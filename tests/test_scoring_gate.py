@@ -1,6 +1,6 @@
 from brain_alpha_ops.config import QualityThresholds, ScoringConfig
 from brain_alpha_ops.models import Candidate
-from brain_alpha_ops.research.scoring import build_scorecard, evaluate_quality_gate
+from brain_alpha_ops.research.scoring import build_scorecard, empirical_score, evaluate_quality_gate
 
 
 def _candidate(metrics):
@@ -57,6 +57,51 @@ def test_gate_rejects_high_correlation():
     gate = evaluate_quality_gate(c, QualityThresholds())
     assert not gate["submission_ready"]
     assert any("correlation" in reason for reason in gate["failed_reasons"])
+
+
+def test_delay_zero_uses_official_delay_zero_thresholds():
+    c = _candidate(
+        {
+            "sharpe": 1.8,
+            "fitness": 1.2,
+            "turnover": 0.25,
+            "returns": 0.08,
+            "drawdown": 0.08,
+            "sub_universe_sharpe": 1.4,
+            "correlation": 0.3,
+            "weight_concentration": 0.08,
+            "margin": 5.0,
+            "pass_fail": "PASS",
+        }
+    )
+    c.submission["settings"] = {"delay": 0}
+
+    scorecard = build_scorecard(c, QualityThresholds())
+
+    assert scorecard["empirical"]["delay"] == 0
+    assert scorecard["empirical"]["hard_gate_failed"] is True
+    assert any("sharpe >= 2.0" in reason for reason in scorecard["empirical"]["hard_gate_failures"])
+
+
+def test_empirical_score_keeps_official_thresholds_under_market_regime():
+    metrics = {
+        "sharpe": 1.3,
+        "fitness": 1.05,
+        "turnover": 0.25,
+        "returns": 0.08,
+        "drawdown": 0.08,
+        "sub_universe_sharpe": 1.4,
+        "correlation": 0.3,
+        "weight_concentration": 0.08,
+        "margin": 5.0,
+        "pass_fail": "PASS",
+    }
+
+    result = empirical_score(metrics, QualityThresholds(market_regime="low_vol"), settings={"delay": 1})
+
+    assert result["threshold_source"] == "BRAIN_Official"
+    assert result["regime_adjustments_applied_to_hard_gates"] is False
+    assert result["hard_gate_failed"] is False
 
 
 def test_local_scorecard_applies_strong_assistant_guidance_bonus():

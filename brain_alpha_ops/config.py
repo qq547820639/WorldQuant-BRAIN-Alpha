@@ -11,20 +11,33 @@ import sys
 from typing import Any
 from urllib.parse import urlparse
 
+from brain_alpha_ops.brain_api.canonical import (
+    SUPPORTED_ALPHA_TYPES,
+    SUPPORTED_DELAYS,
+    SUPPORTED_INSTRUMENT_TYPES,
+    SUPPORTED_LANGUAGES,
+    SUPPORTED_NAN_HANDLING,
+    SUPPORTED_NEUTRALIZATIONS,
+    SUPPORTED_PASTEURIZATION,
+    SUPPORTED_REGIONS,
+    SUPPORTED_UNIT_HANDLING,
+    SUPPORTED_UNIVERSES,
+)
+
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_RUN_CONFIG_PATH = PROJECT_ROOT / "config" / "run_config.json"
 
 _VALID_ENVIRONMENTS = {"mock", "production"}
-_VALID_REGIONS = {"USA", "CHN", "EUR", "GLB"}
-_VALID_UNIVERSES = {"TOP3000", "TOP1000", "TOP500"}
-_VALID_DELAYS = {0, 1}
-_VALID_NEUTRALIZATIONS = {"SUBINDUSTRY", "INDUSTRY", "SECTOR", "MARKET", "NONE"}
-_VALID_ALPHA_TYPES = {"REGULAR", "POWER_POOL", "ATOM", "PYRAMID"}
+_VALID_REGIONS = SUPPORTED_REGIONS
+_VALID_UNIVERSES = SUPPORTED_UNIVERSES
+_VALID_DELAYS = SUPPORTED_DELAYS
+_VALID_NEUTRALIZATIONS = SUPPORTED_NEUTRALIZATIONS
+_VALID_ALPHA_TYPES = SUPPORTED_ALPHA_TYPES
 _VALID_DATASET_STRATEGIES = {"all", "rotate", "random", "specific"}
 _VALID_MARKET_REGIMES = {"normal", "low_vol", "high_vol"}
-_VALID_ON_OFF = {"ON", "OFF"}
-_VALID_UNIT_HANDLING = {"VERIFY", "RAW", "NONE"}
+_VALID_ON_OFF = SUPPORTED_PASTEURIZATION
+_VALID_UNIT_HANDLING = SUPPORTED_UNIT_HANDLING
 
 
 class ConfigValidationError(ValueError):
@@ -210,8 +223,8 @@ class QualityThresholds:
     market_regime: str = "normal"         # "normal" | "low_vol" | "high_vol"
     #
     # 调整说明：高波动环境下 Sharpe 往往被压低、turnover 偏高。
-    # 低波动环境下 Sharpe 可能虚高。regime_adjustments 提供不同环境下
-    # 对 Sharpe/Fitness 阈值的调整因子，供 empirical_score 参考。
+    # 低波动环境下 Sharpe 可能虚高。regime_adjustments 仅作为本地归因/
+    # 校准元数据，不能改变 BRAIN 官方硬门槛。
     regime_adjustments: dict = field(default_factory=lambda: {
         "normal": {"sharpe_factor": 1.0, "fitness_factor": 1.0, "turnover_factor": 1.0},
         "low_vol": {"sharpe_factor": 1.15, "fitness_factor": 1.10, "turnover_factor": 0.90},
@@ -245,6 +258,7 @@ class OfficialAPIConfig:
     base_url: str = "https://api.worldquantbrain.com"
     authentication_path: str = "/authentication"
     simulations_path: str = "/simulations"
+    data_sets_path: str = "/data-sets"
     data_fields_path: str = "/data-fields"
     operators_path: str = "/operators"
     alpha_path_template: str = "/alphas/{alpha_id}"
@@ -402,7 +416,7 @@ def _validate_settings(errors: list[str], settings: BrainSettings) -> None:
     if not isinstance(settings, BrainSettings):
         errors.append("ops.settings must be an object")
         return
-    _require_enum(errors, "ops.settings.instrumentType", settings.instrumentType, {"EQUITY"})
+    _require_enum(errors, "ops.settings.instrumentType", settings.instrumentType, SUPPORTED_INSTRUMENT_TYPES)
     _require_enum(errors, "ops.settings.region", settings.region, _VALID_REGIONS)
     _require_enum(errors, "ops.settings.universe", settings.universe, _VALID_UNIVERSES)
     _require_str(errors, "ops.settings.dataset", settings.dataset)
@@ -412,8 +426,8 @@ def _validate_settings(errors: list[str], settings: BrainSettings) -> None:
     _require_float_range(errors, "ops.settings.truncation", settings.truncation, min_value=0.0, max_value=1.0)
     _require_enum(errors, "ops.settings.pasteurization", settings.pasteurization, _VALID_ON_OFF)
     _require_enum(errors, "ops.settings.unitHandling", settings.unitHandling, _VALID_UNIT_HANDLING)
-    _require_enum(errors, "ops.settings.nanHandling", settings.nanHandling, _VALID_ON_OFF)
-    _require_enum(errors, "ops.settings.language", settings.language, {"FASTEXPR"})
+    _require_enum(errors, "ops.settings.nanHandling", settings.nanHandling, SUPPORTED_NAN_HANDLING)
+    _require_enum(errors, "ops.settings.language", settings.language, SUPPORTED_LANGUAGES)
     _require_bool(errors, "ops.settings.visualization", settings.visualization)
     _require_enum(errors, "ops.settings.type", settings.type, _VALID_ALPHA_TYPES)
 
@@ -617,6 +631,7 @@ def _validate_official_api(errors: list[str], api: OfficialAPIConfig) -> None:
     for field_name in (
         "authentication_path",
         "simulations_path",
+        "data_sets_path",
         "data_fields_path",
         "operators_path",
         "alpha_path_template",

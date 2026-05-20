@@ -6,6 +6,13 @@ import math
 
 from typing import Callable
 
+from brain_alpha_ops.brain_api.canonical import (
+    SUPPORTED_ALPHA_TYPES,
+    SUPPORTED_DELAYS,
+    SUPPORTED_NEUTRALIZATIONS,
+    SUPPORTED_REGIONS,
+    SUPPORTED_UNIVERSES,
+)
 from brain_alpha_ops.config import BrainSettings, OpsConfig, ResearchBudget, RunConfig, load_run_config, validate_run_config
 
 
@@ -25,10 +32,11 @@ _MAX_CYCLES = 10000
 _MAX_CYCLE_PAUSE_SECONDS = 3600
 _MAX_BACKTEST_BATCH_SIZE = 100
 
-_VALID_REGIONS = {"USA", "CHN", "EUR", "GLB"}
-_VALID_UNIVERSES = {"TOP3000", "TOP1000", "TOP500"}
-_VALID_NEUTRALIZATIONS = {"SUBINDUSTRY", "INDUSTRY", "SECTOR", "MARKET", "NONE"}
-_VALID_TYPES = {"REGULAR", "POWER_POOL", "ATOM", "PYRAMID"}
+_VALID_REGIONS = SUPPORTED_REGIONS
+_VALID_UNIVERSES = SUPPORTED_UNIVERSES
+_VALID_DELAYS = SUPPORTED_DELAYS
+_VALID_NEUTRALIZATIONS = SUPPORTED_NEUTRALIZATIONS
+_VALID_TYPES = SUPPORTED_ALPHA_TYPES
 
 
 RunConfigLoader = Callable[[], RunConfig]
@@ -97,7 +105,14 @@ def run_config_from_payload(payload: dict, *, loader: RunConfigLoader = load_run
         instrumentType=str(settings_data.get("instrumentType", current_settings.instrumentType)),
         region=str(settings_data.get("region", current_settings.region)),
         universe=str(settings_data.get("universe", current_settings.universe)),
-        delay=payload_int(settings_data, "delay", current_settings.delay, lower=0, upper=1, label="settings.delay"),
+        delay=payload_int(
+            settings_data,
+            "delay",
+            current_settings.delay,
+            lower=min(_VALID_DELAYS),
+            upper=max(_VALID_DELAYS),
+            label="settings.delay",
+        ),
         decay=payload_int(settings_data, "decay", current_settings.decay, lower=0, label="settings.decay"),
         neutralization=str(settings_data.get("neutralization", current_settings.neutralization)),
         truncation=payload_float(
@@ -373,6 +388,14 @@ def validate_settings_enums(settings: dict) -> None:
     universe = str(settings.get("universe", "")).strip()
     if universe and universe not in _VALID_UNIVERSES:
         errors.append(f"Invalid universe: '{universe}'. Valid: {sorted(_VALID_UNIVERSES)}")
+    if "delay" in settings:
+        try:
+            delay = int(settings.get("delay"))
+        except (TypeError, ValueError):
+            errors.append(f"Invalid delay: '{settings.get('delay')}'. Valid: {sorted(_VALID_DELAYS)}")
+        else:
+            if delay not in _VALID_DELAYS:
+                errors.append(f"Invalid delay: '{delay}'. Valid: {sorted(_VALID_DELAYS)}")
     neutralization = str(settings.get("neutralization", "")).strip()
     if neutralization and neutralization not in _VALID_NEUTRALIZATIONS:
         errors.append(f"Invalid neutralization: '{neutralization}'. Valid: {sorted(_VALID_NEUTRALIZATIONS)}")

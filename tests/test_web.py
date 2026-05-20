@@ -76,6 +76,8 @@ def test_web_html_contains_chinese_console():
     assert "Instrument Type" in HTML
     assert "Truncation" in HTML
     assert "controlButton" in HTML
+    assert "payload.guided = true" in HTML
+    assert "resumeProductionFromCheckpoint" in HTML
     assert "runButton" not in HTML
     assert "复制当前最佳 Alpha" not in HTML
     assert "快速检查选中" not in HTML

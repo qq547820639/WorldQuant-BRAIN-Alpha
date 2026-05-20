@@ -1405,7 +1405,17 @@ def smoke_test_server(port: int | None = None) -> dict:
 
 def main(argv: list[str] | None = None) -> int:
     import argparse
+    import sys
     import time
+
+    def safe_print(message: str) -> None:
+        stream = getattr(sys, "stdout", None)
+        if stream is None:
+            return
+        try:
+            print(message)
+        except Exception:
+            return
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", default="")
@@ -1417,7 +1427,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.smoke_test:
         config_from_payload({"environment": "mock"})
         result = smoke_test_server(port=args.port or run_config.web.port)
-        print(json.dumps({"ok": True, "status": "web ready", **result}, ensure_ascii=False))
+        safe_print(json.dumps({"ok": True, "status": "web ready", **result}, ensure_ascii=False))
         return 0
     url = serve(
         port=args.port or run_config.web.port,
@@ -1427,9 +1437,9 @@ def main(argv: list[str] | None = None) -> int:
         allow_multiple_sessions=run_config.web.allow_multiple_sessions,
         allow_remote=run_config.web.allow_remote,
     )
-    print("BRAIN Alpha Ops 已启动")
-    print(f"访问地址：{url}")
-    print("关闭此窗口或按 Ctrl+C 可停止本地服务。")
+    safe_print("BRAIN Alpha Ops 已启动")
+    safe_print(f"访问地址：{url}")
+    safe_print("关闭此窗口或按 Ctrl+C 可停止本地服务。")
     try:
         while not SERVER_STOP.wait(3600):
             pass
@@ -1440,4 +1450,3 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

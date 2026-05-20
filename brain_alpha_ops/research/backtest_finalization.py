@@ -110,13 +110,17 @@ class BacktestFinalizationService:
         return outcome
 
     def _score_official_candidate(self, candidate: Candidate) -> None:
+        settings = candidate.submission.get("settings") if isinstance(candidate.submission, dict) else None
+        if not isinstance(settings, dict) or not settings:
+            settings = self.config.settings.to_platform_dict()["settings"]
         build_scorecard(
             candidate,
             self.config.thresholds,
             self.config.scoring,
             params=self.scoring_params,
+            settings=settings,
         )
-        evaluate_quality_gate(candidate, self.config.thresholds)
+        evaluate_quality_gate(candidate, self.config.thresholds, settings=settings)
         check_summary = self._run_submission_checks(candidate)
         gate = candidate.gate or {}
         gate["check_summary"] = check_summary

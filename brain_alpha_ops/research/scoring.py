@@ -17,13 +17,15 @@ def build_scorecard(
     thresholds: QualityThresholds,
     scoring: ScoringConfig | None = None,
     params: "ScoringParams | None" = None,
+    settings: dict | None = None,
 ) -> dict:
     prior = prior_score(
         candidate,
         weights_override=scoring.prior_weights_override if scoring else None,
         params=params,
     )
-    empirical = empirical_score(candidate.official_metrics, thresholds)
+    effective_settings = _scorecard_settings(candidate, settings)
+    empirical = empirical_score(candidate.official_metrics, thresholds, settings=effective_settings)
     checklist = submission_checklist(candidate, thresholds)
     base_local_rank_score = local_convergence_score(candidate, prior, scoring=scoring)
     guidance_adjustment = assistant_guidance_score_adjustment(candidate, scoring=scoring)
@@ -71,6 +73,7 @@ def build_scorecard(
             "purpose": "Track whether local priors predict official outcomes over time.",
             "params_used": params is not None,
         },
+        "settings_trace": effective_settings,
     }
     candidate.scorecard = scorecard
     return scorecard
@@ -470,14 +473,10 @@ def empirical_score(metrics: dict, thresholds: QualityThresholds, settings: dict
     effective_min_sharpe = thresholds.min_sharpe_delay0 if delay == 0 else thresholds.min_sharpe
     effective_min_fitness = thresholds.min_fitness_delay0 if delay == 0 else thresholds.min_fitness
 
-    # P2: Market regime adjustment
+    # Market regime metadata is retained for attribution, but official BRAIN
+    # hard gates must never be shifted by local regime factors.
     regime = getattr(thresholds, "market_regime", "normal")
     regime_adj = getattr(thresholds, "regime_adjustments", {}).get(regime, {})
-    regime_sharpe_factor = float(regime_adj.get("sharpe_factor", 1.0))
-    regime_fitness_factor = float(regime_adj.get("fitness_factor", 1.0))
-    regime_turnover_factor = float(regime_adj.get("turnover_factor", 1.0))
-    effective_min_sharpe = effective_min_sharpe * regime_sharpe_factor
-    effective_min_fitness = effective_min_fitness * regime_fitness_factor
 
     sharpe = _num(metrics.get("sharpe"))
     fitness = _num(metrics.get("fitness"))
@@ -584,7 +583,10 @@ def empirical_score(metrics: dict, thresholds: QualityThresholds, settings: dict
             "hard_gate_failed": hard_gate_failed,
             "hard_gate_failures": hard_gate_failures,
             "margin_source": margin_source, "delay": delay,
-            "market_regime": regime, "regime_adjustments": regime_adj}
+            "threshold_source": "BRAIN_Official",
+            "market_regime": regime,
+            "regime_adjustments": regime_adj,
+            "regime_adjustments_applied_to_hard_gates": False}
 
 
 def submission_checklist(candidate: Candidate, thresholds: QualityThresholds) -> dict:
@@ -602,8 +604,13 @@ def submission_checklist(candidate: Candidate, thresholds: QualityThresholds) ->
     return {"score": score, "items": checks}
 
 
-def evaluate_quality_gate(candidate: Candidate, thresholds: QualityThresholds) -> dict:
-    scorecard = candidate.scorecard or build_scorecard(candidate, thresholds)
+def evaluate_quality_gate(
+    candidate: Candidate,
+    thresholds: QualityThresholds,
+    *,
+    settings: dict | None = None,
+) -> dict:
+    scorecard = candidate.scorecard or build_scorecard(candidate, thresholds, settings=settings)
     empirical = scorecard["empirical"]
     failed = []
     warnings = []
@@ -642,6 +649,22 @@ def evaluate_quality_gate(candidate: Candidate, thresholds: QualityThresholds) -
     }
     candidate.gate = gate
     return gate
+
+
+def _scorecard_settings(candidate: Candidate, explicit: dict | None = None) -> dict:
+    """Return the BRAIN settings used for official threshold selection."""
+    if isinstance(explicit, dict) and explicit:
+        return dict(explicit)
+    submission = candidate.submission if isinstance(candidate.submission, dict) else {}
+    for key in ("settings", "brain_settings"):
+        value = submission.get(key)
+        if isinstance(value, dict) and value:
+            return dict(value)
+    validation = candidate.validation if isinstance(candidate.validation, dict) else {}
+    value = validation.get("settings")
+    if isinstance(value, dict) and value:
+        return dict(value)
+    return {}
 
 
 def decision_band(score: float, hard_gate_failed: bool = False) -> str:

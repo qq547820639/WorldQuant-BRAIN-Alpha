@@ -220,10 +220,11 @@ class OfficialScoringSystem:
             self.thresholds,
             scoring=self.scoring,
             params=params,
+            settings=self._settings_for(candidate),
         )
 
         # 2. Evaluate quality gate
-        gate = evaluate_quality_gate(candidate, self.thresholds)
+        gate = evaluate_quality_gate(candidate, self.thresholds, settings=self._settings_for(candidate))
 
         # 3. Build hard/soft gate results
         hard_gates = self._build_hard_gates(candidate, scorecard)
@@ -604,6 +605,13 @@ class OfficialScoringSystem:
             "scoring": self.scoring.get_layer_weights(),
         }, sort_keys=True)
         return hashlib.md5(data.encode()).hexdigest()[:12]
+
+    def _settings_for(self, candidate: Candidate) -> dict:
+        submission = candidate.submission if isinstance(candidate.submission, dict) else {}
+        stored = submission.get("settings")
+        if isinstance(stored, dict) and stored:
+            return dict(stored)
+        return self.ops_config.settings.to_platform_dict()["settings"]
 
 
 # ═══════════════════════════════════════════════════════════════════════

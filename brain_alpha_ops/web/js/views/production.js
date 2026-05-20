@@ -200,20 +200,25 @@
     await startProduction();
   };
 
-  async function startProduction() {
+  async function startProduction(options) {
+    options = options || {};
     _running = true;
     S.set("isRunning", true);
     updateRunButton();
-    Toast.toast("正在创建生产任务...", "info");
+    Toast.toast(options.resume ? "正在从断点恢复引导式生产任务..." : "正在创建引导式生产任务...", "info");
 
     try {
       var payload = window.collectPayload ? window.collectPayload() : {};
       payload.continuousMode = true;
+      payload.guided = true;
+      if (options.resume) {
+        payload.resume = true;
+      }
       var resp = await Api.post("/api/run", payload);
       if (!resp.ok) throw new Error(resp.error || "启动失败");
       _jobId = resp.job_id;
       S.set("activeJobId", _jobId);
-      Toast.toast("生产已启动 (job: " + _jobId.slice(0, 8) + ")", "success");
+      Toast.toast((options.resume ? "断点续跑已启动" : "引导式生产已启动") + " (job: " + _jobId.slice(0, 8) + ")", "success");
 
       // Primary: SSE real-time stream
       connectSSE(_jobId);
@@ -257,6 +262,9 @@
 
   // Expose
   window.startProduction = startProduction;
+  window.resumeProductionFromCheckpoint = function () {
+    return startProduction({ resume: true });
+  };
   window.stopProduction = stopProduction;
   window.connectSSE = connectSSE;
   window.disconnectSSE = disconnectSSE;

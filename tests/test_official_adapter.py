@@ -293,6 +293,100 @@ def test_list_fields_uses_market_scope_params():
         assert "delay=0" in captured["url"]
 
 
+def test_list_datasets_uses_official_data_sets_endpoint():
+    captured = {}
+
+    class Response:
+        headers = {"Content-Type": "application/json"}
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self):
+            return json.dumps(
+                {
+                    "count": 2,
+                    "results": [
+                        {"id": "fundamental6", "name": "Company Fundamental Data", "fieldCount": 886},
+                        {"code": "pv1", "title": "Price Volume Data", "fields": [{"id": "close"}, {"id": "volume"}]},
+                    ],
+                }
+            ).encode()
+
+    def fake_open(req, timeout):
+        captured["url"] = req.full_url
+        return Response()
+
+    with tempfile.TemporaryDirectory() as tmp:
+        api = OfficialBrainAPI(
+            OfficialAPIConfig(
+                base_url="https://example.test",
+                cache_dir=tmp,
+                min_request_interval_seconds=0,
+            ),
+            token="token",
+        )
+        api.set_market_scope(BrainSettings(region="EUR", universe="TOP1000", delay=0))
+        api._open = fake_open
+        datasets = api.list_datasets("all", "")
+        assert [row["id"] for row in datasets] == ["fundamental6", "pv1"]
+        assert datasets[0]["field_count"] == 886
+        assert datasets[1]["field_count"] == 2
+        assert captured["url"].startswith("https://example.test/data-sets?")
+        assert "region=EUR" in captured["url"]
+        assert "universe=TOP1000" in captured["url"]
+        assert "delay=0" in captured["url"]
+
+
+def test_list_datasets_uses_stale_cache_on_429():
+    original_sleep = time.sleep
+
+    def fake_open(_req, timeout):
+        raise urllib.error.HTTPError(
+            "https://example.test",
+            429,
+            "Too Many Requests",
+            {},
+            io.BytesIO(b'{"message": "API rate limit exceeded"}'),
+        )
+
+    with tempfile.TemporaryDirectory() as tmp:
+        config = OfficialAPIConfig(
+            base_url="https://example.test",
+            cache_dir=tmp,
+            context_cache_ttl_seconds=0,
+            allow_stale_context_on_rate_limit=True,
+            min_request_interval_seconds=0,
+            rate_limit_retry_attempts=0,
+        )
+        api = OfficialBrainAPI(config, token="token")
+        cache_name = api._cache_key(
+            "datasets",
+            {
+                "instrumentType": "EQUITY",
+                "region": "USA",
+                "delay": 1,
+                "universe": "TOP3000",
+                "limit": 50,
+                "offset": 0,
+            },
+        )
+        api._cache_path(cache_name).write_text(
+            json.dumps({"created_at": 1, "items": [{"id": "fundamental6", "name": "Fundamental"}]}),
+            encoding="utf-8",
+        )
+        try:
+            time.sleep = lambda _seconds: None
+            api._open = fake_open
+            datasets = api.list_datasets("all", "USA")
+            assert datasets[0]["id"] == "fundamental6"
+        finally:
+            time.sleep = original_sleep
+
+
 def test_list_fields_refreshes_partial_fresh_cache():
     calls = []
 

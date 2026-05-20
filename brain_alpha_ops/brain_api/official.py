@@ -32,9 +32,11 @@ logger = logging.getLogger(__name__)
 
 # Pagination safety limits (M-07)
 _MAX_FIELDS_PAGES = 200
+_MAX_DATASETS_PAGES = 20
 _MAX_OPERATORS_PAGES = 20
 _MAX_USER_ALPHAS_PAGES = 100
 _MAX_FIELDS_ITEMS = 20_000
+_MAX_DATASETS_ITEMS = 2_000
 _MAX_OPERATORS_ITEMS = 2_000
 _MAX_USER_ALPHAS_ITEMS = 50_000
 
@@ -269,6 +271,88 @@ class OfficialBrainAPI:
                 page_params["offset"] = int(page_params.get("offset", 0)) + int(page_params["limit"])
             else:
                 logger.warning("fields pagination reached max pages limit (%d), items=%d total=%d", _MAX_FIELDS_PAGES, len(items), total)
+            self._write_cache(cache_key, items, total)
+            return items
+        except BrainAPIError as exc:
+            if self.config.allow_stale_context_on_rate_limit and exc.status_code == 429 and cached["items"]:
+                return cached["items"]
+            raise
+
+    def list_datasets(self, query: str = "all", region: str = "", progress_callback=None) -> list[dict]:
+        """Fetch official BRAIN data sets from the published /data-sets API."""
+        scope_region = region or self._market_scope.get("region", "USA")
+        params = {
+            "instrumentType": self._market_scope.get("instrumentType", "EQUITY"),
+            "region": scope_region,
+            "delay": int(self._market_scope.get("delay", 1)),
+            "universe": self._market_scope.get("universe", "TOP3000"),
+            "limit": 50,
+            "offset": 0,
+        }
+        if query and query != "all":
+            params["search"] = query
+        cache_key = self._cache_key("datasets", params)
+        cached = self._read_cache(cache_key)
+        if cached["fresh"] and not _looks_partial_context_cache("datasets", cached["items"], cached.get("total", 0), params["limit"]):
+            if progress_callback:
+                progress_callback({"scanned": len(cached["items"]), "total": cached.get("total") or len(cached["items"]), "cached": True})
+            return cached["items"]
+        try:
+            items = []
+            page_params = dict(params)
+            total = 0
+            seen_page_signatures: set[str] = set()
+            for _page in range(1, _MAX_DATASETS_PAGES + 1):
+                data, _headers = self._request("GET", self.config.data_sets_path, query=page_params)
+                page_items = [
+                    row
+                    for row in (_normal_dataset(item) for item in _items(data))
+                    if row.get("id")
+                ]
+                page_signature = _page_signature(page_items, keys=("id", "name"))
+                if page_items and page_signature in seen_page_signatures:
+                    logger.warning(
+                        "datasets pagination stopped on repeated page signature, offset=%s items=%d total=%d",
+                        page_params.get("offset", 0),
+                        len(items),
+                        total,
+                    )
+                    if progress_callback:
+                        progress_callback(
+                            {
+                                "scanned": len(items),
+                                "total": total,
+                                "page_size": len(page_items),
+                                "offset": int(page_params.get("offset", 0)),
+                                "truncated": True,
+                                "warning": "repeated_page",
+                            }
+                        )
+                    break
+                if page_items:
+                    seen_page_signatures.add(page_signature)
+                items.extend(page_items)
+                total = _total_count(data) or total
+                if progress_callback:
+                    progress_callback(
+                        {
+                            "scanned": len(items),
+                            "total": total,
+                            "page_size": len(page_items),
+                            "offset": int(page_params.get("offset", 0)),
+                        }
+                    )
+                if total and len(items) >= total:
+                    break
+                if len(items) >= _MAX_DATASETS_ITEMS:
+                    logger.warning("datasets pagination reached max item limit (%d), total=%d", _MAX_DATASETS_ITEMS, total)
+                    items = items[:_MAX_DATASETS_ITEMS]
+                    break
+                if len(page_items) < int(page_params["limit"]):
+                    break
+                page_params["offset"] = int(page_params.get("offset", 0)) + int(page_params["limit"])
+            else:
+                logger.warning("datasets pagination reached max pages limit (%d), items=%d total=%d", _MAX_DATASETS_PAGES, len(items), total)
             self._write_cache(cache_key, items, total)
             return items
         except BrainAPIError as exc:
@@ -797,7 +881,7 @@ def _looks_partial_context_cache(kind: str, items: list[dict], total: int, page_
         return False
     if total and len(items) < total:
         return True
-    return kind in {"fields", "operators"} and len(items) == int(page_limit)
+    return kind in {"fields", "datasets", "operators"} and len(items) == int(page_limit)
 
 
 def build_simulation_payload(expression: str, settings: dict | BrainSettings) -> dict:
@@ -949,7 +1033,7 @@ def _items(data: Any) -> list:
     if isinstance(data, list):
         return data
     if isinstance(data, dict):
-        for key in ("results", "data", "items", "fields", "operators", "checks"):
+        for key in ("results", "data", "items", "fields", "datasets", "dataSets", "data_sets", "operators", "checks"):
             value = data.get(key)
             if isinstance(value, list):
                 return value
@@ -1041,6 +1125,33 @@ def _normal_operator(item: dict) -> dict:
         "name": str(_first_value(item, ["name", "id", "operator"], "")),
         "category": _first_value(item, ["category", "scope", "type"], ""),
         "description": _first_value(item, ["description", "definition", "help", "doc"], ""),
+        "raw": _scrub(item),
+    }
+
+
+def _normal_dataset(item: dict) -> dict:
+    dataset_id = _first_value(item, ["id", "code", "datasetId", "dataset"], "")
+    if isinstance(dataset_id, dict):
+        dataset_id = _first_value(dataset_id, ["id", "code", "datasetId"], "")
+    field_count = _first_value(
+        item,
+        ["field_count", "fieldCount", "fieldsCount", "dataFieldCount", "data_field_count", "fields"],
+        0,
+    )
+    if isinstance(field_count, list):
+        field_count = len(field_count)
+    try:
+        numeric_field_count = int(field_count or 0)
+    except (TypeError, ValueError):
+        numeric_field_count = 0
+    return {
+        "id": str(dataset_id or ""),
+        "name": str(_first_value(item, ["name", "title", "description"], dataset_id or "")),
+        "field_count": numeric_field_count,
+        "category": _first_value(item, ["category", "group"], ""),
+        "region": _first_value(item, ["region"], ""),
+        "delay": _first_value(item, ["delay"], None),
+        "universe": _first_value(item, ["universe"], ""),
         "raw": _scrub(item),
     }
 
