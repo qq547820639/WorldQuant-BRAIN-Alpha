@@ -516,49 +516,33 @@ class OfficialScoringSystem:
         """
         deviations = []
 
-        # Construct simulated API response matching BRAIN format
+        # Construct a BRAIN-alpha-check-like response from the same empirical
+        # items used by the gate. Official pass_fail, when present, remains the
+        # source of truth; local reconstruction is compared against it.
         empirical = scorecard.get("empirical", {})
         metrics = candidate.official_metrics or {}
+        local_hard_gate_passed = not bool(empirical.get("hard_gate_failed", False))
+        official_pass = str(metrics.get("pass_fail") or "").upper()
+        reconstructed_status = "PASS" if local_hard_gate_passed and metrics else "FAIL"
+        api_status = official_pass if official_pass in {"PASS", "FAIL"} else reconstructed_status
+
+        check_items = {}
+        for row in empirical.get("items", []):
+            if not row.get("is_hard_gate"):
+                continue
+            check_items[row["name"]] = {
+                "value": row.get("actual"),
+                "threshold": row.get("target"),
+                "direction": row.get("direction"),
+                "passed": bool(row.get("passed")),
+                "source": row.get("source", "BRAIN_Official_Alpha_Check"),
+            }
 
         simulated = {
             "alpha_id": candidate.official_alpha_id or candidate.alpha_id,
             "expression": candidate.expression,
-            "status": "PASS" if scorecard["decision_band"] == "submit_candidate" else "FAIL",
-            "checks": {
-                "sharpe": {
-                    "value": metrics.get("sharpe", 0),
-                    "threshold": self.thresholds.min_sharpe,
-                    "passed": (metrics.get("sharpe", 0) or 0) >= self.thresholds.min_sharpe,
-                },
-                "fitness": {
-                    "value": metrics.get("fitness", 0),
-                    "threshold": self.thresholds.min_fitness,
-                    "passed": (metrics.get("fitness", 0) or 0) >= self.thresholds.min_fitness,
-                },
-                "turnover": {
-                    "value": metrics.get("turnover", 0),
-                    "min_threshold": self.thresholds.min_turnover,
-                    "max_threshold": self.thresholds.platform_max_turnover,
-                    "passed": (
-                        self.thresholds.min_turnover <= (metrics.get("turnover", 0) or 0) <= self.thresholds.platform_max_turnover
-                    ),
-                },
-                "self_correlation": {
-                    "value": metrics.get("correlation", 0),
-                    "threshold": self.thresholds.max_self_correlation,
-                    "passed": (abs(metrics.get("correlation", 0) or 0)) < self.thresholds.max_self_correlation,
-                },
-                "weight_concentration": {
-                    "value": metrics.get("weight_concentration", 0),
-                    "threshold": self.thresholds.max_weight_concentration,
-                    "passed": (metrics.get("weight_concentration", 0) or 0) <= self.thresholds.max_weight_concentration,
-                },
-                "sub_universe_sharpe": {
-                    "value": metrics.get("sub_universe_sharpe", 0),
-                    "min_ratio": self.thresholds.sub_universe_sharpe_min_ratio,
-                    "passed": True,  # Requires sub_size/alpha_size to compute accurately
-                },
-            },
+            "status": api_status,
+            "checks": check_items,
             "score": {
                 "total": scorecard["total_score"],
                 "prior": scorecard["prior"]["score"],
@@ -566,20 +550,27 @@ class OfficialScoringSystem:
                 "checklist": scorecard["submission_checklist"]["score"],
             },
             "gate": {
-                "hard_gate_passed": not empirical.get("hard_gate_failed", False),
+                "hard_gate_passed": api_status == "PASS",
+                "reconstructed_hard_gate_passed": local_hard_gate_passed,
                 "soft_gate_warnings": [],
-                "submission_ready": scorecard.get("decision_band") == "submit_candidate",
+                "submission_ready": api_status == "PASS",
+                "local_submission_ready": scorecard.get("decision_band") == "submit_candidate",
             },
             "meta": {
                 "simulated": True,
                 "scoring_schema": "scorecard-v2.3",
                 "threshold_version": "CANONICAL_v2",
+                "official_pass_fail_source": "candidate.official_metrics.pass_fail" if official_pass else "reconstructed_hard_gates",
                 "thresholds_used": {
                     "min_sharpe": self.thresholds.min_sharpe,
+                    "min_sharpe_delay0": self.thresholds.min_sharpe_delay0,
                     "min_fitness": self.thresholds.min_fitness,
+                    "min_fitness_delay0": self.thresholds.min_fitness_delay0,
+                    "min_turnover": self.thresholds.min_turnover,
                     "platform_max_turnover": self.thresholds.platform_max_turnover,
                     "max_self_correlation": self.thresholds.max_self_correlation,
                     "max_weight_concentration": self.thresholds.max_weight_concentration,
+                    "sub_universe_sharpe_min_ratio": self.thresholds.sub_universe_sharpe_min_ratio,
                 },
             },
         }
@@ -587,19 +578,17 @@ class OfficialScoringSystem:
         # Compare with official metrics if available
         deviation = 0.0
         if candidate.official_metrics:
-            official_pass = candidate.official_metrics.get("pass_fail")
-            simulated_pass = simulated["status"]
-            if official_pass and official_pass != simulated_pass:
+            if official_pass and official_pass != reconstructed_status:
                 deviation = 1.0
                 deviations.append(
-                    f"pass_fail mismatch: official={official_pass}, simulated={simulated_pass}"
+                    f"pass_fail mismatch: official={official_pass}, reconstructed={reconstructed_status}"
                 )
 
             # Check specific metric deviations
             for check_name in ["sharpe", "fitness"]:
                 if check_name in candidate.official_metrics:
                     official_val = candidate.official_metrics[check_name]
-                    sim_val = simulated["checks"][check_name]["value"]
+                    sim_val = simulated["checks"].get(check_name, {}).get("value")
                     if abs((official_val or 0) - (sim_val or 0)) > 0.001:
                         deviations.append(
                             f"{check_name} mismatch: official={official_val}, simulated={sim_val}"

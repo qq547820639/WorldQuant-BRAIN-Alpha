@@ -25,6 +25,7 @@ def test_quality_gate_runs_core_steps_and_skips_pytest(monkeypatch, tmp_path):
         "python_compile",
         "config",
         "dependency_policy",
+        "redline_verification",
         "frontend_inline_sync",
         "frontend_syntax",
         "secret_scan",
@@ -51,13 +52,14 @@ def test_quality_gate_includes_pytest_args_and_propagates_failure(monkeypatch, t
         "python_compile",
         "config",
         "dependency_policy",
+        "redline_verification",
         "frontend_inline_sync",
         "frontend_syntax",
         "secret_scan",
         "pytest",
     ]
-    assert "--include-all" in result["steps"][5]["command"]
-    assert result["steps"][6]["command"][-1] == "tests/test_web.py"
+    assert "--include-all" in result["steps"][6]["command"]
+    assert result["steps"][7]["command"][-1] == "tests/test_web.py"
 
 
 def test_quality_gate_can_skip_compile(monkeypatch, tmp_path):
@@ -77,7 +79,7 @@ def test_quality_gate_can_skip_compile(monkeypatch, tmp_path):
     )
 
     assert result["ok"] is True
-    assert [step["name"] for step in result["steps"]] == ["config", "dependency_policy", "frontend_inline_sync", "frontend_syntax", "secret_scan"]
+    assert [step["name"] for step in result["steps"]] == ["config", "dependency_policy", "redline_verification", "frontend_inline_sync", "frontend_syntax", "secret_scan"]
     assert not any("compileall" in call for call in calls)
 
 
@@ -102,6 +104,7 @@ def test_quality_gate_can_include_dependency_audit(monkeypatch, tmp_path):
         "python_compile",
         "config",
         "dependency_policy",
+        "redline_verification",
         "frontend_inline_sync",
         "frontend_syntax",
         "secret_scan",
@@ -129,6 +132,7 @@ def test_quality_gate_can_include_optional_tooling(monkeypatch, tmp_path):
     assert result["ok"] is True
     assert [step["name"] for step in result["steps"]][-1] == "optional_tooling"
     assert any(any("check_optional_tooling.py" in str(arg) for arg in call) for call in calls)
+    assert any("brain_alpha_ops.compliance.redline_verifier" in call for call in calls)
 
 
 def test_quality_gate_can_include_static_analysis(monkeypatch, tmp_path):

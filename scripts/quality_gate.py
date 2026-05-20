@@ -168,6 +168,10 @@ def _dependency_policy() -> tuple[bool, dict]:
     return _run_python_module(["scripts/check_dependency_policy.py", "--pyproject", str(ROOT / "pyproject.toml"), "--json"])
 
 
+def _redline_verification() -> tuple[bool, dict]:
+    return _run_python_module(["-m", "brain_alpha_ops.compliance.redline_verifier", "--block", "--json"])
+
+
 def _pytest(pytest_args: list[str]) -> tuple[bool, dict]:
     return _run_python_module(["-m", "pytest", *(pytest_args or [])])
 
@@ -224,6 +228,7 @@ def run_quality_gate(
     steps.extend([
         _step("config", lambda: _validate_config(config_path)),
         _step("dependency_policy", _dependency_policy),
+        _step("redline_verification", _redline_verification),
         _step("frontend_inline_sync", _frontend_inline_sync),
         _step("frontend_syntax", lambda: _frontend_syntax(html_path)),
         _step("secret_scan", lambda: _secret_scan(include_all_secrets)),
