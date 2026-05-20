@@ -115,3 +115,28 @@ def test_gate_config_and_score_history_are_structured(tmp_path):
     assert len(history_path.read_text(encoding="utf-8").splitlines()) == 3
     assert json.loads(history_path.read_text(encoding="utf-8").splitlines()[0])["alpha_id"] == "score_alpha"
     assert db.convergence_stats()["status"] == "ready"
+
+
+def test_scoring_web_cli_compatibility_helpers(tmp_path):
+    metrics = {
+        "sharpe": 1.8,
+        "fitness": 1.3,
+        "turnover": 0.25,
+        "returns": 0.09,
+        "drawdown": 0.04,
+        "correlation": 0.2,
+        "weight_concentration": 0.04,
+        "sub_universe_sharpe": 1.5,
+        "margin": 6.0,
+        "pass_fail": "PASS",
+    }
+    candidate_dict = _candidate(metrics).to_dict()
+    gate_config = GateConfig.from_thresholds(OfficialScoringSystem().thresholds)
+    result = OfficialScoringSystem(gate_config=gate_config).evaluate(candidate_dict)
+
+    assert result.alpha_id == "score_alpha"
+    assert result.simulated_api_output["status"] == "PASS"
+
+    db = ScoreHistoryDB(str(tmp_path))
+    db.append(result)
+    assert (tmp_path / "score_history.jsonl").is_file()

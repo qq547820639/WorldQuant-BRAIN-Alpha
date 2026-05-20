@@ -6,6 +6,8 @@ into a single authoritative source. Both modules import from here.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from brain_alpha_ops.errors import (
     AppError,
     AuthError,
@@ -19,7 +21,33 @@ from brain_alpha_ops.errors import (
     ValidationError,
     classify_error as _core_classify,
 )
-from brain_alpha_ops.error_payloads import ErrorInfo
+
+
+@dataclass(frozen=True)
+class ErrorInfo:
+    error_code: str
+    error_category: str
+    redacted_message: str
+    error_type: str
+    retryable: bool = False
+    fix_hint: str = ""
+    status_code: int | None = None
+    retry_after: float | None = None
+
+    def to_dict(self) -> dict:
+        payload = {
+            "error_code": self.error_code,
+            "error_category": self.error_category,
+            "error": self.redacted_message,
+            "error_type": self.error_type,
+            "retryable": self.retryable,
+            "fix_hint": self.fix_hint,
+        }
+        if self.status_code is not None:
+            payload["status_code"] = self.status_code
+        if self.retry_after is not None:
+            payload["retry_after"] = self.retry_after
+        return payload
 
 
 # ── UX / guided pipeline error code taxonomy ──
@@ -102,11 +130,13 @@ def classify_ux_error(error: Exception | str) -> ErrorInfo:
 
     return ErrorInfo(
         error_code=code,
-        error_category=ux_meta.get("category", core_info.error_category),
+        error_category=ux_meta.get("category", core_info.category),
         retryable=ux_meta.get("retryable", core_info.retryable),
         fix_hint=ux_meta.get("fix_hint", ""),
         error_type=core_info.error_type,
-        redacted_message=core_info.redacted_message,
+        redacted_message=core_info.message,
+        status_code=core_info.status_code,
+        retry_after=core_info.retry_after,
     )
 
 

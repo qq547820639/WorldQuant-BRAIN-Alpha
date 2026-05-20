@@ -73,6 +73,11 @@ class ComplianceReport:
         self.total_checks += 1
         self.passed += 1
 
+    @property
+    def ok(self) -> bool:
+        """Compatibility flag for CLI/Web callers: no blocking violations."""
+        return self.overall != "FAIL"
+
     def finalize(self) -> "ComplianceReport":
         if self.failed > 0:
             self.overall = "FAIL"
@@ -720,6 +725,9 @@ class RedLineVerifier:
     Run this verifier before any production pipeline execution or deployment.
     Any BLOCKING violation MUST halt the pipeline.
     """
+
+    def __init__(self, run_config: Any | None = None):
+        self.run_config = run_config
 
     def verify_all(self) -> ComplianceReport:
         """Run all six red-line verifications."""

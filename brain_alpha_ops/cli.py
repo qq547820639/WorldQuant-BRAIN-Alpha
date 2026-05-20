@@ -461,11 +461,11 @@ def _main(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
         return 0
 
     if args.command == "score":
-        from brain_alpha_ops.scoring.official_scoring import OfficialScoringSystem, GateConfig
-        candidate = _load_json_argument(args.candidate_json)
+        from brain_alpha_ops.models import Candidate
+        from brain_alpha_ops.scoring.official_scoring import OfficialScoringSystem
+        candidate = Candidate.from_dict(_load_json_argument(args.candidate_json))
         run_config = load_run_config(args.config)
-        gate_config = GateConfig.from_thresholds(run_config.ops.thresholds)
-        system = OfficialScoringSystem(gate_config=gate_config)
+        system = OfficialScoringSystem(run_config.ops)
         result = system.evaluate(candidate)
         if args.attribution_only:
             print(result.attribution_report())
@@ -483,11 +483,8 @@ def _main(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
         if args.cycles is not None:
             run_config.ops.budget.max_cycles = args.cycles
         pipeline = GuidedPipeline(run_config)
-        if args.resume:
-            pipeline.resume()
-        else:
-            pipeline.run()
-        pipeline.print_summary()
+        result = pipeline.resume() if args.resume else pipeline.run_guided()
+        pipeline.print_summary(result)
         return 0
 
     if args.command != "run":
