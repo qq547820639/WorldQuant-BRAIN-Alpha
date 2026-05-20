@@ -13,6 +13,8 @@ from typing import Callable
 
 
 ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 DEFAULT_CONFIG = ROOT / "config" / "run_config.json"
 DEFAULT_HTML = ROOT / "brain_alpha_ops" / "web" / "index.html"
 COMPILE_TARGETS = [

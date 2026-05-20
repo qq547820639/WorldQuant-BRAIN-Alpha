@@ -29,6 +29,7 @@ def test_quality_gate_runs_core_steps_and_skips_pytest(monkeypatch, tmp_path):
         "frontend_inline_sync",
         "frontend_syntax",
         "secret_scan",
+        "cache_metadata_audit",
     ]
     assert all("-m" not in call or "pytest" not in call for call in calls)
 
@@ -56,10 +57,11 @@ def test_quality_gate_includes_pytest_args_and_propagates_failure(monkeypatch, t
         "frontend_inline_sync",
         "frontend_syntax",
         "secret_scan",
+        "cache_metadata_audit",
         "pytest",
     ]
     assert "--include-all" in result["steps"][6]["command"]
-    assert result["steps"][7]["command"][-1] == "tests/test_web.py"
+    assert result["steps"][8]["command"][-1] == "tests/test_web.py"
 
 
 def test_quality_gate_can_skip_compile(monkeypatch, tmp_path):
@@ -79,7 +81,7 @@ def test_quality_gate_can_skip_compile(monkeypatch, tmp_path):
     )
 
     assert result["ok"] is True
-    assert [step["name"] for step in result["steps"]] == ["config", "dependency_policy", "redline_verification", "frontend_inline_sync", "frontend_syntax", "secret_scan"]
+    assert [step["name"] for step in result["steps"]] == ["config", "dependency_policy", "redline_verification", "frontend_inline_sync", "frontend_syntax", "secret_scan", "cache_metadata_audit"]
     assert not any("compileall" in call for call in calls)
 
 
@@ -108,6 +110,7 @@ def test_quality_gate_can_include_dependency_audit(monkeypatch, tmp_path):
         "frontend_inline_sync",
         "frontend_syntax",
         "secret_scan",
+        "cache_metadata_audit",
         "dependency_audit",
     ]
     assert any("pip_audit" in call for call in calls)
