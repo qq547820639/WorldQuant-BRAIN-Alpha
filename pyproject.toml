@@ -1,3 +1,11 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["brain_alpha_ops*"]
+
 [project]
 name = "brain-alpha-ops"
 version = "0.3.0"
