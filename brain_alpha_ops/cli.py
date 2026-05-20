@@ -167,6 +167,23 @@ def build_parser() -> argparse.ArgumentParser:
     cross.add_argument("--reviewer-response", default="", help="optional reviewer response text or path")
     cross.add_argument("--min-confidence", type=float, default=0.6)
     cross.add_argument("--record-ledger", action="store_true", help="append prompt run metadata to prompt_runs.jsonl")
+
+    redline = sub.add_parser("redline", help="verify six technical red lines compliance (aggregate quality gate step)")
+    redline.add_argument("--config", default=str(DEFAULT_RUN_CONFIG_PATH))
+    redline.add_argument("--block", action="store_true", help="exit with code 1 on violations")
+    redline.add_argument("--json", action="store_true", help="print machine-readable JSON")
+
+    score = sub.add_parser("score", help="evaluate a candidate alpha via the full scoring pipeline")
+    score.add_argument("--candidate-json", required=True, help="candidate JSON text or path to a JSON file")
+    score.add_argument("--config", default=str(DEFAULT_RUN_CONFIG_PATH))
+    score.add_argument("--json", action="store_true", help="print machine-readable JSON")
+    score.add_argument("--attribution-only", action="store_true", help="print only the attribution tree")
+
+    guided = sub.add_parser("guided-run", help="run the research pipeline with guided UX (checkpoints, progress, redline)")
+    guided.add_argument("--config", default=str(DEFAULT_RUN_CONFIG_PATH))
+    guided.add_argument("--env", choices=["mock", "production"], default=None)
+    guided.add_argument("--cycles", type=int, default=None)
+    guided.add_argument("--resume", action="store_true", help="resume from the latest checkpoint")
     return parser
 
 
@@ -423,6 +440,54 @@ def _main(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
                 parse_status="cross_reviewed" if payload.get("ok") else "failed",
             )
         print(json.dumps(payload, ensure_ascii=False, indent=2, default=str))
+        return 0
+
+    if args.command == "redline":
+        from brain_alpha_ops.compliance.redline_verifier import RedLineVerifier
+        run_config = load_run_config(args.config)
+        verifier = RedLineVerifier(run_config)
+        if args.json:
+            report = verifier.verify_all()
+            print(json.dumps(report.to_dict(), ensure_ascii=False, indent=2, default=str))
+            return 1 if (args.block and not report.ok) else 0
+        if args.block:
+            verifier.verify_and_block()
+            print("OK: all six technical red lines passed.")
+        else:
+            report = verifier.verify_all()
+            print(report.report())
+            if not report.ok:
+                print(f"WARNING: {len(report.violations)} violation(s) found.")
+        return 0
+
+    if args.command == "score":
+        from brain_alpha_ops.scoring.official_scoring import OfficialScoringSystem, GateConfig
+        candidate = _load_json_argument(args.candidate_json)
+        run_config = load_run_config(args.config)
+        gate_config = GateConfig.from_thresholds(run_config.ops.thresholds)
+        system = OfficialScoringSystem(gate_config=gate_config)
+        result = system.evaluate(candidate)
+        if args.attribution_only:
+            print(result.attribution_report())
+        elif args.json:
+            print(json.dumps(result.to_dict(), ensure_ascii=False, indent=2, default=str))
+        else:
+            print(result.attribution_report())
+        return 0
+
+    if args.command == "guided-run":
+        from brain_alpha_ops.ux.guided_pipeline import GuidedPipeline
+        run_config = load_run_config(args.config)
+        if args.env is not None:
+            run_config.environment = args.env
+        if args.cycles is not None:
+            run_config.ops.budget.max_cycles = args.cycles
+        pipeline = GuidedPipeline(run_config)
+        if args.resume:
+            pipeline.resume()
+        else:
+            pipeline.run()
+        pipeline.print_summary()
         return 0
 
     if args.command != "run":
