@@ -114,6 +114,11 @@
       parts.push(renderScorecardDetail(candidate));
     }
 
+    // --- Scoring Attribution (from scoring API) ---
+    if (candidate.alpha_id) {
+      parts.push(renderScoringSection(candidate.alpha_id));
+    }
+
     // --- Gate ---
     var gate = candidate.gate || {};
     if (Object.keys(gate).length) {
@@ -627,6 +632,115 @@
     if (modal) { modal.classList.add('hidden'); }
   }
 
+  // ---------- Scoring Attribution & Redline ---------------------------------
+
+  /**
+   * Async section that loads scoring attribution from the API.
+   * Shows a loading placeholder, then replaces with the result.
+   */
+  function renderScoringSection(alphaId) {
+    var containerId = 'scoringSection_' + alphaId;
+    var html = '<div id="' + containerId + '" class="detail-section">' +
+      '<div style="color:var(--muted);font-size:13px">评分归因加载中...</div></div>';
+    // Load async
+    setTimeout(function () {
+      var el = document.getElementById(containerId);
+      if (!el) return;
+      try {
+        window.ApiClient.post('/api/scoring/attribution', { alpha_id: alphaId }).then(function (data) {
+          if (data && data.attribution) {
+            el.innerHTML = renderAttributionTreeHTML(data);
+          } else {
+            el.innerHTML = '<div style="color:var(--muted);font-size:13px">暂无评分归因数据</div>';
+          }
+        }).catch(function () {
+          el.innerHTML = '';
+        });
+      } catch (e) {
+        el.innerHTML = '';
+      }
+    }, 10);
+    return html;
+  }
+
+  function renderAttributionTreeHTML(result) {
+    var hg = result.hard_gates || [];
+    var sg = result.soft_gates || [];
+    var tf = result.top_failures || [];
+    var hints = result.improvement_hints || [];
+
+    var body = '';
+
+    // Gate summary
+    var gatePassed = hg.every(function (g) { return g.passed; });
+    var softWarn = sg.filter(function (g) { return !g.passed; });
+    body += '<div style="margin-bottom:8px">' +
+      '<span style="color:' + (gatePassed ? 'var(--good)' : 'var(--bad)') + ';font-weight:600">' +
+      (gatePassed ? '✓ 硬门禁通过' : '✗ 硬门禁未通过') + '</span>' +
+      (softWarn.length ? ' <span style="color:var(--warn);margin-left:8px">⚠ ' + softWarn.length + ' 项软门禁警告</span>' : '') +
+      '</div>';
+
+    // Top failures
+    if (tf.length) {
+      body += '<div style="margin-bottom:8px;font-size:13px;color:var(--bad)">主要失败项: ';
+      body += tf.map(function (f) { return f.name + ' (' + f.reason + ')'; }).join(', ');
+      body += '</div>';
+    }
+
+    // Improvement hints
+    if (hints.length) {
+      body += '<div style="margin-bottom:8px;font-size:12px;color:var(--muted)">';
+      body += hints.map(function (h) { return '💡 ' + h; }).join('<br>');
+      body += '</div>';
+    }
+
+    // Simple tree
+    if (result.attribution) {
+      body += renderAttributionNode(result.attribution);
+    }
+
+    return body;
+  }
+
+  function renderAttributionNode(node) {
+    if (!node) return '';
+    var indent = 'margin-left:16px;';
+    var sign = node.contribution >= 0 ? '' : '';
+    var color = node.score > 0.7 ? 'var(--good)' : node.score > 0.4 ? 'var(--warn)' : 'var(--bad)';
+    var html = '<div style="font-size:13px;' + (node.weight < 1.0 ? indent : '') + '">' +
+      '<span style="color:' + color + ';font-weight:600">' + node.name + '</span>' +
+      ' <span style="color:var(--muted);font-size:12px">得分=' + (node.score || 0).toFixed(2) +
+      ' 权重=' + (node.weight || 0).toFixed(2) +
+      ' 贡献=' + (node.contribution || 0).toFixed(2) + '</span>' +
+      (node.explanation ? ' <span style="color:var(--muted);font-size:11px">' + node.explanation + '</span>' : '') +
+      '</div>';
+    if (node.children && node.children.length) {
+      for (var i = 0; i < node.children.length; i++) {
+        html += renderAttributionNode(node.children[i]);
+      }
+    }
+    return html;
+  }
+
+  /**
+   * Fetch and display the redline compliance report.
+   */
+  function loadRedlineReport() {
+    try {
+      window.ApiClient.get('/api/redline/report').then(function (data) {
+        window.AppState.set('redlineReport', data);
+        var el = document.getElementById('redlineSummary');
+        if (el && data) {
+          var ok = data.ok;
+          var vc = data.violations || 0;
+          el.innerHTML = ok
+            ? '<span style="color:var(--good)">✓ 六大红线验证通过</span>'
+            : '<span style="color:var(--bad)">✗ ' + vc + ' 条红线违规</span>';
+        }
+      }).catch(function () {});
+    } catch (e) {}
+  }
+
   // ---------- Public API ----------------------------------------------------
 
   window.DetailView = {
@@ -648,4 +762,5 @@
   window.viewAssistantContextDetail = renderAssistantContextDetail;
   window.viewAssistantGuidanceDetail = renderAssistantGuidanceDetail;
   window.viewCheckDetail = renderCheckDetail;
+  window.loadRedlineReport = loadRedlineReport;
 })();
