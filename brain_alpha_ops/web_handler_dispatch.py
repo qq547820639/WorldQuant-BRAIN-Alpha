@@ -206,6 +206,9 @@ def dispatch_get(handler: Any, parsed: Any, ctx: WebHandlerDispatchContext) -> N
     elif parsed.path == "/api/scoring/health":
         from brain_alpha_ops.web_redline_scoring import handle_scoring_health
         handler._json(handle_scoring_health(parse_qs(parsed.query)))
+    elif parsed.path == "/api/checkpoint/status":
+        from brain_alpha_ops.web_redline_scoring import handle_checkpoint_status
+        handler._json(handle_checkpoint_status(parse_qs(parsed.query)))
     else:
         handler._json({"ok": False, "error_code": "NOT_FOUND", "error": "not found"}, status=404)
 

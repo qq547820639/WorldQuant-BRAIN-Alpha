@@ -4079,6 +4079,7 @@
     refreshUserProfile();
     setInterval(refreshUserProfile, 30000);
     if (window.loadRedlineReport) { window.loadRedlineReport(); }
+    if (window.loadCheckpointStatus) { window.loadCheckpointStatus(); }
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
