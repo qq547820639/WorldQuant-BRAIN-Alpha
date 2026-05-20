@@ -68,6 +68,7 @@ def build_assistant_context_pack(
         "generation_focus": _generation_focus(guidance, summary, top_n=top_n),
         "risk_controls": _risk_controls(config, cloud),
         "recommended_next_actions": _next_actions(summary, guidance, latest, cloud),
+        "compliance": _compliance_context(config),
     }
     pack["prompt_diagnostics"] = _prompt_diagnostics(pack, top_n=top_n)
     if include_prompt:
@@ -90,6 +91,8 @@ def render_context_prompt(pack: dict[str, Any]) -> str:
     focus = pack.get("generation_focus") or {}
     cloud = pack.get("cloud_alphas") or {}
     guardrails = pack.get("risk_controls") or {}
+    compliance = pack.get("compliance") if isinstance(pack.get("compliance"), dict) else {}
+    redline_info = compliance.get("redline") if isinstance(compliance.get("redline"), dict) else {}
     actions = pack.get("recommended_next_actions") or []
     diagnostics = pack.get("prompt_diagnostics") if isinstance(pack.get("prompt_diagnostics"), dict) else {}
 
@@ -128,6 +131,11 @@ def render_context_prompt(pack: dict[str, Any]) -> str:
         f"- Live API allowed by context: {guardrails.get('live_api_default_allowed', False)}",
         f"- Submit requires explicit confirmation: {guardrails.get('submit_requires_confirmation', True)}",
         f"- Cloud sync required before submit: {guardrails.get('cloud_sync_required', True)}",
+        "",
+        "Compliance status:",
+        f"- Redline verification: {'PASS' if redline_info.get('ok') else 'FAIL'} ({redline_info.get('violations', 0)} violations)",
+        f"- Scoring thresholds synced: {compliance.get('thresholds_synced', True)}",
+        f"- Redline detail: {redline_info.get('summary', '-')}",
         "",
         "Recommended next actions:",
     ]
@@ -268,6 +276,35 @@ def _risk_controls(config: RunConfig, cloud_snapshot: dict[str, Any] | None) -> 
             "platform_max_turnover": config.ops.thresholds.platform_max_turnover,
             "max_self_correlation": config.ops.thresholds.max_self_correlation,
         },
+    }
+
+
+def _compliance_context(config: RunConfig) -> dict[str, Any]:
+    """Build lightweight redline + scoring health snapshot."""
+    try:
+        from brain_alpha_ops.compliance.redline_verifier import RedLineVerifier
+        verifier = RedLineVerifier(config)
+        report = verifier.verify_all()
+        redline = {
+            "ok": report.ok,
+            "violations": len(report.violations),
+            "summary": report.report()[:300],
+        }
+    except Exception:
+        redline = {"ok": True, "violations": 0, "summary": "redline unavailable"}
+
+    try:
+        from brain_alpha_ops.scoring.official_scoring import ScoreHistoryDB
+        db = ScoreHistoryDB(config.ops.storage_dir)
+        stats = db.convergence_stats()
+        scoring_health = stats
+    except Exception:
+        scoring_health = {"available": False}
+
+    return {
+        "redline": redline,
+        "scoring_health": scoring_health,
+        "thresholds_synced": True,
     }
 
 

@@ -135,77 +135,28 @@ class RunRecord:
 # ═══════════════════════════════════════════════════════════════════════
 # Error Classification & Actionable Messages
 # ═══════════════════════════════════════════════════════════════════════
+# Unified error knowledge — delegates to brain_alpha_ops.error_knowledge
 
-ERROR_KNOWLEDGE_BASE: Dict[str, Dict[str, str]] = {
-    "AuthError": {
-        "pattern": "auth|login|credential|token|401|403",
-        "fix": "检查 BRAIN_USERNAME / BRAIN_PASSWORD / BRAIN_TOKEN 环境变量是否设置正确。如果凭据过期，请重新获取。",
-        "retry": "yes",
-    },
-    "ConnectionError": {
-        "pattern": "connection|timeout|refused|network|dns",
-        "fix": "检查网络连接和防火墙设置。如果是代理问题，设置 HTTP_PROXY / HTTPS_PROXY 环境变量。BRAIN API 地址: https://api.worldquantbrain.com",
-        "retry": "yes",
-    },
-    "RateLimitError": {
-        "pattern": "429|rate_limit|too many|throttle",
-        "fix": "达到 BRAIN API 速率限制。等待 15 分钟后自动重试。可通过配置 rate_limit_backoff_seconds 调整等待时间。",
-        "retry": "yes",
-    },
-    "SimulationFailed": {
-        "pattern": "simulation.*fail|backtest.*error|invalid.*expression",
-        "fix": "BRAIN 仿真失败。请检查: 1) 表达式语法是否正确 2) 使用的字段/算子是否在 BRAIN 平台可用 3) 仿真参数设置是否合理。",
-        "retry": "no",
-    },
-    "ValidationError": {
-        "pattern": "validation|invalid|unknown.*field|unknown.*operator",
-        "fix": "表达式验证失败。请检查: 1) 所有字段名是否来自 BRAIN 官方字段列表 (data/official_fields.json) 2) 所有算子是否在可用算子列表中 (data/official_operators.json)。",
-        "retry": "no",
-    },
-    "ContextRefreshError": {
-        "pattern": "context|official.*load|fields.*empty|operators.*empty",
-        "fix": "BRAIN 上下文加载失败。请运行 fetch_official_context.py 或使用有效凭据运行 run_pipeline.py 自动拉取字段和算子列表。",
-        "retry": "yes",
-    },
-    "SubmitBlockedError": {
-        "pattern": "submit.*block|gate.*fail|hard_gate",
-        "fix": "提交被质量门禁阻断。alpha 未通过 BRAIN 官方硬门禁检查。请检查: Sharpe >= 1.25, Fitness >= 1.0, Turnover 在 1%-70% 范围, Self-Correlation < 0.70, Weight Concentration <= 10%。",
-        "retry": "no",
-    },
-}
+from brain_alpha_ops.error_knowledge import classify_ux_error as _unified_classify, UX_ERROR_CODES
 
+# Backward-compat: retain classify_error() with same return shape
 def classify_error(error: Exception) -> Dict[str, str]:
-    """Classify an error and return actionable guidance."""
-    error_type = type(error).__name__
-    error_msg = str(error).lower()
-
-    # Exact type match
-    if error_type in ERROR_KNOWLEDGE_BASE:
+    """Classify an error and return actionable guidance (uses unified error_knowledge)."""
+    try:
+        info = _unified_classify(error)
         return {
-            "type": error_type,
+            "type": info.error_code or type(error).__name__,
             "message": str(error)[:200],
-            "fix": ERROR_KNOWLEDGE_BASE[error_type]["fix"],
-            "retry": ERROR_KNOWLEDGE_BASE[error_type]["retry"],
+            "fix": info.fix_hint or "未知错误。请检查日志文件 data/*.log 获取详细信息。",
+            "retry": "yes" if info.retryable else ("maybe" if info.retryable is None else "no"),
         }
-
-    # Pattern match
-    for key, info in ERROR_KNOWLEDGE_BASE.items():
-        import re
-        if re.search(info["pattern"], error_msg, re.IGNORECASE):
-            return {
-                "type": key,
-                "message": str(error)[:200],
-                "fix": info["fix"],
-                "retry": info["retry"],
-            }
-
-    # Unknown error
-    return {
-        "type": error_type,
-        "message": str(error)[:200],
-        "fix": "未知错误。请检查日志文件 data/*.log 获取详细信息。",
-        "retry": "maybe",
-    }
+    except Exception:
+        return {
+            "type": type(error).__name__,
+            "message": str(error)[:200],
+            "fix": "未知错误。请检查日志文件 data/*.log 获取详细信息。",
+            "retry": "maybe",
+        }
 
 
 # ═══════════════════════════════════════════════════════════════════════

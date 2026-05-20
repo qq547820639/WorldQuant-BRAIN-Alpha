@@ -200,6 +200,12 @@ def dispatch_get(handler: Any, parsed: Any, ctx: WebHandlerDispatchContext) -> N
         handler._json(ctx.profile_payload(ctx.user_profile_snapshot))
     elif parsed.path == "/api/presets":
         handler._json(ctx.presets_payload(ctx.load_presets))
+    elif parsed.path == "/api/redline/report":
+        from brain_alpha_ops.web_redline_scoring import handle_redline_report
+        handler._json(handle_redline_report(parse_qs(parsed.query)))
+    elif parsed.path == "/api/scoring/health":
+        from brain_alpha_ops.web_redline_scoring import handle_scoring_health
+        handler._json(handle_scoring_health(parse_qs(parsed.query)))
     else:
         handler._json({"ok": False, "error_code": "NOT_FOUND", "error": "not found"}, status=404)
 
@@ -362,6 +368,20 @@ def dispatch_post(handler: Any, parsed: Any, ctx: WebHandlerDispatchContext) -> 
         )
         handler._json(response, extra_headers=headers)
         ctx.start_shutdown()
+    elif parsed.path == "/api/scoring/evaluate":
+        try:
+            payload = handler._read_json()
+            from brain_alpha_ops.web_redline_scoring import handle_scoring_evaluate
+            handler._json(handle_scoring_evaluate(payload))
+        except Exception as exc:
+            handler._json(ctx.web_error(exc, "SCORING_ERROR"), status=400)
+    elif parsed.path == "/api/scoring/attribution":
+        try:
+            payload = handler._read_json()
+            from brain_alpha_ops.web_redline_scoring import handle_scoring_attribution
+            handler._json(handle_scoring_attribution(payload))
+        except Exception as exc:
+            handler._json(ctx.web_error(exc, "SCORING_ERROR"), status=400)
     else:
         handler._json({"ok": False, "error_code": "NOT_FOUND", "error": "not found"}, status=404)
 

@@ -43,6 +43,8 @@ GET_ROUTES = {
         WebRoute("GET", "/api/check_results", "check_results"),
         WebRoute("GET", "/api/profile", "profile"),
         WebRoute("GET", "/api/presets", "presets"),
+        WebRoute("GET", "/api/redline/report", "redline_report"),
+        WebRoute("GET", "/api/scoring/health", "scoring_health"),
     ]
 }
 
@@ -65,6 +67,8 @@ POST_ROUTES = {
         WebRoute("POST", "/api/assistant_guidance", "assistant_guidance"),
         WebRoute("POST", "/api/logout", "logout"),
         WebRoute("POST", "/api/shutdown", "shutdown"),
+        WebRoute("POST", "/api/scoring/evaluate", "scoring_evaluate"),
+        WebRoute("POST", "/api/scoring/attribution", "scoring_attribution"),
     ]
 }
 
