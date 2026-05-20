@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -124,13 +125,31 @@ STATIC_ANALYSIS_TARGETS = [
 StepRunner = Callable[[], tuple[bool, dict]]
 
 
+def _subprocess_env() -> dict[str, str]:
+    env = os.environ.copy()
+    local_deps = ROOT / ".codex_pydeps"
+    python_paths: list[str] = []
+    if local_deps.exists():
+        python_paths.append(str(local_deps))
+    existing = env.get("PYTHONPATH", "")
+    if existing:
+        python_paths.append(existing)
+    if python_paths:
+        env["PYTHONPATH"] = os.pathsep.join(python_paths)
+    env.setdefault("PYTHONUTF8", "1")
+    return env
+
+
 def _run_python_module(args: list[str]) -> tuple[bool, dict]:
     started = time.perf_counter()
     proc = subprocess.run(
         [sys.executable, *args],
         cwd=str(ROOT),
         text=True,
+        encoding="utf-8",
+        errors="replace",
         capture_output=True,
+        env=_subprocess_env(),
     )
     return proc.returncode == 0, {
         "command": [sys.executable, *args],

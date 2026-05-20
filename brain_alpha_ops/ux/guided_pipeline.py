@@ -194,6 +194,7 @@ class GuidedPipeline:
         self._progress_callback: Optional[Callable] = None
         self._stop_flag = False
         self._checkpoint_dir = Path("data/checkpoints")
+        self._last_result: Optional[PipelineResult] = None
 
         # Initialize phases
         for phase_id, phase_desc in self.PHASES:
@@ -241,7 +242,30 @@ class GuidedPipeline:
             self._save_checkpoint(run_id, "error", result)
             raise
 
+        self._last_result = result
         return result
+
+    def run(self) -> PipelineResult:
+        """Backward-compatible alias used by CLI and older docs."""
+        return self.run_guided()
+
+    def resume(self, run_id: str | None = None) -> PipelineResult:
+        """Resume from the latest checkpoint when possible.
+
+        The core pipeline already resumes persisted official backtests from the
+        repository. Checkpoints preserve UX state and the latest snapshot; if a
+        completed snapshot exists we return it, otherwise we start a guided run
+        with persisted-backtest resume enabled.
+        """
+        checkpoint = self.load_checkpoint(run_id) if run_id else self.latest_checkpoint()
+        if checkpoint:
+            self._notify("resume", "running", checkpoint.to_dict())
+            snapshot_result = self._result_from_snapshot(checkpoint.snapshot)
+            if snapshot_result and checkpoint.phase_completed in {"finalize", "completed"}:
+                self._last_result = snapshot_result
+                self._notify("resume", "completed", {"run_id": checkpoint.run_id})
+                return snapshot_result
+        return self.run_guided()
 
     # ── Phase Implementations ──
 
@@ -469,6 +493,38 @@ class GuidedPipeline:
                 continue
         return checkpoints
 
+    def latest_checkpoint(self) -> Optional[CheckpointData]:
+        checkpoints = self.list_checkpoints()
+        if not checkpoints:
+            return None
+        return self.load_checkpoint(str(checkpoints[0].get("run_id", "")))
+
+    @staticmethod
+    def _result_from_snapshot(snapshot: Dict[str, Any]) -> Optional[PipelineResult]:
+        if not isinstance(snapshot, dict) or not snapshot.get("run_id"):
+            return None
+        try:
+            candidates = [
+                Candidate.from_dict(row)
+                for row in snapshot.get("candidates", [])
+                if isinstance(row, dict)
+            ]
+            event_fields = set(PipelineEvent.__dataclass_fields__)
+            events = [
+                PipelineEvent(**{key: value for key, value in row.items() if key in event_fields})
+                for row in snapshot.get("events", [])
+                if isinstance(row, dict)
+            ]
+            summary = snapshot.get("summary") if isinstance(snapshot.get("summary"), dict) else {}
+            return PipelineResult(
+                run_id=str(snapshot.get("run_id")),
+                candidates=candidates,
+                events=events,
+                summary=summary,
+            )
+        except Exception:
+            return None
+
     # ── Run History ──
 
     def _save_run_record(self, result: PipelineResult) -> None:
@@ -549,8 +605,12 @@ class GuidedPipeline:
                 for err in phase.errors[:2]:
                     print(f"       [W] {err}")
 
-    def print_summary(self, result: PipelineResult) -> None:
+    def print_summary(self, result: Optional[PipelineResult] = None) -> None:
         """Print structured result summary."""
+        result = result or self._last_result
+        if result is None:
+            print("\n  No pipeline result is available yet.")
+            return
         s = result.summary
         print("\n" + "=" * 64)
         print("  BRAIN Alpha Ops — Guided Pipeline Summary")

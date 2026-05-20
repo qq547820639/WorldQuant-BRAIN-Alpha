@@ -195,19 +195,25 @@ class OfficialScoringSystem:
       5. Historical score tracking for convergence analysis
     """
 
-    def __init__(self, ops_config: Optional[OpsConfig] = None):
+    def __init__(self, ops_config: Optional[OpsConfig] = None, *, gate_config: "GateConfig | None" = None):
         self.ops_config = ops_config or OpsConfig()
         self.thresholds = self.ops_config.thresholds
         self.scoring = self.ops_config.scoring
+        self.gate_config = gate_config
+        if gate_config is not None:
+            self.thresholds = gate_config.thresholds
         self._score_history: Dict[str, List[Dict[str, Any]]] = {}
 
     # ── Core Evaluation ──
 
-    def evaluate(self, candidate: Candidate, params=None) -> ScoringResult:
+    def evaluate(self, candidate: Candidate | dict, params=None) -> ScoringResult:
         """Full evaluation: score → gate → attribute → simulate.
 
         Returns a ScoringResult with complete traceability.
         """
+        if isinstance(candidate, dict):
+            candidate = Candidate.from_dict(candidate)
+
         # 1. Build scorecard
         scorecard = build_scorecard(
             candidate,
@@ -222,6 +228,10 @@ class OfficialScoringSystem:
         # 3. Build hard/soft gate results
         hard_gates = self._build_hard_gates(candidate, scorecard)
         soft_gates = self._build_soft_gates(candidate, scorecard)
+        if self.gate_config is not None and candidate.official_metrics:
+            configured_gate = self.gate_config.evaluate(candidate.official_metrics)
+            configured_gate.gate_name = "CONFIGURED_GATE"
+            soft_gates.append(configured_gate)
 
         # 4. Build attribution tree
         attribution = self._build_attribution_tree(scorecard)
@@ -607,6 +617,10 @@ class GateConfig:
         self.thresholds = thresholds
         self._gates: List[Dict[str, Any]] = []
 
+    @classmethod
+    def from_thresholds(cls, thresholds: QualityThresholds) -> "GateConfig":
+        return cls(thresholds)
+
     def add_hard_gate(self, name: str, check_fn, description: str = "") -> "GateConfig":
         self._gates.append({
             "name": name,
@@ -664,7 +678,8 @@ class ScoreHistoryDB:
     DEFAULT_HISTORY_LIMIT = 5000
 
     def __init__(self, path: str = "data/score_history.jsonl"):
-        self._path = Path(path)
+        target = Path(path)
+        self._path = target if target.suffix.lower() == ".jsonl" else target / "score_history.jsonl"
         self._path.parent.mkdir(parents=True, exist_ok=True)
 
     def append(self, result: ScoringResult) -> None:

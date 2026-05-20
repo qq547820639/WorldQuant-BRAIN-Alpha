@@ -127,7 +127,7 @@ from brain_alpha_ops.web_review_api import (
 )
 from brain_alpha_ops.web_handler_dispatch import WebHandlerDispatchContext, dispatch_get, dispatch_post
 from brain_alpha_ops.web_routes import route_for
-from brain_alpha_ops.web_run_job import run_job_service
+from brain_alpha_ops.web_run_job import run_guided_job_service, run_job_service
 from brain_alpha_ops.web_runtime_state import (
     active_auxiliary_operation as _active_auxiliary_operation_service,
     compute_run_stats as _compute_run_stats_service,
@@ -645,6 +645,17 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def run_job(job_id: str, payload: dict):
+    if payload.get("guided"):
+        run_guided_job_service(
+            job_id,
+            payload,
+            job_store=JOBS,
+            run_config_from_payload=run_config_from_payload,
+            compute_run_stats=_compute_run_stats,
+            safe_error_message=safe_error_message,
+            log=logger,
+        )
+        return
     run_job_service(
         job_id,
         payload,

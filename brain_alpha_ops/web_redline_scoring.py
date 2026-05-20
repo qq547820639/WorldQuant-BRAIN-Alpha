@@ -8,14 +8,12 @@ Exposes:
 
 from __future__ import annotations
 
-import json
-import os
 from typing import Any
 
 from brain_alpha_ops.compliance.redline_verifier import RedLineVerifier
 from brain_alpha_ops.config import load_run_config
+from brain_alpha_ops.models import Candidate
 from brain_alpha_ops.scoring.official_scoring import (
-    GateConfig,
     OfficialScoringSystem,
     ScoreHistoryDB,
 )
@@ -41,9 +39,8 @@ def handle_scoring_evaluate(body: dict[str, Any]) -> dict[str, Any]:
         return {"ok": False, "error": "missing or invalid 'candidate' in request body"}
 
     config = load_run_config()
-    gate_config = GateConfig.from_thresholds(config.ops.thresholds)
-    system = OfficialScoringSystem(gate_config=gate_config)
-    result = system.evaluate(candidate)
+    system = OfficialScoringSystem(config.ops)
+    result = system.evaluate(Candidate.from_dict(candidate))
 
     # Persist to score history
     try:
