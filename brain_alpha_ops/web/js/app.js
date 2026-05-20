@@ -4078,6 +4078,7 @@
     loadCheckResults();
     refreshUserProfile();
     setInterval(refreshUserProfile, 30000);
+    if (window.loadRedlineReport) { window.loadRedlineReport(); }
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);

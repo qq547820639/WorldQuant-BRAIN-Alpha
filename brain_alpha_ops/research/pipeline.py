@@ -532,6 +532,20 @@ class AlphaResearchPipeline:
             self.repository.save_run_history(run_id, result.to_dict(), status=run_status)
         except Exception:
             logger.warning("failed to persist run history for %s", run_id, exc_info=True)
+
+        # Auto-calibration check (non-blocking)
+        try:
+            from calibrate_weights import auto_calibrate_if_stalled
+            calib = auto_calibrate_if_stalled(self.ops_config.storage_dir)
+            if calib.get("triggered") and calib.get("advice"):
+                logger.info("auto_calibration triggered: %s", calib.get("reason"))
+                self.events.append(PipelineEvent(
+                    event="auto_calibration",
+                    data={"triggered": True, "reason": calib.get("reason"), "advice": calib.get("advice")},
+                ))
+        except Exception:
+            logger.debug("auto_calibration skipped", exc_info=True)
+
         return result
 
     # ═══════════════════════════════════════════════════════════════════
