@@ -1,6 +1,6 @@
 import json
 
-from brain_alpha_ops.cli import main
+from brain_alpha_ops.cli import _load_json_argument, main
 from brain_alpha_ops.config import RunConfig, write_run_config
 from brain_alpha_ops.models import Candidate
 from brain_alpha_ops.research.repository import ResearchRepository
@@ -30,6 +30,13 @@ def test_cli_memory_summary_prints_json(tmp_path, capsys):
     payload = json.loads(capsys.readouterr().out)
     assert payload["total_candidates"] == 1
     assert payload["fields"][0]["name"] == "close"
+
+
+def test_cli_json_file_argument_accepts_utf8_bom(tmp_path):
+    candidate_path = tmp_path / "candidate.json"
+    candidate_path.write_text('{"alpha_id": "bom_ok"}', encoding="utf-8-sig")
+
+    assert _load_json_argument(str(candidate_path)) == {"alpha_id": "bom_ok"}
 
 
 def test_cli_memory_summary_writes_file(tmp_path, capsys):

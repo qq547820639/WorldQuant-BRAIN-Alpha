@@ -536,7 +536,7 @@ def _has_cli_credentials(args: argparse.Namespace) -> bool:
 def _read_text_file(path: str) -> str:
     from pathlib import Path
 
-    return Path(path).read_text(encoding="utf-8")
+    return Path(path).read_text(encoding="utf-8-sig")
 
 
 def _read_text_or_literal(value: str) -> str:
@@ -544,7 +544,7 @@ def _read_text_or_literal(value: str) -> str:
 
     path = Path(value)
     if path.is_file():
-        return path.read_text(encoding="utf-8")
+        return path.read_text(encoding="utf-8-sig")
     return value
 
 
