@@ -1189,6 +1189,8 @@
       </div>
       <div class="toolbar" style="padding:0 14px 6px">
         <span id="redlineSummary" style="font-size:12px;color:var(--muted)">红线验证加载中...</span>
+        <span style="margin:0 8px;color:var(--line)">|</span>
+        <span id="checkpointSummary" style="font-size:12px;color:var(--muted)">断点加载中...</span>
       </div>
       <div id="insight" class="insight"></div>
       <div id="chartsPanel" class="charts-panel">
@@ -2618,32 +2620,65 @@
 
     var body = '';
 
-    // Gate summary
-    var gatePassed = hg.every(function (g) { return g.passed; });
-    var softWarn = sg.filter(function (g) { return !g.passed; });
-    body += '<div style="margin-bottom:8px">' +
-      '<span style="color:' + (gatePassed ? 'var(--good)' : 'var(--bad)') + ';font-weight:600">' +
-      (gatePassed ? '✓ 硬门禁通过' : '✗ 硬门禁未通过') + '</span>' +
-      (softWarn.length ? ' <span style="color:var(--warn);margin-left:8px">⚠ ' + softWarn.length + ' 项软门禁警告</span>' : '') +
-      '</div>';
+    // ── Hard Gates Panel ──
+    body += '<div class="detail-section" style="margin-top:6px">';
+    body += '<div style="font-weight:700;font-size:13px;margin-bottom:4px;color:var(--text)">🔒 硬门禁</div>';
+    if (hg.length) {
+      hg.forEach(function (g) {
+        var color = g.passed ? 'var(--good)' : 'var(--bad)';
+        var icon = g.passed ? '✓' : '✗';
+        body += '<div style="font-size:12px;padding:2px 0;color:' + color + '">' + icon + ' ' + g.gate_name;
+        if (g.failed_items && g.failed_items.length) {
+          body += ' <span style="color:var(--muted)">(' + g.failed_items.join(', ') + ')</span>';
+        }
+        body += '</div>';
+      });
+    } else {
+      body += '<div style="font-size:12px;color:var(--muted)">无</div>';
+    }
+    body += '</div>';
 
-    // Top failures
+    // ── Soft Gates Panel ──
+    if (sg.length) {
+      body += '<div class="detail-section" style="margin-top:6px">';
+      body += '<div style="font-weight:700;font-size:13px;margin-bottom:4px;color:var(--text)">⚠ 软门禁警告</div>';
+      sg.forEach(function (g) {
+        var color = g.passed ? 'var(--muted)' : 'var(--warn)';
+        body += '<div style="font-size:12px;padding:2px 0;color:' + color + '">' + g.gate_name;
+        if (g.failed_items && g.failed_items.length) {
+          body += ' (' + g.failed_items.join(', ') + ')';
+        }
+        body += '</div>';
+      });
+      body += '</div>';
+    }
+
+    // ── Top Failures ──
     if (tf.length) {
-      body += '<div style="margin-bottom:8px;font-size:13px;color:var(--bad)">主要失败项: ';
-      body += tf.map(function (f) { return f.name + ' (' + f.reason + ')'; }).join(', ');
+      body += '<div class="detail-section" style="margin-top:6px">';
+      body += '<div style="font-weight:700;font-size:13px;margin-bottom:4px;color:var(--bad)">✗ 主要失败项</div>';
+      tf.forEach(function (f) {
+        body += '<div style="font-size:12px;padding:2px 0;color:var(--bad)">' + f.name + ': ' + (f.reason || f.actual || '') + '</div>';
+      });
       body += '</div>';
     }
 
-    // Improvement hints
+    // ── Improvement Hints ──
     if (hints.length) {
-      body += '<div style="margin-bottom:8px;font-size:12px;color:var(--muted)">';
-      body += hints.map(function (h) { return '💡 ' + h; }).join('<br>');
+      body += '<div class="detail-section" style="margin-top:6px">';
+      body += '<div style="font-weight:700;font-size:13px;margin-bottom:4px;color:var(--text)">💡 改进建议</div>';
+      hints.forEach(function (h) {
+        body += '<div style="font-size:12px;padding:2px 0;color:var(--muted)">' + h + '</div>';
+      });
       body += '</div>';
     }
 
-    // Simple tree
+    // ── Attribution Tree ──
     if (result.attribution) {
+      body += '<div class="detail-section" style="margin-top:6px">';
+      body += '<div style="font-weight:700;font-size:13px;margin-bottom:4px;color:var(--text)">🌳 评分归因树</div>';
       body += renderAttributionNode(result.attribution);
+      body += '</div>';
     }
 
     return body;
@@ -2710,6 +2745,41 @@
   window.viewAssistantGuidanceDetail = renderAssistantGuidanceDetail;
   window.viewCheckDetail = renderCheckDetail;
   window.loadRedlineReport = loadRedlineReport;
+  window.loadCheckpointStatus = loadCheckpointStatus;
+
+  /**
+   * Checkpoint status loading and UI update.
+   */
+  function loadCheckpointStatus() {
+    try {
+      window.ApiClient.get('/api/checkpoint/status').then(function (data) {
+        window.AppState.set('checkpointStatus', data);
+        var el = document.getElementById('checkpointSummary');
+        if (el && data && data.ok) {
+          if (data.resume_available) {
+            var latest = data.latest || {};
+            el.innerHTML = '<span style="color:var(--accent);cursor:pointer;text-decoration:underline" title="恢复最近断点">' +
+              '📋 可恢复 (' + (latest.phase_completed || '') + ')' + '</span>';
+            el.onclick = function () { if (confirm('从断点恢复流水线？')) { resumeFromCheckpoint(); } };
+          } else {
+            el.innerHTML = '<span style="color:var(--muted)">📋 无断点</span>';
+          }
+        }
+      }).catch(function () {});
+    } catch (e) {}
+  }
+
+  function resumeFromCheckpoint() {
+    var payload = { guided: true, resume: true };
+    try {
+      window.ApiClient.post('/api/run', payload).then(function (data) {
+        if (data && data.ok) {
+          window.AppState.set('activeJobId', data.job_id);
+          window.AppState.set('isRunning', true);
+        }
+      }).catch(function () {});
+    } catch (e) {}
+  }
 })();
 
 </script>
@@ -7604,6 +7674,7 @@
     refreshUserProfile();
     setInterval(refreshUserProfile, 30000);
     if (window.loadRedlineReport) { window.loadRedlineReport(); }
+    if (window.loadCheckpointStatus) { window.loadCheckpointStatus(); }
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);

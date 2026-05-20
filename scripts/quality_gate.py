@@ -191,6 +191,16 @@ def _redline_verification() -> tuple[bool, dict]:
     return _run_python_module(["-m", "brain_alpha_ops.compliance.redline_verifier", "--block", "--json"])
 
 
+def _cache_metadata_audit() -> tuple[bool, dict]:
+    """Check cache metadata freshness (non-blocking advisory)."""
+    from brain_alpha_ops.data.cache_metadata import build_cache_audit_snapshot
+    from brain_alpha_ops.config import runtime_project_root
+    cache_dir = runtime_project_root() / "data" / "api_cache"
+    snapshot = build_cache_audit_snapshot(cache_dir)
+    ok = snapshot.get("stale_count", 0) == 0
+    return ok, {"exit_code": 0, "command": "cache_metadata_audit", **snapshot}
+
+
 def _pytest(pytest_args: list[str]) -> tuple[bool, dict]:
     return _run_python_module(["-m", "pytest", *(pytest_args or [])])
 
@@ -251,6 +261,7 @@ def run_quality_gate(
         _step("frontend_inline_sync", _frontend_inline_sync),
         _step("frontend_syntax", lambda: _frontend_syntax(html_path)),
         _step("secret_scan", lambda: _secret_scan(include_all_secrets)),
+        _step("cache_metadata_audit", _cache_metadata_audit),
     ])
     if dependency_audit:
         steps.append(_step("dependency_audit", _dependency_audit))

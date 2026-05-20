@@ -45,6 +45,7 @@ GET_ROUTES = {
         WebRoute("GET", "/api/presets", "presets"),
         WebRoute("GET", "/api/redline/report", "redline_report"),
         WebRoute("GET", "/api/scoring/health", "scoring_health"),
+        WebRoute("GET", "/api/checkpoint/status", "checkpoint_status"),
     ]
 }
 

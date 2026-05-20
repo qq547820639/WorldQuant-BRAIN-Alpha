@@ -78,3 +78,23 @@ def handle_scoring_attribution(body: dict[str, Any]) -> dict[str, Any]:
         "top_failures": result.get("top_failures"),
         "improvement_hints": result.get("improvement_hints"),
     }
+
+
+def handle_checkpoint_status(query: dict[str, Any]) -> dict[str, Any]:
+    """GET /api/checkpoint/status — list checkpoints and latest resume status."""
+    try:
+        from brain_alpha_ops.ux.guided_pipeline import GuidedPipeline
+        config = load_run_config()
+        gp = GuidedPipeline(config)
+        checkpoints = gp.list_checkpoints()
+        latest = gp.latest_checkpoint()
+        return {
+            "ok": True,
+            "schema_version": "checkpoint_status.v1",
+            "checkpoint_count": len(checkpoints),
+            "checkpoints": checkpoints[:10],
+            "latest": latest.to_dict() if latest else None,
+            "resume_available": latest is not None,
+        }
+    except Exception as exc:
+        return {"ok": False, "error": str(exc), "resume_available": False}
