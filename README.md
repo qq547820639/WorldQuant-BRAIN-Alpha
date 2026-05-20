@@ -101,7 +101,7 @@ python -m brain_alpha_ops.cli assistant-guidance-audit --config config/run_confi
 python scripts/quality_gate.py
 ```
 
-它会依次执行 Python 语法编译检查、配置校验、前端内联 JavaScript 语法检查、敏感信息扫描和 pytest。需要快速预检时可以跳过测试：
+它会依次执行 Python 语法编译检查、配置校验、依赖策略检查、六大技术红线验证、前端内联 JavaScript 同步/语法检查、敏感信息扫描和 pytest。需要快速预检时可以跳过测试：
 
 ```powershell
 python scripts/quality_gate.py --skip-tests
@@ -117,6 +117,12 @@ python scripts/quality_gate.py --json
 
 ```powershell
 python scripts/check_frontend_syntax.py --json
+```
+
+单独运行 BRAIN 技术红线验证：
+
+```powershell
+python -m brain_alpha_ops.compliance.redline_verifier --block --json
 ```
 
 单独运行敏感信息扫描：
@@ -163,7 +169,9 @@ python scripts/scan_sensitive_artifacts.py --include-all --json --fail-on-findin
 - 本地研究记忆与离线 LLM 请求上下文打包。
 - 前端内联脚本语法检查及测试覆盖。
 - 敏感信息扫描 JSON 输出、误报收敛和测试覆盖。
-- 本地聚合质量门禁 `scripts/quality_gate.py`，覆盖 Python compileall、配置、前端语法、敏感扫描和 pytest。
+- 本地聚合质量门禁 `scripts/quality_gate.py`，覆盖 Python compileall、配置、依赖策略、红线验证、前端语法、敏感扫描和 pytest。
+- 科学评分封装 `brain_alpha_ops/scoring/official_scoring.py`，提供官方 Pass/Fail 对齐模拟、可配置门禁、评分归因和 JSONL 历史追踪。
+- 用户体验层 `brain_alpha_ops/ux/guided_pipeline.py`，提供流程引导、进度回调、可操作错误提示、断点文件和运行历史。
 
 建议后续继续推进：
 
