@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://code.iconify.design/iconify-icon/1.0.7/iconify-icon.min.js"></script>
+  <link href="https://api.fontshare.com/v2/css?f[]=satoshi@700,500,400&f[]=general-sans@600,500,400&display=swap" rel="stylesheet">
+  <title>BRAIN Alpha Ops Dashboard</title>
+  <style>
+    :root {
+      --teal-accent: #14b8a6;
+      --oled-bg: #000000;
+      --surface-dark: #09090b;
+      --border-dark: #18181b;
+      --text-main: #fafafa;
+      --text-muted: #a1a1aa;
+    }
+    body {
+      font-family: 'Satoshi', sans-serif;
+      color: var(--text-main);
+      background-color: var(--oled-bg);
+      overflow: hidden;
+    }
+    .font-display {
+      font-family: 'General Sans', sans-serif;
+    }
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: #3f3f46;
+      border-radius: 10px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+      background: #52525b;
+    }
+  </style>
+</head>
+<body>
+  <div class="flex h-screen w-full bg-black">
+    <!-- SIDEBAR: Production Controls (360px) -->
+    <aside class="w-[360px] h-full bg-[#000000] border-r border-zinc-800 flex flex-col shrink-0">
+      <div class="p-6 border-b border-zinc-800 flex items-center gap-3">
+        <div class="w-8 h-8 bg-[#0f766e] rounded flex items-center justify-center text-white font-bold text-lg italic">B</div>
+        <h1 class="font-display font-semibold text-xl tracking-tight text-white">Alpha Ops <span class="text-xs font-normal text-zinc-500 align-top ml-1">v2.4</span></h1>
+      </div>
+
+      <div class="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-8">
+        <!-- Production Controls Section -->
+        <div>
+          <h3 class="text-[11px] font-bold uppercase tracking-wider text-zinc-500 mb-4">Production Environment</h3>
+          <div class="space-y-3">
+            <div class="flex items-center justify-between p-3 rounded-lg bg-zinc-900/50 border border-zinc-800">
+              <div class="flex flex-col">
+                <span class="text-sm font-semibold text-zinc-100">Primary Engine</span>
+                <span class="text-[10px] text-zinc-500 uppercase">Instance: AWS-USE1-01</span>
+              </div>
+              <div class="relative inline-flex items-center cursor-pointer">
+                <input type="checkbox" class="sr-only peer" checked>
+                <div class="w-11 h-6 bg-zinc-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-zinc-900 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#0f766e]"></div>
+              </div>
+            </div>
+            <div class="flex items-center justify-between p-3 rounded-lg bg-zinc-900/50 border border-zinc-800">
+              <div class="flex flex-col">
+                <span class="text-sm font-semibold text-zinc-100">Order Execution</span>
+                <span class="text-[10px] text-[#2dd4bf] font-bold">CONNECTED</span>
+              </div>
+              <div class="w-3 h-3 bg-emerald-500 rounded-full shadow-[0_0_12px_rgba(16,185,129,0.7)] animate-pulse"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Quick Stats -->
+        <div>
+          <h3 class="text-[11px] font-bold uppercase tracking-wider text-zinc-500 mb-4">Live Telemetry</h3>
+          <div class="grid grid-cols-2 gap-4">
+            <div class="p-3 bg-zinc-900/30 border border-zinc-800 rounded-lg">
+              <span class="text-xs text-zinc-500">Latency</span>
+              <div class="text-lg font-bold text-zinc-100">14.2ms</div>
+            </div>
+            <div class="p-3 bg-zinc-900/30 border border-zinc-800 rounded-lg">
+              <span class="text-xs text-zinc-500">Throughput</span>
+              <div class="text-lg font-bold text-zinc-100">8.4k/s</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Navigation Links -->
+        <nav class="space-y-1">
+          <a href="#" id="nav-dashboard" class="flex items-center gap-3 px-3 py-2 text-sm font-medium bg-[#0f766e]/20 text-[#2dd4bf] rounded-md transition-colors">
+            <iconify-icon icon="lucide:layout-dashboard" class="text-lg"></iconify-icon>
+            Overview
+          </a>
+          <a href="#" id="nav-backtests" class="flex items-center gap-3 px-3 py-2 text-sm font-medium text-zinc-400 hover:bg-zinc-900 hover:text-white rounded-md transition-colors">
+            <iconify-icon icon="lucide:test-tube-2" class="text-lg"></iconify-icon>
+            Backtesting Engine
+          </a>
+          <a href="#" id="nav-portfolio" class="flex items-center gap-3 px-3 py-2 text-sm font-medium text-zinc-400 hover:bg-zinc-900 hover:text-white rounded-md transition-colors">
+            <iconify-icon icon="lucide:pie-chart" class="text-lg"></iconify-icon>
+            Portfolio Construction
+          </a>
+          <a href="#" id="nav-risks" class="flex items-center gap-3 px-3 py-2 text-sm font-medium text-zinc-400 hover:bg-zinc-900 hover:text-white rounded-md transition-colors">
+            <iconify-icon icon="lucide:shield-alert" class="text-lg"></iconify-icon>
+            Risk Management
+          </a>
+        </nav>
+      </div>
+
+      <div class="p-6 bg-zinc-950 border-t border-zinc-800">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-full bg-zinc-800 border-2 border-zinc-700 overflow-hidden shrink-0">
+            <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=QuantMaster" alt="User avatar">
+          </div>
+          <div class="flex flex-col min-w-0">
+            <span class="text-sm font-bold truncate text-white">S. Peterson</span>
+            <span class="text-[10px] text-zinc-500 truncate uppercase">Head of Quant Ops</span>
+          </div>
+          <a href="#" id="logout-btn" class="ml-auto text-zinc-500 hover:text-white transition-colors">
+            <iconify-icon icon="lucide:log-out" class="text-lg"></iconify-icon>
+          </a>
+        </div>
+      </div>
+    </aside>
+
+    <!-- MAIN SECTION -->
+    <main class="flex-1 flex flex-col overflow-hidden">
+      <!-- TOOLBAR -->
+      <header class="h-16 bg-black border-b border-zinc-800 px-8 flex items-center justify-between z-10">
+        <div class="flex items-center flex-1 max-w-xl">
+          <div class="relative w-full">
+            <iconify-icon icon="lucide:search" class="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500"></iconify-icon>
+            <input type="text" placeholder="Search alphas, candidates, or execution logs..." class="w-full pl-10 pr-4 py-2 bg-zinc-900/50 border border-zinc-800 rounded-lg text-sm text-zinc-200 focus:outline-none focus:ring-2 focus:ring-[#0f766e]/40 focus:border-[#2dd4bf] transition-all">
+          </div>
+        </div>
+        <div class="flex items-center gap-4">
+          <button class="p-2 text-zinc-400 hover:bg-zinc-800 hover:text-white rounded-full relative transition-colors">
+            <iconify-icon icon="lucide:bell" class="text-xl"></iconify-icon>
+            <span class="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full border border-black"></span>
+          </button>
+          <div class="h-8 w-[1px] bg-zinc-800 mx-2"></div>
+          <button class="bg-[#0f766e] text-white px-4 py-2 rounded-lg text-sm font-semibold flex items-center gap-2 hover:bg-[#0d645d] transition-colors shadow-[0_0_15px_rgba(15,118,110,0.3)]">
+            <iconify-icon icon="lucide:plus" class="text-lg"></iconify-icon>
+            New Backtest
+          </button>
+        </div>
+      </header>
+
+      <div class="flex-1 overflow-y-auto p-8 custom-scrollbar space-y-8">
+        <!-- INSIGHT CARDS / MONITOR STATS -->
+        <section class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div class="bg-zinc-900/40 p-6 rounded-xl border border-zinc-800 hover:border-zinc-700 transition-colors">
+            <div class="flex justify-between items-start mb-2">
+              <span class="text-sm text-zinc-400 font-medium uppercase tracking-tight">Active Alphas</span>
+              <span class="bg-emerald-500/10 text-emerald-400 text-[10px] font-bold px-1.5 py-0.5 rounded border border-emerald-500/20">+2 NEW</span>
+            </div>
+            <div class="text-3xl font-display font-bold text-white">128</div>
+            <div class="mt-4 flex items-center gap-2 text-xs text-zinc-500">
+              <iconify-icon icon="lucide:trending-up" class="text-emerald-400"></iconify-icon>
+              <span class="text-emerald-400 font-semibold">4.2%</span> <span class="opacity-70">vs last window</span>
+            </div>
+          </div>
+
+          <div class="bg-zinc-900/40 p-6 rounded-xl border border-zinc-800 hover:border-zinc-700 transition-colors">
+            <div class="flex justify-between items-start mb-2">
+              <span class="text-sm text-zinc-400 font-medium uppercase tracking-tight">Current AUM</span>
+            </div>
+            <div class="text-3xl font-display font-bold text-white">$1.24B</div>
+            <div class="mt-4 flex items-center gap-2 text-xs text-zinc-500">
+              <span class="opacity-70">Utilization:</span> <span class="text-[#2dd4bf] font-semibold">88.4%</span>
+            </div>
+          </div>
+
+          <div class="bg-zinc-900/40 p-6 rounded-xl border border-zinc-800 hover:border-zinc-700 transition-colors">
+            <div class="flex justify-between items-start mb-2">
+              <span class="text-sm text-zinc-400 font-medium uppercase tracking-tight">Sharpe Ratio</span>
+            </div>
+            <div class="text-3xl font-display font-bold text-white">2.84</div>
+            <div class="mt-4 flex items-center gap-2 text-xs text-zinc-500">
+              <iconify-icon icon="lucide:minus" class="text-zinc-600"></iconify-icon>
+              <span class="opacity-70">Stable at 30d rolling</span>
+            </div>
+          </div>
+
+          <div class="bg-zinc-900/40 p-6 rounded-xl border border-zinc-800 hover:border-zinc-700 transition-colors">
+            <div class="flex justify-between items-start mb-2">
+              <span class="text-sm text-zinc-400 font-medium uppercase tracking-tight">Avg Drawdown</span>
+            </div>
+            <div class="text-3xl font-display font-bold text-red-500">-1.12%</div>
+            <div class="mt-4 flex items-center gap-2 text-xs text-zinc-500">
+              <iconify-icon icon="lucide:trending-down" class="text-red-400"></iconify-icon>
+              <span class="text-red-400 font-semibold">-0.2%</span> <span class="opacity-70">below limit</span>
+            </div>
+          </div>
+        </section>
+
+        <!-- BACKTEST SLOTS -->
+        <section>
+          <div class="flex items-center justify-between mb-4">
+            <h2 class="text-lg font-display font-bold text-white">Active Backtest Slots</h2>
+            <a href="#" id="view-all-backtests" class="text-xs font-semibold text-[#2dd4bf] hover:text-[#5eead4] transition-colors">View Cluster Status</a>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div class="bg-zinc-900/20 border border-zinc-800 rounded-xl p-4 flex flex-col gap-3 group hover:border-[#0f766e] transition-all hover:bg-zinc-900/40">
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-bold px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">RUNNING</span>
+                <span class="text-[10px] text-zinc-500">Slot #01</span>
+              </div>
+              <div>
+                <h4 class="text-sm font-bold truncate text-zinc-100">Mean_Reversion_ETH_v2</h4>
+                <p class="text-[11px] text-zinc-500 mt-1">Epoch: 142/500 • Accuracy: 0.62</p>
+              </div>
+              <div class="w-full bg-zinc-800 h-1.5 rounded-full overflow-hidden">
+                <div class="bg-amber-500 h-full w-[28%] transition-all shadow-[0_0_8px_rgba(245,158,11,0.5)]"></div>
+              </div>
+            </div>
+            <div class="bg-zinc-900/20 border border-zinc-800 rounded-xl p-4 flex flex-col gap-3 group hover:border-[#0f766e] transition-all hover:bg-zinc-900/40">
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-bold px-2 py-0.5 rounded bg-[#0f766e]/20 text-[#2dd4bf] border border-[#0f766e]/30">QUEUED</span>
+                <span class="text-[10px] text-zinc-500">Slot #02</span>
+              </div>
+              <div>
+                <h4 class="text-sm font-bold truncate text-zinc-100">MOM_Trend_HFT_US_Equities</h4>
+                <p class="text-[11px] text-zinc-500 mt-1">Est. Start: 4m 12s</p>
+              </div>
+              <div class="w-full bg-zinc-800 h-1.5 rounded-full overflow-hidden"></div>
+            </div>
+            <div class="bg-black border border-zinc-800 border-dashed rounded-xl p-4 flex flex-col items-center justify-center gap-2 group hover:bg-zinc-900/50 hover:border-zinc-600 cursor-pointer transition-all">
+              <iconify-icon icon="lucide:plus-circle" class="text-2xl text-zinc-700 group-hover:text-[#2dd4bf]"></iconify-icon>
+              <span class="text-xs font-semibold text-zinc-600 group-hover:text-[#2dd4bf]">Empty Slot</span>
+            </div>
+          </div>
+        </section>
+
+        <!-- CANDIDATE TABLE -->
+        <section class="bg-zinc-900/20 border border-zinc-800 rounded-xl overflow-hidden shadow-2xl flex flex-col">
+          <div class="px-6 py-4 border-b border-zinc-800 flex items-center justify-between bg-zinc-950/50">
+            <div class="flex items-center gap-4">
+              <h2 class="text-md font-bold text-white">Alpha Candidates</h2>
+              <div class="flex bg-zinc-900 border border-zinc-800 rounded-lg p-0.5">
+                <button class="px-3 py-1 text-[11px] font-bold bg-[#0f766e] text-white rounded-md">Production</button>
+                <button class="px-3 py-1 text-[11px] font-bold text-zinc-500 hover:text-zinc-200 transition-colors">Research</button>
+              </div>
+            </div>
+            <div class="flex items-center gap-2">
+              <button class="flex items-center gap-1.5 px-3 py-1.5 border border-zinc-800 rounded-lg text-xs font-semibold text-zinc-300 hover:bg-zinc-800 transition-colors">
+                <iconify-icon icon="lucide:filter" class="text-zinc-500"></iconify-icon>
+                Filter
+              </button>
+              <button class="flex items-center gap-1.5 px-3 py-1.5 border border-zinc-800 rounded-lg text-xs font-semibold text-zinc-300 hover:bg-zinc-800 transition-colors">
+                <iconify-icon icon="lucide:download" class="text-zinc-500"></iconify-icon>
+                Export CSV
+              </button>
+            </div>
+          </div>
+          
+          <div class="overflow-x-auto overflow-y-auto max-h-[400px] custom-scrollbar">
+            <table class="w-full text-left text-sm border-collapse">
+              <thead class="sticky top-0 bg-zinc-900 border-b border-zinc-800 z-10">
+                <tr>
+                  <th class="px-6 py-3 font-bold text-[11px] uppercase tracking-wider text-zinc-500">Alpha ID</th>
+                  <th class="px-6 py-3 font-bold text-[11px] uppercase tracking-wider text-zinc-500">Strategy Type</th>
+                  <th class="px-6 py-3 font-bold text-[11px] uppercase tracking-wider text-zinc-500 text-right">E(R) %</th>
+                  <th class="px-6 py-3 font-bold text-[11px] uppercase tracking-wider text-zinc-500 text-right">Sharpe</th>
+                  <th class="px-6 py-3 font-bold text-[11px] uppercase tracking-wider text-zinc-500">Universe</th>
+                  <th class="px-6 py-3 font-bold text-[11px] uppercase tracking-wider text-zinc-500">Deployment</th>
+                  <th class="px-6 py-3 font-bold text-[11px] uppercase tracking-wider text-zinc-500">Status</th>
+                  <th class="px-6 py-3"></th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-zinc-800">
+                <tr class="hover:bg-zinc-800/50 transition-colors group">
+                  <td class="px-6 py-4 font-bold text-[#2dd4bf]">AL-8042-US</td>
+                  <td class="px-6 py-4 text-zinc-300">Mean Reversion</td>
+                  <td class="px-6 py-4 text-right font-mono text-white">14.2%</td>
+                  <td class="px-6 py-4 text-right font-mono text-white">2.14</td>
+                  <td class="px-6 py-4"><span class="px-2 py-0.5 rounded bg-zinc-800 text-zinc-400 text-[10px] font-bold border border-zinc-700">S&P 500</span></td>
+                  <td class="px-6 py-4 text-zinc-500 text-xs">2023-11-04</td>
+                  <td class="px-6 py-4">
+                    <span class="flex items-center gap-1.5 text-xs text-emerald-400 font-bold">
+                      <span class="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.5)]"></span> Live
+                    </span>
+                  </td>
+                  <td class="px-6 py-4 text-right">
+                    <button class="text-zinc-600 group-hover:text-zinc-300 transition-colors">
+                      <iconify-icon icon="lucide:more-horizontal"></iconify-icon>
+                    </button>
+                  </td>
+                </tr>
+                <tr class="hover:bg-zinc-800/50 transition-colors group">
+                  <td class="px-6 py-4 font-bold text-[#2dd4bf]">AL-9012-EU</td>
+                  <td class="px-6 py-4 text-zinc-300">Trend Following</td>
+                  <td class="px-6 py-4 text-right font-mono text-white">22.8%</td>
+                  <td class="px-6 py-4 text-right font-mono text-white">1.98</td>
+                  <td class="px-6 py-4"><span class="px-2 py-0.5 rounded bg-zinc-800 text-zinc-400 text-[10px] font-bold border border-zinc-700">EUROSTOXX</span></td>
+                  <td class="px-6 py-4 text-zinc-500 text-xs">2023-11-12</td>
+                  <td class="px-6 py-4">
+                    <span class="flex items-center gap-1.5 text-xs text-amber-400 font-bold">
+                      <span class="w-2 h-2 rounded-full bg-amber-500"></span> Shadow
+                    </span>
+                  </td>
+                  <td class="px-6 py-4 text-right">
+                    <button class="text-zinc-600 group-hover:text-zinc-300 transition-colors">
+                      <iconify-icon icon="lucide:more-horizontal"></iconify-icon>
+                    </button>
+                  </td>
+                </tr>
+                <tr class="hover:bg-zinc-800/50 transition-colors group">
+                  <td class="px-6 py-4 font-bold text-[#2dd4bf]">AL-1244-FX</td>
+                  <td class="px-6 py-4 text-zinc-300">Arb (Stat)</td>
+                  <td class="px-6 py-4 text-right font-mono text-white">8.4%</td>
+                  <td class="px-6 py-4 text-right font-mono text-white">3.22</td>
+                  <td class="px-6 py-4"><span class="px-2 py-0.5 rounded bg-zinc-800 text-zinc-400 text-[10px] font-bold border border-zinc-700">G10 Currencies</span></td>
+                  <td class="px-6 py-4 text-zinc-500 text-xs">2023-11-15</td>
+                  <td class="px-6 py-4">
+                    <span class="flex items-center gap-1.5 text-xs text-zinc-500 font-bold">
+                      <span class="w-2 h-2 rounded-full bg-zinc-700"></span> Staged
+                    </span>
+                  </td>
+                  <td class="px-6 py-4 text-right">
+                    <button class="text-zinc-600 group-hover:text-zinc-300 transition-colors">
+                      <iconify-icon icon="lucide:more-horizontal"></iconify-icon>
+                    </button>
+                  </td>
+                </tr>
+                <tr class="hover:bg-zinc-800/50 transition-colors group">
+                  <td class="px-6 py-4 font-bold text-[#2dd4bf]">AL-1552-US</td>
+                  <td class="px-6 py-4 text-zinc-300">Machine Learning</td>
+                  <td class="px-6 py-4 text-right font-mono text-white">31.2%</td>
+                  <td class="px-6 py-4 text-right font-mono text-white">1.45</td>
+                  <td class="px-6 py-4"><span class="px-2 py-0.5 rounded bg-zinc-800 text-zinc-400 text-[10px] font-bold border border-zinc-700">NASDAQ</span></td>
+                  <td class="px-6 py-4 text-zinc-500 text-xs">2023-12-01</td>
+                  <td class="px-6 py-4">
+                    <span class="flex items-center gap-1.5 text-xs text-red-500 font-bold">
+                      <span class="w-2 h-2 rounded-full bg-red-600 shadow-[0_0_6px_rgba(239,68,68,0.5)]"></span> Halted
+                    </span>
+                  </td>
+                  <td class="px-6 py-4 text-right">
+                    <button class="text-zinc-600 group-hover:text-zinc-300 transition-colors">
+                      <iconify-icon icon="lucide:more-horizontal"></iconify-icon>
+                    </button>
+                  </td>
+                </tr>
+                <tr class="hover:bg-zinc-800/50 transition-colors group">
+                  <td class="px-6 py-4 font-bold text-[#2dd4bf]">AL-2001-GB</td>
+                  <td class="px-6 py-4 text-zinc-300">Mean Reversion</td>
+                  <td class="px-6 py-4 text-right font-mono text-white">12.1%</td>
+                  <td class="px-6 py-4 text-right font-mono text-white">2.45</td>
+                  <td class="px-6 py-4"><span class="px-2 py-0.5 rounded bg-zinc-800 text-zinc-400 text-[10px] font-bold border border-zinc-700">FTSE 100</span></td>
+                  <td class="px-6 py-4 text-zinc-500 text-xs">2023-12-05</td>
+                  <td class="px-6 py-4">
+                    <span class="flex items-center gap-1.5 text-xs text-emerald-400 font-bold">
+                      <span class="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.5)]"></span> Live
+                    </span>
+                  </td>
+                  <td class="px-6 py-4 text-right">
+                    <button class="text-zinc-600 group-hover:text-zinc-300 transition-colors">
+                      <iconify-icon icon="lucide:more-horizontal"></iconify-icon>
+                    </button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="px-6 py-4 border-t border-zinc-800 bg-zinc-950 flex items-center justify-between text-xs text-zinc-500 font-medium">
+            <span>Showing 5 of 128 production candidates</span>
+            <div class="flex items-center gap-4">
+              <div class="flex items-center gap-2">
+                Rows per page:
+                <select class="bg-transparent border-none focus:ring-0 cursor-pointer text-[#2dd4bf] font-bold">
+                  <option>10</option>
+                  <option>25</option>
+                  <option>50</option>
+                </select>
+              </div>
+              <div class="flex items-center gap-2">
+                <button class="p-1 rounded hover:bg-zinc-800 transition-colors text-zinc-400 hover:text-white"><iconify-icon icon="lucide:chevron-left"></iconify-icon></button>
+                <span class="text-zinc-300">Page 1 of 13</span>
+                <button class="p-1 rounded hover:bg-zinc-800 transition-colors text-zinc-400 hover:text-white"><iconify-icon icon="lucide:chevron-right"></iconify-icon></button>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+</body>
+</html>" 
+}
+```

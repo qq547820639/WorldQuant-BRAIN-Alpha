@@ -1,0 +1,27 @@
+name: Quality Gate
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  quality-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install package and dev tooling
+        run: python -m pip install -e ".[test,dev]"
+
+      - name: Run aggregate quality gate
+        run: python scripts/quality_gate.py --optional-tooling --strict-optional-tooling --ruff --mypy --dependency-audit

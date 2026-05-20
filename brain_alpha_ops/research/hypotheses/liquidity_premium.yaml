@@ -1,0 +1,81 @@
+hypothesis:
+  id: "liquidity_premium"
+  name: "Liquidity Premium"
+  category: "liquidity"
+  version: "1.0.0"
+
+  rationale:
+    theory: >
+      流动性差的股票需要提供更高预期收益作为补偿。Amihud非流动性指标、
+      买卖价差等衡量交易成本，流动性冲击时溢价最显著。小市值股票的流动性折价
+      是价值溢价和小盘溢价的共同驱动因素。
+    academic_refs:
+      - "Amihud & Mendelson (1986) — Asset Pricing and the Bid-Ask Spread"
+      - "Amihud (2002) — Illiquidity and Stock Returns: Cross-Section and Time-Series Effects"
+      - "Pastor & Stambaugh (2003) — Liquidity Risk and Expected Stock Returns"
+    behavioral_bias: ""
+
+  field_categories:
+    - category: "bid_ask_spread"
+      priority: P0
+      examples: ["bid_ask_spread", "effective_spread"]
+    - category: "amihud_illiquidity"
+      priority: P0
+      examples: ["amihud_ratio", "illiq_ratio"]
+    - category: "turnover_ratio"
+      priority: P0
+      examples: ["turnover_ratio", "share_turnover"]
+    - category: "trading_volume"
+      priority: P1
+      examples: ["avg_daily_volume", "dollar_volume"]
+    - category: "market_impact"
+      priority: P1
+      examples: ["market_impact_cost", "realized_spread"]
+    - category: "free_float"
+      priority: P2
+      examples: ["free_float_pct", "shares_outstanding"]
+
+  expression_families:
+    - id: "amihud_classic"
+      structure: "rank(ts_mean({field_illiq}, {window}))"
+      description: "经典Amihud非流动性 — 高非流动性=高预期收益"
+      windows: [3, 6, 12]
+
+    - id: "low_turnover"
+      structure: "rank(-1 * ts_mean({field_turnover}, {window}))"
+      description: "低换手率 — 流动性差=预期高收益"
+      windows: [1, 3, 6]
+
+    - id: "small_illiquid"
+      structure: "rank(-1 * log({field_mcap}) * {field_spread})"
+      description: "小盘+高差价交互 — 捕获规模-流动性双重折价"
+      windows: [1]
+
+    - id: "liquidity_shock_reversal"
+      structure: "rank(-1 * zscore(ts_delta({field_illiq}, {window_short}), {window_long}))"
+      description: "流动性冲击后反弹 — 极端非流动性后回归正常"
+      windows_short: [1, 3]
+      windows_long: [6, 12]
+
+  expected_failure_modes:
+    - gate: "CAPACITY"
+      reason: "小盘微盘股容量严重不足（< $1M/day），无法大规模部署"
+      mitigation: "使用TOP3000 universe过滤，设置最低市值/交易量门槛"
+    - gate: "TURNOVER"
+      reason: "实际交易成本（滑点、佣金）侵蚀alpha收益"
+      mitigation: "使用delay=5降低冲击成本，优先考虑大市值流动性阈值"
+    - gate: "MARKET_IMPACT"
+      reason: "流动性差的股票滑点大，simulated alpha≠实际收益"
+      mitigation: "保守假设滑点为bid-ask spread的50%"
+
+  adaptation:
+    preferred_regions: ["USA", "DEV", "ASIA"]
+    preferred_universes: ["SMALL_CAP", "MICRO_CAP"]
+    preferred_delays: [2, 3, 5]
+    unsuitable_regions: ["FRONTIER"]
+
+  experience_weights:
+    overall: 1.0
+    field_category_weights: {}
+    expression_family_weights: {}
+    window_weights: {}

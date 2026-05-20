@@ -1,0 +1,131 @@
+# JSON Schema definition for hypothesis YAML files.
+# This schema is for reference and CI validation; runtime loading does not require jsonschema.
+# schema version: 1.0.0
+
+"$schema": "http://json-schema.org/draft-07/schema#"
+type: object
+required: [hypothesis]
+additionalProperties: false
+properties:
+  hypothesis:
+    type: object
+    required: [id, name, category, version, rationale, field_categories, expression_families, adaptation]
+    additionalProperties: false
+    properties:
+      id:
+        type: string
+        description: "Unique identifier, e.g. 'earnings_revision_momentum'"
+        pattern: "^[a-z][a-z0-9_]*$"
+      name:
+        type: string
+        description: "Human-readable name"
+      category:
+        type: string
+        description: "Category mapping compatible with DynamicThemeEngine TEMPLATE_SKELETONS keys"
+        enum: [momentum, quality, reversal, volatility, liquidity, value, growth, hybrid, cross_sectional]
+      version:
+        type: string
+        pattern: "^\\d+\\.\\d+\\.\\d+$"
+      rationale:
+        type: object
+        required: [theory]
+        properties:
+          theory:
+            type: string
+            minLength: 20
+          academic_refs:
+            type: array
+            items: {type: string}
+            default: []
+          behavioral_bias:
+            type: string
+            default: ""
+      field_categories:
+        type: array
+        minItems: 2
+        items:
+          type: object
+          required: [category, priority]
+          properties:
+            category:
+              type: string
+            priority:
+              type: string
+              enum: [P0, P1, P2]
+            examples:
+              type: array
+              items: {type: string}
+              default: []
+            weight:
+              type: number
+              minimum: 0.0
+              default: 1.0
+      expression_families:
+        type: array
+        minItems: 2
+        maxItems: 5
+        items:
+          type: object
+          required: [id, structure, description]
+          properties:
+            id:
+              type: string
+              pattern: "^[a-z][a-z0-9_]*$"
+            structure:
+              type: string
+            description:
+              type: string
+            windows:
+              type: array
+              items: {type: integer, minimum: 1}
+              default: []
+            windows_short:
+              type: array
+              items: {type: integer, minimum: 1}
+              default: []
+            windows_long:
+              type: array
+              items: {type: integer, minimum: 1}
+              default: []
+            weight:
+              type: number
+              minimum: 0.0
+              default: 1.0
+      expected_failure_modes:
+        type: array
+        items:
+          type: object
+          required: [gate, reason, mitigation]
+          properties:
+            gate: {type: string}
+            reason: {type: string}
+            mitigation: {type: string}
+        default: []
+      adaptation:
+        type: object
+        required: [preferred_regions, preferred_universes, preferred_delays]
+        properties:
+          preferred_regions:
+            type: array
+            items: {type: string}
+            default: ["USA"]
+          preferred_universes:
+            type: array
+            items: {type: string}
+            default: ["TOP3000"]
+          preferred_delays:
+            type: array
+            items: {type: integer, minimum: 0}
+            default: [1]
+          unsuitable_regions:
+            type: array
+            items: {type: string}
+            default: []
+      experience_weights:
+        type: object
+        properties:
+          overall: {type: number, minimum: 0.0, default: 1.0}
+          field_category_weights: {type: object, default: {}}
+          expression_family_weights: {type: object, default: {}}
+          window_weights: {type: object, default: {}}
+        default: {}

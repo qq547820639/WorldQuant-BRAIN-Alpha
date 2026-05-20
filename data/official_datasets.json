@@ -1,0 +1,82 @@
+[
+  {
+    "id": "model77",
+    "name": "Analysts' Factor Model",
+    "field_count": 3256
+  },
+  {
+    "id": "fundamental2",
+    "name": "Report Footnotes",
+    "field_count": 766
+  },
+  {
+    "id": "analyst4",
+    "name": "Analyst Estimate Data for Equity",
+    "field_count": 1324
+  },
+  {
+    "id": "news12",
+    "name": "US News Data",
+    "field_count": 875
+  },
+  {
+    "id": "pv1",
+    "name": "Price Volume Data for Equity",
+    "field_count": 24
+  },
+  {
+    "id": "model16",
+    "name": "Fundamental Scores",
+    "field_count": 24
+  },
+  {
+    "id": "fundamental6",
+    "name": "Company Fundamental Data for Equity",
+    "field_count": 886
+  },
+  {
+    "id": "model51",
+    "name": "Systematic Risk Metrics",
+    "field_count": 16
+  },
+  {
+    "id": "option9",
+    "name": "Options Analytics",
+    "field_count": 74
+  },
+  {
+    "id": "news18",
+    "name": "Ravenpack News Data",
+    "field_count": 121
+  },
+  {
+    "id": "sentiment1",
+    "name": "Research Sentiment Data",
+    "field_count": 19
+  },
+  {
+    "id": "option8",
+    "name": "Volatility Data",
+    "field_count": 64
+  },
+  {
+    "id": "pv13",
+    "name": "Relationship Data for Equity",
+    "field_count": 165
+  },
+  {
+    "id": "socialmedia12",
+    "name": "Sentiment Data for Equity",
+    "field_count": 18
+  },
+  {
+    "id": "socialmedia8",
+    "name": "Social Media Data for Equity",
+    "field_count": 4
+  },
+  {
+    "id": "univ1",
+    "name": "Universe Dataset",
+    "field_count": 6
+  }
+]

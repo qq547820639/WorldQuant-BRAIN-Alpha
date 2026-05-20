@@ -1,0 +1,89 @@
+hypothesis:
+  id: "value_reversal"
+  name: "Value / Reversal"
+  category: "reversal"
+  version: "1.0.0"
+
+  rationale:
+    theory: >
+      短期（1-12月）存在过度反应导致的均值回归，长期（3-5年）存在价值溢价。
+      行为金融学解释为投资者过度外推近期趋势，导致输家过度折价、赢家过度溢价。
+      低估值（低P/B、低P/E、高股息率）股票长期提供超额收益。
+    academic_refs:
+      - "De Bondt & Thaler (1985) — Does the Stock Market Overreact?"
+      - "Fama & French (1992) — The Cross-Section of Expected Stock Returns"
+      - "Lakonishok, Shleifer & Vishny (1994) — Contrarian Investment, Extrapolation, and Risk"
+    behavioral_bias: "overreaction"
+
+  field_categories:
+    - category: "valuation_ratio"
+      priority: P0
+      examples: ["pb_ratio", "pe_ratio", "ps_ratio"]
+    - category: "price_to_book"
+      priority: P0
+      examples: ["pb_ratio", "tangible_pb"]
+    - category: "price_to_earnings"
+      priority: P0
+      examples: ["pe_ratio_ttm", "pe_ratio_fwd"]
+    - category: "enterprise_value_multiples"
+      priority: P1
+      examples: ["ev_to_ebitda", "ev_to_sales"]
+    - category: "dividend_yield"
+      priority: P1
+      examples: ["dividend_yield", "buyback_yield"]
+    - category: "short_term_reversal"
+      priority: P2
+      examples: ["ret_1m", "ret_3m"]
+    - category: "long_term_reversal"
+      priority: P2
+      examples: ["ret_36m", "ret_60m"]
+
+  expression_families:
+    - id: "short_reversal"
+      structure: "rank(-1 * ts_delta(returns, {window}))"
+      description: "短期反转 — 近期输家未来赢家"
+      windows: [1, 3, 6]
+
+    - id: "deep_value"
+      structure: "rank(-1 * {field_valuation})"
+      description: "价值选股 — 低估值=高预期收益，直接取负号"
+      windows: [1]
+
+    - id: "sector_relative_cheap"
+      structure: "rank(-1 * ({field_yield} - group_mean({field_yield}, sector)))"
+      description: "行业相对便宜度 — 行业内横向比较"
+      windows: [1]
+
+    - id: "value_reversal_composite"
+      structure: "rank(-1 * ts_delta(returns, {window_short})) + rank(-1 * {field_value})"
+      description: "价值+反转复合信号 — 超跌且低估"
+      windows_short: [1, 3, 6]
+
+    - id: "extreme_reversal"
+      structure: "rank(zscore(-1 * ts_delta(returns, {window}), {window_long}))"
+      description: "极端下跌后的反弹 — 捕捉过度恐慌后的均值回归"
+      windows: [1]
+      windows_long: [12, 24, 36]
+
+  expected_failure_modes:
+    - gate: "TURNOVER"
+      reason: "反转策略换手率极高（>80%），交易成本侵蚀收益"
+      mitigation: "使用较长窗口（3-6M）降低换手，或加入流动性过滤"
+    - gate: "SELF_CORRELATION"
+      reason: "价值信号自相关较高，因子变化缓慢"
+      mitigation: "增加decay参数降低PnL自相关"
+    - gate: "NEUTRALIZATION"
+      reason: "行业中性化可能削弱价值信号（不同行业估值水平差异大）"
+      mitigation: "使用sector-relative版本保留行业内排序"
+
+  adaptation:
+    preferred_regions: ["USA", "EUROPE", "DEV", "ASIA", "DEV_EX_US"]
+    preferred_universes: ["TOP3000", "SMALL_CAP"]
+    preferred_delays: [1]
+    unsuitable_regions: []
+
+  experience_weights:
+    overall: 1.0
+    field_category_weights: {}
+    expression_family_weights: {}
+    window_weights: {}

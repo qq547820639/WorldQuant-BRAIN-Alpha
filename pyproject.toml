@@ -1,0 +1,36 @@
+[project]
+name = "brain-alpha-ops"
+version = "0.3.0"
+description = "Account-safety-first WorldQuant BRAIN alpha research operations toolkit."
+requires-python = ">=3.10"
+dependencies = [
+    "pyyaml>=6.0,<7",
+    "requests>=2.32.4,<3",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=7.0,<10",
+    "pytest-cov>=4.0,<7",
+]
+dev = [
+    "ruff>=0.4,<1",
+    "mypy>=1.0,<2",
+    "pip-audit>=2.7,<3",
+]
+web = [
+    # web server uses standard library only; no extra deps needed
+]
+
+[tool.brain-alpha-ops]
+default_environment = "mock"
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-v --tb=short"
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests that require network or external services",
+]

@@ -1,0 +1,64 @@
+sequenceDiagram
+    participant P as AlphaResearchPipeline
+    participant HDG as HypothesisDrivenGenerator
+    participant MR as GenerationModeRouter
+    participant HS as HypothesisSelector
+    participant HL as HypothesisLibrary
+    participant EFS as ExpressionFamilySelector
+    participant FS as FieldSelector
+    participant DS as DatasetSelector
+    participant CA as ContextAdapter
+    participant DTE as DynamicThemeEngine
+
+    P->>HDG: generate(count=20, dataset_id="analyst4")
+
+    loop 20 candidates
+        HDG->>MR: route()
+        MR-->>HDG: "hypothesis_driven" (70%)
+
+        alt Mode: hypothesis_driven
+            Note over HDG: Step 1: Mode Routing ✓
+            
+            Note over HDG: Step 2: Hypothesis Selection
+            HDG->>HS: select()
+            HS->>HL: get_all() → weighted random
+            HL-->>HS: Hypothesis("earnings_revision_momentum")
+            HS-->>HDG: hypothesis
+
+            Note over HDG: Step 3: Expression Family Selection
+            HDG->>EFS: select(hypothesis)
+            EFS-->>HDG: ExpressionFamily("revision_diff", windows=[1,3,6])
+            HDG->>EFS: select_window(expr_family)
+            EFS-->>HDG: window=3
+
+            Note over HDG: Step 4: Field Selection
+            HDG->>FS: select_fields(hypothesis, "analyst4", count=2)
+            FS->>HL: hypothesis.field_categories → category names
+            FS->>DS: get_fields_by_category("earnings_estimate_revision")
+            DS-->>FS: ["eps_fy1_3m_rev", "sales_fy1_rev", ...]
+            FS-->>HDG: ["eps_fy1_3m_rev", "sales_fy1_rev"]
+
+            Note over HDG: Step 5: Context Adaptation
+            HDG->>CA: adapt(hypothesis)
+            CA-->>HDG: {region: "USA", universe: "TOP3000", delay: 1}
+
+            Note over HDG: Step 6: Alpha Assembly
+            HDG->>HDG: _build_expression(family, fields, window)
+            HDG->>HDG: _attach_meta(candidate, GenerationMeta{...})
+            HDG-->>P: Candidate(alpha_id, expression, generation_meta in template_source)
+
+        else Mode: experience_feedback (20%)
+            Note over HDG: Use experience.py winning_patterns
+            HDG->>HDG: _generate_experience_feedback(dataset_id)
+            HDG->>DTE: generate(dataset_id, n=1) with experience bias
+            DTE-->>HDG: ThemeTemplate
+            HDG-->>P: Candidate (biased by winning patterns)
+
+        else Mode: random_exploration (10%)
+            Note over HDG: Fallback to DynamicThemeEngine
+            HDG->>HDG: _generate_random_exploration(dataset_id)
+            HDG->>DTE: generate(dataset_id, n=1) random
+            DTE-->>HDG: ThemeTemplate
+            HDG-->>P: Candidate (random exploration)
+        end
+    end

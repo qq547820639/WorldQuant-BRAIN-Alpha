@@ -1,0 +1,95 @@
+hypothesis:
+  id: "microstructure_order_flow"
+  name: "Microstructure / Order Flow"
+  category: "hybrid"
+  version: "1.0.0"
+
+  rationale:
+    theory: >
+      Order flow contains information asymmetry: large block trades, dark pool
+      activity, and open/close price spreads reflect the behaviour of informed
+      traders. Order imbalance (OBI), volume-weighted average price (VWAP)
+      deviations, and intraday volatility patterns contain short-term alpha
+      signals. The key insight is that the way orders arrive and execute reveals
+      private information before it is fully reflected in prices.
+    academic_refs:
+      - "Kyle (1985) — Continuous auctions and insider trading"
+      - "Easley, Lopez de Prado, O'Hara (2012) — Flow toxicity and liquidity"
+      - "Hendershott, Jones, Menkveld (2011) — Does algorithmic trading improve liquidity?"
+    behavioral_bias: "overconfidence"
+
+  field_categories:
+    - category: "order_imbalance"
+      priority: P0
+      examples: ["obi", "dollar_imbalance", "buy_sell_ratio", "order_imbalance_ratio"]
+      weight: 1.0
+    - category: "block_trade_ratio"
+      priority: P1
+      examples: ["block_trade_pct", "large_trade_ratio", "block_volume"]
+      weight: 1.0
+    - category: "dark_pool_volume"
+      priority: P1
+      examples: ["dark_pool_pct", "dark_volume", "off_exchange_ratio"]
+      weight: 1.0
+    - category: "close_open_return"
+      priority: P1
+      examples: ["overnight_return", "close_to_open", "open_to_close"]
+      weight: 1.0
+    - category: "realized_spread"
+      priority: P1
+      examples: ["realized_spread_5m", "realized_spread_30m", "effective_spread"]
+      weight: 1.0
+    - category: "vwap_deviation"
+      priority: P1
+      examples: ["vwap_deviation", "vwap_distance", "close_to_vwap"]
+      weight: 1.0
+
+  expression_families:
+    - id: "order_imbalance_ratio"
+      structure: "order_imbalance_ratio(window)"
+      description: "Ratio of buy to sell order imbalance — buying pressure signal"
+      windows: [1, 5, 10, 20]
+      weight: 1.0
+    - id: "vwap_deviation_signal"
+      structure: "(close_price - vwap) / vwap"
+      description: "VWAP deviation — closing price relative to volume-weighted average"
+      windows: [1, 5, 10]
+      weight: 1.0
+    - id: "block_trade_premium"
+      structure: "block_trade_premium(window)"
+      description: "Block trade price premium — informed traders pay a premium for size"
+      windows: [5, 10, 20]
+      weight: 1.0
+    - id: "overnight_intraday_spread"
+      structure: "overnight_return - intraday_return"
+      description: "Overnight minus intraday return — captures informed overnight positioning"
+      windows: [1, 5, 20]
+      weight: 1.0
+    - id: "adverse_selection_cost"
+      structure: "-1 * realized_spread"
+      description: "Negative realized spread — higher adverse selection cost may signal informed trading"
+      windows: [5, 10, 20]
+      weight: 1.0
+
+  expected_failure_modes:
+    - gate: "MARKET_IMPACT"
+      reason: "High-frequency microstructure signals have substantial trading costs"
+      mitigation: "Use position limits and incorporate transaction cost estimates"
+    - gate: "CAPACITY"
+      reason: "Microstructure alpha capacity is extremely limited"
+      mitigation: "Focus on TOP3000 universe names with sufficient liquidity"
+    - gate: "DATA_QUALITY"
+      reason: "Microstructure data is noisy and may have reporting gaps"
+      mitigation: "Use robust aggregation windows and outlier filtering"
+
+  adaptation:
+    preferred_regions: ["USA"]
+    preferred_universes: ["TOP3000", "TOP1000", "MID_LARGE_CAP"]
+    preferred_delays: [1]
+    unsuitable_regions: ["FRONTIER"]
+
+  experience_weights:
+    overall: 1.0
+    field_category_weights: {}
+    expression_family_weights: {}
+    window_weights: {}

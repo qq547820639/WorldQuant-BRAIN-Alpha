@@ -1,0 +1,174 @@
+classDiagram
+    direction TB
+
+    %% ── Config Layer ──
+    class QualityThresholds {
+        +float min_sharpe = 1.25
+        +float min_fitness = 1.0
+        +float min_turnover = 0.01
+        +float max_turnover = 0.70
+        +float max_self_correlation = 0.70
+        +float max_weight_concentration = 0.10
+        +float sub_universe_sharpe_min_ratio = 0.75
+        +float min_margin_bps = 4.0
+        +float max_drawdown = 0.25
+        +float min_sharpe_delay0 = 2.0
+        +float min_fitness_delay0 = 1.3
+        +bool require_official_pass = True
+    }
+
+    class BrainSettings {
+        +str type = "REGULAR"
+        +int delay = 1
+        +str region = "USA"
+        +str universe = "TOP3000"
+        +str neutralization = "SUBINDUSTRY"
+        +to_platform_dict() dict
+    }
+
+    class ResearchBudget {
+        +int max_cycles = 10
+        +str dataset_strategy = "rotate"
+        +bool check_registry_enabled = True
+        +int experience_feedback_interval = 5
+        +int context_refresh_interval_cycles = 50
+    }
+
+    %% ── Data Layer ──
+    class OfficialDataLoader {
+        -Dict~str,OfficialField~ _fields
+        -Dict~str,OfficialOperator~ _operators
+        -Dict~str,OfficialDataset~ _datasets
+        +instance() OfficialDataLoader$
+        +reload() OfficialDataLoader$
+        +load_all(data_dir) None
+        +refresh(data_dir) dict
+        +get_fields(dataset_id?) List~OfficialField~
+        +get_operators() List~OfficialOperator~
+        +validate_field(name, dataset_id?) bool
+        +validate_operator(name) bool
+        -_validate_load_result() None
+    }
+
+    class OfficialField {
+        +str id
+        +str description
+        +Optional~DatasetRef~ dataset
+        +str category
+        +int delay
+        +float coverage
+    }
+
+    class OfficialOperator {
+        +str name
+        +str category
+        +str definition
+        +str description
+    }
+
+    class OfficialDataset {
+        +str id
+        +str name
+        +int field_count
+    }
+
+    class DatasetRef {
+        +str id
+        +str name
+    }
+
+    class LoadError {
+        +str file_path
+        +str reason
+        +str severity
+    }
+
+    %% ── Check Layer ──
+    class AlphaCheckRegistry {
+        -Dict~str,AlphaCheck~ _checks
+        +register(check) None
+        +get(name) Optional~AlphaCheck~
+        +build_default_checks() None
+        +build_type_checks(alpha_type) None
+        +evaluate(sim_result, checks?) CheckReport
+    }
+
+    class AlphaCheck {
+        +str name
+        +str severity
+        +run(sim_result) CheckResult
+    }
+
+    class CheckResult {
+        +str check_name
+        +bool passed
+        +Any actual
+        +str expected
+        +str severity
+        +str message
+        +bool exception_applied
+        +str exception_detail
+    }
+
+    class CheckReport {
+        +bool passed
+        +int total
+        +int passed_count
+        +int failed_count
+        +List~CheckResult~ results
+        +str summary
+        +int exception_count
+    }
+
+    %% ── Scoring Layer ──
+    class ScoringFunctions {
+        +calculate_fitness(sharpe, returns, turnover) float$
+        +calculate_sub_sharpe_threshold(ratio, sub_size, alpha_size, alpha_sharpe) float$
+        +threshold_for_delay(delay, thresholds) tuple$
+    }
+
+    %% ── Pipeline Layer ──
+    class AlphaResearchPipeline {
+        -OfficialDataLoader _loader
+        -DatasetSelector _selector
+        -AlphaCheckRegistry _check_registry
+        -int _cycle_count
+        +run(auto_submit) PipelineResult
+        -_load_official_context() tuple
+        -_finalize_backtest_candidate(...) int
+        -_run_alpha_checks(candidate) CheckReport
+        -_refresh_context_if_needed() None
+        -_feed_experience_to_generator() None
+    }
+
+    class CandidateGenerator {
+        +update_context(fields, operators) None
+        +set_dataset(dataset_id) None
+        +generate(count, dataset_id) List~Candidate~
+        +apply_pattern_weights(patterns) None
+    }
+
+    class DatasetSelector {
+        -List~str~ _datasets
+        -int _rotation_index
+        +initialize(loader) None
+        +select(strategy, ...) List~str~
+    }
+
+    %% ── Relations ──
+    QualityThresholds --> ScoringFunctions : consumed by
+    BrainSettings --> AlphaResearchPipeline : configures
+    ResearchBudget --> AlphaResearchPipeline : configures
+    OfficialDataLoader "1" --> "*" OfficialField : indexes
+    OfficialDataLoader "1" --> "*" OfficialOperator : indexes
+    OfficialDataLoader "1" --> "*" OfficialDataset : indexes
+    OfficialField --> DatasetRef : has
+    OfficialDataLoader --> LoadError : raises on failure
+    AlphaCheckRegistry "1" --> "*" AlphaCheck : manages
+    AlphaCheck --> CheckResult : produces
+    AlphaCheckRegistry --> CheckReport : evaluates to
+    AlphaResearchPipeline --> OfficialDataLoader : uses
+    AlphaResearchPipeline --> AlphaCheckRegistry : invokes
+    AlphaResearchPipeline --> CandidateGenerator : drives
+    AlphaResearchPipeline --> DatasetSelector : drives
+    AlphaResearchPipeline --> ScoringFunctions : calls

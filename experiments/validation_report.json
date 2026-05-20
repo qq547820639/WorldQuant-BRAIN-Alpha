@@ -1,0 +1,220 @@
+{
+  "total_generated": 3,
+  "total_simulated": 3,
+  "total_completed": 2,
+  "total_failed": 1,
+  "total_passed_brain": 0,
+  "total_submittable": 0,
+  "sharpe_distribution": [
+    -0.22,
+    0.1
+  ],
+  "fitness_distribution": [
+    -0.1,
+    0.02
+  ],
+  "turnover_distribution": [
+    0.0318,
+    0.0363
+  ],
+  "prior_score_vs_sharpe_corr": null,
+  "total_score_vs_pass_rate": {
+    "<50": 0.0
+  },
+  "expression_correlation_blocked": 0,
+  "expression_correlation_block_rate": 0.0,
+  "top_fields": [
+    [
+      "sales_estimate_dispersion",
+      1
+    ],
+    [
+      "actual_cashflow_per_share_value_quarterly",
+      1
+    ],
+    [
+      "actual_dividend_value_quarterly",
+      1
+    ],
+    [
+      "sector",
+      1
+    ]
+  ],
+  "top_operators": [
+    [
+      "rank",
+      1
+    ],
+    [
+      "log",
+      1
+    ],
+    [
+      "zscore",
+      1
+    ],
+    [
+      "winsorize",
+      1
+    ],
+    [
+      "group_zscore",
+      1
+    ]
+  ],
+  "skeleton_distribution": {
+    "cross_sectional": 2,
+    "liquidity": 1
+  },
+  "results": [
+    {
+      "index": 1,
+      "expression": "-1 * sales_estimate_dispersion",
+      "fields": [
+        "sales_estimate_dispersion"
+      ],
+      "operators": [],
+      "family": "cross_sectional",
+      "dataset_id": "analyst4",
+      "prior_score": 0.0,
+      "local_quality": 27.0,
+      "local_rank": 9.45,
+      "simulation_status": "completed",
+      "official_alpha_id": "6XRRXlYY",
+      "simulation_error": "",
+      "brain_failure_detail": "",
+      "sharpe": -0.22,
+      "fitness": -0.1,
+      "turnover": 0.0318,
+      "turnover_raw": 0.0318,
+      "returns": -0.0252,
+      "drawdown": 0.4394,
+      "margin": -0.001585,
+      "self_correlation": null,
+      "weight_concentration": 0.0,
+      "sub_universe_sharpe": 0.0,
+      "is_booksize_ratio": null,
+      "ic_mean": null,
+      "ic_ir": null,
+      "empirical_score": 0.0,
+      "checklist_score": 0.0,
+      "total_score": 30.48,
+      "decision_band": "hard_gate_blocked",
+      "gate_status": "NEEDS_ITERATION",
+      "gate_failed_reasons": [
+        "sharpe >= 1.25 (actual: -0.22)",
+        "fitness >= 1.0 (actual: -0.1)",
+        "sub_universe_sharpe >= 0.0075 (actual: 0.0)",
+        "returns >= 0.0 (actual: -0.0252)",
+        "drawdown <= 0.25 (actual: 0.4394)",
+        "is_oos_ratio >= 0.5 (actual: 0.0)",
+        "margin_bps >= 4.0 (actual: -0.0016)",
+        "official_pass: BRAIN pass/fail result.",
+        "economic_logic: One-sentence economic/behavioral thesis.",
+        "local_quality: Local prefilter quality."
+      ],
+      "brain_pass_fail": "FAIL",
+      "brain_check_passed": false,
+      "brain_is_submittable": false,
+      "brain_errors": []
+    },
+    {
+      "index": 2,
+      "expression": "rank(-1 * log(actual_cashflow_per_share_value_quarterly) * actual_dividend_value_quarterly)",
+      "fields": [
+        "actual_cashflow_per_share_value_quarterly",
+        "actual_dividend_value_quarterly"
+      ],
+      "operators": [
+        "rank",
+        "log"
+      ],
+      "family": "liquidity",
+      "dataset_id": "analyst4",
+      "prior_score": 0.0,
+      "local_quality": 59.0,
+      "local_rank": 20.65,
+      "simulation_status": "completed",
+      "official_alpha_id": "O0noGrQd",
+      "simulation_error": "",
+      "brain_failure_detail": "",
+      "sharpe": 0.1,
+      "fitness": 0.02,
+      "turnover": 0.0363,
+      "turnover_raw": 0.0363,
+      "returns": 0.0048,
+      "drawdown": 0.1232,
+      "margin": 0.000262,
+      "self_correlation": null,
+      "weight_concentration": 0.0,
+      "sub_universe_sharpe": 0.0,
+      "is_booksize_ratio": null,
+      "ic_mean": null,
+      "ic_ir": null,
+      "empirical_score": 0.0,
+      "checklist_score": 0.0,
+      "total_score": 32.53,
+      "decision_band": "hard_gate_blocked",
+      "gate_status": "NEEDS_ITERATION",
+      "gate_failed_reasons": [
+        "sharpe >= 1.25 (actual: 0.1)",
+        "fitness >= 1.0 (actual: 0.02)",
+        "sub_universe_sharpe >= 0.075 (actual: 0.0)",
+        "is_oos_ratio >= 0.5 (actual: 0.0)",
+        "margin_bps >= 4.0 (actual: 0.0003)",
+        "official_pass: BRAIN pass/fail result.",
+        "economic_logic: One-sentence economic/behavioral thesis.",
+        "local_quality: Local prefilter quality."
+      ],
+      "brain_pass_fail": "FAIL",
+      "brain_check_passed": false,
+      "brain_is_submittable": false,
+      "brain_errors": []
+    },
+    {
+      "index": 3,
+      "expression": "zscore(winsorize(group_zscore(anl20_fs_basic_splt_v4_nd_eps_estimate, sector), std=4))",
+      "fields": [
+        "sector"
+      ],
+      "operators": [
+        "zscore",
+        "winsorize",
+        "group_zscore"
+      ],
+      "family": "cross_sectional",
+      "dataset_id": "analyst4",
+      "prior_score": 0.0,
+      "local_quality": 57.0,
+      "local_rank": 19.95,
+      "simulation_status": "failed",
+      "official_alpha_id": "",
+      "simulation_error": "BRAIN returned FAILED",
+      "brain_failure_detail": "{'id': '3LhR4o8V74iXbMBbeqj7P2L', 'type': 'REGULAR', 'status': 'ERROR', 'message': 'Attempted to use unknown variable \"anl20_fs_basic_splt_v4_nd_eps_estimate\". <linkToCommonErrorMessages>Learn more</linkToCommonErrorMessages>', 'location': {'line': 1, 'start': 30, 'end': 68, 'property': 'regular'}, 'links': {'linkToCommonErrorMessages': 'https://support.worldquantbrain.com/hc/en-us/articles/184234",
+      "sharpe": null,
+      "fitness": null,
+      "turnover": null,
+      "turnover_raw": null,
+      "returns": null,
+      "drawdown": null,
+      "margin": null,
+      "self_correlation": null,
+      "weight_concentration": null,
+      "sub_universe_sharpe": null,
+      "is_booksize_ratio": null,
+      "ic_mean": null,
+      "ic_ir": null,
+      "empirical_score": 0.0,
+      "checklist_score": 0.0,
+      "total_score": 0.0,
+      "decision_band": "",
+      "gate_status": "",
+      "gate_failed_reasons": [],
+      "brain_pass_fail": "",
+      "brain_check_passed": false,
+      "brain_is_submittable": false,
+      "brain_errors": []
+    }
+  ]
+}

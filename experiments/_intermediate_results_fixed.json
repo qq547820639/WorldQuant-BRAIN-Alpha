@@ -1,0 +1,1576 @@
+{
+  "completed": 0,
+  "failed": 34,
+  "total": 100,
+  "results": [
+    {
+      "index": 1,
+      "expression": "-1 * sales_estimate_dispersion",
+      "status": "completed",
+      "sharpe": 0.0,
+      "fitness": 0.0,
+      "turnover": 0.0,
+      "error": "",
+      "metrics": {
+        "sharpe": 0,
+        "fitness": 0,
+        "turnover": 0,
+        "failure_reason": "No sim_id available for refetch",
+        "extraction_source": "no_sim_id"
+      }
+    },
+    {
+      "index": 2,
+      "expression": "rank(-1 * log(actual_cashflow_per_share_value_quarterly) * actual_dividend_value_quarterly)",
+      "status": "completed",
+      "sharpe": 0.0,
+      "fitness": 0.0,
+      "turnover": 0.0,
+      "error": "",
+      "metrics": {
+        "sharpe": 0,
+        "fitness": 0,
+        "turnover": 0,
+        "failure_reason": "No sim_id available for refetch",
+        "extraction_source": "no_sim_id"
+      }
+    },
+    {
+      "index": 4,
+      "expression": "winsorize(normalize(winsorize(ts_sum(anl4_netprofita_mean, 60))), std=5)",
+      "status": "completed",
+      "sharpe": 0.0,
+      "fitness": 0.0,
+      "turnover": 0.0,
+      "error": "",
+      "metrics": {
+        "sharpe": 0,
+        "fitness": 0,
+        "turnover": 0,
+        "failure_reason": "No sim_id available for refetch",
+        "extraction_source": "no_sim_id"
+      }
+    },
+    {
+      "index": 6,
+      "expression": "winsorize(normalize(-anl4_fs_guidances_advanced_qf_nd_totgw_maxguidance), std=5)",
+      "status": "completed",
+      "sharpe": 0.0,
+      "fitness": 0.0,
+      "turnover": 0.0,
+      "error": "",
+      "metrics": {
+        "sharpe": 0,
+        "fitness": 0,
+        "turnover": 0,
+        "failure_reason": "No sim_id available for refetch",
+        "extraction_source": "no_sim_id"
+      }
+    },
+    {
+      "index": 7,
+      "expression": "winsorize(quantile(zscore(-anl4_fs_guidances_advanced_qf_nd_tbvps_maxguidance)), std=5)",
+      "status": "completed",
+      "sharpe": 0.0,
+      "fitness": 0.0,
+      "turnover": 0.0,
+      "error": "",
+      "metrics": {
+        "sharpe": 0,
+        "fitness": 0,
+        "turnover": 0,
+        "failure_reason": "No sim_id available for refetch",
+        "extraction_source": "no_sim_id"
+      }
+    },
+    {
+      "index": 9,
+      "expression": "rank(-1 * ts_mean(actual_cashflow_per_share_value_quarterly, 12))",
+      "status": "completed",
+      "sharpe": 0.0,
+      "fitness": 0.0,
+      "turnover": 0.0,
+      "error": "",
+      "metrics": {
+        "sharpe": 0,
+        "fitness": 0,
+        "turnover": 0,
+        "failure_reason": "No sim_id available for refetch",
+        "extraction_source": "no_sim_id"
+      }
+    },
+    {
+      "index": 10,
+      "expression": "rank(operating_profit_before_interest_tax)",
+      "status": "completed",
+      "sharpe": 0.0,
+      "fitness": 0.0,
+      "turnover": 0.0,
+      "error": "",
+      "metrics": {
+        "sharpe": 0,
+        "fitness": 0,
+        "turnover": 0,
+        "failure_reason": "No sim_id available for refetch",
+        "extraction_source": "no_sim_id"
+      }
+    },
+    {
+      "index": 12,
+      "expression": "rank(ts_rank(earnings_per_share_estimate_count / actual_cashflow_per_share_value_quarterly, 3))",
+      "status": "completed",
+      "sharpe": 0.0,
+      "fitness": 0.0,
+      "turnover": 0.0,
+      "error": "",
+      "metrics": {
+        "sharpe": 0,
+        "fitness": 0,
+        "turnover": 0,
+        "failure_reason": "No sim_id available for refetch",
+        "extraction_source": "no_sim_id"
+      }
+    },
+    {
+      "index": 13,
+      "expression": "zscore(group_rank(anl4_fs_actuals_basic_af_nd_cfps_value, sector))",
+      "status": "completed",
+      "sharpe": 0.0,
+      "fitness": 0.0,
+      "turnover": 0.0,
+      "error": "",
+      "metrics": {
+        "sharpe": 0,
+        "fitness": 0,
+        "turnover": 0,
+        "failure_reason": "No sim_id available for refetch",
+        "extraction_source": "no_sim_id"
+      }
+    },
+    {
+      "index": 14,
+      "expression": "quantile(ts_sum(guidance_reporting_currency, 60)) + quantile(ts_zscore(anl4_netprofit_low, 12))",
+      "status": "completed",
+      "sharpe": 0.0,
+      "fitness": 0.0,
+      "turnover": 0.0,
+      "error": "",
+      "metrics": {
+        "sharpe": 0,
+        "fitness": 0,
+        "turnover": 0,
+        "failure_reason": "No sim_id available for refetch",
+        "extraction_source": "no_sim_id"
+      }
+    },
+    {
+      "index": 15,
+      "expression": "-1 * actual_cashflow_per_share_value_quarterly",
+      "status": "completed",
+      "sharpe": 0.0,
+      "fitness": 0.0,
+      "turnover": 0.0,
+      "error": "",
+      "metrics": {
+        "sharpe": 0,
+        "fitness": 0,
+        "turnover": 0,
+        "failure_reason": "No sim_id available for refetch",
+        "extraction_source": "no_sim_id"
+      }
+    },
+    {
+      "index": 16,
+      "expression": "zscore(quantile(ts_sum(anl4_qfd1_az_hgih_spfc, 30)) + quantile(ts_zscore(gross_income_reported_value",
+      "status": "completed",
+      "sharpe": 0.0,
+      "fitness": 0.0,
+      "turnover": 0.0,
+      "error": "",
+      "metrics": {
+        "sharpe": 0,
+        "fitness": 0,
+        "turnover": 0,
+        "failure_reason": "No sim_id available for refetch",
+        "extraction_source": "no_sim_id"
+      }
+    },
+    {
+      "index": 17,
+      "expression": "quantile(zscore(-anl4_tbvps_high))",
+      "status": "completed",
+      "sharpe": 0.0,
+      "fitness": 0.0,
+      "turnover": 0.0,
+      "error": "",
+      "metrics": {
+        "sharpe": 0,
+        "fitness": 0,
+        "turnover": 0,
+        "failure_reason": "No sim_id available for refetch",
+        "extraction_source": "no_sim_id"
+      }
+    },
+    {
+      "index": 18,
+      "expression": "winsorize(-1 * winsorize(ts_sum(anl4_fs_detail_estimates_advanced_af_nd_sh_equity_number, 120)), std",
+      "status": "completed",
+      "sharpe": 0.0,
+      "fitness": 0.0,
+      "turnover": 0.0,
+      "error": "",
+      "metrics": {
+        "sharpe": 0,
+        "fitness": 0,
+        "turnover": 0,
+        "failure_reason": "No sim_id available for refetch",
+        "extraction_source": "no_sim_id"
+      }
+    },
+    {
+      "index": 19,
+      "expression": "rank(actual_cashflow_per_share_value_quarterly * actual_dividend_value_quarterly)",
+      "status": "completed",
+      "sharpe": 0.0,
+      "fitness": 0.0,
+      "turnover": 0.0,
+      "error": "",
+      "metrics": {
+        "sharpe": 0,
+        "fitness": 0,
+        "turnover": 0,
+        "failure_reason": "No sim_id available for refetch",
+        "extraction_source": "no_sim_id"
+      }
+    },
+    {
+      "index": 22,
+      "expression": "winsorize(-cashflow_per_share_minimum)",
+      "status": "completed",
+      "sharpe": 0.0,
+      "fitness": 0.0,
+      "turnover": 0.0,
+      "error": "",
+      "metrics": {
+        "sharpe": 0,
+        "fitness": 0,
+        "turnover": 0,
+        "failure_reason": "No sim_id available for refetch",
+        "extraction_source": "no_sim_id"
+      }
+    },
+    {
+      "index": 23,
+      "expression": "normalize(if_else(greater(ts_sum(anl4_fs_detail_estimate_1qf_v4_nd_ebit_std, 15), 0), anl4_fs_detail",
+      "status": "completed",
+      "sharpe": 0.0,
+      "fitness": 0.0,
+      "turnover": 0.0,
+      "error": "",
+      "metrics": {
+        "sharpe": 0,
+        "fitness": 0,
+        "turnover": 0,
+        "failure_reason": "No sim_id available for refetch",
+        "extraction_source": "no_sim_id"
+      }
+    },
+    {
+      "index": 24,
+      "expression": "rank(-1 * actual_cashflow_per_share_value_quarterly)",
+      "status": "completed",
+      "sharpe": 0.0,
+      "fitness": 0.0,
+      "turnover": 0.0,
+      "error": "",
+      "metrics": {
+        "sharpe": 0,
+        "fitness": 0,
+        "turnover": 0,
+        "failure_reason": "No sim_id available for refetch",
+        "extraction_source": "no_sim_id"
+      }
+    },
+    {
+      "index": 28,
+      "expression": "rank(-1 * actual_cashflow_per_share_value_quarterly)",
+      "status": "completed",
+      "sharpe": 0.0,
+      "fitness": 0.0,
+      "turnover": 0.0,
+      "error": "",
+      "metrics": {
+        "sharpe": 0,
+        "fitness": 0,
+        "turnover": 0,
+        "failure_reason": "No sim_id available for refetch",
+        "extraction_source": "no_sim_id"
+      }
+    },
+    {
+      "index": 30,
+      "expression": "-1 * actual_cashflow_per_share_value_quarterly",
+      "status": "completed",
+      "sharpe": 0.0,
+      "fitness": 0.0,
+      "turnover": 0.0,
+      "error": "",
+      "metrics": {
+        "sharpe": 0,
+        "fitness": 0,
+        "turnover": 0,
+        "failure_reason": "No sim_id available for refetch",
+        "extraction_source": "no_sim_id"
+      }
+    },
+    {
+      "index": 32,
+      "expression": "rank(divide(1, 1 + max_total_assets_quarterly_estimate))",
+      "status": "completed",
+      "sharpe": 0.0,
+      "fitness": 0.0,
+      "turnover": 0.0,
+      "error": "",
+      "metrics": {
+        "sharpe": 0,
+        "fitness": 0,
+        "turnover": 0,
+        "failure_reason": "No sim_id available for refetch",
+        "extraction_source": "no_sim_id"
+      }
+    },
+    {
+      "index": 33,
+      "expression": "rank(-1 * actual_cashflow_per_share_value_quarterly)",
+      "status": "completed",
+      "sharpe": 0.0,
+      "fitness": 0.0,
+      "turnover": 0.0,
+      "error": "",
+      "metrics": {
+        "sharpe": 0,
+        "fitness": 0,
+        "turnover": 0,
+        "failure_reason": "No sim_id available for refetch",
+        "extraction_source": "no_sim_id"
+      }
+    },
+    {
+      "index": 34,
+      "expression": "rank(-1 * ts_delta(returns, 1)) + rank(-1 * actual_cashflow_per_share_value_quarterly)",
+      "status": "completed",
+      "sharpe": 0.0,
+      "fitness": 0.0,
+      "turnover": 0.0,
+      "error": "",
+      "metrics": {
+        "sharpe": 0,
+        "fitness": 0,
+        "turnover": 0,
+        "failure_reason": "No sim_id available for refetch",
+        "extraction_source": "no_sim_id"
+      }
+    },
+    {
+      "index": 39,
+      "expression": "normalize(ts_corr(anl4_epsr_flag, returns, 120))",
+      "status": "completed",
+      "sharpe": 0.0,
+      "fitness": 0.0,
+      "turnover": 0.0,
+      "error": "",
+      "metrics": {
+        "sharpe": 0,
+        "fitness": 0,
+        "turnover": 0,
+        "failure_reason": "No sim_id available for refetch",
+        "extraction_source": "no_sim_id"
+      }
+    },
+    {
+      "index": 41,
+      "expression": "rank(zscore(ts_delta(earnings_per_share_estimate_count, 3)))",
+      "status": "completed",
+      "sharpe": 0.0,
+      "fitness": 0.0,
+      "turnover": 0.0,
+      "error": "",
+      "metrics": {
+        "sharpe": 0,
+        "fitness": 0,
+        "turnover": 0,
+        "failure_reason": "No sim_id available for refetch",
+        "extraction_source": "no_sim_id"
+      }
+    },
+    {
+      "index": 42,
+      "expression": "rank(-1 * ts_mean(actual_cashflow_per_share_value_quarterly, 6))",
+      "status": "completed",
+      "sharpe": 0.0,
+      "fitness": 0.0,
+      "turnover": 0.0,
+      "error": "",
+      "metrics": {
+        "sharpe": 0,
+        "fitness": 0,
+        "turnover": 0,
+        "failure_reason": "No sim_id available for refetch",
+        "extraction_source": "no_sim_id"
+      }
+    },
+    {
+      "index": 43,
+      "expression": "rank(-1 * actual_cashflow_per_share_value_quarterly)",
+      "status": "completed",
+      "sharpe": 0.0,
+      "fitness": 0.0,
+      "turnover": 0.0,
+      "error": "",
+      "metrics": {
+        "sharpe": 0,
+        "fitness": 0,
+        "turnover": 0,
+        "failure_reason": "No sim_id available for refetch",
+        "extraction_source": "no_sim_id"
+      }
+    },
+    {
+      "index": 45,
+      "expression": "winsorize(winsorize(ts_sum(anl4_fs_detail_estimate_1qf_v4_nd_epsr_high, 8)) + winsorize(ts_zscore(ea",
+      "status": "completed",
+      "sharpe": 0.0,
+      "fitness": 0.0,
+      "turnover": 0.0,
+      "error": "",
+      "metrics": {
+        "sharpe": 0,
+        "fitness": 0,
+        "turnover": 0,
+        "failure_reason": "No sim_id available for refetch",
+        "extraction_source": "no_sim_id"
+      }
+    },
+    {
+      "index": 46,
+      "expression": "zscore(winsorize(if_else(greater(ts_delta(anl4_fs_detail_estimate_1qf_v4_nd_netdebt_mean, 20), 0), a",
+      "status": "completed",
+      "sharpe": 0.0,
+      "fitness": 0.0,
+      "turnover": 0.0,
+      "error": "",
+      "metrics": {
+        "sharpe": 0,
+        "fitness": 0,
+        "turnover": 0,
+        "failure_reason": "No sim_id available for refetch",
+        "extraction_source": "no_sim_id"
+      }
+    },
+    {
+      "index": 48,
+      "expression": "-1 * rank(actual_cashflow_per_share_value_quarterly) + rank(actual_dividend_value_quarterly)",
+      "status": "completed",
+      "sharpe": 0.0,
+      "fitness": 0.0,
+      "turnover": 0.0,
+      "error": "",
+      "metrics": {
+        "sharpe": 0,
+        "fitness": 0,
+        "turnover": 0,
+        "failure_reason": "No sim_id available for refetch",
+        "extraction_source": "no_sim_id"
+      }
+    },
+    {
+      "index": 50,
+      "expression": "winsorize(ts_sum(anl4_ebit_high, 3) - ts_sum(anl4_ebit_high, 40))",
+      "status": "completed",
+      "sharpe": 0.0,
+      "fitness": 0.0,
+      "turnover": 0.0,
+      "error": "",
+      "metrics": {
+        "sharpe": 0,
+        "fitness": 0,
+        "turnover": 0,
+        "failure_reason": "No sim_id available for refetch",
+        "extraction_source": "no_sim_id"
+      }
+    },
+    {
+      "index": 51,
+      "expression": "zscore(rank(ts_mean(anl4_fs_detail_estimates_basic_qf_delay1_v4_nd_eps_median, 252) - ts_mean(anl4_f",
+      "status": "completed",
+      "sharpe": 0.0,
+      "fitness": 0.0,
+      "turnover": 0.0,
+      "error": "",
+      "metrics": {
+        "sharpe": 0,
+        "fitness": 0,
+        "turnover": 0,
+        "failure_reason": "No sim_id available for refetch",
+        "extraction_source": "no_sim_id"
+      }
+    },
+    {
+      "index": 53,
+      "expression": "zscore(-1 * quantile(ts_std_dev(capital_expenditure_min, 40)))",
+      "status": "completed",
+      "sharpe": 0.0,
+      "fitness": 0.0,
+      "turnover": 0.0,
+      "error": "",
+      "metrics": {
+        "sharpe": 0,
+        "fitness": 0,
+        "turnover": 0,
+        "failure_reason": "No sim_id available for refetch",
+        "extraction_source": "no_sim_id"
+      }
+    },
+    {
+      "index": 54,
+      "expression": "rank(actual_cashflow_per_share_value_quarterly * actual_dividend_value_quarterly)",
+      "status": "completed",
+      "sharpe": 0.0,
+      "fitness": 0.0,
+      "turnover": 0.0,
+      "error": "",
+      "metrics": {
+        "sharpe": 0,
+        "fitness": 0,
+        "turnover": 0,
+        "failure_reason": "No sim_id available for refetch",
+        "extraction_source": "no_sim_id"
+      }
+    },
+    {
+      "index": 56,
+      "expression": "zscore(quantile(normalize(ts_sum(cashflow_per_share_minimum, 60))))",
+      "status": "completed",
+      "sharpe": 0.0,
+      "fitness": 0.0,
+      "turnover": 0.0,
+      "error": "",
+      "metrics": {
+        "sharpe": 0,
+        "fitness": 0,
+        "turnover": 0,
+        "failure_reason": "No sim_id available for refetch",
+        "extraction_source": "no_sim_id"
+      }
+    },
+    {
+      "index": 58,
+      "expression": "actual_cashflow_per_share_value_quarterly / actual_dividend_value_quarterly",
+      "status": "completed",
+      "sharpe": 0.0,
+      "fitness": 0.0,
+      "turnover": 0.0,
+      "error": "",
+      "metrics": {
+        "sharpe": 0,
+        "fitness": 0,
+        "turnover": 0,
+        "failure_reason": "No sim_id available for refetch",
+        "extraction_source": "no_sim_id"
+      }
+    },
+    {
+      "index": 60,
+      "expression": "rank(zscore(ts_delta(earnings_per_share_estimate_count, 12)))",
+      "status": "completed",
+      "sharpe": 0.0,
+      "fitness": 0.0,
+      "turnover": 0.0,
+      "error": "",
+      "metrics": {
+        "sharpe": 0,
+        "fitness": 0,
+        "turnover": 0,
+        "failure_reason": "No sim_id available for refetch",
+        "extraction_source": "no_sim_id"
+      }
+    },
+    {
+      "index": 62,
+      "expression": "rank(-1 * ts_mean(actual_cashflow_per_share_value_quarterly, 6))",
+      "status": "completed",
+      "sharpe": 0.0,
+      "fitness": 0.0,
+      "turnover": 0.0,
+      "error": "",
+      "metrics": {
+        "sharpe": 0,
+        "fitness": 0,
+        "turnover": 0,
+        "failure_reason": "No sim_id available for refetch",
+        "extraction_source": "no_sim_id"
+      }
+    },
+    {
+      "index": 64,
+      "expression": "winsorize(-ts_std_dev(pretax_income_reported_min_guidance_qtr, 120))",
+      "status": "completed",
+      "sharpe": 0.0,
+      "fitness": 0.0,
+      "turnover": 0.0,
+      "error": "",
+      "metrics": {
+        "sharpe": 0,
+        "fitness": 0,
+        "turnover": 0,
+        "failure_reason": "No sim_id available for refetch",
+        "extraction_source": "no_sim_id"
+      }
+    },
+    {
+      "index": 65,
+      "expression": "zscore(rank(if_else(greater(anl4_fs_detail_estimates_basic_af_v4_nd_div_std, 0), anl4_fs_detail_esti",
+      "status": "completed",
+      "sharpe": 0.0,
+      "fitness": 0.0,
+      "turnover": 0.0,
+      "error": "",
+      "metrics": {
+        "sharpe": 0,
+        "fitness": 0,
+        "turnover": 0,
+        "failure_reason": "No sim_id available for refetch",
+        "extraction_source": "no_sim_id"
+      }
+    },
+    {
+      "index": 66,
+      "expression": "zscore(normalize(ts_sum(sales_guidance_value, 252) - ts_sum(sales_guidance_value, 60)))",
+      "status": "completed",
+      "sharpe": 0.0,
+      "fitness": 0.0,
+      "turnover": 0.0,
+      "error": "",
+      "metrics": {
+        "sharpe": 0,
+        "fitness": 0,
+        "turnover": 0,
+        "failure_reason": "No sim_id available for refetch",
+        "extraction_source": "no_sim_id"
+      }
+    },
+    {
+      "index": 67,
+      "expression": "winsorize(group_zscore(anl4_fs_detail_estimates_advanced_af_nd_bvps_std, industry), std=5)",
+      "status": "completed",
+      "sharpe": 0.0,
+      "fitness": 0.0,
+      "turnover": 0.0,
+      "error": "",
+      "metrics": {
+        "sharpe": 0,
+        "fitness": 0,
+        "turnover": 0,
+        "failure_reason": "No sim_id available for refetch",
+        "extraction_source": "no_sim_id"
+      }
+    },
+    {
+      "index": 68,
+      "expression": "rank(ts_delta(earnings_per_share_estimate_count, 1) - ts_delta(earnings_per_share_estimate_count, 6)",
+      "status": "completed",
+      "sharpe": 0.0,
+      "fitness": 0.0,
+      "turnover": 0.0,
+      "error": "",
+      "metrics": {
+        "sharpe": 0,
+        "fitness": 0,
+        "turnover": 0,
+        "failure_reason": "No sim_id available for refetch",
+        "extraction_source": "no_sim_id"
+      }
+    },
+    {
+      "index": 70,
+      "expression": "rank(-1 * actual_cashflow_per_share_value_quarterly)",
+      "status": "completed",
+      "sharpe": 0.0,
+      "fitness": 0.0,
+      "turnover": 0.0,
+      "error": "",
+      "metrics": {
+        "sharpe": 0,
+        "fitness": 0,
+        "turnover": 0,
+        "failure_reason": "No sim_id available for refetch",
+        "extraction_source": "no_sim_id"
+      }
+    },
+    {
+      "index": 72,
+      "expression": "group_rank(-anl4_fs_detail_estimates_advanced_af_nd_cfi_median, subindustry)",
+      "status": "completed",
+      "sharpe": 0.0,
+      "fitness": 0.0,
+      "turnover": 0.0,
+      "error": "",
+      "metrics": {
+        "sharpe": 0,
+        "fitness": 0,
+        "turnover": 0,
+        "failure_reason": "No sim_id available for refetch",
+        "extraction_source": "no_sim_id"
+      }
+    },
+    {
+      "index": 73,
+      "expression": "rank(-1 * actual_cashflow_per_share_value_quarterly)",
+      "status": "completed",
+      "sharpe": 0.0,
+      "fitness": 0.0,
+      "turnover": 0.0,
+      "error": "",
+      "metrics": {
+        "sharpe": 0,
+        "fitness": 0,
+        "turnover": 0,
+        "failure_reason": "No sim_id available for refetch",
+        "extraction_source": "no_sim_id"
+      }
+    },
+    {
+      "index": 74,
+      "expression": "rank(-1 * ts_mean(actual_cashflow_per_share_value_quarterly, 1))",
+      "status": "completed",
+      "sharpe": 0.0,
+      "fitness": 0.0,
+      "turnover": 0.0,
+      "error": "",
+      "metrics": {
+        "sharpe": 0,
+        "fitness": 0,
+        "turnover": 0,
+        "failure_reason": "No sim_id available for refetch",
+        "extraction_source": "no_sim_id"
+      }
+    },
+    {
+      "index": 76,
+      "expression": "winsorize(normalize(ts_sum(min_tangible_book_value_per_share_guidance_2, 120)))",
+      "status": "completed",
+      "sharpe": 0.0,
+      "fitness": 0.0,
+      "turnover": 0.0,
+      "error": "",
+      "metrics": {
+        "sharpe": 0,
+        "fitness": 0,
+        "turnover": 0,
+        "failure_reason": "No sim_id available for refetch",
+        "extraction_source": "no_sim_id"
+      }
+    },
+    {
+      "index": 77,
+      "expression": "rank(actual_cashflow_per_share_value_quarterly - actual_dividend_value_quarterly)",
+      "status": "completed",
+      "sharpe": 0.0,
+      "fitness": 0.0,
+      "turnover": 0.0,
+      "error": "",
+      "metrics": {
+        "sharpe": 0,
+        "fitness": 0,
+        "turnover": 0,
+        "failure_reason": "No sim_id available for refetch",
+        "extraction_source": "no_sim_id"
+      }
+    },
+    {
+      "index": 79,
+      "expression": "rank(-1 * ts_delta(returns, 6))",
+      "status": "completed",
+      "sharpe": 0.0,
+      "fitness": 0.0,
+      "turnover": 0.0,
+      "error": "",
+      "metrics": {
+        "sharpe": 0,
+        "fitness": 0,
+        "turnover": 0,
+        "failure_reason": "No sim_id available for refetch",
+        "extraction_source": "no_sim_id"
+      }
+    },
+    {
+      "index": 80,
+      "expression": "-1 * actual_cashflow_per_share_value_quarterly",
+      "status": "completed",
+      "sharpe": 0.0,
+      "fitness": 0.0,
+      "turnover": 0.0,
+      "error": "",
+      "metrics": {
+        "sharpe": 0,
+        "fitness": 0,
+        "turnover": 0,
+        "failure_reason": "No sim_id available for refetch",
+        "extraction_source": "no_sim_id"
+      }
+    },
+    {
+      "index": 81,
+      "expression": "rank(cashflow_per_share_estimate_count)",
+      "status": "completed",
+      "sharpe": 0.0,
+      "fitness": 0.0,
+      "turnover": 0.0,
+      "error": "",
+      "metrics": {
+        "sharpe": 0,
+        "fitness": 0,
+        "turnover": 0,
+        "failure_reason": "No sim_id available for refetch",
+        "extraction_source": "no_sim_id"
+      }
+    },
+    {
+      "index": 82,
+      "expression": "rank(ts_rank(earnings_per_share_estimate_count / actual_cashflow_per_share_value_quarterly, 3))",
+      "status": "completed",
+      "sharpe": 0.0,
+      "fitness": 0.0,
+      "turnover": 0.0,
+      "error": "",
+      "metrics": {
+        "sharpe": 0,
+        "fitness": 0,
+        "turnover": 0,
+        "failure_reason": "No sim_id available for refetch",
+        "extraction_source": "no_sim_id"
+      }
+    },
+    {
+      "index": 84,
+      "expression": "normalize(ts_decay_linear(ts_zscore(anl4_fs_detail_estimates_advanced_af_nd_bvps_number, 60), 12))",
+      "status": "completed",
+      "sharpe": 0.0,
+      "fitness": 0.0,
+      "turnover": 0.0,
+      "error": "",
+      "metrics": {
+        "sharpe": 0,
+        "fitness": 0,
+        "turnover": 0,
+        "failure_reason": "No sim_id available for refetch",
+        "extraction_source": "no_sim_id"
+      }
+    },
+    {
+      "index": 85,
+      "expression": "rank(-1 * actual_cashflow_per_share_value_quarterly)",
+      "status": "completed",
+      "sharpe": 0.0,
+      "fitness": 0.0,
+      "turnover": 0.0,
+      "error": "",
+      "metrics": {
+        "sharpe": 0,
+        "fitness": 0,
+        "turnover": 0,
+        "failure_reason": "No sim_id available for refetch",
+        "extraction_source": "no_sim_id"
+      }
+    },
+    {
+      "index": 86,
+      "expression": "rank(ts_mean(actual_cashflow_per_share_value_quarterly, 12))",
+      "status": "completed",
+      "sharpe": 0.0,
+      "fitness": 0.0,
+      "turnover": 0.0,
+      "error": "",
+      "metrics": {
+        "sharpe": 0,
+        "fitness": 0,
+        "turnover": 0,
+        "failure_reason": "No sim_id available for refetch",
+        "extraction_source": "no_sim_id"
+      }
+    },
+    {
+      "index": 87,
+      "expression": "rank(zscore(ts_delta(earnings_per_share_estimate_count, 6)))",
+      "status": "completed",
+      "sharpe": 0.0,
+      "fitness": 0.0,
+      "turnover": 0.0,
+      "error": "",
+      "metrics": {
+        "sharpe": 0,
+        "fitness": 0,
+        "turnover": 0,
+        "failure_reason": "No sim_id available for refetch",
+        "extraction_source": "no_sim_id"
+      }
+    },
+    {
+      "index": 88,
+      "expression": "zscore(quantile(ts_decay_linear(ts_std_dev(anl4_bvps_flag, 252), 60)))",
+      "status": "completed",
+      "sharpe": 0.0,
+      "fitness": 0.0,
+      "turnover": 0.0,
+      "error": "",
+      "metrics": {
+        "sharpe": 0,
+        "fitness": 0,
+        "turnover": 0,
+        "failure_reason": "No sim_id available for refetch",
+        "extraction_source": "no_sim_id"
+      }
+    },
+    {
+      "index": 90,
+      "expression": "winsorize(quantile(ts_std_dev(anl4_fs_guidances_basic_qf_nd_eps_maxguidance, 180)), std=3)",
+      "status": "completed",
+      "sharpe": 0.0,
+      "fitness": 0.0,
+      "turnover": 0.0,
+      "error": "",
+      "metrics": {
+        "sharpe": 0,
+        "fitness": 0,
+        "turnover": 0,
+        "failure_reason": "No sim_id available for refetch",
+        "extraction_source": "no_sim_id"
+      }
+    },
+    {
+      "index": 92,
+      "expression": "rank(operating_profit_before_interest_tax)",
+      "status": "completed",
+      "sharpe": 0.0,
+      "fitness": 0.0,
+      "turnover": 0.0,
+      "error": "",
+      "metrics": {
+        "sharpe": 0,
+        "fitness": 0,
+        "turnover": 0,
+        "failure_reason": "No sim_id available for refetch",
+        "extraction_source": "no_sim_id"
+      }
+    },
+    {
+      "index": 93,
+      "expression": "rank(if_else(greater(anl4_qfv4_div_number, 0), anl4_qfv4_div_number, 0))",
+      "status": "completed",
+      "sharpe": 0.0,
+      "fitness": 0.0,
+      "turnover": 0.0,
+      "error": "",
+      "metrics": {
+        "sharpe": 0,
+        "fitness": 0,
+        "turnover": 0,
+        "failure_reason": "No sim_id available for refetch",
+        "extraction_source": "no_sim_id"
+      }
+    },
+    {
+      "index": 94,
+      "expression": "rank(-1 * ts_mean(actual_cashflow_per_share_value_quarterly, 3))",
+      "status": "completed",
+      "sharpe": 0.0,
+      "fitness": 0.0,
+      "turnover": 0.0,
+      "error": "",
+      "metrics": {
+        "sharpe": 0,
+        "fitness": 0,
+        "turnover": 0,
+        "failure_reason": "No sim_id available for refetch",
+        "extraction_source": "no_sim_id"
+      }
+    },
+    {
+      "index": 95,
+      "expression": "zscore(normalize(ts_sum(anl4_fs_detail_estimates_advanced_af_nd_epsr_number, 12)) + normalize(ts_zsc",
+      "status": "completed",
+      "sharpe": 0.0,
+      "fitness": 0.0,
+      "turnover": 0.0,
+      "error": "",
+      "metrics": {
+        "sharpe": 0,
+        "fitness": 0,
+        "turnover": 0,
+        "failure_reason": "No sim_id available for refetch",
+        "extraction_source": "no_sim_id"
+      }
+    },
+    {
+      "index": 97,
+      "expression": "quantile(normalize(ts_sum(anl4_fs_detail_estimates_advanced_af_nd_totassets_mean, 5)))",
+      "status": "completed",
+      "sharpe": 0.0,
+      "fitness": 0.0,
+      "turnover": 0.0,
+      "error": "",
+      "metrics": {
+        "sharpe": 0,
+        "fitness": 0,
+        "turnover": 0,
+        "failure_reason": "No sim_id available for refetch",
+        "extraction_source": "no_sim_id"
+      }
+    },
+    {
+      "index": 99,
+      "expression": "rank(-1 * actual_cashflow_per_share_value_quarterly)",
+      "status": "completed",
+      "sharpe": 0.0,
+      "fitness": 0.0,
+      "turnover": 0.0,
+      "error": "",
+      "metrics": {
+        "sharpe": 0,
+        "fitness": 0,
+        "turnover": 0,
+        "failure_reason": "No sim_id available for refetch",
+        "extraction_source": "no_sim_id"
+      }
+    },
+    {
+      "index": 100,
+      "expression": "-1 * rank(actual_cashflow_per_share_value_quarterly) + rank(actual_dividend_value_quarterly)",
+      "status": "completed",
+      "sharpe": 0.0,
+      "fitness": 0.0,
+      "turnover": 0.0,
+      "error": "",
+      "metrics": {
+        "sharpe": 0,
+        "fitness": 0,
+        "turnover": 0,
+        "failure_reason": "No sim_id available for refetch",
+        "extraction_source": "no_sim_id"
+      }
+    },
+    {
+      "index": 3,
+      "expression": "zscore(winsorize(group_zscore(anl20_fs_basic_splt_v4_nd_eps_estimate, sector), std=4))",
+      "status": "failed",
+      "sharpe": null,
+      "fitness": null,
+      "turnover": null,
+      "error": "Attempted to use unknown variable \"anl20_fs_basic_splt_v4_nd_eps_estimate\". <linkToCommonErrorMessages>Learn more</linkToCommonErrorMessages>",
+      "metrics": {
+        "sharpe": 0,
+        "fitness": 0,
+        "turnover": 0
+      },
+      "metrics_fixed": false
+    },
+    {
+      "index": 5,
+      "expression": "zscore(normalize(if_else(greater(ts_delta(anl4_cuo1conafv1120_item, 10), 0), anl4_cuo1conafv110_item",
+      "status": "failed",
+      "sharpe": null,
+      "fitness": null,
+      "turnover": null,
+      "error": "Attempted to use unknown variable \"anl4_cuo1conafv1120_item\". <linkToCommonErrorMessages>Learn more</linkToCommonErrorMessages>",
+      "metrics": {
+        "sharpe": 0,
+        "fitness": 0,
+        "turnover": 0
+      },
+      "metrics_fixed": false
+    },
+    {
+      "index": 8,
+      "expression": "rank(ts_rank(actual_cashflow_per_share_value_quarterly - anl4_adxqfv110_down, 1))",
+      "status": "failed",
+      "sharpe": null,
+      "fitness": null,
+      "turnover": null,
+      "error": "Operator subtract does not support event inputs. <linkToCommonErrorMessages>Learn more</linkToCommonErrorMessages>",
+      "metrics": {
+        "sharpe": 0,
+        "fitness": 0,
+        "turnover": 0
+      },
+      "metrics_fixed": false
+    },
+    {
+      "index": 11,
+      "expression": "rank(-1 * zscore(ts_delta(actual_cashflow_per_share_value_quarterly, 1), 6))",
+      "status": "failed",
+      "sharpe": null,
+      "fitness": null,
+      "turnover": null,
+      "error": "Invalid number of inputs : 2, should be exactly 1 input(s). <linkToCommonErrorMessages>Learn more</linkToCommonErrorMessages>",
+      "metrics": {
+        "sharpe": 0,
+        "fitness": 0,
+        "turnover": 0
+      },
+      "metrics_fixed": false
+    },
+    {
+      "index": 20,
+      "expression": "anl4_buy(12)",
+      "status": "failed",
+      "sharpe": null,
+      "fitness": null,
+      "turnover": null,
+      "error": "Attempted to use inaccessible or unknown operator \"anl4_buy\". <linkToCommonErrorMessages>Learn more</linkToCommonErrorMessages>",
+      "metrics": {
+        "sharpe": 0,
+        "fitness": 0,
+        "turnover": 0
+      },
+      "metrics_fixed": false
+    },
+    {
+      "index": 21,
+      "expression": "actual_cashflow_per_share_value_quarterly(12)",
+      "status": "failed",
+      "sharpe": null,
+      "fitness": null,
+      "turnover": null,
+      "error": "Attempted to use inaccessible or unknown operator \"actual_cashflow_per_share_value_quarterly\". <linkToCommonErrorMessages>Learn more</linkToCommonErrorMessages>",
+      "metrics": {
+        "sharpe": 0,
+        "fitness": 0,
+        "turnover": 0
+      },
+      "metrics_fixed": false
+    },
+    {
+      "index": 25,
+      "expression": "actual_cashflow_per_share_value_quarterly(10)",
+      "status": "failed",
+      "sharpe": null,
+      "fitness": null,
+      "turnover": null,
+      "error": "Attempted to use inaccessible or unknown operator \"actual_cashflow_per_share_value_quarterly\". <linkToCommonErrorMessages>Learn more</linkToCommonErrorMessages>",
+      "metrics": {
+        "sharpe": 0,
+        "fitness": 0,
+        "turnover": 0
+      },
+      "metrics_fixed": false
+    },
+    {
+      "index": 26,
+      "expression": "rank(-1 * zscore(ts_delta(actual_cashflow_per_share_value_quarterly, 1), 6))",
+      "status": "failed",
+      "sharpe": null,
+      "fitness": null,
+      "turnover": null,
+      "error": "Invalid number of inputs : 2, should be exactly 1 input(s). <linkToCommonErrorMessages>Learn more</linkToCommonErrorMessages>",
+      "metrics": {
+        "sharpe": 0,
+        "fitness": 0,
+        "turnover": 0
+      },
+      "metrics_fixed": false
+    },
+    {
+      "index": 27,
+      "expression": "rank(zscore(actual_cashflow_per_share_value_quarterly, 40))",
+      "status": "failed",
+      "sharpe": null,
+      "fitness": null,
+      "turnover": null,
+      "error": "Invalid number of inputs : 2, should be exactly 1 input(s). <linkToCommonErrorMessages>Learn more</linkToCommonErrorMessages>",
+      "metrics": {
+        "sharpe": 0,
+        "fitness": 0,
+        "turnover": 0
+      },
+      "metrics_fixed": false
+    },
+    {
+      "index": 29,
+      "expression": "operating_profit_before_interest_tax(3)",
+      "status": "failed",
+      "sharpe": null,
+      "fitness": null,
+      "turnover": null,
+      "error": "Attempted to use inaccessible or unknown operator \"operating_profit_before_interest_tax\". <linkToCommonErrorMessages>Learn more</linkToCommonErrorMessages>",
+      "metrics": {
+        "sharpe": 0,
+        "fitness": 0,
+        "turnover": 0
+      },
+      "metrics_fixed": false
+    },
+    {
+      "index": 31,
+      "expression": "rank(-1 * log(actual_cashflow_per_share_value_quarterly) * bid_ask_spread)",
+      "status": "failed",
+      "sharpe": null,
+      "fitness": null,
+      "turnover": null,
+      "error": "Attempted to use unknown variable \"bid_ask_spread\". <linkToCommonErrorMessages>Learn more</linkToCommonErrorMessages>",
+      "metrics": {
+        "sharpe": 0,
+        "fitness": 0,
+        "turnover": 0
+      },
+      "metrics_fixed": false
+    },
+    {
+      "index": 35,
+      "expression": "actual_cashflow_per_share_value_quarterly(20)",
+      "status": "failed",
+      "sharpe": null,
+      "fitness": null,
+      "turnover": null,
+      "error": "Attempted to use inaccessible or unknown operator \"actual_cashflow_per_share_value_quarterly\". <linkToCommonErrorMessages>Learn more</linkToCommonErrorMessages>",
+      "metrics": {
+        "sharpe": 0,
+        "fitness": 0,
+        "turnover": 0
+      },
+      "metrics_fixed": false
+    },
+    {
+      "index": 36,
+      "expression": "operating_profit_before_interest_tax(3)",
+      "status": "failed",
+      "sharpe": null,
+      "fitness": null,
+      "turnover": null,
+      "error": "Attempted to use inaccessible or unknown operator \"operating_profit_before_interest_tax\". <linkToCommonErrorMessages>Learn more</linkToCommonErrorMessages>",
+      "metrics": {
+        "sharpe": 0,
+        "fitness": 0,
+        "turnover": 0
+      },
+      "metrics_fixed": false
+    },
+    {
+      "index": 37,
+      "expression": "rank(-1 * zscore(ts_delta(actual_cashflow_per_share_value_quarterly, 1), 6))",
+      "status": "failed",
+      "sharpe": null,
+      "fitness": null,
+      "turnover": null,
+      "error": "Invalid number of inputs : 2, should be exactly 1 input(s). <linkToCommonErrorMessages>Learn more</linkToCommonErrorMessages>",
+      "metrics": {
+        "sharpe": 0,
+        "fitness": 0,
+        "turnover": 0
+      },
+      "metrics_fixed": false
+    },
+    {
+      "index": 38,
+      "expression": "group_rank(ts_delta(anl4_fs_guidance_qf_v4_nd_currency, 20), sector)",
+      "status": "failed",
+      "sharpe": null,
+      "fitness": null,
+      "turnover": null,
+      "error": "Operator ts_delta does not support event inputs. <linkToCommonErrorMessages>Learn more</linkToCommonErrorMessages>",
+      "metrics": {
+        "sharpe": 0,
+        "fitness": 0,
+        "turnover": 0
+      },
+      "metrics_fixed": false
+    },
+    {
+      "index": 40,
+      "expression": "cashflow_per_share_estimate_count(12)",
+      "status": "failed",
+      "sharpe": null,
+      "fitness": null,
+      "turnover": null,
+      "error": "Attempted to use inaccessible or unknown operator \"cashflow_per_share_estimate_count\". <linkToCommonErrorMessages>Learn more</linkToCommonErrorMessages>",
+      "metrics": {
+        "sharpe": 0,
+        "fitness": 0,
+        "turnover": 0
+      },
+      "metrics_fixed": false
+    },
+    {
+      "index": 44,
+      "expression": "rank(ts_mean(returns, 60) / ts_std(returns, 60))",
+      "status": "failed",
+      "sharpe": null,
+      "fitness": null,
+      "turnover": null,
+      "error": "Attempted to use inaccessible or unknown operator \"ts_std\". <linkToCommonErrorMessages>Learn more</linkToCommonErrorMessages>",
+      "metrics": {
+        "sharpe": 0,
+        "fitness": 0,
+        "turnover": 0
+      },
+      "metrics_fixed": false
+    },
+    {
+      "index": 47,
+      "expression": "sue_4q(12)",
+      "status": "failed",
+      "sharpe": null,
+      "fitness": null,
+      "turnover": null,
+      "error": "Attempted to use inaccessible or unknown operator \"sue_4q\". <linkToCommonErrorMessages>Learn more</linkToCommonErrorMessages>",
+      "metrics": {
+        "sharpe": 0,
+        "fitness": 0,
+        "turnover": 0
+      },
+      "metrics_fixed": false
+    },
+    {
+      "index": 49,
+      "expression": "actual_cashflow_per_share_value_quarterly(1)",
+      "status": "failed",
+      "sharpe": null,
+      "fitness": null,
+      "turnover": null,
+      "error": "Attempted to use inaccessible or unknown operator \"actual_cashflow_per_share_value_quarterly\". <linkToCommonErrorMessages>Learn more</linkToCommonErrorMessages>",
+      "metrics": {
+        "sharpe": 0,
+        "fitness": 0,
+        "turnover": 0
+      },
+      "metrics_fixed": false
+    },
+    {
+      "index": 52,
+      "expression": "winsorize(-1 * quantile(ts_mean(anl4_eaz2lltv110_person, 5)), std=4)",
+      "status": "failed",
+      "sharpe": null,
+      "fitness": null,
+      "turnover": null,
+      "error": "Operator ts_mean does not support event inputs. <linkToCommonErrorMessages>Learn more</linkToCommonErrorMessages>",
+      "metrics": {
+        "sharpe": 0,
+        "fitness": 0,
+        "turnover": 0
+      },
+      "metrics_fixed": false
+    },
+    {
+      "index": 55,
+      "expression": "rank(ts_rank(actual_cashflow_per_share_value_quarterly - anl4_adxqfv110_down, 3))",
+      "status": "failed",
+      "sharpe": null,
+      "fitness": null,
+      "turnover": null,
+      "error": "Operator subtract does not support event inputs. <linkToCommonErrorMessages>Learn more</linkToCommonErrorMessages>",
+      "metrics": {
+        "sharpe": 0,
+        "fitness": 0,
+        "turnover": 0
+      },
+      "metrics_fixed": false
+    },
+    {
+      "index": 57,
+      "expression": "rank(short_interest_pct)",
+      "status": "failed",
+      "sharpe": null,
+      "fitness": null,
+      "turnover": null,
+      "error": "Attempted to use unknown variable \"short_interest_pct\". <linkToCommonErrorMessages>Learn more</linkToCommonErrorMessages>",
+      "metrics": {
+        "sharpe": 0,
+        "fitness": 0,
+        "turnover": 0
+      },
+      "metrics_fixed": false
+    },
+    {
+      "index": 59,
+      "expression": "rank(zscore(roic, 20))",
+      "status": "failed",
+      "sharpe": null,
+      "fitness": null,
+      "turnover": null,
+      "error": "Attempted to use unknown variable \"roic\". <linkToCommonErrorMessages>Learn more</linkToCommonErrorMessages>",
+      "metrics": {
+        "sharpe": 0,
+        "fitness": 0,
+        "turnover": 0
+      },
+      "metrics_fixed": false
+    },
+    {
+      "index": 61,
+      "expression": "rank(ts_mean(returns, 20) / ts_std(returns, 20))",
+      "status": "failed",
+      "sharpe": null,
+      "fitness": null,
+      "turnover": null,
+      "error": "Attempted to use inaccessible or unknown operator \"ts_std\". <linkToCommonErrorMessages>Learn more</linkToCommonErrorMessages>",
+      "metrics": {
+        "sharpe": 0,
+        "fitness": 0,
+        "turnover": 0
+      },
+      "metrics_fixed": false
+    },
+    {
+      "index": 63,
+      "expression": "anl4_buy(3)",
+      "status": "failed",
+      "sharpe": null,
+      "fitness": null,
+      "turnover": null,
+      "error": "Attempted to use inaccessible or unknown operator \"anl4_buy\". <linkToCommonErrorMessages>Learn more</linkToCommonErrorMessages>",
+      "metrics": {
+        "sharpe": 0,
+        "fitness": 0,
+        "turnover": 0
+      },
+      "metrics_fixed": false
+    },
+    {
+      "index": 69,
+      "expression": "rank(roe - actual_cashflow_per_share_value_quarterly)",
+      "status": "failed",
+      "sharpe": null,
+      "fitness": null,
+      "turnover": null,
+      "error": "Attempted to use unknown variable \"roe\". <linkToCommonErrorMessages>Learn more</linkToCommonErrorMessages>",
+      "metrics": {
+        "sharpe": 0,
+        "fitness": 0,
+        "turnover": 0
+      },
+      "metrics_fixed": false
+    },
+    {
+      "index": 71,
+      "expression": "cashflow_per_share_estimate_count(3)",
+      "status": "failed",
+      "sharpe": null,
+      "fitness": null,
+      "turnover": null,
+      "error": "Attempted to use inaccessible or unknown operator \"cashflow_per_share_estimate_count\". <linkToCommonErrorMessages>Learn more</linkToCommonErrorMessages>",
+      "metrics": {
+        "sharpe": 0,
+        "fitness": 0,
+        "turnover": 0
+      },
+      "metrics_fixed": false
+    },
+    {
+      "index": 75,
+      "expression": "actual_cashflow_per_share_value_quarterly(5)",
+      "status": "failed",
+      "sharpe": null,
+      "fitness": null,
+      "turnover": null,
+      "error": "Attempted to use inaccessible or unknown operator \"actual_cashflow_per_share_value_quarterly\". <linkToCommonErrorMessages>Learn more</linkToCommonErrorMessages>",
+      "metrics": {
+        "sharpe": 0,
+        "fitness": 0,
+        "turnover": 0
+      },
+      "metrics_fixed": false
+    },
+    {
+      "index": 78,
+      "expression": "operating_profit_before_interest_tax(12)",
+      "status": "failed",
+      "sharpe": null,
+      "fitness": null,
+      "turnover": null,
+      "error": "Attempted to use inaccessible or unknown operator \"operating_profit_before_interest_tax\". <linkToCommonErrorMessages>Learn more</linkToCommonErrorMessages>",
+      "metrics": {
+        "sharpe": 0,
+        "fitness": 0,
+        "turnover": 0
+      },
+      "metrics_fixed": false
+    },
+    {
+      "index": 83,
+      "expression": "rank(zscore(-1 * ts_delta(returns, 36), 12))",
+      "status": "failed",
+      "sharpe": null,
+      "fitness": null,
+      "turnover": null,
+      "error": "Invalid number of inputs : 2, should be exactly 1 input(s). <linkToCommonErrorMessages>Learn more</linkToCommonErrorMessages>",
+      "metrics": {
+        "sharpe": 0,
+        "fitness": 0,
+        "turnover": 0
+      },
+      "metrics_fixed": false
+    },
+    {
+      "index": 89,
+      "expression": "group_backfill(anl4_fs_guidances_advanced_af_nd_cfo_minguidance, industry)",
+      "status": "failed",
+      "sharpe": null,
+      "fitness": null,
+      "turnover": null,
+      "error": "Required attribute \"lookback\" must have a value. <linkToCommonErrorMessages>Learn more</linkToCommonErrorMessages>",
+      "metrics": {
+        "sharpe": 0,
+        "fitness": 0,
+        "turnover": 0
+      },
+      "metrics_fixed": false
+    },
+    {
+      "index": 91,
+      "expression": "rank(-1 * actual_cashflow_per_share_value_quarterly)",
+      "status": "timeout",
+      "sharpe": null,
+      "fitness": null,
+      "turnover": null,
+      "error": "poll timeout",
+      "metrics": {
+        "sharpe": 0,
+        "fitness": 0,
+        "turnover": 0
+      },
+      "metrics_fixed": false
+    },
+    {
+      "index": 96,
+      "expression": "actual_cashflow_per_share_value_quarterly(12)",
+      "status": "failed",
+      "sharpe": null,
+      "fitness": null,
+      "turnover": null,
+      "error": "Attempted to use inaccessible or unknown operator \"actual_cashflow_per_share_value_quarterly\". <linkToCommonErrorMessages>Learn more</linkToCommonErrorMessages>",
+      "metrics": {
+        "sharpe": 0,
+        "fitness": 0,
+        "turnover": 0
+      },
+      "metrics_fixed": false
+    },
+    {
+      "index": 98,
+      "expression": "winsorize(group_zscore(anl30_fs_detail_estimate_1qf_v4_nd_ptp_high, industry), std=4)",
+      "status": "failed",
+      "sharpe": null,
+      "fitness": null,
+      "turnover": null,
+      "error": "Attempted to use unknown variable \"anl30_fs_detail_estimate_1qf_v4_nd_ptp_high\". <linkToCommonErrorMessages>Learn more</linkToCommonErrorMessages>",
+      "metrics": {
+        "sharpe": 0,
+        "fitness": 0,
+        "turnover": 0
+      },
+      "metrics_fixed": false
+    }
+  ],
+  "sharpes": [],
+  "non_zero_sharpes": [],
+  "fitnesses": []
+}

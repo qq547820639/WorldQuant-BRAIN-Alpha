@@ -1,0 +1,73 @@
+# ============================================================================
+# BRAIN Alpha Ops — .gitignore
+# ============================================================================
+
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+*.egg
+.eggs/
+dist/
+build/
+*.spec
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ---- Virtual environments ----
+venv/
+.venv/
+env/
+.env
+.codex_pydeps/
+
+# ---- IDE / Editor ----
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ---- Data & Logs (large / sensitive / runtime-generated) ----
+data/*.jsonl
+data/api_cache/
+data/*.log
+*.log
+*.err.log
+*.out.log
+
+# ---- Cache & Temp ----
+*.tmp
+*.bak
+*.cache
+
+# ---- Build artifacts ----
+BrainAlphaOps.spec
+build/
+dist/
+
+# ---- Archive ----
+_archive_before_rebuild_*/
+
+# ---- Temp / External source copies ----
+.codex_tmp_quantgpt_src/
+
+# ---- Credentials (NEVER commit) ----
+.env
+.env.*
+credentials.json
+secrets.json
+
+# ---- Jupyter ----
+.ipynb_checkpoints/
+*.ipynb
+
+# ---- OS ----
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
