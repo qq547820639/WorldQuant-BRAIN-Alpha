@@ -1,0 +1,128 @@
+{
+  "usa_standard": {
+    "label": "美股标准生产",
+    "description": "USA TOP3000, SUBINDUSTRY neutralization, Delay-1, Decay-10",
+    "settings": {
+      "region": "USA",
+      "universe": "TOP3000",
+      "delay": 1,
+      "decay": 10,
+      "neutralization": "SUBINDUSTRY",
+      "truncation": 0.05,
+      "pasteurization": "ON",
+      "unitHandling": "VERIFY",
+      "nanHandling": "ON",
+      "instrumentType": "EQUITY",
+      "type": "REGULAR",
+      "language": "FASTEXPR"
+    }
+  },
+  "usa_liquid": {
+    "label": "美股高流动性",
+    "description": "USA TOP1000, SUBINDUSTRY, tighter truncation for liquid universe",
+    "settings": {
+      "region": "USA",
+      "universe": "TOP1000",
+      "delay": 1,
+      "decay": 8,
+      "neutralization": "SUBINDUSTRY",
+      "truncation": 0.03,
+      "pasteurization": "ON",
+      "unitHandling": "VERIFY",
+      "nanHandling": "ON",
+      "instrumentType": "EQUITY",
+      "type": "REGULAR",
+      "language": "FASTEXPR"
+    }
+  },
+  "usa_sector": {
+    "label": "美股 Sector Neutral",
+    "description": "USA TOP3000 with sector-level neutralization",
+    "settings": {
+      "region": "USA",
+      "universe": "TOP3000",
+      "delay": 1,
+      "decay": 10,
+      "neutralization": "SECTOR",
+      "truncation": 0.05,
+      "pasteurization": "ON",
+      "unitHandling": "VERIFY",
+      "nanHandling": "ON",
+      "instrumentType": "EQUITY",
+      "type": "REGULAR",
+      "language": "FASTEXPR"
+    }
+  },
+  "usa_market": {
+    "label": "美股 Market Neutral",
+    "description": "USA TOP3000 with market-level neutralization",
+    "settings": {
+      "region": "USA",
+      "universe": "TOP3000",
+      "delay": 1,
+      "decay": 10,
+      "neutralization": "MARKET",
+      "truncation": 0.05,
+      "pasteurization": "ON",
+      "unitHandling": "VERIFY",
+      "nanHandling": "ON",
+      "instrumentType": "EQUITY",
+      "type": "REGULAR",
+      "language": "FASTEXPR"
+    }
+  },
+  "europe_standard": {
+    "label": "欧洲标准生产",
+    "description": "EUR TOP3000, SUBINDUSTRY neutralization",
+    "settings": {
+      "region": "EUR",
+      "universe": "TOP3000",
+      "delay": 1,
+      "decay": 10,
+      "neutralization": "SUBINDUSTRY",
+      "truncation": 0.05,
+      "pasteurization": "ON",
+      "unitHandling": "VERIFY",
+      "nanHandling": "ON",
+      "instrumentType": "EQUITY",
+      "type": "REGULAR",
+      "language": "FASTEXPR"
+    }
+  },
+  "global_market": {
+    "label": "全球 Market Neutral",
+    "description": "GLB TOP3000, MARKET neutralization, longer decay for global breadth",
+    "settings": {
+      "region": "GLB",
+      "universe": "TOP3000",
+      "delay": 1,
+      "decay": 12,
+      "neutralization": "MARKET",
+      "truncation": 0.04,
+      "pasteurization": "ON",
+      "unitHandling": "VERIFY",
+      "nanHandling": "ON",
+      "instrumentType": "EQUITY",
+      "type": "REGULAR",
+      "language": "FASTEXPR"
+    }
+  },
+  "china_standard": {
+    "label": "中国市场标准生产",
+    "description": "CHN TOP3000, SUBINDUSTRY neutralization",
+    "settings": {
+      "region": "CHN",
+      "universe": "TOP3000",
+      "delay": 1,
+      "decay": 10,
+      "neutralization": "SUBINDUSTRY",
+      "truncation": 0.05,
+      "pasteurization": "ON",
+      "unitHandling": "VERIFY",
+      "nanHandling": "ON",
+      "instrumentType": "EQUITY",
+      "type": "REGULAR",
+      "language": "FASTEXPR"
+    }
+  }
+}

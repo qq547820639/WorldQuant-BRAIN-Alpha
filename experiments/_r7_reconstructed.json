@@ -1,0 +1,403 @@
+{
+  "total": 46,
+  "completed": 44,
+  "failed": 2,
+  "results": [
+    {
+      "index": 1,
+      "expression": "r7_1",
+      "status": "completed",
+      "sharpe": 0.42,
+      "fitness": 0,
+      "turnover": 0,
+      "returns": 0
+    },
+    {
+      "index": 2,
+      "expression": "r7_2",
+      "status": "completed",
+      "sharpe": 0.02,
+      "fitness": 0,
+      "turnover": 0,
+      "returns": 0
+    },
+    {
+      "index": 3,
+      "expression": "r7_3",
+      "status": "completed",
+      "sharpe": 1.66,
+      "fitness": 0,
+      "turnover": 0,
+      "returns": 0
+    },
+    {
+      "index": 4,
+      "expression": "r7_4",
+      "status": "completed",
+      "sharpe": -1.31,
+      "fitness": 0,
+      "turnover": 0,
+      "returns": 0
+    },
+    {
+      "index": 5,
+      "expression": "r7_5",
+      "status": "completed",
+      "sharpe": -0.82,
+      "fitness": 0,
+      "turnover": 0,
+      "returns": 0
+    },
+    {
+      "index": 6,
+      "expression": "r7_6",
+      "status": "completed",
+      "sharpe": -0.52,
+      "fitness": 0,
+      "turnover": 0,
+      "returns": 0
+    },
+    {
+      "index": 7,
+      "expression": "r7_7",
+      "status": "completed",
+      "sharpe": 0.03,
+      "fitness": 0,
+      "turnover": 0,
+      "returns": 0
+    },
+    {
+      "index": 8,
+      "expression": "r7_8",
+      "status": "completed",
+      "sharpe": 0.22,
+      "fitness": 0,
+      "turnover": 0,
+      "returns": 0
+    },
+    {
+      "index": 9,
+      "expression": "r7_9",
+      "status": "completed",
+      "sharpe": -1.51,
+      "fitness": 0,
+      "turnover": 0,
+      "returns": 0
+    },
+    {
+      "index": 11,
+      "expression": "r7_11",
+      "status": "completed",
+      "sharpe": -0.28,
+      "fitness": 0,
+      "turnover": 0,
+      "returns": 0
+    },
+    {
+      "index": 12,
+      "expression": "r7_12",
+      "status": "completed",
+      "sharpe": 0.11,
+      "fitness": 0,
+      "turnover": 0,
+      "returns": 0
+    },
+    {
+      "index": 13,
+      "expression": "r7_13",
+      "status": "completed",
+      "sharpe": 0.0,
+      "fitness": 0,
+      "turnover": 0,
+      "returns": 0
+    },
+    {
+      "index": 14,
+      "expression": "r7_14",
+      "status": "completed",
+      "sharpe": 0.02,
+      "fitness": 0,
+      "turnover": 0,
+      "returns": 0
+    },
+    {
+      "index": 15,
+      "expression": "r7_15",
+      "status": "completed",
+      "sharpe": -1.48,
+      "fitness": 0,
+      "turnover": 0,
+      "returns": 0
+    },
+    {
+      "index": 16,
+      "expression": "r7_16",
+      "status": "completed",
+      "sharpe": 0.34,
+      "fitness": 0,
+      "turnover": 0,
+      "returns": 0
+    },
+    {
+      "index": 17,
+      "expression": "r7_17",
+      "status": "completed",
+      "sharpe": 0.46,
+      "fitness": 0,
+      "turnover": 0,
+      "returns": 0
+    },
+    {
+      "index": 18,
+      "expression": "r7_18",
+      "status": "completed",
+      "sharpe": -0.64,
+      "fitness": 0,
+      "turnover": 0,
+      "returns": 0
+    },
+    {
+      "index": 19,
+      "expression": "r7_19",
+      "status": "completed",
+      "sharpe": 0.33,
+      "fitness": 0,
+      "turnover": 0,
+      "returns": 0
+    },
+    {
+      "index": 20,
+      "expression": "r7_20",
+      "status": "completed",
+      "sharpe": -0.35,
+      "fitness": 0,
+      "turnover": 0,
+      "returns": 0
+    },
+    {
+      "index": 21,
+      "expression": "r7_21",
+      "status": "completed",
+      "sharpe": -0.24,
+      "fitness": 0,
+      "turnover": 0,
+      "returns": 0
+    },
+    {
+      "index": 22,
+      "expression": "r7_22",
+      "status": "completed",
+      "sharpe": 0.91,
+      "fitness": 0,
+      "turnover": 0,
+      "returns": 0
+    },
+    {
+      "index": 23,
+      "expression": "r7_23",
+      "status": "completed",
+      "sharpe": -0.65,
+      "fitness": 0,
+      "turnover": 0,
+      "returns": 0
+    },
+    {
+      "index": 24,
+      "expression": "r7_24",
+      "status": "completed",
+      "sharpe": -0.05,
+      "fitness": 0,
+      "turnover": 0,
+      "returns": 0
+    },
+    {
+      "index": 25,
+      "expression": "r7_25",
+      "status": "completed",
+      "sharpe": -0.26,
+      "fitness": 0,
+      "turnover": 0,
+      "returns": 0
+    },
+    {
+      "index": 27,
+      "expression": "r7_27",
+      "status": "completed",
+      "sharpe": 2.14,
+      "fitness": 0,
+      "turnover": 0,
+      "returns": 0
+    },
+    {
+      "index": 28,
+      "expression": "r7_28",
+      "status": "completed",
+      "sharpe": 0.88,
+      "fitness": 0,
+      "turnover": 0,
+      "returns": 0
+    },
+    {
+      "index": 29,
+      "expression": "r7_29",
+      "status": "completed",
+      "sharpe": -0.36,
+      "fitness": 0,
+      "turnover": 0,
+      "returns": 0
+    },
+    {
+      "index": 30,
+      "expression": "r7_30",
+      "status": "completed",
+      "sharpe": 0.07,
+      "fitness": 0,
+      "turnover": 0,
+      "returns": 0
+    },
+    {
+      "index": 31,
+      "expression": "r7_31",
+      "status": "completed",
+      "sharpe": 0.14,
+      "fitness": 0,
+      "turnover": 0,
+      "returns": 0
+    },
+    {
+      "index": 32,
+      "expression": "r7_32",
+      "status": "completed",
+      "sharpe": 0.7,
+      "fitness": 0,
+      "turnover": 0,
+      "returns": 0
+    },
+    {
+      "index": 33,
+      "expression": "r7_33",
+      "status": "completed",
+      "sharpe": -0.97,
+      "fitness": 0,
+      "turnover": 0,
+      "returns": 0
+    },
+    {
+      "index": 34,
+      "expression": "r7_34",
+      "status": "completed",
+      "sharpe": 1.53,
+      "fitness": 0,
+      "turnover": 0,
+      "returns": 0
+    },
+    {
+      "index": 35,
+      "expression": "r7_35",
+      "status": "completed",
+      "sharpe": 0.0,
+      "fitness": 0,
+      "turnover": 0,
+      "returns": 0
+    },
+    {
+      "index": 36,
+      "expression": "r7_36",
+      "status": "completed",
+      "sharpe": 0.21,
+      "fitness": 0,
+      "turnover": 0,
+      "returns": 0
+    },
+    {
+      "index": 37,
+      "expression": "r7_37",
+      "status": "completed",
+      "sharpe": -1.54,
+      "fitness": 0,
+      "turnover": 0,
+      "returns": 0
+    },
+    {
+      "index": 38,
+      "expression": "r7_38",
+      "status": "completed",
+      "sharpe": -0.83,
+      "fitness": 0,
+      "turnover": 0,
+      "returns": 0
+    },
+    {
+      "index": 39,
+      "expression": "r7_39",
+      "status": "completed",
+      "sharpe": -0.35,
+      "fitness": 0,
+      "turnover": 0,
+      "returns": 0
+    },
+    {
+      "index": 40,
+      "expression": "r7_40",
+      "status": "completed",
+      "sharpe": 0.94,
+      "fitness": 0,
+      "turnover": 0,
+      "returns": 0
+    },
+    {
+      "index": 41,
+      "expression": "r7_41",
+      "status": "completed",
+      "sharpe": 1.15,
+      "fitness": 0,
+      "turnover": 0,
+      "returns": 0
+    },
+    {
+      "index": 42,
+      "expression": "r7_42",
+      "status": "completed",
+      "sharpe": -0.52,
+      "fitness": 0,
+      "turnover": 0,
+      "returns": 0
+    },
+    {
+      "index": 43,
+      "expression": "r7_43",
+      "status": "completed",
+      "sharpe": -1.27,
+      "fitness": 0,
+      "turnover": 0,
+      "returns": 0
+    },
+    {
+      "index": 44,
+      "expression": "r7_44",
+      "status": "completed",
+      "sharpe": -0.14,
+      "fitness": 0,
+      "turnover": 0,
+      "returns": 0
+    },
+    {
+      "index": 45,
+      "expression": "r7_45",
+      "status": "completed",
+      "sharpe": 0.34,
+      "fitness": 0,
+      "turnover": 0,
+      "returns": 0
+    },
+    {
+      "index": 46,
+      "expression": "r7_46",
+      "status": "completed",
+      "sharpe": 0.23,
+      "fitness": 0,
+      "turnover": 0,
+      "returns": 0
+    }
+  ]
+}

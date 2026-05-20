@@ -1,0 +1,90 @@
+hypothesis:
+  id: "sentiment_short_interest"
+  name: "Sentiment / Short Interest"
+  category: "hybrid"
+  version: "1.0.0"
+
+  rationale:
+    theory: >
+      High short interest reflects bearish market sentiment, but extreme short
+      interest levels can lead to short squeezes. Short sellers are generally
+      informed traders, so high short interest also signals fundamental concerns.
+      The key is distinguishing "crowded shorts" (squeeze candidates) from
+      "fundamental shorts" (continued deterioration). Changes in short interest and
+      insider trading patterns provide additional alpha signals.
+    academic_refs:
+      - "Asquith, Pathak, Ritter (2005) — Short interest, institutional ownership, and stock returns"
+      - "Boehmer, Jones, Zhang (2008) — Which shorts are informed?"
+      - "Cohen, Malloy, Pomorski (2012) — Decoding inside information"
+    behavioral_bias: "herding"
+
+  field_categories:
+    - category: "short_interest_ratio"
+      priority: P0
+      examples: ["short_interest_ratio", "short_interest_pct", "short_interest_to_float"]
+      weight: 1.0
+    - category: "days_to_cover"
+      priority: P0
+      examples: ["days_to_cover", "short_ratio"]
+      weight: 1.0
+    - category: "short_interest_change"
+      priority: P1
+      examples: ["short_interest_1m_chg", "short_interest_3m_chg"]
+      weight: 1.0
+    - category: "institutional_ownership_change"
+      priority: P1
+      examples: ["inst_ownership_chg", "inst_ownership_13f"]
+      weight: 1.0
+    - category: "insider_trading"
+      priority: P1
+      examples: ["insider_buy_ratio", "insider_sell_ratio", "insider_net_buy"]
+      weight: 1.0
+    - category: "news_sentiment"
+      priority: P1
+      examples: ["news_sentiment_score", "news_volume", "sentiment_momentum"]
+      weight: 1.0
+
+  expression_families:
+    - id: "high_short_negative"
+      structure: "rank(short_interest_ratio)"
+      description: "High short interest as a negative signal — informed shorts predict underperformance"
+      windows: [1, 3, 6]
+      weight: 1.0
+    - id: "short_squeeze_signal"
+      structure: "-1 * rank(days_to_cover) + rank(momentum_1m)"
+      description: "High short interest + recent positive momentum = potential short squeeze"
+      windows: [1, 3]
+      weight: 1.0
+    - id: "short_change_trend"
+      structure: "short_interest_change_rate(window)"
+      description: "Rate of change in short interest — increasing shorts is bearish"
+      windows: [3, 6, 12]
+      weight: 1.0
+    - id: "insider_buy_signal"
+      structure: "insider_buy_ratio(window)"
+      description: "Insider purchase ratio — insiders buying is a bullish signal"
+      windows: [3, 6, 12]
+      weight: 1.0
+
+  expected_failure_modes:
+    - gate: "TURNOVER"
+      reason: "Short squeeze signals are short-lived — high turnover risk"
+      mitigation: "Use shorter rebalancing windows for squeeze signals"
+    - gate: "CORRELATION"
+      reason: "Short interest signals can correlate with reversal and momentum"
+      mitigation: "Orthogonalize to existing momentum and reversal alphas"
+    - gate: "SELF_CORRELATION"
+      reason: "Short interest levels change slowly, causing autocorrelation"
+      mitigation: "Use change-based expressions rather than level-based"
+
+  adaptation:
+    preferred_regions: ["USA"]
+    preferred_universes: ["MID_CAP", "TOP3000", "SMID_CAP"]
+    preferred_delays: [1, 2, 3]
+    unsuitable_regions: ["FRONTIER"]
+
+  experience_weights:
+    overall: 1.0
+    field_category_weights: {}
+    expression_family_weights: {}
+    window_weights: {}

@@ -1,0 +1,82 @@
+sequenceDiagram
+    participant Main as run()
+    participant Ctx as _load_official_context
+    participant Loader as OfficialDataLoader
+    participant Gen as CandidateGenerator
+    participant Selector as DatasetSelector
+    participant Score as scoring
+    participant Registry as AlphaCheckRegistry
+    participant Exp as experience
+    participant API as OfficialBrainAPI
+
+    Note over Main: ── 启动阶段 ──
+    Main->>API: authenticate()
+    Main->>Ctx: _load_official_context()
+
+    rect rgb(255, 240, 240)
+        Note over Ctx,Loader: P0-1: 硬失败修复
+        Ctx->>Loader: load_all("data")
+        alt JSON 加载成功
+            Loader-->>Ctx: fields(7642), operators(66), datasets(16)
+            Ctx->>Selector: initialize(loader)
+            Ctx->>Gen: update_context(fields, operators)
+            Ctx->>Gen: set_dataset(first_selected_id)
+        else JSON 加载失败
+            Loader-->>Ctx: LoadError(FATAL)
+            Ctx-->>Main: raise RuntimeError("官方数据加载失败，终止 pipeline")
+        end
+    end
+
+    Note over Main: ── 主循环 ──
+    loop cycle = 1..max_cycles
+        rect rgb(240, 255, 240)
+            Note over Main,Selector: P0-3: Dataset 选取保护
+            Main->>Selector: select(strategy)
+            alt selector 不可用或 dataset 为空
+                Main->>Main: log ERROR, skip cycle
+            else 正常
+                Selector-->>Main: [dataset_id]
+                Main->>Gen: set_dataset(dataset_id)
+                Main->>Gen: generate(count, dataset_id)
+                Gen-->>Main: List~Candidate~
+            end
+        end
+
+        Main->>Score: build_scorecard() per candidate
+        Main->>Score: local_prefilter()
+
+        Note over Main: 验证 & 回测提交
+        Main->>API: validate() (expression check)
+        Main->>API: submit_simulation()
+        Main->>API: poll_simulation() per slot
+
+        rect rgb(240, 240, 255)
+            Note over Main,Registry: P1-2: 官方回测结果 → 全量检查
+            API-->>Main: fetch_result() → metrics
+            Main->>Registry: evaluate(sim_result)
+            Registry->>Registry: 22 checks (sharpe, fitness, turnover, correlation, ...)
+            Registry-->>Main: CheckReport(passed, results[])
+            Main->>Score: merge check report into scorecard
+            Main->>Score: evaluate_quality_gate()
+        end
+
+        rect rgb(255, 255, 240)
+            Note over Main,Exp: P2-2: 经验反馈（每5个cycle）
+            alt cycle % 5 == 0
+                Main->>Exp: get_winning_patterns()
+                Exp-->>Main: patterns
+                Main->>Gen: apply_pattern_weights(patterns)
+            end
+            Main->>Exp: record_alpha_result(candidate)
+        end
+
+        rect rgb(255, 245, 240)
+            Note over Main: P2-5: 上下文定期刷新
+            alt cycle % 50 == 0
+                Main->>Loader: refresh("data")
+            end
+        end
+    end
+
+    Note over Main: ── 结束 ──
+    Main->>Main: rank & save final candidates

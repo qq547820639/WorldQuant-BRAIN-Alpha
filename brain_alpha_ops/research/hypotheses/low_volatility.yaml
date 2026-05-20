@@ -1,0 +1,80 @@
+hypothesis:
+  id: "low_volatility_anomaly"
+  name: "Low Volatility / Low Beta Anomaly"
+  category: "volatility"
+  version: "1.0.0"
+
+  rationale:
+    theory: >
+      低波动/低Beta股票长期风险调整后收益高于CAPM预测，违反"高风险高收益"假设。
+      原因包括杠杆约束（受限投资者追逐高波动以获得高beta敞口）、
+      彩票偏好（散户偏爱高波动小概率大赢）、机构benchmark跟踪导致的低波动定价偏低。
+    academic_refs:
+      - "Ang, Hodrick, Xing & Zhang (2006) — The Cross-Section of Volatility and Expected Returns"
+      - "Frazzini & Pedersen (2014) — Betting Against Beta"
+      - "Baker, Bradley & Wurgler (2011) — Benchmarks as Limits to Arbitrage"
+    behavioral_bias: "lottery_preference"
+
+  field_categories:
+    - category: "historical_volatility"
+      priority: P0
+      examples: ["volatility_60d", "volatility_120d", "volatility_252d"]
+    - category: "beta"
+      priority: P0
+      examples: ["beta_60d", "beta_252d"]
+    - category: "idiosyncratic_volatility"
+      priority: P1
+      examples: ["ivol_60d", "ivol_252d"]
+    - category: "downside_risk"
+      priority: P1
+      examples: ["downside_deviation", "var_95", "cvar_95"]
+    - category: "max_drawdown"
+      priority: P2
+      examples: ["max_drawdown_60d", "max_drawdown_252d"]
+    - category: "correlation_to_market"
+      priority: P2
+      examples: ["corr_to_spx_60d", "r_squared_252d"]
+
+  expression_families:
+    - id: "low_vol_direct"
+      structure: "rank(-1 * ts_std(returns, {window}))"
+      description: "直接低波动 — 波动率越低排名越高"
+      windows: [20, 40, 60, 120, 252]
+
+    - id: "low_beta"
+      structure: "rank(-1 * {field_beta})"
+      description: "低Beta选股 — 市场敏感度越低越好"
+      windows: [1]
+
+    - id: "low_idiosyncratic"
+      structure: "rank(-1 * {field_ivol})"
+      description: "低特质波动比例 — 公司特有风险低"
+      windows: [1]
+
+    - id: "efficiency_first"
+      structure: "rank(ts_mean(returns, {window}) / ts_std(returns, {window}))"
+      description: "效率优先 — Sharpe-like排序"
+      windows: [20, 60, 120]
+
+  expected_failure_modes:
+    - gate: "NEUTRALIZATION"
+      reason: "低波动集中在防御行业（公用事业、消费必需品）"
+      mitigation: "使用sector-relative版本或sector neutral"
+    - gate: "CAPACITY"
+      reason: "大市值低波动股票拥挤，策略容量有限"
+      mitigation: "扩展到SMID_CAP universe"
+    - gate: "CORRELATION"
+      reason: "各类低波动Alpha之间高度相关（>0.80）"
+      mitigation: "选择与其他低波动策略相关性最低的版本"
+
+  adaptation:
+    preferred_regions: ["USA", "EUROPE", "DEV", "DEV_EX_US"]
+    preferred_universes: ["TOP3000", "ALL_CAP"]
+    preferred_delays: [1, 2, 5]
+    unsuitable_regions: ["FRONTIER"]
+
+  experience_weights:
+    overall: 1.0
+    field_category_weights: {}
+    expression_family_weights: {}
+    window_weights: {}

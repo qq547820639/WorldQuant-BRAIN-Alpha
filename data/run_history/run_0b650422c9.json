@@ -1,0 +1,5097 @@
+{
+  "run_id": "run_0b650422c9",
+  "started_at": "2026-05-17T07:54:59.960288+00:00",
+  "completed_at": "2026-05-17T07:54:59.960288+00:00",
+  "status": "completed",
+  "phases": [
+    {
+      "name": "init",
+      "description": "环境初始化与连接验证",
+      "status": "completed",
+      "duration_seconds": 0.0,
+      "result_summary": "环境: mock (模拟模式)",
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "name": "context",
+      "description": "BRAIN 平台上下文加载 (字段/算子/数据集)",
+      "status": "completed",
+      "duration_seconds": 0.072128,
+      "result_summary": "字段: 7642 个, 算子: 66 个",
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "name": "redline",
+      "description": "技术红线合规验证",
+      "status": "completed",
+      "duration_seconds": 0.009506,
+      "result_summary": "通过: 61/61 项",
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "name": "generation",
+      "description": "Alpha 候选生成",
+      "status": "completed",
+      "duration_seconds": 1.299931,
+      "result_summary": "生成 13 个候选",
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "name": "validation",
+      "description": "本地质量评估与排序",
+      "status": "running",
+      "duration_seconds": 0.0,
+      "result_summary": "",
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "name": "simulation",
+      "description": "BRAIN 官方回测仿真",
+      "status": "completed",
+      "duration_seconds": 1.299931,
+      "result_summary": "官方仿真 1 个",
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "name": "scoring",
+      "description": "多维评分与归因分析",
+      "status": "completed",
+      "duration_seconds": 1.299931,
+      "result_summary": "评分分布: {'optimize (70-84)': 2, 'research (50-69)': 8}",
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "name": "gating",
+      "description": "Pass/Fail 门禁评估",
+      "status": "running",
+      "duration_seconds": 0.0,
+      "result_summary": "",
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "name": "submission",
+      "description": "提交决策与自动提交",
+      "status": "completed",
+      "duration_seconds": 1.299931,
+      "result_summary": "提交 0 个",
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "name": "finalize",
+      "description": "结果汇总与持久化",
+      "status": "completed",
+      "duration_seconds": 0.0,
+      "result_summary": "运行完成 — 候选 13 个, 仿真 1 个, 提交 0 个",
+      "errors": [],
+      "warnings": []
+    }
+  ],
+  "summary": {
+    "total_candidates": 13,
+    "produced_count": 13,
+    "retained_pool_size": 10,
+    "candidate_pool_available_count": 10,
+    "candidate_pool_source_count": 10,
+    "candidate_pool_excludes_waiting_backtests": true,
+    "retained_pool_limit": 10,
+    "rejected_count": 1,
+    "rejected_stats": {
+      "BRAIN_CHECK_FAILED": 1
+    },
+    "archive_count": 1,
+    "archive_stats": {
+      "BRAIN_CHECK_FAILED": 1
+    },
+    "backtest_batch_size": 3,
+    "backtests_submitted": 1,
+    "local_ranked": 10,
+    "official_validation_attempted": 4,
+    "official_validation_passed": 4,
+    "pending_validation_count": 6,
+    "officially_simulated": 1,
+    "official_deferred": 0,
+    "simulation_retry_pending": 0,
+    "secondary_fusion_candidates": 1,
+    "pending_backtest_count": 0,
+    "submission_ready": 0,
+    "ready_results_count": 0,
+    "auto_submit_ready": 0,
+    "submitted_this_run": 0,
+    "best_score": 73.99,
+    "operating_mode": "local_autonomous_loop_top10_top3",
+    "run_forever": false,
+    "official_calls_halted": false,
+    "official_halt_reason": "",
+    "official_context": {
+      "fields_count": 7642,
+      "operators_count": 66,
+      "source": "official_json_files",
+      "warning": ""
+    },
+    "backtest_slots": [
+      {
+        "slot": 1,
+        "alpha_id": "",
+        "simulation_id": "",
+        "status": "EMPTY",
+        "official_alpha_id": "",
+        "score": 0.0,
+        "poll_count": 0,
+        "progress_percent": 0,
+        "next_poll_seconds": 0,
+        "message": "等待候选补位"
+      },
+      {
+        "slot": 2,
+        "alpha_id": "",
+        "simulation_id": "",
+        "status": "EMPTY",
+        "official_alpha_id": "",
+        "score": 0.0,
+        "poll_count": 0,
+        "progress_percent": 0,
+        "next_poll_seconds": 0,
+        "message": "等待候选补位"
+      },
+      {
+        "slot": 3,
+        "alpha_id": "",
+        "simulation_id": "",
+        "status": "EMPTY",
+        "official_alpha_id": "",
+        "score": 0.0,
+        "poll_count": 0,
+        "progress_percent": 0,
+        "next_poll_seconds": 0,
+        "message": "等待候选补位"
+      }
+    ],
+    "strategy_profile": {
+      "name": "usa_standard",
+      "label": "美股标准生产",
+      "region": "USA",
+      "universe": "TOP3000",
+      "delay": 1,
+      "neutralization": "SUBINDUSTRY",
+      "reason": "基准设置，覆盖较广，先用子行业中性控制行业暴露。",
+      "settings": {
+        "instrumentType": "EQUITY",
+        "region": "USA",
+        "universe": "TOP3000",
+        "delay": 1,
+        "decay": 10,
+        "neutralization": "SUBINDUSTRY",
+        "truncation": 0.05,
+        "pasteurization": "ON",
+        "unitHandling": "VERIFY",
+        "nanHandling": "ON",
+        "language": "FASTEXPR",
+        "visualization": false
+      }
+    },
+    "strategy_switch_count": 0,
+    "cloud_sync": {
+      "status": "skipped",
+      "range": "3d",
+      "count": 0,
+      "warning": ""
+    },
+    "cloud_alphas": [],
+    "lifecycle_records": [
+      {
+        "timestamp": 1779004498.7214663,
+        "alpha_id": "alpha_8b0467baa4",
+        "official_alpha_id": "",
+        "stage": "generated",
+        "status": "created",
+        "family": "cross_sectional",
+        "hypothesis": "Hypothesis-driven: Analyst Behavior Biases — Low forecast dispersion — consensus indicates certainty and trust in estimates",
+        "score": 0.0,
+        "scorecard": {},
+        "local_quality": {},
+        "validation": {},
+        "official_metrics": {},
+        "gate": {},
+        "simulation_id": "",
+        "expression": "-1 * accrued_liabilities_total",
+        "note": "本地生成"
+      },
+      {
+        "timestamp": 1779004498.7214663,
+        "alpha_id": "alpha_49ca4e2b39",
+        "official_alpha_id": "",
+        "stage": "generated",
+        "status": "created",
+        "family": "liquidity",
+        "hypothesis": "Hypothesis-driven: Liquidity Premium — 小盘+高差价交互 — 捕获规模-流动性双重折价",
+        "score": 0.0,
+        "scorecard": {},
+        "local_quality": {},
+        "validation": {},
+        "official_metrics": {},
+        "gate": {},
+        "simulation_id": "",
+        "expression": "rank(-1 * log(accrued_liabilities_total) * debt_basis_spread_variable_rate)",
+        "note": "本地生成"
+      },
+      {
+        "timestamp": 1779004498.7224667,
+        "alpha_id": "alpha_9432ac0459",
+        "official_alpha_id": "",
+        "stage": "generated",
+        "status": "created",
+        "family": "cross_sectional",
+        "hypothesis": "Experience-feedback: cross_sectional_0000 alpha from fundamental2",
+        "score": 0.0,
+        "scorecard": {},
+        "local_quality": {},
+        "validation": {},
+        "official_metrics": {},
+        "gate": {},
+        "simulation_id": "",
+        "expression": "zscore(winsorize(group_zscore(equity_method_investment_income, sector), std=60))",
+        "note": "本地生成"
+      },
+      {
+        "timestamp": 1779004498.724969,
+        "alpha_id": "alpha_8b0467baa4",
+        "official_alpha_id": "",
+        "stage": "local_scored",
+        "status": "local_prefilter_rejected",
+        "family": "cross_sectional",
+        "hypothesis": "Hypothesis-driven: Analyst Behavior Biases — Low forecast dispersion — consensus indicates certainty and trust in estimates",
+        "score": 52.43,
+        "scorecard": {
+          "schema_version": "scorecard-v2.3",
+          "total_score": 52.43,
+          "decision_band": "research_only",
+          "score_basis": "local_prior",
+          "local_rank_score": 52.43,
+          "layer_weights": {
+            "prior": 0.3,
+            "empirical": 0.45,
+            "checklist": 0.25
+          },
+          "prior": {
+            "score": 66.12,
+            "dimensions": {
+              "economic_logic": 52,
+              "economic_concepts": [],
+              "structure": 90.0,
+              "field_operator_support": 58.0,
+              "data_compliance": 82.0,
+              "horizon_turnover_proxy": 68.0,
+              "risk_control_proxy": 48.0,
+              "diversity": 65.0,
+              "explainability": 85.0
+            },
+            "weights": {
+              "economic_logic": 0.18,
+              "structure": 0.14,
+              "field_operator_support": 0.16,
+              "data_compliance": 0.12,
+              "horizon_turnover_proxy": 0.14,
+              "risk_control_proxy": 0.14,
+              "diversity": 0.07,
+              "explainability": 0.05
+            },
+            "source": "经验+校准"
+          },
+          "empirical": {
+            "score": 0.0,
+            "items": [],
+            "status": "missing_official_metrics"
+          },
+          "submission_checklist": {
+            "score": 35,
+            "items": [
+              {
+                "name": "official_metrics_present",
+                "passed": false,
+                "points": 15,
+                "meaning": "Official simulation metrics are required."
+              },
+              {
+                "name": "official_pass",
+                "passed": false,
+                "points": 15,
+                "meaning": "BRAIN pass/fail result."
+              },
+              {
+                "name": "economic_logic",
+                "passed": true,
+                "points": 15,
+                "meaning": "One-sentence economic/behavioral thesis."
+              },
+              {
+                "name": "data_delay_conservative",
+                "passed": true,
+                "points": 10,
+                "meaning": "Default settings use Delay 1 unless changed by user."
+              },
+              {
+                "name": "local_quality",
+                "passed": false,
+                "points": 15,
+                "meaning": "Local prefilter quality."
+              },
+              {
+                "name": "self_correlation_proxy",
+                "passed": false,
+                "points": 20,
+                "meaning": "Official/local correlation proxy."
+              },
+              {
+                "name": "diversity",
+                "passed": true,
+                "points": 10,
+                "meaning": "Avoid plain crowded templates."
+              }
+            ]
+          },
+          "confidence": null,
+          "calibration": {
+            "prior_minus_empirical": null,
+            "sample_weight": 0.25,
+            "purpose": "Track whether local priors predict official outcomes over time.",
+            "params_used": true
+          }
+        },
+        "local_quality": {
+          "schema_version": "local-quality-v2",
+          "score": 27.0,
+          "threshold": 40.0,
+          "passed": false,
+          "reasons": [
+            "no_operator",
+            "weak_standardization_or_time_series_structure"
+          ],
+          "field_count": 2,
+          "operator_count": 0,
+          "nesting_depth": 0,
+          "warnings": [
+            "fields unavailable in current official context: analyst_count_chg, coverage_drop",
+            "field 'analyst_count_chg' not in active dataset 'fundamental2'. Expression may use fields from wrong dataset."
+          ]
+        },
+        "validation": {},
+        "official_metrics": {},
+        "gate": {
+          "schema_version": "production-gate-v2.1",
+          "submission_ready": false,
+          "status": "LOCAL_PREFILTER_REJECTED",
+          "failed_reasons": [
+            "no_operator",
+            "weak_standardization_or_time_series_structure"
+          ],
+          "warnings": []
+        },
+        "simulation_id": "",
+        "expression": "-1 * accrued_liabilities_total",
+        "note": "no_operator; weak_standardization_or_time_series_structure"
+      },
+      {
+        "timestamp": 1779004498.7279751,
+        "alpha_id": "alpha_49ca4e2b39",
+        "official_alpha_id": "",
+        "stage": "local_scored",
+        "status": "local_prefilter_passed",
+        "family": "liquidity",
+        "hypothesis": "Hypothesis-driven: Liquidity Premium — 小盘+高差价交互 — 捕获规模-流动性双重折价",
+        "score": 68.32,
+        "scorecard": {
+          "schema_version": "scorecard-v2.3",
+          "total_score": 68.32,
+          "decision_band": "research_only",
+          "score_basis": "local_prior",
+          "local_rank_score": 68.32,
+          "layer_weights": {
+            "prior": 0.3,
+            "empirical": 0.45,
+            "checklist": 0.25
+          },
+          "prior": {
+            "score": 73.34,
+            "dimensions": {
+              "economic_logic": 85,
+              "economic_concepts": [
+                "volatility",
+                "liquidity",
+                "cross_sectional"
+              ],
+              "structure": 90.0,
+              "field_operator_support": 66.0,
+              "data_compliance": 82.0,
+              "horizon_turnover_proxy": 68.0,
+              "risk_control_proxy": 48.0,
+              "diversity": 65.0,
+              "explainability": 85.0
+            },
+            "weights": {
+              "economic_logic": 0.18,
+              "structure": 0.14,
+              "field_operator_support": 0.16,
+              "data_compliance": 0.12,
+              "horizon_turnover_proxy": 0.14,
+              "risk_control_proxy": 0.14,
+              "diversity": 0.07,
+              "explainability": 0.05
+            },
+            "source": "经验+校准"
+          },
+          "empirical": {
+            "score": 0.0,
+            "items": [],
+            "status": "missing_official_metrics"
+          },
+          "submission_checklist": {
+            "score": 50,
+            "items": [
+              {
+                "name": "official_metrics_present",
+                "passed": false,
+                "points": 15,
+                "meaning": "Official simulation metrics are required."
+              },
+              {
+                "name": "official_pass",
+                "passed": false,
+                "points": 15,
+                "meaning": "BRAIN pass/fail result."
+              },
+              {
+                "name": "economic_logic",
+                "passed": true,
+                "points": 15,
+                "meaning": "One-sentence economic/behavioral thesis."
+              },
+              {
+                "name": "data_delay_conservative",
+                "passed": true,
+                "points": 10,
+                "meaning": "Default settings use Delay 1 unless changed by user."
+              },
+              {
+                "name": "local_quality",
+                "passed": true,
+                "points": 15,
+                "meaning": "Local prefilter quality."
+              },
+              {
+                "name": "self_correlation_proxy",
+                "passed": false,
+                "points": 20,
+                "meaning": "Official/local correlation proxy."
+              },
+              {
+                "name": "diversity",
+                "passed": true,
+                "points": 10,
+                "meaning": "Avoid plain crowded templates."
+              }
+            ]
+          },
+          "confidence": null,
+          "calibration": {
+            "prior_minus_empirical": null,
+            "sample_weight": 0.25,
+            "purpose": "Track whether local priors predict official outcomes over time.",
+            "params_used": true
+          }
+        },
+        "local_quality": {
+          "schema_version": "local-quality-v2",
+          "score": 59.0,
+          "threshold": 40.0,
+          "passed": true,
+          "reasons": [
+            "passed_local_prefilter"
+          ],
+          "field_count": 2,
+          "operator_count": 2,
+          "nesting_depth": 2,
+          "warnings": [
+            "fields unavailable in current official context: avg_daily_volume, dollar_volume",
+            "field 'avg_daily_volume' not in active dataset 'fundamental2'. Expression may use fields from wrong dataset."
+          ]
+        },
+        "validation": {},
+        "official_metrics": {},
+        "gate": {
+          "schema_version": "production-gate-v2.1",
+          "submission_ready": false,
+          "status": "OFFICIAL_CONTEXT_WARNING",
+          "failed_reasons": [],
+          "warnings": [
+            "fields unavailable in current official context: avg_daily_volume, dollar_volume",
+            "field 'avg_daily_volume' not in active dataset 'fundamental2'. Expression may use fields from wrong dataset."
+          ]
+        },
+        "simulation_id": "",
+        "expression": "rank(-1 * log(accrued_liabilities_total) * debt_basis_spread_variable_rate)",
+        "note": "passed_local_prefilter"
+      },
+      {
+        "timestamp": 1779004498.9360018,
+        "alpha_id": "alpha_9432ac0459",
+        "official_alpha_id": "",
+        "stage": "local_scored",
+        "status": "local_prefilter_passed",
+        "family": "cross_sectional",
+        "hypothesis": "Experience-feedback: cross_sectional_0000 alpha from fundamental2",
+        "score": 67.14,
+        "scorecard": {
+          "schema_version": "scorecard-v2.3",
+          "total_score": 67.14,
+          "decision_band": "research_only",
+          "score_basis": "local_prior",
+          "local_rank_score": 67.14,
+          "layer_weights": {
+            "prior": 0.3,
+            "empirical": 0.45,
+            "checklist": 0.25
+          },
+          "prior": {
+            "score": 71.52,
+            "dimensions": {
+              "economic_logic": 92,
+              "economic_concepts": [
+                "mean_reversion",
+                "quality",
+                "volatility",
+                "risk_management",
+                "cross_sectional"
+              ],
+              "structure": 90.0,
+              "field_operator_support": 54.0,
+              "data_compliance": 35.0,
+              "horizon_turnover_proxy": 82.0,
+              "risk_control_proxy": 66.0,
+              "diversity": 65.0,
+              "explainability": 85.0
+            },
+            "weights": {
+              "economic_logic": 0.18,
+              "structure": 0.14,
+              "field_operator_support": 0.16,
+              "data_compliance": 0.12,
+              "horizon_turnover_proxy": 0.14,
+              "risk_control_proxy": 0.14,
+              "diversity": 0.07,
+              "explainability": 0.05
+            },
+            "source": "经验+校准"
+          },
+          "empirical": {
+            "score": 0.0,
+            "items": [],
+            "status": "missing_official_metrics"
+          },
+          "submission_checklist": {
+            "score": 50,
+            "items": [
+              {
+                "name": "official_metrics_present",
+                "passed": false,
+                "points": 15,
+                "meaning": "Official simulation metrics are required."
+              },
+              {
+                "name": "official_pass",
+                "passed": false,
+                "points": 15,
+                "meaning": "BRAIN pass/fail result."
+              },
+              {
+                "name": "economic_logic",
+                "passed": true,
+                "points": 15,
+                "meaning": "One-sentence economic/behavioral thesis."
+              },
+              {
+                "name": "data_delay_conservative",
+                "passed": true,
+                "points": 10,
+                "meaning": "Default settings use Delay 1 unless changed by user."
+              },
+              {
+                "name": "local_quality",
+                "passed": true,
+                "points": 15,
+                "meaning": "Local prefilter quality."
+              },
+              {
+                "name": "self_correlation_proxy",
+                "passed": false,
+                "points": 20,
+                "meaning": "Official/local correlation proxy."
+              },
+              {
+                "name": "diversity",
+                "passed": true,
+                "points": 10,
+                "meaning": "Avoid plain crowded templates."
+              }
+            ]
+          },
+          "confidence": null,
+          "calibration": {
+            "prior_minus_empirical": null,
+            "sample_weight": 0.25,
+            "purpose": "Track whether local priors predict official outcomes over time.",
+            "params_used": true
+          }
+        },
+        "local_quality": {
+          "schema_version": "local-quality-v2",
+          "score": 59.0,
+          "threshold": 40.0,
+          "passed": true,
+          "reasons": [
+            "passed_local_prefilter"
+          ],
+          "field_count": 2,
+          "operator_count": 3,
+          "nesting_depth": 3
+        },
+        "validation": {},
+        "official_metrics": {},
+        "gate": {},
+        "simulation_id": "",
+        "expression": "zscore(winsorize(group_zscore(equity_method_investment_income, sector), std=60))",
+        "note": "passed_local_prefilter"
+      },
+      {
+        "timestamp": 1779004498.938002,
+        "alpha_id": "alpha_49ca4e2b39",
+        "official_alpha_id": "",
+        "stage": "official_validation",
+        "status": "official_validation_passed",
+        "family": "liquidity",
+        "hypothesis": "Hypothesis-driven: Liquidity Premium — 小盘+高差价交互 — 捕获规模-流动性双重折价",
+        "score": 68.32,
+        "scorecard": {
+          "schema_version": "scorecard-v2.3",
+          "total_score": 68.32,
+          "decision_band": "research_only",
+          "score_basis": "local_prior",
+          "local_rank_score": 68.32,
+          "layer_weights": {
+            "prior": 0.3,
+            "empirical": 0.45,
+            "checklist": 0.25
+          },
+          "prior": {
+            "score": 73.34,
+            "dimensions": {
+              "economic_logic": 85,
+              "economic_concepts": [
+                "volatility",
+                "liquidity",
+                "cross_sectional"
+              ],
+              "structure": 90.0,
+              "field_operator_support": 66.0,
+              "data_compliance": 82.0,
+              "horizon_turnover_proxy": 68.0,
+              "risk_control_proxy": 48.0,
+              "diversity": 65.0,
+              "explainability": 85.0
+            },
+            "weights": {
+              "economic_logic": 0.18,
+              "structure": 0.14,
+              "field_operator_support": 0.16,
+              "data_compliance": 0.12,
+              "horizon_turnover_proxy": 0.14,
+              "risk_control_proxy": 0.14,
+              "diversity": 0.07,
+              "explainability": 0.05
+            },
+            "source": "经验+校准"
+          },
+          "empirical": {
+            "score": 0.0,
+            "items": [],
+            "status": "missing_official_metrics"
+          },
+          "submission_checklist": {
+            "score": 50,
+            "items": [
+              {
+                "name": "official_metrics_present",
+                "passed": false,
+                "points": 15,
+                "meaning": "Official simulation metrics are required."
+              },
+              {
+                "name": "official_pass",
+                "passed": false,
+                "points": 15,
+                "meaning": "BRAIN pass/fail result."
+              },
+              {
+                "name": "economic_logic",
+                "passed": true,
+                "points": 15,
+                "meaning": "One-sentence economic/behavioral thesis."
+              },
+              {
+                "name": "data_delay_conservative",
+                "passed": true,
+                "points": 10,
+                "meaning": "Default settings use Delay 1 unless changed by user."
+              },
+              {
+                "name": "local_quality",
+                "passed": true,
+                "points": 15,
+                "meaning": "Local prefilter quality."
+              },
+              {
+                "name": "self_correlation_proxy",
+                "passed": false,
+                "points": 20,
+                "meaning": "Official/local correlation proxy."
+              },
+              {
+                "name": "diversity",
+                "passed": true,
+                "points": 10,
+                "meaning": "Avoid plain crowded templates."
+              }
+            ]
+          },
+          "confidence": null,
+          "calibration": {
+            "prior_minus_empirical": null,
+            "sample_weight": 0.25,
+            "purpose": "Track whether local priors predict official outcomes over time.",
+            "params_used": true
+          }
+        },
+        "local_quality": {
+          "schema_version": "local-quality-v2",
+          "score": 59.0,
+          "threshold": 40.0,
+          "passed": true,
+          "reasons": [
+            "passed_local_prefilter"
+          ],
+          "field_count": 2,
+          "operator_count": 2,
+          "nesting_depth": 2,
+          "warnings": [
+            "fields unavailable in current official context: avg_daily_volume, dollar_volume",
+            "field 'avg_daily_volume' not in active dataset 'fundamental2'. Expression may use fields from wrong dataset."
+          ]
+        },
+        "validation": {
+          "status": "PASS",
+          "errors": [],
+          "invalid_operators": [],
+          "invalid_fields": []
+        },
+        "official_metrics": {},
+        "gate": {
+          "schema_version": "production-gate-v2.1",
+          "submission_ready": false,
+          "status": "OFFICIAL_CONTEXT_WARNING",
+          "failed_reasons": [],
+          "warnings": [
+            "fields unavailable in current official context: avg_daily_volume, dollar_volume",
+            "field 'avg_daily_volume' not in active dataset 'fundamental2'. Expression may use fields from wrong dataset."
+          ]
+        },
+        "simulation_id": "",
+        "expression": "rank(-1 * log(accrued_liabilities_total) * debt_basis_spread_variable_rate)",
+        "note": "PASS"
+      },
+      {
+        "timestamp": 1779004498.9390018,
+        "alpha_id": "alpha_9432ac0459",
+        "official_alpha_id": "",
+        "stage": "official_validation",
+        "status": "official_validation_passed",
+        "family": "cross_sectional",
+        "hypothesis": "Experience-feedback: cross_sectional_0000 alpha from fundamental2",
+        "score": 67.14,
+        "scorecard": {
+          "schema_version": "scorecard-v2.3",
+          "total_score": 67.14,
+          "decision_band": "research_only",
+          "score_basis": "local_prior",
+          "local_rank_score": 67.14,
+          "layer_weights": {
+            "prior": 0.3,
+            "empirical": 0.45,
+            "checklist": 0.25
+          },
+          "prior": {
+            "score": 71.52,
+            "dimensions": {
+              "economic_logic": 92,
+              "economic_concepts": [
+                "mean_reversion",
+                "quality",
+                "volatility",
+                "risk_management",
+                "cross_sectional"
+              ],
+              "structure": 90.0,
+              "field_operator_support": 54.0,
+              "data_compliance": 35.0,
+              "horizon_turnover_proxy": 82.0,
+              "risk_control_proxy": 66.0,
+              "diversity": 65.0,
+              "explainability": 85.0
+            },
+            "weights": {
+              "economic_logic": 0.18,
+              "structure": 0.14,
+              "field_operator_support": 0.16,
+              "data_compliance": 0.12,
+              "horizon_turnover_proxy": 0.14,
+              "risk_control_proxy": 0.14,
+              "diversity": 0.07,
+              "explainability": 0.05
+            },
+            "source": "经验+校准"
+          },
+          "empirical": {
+            "score": 0.0,
+            "items": [],
+            "status": "missing_official_metrics"
+          },
+          "submission_checklist": {
+            "score": 50,
+            "items": [
+              {
+                "name": "official_metrics_present",
+                "passed": false,
+                "points": 15,
+                "meaning": "Official simulation metrics are required."
+              },
+              {
+                "name": "official_pass",
+                "passed": false,
+                "points": 15,
+                "meaning": "BRAIN pass/fail result."
+              },
+              {
+                "name": "economic_logic",
+                "passed": true,
+                "points": 15,
+                "meaning": "One-sentence economic/behavioral thesis."
+              },
+              {
+                "name": "data_delay_conservative",
+                "passed": true,
+                "points": 10,
+                "meaning": "Default settings use Delay 1 unless changed by user."
+              },
+              {
+                "name": "local_quality",
+                "passed": true,
+                "points": 15,
+                "meaning": "Local prefilter quality."
+              },
+              {
+                "name": "self_correlation_proxy",
+                "passed": false,
+                "points": 20,
+                "meaning": "Official/local correlation proxy."
+              },
+              {
+                "name": "diversity",
+                "passed": true,
+                "points": 10,
+                "meaning": "Avoid plain crowded templates."
+              }
+            ]
+          },
+          "confidence": null,
+          "calibration": {
+            "prior_minus_empirical": null,
+            "sample_weight": 0.25,
+            "purpose": "Track whether local priors predict official outcomes over time.",
+            "params_used": true
+          }
+        },
+        "local_quality": {
+          "schema_version": "local-quality-v2",
+          "score": 59.0,
+          "threshold": 40.0,
+          "passed": true,
+          "reasons": [
+            "passed_local_prefilter"
+          ],
+          "field_count": 2,
+          "operator_count": 3,
+          "nesting_depth": 3
+        },
+        "validation": {
+          "status": "PASS",
+          "errors": [],
+          "invalid_operators": [],
+          "invalid_fields": []
+        },
+        "official_metrics": {},
+        "gate": {},
+        "simulation_id": "",
+        "expression": "zscore(winsorize(group_zscore(equity_method_investment_income, sector), std=60))",
+        "note": "PASS"
+      },
+      {
+        "timestamp": 1779004498.9455073,
+        "alpha_id": "alpha_08e4f2672b",
+        "official_alpha_id": "",
+        "stage": "generated",
+        "status": "created",
+        "family": "quality",
+        "hypothesis": "Random exploration quality alpha from fundamental2",
+        "score": 0.0,
+        "scorecard": {},
+        "local_quality": {},
+        "validation": {},
+        "official_metrics": {},
+        "gate": {},
+        "simulation_id": "",
+        "expression": "normalize(winsorize(ts_sum(recurring_assets_fair_value_lvl2, 30)))",
+        "note": "候选池补位生成"
+      },
+      {
+        "timestamp": 1779004498.9470105,
+        "alpha_id": "alpha_e22f066454",
+        "official_alpha_id": "",
+        "stage": "generated",
+        "status": "created",
+        "family": "momentum",
+        "hypothesis": "Hypothesis-driven: Earnings Revision Momentum — 分析师覆盖度调整后的修正信号，消除覆盖度偏差",
+        "score": 0.0,
+        "scorecard": {},
+        "local_quality": {},
+        "validation": {},
+        "official_metrics": {},
+        "gate": {},
+        "simulation_id": "",
+        "expression": "rank(ts_rank(unremitted_foreign_earnings_value / accrued_liabilities_total, 6))",
+        "note": "候选池补位生成"
+      },
+      {
+        "timestamp": 1779004498.9470105,
+        "alpha_id": "alpha_9ea22976a8",
+        "official_alpha_id": "",
+        "stage": "generated",
+        "status": "created",
+        "family": "hybrid",
+        "hypothesis": "Experience-feedback: hybrid_0000 alpha from fundamental2",
+        "score": 0.0,
+        "scorecard": {},
+        "local_quality": {},
+        "validation": {},
+        "official_metrics": {},
+        "gate": {},
+        "simulation_id": "",
+        "expression": "zscore(winsorize(ts_sum(equity_awards_granted_non_option_period, 15)) * winsorize(ts_sum(future_minimum_operating_lease_payments, 120)))",
+        "note": "候选池补位生成"
+      },
+      {
+        "timestamp": 1779004499.1371992,
+        "alpha_id": "alpha_08e4f2672b",
+        "official_alpha_id": "",
+        "stage": "local_scored",
+        "status": "local_prefilter_passed",
+        "family": "quality",
+        "hypothesis": "Random exploration quality alpha from fundamental2",
+        "score": 65.62,
+        "scorecard": {
+          "schema_version": "scorecard-v2.3",
+          "total_score": 65.62,
+          "decision_band": "research_only",
+          "score_basis": "local_prior",
+          "local_rank_score": 65.62,
+          "layer_weights": {
+            "prior": 0.3,
+            "empirical": 0.45,
+            "checklist": 0.25
+          },
+          "prior": {
+            "score": 70.26,
+            "dimensions": {
+              "economic_logic": 85,
+              "economic_concepts": [
+                "value",
+                "quality",
+                "risk_management"
+              ],
+              "structure": 90.0,
+              "field_operator_support": 54.0,
+              "data_compliance": 35.0,
+              "horizon_turnover_proxy": 82.0,
+              "risk_control_proxy": 66.0,
+              "diversity": 65.0,
+              "explainability": 85.0
+            },
+            "weights": {
+              "economic_logic": 0.18,
+              "structure": 0.14,
+              "field_operator_support": 0.16,
+              "data_compliance": 0.12,
+              "horizon_turnover_proxy": 0.14,
+              "risk_control_proxy": 0.14,
+              "diversity": 0.07,
+              "explainability": 0.05
+            },
+            "source": "经验+校准"
+          },
+          "empirical": {
+            "score": 0.0,
+            "items": [],
+            "status": "missing_official_metrics"
+          },
+          "submission_checklist": {
+            "score": 50,
+            "items": [
+              {
+                "name": "official_metrics_present",
+                "passed": false,
+                "points": 15,
+                "meaning": "Official simulation metrics are required."
+              },
+              {
+                "name": "official_pass",
+                "passed": false,
+                "points": 15,
+                "meaning": "BRAIN pass/fail result."
+              },
+              {
+                "name": "economic_logic",
+                "passed": true,
+                "points": 15,
+                "meaning": "One-sentence economic/behavioral thesis."
+              },
+              {
+                "name": "data_delay_conservative",
+                "passed": true,
+                "points": 10,
+                "meaning": "Default settings use Delay 1 unless changed by user."
+              },
+              {
+                "name": "local_quality",
+                "passed": true,
+                "points": 15,
+                "meaning": "Local prefilter quality."
+              },
+              {
+                "name": "self_correlation_proxy",
+                "passed": false,
+                "points": 20,
+                "meaning": "Official/local correlation proxy."
+              },
+              {
+                "name": "diversity",
+                "passed": true,
+                "points": 10,
+                "meaning": "Avoid plain crowded templates."
+              }
+            ]
+          },
+          "confidence": null,
+          "calibration": {
+            "prior_minus_empirical": null,
+            "sample_weight": 0.25,
+            "purpose": "Track whether local priors predict official outcomes over time.",
+            "params_used": true
+          }
+        },
+        "local_quality": {
+          "schema_version": "local-quality-v2",
+          "score": 57.0,
+          "threshold": 40.0,
+          "passed": true,
+          "reasons": [
+            "passed_local_prefilter"
+          ],
+          "field_count": 1,
+          "operator_count": 3,
+          "nesting_depth": 3
+        },
+        "validation": {},
+        "official_metrics": {},
+        "gate": {},
+        "simulation_id": "",
+        "expression": "normalize(winsorize(ts_sum(recurring_assets_fair_value_lvl2, 30)))",
+        "note": "passed_local_prefilter"
+      },
+      {
+        "timestamp": 1779004499.139199,
+        "alpha_id": "alpha_e22f066454",
+        "official_alpha_id": "",
+        "stage": "local_scored",
+        "status": "local_prefilter_passed",
+        "family": "momentum",
+        "hypothesis": "Hypothesis-driven: Earnings Revision Momentum — 分析师覆盖度调整后的修正信号，消除覆盖度偏差",
+        "score": 72.05,
+        "scorecard": {
+          "schema_version": "scorecard-v2.3",
+          "total_score": 72.05,
+          "decision_band": "optimize_before_submit",
+          "score_basis": "local_prior",
+          "local_rank_score": 72.05,
+          "layer_weights": {
+            "prior": 0.3,
+            "empirical": 0.45,
+            "checklist": 0.25
+          },
+          "prior": {
+            "score": 79.08,
+            "dimensions": {
+              "economic_logic": 92,
+              "economic_concepts": [
+                "momentum",
+                "value",
+                "growth",
+                "cross_sectional"
+              ],
+              "structure": 90.0,
+              "field_operator_support": 66.0,
+              "data_compliance": 82.0,
+              "horizon_turnover_proxy": 82.0,
+              "risk_control_proxy": 66.0,
+              "diversity": 65.0,
+              "explainability": 85.0
+            },
+            "weights": {
+              "economic_logic": 0.18,
+              "structure": 0.14,
+              "field_operator_support": 0.16,
+              "data_compliance": 0.12,
+              "horizon_turnover_proxy": 0.14,
+              "risk_control_proxy": 0.14,
+              "diversity": 0.07,
+              "explainability": 0.05
+            },
+            "source": "经验+校准"
+          },
+          "empirical": {
+            "score": 0.0,
+            "items": [],
+            "status": "missing_official_metrics"
+          },
+          "submission_checklist": {
+            "score": 50,
+            "items": [
+              {
+                "name": "official_metrics_present",
+                "passed": false,
+                "points": 15,
+                "meaning": "Official simulation metrics are required."
+              },
+              {
+                "name": "official_pass",
+                "passed": false,
+                "points": 15,
+                "meaning": "BRAIN pass/fail result."
+              },
+              {
+                "name": "economic_logic",
+                "passed": true,
+                "points": 15,
+                "meaning": "One-sentence economic/behavioral thesis."
+              },
+              {
+                "name": "data_delay_conservative",
+                "passed": true,
+                "points": 10,
+                "meaning": "Default settings use Delay 1 unless changed by user."
+              },
+              {
+                "name": "local_quality",
+                "passed": true,
+                "points": 15,
+                "meaning": "Local prefilter quality."
+              },
+              {
+                "name": "self_correlation_proxy",
+                "passed": false,
+                "points": 20,
+                "meaning": "Official/local correlation proxy."
+              },
+              {
+                "name": "diversity",
+                "passed": true,
+                "points": 10,
+                "meaning": "Avoid plain crowded templates."
+              }
+            ]
+          },
+          "confidence": null,
+          "calibration": {
+            "prior_minus_empirical": null,
+            "sample_weight": 0.25,
+            "purpose": "Track whether local priors predict official outcomes over time.",
+            "params_used": true
+          }
+        },
+        "local_quality": {
+          "schema_version": "local-quality-v2",
+          "score": 59.0,
+          "threshold": 40.0,
+          "passed": true,
+          "reasons": [
+            "passed_local_prefilter"
+          ],
+          "field_count": 2,
+          "operator_count": 2,
+          "nesting_depth": 2,
+          "warnings": [
+            "fields unavailable in current official context: eps_dispersion, sales_dispersion",
+            "field 'eps_dispersion' not in active dataset 'fundamental2'. Expression may use fields from wrong dataset."
+          ]
+        },
+        "validation": {},
+        "official_metrics": {},
+        "gate": {
+          "schema_version": "production-gate-v2.1",
+          "submission_ready": false,
+          "status": "OFFICIAL_CONTEXT_WARNING",
+          "failed_reasons": [],
+          "warnings": [
+            "fields unavailable in current official context: eps_dispersion, sales_dispersion",
+            "field 'eps_dispersion' not in active dataset 'fundamental2'. Expression may use fields from wrong dataset."
+          ]
+        },
+        "simulation_id": "",
+        "expression": "rank(ts_rank(unremitted_foreign_earnings_value / accrued_liabilities_total, 6))",
+        "note": "passed_local_prefilter"
+      },
+      {
+        "timestamp": 1779004499.3238876,
+        "alpha_id": "alpha_9ea22976a8",
+        "official_alpha_id": "",
+        "stage": "local_scored",
+        "status": "local_prefilter_passed",
+        "family": "hybrid",
+        "hypothesis": "Experience-feedback: hybrid_0000 alpha from fundamental2",
+        "score": 65.96,
+        "scorecard": {
+          "schema_version": "scorecard-v2.3",
+          "total_score": 65.96,
+          "decision_band": "research_only",
+          "score_basis": "local_prior",
+          "local_rank_score": 65.96,
+          "layer_weights": {
+            "prior": 0.3,
+            "empirical": 0.45,
+            "checklist": 0.25
+          },
+          "prior": {
+            "score": 69.7,
+            "dimensions": {
+              "economic_logic": 85,
+              "economic_concepts": [
+                "mean_reversion",
+                "quality",
+                "risk_management"
+              ],
+              "structure": 82.0,
+              "field_operator_support": 54.0,
+              "data_compliance": 35.0,
+              "horizon_turnover_proxy": 68.0,
+              "risk_control_proxy": 84.0,
+              "diversity": 65.0,
+              "explainability": 85.0
+            },
+            "weights": {
+              "economic_logic": 0.18,
+              "structure": 0.14,
+              "field_operator_support": 0.16,
+              "data_compliance": 0.12,
+              "horizon_turnover_proxy": 0.14,
+              "risk_control_proxy": 0.14,
+              "diversity": 0.07,
+              "explainability": 0.05
+            },
+            "source": "经验+校准"
+          },
+          "empirical": {
+            "score": 0.0,
+            "items": [],
+            "status": "missing_official_metrics"
+          },
+          "submission_checklist": {
+            "score": 50,
+            "items": [
+              {
+                "name": "official_metrics_present",
+                "passed": false,
+                "points": 15,
+                "meaning": "Official simulation metrics are required."
+              },
+              {
+                "name": "official_pass",
+                "passed": false,
+                "points": 15,
+                "meaning": "BRAIN pass/fail result."
+              },
+              {
+                "name": "economic_logic",
+                "passed": true,
+                "points": 15,
+                "meaning": "One-sentence economic/behavioral thesis."
+              },
+              {
+                "name": "data_delay_conservative",
+                "passed": true,
+                "points": 10,
+                "meaning": "Default settings use Delay 1 unless changed by user."
+              },
+              {
+                "name": "local_quality",
+                "passed": true,
+                "points": 15,
+                "meaning": "Local prefilter quality."
+              },
+              {
+                "name": "self_correlation_proxy",
+                "passed": false,
+                "points": 20,
+                "meaning": "Official/local correlation proxy."
+              },
+              {
+                "name": "diversity",
+                "passed": true,
+                "points": 10,
+                "meaning": "Avoid plain crowded templates."
+              }
+            ]
+          },
+          "confidence": null,
+          "calibration": {
+            "prior_minus_empirical": null,
+            "sample_weight": 0.25,
+            "purpose": "Track whether local priors predict official outcomes over time.",
+            "params_used": true
+          }
+        },
+        "local_quality": {
+          "schema_version": "local-quality-v2",
+          "score": 59.0,
+          "threshold": 40.0,
+          "passed": true,
+          "reasons": [
+            "passed_local_prefilter"
+          ],
+          "field_count": 2,
+          "operator_count": 5,
+          "nesting_depth": 3
+        },
+        "validation": {},
+        "official_metrics": {},
+        "gate": {},
+        "simulation_id": "",
+        "expression": "zscore(winsorize(ts_sum(equity_awards_granted_non_option_period, 15)) * winsorize(ts_sum(future_minimum_operating_lease_payments, 120)))",
+        "note": "passed_local_prefilter"
+      },
+      {
+        "timestamp": 1779004499.3293903,
+        "alpha_id": "alpha_6092034049",
+        "official_alpha_id": "",
+        "stage": "generated",
+        "status": "created",
+        "family": "liquidity",
+        "hypothesis": "Experience-feedback: liquidity_0000 alpha from fundamental2",
+        "score": 0.0,
+        "scorecard": {},
+        "local_quality": {},
+        "validation": {},
+        "official_metrics": {},
+        "gate": {},
+        "simulation_id": "",
+        "expression": "winsorize(normalize(ts_corr(annual_deferred_income_tax_expense, returns, 40)), std=4)",
+        "note": "候选池补位生成"
+      },
+      {
+        "timestamp": 1779004499.330393,
+        "alpha_id": "alpha_b83ad7b55a",
+        "official_alpha_id": "",
+        "stage": "generated",
+        "status": "created",
+        "family": "hybrid",
+        "hypothesis": "Hypothesis-driven: Sentiment / Short Interest — High short interest as a negative signal — informed shorts predict underperformance",
+        "score": 0.0,
+        "scorecard": {},
+        "local_quality": {},
+        "validation": {},
+        "official_metrics": {},
+        "gate": {},
+        "simulation_id": "",
+        "expression": "rank(benefit_obligation_interest_cost_change)",
+        "note": "候选池补位生成"
+      },
+      {
+        "timestamp": 1779004499.330393,
+        "alpha_id": "alpha_a2a51b6ee0",
+        "official_alpha_id": "",
+        "stage": "generated",
+        "status": "created",
+        "family": "reversal",
+        "hypothesis": "Hypothesis-driven: Value / Reversal — 价值选股 — 低估值=高预期收益，直接取负号",
+        "score": 0.0,
+        "scorecard": {},
+        "local_quality": {},
+        "validation": {},
+        "official_metrics": {},
+        "gate": {},
+        "simulation_id": "",
+        "expression": "rank(-1 * deferred_tax_assets_valuation_allowance_value)",
+        "note": "候选池补位生成"
+      },
+      {
+        "timestamp": 1779004499.5195956,
+        "alpha_id": "alpha_6092034049",
+        "official_alpha_id": "",
+        "stage": "local_scored",
+        "status": "local_prefilter_passed",
+        "family": "liquidity",
+        "hypothesis": "Experience-feedback: liquidity_0000 alpha from fundamental2",
+        "score": 67.14,
+        "scorecard": {
+          "schema_version": "scorecard-v2.3",
+          "total_score": 67.14,
+          "decision_band": "research_only",
+          "score_basis": "local_prior",
+          "local_rank_score": 67.14,
+          "layer_weights": {
+            "prior": 0.3,
+            "empirical": 0.45,
+            "checklist": 0.25
+          },
+          "prior": {
+            "score": 71.52,
+            "dimensions": {
+              "economic_logic": 92,
+              "economic_concepts": [
+                "quality",
+                "volatility",
+                "liquidity",
+                "risk_management"
+              ],
+              "structure": 90.0,
+              "field_operator_support": 54.0,
+              "data_compliance": 35.0,
+              "horizon_turnover_proxy": 82.0,
+              "risk_control_proxy": 66.0,
+              "diversity": 65.0,
+              "explainability": 85.0
+            },
+            "weights": {
+              "economic_logic": 0.18,
+              "structure": 0.14,
+              "field_operator_support": 0.16,
+              "data_compliance": 0.12,
+              "horizon_turnover_proxy": 0.14,
+              "risk_control_proxy": 0.14,
+              "diversity": 0.07,
+              "explainability": 0.05
+            },
+            "source": "经验+校准"
+          },
+          "empirical": {
+            "score": 0.0,
+            "items": [],
+            "status": "missing_official_metrics"
+          },
+          "submission_checklist": {
+            "score": 50,
+            "items": [
+              {
+                "name": "official_metrics_present",
+                "passed": false,
+                "points": 15,
+                "meaning": "Official simulation metrics are required."
+              },
+              {
+                "name": "official_pass",
+                "passed": false,
+                "points": 15,
+                "meaning": "BRAIN pass/fail result."
+              },
+              {
+                "name": "economic_logic",
+                "passed": true,
+                "points": 15,
+                "meaning": "One-sentence economic/behavioral thesis."
+              },
+              {
+                "name": "data_delay_conservative",
+                "passed": true,
+                "points": 10,
+                "meaning": "Default settings use Delay 1 unless changed by user."
+              },
+              {
+                "name": "local_quality",
+                "passed": true,
+                "points": 15,
+                "meaning": "Local prefilter quality."
+              },
+              {
+                "name": "self_correlation_proxy",
+                "passed": false,
+                "points": 20,
+                "meaning": "Official/local correlation proxy."
+              },
+              {
+                "name": "diversity",
+                "passed": true,
+                "points": 10,
+                "meaning": "Avoid plain crowded templates."
+              }
+            ]
+          },
+          "confidence": null,
+          "calibration": {
+            "prior_minus_empirical": null,
+            "sample_weight": 0.25,
+            "purpose": "Track whether local priors predict official outcomes over time.",
+            "params_used": true
+          }
+        },
+        "local_quality": {
+          "schema_version": "local-quality-v2",
+          "score": 59.0,
+          "threshold": 40.0,
+          "passed": true,
+          "reasons": [
+            "passed_local_prefilter"
+          ],
+          "field_count": 2,
+          "operator_count": 3,
+          "nesting_depth": 3
+        },
+        "validation": {},
+        "official_metrics": {},
+        "gate": {},
+        "simulation_id": "",
+        "expression": "winsorize(normalize(ts_corr(annual_deferred_income_tax_expense, returns, 40)), std=4)",
+        "note": "passed_local_prefilter"
+      },
+      {
+        "timestamp": 1779004499.5225952,
+        "alpha_id": "alpha_b83ad7b55a",
+        "official_alpha_id": "",
+        "stage": "local_scored",
+        "status": "local_prefilter_passed",
+        "family": "hybrid",
+        "hypothesis": "Hypothesis-driven: Sentiment / Short Interest — High short interest as a negative signal — informed shorts predict underperformance",
+        "score": 64.28,
+        "scorecard": {
+          "schema_version": "scorecard-v2.3",
+          "total_score": 64.28,
+          "decision_band": "research_only",
+          "score_basis": "local_prior",
+          "local_rank_score": 64.28,
+          "layer_weights": {
+            "prior": 0.3,
+            "empirical": 0.45,
+            "checklist": 0.25
+          },
+          "prior": {
+            "score": 67.12,
+            "dimensions": {
+              "economic_logic": 68,
+              "economic_concepts": [
+                "cross_sectional"
+              ],
+              "structure": 90.0,
+              "field_operator_support": 62.0,
+              "data_compliance": 82.0,
+              "horizon_turnover_proxy": 50.0,
+              "risk_control_proxy": 48.0,
+              "diversity": 65.0,
+              "explainability": 85.0
+            },
+            "weights": {
+              "economic_logic": 0.18,
+              "structure": 0.14,
+              "field_operator_support": 0.16,
+              "data_compliance": 0.12,
+              "horizon_turnover_proxy": 0.14,
+              "risk_control_proxy": 0.14,
+              "diversity": 0.07,
+              "explainability": 0.05
+            },
+            "source": "经验+校准"
+          },
+          "empirical": {
+            "score": 0.0,
+            "items": [],
+            "status": "missing_official_metrics"
+          },
+          "submission_checklist": {
+            "score": 50,
+            "items": [
+              {
+                "name": "official_metrics_present",
+                "passed": false,
+                "points": 15,
+                "meaning": "Official simulation metrics are required."
+              },
+              {
+                "name": "official_pass",
+                "passed": false,
+                "points": 15,
+                "meaning": "BRAIN pass/fail result."
+              },
+              {
+                "name": "economic_logic",
+                "passed": true,
+                "points": 15,
+                "meaning": "One-sentence economic/behavioral thesis."
+              },
+              {
+                "name": "data_delay_conservative",
+                "passed": true,
+                "points": 10,
+                "meaning": "Default settings use Delay 1 unless changed by user."
+              },
+              {
+                "name": "local_quality",
+                "passed": true,
+                "points": 15,
+                "meaning": "Local prefilter quality."
+              },
+              {
+                "name": "self_correlation_proxy",
+                "passed": false,
+                "points": 20,
+                "meaning": "Official/local correlation proxy."
+              },
+              {
+                "name": "diversity",
+                "passed": true,
+                "points": 10,
+                "meaning": "Avoid plain crowded templates."
+              }
+            ]
+          },
+          "confidence": null,
+          "calibration": {
+            "prior_minus_empirical": null,
+            "sample_weight": 0.25,
+            "purpose": "Track whether local priors predict official outcomes over time.",
+            "params_used": true
+          }
+        },
+        "local_quality": {
+          "schema_version": "local-quality-v2",
+          "score": 59.0,
+          "threshold": 40.0,
+          "passed": true,
+          "reasons": [
+            "passed_local_prefilter"
+          ],
+          "field_count": 2,
+          "operator_count": 1,
+          "nesting_depth": 1,
+          "warnings": [
+            "fields unavailable in current official context: short_interest_pct, short_interest_to_float",
+            "field 'short_interest_pct' not in active dataset 'fundamental2'. Expression may use fields from wrong dataset."
+          ]
+        },
+        "validation": {},
+        "official_metrics": {},
+        "gate": {
+          "schema_version": "production-gate-v2.1",
+          "submission_ready": false,
+          "status": "OFFICIAL_CONTEXT_WARNING",
+          "failed_reasons": [],
+          "warnings": [
+            "fields unavailable in current official context: short_interest_pct, short_interest_to_float",
+            "field 'short_interest_pct' not in active dataset 'fundamental2'. Expression may use fields from wrong dataset."
+          ]
+        },
+        "simulation_id": "",
+        "expression": "rank(benefit_obligation_interest_cost_change)",
+        "note": "passed_local_prefilter"
+      },
+      {
+        "timestamp": 1779004499.524102,
+        "alpha_id": "alpha_a2a51b6ee0",
+        "official_alpha_id": "",
+        "stage": "local_scored",
+        "status": "local_prefilter_passed",
+        "family": "reversal",
+        "hypothesis": "Hypothesis-driven: Value / Reversal — 价值选股 — 低估值=高预期收益，直接取负号",
+        "score": 67.91,
+        "scorecard": {
+          "schema_version": "scorecard-v2.3",
+          "total_score": 67.91,
+          "decision_band": "research_only",
+          "score_basis": "local_prior",
+          "local_rank_score": 67.91,
+          "layer_weights": {
+            "prior": 0.3,
+            "empirical": 0.45,
+            "checklist": 0.25
+          },
+          "prior": {
+            "score": 72.7,
+            "dimensions": {
+              "economic_logic": 85,
+              "economic_concepts": [
+                "mean_reversion",
+                "value",
+                "cross_sectional"
+              ],
+              "structure": 90.0,
+              "field_operator_support": 62.0,
+              "data_compliance": 82.0,
+              "horizon_turnover_proxy": 68.0,
+              "risk_control_proxy": 48.0,
+              "diversity": 65.0,
+              "explainability": 85.0
+            },
+            "weights": {
+              "economic_logic": 0.18,
+              "structure": 0.14,
+              "field_operator_support": 0.16,
+              "data_compliance": 0.12,
+              "horizon_turnover_proxy": 0.14,
+              "risk_control_proxy": 0.14,
+              "diversity": 0.07,
+              "explainability": 0.05
+            },
+            "source": "经验+校准"
+          },
+          "empirical": {
+            "score": 0.0,
+            "items": [],
+            "status": "missing_official_metrics"
+          },
+          "submission_checklist": {
+            "score": 50,
+            "items": [
+              {
+                "name": "official_metrics_present",
+                "passed": false,
+                "points": 15,
+                "meaning": "Official simulation metrics are required."
+              },
+              {
+                "name": "official_pass",
+                "passed": false,
+                "points": 15,
+                "meaning": "BRAIN pass/fail result."
+              },
+              {
+                "name": "economic_logic",
+                "passed": true,
+                "points": 15,
+                "meaning": "One-sentence economic/behavioral thesis."
+              },
+              {
+                "name": "data_delay_conservative",
+                "passed": true,
+                "points": 10,
+                "meaning": "Default settings use Delay 1 unless changed by user."
+              },
+              {
+                "name": "local_quality",
+                "passed": true,
+                "points": 15,
+                "meaning": "Local prefilter quality."
+              },
+              {
+                "name": "self_correlation_proxy",
+                "passed": false,
+                "points": 20,
+                "meaning": "Official/local correlation proxy."
+              },
+              {
+                "name": "diversity",
+                "passed": true,
+                "points": 10,
+                "meaning": "Avoid plain crowded templates."
+              }
+            ]
+          },
+          "confidence": null,
+          "calibration": {
+            "prior_minus_empirical": null,
+            "sample_weight": 0.25,
+            "purpose": "Track whether local priors predict official outcomes over time.",
+            "params_used": true
+          }
+        },
+        "local_quality": {
+          "schema_version": "local-quality-v2",
+          "score": 59.0,
+          "threshold": 40.0,
+          "passed": true,
+          "reasons": [
+            "passed_local_prefilter"
+          ],
+          "field_count": 2,
+          "operator_count": 1,
+          "nesting_depth": 1,
+          "warnings": [
+            "fields unavailable in current official context: buyback_yield, dividend_yield",
+            "field 'buyback_yield' not in active dataset 'fundamental2'. Expression may use fields from wrong dataset."
+          ]
+        },
+        "validation": {},
+        "official_metrics": {},
+        "gate": {
+          "schema_version": "production-gate-v2.1",
+          "submission_ready": false,
+          "status": "OFFICIAL_CONTEXT_WARNING",
+          "failed_reasons": [],
+          "warnings": [
+            "fields unavailable in current official context: buyback_yield, dividend_yield",
+            "field 'buyback_yield' not in active dataset 'fundamental2'. Expression may use fields from wrong dataset."
+          ]
+        },
+        "simulation_id": "",
+        "expression": "rank(-1 * deferred_tax_assets_valuation_allowance_value)",
+        "note": "passed_local_prefilter"
+      },
+      {
+        "timestamp": 1779004499.5271087,
+        "alpha_id": "alpha_e22f066454",
+        "official_alpha_id": "",
+        "stage": "official_validation",
+        "status": "official_validation_passed",
+        "family": "momentum",
+        "hypothesis": "Hypothesis-driven: Earnings Revision Momentum — 分析师覆盖度调整后的修正信号，消除覆盖度偏差",
+        "score": 72.05,
+        "scorecard": {
+          "schema_version": "scorecard-v2.3",
+          "total_score": 72.05,
+          "decision_band": "optimize_before_submit",
+          "score_basis": "local_prior",
+          "local_rank_score": 72.05,
+          "layer_weights": {
+            "prior": 0.3,
+            "empirical": 0.45,
+            "checklist": 0.25
+          },
+          "prior": {
+            "score": 79.08,
+            "dimensions": {
+              "economic_logic": 92,
+              "economic_concepts": [
+                "momentum",
+                "value",
+                "growth",
+                "cross_sectional"
+              ],
+              "structure": 90.0,
+              "field_operator_support": 66.0,
+              "data_compliance": 82.0,
+              "horizon_turnover_proxy": 82.0,
+              "risk_control_proxy": 66.0,
+              "diversity": 65.0,
+              "explainability": 85.0
+            },
+            "weights": {
+              "economic_logic": 0.18,
+              "structure": 0.14,
+              "field_operator_support": 0.16,
+              "data_compliance": 0.12,
+              "horizon_turnover_proxy": 0.14,
+              "risk_control_proxy": 0.14,
+              "diversity": 0.07,
+              "explainability": 0.05
+            },
+            "source": "经验+校准"
+          },
+          "empirical": {
+            "score": 0.0,
+            "items": [],
+            "status": "missing_official_metrics"
+          },
+          "submission_checklist": {
+            "score": 50,
+            "items": [
+              {
+                "name": "official_metrics_present",
+                "passed": false,
+                "points": 15,
+                "meaning": "Official simulation metrics are required."
+              },
+              {
+                "name": "official_pass",
+                "passed": false,
+                "points": 15,
+                "meaning": "BRAIN pass/fail result."
+              },
+              {
+                "name": "economic_logic",
+                "passed": true,
+                "points": 15,
+                "meaning": "One-sentence economic/behavioral thesis."
+              },
+              {
+                "name": "data_delay_conservative",
+                "passed": true,
+                "points": 10,
+                "meaning": "Default settings use Delay 1 unless changed by user."
+              },
+              {
+                "name": "local_quality",
+                "passed": true,
+                "points": 15,
+                "meaning": "Local prefilter quality."
+              },
+              {
+                "name": "self_correlation_proxy",
+                "passed": false,
+                "points": 20,
+                "meaning": "Official/local correlation proxy."
+              },
+              {
+                "name": "diversity",
+                "passed": true,
+                "points": 10,
+                "meaning": "Avoid plain crowded templates."
+              }
+            ]
+          },
+          "confidence": null,
+          "calibration": {
+            "prior_minus_empirical": null,
+            "sample_weight": 0.25,
+            "purpose": "Track whether local priors predict official outcomes over time.",
+            "params_used": true
+          }
+        },
+        "local_quality": {
+          "schema_version": "local-quality-v2",
+          "score": 59.0,
+          "threshold": 40.0,
+          "passed": true,
+          "reasons": [
+            "passed_local_prefilter"
+          ],
+          "field_count": 2,
+          "operator_count": 2,
+          "nesting_depth": 2,
+          "warnings": [
+            "fields unavailable in current official context: eps_dispersion, sales_dispersion",
+            "field 'eps_dispersion' not in active dataset 'fundamental2'. Expression may use fields from wrong dataset."
+          ]
+        },
+        "validation": {
+          "status": "PASS",
+          "errors": [],
+          "invalid_operators": [],
+          "invalid_fields": []
+        },
+        "official_metrics": {},
+        "gate": {
+          "schema_version": "production-gate-v2.1",
+          "submission_ready": false,
+          "status": "OFFICIAL_CONTEXT_WARNING",
+          "failed_reasons": [],
+          "warnings": [
+            "fields unavailable in current official context: eps_dispersion, sales_dispersion",
+            "field 'eps_dispersion' not in active dataset 'fundamental2'. Expression may use fields from wrong dataset."
+          ]
+        },
+        "simulation_id": "",
+        "expression": "rank(ts_rank(unremitted_foreign_earnings_value / accrued_liabilities_total, 6))",
+        "note": "PASS"
+      },
+      {
+        "timestamp": 1779004499.529109,
+        "alpha_id": "alpha_a2a51b6ee0",
+        "official_alpha_id": "",
+        "stage": "official_validation",
+        "status": "official_validation_passed",
+        "family": "reversal",
+        "hypothesis": "Hypothesis-driven: Value / Reversal — 价值选股 — 低估值=高预期收益，直接取负号",
+        "score": 67.91,
+        "scorecard": {
+          "schema_version": "scorecard-v2.3",
+          "total_score": 67.91,
+          "decision_band": "research_only",
+          "score_basis": "local_prior",
+          "local_rank_score": 67.91,
+          "layer_weights": {
+            "prior": 0.3,
+            "empirical": 0.45,
+            "checklist": 0.25
+          },
+          "prior": {
+            "score": 72.7,
+            "dimensions": {
+              "economic_logic": 85,
+              "economic_concepts": [
+                "mean_reversion",
+                "value",
+                "cross_sectional"
+              ],
+              "structure": 90.0,
+              "field_operator_support": 62.0,
+              "data_compliance": 82.0,
+              "horizon_turnover_proxy": 68.0,
+              "risk_control_proxy": 48.0,
+              "diversity": 65.0,
+              "explainability": 85.0
+            },
+            "weights": {
+              "economic_logic": 0.18,
+              "structure": 0.14,
+              "field_operator_support": 0.16,
+              "data_compliance": 0.12,
+              "horizon_turnover_proxy": 0.14,
+              "risk_control_proxy": 0.14,
+              "diversity": 0.07,
+              "explainability": 0.05
+            },
+            "source": "经验+校准"
+          },
+          "empirical": {
+            "score": 0.0,
+            "items": [],
+            "status": "missing_official_metrics"
+          },
+          "submission_checklist": {
+            "score": 50,
+            "items": [
+              {
+                "name": "official_metrics_present",
+                "passed": false,
+                "points": 15,
+                "meaning": "Official simulation metrics are required."
+              },
+              {
+                "name": "official_pass",
+                "passed": false,
+                "points": 15,
+                "meaning": "BRAIN pass/fail result."
+              },
+              {
+                "name": "economic_logic",
+                "passed": true,
+                "points": 15,
+                "meaning": "One-sentence economic/behavioral thesis."
+              },
+              {
+                "name": "data_delay_conservative",
+                "passed": true,
+                "points": 10,
+                "meaning": "Default settings use Delay 1 unless changed by user."
+              },
+              {
+                "name": "local_quality",
+                "passed": true,
+                "points": 15,
+                "meaning": "Local prefilter quality."
+              },
+              {
+                "name": "self_correlation_proxy",
+                "passed": false,
+                "points": 20,
+                "meaning": "Official/local correlation proxy."
+              },
+              {
+                "name": "diversity",
+                "passed": true,
+                "points": 10,
+                "meaning": "Avoid plain crowded templates."
+              }
+            ]
+          },
+          "confidence": null,
+          "calibration": {
+            "prior_minus_empirical": null,
+            "sample_weight": 0.25,
+            "purpose": "Track whether local priors predict official outcomes over time.",
+            "params_used": true
+          }
+        },
+        "local_quality": {
+          "schema_version": "local-quality-v2",
+          "score": 59.0,
+          "threshold": 40.0,
+          "passed": true,
+          "reasons": [
+            "passed_local_prefilter"
+          ],
+          "field_count": 2,
+          "operator_count": 1,
+          "nesting_depth": 1,
+          "warnings": [
+            "fields unavailable in current official context: buyback_yield, dividend_yield",
+            "field 'buyback_yield' not in active dataset 'fundamental2'. Expression may use fields from wrong dataset."
+          ]
+        },
+        "validation": {
+          "status": "PASS",
+          "errors": [],
+          "invalid_operators": [],
+          "invalid_fields": []
+        },
+        "official_metrics": {},
+        "gate": {
+          "schema_version": "production-gate-v2.1",
+          "submission_ready": false,
+          "status": "OFFICIAL_CONTEXT_WARNING",
+          "failed_reasons": [],
+          "warnings": [
+            "fields unavailable in current official context: buyback_yield, dividend_yield",
+            "field 'buyback_yield' not in active dataset 'fundamental2'. Expression may use fields from wrong dataset."
+          ]
+        },
+        "simulation_id": "",
+        "expression": "rank(-1 * deferred_tax_assets_valuation_allowance_value)",
+        "note": "PASS"
+      },
+      {
+        "timestamp": 1779004499.530612,
+        "alpha_id": "alpha_6092034049",
+        "official_alpha_id": "",
+        "stage": "official_validation",
+        "status": "official_validation_passed",
+        "family": "liquidity",
+        "hypothesis": "Experience-feedback: liquidity_0000 alpha from fundamental2",
+        "score": 67.14,
+        "scorecard": {
+          "schema_version": "scorecard-v2.3",
+          "total_score": 67.14,
+          "decision_band": "research_only",
+          "score_basis": "local_prior",
+          "local_rank_score": 67.14,
+          "layer_weights": {
+            "prior": 0.3,
+            "empirical": 0.45,
+            "checklist": 0.25
+          },
+          "prior": {
+            "score": 71.52,
+            "dimensions": {
+              "economic_logic": 92,
+              "economic_concepts": [
+                "quality",
+                "volatility",
+                "liquidity",
+                "risk_management"
+              ],
+              "structure": 90.0,
+              "field_operator_support": 54.0,
+              "data_compliance": 35.0,
+              "horizon_turnover_proxy": 82.0,
+              "risk_control_proxy": 66.0,
+              "diversity": 65.0,
+              "explainability": 85.0
+            },
+            "weights": {
+              "economic_logic": 0.18,
+              "structure": 0.14,
+              "field_operator_support": 0.16,
+              "data_compliance": 0.12,
+              "horizon_turnover_proxy": 0.14,
+              "risk_control_proxy": 0.14,
+              "diversity": 0.07,
+              "explainability": 0.05
+            },
+            "source": "经验+校准"
+          },
+          "empirical": {
+            "score": 0.0,
+            "items": [],
+            "status": "missing_official_metrics"
+          },
+          "submission_checklist": {
+            "score": 50,
+            "items": [
+              {
+                "name": "official_metrics_present",
+                "passed": false,
+                "points": 15,
+                "meaning": "Official simulation metrics are required."
+              },
+              {
+                "name": "official_pass",
+                "passed": false,
+                "points": 15,
+                "meaning": "BRAIN pass/fail result."
+              },
+              {
+                "name": "economic_logic",
+                "passed": true,
+                "points": 15,
+                "meaning": "One-sentence economic/behavioral thesis."
+              },
+              {
+                "name": "data_delay_conservative",
+                "passed": true,
+                "points": 10,
+                "meaning": "Default settings use Delay 1 unless changed by user."
+              },
+              {
+                "name": "local_quality",
+                "passed": true,
+                "points": 15,
+                "meaning": "Local prefilter quality."
+              },
+              {
+                "name": "self_correlation_proxy",
+                "passed": false,
+                "points": 20,
+                "meaning": "Official/local correlation proxy."
+              },
+              {
+                "name": "diversity",
+                "passed": true,
+                "points": 10,
+                "meaning": "Avoid plain crowded templates."
+              }
+            ]
+          },
+          "confidence": null,
+          "calibration": {
+            "prior_minus_empirical": null,
+            "sample_weight": 0.25,
+            "purpose": "Track whether local priors predict official outcomes over time.",
+            "params_used": true
+          }
+        },
+        "local_quality": {
+          "schema_version": "local-quality-v2",
+          "score": 59.0,
+          "threshold": 40.0,
+          "passed": true,
+          "reasons": [
+            "passed_local_prefilter"
+          ],
+          "field_count": 2,
+          "operator_count": 3,
+          "nesting_depth": 3
+        },
+        "validation": {
+          "status": "PASS",
+          "errors": [],
+          "invalid_operators": [],
+          "invalid_fields": []
+        },
+        "official_metrics": {},
+        "gate": {},
+        "simulation_id": "",
+        "expression": "winsorize(normalize(ts_corr(annual_deferred_income_tax_expense, returns, 40)), std=4)",
+        "note": "PASS"
+      },
+      {
+        "timestamp": 1779004499.5316162,
+        "alpha_id": "alpha_e22f066454",
+        "official_alpha_id": "",
+        "stage": "simulation_submitted",
+        "status": "simulation_submitted",
+        "family": "momentum",
+        "hypothesis": "Hypothesis-driven: Earnings Revision Momentum — 分析师覆盖度调整后的修正信号，消除覆盖度偏差",
+        "score": 72.05,
+        "scorecard": {
+          "schema_version": "scorecard-v2.3",
+          "total_score": 72.05,
+          "decision_band": "optimize_before_submit",
+          "score_basis": "local_prior",
+          "local_rank_score": 72.05,
+          "layer_weights": {
+            "prior": 0.3,
+            "empirical": 0.45,
+            "checklist": 0.25
+          },
+          "prior": {
+            "score": 79.08,
+            "dimensions": {
+              "economic_logic": 92,
+              "economic_concepts": [
+                "momentum",
+                "value",
+                "growth",
+                "cross_sectional"
+              ],
+              "structure": 90.0,
+              "field_operator_support": 66.0,
+              "data_compliance": 82.0,
+              "horizon_turnover_proxy": 82.0,
+              "risk_control_proxy": 66.0,
+              "diversity": 65.0,
+              "explainability": 85.0
+            },
+            "weights": {
+              "economic_logic": 0.18,
+              "structure": 0.14,
+              "field_operator_support": 0.16,
+              "data_compliance": 0.12,
+              "horizon_turnover_proxy": 0.14,
+              "risk_control_proxy": 0.14,
+              "diversity": 0.07,
+              "explainability": 0.05
+            },
+            "source": "经验+校准"
+          },
+          "empirical": {
+            "score": 0.0,
+            "items": [],
+            "status": "missing_official_metrics"
+          },
+          "submission_checklist": {
+            "score": 50,
+            "items": [
+              {
+                "name": "official_metrics_present",
+                "passed": false,
+                "points": 15,
+                "meaning": "Official simulation metrics are required."
+              },
+              {
+                "name": "official_pass",
+                "passed": false,
+                "points": 15,
+                "meaning": "BRAIN pass/fail result."
+              },
+              {
+                "name": "economic_logic",
+                "passed": true,
+                "points": 15,
+                "meaning": "One-sentence economic/behavioral thesis."
+              },
+              {
+                "name": "data_delay_conservative",
+                "passed": true,
+                "points": 10,
+                "meaning": "Default settings use Delay 1 unless changed by user."
+              },
+              {
+                "name": "local_quality",
+                "passed": true,
+                "points": 15,
+                "meaning": "Local prefilter quality."
+              },
+              {
+                "name": "self_correlation_proxy",
+                "passed": false,
+                "points": 20,
+                "meaning": "Official/local correlation proxy."
+              },
+              {
+                "name": "diversity",
+                "passed": true,
+                "points": 10,
+                "meaning": "Avoid plain crowded templates."
+              }
+            ]
+          },
+          "confidence": null,
+          "calibration": {
+            "prior_minus_empirical": null,
+            "sample_weight": 0.25,
+            "purpose": "Track whether local priors predict official outcomes over time.",
+            "params_used": true
+          }
+        },
+        "local_quality": {
+          "schema_version": "local-quality-v2",
+          "score": 59.0,
+          "threshold": 40.0,
+          "passed": true,
+          "reasons": [
+            "passed_local_prefilter"
+          ],
+          "field_count": 2,
+          "operator_count": 2,
+          "nesting_depth": 2,
+          "warnings": [
+            "fields unavailable in current official context: eps_dispersion, sales_dispersion",
+            "field 'eps_dispersion' not in active dataset 'fundamental2'. Expression may use fields from wrong dataset."
+          ]
+        },
+        "validation": {
+          "status": "PASS",
+          "errors": [],
+          "invalid_operators": [],
+          "invalid_fields": []
+        },
+        "official_metrics": {},
+        "gate": {
+          "schema_version": "production-gate-v2.1",
+          "submission_ready": false,
+          "status": "OFFICIAL_CONTEXT_WARNING",
+          "failed_reasons": [],
+          "warnings": [
+            "fields unavailable in current official context: eps_dispersion, sales_dispersion",
+            "field 'eps_dispersion' not in active dataset 'fundamental2'. Expression may use fields from wrong dataset."
+          ]
+        },
+        "simulation_id": "mock_sim_0001",
+        "expression": "rank(ts_rank(unremitted_foreign_earnings_value / accrued_liabilities_total, 6))",
+        "note": "slot=1"
+      },
+      {
+        "timestamp": 1779004499.7304196,
+        "alpha_id": "alpha_539682ba6e",
+        "official_alpha_id": "",
+        "stage": "secondary_fusion_created",
+        "status": "secondary_fusion_pending",
+        "family": "momentum",
+        "hypothesis": "Hypothesis-driven: Earnings Revision Momentum — 分析师覆盖度调整后的修正信号，消除覆盖度偏差 Secondary fusion after: sharpe >= 1.25 (actual: 0.96); fitness >= 1.0 (actual: 0.75); sub_universe_sharpe >= 0.72 (actual: 0.65); official_pass: BRAIN pass/fail result.; BRAIN_CHECK:sh",
+        "score": 70.0,
+        "scorecard": {
+          "schema_version": "scorecard-v2.3",
+          "total_score": 70.0,
+          "decision_band": "optimize_before_submit",
+          "score_basis": "local_prior",
+          "local_rank_score": 70.0,
+          "layer_weights": {
+            "prior": 0.3,
+            "empirical": 0.45,
+            "checklist": 0.25
+          },
+          "prior": {
+            "score": 75.92,
+            "dimensions": {
+              "economic_logic": 92,
+              "economic_concepts": [
+                "momentum",
+                "value",
+                "growth",
+                "cross_sectional"
+              ],
+              "structure": 90.0,
+              "field_operator_support": 62.0,
+              "data_compliance": 82.0,
+              "horizon_turnover_proxy": 82.0,
+              "risk_control_proxy": 48.0,
+              "diversity": 65.0,
+              "explainability": 85.0
+            },
+            "weights": {
+              "economic_logic": 0.18,
+              "structure": 0.14,
+              "field_operator_support": 0.16,
+              "data_compliance": 0.12,
+              "horizon_turnover_proxy": 0.14,
+              "risk_control_proxy": 0.14,
+              "diversity": 0.07,
+              "explainability": 0.05
+            },
+            "source": "经验+校准"
+          },
+          "empirical": {
+            "score": 0.0,
+            "items": [],
+            "status": "missing_official_metrics"
+          },
+          "submission_checklist": {
+            "score": 50,
+            "items": [
+              {
+                "name": "official_metrics_present",
+                "passed": false,
+                "points": 15,
+                "meaning": "Official simulation metrics are required."
+              },
+              {
+                "name": "official_pass",
+                "passed": false,
+                "points": 15,
+                "meaning": "BRAIN pass/fail result."
+              },
+              {
+                "name": "economic_logic",
+                "passed": true,
+                "points": 15,
+                "meaning": "One-sentence economic/behavioral thesis."
+              },
+              {
+                "name": "data_delay_conservative",
+                "passed": true,
+                "points": 10,
+                "meaning": "Default settings use Delay 1 unless changed by user."
+              },
+              {
+                "name": "local_quality",
+                "passed": true,
+                "points": 15,
+                "meaning": "Local prefilter quality."
+              },
+              {
+                "name": "self_correlation_proxy",
+                "passed": false,
+                "points": 20,
+                "meaning": "Official/local correlation proxy."
+              },
+              {
+                "name": "diversity",
+                "passed": true,
+                "points": 10,
+                "meaning": "Avoid plain crowded templates."
+              }
+            ]
+          },
+          "confidence": null,
+          "calibration": {
+            "prior_minus_empirical": null,
+            "sample_weight": 0.25,
+            "purpose": "Track whether local priors predict official outcomes over time.",
+            "params_used": true
+          }
+        },
+        "local_quality": {
+          "schema_version": "local-quality-v2",
+          "score": 59.0,
+          "threshold": 40.0,
+          "passed": true,
+          "reasons": [
+            "passed_local_prefilter"
+          ],
+          "field_count": 2,
+          "operator_count": 2,
+          "nesting_depth": 2
+        },
+        "validation": {},
+        "official_metrics": {},
+        "gate": {},
+        "simulation_id": "",
+        "expression": "ts_rank(ts_rank(unremitted_foreign_earnings_value / accrued_liabilities_total, 6))",
+        "note": "sharpe >= 1.25 (actual: 0.96); fitness >= 1.0 (actual: 0.75); sub_universe_sharpe >= 0.72 (actual: 0.65); official_pass: BRAIN pass/fail result.; BRAIN_CHECK:sharpe_positive:Sharpe=0.960 (below 1.25); BRAIN_CHECK:fitness_minimum:Fitness=0.750 (below 1.0); BRAIN_CHECK:sub_universe_sharpe:SubUniverseSharpe=0.6500 (below 0.7200)"
+      },
+      {
+        "timestamp": 1779004499.7319229,
+        "alpha_id": "alpha_e22f066454",
+        "official_alpha_id": "mock_alpha_0001",
+        "stage": "backtest_failed",
+        "status": "official_standard_rejected",
+        "family": "momentum",
+        "hypothesis": "Hypothesis-driven: Earnings Revision Momentum — 分析师覆盖度调整后的修正信号，消除覆盖度偏差",
+        "score": 44.97,
+        "scorecard": {
+          "schema_version": "scorecard-v2.3",
+          "total_score": 44.97,
+          "decision_band": "hard_gate_blocked",
+          "score_basis": "official_verified",
+          "local_rank_score": 72.05,
+          "layer_weights": {
+            "prior": 0.3,
+            "empirical": 0.45,
+            "checklist": 0.25
+          },
+          "prior": {
+            "score": 79.08,
+            "dimensions": {
+              "economic_logic": 92,
+              "economic_concepts": [
+                "momentum",
+                "value",
+                "growth",
+                "cross_sectional"
+              ],
+              "structure": 90.0,
+              "field_operator_support": 66.0,
+              "data_compliance": 82.0,
+              "horizon_turnover_proxy": 82.0,
+              "risk_control_proxy": 66.0,
+              "diversity": 65.0,
+              "explainability": 85.0
+            },
+            "weights": {
+              "economic_logic": 0.18,
+              "structure": 0.14,
+              "field_operator_support": 0.16,
+              "data_compliance": 0.12,
+              "horizon_turnover_proxy": 0.14,
+              "risk_control_proxy": 0.14,
+              "diversity": 0.07,
+              "explainability": 0.05
+            },
+            "source": "经验+校准"
+          },
+          "empirical": {
+            "score": 0.0,
+            "items": [
+              {
+                "name": "sharpe",
+                "actual": 0.96,
+                "direction": ">=",
+                "target": 1.25,
+                "passed": false,
+                "points": 20,
+                "is_hard_gate": true,
+                "source": "BRAIN_Official"
+              },
+              {
+                "name": "fitness",
+                "actual": 0.75,
+                "direction": ">=",
+                "target": 1.0,
+                "passed": false,
+                "points": 15,
+                "is_hard_gate": true,
+                "source": "BRAIN_Official"
+              },
+              {
+                "name": "fitness_crosscheck",
+                "actual": 0.3031,
+                "direction": "<=",
+                "target": 0.05,
+                "passed": false,
+                "points": 0,
+                "is_hard_gate": false,
+                "source": "经验"
+              },
+              {
+                "name": "turnover_min",
+                "actual": 0.18,
+                "direction": ">=",
+                "target": 0.01,
+                "passed": true,
+                "points": 8,
+                "is_hard_gate": true,
+                "source": "BRAIN_Official"
+              },
+              {
+                "name": "turnover_platform",
+                "actual": 0.18,
+                "direction": "<=",
+                "target": 0.7,
+                "passed": true,
+                "points": 8,
+                "is_hard_gate": true,
+                "source": "BRAIN_Official"
+              },
+              {
+                "name": "turnover_quality",
+                "actual": 0.18,
+                "direction": "<=",
+                "target": 0.3,
+                "passed": true,
+                "points": 6,
+                "is_hard_gate": false,
+                "source": "经验"
+              },
+              {
+                "name": "returns",
+                "actual": 0.039,
+                "direction": ">=",
+                "target": 0.0,
+                "passed": true,
+                "points": 5,
+                "is_hard_gate": false,
+                "source": "经验"
+              },
+              {
+                "name": "drawdown",
+                "actual": 0.18,
+                "direction": "<=",
+                "target": 0.25,
+                "passed": true,
+                "points": 5,
+                "is_hard_gate": false,
+                "source": "经验"
+              },
+              {
+                "name": "self_correlation",
+                "actual": 0.25,
+                "direction": "<=",
+                "target": 0.7,
+                "passed": true,
+                "points": 14,
+                "is_hard_gate": true,
+                "source": "BRAIN_Official",
+                "exception_applied": false
+              },
+              {
+                "name": "prod_correlation",
+                "actual": 0.0,
+                "direction": "<=",
+                "target": 0.7,
+                "passed": true,
+                "points": 10,
+                "is_hard_gate": true,
+                "source": "BRAIN_Official"
+              },
+              {
+                "name": "weight_concentration",
+                "actual": 0.04,
+                "direction": "<=",
+                "target": 0.1,
+                "passed": true,
+                "points": 5,
+                "is_hard_gate": true,
+                "source": "BRAIN_Official"
+              },
+              {
+                "name": "sub_universe_sharpe",
+                "actual": 0.65,
+                "direction": ">=",
+                "target": 0.72,
+                "passed": false,
+                "points": 10,
+                "is_hard_gate": true,
+                "source": "BRAIN_Official"
+              },
+              {
+                "name": "is_oos_ratio",
+                "actual": 0.6771,
+                "direction": ">=",
+                "target": 0.5,
+                "passed": true,
+                "points": 8,
+                "is_hard_gate": false,
+                "source": "经验"
+              },
+              {
+                "name": "margin_bps",
+                "actual": 5.37,
+                "direction": ">=",
+                "target": 4.0,
+                "passed": true,
+                "points": 10,
+                "is_hard_gate": false,
+                "source": "经验",
+                "margin_source": "BRAIN_API"
+              }
+            ],
+            "status": "hard_gate_blocked",
+            "hard_gate_failed": true,
+            "hard_gate_failures": [
+              "sharpe >= 1.25 (actual: 0.96)",
+              "fitness >= 1.0 (actual: 0.75)",
+              "sub_universe_sharpe >= 0.72 (actual: 0.65)"
+            ],
+            "margin_source": "BRAIN_API",
+            "delay": 1,
+            "market_regime": "normal",
+            "regime_adjustments": {
+              "sharpe_factor": 1.0,
+              "fitness_factor": 1.0,
+              "turnover_factor": 1.0
+            }
+          },
+          "submission_checklist": {
+            "score": 85,
+            "items": [
+              {
+                "name": "official_metrics_present",
+                "passed": true,
+                "points": 15,
+                "meaning": "Official simulation metrics are required."
+              },
+              {
+                "name": "official_pass",
+                "passed": false,
+                "points": 15,
+                "meaning": "BRAIN pass/fail result."
+              },
+              {
+                "name": "economic_logic",
+                "passed": true,
+                "points": 15,
+                "meaning": "One-sentence economic/behavioral thesis."
+              },
+              {
+                "name": "data_delay_conservative",
+                "passed": true,
+                "points": 10,
+                "meaning": "Default settings use Delay 1 unless changed by user."
+              },
+              {
+                "name": "local_quality",
+                "passed": true,
+                "points": 15,
+                "meaning": "Local prefilter quality."
+              },
+              {
+                "name": "self_correlation_proxy",
+                "passed": true,
+                "points": 20,
+                "meaning": "Official/local correlation proxy."
+              },
+              {
+                "name": "diversity",
+                "passed": true,
+                "points": 10,
+                "meaning": "Avoid plain crowded templates."
+              }
+            ]
+          },
+          "confidence": {
+            "confidence_level": "medium",
+            "item_count": 10,
+            "passed_count": 10,
+            "score_variance": 7.49,
+            "score_dispersion": 0.3464,
+            "data_completeness": 0.7143,
+            "interpretation": "Score estimate is acceptable: 10/14 items passed, moderate dispersion (cv=0.346). Consider adding more validation data."
+          },
+          "calibration": {
+            "prior_minus_empirical": 79.08,
+            "sample_weight": 1.0,
+            "purpose": "Track whether local priors predict official outcomes over time.",
+            "params_used": true
+          }
+        },
+        "local_quality": {
+          "schema_version": "local-quality-v2",
+          "score": 59.0,
+          "threshold": 40.0,
+          "passed": true,
+          "reasons": [
+            "passed_local_prefilter"
+          ],
+          "field_count": 2,
+          "operator_count": 2,
+          "nesting_depth": 2,
+          "warnings": [
+            "fields unavailable in current official context: eps_dispersion, sales_dispersion",
+            "field 'eps_dispersion' not in active dataset 'fundamental2'. Expression may use fields from wrong dataset."
+          ]
+        },
+        "validation": {
+          "status": "PASS",
+          "errors": [],
+          "invalid_operators": [],
+          "invalid_fields": []
+        },
+        "official_metrics": {
+          "sharpe": 0.96,
+          "fitness": 0.75,
+          "turnover": 0.18,
+          "returns": 0.039,
+          "drawdown": 0.18,
+          "margin": 5.37,
+          "sub_universe_sharpe": 0.65,
+          "correlation": 0.25,
+          "weight_concentration": 0.04,
+          "pass_fail": "FAIL",
+          "turnover_quality_warning": false,
+          "failure_reason": "MOCK_METRIC_FAIL",
+          "official_alpha_id": "mock_alpha_0001"
+        },
+        "gate": {
+          "schema_version": "production-gate-v2.2",
+          "submission_ready": false,
+          "status": "BRAIN_CHECK_FAILED",
+          "failed_reasons": [
+            "sharpe >= 1.25 (actual: 0.96)",
+            "fitness >= 1.0 (actual: 0.75)",
+            "sub_universe_sharpe >= 0.72 (actual: 0.65)",
+            "official_pass: BRAIN pass/fail result.",
+            "BRAIN_CHECK:sharpe_positive:Sharpe=0.960 (below 1.25)",
+            "BRAIN_CHECK:fitness_minimum:Fitness=0.750 (below 1.0)",
+            "BRAIN_CHECK:sub_universe_sharpe:SubUniverseSharpe=0.6500 (below 0.7200)"
+          ],
+          "warnings": [
+            "hard_gate_blocked: BRAIN official checks failed — submission blocked regardless of total score"
+          ],
+          "hard_gate_blocked": true,
+          "source_notes": {
+            "thresholds": "BRAIN 官方 Alpha Check 标准 (LOW_SHARPE/LOW_FITNESS/HIGH_TURNOVER/CONCENTRATED_WEIGHT/SELF_CORRELATION/LOW_SUB_UNIVERSE_SHARPE)。Drawdown 非 BRAIN 硬性检查。",
+            "official_checks": "官方模拟与 alpha check 是提交前必要证据。",
+            "hard_gate_policy": "P1-2: BRAIN hard gates (sharpe/fitness/turnover_platform/self_correlation/prod_correlation/weight_concentration/sub_universe_sharpe/turnover_min) are blocking — any failure prevents submission regardless of total score."
+          },
+          "check_summary": {
+            "passed": false,
+            "errors": [
+              {
+                "name": "sharpe_positive",
+                "message": "Sharpe=0.960 (below 1.25)"
+              },
+              {
+                "name": "fitness_minimum",
+                "message": "Fitness=0.750 (below 1.0)"
+              },
+              {
+                "name": "sub_universe_sharpe",
+                "message": "SubUniverseSharpe=0.6500 (below 0.7200)"
+              }
+            ],
+            "warnings": [
+              {
+                "name": "marginal_contribution",
+                "message": "MarginalContribution=0.00000"
+              },
+              {
+                "name": "ic_mean",
+                "message": "IC_Mean=0.0000 (below 0.02)"
+              },
+              {
+                "name": "ic_ir",
+                "message": "IC_IR=0.000 (below 0.3)"
+              }
+            ],
+            "info": [
+              {
+                "name": "rank_ic",
+                "message": "RankIC=0.0000"
+              }
+            ]
+          }
+        },
+        "simulation_id": "mock_sim_0001",
+        "expression": "rank(ts_rank(unremitted_foreign_earnings_value / accrued_liabilities_total, 6))",
+        "note": "sharpe >= 1.25 (actual: 0.96); fitness >= 1.0 (actual: 0.75); sub_universe_sharpe >= 0.72 (actual: 0.65); official_pass: BRAIN pass/fail result.; BRAIN_CHECK:sharpe_positive:Sharpe=0.960 (below 1.25); BRAIN_CHECK:fitness_minimum:Fitness=0.750 (below 1.0); BRAIN_CHECK:sub_universe_sharpe:SubUniverseSharpe=0.6500 (below 0.7200)"
+      },
+      {
+        "timestamp": 1779004499.7389307,
+        "alpha_id": "alpha_44a6311a35",
+        "official_alpha_id": "",
+        "stage": "generated",
+        "status": "created",
+        "family": "hybrid",
+        "hypothesis": "Hypothesis-driven: Microstructure / Order Flow — VWAP deviation — closing price relative to volume-weighted average",
+        "score": 0.0,
+        "scorecard": {},
+        "local_quality": {},
+        "validation": {},
+        "official_metrics": {},
+        "gate": {},
+        "simulation_id": "",
+        "expression": "(acquisition_total_purchase_price - accrued_liabilities_total_2) / accrued_liabilities_total_2",
+        "note": "候选池补位生成"
+      },
+      {
+        "timestamp": 1779004499.7394335,
+        "alpha_id": "alpha_796cb5a532",
+        "official_alpha_id": "",
+        "stage": "generated",
+        "status": "created",
+        "family": "conditional",
+        "hypothesis": "Experience-feedback: conditional_0000 alpha from fundamental2",
+        "score": 0.0,
+        "scorecard": {},
+        "local_quality": {},
+        "validation": {},
+        "official_metrics": {},
+        "gate": {},
+        "simulation_id": "",
+        "expression": "winsorize(normalize(if_else(greater(ts_delta(option_awards_granted_count, 120), 0), option_awards_granted_count, 0)), std=5)",
+        "note": "候选池补位生成"
+      },
+      {
+        "timestamp": 1779004499.7394335,
+        "alpha_id": "alpha_bcb74711a9",
+        "official_alpha_id": "",
+        "stage": "generated",
+        "status": "created",
+        "family": "volatility",
+        "hypothesis": "Hypothesis-driven: Low Volatility / Low Beta Anomaly — 效率优先 — Sharpe-like排序",
+        "score": 0.0,
+        "scorecard": {},
+        "local_quality": {},
+        "validation": {},
+        "official_metrics": {},
+        "gate": {},
+        "simulation_id": "",
+        "expression": "rank(ts_mean(returns, 120) / ts_std(returns, 120))",
+        "note": "候选池补位生成"
+      },
+      {
+        "timestamp": 1779004499.7414374,
+        "alpha_id": "alpha_44a6311a35",
+        "official_alpha_id": "",
+        "stage": "local_scored",
+        "status": "local_prefilter_rejected",
+        "family": "hybrid",
+        "hypothesis": "Hypothesis-driven: Microstructure / Order Flow — VWAP deviation — closing price relative to volume-weighted average",
+        "score": 54.65,
+        "scorecard": {
+          "schema_version": "scorecard-v2.3",
+          "total_score": 54.65,
+          "decision_band": "research_only",
+          "score_basis": "local_prior",
+          "local_rank_score": 54.65,
+          "layer_weights": {
+            "prior": 0.3,
+            "empirical": 0.45,
+            "checklist": 0.25
+          },
+          "prior": {
+            "score": 69.54,
+            "dimensions": {
+              "economic_logic": 85,
+              "economic_concepts": [
+                "volatility",
+                "liquidity",
+                "cross_sectional"
+              ],
+              "structure": 90.0,
+              "field_operator_support": 58.0,
+              "data_compliance": 82.0,
+              "horizon_turnover_proxy": 50.0,
+              "risk_control_proxy": 48.0,
+              "diversity": 65.0,
+              "explainability": 85.0
+            },
+            "weights": {
+              "economic_logic": 0.18,
+              "structure": 0.14,
+              "field_operator_support": 0.16,
+              "data_compliance": 0.12,
+              "horizon_turnover_proxy": 0.14,
+              "risk_control_proxy": 0.14,
+              "diversity": 0.07,
+              "explainability": 0.05
+            },
+            "source": "经验+校准"
+          },
+          "empirical": {
+            "score": 0.0,
+            "items": [],
+            "status": "missing_official_metrics"
+          },
+          "submission_checklist": {
+            "score": 35,
+            "items": [
+              {
+                "name": "official_metrics_present",
+                "passed": false,
+                "points": 15,
+                "meaning": "Official simulation metrics are required."
+              },
+              {
+                "name": "official_pass",
+                "passed": false,
+                "points": 15,
+                "meaning": "BRAIN pass/fail result."
+              },
+              {
+                "name": "economic_logic",
+                "passed": true,
+                "points": 15,
+                "meaning": "One-sentence economic/behavioral thesis."
+              },
+              {
+                "name": "data_delay_conservative",
+                "passed": true,
+                "points": 10,
+                "meaning": "Default settings use Delay 1 unless changed by user."
+              },
+              {
+                "name": "local_quality",
+                "passed": false,
+                "points": 15,
+                "meaning": "Local prefilter quality."
+              },
+              {
+                "name": "self_correlation_proxy",
+                "passed": false,
+                "points": 20,
+                "meaning": "Official/local correlation proxy."
+              },
+              {
+                "name": "diversity",
+                "passed": true,
+                "points": 10,
+                "meaning": "Avoid plain crowded templates."
+              }
+            ]
+          },
+          "confidence": null,
+          "calibration": {
+            "prior_minus_empirical": null,
+            "sample_weight": 0.25,
+            "purpose": "Track whether local priors predict official outcomes over time.",
+            "params_used": true
+          }
+        },
+        "local_quality": {
+          "schema_version": "local-quality-v2",
+          "score": 27.0,
+          "threshold": 40.0,
+          "passed": false,
+          "reasons": [
+            "no_operator",
+            "weak_standardization_or_time_series_structure"
+          ],
+          "field_count": 2,
+          "operator_count": 0,
+          "nesting_depth": 1,
+          "warnings": [
+            "fields unavailable in current official context: buy_sell_ratio, obi",
+            "field 'buy_sell_ratio' not in active dataset 'fundamental2'. Expression may use fields from wrong dataset."
+          ]
+        },
+        "validation": {},
+        "official_metrics": {},
+        "gate": {
+          "schema_version": "production-gate-v2.1",
+          "submission_ready": false,
+          "status": "LOCAL_PREFILTER_REJECTED",
+          "failed_reasons": [
+            "no_operator",
+            "weak_standardization_or_time_series_structure"
+          ],
+          "warnings": []
+        },
+        "simulation_id": "",
+        "expression": "(acquisition_total_purchase_price - accrued_liabilities_total_2) / accrued_liabilities_total_2",
+        "note": "no_operator; weak_standardization_or_time_series_structure"
+      },
+      {
+        "timestamp": 1779004499.9357584,
+        "alpha_id": "alpha_796cb5a532",
+        "official_alpha_id": "",
+        "stage": "local_scored",
+        "status": "local_prefilter_passed",
+        "family": "conditional",
+        "hypothesis": "Experience-feedback: conditional_0000 alpha from fundamental2",
+        "score": 66.54,
+        "scorecard": {
+          "schema_version": "scorecard-v2.3",
+          "total_score": 66.54,
+          "decision_band": "research_only",
+          "score_basis": "local_prior",
+          "local_rank_score": 66.54,
+          "layer_weights": {
+            "prior": 0.3,
+            "empirical": 0.45,
+            "checklist": 0.25
+          },
+          "prior": {
+            "score": 71.68,
+            "dimensions": {
+              "economic_logic": 92,
+              "economic_concepts": [
+                "momentum",
+                "quality",
+                "volatility",
+                "risk_management"
+              ],
+              "structure": 82.0,
+              "field_operator_support": 62.0,
+              "data_compliance": 35.0,
+              "horizon_turnover_proxy": 82.0,
+              "risk_control_proxy": 66.0,
+              "diversity": 65.0,
+              "explainability": 85.0
+            },
+            "weights": {
+              "economic_logic": 0.18,
+              "structure": 0.14,
+              "field_operator_support": 0.16,
+              "data_compliance": 0.12,
+              "horizon_turnover_proxy": 0.14,
+              "risk_control_proxy": 0.14,
+              "diversity": 0.07,
+              "explainability": 0.05
+            },
+            "source": "经验+校准"
+          },
+          "empirical": {
+            "score": 0.0,
+            "items": [],
+            "status": "missing_official_metrics"
+          },
+          "submission_checklist": {
+            "score": 50,
+            "items": [
+              {
+                "name": "official_metrics_present",
+                "passed": false,
+                "points": 15,
+                "meaning": "Official simulation metrics are required."
+              },
+              {
+                "name": "official_pass",
+                "passed": false,
+                "points": 15,
+                "meaning": "BRAIN pass/fail result."
+              },
+              {
+                "name": "economic_logic",
+                "passed": true,
+                "points": 15,
+                "meaning": "One-sentence economic/behavioral thesis."
+              },
+              {
+                "name": "data_delay_conservative",
+                "passed": true,
+                "points": 10,
+                "meaning": "Default settings use Delay 1 unless changed by user."
+              },
+              {
+                "name": "local_quality",
+                "passed": true,
+                "points": 15,
+                "meaning": "Local prefilter quality."
+              },
+              {
+                "name": "self_correlation_proxy",
+                "passed": false,
+                "points": 20,
+                "meaning": "Official/local correlation proxy."
+              },
+              {
+                "name": "diversity",
+                "passed": true,
+                "points": 10,
+                "meaning": "Avoid plain crowded templates."
+              }
+            ]
+          },
+          "confidence": null,
+          "calibration": {
+            "prior_minus_empirical": null,
+            "sample_weight": 0.25,
+            "purpose": "Track whether local priors predict official outcomes over time.",
+            "params_used": true
+          }
+        },
+        "local_quality": {
+          "schema_version": "local-quality-v2",
+          "score": 57.0,
+          "threshold": 40.0,
+          "passed": true,
+          "reasons": [
+            "passed_local_prefilter"
+          ],
+          "field_count": 1,
+          "operator_count": 5,
+          "nesting_depth": 5
+        },
+        "validation": {},
+        "official_metrics": {},
+        "gate": {},
+        "simulation_id": "",
+        "expression": "winsorize(normalize(if_else(greater(ts_delta(option_awards_granted_count, 120), 0), option_awards_granted_count, 0)), std=5)",
+        "note": "passed_local_prefilter"
+      },
+      {
+        "timestamp": 1779004499.9377587,
+        "alpha_id": "alpha_bcb74711a9",
+        "official_alpha_id": "",
+        "stage": "local_scored",
+        "status": "local_prefilter_passed",
+        "family": "volatility",
+        "hypothesis": "Hypothesis-driven: Low Volatility / Low Beta Anomaly — 效率优先 — Sharpe-like排序",
+        "score": 73.99,
+        "scorecard": {
+          "schema_version": "scorecard-v2.3",
+          "total_score": 73.99,
+          "decision_band": "optimize_before_submit",
+          "score_basis": "local_prior",
+          "local_rank_score": 73.99,
+          "layer_weights": {
+            "prior": 0.3,
+            "empirical": 0.45,
+            "checklist": 0.25
+          },
+          "prior": {
+            "score": 77.76,
+            "dimensions": {
+              "economic_logic": 92,
+              "economic_concepts": [
+                "momentum",
+                "volatility",
+                "liquidity",
+                "cross_sectional"
+              ],
+              "structure": 90.0,
+              "field_operator_support": 70.0,
+              "data_compliance": 82.0,
+              "horizon_turnover_proxy": 68.0,
+              "risk_control_proxy": 66.0,
+              "diversity": 65.0,
+              "explainability": 85.0
+            },
+            "weights": {
+              "economic_logic": 0.18,
+              "structure": 0.14,
+              "field_operator_support": 0.16,
+              "data_compliance": 0.12,
+              "horizon_turnover_proxy": 0.14,
+              "risk_control_proxy": 0.14,
+              "diversity": 0.07,
+              "explainability": 0.05
+            },
+            "source": "经验+校准"
+          },
+          "empirical": {
+            "score": 0.0,
+            "items": [],
+            "status": "missing_official_metrics"
+          },
+          "submission_checklist": {
+            "score": 50,
+            "items": [
+              {
+                "name": "official_metrics_present",
+                "passed": false,
+                "points": 15,
+                "meaning": "Official simulation metrics are required."
+              },
+              {
+                "name": "official_pass",
+                "passed": false,
+                "points": 15,
+                "meaning": "BRAIN pass/fail result."
+              },
+              {
+                "name": "economic_logic",
+                "passed": true,
+                "points": 15,
+                "meaning": "One-sentence economic/behavioral thesis."
+              },
+              {
+                "name": "data_delay_conservative",
+                "passed": true,
+                "points": 10,
+                "meaning": "Default settings use Delay 1 unless changed by user."
+              },
+              {
+                "name": "local_quality",
+                "passed": true,
+                "points": 15,
+                "meaning": "Local prefilter quality."
+              },
+              {
+                "name": "self_correlation_proxy",
+                "passed": false,
+                "points": 20,
+                "meaning": "Official/local correlation proxy."
+              },
+              {
+                "name": "diversity",
+                "passed": true,
+                "points": 10,
+                "meaning": "Avoid plain crowded templates."
+              }
+            ]
+          },
+          "confidence": null,
+          "calibration": {
+            "prior_minus_empirical": null,
+            "sample_weight": 0.25,
+            "purpose": "Track whether local priors predict official outcomes over time.",
+            "params_used": true
+          }
+        },
+        "local_quality": {
+          "schema_version": "local-quality-v2",
+          "score": 67.0,
+          "threshold": 40.0,
+          "passed": true,
+          "reasons": [
+            "passed_local_prefilter"
+          ],
+          "field_count": 2,
+          "operator_count": 3,
+          "nesting_depth": 2,
+          "warnings": [
+            "fields unavailable in current official context: corr_to_spx_60d, r_squared_252d",
+            "operators unavailable in current official context: ts_std",
+            "field 'corr_to_spx_60d' not in active dataset 'fundamental2'. Expression may use fields from wrong dataset."
+          ]
+        },
+        "validation": {},
+        "official_metrics": {},
+        "gate": {
+          "schema_version": "production-gate-v2.1",
+          "submission_ready": false,
+          "status": "OFFICIAL_CONTEXT_WARNING",
+          "failed_reasons": [],
+          "warnings": [
+            "fields unavailable in current official context: corr_to_spx_60d, r_squared_252d",
+            "operators unavailable in current official context: ts_std",
+            "field 'corr_to_spx_60d' not in active dataset 'fundamental2'. Expression may use fields from wrong dataset."
+          ]
+        },
+        "simulation_id": "",
+        "expression": "rank(ts_mean(returns, 120) / ts_std(returns, 120))",
+        "note": "passed_local_prefilter"
+      }
+    ],
+    "convergence": {
+      "cycles_tracked": 1,
+      "total_produced": 3,
+      "total_submitted": 0,
+      "recent_avg_sharpe": 0.0,
+      "recent_max_sharpe": 0.0,
+      "best_sharpe": 0.0,
+      "sharpe_trend": "stable",
+      "stalled": false,
+      "stall_cycles": 1,
+      "recommendation": "Quality is stable — maintain current approach.",
+      "sharpe_ci_90": [
+        0.0,
+        0.0
+      ],
+      "trend_confidence": 0.0,
+      "stall_is_significant": false
+    },
+    "candidates": [
+      {
+        "alpha_id": "alpha_bcb74711a9",
+        "expression": "rank(ts_mean(returns, 120) / ts_std(returns, 120))",
+        "family": "volatility",
+        "hypothesis": "Hypothesis-driven: Low Volatility / Low Beta Anomaly — 效率优先 — Sharpe-like排序",
+        "data_fields": [
+          "corr_to_spx_60d",
+          "r_squared_252d"
+        ],
+        "operators": [
+          "rank",
+          "ts_mean",
+          "ts_std"
+        ],
+        "source_tags": [
+          "hypothesis_driven"
+        ],
+        "parent_id": "",
+        "mutation_type": "",
+        "dataset_id": "fundamental2",
+        "template_source": "{\"mode\": \"hypothesis_driven\", \"hypothesis_id\": \"low_volatility_anomaly\", \"hypothesis_name\": \"Low Volatility / Low Beta Anomaly\", \"expression_family_id\": \"efficiency_first\", \"field_category\": \"correlation_to_market\", \"selected_fields\": [\"r_squared_252d\", \"corr_to_spx_60d\"], \"region\": \"USA\", \"universe\": \"ALL_CAP\", \"delay\": 2, \"timestamp\": \"2026-05-17T07:54:59Z\"}",
+        "local_quality": {
+          "schema_version": "local-quality-v2",
+          "score": 67.0,
+          "threshold": 40.0,
+          "passed": true,
+          "reasons": [
+            "passed_local_prefilter"
+          ],
+          "field_count": 2,
+          "operator_count": 3,
+          "nesting_depth": 2,
+          "warnings": [
+            "fields unavailable in current official context: corr_to_spx_60d, r_squared_252d",
+            "operators unavailable in current official context: ts_std",
+            "field 'corr_to_spx_60d' not in active dataset 'fundamental2'. Expression may use fields from wrong dataset."
+          ]
+        },
+        "validation": {},
+        "simulation_id": "",
+        "official_alpha_id": "",
+        "official_metrics": {},
+        "scorecard": {
+          "schema_version": "scorecard-v2.3",
+          "total_score": 73.99,
+          "decision_band": "optimize_before_submit",
+          "score_basis": "local_prior",
+          "local_rank_score": 73.99,
+          "layer_weights": {
+            "prior": 0.3,
+            "empirical": 0.45,
+            "checklist": 0.25
+          },
+          "prior": {
+            "score": 77.76,
+            "dimensions": {
+              "economic_logic": 92,
+              "economic_concepts": [
+                "momentum",
+                "volatility",
+                "liquidity",
+                "cross_sectional"
+              ],
+              "structure": 90.0,
+              "field_operator_support": 70.0,
+              "data_compliance": 82.0,
+              "horizon_turnover_proxy": 68.0,
+              "risk_control_proxy": 66.0,
+              "diversity": 65.0,
+              "explainability": 85.0
+            },
+            "weights": {
+              "economic_logic": 0.18,
+              "structure": 0.14,
+              "field_operator_support": 0.16,
+              "data_compliance": 0.12,
+              "horizon_turnover_proxy": 0.14,
+              "risk_control_proxy": 0.14,
+              "diversity": 0.07,
+              "explainability": 0.05
+            },
+            "source": "经验+校准"
+          },
+          "empirical": {
+            "score": 0.0,
+            "items": [],
+            "status": "missing_official_metrics"
+          },
+          "submission_checklist": {
+            "score": 50,
+            "items": [
+              {
+                "name": "official_metrics_present",
+                "passed": false,
+                "points": 15,
+                "meaning": "Official simulation metrics are required."
+              },
+              {
+                "name": "official_pass",
+                "passed": false,
+                "points": 15,
+                "meaning": "BRAIN pass/fail result."
+              },
+              {
+                "name": "economic_logic",
+                "passed": true,
+                "points": 15,
+                "meaning": "One-sentence economic/behavioral thesis."
+              },
+              {
+                "name": "data_delay_conservative",
+                "passed": true,
+                "points": 10,
+                "meaning": "Default settings use Delay 1 unless changed by user."
+              },
+              {
+                "name": "local_quality",
+                "passed": true,
+                "points": 15,
+                "meaning": "Local prefilter quality."
+              },
+              {
+                "name": "self_correlation_proxy",
+                "passed": false,
+                "points": 20,
+                "meaning": "Official/local correlation proxy."
+              },
+              {
+                "name": "diversity",
+                "passed": true,
+                "points": 10,
+                "meaning": "Avoid plain crowded templates."
+              }
+            ]
+          },
+          "confidence": null,
+          "calibration": {
+            "prior_minus_empirical": null,
+            "sample_weight": 0.25,
+            "purpose": "Track whether local priors predict official outcomes over time.",
+            "params_used": true
+          }
+        },
+        "gate": {
+          "schema_version": "production-gate-v2.1",
+          "submission_ready": false,
+          "status": "OFFICIAL_CONTEXT_WARNING",
+          "failed_reasons": [],
+          "warnings": [
+            "fields unavailable in current official context: corr_to_spx_60d, r_squared_252d",
+            "operators unavailable in current official context: ts_std",
+            "field 'corr_to_spx_60d' not in active dataset 'fundamental2'. Expression may use fields from wrong dataset."
+          ]
+        },
+        "submission": {
+          "cycle": 1
+        },
+        "lifecycle_status": "candidate_pool_retained",
+        "created_at": "2026-05-17T07:54:59.738930+00:00",
+        "pool_rank": 1,
+        "in_retained_pool": true,
+        "smart_rank_score": 73.99,
+        "cloud_correlation_risk": {
+          "level": "unknown",
+          "max_similarity": 0.0,
+          "matched_alpha_id": "",
+          "note": "cloud alpha sync unavailable"
+        }
+      },
+      {
+        "alpha_id": "alpha_539682ba6e",
+        "expression": "ts_rank(ts_rank(unremitted_foreign_earnings_value / accrued_liabilities_total, 6))",
+        "family": "momentum",
+        "hypothesis": "Hypothesis-driven: Earnings Revision Momentum — 分析师覆盖度调整后的修正信号，消除覆盖度偏差 Secondary fusion after: sharpe >= 1.25 (actual: 0.96); fitness >= 1.0 (actual: 0.75); sub_universe_sharpe >= 0.72 (actual: 0.65); official_pass: BRAIN pass/fail result.; BRAIN_CHECK:sh",
+        "data_fields": [
+          "accrued_liabilities_total",
+          "unremitted_foreign_earnings_value"
+        ],
+        "operators": [
+          "ts_rank",
+          "ts_rank"
+        ],
+        "source_tags": [
+          "hypothesis_driven",
+          "secondary_fusion"
+        ],
+        "parent_id": "alpha_e22f066454",
+        "mutation_type": "secondary_fusion",
+        "dataset_id": "",
+        "template_source": "",
+        "local_quality": {
+          "schema_version": "local-quality-v2",
+          "score": 59.0,
+          "threshold": 40.0,
+          "passed": true,
+          "reasons": [
+            "passed_local_prefilter"
+          ],
+          "field_count": 2,
+          "operator_count": 2,
+          "nesting_depth": 2
+        },
+        "validation": {},
+        "simulation_id": "",
+        "official_alpha_id": "",
+        "official_metrics": {},
+        "scorecard": {
+          "schema_version": "scorecard-v2.3",
+          "total_score": 70.0,
+          "decision_band": "optimize_before_submit",
+          "score_basis": "local_prior",
+          "local_rank_score": 70.0,
+          "layer_weights": {
+            "prior": 0.3,
+            "empirical": 0.45,
+            "checklist": 0.25
+          },
+          "prior": {
+            "score": 75.92,
+            "dimensions": {
+              "economic_logic": 92,
+              "economic_concepts": [
+                "momentum",
+                "value",
+                "growth",
+                "cross_sectional"
+              ],
+              "structure": 90.0,
+              "field_operator_support": 62.0,
+              "data_compliance": 82.0,
+              "horizon_turnover_proxy": 82.0,
+              "risk_control_proxy": 48.0,
+              "diversity": 65.0,
+              "explainability": 85.0
+            },
+            "weights": {
+              "economic_logic": 0.18,
+              "structure": 0.14,
+              "field_operator_support": 0.16,
+              "data_compliance": 0.12,
+              "horizon_turnover_proxy": 0.14,
+              "risk_control_proxy": 0.14,
+              "diversity": 0.07,
+              "explainability": 0.05
+            },
+            "source": "经验+校准"
+          },
+          "empirical": {
+            "score": 0.0,
+            "items": [],
+            "status": "missing_official_metrics"
+          },
+          "submission_checklist": {
+            "score": 50,
+            "items": [
+              {
+                "name": "official_metrics_present",
+                "passed": false,
+                "points": 15,
+                "meaning": "Official simulation metrics are required."
+              },
+              {
+                "name": "official_pass",
+                "passed": false,
+                "points": 15,
+                "meaning": "BRAIN pass/fail result."
+              },
+              {
+                "name": "economic_logic",
+                "passed": true,
+                "points": 15,
+                "meaning": "One-sentence economic/behavioral thesis."
+              },
+              {
+                "name": "data_delay_conservative",
+                "passed": true,
+                "points": 10,
+                "meaning": "Default settings use Delay 1 unless changed by user."
+              },
+              {
+                "name": "local_quality",
+                "passed": true,
+                "points": 15,
+                "meaning": "Local prefilter quality."
+              },
+              {
+                "name": "self_correlation_proxy",
+                "passed": false,
+                "points": 20,
+                "meaning": "Official/local correlation proxy."
+              },
+              {
+                "name": "diversity",
+                "passed": true,
+                "points": 10,
+                "meaning": "Avoid plain crowded templates."
+              }
+            ]
+          },
+          "confidence": null,
+          "calibration": {
+            "prior_minus_empirical": null,
+            "sample_weight": 0.25,
+            "purpose": "Track whether local priors predict official outcomes over time.",
+            "params_used": true
+          }
+        },
+        "gate": {},
+        "submission": {
+          "parent_alpha_id": "alpha_e22f066454",
+          "secondary_fusion_reason": "sharpe >= 1.25 (actual: 0.96); fitness >= 1.0 (actual: 0.75); sub_universe_sharpe >= 0.72 (actual: 0.65); official_pass: BRAIN pass/fail result.; BRAIN_CHECK:sharpe_positive:Sharpe=0.960 (below 1.25); BRAIN_CHECK:fitness_minimum:Fitness=0.7",
+          "source_official_alpha_id": "mock_alpha_0001"
+        },
+        "lifecycle_status": "secondary_fusion_pending",
+        "created_at": "2026-05-17T07:54:59.730419+00:00",
+        "pool_rank": 2,
+        "in_retained_pool": true,
+        "smart_rank_score": 70.0,
+        "cloud_correlation_risk": {
+          "level": "unknown",
+          "max_similarity": 0.0,
+          "matched_alpha_id": "",
+          "note": "cloud alpha sync unavailable"
+        }
+      },
+      {
+        "alpha_id": "alpha_49ca4e2b39",
+        "expression": "rank(-1 * log(accrued_liabilities_total) * debt_basis_spread_variable_rate)",
+        "family": "liquidity",
+        "hypothesis": "Hypothesis-driven: Liquidity Premium — 小盘+高差价交互 — 捕获规模-流动性双重折价",
+        "data_fields": [
+          "avg_daily_volume",
+          "dollar_volume"
+        ],
+        "operators": [
+          "rank",
+          "log"
+        ],
+        "source_tags": [
+          "hypothesis_driven"
+        ],
+        "parent_id": "",
+        "mutation_type": "",
+        "dataset_id": "fundamental2",
+        "template_source": "{\"mode\": \"hypothesis_driven\", \"hypothesis_id\": \"liquidity_premium\", \"hypothesis_name\": \"Liquidity Premium\", \"expression_family_id\": \"small_illiquid\", \"field_category\": \"trading_volume\", \"selected_fields\": [\"dollar_volume\", \"avg_daily_volume\"], \"region\": \"DEV\", \"universe\": \"MICRO_CAP\", \"delay\": 2, \"timestamp\": \"2026-05-17T07:54:58Z\"}",
+        "local_quality": {
+          "schema_version": "local-quality-v2",
+          "score": 59.0,
+          "threshold": 40.0,
+          "passed": true,
+          "reasons": [
+            "passed_local_prefilter"
+          ],
+          "field_count": 2,
+          "operator_count": 2,
+          "nesting_depth": 2,
+          "warnings": [
+            "fields unavailable in current official context: avg_daily_volume, dollar_volume",
+            "field 'avg_daily_volume' not in active dataset 'fundamental2'. Expression may use fields from wrong dataset."
+          ]
+        },
+        "validation": {
+          "status": "PASS",
+          "errors": [],
+          "invalid_operators": [],
+          "invalid_fields": []
+        },
+        "simulation_id": "",
+        "official_alpha_id": "",
+        "official_metrics": {},
+        "scorecard": {
+          "schema_version": "scorecard-v2.3",
+          "total_score": 68.32,
+          "decision_band": "research_only",
+          "score_basis": "local_prior",
+          "local_rank_score": 68.32,
+          "layer_weights": {
+            "prior": 0.3,
+            "empirical": 0.45,
+            "checklist": 0.25
+          },
+          "prior": {
+            "score": 73.34,
+            "dimensions": {
+              "economic_logic": 85,
+              "economic_concepts": [
+                "volatility",
+                "liquidity",
+                "cross_sectional"
+              ],
+              "structure": 90.0,
+              "field_operator_support": 66.0,
+              "data_compliance": 82.0,
+              "horizon_turnover_proxy": 68.0,
+              "risk_control_proxy": 48.0,
+              "diversity": 65.0,
+              "explainability": 85.0
+            },
+            "weights": {
+              "economic_logic": 0.18,
+              "structure": 0.14,
+              "field_operator_support": 0.16,
+              "data_compliance": 0.12,
+              "horizon_turnover_proxy": 0.14,
+              "risk_control_proxy": 0.14,
+              "diversity": 0.07,
+              "explainability": 0.05
+            },
+            "source": "经验+校准"
+          },
+          "empirical": {
+            "score": 0.0,
+            "items": [],
+            "status": "missing_official_metrics"
+          },
+          "submission_checklist": {
+            "score": 50,
+            "items": [
+              {
+                "name": "official_metrics_present",
+                "passed": false,
+                "points": 15,
+                "meaning": "Official simulation metrics are required."
+              },
+              {
+                "name": "official_pass",
+                "passed": false,
+                "points": 15,
+                "meaning": "BRAIN pass/fail result."
+              },
+              {
+                "name": "economic_logic",
+                "passed": true,
+                "points": 15,
+                "meaning": "One-sentence economic/behavioral thesis."
+              },
+              {
+                "name": "data_delay_conservative",
+                "passed": true,
+                "points": 10,
+                "meaning": "Default settings use Delay 1 unless changed by user."
+              },
+              {
+                "name": "local_quality",
+                "passed": true,
+                "points": 15,
+                "meaning": "Local prefilter quality."
+              },
+              {
+                "name": "self_correlation_proxy",
+                "passed": false,
+                "points": 20,
+                "meaning": "Official/local correlation proxy."
+              },
+              {
+                "name": "diversity",
+                "passed": true,
+                "points": 10,
+                "meaning": "Avoid plain crowded templates."
+              }
+            ]
+          },
+          "confidence": null,
+          "calibration": {
+            "prior_minus_empirical": null,
+            "sample_weight": 0.25,
+            "purpose": "Track whether local priors predict official outcomes over time.",
+            "params_used": true
+          }
+        },
+        "gate": {
+          "schema_version": "production-gate-v2.1",
+          "submission_ready": false,
+          "status": "OFFICIAL_CONTEXT_WARNING",
+          "failed_reasons": [],
+          "warnings": [
+            "fields unavailable in current official context: avg_daily_volume, dollar_volume",
+            "field 'avg_daily_volume' not in active dataset 'fundamental2'. Expression may use fields from wrong dataset."
+          ]
+        },
+        "submission": {
+          "cycle": 1
+        },
+        "lifecycle_status": "official_validation_passed",
+        "created_at": "2026-05-17T07:54:58.717960+00:00",
+        "pool_rank": 3,
+        "in_retained_pool": true,
+        "smart_rank_score": 68.32,
+        "cloud_correlation_risk": {
+          "level": "unknown",
+          "max_similarity": 0.0,
+          "matched_alpha_id": "",
+          "note": "cloud alpha sync unavailable"
+        }
+      },
+      {
+        "alpha_id": "alpha_a2a51b6ee0",
+        "expression": "rank(-1 * deferred_tax_assets_valuation_allowance_value)",
+        "family": "reversal",
+        "hypothesis": "Hypothesis-driven: Value / Reversal — 价值选股 — 低估值=高预期收益，直接取负号",
+        "data_fields": [
+          "buyback_yield",
+          "dividend_yield"
+        ],
+        "operators": [
+          "rank"
+        ],
+        "source_tags": [
+          "hypothesis_driven"
+        ],
+        "parent_id": "",
+        "mutation_type": "",
+        "dataset_id": "fundamental2",
+        "template_source": "{\"mode\": \"hypothesis_driven\", \"hypothesis_id\": \"value_reversal\", \"hypothesis_name\": \"Value / Reversal\", \"expression_family_id\": \"deep_value\", \"field_category\": \"dividend_yield\", \"selected_fields\": [\"buyback_yield\", \"dividend_yield\"], \"region\": \"EUROPE\", \"universe\": \"TOP3000\", \"delay\": 1, \"timestamp\": \"2026-05-17T07:54:59Z\"}",
+        "local_quality": {
+          "schema_version": "local-quality-v2",
+          "score": 59.0,
+          "threshold": 40.0,
+          "passed": true,
+          "reasons": [
+            "passed_local_prefilter"
+          ],
+          "field_count": 2,
+          "operator_count": 1,
+          "nesting_depth": 1,
+          "warnings": [
+            "fields unavailable in current official context: buyback_yield, dividend_yield",
+            "field 'buyback_yield' not in active dataset 'fundamental2'. Expression may use fields from wrong dataset."
+          ]
+        },
+        "validation": {
+          "status": "PASS",
+          "errors": [],
+          "invalid_operators": [],
+          "invalid_fields": []
+        },
+        "simulation_id": "",
+        "official_alpha_id": "",
+        "official_metrics": {},
+        "scorecard": {
+          "schema_version": "scorecard-v2.3",
+          "total_score": 67.91,
+          "decision_band": "research_only",
+          "score_basis": "local_prior",
+          "local_rank_score": 67.91,
+          "layer_weights": {
+            "prior": 0.3,
+            "empirical": 0.45,
+            "checklist": 0.25
+          },
+          "prior": {
+            "score": 72.7,
+            "dimensions": {
+              "economic_logic": 85,
+              "economic_concepts": [
+                "mean_reversion",
+                "value",
+                "cross_sectional"
+              ],
+              "structure": 90.0,
+              "field_operator_support": 62.0,
+              "data_compliance": 82.0,
+              "horizon_turnover_proxy": 68.0,
+              "risk_control_proxy": 48.0,
+              "diversity": 65.0,
+              "explainability": 85.0
+            },
+            "weights": {
+              "economic_logic": 0.18,
+              "structure": 0.14,
+              "field_operator_support": 0.16,
+              "data_compliance": 0.12,
+              "horizon_turnover_proxy": 0.14,
+              "risk_control_proxy": 0.14,
+              "diversity": 0.07,
+              "explainability": 0.05
+            },
+            "source": "经验+校准"
+          },
+          "empirical": {
+            "score": 0.0,
+            "items": [],
+            "status": "missing_official_metrics"
+          },
+          "submission_checklist": {
+            "score": 50,
+            "items": [
+              {
+                "name": "official_metrics_present",
+                "passed": false,
+                "points": 15,
+                "meaning": "Official simulation metrics are required."
+              },
+              {
+                "name": "official_pass",
+                "passed": false,
+                "points": 15,
+                "meaning": "BRAIN pass/fail result."
+              },
+              {
+                "name": "economic_logic",
+                "passed": true,
+                "points": 15,
+                "meaning": "One-sentence economic/behavioral thesis."
+              },
+              {
+                "name": "data_delay_conservative",
+                "passed": true,
+                "points": 10,
+                "meaning": "Default settings use Delay 1 unless changed by user."
+              },
+              {
+                "name": "local_quality",
+                "passed": true,
+                "points": 15,
+                "meaning": "Local prefilter quality."
+              },
+              {
+                "name": "self_correlation_proxy",
+                "passed": false,
+                "points": 20,
+                "meaning": "Official/local correlation proxy."
+              },
+              {
+                "name": "diversity",
+                "passed": true,
+                "points": 10,
+                "meaning": "Avoid plain crowded templates."
+              }
+            ]
+          },
+          "confidence": null,
+          "calibration": {
+            "prior_minus_empirical": null,
+            "sample_weight": 0.25,
+            "purpose": "Track whether local priors predict official outcomes over time.",
+            "params_used": true
+          }
+        },
+        "gate": {
+          "schema_version": "production-gate-v2.1",
+          "submission_ready": false,
+          "status": "OFFICIAL_CONTEXT_WARNING",
+          "failed_reasons": [],
+          "warnings": [
+            "fields unavailable in current official context: buyback_yield, dividend_yield",
+            "field 'buyback_yield' not in active dataset 'fundamental2'. Expression may use fields from wrong dataset."
+          ]
+        },
+        "submission": {
+          "cycle": 1
+        },
+        "lifecycle_status": "official_validation_passed",
+        "created_at": "2026-05-17T07:54:59.329390+00:00",
+        "pool_rank": 4,
+        "in_retained_pool": true,
+        "smart_rank_score": 67.91,
+        "cloud_correlation_risk": {
+          "level": "unknown",
+          "max_similarity": 0.0,
+          "matched_alpha_id": "",
+          "note": "cloud alpha sync unavailable"
+        }
+      },
+      {
+        "alpha_id": "alpha_9432ac0459",
+        "expression": "zscore(winsorize(group_zscore(equity_method_investment_income, sector), std=60))",
+        "family": "cross_sectional",
+        "hypothesis": "Experience-feedback: cross_sectional_0000 alpha from fundamental2",
+        "data_fields": [],
+        "operators": [
+          "zscore",
+          "winsorize",
+          "group_zscore"
+        ],
+        "source_tags": [
+          "experience_feedback"
+        ],
+        "parent_id": "",
+        "mutation_type": "",
+        "dataset_id": "fundamental2",
+        "template_source": "{\"mode\": \"experience_feedback\", \"hypothesis_id\": \"cross_sectional\", \"hypothesis_name\": \"Experience-biased cross_sectional\", \"expression_family_id\": \"experience_pattern\", \"field_category\": \"experience_feedback\", \"selected_fields\": [], \"region\": \"USA\", \"universe\": \"TOP3000\", \"delay\": 1, \"timestamp\": \"2026-05-17T07:54:58Z\"}",
+        "local_quality": {
+          "schema_version": "local-quality-v2",
+          "score": 59.0,
+          "threshold": 40.0,
+          "passed": true,
+          "reasons": [
+            "passed_local_prefilter"
+          ],
+          "field_count": 2,
+          "operator_count": 3,
+          "nesting_depth": 3
+        },
+        "validation": {
+          "status": "PASS",
+          "errors": [],
+          "invalid_operators": [],
+          "invalid_fields": []
+        },
+        "simulation_id": "",
+        "official_alpha_id": "",
+        "official_metrics": {},
+        "scorecard": {
+          "schema_version": "scorecard-v2.3",
+          "total_score": 67.14,
+          "decision_band": "research_only",
+          "score_basis": "local_prior",
+          "local_rank_score": 67.14,
+          "layer_weights": {
+            "prior": 0.3,
+            "empirical": 0.45,
+            "checklist": 0.25
+          },
+          "prior": {
+            "score": 71.52,
+            "dimensions": {
+              "economic_logic": 92,
+              "economic_concepts": [
+                "mean_reversion",
+                "quality",
+                "volatility",
+                "risk_management",
+                "cross_sectional"
+              ],
+              "structure": 90.0,
+              "field_operator_support": 54.0,
+              "data_compliance": 35.0,
+              "horizon_turnover_proxy": 82.0,
+              "risk_control_proxy": 66.0,
+              "diversity": 65.0,
+              "explainability": 85.0
+            },
+            "weights": {
+              "economic_logic": 0.18,
+              "structure": 0.14,
+              "field_operator_support": 0.16,
+              "data_compliance": 0.12,
+              "horizon_turnover_proxy": 0.14,
+              "risk_control_proxy": 0.14,
+              "diversity": 0.07,
+              "explainability": 0.05
+            },
+            "source": "经验+校准"
+          },
+          "empirical": {
+            "score": 0.0,
+            "items": [],
+            "status": "missing_official_metrics"
+          },
+          "submission_checklist": {
+            "score": 50,
+            "items": [
+              {
+                "name": "official_metrics_present",
+                "passed": false,
+                "points": 15,
+                "meaning": "Official simulation metrics are required."
+              },
+              {
+                "name": "official_pass",
+                "passed": false,
+                "points": 15,
+                "meaning": "BRAIN pass/fail result."
+              },
+              {
+                "name": "economic_logic",
+                "passed": true,
+                "points": 15,
+                "meaning": "One-sentence economic/behavioral thesis."
+              },
+              {
+                "name": "data_delay_conservative",
+                "passed": true,
+                "points": 10,
+                "meaning": "Default settings use Delay 1 unless changed by user."
+              },
+              {
+                "name": "local_quality",
+                "passed": true,
+                "points": 15,
+                "meaning": "Local prefilter quality."
+              },
+              {
+                "name": "self_correlation_proxy",
+                "passed": false,
+                "points": 20,
+                "meaning": "Official/local correlation proxy."
+              },
+              {
+                "name": "diversity",
+                "passed": true,
+                "points": 10,
+                "meaning": "Avoid plain crowded templates."
+              }
+            ]
+          },
+          "confidence": null,
+          "calibration": {
+            "prior_minus_empirical": null,
+            "sample_weight": 0.25,
+            "purpose": "Track whether local priors predict official outcomes over time.",
+            "params_used": true
+          }
+        },
+        "gate": {},
+        "submission": {
+          "cycle": 1
+        },
+        "lifecycle_status": "official_validation_passed",
+        "created_at": "2026-05-17T07:54:58.721466+00:00",
+        "pool_rank": 5,
+        "in_retained_pool": true,
+        "smart_rank_score": 67.14,
+        "cloud_correlation_risk": {
+          "level": "unknown",
+          "max_similarity": 0.0,
+          "matched_alpha_id": "",
+          "note": "cloud alpha sync unavailable"
+        }
+      },
+      {
+        "alpha_id": "alpha_6092034049",
+        "expression": "winsorize(normalize(ts_corr(annual_deferred_income_tax_expense, returns, 40)), std=4)",
+        "family": "liquidity",
+        "hypothesis": "Experience-feedback: liquidity_0000 alpha from fundamental2",
+        "data_fields": [],
+        "operators": [
+          "winsorize",
+          "normalize",
+          "ts_corr"
+        ],
+        "source_tags": [
+          "experience_feedback"
+        ],
+        "parent_id": "",
+        "mutation_type": "",
+        "dataset_id": "fundamental2",
+        "template_source": "{\"mode\": \"experience_feedback\", \"hypothesis_id\": \"liquidity\", \"hypothesis_name\": \"Experience-biased liquidity\", \"expression_family_id\": \"experience_pattern\", \"field_category\": \"experience_feedback\", \"selected_fields\": [], \"region\": \"USA\", \"universe\": \"TOP3000\", \"delay\": 1, \"timestamp\": \"2026-05-17T07:54:59Z\"}",
+        "local_quality": {
+          "schema_version": "local-quality-v2",
+          "score": 59.0,
+          "threshold": 40.0,
+          "passed": true,
+          "reasons": [
+            "passed_local_prefilter"
+          ],
+          "field_count": 2,
+          "operator_count": 3,
+          "nesting_depth": 3
+        },
+        "validation": {
+          "status": "PASS",
+          "errors": [],
+          "invalid_operators": [],
+          "invalid_fields": []
+        },
+        "simulation_id": "",
+        "official_alpha_id": "",
+        "official_metrics": {},
+        "scorecard": {
+          "schema_version": "scorecard-v2.3",
+          "total_score": 67.14,
+          "decision_band": "research_only",
+          "score_basis": "local_prior",
+          "local_rank_score": 67.14,
+          "layer_weights": {
+            "prior": 0.3,
+            "empirical": 0.45,
+            "checklist": 0.25
+          },
+          "prior": {
+            "score": 71.52,
+            "dimensions": {
+              "economic_logic": 92,
+              "economic_concepts": [
+                "quality",
+                "volatility",
+                "liquidity",
+                "risk_management"
+              ],
+              "structure": 90.0,
+              "field_operator_support": 54.0,
+              "data_compliance": 35.0,
+              "horizon_turnover_proxy": 82.0,
+              "risk_control_proxy": 66.0,
+              "diversity": 65.0,
+              "explainability": 85.0
+            },
+            "weights": {
+              "economic_logic": 0.18,
+              "structure": 0.14,
+              "field_operator_support": 0.16,
+              "data_compliance": 0.12,
+              "horizon_turnover_proxy": 0.14,
+              "risk_control_proxy": 0.14,
+              "diversity": 0.07,
+              "explainability": 0.05
+            },
+            "source": "经验+校准"
+          },
+          "empirical": {
+            "score": 0.0,
+            "items": [],
+            "status": "missing_official_metrics"
+          },
+          "submission_checklist": {
+            "score": 50,
+            "items": [
+              {
+                "name": "official_metrics_present",
+                "passed": false,
+                "points": 15,
+                "meaning": "Official simulation metrics are required."
+              },
+              {
+                "name": "official_pass",
+                "passed": false,
+                "points": 15,
+                "meaning": "BRAIN pass/fail result."
+              },
+              {
+                "name": "economic_logic",
+                "passed": true,
+                "points": 15,
+                "meaning": "One-sentence economic/behavioral thesis."
+              },
+              {
+                "name": "data_delay_conservative",
+                "passed": true,
+                "points": 10,
+                "meaning": "Default settings use Delay 1 unless changed by user."
+              },
+              {
+                "name": "local_quality",
+                "passed": true,
+                "points": 15,
+                "meaning": "Local prefilter quality."
+              },
+              {
+                "name": "self_correlation_proxy",
+                "passed": false,
+                "points": 20,
+                "meaning": "Official/local correlation proxy."
+              },
+              {
+                "name": "diversity",
+                "passed": true,
+                "points": 10,
+                "meaning": "Avoid plain crowded templates."
+              }
+            ]
+          },
+          "confidence": null,
+          "calibration": {
+            "prior_minus_empirical": null,
+            "sample_weight": 0.25,
+            "purpose": "Track whether local priors predict official outcomes over time.",
+            "params_used": true
+          }
+        },
+        "gate": {},
+        "submission": {
+          "cycle": 1
+        },
+        "lifecycle_status": "official_validation_passed",
+        "created_at": "2026-05-17T07:54:59.326887+00:00",
+        "pool_rank": 6,
+        "in_retained_pool": true,
+        "smart_rank_score": 67.14,
+        "cloud_correlation_risk": {
+          "level": "unknown",
+          "max_similarity": 0.0,
+          "matched_alpha_id": "",
+          "note": "cloud alpha sync unavailable"
+        }
+      },
+      {
+        "alpha_id": "alpha_796cb5a532",
+        "expression": "winsorize(normalize(if_else(greater(ts_delta(option_awards_granted_count, 120), 0), option_awards_granted_count, 0)), std=5)",
+        "family": "conditional",
+        "hypothesis": "Experience-feedback: conditional_0000 alpha from fundamental2",
+        "data_fields": [],
+        "operators": [
+          "winsorize",
+          "normalize",
+          "if_else",
+          "greater",
+          "ts_delta"
+        ],
+        "source_tags": [
+          "experience_feedback"
+        ],
+        "parent_id": "",
+        "mutation_type": "",
+        "dataset_id": "fundamental2",
+        "template_source": "{\"mode\": \"experience_feedback\", \"hypothesis_id\": \"conditional\", \"hypothesis_name\": \"Experience-biased conditional\", \"expression_family_id\": \"experience_pattern\", \"field_category\": \"experience_feedback\", \"selected_fields\": [], \"region\": \"USA\", \"universe\": \"TOP3000\", \"delay\": 1, \"timestamp\": \"2026-05-17T07:54:59Z\"}",
+        "local_quality": {
+          "schema_version": "local-quality-v2",
+          "score": 57.0,
+          "threshold": 40.0,
+          "passed": true,
+          "reasons": [
+            "passed_local_prefilter"
+          ],
+          "field_count": 1,
+          "operator_count": 5,
+          "nesting_depth": 5
+        },
+        "validation": {},
+        "simulation_id": "",
+        "official_alpha_id": "",
+        "official_metrics": {},
+        "scorecard": {
+          "schema_version": "scorecard-v2.3",
+          "total_score": 66.54,
+          "decision_band": "research_only",
+          "score_basis": "local_prior",
+          "local_rank_score": 66.54,
+          "layer_weights": {
+            "prior": 0.3,
+            "empirical": 0.45,
+            "checklist": 0.25
+          },
+          "prior": {
+            "score": 71.68,
+            "dimensions": {
+              "economic_logic": 92,
+              "economic_concepts": [
+                "momentum",
+                "quality",
+                "volatility",
+                "risk_management"
+              ],
+              "structure": 82.0,
+              "field_operator_support": 62.0,
+              "data_compliance": 35.0,
+              "horizon_turnover_proxy": 82.0,
+              "risk_control_proxy": 66.0,
+              "diversity": 65.0,
+              "explainability": 85.0
+            },
+            "weights": {
+              "economic_logic": 0.18,
+              "structure": 0.14,
+              "field_operator_support": 0.16,
+              "data_compliance": 0.12,
+              "horizon_turnover_proxy": 0.14,
+              "risk_control_proxy": 0.14,
+              "diversity": 0.07,
+              "explainability": 0.05
+            },
+            "source": "经验+校准"
+          },
+          "empirical": {
+            "score": 0.0,
+            "items": [],
+            "status": "missing_official_metrics"
+          },
+          "submission_checklist": {
+            "score": 50,
+            "items": [
+              {
+                "name": "official_metrics_present",
+                "passed": false,
+                "points": 15,
+                "meaning": "Official simulation metrics are required."
+              },
+              {
+                "name": "official_pass",
+                "passed": false,
+                "points": 15,
+                "meaning": "BRAIN pass/fail result."
+              },
+              {
+                "name": "economic_logic",
+                "passed": true,
+                "points": 15,
+                "meaning": "One-sentence economic/behavioral thesis."
+              },
+              {
+                "name": "data_delay_conservative",
+                "passed": true,
+                "points": 10,
+                "meaning": "Default settings use Delay 1 unless changed by user."
+              },
+              {
+                "name": "local_quality",
+                "passed": true,
+                "points": 15,
+                "meaning": "Local prefilter quality."
+              },
+              {
+                "name": "self_correlation_proxy",
+                "passed": false,
+                "points": 20,
+                "meaning": "Official/local correlation proxy."
+              },
+              {
+                "name": "diversity",
+                "passed": true,
+                "points": 10,
+                "meaning": "Avoid plain crowded templates."
+              }
+            ]
+          },
+          "confidence": null,
+          "calibration": {
+            "prior_minus_empirical": null,
+            "sample_weight": 0.25,
+            "purpose": "Track whether local priors predict official outcomes over time.",
+            "params_used": true
+          }
+        },
+        "gate": {},
+        "submission": {
+          "cycle": 1
+        },
+        "lifecycle_status": "candidate_pool_retained",
+        "created_at": "2026-05-17T07:54:59.737931+00:00",
+        "pool_rank": 7,
+        "in_retained_pool": true,
+        "smart_rank_score": 66.54,
+        "cloud_correlation_risk": {
+          "level": "unknown",
+          "max_similarity": 0.0,
+          "matched_alpha_id": "",
+          "note": "cloud alpha sync unavailable"
+        }
+      },
+      {
+        "alpha_id": "alpha_9ea22976a8",
+        "expression": "zscore(winsorize(ts_sum(equity_awards_granted_non_option_period, 15)) * winsorize(ts_sum(future_minimum_operating_lease_payments, 120)))",
+        "family": "hybrid",
+        "hypothesis": "Experience-feedback: hybrid_0000 alpha from fundamental2",
+        "data_fields": [],
+        "operators": [
+          "zscore",
+          "winsorize",
+          "ts_sum",
+          "winsorize",
+          "ts_sum"
+        ],
+        "source_tags": [
+          "experience_feedback"
+        ],
+        "parent_id": "",
+        "mutation_type": "",
+        "dataset_id": "fundamental2",
+        "template_source": "{\"mode\": \"experience_feedback\", \"hypothesis_id\": \"hybrid\", \"hypothesis_name\": \"Experience-biased hybrid\", \"expression_family_id\": \"experience_pattern\", \"field_category\": \"experience_feedback\", \"selected_fields\": [], \"region\": \"USA\", \"universe\": \"TOP3000\", \"delay\": 1, \"timestamp\": \"2026-05-17T07:54:58Z\"}",
+        "local_quality": {
+          "schema_version": "local-quality-v2",
+          "score": 59.0,
+          "threshold": 40.0,
+          "passed": true,
+          "reasons": [
+            "passed_local_prefilter"
+          ],
+          "field_count": 2,
+          "operator_count": 5,
+          "nesting_depth": 3
+        },
+        "validation": {},
+        "simulation_id": "",
+        "official_alpha_id": "",
+        "official_metrics": {},
+        "scorecard": {
+          "schema_version": "scorecard-v2.3",
+          "total_score": 65.96,
+          "decision_band": "research_only",
+          "score_basis": "local_prior",
+          "local_rank_score": 65.96,
+          "layer_weights": {
+            "prior": 0.3,
+            "empirical": 0.45,
+            "checklist": 0.25
+          },
+          "prior": {
+            "score": 69.7,
+            "dimensions": {
+              "economic_logic": 85,
+              "economic_concepts": [
+                "mean_reversion",
+                "quality",
+                "risk_management"
+              ],
+              "structure": 82.0,
+              "field_operator_support": 54.0,
+              "data_compliance": 35.0,
+              "horizon_turnover_proxy": 68.0,
+              "risk_control_proxy": 84.0,
+              "diversity": 65.0,
+              "explainability": 85.0
+            },
+            "weights": {
+              "economic_logic": 0.18,
+              "structure": 0.14,
+              "field_operator_support": 0.16,
+              "data_compliance": 0.12,
+              "horizon_turnover_proxy": 0.14,
+              "risk_control_proxy": 0.14,
+              "diversity": 0.07,
+              "explainability": 0.05
+            },
+            "source": "经验+校准"
+          },
+          "empirical": {
+            "score": 0.0,
+            "items": [],
+            "status": "missing_official_metrics"
+          },
+          "submission_checklist": {
+            "score": 50,
+            "items": [
+              {
+                "name": "official_metrics_present",
+                "passed": false,
+                "points": 15,
+                "meaning": "Official simulation metrics are required."
+              },
+              {
+                "name": "official_pass",
+                "passed": false,
+                "points": 15,
+                "meaning": "BRAIN pass/fail result."
+              },
+              {
+                "name": "economic_logic",
+                "passed": true,
+                "points": 15,
+                "meaning": "One-sentence economic/behavioral thesis."
+              },
+              {
+                "name": "data_delay_conservative",
+                "passed": true,
+                "points": 10,
+                "meaning": "Default settings use Delay 1 unless changed by user."
+              },
+              {
+                "name": "local_quality",
+                "passed": true,
+                "points": 15,
+                "meaning": "Local prefilter quality."
+              },
+              {
+                "name": "self_correlation_proxy",
+                "passed": false,
+                "points": 20,
+                "meaning": "Official/local correlation proxy."
+              },
+              {
+                "name": "diversity",
+                "passed": true,
+                "points": 10,
+                "meaning": "Avoid plain crowded templates."
+              }
+            ]
+          },
+          "confidence": null,
+          "calibration": {
+            "prior_minus_empirical": null,
+            "sample_weight": 0.25,
+            "purpose": "Track whether local priors predict official outcomes over time.",
+            "params_used": true
+          }
+        },
+        "gate": {},
+        "submission": {
+          "cycle": 1
+        },
+        "lifecycle_status": "candidate_pool_retained",
+        "created_at": "2026-05-17T07:54:58.945507+00:00",
+        "pool_rank": 8,
+        "in_retained_pool": true,
+        "smart_rank_score": 65.96,
+        "cloud_correlation_risk": {
+          "level": "unknown",
+          "max_similarity": 0.0,
+          "matched_alpha_id": "",
+          "note": "cloud alpha sync unavailable"
+        }
+      },
+      {
+        "alpha_id": "alpha_08e4f2672b",
+        "expression": "normalize(winsorize(ts_sum(recurring_assets_fair_value_lvl2, 30)))",
+        "family": "quality",
+        "hypothesis": "Random exploration quality alpha from fundamental2",
+        "data_fields": [],
+        "operators": [
+          "normalize",
+          "winsorize",
+          "ts_sum"
+        ],
+        "source_tags": [
+          "random_exploration"
+        ],
+        "parent_id": "",
+        "mutation_type": "",
+        "dataset_id": "fundamental2",
+        "template_source": "{\"mode\": \"random_exploration\", \"hypothesis_id\": \"random\", \"hypothesis_name\": \"Random Exploration\", \"expression_family_id\": \"quality\", \"field_category\": \"random_exploration\", \"selected_fields\": [], \"region\": \"USA\", \"universe\": \"TOP3000\", \"delay\": 1, \"timestamp\": \"2026-05-17T07:54:58Z\"}",
+        "local_quality": {
+          "schema_version": "local-quality-v2",
+          "score": 57.0,
+          "threshold": 40.0,
+          "passed": true,
+          "reasons": [
+            "passed_local_prefilter"
+          ],
+          "field_count": 1,
+          "operator_count": 3,
+          "nesting_depth": 3
+        },
+        "validation": {},
+        "simulation_id": "",
+        "official_alpha_id": "",
+        "official_metrics": {},
+        "scorecard": {
+          "schema_version": "scorecard-v2.3",
+          "total_score": 65.62,
+          "decision_band": "research_only",
+          "score_basis": "local_prior",
+          "local_rank_score": 65.62,
+          "layer_weights": {
+            "prior": 0.3,
+            "empirical": 0.45,
+            "checklist": 0.25
+          },
+          "prior": {
+            "score": 70.26,
+            "dimensions": {
+              "economic_logic": 85,
+              "economic_concepts": [
+                "value",
+                "quality",
+                "risk_management"
+              ],
+              "structure": 90.0,
+              "field_operator_support": 54.0,
+              "data_compliance": 35.0,
+              "horizon_turnover_proxy": 82.0,
+              "risk_control_proxy": 66.0,
+              "diversity": 65.0,
+              "explainability": 85.0
+            },
+            "weights": {
+              "economic_logic": 0.18,
+              "structure": 0.14,
+              "field_operator_support": 0.16,
+              "data_compliance": 0.12,
+              "horizon_turnover_proxy": 0.14,
+              "risk_control_proxy": 0.14,
+              "diversity": 0.07,
+              "explainability": 0.05
+            },
+            "source": "经验+校准"
+          },
+          "empirical": {
+            "score": 0.0,
+            "items": [],
+            "status": "missing_official_metrics"
+          },
+          "submission_checklist": {
+            "score": 50,
+            "items": [
+              {
+                "name": "official_metrics_present",
+                "passed": false,
+                "points": 15,
+                "meaning": "Official simulation metrics are required."
+              },
+              {
+                "name": "official_pass",
+                "passed": false,
+                "points": 15,
+                "meaning": "BRAIN pass/fail result."
+              },
+              {
+                "name": "economic_logic",
+                "passed": true,
+                "points": 15,
+                "meaning": "One-sentence economic/behavioral thesis."
+              },
+              {
+                "name": "data_delay_conservative",
+                "passed": true,
+                "points": 10,
+                "meaning": "Default settings use Delay 1 unless changed by user."
+              },
+              {
+                "name": "local_quality",
+                "passed": true,
+                "points": 15,
+                "meaning": "Local prefilter quality."
+              },
+              {
+                "name": "self_correlation_proxy",
+                "passed": false,
+                "points": 20,
+                "meaning": "Official/local correlation proxy."
+              },
+              {
+                "name": "diversity",
+                "passed": true,
+                "points": 10,
+                "meaning": "Avoid plain crowded templates."
+              }
+            ]
+          },
+          "confidence": null,
+          "calibration": {
+            "prior_minus_empirical": null,
+            "sample_weight": 0.25,
+            "purpose": "Track whether local priors predict official outcomes over time.",
+            "params_used": true
+          }
+        },
+        "gate": {},
+        "submission": {
+          "cycle": 1
+        },
+        "lifecycle_status": "candidate_pool_retained",
+        "created_at": "2026-05-17T07:54:58.941507+00:00",
+        "pool_rank": 9,
+        "in_retained_pool": true,
+        "smart_rank_score": 65.62,
+        "cloud_correlation_risk": {
+          "level": "unknown",
+          "max_similarity": 0.0,
+          "matched_alpha_id": "",
+          "note": "cloud alpha sync unavailable"
+        }
+      },
+      {
+        "alpha_id": "alpha_b83ad7b55a",
+        "expression": "rank(benefit_obligation_interest_cost_change)",
+        "family": "hybrid",
+        "hypothesis": "Hypothesis-driven: Sentiment / Short Interest — High short interest as a negative signal — informed shorts predict underperformance",
+        "data_fields": [
+          "short_interest_pct",
+          "short_interest_to_float"
+        ],
+        "operators": [
+          "rank"
+        ],
+        "source_tags": [
+          "hypothesis_driven"
+        ],
+        "parent_id": "",
+        "mutation_type": "",
+        "dataset_id": "fundamental2",
+        "template_source": "{\"mode\": \"hypothesis_driven\", \"hypothesis_id\": \"sentiment_short_interest\", \"hypothesis_name\": \"Sentiment / Short Interest\", \"expression_family_id\": \"high_short_negative\", \"field_category\": \"short_interest_ratio\", \"selected_fields\": [\"short_interest_pct\", \"short_interest_to_float\"], \"region\": \"USA\", \"universe\": \"SMID_CAP\", \"delay\": 2, \"timestamp\": \"2026-05-17T07:54:59Z\"}",
+        "local_quality": {
+          "schema_version": "local-quality-v2",
+          "score": 59.0,
+          "threshold": 40.0,
+          "passed": true,
+          "reasons": [
+            "passed_local_prefilter"
+          ],
+          "field_count": 2,
+          "operator_count": 1,
+          "nesting_depth": 1,
+          "warnings": [
+            "fields unavailable in current official context: short_interest_pct, short_interest_to_float",
+            "field 'short_interest_pct' not in active dataset 'fundamental2'. Expression may use fields from wrong dataset."
+          ]
+        },
+        "validation": {},
+        "simulation_id": "",
+        "official_alpha_id": "",
+        "official_metrics": {},
+        "scorecard": {
+          "schema_version": "scorecard-v2.3",
+          "total_score": 64.28,
+          "decision_band": "research_only",
+          "score_basis": "local_prior",
+          "local_rank_score": 64.28,
+          "layer_weights": {
+            "prior": 0.3,
+            "empirical": 0.45,
+            "checklist": 0.25
+          },
+          "prior": {
+            "score": 67.12,
+            "dimensions": {
+              "economic_logic": 68,
+              "economic_concepts": [
+                "cross_sectional"
+              ],
+              "structure": 90.0,
+              "field_operator_support": 62.0,
+              "data_compliance": 82.0,
+              "horizon_turnover_proxy": 50.0,
+              "risk_control_proxy": 48.0,
+              "diversity": 65.0,
+              "explainability": 85.0
+            },
+            "weights": {
+              "economic_logic": 0.18,
+              "structure": 0.14,
+              "field_operator_support": 0.16,
+              "data_compliance": 0.12,
+              "horizon_turnover_proxy": 0.14,
+              "risk_control_proxy": 0.14,
+              "diversity": 0.07,
+              "explainability": 0.05
+            },
+            "source": "经验+校准"
+          },
+          "empirical": {
+            "score": 0.0,
+            "items": [],
+            "status": "missing_official_metrics"
+          },
+          "submission_checklist": {
+            "score": 50,
+            "items": [
+              {
+                "name": "official_metrics_present",
+                "passed": false,
+                "points": 15,
+                "meaning": "Official simulation metrics are required."
+              },
+              {
+                "name": "official_pass",
+                "passed": false,
+                "points": 15,
+                "meaning": "BRAIN pass/fail result."
+              },
+              {
+                "name": "economic_logic",
+                "passed": true,
+                "points": 15,
+                "meaning": "One-sentence economic/behavioral thesis."
+              },
+              {
+                "name": "data_delay_conservative",
+                "passed": true,
+                "points": 10,
+                "meaning": "Default settings use Delay 1 unless changed by user."
+              },
+              {
+                "name": "local_quality",
+                "passed": true,
+                "points": 15,
+                "meaning": "Local prefilter quality."
+              },
+              {
+                "name": "self_correlation_proxy",
+                "passed": false,
+                "points": 20,
+                "meaning": "Official/local correlation proxy."
+              },
+              {
+                "name": "diversity",
+                "passed": true,
+                "points": 10,
+                "meaning": "Avoid plain crowded templates."
+              }
+            ]
+          },
+          "confidence": null,
+          "calibration": {
+            "prior_minus_empirical": null,
+            "sample_weight": 0.25,
+            "purpose": "Track whether local priors predict official outcomes over time.",
+            "params_used": true
+          }
+        },
+        "gate": {
+          "schema_version": "production-gate-v2.1",
+          "submission_ready": false,
+          "status": "OFFICIAL_CONTEXT_WARNING",
+          "failed_reasons": [],
+          "warnings": [
+            "fields unavailable in current official context: short_interest_pct, short_interest_to_float",
+            "field 'short_interest_pct' not in active dataset 'fundamental2'. Expression may use fields from wrong dataset."
+          ]
+        },
+        "submission": {
+          "cycle": 1
+        },
+        "lifecycle_status": "candidate_pool_retained",
+        "created_at": "2026-05-17T07:54:59.328887+00:00",
+        "pool_rank": 10,
+        "in_retained_pool": true,
+        "smart_rank_score": 64.28,
+        "cloud_correlation_risk": {
+          "level": "unknown",
+          "max_similarity": 0.0,
+          "matched_alpha_id": "",
+          "note": "cloud alpha sync unavailable"
+        }
+      }
+    ],
+    "passed_candidates": [],
+    "pending_backtest_candidates": [],
+    "official_call_policy": {
+      "local_first": true,
+      "retained_alpha_pool_size": 10,
+      "official_backtest_batch_size": 3,
+      "max_official_validations_per_cycle": 10,
+      "max_official_simulations_per_cycle": 3,
+      "max_official_concurrent_simulations": 3,
+      "max_simulation_retries": 1,
+      "enable_secondary_fusion": true,
+      "poll_interval_seconds": 6.0,
+      "poll_attempt_limit": null,
+      "min_prior_score_for_official_validation": 60.0,
+      "min_prior_score_for_official_simulation": 70.0
+    },
+    "can_complete_goal": {
+      "local_production_evaluation_ranking_loop": true,
+      "retains_top_10_before_backtest": true,
+      "submits_top_3_backtests_per_cycle": true,
+      "waits_for_backtest_results": true,
+      "screen_progress_updates": true,
+      "caveat": "Official rate limits can still defer a batch; deferred candidates are not treated as alpha-quality failures."
+    },
+    "user_profile": {
+      "tier": "Consultant",
+      "level": 3,
+      "points": 1250.0,
+      "username": "mock_consultant@brain.alpha",
+      "raw": {
+        "tier": "Consultant",
+        "level": 3,
+        "points": 1250.0,
+        "username": "mock_consultant@brain.alpha"
+      }
+    },
+    "score_distribution": {
+      "optimize (70-84)": 2,
+      "research (50-69)": 8
+    },
+    "gate_summary": {
+      "local_prefilter": {
+        "pass": 0,
+        "fail": 0,
+        "block": 0
+      },
+      "expression_validate": {
+        "pass": 0,
+        "fail": 0,
+        "block": 0
+      },
+      "official_simulation": {
+        "pass": 0,
+        "fail": 0,
+        "block": 0
+      },
+      "quality_gate": {
+        "pass": 0,
+        "fail": 0,
+        "block": 0
+      }
+    },
+    "auto_submitted": 0
+  },
+  "checkpoint_path": "data\\checkpoints\\run_0b650422c9.checkpoint.json"
+}

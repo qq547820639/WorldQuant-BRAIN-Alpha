@@ -1,0 +1,23 @@
+{
+  "id": "viBBl8g04Rb9EqMQJM4Rab",
+  "type": "REGULAR",
+  "settings": {
+    "instrumentType": "EQUITY",
+    "region": "USA",
+    "universe": "TOP3000",
+    "delay": 1,
+    "decay": 10,
+    "neutralization": "SUBINDUSTRY",
+    "truncation": 0.05,
+    "pasteurization": "ON",
+    "unitHandling": "VERIFY",
+    "nanHandling": "ON",
+    "maxTrade": "OFF",
+    "maxPosition": "OFF",
+    "language": "FASTEXPR",
+    "visualization": false
+  },
+  "regular": "-1 * sales_estimate_dispersion",
+  "status": "COMPLETE",
+  "alpha": "6XRRXlYY"
+}

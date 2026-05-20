@@ -1,0 +1,1328 @@
+﻿<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <link rel="preconnect" href="https://api.fontshare.com" crossorigin>
+  <link href="https://api.fontshare.com/v2/css?f[]=satoshi@700,600,500,400&display=swap" rel="stylesheet">
+  <script src="https://code.iconify.design/iconify-icon/1.0.7/iconify-icon.min.js"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BRAIN Alpha Ops</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --bg: #f5f7fa;
+      --panel: #ffffff;
+      --soft: #f8fafc;
+      --text: #172033;
+      --muted: #64748b;
+      --line: #d7dee8;
+      --accent: #0f766e;
+      --accent-soft: #ccfbf1;
+      --good: #15803d;
+      --warn: #a16207;
+      --bad: #b91c1c;
+      --blue: #2563eb;
+      --info: #2563eb;
+      --blue-soft: #dbeafe;
+      --color-info: #2563eb;
+      --color-info-soft: #dbeafe;
+      --amber-soft: #fef3c7;
+      --red-soft: #fee2e2;
+      --shadow: 0 14px 36px rgba(15, 23, 42, 0.08);
+      --shadow-soft: 0 8px 22px rgba(15, 23, 42, 0.06);
+      --surface: #ffffff;
+      --surface-alt: #f8fafc;
+      --accent-hover: #0d645d;
+      --accent-border: #0f766e;
+      --good-soft: #dcfce7;
+      --warn-soft: #fef3c7;
+      --bad-soft: #fee2e2;
+      --info-soft: #dbeafe;
+      --ring: rgba(45, 212, 191, 0.18);
+    }
+    [data-theme="dark"] {
+      --bg: #0d1117;
+      --panel: #161b22;
+      --soft: #1c2128;
+      --text: #e6edf3;
+      --muted: #8b949e;
+      --line: #30363d;
+      --accent: #14b8a6;
+      --accent-soft: #042f2e;
+      --good: #22c55e;
+      --warn: #f59e0b;
+      --bad: #ef4444;
+      --blue: #3b82f6;
+      --info: #3b82f6;
+      --blue-soft: #172554;
+      --color-info: #3b82f6;
+      --color-info-soft: #172554;
+      --amber-soft: #422006;
+      --red-soft: #450a0a;
+      --shadow: 0 14px 36px rgba(0, 0, 0, 0.5);
+      --shadow-soft: 0 8px 22px rgba(0, 0, 0, 0.4);
+      --surface: #161b22;
+      --surface-alt: #1c2128;
+      --accent-hover: #0d9488;
+      --accent-border: #14b8a6;
+      --good-soft: #052e16;
+      --warn-soft: #422006;
+      --bad-soft: #450a0a;
+      --info-soft: #172554;
+      --ring: rgba(20, 184, 166, 0.25);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--text);
+      background: var(--bg);
+      font-family: "Satoshi", "Inter", "Microsoft YaHei", "Segoe UI", system-ui, sans-serif;
+      letter-spacing: 0;
+      overflow: auto;
+    }
+    header {
+      min-height: 66px;
+      padding: 12px 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      background: var(--panel);
+      border-bottom: 1px solid var(--line);
+      box-shadow: 0 1px 0 rgba(15, 23, 42, 0.04);
+    }
+    h1, h2, p { margin: 0; }
+    h1 { font-size: 20px; font-weight: 900; }
+    h2 { font-size: 15px; font-weight: 850; }
+    main {
+      display: grid;
+      grid-template-columns: 360px minmax(0, 1fr);
+      gap: 12px;
+      padding: 12px;
+      min-height: calc(100vh - 66px);
+      align-items: start;
+    }
+    aside, section {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: var(--shadow-soft);
+    }
+    aside { padding: 14px; overflow: auto; max-height: calc(100vh - 90px); position: sticky; top: 12px; }
+    section {
+      min-width: 0;
+      min-height: calc(100vh - 90px);
+      display: flex;
+      flex-direction: column;
+      overflow: visible;
+    }
+    label {
+      display: block;
+      margin: 10px 0 5px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+    }
+    input, select, textarea {
+      width: 100%;
+      min-height: 34px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 0 9px;
+      color: var(--text);
+      background: var(--panel);
+      font: inherit;
+      font-size: 13px;
+      outline: none;
+      transition: border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
+    }
+    textarea {
+      min-height: 72px;
+      padding: 8px 9px;
+      resize: vertical;
+      line-height: 1.35;
+    }
+    input:focus, select:focus, textarea:focus {
+      border-color: #2dd4bf;
+      box-shadow: 0 0 0 3px rgba(45, 212, 191, 0.18);
+    }
+    button {
+      min-height: 34px;
+      border: 1px solid var(--accent);
+      border-radius: 6px;
+      background: var(--accent);
+      color: #fff;
+      font: inherit;
+      font-size: 13px;
+      font-weight: 800;
+      cursor: pointer;
+      box-shadow: 0 1px 0 rgba(15, 23, 42, 0.06);
+      transition: background 160ms ease, border-color 160ms ease, color 160ms ease, transform 120ms ease, box-shadow 160ms ease;
+    }
+    button:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 8px 18px rgba(15, 118, 110, 0.18); }
+    button:active:not(:disabled) { transform: translateY(0); }
+    button.full { width: 100%; margin-top: 10px; }
+    button.secondary { background: var(--panel); color: var(--text); border-color: var(--line); }
+    button.secondary:hover:not(:disabled) { border-color: var(--muted); box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08); }
+    button.stop { background: var(--panel); color: var(--bad); border-color: var(--bad-soft); }
+    button.small { min-height: 28px; padding: 0 8px; font-size: 12px; }
+    button:disabled { opacity: 0.62; cursor: default; }
+    .run-actions {
+      margin: 10px 0 6px;
+      padding: 10px;
+      border: 1px solid #99f6e4;
+      border-radius: 8px;
+      background: #f0fdfa;
+    }
+    .run-actions .subhead { color: #134e4a; }
+    .run-actions button.full { margin-top: 8px; }
+    details {
+      margin-top: 12px;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+    }
+    details[open] { background: #fbfdff; }
+    summary { cursor: pointer; font-size: 13px; font-weight: 850; list-style-position: outside; }
+    .subhead { margin-top: 3px; color: var(--muted); font-size: 12px; line-height: 1.45; }
+    .status, .pill {
+      display: inline-flex;
+      align-items: center;
+      min-height: 28px;
+      padding: 0 10px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--soft);
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 850;
+      white-space: nowrap;
+    }
+    .status { border-color: var(--color-info); background: var(--color-info-soft); color: var(--color-info); }
+    .pill { background: var(--soft); }
+    .note {
+      margin: 8px 0 12px;
+      padding: 9px 10px;
+      border: 1px solid #99f6e4;
+      border-radius: 6px;
+      background: #f0fdfa;
+      color: #134e4a;
+      font-size: 12px;
+      line-height: 1.5;
+    }
+    .warning { border-color: #fde68a; background: #fffbeb; color: #713f12; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .run-card, .slot-card {
+      margin-top: 12px;
+      padding: 8px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      box-shadow: 0 1px 0 rgba(15, 23, 42, 0.03);
+    }
+    .run-head, .slot-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 850;
+    }
+    .run-head span, .slot-head span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+    .slot-grid { display: grid; gap: 9px; }
+    .slot-card { background: var(--panel); cursor: pointer; min-height: 82px; }
+    .slot-card .message { max-height: 46px; overflow: hidden; font-size: 11px; line-height: 1.28; }
+    .slot-card { overflow: hidden; }
+    .slot-card:hover { border-color: #94a3b8; box-shadow: var(--shadow-soft); }
+    .slot-card.active { border-color: #5eead4; background: #f0fdfa; }
+    .slot-card.done { border-color: #86efac; background: #f0fdf4; }
+    .slot-card.warn { border-color: #fde68a; background: #fffbeb; }
+    .slot-card.bad { border-color: #fecaca; background: #fef2f2; }
+    .track {
+      height: 7px;
+      margin: 6px 0;
+      border-radius: 999px;
+      background: #e2e8f0;
+      overflow: hidden;
+    }
+    .fill {
+      height: 100%;
+      width: 0%;
+      border-radius: 999px;
+      background: var(--accent);
+      transition: width 180ms ease;
+    }
+    .progress-meta {
+      margin-top: -3px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 800;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
+    }
+    .slot-card.warn .fill { background: var(--warn); }
+    .slot-card.bad .fill { background: var(--bad); }
+    .message { color: var(--text); font-size: 12px; line-height: 1.45; overflow-wrap: anywhere; white-space: pre-wrap; }
+    .strategy-policy {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+      white-space: normal;
+    }
+    .strategy-item {
+      min-width: 0;
+      padding: 8px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--soft);
+    }
+    .strategy-item.wide { grid-column: 1 / -1; }
+    .strategy-label {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 850;
+      line-height: 1.2;
+    }
+    .strategy-value {
+      margin-top: 3px;
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 900;
+      line-height: 1.25;
+      overflow-wrap: anywhere;
+    }
+    .strategy-note {
+      margin-top: 2px;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.3;
+      overflow-wrap: anywhere;
+    }
+    .summary {
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px solid var(--line);
+      font-size: 12px;
+      line-height: 1.55;
+      white-space: pre-wrap;
+    }
+    .panel-head {
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      background: var(--panel);
+    }
+    .insight {
+      padding: 8px 14px;
+      border-bottom: 1px solid var(--line);
+      background: var(--soft);
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(220px, 0.34fr);
+      gap: 9px;
+      align-items: start;
+    }
+    .insight-group { min-width: 0; }
+    .insight-group-title {
+      margin: 0 0 5px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 900;
+      letter-spacing: 0;
+    }
+    .insight-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
+      gap: 7px;
+    }
+    .insight-item {
+      width: 100%;
+      min-height: 50px;
+      padding: 6px 8px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      color: var(--text);
+      font: inherit;
+      text-align: left;
+      display: block;
+      box-shadow: none;
+      cursor: pointer;
+      transition: border-color 160ms ease, box-shadow 160ms ease, transform 120ms ease, background 160ms ease;
+    }
+    .insight-item:hover, .insight-item:focus-visible { border-color: #5eead4; box-shadow: var(--shadow-soft); transform: translateY(-1px); outline: none; }
+    .insight-item.active {
+      border-color: #5eead4;
+      background: #f0fdfa;
+      box-shadow: inset 0 0 0 1px #99f6e4;
+    }
+    .insight-item.active .insight-label { color: #0f766e; }
+    .insight-label { color: var(--muted); font-size: 11.5px; font-weight: 850; margin-bottom: 2px; }
+    .insight-value { font-size: 15px; font-weight: 900; line-height: 1.15; overflow-wrap: anywhere; }
+    .insight-note { margin-top: 2px; color: var(--muted); font-size: 11px; line-height: 1.2; }
+    .monitor {
+      padding: 8px 14px;
+      border-bottom: 1px solid var(--line);
+      background: var(--panel);
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(260px, 0.78fr);
+      gap: 8px;
+      align-items: start;
+    }
+    .monitor > *, .slot-panel, .run-card, .slot-card { min-width: 0; }
+    .monitor .run-card, .monitor .slot-card {
+      margin-top: 0;
+    }
+    .monitor .run-card {
+      overflow: hidden;
+    }
+    .monitor .run-card .message { max-height: 44px; overflow: hidden; }
+    .monitor-stats {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(72px, 1fr));
+      gap: 7px;
+    }
+    .stat-tile {
+      padding: 6px 8px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--soft);
+      min-height: 52px;
+      box-shadow: 0 1px 0 rgba(15, 23, 42, 0.03);
+    }
+    .stat-label { color: var(--muted); font-size: 11.5px; font-weight: 850; }
+    .stat-value { margin-top: 1px; font-size: 14px; font-weight: 900; }
+    .stat-note { margin-top: 1px; color: var(--muted); font-size: 11px; line-height: 1.2; }
+    .monitor-slots {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+    .slot-panel {
+      display: grid;
+      gap: 7px;
+      align-content: start;
+      grid-column: 1 / -1;
+    }
+    .toolbar {
+      padding: 8px 14px;
+      display: grid;
+      grid-template-columns: minmax(240px, 0.55fr) minmax(260px, 1fr);
+      gap: 8px;
+      align-items: center;
+      border-bottom: 1px solid var(--line);
+      background: var(--panel);
+    }
+    .module-actions {
+      padding: 8px 14px;
+      border-bottom: 1px solid var(--line);
+      background: #f0fdfa;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(180px, max-content);
+      gap: 12px;
+      align-items: start;
+    }
+    .module-actions.hidden { display: none; }
+    .module-actions .track { max-width: min(100%, 760px); }
+    .module-actions .action-row { justify-content: flex-end; flex-wrap: wrap; min-width: 0; }
+    .module-actions .assistant-input {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(96px, 0.16fr) minmax(96px, 0.16fr);
+      gap: 8px;
+      align-items: end;
+      margin-top: 8px;
+    }
+    .module-actions .assistant-input label { margin: 0 0 4px; }
+    .module-title { font-size: 13px; font-weight: 900; }
+    .module-hint { margin-top: 2px; color: #134e4a; font-size: 12px; line-height: 1.35; }
+    .check-stats { margin-top: 4px; color: #134e4a; font-size: 12px; }
+    .submit-fail-row {
+      display: grid;
+      grid-template-columns: minmax(80px, 0.2fr) minmax(0, 1fr) auto;
+      gap: 8px;
+      align-items: center;
+      padding: 6px 8px;
+      margin: 2px 0;
+      border: 1px solid #fecaca;
+      border-radius: 6px;
+      background: var(--panel);
+      font-size: 12px;
+    }
+    .submit-fail-id {
+      font-weight: 800;
+      color: #b91c1c;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .submit-fail-reason {
+      color: var(--muted);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .switch {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 850;
+      white-space: nowrap;
+    }
+    .switch input { width: auto; min-height: auto; }
+    .table-wrap {
+      overflow: auto;
+      flex: 1 1 auto;
+      min-height: 280px;
+      max-height: calc(100vh - 430px);
+      background: var(--panel);
+      border-bottom-left-radius: 8px;
+      border-bottom-right-radius: 8px;
+    }
+    .table-wrap.stats-mode {
+      max-height: none;
+      min-height: 0;
+      overflow: auto;
+    }
+    .stats-dashboard {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+      gap: 12px;
+      padding: 12px;
+      background: var(--soft);
+    }
+    .stats-card {
+      min-height: 96px;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      box-shadow: var(--shadow-soft);
+    }
+    .stats-card.primary {
+      border-color: #5eead4;
+      background: #f0fdfa;
+    }
+    .stats-card.warning {
+      border-color: #fde68a;
+      background: #fffbeb;
+    }
+    .stats-card .stat-label { font-size: 12px; }
+    .stats-card .stat-value { font-size: 22px; line-height: 1.15; }
+    .stats-card .stat-note { font-size: 12px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { padding: 8px 10px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+    th { position: sticky; top: 0; background: var(--soft); color: var(--muted); font-size: 12px; z-index: 1; box-shadow: 0 1px 0 var(--line); }
+    tbody tr { cursor: pointer; background: var(--panel); }
+    tbody tr:nth-child(even) { background: #fbfdff; }
+    tbody tr:hover { background: #f0fdfa; }
+    tbody tr.selected { background: var(--accent-soft); }
+    .score-badge {
+      display: inline-flex;
+      min-width: 58px;
+      justify-content: center;
+      padding: 4px 8px;
+      border-radius: 999px;
+      font-weight: 900;
+      font-size: 12px;
+    }
+    .badge-good { background: #dcfce7; color: var(--good); }
+    .badge-warn { background: #fef3c7; color: var(--warn); }
+    .badge-info { background: var(--info-soft); color: var(--info); }
+    .badge-bad { background: #fee2e2; color: var(--bad); }
+    .detail {
+      padding: 12px 14px;
+      overflow: auto;
+      font-family: Consolas, "Microsoft YaHei", monospace;
+      font-size: 13px;
+      line-height: 1.55;
+      white-space: normal;
+      border-top: 1px solid var(--line);
+    }
+    .detail h3 {
+      margin: 12px 0 6px;
+      font-family: "Microsoft YaHei", "Segoe UI", Arial, sans-serif;
+      font-size: 14px;
+    }
+    .action-row {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+    .action-row button { width: auto; padding: 0 10px; }
+    .action-row select { width: auto; min-width: 112px; }
+    /* P1-8: User profile badge in header */
+    .header-right { display: flex; align-items: center; gap: 8px; }
+    .header-divider { width: 1px; height: 24px; background: var(--line); margin: 0 4px; flex-shrink: 0; }
+    .header-icon-btn {
+      width: 28px; height: 28px; border-radius: 6px;
+      border: 1px solid var(--line); background: var(--panel);
+      color: var(--muted); cursor: pointer;
+      display: inline-flex; align-items: center; justify-content: center;
+      font-size: 13px; padding: 0; flex-shrink: 0;
+      transition: all 160ms ease;
+    }
+    .header-icon-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .header-ghost-btn {
+      min-height: 28px; padding: 0 8px; border-radius: 6px;
+      border: 1px solid transparent; background: transparent;
+      color: var(--muted); cursor: pointer;
+      font: inherit; font-size: 12px; font-weight: 600;
+      transition: all 160ms ease;
+    }
+    .header-ghost-btn:hover { background: var(--soft); color: var(--text); border-color: var(--line); }
+    .header-danger-btn {
+      min-height: 28px; padding: 0 8px; border-radius: 6px;
+      border: 1px solid var(--bad-soft); background: transparent;
+      color: var(--bad); cursor: pointer;
+      font: inherit; font-size: 12px; font-weight: 600;
+      transition: all 160ms ease;
+    }
+    .header-danger-btn:hover { background: var(--bad-soft); border-color: var(--bad); }
+    .user-profile {
+      display: flex; align-items: center; gap: 10px;
+      padding: 5px 14px; border-radius: 20px;
+      background: var(--blue-soft); font-size: 13px; font-weight: 600;
+    }
+    .user-tier { color: var(--accent); }
+    .user-points { color: var(--muted); }
+    .user-profile.loading { opacity: 0.6; }
+    .user-profile.error { background: var(--red-soft); }
+    .mini {
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
+    }
+    .copy-box {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      gap: 8px;
+      margin: 6px 0 10px;
+      padding: 9px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--soft);
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+    .kv {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+      margin: 8px 0;
+    }
+    .kv div {
+      padding: 9px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--soft);
+      overflow-wrap: anywhere;
+    }
+    .hidden { display: none; }
+    .modal {
+      position: fixed;
+      inset: 0;
+      z-index: 20;
+      display: grid;
+      place-items: center;
+      background: rgba(15, 23, 42, 0.36);
+      padding: 24px;
+    }
+    .modal.hidden { display: none; }
+    .modal-panel {
+      width: min(1040px, 96vw);
+      max-height: 88vh;
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      box-shadow: 0 18px 60px rgba(15, 23, 42, 0.22);
+    }
+    .modal-head {
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: center;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--line);
+      background: var(--panel);
+    }
+    .modal-body { padding: 12px 14px; }
+    @media (max-width: 1380px) {
+      .monitor { grid-template-columns: minmax(0, 1fr) minmax(260px, 0.8fr); }
+      .slot-panel { grid-column: 1 / -1; }
+      .slot-card { min-height: 116px; }
+    }
+    @media (max-width: 1120px) {
+      main { grid-template-columns: 1fr; height: auto; }
+      aside { position: static; max-height: none; }
+      section { min-height: 980px; height: auto; }
+      .insight { grid-template-columns: 1fr; }
+      .insight-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .monitor { grid-template-columns: 1fr; }
+      .monitor-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .monitor-slots { grid-template-columns: 1fr 1fr 1fr; }
+      .table-wrap { max-height: 680px; }
+    }
+    @media (max-width: 720px) {
+      .row, .insight, .toolbar, .module-actions, .monitor, .monitor-stats, .monitor-slots, .kv { grid-template-columns: 1fr; }
+      .module-actions .assistant-input { grid-template-columns: 1fr; }
+      .insight-grid { grid-template-columns: 1fr; }
+      header { align-items: flex-start; flex-direction: column; }
+      .toolbar button, .toolbar select { width: 100%; }
+    }
+    /* ── P2: Chart panels ── */
+    .charts-panel {
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--line);
+      background: var(--panel);
+      display: none;
+    }
+    .charts-panel.visible { display: block; }
+    .charts-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    .chart-card {
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      box-shadow: var(--shadow-soft);
+      min-height: 180px;
+    }
+    .chart-card.full { grid-column: 1 / -1; }
+    .chart-card h3 {
+      margin: 0 0 8px;
+      font-size: 13px;
+      color: var(--muted);
+      font-weight: 850;
+    }
+    .chart-card canvas { max-height: 200px; }
+    @media (max-width: 900px) {
+      .charts-grid { grid-template-columns: 1fr; }
+    }
+
+    /* ── P0: Scorecard visualization styles ── */
+    .sc-viz { margin: 10px 0; }
+    .sc-layer-title {
+      margin: 10px 0 6px;
+      padding: 4px 0;
+      border-bottom: 2px solid var(--accent);
+      font-size: 13px;
+      font-weight: 900;
+      color: var(--accent);
+    }
+    .sc-dim-row {
+      display: grid;
+      grid-template-columns: 28px minmax(90px, 0.28fr) minmax(0, 1fr) 48px 36px;
+      gap: 6px;
+      align-items: center;
+      padding: 3px 4px;
+      margin: 1px 0;
+      border-radius: 4px;
+      font-size: 12px;
+      line-height: 1.3;
+      transition: background 120ms ease;
+    }
+    .sc-dim-row:hover { background: var(--soft); }
+    .sc-dim-icon { text-align: center; font-size: 14px; }
+    .sc-dim-name { color: var(--text); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .sc-dim-bar-wrap { height: 8px; border-radius: 4px; background: #e2e8f0; overflow: hidden; min-width: 40px; }
+    .sc-dim-bar { height: 100%; border-radius: 4px; transition: width 300ms ease; }
+    .sc-dim-bar.high { background: #15803d; }
+    .sc-dim-bar.mid { background: #a16207; }
+    .sc-dim-bar.low { background: #b91c1c; }
+    .sc-dim-val { text-align: right; font-weight: 900; font-size: 13px; }
+    .sc-dim-wt { text-align: right; color: var(--muted); font-size: 11px; }
+
+    .sc-emp-row {
+      display: grid;
+      grid-template-columns: 20px minmax(120px, 0.35fr) 56px 56px minmax(0, 1fr);
+      gap: 5px;
+      align-items: center;
+      padding: 3px 4px;
+      margin: 1px 0;
+      border-radius: 4px;
+      font-size: 12px;
+      line-height: 1.3;
+    }
+    .sc-emp-icon { text-align: center; font-size: 13px; }
+    .sc-emp-name { color: var(--text); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .sc-emp-actual { text-align: right; font-weight: 700; }
+    .sc-emp-score { text-align: right; font-weight: 900; }
+    .sc-emp-detail { color: var(--muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    .sc-total-bar {
+      display: grid;
+      grid-template-columns: 64px minmax(0, 1fr) 64px;
+      gap: 8px;
+      align-items: center;
+      padding: 6px 0;
+      margin: 6px 0 10px;
+    }
+    .sc-total-label { font-size: 12px; font-weight: 800; color: var(--muted); text-align: right; }
+    .sc-total-wrap { height: 12px; border-radius: 6px; background: #e2e8f0; overflow: hidden; }
+    .sc-total-fill { height: 100%; border-radius: 6px; transition: width 400ms ease; }
+    .sc-total-val { font-size: 16px; font-weight: 900; text-align: left; }
+
+    .sc-decision-band {
+      display: inline-flex;
+      align-items: center;
+      padding: 4px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 900;
+      margin-bottom: 8px;
+    }
+    .sc-decision-band.submit_candidate { background: #dcfce7; color: #15803d; border: 1px solid #86efac; }
+    .sc-decision-band.optimize_before_submit { background: #fef3c7; color: #a16207; border: 1px solid #fde68a; }
+    .sc-decision-band.research_only { background: #dbeafe; color: #1d4ed8; border: 1px solid #93c5fd; }
+    .sc-decision-band.abandon { background: #fee2e2; color: #b91c1c; border: 1px solid #fecaca; }
+    .sc-decision-band.hard_gate_blocked { background: #fce7f3; color: #9d174d; border: 1px solid #f9a8d4; }
+
+    /* Lifecycle timeline */
+    .lc-timeline {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 2px;
+      margin: 8px 0;
+      padding: 6px 0;
+    }
+    .lc-step {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 8px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .lc-step.done { background: #dcfce7; color: #15803d; }
+    .lc-step.active { background: #dbeafe; color: #1d4ed8; border: 1px solid #93c5fd; }
+    .lc-step.failed { background: #fee2e2; color: #b91c1c; }
+    .lc-step.pending { background: #f1f5f9; color: var(--muted); }
+    .lc-arrow { color: #94a3b8; font-size: 10px; margin: 0 1px; }
+
+    /* Provenance badge */
+    .prov-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .prov-badge.hypothesis { background: #ede9fe; color: #6d28d9; }
+    .prov-badge.experience { background: #fef3c7; color: #a16207; }
+    .prov-badge.random { background: #f1f5f9; color: var(--muted); }
+
+    /* Score explanation tooltip */
+    .score-explainer {
+      margin: 6px 0;
+      padding: 8px 10px;
+      border: 1px solid #bae6fd;
+      border-radius: 6px;
+      background: #eff6ff;
+      font-size: 12px;
+      line-height: 1.5;
+      color: #1d4ed8;
+    }
+    .score-explainer b { color: #1e40af; }
+
+    /* ── Toast notification system ── */
+    .toast-container {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      z-index: 100;
+      display: flex;
+      flex-direction: column-reverse;
+      gap: 8px;
+      max-width: 420px;
+      pointer-events: none;
+    }
+    .toast {
+      pointer-events: auto;
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      line-height: 1.4;
+      box-shadow: 0 8px 24px rgba(15, 23, 42, 0.14);
+      animation: toastIn 260ms ease-out;
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      cursor: pointer;
+    }
+    .toast.removing { animation: toastOut 200ms ease-in forwards; }
+    .toast-icon { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+    .toast-msg { flex: 1; min-width: 0; }
+    .toast-close { color: inherit; opacity: 0.5; font-size: 14px; cursor: pointer; flex-shrink: 0; }
+    .toast.success { background: #dcfce7; color: #15803d; border: 1px solid #86efac; }
+    .toast.error { background: #fee2e2; color: #b91c1c; border: 1px solid #fecaca; }
+    .toast.warning { background: #fef3c7; color: #a16207; border: 1px solid #fde68a; }
+    .toast.info { background: #dbeafe; color: #1d4ed8; border: 1px solid #93c5fd; }
+    @keyframes toastIn { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes toastOut { from { opacity: 1; transform: translateY(0); } to { opacity: 0; transform: translateY(10px); } }
+
+    /* ── Loading spinner overlay ── */
+    .spinner-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 90;
+      display: grid;
+      place-items: center;
+      background: rgba(255,255,255,0.7);
+      backdrop-filter: blur(2px);
+    }
+    .spinner-overlay.hidden { display: none; }
+    .spinner-box {
+      padding: 20px 28px;
+      border-radius: 12px;
+      background: var(--panel);
+      box-shadow: 0 12px 40px rgba(15, 23, 42, 0.16);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+    }
+    .spinner {
+      width: 32px; height: 32px;
+      border: 3px solid #e2e8f0;
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+    .spinner-text { font-size: 13px; font-weight: 700; color: var(--text); }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Confirm dialog ── */
+    .confirm-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 95;
+      display: grid;
+      place-items: center;
+      background: rgba(15, 23, 42, 0.36);
+    }
+    .confirm-overlay.hidden { display: none; }
+    .confirm-dialog {
+      padding: 20px;
+      border-radius: 12px;
+      background: var(--panel);
+      box-shadow: 0 18px 60px rgba(15, 23, 42, 0.22);
+      max-width: 400px;
+      min-width: 280px;
+    }
+    .confirm-dialog p { margin: 0 0 14px; font-size: 14px; line-height: 1.5; }
+    .confirm-actions { display: flex; gap: 8px; justify-content: flex-end; }
+
+    /* ── Filter toolbar ── */
+    .filter-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      padding: 6px 14px;
+      border-bottom: 1px solid var(--line);
+      background: var(--soft);
+      align-items: center;
+    }
+    .filter-chip {
+      padding: 3px 10px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 700;
+      cursor: pointer;
+      background: var(--panel);
+      color: var(--muted);
+      transition: all 140ms ease;
+      white-space: nowrap;
+    }
+    .filter-chip:hover { border-color: #94a3b8; }
+    .filter-chip.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+    /* ── Quick connection test ── */
+    .conn-test {
+      margin-top: 6px;
+      padding: 6px 10px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 700;
+      min-height: 20px;
+    }
+    .conn-test.ok { background: #dcfce7; color: #15803d; }
+    .conn-test.fail { background: #fee2e2; color: #b91c1c; }
+    .conn-test.testing { background: #fef3c7; color: #a16207; }
+
+    /* ── Keyboard shortcut hint ── */
+    .kbd {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 20px;
+      height: 20px;
+      padding: 0 5px;
+      border: 1px solid #cbd5e1;
+      border-radius: 4px;
+      background: #f1f5f9;
+      font-family: Consolas, monospace;
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    /* ── Dark mode overrides for hardcoded light-theme colors ── */
+    [data-theme="dark"] input:focus,
+    [data-theme="dark"] select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--ring); }
+    [data-theme="dark"] .run-actions { border-color: var(--accent); background: var(--accent-soft); }
+    [data-theme="dark"] .run-actions .subhead { color: var(--muted); }
+    [data-theme="dark"] .note { border-color: var(--accent); background: var(--accent-soft); color: var(--text); }
+    [data-theme="dark"] .warning { border-color: var(--warn); background: var(--warn-soft); color: var(--warn); }
+    [data-theme="dark"] .slot-card.active { border-color: var(--accent); background: var(--accent-soft); }
+    [data-theme="dark"] .slot-card.done { border-color: var(--good); background: var(--good-soft); }
+    [data-theme="dark"] .slot-card.warn { border-color: var(--warn); background: var(--warn-soft); }
+    [data-theme="dark"] .slot-card.bad { border-color: var(--bad); background: var(--bad-soft); }
+    [data-theme="dark"] .insight-item.active { border-color: var(--accent); background: var(--accent-soft); }
+    [data-theme="dark"] .insight-item.active .insight-label { color: var(--accent); }
+    [data-theme="dark"] .module-actions { background: var(--accent-soft); }
+    [data-theme="dark"] .module-hint { color: var(--muted); }
+    [data-theme="dark"] .check-stats { color: var(--muted); }
+    [data-theme="dark"] .stats-card.primary { border-color: var(--accent); background: var(--accent-soft); }
+    [data-theme="dark"] .stats-card.warning { border-color: var(--warn); background: var(--warn-soft); }
+    [data-theme="dark"] .toast.success { background: var(--good-soft); color: var(--good); border-color: var(--good); }
+    [data-theme="dark"] .toast.error { background: var(--bad-soft); color: var(--bad); border-color: var(--bad); }
+    [data-theme="dark"] .toast.warning { background: var(--warn-soft); color: var(--warn); border-color: var(--warn); }
+    [data-theme="dark"] .toast.info { background: var(--info-soft); color: var(--info); border-color: var(--info); }
+    [data-theme="dark"] .filter-chip:hover { border-color: var(--muted); }
+    [data-theme="dark"] .insight-item:hover,
+    [data-theme="dark"] .insight-item:focus-visible { border-color: var(--accent); }
+    [data-theme="dark"] .slot-card:hover { border-color: var(--muted); }
+    [data-theme="dark"] .score-explainer { background: var(--info-soft); color: var(--info); border-color: var(--info); }
+    [data-theme="dark"] .score-explainer b { color: var(--info); }
+    [data-theme="dark"] .conn-test.ok { background: var(--good-soft); color: var(--good); }
+    [data-theme="dark"] .conn-test.fail { background: var(--bad-soft); color: var(--bad); }
+    [data-theme="dark"] .conn-test.testing { background: var(--warn-soft); color: var(--warn); }
+    [data-theme="dark"] .submit-fail-row { border-color: var(--bad-soft); }
+    [data-theme="dark"] details[open] { background: var(--soft); }
+    [data-theme="dark"] .table-wrap { background: var(--panel); }
+    [data-theme="dark"] th { background: var(--soft); }
+    [data-theme="dark"] tbody tr { background: var(--panel); }
+    [data-theme="dark"] tbody tr:nth-child(even) { background: var(--soft); }
+    [data-theme="dark"] tbody tr:hover { background: var(--accent-soft); }
+    [data-theme="dark"] tbody tr.selected { background: var(--accent-soft); }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>BRAIN Alpha Ops</h1>
+      <div class="subhead">无人值守流程：本地生产、评分和排序按配置运行；只有拿到 simulation_id 的任务才进入回测槽。</div>
+    </div>
+    <div class="header-right">
+      <span id="env-badge" class="pill" style="font-size:11px;min-height:28px">Production</span>
+      <div id="user-profile" class="user-profile">
+        <span class="user-tier">未连接</span>
+        <span class="user-points">--</span>
+      </div>
+      <span class="header-divider"></span>
+      <div id="status" class="status">系统空闲</div>
+      <button id="themeToggle" class="header-icon-btn" onclick="toggleTheme()" title="切换浅色/暗色主题"><span class="theme-icon-light">☀</span><span class="theme-icon-dark" style="display:none">☽</span></button>
+      <button class="header-danger-btn" onclick="shutdownApp()" title="停止本地服务并终止所有后台任务">关闭服务</button>
+    </div>
+  </header>
+  <main>
+    <aside>
+      <h2>生产控制</h2>
+      <label>运行环境</label>
+      <select id="environment" onchange="toggleEnvironment()">
+        <option value="production" selected>生产环境：官方 BRAIN API</option>
+        <option value="mock">本地模拟环境</option>
+      </select>
+      <div id="productionNote" class="note warning">生产环境会调用真实 BRAIN API。登录后会先同步云端数据，用于自相关和重复提交风险拦截。</div>
+      <div id="mockNote" class="note hidden">本地模拟环境只用于验证流程和界面，不代表真实 BRAIN 结果。</div>
+
+      <div id="credentials">
+        <label>BRAIN 账号</label>
+        <input id="username" autocomplete="username" placeholder="用户名或邮箱">
+        <label>BRAIN 密码</label>
+        <input id="password" type="password" autocomplete="current-password" placeholder="也可留空并使用 Token">
+        <details>
+          <summary>高级连接设置</summary>
+          <div class="subhead">只影响登录方式和 API 地址，不改变 Alpha 的回测参数。</div>
+          <label>Token</label>
+          <input id="token" type="password" placeholder="可选：Bearer Token">
+          <label>API 地址</label>
+          <input id="baseUrl" value="https://api.worldquantbrain.com">
+          <button id="connTestBtn" class="secondary small full" onclick="testConnection()" style="margin-top:8px">🔌 测试连接</button>
+          <div id="connTestResult" class="conn-test hidden"></div>
+        </details>
+      </div>
+
+      <div class="run-actions">
+        <div class="subhead">启动后会按配置生产、评分、排序和补位。</div>
+        <button id="controlButton" class="full" onclick="toggleRun()">开始生产搜索</button>
+      </div>
+
+      <label>市场预设</label>
+      <select id="preset" onchange="applyPreset()">
+        <option value="usa_standard">美股标准生产</option>
+        <option value="usa_liquid">美股高流动性</option>
+        <option value="usa_sector">美股 Sector Neutral</option>
+        <option value="usa_market">美股 Market Neutral</option>
+        <option value="europe_standard">欧洲标准生产</option>
+        <option value="global_market">全球 Market Neutral</option>
+        <option value="china_standard">中国市场标准生产</option>
+      </select>
+      <div class="subhead">预设是官方回测设置的一组快捷组合；手动修改下方设置会覆盖预设。</div>
+
+      <details open>
+        <summary>官方回测设置</summary>
+        <div class="subhead">这些值会直接写入官方 simulation/settings；自动切换策略时会同步更新这里。</div>
+        <div class="row">
+          <div><label>Region</label><select id="region"><option>USA</option><option>CHN</option><option>EUR</option><option>GLB</option></select></div>
+          <div><label>Universe</label><select id="universe"><option>TOP3000</option><option>TOP1000</option><option>TOP500</option></select></div>
+        </div>
+        <div class="row">
+          <div><label>Delay</label><select id="delay"><option value="1">1</option><option value="0">0</option></select></div>
+          <div><label>Neutralization</label><select id="neutralization"><option>SUBINDUSTRY</option><option>INDUSTRY</option><option>SECTOR</option><option>MARKET</option><option>NONE</option></select></div>
+        </div>
+        <div class="row">
+          <div><label>Instrument Type</label><select id="instrumentType"><option>EQUITY</option></select></div>
+          <div><label>Alpha Type</label><select id="alphaType"><option>REGULAR</option><option>POWER_POOL</option><option>ATOM</option><option>PYRAMID</option></select></div>
+        </div>
+        <div class="row">
+          <div><label>Decay</label><input id="decay" type="number" min="0" step="1" value="10"></div>
+          <div><label>Truncation</label><input id="truncation" type="number" min="0" max="1" step="0.01" value="0.05"></div>
+        </div>
+        <div class="row">
+          <div><label>Pasteurization</label><select id="pasteurization"><option>ON</option><option>OFF</option></select></div>
+          <div><label>NaN Handling</label><select id="nanHandling"><option>ON</option><option>OFF</option></select></div>
+        </div>
+        <div class="row">
+          <div><label>Unit Handling</label><select id="unitHandling"><option>VERIFY</option><option>RAW</option></select></div>
+          <div><label>Language</label><select id="language"><option>FASTEXPR</option></select></div>
+        </div>
+      </details>
+
+      <details open>
+        <summary>云端数据</summary>
+        <label>同步范围</label>
+        <select id="syncRange">
+          <option value="3d" selected>近 3 天</option>
+          <option value="7d">近 7 天</option>
+          <option value="all">全部</option>
+        </select>
+        <button id="syncButton" class="full secondary" onclick="syncCloud()">同步云端数据</button>
+        <div class="track"><div id="cloudSyncFill" class="fill"></div></div>
+        <div id="cloudSyncMeta" class="progress-meta">进度：0% | 已扫描：0/待确认 | 预计剩余：-</div>
+        <div id="cloudSyncText" class="message hidden"></div>
+      </details>
+
+      <details open>
+        <summary>系统策略</summary>
+        <div class="note">本地生产强度和回测策略来自配置文件。界面只保留必要开关，避免把无人值守流程变成人工调参面板。</div>
+        <div class="row">
+          <label class="switch" title="启用后，生产循环会读取最近一次可用 Assistant Guidance 作为候选生成偏好。"><input id="useAssistantGuidance" type="checkbox" checked> Assistant Guidance</label>
+          <div>
+            <label>Guidance 最低置信度</label>
+            <input id="assistantGuidanceMinConfidence" type="number" min="0" max="1" step="0.05" value="0.6">
+          </div>
+        </div>
+        <div class="row">
+          <label class="switch" title="启用后，历史表现强/弱的 guidance 会对本地排序分做小幅可审计调整。"><input id="assistantGuidanceScoreAdjustment" type="checkbox" checked> Guidance 排序微调</label>
+          <div>
+            <label>排序最低置信度</label>
+            <input id="assistantGuidanceScoreMinConfidence" type="number" min="0" max="1" step="0.05" value="0.6">
+          </div>
+        </div>
+        <div class="row">
+          <div>
+            <label>最小结果样本数</label>
+            <input id="assistantGuidanceScoreMinOutcomeCount" type="number" min="0" max="100" step="1" value="1">
+          </div>
+          <div>
+            <label>加分上限</label>
+            <input id="assistantGuidanceScoreBonusCap" type="number" min="0" max="10" step="0.5" value="4">
+          </div>
+        </div>
+        <div class="row">
+          <div></div>
+          <div>
+            <label>扣分上限</label>
+            <input id="assistantGuidanceScorePenaltyCap" type="number" min="0" max="10" step="0.5" value="5">
+          </div>
+        </div>
+        <div class="row">
+          <label class="switch" title="启用后，本地候选生成会加载配置中的策略插件。"><input id="strategyPluginsEnabled" type="checkbox"> Strategy Plugins</label>
+          <div>
+            <label>Plugin Specs</label>
+            <textarea id="strategyPluginSpecs" rows="3" placeholder="module.path:PluginClass"></textarea>
+          </div>
+        </div>
+        <div id="strategyText" class="message strategy-policy">正在读取配置...</div>
+      </details>
+
+    </aside>
+
+    <section>
+      <div class="panel-head">
+        <div>
+          <h2 id="tableTitle">候选池</h2>
+          <div class="subhead">研究流程：候选 → 等待回测 → 回测中 → 达标 → 检查后可提交 → 已提交 / 不达标回溯。</div>
+        </div>
+        <span id="countPill" class="pill">候选池 0/10</span>
+      </div>
+      <div id="insight" class="insight"></div>
+      <div id="chartsPanel" class="charts-panel">
+        <div class="charts-grid">
+          <div class="chart-card">
+            <h3>评分趋势（近 20 轮）</h3>
+            <canvas id="scoreTrendChart"></canvas>
+          </div>
+          <div class="chart-card">
+            <h3>Sharpe 分布</h3>
+            <canvas id="sharpeDistChart"></canvas>
+          </div>
+          <div class="chart-card">
+            <h3>门禁通过率</h3>
+            <canvas id="gatePieChart"></canvas>
+          </div>
+          <div class="chart-card">
+            <h3>Turnover 质量目标</h3>
+            <canvas id="turnoverChart"></canvas>
+          </div>
+        </div>
+      </div>
+      <div class="monitor">
+        <div id="opsMonitor" class="hidden"></div><div id="summary" class="hidden"></div>
+        <div class="run-card">
+          <div class="run-head"><span>数据统计</span><span id="monitorCloudStatus">未同步</span></div>
+          <div class="track"><div id="monitorCloudFill" class="fill"></div></div>
+          <div id="monitorCloudMeta" class="progress-meta">进度：0% | 已扫描：0/待确认 | 预计剩余：-</div>
+          <div id="monitorCloudText" class="message">登录后强制同步；也可手动刷新。</div>
+        </div>
+        <div class="slot-panel">
+          <div class="run-head"><span>官方回测槽位</span><span id="slotPolicyText">3 槽并发提交 / 间隔轮询</span></div>
+          <div id="backtestPanel" class="slot-grid monitor-slots"></div>
+        </div>
+      </div>
+      <div class="toolbar">
+        <input id="tableSearch" placeholder="搜索 Alpha ID、家族、假说、表达式或官方 ID" oninput="renderCurrentView()">
+        <div id="sortHint" class="subhead">候选池按排序分降序排序。快捷键：<span class="kbd">Ctrl+Enter</span> 启停生产，<span class="kbd">Esc</span> 关闭弹窗。</div>
+      </div>
+      <div id="filterBar" class="filter-bar hidden"></div>
+      <div id="moduleActions" class="module-actions hidden">
+        <div>
+          <div id="moduleActionTitle" class="module-title">达标检查</div>
+          <div id="moduleActionHint" class="module-hint">批量核验全部达标 Alpha 当前是否仍可提交。</div>
+          <div id="checkStats" class="check-stats">尚未检查。</div>
+          <div class="track"><div id="checkProgressFill" class="fill"></div></div>
+          <div id="checkProgressMeta" class="progress-meta">进度：0% | 已检查：0/0 | 预计剩余：-</div>
+          <div id="assistantGenerateInputs" class="assistant-input hidden">
+            <div>
+              <label>Assistant JSON</label>
+              <textarea id="assistantResponseInput" placeholder="粘贴外部 LLM 返回的 JSON；留空则仅使用本地 Research Memory"></textarea>
+            </div>
+            <div>
+              <label>数量</label>
+              <input id="assistantCandidateCount" type="number" min="1" max="100" step="1" value="10">
+            </div>
+            <div>
+              <label>置信度</label>
+              <input id="assistantMinConfidence" type="number" min="0" max="1" step="0.05" value="0.6">
+            </div>
+          </div>
+        </div>
+        <div class="action-row">
+          <label id="autoSubmitSwitch" class="switch" title="开启后，检查通过的 Alpha 会自动提交到官方 BRAIN。"><input id="autoSubmitToggle" type="checkbox" onchange="handleAutoSubmitToggle()"> 自动提交</label>
+          <select id="checkMode" class="small"><option value="quick" selected>快速检查</option><option value="all">全部检查</option></select>
+          <button id="checkButton" class="secondary small" onclick="checkBatch($('checkMode').value)">检查</button>
+          <button id="submitSelectedButton" class="small hidden" onclick="submitSelectedCandidates()">提交勾选</button>
+          <button id="assistantUseDraftButton" class="secondary small hidden" onclick="useOfflineAssistantDraft()">使用离线草稿</button>
+          <button id="assistantSaveDraftButton" class="secondary small hidden" onclick="saveOfflineAssistantDraftGuidance()">保存草稿 Guidance</button>
+          <button id="assistantUseLatestButton" class="secondary small hidden" onclick="useLatestAssistantGuidance()">使用已保存 Guidance</button>
+          <button id="assistantPreviewGuidanceButton" class="secondary small hidden" onclick="previewAssistantGuidance()">预览 Guidance</button>
+          <button id="assistantSaveGuidanceButton" class="secondary small hidden" onclick="saveAssistantGuidance()">保存 Guidance</button>
+          <button id="assistantGenerateButton" class="small hidden" onclick="generateAssistantCandidates()">生成候选</button>
+        </div>
+      </div>
+      <div id="submitFailurePanel" class="module-actions hidden" style="background:#fff5f5;border-color:#fecaca">
+        <div>
+          <div class="module-title" style="color:#b91c1c">提交失败详情</div>
+          <div class="module-hint" style="color:#991b1b" id="submitFailureCount"></div>
+          <div id="submitFailureList" style="max-height:260px;overflow-y:auto;margin-top:8px"></div>
+        </div>
+        <div class="action-row">
+          <button class="small" style="background:#b91c1c;border-color:#b91c1c" onclick="retryAllFailedSubmit()">全部重试失败项</button>
+          <button class="secondary small" onclick="clearSubmitFailurePanel()">关闭</button>
+        </div>
+      </div>
+      <div id="tableWrap" class="table-wrap">
+        <div id="cloudStatsPanel" class="stats-dashboard hidden"></div>
+        <table id="candidateTable">
+          <thead>
+            <tr>
+          <th>#</th><th>Alpha / 记录</th><th>家族</th><th>排序分</th><th>状态</th><th>官方 ID</th><th>风险 / 原因</th><th>操作</th>
+            </tr>
+          </thead>
+          <tbody id="candidateRows"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+  <div id="detailModal" class="modal hidden">
+    <div class="modal-panel" onclick="event.stopPropagation()">
+      <div class="modal-head">
+        <h2 id="modalTitle">详情</h2>
+        <button class="secondary small" onclick="closeDetailModal()">关闭</button>
+      </div>
+      <div id="detail" class="detail modal-body">暂无详情。</div>
+    </div>
+  </div>
+  <div id="toastContainer" class="toast-container"></div>
+  <div id="spinnerOverlay" class="spinner-overlay hidden">
+    <div class="spinner-box">
+      <div class="spinner"></div>
+      <div class="spinner-text" id="spinnerText">处理中...</div>
+    </div>
+  </div>
+  <div id="confirmOverlay" class="confirm-overlay hidden" onclick="hideConfirm()">
+    <div class="confirm-dialog" onclick="event.stopPropagation()">
+      <p id="confirmText"></p>
+      <div class="confirm-actions">
+        <button class="secondary small" id="confirmNo">取消</button>
+        <button class="small" id="confirmYes">确认</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- inline:js/utils.js -->
+  <!-- inline:js/api-client.js -->
+  <!-- inline:js/state.js -->
+  <!-- inline:js/components/toast.js -->
+  <!-- inline:js/components/spinner.js -->
+  <!-- inline:js/components/modal.js -->
+  <!-- inline:js/components/progress.js -->
+  <!-- inline:js/components/table.js -->
+  <!-- inline:js/views/detail.js -->
+  <!-- inline:js/views/production.js -->
+  <!-- inline:js/views/charts.js -->
+  <!-- inline:js/view-model.js -->
+  <!-- inline:js/app.js -->
+</body>
+</html>

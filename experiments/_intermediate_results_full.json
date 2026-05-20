@@ -1,0 +1,288 @@
+{
+  "completed": 28,
+  "failed": 2,
+  "total": 30,
+  "results": [
+    {
+      "index": 1,
+      "expression": "",
+      "status": "completed",
+      "sharpe": 0.38,
+      "fitness": 0,
+      "turnover": 0,
+      "full_metrics": null,
+      "error": "fetch failed"
+    },
+    {
+      "index": 2,
+      "expression": "",
+      "status": "completed",
+      "sharpe": 0.57,
+      "fitness": 0,
+      "turnover": 0,
+      "full_metrics": null,
+      "error": "fetch failed"
+    },
+    {
+      "index": 3,
+      "expression": "",
+      "status": "completed",
+      "sharpe": 0.75,
+      "fitness": 0,
+      "turnover": 0,
+      "full_metrics": null,
+      "error": "fetch failed"
+    },
+    {
+      "index": 4,
+      "expression": "",
+      "status": "completed",
+      "sharpe": -0.5,
+      "fitness": 0,
+      "turnover": 0,
+      "full_metrics": null,
+      "error": "fetch failed"
+    },
+    {
+      "index": 5,
+      "expression": "",
+      "status": "completed",
+      "sharpe": 0.36,
+      "fitness": 0,
+      "turnover": 0,
+      "full_metrics": null,
+      "error": "fetch failed"
+    },
+    {
+      "index": 7,
+      "expression": "",
+      "status": "completed",
+      "sharpe": -0.35,
+      "fitness": 0,
+      "turnover": 0,
+      "full_metrics": null,
+      "error": "fetch failed"
+    },
+    {
+      "index": 8,
+      "expression": "",
+      "status": "completed",
+      "sharpe": -0.69,
+      "fitness": 0,
+      "turnover": 0,
+      "full_metrics": null,
+      "error": "fetch failed"
+    },
+    {
+      "index": 9,
+      "expression": "",
+      "status": "completed",
+      "sharpe": -0.15,
+      "fitness": 0,
+      "turnover": 0,
+      "full_metrics": null,
+      "error": "fetch failed"
+    },
+    {
+      "index": 10,
+      "expression": "",
+      "status": "completed",
+      "sharpe": -0.42,
+      "fitness": 0,
+      "turnover": 0,
+      "full_metrics": null,
+      "error": "fetch failed"
+    },
+    {
+      "index": 11,
+      "expression": "",
+      "status": "completed",
+      "sharpe": -0.29,
+      "fitness": 0,
+      "turnover": 0,
+      "full_metrics": null,
+      "error": "fetch failed"
+    },
+    {
+      "index": 12,
+      "expression": "",
+      "status": "completed",
+      "sharpe": -0.11,
+      "fitness": 0,
+      "turnover": 0,
+      "full_metrics": null,
+      "error": "fetch failed"
+    },
+    {
+      "index": 13,
+      "expression": "",
+      "status": "completed",
+      "sharpe": -0.36,
+      "fitness": 0,
+      "turnover": 0,
+      "full_metrics": null,
+      "error": "fetch failed"
+    },
+    {
+      "index": 14,
+      "expression": "",
+      "status": "completed",
+      "sharpe": -0.42,
+      "fitness": 0,
+      "turnover": 0,
+      "full_metrics": null,
+      "error": "fetch failed"
+    },
+    {
+      "index": 15,
+      "expression": "",
+      "status": "completed",
+      "sharpe": 0.22,
+      "fitness": 0,
+      "turnover": 0,
+      "full_metrics": null,
+      "error": "fetch failed"
+    },
+    {
+      "index": 16,
+      "expression": "",
+      "status": "completed",
+      "sharpe": 1.51,
+      "fitness": 0,
+      "turnover": 0,
+      "full_metrics": null,
+      "error": "fetch failed"
+    },
+    {
+      "index": 17,
+      "expression": "",
+      "status": "completed",
+      "sharpe": 0.28,
+      "fitness": 0,
+      "turnover": 0,
+      "full_metrics": null,
+      "error": "fetch failed"
+    },
+    {
+      "index": 18,
+      "expression": "",
+      "status": "completed",
+      "sharpe": -0.23,
+      "fitness": 0,
+      "turnover": 0,
+      "full_metrics": null,
+      "error": "fetch failed"
+    },
+    {
+      "index": 19,
+      "expression": "",
+      "status": "completed",
+      "sharpe": -1.47,
+      "fitness": 0,
+      "turnover": 0,
+      "full_metrics": null,
+      "error": "fetch failed"
+    },
+    {
+      "index": 20,
+      "expression": "",
+      "status": "completed",
+      "sharpe": 0.36,
+      "fitness": 0,
+      "turnover": 0,
+      "full_metrics": null,
+      "error": "fetch failed"
+    },
+    {
+      "index": 21,
+      "expression": "",
+      "status": "completed",
+      "sharpe": -0.33,
+      "fitness": 0,
+      "turnover": 0,
+      "full_metrics": null,
+      "error": "fetch failed"
+    },
+    {
+      "index": 23,
+      "expression": "",
+      "status": "completed",
+      "sharpe": 0.13,
+      "fitness": 0,
+      "turnover": 0,
+      "full_metrics": null,
+      "error": "fetch failed"
+    },
+    {
+      "index": 24,
+      "expression": "",
+      "status": "completed",
+      "sharpe": -0.16,
+      "fitness": 0,
+      "turnover": 0,
+      "full_metrics": null,
+      "error": "fetch failed"
+    },
+    {
+      "index": 25,
+      "expression": "",
+      "status": "completed",
+      "sharpe": 1.53,
+      "fitness": 0,
+      "turnover": 0,
+      "full_metrics": null,
+      "error": "fetch failed"
+    },
+    {
+      "index": 26,
+      "expression": "",
+      "status": "completed",
+      "sharpe": -0.42,
+      "fitness": 0,
+      "turnover": 0,
+      "full_metrics": null,
+      "error": "fetch failed"
+    },
+    {
+      "index": 27,
+      "expression": "",
+      "status": "completed",
+      "sharpe": 1.93,
+      "fitness": 0,
+      "turnover": 0,
+      "full_metrics": null,
+      "error": "fetch failed"
+    },
+    {
+      "index": 28,
+      "expression": "",
+      "status": "completed",
+      "sharpe": 0.3,
+      "fitness": 0,
+      "turnover": 0,
+      "full_metrics": null,
+      "error": "fetch failed"
+    },
+    {
+      "index": 29,
+      "expression": "",
+      "status": "completed",
+      "sharpe": -0.7,
+      "fitness": 0,
+      "turnover": 0,
+      "full_metrics": null,
+      "error": "fetch failed"
+    },
+    {
+      "index": 30,
+      "expression": "",
+      "status": "completed",
+      "sharpe": -0.25,
+      "fitness": 0,
+      "turnover": 0,
+      "full_metrics": null,
+      "error": "fetch failed"
+    }
+  ],
+  "_note": "full_metrics backfilled from BRAIN API post-hoc"
+}

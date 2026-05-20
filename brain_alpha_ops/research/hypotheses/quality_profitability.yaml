@@ -1,0 +1,83 @@
+hypothesis:
+  id: "quality_profitability"
+  name: "Quality / Profitability"
+  category: "quality"
+  version: "1.0.0"
+
+  rationale:
+    theory: >
+      高盈利能力的公司具有持久的竞争优势（经济护城河），市场系统性地低估这些优势的持续性。
+      ROE、毛利率等指标反映管理质量和定价权。应计项目质量低的公司未来收益可能反转，
+      而高现金流的公司盈利更具可持续性。
+    academic_refs:
+      - "Novy-Marx (2013) — The Other Side of Value: The Gross Profitability Premium"
+      - "Fama & French (2015) — A Five-Factor Asset Pricing Model"
+      - "Sloan (1996) — Do Stock Prices Fully Reflect Information in Accruals?"
+    behavioral_bias: "overconfidence"
+
+  field_categories:
+    - category: "profitability_ratio"
+      priority: P0
+      examples: ["roe", "roic", "roa"]
+    - category: "margin"
+      priority: P0
+      examples: ["gross_margin", "operating_margin", "net_margin"]
+    - category: "efficiency_ratio"
+      priority: P1
+      examples: ["asset_turnover", "inventory_turnover"]
+    - category: "accruals"
+      priority: P1
+      examples: ["total_accruals", "discretionary_accruals"]
+    - category: "earnings_quality"
+      priority: P1
+      examples: ["earnings_variability", "earnings_persistence"]
+    - category: "cash_flow_quality"
+      priority: P2
+      examples: ["fcf_yield", "operating_cf_to_earnings"]
+    - category: "balance_sheet_strength"
+      priority: P2
+      examples: ["debt_to_equity", "current_ratio", "interest_coverage"]
+
+  expression_families:
+    - id: "excess_roe"
+      structure: "rank({field_roe} - {field_coc})"
+      description: "超额ROE — ROE减去权益成本，衡量经济利润创造"
+      windows: [1]
+
+    - id: "dupont_variant"
+      structure: "rank({field_margin} * {field_turnover})"
+      description: "DuPont分解变体 — 利润率×资产周转率"
+      windows: [1]
+
+    - id: "accruals_quality"
+      structure: "rank(-1 * ts_mean({field_accrual}, {window}))"
+      description: "应计项目质量 — 低应计项目（高现金流/利润比）= 高质量"
+      windows: [3, 6, 12]
+
+    - id: "long_term_stability"
+      structure: "rank(zscore({field_roic}, {window}))"
+      description: "长期盈利稳定性 — ROIC的5年Z-Score"
+      windows: [20, 40, 60]
+
+  expected_failure_modes:
+    - gate: "NEUTRALIZATION"
+      reason: "防御性行业（公用事业、消费品）集中度较高"
+      mitigation: "使用market neutral代替subindustry neutral"
+    - gate: "SELF_CORRELATION"
+      reason: "质量信号自相关高（质量特征变化缓慢）"
+      mitigation: "使用较长的decay参数（20-40天）"
+    - gate: "CAPACITY"
+      reason: "大市值股票拥挤，超额收益有限"
+      mitigation: "转向SMID_CAP universe寻找额外alpha"
+
+  adaptation:
+    preferred_regions: ["USA", "EUROPE", "DEV", "DEV_EX_US"]
+    preferred_universes: ["TOP3000", "SMID_CAP"]
+    preferred_delays: [1, 2]
+    unsuitable_regions: []
+
+  experience_weights:
+    overall: 1.0
+    field_category_weights: {}
+    expression_family_weights: {}
+    window_weights: {}

@@ -1,0 +1,100 @@
+hypothesis:
+  id: "analyst_behavior_bias"
+  name: "Analyst Behavior Biases"
+  category: "cross_sectional"
+  version: "1.0.0"
+
+  rationale:
+    theory: >
+      Analysts exhibit systematic behavioural biases: herding (converging to
+      consensus), overconfidence (overestimating forecast precision), and
+      confirmation bias (seeking information that confirms prior views). Changes
+      in analyst coverage, recommendation dispersion, and forecast disagreement
+      contain alpha because they reveal shifts in information asymmetry and
+      market attention. Star analysts and target price revisions are particularly
+      informative.
+    academic_refs:
+      - "Hong, Kubik, Solomon (2000) — Security analysts' career concerns and herding"
+      - "Jegadeesh & Kim (2006) — Value of analyst recommendations"
+      - "Stickel (1992) — Reputation and performance among security analysts"
+    behavioral_bias: "herding"
+
+  field_categories:
+    - category: "analyst_coverage_change"
+      priority: P0
+      examples: ["analyst_count_chg", "coverage_initiation", "coverage_drop"]
+      weight: 1.0
+    - category: "recommendation_dispersion"
+      priority: P0
+      examples: ["rec_dispersion", "rec_std", "rec_range"]
+      weight: 1.0
+    - category: "estimate_dispersion"
+      priority: P1
+      examples: ["eps_dispersion", "sales_dispersion", "cv_eps"]
+      weight: 1.0
+    - category: "star_analyst_coverage"
+      priority: P1
+      examples: ["star_analyst_count", "all_star_coverage"]
+      weight: 1.0
+    - category: "recommendation_consensus"
+      priority: P1
+      examples: ["rec_mean", "rec_consensus", "rec_score"]
+      weight: 1.0
+    - category: "target_price_upside"
+      priority: P1
+      examples: ["target_price_upside", "tp_revision", "tp_accuracy"]
+      weight: 1.0
+    - category: "earnings_surprise_history"
+      priority: P1
+      examples: ["sue_1q", "sue_4q", "surprise_persistence"]
+      weight: 1.0
+
+  expression_families:
+    - id: "coverage_change"
+      structure: "analyst_count_change(window)"
+      description: "Change in analyst coverage — increasing coverage is a positive signal"
+      windows: [3, 6, 12]
+      weight: 1.0
+    - id: "low_dispersion_consensus"
+      structure: "-1 * estimate_dispersion"
+      description: "Low forecast dispersion — consensus indicates certainty and trust in estimates"
+      windows: [1, 3, 6]
+      weight: 1.0
+    - id: "risk_adjusted_upside"
+      structure: "target_price_upside / implied_volatility"
+      description: "Target price upside divided by implied volatility — risk-adjusted upside potential"
+      windows: [3, 6]
+      weight: 1.0
+    - id: "star_coverage_count"
+      structure: "rank(star_coverage_count)"
+      description: "Number of star analysts covering the stock — quality signal"
+      windows: [1, 3, 6]
+      weight: 1.0
+    - id: "surprise_persistence"
+      structure: "surprise_persistence(window)"
+      description: "Number of consecutive earnings surprises — persistence of positive surprises"
+      windows: [4, 8, 12]
+      weight: 1.0
+
+  expected_failure_modes:
+    - gate: "NEUTRALIZATION"
+      reason: "Analyst coverage concentrates in large-cap, certain industry stocks"
+      mitigation: "Use sector-relative coverage metrics"
+    - gate: "DATA_LAG"
+      reason: "Analyst rating data has reporting delays"
+      mitigation: "Use delay 2–5 to ensure data availability"
+    - gate: "SELF_CORRELATION"
+      reason: "Analyst coverage levels are slow-moving"
+      mitigation: "Use change-based expressions"
+
+  adaptation:
+    preferred_regions: ["USA", "EUROPE", "DEV"]
+    preferred_universes: ["TOP3000", "MID_LARGE_CAP"]
+    preferred_delays: [2, 3, 4, 5]
+    unsuitable_regions: ["FRONTIER"]
+
+  experience_weights:
+    overall: 1.0
+    field_category_weights: {}
+    expression_family_weights: {}
+    window_weights: {}

@@ -1,0 +1,78 @@
+hypothesis:
+  id: "earnings_revision_momentum"
+  name: "Earnings Revision Momentum"
+  category: "momentum"
+  version: "1.0.0"
+
+  rationale:
+    theory: >
+      分析师盈利预测调整具有锚定偏差（anchoring bias），上修过程缓慢且具有持续性。
+      最先上修的股票在未来3-12个月有显著超额收益。市场对盈利预测修正反应不足，
+      导致信息逐步被价格吸收，形成可交易的动量效应。
+    academic_refs:
+      - "Chan, Jegadeesh, Lakonishok (1996) — Momentum Strategies"
+      - "Gleason & Lee (2003) — Analyst Forecast Revisions and Market Price Discovery"
+      - "Zhang (2008) — Analyst Responsiveness and the Post-Earnings-Announcement Drift"
+    behavioral_bias: "anchoring"
+
+  field_categories:
+    - category: "earnings_estimate_revision"
+      priority: P0
+      examples: ["eps_fy1_3m_rev", "sales_fy1_rev"]
+    - category: "revenue_estimate_revision"
+      priority: P0
+      examples: ["sales_fy1_3m_rev", "sales_fy2_rev"]
+    - category: "analyst_rating_change"
+      priority: P1
+      examples: ["rec_mean_3m_chg", "rec_dispersion"]
+    - category: "earnings_surprise"
+      priority: P1
+      examples: ["sue_basic", "earnings_yield"]
+    - category: "estimate_dispersion"
+      priority: P2
+      examples: ["eps_dispersion", "sales_dispersion"]
+
+  expression_families:
+    - id: "revision_diff"
+      structure: "rank(ts_rank({field_up} - {field_down}, {window}))"
+      description: "上下修差异标准化 — 捕捉分析师上修减下修的净方向"
+      windows: [1, 3, 6]
+
+    - id: "revision_momentum_zscore"
+      structure: "rank(zscore(ts_delta({field_revision}, {window})))"
+      description: "上修比例的滚动Z-Score，标准化处理不同量级的上修幅度"
+      windows: [3, 6, 12]
+
+    - id: "revision_acceleration"
+      structure: "rank(ts_delta({field_revision}, {window_short}) - ts_delta({field_revision}, {window_long}))"
+      description: "短期上修减长期上修，捕捉盈利修正的加速信号"
+      windows_short: [1, 2]
+      windows_long: [6, 12]
+
+    - id: "revision_coverage_adjusted"
+      structure: "rank(ts_rank({field_revision} / {field_coverage}, {window}))"
+      description: "分析师覆盖度调整后的修正信号，消除覆盖度偏差"
+      windows: [3, 6]
+
+  expected_failure_modes:
+    - gate: "NEUTRALIZATION"
+      reason: "行业中性化后信号衰减，因分析师覆盖集中在科技和金融行业"
+      mitigation: "使用sector-relative版本或放宽中性化约束"
+    - gate: "TURNOVER"
+      reason: "月度再平衡可能导致换手率过高（>50%）"
+      mitigation: "使用3M或6M窗口降低换手，或增加decay参数"
+    - gate: "CORRELATION"
+      reason: "与已有momentum Alpha可能高度相关（>0.7）"
+      mitigation: "orthogonalize to existing momentum alphas"
+
+  adaptation:
+    preferred_regions: ["USA", "DEV_EX_US", "ASIA"]
+    preferred_universes: ["TOP3000", "MID_LARGE_CAP"]
+    preferred_delays: [1, 2]
+    unsuitable_regions: ["FRONTIER"]
+
+  experience_weights:
+    overall: 1.0
+    field_category_weights: {}
+    expression_family_weights: {}
+    window_weights: {}
