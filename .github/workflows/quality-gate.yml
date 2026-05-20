@@ -23,13 +23,20 @@ jobs:
       - name: Install package and dev tooling
         run: python -m pip install -e ".[test,dev]"
 
-      - name: Run essential quality gates
-        id: essential
-        run: python scripts/quality_gate.py --json --skip-tests
+      - name: 1/6 - Python compile check
+        run: python -m compileall -q brain_alpha_ops scripts tests
 
-      - name: Run tests
+      - name: 2/6 - Config validation
+        run: python -m brain_alpha_ops.cli validate-config --config config/run_config.json
+
+      - name: 3/6 - Dependency policy
+        run: python scripts/check_dependency_policy.py --pyproject pyproject.toml --json
+
+      - name: 4/6 - Frontend inline sync
+        run: python brain_alpha_ops/web/build_inline.py --check --json
+
+      - name: 5/6 - Secret scan
+        run: python scripts/scan_sensitive_artifacts.py --root . --json --fail-on-findings
+
+      - name: 6/6 - Tests
         run: python -m pytest tests/ -v --tb=short
-
-      - name: Run optional quality gates (informational)
-        continue-on-error: true
-        run: python scripts/quality_gate.py --optional-tooling --ruff --mypy --dependency-audit --skip-tests 2>&1 || true
