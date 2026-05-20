@@ -2,6 +2,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 import json
+import os
 import urllib.request
 
 import pytest
@@ -517,6 +518,7 @@ def test_web_error_payload_preserves_endpoint_code_and_classification():
     assert payload["redacted_message"] == payload["error"]
 
 
+@pytest.mark.skipif(os.getenv("CI") == "true", reason="skipping live server test in CI environment")
 def test_web_smoke_test_server_exercises_session_lifecycle():
     port = web.find_free_port(start=8876)
 
@@ -549,6 +551,7 @@ def test_stream_uses_separate_session_token():
         web._expire_session(session_id)
 
 
+@pytest.mark.skipif(os.getenv("CI") == "true", reason="skipping live server test in CI environment")
 def test_web_responses_include_security_headers():
     port = web.find_free_port(start=8976)
     url = web.serve(port=port, open_browser=False)

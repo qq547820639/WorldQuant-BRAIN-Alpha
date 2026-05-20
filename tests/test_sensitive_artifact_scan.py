@@ -1,4 +1,5 @@
 import json
+import os
 
 from scripts.scan_sensitive_artifacts import scan_artifacts, main
 
@@ -18,7 +19,7 @@ def test_scan_artifacts_reports_redacted_findings_in_default_locations(tmp_path)
     assert result["schema_version"] == "sensitive_artifact_scan.v1"
     assert result["checked"] == 1
     assert result["findings"][0]["type"] == "auth_header"
-    assert result["findings"][0]["path"] == "data\\run.jsonl"
+    assert result["findings"][0]["path"] == f"data{os.sep}run.jsonl"
     assert "secret-token-value" not in result["findings"][0]["snippet"]
     assert "Authorization: <redacted>" in result["findings"][0]["snippet"]
 
@@ -62,7 +63,7 @@ def test_scan_artifacts_does_not_flag_plain_session_descriptions(tmp_path):
 
     assert result["ok"] is False
     assert len(result["findings"]) == 1
-    assert result["findings"][0]["path"] == "data\\auth.json"
+    assert result["findings"][0]["path"] == f"data{os.sep}auth.json"
     assert result["findings"][0]["type"] == "secret_key"
 
 

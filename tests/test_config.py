@@ -80,7 +80,8 @@ def test_write_run_config_round_trips():
 
 
 def test_frozen_runtime_root_is_executable_directory(monkeypatch):
-    exe_path = Path(tempfile.gettempdir()) / "BrainAlphaOps" / "BrainAlphaOps.exe"
+    exe_name = "BrainAlphaOps.exe" if sys.platform == "win32" else "BrainAlphaOps"
+    exe_path = Path(tempfile.gettempdir()) / "BrainAlphaOps" / exe_name
     monkeypatch.setattr(sys, "frozen", True, raising=False)
     monkeypatch.setattr(sys, "executable", str(exe_path))
     monkeypatch.delenv("BRAIN_ALPHA_OPS_HOME", raising=False)
