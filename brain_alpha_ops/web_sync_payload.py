@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any, Callable
 
 from brain_alpha_ops.config import RunConfig
+from brain_alpha_ops.official_context_datasets import list_official_datasets_or_derive
 from brain_alpha_ops.research.repository import ResearchRepository
 
 
@@ -36,7 +37,12 @@ def sync_cloud_alphas_payload(
     try:
         fields = api.list_fields("all", run_config.ops.settings.region)
         operators = api.list_operators("all")
-        datasets = datasets_from_fields(fields)
+        datasets = list_official_datasets_or_derive(
+            api,
+            fields,
+            region=run_config.ops.settings.region,
+            datasets_from_fields=datasets_from_fields,
+        )
         persist_official_context(fields, operators, datasets)
     except Exception:
         fields = list(default_fields)

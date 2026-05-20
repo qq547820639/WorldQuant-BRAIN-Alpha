@@ -15,6 +15,9 @@ class BrainAPI(Protocol):
     def list_fields(self, query: str = "all", region: str = "", progress_callback=None) -> list[dict]:
         ...
 
+    def list_datasets(self, query: str = "all", region: str = "", progress_callback=None) -> list[dict]:
+        ...
+
     def list_operators(self, query: str = "all", progress_callback=None) -> list[dict]:
         ...
 

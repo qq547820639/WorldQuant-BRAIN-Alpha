@@ -6,6 +6,7 @@ import logging
 from typing import Any, Callable, Protocol
 
 from brain_alpha_ops.config import RunConfig
+from brain_alpha_ops.official_context_datasets import list_official_datasets_or_derive
 from brain_alpha_ops.research.repository import ResearchRepository
 
 
@@ -124,7 +125,12 @@ def run_sync_job_service(
                     },
                 ),
             )
-            datasets = datasets_from_fields(fields)
+            datasets = list_official_datasets_or_derive(
+                api,
+                fields,
+                region=run_config.ops.settings.region,
+                datasets_from_fields=datasets_from_fields,
+            )
             stats["datasets_count"] = len(datasets)
             store.update(
                 job_id,

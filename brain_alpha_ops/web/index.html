@@ -2065,7 +2065,7 @@
 
     // --- Scoring Attribution (from scoring API) ---
     if (candidate.alpha_id) {
-      parts.push(renderScoringSection(candidate.alpha_id));
+      parts.push(renderScoringSection(candidate));
     }
 
     // --- Gate ---
@@ -2587,8 +2587,10 @@
    * Async section that loads scoring attribution from the API.
    * Shows a loading placeholder, then replaces with the result.
    */
-  function renderScoringSection(alphaId) {
-    var containerId = 'scoringSection_' + alphaId;
+  function renderScoringSection(candidate) {
+    candidate = candidate || {};
+    var alphaId = candidate.alpha_id || candidate.official_alpha_id || candidate.simulation_id || '';
+    var containerId = 'scoringSection_' + String(alphaId).replace(/[^a-zA-Z0-9_-]/g, '_');
     var html = '<div id="' + containerId + '" class="detail-section">' +
       '<div style="color:var(--muted);font-size:13px">评分归因加载中...</div></div>';
     // Load async
@@ -2596,17 +2598,17 @@
       var el = document.getElementById(containerId);
       if (!el) return;
       try {
-        window.ApiClient.post('/api/scoring/attribution', { alpha_id: alphaId }).then(function (data) {
+        window.ApiClient.post('/api/scoring/attribution', { alpha_id: alphaId, candidate: candidate }).then(function (data) {
           if (data && data.attribution) {
             el.innerHTML = renderAttributionTreeHTML(data);
           } else {
             el.innerHTML = '<div style="color:var(--muted);font-size:13px">暂无评分归因数据</div>';
           }
         }).catch(function () {
-          el.innerHTML = '';
+          el.innerHTML = '<div style="color:var(--muted);font-size:13px">Scoring attribution failed to load.</div>';
         });
       } catch (e) {
-        el.innerHTML = '';
+        el.innerHTML = '<div style="color:var(--muted);font-size:13px">Scoring attribution failed to load.</div>';
       }
     }, 10);
     return html;
@@ -2622,14 +2624,14 @@
 
     // ── Hard Gates Panel ──
     body += '<div class="detail-section" style="margin-top:6px">';
-    body += '<div style="font-weight:700;font-size:13px;margin-bottom:4px;color:var(--text)">🔒 硬门禁</div>';
+    body += '<div style="font-weight:700;font-size:13px;margin-bottom:4px;color:var(--text)">Hard Gates</div>';
     if (hg.length) {
       hg.forEach(function (g) {
         var color = g.passed ? 'var(--good)' : 'var(--bad)';
         var icon = g.passed ? '✓' : '✗';
-        body += '<div style="font-size:12px;padding:2px 0;color:' + color + '">' + icon + ' ' + g.gate_name;
+        body += '<div style="font-size:12px;padding:2px 0;color:' + color + '">' + icon + ' ' + esc(g.gate_name || '-');
         if (g.failed_items && g.failed_items.length) {
-          body += ' <span style="color:var(--muted)">(' + g.failed_items.join(', ') + ')</span>';
+          body += ' <span style="color:var(--muted)">(' + g.failed_items.map(function (item) { return esc(item); }).join(', ') + ')</span>';
         }
         body += '</div>';
       });
@@ -2641,12 +2643,12 @@
     // ── Soft Gates Panel ──
     if (sg.length) {
       body += '<div class="detail-section" style="margin-top:6px">';
-      body += '<div style="font-weight:700;font-size:13px;margin-bottom:4px;color:var(--text)">⚠ 软门禁警告</div>';
+      body += '<div style="font-weight:700;font-size:13px;margin-bottom:4px;color:var(--text)">Soft Gate Warnings</div>';
       sg.forEach(function (g) {
         var color = g.passed ? 'var(--muted)' : 'var(--warn)';
-        body += '<div style="font-size:12px;padding:2px 0;color:' + color + '">' + g.gate_name;
+        body += '<div style="font-size:12px;padding:2px 0;color:' + color + '">' + esc(g.gate_name || '-');
         if (g.failed_items && g.failed_items.length) {
-          body += ' (' + g.failed_items.join(', ') + ')';
+          body += ' (' + g.failed_items.map(function (item) { return esc(item); }).join(', ') + ')';
         }
         body += '</div>';
       });
@@ -2656,9 +2658,10 @@
     // ── Top Failures ──
     if (tf.length) {
       body += '<div class="detail-section" style="margin-top:6px">';
-      body += '<div style="font-weight:700;font-size:13px;margin-bottom:4px;color:var(--bad)">✗ 主要失败项</div>';
+      body += '<div style="font-weight:700;font-size:13px;margin-bottom:4px;color:var(--bad)">Top Failures</div>';
       tf.forEach(function (f) {
-        body += '<div style="font-size:12px;padding:2px 0;color:var(--bad)">' + f.name + ': ' + (f.reason || f.actual || '') + '</div>';
+        var item = f.item || f.name || '-';
+        body += '<div style="font-size:12px;padding:2px 0;color:var(--bad)">' + esc(item) + ': ' + esc(f.reason || f.actual || '') + '</div>';
       });
       body += '</div>';
     }
@@ -2666,9 +2669,9 @@
     // ── Improvement Hints ──
     if (hints.length) {
       body += '<div class="detail-section" style="margin-top:6px">';
-      body += '<div style="font-weight:700;font-size:13px;margin-bottom:4px;color:var(--text)">💡 改进建议</div>';
+      body += '<div style="font-weight:700;font-size:13px;margin-bottom:4px;color:var(--text)">Improvement Hints</div>';
       hints.forEach(function (h) {
-        body += '<div style="font-size:12px;padding:2px 0;color:var(--muted)">' + h + '</div>';
+        body += '<div style="font-size:12px;padding:2px 0;color:var(--muted)">' + esc(h) + '</div>';
       });
       body += '</div>';
     }
@@ -2676,7 +2679,7 @@
     // ── Attribution Tree ──
     if (result.attribution) {
       body += '<div class="detail-section" style="margin-top:6px">';
-      body += '<div style="font-weight:700;font-size:13px;margin-bottom:4px;color:var(--text)">🌳 评分归因树</div>';
+      body += '<div style="font-weight:700;font-size:13px;margin-bottom:4px;color:var(--text)">Scoring Attribution Tree</div>';
       body += renderAttributionNode(result.attribution);
       body += '</div>';
     }
@@ -2687,14 +2690,16 @@
   function renderAttributionNode(node) {
     if (!node) return '';
     var indent = 'margin-left:16px;';
-    var sign = node.contribution >= 0 ? '' : '';
-    var color = node.score > 0.7 ? 'var(--good)' : node.score > 0.4 ? 'var(--warn)' : 'var(--bad)';
-    var html = '<div style="font-size:13px;' + (node.weight < 1.0 ? indent : '') + '">' +
-      '<span style="color:' + color + ';font-weight:600">' + node.name + '</span>' +
-      ' <span style="color:var(--muted);font-size:12px">得分=' + (node.score || 0).toFixed(2) +
-      ' 权重=' + (node.weight || 0).toFixed(2) +
-      ' 贡献=' + (node.contribution || 0).toFixed(2) + '</span>' +
-      (node.explanation ? ' <span style="color:var(--muted);font-size:11px">' + node.explanation + '</span>' : '') +
+    var score = Number(node.score || 0);
+    var weight = Number(node.weight || 0);
+    var contribution = Number(node.contribution || 0);
+    var color = score >= 70 ? 'var(--good)' : score >= 40 ? 'var(--warn)' : 'var(--bad)';
+    var html = '<div style="font-size:13px;' + (weight < 1.0 ? indent : '') + '">' +
+      '<span style="color:' + color + ';font-weight:600">' + esc(node.name || '-') + '</span>' +
+      ' <span style="color:var(--muted);font-size:12px">score=' + score.toFixed(2) +
+      ' weight=' + weight.toFixed(2) +
+      ' contribution=' + contribution.toFixed(2) + '</span>' +
+      (node.explanation ? ' <span style="color:var(--muted);font-size:11px">' + esc(node.explanation) + '</span>' : '') +
       '</div>';
     if (node.children && node.children.length) {
       for (var i = 0; i < node.children.length; i++) {
@@ -2770,12 +2775,19 @@
   }
 
   function resumeFromCheckpoint() {
+    if (typeof window.resumeProductionFromCheckpoint === 'function') {
+      window.resumeProductionFromCheckpoint();
+      return;
+    }
     var payload = { guided: true, resume: true };
     try {
       window.ApiClient.post('/api/run', payload).then(function (data) {
         if (data && data.ok) {
           window.AppState.set('activeJobId', data.job_id);
           window.AppState.set('isRunning', true);
+          if (typeof window.connectSSE === 'function') {
+            window.connectSSE(data.job_id);
+          }
         }
       }).catch(function () {});
     } catch (e) {}
@@ -2986,20 +2998,25 @@
     await startProduction();
   };
 
-  async function startProduction() {
+  async function startProduction(options) {
+    options = options || {};
     _running = true;
     S.set("isRunning", true);
     updateRunButton();
-    Toast.toast("正在创建生产任务...", "info");
+    Toast.toast(options.resume ? "正在从断点恢复引导式生产任务..." : "正在创建引导式生产任务...", "info");
 
     try {
       var payload = window.collectPayload ? window.collectPayload() : {};
       payload.continuousMode = true;
+      payload.guided = true;
+      if (options.resume) {
+        payload.resume = true;
+      }
       var resp = await Api.post("/api/run", payload);
       if (!resp.ok) throw new Error(resp.error || "启动失败");
       _jobId = resp.job_id;
       S.set("activeJobId", _jobId);
-      Toast.toast("生产已启动 (job: " + _jobId.slice(0, 8) + ")", "success");
+      Toast.toast((options.resume ? "断点续跑已启动" : "引导式生产已启动") + " (job: " + _jobId.slice(0, 8) + ")", "success");
 
       // Primary: SSE real-time stream
       connectSSE(_jobId);
@@ -3043,6 +3060,9 @@
 
   // Expose
   window.startProduction = startProduction;
+  window.resumeProductionFromCheckpoint = function () {
+    return startProduction({ resume: true });
+  };
   window.stopProduction = stopProduction;
   window.connectSSE = connectSSE;
   window.disconnectSSE = disconnectSSE;

@@ -21,6 +21,11 @@ class Api:
         return [{"name": "rank"}]
 
 
+class ApiWithDatasets(Api):
+    def list_datasets(self, *_args):
+        return [{"id": "official_ds", "name": "Official Dataset", "field_count": 9}]
+
+
 class Repo:
     def __init__(self, storage_dir):
         self.storage_dir = storage_dir
@@ -51,6 +56,26 @@ def test_sync_cloud_alphas_payload_merges_and_persists_context(tmp_path):
     assert payload["fields_count"] == 1
     assert payload["operators_count"] == 1
     assert persisted
+
+
+def test_sync_cloud_alphas_payload_prefers_official_datasets(tmp_path):
+    run_config = RunConfig(environment="mock")
+    run_config.ops.storage_dir = str(tmp_path)
+    persisted = []
+
+    payload = sync_cloud_alphas_payload(
+        {},
+        run_config_from_payload=lambda body: run_config,
+        api_from_run_config=lambda config: ApiWithDatasets(),
+        repository_factory=Repo,
+        datasets_from_fields=lambda fields: [{"id": "derived"}],
+        persist_official_context=lambda fields, operators, datasets: persisted.append((fields, operators, datasets)),
+        default_fields=[],
+        default_operators=[],
+    )
+
+    assert payload["datasets_count"] == 1
+    assert persisted[0][2] == [{"id": "official_ds", "name": "Official Dataset", "field_count": 9}]
 
 
 def test_sync_cloud_alphas_payload_uses_context_fallback(tmp_path):

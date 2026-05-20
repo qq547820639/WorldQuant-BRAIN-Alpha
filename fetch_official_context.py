@@ -1,4 +1,4 @@
-"""Fetch official BRAIN fields, operators, and derived datasets.
+"""Fetch official BRAIN fields, operators, and datasets.
 
 This is a manual maintenance script. It requires live WorldQuant BRAIN
 credentials via BRAIN_USERNAME and BRAIN_PASSWORD. Sensitive authentication
@@ -108,6 +108,48 @@ def fetch_operators(session: requests.Session) -> list[dict]:
     return operators
 
 
+def fetch_datasets(session: requests.Session) -> list[dict]:
+    print("\nFetching data sets...")
+    datasets: list[dict] = []
+    offset = 0
+    limit = 50
+    total: int | None = None
+
+    while True:
+        url = (
+            f"{BASE_URL}/data-sets?limit={limit}&offset={offset}"
+            "&instrumentType=EQUITY&region=USA&delay=1&universe=TOP3000"
+        )
+        payload = _get_json(session, url)
+        if isinstance(payload, list):
+            page_items = payload
+            total = total or len(payload)
+        elif isinstance(payload, dict):
+            page_items = payload.get("results") or payload.get("datasets") or payload.get("dataSets") or []
+            if total is None:
+                total = int(payload.get("count", payload.get("total", 0)) or 0)
+                print(f"Total data sets reported: {total or 'unknown'}")
+        else:
+            raise RuntimeError(f"unexpected data-sets payload type: {type(payload).__name__}")
+        if not isinstance(page_items, list):
+            raise RuntimeError("unexpected data-sets results payload")
+
+        normalized = [
+            row
+            for row in (_normal_dataset(item) for item in page_items if isinstance(item, dict))
+            if row.get("id")
+        ]
+        datasets.extend(normalized)
+        print(f"  fetched {len(normalized)} data sets; accumulated {len(datasets)}")
+
+        if not page_items or (total and len(datasets) >= total):
+            break
+        offset += limit
+        time.sleep(3)
+
+    return datasets
+
+
 def derive_datasets(fields: list[dict]) -> list[dict]:
     datasets: dict[str, dict] = {}
     for field in fields:
@@ -129,6 +171,32 @@ def derive_datasets(fields: list[dict]) -> list[dict]:
     return sorted(datasets.values(), key=lambda item: (-int(item["field_count"]), str(item["id"])))
 
 
+def _normal_dataset(item: dict) -> dict:
+    dataset_id = item.get("id") or item.get("code") or item.get("datasetId") or item.get("dataset") or ""
+    if isinstance(dataset_id, dict):
+        dataset_id = dataset_id.get("id") or dataset_id.get("code") or dataset_id.get("datasetId") or ""
+    field_count = (
+        item.get("field_count")
+        or item.get("fieldCount")
+        or item.get("fieldsCount")
+        or item.get("dataFieldCount")
+        or item.get("data_field_count")
+        or item.get("fields")
+        or 0
+    )
+    if isinstance(field_count, list):
+        field_count = len(field_count)
+    try:
+        numeric_field_count = int(field_count or 0)
+    except (TypeError, ValueError):
+        numeric_field_count = 0
+    return {
+        "id": str(dataset_id or ""),
+        "name": str(item.get("name") or item.get("title") or dataset_id or ""),
+        "field_count": numeric_field_count,
+    }
+
+
 def _write_json(path: Path, payload: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
@@ -142,7 +210,11 @@ def main() -> int:
         if not fields:
             raise RuntimeError("no fields fetched")
         operators = fetch_operators(session)
-        datasets = derive_datasets(fields)
+        try:
+            datasets = fetch_datasets(session)
+        except Exception as exc:
+            print(f"WARNING: data-sets endpoint failed; deriving from official fields: {redact_error_message(exc)}")
+            datasets = derive_datasets(fields)
 
         _write_json(FIELDS_PATH, fields)
         _write_json(OPERATORS_PATH, operators)

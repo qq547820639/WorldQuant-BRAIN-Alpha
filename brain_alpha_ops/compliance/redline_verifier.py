@@ -27,6 +27,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from brain_alpha_ops.brain_api.canonical import (
+    CANONICAL_API_PATHS,
+    CANONICAL_METRIC_NAMES,
+    CANONICAL_SETTINGS,
+    CANONICAL_THRESHOLDS,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -146,53 +153,6 @@ class ComplianceReport:
 # ═══════════════════════════════════════════════════════════════════════
 # Source: https://api.worldquantbrain.com — Alpha Check, Data Fields, Operators
 # Any deviation from these values is a red-line violation.
-
-CANONICAL_THRESHOLDS = {
-    "min_sharpe": 1.25,
-    "min_sharpe_delay0": 2.0,
-    "min_fitness": 1.0,
-    "min_fitness_delay0": 1.3,
-    "min_turnover": 0.01,
-    "platform_max_turnover": 0.70,
-    "max_self_correlation": 0.70,
-    "max_weight_concentration": 0.10,
-    "sub_universe_sharpe_min_ratio": 0.75,
-}
-
-CANONICAL_API_PATHS = {
-    "authentication": "/authentication",
-    "simulations": "/simulations",
-    "data_fields": "/data-fields",
-    "operators": "/operators",
-    "user_alphas": "/users/self/alphas",
-    "user_profile": "/users/self",
-    "alpha_check": "/alphas/{alpha_id}/check",
-    "alpha_submit": "/alphas/{alpha_id}/submit",
-    "alpha_detail": "/alphas/{alpha_id}",
-    "alpha_correlations": "/alphas/correlations/check",
-}
-
-CANONICAL_SETTINGS = {
-    "instrumentType": {"EQUITY"},
-    "region": {"USA", "EUR", "CHN", "JPN", "KOR", "TWN", "IND", "Global", "DevEurope", "AsiaExJapan"},
-    "universe": {"TOP3000", "TOP2000", "TOP1000", "TOP500", "ALL"},
-    "delay": {0, 1, 5, 10, 20},
-    "decay": {0, 1, 2, 5, 10, 20, 40, 60, 120},
-    "neutralization": {"NONE", "INDUSTRY", "SUBINDUSTRY", "SECTOR", "MARKET", "MME"},
-    "truncation": {0.01, 0.02, 0.05, 0.10},
-    "pasteurization": {"ON", "OFF"},
-    "unitHandling": {"VERIFY", "NONE"},
-    "nanHandling": {"ON", "OFF"},
-    "language": {"FASTEXPR"},
-    "type": {"REGULAR", "BOOK"},
-}
-
-CANONICAL_METRIC_NAMES = {
-    "sharpe", "fitness", "turnover", "returns", "drawdown",
-    "correlation", "weight_concentration", "sub_universe_sharpe", "margin",
-    "subUniverseSize", "alphaSize",
-}
-
 
 # ═══════════════════════════════════════════════════════════════════════
 # Red Line Verification Functions
@@ -377,6 +337,36 @@ def _verify_redline_2_threshold_zero_deviation(report: ComplianceReport) -> None
     except Exception:
         report.add_pass()
 
+    # 2d. Verify official hard gates are not adjusted by local market-regime factors.
+    try:
+        from brain_alpha_ops.research.scoring import empirical_score
+        import inspect
+
+        source = inspect.getsource(empirical_score)
+        forbidden = [
+            "effective_min_sharpe = effective_min_sharpe *",
+            "effective_min_fitness = effective_min_fitness *",
+            "regime_sharpe_factor",
+            "regime_fitness_factor",
+        ]
+        offenders = [token for token in forbidden if token in source]
+        if offenders:
+            report.add(RedLineViolation(
+                redline_id=redline_id,
+                redline_name="阈值零偏差",
+                severity="BLOCKING",
+                file_path="brain_alpha_ops/research/scoring.py",
+                check_name="官方硬门槛被本地 market regime 调整",
+                actual_value=", ".join(offenders),
+                expected_value="BRAIN hard gates use canonical thresholds without local factors",
+                deviation="本地环境因子会改变 LOW_SHARPE/LOW_FITNESS 阈值",
+                fix_guidance="保留 regime 元数据用于归因，但不要乘到 BRAIN 官方硬门槛上",
+            ))
+        else:
+            report.add_pass()
+    except Exception:
+        report.add_pass()
+
 
 def _verify_redline_3_dataset_ids(report: ComplianceReport) -> None:
     """Red Line 3: Dataset ID 全量可用."""
@@ -467,21 +457,22 @@ def _verify_redline_4_parameter_traceability(report: ComplianceReport) -> None:
     redline_id = 4
     report.redline_summary[redline_id] = "参数全链路可溯"
 
-    # 4a. Verify build_scorecard accepts ScoringParams
+    # 4a. Verify build_scorecard accepts ScoringParams and BRAIN settings trace.
     try:
         from brain_alpha_ops.research.scoring import build_scorecard
         import inspect
         sig = inspect.signature(build_scorecard)
-        if "params" in sig.parameters:
+        if "params" in sig.parameters and "settings" in sig.parameters:
             report.add_pass()
         else:
             report.add(RedLineViolation(
                 redline_id=redline_id, redline_name="参数全链路可溯",
                 severity="WARNING", file_path="brain_alpha_ops/research/scoring.py",
-                check_name="build_scorecard 缺少 params 参数",
-                actual_value="未接受 ScoringParams", expected_value="params: ScoringParams | None",
-                deviation="评分函数不接受可校准参数",
-                fix_guidance="确保 build_scorecard 接受 params 参数以支持校准",
+                check_name="build_scorecard 缺少参数溯源入口",
+                actual_value=f"parameters={list(sig.parameters)}",
+                expected_value="params + settings",
+                deviation="评分函数不能完整追溯校准参数与 BRAIN settings",
+                fix_guidance="确保 build_scorecard 接受 params 与 settings 参数",
             ))
     except Exception:
         report.add_pass()
@@ -650,6 +641,7 @@ def _verify_redline_6_code_alignment(report: ComplianceReport) -> None:
         path_map = {
             "authentication": api_config.authentication_path,
             "simulations": api_config.simulations_path,
+            "data_sets": api_config.data_sets_path,
             "data_fields": api_config.data_fields_path,
             "operators": api_config.operators_path,
             "user_alphas": api_config.user_alphas_path,
@@ -694,7 +686,56 @@ def _verify_redline_6_code_alignment(report: ComplianceReport) -> None:
     except Exception:
         report.add_pass()
 
-    # 6d. Verify metric field names in empirical_score
+    # 6d. Verify config/web enum validators share the canonical settings.
+    try:
+        from brain_alpha_ops import config as config_mod
+        from brain_alpha_ops import web_config as web_config_mod
+
+        validator_sets = {
+            "config.region": (getattr(config_mod, "_VALID_REGIONS", set()), CANONICAL_SETTINGS["region"]),
+            "config.universe": (getattr(config_mod, "_VALID_UNIVERSES", set()), CANONICAL_SETTINGS["universe"]),
+            "config.delay": (getattr(config_mod, "_VALID_DELAYS", set()), CANONICAL_SETTINGS["delay"]),
+            "config.neutralization": (
+                getattr(config_mod, "_VALID_NEUTRALIZATIONS", set()),
+                CANONICAL_SETTINGS["neutralization"],
+            ),
+            "config.type": (getattr(config_mod, "_VALID_ALPHA_TYPES", set()), CANONICAL_SETTINGS["type"]),
+            "config.unitHandling": (
+                getattr(config_mod, "_VALID_UNIT_HANDLING", set()),
+                CANONICAL_SETTINGS["unitHandling"],
+            ),
+            "web.region": (getattr(web_config_mod, "_VALID_REGIONS", set()), CANONICAL_SETTINGS["region"]),
+            "web.universe": (getattr(web_config_mod, "_VALID_UNIVERSES", set()), CANONICAL_SETTINGS["universe"]),
+            "web.delay": (getattr(web_config_mod, "_VALID_DELAYS", set()), CANONICAL_SETTINGS["delay"]),
+            "web.neutralization": (
+                getattr(web_config_mod, "_VALID_NEUTRALIZATIONS", set()),
+                CANONICAL_SETTINGS["neutralization"],
+            ),
+            "web.type": (getattr(web_config_mod, "_VALID_TYPES", set()), CANONICAL_SETTINGS["type"]),
+        }
+        for name, (actual, expected) in validator_sets.items():
+            if set(actual) != set(expected):
+                report.add(RedLineViolation(
+                    redline_id=redline_id, redline_name="代码强对齐",
+                    severity="BLOCKING", file_path="brain_alpha_ops/brain_api/canonical.py",
+                    check_name=f"canonical enum drift: {name}",
+                    actual_value=sorted(actual), expected_value=sorted(expected),
+                    deviation="Config/Web enum validators are not aligned with canonical settings.",
+                    fix_guidance="Import supported enum sets from brain_alpha_ops.brain_api.canonical.",
+                ))
+            else:
+                report.add_pass()
+    except Exception as exc:
+        report.add(RedLineViolation(
+            redline_id=redline_id, redline_name="代码强对齐",
+            severity="WARNING", file_path="brain_alpha_ops/brain_api/canonical.py",
+            check_name="canonical enum alignment check failed",
+            actual_value=str(exc), expected_value="alignment check can run",
+            deviation="Unable to verify config/web enum alignment.",
+            fix_guidance="Ensure config.py and web_config.py import canonical enum sets without cycles.",
+        ))
+
+    # 6e. Verify metric field names in empirical_score
     try:
         from brain_alpha_ops.research.scoring import empirical_score
         import inspect

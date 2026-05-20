@@ -110,6 +110,34 @@ class MockBrainAPI:
             progress_callback({"scanned": len(items), "total": len(items), "range": region or "mock"})
         return items
 
+    def list_datasets(self, query: str = "all", region: str = "", progress_callback=None) -> list[dict]:
+        items: list[dict[str, Any]] = []
+        try:
+            from brain_alpha_ops.data import OfficialDataLoader
+
+            for ds in OfficialDataLoader.instance().get_datasets():
+                items.append({"id": ds.id, "name": ds.name, "field_count": ds.field_count})
+        except Exception:
+            items = []
+        if not items:
+            grouped: dict[str, dict[str, Any]] = {}
+            for field in FIELDS:
+                raw_dataset = field.get("dataset")
+                dataset_id = str(raw_dataset.get("id") if isinstance(raw_dataset, dict) else raw_dataset or "").strip()
+                if not dataset_id:
+                    continue
+                row = grouped.setdefault(dataset_id, {"id": dataset_id, "name": dataset_id, "field_count": 0})
+                row["field_count"] = int(row.get("field_count", 0) or 0) + 1
+            items = sorted(grouped.values(), key=lambda item: str(item.get("id", "")))
+        if not items:
+            items = [{"id": "mock", "name": "Mock Dataset", "field_count": len(FIELDS)}]
+        if query not in ("", "all", None):
+            needle = str(query).lower()
+            items = [item for item in items if needle in str(item.get("id", "")).lower() or needle in str(item.get("name", "")).lower()]
+        if progress_callback:
+            progress_callback({"scanned": len(items), "total": len(items), "range": region or "mock"})
+        return items
+
     def list_operators(self, query: str = "all", progress_callback=None) -> list[dict]:
         items = [{"name": operator} for operator in OPERATORS]
         if query not in ("", "all", None):

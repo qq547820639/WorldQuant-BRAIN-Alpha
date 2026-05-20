@@ -5,6 +5,8 @@ import sys
 import tempfile
 
 from brain_alpha_ops import config as config_mod
+from brain_alpha_ops import web_config as web_config_mod
+from brain_alpha_ops.brain_api.canonical import CANONICAL_API_PATHS, CANONICAL_SETTINGS
 import pytest
 
 from brain_alpha_ops.config import (
@@ -173,6 +175,30 @@ def test_load_run_config_rejects_invalid_official_api_url():
 
         with pytest.raises(ConfigValidationError, match="base_url"):
             load_run_config(path)
+
+
+def test_config_and_web_settings_enums_use_canonical_contract():
+    assert config_mod._VALID_REGIONS == CANONICAL_SETTINGS["region"]
+    assert config_mod._VALID_UNIVERSES == CANONICAL_SETTINGS["universe"]
+    assert config_mod._VALID_DELAYS == CANONICAL_SETTINGS["delay"]
+    assert config_mod._VALID_NEUTRALIZATIONS == CANONICAL_SETTINGS["neutralization"]
+    assert config_mod._VALID_ALPHA_TYPES == CANONICAL_SETTINGS["type"]
+    assert config_mod._VALID_UNIT_HANDLING == CANONICAL_SETTINGS["unitHandling"]
+
+    assert web_config_mod._VALID_REGIONS == CANONICAL_SETTINGS["region"]
+    assert web_config_mod._VALID_UNIVERSES == CANONICAL_SETTINGS["universe"]
+    assert web_config_mod._VALID_DELAYS == CANONICAL_SETTINGS["delay"]
+    assert web_config_mod._VALID_NEUTRALIZATIONS == CANONICAL_SETTINGS["neutralization"]
+    assert web_config_mod._VALID_TYPES == CANONICAL_SETTINGS["type"]
+
+
+def test_official_api_paths_use_canonical_contract():
+    config = RunConfig().ops.official_api
+    assert config.authentication_path == CANONICAL_API_PATHS["authentication"]
+    assert config.simulations_path == CANONICAL_API_PATHS["simulations"]
+    assert config.data_sets_path == CANONICAL_API_PATHS["data_sets"]
+    assert config.data_fields_path == CANONICAL_API_PATHS["data_fields"]
+    assert config.operators_path == CANONICAL_API_PATHS["operators"]
 
 
 def _restore_env(name, value):

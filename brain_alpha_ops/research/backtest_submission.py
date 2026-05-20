@@ -42,8 +42,10 @@ class BacktestSubmissionService:
     def submit_slot(self, slot: int, candidate: Candidate) -> BacktestSubmitOutcome:
         candidate.lifecycle_status = "backtest_slot_selected"
         candidate.submission["backtest_slot"] = slot
+        settings = dict(self.settings_provider())
+        candidate.submission["settings"] = settings
         try:
-            sim_id = self.api.submit_simulation(candidate.expression, self.settings_provider())
+            sim_id = self.api.submit_simulation(candidate.expression, settings)
         except BrainAPIError as exc:
             return self._handle_submit_error(exc, candidate)
 

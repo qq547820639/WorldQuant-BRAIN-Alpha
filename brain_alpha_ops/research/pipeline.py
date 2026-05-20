@@ -2523,8 +2523,10 @@ class AlphaResearchPipeline:
         )
         for index, candidate in enumerate(candidates, start=1):
             self._progress("simulation_submit", index - 1, total, f"提交回测任务 {index}/{total}：{candidate.alpha_id}", candidate.alpha_id)
+            settings = self.config.settings.to_platform_dict()["settings"]
+            candidate.submission["settings"] = dict(settings)
             try:
-                sim_id = self.api.submit_simulation(candidate.expression, self.config.settings.to_platform_dict()["settings"])
+                sim_id = self.api.submit_simulation(candidate.expression, settings)
             except BrainAPIError as exc:
                 self._handle_simulation_submit_error(exc, candidate, candidates[index:], submitted)
                 break

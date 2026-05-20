@@ -40,6 +40,7 @@ def test_backtest_submission_service_assigns_slot_on_success():
     assert candidate.lifecycle_status == "simulation_submitted"
     assert candidate.submission["simulation_status"] == "SUBMITTED"
     assert candidate.submission["backtest_slot"] == 2
+    assert candidate.submission["settings"] == {"region": "USA"}
     assert candidate.submission["poll_count"] == 0
     assert candidate.submission["next_poll_at"] > 0
     assert slots.get(2) is candidate

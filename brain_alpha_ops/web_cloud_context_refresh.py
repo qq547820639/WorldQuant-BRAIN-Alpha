@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Callable, Protocol
 
+from brain_alpha_ops.official_context_datasets import list_official_datasets_or_derive
 from brain_alpha_ops.research.repository import ResearchRepository
 
 
@@ -140,7 +141,16 @@ def refresh_cloud_context_for_check_service(
         context_errors.append(f"operators refresh failed: {safe_error_message(exc)}")
 
     try:
-        datasets = datasets_from_fields(fields) if fields_count > 0 else []
+        datasets = (
+            list_official_datasets_or_derive(
+                api,
+                fields,
+                region=region,
+                datasets_from_fields=datasets_from_fields,
+            )
+            if fields_count > 0
+            else []
+        )
         persist_official_context(
             fields if fields_count > 0 else [],
             operators if operators_count > 0 else [],
