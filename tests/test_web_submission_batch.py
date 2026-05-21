@@ -18,6 +18,8 @@ def test_submit_batch_payload_blocks_on_observability_confirmation(tmp_path):
     )
 
     assert payload["ok"] is False
+    assert payload["schema_version"] == "submission_batch_result.v2"
+    assert payload["status"] == "BLOCKED"
     assert payload["error_code"] == "SUBMIT_OBSERVABILITY_CONFIRMATION_REQUIRED"
     assert payload["observability_preflight"]["blocking_flags"] == ["rate_limit_pressure"]
 
@@ -42,7 +44,12 @@ def test_submit_batch_payload_deduplicates_successful_alpha_ids(tmp_path):
     )
 
     assert payload["ok"] is True
+    assert payload["schema_version"] == "submission_batch_result.v2"
+    assert payload["status"] == "COMPLETED"
     assert payload["submitted"] == 2
     assert payload["failed"] == 0
+    assert payload["submitted_alpha_ids"] == ["a1", "a1"]
+    assert payload["state_counts"]["SUBMITTED"] == 1
+    assert payload["state_counts"]["ALREADY_SUBMITTED"] == 1
     assert submitted == ["a1"]
     assert payload["results"][1]["submission"]["status"] == "ALREADY_SUBMITTED"

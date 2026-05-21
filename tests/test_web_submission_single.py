@@ -67,6 +67,10 @@ def test_submit_candidate_payload_submits_and_records(tmp_path):
     )
 
     assert payload["ok"] is True
+    assert payload["schema_version"] == "submission_result.v2"
+    assert payload["alpha_id"] == "a1"
+    assert payload["official_alpha_id"] == "off_1"
+    assert payload["status"] == "SUBMITTED"
     assert payload["submission"]["status"] == "SUBMITTED"
     assert api_calls[0] == ("authenticate",)
     assert api_calls[1][0] == "submit_alpha"
@@ -92,5 +96,9 @@ def test_submit_candidate_payload_records_preflight_block(tmp_path):
         api_from_run_config=lambda config: FakeApi([]),
     )
 
-    assert payload == {"ok": False, "error": "blocked"}
+    assert payload["ok"] is False
+    assert payload["error"] == "blocked"
+    assert payload["schema_version"] == "submission_result.v2"
+    assert payload["alpha_id"] == "a1"
+    assert payload["status"] == "BLOCKED"
     assert blocked == ["blocked"]

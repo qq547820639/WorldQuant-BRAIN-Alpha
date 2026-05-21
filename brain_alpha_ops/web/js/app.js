@@ -67,6 +67,7 @@
   VIEW_TITLES.robustness = 'Robustness';
 
   var activeFilter = '';
+  var resultDisplayMode = 'table';
   var rowCache = new Map();
   var presets = {};
   var syncInFlight = false;
@@ -146,6 +147,94 @@
     track.setAttribute('aria-valuenow', String(value));
     if (label) track.setAttribute('aria-valuetext', label);
   }
+
+  function setControlState(id, disabled, reason) {
+    var el = $(id);
+    if (!el) return;
+    if (!el.dataset.defaultTitle) el.dataset.defaultTitle = el.getAttribute('title') || '';
+    el.disabled = Boolean(disabled);
+    el.setAttribute('aria-disabled', disabled ? 'true' : 'false');
+    if (reason) el.setAttribute('title', reason);
+    else if (el.dataset.defaultTitle) el.setAttribute('title', el.dataset.defaultTitle);
+    else el.removeAttribute('title');
+  }
+
+  function operationBlockReason(action) {
+    var running = Boolean(S.get('isRunning'));
+    if (action === 'production') {
+      if (syncInFlight) return '云端同步正在进行，完成后再启动生产。';
+      if (batchCheckJobId) return '达标检查正在进行，完成后再启动生产。';
+      if (submitInFlight) return '提交正在进行，完成后再启动生产。';
+      return '';
+    }
+    if (action === 'sync') {
+      if (running) return '生产任务运行中，先停止生产再同步云端数据。';
+      if (batchCheckJobId) return '达标检查正在进行，完成后再同步云端数据。';
+      if (submitInFlight) return '提交正在进行，完成后再同步云端数据。';
+      if (syncInFlight) return '云端同步正在进行。';
+      return '';
+    }
+    if (action === 'check') {
+      if (running) return '生产任务运行中，先停止生产再执行达标检查。';
+      if (syncInFlight) return '云端同步正在进行，完成后再检查。';
+      if (submitInFlight) return '提交正在进行，完成后再检查。';
+      if (batchCheckJobId) return '达标检查正在进行。';
+      return '';
+    }
+    if (action === 'submit') {
+      if (running) return '生产任务运行中，先停止生产再提交。';
+      if (syncInFlight) return '云端同步正在进行，完成后再提交。';
+      if (batchCheckJobId) return '达标检查正在进行，完成后再提交。';
+      if (submitInFlight) return '提交正在进行。';
+      return '';
+    }
+    return '';
+  }
+
+  function currentOperationText() {
+    if (syncInFlight) return '云端同步正在进行，其他冲突操作已暂时锁定。';
+    if (batchCheckJobId) return '达标检查正在进行，其他冲突操作已暂时锁定。';
+    if (submitInFlight) return '提交正在进行，其他冲突操作已暂时锁定。';
+    if (S.get('isRunning')) return '生产任务正在运行；需要同步、检查或提交时请先停止生产。';
+    return '';
+  }
+
+  function renderBusyControls() {
+    var productionReason = operationBlockReason('production');
+    var syncReason = operationBlockReason('sync');
+    var checkReason = operationBlockReason('check');
+    var submitReason = operationBlockReason('submit');
+    setControlState('controlButton', Boolean(productionReason), productionReason);
+    setControlState('syncButton', Boolean(syncReason), syncReason);
+    var syncRange = $('syncRange');
+    if (syncRange) {
+      syncRange.disabled = Boolean(syncReason);
+      syncRange.setAttribute('aria-disabled', syncRange.disabled ? 'true' : 'false');
+      if (syncReason) syncRange.setAttribute('title', syncReason);
+      else syncRange.removeAttribute('title');
+    }
+    setControlState('checkButton', Boolean(checkReason) || Boolean(batchCheckJobId), checkReason);
+    var submitButton = $('submitSelectedButton');
+    if (submitButton && submitReason) {
+      submitButton.disabled = true;
+      submitButton.setAttribute('aria-disabled', 'true');
+      submitButton.setAttribute('title', submitReason);
+    }
+    var autoSubmit = $('autoSubmitToggle');
+    if (autoSubmit) {
+      autoSubmit.disabled = Boolean(submitReason || batchCheckJobId || submitInFlight);
+      autoSubmit.setAttribute('aria-disabled', autoSubmit.disabled ? 'true' : 'false');
+    }
+    var guard = $('operationGuard');
+    if (guard) {
+      var message = currentOperationText();
+      guard.textContent = message;
+      guard.classList.toggle('hidden', !message);
+    }
+  }
+
+  window.operationBlockReason = operationBlockReason;
+  window.renderBusyControls = renderBusyControls;
 
   function currentSummary() {
     return S.get('currentResult.summary') || {};
@@ -661,6 +750,7 @@
     renderBacktests(currentBacktests());
     if (typeof window.renderCharts === 'function') window.renderCharts();
     renderCurrentView();
+    renderBusyControls();
   }
 
   window.switchView = function (view) {
@@ -751,23 +841,73 @@
     var tableWrap = $('tableWrap');
     var cloudStatsPanel = $('cloudStatsPanel');
     var candidateTable = $('candidateTable');
+    var chartsPanel = $('chartsPanel');
+    var displayModeToggle = $('displayModeToggle');
     var filterBar = $('filterBar');
     var statsMode = ['cloud', 'research_memory', 'research_observability', 'research_knowledge', 'prompt_runs', 'sqlite_indexes', 'robustness'].indexOf(view) !== -1;
-    if (tableWrap) tableWrap.classList.toggle('stats-mode', statsMode);
+    var chartEligible = isChartEligibleView(view);
+    if (!chartEligible && resultDisplayMode === 'charts') resultDisplayMode = 'table';
+    var chartMode = chartEligible && resultDisplayMode === 'charts';
+    if (displayModeToggle) displayModeToggle.classList.toggle('hidden', !chartEligible);
+    updateDisplayModeButtons();
+    if (chartsPanel) chartsPanel.classList.toggle('visible', chartMode);
+    if (tableWrap) {
+      tableWrap.classList.toggle('stats-mode', statsMode);
+      tableWrap.classList.toggle('hidden', chartMode);
+    }
     if (cloudStatsPanel) cloudStatsPanel.classList.toggle('hidden', !statsMode);
-    if (candidateTable) candidateTable.classList.toggle('hidden', statsMode);
+    if (candidateTable) candidateTable.classList.toggle('hidden', statsMode || chartMode);
+    var mobileCardList = $('mobileCardList');
+    if (mobileCardList) mobileCardList.classList.toggle('hidden', statsMode || chartMode);
     if (filterBar) filterBar.classList.toggle('hidden', statsMode);
-    if (statsMode) return;
+    if (statsMode || chartMode) {
+      if (chartMode && typeof window.renderCharts === 'function') {
+        window.renderCharts({
+          candidates: rows.map(function (row) { return row.raw || {}; }),
+          view: view,
+          title: viewTitle(view),
+        });
+      }
+      if (mobileCardList) mobileCardList.innerHTML = '';
+      var tableBody = $('candidateRows');
+      if (tableBody) tableBody.innerHTML = '';
+      renderBusyControls();
+      return;
+    }
 
     cacheRenderedRows(rows);
     var body = $('candidateRows');
     if (!body) return;
     body.innerHTML = rows.length
       ? rows.map(rowHtml).join('')
-      : '<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:22px">' + esc(emptyText(view)) + '</td></tr>';
+      : '<tr><td colspan="8" class="table-empty-cell">' + emptyStateHtml(view) + '</td></tr>';
+    if (mobileCardList) {
+      mobileCardList.innerHTML = rows.length
+        ? rows.map(mobileCardHtml).join('')
+        : '<div class="mobile-row-card empty-mobile-card">' + emptyStateHtml(view) + '</div>';
+    }
+    renderBusyControls();
   }
 
   window.renderCurrentView = renderCurrentView;
+
+  function isChartEligibleView(view) {
+    return ['candidates', 'passed', 'submittable', 'failed', 'backtest_rework'].indexOf(view) !== -1;
+  }
+
+  function updateDisplayModeButtons() {
+    var tableButton = $('tableModeButton');
+    var chartButton = $('chartModeButton');
+    if (tableButton) tableButton.classList.toggle('active', resultDisplayMode !== 'charts');
+    if (chartButton) chartButton.classList.toggle('active', resultDisplayMode === 'charts');
+    if (tableButton) tableButton.setAttribute('aria-pressed', resultDisplayMode !== 'charts' ? 'true' : 'false');
+    if (chartButton) chartButton.setAttribute('aria-pressed', resultDisplayMode === 'charts' ? 'true' : 'false');
+  }
+
+  window.setResultDisplayMode = function (mode) {
+    resultDisplayMode = mode === 'charts' ? 'charts' : 'table';
+    renderCurrentView();
+  };
 
   function countText(view, count) {
     var summary = currentSummary();
@@ -1514,11 +1654,11 @@
     var html = chips.map(function (chip) {
       var key = chip[0];
       var active = activeFilter === key || (!activeFilter && key === 'all');
-      return '<span class="filter-chip ' + (active ? 'active' : '') + '" onclick="setFilter(' + jsStringAttr(key) + ')">' + esc(chip[1]) + '</span>';
+      return '<button type="button" class="filter-chip ' + (active ? 'active' : '') + '" aria-pressed="' + (active ? 'true' : 'false') + '" onclick="setFilter(' + jsStringAttr(key) + ')">' + esc(chip[1]) + '</button>';
     }).join('');
     families.slice(0, 6).forEach(function (family) {
       var key = 'family:' + family;
-      html += '<span class="filter-chip ' + (activeFilter === key ? 'active' : '') + '" onclick="setFilter(' + jsStringAttr(key) + ')">' + esc(family) + '</span>';
+      html += '<button type="button" class="filter-chip ' + (activeFilter === key ? 'active' : '') + '" aria-pressed="' + (activeFilter === key ? 'true' : 'false') + '" onclick="setFilter(' + jsStringAttr(key) + ')">' + esc(family) + '</button>';
     });
     bar.innerHTML = html;
   }
@@ -1950,7 +2090,7 @@
     var kindArg = jsStringAttr(item.kind);
     var idArg = jsStringAttr(item.id);
     var selectBox = item.kind === 'submittable' && checked && !(($('autoSubmitToggle') || {}).checked)
-      ? '<input type="checkbox" ' + (selectedSubmitIds.has(c.alpha_id) ? 'checked' : '') + ' onclick="event.stopPropagation(); toggleSubmitSelection(' + jsStringAttr(c.alpha_id) + ', this.checked)">'
+      ? '<input type="checkbox" aria-label="选择 Alpha ' + escapeAttr(c.alpha_id || '') + ' 用于提交" ' + (selectedSubmitIds.has(c.alpha_id) ? 'checked' : '') + ' onclick="event.stopPropagation(); toggleSubmitSelection(' + jsStringAttr(c.alpha_id) + ', this.checked)">'
       : '';
     return '<tr id="' + rowId(item) + '"' + interactiveRowAttrs(item.kind, item.id, '查看 Alpha ' + (c.alpha_id || item.id || '') + ' 详情') + ' onclick="viewRow(' + kindArg + ', ' + idArg + ', event)">' +
       '<td>' + (selectBox || String(index + 1)) + '</td>' +
@@ -1962,6 +2102,44 @@
       '<td>' + esc(attention(c)) + (risk.level ? '<br>云端相关：' + esc(risk.level) + ' ' + esc(num(risk.max_similarity, 3)) : '') + '</td>' +
       '<td>' + candidateActions(c, item.kind) + '</td>' +
       '</tr>';
+  }
+
+  function mobileCardId(item) {
+    return 'mobile_' + rowId(item);
+  }
+
+  function mobileCardHtml(item, index) {
+    var raw = item.raw || {};
+    var c = candidateLikeFromRecord(item.kind, raw);
+    var checked = isSubmittable(c);
+    var stale = Boolean(isOfficialPassedCheck(checkResults()[c.alpha_id]) && !checked);
+    var score = item.kind === 'submittable' ? submissionRankScore(c) : candidateDisplayScore(c);
+    var officialId = c.official_alpha_id || ((c.official_metrics || {}).official_alpha_id) || c.simulation_id || raw.id || '';
+    var risk = c.cloud_correlation_risk || raw.cloud_correlation_risk || {};
+    var status = item.kind === 'cloud'
+      ? statusLabelFromCode(raw.status || '-')
+      : item.kind === 'backtest'
+        ? statusText(raw.status || '-')
+        : candidateStatusLabel(c, checked, stale);
+    var riskText = risk.level
+      ? '云端相关 ' + risk.level + ' ' + num(risk.max_similarity, 3)
+      : (attention(c) || raw.message || raw.note || '-');
+    var selectBox = item.kind === 'submittable' && checked && !(($('autoSubmitToggle') || {}).checked)
+      ? '<label class="switch"><input type="checkbox" aria-label="选择 Alpha ' + escapeAttr(c.alpha_id || item.id || '') + ' 用于提交" ' + (selectedSubmitIds.has(c.alpha_id) ? 'checked' : '') + ' onclick="event.stopPropagation(); toggleSubmitSelection(' + jsStringAttr(c.alpha_id) + ', this.checked)"> 选择提交</label>'
+      : '';
+    return '<div id="' + mobileCardId(item) + '" class="mobile-row-card" data-kind="' + escapeAttr(item.kind) + '" data-id="' + escapeAttr(item.id) + '">' +
+      '<div class="mobile-card-head">' +
+        '<div class="mobile-card-title">' + esc(c.alpha_id || raw.id || item.id || '-') + '<div class="mini">' + esc(c.hypothesis || c.expression || raw.timestamp || '') + '</div></div>' +
+        '<div class="mobile-card-score"><span class="score-badge ' + scoreClass(score) + '">' + esc(num(score)) + '</span></div>' +
+      '</div>' +
+      '<div class="mobile-card-meta">' +
+        '<div><b>状态</b><br>' + esc(status) + '</div>' +
+        '<div><b>官方 ID</b><br>' + esc(officialId || '未获得') + '</div>' +
+        '<div><b>家族</b><br>' + esc(c.family || (item.kind === 'cloud' ? '云端' : '-')) + '</div>' +
+        '<div><b>风险 / 原因</b><br>' + esc(riskText) + '</div>' +
+      '</div>' +
+      '<div class="mobile-card-actions">' + selectBox + candidateActions(c, item.kind) + '</div>' +
+      '</div>';
   }
 
   function backtestRowHtml(item, index) {
@@ -2017,9 +2195,9 @@
     var kindArg = jsStringAttr(kind || 'candidate');
     var idArg = jsStringAttr(candidate.alpha_id || candidate.id || '');
     var submit = isSubmittable(candidate) && !(($('autoSubmitToggle') || {}).checked)
-      ? '<button class="small" ' + (submitInFlight ? 'disabled' : '') + ' onclick="event.stopPropagation(); submitCandidate(' + jsStringAttr(candidate.alpha_id) + ')">提交</button>'
+      ? '<button class="small" aria-label="提交 Alpha ' + escapeAttr(candidate.alpha_id || '') + '" ' + (submitInFlight ? 'disabled' : '') + ' onclick="event.stopPropagation(); submitCandidate(' + jsStringAttr(candidate.alpha_id) + ')">提交</button>'
       : '';
-    return '<button class="small secondary" data-action="view-row" data-kind="' + escapeAttr(kind || 'candidate') + '" data-id="' + escapeAttr(candidate.alpha_id || '') + '" onclick="viewRow(' + kindArg + ', ' + idArg + ', event)">查看</button>' + submit;
+    return '<button class="small secondary" aria-label="查看 Alpha ' + escapeAttr(candidate.alpha_id || '') + ' 详情" data-action="view-row" data-kind="' + escapeAttr(kind || 'candidate') + '" data-id="' + escapeAttr(candidate.alpha_id || '') + '" onclick="viewRow(' + kindArg + ', ' + idArg + ', event)">查看</button>' + submit;
   }
 
   window.toggleSubmitSelection = function (alphaId, checked) {
@@ -2074,6 +2252,9 @@
     document.querySelectorAll('tbody tr').forEach(function (row) { row.classList.remove('selected'); });
     var rowEl = $(rowId(item));
     if (rowEl) rowEl.classList.add('selected');
+    document.querySelectorAll('.mobile-row-card').forEach(function (row) { row.classList.remove('selected'); });
+    var cardEl = $(mobileCardId(item));
+    if (cardEl) cardEl.classList.add('selected');
 
     if (window.DetailView && hasAlphaDetail(item.raw || {})) {
       window.DetailView.renderCandidateDetail(candidateLikeFromRecord(kind, item.raw || {}));
@@ -2347,6 +2528,67 @@
     return messages[view] || '暂无记录';
   }
 
+  function emptyStateHint(view) {
+    var hints = {
+      candidates: '连接账号并启动生产后，结果会按排序分进入这里；若刚启动，等待云端同步和上下文加载完成即可。',
+      pending_backtest: '候选通过预检后会排队等待官方 simulation；可以先查看候选池确认本地生成是否正常。',
+      running_backtest: '当前没有占用官方槽位的任务；槽位会在提交回测后显示进度和倒计时。',
+      backtest_rework: '暂无需要处理的回测异常；限流、并发等待或官方拒绝会在这里集中复盘。',
+      passed: '达标 Alpha 会在这里执行官方提交前检查，检查通过后才会进入可提交队列。',
+      submittable: '可提交队列依赖最近一次官方检查结果；检查过期或失败时会回到达标列表。',
+      submitted: '成功提交或云端已运行的 Alpha 会在这里保留审计线索。',
+      failed: '官方 FAIL、硬检查失败和阻断原因会在这里保留，方便回溯策略问题。',
+      cloud: '云端快照用于重复提交和相关性拦截；登录后同步即可刷新统计。',
+      lifecycle: '生命周期记录会随生产、回测、检查和提交持续写入。',
+      research_memory: 'Research Memory 会从本地 JSONL 中汇总可复用字段、算子和失败经验。',
+      research_observability: 'Observability 会展示表达式复用、官方回测健康度和本地记录状态。',
+      research_knowledge: '结构化规则、发现和失败样本沉淀后会出现在这里。',
+      prompt_runs: '只展示提示运行元数据和解析状态，不展示原始提示词或响应。',
+      sqlite_indexes: 'SQLite 缓存构建后会显示表达式历史、云端 Alpha 和回测记录索引。',
+      robustness: '带有反过拟合或滚动验证报告的候选会在这里汇总风险。',
+    };
+    return hints[view] || '当前视图暂无记录。';
+  }
+
+  function emptyStateActions(view) {
+    var actions = [];
+    if (view === 'candidates') {
+      actions.push(['开始生产搜索', 'toggleRun()', '']);
+      actions.push(['同步云端数据', 'syncCloud()', 'secondary']);
+    } else if (view === 'passed') {
+      actions.push(['查看候选池', "switchView('candidates')", 'secondary']);
+      actions.push(['快速检查', "checkBatch('quick')", '']);
+    } else if (view === 'submittable') {
+      actions.push(['回到达标列表', "switchView('passed')", 'secondary']);
+      actions.push(['快速检查', "checkBatch('quick')", '']);
+    } else if (view === 'cloud') {
+      actions.push(['同步云端数据', 'syncCloud()', '']);
+      actions.push(['查看候选池', "switchView('candidates')", 'secondary']);
+    } else if (view === 'research_memory') {
+      actions.push(['生成候选', 'generateAssistantCandidates()', '']);
+      actions.push(['查看候选池', "switchView('candidates')", 'secondary']);
+    } else if (['research_observability', 'research_knowledge', 'prompt_runs', 'sqlite_indexes', 'robustness', 'lifecycle'].indexOf(view) !== -1) {
+      actions.push(['查看候选池', "switchView('candidates')", 'secondary']);
+      actions.push(['同步云端数据', 'syncCloud()', 'secondary']);
+    } else {
+      actions.push(['查看候选池', "switchView('candidates')", 'secondary']);
+    }
+    return actions;
+  }
+
+  function emptyStateHtml(view) {
+    var actions = emptyStateActions(view).map(function (action) {
+      var cls = action[2] ? ' ' + action[2] : '';
+      return '<button type="button" class="small' + cls + '" onclick="' + action[1] + '">' + esc(action[0]) + '</button>';
+    }).join('');
+    return '<div class="empty-state" role="status">' +
+      '<div class="empty-kicker">' + esc(viewTitle(view)) + '</div>' +
+      '<div class="empty-title">' + esc(emptyText(view)) + '</div>' +
+      '<div class="empty-hint">' + esc(emptyStateHint(view)) + '</div>' +
+      '<div class="empty-actions">' + actions + '</div>' +
+      '</div>';
+  }
+
   function renderInsightLegacyUnused() {
     var summary = currentSummary();
     var cloud = summary.cloud_sync || {};
@@ -2383,6 +2625,70 @@
       label: startupPhases.indexOf(phase) !== -1 ? phaseName(phase) + '中' : '准备中',
       note: active ? '启动后生成数据' : '关键状态',
     };
+  }
+
+  function workflowStepHtml(step) {
+    var active = step.views.indexOf(activeView()) !== -1;
+    return '<button type="button" class="workflow-step ' + (active ? 'active' : '') + '" onclick="switchView(' + jsStringAttr(step.target) + ')" aria-current="' + (active ? 'step' : 'false') + '">' +
+      '<span class="step-index">' + esc(step.index) + '</span>' +
+      '<span><span class="workflow-label">' + esc(step.label) + '</span><span class="workflow-meta">' + esc(step.meta) + '</span></span>' +
+      '</button>';
+  }
+
+  function renderWorkflowNav() {
+    var container = $('workflowNav');
+    if (!container) return;
+    var summary = currentSummary();
+    var startup = startupInsightState(summary);
+    var candidateCount = currentCandidates().length;
+    var backtestActive = activeBacktestCount(currentBacktests());
+    var pendingCount = pendingBacktestCandidates().length;
+    var reworkCount = backtestReworkRows().length;
+    var backtestTarget = backtestActive ? 'running_backtest' : (pendingCount ? 'pending_backtest' : (reworkCount ? 'backtest_rework' : 'pending_backtest'));
+    var needsCheck = needsCheckCount();
+    var submittableCount = submittableCandidates().length;
+    var cloud = summary.cloud_sync || {};
+    var cloudMeta = cloud.run_status === 'skipped' || isSkippedCloudSync(cloud)
+      ? '缓存已加载'
+      : statusLabelFromCode(cloud.status || cloud.phase || '未同步');
+    var steps = [
+      {
+        index: '1',
+        label: '生产候选',
+        target: 'candidates',
+        views: ['candidates'],
+        meta: startup.active && !candidateCount ? startup.label : ('候选 ' + candidateCount + '/' + (summary.retained_pool_limit || configuredBudget().retained_alpha_pool_size || 10)),
+      },
+      {
+        index: '2',
+        label: '官方回测',
+        target: backtestTarget,
+        views: ['pending_backtest', 'running_backtest', 'backtest_rework'],
+        meta: backtestActive ? ('槽位 ' + backtestActive + '/' + configuredBacktestSlotLimit()) : ('等待 ' + pendingCount + ' / 异常 ' + reworkCount),
+      },
+      {
+        index: '3',
+        label: '达标检查',
+        target: 'passed',
+        views: ['passed'],
+        meta: needsCheck ? (needsCheck + ' 个待检查') : ('达标 ' + passedCandidates().length),
+      },
+      {
+        index: '4',
+        label: '提交队列',
+        target: 'submittable',
+        views: ['submittable', 'submitted'],
+        meta: '可提交 ' + submittableCount + ' / 已提交 ' + submittedRows().length,
+      },
+      {
+        index: '5',
+        label: '诊断复盘',
+        target: 'research_observability',
+        views: ['cloud', 'research_observability', 'research_memory', 'research_knowledge', 'prompt_runs', 'sqlite_indexes', 'robustness', 'lifecycle', 'failed'],
+        meta: cloudMeta + ' / 失败 ' + failedRows().length,
+      },
+    ];
+    container.innerHTML = steps.map(workflowStepHtml).join('');
   }
 
   function renderInsight() {
@@ -2463,13 +2769,20 @@
     ];
     var container = $('insight');
     if (!container) return;
-    container.innerHTML = insightGroupHtml('生产流程', processCards) + insightGroupHtml('辅助追踪', trackingCards);
+    renderWorkflowNav();
+    var trackingActive = trackingCards.some(function (card) { return card[0] === activeView(); });
+    container.innerHTML = insightGroupHtml('生产流程', processCards) + insightGroupHtml('辅助追踪与诊断', trackingCards, { collapsible: true, open: trackingActive });
   }
 
-  function insightGroupHtml(title, cards) {
-    return '<div class="insight-group"><div class="insight-group-title">' + esc(title) + '</div><div class="insight-grid">' +
+  function insightGroupHtml(title, cards, options) {
+    options = options || {};
+    var content = '<div class="insight-grid">' +
       cards.map(function (card) { return insightCardHtml(card[0], card[1], card[2], card[3]); }).join('') +
-      '</div></div>';
+      '</div>';
+    if (options.collapsible) {
+      return '<details class="insight-group insight-group-collapsible" ' + (options.open ? 'open' : '') + '><summary>' + esc(title) + '</summary>' + content + '</details>';
+    }
+    return '<div class="insight-group"><div class="insight-group-title">' + esc(title) + '</div>' + content + '</div>';
   }
 
   function insightCardHtml(view, label, value, note) {
@@ -2768,11 +3081,18 @@
 
   window.syncCloud = async function () {
     if (syncInFlight) return;
+    var blockReason = operationBlockReason('sync');
+    if (blockReason) {
+      toast(blockReason, 'warning');
+      renderBusyControls();
+      return;
+    }
     syncInFlight = true;
     syncStartedAt = Date.now();
     resetCountdownState(syncCountdownState);
     lastSyncProgressSnapshot = null;
     progressEtaState = {};
+    renderBusyControls();
     if ($('syncButton')) {
       $('syncButton').disabled = true;
       $('syncButton').textContent = '同步中...';
@@ -2792,6 +3112,7 @@
         $('syncButton').disabled = false;
         $('syncButton').textContent = '同步云端数据';
       }
+      renderBusyControls();
     }
   };
 
@@ -2816,6 +3137,12 @@
   window.checkBatch = async function (mode, options) {
     options = options || {};
     if (batchCheckJobId) return;
+    var blockReason = operationBlockReason('check');
+    if (blockReason) {
+      toast(blockReason, 'warning');
+      renderBusyControls();
+      return;
+    }
     var candidates = mode === 'all' ? passedCandidates() : derivePassedCandidates(currentCandidates()).concat(S.get('currentResult.passed_candidates') || []);
     var byId = {};
     candidates.forEach(function (candidate) { if (candidate.alpha_id) byId[candidate.alpha_id] = candidate; });
@@ -2834,6 +3161,7 @@
     lastCheckProgressSnapshot = null;
     progressEtaState = {};
     updateCheckControls(true);
+    renderBusyControls();
     if ($('checkStats')) $('checkStats').textContent = '正在检查 ' + candidates.length + ' 个达标 Alpha...';
     try {
       var data = await Api.post('/api/check_batch', payload);
@@ -2849,6 +3177,7 @@
         checkCountdownTimer = null;
       }
       updateCheckControls(false);
+      renderBusyControls();
     }
   };
 
@@ -2961,6 +3290,13 @@
 
   window.submitCandidate = async function (alphaId, options) {
     options = options || {};
+    var blockReason = operationBlockReason('submit');
+    if (submitInFlight && options.confirmObservabilityRisk && blockReason === '提交正在进行。') blockReason = '';
+    if (blockReason) {
+      toast(blockReason, 'warning');
+      renderBusyControls();
+      return { ok: false, alpha_id: alphaId, error: blockReason };
+    }
     var candidate = findCandidate(alphaId);
     if (!candidate) {
       toast('找不到待提交 Alpha。', 'error');
@@ -2974,6 +3310,7 @@
     if (options.confirmObservabilityRisk) payload.confirm_observability_risk = true;
     submitInFlight = true;
     renderModuleActions();
+    renderBusyControls();
     try {
       var data = await Api.post('/api/submit', payload);
       toast('提交成功：' + alphaId, 'success');
@@ -3003,6 +3340,13 @@
 
   window.submitSelectedCandidates = async function (options) {
     options = options || {};
+    var blockReason = operationBlockReason('submit');
+    if (submitInFlight && options.confirmObservabilityRisk && blockReason === '提交正在进行。') blockReason = '';
+    if (blockReason) {
+      toast(blockReason, 'warning');
+      renderBusyControls();
+      return;
+    }
     var ids = Array.from(selectedSubmitIds);
     if (!ids.length) {
       toast('请先勾选可提交 Alpha。', 'info');
@@ -3018,6 +3362,7 @@
     lastSubmitPayload = payload;
     submitInFlight = true;
     renderModuleActions();
+    renderBusyControls();
     try {
       var data = await Api.post('/api/submit_batch', payload);
       lastSubmitResults = data.results || [];
@@ -3540,11 +3885,13 @@
       $('syncButton').textContent = syncInFlight ? '同步中...' : '同步云端数据';
     }
     if ($('syncRange')) $('syncRange').disabled = syncInFlight;
+    renderBusyControls();
   };
 
   window.setSubmitBusy = function (busy) {
     submitInFlight = Boolean(busy);
     renderModuleActions();
+    renderBusyControls();
   };
 
   window.refreshAssistantContext = async function () {
@@ -4121,6 +4468,17 @@
         if (!row) return;
         event.preventDefault();
         window.viewRow(row.dataset.kind || '', row.dataset.id || '', event);
+      });
+    }
+    var cards = $('mobileCardList');
+    if (cards) {
+      cards.addEventListener('keydown', function (event) {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        if (event.target.closest('input, button, select, textarea, label')) return;
+        var card = event.target.closest('.mobile-row-card[data-kind]');
+        if (!card) return;
+        event.preventDefault();
+        window.viewRow(card.dataset.kind || '', card.dataset.id || '', event);
       });
     }
 

@@ -27,8 +27,11 @@ def test_web_html_contains_chinese_console():
     assert "backtestPanel" in HTML
     assert "insightCardHtml" in HTML
     assert "insightGroupHtml" in HTML
+    assert "workflowNav" in HTML
+    assert "renderWorkflowNav" in HTML
+    assert "emptyStateHtml" in HTML
     assert "生产流程" in HTML
-    assert "辅助追踪" in HTML
+    assert "辅助追踪与诊断" in HTML
     assert "switchView" in HTML
     assert "configuredBacktestSlotLimit" in HTML
     assert "syncButton" in HTML
@@ -292,13 +295,88 @@ def test_stats_cards_sanitize_dynamic_class_and_action_handlers():
 
 def test_charts_handle_empty_and_large_datasets():
     charts_js = (Path(__file__).resolve().parents[1] / "brain_alpha_ops" / "web" / "js" / "views" / "charts.js").read_text(encoding="utf-8")
+    template = (Path(__file__).resolve().parents[1] / "brain_alpha_ops" / "web" / "index_template.html").read_text(encoding="utf-8")
 
     assert "MAX_CHART_POINTS = 300" in charts_js
     assert "function renderEmptyChart" in charts_js
+    assert "function renderNativeCharts" in charts_js
     assert "function sampleRows" in charts_js
     assert "function candidateRows" in charts_js
+    assert "function renderCharts(options)" in charts_js
+    assert "Array.isArray(options.candidates)" in charts_js
     assert "sampleRows(candidateRows(candidates)" in charts_js
+    assert "cdn.jsdelivr.net" not in template
+    assert "api.fontshare.com" not in template
+    assert "code.iconify.design" not in template
     assert "sharpes = [0]" not in charts_js
+
+
+def test_result_display_mode_uses_filtered_view_rows_without_blank_table_shell():
+    app_js = (Path(__file__).resolve().parents[1] / "brain_alpha_ops" / "web" / "js" / "app.js").read_text(encoding="utf-8")
+    start = app_js.index("function renderCurrentView")
+    end = app_js.index("  window.renderCurrentView", start)
+    block = app_js[start:end]
+
+    assert "window.renderCharts({" in block
+    assert "candidates: rows.map(function (row) { return row.raw || {}; })" in block
+    assert "tableWrap.classList.toggle('hidden', chartMode)" in block
+    assert "filterBar.classList.toggle('hidden', statsMode)" in block
+    assert "statsMode || chartMode" not in block.split("filterBar.classList.toggle", 1)[1].split(";", 1)[0]
+
+
+def test_filter_chips_and_display_toggle_are_keyboard_accessible():
+    app_js = (Path(__file__).resolve().parents[1] / "brain_alpha_ops" / "web" / "js" / "app.js").read_text(encoding="utf-8")
+    template = (Path(__file__).resolve().parents[1] / "brain_alpha_ops" / "web" / "index_template.html").read_text(encoding="utf-8")
+
+    assert '<button type="button" class="filter-chip ' in app_js
+    assert 'aria-pressed="' in app_js
+    assert "button.filter-chip" in template
+    assert 'id="tableModeButton" type="button" class="active" aria-pressed="true"' in template
+    assert "tableButton.setAttribute('aria-pressed'" in app_js
+
+
+def test_operation_guard_blocks_conflicting_frontend_actions():
+    root = Path(__file__).resolve().parents[1]
+    app_js = (root / "brain_alpha_ops" / "web" / "js" / "app.js").read_text(encoding="utf-8")
+    production_js = (root / "brain_alpha_ops" / "web" / "js" / "views" / "production.js").read_text(encoding="utf-8")
+    template = (root / "brain_alpha_ops" / "web" / "index_template.html").read_text(encoding="utf-8")
+
+    assert "function operationBlockReason(action)" in app_js
+    assert "function renderBusyControls()" in app_js
+    assert "window.operationBlockReason = operationBlockReason" in app_js
+    assert 'id="operationGuard"' in template
+    assert 'role="status"' in template
+    assert 'window.operationBlockReason("production")' in production_js
+    assert 'var jobId = _jobId || S.get("activeJobId") || ""' in production_js
+
+
+def test_ux_refactor_keeps_core_flow_visible_and_empty_states_actionable():
+    root = Path(__file__).resolve().parents[1]
+    app_js = (root / "brain_alpha_ops" / "web" / "js" / "app.js").read_text(encoding="utf-8")
+    template = (root / "brain_alpha_ops" / "web" / "index_template.html").read_text(encoding="utf-8")
+
+    assert 'id="workflowNav" class="workflow-nav"' in template
+    assert "function renderWorkflowNav()" in app_js
+    assert "workflow-step" in app_js
+    assert "诊断复盘" in app_js
+    assert "function emptyStateHtml(view)" in app_js
+    assert "empty-actions" in app_js
+    assert "table-empty-cell" in app_js
+    assert "control-section primary run-actions" in template
+    assert "view-guidance" in template
+
+
+def test_mobile_cards_use_explicit_controls_instead_of_nested_button_role():
+    app_js = (Path(__file__).resolve().parents[1] / "brain_alpha_ops" / "web" / "js" / "app.js").read_text(encoding="utf-8")
+    start = app_js.index("function mobileCardHtml")
+    end = app_js.index("  function backtestRowHtml", start)
+    block = app_js[start:end]
+
+    assert 'class="mobile-row-card" data-kind="' in block
+    assert 'role="button"' not in block
+    assert 'tabindex="0"' not in block
+    assert 'aria-label="查看 Alpha ' in app_js
+    assert 'aria-label="提交 Alpha ' in app_js
 
 
 def test_view_model_helpers_are_modular_and_inlined():

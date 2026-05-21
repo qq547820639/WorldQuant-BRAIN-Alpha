@@ -185,15 +185,17 @@
   function updateRunButton() {
     var btn = $("controlButton");
     if (!btn) return;
-    btn.textContent = _running ? "停止连续生产" : "开始生产搜索";
-    btn.className = _running ? "full stop" : "full";
+    var running = _running || Boolean(S.get("isRunning"));
+    btn.textContent = running ? "停止连续生产" : "开始生产搜索";
+    btn.className = running ? "full stop" : "full";
+    if (typeof window.renderBusyControls === "function") window.renderBusyControls();
   }
 
   // ------------------------------------------------------------------
   // Production control — exposed to window for HTML onclick handlers
   // ------------------------------------------------------------------
   window.toggleRun = async function () {
-    if (_running) {
+    if (_running || S.get("isRunning")) {
       await stopProduction();
       return;
     }
@@ -202,6 +204,12 @@
 
   async function startProduction(options) {
     options = options || {};
+    var blockReason = typeof window.operationBlockReason === "function" ? window.operationBlockReason("production") : "";
+    if (blockReason) {
+      Toast.toast(blockReason, "warning");
+      if (typeof window.renderBusyControls === "function") window.renderBusyControls();
+      return;
+    }
     _running = true;
     S.set("isRunning", true);
     updateRunButton();
@@ -236,7 +244,8 @@
     if (_pollTimer) { clearInterval(_pollTimer); _pollTimer = null; }
 
     try {
-      var resp = await Api.post("/api/stop", { job_id: _jobId });
+      var jobId = _jobId || S.get("activeJobId") || "";
+      var resp = await Api.post("/api/stop", { job_id: jobId });
       if (resp.ok) {
         Toast.toast("生产已停止", "info");
       }

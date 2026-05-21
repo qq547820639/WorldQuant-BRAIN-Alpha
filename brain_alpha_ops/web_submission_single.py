@@ -46,17 +46,21 @@ def submit_candidate_payload(
     preflight = submission_preflight_advisory(candidate, run_config)
     if not preflight.get("ok"):
         record_submit_blocked(payload, candidate, run_config, str(preflight.get("error") or "Submission blocked."))
-        return preflight
+        return _submission_contract_payload(preflight, candidate, official_alpha_id(candidate))
     official_id = official_alpha_id(candidate)
     observability_preflight = observability_submission_preflight(run_config.ops.storage_dir)
     if observability_preflight.get("requires_confirmation") and not payload_truthy(payload.get("confirm_observability_risk")):
         error = "Observability diagnostics recommend pausing submission until blocking flags are acknowledged."
-        return {
+        risk_explanation = observability_preflight.get("risk_explanation") if isinstance(observability_preflight.get("risk_explanation"), dict) else {}
+        return _submission_contract_payload({
             "ok": False,
             "error_code": "SUBMIT_OBSERVABILITY_CONFIRMATION_REQUIRED",
             "error": error,
             "observability_preflight": observability_preflight,
-        }
+            "risk_explanation": risk_explanation,
+            "risk_explanations": [risk_explanation] if risk_explanation else [],
+            "state_navigation": observability_preflight.get("state_navigation") if isinstance(observability_preflight.get("state_navigation"), dict) else {},
+        }, candidate, official_id)
     api = api_from_run_config(run_config)
     api.authenticate()
     result = api.submit_alpha(official_id, candidate.get("expression", ""), run_config.ops.settings.to_platform_dict()["settings"])
@@ -83,4 +87,38 @@ def submit_candidate_payload(
             "note": "manual",
         },
     )
-    return {"ok": True, "submission": result}
+    return _submission_contract_payload(
+        {
+            "ok": True,
+            "submission": result,
+            "status": result.get("status", "SUBMITTED"),
+            "state_navigation": {
+                "schema_version": "abnormal_state_navigation.v1",
+                "state": "completed",
+                "reason_code": "SUBMISSION_ACCEPTED",
+                "title": "提交已受理",
+                "summary": "官方提交请求已完成，本地提交账本和生命周期已记录。",
+                "target_view": "submitted",
+                "primary_action": "查看已提交列表或云端状态。",
+                "steps": [
+                    {"id": "submitted", "label": "提交完成", "status": "done", "view": "submitted"},
+                    {"id": "sync_cloud", "label": "刷新云端状态", "status": "pending", "view": "cloud"},
+                ],
+            },
+        },
+        candidate,
+        official_id,
+    )
+
+
+def _submission_contract_payload(payload: dict[str, Any], candidate: dict[str, Any], official_id: str) -> dict[str, Any]:
+    enriched = dict(payload)
+    enriched.setdefault("schema_version", "submission_result.v2")
+    enriched.setdefault("alpha_id", candidate.get("alpha_id", ""))
+    enriched.setdefault("official_alpha_id", official_id)
+    enriched.setdefault("status", "SUBMITTED" if enriched.get("ok") else "BLOCKED")
+    if "state_navigation" not in enriched:
+        enriched["state_navigation"] = {}
+    if "risk_explanations" not in enriched and isinstance(enriched.get("risk_explanation"), dict) and enriched.get("risk_explanation"):
+        enriched["risk_explanations"] = [enriched["risk_explanation"]]
+    return enriched
