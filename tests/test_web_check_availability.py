@@ -20,8 +20,10 @@ class Ledger:
 class Api:
     def __init__(self, status="PASSED"):
         self.status = status
+        self.calls = 0
 
     def check_alpha(self, alpha_id):
+        self.calls += 1
         return {"status": self.status}
 
 
@@ -64,3 +66,56 @@ def test_check_candidate_availability_detects_duplicate_expression(tmp_path):
     duplicate = next(item for item in result["checks"] if item["name"] == "not_submitted_before")
     assert duplicate["passed"] is False
     assert result["status"] == "BLOCKED"
+
+
+def test_check_candidate_availability_frontloads_cloud_self_correlation_risk(tmp_path):
+    candidate = {
+        "alpha_id": "a1",
+        "official_alpha_id": "off_1",
+        "expression": "rank(open)",
+        "gate": {"submission_ready": True},
+        "lifecycle_status": "submission_ready",
+        "scorecard": {"total_score": 80},
+    }
+    api = Api()
+    result = check_candidate_availability(
+        candidate,
+        "quick",
+        api,
+        Ledger(tmp_path / "ledger.jsonl"),
+        [{"id": "cloud_1", "expression": {"code": "rank(open)"}, "status": "UNSUBMITTED"}],
+        "",
+        {
+            "requires_confirmation": True,
+            "risk_level": "blocked",
+            "blocking_flags": ["cloud_self_correlation_saturation"],
+            "warning_flags": ["cloud_self_correlation_saturation"],
+            "health_flags": ["cloud_self_correlation_saturation"],
+            "actions": ["Diversify expression templates."],
+            "flag_details": {
+                "cloud_self_correlation_saturation": {
+                    "evidence": {
+                        "check_total": 150,
+                        "blocked_count": 150,
+                        "cloud_self_correlation_failed_count": 150,
+                        "cloud_self_correlation_block_rate": 1.0,
+                    }
+                }
+            },
+        },
+        safe_error_message=str,
+        observability_submission_preflight=lambda storage_dir: {"requires_confirmation": False},
+    )
+
+    cloud_check = next(item for item in result["checks"] if item["name"] == "cloud_self_correlation")
+    context_check = next(item for item in result["checks"] if item["name"] == "context_health_preflight")
+    official_check = next(item for item in result["checks"] if item["name"] == "official_pre_submit_check")
+
+    assert result["status"] == "BLOCKED"
+    assert result["local_preflight_passed"] is False
+    assert cloud_check["passed"] is False
+    assert cloud_check["risk_explanation"]["rule"] == "cloud_self_correlation"
+    assert context_check["passed"] is False
+    assert official_check["detail"].startswith("Skipped")
+    assert result["state_navigation"]["reason_code"] == "CLOUD_SELF_CORRELATION_BLOCKED"
+    assert api.calls == 0

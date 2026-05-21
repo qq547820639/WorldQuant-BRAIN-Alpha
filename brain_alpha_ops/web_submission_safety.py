@@ -2,13 +2,19 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any, Callable
 
 from brain_alpha_ops.config import RunConfig
+from brain_alpha_ops.jsonl import read_jsonl_tail
 from brain_alpha_ops.research.expression_ast import expression_key
 from brain_alpha_ops.research.observability import build_research_observability_snapshot
 from brain_alpha_ops.research.safety import SubmissionLedger, mock_source_reasons
 from brain_alpha_ops.web_candidate_selection import official_alpha_id
+from brain_alpha_ops.web_risk_guidance import (
+    build_cloud_self_correlation_explanation,
+    build_context_health_explanation,
+)
 
 
 LedgerFactory = Callable[[str], SubmissionLedger]
@@ -18,10 +24,18 @@ ObservabilityBuilder = Callable[..., dict[str, Any]]
 SafeErrorMessage = Callable[[Exception], str]
 
 
-def submit_preflight_block(error_code: str, error: str, *, category: str = "validation", action: str = "") -> dict[str, Any]:
+def submit_preflight_block(
+    error_code: str,
+    error: str,
+    *,
+    category: str = "validation",
+    action: str = "",
+    **extra: Any,
+) -> dict[str, Any]:
     payload: dict[str, Any] = {"ok": False, "error_code": error_code, "error_category": category, "error": error}
     if action:
         payload["action"] = action
+    payload.update({key: value for key, value in extra.items() if value is not None})
     return payload
 
 
@@ -82,6 +96,11 @@ def submission_preflight_advisory(
             action="Generate or select a materially different expression before submitting.",
         )
 
+    latest_check = _latest_check_result_for_candidate(run_config.ops.storage_dir, candidate)
+    cloud_self_block = _cloud_self_correlation_submit_block(candidate, latest_check)
+    if cloud_self_block:
+        return cloud_self_block
+
     cloud_snapshot = cloud_alpha_snapshot(limit=2000)
     cloud_rows = cloud_snapshot.get("alphas") or []
     cloud_summary = cloud_snapshot.get("summary") or {}
@@ -112,6 +131,66 @@ def submission_preflight_advisory(
     return {"ok": True}
 
 
+def _latest_check_result_for_candidate(storage_dir: str, candidate: dict[str, Any], *, limit: int = 5000) -> dict[str, Any]:
+    alpha_id = str(candidate.get("alpha_id") or "")
+    official_id = official_alpha_id(candidate)
+    candidate_expr_key = expression_key(str(candidate.get("expression", "")))
+    latest: dict[str, Any] = {}
+    for row in read_jsonl_tail(Path(storage_dir) / "checks.jsonl", limit=limit):
+        if not isinstance(row, dict):
+            continue
+        row_alpha_id = str(row.get("alpha_id") or "")
+        row_official_id = str(row.get("official_alpha_id") or "")
+        row_expr_key = expression_key(str(row.get("expression", "")))
+        matches = (
+            bool(alpha_id and row_alpha_id == alpha_id)
+            or bool(official_id and row_official_id == official_id)
+            or bool(candidate_expr_key and row_expr_key == candidate_expr_key)
+        )
+        if matches:
+            latest = row
+    return latest
+
+
+def _cloud_self_correlation_submit_block(candidate: dict[str, Any], check_result: dict[str, Any]) -> dict[str, Any] | None:
+    if not check_result:
+        return None
+    cloud_check_failed = any(
+        isinstance(row, dict)
+        and str(row.get("name") or "") == "cloud_self_correlation"
+        and row.get("passed") is False
+        for row in check_result.get("checks") or []
+    )
+    cloud_risk = check_result.get("cloud_correlation_risk") if isinstance(check_result.get("cloud_correlation_risk"), dict) else {}
+    if not cloud_check_failed and str(cloud_risk.get("level") or "").lower() != "high":
+        return None
+    explanation = build_cloud_self_correlation_explanation(
+        {**candidate, "official_alpha_id": official_alpha_id(candidate)},
+        cloud_risk,
+        check_context={
+            "checked_at": check_result.get("checked_at", ""),
+            "check_status": check_result.get("status", ""),
+            "is_stale": check_result.get("is_stale"),
+        },
+    )
+    return submit_preflight_block(
+        "SUBMIT_CLOUD_SELF_CORRELATION_BLOCKED",
+        explanation["summary"],
+        category="risk",
+        action="Refresh cloud data, diversify the expression, then rerun official checks before submitting.",
+        risk_explanation=explanation,
+        risk_explanations=[explanation],
+        state_navigation=explanation.get("navigation"),
+        check_result={
+            "alpha_id": check_result.get("alpha_id", ""),
+            "official_alpha_id": check_result.get("official_alpha_id", ""),
+            "checked_at": check_result.get("checked_at", ""),
+            "status": check_result.get("status", ""),
+            "is_stale": check_result.get("is_stale"),
+        },
+    )
+
+
 def observability_submission_preflight(
     storage_dir: str,
     *,
@@ -128,6 +207,13 @@ def observability_submission_preflight(
             include_cloud=True,
         )
     except Exception as exc:
+        fallback_explanation = build_context_health_explanation({
+            "risk_level": "unknown",
+            "health_flags": ["observability_preflight_unavailable"],
+            "blocking_flags": ["observability_preflight_unavailable"],
+            "warning_flags": ["observability_preflight_unavailable"],
+            "actions": ["Review local observability errors before submission or confirm the risk explicitly."],
+        })
         return {
             "ok": False,
             "schema_version": "submission_observability_preflight.v1",
@@ -136,6 +222,8 @@ def observability_submission_preflight(
             "blocking_flags": ["observability_preflight_unavailable"],
             "warning_flags": ["observability_preflight_unavailable"],
             "actions": ["Review local observability errors before submission or confirm the risk explicitly."],
+            "risk_explanation": fallback_explanation,
+            "state_navigation": fallback_explanation.get("navigation"),
             "requires_confirmation": True,
             "error": safe_error_message(exc),
         }
@@ -146,6 +234,17 @@ def observability_submission_preflight(
     health_flags = [str(item) for item in health.get("health_flags") or [] if str(item)]
     actions = [str(item) for item in health.get("actions") or [] if str(item)]
     risk_level = str(health.get("risk_level") or "unknown")
+    flag_details = health.get("flag_details") if isinstance(health.get("flag_details"), dict) else {}
+    context_explanation = build_context_health_explanation({
+        "risk_level": risk_level,
+        "health_flags": health_flags,
+        "blocking_flags": blocking_flags,
+        "warning_flags": warning_flags,
+        "actions": actions,
+        "flag_details": flag_details,
+        "source_schema_version": snapshot.get("schema_version", ""),
+        "generated_at": snapshot.get("generated_at", ""),
+    })
     return {
         "ok": True,
         "schema_version": "submission_observability_preflight.v1",
@@ -154,6 +253,9 @@ def observability_submission_preflight(
         "blocking_flags": blocking_flags,
         "warning_flags": warning_flags,
         "actions": actions,
+        "flag_details": flag_details,
+        "risk_explanation": context_explanation if blocking_flags or warning_flags else {},
+        "state_navigation": context_explanation.get("navigation") if blocking_flags else {},
         "requires_confirmation": bool(blocking_flags),
         "official_call_guard": official_call_guard,
         "source_schema_version": snapshot.get("schema_version", ""),

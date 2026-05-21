@@ -704,7 +704,11 @@ def test_check_candidate_availability_includes_observability_preflight(tmp_path)
         observability_preflight=advisory,
     )
 
-    assert result["submittable"] is True
+    assert result["submittable"] is False
+    assert result["status"] == "BLOCKED"
+    context_check = next(item for item in result["checks"] if item["name"] == "context_health_preflight")
+    assert context_check["passed"] is False
+    assert result["context_health"]["blocking_flags"] == ["rate_limit_pressure"]
     assert result["observability_preflight"]["requires_confirmation"] is True
     assert result["observability_preflight"]["blocking_flags"] == ["rate_limit_pressure"]
 

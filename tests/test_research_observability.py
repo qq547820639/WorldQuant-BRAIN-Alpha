@@ -104,6 +104,31 @@ def test_research_observability_snapshot_summarizes_official_call_guard(tmp_path
     assert context["official_guard_blocked_count"] == 2
 
 
+def test_research_observability_flags_cloud_self_correlation_saturation(tmp_path):
+    repo = ResearchRepository(str(tmp_path))
+    for index in range(25):
+        repo.save_check_record(
+            {
+                "alpha_id": f"a{index}",
+                "status": "BLOCKED",
+                "passed": False,
+                "submittable": False,
+                "checks": [
+                    {"name": "cloud_self_correlation", "passed": False, "detail": "high 0.9500"},
+                    {"name": "official_pre_submit_check", "passed": False, "detail": "skipped"},
+                ],
+            }
+        )
+
+    snapshot = build_research_observability_snapshot(tmp_path, limit=100, top_n=5, include_cloud=False)
+    context = observability_context(snapshot, top_n=5)
+
+    assert snapshot["checks"]["cloud_self_correlation_failed_count"] == 25
+    assert snapshot["health"]["risk_level"] == "blocked"
+    assert "cloud_self_correlation_saturation" in snapshot["health"]["blocking_flags"]
+    assert context["cloud_self_correlation_block_rate"] == 1.0
+
+
 def test_actionable_duplicate_helpers_ignore_single_alpha_lifecycle_noise():
     expression = "rank(ts_delta(close, 20))"
     same_alpha_lifecycle_bucket = {

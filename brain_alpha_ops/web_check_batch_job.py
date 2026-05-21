@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import Counter
 import logging
 from typing import Any, Callable, Protocol
 
@@ -56,6 +57,7 @@ def run_check_batch_job_service(
     submittable = 0
     blocked = 0
     failed = 0
+    blocker_counts: Counter[str] = Counter()
     results: list[dict[str, Any]] = []
     cloud_alphas: list[dict[str, Any]] = []
     cloud_error = ""
@@ -130,6 +132,9 @@ def run_check_batch_job_service(
                 failed += 1
             else:
                 blocked += 1
+                for check in result.get("checks") or []:
+                    if isinstance(check, dict) and check.get("passed") is False:
+                        blocker_counts[str(check.get("name") or "unknown")] += 1
             repo.save_check_record({"job_id": str(payload.get("job_id", "")), **result})
             store.update(
                 job_id,
@@ -144,6 +149,7 @@ def run_check_batch_job_service(
                     "submittable": submittable,
                     "blocked": blocked,
                     "failed": failed,
+                    "blockers": dict(blocker_counts.most_common(5)),
                     "current_alpha_id": candidate.get("alpha_id", ""),
                     "message": f"Checked {checked}/{total}; submittable {submittable}, blocked {blocked}, failed {failed}.",
                     "items": results,
@@ -160,6 +166,7 @@ def run_check_batch_job_service(
             "failed": failed,
             "cloud_count": len(cloud_alphas),
             "cloud_error": cloud_error,
+            "blockers": dict(blocker_counts.most_common(5)),
         }
         store.update(
             job_id,

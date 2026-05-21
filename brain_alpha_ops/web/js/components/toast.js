@@ -33,6 +33,7 @@
 
     var toastEl = document.createElement('div');
     toastEl.className = 'toast ' + type;
+    toastEl.setAttribute('role', type === 'error' ? 'alert' : 'status');
     toastEl.innerHTML =
       '<span class="toast-icon">' + ICONS[type] + '</span>' +
       '<span class="toast-msg">' + escapeHtml(msg) + '</span>';

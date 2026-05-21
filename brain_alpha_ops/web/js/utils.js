@@ -88,5 +88,60 @@
     return Boolean(value);
   };
 
+  function safeClassToken(value) {
+    return String(value || "").replace(/[^a-zA-Z0-9_-]/g, "");
+  }
+
+  function pct(value) {
+    var n = Number(value || 0);
+    if (!Number.isFinite(n)) n = 0;
+    return Math.max(0, Math.min(100, n * 100));
+  }
+
+  Utils.renderStateNavigation = function (navigation) {
+    if (!navigation || typeof navigation !== "object") return "";
+    var steps = Array.isArray(navigation.steps) ? navigation.steps : [];
+    var stepHtml = steps.map(function (step) {
+      var cls = safeClassToken(step.status || "pending") || "pending";
+      return '<span class="state-nav-step ' + cls + '">' + Utils.escapeHtml(step.label || step.id || "-") + '</span>';
+    }).join("");
+    return '<div class="state-nav-card">' +
+      '<div class="state-nav-title">' + Utils.escapeHtml(navigation.title || "解决路径") + '</div>' +
+      (navigation.summary ? '<div class="state-nav-summary">' + Utils.escapeHtml(navigation.summary) + '</div>' : '') +
+      (stepHtml ? '<div class="state-nav-steps">' + stepHtml + '</div>' : '') +
+      (navigation.primary_action ? '<div class="state-nav-action">' + Utils.escapeHtml(navigation.primary_action) + '</div>' : '') +
+      '</div>';
+  };
+
+  Utils.renderRiskExplanation = function (explanation) {
+    if (!explanation || typeof explanation !== "object") return "";
+    var visual = explanation.visual || {};
+    var evidence = explanation.evidence || {};
+    var value = Number(visual.value !== undefined ? visual.value : evidence.max_similarity);
+    if (!Number.isFinite(value)) value = 0;
+    var threshold = Number(visual.threshold || evidence.threshold || 0.9);
+    if (!Number.isFinite(threshold) || threshold <= 0) threshold = 0.9;
+    var severity = safeClassToken(explanation.severity || explanation.level || "info") || "info";
+    var reasons = (Array.isArray(explanation.reasons) ? explanation.reasons : []).slice(0, 5).map(function (item) {
+      return '<li>' + Utils.escapeHtml(item) + '</li>';
+    }).join("");
+    var actions = (Array.isArray(explanation.recommended_actions) ? explanation.recommended_actions : []).slice(0, 5).map(function (item) {
+      return '<li>' + Utils.escapeHtml(item) + '</li>';
+    }).join("");
+    var meterPct = pct(value);
+    var thresholdPct = pct(threshold);
+    return '<div class="risk-card risk-' + severity + '">' +
+      '<div class="risk-card-head">' +
+        '<div><div class="risk-title">' + Utils.escapeHtml(explanation.title || "风险提示") + '</div>' +
+        '<div class="risk-summary">' + Utils.escapeHtml(explanation.summary || "") + '</div></div>' +
+        '<div class="risk-score">' + meterPct.toFixed(1) + '%</div>' +
+      '</div>' +
+      '<div class="risk-meter" aria-label="risk meter"><div class="risk-meter-fill" style="width:' + meterPct + '%"></div><span class="risk-threshold" style="left:' + thresholdPct + '%"></span></div>' +
+      (reasons ? '<div class="risk-list-title">原因</div><ul class="risk-list">' + reasons + '</ul>' : '') +
+      (actions ? '<div class="risk-list-title">处理路径</div><ul class="risk-list">' + actions + '</ul>' : '') +
+      Utils.renderStateNavigation(explanation.navigation || explanation.state_navigation) +
+      '</div>';
+  };
+
   window.Utils = Utils;
 })();

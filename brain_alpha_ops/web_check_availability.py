@@ -9,6 +9,11 @@ from brain_alpha_ops.models import utc_now
 from brain_alpha_ops.research.expression_ast import expression_key
 from brain_alpha_ops.research.safety import similarity
 from brain_alpha_ops.web_candidate_selection import is_passed_candidate_for_check, official_alpha_id
+from brain_alpha_ops.web_risk_guidance import (
+    build_cloud_self_correlation_explanation,
+    build_context_health_explanation,
+    build_state_navigation,
+)
 
 
 SafeErrorMessage = Callable[[Exception], str]
@@ -23,6 +28,7 @@ CHECK_LABELS: dict[str, tuple[str, str]] = {
     "not_submitted_before": ("Local duplicate", "Check local submission history."),
     "cloud_status_not_already_submitted": ("Cloud status", "Do not resubmit active or submitted cloud alphas."),
     "cloud_self_correlation": ("Cloud self-correlation", "Reduce similarity to existing cloud alphas."),
+    "context_health_preflight": ("Context health", "Resolve blocking context-health flags before official checks."),
     "official_pre_submit_check": ("Official pre-submit check", "Run the official pre-submit check."),
 }
 
@@ -42,15 +48,17 @@ def check_candidate_availability(
     official_id = official_alpha_id(candidate)
     checks: list[dict[str, Any]] = []
 
-    def add(name: str, passed: bool, detail: str) -> None:
+    def add(name: str, passed: bool, detail: str, **extra: Any) -> None:
         label, suggestion = CHECK_LABELS.get(name, (name, "Review this check before submitting."))
-        checks.append({
+        row = {
             "name": name,
             "label_cn": label,
             "passed": bool(passed),
             "detail": detail,
             "suggestion": suggestion if not passed else "",
-        })
+        }
+        row.update({key: value for key, value in extra.items() if value is not None})
+        checks.append(row)
 
     gate = candidate.get("gate") or {}
     status_text = f"{candidate.get('lifecycle_status', '')} {gate.get('status', '')}".lower()
@@ -70,11 +78,32 @@ def check_candidate_availability(
     add("cloud_status_not_already_submitted", not already_submitted_status, cloud_status.get("status", "not found"))
 
     cloud_risk = cloud_similarity_risk(candidate, cloud_alphas)
-    add("cloud_self_correlation", cloud_risk["level"] != "high", f"{cloud_risk['level']} {cloud_risk['max_similarity']:.4f}")
     observability_preflight = observability_preflight or observability_submission_preflight(str(Path(ledger.path).parent))
+    cloud_check_context = _cloud_self_correlation_check_context(observability_preflight)
+    cloud_explanation = build_cloud_self_correlation_explanation(candidate, cloud_risk, check_context=cloud_check_context)
+    add(
+        "cloud_self_correlation",
+        cloud_risk["level"] != "high",
+        f"{cloud_risk['level']} {cloud_risk['max_similarity']:.4f}",
+        risk_explanation=cloud_explanation if cloud_risk["level"] in {"high", "medium"} else None,
+        state_navigation=cloud_explanation.get("navigation") if cloud_risk["level"] == "high" else None,
+        severity=cloud_explanation.get("severity"),
+    )
+
+    context_explanation = build_context_health_explanation(observability_preflight)
+    context_blocked = bool(context_explanation.get("blocking_flags"))
+    add(
+        "context_health_preflight",
+        not context_blocked,
+        context_explanation.get("summary", ""),
+        risk_explanation=context_explanation if context_blocked else None,
+        state_navigation=context_explanation.get("navigation") if context_blocked else None,
+        severity=context_explanation.get("severity"),
+    )
 
     official_check_passed = False
-    if official_id:
+    local_preflight_passed = all(row["passed"] for row in checks)
+    if official_id and local_preflight_passed:
         try:
             official_check = api.check_alpha(official_id)
         except Exception as exc:
@@ -82,6 +111,19 @@ def check_candidate_availability(
         else:
             official_check_passed = official_check.get("status") == "PASSED"
             add("official_pre_submit_check", official_check_passed, official_check.get("status", ""))
+    elif official_id:
+        add(
+            "official_pre_submit_check",
+            False,
+            "Skipped because local/context preflight blocked before an official call.",
+            state_navigation=build_state_navigation(
+                "LOCAL_PREFLIGHT_BLOCKED",
+                title="先处理本地前置阻断",
+                summary="本地检查或上下文健康已阻断，暂不调用官方预提交检查。",
+                target_view="passed",
+                primary_action="解决阻断项后重新检查。",
+            ),
+        )
 
     passed = all(row["passed"] for row in checks)
     submittable = passed and official_check_passed
@@ -91,6 +133,8 @@ def check_candidate_availability(
     elif cloud_risk["level"] == "medium":
         score -= 12
     failed_reasons = [row["detail"] or row["name"] for row in checks if not row["passed"]]
+    risk_explanations = [row["risk_explanation"] for row in checks if not row["passed"] and isinstance(row.get("risk_explanation"), dict)]
+    state_navigation = next((row.get("state_navigation") for row in checks if not row["passed"] and isinstance(row.get("state_navigation"), dict)), {})
     return {
         "ok": True,
         "alpha_id": candidate.get("alpha_id", ""),
@@ -98,16 +142,34 @@ def check_candidate_availability(
         "mode": mode,
         "passed": passed,
         "submittable": submittable,
-        "requires_official_check": passed and not submittable,
-        "status": "SUBMITTABLE" if submittable else "CHECK_PASSED_NEEDS_OFFICIAL" if passed else "BLOCKED",
+        "local_preflight_passed": local_preflight_passed,
+        "requires_official_check": local_preflight_passed and not submittable,
+        "status": "SUBMITTABLE" if submittable else "CHECK_PASSED_NEEDS_OFFICIAL" if local_preflight_passed else "BLOCKED",
         "score": round(score, 2),
         "checked_at": utc_now(),
         "is_stale": False,
         "checks": checks,
         "failed_reasons": failed_reasons,
+        "risk_explanations": risk_explanations,
+        "state_navigation": state_navigation,
         "cloud_correlation_risk": cloud_risk,
         "cloud_status": cloud_status,
+        "context_health": context_explanation,
         "observability_preflight": observability_preflight,
+    }
+
+
+def _cloud_self_correlation_check_context(observability_preflight: dict[str, Any]) -> dict[str, Any]:
+    details = observability_preflight.get("flag_details") if isinstance(observability_preflight.get("flag_details"), dict) else {}
+    saturation = details.get("cloud_self_correlation_saturation") if isinstance(details.get("cloud_self_correlation_saturation"), dict) else {}
+    evidence = saturation.get("evidence") if isinstance(saturation.get("evidence"), dict) else {}
+    if not evidence:
+        return {}
+    return {
+        "recent_check_count": evidence.get("check_total", 0),
+        "blocked_count": evidence.get("blocked_count", 0),
+        "cloud_self_correlation_failed_count": evidence.get("cloud_self_correlation_failed_count", 0),
+        "cloud_self_correlation_block_rate": evidence.get("cloud_self_correlation_block_rate", 0.0),
     }
 
 

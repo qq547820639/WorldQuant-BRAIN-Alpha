@@ -9,6 +9,8 @@
   var escapeAttr = window.Utils.escapeAttr;
   var jsStringAttr = window.Utils.jsStringAttr;
   var phaseName = window.Utils.phaseName;
+  var renderRiskExplanation = window.Utils.renderRiskExplanation;
+  var renderStateNavigation = window.Utils.renderStateNavigation;
   var Api = window.ApiClient;
   var S = window.AppState;
   var Toast = window.Toast;
@@ -131,6 +133,18 @@
       'openRobustnessDetail()': true,
     };
     return allowed[String(handler || '')] ? String(handler) : '';
+  }
+
+  function interactiveRowAttrs(kind, id, label) {
+    return ' tabindex="0" role="button" aria-label="' + escapeAttr(label || ('查看 ' + kind + ' 详情')) + '" data-kind="' + escapeAttr(kind || '') + '" data-id="' + escapeAttr(id || '') + '"';
+  }
+
+  function setProgressA11y(trackId, percent, label) {
+    var track = $(trackId);
+    if (!track) return;
+    var value = Math.max(0, Math.min(100, Math.round(Number(percent) || 0)));
+    track.setAttribute('aria-valuenow', String(value));
+    if (label) track.setAttribute('aria-valuetext', label);
   }
 
   function currentSummary() {
@@ -1938,7 +1952,7 @@
     var selectBox = item.kind === 'submittable' && checked && !(($('autoSubmitToggle') || {}).checked)
       ? '<input type="checkbox" ' + (selectedSubmitIds.has(c.alpha_id) ? 'checked' : '') + ' onclick="event.stopPropagation(); toggleSubmitSelection(' + jsStringAttr(c.alpha_id) + ', this.checked)">'
       : '';
-    return '<tr id="' + rowId(item) + '" data-kind="' + escapeAttr(item.kind) + '" data-id="' + escapeAttr(item.id) + '" onclick="viewRow(' + kindArg + ', ' + idArg + ', event)">' +
+    return '<tr id="' + rowId(item) + '"' + interactiveRowAttrs(item.kind, item.id, '查看 Alpha ' + (c.alpha_id || item.id || '') + ' 详情') + ' onclick="viewRow(' + kindArg + ', ' + idArg + ', event)">' +
       '<td>' + (selectBox || String(index + 1)) + '</td>' +
       '<td><b>' + esc(c.alpha_id || '') + '</b><div class="mini">' + esc(c.hypothesis || '无假说') + '</div><div class="mini">' + esc(c.expression || '') + '</div></td>' +
       '<td>' + esc(c.family || '') + '</td>' +
@@ -1954,7 +1968,7 @@
     var slot = item.raw || {};
     var idArg = jsStringAttr(item.id);
     var score = candidateDisplayScore(slot);
-    return '<tr id="' + rowId(item) + '" data-kind="backtest" data-id="' + escapeAttr(item.id) + '" onclick="viewRow(&quot;backtest&quot;, ' + idArg + ', event)">' +
+    return '<tr id="' + rowId(item) + '"' + interactiveRowAttrs('backtest', item.id, '查看回测槽 ' + (slot.slot || item.id || '') + ' 详情') + ' onclick="viewRow(&quot;backtest&quot;, ' + idArg + ', event)">' +
       '<td>' + (index + 1) + '</td>' +
       '<td><b>' + esc(slot.alpha_id || '-') + '</b><div class="mini">槽 ' + esc(slot.slot || '-') + ' | Simulation ' + esc(slot.simulation_id || '-') + '</div></td>' +
       '<td>官方回测</td>' +
@@ -1971,7 +1985,7 @@
     var idArg = jsStringAttr(item.id);
     var metrics = extractOfficialMetrics(row);
     var score = cloudMetricScore(metrics);
-    return '<tr id="' + rowId(item) + '" data-kind="cloud" data-id="' + escapeAttr(item.id) + '" onclick="viewRow(&quot;cloud&quot;, ' + idArg + ', event)">' +
+    return '<tr id="' + rowId(item) + '"' + interactiveRowAttrs('cloud', item.id, '查看云端 Alpha ' + (row.id || row.alpha_id || item.id || '') + ' 详情') + ' onclick="viewRow(&quot;cloud&quot;, ' + idArg + ', event)">' +
       '<td>' + (index + 1) + '</td>' +
       '<td><b>' + esc(row.id || row.alpha_id || '') + '</b><div class="mini">' + esc(expressionFromRow(row)) + '</div></td>' +
       '<td>云端</td>' +
@@ -1987,7 +2001,7 @@
     var row = item.raw || {};
     var idArg = jsStringAttr(item.id);
     var score = candidateDisplayScore(row);
-    return '<tr id="' + rowId(item) + '" data-kind="lifecycle" data-id="' + escapeAttr(item.id) + '" onclick="viewRow(&quot;lifecycle&quot;, ' + idArg + ', event)">' +
+    return '<tr id="' + rowId(item) + '"' + interactiveRowAttrs('lifecycle', item.id, '查看生命周期记录详情') + ' onclick="viewRow(&quot;lifecycle&quot;, ' + idArg + ', event)">' +
       '<td>' + (index + 1) + '</td>' +
       '<td><b>' + esc(row.alpha_id || row.official_alpha_id || '-') + '</b><div class="mini">' + esc(row.timestamp || '') + '</div></td>' +
       '<td>' + esc(row.family || '-') + '</td>' +
@@ -2534,9 +2548,10 @@
       var countdown = slotCountdownText(slot);
       var detail = esc(slot.alpha_id || '等待 Alpha') + '<br>' + esc(slot.message || slot.simulation_id || '');
       if (countdown) detail += '<br>' + esc(countdown);
-      return '<div class="slot-card ' + cls + '" onclick="viewRow(&quot;backtest&quot;, ' + jsStringAttr(String(slot.slot || slot.alpha_id || index)) + ', event)">' +
+      var slotId = String(slot.slot || slot.alpha_id || index);
+      return '<div class="slot-card ' + cls + '" tabindex="0" role="button" data-kind="backtest" data-id="' + escapeAttr(slotId) + '" aria-label="查看回测槽 ' + escapeAttr(slot.slot || index + 1) + ' 详情" onclick="viewRow(&quot;backtest&quot;, ' + jsStringAttr(slotId) + ', event)">' +
         '<div class="slot-head"><span>槽 ' + esc(slot.slot || index + 1) + '</span><span>' + esc(statusText(slot.status || 'idle')) + '</span></div>' +
-        '<div class="track"><div class="fill" style="width:' + progress + '%"></div></div>' +
+        '<div class="track" role="progressbar" aria-label="回测槽 ' + esc(slot.slot || index + 1) + ' 进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + progress + '"><div class="fill" style="width:' + progress + '%"></div></div>' +
         '<div class="message">' + detail + '</div>' +
         '</div>';
     }).join('');
@@ -2725,6 +2740,9 @@
     var remaining = terminal || percent >= 100 ? '-' : stableRemainingText(progress, percent, syncStartedAt, syncCountdownState);
     if ($('cloudSyncFill')) $('cloudSyncFill').style.width = percent + '%';
     if ($('monitorCloudFill')) $('monitorCloudFill').style.width = percent + '%';
+    var progressLabel = '进度 ' + percent + '%，已扫描 ' + totalLabel + '，预计剩余 ' + remaining;
+    setProgressA11y('cloudSyncTrack', percent, progressLabel);
+    setProgressA11y('monitorCloudTrack', percent, progressLabel);
     if ($('cloudSyncMeta')) $('cloudSyncMeta').textContent = '进度：' + percent + '% | 已扫描：' + totalLabel + ' | 预计剩余：' + remaining;
     if ($('monitorCloudMeta')) $('monitorCloudMeta').textContent = '进度：' + percent + '% | 已扫描：' + totalLabel + ' | 预计剩余：' + remaining;
     if ($('monitorCloudStatus')) $('monitorCloudStatus').textContent = status;
@@ -2860,6 +2878,7 @@
     var checked = Math.max(0, Number(progress.checked || 0));
     var percent = progress.phase === 'completed' ? 100 : (total > 0 ? Math.round(checked / total * 100) : 0);
     if ($('checkProgressFill')) $('checkProgressFill').style.width = percent + '%';
+    setProgressA11y('checkProgressTrack', percent, '进度 ' + percent + '%，已检查 ' + checked + '/' + total);
     var terminal = isTerminalProgress(progress) || percent >= 100;
     if (terminal) {
       resetCountdownState(checkCountdownState);
@@ -2877,6 +2896,8 @@
     );
     if ($('checkProgressMeta')) $('checkProgressMeta').textContent = '进度：' + percent + '% | 已检查：' + checked + '/' + total + ' | 预计剩余：' + remaining;
     if ($('checkStats')) {
+      var blockers = progress.blockers || {};
+      var blockerText = Object.keys(blockers).slice(0, 2).map(function (key) { return key + ' ' + blockers[key]; }).join(', ');
       $('checkStats').textContent = [
         '模式：' + (progress.mode === 'all' ? '全部检查' : '快速检查'),
         '总数：' + (progress.total || 0),
@@ -2884,7 +2905,8 @@
         '可提交：' + (progress.submittable || 0),
         '不可提交：' + (progress.blocked || 0),
         '失败：' + (progress.failed || 0),
-      ].join(' | ');
+        blockerText ? '主要阻断：' + blockerText : '',
+      ].filter(Boolean).join(' | ');
     }
     renderOpsMonitor();
   }
@@ -2923,6 +2945,20 @@
     return 'Observability blocking flags: ' + flags + '.' + guardNote + errorNote + actionNote + ' ' + actionLabel;
   }
 
+  function submitErrorItem(alphaId, error) {
+    var data = (error || {}).data || {};
+    var explanations = data.risk_explanations || (data.risk_explanation ? [data.risk_explanation] : []);
+    return {
+      alpha_id: alphaId || '',
+      ok: false,
+      error_code: (error || {}).code || data.error_code || 'SUBMIT_ERROR',
+      error: (error || {}).message || data.error || '提交失败',
+      risk_explanation: explanations[0] || {},
+      risk_explanations: explanations,
+      state_navigation: data.state_navigation || ((explanations[0] || {}).navigation) || {},
+    };
+  }
+
   window.submitCandidate = async function (alphaId, options) {
     options = options || {};
     var candidate = findCandidate(alphaId);
@@ -2954,6 +2990,9 @@
         if (ok) {
           return window.submitCandidate(alphaId, Object.assign({}, options, { confirmObservabilityRisk: true }));
         }
+      }
+      if (e.data && (e.data.risk_explanation || e.data.state_navigation || e.data.risk_explanations)) {
+        renderSubmitFailurePanel([submitErrorItem(alphaId, e)]);
       }
       return { ok: false, alpha_id: alphaId, error: e.message };
     } finally {
@@ -2998,6 +3037,9 @@
         }
       }
       toast('批量提交失败：' + e.message, 'error');
+      if (e.data && (e.data.risk_explanation || e.data.state_navigation || e.data.risk_explanations)) {
+        renderSubmitFailurePanel(ids.map(function (id) { return submitErrorItem(id, e); }));
+      }
     } finally {
       submitInFlight = false;
       renderAll();
@@ -3022,9 +3064,28 @@
     if ($('submitFailureCount')) $('submitFailureCount').textContent = failed.length + ' 个 Alpha 提交失败。';
     if ($('submitFailureList')) {
       $('submitFailureList').innerHTML = failed.map(function (item) {
-        return '<div class="submit-fail-row"><b>' + esc(item.alpha_id || '-') + '</b><div class="mini">' + esc(item.error || item.error_code || '提交失败') + '</div></div>';
+        var code = item.error_code || item.code || 'SUBMIT_ERROR';
+        var suggestion = submitFailureSuggestion(code, item.error || '');
+        var explanations = item.risk_explanations || (item.risk_explanation ? [item.risk_explanation] : []);
+        var riskHtml = explanations.map(function (explanation) { return renderRiskExplanation(explanation); }).join('');
+        var navHtml = riskHtml ? '' : renderStateNavigation(item.state_navigation || {});
+        return '<div class="submit-fail-row">' +
+          '<div class="submit-fail-id">' + esc(item.alpha_id || '-') + '</div>' +
+          '<div class="submit-fail-reason"><b>' + esc(code) + '</b><br>' + esc(item.error || '提交失败') + '<br><span class="mini">' + esc(suggestion) + '</span>' + riskHtml + navHtml + '</div>' +
+          '<button class="secondary small" onclick="retryFailedSubmitItem(' + jsStringAttr(item.alpha_id || '') + ')">重试</button>' +
+          '</div>';
       }).join('');
     }
+  }
+
+  function submitFailureSuggestion(code, message) {
+    var text = String(code || '') + ' ' + String(message || '');
+    if (/CLOUD_SELF_CORRELATION|self_correlation|相似度/i.test(text)) return '先刷新云端数据，调整表达式差异化，再重新执行检查。';
+    if (/CLOUD_SYNC|cloud/i.test(text)) return '先刷新云端数据，再重新检查该 Alpha。';
+    if (/NOT_READY|MISSING_OFFICIAL|official/i.test(text)) return '先完成官方回测与预提交检查，再提交。';
+    if (/DUPLICATE|ALREADY_SUBMITTED|重复|已提交/i.test(text)) return '核对云端与本地提交记录，避免重复提交。';
+    if (/OBSERVABILITY|risk|风险/i.test(text)) return '查看观测风险和阻断项，确认后再重试。';
+    return '查看候选详情和失败原因，修正后单项重试。';
   }
 
   window.clearSubmitFailurePanel = function () {
@@ -3037,6 +3098,12 @@
     var failedIds = (lastSubmitResults || []).filter(function (item) { return !item.ok && item.alpha_id; }).map(function (item) { return item.alpha_id; });
     if (!failedIds.length || !lastSubmitPayload) return;
     selectedSubmitIds = new Set(failedIds);
+    await window.submitSelectedCandidates({ auto: lastSubmitPayload.submit_mode === 'auto' });
+  };
+
+  window.retryFailedSubmitItem = async function (alphaId) {
+    if (!alphaId || !lastSubmitPayload) return;
+    selectedSubmitIds = new Set([alphaId]);
     await window.submitSelectedCandidates({ auto: lastSubmitPayload.submit_mode === 'auto' });
   };
 
@@ -4047,6 +4114,14 @@
         var row = event.target.closest('tr[data-kind]');
         if (row) window.viewRow(row.dataset.kind || '', row.dataset.id || '', event);
       });
+      body.addEventListener('keydown', function (event) {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        if (event.target.closest('input, button, select, textarea, label')) return;
+        var row = event.target.closest('tr[data-kind]');
+        if (!row) return;
+        event.preventDefault();
+        window.viewRow(row.dataset.kind || '', row.dataset.id || '', event);
+      });
     }
 
     document.addEventListener('keydown', function (event) {
@@ -4060,6 +4135,10 @@
       }
       if (event.ctrlKey && event.key === 'Enter' && typeof window.toggleRun === 'function') {
         window.toggleRun();
+      }
+      if ((event.key === 'Enter' || event.key === ' ') && event.target && event.target.classList && event.target.classList.contains('slot-card')) {
+        event.preventDefault();
+        window.viewRow(event.target.dataset.kind || 'backtest', event.target.dataset.id || '', event);
       }
     });
 
