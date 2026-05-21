@@ -1,5 +1,6 @@
 // brain_alpha_ops/web/js/view-model.js
 // Pure view-model helpers shared by app rendering flows.
+// v3: Enhanced with additional identity helpers and batch operations.
 
 (function () {
   'use strict';
@@ -87,13 +88,48 @@
     return Array.isArray(fallback) ? fallback : [];
   }
 
+  /**
+   * v3: Scorecard helpers - extract display score from a candidate.
+   */
+  function candidateDisplayScore(candidate) {
+    if (!candidate) return 0;
+    var sc = candidate.scorecard || {};
+    return sc.total_score || sc.local_rank_score || 0;
+  }
+
+  function officialMetric(candidate, key) {
+    var metrics = candidate.official_metrics || candidate.metrics || {};
+    var value = metrics[key];
+    return Number.isFinite(Number(value)) ? Number(value) : 0;
+  }
+
+  function firstFiniteNumber() {
+    for (var i = 0; i < arguments.length; i += 1) {
+      var n = Number(arguments[i]);
+      if (Number.isFinite(n)) return n;
+    }
+    return null;
+  }
+
+  function firstPositiveFiniteNumber() {
+    for (var i = 0; i < arguments.length; i += 1) {
+      var n = Number(arguments[i]);
+      if (Number.isFinite(n) && n > 0) return n;
+    }
+    return null;
+  }
+
   window.ViewModel = {
     candidateIdentity: candidateIdentity,
+    candidateDisplayScore: candidateDisplayScore,
     chooseRuntimeArray: chooseRuntimeArray,
     expressionFromRow: expressionFromRow,
     firstArrayWithItems: firstArrayWithItems,
+    firstFiniteNumber: firstFiniteNumber,
+    firstPositiveFiniteNumber: firstPositiveFiniteNumber,
     lifecycleIdentity: lifecycleIdentity,
     normalizedExpression: normalizedExpression,
+    officialMetric: officialMetric,
     uniqueBacktestSlots: uniqueBacktestSlots,
     uniqueBy: uniqueBy,
     uniqueCandidates: uniqueCandidates,

@@ -1,6 +1,6 @@
 // brain_alpha_ops/web/js/views/detail.js
 // Detail modal rendering — candidate, cloud, lifecycle, check details.
-// IIFE exposes to window namespace.
+// v3: Enhanced with better formatting, performance, and accessibility.
 
 (function () {
   'use strict';
@@ -11,12 +11,12 @@
   var formatScore = window.Utils.formatScore;
   var humanCheckName = window.Utils.humanCheckName;
   var renderRiskExplanation = window.Utils.renderRiskExplanation;
-  var renderStateNavigation = window.Utils.renderStateNavigation;
-  var statusBadge = window.Table.statusBadge;
-  var scoreSpan = window.Table.scoreSpan;
+  var scoreSpan = window.Utils.scoreSpan;
+  var statusBadge = window.Utils.statusBadge;
+  var S = window.AppState;
   var previousFocus = null;
 
-  // ---------- Helpers -------------------------------------------------------
+  // ── Helpers ────────────────────────────────────────────────────────────
 
   function fmtVal(val) {
     if (val == null) return '-';
@@ -29,19 +29,14 @@
     if (value == null) return '-';
     switch (format) {
       case 'score': return scoreSpan(value);
-      case 'badge': return statusBadge(String(value));
+      case 'badge': return statusBadge(String(value), value === true || value === '是' ? 'good' : 'muted');
       case 'json': return '<pre class="detail-json">' + esc(JSON.stringify(value, null, 2)) + '</pre>';
-      case 'number': {
-        var n = Number(value);
-        return Number.isFinite(n) ? n.toFixed(Number.isInteger(n) ? 0 : 4) : '-';
-      }
+      case 'number': { var n = Number(value); return Number.isFinite(n) ? n.toFixed(Number.isInteger(n) ? 0 : 4) : '-'; }
       default: return esc(String(value));
     }
   }
 
-  function hasDataObject(obj) {
-    return Boolean(obj && typeof obj === 'object' && Object.keys(obj).length);
-  }
+  function hasDataObject(obj) { return Boolean(obj && typeof obj === 'object' && Object.keys(obj).length); }
 
   function metricValue(candidate, key) {
     var metrics = (candidate || {}).official_metrics || (candidate || {}).metrics || {};
@@ -50,56 +45,57 @@
     return Number.isFinite(n) ? n : metrics[key];
   }
 
-  function scorePart(scorecard, key) {
-    var section = (scorecard || {})[key] || {};
-    return section.score !== undefined && section.score !== null ? section.score : '-';
-  }
-
   function sectionBlock(title, body) {
     return '<div class="detail-section">' +
       '<div class="detail-section-title">' + esc(title) + '</div>' +
-      '<div class="detail-section-body">' + body + '</div>' +
-      '</div>';
+      '<div class="detail-section-body">' + body + '</div></div>';
   }
 
-  // ---------- renderFieldTable ----------------------------------------------
-
-  function renderFieldTable(containerId, title, fields) {
-    var container = $(containerId);
-    if (!container) return;
-
+  function renderFieldTableHTML(title, fields) {
     var rows = fields.map(function (f) {
       var label = f.label || '';
       var value = formatFieldValue(f.value, f.format || 'text');
       var cls = f.className || '';
-      return '<tr>' +
-        '<td class="' + cls + ' field-label">' + esc(label) + '</td>' +
-        '<td class="' + cls + ' field-value">' + value + '</td>' +
-        '</tr>';
+      return '<tr><td class="field-label ' + cls + '">' + esc(label) + '</td>' +
+        '<td class="field-value ' + cls + '">' + value + '</td></tr>';
     }).join('');
-
-    var html = '<table class="detail-table"><thead><tr><th colspan="2">' + esc(title) + '</th></tr></thead><tbody>' + rows + '</tbody></table>';
-    container.innerHTML = html;
+    return '<table class="detail-table"><thead><tr><th colspan="2" style="font-weight:var(--fw-bold);font-size:var(--fs-sm)">' + esc(title) + '</th></tr></thead><tbody>' + rows + '</tbody></table>';
   }
 
-  // ---------- renderCandidateDetail -----------------------------------------
+  function showEmpty() {
+    var bodyEl = $('detail'); if (bodyEl) bodyEl.innerHTML = '<div class="text-center text-muted" style="padding:var(--sp-8)">暂无详情数据。</div>';
+  }
 
-  function renderCandidateDetail(candidate) {
-    if (!candidate) {
-      showEmpty();
-      return;
+  // ── MODAL OPEN/CLOSE ──────────────────────────────────────────────────
+
+  window.closeDetailModal = function () {
+    var overlay = $('detailModal');
+    if (overlay) { overlay.classList.add('hidden'); overlay.setAttribute('aria-hidden', 'true'); }
+    if (previousFocus && typeof previousFocus.focus === 'function') { try { previousFocus.focus(); } catch (e) {} }
+  };
+
+  function openDetailModal() {
+    var overlay = $('detailModal');
+    if (overlay) {
+      previousFocus = document.activeElement;
+      overlay.classList.remove('hidden');
+      overlay.setAttribute('aria-hidden', 'false');
+      var closeBtn = $('detailCloseButton');
+      if (closeBtn) setTimeout(function () { closeBtn.focus(); }, 80);
     }
+  }
 
-    var titleEl = $('modalTitle');
-    if (titleEl) { titleEl.textContent = candidate.alpha_id || '候选详情'; }
+  // ── Candidate Detail ──────────────────────────────────────────────────
 
-    var bodyEl = $('detail');
-    if (!bodyEl) return;
+  window.viewCandidateDetail = function (candidate) {
+    if (!candidate) { showEmpty(); openDetailModal(); return; }
+    var titleEl = $('modalTitle'); if (titleEl) titleEl.textContent = candidate.alpha_id || '候选详情';
+    var bodyEl = $('detail'); if (!bodyEl) return;
 
     var parts = [];
 
-    // --- 基本信息 ---
-    parts.push(renderFieldTableHTML2('基本信息', [
+    // Basic info
+    parts.push(renderFieldTableHTML('基本信息', [
       { label: 'Alpha ID', value: candidate.alpha_id },
       { label: '家族', value: candidate.family },
       { label: '假说', value: candidate.hypothesis },
@@ -111,780 +107,228 @@
       { label: '生命周期', value: candidate.lifecycle_status || '-' },
     ]));
 
-    // --- Scorecard ---
+    // Scorecard
     var sc = candidate.scorecard || {};
     if (hasDataObject(sc) || hasDataObject(candidate.official_metrics)) {
       parts.push(renderScorecardDetail(candidate));
     }
 
-    // --- Scoring Attribution (from scoring API) ---
+    // Post-score attribution
     if (candidate.alpha_id) {
       parts.push(renderScoringSection(candidate));
     }
 
-    // --- Gate ---
+    // Gate
     var gate = candidate.gate || {};
     if (Object.keys(gate).length) {
-      parts.push(renderFieldTableHTML2('门禁', [
-        { label: '通过', value: gate.passed ? '是' : '否', format: gate.passed ? 'badge' : 'text' },
-        { label: '可提交', value: gate.submission_ready ? '是' : '否' },
+      parts.push(renderFieldTableHTML('门禁', [
+        { label: '通过', value: gate.passed, format: 'badge' },
+        { label: '可提交', value: gate.submission_ready, format: 'badge' },
         { label: '详情', value: gate.details || gate.reason || '-' },
       ]));
     }
 
-    // --- Validation ---
+    // Validation
     var v = candidate.validation || {};
     if (Object.keys(v).length) {
-      parts.push(renderFieldTableHTML2('校验', [
+      parts.push(renderFieldTableHTML('校验', [
         { label: 'IS Sharpe', value: v.is_sharpe, format: 'number' },
         { label: 'OOS Sharpe', value: v.oos_sharpe, format: 'number' },
         { label: 'R IC', value: v.r_ic, format: 'number' },
         { label: 'R IC IR', value: v.r_ic_ir, format: 'number' },
         { label: 'Max Drawdown', value: v.max_drawdown, format: 'number' },
         { label: '自相关', value: v.self_correlation, format: 'number' },
-        { label: '状态', value: v.status || v.passed != null ? (v.passed ? '通过' : '未通过') : '-' },
+        { label: '状态', value: v.passed != null ? (v.passed ? '通过' : '未通过') : (v.status || '-') },
       ]));
     }
 
-    // --- 本地质量 ---
+    // Local quality
     var lq = candidate.local_quality || {};
     if (Object.keys(lq).length) {
-      parts.push(renderFieldTableHTML2('本地质量', [
-        { label: '排序分', value: lq.rank_score, format: 'score' },
-        { label: 'IS Sharpe', value: lq.is_sharpe, format: 'number' },
-        { label: 'OOS Sharpe', value: lq.oos_sharpe, format: 'number' },
-        { label: 'Fitness', value: lq.fitness, format: 'number' },
-        { label: 'Turnover', value: lq.turnover, format: 'number' },
-      ]));
+      parts.push(renderFieldTableHTML('本地质量', Object.keys(lq).slice(0, 12).map(function (k) {
+        return { label: k, value: lq[k] };
+      })));
     }
 
-    // --- 官方指标 ---
+    // Official metrics
     var om = candidate.official_metrics || {};
-    if (Object.keys(om).length) {
-      parts.push(renderFieldTableHTML2('官方指标', [
-        { label: '官方 Alpha ID', value: candidate.official_alpha_id || '-' },
+    if (hasDataObject(om)) {
+      parts.push(renderFieldTableHTML('官方指标', [
         { label: 'Sharpe', value: om.sharpe, format: 'number' },
         { label: 'Fitness', value: om.fitness, format: 'number' },
         { label: 'Turnover', value: om.turnover, format: 'number' },
-        { label: 'R IC', value: om.r_ic, format: 'number' },
+        { label: 'Returns', value: om.returns, format: 'number' },
+        { label: 'Drawdown', value: om.drawdown, format: 'number' },
+        { label: 'Margin', value: om.margin, format: 'number' },
+        { label: 'Self Correlation', value: om.self_correlation, format: 'number' },
       ]));
     }
 
-    // --- 提交信息 ---
-    var sub = candidate.submission || {};
-    if (Object.keys(sub).length) {
-      parts.push(renderFieldTableHTML2('提交信息', [
-        { label: '提交 ID', value: sub.id || sub.submission_id || '-' },
-        { label: '状态', value: sub.status || '-' },
-        { label: '消息', value: sub.message || sub.reason || '-' },
-      ]));
+    // Risk
+    if (candidate.submission_risk || candidate.risk_check) {
+      var risk = candidate.submission_risk || candidate.risk_check || {};
+      parts.push(renderRiskExplanation(risk.explanation || risk));
     }
 
-    if (sub.assistant_guidance_digest) {
-      var guidanceOutcome = sub.assistant_guidance_outcome || {};
-      parts.push(renderFieldTableHTML2('Assistant Guidance', [
-        { label: 'Guidance Digest', value: sub.assistant_guidance_digest || '-' },
-        { label: 'Source', value: sub.assistant_guidance_source || '-' },
-        { label: 'Confidence', value: sub.assistant_guidance_confidence, format: 'number' },
-        { label: 'Outcome Status', value: sub.assistant_guidance_outcome_status || '-' },
-        { label: 'Outcome Count', value: guidanceOutcome.count || sub.assistant_guidance_outcome_count || 0, format: 'number' },
-        { label: 'Outcome Success Rate', value: guidanceOutcome.success_rate || sub.assistant_guidance_outcome_success_rate || 0, format: 'number' },
-        { label: 'Outcome Avg Score', value: guidanceOutcome.avg_score || sub.assistant_guidance_outcome_avg_score || 0, format: 'number' },
-        { label: 'Outcome Avg Sharpe', value: guidanceOutcome.avg_sharpe || sub.assistant_guidance_outcome_avg_sharpe || 0, format: 'number' },
-      ]));
-    }
-
-    if (candidate._detail_source_kind) {
-      parts.push(renderFieldTableHTML2('状态来源', [
-        { label: '来源状态栏', value: candidate._detail_source_kind },
-        { label: '槽位', value: candidate.slot || '-' },
-        { label: '记录时间', value: candidate.timestamp || candidate.created_at || '-' },
-      ]));
-    }
-
-    bodyEl.innerHTML = parts.join('');
-    showModal();
-  }
-
-  // ---------- renderCloudDetail ---------------------------------------------
-
-  function renderCloudDetail(row) {
-    if (!row) {
-      showEmpty();
-      return;
-    }
-
-    // Accept element or data object
-    var data = row;
-    if (row instanceof HTMLElement) {
-      var raw = row.getAttribute('data-row');
-      if (raw) {
-        try { data = JSON.parse(raw); } catch (e) { data = {}; }
-      }
-    }
-
-    var titleEl = $('modalTitle');
-    if (titleEl) { titleEl.textContent = data.alpha_id || data.id || '云端 Alpha 详情'; }
-
-    var bodyEl = $('detail');
-    if (!bodyEl) return;
-
-    var parts = [];
-    parts.push(renderFieldTableHTML2('云端 Alpha', [
-      { label: 'Alpha ID', value: data.alpha_id || data.id },
-      { label: '状态', value: data.status },
-      { label: 'Sharpe', value: data.sharpe, format: 'number' },
-      { label: 'Fitness', value: data.fitness, format: 'number' },
-      { label: 'Turnover', value: data.turnover, format: 'number' },
-      { label: '自相关', value: data.self_correlation, format: 'number' },
-      { label: '子宇宙 Sharpe', value: data.sub_universe_sharpe, format: 'number' },
-      { label: 'R IC', value: data.r_ic, format: 'number' },
-      { label: '权重集中度', value: data.weight_concentration, format: 'number' },
-      { label: '最近日期', value: data.latest_date || data.date || '-' },
-      { label: '表达式', value: data.expression || '-' },
-      { label: '设置 ID', value: data.settings_id || '-' },
-    ]));
-
-    bodyEl.innerHTML = parts.join('');
-    showModal();
-  }
-
-  function renderAssistantContextDetail(pack) {
-    if (!pack) {
-      showEmpty();
-      return;
-    }
-
-    var titleEl = $('modalTitle');
-    if (titleEl) { titleEl.textContent = 'LLM Context Pack'; }
-
-    var bodyEl = $('detail');
-    if (!bodyEl) return;
-
-    var prompt = String(pack.prompt || '');
-    var rawJson = JSON.stringify(pack, null, 2);
-    var runConfig = pack.run_config || {};
-    var latest = pack.latest_result || {};
-    var memory = pack.research_memory || {};
-    var focus = pack.generation_focus || {};
-    var cloud = pack.cloud_alphas || {};
-    var guardrails = pack.risk_controls || {};
-    var actions = Array.isArray(pack.recommended_next_actions) ? pack.recommended_next_actions : [];
-
-    var yesNo = function (value) { return value ? 'Yes' : 'No'; };
-    var parts = [];
-    parts.push(renderFieldTableHTML2('Context Overview', [
-      { label: 'Schema', value: pack.schema_version || '-' },
-      { label: 'Generated At', value: pack.generated_at || '-' },
-      { label: 'Source', value: pack.source || '-' },
-      { label: 'Storage Dir', value: pack.storage_dir || '-' },
-      { label: 'Environment', value: runConfig.environment || '-' },
-      { label: 'Auto Submit', value: yesNo(runConfig.auto_submit), format: runConfig.auto_submit ? 'badge' : 'text' },
-    ]));
-
-    parts.push(renderFieldTableHTML2('Latest Result', [
-      { label: 'Status', value: latest.status || '-' },
-      { label: 'Candidates', value: latest.candidate_count || 0, format: 'number' },
-      { label: 'Pending Backtests', value: latest.pending_backtest_count || 0, format: 'number' },
-      { label: 'Passed', value: latest.passed_count || 0, format: 'number' },
-      { label: 'Active Backtests', value: latest.active_backtest_count || 0, format: 'number' },
-      { label: 'Strategy Profile', value: (latest.strategy_profile || {}).name || '-' },
-    ]));
-
-    parts.push(renderFieldTableHTML2('Research Memory', [
-      { label: 'Samples', value: memory.total_candidates || 0, format: 'number' },
-      { label: 'Fields', value: (focus.fields || []).slice(0, 5).join(', ') || '-' },
-      { label: 'Operators', value: (focus.operators || []).slice(0, 5).join(', ') || '-' },
-      { label: 'Windows', value: (focus.windows || []).slice(0, 5).join(', ') || '-' },
-      { label: 'Failure Patterns', value: (focus.failure_patterns || []).slice(0, 3).map(function (row) {
-        return String(row.reason || '-') + ' x' + String(row.count || 0);
-      }).join(' | ') || '-' },
-    ]));
-
-    parts.push(renderFieldTableHTML2('Cloud Risk', [
-      { label: 'Cloud Count', value: cloud.count || 0, format: 'number' },
-      { label: 'Submitted', value: cloud.submitted_count || 0, format: 'number' },
-      { label: 'Passed Unsubmitted', value: cloud.passed_unsubmitted_count || 0, format: 'number' },
-      { label: 'Failed Unsubmitted', value: cloud.failed_unsubmitted_count || 0, format: 'number' },
-      { label: 'Stale', value: yesNo(cloud.is_stale), format: cloud.is_stale ? 'badge' : 'text' },
-      { label: 'Cloud Source', value: cloud.source || '-' },
-    ]));
-
-    parts.push(renderFieldTableHTML2('Guardrails', [
-      { label: 'Live API Default Allowed', value: yesNo(guardrails.live_api_default_allowed), format: guardrails.live_api_default_allowed ? 'badge' : 'text' },
-      { label: 'Submit Requires Confirmation', value: yesNo(guardrails.submit_requires_confirmation), format: guardrails.submit_requires_confirmation ? 'badge' : 'text' },
-      { label: 'Cloud Sync Required', value: yesNo(guardrails.cloud_sync_required), format: guardrails.cloud_sync_required ? 'badge' : 'text' },
-      { label: 'Max Expression Similarity', value: guardrails.max_expression_similarity, format: 'number' },
-      { label: 'Block Micro Variants', value: yesNo(guardrails.block_micro_variants) },
-    ]));
-
-    if (actions.length) {
-      parts.push(renderFieldTableHTML2('Recommended Actions', actions.map(function (item, index) {
-        return { label: 'Action ' + (index + 1), value: item };
-      })));
-    }
-
-    parts.push(sectionBlock('Prompt', '<div class="copy-box">' + esc(prompt || '-') + '</div>' +
-      '<div class="action-row">' +
-      '<button class="secondary small" onclick="copyText(' + jsStringAttr(prompt) + ')">Copy Prompt</button>' +
-      '<button class="secondary small" onclick="copyText(' + jsStringAttr(rawJson) + ')">Copy JSON</button>' +
-      '</div>'));
-
-    parts.push(sectionBlock('Raw JSON', '<div class="copy-box">' + esc(rawJson) + '</div>'));
-
-    bodyEl.innerHTML = parts.join('');
-    showModal();
-  }
-
-  function renderAssistantGuidanceDetail(snapshot) {
-    if (!snapshot) {
-      showEmpty();
-      return;
-    }
-
-    var titleEl = $('modalTitle');
-    if (titleEl) { titleEl.textContent = 'Assistant Guidance'; }
-
-    var bodyEl = $('detail');
-    if (!bodyEl) return;
-
-    var guidance = snapshot.guidance || {};
-    var guidanceOutcome = guidance.historical_outcome || {};
-    var outcomes = snapshot.outcomes || {};
-    var scoringPolicy = snapshot.scoring_policy || {};
-    var scoreEligibility = snapshot.score_adjustment_eligibility || {};
-    var history = Array.isArray(snapshot.history) ? snapshot.history : [];
-    var rawJson = JSON.stringify(snapshot, null, 2);
-    var listText = function (items) {
-      return Array.isArray(items) && items.length ? items.join(', ') : '-';
-    };
-    var yesNo = function (value) { return value ? 'Yes' : 'No'; };
-    var parts = [];
-
-    parts.push(renderFieldTableHTML2('Guidance Snapshot', [
-      { label: 'Mode', value: snapshot.preview_only ? 'Preview Only' : 'Persisted Snapshot' },
-      { label: 'Enabled', value: yesNo(snapshot.enabled), format: snapshot.enabled ? 'badge' : 'text' },
-      { label: 'Configured Min Confidence', value: snapshot.configured_min_confidence, format: 'number' },
-      { label: 'Effective Min Confidence', value: snapshot.min_confidence, format: 'number' },
-      { label: 'Score Adjustment', value: scoringPolicy.enabled === false ? 'Off' : 'On' },
-      { label: 'Score Min Confidence', value: scoringPolicy.min_confidence, format: 'number' },
-      { label: 'Score Min Outcomes', value: scoringPolicy.min_outcome_count, format: 'number' },
-      { label: 'History Count', value: snapshot.history_count || 0, format: 'number' },
-      { label: 'History Limit', value: snapshot.history_limit || 0, format: 'number' },
-    ]));
-
-    parts.push(renderFieldTableHTML2('Score Adjustment Eligibility', [
-      { label: 'Eligible', value: yesNo(scoreEligibility.eligible), format: scoreEligibility.eligible ? 'badge' : 'text' },
-      { label: 'Reason', value: scoreEligibility.reason || '-' },
-      { label: 'Guidance Digest', value: scoreEligibility.guidance_digest || '-' },
-      { label: 'Confidence', value: scoreEligibility.confidence, format: 'number' },
-      { label: 'Outcome Count', value: scoreEligibility.outcome_count || 0, format: 'number' },
-      { label: 'Outcome Status', value: scoreEligibility.outcome_status || '-' },
-      { label: 'Applies To', value: scoringPolicy.applies_to || '-' },
-    ]));
-
-    parts.push(renderFieldTableHTML2('Latest Usable Guidance', [
-      { label: 'Usable', value: yesNo(guidance.usable), format: guidance.usable ? 'badge' : 'text' },
-      { label: 'Reason', value: guidance.reason || '-' },
-      { label: 'Source', value: guidance.source || guidance.persistence_source || '-' },
-      { label: 'Guidance Digest', value: guidance.guidance_digest || '-' },
-      { label: 'Persisted At', value: guidance.persisted_at || '-' },
-      { label: 'Confidence', value: guidance.confidence, format: 'number' },
-      { label: 'Sample Size', value: guidance.sample_size || 0, format: 'number' },
-      { label: 'Outcome Status', value: guidance.historical_outcome_status || '-' },
-      { label: 'Outcome Count', value: guidanceOutcome.count || 0, format: 'number' },
-      { label: 'Outcome Success Rate', value: guidanceOutcome.success_rate || 0, format: 'number' },
-      { label: 'Outcome Avg Score', value: guidanceOutcome.avg_score || 0, format: 'number' },
-    ]));
-
-    parts.push(renderFieldTableHTML2('Observed Outcomes', [
-      { label: 'Guided Candidates', value: outcomes.count || 0, format: 'number' },
-      { label: 'Success Count', value: outcomes.success_count || 0, format: 'number' },
-      { label: 'Success Rate', value: outcomes.success_rate || 0, format: 'number' },
-      { label: 'Average Score', value: outcomes.avg_score || 0, format: 'number' },
-      { label: 'Average Sharpe', value: outcomes.avg_sharpe || 0, format: 'number' },
-      { label: 'Average Fitness', value: outcomes.avg_fitness || 0, format: 'number' },
-    ]));
-
-    parts.push(renderFieldTableHTML2('Generation Bias', [
-      { label: 'Fields', value: listText(guidance.top_fields) },
-      { label: 'Operators', value: listText(guidance.top_operators) },
-      { label: 'Windows', value: listText(guidance.preferred_windows) },
-      { label: 'Field Combinations', value: listText((guidance.field_combinations || []).map(function (combo) {
-        return Array.isArray(combo) ? combo.join('+') : String(combo);
-      })) },
-      { label: 'Risk Flags', value: listText(guidance.risk_flags) },
-      { label: 'Summary', value: guidance.summary || '-' },
-    ]));
-
-    if (Array.isArray(guidance.recommended_next_actions) && guidance.recommended_next_actions.length) {
-      parts.push(renderFieldTableHTML2('Recommended Actions', guidance.recommended_next_actions.map(function (item, index) {
-        return { label: 'Action ' + (index + 1), value: item };
-      })));
-    }
-
-    if (history.length) {
-      var rows = history.slice(0, 12).map(function (item) {
-        item = item || {};
-        var saved = item.assistant_guidance || {};
-        var ready = item.usable !== false && item.meets_min_confidence !== false && item.has_generator_bias !== false && item.has_healthy_outcome !== false;
-        var fields = listText(item.top_fields || saved.top_fields);
-        var ops = listText(item.top_operators || saved.top_operators);
-        var windows = listText(item.preferred_windows || saved.preferred_windows);
-        var outcome = item.outcomes || {};
-        var outcomeText = outcome.count ? (' | generated ' + outcome.count + ' | success ' + String(outcome.success_rate || 0)) : '';
-        var outcomeStatus = item.historical_outcome_status && item.historical_outcome_status !== 'unknown' ? (' | outcome ' + item.historical_outcome_status) : '';
-        var scoringText = item.score_adjustment_eligible ? ' | scoring eligible' : (' | scoring ' + String(item.score_adjustment_reason || 'not eligible'));
-        return '<div class="kv">' +
-          '<div><b>' + esc(item.timestamp || '-') + '</b><span class="muted"> ' + esc(item.source || '-') + '</span>' +
-          '<div class="muted">conf ' + esc(String(item.confidence == null ? '-' : item.confidence)) +
-          ' | digest ' + esc(item.guidance_digest || '-') + outcomeText + outcomeStatus +
-          esc(scoringText) +
-          ' | fields ' + esc(fields) + ' | ops ' + esc(ops) + ' | windows ' + esc(windows) + '</div>' +
-          '<div>' + esc(item.summary || saved.summary || item.reason || '-') + '</div></div>' +
-          '<div class="action-row">' +
-          '<button class="secondary small" onclick="useSavedAssistantGuidance(' + jsStringAttr(String(item.history_index)) + ')">' + (ready ? 'Use' : 'Load') + '</button>' +
-          '<button class="secondary small" onclick="copyText(' + jsStringAttr(JSON.stringify(saved, null, 2)) + ')">Copy</button>' +
-          '</div>' +
-          '</div>';
-      }).join('');
-      parts.push(sectionBlock('Recent Saved Guidance', rows));
-    }
-
-    parts.push(sectionBlock('Raw JSON', '<div class="copy-box">' + esc(rawJson) + '</div>' +
-      '<div class="action-row"><button class="secondary small" onclick="copyText(' + jsStringAttr(rawJson) + ')">Copy JSON</button></div>'));
-
-    bodyEl.innerHTML = parts.join('');
-    showModal();
-  }
-
-  // ---------- renderLifecycleDetail -----------------------------------------
-
-  function renderLifecycleDetail(row) {
-    if (!row) {
-      showEmpty();
-      return;
-    }
-
-    // Accept element or data object
-    var data = row;
-    if (row instanceof HTMLElement) {
-      var raw = row.getAttribute('data-row');
-      if (raw) {
-        try { data = JSON.parse(raw); } catch (e) { data = {}; }
-      }
-    }
-
-    var titleEl = $('modalTitle');
-    if (titleEl) { titleEl.textContent = data.alpha_id || '生命周期详情'; }
-
-    var bodyEl = $('detail');
-    if (!bodyEl) return;
-
-    var parts = [];
-    parts.push(renderFieldTableHTML2('生命周期记录', [
-      { label: 'Alpha ID', value: data.alpha_id || '-' },
-      { label: '运行 ID', value: data.run_id || '-' },
-      { label: '阶段', value: data.stage || '-' },
-      { label: '状态', value: data.status, format: 'badge' },
-      { label: '分类', value: data.status_category || '-' },
-      { label: '消息', value: data.message || '-' },
-      { label: '时间戳', value: data.timestamp || '-' },
-    ]));
-
-    if (data.detail || data.meta) {
-      parts.push(renderFieldTableHTML2('附加信息', [
-        { label: '详情', value: data.detail || data.meta, format: 'json' },
-      ]));
-    }
-
-    bodyEl.innerHTML = parts.join('');
-    showModal();
-  }
-
-  // ---------- renderCheckDetail ---------------------------------------------
-
-  function renderCheckDetail(result) {
-    if (!result) {
-      showEmpty();
-      return;
-    }
-
-    var titleEl = $('modalTitle');
-    if (titleEl) { titleEl.textContent = result.alpha_id || '检查详情'; }
-
-    var bodyEl = $('detail');
-    if (!bodyEl) return;
-
-    var parts = [];
-    parts.push(renderFieldTableHTML2('检查结果', [
-      { label: 'Alpha ID', value: result.alpha_id || '-' },
-      { label: '通过', value: result.passed ? '通过' : '未通过', format: 'badge' },
-      { label: '新鲜度', value: result.is_stale === false ? '有效' : result.is_stale === true ? '过期' : '-' },
-      { label: '检查时间', value: result.checked_at || '-' },
-      { label: '消息', value: result.message || '-' },
-    ]));
-
-    var checks = result.checks || [];
-    if (checks.length) {
-      var checkFields = checks.map(function (c) {
-        var detail = c.passed ? '通过' : ('未通过' + (c.detail ? '：' + c.detail : ''));
-        if (!c.passed && c.suggestion) detail += '\n建议：' + c.suggestion;
-        return { label: humanCheckName(c), value: detail, format: 'text' };
-      });
-      parts.push(renderFieldTableHTML2('逐项检查', checkFields));
-      var suggestions = checks.filter(function (c) { return !c.passed && c.suggestion; });
-      if (suggestions.length) {
-        parts.push(sectionBlock('处理建议', suggestions.map(function (c) {
-          return '<div class="copy-box"><b>' + esc(humanCheckName(c)) + '</b><br>' + esc(c.suggestion) + '</div>';
-        }).join('')));
-      }
-    }
-
-    var riskBlocks = [];
-    var riskSeen = {};
-    function pushRiskExplanation(item) {
-      if (!item || typeof item !== 'object') return;
-      var key = String(item.rule || '') + '|' + String(item.summary || '');
-      if (riskSeen[key]) return;
-      riskSeen[key] = true;
-      var html = renderRiskExplanation(item);
-      if (html) riskBlocks.push(html);
-    }
-    (result.risk_explanations || []).forEach(pushRiskExplanation);
-    checks.forEach(function (c) {
-      if (!c.passed && c.risk_explanation) pushRiskExplanation(c.risk_explanation);
-    });
-    if (riskBlocks.length) parts.push(sectionBlock('风险解释', riskBlocks.join('')));
-    if (result.state_navigation && !riskBlocks.length) {
-      parts.push(sectionBlock('解决路径', renderStateNavigation(result.state_navigation)));
-    }
-
-    bodyEl.innerHTML = parts.join('');
-    showModal();
-  }
-
-  function renderScorecardDetail(candidate) {
-    candidate = candidate || {};
-    var sc = candidate.scorecard || {};
-    var isMetricScorecard = sc.schema_version === 'ui-metric-scorecard-v1';
-    var calibration = sc.calibration || {};
-    var guidanceAdjustment = sc.assistant_guidance_adjustment || {};
-    var fields = [
-      { label: isMetricScorecard ? '本地规则分' : '总分', value: sc.total_score !== undefined ? sc.total_score : candidate.score, format: 'score' },
-      { label: '评分来源', value: sc.score_basis || '-' },
-      { label: '决策带', value: sc.decision_band || '-' },
-      { label: '本地排序分', value: sc.local_rank_score, format: 'score' },
-      { label: 'Base Local Rank', value: sc.base_local_rank_score, format: 'score' },
-      { label: 'Guidance Adjustment', value: guidanceAdjustment.adjustment || 0, format: 'number' },
-      { label: 'Guidance Outcome', value: guidanceAdjustment.outcome_status || '-' },
-      { label: '说明', value: calibration.purpose || (isMetricScorecard ? '用于排序参考，不是官方 BRAIN 总评分。' : '-') },
-      { label: '先验分', value: scorePart(sc, 'prior'), format: 'score' },
-      { label: '实证分', value: scorePart(sc, 'empirical'), format: 'score' },
-      { label: '提交清单分', value: scorePart(sc, 'submission_checklist'), format: 'score' },
-      { label: 'Sharpe', value: metricValue(candidate, 'sharpe'), format: 'number' },
-      { label: 'Fitness', value: metricValue(candidate, 'fitness'), format: 'number' },
-      { label: 'Turnover', value: metricValue(candidate, 'turnover'), format: 'number' },
-      { label: 'Returns', value: metricValue(candidate, 'returns'), format: 'number' },
-      { label: 'Drawdown', value: metricValue(candidate, 'drawdown'), format: 'number' },
-      { label: 'Sub-Universe Sharpe', value: metricValue(candidate, 'sub_universe_sharpe'), format: 'number' },
-      { label: 'Correlation', value: metricValue(candidate, 'correlation'), format: 'number' },
-      { label: 'Pass/Fail', value: ((candidate.official_metrics || {}).pass_fail || (candidate.metrics || {}).pass_fail || '-') },
-    ];
-    var html = renderFieldTableHTML2('评分卡', fields);
-
-    if (guidanceAdjustment.source && guidanceAdjustment.source !== 'none') {
-      html += renderFieldTableHTML2('Guidance Score Adjustment', [
-        { label: 'Guidance Digest', value: guidanceAdjustment.guidance_digest || '-' },
-        { label: 'Outcome Status', value: guidanceAdjustment.outcome_status || '-' },
-        { label: 'Outcome Count', value: guidanceAdjustment.outcome_count || 0, format: 'number' },
-        { label: 'Success Rate', value: guidanceAdjustment.success_rate || 0, format: 'number' },
-        { label: 'Avg Score', value: guidanceAdjustment.avg_score || 0, format: 'number' },
-        { label: 'Confidence', value: guidanceAdjustment.confidence || 0, format: 'number' },
-        { label: 'Min Confidence', value: (guidanceAdjustment.configuration || {}).min_confidence || 0, format: 'number' },
-        { label: 'Min Outcome Count', value: (guidanceAdjustment.configuration || {}).min_outcome_count || 0, format: 'number' },
-        { label: 'Applied To Total', value: guidanceAdjustment.applied_to_total ? 'Yes' : 'No' },
-        { label: 'Reason', value: guidanceAdjustment.reason || '-' },
-      ]);
-    }
-
-    var empiricalItems = ((sc.empirical || {}).items) || [];
-    if (empiricalItems.length) {
-      html += renderFieldTableHTML2('评分依据', empiricalItems.map(function (item) {
-        var actual = item.actual === undefined || item.actual === null ? '-' : item.actual;
-        var score = item.score !== undefined ? item.score : item.points !== undefined && item.passed ? item.points : 0;
-        return {
-          label: item.name || '-',
-          value: String(actual) + ' | ' + (item.passed ? 'pass' : 'fail') + ' | +' + score,
-        };
-      }));
-    }
-
-    var dims = (sc.prior || {}).dimensions || {};
-    if (Object.keys(dims).length) {
-      html += renderFieldTableHTML2('先验维度', Object.keys(dims).map(function (key) {
-        return { label: key, value: dims[key], format: 'score' };
-      }));
-    }
-    return html;
-  }
-
-  // ---------- Internal helpers ----------------------------------------------
-
-  function renderFieldTableHTML(title, fields) {
-    var rows = fields.map(function (f) {
-      return '<tr>' +
-        '<td class="field-label">' + esc(f.label) + '</td>' +
-        '<td class="field-value">' + formatFieldValue(f.value, f.format || 'text') + '</td>' +
-        '</tr>';
+    bodyEl.innerHTML = parts.map(function (html) {
+      return '<div class="detail-section">' +
+        '<div class="detail-section-title" style="font-size:var(--fs-sm);font-weight:var(--fw-extrabold)">' + (html.title || '') + '</div>' +
+        '<div class="detail-section-body">' + (html.body || html) + '</div>' +
+        '</div>';
     }).join('');
-    return '<table class="detail-table"><thead><tr><th colspan="2">' + esc(title) + '</th></tr></thead><tbody>' + rows + '</tbody></table>';
-  }
 
-  // Renders as section-wrapped table
-  function renderFieldTableHTML2(title, fields) {
-    return sectionBlock(title, renderFieldTableHTML(title, fields));
-  }
-
-  function showModal() {
-    var modal = $('detailModal');
-    if (!modal) return;
-    previousFocus = document.activeElement && document.activeElement !== document.body ? document.activeElement : previousFocus;
-    modal.classList.remove('hidden');
-    modal.setAttribute('aria-hidden', 'false');
-    var panel = modal.querySelector('.modal-panel');
-    var closeButton = $('detailCloseButton');
-    setTimeout(function () {
-      (closeButton || panel || modal).focus();
-    }, 0);
-  }
-
-  function showEmpty() {
-    var bodyEl = $('detail');
-    if (bodyEl) { bodyEl.innerHTML = '<p style="color:var(--muted);text-align:center;padding:20px">暂无详情。</p>'; }
-    showModal();
-  }
-
-  function closeDetailModal() {
-    var modal = $('detailModal');
-    if (modal) {
-      modal.classList.add('hidden');
-      modal.setAttribute('aria-hidden', 'true');
-    }
-    if (previousFocus && typeof previousFocus.focus === 'function' && document.contains(previousFocus)) {
-      previousFocus.focus();
-    }
-  }
-
-  // ---------- Scoring Attribution & Redline ---------------------------------
-
-  /**
-   * Async section that loads scoring attribution from the API.
-   * Shows a loading placeholder, then replaces with the result.
-   */
-  function renderScoringSection(candidate) {
-    candidate = candidate || {};
-    var alphaId = candidate.alpha_id || candidate.official_alpha_id || candidate.simulation_id || '';
-    var containerId = 'scoringSection_' + String(alphaId).replace(/[^a-zA-Z0-9_-]/g, '_');
-    var html = '<div id="' + containerId + '" class="detail-section">' +
-      '<div style="color:var(--muted);font-size:13px">评分归因加载中...</div></div>';
-    // Load async
-    setTimeout(function () {
-      var el = document.getElementById(containerId);
-      if (!el) return;
-      try {
-        window.ApiClient.post('/api/scoring/attribution', { alpha_id: alphaId, candidate: candidate }).then(function (data) {
-          if (data && data.attribution) {
-            el.innerHTML = renderAttributionTreeHTML(data);
-          } else {
-            el.innerHTML = '<div style="color:var(--muted);font-size:13px">暂无评分归因数据</div>';
-          }
-        }).catch(function () {
-          el.innerHTML = '<div style="color:var(--muted);font-size:13px">Scoring attribution failed to load.</div>';
-        });
-      } catch (e) {
-        el.innerHTML = '<div style="color:var(--muted);font-size:13px">Scoring attribution failed to load.</div>';
-      }
-    }, 10);
-    return html;
-  }
-
-  function renderAttributionTreeHTML(result) {
-    var hg = result.hard_gates || [];
-    var sg = result.soft_gates || [];
-    var tf = result.top_failures || [];
-    var hints = result.improvement_hints || [];
-
-    var body = '';
-
-    // ── Hard Gates Panel ──
-    body += '<div class="detail-section" style="margin-top:6px">';
-    body += '<div style="font-weight:700;font-size:13px;margin-bottom:4px;color:var(--text)">Hard Gates</div>';
-    if (hg.length) {
-      hg.forEach(function (g) {
-        var color = g.passed ? 'var(--good)' : 'var(--bad)';
-        var icon = g.passed ? '✓' : '✗';
-        body += '<div style="font-size:12px;padding:2px 0;color:' + color + '">' + icon + ' ' + esc(g.gate_name || '-');
-        if (g.failed_items && g.failed_items.length) {
-          body += ' <span style="color:var(--muted)">(' + g.failed_items.map(function (item) { return esc(item); }).join(', ') + ')</span>';
-        }
-        body += '</div>';
-      });
-    } else {
-      body += '<div style="font-size:12px;color:var(--muted)">无</div>';
-    }
-    body += '</div>';
-
-    // ── Soft Gates Panel ──
-    if (sg.length) {
-      body += '<div class="detail-section" style="margin-top:6px">';
-      body += '<div style="font-weight:700;font-size:13px;margin-bottom:4px;color:var(--text)">Soft Gate Warnings</div>';
-      sg.forEach(function (g) {
-        var color = g.passed ? 'var(--muted)' : 'var(--warn)';
-        body += '<div style="font-size:12px;padding:2px 0;color:' + color + '">' + esc(g.gate_name || '-');
-        if (g.failed_items && g.failed_items.length) {
-          body += ' (' + g.failed_items.map(function (item) { return esc(item); }).join(', ') + ')';
-        }
-        body += '</div>';
-      });
-      body += '</div>';
-    }
-
-    // ── Top Failures ──
-    if (tf.length) {
-      body += '<div class="detail-section" style="margin-top:6px">';
-      body += '<div style="font-weight:700;font-size:13px;margin-bottom:4px;color:var(--bad)">Top Failures</div>';
-      tf.forEach(function (f) {
-        var item = f.item || f.name || '-';
-        body += '<div style="font-size:12px;padding:2px 0;color:var(--bad)">' + esc(item) + ': ' + esc(f.reason || f.actual || '') + '</div>';
-      });
-      body += '</div>';
-    }
-
-    // ── Improvement Hints ──
-    if (hints.length) {
-      body += '<div class="detail-section" style="margin-top:6px">';
-      body += '<div style="font-weight:700;font-size:13px;margin-bottom:4px;color:var(--text)">Improvement Hints</div>';
-      hints.forEach(function (h) {
-        body += '<div style="font-size:12px;padding:2px 0;color:var(--muted)">' + esc(h) + '</div>';
-      });
-      body += '</div>';
-    }
-
-    // ── Attribution Tree ──
-    if (result.attribution) {
-      body += '<div class="detail-section" style="margin-top:6px">';
-      body += '<div style="font-weight:700;font-size:13px;margin-bottom:4px;color:var(--text)">Scoring Attribution Tree</div>';
-      body += renderAttributionNode(result.attribution);
-      body += '</div>';
-    }
-
-    return body;
-  }
-
-  function renderAttributionNode(node) {
-    if (!node) return '';
-    var indent = 'margin-left:16px;';
-    var score = Number(node.score || 0);
-    var weight = Number(node.weight || 0);
-    var contribution = Number(node.contribution || 0);
-    var color = score >= 70 ? 'var(--good)' : score >= 40 ? 'var(--warn)' : 'var(--bad)';
-    var html = '<div style="font-size:13px;' + (weight < 1.0 ? indent : '') + '">' +
-      '<span style="color:' + color + ';font-weight:600">' + esc(node.name || '-') + '</span>' +
-      ' <span style="color:var(--muted);font-size:12px">score=' + score.toFixed(2) +
-      ' weight=' + weight.toFixed(2) +
-      ' contribution=' + contribution.toFixed(2) + '</span>' +
-      (node.explanation ? ' <span style="color:var(--muted);font-size:11px">' + esc(node.explanation) + '</span>' : '') +
-      '</div>';
-    if (node.children && node.children.length) {
-      for (var i = 0; i < node.children.length; i++) {
-        html += renderAttributionNode(node.children[i]);
-      }
-    }
-    return html;
-  }
-
-  /**
-   * Fetch and display the redline compliance report.
-   */
-  function loadRedlineReport() {
-    try {
-      window.ApiClient.get('/api/redline/report').then(function (data) {
-        window.AppState.set('redlineReport', data);
-        var el = document.getElementById('redlineSummary');
-        if (el && data) {
-          var ok = data.ok;
-          var vc = data.violations || 0;
-          el.innerHTML = ok
-            ? '<span style="color:var(--good)">✓ 六大红线验证通过</span>'
-            : '<span style="color:var(--bad)">✗ ' + vc + ' 条红线违规</span>';
-        }
-      }).catch(function () {});
-    } catch (e) {}
-  }
-
-  // ---------- Public API ----------------------------------------------------
-
-  window.DetailView = {
-    renderFieldTable: renderFieldTable,
-    renderCandidateDetail: renderCandidateDetail,
-    renderCloudDetail: renderCloudDetail,
-    renderLifecycleDetail: renderLifecycleDetail,
-    renderAssistantContextDetail: renderAssistantContextDetail,
-    renderAssistantGuidanceDetail: renderAssistantGuidanceDetail,
-    renderCheckDetail: renderCheckDetail,
-    closeDetailModal: closeDetailModal,
+    openDetailModal();
   };
 
-  // Backward-compat global alias — called from inline onclick handlers
-  window.closeDetailModal = closeDetailModal;
-  window.viewCandidateDetail = renderCandidateDetail;
-  window.viewCloudDetail = renderCloudDetail;
-  window.viewLifecycleDetail = renderLifecycleDetail;
-  window.viewAssistantContextDetail = renderAssistantContextDetail;
-  window.viewAssistantGuidanceDetail = renderAssistantGuidanceDetail;
-  window.viewCheckDetail = renderCheckDetail;
-  window.loadRedlineReport = loadRedlineReport;
-  window.loadCheckpointStatus = loadCheckpointStatus;
+  // ── Scorecard Detail ──────────────────────────────────────────────────
 
-  /**
-   * Checkpoint status loading and UI update.
-   */
-  function loadCheckpointStatus() {
-    try {
-      window.ApiClient.get('/api/checkpoint/status').then(function (data) {
-        window.AppState.set('checkpointStatus', data);
-        var el = document.getElementById('checkpointSummary');
-        if (el && data && data.ok) {
-          if (data.resume_available) {
-            var latest = data.latest || {};
-            el.innerHTML = '<span style="color:var(--accent);cursor:pointer;text-decoration:underline" title="恢复最近断点">' +
-              '📋 可恢复 (' + (latest.phase_completed || '') + ')' + '</span>';
-            el.onclick = function () { if (confirm('从断点恢复流水线？')) { resumeFromCheckpoint(); } };
-          } else {
-            el.innerHTML = '<span style="color:var(--muted)">📋 无断点</span>';
-          }
-        }
-      }).catch(function () {});
-    } catch (e) {}
-  }
+  function renderScorecardDetail(candidate) {
+    var sc = candidate.scorecard || {};
+    var parts = [];
 
-  function resumeFromCheckpoint() {
-    if (typeof window.resumeProductionFromCheckpoint === 'function') {
-      window.resumeProductionFromCheckpoint();
-      return;
+    // Overall
+    if (sc.total_score !== undefined || sc.local_rank_score !== undefined) {
+      parts.push('<div style="font-weight:var(--fw-bold);margin-bottom:var(--sp-2)">总分：' +
+        scoreSpan(sc.total_score || sc.local_rank_score || 0) + '</div>');
     }
-    var payload = { guided: true, resume: true };
-    try {
-      window.ApiClient.post('/api/run', payload).then(function (data) {
-        if (data && data.ok) {
-          window.AppState.set('activeJobId', data.job_id);
-          window.AppState.set('isRunning', true);
-          if (typeof window.connectSSE === 'function') {
-            window.connectSSE(data.job_id);
-          }
-        }
-      }).catch(function () {});
-    } catch (e) {}
+
+    // Layers
+    var layers = sc.layers || sc.scorecard_layers || [];
+    if (layers.length) {
+      layers.forEach(function (layer) {
+        var layerTitle = layer.name || layer.layer || '';
+        parts.push('<div class="sc-layer-title">' + esc(layerTitle) + '</div>');
+        var dims = layer.dimensions || layer.dims || layer.items || [];
+        dims.forEach(function (dim) {
+          var name = dim.name || dim.dimension || dim.label || '';
+          var score = dim.score !== undefined ? Number(dim.score) : 0;
+          var weight = dim.weight !== undefined ? Number(dim.weight) : 0;
+          var pctScore = Math.max(0, Math.min(100, (score + 10) / 20 * 100)); // normalize to 0-100
+          var barClass = pctScore >= 70 ? 'high' : pctScore >= 40 ? 'mid' : 'low';
+          parts.push('<div class="sc-dim-row">' +
+            '<span style="font-size:var(--fs-2xs);color:var(--text-muted)">' + esc(name.slice(0, 2)) + '</span>' +
+            '<span style="font-size:var(--fs-xs)">' + esc(name) + '</span>' +
+            '<div class="sc-dim-bar-wrap"><div class="sc-dim-bar ' + barClass + '" style="width:' + pctScore + '%"></div></div>' +
+            '<span class="sc-dim-val">' + scoreSpan(score) + '</span>' +
+            '<span style="font-size:var(--fs-2xs);color:var(--text-muted);text-align:right">' + (weight * 100).toFixed(0) + '%</span>' +
+            '</div>');
+        });
+      });
+    }
+
+    return sectionBlock('评分卡', parts.join(''));
   }
+
+  // ── Scoring Section ───────────────────────────────────────────────────
+
+  function renderScoringSection(candidate) {
+    var scoring = candidate.post_score_attribution || candidate.scoring_attribution || candidate.scoring || {};
+    if (!hasDataObject(scoring)) {
+      // Try fetch from cache
+      var cachedCheck = S.get('checkResults') || {};
+      var check = cachedCheck[candidate.alpha_id];
+      if (check && hasDataObject(check.scoring)) scoring = check.scoring;
+    }
+    if (!hasDataObject(scoring)) return '';
+
+    var fields = [];
+    if (scoring.shap_values && Array.isArray(scoring.shap_values)) {
+      scoring.shap_values.slice(0, 8).forEach(function (item) {
+        fields.push({ label: item.name || item.feature || '', value: (item.value || item.shap_value || 0).toFixed(4) });
+      });
+    }
+    if (scoring.top_features && Array.isArray(scoring.top_features)) {
+      scoring.top_features.slice(0, 8).forEach(function (item) {
+        fields.push({ label: item, value: scoring.feature_values ? scoring.feature_values[item] : '' });
+      });
+    }
+    if (!fields.length) {
+      Object.keys(scoring).slice(0, 10).forEach(function (k) {
+        var v = scoring[k];
+        if (typeof v !== 'object') fields.push({ label: k, value: v });
+      });
+    }
+    if (!fields.length) return '';
+
+    return sectionBlock('评分归因', renderFieldTableHTML('', fields));
+  }
+
+  // ── Cloud Detail ──────────────────────────────────────────────────────
+
+  window.viewCloudDetail = function (el) {
+    var id = el && el.getAttribute('data-id');
+    var cloudRows = S.get('currentResult.cloud_alphas') || [];
+    var row = cloudRows.find(function (r) { return (r.alpha_id || r.id) === id; });
+    if (!row) { Toast.error('未找到云端记录。'); return; }
+
+    var titleEl = $('modalTitle'); if (titleEl) titleEl.textContent = '云端 Alpha: ' + (row.alpha_id || id);
+    var bodyEl = $('detail'); if (!bodyEl) return;
+
+    bodyEl.innerHTML = sectionBlock('云端记录', renderFieldTableHTML('', [
+      { label: 'Alpha ID', value: row.alpha_id },
+      { label: '状态', value: row.status, format: 'badge' },
+      { label: 'Sharpe', value: row.sharpe, format: 'number' },
+      { label: 'Fitness', value: row.fitness, format: 'number' },
+      { label: 'Turnover', value: row.turnover, format: 'number' },
+      { label: 'Self Correlation', value: row.self_correlation, format: 'number' },
+      { label: 'Date', value: row.date_created || row.date || '-' },
+    ]));
+
+    openDetailModal();
+  };
+
+  // ── Lifecycle Detail ──────────────────────────────────────────────────
+
+  window.viewLifecycleDetail = function (el) {
+    var id = el && el.getAttribute('data-id');
+    var lifecycle = S.get('currentResult.lifecycle_records') || [];
+    var record = lifecycle.find(function (r) { return (r.alpha_id || r.id) === id; });
+    if (!record) { Toast.error('未找到生命周期记录。'); return; }
+
+    var titleEl = $('modalTitle'); if (titleEl) titleEl.textContent = '生命周期: ' + (record.alpha_id || id);
+    var bodyEl = $('detail'); if (!bodyEl) return;
+
+    bodyEl.innerHTML = sectionBlock('生命周期记录', renderFieldTableHTML('', [
+      { label: 'Alpha ID', value: record.alpha_id },
+      { label: '阶段', value: record.stage },
+      { label: '状态', value: record.status, format: 'badge' },
+      { label: '时间', value: record.timestamp },
+      { label: '消息', value: record.message || '' },
+      { label: '详情', value: record.details || record.note || '-' },
+    ]));
+
+    openDetailModal();
+  };
+
+  // ── Check Detail ──────────────────────────────────────────────────────
+
+  window.viewCheckDetail = function (check) {
+    if (!check) { showEmpty(); openDetailModal(); return; }
+    var titleEl = $('modalTitle'); if (titleEl) titleEl.textContent = '检查结果: ' + (check.alpha_id || '');
+    var bodyEl = $('detail'); if (!bodyEl) return;
+
+    var checks = Array.isArray(check.checks) ? check.checks : [];
+    var checkHtml = checks.length > 0 ? renderFieldTableHTML('检查项', checks.map(function (c) {
+      return { label: humanCheckName(c.name || c), value: (c.passed !== undefined ? (c.passed ? '✓ 通过' : '✗ 未通过') : fmtVal(c)) + (c.message ? ' — ' + esc(c.message) : ''), format: c.passed ? 'badge' : 'text' };
+    })) : '<div class="text-muted" style="padding:var(--sp-2)">暂无检查项详情。</div>';
+
+    bodyEl.innerHTML = sectionBlock('检查结果', renderFieldTableHTML('', [
+      { label: 'Alpha ID', value: check.alpha_id },
+      { label: '通过', value: check.passed, format: 'badge' },
+      { label: '检查时间', value: check.checked_at || '-' },
+      { label: '是否过期', value: check.is_stale ? '是' : '否', format: 'badge' },
+      { label: '错误', value: check.error || '-' },
+    ])) + sectionBlock('检查详情', checkHtml);
+
+    openDetailModal();
+  };
+
+  // ── Expose ─────────────────────────────────────────────────────────────
+
+  window.DetailView = {
+    viewCandidateDetail: window.viewCandidateDetail,
+    viewCloudDetail: window.viewCloudDetail,
+    viewLifecycleDetail: window.viewLifecycleDetail,
+    viewCheckDetail: window.viewCheckDetail,
+  };
 })();
