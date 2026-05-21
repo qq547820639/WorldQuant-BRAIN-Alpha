@@ -72,6 +72,32 @@
       --ring: rgba(20, 184, 166, 0.25);
     }
     * { box-sizing: border-box; }
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+    .skip-link {
+      position: absolute;
+      left: 12px;
+      top: 8px;
+      z-index: 50;
+      padding: 8px 12px;
+      border-radius: 6px;
+      background: var(--accent);
+      color: #fff;
+      font-size: 13px;
+      font-weight: 850;
+      transform: translateY(-140%);
+      transition: transform 160ms ease;
+    }
+    .skip-link:focus { transform: translateY(0); }
     body {
       margin: 0;
       min-height: 100vh;
@@ -148,7 +174,7 @@
       box-shadow: 0 0 0 3px rgba(45, 212, 191, 0.18);
     }
     button {
-      min-height: 34px;
+      min-height: 40px;
       border: 1px solid var(--accent);
       border-radius: 6px;
       background: var(--accent);
@@ -166,7 +192,7 @@
     button.secondary { background: var(--panel); color: var(--text); border-color: var(--line); }
     button.secondary:hover:not(:disabled) { border-color: var(--muted); box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08); }
     button.stop { background: var(--panel); color: var(--bad); border-color: var(--bad-soft); }
-    button.small { min-height: 28px; padding: 0 8px; font-size: 12px; }
+    button.small { min-height: 36px; padding: 0 10px; font-size: 12px; }
     button:disabled { opacity: 0.62; cursor: default; }
     .run-actions {
       margin: 10px 0 6px;
@@ -247,6 +273,7 @@
       background: #e2e8f0;
       overflow: hidden;
     }
+    .track[role="progressbar"] { outline: 1px solid transparent; }
     .fill {
       height: 100%;
       width: 0%;
@@ -442,7 +469,7 @@
       display: grid;
       grid-template-columns: minmax(80px, 0.2fr) minmax(0, 1fr) auto;
       gap: 8px;
-      align-items: center;
+      align-items: start;
       padding: 6px 8px;
       margin: 2px 0;
       border: 1px solid #fecaca;
@@ -459,10 +486,57 @@
     }
     .submit-fail-reason {
       color: var(--muted);
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
+      overflow: visible;
+      white-space: normal;
+      min-width: 0;
     }
+    .risk-card {
+      margin-top: 8px;
+      padding: 9px 10px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--soft);
+      color: var(--text);
+      display: grid;
+      gap: 7px;
+    }
+    .risk-card.risk-blocking { border-color: #fecaca; background: #fff1f2; }
+    .risk-card.risk-warning { border-color: #fde68a; background: #fffbeb; }
+    .risk-card-head { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; }
+    .risk-title { font-weight: 900; font-size: 13px; color: var(--text); }
+    .risk-summary { margin-top: 2px; font-size: 12px; line-height: 1.45; color: var(--muted); }
+    .risk-score { font-weight: 900; color: var(--bad); white-space: nowrap; }
+    .risk-meter { position: relative; height: 8px; border-radius: 999px; background: #e2e8f0; overflow: hidden; }
+    .risk-meter-fill { height: 100%; max-width: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--accent), var(--warn), var(--bad)); }
+    .risk-threshold { position: absolute; top: -3px; width: 2px; height: 14px; background: var(--bad); }
+    .risk-list-title { font-size: 11px; font-weight: 900; color: var(--muted); text-transform: uppercase; letter-spacing: 0; }
+    .risk-list { margin: 0; padding-left: 18px; color: var(--muted); font-size: 12px; line-height: 1.45; }
+    .state-nav-card {
+      margin-top: 4px;
+      padding: 8px;
+      border: 1px dashed var(--line);
+      border-radius: 6px;
+      background: var(--panel);
+      display: grid;
+      gap: 6px;
+    }
+    .state-nav-title { font-weight: 900; font-size: 12px; color: var(--text); }
+    .state-nav-summary, .state-nav-action { font-size: 12px; color: var(--muted); line-height: 1.4; }
+    .state-nav-steps { display: flex; flex-wrap: wrap; gap: 6px; }
+    .state-nav-step {
+      display: inline-flex;
+      align-items: center;
+      min-height: 24px;
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: var(--soft);
+      border: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 850;
+    }
+    .state-nav-step.active { background: var(--blue-soft); border-color: var(--blue); color: var(--blue); }
+    .state-nav-step.done { background: var(--good-soft); border-color: var(--good); color: var(--good); }
     .switch {
       display: inline-flex;
       align-items: center;
@@ -519,6 +593,11 @@
     tbody tr { cursor: pointer; background: var(--panel); }
     tbody tr:nth-child(even) { background: #fbfdff; }
     tbody tr:hover { background: #f0fdfa; }
+    tbody tr:focus-visible {
+      outline: 3px solid var(--ring);
+      outline-offset: -3px;
+      background: #f0fdfa;
+    }
     tbody tr.selected { background: var(--accent-soft); }
     .score-badge {
       display: inline-flex;
@@ -560,7 +639,7 @@
     .header-right { display: flex; align-items: center; gap: 8px; }
     .header-divider { width: 1px; height: 24px; background: var(--line); margin: 0 4px; flex-shrink: 0; }
     .header-icon-btn {
-      width: 28px; height: 28px; border-radius: 6px;
+      width: 40px; height: 40px; border-radius: 6px;
       border: 1px solid var(--line); background: var(--panel);
       color: var(--muted); cursor: pointer;
       display: inline-flex; align-items: center; justify-content: center;
@@ -569,7 +648,7 @@
     }
     .header-icon-btn:hover { border-color: var(--accent); color: var(--accent); }
     .header-ghost-btn {
-      min-height: 28px; padding: 0 8px; border-radius: 6px;
+      min-height: 40px; padding: 0 10px; border-radius: 6px;
       border: 1px solid transparent; background: transparent;
       color: var(--muted); cursor: pointer;
       font: inherit; font-size: 12px; font-weight: 600;
@@ -577,7 +656,7 @@
     }
     .header-ghost-btn:hover { background: var(--soft); color: var(--text); border-color: var(--line); }
     .header-danger-btn {
-      min-height: 28px; padding: 0 8px; border-radius: 6px;
+      min-height: 40px; padding: 0 10px; border-radius: 6px;
       border: 1px solid var(--bad-soft); background: transparent;
       color: var(--bad); cursor: pointer;
       font: inherit; font-size: 12px; font-weight: 600;
@@ -675,11 +754,18 @@
       .table-wrap { max-height: 680px; }
     }
     @media (max-width: 720px) {
+      main { display: flex; flex-direction: column; }
+      section { order: 1; min-height: auto; }
+      aside { order: 2; }
       .row, .insight, .toolbar, .module-actions, .monitor, .monitor-stats, .monitor-slots, .kv { grid-template-columns: 1fr; }
       .module-actions .assistant-input { grid-template-columns: 1fr; }
       .insight-grid { grid-template-columns: 1fr; }
       header { align-items: flex-start; flex-direction: column; }
       .toolbar button, .toolbar select { width: 100%; }
+      button, input, select, textarea { min-height: 44px; }
+      button.small { min-height: 40px; }
+      .header-right { flex-wrap: wrap; }
+      .header-icon-btn, .header-danger-btn { min-height: 44px; }
     }
     /* ── P2: Chart panels ── */
     .charts-panel {
@@ -1018,6 +1104,10 @@
     [data-theme="dark"] .conn-test.fail { background: var(--bad-soft); color: var(--bad); }
     [data-theme="dark"] .conn-test.testing { background: var(--warn-soft); color: var(--warn); }
     [data-theme="dark"] .submit-fail-row { border-color: var(--bad-soft); }
+    [data-theme="dark"] .risk-card { background: var(--soft); border-color: var(--line); }
+    [data-theme="dark"] .risk-card.risk-blocking { background: var(--bad-soft); border-color: var(--bad); }
+    [data-theme="dark"] .risk-card.risk-warning { background: var(--warn-soft); border-color: var(--warn); }
+    [data-theme="dark"] .state-nav-card { background: var(--panel); border-color: var(--line); }
     [data-theme="dark"] details[open] { background: var(--soft); }
     [data-theme="dark"] .table-wrap { background: var(--panel); }
     [data-theme="dark"] th { background: var(--soft); }
@@ -1028,7 +1118,8 @@
   </style>
 </head>
 <body>
-  <header>
+  <a class="skip-link" href="#mainContent">跳到结果</a>
+  <header role="banner">
     <div>
       <h1>BRAIN Alpha Ops</h1>
       <div class="subhead">无人值守流程：本地生产、评分和排序按配置运行；只有拿到 simulation_id 的任务才进入回测槽。</div>
@@ -1040,14 +1131,14 @@
         <span class="user-points">--</span>
       </div>
       <span class="header-divider"></span>
-      <div id="status" class="status">系统空闲</div>
-      <button id="themeToggle" class="header-icon-btn" onclick="toggleTheme()" title="切换浅色/暗色主题"><span class="theme-icon-light">☀</span><span class="theme-icon-dark" style="display:none">☽</span></button>
+      <div id="status" class="status" role="status" aria-live="polite" aria-atomic="true">系统空闲</div>
+      <button id="themeToggle" class="header-icon-btn" onclick="toggleTheme()" title="切换浅色/暗色主题" aria-label="切换浅色或暗色主题"><span class="theme-icon-light">☀</span><span class="theme-icon-dark" style="display:none">☽</span></button>
       <button class="header-danger-btn" onclick="shutdownApp()" title="停止本地服务并终止所有后台任务">关闭服务</button>
     </div>
   </header>
-  <main>
-    <aside>
-      <h2>生产控制</h2>
+  <main id="appMain" role="main">
+    <aside id="controlPanel" role="complementary" aria-labelledby="controlTitle">
+      <h2 id="controlTitle">生产控制</h2>
       <label>运行环境</label>
       <select id="environment" onchange="toggleEnvironment()">
         <option value="production" selected>生产环境：官方 BRAIN API</option>
@@ -1076,6 +1167,7 @@
       <div class="run-actions">
         <div class="subhead">启动后会按配置生产、评分、排序和补位。</div>
         <button id="controlButton" class="full" onclick="toggleRun()">开始生产搜索</button>
+        <button class="full secondary" onclick="document.getElementById('mainContent').scrollIntoView({ behavior: 'smooth', block: 'start' })">查看结果面板</button>
       </div>
 
       <label>市场预设</label>
@@ -1090,7 +1182,7 @@
       </select>
       <div class="subhead">预设是官方回测设置的一组快捷组合；手动修改下方设置会覆盖预设。</div>
 
-      <details open>
+      <details>
         <summary>官方回测设置</summary>
         <div class="subhead">这些值会直接写入官方 simulation/settings；自动切换策略时会同步更新这里。</div>
         <div class="row">
@@ -1128,12 +1220,12 @@
           <option value="all">全部</option>
         </select>
         <button id="syncButton" class="full secondary" onclick="syncCloud()">同步云端数据</button>
-        <div class="track"><div id="cloudSyncFill" class="fill"></div></div>
-        <div id="cloudSyncMeta" class="progress-meta">进度：0% | 已扫描：0/待确认 | 预计剩余：-</div>
+        <div id="cloudSyncTrack" class="track" role="progressbar" aria-label="云端同步进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="cloudSyncFill" class="fill"></div></div>
+        <div id="cloudSyncMeta" class="progress-meta" aria-live="polite" aria-atomic="true">进度：0% | 已扫描：0/待确认 | 预计剩余：-</div>
         <div id="cloudSyncText" class="message hidden"></div>
       </details>
 
-      <details open>
+      <details>
         <summary>系统策略</summary>
         <div class="note">本地生产强度和回测策略来自配置文件。界面只保留必要开关，避免把无人值守流程变成人工调参面板。</div>
         <div class="row">
@@ -1179,7 +1271,7 @@
 
     </aside>
 
-    <section>
+    <section id="mainContent" aria-labelledby="tableTitle">
       <div class="panel-head">
         <div>
           <h2 id="tableTitle">候选池</h2>
@@ -1217,8 +1309,8 @@
         <div id="opsMonitor" class="hidden"></div><div id="summary" class="hidden"></div>
         <div class="run-card">
           <div class="run-head"><span>数据统计</span><span id="monitorCloudStatus">未同步</span></div>
-          <div class="track"><div id="monitorCloudFill" class="fill"></div></div>
-          <div id="monitorCloudMeta" class="progress-meta">进度：0% | 已扫描：0/待确认 | 预计剩余：-</div>
+          <div id="monitorCloudTrack" class="track" role="progressbar" aria-label="数据统计同步进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="monitorCloudFill" class="fill"></div></div>
+          <div id="monitorCloudMeta" class="progress-meta" aria-live="polite" aria-atomic="true">进度：0% | 已扫描：0/待确认 | 预计剩余：-</div>
           <div id="monitorCloudText" class="message">登录后强制同步；也可手动刷新。</div>
         </div>
         <div class="slot-panel">
@@ -1236,8 +1328,8 @@
           <div id="moduleActionTitle" class="module-title">达标检查</div>
           <div id="moduleActionHint" class="module-hint">批量核验全部达标 Alpha 当前是否仍可提交。</div>
           <div id="checkStats" class="check-stats">尚未检查。</div>
-          <div class="track"><div id="checkProgressFill" class="fill"></div></div>
-          <div id="checkProgressMeta" class="progress-meta">进度：0% | 已检查：0/0 | 预计剩余：-</div>
+          <div id="checkProgressTrack" class="track" role="progressbar" aria-label="达标检查进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="checkProgressFill" class="fill"></div></div>
+          <div id="checkProgressMeta" class="progress-meta" aria-live="polite" aria-atomic="true">进度：0% | 已检查：0/0 | 预计剩余：-</div>
           <div id="assistantGenerateInputs" class="assistant-input hidden">
             <div>
               <label>Assistant JSON</label>
@@ -1279,7 +1371,8 @@
       </div>
       <div id="tableWrap" class="table-wrap">
         <div id="cloudStatsPanel" class="stats-dashboard hidden"></div>
-        <table id="candidateTable">
+        <table id="candidateTable" aria-label="Alpha 候选与生命周期记录">
+          <caption class="sr-only">Alpha 候选、回测、检查、提交和生命周期记录</caption>
           <thead>
             <tr>
           <th>#</th><th>Alpha / 记录</th><th>家族</th><th>排序分</th><th>状态</th><th>官方 ID</th><th>风险 / 原因</th><th>操作</th>
@@ -1290,24 +1383,24 @@
       </div>
     </section>
   </main>
-  <div id="detailModal" class="modal hidden">
-    <div class="modal-panel" onclick="event.stopPropagation()">
+  <div id="detailModal" class="modal hidden" aria-hidden="true">
+    <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="modalTitle" tabindex="-1" onclick="event.stopPropagation()">
       <div class="modal-head">
         <h2 id="modalTitle">详情</h2>
-        <button class="secondary small" onclick="closeDetailModal()">关闭</button>
+        <button id="detailCloseButton" class="secondary small" onclick="closeDetailModal()">关闭</button>
       </div>
       <div id="detail" class="detail modal-body">暂无详情。</div>
     </div>
   </div>
-  <div id="toastContainer" class="toast-container"></div>
-  <div id="spinnerOverlay" class="spinner-overlay hidden">
+  <div id="toastContainer" class="toast-container" aria-live="polite" aria-atomic="true"></div>
+  <div id="spinnerOverlay" class="spinner-overlay hidden" role="status" aria-live="polite" aria-atomic="true">
     <div class="spinner-box">
       <div class="spinner"></div>
       <div class="spinner-text" id="spinnerText">处理中...</div>
     </div>
   </div>
-  <div id="confirmOverlay" class="confirm-overlay hidden" onclick="hideConfirm()">
-    <div class="confirm-dialog" onclick="event.stopPropagation()">
+  <div id="confirmOverlay" class="confirm-overlay hidden" aria-hidden="true" onclick="hideConfirm()">
+    <div class="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="confirmText" tabindex="-1" onclick="event.stopPropagation()">
       <p id="confirmText"></p>
       <div class="confirm-actions">
         <button class="secondary small" id="confirmNo">取消</button>
@@ -1407,6 +1500,61 @@
     return Boolean(value);
   };
 
+  function safeClassToken(value) {
+    return String(value || "").replace(/[^a-zA-Z0-9_-]/g, "");
+  }
+
+  function pct(value) {
+    var n = Number(value || 0);
+    if (!Number.isFinite(n)) n = 0;
+    return Math.max(0, Math.min(100, n * 100));
+  }
+
+  Utils.renderStateNavigation = function (navigation) {
+    if (!navigation || typeof navigation !== "object") return "";
+    var steps = Array.isArray(navigation.steps) ? navigation.steps : [];
+    var stepHtml = steps.map(function (step) {
+      var cls = safeClassToken(step.status || "pending") || "pending";
+      return '<span class="state-nav-step ' + cls + '">' + Utils.escapeHtml(step.label || step.id || "-") + '</span>';
+    }).join("");
+    return '<div class="state-nav-card">' +
+      '<div class="state-nav-title">' + Utils.escapeHtml(navigation.title || "解决路径") + '</div>' +
+      (navigation.summary ? '<div class="state-nav-summary">' + Utils.escapeHtml(navigation.summary) + '</div>' : '') +
+      (stepHtml ? '<div class="state-nav-steps">' + stepHtml + '</div>' : '') +
+      (navigation.primary_action ? '<div class="state-nav-action">' + Utils.escapeHtml(navigation.primary_action) + '</div>' : '') +
+      '</div>';
+  };
+
+  Utils.renderRiskExplanation = function (explanation) {
+    if (!explanation || typeof explanation !== "object") return "";
+    var visual = explanation.visual || {};
+    var evidence = explanation.evidence || {};
+    var value = Number(visual.value !== undefined ? visual.value : evidence.max_similarity);
+    if (!Number.isFinite(value)) value = 0;
+    var threshold = Number(visual.threshold || evidence.threshold || 0.9);
+    if (!Number.isFinite(threshold) || threshold <= 0) threshold = 0.9;
+    var severity = safeClassToken(explanation.severity || explanation.level || "info") || "info";
+    var reasons = (Array.isArray(explanation.reasons) ? explanation.reasons : []).slice(0, 5).map(function (item) {
+      return '<li>' + Utils.escapeHtml(item) + '</li>';
+    }).join("");
+    var actions = (Array.isArray(explanation.recommended_actions) ? explanation.recommended_actions : []).slice(0, 5).map(function (item) {
+      return '<li>' + Utils.escapeHtml(item) + '</li>';
+    }).join("");
+    var meterPct = pct(value);
+    var thresholdPct = pct(threshold);
+    return '<div class="risk-card risk-' + severity + '">' +
+      '<div class="risk-card-head">' +
+        '<div><div class="risk-title">' + Utils.escapeHtml(explanation.title || "风险提示") + '</div>' +
+        '<div class="risk-summary">' + Utils.escapeHtml(explanation.summary || "") + '</div></div>' +
+        '<div class="risk-score">' + meterPct.toFixed(1) + '%</div>' +
+      '</div>' +
+      '<div class="risk-meter" aria-label="risk meter"><div class="risk-meter-fill" style="width:' + meterPct + '%"></div><span class="risk-threshold" style="left:' + thresholdPct + '%"></span></div>' +
+      (reasons ? '<div class="risk-list-title">原因</div><ul class="risk-list">' + reasons + '</ul>' : '') +
+      (actions ? '<div class="risk-list-title">处理路径</div><ul class="risk-list">' + actions + '</ul>' : '') +
+      Utils.renderStateNavigation(explanation.navigation || explanation.state_navigation) +
+      '</div>';
+  };
+
   window.Utils = Utils;
 })();
 
@@ -1442,6 +1590,7 @@
     SUBMIT_CLOUD_SYNC_REQUIRED: "提交被阻止：请先同步云端 Alpha 缓存。",
     SUBMIT_CLOUD_SYNC_STALE: "提交被阻止：云端 Alpha 缓存已过期，请重新同步。",
     SUBMIT_CLOUD_ALREADY_SUBMITTED: "提交被阻止：云端记录显示该 Alpha 已提交或已进入生产状态。",
+    SUBMIT_CLOUD_SELF_CORRELATION_BLOCKED: "提交被阻止：官方 cloud_self_correlation 风险过高，请先处理云端相似度。",
     SUBMIT_OBSERVABILITY_CONFIRMATION_REQUIRED: "提交前需要确认观测风险，请查看阻断项后再次确认。",
     SUBMIT_ERROR: "提交失败，请查看候选详情和服务日志。",
     SUBMIT_BATCH_ERROR: "批量提交失败，请查看失败项明细。",
@@ -1700,6 +1849,7 @@
 
     var toastEl = document.createElement('div');
     toastEl.className = 'toast ' + type;
+    toastEl.setAttribute('role', type === 'error' ? 'alert' : 'status');
     toastEl.innerHTML =
       '<span class="toast-icon">' + ICONS[type] + '</span>' +
       '<span class="toast-msg">' + escapeHtml(msg) + '</span>';
@@ -1776,6 +1926,7 @@
     if (overlay) {
       overlay.classList.remove('active');
       overlay.classList.add('hidden');
+      overlay.setAttribute('aria-hidden', 'true');
     }
   }
 
@@ -1800,10 +1951,13 @@
 
       overlay.classList.remove('hidden');
       overlay.classList.add('active');
+      overlay.setAttribute('aria-hidden', 'false');
+      noBtn.focus();
 
       function cleanup() {
         overlay.classList.remove('active');
         overlay.classList.add('hidden');
+        overlay.setAttribute('aria-hidden', 'true');
         yesBtn.removeEventListener('click', onYes);
         noBtn.removeEventListener('click', onNo);
       }
@@ -1959,8 +2113,11 @@
   var jsStringAttr = window.Utils.jsStringAttr;
   var formatScore = window.Utils.formatScore;
   var humanCheckName = window.Utils.humanCheckName;
+  var renderRiskExplanation = window.Utils.renderRiskExplanation;
+  var renderStateNavigation = window.Utils.renderStateNavigation;
   var statusBadge = window.Table.statusBadge;
   var scoreSpan = window.Table.scoreSpan;
+  var previousFocus = null;
 
   // ---------- Helpers -------------------------------------------------------
 
@@ -2474,9 +2631,36 @@
     var checks = result.checks || [];
     if (checks.length) {
       var checkFields = checks.map(function (c) {
-        return { label: humanCheckName(c.name), value: c.passed ? '通过' : '未通过', format: 'badge' };
+        var detail = c.passed ? '通过' : ('未通过' + (c.detail ? '：' + c.detail : ''));
+        if (!c.passed && c.suggestion) detail += '\n建议：' + c.suggestion;
+        return { label: humanCheckName(c), value: detail, format: 'text' };
       });
       parts.push(renderFieldTableHTML2('逐项检查', checkFields));
+      var suggestions = checks.filter(function (c) { return !c.passed && c.suggestion; });
+      if (suggestions.length) {
+        parts.push(sectionBlock('处理建议', suggestions.map(function (c) {
+          return '<div class="copy-box"><b>' + esc(humanCheckName(c)) + '</b><br>' + esc(c.suggestion) + '</div>';
+        }).join('')));
+      }
+    }
+
+    var riskBlocks = [];
+    var riskSeen = {};
+    function pushRiskExplanation(item) {
+      if (!item || typeof item !== 'object') return;
+      var key = String(item.rule || '') + '|' + String(item.summary || '');
+      if (riskSeen[key]) return;
+      riskSeen[key] = true;
+      var html = renderRiskExplanation(item);
+      if (html) riskBlocks.push(html);
+    }
+    (result.risk_explanations || []).forEach(pushRiskExplanation);
+    checks.forEach(function (c) {
+      if (!c.passed && c.risk_explanation) pushRiskExplanation(c.risk_explanation);
+    });
+    if (riskBlocks.length) parts.push(sectionBlock('风险解释', riskBlocks.join('')));
+    if (result.state_navigation && !riskBlocks.length) {
+      parts.push(sectionBlock('解决路径', renderStateNavigation(result.state_navigation)));
     }
 
     bodyEl.innerHTML = parts.join('');
@@ -2567,7 +2751,15 @@
 
   function showModal() {
     var modal = $('detailModal');
-    if (modal) { modal.classList.remove('hidden'); }
+    if (!modal) return;
+    previousFocus = document.activeElement && document.activeElement !== document.body ? document.activeElement : previousFocus;
+    modal.classList.remove('hidden');
+    modal.setAttribute('aria-hidden', 'false');
+    var panel = modal.querySelector('.modal-panel');
+    var closeButton = $('detailCloseButton');
+    setTimeout(function () {
+      (closeButton || panel || modal).focus();
+    }, 0);
   }
 
   function showEmpty() {
@@ -2578,7 +2770,13 @@
 
   function closeDetailModal() {
     var modal = $('detailModal');
-    if (modal) { modal.classList.add('hidden'); }
+    if (modal) {
+      modal.classList.add('hidden');
+      modal.setAttribute('aria-hidden', 'true');
+    }
+    if (previousFocus && typeof previousFocus.focus === 'function' && document.contains(previousFocus)) {
+      previousFocus.focus();
+    }
   }
 
   // ---------- Scoring Attribution & Redline ---------------------------------
@@ -3624,6 +3822,8 @@
   var escapeAttr = window.Utils.escapeAttr;
   var jsStringAttr = window.Utils.jsStringAttr;
   var phaseName = window.Utils.phaseName;
+  var renderRiskExplanation = window.Utils.renderRiskExplanation;
+  var renderStateNavigation = window.Utils.renderStateNavigation;
   var Api = window.ApiClient;
   var S = window.AppState;
   var Toast = window.Toast;
@@ -3746,6 +3946,18 @@
       'openRobustnessDetail()': true,
     };
     return allowed[String(handler || '')] ? String(handler) : '';
+  }
+
+  function interactiveRowAttrs(kind, id, label) {
+    return ' tabindex="0" role="button" aria-label="' + escapeAttr(label || ('查看 ' + kind + ' 详情')) + '" data-kind="' + escapeAttr(kind || '') + '" data-id="' + escapeAttr(id || '') + '"';
+  }
+
+  function setProgressA11y(trackId, percent, label) {
+    var track = $(trackId);
+    if (!track) return;
+    var value = Math.max(0, Math.min(100, Math.round(Number(percent) || 0)));
+    track.setAttribute('aria-valuenow', String(value));
+    if (label) track.setAttribute('aria-valuetext', label);
   }
 
   function currentSummary() {
@@ -5553,7 +5765,7 @@
     var selectBox = item.kind === 'submittable' && checked && !(($('autoSubmitToggle') || {}).checked)
       ? '<input type="checkbox" ' + (selectedSubmitIds.has(c.alpha_id) ? 'checked' : '') + ' onclick="event.stopPropagation(); toggleSubmitSelection(' + jsStringAttr(c.alpha_id) + ', this.checked)">'
       : '';
-    return '<tr id="' + rowId(item) + '" data-kind="' + escapeAttr(item.kind) + '" data-id="' + escapeAttr(item.id) + '" onclick="viewRow(' + kindArg + ', ' + idArg + ', event)">' +
+    return '<tr id="' + rowId(item) + '"' + interactiveRowAttrs(item.kind, item.id, '查看 Alpha ' + (c.alpha_id || item.id || '') + ' 详情') + ' onclick="viewRow(' + kindArg + ', ' + idArg + ', event)">' +
       '<td>' + (selectBox || String(index + 1)) + '</td>' +
       '<td><b>' + esc(c.alpha_id || '') + '</b><div class="mini">' + esc(c.hypothesis || '无假说') + '</div><div class="mini">' + esc(c.expression || '') + '</div></td>' +
       '<td>' + esc(c.family || '') + '</td>' +
@@ -5569,7 +5781,7 @@
     var slot = item.raw || {};
     var idArg = jsStringAttr(item.id);
     var score = candidateDisplayScore(slot);
-    return '<tr id="' + rowId(item) + '" data-kind="backtest" data-id="' + escapeAttr(item.id) + '" onclick="viewRow(&quot;backtest&quot;, ' + idArg + ', event)">' +
+    return '<tr id="' + rowId(item) + '"' + interactiveRowAttrs('backtest', item.id, '查看回测槽 ' + (slot.slot || item.id || '') + ' 详情') + ' onclick="viewRow(&quot;backtest&quot;, ' + idArg + ', event)">' +
       '<td>' + (index + 1) + '</td>' +
       '<td><b>' + esc(slot.alpha_id || '-') + '</b><div class="mini">槽 ' + esc(slot.slot || '-') + ' | Simulation ' + esc(slot.simulation_id || '-') + '</div></td>' +
       '<td>官方回测</td>' +
@@ -5586,7 +5798,7 @@
     var idArg = jsStringAttr(item.id);
     var metrics = extractOfficialMetrics(row);
     var score = cloudMetricScore(metrics);
-    return '<tr id="' + rowId(item) + '" data-kind="cloud" data-id="' + escapeAttr(item.id) + '" onclick="viewRow(&quot;cloud&quot;, ' + idArg + ', event)">' +
+    return '<tr id="' + rowId(item) + '"' + interactiveRowAttrs('cloud', item.id, '查看云端 Alpha ' + (row.id || row.alpha_id || item.id || '') + ' 详情') + ' onclick="viewRow(&quot;cloud&quot;, ' + idArg + ', event)">' +
       '<td>' + (index + 1) + '</td>' +
       '<td><b>' + esc(row.id || row.alpha_id || '') + '</b><div class="mini">' + esc(expressionFromRow(row)) + '</div></td>' +
       '<td>云端</td>' +
@@ -5602,7 +5814,7 @@
     var row = item.raw || {};
     var idArg = jsStringAttr(item.id);
     var score = candidateDisplayScore(row);
-    return '<tr id="' + rowId(item) + '" data-kind="lifecycle" data-id="' + escapeAttr(item.id) + '" onclick="viewRow(&quot;lifecycle&quot;, ' + idArg + ', event)">' +
+    return '<tr id="' + rowId(item) + '"' + interactiveRowAttrs('lifecycle', item.id, '查看生命周期记录详情') + ' onclick="viewRow(&quot;lifecycle&quot;, ' + idArg + ', event)">' +
       '<td>' + (index + 1) + '</td>' +
       '<td><b>' + esc(row.alpha_id || row.official_alpha_id || '-') + '</b><div class="mini">' + esc(row.timestamp || '') + '</div></td>' +
       '<td>' + esc(row.family || '-') + '</td>' +
@@ -6149,9 +6361,10 @@
       var countdown = slotCountdownText(slot);
       var detail = esc(slot.alpha_id || '等待 Alpha') + '<br>' + esc(slot.message || slot.simulation_id || '');
       if (countdown) detail += '<br>' + esc(countdown);
-      return '<div class="slot-card ' + cls + '" onclick="viewRow(&quot;backtest&quot;, ' + jsStringAttr(String(slot.slot || slot.alpha_id || index)) + ', event)">' +
+      var slotId = String(slot.slot || slot.alpha_id || index);
+      return '<div class="slot-card ' + cls + '" tabindex="0" role="button" data-kind="backtest" data-id="' + escapeAttr(slotId) + '" aria-label="查看回测槽 ' + escapeAttr(slot.slot || index + 1) + ' 详情" onclick="viewRow(&quot;backtest&quot;, ' + jsStringAttr(slotId) + ', event)">' +
         '<div class="slot-head"><span>槽 ' + esc(slot.slot || index + 1) + '</span><span>' + esc(statusText(slot.status || 'idle')) + '</span></div>' +
-        '<div class="track"><div class="fill" style="width:' + progress + '%"></div></div>' +
+        '<div class="track" role="progressbar" aria-label="回测槽 ' + esc(slot.slot || index + 1) + ' 进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + progress + '"><div class="fill" style="width:' + progress + '%"></div></div>' +
         '<div class="message">' + detail + '</div>' +
         '</div>';
     }).join('');
@@ -6340,6 +6553,9 @@
     var remaining = terminal || percent >= 100 ? '-' : stableRemainingText(progress, percent, syncStartedAt, syncCountdownState);
     if ($('cloudSyncFill')) $('cloudSyncFill').style.width = percent + '%';
     if ($('monitorCloudFill')) $('monitorCloudFill').style.width = percent + '%';
+    var progressLabel = '进度 ' + percent + '%，已扫描 ' + totalLabel + '，预计剩余 ' + remaining;
+    setProgressA11y('cloudSyncTrack', percent, progressLabel);
+    setProgressA11y('monitorCloudTrack', percent, progressLabel);
     if ($('cloudSyncMeta')) $('cloudSyncMeta').textContent = '进度：' + percent + '% | 已扫描：' + totalLabel + ' | 预计剩余：' + remaining;
     if ($('monitorCloudMeta')) $('monitorCloudMeta').textContent = '进度：' + percent + '% | 已扫描：' + totalLabel + ' | 预计剩余：' + remaining;
     if ($('monitorCloudStatus')) $('monitorCloudStatus').textContent = status;
@@ -6475,6 +6691,7 @@
     var checked = Math.max(0, Number(progress.checked || 0));
     var percent = progress.phase === 'completed' ? 100 : (total > 0 ? Math.round(checked / total * 100) : 0);
     if ($('checkProgressFill')) $('checkProgressFill').style.width = percent + '%';
+    setProgressA11y('checkProgressTrack', percent, '进度 ' + percent + '%，已检查 ' + checked + '/' + total);
     var terminal = isTerminalProgress(progress) || percent >= 100;
     if (terminal) {
       resetCountdownState(checkCountdownState);
@@ -6492,6 +6709,8 @@
     );
     if ($('checkProgressMeta')) $('checkProgressMeta').textContent = '进度：' + percent + '% | 已检查：' + checked + '/' + total + ' | 预计剩余：' + remaining;
     if ($('checkStats')) {
+      var blockers = progress.blockers || {};
+      var blockerText = Object.keys(blockers).slice(0, 2).map(function (key) { return key + ' ' + blockers[key]; }).join(', ');
       $('checkStats').textContent = [
         '模式：' + (progress.mode === 'all' ? '全部检查' : '快速检查'),
         '总数：' + (progress.total || 0),
@@ -6499,7 +6718,8 @@
         '可提交：' + (progress.submittable || 0),
         '不可提交：' + (progress.blocked || 0),
         '失败：' + (progress.failed || 0),
-      ].join(' | ');
+        blockerText ? '主要阻断：' + blockerText : '',
+      ].filter(Boolean).join(' | ');
     }
     renderOpsMonitor();
   }
@@ -6538,6 +6758,20 @@
     return 'Observability blocking flags: ' + flags + '.' + guardNote + errorNote + actionNote + ' ' + actionLabel;
   }
 
+  function submitErrorItem(alphaId, error) {
+    var data = (error || {}).data || {};
+    var explanations = data.risk_explanations || (data.risk_explanation ? [data.risk_explanation] : []);
+    return {
+      alpha_id: alphaId || '',
+      ok: false,
+      error_code: (error || {}).code || data.error_code || 'SUBMIT_ERROR',
+      error: (error || {}).message || data.error || '提交失败',
+      risk_explanation: explanations[0] || {},
+      risk_explanations: explanations,
+      state_navigation: data.state_navigation || ((explanations[0] || {}).navigation) || {},
+    };
+  }
+
   window.submitCandidate = async function (alphaId, options) {
     options = options || {};
     var candidate = findCandidate(alphaId);
@@ -6569,6 +6803,9 @@
         if (ok) {
           return window.submitCandidate(alphaId, Object.assign({}, options, { confirmObservabilityRisk: true }));
         }
+      }
+      if (e.data && (e.data.risk_explanation || e.data.state_navigation || e.data.risk_explanations)) {
+        renderSubmitFailurePanel([submitErrorItem(alphaId, e)]);
       }
       return { ok: false, alpha_id: alphaId, error: e.message };
     } finally {
@@ -6613,6 +6850,9 @@
         }
       }
       toast('批量提交失败：' + e.message, 'error');
+      if (e.data && (e.data.risk_explanation || e.data.state_navigation || e.data.risk_explanations)) {
+        renderSubmitFailurePanel(ids.map(function (id) { return submitErrorItem(id, e); }));
+      }
     } finally {
       submitInFlight = false;
       renderAll();
@@ -6637,9 +6877,28 @@
     if ($('submitFailureCount')) $('submitFailureCount').textContent = failed.length + ' 个 Alpha 提交失败。';
     if ($('submitFailureList')) {
       $('submitFailureList').innerHTML = failed.map(function (item) {
-        return '<div class="submit-fail-row"><b>' + esc(item.alpha_id || '-') + '</b><div class="mini">' + esc(item.error || item.error_code || '提交失败') + '</div></div>';
+        var code = item.error_code || item.code || 'SUBMIT_ERROR';
+        var suggestion = submitFailureSuggestion(code, item.error || '');
+        var explanations = item.risk_explanations || (item.risk_explanation ? [item.risk_explanation] : []);
+        var riskHtml = explanations.map(function (explanation) { return renderRiskExplanation(explanation); }).join('');
+        var navHtml = riskHtml ? '' : renderStateNavigation(item.state_navigation || {});
+        return '<div class="submit-fail-row">' +
+          '<div class="submit-fail-id">' + esc(item.alpha_id || '-') + '</div>' +
+          '<div class="submit-fail-reason"><b>' + esc(code) + '</b><br>' + esc(item.error || '提交失败') + '<br><span class="mini">' + esc(suggestion) + '</span>' + riskHtml + navHtml + '</div>' +
+          '<button class="secondary small" onclick="retryFailedSubmitItem(' + jsStringAttr(item.alpha_id || '') + ')">重试</button>' +
+          '</div>';
       }).join('');
     }
+  }
+
+  function submitFailureSuggestion(code, message) {
+    var text = String(code || '') + ' ' + String(message || '');
+    if (/CLOUD_SELF_CORRELATION|self_correlation|相似度/i.test(text)) return '先刷新云端数据，调整表达式差异化，再重新执行检查。';
+    if (/CLOUD_SYNC|cloud/i.test(text)) return '先刷新云端数据，再重新检查该 Alpha。';
+    if (/NOT_READY|MISSING_OFFICIAL|official/i.test(text)) return '先完成官方回测与预提交检查，再提交。';
+    if (/DUPLICATE|ALREADY_SUBMITTED|重复|已提交/i.test(text)) return '核对云端与本地提交记录，避免重复提交。';
+    if (/OBSERVABILITY|risk|风险/i.test(text)) return '查看观测风险和阻断项，确认后再重试。';
+    return '查看候选详情和失败原因，修正后单项重试。';
   }
 
   window.clearSubmitFailurePanel = function () {
@@ -6652,6 +6911,12 @@
     var failedIds = (lastSubmitResults || []).filter(function (item) { return !item.ok && item.alpha_id; }).map(function (item) { return item.alpha_id; });
     if (!failedIds.length || !lastSubmitPayload) return;
     selectedSubmitIds = new Set(failedIds);
+    await window.submitSelectedCandidates({ auto: lastSubmitPayload.submit_mode === 'auto' });
+  };
+
+  window.retryFailedSubmitItem = async function (alphaId) {
+    if (!alphaId || !lastSubmitPayload) return;
+    selectedSubmitIds = new Set([alphaId]);
     await window.submitSelectedCandidates({ auto: lastSubmitPayload.submit_mode === 'auto' });
   };
 
@@ -7662,6 +7927,14 @@
         var row = event.target.closest('tr[data-kind]');
         if (row) window.viewRow(row.dataset.kind || '', row.dataset.id || '', event);
       });
+      body.addEventListener('keydown', function (event) {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        if (event.target.closest('input, button, select, textarea, label')) return;
+        var row = event.target.closest('tr[data-kind]');
+        if (!row) return;
+        event.preventDefault();
+        window.viewRow(row.dataset.kind || '', row.dataset.id || '', event);
+      });
     }
 
     document.addEventListener('keydown', function (event) {
@@ -7675,6 +7948,10 @@
       }
       if (event.ctrlKey && event.key === 'Enter' && typeof window.toggleRun === 'function') {
         window.toggleRun();
+      }
+      if ((event.key === 'Enter' || event.key === ' ') && event.target && event.target.classList && event.target.classList.contains('slot-card')) {
+        event.preventDefault();
+        window.viewRow(event.target.dataset.kind || 'backtest', event.target.dataset.id || '', event);
       }
     });
 

@@ -10,8 +10,11 @@
   var jsStringAttr = window.Utils.jsStringAttr;
   var formatScore = window.Utils.formatScore;
   var humanCheckName = window.Utils.humanCheckName;
+  var renderRiskExplanation = window.Utils.renderRiskExplanation;
+  var renderStateNavigation = window.Utils.renderStateNavigation;
   var statusBadge = window.Table.statusBadge;
   var scoreSpan = window.Table.scoreSpan;
+  var previousFocus = null;
 
   // ---------- Helpers -------------------------------------------------------
 
@@ -525,9 +528,36 @@
     var checks = result.checks || [];
     if (checks.length) {
       var checkFields = checks.map(function (c) {
-        return { label: humanCheckName(c.name), value: c.passed ? '通过' : '未通过', format: 'badge' };
+        var detail = c.passed ? '通过' : ('未通过' + (c.detail ? '：' + c.detail : ''));
+        if (!c.passed && c.suggestion) detail += '\n建议：' + c.suggestion;
+        return { label: humanCheckName(c), value: detail, format: 'text' };
       });
       parts.push(renderFieldTableHTML2('逐项检查', checkFields));
+      var suggestions = checks.filter(function (c) { return !c.passed && c.suggestion; });
+      if (suggestions.length) {
+        parts.push(sectionBlock('处理建议', suggestions.map(function (c) {
+          return '<div class="copy-box"><b>' + esc(humanCheckName(c)) + '</b><br>' + esc(c.suggestion) + '</div>';
+        }).join('')));
+      }
+    }
+
+    var riskBlocks = [];
+    var riskSeen = {};
+    function pushRiskExplanation(item) {
+      if (!item || typeof item !== 'object') return;
+      var key = String(item.rule || '') + '|' + String(item.summary || '');
+      if (riskSeen[key]) return;
+      riskSeen[key] = true;
+      var html = renderRiskExplanation(item);
+      if (html) riskBlocks.push(html);
+    }
+    (result.risk_explanations || []).forEach(pushRiskExplanation);
+    checks.forEach(function (c) {
+      if (!c.passed && c.risk_explanation) pushRiskExplanation(c.risk_explanation);
+    });
+    if (riskBlocks.length) parts.push(sectionBlock('风险解释', riskBlocks.join('')));
+    if (result.state_navigation && !riskBlocks.length) {
+      parts.push(sectionBlock('解决路径', renderStateNavigation(result.state_navigation)));
     }
 
     bodyEl.innerHTML = parts.join('');
@@ -618,7 +648,15 @@
 
   function showModal() {
     var modal = $('detailModal');
-    if (modal) { modal.classList.remove('hidden'); }
+    if (!modal) return;
+    previousFocus = document.activeElement && document.activeElement !== document.body ? document.activeElement : previousFocus;
+    modal.classList.remove('hidden');
+    modal.setAttribute('aria-hidden', 'false');
+    var panel = modal.querySelector('.modal-panel');
+    var closeButton = $('detailCloseButton');
+    setTimeout(function () {
+      (closeButton || panel || modal).focus();
+    }, 0);
   }
 
   function showEmpty() {
@@ -629,7 +667,13 @@
 
   function closeDetailModal() {
     var modal = $('detailModal');
-    if (modal) { modal.classList.add('hidden'); }
+    if (modal) {
+      modal.classList.add('hidden');
+      modal.setAttribute('aria-hidden', 'true');
+    }
+    if (previousFocus && typeof previousFocus.focus === 'function' && document.contains(previousFocus)) {
+      previousFocus.focus();
+    }
   }
 
   // ---------- Scoring Attribution & Redline ---------------------------------

@@ -57,6 +57,31 @@ def test_submission_preflight_advisory_reports_duplicate_expression(tmp_path):
     assert payload["error_code"] == "SUBMIT_DUPLICATE_EXPRESSION"
 
 
+def test_submission_preflight_advisory_blocks_cloud_self_correlation_check(tmp_path):
+    run_config = RunConfig(environment="mock")
+    run_config.ops.storage_dir = str(tmp_path)
+    run_config.ops.budget.require_cloud_sync = False
+    (tmp_path / "checks.jsonl").write_text(
+        '{"alpha_id":"a1","official_alpha_id":"off_1","status":"BLOCKED","passed":false,'
+        '"cloud_correlation_risk":{"level":"high","max_similarity":0.96,"matched_alpha_id":"cloud_1","matched_status":"UNSUBMITTED"},'
+        '"checks":[{"name":"cloud_self_correlation","passed":false,"detail":"high 0.9600"}]}\n',
+        encoding="utf-8",
+    )
+
+    payload = submission_preflight_advisory(
+        _candidate(),
+        run_config,
+        ledger_factory=lambda storage_dir: Ledger(storage_dir),
+        cloud_alpha_snapshot=lambda limit=2000: {"alphas": [], "summary": {}},
+        cloud_status_for=lambda candidate, rows: {"status": ""},
+    )
+
+    assert payload["ok"] is False
+    assert payload["error_code"] == "SUBMIT_CLOUD_SELF_CORRELATION_BLOCKED"
+    assert payload["risk_explanation"]["rule"] == "cloud_self_correlation"
+    assert payload["state_navigation"]["reason_code"] == "CLOUD_SELF_CORRELATION_BLOCKED"
+
+
 def test_observability_submission_preflight_maps_health_and_errors():
     advisory = observability_submission_preflight(
         "data",

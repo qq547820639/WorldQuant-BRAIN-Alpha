@@ -12,6 +12,7 @@
     if (overlay) {
       overlay.classList.remove('active');
       overlay.classList.add('hidden');
+      overlay.setAttribute('aria-hidden', 'true');
     }
   }
 
@@ -36,10 +37,13 @@
 
       overlay.classList.remove('hidden');
       overlay.classList.add('active');
+      overlay.setAttribute('aria-hidden', 'false');
+      noBtn.focus();
 
       function cleanup() {
         overlay.classList.remove('active');
         overlay.classList.add('hidden');
+        overlay.setAttribute('aria-hidden', 'true');
         yesBtn.removeEventListener('click', onYes);
         noBtn.removeEventListener('click', onNo);
       }

@@ -138,6 +138,7 @@ from brain_alpha_ops.web_runtime_state import (
     maybe_archive_lifecycle as _maybe_archive_lifecycle_service,
     status_category as _status_category_service,
 )
+from brain_alpha_ops.web_risk_guidance import build_cloud_self_correlation_explanation
 from brain_alpha_ops.web_security import (
     LOCAL_HOSTS,
     LOOPBACK_BIND_HOSTS,
@@ -269,7 +270,17 @@ def safe_error_payload(exc: Exception, *, error_code: str = "UNHANDLED_ERROR") -
 
 
 def _web_error(exc: Exception, error_code: str) -> dict:
-    return safe_error_payload(exc, error_code=error_code)
+    payload = safe_error_payload(exc, error_code=error_code)
+    text = f"{payload.get('error_code', '')} {payload.get('error', '')}".lower()
+    if "cloud_self_correlation" in text:
+        explanation = build_cloud_self_correlation_explanation(
+            {},
+            {"level": "high", "max_similarity": 0.90, "matched_alpha_id": "", "matched_status": ""},
+        )
+        payload["risk_explanation"] = explanation
+        payload["risk_explanations"] = [explanation]
+        payload["state_navigation"] = explanation.get("navigation")
+    return payload
 
 
 def _load_html() -> str:

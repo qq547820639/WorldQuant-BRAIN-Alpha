@@ -58,6 +58,7 @@ def build_research_observability_snapshot(
     )
     expression_payload = _observability_expression_payload(expression, top_n=safe_top_n)
     backtest_payload = _backtest_observability(backtest_rows, top_n=safe_top_n)
+    check_payload = _check_observability(check_rows, top_n=safe_top_n)
     error_payload = _error_observability(error_rows, top_n=safe_top_n)
     official_call_guard = official_call_guard_observability(lifecycle_rows, top_n=safe_top_n)
     jsonl_payload = {name: result.to_dict() for name, result in jsonl_results.items()}
@@ -65,6 +66,7 @@ def build_research_observability_snapshot(
     health = diagnose_research_health(
         expression_payload=expression_payload,
         backtests=backtest_payload,
+        checks=check_payload,
         errors=error_payload,
         jsonl=jsonl_payload,
         sqlite_cache=sqlite_payload,
@@ -88,6 +90,7 @@ def build_research_observability_snapshot(
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "expression_index": expression_payload,
         "backtests": backtest_payload,
+        "checks": check_payload,
         "errors": error_payload,
         "official_call_guard": official_call_guard,
         "jsonl": jsonl_payload,
@@ -103,6 +106,7 @@ def observability_context(snapshot: dict[str, Any] | None, *, top_n: int = 10) -
     snapshot = snapshot or {}
     expression = snapshot.get("expression_index") if isinstance(snapshot.get("expression_index"), dict) else {}
     backtests = snapshot.get("backtests") if isinstance(snapshot.get("backtests"), dict) else {}
+    checks = snapshot.get("checks") if isinstance(snapshot.get("checks"), dict) else {}
     errors = snapshot.get("errors") if isinstance(snapshot.get("errors"), dict) else {}
     official_guard = snapshot.get("official_call_guard") if isinstance(snapshot.get("official_call_guard"), dict) else {}
     sqlite_cache = snapshot.get("sqlite_cache") if isinstance(snapshot.get("sqlite_cache"), dict) else {}
@@ -122,6 +126,10 @@ def observability_context(snapshot: dict[str, Any] | None, *, top_n: int = 10) -
         "backtest_total": backtests.get("total", 0),
         "backtest_failure_rate": backtests.get("failure_rate", 0.0),
         "backtest_retryable_count": backtests.get("retryable_count", 0),
+        "check_total": checks.get("total", 0),
+        "check_blocked_count": checks.get("blocked_count", 0),
+        "cloud_self_correlation_failed_count": checks.get("cloud_self_correlation_failed_count", 0),
+        "cloud_self_correlation_block_rate": checks.get("cloud_self_correlation_block_rate", 0.0),
         "error_total": errors.get("total", 0),
         "retryable_error_count": errors.get("retryable_count", 0),
         "official_guard_blocked_count": official_guard.get("blocked_count", 0),
@@ -245,6 +253,7 @@ def diagnose_research_health(
     *,
     expression_payload: dict[str, Any] | None = None,
     backtests: dict[str, Any] | None = None,
+    checks: dict[str, Any] | None = None,
     errors: dict[str, Any] | None = None,
     jsonl: dict[str, Any] | None = None,
     sqlite_cache: dict[str, Any] | None = None,
@@ -260,6 +269,11 @@ def diagnose_research_health(
         backtests
         if isinstance(backtests, dict)
         else snapshot.get("backtests") if isinstance(snapshot.get("backtests"), dict) else {}
+    )
+    check_payload = (
+        checks
+        if isinstance(checks, dict)
+        else snapshot.get("checks") if isinstance(snapshot.get("checks"), dict) else {}
     )
     error_payload = (
         errors
@@ -285,6 +299,10 @@ def diagnose_research_health(
     backtest_failed = _int_from_any(backtest_payload.get("failed_count"))
     backtest_failure_rate = _float_from_any(backtest_payload.get("failure_rate"))
     backtest_retryable = _int_from_any(backtest_payload.get("retryable_count"))
+    check_total = _int_from_any(check_payload.get("total"))
+    check_blocked = _int_from_any(check_payload.get("blocked_count"))
+    cloud_self_correlation_failed = _int_from_any(check_payload.get("cloud_self_correlation_failed_count"))
+    cloud_self_correlation_rate = _float_from_any(check_payload.get("cloud_self_correlation_block_rate"))
     error_total = _int_from_any(error_payload.get("total"))
     error_retryable = _int_from_any(error_payload.get("retryable_count"))
     error_retryable_rate = _float_from_any(error_payload.get("retryable_rate"))
@@ -383,6 +401,22 @@ def diagnose_research_health(
             evidence={"backtest_retryable_count": backtest_retryable},
         )
 
+    if check_total >= 10 and cloud_self_correlation_failed > 0 and cloud_self_correlation_rate >= 0.5:
+        add_flag(
+            "cloud_self_correlation_saturation",
+            severity="critical" if cloud_self_correlation_rate >= 0.8 else "high",
+            message="Recent official check records are dominated by cloud_self_correlation blocks.",
+            action="Pause submission, refresh cloud context, diversify expression templates, then rerun checks before submitting.",
+            blocking=check_total >= 20 and cloud_self_correlation_rate >= 0.8,
+            evidence={
+                "check_total": check_total,
+                "blocked_count": check_blocked,
+                "cloud_self_correlation_failed_count": cloud_self_correlation_failed,
+                "cloud_self_correlation_block_rate": cloud_self_correlation_rate,
+                "top_failed_rules": list(check_payload.get("top_failed_rules") or [])[:5],
+            },
+        )
+
     if error_retryable > 0:
         add_flag(
             "retryable_official_errors_present",
@@ -452,7 +486,7 @@ def diagnose_research_health(
 
     if blocking_flags:
         risk_level = "blocked"
-    elif any(details.get(flag, {}).get("severity") == "high" for flag in health_flags):
+    elif any(details.get(flag, {}).get("severity") in {"high", "critical"} for flag in health_flags):
         risk_level = "high"
     elif warning_flags:
         risk_level = "medium"
@@ -479,6 +513,10 @@ def diagnose_research_health(
             "backtest_total": backtest_total,
             "backtest_failure_rate": backtest_failure_rate,
             "backtest_retryable_count": backtest_retryable,
+            "check_total": check_total,
+            "check_blocked_count": check_blocked,
+            "cloud_self_correlation_failed_count": cloud_self_correlation_failed,
+            "cloud_self_correlation_block_rate": cloud_self_correlation_rate,
             "error_total": error_total,
             "retryable_error_count": error_retryable,
             "retryable_error_rate": error_retryable_rate,
@@ -529,6 +567,52 @@ def _observability_expression_payload(summary: dict[str, Any], *, top_n: int) ->
         "top_operators": list(summary.get("operators") or [])[:top_n],
         "top_windows": list(summary.get("windows") or [])[:top_n],
         "error": str(summary.get("error") or ""),
+    }
+
+
+def _check_observability(rows: list[dict[str, Any]], *, top_n: int) -> dict[str, Any]:
+    status_counts: Counter[str] = Counter()
+    failure_counts: Counter[str] = Counter()
+    blocked_count = 0
+    submittable_count = 0
+    latest: list[dict[str, Any]] = []
+    for row in rows:
+        status = _text(row.get("status") or "unknown")
+        status_counts[status] += 1
+        if _truthy(row.get("submittable")):
+            submittable_count += 1
+        if row.get("passed") is False or row.get("submittable") is False or status.upper() == "BLOCKED":
+            blocked_count += 1
+        failed_rules: list[str] = []
+        for check in row.get("checks") or []:
+            if not isinstance(check, dict) or check.get("passed") is not False:
+                continue
+            name = _text(check.get("name") or "unknown")
+            failure_counts[name] += 1
+            failed_rules.append(name)
+        latest.append(
+            {
+                "timestamp": row.get("checked_at") or row.get("timestamp") or "",
+                "alpha_id": _text(row.get("alpha_id")),
+                "status": status,
+                "submittable": _truthy(row.get("submittable")),
+                "failed_rules": failed_rules[:5],
+            }
+        )
+    total = len(rows)
+    cloud_self_correlation_failed = failure_counts.get("cloud_self_correlation", 0)
+    return {
+        "ok": True,
+        "schema_version": "research_check_observability.v1",
+        "total": total,
+        "blocked_count": blocked_count,
+        "submittable_count": submittable_count,
+        "cloud_self_correlation_failed_count": cloud_self_correlation_failed,
+        "cloud_self_correlation_block_rate": round(cloud_self_correlation_failed / total, 4) if total else 0.0,
+        "status_counts": dict(status_counts.most_common()),
+        "failed_rule_counts": dict(failure_counts.most_common()),
+        "top_failed_rules": _counter_rows(failure_counts, "rule", top_n),
+        "latest": latest[-top_n:][::-1],
     }
 
 

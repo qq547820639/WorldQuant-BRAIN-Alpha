@@ -28,6 +28,7 @@
     SUBMIT_CLOUD_SYNC_REQUIRED: "提交被阻止：请先同步云端 Alpha 缓存。",
     SUBMIT_CLOUD_SYNC_STALE: "提交被阻止：云端 Alpha 缓存已过期，请重新同步。",
     SUBMIT_CLOUD_ALREADY_SUBMITTED: "提交被阻止：云端记录显示该 Alpha 已提交或已进入生产状态。",
+    SUBMIT_CLOUD_SELF_CORRELATION_BLOCKED: "提交被阻止：官方 cloud_self_correlation 风险过高，请先处理云端相似度。",
     SUBMIT_OBSERVABILITY_CONFIRMATION_REQUIRED: "提交前需要确认观测风险，请查看阻断项后再次确认。",
     SUBMIT_ERROR: "提交失败，请查看候选详情和服务日志。",
     SUBMIT_BATCH_ERROR: "批量提交失败，请查看失败项明细。",

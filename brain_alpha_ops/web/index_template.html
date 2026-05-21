@@ -72,6 +72,32 @@
       --ring: rgba(20, 184, 166, 0.25);
     }
     * { box-sizing: border-box; }
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+    .skip-link {
+      position: absolute;
+      left: 12px;
+      top: 8px;
+      z-index: 50;
+      padding: 8px 12px;
+      border-radius: 6px;
+      background: var(--accent);
+      color: #fff;
+      font-size: 13px;
+      font-weight: 850;
+      transform: translateY(-140%);
+      transition: transform 160ms ease;
+    }
+    .skip-link:focus { transform: translateY(0); }
     body {
       margin: 0;
       min-height: 100vh;
@@ -148,7 +174,7 @@
       box-shadow: 0 0 0 3px rgba(45, 212, 191, 0.18);
     }
     button {
-      min-height: 34px;
+      min-height: 40px;
       border: 1px solid var(--accent);
       border-radius: 6px;
       background: var(--accent);
@@ -166,7 +192,7 @@
     button.secondary { background: var(--panel); color: var(--text); border-color: var(--line); }
     button.secondary:hover:not(:disabled) { border-color: var(--muted); box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08); }
     button.stop { background: var(--panel); color: var(--bad); border-color: var(--bad-soft); }
-    button.small { min-height: 28px; padding: 0 8px; font-size: 12px; }
+    button.small { min-height: 36px; padding: 0 10px; font-size: 12px; }
     button:disabled { opacity: 0.62; cursor: default; }
     .run-actions {
       margin: 10px 0 6px;
@@ -247,6 +273,7 @@
       background: #e2e8f0;
       overflow: hidden;
     }
+    .track[role="progressbar"] { outline: 1px solid transparent; }
     .fill {
       height: 100%;
       width: 0%;
@@ -442,7 +469,7 @@
       display: grid;
       grid-template-columns: minmax(80px, 0.2fr) minmax(0, 1fr) auto;
       gap: 8px;
-      align-items: center;
+      align-items: start;
       padding: 6px 8px;
       margin: 2px 0;
       border: 1px solid #fecaca;
@@ -459,10 +486,57 @@
     }
     .submit-fail-reason {
       color: var(--muted);
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
+      overflow: visible;
+      white-space: normal;
+      min-width: 0;
     }
+    .risk-card {
+      margin-top: 8px;
+      padding: 9px 10px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--soft);
+      color: var(--text);
+      display: grid;
+      gap: 7px;
+    }
+    .risk-card.risk-blocking { border-color: #fecaca; background: #fff1f2; }
+    .risk-card.risk-warning { border-color: #fde68a; background: #fffbeb; }
+    .risk-card-head { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; }
+    .risk-title { font-weight: 900; font-size: 13px; color: var(--text); }
+    .risk-summary { margin-top: 2px; font-size: 12px; line-height: 1.45; color: var(--muted); }
+    .risk-score { font-weight: 900; color: var(--bad); white-space: nowrap; }
+    .risk-meter { position: relative; height: 8px; border-radius: 999px; background: #e2e8f0; overflow: hidden; }
+    .risk-meter-fill { height: 100%; max-width: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--accent), var(--warn), var(--bad)); }
+    .risk-threshold { position: absolute; top: -3px; width: 2px; height: 14px; background: var(--bad); }
+    .risk-list-title { font-size: 11px; font-weight: 900; color: var(--muted); text-transform: uppercase; letter-spacing: 0; }
+    .risk-list { margin: 0; padding-left: 18px; color: var(--muted); font-size: 12px; line-height: 1.45; }
+    .state-nav-card {
+      margin-top: 4px;
+      padding: 8px;
+      border: 1px dashed var(--line);
+      border-radius: 6px;
+      background: var(--panel);
+      display: grid;
+      gap: 6px;
+    }
+    .state-nav-title { font-weight: 900; font-size: 12px; color: var(--text); }
+    .state-nav-summary, .state-nav-action { font-size: 12px; color: var(--muted); line-height: 1.4; }
+    .state-nav-steps { display: flex; flex-wrap: wrap; gap: 6px; }
+    .state-nav-step {
+      display: inline-flex;
+      align-items: center;
+      min-height: 24px;
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: var(--soft);
+      border: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 850;
+    }
+    .state-nav-step.active { background: var(--blue-soft); border-color: var(--blue); color: var(--blue); }
+    .state-nav-step.done { background: var(--good-soft); border-color: var(--good); color: var(--good); }
     .switch {
       display: inline-flex;
       align-items: center;
@@ -519,6 +593,11 @@
     tbody tr { cursor: pointer; background: var(--panel); }
     tbody tr:nth-child(even) { background: #fbfdff; }
     tbody tr:hover { background: #f0fdfa; }
+    tbody tr:focus-visible {
+      outline: 3px solid var(--ring);
+      outline-offset: -3px;
+      background: #f0fdfa;
+    }
     tbody tr.selected { background: var(--accent-soft); }
     .score-badge {
       display: inline-flex;
@@ -560,7 +639,7 @@
     .header-right { display: flex; align-items: center; gap: 8px; }
     .header-divider { width: 1px; height: 24px; background: var(--line); margin: 0 4px; flex-shrink: 0; }
     .header-icon-btn {
-      width: 28px; height: 28px; border-radius: 6px;
+      width: 40px; height: 40px; border-radius: 6px;
       border: 1px solid var(--line); background: var(--panel);
       color: var(--muted); cursor: pointer;
       display: inline-flex; align-items: center; justify-content: center;
@@ -569,7 +648,7 @@
     }
     .header-icon-btn:hover { border-color: var(--accent); color: var(--accent); }
     .header-ghost-btn {
-      min-height: 28px; padding: 0 8px; border-radius: 6px;
+      min-height: 40px; padding: 0 10px; border-radius: 6px;
       border: 1px solid transparent; background: transparent;
       color: var(--muted); cursor: pointer;
       font: inherit; font-size: 12px; font-weight: 600;
@@ -577,7 +656,7 @@
     }
     .header-ghost-btn:hover { background: var(--soft); color: var(--text); border-color: var(--line); }
     .header-danger-btn {
-      min-height: 28px; padding: 0 8px; border-radius: 6px;
+      min-height: 40px; padding: 0 10px; border-radius: 6px;
       border: 1px solid var(--bad-soft); background: transparent;
       color: var(--bad); cursor: pointer;
       font: inherit; font-size: 12px; font-weight: 600;
@@ -675,11 +754,18 @@
       .table-wrap { max-height: 680px; }
     }
     @media (max-width: 720px) {
+      main { display: flex; flex-direction: column; }
+      section { order: 1; min-height: auto; }
+      aside { order: 2; }
       .row, .insight, .toolbar, .module-actions, .monitor, .monitor-stats, .monitor-slots, .kv { grid-template-columns: 1fr; }
       .module-actions .assistant-input { grid-template-columns: 1fr; }
       .insight-grid { grid-template-columns: 1fr; }
       header { align-items: flex-start; flex-direction: column; }
       .toolbar button, .toolbar select { width: 100%; }
+      button, input, select, textarea { min-height: 44px; }
+      button.small { min-height: 40px; }
+      .header-right { flex-wrap: wrap; }
+      .header-icon-btn, .header-danger-btn { min-height: 44px; }
     }
     /* ── P2: Chart panels ── */
     .charts-panel {
@@ -1018,6 +1104,10 @@
     [data-theme="dark"] .conn-test.fail { background: var(--bad-soft); color: var(--bad); }
     [data-theme="dark"] .conn-test.testing { background: var(--warn-soft); color: var(--warn); }
     [data-theme="dark"] .submit-fail-row { border-color: var(--bad-soft); }
+    [data-theme="dark"] .risk-card { background: var(--soft); border-color: var(--line); }
+    [data-theme="dark"] .risk-card.risk-blocking { background: var(--bad-soft); border-color: var(--bad); }
+    [data-theme="dark"] .risk-card.risk-warning { background: var(--warn-soft); border-color: var(--warn); }
+    [data-theme="dark"] .state-nav-card { background: var(--panel); border-color: var(--line); }
     [data-theme="dark"] details[open] { background: var(--soft); }
     [data-theme="dark"] .table-wrap { background: var(--panel); }
     [data-theme="dark"] th { background: var(--soft); }
@@ -1028,7 +1118,8 @@
   </style>
 </head>
 <body>
-  <header>
+  <a class="skip-link" href="#mainContent">跳到结果</a>
+  <header role="banner">
     <div>
       <h1>BRAIN Alpha Ops</h1>
       <div class="subhead">无人值守流程：本地生产、评分和排序按配置运行；只有拿到 simulation_id 的任务才进入回测槽。</div>
@@ -1040,14 +1131,14 @@
         <span class="user-points">--</span>
       </div>
       <span class="header-divider"></span>
-      <div id="status" class="status">系统空闲</div>
-      <button id="themeToggle" class="header-icon-btn" onclick="toggleTheme()" title="切换浅色/暗色主题"><span class="theme-icon-light">☀</span><span class="theme-icon-dark" style="display:none">☽</span></button>
+      <div id="status" class="status" role="status" aria-live="polite" aria-atomic="true">系统空闲</div>
+      <button id="themeToggle" class="header-icon-btn" onclick="toggleTheme()" title="切换浅色/暗色主题" aria-label="切换浅色或暗色主题"><span class="theme-icon-light">☀</span><span class="theme-icon-dark" style="display:none">☽</span></button>
       <button class="header-danger-btn" onclick="shutdownApp()" title="停止本地服务并终止所有后台任务">关闭服务</button>
     </div>
   </header>
-  <main>
-    <aside>
-      <h2>生产控制</h2>
+  <main id="appMain" role="main">
+    <aside id="controlPanel" role="complementary" aria-labelledby="controlTitle">
+      <h2 id="controlTitle">生产控制</h2>
       <label>运行环境</label>
       <select id="environment" onchange="toggleEnvironment()">
         <option value="production" selected>生产环境：官方 BRAIN API</option>
@@ -1076,6 +1167,7 @@
       <div class="run-actions">
         <div class="subhead">启动后会按配置生产、评分、排序和补位。</div>
         <button id="controlButton" class="full" onclick="toggleRun()">开始生产搜索</button>
+        <button class="full secondary" onclick="document.getElementById('mainContent').scrollIntoView({ behavior: 'smooth', block: 'start' })">查看结果面板</button>
       </div>
 
       <label>市场预设</label>
@@ -1090,7 +1182,7 @@
       </select>
       <div class="subhead">预设是官方回测设置的一组快捷组合；手动修改下方设置会覆盖预设。</div>
 
-      <details open>
+      <details>
         <summary>官方回测设置</summary>
         <div class="subhead">这些值会直接写入官方 simulation/settings；自动切换策略时会同步更新这里。</div>
         <div class="row">
@@ -1128,12 +1220,12 @@
           <option value="all">全部</option>
         </select>
         <button id="syncButton" class="full secondary" onclick="syncCloud()">同步云端数据</button>
-        <div class="track"><div id="cloudSyncFill" class="fill"></div></div>
-        <div id="cloudSyncMeta" class="progress-meta">进度：0% | 已扫描：0/待确认 | 预计剩余：-</div>
+        <div id="cloudSyncTrack" class="track" role="progressbar" aria-label="云端同步进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="cloudSyncFill" class="fill"></div></div>
+        <div id="cloudSyncMeta" class="progress-meta" aria-live="polite" aria-atomic="true">进度：0% | 已扫描：0/待确认 | 预计剩余：-</div>
         <div id="cloudSyncText" class="message hidden"></div>
       </details>
 
-      <details open>
+      <details>
         <summary>系统策略</summary>
         <div class="note">本地生产强度和回测策略来自配置文件。界面只保留必要开关，避免把无人值守流程变成人工调参面板。</div>
         <div class="row">
@@ -1179,7 +1271,7 @@
 
     </aside>
 
-    <section>
+    <section id="mainContent" aria-labelledby="tableTitle">
       <div class="panel-head">
         <div>
           <h2 id="tableTitle">候选池</h2>
@@ -1217,8 +1309,8 @@
         <div id="opsMonitor" class="hidden"></div><div id="summary" class="hidden"></div>
         <div class="run-card">
           <div class="run-head"><span>数据统计</span><span id="monitorCloudStatus">未同步</span></div>
-          <div class="track"><div id="monitorCloudFill" class="fill"></div></div>
-          <div id="monitorCloudMeta" class="progress-meta">进度：0% | 已扫描：0/待确认 | 预计剩余：-</div>
+          <div id="monitorCloudTrack" class="track" role="progressbar" aria-label="数据统计同步进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="monitorCloudFill" class="fill"></div></div>
+          <div id="monitorCloudMeta" class="progress-meta" aria-live="polite" aria-atomic="true">进度：0% | 已扫描：0/待确认 | 预计剩余：-</div>
           <div id="monitorCloudText" class="message">登录后强制同步；也可手动刷新。</div>
         </div>
         <div class="slot-panel">
@@ -1236,8 +1328,8 @@
           <div id="moduleActionTitle" class="module-title">达标检查</div>
           <div id="moduleActionHint" class="module-hint">批量核验全部达标 Alpha 当前是否仍可提交。</div>
           <div id="checkStats" class="check-stats">尚未检查。</div>
-          <div class="track"><div id="checkProgressFill" class="fill"></div></div>
-          <div id="checkProgressMeta" class="progress-meta">进度：0% | 已检查：0/0 | 预计剩余：-</div>
+          <div id="checkProgressTrack" class="track" role="progressbar" aria-label="达标检查进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="checkProgressFill" class="fill"></div></div>
+          <div id="checkProgressMeta" class="progress-meta" aria-live="polite" aria-atomic="true">进度：0% | 已检查：0/0 | 预计剩余：-</div>
           <div id="assistantGenerateInputs" class="assistant-input hidden">
             <div>
               <label>Assistant JSON</label>
@@ -1279,7 +1371,8 @@
       </div>
       <div id="tableWrap" class="table-wrap">
         <div id="cloudStatsPanel" class="stats-dashboard hidden"></div>
-        <table id="candidateTable">
+        <table id="candidateTable" aria-label="Alpha 候选与生命周期记录">
+          <caption class="sr-only">Alpha 候选、回测、检查、提交和生命周期记录</caption>
           <thead>
             <tr>
           <th>#</th><th>Alpha / 记录</th><th>家族</th><th>排序分</th><th>状态</th><th>官方 ID</th><th>风险 / 原因</th><th>操作</th>
@@ -1290,24 +1383,24 @@
       </div>
     </section>
   </main>
-  <div id="detailModal" class="modal hidden">
-    <div class="modal-panel" onclick="event.stopPropagation()">
+  <div id="detailModal" class="modal hidden" aria-hidden="true">
+    <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="modalTitle" tabindex="-1" onclick="event.stopPropagation()">
       <div class="modal-head">
         <h2 id="modalTitle">详情</h2>
-        <button class="secondary small" onclick="closeDetailModal()">关闭</button>
+        <button id="detailCloseButton" class="secondary small" onclick="closeDetailModal()">关闭</button>
       </div>
       <div id="detail" class="detail modal-body">暂无详情。</div>
     </div>
   </div>
-  <div id="toastContainer" class="toast-container"></div>
-  <div id="spinnerOverlay" class="spinner-overlay hidden">
+  <div id="toastContainer" class="toast-container" aria-live="polite" aria-atomic="true"></div>
+  <div id="spinnerOverlay" class="spinner-overlay hidden" role="status" aria-live="polite" aria-atomic="true">
     <div class="spinner-box">
       <div class="spinner"></div>
       <div class="spinner-text" id="spinnerText">处理中...</div>
     </div>
   </div>
-  <div id="confirmOverlay" class="confirm-overlay hidden" onclick="hideConfirm()">
-    <div class="confirm-dialog" onclick="event.stopPropagation()">
+  <div id="confirmOverlay" class="confirm-overlay hidden" aria-hidden="true" onclick="hideConfirm()">
+    <div class="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="confirmText" tabindex="-1" onclick="event.stopPropagation()">
       <p id="confirmText"></p>
       <div class="confirm-actions">
         <button class="secondary small" id="confirmNo">取消</button>
