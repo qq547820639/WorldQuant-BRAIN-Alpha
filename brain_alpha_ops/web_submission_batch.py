@@ -31,11 +31,17 @@ def submit_batch_payload(
     run_config = run_config_from_payload(payload)
     observability_preflight = observability_submission_preflight(run_config.ops.storage_dir)
     if observability_preflight.get("requires_confirmation") and not payload_truthy(payload.get("confirm_observability_risk")):
+        risk_explanation = observability_preflight.get("risk_explanation") if isinstance(observability_preflight.get("risk_explanation"), dict) else {}
         return {
             "ok": False,
+            "schema_version": "submission_batch_result.v2",
+            "status": "BLOCKED",
             "error_code": "SUBMIT_OBSERVABILITY_CONFIRMATION_REQUIRED",
             "error": "Observability diagnostics recommend pausing submission until blocking flags are acknowledged.",
             "observability_preflight": observability_preflight,
+            "risk_explanation": risk_explanation,
+            "risk_explanations": [risk_explanation] if risk_explanation else [],
+            "state_navigation": observability_preflight.get("state_navigation") if isinstance(observability_preflight.get("state_navigation"), dict) else {},
         }
     results = []
     submitted_set: set[str] = set()
@@ -61,7 +67,21 @@ def submit_batch_payload(
         results.append({"alpha_id": alpha_id, **result})
     return {
         "ok": True,
+        "schema_version": "submission_batch_result.v2",
+        "status": "COMPLETED" if all(item.get("ok") for item in results) else "PARTIAL_FAILED",
         "submitted": sum(1 for item in results if item.get("ok")),
         "failed": sum(1 for item in results if not item.get("ok")),
+        "submitted_alpha_ids": [item.get("alpha_id", "") for item in results if item.get("ok") and item.get("alpha_id")],
+        "failed_alpha_ids": [item.get("alpha_id", "") for item in results if not item.get("ok") and item.get("alpha_id")],
+        "state_counts": _state_counts(results),
         "results": results,
     }
+
+
+def _state_counts(results: list[dict[str, Any]]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for item in results:
+        submission = item.get("submission") if isinstance(item.get("submission"), dict) else {}
+        key = str(item.get("status") or submission.get("status") or ("SUBMITTED" if item.get("ok") else item.get("error_code") or "FAILED"))
+        counts[key] = counts.get(key, 0) + 1
+    return counts

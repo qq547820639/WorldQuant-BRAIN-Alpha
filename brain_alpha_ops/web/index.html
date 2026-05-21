@@ -2,12 +2,8 @@
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8">
-  <link rel="preconnect" href="https://api.fontshare.com" crossorigin>
-  <link href="https://api.fontshare.com/v2/css?f[]=satoshi@700,600,500,400&display=swap" rel="stylesheet">
-  <script src="https://code.iconify.design/iconify-icon/1.0.7/iconify-icon.min.js"></script>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>BRAIN Alpha Ops</title>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <style>
     :root {
       --bg: #f5f7fa;
@@ -108,8 +104,8 @@
       overflow: auto;
     }
     header {
-      min-height: 66px;
-      padding: 12px 18px;
+      min-height: 68px;
+      padding: 12px 20px;
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -123,9 +119,9 @@
     h2 { font-size: 15px; font-weight: 850; }
     main {
       display: grid;
-      grid-template-columns: 360px minmax(0, 1fr);
-      gap: 12px;
-      padding: 12px;
+      grid-template-columns: minmax(292px, 328px) minmax(0, 1fr);
+      gap: 16px;
+      padding: 16px;
       min-height: calc(100vh - 66px);
       align-items: start;
     }
@@ -135,14 +131,70 @@
       border-radius: 8px;
       box-shadow: var(--shadow-soft);
     }
-    aside { padding: 14px; overflow: auto; max-height: calc(100vh - 90px); position: sticky; top: 12px; }
+    aside {
+      padding: 0;
+      overflow: hidden;
+      max-height: calc(100vh - 100px);
+      position: sticky;
+      top: 16px;
+    }
+    .control-scroll {
+      max-height: inherit;
+      overflow: auto;
+      padding: 14px;
+    }
     section {
       min-width: 0;
-      min-height: calc(100vh - 90px);
+      min-height: calc(100vh - 100px);
       display: flex;
       flex-direction: column;
       overflow: visible;
     }
+    .control-header {
+      padding: 14px 14px 12px;
+      border-bottom: 1px solid var(--line);
+      background: var(--soft);
+    }
+    .control-section {
+      margin-top: 12px;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+    }
+    .control-section.primary {
+      border-color: #99f6e4;
+      background: #f0fdfa;
+    }
+    .control-section-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 8px;
+      font-size: 13px;
+      font-weight: 900;
+    }
+    .step-index {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 24px;
+      height: 24px;
+      border-radius: 999px;
+      background: var(--accent);
+      color: #fff;
+      font-size: 12px;
+      font-weight: 900;
+      flex: 0 0 auto;
+    }
+    .quick-links {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    .quick-links button { margin: 0; }
     label {
       display: block;
       margin: 10px 0 5px;
@@ -152,10 +204,10 @@
     }
     input, select, textarea {
       width: 100%;
-      min-height: 34px;
+      min-height: 38px;
       border: 1px solid var(--line);
       border-radius: 6px;
-      padding: 0 9px;
+      padding: 0 10px;
       color: var(--text);
       background: var(--panel);
       font: inherit;
@@ -165,7 +217,7 @@
     }
     textarea {
       min-height: 72px;
-      padding: 8px 9px;
+      padding: 9px 10px;
       resize: vertical;
       line-height: 1.35;
     }
@@ -187,6 +239,10 @@
       transition: background 160ms ease, border-color 160ms ease, color 160ms ease, transform 120ms ease, box-shadow 160ms ease;
     }
     button:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 8px 18px rgba(15, 118, 110, 0.18); }
+    button:focus-visible {
+      outline: 3px solid var(--ring);
+      outline-offset: 2px;
+    }
     button:active:not(:disabled) { transform: translateY(0); }
     button.full { width: 100%; margin-top: 10px; }
     button.secondary { background: var(--panel); color: var(--text); border-color: var(--line); }
@@ -194,15 +250,19 @@
     button.stop { background: var(--panel); color: var(--bad); border-color: var(--bad-soft); }
     button.small { min-height: 36px; padding: 0 10px; font-size: 12px; }
     button:disabled { opacity: 0.62; cursor: default; }
-    .run-actions {
-      margin: 10px 0 6px;
-      padding: 10px;
-      border: 1px solid #99f6e4;
-      border-radius: 8px;
-      background: #f0fdfa;
-    }
+    .run-actions { margin: 0; }
     .run-actions .subhead { color: #134e4a; }
     .run-actions button.full { margin-top: 8px; }
+    .operation-guard {
+      margin-top: 8px;
+      padding: 8px 10px;
+      border: 1px solid #fde68a;
+      border-radius: 6px;
+      background: #fffbeb;
+      color: #713f12;
+      font-size: 12px;
+      line-height: 1.45;
+    }
     details {
       margin-top: 12px;
       padding: 10px;
@@ -336,7 +396,7 @@
       white-space: pre-wrap;
     }
     .panel-head {
-      padding: 10px 14px;
+      padding: 14px 16px 12px;
       border-bottom: 1px solid var(--line);
       display: flex;
       align-items: center;
@@ -344,16 +404,125 @@
       gap: 10px;
       background: var(--panel);
     }
-    .insight {
-      padding: 8px 14px;
+    .workflow-nav {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 8px;
+      padding: 12px 16px;
       border-bottom: 1px solid var(--line);
       background: var(--soft);
+    }
+    .workflow-step {
+      min-height: 72px;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      color: var(--text);
       display: grid;
-      grid-template-columns: minmax(0, 1fr) minmax(220px, 0.34fr);
-      gap: 9px;
+      grid-template-columns: auto minmax(0, 1fr);
+      gap: 8px;
+      align-items: start;
+      text-align: left;
+      box-shadow: none;
+    }
+    .workflow-step:hover:not(:disabled),
+    .workflow-step:focus-visible {
+      border-color: #5eead4;
+      box-shadow: var(--shadow-soft);
+      transform: translateY(-1px);
+    }
+    .workflow-step.active {
+      border-color: #5eead4;
+      background: #f0fdfa;
+      box-shadow: inset 0 0 0 1px #99f6e4;
+    }
+    .workflow-step .step-index { width: 26px; height: 26px; margin-top: 1px; }
+    .workflow-label {
+      display: block;
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 900;
+      line-height: 1.2;
+    }
+    .workflow-meta {
+      display: block;
+      margin-top: 3px;
+      color: var(--muted);
+      font-size: 11.5px;
+      line-height: 1.25;
+      overflow-wrap: anywhere;
+    }
+    .status-strip {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      padding: 8px 16px;
+      border-bottom: 1px solid var(--line);
+      background: var(--panel);
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .status-strip span { min-width: 0; overflow-wrap: anywhere; }
+    .status-separator { width: 1px; height: 16px; background: var(--line); }
+    .panel-tools {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+    .segmented-control {
+      display: inline-flex;
+      align-items: center;
+      gap: 2px;
+      padding: 2px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--soft);
+    }
+    .segmented-control button {
+      min-height: 30px;
+      padding: 0 10px;
+      border-color: transparent;
+      background: transparent;
+      color: var(--muted);
+      box-shadow: none;
+    }
+    .segmented-control button.active {
+      background: var(--panel);
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+    .segmented-control button:focus-visible {
+      outline: 3px solid var(--ring);
+      outline-offset: 2px;
+    }
+    .insight {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--line);
+      background: var(--panel);
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(280px, 0.42fr);
+      gap: 12px;
       align-items: start;
     }
     .insight-group { min-width: 0; }
+    .insight-group-collapsible {
+      margin: 0;
+      padding: 0;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+    }
+    .insight-group-collapsible[open] { background: transparent; }
+    .insight-group-collapsible summary {
+      margin: 0 0 5px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 900;
+    }
     .insight-group-title {
       margin: 0 0 5px;
       color: var(--muted);
@@ -363,13 +532,13 @@
     }
     .insight-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
-      gap: 7px;
+      grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
+      gap: 8px;
     }
     .insight-item {
       width: 100%;
-      min-height: 50px;
-      padding: 6px 8px;
+      min-height: 62px;
+      padding: 9px 10px;
       border: 1px solid var(--line);
       border-radius: 8px;
       background: var(--panel);
@@ -388,16 +557,16 @@
       box-shadow: inset 0 0 0 1px #99f6e4;
     }
     .insight-item.active .insight-label { color: #0f766e; }
-    .insight-label { color: var(--muted); font-size: 11.5px; font-weight: 850; margin-bottom: 2px; }
-    .insight-value { font-size: 15px; font-weight: 900; line-height: 1.15; overflow-wrap: anywhere; }
+    .insight-label { color: var(--muted); font-size: 11.5px; font-weight: 850; margin-bottom: 3px; }
+    .insight-value { font-size: 18px; font-weight: 900; line-height: 1.15; overflow-wrap: anywhere; }
     .insight-note { margin-top: 2px; color: var(--muted); font-size: 11px; line-height: 1.2; }
     .monitor {
-      padding: 8px 14px;
+      padding: 12px 16px;
       border-bottom: 1px solid var(--line);
-      background: var(--panel);
+      background: var(--soft);
       display: grid;
       grid-template-columns: minmax(0, 1fr) minmax(260px, 0.78fr);
-      gap: 8px;
+      gap: 10px;
       align-items: start;
     }
     .monitor > *, .slot-panel, .run-card, .slot-card { min-width: 0; }
@@ -434,16 +603,25 @@
       grid-column: 1 / -1;
     }
     .toolbar {
-      padding: 8px 14px;
+      padding: 12px 16px;
       display: grid;
       grid-template-columns: minmax(240px, 0.55fr) minmax(260px, 1fr);
-      gap: 8px;
+      gap: 10px;
       align-items: center;
       border-bottom: 1px solid var(--line);
       background: var(--panel);
     }
+    .view-guidance {
+      padding: 9px 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--soft);
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
     .module-actions {
-      padding: 8px 14px;
+      padding: 12px 16px;
       border-bottom: 1px solid var(--line);
       background: #f0fdfa;
       display: grid;
@@ -551,7 +729,7 @@
       overflow: auto;
       flex: 1 1 auto;
       min-height: 280px;
-      max-height: calc(100vh - 430px);
+      max-height: clamp(360px, calc(100vh - 500px), 760px);
       background: var(--panel);
       border-bottom-left-radius: 8px;
       border-bottom-right-radius: 8px;
@@ -599,6 +777,82 @@
       background: #f0fdfa;
     }
     tbody tr.selected { background: var(--accent-soft); }
+    .table-empty-cell {
+      padding: 22px 16px;
+      text-align: center;
+      background: var(--panel);
+    }
+    .empty-state {
+      display: grid;
+      gap: 8px;
+      justify-items: center;
+      max-width: 620px;
+      margin: 0 auto;
+      padding: 10px;
+      color: var(--muted);
+    }
+    .empty-kicker {
+      color: var(--accent);
+      font-size: 11px;
+      font-weight: 900;
+    }
+    .empty-title {
+      color: var(--text);
+      font-size: 15px;
+      font-weight: 900;
+      line-height: 1.35;
+    }
+    .empty-hint {
+      max-width: 520px;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+    .empty-actions {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 8px;
+      margin-top: 2px;
+    }
+    .empty-actions button { width: auto; padding: 0 12px; }
+    .mobile-card-list {
+      display: none;
+      gap: 8px;
+      padding: 8px;
+    }
+    .mobile-row-card {
+      display: grid;
+      gap: 7px;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      box-shadow: var(--shadow-soft);
+    }
+    .mobile-row-card:focus-visible {
+      outline: 3px solid var(--ring);
+      outline-offset: 2px;
+    }
+    .mobile-row-card.selected { border-color: var(--accent); background: var(--accent-soft); }
+    .mobile-card-head { display: flex; justify-content: space-between; gap: 8px; align-items: flex-start; }
+    .mobile-card-title { min-width: 0; font-weight: 900; overflow-wrap: anywhere; }
+    .mobile-card-score { flex-shrink: 0; }
+    .mobile-card-meta {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 6px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .mobile-card-meta div {
+      min-width: 0;
+      padding: 6px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--soft);
+      overflow-wrap: anywhere;
+    }
+    .mobile-card-actions { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
     .score-badge {
       display: inline-flex;
       min-width: 58px;
@@ -738,6 +992,7 @@
     }
     .modal-body { padding: 12px 14px; }
     @media (max-width: 1380px) {
+      .workflow-nav { grid-template-columns: repeat(3, minmax(0, 1fr)); }
       .monitor { grid-template-columns: minmax(0, 1fr) minmax(260px, 0.8fr); }
       .slot-panel { grid-column: 1 / -1; }
       .slot-card { min-height: 116px; }
@@ -745,6 +1000,7 @@
     @media (max-width: 1120px) {
       main { grid-template-columns: 1fr; height: auto; }
       aside { position: static; max-height: none; }
+      .control-scroll { max-height: none; }
       section { min-height: 980px; height: auto; }
       .insight { grid-template-columns: 1fr; }
       .insight-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -754,18 +1010,25 @@
       .table-wrap { max-height: 680px; }
     }
     @media (max-width: 720px) {
-      main { display: flex; flex-direction: column; }
+      main { display: flex; flex-direction: column; padding: 10px; gap: 10px; }
       section { order: 1; min-height: auto; }
       aside { order: 2; }
-      .row, .insight, .toolbar, .module-actions, .monitor, .monitor-stats, .monitor-slots, .kv { grid-template-columns: 1fr; }
+      .row, .quick-links, .workflow-nav, .insight, .toolbar, .module-actions, .monitor, .monitor-stats, .monitor-slots, .kv { grid-template-columns: 1fr; }
       .module-actions .assistant-input { grid-template-columns: 1fr; }
       .insight-grid { grid-template-columns: 1fr; }
       header { align-items: flex-start; flex-direction: column; }
+      .panel-head { align-items: flex-start; flex-direction: column; }
+      .panel-tools { width: 100%; justify-content: flex-start; }
       .toolbar button, .toolbar select { width: 100%; }
       button, input, select, textarea { min-height: 44px; }
       button.small { min-height: 40px; }
       .header-right { flex-wrap: wrap; }
       .header-icon-btn, .header-danger-btn { min-height: 44px; }
+      .table-wrap { overflow: visible; }
+      #candidateTable:not(.hidden) { display: none; }
+      .mobile-card-list:not(.hidden) { display: grid; }
+      .mobile-card-meta { grid-template-columns: 1fr; }
+      .workflow-step { min-height: 64px; }
     }
     /* ── P2: Chart panels ── */
     .charts-panel {
@@ -796,6 +1059,15 @@
       font-weight: 850;
     }
     .chart-card canvas { max-height: 200px; }
+    .chart-fallback {
+      margin-bottom: 10px;
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--soft);
+      color: var(--muted);
+      font-size: 13px;
+    }
     @media (max-width: 900px) {
       .charts-grid { grid-template-columns: 1fr; }
     }
@@ -1029,6 +1301,7 @@
       align-items: center;
     }
     .filter-chip {
+      min-height: 28px;
       padding: 3px 10px;
       border: 1px solid var(--line);
       border-radius: 999px;
@@ -1039,8 +1312,11 @@
       color: var(--muted);
       transition: all 140ms ease;
       white-space: nowrap;
+      box-shadow: none;
     }
+    button.filter-chip { width: auto; font: inherit; }
     .filter-chip:hover { border-color: #94a3b8; }
+    .filter-chip:focus-visible { outline: 3px solid var(--ring); outline-offset: 2px; }
     .filter-chip.active { background: var(--accent); color: #fff; border-color: var(--accent); }
 
     /* ── Quick connection test ── */
@@ -1075,6 +1351,9 @@
     /* ── Dark mode overrides for hardcoded light-theme colors ── */
     [data-theme="dark"] input:focus,
     [data-theme="dark"] select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--ring); }
+    [data-theme="dark"] .control-header { background: var(--soft); }
+    [data-theme="dark"] .control-section { background: var(--panel); }
+    [data-theme="dark"] .control-section.primary { border-color: var(--accent); background: var(--accent-soft); }
     [data-theme="dark"] .run-actions { border-color: var(--accent); background: var(--accent-soft); }
     [data-theme="dark"] .run-actions .subhead { color: var(--muted); }
     [data-theme="dark"] .note { border-color: var(--accent); background: var(--accent-soft); color: var(--text); }
@@ -1083,6 +1362,9 @@
     [data-theme="dark"] .slot-card.done { border-color: var(--good); background: var(--good-soft); }
     [data-theme="dark"] .slot-card.warn { border-color: var(--warn); background: var(--warn-soft); }
     [data-theme="dark"] .slot-card.bad { border-color: var(--bad); background: var(--bad-soft); }
+    [data-theme="dark"] .workflow-step.active { border-color: var(--accent); background: var(--accent-soft); }
+    [data-theme="dark"] .workflow-step:hover,
+    [data-theme="dark"] .workflow-step:focus-visible { border-color: var(--accent); }
     [data-theme="dark"] .insight-item.active { border-color: var(--accent); background: var(--accent-soft); }
     [data-theme="dark"] .insight-item.active .insight-label { color: var(--accent); }
     [data-theme="dark"] .module-actions { background: var(--accent-soft); }
@@ -1138,81 +1420,96 @@
   </header>
   <main id="appMain" role="main">
     <aside id="controlPanel" role="complementary" aria-labelledby="controlTitle">
-      <h2 id="controlTitle">生产控制</h2>
-      <label>运行环境</label>
-      <select id="environment" onchange="toggleEnvironment()">
-        <option value="production" selected>生产环境：官方 BRAIN API</option>
-        <option value="mock">本地模拟环境</option>
-      </select>
-      <div id="productionNote" class="note warning">生产环境会调用真实 BRAIN API。登录后会先同步云端数据，用于自相关和重复提交风险拦截。</div>
-      <div id="mockNote" class="note hidden">本地模拟环境只用于验证流程和界面，不代表真实 BRAIN 结果。</div>
-
-      <div id="credentials">
-        <label>BRAIN 账号</label>
-        <input id="username" autocomplete="username" placeholder="用户名或邮箱">
-        <label>BRAIN 密码</label>
-        <input id="password" type="password" autocomplete="current-password" placeholder="也可留空并使用 Token">
-        <details>
-          <summary>高级连接设置</summary>
-          <div class="subhead">只影响登录方式和 API 地址，不改变 Alpha 的回测参数。</div>
-          <label>Token</label>
-          <input id="token" type="password" placeholder="可选：Bearer Token">
-          <label>API 地址</label>
-          <input id="baseUrl" value="https://api.worldquantbrain.com">
-          <button id="connTestBtn" class="secondary small full" onclick="testConnection()" style="margin-top:8px">🔌 测试连接</button>
-          <div id="connTestResult" class="conn-test hidden"></div>
-        </details>
+      <div class="control-header">
+        <h2 id="controlTitle">任务入口</h2>
+        <div class="subhead">按连接、生产、同步的顺序处理，常用操作保持在可见区域。</div>
       </div>
+      <div class="control-scroll">
+        <div class="control-section">
+          <div class="control-section-title"><span>连接与身份</span><span class="step-index">1</span></div>
+          <label>运行环境</label>
+          <select id="environment" onchange="toggleEnvironment()">
+            <option value="production" selected>生产环境：官方 BRAIN API</option>
+            <option value="mock">本地模拟环境</option>
+          </select>
+          <div id="productionNote" class="note warning">生产环境会调用真实 BRAIN API。登录后会先同步云端数据，用于自相关和重复提交风险拦截。</div>
+          <div id="mockNote" class="note hidden">本地模拟环境只用于验证流程和界面，不代表真实 BRAIN 结果。</div>
 
-      <div class="run-actions">
+          <div id="credentials">
+            <label>BRAIN 账号</label>
+            <input id="username" autocomplete="username" placeholder="用户名或邮箱">
+            <label>BRAIN 密码</label>
+            <input id="password" type="password" autocomplete="current-password" placeholder="也可留空并使用 Token">
+            <details>
+              <summary>高级连接设置</summary>
+              <div class="subhead">只影响登录方式和 API 地址，不改变 Alpha 的回测参数。</div>
+              <label>Token</label>
+              <input id="token" type="password" placeholder="可选：Bearer Token">
+              <label>API 地址</label>
+              <input id="baseUrl" value="https://api.worldquantbrain.com">
+              <button id="connTestBtn" class="secondary small full" onclick="testConnection()" style="margin-top:8px">测试连接</button>
+              <div id="connTestResult" class="conn-test hidden"></div>
+            </details>
+          </div>
+        </div>
+
+      <div class="control-section primary run-actions">
+        <div class="control-section-title"><span>生产搜索</span><span class="step-index">2</span></div>
         <div class="subhead">启动后会按配置生产、评分、排序和补位。</div>
         <button id="controlButton" class="full" onclick="toggleRun()">开始生产搜索</button>
-        <button class="full secondary" onclick="document.getElementById('mainContent').scrollIntoView({ behavior: 'smooth', block: 'start' })">查看结果面板</button>
+        <div class="quick-links">
+          <button class="secondary small" onclick="document.getElementById('mainContent').scrollIntoView({ behavior: 'smooth', block: 'start' })">结果面板</button>
+          <button class="secondary small" onclick="switchView('passed')">达标检查</button>
+        </div>
+        <div id="operationGuard" class="operation-guard hidden" role="status" aria-live="polite" aria-atomic="true"></div>
       </div>
 
-      <label>市场预设</label>
-      <select id="preset" onchange="applyPreset()">
-        <option value="usa_standard">美股标准生产</option>
-        <option value="usa_liquid">美股高流动性</option>
-        <option value="usa_sector">美股 Sector Neutral</option>
-        <option value="usa_market">美股 Market Neutral</option>
-        <option value="europe_standard">欧洲标准生产</option>
-        <option value="global_market">全球 Market Neutral</option>
-        <option value="china_standard">中国市场标准生产</option>
-      </select>
-      <div class="subhead">预设是官方回测设置的一组快捷组合；手动修改下方设置会覆盖预设。</div>
+        <div class="control-section">
+          <div class="control-section-title"><span>市场与回测参数</span><span class="step-index">3</span></div>
+          <label>市场预设</label>
+          <select id="preset" onchange="applyPreset()">
+            <option value="usa_standard">美股标准生产</option>
+            <option value="usa_liquid">美股高流动性</option>
+            <option value="usa_sector">美股 Sector Neutral</option>
+            <option value="usa_market">美股 Market Neutral</option>
+            <option value="europe_standard">欧洲标准生产</option>
+            <option value="global_market">全球 Market Neutral</option>
+            <option value="china_standard">中国市场标准生产</option>
+          </select>
+          <div class="subhead">预设是官方回测设置的一组快捷组合；手动修改下方设置会覆盖预设。</div>
 
-      <details>
-        <summary>官方回测设置</summary>
-        <div class="subhead">这些值会直接写入官方 simulation/settings；自动切换策略时会同步更新这里。</div>
-        <div class="row">
-          <div><label>Region</label><select id="region"><option>USA</option><option>CHN</option><option>EUR</option><option>GLB</option></select></div>
-          <div><label>Universe</label><select id="universe"><option>TOP3000</option><option>TOP1000</option><option>TOP500</option></select></div>
+          <details>
+            <summary>官方回测设置</summary>
+            <div class="subhead">这些值会直接写入官方 simulation/settings；自动切换策略时会同步更新这里。</div>
+            <div class="row">
+              <div><label>Region</label><select id="region"><option>USA</option><option>CHN</option><option>EUR</option><option>GLB</option></select></div>
+              <div><label>Universe</label><select id="universe"><option>TOP3000</option><option>TOP1000</option><option>TOP500</option></select></div>
+            </div>
+            <div class="row">
+              <div><label>Delay</label><select id="delay"><option value="1">1</option><option value="0">0</option></select></div>
+              <div><label>Neutralization</label><select id="neutralization"><option>SUBINDUSTRY</option><option>INDUSTRY</option><option>SECTOR</option><option>MARKET</option><option>NONE</option></select></div>
+            </div>
+            <div class="row">
+              <div><label>Instrument Type</label><select id="instrumentType"><option>EQUITY</option></select></div>
+              <div><label>Alpha Type</label><select id="alphaType"><option>REGULAR</option><option>POWER_POOL</option><option>ATOM</option><option>PYRAMID</option></select></div>
+            </div>
+            <div class="row">
+              <div><label>Decay</label><input id="decay" type="number" min="0" step="1" value="10"></div>
+              <div><label>Truncation</label><input id="truncation" type="number" min="0" max="1" step="0.01" value="0.05"></div>
+            </div>
+            <div class="row">
+              <div><label>Pasteurization</label><select id="pasteurization"><option>ON</option><option>OFF</option></select></div>
+              <div><label>NaN Handling</label><select id="nanHandling"><option>ON</option><option>OFF</option></select></div>
+            </div>
+            <div class="row">
+              <div><label>Unit Handling</label><select id="unitHandling"><option>VERIFY</option><option>RAW</option></select></div>
+              <div><label>Language</label><select id="language"><option>FASTEXPR</option></select></div>
+            </div>
+          </details>
         </div>
-        <div class="row">
-          <div><label>Delay</label><select id="delay"><option value="1">1</option><option value="0">0</option></select></div>
-          <div><label>Neutralization</label><select id="neutralization"><option>SUBINDUSTRY</option><option>INDUSTRY</option><option>SECTOR</option><option>MARKET</option><option>NONE</option></select></div>
-        </div>
-        <div class="row">
-          <div><label>Instrument Type</label><select id="instrumentType"><option>EQUITY</option></select></div>
-          <div><label>Alpha Type</label><select id="alphaType"><option>REGULAR</option><option>POWER_POOL</option><option>ATOM</option><option>PYRAMID</option></select></div>
-        </div>
-        <div class="row">
-          <div><label>Decay</label><input id="decay" type="number" min="0" step="1" value="10"></div>
-          <div><label>Truncation</label><input id="truncation" type="number" min="0" max="1" step="0.01" value="0.05"></div>
-        </div>
-        <div class="row">
-          <div><label>Pasteurization</label><select id="pasteurization"><option>ON</option><option>OFF</option></select></div>
-          <div><label>NaN Handling</label><select id="nanHandling"><option>ON</option><option>OFF</option></select></div>
-        </div>
-        <div class="row">
-          <div><label>Unit Handling</label><select id="unitHandling"><option>VERIFY</option><option>RAW</option></select></div>
-          <div><label>Language</label><select id="language"><option>FASTEXPR</option></select></div>
-        </div>
-      </details>
 
-      <details open>
-        <summary>云端数据</summary>
+      <div class="control-section">
+        <div class="control-section-title"><span>云端数据</span><span class="step-index">4</span></div>
         <label>同步范围</label>
         <select id="syncRange">
           <option value="3d" selected>近 3 天</option>
@@ -1223,10 +1520,11 @@
         <div id="cloudSyncTrack" class="track" role="progressbar" aria-label="云端同步进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="cloudSyncFill" class="fill"></div></div>
         <div id="cloudSyncMeta" class="progress-meta" aria-live="polite" aria-atomic="true">进度：0% | 已扫描：0/待确认 | 预计剩余：-</div>
         <div id="cloudSyncText" class="message hidden"></div>
-      </details>
+      </div>
 
+      <div class="control-section">
       <details>
-        <summary>系统策略</summary>
+        <summary>系统策略与插件</summary>
         <div class="note">本地生产强度和回测策略来自配置文件。界面只保留必要开关，避免把无人值守流程变成人工调参面板。</div>
         <div class="row">
           <label class="switch" title="启用后，生产循环会读取最近一次可用 Assistant Guidance 作为候选生成偏好。"><input id="useAssistantGuidance" type="checkbox" checked> Assistant Guidance</label>
@@ -1268,24 +1566,34 @@
         </div>
         <div id="strategyText" class="message strategy-policy">正在读取配置...</div>
       </details>
+      </div>
 
+      </div>
     </aside>
 
     <section id="mainContent" aria-labelledby="tableTitle">
+      <div id="workflowNav" class="workflow-nav" aria-label="核心任务流程"></div>
       <div class="panel-head">
         <div>
           <h2 id="tableTitle">候选池</h2>
           <div class="subhead">研究流程：候选 → 等待回测 → 回测中 → 达标 → 检查后可提交 → 已提交 / 不达标回溯。</div>
         </div>
-        <span id="countPill" class="pill">候选池 0/10</span>
+        <div class="panel-tools">
+          <div id="displayModeToggle" class="segmented-control hidden" aria-label="结果展示方式">
+            <button id="tableModeButton" type="button" class="active" aria-pressed="true" onclick="setResultDisplayMode('table')">表格</button>
+            <button id="chartModeButton" type="button" aria-pressed="false" onclick="setResultDisplayMode('charts')">图表</button>
+          </div>
+          <span id="countPill" class="pill">候选池 0/10</span>
+        </div>
       </div>
-      <div class="toolbar" style="padding:0 14px 6px">
-        <span id="redlineSummary" style="font-size:12px;color:var(--muted)">红线验证加载中...</span>
-        <span style="margin:0 8px;color:var(--line)">|</span>
-        <span id="checkpointSummary" style="font-size:12px;color:var(--muted)">断点加载中...</span>
+      <div class="status-strip" aria-label="运行安全摘要">
+        <span id="redlineSummary">红线验证加载中...</span>
+        <span class="status-separator" aria-hidden="true"></span>
+        <span id="checkpointSummary">断点加载中...</span>
       </div>
       <div id="insight" class="insight"></div>
       <div id="chartsPanel" class="charts-panel">
+        <div id="chartFallback" class="chart-fallback hidden"></div>
         <div class="charts-grid">
           <div class="chart-card">
             <h3>评分趋势（近 20 轮）</h3>
@@ -1320,7 +1628,7 @@
       </div>
       <div class="toolbar">
         <input id="tableSearch" placeholder="搜索 Alpha ID、家族、假说、表达式或官方 ID" oninput="renderCurrentView()">
-        <div id="sortHint" class="subhead">候选池按排序分降序排序。快捷键：<span class="kbd">Ctrl+Enter</span> 启停生产，<span class="kbd">Esc</span> 关闭弹窗。</div>
+        <div id="sortHint" class="view-guidance">候选池按排序分降序排序。</div>
       </div>
       <div id="filterBar" class="filter-bar hidden"></div>
       <div id="moduleActions" class="module-actions hidden">
@@ -1380,6 +1688,7 @@
           </thead>
           <tbody id="candidateRows"></tbody>
         </table>
+        <div id="mobileCardList" class="mobile-card-list hidden" aria-label="移动端 Alpha 卡片列表"></div>
       </div>
     </section>
   </main>
@@ -3181,15 +3490,17 @@
   function updateRunButton() {
     var btn = $("controlButton");
     if (!btn) return;
-    btn.textContent = _running ? "停止连续生产" : "开始生产搜索";
-    btn.className = _running ? "full stop" : "full";
+    var running = _running || Boolean(S.get("isRunning"));
+    btn.textContent = running ? "停止连续生产" : "开始生产搜索";
+    btn.className = running ? "full stop" : "full";
+    if (typeof window.renderBusyControls === "function") window.renderBusyControls();
   }
 
   // ------------------------------------------------------------------
   // Production control — exposed to window for HTML onclick handlers
   // ------------------------------------------------------------------
   window.toggleRun = async function () {
-    if (_running) {
+    if (_running || S.get("isRunning")) {
       await stopProduction();
       return;
     }
@@ -3198,6 +3509,12 @@
 
   async function startProduction(options) {
     options = options || {};
+    var blockReason = typeof window.operationBlockReason === "function" ? window.operationBlockReason("production") : "";
+    if (blockReason) {
+      Toast.toast(blockReason, "warning");
+      if (typeof window.renderBusyControls === "function") window.renderBusyControls();
+      return;
+    }
     _running = true;
     S.set("isRunning", true);
     updateRunButton();
@@ -3232,7 +3549,8 @@
     if (_pollTimer) { clearInterval(_pollTimer); _pollTimer = null; }
 
     try {
-      var resp = await Api.post("/api/stop", { job_id: _jobId });
+      var jobId = _jobId || S.get("activeJobId") || "";
+      var resp = await Api.post("/api/stop", { job_id: jobId });
       if (resp.ok) {
         Toast.toast("生产已停止", "info");
       }
@@ -3300,6 +3618,13 @@
 
   function isChartJsAvailable() {
     return typeof Chart !== 'undefined';
+  }
+
+  function setChartFallback(message) {
+    var el = document.getElementById('chartFallback');
+    if (!el) return;
+    el.textContent = message || '';
+    el.classList.toggle('hidden', !message);
   }
 
   function displayScore(candidate) {
@@ -3670,13 +3995,213 @@
     return opts;
   }
 
+  // ---------- Native canvas fallback ---------------------------------------
+
+  function nativeCanvas(id) {
+    var canvas = document.getElementById(id);
+    if (!canvas) return null;
+    var rect = canvas.getBoundingClientRect();
+    var parentWidth = canvas.parentElement ? canvas.parentElement.clientWidth : 0;
+    var width = Math.max(260, Math.round(rect.width || parentWidth || 360));
+    var height = Math.max(180, Math.round(rect.height || 200));
+    var ratio = window.devicePixelRatio || 1;
+    canvas.width = Math.round(width * ratio);
+    canvas.height = Math.round(height * ratio);
+    canvas.style.width = width + 'px';
+    canvas.style.height = height + 'px';
+    var ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+    ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+    ctx.clearRect(0, 0, width, height);
+    ctx.fillStyle = COLORS.panel;
+    ctx.fillRect(0, 0, width, height);
+    return { canvas: canvas, ctx: ctx, width: width, height: height };
+  }
+
+  function drawTitle(ctx, title) {
+    ctx.fillStyle = COLORS.muted;
+    ctx.font = '700 13px "Microsoft YaHei", "Segoe UI", sans-serif';
+    ctx.fillText(title, 12, 20);
+  }
+
+  function drawEmptyNative(id, title, message) {
+    var chart = nativeCanvas(id);
+    if (!chart) return;
+    drawTitle(chart.ctx, title);
+    chart.ctx.fillStyle = COLORS.muted;
+    chart.ctx.font = '12px "Microsoft YaHei", "Segoe UI", sans-serif';
+    chart.ctx.fillText(message || '暂无数据', 12, Math.round(chart.height / 2));
+  }
+
+  function valueRange(values) {
+    var clean = values.filter(function (value) { return Number.isFinite(value); });
+    if (!clean.length) return { min: 0, max: 1 };
+    var min = Math.min.apply(null, clean);
+    var max = Math.max.apply(null, clean);
+    if (min === max) {
+      min -= 1;
+      max += 1;
+    }
+    return { min: min, max: max };
+  }
+
+  function drawLineNative(id, title, values, color) {
+    var chart = nativeCanvas(id);
+    if (!chart) return;
+    drawTitle(chart.ctx, title);
+    values = values.filter(function (value) { return Number.isFinite(value); });
+    if (!values.length) {
+      drawEmptyNative(id, title, '暂无候选数据');
+      return;
+    }
+    var ctx = chart.ctx;
+    var pad = { left: 34, right: 12, top: 32, bottom: 24 };
+    var width = chart.width - pad.left - pad.right;
+    var height = chart.height - pad.top - pad.bottom;
+    var range = valueRange(values);
+    ctx.strokeStyle = COLORS.grid;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(pad.left, pad.top);
+    ctx.lineTo(pad.left, pad.top + height);
+    ctx.lineTo(pad.left + width, pad.top + height);
+    ctx.stroke();
+    ctx.strokeStyle = color || COLORS.accent;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    values.forEach(function (value, index) {
+      var x = pad.left + (values.length === 1 ? width / 2 : index / (values.length - 1) * width);
+      var y = pad.top + height - ((value - range.min) / (range.max - range.min) * height);
+      if (index === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+    ctx.fillStyle = COLORS.muted;
+    ctx.font = '11px "Segoe UI", sans-serif';
+    ctx.fillText(range.max.toFixed(1), 4, pad.top + 4);
+    ctx.fillText(range.min.toFixed(1), 4, pad.top + height);
+  }
+
+  function drawBarsNative(id, title, values, color, emptyText) {
+    var chart = nativeCanvas(id);
+    if (!chart) return;
+    drawTitle(chart.ctx, title);
+    values = values.filter(function (value) { return Number.isFinite(value); });
+    if (!values.length) {
+      drawEmptyNative(id, title, emptyText || '暂无数据');
+      return;
+    }
+    var ctx = chart.ctx;
+    var pad = { left: 28, right: 10, top: 32, bottom: 24 };
+    var width = chart.width - pad.left - pad.right;
+    var height = chart.height - pad.top - pad.bottom;
+    var max = Math.max.apply(null, values.concat([1]));
+    var barWidth = Math.max(2, width / values.length * 0.72);
+    ctx.strokeStyle = COLORS.grid;
+    ctx.beginPath();
+    ctx.moveTo(pad.left, pad.top + height);
+    ctx.lineTo(pad.left + width, pad.top + height);
+    ctx.stroke();
+    ctx.fillStyle = color || COLORS.accentAlpha;
+    values.forEach(function (value, index) {
+      var x = pad.left + index / values.length * width;
+      var h = Math.max(1, value / max * height);
+      ctx.fillRect(x, pad.top + height - h, barWidth, h);
+    });
+  }
+
+  function drawDoughnutNative(id, title, values) {
+    var chart = nativeCanvas(id);
+    if (!chart) return;
+    drawTitle(chart.ctx, title);
+    var total = values.reduce(function (sum, value) { return sum + Math.max(0, value); }, 0);
+    if (!total) {
+      drawEmptyNative(id, title, '暂无门禁数据');
+      return;
+    }
+    var ctx = chart.ctx;
+    var cx = chart.width / 2;
+    var cy = chart.height / 2 + 8;
+    var radius = Math.min(chart.width, chart.height) * 0.28;
+    var start = -Math.PI / 2;
+    [COLORS.good, COLORS.bad, COLORS.muted].forEach(function (color, index) {
+      var value = Math.max(0, values[index] || 0);
+      var end = start + value / total * Math.PI * 2;
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.arc(cx, cy, radius, start, end);
+      ctx.closePath();
+      ctx.fillStyle = color;
+      ctx.fill();
+      start = end;
+    });
+    ctx.fillStyle = COLORS.panel;
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius * 0.58, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = COLORS.muted;
+    ctx.font = '11px "Microsoft YaHei", "Segoe UI", sans-serif';
+    ctx.fillText('通过 ' + values[0] + ' / 未通过 ' + values[1] + ' / 未查 ' + values[2], 12, chart.height - 10);
+  }
+
+  function nativeGateCounts(candidates) {
+    var counts = [0, 0, 0];
+    candidateRows(candidates).forEach(function (c) {
+      var gate = c.gate || {};
+      if (gate.passed === true || gate.submission_ready === true) counts[0]++;
+      else if (gate.passed === false || gate.status === 'BRAIN_CHECK_FAILED') counts[1]++;
+      else counts[2]++;
+    });
+    return counts;
+  }
+
+  function renderNativeCharts(summary, candidates) {
+    var rows = candidateRows(candidates);
+    if (!rows.length) {
+      setChartFallback('当前视图暂无可绘制数据；表格和操作仍可正常使用。');
+      drawEmptyNative('scoreTrendChart', '排序分趋势', '暂无候选数据');
+      drawEmptyNative('sharpeDistChart', 'Sharpe 分布', '暂无 Sharpe 数据');
+      drawEmptyNative('gatePieChart', '门禁状态', '暂无门禁数据');
+      drawEmptyNative('turnoverChart', 'Turnover vs Sharpe', '暂无 Turnover 数据');
+      return;
+    }
+    setChartFallback('已使用内置离线图表渲染；无需外部 CDN。');
+    var sampled = sampleRows(rows, MAX_CHART_POINTS);
+    drawLineNative('scoreTrendChart', '排序分趋势', sampled.map(displayScore), COLORS.accent);
+    var sharpes = rows.map(function (c) {
+      return safeNumber((c.scorecard || {}).sharpe || officialMetric(c, 'sharpe'), NaN);
+    }).filter(function (value) { return Number.isFinite(value) && value !== 0; });
+    if (sharpes.length) {
+      var range = valueRange(sharpes);
+      var bins = new Array(Math.min(15, Math.max(5, Math.floor(sharpes.length / 5)))).fill(0);
+      sharpes.forEach(function (value) {
+        var index = Math.min(bins.length - 1, Math.max(0, Math.floor((value - range.min) / (range.max - range.min) * bins.length)));
+        bins[index] += 1;
+      });
+      drawBarsNative('sharpeDistChart', 'Sharpe 分布', bins, COLORS.accentAlpha, '暂无 Sharpe 数据');
+    } else {
+      drawEmptyNative('sharpeDistChart', 'Sharpe 分布', '暂无 Sharpe 数据');
+    }
+    drawDoughnutNative('gatePieChart', '门禁状态', nativeGateCounts(rows));
+    var turnovers = sampleRows(rows.map(function (c) {
+      var sc = c.scorecard || {};
+      return safeNumber(sc.turnover || officialMetric(c, 'turnover'), NaN);
+    }).filter(function (value) { return Number.isFinite(value) && value !== 0; }).sort(function (a, b) { return a - b; }), MAX_CHART_POINTS);
+    drawBarsNative('turnoverChart', 'Turnover vs Sharpe', turnovers, COLORS.warnAlpha, '暂无 Turnover 数据');
+  }
+
   // ---------- renderCharts (main entry) -------------------------------------
 
-  function renderCharts() {
-    if (!isChartJsAvailable()) return;
+  function renderCharts(options) {
+    options = options || {};
+    if (!isChartJsAvailable()) {
+      destroyAll();
+      renderNativeCharts(AppState.get('currentResult.summary') || {}, Array.isArray(options.candidates) ? options.candidates : (AppState.get('currentResult.candidates') || []));
+      return;
+    }
 
     var summary = AppState.get('currentResult.summary') || {};
-    var candidates = AppState.get('currentResult.candidates') || [];
+    var candidates = Array.isArray(options.candidates) ? options.candidates : (AppState.get('currentResult.candidates') || []);
 
     // Only render if at least one canvas exists
     var hasAnyCanvas = !!(
@@ -3686,6 +4211,8 @@
       document.getElementById('turnoverChart')
     );
     if (!hasAnyCanvas) return;
+    var label = options.title ? String(options.title) : '候选';
+    setChartFallback(candidateRows(candidates).length ? '' : '当前' + label + '视图暂无可绘制数据；开始生产或调整筛选后这里会展示评分、Sharpe、门禁和 Turnover 图表。');
 
     renderScoreTrendChart(summary, candidates);
     renderSharpeDistChart(summary, candidates);
@@ -3880,6 +4407,7 @@
   VIEW_TITLES.robustness = 'Robustness';
 
   var activeFilter = '';
+  var resultDisplayMode = 'table';
   var rowCache = new Map();
   var presets = {};
   var syncInFlight = false;
@@ -3959,6 +4487,94 @@
     track.setAttribute('aria-valuenow', String(value));
     if (label) track.setAttribute('aria-valuetext', label);
   }
+
+  function setControlState(id, disabled, reason) {
+    var el = $(id);
+    if (!el) return;
+    if (!el.dataset.defaultTitle) el.dataset.defaultTitle = el.getAttribute('title') || '';
+    el.disabled = Boolean(disabled);
+    el.setAttribute('aria-disabled', disabled ? 'true' : 'false');
+    if (reason) el.setAttribute('title', reason);
+    else if (el.dataset.defaultTitle) el.setAttribute('title', el.dataset.defaultTitle);
+    else el.removeAttribute('title');
+  }
+
+  function operationBlockReason(action) {
+    var running = Boolean(S.get('isRunning'));
+    if (action === 'production') {
+      if (syncInFlight) return '云端同步正在进行，完成后再启动生产。';
+      if (batchCheckJobId) return '达标检查正在进行，完成后再启动生产。';
+      if (submitInFlight) return '提交正在进行，完成后再启动生产。';
+      return '';
+    }
+    if (action === 'sync') {
+      if (running) return '生产任务运行中，先停止生产再同步云端数据。';
+      if (batchCheckJobId) return '达标检查正在进行，完成后再同步云端数据。';
+      if (submitInFlight) return '提交正在进行，完成后再同步云端数据。';
+      if (syncInFlight) return '云端同步正在进行。';
+      return '';
+    }
+    if (action === 'check') {
+      if (running) return '生产任务运行中，先停止生产再执行达标检查。';
+      if (syncInFlight) return '云端同步正在进行，完成后再检查。';
+      if (submitInFlight) return '提交正在进行，完成后再检查。';
+      if (batchCheckJobId) return '达标检查正在进行。';
+      return '';
+    }
+    if (action === 'submit') {
+      if (running) return '生产任务运行中，先停止生产再提交。';
+      if (syncInFlight) return '云端同步正在进行，完成后再提交。';
+      if (batchCheckJobId) return '达标检查正在进行，完成后再提交。';
+      if (submitInFlight) return '提交正在进行。';
+      return '';
+    }
+    return '';
+  }
+
+  function currentOperationText() {
+    if (syncInFlight) return '云端同步正在进行，其他冲突操作已暂时锁定。';
+    if (batchCheckJobId) return '达标检查正在进行，其他冲突操作已暂时锁定。';
+    if (submitInFlight) return '提交正在进行，其他冲突操作已暂时锁定。';
+    if (S.get('isRunning')) return '生产任务正在运行；需要同步、检查或提交时请先停止生产。';
+    return '';
+  }
+
+  function renderBusyControls() {
+    var productionReason = operationBlockReason('production');
+    var syncReason = operationBlockReason('sync');
+    var checkReason = operationBlockReason('check');
+    var submitReason = operationBlockReason('submit');
+    setControlState('controlButton', Boolean(productionReason), productionReason);
+    setControlState('syncButton', Boolean(syncReason), syncReason);
+    var syncRange = $('syncRange');
+    if (syncRange) {
+      syncRange.disabled = Boolean(syncReason);
+      syncRange.setAttribute('aria-disabled', syncRange.disabled ? 'true' : 'false');
+      if (syncReason) syncRange.setAttribute('title', syncReason);
+      else syncRange.removeAttribute('title');
+    }
+    setControlState('checkButton', Boolean(checkReason) || Boolean(batchCheckJobId), checkReason);
+    var submitButton = $('submitSelectedButton');
+    if (submitButton && submitReason) {
+      submitButton.disabled = true;
+      submitButton.setAttribute('aria-disabled', 'true');
+      submitButton.setAttribute('title', submitReason);
+    }
+    var autoSubmit = $('autoSubmitToggle');
+    if (autoSubmit) {
+      autoSubmit.disabled = Boolean(submitReason || batchCheckJobId || submitInFlight);
+      autoSubmit.setAttribute('aria-disabled', autoSubmit.disabled ? 'true' : 'false');
+    }
+    var guard = $('operationGuard');
+    if (guard) {
+      var message = currentOperationText();
+      guard.textContent = message;
+      guard.classList.toggle('hidden', !message);
+    }
+  }
+
+  window.operationBlockReason = operationBlockReason;
+  window.renderBusyControls = renderBusyControls;
 
   function currentSummary() {
     return S.get('currentResult.summary') || {};
@@ -4474,6 +5090,7 @@
     renderBacktests(currentBacktests());
     if (typeof window.renderCharts === 'function') window.renderCharts();
     renderCurrentView();
+    renderBusyControls();
   }
 
   window.switchView = function (view) {
@@ -4564,23 +5181,73 @@
     var tableWrap = $('tableWrap');
     var cloudStatsPanel = $('cloudStatsPanel');
     var candidateTable = $('candidateTable');
+    var chartsPanel = $('chartsPanel');
+    var displayModeToggle = $('displayModeToggle');
     var filterBar = $('filterBar');
     var statsMode = ['cloud', 'research_memory', 'research_observability', 'research_knowledge', 'prompt_runs', 'sqlite_indexes', 'robustness'].indexOf(view) !== -1;
-    if (tableWrap) tableWrap.classList.toggle('stats-mode', statsMode);
+    var chartEligible = isChartEligibleView(view);
+    if (!chartEligible && resultDisplayMode === 'charts') resultDisplayMode = 'table';
+    var chartMode = chartEligible && resultDisplayMode === 'charts';
+    if (displayModeToggle) displayModeToggle.classList.toggle('hidden', !chartEligible);
+    updateDisplayModeButtons();
+    if (chartsPanel) chartsPanel.classList.toggle('visible', chartMode);
+    if (tableWrap) {
+      tableWrap.classList.toggle('stats-mode', statsMode);
+      tableWrap.classList.toggle('hidden', chartMode);
+    }
     if (cloudStatsPanel) cloudStatsPanel.classList.toggle('hidden', !statsMode);
-    if (candidateTable) candidateTable.classList.toggle('hidden', statsMode);
+    if (candidateTable) candidateTable.classList.toggle('hidden', statsMode || chartMode);
+    var mobileCardList = $('mobileCardList');
+    if (mobileCardList) mobileCardList.classList.toggle('hidden', statsMode || chartMode);
     if (filterBar) filterBar.classList.toggle('hidden', statsMode);
-    if (statsMode) return;
+    if (statsMode || chartMode) {
+      if (chartMode && typeof window.renderCharts === 'function') {
+        window.renderCharts({
+          candidates: rows.map(function (row) { return row.raw || {}; }),
+          view: view,
+          title: viewTitle(view),
+        });
+      }
+      if (mobileCardList) mobileCardList.innerHTML = '';
+      var tableBody = $('candidateRows');
+      if (tableBody) tableBody.innerHTML = '';
+      renderBusyControls();
+      return;
+    }
 
     cacheRenderedRows(rows);
     var body = $('candidateRows');
     if (!body) return;
     body.innerHTML = rows.length
       ? rows.map(rowHtml).join('')
-      : '<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:22px">' + esc(emptyText(view)) + '</td></tr>';
+      : '<tr><td colspan="8" class="table-empty-cell">' + emptyStateHtml(view) + '</td></tr>';
+    if (mobileCardList) {
+      mobileCardList.innerHTML = rows.length
+        ? rows.map(mobileCardHtml).join('')
+        : '<div class="mobile-row-card empty-mobile-card">' + emptyStateHtml(view) + '</div>';
+    }
+    renderBusyControls();
   }
 
   window.renderCurrentView = renderCurrentView;
+
+  function isChartEligibleView(view) {
+    return ['candidates', 'passed', 'submittable', 'failed', 'backtest_rework'].indexOf(view) !== -1;
+  }
+
+  function updateDisplayModeButtons() {
+    var tableButton = $('tableModeButton');
+    var chartButton = $('chartModeButton');
+    if (tableButton) tableButton.classList.toggle('active', resultDisplayMode !== 'charts');
+    if (chartButton) chartButton.classList.toggle('active', resultDisplayMode === 'charts');
+    if (tableButton) tableButton.setAttribute('aria-pressed', resultDisplayMode !== 'charts' ? 'true' : 'false');
+    if (chartButton) chartButton.setAttribute('aria-pressed', resultDisplayMode === 'charts' ? 'true' : 'false');
+  }
+
+  window.setResultDisplayMode = function (mode) {
+    resultDisplayMode = mode === 'charts' ? 'charts' : 'table';
+    renderCurrentView();
+  };
 
   function countText(view, count) {
     var summary = currentSummary();
@@ -5327,11 +5994,11 @@
     var html = chips.map(function (chip) {
       var key = chip[0];
       var active = activeFilter === key || (!activeFilter && key === 'all');
-      return '<span class="filter-chip ' + (active ? 'active' : '') + '" onclick="setFilter(' + jsStringAttr(key) + ')">' + esc(chip[1]) + '</span>';
+      return '<button type="button" class="filter-chip ' + (active ? 'active' : '') + '" aria-pressed="' + (active ? 'true' : 'false') + '" onclick="setFilter(' + jsStringAttr(key) + ')">' + esc(chip[1]) + '</button>';
     }).join('');
     families.slice(0, 6).forEach(function (family) {
       var key = 'family:' + family;
-      html += '<span class="filter-chip ' + (activeFilter === key ? 'active' : '') + '" onclick="setFilter(' + jsStringAttr(key) + ')">' + esc(family) + '</span>';
+      html += '<button type="button" class="filter-chip ' + (activeFilter === key ? 'active' : '') + '" aria-pressed="' + (activeFilter === key ? 'true' : 'false') + '" onclick="setFilter(' + jsStringAttr(key) + ')">' + esc(family) + '</button>';
     });
     bar.innerHTML = html;
   }
@@ -5763,7 +6430,7 @@
     var kindArg = jsStringAttr(item.kind);
     var idArg = jsStringAttr(item.id);
     var selectBox = item.kind === 'submittable' && checked && !(($('autoSubmitToggle') || {}).checked)
-      ? '<input type="checkbox" ' + (selectedSubmitIds.has(c.alpha_id) ? 'checked' : '') + ' onclick="event.stopPropagation(); toggleSubmitSelection(' + jsStringAttr(c.alpha_id) + ', this.checked)">'
+      ? '<input type="checkbox" aria-label="选择 Alpha ' + escapeAttr(c.alpha_id || '') + ' 用于提交" ' + (selectedSubmitIds.has(c.alpha_id) ? 'checked' : '') + ' onclick="event.stopPropagation(); toggleSubmitSelection(' + jsStringAttr(c.alpha_id) + ', this.checked)">'
       : '';
     return '<tr id="' + rowId(item) + '"' + interactiveRowAttrs(item.kind, item.id, '查看 Alpha ' + (c.alpha_id || item.id || '') + ' 详情') + ' onclick="viewRow(' + kindArg + ', ' + idArg + ', event)">' +
       '<td>' + (selectBox || String(index + 1)) + '</td>' +
@@ -5775,6 +6442,44 @@
       '<td>' + esc(attention(c)) + (risk.level ? '<br>云端相关：' + esc(risk.level) + ' ' + esc(num(risk.max_similarity, 3)) : '') + '</td>' +
       '<td>' + candidateActions(c, item.kind) + '</td>' +
       '</tr>';
+  }
+
+  function mobileCardId(item) {
+    return 'mobile_' + rowId(item);
+  }
+
+  function mobileCardHtml(item, index) {
+    var raw = item.raw || {};
+    var c = candidateLikeFromRecord(item.kind, raw);
+    var checked = isSubmittable(c);
+    var stale = Boolean(isOfficialPassedCheck(checkResults()[c.alpha_id]) && !checked);
+    var score = item.kind === 'submittable' ? submissionRankScore(c) : candidateDisplayScore(c);
+    var officialId = c.official_alpha_id || ((c.official_metrics || {}).official_alpha_id) || c.simulation_id || raw.id || '';
+    var risk = c.cloud_correlation_risk || raw.cloud_correlation_risk || {};
+    var status = item.kind === 'cloud'
+      ? statusLabelFromCode(raw.status || '-')
+      : item.kind === 'backtest'
+        ? statusText(raw.status || '-')
+        : candidateStatusLabel(c, checked, stale);
+    var riskText = risk.level
+      ? '云端相关 ' + risk.level + ' ' + num(risk.max_similarity, 3)
+      : (attention(c) || raw.message || raw.note || '-');
+    var selectBox = item.kind === 'submittable' && checked && !(($('autoSubmitToggle') || {}).checked)
+      ? '<label class="switch"><input type="checkbox" aria-label="选择 Alpha ' + escapeAttr(c.alpha_id || item.id || '') + ' 用于提交" ' + (selectedSubmitIds.has(c.alpha_id) ? 'checked' : '') + ' onclick="event.stopPropagation(); toggleSubmitSelection(' + jsStringAttr(c.alpha_id) + ', this.checked)"> 选择提交</label>'
+      : '';
+    return '<div id="' + mobileCardId(item) + '" class="mobile-row-card" data-kind="' + escapeAttr(item.kind) + '" data-id="' + escapeAttr(item.id) + '">' +
+      '<div class="mobile-card-head">' +
+        '<div class="mobile-card-title">' + esc(c.alpha_id || raw.id || item.id || '-') + '<div class="mini">' + esc(c.hypothesis || c.expression || raw.timestamp || '') + '</div></div>' +
+        '<div class="mobile-card-score"><span class="score-badge ' + scoreClass(score) + '">' + esc(num(score)) + '</span></div>' +
+      '</div>' +
+      '<div class="mobile-card-meta">' +
+        '<div><b>状态</b><br>' + esc(status) + '</div>' +
+        '<div><b>官方 ID</b><br>' + esc(officialId || '未获得') + '</div>' +
+        '<div><b>家族</b><br>' + esc(c.family || (item.kind === 'cloud' ? '云端' : '-')) + '</div>' +
+        '<div><b>风险 / 原因</b><br>' + esc(riskText) + '</div>' +
+      '</div>' +
+      '<div class="mobile-card-actions">' + selectBox + candidateActions(c, item.kind) + '</div>' +
+      '</div>';
   }
 
   function backtestRowHtml(item, index) {
@@ -5830,9 +6535,9 @@
     var kindArg = jsStringAttr(kind || 'candidate');
     var idArg = jsStringAttr(candidate.alpha_id || candidate.id || '');
     var submit = isSubmittable(candidate) && !(($('autoSubmitToggle') || {}).checked)
-      ? '<button class="small" ' + (submitInFlight ? 'disabled' : '') + ' onclick="event.stopPropagation(); submitCandidate(' + jsStringAttr(candidate.alpha_id) + ')">提交</button>'
+      ? '<button class="small" aria-label="提交 Alpha ' + escapeAttr(candidate.alpha_id || '') + '" ' + (submitInFlight ? 'disabled' : '') + ' onclick="event.stopPropagation(); submitCandidate(' + jsStringAttr(candidate.alpha_id) + ')">提交</button>'
       : '';
-    return '<button class="small secondary" data-action="view-row" data-kind="' + escapeAttr(kind || 'candidate') + '" data-id="' + escapeAttr(candidate.alpha_id || '') + '" onclick="viewRow(' + kindArg + ', ' + idArg + ', event)">查看</button>' + submit;
+    return '<button class="small secondary" aria-label="查看 Alpha ' + escapeAttr(candidate.alpha_id || '') + ' 详情" data-action="view-row" data-kind="' + escapeAttr(kind || 'candidate') + '" data-id="' + escapeAttr(candidate.alpha_id || '') + '" onclick="viewRow(' + kindArg + ', ' + idArg + ', event)">查看</button>' + submit;
   }
 
   window.toggleSubmitSelection = function (alphaId, checked) {
@@ -5887,6 +6592,9 @@
     document.querySelectorAll('tbody tr').forEach(function (row) { row.classList.remove('selected'); });
     var rowEl = $(rowId(item));
     if (rowEl) rowEl.classList.add('selected');
+    document.querySelectorAll('.mobile-row-card').forEach(function (row) { row.classList.remove('selected'); });
+    var cardEl = $(mobileCardId(item));
+    if (cardEl) cardEl.classList.add('selected');
 
     if (window.DetailView && hasAlphaDetail(item.raw || {})) {
       window.DetailView.renderCandidateDetail(candidateLikeFromRecord(kind, item.raw || {}));
@@ -6160,6 +6868,67 @@
     return messages[view] || '暂无记录';
   }
 
+  function emptyStateHint(view) {
+    var hints = {
+      candidates: '连接账号并启动生产后，结果会按排序分进入这里；若刚启动，等待云端同步和上下文加载完成即可。',
+      pending_backtest: '候选通过预检后会排队等待官方 simulation；可以先查看候选池确认本地生成是否正常。',
+      running_backtest: '当前没有占用官方槽位的任务；槽位会在提交回测后显示进度和倒计时。',
+      backtest_rework: '暂无需要处理的回测异常；限流、并发等待或官方拒绝会在这里集中复盘。',
+      passed: '达标 Alpha 会在这里执行官方提交前检查，检查通过后才会进入可提交队列。',
+      submittable: '可提交队列依赖最近一次官方检查结果；检查过期或失败时会回到达标列表。',
+      submitted: '成功提交或云端已运行的 Alpha 会在这里保留审计线索。',
+      failed: '官方 FAIL、硬检查失败和阻断原因会在这里保留，方便回溯策略问题。',
+      cloud: '云端快照用于重复提交和相关性拦截；登录后同步即可刷新统计。',
+      lifecycle: '生命周期记录会随生产、回测、检查和提交持续写入。',
+      research_memory: 'Research Memory 会从本地 JSONL 中汇总可复用字段、算子和失败经验。',
+      research_observability: 'Observability 会展示表达式复用、官方回测健康度和本地记录状态。',
+      research_knowledge: '结构化规则、发现和失败样本沉淀后会出现在这里。',
+      prompt_runs: '只展示提示运行元数据和解析状态，不展示原始提示词或响应。',
+      sqlite_indexes: 'SQLite 缓存构建后会显示表达式历史、云端 Alpha 和回测记录索引。',
+      robustness: '带有反过拟合或滚动验证报告的候选会在这里汇总风险。',
+    };
+    return hints[view] || '当前视图暂无记录。';
+  }
+
+  function emptyStateActions(view) {
+    var actions = [];
+    if (view === 'candidates') {
+      actions.push(['开始生产搜索', 'toggleRun()', '']);
+      actions.push(['同步云端数据', 'syncCloud()', 'secondary']);
+    } else if (view === 'passed') {
+      actions.push(['查看候选池', "switchView('candidates')", 'secondary']);
+      actions.push(['快速检查', "checkBatch('quick')", '']);
+    } else if (view === 'submittable') {
+      actions.push(['回到达标列表', "switchView('passed')", 'secondary']);
+      actions.push(['快速检查', "checkBatch('quick')", '']);
+    } else if (view === 'cloud') {
+      actions.push(['同步云端数据', 'syncCloud()', '']);
+      actions.push(['查看候选池', "switchView('candidates')", 'secondary']);
+    } else if (view === 'research_memory') {
+      actions.push(['生成候选', 'generateAssistantCandidates()', '']);
+      actions.push(['查看候选池', "switchView('candidates')", 'secondary']);
+    } else if (['research_observability', 'research_knowledge', 'prompt_runs', 'sqlite_indexes', 'robustness', 'lifecycle'].indexOf(view) !== -1) {
+      actions.push(['查看候选池', "switchView('candidates')", 'secondary']);
+      actions.push(['同步云端数据', 'syncCloud()', 'secondary']);
+    } else {
+      actions.push(['查看候选池', "switchView('candidates')", 'secondary']);
+    }
+    return actions;
+  }
+
+  function emptyStateHtml(view) {
+    var actions = emptyStateActions(view).map(function (action) {
+      var cls = action[2] ? ' ' + action[2] : '';
+      return '<button type="button" class="small' + cls + '" onclick="' + action[1] + '">' + esc(action[0]) + '</button>';
+    }).join('');
+    return '<div class="empty-state" role="status">' +
+      '<div class="empty-kicker">' + esc(viewTitle(view)) + '</div>' +
+      '<div class="empty-title">' + esc(emptyText(view)) + '</div>' +
+      '<div class="empty-hint">' + esc(emptyStateHint(view)) + '</div>' +
+      '<div class="empty-actions">' + actions + '</div>' +
+      '</div>';
+  }
+
   function renderInsightLegacyUnused() {
     var summary = currentSummary();
     var cloud = summary.cloud_sync || {};
@@ -6196,6 +6965,70 @@
       label: startupPhases.indexOf(phase) !== -1 ? phaseName(phase) + '中' : '准备中',
       note: active ? '启动后生成数据' : '关键状态',
     };
+  }
+
+  function workflowStepHtml(step) {
+    var active = step.views.indexOf(activeView()) !== -1;
+    return '<button type="button" class="workflow-step ' + (active ? 'active' : '') + '" onclick="switchView(' + jsStringAttr(step.target) + ')" aria-current="' + (active ? 'step' : 'false') + '">' +
+      '<span class="step-index">' + esc(step.index) + '</span>' +
+      '<span><span class="workflow-label">' + esc(step.label) + '</span><span class="workflow-meta">' + esc(step.meta) + '</span></span>' +
+      '</button>';
+  }
+
+  function renderWorkflowNav() {
+    var container = $('workflowNav');
+    if (!container) return;
+    var summary = currentSummary();
+    var startup = startupInsightState(summary);
+    var candidateCount = currentCandidates().length;
+    var backtestActive = activeBacktestCount(currentBacktests());
+    var pendingCount = pendingBacktestCandidates().length;
+    var reworkCount = backtestReworkRows().length;
+    var backtestTarget = backtestActive ? 'running_backtest' : (pendingCount ? 'pending_backtest' : (reworkCount ? 'backtest_rework' : 'pending_backtest'));
+    var needsCheck = needsCheckCount();
+    var submittableCount = submittableCandidates().length;
+    var cloud = summary.cloud_sync || {};
+    var cloudMeta = cloud.run_status === 'skipped' || isSkippedCloudSync(cloud)
+      ? '缓存已加载'
+      : statusLabelFromCode(cloud.status || cloud.phase || '未同步');
+    var steps = [
+      {
+        index: '1',
+        label: '生产候选',
+        target: 'candidates',
+        views: ['candidates'],
+        meta: startup.active && !candidateCount ? startup.label : ('候选 ' + candidateCount + '/' + (summary.retained_pool_limit || configuredBudget().retained_alpha_pool_size || 10)),
+      },
+      {
+        index: '2',
+        label: '官方回测',
+        target: backtestTarget,
+        views: ['pending_backtest', 'running_backtest', 'backtest_rework'],
+        meta: backtestActive ? ('槽位 ' + backtestActive + '/' + configuredBacktestSlotLimit()) : ('等待 ' + pendingCount + ' / 异常 ' + reworkCount),
+      },
+      {
+        index: '3',
+        label: '达标检查',
+        target: 'passed',
+        views: ['passed'],
+        meta: needsCheck ? (needsCheck + ' 个待检查') : ('达标 ' + passedCandidates().length),
+      },
+      {
+        index: '4',
+        label: '提交队列',
+        target: 'submittable',
+        views: ['submittable', 'submitted'],
+        meta: '可提交 ' + submittableCount + ' / 已提交 ' + submittedRows().length,
+      },
+      {
+        index: '5',
+        label: '诊断复盘',
+        target: 'research_observability',
+        views: ['cloud', 'research_observability', 'research_memory', 'research_knowledge', 'prompt_runs', 'sqlite_indexes', 'robustness', 'lifecycle', 'failed'],
+        meta: cloudMeta + ' / 失败 ' + failedRows().length,
+      },
+    ];
+    container.innerHTML = steps.map(workflowStepHtml).join('');
   }
 
   function renderInsight() {
@@ -6276,13 +7109,20 @@
     ];
     var container = $('insight');
     if (!container) return;
-    container.innerHTML = insightGroupHtml('生产流程', processCards) + insightGroupHtml('辅助追踪', trackingCards);
+    renderWorkflowNav();
+    var trackingActive = trackingCards.some(function (card) { return card[0] === activeView(); });
+    container.innerHTML = insightGroupHtml('生产流程', processCards) + insightGroupHtml('辅助追踪与诊断', trackingCards, { collapsible: true, open: trackingActive });
   }
 
-  function insightGroupHtml(title, cards) {
-    return '<div class="insight-group"><div class="insight-group-title">' + esc(title) + '</div><div class="insight-grid">' +
+  function insightGroupHtml(title, cards, options) {
+    options = options || {};
+    var content = '<div class="insight-grid">' +
       cards.map(function (card) { return insightCardHtml(card[0], card[1], card[2], card[3]); }).join('') +
-      '</div></div>';
+      '</div>';
+    if (options.collapsible) {
+      return '<details class="insight-group insight-group-collapsible" ' + (options.open ? 'open' : '') + '><summary>' + esc(title) + '</summary>' + content + '</details>';
+    }
+    return '<div class="insight-group"><div class="insight-group-title">' + esc(title) + '</div>' + content + '</div>';
   }
 
   function insightCardHtml(view, label, value, note) {
@@ -6581,11 +7421,18 @@
 
   window.syncCloud = async function () {
     if (syncInFlight) return;
+    var blockReason = operationBlockReason('sync');
+    if (blockReason) {
+      toast(blockReason, 'warning');
+      renderBusyControls();
+      return;
+    }
     syncInFlight = true;
     syncStartedAt = Date.now();
     resetCountdownState(syncCountdownState);
     lastSyncProgressSnapshot = null;
     progressEtaState = {};
+    renderBusyControls();
     if ($('syncButton')) {
       $('syncButton').disabled = true;
       $('syncButton').textContent = '同步中...';
@@ -6605,6 +7452,7 @@
         $('syncButton').disabled = false;
         $('syncButton').textContent = '同步云端数据';
       }
+      renderBusyControls();
     }
   };
 
@@ -6629,6 +7477,12 @@
   window.checkBatch = async function (mode, options) {
     options = options || {};
     if (batchCheckJobId) return;
+    var blockReason = operationBlockReason('check');
+    if (blockReason) {
+      toast(blockReason, 'warning');
+      renderBusyControls();
+      return;
+    }
     var candidates = mode === 'all' ? passedCandidates() : derivePassedCandidates(currentCandidates()).concat(S.get('currentResult.passed_candidates') || []);
     var byId = {};
     candidates.forEach(function (candidate) { if (candidate.alpha_id) byId[candidate.alpha_id] = candidate; });
@@ -6647,6 +7501,7 @@
     lastCheckProgressSnapshot = null;
     progressEtaState = {};
     updateCheckControls(true);
+    renderBusyControls();
     if ($('checkStats')) $('checkStats').textContent = '正在检查 ' + candidates.length + ' 个达标 Alpha...';
     try {
       var data = await Api.post('/api/check_batch', payload);
@@ -6662,6 +7517,7 @@
         checkCountdownTimer = null;
       }
       updateCheckControls(false);
+      renderBusyControls();
     }
   };
 
@@ -6774,6 +7630,13 @@
 
   window.submitCandidate = async function (alphaId, options) {
     options = options || {};
+    var blockReason = operationBlockReason('submit');
+    if (submitInFlight && options.confirmObservabilityRisk && blockReason === '提交正在进行。') blockReason = '';
+    if (blockReason) {
+      toast(blockReason, 'warning');
+      renderBusyControls();
+      return { ok: false, alpha_id: alphaId, error: blockReason };
+    }
     var candidate = findCandidate(alphaId);
     if (!candidate) {
       toast('找不到待提交 Alpha。', 'error');
@@ -6787,6 +7650,7 @@
     if (options.confirmObservabilityRisk) payload.confirm_observability_risk = true;
     submitInFlight = true;
     renderModuleActions();
+    renderBusyControls();
     try {
       var data = await Api.post('/api/submit', payload);
       toast('提交成功：' + alphaId, 'success');
@@ -6816,6 +7680,13 @@
 
   window.submitSelectedCandidates = async function (options) {
     options = options || {};
+    var blockReason = operationBlockReason('submit');
+    if (submitInFlight && options.confirmObservabilityRisk && blockReason === '提交正在进行。') blockReason = '';
+    if (blockReason) {
+      toast(blockReason, 'warning');
+      renderBusyControls();
+      return;
+    }
     var ids = Array.from(selectedSubmitIds);
     if (!ids.length) {
       toast('请先勾选可提交 Alpha。', 'info');
@@ -6831,6 +7702,7 @@
     lastSubmitPayload = payload;
     submitInFlight = true;
     renderModuleActions();
+    renderBusyControls();
     try {
       var data = await Api.post('/api/submit_batch', payload);
       lastSubmitResults = data.results || [];
@@ -7353,11 +8225,13 @@
       $('syncButton').textContent = syncInFlight ? '同步中...' : '同步云端数据';
     }
     if ($('syncRange')) $('syncRange').disabled = syncInFlight;
+    renderBusyControls();
   };
 
   window.setSubmitBusy = function (busy) {
     submitInFlight = Boolean(busy);
     renderModuleActions();
+    renderBusyControls();
   };
 
   window.refreshAssistantContext = async function () {
@@ -7934,6 +8808,17 @@
         if (!row) return;
         event.preventDefault();
         window.viewRow(row.dataset.kind || '', row.dataset.id || '', event);
+      });
+    }
+    var cards = $('mobileCardList');
+    if (cards) {
+      cards.addEventListener('keydown', function (event) {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        if (event.target.closest('input, button, select, textarea, label')) return;
+        var card = event.target.closest('.mobile-row-card[data-kind]');
+        if (!card) return;
+        event.preventDefault();
+        window.viewRow(card.dataset.kind || '', card.dataset.id || '', event);
       });
     }
 

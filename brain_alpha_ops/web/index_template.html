@@ -2,12 +2,8 @@
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8">
-  <link rel="preconnect" href="https://api.fontshare.com" crossorigin>
-  <link href="https://api.fontshare.com/v2/css?f[]=satoshi@700,600,500,400&display=swap" rel="stylesheet">
-  <script src="https://code.iconify.design/iconify-icon/1.0.7/iconify-icon.min.js"></script>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>BRAIN Alpha Ops</title>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <style>
     :root {
       --bg: #f5f7fa;
@@ -108,8 +104,8 @@
       overflow: auto;
     }
     header {
-      min-height: 66px;
-      padding: 12px 18px;
+      min-height: 68px;
+      padding: 12px 20px;
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -123,9 +119,9 @@
     h2 { font-size: 15px; font-weight: 850; }
     main {
       display: grid;
-      grid-template-columns: 360px minmax(0, 1fr);
-      gap: 12px;
-      padding: 12px;
+      grid-template-columns: minmax(292px, 328px) minmax(0, 1fr);
+      gap: 16px;
+      padding: 16px;
       min-height: calc(100vh - 66px);
       align-items: start;
     }
@@ -135,14 +131,70 @@
       border-radius: 8px;
       box-shadow: var(--shadow-soft);
     }
-    aside { padding: 14px; overflow: auto; max-height: calc(100vh - 90px); position: sticky; top: 12px; }
+    aside {
+      padding: 0;
+      overflow: hidden;
+      max-height: calc(100vh - 100px);
+      position: sticky;
+      top: 16px;
+    }
+    .control-scroll {
+      max-height: inherit;
+      overflow: auto;
+      padding: 14px;
+    }
     section {
       min-width: 0;
-      min-height: calc(100vh - 90px);
+      min-height: calc(100vh - 100px);
       display: flex;
       flex-direction: column;
       overflow: visible;
     }
+    .control-header {
+      padding: 14px 14px 12px;
+      border-bottom: 1px solid var(--line);
+      background: var(--soft);
+    }
+    .control-section {
+      margin-top: 12px;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+    }
+    .control-section.primary {
+      border-color: #99f6e4;
+      background: #f0fdfa;
+    }
+    .control-section-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 8px;
+      font-size: 13px;
+      font-weight: 900;
+    }
+    .step-index {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 24px;
+      height: 24px;
+      border-radius: 999px;
+      background: var(--accent);
+      color: #fff;
+      font-size: 12px;
+      font-weight: 900;
+      flex: 0 0 auto;
+    }
+    .quick-links {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    .quick-links button { margin: 0; }
     label {
       display: block;
       margin: 10px 0 5px;
@@ -152,10 +204,10 @@
     }
     input, select, textarea {
       width: 100%;
-      min-height: 34px;
+      min-height: 38px;
       border: 1px solid var(--line);
       border-radius: 6px;
-      padding: 0 9px;
+      padding: 0 10px;
       color: var(--text);
       background: var(--panel);
       font: inherit;
@@ -165,7 +217,7 @@
     }
     textarea {
       min-height: 72px;
-      padding: 8px 9px;
+      padding: 9px 10px;
       resize: vertical;
       line-height: 1.35;
     }
@@ -187,6 +239,10 @@
       transition: background 160ms ease, border-color 160ms ease, color 160ms ease, transform 120ms ease, box-shadow 160ms ease;
     }
     button:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 8px 18px rgba(15, 118, 110, 0.18); }
+    button:focus-visible {
+      outline: 3px solid var(--ring);
+      outline-offset: 2px;
+    }
     button:active:not(:disabled) { transform: translateY(0); }
     button.full { width: 100%; margin-top: 10px; }
     button.secondary { background: var(--panel); color: var(--text); border-color: var(--line); }
@@ -194,15 +250,19 @@
     button.stop { background: var(--panel); color: var(--bad); border-color: var(--bad-soft); }
     button.small { min-height: 36px; padding: 0 10px; font-size: 12px; }
     button:disabled { opacity: 0.62; cursor: default; }
-    .run-actions {
-      margin: 10px 0 6px;
-      padding: 10px;
-      border: 1px solid #99f6e4;
-      border-radius: 8px;
-      background: #f0fdfa;
-    }
+    .run-actions { margin: 0; }
     .run-actions .subhead { color: #134e4a; }
     .run-actions button.full { margin-top: 8px; }
+    .operation-guard {
+      margin-top: 8px;
+      padding: 8px 10px;
+      border: 1px solid #fde68a;
+      border-radius: 6px;
+      background: #fffbeb;
+      color: #713f12;
+      font-size: 12px;
+      line-height: 1.45;
+    }
     details {
       margin-top: 12px;
       padding: 10px;
@@ -336,7 +396,7 @@
       white-space: pre-wrap;
     }
     .panel-head {
-      padding: 10px 14px;
+      padding: 14px 16px 12px;
       border-bottom: 1px solid var(--line);
       display: flex;
       align-items: center;
@@ -344,16 +404,125 @@
       gap: 10px;
       background: var(--panel);
     }
-    .insight {
-      padding: 8px 14px;
+    .workflow-nav {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 8px;
+      padding: 12px 16px;
       border-bottom: 1px solid var(--line);
       background: var(--soft);
+    }
+    .workflow-step {
+      min-height: 72px;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      color: var(--text);
       display: grid;
-      grid-template-columns: minmax(0, 1fr) minmax(220px, 0.34fr);
-      gap: 9px;
+      grid-template-columns: auto minmax(0, 1fr);
+      gap: 8px;
+      align-items: start;
+      text-align: left;
+      box-shadow: none;
+    }
+    .workflow-step:hover:not(:disabled),
+    .workflow-step:focus-visible {
+      border-color: #5eead4;
+      box-shadow: var(--shadow-soft);
+      transform: translateY(-1px);
+    }
+    .workflow-step.active {
+      border-color: #5eead4;
+      background: #f0fdfa;
+      box-shadow: inset 0 0 0 1px #99f6e4;
+    }
+    .workflow-step .step-index { width: 26px; height: 26px; margin-top: 1px; }
+    .workflow-label {
+      display: block;
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 900;
+      line-height: 1.2;
+    }
+    .workflow-meta {
+      display: block;
+      margin-top: 3px;
+      color: var(--muted);
+      font-size: 11.5px;
+      line-height: 1.25;
+      overflow-wrap: anywhere;
+    }
+    .status-strip {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      padding: 8px 16px;
+      border-bottom: 1px solid var(--line);
+      background: var(--panel);
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .status-strip span { min-width: 0; overflow-wrap: anywhere; }
+    .status-separator { width: 1px; height: 16px; background: var(--line); }
+    .panel-tools {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+    .segmented-control {
+      display: inline-flex;
+      align-items: center;
+      gap: 2px;
+      padding: 2px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--soft);
+    }
+    .segmented-control button {
+      min-height: 30px;
+      padding: 0 10px;
+      border-color: transparent;
+      background: transparent;
+      color: var(--muted);
+      box-shadow: none;
+    }
+    .segmented-control button.active {
+      background: var(--panel);
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+    .segmented-control button:focus-visible {
+      outline: 3px solid var(--ring);
+      outline-offset: 2px;
+    }
+    .insight {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--line);
+      background: var(--panel);
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(280px, 0.42fr);
+      gap: 12px;
       align-items: start;
     }
     .insight-group { min-width: 0; }
+    .insight-group-collapsible {
+      margin: 0;
+      padding: 0;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+    }
+    .insight-group-collapsible[open] { background: transparent; }
+    .insight-group-collapsible summary {
+      margin: 0 0 5px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 900;
+    }
     .insight-group-title {
       margin: 0 0 5px;
       color: var(--muted);
@@ -363,13 +532,13 @@
     }
     .insight-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
-      gap: 7px;
+      grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
+      gap: 8px;
     }
     .insight-item {
       width: 100%;
-      min-height: 50px;
-      padding: 6px 8px;
+      min-height: 62px;
+      padding: 9px 10px;
       border: 1px solid var(--line);
       border-radius: 8px;
       background: var(--panel);
@@ -388,16 +557,16 @@
       box-shadow: inset 0 0 0 1px #99f6e4;
     }
     .insight-item.active .insight-label { color: #0f766e; }
-    .insight-label { color: var(--muted); font-size: 11.5px; font-weight: 850; margin-bottom: 2px; }
-    .insight-value { font-size: 15px; font-weight: 900; line-height: 1.15; overflow-wrap: anywhere; }
+    .insight-label { color: var(--muted); font-size: 11.5px; font-weight: 850; margin-bottom: 3px; }
+    .insight-value { font-size: 18px; font-weight: 900; line-height: 1.15; overflow-wrap: anywhere; }
     .insight-note { margin-top: 2px; color: var(--muted); font-size: 11px; line-height: 1.2; }
     .monitor {
-      padding: 8px 14px;
+      padding: 12px 16px;
       border-bottom: 1px solid var(--line);
-      background: var(--panel);
+      background: var(--soft);
       display: grid;
       grid-template-columns: minmax(0, 1fr) minmax(260px, 0.78fr);
-      gap: 8px;
+      gap: 10px;
       align-items: start;
     }
     .monitor > *, .slot-panel, .run-card, .slot-card { min-width: 0; }
@@ -434,16 +603,25 @@
       grid-column: 1 / -1;
     }
     .toolbar {
-      padding: 8px 14px;
+      padding: 12px 16px;
       display: grid;
       grid-template-columns: minmax(240px, 0.55fr) minmax(260px, 1fr);
-      gap: 8px;
+      gap: 10px;
       align-items: center;
       border-bottom: 1px solid var(--line);
       background: var(--panel);
     }
+    .view-guidance {
+      padding: 9px 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--soft);
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
     .module-actions {
-      padding: 8px 14px;
+      padding: 12px 16px;
       border-bottom: 1px solid var(--line);
       background: #f0fdfa;
       display: grid;
@@ -551,7 +729,7 @@
       overflow: auto;
       flex: 1 1 auto;
       min-height: 280px;
-      max-height: calc(100vh - 430px);
+      max-height: clamp(360px, calc(100vh - 500px), 760px);
       background: var(--panel);
       border-bottom-left-radius: 8px;
       border-bottom-right-radius: 8px;
@@ -599,6 +777,82 @@
       background: #f0fdfa;
     }
     tbody tr.selected { background: var(--accent-soft); }
+    .table-empty-cell {
+      padding: 22px 16px;
+      text-align: center;
+      background: var(--panel);
+    }
+    .empty-state {
+      display: grid;
+      gap: 8px;
+      justify-items: center;
+      max-width: 620px;
+      margin: 0 auto;
+      padding: 10px;
+      color: var(--muted);
+    }
+    .empty-kicker {
+      color: var(--accent);
+      font-size: 11px;
+      font-weight: 900;
+    }
+    .empty-title {
+      color: var(--text);
+      font-size: 15px;
+      font-weight: 900;
+      line-height: 1.35;
+    }
+    .empty-hint {
+      max-width: 520px;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+    .empty-actions {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 8px;
+      margin-top: 2px;
+    }
+    .empty-actions button { width: auto; padding: 0 12px; }
+    .mobile-card-list {
+      display: none;
+      gap: 8px;
+      padding: 8px;
+    }
+    .mobile-row-card {
+      display: grid;
+      gap: 7px;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      box-shadow: var(--shadow-soft);
+    }
+    .mobile-row-card:focus-visible {
+      outline: 3px solid var(--ring);
+      outline-offset: 2px;
+    }
+    .mobile-row-card.selected { border-color: var(--accent); background: var(--accent-soft); }
+    .mobile-card-head { display: flex; justify-content: space-between; gap: 8px; align-items: flex-start; }
+    .mobile-card-title { min-width: 0; font-weight: 900; overflow-wrap: anywhere; }
+    .mobile-card-score { flex-shrink: 0; }
+    .mobile-card-meta {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 6px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .mobile-card-meta div {
+      min-width: 0;
+      padding: 6px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--soft);
+      overflow-wrap: anywhere;
+    }
+    .mobile-card-actions { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
     .score-badge {
       display: inline-flex;
       min-width: 58px;
@@ -738,6 +992,7 @@
     }
     .modal-body { padding: 12px 14px; }
     @media (max-width: 1380px) {
+      .workflow-nav { grid-template-columns: repeat(3, minmax(0, 1fr)); }
       .monitor { grid-template-columns: minmax(0, 1fr) minmax(260px, 0.8fr); }
       .slot-panel { grid-column: 1 / -1; }
       .slot-card { min-height: 116px; }
@@ -745,6 +1000,7 @@
     @media (max-width: 1120px) {
       main { grid-template-columns: 1fr; height: auto; }
       aside { position: static; max-height: none; }
+      .control-scroll { max-height: none; }
       section { min-height: 980px; height: auto; }
       .insight { grid-template-columns: 1fr; }
       .insight-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -754,18 +1010,25 @@
       .table-wrap { max-height: 680px; }
     }
     @media (max-width: 720px) {
-      main { display: flex; flex-direction: column; }
+      main { display: flex; flex-direction: column; padding: 10px; gap: 10px; }
       section { order: 1; min-height: auto; }
       aside { order: 2; }
-      .row, .insight, .toolbar, .module-actions, .monitor, .monitor-stats, .monitor-slots, .kv { grid-template-columns: 1fr; }
+      .row, .quick-links, .workflow-nav, .insight, .toolbar, .module-actions, .monitor, .monitor-stats, .monitor-slots, .kv { grid-template-columns: 1fr; }
       .module-actions .assistant-input { grid-template-columns: 1fr; }
       .insight-grid { grid-template-columns: 1fr; }
       header { align-items: flex-start; flex-direction: column; }
+      .panel-head { align-items: flex-start; flex-direction: column; }
+      .panel-tools { width: 100%; justify-content: flex-start; }
       .toolbar button, .toolbar select { width: 100%; }
       button, input, select, textarea { min-height: 44px; }
       button.small { min-height: 40px; }
       .header-right { flex-wrap: wrap; }
       .header-icon-btn, .header-danger-btn { min-height: 44px; }
+      .table-wrap { overflow: visible; }
+      #candidateTable:not(.hidden) { display: none; }
+      .mobile-card-list:not(.hidden) { display: grid; }
+      .mobile-card-meta { grid-template-columns: 1fr; }
+      .workflow-step { min-height: 64px; }
     }
     /* ── P2: Chart panels ── */
     .charts-panel {
@@ -796,6 +1059,15 @@
       font-weight: 850;
     }
     .chart-card canvas { max-height: 200px; }
+    .chart-fallback {
+      margin-bottom: 10px;
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--soft);
+      color: var(--muted);
+      font-size: 13px;
+    }
     @media (max-width: 900px) {
       .charts-grid { grid-template-columns: 1fr; }
     }
@@ -1029,6 +1301,7 @@
       align-items: center;
     }
     .filter-chip {
+      min-height: 28px;
       padding: 3px 10px;
       border: 1px solid var(--line);
       border-radius: 999px;
@@ -1039,8 +1312,11 @@
       color: var(--muted);
       transition: all 140ms ease;
       white-space: nowrap;
+      box-shadow: none;
     }
+    button.filter-chip { width: auto; font: inherit; }
     .filter-chip:hover { border-color: #94a3b8; }
+    .filter-chip:focus-visible { outline: 3px solid var(--ring); outline-offset: 2px; }
     .filter-chip.active { background: var(--accent); color: #fff; border-color: var(--accent); }
 
     /* ── Quick connection test ── */
@@ -1075,6 +1351,9 @@
     /* ── Dark mode overrides for hardcoded light-theme colors ── */
     [data-theme="dark"] input:focus,
     [data-theme="dark"] select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--ring); }
+    [data-theme="dark"] .control-header { background: var(--soft); }
+    [data-theme="dark"] .control-section { background: var(--panel); }
+    [data-theme="dark"] .control-section.primary { border-color: var(--accent); background: var(--accent-soft); }
     [data-theme="dark"] .run-actions { border-color: var(--accent); background: var(--accent-soft); }
     [data-theme="dark"] .run-actions .subhead { color: var(--muted); }
     [data-theme="dark"] .note { border-color: var(--accent); background: var(--accent-soft); color: var(--text); }
@@ -1083,6 +1362,9 @@
     [data-theme="dark"] .slot-card.done { border-color: var(--good); background: var(--good-soft); }
     [data-theme="dark"] .slot-card.warn { border-color: var(--warn); background: var(--warn-soft); }
     [data-theme="dark"] .slot-card.bad { border-color: var(--bad); background: var(--bad-soft); }
+    [data-theme="dark"] .workflow-step.active { border-color: var(--accent); background: var(--accent-soft); }
+    [data-theme="dark"] .workflow-step:hover,
+    [data-theme="dark"] .workflow-step:focus-visible { border-color: var(--accent); }
     [data-theme="dark"] .insight-item.active { border-color: var(--accent); background: var(--accent-soft); }
     [data-theme="dark"] .insight-item.active .insight-label { color: var(--accent); }
     [data-theme="dark"] .module-actions { background: var(--accent-soft); }
@@ -1138,81 +1420,96 @@
   </header>
   <main id="appMain" role="main">
     <aside id="controlPanel" role="complementary" aria-labelledby="controlTitle">
-      <h2 id="controlTitle">生产控制</h2>
-      <label>运行环境</label>
-      <select id="environment" onchange="toggleEnvironment()">
-        <option value="production" selected>生产环境：官方 BRAIN API</option>
-        <option value="mock">本地模拟环境</option>
-      </select>
-      <div id="productionNote" class="note warning">生产环境会调用真实 BRAIN API。登录后会先同步云端数据，用于自相关和重复提交风险拦截。</div>
-      <div id="mockNote" class="note hidden">本地模拟环境只用于验证流程和界面，不代表真实 BRAIN 结果。</div>
-
-      <div id="credentials">
-        <label>BRAIN 账号</label>
-        <input id="username" autocomplete="username" placeholder="用户名或邮箱">
-        <label>BRAIN 密码</label>
-        <input id="password" type="password" autocomplete="current-password" placeholder="也可留空并使用 Token">
-        <details>
-          <summary>高级连接设置</summary>
-          <div class="subhead">只影响登录方式和 API 地址，不改变 Alpha 的回测参数。</div>
-          <label>Token</label>
-          <input id="token" type="password" placeholder="可选：Bearer Token">
-          <label>API 地址</label>
-          <input id="baseUrl" value="https://api.worldquantbrain.com">
-          <button id="connTestBtn" class="secondary small full" onclick="testConnection()" style="margin-top:8px">🔌 测试连接</button>
-          <div id="connTestResult" class="conn-test hidden"></div>
-        </details>
+      <div class="control-header">
+        <h2 id="controlTitle">任务入口</h2>
+        <div class="subhead">按连接、生产、同步的顺序处理，常用操作保持在可见区域。</div>
       </div>
+      <div class="control-scroll">
+        <div class="control-section">
+          <div class="control-section-title"><span>连接与身份</span><span class="step-index">1</span></div>
+          <label>运行环境</label>
+          <select id="environment" onchange="toggleEnvironment()">
+            <option value="production" selected>生产环境：官方 BRAIN API</option>
+            <option value="mock">本地模拟环境</option>
+          </select>
+          <div id="productionNote" class="note warning">生产环境会调用真实 BRAIN API。登录后会先同步云端数据，用于自相关和重复提交风险拦截。</div>
+          <div id="mockNote" class="note hidden">本地模拟环境只用于验证流程和界面，不代表真实 BRAIN 结果。</div>
 
-      <div class="run-actions">
+          <div id="credentials">
+            <label>BRAIN 账号</label>
+            <input id="username" autocomplete="username" placeholder="用户名或邮箱">
+            <label>BRAIN 密码</label>
+            <input id="password" type="password" autocomplete="current-password" placeholder="也可留空并使用 Token">
+            <details>
+              <summary>高级连接设置</summary>
+              <div class="subhead">只影响登录方式和 API 地址，不改变 Alpha 的回测参数。</div>
+              <label>Token</label>
+              <input id="token" type="password" placeholder="可选：Bearer Token">
+              <label>API 地址</label>
+              <input id="baseUrl" value="https://api.worldquantbrain.com">
+              <button id="connTestBtn" class="secondary small full" onclick="testConnection()" style="margin-top:8px">测试连接</button>
+              <div id="connTestResult" class="conn-test hidden"></div>
+            </details>
+          </div>
+        </div>
+
+      <div class="control-section primary run-actions">
+        <div class="control-section-title"><span>生产搜索</span><span class="step-index">2</span></div>
         <div class="subhead">启动后会按配置生产、评分、排序和补位。</div>
         <button id="controlButton" class="full" onclick="toggleRun()">开始生产搜索</button>
-        <button class="full secondary" onclick="document.getElementById('mainContent').scrollIntoView({ behavior: 'smooth', block: 'start' })">查看结果面板</button>
+        <div class="quick-links">
+          <button class="secondary small" onclick="document.getElementById('mainContent').scrollIntoView({ behavior: 'smooth', block: 'start' })">结果面板</button>
+          <button class="secondary small" onclick="switchView('passed')">达标检查</button>
+        </div>
+        <div id="operationGuard" class="operation-guard hidden" role="status" aria-live="polite" aria-atomic="true"></div>
       </div>
 
-      <label>市场预设</label>
-      <select id="preset" onchange="applyPreset()">
-        <option value="usa_standard">美股标准生产</option>
-        <option value="usa_liquid">美股高流动性</option>
-        <option value="usa_sector">美股 Sector Neutral</option>
-        <option value="usa_market">美股 Market Neutral</option>
-        <option value="europe_standard">欧洲标准生产</option>
-        <option value="global_market">全球 Market Neutral</option>
-        <option value="china_standard">中国市场标准生产</option>
-      </select>
-      <div class="subhead">预设是官方回测设置的一组快捷组合；手动修改下方设置会覆盖预设。</div>
+        <div class="control-section">
+          <div class="control-section-title"><span>市场与回测参数</span><span class="step-index">3</span></div>
+          <label>市场预设</label>
+          <select id="preset" onchange="applyPreset()">
+            <option value="usa_standard">美股标准生产</option>
+            <option value="usa_liquid">美股高流动性</option>
+            <option value="usa_sector">美股 Sector Neutral</option>
+            <option value="usa_market">美股 Market Neutral</option>
+            <option value="europe_standard">欧洲标准生产</option>
+            <option value="global_market">全球 Market Neutral</option>
+            <option value="china_standard">中国市场标准生产</option>
+          </select>
+          <div class="subhead">预设是官方回测设置的一组快捷组合；手动修改下方设置会覆盖预设。</div>
 
-      <details>
-        <summary>官方回测设置</summary>
-        <div class="subhead">这些值会直接写入官方 simulation/settings；自动切换策略时会同步更新这里。</div>
-        <div class="row">
-          <div><label>Region</label><select id="region"><option>USA</option><option>CHN</option><option>EUR</option><option>GLB</option></select></div>
-          <div><label>Universe</label><select id="universe"><option>TOP3000</option><option>TOP1000</option><option>TOP500</option></select></div>
+          <details>
+            <summary>官方回测设置</summary>
+            <div class="subhead">这些值会直接写入官方 simulation/settings；自动切换策略时会同步更新这里。</div>
+            <div class="row">
+              <div><label>Region</label><select id="region"><option>USA</option><option>CHN</option><option>EUR</option><option>GLB</option></select></div>
+              <div><label>Universe</label><select id="universe"><option>TOP3000</option><option>TOP1000</option><option>TOP500</option></select></div>
+            </div>
+            <div class="row">
+              <div><label>Delay</label><select id="delay"><option value="1">1</option><option value="0">0</option></select></div>
+              <div><label>Neutralization</label><select id="neutralization"><option>SUBINDUSTRY</option><option>INDUSTRY</option><option>SECTOR</option><option>MARKET</option><option>NONE</option></select></div>
+            </div>
+            <div class="row">
+              <div><label>Instrument Type</label><select id="instrumentType"><option>EQUITY</option></select></div>
+              <div><label>Alpha Type</label><select id="alphaType"><option>REGULAR</option><option>POWER_POOL</option><option>ATOM</option><option>PYRAMID</option></select></div>
+            </div>
+            <div class="row">
+              <div><label>Decay</label><input id="decay" type="number" min="0" step="1" value="10"></div>
+              <div><label>Truncation</label><input id="truncation" type="number" min="0" max="1" step="0.01" value="0.05"></div>
+            </div>
+            <div class="row">
+              <div><label>Pasteurization</label><select id="pasteurization"><option>ON</option><option>OFF</option></select></div>
+              <div><label>NaN Handling</label><select id="nanHandling"><option>ON</option><option>OFF</option></select></div>
+            </div>
+            <div class="row">
+              <div><label>Unit Handling</label><select id="unitHandling"><option>VERIFY</option><option>RAW</option></select></div>
+              <div><label>Language</label><select id="language"><option>FASTEXPR</option></select></div>
+            </div>
+          </details>
         </div>
-        <div class="row">
-          <div><label>Delay</label><select id="delay"><option value="1">1</option><option value="0">0</option></select></div>
-          <div><label>Neutralization</label><select id="neutralization"><option>SUBINDUSTRY</option><option>INDUSTRY</option><option>SECTOR</option><option>MARKET</option><option>NONE</option></select></div>
-        </div>
-        <div class="row">
-          <div><label>Instrument Type</label><select id="instrumentType"><option>EQUITY</option></select></div>
-          <div><label>Alpha Type</label><select id="alphaType"><option>REGULAR</option><option>POWER_POOL</option><option>ATOM</option><option>PYRAMID</option></select></div>
-        </div>
-        <div class="row">
-          <div><label>Decay</label><input id="decay" type="number" min="0" step="1" value="10"></div>
-          <div><label>Truncation</label><input id="truncation" type="number" min="0" max="1" step="0.01" value="0.05"></div>
-        </div>
-        <div class="row">
-          <div><label>Pasteurization</label><select id="pasteurization"><option>ON</option><option>OFF</option></select></div>
-          <div><label>NaN Handling</label><select id="nanHandling"><option>ON</option><option>OFF</option></select></div>
-        </div>
-        <div class="row">
-          <div><label>Unit Handling</label><select id="unitHandling"><option>VERIFY</option><option>RAW</option></select></div>
-          <div><label>Language</label><select id="language"><option>FASTEXPR</option></select></div>
-        </div>
-      </details>
 
-      <details open>
-        <summary>云端数据</summary>
+      <div class="control-section">
+        <div class="control-section-title"><span>云端数据</span><span class="step-index">4</span></div>
         <label>同步范围</label>
         <select id="syncRange">
           <option value="3d" selected>近 3 天</option>
@@ -1223,10 +1520,11 @@
         <div id="cloudSyncTrack" class="track" role="progressbar" aria-label="云端同步进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="cloudSyncFill" class="fill"></div></div>
         <div id="cloudSyncMeta" class="progress-meta" aria-live="polite" aria-atomic="true">进度：0% | 已扫描：0/待确认 | 预计剩余：-</div>
         <div id="cloudSyncText" class="message hidden"></div>
-      </details>
+      </div>
 
+      <div class="control-section">
       <details>
-        <summary>系统策略</summary>
+        <summary>系统策略与插件</summary>
         <div class="note">本地生产强度和回测策略来自配置文件。界面只保留必要开关，避免把无人值守流程变成人工调参面板。</div>
         <div class="row">
           <label class="switch" title="启用后，生产循环会读取最近一次可用 Assistant Guidance 作为候选生成偏好。"><input id="useAssistantGuidance" type="checkbox" checked> Assistant Guidance</label>
@@ -1268,24 +1566,34 @@
         </div>
         <div id="strategyText" class="message strategy-policy">正在读取配置...</div>
       </details>
+      </div>
 
+      </div>
     </aside>
 
     <section id="mainContent" aria-labelledby="tableTitle">
+      <div id="workflowNav" class="workflow-nav" aria-label="核心任务流程"></div>
       <div class="panel-head">
         <div>
           <h2 id="tableTitle">候选池</h2>
           <div class="subhead">研究流程：候选 → 等待回测 → 回测中 → 达标 → 检查后可提交 → 已提交 / 不达标回溯。</div>
         </div>
-        <span id="countPill" class="pill">候选池 0/10</span>
+        <div class="panel-tools">
+          <div id="displayModeToggle" class="segmented-control hidden" aria-label="结果展示方式">
+            <button id="tableModeButton" type="button" class="active" aria-pressed="true" onclick="setResultDisplayMode('table')">表格</button>
+            <button id="chartModeButton" type="button" aria-pressed="false" onclick="setResultDisplayMode('charts')">图表</button>
+          </div>
+          <span id="countPill" class="pill">候选池 0/10</span>
+        </div>
       </div>
-      <div class="toolbar" style="padding:0 14px 6px">
-        <span id="redlineSummary" style="font-size:12px;color:var(--muted)">红线验证加载中...</span>
-        <span style="margin:0 8px;color:var(--line)">|</span>
-        <span id="checkpointSummary" style="font-size:12px;color:var(--muted)">断点加载中...</span>
+      <div class="status-strip" aria-label="运行安全摘要">
+        <span id="redlineSummary">红线验证加载中...</span>
+        <span class="status-separator" aria-hidden="true"></span>
+        <span id="checkpointSummary">断点加载中...</span>
       </div>
       <div id="insight" class="insight"></div>
       <div id="chartsPanel" class="charts-panel">
+        <div id="chartFallback" class="chart-fallback hidden"></div>
         <div class="charts-grid">
           <div class="chart-card">
             <h3>评分趋势（近 20 轮）</h3>
@@ -1320,7 +1628,7 @@
       </div>
       <div class="toolbar">
         <input id="tableSearch" placeholder="搜索 Alpha ID、家族、假说、表达式或官方 ID" oninput="renderCurrentView()">
-        <div id="sortHint" class="subhead">候选池按排序分降序排序。快捷键：<span class="kbd">Ctrl+Enter</span> 启停生产，<span class="kbd">Esc</span> 关闭弹窗。</div>
+        <div id="sortHint" class="view-guidance">候选池按排序分降序排序。</div>
       </div>
       <div id="filterBar" class="filter-bar hidden"></div>
       <div id="moduleActions" class="module-actions hidden">
@@ -1380,6 +1688,7 @@
           </thead>
           <tbody id="candidateRows"></tbody>
         </table>
+        <div id="mobileCardList" class="mobile-card-list hidden" aria-label="移动端 Alpha 卡片列表"></div>
       </div>
     </section>
   </main>
