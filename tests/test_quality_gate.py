@@ -2,7 +2,9 @@ from pathlib import Path
 
 from scripts import quality_gate
 from scripts.check_dependency_policy import check_dependency_policy
+from scripts.check_module_size import check_module_size
 from scripts.check_optional_tooling import check_optional_tooling
+from scripts.check_text_encoding import check_text_encoding
 
 
 def test_quality_gate_runs_core_steps_and_skips_pytest(monkeypatch, tmp_path):
@@ -26,10 +28,16 @@ def test_quality_gate_runs_core_steps_and_skips_pytest(monkeypatch, tmp_path):
         "config",
         "dependency_policy",
         "redline_verification",
+        "brain_contract_validation",
         "frontend_inline_sync",
         "frontend_syntax",
+        "frontend_innerhtml_guard",
+        "text_encoding_scan",
+        "official_context_validation",
+        "module_size_audit",
         "secret_scan",
         "cache_metadata_audit",
+        "diagnostic_report_sync",
     ]
     assert all("-m" not in call or "pytest" not in call for call in calls)
 
@@ -54,14 +62,20 @@ def test_quality_gate_includes_pytest_args_and_propagates_failure(monkeypatch, t
         "config",
         "dependency_policy",
         "redline_verification",
+        "brain_contract_validation",
         "frontend_inline_sync",
         "frontend_syntax",
+        "frontend_innerhtml_guard",
+        "text_encoding_scan",
+        "official_context_validation",
+        "module_size_audit",
         "secret_scan",
         "cache_metadata_audit",
+        "diagnostic_report_sync",
         "pytest",
     ]
-    assert "--include-all" in result["steps"][6]["command"]
-    assert result["steps"][8]["command"][-1] == "tests/test_web.py"
+    assert "--include-all" in result["steps"][11]["command"]
+    assert result["steps"][14]["command"][-1] == "tests/test_web.py"
 
 
 def test_quality_gate_can_skip_compile(monkeypatch, tmp_path):
@@ -81,7 +95,7 @@ def test_quality_gate_can_skip_compile(monkeypatch, tmp_path):
     )
 
     assert result["ok"] is True
-    assert [step["name"] for step in result["steps"]] == ["config", "dependency_policy", "redline_verification", "frontend_inline_sync", "frontend_syntax", "secret_scan", "cache_metadata_audit"]
+    assert [step["name"] for step in result["steps"]] == ["config", "dependency_policy", "redline_verification", "brain_contract_validation", "frontend_inline_sync", "frontend_syntax", "frontend_innerhtml_guard", "text_encoding_scan", "official_context_validation", "module_size_audit", "secret_scan", "cache_metadata_audit", "diagnostic_report_sync"]
     assert not any("compileall" in call for call in calls)
 
 
@@ -107,10 +121,16 @@ def test_quality_gate_can_include_dependency_audit(monkeypatch, tmp_path):
         "config",
         "dependency_policy",
         "redline_verification",
+        "brain_contract_validation",
         "frontend_inline_sync",
         "frontend_syntax",
+        "frontend_innerhtml_guard",
+        "text_encoding_scan",
+        "official_context_validation",
+        "module_size_audit",
         "secret_scan",
         "cache_metadata_audit",
+        "diagnostic_report_sync",
         "dependency_audit",
     ]
     assert any("pip_audit" in call for call in calls)
@@ -164,6 +184,29 @@ def test_quality_gate_can_include_static_analysis(monkeypatch, tmp_path):
     assert any("mypy" in call for call in calls)
 
 
+def test_quality_gate_can_require_fresh_official_context(monkeypatch, tmp_path):
+    calls = []
+
+    def fake_run(args):
+        calls.append(args)
+        return True, {"command": args, "exit_code": 0, "duration_seconds": 0.01, "stdout": "", "stderr": ""}
+
+    monkeypatch.setattr(quality_gate, "_run_python_module", fake_run)
+
+    result = quality_gate.run_quality_gate(
+        config_path=tmp_path / "run_config.json",
+        html_path=tmp_path / "index.html",
+        strict_official_context=True,
+        skip_tests=True,
+    )
+
+    assert result["ok"] is True
+    official_call = next(call for call in calls if any("check_official_context.py" in str(arg) for arg in call))
+    contract_call = next(call for call in calls if any("check_brain_contract.py" in str(arg) for arg in call))
+    assert "--strict-freshness" in official_call
+    assert "--strict-freshness" in contract_call
+
+
 def test_optional_tooling_reports_missing_as_non_blocking_by_default():
     def fake_runner(args):
         return (1, "", "missing", 0.01)
@@ -206,3 +249,43 @@ def test_dependency_policy_accepts_project_pyproject():
 
     assert result["ok"] is True
     assert result["findings"] == []
+
+
+def test_text_encoding_scan_rejects_mojibake(tmp_path):
+    clean = tmp_path / "README.md"
+    bad = tmp_path / "bad.md"
+    clean.write_text("云端同步正在进行。\n", encoding="utf-8")
+    bad.write_text("".join(chr(codepoint) for codepoint in (0x6D5C, 0x6220, 0xE061)) + "\n", encoding="utf-8")
+
+    result = check_text_encoding(tmp_path, ["README.md", "bad.md"])
+
+    assert result["ok"] is False
+    assert result["findings"][0]["path"] == "bad.md"
+    assert result["findings"][0]["code"] == "mojibake"
+
+
+def test_text_encoding_scan_accepts_current_workspace():
+    result = check_text_encoding(Path(__file__).resolve().parents[1])
+
+    assert result["ok"] is True
+    assert result["findings"] == []
+
+
+def test_module_size_audit_rejects_files_above_limit(tmp_path):
+    package = tmp_path / "brain_alpha_ops"
+    package.mkdir()
+    package.joinpath("large.py").write_text("\n".join("print('x')" for _ in range(4)), encoding="utf-8")
+
+    result = check_module_size(tmp_path, ["brain_alpha_ops"], default_limit=3, baseline_limits={})
+
+    assert result["ok"] is False
+    assert result["findings"][0]["path"] == "brain_alpha_ops/large.py"
+    assert result["findings"][0]["code"] == "module_line_limit_exceeded"
+
+
+def test_module_size_audit_accepts_current_workspace():
+    result = check_module_size(Path(__file__).resolve().parents[1])
+
+    assert result["ok"] is True
+    assert result["findings"] == []
+    assert result["hotspots"]

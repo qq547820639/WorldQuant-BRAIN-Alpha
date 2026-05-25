@@ -11,11 +11,12 @@ from scripts.check_frontend_syntax import _node_path
 ROOT = Path(__file__).resolve().parents[1]
 WEB_DIR = ROOT / "brain_alpha_ops" / "web"
 WEB_JS = ROOT / "brain_alpha_ops" / "web" / "js"
+WEB_CSS = ROOT / "brain_alpha_ops" / "web" / "css"
 TEMPLATE_PATH = WEB_DIR / "index_template.html"
 
 MODULE_TEST_COVERAGE = {
     "js/api-client.js": "api request, csrf header, and error mapping",
-    "js/app.js": "ux orchestration, workflow nav, empty states, busy guards",
+    "js/app.js": "ux orchestration, workflow nav, busy guards, and app actions",
     "js/components/modal.js": "confirm dialog visibility, focus, and resolution",
     "js/components/progress.js": "progress bar clamp and status text rendering",
     "js/components/spinner.js": "loading overlay visibility and message rendering",
@@ -23,7 +24,13 @@ MODULE_TEST_COVERAGE = {
     "js/components/toast.js": "toast roles, escaping, and removal contract",
     "js/state.js": "nested state set/merge, listeners, cache, check freshness",
     "js/utils.js": "escaping, labels, risk/state navigation rendering",
+    "js/form-controls.js": "form value writes, config hydration, and payload assembly",
+    "js/result-state.js": "result snapshot merging and cloud sync preservation",
+    "js/result-table.js": "main result table, mobile cards, and empty-state rendering",
     "js/view-model.js": "identity, normalization, dedupe, runtime array selection",
+    "js/view-registry.js": "view ordering, labels, navigation groups, and empty-state hints",
+    "js/view-renderers.js": "result row sources, filters, and column renderer definitions",
+    "js/cloud-sync.js": "production cloud snapshot loading, sync polling, and state hydration",
     "js/views/charts.js": "offline canvas fallback and empty dataset rendering",
     "js/views/detail.js": "detail modal rendering, escaping, and check suggestions",
     "js/views/monitor.js": "legacy monitor tiles and backtest slot rendering",
@@ -166,6 +173,10 @@ function createHarness() {
       }
       return null;
     }
+    querySelectorAll(selector) {
+      if (selector === "[data-style-width]" || selector === "[data-style-left]") return [];
+      return this.children;
+    }
     getBoundingClientRect() {
       return { width: this.clientWidth || 360, height: this.clientHeight || 200, top: 0, left: 0 };
     }
@@ -242,7 +253,7 @@ function load(context, relPath) {
     "toastContainer", "spinnerOverlay", "spinnerText", "confirmOverlay", "confirmText",
     "confirmYes", "confirmNo", "progressFill", "progressMeta", "tableRows",
     "detailModal", "detailCloseButton", "modalTitle", "detail", "opsMonitor",
-    "insight", "backtestPanel", "controlButton", "status"
+    "insight", "backtestPanel", "controlButton", "status", "checkpointSummary"
   ].forEach(id => document.register(id, id === "confirmYes" || id === "confirmNo" || id === "detailCloseButton" || id === "controlButton" ? "button" : "div"));
   const modalPanel = new Element("div");
   modalPanel.classList.add("modal-panel");
@@ -254,6 +265,11 @@ function load(context, relPath) {
   load(context, "js/state.js");
   load(context, "js/api-client.js");
   load(context, "js/view-model.js");
+  load(context, "js/view-registry.js");
+  load(context, "js/view-renderers.js");
+  load(context, "js/result-state.js");
+  load(context, "js/result-table.js");
+  load(context, "js/form-controls.js");
   load(context, "js/components/toast.js");
   load(context, "js/components/spinner.js");
   load(context, "js/components/modal.js");
@@ -291,6 +307,25 @@ function load(context, relPath) {
   assert(context.ViewModel.normalizedExpression(" rank( x ) ") === "rank( x )", "view-model normalization failed");
   assert(context.ViewModel.uniqueCandidates([{ alpha_id: "A1" }, { alpha_id: "A1" }]).length === 1, "view-model candidate dedupe failed");
   assert(context.ViewModel.chooseRuntimeArray([], [{ id: 1 }], [{ id: 2 }])[0].id === 1, "view-model runtime array choice failed");
+  const viewRows = context.ViewRenderers.getRowsForView("passed", { candidates: [{ alpha_id: "A1", lifecycle_status: "submission_ready", gate: { submission_ready: true } }] });
+  assert(viewRows.length === 1 && viewRows[0].kind === "passed", "view-renderers row source failed");
+  const resultBatch = context.ResultState.buildResultBatch({ summary: { cloud_sync: { status: "empty" } }, candidates: [{ alpha_id: "A1" }] }, { currentSummary: {}, currentCandidates: [], liveCloudSyncProgress: () => ({ status: "running", scanned: 3 }) });
+  assert(resultBatch["currentResult.summary"].cloud_sync.scanned === 3, "result-state must preserve active cloud progress over empty snapshots");
+  document.register("region", "select").value = "USA";
+  document.register("universe", "select").value = "TOP3000";
+  document.register("delay", "input").value = "1";
+  document.register("neutralization", "select").value = "SUBINDUSTRY";
+  document.register("instrumentType", "select").value = "EQUITY";
+  document.register("alphaType", "select").value = "REGULAR";
+  document.register("decay", "input").value = "10";
+  document.register("truncation", "input").value = "0.05";
+  document.register("pasteurization", "select").value = "ON";
+  document.register("nanHandling", "select").value = "ON";
+  document.register("unitHandling", "select").value = "VERIFY";
+  document.register("language", "select").value = "FASTEXPR";
+  document.register("useAssistantGuidance", "input").type = "checkbox";
+  document.getElementById("useAssistantGuidance").checked = true;
+  assert(context.FormControls.collectPayload().settings.region === "USA", "form-controls must collect settings payload");
 
   const toast = context.Toast.toast("<unsafe>", "error", 0);
   assert(toast.getAttribute("role") === "alert" && toast.innerHTML.includes("&lt;unsafe&gt;"), "toast must render safe alert markup");
@@ -301,7 +336,9 @@ function load(context, relPath) {
 
   context.Progress.renderProgress("progress", { percent: 150, message: "Sync", scanned: 2, total: 4, added: 1, skipped: 3 });
   assert(document.getElementById("progressFill").style.width === "100%", "progress must clamp fill width");
-  assert(document.getElementById("progressMeta").textContent.includes("(2/4)") && document.getElementById("progressMeta").textContent.includes("已跳过 3"), "progress meta rendering failed");
+  assert(context.Utils.renderSafeHtmlFragment('<img src=x onerror=alert(1)>', 'badge').includes("&lt;img"), "safe fragment helper must reject dangerous tags");
+  assert(context.Utils.renderSafeHtmlFragment(context.Utils.statusBadge("OK", "good"), "badge").includes("badge-success"), "safe fragment helper must allow whitelisted badges");
+  assert(document.getElementById("progressMeta").textContent.includes("2/4") && document.getElementById("progressMeta").textContent.includes("跳过 3"), "progress meta rendering failed");
 
   const confirmed = context.Modal.confirmAction("Continue?", "Yes", "No");
   assert(!document.getElementById("confirmOverlay").classList.contains("hidden"), "modal must show confirm overlay");
@@ -309,8 +346,12 @@ function load(context, relPath) {
   assert(await confirmed === true, "modal must resolve true from yes button");
   assert(document.getElementById("confirmOverlay").classList.contains("hidden"), "modal must hide after resolution");
 
-  context.Table.render("tableRows", [{ accessor: "name" }, { accessor: row => row.raw.html, render: value => value, trustedHtml: false }], [{ kind: "candidate", id: "1", raw: { name: "<Alpha>", html: "<button>bad</button>" } }]);
+  context.Table.render("tableRows", [{ accessor: "name" }, { accessor: row => row.raw.html, render: value => value, trustedHtml: true }], [{ kind: "candidate", id: "1", raw: { name: "<Alpha>", html: "<button>bad</button>" } }]);
   assert(document.getElementById("tableRows").innerHTML.includes("&lt;Alpha&gt;") && document.getElementById("tableRows").innerHTML.includes("&lt;button&gt;bad&lt;/button&gt;"), "table must escape untrusted values");
+  context.Table.render("tableRows", [{ accessor: row => row.raw.status, render: value => context.Utils.statusBadge(value, "good"), htmlType: "badge" }], [{ kind: "candidate", id: "2", raw: { status: "OK" } }]);
+  assert(document.getElementById("tableRows").innerHTML.includes("badge-success"), "table must render whitelisted badge fragments");
+  context.Table.render("tableRows", [{ accessor: row => row.raw.html, render: value => value, htmlType: "badge" }], [{ kind: "candidate", id: "3", raw: { html: '<span class="badge badge-success" onclick="alert(1)">bad</span>' } }]);
+  assert(document.getElementById("tableRows").innerHTML.includes("&lt;span") && !document.getElementById("tableRows").innerHTML.includes('<span class="badge badge-success" onclick='), "table must reject malformed whitelisted fragments");
   context.Table.render("tableRows", [{ accessor: "name" }], [], { emptyText: "No rows" });
   assert(document.getElementById("tableRows").innerHTML.includes("No rows"), "table empty state rendering failed");
 
@@ -328,11 +369,13 @@ function load(context, relPath) {
   };
   load(context, "js/views/charts.js");
   context.ChartView.renderCharts({ candidates: [{ alpha_id: "A1", scorecard: { total_score: 88, sharpe: 1.2, turnover: 0.18 }, gate: { submission_ready: true } }] });
-  assert(document.getElementById("chartFallback").textContent.includes("内置离线图表"), "charts must expose offline fallback guidance");
-  assert(document.getElementById("scoreTrendChart").drawOps.length > 0, "charts must draw to native canvas fallback");
+  assert(document.getElementById("chartFallback").textContent.includes("Chart.js 未加载"), "charts must expose offline fallback guidance");
+  assert(document.getElementById("chartFallback").textContent.includes("本地 canvas"), "charts must explain local canvas fallback");
+  assert(document.getElementById("scoreTrendChart").drawOps.length > 0, "charts should draw native fallback without Chart.js");
+  assert(document.getElementById("gatePieChart").drawOps.includes("arc"), "native fallback should render a gate pie chart");
 
   load(context, "js/views/detail.js");
-  context.DetailView.renderCheckDetail({ alpha_id: "A1", passed: false, is_stale: false, checks: [{ name: "official_pre_submit_check", passed: false, suggestion: "Fix <bad>" }] });
+  context.DetailView.viewCheckDetail({ alpha_id: "A1", passed: false, is_stale: false, checks: [{ name: "official_pre_submit_check", passed: false, suggestion: "Fix <bad>" }] });
   assert(document.getElementById("detail").innerHTML.includes("Fix &lt;bad&gt;"), "detail check suggestions must be escaped");
   assert(document.getElementById("detailModal").getAttribute("aria-hidden") === "false", "detail modal must become visible");
 
@@ -340,18 +383,28 @@ function load(context, relPath) {
   context.AppState.set("currentResult.candidates", [{ alpha_id: "A1", lifecycle_status: "submission_ready" }]);
   context.AppState.set("currentResult.summary", { stats: { produced_count: 5, passed_count: 1 }, dataset_id: "D1" });
   context.MonitorView.renderOpsMonitor();
-  assert(document.getElementById("opsMonitor").innerHTML.includes("monitor-tile") && document.getElementById("opsMonitor").innerHTML.includes("D1"), "monitor must render stat tiles");
+  assert(document.getElementById("opsMonitor").innerHTML.includes("stat-tile") && document.getElementById("opsMonitor").innerHTML.includes("D1"), "monitor must render stat tiles");
   context.MonitorView.renderBacktests([{ status: "running", alpha_id: "A1", sharpe: 1.2, fitness: 0.7 }]);
-  assert(document.getElementById("backtestPanel").innerHTML.includes("monitor-slot") && document.getElementById("backtestPanel").innerHTML.includes("A1"), "monitor must render backtest slots");
+  assert(document.getElementById("backtestPanel").innerHTML.includes("slot-card") && document.getElementById("backtestPanel").innerHTML.includes("A1"), "monitor must render backtest slots");
 
   context.Toast.toast = function(message, type) { context.lastToast = { message, type }; };
+  context.Toast.warning = function(message) { context.lastToast = { message, type: "warning" }; };
   context.operationBlockReason = function(action) { return action === "production" ? "blocked by test" : ""; };
   context.renderBusyControls = function() { context.busyRendered = true; };
   context.collectPayload = function() { return {}; };
   load(context, "js/views/production.js");
+  context.fetch = async function(url) {
+    if (url === "/api/checkpoint/status") {
+      return { json: async () => ({ ok: true, checkpoint_count: 1, history_count: 2, resume_available: true, latest: { run_id: "run_1", phase_completed: "redline" }, latest_history: { run_id: "run_1", status: "completed" }, latest_comparison: { deltas: { best_score: 10.5, submission_ready: 2 } } }) };
+    }
+    return { json: async () => ({ ok: true }) };
+  };
+  await context.loadCheckpointStatus();
+  assert(document.getElementById("checkpointSummary").textContent.includes("断点可续跑") && document.getElementById("checkpointSummary").textContent.includes("历史 2"), "production module must render checkpoint and history status");
+  assert(document.getElementById("checkpointSummary").textContent.includes("10.5"), "production module must render score delta");
   await context.startProduction();
   assert(context.lastToast.message === "blocked by test" && context.lastToast.type === "warning", "production module must honor operation guard before api calls");
-  assert(typeof context.toggleRun === "function" && typeof context.connectSSE === "function" && typeof context.disconnectSSE === "function", "production module exports must remain available");
+  assert(typeof context.toggleRun === "function" && typeof context.connectSSE === "function" && typeof context.disconnectSSE === "function" && typeof context.loadCheckpointStatus === "function", "production module exports must remain available");
 
   console.log("frontend module contracts ok");
 })().catch(err => {
@@ -364,54 +417,82 @@ function load(context, relPath) {
 
 def test_app_ux_orchestrator_has_tested_navigation_empty_and_busy_contracts():
     app_js = (WEB_JS / "app.js").read_text(encoding="utf-8")
+    view_registry_js = (WEB_JS / "view-registry.js").read_text(encoding="utf-8")
+    view_renderers_js = (WEB_JS / "view-renderers.js").read_text(encoding="utf-8")
+    result_table_js = (WEB_JS / "result-table.js").read_text(encoding="utf-8")
     template = (ROOT / "brain_alpha_ops" / "web" / "index_template.html").read_text(encoding="utf-8")
 
-    for label in ["生产候选", "官方回测", "达标检查", "提交队列", "诊断复盘"]:
-        assert label in app_js
+    for label in ["生产流程", "数据审计", "研究工具", "达标检查", "可提交"]:
+        assert label in (app_js + view_registry_js + view_renderers_js)
 
-    assert "function renderWorkflowNav()" in app_js
-    assert "workflow-step " in app_js
-    assert "aria-current=\"" in app_js
-    assert "renderWorkflowNav();" in app_js
-    assert "insightGroupHtml('辅助追踪与诊断', trackingCards, { collapsible: true" in app_js
+    assert "function renderViewTabs()" in app_js
+    assert "function renderTaskRail()" in app_js
+    assert "VIEW_GROUPS" in view_registry_js
+    assert "view-tab-group" in app_js
+    assert "tab-marker" in app_js
+    assert "view-tab-row" in app_js
+    assert "workflow-rail" in template
+    assert "workflowStepProduce" in template
+    assert "workflowStepCheck" in template
+    assert "workflowStepSubmit" in template
+    assert "workflowStepCloud" in template
+    assert "workflowStatusText" in app_js
+    assert "workflowCandidateCount" in app_js
+    assert "aria-pressed=\"" in app_js
+    assert "renderViewTabs();" in app_js
+    assert "renderInsight" in app_js
 
-    assert "function emptyStateHtml(view)" in app_js
-    assert "function emptyStateActions(view)" in app_js
-    assert "emptyStateHtml(view)" in app_js
-    assert "table-empty-cell" in app_js
-    assert "empty-mobile-card" in app_js
-    assert "toggleRun()" in app_js
-    assert "syncCloud()" in app_js
-    assert "checkBatch('quick')" in app_js
+    assert "function getEmptyDescription(view)" in result_table_js
+    assert "function getEmptyActionsHtml(view)" in result_table_js
+    assert "tableEmptyState" in result_table_js
+    assert "tableEmptyDescription" in result_table_js
+    assert "tableEmptyActions" in result_table_js
+    assert "tableEmptyIcon" in result_table_js
+    assert "clear-search" in result_table_js
+    assert 'data-action="toggle-run"' in template
+    assert 'data-action="sync-cloud"' in template
+    assert 'data-action="check-batch"' in template
+    assert "function installStaticActionHandlers()" in app_js
+    assert "function getRowsForView" in view_renderers_js
+    assert "function getColumnsForView" in view_renderers_js
+    assert "function buildCandidateRows" in view_renderers_js
 
-    assert "function operationBlockReason(action)" in app_js
-    assert "function renderBusyControls()" in app_js
+    assert "window.operationBlockReason = function (action)" in app_js
+    assert "window.renderBusyControls = function ()" in app_js
     assert "setControlState('controlButton'" in app_js
     assert "setControlState('syncButton'" in app_js
     assert "operationGuard" in app_js
 
-    assert 'id="workflowNav" class="workflow-nav"' in template
-    assert "control-section primary run-actions" in template
-    assert "status-strip" in template
-    assert "view-guidance" in template
+    assert 'id="viewTabs"' in template
+    assert "action-card" in template
+    assert "status-bar" in template
+    assert "panelHint" in template
 
 
 def test_ux_styles_cover_interaction_feedback_and_responsive_layout():
     template = (ROOT / "brain_alpha_ops" / "web" / "index_template.html").read_text(encoding="utf-8")
+    css = (WEB_CSS / "app.css").read_text(encoding="utf-8")
 
     for selector in [
-        "button:focus-visible",
-        ".workflow-step:hover:not(:disabled)",
-        ".workflow-step.active",
-        ".insight-item:hover",
+        ".btn:focus-visible",
+        ".view-tab:hover",
+        ".view-tab.is-active",
+        ".insight-tile:hover",
         ".filter-chip:focus-visible",
+        ".workflow-step:hover",
+        ".workflow-step.is-active",
+        ".workflow-actions",
         ".empty-state",
-        ".empty-actions",
-        ".mobile-card-list:not(.hidden)",
+        ".empty-state-actions",
+        ".mobile-cards{display:none",
     ]:
-        assert selector in template
+        assert selector in css
 
-    assert "@media (max-width: 1380px)" in template
-    assert ".workflow-nav { grid-template-columns: repeat(3, minmax(0, 1fr)); }" in template
-    assert "@media (max-width: 720px)" in template
-    assert ".row, .quick-links, .workflow-nav, .insight, .toolbar, .module-actions, .monitor, .monitor-stats, .monitor-slots, .kv { grid-template-columns: 1fr; }" in template
+    assert '<!-- inline-css:css/app.css -->' in template
+    assert "@media(max-width:1200px)" in css
+    assert "overflow-x:auto;overflow-y:hidden" in css
+    assert ".sidebar-body > .action-card" in css
+    assert ".app-content{order:1;min-height:auto}" in css
+    assert ".app-sidebar{order:2;position:static;max-height:none}" in css
+    assert "@media(max-width:640px)" in css
+    assert ".view-tab{min-width:128px;max-width:160px}" in css

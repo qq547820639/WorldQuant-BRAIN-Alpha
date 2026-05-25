@@ -1,0 +1,64 @@
+{
+  "schema_version": "official_context_refresh.v1",
+  "generated_at": "2026-05-25T01:45:01.603233+00:00",
+  "started_at": "2026-05-25T01:37:14.066044+00:00",
+  "environment": "production",
+  "storage_dir": "D:\\Works\\WorldQuant BRAIN Alpha\\data",
+  "base_url": "https://api.worldquantbrain.com",
+  "region": "USA",
+  "universe": "TOP3000",
+  "delay": 1,
+  "write_enabled": true,
+  "status_path": "D:\\Works\\WorldQuant BRAIN Alpha\\data\\official_context_refresh_status.json",
+  "ok": true,
+  "status": "refreshed",
+  "auth": {
+    "status": "ok",
+    "auth": "session_cookie"
+  },
+  "counts": {
+    "fields": 7642,
+    "operators": 66,
+    "datasets": 16
+  },
+  "before": {
+    "fields": 7642,
+    "operators": 66,
+    "datasets": 16,
+    "manifest_complete": true,
+    "manifest_stale": true
+  },
+  "after": {
+    "fields": 7642,
+    "operators": 66,
+    "datasets": 16,
+    "manifest_complete": true,
+    "manifest_stale": false
+  },
+  "progress": {
+    "fields": {
+      "events": 153,
+      "scanned": 7642,
+      "total": 7642,
+      "cached": false,
+      "truncated": false,
+      "warning": ""
+    },
+    "operators": {
+      "events": 1,
+      "scanned": 66,
+      "total": 66,
+      "cached": false,
+      "truncated": false,
+      "warning": ""
+    },
+    "datasets": {
+      "events": 0,
+      "scanned": 0,
+      "total": 0,
+      "cached": false,
+      "truncated": false,
+      "warning": ""
+    }
+  }
+}

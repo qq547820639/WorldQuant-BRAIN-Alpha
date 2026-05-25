@@ -52,20 +52,39 @@ def is_allowed_local_request(
     origin_header: str = "",
     referer_header: str = "",
     local_hosts: set[str] | frozenset[str] = LOCAL_HOSTS,
+    allow_remote: bool = False,
 ) -> bool:
     host = header_hostname(host_header)
-    if host and host not in local_hosts:
+    if host and host not in local_hosts and not allow_remote:
         return False
     host_port = header_port(host_header)
     for header_value in (origin_header, referer_header):
         if not header_value:
             continue
         parsed = urlparse(header_value)
-        if parsed.hostname not in local_hosts:
+        parsed_host = (parsed.hostname or "").lower()
+        if allow_remote and host:
+            if parsed_host != host:
+                return False
+        elif parsed_host not in local_hosts:
             return False
-        if host_port and parsed.port and parsed.port != host_port:
+        parsed_port = parsed.port
+        if host_port and parsed_port and parsed_port != host_port:
             return False
     return True
+
+
+def admin_token_from_headers(headers: Any) -> str:
+    auth_header = str(headers.get("Authorization", "") if headers else "")
+    if auth_header.lower().startswith("bearer "):
+        return auth_header[7:].strip()
+    return str(headers.get("X-Brain-Alpha-Admin-Token", "") if headers else "").strip()
+
+
+def validate_admin_token(provided_token: str, expected_token: str) -> bool:
+    if not provided_token or not expected_token:
+        return False
+    return secrets.compare_digest(str(provided_token), str(expected_token))
 
 
 @dataclass
@@ -73,10 +92,16 @@ class LocalSessionManager:
     cookie_name: str = SESSION_COOKIE_NAME
     ttl_seconds: int = DEFAULT_SESSION_TTL_SECONDS
     allow_multiple_sessions: bool = True
+    secure_cookies: bool = False
     sessions: dict[str, dict[str, Any]] = field(default_factory=dict)
     lock: threading.Lock = field(default_factory=threading.Lock)
 
-    def configure(self, ttl_seconds: int | float | None = None, allow_multiple_sessions: bool | None = None) -> None:
+    def configure(
+        self,
+        ttl_seconds: int | float | None = None,
+        allow_multiple_sessions: bool | None = None,
+        secure_cookies: bool | None = None,
+    ) -> None:
         if ttl_seconds is not None:
             try:
                 self.ttl_seconds = max(60, int(ttl_seconds))
@@ -84,13 +109,17 @@ class LocalSessionManager:
                 self.ttl_seconds = DEFAULT_SESSION_TTL_SECONDS
         if allow_multiple_sessions is not None:
             self.allow_multiple_sessions = bool(allow_multiple_sessions)
+        if secure_cookies is not None:
+            self.secure_cookies = bool(secure_cookies)
 
     def cookie_header(self, session_id: str, *, max_age: int | None = None) -> str:
         max_age = self.ttl_seconds if max_age is None else max_age
-        return f"{self.cookie_name}={session_id}; Path=/; Max-Age={max_age}; HttpOnly; SameSite=Strict"
+        secure = "; Secure" if self.secure_cookies else ""
+        return f"{self.cookie_name}={session_id}; Path=/; Max-Age={max_age}; HttpOnly; SameSite=Strict{secure}"
 
     def expired_cookie_header(self) -> str:
-        return f"{self.cookie_name}=; Path=/; Max-Age=0; HttpOnly; SameSite=Strict"
+        secure = "; Secure" if self.secure_cookies else ""
+        return f"{self.cookie_name}=; Path=/; Max-Age=0; HttpOnly; SameSite=Strict{secure}"
 
     def prune(self, now: float | None = None) -> None:
         current = time.time() if now is None else now

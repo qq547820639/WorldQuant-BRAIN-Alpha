@@ -78,12 +78,19 @@ STATIC_ANALYSIS_TARGETS = [
     "brain_alpha_ops/research/strategy_plugins.py",
     "brain_alpha_ops/research/strategy_switch.py",
     "brain_alpha_ops/research/production_context.py",
+    "brain_alpha_ops/data/official_context_validation.py",
     "scripts/check_dependency_policy.py",
+    "scripts/check_brain_contract.py",
+    "scripts/check_diagnostic_report.py",
+    "scripts/check_module_size.py",
     "scripts/check_optional_tooling.py",
+    "scripts/check_official_context.py",
+    "scripts/check_text_encoding.py",
     "scripts/quality_gate.py",
     "tests/test_quality_gate.py",
     "tests/test_strategy_plugins.py",
     "tests/test_production_context.py",
+    "tests/test_official_context_validation.py",
     "tests/test_web_assistant_snapshots.py",
     "tests/test_web_build_inline.py",
     "tests/test_web_check_batch_job.py",
@@ -174,6 +181,10 @@ def _frontend_syntax(html_path: Path) -> tuple[bool, dict]:
     return _run_python_module(["scripts/check_frontend_syntax.py", "--html", str(html_path), "--json"])
 
 
+def _frontend_innerhtml_guard() -> tuple[bool, dict]:
+    return _run_python_module(["scripts/check_frontend_innerhtml.py", "--json"])
+
+
 def _frontend_inline_sync() -> tuple[bool, dict]:
     return _run_python_module([str(FRONTEND_INLINE_BUILDER), "--check", "--json"])
 
@@ -185,8 +196,30 @@ def _secret_scan(include_all: bool) -> tuple[bool, dict]:
     return _run_python_module(args)
 
 
+def _text_encoding_scan() -> tuple[bool, dict]:
+    return _run_python_module(["scripts/check_text_encoding.py", "--root", str(ROOT), "--json"])
+
+
+def _module_size_audit() -> tuple[bool, dict]:
+    return _run_python_module(["scripts/check_module_size.py", "--root", str(ROOT), "--json"])
+
+
+def _official_context_validation(config_path: Path, *, strict: bool = False) -> tuple[bool, dict]:
+    args = ["scripts/check_official_context.py", "--config", str(config_path), "--json"]
+    if strict:
+        args.append("--strict-freshness")
+    return _run_python_module(args)
+
+
 def _dependency_policy() -> tuple[bool, dict]:
     return _run_python_module(["scripts/check_dependency_policy.py", "--pyproject", str(ROOT / "pyproject.toml"), "--json"])
+
+
+def _brain_contract_validation(config_path: Path, *, strict: bool = False) -> tuple[bool, dict]:
+    args = ["scripts/check_brain_contract.py", "--config", str(config_path), "--json"]
+    if strict:
+        args.append("--strict-freshness")
+    return _run_python_module(args)
 
 
 def _redline_verification() -> tuple[bool, dict]:
@@ -201,6 +234,19 @@ def _cache_metadata_audit() -> tuple[bool, dict]:
     snapshot = build_cache_audit_snapshot(cache_dir)
     ok = snapshot.get("stale_count", 0) == 0
     return ok, {"exit_code": 0, "command": "cache_metadata_audit", **snapshot}
+
+
+def _diagnostic_report_sync(config_path: Path) -> tuple[bool, dict]:
+    return _run_python_module(
+        [
+            "scripts/check_diagnostic_report.py",
+            "--config",
+            str(config_path),
+            "--report",
+            str(ROOT / "docs" / "ALPHA_PRODUCTION_DIAGNOSIS_20260522.md"),
+            "--json",
+        ]
+    )
 
 
 def _pytest(pytest_args: list[str]) -> tuple[bool, dict]:
@@ -227,6 +273,7 @@ def _mypy_check() -> tuple[bool, dict]:
         [
             "-m",
             "mypy",
+            "--explicit-package-bases",
             "--ignore-missing-imports",
             "--follow-imports=silent",
             *STATIC_ANALYSIS_TARGETS,
@@ -252,6 +299,7 @@ def run_quality_gate(
     ruff: bool = False,
     mypy: bool = False,
     strict_optional_tooling: bool = False,
+    strict_official_context: bool = False,
 ) -> dict:
     steps = []
     if not skip_compile:
@@ -260,10 +308,16 @@ def run_quality_gate(
         _step("config", lambda: _validate_config(config_path)),
         _step("dependency_policy", _dependency_policy),
         _step("redline_verification", _redline_verification),
+        _step("brain_contract_validation", lambda: _brain_contract_validation(config_path, strict=strict_official_context)),
         _step("frontend_inline_sync", _frontend_inline_sync),
         _step("frontend_syntax", lambda: _frontend_syntax(html_path)),
+        _step("frontend_innerhtml_guard", _frontend_innerhtml_guard),
+        _step("text_encoding_scan", _text_encoding_scan),
+        _step("official_context_validation", lambda: _official_context_validation(config_path, strict=strict_official_context)),
+        _step("module_size_audit", _module_size_audit),
         _step("secret_scan", lambda: _secret_scan(include_all_secrets)),
         _step("cache_metadata_audit", _cache_metadata_audit),
+        _step("diagnostic_report_sync", lambda: _diagnostic_report_sync(config_path)),
     ])
     if dependency_audit:
         steps.append(_step("dependency_audit", _dependency_audit))
@@ -291,6 +345,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--dependency-audit", action="store_true", help="Run pip-audit when installed.")
     parser.add_argument("--optional-tooling", action="store_true", help="Report optional ruff/mypy/pip-audit availability without enforcing it.")
     parser.add_argument("--strict-optional-tooling", action="store_true", help="Fail optional tooling check when ruff/mypy/pip-audit are missing.")
+    parser.add_argument("--strict-official-context", action="store_true", help="Fail when official fields/operators/datasets metadata is stale.")
     parser.add_argument("--ruff", action="store_true", help="Run ruff on the incremental static-analysis target set.")
     parser.add_argument("--mypy", action="store_true", help="Run mypy on the incremental static-analysis target set.")
     parser.add_argument("--skip-compile", action="store_true", help="Skip Python compileall syntax checks.")
@@ -309,6 +364,7 @@ def main(argv: list[str] | None = None) -> int:
         dependency_audit=args.dependency_audit,
         optional_tooling=args.optional_tooling,
         strict_optional_tooling=args.strict_optional_tooling,
+        strict_official_context=args.strict_official_context,
         ruff=args.ruff,
         mypy=args.mypy,
         skip_compile=args.skip_compile,

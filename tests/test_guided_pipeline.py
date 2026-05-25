@@ -1,0 +1,39 @@
+from brain_alpha_ops.config import RunConfig
+from brain_alpha_ops.models import PipelineResult
+from brain_alpha_ops.ux import guided_pipeline
+from brain_alpha_ops.ux.guided_pipeline import GuidedPipeline
+
+
+def test_guided_pipeline_completes_core_phases_and_uses_configured_storage(monkeypatch, tmp_path):
+    config = RunConfig(environment="mock")
+    config.ops.storage_dir = str(tmp_path)
+    pipeline = GuidedPipeline(config)
+
+    def fake_run_pipeline(run_config, *, progress_callback, stop_callback):
+        return PipelineResult(
+            run_id="run_guided_test",
+            candidates=[],
+            events=[],
+            summary={
+                "total_candidates": 3,
+                "official_validation_attempted": 2,
+                "official_validation_passed": 1,
+                "officially_simulated": 1,
+                "score_distribution": {"submit_candidate": 1},
+                "gate_summary": {"BRAIN_HARD_GATES": {"pass": 1, "fail": 0}},
+                "submission_ready": 1,
+                "auto_submitted": 0,
+            },
+        )
+
+    monkeypatch.setattr(guided_pipeline, "run_pipeline_from_config", fake_run_pipeline)
+
+    result = pipeline._phase_core_pipeline(
+        PipelineResult(run_id="run_guided_test", candidates=[], events=[], summary={})
+    )
+    pipeline._phase_finalize(result)
+
+    assert pipeline.phases["validation"].status == "completed"
+    assert pipeline.phases["gating"].status == "completed"
+    assert (tmp_path / "run_history" / "run_guided_test.json").is_file()
+    assert pipeline.list_history()[0]["run_id"] == "run_guided_test"

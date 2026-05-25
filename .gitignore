@@ -13,8 +13,10 @@ dist/
 build/
 *.spec
 .pytest_cache/
+.pytest_cache_runtime/
 .mypy_cache/
 .ruff_cache/
+.pip_audit_cache/
 
 # ---- Virtual environments ----
 venv/
@@ -35,6 +37,10 @@ Thumbs.db
 # ---- Data & Logs (large / sensitive / runtime-generated) ----
 data/*.jsonl
 data/api_cache/
+data/jobs_sync.json
+data/jobs_production.json
+data/*.sqlite
+data/checkpoints/
 data/*.log
 *.log
 *.err.log
@@ -55,6 +61,10 @@ _archive_before_rebuild_*/
 
 # ---- Temp / External source copies ----
 .codex_tmp_quantgpt_src/
+.pytest_tmp*/
+
+# ---- Output artifacts ----
+output/
 
 # ---- Credentials (NEVER commit) ----
 .env

@@ -1,0 +1,118 @@
+{
+  "version": 1,
+  "updated_at": 1779671928.5712442,
+  "jobs": {
+    "job_0001": {
+      "status": "failed",
+      "result": null,
+      "error": "settings.decay must be >= 0",
+      "cancel": false,
+      "created_at": 1779437051.50678,
+      "updated_at": 1779437051.5805824,
+      "progress": {
+        "phase": "failed",
+        "current": 1,
+        "total": 1,
+        "percent": 100,
+        "message": "settings.decay must be >= 0",
+        "alpha_id": "",
+        "error_context": {
+          "schema_version": "observability.v1",
+          "correlation_id": "corr_929540b608750ed2",
+          "job_id": "job_0001",
+          "phase": "guided_run",
+          "error_code": "GUIDED_JOB_FAILED",
+          "error_category": "validation",
+          "error_type": "ValueError",
+          "error": "settings.decay must be >= 0",
+          "redacted_message": "settings.decay must be >= 0",
+          "retryable": false
+        }
+      }
+    },
+    "job_0002": {
+      "status": "failed",
+      "result": null,
+      "error": "settings.decay must be >= 0",
+      "cancel": false,
+      "created_at": 1779438258.7752442,
+      "updated_at": 1779438258.8567812,
+      "progress": {
+        "phase": "failed",
+        "current": 1,
+        "total": 1,
+        "percent": 100,
+        "message": "settings.decay must be >= 0",
+        "alpha_id": "",
+        "error_context": {
+          "schema_version": "observability.v1",
+          "correlation_id": "corr_929540b608750ed2",
+          "job_id": "job_0002",
+          "phase": "guided_run",
+          "error_code": "GUIDED_JOB_FAILED",
+          "error_category": "validation",
+          "error_type": "ValueError",
+          "error": "settings.decay must be >= 0",
+          "redacted_message": "settings.decay must be >= 0",
+          "retryable": false
+        }
+      }
+    },
+    "job_0003": {
+      "status": "failed",
+      "result": null,
+      "error": "Authentication failed; check credentials or connection settings.",
+      "cancel": false,
+      "created_at": 1779442815.3677447,
+      "updated_at": 1779442815.5737875,
+      "progress": {
+        "phase": "failed",
+        "current": 1,
+        "total": 1,
+        "percent": 100,
+        "message": "Authentication failed; check credentials or connection settings.",
+        "alpha_id": "",
+        "error_context": {
+          "schema_version": "observability.v1",
+          "correlation_id": "corr_929540b608750ed2",
+          "job_id": "job_0003",
+          "phase": "guided_run",
+          "error_code": "GUIDED_JOB_FAILED",
+          "error_category": "internal",
+          "error_type": "RuntimeError",
+          "error": "生产环境需要 BRAIN 凭据。请设置 BRAIN_USERNAME/BRAIN_PASSWORD 或 BRAIN_TOKEN 环境变量。详见 README.md。",
+          "redacted_message": "生产环境需要 BRAIN 凭据。请设置 BRAIN_USERNAME/BRAIN_PASSWORD 或 BRAIN_TOKEN 环境变量。详见 README.md。",
+          "retryable": false
+        }
+      }
+    },
+    "job_0004": {
+      "status": "failed",
+      "result": null,
+      "error": "Authentication failed; check credentials or connection settings.",
+      "cancel": false,
+      "created_at": 1779443043.675404,
+      "updated_at": 1779443043.8855655,
+      "progress": {
+        "phase": "failed",
+        "current": 1,
+        "total": 1,
+        "percent": 100,
+        "message": "Authentication failed; check credentials or connection settings.",
+        "alpha_id": "",
+        "error_context": {
+          "schema_version": "observability.v1",
+          "correlation_id": "corr_929540b608750ed2",
+          "job_id": "job_0004",
+          "phase": "guided_run",
+          "error_code": "GUIDED_JOB_FAILED",
+          "error_category": "internal",
+          "error_type": "RuntimeError",
+          "error": "生产环境需要 BRAIN 凭据。请设置 BRAIN_USERNAME/BRAIN_PASSWORD 或 BRAIN_TOKEN 环境变量。详见 README.md。",
+          "redacted_message": "生产环境需要 BRAIN 凭据。请设置 BRAIN_USERNAME/BRAIN_PASSWORD 或 BRAIN_TOKEN 环境变量。详见 README.md。",
+          "retryable": false
+        }
+      }
+    }
+  }
+}

@@ -7,11 +7,33 @@ from typing import Callable, Iterable
 
 from brain_alpha_ops.models import Candidate
 
-from .expression_ast import expression_key
+from .pipeline_helpers import blocked_gate, expr_key, is_hard_backtest_blocked, ranking_score
 
 
 CandidateRanker = Callable[[list[Candidate]], list[Candidate]]
 CandidatePredicate = Callable[[Candidate], bool]
+
+INACTIVE_BACKTEST_STATUSES = {
+    "simulation_failed",
+    "simulation_poll_failed",
+    "simulation_request_failed",
+    "official_standard_rejected",
+    "submission_ready",
+}
+
+
+def is_active_backtest_candidate(candidate: Candidate) -> bool:
+    if not candidate.simulation_id or candidate.official_metrics:
+        return False
+    return candidate.lifecycle_status not in INACTIVE_BACKTEST_STATUSES
+
+
+def pending_simulation_targets(pool: list[Candidate]) -> list[Candidate]:
+    return [
+        candidate
+        for candidate in pool
+        if is_active_backtest_candidate(candidate)
+    ]
 
 
 @dataclass
@@ -148,42 +170,3 @@ class CandidatePoolService:
                 continue
             available.append(candidate)
         return self.smart_ranker(available)
-
-
-def expr_key(candidate: Candidate) -> str:
-    return expression_key(candidate.expression)
-
-
-def ranking_score(candidate: Candidate) -> float:
-    return float(candidate.scorecard.get("total_score", 0.0) or 0.0)
-
-
-def blocked_gate(status: str, reasons: list[str]) -> dict:
-    return {
-        "schema_version": "production-gate-v2.1",
-        "submission_ready": False,
-        "status": status,
-        "failed_reasons": list(reasons),
-        "warnings": [],
-    }
-
-
-def is_hard_backtest_blocked(status: str) -> bool:
-    text = str(status or "").lower()
-    if "simulation_deferred_concurrency_limit" in text or "simulation_deferred_rate_limit" in text:
-        return False
-    return any(
-        marker in text
-        for marker in (
-            "official_validation_failed",
-            "observability_duplicate_blocked",
-            "local_standard_rejected",
-            "official_standard_rejected",
-            "simulation_request_failed",
-            "simulation_poll_failed",
-            "simulation_result_failed",
-            "simulation_failed",
-            "simulation_timeout",
-            "rejected",
-        )
-    )

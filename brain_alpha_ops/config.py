@@ -319,6 +319,8 @@ class WebConfig:
     session_ttl_seconds: int = 43200
     allow_multiple_sessions: bool = True
     allow_remote: bool = False
+    secure_cookies: bool = False
+    admin_token_env: str = "BRAIN_ALPHA_OPS_WEB_ADMIN_TOKEN"
 
 
 @dataclass
@@ -372,7 +374,7 @@ def validate_run_config(config: RunConfig) -> RunConfig:
     _require_bool(errors, "auto_submit", config.auto_submit)
     _validate_credentials(errors, config.credentials)
     _validate_web(errors, config.web)
-    _validate_ops(errors, config.ops)
+    _validate_ops(errors, config.ops, environment=config.environment)
     if errors:
         raise ConfigValidationError("Invalid run configuration: " + "; ".join(errors))
     return config
@@ -396,9 +398,11 @@ def _validate_web(errors: list[str], web: WebConfig) -> None:
     _require_int_range(errors, "web.session_ttl_seconds", web.session_ttl_seconds, min_value=60)
     _require_bool(errors, "web.allow_multiple_sessions", web.allow_multiple_sessions)
     _require_bool(errors, "web.allow_remote", web.allow_remote)
+    _require_bool(errors, "web.secure_cookies", web.secure_cookies)
+    _require_str(errors, "web.admin_token_env", web.admin_token_env, allow_empty=False)
 
 
-def _validate_ops(errors: list[str], ops: OpsConfig) -> None:
+def _validate_ops(errors: list[str], ops: OpsConfig, *, environment: str = "") -> None:
     if not isinstance(ops, OpsConfig):
         errors.append("ops must be an object")
         return
@@ -407,7 +411,7 @@ def _validate_ops(errors: list[str], ops: OpsConfig) -> None:
     _validate_scoring(errors, ops.scoring)
     _validate_thresholds(errors, ops.thresholds)
     _validate_submission_policy(errors, ops.submission_policy)
-    _validate_official_api(errors, ops.official_api)
+    _validate_official_api(errors, ops.official_api, environment=environment)
     _require_str(errors, "ops.storage_dir", ops.storage_dir, allow_empty=False)
     _require_str(errors, "ops.source_tag_policy", ops.source_tag_policy, allow_empty=False)
 
@@ -623,11 +627,11 @@ def _validate_submission_policy(errors: list[str], policy: SubmissionPolicy) -> 
     )
 
 
-def _validate_official_api(errors: list[str], api: OfficialAPIConfig) -> None:
+def _validate_official_api(errors: list[str], api: OfficialAPIConfig, *, environment: str = "") -> None:
     if not isinstance(api, OfficialAPIConfig):
         errors.append("ops.official_api must be an object")
         return
-    _validate_http_url(errors, "ops.official_api.base_url", api.base_url)
+    _validate_http_url(errors, "ops.official_api.base_url", api.base_url, require_https=(environment == "production"))
     for field_name in (
         "authentication_path",
         "simulations_path",
@@ -790,13 +794,16 @@ def _validate_regime_adjustments(errors: list[str], value: Any) -> None:
                 )
 
 
-def _validate_http_url(errors: list[str], name: str, value: Any) -> None:
+def _validate_http_url(errors: list[str], name: str, value: Any, *, require_https: bool = False) -> None:
     if not isinstance(value, str) or not value.strip():
         errors.append(f"{name} must be a non-empty URL")
         return
     parsed = urlparse(value)
     if parsed.scheme not in {"http", "https"} or not parsed.netloc:
         errors.append(f"{name} must be an http(s) URL")
+        return
+    if require_https and parsed.scheme != "https":
+        errors.append(f"{name} must use https in production")
 
 
 def _require_api_path(errors: list[str], name: str, value: Any) -> None:

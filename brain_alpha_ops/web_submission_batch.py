@@ -26,7 +26,8 @@ def submit_batch_payload(
     payload_truthy: PayloadTruthy,
 ) -> dict[str, Any]:
     alpha_ids = [str(item) for item in payload.get("alpha_ids", []) if str(item)]
-    candidates = payload.get("submit_candidates") if isinstance(payload.get("submit_candidates"), list) else []
+    raw_candidates = payload.get("submit_candidates")
+    candidates = raw_candidates if isinstance(raw_candidates, list) else []
     by_id = {str(candidate.get("alpha_id", "")): candidate for candidate in candidates if isinstance(candidate, dict)}
     run_config = run_config_from_payload(payload)
     observability_preflight = observability_submission_preflight(run_config.ops.storage_dir)
@@ -81,7 +82,8 @@ def submit_batch_payload(
 def _state_counts(results: list[dict[str, Any]]) -> dict[str, int]:
     counts: dict[str, int] = {}
     for item in results:
-        submission = item.get("submission") if isinstance(item.get("submission"), dict) else {}
+        raw_submission = item.get("submission")
+        submission = raw_submission if isinstance(raw_submission, dict) else {}
         key = str(item.get("status") or submission.get("status") or ("SUBMITTED" if item.get("ok") else item.get("error_code") or "FAILED"))
         counts[key] = counts.get(key, 0) + 1
     return counts

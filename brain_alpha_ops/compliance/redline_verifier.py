@@ -450,8 +450,11 @@ def _verify_redline_3_dataset_ids(report: ComplianceReport) -> None:
             ))
     except Exception:
         report.add_pass()
-
-
+    from brain_alpha_ops.data.official_context_validation import validate_official_context
+    if validate_official_context(data_dir=_project_root() / "data").get("blocking_ok"):
+        report.add_pass()
+    else:
+        report.add(RedLineViolation(redline_id, "Dataset ID 全量可用", "BLOCKING", "data/official_datasets.json", "官方上下文 Dataset 血缘不一致", "invalid", "matching official field counts", "context lineage failed", "运行 fetch_official_context.py 后复核 metadata hash。"))
 def _verify_redline_4_parameter_traceability(report: ComplianceReport) -> None:
     """Red Line 4: 参数全链路可溯."""
     redline_id = 4

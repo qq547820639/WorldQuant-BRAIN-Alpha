@@ -68,6 +68,22 @@ def test_expression_sqlite_index_reports_missing_cache(tmp_path):
     assert summary["error_code"] == "INDEX_NOT_BUILT"
 
 
+def test_expression_sqlite_index_similarity_lookup_caps_scan_rows(tmp_path):
+    repo = ResearchRepository(str(tmp_path))
+    repo.save_candidate("run_1", _candidate("older", "rank(ts_delta(close, 21))"))
+    repo.save_candidate("run_1", _candidate("newest", "rank(ts_delta(open, 21))"))
+    index = ExpressionSqliteIndex(tmp_path)
+
+    lookup = index.lookup("rank(ts_delta(close, 20))", min_similarity=0.7, max_scan_rows=1)
+
+    assert lookup["ok"] is True
+    assert lookup["exact_match"] is False
+    assert lookup["similar_scan_limit"] == 1
+    assert lookup["similar_scan_count"] == 1
+    assert lookup["similar_scan_truncated"] is True
+    assert all(row["alpha_id"] != "older" for row in lookup["similar_records"])
+
+
 def test_expression_sqlite_index_manifest_marks_stale_after_jsonl_append(tmp_path):
     repo = ResearchRepository(str(tmp_path))
     repo.save_candidate("run_1", _candidate("a1", "rank(ts_delta(close, 20))"))

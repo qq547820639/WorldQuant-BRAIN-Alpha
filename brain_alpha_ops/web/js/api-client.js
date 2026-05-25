@@ -61,20 +61,22 @@
       }
 
       try {
-        var controller = new AbortController();
-        var timeoutId = setTimeout(function () { controller.abort(); }, timeoutMs);
+        var controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+        var timeoutId = controller ? setTimeout(function () { controller.abort(); }, timeoutMs) : null;
 
-        var response = await fetch(apiUrl(path), {
+        var fetchFn = typeof window.fetch === 'function' ? window.fetch.bind(window) : fetch;
+        var requestOptions = {
           method: options.method || 'GET',
           headers: Object.assign(
             { 'X-Brain-Alpha-CSRF': CSRF_TOKEN },
             options.headers || {}
           ),
           body: options.body || undefined,
-          signal: controller.signal,
-        });
+        };
+        if (controller) requestOptions.signal = controller.signal;
+        var response = await fetchFn(apiUrl(path), requestOptions);
 
-        clearTimeout(timeoutId);
+        if (timeoutId) clearTimeout(timeoutId);
 
         var data;
         try {
@@ -83,7 +85,7 @@
           throw createError('NETWORK_ERROR', '响应格式无效');
         }
 
-        if (!data.ok) {
+        if (data.ok === false) {
           var code = data.error_code || 'UNKNOWN';
           var msg = userMessage(code, data.error);
           var err = new Error(msg);
@@ -94,6 +96,11 @@
             throw err;
           }
           throw err;
+        }
+        if (response && response.ok === false) {
+          var httpErr = new Error('HTTP ' + (response.status || 'ERROR'));
+          httpErr.code = 'NETWORK_ERROR';
+          throw httpErr;
         }
         return data;
       } catch (e) {

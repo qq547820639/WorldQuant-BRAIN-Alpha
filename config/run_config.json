@@ -16,7 +16,8 @@
     "open_browser": true,
     "session_ttl_seconds": 43200,
     "allow_multiple_sessions": true,
-    "allow_remote": false
+    "allow_remote": false,
+    "admin_token_env": "BRAIN_ALPHA_OPS_WEB_ADMIN_TOKEN"
   },
   "ops": {
     "storage_dir": "data",

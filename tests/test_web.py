@@ -17,155 +17,171 @@ from brain_alpha_ops.tasks import JobStore
 from brain_alpha_ops.web import _load_html, anti_overfit_snapshot, assistant_context_snapshot, assistant_cross_review_payload, assistant_guidance_snapshot, assistant_request_snapshot, assistant_response_guidance_payload, assistant_response_parse_payload, cloud_alpha_snapshot, config_from_payload, generate_candidates_payload, passed_candidates_from_payload, public_run_config, research_memory_snapshot, research_observability_snapshot, rolling_validation_snapshot, save_assistant_guidance_payload, sqlite_expression_lookup_payload, sqlite_index_snapshot, sqlite_record_lookup_payload
 from brain_alpha_ops.web_routes import GET_ROUTES, POST_ROUTES, route_for
 from scripts.check_frontend_syntax import check_scripts
+from tests.test_web_frontend_v2 import _build_test_script, _run_node_script
+
+
+APP_TEST_MODULES = [
+    "js/utils.js",
+    "js/api-client.js",
+    "js/state.js",
+    "js/components/toast.js",
+    "js/components/spinner.js",
+    "js/components/modal.js",
+    "js/components/progress.js",
+    "js/components/table.js",
+    "js/views/detail.js",
+    "js/views/production.js",
+    "js/views/charts.js",
+    "js/views/monitor.js",
+    "js/view-model.js",
+    "js/view-registry.js",
+    "js/view-renderers.js",
+    "js/result-state.js",
+    "js/result-table.js",
+    "js/form-controls.js",
+    "js/cloud-sync.js",
+    "js/app.js",
+]
+
+
+def _run_app_contract(test_code: str) -> str:
+    return _run_node_script(_build_test_script(APP_TEST_MODULES, test_code))
 
 
 def test_web_html_contains_chinese_console():
     HTML = _load_html()
-    assert "官方回测槽位" in HTML
-    assert "系统策略" in HTML
-    assert "停止连续生产" in HTML
-    assert "backtestPanel" in HTML
-    assert "insightCardHtml" in HTML
-    assert "insightGroupHtml" in HTML
-    assert "workflowNav" in HTML
-    assert "renderWorkflowNav" in HTML
-    assert "emptyStateHtml" in HTML
-    assert "生产流程" in HTML
-    assert "辅助追踪与诊断" in HTML
-    assert "switchView" in HTML
-    assert "configuredBacktestSlotLimit" in HTML
-    assert "syncButton" in HTML
-    assert "setSyncBusy" in HTML
-    assert "setSubmitBusy" in HTML
+
+    for text in (
+        "BRAIN Alpha Ops",
+        "策略 & 插件",
+        "开始生产搜索",
+        "生产流程",
+        "数据审计",
+        "研究工具",
+        "达标",
+        "可提交",
+        "不达标",
+        "排序分",
+        "提交勾选",
+        "预计剩余",
+        "Instrument Type",
+        "Truncation",
+        "Assistant JSON",
+    ):
+        assert text in HTML
+
+    for element_id in (
+        "backtestPanel",
+        "insightPanel",
+        "viewTabs",
+        "syncButton",
+        "checkMode",
+        "checkButton",
+        "detailModal",
+        "checkProgressFill",
+        "cloudSyncMeta",
+        "monitorCloudMeta",
+        "cloudStatsPanel",
+        "checkProgressMeta",
+        "autoSubmitToggle",
+        "controlButton",
+        "slotPolicyText",
+        "assistantGenerateInputs",
+        "assistantUseDraftButton",
+        "assistantSaveDraftButton",
+        "assistantUseLatestButton",
+        "assistantPreviewGuidanceButton",
+        "assistantSaveGuidanceButton",
+    ):
+        assert element_id in HTML
+
+    for symbol in (
+        "renderViewTabs",
+        "getEmptyDescription",
+        "switchView",
+        "renderStrategyPolicy",
+        "renderOpsMonitor",
+        "buildResearchRows",
+        "monitor-stats-grid",
+        "cloud_alphas",
+        "buildCloudRows",
+        "buildSubmittableRows",
+        "cloudSyncStatus",
+        "checkResults",
+        "renderRiskExplanation",
+        "CHECK_STALE_MS",
+        "payload.guided = true",
+        "resumeProductionFromCheckpoint",
+        "pollJob",
+        "slot-card",
+        "phaseName",
+        "official_validation",
+        "simulation_submit",
+        "currentResearchKnowledge",
+        "buildPromptRunRows",
+        "buildSqliteRows",
+        "buildRobustnessRows",
+        "currentRobustnessSnapshot",
+        "viewCandidateDetail",
+        "viewCheckDetail",
+        "renderFieldTableHTML",
+        "research_observability",
+        "submission_risk",
+        "strategyPluginsEnabled",
+        "strategyPluginSpecs",
+        "assistantGuidanceScoreMinConfidence",
+        "assistantGuidanceScoreMinOutcomeCount",
+    ):
+        assert symbol in HTML
+
     assert "switchTab" not in HTML
     assert 'class="tabs"' not in HTML
-    assert "data-tab" not in HTML
-    assert "达标" in HTML
-    assert "可提交" in HTML
-    assert "不达标" in HTML
-    assert "数据统计" in HTML
-    assert "sync_status" in HTML
-    assert "快速检查" in HTML
-    assert "全部检查" in HTML
-    assert "排序分" in HTML
-    assert "checkMode" in HTML
-    assert "checkButton" in HTML
-    assert "提交勾选" in HTML
+    assert 'data-tab="' not in HTML
+    assert "cloud_sync" in HTML
+    assert '<option value="quick" selected>快速</option>' in HTML
+    assert '<option value="all">全部</option>' in HTML
     assert "自动提交可提交" not in HTML
     assert "check_batch" in HTML
     assert "submit_batch" in HTML
-    assert "detailModal" in HTML
-    assert "checkProgressFill" in HTML
-    assert "cloudSyncMeta" in HTML
-    assert "monitorCloudMeta" in HTML
-    assert "cloudStatsPanel" in HTML
-    assert "renderCloudStatsPanel" in HTML
-    assert "renderResearchMemoryPanel" in HTML
-    assert "stats-dashboard" in HTML
-    assert "checkProgressMeta" in HTML
-    assert "isSubmittedCloudStatus" in HTML
-    assert "isCloudFailedAlpha" in HTML
-    assert "cloudPassedCandidates" in HTML
-    assert "detailedSyncStatusCode" in HTML
-    assert "contextScopeText" in HTML
-    assert "checkFailureSummary" in HTML
-    assert "priorBreakdown" in HTML
     assert "状态码" not in HTML
-    assert "预计剩余" in HTML
     assert "下次刷新" not in HTML
-    assert "倒计时" in HTML
-    assert "CHECK_STALE_MS" in HTML
-    assert "autoSubmitToggle" in HTML
-    assert "Instrument Type" in HTML
-    assert "Truncation" in HTML
-    assert "controlButton" in HTML
-    assert "payload.guided = true" in HTML
-    assert "resumeProductionFromCheckpoint" in HTML
     assert "runButton" not in HTML
     assert "复制当前最佳 Alpha" not in HTML
     assert "快速检查选中" not in HTML
     assert "运行、同步和三槽回测监控已固定在右侧顶部" not in HTML
-    assert "waitForJob" in HTML
-    assert "slotTarget" in HTML
-    assert "openBacktestSlot" in HTML
-    assert "slotCountdownText" in HTML
-    assert "WAITING_CAPACITY" in HTML
-    assert "WAITING_SUBMIT" in HTML
-    assert "CONTEXT_READY" in HTML
-    assert "回测前预检" in HTML
-    assert "官方容量等待" in HTML
-    assert "/api/config" in HTML
-    assert "/api/active_job" in HTML
-    assert "/api/cloud_alphas" in HTML
-    assert "/api/research_memory" in HTML
-    assert "/api/research_knowledge" in HTML
-    assert "/api/research_observability" in HTML
-    assert "/api/prompt_runs" in HTML
-    assert "/api/sqlite_indexes" in HTML
-    assert "/api/sqlite_expression_lookup" in HTML
-    assert "/api/sqlite_record_lookup" in HTML
-    assert "/api/rolling_validation" in HTML
-    assert "/api/assistant_context" in HTML
-    assert "/api/assistant_guidance" in HTML
-    assert "/api/assistant_request" in HTML
+
+    for path in (
+        "/api/config",
+        "/api/active_job",
+        "/api/cloud_alphas",
+        "/api/research_memory",
+        "/api/check_batch",
+        "/api/submit",
+        "/api/submit_batch",
+        "/api/sync_alphas",
+    ):
+        assert path in HTML
+
+    for path in (
+        "/api/research_knowledge",
+        "/api/research_observability",
+        "/api/prompt_runs",
+        "/api/sqlite_indexes",
+        "/api/sqlite_expression_lookup",
+        "/api/sqlite_record_lookup",
+        "/api/anti_overfit",
+        "/api/rolling_validation",
+    ):
+        assert path in GET_ROUTES
+
     assert "loadCloudSnapshot" in HTML
+    assert "loadSnapshot" in HTML
+    assert "/api/cloud_alphas?limit=500" in HTML
+    assert "/api/sync_status?compact=1&job_id=" in HTML
+    assert "pollSyncJob" in HTML
     assert "loadResearchMemory" in HTML
-    assert "loadResearchKnowledge" in HTML
-    assert "loadResearchObservability" in HTML
-    assert "loadPromptRuns" in HTML
-    assert "loadSqliteIndexes" in HTML
-    assert "renderResearchKnowledgePanel" in HTML
-    assert "renderPromptRunLedgerPanel" in HTML
-    assert "renderSqliteIndexPanel" in HTML
-    assert "renderRobustnessPanel" in HTML
-    assert "runSqliteExpressionLookup" in HTML
-    assert "runSqliteRecordLookup" in HTML
-    assert "buildRobustnessSnapshot" in HTML
-    assert "runAntiOverfitForCandidate" in HTML
-    assert "runRollingValidationForCandidate" in HTML
-    assert "openSqliteLookupDetail" in HTML
-    assert "updateSqliteLookupDetailControls" in HTML
-    assert "copySqliteLookupJson" in HTML
-    assert "openRobustnessDetail" in HTML
-    assert "runRobustnessBatchForVisible" in HTML
-    assert "applyRobustnessResultToCandidate" in HTML
-    assert "candidateMatchesId" in HTML
-    assert "runAntiOverfitForInput" in HTML
-    assert "runRollingValidationForInput" in HTML
-    assert "renderSimpleDetailTable" in HTML
-    assert "renderResearchObservabilityPanel" in HTML
-    assert "Generation Guidance" in HTML
-    assert "currentObservabilityGenerationGuidance" in HTML
-    assert "Official Guard" in HTML
-    assert "currentObservabilityOfficialCallGuard" in HTML
-    assert "snapshot.official_call_guard" in HTML
-    assert "Guard blocked" in HTML
-    assert "observabilityConfirmationMessage" in HTML
-    assert "Preflight unavailable:" in HTML
-    assert "Partial Errors" in HTML
-    assert "research_observability" in HTML
-    assert "loadAssistantContext" in HTML
-    assert "loadAssistantGuidance" in HTML
+    assert "OfficialBrainAPI" not in HTML
     assert "useAssistantGuidance" in HTML
-    assert "strategyPluginsEnabled" in HTML
-    assert "strategyPluginSpecs" in HTML
-    assert "assistantGuidanceScoreMinConfidence" in HTML
-    assert "assistantGuidanceScoreMinOutcomeCount" in HTML
-    assert "useOfflineAssistantDraft" in HTML
-    assert "assistantUseDraftButton" in HTML
-    assert "saveOfflineAssistantDraftGuidance" in HTML
-    assert "assistantSaveDraftButton" in HTML
-    assert "useLatestAssistantGuidance" in HTML
-    assert "useSavedAssistantGuidance" in HTML
-    assert "assistantUseLatestButton" in HTML
-    assert "offline_draft" in HTML
-    assert "previewAssistantGuidance" in HTML
-    assert "assistantPreviewGuidanceButton" in HTML
-    assert "/api/assistant_response/guidance" in HTML
-    assert "saveAssistantGuidance" in HTML
-    assert "assistantSaveGuidanceButton" in HTML
-    assert "copyAssistantRequest" in HTML
-    assert "renderAssistantContextDetail" in HTML
 
 
 def test_api_client_maps_submit_preflight_error_codes():
@@ -185,11 +201,11 @@ def test_api_client_maps_submit_preflight_error_codes():
     ):
         assert code in js
         assert code in html
-    assert "renderAssistantGuidanceDetail" in html
-    assert "applyCloudSnapshot" in html
+    assert "assistantGenerateInputs" in html
+    assert "currentResult.cloud_alphas" in html
     assert "research_memory" in html
     assert "云端已提交" in html
-    assert "云端不达标" in html
+    assert "云端相似度过高" in html
     assert '<option value="production" selected>' in html
     assert '<option value="3d" selected>近 3 天</option>' in html
 
@@ -218,79 +234,171 @@ def test_web_inline_html_matches_modular_js_sources():
     assert "js/app.js" in result["sources"]
 
 
-def test_research_observability_cards_escape_dynamic_text():
-    app_js = (Path(__file__).resolve().parents[1] / "brain_alpha_ops" / "web" / "js" / "app.js").read_text(encoding="utf-8")
-    start = app_js.index("function renderResearchObservabilityPanel")
-    end = app_js.index("  function researchMemoryRows", start)
-    render_block = app_js[start:end]
+def test_web_static_html_uses_delegated_handlers_without_inline_events():
+    root = Path(__file__).resolve().parents[1]
+    template = (root / "brain_alpha_ops" / "web" / "index_template.html").read_text(encoding="utf-8")
+    generated = (root / "brain_alpha_ops" / "web" / "index.html").read_text(encoding="utf-8")
 
-    assert "'<div class=\"stat-label\">' + esc(row.name || '')" in render_block
-    assert "'<div class=\"stat-value\">' + esc(value)" in render_block
-    assert "'<div class=\"stat-note\">' + esc(row.note || '')" in render_block
-
-
-def test_additional_stats_panels_escape_dynamic_text():
-    app_js = (Path(__file__).resolve().parents[1] / "brain_alpha_ops" / "web" / "js" / "app.js").read_text(encoding="utf-8")
-    start = app_js.index("function renderStatsPanelForView")
-    end = app_js.index("  function renderModuleActions", start)
-    render_block = app_js[start:end]
-
-    assert "function renderResearchKnowledgePanel" in app_js
-    assert "function renderPromptRunLedgerPanel" in app_js
-    assert "function renderSqliteIndexPanel" in app_js
-    assert "function renderRobustnessPanel" in app_js
-    assert "function renderSimpleDetailTable" in app_js
-    assert "openSqliteLookupDetail" in app_js
-    assert "updateSqliteLookupDetailControls" in app_js
-    assert "copySqliteLookupJson" in app_js
-    assert "function filteredLookupRows" in app_js
-    assert "function sortedLookupRows" in app_js
-    assert "openRobustnessDetail" in app_js
-    assert "function applyRobustnessResultToCandidate" in app_js
-    assert "function candidateMatchesId" in app_js
-    assert "'<div class=\"stat-label\">' + esc(row.name || '')" in render_block
-    assert "'<div class=\"stat-value\">' + esc(value)" in render_block
-    assert "'<div class=\"stat-note\">' + esc(row.note || '')" in render_block
+    for html in (template, generated):
+        assert "onclick=" not in html
+        assert "onchange=" not in html
+        assert "oninput=" not in html
+        assert "onkeydown=" not in html
+        assert 'data-action="toggle-run"' in html
+        assert 'data-action="sync-cloud"' in html
+        assert 'data-change-action="toggle-environment"' in html
+        assert 'value="mock"' not in html
+        assert "本地模拟环境" not in html
 
 
-def test_sqlite_lookup_detail_controls_escape_and_reuse_lookup_state():
-    app_js = (Path(__file__).resolve().parents[1] / "brain_alpha_ops" / "web" / "js" / "app.js").read_text(encoding="utf-8")
-    start = app_js.index("window.openSqliteLookupDetail = function")
-    end = app_js.index("  window.openRobustnessDetail", start)
-    block = app_js[start:end]
+def test_web_static_html_has_no_inline_style_attributes():
+    root = Path(__file__).resolve().parents[1]
+    template = (root / "brain_alpha_ops" / "web" / "index_template.html").read_text(encoding="utf-8")
+    generated = (root / "brain_alpha_ops" / "web" / "index.html").read_text(encoding="utf-8")
 
-    assert "escapeAttr(filterText)" in block
-    assert "renderSimpleDetailTable(expressionRows.slice(0, 20)" in block
-    assert "renderSimpleDetailTable(recordRows.slice(0, 30)" in block
-    assert "S.merge('currentResult.sqlite_lookup'" in block
-    assert "window.copyText(JSON.stringify(currentSqliteLookup(), null, 2))" in block
+    for html in (template, generated):
+        assert " style=" not in html
+        assert "style-src 'self' 'unsafe-inline'" not in web.content_security_policy_for_html(html)
 
 
-def test_robustness_results_write_back_to_candidate_submissions():
-    app_js = (Path(__file__).resolve().parents[1] / "brain_alpha_ops" / "web" / "js" / "app.js").read_text(encoding="utf-8")
-    start = app_js.index("function applyRobustnessResultToCandidate")
-    end = app_js.index("  async function loadAssistantContext", start)
-    block = app_js[start:end]
+def test_web_csp_hashes_inline_scripts_without_unsafe_inline():
+    from brain_alpha_ops.web import content_security_policy_for_html
 
-    assert "submission.anti_overfit_report = result.anti_overfit.anti_overfit_report" in block
-    assert "submission.rolling_validation_report = result.rolling_validation.rolling_validation_report" in block
-    assert "S.set('currentResult.candidates', candidateUpdate.rows)" in block
-    assert "S.set('currentResult.passed_candidates', passedUpdate.rows)" in block
-    assert "candidateIdentity(candidate || {})" in block
+    html = "<style>.ok{color:red}</style><script>console.log('ok')</script><script>window.x=1</script>"
+    csp = content_security_policy_for_html(html)
+
+    assert "script-src 'self'" in csp
+    assert "script-src 'self' 'unsafe-inline'" not in csp
+    assert "style-src 'self'" in csp
+    assert "style-src 'self' 'unsafe-inline'" not in csp
+    assert csp.count("'sha256-") == 3
+
+
+def test_research_observability_rows_render_and_cache_items():
+    test_code = """
+window.AppState.setBatch({
+  "activeView": "research_observability",
+  "currentResult.research_observability": {
+    items: [{ id: "OBS001", stage: "<script>stage</script>", status: "passed", message: "<b>unsafe</b>" }]
+  },
+});
+
+window.renderCurrentView();
+
+var html = document.getElementById("candidateRows").innerHTML;
+assertContains(html, "OBS001", "research row id rendered");
+assertNotContains(html, "<script>stage</script>", "raw stage not injected");
+assertNotContains(html, "<b>unsafe</b>", "raw message not injected");
+var cached = window.AppState.getCached("research_observability", "OBS001");
+assertEqual(cached.raw.message, "<b>unsafe</b>", "research row keeps raw detail data in cache");
+"""
+
+    _run_app_contract(test_code)
+
+
+def test_additional_stats_panels_render_through_current_view_contract():
+    test_code = """
+window.AppState.setBatch({
+  "currentResult.research_knowledge": { items: [{ id: "KN001", stage: "learn", message: "<tag>knowledge</tag>" }] },
+  "currentResult.prompt_runs": { runs: [{ run_id: "PR001", stage: "prompt", message: "<tag>prompt</tag>" }] },
+  "currentResult.sqlite_indexes": { expressions: { count: 2 } },
+  "currentResult.robustness_snapshot": { candidates: [{ alpha_id: "ROB001", family: "<tag>family</tag>", submission_risk: "<tag>risk</tag>" }] },
+  "currentResult.lifecycle_records": [{ alpha_id: "LIFE001", stage: "<tag>stage</tag>", status: "completed", message: "<tag>message</tag>" }],
+});
+
+window.switchView("research_knowledge");
+assertContains(document.getElementById("candidateRows").innerHTML, "KN001", "knowledge row rendered");
+assertEqual(window.AppState.getCached("research_knowledge", "KN001").raw.message, "<tag>knowledge</tag>", "knowledge detail data cached");
+
+window.switchView("prompt_runs");
+assertContains(document.getElementById("candidateRows").innerHTML, "PR001", "prompt run rendered");
+assertEqual(window.AppState.getCached("prompt_run", "PR001").raw.message, "<tag>prompt</tag>", "prompt run detail data cached");
+
+window.switchView("sqlite_indexes");
+assertContains(document.getElementById("candidateRows").innerHTML, "expressions", "sqlite index row rendered");
+
+window.switchView("lifecycle");
+var lifecycleHtml = document.getElementById("candidateRows").innerHTML;
+assertContains(lifecycleHtml, "LIFE001", "lifecycle row rendered");
+assertNotContains(lifecycleHtml, "<tag>stage</tag>", "raw lifecycle stage not injected");
+assertNotContains(lifecycleHtml, "<tag>message</tag>", "raw lifecycle message not injected");
+
+window.switchView("robustness");
+var robustnessHtml = document.getElementById("candidateRows").innerHTML;
+assertContains(robustnessHtml, "ROB001", "robustness row rendered");
+assertContains(robustnessHtml, "&lt;tag&gt;family&lt;/tag&gt;", "robustness family escaped");
+assertContains(robustnessHtml, "&lt;tag&gt;risk&lt;/tag&gt;", "robustness risk escaped");
+"""
+
+    _run_app_contract(test_code)
+
+
+def test_sqlite_index_rows_reuse_cached_lookup_state():
+    test_code = """
+window.AppState.setBatch({
+  "activeView": "sqlite_indexes",
+  "currentResult.sqlite_indexes": {
+    expression_index: { count: 7, status: "<b>ready</b>" },
+  },
+});
+
+window.renderCurrentView();
+
+var html = document.getElementById("candidateRows").innerHTML;
+assertContains(html, "expression_index", "sqlite index key rendered");
+assertContains(html, "查看详情", "row action rendered");
+var cached = window.AppState.getCached("sqlite_index", "expression_index");
+assertEqual(cached.raw.key, "expression_index", "sqlite row cached by key");
+"""
+
+    _run_app_contract(test_code)
+    assert "/api/sqlite_expression_lookup" in GET_ROUTES
+    assert "/api/sqlite_record_lookup" in GET_ROUTES
+
+
+def test_robustness_results_render_and_cache_candidate_rows():
+    test_code = """
+window.AppState.setBatch({
+  "activeView": "robustness",
+  "currentResult.robustness_snapshot": {
+    candidates: [{ alpha_id: "ROB002", family: "Momentum", scorecard: { total_score: 91 }, gate: { submission_ready: true } }]
+  },
+});
+
+window.renderCurrentView();
+
+var html = document.getElementById("candidateRows").innerHTML;
+assertContains(html, "ROB002", "robustness alpha rendered");
+assertContains(html, "Momentum", "robustness family rendered");
+var cached = window.AppState.getCached("robustness", "ROB002");
+assertEqual(cached.raw.alpha_id, "ROB002", "robustness row cached by alpha id");
+"""
+
+    _run_app_contract(test_code)
+    assert "/api/anti_overfit" in GET_ROUTES
+    assert "/api/rolling_validation" in GET_ROUTES
 
 
 def test_stats_cards_sanitize_dynamic_class_and_action_handlers():
-    app_js = (Path(__file__).resolve().parents[1] / "brain_alpha_ops" / "web" / "js" / "app.js").read_text(encoding="utf-8")
-    start = app_js.index("function safeClassTokens")
-    end = app_js.index("  function renderModuleActions", start)
-    render_block = app_js[start:end]
+    test_code = """
+window.AppState.setBatch({
+  "activeView": "passed",
+  "currentResult.candidates": [
+    { alpha_id: "BTN001", lifecycle_status: "submission_ready", family: "<b>unsafe</b>", scorecard: { total_score: 88 }, gate: { submission_ready: true } }
+  ],
+});
 
-    assert "function safeClassTokens" in render_block
-    assert "return allowed[String(handler || '')] ? String(handler) : ''" in render_block
-    assert "var cls = safeClassTokens(row.cls || (index <= 2 ? 'primary' : ''))" in render_block
-    assert "var handler = safeStatActionHandler(action.handler)" in render_block
-    assert "onclick=\"' + action.handler + '\"" not in render_block
-    assert "var cls = row.cls ||" not in render_block
+window.renderCurrentView();
+
+var html = document.getElementById("candidateRows").innerHTML;
+assertContains(html, 'data-action="open-row"', "open row action rendered as data-action");
+assertContains(html, 'data-action="toggle-select"', "select action rendered as data-action");
+assertContains(html, "&lt;b&gt;unsafe&lt;/b&gt;", "family is escaped in row html");
+assertNotContains(html, "onclick=", "row actions avoid inline click handlers");
+assertNotContains(html, "onkeydown=", "row actions avoid inline key handlers");
+"""
+
+    _run_app_contract(test_code)
 
 
 def test_charts_handle_empty_and_large_datasets():
@@ -298,98 +406,164 @@ def test_charts_handle_empty_and_large_datasets():
     template = (Path(__file__).resolve().parents[1] / "brain_alpha_ops" / "web" / "index_template.html").read_text(encoding="utf-8")
 
     assert "MAX_CHART_POINTS = 300" in charts_js
-    assert "function renderEmptyChart" in charts_js
+    assert "function renderEmptyNativeChart" in charts_js
     assert "function renderNativeCharts" in charts_js
+    assert "function drawLineChart" in charts_js
+    assert "function drawBarChart" in charts_js
+    assert "function drawPieChart" in charts_js
     assert "function sampleRows" in charts_js
     assert "function candidateRows" in charts_js
     assert "function renderCharts(options)" in charts_js
     assert "Array.isArray(options.candidates)" in charts_js
     assert "sampleRows(candidateRows(candidates)" in charts_js
+    assert "已启用本地 canvas 简版图表" in charts_js
     assert "cdn.jsdelivr.net" not in template
     assert "api.fontshare.com" not in template
     assert "code.iconify.design" not in template
     assert "sharpes = [0]" not in charts_js
 
 
-def test_result_display_mode_uses_filtered_view_rows_without_blank_table_shell():
-    app_js = (Path(__file__).resolve().parents[1] / "brain_alpha_ops" / "web" / "js" / "app.js").read_text(encoding="utf-8")
-    start = app_js.index("function renderCurrentView")
-    end = app_js.index("  window.renderCurrentView", start)
-    block = app_js[start:end]
+def test_result_display_mode_uses_filtered_rows_without_blank_table_shell():
+    test_code = """
+window.AppState.setBatch({
+  "activeView": "candidates",
+  "currentResult.candidates": [
+    { alpha_id: "KEEP001", family: "Momentum", lifecycle_status: "candidate", scorecard: { total_score: 80 } },
+    { alpha_id: "DROP001", family: "Reversal", lifecycle_status: "candidate", scorecard: { total_score: 70 } },
+  ],
+});
+document.getElementById("tableSearch").value = "KEEP";
 
-    assert "window.renderCharts({" in block
-    assert "candidates: rows.map(function (row) { return row.raw || {}; })" in block
-    assert "tableWrap.classList.toggle('hidden', chartMode)" in block
-    assert "filterBar.classList.toggle('hidden', statsMode)" in block
-    assert "statsMode || chartMode" not in block.split("filterBar.classList.toggle", 1)[1].split(";", 1)[0]
+window.renderCurrentView();
+
+var rowsHtml = document.getElementById("candidateRows").innerHTML;
+assertContains(rowsHtml, "KEEP001", "matching row rendered");
+assertNotContains(rowsHtml, "DROP001", "non-matching row filtered out");
+assertEqual(document.getElementById("candidateTable").classList.contains("hidden"), false, "table visible with filtered data");
+assertEqual(document.getElementById("mobileCardList").classList.contains("hidden"), true, "desktop mobile shell hidden");
+assertEqual(window.AppState.getCached("candidate", "KEEP001").raw.alpha_id, "KEEP001", "render caches visible row");
+
+document.getElementById("tableSearch").value = "none";
+window.renderCurrentView();
+assertEqual(document.getElementById("candidateTable").classList.contains("hidden"), true, "table hidden when filter removes all rows");
+assertEqual(document.getElementById("tableEmptyState").classList.contains("hidden"), false, "empty state shown after filter removes all rows");
+"""
+
+    _run_app_contract(test_code)
 
 
 def test_filter_chips_and_display_toggle_are_keyboard_accessible():
-    app_js = (Path(__file__).resolve().parents[1] / "brain_alpha_ops" / "web" / "js" / "app.js").read_text(encoding="utf-8")
-    template = (Path(__file__).resolve().parents[1] / "brain_alpha_ops" / "web" / "index_template.html").read_text(encoding="utf-8")
+    test_code = """
+window.AppState.set("activeView", "candidates");
+window.renderAll();
 
-    assert '<button type="button" class="filter-chip ' in app_js
-    assert 'aria-pressed="' in app_js
-    assert "button.filter-chip" in template
-    assert 'id="tableModeButton" type="button" class="active" aria-pressed="true"' in template
-    assert "tableButton.setAttribute('aria-pressed'" in app_js
+var tabs = document.getElementById("viewTabs").innerHTML;
+assertContains(tabs, "<button", "tabs render as buttons");
+assertContains(tabs, 'data-action="switch-view"', "tabs use delegated switch action");
+assertContains(tabs, 'aria-pressed="true"', "active tab exposes pressed state");
+
+window.setResultDisplayMode("charts");
+assertEqual(document.getElementById("chartsPanel").classList.contains("visible"), true, "charts panel visible");
+assertEqual(document.getElementById("chartModeBtn").getAttribute("aria-pressed"), "true", "chart toggle pressed");
+assertEqual(document.getElementById("tableModeBtn").getAttribute("aria-pressed"), "false", "table toggle not pressed");
+
+window.setResultDisplayMode("table");
+assertEqual(document.getElementById("tableModeBtn").getAttribute("aria-pressed"), "true", "table toggle pressed");
+assertEqual(document.getElementById("chartModeBtn").getAttribute("aria-pressed"), "false", "chart toggle not pressed");
+"""
+
+    _run_app_contract(test_code)
 
 
 def test_operation_guard_blocks_conflicting_frontend_actions():
-    root = Path(__file__).resolve().parents[1]
-    app_js = (root / "brain_alpha_ops" / "web" / "js" / "app.js").read_text(encoding="utf-8")
-    production_js = (root / "brain_alpha_ops" / "web" / "js" / "views" / "production.js").read_text(encoding="utf-8")
-    template = (root / "brain_alpha_ops" / "web" / "index_template.html").read_text(encoding="utf-8")
+    test_code = """
+window.AppState.set("syncInFlight", true);
 
-    assert "function operationBlockReason(action)" in app_js
-    assert "function renderBusyControls()" in app_js
-    assert "window.operationBlockReason = operationBlockReason" in app_js
-    assert 'id="operationGuard"' in template
-    assert 'role="status"' in template
-    assert 'window.operationBlockReason("production")' in production_js
-    assert 'var jobId = _jobId || S.get("activeJobId") || ""' in production_js
+window.renderBusyControls();
+
+assertContains(window.operationBlockReason("production"), "云端同步", "production blocked during sync");
+assertContains(window.operationBlockReason("check"), "云端同步", "check blocked during sync");
+assertEqual(document.getElementById("controlButton").disabled, true, "production button disabled");
+assertEqual(document.getElementById("operationGuard").classList.contains("hidden"), false, "guard visible");
+assertContains(document.getElementById("operationGuard").textContent, "云端同步", "guard explains sync lock");
+
+window.AppState.set("syncInFlight", false);
+window.AppState.set("batchCheckJobId", "check_1");
+assertContains(window.operationBlockReason("submit"), "达标检查", "submit blocked during batch check");
+
+window.AppState.set("batchCheckJobId", "");
+window.AppState.set("submitInFlight", true);
+assertContains(window.operationBlockReason("sync"), "提交", "sync blocked during submit");
+"""
+
+    _run_app_contract(test_code)
 
 
 def test_ux_refactor_keeps_core_flow_visible_and_empty_states_actionable():
-    root = Path(__file__).resolve().parents[1]
-    app_js = (root / "brain_alpha_ops" / "web" / "js" / "app.js").read_text(encoding="utf-8")
-    template = (root / "brain_alpha_ops" / "web" / "index_template.html").read_text(encoding="utf-8")
+    test_code = """
+window.AppState.setBatch({
+  "activeView": "candidates",
+  "currentResult.candidates": [],
+});
 
-    assert 'id="workflowNav" class="workflow-nav"' in template
-    assert "function renderWorkflowNav()" in app_js
-    assert "workflow-step" in app_js
-    assert "诊断复盘" in app_js
-    assert "function emptyStateHtml(view)" in app_js
-    assert "empty-actions" in app_js
-    assert "table-empty-cell" in app_js
-    assert "control-section primary run-actions" in template
-    assert "view-guidance" in template
+window.renderAll();
+
+assertContains(document.getElementById("viewTabs").innerHTML, "view-tab-group", "view tabs grouped");
+assertContains(document.getElementById("viewTabs").innerHTML, "tab-marker", "tab marker visible");
+assertEqual(document.getElementById("tableEmptyState").classList.contains("hidden"), false, "empty state visible");
+assertContains(document.getElementById("tableEmptyDescription").textContent, "启动生产搜索", "empty state actionable copy");
+assertContains(document.getElementById("panelHint").textContent, "按排序分", "panel hint follows active view");
+"""
+
+    _run_app_contract(test_code)
 
 
 def test_mobile_cards_use_explicit_controls_instead_of_nested_button_role():
-    app_js = (Path(__file__).resolve().parents[1] / "brain_alpha_ops" / "web" / "js" / "app.js").read_text(encoding="utf-8")
-    start = app_js.index("function mobileCardHtml")
-    end = app_js.index("  function backtestRowHtml", start)
-    block = app_js[start:end]
+    test_code = """
+window.innerWidth = 480;
+window.AppState.setBatch({
+  "activeView": "passed",
+  "currentResult.candidates": [
+    { alpha_id: "MOB001", lifecycle_status: "submission_ready", scorecard: { total_score: 86 }, gate: { submission_ready: true } },
+  ],
+});
 
-    assert 'class="mobile-row-card" data-kind="' in block
-    assert 'role="button"' not in block
-    assert 'tabindex="0"' not in block
-    assert 'aria-label="查看 Alpha ' in app_js
-    assert 'aria-label="提交 Alpha ' in app_js
+window.renderCurrentView();
+
+var html = document.getElementById("mobileCardList").innerHTML;
+assertContains(html, "mobile-card", "mobile card rendered");
+assertContains(html, 'data-action="open-row"', "mobile card has explicit open control");
+assertContains(html, 'data-action="toggle-select"', "mobile card has explicit select control");
+assertNotContains(html, 'role="button"', "mobile card container avoids nested button role");
+assertNotContains(html, 'tabindex="0"', "mobile card container avoids redundant tabindex");
+"""
+
+    _run_app_contract(test_code)
 
 
 def test_view_model_helpers_are_modular_and_inlined():
     root = Path(__file__).resolve().parents[1]
     view_model_js = (root / "brain_alpha_ops" / "web" / "js" / "view-model.js").read_text(encoding="utf-8")
+    view_registry_js = (root / "brain_alpha_ops" / "web" / "js" / "view-registry.js").read_text(encoding="utf-8")
+    view_renderers_js = (root / "brain_alpha_ops" / "web" / "js" / "view-renderers.js").read_text(encoding="utf-8")
     app_js = (root / "brain_alpha_ops" / "web" / "js" / "app.js").read_text(encoding="utf-8")
     html = _load_html()
 
     assert "window.ViewModel" in view_model_js
     assert "uniqueBacktestSlots" in view_model_js
+    assert "window.ViewRegistry" in view_registry_js
+    assert "VIEW_GROUPS" in view_registry_js
+    assert "window.ViewRenderers" in view_renderers_js
+    assert "function getRowsForView" in view_renderers_js
+    assert "function getColumnsForView" in view_renderers_js
     assert "var VM = window.ViewModel" in app_js
+    assert "var Registry = window.ViewRegistry" in app_js
+    assert "var ViewRenderers = window.ViewRenderers" in app_js
     assert "function uniqueBacktestSlots" not in app_js
+    assert "function buildCandidateRows" not in app_js
     assert "// brain_alpha_ops/web/js/view-model.js" in html
+    assert "// brain_alpha_ops/web/js/view-registry.js" in html
+    assert "// brain_alpha_ops/web/js/view-renderers.js" in html
 
 
 def test_web_inline_script_syntax_check_reports_failures(tmp_path):
@@ -468,6 +642,16 @@ def test_web_config_from_payload_rejects_invalid_numbers():
 
     with pytest.raises(ValueError, match="cyclePauseSeconds must be >= 0.0"):
         config_from_payload({"cyclePauseSeconds": -1})
+
+
+def test_web_config_from_payload_rejects_user_facing_mock_environment():
+    with pytest.raises(ValueError, match="only supports production"):
+        config_from_payload({"environment": "mock"})
+
+
+def test_web_config_from_payload_rejects_non_official_base_url_in_production():
+    with pytest.raises(ValueError, match="baseUrl not allowed"):
+        config_from_payload({"environment": "production", "baseUrl": "http://127.0.0.1:1"})
 
 
 def test_web_config_from_payload_clamps_large_numeric_limits():
@@ -640,7 +824,13 @@ def test_web_responses_include_security_headers():
         assert root_response.headers.get("X-Content-Type-Options") == "nosniff"
         assert root_response.headers.get("X-Frame-Options") == "DENY"
         assert root_response.headers.get("Referrer-Policy") == "no-referrer"
-        assert "frame-ancestors 'none'" in root_response.headers.get("Content-Security-Policy", "")
+        csp = root_response.headers.get("Content-Security-Policy", "")
+        assert "frame-ancestors 'none'" in csp
+        assert "script-src 'self'" in csp
+        assert "script-src 'self' 'unsafe-inline'" not in csp
+        assert "style-src 'self'" in csp
+        assert "style-src 'self' 'unsafe-inline'" not in csp
+        assert "'sha256-" in csp
     finally:
         web.shutdown_server()
 
@@ -650,6 +840,16 @@ def test_remote_bind_requires_explicit_allow_remote():
 
     with pytest.raises(ValueError, match="allow_remote"):
         web.serve(port=port, host="0.0.0.0", open_browser=False)
+
+
+def test_remote_bind_requires_admin_token_env(monkeypatch):
+    config = RunConfig(environment="mock")
+    config.web.admin_token_env = "BRAIN_ALPHA_OPS_TEST_ADMIN_TOKEN"
+    monkeypatch.setattr(web, "load_run_config", lambda *args, **kwargs: config)
+    monkeypatch.delenv("BRAIN_ALPHA_OPS_TEST_ADMIN_TOKEN", raising=False)
+
+    with pytest.raises(ValueError, match="admin token env var"):
+        web.serve(port=9077, host="127.0.0.1", open_browser=False, allow_remote=True)
 
 
 def test_batch_check_targets_all_passed_candidates():
@@ -1588,7 +1788,7 @@ def test_save_assistant_guidance_payload_persists_usable_guidance(monkeypatch, t
 
     payload = save_assistant_guidance_payload(
         {
-            "environment": "mock",
+            "environment": "production",
             "min_confidence": 0.7,
             "assistant_response": (
                 '{"summary":"Use close momentum.",'
@@ -1616,7 +1816,7 @@ def test_save_assistant_guidance_payload_skips_low_confidence(monkeypatch, tmp_p
 
     payload = save_assistant_guidance_payload(
         {
-            "environment": "mock",
+            "environment": "production",
             "min_confidence": 0.8,
             "assistant_response": (
                 '{"summary":"Weak hint.",'
@@ -1646,7 +1846,7 @@ def test_generate_candidates_payload_applies_assistant_guidance(monkeypatch, tmp
 
     payload = generate_candidates_payload(
         {
-            "environment": "mock",
+            "environment": "production",
             "count": 2,
             "use_research_memory": False,
             "assistant_min_confidence": 0.7,
@@ -1687,7 +1887,7 @@ def test_generate_candidates_payload_attaches_guidance_outcome_metadata(monkeypa
 
     payload = generate_candidates_payload(
         {
-            "environment": "mock",
+            "environment": "production",
             "count": 2,
             "use_research_memory": False,
             "assistant_min_confidence": 0.7,

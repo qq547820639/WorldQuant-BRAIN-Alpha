@@ -43,7 +43,8 @@ def run_sync_job_service(
     error_payload: ErrorPayload,
 ) -> None:
     sync_range = str(payload.get("syncRange", "3d"))
-    stats = {"range": sync_range, "scanned": 0, "total": 0, "added": 0, "updated": 0, "skipped": 0, "failed": 0}
+    stats: dict[str, Any] = {"range": sync_range, "scanned": 0, "total": 0, "added": 0, "updated": 0, "skipped": 0, "failed": 0}
+    context_error = ""
     try:
         store.update(
             job_id,
@@ -164,11 +165,25 @@ def run_sync_job_service(
                 ),
             )
             persist_official_context(fields, operators, datasets)
-        except Exception:
+        except Exception as exc:
+            context_error = safe_error_message(exc)
             stats["failed"] += 1
             fields = list(default_fields)
             operators = list(default_operators)
             datasets = []
+            store.update(
+                job_id,
+                status="running",
+                progress={
+                    "phase": "context",
+                    "status_code": "CONTEXT_FAILED",
+                    "message": f"Official context refresh failed; using fallback context: {context_error}",
+                    "context_error": context_error,
+                    "current": 3,
+                    "total_steps": 3,
+                    **stats,
+                },
+            )
         result = {
             "ok": True,
             **stats,
@@ -178,15 +193,20 @@ def run_sync_job_service(
             "fields_count": len(fields),
             "operators_count": len(operators),
             "datasets_count": len(datasets),
+            "context_status": "failed" if context_error else "refreshed",
+            "context_error": context_error,
         }
+        final_status = "completed_with_warnings" if context_error else "completed"
         store.update(
             job_id,
-            status="completed",
+            status=final_status,
             result=result,
             progress={
-                "phase": "completed",
-                "status_code": "COMPLETED",
+                "phase": final_status,
+                "status_code": "COMPLETED_WITH_WARNINGS" if context_error else "COMPLETED",
                 "message": (
+                    f"Cloud sync completed with context warning: {context_error}"
+                    if context_error else
                     f"Cloud sync completed: scanned {stats['scanned']}, added {stats['added']}, "
                     f"updated {stats.get('updated', 0)}, skipped {stats['skipped']}, failed {stats['failed']}."
                 ),
@@ -194,6 +214,8 @@ def run_sync_job_service(
                 "fields_count": len(fields),
                 "operators_count": len(operators),
                 "datasets_count": len(datasets),
+                "context_status": "failed" if context_error else "refreshed",
+                "context_error": context_error,
             },
         )
     except Exception as exc:

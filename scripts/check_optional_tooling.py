@@ -62,8 +62,16 @@ def _run_tool(args: list[str]) -> tuple[int, str, str, float]:
             timeout=20,
         )
     except subprocess.TimeoutExpired as exc:
-        return 124, exc.stdout or "", exc.stderr or "tool check timed out", time.perf_counter() - started
+        return 124, _timeout_text(exc.stdout), _timeout_text(exc.stderr, "tool check timed out"), time.perf_counter() - started
     return proc.returncode, proc.stdout, proc.stderr, time.perf_counter() - started
+
+
+def _timeout_text(value: str | bytes | None, default: str = "") -> str:
+    if value is None:
+        return default
+    if isinstance(value, bytes):
+        return value.decode("utf-8", errors="replace")
+    return value
 
 
 def main(argv: list[str] | None = None) -> int:

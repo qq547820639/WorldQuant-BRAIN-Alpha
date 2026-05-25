@@ -17,8 +17,27 @@ from typing import Any
 from brain_alpha_ops.config import RunConfig, load_run_config
 from brain_alpha_ops.jsonl import read_jsonl_tail
 from brain_alpha_ops.models import utc_now
+from brain_alpha_ops.redaction import redact_data
 from brain_alpha_ops.research.memory import ResearchMemory
 from brain_alpha_ops.research.observability import build_research_observability_snapshot, observability_context
+from brain_alpha_ops.research.robustness_context import (
+    build_robustness_context,
+    format_report_status,
+    latest_candidate_rows,
+)
+
+
+ASSISTANT_CONTEXT_SENSITIVE_KEY_FRAGMENTS = (
+    "authorization",
+    "cache_dir",
+    "cookie",
+    "credential",
+    "password",
+    "path",
+    "secret",
+    "storage_dir",
+    "token",
+)
 
 
 def build_assistant_context_pack(
@@ -32,7 +51,7 @@ def build_assistant_context_pack(
     limit: int = 5000,
     top_n: int = 10,
     include_prompt: bool = True,
-    include_sensitive: bool = True,
+    include_sensitive: bool = False,
 ) -> dict[str, Any]:
     """Build a prompt-ready context pack for an alpha research assistant."""
     config = run_config or load_run_config()
@@ -44,6 +63,8 @@ def build_assistant_context_pack(
     latest = latest_result_snapshot if latest_result_snapshot is not None else _latest_result_from_storage(storage_dir)
     cloud = cloud_alpha_snapshot if cloud_alpha_snapshot is not None else _cloud_snapshot_from_storage(storage_dir, top_n=top_n)
     observability = observability_snapshot if observability_snapshot is not None else build_research_observability_snapshot(storage_dir, limit=limit, top_n=top_n)
+    latest_context = _latest_result_context(latest)
+    robustness = build_robustness_context(latest_candidate_rows(latest), top_n=top_n)
 
     pack = {
         "ok": True,
@@ -57,7 +78,7 @@ def build_assistant_context_pack(
             "operating_mode": "local_first_memory_guided_research",
         },
         "run_config": _run_config_context(config),
-        "latest_result": _latest_result_context(latest),
+        "latest_result": latest_context,
         "cloud_alphas": _cloud_context(cloud, top_n=top_n),
         "research_memory": _memory_context(summary, guidance, top_n=top_n),
         "expression_index": _expression_index_context(
@@ -65,18 +86,33 @@ def build_assistant_context_pack(
             top_n=top_n,
         ),
         "observability": observability_context(observability, top_n=top_n),
+        "robustness": robustness,
         "generation_focus": _generation_focus(guidance, summary, top_n=top_n),
         "risk_controls": _risk_controls(config, cloud),
-        "recommended_next_actions": _next_actions(summary, guidance, latest, cloud),
+        "recommended_next_actions": _next_actions(summary, guidance, latest, cloud, robustness=robustness),
         "compliance": _compliance_context(config),
     }
     pack["prompt_diagnostics"] = _prompt_diagnostics(pack, top_n=top_n)
+    if not include_sensitive:
+        pack = _redact_assistant_context_pack(pack)
     if include_prompt:
         pack["prompt"] = render_context_prompt(pack)
-    if not include_sensitive:
-        pack.pop("storage_dir", None)
-        pack["sensitive_fields_redacted"] = ["storage_dir"]
     return pack
+
+
+def _redact_assistant_context_pack(pack: dict[str, Any]) -> dict[str, Any]:
+    redacted_keys: set[str] = set()
+    redacted = redact_data(
+        pack,
+        key_fragments=ASSISTANT_CONTEXT_SENSITIVE_KEY_FRAGMENTS,
+        redacted_keys=redacted_keys,
+    )
+    if not isinstance(redacted, dict):
+        return {}
+    redacted.pop("storage_dir", None)
+    redacted_keys.add("storage_dir")
+    redacted["sensitive_fields_redacted"] = sorted(redacted_keys)
+    return redacted
 
 
 def render_context_prompt(pack: dict[str, Any]) -> str:
@@ -88,6 +124,7 @@ def render_context_prompt(pack: dict[str, Any]) -> str:
     memory = pack.get("research_memory") or {}
     expression_index = pack.get("expression_index") or {}
     observability = pack.get("observability") or {}
+    robustness = pack.get("robustness") or {}
     focus = pack.get("generation_focus") or {}
     cloud = pack.get("cloud_alphas") or {}
     guardrails = pack.get("risk_controls") or {}
@@ -121,6 +158,7 @@ def render_context_prompt(pack: dict[str, Any]) -> str:
         f"- Guidance feedback: {_join_guidance_outcomes(focus.get('guidance_outcomes') or memory.get('assistant_guidance_outcomes') or [])}",
         f"- Expression index: unique={expression_index.get('unique_expression_count', 0)}, duplicates={expression_index.get('duplicate_expression_count', 0)}, top duplicates={_join_duplicate_expressions(expression_index.get('duplicates') or [])}",
         f"- Observability: risk={observability.get('risk_level', 'unknown')}, flags={_join_text_items(observability.get('health_flags') or [])}, blocking={_join_text_items(observability.get('blocking_flags') or [])}, backtest_failure_rate={observability.get('backtest_failure_rate', 0)}, retryable_errors={observability.get('retryable_error_count', 0)}, official_guard_blocked={observability.get('official_guard_blocked_count', 0)} (validation={observability.get('official_guard_validation_blocked_count', 0)}, simulation={observability.get('official_guard_simulation_blocked_count', 0)}), actions={_join_text_items(observability.get('recommended_actions') or observability.get('recommendations') or [])}",
+        f"- Robustness evidence: anti_overfit={format_report_status(robustness.get('anti_overfit') or {}, 'recommendation')}, rolling_validation={format_report_status(robustness.get('rolling_validation') or {}, 'status')}, flags={_join_text_items(robustness.get('risk_flags') or [])}, actions={_join_text_items(robustness.get('recommended_actions') or [])}",
         f"- Prompt diagnostics: tokens≈{diagnostics.get('estimated_context_tokens', 0)}, duplicate_focus={diagnostics.get('duplicate_focus_count', 0)}, risk_flags={_join_text_items(diagnostics.get('risk_flags') or [])}, evidence_digest={diagnostics.get('evidence_digest', '-')}",
         "",
         "Cloud/cache risk context:",
@@ -313,6 +351,7 @@ def _next_actions(
     guidance: dict[str, Any],
     latest: dict[str, Any] | None,
     cloud: dict[str, Any] | None,
+    robustness: dict[str, Any] | None = None,
 ) -> list[str]:
     actions: list[str] = []
     if guidance.get("top_fields") or guidance.get("top_operators"):
@@ -346,9 +385,11 @@ def _next_actions(
     latest_context = _latest_result_context(latest)
     if latest_context.get("pending_backtest_count"):
         actions.append("Wait for or poll pending backtests before overproducing near-duplicate variants.")
+    robustness = robustness if isinstance(robustness, dict) else {}
+    actions.extend(str(item) for item in robustness.get("recommended_actions") or [] if str(item).strip())
     if not actions:
         actions.append("Run a local production cycle to populate research memory before asking for high-confidence recommendations.")
-    return actions
+    return _unique_text_items(actions)
 
 
 def _prompt_diagnostics(pack: dict[str, Any], *, top_n: int) -> dict[str, Any]:
@@ -356,6 +397,7 @@ def _prompt_diagnostics(pack: dict[str, Any], *, top_n: int) -> dict[str, Any]:
     memory = pack.get("research_memory") if isinstance(pack.get("research_memory"), dict) else {}
     focus = pack.get("generation_focus") if isinstance(pack.get("generation_focus"), dict) else {}
     observability = pack.get("observability") if isinstance(pack.get("observability"), dict) else {}
+    robustness = pack.get("robustness") if isinstance(pack.get("robustness"), dict) else {}
     cloud = pack.get("cloud_alphas") if isinstance(pack.get("cloud_alphas"), dict) else {}
     guardrails = pack.get("risk_controls") if isinstance(pack.get("risk_controls"), dict) else {}
     duplicate_rows = list(focus.get("duplicate_expressions") or [])[:top_n]
@@ -363,10 +405,13 @@ def _prompt_diagnostics(pack: dict[str, Any], *, top_n: int) -> dict[str, Any]:
     risk_flags = _unique_text_items(
         list(observability.get("warning_flags") or [])
         + list(observability.get("blocking_flags") or [])
+        + list(robustness.get("risk_flags") or [])
         + (["observability_official_call_guard_active"] if official_guard_blocked else [])
         + (["cloud_cache_stale"] if cloud.get("is_stale") or guardrails.get("cloud_cache_stale") else [])
         + (["pending_backtests"] if int(latest.get("pending_backtest_count") or 0) else [])
     )
+    anti = robustness.get("anti_overfit") if isinstance(robustness.get("anti_overfit"), dict) else {}
+    rolling = robustness.get("rolling_validation") if isinstance(robustness.get("rolling_validation"), dict) else {}
     evidence = {
         "candidate_count": latest.get("candidate_count", 0),
         "memory_candidates": memory.get("total_candidates", 0),
@@ -374,6 +419,8 @@ def _prompt_diagnostics(pack: dict[str, Any], *, top_n: int) -> dict[str, Any]:
         "duplicate_expression_count": len(duplicate_rows),
         "observability_risk_level": observability.get("risk_level", "unknown"),
         "official_guard_blocked_count": official_guard_blocked,
+        "anti_overfit_available_count": anti.get("available_count", 0),
+        "rolling_validation_available_count": rolling.get("available_count", 0),
         "risk_flags": risk_flags[:top_n],
         "fields": list(focus.get("fields") or [])[:top_n],
         "operators": list(focus.get("operators") or [])[:top_n],
@@ -388,6 +435,8 @@ def _prompt_diagnostics(pack: dict[str, Any], *, top_n: int) -> dict[str, Any]:
         "guidance_sample_size": evidence["guidance_sample_size"],
         "duplicate_focus_count": len(duplicate_rows),
         "official_guard_blocked_count": official_guard_blocked,
+        "anti_overfit_available_count": _int_value(anti.get("available_count")),
+        "rolling_validation_available_count": _int_value(rolling.get("available_count")),
         "risk_flags": risk_flags[:top_n],
         "evidence_digest": sha256(compact_text.encode("utf-8")).hexdigest()[:12],
     }

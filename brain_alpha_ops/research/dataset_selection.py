@@ -53,6 +53,7 @@ class DatasetSelectionService:
         generator: Any,
         settings: Any,
         strategy: str = "rotate",
+        allow_datasetless: bool = False,
         event: EventCallback | None = None,
     ) -> None:
         self.selector = selector
@@ -60,6 +61,7 @@ class DatasetSelectionService:
         self.generator = generator
         self.settings = settings
         self.strategy = strategy or "rotate"
+        self.allow_datasetless = bool(allow_datasetless)
         self.event = event
 
     def select(self) -> DatasetSelectionResult:
@@ -98,6 +100,16 @@ class DatasetSelectionService:
                 action="skip",
                 reason="No datasets available from loader or selector; skipping generation cycle.",
                 event="dataset_skip_cycle",
+                level="WARN",
+            )
+            self._emit(result)
+            return result
+
+        if self.allow_datasetless:
+            result = DatasetSelectionResult(
+                action="continue",
+                reason="DatasetSelector unavailable; using loaded field/operator context without a dataset filter.",
+                event="dataset_fallback_context",
                 level="WARN",
             )
             self._emit(result)

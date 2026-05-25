@@ -2,12 +2,14 @@ from __future__ import annotations
 
 from brain_alpha_ops.web_security import (
     LocalSessionManager,
+    admin_token_from_headers,
     header_hostname,
     header_port,
     is_allowed_local_request,
     normalize_host,
     parse_cookies,
     path_requires_session,
+    validate_admin_token,
 )
 
 
@@ -29,6 +31,33 @@ def test_local_request_origin_and_referer_must_match_loopback_and_port():
     assert not is_allowed_local_request(host_header="127.0.0.1:8765", referer_header="http://127.0.0.1:9999/page")
 
 
+def test_remote_request_policy_requires_same_origin_when_enabled():
+    assert is_allowed_local_request(
+        host_header="console.example.test:8765",
+        origin_header="http://console.example.test:8765",
+        allow_remote=True,
+    )
+    assert not is_allowed_local_request(
+        host_header="console.example.test:8765",
+        origin_header="http://evil.example:8765",
+        allow_remote=True,
+    )
+    assert not is_allowed_local_request(
+        host_header="console.example.test:8765",
+        referer_header="http://console.example.test:9999/page",
+        allow_remote=True,
+    )
+
+
+def test_remote_admin_token_accepts_bearer_or_dedicated_header():
+    assert admin_token_from_headers({"Authorization": "Bearer secret-token"}) == "secret-token"
+    assert admin_token_from_headers({"X-Brain-Alpha-Admin-Token": "secret-token"}) == "secret-token"
+    assert validate_admin_token("secret-token", "secret-token") is True
+    assert validate_admin_token("secret-token", "other-token") is False
+    assert validate_admin_token("", "secret-token") is False
+    assert validate_admin_token("secret-token", "") is False
+
+
 def test_session_manager_uses_distinct_csrf_and_stream_tokens():
     manager = LocalSessionManager(ttl_seconds=120)
     session_id, csrf_token = manager.create()
@@ -43,6 +72,15 @@ def test_session_manager_uses_distinct_csrf_and_stream_tokens():
     assert manager.validate_stream(session_id, stream_token) is True
     assert "HttpOnly" in manager.cookie_header(session_id)
     assert "SameSite=Strict" in manager.cookie_header(session_id)
+    assert "Secure" not in manager.cookie_header(session_id)
+
+
+def test_session_manager_can_mark_cookies_secure_for_remote_https():
+    manager = LocalSessionManager(ttl_seconds=120, secure_cookies=True)
+    session_id, _csrf_token = manager.create()
+
+    assert "Secure" in manager.cookie_header(session_id)
+    assert "Secure" in manager.expired_cookie_header()
 
 
 def test_session_manager_prunes_and_single_session_policy():

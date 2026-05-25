@@ -61,7 +61,8 @@ def generate_candidates_payload(
         return result
 
     candidates: list[dict[str, Any]] = []
-    assistant_guidance = result.get("assistant_guidance") if isinstance(result.get("assistant_guidance"), dict) else {}
+    raw_assistant_guidance = result.get("assistant_guidance")
+    assistant_guidance = raw_assistant_guidance if isinstance(raw_assistant_guidance, dict) else {}
     assistant_guidance_applied = bool(assistant_guidance.get("applied"))
     assistant_guidance = ensure_assistant_guidance_digest(assistant_guidance) if assistant_guidance else {}
     for row in result.get("candidates") or []:

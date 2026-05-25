@@ -56,7 +56,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     run = sub.add_parser("run", help="run the research pipeline")
     run.add_argument("--config", default=str(DEFAULT_RUN_CONFIG_PATH))
-    run.add_argument("--env", choices=["mock", "production"], default=None)
+    run.add_argument("--env", choices=["production"], default=None)
     run.add_argument("--cycles", type=int, default=None)
     run.add_argument("--candidates", type=int, default=None)
     run.add_argument("--validations", type=int, default=None)
@@ -77,6 +77,11 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument(
         "--token", default=None,
         help="[弃用] 凭据请使用环境变量 BRAIN_TOKEN，此参数会暴露在 shell 历史中",
+    )
+    run.add_argument(
+        "--allow-insecure-cli-credentials",
+        action="store_true",
+        help="dangerous compatibility escape hatch for deprecated --username/--password/--token",
     )
 
     init = sub.add_parser("init-config", help="write a default JSON run config")
@@ -126,6 +131,7 @@ def build_parser() -> argparse.ArgumentParser:
     context.add_argument("--top-n", type=int, default=10)
     context.add_argument("--prompt-only", action="store_true", help="print only the rendered text prompt")
     context.add_argument("--no-prompt", action="store_true", help="omit the rendered text prompt from JSON output")
+    context.add_argument("--include-sensitive", action="store_true", help="include local paths and other sensitive context fields")
 
     request = sub.add_parser("assistant-request", help="emit a provider-neutral LLM request envelope")
     request.add_argument("--config", default=str(DEFAULT_RUN_CONFIG_PATH))
@@ -134,6 +140,7 @@ def build_parser() -> argparse.ArgumentParser:
     request.add_argument("--prompt-only", action="store_true", help="print only the user prompt")
     request.add_argument("--no-prompt", action="store_true", help="omit the top-level prompt from JSON output")
     request.add_argument("--no-draft", action="store_true", help="omit the deterministic offline response draft")
+    request.add_argument("--include-sensitive", action="store_true", help="include local paths and other sensitive context fields")
 
     parse = sub.add_parser("assistant-parse", help="parse and normalize an assistant model JSON response")
     parse.add_argument("--input", default="-", help="response file path, or '-' for stdin")
@@ -181,9 +188,14 @@ def build_parser() -> argparse.ArgumentParser:
 
     guided = sub.add_parser("guided-run", help="run the research pipeline with guided UX (checkpoints, progress, redline)")
     guided.add_argument("--config", default=str(DEFAULT_RUN_CONFIG_PATH))
-    guided.add_argument("--env", choices=["mock", "production"], default=None)
+    guided.add_argument("--env", choices=["production"], default=None)
     guided.add_argument("--cycles", type=int, default=None)
     guided.add_argument("--resume", action="store_true", help="resume from the latest checkpoint")
+
+    diagnose = sub.add_parser("diagnose", help="build production diagnosis, gap matrix, and upgrade plan")
+    diagnose.add_argument("--config", default=str(DEFAULT_RUN_CONFIG_PATH))
+    diagnose.add_argument("--json", action="store_true", help="print machine-readable JSON")
+    diagnose.add_argument("--output", default="", help="optional Markdown report output path")
     return parser
 
 
@@ -309,6 +321,7 @@ def _main(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
             limit=args.limit,
             top_n=args.top_n,
             include_prompt=not args.no_prompt or args.prompt_only,
+            include_sensitive=bool(args.include_sensitive),
         )
         if args.prompt_only:
             print(payload.get("prompt", ""))
@@ -323,6 +336,7 @@ def _main(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
             limit=args.limit,
             top_n=args.top_n,
             include_prompt=True,
+            include_sensitive=bool(args.include_sensitive),
         )
         payload = build_assistant_request_pack(
             context_pack,
@@ -487,6 +501,19 @@ def _main(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
         pipeline.print_summary(result)
         return 0
 
+    if args.command == "diagnose":
+        from brain_alpha_ops.production_diagnostics import (
+            build_diagnostic_snapshot,
+            render_one_page_markdown,
+            snapshot_to_json,
+            write_diagnostic_report,
+        )
+        snapshot = build_diagnostic_snapshot(args.config)
+        if args.output:
+            write_diagnostic_report(args.output, snapshot)
+        print(snapshot_to_json(snapshot) if args.json else render_one_page_markdown(snapshot))
+        return 0 if snapshot.get("ok") else 1
+
     if args.command != "run":
         parser.print_help()
         return 2
@@ -508,10 +535,10 @@ def _main(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
         run_config.ops.storage_dir = args.storage_dir
     if args.base_url is not None:
         run_config.ops.official_api.base_url = args.base_url
-    if _has_cli_credentials(args) and str(run_config.environment).lower() == "production":
+    if _has_cli_credentials(args) and not args.allow_insecure_cli_credentials:
         raise ConfigValidationError(
-            "command-line credentials are disabled in production; "
-            "use BRAIN_USERNAME / BRAIN_PASSWORD / BRAIN_TOKEN environment variables"
+            "command-line credentials are disabled; use BRAIN_USERNAME / BRAIN_PASSWORD / "
+            "BRAIN_TOKEN environment variables, or pass --allow-insecure-cli-credentials for temporary local debugging"
         )
     if args.username is not None:
         print(_CRED_DEPRECATION, file=sys.stderr)

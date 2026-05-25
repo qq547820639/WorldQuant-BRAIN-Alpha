@@ -4,7 +4,7 @@ BRAIN Alpha Ops 是一个面向 WorldQuant BRAIN 的本地量化研究与生产�
 
 ## 核心原则
 
-- 生产环境和 mock 环境严格隔离。
+- 用户入口只交付生产环境，所有页面验收和联调均走官方 BRAIN API。
 - 低质量候选只做本地预筛和归档，不浪费官方 API 预算。
 - 官方模拟、检查结果和提交账本共同决定是否允许提交。
 - 自动提交默认关闭；开启后仍必须通过质量、相关性、换手、集中度、重复表达式、微变体和节奏控制等门禁。
@@ -38,7 +38,8 @@ python -m brain_alpha_ops.cli run --config config/run_config.json --cycles 1 --c
 python -m brain_alpha_ops.cli assistant-context --config config/run_config.json
 python -m brain_alpha_ops.cli assistant-request --config config/run_config.json
 python -m brain_alpha_ops.cli assistant-guidance-audit --config config/run_config.json
-python -m pytest
+python scripts/quality_gate.py --json
+node scripts\live_page_e2e.mjs --url http://127.0.0.1:8765/ --sync --output-dir output\playwright
 ```
 
 Web 控制台默认监听本机地址，提供候选池、等待回测、回测中、达标、可提交、已提交、不达标、云端数据、研究记忆和生命周期视图。连续生产、云端同步、批量检查和提交互斥执行，减少重复点击和官方 API 争用。
@@ -67,7 +68,7 @@ python run_pipeline.py
 
 主要配置入口是 `config/run_config.json`。
 
-- `environment`: `mock` 或 `production`。
+- `environment`: 固定为 `production`；用户侧不再提供 mock 运行环境。
 - `auto_submit`: 是否允许自动提交，默认 `false`。
 - `credentials`: 只建议配置环境变量名，不建议写入真实凭证。
 - `web`: 本地控制台 host、port、会话 TTL 和多会话策略。
@@ -139,7 +140,7 @@ python scripts/scan_sensitive_artifacts.py --include-all --json --fail-on-findin
 - `brain_alpha_ops/config.py`: 运行配置、阈值、提交策略和配置校验。
 - `brain_alpha_ops/runner.py`: CLI、Web 和编辑器入口共用的运行适配层。
 - `brain_alpha_ops/models.py`: 候选、指标、门禁、事件等核心数据结构。
-- `brain_alpha_ops/brain_api/`: 官方 API 与 mock API 适配。
+- `brain_alpha_ops/brain_api/`: 官方 API 适配；生产运行只调用 WorldQuant BRAIN 官方接口。
 - `brain_alpha_ops/research/`: 生成、评分、诊断、安全门禁、研究记忆和流水线。
 - `brain_alpha_ops/web.py`: 本地 Web API、任务状态和控制台服务。
 - `brain_alpha_ops/web/`: 前端模板和拆分后的 JavaScript 视图。

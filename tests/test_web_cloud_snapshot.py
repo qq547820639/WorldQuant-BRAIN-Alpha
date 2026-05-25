@@ -5,6 +5,7 @@ import json
 from types import SimpleNamespace
 
 from brain_alpha_ops.web_cloud_snapshot import (
+    cached_user_alpha_paths,
     cloud_alpha_snapshot,
     datasets_from_fields,
     official_context_file_counts,
@@ -22,12 +23,19 @@ def _config(storage, cache, *, context_cache_ttl_seconds=3600):
     )
 
 
+def _loader(storage, cache, *, context_cache_ttl_seconds=3600):
+    def load_config():
+        return _config(storage, cache, context_cache_ttl_seconds=context_cache_ttl_seconds)
+
+    return load_config
+
+
 def test_cloud_alpha_snapshot_reads_storage_dedupes_and_counts_context(tmp_path):
     storage = tmp_path / "storage"
     cache = tmp_path / "cache"
     storage.mkdir()
     cache.mkdir()
-    load_config = lambda: _config(storage, cache)
+    load_config = _loader(storage, cache)
     save_official_context_json("official_fields.json", [{"id": "close"}], load_config=load_config, runtime_root=lambda: tmp_path)
     save_official_context_json("official_operators.json", [{"name": "rank"}], load_config=load_config, runtime_root=lambda: tmp_path)
     save_official_context_json("official_datasets.json", [{"id": "fundamental6"}], load_config=load_config, runtime_root=lambda: tmp_path)
@@ -60,7 +68,7 @@ def test_cloud_alpha_snapshot_falls_back_to_latest_api_cache(tmp_path):
     cache = tmp_path / "cache"
     storage.mkdir()
     cache.mkdir()
-    load_config = lambda: _config(storage, cache)
+    load_config = _loader(storage, cache)
     (cache / "user_alphas_recent.json").write_text(
         json.dumps({"results": [{"id": "cloud_1", "status": "UNSUBMITTED", "metrics": {"pass_fail": "PASS"}}]}),
         encoding="utf-8",
@@ -73,12 +81,47 @@ def test_cloud_alpha_snapshot_falls_back_to_latest_api_cache(tmp_path):
     assert snapshot["alphas"][0]["id"] == "cloud_1"
 
 
+def test_cloud_alpha_snapshot_default_reads_full_cloud_cache(tmp_path):
+    storage = tmp_path / "storage"
+    cache = tmp_path / "cache"
+    storage.mkdir()
+    cache.mkdir()
+    load_config = _loader(storage, cache)
+    rows = [{"id": f"a{index}", "updated_at": f"2026-01-01T00:00:{index % 60:02d}Z"} for index in range(10005)]
+    (storage / "cloud_alphas.jsonl").write_text(
+        "\n".join(json.dumps(row) for row in rows) + "\n",
+        encoding="utf-8",
+    )
+
+    snapshot = cloud_alpha_snapshot(load_config=load_config, runtime_root=lambda: tmp_path)
+
+    assert len(snapshot["alphas"]) == 10005
+    assert {row["id"] for row in snapshot["alphas"]} >= {"a0", "a10004"}
+
+
+def test_cached_user_alpha_paths_are_bounded_to_recent_files(tmp_path):
+    storage = tmp_path / "storage"
+    cache = tmp_path / "cache"
+    storage.mkdir()
+    cache.mkdir()
+    load_config = _loader(storage, cache)
+    for index in range(5):
+        path = cache / f"user_alphas_{index}.json"
+        path.write_text("[]", encoding="utf-8")
+        path.touch()
+
+    paths = cached_user_alpha_paths(load_config=load_config, max_files=3)
+
+    assert len(paths) == 3
+    assert all(path.name.startswith("user_alphas_") for path in paths)
+
+
 def test_datasets_from_fields_aggregates_dataset_references(tmp_path):
     storage = tmp_path / "storage"
     cache = tmp_path / "cache"
     storage.mkdir()
     cache.mkdir()
-    load_config = lambda: _config(storage, cache)
+    load_config = _loader(storage, cache)
 
     datasets = datasets_from_fields(
         [
@@ -100,7 +143,7 @@ def test_read_storage_jsonl_stats_uses_configured_storage(tmp_path):
     cache = tmp_path / "cache"
     storage.mkdir()
     cache.mkdir()
-    load_config = lambda: _config(storage, cache)
+    load_config = _loader(storage, cache)
     (storage / "checks.jsonl").write_text('{"alpha_id":"a1"}\nnot-json\n', encoding="utf-8")
 
     stats = read_storage_jsonl_stats("checks.jsonl", limit=10, load_config=load_config)
@@ -114,7 +157,7 @@ def test_official_context_manifest_marks_missing_and_expired_files(tmp_path):
     cache = tmp_path / "cache"
     storage.mkdir()
     cache.mkdir()
-    load_config = lambda: _config(storage, cache)
+    load_config = _loader(storage, cache)
     save_official_context_json("official_fields.json", [{"id": "close"}], load_config=load_config, runtime_root=lambda: tmp_path)
     expired_at = datetime.now(timezone.utc) - timedelta(seconds=5)
     metadata_path = storage / "official_fields.meta.json"

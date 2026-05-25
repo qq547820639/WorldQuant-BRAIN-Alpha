@@ -45,17 +45,41 @@ def run_guided_job_service(
         run_config = run_config_from_payload(payload)
         guided = GuidedPipeline(run_config)
 
-        def _progress_cb(phase: str, detail: str = "") -> None:
+        phase_names = list(getattr(guided, "phases", {}) or {}) or ["guided"]
+
+        def _progress_cb(phase: str, status: str = "", data: dict[str, Any] | None = None) -> None:
+            progress_data = data if isinstance(data, dict) else {}
+            try:
+                current = phase_names.index(phase) + 1
+            except ValueError:
+                current = min(len(phase_names), 1)
+            total = max(1, len(phase_names))
+            explicit_percent = progress_data.get("percent")
+            try:
+                percent = float(explicit_percent)
+            except (TypeError, ValueError):
+                base = (current - 1) / total * 100.0
+                percent = current / total * 100.0 if status == "completed" else max(5.0, base)
+            percent = max(0.0, min(100.0, percent))
+            message = (
+                progress_data.get("message")
+                or progress_data.get("summary")
+                or progress_data.get("error")
+                or status
+                or phase
+            )
             job_store.update(job_id, progress={
                 "phase": phase,
-                "current": 1,
-                "total": 1,
-                "percent": 50,
-                "message": detail or phase,
-                "alpha_id": "",
+                "status": status,
+                "current": current,
+                "total": total,
+                "percent": round(percent, 1),
+                "message": str(message),
+                "alpha_id": str(progress_data.get("alpha_id") or ""),
+                "data": progress_data,
             })
 
-        guided.on_progress = _progress_cb
+        guided.on_progress(_progress_cb)
 
         if payload.get("resume"):
             result = guided.resume()
@@ -63,8 +87,10 @@ def run_guided_job_service(
             result = guided.run()
 
         final_status = "stopped" if job_store.is_cancelled(job_id) else "completed"
-        result_data = result.to_dict() if hasattr(result, "to_dict") else result
-        summary = result_data.get("summary") if isinstance(result_data, dict) else {}
+        raw_result_data = result.to_dict() if hasattr(result, "to_dict") else result
+        result_data: dict[str, Any] = raw_result_data if isinstance(raw_result_data, dict) else {}
+        raw_summary = result_data.get("summary")
+        summary: dict[str, Any] = raw_summary if isinstance(raw_summary, dict) else {}
         candidates = summary.get("candidates") or result_data.get("candidates", [])
 
         job_store.update(

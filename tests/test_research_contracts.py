@@ -2,6 +2,7 @@ from brain_alpha_ops.research.contracts import (
     backtest_record,
     recoverable_backtest_candidates,
 )
+from brain_alpha_ops.research.repository import ResearchRepository
 
 
 def test_backtest_contract_adds_schema_and_correlation_id():
@@ -57,3 +58,33 @@ def test_recoverable_backtest_candidates_uses_latest_active_rows():
     assert recovered[0].simulation_id == "sim_active"
     assert recovered[0].submission["backtest_slot"] == 2
     assert recovered[0].submission["recovered_from_persistence"] is True
+
+
+def test_repository_internal_filename_api_rejects_path_traversal(tmp_path):
+    repo = ResearchRepository(str(tmp_path))
+
+    for filename in ("../outside.jsonl", "nested/candidates.jsonl", "unknown.jsonl"):
+        try:
+            repo._append(filename, {"ok": True})
+        except ValueError as exc:
+            assert "repository" in str(exc)
+        else:
+            raise AssertionError(f"{filename} should be rejected")
+
+    try:
+        repo.maybe_archive("../candidates.jsonl", max_size_mb=0)
+    except ValueError as exc:
+        assert "repository" in str(exc)
+    else:
+        raise AssertionError("archive traversal should be rejected")
+
+    assert not (tmp_path.parent / "outside.jsonl").exists()
+
+
+def test_repository_allows_known_jsonl_files(tmp_path):
+    repo = ResearchRepository(str(tmp_path))
+
+    repo._append("events.jsonl", {"event": "ok"})
+
+    assert (tmp_path / "events.jsonl").is_file()
+    assert (tmp_path / "events.jsonl.lock").exists() is False

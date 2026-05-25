@@ -31,13 +31,14 @@ web = [
 ]
 
 [tool.brain-alpha-ops]
-default_environment = "mock"
+default_environment = "production"
 
 [tool.pytest.ini_options]
 minversion = "7.0"
 testpaths = ["tests"]
 pythonpath = ["."]
 addopts = "-v --tb=short"
+cache_dir = ".pytest_cache_runtime"
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
     "integration: marks tests that require network or external services",

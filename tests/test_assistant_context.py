@@ -9,6 +9,7 @@ from brain_alpha_ops.research.repository import ResearchRepository
 def test_assistant_context_pack_merges_runtime_memory_and_guidance(tmp_path):
     config = RunConfig(environment="mock")
     config.ops.storage_dir = str(tmp_path)
+    config.ops.official_api.cache_dir = str(tmp_path / "api_cache")
     repo = ResearchRepository(str(tmp_path))
 
     winner = Candidate(
@@ -22,7 +23,11 @@ def test_assistant_context_pack_merges_runtime_memory_and_guidance(tmp_path):
         official_metrics={"sharpe": 1.8, "fitness": 1.2, "pass_fail": "PASS"},
         scorecard={"total_score": 88},
         gate={"submission_ready": True},
-        submission={"assistant_guidance_digest": "ag_contextdigest"},
+        submission={
+            "assistant_guidance_digest": "ag_contextdigest",
+            "anti_overfit_report": {"schema_version": "anti_overfit_report.v1", "recommendation": "pass", "score": 100},
+            "rolling_validation_report": {"schema_version": "rolling_validation_report.v1", "status": "pass", "passed": True, "score": 90},
+        },
         lifecycle_status="submission_ready",
     )
     loser = Candidate(
@@ -35,6 +40,20 @@ def test_assistant_context_pack_merges_runtime_memory_and_guidance(tmp_path):
         official_metrics={"sharpe": 0.3, "fitness": 0.1, "pass_fail": "FAIL", "failure_reason": "LOW_SHARPE"},
         scorecard={"total_score": 24},
         gate={"failed_reasons": ["LOW_SHARPE"]},
+        submission={
+            "anti_overfit_report": {
+                "schema_version": "anti_overfit_report.v1",
+                "recommendation": "block",
+                "score": 25,
+                "tests": [{"name": "placebo", "passed": False}],
+            },
+            "rolling_validation_report": {
+                "schema_version": "rolling_validation_report.v1",
+                "status": "fail",
+                "passed": False,
+                "score": 20,
+            },
+        },
         lifecycle_status="official_standard_rejected",
     )
     repo.save_candidate("run_1", winner)
@@ -109,6 +128,10 @@ def test_assistant_context_pack_merges_runtime_memory_and_guidance(tmp_path):
     assert pack["observability"]["duplicate_expression_count"] >= 1
     assert pack["observability"]["official_guard_blocked_count"] == 1
     assert pack["observability"]["risk_level"] in {"medium", "high"}
+    assert pack["robustness"]["anti_overfit"]["available_count"] == 2
+    assert pack["robustness"]["anti_overfit"]["status_counts"]["block"] == 1
+    assert pack["robustness"]["rolling_validation"]["status_counts"]["fail"] == 1
+    assert "anti_overfit_block" in pack["robustness"]["risk_flags"]
     assert "duplicate_expression_history" in pack["observability"]["health_flags"]
     assert pack["latest_result"]["backtest_records"][0]["action"] == "submitted"
     assert "rank" in pack["generation_focus"]["operators"]
@@ -123,11 +146,14 @@ def test_assistant_context_pack_merges_runtime_memory_and_guidance(tmp_path):
     assert "risk=" in pack["prompt"]
     assert "Prompt diagnostics" in pack["prompt"]
     assert "official_guard_blocked=1" in pack["prompt"]
+    assert "Robustness evidence:" in pack["prompt"]
+    assert "anti_overfit_block" in pack["prompt"]
     assert pack["prompt_diagnostics"]["schema_version"] == "assistant_prompt_diagnostics.v1"
     assert pack["prompt_diagnostics"]["duplicate_focus_count"] >= 1
     assert pack["prompt_diagnostics"]["official_guard_blocked_count"] == 1
     assert "duplicate_expression_history" in pack["prompt_diagnostics"]["risk_flags"]
     assert "observability_official_call_guard_active" in pack["prompt_diagnostics"]["risk_flags"]
+    assert "anti_overfit_block" in pack["prompt_diagnostics"]["risk_flags"]
     assert "duplicate_expression_history" in pack["prompt"]
     assert "ag_contextdigest" in pack["prompt"]
     assert any("ag_contextdigest" in item for item in pack["recommended_next_actions"])
@@ -141,16 +167,93 @@ def test_assistant_context_pack_merges_runtime_memory_and_guidance(tmp_path):
     assert request["offline_draft"]["evidence"]["duplicate_expression_count"] >= 1
     assert request["offline_draft"]["evidence"]["observability_official_guard_blocked_count"] == 1
     assert request["offline_draft"]["evidence"]["recent_backtest_record_count"] == 1
+    assert request["offline_draft"]["evidence"]["anti_overfit_available_count"] == 2
+    assert "anti_overfit_block" in request["offline_draft"]["risk_flags"]
+    assert any(item.get("target") == "robustness_gate" for item in request["offline_draft"]["candidate_adjustments"])
+    assert "anti_overfit_block" in request["prompt_diagnostics"]["risk_flags"]
 
 
 def test_assistant_context_pack_can_redact_sensitive_paths(tmp_path):
     config = RunConfig(environment="mock")
     config.ops.storage_dir = str(tmp_path)
 
-    pack = build_assistant_context_pack(config, include_sensitive=False)
+    pack = build_assistant_context_pack(
+        config,
+        latest_result_snapshot={
+            "ok": True,
+            "result": {
+                "summary": {
+                    "candidates": [
+                        {
+                            "alpha_id": "a1",
+                            "expression": "rank(close)",
+                            "api_key": "sk-local-secret",
+                            "cache_path": str(tmp_path / "cache" / "raw.json"),
+                            "submission": {
+                                "authorization": "Bearer local-token",
+                                "cookie": "session=secret",
+                            },
+                        }
+                    ]
+                }
+            },
+        },
+        cloud_alpha_snapshot={
+            "summary": {"source": "mock", "loaded_at": "now"},
+            "alphas": [
+                {
+                    "id": "cloud_1",
+                    "status": "ACTIVE",
+                    "metrics": {"pass_fail": "PASS"},
+                    "raw_path": str(tmp_path / "cloud.json"),
+                    "access_token": "cloud-token",
+                }
+            ],
+        },
+        memory_summary={
+            "source": "test",
+            "total_candidates": 0,
+            "expression_index": {},
+            "assistant_guidance_outcomes": [],
+            "secret_note": "memory secret",
+        },
+        memory_guidance={
+            "source": "test",
+            "top_fields": ["close"],
+            "token": "guidance-token",
+            "evidence_path": str(tmp_path / "guidance-evidence.json"),
+            "nested": {"password": "guidance-password"},
+        },
+        observability_snapshot={
+            "schema_version": "observability.v1",
+            "risk_level": "low",
+            "health_flags": [],
+            "flag_details": {
+                "cache_dir": str(tmp_path / "observability-cache"),
+                "credentials": {"password": "observability-password"},
+            },
+        },
+        include_sensitive=False,
+    )
+    encoded = str(pack)
 
     assert "storage_dir" not in pack
-    assert pack["sensitive_fields_redacted"] == ["storage_dir"]
+    assert "storage_dir" in pack["sensitive_fields_redacted"]
+    assert "evidence_path" in pack["sensitive_fields_redacted"]
+    assert "password" in pack["sensitive_fields_redacted"]
+    assert "token" in pack["sensitive_fields_redacted"]
+    assert str(tmp_path) not in encoded
+    assert "local-token" not in encoded
+    assert "guidance-password" not in encoded
+    assert "<redacted>" in encoded
+    assert isinstance(pack["prompt_diagnostics"]["estimated_context_tokens"], int)
+    assert str(tmp_path) not in pack["prompt"]
+
+    request = build_assistant_request_pack(pack)
+    request_encoded = str(request)
+    assert str(tmp_path) not in request_encoded
+    assert "local-token" not in request_encoded
+    assert "guidance-password" not in request_encoded
 
 
 def test_assistant_context_pack_reuses_memory_summary_for_guidance(monkeypatch, tmp_path):

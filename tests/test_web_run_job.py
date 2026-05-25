@@ -3,16 +3,19 @@ from __future__ import annotations
 import logging
 from types import SimpleNamespace
 
-from brain_alpha_ops.web_run_job import run_job_service
+from brain_alpha_ops.models import PipelineResult
+from brain_alpha_ops.web_run_job import run_guided_job_service, run_job_service
 
 
 class _Store:
     def __init__(self, *, cancelled=False):
         self.cancelled = cancelled
         self.rows = {"job_1": {"progress": {}}}
+        self.updates = []
 
     def update(self, job_id, **fields):
         self.rows.setdefault(job_id, {}).update(fields)
+        self.updates.append((job_id, fields))
 
     def get(self, job_id):
         return self.rows.get(job_id)
@@ -86,3 +89,46 @@ def test_run_job_service_records_redacted_failure_context():
     assert row["error"] == "redacted failure"
     assert row["progress"]["error_context"]["error_code"] == "RUN_JOB_FAILED"
     assert row["progress"]["error_context"]["job_id"] == "job_1"
+
+
+def test_run_guided_job_service_registers_phase_progress(monkeypatch):
+    store = _Store()
+
+    class FakeGuidedPipeline:
+        def __init__(self, _config):
+            self.phases = {"init": object(), "redline": object(), "finalize": object()}
+            self.callback = None
+
+        def on_progress(self, callback):
+            self.callback = callback
+            return self
+
+        def run(self):
+            assert self.callback is not None
+            self.callback("redline", "running", {"message": "checking red lines", "percent": 33, "alpha_id": "a1"})
+            return PipelineResult(run_id="run_guided", candidates=[], events=[], summary={"candidates": [{"alpha_id": "a1"}]})
+
+        def resume(self):
+            return self.run()
+
+    monkeypatch.setattr("brain_alpha_ops.ux.guided_pipeline.GuidedPipeline", FakeGuidedPipeline)
+
+    run_guided_job_service(
+        "job_1",
+        {"guided": True},
+        job_store=store,
+        run_config_from_payload=lambda payload: _config(),
+        compute_run_stats=lambda data, config: {"candidate_count": len(data.get("candidates", []))},
+        safe_error_message=str,
+        log=logging.getLogger("tests.web_run_job"),
+    )
+
+    assert any(
+        update.get("progress", {}).get("phase") == "redline"
+        and update.get("progress", {}).get("status") == "running"
+        and update.get("progress", {}).get("percent") == 33
+        for _job_id, update in store.updates
+    )
+    row = store.get("job_1")
+    assert row["status"] == "completed"
+    assert row["progress"]["data"]["stats"] == {"candidate_count": 1}

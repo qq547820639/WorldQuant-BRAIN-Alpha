@@ -54,11 +54,13 @@ class OfficialDataLoader:
         self._fields_by_name: Dict[str, List[OfficialField]] = {}
         self._operators: Dict[str, OfficialOperator] = {}
         self._datasets: Dict[str, OfficialDataset] = {}
+        self._loaded_root: Path | None = None
 
     def load_all(self, data_dir: str | Path = "data") -> None:
         """Read all three official JSON files and build in-memory indexes."""
         data_path = Path(data_dir)
         root = data_path if data_path.is_absolute() else runtime_project_root() / data_path
+        self._loaded_root = root
         self._load_fields(root / "official_fields.json")
         self._load_operators(root / "official_operators.json")
         self._load_datasets(root / "official_datasets.json")
@@ -146,7 +148,6 @@ class OfficialDataLoader:
         old_fields = self.field_count
         old_operators = self.operator_count
         old_datasets = self.dataset_count
-
         # Backup existing data in case reload fails
         backup_fields = dict(self._fields)
         backup_operators = dict(self._operators)
@@ -243,11 +244,18 @@ class OfficialDataLoader:
         if not path.exists():
             return
         raw = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(raw, list):
+            return
         for item in raw:
+            if not isinstance(item, dict):
+                continue
+            field_id = str(item.get("id") or item.get("name") or item.get("field") or item.get("fieldId") or "").strip()
+            if not field_id:
+                continue
             ds_raw = item.get("dataset") if isinstance(item.get("dataset"), dict) else None
             cat_raw = item.get("category") if isinstance(item.get("category"), dict) else None
             field = OfficialField(
-                id=str(item.get("id", "")),
+                id=field_id,
                 description=str(item.get("description", "")),
                 dataset=DatasetRef(id=str(ds_raw.get("id", "")), name=str(ds_raw.get("name", ""))) if ds_raw else None,
                 category=str(cat_raw.get("id", "") if cat_raw else item.get("category", "")),

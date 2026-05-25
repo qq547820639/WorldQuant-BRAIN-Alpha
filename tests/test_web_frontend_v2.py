@@ -1,6 +1,6 @@
-"""
+﻿"""
 Comprehensive frontend module tests for UX v3 redesign.
-Tests all 14 JS modules: state, utils, api-client, view-model,
+Tests all 15 JS modules: state, utils, api-client, view-model,
 all 5 components, all 4 views, and app entry point.
 Uses Node.js VM module with DOM simulation harness for realistic testing.
 """
@@ -19,6 +19,7 @@ from scripts.check_frontend_syntax import _node_path
 ROOT = Path(__file__).resolve().parents[1]
 WEB_DIR = ROOT / "brain_alpha_ops" / "web"
 WEB_JS = WEB_DIR / "js"
+WEB_CSS = WEB_DIR / "css"
 TEMPLATE_PATH = WEB_DIR / "index_template.html"
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -33,9 +34,14 @@ ALL_MODULES = {
     "js/components/spinner.js",
     "js/components/table.js",
     "js/components/toast.js",
+    "js/form-controls.js",
+    "js/result-state.js",
+    "js/result-table.js",
     "js/state.js",
     "js/utils.js",
     "js/view-model.js",
+    "js/view-registry.js",
+    "js/view-renderers.js",
     "js/views/charts.js",
     "js/views/detail.js",
     "js/views/monitor.js",
@@ -75,6 +81,7 @@ def _run_node_script(script: str, timeout: int = 120) -> str:
 
 def _build_test_script(modules: list[str], test_code: str) -> str:
     """Build a complete Node.js test script with DOM harness and module loading."""
+    modules = _frontend_module_load_order(modules)
     harness = r"""
 // DOM Simulation Harness for browser-less testing
 class ClassList {
@@ -99,6 +106,7 @@ class MockElement {
     this._dataset = {};
     this._style = {};
     this._events = {};
+    this.parentElement = null;
     this.textContent = "";
     this.innerHTML = "";
     this.value = "";
@@ -114,6 +122,7 @@ class MockElement {
     this.role = "";
     this.clientWidth = 800;
     this.clientHeight = 600;
+    this.drawOps = [];
   }
   getAttribute(name) { return this._attrs[name] || null; }
   setAttribute(name, value) { this._attrs[name] = String(value); }
@@ -131,13 +140,17 @@ class MockElement {
   }
   dispatchEvent(event) {
     const handlers = this._events[event.type] || [];
-    handlers.forEach(function(fn) { fn.call(this, event); });
+    event.target = event.target || this;
+    event.currentTarget = event.currentTarget || this;
+    event.preventDefault = event.preventDefault || function() {};
+    event.stopPropagation = event.stopPropagation || function() {};
+    handlers.forEach(fn => fn.call(this, event));
   }
-  click() { this.dispatchEvent({ type: "click" }); }
+  click() { this.dispatchEvent({ type: "click", target: this }); }
   focus() {}
   scrollIntoView() {}
-  appendChild(child) { child.parentNode = this; this.children.push(child); return child; }
-  removeChild(child) { this.children = this.children.filter(function(c) { return c !== child; }); return child; }
+  appendChild(child) { child.parentNode = this; child.parentElement = this; this.children.push(child); return child; }
+  removeChild(child) { this.children = this.children.filter(function(c) { return c !== child; }); child.parentNode = null; child.parentElement = null; return child; }
   querySelector(selector) {
     if (selector === ".modal-panel" || selector === ".confirm-dialog") return new MockElement("div");
     if (selector === ".confirm-dialog-icon") return new MockElement("div");
@@ -145,11 +158,29 @@ class MockElement {
   }
   querySelectorAll(selector) {
     if (selector === ".sbar-section") return [new MockElement("div"), new MockElement("div")];
+    if (selector === "[data-style-width]" || selector === "[data-style-left]") return [];
     return this.children;
   }
   contains(el) { return this.children.includes(el); }
   closest(selector) { return null; }
   getBoundingClientRect() { return { top: 0, left: 0, width: 800, height: 600, bottom: 600, right: 800 }; }
+  getContext(type) {
+    if (this.tagName !== "CANVAS" || type !== "2d") return null;
+    const el = this;
+    return {
+      setTransform() { el.drawOps.push("setTransform"); },
+      clearRect() { el.drawOps.push("clearRect"); },
+      fillRect() { el.drawOps.push("fillRect"); },
+      fillText(text) { el.drawOps.push("text:" + text); },
+      beginPath() { el.drawOps.push("beginPath"); },
+      moveTo() { el.drawOps.push("moveTo"); },
+      lineTo() { el.drawOps.push("lineTo"); },
+      stroke() { el.drawOps.push("stroke"); },
+      arc() { el.drawOps.push("arc"); },
+      closePath() { el.drawOps.push("closePath"); },
+      fill() { el.drawOps.push("fill"); },
+    };
+  }
 }
 
 // Global document mock
@@ -203,12 +234,6 @@ globalThis.window = {
   },
   URL: URL,
   EventSource: function() { this.close = function() {}; this.readyState = 1; },
-  Chart: function(ctx, config) {
-    this.data = config.data;
-    this.options = config.options;
-    this.type = config.type;
-    this.destroy = function() {};
-  },
   btoa: function(s) { return Buffer.from(s).toString("base64"); },
   atob: function(s) { return Buffer.from(s, "base64").toString(); },
   location: { origin: "http://localhost:8080" },
@@ -270,6 +295,19 @@ function loadModule(name) {
     )
 
 
+def _frontend_module_load_order(modules: list[str]) -> list[str]:
+    """Add app-level service dependencies while preserving explicit test order."""
+    ordered = list(modules)
+    if "js/app.js" not in ordered:
+        return ordered
+    for dependency in ["js/result-state.js", "js/result-table.js", "js/form-controls.js"]:
+        if dependency in ordered:
+            continue
+        insert_at = ordered.index("js/app.js")
+        ordered.insert(insert_at, dependency)
+    return ordered
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 # Module existence tests
 # ═══════════════════════════════════════════════════════════════════════════
@@ -297,7 +335,7 @@ def test_template_references_all_modules():
 
 def test_template_has_v3_css_variables():
     """Verify the template includes the v3 design system CSS variables."""
-    template = TEMPLATE_PATH.read_text(encoding="utf-8")
+    css = (WEB_CSS / "app.css").read_text(encoding="utf-8")
     required_vars = [
         "--bg-root", "--bg-surface", "--bg-muted", "--bg-accent-soft",
         "--text-primary", "--text-secondary", "--text-muted",
@@ -310,42 +348,48 @@ def test_template_has_v3_css_variables():
         "--font", "--font-mono",
     ]
     for var in required_vars:
-        assert var in template, f"CSS variable {var} missing from template"
+        assert var in css, f"CSS variable {var} missing from CSS source"
 
 
 def test_template_has_dark_mode_support():
     """Verify dark mode theme is defined with v3 tokens."""
     template = TEMPLATE_PATH.read_text(encoding="utf-8")
-    assert "data-theme" in template
-    assert "toggleTheme" in template
+    css = (WEB_CSS / "app.css").read_text(encoding="utf-8")
+    app_js = (WEB_JS / "app.js").read_text(encoding="utf-8")
+    assert "data-theme" in css
+    assert 'data-action="toggle-theme"' in template
+    assert "window.toggleTheme" in app_js
     # brain-alpha-ops-theme is in app.js, not the HTML template
 
 
 def test_template_has_responsive_breakpoints():
     """Verify responsive CSS breakpoints are defined."""
-    template = TEMPLATE_PATH.read_text(encoding="utf-8")
-    assert "@media(max-width:1200px)" in template or "@media (max-width: 1200px)" in template
-    assert "@media(max-width:960px)" in template or "@media (max-width: 960px)" in template
-    assert "@media(max-width:640px)" in template or "@media (max-width: 640px)" in template
+    css = (WEB_CSS / "app.css").read_text(encoding="utf-8")
+    assert "@media(max-width:1200px)" in css or "@media (max-width: 1200px)" in css
+    assert "@media(max-width:960px)" in css or "@media (max-width: 960px)" in css
+    assert "@media(max-width:640px)" in css or "@media (max-width: 640px)" in css
 
 
 def test_template_has_empty_state_v3():
     """Verify the v3 empty state UI elements exist with illustration."""
     template = TEMPLATE_PATH.read_text(encoding="utf-8")
+    result_table_js = (WEB_JS / "result-table.js").read_text(encoding="utf-8")
     assert "empty-state" in template
     assert "empty-state-illustration" in template
     assert "empty-state-title" in template
     assert "empty-state-desc" in template
     assert "empty-state-actions" in template
     assert "tableEmptyIcon" in template
+    assert "启动生产搜索会自动" in result_table_js
 
 
 def test_template_has_toast_container():
     """Verify toast notification infrastructure is in place."""
     template = TEMPLATE_PATH.read_text(encoding="utf-8")
+    css = (WEB_CSS / "app.css").read_text(encoding="utf-8")
     assert "toast-container" in template
-    assert "toastSlideIn" in template
-    assert "toastSlideOut" in template
+    assert "toastSlideIn" in css
+    assert "toastSlideOut" in css
 
 
 def test_template_has_spinner_overlay():
@@ -358,10 +402,11 @@ def test_template_has_spinner_overlay():
 def test_template_has_v3_sidebar_sections():
     """Verify v3 sbar-section collapsible sections are in the template."""
     template = TEMPLATE_PATH.read_text(encoding="utf-8")
+    css = (WEB_CSS / "app.css").read_text(encoding="utf-8")
     assert "sbar-section" in template
     assert "sbar-section-header" in template
     assert "sbar-section-body" in template
-    assert "is-collapsed" in template
+    assert "is-collapsed" in css
     assert "sbar-step" in template
     assert "sbar-chevron" in template
     assert "sbarSection1" in template
@@ -373,20 +418,27 @@ def test_template_has_v3_sidebar_sections():
 def test_template_has_v3_insight_tiles():
     """Verify v3 insight-strip with insight-tile cards."""
     template = TEMPLATE_PATH.read_text(encoding="utf-8")
+    css = (WEB_CSS / "app.css").read_text(encoding="utf-8")
     assert "insight-strip" in template
-    assert "insight-tile" in template
-    assert "insight-tile-icon" in template
-    assert "insight-tile-label" in template
-    assert "insight-tile-value" in template
+    assert "insight-tile" in css
+    assert "insight-tile-icon" in css
+    assert "insight-tile-label" in css
+    assert "insight-tile-value" in css
 
 
 def test_template_has_view_tabs():
     """Verify v3 view-tabs navigation exists."""
     template = TEMPLATE_PATH.read_text(encoding="utf-8")
+    css = (WEB_CSS / "app.css").read_text(encoding="utf-8")
+    app_js = (WEB_JS / "app.js").read_text(encoding="utf-8")
+    view_registry_js = (WEB_JS / "view-registry.js").read_text(encoding="utf-8")
     assert 'id="viewTabs"' in template
-    assert "view-tab" in template
-    assert "tab-badge" in template
-    assert "view-tab-separator" in template
+    assert "view-tab" in css
+    assert "tab-badge" in app_js + css
+    assert "view-tab-group" in app_js + css
+    assert "view-tab-group-label" in css
+    assert "tab-marker" in app_js + css
+    assert "生产流程" in view_registry_js
 
 
 def test_template_has_action_card():
@@ -396,20 +448,22 @@ def test_template_has_action_card():
     assert "action-card-title" in template
     assert "action-card-desc" in template
     assert "btn-run" in template
+    assert "去检查" in template
 
 
 def test_template_has_header_status_dot():
     """Verify the v3 header status indicator dot."""
     template = TEMPLATE_PATH.read_text(encoding="utf-8")
+    css = (WEB_CSS / "app.css").read_text(encoding="utf-8")
     assert "header-status-dot" in template
     assert "headerStatusDot" in template
-    assert "is-running" in template
+    assert "is-running" in css
 
 
 def test_template_has_sr_only():
     """Verify screen-reader-only utility."""
-    template = TEMPLATE_PATH.read_text(encoding="utf-8")
-    assert ".sr-only" in template
+    css = (WEB_CSS / "app.css").read_text(encoding="utf-8")
+    assert ".sr-only" in css
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -431,6 +485,7 @@ def test_template_has_all_required_html_elements():
         'id="confirmOverlay"', 'id="toastContainer"', 'id="spinnerOverlay"',
         'id="moduleActions"', 'id="submitFailurePanel"',
         'id="viewTabs"', 'id="tableSearch"', 'id="controlButton"',
+        'id="workflowRail"', 'id="workflowStatus"', 'id="workflowRunButton"',
     ]
     for el in required:
         assert el in template, f"Required element missing: {el}"
@@ -441,6 +496,32 @@ def test_template_has_theme_toggle():
     assert 'id="themeToggleBtn"' in template
     assert "theme-icon-light" in template
     assert "theme-icon-dark" in template
+
+
+def test_template_has_ux_refactor_shell_contract():
+    template = TEMPLATE_PATH.read_text(encoding="utf-8")
+    css = (WEB_CSS / "app.css").read_text(encoding="utf-8")
+    app_js = (WEB_JS / "app.js").read_text(encoding="utf-8")
+    view_registry_js = (WEB_JS / "view-registry.js").read_text(encoding="utf-8")
+
+    assert "header-brand-subtitle" in template
+    assert "生产、检查、提交的本地工作台" in template
+    assert "policy-grid" in app_js + css
+    assert "policy-card" in app_js + css
+    assert "connection-result" in template
+    assert "assistant-generate-inputs" in template
+    assert "sync-card" in template
+    assert "slot-panel" in template
+    assert "VIEW_GROUPS" in view_registry_js
+    assert "view-tab-group" in app_js + css
+    assert "workflow-rail" in template + css
+    assert "workflow-step" in template + css
+    assert "workflow-panel" in template + css
+    assert "workflow-actions" in template + css
+    assert "tab-marker" in app_js + css
+    assert "empty-state-illustration\" id=\"tableEmptyIcon\">01" in template
+    assert 'id="tableEmptyActions"' in template
+    assert '<span class="search-icon">/</span>' in template
 
 
 def test_template_form_elements_use_v3_classes():
@@ -456,8 +537,8 @@ def test_template_form_elements_use_v3_classes():
 
 
 def test_template_has_button_loading_state():
-    template = TEMPLATE_PATH.read_text(encoding="utf-8")
-    assert "is-loading" in template
+    css = (WEB_CSS / "app.css").read_text(encoding="utf-8")
+    assert "is-loading" in css
 
 
 def test_template_has_toggle_class():
@@ -466,9 +547,10 @@ def test_template_has_toggle_class():
 
 
 def test_template_has_progress_indeterminate():
-    template = TEMPLATE_PATH.read_text(encoding="utf-8")
-    assert "is-indeterminate" in template
-    assert "progressIndeterminate" in template
+    css = (WEB_CSS / "app.css").read_text(encoding="utf-8")
+    production_js = (WEB_JS / "views" / "production.js").read_text(encoding="utf-8")
+    assert "is-indeterminate" in css + production_js
+    assert "progressIndeterminate" in css
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -505,7 +587,8 @@ def test_backward_compat_inline_markers_unchanged():
         "js/components/modal.js", "js/components/progress.js",
         "js/components/table.js", "js/views/detail.js",
         "js/views/production.js", "js/views/charts.js",
-        "js/view-model.js", "js/app.js",
+        "js/view-model.js", "js/view-registry.js", "js/view-renderers.js",
+        "js/result-state.js", "js/result-table.js", "js/form-controls.js", "js/app.js",
     ]
     for req in required:
         assert req in inlined, f"Required inline marker missing: {req}"
@@ -523,8 +606,10 @@ def test_build_inline_still_works():
     html, stats = module.build_inline(template)
 
     assert stats["replaced"] >= 13, f"Expected >= 13 modules, got {stats['replaced']}"
+    assert stats["css_replaced"] == 1
     assert len(stats["missing"]) == 0, f"Missing modules: {stats['missing']}"
     assert "<!-- inline:" not in html, "No unreplaced inline markers"
+    assert "<!-- inline-css:" not in html, "No unreplaced inline CSS markers"
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -661,14 +746,14 @@ assertContains(u.badgeClass("muted"), "badge-default", "muted badge");
 
 // Score span (v3: uses Utils.scoreSpan)
 var sHigh = u.scoreSpan(85.5);
-assertContains(sHigh, "var(--success)", "high score green");
+assertContains(sHigh, "score-value is-high", "high score class");
 assertContains(sHigh, "85.5", "score value");
 
 var sMid = u.scoreSpan(55);
-assertContains(sMid, "var(--warning)", "mid score yellow");
+assertContains(sMid, "score-value is-mid", "mid score class");
 
 var sLow = u.scoreSpan(30);
-assertContains(sLow, "var(--danger)", "low score red");
+assertContains(sLow, "score-value is-low", "low score class");
 
 var sNull = u.scoreSpan(null);
 assertContains(sNull, "-", "null score");
@@ -697,6 +782,14 @@ var navHtml = u.renderStateNavigation({
 });
 assertContains(navHtml, "解决路径", "nav title");
 assertContains(navHtml, "lc-step", "lifecycle step class");
+
+// Data style bridge
+var styled = new MockElement("div");
+styled.setAttribute("data-style-width", "125");
+var rootEl = new MockElement("div");
+rootEl.querySelectorAll = function(selector) { return selector === "[data-style-width]" ? [styled] : []; };
+u.applyDataStyles(rootEl);
+assertEqual(styled.style.width, "100%", "data style width clamp");
 
 // setVal
 var testInput = document.getElementById("testInput");
@@ -995,21 +1088,25 @@ assertContains(bb, "badge-danger", "bad badge");
 
 // Score span
 var sh = T.scoreSpan(85.5);
-assertContains(sh, "var(--success)", "high score");
+assertContains(sh, "score-value is-high", "high score");
 assertContains(sh, "85.5", "value");
 
 var sl = T.scoreSpan(30);
-assertContains(sl, "var(--danger)", "low score");
+assertContains(sl, "score-value is-low", "low score");
 
 var sn = T.scoreSpan(null);
 assertContains(sn, "-", "null score");
+
+// Safe fragment renderer
+assertContains(window.Utils.renderSafeHtmlFragment(T.statusBadge("OK", "good"), "badge"), "badge-success", "badge fragment allowed");
+assertContains(window.Utils.renderSafeHtmlFragment('<img src=x onerror=alert(1)>', "badge"), "&lt;img", "dangerous fragment escaped");
 
 // Render empty
 var tbody = document.getElementById("candidateRows");
 T.render("candidateRows",
   [{ accessor: "id", render: function(v) { return String(v); } }],
   [],
-  { emptyText: "暂无", emptyIcon: "📊" }
+  { emptyText: "暂无", emptyIcon: "NA" }
 );
 
 var emptyEl = document.getElementById("tableEmptyState");
@@ -1026,6 +1123,20 @@ T.render("candidateRows",
 assertEqual(emptyEl.classList.contains("hidden"), true, "empty state hidden");
 assertEqual(tableEl.classList.contains("hidden"), false, "table visible");
 assertContains(tbody.innerHTML, "row1", "row rendered");
+
+T.render("candidateRows",
+  [{ accessor: "id", render: function(v) { return "<script>" + v + "</script>"; }, trustedHtml: true }],
+  [{ kind: "test", id: "row2", raw: { alpha_id: "A2" }, _selected: false }],
+  { emptyText: "No rows" }
+);
+assertContains(tbody.innerHTML, "&lt;script&gt;row2&lt;/script&gt;", "legacy trustedHtml must not pass through");
+
+T.render("candidateRows",
+  [{ accessor: "id", render: function(v) { return T.statusBadge(v, "good"); }, htmlType: "badge" }],
+  [{ kind: "test", id: "row3", raw: { alpha_id: "A3" }, _selected: false }],
+  { emptyText: "No rows" }
+);
+assertContains(tbody.innerHTML, "badge-success", "whitelisted badge html rendered");
 """
 
     _run_node_script(_build_test_script(["js/utils.js", "js/components/table.js"], test_code))
@@ -1068,6 +1179,7 @@ assertContains(insightPanel.innerHTML, "insight-tile", "v3 insight-tile class");
 assertContains(insightPanel.innerHTML, "insight-tile-label", "v3 label");
 assertContains(insightPanel.innerHTML, "insight-tile-value", "v3 value");
 assertContains(insightPanel.innerHTML, "insight-tile-icon", "v3 icon");
+assertContains(insightPanel.innerHTML, "RUN", "plain status marker");
 assertContains(insightPanel.innerHTML, "运行中", "status in insight");
 
 // Render ops monitor
@@ -1137,6 +1249,10 @@ assertEqual(typeof window.ChartView.destroyAll, "function", "destroyAll exists")
 
 window.AppState.set("currentResult.summary", {});
 window.AppState.set("currentResult.candidates", []);
+document.getElementById("scoreTrendChart").tagName = "CANVAS";
+document.getElementById("sharpeDistChart").tagName = "CANVAS";
+document.getElementById("gatePieChart").tagName = "CANVAS";
+document.getElementById("turnoverChart").tagName = "CANVAS";
 
 // Should not throw with empty data
 try {
@@ -1144,6 +1260,16 @@ try {
 } catch (e) {
   assert(false, "renderCharts should not throw: " + e.message);
 }
+assertContains(document.getElementById("chartFallback").textContent, "Chart.js 未加载", "offline fallback text");
+
+window.AppState.set("currentResult.candidates", [
+  { alpha_id: "A1", scorecard: { total_score: 80, sharpe: 1.2, turnover: 0.18 }, gate: { submission_ready: true } },
+  { alpha_id: "A2", scorecard: { total_score: 65, sharpe: 0.9, turnover: 0.25 }, gate: { passed: false } },
+]);
+window.ChartView.renderCharts();
+assertContains(document.getElementById("chartFallback").textContent, "本地 canvas", "native fallback text");
+assert(document.getElementById("scoreTrendChart").drawOps.length > 0, "score fallback drawn");
+assertContains(document.getElementById("gatePieChart").drawOps.join("|"), "arc", "gate pie fallback drawn");
 
 // destroyAll should not throw
 try {
@@ -1246,6 +1372,53 @@ assertDefined(window.loadConfig, "loadConfig exported");
 
     _run_node_script(_build_test_script(
         ["js/utils.js", "js/api-client.js", "js/state.js", "js/view-model.js",
+         "js/view-registry.js",
+         "js/view-renderers.js",
+         "js/components/toast.js", "js/components/spinner.js", "js/components/modal.js",
+         "js/components/progress.js", "js/components/table.js",
+         "js/views/detail.js", "js/views/production.js", "js/views/charts.js",
+         "js/views/monitor.js", "js/app.js"],
+        test_code
+    ))
+
+
+def test_app_navigation_groups_and_action_guidance():
+    """Test UX refactor navigation groups and contextual action visibility."""
+    test_code = """
+window.AppState.setBatch({
+  "currentResult.candidates": [
+    { alpha_id: "NAV001", lifecycle_status: "submission_ready", scorecard: { total_score: 82 }, gate: { submission_ready: true } },
+    { alpha_id: "NAV002", lifecycle_status: "failed", scorecard: { total_score: 20 }, gate: { passed: false } },
+  ],
+  "activeView": "candidates",
+});
+
+window.renderAll();
+var tabs = document.getElementById("viewTabs");
+assertContains(tabs.innerHTML, "view-tab-group", "grouped navigation shell");
+assertContains(tabs.innerHTML, "生产流程", "workflow group label");
+assertContains(tabs.innerHTML, "数据审计", "data group label");
+assertContains(tabs.innerHTML, "研究工具", "research group label");
+assertContains(tabs.innerHTML, "tab-marker", "plain tab marker");
+assertContains(tabs.innerHTML, "01", "candidate step marker");
+
+window.switchView("passed");
+var actionBar = document.getElementById("moduleActions");
+assertEqual(actionBar.classList.contains("hidden"), false, "passed action bar visible");
+assertContains(document.getElementById("moduleActionHint").textContent, "官方预提交检查", "check guidance copy");
+assertEqual(document.getElementById("checkButton").classList.contains("hidden"), false, "check visible for passed");
+assertEqual(document.getElementById("checkMode").classList.contains("hidden"), false, "check mode visible for passed");
+
+window.switchView("submittable");
+assertContains(document.getElementById("moduleActionHint").textContent, "勾选", "submit guidance copy");
+assertEqual(document.getElementById("checkButton").classList.contains("hidden"), true, "check hidden for submit view");
+assertEqual(document.getElementById("submitSelectedButton").classList.contains("hidden"), false, "submit visible for submit view");
+"""
+
+    _run_node_script(_build_test_script(
+        ["js/utils.js", "js/api-client.js", "js/state.js", "js/view-model.js",
+         "js/view-registry.js",
+         "js/view-renderers.js",
          "js/components/toast.js", "js/components/spinner.js", "js/components/modal.js",
          "js/components/progress.js", "js/components/table.js",
          "js/views/detail.js", "js/views/production.js", "js/views/charts.js",
@@ -1268,10 +1441,72 @@ var emptyEl = document.getElementById("tableEmptyState");
 assertEqual(emptyEl.classList.contains("hidden"), false, "empty state visible");
 var tableEl = document.getElementById("candidateTable");
 assertEqual(tableEl.classList.contains("hidden"), true, "table hidden when empty");
+assertContains(document.getElementById("tableEmptyDescription").textContent, "启动生产搜索", "friendly empty guidance");
+assertEqual(document.getElementById("tableEmptyIcon").textContent, "01", "plain empty marker");
 """
 
     _run_node_script(_build_test_script(
         ["js/utils.js", "js/api-client.js", "js/state.js", "js/view-model.js",
+         "js/view-registry.js",
+         "js/view-renderers.js",
+         "js/components/toast.js", "js/components/spinner.js", "js/components/modal.js",
+         "js/components/progress.js", "js/components/table.js",
+         "js/views/detail.js", "js/views/production.js", "js/views/charts.js",
+         "js/views/monitor.js", "js/app.js"],
+        test_code
+    ))
+
+
+def test_app_workflow_rail_counts_status_and_empty_actions():
+    """Task rail should expose the happy path and keep controls/state in sync."""
+    test_code = """
+var checkedAt = new Date().toISOString();
+window.AppState.setBatch({
+  "currentResult.candidates": [
+    { alpha_id: "READY001", lifecycle_status: "submission_ready", scorecard: { total_score: 88 }, gate: { submission_ready: true } },
+    { alpha_id: "CAND001", lifecycle_status: "candidate", scorecard: { total_score: 70 }, gate: {} },
+  ],
+  "currentResult.cloud_alphas": [{ alpha_id: "CLD001", status: "APPROVED" }],
+  "checkResults": {
+    READY001: { alpha_id: "READY001", passed: true, checked_at: checkedAt, checks: [{ name: "official_pre_submit_check", passed: true }] },
+  },
+  "activeView": "passed",
+});
+
+window.renderTaskRail();
+assertEqual(document.getElementById("workflowCandidateCount").textContent, "2", "candidate count");
+assertEqual(document.getElementById("workflowPassedCount").textContent, "1", "passed count");
+assertEqual(document.getElementById("workflowSubmittableCount").textContent, "1", "submittable count");
+assertEqual(document.getElementById("workflowCloudCount").textContent, "1", "cloud count");
+assertEqual(document.getElementById("workflowStepCheck").classList.contains("is-active"), true, "check step active");
+assertContains(document.getElementById("workflowStatus").textContent, "可提交", "status guides next step");
+
+window.AppState.set("syncInFlight", true);
+window.renderBusyControls();
+assertEqual(document.getElementById("workflowRunButton").disabled, true, "run disabled during sync");
+assertEqual(document.getElementById("workflowStatus").classList.contains("is-busy"), true, "busy status class");
+window.AppState.set("syncInFlight", false);
+
+window.AppState.setBatch({
+  "currentResult.candidates": [],
+  "checkResults": {},
+  "activeView": "submittable",
+});
+window.renderCurrentView();
+var actions = document.getElementById("tableEmptyActions").innerHTML;
+assertContains(actions, 'data-action="switch-view"', "empty state links to check view");
+assertContains(actions, 'data-view="passed"', "empty state targets passed view");
+assertContains(actions, 'data-action="check-batch"', "empty state offers check action");
+
+document.getElementById("tableSearch").value = "missing";
+window.renderCurrentView();
+assertContains(document.getElementById("tableEmptyActions").innerHTML, 'data-action="clear-search"', "search empty state can clear query");
+"""
+
+    _run_node_script(_build_test_script(
+        ["js/utils.js", "js/api-client.js", "js/state.js", "js/view-model.js",
+         "js/view-registry.js",
+         "js/view-renderers.js",
          "js/components/toast.js", "js/components/spinner.js", "js/components/modal.js",
          "js/components/progress.js", "js/components/table.js",
          "js/views/detail.js", "js/views/production.js", "js/views/charts.js",
@@ -1300,6 +1535,7 @@ window.renderCurrentView();
 var tbody = document.getElementById("candidateRows");
 assertContains(tbody.innerHTML, "ALPHA001", "first alpha rendered");
 assertContains(tbody.innerHTML, "ALPHA002", "second alpha rendered");
+assertContains(tbody.innerHTML, "badge-success", "app keeps whitelisted badges as html");
 
 var pill = document.getElementById("countPill");
 assertContains(pill.textContent, "2", "count pill shows 2");
@@ -1307,6 +1543,43 @@ assertContains(pill.textContent, "2", "count pill shows 2");
 
     _run_node_script(_build_test_script(
         ["js/utils.js", "js/api-client.js", "js/state.js", "js/view-model.js",
+         "js/view-registry.js",
+         "js/view-renderers.js",
+         "js/components/toast.js", "js/components/spinner.js", "js/components/modal.js",
+         "js/components/progress.js", "js/components/table.js",
+         "js/views/detail.js", "js/views/production.js", "js/views/charts.js",
+         "js/views/monitor.js", "js/app.js"],
+        test_code
+    ))
+
+
+def test_app_escapes_malicious_table_fields():
+    """App table renderer must not pass unapproved HTML fragments through."""
+    test_code = """
+window.AppState.setBatch({
+  "currentResult.candidates": [
+    { alpha_id: "<img src=x onerror=alert(1)>", family: "<script>alert(1)</script>",
+      lifecycle_status: '"><img src=x onerror=alert(2)>',
+      submission_risk: '<img src=x onerror=alert(3)>',
+      scorecard: { total_score: 85 }, gate: {} },
+  ],
+  "activeView": "candidates",
+});
+
+window.renderCurrentView();
+
+var html = document.getElementById("candidateRows").innerHTML;
+assertContains(html, "&lt;img src=x onerror=alert(1)&gt;", "alpha id escaped");
+assertContains(html, "&lt;script&gt;alert(1)&lt;/script&gt;", "family escaped");
+assertContains(html, "&lt;img src=x onerror=alert(3)&gt;", "risk escaped");
+assert(!html.includes("<script>"), "no raw script tag");
+assert(!html.includes("<img src=x"), "no raw image tag");
+"""
+
+    _run_node_script(_build_test_script(
+        ["js/utils.js", "js/api-client.js", "js/state.js", "js/view-model.js",
+         "js/view-registry.js",
+         "js/view-renderers.js",
          "js/components/toast.js", "js/components/spinner.js", "js/components/modal.js",
          "js/components/progress.js", "js/components/table.js",
          "js/views/detail.js", "js/views/production.js", "js/views/charts.js",
@@ -1339,6 +1612,8 @@ assertEqual(window.AppState.get("activeView"), "candidates", "invalid falls back
 
     _run_node_script(_build_test_script(
         ["js/utils.js", "js/api-client.js", "js/state.js", "js/view-model.js",
+         "js/view-registry.js",
+         "js/view-renderers.js",
          "js/components/toast.js", "js/components/spinner.js", "js/components/modal.js",
          "js/components/progress.js", "js/components/table.js",
          "js/views/detail.js", "js/views/production.js", "js/views/charts.js",
@@ -1369,6 +1644,8 @@ assertEqual(chartBtn.classList.contains("is-active"), false, "chart btn not acti
 
     _run_node_script(_build_test_script(
         ["js/utils.js", "js/api-client.js", "js/state.js", "js/view-model.js",
+         "js/view-registry.js",
+         "js/view-renderers.js",
          "js/components/toast.js", "js/components/spinner.js", "js/components/modal.js",
          "js/components/progress.js", "js/components/table.js",
          "js/views/detail.js", "js/views/production.js", "js/views/charts.js",
@@ -1388,12 +1665,16 @@ window.AppState.set("activeView", "passed");
 var el = { textContent: "选择" };
 window.toggleSelectCandidate("SEL001", el);
 assertEqual(el.textContent, "已选", "toggled on");
+assert(window.AppState.get("selectedSubmitIds").indexOf("SEL001") !== -1, "selection stored in AppState");
 window.toggleSelectCandidate("SEL001", el);
 assertEqual(el.textContent, "选择", "toggled off");
+assertEqual(window.AppState.get("selectedSubmitIds").length, 0, "selection removed from AppState");
 """
 
     _run_node_script(_build_test_script(
         ["js/utils.js", "js/api-client.js", "js/state.js", "js/view-model.js",
+         "js/view-registry.js",
+         "js/view-renderers.js",
          "js/components/toast.js", "js/components/spinner.js", "js/components/modal.js",
          "js/components/progress.js", "js/components/table.js",
          "js/views/detail.js", "js/views/production.js", "js/views/charts.js",
@@ -1418,10 +1699,30 @@ assertContains(window.operationBlockReason("sync"), "生产", "sync blocked when
 assertContains(window.operationBlockReason("check"), "生产", "check blocked when running");
 
 window.AppState.set("isRunning", false);
+
+window.AppState.set("syncInFlight", true);
+assertContains(window.operationBlockReason("production"), "云端", "production blocked during sync");
+assertContains(window.operationBlockReason("check"), "云端", "check blocked during sync");
+assertContains(window.operationBlockReason("submit"), "云端", "submit blocked during sync");
+window.AppState.set("syncInFlight", false);
+
+window.AppState.set("batchCheckJobId", "check_test");
+assertContains(window.operationBlockReason("production"), "达标", "production blocked during check");
+assertContains(window.operationBlockReason("sync"), "达标", "sync blocked during check");
+assertContains(window.operationBlockReason("submit"), "达标", "submit blocked during check");
+window.AppState.set("batchCheckJobId", "");
+
+window.AppState.set("submitInFlight", true);
+assertContains(window.operationBlockReason("production"), "提交", "production blocked during submit");
+assertContains(window.operationBlockReason("sync"), "提交", "sync blocked during submit");
+assertContains(window.operationBlockReason("check"), "提交", "check blocked during submit");
+window.AppState.set("submitInFlight", false);
 """
 
     _run_node_script(_build_test_script(
         ["js/utils.js", "js/api-client.js", "js/state.js", "js/view-model.js",
+         "js/view-registry.js",
+         "js/view-renderers.js",
          "js/components/toast.js", "js/components/spinner.js", "js/components/modal.js",
          "js/components/progress.js", "js/components/table.js",
          "js/views/detail.js", "js/views/production.js", "js/views/charts.js",
@@ -1450,6 +1751,8 @@ var config = {
 
 window.renderStrategyPolicy(config);
 var target = document.getElementById("strategyText");
+assertContains(target.innerHTML, "policy-grid", "policy grid class");
+assertContains(target.innerHTML, "policy-card", "policy card class");
 assertContains(target.innerHTML, "候选上限", "shows candidate limit");
 assertContains(target.innerHTML, "池容量", "shows pool size label");
 assertContains(target.innerHTML, "10", "shows pool size value");
@@ -1458,6 +1761,8 @@ assertContains(target.innerHTML, "连续生产", "shows run forever");
 
     _run_node_script(_build_test_script(
         ["js/utils.js", "js/api-client.js", "js/state.js", "js/view-model.js",
+         "js/view-registry.js",
+         "js/view-renderers.js",
          "js/components/toast.js", "js/components/spinner.js", "js/components/modal.js",
          "js/components/progress.js", "js/components/table.js",
          "js/views/detail.js", "js/views/production.js", "js/views/charts.js",
@@ -1471,9 +1776,9 @@ assertContains(target.innerHTML, "连续生产", "shows run forever");
 # ═══════════════════════════════════════════════════════════════════════════
 
 def test_full_integration_all_modules_no_crash():
-    """Load all 14 modules together, verify no crashes from init or rendering."""
+    """Load all 15 modules together, verify no crashes from init or rendering."""
     test_code = """
-// All 14 modules loaded — verify exports
+// All 15 modules loaded — verify exports
 assertDefined(window.Utils, "Utils loaded");
 assertDefined(window.ApiClient, "ApiClient loaded");
 assertDefined(window.AppState, "AppState loaded");
@@ -1531,9 +1836,13 @@ assertEqual(titleEl.textContent, "候选池", "title correct");
 
     _run_node_script(_build_test_script(
         ["js/utils.js", "js/api-client.js", "js/state.js", "js/view-model.js",
+         "js/view-registry.js",
+         "js/view-renderers.js",
          "js/components/toast.js", "js/components/spinner.js", "js/components/modal.js",
          "js/components/progress.js", "js/components/table.js",
          "js/views/detail.js", "js/views/production.js", "js/views/charts.js",
          "js/views/monitor.js", "js/app.js"],
         test_code
     ))
+
+

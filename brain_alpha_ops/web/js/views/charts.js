@@ -43,6 +43,37 @@
     return Array.isArray(candidates) ? candidates.filter(function (c) { return c && typeof c === 'object'; }) : [];
   }
 
+  function chartRows(options) {
+    options = options || {};
+    if (Array.isArray(options.candidates)) return candidateRows(options.candidates);
+    var view = S.get('activeView') || 'candidates';
+    if (view === 'cloud') return candidateRows(S.get('currentResult.cloud_alphas') || []);
+    return candidateRows(S.get('currentResult.candidates') || []);
+  }
+
+  function metricsFor(row) {
+    row = row || {};
+    var raw = row.raw || row;
+    return row.scorecard || raw.scorecard || raw.metrics || raw.is || {};
+  }
+
+  function metricNumber(row, names, fallback) {
+    var metrics = metricsFor(row);
+    names = Array.isArray(names) ? names : [names];
+    for (var i = 0; i < names.length; i++) {
+      var value = metrics[names[i]];
+      var parsed = Number(value);
+      if (Number.isFinite(parsed)) return parsed;
+    }
+    return fallback === undefined ? NaN : fallback;
+  }
+
+  function rowCreatedAt(row) {
+    row = row || {};
+    var raw = row.raw || row;
+    return raw.created_at || raw.dateCreated || row.created_at || '';
+  }
+
   function sampleRows(rows, limit) {
     rows = Array.isArray(rows) ? rows : [];
     limit = Math.max(1, Math.floor(safeNumber(limit, MAX_CHART_POINTS)));
@@ -73,7 +104,7 @@
     destroyChart('scoreTrend');
 
     var sorted = sampleRows(candidateRows(candidates).sort(function (a, b) {
-      return (a.created_at || '').localeCompare(b.created_at || '');
+      return rowCreatedAt(a).localeCompare(rowCreatedAt(b));
     }), MAX_CHART_POINTS);
 
     if (!sorted.length) {
@@ -85,7 +116,10 @@
     }
 
     var labels = sorted.map(function (_, i) { return String(i + 1); });
-    var scores = sorted.map(function (c) { return safeNumber((c.scorecard || {}).total_score || 0, 0); });
+    var scores = sorted.map(function (c) {
+      var score = metricNumber(c, ['total_score', 'local_rank_score'], NaN);
+      return Number.isFinite(score) ? score : metricNumber(c, 'sharpe', 0);
+    });
 
     var windowSize = Math.max(3, Math.floor(scores.length / 10));
     var rollingAvg = scores.map(function (_, i) {
@@ -115,7 +149,7 @@
     destroyChart('sharpeDist');
 
     var sharpes = candidateRows(candidates).map(function (c) {
-      return safeNumber((c.scorecard || {}).sharpe || 0, NaN);
+      return metricNumber(c, 'sharpe', NaN);
     }).filter(function (v) { return Number.isFinite(v) && v !== 0; });
 
     if (!sharpes.length) {
@@ -161,8 +195,9 @@
     var passed = 0, failed = 0, unchecked = 0;
     rows.forEach(function (c) {
       var gate = c.gate || {};
-      if (gate.passed === true || gate.submission_ready === true) passed++;
-      else if (gate.passed === false || gate.status === 'BRAIN_CHECK_FAILED') failed++;
+      var passFail = String(metricsFor(c).pass_fail || '').toUpperCase();
+      if (gate.passed === true || gate.submission_ready === true || passFail === 'PASS') passed++;
+      else if (gate.passed === false || gate.status === 'BRAIN_CHECK_FAILED' || passFail === 'FAIL') failed++;
       else unchecked++;
     });
 
@@ -181,8 +216,11 @@
     destroyChart('turnover');
 
     var values = sampleRows(candidateRows(candidates).map(function (c) {
-      var sc = c.scorecard || {};
-      return { turnover: safeNumber(sc.turnover || 0, 0), fitness: safeNumber(sc.fitness || 0, 0), sharpe: safeNumber(sc.sharpe || 0, 0) };
+      return {
+        turnover: metricNumber(c, ['turnover', 'turnover_raw'], 0),
+        fitness: metricNumber(c, 'fitness', 0),
+        sharpe: metricNumber(c, 'sharpe', 0),
+      };
     }).filter(function (row) { return row.turnover !== 0 || row.fitness !== 0 || row.sharpe !== 0; }), MAX_CHART_POINTS);
 
     if (!values.length) {
@@ -253,9 +291,116 @@
     ctx.fillText(title, 12, 20);
   }
 
+  function renderEmptyNativeChart(target, title, message) {
+    if (!target) return;
+    drawTitle(target.ctx, title);
+    target.ctx.fillStyle = COLORS.muted;
+    target.ctx.font = '12px "Microsoft YaHei", sans-serif';
+    target.ctx.fillText(message || '暂无可绘制数据', 12, 48);
+  }
+
+  function drawLineChart(target, title, values, color) {
+    if (!target) return;
+    values = values.filter(function (v) { return Number.isFinite(v); });
+    drawTitle(target.ctx, title);
+    if (!values.length) {
+      renderEmptyNativeChart(target, title, '暂无评分数据');
+      return;
+    }
+    var ctx = target.ctx, width = target.width, height = target.height;
+    var left = 34, right = 14, top = 38, bottom = 28;
+    var chartW = Math.max(1, width - left - right);
+    var chartH = Math.max(1, height - top - bottom);
+    var min = Math.min.apply(null, values), max = Math.max.apply(null, values);
+    if (min === max) { min -= 1; max += 1; }
+    ctx.strokeStyle = COLORS.grid; ctx.lineWidth = 1;
+    for (var g = 0; g <= 3; g++) {
+      var yGrid = top + chartH * g / 3;
+      ctx.beginPath(); ctx.moveTo(left, yGrid); ctx.lineTo(left + chartW, yGrid); ctx.stroke();
+    }
+    ctx.strokeStyle = color || COLORS.accent; ctx.lineWidth = 2;
+    ctx.beginPath();
+    values.forEach(function (value, i) {
+      var x = left + (values.length === 1 ? chartW : chartW * i / (values.length - 1));
+      var y = top + chartH - ((value - min) / (max - min)) * chartH;
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+    ctx.fillStyle = COLORS.muted; ctx.font = '11px "Microsoft YaHei", sans-serif';
+    ctx.fillText(max.toFixed(1), 4, top + 4);
+    ctx.fillText(min.toFixed(1), 4, top + chartH);
+  }
+
+  function drawBarChart(target, title, values, color) {
+    if (!target) return;
+    values = values.filter(function (v) { return Number.isFinite(v); });
+    drawTitle(target.ctx, title);
+    if (!values.length) {
+      renderEmptyNativeChart(target, title, '暂无分布数据');
+      return;
+    }
+    var ctx = target.ctx, width = target.width, height = target.height;
+    var left = 24, right = 12, top = 38, bottom = 24;
+    var chartW = Math.max(1, width - left - right);
+    var chartH = Math.max(1, height - top - bottom);
+    var max = Math.max.apply(null, values.concat([1]));
+    var barW = Math.max(2, chartW / values.length - 2);
+    ctx.fillStyle = color || COLORS.accent;
+    values.forEach(function (value, i) {
+      var h = Math.max(2, Math.abs(value) / max * chartH);
+      var x = left + i * (chartW / values.length);
+      var y = top + chartH - h;
+      ctx.fillRect(x, y, barW, h);
+    });
+  }
+
+  function drawPieChart(target, title, values, colors) {
+    if (!target) return;
+    drawTitle(target.ctx, title);
+    var total = values.reduce(function (sum, value) { return sum + Math.max(0, value); }, 0);
+    if (!total) {
+      renderEmptyNativeChart(target, title, '暂无门禁数据');
+      return;
+    }
+    var ctx = target.ctx;
+    var cx = target.width / 2, cy = target.height / 2 + 8;
+    var radius = Math.max(42, Math.min(target.width, target.height) / 3.4);
+    var start = -Math.PI / 2;
+    values.forEach(function (value, i) {
+      var angle = Math.max(0, value) / total * Math.PI * 2;
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.arc(cx, cy, radius, start, start + angle);
+      ctx.closePath();
+      ctx.fillStyle = colors[i] || COLORS.muted;
+      ctx.fill();
+      start += angle;
+    });
+  }
+
   function renderNativeCharts(summary, candidates) {
-    // Minimal native fallback when Chart.js is unavailable
-    setChartFallback('Chart.js 未加载，图表功能不可用。表格和操作仍可正常使用。');
+    var rows = candidateRows(candidates);
+    setChartFallback(rows.length ? 'Chart.js 未加载，已启用本地 canvas 简版图表。' : 'Chart.js 未加载，当前视图暂无可绘制数据。');
+    var sampled = sampleRows(rows, MAX_CHART_POINTS);
+    var scores = sampled.map(function (c) {
+      var score = metricNumber(c, ['total_score', 'local_rank_score'], NaN);
+      return Number.isFinite(score) ? score : metricNumber(c, 'sharpe', NaN);
+    });
+    var sharpes = rows.map(function (c) { return metricNumber(c, 'sharpe', NaN); }).filter(function (v) { return Number.isFinite(v) && v !== 0; });
+    var turnover = sampleRows(rows.map(function (c) { return metricNumber(c, ['turnover', 'turnover_raw'], NaN); }).filter(Number.isFinite), MAX_CHART_POINTS);
+    var passed = 0, failed = 0, unchecked = 0;
+    rows.forEach(function (c) {
+      var gate = c.gate || {};
+      var passFail = String(metricsFor(c).pass_fail || '').toUpperCase();
+      if (gate.passed === true || gate.submission_ready === true || passFail === 'PASS') passed++;
+      else if (gate.passed === false || gate.status === 'BRAIN_CHECK_FAILED' || passFail === 'FAIL') failed++;
+      else unchecked++;
+    });
+    drawLineChart(nativeCanvas('scoreTrendChart'), '评分趋势', scores, COLORS.accent);
+    drawBarChart(nativeCanvas('sharpeDistChart'), 'Sharpe 分布', sharpes, COLORS.blue);
+    drawPieChart(nativeCanvas('gatePieChart'), '门禁通过率', [passed, failed, unchecked], [COLORS.good, COLORS.bad, COLORS.muted]);
+    drawBarChart(nativeCanvas('turnoverChart'), 'Turnover 质量目标', turnover, COLORS.warn);
   }
 
   // ── Main Entry ─────────────────────────────────────────────────────────
@@ -264,11 +409,11 @@
     options = options || {};
     if (!isChartJsAvailable()) {
       destroyAll();
-      renderNativeCharts(S.get('currentResult.summary') || {}, Array.isArray(options.candidates) ? options.candidates : (S.get('currentResult.candidates') || []));
+      renderNativeCharts(S.get('currentResult.summary') || {}, chartRows(options));
       return;
     }
     var summary = S.get('currentResult.summary') || {};
-    var candidates = Array.isArray(options.candidates) ? options.candidates : (S.get('currentResult.candidates') || []);
+    var candidates = chartRows(options);
     var hasAnyCanvas = !!(document.getElementById('scoreTrendChart') || document.getElementById('sharpeDistChart') || document.getElementById('gatePieChart') || document.getElementById('turnoverChart'));
     if (!hasAnyCanvas) return;
     setChartFallback(candidateRows(candidates).length ? '' : '当前视图暂无可绘制数据。');

@@ -12,14 +12,14 @@ class Generator:
 
 
 class Selector:
-    available_datasets = ["ds_a"]
+    available_datasets: list[str] = ["ds_a"]
 
     def select(self, strategy):
         return ["ds_a"]
 
 
 class EmptySelector:
-    available_datasets = []
+    available_datasets: list[str] = []
 
 
 class Loader:

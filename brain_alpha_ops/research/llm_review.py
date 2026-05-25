@@ -60,6 +60,8 @@ class FallbackLLMProvider:
 class LLMProviderRouter:
     """Task-aware provider router with lightweight health tracking."""
 
+    name = "router"
+
     def __init__(self, providers: list[LLMProvider], *, task_routes: dict[str, list[str]] | None = None):
         self.providers = [provider for provider in providers if provider is not None]
         self.task_routes = {str(key): list(value) for key, value in (task_routes or {}).items()}
@@ -174,7 +176,7 @@ class OpenAICompatibleProvider:
         return str(content)
 
     def _payload(self, request: dict[str, Any]) -> dict[str, Any]:
-        payload = {
+        payload: dict[str, Any] = {
             "model": self.model,
             "messages": list(request.get("messages") or []),
         }

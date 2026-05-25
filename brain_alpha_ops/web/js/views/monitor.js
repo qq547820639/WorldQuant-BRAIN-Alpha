@@ -50,17 +50,17 @@
     var runningBT = backtests.filter(function (b) { return b.status === 'active' || b.status === 'running'; }).length;
 
     var cards = [
-      { icon: isRunning ? '⚡' : '⏸', label: '运行状态', value: isRunning ? '运行中' : '已停止',
+      { icon: isRunning ? 'RUN' : 'IDLE', label: '运行状态', value: isRunning ? '运行中' : '已停止',
         note: isRunning ? phaseLabel : '等待启动', accent: isRunning },
-      { icon: '📋', label: '候选池', value: candidates.length,
+      { icon: 'POOL', label: '候选池', value: candidates.length,
         note: passedCount + ' 达标', accent: candidates.length > 0 },
-      { icon: '📤', label: '可提交', value: freshPassed,
+      { icon: 'OK', label: '可提交', value: freshPassed,
         note: freshBlocked + ' 阻断',
         style: freshPassed > 0 ? 'is-success' : (freshBlocked > 0 ? 'is-warning' : '') },
-      { icon: '⭐', label: '最高分', value: topScore > 0 ? topScore.toFixed(1) : '-',
+      { icon: 'TOP', label: '最高分', value: topScore > 0 ? topScore.toFixed(1) : '-',
         note: topScore >= 70 ? '优秀' : topScore >= 50 ? '中等' : '',
         accent: topScore >= 70 },
-      { icon: '🔄', label: '回测中', value: runningBT + '/' + backtests.length,
+      { icon: 'BT', label: '回测中', value: runningBT + '/' + backtests.length,
         note: backtests.length > 0 ? '活跃槽位' : '暂无',
         accent: runningBT > 0 },
     ];
@@ -135,7 +135,7 @@
     if (!container) return;
 
     if (!backtests || !backtests.length) {
-      container.innerHTML = '<div style="padding:var(--sp-5);text-align:center;color:var(--text-muted);font-size:var(--fs-sm)">暂无回测槽位。启动生产后将自动填充。</div>';
+      container.innerHTML = '<div class="slot-empty">暂无回测槽位。启动生产后将自动填充。</div>';
       return;
     }
 
@@ -155,11 +155,11 @@
       var fitness = bt.fitness != null ? formatScore(bt.fitness) : '-';
 
       return '<div class="slot-card ' + statusClass + '" data-slot="' + idx + '">' +
-        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">' +
-        '<span style="font-weight:700;font-size:var(--fs-sm)">槽 #' + (idx + 1) + '</span>' +
+        '<div class="slot-card-head">' +
+        '<span class="slot-card-title">槽 #' + (idx + 1) + '</span>' +
         '<span class="badge ' + badgeClass + '">' + esc(status) + '</span>' +
         '</div>' +
-        '<div style="font-size:var(--fs-xs);color:var(--text-secondary);display:grid;gap:2px">' +
+        '<div class="slot-card-meta">' +
         '<div>Alpha: ' + esc(alphaId) + '</div>' +
         '<div>Sharpe: ' + scoreSpan(Number(sharpe) || 0) + ' | Fitness: ' + scoreSpan(Number(fitness) || 0) + '</div>' +
         '</div></div>';

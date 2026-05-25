@@ -47,6 +47,7 @@ def sqlite_expression_lookup_payload(
     expression: str,
     top_n: int = 10,
     min_similarity: float = 0.75,
+    max_scan_rows: int = 2000,
     load_config: LoadConfig = load_run_config,
     web_error: WebError = _default_web_error,
 ) -> dict[str, Any]:
@@ -56,6 +57,7 @@ def sqlite_expression_lookup_payload(
             expression,
             top_n=top_n,
             min_similarity=min_similarity,
+            max_scan_rows=max_scan_rows,
         )
     except Exception as exc:
         return web_error(exc, "SQLITE_EXPRESSION_LOOKUP_ERROR")

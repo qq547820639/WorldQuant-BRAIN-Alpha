@@ -93,10 +93,16 @@ class ExpressionHistoryIndex:
         top_n: int = 10,
         include_cloud: bool = True,
         min_similarity: float = 0.75,
+        max_scan_rows: int = 2000,
         source_rows: dict[str, list[dict[str, Any]]] | None = None,
     ) -> dict[str, Any]:
         if source_rows is None:
-            sqlite_lookup = self._sqlite_lookup(expression, top_n=top_n, min_similarity=min_similarity)
+            sqlite_lookup = self._sqlite_lookup(
+                expression,
+                top_n=top_n,
+                min_similarity=min_similarity,
+                max_scan_rows=max_scan_rows,
+            )
             if sqlite_lookup.get("ok"):
                 return _compat_lookup_schema(sqlite_lookup)
         target = expression_profile_summary(expression)
@@ -141,7 +147,7 @@ class ExpressionHistoryIndex:
         except Exception:
             return {}
 
-    def _sqlite_lookup(self, expression: str, *, top_n: int, min_similarity: float) -> dict[str, Any]:
+    def _sqlite_lookup(self, expression: str, *, top_n: int, min_similarity: float, max_scan_rows: int) -> dict[str, Any]:
         db_path = self.storage_dir / "expression_index.sqlite"
         if not db_path.is_file():
             return {}
@@ -152,6 +158,7 @@ class ExpressionHistoryIndex:
                 expression,
                 top_n=top_n,
                 min_similarity=min_similarity,
+                max_scan_rows=max_scan_rows,
             )
         except Exception:
             return {}
