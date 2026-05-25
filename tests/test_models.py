@@ -19,3 +19,23 @@ def test_candidate_from_dict_preserves_unknown_fields():
     }
     payload = candidate.to_dict()
     assert payload["extra_fields"]["custom_label"] == "keep-me"
+
+
+def test_candidate_from_dict_retains_explicit_extra_fields_payload():
+    candidate = Candidate.from_dict(
+        {
+            "alpha_id": "a2",
+            "expression": "rank(volume)",
+            "family": "Volume",
+            "hypothesis": "test",
+            "extra_fields": {"source": "manual"},
+            "custom_label": "keep-me",
+        }
+    )
+
+    assert candidate.extra_fields == {
+        "source": "manual",
+        "custom_label": "keep-me",
+    }
+    payload = candidate.to_dict()
+    assert payload["extra_fields"]["source"] == "manual"
