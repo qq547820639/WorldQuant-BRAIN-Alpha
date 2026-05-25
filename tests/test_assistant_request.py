@@ -43,6 +43,7 @@ def test_assistant_request_pack_wraps_context_with_schema_and_draft(tmp_path):
     assert "factor research agent" in request["request"]["messages"][0]["content"]
     assert "score_factor" in request["request"]["messages"][0]["content"]
     assert "run_backtest" in request["request"]["messages"][0]["content"]
+    assert "run_batch_backtest" in request["request"]["messages"][0]["content"]
     assert request["request"]["response_schema"]["schema_version"] == "assistant_response.v1"
     assert request["prompt_diagnostics"]["schema_version"] == "assistant_request_prompt_diagnostics.v1"
     assert request["prompt_diagnostics"]["estimated_prompt_tokens"] > 0
@@ -66,6 +67,7 @@ def test_assistant_system_prompt_is_loaded_from_packaged_template():
     assert "WorldQuant BRAIN FASTEXPR" in prompt
     assert "score_factor" in prompt
     assert "run_backtest" in prompt
+    assert "run_batch_backtest" in prompt
     assert "Return one valid JSON object only" in prompt
 
 

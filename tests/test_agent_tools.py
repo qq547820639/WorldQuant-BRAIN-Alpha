@@ -27,19 +27,25 @@ def test_agent_tool_manifest_exposes_safe_whitelist():
     assert "cross_review_assistant_response" in tools
     assert "query_expression_index" in tools
     assert "query_research_observability" in tools
+    assert "run_simulation_batch" in tools
     assert "score_factor" in tools
     assert "run_backtest" in tools
+    assert "run_batch_backtest" in tools
     assert "submit_alpha" in tools
     assert tools["submit_alpha"].destructive is True
     assert tools["run_simulation"].live_api is True
+    assert tools["run_simulation_batch"].live_api is True
     assert tools["score_factor"].alias_for == "score_candidate"
     assert tools["run_backtest"].alias_for == "run_simulation"
+    assert tools["run_batch_backtest"].alias_for == "run_simulation_batch"
     assert tools["score_factor"].category == "scoring"
     assert tools["run_backtest"].chain_stage == "deep_validate"
+    assert tools["run_simulation_batch"].input_schema["required"] == ["expressions"]
     assert tools["run_anti_overfit"].input_schema["required"] == ["candidate"]
     assert tools["cross_review_assistant_response"].input_schema["required"] == ["request_pack", "primary_response"]
     assert tool_aliases()["score_factor"] == "score_candidate"
     assert resolve_tool_name("run_backtest") == "run_simulation"
+    assert resolve_tool_name("run_batch_backtest") == "run_simulation_batch"
 
 
 def test_agent_toolbox_lists_context_and_generates_candidates(tmp_path):
@@ -509,6 +515,74 @@ def test_agent_toolbox_runs_mock_simulation_without_live_confirmation(tmp_path):
     assert result["result"]["alpha_id"].startswith("mock_alpha_")
 
 
+def test_agent_toolbox_runs_bounded_mock_simulation_batch(tmp_path):
+    toolbox = mock_toolbox(storage_dir=tmp_path)
+
+    result = toolbox.call(
+        "run_batch_backtest",
+        {
+            "expressions": [
+                "rank(ts_delta(close, 20))",
+                "rank(ts_mean(volume, 10))",
+                "rank(ts_mean(volume, 10))",
+                "rank(ts_delta(open, 5))",
+            ],
+            "max_batch_size": 2,
+            "max_workers": 2,
+        },
+    )
+
+    assert result["ok"] is True
+    assert result["tool_alias"] == "run_batch_backtest"
+    assert result["canonical_tool"] == "run_simulation_batch"
+    assert result["schema_version"] == "agent_simulation_batch_result.v1"
+    assert result["requested_count"] == 3
+    assert result["selected_count"] == 2
+    assert result["submitted_count"] == 2
+    assert result["completed_count"] == 2
+    assert result["skipped_count"] == 1
+    assert result["skipped"][0]["reason"] == "batch_size_limit"
+    assert [item["index"] for item in result["results"]] == [0, 1]
+    assert all(item["simulation_id"].startswith("mock_sim_") for item in result["results"])
+
+
+def test_agent_toolbox_batch_simulation_reports_item_failures(tmp_path):
+    toolbox = mock_toolbox(storage_dir=tmp_path)
+
+    result = toolbox.call(
+        "run_simulation_batch",
+        {
+            "expressions": [
+                "rank(ts_delta(close, 20))",
+                "rank(ts_delta(close, 20)",
+            ],
+            "max_workers": 2,
+        },
+    )
+
+    assert result["ok"] is False
+    assert result["submitted_count"] == 1
+    assert result["failed_count"] == 1
+    failed = [item for item in result["results"] if not item["ok"]][0]
+    assert failed["error_code"] == "VALIDATION_FAILED"
+    assert failed["index"] == 1
+
+
+def test_agent_toolbox_blocks_production_simulation_batch_without_confirmation(tmp_path):
+    config = RunConfig(environment="production")
+    config.ops.storage_dir = str(tmp_path)
+    toolbox = BrainAlphaToolbox(run_config=config, api=MockBrainAPI(), allow_live_api=False)
+
+    result = toolbox.call(
+        "run_simulation_batch",
+        {"expressions": ["rank(ts_delta(close, 20))"]},
+    )
+
+    assert result["ok"] is False
+    assert result["error_code"] == "LIVE_API_NOT_ALLOWED"
+    assert result["tool"] == "run_simulation_batch"
+
+
 def test_agent_toolbox_blocks_production_live_api_without_confirmation(tmp_path):
     config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path)
@@ -603,6 +677,54 @@ def test_agent_toolbox_blocks_duplicate_expression_before_live_simulation(tmp_pa
     assert "expression_fingerprint" in result["matching_records"][0]
     assert "secret" not in result
     assert called["submit"] == 0
+
+
+def test_agent_toolbox_batch_blocks_duplicate_expression_items_before_live_simulation(tmp_path):
+    expression = "rank(ts_delta(close, 20))"
+    repo = ResearchRepository(str(tmp_path))
+    repo.save_backtest_record(
+        "run_1",
+        {
+            "action": "submitted",
+            "alpha_id": "historical_alpha",
+            "status": "SUBMITTED",
+            "expression": expression,
+        },
+    )
+    config = RunConfig(environment="production")
+    config.ops.storage_dir = str(tmp_path)
+    called = {"submit": 0}
+
+    class CountSubmitAPI(MockBrainAPI):
+        def submit_simulation(self, expression, settings):
+            called["submit"] += 1
+            return super().submit_simulation(expression, settings)
+
+    toolbox = BrainAlphaToolbox(
+        run_config=config,
+        api=CountSubmitAPI(),
+        allow_live_api=True,
+    )
+
+    result = toolbox.call(
+        "run_simulation_batch",
+        {
+            "expressions": [
+                expression,
+                "rank(ts_delta(open, 5))",
+            ],
+            "confirm_live_api": True,
+            "max_workers": 1,
+        },
+    )
+
+    assert result["ok"] is False
+    assert result["submitted_count"] == 1
+    assert result["failed_count"] == 1
+    assert result["results"][0]["error_code"] == "OBSERVABILITY_DUPLICATE_EXPRESSION_BLOCKED"
+    assert result["results"][0]["expression_canonical"] == expression_key(expression)
+    assert result["results"][1]["ok"] is True
+    assert called["submit"] == 1
 
 
 def test_agent_toolbox_blocks_live_api_when_duplicate_preflight_fails(monkeypatch, tmp_path):

@@ -24,12 +24,15 @@ def test_mcp_initialize_and_tool_list(tmp_path):
     assert "generate_candidates" in names
     assert "score_factor" in names
     assert "run_backtest" in names
+    assert "run_batch_backtest" in names
     assert "submit_alpha" in names
     listed = {tool["name"]: tool for tool in tools["result"]["tools"]}
     assert listed["score_factor"]["annotations"]["aliasFor"] == "score_candidate"
     assert listed["score_factor"]["annotations"]["chainStage"] == "screen"
     assert listed["run_backtest"]["annotations"]["aliasFor"] == "run_simulation"
     assert listed["run_backtest"]["annotations"]["liveApi"] is True
+    assert listed["run_batch_backtest"]["annotations"]["aliasFor"] == "run_simulation_batch"
+    assert listed["run_batch_backtest"]["annotations"]["liveApi"] is True
 
 
 def test_mcp_tool_call_returns_text_content(tmp_path):

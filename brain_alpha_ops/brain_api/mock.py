@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, timezone
 import hashlib
 import os
 import re
+import threading
 from typing import Any
 
 from .base import BrainAPIError
@@ -85,6 +86,7 @@ class MockBrainAPI:
         _init_from_official_loader()
         self._simulations: dict[str, dict[str, Any]] = {}
         self._counter = 0
+        self._lock = threading.Lock()
 
     def authenticate(self) -> dict:
         return {"status": "ok", "environment": "mock"}
@@ -205,14 +207,15 @@ class MockBrainAPI:
         }
 
     def submit_simulation(self, expression: str, settings: dict) -> str:
-        self._counter += 1
-        sim_id = f"mock_sim_{self._counter:04d}"
-        self._simulations[sim_id] = {
-            "expression": expression,
-            "settings": settings,
-            "status": "COMPLETED",
-            "alpha_id": f"mock_alpha_{self._counter:04d}",
-        }
+        with self._lock:
+            self._counter += 1
+            sim_id = f"mock_sim_{self._counter:04d}"
+            self._simulations[sim_id] = {
+                "expression": expression,
+                "settings": settings,
+                "status": "COMPLETED",
+                "alpha_id": f"mock_alpha_{self._counter:04d}",
+            }
         return sim_id
 
     def poll_simulation(self, simulation_id: str) -> str:

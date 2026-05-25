@@ -7,6 +7,7 @@ arbitrary Python code.
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Callable, Mapping
 
 from brain_alpha_ops.agent_tool_registry import resolve_tool_name, tool_definitions
@@ -43,6 +44,8 @@ from brain_alpha_ops.tasks import JobStore
 
 MAX_TOOL_CANDIDATES = 100
 MAX_SYNC_RANGE = {"1d", "3d", "7d", "all"}
+MAX_BATCH_SIMULATIONS = 10
+MAX_BATCH_SIMULATION_WORKERS = 3
 
 
 class BrainAlphaToolbox:
@@ -70,6 +73,7 @@ class BrainAlphaToolbox:
             "validate_expression": self._validate_expression,
             "score_candidate": self._score_candidate,
             "run_simulation": self._run_simulation,
+            "run_simulation_batch": self._run_simulation_batch,
             "check_alpha": self._check_alpha,
             "submit_alpha": self._submit_alpha,
             "sync_cloud_alphas": self._sync_cloud_alphas,
@@ -233,6 +237,108 @@ class BrainAlphaToolbox:
         return {"ok": True, "candidate": candidate.to_dict(), "scorecard": scorecard}
 
     def _run_simulation(self, args: dict[str, Any]) -> dict[str, Any]:
+        return self._run_simulation_with_api(args, self._api())
+
+    def _run_simulation_batch(self, args: dict[str, Any]) -> dict[str, Any]:
+        blocked = self._live_api_blocked(args, tool="run_simulation_batch")
+        if blocked:
+            return blocked
+        expressions = _expression_batch_argument(args)
+        max_batch_size = _bounded_int(args.get("max_batch_size", MAX_BATCH_SIMULATIONS), 1, MAX_BATCH_SIMULATIONS)
+        selected = expressions[:max_batch_size]
+        skipped = [
+            {
+                "index": index,
+                "expression": expression,
+                "reason": "batch_size_limit",
+            }
+            for index, expression in enumerate(expressions[max_batch_size:], start=max_batch_size)
+        ]
+        if not selected:
+            return {
+                "ok": False,
+                "schema_version": "agent_simulation_batch_result.v1",
+                "error_code": "EMPTY_SIMULATION_BATCH",
+                "error": "run_simulation_batch requires at least one expression",
+                "requested_count": 0,
+                "submitted_count": 0,
+                "completed_count": 0,
+                "failed_count": 0,
+                "skipped_count": len(skipped),
+                "results": [],
+                "skipped": skipped,
+            }
+
+        requested_max_workers = _bounded_int(args.get("max_workers", 1), 1, MAX_BATCH_SIMULATION_WORKERS)
+        shared_args = dict(args)
+        shared_args.pop("expressions", None)
+        shared_args.pop("max_batch_size", None)
+        shared_args.pop("max_workers", None)
+
+        results: list[dict[str, Any] | None] = [None] * len(selected)
+        if self.api is not None:
+            effective_workers = 1
+        elif str(self.run_config.environment).lower() == "mock":
+            effective_workers = min(requested_max_workers, len(selected))
+        else:
+            effective_workers = min(requested_max_workers, len(selected))
+
+        if effective_workers == 1 or len(selected) == 1:
+            api = self._batch_api_for_item()
+            for index, expression in enumerate(selected):
+                results[index] = self._run_single_batch_simulation(index, expression, shared_args, api=api)
+        else:
+            with ThreadPoolExecutor(max_workers=effective_workers) as executor:
+                future_map = {}
+                for index, expression in enumerate(selected):
+                    api = self._batch_api_for_item()
+                    future = executor.submit(self._run_single_batch_simulation, index, expression, shared_args, api)
+                    future_map[future] = index
+                for future in as_completed(future_map):
+                    index = future_map[future]
+                    try:
+                        results[index] = future.result()
+                    except Exception as exc:
+                        results[index] = _tool_error(
+                            exc,
+                            "SIMULATION_BATCH_ITEM_ERROR",
+                            tool="run_simulation_batch",
+                            index=index,
+                        )
+        item_results = [result for result in results if isinstance(result, dict)]
+        submitted_count = sum(1 for result in item_results if result.get("simulation_id"))
+        completed_count = sum(1 for result in item_results if str(result.get("status", "")).upper() == "COMPLETED")
+        failed_count = sum(1 for result in item_results if not bool(result.get("ok")))
+        return {
+            "ok": failed_count == 0 and submitted_count == len(selected),
+            "schema_version": "agent_simulation_batch_result.v1",
+            "requested_count": len(expressions),
+            "selected_count": len(selected),
+            "submitted_count": submitted_count,
+            "completed_count": completed_count,
+            "failed_count": failed_count,
+            "skipped_count": len(skipped),
+            "requested_max_workers": requested_max_workers,
+            "max_workers": effective_workers,
+            "results": item_results,
+            "skipped": skipped,
+        }
+
+    def _run_single_batch_simulation(
+        self,
+        index: int,
+        expression: str,
+        shared_args: dict[str, Any],
+        api: Any | None = None,
+    ) -> dict[str, Any]:
+        item_args = dict(shared_args)
+        item_args["expression"] = expression
+        result = self._run_simulation_with_api(item_args, api or self._api())
+        result["index"] = index
+        result.setdefault("expression", expression)
+        return result
+
+    def _run_simulation_with_api(self, args: dict[str, Any], api: Any) -> dict[str, Any]:
         blocked = self._live_api_blocked(args, tool="run_simulation")
         if blocked:
             return blocked
@@ -240,7 +346,6 @@ class BrainAlphaToolbox:
         blocked = self._duplicate_live_expression_block(expression, tool="run_simulation")
         if blocked:
             return blocked
-        api = self._api()
         api.authenticate()
         validation = api.validate_expression(
             expression,
@@ -262,6 +367,15 @@ class BrainAlphaToolbox:
         if status.upper() == "COMPLETED":
             payload["result"] = api.fetch_result(simulation_id)
         return payload
+
+    def _batch_api_for_item(self):
+        if self.api is not None:
+            return self.api
+        if str(self.run_config.environment).lower() == "mock":
+            if not hasattr(self, "_batch_mock_api"):
+                self._batch_mock_api = MockBrainAPI()
+            return self._batch_mock_api
+        return api_from_run_config(self.run_config)
 
     def _check_alpha(self, args: dict[str, Any]) -> dict[str, Any]:
         blocked = self._live_api_blocked(args, tool="check_alpha")
@@ -595,6 +709,26 @@ def _candidate_argument(args: dict[str, Any]) -> dict[str, Any]:
         "official_metrics": dict(args.get("official_metrics") or {}),
         "submission": dict(args.get("submission") or {}),
     }
+
+
+def _expression_batch_argument(args: dict[str, Any]) -> list[str]:
+    raw = args.get("expressions")
+    if raw is None:
+        single = str(args.get("expression", "") or "").strip()
+        return [single] if single else []
+    values = raw if isinstance(raw, list) else [raw]
+    expressions: list[str] = []
+    seen: set[str] = set()
+    for item in values:
+        expression = str(item or "").strip()
+        if not expression:
+            continue
+        marker = expression_key(expression)
+        if marker in seen:
+            continue
+        seen.add(marker)
+        expressions.append(expression)
+    return expressions
 
 
 def _has_generator_bias(guidance: dict[str, Any] | None) -> bool:

@@ -16,7 +16,11 @@ Source checklist: user-provided QuantGPT comparison recommendations on architect
   - Added `brain_alpha_ops/research/prompt_templates.py` so the prompt is loaded as a packaged template with a safe fallback.
   - Updated Windows/PyInstaller packaging paths to include prompt templates in the runtime artifact.
 - [x] AM-3 Added focused regression tests for the registry, aliases, prompt template, MCP metadata, and packaging coverage.
-- [x] AM-4 Ran validation and synchronized this checklist with final evidence.
+- [x] AM-4 Added a controlled agent/MCP batch simulation surface:
+  - Registered `run_simulation_batch` plus QuantGPT-style alias `run_batch_backtest`.
+  - The batch path reuses the single-expression simulation safety gates: live API confirmation, duplicate-expression preflight, validation-before-submit, per-item result capture, and bounded batch/concurrency limits.
+  - Assistant prompt guidance now treats batch backtest as a budgeted deep-validation step, not a shortcut around `score_factor`.
+- [x] AM-5 Ran validation and synchronized this checklist with final evidence.
 
 ## Pending
 
@@ -25,7 +29,7 @@ Source checklist: user-provided QuantGPT comparison recommendations on architect
 ## Deferred
 
 - [ ] AM-DATA-1 Introduce NumPy/Pandas/vectorbt/backtrader or a new vectorized market-data cache. This requires product-level dependency and data-model decisions beyond the current safe local refactor.
-- [ ] AM-DATA-2 Implement true parallel full-market batch backtesting. Current official API/backtest safety gates are intentionally conservative; concurrency needs separate rate-limit and account-safety design.
+- [ ] AM-DATA-2 Implement true parallel full-market batch backtesting. Current official API/backtest safety gates are intentionally conservative. The agent/MCP layer now has a bounded `run_simulation_batch` entry point, but production-grade full-market concurrency still needs separate rate-limit and account-safety design.
 - [ ] AM-EXEC-1 Add parameter-scan or evolutionary factor search loops. The repo already has iterative/guided research primitives, but broad automated search should be scoped separately with budget controls.
 - [ ] AM-OPS-1 Add external monitoring or alert delivery. The current pass can improve local observability surfaces, but production alert routing needs an operator/channel choice.
 
