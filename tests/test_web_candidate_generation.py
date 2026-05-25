@@ -103,6 +103,28 @@ def test_generate_candidates_payload_empty_payload_uses_defaults(tmp_path):
     assert calls[0][1]["assistant_min_confidence"] == 0.0
 
 
+def test_generate_candidates_payload_resolves_empty_dataset_from_cache(tmp_path):
+    run_config = RunConfig(environment="mock")
+    run_config.ops.storage_dir = str(tmp_path)
+    (tmp_path / "official_datasets.json").write_text(
+        '[{"id":"ds_a"},{"id":"pv1"},{"id":"ds_b"}]',
+        encoding="utf-8",
+    )
+    run_config.ops.settings.dataset = ""
+    calls = []
+
+    payload = generate_candidates_payload(
+        {},
+        run_config_from_payload=lambda body: run_config,
+        toolbox_factory=lambda config: FakeToolbox({"ok": True, "candidates": []}, calls),
+        repository_factory=lambda storage_dir: FakeRepository(storage_dir, []),
+    )
+
+    assert payload["ok"] is True
+    assert calls[0][1]["dataset_id"] == "pv1"
+    assert run_config.ops.settings.dataset == "pv1"
+
+
 def test_generate_candidates_payload_returns_toolbox_error_without_post_processing(tmp_path):
     run_config = RunConfig(environment="mock")
     run_config.ops.storage_dir = str(tmp_path)

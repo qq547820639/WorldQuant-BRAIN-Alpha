@@ -24,6 +24,7 @@ from brain_alpha_ops.brain_api.canonical import (
     SUPPORTED_UNIVERSES,
 )
 from brain_alpha_ops.config_validation_helpers import validate_decision_thresholds
+from brain_alpha_ops.dataset_defaults import resolve_default_dataset_id
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -46,12 +47,7 @@ class ConfigValidationError(ValueError):
 
 
 def runtime_project_root() -> Path:
-    """Return the persistent application root.
-
-    PyInstaller one-file apps unpack Python modules into a temporary directory.
-    Runtime data must stay next to the executable, not under the temporary
-    unpack directory and not in the source checkout unless running from source.
-    """
+    """Return the persistent application root for source and frozen builds."""
     override = os.getenv("BRAIN_ALPHA_OPS_HOME", "").strip()
     if override:
         return Path(override).expanduser().resolve()
@@ -64,9 +60,7 @@ def runtime_project_root() -> Path:
 
 def default_run_config_path() -> Path:
     runtime_path = runtime_project_root() / "config" / "run_config.json"
-    if runtime_path.is_file():
-        return runtime_path
-    return DEFAULT_RUN_CONFIG_PATH
+    return runtime_path if runtime_path.is_file() else DEFAULT_RUN_CONFIG_PATH
 
 
 def resolve_runtime_path(value: str | Path, *, base: Path | None = None) -> str:
@@ -376,6 +370,11 @@ def validate_run_config(config: RunConfig) -> RunConfig:
     _require_bool(errors, "auto_submit", config.auto_submit)
     _validate_credentials(errors, config.credentials)
     _validate_web(errors, config.web)
+    dataset = getattr(config.ops.settings, "dataset", "")
+    config.ops.settings.dataset = dataset.strip() if isinstance(dataset, str) and dataset.strip() else resolve_default_dataset_id(
+        config.ops.storage_dir,
+        runtime_root=runtime_project_root,
+    )
     _validate_ops(errors, config.ops, environment=config.environment)
     if errors:
         raise ConfigValidationError("Invalid run configuration: " + "; ".join(errors))

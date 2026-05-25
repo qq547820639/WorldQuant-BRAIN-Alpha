@@ -1319,7 +1319,31 @@ var candidate = {
   alpha_id: "TEST001", family: "momentum", hypothesis: "趋势跟踪",
   expression: "rank(close)", data_fields: ["close"], operators: ["rank"],
   lifecycle_status: "candidate",
-  scorecard: { total_score: 85, local_rank_score: 82 },
+  scorecard: {
+    total_score: 85,
+    local_rank_score: 82,
+    attribution_tree: {
+      name: "total_score",
+      score: 85,
+      weight: 1,
+      contribution: 85,
+      explanation: "Decision: submit_candidate",
+      children: [
+        {
+          name: "prior_score",
+          score: 78,
+          weight: 0.3,
+          contribution: 23.4,
+          explanation: "Source: experience",
+          children: []
+        }
+      ]
+    },
+    top_failures: [
+      { severity: "blocking", item: "official_pass", reason: "PASS required" }
+    ],
+    improvement_hints: ["Resolve failed official Alpha Check items before submission."]
+  },
   gate: { passed: true, submission_ready: true },
   validation: { is_sharpe: 1.5, r_ic: 0.05 },
 };
@@ -1328,6 +1352,10 @@ var detailEl = document.getElementById("detail");
 assertContains(detailEl.innerHTML, "TEST001", "shows alpha ID");
 assertContains(detailEl.innerHTML, "detail-section", "section layout");
 assertContains(detailEl.innerHTML, "detail-section-title", "section titles");
+assertContains(detailEl.innerHTML, "评分归因", "score attribution title");
+assertContains(detailEl.innerHTML, "关键失败项", "failure block title");
+assertContains(detailEl.innerHTML, "修复建议", "hint block title");
+assertContains(detailEl.innerHTML, "official_pass", "failure item rendered");
 
 // Empty candidate
 window.viewCandidateDetail(null);

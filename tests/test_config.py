@@ -56,6 +56,24 @@ def test_load_run_config_merges_nested_values():
         assert config.ops.thresholds.min_sharpe == 1.25
 
 
+def test_load_run_config_fills_empty_dataset_from_official_cache(tmp_path):
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+    (data_dir / "official_datasets.json").write_text(
+        json.dumps([{"id": "ds_a"}, {"id": "pv1"}, {"id": "ds_b"}]),
+        encoding="utf-8",
+    )
+    path = tmp_path / "run_config.json"
+    path.write_text(
+        json.dumps({"ops": {"storage_dir": str(data_dir), "settings": {"dataset": ""}}}),
+        encoding="utf-8",
+    )
+
+    config = load_run_config(path)
+
+    assert config.ops.settings.dataset == "pv1"
+
+
 def test_credentials_resolve_from_environment():
     old_user = os.environ.get("BRAIN_USERNAME")
     old_password = os.environ.get("BRAIN_PASSWORD")
