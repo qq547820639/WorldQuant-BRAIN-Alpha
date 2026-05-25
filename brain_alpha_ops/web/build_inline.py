@@ -18,7 +18,12 @@ SCRIPT_TEMPLATE = "<script>\n{content}\n</script>"
 STYLE_TEMPLATE = "<style>\n{content}\n</style>"
 
 
+def _read_source_text(path: Path) -> str:
+    return path.read_text(encoding="utf-8-sig")
+
+
 def build_inline(template_text: str, *, strict: bool = True) -> tuple[str, dict]:
+    template_text = template_text.lstrip("\ufeff")
     replaced = 0
     css_replaced = 0
     missing: list[str] = []
@@ -36,7 +41,7 @@ def build_inline(template_text: str, *, strict: bool = True) -> tuple[str, dict]
             return match.group(0)
         css_replaced += 1
         css_sources.append(rel_path)
-        css_content = css_path.read_text(encoding="utf-8")
+        css_content = _read_source_text(css_path)
         return STYLE_TEMPLATE.format(content=css_content)
 
     def replace_inline(match: re.Match) -> str:
@@ -50,7 +55,7 @@ def build_inline(template_text: str, *, strict: bool = True) -> tuple[str, dict]
             return match.group(0)
         replaced += 1
         sources.append(rel_path)
-        js_content = js_path.read_text(encoding="utf-8")
+        js_content = _read_source_text(js_path)
         return SCRIPT_TEMPLATE.format(content=js_content)
 
     html = INLINE_CSS_PATTERN.sub(replace_css_inline, template_text)
@@ -68,7 +73,7 @@ def build(*, output_path: Path = OUTPUT_PATH, strict: bool = True, write: bool =
     if not TEMPLATE_PATH.is_file():
         return {"ok": False, "error": f"template not found: {TEMPLATE_PATH}", "replaced": 0, "missing": []}
     try:
-        html, stats = build_inline(TEMPLATE_PATH.read_text(encoding="utf-8"), strict=strict)
+        html, stats = build_inline(_read_source_text(TEMPLATE_PATH), strict=strict)
     except FileNotFoundError as exc:
         return {"ok": False, "error": str(exc), "replaced": 0, "missing": []}
     if write:
@@ -82,7 +87,7 @@ def check(output_path: Path = OUTPUT_PATH, *, strict: bool = True) -> dict:
         return result
     if not output_path.is_file():
         return {**result, "ok": False, "error": f"output not found: {output_path}"}
-    expected, _stats = build_inline(TEMPLATE_PATH.read_text(encoding="utf-8"), strict=strict)
+    expected, _stats = build_inline(_read_source_text(TEMPLATE_PATH), strict=strict)
     actual = output_path.read_text(encoding="utf-8")
     if actual != expected:
         return {
