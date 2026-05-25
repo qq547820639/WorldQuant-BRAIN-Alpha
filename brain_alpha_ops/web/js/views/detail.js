@@ -217,8 +217,55 @@
         });
       });
     }
+    if (sc.attribution_tree) {
+      parts.push('<div class="sc-hint-title">评分归因</div>' + renderAttributionTree(sc.attribution_tree));
+    }
+    if (Array.isArray(sc.top_failures) && sc.top_failures.length) {
+      parts.push(renderFailureList(sc.top_failures));
+    }
+    if (Array.isArray(sc.improvement_hints) && sc.improvement_hints.length) {
+      parts.push('<div class="sc-hint-block"><div class="sc-hint-title">修复建议</div><ul class="sc-hint-list">' +
+        sc.improvement_hints.slice(0, 8).map(function (hint) {
+          return '<li>' + esc(String(hint)) + '</li>';
+        }).join('') +
+        '</ul></div>');
+    }
 
     return sectionBlock('评分卡', parts.join(''));
+  }
+
+  function renderAttributionTree(node) {
+    if (!node || typeof node !== 'object') return '';
+    var children = Array.isArray(node.children) ? node.children : [];
+    var score = Number(node.score);
+    var weight = Number(node.weight);
+    var contribution = Number(node.contribution);
+    var meta = [];
+    if (Number.isFinite(score)) meta.push('score ' + score.toFixed(2));
+    if (Number.isFinite(weight)) meta.push('weight ' + weight.toFixed(2));
+    if (Number.isFinite(contribution)) meta.push('contrib ' + contribution.toFixed(2));
+    return '<div class="sc-tree-node">' +
+      '<div class="sc-tree-row">' +
+      '<span class="sc-tree-name">' + esc(node.name || 'score') + '</span>' +
+      '<span class="sc-tree-meta">' + esc(meta.join(' · ')) + '</span>' +
+      '</div>' +
+      (node.explanation ? '<div class="sc-tree-explain">' + esc(node.explanation) + '</div>' : '') +
+      (children.length ? '<div class="sc-tree-children">' +
+        children.slice(0, 12).map(renderAttributionTree).join('') +
+        '</div>' : '') +
+      '</div>';
+  }
+
+  function renderFailureList(items) {
+    var rows = (items || []).slice(0, 8).map(function (item) {
+      var severity = String(item.severity || 'warning');
+      return '<li class="sc-failure-item is-' + esc(severity) + '">' +
+        '<span class="sc-failure-severity">' + esc(severity) + '</span>' +
+        '<span class="sc-failure-name">' + esc(item.item || item.name || 'check') + '</span>' +
+        '<span class="sc-failure-reason">' + esc(item.reason || item.message || '') + '</span>' +
+        '</li>';
+    }).join('');
+    return '<div class="sc-failure-block"><div class="sc-hint-title">关键失败项</div><ul class="sc-failure-list">' + rows + '</ul></div>';
   }
 
   // ── Scoring Section ───────────────────────────────────────────────────
@@ -232,6 +279,9 @@
       if (check && hasDataObject(check.scoring)) scoring = check.scoring;
     }
     if (!hasDataObject(scoring)) return '';
+    if (scoring.attribution_tree) {
+      return sectionBlock('评分归因', renderAttributionTree(scoring.attribution_tree));
+    }
 
     var fields = [];
     if (scoring.shap_values && Array.isArray(scoring.shap_values)) {

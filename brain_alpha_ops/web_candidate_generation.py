@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any, Callable, Protocol
 
 from brain_alpha_ops.agent_tools import BrainAlphaToolbox
-from brain_alpha_ops.config import RunConfig
+from brain_alpha_ops.config import RunConfig, resolve_default_dataset_id
 from brain_alpha_ops.error_payloads import user_error_payload
 from brain_alpha_ops.models import Candidate
 from brain_alpha_ops.research.generator import local_quality
@@ -46,9 +46,13 @@ def generate_candidates_payload(
 ) -> dict[str, Any]:
     payload = dict(payload or {})
     run_config = run_config_from_payload(payload)
+    dataset_id = str(payload.get("dataset_id") or run_config.ops.settings.dataset or "").strip()
+    if not dataset_id:
+        dataset_id = resolve_default_dataset_id(run_config.ops.storage_dir)
+        run_config.ops.settings.dataset = dataset_id
     args = {
         "count": bounded_query_int(payload.get("count", payload.get("candidates", 10)), 1, _MAX_CANDIDATES),
-        "dataset_id": str(payload.get("dataset_id") or run_config.ops.settings.dataset or ""),
+        "dataset_id": dataset_id,
         "use_research_memory": payload_truthy(payload.get("use_research_memory", True)),
         "top_n": bounded_query_int(payload.get("top_n", 10), 1, 50),
         "min_success_rate": bounded_query_float(payload.get("min_success_rate", 0.0), 0.0, 1.0),

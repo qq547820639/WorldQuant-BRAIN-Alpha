@@ -83,6 +83,30 @@ def test_delay_zero_uses_official_delay_zero_thresholds():
     assert any("sharpe >= 2.0" in reason for reason in scorecard["empirical"]["hard_gate_failures"])
 
 
+def test_scorecard_includes_attribution_tree_failures_and_hints():
+    c = _candidate(
+        {
+            "sharpe": 0.8,
+            "fitness": 0.6,
+            "turnover": 0.82,
+            "returns": -0.02,
+            "drawdown": 0.4,
+            "sub_universe_sharpe": 0.4,
+            "correlation": 0.91,
+            "weight_concentration": 0.22,
+            "margin": 1.0,
+            "pass_fail": "FAIL",
+        }
+    )
+
+    scorecard = build_scorecard(c, QualityThresholds())
+
+    assert scorecard["attribution_tree"]["name"] == "total_score"
+    assert scorecard["attribution_tree"]["children"]
+    assert any(item["severity"] == "blocking" for item in scorecard["top_failures"])
+    assert scorecard["improvement_hints"]
+
+
 def test_empirical_score_keeps_official_thresholds_under_market_regime():
     metrics = {
         "sharpe": 1.3,

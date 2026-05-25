@@ -7,6 +7,8 @@ from typing import TYPE_CHECKING
 
 from brain_alpha_ops.config import QualityThresholds, ScoringConfig
 from brain_alpha_ops.models import Candidate
+from brain_alpha_ops.scoring.attribution import build_attribution_tree
+from brain_alpha_ops.research.scoring_explainability import scorecard_improvement_hints, scorecard_top_failures
 
 if TYPE_CHECKING:
     from brain_alpha_ops.research.scoring_params import ScoringParams
@@ -19,19 +21,13 @@ def build_scorecard(
     params: "ScoringParams | None" = None,
     settings: dict | None = None,
 ) -> dict:
-    prior = prior_score(
-        candidate,
-        weights_override=scoring.prior_weights_override if scoring else None,
-        params=params,
-    )
+    prior = prior_score(candidate, weights_override=scoring.prior_weights_override if scoring else None, params=params)
     effective_settings = _scorecard_settings(candidate, settings)
     empirical = empirical_score(candidate.official_metrics, thresholds, settings=effective_settings)
     checklist = submission_checklist(candidate, thresholds)
     base_local_rank_score = local_convergence_score(candidate, prior, scoring=scoring)
     guidance_adjustment = assistant_guidance_score_adjustment(candidate, scoring=scoring)
-    local_rank_score = _bounded_score(
-        base_local_rank_score + float(guidance_adjustment.get("adjustment", 0.0) or 0.0)
-    )
+    local_rank_score = _bounded_score(base_local_rank_score + float(guidance_adjustment.get("adjustment", 0.0) or 0.0))
     official_verified = bool(candidate.official_metrics)
 
     # ── 三层权重：从 ScoringConfig 读取，fallback 到原始 30/45/25 ──
@@ -61,10 +57,7 @@ def build_scorecard(
             **guidance_adjustment,
             "applied_to_total": (not official_verified and float(guidance_adjustment.get("adjustment", 0.0) or 0.0) != 0.0),
         },
-        "confidence": estimate_score_confidence({
-            "empirical": empirical,
-            "score_basis": score_basis,
-        }) if official_verified else None,
+        "confidence": estimate_score_confidence({"empirical": empirical, "score_basis": score_basis}) if official_verified else None,
         "calibration": {
             "prior_minus_empirical": round(prior["score"] - empirical["score"], 2)
             if official_verified
@@ -75,6 +68,9 @@ def build_scorecard(
         },
         "settings_trace": effective_settings,
     }
+    scorecard["attribution_tree"] = build_attribution_tree(scorecard).to_dict()
+    scorecard["top_failures"] = scorecard_top_failures(scorecard)
+    scorecard["improvement_hints"] = scorecard_improvement_hints(scorecard)
     candidate.scorecard = scorecard
     return scorecard
 

@@ -2,7 +2,7 @@
 
 Updated: 2026-05-25
 
-Source checklist: `E:\deep-research-report.md`
+Source checklist: `E:\deep-research-report (2).md`
 
 ## Completed
 
@@ -11,6 +11,10 @@ Source checklist: `E:\deep-research-report.md`
 - [x] DR-2 Web HTML template cache is protected by a module lock for concurrent load/reset paths.
 - [x] DR-3 Focused tests cover empty/default generation input, bounded generation arguments, toolbox exceptions, HTML cache concurrency, JobStore concurrency, and candidate unknown-field preservation.
 - [x] DR-4 Final verification and checklist synchronization are complete.
+- [x] DR-5 Empty `ops.settings.dataset` now resolves from the official dataset cache, and web candidate generation uses the same default.
+- [x] DR-6 Scorecard explainability is now part of the standard scorecard payload, including attribution tree, top failures, and improvement hints.
+- [x] DR-7 Detail modal renders scorecard attribution, failure items, and repair hints for candidate inspection.
+- [x] DR-8 Focused regression tests now cover dataset fallback, scorecard explainability, and detail-modal rendering.
 
 ## Pending
 
