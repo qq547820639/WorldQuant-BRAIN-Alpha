@@ -1,3 +1,5 @@
+import threading
+
 from brain_alpha_ops.tasks import DEFAULT_RECOVERY_ERROR, JobStore
 
 
@@ -76,3 +78,36 @@ def test_job_store_redacts_sensitive_payloads_before_persisting(tmp_path):
     assert "secret-token-456" not in persisted
     assert "SECRET789" not in persisted
     assert "live-token-123" not in persisted
+
+
+def test_job_store_concurrent_create_update_cancel_stays_bounded(tmp_path):
+    path = tmp_path / "jobs.json"
+    store = JobStore(path, max_jobs=75)
+    errors: list[BaseException] = []
+
+    def worker(worker_id: int) -> None:
+        try:
+            for index in range(25):
+                job_id = store.create({"worker": worker_id, "index": index})
+                store.update(job_id, status="running", progress={"phase": "worker", "percent": index})
+                if index % 3 == 0:
+                    assert store.cancel(job_id) is True
+                else:
+                    store.update(job_id, status="completed", result={"ok": True, "worker": worker_id})
+                assert store.get(job_id) is not None
+        except BaseException as exc:  # pragma: no cover - defensive for thread failures
+            errors.append(exc)
+
+    threads = [threading.Thread(target=worker, args=(worker_id,)) for worker_id in range(6)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    rows = store.all()
+    restored = JobStore(path, max_jobs=75, recover_active_as="")
+
+    assert errors == []
+    assert 1 <= len(rows) <= 75
+    assert len(restored.all()) <= 75
+    assert all(job_id.startswith("job_") for job_id, _job in rows)

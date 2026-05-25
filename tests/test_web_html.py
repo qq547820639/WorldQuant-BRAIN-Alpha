@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import threading
+
 import pytest
 
 from brain_alpha_ops import web_html
@@ -38,6 +40,30 @@ def test_default_load_html_uses_cache(monkeypatch, tmp_path):
 
     web_html.reset_html_cache()
     assert web_html.load_html() == "<html>second</html>"
+
+
+def test_reset_html_cache_is_safe_under_concurrent_loads(monkeypatch, tmp_path):
+    path = tmp_path / "index.html"
+    path.write_text("<html>safe</html>", encoding="utf-8")
+    monkeypatch.setattr(web_html, "default_html_path", lambda: path)
+
+    errors: list[BaseException] = []
+
+    def worker() -> None:
+        try:
+            for _ in range(200):
+                web_html.reset_html_cache()
+                assert web_html.load_html() == "<html>safe</html>"
+        except BaseException as exc:  # pragma: no cover - defensive for thread failures
+            errors.append(exc)
+
+    threads = [threading.Thread(target=worker) for _ in range(6)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert errors == []
 
 
 def test_html_csp_hashes_inline_blocks_without_unsafe_inline():

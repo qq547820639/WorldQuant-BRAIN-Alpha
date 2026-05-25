@@ -6,6 +6,7 @@ from typing import Any, Callable, Protocol
 
 from brain_alpha_ops.agent_tools import BrainAlphaToolbox
 from brain_alpha_ops.config import RunConfig
+from brain_alpha_ops.error_payloads import user_error_payload
 from brain_alpha_ops.models import Candidate
 from brain_alpha_ops.research.generator import local_quality
 from brain_alpha_ops.research.guidance import (
@@ -56,7 +57,20 @@ def generate_candidates_payload(
     for key in ("assistant_response", "assistant_raw_output", "assistant_guidance"):
         if key in payload:
             args[key] = payload[key]
-    result = toolbox_factory(run_config).call("generate_candidates", args)
+    try:
+        result = toolbox_factory(run_config).call("generate_candidates", args)
+    except Exception as exc:
+        return user_error_payload(
+            exc,
+            error_code="GENERATE_CANDIDATES_TOOLBOX_ERROR",
+            phase="web_generate_candidates",
+        )
+    if not isinstance(result, dict):
+        return user_error_payload(
+            TypeError("candidate generator returned a non-object response"),
+            error_code="GENERATE_CANDIDATES_VALIDATION_ERROR",
+            phase="web_generate_candidates",
+        )
     if not result.get("ok"):
         return result
 
