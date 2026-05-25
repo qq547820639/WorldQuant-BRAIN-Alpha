@@ -1,194 +1,314 @@
 # BRAIN Alpha Ops
 
-BRAIN Alpha Ops 是一个面向 WorldQuant BRAIN 的本地量化研究与生产辅助工具。它把 Alpha 生成、候选筛选、本地评分、官方预检/回测、提交安全门禁、研究记忆、Assistant Guidance 和 Web 控制台放在同一套可配置流程里，目标是以可追踪、可复用、账号安全优先的方式推进 Alpha 研究。
+**WorldQuant BRAIN 量化研究助手** — 帮你高效生成 Alpha、自动筛选、本地评分、官方回测，并安全提交到 BRAIN 平台。
 
-## 核心原则
+整个工具围绕一条清晰的工作流设计：生成 → 筛选 → 验证 → 回测 → 提交。你可以通过命令行、脚本或者本地网页控制台来操作，所有交互都走 WorldQuant BRAIN 官方 API，确保账号安全。
 
-- 用户入口只交付生产环境，所有页面验收和联调均走官方 BRAIN API。
-- 低质量候选只做本地预筛和归档，不浪费官方 API 预算。
-- 官方模拟、检查结果和提交账本共同决定是否允许提交。
-- 自动提交默认关闭；开启后仍必须通过质量、相关性、换手、集中度、重复表达式、微变体和节奏控制等门禁。
-- BRAIN 官方硬门槛保持零偏差；本地评分、校准和市场环境因子只能作为归因或排序辅助，不能改写官方 Pass/Fail 阈值。
-- 凭证优先通过环境变量传入，不写入仓库、日志或运行结果。
+---
+
+## 它能做什么？
+
+- **Alpha 自动生成**：结合假设驱动、经验反馈和随机探索三种策略，自动生成候选 Alpha 表达式
+- **智能筛选**：本地评分系统预先过滤低质量候选，只把最有潜力的送官方验证，节省 API 配额
+- **官方对接**：自动调用 BRAIN 官方 API 进行 Alpha 检查（Check）、模拟回测（Simulation）和提交
+- **多层门禁**：Sharpe、Fitness、换手率、集中度、表达式去重等多道质量关卡，不合格的不放行
+- **Web 控制台**：本地网页界面，可视化查看候选池、回测进度、达标状态，支持一键检查和提交
+- **研究记忆**：自动记录每次实验的结果和教训，辅助后续生成策略优化
+- **安全第一**：凭证走环境变量，不落盘；自动提交默认关闭，需要手动或配置开启
+
+---
+
+## 环境要求
+
+- **Python** >= 3.10
+- 一个 WorldQuant BRAIN 账号（注册地址：https://platform.worldquantbrain.com）
+
+---
+
+## 安装
+
+```powershell
+# 克隆项目
+git clone https://github.com/qq547820639/WorldQuant-BRAIN-Alpha.git
+cd WorldQuant-BRAIN-Alpha
+
+# 创建虚拟环境（推荐）
+python -m venv venv
+venv\Scripts\activate
+
+# 安装依赖
+pip install -e .
+```
+
+Web 控制台完全基于 Python 标准库，无需额外安装前端依赖。
+
+如果需要运行测试或开发，安装可选依赖：
+
+```powershell
+pip install -e ".[test,dev]"
+```
+
+---
 
 ## 快速开始
 
-先校验配置文件：
+### 第一步：设置凭证
+
+把 BRAIN 账号信息设成环境变量，**不要直接写在配置文件里**：
+
+```powershell
+$env:BRAIN_USERNAME = "your@email.com"
+$env:BRAIN_PASSWORD = "your_password"
+```
+
+如果你用的是 token，可以设 `$env:BRAIN_TOKEN`。
+
+### 第二步：检查配置
+
+项目自带了一份默认配置 `config/run_config.json`，先验证一下：
 
 ```powershell
 python -m brain_alpha_ops.cli validate-config --config config/run_config.json
 ```
 
-运行本地研究流水线：
+如果有问题会直接报出来，方便修正。
+
+### 第三步：跑起来
+
+**命令行模式** — 完整研究流水线：
 
 ```powershell
 python run_pipeline.py
 ```
 
-启动本地 Web 控制台：
+**Web 控制台模式** — 打开本地网页界面：
 
 ```powershell
 python launch_web.py
 ```
 
-常用 CLI：
+浏览器会自动打开 `http://127.0.0.1:8765`，在这里你可以看到候选 Alpha 的完整生命周期。
+
+---
+
+## Web 控制台
+
+Web 控制台提供一个直观的选项卡式界面，覆盖 Alpha 从生成到提交的全过程：
+
+| 视图 | 说明 |
+|------|------|
+| 候选池 | 本轮生成的所有 Alpha，展示表达式和本地评分 |
+| 等待回测 | 已通过本地筛选，排队等待官方回测 |
+| 回测中 | 正在 BRAIN 平台执行模拟回测 |
+| 达标 | 回测通过质量门槛的 Alpha |
+| 可提交 | 满足所有提交条件的 Alpha，可以一键提交 |
+| 已提交 | 成功提交到 BRAIN 的记录 |
+| 不达标 | 未通过质量门槛的 Alpha 及失败原因 |
+| 云端数据 | 同步显示 BRAIN 平台上已有的 Alpha 记录 |
+| 研究记忆 | 历史实验的总结和经验 |
+| 生命周期 | 完整的 Alpha 状态流转时间线 |
+
+主要功能：
+- **批量检查 & 提交**：选中多个 Alpha 一次性执行，提交操作互斥避免重复
+- **云端同步**：自动拉取 BRAIN 平台已有 Alpha，做去重对比
+- **连续生产**：支持持续多轮运行，每轮自动生成新候选
+- **风险提示**：提交前展示风险等级和注意事项
+
+---
+
+## CLI 命令参考
+
+所有命令都通过 `python -m brain_alpha_ops.cli <命令>` 调用。常用的是前几个，其他按需使用：
+
+### 核心流水线
+
+| 命令 | 说明 |
+|------|------|
+| `run` | 运行完整研究流水线 |
+| `guided-run` | 带进度引导和检查点的研究流水线 |
 
 ```powershell
+# 运行一轮，生成 12 个候选
 python -m brain_alpha_ops.cli run --config config/run_config.json --cycles 1 --candidates 12
-python -m brain_alpha_ops.cli assistant-context --config config/run_config.json
-python -m brain_alpha_ops.cli assistant-request --config config/run_config.json
-python -m brain_alpha_ops.cli assistant-guidance-audit --config config/run_config.json
-python scripts/quality_gate.py --json
-node scripts\live_page_e2e.mjs --url http://127.0.0.1:8765/ --sync --output-dir output\playwright
+
+# 带引导模式的流水线（支持断点续跑）
+python -m brain_alpha_ops.cli guided-run --config config/run_config.json
 ```
 
-Web 控制台默认监听本机地址，提供候选池、等待回测、回测中、达标、可提交、已提交、不达标、云端数据、研究记忆和生命周期视图。连续生产、云端同步、批量检查和提交互斥执行，减少重复点击和官方 API 争用。
+### 配置管理
 
-## 生产凭证
+| 命令 | 说明 |
+|------|------|
+| `init-config` | 生成默认配置文件 |
+| `validate-config` | 校验配置文件是否合法 |
 
-生产环境需要在 `config/run_config.json` 中设置：
+### 评分与诊断
 
-```json
-{
-  "environment": "production"
-}
-```
+| 命令 | 说明 |
+|------|------|
+| `score` | 对候选 Alpha 执行完整评分流水线 |
+| `diagnose` | 生产诊断：差距矩阵、升级建议 |
+| `anti-overfit` | 确定性反过拟合检查 |
+| `rolling-validate` | 滚动窗口验证 |
 
-凭证通过环境变量传入：
+### Assistant（LLM 辅助研究）
 
-```powershell
-$env:BRAIN_USERNAME="your@email.com"
-$env:BRAIN_PASSWORD="your_password"
-python run_pipeline.py
-```
+| 命令 | 说明 |
+|------|------|
+| `assistant-context` | 导出 LLM 可用的研究上下文 |
+| `assistant-request` | 生成与模型无关的 LLM 请求 |
+| `assistant-parse` | 解析标准化 LLM 响应 |
+| `assistant-guidance` | 将 LLM 响应转为生成指南 |
+| `assistant-save-guidance` | 持久化 LLM 建议供后续复用 |
+| `assistant-guidance-audit` | 审计已保存指南的有效性 |
+| `assistant-cross-review` | 对 LLM 响应做交叉审查 |
 
-也可以使用 `BRAIN_TOKEN`。不要把账号、密码或 token 写进配置文件、脚本、文档或日志。
+### 数据与记忆
 
-## 配置文件
+| 命令 | 说明 |
+|------|------|
+| `memory-summary` | 查看本地研究记忆摘要 |
+| `memory-guidance` | 导出生成器可用的研究记忆 |
+| `expression-index` | 查看/查询表达式历史（SQLite） |
+| `record-index` | 查看/查询 BRAIN Alpha 记录（SQLite） |
+| `research-observability` | 研究健康状态、回测统计、错误日志 |
 
-主要配置入口是 `config/run_config.json`。
+### 合规
 
-- `environment`: 固定为 `production`；用户侧不再提供 mock 运行环境。
-- `auto_submit`: 是否允许自动提交，默认 `false`。
-- `credentials`: 只建议配置环境变量名，不建议写入真实凭证。
-- `web`: 本地控制台 host、port、会话 TTL 和多会话策略。
-- `ops.settings`: WorldQuant BRAIN 的 region、universe、delay、neutralization、decay、truncation、language、type 等设置。
-- `ops.budget`: 每轮候选数量、官方预检/模拟数量、候选池大小、连续运行、云端同步和 Assistant Guidance 策略。
-- `ops.scoring`: prior/empirical/checklist 分层权重、本地排序权重和 Assistant Guidance 评分调整参数。
-- `ops.thresholds`: Sharpe、Fitness、Turnover、相关性、集中度等质量阈值。
-- `ops.submission_policy`: 自动提交频率、表达式相似度和提交前检查策略。
-- `ops.official_api`: 官方 API 路径、超时、轮询、限速重试和缓存目录。
+| 命令 | 说明 |
+|------|------|
+| `redline` | 六大技术红线合规验证 |
 
-配置加载会进行类型、枚举、数值范围、URL 和 path 校验。坏配置会在启动早期失败，并给出结构化错误。
+---
 
-## Assistant Guidance
+## 配置说明
 
-项目支持把本地研究记忆和外部 LLM 建议转换为可复用的生成偏置：
+配置文件位于 `config/run_config.json`。主要板块：
 
-```powershell
-python -m brain_alpha_ops.cli assistant-context --config config/run_config.json
-python -m brain_alpha_ops.cli assistant-request --config config/run_config.json
-python -m brain_alpha_ops.cli assistant-save-guidance --config config/run_config.json --input assistant_response.json
-python -m brain_alpha_ops.cli assistant-guidance-audit --config config/run_config.json
-```
+### 基本设置
+- **`environment`**：固定为 `"production"`，不提供 mock 模式
+- **`auto_submit`**：是否允许自动提交（默认 `false`，建议手动控制）
+- **`credentials`**：配置环境变量名称即可，不要填真实密码
 
-系统会记录 guidance digest、置信度、历史结果和本地排序调整资格。历史表现较弱的 guidance 不会继续作为生成偏置使用。
+### BRAIN 参数（`ops.settings`）
+控制 Alpha 的基础属性：市场（USA/EUR/GLB）、股票池（TOP1000/2000/3000）、延迟、中性化、截尾等。
+
+### 资源预算（`ops.budget`）
+- **`max_candidates_per_cycle`**：每轮生成多少个候选
+- **`max_official_validations_per_cycle`**：每轮最多送几个做官方 Alpha Check
+- **`max_official_simulations_per_cycle`**：每轮最多送几个做回测
+- **`run_forever`**：是否持续循环运行
+
+### 质量门槛（`ops.thresholds`）
+与 BRAIN 官方标准对齐的硬性门槛：
+- **`min_sharpe`**：最低 Sharpe 比率（默认 1.25）
+- **`min_fitness`**：最低 Fitness（默认 1.0）
+- **`platform_max_turnover`**：最大换手率（默认 0.70）
+- **`max_self_correlation`**：最大自相关性
+- **`max_weight_concentration`**：最大权重集中度
+
+### 提交策略（`ops.submission_policy`）
+- **`max_auto_submissions_per_day`**：每天最多自动提交数
+- **`max_expression_similarity`**：表达式相似度上限，防重复提交
+- **`block_micro_variants`**：是否阻止微变体提交
+
+---
 
 ## 质量门禁
 
-交接、打包或上线前运行聚合质量门禁：
+提交代码或打包前，运行聚合质量检查：
 
 ```powershell
+# 完整检查（含测试）
 python scripts/quality_gate.py
-```
 
-它会依次执行 Python 语法编译检查、配置校验、依赖策略检查、六大技术红线验证、前端内联 JavaScript 同步/语法检查、敏感信息扫描和 pytest。需要快速预检时可以跳过测试：
-
-```powershell
+# 快速检查，跳过测试
 python scripts/quality_gate.py --skip-tests
-```
 
-机器可读输出：
-
-```powershell
+# 输出 JSON 格式（适合 CI）
 python scripts/quality_gate.py --json
 ```
 
-单独运行前端语法检查：
+质量门禁包含以下环节：
+1. Python 语法编译检查
+2. 配置合法性校验
+3. 依赖策略检查
+4. BRAIN 六大技术红线验证
+5. 前端 JavaScript 语法检查
+6. 敏感信息扫描
+7. pytest 测试套件
+
+也可以单独运行某一项：
 
 ```powershell
+# 技术红线
+python -m brain_alpha_ops.compliance.redline_verifier --block --json
+
+# 敏感信息扫描
+python scripts/scan_sensitive_artifacts.py --json --fail-on-findings
+
+# 前端语法检查
 python scripts/check_frontend_syntax.py --json
 ```
 
-单独运行 BRAIN 技术红线验证：
-
-```powershell
-python -m brain_alpha_ops.compliance.redline_verifier --block --json
-```
-
-单独运行敏感信息扫描：
-
-```powershell
-python scripts/scan_sensitive_artifacts.py --json --fail-on-findings
-python scripts/scan_sensitive_artifacts.py --include-all --json --fail-on-findings
-```
-
-如果确认发生真实凭证泄露，应立即轮换账号密码或 token，并清理相关历史记录。
+---
 
 ## 项目结构
 
-- `brain_alpha_ops/config.py`: 运行配置、阈值、提交策略和配置校验。
-- `brain_alpha_ops/runner.py`: CLI、Web 和编辑器入口共用的运行适配层。
-- `brain_alpha_ops/models.py`: 候选、指标、门禁、事件等核心数据结构。
-- `brain_alpha_ops/brain_api/`: 官方 API 适配；生产运行只调用 WorldQuant BRAIN 官方接口。
-- `brain_alpha_ops/research/`: 生成、评分、诊断、安全门禁、研究记忆和流水线。
-- `brain_alpha_ops/web.py`: 本地 Web API、任务状态和控制台服务。
-- `brain_alpha_ops/web/`: 前端模板和拆分后的 JavaScript 视图。
-- `config/`: 运行配置和策略预设。
-- `docs/`: 架构、接口、评审和阶段性设计文档。
-- `scripts/`: 构建、质量门禁、前端语法检查和敏感信息扫描脚本。
-- `tests/`: pytest 测试套件。
+```
+brain_alpha_ops/
+├── brain_api/         BRAIN 官方 API 封装和缓存
+├── cli.py             命令行入口（20+ 子命令）
+├── config.py          配置加载和校验
+├── models.py          核心数据模型（候选、门禁、事件等）
+├── runner.py          流水线运行适配层
+├── compliance/        合规验证（技术红线）
+├── data/              数据加载、字段/算子/数据集索引
+├── research/          Alpha 生成、评分、回测、流水线
+│   └── hypotheses/    假设库（YAML 驱动）
+├── scoring/           多层评分系统和门禁
+├── ux/                用户体验层（引导流程、历史记录）
+├── web/               Web 前端（HTML + JS 模块）
+│   ├── css/           样式
+│   ├── js/            JavaScript 模块（API、状态、视图、组件）
+│   └── index.html     控制台页面
+├── web.py             Web API 服务端
+├── web_*.py           Web 功能模块（提交、回测、评分、会话等）
+├── production_diagnostics.py   生产诊断工具
+├── observability.py            可观测性支持
+└── jsonl.py            JSONL 日志读写
+config/
+├── run_config.json    主配置文件
+└── presets.json       策略预设
+scripts/              构建脚本、质量门禁、检查工具
+tests/                pytest 测试套件
+docs/                 架构设计、评审报告、诊断文档
+```
+
+---
 
 ## Windows 打包
 
-生成 Windows 可执行文件前，建议先跑质量门禁：
+可以把整个项目打包成一个独立的 `.exe` 文件，方便分发和使用：
 
 ```powershell
+# 先跑质量检查
 python scripts/quality_gate.py --skip-tests --json
-python -m brain_alpha_ops.compliance.redline_verifier --block --json
-```
 
-安装 PyInstaller（首次打包需要）：
-
-```powershell
-python -m pip install pyinstaller
-```
-
-正式打包使用 `BrainAlphaOps.spec`，它会把运行配置、官方字段/算子/数据集、Web 控制台 HTML 和 hypothesis library 一起纳入构建：
-
-```powershell
+# 打包
 .\scripts\build_windows.ps1
-```
 
-等价命令：
-
-```powershell
-python -m PyInstaller --clean --noconfirm BrainAlphaOps.spec
-```
-
-输出位于：
-
-```powershell
+# 输出文件
 dist\BrainAlphaOps.exe
 ```
 
-当前 EXE 使用本地 Web 控制台作为主要 UI，并采用 console bootloader 保证本地服务生命周期稳定；关闭控制台窗口会停止服务。直接运行会按 `config/run_config.json` 打开浏览器；自动化验证或不希望打开浏览器时可用：
+直接双击运行会启动 Web 控制台并打开浏览器。如果不想打开浏览器：
 
 ```powershell
 .\dist\BrainAlphaOps.exe --no-browser --port 8765
 ```
 
-打包后烟测：
+打包后的验证：
 
 ```powershell
 .\dist\BrainAlphaOps.exe --smoke-test --port 8765
@@ -196,26 +316,37 @@ Invoke-WebRequest -UseBasicParsing http://127.0.0.1:8765/
 Invoke-WebRequest -UseBasicParsing http://127.0.0.1:8765/api/health
 ```
 
-`/api/config` 等接口需要先访问根页面取得本地会话 Cookie 和页面内 CSRF token；浏览器使用时会自动处理。
+---
 
-## 当前改造状态
+## 开发
 
-已完成的关键加固包括：
+### 运行测试
 
-- 集中配置校验与 CLI `validate-config`。
-- Web payload 数值解析和上限控制。
-- 官方 API 分页最大页数、重复页和总量停止保护。
-- Assistant Guidance 的持久化、复用、历史结果追踪和审计。
-- 本地研究记忆与离线 LLM 请求上下文打包。
-- 前端内联脚本语法检查及测试覆盖。
-- 敏感信息扫描 JSON 输出、误报收敛和测试覆盖。
-- 本地聚合质量门禁 `scripts/quality_gate.py`，覆盖 Python compileall、配置、依赖策略、红线验证、前端语法、敏感扫描和 pytest。
-- 科学评分封装 `brain_alpha_ops/scoring/official_scoring.py`，提供官方 Pass/Fail 对齐模拟、可配置门禁、评分归因和 JSONL 历史追踪。
-- 用户体验层 `brain_alpha_ops/ux/guided_pipeline.py`，提供流程引导、进度回调、可操作错误提示、断点文件和运行历史。
+```powershell
+pytest                              # 全部测试
+pytest -m "not slow"                # 跳过慢测试
+pytest tests/test_web_html.py       # 单文件
+pytest --cov=brain_alpha_ops        # 带覆盖率
+```
 
-建议后续继续推进：
+### 代码检查
 
-- 清理剩余文档和代码注释中的乱码。
-- 将根目录临时联调脚本迁移到 `scripts/`。
-- 拆分超长的 `pipeline`、`web` handler 和 official adapter。
-- 在 CI 中接入 `quality_gate.py`，并逐步加入 ruff、类型检查和覆盖率阈值。
+```powershell
+ruff check brain_alpha_ops/         # 代码风格
+mypy brain_alpha_ops/               # 类型检查
+```
+
+---
+
+## 安全提示
+
+- **永远不要**把 BRAIN 用户名、密码或 token 写进代码、配置文件或 commit 到 Git
+- 凭证统一通过环境变量 `BRAIN_USERNAME` / `BRAIN_PASSWORD` / `BRAIN_TOKEN` 传入
+- 如果怀疑凭证泄露，立即在 BRAIN 平台重置密码或 token
+- 自动提交功能默认关闭，开启后也会受到频率、相似度和质量门槛的多重限制
+
+---
+
+## 许可
+
+Internal use.
