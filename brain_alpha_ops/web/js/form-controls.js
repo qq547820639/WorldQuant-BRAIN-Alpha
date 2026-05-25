@@ -27,7 +27,7 @@
       el.checked = Boolean(value);
       return;
     }
-    el.value = value;
+    el.value = String(value);
   }
 
   function connectionPayload() {
@@ -40,6 +40,7 @@
   }
 
   function collectPayload() {
+    var alphaType = fieldValue('alphaType');
     return {
       environment: 'production',
       username: fieldValue('username'),
@@ -47,13 +48,14 @@
       token: fieldValue('token'),
       baseUrl: fieldValue('baseUrl'),
       preset: fieldValue('preset'),
+      autoSubmit: checkedValue('autoSubmitToggle'),
       settings: {
         region: fieldValue('region'),
         universe: fieldValue('universe'),
         delay: numericValue('delay', 1),
         neutralization: fieldValue('neutralization'),
         instrumentType: fieldValue('instrumentType'),
-        alphaType: fieldValue('alphaType'),
+        type: alphaType,
         decay: numericValue('decay', 0),
         truncation: numericValue('truncation', 0),
         pasteurization: fieldValue('pasteurization'),
@@ -61,11 +63,16 @@
         unitHandling: fieldValue('unitHandling'),
         language: fieldValue('language'),
       },
-      use_assistant_guidance: checkedValue('useAssistantGuidance'),
-      assistant_guidance_min_confidence: numericValue('assistantGuidanceMinConfidence', 0.6),
-      assistant_guidance_score_adjustment: checkedValue('assistantGuidanceScoreAdjustment'),
-      assistant_guidance_score_min_confidence: numericValue('assistantGuidanceScoreMinConfidence', 0.6),
-      strategy_plugins_enabled: checkedValue('strategyPluginsEnabled'),
+      syncRange: fieldValue('syncRange'),
+      useAssistantGuidance: checkedValue('useAssistantGuidance'),
+      assistantGuidanceMinConfidence: numericValue('assistantGuidanceMinConfidence', 0.6),
+      assistantGuidanceScoreAdjustment: checkedValue('assistantGuidanceScoreAdjustment'),
+      assistantGuidanceScoreMinConfidence: numericValue('assistantGuidanceScoreMinConfidence', 0.6),
+      assistantGuidanceScoreMinOutcomeCount: numericValue('assistantGuidanceScoreMinOutcomeCount', 1),
+      assistantGuidanceScoreBonusCap: numericValue('assistantGuidanceScoreBonusCap', 4),
+      assistantGuidanceScorePenaltyCap: numericValue('assistantGuidanceScorePenaltyCap', 5),
+      strategyPluginsEnabled: checkedValue('strategyPluginsEnabled'),
+      strategyPluginSpecs: fieldValue('strategyPluginSpecs'),
     };
   }
 
@@ -75,18 +82,41 @@
     var settings = preset.settings;
     [
       'region', 'universe', 'delay', 'neutralization', 'instrumentType',
-      'alphaType', 'decay', 'truncation', 'pasteurization', 'nanHandling',
+      'decay', 'truncation', 'pasteurization', 'nanHandling',
       'unitHandling', 'language',
     ].forEach(function (id) { setControlValue(id, settings[id]); });
+    setControlValue('alphaType', settings.type || settings.alphaType);
     return true;
   }
 
   function applyConfig(config) {
     var ops = (config || {}).ops || {};
+    var officialApi = ops.official_api || {};
+    var settings = ops.settings || {};
     var budget = ops.budget || {};
-    setControlValue('useAssistantGuidance', budget.assistant_guidance_enabled !== false);
-    setControlValue('assistantGuidanceScoreAdjustment', budget.assistant_guidance_score_adjustment !== false);
+    var scoring = ops.scoring || {};
+    [
+      'region', 'universe', 'delay', 'neutralization', 'instrumentType',
+      'decay', 'truncation', 'pasteurization', 'nanHandling',
+      'unitHandling', 'language',
+    ].forEach(function (id) { setControlValue(id, settings[id]); });
+    setControlValue('alphaType', settings.type || settings.alphaType);
+    setControlValue('environment', (config || {}).environment || 'production');
+    setControlValue('baseUrl', officialApi.base_url);
+    setControlValue('autoSubmitToggle', Boolean((config || {}).auto_submit));
+    setControlValue('syncRange', budget.cloud_sync_range);
+    setControlValue('useAssistantGuidance', budget.use_assistant_guidance !== false);
+    setControlValue('assistantGuidanceMinConfidence', budget.assistant_guidance_min_confidence);
+    setControlValue('assistantGuidanceScoreAdjustment', scoring.assistant_guidance_score_adjustment_enabled !== false);
+    setControlValue('assistantGuidanceScoreMinConfidence', scoring.assistant_guidance_score_min_confidence);
+    setControlValue('assistantGuidanceScoreMinOutcomeCount', scoring.assistant_guidance_score_min_outcome_count);
+    setControlValue('assistantGuidanceScoreBonusCap', scoring.assistant_guidance_score_bonus_cap);
+    setControlValue('assistantGuidanceScorePenaltyCap', scoring.assistant_guidance_score_penalty_cap);
     setControlValue('strategyPluginsEnabled', Boolean(budget.strategy_plugins_enabled));
+    setControlValue(
+      'strategyPluginSpecs',
+      Array.isArray(budget.strategy_plugin_specs) ? budget.strategy_plugin_specs.join('\n') : budget.strategy_plugin_specs
+    );
   }
 
   window.FormControls = {

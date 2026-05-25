@@ -4,6 +4,7 @@ import pytest
 from pathlib import Path
 
 from brain_alpha_ops.research.hypothesis_library import (
+    PACKAGED_HYPOTHESIS_LIBRARY_FILES,
     HypothesisLibrary,
     Hypothesis,
     ExpressionFamily,
@@ -13,6 +14,7 @@ from brain_alpha_ops.research.hypothesis_library import (
     Rationale,
     ExperienceWeights,
     GenerationMeta,
+    ensure_hypothesis_library_files,
 )
 
 
@@ -34,6 +36,50 @@ def test_library_loads_all_eight_hypotheses():
     lib = HypothesisLibrary(str(HYPOTHESES_DIR)).load_all()
     assert lib.count == 8, f"Expected 8 hypotheses, got {lib.count}"
     assert len(lib.get_all()) == 8
+
+
+def test_library_repairs_packaged_hypotheses_from_meipass(monkeypatch, tmp_path):
+    bundled_dir = tmp_path / "bundle" / "brain_alpha_ops" / "research" / "hypotheses"
+    runtime_dir = tmp_path / "runtime" / "brain_alpha_ops" / "research" / "hypotheses"
+    bundled_dir.mkdir(parents=True)
+    source_file = HYPOTHESES_DIR / "earnings_revision.yaml"
+    (bundled_dir / "earnings_revision.yaml").write_text(
+        source_file.read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr("sys._MEIPASS", str(tmp_path / "bundle"), raising=False)
+
+    lib = HypothesisLibrary(runtime_dir).load_all()
+
+    assert (runtime_dir / "earnings_revision.yaml").is_file()
+    assert lib.count == 1
+    assert lib.get_by_id("earnings_revision_momentum") is not None
+
+
+def test_hypothesis_library_repair_does_not_overwrite_valid_runtime_files(monkeypatch, tmp_path):
+    bundled_dir = tmp_path / "bundle" / "brain_alpha_ops" / "research" / "hypotheses"
+    runtime_dir = tmp_path / "runtime" / "brain_alpha_ops" / "research" / "hypotheses"
+    bundled_dir.mkdir(parents=True)
+    runtime_dir.mkdir(parents=True)
+    runtime_file = runtime_dir / "earnings_revision.yaml"
+    runtime_file.write_text("runtime-version", encoding="utf-8")
+    (bundled_dir / "earnings_revision.yaml").write_text("bundled-version", encoding="utf-8")
+
+    monkeypatch.setattr("sys._MEIPASS", str(tmp_path / "bundle"), raising=False)
+
+    result = ensure_hypothesis_library_files(runtime_dir)
+
+    copied = result["copied"]
+    assert isinstance(copied, list)
+    assert "earnings_revision.yaml" not in copied
+    assert runtime_file.read_text(encoding="utf-8") == "runtime-version"
+
+
+def test_packaged_hypothesis_file_manifest_covers_current_library():
+    expected = sorted(path.name for path in HYPOTHESES_DIR.glob("*.yaml"))
+
+    assert sorted(PACKAGED_HYPOTHESIS_LIBRARY_FILES) == expected
 
 
 def test_library_get_ids_returns_all():

@@ -23,6 +23,8 @@ from __future__ import annotations
 import logging
 import os
 import random
+import shutil
+import sys
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -31,6 +33,89 @@ from typing import Any, Dict, List, Optional
 import yaml
 
 logger = logging.getLogger(__name__)
+
+DEFAULT_HYPOTHESIS_LIBRARY_RELATIVE_DIR = Path("brain_alpha_ops") / "research" / "hypotheses"
+PACKAGED_HYPOTHESIS_LIBRARY_FILES = (
+    "_schema.yaml",
+    "analyst_behavior.yaml",
+    "earnings_revision.yaml",
+    "liquidity_premium.yaml",
+    "low_volatility.yaml",
+    "microstructure.yaml",
+    "quality_profitability.yaml",
+    "sentiment_short.yaml",
+    "value_reversal.yaml",
+)
+
+
+def ensure_hypothesis_library_files(directory: str | Path) -> dict[str, object]:
+    """Repair missing packaged hypothesis YAML files from PyInstaller data."""
+    target_root = Path(directory)
+    bundled_root = _bundled_hypothesis_root()
+    result: dict[str, object] = {
+        "target_root": str(target_root),
+        "bundled_root": str(bundled_root) if bundled_root else "",
+        "copied": [],
+        "present": [],
+        "missing": [],
+        "failed": [],
+    }
+    copied = result["copied"]
+    present = result["present"]
+    missing = result["missing"]
+    failed = result["failed"]
+    assert isinstance(copied, list)
+    assert isinstance(present, list)
+    assert isinstance(missing, list)
+    assert isinstance(failed, list)
+
+    for filename in PACKAGED_HYPOTHESIS_LIBRARY_FILES:
+        target = target_root / filename
+        if _yaml_file_is_usable(target):
+            present.append(filename)
+            continue
+        if bundled_root is None:
+            missing.append(filename)
+            continue
+        source = bundled_root / filename
+        if not _yaml_file_is_usable(source):
+            missing.append(filename)
+            continue
+        try:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source, target)
+            copied.append(filename)
+        except OSError as exc:
+            failed.append({"filename": filename, "error": str(exc)})
+
+    if copied:
+        logger.info(
+            "HypothesisLibrary: copied bundled hypothesis files into %s: %s",
+            target_root,
+            ", ".join(str(item) for item in copied),
+        )
+    if failed:
+        logger.warning(
+            "HypothesisLibrary: failed to copy bundled hypothesis files into %s: %s",
+            target_root,
+            failed,
+        )
+    return result
+
+
+def _bundled_hypothesis_root() -> Path | None:
+    meipass = getattr(sys, "_MEIPASS", None)
+    if not meipass:
+        return None
+    root = Path(str(meipass)) / DEFAULT_HYPOTHESIS_LIBRARY_RELATIVE_DIR
+    return root if root.is_dir() else None
+
+
+def _yaml_file_is_usable(path: Path) -> bool:
+    try:
+        return path.is_file() and path.stat().st_size > 0
+    except OSError:
+        return False
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -353,6 +438,7 @@ class HypothesisLibrary:
         Skips _schema.yaml and files starting with '_'.
         Returns self for method chaining.
         """
+        ensure_hypothesis_library_files(self._directory)
         if not self._directory.exists():
             logger.warning("HypothesisLibrary: directory %s does not exist.", self._directory)
             return self

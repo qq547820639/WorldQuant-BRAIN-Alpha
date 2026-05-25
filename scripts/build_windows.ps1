@@ -22,6 +22,37 @@ if ($LASTEXITCODE -ne 0) {
     exit $LASTEXITCODE
 }
 
+$OfficialContextFiles = @(
+    "official_fields.json",
+    "official_fields.meta.json",
+    "official_operators.json",
+    "official_operators.meta.json",
+    "official_datasets.json",
+    "official_datasets.meta.json",
+    "official_context_refresh_status.json"
+)
+$DistData = Join-Path $Root "dist\data"
+New-Item -ItemType Directory -Path $DistData -Force | Out-Null
+foreach ($Name in $OfficialContextFiles) {
+    $Source = Join-Path $Root "data\$Name"
+    if (-not (Test-Path $Source)) {
+        Write-Error "Missing required official context release file: $Source"
+        exit 1
+    }
+    Copy-Item -Path $Source -Destination (Join-Path $DistData $Name) -Force
+}
+
+$HypothesisSource = Join-Path $Root "brain_alpha_ops\research\hypotheses"
+$HypothesisTarget = Join-Path $Root "dist\brain_alpha_ops\research\hypotheses"
+if (-not (Test-Path $HypothesisSource)) {
+    Write-Error "Missing required hypothesis library release directory: $HypothesisSource"
+    exit 1
+}
+New-Item -ItemType Directory -Path $HypothesisTarget -Force | Out-Null
+Copy-Item -Path (Join-Path $HypothesisSource "*") -Destination $HypothesisTarget -Recurse -Force
+
 Write-Host ""
+Write-Host "Copied official context files to $DistData"
+Write-Host "Copied hypothesis library files to $HypothesisTarget"
 Write-Host "Done: $Root\dist\BrainAlphaOps.exe"
 Write-Host "The executable starts the local service in a console and opens the browser UI automatically."

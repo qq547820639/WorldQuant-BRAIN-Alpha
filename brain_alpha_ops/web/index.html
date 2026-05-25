@@ -194,7 +194,7 @@
     /* ── MAIN AREA ──────────────────────────────────────────────────────── */
     .app-main{
       display:grid;grid-template-columns:304px minmax(0,1fr);
-      gap:var(--sp-4);padding:var(--sp-4);align-items:start;
+      gap:var(--sp-2);padding:var(--sp-2);align-items:start;
     }
 
     /* ── SIDEBAR ────────────────────────────────────────────────────────── */
@@ -262,20 +262,24 @@
     .action-card .btn-run:focus-visible{outline:2px solid var(--accent-ring);outline-offset:2px}
     .action-card .btn-run:disabled{opacity:0.5;cursor:not-allowed}
     .action-card .btn-run.is-stopping{background:var(--danger);border-color:var(--danger);color:#fff}
+    .task-console-actions{display:grid;grid-template-columns:1fr 1fr 1fr;gap:var(--sp-2);margin-top:var(--sp-2)}
+    .task-console-actions .btn{min-width:0;white-space:nowrap}
+    .task-console-reason{min-height:18px;margin-top:var(--sp-2);font-size:var(--fs-2xs);color:var(--text-muted);line-height:1.4}
+    .task-console-reason.is-blocked{color:var(--warning);font-weight:var(--fw-semibold)}
     .action-card-sub{display:flex;gap:var(--sp-2);margin-top:var(--sp-2)}
 
     /* ── CONTENT PANEL ──────────────────────────────────────────────────── */
     .app-content{
       background:var(--bg-surface);border:1px solid var(--border-default);
       border-radius:var(--r-md);box-shadow:var(--shadow-sm);
-      display:flex;flex-direction:column;min-height:calc(100vh - 120px);
+      display:flex;flex-direction:column;min-height:calc(100vh - 68px);
       overflow:hidden;
     }
 
     /* ── WORKFLOW RAIL ─────────────────────────────────────────────────── */
     .workflow-rail{
-      display:grid;grid-template-columns:minmax(0,1fr) auto;gap:var(--sp-4);
-      padding:var(--sp-4) var(--sp-5);border-bottom:1px solid var(--border-default);
+      display:grid;grid-template-columns:minmax(0,1fr) minmax(320px,360px);gap:var(--sp-2);
+      padding:var(--sp-1) var(--sp-3);border-bottom:1px solid var(--border-default);
       background:var(--bg-surface);align-items:stretch;
     }
     .workflow-steps{
@@ -283,8 +287,8 @@
       gap:var(--sp-2);min-width:0;
     }
     .workflow-step{
-      display:grid;grid-template-columns:auto minmax(0,1fr);gap:var(--sp-2);
-      min-height:72px;padding:var(--sp-3);border:1px solid var(--border-default);
+      display:grid;grid-template-columns:auto minmax(0,1fr);gap:var(--sp-2);align-items:center;
+      min-height:42px;padding:var(--sp-1) var(--sp-2);border:1px solid var(--border-default);
       border-radius:var(--r-md);background:var(--bg-surface-raised);
       color:var(--text-primary);text-align:left;font:inherit;cursor:pointer;
       transition:all var(--t-base);position:relative;
@@ -294,49 +298,50 @@
     .workflow-step.is-active{border-color:var(--border-accent);background:var(--bg-accent-soft);box-shadow:var(--shadow-sm)}
     .workflow-step.is-disabled{opacity:.55;cursor:not-allowed;transform:none;box-shadow:none}
     .workflow-step-index{
-      display:flex;align-items:center;justify-content:center;width:30px;height:30px;
+      display:flex;align-items:center;justify-content:center;width:24px;height:24px;
       border-radius:var(--r-md);background:var(--bg-muted);border:1px solid var(--border-default);
       color:var(--text-secondary);font-size:var(--fs-2xs);font-weight:var(--fw-extrabold);
     }
     .workflow-step.is-active .workflow-step-index{background:var(--accent);border-color:var(--accent);color:#fff}
     .workflow-step-body{min-width:0}
-    .workflow-step-title{display:flex;align-items:center;justify-content:space-between;gap:var(--sp-2);font-size:var(--fs-sm);font-weight:var(--fw-bold)}
+    .workflow-step-title{display:flex;align-items:center;justify-content:space-between;gap:var(--sp-2);font-size:var(--fs-xs);font-weight:var(--fw-bold)}
     .workflow-step-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
     .workflow-count{
-      display:inline-flex;align-items:center;justify-content:center;min-width:24px;height:22px;
+      display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:20px;
       padding:0 var(--sp-2);border-radius:var(--r-full);background:var(--bg-surface);
       color:var(--text-secondary);border:1px solid var(--border-default);
       font-size:var(--fs-2xs);font-weight:var(--fw-extrabold);flex-shrink:0;
     }
     .workflow-step.is-active .workflow-count{color:var(--accent);border-color:var(--border-accent)}
-    .workflow-step-hint{font-size:var(--fs-xs);color:var(--text-secondary);margin-top:var(--sp-1);line-height:1.35}
+    .workflow-step-hint{display:none}
     .workflow-panel{
-      display:flex;flex-direction:column;justify-content:space-between;gap:var(--sp-3);
-      width:260px;padding:var(--sp-3);border:1px solid var(--border-default);
+      display:grid;grid-template-rows:auto 1fr;justify-content:stretch;gap:var(--sp-1);
+      width:auto;padding:var(--sp-1);border:1px solid var(--border-default);
       border-radius:var(--r-md);background:var(--bg-muted);
     }
-    .workflow-status{font-size:var(--fs-xs);color:var(--text-secondary);line-height:1.45}
+    .workflow-status{font-size:var(--fs-2xs);color:var(--text-secondary);line-height:1.25;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
     .workflow-status.is-busy{color:var(--accent);font-weight:var(--fw-bold)}
-    .workflow-actions{display:grid;grid-template-columns:1fr 1fr;gap:var(--sp-2)}
-    .workflow-actions .workflow-primary-action{grid-column:1 / -1}
+    .workflow-actions{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:var(--sp-1);align-items:end}
+    .workflow-actions .workflow-primary-action{grid-column:auto}
+    .workflow-actions .btn{min-height:28px;padding:0 var(--sp-2);font-size:var(--fs-xs)}
 
     /* ── VIEW TABS ──────────────────────────────────────────────────────── */
     .view-tabs{
-      display:flex;align-items:flex-start;gap:var(--sp-3);
-      overflow-x:auto;overflow-y:hidden;padding:var(--sp-3) var(--sp-5);
+      display:flex;flex-wrap:wrap;align-items:center;gap:var(--sp-1) var(--sp-3);
+      overflow-x:visible;overflow-y:visible;padding:var(--sp-1) var(--sp-3);
       border-bottom:1px solid var(--border-default);
       background:var(--bg-muted);scrollbar-width:none;-ms-overflow-style:none;
     }
     .view-tabs::-webkit-scrollbar{width:0;height:0;display:none}
-    .view-tab-group{display:flex;flex:0 0 auto;flex-direction:column;gap:var(--sp-2);min-width:max-content;max-width:100%}
-    .view-tab-group-label{display:flex;align-items:baseline;justify-content:space-between;gap:var(--sp-2);font-size:var(--fs-2xs);font-weight:var(--fw-extrabold);color:var(--text-secondary);text-transform:uppercase;letter-spacing:0}
-    .view-tab-group-label small{font-size:var(--fs-2xs);font-weight:var(--fw-medium);color:var(--text-muted);text-transform:none}
-    .view-tab-row{display:flex;flex-wrap:nowrap;gap:var(--sp-2)}
+    .view-tab-group{display:flex;align-items:center;gap:var(--sp-1);min-width:0;max-width:100%}
+    .view-tab-group-label{display:flex;align-items:center;gap:var(--sp-1);font-size:var(--fs-2xs);font-weight:var(--fw-extrabold);color:var(--text-secondary);letter-spacing:0;white-space:nowrap}
+    .view-tab-group-label small{display:none}
+    .view-tab-row{display:flex;flex-wrap:wrap;gap:var(--sp-1)}
     .view-tab{
-      display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:var(--sp-2);
-      min-width:120px;max-width:150px;min-height:36px;padding:var(--sp-2);border:1px solid var(--border-default);border-radius:var(--r-md);
+      display:grid;grid-template-columns:auto minmax(0,auto) auto;align-items:center;gap:var(--sp-1);
+      flex:0 0 auto;min-width:0;max-width:132px;min-height:26px;padding:0 var(--sp-1);border:1px solid var(--border-default);border-radius:var(--r-sm);
       background:var(--bg-surface);color:var(--text-secondary);
-      font:inherit;font-size:var(--fs-sm);font-weight:var(--fw-semibold);
+      font:inherit;font-size:var(--fs-xs);font-weight:var(--fw-semibold);
       cursor:pointer;transition:all var(--t-fast);
       position:relative;
     }
@@ -345,7 +350,7 @@
     .view-tab:focus-visible{outline:2px solid var(--accent-ring);outline-offset:2px}
     .tab-marker{
       display:inline-flex;align-items:center;justify-content:center;
-      width:28px;height:22px;border-radius:var(--r-sm);background:var(--bg-muted);
+      width:22px;height:18px;border-radius:var(--r-sm);background:var(--bg-muted);
       color:var(--text-secondary);font-size:var(--fs-2xs);font-weight:var(--fw-extrabold);
       border:1px solid var(--border-default);
     }
@@ -353,7 +358,7 @@
     .view-tab-label{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left}
     .view-tab .tab-badge{
       display:inline-flex;align-items:center;justify-content:center;
-      min-width:18px;height:18px;padding:0 4px;border-radius:var(--r-full);
+      min-width:16px;height:16px;padding:0 4px;border-radius:var(--r-full);
       background:var(--border-default);color:var(--text-secondary);
       font-size:var(--fs-2xs);font-weight:var(--fw-extrabold);
     }
@@ -365,7 +370,7 @@
     /* ── PANEL HEADER ───────────────────────────────────────────────────── */
     .panel-header{
       display:flex;align-items:center;justify-content:space-between;gap:var(--sp-4);
-      padding:var(--sp-4) var(--sp-5) var(--sp-3);border-bottom:1px solid var(--border-subtle);
+      padding:var(--sp-2) var(--sp-3);border-bottom:1px solid var(--border-subtle);
       background:var(--bg-surface);
     }
     .panel-title-group{min-width:0}
@@ -376,9 +381,10 @@
     /* ── INSIGHT CARDS (top stats) ──────────────────────────────────────── */
     .insight-strip{
       display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));
-      gap:var(--sp-2);padding:var(--sp-3) var(--sp-5);
+      gap:var(--sp-2);padding:var(--sp-2) var(--sp-3);
       border-bottom:1px solid var(--border-subtle);background:var(--bg-surface);
     }
+    .insight-strip:empty{display:none}
     .insight-tile{
       padding:var(--sp-3);border:1px solid var(--border-default);
       border-radius:var(--r-md);transition:all var(--t-base);
@@ -398,21 +404,29 @@
     /* ── STATUS BAR ─────────────────────────────────────────────────────── */
     .status-bar{
       display:flex;align-items:center;gap:var(--sp-3);flex-wrap:wrap;
-      padding:var(--sp-2) var(--sp-5);border-bottom:1px solid var(--border-subtle);
+      padding:var(--sp-1) var(--sp-3);border-bottom:1px solid var(--border-subtle);
       background:var(--bg-surface-raised);font-size:var(--fs-xs);color:var(--text-secondary);
     }
     .status-bar-divider{width:1px;height:12px;background:var(--border-default)}
+    .status-pill{
+      display:inline-flex;align-items:center;min-height:22px;max-width:100%;
+      padding:0 var(--sp-2);border:1px solid var(--border-default);border-radius:var(--r-full);
+      background:var(--bg-surface);color:var(--text-secondary);
+      font-size:var(--fs-2xs);font-weight:var(--fw-semibold);line-height:1.35;
+      overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+    }
 
     /* ── MONITOR AREA ───────────────────────────────────────────────────── */
     .monitor-panel{
-      display:grid;grid-template-columns:minmax(0,1fr) 300px;
-      gap:var(--sp-3);padding:var(--sp-3) var(--sp-5);
+      display:none;grid-template-columns:minmax(0,1fr) minmax(240px,300px);
+      gap:var(--sp-2);padding:var(--sp-2) var(--sp-3);
       border-bottom:1px solid var(--border-default);background:var(--bg-muted);
     }
-    .sync-card{padding:var(--sp-3);border:1px solid var(--border-default);border-radius:var(--r-md);background:var(--bg-surface)}
+    .monitor-panel.is-visible{display:grid}
+    .sync-card{padding:var(--sp-2);border:1px solid var(--border-default);border-radius:var(--r-md);background:var(--bg-surface)}
     .slot-panel{display:flex;flex-direction:column;gap:var(--sp-2);min-width:0}
     .monitor-stats-grid{
-      display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));
+      display:grid;grid-template-columns:repeat(auto-fit,minmax(118px,1fr));
       gap:var(--sp-2);
     }
     .stat-tile{
@@ -504,6 +518,7 @@
       max-height:clamp(340px,calc(100vh - 500px),780px);
       background:var(--bg-surface);
     }
+    .data-table-wrap.is-empty{flex:1 1 auto;max-height:none;min-height:190px}
     .data-table-wrap::-webkit-scrollbar{width:6px;height:6px}
     .data-table-wrap::-webkit-scrollbar-thumb{background:var(--border-default);border-radius:3px}
     table.data-table{width:100%;border-collapse:collapse;font-size:var(--fs-sm)}
@@ -534,17 +549,17 @@
 
     /* ── EMPTY STATE ────────────────────────────────────────────────────── */
     .empty-state{
-      display:flex;flex-direction:column;align-items:center;justify-content:center;
-      padding:var(--sp-12) var(--sp-5);text-align:center;min-height:280px;
+      display:flex;flex-direction:column;align-items:center;justify-content:flex-start;
+      padding:var(--sp-5) var(--sp-4);text-align:center;min-height:180px;
     }
     .empty-state-illustration{
-      width:72px;height:72px;border-radius:var(--r-md);
+      width:44px;height:44px;border-radius:var(--r-md);
       background:var(--bg-muted);display:flex;align-items:center;
-      justify-content:center;font-size:var(--fs-lg);font-weight:var(--fw-extrabold);margin-bottom:var(--sp-4);
+      justify-content:center;font-size:var(--fs-sm);font-weight:var(--fw-extrabold);margin-bottom:var(--sp-2);
       border:1px solid var(--border-default);
     }
     .empty-state-title{font-size:var(--fs-lg);font-weight:var(--fw-bold);color:var(--text-primary);margin-bottom:var(--sp-1)}
-    .empty-state-desc{font-size:var(--fs-sm);color:var(--text-secondary);max-width:400px;line-height:1.5;margin-bottom:var(--sp-4)}
+    .empty-state-desc{font-size:var(--fs-sm);color:var(--text-secondary);max-width:520px;line-height:1.5;margin-bottom:var(--sp-3)}
     .empty-state-actions{display:flex;flex-wrap:wrap;gap:var(--sp-2);justify-content:center}
 
     /* ── MOBILE CARDS ───────────────────────────────────────────────────── */
@@ -612,10 +627,14 @@
       background:var(--bg-surface);color:var(--text-primary);
       font:inherit;font-size:var(--fs-sm);outline:none;transition:all var(--t-base);
     }
+    .form-select{padding-right:34px;text-overflow:ellipsis}
     .form-textarea{min-height:64px;padding:var(--sp-2) var(--sp-3);resize:vertical;line-height:1.5}
     .form-input:hover,.form-select:hover,.form-textarea:hover{border-color:var(--border-hover)}
     .form-input:focus,.form-select:focus,.form-textarea:focus{border-color:var(--border-focus);box-shadow:0 0 0 3px var(--accent-ring)}
     .form-row{display:grid;grid-template-columns:1fr 1fr;gap:var(--sp-2)}
+    .form-help{font-size:var(--fs-2xs);color:var(--text-muted);line-height:1.35;margin-top:var(--sp-1)}
+    .form-group.is-disabled{opacity:.62}
+    .form-group.is-disabled .form-textarea{background:var(--bg-muted);cursor:not-allowed}
     .form-input.is-invalid,.form-select.is-invalid{border-color:var(--danger);box-shadow:0 0 0 2px rgba(220,38,38,0.15)}
     .form-feedback{font-size:var(--fs-2xs);font-weight:var(--fw-semibold)}
     .form-feedback.is-error{color:var(--danger)}
@@ -623,11 +642,12 @@
     .connection-result.is-pending{background:var(--bg-warning-soft);color:var(--warning);border-color:#fde68a}
     .connection-result.is-success{background:var(--bg-success-soft);color:var(--success);border-color:#86efac}
     .connection-result.is-error{background:var(--bg-danger-soft);color:var(--danger);border-color:#fecaca}
-    .policy-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:var(--sp-2)}
-    .policy-card{padding:var(--sp-2);border:1px solid var(--border-default);border-radius:var(--r-md);background:var(--bg-surface-raised)}
+    .policy-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--sp-2)}
+    .policy-card{min-width:0;padding:var(--sp-2);border:1px solid var(--border-default);border-radius:var(--r-md);background:var(--bg-surface-raised)}
+    .policy-card.is-wide{grid-column:1 / -1}
     .policy-label{font-size:var(--fs-2xs);color:var(--text-secondary);font-weight:var(--fw-bold);text-transform:uppercase;letter-spacing:0}
     .policy-value{font-size:var(--fs-sm);font-weight:var(--fw-bold);margin-top:2px}
-    .policy-note{font-size:var(--fs-2xs);color:var(--text-muted);margin-top:1px}
+    .policy-note{font-size:var(--fs-2xs);color:var(--text-muted);margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
     /* ── SEGMENTED CONTROL ──────────────────────────────────────────────── */
     .segmented{display:inline-flex;gap:2px;padding:2px;border:1px solid var(--border-default);border-radius:var(--r-md);background:var(--bg-muted)}
@@ -911,6 +931,8 @@
       .app-sidebar{order:2;position:static;max-height:none}
       .insight-strip{grid-template-columns:repeat(2,1fr)}
       .workflow-steps{grid-template-columns:repeat(2,minmax(0,1fr))}
+      .view-tab-group{display:grid;grid-template-columns:1fr}
+      .view-tab-group-label small{display:inline}
       .view-tab{min-width:132px}
     }
     @media(max-width:640px){
@@ -923,6 +945,7 @@
       .workflow-step-hint{display:none}
       .workflow-panel{grid-template-columns:1fr}
       .workflow-actions{min-width:0;width:100%}
+      .task-console-actions{grid-template-columns:1fr}
       .view-tabs{padding:var(--sp-2);gap:var(--sp-2)}
       .view-tab{min-width:128px;max-width:160px}
       .insight-strip{grid-template-columns:1fr}
@@ -934,6 +957,8 @@
       .monitor-panel{grid-template-columns:1fr}
       table.data-table{display:none}.mobile-cards{display:flex}
       .data-table-wrap{max-height:none;overflow:visible}
+      .data-table-wrap.is-empty{min-height:220px}
+      .empty-state{padding:var(--sp-6) var(--sp-3);min-height:220px}
       .btn{min-height:38px}.btn-sm{min-height:30px}
       .toast-container{left:var(--sp-2);right:var(--sp-2);bottom:var(--sp-2);max-width:none}
     }
@@ -963,7 +988,7 @@
           <h1>BRAIN Alpha Ops</h1>
           <div class="header-brand-subtitle">生产、检查、提交的本地工作台</div>
         </div>
-        <span id="envBadge" class="env-badge">Production</span>
+        <span id="envBadge" class="env-badge">生产环境</span>
       </div>
       <div class="header-actions">
         <div class="header-status">
@@ -974,7 +999,7 @@
         <div id="userProfile" class="text-sm text-muted">未连接</div>
         <span class="header-divider" aria-hidden="true"></span>
         <button id="themeToggleBtn" class="btn btn-icon btn-ghost btn-sm" data-action="toggle-theme" title="切换浅色/暗色主题" aria-label="切换浅色或暗色主题">
-          <span class="theme-icon-light">L</span><span class="theme-icon-dark hidden">D</span>
+          <span class="theme-icon-light">浅</span><span class="theme-icon-dark hidden">深</span>
         </button>
         <button class="btn btn-danger btn-sm" data-action="shutdown-app" title="停止本地服务">关闭</button>
       </div>
@@ -986,11 +1011,17 @@
       <aside class="app-sidebar" id="controlPanel" role="complementary" aria-label="控制面板">
         <div class="sidebar-body">
 
-          <!-- PRIMARY ACTION CARD — always visible, prominent -->
+          <!-- PRIMARY TASK CONSOLE -->
           <div class="action-card">
-            <div class="action-card-title">生产搜索</div>
-            <div class="action-card-desc">一键启动核心流程：生成候选、官方回测、评分入池，再进入达标检查。</div>
+            <div class="action-card-title">任务操作台</div>
+            <div class="action-card-desc">核心动作常驻首屏：生产、同步、检查、提交都在这里；冲突时直接显示禁用原因。</div>
             <button id="controlButton" class="btn-run" data-action="toggle-run">开始生产搜索</button>
+            <div class="task-console-actions" aria-label="核心任务操作">
+              <button id="sideSyncButton" class="btn btn-secondary btn-sm" data-action="sync-cloud">同步云端</button>
+              <button id="sideCheckButton" class="btn btn-secondary btn-sm" data-action="check-batch">检查达标</button>
+              <button id="sideSubmitButton" class="btn btn-secondary btn-sm" data-action="submit-selected">提交勾选</button>
+            </div>
+            <div id="sideTaskReason" class="task-console-reason" aria-live="polite">当前无冲突操作。</div>
             <div class="action-card-sub">
               <button class="btn btn-secondary btn-sm flex-1" data-action="scroll-main">查看结果</button>
               <button class="btn btn-secondary btn-sm flex-1" data-action="switch-view" data-view="passed">去检查</button>
@@ -1031,7 +1062,7 @@
                   </div>
                   <div class="collapsible-body">
                     <div class="form-group">
-                      <label class="form-label" for="token">Token</label>
+                      <label class="form-label" for="token">令牌 Token</label>
                       <input id="token" class="form-input" type="password" placeholder="可选：Bearer Token">
                     </div>
                     <div class="form-group">
@@ -1071,28 +1102,28 @@
                 <div class="collapsible-header" data-action="toggle-collapsible" data-target="backtestSettings" role="button" tabindex="0"><span>高级回测设置</span><span>▼</span></div>
                 <div class="collapsible-body">
                   <div class="form-row">
-                    <div class="form-group"><label class="form-label" for="region">Region</label><select id="region" class="form-select"><option>USA</option><option>CHN</option><option>EUR</option><option>GLB</option></select></div>
-                    <div class="form-group"><label class="form-label" for="universe">Universe</label><select id="universe" class="form-select"><option>TOP3000</option><option>TOP1000</option><option>TOP500</option></select></div>
+                    <div class="form-group"><label class="form-label" for="region">地区 Region</label><select id="region" class="form-select"><option>USA</option><option>CHN</option><option>EUR</option><option>GLB</option></select></div>
+                    <div class="form-group"><label class="form-label" for="universe">股票池 Universe</label><select id="universe" class="form-select"><option>TOP3000</option><option>TOP1000</option><option>TOP500</option></select></div>
                   </div>
                   <div class="form-row">
-                    <div class="form-group"><label class="form-label" for="delay">Delay</label><select id="delay" class="form-select"><option value="1">1</option><option value="0">0</option></select></div>
-                    <div class="form-group"><label class="form-label" for="neutralization">Neutralization</label><select id="neutralization" class="form-select"><option>SUBINDUSTRY</option><option>INDUSTRY</option><option>SECTOR</option><option>MARKET</option><option>NONE</option></select></div>
+                    <div class="form-group"><label class="form-label" for="delay">延迟 Delay</label><select id="delay" class="form-select"><option value="1">1</option><option value="0">0</option></select></div>
+                    <div class="form-group"><label class="form-label" for="neutralization">中性化 Neutralization</label><select id="neutralization" class="form-select"><option>SUBINDUSTRY</option><option>INDUSTRY</option><option>SECTOR</option><option>MARKET</option><option>NONE</option></select></div>
                   </div>
                   <div class="form-row">
-                    <div class="form-group"><label class="form-label" for="instrumentType">Instrument Type</label><select id="instrumentType" class="form-select"><option>EQUITY</option></select></div>
-                    <div class="form-group"><label class="form-label" for="alphaType">Alpha Type</label><select id="alphaType" class="form-select"><option>REGULAR</option><option>POWER_POOL</option><option>ATOM</option><option>PYRAMID</option></select></div>
+                    <div class="form-group"><label class="form-label" for="instrumentType">工具类型 Instrument Type</label><select id="instrumentType" class="form-select"><option>EQUITY</option></select></div>
+                    <div class="form-group"><label class="form-label" for="alphaType">Alpha 类型</label><select id="alphaType" class="form-select"><option>REGULAR</option><option>POWER_POOL</option><option>ATOM</option><option>PYRAMID</option></select></div>
                   </div>
                   <div class="form-row">
-                    <div class="form-group"><label class="form-label" for="decay">Decay</label><input id="decay" class="form-input" type="number" min="0" step="1" value="10"></div>
-                    <div class="form-group"><label class="form-label" for="truncation">Truncation</label><input id="truncation" class="form-input" type="number" min="0" max="1" step="0.01" value="0.05"></div>
+                    <div class="form-group"><label class="form-label" for="decay">衰减 Decay</label><input id="decay" class="form-input" type="number" min="0" step="1" value="10"></div>
+                    <div class="form-group"><label class="form-label" for="truncation">截断 Truncation</label><input id="truncation" class="form-input" type="number" min="0" max="1" step="0.01" value="0.05"></div>
                   </div>
                   <div class="form-row">
-                    <div class="form-group"><label class="form-label" for="pasteurization">Pasteurization</label><select id="pasteurization" class="form-select"><option>ON</option><option>OFF</option></select></div>
-                    <div class="form-group"><label class="form-label" for="nanHandling">NaN Handling</label><select id="nanHandling" class="form-select"><option>ON</option><option>OFF</option></select></div>
+                    <div class="form-group"><label class="form-label" for="pasteurization">净化 Pasteurization</label><select id="pasteurization" class="form-select"><option>ON</option><option>OFF</option></select></div>
+                    <div class="form-group"><label class="form-label" for="nanHandling">缺失值 NaN Handling</label><select id="nanHandling" class="form-select"><option>ON</option><option>OFF</option></select></div>
                   </div>
                   <div class="form-row">
-                    <div class="form-group"><label class="form-label" for="unitHandling">Unit Handling</label><select id="unitHandling" class="form-select"><option>VERIFY</option><option>RAW</option></select></div>
-                    <div class="form-group"><label class="form-label" for="language">Language</label><select id="language" class="form-select"><option>FASTEXPR</option></select></div>
+                    <div class="form-group"><label class="form-label" for="unitHandling">单位处理 Unit Handling</label><select id="unitHandling" class="form-select"><option>VERIFY</option><option>RAW</option><option>NONE</option></select></div>
+                    <div class="form-group"><label class="form-label" for="language">语言 Language</label><select id="language" class="form-select"><option>FASTEXPR</option></select></div>
                   </div>
                 </div>
               </div>
@@ -1127,17 +1158,17 @@
               <span class="sbar-chevron">▼</span>
             </div>
             <div class="sbar-section-body">
-              <label class="toggle" title="启用后，生产循环会读取最近一次可用 Assistant Guidance 作为候选生成偏好。">
+              <label class="toggle" title="启用后，生产循环会读取最近一次可用助手指导作为候选生成偏好。">
                 <input id="useAssistantGuidance" type="checkbox" checked>
-                <span>Assistant Guidance</span>
+                <span>助手指导</span>
               </label>
               <div class="form-group">
-                <label class="form-label" for="assistantGuidanceMinConfidence">Guidance 最低置信度</label>
+                <label class="form-label" for="assistantGuidanceMinConfidence">指导最低置信度</label>
                 <input id="assistantGuidanceMinConfidence" class="form-input" type="number" min="0" max="1" step="0.05" value="0.6">
               </div>
               <label class="toggle" title="启用后，历史表现强/弱的 guidance 会对本地排序分做小幅可审计调整。">
                 <input id="assistantGuidanceScoreAdjustment" type="checkbox" checked>
-                <span>Guidance 排序微调</span>
+                <span>指导排序微调</span>
               </label>
               <div class="form-row">
                 <div class="form-group"><label class="form-label" for="assistantGuidanceScoreMinConfidence">排序最低置信度</label><input id="assistantGuidanceScoreMinConfidence" class="form-input" type="number" min="0" max="1" step="0.05" value="0.6"></div>
@@ -1148,12 +1179,13 @@
                 <div class="form-group"><label class="form-label" for="assistantGuidanceScorePenaltyCap">扣分上限</label><input id="assistantGuidanceScorePenaltyCap" class="form-input" type="number" min="0" max="10" step="0.5" value="5"></div>
               </div>
               <label class="toggle" title="启用后，本地候选生成会加载配置中的策略插件。">
-                <input id="strategyPluginsEnabled" type="checkbox">
-                <span>Strategy Plugins</span>
+                <input id="strategyPluginsEnabled" type="checkbox" data-change-action="toggle-strategy-plugins">
+                <span>策略插件</span>
               </label>
-              <div class="form-group">
-                <label class="form-label" for="strategyPluginSpecs">Plugin Specs</label>
-                <textarea id="strategyPluginSpecs" class="form-textarea" rows="2" placeholder="module.path:PluginClass"></textarea>
+              <div class="form-group" id="strategyPluginSpecsGroup">
+                <label class="form-label" for="strategyPluginSpecs">插件规格</label>
+                <textarea id="strategyPluginSpecs" class="form-textarea" rows="2" placeholder="开启策略插件后填写 module.path:PluginClass"></textarea>
+                <div class="form-help" id="strategyPluginSpecsHelp">未启用策略插件时不会加载插件；启用后每行填写一个 module.path:PluginClass。</div>
               </div>
               <div id="strategyText" class="text-sm strategy-text">正在读取配置...</div>
             </div>
@@ -1230,9 +1262,9 @@
 
         <!-- Status Bar -->
         <div class="status-bar" id="statusBar">
-          <span id="redlineSummary">红线验证加载中...</span>
+          <span id="redlineSummary" class="status-pill">红线验证加载中...</span>
           <span class="status-bar-divider" aria-hidden="true"></span>
-          <span id="checkpointSummary">断点加载中...</span>
+          <span id="checkpointSummary" class="status-pill">断点加载中...</span>
         </div>
 
         <!-- Charts Panel -->
@@ -1247,7 +1279,7 @@
         </div>
 
         <!-- Monitor Section -->
-        <div class="monitor-panel">
+        <div class="monitor-panel" id="monitorPanel">
           <div>
             <div id="opsMonitor" class="monitor-stats-grid hidden"></div>
             <div id="summary" class="hidden"></div>
@@ -1294,7 +1326,7 @@
             <div class="progress mt-sm"><div id="checkProgressFill" class="progress-fill is-empty"></div></div>
             <div id="checkProgressMeta" class="progress-meta">进度：0%</div>
             <div id="assistantGenerateInputs" class="assistant-generate-inputs hidden">
-              <div class="form-group"><label class="form-label" for="assistantResponseInput">Assistant JSON</label><textarea id="assistantResponseInput" class="form-textarea" rows="2" placeholder="粘贴外部 LLM 返回的 JSON；留空则仅使用本地 Research Memory"></textarea></div>
+              <div class="form-group"><label class="form-label" for="assistantResponseInput">助手 JSON</label><textarea id="assistantResponseInput" class="form-textarea" rows="2" placeholder="粘贴外部 LLM 返回的 JSON；留空则仅使用本地研究记忆"></textarea></div>
               <div class="form-group"><label class="form-label" for="assistantCandidateCount">数量</label><input id="assistantCandidateCount" class="form-input" type="number" min="1" max="100" step="1" value="10"></div>
               <div class="form-group"><label class="form-label" for="assistantMinConfidence">置信度</label><input id="assistantMinConfidence" class="form-input" type="number" min="0" max="1" step="0.05" value="0.6"></div>
             </div>
@@ -1309,7 +1341,7 @@
             <button id="submitSelectedButton" class="btn btn-primary btn-sm hidden" data-action="submit-selected">提交勾选</button>
             <button id="assistantUseDraftButton" class="btn btn-secondary btn-sm hidden" data-action="assistant-use-draft">离线草稿</button>
             <button id="assistantSaveDraftButton" class="btn btn-secondary btn-sm hidden" data-action="assistant-save-draft">保存草稿</button>
-            <button id="assistantUseLatestButton" class="btn btn-secondary btn-sm hidden" data-action="assistant-use-latest">使用 Guidance</button>
+            <button id="assistantUseLatestButton" class="btn btn-secondary btn-sm hidden" data-action="assistant-use-latest">使用指导</button>
             <button id="assistantPreviewGuidanceButton" class="btn btn-secondary btn-sm hidden" data-action="assistant-preview-guidance">预览</button>
             <button id="assistantSaveGuidanceButton" class="btn btn-secondary btn-sm hidden" data-action="assistant-save-guidance">保存</button>
             <button id="assistantGenerateButton" class="btn btn-primary btn-sm hidden" data-action="assistant-generate-candidates">生成候选</button>
@@ -3783,7 +3815,10 @@
     'passed', 'submittable', 'submitted', 'failed',
   ];
   var DATA_VIEWS = ['cloud', 'lifecycle'];
-  var RESEARCH_VIEWS = ['research_memory', 'research_knowledge', 'research_observability', 'prompt_runs', 'sqlite_indexes', 'robustness'];
+  var RESEARCH_VIEWS = [
+    'research_memory', 'research_knowledge', 'research_observability',
+    'prompt_runs', 'sqlite_indexes', 'robustness',
+  ];
 
   var ViewRegistry = {
     VIEW_ORDER: WORKFLOW_VIEWS.concat(DATA_VIEWS, RESEARCH_VIEWS),
@@ -3796,12 +3831,22 @@
       { label: '研究工具', hint: '记忆、知识与验证', views: RESEARCH_VIEWS },
     ],
     VIEW_TITLES: {
-      candidates: '候选池', pending_backtest: '等待回测', running_backtest: '回测中',
-      backtest_rework: '二次融合', passed: '达标', submittable: '可提交',
-      submitted: '已提交', failed: '不达标', cloud: '云端数据', lifecycle: '生命周期',
-      research_memory: 'Research Memory', research_observability: 'Observability',
-      research_knowledge: 'Knowledge Base', prompt_runs: 'Prompt Ledger',
-      sqlite_indexes: 'SQLite Index', robustness: 'Robustness',
+      candidates: '候选池',
+      pending_backtest: '等待回测',
+      running_backtest: '回测中',
+      backtest_rework: '二次融合',
+      passed: '达标',
+      submittable: '可提交',
+      submitted: '已提交',
+      failed: '不达标',
+      cloud: '云端数据',
+      lifecycle: '生命周期',
+      research_memory: '研究记忆',
+      research_observability: '可观测性',
+      research_knowledge: '知识库',
+      prompt_runs: '提示账本',
+      sqlite_indexes: 'SQLite 索引',
+      robustness: '稳健性',
     },
     VIEW_ICONS: {
       candidates: '01', pending_backtest: '02', running_backtest: '03',
@@ -3812,18 +3857,18 @@
     },
     VIEW_HINTS: {
       candidates: '按排序分降序展示核心候选池。',
-      pending_backtest: '等待回测按排队顺序展示。',
+      pending_backtest: '等待回测的 Alpha 按排队顺序展示。',
       running_backtest: '正在等待官方回测结果返回。',
       backtest_rework: '回测失败或需要二次融合的 Alpha。',
       passed: '达标 Alpha 可批量检查后提交。',
-      submittable: '检查通过且在有效期内的 Alpha，可直接提交。',
+      submittable: '检查通过且仍在有效期内的 Alpha，可直接提交。',
       submitted: '已提交和云端已提交记录。',
       failed: '不达标、拒绝和阻断记录。',
       cloud: '云端快照和缓存统计。',
       lifecycle: '关键生命周期事件追踪。',
-      research_memory: '本地 JSONL research memory。',
+      research_memory: '本地 JSONL 研究记忆。',
       research_knowledge: '结构化规则和发现。',
-      research_observability: '可观测性快照。',
+      research_observability: '研究链路可观测快照。',
       prompt_runs: 'Prompt 运行账本。',
       sqlite_indexes: 'SQLite 缓存状态。',
       robustness: '反过拟合和滚动验证状态。',
@@ -4174,10 +4219,12 @@
       var columns = deps.getColumnsForView ? deps.getColumnsForView(view) : [];
       var tableBody = $('candidateRows');
       var emptyEl = document.getElementById('tableEmptyState');
+      var tableWrap = document.getElementById('tableWrap');
       var tableEl = document.getElementById('candidateTable');
       var mobileEl = document.getElementById('mobileCardList');
       if (!rows.length) {
         if (tableBody) tableBody.innerHTML = '';
+        if (tableWrap) tableWrap.classList.add('is-empty');
         if (tableEl) tableEl.classList.add('hidden');
         if (mobileEl) mobileEl.classList.add('hidden');
         if (emptyEl) {
@@ -4188,6 +4235,7 @@
         updateSortHint(view);
         return;
       }
+      if (tableWrap) tableWrap.classList.remove('is-empty');
       if (emptyEl) emptyEl.classList.add('hidden');
       if (tableEl) tableEl.classList.remove('hidden');
       var displayRows = rows.slice(0, maxRows);
@@ -4260,7 +4308,7 @@
         pending_backtest: '当前没有排队回测项。新的候选进入官方模拟前会显示在这里。',
         running_backtest: '当前没有正在等待官方结果的回测。运行中的槽位会实时更新。',
         backtest_rework: '没有需要返工的 Alpha。失败或被拒绝的回测会集中到这里。',
-        passed: '还没有达到提交门槛的 Alpha。生产任务产生达标项后，可以在这里发起官方预提交检查。',
+        passed: '还没有达到提交门槛的 Alpha。生产任务产生达标项后，可在这里发起官方预提交检查。',
         submittable: '没有处于有效检查期内的 Alpha。请先在达标视图执行快速或全部检查。',
         submitted: '当前没有本地提交记录。提交成功后会自动刷新检查状态。',
         failed: '当前没有失败、拒绝或被阻断的 Alpha。',
@@ -4368,7 +4416,7 @@
       el.checked = Boolean(value);
       return;
     }
-    el.value = value;
+    el.value = String(value);
   }
 
   function connectionPayload() {
@@ -4381,6 +4429,7 @@
   }
 
   function collectPayload() {
+    var alphaType = fieldValue('alphaType');
     return {
       environment: 'production',
       username: fieldValue('username'),
@@ -4388,13 +4437,14 @@
       token: fieldValue('token'),
       baseUrl: fieldValue('baseUrl'),
       preset: fieldValue('preset'),
+      autoSubmit: checkedValue('autoSubmitToggle'),
       settings: {
         region: fieldValue('region'),
         universe: fieldValue('universe'),
         delay: numericValue('delay', 1),
         neutralization: fieldValue('neutralization'),
         instrumentType: fieldValue('instrumentType'),
-        alphaType: fieldValue('alphaType'),
+        type: alphaType,
         decay: numericValue('decay', 0),
         truncation: numericValue('truncation', 0),
         pasteurization: fieldValue('pasteurization'),
@@ -4402,11 +4452,16 @@
         unitHandling: fieldValue('unitHandling'),
         language: fieldValue('language'),
       },
-      use_assistant_guidance: checkedValue('useAssistantGuidance'),
-      assistant_guidance_min_confidence: numericValue('assistantGuidanceMinConfidence', 0.6),
-      assistant_guidance_score_adjustment: checkedValue('assistantGuidanceScoreAdjustment'),
-      assistant_guidance_score_min_confidence: numericValue('assistantGuidanceScoreMinConfidence', 0.6),
-      strategy_plugins_enabled: checkedValue('strategyPluginsEnabled'),
+      syncRange: fieldValue('syncRange'),
+      useAssistantGuidance: checkedValue('useAssistantGuidance'),
+      assistantGuidanceMinConfidence: numericValue('assistantGuidanceMinConfidence', 0.6),
+      assistantGuidanceScoreAdjustment: checkedValue('assistantGuidanceScoreAdjustment'),
+      assistantGuidanceScoreMinConfidence: numericValue('assistantGuidanceScoreMinConfidence', 0.6),
+      assistantGuidanceScoreMinOutcomeCount: numericValue('assistantGuidanceScoreMinOutcomeCount', 1),
+      assistantGuidanceScoreBonusCap: numericValue('assistantGuidanceScoreBonusCap', 4),
+      assistantGuidanceScorePenaltyCap: numericValue('assistantGuidanceScorePenaltyCap', 5),
+      strategyPluginsEnabled: checkedValue('strategyPluginsEnabled'),
+      strategyPluginSpecs: fieldValue('strategyPluginSpecs'),
     };
   }
 
@@ -4416,18 +4471,41 @@
     var settings = preset.settings;
     [
       'region', 'universe', 'delay', 'neutralization', 'instrumentType',
-      'alphaType', 'decay', 'truncation', 'pasteurization', 'nanHandling',
+      'decay', 'truncation', 'pasteurization', 'nanHandling',
       'unitHandling', 'language',
     ].forEach(function (id) { setControlValue(id, settings[id]); });
+    setControlValue('alphaType', settings.type || settings.alphaType);
     return true;
   }
 
   function applyConfig(config) {
     var ops = (config || {}).ops || {};
+    var officialApi = ops.official_api || {};
+    var settings = ops.settings || {};
     var budget = ops.budget || {};
-    setControlValue('useAssistantGuidance', budget.assistant_guidance_enabled !== false);
-    setControlValue('assistantGuidanceScoreAdjustment', budget.assistant_guidance_score_adjustment !== false);
+    var scoring = ops.scoring || {};
+    [
+      'region', 'universe', 'delay', 'neutralization', 'instrumentType',
+      'decay', 'truncation', 'pasteurization', 'nanHandling',
+      'unitHandling', 'language',
+    ].forEach(function (id) { setControlValue(id, settings[id]); });
+    setControlValue('alphaType', settings.type || settings.alphaType);
+    setControlValue('environment', (config || {}).environment || 'production');
+    setControlValue('baseUrl', officialApi.base_url);
+    setControlValue('autoSubmitToggle', Boolean((config || {}).auto_submit));
+    setControlValue('syncRange', budget.cloud_sync_range);
+    setControlValue('useAssistantGuidance', budget.use_assistant_guidance !== false);
+    setControlValue('assistantGuidanceMinConfidence', budget.assistant_guidance_min_confidence);
+    setControlValue('assistantGuidanceScoreAdjustment', scoring.assistant_guidance_score_adjustment_enabled !== false);
+    setControlValue('assistantGuidanceScoreMinConfidence', scoring.assistant_guidance_score_min_confidence);
+    setControlValue('assistantGuidanceScoreMinOutcomeCount', scoring.assistant_guidance_score_min_outcome_count);
+    setControlValue('assistantGuidanceScoreBonusCap', scoring.assistant_guidance_score_bonus_cap);
+    setControlValue('assistantGuidanceScorePenaltyCap', scoring.assistant_guidance_score_penalty_cap);
     setControlValue('strategyPluginsEnabled', Boolean(budget.strategy_plugins_enabled));
+    setControlValue(
+      'strategyPluginSpecs',
+      Array.isArray(budget.strategy_plugin_specs) ? budget.strategy_plugin_specs.join('\n') : budget.strategy_plugin_specs
+    );
   }
 
   window.FormControls = {
@@ -4438,6 +4516,78 @@
     fieldValue: fieldValue,
     numericValue: numericValue,
     setControlValue: setControlValue,
+  };
+})();
+
+</script>
+  <script>
+// brain_alpha_ops/web/js/strategy-panel.js
+// Strategy policy summary and plugin-control state.
+(function () {
+  'use strict';
+
+  var Utils = window.Utils;
+  var $ = Utils.$;
+  var esc = Utils.escapeHtml;
+  var escapeAttr = Utils.escapeAttr;
+
+  function syncPluginControls() {
+    var enabled = Boolean(($('strategyPluginsEnabled') || {}).checked);
+    var group = $('strategyPluginSpecsGroup');
+    var specs = $('strategyPluginSpecs');
+    var help = $('strategyPluginSpecsHelp');
+    if (group) group.classList.toggle('is-disabled', !enabled);
+    if (specs) {
+      specs.disabled = !enabled;
+      specs.setAttribute('aria-disabled', String(!enabled));
+      specs.placeholder = enabled ? 'module.path:PluginClass，每行一个' : '开启策略插件后填写 module.path:PluginClass';
+    }
+    if (help) help.textContent = enabled
+      ? '每行填写一个 module.path:PluginClass，保存配置后下一轮生产会加载。'
+      : '未启用策略插件时不会加载插件；启用后每行填写一个 module.path:PluginClass。';
+  }
+
+  function renderPolicy(config) {
+    var target = $('strategyText');
+    if (!target) return;
+    var ops = (config || {}).ops || {};
+    var budget = ops.budget || {};
+    var slotLimits = [
+      Number(budget.official_backtest_batch_size) || 3,
+      Number(budget.max_official_simulations_per_cycle) || 3,
+      Number(budget.max_official_concurrent_simulations) || 3,
+    ].filter(function (v) { return Number.isFinite(v) && v > 0; });
+    var slotLimit = Math.max(1, Math.round(Math.min.apply(Math, slotLimits)));
+    if ($('slotPolicyText')) $('slotPolicyText').textContent = slotLimit + ' 槽';
+    var runForever = Boolean(budget.run_forever);
+    var pluginSpecs = Array.isArray(budget.strategy_plugin_specs) ? budget.strategy_plugin_specs : [];
+    var items = [
+      { label: '候选上限', value: (budget.max_candidates_per_cycle || 20) + ' / 轮', note: '每轮最多生成并评分的候选数' },
+      { label: '池容量', value: (budget.retained_alpha_pool_size || 10), note: '本地候选池保留上限' },
+      { label: '回测槽位', value: slotLimit + ' 并发槽', note: '批量 ' + (budget.official_backtest_batch_size || 3) },
+      { label: '连续生产', value: runForever ? '开启' : '单轮', note: runForever ? '持续生产' : '单轮后停止' },
+      {
+        label: '策略插件',
+        value: budget.strategy_plugins_enabled ? ('开启 | ' + pluginSpecs.length + ' 条') : '关闭',
+        note: budget.strategy_plugins_enabled
+          ? (pluginSpecs.length ? pluginSpecs.join(', ') : '已开启，未配置插件规格')
+          : '关闭时不会加载插件规格',
+        className: 'is-wide',
+      },
+    ];
+    target.innerHTML = '<div class="policy-grid">' +
+      items.map(function (item) {
+        return '<div class="policy-card' + (item.className ? ' ' + escapeAttr(item.className) : '') + '">' +
+          '<div class="policy-label">' + esc(item.label) + '</div>' +
+          '<div class="policy-value">' + esc(String(item.value)) + '</div>' +
+          '<div class="policy-note">' + esc(item.note) + '</div>' +
+          '</div>';
+      }).join('') + '</div>';
+  }
+
+  window.StrategyPanel = {
+    renderPolicy: renderPolicy,
+    syncPluginControls: syncPluginControls,
   };
 })();
 
@@ -4650,6 +4800,7 @@
   var ViewRenderers = window.ViewRenderers;
   var ResultState = window.ResultState;
   var FormControls = window.FormControls;
+  var StrategyPanel = window.StrategyPanel || {};
   var candidateIdentity = VM.candidateIdentity;
   window.$ = $;
   var VIEW_ORDER = Registry.VIEW_ORDER;
@@ -4674,6 +4825,7 @@
     else if (el.dataset.defaultTitle) el.setAttribute('title', el.dataset.defaultTitle);
     else el.removeAttribute('title');
   }
+  function syncStrategyPluginControls() { if (StrategyPanel.syncPluginControls) StrategyPanel.syncPluginControls(); }
   window.operationBlockReason = function (action) {
     var running = Boolean(S.get('isRunning'));
     switch (action) {
@@ -4700,16 +4852,27 @@
     setControlState('workflowRunButton', Boolean(prodReason), prodReason);
     setControlState('syncButton', Boolean(syncReason), syncReason);
     setControlState('workflowSyncButton', Boolean(syncReason), syncReason);
+    setControlState('sideSyncButton', Boolean(syncReason), syncReason);
     var syncRange = $('syncRange'); if (syncRange) syncRange.disabled = Boolean(syncReason);
     setControlState('checkButton', Boolean(checkReason) || Boolean(batchCheckJobId()), checkReason);
     setControlState('workflowCheckButton', Boolean(checkReason) || Boolean(batchCheckJobId()), checkReason || (batchCheckJobId() ? '达标检查正在进行。' : ''));
+    setControlState('sideCheckButton', Boolean(checkReason) || Boolean(batchCheckJobId()), checkReason || (batchCheckJobId() ? '达标检查正在进行。' : ''));
     var submitBtn = $('submitSelectedButton');
     if (submitBtn) { var selectedCount = selectedSubmitCount(); var sReason = submitReason || !selectedCount ? (selectedCount ? submitReason : '请先选择要提交的 Alpha') : ''; submitBtn.disabled = Boolean(sReason); if (sReason) submitBtn.setAttribute('title', sReason); }
     var railSubmitBtn = $('workflowSubmitButton');
     if (railSubmitBtn) { var railSelectedCount = selectedSubmitCount(); var railReason = submitReason || !railSelectedCount ? (railSelectedCount ? submitReason : '请先在达标或可提交视图选择 Alpha') : ''; railSubmitBtn.disabled = Boolean(railReason); railSubmitBtn.setAttribute('aria-disabled', Boolean(railReason)); if (railReason) railSubmitBtn.setAttribute('title', railReason); else railSubmitBtn.removeAttribute('title'); }
+    var sideSubmitBtn = $('sideSubmitButton');
+    if (sideSubmitBtn) { var sideSelectedCount = selectedSubmitCount(); var sideSubmitReason = submitReason || !sideSelectedCount ? (sideSelectedCount ? submitReason : '请先在达标或可提交视图选择 Alpha') : ''; sideSubmitBtn.disabled = Boolean(sideSubmitReason); sideSubmitBtn.setAttribute('aria-disabled', Boolean(sideSubmitReason)); if (sideSubmitReason) sideSubmitBtn.setAttribute('title', sideSubmitReason); else sideSubmitBtn.removeAttribute('title'); }
     var autoSubmit = $('autoSubmitToggle'); if (autoSubmit) autoSubmit.disabled = Boolean(submitReason || batchCheckJobId() || submitInFlight());
     var guard = $('operationGuard');
     if (guard) { var msg = currentOperationText(); guard.textContent = msg; guard.classList.toggle('hidden', !msg); }
+    var sideReason = $('sideTaskReason');
+    if (sideReason) {
+      var reasonText = currentOperationText() || (selectedSubmitCount() ? '已选择 ' + selectedSubmitCount() + ' 个 Alpha，可提交。' : '当前无冲突操作。');
+      sideReason.textContent = reasonText;
+      sideReason.classList.toggle('is-blocked', Boolean(currentOperationText()));
+    }
+    syncStrategyPluginControls();
     renderTaskRail();
   };
   function currentSummary() { return S.get('currentResult.summary') || {}; }
@@ -4753,7 +4916,7 @@
     var prodNote = $('productionNote');
     if (prodNote) prodNote.classList.remove('hidden');
     var envBadge = $('envBadge');
-    if (envBadge) envBadge.textContent = 'Production';
+    if (envBadge) envBadge.textContent = '生产环境';
     window.renderBusyControls();
   };
   function renderViewTabs() {
@@ -4937,36 +5100,7 @@
     state: S,
   });
   function updatePanelHeader() { resultTable.updatePanelHeader(); }
-  window.renderStrategyPolicy = function (config) {
-    var target = $('strategyText');
-    if (!target) return;
-    var ops = (config || {}).ops || {};
-    var budget = ops.budget || {};
-    var slotLimits = [
-      Number(budget.official_backtest_batch_size) || 3,
-      Number(budget.max_official_simulations_per_cycle) || 3,
-      Number(budget.max_official_concurrent_simulations) || 3,
-    ].filter(function (v) { return Number.isFinite(v) && v > 0; });
-    var slotLimit = Math.max(1, Math.round(Math.min.apply(Math, slotLimits)));
-    if ($('slotPolicyText')) $('slotPolicyText').textContent = slotLimit + ' 槽';
-    var runForever = Boolean(budget.run_forever);
-    var pluginSpecs = Array.isArray(budget.strategy_plugin_specs) ? budget.strategy_plugin_specs : [];
-    var items = [
-      { label: '候选上限', value: (budget.max_candidates_per_cycle || 20) + ' / 轮', note: '每轮最多生成并评分的候选数' },
-      { label: '池容量', value: (budget.retained_alpha_pool_size || 10), note: '本地候选池保留上限' },
-      { label: '回测槽位', value: slotLimit + ' 并发槽', note: '批量 ' + (budget.official_backtest_batch_size || 3) },
-      { label: '连续生产', value: runForever ? '开启' : '单轮', note: runForever ? '持续生产' : '单轮后停止' },
-      { label: 'Strategy Plugins', value: budget.strategy_plugins_enabled ? ('On | ' + pluginSpecs.length + ' specs') : 'Off', note: pluginSpecs.length ? pluginSpecs.join(', ') : '-' },
-    ];
-    target.innerHTML = '<div class="policy-grid">' +
-      items.map(function (item) {
-        return '<div class="policy-card">' +
-          '<div class="policy-label">' + esc(item.label) + '</div>' +
-          '<div class="policy-value">' + esc(String(item.value)) + '</div>' +
-          '<div class="policy-note">' + esc(item.note) + '</div>' +
-          '</div>';
-      }).join('') + '</div>';
-  };
+  window.renderStrategyPolicy = function (config) { if (StrategyPanel.renderPolicy) StrategyPanel.renderPolicy(config); };
   function renderResult(result) {
     S.setBatch(ResultState.buildResultBatch(result, {
       currentBacktests: currentBacktests(),
@@ -5169,6 +5303,9 @@
       case 'handle-auto-submit-toggle':
         invokeWindowAction('handleAutoSubmitToggle');
         break;
+      case 'toggle-strategy-plugins':
+        syncStrategyPluginControls();
+        break;
     }
   }
   function handlePageInput(event) {
@@ -5315,11 +5452,13 @@
         S.set('config', data.config);
         if (typeof window.renderStrategyPolicy === 'function') window.renderStrategyPolicy(data.config);
         FormControls.applyConfig(data.config);
+        syncStrategyPluginControls();
       }
     } catch (e) {}
   };
   window.applyPreset = function () {
     FormControls.applyPreset(presets);
+    syncStrategyPluginControls();
   };
   async function loadPresets() {
     try { var data = await Api.get('/api/presets'); if (data && data.presets) presets = data.presets; } catch (e) {}
@@ -5355,6 +5494,8 @@
       if (results[1] && results[1].config) {
         S.set('config', results[1].config);
         if (typeof window.renderStrategyPolicy === 'function') window.renderStrategyPolicy(results[1].config);
+        FormControls.applyConfig(results[1].config);
+        syncStrategyPluginControls();
       }
     } catch (e) { /* ignore */ }
     loadProfile();

@@ -15,6 +15,7 @@
   var ViewRenderers = window.ViewRenderers;
   var ResultState = window.ResultState;
   var FormControls = window.FormControls;
+  var StrategyPanel = window.StrategyPanel || {};
   var candidateIdentity = VM.candidateIdentity;
   window.$ = $;
   var VIEW_ORDER = Registry.VIEW_ORDER;
@@ -39,6 +40,7 @@
     else if (el.dataset.defaultTitle) el.setAttribute('title', el.dataset.defaultTitle);
     else el.removeAttribute('title');
   }
+  function syncStrategyPluginControls() { if (StrategyPanel.syncPluginControls) StrategyPanel.syncPluginControls(); }
   window.operationBlockReason = function (action) {
     var running = Boolean(S.get('isRunning'));
     switch (action) {
@@ -65,16 +67,27 @@
     setControlState('workflowRunButton', Boolean(prodReason), prodReason);
     setControlState('syncButton', Boolean(syncReason), syncReason);
     setControlState('workflowSyncButton', Boolean(syncReason), syncReason);
+    setControlState('sideSyncButton', Boolean(syncReason), syncReason);
     var syncRange = $('syncRange'); if (syncRange) syncRange.disabled = Boolean(syncReason);
     setControlState('checkButton', Boolean(checkReason) || Boolean(batchCheckJobId()), checkReason);
     setControlState('workflowCheckButton', Boolean(checkReason) || Boolean(batchCheckJobId()), checkReason || (batchCheckJobId() ? '达标检查正在进行。' : ''));
+    setControlState('sideCheckButton', Boolean(checkReason) || Boolean(batchCheckJobId()), checkReason || (batchCheckJobId() ? '达标检查正在进行。' : ''));
     var submitBtn = $('submitSelectedButton');
     if (submitBtn) { var selectedCount = selectedSubmitCount(); var sReason = submitReason || !selectedCount ? (selectedCount ? submitReason : '请先选择要提交的 Alpha') : ''; submitBtn.disabled = Boolean(sReason); if (sReason) submitBtn.setAttribute('title', sReason); }
     var railSubmitBtn = $('workflowSubmitButton');
     if (railSubmitBtn) { var railSelectedCount = selectedSubmitCount(); var railReason = submitReason || !railSelectedCount ? (railSelectedCount ? submitReason : '请先在达标或可提交视图选择 Alpha') : ''; railSubmitBtn.disabled = Boolean(railReason); railSubmitBtn.setAttribute('aria-disabled', Boolean(railReason)); if (railReason) railSubmitBtn.setAttribute('title', railReason); else railSubmitBtn.removeAttribute('title'); }
+    var sideSubmitBtn = $('sideSubmitButton');
+    if (sideSubmitBtn) { var sideSelectedCount = selectedSubmitCount(); var sideSubmitReason = submitReason || !sideSelectedCount ? (sideSelectedCount ? submitReason : '请先在达标或可提交视图选择 Alpha') : ''; sideSubmitBtn.disabled = Boolean(sideSubmitReason); sideSubmitBtn.setAttribute('aria-disabled', Boolean(sideSubmitReason)); if (sideSubmitReason) sideSubmitBtn.setAttribute('title', sideSubmitReason); else sideSubmitBtn.removeAttribute('title'); }
     var autoSubmit = $('autoSubmitToggle'); if (autoSubmit) autoSubmit.disabled = Boolean(submitReason || batchCheckJobId() || submitInFlight());
     var guard = $('operationGuard');
     if (guard) { var msg = currentOperationText(); guard.textContent = msg; guard.classList.toggle('hidden', !msg); }
+    var sideReason = $('sideTaskReason');
+    if (sideReason) {
+      var reasonText = currentOperationText() || (selectedSubmitCount() ? '已选择 ' + selectedSubmitCount() + ' 个 Alpha，可提交。' : '当前无冲突操作。');
+      sideReason.textContent = reasonText;
+      sideReason.classList.toggle('is-blocked', Boolean(currentOperationText()));
+    }
+    syncStrategyPluginControls();
     renderTaskRail();
   };
   function currentSummary() { return S.get('currentResult.summary') || {}; }
@@ -118,7 +131,7 @@
     var prodNote = $('productionNote');
     if (prodNote) prodNote.classList.remove('hidden');
     var envBadge = $('envBadge');
-    if (envBadge) envBadge.textContent = 'Production';
+    if (envBadge) envBadge.textContent = '生产环境';
     window.renderBusyControls();
   };
   function renderViewTabs() {
@@ -302,36 +315,7 @@
     state: S,
   });
   function updatePanelHeader() { resultTable.updatePanelHeader(); }
-  window.renderStrategyPolicy = function (config) {
-    var target = $('strategyText');
-    if (!target) return;
-    var ops = (config || {}).ops || {};
-    var budget = ops.budget || {};
-    var slotLimits = [
-      Number(budget.official_backtest_batch_size) || 3,
-      Number(budget.max_official_simulations_per_cycle) || 3,
-      Number(budget.max_official_concurrent_simulations) || 3,
-    ].filter(function (v) { return Number.isFinite(v) && v > 0; });
-    var slotLimit = Math.max(1, Math.round(Math.min.apply(Math, slotLimits)));
-    if ($('slotPolicyText')) $('slotPolicyText').textContent = slotLimit + ' 槽';
-    var runForever = Boolean(budget.run_forever);
-    var pluginSpecs = Array.isArray(budget.strategy_plugin_specs) ? budget.strategy_plugin_specs : [];
-    var items = [
-      { label: '候选上限', value: (budget.max_candidates_per_cycle || 20) + ' / 轮', note: '每轮最多生成并评分的候选数' },
-      { label: '池容量', value: (budget.retained_alpha_pool_size || 10), note: '本地候选池保留上限' },
-      { label: '回测槽位', value: slotLimit + ' 并发槽', note: '批量 ' + (budget.official_backtest_batch_size || 3) },
-      { label: '连续生产', value: runForever ? '开启' : '单轮', note: runForever ? '持续生产' : '单轮后停止' },
-      { label: 'Strategy Plugins', value: budget.strategy_plugins_enabled ? ('On | ' + pluginSpecs.length + ' specs') : 'Off', note: pluginSpecs.length ? pluginSpecs.join(', ') : '-' },
-    ];
-    target.innerHTML = '<div class="policy-grid">' +
-      items.map(function (item) {
-        return '<div class="policy-card">' +
-          '<div class="policy-label">' + esc(item.label) + '</div>' +
-          '<div class="policy-value">' + esc(String(item.value)) + '</div>' +
-          '<div class="policy-note">' + esc(item.note) + '</div>' +
-          '</div>';
-      }).join('') + '</div>';
-  };
+  window.renderStrategyPolicy = function (config) { if (StrategyPanel.renderPolicy) StrategyPanel.renderPolicy(config); };
   function renderResult(result) {
     S.setBatch(ResultState.buildResultBatch(result, {
       currentBacktests: currentBacktests(),
@@ -534,6 +518,9 @@
       case 'handle-auto-submit-toggle':
         invokeWindowAction('handleAutoSubmitToggle');
         break;
+      case 'toggle-strategy-plugins':
+        syncStrategyPluginControls();
+        break;
     }
   }
   function handlePageInput(event) {
@@ -680,11 +667,13 @@
         S.set('config', data.config);
         if (typeof window.renderStrategyPolicy === 'function') window.renderStrategyPolicy(data.config);
         FormControls.applyConfig(data.config);
+        syncStrategyPluginControls();
       }
     } catch (e) {}
   };
   window.applyPreset = function () {
     FormControls.applyPreset(presets);
+    syncStrategyPluginControls();
   };
   async function loadPresets() {
     try { var data = await Api.get('/api/presets'); if (data && data.presets) presets = data.presets; } catch (e) {}
@@ -720,6 +709,8 @@
       if (results[1] && results[1].config) {
         S.set('config', results[1].config);
         if (typeof window.renderStrategyPolicy === 'function') window.renderStrategyPolicy(results[1].config);
+        FormControls.applyConfig(results[1].config);
+        syncStrategyPluginControls();
       }
     } catch (e) { /* ignore */ }
     loadProfile();

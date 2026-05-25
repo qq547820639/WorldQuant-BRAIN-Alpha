@@ -473,6 +473,7 @@ class HypothesisDrivenGenerator:
         self._observability_diversity_boost: bool = False
         self._observability_avoid_keys: Set[str] = set()
         self._observability_guidance: Dict[str, Any] = {}
+        self._warned_empty_hypothesis_library: bool = False
 
     # ── Public API (CandidateGenerator-compatible) ──────────────────
 
@@ -617,7 +618,12 @@ class HypothesisDrivenGenerator:
           6. Alpha assembly
         """
         if not self._library or self._library.count == 0:
-            logger.warning("_generate_hypothesis_driven: no hypotheses loaded.")
+            if not self._warned_empty_hypothesis_library:
+                logger.warning(
+                    "_generate_hypothesis_driven: no hypotheses loaded; "
+                    "falling back to random exploration for this run."
+                )
+                self._warned_empty_hypothesis_library = True
             return self._generate_random_exploration(dataset_id)
 
         # Step 2: Hypothesis selection

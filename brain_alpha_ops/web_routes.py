@@ -20,6 +20,7 @@ GET_ROUTES = {
         WebRoute("GET", "/", "root", requires_session=False, category="html"),
         WebRoute("GET", "/api/status", "status"),
         WebRoute("GET", "/api/config", "config"),
+        WebRoute("GET", "/api/config_schema", "config_schema"),
         WebRoute("GET", "/api/active_job", "active_job"),
         WebRoute("GET", "/api/latest_result", "latest_result"),
         WebRoute("GET", "/api/health", "health", requires_session=False),
