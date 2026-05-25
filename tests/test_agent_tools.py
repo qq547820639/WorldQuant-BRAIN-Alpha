@@ -568,6 +568,29 @@ def test_agent_toolbox_batch_simulation_reports_item_failures(tmp_path):
     assert failed["index"] == 1
 
 
+def test_agent_toolbox_batch_simulation_counts_terminal_failed_status(tmp_path):
+    class FailedSimulationAPI(MockBrainAPI):
+        def poll_simulation(self, simulation_id):
+            return "FAILED"
+
+    config = RunConfig(environment="mock")
+    config.ops.storage_dir = str(tmp_path)
+    toolbox = BrainAlphaToolbox(run_config=config, api=FailedSimulationAPI(), allow_live_api=True)
+
+    result = toolbox.call(
+        "run_simulation_batch",
+        {"expressions": ["rank(ts_delta(close, 20))"]},
+    )
+
+    assert result["ok"] is False
+    assert result["submitted_count"] == 1
+    assert result["completed_count"] == 0
+    assert result["failed_count"] == 1
+    assert result["results"][0]["ok"] is False
+    assert result["results"][0]["error_code"] == "SIMULATION_FAILED"
+    assert result["results"][0]["status"] == "FAILED"
+
+
 def test_agent_toolbox_blocks_production_simulation_batch_without_confirmation(tmp_path):
     config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path)

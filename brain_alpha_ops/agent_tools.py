@@ -366,6 +366,10 @@ class BrainAlphaToolbox:
         payload = {"ok": True, "simulation_id": simulation_id, "status": status}
         if status.upper() == "COMPLETED":
             payload["result"] = api.fetch_result(simulation_id)
+        elif status.upper() in {"FAILED", "ERROR"}:
+            payload["ok"] = False
+            payload["error_code"] = "SIMULATION_FAILED"
+            payload["error"] = f"simulation finished with status {status.upper()}"
         return payload
 
     def _batch_api_for_item(self):
