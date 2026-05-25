@@ -862,7 +862,7 @@ def test_submit_simulation_rejects_cross_origin_location_header():
         raise AssertionError("expected cross-origin Location to be rejected")
 
 
-def test_throttle_uses_shared_lock_across_instances(monkeypatch):
+def test_throttle_uses_shared_timestamp_across_instances(monkeypatch):
     import brain_alpha_ops.brain_api.official as official
 
     sleeps = []
@@ -883,3 +883,4 @@ def test_throttle_uses_shared_lock_across_instances(monkeypatch):
     assert round(sleeps[0], 6) == 2.9
     assert sleeps[1] == 3.0
     assert official._GLOBAL_LAST_REQUEST_AT == 106.0
+    assert first._request_lock.__class__.__name__ == "RLock"

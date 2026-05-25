@@ -23,6 +23,7 @@ from brain_alpha_ops.brain_api.canonical import (
     SUPPORTED_UNIT_HANDLING,
     SUPPORTED_UNIVERSES,
 )
+from brain_alpha_ops.config_validation_helpers import validate_decision_thresholds
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -152,6 +153,7 @@ class ScoringConfig:
 
     # ── 可覆盖的 prior 维度权重（None = 使用默认经验值） ──
     prior_weights_override: dict[str, float] | None = None
+    decision_thresholds: dict[str, float] = field(default_factory=lambda: {"submit": 85.0, "optimize": 70.0, "research": 50.0})
 
     # Assistant guidance outcome local-ranking adjustment.
     assistant_guidance_score_adjustment_enabled: bool = True
@@ -523,6 +525,7 @@ def _validate_scoring(errors: list[str], scoring: ScoringConfig) -> None:
                     value,
                     min_value=0.0,
                 )
+    validate_decision_thresholds(errors, scoring.decision_thresholds)
     _require_bool(
         errors,
         "ops.scoring.assistant_guidance_score_adjustment_enabled",
@@ -725,7 +728,6 @@ def _require_float_range(
         errors.append(f"{name} must be >= {min_value}")
     if max_value is not None and numeric > max_value:
         errors.append(f"{name} must be <= {max_value}")
-
 
 def _require_enum(errors: list[str], name: str, value: Any, allowed: set[Any]) -> None:
     if isinstance(value, bool):

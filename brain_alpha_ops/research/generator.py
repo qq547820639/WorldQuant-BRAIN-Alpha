@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import random
 import re
-from typing import List, Optional, TYPE_CHECKING
+from typing import Optional, TYPE_CHECKING
 
 from brain_alpha_ops.models import Candidate, new_id
 from brain_alpha_ops.research.expression_ast import expression_fingerprint, expression_key, ordered_operators, profile_expression
@@ -19,8 +19,90 @@ if TYPE_CHECKING:
     from .dataset_selector import DatasetSelector
 
 # Default window sizes — can be overridden per dataset frequency (P1-4 TODO).
-WINDOWS = [3, 5, 8, 10, 12, 15, 20, 30, 40, 60, 90, 120, 180, 252]
-WINSOR_STD = [3, 4, 5, 6]
+DEFAULT_WINDOWS = [3, 5, 8, 10, 12, 15, 20, 30, 40, 60, 90, 120, 180, 252]
+DEFAULT_WINSOR_STD = [3, 4, 5, 6]
+
+
+def _get_default_windows() -> list[int]:
+    """Return a copy of the built-in fallback windows."""
+    return list(DEFAULT_WINDOWS)
+
+
+def _get_default_winsor_stds() -> list[int]:
+    """Return a copy of the built-in fallback winsorize std values."""
+    return list(DEFAULT_WINSOR_STD)
+
+
+def _load_operators_windows(loader: "Optional[OfficialDataLoader]" = None) -> tuple[list[int], list[int]]:
+    """Derive generation knobs from official operator metadata when available."""
+    try:
+        if loader is None:
+            from brain_alpha_ops.data import OfficialDataLoader
+
+            loader = OfficialDataLoader.instance()
+        operators = loader.get_operators()
+    except Exception:
+        return _get_default_windows(), _get_default_winsor_stds()
+
+    windows: set[int] = set()
+    winsor_stds: set[int] = set()
+    for op in operators or []:
+        name = _operator_attr(op, "name").lower()
+        category = _operator_attr(op, "category").lower()
+        definition = _operator_attr(op, "definition")
+        description = _operator_attr(op, "description")
+        text = f"{definition} {description}"
+        if name.startswith("ts_") or "time series" in category:
+            windows.update(_parameter_defaults(op, {"window", "lookback", "d"}))
+            if re.search(r"\b(d|lookback)\b", definition):
+                windows.update(_get_default_windows())
+        if name in {"winsorize", "group_backfill"} or "winsor" in text.lower():
+            winsor_stds.update(_parameter_defaults(op, {"std", "standard_deviation"}))
+            winsor_stds.update(
+                int(float(value))
+                for value in re.findall(r"\bstd\s*=\s*(\d+(?:\.\d+)?)", text, flags=re.IGNORECASE)
+            )
+
+    return (
+        sorted(w for w in windows if w > 0) or _get_default_windows(),
+        sorted(w for w in winsor_stds if w > 0) or _get_default_winsor_stds(),
+    )
+
+
+def _operator_attr(operator: object, name: str) -> str:
+    if isinstance(operator, dict):
+        value = operator.get(name, "")
+        if not value and isinstance(operator.get("raw"), dict):
+            value = operator["raw"].get(name, "")
+        return str(value or "")
+    return str(getattr(operator, name, "") or "")
+
+
+def _parameter_defaults(operator: object, names: set[str]) -> set[int]:
+    if not isinstance(operator, dict):
+        return set()
+    values: set[int] = set()
+    params = operator.get("parameters")
+    if not isinstance(params, list) and isinstance(operator.get("raw"), dict):
+        params = operator["raw"].get("parameters")
+    if not isinstance(params, list):
+        return values
+    for param in params:
+        if not isinstance(param, dict):
+            continue
+        param_name = str(param.get("name") or param.get("type") or "").lower()
+        if param_name not in names:
+            continue
+        for key in ("default", "value"):
+            value = param.get(key)
+            if isinstance(value, (int, float)) and value > 0:
+                values.add(int(value))
+        choices = param.get("choices") or param.get("values")
+        if isinstance(choices, list):
+            for value in choices:
+                if isinstance(value, (int, float)) and value > 0:
+                    values.add(int(value))
+    return values
 
 
 class CandidateGenerator:
@@ -56,6 +138,7 @@ class CandidateGenerator:
         self._theme_engine = theme_engine
         self._selector = selector
         self._max_field_pool_size = max(10, int(max_field_pool_size))
+        self._windows, self._winsor_stds = _load_operators_windows(loader)
 
         # Lazy init fields/operators from loader
         self._fields: set[str] = set()
@@ -69,6 +152,14 @@ class CandidateGenerator:
         self._observability_diversity_boost = False
         self._observability_avoid_keys: set[str] = set()
         self._observability_guidance: dict = {}
+
+    @property
+    def windows(self) -> list[int]:
+        return list(self._windows)
+
+    @property
+    def winsor_stds(self) -> list[int]:
+        return list(self._winsor_stds)
 
     # ------------------------------------------------------------------
     # Context
@@ -277,9 +368,9 @@ class CandidateGenerator:
         diversity_boost = self._observability_diversity_boost
         # P2-2: Blend experienced windows with defaults (70% experience, 30% exploration)
         if self._experience_windows:
-            windows = self._experience_windows + [w for w in WINDOWS if w not in self._experience_windows]
+            windows = self._experience_windows + [w for w in self._windows if w not in self._experience_windows]
         else:
-            windows = WINDOWS
+            windows = self._windows
 
         ds_label = dataset_id or self._dataset_id or "default"
 
@@ -485,15 +576,16 @@ def mutate_expression(expression: str, index: int, mode: str = "default",
       - "operator_substitute": replace operators with same-family alternatives (P0-2)
 
     P2-2: When *experience_windows* is provided, blend 70% experience windows
-    with 30% default WINDOWS for exploration.
+    with 30% default windows for exploration.
     """
     seed = index
+    default_windows = _get_default_windows()
     # P2-2: Blend experience windows (70%) + exploration (30%)
     if experience_windows:
-        exp = [w for w in experience_windows if w not in WINDOWS]
-        windows = exp + WINDOWS  # experience front-loaded for preference
+        exp = [w for w in experience_windows if w not in default_windows]
+        windows = exp + default_windows  # experience front-loaded for preference
     else:
-        windows = WINDOWS
+        windows = default_windows
     numbers = re.findall(r"\b\d+\b", expression)
 
     if mode == "field_swap":

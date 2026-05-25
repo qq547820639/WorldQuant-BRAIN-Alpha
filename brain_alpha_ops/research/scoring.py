@@ -49,7 +49,7 @@ def build_scorecard(
     scorecard = {
         "schema_version": "scorecard-v2.3",
         "total_score": total,
-        "decision_band": decision_band(total, empirical.get("hard_gate_failed", False)),
+        "decision_band": decision_band(total, empirical.get("hard_gate_failed", False), scoring=scoring),
         "score_basis": score_basis,
         "local_rank_score": local_rank_score,
         "base_local_rank_score": base_local_rank_score,
@@ -490,12 +490,16 @@ def empirical_score(metrics: dict, thresholds: QualityThresholds, settings: dict
     sub_universe_sharpe = _num(metrics.get("sub_universe_sharpe", 0.0))
     # BRAIN: LOW_SUB_UNIVERSE_SHARPE — sub_sharpe < 0.75 × √(sub_size/alpha_size) × alpha_sharpe
     import math
-    sub_size = _num(metrics.get("subUniverseSize", 1000))
-    alpha_size = _num(metrics.get("alphaSize", 1000))
-    size_factor = math.sqrt(sub_size / max(alpha_size, 1))
+    sub_size = _num(metrics.get("subUniverseSize", metrics.get("sub_universe_size", 1000)))
+    alpha_size = _num(metrics.get("alphaSize", metrics.get("alpha_size", 1000)))
+    if alpha_size <= 0:
+        alpha_size = 1
+    if sub_size <= 0:
+        sub_size = max(alpha_size, 1)
+    size_factor = math.sqrt(max(sub_size, 1) / max(alpha_size, 1))
     sub_sharpe_threshold = round(
         thresholds.sub_universe_sharpe_min_ratio * size_factor * max(sharpe, 0.01), 4
-    )
+    ) if sharpe > 0 else 0.0
     # Margin (BRAIN 顾问标准): prefer API-provided margin in bps
     # P2-3: API margin preferred; fall back to local estimate only when API absent
     margin = _num(metrics.get("margin", None))
@@ -667,14 +671,20 @@ def _scorecard_settings(candidate: Candidate, explicit: dict | None = None) -> d
     return {}
 
 
-def decision_band(score: float, hard_gate_failed: bool = False) -> str:
+def decision_band(score: float, hard_gate_failed: bool = False, scoring: ScoringConfig | None = None) -> str:
     if hard_gate_failed:
         return "hard_gate_blocked"
-    if score >= 85:
+    thresholds = {"submit": 85.0, "optimize": 70.0, "research": 50.0}
+    if scoring and isinstance(getattr(scoring, "decision_thresholds", None), dict):
+        for key in thresholds:
+            value = scoring.decision_thresholds.get(key)
+            if isinstance(value, (int, float)):
+                thresholds[key] = float(value)
+    if score >= thresholds["submit"]:
         return "submit_candidate"
-    if score >= 70:
+    if score >= thresholds["optimize"]:
         return "optimize_before_submit"
-    if score >= 50:
+    if score >= thresholds["research"]:
         return "research_only"
     return "abandon_or_rebuild"
 

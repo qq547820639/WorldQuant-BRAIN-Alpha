@@ -39,6 +39,7 @@ class Candidate:
     submission: dict[str, Any] = field(default_factory=dict)
     lifecycle_status: str = "created"
     created_at: str = field(default_factory=utc_now)
+    extra_fields: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -46,7 +47,11 @@ class Candidate:
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "Candidate":
         known = {field.name for field in cls.__dataclass_fields__.values()}
-        return cls(**{key: value for key, value in data.items() if key in known})
+        known_data = {key: value for key, value in data.items() if key in known}
+        extra = dict(known_data.get("extra_fields") or {})
+        extra.update({key: value for key, value in data.items() if key not in known})
+        known_data["extra_fields"] = extra
+        return cls(**known_data)
 
 
 @dataclass

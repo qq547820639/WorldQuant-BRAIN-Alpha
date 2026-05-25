@@ -1,6 +1,6 @@
 from brain_alpha_ops.config import QualityThresholds, ScoringConfig
 from brain_alpha_ops.models import Candidate
-from brain_alpha_ops.research.scoring import build_scorecard, empirical_score, evaluate_quality_gate
+from brain_alpha_ops.research.scoring import build_scorecard, decision_band, empirical_score, evaluate_quality_gate
 
 
 def _candidate(metrics):
@@ -102,6 +102,60 @@ def test_empirical_score_keeps_official_thresholds_under_market_regime():
     assert result["threshold_source"] == "BRAIN_Official"
     assert result["regime_adjustments_applied_to_hard_gates"] is False
     assert result["hard_gate_failed"] is False
+
+
+def test_decision_band_uses_configurable_thresholds():
+    scoring = ScoringConfig(decision_thresholds={"submit": 90, "optimize": 80, "research": 60})
+
+    assert decision_band(88, scoring=scoring) == "optimize_before_submit"
+    assert decision_band(92, scoring=scoring) == "submit_candidate"
+    assert decision_band(58, scoring=scoring) == "abandon_or_rebuild"
+    assert decision_band(92, hard_gate_failed=True, scoring=scoring) == "hard_gate_blocked"
+
+
+def test_scorecard_passes_configurable_decision_thresholds():
+    c = Candidate(
+        alpha_id="local_threshold",
+        expression="rank(ts_delta(close, 20))",
+        family="Momentum",
+        hypothesis="Price momentum candidate.",
+        data_fields=["close"],
+        operators=["rank", "ts_delta"],
+        local_quality={"passed": True, "score": 80},
+    )
+
+    default = build_scorecard(c, QualityThresholds())
+    configured = build_scorecard(
+        c,
+        QualityThresholds(),
+        ScoringConfig(decision_thresholds={"submit": 95, "optimize": 85, "research": 75}),
+    )
+
+    assert default["decision_band"] in {"optimize_before_submit", "submit_candidate"}
+    assert configured["decision_band"] == "research_only"
+
+
+def test_empirical_score_handles_zero_alpha_size_and_negative_sharpe():
+    result = empirical_score(
+        {
+            "sharpe": -0.1,
+            "fitness": 1.2,
+            "turnover": 0.2,
+            "returns": 0.08,
+            "drawdown": 0.05,
+            "sub_universe_sharpe": 0.0,
+            "correlation": 0.2,
+            "weight_concentration": 0.02,
+            "margin": 5.0,
+            "alpha_size": 0,
+            "sub_universe_size": 0,
+        },
+        QualityThresholds(),
+    )
+
+    item = next(row for row in result["items"] if row["name"] == "sub_universe_sharpe")
+    assert item["target"] == 0.0
+    assert item["passed"] is True
 
 
 def test_local_scorecard_applies_strong_assistant_guidance_bonus():

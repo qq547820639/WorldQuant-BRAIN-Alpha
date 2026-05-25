@@ -62,7 +62,7 @@ _MAX_DATASETS_ITEMS = 2_000
 _MAX_OPERATORS_ITEMS = 2_000
 
 _GLOBAL_LAST_REQUEST_AT = 0.0  # shared timestamp for cross-instance rate awareness
-_GLOBAL_REQUEST_LOCK = threading.Lock()
+_GLOBAL_TIMESTAMP_LOCK = threading.RLock()
 
 
 class OfficialBrainAPI:
@@ -90,7 +90,7 @@ class OfficialBrainAPI:
         }
         self._prefer_cookie_auth = False
         self._last_request_at = 0.0
-        self._request_lock = threading.Lock()
+        self._request_lock = threading.RLock()
         self._cache_lock = threading.Lock()
 
     def set_market_scope(self, settings: BrainSettings | dict | None):
@@ -815,18 +815,22 @@ class OfficialBrainAPI:
     def _throttle(self):
         global _GLOBAL_LAST_REQUEST_AT
         interval = max(0.0, float(self.config.min_request_interval_seconds))
-        with _GLOBAL_REQUEST_LOCK:
-            with self._request_lock:
-                if interval <= 0:
-                    _GLOBAL_LAST_REQUEST_AT = time.monotonic()
-                    self._last_request_at = _GLOBAL_LAST_REQUEST_AT
-                    return
+        with self._request_lock:
+            if interval <= 0:
+                now = time.monotonic()
+                with _GLOBAL_TIMESTAMP_LOCK:
+                    _GLOBAL_LAST_REQUEST_AT = now
+                self._last_request_at = now
+                return
+            with _GLOBAL_TIMESTAMP_LOCK:
                 last_request_at = max(self._last_request_at, _GLOBAL_LAST_REQUEST_AT)
-                elapsed = time.monotonic() - last_request_at
-                if elapsed < interval:
-                    time.sleep(interval - elapsed)
-                _GLOBAL_LAST_REQUEST_AT = time.monotonic()
-                self._last_request_at = _GLOBAL_LAST_REQUEST_AT
+            elapsed = time.monotonic() - last_request_at
+            if elapsed < interval:
+                time.sleep(interval - elapsed)
+            now = time.monotonic()
+            self._last_request_at = now
+            with _GLOBAL_TIMESTAMP_LOCK:
+                _GLOBAL_LAST_REQUEST_AT = now
 
     def _open(self, req: urllib.request.Request, *, timeout: int):
         return self._opener.open(req, timeout=timeout)

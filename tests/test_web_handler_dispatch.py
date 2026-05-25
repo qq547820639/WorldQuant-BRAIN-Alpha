@@ -348,3 +348,49 @@ def test_dispatch_post_logout_and_shutdown_expire_session():
     shutdown = _Handler()
     dispatch_post(shutdown, urlparse("/api/shutdown"), ctx)
     assert started[-1][0] == "shutdown"
+
+
+def test_dispatch_get_wraps_route_exceptions_as_json_errors():
+    ctx, _started, _lock = _ctx()
+    ctx = dataclasses.replace(
+        ctx,
+        route_for=lambda _method, _path: type("Route", (), {"handler": "broken", "requires_session": False})(),
+    )
+    handlers = dict(_GET_DISPATCH_HANDLERS)
+    handlers["broken"] = lambda _handler, _parsed, _ctx: (_ for _ in ()).throw(RuntimeError("boom"))
+
+    handler = _Handler()
+    from brain_alpha_ops import web_handler_dispatch as dispatch_mod
+
+    original = dispatch_mod._GET_DISPATCH_HANDLERS
+    dispatch_mod._GET_DISPATCH_HANDLERS = handlers
+    try:
+        dispatch_get(handler, urlparse("/api/health"), ctx)
+    finally:
+        dispatch_mod._GET_DISPATCH_HANDLERS = original
+
+    assert handler.json_calls[-1][1] == 500
+    assert handler.json_calls[-1][0]["error_code"] == "GET_ROUTE_ERROR"
+
+
+def test_dispatch_post_wraps_route_exceptions_as_json_errors():
+    ctx, _started, _lock = _ctx()
+    ctx = dataclasses.replace(
+        ctx,
+        route_for=lambda _method, _path: type("Route", (), {"handler": "broken", "requires_session": False})(),
+    )
+    handlers = dict(_POST_DISPATCH_HANDLERS)
+    handlers["broken"] = lambda _handler, _parsed, _ctx: (_ for _ in ()).throw(RuntimeError("boom"))
+
+    handler = _Handler()
+    from brain_alpha_ops import web_handler_dispatch as dispatch_mod
+
+    original = dispatch_mod._POST_DISPATCH_HANDLERS
+    dispatch_mod._POST_DISPATCH_HANDLERS = handlers
+    try:
+        dispatch_post(handler, urlparse("/api/run"), ctx)
+    finally:
+        dispatch_mod._POST_DISPATCH_HANDLERS = original
+
+    assert handler.json_calls[-1][1] == 500
+    assert handler.json_calls[-1][0]["error_code"] == "POST_ROUTE_ERROR"
