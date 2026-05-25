@@ -120,7 +120,10 @@ def _dispatch_route(
     if route_handler is None:
         handler._json({"ok": False, "error_code": "NOT_FOUND", "error": "not found"}, status=404)
         return
-    route_handler(handler, parsed, ctx)
+    try:
+        route_handler(handler, parsed, ctx)
+    except Exception as exc:
+        handler._json(ctx.web_error(exc, f"{method}_ROUTE_ERROR"), status=500)
 
 def _get_root(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext) -> None:
     if ctx.remote_admin_required() and not ctx.has_valid_admin_token(getattr(handler, "headers", {})):

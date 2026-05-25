@@ -1,5 +1,6 @@
 from brain_alpha_ops.config import ResearchBudget
 from brain_alpha_ops.research.generator import CandidateGenerator, extract_fields, extract_operators, local_quality, nesting_depth
+from brain_alpha_ops.research.generator import _get_default_windows, _load_operators_windows
 from brain_alpha_ops.research.expression_ast import expression_key
 from brain_alpha_ops.research.validated_generator import _passes_diversity, _tokenize, prefilter_quality
 
@@ -10,6 +11,40 @@ def test_generator_returns_structured_candidates():
     assert candidates[0].expression
     assert candidates[0].hypothesis
     assert candidates[0].data_fields
+
+
+def test_generator_windows_are_instance_properties_from_operator_metadata():
+    class Loader:
+        def get_operators(self):
+            return [
+                {
+                    "name": "ts_mean",
+                    "category": "Time Series",
+                    "definition": "ts_mean(x, d)",
+                    "parameters": [{"name": "d", "default": 17}],
+                },
+                {
+                    "name": "winsorize",
+                    "definition": "winsorize(x, std=5)",
+                    "parameters": [{"name": "std", "default": 5}],
+                },
+            ]
+
+    windows, winsor_stds = _load_operators_windows(Loader())
+    generator = CandidateGenerator(loader=Loader())
+
+    assert 17 in windows
+    assert 5 in winsor_stds
+    assert generator.windows == windows
+    assert generator.winsor_stds == winsor_stds
+    assert generator.windows is not generator.windows
+
+
+def test_default_windows_helper_returns_copy():
+    windows = _get_default_windows()
+    windows.append(999)
+
+    assert 999 not in _get_default_windows()
 
 
 def test_local_prefilter_rejects_bad_candidate():

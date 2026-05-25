@@ -177,6 +177,29 @@ def test_load_run_config_rejects_invalid_scoring_weights():
             load_run_config(path)
 
 
+def test_load_run_config_rejects_invalid_decision_thresholds():
+    with tempfile.TemporaryDirectory() as tmp:
+        path = os.path.join(tmp, "run_config.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(
+                {
+                    "ops": {
+                        "scoring": {
+                            "decision_thresholds": {
+                                "submit": 60,
+                                "optimize": 80,
+                                "research": 50,
+                            }
+                        }
+                    }
+                },
+                handle,
+            )
+
+        with pytest.raises(ConfigValidationError, match="decision_thresholds"):
+            load_run_config(path)
+
+
 def test_load_run_config_rejects_bad_generation_mode_ratio():
     with tempfile.TemporaryDirectory() as tmp:
         path = os.path.join(tmp, "run_config.json")

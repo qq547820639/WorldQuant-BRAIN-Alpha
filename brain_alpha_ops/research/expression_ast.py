@@ -9,8 +9,8 @@ import re
 from typing import Iterable
 
 
-_TOKEN_RE = re.compile(r"\s*([A-Za-z_][A-Za-z0-9_]*|\d+(?:\.\d+)?|[(),+\-*/])")
-_LEXICAL_TOKEN_RE = re.compile(r"[a-zA-Z_][a-zA-Z0-9_]*|\d+(?:\.\d+)?|[-+*/(),]")
+_TOKEN_RE = re.compile(r"\s*(>=|<=|==|!=|[A-Za-z_][A-Za-z0-9_]*|\d+(?:\.\d+)?|[(),+\-*/?:<>])")
+_LEXICAL_TOKEN_RE = re.compile(r">=|<=|==|!=|[a-zA-Z_][a-zA-Z0-9_]*|\d+(?:\.\d+)?|[-+*/(),?:<>]")
 
 
 class ExpressionParseError(ValueError):
@@ -182,6 +182,27 @@ class _Parser:
         self.advance()
 
     def parse_expression(self) -> ExprNode:
+        return self.parse_conditional()
+
+    def parse_conditional(self) -> ExprNode:
+        node = self.parse_comparison()
+        if self.peek() == "?":
+            self.advance()
+            true_expr = self.parse_expression()
+            self.consume(":")
+            false_expr = self.parse_expression()
+            node = ExprNode("conditional", "?", (node, true_expr, false_expr))
+        return node
+
+    def parse_comparison(self) -> ExprNode:
+        node = self.parse_additive()
+        while self.peek() in {">", "<", ">=", "<=", "==", "!="}:
+            op = self.advance()
+            right = self.parse_additive()
+            node = ExprNode("binary", op, (node, right))
+        return node
+
+    def parse_additive(self) -> ExprNode:
         node = self.parse_term()
         while self.peek() in {"+", "-"}:
             op = self.advance()
@@ -221,6 +242,14 @@ class _Parser:
             "-",
             "*",
             "/",
+            "?",
+            ":",
+            ">",
+            "<",
+            ">=",
+            "<=",
+            "==",
+            "!=",
         }:
             raise ExpressionParseError(f"unexpected token: {token}")
         if _is_number(token):
@@ -265,9 +294,12 @@ def canonicalize(node: ExprNode) -> str:
     if node.kind == "unary":
         child = node.children[0]
         child_text = canonicalize(child)
-        if child.kind == "binary":
+        if child.kind in {"binary", "conditional"}:
             child_text = f"({child_text})"
         return f"{node.value}{child_text}"
+    if node.kind == "conditional":
+        condition, true_expr, false_expr = node.children
+        return f"{canonicalize(condition)}?{canonicalize(true_expr)}:{canonicalize(false_expr)}"
     if node.kind == "binary":
         op = node.value
         if op in {"+", "*"}:
@@ -282,6 +314,8 @@ def canonicalize(node: ExprNode) -> str:
 
 def _canonical_child(child: ExprNode, parent_op: str, *, is_right: bool) -> str:
     text = canonicalize(child)
+    if child.kind == "conditional":
+        return f"({text})"
     if child.kind != "binary":
         return text
     child_prec = _precedence(child.value)
@@ -395,7 +429,13 @@ def _normalize_number(token: str) -> str:
 
 
 def _precedence(op: str) -> int:
-    return 2 if op in {"*", "/"} else 1
+    if op in {"*", "/"}:
+        return 3
+    if op in {"+", "-"}:
+        return 2
+    if op in {">", "<", ">=", "<=", "==", "!="}:
+        return 1
+    return 0
 
 
 def _window_bucket(value: int) -> str:

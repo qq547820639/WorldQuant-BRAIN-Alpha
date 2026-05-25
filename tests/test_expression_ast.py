@@ -59,3 +59,22 @@ def test_invalid_expression_falls_back_to_lexical_profile():
     assert profile.parse_error
     with pytest.raises(ExpressionParseError):
         parse_expression("rank(ts_delta(close, 20)")
+
+
+def test_conditional_expression_and_comparison_parse():
+    expr = "adv20 < volume ? rank(ts_delta(close, 5)) : -rank(ts_delta(close, 10))"
+    profile = profile_expression(expr)
+
+    assert profile.parsed is True
+    assert profile.canonical == "adv20<volume?rank(ts_delta(close,5)):-rank(ts_delta(close,10))"
+    assert profile.operators == ("rank", "ts_delta")
+    assert profile.fields == ("adv20", "volume", "close")
+    assert profile.windows == (5, 10)
+
+
+def test_malformed_conditional_falls_back_to_lexical_profile():
+    profile = profile_expression("adv20 < volume ? rank(close)")
+
+    assert profile.parsed is False
+    assert "?" in profile.canonical
+    assert profile.parse_error
