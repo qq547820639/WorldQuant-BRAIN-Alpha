@@ -154,6 +154,25 @@ def build_default_tool_registry() -> ToolRegistry:
     )
     registry.register(
         ToolDefinition(
+            "run_simulation_batch",
+            "Run a bounded batch of configured BRAIN simulations with per-expression validation, duplicate preflight, live API confirmation, and optional limited parallelism.",
+            _schema(
+                {
+                    "expressions": "array",
+                    "max_polls": "integer",
+                    "max_batch_size": "integer",
+                    "max_workers": "integer",
+                    "confirm_live_api": "boolean",
+                },
+                required=["expressions"],
+            ),
+            live_api=True,
+            category="backtest",
+            chain_stage="deep_validate",
+        )
+    )
+    registry.register(
+        ToolDefinition(
             "check_alpha",
             "Run the configured alpha check for an official alpha id.",
             _schema({"alpha_id": "string", "confirm_live_api": "boolean"}),
@@ -296,6 +315,13 @@ def build_default_tool_registry() -> ToolRegistry:
         "run_backtest",
         "run_simulation",
         description="QuantGPT-style alias for the configured BRAIN simulation/backtest workflow; requires live API confirmation outside mock mode.",
+        category="backtest",
+        chain_stage="deep_validate",
+    )
+    registry.register_alias(
+        "run_batch_backtest",
+        "run_simulation_batch",
+        description="QuantGPT-style alias for a bounded batch of configured BRAIN simulations; requires the same live API confirmation and budget discipline as run_backtest.",
         category="backtest",
         chain_stage="deep_validate",
     )

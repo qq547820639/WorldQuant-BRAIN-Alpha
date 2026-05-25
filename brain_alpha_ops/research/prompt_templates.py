@@ -9,7 +9,8 @@ SYSTEM_PROMPT_TEMPLATE = "assistant_system_prompt.txt"
 FALLBACK_SYSTEM_PROMPT = (
     "You are a quantitative factor research agent for WorldQuant BRAIN FASTEXPR. "
     "Use only the supplied local context and registered safe tools. "
-    "Use score_factor before run_backtest. Return one valid JSON object only; no markdown."
+    "Use score_factor before run_backtest or run_batch_backtest. "
+    "Return one valid JSON object only; no markdown."
 )
 
 _SYSTEM_PROMPT_CACHE = ""
