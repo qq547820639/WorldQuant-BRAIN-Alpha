@@ -19,3 +19,19 @@ Source checklist: `E:\deep-research-report.md`
 ## Deferred
 
 - [ ] Live BRAIN submission validation remains manual by design; automated tests must not submit real alphas.
+
+## Verification
+
+- [x] `python -m compileall -q brain_alpha_ops scripts tests`
+- [x] `scripts/quality_gate.py --skip-tests --json`
+  - Passed: Python compile, config validation, dependency policy, redline verification, brain contract validation, frontend inline sync, frontend syntax, frontend innerHTML guard, text encoding scan, official context validation, module size audit, sensitive artifact scan, cache metadata audit, and diagnostic report sync.
+- [x] Focused pytest slice for the deep-research surfaces
+  - `tests/test_web_candidate_generation.py`
+  - `tests/test_web_html.py`
+  - `tests/test_tasks.py`
+  - Result: `14 passed, 1 warning`
+- [x] Full repository pytest confirmation
+  - Result: `705 passed, 1 warning`
+- [x] Current checklist state remains fully closed for executable items
+  - No pending local tasks remain.
+  - Only the live BRAIN submission validation stays deferred because it must remain manual.
