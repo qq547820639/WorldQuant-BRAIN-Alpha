@@ -22,7 +22,14 @@ def test_mcp_initialize_and_tool_list(tmp_path):
     assert init["result"]["capabilities"]["tools"] == {}
     names = {tool["name"] for tool in tools["result"]["tools"]}
     assert "generate_candidates" in names
+    assert "score_factor" in names
+    assert "run_backtest" in names
     assert "submit_alpha" in names
+    listed = {tool["name"]: tool for tool in tools["result"]["tools"]}
+    assert listed["score_factor"]["annotations"]["aliasFor"] == "score_candidate"
+    assert listed["score_factor"]["annotations"]["chainStage"] == "screen"
+    assert listed["run_backtest"]["annotations"]["aliasFor"] == "run_simulation"
+    assert listed["run_backtest"]["annotations"]["liveApi"] is True
 
 
 def test_mcp_tool_call_returns_text_content(tmp_path):
@@ -43,6 +50,27 @@ def test_mcp_tool_call_returns_text_content(tmp_path):
     payload = json.loads(response["result"]["content"][0]["text"])
     assert payload["ok"] is True
     assert payload["scorecard"]["total_score"] > 0
+
+
+def test_mcp_tool_call_resolves_quantgpt_style_alias(tmp_path):
+    response = handle_request(
+        {
+            "jsonrpc": "2.0",
+            "id": 33,
+            "method": "tools/call",
+            "params": {
+                "name": "score_factor",
+                "arguments": {"expression": "rank(ts_delta(close, 20))"},
+            },
+        },
+        toolbox(tmp_path),
+    )
+
+    assert response["result"]["isError"] is False
+    payload = json.loads(response["result"]["content"][0]["text"])
+    assert payload["ok"] is True
+    assert payload["tool_alias"] == "score_factor"
+    assert payload["canonical_tool"] == "score_candidate"
 
 
 def test_mcp_stdio_serves_line_delimited_json(tmp_path):

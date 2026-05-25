@@ -42,6 +42,9 @@ def handle_request(request: dict[str, Any], toolbox: BrainAlphaToolbox) -> dict[
                     "annotations": {
                         "liveApi": bool(tool.get("live_api")),
                         "destructive": bool(tool.get("destructive")),
+                        "aliasFor": str(tool.get("alias_for") or ""),
+                        "category": str(tool.get("category") or ""),
+                        "chainStage": str(tool.get("chain_stage") or ""),
                     },
                 }
                 for tool in toolbox.list_tools()

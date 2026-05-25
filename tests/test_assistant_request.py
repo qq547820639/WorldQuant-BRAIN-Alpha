@@ -2,8 +2,13 @@ import json
 
 from brain_alpha_ops.config import RunConfig
 from brain_alpha_ops.models import Candidate
-from brain_alpha_ops.research.assistant import assistant_response_to_generation_guidance, build_assistant_request_pack, parse_assistant_response
+from brain_alpha_ops.research.assistant import (
+    assistant_response_to_generation_guidance,
+    build_assistant_request_pack,
+    parse_assistant_response,
+)
 from brain_alpha_ops.research.context import build_assistant_context_pack
+from brain_alpha_ops.research.prompt_templates import load_system_prompt
 from brain_alpha_ops.research.repository import ResearchRepository
 
 
@@ -35,6 +40,9 @@ def test_assistant_request_pack_wraps_context_with_schema_and_draft(tmp_path):
     assert request["schema_version"] == "assistant_request_pack.v1"
     assert request["context_schema_version"] == "assistant_context_pack.v1"
     assert request["request"]["messages"][0]["role"] == "system"
+    assert "factor research agent" in request["request"]["messages"][0]["content"]
+    assert "score_factor" in request["request"]["messages"][0]["content"]
+    assert "run_backtest" in request["request"]["messages"][0]["content"]
     assert request["request"]["response_schema"]["schema_version"] == "assistant_response.v1"
     assert request["prompt_diagnostics"]["schema_version"] == "assistant_request_prompt_diagnostics.v1"
     assert request["prompt_diagnostics"]["estimated_prompt_tokens"] > 0
@@ -50,6 +58,15 @@ def test_assistant_request_pack_wraps_context_with_schema_and_draft(tmp_path):
         for item in request["offline_draft"]["candidate_adjustments"]
     )
     assert any("ag_requestdigest" in item for item in request["offline_draft"]["recommended_next_actions"])
+
+
+def test_assistant_system_prompt_is_loaded_from_packaged_template():
+    prompt = load_system_prompt()
+
+    assert "WorldQuant BRAIN FASTEXPR" in prompt
+    assert "score_factor" in prompt
+    assert "run_backtest" in prompt
+    assert "Return one valid JSON object only" in prompt
 
 
 def test_assistant_request_pack_compacts_prompt_when_budget_is_exceeded():

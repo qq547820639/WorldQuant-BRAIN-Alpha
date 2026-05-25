@@ -32,3 +32,16 @@ def test_pyinstaller_spec_bundles_hypothesis_library_directory():
 
     assert "brain_alpha_ops\\\\research\\\\hypotheses" in spec_text
     assert len(PACKAGED_HYPOTHESIS_LIBRARY_FILES) >= 8
+
+
+def test_pyinstaller_spec_bundles_assistant_prompt_templates():
+    spec_text = Path("BrainAlphaOps.spec").read_text(encoding="utf-8")
+
+    assert "brain_alpha_ops\\\\research\\\\prompts" in spec_text
+
+
+def test_windows_build_copies_assistant_prompt_templates_to_dist_runtime_path():
+    script_text = Path("scripts/build_windows.ps1").read_text(encoding="utf-8")
+
+    assert "brain_alpha_ops\\research\\prompts" in script_text
+    assert "dist\\brain_alpha_ops\\research\\prompts" in script_text

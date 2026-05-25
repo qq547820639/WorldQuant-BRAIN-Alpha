@@ -1,4 +1,5 @@
-from brain_alpha_ops.agent_tools import BrainAlphaToolbox, tool_definitions
+from brain_alpha_ops.agent_tool_registry import resolve_tool_name, tool_aliases, tool_definitions
+from brain_alpha_ops.agent_tools import BrainAlphaToolbox
 from brain_alpha_ops.brain_api import MockBrainAPI
 from brain_alpha_ops.config import RunConfig
 from brain_alpha_ops.models import Candidate
@@ -26,11 +27,19 @@ def test_agent_tool_manifest_exposes_safe_whitelist():
     assert "cross_review_assistant_response" in tools
     assert "query_expression_index" in tools
     assert "query_research_observability" in tools
+    assert "score_factor" in tools
+    assert "run_backtest" in tools
     assert "submit_alpha" in tools
     assert tools["submit_alpha"].destructive is True
     assert tools["run_simulation"].live_api is True
+    assert tools["score_factor"].alias_for == "score_candidate"
+    assert tools["run_backtest"].alias_for == "run_simulation"
+    assert tools["score_factor"].category == "scoring"
+    assert tools["run_backtest"].chain_stage == "deep_validate"
     assert tools["run_anti_overfit"].input_schema["required"] == ["candidate"]
     assert tools["cross_review_assistant_response"].input_schema["required"] == ["request_pack", "primary_response"]
+    assert tool_aliases()["score_factor"] == "score_candidate"
+    assert resolve_tool_name("run_backtest") == "run_simulation"
 
 
 def test_agent_toolbox_lists_context_and_generates_candidates(tmp_path):
@@ -471,6 +480,23 @@ def test_agent_toolbox_validates_and_scores_expression(tmp_path):
     assert score["ok"] is True
     assert score["scorecard"]["total_score"] > 0
     assert score["candidate"]["operators"] == ["rank", "ts_delta"]
+
+
+def test_agent_toolbox_quantgpt_style_aliases_follow_score_then_backtest_chain(tmp_path):
+    toolbox = mock_toolbox(storage_dir=tmp_path)
+    expression = "rank(ts_delta(close, 20))"
+
+    score = toolbox.call("score_factor", {"expression": expression, "family": "Momentum"})
+    backtest = toolbox.call("run_backtest", {"expression": expression})
+
+    assert score["ok"] is True
+    assert score["tool_alias"] == "score_factor"
+    assert score["canonical_tool"] == "score_candidate"
+    assert score["scorecard"]["total_score"] > 0
+    assert backtest["ok"] is True
+    assert backtest["tool_alias"] == "run_backtest"
+    assert backtest["canonical_tool"] == "run_simulation"
+    assert backtest["simulation_id"].startswith("mock_sim_")
 
 
 def test_agent_toolbox_runs_mock_simulation_without_live_confirmation(tmp_path):

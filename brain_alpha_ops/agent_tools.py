@@ -7,9 +7,9 @@ arbitrary Python code.
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
 from typing import Any, Callable, Mapping
 
+from brain_alpha_ops.agent_tool_registry import resolve_tool_name, tool_definitions
 from brain_alpha_ops.brain_api import MockBrainAPI
 from brain_alpha_ops.config import RunConfig, load_run_config
 from brain_alpha_ops.error_payloads import user_error_payload
@@ -43,18 +43,6 @@ from brain_alpha_ops.tasks import JobStore
 
 MAX_TOOL_CANDIDATES = 100
 MAX_SYNC_RANGE = {"1d", "3d", "7d", "all"}
-
-
-@dataclass(frozen=True)
-class ToolDefinition:
-    name: str
-    description: str
-    input_schema: dict[str, Any]
-    live_api: bool = False
-    destructive: bool = False
-
-    def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
 
 
 class BrainAlphaToolbox:
@@ -102,13 +90,19 @@ class BrainAlphaToolbox:
         return [tool.to_dict() for tool in tool_definitions()]
 
     def call(self, name: str, arguments: dict[str, Any] | None = None) -> dict[str, Any]:
-        handler = self._handlers.get(str(name or ""))
+        requested_name = str(name or "")
+        resolved_name = resolve_tool_name(requested_name)
+        handler = self._handlers.get(resolved_name)
         if not handler:
             return _tool_error(ValueError(f"unknown tool: {name}"), "TOOL_NOT_FOUND")
         try:
-            return redact_data(handler(dict(arguments or {})))
+            payload = redact_data(handler(dict(arguments or {})))
+            if isinstance(payload, dict) and resolved_name != requested_name:
+                payload.setdefault("tool_alias", requested_name)
+                payload.setdefault("canonical_tool", resolved_name)
+            return payload
         except Exception as exc:
-            return _tool_error(exc, "TOOL_ERROR", tool=str(name or ""))
+            return _tool_error(exc, "TOOL_ERROR", tool=requested_name, canonical_tool=resolved_name)
 
     def _list_context(self, args: dict[str, Any]) -> dict[str, Any]:
         query = str(args.get("query", "all") or "all")
@@ -552,136 +546,6 @@ class BrainAlphaToolbox:
             "exact_count": lookup.get("exact_count", len(exact_records)),
             "matching_records": actionable_records[:5],
         }
-
-
-def tool_definitions() -> list[ToolDefinition]:
-    return [
-        ToolDefinition(
-            "list_context",
-            "List local official fields, operators, and datasets available to the research engine.",
-            _schema({"query": "string", "limit": "integer"}),
-        ),
-        ToolDefinition(
-            "generate_candidates",
-            "Generate candidate FASTEXPR alpha expressions without calling the official API; local research memory guidance is enabled by default and optional assistant guidance can bias the local generator.",
-            _schema({
-                "count": "integer",
-                "dataset_id": "string",
-                "use_research_memory": "boolean",
-                "top_n": "integer",
-                "min_success_rate": "number",
-                "assistant_response": "string",
-                "assistant_raw_output": "string",
-                "assistant_guidance": "object",
-                "assistant_min_confidence": "number",
-            }),
-        ),
-        ToolDefinition(
-            "validate_expression",
-            "Validate a FASTEXPR expression locally, optionally with the configured BRAIN API.",
-            _schema({"expression": "string", "use_api": "boolean", "confirm_live_api": "boolean"}),
-            live_api=True,
-        ),
-        ToolDefinition(
-            "score_candidate",
-            "Compute local scorecard and gate-oriented diagnostics for one expression.",
-            _schema({"expression": "string", "family": "string", "hypothesis": "string", "official_metrics": "object"}),
-        ),
-        ToolDefinition(
-            "run_simulation",
-            "Submit one expression to the configured simulation API and fetch the result when completed.",
-            _schema({"expression": "string", "max_polls": "integer", "confirm_live_api": "boolean"}),
-            live_api=True,
-        ),
-        ToolDefinition(
-            "check_alpha",
-            "Run the configured alpha check for an official alpha id.",
-            _schema({"alpha_id": "string", "confirm_live_api": "boolean"}),
-            live_api=True,
-        ),
-        ToolDefinition(
-            "submit_alpha",
-            "Submit an official alpha after pre-submit check and explicit confirmation.",
-            _schema({"alpha_id": "string", "expression": "string", "confirm_live_api": "boolean", "confirm_submit": "boolean"}),
-            live_api=True,
-            destructive=True,
-        ),
-        ToolDefinition(
-            "sync_cloud_alphas",
-            "Sync user cloud alphas into the local research repository.",
-            _schema({"sync_range": "string", "limit": "integer", "confirm_live_api": "boolean"}),
-            live_api=True,
-        ),
-        ToolDefinition(
-            "get_job_status",
-            "Read status from a configured task store.",
-            _schema({"kind": "string", "job_id": "string"}),
-        ),
-        ToolDefinition(
-            "query_research_memory",
-            "Summarize local research memory: fields, operators, failures, hypotheses, and lineage.",
-            _schema({"limit": "integer", "top_n": "integer", "persist": "boolean"}),
-        ),
-        ToolDefinition(
-            "query_expression_index",
-            "Summarize or look up persisted FASTEXPR history by canonical fingerprint and semantic similarity.",
-            _schema({"expression": "string", "limit": "integer", "top_n": "integer", "include_cloud": "boolean", "min_similarity": "number"}),
-        ),
-        ToolDefinition(
-            "query_research_observability",
-            "Summarize local research health: expression reuse, backtest failures, retryable errors, official-call guard blocks, and JSONL/cache status.",
-            _schema({"limit": "integer", "top_n": "integer", "include_cloud": "boolean"}),
-        ),
-        ToolDefinition(
-            "build_assistant_context",
-            "Build an LLM-ready context pack from run config, latest local results, cloud cache, and research memory guidance.",
-            _schema({"limit": "integer", "top_n": "integer", "include_prompt": "boolean"}),
-        ),
-        ToolDefinition(
-            "build_assistant_request",
-            "Build a provider-neutral LLM request envelope with response schema and offline fallback draft.",
-            _schema({"limit": "integer", "top_n": "integer", "include_prompt": "boolean", "include_offline_draft": "boolean"}),
-        ),
-        ToolDefinition(
-            "parse_assistant_response",
-            "Parse and normalize a JSON response returned by an external assistant model.",
-            _schema({"raw_output": "string"}),
-        ),
-        ToolDefinition(
-            "assistant_response_guidance",
-            "Convert an assistant model response into generator-ready fields, operators, windows, and operational flags.",
-            _schema({"raw_output": "string", "min_confidence": "number"}),
-        ),
-        ToolDefinition(
-            "run_anti_overfit",
-            "Run deterministic anti-overfit checks for a candidate payload.",
-            _schema({"candidate": "object"}, required=["candidate"]),
-        ),
-        ToolDefinition(
-            "run_rolling_validation",
-            "Run rolling validation checks for a candidate payload.",
-            _schema({"candidate": "object", "windows": "integer"}, required=["candidate"]),
-        ),
-        ToolDefinition(
-            "cross_review_assistant_response",
-            "Cross-review a primary assistant response against an assistant request pack.",
-            _schema(
-                {"request_pack": "object", "primary_response": "string", "reviewer_response": "string", "min_confidence": "number"},
-                required=["request_pack", "primary_response"],
-            ),
-        ),
-    ]
-
-
-def _schema(properties: dict[str, str], *, required: list[str] | None = None) -> dict[str, Any]:
-    required_names = required if required is not None else [name for name in properties if name in {"expression", "alpha_id", "raw_output"}]
-    return {
-        "type": "object",
-        "properties": {name: {"type": kind} for name, kind in properties.items()},
-        "required": required_names,
-        "additionalProperties": False,
-    }
-
 
 def _tool_error(exc: Exception, error_code: str, **context: Any) -> dict[str, Any]:
     return user_error_payload(exc, error_code=error_code, **context)
