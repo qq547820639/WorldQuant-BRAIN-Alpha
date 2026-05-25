@@ -21,6 +21,10 @@ Source checklist: user-provided QuantGPT comparison recommendations on architect
   - The batch path reuses the single-expression simulation safety gates: live API confirmation, duplicate-expression preflight, validation-before-submit, per-item result capture, and bounded batch/concurrency limits.
   - Assistant prompt guidance now treats batch backtest as a budgeted deep-validation step, not a shortcut around `score_factor`.
 - [x] AM-5 Ran validation and synchronized this checklist with final evidence.
+- [x] AM-6 Hardened batch simulation result accounting.
+  - `run_simulation` now marks terminal `FAILED`/`ERROR` poll statuses as failed tool results instead of reporting a successful submitted simulation.
+  - `run_simulation_batch` therefore counts terminal simulation failures in `failed_count` and returns `ok=false` when any selected item finishes failed.
+  - Added a regression test so failed terminal statuses cannot be silently counted as successful batch work.
 
 ## Pending
 
@@ -47,3 +51,9 @@ Source checklist: user-provided QuantGPT comparison recommendations on architect
 - [x] Standard quality gate: `scripts/quality_gate.py --skip-tests --json` passed all configured steps.
 - [x] Strict quality gate: `scripts/quality_gate.py --strict-official-context --skip-tests --json` passed, including strict official context and strict BRAIN contract validation.
 - [x] Full repository pytest: `713 passed, 1 existing pytest config warning`.
+- [x] Incremental AM-6 verification:
+  - `python -m compileall -q brain_alpha_ops tests`: passed.
+  - Batch/agent/observability focused slice passed: `50 passed, 1 existing pytest config warning`.
+  - Registry/prompt/packaging focused slice passed: `47 passed, 1 existing pytest config warning`.
+  - Standard quality gate after AM-6: `scripts/quality_gate.py --skip-tests --json` passed all configured steps.
+  - Full repository pytest was not re-run after AM-6; the last full-suite baseline remains the `713 passed` result above.
