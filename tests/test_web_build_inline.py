@@ -49,6 +49,17 @@ def test_build_inline_writes_expected_output(tmp_path):
     assert result["replaced"] >= 13
     assert result["css_replaced"] == 1
     assert "css/app.css" in result["css_sources"]
+    assert "\ufeff" not in output.read_text(encoding="utf-8")
+
+
+def test_build_inline_strips_bom_from_template_and_inlined_sources():
+    html, stats = build_inline.build_inline(
+        "\ufeff<body><!-- inline-css:css/app.css --><!-- inline:js/app.js --></body>"
+    )
+
+    assert stats["replaced"] == 1
+    assert stats["css_replaced"] == 1
+    assert "\ufeff" not in html
 
 
 def test_legacy_build_inline_entrypoint_delegates_to_web_builder():
