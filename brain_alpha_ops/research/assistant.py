@@ -16,6 +16,7 @@ from typing import Any
 from brain_alpha_ops.models import utc_now
 from brain_alpha_ops.research.context import render_context_prompt
 from brain_alpha_ops.research.guidance import assistant_guidance_digest
+from brain_alpha_ops.research.prompt_templates import load_system_prompt
 from brain_alpha_ops.research.robustness_context import assistant_robustness_signals, robustness_evidence, robustness_gate_adjustment
 
 
@@ -24,11 +25,6 @@ ASSISTANT_RESPONSE_SCHEMA_VERSION = "assistant_response.v1"
 ASSISTANT_GUIDANCE_SCHEMA_VERSION = "assistant_generation_guidance.v1"
 DEFAULT_MAX_PROMPT_TOKENS = 6000
 INTERNAL_CONTEXT_METADATA_KEYS = {"sensitive_fields_redacted"}
-
-SYSTEM_PROMPT = (
-    "You are a quantitative investment research assistant for WorldQuant BRAIN FASTEXPR. "
-    "Use only the supplied local context. Return one valid JSON object only; no markdown."
-)
 
 ASSISTANT_RESPONSE_SCHEMA: dict[str, Any] = {
     "schema_version": ASSISTANT_RESPONSE_SCHEMA_VERSION,
@@ -95,7 +91,7 @@ def build_assistant_request_pack(
         "prompt_diagnostics": prompt_diagnostics,
         "request": {
             "messages": [
-                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "system", "content": load_system_prompt()},
                 {"role": "user", "content": prompt},
             ],
             "response_schema": ASSISTANT_RESPONSE_SCHEMA,
@@ -153,7 +149,6 @@ def _strip_internal_context_metadata(value: Any) -> Any:
     if isinstance(value, tuple):
         return tuple(_strip_internal_context_metadata(item) for item in value)
     return value
-
 
 def render_assistant_request_prompt(context_pack: dict[str, Any]) -> str:
     """Render the user message that should be sent with ``SYSTEM_PROMPT``."""

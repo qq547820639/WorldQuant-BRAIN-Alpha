@@ -51,8 +51,18 @@ if (-not (Test-Path $HypothesisSource)) {
 New-Item -ItemType Directory -Path $HypothesisTarget -Force | Out-Null
 Copy-Item -Path (Join-Path $HypothesisSource "*") -Destination $HypothesisTarget -Recurse -Force
 
+$PromptSource = Join-Path $Root "brain_alpha_ops\research\prompts"
+$PromptTarget = Join-Path $Root "dist\brain_alpha_ops\research\prompts"
+if (-not (Test-Path $PromptSource)) {
+    Write-Error "Missing required assistant prompt template directory: $PromptSource"
+    exit 1
+}
+New-Item -ItemType Directory -Path $PromptTarget -Force | Out-Null
+Copy-Item -Path (Join-Path $PromptSource "*") -Destination $PromptTarget -Recurse -Force
+
 Write-Host ""
 Write-Host "Copied official context files to $DistData"
 Write-Host "Copied hypothesis library files to $HypothesisTarget"
+Write-Host "Copied assistant prompt template files to $PromptTarget"
 Write-Host "Done: $Root\dist\BrainAlphaOps.exe"
 Write-Host "The executable starts the local service in a console and opens the browser UI automatically."
