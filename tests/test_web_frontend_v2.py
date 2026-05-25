@@ -38,6 +38,7 @@ ALL_MODULES = {
     "js/result-state.js",
     "js/result-table.js",
     "js/state.js",
+    "js/strategy-panel.js",
     "js/utils.js",
     "js/view-model.js",
     "js/view-registry.js",
@@ -300,7 +301,7 @@ def _frontend_module_load_order(modules: list[str]) -> list[str]:
     ordered = list(modules)
     if "js/app.js" not in ordered:
         return ordered
-    for dependency in ["js/result-state.js", "js/result-table.js", "js/form-controls.js"]:
+    for dependency in ["js/result-state.js", "js/result-table.js", "js/form-controls.js", "js/strategy-panel.js"]:
         if dependency in ordered:
             continue
         insert_at = ordered.index("js/app.js")
@@ -437,6 +438,7 @@ def test_template_has_view_tabs():
     assert "tab-badge" in app_js + css
     assert "view-tab-group" in app_js + css
     assert "view-tab-group-label" in css
+    assert "view-tab-row" in css
     assert "tab-marker" in app_js + css
     assert "生产流程" in view_registry_js
 
@@ -485,7 +487,10 @@ def test_template_has_all_required_html_elements():
         'id="confirmOverlay"', 'id="toastContainer"', 'id="spinnerOverlay"',
         'id="moduleActions"', 'id="submitFailurePanel"',
         'id="viewTabs"', 'id="tableSearch"', 'id="controlButton"',
+        'id="sideSyncButton"', 'id="sideCheckButton"', 'id="sideSubmitButton"',
+        'id="sideTaskReason"',
         'id="workflowRail"', 'id="workflowStatus"', 'id="workflowRunButton"',
+        'id="strategyPluginSpecsGroup"', 'id="strategyPluginSpecsHelp"',
     ]
     for el in required:
         assert el in template, f"Required element missing: {el}"
@@ -508,6 +513,7 @@ def test_template_has_ux_refactor_shell_contract():
     assert "生产、检查、提交的本地工作台" in template
     assert "policy-grid" in app_js + css
     assert "policy-card" in app_js + css
+    assert "policy-card.is-wide" in css
     assert "connection-result" in template
     assert "assistant-generate-inputs" in template
     assert "sync-card" in template
@@ -518,6 +524,12 @@ def test_template_has_ux_refactor_shell_contract():
     assert "workflow-step" in template + css
     assert "workflow-panel" in template + css
     assert "workflow-actions" in template + css
+    assert "task-console-actions" in template + css
+    assert "任务操作台" in template
+    assert "status-pill" in template + css
+    assert "data-table-wrap.is-empty" in css
+    assert "form-group.is-disabled" in css
+    assert 'data-change-action="toggle-strategy-plugins"' in template
     assert "tab-marker" in app_js + css
     assert "empty-state-illustration\" id=\"tableEmptyIcon\">01" in template
     assert 'id="tableEmptyActions"' in template
@@ -1484,8 +1496,18 @@ assertContains(document.getElementById("workflowStatus").textContent, "可提交
 window.AppState.set("syncInFlight", true);
 window.renderBusyControls();
 assertEqual(document.getElementById("workflowRunButton").disabled, true, "run disabled during sync");
+assertEqual(document.getElementById("sideSyncButton").disabled, true, "side sync disabled during sync");
+assertContains(document.getElementById("sideTaskReason").textContent, "云端同步", "side console explains sync lock");
 assertEqual(document.getElementById("workflowStatus").classList.contains("is-busy"), true, "busy status class");
 window.AppState.set("syncInFlight", false);
+
+document.getElementById("strategyPluginsEnabled").checked = false;
+window.renderBusyControls();
+assertEqual(document.getElementById("strategyPluginSpecs").disabled, true, "plugin specs disabled when plugin switch is off");
+assertEqual(document.getElementById("strategyPluginSpecsGroup").classList.contains("is-disabled"), true, "plugin specs group visibly disabled");
+document.getElementById("strategyPluginsEnabled").checked = true;
+window.renderBusyControls();
+assertEqual(document.getElementById("strategyPluginSpecs").disabled, false, "plugin specs enabled when plugin switch is on");
 
 window.AppState.setBatch({
   "currentResult.candidates": [],
@@ -1493,6 +1515,7 @@ window.AppState.setBatch({
   "activeView": "submittable",
 });
 window.renderCurrentView();
+assertEqual(document.getElementById("tableWrap").classList.contains("is-empty"), true, "empty table wrapper uses compact empty layout");
 var actions = document.getElementById("tableEmptyActions").innerHTML;
 assertContains(actions, 'data-action="switch-view"', "empty state links to check view");
 assertContains(actions, 'data-view="passed"', "empty state targets passed view");
@@ -1535,6 +1558,7 @@ window.renderCurrentView();
 var tbody = document.getElementById("candidateRows");
 assertContains(tbody.innerHTML, "ALPHA001", "first alpha rendered");
 assertContains(tbody.innerHTML, "ALPHA002", "second alpha rendered");
+assertEqual(document.getElementById("tableWrap").classList.contains("is-empty"), false, "data table wrapper exits empty layout when rows exist");
 assertContains(tbody.innerHTML, "badge-success", "app keeps whitelisted badges as html");
 
 var pill = document.getElementById("countPill");
@@ -1757,6 +1781,7 @@ assertContains(target.innerHTML, "候选上限", "shows candidate limit");
 assertContains(target.innerHTML, "池容量", "shows pool size label");
 assertContains(target.innerHTML, "10", "shows pool size value");
 assertContains(target.innerHTML, "连续生产", "shows run forever");
+assertContains(target.innerHTML, "策略插件", "shows plugin policy label");
 """
 
     _run_node_script(_build_test_script(

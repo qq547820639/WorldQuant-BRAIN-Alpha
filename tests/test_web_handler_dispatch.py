@@ -114,6 +114,7 @@ def _ctx():
         check_jobs=check_jobs,
         enrich_progress=lambda progress: {**progress, "enriched": True},
         public_run_config=lambda: {"environment": "mock"},
+        public_config_schema=lambda: {"schema_version": "test_schema"},
         latest_result_snapshot=lambda: {"ok": True, "source": "latest"},
         lifecycle_from_job=lambda job: [{"stage": "x"}],
         cloud_alpha_snapshot=lambda **kwargs: {"alphas": [], "summary": {"limit": kwargs.get("limit")}},
@@ -171,6 +172,10 @@ def test_dispatch_get_handles_root_status_and_query_bounds():
     status = _Handler()
     dispatch_get(status, urlparse("/api/status?job_id=job_1"), ctx)
     assert status.json_calls[0][0]["progress"]["enriched"] is True
+
+    config_schema = _Handler()
+    dispatch_get(config_schema, urlparse("/api/config_schema"), ctx)
+    assert config_schema.json_calls[0][0]["schema"]["schema_version"] == "test_schema"
 
     memory = _Handler()
     dispatch_get(memory, urlparse("/api/research_memory?limit=3&top_n=2"), ctx)

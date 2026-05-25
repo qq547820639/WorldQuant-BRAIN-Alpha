@@ -101,6 +101,7 @@ def bounded_query_float(value: object, lower: float, upper: float) -> float:
 def run_config_from_payload(payload: dict, *, loader: RunConfigLoader = load_run_config) -> RunConfig:
     run_config = loader()
     settings_data = payload.get("settings") or {}
+    alpha_type = settings_data.get("type", settings_data.get("alphaType"))
     current_settings = run_config.ops.settings
     requested_environment = payload_web_environment(payload)
     if requested_environment is not None:
@@ -143,7 +144,7 @@ def run_config_from_payload(payload: dict, *, loader: RunConfigLoader = load_run
         nanHandling=str(settings_data.get("nanHandling", current_settings.nanHandling)),
         language=str(settings_data.get("language", current_settings.language)),
         visualization=payload_truthy(settings_data.get("visualization", current_settings.visualization)),
-        type=str(settings_data.get("type", current_settings.type)),
+        type=str(alpha_type if alpha_type is not None else current_settings.type),
     )
     current_budget = run_config.ops.budget
     run_config.ops.budget = ResearchBudget(
@@ -415,7 +416,7 @@ def validate_settings_enums(settings: dict) -> None:
     neutralization = str(settings.get("neutralization", "")).strip()
     if neutralization and neutralization not in _VALID_NEUTRALIZATIONS:
         errors.append(f"Invalid neutralization: '{neutralization}'. Valid: {sorted(_VALID_NEUTRALIZATIONS)}")
-    alpha_type = str(settings.get("type", "")).strip()
+    alpha_type = str(settings.get("type", settings.get("alphaType", ""))).strip()
     if alpha_type and alpha_type not in _VALID_TYPES:
         errors.append(f"Invalid alpha type: '{alpha_type}'. Valid: {sorted(_VALID_TYPES)}")
     if errors:

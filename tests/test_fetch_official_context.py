@@ -4,7 +4,11 @@ import pytest
 
 import fetch_official_context
 from brain_alpha_ops.config import RunConfig, write_run_config
-from brain_alpha_ops.data.loader import OfficialDataLoader
+from brain_alpha_ops.data.loader import (
+    PACKAGED_OFFICIAL_CONTEXT_FILES,
+    OfficialDataLoader,
+    ensure_official_context_files,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -111,6 +115,91 @@ def test_official_loader_accepts_name_only_field_records(tmp_path):
     assert loader.field_count == 2
     assert loader.validate_field("close") is True
     assert loader.validate_field("volume") is True
+
+
+def test_official_loader_repairs_packaged_context_from_meipass(monkeypatch, tmp_path):
+    runtime_root = tmp_path / "runtime"
+    bundled_data = tmp_path / "bundle" / "data"
+    bundled_data.mkdir(parents=True)
+    (bundled_data / "official_fields.json").write_text(
+        json.dumps([{"id": "close", "dataset": {"id": "pv1", "name": "Price Volume"}}]),
+        encoding="utf-8",
+    )
+    (bundled_data / "official_operators.json").write_text(
+        json.dumps([{"name": "rank"}]),
+        encoding="utf-8",
+    )
+    (bundled_data / "official_datasets.json").write_text(
+        json.dumps([{"id": "pv1", "name": "Price Volume", "field_count": 1}]),
+        encoding="utf-8",
+    )
+    (bundled_data / "official_fields.meta.json").write_text('{"source":"official_api"}', encoding="utf-8")
+
+    monkeypatch.setattr("brain_alpha_ops.data.loader.runtime_project_root", lambda: runtime_root)
+    monkeypatch.setattr("sys._MEIPASS", str(tmp_path / "bundle"), raising=False)
+
+    loader = OfficialDataLoader()
+    loader.load_all("data")
+
+    target_data = runtime_root / "data"
+    assert (target_data / "official_fields.json").is_file()
+    assert (target_data / "official_operators.json").is_file()
+    assert (target_data / "official_datasets.json").is_file()
+    assert (target_data / "official_fields.meta.json").is_file()
+    assert loader.field_count == 1
+    assert loader.operator_count == 1
+    assert loader.dataset_count == 1
+    assert loader.validate_field("close") is True
+    assert loader.validate_operator("rank") is True
+    assert loader.get_dataset("pv1") is not None
+
+
+def test_packaged_context_repair_does_not_overwrite_valid_runtime_files(monkeypatch, tmp_path):
+    runtime_data = tmp_path / "runtime" / "data"
+    bundled_data = tmp_path / "bundle" / "data"
+    runtime_data.mkdir(parents=True)
+    bundled_data.mkdir(parents=True)
+    (runtime_data / "official_fields.json").write_text(
+        json.dumps([{"id": "runtime_close"}]),
+        encoding="utf-8",
+    )
+    (bundled_data / "official_fields.json").write_text(
+        json.dumps([{"id": "bundled_close"}]),
+        encoding="utf-8",
+    )
+    (bundled_data / "official_operators.json").write_text(
+        json.dumps([{"name": "rank"}]),
+        encoding="utf-8",
+    )
+    (bundled_data / "official_datasets.json").write_text(
+        json.dumps([{"id": "pv1", "name": "Price Volume", "field_count": 1}]),
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr("sys._MEIPASS", str(tmp_path / "bundle"), raising=False)
+
+    result = ensure_official_context_files(runtime_data)
+
+    copied = result["copied"]
+    assert isinstance(copied, list)
+    assert "official_fields.json" not in copied
+    assert "official_operators.json" in copied
+    assert "official_datasets.json" in copied
+    assert json.loads((runtime_data / "official_fields.json").read_text(encoding="utf-8")) == [
+        {"id": "runtime_close"}
+    ]
+
+
+def test_packaged_context_file_manifest_covers_metadata_and_status():
+    assert PACKAGED_OFFICIAL_CONTEXT_FILES == (
+        "official_fields.json",
+        "official_operators.json",
+        "official_datasets.json",
+        "official_fields.meta.json",
+        "official_operators.meta.json",
+        "official_datasets.meta.json",
+        "official_context_refresh_status.json",
+    )
 
 
 def test_official_loader_preserves_existing_cache_when_refresh_target_is_empty(tmp_path):

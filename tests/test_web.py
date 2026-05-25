@@ -3,12 +3,14 @@ from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 import json
 import os
+import re
 import urllib.request
 
 import pytest
 
 from brain_alpha_ops import web
 from brain_alpha_ops.brain_api.base import BrainAPIError
+from brain_alpha_ops.brain_api.canonical import CANONICAL_SETTINGS
 from brain_alpha_ops.config import RunConfig
 from brain_alpha_ops.models import Candidate
 from brain_alpha_ops.research.repository import ResearchRepository
@@ -48,6 +50,16 @@ def _run_app_contract(test_code: str) -> str:
     return _run_node_script(_build_test_script(APP_TEST_MODULES, test_code))
 
 
+def _select_options(html: str, select_id: str) -> set[str]:
+    match = re.search(rf'<select[^>]*id="{re.escape(select_id)}"[^>]*>(.*?)</select>', html, re.DOTALL)
+    assert match, f"select not found: {select_id}"
+    values: set[str] = set()
+    for option in re.finditer(r'<option(?:\s+value="([^"]*)")?[^>]*>(.*?)</option>', match.group(1), re.DOTALL):
+        value = option.group(1) if option.group(1) is not None else re.sub(r"<[^>]+>", "", option.group(2)).strip()
+        values.add(value)
+    return values
+
+
 def test_web_html_contains_chinese_console():
     HTML = _load_html()
 
@@ -64,9 +76,10 @@ def test_web_html_contains_chinese_console():
         "排序分",
         "提交勾选",
         "预计剩余",
+        "任务操作台",
         "Instrument Type",
         "Truncation",
-        "Assistant JSON",
+        "助手 JSON",
     ):
         assert text in HTML
 
@@ -85,6 +98,9 @@ def test_web_html_contains_chinese_console():
         "checkProgressMeta",
         "autoSubmitToggle",
         "controlButton",
+        "sideSyncButton",
+        "sideCheckButton",
+        "sideSubmitButton",
         "slotPolicyText",
         "assistantGenerateInputs",
         "assistantUseDraftButton",
@@ -182,6 +198,21 @@ def test_web_html_contains_chinese_console():
     assert "loadResearchMemory" in HTML
     assert "OfficialBrainAPI" not in HTML
     assert "useAssistantGuidance" in HTML
+
+
+def test_web_settings_select_options_match_canonical_contract():
+    html = _load_html()
+
+    assert _select_options(html, "region") == CANONICAL_SETTINGS["region"]
+    assert _select_options(html, "universe") == CANONICAL_SETTINGS["universe"]
+    assert {int(value) for value in _select_options(html, "delay")} == CANONICAL_SETTINGS["delay"]
+    assert _select_options(html, "neutralization") == CANONICAL_SETTINGS["neutralization"]
+    assert _select_options(html, "instrumentType") == CANONICAL_SETTINGS["instrumentType"]
+    assert _select_options(html, "alphaType") == CANONICAL_SETTINGS["type"]
+    assert _select_options(html, "pasteurization") == CANONICAL_SETTINGS["pasteurization"]
+    assert _select_options(html, "unitHandling") == CANONICAL_SETTINGS["unitHandling"]
+    assert _select_options(html, "nanHandling") == CANONICAL_SETTINGS["nanHandling"]
+    assert _select_options(html, "language") == CANONICAL_SETTINGS["language"]
 
 
 def test_api_client_maps_submit_preflight_error_codes():
@@ -633,6 +664,13 @@ def test_web_config_from_payload():
     assert config.scoring.assistant_guidance_score_penalty_cap == 3.5
 
 
+def test_web_config_from_payload_accepts_alpha_type_alias():
+    config = config_from_payload({"settings": {"alphaType": "PYRAMID", "unitHandling": "NONE"}})
+
+    assert config.settings.type == "PYRAMID"
+    assert config.settings.unitHandling == "NONE"
+
+
 def test_web_config_from_payload_rejects_invalid_numbers():
     with pytest.raises(ValueError, match="candidates must be an integer"):
         config_from_payload({"candidates": "many"})
@@ -675,10 +713,31 @@ def test_public_config_redacts_credentials():
     assert config["credentials"]["token"] == ""
 
 
+def test_public_config_schema_exposes_required_panel_contract():
+    schema = web.public_config_schema()
+    control_paths = {item["payload_path"] for item in schema["controls"]}
+
+    assert schema["schema_version"] == "web_config_schema.v1"
+    assert schema["environment"]["allowed"] == ["production"]
+    assert "type" in schema["required_settings_fields"]
+    assert "settings.type" in control_paths
+    assert "settings.alphaType" not in control_paths
+    assert schema["settings_options"]["unitHandling"] == ["NONE", "RAW", "VERIFY"]
+    assert "assistantGuidanceScoreMinOutcomeCount" in control_paths
+    assert "strategyPluginSpecs" in control_paths
+    assert schema["operation_layout"]["primary_console"] == [
+        "toggle-run",
+        "sync-cloud",
+        "check-batch",
+        "submit-selected",
+    ]
+
+
 def test_web_routes_define_session_policy_and_known_paths():
     assert route_for("GET", "/api/health").requires_session is False
     assert route_for("GET", "/").category == "html"
     assert route_for("POST", "/api/run").requires_session is True
+    assert route_for("GET", "/api/config_schema").handler == "config_schema"
     assert route_for("GET", "/missing") is None
     assert "/api/assistant_request" in GET_ROUTES
     assert "/api/research_knowledge" in GET_ROUTES

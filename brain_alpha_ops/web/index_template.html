@@ -18,7 +18,7 @@
           <h1>BRAIN Alpha Ops</h1>
           <div class="header-brand-subtitle">生产、检查、提交的本地工作台</div>
         </div>
-        <span id="envBadge" class="env-badge">Production</span>
+        <span id="envBadge" class="env-badge">生产环境</span>
       </div>
       <div class="header-actions">
         <div class="header-status">
@@ -29,7 +29,7 @@
         <div id="userProfile" class="text-sm text-muted">未连接</div>
         <span class="header-divider" aria-hidden="true"></span>
         <button id="themeToggleBtn" class="btn btn-icon btn-ghost btn-sm" data-action="toggle-theme" title="切换浅色/暗色主题" aria-label="切换浅色或暗色主题">
-          <span class="theme-icon-light">L</span><span class="theme-icon-dark hidden">D</span>
+          <span class="theme-icon-light">浅</span><span class="theme-icon-dark hidden">深</span>
         </button>
         <button class="btn btn-danger btn-sm" data-action="shutdown-app" title="停止本地服务">关闭</button>
       </div>
@@ -41,11 +41,17 @@
       <aside class="app-sidebar" id="controlPanel" role="complementary" aria-label="控制面板">
         <div class="sidebar-body">
 
-          <!-- PRIMARY ACTION CARD — always visible, prominent -->
+          <!-- PRIMARY TASK CONSOLE -->
           <div class="action-card">
-            <div class="action-card-title">生产搜索</div>
-            <div class="action-card-desc">一键启动核心流程：生成候选、官方回测、评分入池，再进入达标检查。</div>
+            <div class="action-card-title">任务操作台</div>
+            <div class="action-card-desc">核心动作常驻首屏：生产、同步、检查、提交都在这里；冲突时直接显示禁用原因。</div>
             <button id="controlButton" class="btn-run" data-action="toggle-run">开始生产搜索</button>
+            <div class="task-console-actions" aria-label="核心任务操作">
+              <button id="sideSyncButton" class="btn btn-secondary btn-sm" data-action="sync-cloud">同步云端</button>
+              <button id="sideCheckButton" class="btn btn-secondary btn-sm" data-action="check-batch">检查达标</button>
+              <button id="sideSubmitButton" class="btn btn-secondary btn-sm" data-action="submit-selected">提交勾选</button>
+            </div>
+            <div id="sideTaskReason" class="task-console-reason" aria-live="polite">当前无冲突操作。</div>
             <div class="action-card-sub">
               <button class="btn btn-secondary btn-sm flex-1" data-action="scroll-main">查看结果</button>
               <button class="btn btn-secondary btn-sm flex-1" data-action="switch-view" data-view="passed">去检查</button>
@@ -86,7 +92,7 @@
                   </div>
                   <div class="collapsible-body">
                     <div class="form-group">
-                      <label class="form-label" for="token">Token</label>
+                      <label class="form-label" for="token">令牌 Token</label>
                       <input id="token" class="form-input" type="password" placeholder="可选：Bearer Token">
                     </div>
                     <div class="form-group">
@@ -126,28 +132,28 @@
                 <div class="collapsible-header" data-action="toggle-collapsible" data-target="backtestSettings" role="button" tabindex="0"><span>高级回测设置</span><span>▼</span></div>
                 <div class="collapsible-body">
                   <div class="form-row">
-                    <div class="form-group"><label class="form-label" for="region">Region</label><select id="region" class="form-select"><option>USA</option><option>CHN</option><option>EUR</option><option>GLB</option></select></div>
-                    <div class="form-group"><label class="form-label" for="universe">Universe</label><select id="universe" class="form-select"><option>TOP3000</option><option>TOP1000</option><option>TOP500</option></select></div>
+                    <div class="form-group"><label class="form-label" for="region">地区 Region</label><select id="region" class="form-select"><option>USA</option><option>CHN</option><option>EUR</option><option>GLB</option></select></div>
+                    <div class="form-group"><label class="form-label" for="universe">股票池 Universe</label><select id="universe" class="form-select"><option>TOP3000</option><option>TOP1000</option><option>TOP500</option></select></div>
                   </div>
                   <div class="form-row">
-                    <div class="form-group"><label class="form-label" for="delay">Delay</label><select id="delay" class="form-select"><option value="1">1</option><option value="0">0</option></select></div>
-                    <div class="form-group"><label class="form-label" for="neutralization">Neutralization</label><select id="neutralization" class="form-select"><option>SUBINDUSTRY</option><option>INDUSTRY</option><option>SECTOR</option><option>MARKET</option><option>NONE</option></select></div>
+                    <div class="form-group"><label class="form-label" for="delay">延迟 Delay</label><select id="delay" class="form-select"><option value="1">1</option><option value="0">0</option></select></div>
+                    <div class="form-group"><label class="form-label" for="neutralization">中性化 Neutralization</label><select id="neutralization" class="form-select"><option>SUBINDUSTRY</option><option>INDUSTRY</option><option>SECTOR</option><option>MARKET</option><option>NONE</option></select></div>
                   </div>
                   <div class="form-row">
-                    <div class="form-group"><label class="form-label" for="instrumentType">Instrument Type</label><select id="instrumentType" class="form-select"><option>EQUITY</option></select></div>
-                    <div class="form-group"><label class="form-label" for="alphaType">Alpha Type</label><select id="alphaType" class="form-select"><option>REGULAR</option><option>POWER_POOL</option><option>ATOM</option><option>PYRAMID</option></select></div>
+                    <div class="form-group"><label class="form-label" for="instrumentType">工具类型 Instrument Type</label><select id="instrumentType" class="form-select"><option>EQUITY</option></select></div>
+                    <div class="form-group"><label class="form-label" for="alphaType">Alpha 类型</label><select id="alphaType" class="form-select"><option>REGULAR</option><option>POWER_POOL</option><option>ATOM</option><option>PYRAMID</option></select></div>
                   </div>
                   <div class="form-row">
-                    <div class="form-group"><label class="form-label" for="decay">Decay</label><input id="decay" class="form-input" type="number" min="0" step="1" value="10"></div>
-                    <div class="form-group"><label class="form-label" for="truncation">Truncation</label><input id="truncation" class="form-input" type="number" min="0" max="1" step="0.01" value="0.05"></div>
+                    <div class="form-group"><label class="form-label" for="decay">衰减 Decay</label><input id="decay" class="form-input" type="number" min="0" step="1" value="10"></div>
+                    <div class="form-group"><label class="form-label" for="truncation">截断 Truncation</label><input id="truncation" class="form-input" type="number" min="0" max="1" step="0.01" value="0.05"></div>
                   </div>
                   <div class="form-row">
-                    <div class="form-group"><label class="form-label" for="pasteurization">Pasteurization</label><select id="pasteurization" class="form-select"><option>ON</option><option>OFF</option></select></div>
-                    <div class="form-group"><label class="form-label" for="nanHandling">NaN Handling</label><select id="nanHandling" class="form-select"><option>ON</option><option>OFF</option></select></div>
+                    <div class="form-group"><label class="form-label" for="pasteurization">净化 Pasteurization</label><select id="pasteurization" class="form-select"><option>ON</option><option>OFF</option></select></div>
+                    <div class="form-group"><label class="form-label" for="nanHandling">缺失值 NaN Handling</label><select id="nanHandling" class="form-select"><option>ON</option><option>OFF</option></select></div>
                   </div>
                   <div class="form-row">
-                    <div class="form-group"><label class="form-label" for="unitHandling">Unit Handling</label><select id="unitHandling" class="form-select"><option>VERIFY</option><option>RAW</option></select></div>
-                    <div class="form-group"><label class="form-label" for="language">Language</label><select id="language" class="form-select"><option>FASTEXPR</option></select></div>
+                    <div class="form-group"><label class="form-label" for="unitHandling">单位处理 Unit Handling</label><select id="unitHandling" class="form-select"><option>VERIFY</option><option>RAW</option><option>NONE</option></select></div>
+                    <div class="form-group"><label class="form-label" for="language">语言 Language</label><select id="language" class="form-select"><option>FASTEXPR</option></select></div>
                   </div>
                 </div>
               </div>
@@ -182,17 +188,17 @@
               <span class="sbar-chevron">▼</span>
             </div>
             <div class="sbar-section-body">
-              <label class="toggle" title="启用后，生产循环会读取最近一次可用 Assistant Guidance 作为候选生成偏好。">
+              <label class="toggle" title="启用后，生产循环会读取最近一次可用助手指导作为候选生成偏好。">
                 <input id="useAssistantGuidance" type="checkbox" checked>
-                <span>Assistant Guidance</span>
+                <span>助手指导</span>
               </label>
               <div class="form-group">
-                <label class="form-label" for="assistantGuidanceMinConfidence">Guidance 最低置信度</label>
+                <label class="form-label" for="assistantGuidanceMinConfidence">指导最低置信度</label>
                 <input id="assistantGuidanceMinConfidence" class="form-input" type="number" min="0" max="1" step="0.05" value="0.6">
               </div>
               <label class="toggle" title="启用后，历史表现强/弱的 guidance 会对本地排序分做小幅可审计调整。">
                 <input id="assistantGuidanceScoreAdjustment" type="checkbox" checked>
-                <span>Guidance 排序微调</span>
+                <span>指导排序微调</span>
               </label>
               <div class="form-row">
                 <div class="form-group"><label class="form-label" for="assistantGuidanceScoreMinConfidence">排序最低置信度</label><input id="assistantGuidanceScoreMinConfidence" class="form-input" type="number" min="0" max="1" step="0.05" value="0.6"></div>
@@ -203,12 +209,13 @@
                 <div class="form-group"><label class="form-label" for="assistantGuidanceScorePenaltyCap">扣分上限</label><input id="assistantGuidanceScorePenaltyCap" class="form-input" type="number" min="0" max="10" step="0.5" value="5"></div>
               </div>
               <label class="toggle" title="启用后，本地候选生成会加载配置中的策略插件。">
-                <input id="strategyPluginsEnabled" type="checkbox">
-                <span>Strategy Plugins</span>
+                <input id="strategyPluginsEnabled" type="checkbox" data-change-action="toggle-strategy-plugins">
+                <span>策略插件</span>
               </label>
-              <div class="form-group">
-                <label class="form-label" for="strategyPluginSpecs">Plugin Specs</label>
-                <textarea id="strategyPluginSpecs" class="form-textarea" rows="2" placeholder="module.path:PluginClass"></textarea>
+              <div class="form-group" id="strategyPluginSpecsGroup">
+                <label class="form-label" for="strategyPluginSpecs">插件规格</label>
+                <textarea id="strategyPluginSpecs" class="form-textarea" rows="2" placeholder="开启策略插件后填写 module.path:PluginClass"></textarea>
+                <div class="form-help" id="strategyPluginSpecsHelp">未启用策略插件时不会加载插件；启用后每行填写一个 module.path:PluginClass。</div>
               </div>
               <div id="strategyText" class="text-sm strategy-text">正在读取配置...</div>
             </div>
@@ -285,9 +292,9 @@
 
         <!-- Status Bar -->
         <div class="status-bar" id="statusBar">
-          <span id="redlineSummary">红线验证加载中...</span>
+          <span id="redlineSummary" class="status-pill">红线验证加载中...</span>
           <span class="status-bar-divider" aria-hidden="true"></span>
-          <span id="checkpointSummary">断点加载中...</span>
+          <span id="checkpointSummary" class="status-pill">断点加载中...</span>
         </div>
 
         <!-- Charts Panel -->
@@ -302,7 +309,7 @@
         </div>
 
         <!-- Monitor Section -->
-        <div class="monitor-panel">
+        <div class="monitor-panel" id="monitorPanel">
           <div>
             <div id="opsMonitor" class="monitor-stats-grid hidden"></div>
             <div id="summary" class="hidden"></div>
@@ -349,7 +356,7 @@
             <div class="progress mt-sm"><div id="checkProgressFill" class="progress-fill is-empty"></div></div>
             <div id="checkProgressMeta" class="progress-meta">进度：0%</div>
             <div id="assistantGenerateInputs" class="assistant-generate-inputs hidden">
-              <div class="form-group"><label class="form-label" for="assistantResponseInput">Assistant JSON</label><textarea id="assistantResponseInput" class="form-textarea" rows="2" placeholder="粘贴外部 LLM 返回的 JSON；留空则仅使用本地 Research Memory"></textarea></div>
+              <div class="form-group"><label class="form-label" for="assistantResponseInput">助手 JSON</label><textarea id="assistantResponseInput" class="form-textarea" rows="2" placeholder="粘贴外部 LLM 返回的 JSON；留空则仅使用本地研究记忆"></textarea></div>
               <div class="form-group"><label class="form-label" for="assistantCandidateCount">数量</label><input id="assistantCandidateCount" class="form-input" type="number" min="1" max="100" step="1" value="10"></div>
               <div class="form-group"><label class="form-label" for="assistantMinConfidence">置信度</label><input id="assistantMinConfidence" class="form-input" type="number" min="0" max="1" step="0.05" value="0.6"></div>
             </div>
@@ -364,7 +371,7 @@
             <button id="submitSelectedButton" class="btn btn-primary btn-sm hidden" data-action="submit-selected">提交勾选</button>
             <button id="assistantUseDraftButton" class="btn btn-secondary btn-sm hidden" data-action="assistant-use-draft">离线草稿</button>
             <button id="assistantSaveDraftButton" class="btn btn-secondary btn-sm hidden" data-action="assistant-save-draft">保存草稿</button>
-            <button id="assistantUseLatestButton" class="btn btn-secondary btn-sm hidden" data-action="assistant-use-latest">使用 Guidance</button>
+            <button id="assistantUseLatestButton" class="btn btn-secondary btn-sm hidden" data-action="assistant-use-latest">使用指导</button>
             <button id="assistantPreviewGuidanceButton" class="btn btn-secondary btn-sm hidden" data-action="assistant-preview-guidance">预览</button>
             <button id="assistantSaveGuidanceButton" class="btn btn-secondary btn-sm hidden" data-action="assistant-save-guidance">保存</button>
             <button id="assistantGenerateButton" class="btn btn-primary btn-sm hidden" data-action="assistant-generate-candidates">生成候选</button>
@@ -464,6 +471,7 @@
   <!-- inline:js/result-state.js -->
   <!-- inline:js/result-table.js -->
   <!-- inline:js/form-controls.js -->
+  <!-- inline:js/strategy-panel.js -->
   <!-- inline:js/cloud-sync.js -->
   <!-- inline:js/app.js -->
 </body>

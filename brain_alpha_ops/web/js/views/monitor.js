@@ -11,6 +11,28 @@
   var scoreSpan = window.Utils.scoreSpan;
   var S = window.AppState;
 
+  function hasMonitorSignal() {
+    var summary = S.get('currentResult.summary') || {};
+    var stats = summary.stats || {};
+    var live = (S.get('liveProgress') || {}).data || {};
+    return Boolean(
+      S.get('isRunning') ||
+      S.get('syncInFlight') ||
+      Object.keys(S.get('checkResults') || {}).length ||
+      (S.get('currentResult.candidates') || []).length ||
+      (S.get('currentResult.backtests') || []).length ||
+      (S.get('currentResult.cloud_alphas') || []).length ||
+      stats.produced_count ||
+      live.produced_count ||
+      summary.produced_count
+    );
+  }
+
+  function syncMonitorPanelVisibility() {
+    var panel = $('monitorPanel');
+    if (panel) panel.classList.toggle('is-visible', hasMonitorSignal());
+  }
+
   // ── renderInsight (top insight strip) ──────────────────────────────────
 
   function renderInsight() {
@@ -77,6 +99,7 @@
         (card.note ? '<div class="insight-tile-note">' + esc(card.note) + '</div>' : '') +
         '</div></div>';
     }).join('');
+    syncMonitorPanelVisibility();
   }
 
   // ── renderOpsMonitor (stat grid below insight strip) ──────────────────
@@ -126,6 +149,7 @@
         '</div>';
     }).join('');
     container.classList.remove('hidden');
+    syncMonitorPanelVisibility();
   }
 
   // ── renderBacktests (slot cards) ──────────────────────────────────────
@@ -136,6 +160,7 @@
 
     if (!backtests || !backtests.length) {
       container.innerHTML = '<div class="slot-empty">暂无回测槽位。启动生产后将自动填充。</div>';
+      syncMonitorPanelVisibility();
       return;
     }
 
@@ -164,6 +189,7 @@
         '<div>Sharpe: ' + scoreSpan(Number(sharpe) || 0) + ' | Fitness: ' + scoreSpan(Number(fitness) || 0) + '</div>' +
         '</div></div>';
     }).join('');
+    syncMonitorPanelVisibility();
   }
 
   // ── Public API ────────────────────────────────────────────────────────

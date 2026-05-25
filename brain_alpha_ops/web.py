@@ -36,6 +36,7 @@ from brain_alpha_ops.web_config import (
     payload_truthy,
     run_config_from_payload as _run_config_from_payload,
 )
+from brain_alpha_ops.web_config_schema import public_config_schema
 from brain_alpha_ops import web_html
 from brain_alpha_ops.brain_api.context_defaults import DEFAULT_FIELDS, DEFAULT_OPERATORS
 from brain_alpha_ops.jsonl import tail_text_lines
@@ -432,6 +433,7 @@ def _handler_dispatch_context() -> WebHandlerDispatchContext:
         check_jobs=CHECK_JOBS,
         enrich_progress=_enrich_progress,
         public_run_config=public_run_config,
+        public_config_schema=public_config_schema,
         latest_result_snapshot=latest_result_snapshot,
         lifecycle_from_job=lifecycle_from_job,
         cloud_alpha_snapshot=cloud_alpha_snapshot,

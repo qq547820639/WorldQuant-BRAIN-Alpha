@@ -32,10 +32,12 @@
       var columns = deps.getColumnsForView ? deps.getColumnsForView(view) : [];
       var tableBody = $('candidateRows');
       var emptyEl = document.getElementById('tableEmptyState');
+      var tableWrap = document.getElementById('tableWrap');
       var tableEl = document.getElementById('candidateTable');
       var mobileEl = document.getElementById('mobileCardList');
       if (!rows.length) {
         if (tableBody) tableBody.innerHTML = '';
+        if (tableWrap) tableWrap.classList.add('is-empty');
         if (tableEl) tableEl.classList.add('hidden');
         if (mobileEl) mobileEl.classList.add('hidden');
         if (emptyEl) {
@@ -46,6 +48,7 @@
         updateSortHint(view);
         return;
       }
+      if (tableWrap) tableWrap.classList.remove('is-empty');
       if (emptyEl) emptyEl.classList.add('hidden');
       if (tableEl) tableEl.classList.remove('hidden');
       var displayRows = rows.slice(0, maxRows);
@@ -118,7 +121,7 @@
         pending_backtest: '当前没有排队回测项。新的候选进入官方模拟前会显示在这里。',
         running_backtest: '当前没有正在等待官方结果的回测。运行中的槽位会实时更新。',
         backtest_rework: '没有需要返工的 Alpha。失败或被拒绝的回测会集中到这里。',
-        passed: '还没有达到提交门槛的 Alpha。生产任务产生达标项后，可以在这里发起官方预提交检查。',
+        passed: '还没有达到提交门槛的 Alpha。生产任务产生达标项后，可在这里发起官方预提交检查。',
         submittable: '没有处于有效检查期内的 Alpha。请先在达标视图执行快速或全部检查。',
         submitted: '当前没有本地提交记录。提交成功后会自动刷新检查状态。',
         failed: '当前没有失败、拒绝或被阻断的 Alpha。',

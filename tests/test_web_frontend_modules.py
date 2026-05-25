@@ -25,6 +25,7 @@ MODULE_TEST_COVERAGE = {
     "js/state.js": "nested state set/merge, listeners, cache, check freshness",
     "js/utils.js": "escaping, labels, risk/state navigation rendering",
     "js/form-controls.js": "form value writes, config hydration, and payload assembly",
+    "js/strategy-panel.js": "strategy policy summary and plugin-control state",
     "js/result-state.js": "result snapshot merging and cloud sync preservation",
     "js/result-table.js": "main result table, mobile cards, and empty-state rendering",
     "js/view-model.js": "identity, normalization, dedupe, runtime array selection",
@@ -270,6 +271,7 @@ function load(context, relPath) {
   load(context, "js/result-state.js");
   load(context, "js/result-table.js");
   load(context, "js/form-controls.js");
+  load(context, "js/strategy-panel.js");
   load(context, "js/components/toast.js");
   load(context, "js/components/spinner.js");
   load(context, "js/components/modal.js");
@@ -316,16 +318,102 @@ function load(context, relPath) {
   document.register("delay", "input").value = "1";
   document.register("neutralization", "select").value = "SUBINDUSTRY";
   document.register("instrumentType", "select").value = "EQUITY";
-  document.register("alphaType", "select").value = "REGULAR";
+  document.register("alphaType", "select").value = "PYRAMID";
   document.register("decay", "input").value = "10";
   document.register("truncation", "input").value = "0.05";
   document.register("pasteurization", "select").value = "ON";
   document.register("nanHandling", "select").value = "ON";
-  document.register("unitHandling", "select").value = "VERIFY";
+  document.register("unitHandling", "select").value = "NONE";
   document.register("language", "select").value = "FASTEXPR";
+  document.register("preset", "select").value = "atom_preset";
+  document.register("environment", "select").value = "production";
+  document.register("baseUrl", "input").value = "https://api.worldquantbrain.com";
+  document.register("syncRange", "select").value = "7d";
+  document.register("autoSubmitToggle", "input").type = "checkbox";
+  document.getElementById("autoSubmitToggle").checked = true;
   document.register("useAssistantGuidance", "input").type = "checkbox";
   document.getElementById("useAssistantGuidance").checked = true;
-  assert(context.FormControls.collectPayload().settings.region === "USA", "form-controls must collect settings payload");
+  document.register("assistantGuidanceMinConfidence", "input").value = "0.7";
+  document.register("assistantGuidanceScoreAdjustment", "input").type = "checkbox";
+  document.getElementById("assistantGuidanceScoreAdjustment").checked = true;
+  document.register("assistantGuidanceScoreMinConfidence", "input").value = "0.75";
+  document.register("assistantGuidanceScoreMinOutcomeCount", "input").value = "2";
+  document.register("assistantGuidanceScoreBonusCap", "input").value = "2.5";
+  document.register("assistantGuidanceScorePenaltyCap", "input").value = "3.5";
+  document.register("strategyPluginsEnabled", "input").type = "checkbox";
+  document.getElementById("strategyPluginsEnabled").checked = true;
+  document.register("strategyPluginSpecs", "textarea").value = "brain_alpha_ops.examples.strategy_plugin:ConservativeMeanReversionPlugin";
+  const formPayload = context.FormControls.collectPayload();
+  assert(formPayload.settings.region === "USA", "form-controls must collect settings payload");
+  assert(formPayload.settings.type === "PYRAMID", "form-controls must send backend alpha type key");
+  assert(!Object.prototype.hasOwnProperty.call(formPayload.settings, "alphaType"), "form-controls must not emit stale alphaType key");
+  assert(formPayload.settings.unitHandling === "NONE", "form-controls must preserve canonical unit handling NONE");
+  assert(formPayload.autoSubmit === true, "form-controls must collect auto submit toggle");
+  assert(formPayload.syncRange === "7d", "form-controls must collect cloud sync range");
+  assert(formPayload.useAssistantGuidance === true, "form-controls must emit canonical guidance key");
+  assert(formPayload.assistantGuidanceMinConfidence === 0.7, "form-controls must collect guidance confidence");
+  assert(formPayload.assistantGuidanceScoreAdjustment === true, "form-controls must collect scoring adjustment flag");
+  assert(formPayload.assistantGuidanceScoreMinConfidence === 0.75, "form-controls must collect scoring confidence");
+  assert(formPayload.assistantGuidanceScoreMinOutcomeCount === 2, "form-controls must collect scoring sample floor");
+  assert(formPayload.assistantGuidanceScoreBonusCap === 2.5, "form-controls must collect scoring bonus cap");
+  assert(formPayload.assistantGuidanceScorePenaltyCap === 3.5, "form-controls must collect scoring penalty cap");
+  assert(formPayload.strategyPluginsEnabled === true, "form-controls must emit canonical plugin flag");
+  assert(formPayload.strategyPluginSpecs.indexOf("ConservativeMeanReversionPlugin") !== -1, "form-controls must collect plugin specs");
+  [
+    "use_assistant_guidance",
+    "assistant_guidance_min_confidence",
+    "assistant_guidance_score_adjustment",
+    "assistant_guidance_score_min_confidence",
+    "strategy_plugins_enabled",
+  ].forEach(key => assert(!Object.prototype.hasOwnProperty.call(formPayload, key), "form-controls must not emit stale snake_case key " + key));
+  assert(context.FormControls.applyPreset({ atom_preset: { settings: { type: "ATOM", unitHandling: "RAW" } } }), "preset application should accept backend type key");
+  assert(document.getElementById("alphaType").value === "ATOM", "preset type must update alphaType control");
+  assert(document.getElementById("unitHandling").value === "RAW", "preset unit handling must update control");
+  context.FormControls.applyConfig({
+    environment: "production",
+    auto_submit: false,
+    ops: {
+      official_api: { base_url: "https://api.worldquantbrain.com" },
+      settings: {
+        region: "EUR",
+        universe: "TOP1000",
+        delay: 0,
+        neutralization: "MARKET",
+        instrumentType: "EQUITY",
+        type: "REGULAR",
+        decay: 5,
+        truncation: 0.08,
+        pasteurization: "OFF",
+        nanHandling: "OFF",
+        unitHandling: "VERIFY",
+        language: "FASTEXPR",
+      },
+      budget: {
+        cloud_sync_range: "all",
+        use_assistant_guidance: false,
+        assistant_guidance_min_confidence: 0.8,
+        strategy_plugins_enabled: true,
+        strategy_plugin_specs: ["pkg:PluginA", "pkg:PluginB"],
+      },
+      scoring: {
+        assistant_guidance_score_adjustment_enabled: false,
+        assistant_guidance_score_min_confidence: 0.85,
+        assistant_guidance_score_min_outcome_count: 4,
+        assistant_guidance_score_bonus_cap: 1.5,
+        assistant_guidance_score_penalty_cap: 2.5,
+      },
+    },
+  });
+  assert(document.getElementById("region").value === "EUR", "applyConfig must hydrate settings.region");
+  assert(document.getElementById("alphaType").value === "REGULAR", "applyConfig must hydrate settings.type into alphaType");
+  assert(document.getElementById("syncRange").value === "all", "applyConfig must hydrate cloud sync range");
+  assert(document.getElementById("autoSubmitToggle").checked === false, "applyConfig must hydrate auto_submit");
+  assert(document.getElementById("useAssistantGuidance").checked === false, "applyConfig must hydrate guidance flag");
+  assert(document.getElementById("assistantGuidanceMinConfidence").value === "0.8", "applyConfig must hydrate guidance confidence");
+  assert(document.getElementById("assistantGuidanceScoreAdjustment").checked === false, "applyConfig must hydrate scoring adjustment flag");
+  assert(document.getElementById("assistantGuidanceScoreMinOutcomeCount").value === "4", "applyConfig must hydrate scoring sample floor");
+  assert(document.getElementById("strategyPluginsEnabled").checked === true, "applyConfig must hydrate plugin flag");
+  assert(document.getElementById("strategyPluginSpecs").value === "pkg:PluginA\npkg:PluginB", "applyConfig must hydrate plugin specs one per line");
 
   const toast = context.Toast.toast("<unsafe>", "error", 0);
   assert(toast.getAttribute("role") === "alert" && toast.innerHTML.includes("&lt;unsafe&gt;"), "toast must render safe alert markup");
@@ -420,6 +508,7 @@ def test_app_ux_orchestrator_has_tested_navigation_empty_and_busy_contracts():
     view_registry_js = (WEB_JS / "view-registry.js").read_text(encoding="utf-8")
     view_renderers_js = (WEB_JS / "view-renderers.js").read_text(encoding="utf-8")
     result_table_js = (WEB_JS / "result-table.js").read_text(encoding="utf-8")
+    strategy_panel_js = (WEB_JS / "strategy-panel.js").read_text(encoding="utf-8")
     template = (ROOT / "brain_alpha_ops" / "web" / "index_template.html").read_text(encoding="utf-8")
 
     for label in ["生产流程", "数据审计", "研究工具", "达标检查", "可提交"]:
@@ -459,13 +548,27 @@ def test_app_ux_orchestrator_has_tested_navigation_empty_and_busy_contracts():
 
     assert "window.operationBlockReason = function (action)" in app_js
     assert "window.renderBusyControls = function ()" in app_js
+    assert "function syncStrategyPluginControls()" in app_js
+    assert "function syncPluginControls()" in strategy_panel_js
+    assert "function renderPolicy(config)" in strategy_panel_js
     assert "setControlState('controlButton'" in app_js
     assert "setControlState('syncButton'" in app_js
+    assert "setControlState('sideSyncButton'" in app_js
+    assert "setControlState('sideCheckButton'" in app_js
+    assert "sideTaskReason" in app_js
     assert "operationGuard" in app_js
 
     assert 'id="viewTabs"' in template
     assert "action-card" in template
+    assert "task-console-actions" in template
+    assert 'id="sideSyncButton"' in template
+    assert 'id="sideCheckButton"' in template
+    assert 'id="sideSubmitButton"' in template
+    assert 'id="strategyPluginSpecsGroup"' in template
+    assert 'data-change-action="toggle-strategy-plugins"' in template
+    assert 'id="strategyPluginSpecsHelp"' in template
     assert "status-bar" in template
+    assert "status-pill" in template
     assert "panelHint" in template
 
 
@@ -482,15 +585,22 @@ def test_ux_styles_cover_interaction_feedback_and_responsive_layout():
         ".workflow-step:hover",
         ".workflow-step.is-active",
         ".workflow-actions",
+        ".task-console-actions",
+        ".task-console-reason",
+        ".status-pill",
+        ".data-table-wrap.is-empty",
         ".empty-state",
         ".empty-state-actions",
+        ".form-group.is-disabled",
+        ".policy-card.is-wide",
         ".mobile-cards{display:none",
     ]:
         assert selector in css
 
     assert '<!-- inline-css:css/app.css -->' in template
     assert "@media(max-width:1200px)" in css
-    assert "overflow-x:auto;overflow-y:hidden" in css
+    assert "overflow-x:visible;overflow-y:visible" in css
+    assert ".form-select{padding-right:34px;text-overflow:ellipsis}" in css
     assert ".sidebar-body > .action-card" in css
     assert ".app-content{order:1;min-height:auto}" in css
     assert ".app-sidebar{order:2;position:static;max-height:none}" in css

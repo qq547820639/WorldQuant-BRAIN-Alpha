@@ -42,6 +42,7 @@ class WebHandlerDispatchContext:
     check_jobs: Any
     enrich_progress: Callable[[dict[str, Any]], dict[str, Any]]
     public_run_config: Callable[[], dict[str, Any]]
+    public_config_schema: Callable[[], dict[str, Any]]
     latest_result_snapshot: Callable[[], dict[str, Any]]
     lifecycle_from_job: Callable[[dict[str, Any]], list[dict[str, Any]]]
     cloud_alpha_snapshot: Callable[..., dict[str, Any]]
@@ -138,6 +139,10 @@ def _get_status(handler: Any, parsed: Any, ctx: WebHandlerDispatchContext) -> No
 
 def _get_config(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext) -> None:
     handler._json({"ok": True, "config": ctx.public_run_config()})
+
+
+def _get_config_schema(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext) -> None:
+    handler._json({"ok": True, "schema": ctx.public_config_schema()})
 
 
 def _get_active_job(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext) -> None:
@@ -497,6 +502,7 @@ _GET_DISPATCH_HANDLERS: dict[str, RouteDispatcher] = {
     "root": _get_root,
     "status": _get_status,
     "config": _get_config,
+    "config_schema": _get_config_schema,
     "active_job": _get_active_job,
     "latest_result": _get_latest_result,
     "health": _get_health,
