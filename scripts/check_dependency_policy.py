@@ -11,7 +11,6 @@ import argparse
 import json
 from pathlib import Path
 import re
-import sys
 from typing import Any
 
 
@@ -22,11 +21,13 @@ DEFAULT_PYPROJECT = ROOT / "pyproject.toml"
 def check_dependency_policy(pyproject_path: str | Path = DEFAULT_PYPROJECT) -> dict[str, Any]:
     path = Path(pyproject_path)
     payload = _load_pyproject(path)
-    project = payload.get("project") if isinstance(payload.get("project"), dict) else {}
+    raw_project = payload.get("project")
+    project: dict[str, Any] = raw_project if isinstance(raw_project, dict) else {}
     entries: list[tuple[str, str, str]] = []
     for dependency in project.get("dependencies") or []:
         entries.append(("project.dependencies", str(dependency), "runtime"))
-    optional = project.get("optional-dependencies") if isinstance(project.get("optional-dependencies"), dict) else {}
+    raw_optional = project.get("optional-dependencies")
+    optional: dict[str, Any] = raw_optional if isinstance(raw_optional, dict) else {}
     for group, values in optional.items():
         for dependency in values or []:
             entries.append((f"project.optional-dependencies.{group}", str(dependency), "optional"))

@@ -96,8 +96,8 @@
   Utils.scoreSpan = function (val) {
     var n = Number(val);
     if (!Number.isFinite(n)) return Utils.escapeHtml(String(val ?? '-'));
-    var color = n >= 70 ? 'var(--success)' : n >= 50 ? 'var(--warning)' : 'var(--danger)';
-    return '<span style="font-weight:700;color:' + color + '">' + n.toFixed(1) + '</span>';
+    var cls = n >= 70 ? 'is-high' : n >= 50 ? 'is-mid' : 'is-low';
+    return '<span class="score-value ' + cls + '">' + n.toFixed(1) + '</span>';
   };
 
   // ── Status badge renderer ─────────────────────────────────────────────
@@ -105,6 +105,65 @@
     var map = { good: 'success', warn: 'warning', bad: 'danger', info: 'info', muted: 'default' };
     var cls = map[color] || 'default';
     return '<span class="badge badge-' + cls + '">' + Utils.escapeHtml(String(status || '')) + '</span>';
+  };
+
+  var SAFE_FRAGMENT_TYPES = { badge: true, score: true, buttonGroup: true, candidateId: true, riskText: true };
+
+  function hasUnsafeHtmlFragment(html) {
+    return /<\s*(script|iframe|object|embed|link|meta|style|svg|math|img|video|audio|form|input|select|textarea)\b/i.test(html) ||
+      /<[^>]+\son[a-z]+\s*=/i.test(html) ||
+      /<[^>]+javascript\s*:/i.test(html);
+  }
+
+  function matchesRepeated(html, pattern) {
+    var cursor = 0;
+    var match;
+    pattern.lastIndex = 0;
+    while ((match = pattern.exec(html)) !== null) {
+      if (html.slice(cursor, match.index).trim() !== '') return false;
+      cursor = pattern.lastIndex;
+    }
+    return html.slice(cursor).trim() === '';
+  }
+
+  function isWhitelistedFragment(html, type) {
+    switch (type) {
+      case 'badge':
+        return /^<span class="badge badge-(success|warning|danger|info|default|accent|muted)">[^<]*<\/span>$/.test(html);
+      case 'score':
+        return /^<span class="score-value is-(high|mid|low)">-?\d+(?:\.\d+)?<\/span>$/.test(html);
+      case 'buttonGroup':
+        return matchesRepeated(html, /<button type="button" class="[-_ a-zA-Z0-9]+" data-action="[-_a-zA-Z0-9]+" data-kind="[^"]*" data-id="[^"]*"(?: aria-pressed="(?:true|false)")?>[^<]*<\/button>/g);
+      case 'candidateId':
+        return /^<div><div class="candidate-id-main">[^<]*<\/div>(?:<div class="candidate-id-family">[^<]*<\/div>)?<\/div>$/.test(html);
+      case 'riskText':
+        return html === '' || /^<span class="risk-text">[^<]*<\/span>$/.test(html);
+      default:
+        return false;
+    }
+  }
+
+  Utils.renderSafeHtmlFragment = function (value, type) {
+    var html = String(value ?? '');
+    if (!type || !SAFE_FRAGMENT_TYPES[type]) return Utils.escapeHtml(html);
+    if (html.indexOf('<') === -1) return Utils.escapeHtml(html);
+    if (hasUnsafeHtmlFragment(html) || !isWhitelistedFragment(html, type)) return Utils.escapeHtml(html);
+    return html;
+  };
+
+  Utils.applyDataStyles = function (root) {
+    root = root || document;
+    var scoped = root.querySelectorAll ? root : document;
+    var widthEls = scoped.querySelectorAll('[data-style-width]');
+    Array.prototype.forEach.call(widthEls, function (el) {
+      var width = Number(el.getAttribute('data-style-width'));
+      if (Number.isFinite(width)) el.style.width = Math.max(0, Math.min(100, width)) + '%';
+    });
+    var leftEls = scoped.querySelectorAll('[data-style-left]');
+    Array.prototype.forEach.call(leftEls, function (el) {
+      var left = Number(el.getAttribute('data-style-left'));
+      if (Number.isFinite(left)) el.style.left = Math.max(0, Math.min(100, left)) + '%';
+    });
   };
 
   // ── Risk explanation renderer ─────────────────────────────────────────
@@ -132,7 +191,7 @@
         '<div class="risk-summary">' + Utils.escapeHtml(explanation.summary || '') + '</div></div>' +
         '<div class="risk-score">' + pctVal.toFixed(1) + '%</div>' +
       '</div>' +
-      '<div class="risk-meter" aria-label="risk meter"><div class="risk-meter-fill" style="width:' + pctVal + '%"></div><span class="risk-threshold" style="left:' + pctThreshold + '%"></span></div>' +
+      '<div class="risk-meter" aria-label="risk meter"><div class="risk-meter-fill" data-style-width="' + pctVal.toFixed(3) + '"></div><span class="risk-threshold" data-style-left="' + pctThreshold.toFixed(3) + '"></span></div>' +
       (reasons ? '<div class="risk-list-title">原因</div><ul class="risk-list">' + reasons + '</ul>' : '') +
       (actions ? '<div class="risk-list-title">处理路径</div><ul class="risk-list">' + actions + '</ul>' : '') +
       Utils.renderStateNavigation(explanation.navigation || explanation.state_navigation) +
@@ -146,11 +205,11 @@
       var cls = String(step.status || 'pending').replace(/[^a-zA-Z0-9_-]/g, '') || 'pending';
       return '<span class="lc-step ' + cls + '">' + Utils.escapeHtml(step.label || step.id || '-') + '</span>';
     }).join('');
-    return '<div style="margin-top:var(--sp-2);padding:var(--sp-2);background:var(--bg-muted);border-radius:var(--r-sm)">' +
-      '<div style="font-weight:var(--fw-bold);margin-bottom:4px">' + Utils.escapeHtml(navigation.title || '解决路径') + '</div>' +
-      (navigation.summary ? '<div style="font-size:var(--fs-xs);color:var(--text-secondary)">' + Utils.escapeHtml(navigation.summary) + '</div>' : '') +
-      (stepHtml ? '<div class="lc-timeline" style="margin-top:4px">' + stepHtml + '</div>' : '') +
-      (navigation.primary_action ? '<div style="font-size:var(--fs-xs);color:var(--accent);font-weight:var(--fw-bold);margin-top:4px">' + Utils.escapeHtml(navigation.primary_action) + '</div>' : '') +
+    return '<div class="state-navigation">' +
+      '<div class="state-navigation-title">' + Utils.escapeHtml(navigation.title || '解决路径') + '</div>' +
+      (navigation.summary ? '<div class="state-navigation-summary">' + Utils.escapeHtml(navigation.summary) + '</div>' : '') +
+      (stepHtml ? '<div class="lc-timeline state-navigation-timeline">' + stepHtml + '</div>' : '') +
+      (navigation.primary_action ? '<div class="state-navigation-action">' + Utils.escapeHtml(navigation.primary_action) + '</div>' : '') +
       '</div>';
   };
 

@@ -14,6 +14,7 @@ from brain_alpha_ops.research.sqlite_index_manifest import build_sqlite_index_ma
 
 
 SCHEMA_VERSION = "expression-sqlite-index.v1"
+DEFAULT_LOOKUP_SCAN_LIMIT = 2000
 
 
 class ExpressionSqliteIndex:
@@ -202,7 +203,14 @@ class ExpressionSqliteIndex:
         summary["is_stale"] = manifest["is_stale"]
         return summary
 
-    def lookup(self, expression: str, *, top_n: int = 10, min_similarity: float = 0.75) -> dict[str, Any]:
+    def lookup(
+        self,
+        expression: str,
+        *,
+        top_n: int = 10,
+        min_similarity: float = 0.75,
+        max_scan_rows: int = DEFAULT_LOOKUP_SCAN_LIMIT,
+    ) -> dict[str, Any]:
         if not self.db_path.is_file():
             return {
                 "ok": False,
@@ -224,9 +232,20 @@ class ExpressionSqliteIndex:
                 )
             ]
             similar: list[dict[str, Any]] = []
+            scanned_rows = 0
+            scan_truncated = False
             if not exact:
-                rows = [_row_to_record(row) for row in conn.execute("SELECT * FROM expression_records ORDER BY id DESC")]
-                for row in rows:
+                safe_scan_limit = max(1, int(max_scan_rows or DEFAULT_LOOKUP_SCAN_LIMIT))
+                cursor = conn.execute(
+                    "SELECT * FROM expression_records ORDER BY id DESC LIMIT ?",
+                    (safe_scan_limit + 1,),
+                )
+                for raw_row in cursor:
+                    if scanned_rows >= safe_scan_limit:
+                        scan_truncated = True
+                        break
+                    scanned_rows += 1
+                    row = _row_to_record(raw_row)
                     score = expression_similarity(
                         str(target.get("expression_canonical") or expression),
                         str(row.get("expression_canonical") or row.get("expression") or ""),
@@ -246,6 +265,9 @@ class ExpressionSqliteIndex:
             "similar_count": len(similar),
             "similar_records": similar[:top_n],
             "min_similarity": min_similarity,
+            "similar_scan_limit": max(1, int(max_scan_rows or DEFAULT_LOOKUP_SCAN_LIMIT)),
+            "similar_scan_count": scanned_rows,
+            "similar_scan_truncated": scan_truncated,
         }
 
     def _connect(self) -> sqlite3.Connection:

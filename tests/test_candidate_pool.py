@@ -1,5 +1,7 @@
 from brain_alpha_ops.models import Candidate
-from brain_alpha_ops.research.candidate_pool import CandidatePoolService
+from brain_alpha_ops.research import candidate_pool
+from brain_alpha_ops.research.candidate_pool import CandidatePoolService, is_active_backtest_candidate, pending_simulation_targets
+from brain_alpha_ops.research.pipeline_helpers import is_hard_backtest_blocked
 
 
 def _candidate(alpha_id: str, expression: str, score: float, *, status: str = "created") -> Candidate:
@@ -57,6 +59,12 @@ def test_candidate_pool_service_filters_validation_and_backtest_targets():
     assert [row.alpha_id for row in service.backtest_targets([ready, deferred], batch_size=1)] == ["ready"]
 
 
+def test_candidate_pool_uses_shared_hard_backtest_block_helper():
+    assert candidate_pool.is_hard_backtest_blocked is is_hard_backtest_blocked
+    assert is_hard_backtest_blocked("simulation_failed") is True
+    assert is_hard_backtest_blocked("simulation_deferred_rate_limit") is False
+
+
 def test_candidate_pool_service_prunes_without_removing_active_or_pending():
     service = _service()
     service.retained_alpha_pool_size = 1
@@ -76,3 +84,21 @@ def test_candidate_pool_service_prunes_without_removing_active_or_pending():
     assert [row.alpha_id for row in pruned] == ["prune"]
     assert set(row.alpha_id for row in pool.values()) == {"active", "pending", "keep"}
     assert prune.lifecycle_status == "candidate_pool_pruned"
+
+
+def test_candidate_pool_identifies_active_and_pending_simulation_targets():
+    active = _candidate("active", "rank(close)", 80, status="simulation_running")
+    active.simulation_id = "sim_active"
+    completed = _candidate("completed", "rank(open)", 80, status="submission_ready")
+    completed.simulation_id = "sim_completed"
+    failed = _candidate("failed", "rank(low)", 80, status="simulation_failed")
+    failed.simulation_id = "sim_failed"
+    metriced = _candidate("metriced", "rank(high)", 80, status="simulation_running")
+    metriced.simulation_id = "sim_metriced"
+    metriced.official_metrics = {"sharpe": 1.2}
+
+    assert is_active_backtest_candidate(active) is True
+    assert is_active_backtest_candidate(completed) is False
+    assert is_active_backtest_candidate(failed) is False
+    assert is_active_backtest_candidate(metriced) is False
+    assert pending_simulation_targets([completed, active, failed, metriced]) == [active]

@@ -150,8 +150,10 @@ def _select_candidate(candidates: list[dict[str, Any]], candidate_id: str) -> di
 
 
 def _candidate_identifiers(candidate: dict[str, Any]) -> set[str]:
-    metrics = candidate.get("official_metrics") if isinstance(candidate.get("official_metrics"), dict) else {}
-    submission = candidate.get("submission") if isinstance(candidate.get("submission"), dict) else {}
+    raw_metrics = candidate.get("official_metrics")
+    metrics = raw_metrics if isinstance(raw_metrics, dict) else {}
+    raw_submission = candidate.get("submission")
+    submission = raw_submission if isinstance(raw_submission, dict) else {}
     return {
         str(value)
         for value in (

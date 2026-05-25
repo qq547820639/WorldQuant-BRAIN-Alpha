@@ -8,6 +8,7 @@ from typing import Any
 
 SENSITIVE_KEYS = {
     "access_token",
+    "api_key",
     "authorization",
     "cookie",
     "csrf",
@@ -41,19 +42,60 @@ def redact_text(value: object, *, max_length: int | None = None) -> str:
     return text
 
 
-def redact_data(data: Any) -> Any:
+def redact_data(
+    data: Any,
+    *,
+    key_fragments: tuple[str, ...] | None = None,
+    redacted_keys: set[str] | None = None,
+) -> Any:
+    fragments = tuple(_normalize_key(fragment) for fragment in (key_fragments or ()))
     if isinstance(data, dict):
         return {
-            key: "<redacted>" if str(key).lower() in SENSITIVE_KEYS else redact_data(value)
+            key: _redact_value_for_key(key, value, fragments=fragments, redacted_keys=redacted_keys)
             for key, value in data.items()
         }
     if isinstance(data, list):
-        return [redact_data(item) for item in data]
+        return [redact_data(item, key_fragments=key_fragments, redacted_keys=redacted_keys) for item in data]
     if isinstance(data, tuple):
-        return tuple(redact_data(item) for item in data)
+        return tuple(redact_data(item, key_fragments=key_fragments, redacted_keys=redacted_keys) for item in data)
     if isinstance(data, str):
         return redact_text(data)
     return data
+
+
+def _redact_value_for_key(
+    key: Any,
+    value: Any,
+    *,
+    fragments: tuple[str, ...],
+    redacted_keys: set[str] | None,
+) -> Any:
+    normalized = _normalize_key(str(key))
+    if _is_sensitive_key(normalized, fragments):
+        if redacted_keys is not None:
+            redacted_keys.add(str(key))
+        return "<redacted>"
+    return redact_data(value, key_fragments=fragments, redacted_keys=redacted_keys)
+
+
+def _is_sensitive_key(normalized_key: str, fragments: tuple[str, ...]) -> bool:
+    if normalized_key in {_normalize_key(key) for key in SENSITIVE_KEYS}:
+        return True
+    parts = {part for part in normalized_key.split("_") if part}
+    return any(
+        fragment
+        and (
+            normalized_key == fragment
+            or fragment in parts
+            or normalized_key.startswith(f"{fragment}_")
+            or normalized_key.endswith(f"_{fragment}")
+        )
+        for fragment in fragments
+    )
+
+
+def _normalize_key(value: str) -> str:
+    return value.strip().lower().replace("-", "_")
 
 
 def redact_error_message(exc: Exception | object, *, max_length: int = 240) -> str:

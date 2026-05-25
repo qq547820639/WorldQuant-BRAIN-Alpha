@@ -18,14 +18,37 @@ import re
 import threading
 import time
 import urllib.error
-import urllib.parse
 import urllib.request
 from typing import Any
 
 from brain_alpha_ops.config import BrainSettings, OfficialAPIConfig
-from brain_alpha_ops.redaction import redact_data, redact_error_message
+from brain_alpha_ops.redaction import redact_error_message
 
 from .base import BrainAPIError
+from .official_helpers import (
+    build_official_url,
+    _first_value,
+    build_simulation_payload,
+    items as _items,
+    looks_non_production_alpha_id as _looks_non_production_alpha_id,
+    looks_partial_context_cache as _looks_partial_context_cache,
+    merge_payloads as _merge,
+    normal_alpha as _normal_alpha,
+    normal_dataset as _normal_dataset,
+    normal_field as _normal_field,
+    normal_operator as _normal_operator,
+    normalize_metrics,
+    page_signature as _page_signature,
+    parse_response as _parse,
+    retry_after as _retry_after,
+    retry_delay as _retry_delay,
+    retryable_status as _retryable_status,
+    scrub as _scrub,
+    total_count as _total_count,
+    dedupe_alpha_items as _dedupe_alpha_items,
+    user_alpha_progress as _user_alpha_progress,
+    user_alpha_offset_recovery as _user_alpha_offset_recovery,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -34,13 +57,12 @@ logger = logging.getLogger(__name__)
 _MAX_FIELDS_PAGES = 200
 _MAX_DATASETS_PAGES = 20
 _MAX_OPERATORS_PAGES = 20
-_MAX_USER_ALPHAS_PAGES = 100
 _MAX_FIELDS_ITEMS = 20_000
 _MAX_DATASETS_ITEMS = 2_000
 _MAX_OPERATORS_ITEMS = 2_000
-_MAX_USER_ALPHAS_ITEMS = 50_000
 
-_GLOBAL_LAST_REQUEST_AT = 0.0  # shared timestamp for cross-instance rate awareness (P1-5: lock moved to per-instance)
+_GLOBAL_LAST_REQUEST_AT = 0.0  # shared timestamp for cross-instance rate awareness
+_GLOBAL_REQUEST_LOCK = threading.Lock()
 
 
 class OfficialBrainAPI:
@@ -68,7 +90,7 @@ class OfficialBrainAPI:
         }
         self._prefer_cookie_auth = False
         self._last_request_at = 0.0
-        self._request_lock = threading.Lock()  # P1-5: per-instance lock instead of global
+        self._request_lock = threading.Lock()
         self._cache_lock = threading.Lock()
 
     def set_market_scope(self, settings: BrainSettings | dict | None):
@@ -271,7 +293,7 @@ class OfficialBrainAPI:
                 page_params["offset"] = int(page_params.get("offset", 0)) + int(page_params["limit"])
             else:
                 logger.warning("fields pagination reached max pages limit (%d), items=%d total=%d", _MAX_FIELDS_PAGES, len(items), total)
-            self._write_cache(cache_key, items, total)
+            self._write_cache(cache_key, items, max(total, len(items)))
             return items
         except BrainAPIError as exc:
             if self.config.allow_stale_context_on_rate_limit and exc.status_code == 429 and cached["items"]:
@@ -353,7 +375,8 @@ class OfficialBrainAPI:
                 page_params["offset"] = int(page_params.get("offset", 0)) + int(page_params["limit"])
             else:
                 logger.warning("datasets pagination reached max pages limit (%d), items=%d total=%d", _MAX_DATASETS_PAGES, len(items), total)
-            self._write_cache(cache_key, items, total)
+            items = _dedupe_alpha_items(items)
+            self._write_cache(cache_key, items, max(total, len(items)))
             return items
         except BrainAPIError as exc:
             if self.config.allow_stale_context_on_rate_limit and exc.status_code == 429 and cached["items"]:
@@ -435,15 +458,31 @@ class OfficialBrainAPI:
         cached = self._read_cache(cache_key)
         if cached["fresh"]:
             if progress_callback:
-                progress_callback({"range": sync_range, "scanned": len(cached["items"]), "total": len(cached["items"]), "cached": True, "stale": False})
+                progress_callback(_user_alpha_progress(sync_range, cached["items"], len(cached["items"]), cached=True, stale=False))
             return cached["items"]
         try:
             items = []
             page_params = dict(params)
             total = 0
             seen_page_signatures: set[str] = set()
-            for _page in range(1, _MAX_USER_ALPHAS_PAGES + 1):
-                data, _headers = self._request("GET", self.config.user_alphas_path, query=page_params)
+            while True:
+                try:
+                    data, _headers = self._request("GET", self.config.user_alphas_path, query=page_params)
+                except BrainAPIError as exc:
+                    recovery = _user_alpha_offset_recovery(
+                        exc,
+                        items,
+                        page_params,
+                        sync_range=sync_range,
+                        total=total,
+                    )
+                    if not recovery:
+                        raise
+                    page_params = recovery["page_params"]
+                    seen_page_signatures.clear()
+                    if progress_callback:
+                        progress_callback(recovery["progress"])
+                    continue
                 page_items = [_normal_alpha(item) for item in _items(data)]
                 page_signature = _page_signature(page_items, keys=("id", "expression", "created_at"))
                 if page_items and page_signature in seen_page_signatures:
@@ -454,58 +493,25 @@ class OfficialBrainAPI:
                         total,
                     )
                     if progress_callback:
-                        progress_callback(
-                            {
-                                "range": sync_range,
-                                "scanned": len(items),
-                                "total": total,
-                                "page_size": len(page_items),
-                                "offset": int(page_params.get("offset", 0)),
-                                "truncated": True,
-                                "warning": "repeated_page",
-                            }
-                        )
+                        progress_callback(_user_alpha_progress(sync_range, items, total, page_size=len(page_items), offset=int(page_params.get("offset", 0)), truncated=True, warning="repeated_page"))
                     break
                 if page_items:
                     seen_page_signatures.add(page_signature)
                 items.extend(page_items)
-                total = _total_count(data) or total
+                total = max(_total_count(data) or 0, total, len(items))
                 if progress_callback:
-                    progress_callback(
-                        {
-                            "range": sync_range,
-                            "scanned": len(items),
-                            "total": total,
-                            "page_size": len(page_items),
-                            "offset": int(page_params.get("offset", 0)),
-                        }
-                    )
-                if total and len(items) >= total:
-                    break
-                if len(items) >= _MAX_USER_ALPHAS_ITEMS:
-                    logger.warning("user_alphas pagination reached max item limit (%d), total=%d", _MAX_USER_ALPHAS_ITEMS, total)
-                    items = items[:_MAX_USER_ALPHAS_ITEMS]
+                    progress_callback(_user_alpha_progress(sync_range, items, total, page_size=len(page_items), offset=int(page_params.get("offset", 0))))
+                if not page_items:
                     break
                 if len(page_items) < int(page_params["limit"]):
                     break
                 page_params["offset"] = int(page_params.get("offset", 0)) + int(page_params["limit"])
-            else:
-                logger.warning("user_alphas pagination reached max pages limit (%d), items=%d total=%d", _MAX_USER_ALPHAS_PAGES, len(items), total)
-            self._write_cache(cache_key, items)
+            self._write_cache(cache_key, items, total)
             return items
         except BrainAPIError as exc:
             if self.config.allow_stale_context_on_rate_limit and exc.status_code == 429 and cached["items"]:
                 if progress_callback:
-                    progress_callback(
-                        {
-                            "range": sync_range,
-                            "scanned": len(cached["items"]),
-                            "total": cached.get("total") or len(cached["items"]),
-                            "cached": True,
-                            "stale": True,
-                            "warning": redact_error_message(exc),
-                        }
-                    )
+                    progress_callback(_user_alpha_progress(sync_range, cached["items"], cached.get("total") or len(cached["items"]), cached=True, stale=True, warning=redact_error_message(exc)))
                 return cached["items"]
             raise
 
@@ -601,6 +607,8 @@ class OfficialBrainAPI:
         sim_id = location or _first_value(data, ["id", "simulation_id", "location"], "")
         if not sim_id:
             raise BrainAPIError(f"simulation submission did not return a location/id: {_scrub(data)}")
+        if str(sim_id).startswith(("http://", "https://")):
+            build_official_url(self.config.base_url, str(sim_id), None)
         return str(sim_id)
 
     def poll_simulation(self, simulation_id: str) -> str:
@@ -728,7 +736,7 @@ class OfficialBrainAPI:
         query: dict | None = None,
         headers: dict | None = None,
     ) -> tuple[Any, dict]:
-        url = _url(self.config.base_url, path_or_url, query)
+        url = build_official_url(self.config.base_url, path_or_url, query)
         payload = None if body is None else json.dumps(body).encode("utf-8")
         attempts = max(1, int(self.config.rate_limit_retry_attempts) + 1)
         if self.token and (self._has_session_cookie() or (self.username and self.password)):
@@ -807,17 +815,18 @@ class OfficialBrainAPI:
     def _throttle(self):
         global _GLOBAL_LAST_REQUEST_AT
         interval = max(0.0, float(self.config.min_request_interval_seconds))
-        with self._request_lock:  # P1-5: per-instance lock
-            if interval <= 0:
+        with _GLOBAL_REQUEST_LOCK:
+            with self._request_lock:
+                if interval <= 0:
+                    _GLOBAL_LAST_REQUEST_AT = time.monotonic()
+                    self._last_request_at = _GLOBAL_LAST_REQUEST_AT
+                    return
+                last_request_at = max(self._last_request_at, _GLOBAL_LAST_REQUEST_AT)
+                elapsed = time.monotonic() - last_request_at
+                if elapsed < interval:
+                    time.sleep(interval - elapsed)
                 _GLOBAL_LAST_REQUEST_AT = time.monotonic()
                 self._last_request_at = _GLOBAL_LAST_REQUEST_AT
-                return
-            last_request_at = max(self._last_request_at, _GLOBAL_LAST_REQUEST_AT)
-            elapsed = time.monotonic() - last_request_at
-            if elapsed < interval:
-                time.sleep(interval - elapsed)
-            _GLOBAL_LAST_REQUEST_AT = time.monotonic()
-            self._last_request_at = _GLOBAL_LAST_REQUEST_AT
 
     def _open(self, req: urllib.request.Request, *, timeout: int):
         return self._opener.open(req, timeout=timeout)
@@ -874,331 +883,3 @@ class OfficialBrainAPI:
                 except Exception as cleanup_exc:
                     logger.debug("failed to remove temporary cache file %s: %s", tmp, redact_error_message(cleanup_exc))
             return
-
-
-def _looks_partial_context_cache(kind: str, items: list[dict], total: int, page_limit: int) -> bool:
-    if total and len(items) >= total:
-        return False
-    if total and len(items) < total:
-        return True
-    return kind in {"fields", "datasets", "operators"} and len(items) == int(page_limit)
-
-
-def build_simulation_payload(expression: str, settings: dict | BrainSettings) -> dict:
-    if isinstance(settings, BrainSettings):
-        settings_obj = settings
-    else:
-        settings_obj = BrainSettings(**{**BrainSettings().__dict__, **(settings or {})})
-    platform = settings_obj.to_platform_dict()
-    platform["regular"] = expression
-    return platform
-
-
-def normalize_metrics(payload: Any) -> dict:
-    """Extract ALL metrics from BRAIN response into a flat, scoring-ready dict.
-
-    Handles nested structures (is.*, os.*, is.checks[]) and produces both raw
-    values and BRAIN official check classifications (brain_pass, brain_checks, etc.).
-    """
-    metrics_root = _first_value(payload, ["is", "metrics", "result", "results"], payload)
-    os_root = _first_value(payload, ["os"], {}) or {}
-
-    # ── Collect all checks regardless of nesting ──
-    checks = _find_all(payload, "checks")
-    flat_checks = []
-    for item in checks:
-        if isinstance(item, list):
-            flat_checks.extend(item)
-
-    # Classify checks: PASS / FAIL / PENDING
-    failed = []
-    passed = []
-    pending = []
-    brain_checks = {}
-    for item in flat_checks:
-        if not isinstance(item, dict):
-            continue
-        result = str(_first_value(item, ["result", "status"], "")).upper()
-        name = str(_first_value(item, ["name", "check"], "?"))
-        entry = {
-            "result": result,
-            "limit": _first_value(item, ["limit"], None),
-            "value": _first_value(item, ["value"], None),
-        }
-        brain_checks[name] = entry
-        if result in {"FAIL", "FAILED"}:
-            failed.append(item)
-        elif result == "PASS":
-            passed.append(item)
-        elif result == "PENDING":
-            pending.append(item)
-
-    non_pending_fails = [f for f in failed if str(_first_value(f, ["name", "check"], "")) != "SELF_CORRELATION"]
-    brain_pass = len(non_pending_fails) == 0
-
-    # ── IS/OOS ratio ──
-    os_sharpe = _num(_first_value(os_root, ["sharpe", "Sharpe"]))
-    is_sharpe = _num(_first_value(metrics_root, ["sharpe", "Sharpe"]))
-    is_oos_ratio = round(is_sharpe / os_sharpe, 4) if os_sharpe != 0 else 0.0
-
-    metrics = {
-        "sharpe": is_sharpe,
-        "fitness": _num(_first_value(metrics_root, ["fitness", "Fitness"])),
-        "turnover": _ratio(_first_value(metrics_root, ["turnover", "Turnover"])),
-        "turnover_raw": _num(_first_value(metrics_root, ["turnover", "Turnover"])),
-        "returns": _num_or_none(_first_value(metrics_root, ["returns", "Returns", "return"], None)),
-        "drawdown": abs(_ratio(_first_value(metrics_root, ["drawdown", "maxDrawdown", "MaxDrawdown"]))),
-        "margin": _num_or_none(_first_value(metrics_root, ["margin", "Margin"], None)),
-        "sub_universe_sharpe": _num(_first_value(metrics_root, ["subUniverseSharpe", "sub_universe_sharpe"])),
-        "correlation": abs(_ratio(_first_value(metrics_root, ["correlation", "selfCorrelation", "prodCorrelation"], 0.0))),
-        "weight_concentration": _ratio(_first_value(metrics_root, ["weightConcentration", "weight_concentration"], 0.0)),
-        "pass_fail": "FAIL" if failed else "PASS",
-        "failure_reason": ", ".join(str(_first_value(item, ["name", "title", "check"], "FAILED_CHECK")) for item in failed[:3]) or None,
-        "brain_checks": brain_checks,
-        "brain_pass": brain_pass,
-        "brain_failed_names": [str(_first_value(f, ["name", "check"], "?")) for f in failed],
-        "brain_passed_names": [str(_first_value(p, ["name", "check"], "?")) for p in passed],
-        "brain_pending_names": [str(_first_value(p, ["name", "check"], "?")) for p in pending],
-        "is_oos_ratio": is_oos_ratio,
-        "os_sharpe": os_sharpe,
-    }
-    return {key: value for key, value in metrics.items() if value is not None}
-
-
-def _url(base: str, path_or_url: str, query: dict | None) -> str:
-    if path_or_url.startswith(("http://", "https://")):
-        url = path_or_url
-    else:
-        url = base.rstrip("/") + "/" + path_or_url.lstrip("/")
-    if query:
-        clean = {k: v for k, v in query.items() if v not in ("", None)}
-        if clean:
-            url += "?" + urllib.parse.urlencode(clean)
-    return url
-
-
-def _retry_after(headers) -> float | None:
-    value = headers.get("Retry-After") if headers else None
-    if value in (None, ""):
-        return None
-    try:
-        return max(0.0, float(value))
-    except (TypeError, ValueError):
-        return None
-
-
-def _retryable_status(status_code: int | None) -> bool:
-    if status_code is None:
-        return False
-    return int(status_code) in {408, 429, 500, 502, 503, 504}
-
-
-def _retry_delay(headers, attempt: int, base_seconds: float) -> float:
-    retry_after = _retry_after(headers)
-    if retry_after is not None:
-        return retry_after
-    return max(0.0, float(base_seconds)) * (attempt + 1)
-
-
-def _parse(raw: str) -> Any:
-    if not raw:
-        return {}
-    try:
-        return json.loads(raw)
-    except json.JSONDecodeError:
-        return {"raw": raw}
-
-
-def _looks_non_production_alpha_id(value: str) -> bool:
-    text = str(value or "").strip().lower()
-    prefixes = (
-        "mock_",
-        "mock-",
-        "demo_",
-        "demo-",
-        "dry_run_",
-        "dry-run-",
-        "dryrun_",
-        "test_",
-        "test-",
-        "fake_",
-        "fake-",
-        "sample_",
-        "sample-",
-    )
-    return bool(text and (text in {"mock", "demo", "dry-run", "dry_run", "dryrun", "test", "testing", "fake", "sample"} or text.startswith(prefixes)))
-
-
-def _items(data: Any) -> list:
-    if isinstance(data, list):
-        return data
-    if isinstance(data, dict):
-        for key in ("results", "data", "items", "fields", "datasets", "dataSets", "data_sets", "operators", "checks"):
-            value = data.get(key)
-            if isinstance(value, list):
-                return value
-    return []
-
-
-def _total_count(data: Any) -> int:
-    if isinstance(data, list):
-        return len(data)
-    if not isinstance(data, dict):
-        return 0
-    for key in ("count", "total", "totalCount", "total_count", "recordsTotal", "records_total"):
-        value = data.get(key)
-        if isinstance(value, bool):
-            continue
-        try:
-            count = int(value)
-        except (TypeError, ValueError):
-            continue
-        if count >= 0:
-            return count
-    return 0
-
-
-def _page_signature(items: list[dict], *, keys: tuple[str, ...]) -> str:
-    rows: list[dict[str, Any]] = []
-    for item in items:
-        if not isinstance(item, dict):
-            continue
-        row = {key: item.get(key, "") for key in keys}
-        if not any(str(value or "") for value in row.values()):
-            row = item
-        rows.append(row)
-    raw = json.dumps(rows, sort_keys=True, ensure_ascii=False, default=str)
-    return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
-
-
-def _first_value(data: Any, keys: list[str], default: Any = None) -> Any:
-    if isinstance(data, dict):
-        for key in keys:
-            if key in data and data[key] is not None:
-                return data[key]
-        for value in data.values():
-            found = _first_value(value, keys, None)
-            if found is not None:
-                return found
-    elif isinstance(data, list):
-        for value in data:
-            found = _first_value(value, keys, None)
-            if found is not None:
-                return found
-    return default
-
-
-def _find_all(data: Any, key: str) -> list:
-    found = []
-    if isinstance(data, dict):
-        for item_key, value in data.items():
-            if item_key == key:
-                found.append(value)
-            found.extend(_find_all(value, key))
-    elif isinstance(data, list):
-        for item in data:
-            found.extend(_find_all(item, key))
-    return found
-
-
-def _normal_field(item: dict) -> dict:
-    # =========================================================================
-    # P1 修复：正确处理嵌套的 category 对象
-    # BRAIN API 返回格式: {"category": {"id": "model", "name": "Model"}}
-    # 需要提取 id 字段作为字符串
-    # =========================================================================
-    cat = item.get("category")
-    if isinstance(cat, dict):
-        cat = cat.get("id", str(cat))
-    elif not isinstance(cat, str):
-        cat = ""
-    return {
-        "name": str(_first_value(item, ["name", "id", "field", "fieldId"], "")),
-        "category": cat,
-        "delay": _first_value(item, ["delay"], None),
-        "coverage": _num(_first_value(item, ["coverage"], 0.0)),
-    }
-
-
-def _normal_operator(item: dict) -> dict:
-    return {
-        "name": str(_first_value(item, ["name", "id", "operator"], "")),
-        "category": _first_value(item, ["category", "scope", "type"], ""),
-        "description": _first_value(item, ["description", "definition", "help", "doc"], ""),
-        "raw": _scrub(item),
-    }
-
-
-def _normal_dataset(item: dict) -> dict:
-    dataset_id = _first_value(item, ["id", "code", "datasetId", "dataset"], "")
-    if isinstance(dataset_id, dict):
-        dataset_id = _first_value(dataset_id, ["id", "code", "datasetId"], "")
-    field_count = _first_value(
-        item,
-        ["field_count", "fieldCount", "fieldsCount", "dataFieldCount", "data_field_count", "fields"],
-        0,
-    )
-    if isinstance(field_count, list):
-        field_count = len(field_count)
-    try:
-        numeric_field_count = int(field_count or 0)
-    except (TypeError, ValueError):
-        numeric_field_count = 0
-    return {
-        "id": str(dataset_id or ""),
-        "name": str(_first_value(item, ["name", "title", "description"], dataset_id or "")),
-        "field_count": numeric_field_count,
-        "category": _first_value(item, ["category", "group"], ""),
-        "region": _first_value(item, ["region"], ""),
-        "delay": _first_value(item, ["delay"], None),
-        "universe": _first_value(item, ["universe"], ""),
-        "raw": _scrub(item),
-    }
-
-
-def _normal_alpha(item: dict) -> dict:
-    expression = _first_value(item, ["expression", "regular", "code", "formula"], "")
-    settings = _first_value(item, ["settings"], {})
-    metrics = normalize_metrics(item)
-    alpha_id = _first_value(item, ["id", "alpha_id", "alphaId"], "")
-    return {
-        "id": str(alpha_id),
-        "status": str(_first_value(item, ["status", "state", "lifecycle"], "")),
-        "expression": str(expression or ""),
-        "created_at": str(_first_value(item, ["created_at", "dateCreated", "createdDate", "timestamp"], "")),
-        "settings": settings if isinstance(settings, dict) else {},
-        "metrics": metrics,
-        "raw": _scrub(item),
-    }
-
-
-def _num(value: Any) -> float:
-    try:
-        if value in (None, ""):
-            return 0.0
-        return float(value)
-    except (TypeError, ValueError):
-        return 0.0
-
-
-def _num_or_none(value: Any):
-    if value in (None, ""):
-        return None
-    return _num(value)
-
-
-def _ratio(value: Any) -> float:
-    numeric = _num(value)
-    return numeric / 100.0 if abs(numeric) > 1.0 else numeric
-
-
-def _merge(left: Any, right: Any) -> dict:
-    if isinstance(left, dict) and isinstance(right, dict):
-        merged = dict(left)
-        merged.update(right)
-        return merged
-    return {"simulation": left, "alpha": right}
-
-
-def _scrub(data: Any) -> Any:
-    return redact_data(data)

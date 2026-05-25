@@ -67,7 +67,7 @@ def test_serve_normalizes_host_checks_remote_policy_and_starts_thread():
         default_port=8765,
         handler_class=object,
         stop_event=stop_event,
-        configure_session_policy=lambda ttl, multiple: configured.append((ttl, multiple)),
+        configure_session_policy=lambda ttl, multiple, secure=None: configured.append((ttl, multiple, secure)),
         normalize_host=lambda host: "127.0.0.1" if not host else host,
         loopback_bind_hosts={"127.0.0.1"},
         allow_remote=False,
@@ -83,7 +83,7 @@ def test_serve_normalizes_host_checks_remote_policy_and_starts_thread():
     assert server.address == ("127.0.0.1", 9999)
     assert server.served is True
     assert stop_event.cleared is True
-    assert configured == [(60, False)]
+    assert configured == [(60, False, None)]
     assert opened == [url]
 
     with pytest.raises(ValueError, match="allow_remote"):
@@ -94,7 +94,7 @@ def test_serve_normalizes_host_checks_remote_policy_and_starts_thread():
             default_port=8765,
             handler_class=object,
             stop_event=_StopEvent(),
-            configure_session_policy=lambda ttl, multiple: None,
+            configure_session_policy=lambda ttl, multiple, secure=None: None,
             normalize_host=lambda host: host or "127.0.0.1",
             loopback_bind_hosts={"127.0.0.1"},
             allow_remote=False,

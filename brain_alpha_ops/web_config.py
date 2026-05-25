@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 
-from typing import Callable
+from typing import Any, Callable
 
 from brain_alpha_ops.brain_api.canonical import (
     SUPPORTED_ALPHA_TYPES,
@@ -16,10 +16,10 @@ from brain_alpha_ops.brain_api.canonical import (
 from brain_alpha_ops.config import BrainSettings, OpsConfig, ResearchBudget, RunConfig, load_run_config, validate_run_config
 
 
-# Allowed base URLs per environment; used to prevent SSRF via frontend payloads.
+# Allowed base URLs for user-facing web payloads; production is the only
+# runtime environment exposed by the web console.
 _ALLOWED_BASE_URLS: dict[str, set[str]] = {
     "production": {"https://api.worldquantbrain.com"},
-    "mock": set(),  # empty means allow any (safe for local testing)
 }
 
 # Upper bounds for web payload numeric parameters.
@@ -58,10 +58,19 @@ def payload_bool(payload: dict, key: str, default: object = False) -> bool:
     return payload_truthy(payload.get(key, default))
 
 
+def payload_web_environment(payload: dict) -> str | None:
+    if "environment" not in payload:
+        return None
+    environment = str(payload.get("environment") or "production").strip().lower()
+    if environment != "production":
+        raise ValueError("web console only supports production environment; mock mode is not available")
+    return "production"
+
+
 def payload_string_list(payload: dict, key: str, default: list[str] | None = None) -> list[str]:
     raw = payload.get(key, default or [])
     if isinstance(raw, str):
-        values: list[object] = raw.replace("\r", "\n").replace(",", "\n").splitlines()
+        values: list[Any] = raw.replace("\r", "\n").replace(",", "\n").splitlines()
     elif isinstance(raw, (list, tuple)):
         values = list(raw)
     else:
@@ -70,16 +79,20 @@ def payload_string_list(payload: dict, key: str, default: list[str] | None = Non
 
 
 def bounded_query_int(value: object, lower: int, upper: int) -> int:
+    if value is None:
+        return lower
     try:
-        parsed = int(value)
+        parsed = int(str(value))
     except (TypeError, ValueError):
         parsed = lower
     return min(max(parsed, lower), upper)
 
 
 def bounded_query_float(value: object, lower: float, upper: float) -> float:
+    if value is None:
+        return lower
     try:
-        parsed = float(value)
+        parsed = float(str(value))
     except (TypeError, ValueError):
         parsed = lower
     return min(max(parsed, lower), upper)
@@ -89,7 +102,9 @@ def run_config_from_payload(payload: dict, *, loader: RunConfigLoader = load_run
     run_config = loader()
     settings_data = payload.get("settings") or {}
     current_settings = run_config.ops.settings
-    run_config.environment = str(payload.get("environment", run_config.environment))
+    requested_environment = payload_web_environment(payload)
+    if requested_environment is not None:
+        run_config.environment = requested_environment
     run_config.auto_submit = payload_bool(payload, "autoSubmit", run_config.auto_submit)
     if "continuousMode" in payload:
         run_config.ops.budget.run_forever = payload_bool(
@@ -308,8 +323,9 @@ def run_config_from_payload(payload: dict, *, loader: RunConfigLoader = load_run
         0.0,
         10.0,
     )
-    if payload.get("baseUrl"):
-        base_url = str(payload["baseUrl"]).rstrip("/")
+    raw_base_url = payload.get("baseUrl") or payload.get("base_url")
+    if raw_base_url:
+        base_url = str(raw_base_url).rstrip("/")
         allowed = _ALLOWED_BASE_URLS.get(run_config.environment, set())
         if allowed and base_url not in allowed:
             raise ValueError(
@@ -390,7 +406,7 @@ def validate_settings_enums(settings: dict) -> None:
         errors.append(f"Invalid universe: '{universe}'. Valid: {sorted(_VALID_UNIVERSES)}")
     if "delay" in settings:
         try:
-            delay = int(settings.get("delay"))
+            delay = int(str(settings.get("delay")))
         except (TypeError, ValueError):
             errors.append(f"Invalid delay: '{settings.get('delay')}'. Valid: {sorted(_VALID_DELAYS)}")
         else:

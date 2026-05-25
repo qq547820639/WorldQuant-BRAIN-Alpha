@@ -1,165 +1,82 @@
-// brain_alpha_ops/web/js/app.js
+﻿// brain_alpha_ops/web/js/app.js
 // Application entry point: render dispatch, view state, and page-level actions.
 // v3: Redesigned with tab-based navigation, simplified rendering, and enhanced UX.
-
 (function () {
   'use strict';
-
   var $ = window.Utils.$;
   var esc = window.Utils.escapeHtml;
   var escapeAttr = window.Utils.escapeAttr;
-  var jsStringAttr = window.Utils.jsStringAttr;
   var phaseName = window.Utils.phaseName;
-  var num = window.Utils.num;
-  var badgeClass = window.Utils.badgeClass;
-  var scoreSpan = window.Utils.scoreSpan;
-  var statusBadge = window.Utils.statusBadge;
-
   var Api = window.ApiClient;
   var S = window.AppState;
   var Toast = window.Toast;
   var VM = window.ViewModel;
+  var Registry = window.ViewRegistry;
+  var ViewRenderers = window.ViewRenderers;
+  var ResultState = window.ResultState;
+  var FormControls = window.FormControls;
   var candidateIdentity = VM.candidateIdentity;
-  var candidateDisplayScore = VM.candidateDisplayScore;
-  var chooseRuntimeArray = VM.chooseRuntimeArray;
-  var expressionFromRow = VM.expressionFromRow;
-  var normalizedExpression = VM.normalizedExpression;
-  var uniqueBacktestSlots = VM.uniqueBacktestSlots;
-  var uniqueBy = VM.uniqueBy;
-  var uniqueCandidates = VM.uniqueCandidates;
-  var uniqueLifecycle = VM.uniqueLifecycle;
-  var firstFiniteNumber = VM.firstFiniteNumber;
-  var firstPositiveFiniteNumber = VM.firstPositiveFiniteNumber;
-
   window.$ = $;
-
-  var MAX_RENDERED_ROWS = S.MAX_RENDERED_ROWS || 300;
-  var CHECK_STALE_MS = S.CHECK_STALE_MS || 24 * 60 * 60 * 1000;
-
-  // ── View Registry ─────────────────────────────────────────────────────
-  var VIEW_ORDER = [
-    'candidates', 'pending_backtest', 'running_backtest', 'backtest_rework',
-    'passed', 'submittable', 'submitted', 'failed',
-    'cloud', 'lifecycle',
-    'research_memory', 'research_knowledge', 'research_observability',
-    'prompt_runs', 'sqlite_indexes', 'robustness',
-  ];
-
-  var WORKFLOW_VIEWS = ['candidates', 'pending_backtest', 'running_backtest', 'backtest_rework', 'passed', 'submittable', 'submitted', 'failed'];
-  var DATA_VIEWS = ['cloud', 'lifecycle'];
-  var RESEARCH_VIEWS = ['research_memory', 'research_knowledge', 'research_observability', 'prompt_runs', 'sqlite_indexes', 'robustness'];
-
-  var VIEW_TITLES = {
-    candidates: '候选池', pending_backtest: '等待回测', running_backtest: '回测中',
-    backtest_rework: '二次融合', passed: '达标', submittable: '可提交',
-    submitted: '已提交', failed: '不达标', cloud: '云端数据', lifecycle: '生命周期',
-    research_memory: 'Research Memory', research_observability: 'Observability',
-    research_knowledge: 'Knowledge Base', prompt_runs: 'Prompt Ledger',
-    sqlite_indexes: 'SQLite Index', robustness: 'Robustness',
-  };
-
-  var VIEW_ICONS = {
-    candidates: '📋', pending_backtest: '⏳', running_backtest: '🔄',
-    backtest_rework: '🔧', passed: '✅', submittable: '📤',
-    submitted: '🚀', failed: '❌', cloud: '☁️', lifecycle: '📅',
-    research_memory: '🧠', research_observability: '📊',
-    research_knowledge: '📚', prompt_runs: '💬', sqlite_indexes: '🗄️', robustness: '🛡️',
-  };
-
-  var VIEW_HINTS = {
-    candidates: '按排序分降序展示核心候选池。',
-    pending_backtest: '等待回测按排队顺序展示。',
-    running_backtest: '正在等待官方回测结果返回。',
-    backtest_rework: '回测失败或需要二次融合的 Alpha。',
-    passed: '达标 Alpha 可批量检查后提交。',
-    submittable: '检查通过且在有效期内的 Alpha，可直接提交。',
-    submitted: '已提交和云端已提交记录。',
-    failed: '不达标、拒绝和阻断记录。',
-    cloud: '云端快照和缓存统计。',
-    lifecycle: '关键生命周期事件追踪。',
-    research_memory: '本地 JSONL research memory。',
-    research_knowledge: '结构化规则和发现。',
-    research_observability: '可观测性快照。',
-    prompt_runs: 'Prompt 运行账本。',
-    sqlite_indexes: 'SQLite 缓存状态。',
-    robustness: '反过拟合和滚动验证状态。',
-  };
-
-  // ── App-level state ───────────────────────────────────────────────────
-  var activeFilter = '';
-  var resultDisplayMode = 'table';
+  var VIEW_ORDER = Registry.VIEW_ORDER;
+  var VIEW_GROUPS = Registry.VIEW_GROUPS;
+  var VIEW_TITLES = Registry.VIEW_TITLES;
+  var VIEW_ICONS = Registry.VIEW_ICONS;
   var presets = {};
-  var syncInFlight = false;
-  var batchCheckJobId = '';
-  var submitInFlight = false;
-  var selectedSubmitIds = new Set();
-  var syncStartedAt = 0;
-  var checkStartedAt = 0;
-
-  // ── Helpers ────────────────────────────────────────────────────────────
-
-  function toast(msg, type, duration) {
-    if (Toast && Toast.toast) Toast.toast(String(msg || ''), type || 'info', duration);
-  }
-
-  function setVal(id, value) {
-    var el = $(id); if (el && value !== undefined && value !== null) el.value = value;
-  }
-
-  function hasDataObject(obj) { return Boolean(obj && typeof obj === 'object' && Object.keys(obj).length); }
-
+  function syncInFlight() { return Boolean(S.get('syncInFlight')); }
+  function batchCheckJobId() { return S.get('batchCheckJobId') || ''; }
+  function submitInFlight() { return Boolean(S.get('submitInFlight')); }
+  function selectedSubmitList() { return S.get('selectedSubmitIds') || []; }
+  function selectedSubmitCount() { return selectedSubmitList().length; }
+  function isSelectedSubmitId(id) { return selectedSubmitList().indexOf(id) !== -1; }
+  function selectedSubmitIdSet() { return new Set(selectedSubmitList()); }
+  function setSelectedSubmitIds(ids) { S.set('selectedSubmitIds', Array.from(ids || [])); }
   function setControlState(id, disabled, reason) {
     var el = $(id); if (!el) return;
     if (!el.dataset.defaultTitle) el.dataset.defaultTitle = el.getAttribute('title') || '';
     el.disabled = Boolean(disabled);
+    el.setAttribute('aria-disabled', Boolean(disabled));
     if (reason) el.setAttribute('title', reason);
     else if (el.dataset.defaultTitle) el.setAttribute('title', el.dataset.defaultTitle);
     else el.removeAttribute('title');
   }
-
-  // ── Operation Blocking ─────────────────────────────────────────────────
-
   window.operationBlockReason = function (action) {
     var running = Boolean(S.get('isRunning'));
     switch (action) {
-      case 'production': if (syncInFlight) return '云端同步正在进行。'; if (batchCheckJobId) return '达标检查正在进行。'; if (submitInFlight) return '提交正在进行。'; return '';
-      case 'sync': if (running) return '生产任务运行中。'; if (batchCheckJobId) return '达标检查正在进行。'; if (submitInFlight) return '提交正在进行。'; if (syncInFlight) return '云端同步正在进行。'; return '';
-      case 'check': if (running) return '生产任务运行中。'; if (syncInFlight) return '云端同步正在进行。'; if (submitInFlight) return '提交正在进行。'; if (batchCheckJobId) return '达标检查正在进行。'; return '';
-      case 'submit': if (running) return '生产任务运行中。'; if (syncInFlight) return '云端同步正在进行。'; if (batchCheckJobId) return '达标检查正在进行。'; if (submitInFlight) return '提交正在进行。'; return '';
+      case 'production': if (syncInFlight()) return '云端同步正在进行。'; if (batchCheckJobId()) return '达标检查正在进行。'; if (submitInFlight()) return '提交正在进行。'; return '';
+      case 'sync': if (running) return '生产任务运行中。'; if (batchCheckJobId()) return '达标检查正在进行。'; if (submitInFlight()) return '提交正在进行。'; if (syncInFlight()) return '云端同步正在进行。'; return '';
+      case 'check': if (running) return '生产任务运行中。'; if (syncInFlight()) return '云端同步正在进行。'; if (submitInFlight()) return '提交正在进行。'; if (batchCheckJobId()) return '达标检查正在进行。'; return '';
+      case 'submit': if (running) return '生产任务运行中。'; if (syncInFlight()) return '云端同步正在进行。'; if (batchCheckJobId()) return '达标检查正在进行。'; if (submitInFlight()) return '提交正在进行。'; return '';
     }
     return '';
   };
-
   function currentOperationText() {
-    if (syncInFlight) return '云端同步正在进行，其他冲突操作已暂时锁定。';
-    if (batchCheckJobId) return '达标检查正在进行，其他冲突操作已暂时锁定。';
-    if (submitInFlight) return '提交正在进行，其他冲突操作已暂时锁定。';
+    if (syncInFlight()) return '云端同步正在进行，其他冲突操作已暂时锁定。';
+    if (batchCheckJobId()) return '达标检查正在进行，其他冲突操作已暂时锁定。';
+    if (submitInFlight()) return '提交正在进行，其他冲突操作已暂时锁定。';
     if (S.get('isRunning')) return '生产任务正在运行。';
     return '';
   }
-
   window.renderBusyControls = function () {
     var prodReason = window.operationBlockReason('production');
     var syncReason = window.operationBlockReason('sync');
     var checkReason = window.operationBlockReason('check');
     var submitReason = window.operationBlockReason('submit');
-
     setControlState('controlButton', Boolean(prodReason), prodReason);
+    setControlState('workflowRunButton', Boolean(prodReason), prodReason);
     setControlState('syncButton', Boolean(syncReason), syncReason);
+    setControlState('workflowSyncButton', Boolean(syncReason), syncReason);
     var syncRange = $('syncRange'); if (syncRange) syncRange.disabled = Boolean(syncReason);
-    setControlState('checkButton', Boolean(checkReason) || Boolean(batchCheckJobId), checkReason);
-
+    setControlState('checkButton', Boolean(checkReason) || Boolean(batchCheckJobId()), checkReason);
+    setControlState('workflowCheckButton', Boolean(checkReason) || Boolean(batchCheckJobId()), checkReason || (batchCheckJobId() ? '达标检查正在进行。' : ''));
     var submitBtn = $('submitSelectedButton');
-    if (submitBtn) { var sReason = submitReason || !selectedSubmitIds.size ? (selectedSubmitIds.size ? submitReason : '请先选择要提交的 Alpha') : ''; submitBtn.disabled = Boolean(sReason); if (sReason) submitBtn.setAttribute('title', sReason); }
-
-    var autoSubmit = $('autoSubmitToggle'); if (autoSubmit) autoSubmit.disabled = Boolean(submitReason || batchCheckJobId || submitInFlight);
-
+    if (submitBtn) { var selectedCount = selectedSubmitCount(); var sReason = submitReason || !selectedCount ? (selectedCount ? submitReason : '请先选择要提交的 Alpha') : ''; submitBtn.disabled = Boolean(sReason); if (sReason) submitBtn.setAttribute('title', sReason); }
+    var railSubmitBtn = $('workflowSubmitButton');
+    if (railSubmitBtn) { var railSelectedCount = selectedSubmitCount(); var railReason = submitReason || !railSelectedCount ? (railSelectedCount ? submitReason : '请先在达标或可提交视图选择 Alpha') : ''; railSubmitBtn.disabled = Boolean(railReason); railSubmitBtn.setAttribute('aria-disabled', Boolean(railReason)); if (railReason) railSubmitBtn.setAttribute('title', railReason); else railSubmitBtn.removeAttribute('title'); }
+    var autoSubmit = $('autoSubmitToggle'); if (autoSubmit) autoSubmit.disabled = Boolean(submitReason || batchCheckJobId() || submitInFlight());
     var guard = $('operationGuard');
     if (guard) { var msg = currentOperationText(); guard.textContent = msg; guard.classList.toggle('hidden', !msg); }
+    renderTaskRail();
   };
-
-  // ── Data Accessors ─────────────────────────────────────────────────────
-
   function currentSummary() { return S.get('currentResult.summary') || {}; }
   function currentCandidates() { return S.get('currentResult.candidates') || []; }
   function currentBacktests() { return S.get('currentResult.backtests') || []; }
@@ -172,9 +89,6 @@
   function currentSqliteIndexes() { return S.get('currentResult.sqlite_indexes') || {}; }
   function currentRobustnessSnapshot() { return S.get('currentResult.robustness_snapshot') || {}; }
   function checkResults() { return S.get('checkResults') || {}; }
-
-  // ── Theme ──────────────────────────────────────────────────────────────
-
   window.toggleTheme = function () {
     var html = document.documentElement;
     var isDark = html.getAttribute('data-theme') === 'dark';
@@ -182,11 +96,10 @@
     html.setAttribute('data-theme', next);
     var light = document.querySelector('.theme-icon-light');
     var dark = document.querySelector('.theme-icon-dark');
-    if (light) light.style.display = isDark ? '' : 'none';
-    if (dark) dark.style.display = isDark ? 'none' : '';
+    if (light) light.classList.toggle('hidden', !isDark);
+    if (dark) dark.classList.toggle('hidden', isDark);
     try { localStorage.setItem('brain-alpha-ops-theme', isDark ? 'light' : 'dark'); } catch (e) {}
   };
-
   (function initTheme() {
     try {
       var saved = localStorage.getItem('brain-alpha-ops-theme');
@@ -194,70 +107,58 @@
         document.documentElement.setAttribute('data-theme', 'dark');
         var li = document.querySelector('.theme-icon-light');
         var di = document.querySelector('.theme-icon-dark');
-        if (li) li.style.display = 'none';
-        if (di) di.style.display = '';
+        if (li) li.classList.add('hidden');
+        if (di) di.classList.remove('hidden');
       }
     } catch (e) {}
   })();
-
-  // ── Environment Toggle ─────────────────────────────────────────────────
-
   window.toggleEnvironment = function () {
-    var env = ($('environment') || {}).value;
-    var prodNote = $('productionNote'), mockNote = $('mockNote');
-    if (prodNote) prodNote.classList.toggle('hidden', env !== 'production');
-    if (mockNote) mockNote.classList.toggle('hidden', env !== 'mock');
+    var envEl = $('environment');
+    if (envEl) envEl.value = 'production';
+    var prodNote = $('productionNote');
+    if (prodNote) prodNote.classList.remove('hidden');
     var envBadge = $('envBadge');
-    if (envBadge) envBadge.textContent = env === 'mock' ? 'Mock' : 'Production';
+    if (envBadge) envBadge.textContent = 'Production';
     window.renderBusyControls();
   };
-
-  // ── View Tabs ──────────────────────────────────────────────────────────
-
   function renderViewTabs() {
     var container = $('viewTabs');
     if (!container) return;
     var currentView = activeView();
-
-    var workflowTabs = WORKFLOW_VIEWS.map(function (v) {
-      return renderTab(v, currentView);
-    });
-
-    var dataTabs = DATA_VIEWS.map(function (v) {
-      return renderTab(v, currentView);
-    });
-
-    var researchTabs = RESEARCH_VIEWS.map(function (v) {
-      return renderTab(v, currentView);
-    });
-
-    container.innerHTML =
-      workflowTabs.join('') +
-      '<span class="view-tab-separator" aria-hidden="true"></span>' +
-      dataTabs.join('') +
-      '<span class="view-tab-separator" aria-hidden="true"></span>' +
-      researchTabs.join('');
+    container.innerHTML = VIEW_GROUPS.map(function (group) {
+      return '<div class="view-tab-group" aria-label="' + esc(group.label) + '">' +
+        '<div class="view-tab-group-label"><span>' + esc(group.label) + '</span><small>' + esc(group.hint) + '</small></div>' +
+        '<div class="view-tab-row">' + group.views.map(function (view) { return renderTab(view, currentView); }).join('') + '</div>' +
+        '</div>';
+    }).join('');
   }
-
   function renderTab(view, currentView) {
     var title = VIEW_TITLES[view] || view;
-    var icon = VIEW_ICONS[view] || '📌';
+    var icon = VIEW_ICONS[view] || '--';
     var isActive = view === currentView;
     var count = S.viewCount(view);
     var badgeHtml = count > 0 ? '<span class="tab-badge">' + (count > 99 ? '99+' : count) + '</span>' : '';
-
-    return '<button class="view-tab' + (isActive ? ' is-active' : '') + '"' +
-      ' onclick="switchView(\'' + view + '\')"' +
+    return '<button type="button" class="view-tab' + (isActive ? ' is-active' : '') + '"' +
+      ' data-action="switch-view" data-view="' + escapeAttr(view) + '"' +
       ' aria-pressed="' + isActive + '"' +
       ' title="' + esc(title) + (count > 0 ? ' (' + count + ')' : '') + '"' +
-      '>' + icon + ' ' + esc(title) + badgeHtml + '</button>';
+      '><span class="tab-marker" aria-hidden="true">' + esc(icon) + '</span>' +
+      '<span class="view-tab-label">' + esc(title) + '</span>' + badgeHtml + '</button>';
   }
-
-  // ── View Switching ─────────────────────────────────────────────────────
-
+  function installViewTabDelegates() {
+    var container = $('viewTabs');
+    if (!container || container.dataset.delegatedActions === '1') return;
+    container.dataset.delegatedActions = '1';
+    container.addEventListener('click', function (event) {
+      var button = findActionElement(event.target, container);
+      if (!button || button.getAttribute('data-action') !== 'switch-view') return;
+      if (event.preventDefault) event.preventDefault();
+      if (event.stopPropagation) event.stopPropagation();
+      window.switchView(button.getAttribute('data-view') || 'candidates');
+    });
+  }
   window.switchView = function (view) {
     if (VIEW_ORDER.indexOf(view) === -1) view = 'candidates';
-    activeFilter = '';
     S.set('activeView', view);
     renderViewTabs();
     _renderCurrentView();
@@ -265,10 +166,66 @@
     updatePanelHeader();
     // Show/hide action bar based on view
     updateActionBarVisibility(view);
+    renderTaskRail();
   };
-
   function activeView() { return S.get('activeView') || 'candidates'; }
-
+  function setWorkflowText(id, value) {
+    var el = $(id);
+    if (el) el.textContent = String(value);
+  }
+  function workflowStepViews(stepId) {
+    if (stepId === 'workflowStepProduce') return ['candidates', 'pending_backtest', 'running_backtest', 'backtest_rework'];
+    if (stepId === 'workflowStepCheck') return ['passed'];
+    if (stepId === 'workflowStepSubmit') return ['submittable', 'submitted', 'failed'];
+    if (stepId === 'workflowStepCloud') return ['cloud', 'lifecycle'];
+    return [];
+  }
+  function updateWorkflowStep(stepId, currentView) {
+    var el = $(stepId);
+    if (!el) return;
+    var active = workflowStepViews(stepId).indexOf(currentView) !== -1;
+    el.classList.toggle('is-active', active);
+    if (active) el.setAttribute('aria-current', 'step');
+    else el.removeAttribute('aria-current');
+  }
+  function workflowStatusText() {
+    var candidateCount = S.viewCount('candidates');
+    var passedCount = S.viewCount('passed');
+    var submittableCount = S.viewCount('submittable');
+    var selectedCount = selectedSubmitCount();
+    if (syncInFlight()) return '云端同步进行中，正在刷新官方 Alpha 快照。';
+    if (batchCheckJobId()) return '达标检查进行中，通过后会进入可提交队列。';
+    if (submitInFlight()) return '提交处理中，请等待官方结果返回。';
+    if (S.get('isRunning')) return '生产搜索运行中，候选、回测和评分会自动更新。';
+    if (selectedCount) return '已选择 ' + selectedCount + ' 个 Alpha，可从这里批量提交。';
+    if (submittableCount) return '已有 ' + submittableCount + ' 个 Alpha 可提交，先复核再提交。';
+    if (passedCount) return '已有 ' + passedCount + ' 个达标 Alpha，下一步执行官方检查。';
+    if (candidateCount) return '候选池已有 ' + candidateCount + ' 条记录，可查看详情或继续生产。';
+    return '先连接账号，再启动生产搜索或同步云端数据。';
+  }
+  function renderTaskRail() {
+    setWorkflowText('workflowCandidateCount', S.viewCount('candidates'));
+    setWorkflowText('workflowPassedCount', S.viewCount('passed'));
+    setWorkflowText('workflowSubmittableCount', S.viewCount('submittable'));
+    setWorkflowText('workflowCloudCount', S.viewCount('cloud'));
+    var currentView = activeView();
+    ['workflowStepProduce', 'workflowStepCheck', 'workflowStepSubmit', 'workflowStepCloud'].forEach(function (id) {
+      updateWorkflowStep(id, currentView);
+    });
+    var statusEl = $('workflowStatus');
+    if (statusEl) {
+      statusEl.textContent = workflowStatusText();
+      statusEl.classList.toggle('is-busy', Boolean(syncInFlight() || batchCheckJobId() || submitInFlight() || S.get('isRunning')));
+    }
+    var runBtn = $('workflowRunButton');
+    if (runBtn) {
+      var running = Boolean(S.get('isRunning'));
+      runBtn.textContent = running ? '停止生产' : '开始生产搜索';
+      runBtn.classList.toggle('btn-danger', running);
+      runBtn.classList.toggle('btn-primary', !running);
+      runBtn.classList.toggle('is-stopping', running);
+    }
+  }
   function updateActionBarVisibility(view) {
     var bar = $('moduleActions');
     if (!bar) return;
@@ -281,19 +238,20 @@
     }
     var hintEl = $('moduleActionHint');
     if (hintEl) {
-      hintEl.textContent = view === 'submittable' ? '选择 Alpha 进行提交。' : view === 'passed' ? '批量核验全部达标 Alpha 当前是否仍可提交。' : '管理候选池中的 Alpha。';
+      hintEl.textContent = view === 'submittable' ? '勾选已通过检查的 Alpha 后提交。' : view === 'passed' ? '先跑官方预提交检查，再进入可提交列表。' : '查看候选详情，必要时切换到达标视图执行检查。';
     }
     // Show/hide specific buttons
     var checkBtn = $('checkButton');
     var submitBtn = $('submitSelectedButton');
+    var checkMode = $('checkMode');
+    var autoSubmit = $('autoSubmitToggle');
+    var autoSubmitWrap = autoSubmit && autoSubmit.closest ? autoSubmit.closest('.toggle') : null;
     if (checkBtn) checkBtn.classList.toggle('hidden', view !== 'passed');
+    if (checkMode) checkMode.classList.toggle('hidden', view !== 'passed');
+    if (autoSubmitWrap) autoSubmitWrap.classList.toggle('hidden', view !== 'passed');
     if (submitBtn) submitBtn.classList.toggle('hidden', view !== 'submittable' && view !== 'passed');
   }
-
-  // ── Display Mode ───────────────────────────────────────────────────────
-
   window.setResultDisplayMode = function (mode) {
-    resultDisplayMode = mode || 'table';
     var tableBtn = $('tableModeBtn'), chartBtn = $('chartModeBtn');
     var chartsPanel = $('chartsPanel');
     if (tableBtn) { tableBtn.classList.toggle('is-active', mode === 'table'); tableBtn.setAttribute('aria-pressed', mode === 'table'); }
@@ -302,68 +260,48 @@
     if (mode === 'charts' && typeof window.renderCharts === 'function') window.renderCharts();
     var toggle = $('displayModeToggle'); if (toggle) toggle.classList.toggle('hidden', false);
   };
-
-  // ── Panel Header ───────────────────────────────────────────────────────
-
-  function updatePanelHeader() {
-    var view = activeView();
-    var titleEl = $('tableTitle'), hintEl = $('panelHint');
-    if (titleEl) titleEl.textContent = VIEW_TITLES[view] || view;
-    if (hintEl) hintEl.textContent = VIEW_HINTS[view] || '';
-    updateCountPill();
+  function viewRendererOptions() {
+    return {
+      actionButton: actionButton,
+      activeView: activeView,
+      isFreshPassedCheck: S.isFreshPassedCheck,
+      isSelectedSubmitId: isSelectedSubmitId,
+      lastSubmitResults: S.get('lastSubmitResults') || [],
+      submitInFlight: submitInFlight,
+    };
   }
-
-  function updateCountPill() {
-    var pill = $('countPill');
-    if (!pill) return;
-    var rows = getRowsForView(activeView());
-    var count = rows.length;
-    pill.textContent = count + ' 条';
-    pill.className = 'badge ' + (count > 0 ? 'badge-accent' : 'badge-default');
+  function viewDataSources() {
+    return {
+      candidates: currentCandidates(),
+      checks: checkResults(),
+      cloud: currentCloudAlphas(),
+      isFreshPassedCheck: S.isFreshPassedCheck,
+      lastSubmitResults: S.get('lastSubmitResults') || [],
+      lifecycle: currentLifecycle(),
+      promptRuns: currentPromptRuns(),
+      researchKnowledge: currentResearchKnowledge(),
+      researchMemory: currentResearchMemory(),
+      researchObservability: currentResearchObservability(),
+      robustnessSnapshot: currentRobustnessSnapshot(),
+      sqliteIndexes: currentSqliteIndexes(),
+    };
   }
-
-  // ── Cloud Sync / Check Helpers ─────────────────────────────────────────
-
-  function cloudSyncStatus(cloud) {
-    cloud = cloud || {};
-    return String(cloud.phase || cloud.status || cloud.status_code || '').trim().toLowerCase();
-  }
-
-  function isActiveCloudSync(cloud) {
-    cloud = cloud || {};
-    var status = cloudSyncStatus(cloud);
-    if (['completed', 'synced', 'failed', 'skipped'].indexOf(status) !== -1) return false;
-    if (['auth', 'scan', 'merge', 'running', 'cloud_sync'].indexOf(status) !== -1) return true;
-    return firstPositiveFiniteNumber(cloud.scanned, cloud.current, cloud.total) !== null;
-  }
-
   function liveCloudSyncProgress() {
     var live = S.get('liveProgress') || {};
     var progress = live.data || {};
     return ((progress.data || {}).cloud_sync || progress.cloud_sync || {});
   }
-
-  function isEmptyCloudSyncSnapshot(cloud, rows) {
-    cloud = cloud || {};
-    var status = cloudSyncStatus(cloud);
-    if (status === 'empty') return true;
-    if (['completed', 'synced', 'failed', 'skipped'].indexOf(status) !== -1) return false;
-    if (Array.isArray(rows) && rows.length > 0) return false;
-    return !firstPositiveFiniteNumber(cloud.scanned, cloud.current, cloud.total) && !firstPositiveFiniteNumber(cloud.count, cloud.loaded);
-  }
-
-  function mergeCloudSyncSummary(previous, incoming, rows) {
-    previous = previous || {};
-    incoming = incoming || {};
-    var liveCloud = liveCloudSyncProgress();
-    var active = isActiveCloudSync(liveCloud) ? Object.assign({}, previous, liveCloud) : previous;
-    if (isActiveCloudSync(active) && isEmptyCloudSyncSnapshot(incoming, rows)) return Object.assign({}, incoming, active);
-    if (!Object.keys(incoming).length && Object.keys(active).length) return Object.assign({}, active);
-    return Object.assign({}, previous, incoming);
-  }
-
-  // ── Strategy Policy Rendering ──────────────────────────────────────────
-
+  var resultTable = window.ResultTableView.create({
+    activeView: activeView,
+    applySearchFilter: applySearchFilter,
+    getColumnsForView: getColumnsForView,
+    getMobileColumns: getMobileColumns,
+    getRowsForView: getRowsForView,
+    isSelectedSubmitId: isSelectedSubmitId,
+    renderMobileActions: renderMobileActions,
+    state: S,
+  });
+  function updatePanelHeader() { resultTable.updatePanelHeader(); }
   window.renderStrategyPolicy = function (config) {
     var target = $('strategyText');
     if (!target) return;
@@ -376,10 +314,8 @@
     ].filter(function (v) { return Number.isFinite(v) && v > 0; });
     var slotLimit = Math.max(1, Math.round(Math.min.apply(Math, slotLimits)));
     if ($('slotPolicyText')) $('slotPolicyText').textContent = slotLimit + ' 槽';
-
     var runForever = Boolean(budget.run_forever);
     var pluginSpecs = Array.isArray(budget.strategy_plugin_specs) ? budget.strategy_plugin_specs : [];
-
     var items = [
       { label: '候选上限', value: (budget.max_candidates_per_cycle || 20) + ' / 轮', note: '每轮最多生成并评分的候选数' },
       { label: '池容量', value: (budget.retained_alpha_pool_size || 10), note: '本地候选池保留上限' },
@@ -387,56 +323,30 @@
       { label: '连续生产', value: runForever ? '开启' : '单轮', note: runForever ? '持续生产' : '单轮后停止' },
       { label: 'Strategy Plugins', value: budget.strategy_plugins_enabled ? ('On | ' + pluginSpecs.length + ' specs') : 'Off', note: pluginSpecs.length ? pluginSpecs.join(', ') : '-' },
     ];
-
-    target.innerHTML = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:var(--sp-2)">' +
+    target.innerHTML = '<div class="policy-grid">' +
       items.map(function (item) {
-        return '<div style="padding:var(--sp-2);border:1px solid var(--border-default);border-radius:var(--r-md);background:var(--bg-surface-raised)">' +
-          '<div style="font-size:var(--fs-2xs);color:var(--text-secondary);font-weight:var(--fw-bold)">' + esc(item.label) + '</div>' +
-          '<div style="font-size:var(--fs-sm);font-weight:var(--fw-bold);margin-top:2px">' + esc(String(item.value)) + '</div>' +
-          '<div style="font-size:var(--fs-2xs);color:var(--text-muted);margin-top:1px">' + esc(item.note) + '</div>' +
+        return '<div class="policy-card">' +
+          '<div class="policy-label">' + esc(item.label) + '</div>' +
+          '<div class="policy-value">' + esc(String(item.value)) + '</div>' +
+          '<div class="policy-note">' + esc(item.note) + '</div>' +
           '</div>';
       }).join('') + '</div>';
   };
-
-  // ── Main Result Rendering ──────────────────────────────────────────────
-
   function renderResult(result) {
-    result = result || {};
-    var previousSummary = currentSummary();
-    var summary = Object.assign({}, result.summary || {});
-    var candidates = uniqueCandidates(chooseRuntimeArray(summary.candidates, result.candidates, currentCandidates()));
-    var pending = uniqueCandidates(chooseRuntimeArray(summary.pending_backtest_candidates, null, S.get('currentResult.pending_backtest_candidates')));
-    var passed = uniqueCandidates(chooseRuntimeArray(summary.passed_candidates, null, []));
-    var incomingCloudRows = Array.isArray(summary.cloud_alphas) ? summary.cloud_alphas : null;
-    var existingCloudRows = currentCloudAlphas();
-    var incomingCloudSync = summary.cloud_sync || {};
-    summary.cloud_sync = mergeCloudSyncSummary(previousSummary.cloud_sync, incomingCloudSync, incomingCloudRows);
-    var cloud = uniqueCandidates(Array.isArray(incomingCloudRows) ? incomingCloudRows : existingCloudRows);
-    var lifecycle = uniqueLifecycle(summary.lifecycle_records || currentLifecycle());
-    var backtests = uniqueBacktestSlots(summary.backtest_slots || summary.backtests || result.backtests || currentBacktests());
-
-    S.setBatch({
-      'currentResult.summary': summary,
-      'currentResult.candidates': candidates || [],
-      'currentResult.pending_backtest_candidates': pending || [],
-      'currentResult.passed_candidates': passed || [],
-      'currentResult.cloud_alphas': cloud || [],
-      'currentResult.lifecycle_records': lifecycle || [],
-      'currentResult.backtests': backtests || [],
-    });
-
+    S.setBatch(ResultState.buildResultBatch(result, {
+      currentBacktests: currentBacktests(),
+      currentCandidates: currentCandidates(),
+      currentCloudAlphas: currentCloudAlphas(),
+      currentLifecycle: currentLifecycle(),
+      currentPendingBacktestCandidates: S.get('currentResult.pending_backtest_candidates') || [],
+      currentSummary: currentSummary(),
+      liveCloudSyncProgress: liveCloudSyncProgress,
+    }));
     renderAll();
   }
-
   function renderJobSnapshot(job) {
-    job = job || {};
-    var progress = job.progress || {};
-    var data = progress.data || {};
-    var result = job.result || {};
-    var summary = Object.assign({}, data, result.summary || {});
-    renderResult({ summary: summary, candidates: firstArrayWithItems(summary.candidates, data.candidates, result.candidates) || [], backtests: summary.backtests || [] });
+    renderResult(ResultState.jobToResult(job));
   }
-
   function renderAll() {
     renderViewTabs();
     if (typeof window.renderInsight === 'function') window.renderInsight();
@@ -446,120 +356,199 @@
     _renderCurrentView();
     window.renderBusyControls();
     updatePanelHeader();
+    renderTaskRail();
   }
-
-  function firstArrayWithItems() {
-    for (var i = 0; i < arguments.length; i++) { if (Array.isArray(arguments[i]) && arguments[i].length) return arguments[i]; }
-    for (var j = 0; j < arguments.length; j++) { if (Array.isArray(arguments[j])) return arguments[j]; }
-    return null;
+  var _renderCurrentView = function () { resultTable.renderCurrentView(); };
+  window.renderCurrentView = _renderCurrentView;
+  function actionButton(action, label, row, className, options) {
+    return resultTable.actionButton(action, label, row, className, options);
   }
-
-  // ── Main View Renderer ─────────────────────────────────────────────────
-
-  var _renderCurrentView = function () {
-    var view = activeView();
-    var rows = getRowsForView(view);
-    applySearchFilter(rows);
-    var columns = getColumnsForView(view);
-
-    var tableBody = $('candidateRows');
-    var emptyEl = document.getElementById('tableEmptyState');
-    var tableEl = document.getElementById('candidateTable');
-    var mobileEl = document.getElementById('mobileCardList');
-
-    if (!rows.length) {
-      if (tableBody) tableBody.innerHTML = '';
-      if (tableEl) tableEl.classList.add('hidden');
-      if (mobileEl) mobileEl.classList.add('hidden');
-      if (emptyEl) {
-        emptyEl.classList.remove('hidden');
-        var descEl = document.getElementById('tableEmptyDescription');
-        var desc = getEmptyDescription(view);
-        if (descEl) descEl.textContent = desc;
-        var iconEl = document.getElementById('tableEmptyIcon');
-        if (iconEl) iconEl.textContent = VIEW_ICONS[view] || '📊';
-      }
-      updateCountPill();
+  function findActionElement(target, boundary) {
+    while (target && target !== boundary && target.getAttribute) {
+      if (target.getAttribute('data-action')) return target;
+      target = target.parentElement;
+    }
+    return boundary && boundary.getAttribute && boundary.getAttribute('data-action') ? boundary : null;
+  }
+  function handleDelegatedAction(event) {
+    var container = event.currentTarget || event.delegateTarget || this || null;
+    var el = findActionElement(event.target, container);
+    if (!el) return;
+    var action = el.getAttribute('data-action') || '';
+    if (!action) return;
+    if (event.preventDefault) event.preventDefault();
+    if (event.stopPropagation) event.stopPropagation();
+    var id = el.getAttribute('data-id') || '';
+    if (action === 'open-row') {
+      window.handleRowClick(el);
+    } else if (action === 'submit-single') {
+      window.submitSingleCandidate(id);
+    } else if (action === 'toggle-select') {
+      window.toggleSelectCandidate(id, el);
+    }
+  }
+  function installResultDelegates() {
+    ['candidateRows', 'mobileCardList'].forEach(function (id) {
+      var el = $(id);
+      if (!el || el.dataset.delegatedActions === '1') return;
+      el.dataset.delegatedActions = '1';
+      el.addEventListener('click', handleDelegatedAction);
+      el.addEventListener('keydown', function (event) {
+        if (event.key === 'Enter' || event.key === ' ') handleDelegatedAction(event);
+      });
+    });
+  }
+  function isNativeInteractive(el) {
+    var tag = String((el && el.tagName) || '').toUpperCase();
+    return tag === 'BUTTON' || tag === 'A' || tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA';
+  }
+  function hasAncestorClass(target, className, boundary) {
+    while (target && target !== boundary && target.getAttribute) {
+      if (target.classList && target.classList.contains(className)) return true;
+      target = target.parentElement;
+    }
+    return false;
+  }
+  function invokeWindowAction(name, args) {
+    var fn = window[name];
+    if (typeof fn !== 'function') {
+      if (Toast && Toast.warning) Toast.warning('Action is not available in this build.');
       return;
     }
-
-    if (emptyEl) emptyEl.classList.add('hidden');
-    if (tableEl) tableEl.classList.remove('hidden');
-
-    var displayRows = rows.slice(0, MAX_RENDERED_ROWS);
-
-    // Desktop table
-    if (tableBody) {
-      tableBody.innerHTML = displayRows.map(function (row, idx) {
-        var isSelected = selectedSubmitIds.has(row.id || candidateIdentity(row.raw || {}));
-        var rowHtml = '<tr data-kind="' + escapeAttr(row.kind || '') + '" data-id="' + escapeAttr(row.id || '') + '"' +
-          (isSelected ? ' class="is-selected"' : '') + ' tabindex="0" role="button" aria-label="查看详情" ' +
-          'onclick="handleRowClick(this)" onkeydown="if(event.key===\'Enter\')handleRowClick(this)">';
-
-        rowHtml += columns.map(function (col) {
-          var value = typeof col.accessor === 'function' ? col.accessor(row, idx) : (row.raw || row)[col.accessor];
-          var rendered = col.render ? col.render(value, row, idx) : esc(String(value ?? ''));
-          return '<td>' + (col.trustedHtml ? rendered : esc(String(rendered ?? ''))) + '</td>';
-        }).join('');
-
-        return rowHtml + '</tr>';
-      }).join('');
+    try {
+      var result = fn.apply(window, args || []);
+      if (result && typeof result.catch === 'function') {
+        result.catch(function (err) { if (Toast && Toast.error) Toast.error((err && err.message) || String(err)); });
+      }
+    } catch (err) {
+      if (Toast && Toast.error) Toast.error((err && err.message) || String(err));
     }
-
-    // Mobile cards
-    if (mobileEl && window.innerWidth <= 640) {
-      mobileEl.classList.remove('hidden');
-      var mobileCols = getMobileColumns(view);
-      mobileEl.innerHTML = displayRows.map(function (row, idx) {
-        var isSelected = selectedSubmitIds.has(row.id || candidateIdentity(row.raw || {}));
-        var title = row.id || candidateIdentity(row.raw || {}) || ('条目 ' + (idx + 1));
-        var metaHtml = mobileCols.map(function (col) {
-          var value = typeof col.accessor === 'function' ? col.accessor(row, idx) : (row.raw || row)[col.accessor];
-          var rendered = col.render ? col.render(value, row, idx) : esc(String(value ?? ''));
-          return '<div class="mobile-card-meta-item">' + (col.trustedHtml ? rendered : esc(String(rendered ?? '-'))) + '</div>';
-        }).join('');
-        var actionsHtml = renderMobileActions(row, view);
-        return '<div class="mobile-card' + (isSelected ? ' is-selected' : '') + '"' +
-          ' data-kind="' + escapeAttr(row.kind || '') + '" data-id="' + escapeAttr(row.id || '') + '"' +
-          ' tabindex="0" role="button" onclick="handleRowClick(this)" onkeydown="if(event.key===\'Enter\')handleRowClick(this)">' +
-          '<div class="mobile-card-header"><div class="mobile-card-title">' + esc(String(title)) + '</div></div>' +
-          '<div class="mobile-card-meta">' + metaHtml + '</div>' +
-          (actionsHtml ? '<div class="mobile-card-actions">' + actionsHtml + '</div>' : '') +
-          '</div>';
-      }).join('');
-    } else if (mobileEl) {
-      mobileEl.classList.add('hidden');
+  }
+  function handlePageAction(event) {
+    var body = document.body;
+    if (!body) return;
+    var el = findActionElement(event.target, body);
+    if (!el) return;
+    var action = el.getAttribute('data-action') || '';
+    if (!action) return;
+    if (el.id === 'detailModal' && hasAncestorClass(event.target, 'modal-panel', el)) return;
+    if (el.id === 'confirmOverlay' && hasAncestorClass(event.target, 'confirm-dialog', el)) return;
+    switch (action) {
+      case 'toggle-theme':
+        invokeWindowAction('toggleTheme');
+        break;
+      case 'shutdown-app':
+        invokeWindowAction('shutdownApp');
+        break;
+      case 'toggle-run':
+        invokeWindowAction('toggleRun');
+        break;
+      case 'scroll-main': {
+        var main = $('mainContent');
+        if (main && typeof main.scrollIntoView === 'function') main.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        break;
+      }
+      case 'switch-view':
+        invokeWindowAction('switchView', [el.getAttribute('data-view') || 'candidates']);
+        break;
+      case 'toggle-sidebar-section':
+        invokeWindowAction('toggleSidebarSection', [el.getAttribute('data-target') || '']);
+        break;
+      case 'toggle-collapsible': {
+        var target = $(el.getAttribute('data-target') || '');
+        if (target) target.classList.toggle('is-closed');
+        break;
+      }
+      case 'test-connection':
+        invokeWindowAction('testConnection');
+        break;
+      case 'sync-cloud':
+        invokeWindowAction('syncCloud');
+        break;
+      case 'set-result-display-mode':
+        invokeWindowAction('setResultDisplayMode', [el.getAttribute('data-mode') || 'table']);
+        break;
+      case 'clear-search': {
+        var search = $('tableSearch');
+        if (search) search.value = '';
+        _renderCurrentView();
+        break;
+      }
+      case 'check-batch':
+        invokeWindowAction('checkBatch', [(($('checkMode') || {}).value) || 'quick']);
+        break;
+      case 'submit-selected':
+        invokeWindowAction('submitSelectedCandidates');
+        break;
+      case 'assistant-use-draft':
+        invokeWindowAction('useOfflineAssistantDraft');
+        break;
+      case 'assistant-save-draft':
+        invokeWindowAction('saveOfflineAssistantDraftGuidance');
+        break;
+      case 'assistant-use-latest':
+        invokeWindowAction('useLatestAssistantGuidance');
+        break;
+      case 'assistant-preview-guidance':
+        invokeWindowAction('previewAssistantGuidance');
+        break;
+      case 'assistant-save-guidance':
+        invokeWindowAction('saveAssistantGuidance');
+        break;
+      case 'assistant-generate-candidates':
+        invokeWindowAction('generateAssistantCandidates');
+        break;
+      case 'retry-all-failed-submit':
+        invokeWindowAction('retryAllFailedSubmit');
+        break;
+      case 'clear-submit-failure-panel':
+        invokeWindowAction('clearSubmitFailurePanel');
+        break;
+      case 'close-detail-modal':
+        invokeWindowAction('closeDetailModal');
+        break;
+      case 'hide-confirm':
+        invokeWindowAction('hideConfirm');
+        break;
+      default:
+        return;
     }
-
-    updateCountPill();
-    updateSortHint(view);
-  };
-  window.renderCurrentView = _renderCurrentView;
-
-  function getEmptyDescription(view) {
-    var defaults = {
-      candidates: '点击「开始生产搜索」启动无人值守流程，或同步云端数据查看现有 Alpha。',
-      pending_backtest: '暂无等待回测的 Alpha。生产任务会自动将候选提交到回测队列。',
-      running_backtest: '暂无正在回测中的 Alpha。等待官方回测结果返回后自动填充。',
-      backtest_rework: '暂无回测失败的 Alpha。',
-      passed: '暂无达标的 Alpha。等待生产任务产生达标候选。',
-      submittable: '暂无可提交的 Alpha，请先在达标视图中执行批量检查。',
-      submitted: '暂无已提交的 Alpha。',
-      failed: '暂无不达标的 Alpha。',
-      cloud: '暂无云端数据。请先同步云端数据以查看现有 Alpha 记录。',
-      lifecycle: '暂无生命周期记录。',
-    };
-    return defaults[view] || '当前视图暂无数据，请调整筛选条件或开始生产。';
+    if (event.preventDefault) event.preventDefault();
   }
-
-  function updateSortHint(view) {
-    var el = $('sortHint'); if (!el) return;
-    var hints = { candidates: '按排序分降序', passed: '按排序分降序', submittable: '按可提交状态排序' };
-    el.textContent = hints[view] || '';
+  function handlePageKeydown(event) {
+    if (event.key !== 'Enter' && event.key !== ' ' && event.key !== 'Spacebar') return;
+    var el = findActionElement(event.target, document.body);
+    if (!el || isNativeInteractive(el)) return;
+    handlePageAction(event);
   }
-
-  // ── Row click handler ──────────────────────────────────────────────────
-
+  function handlePageChange(event) {
+    var target = event.target;
+    if (!target || !target.getAttribute) return;
+    switch (target.getAttribute('data-change-action') || '') {
+      case 'toggle-environment':
+        invokeWindowAction('toggleEnvironment');
+        break;
+      case 'apply-preset':
+        invokeWindowAction('applyPreset');
+        break;
+      case 'handle-auto-submit-toggle':
+        invokeWindowAction('handleAutoSubmitToggle');
+        break;
+    }
+  }
+  function handlePageInput(event) {
+    var target = event.target;
+    if (!target || !target.getAttribute) return;
+    if (target.getAttribute('data-input-action') === 'render-current-view') _renderCurrentView();
+  }
+  function installStaticActionHandlers() {
+    if (!document.body || document.body.dataset.staticActions === '1') return;
+    document.body.dataset.staticActions = '1';
+    document.addEventListener('click', handlePageAction);
+    document.addEventListener('keydown', handlePageKeydown);
+    document.addEventListener('change', handlePageChange);
+    document.addEventListener('input', handlePageInput);
+  }
   window.handleRowClick = function (el) {
     var kind = el.getAttribute('data-kind') || '';
     var id = el.getAttribute('data-id') || '';
@@ -572,244 +561,75 @@
       window.viewCandidateDetail(cached ? cached.raw || cached : { alpha_id: id });
     }
   };
-
-  // ── View Data Sources ──────────────────────────────────────────────────
-
   function getRowsForView(view) {
-    var summary = currentSummary();
-    var candidates = currentCandidates();
-    var cloud = currentCloudAlphas();
-    var lifecycle = currentLifecycle();
-    var checks = checkResults();
-
-    switch (view) {
-      case 'candidates': return buildCandidateRows(candidates, 'candidate');
-      case 'pending_backtest': return buildCandidateRows(candidates.filter(function (c) { return (c.lifecycle_status || c.status || '') === 'pending_backtest'; }), 'pending_backtest');
-      case 'running_backtest': return buildCandidateRows(candidates.filter(function (c) { var s = c.lifecycle_status || c.status || ''; return s === 'running_backtest' || s === 'running'; }), 'running_backtest');
-      case 'backtest_rework': return buildCandidateRows(candidates.filter(function (c) { var s = c.lifecycle_status || c.status || ''; return s === 'backtest_rework' || s === 'failed_backtest' || s === 'rejected'; }), 'backtest_rework');
-      case 'passed': return buildCandidateRows(candidates.filter(function (c) { return c.lifecycle_status === 'submission_ready' || ((c.gate || {}).submission_ready); }), 'passed');
-      case 'submittable': return buildSubmittableRows(candidates, checks);
-      case 'submitted': return buildSubmittedRows(candidates, lifecycle);
-      case 'failed': return buildCandidateRows(candidates.filter(function (c) { var s = c.lifecycle_status || c.status || ''; return s === 'failed' || s === 'rejected' || s === 'blocked'; }), 'failed');
-      case 'cloud': return buildCloudRows(cloud);
-      case 'lifecycle': return buildLifecycleRows(lifecycle);
-      case 'research_memory': return buildResearchRows(currentResearchMemory(), 'research_memory');
-      case 'research_observability': return buildResearchRows(currentResearchObservability(), 'research_observability');
-      case 'research_knowledge': return buildResearchRows(currentResearchKnowledge(), 'research_knowledge');
-      case 'prompt_runs': return buildPromptRunRows(currentPromptRuns());
-      case 'sqlite_indexes': return buildSqliteRows(currentSqliteIndexes());
-      case 'robustness': return buildRobustnessRows(currentRobustnessSnapshot());
-      default: return [];
-    }
+    return ViewRenderers.getRowsForView(view, viewDataSources());
   }
-
-  function buildCandidateRows(list, kind) {
-    return (list || []).map(function (c, i) { return { kind: kind, id: c.alpha_id || c.id || ('row' + i), raw: c, _rowIndex: i, _candidate: c }; });
-  }
-
-  function buildSubmittableRows(candidates, checks) {
-    return candidates.filter(function (c) {
-      var aid = c.alpha_id || candidateIdentity(c);
-      return S.isFreshPassedCheck(checks[aid]) && !(S.get('lastSubmitResults') || []).some(function (r) { return r.alpha_id === aid && r.submitted; });
-    }).map(function (c, i) {
-      return { kind: 'submittable', id: c.alpha_id || candidateIdentity(c), raw: c, _rowIndex: i, _candidate: c, _check: checks[c.alpha_id] };
-    });
-  }
-
-  function buildSubmittedRows(candidates, lifecycle) {
-    var submitted = lifecycle.filter(function (r) { return r.stage === 'submitted' || r.status === 'submitted'; });
-    var localSubmitted = candidates.filter(function (c) { return c.lifecycle_status === 'submitted'; });
-    return uniqueBy(submitted.concat(localSubmitted.map(function (c, i) { return { kind: 'submitted', id: c.alpha_id || c.official_alpha_id || ('sub' + i), raw: c }; })), function (r) { return r.id; });
-  }
-
-  function buildCloudRows(cloud) {
-    return cloud.map(function (d, i) { return { kind: 'cloud', id: d.alpha_id || d.id || ('cloud' + i), raw: d, _rowIndex: i }; });
-  }
-
-  function buildLifecycleRows(lifecycle) {
-    return lifecycle.map(function (r, i) { return { kind: 'lifecycle', id: r.alpha_id || r.id || ('life' + i), raw: r, _rowIndex: i }; });
-  }
-
-  function buildResearchRows(data, kind) {
-    var items = Array.isArray(data.items) ? data.items : Array.isArray(data) ? data : [];
-    return items.map(function (item, i) { return { kind: kind, id: item.id || ('res' + i), raw: item, _rowIndex: i }; });
-  }
-
-  function buildPromptRunRows(data) {
-    var items = Array.isArray(data.runs) ? data.runs : Array.isArray(data) ? data : [];
-    return items.map(function (item, i) { return { kind: 'prompt_run', id: item.run_id || ('pr' + i), raw: item, _rowIndex: i }; });
-  }
-
-  function buildSqliteRows(indexes) {
-    var items = [];
-    if (hasDataObject(indexes)) {
-      Object.keys(indexes).forEach(function (key, i) { items.push({ kind: 'sqlite_index', id: key, raw: { key: key, value: indexes[key] }, _rowIndex: i }); });
-    }
-    return items;
-  }
-
-  function buildRobustnessRows(snapshot) {
-    var items = Array.isArray(snapshot.candidates) ? snapshot.candidates : Array.isArray(snapshot) ? snapshot : [];
-    return items.map(function (item, i) { return { kind: 'robustness', id: item.alpha_id || ('rob' + i), raw: item, _rowIndex: i }; });
-  }
-
-  // ── Search Filter ──────────────────────────────────────────────────────
-
   function applySearchFilter(rows) {
     var query = ($('tableSearch') || {}).value || '';
-    if (!query || !rows) return;
-    var q = query.toLowerCase();
-    for (var i = rows.length - 1; i >= 0; i--) {
-      var row = rows[i], raw = row.raw || {};
-      var text = [row.id, raw.alpha_id, raw.official_alpha_id, raw.family, raw.hypothesis, raw.expression, expressionFromRow(raw), raw.status, raw.simulation_id, (raw.scorecard || {}).decision_band, raw.lifecycle_status || '', raw.stage || ''].join(' ').toLowerCase();
-      if (text.indexOf(q) === -1) rows.splice(i, 1);
-    }
+    ViewRenderers.applySearchFilter(rows, query);
   }
-
-  // ── Column Definitions ─────────────────────────────────────────────────
-
   function getColumnsForView(view) {
-    switch (view) {
-      case 'cloud': return [
-        { accessor: '_rowIndex', render: function (v, r, i) { return String(i + 1); } },
-        { accessor: 'id', render: function (v, r) { return esc(String((r.raw || {}).alpha_id || r.id || '-')); } },
-        { accessor: 'status', render: function (v, r) { var s = (r.raw || {}).status || ''; return statusBadge(s, s === 'APPROVED' || s === 'PRODUCTION' ? 'good' : s === 'REJECTED' ? 'bad' : 'info'); }, trustedHtml: true },
-        { accessor: 'sharpe', render: function (v, r) { return scoreSpan((r.raw || {}).sharpe); }, trustedHtml: true },
-        { accessor: 'fitness', render: function (v, r) { return scoreSpan((r.raw || {}).fitness); }, trustedHtml: true },
-        { accessor: 'turnover', render: function (v, r) { return num((r.raw || {}).turnover, 4); } },
-        { accessor: 'self_correlation', render: function (v, r) { return num((r.raw || {}).self_correlation, 4); } },
-        { accessor: 'actions', render: function (v, r) { return '<button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();window.viewCloudDetail(document.querySelector(\'[data-id=&quot;' + escapeAttr(r.id) + '&quot;]\'))">详情</button>'; }, trustedHtml: true },
-      ];
-      case 'lifecycle': return [
-        { accessor: '_rowIndex', render: function (v, r, i) { return String(i + 1); } },
-        { accessor: 'id', render: function (v, r) { return esc(String((r.raw || {}).alpha_id || r.id || '-')); } },
-        { accessor: 'stage', render: function (v, r) { return esc(String((r.raw || {}).stage || '-')); } },
-        { accessor: 'status', render: function (v, r) { var s = (r.raw || {}).status || ''; return statusBadge(s, s === 'completed' || s === 'passed' ? 'good' : s === 'failed' ? 'bad' : 'info'); }, trustedHtml: true },
-        { accessor: 'timestamp', render: function (v, r) { return esc(String((r.raw || {}).timestamp || '-')); } },
-        { accessor: 'message', render: function (v, r) { return esc(String((r.raw || {}).message || '')); } },
-        { accessor: 'actions', render: function (v, r) { return '<button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();window.viewLifecycleDetail(document.querySelector(\'[data-id=&quot;' + escapeAttr(r.id) + '&quot;]\'))">详情</button>'; }, trustedHtml: true },
-      ];
-      default: return [
-        { accessor: '_rowIndex', render: function (v, r, i) { return String(i + 1); } },
-        { accessor: 'id', render: function (v, r) {
-          var raw = r.raw || {};
-          var id = raw.alpha_id || r.id || '';
-          var family = raw.family || '';
-          return '<div><div style="font-weight:700">' + esc(id || '-') + '</div>' + (family ? '<div style="font-size:var(--fs-2xs);color:var(--text-muted)">' + esc(family) + '</div>' : '') + '</div>';
-        }, trustedHtml: true },
-        { accessor: 'family', render: function (v, r) { return esc(String((r.raw || {}).family || '-')); } },
-        { accessor: 'score', render: function (v, r) { var sc = (r.raw || {}).scorecard || {}; return scoreSpan(sc.total_score || sc.local_rank_score || 0); }, trustedHtml: true },
-        { accessor: 'status', render: function (v, r) {
-          var raw = r.raw || {};
-          var status = raw.lifecycle_status || raw.status || '';
-          var gate = raw.gate || {};
-          var color = status === 'submission_ready' || gate.submission_ready ? 'good' : status === 'failed' || status === 'rejected' ? 'bad' : status === 'running' || status === 'pending_backtest' ? 'info' : 'muted';
-          return statusBadge(status || '-', color);
-        }, trustedHtml: true },
-        { accessor: 'official_id', render: function (v, r) { return esc(String((r.raw || {}).official_alpha_id || '-')); } },
-        { accessor: 'risk', render: function (v, r) {
-          var raw = r.raw || {};
-          var risk = raw.submission_risk || raw.risk || '';
-          return risk ? '<span style="color:var(--danger);font-size:var(--fs-2xs)">' + esc(String(risk).slice(0, 60)) + '</span>' : '';
-        }, trustedHtml: true },
-        { accessor: 'actions', render: function (v, r) {
-          var raw = r.raw || {}, aid = raw.alpha_id || r.id || '';
-          var viewName = activeView();
-          var buttons = ['<button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();window.viewCandidateDetail(' + jsStringAttr(JSON.stringify(raw)) + ')">详情</button>'];
-          if (viewName === 'submittable' && !S.get('submitInFlight')) { buttons.push('<button class="btn btn-primary btn-sm" onclick="event.stopPropagation();submitSingleCandidate(\'' + escapeAttr(aid) + '\')">提交</button>'); }
-          if (viewName === 'passed') { buttons.push('<button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();toggleSelectCandidate(\'' + escapeAttr(aid) + '\', this)">选择</button>'); }
-          return buttons.join(' ');
-        }, trustedHtml: true },
-      ];
-    }
+    return ViewRenderers.getColumnsForView(view, viewRendererOptions());
   }
-
   function getMobileColumns(view) {
-    return [
-      { label: '排序分', accessor: 'score', render: function (v, r) { return scoreSpan(((r.raw || {}).scorecard || {}).total_score || 0); }, trustedHtml: true },
-      { label: '状态', accessor: 'status', render: function (v, r) { var s = (r.raw || {}).lifecycle_status || '-'; return statusBadge(s, s === 'submission_ready' ? 'good' : 'muted'); }, trustedHtml: true },
-      { label: '官方 ID', accessor: 'official_id', render: function (v, r) { return esc(String((r.raw || {}).official_alpha_id || '-')); } },
-    ];
+    return ViewRenderers.getMobileColumns(view, viewRendererOptions());
   }
-
   function renderMobileActions(row, view) {
-    var raw = row.raw || {}, aid = raw.alpha_id || row.id || '';
-    var buttons = ['<button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();window.viewCandidateDetail(' + jsStringAttr(JSON.stringify(raw)) + ')">详情</button>'];
-    if (view === 'submittable') buttons.push('<button class="btn btn-primary btn-sm" onclick="event.stopPropagation();submitSingleCandidate(\'' + escapeAttr(aid) + '\')">提交</button>');
-    return buttons.join(' ');
+    return ViewRenderers.renderMobileActions(row, view, viewRendererOptions());
   }
-
-  // ── Selection Helpers ──────────────────────────────────────────────────
-
   window.toggleSelectCandidate = function (id, el) {
-    if (selectedSubmitIds.has(id)) { selectedSubmitIds.delete(id); if (el) el.textContent = '选择'; }
-    else { selectedSubmitIds.add(id); if (el) el.textContent = '已选'; }
+    var selected = selectedSubmitIdSet();
+    if (selected.has(id)) { selected.delete(id); if (el) el.textContent = '选择'; }
+    else { selected.add(id); if (el) el.textContent = '已选'; }
+    setSelectedSubmitIds(selected);
     _renderCurrentView();
   };
-
   window.submitSelectedCandidates = async function () {
-    if (selectedSubmitIds.size === 0) { Toast.warning('请先选择要提交的 Alpha。'); return; }
-    var confirmed = await window.Modal.confirmAction('确认提交 ' + selectedSubmitIds.size + ' 个 Alpha？', '确认提交', '取消');
+    if (selectedSubmitCount() === 0) { Toast.warning('请先选择要提交的 Alpha。'); return; }
+    var confirmed = await window.Modal.confirmAction('确认提交 ' + selectedSubmitCount() + ' 个 Alpha？', '确认提交', '取消');
     if (!confirmed) return;
     try {
-      submitInFlight = true;
-      var ids = Array.from(selectedSubmitIds);
-      var resp = await Api.post('/api/submit_batch', { alpha_ids: ids });
+      S.set('submitInFlight', true);
+      var ids = selectedSubmitList();
+      var payload = Object.assign(window.collectPayload ? window.collectPayload() : {}, { alpha_ids: ids });
+      var resp = await Api.post('/api/submit_batch', payload);
       if (resp.ok) {
         Toast.success('提交成功：' + (resp.submitted || ids.length) + ' 个 Alpha');
-        selectedSubmitIds.clear();
+        setSelectedSubmitIds([]);
         if (typeof window.loadCheckResults === 'function') window.loadCheckResults();
       }
     } catch (e) { Toast.error('提交失败：' + e.message); }
-    finally { submitInFlight = false; _renderCurrentView(); window.renderBusyControls(); }
+    finally { S.set('submitInFlight', false); _renderCurrentView(); window.renderBusyControls(); }
   };
-
   window.submitSingleCandidate = async function (alphaId) {
     var confirmed = await window.Modal.confirmAction('确认提交 Alpha ' + alphaId + '？', '提交', '取消');
     if (!confirmed) return;
     try {
-      submitInFlight = true;
-      var resp = await Api.post('/api/submit', { alpha_id: alphaId });
+      S.set('submitInFlight', true);
+      var payload = Object.assign(window.collectPayload ? window.collectPayload() : {}, { alpha_id: alphaId });
+      var resp = await Api.post('/api/submit', payload);
       if (resp.ok) Toast.success('提交成功：' + alphaId);
     } catch (e) { Toast.error('提交失败：' + e.message); }
-    finally { submitInFlight = false; _renderCurrentView(); window.renderBusyControls(); }
+    finally { S.set('submitInFlight', false); _renderCurrentView(); window.renderBusyControls(); }
   };
-
-  // ── Cloud Sync ─────────────────────────────────────────────────────────
-
-  window.syncCloud = async function () {
-    if (syncInFlight) return;
-    var reason = window.operationBlockReason('sync');
-    if (reason) { Toast.warning(reason); return; }
-    syncInFlight = true; syncStartedAt = Date.now();
-    renderBusyControls();
-    Toast.info('开始同步云端数据...');
-    var range = ($('syncRange') || {}).value || '3d';
-    try {
-      var resp = await Api.post('/api/sync_alphas', { range: range });
-      if (resp.ok) {
-        S.set('currentResult.cloud_alphas', resp.cloud_alphas || []);
-        S.set('currentResult.summary.cloud_sync', resp.cloud_sync || { status: 'completed' });
-        Toast.success('云端同步完成');
-        renderAll();
-      }
-    } catch (e) { Toast.error('云端同步失败：' + e.message); }
-    finally { syncInFlight = false; renderBusyControls(); }
-  };
-
-  // ── Check Batch ────────────────────────────────────────────────────────
-
+  if (typeof window.syncCloud !== 'function') {
+    window.syncCloud = function () {
+      if (window.CloudSync && typeof window.CloudSync.syncCloud === 'function') return window.CloudSync.syncCloud();
+      if (Toast && Toast.warning) Toast.warning('云端同步模块尚未加载，请刷新页面后重试。');
+    };
+  }
   window.checkBatch = async function (mode) {
-    if (batchCheckJobId) return;
+    if (batchCheckJobId()) return;
     var reason = window.operationBlockReason('check');
     if (reason) { Toast.warning(reason); return; }
     var passed = currentCandidates().filter(function (c) { return c.lifecycle_status === 'submission_ready' || ((c.gate || {}).submission_ready); });
     if (!passed.length) { Toast.warning('暂无达标 Alpha 可检查。'); return; }
-    batchCheckJobId = 'check_' + Date.now(); checkStartedAt = Date.now();
+    S.setBatch({ batchCheckJobId: 'check_' + Date.now(), checkStartedAt: Date.now() });
     renderBusyControls();
     try {
       var alphaIds = (mode === 'all' ? passed : passed.slice(0, 10)).map(function (c) { return c.alpha_id || candidateIdentity(c); });
-      var resp = await Api.post('/api/check_batch', { alpha_ids: alphaIds });
+      var payload = Object.assign(window.collectPayload ? window.collectPayload() : {}, { alpha_ids: alphaIds });
+      var resp = await Api.post('/api/check_batch', payload);
       if (resp.ok && resp.check_results) {
         var checks = S.get('checkResults') || {};
         Object.assign(checks, resp.check_results);
@@ -818,28 +638,25 @@
         Toast.success('检查完成：' + passedCount + ' 通过 / ' + alphaIds.length + ' 总数');
         if (($('autoSubmitToggle') || {}).checked && passedCount > 0) {
           var passedIds = Object.entries(resp.check_results).filter(function (e) { return e[1].passed; }).map(function (e) { return e[0]; });
-          try { await Api.post('/api/submit_batch', { alpha_ids: passedIds }); Toast.success('自动提交完成'); } catch (e) {}
+          try {
+            var submitPayload = Object.assign(window.collectPayload ? window.collectPayload() : {}, { alpha_ids: passedIds });
+            await Api.post('/api/submit_batch', submitPayload);
+            Toast.success('自动提交完成');
+          } catch (e) {}
         }
       }
     } catch (e) { Toast.error('检查失败：' + e.message); }
-    finally { batchCheckJobId = ''; renderBusyControls(); renderAll(); }
+    finally { S.set('batchCheckJobId', ''); renderBusyControls(); renderAll(); }
   };
-
   window.handleAutoSubmitToggle = function () {
     S.set('config.autoSubmit', Boolean(($('autoSubmitToggle') || {}).checked));
   };
-
-  // ── Shutdown ───────────────────────────────────────────────────────────
-
   window.shutdownApp = async function () {
     var confirmed = await window.Modal.confirmAction('确认关闭本地服务并终止所有后台任务？', '关闭服务', '取消', { variant: 'danger' });
     if (!confirmed) return;
     try { await Api.post('/api/shutdown', {}); } catch (e) {}
-    document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:16px"><div style="font-size:18px;font-weight:700">服务已关闭</div><div style="color:var(--text-muted)">可以安全关闭此窗口。</div></div>';
+    document.body.innerHTML = '<div class="shutdown-screen"><div class="shutdown-title">服务已关闭</div><div class="shutdown-note">可以安全关闭此窗口。</div></div>';
   };
-
-  // ── Profile Loading ────────────────────────────────────────────────────
-
   async function loadProfile() {
     try {
       var data = await Api.get('/api/profile');
@@ -847,95 +664,53 @@
       renderUserProfile();
     } catch (e) { /* silent */ }
   }
-
   function renderUserProfile() {
     var profile = S.get('userProfile') || {}, el = $('userProfile');
     if (!el) return;
     if (profile.tier && profile.tier !== '--') {
-      el.innerHTML = '<span style="color:var(--accent);font-weight:var(--fw-bold)">' + esc(profile.tier || '') + '</span> <span style="color:var(--text-secondary)">' + esc(String(profile.points ?? '--')) + '</span>';
+      el.innerHTML = '<span class="profile-tier">' + esc(profile.tier || '') + '</span> <span class="profile-points">' + esc(String(profile.points ?? '--')) + '</span>';
     } else {
       el.innerHTML = '<span class="text-muted">未连接</span>';
     }
   }
-
-  // ── Load Config ────────────────────────────────────────────────────────
-
   window.loadConfig = async function () {
     try {
       var data = await Api.get('/api/config');
       if (data && data.config) {
         S.set('config', data.config);
         if (typeof window.renderStrategyPolicy === 'function') window.renderStrategyPolicy(data.config);
-        var ops = (data.config || {}).ops || {}, budget = ops.budget || {};
-        setVal('useAssistantGuidance', budget.assistant_guidance_enabled !== false);
-        setVal('assistantGuidanceScoreAdjustment', budget.assistant_guidance_score_adjustment !== false);
-        setVal('strategyPluginsEnabled', Boolean(budget.strategy_plugins_enabled));
+        FormControls.applyConfig(data.config);
       }
     } catch (e) {}
   };
-
-  // ── Presets ────────────────────────────────────────────────────────────
-
   window.applyPreset = function () {
-    var presetId = ($('preset') || {}).value, p = (presets || {})[presetId];
-    if (!p || !p.settings) return;
-    var s = p.settings;
-    setVal('region', s.region); setVal('universe', s.universe); setVal('delay', s.delay);
-    setVal('neutralization', s.neutralization); setVal('instrumentType', s.instrumentType);
-    setVal('alphaType', s.alphaType); setVal('decay', s.decay); setVal('truncation', s.truncation);
-    setVal('pasteurization', s.pasteurization); setVal('nanHandling', s.nanHandling);
-    setVal('unitHandling', s.unitHandling); setVal('language', s.language);
+    FormControls.applyPreset(presets);
   };
-
   async function loadPresets() {
     try { var data = await Api.get('/api/presets'); if (data && data.presets) presets = data.presets; } catch (e) {}
   }
-
-  // ── Connection Test ────────────────────────────────────────────────────
-
   window.testConnection = async function () {
     var resultEl = $('connTestResult');
     if (!resultEl) return;
     resultEl.classList.remove('hidden');
     resultEl.textContent = '测试中...';
-    resultEl.style.background = 'var(--bg-warning-soft)'; resultEl.style.color = 'var(--warning)';
+    resultEl.className = 'connection-result is-pending';
     try {
-      var resp = await Api.post('/api/test_connection', { username: ($('username') || {}).value, password: ($('password') || {}).value, token: ($('token') || {}).value, base_url: ($('baseUrl') || {}).value });
-      if (resp.ok) { resultEl.textContent = '✓ 连接成功'; resultEl.style.background = 'var(--bg-success-soft)'; resultEl.style.color = 'var(--success)'; }
-      else { resultEl.textContent = '✗ 连接失败：' + (resp.error || '未知错误'); resultEl.style.background = 'var(--bg-danger-soft)'; resultEl.style.color = 'var(--danger)'; }
-    } catch (e) { resultEl.textContent = '✗ 连接失败：' + e.message; resultEl.style.background = 'var(--bg-danger-soft)'; resultEl.style.color = 'var(--danger)'; }
+      var resp = await Api.post('/api/test_connection', FormControls.connectionPayload());
+      if (resp.ok) { resultEl.textContent = '连接成功'; resultEl.className = 'connection-result is-success'; }
+      else { resultEl.textContent = '连接失败：' + (resp.error || '未知错误'); resultEl.className = 'connection-result is-error'; }
+    } catch (e) { resultEl.textContent = '连接失败：' + e.message; resultEl.className = 'connection-result is-error'; }
   };
-
-  // ── Collect Payload ────────────────────────────────────────────────────
-
   window.collectPayload = function () {
-    return {
-      environment: ($('environment') || {}).value || 'production',
-      username: ($('username') || {}).value, password: ($('password') || {}).value,
-      token: ($('token') || {}).value, base_url: ($('baseUrl') || {}).value,
-      preset: ($('preset') || {}).value,
-      settings: {
-        region: ($('region') || {}).value, universe: ($('universe') || {}).value,
-        delay: Number(($('delay') || {}).value) || 1, neutralization: ($('neutralization') || {}).value,
-        instrumentType: ($('instrumentType') || {}).value, alphaType: ($('alphaType') || {}).value,
-        decay: Number(($('decay') || {}).value) || 0, truncation: Number(($('truncation') || {}).value) || 0,
-        pasteurization: ($('pasteurization') || {}).value, nanHandling: ($('nanHandling') || {}).value,
-        unitHandling: ($('unitHandling') || {}).value, language: ($('language') || {}).value,
-      },
-      use_assistant_guidance: ($('useAssistantGuidance') || {}).checked,
-      assistant_guidance_min_confidence: Number(($('assistantGuidanceMinConfidence') || {}).value) || 0.6,
-      assistant_guidance_score_adjustment: ($('assistantGuidanceScoreAdjustment') || {}).checked,
-      assistant_guidance_score_min_confidence: Number(($('assistantGuidanceScoreMinConfidence') || {}).value) || 0.6,
-      strategy_plugins_enabled: ($('strategyPluginsEnabled') || {}).checked,
-    };
+    return FormControls.collectPayload();
   };
-
-  // ── Init ───────────────────────────────────────────────────────────────
-
   async function init() {
     renderViewTabs();
     updatePanelHeader();
-
+    renderTaskRail();
+    installStaticActionHandlers();
+    installViewTabDelegates();
+    installResultDelegates();
     try {
       var results = await Promise.all([
         Api.get('/api/latest_result').catch(function () { return {}; }),
@@ -947,21 +722,21 @@
         if (typeof window.renderStrategyPolicy === 'function') window.renderStrategyPolicy(results[1].config);
       }
     } catch (e) { /* ignore */ }
-
     loadProfile();
     loadPresets();
+    if (window.CloudSync && window.CloudSync.loadSnapshot) window.CloudSync.loadSnapshot().catch(function () {});
     if (typeof window.loadRedlineReport === 'function') window.loadRedlineReport();
     if (typeof window.loadCheckpointStatus === 'function') window.loadCheckpointStatus();
     if (typeof window.loadCheckResults === 'function') window.loadCheckResults();
-
     var toggle = $('displayModeToggle'); if (toggle) toggle.classList.remove('hidden');
     window.renderBusyControls();
   }
-
-  // ── State listener ─────────────────────────────────────────────────────
-
   S.onUpdate(function (path) {
-    if (path === 'isRunning' || path === 'activeJobId') {
+    var pathName = String(path || '');
+    var busyPaths = ['isRunning', 'activeJobId', 'syncInFlight', 'batchCheckJobId', 'submitInFlight', 'selectedSubmitIds', 'batch'];
+    if (busyPaths.indexOf(pathName) !== -1) window.renderBusyControls();
+    if (busyPaths.indexOf(pathName) !== -1 || pathName === 'activeView' || pathName === 'checkResults' || pathName.indexOf('currentResult') === 0) renderTaskRail();
+    if (pathName === 'isRunning' || pathName === 'activeJobId') {
       var statusEl = $('globalStatus');
       var dotEl = $('headerStatusDot');
       if (statusEl) {
@@ -980,31 +755,27 @@
       }
     }
   });
-
   window.addEventListener('resize', function () { _renderCurrentView(); });
-
-  // ── Expose ─────────────────────────────────────────────────────────────
-
   window._app = {
     renderResult: renderResult,
     renderJobSnapshot: renderJobSnapshot,
     renderAll: renderAll,
+    renderTaskRail: renderTaskRail,
     loadConfig: window.loadConfig,
     loadProfile: loadProfile,
     loadCheckResults: function () {
       Api.get('/api/check_results').then(function (data) { if (data && data.check_results) S.set('checkResults', data.check_results); }).catch(function () {});
     },
     loadCloudSnapshot: function () {
-      Api.get('/api/cloud_alphas').then(function (data) { if (data && data.cloud_alphas) S.set('currentResult.cloud_alphas', data.cloud_alphas); }).catch(function () {});
+      return window.CloudSync && window.CloudSync.loadSnapshot ? window.CloudSync.loadSnapshot().catch(function () {}) : Promise.resolve();
     },
     loadResearchMemory: function () {
       Api.get('/api/research_memory').then(function (data) { if (data) S.set('currentResult.research_memory', data); }).catch(function () {});
     },
   };
-
   window.renderCurrentView = _renderCurrentView;
+  window.renderTaskRail = renderTaskRail;
   window.renderAll = renderAll;
-
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
   else setTimeout(init, 10);
 })();

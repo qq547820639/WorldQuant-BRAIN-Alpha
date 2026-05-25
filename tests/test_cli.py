@@ -273,6 +273,8 @@ def test_cli_assistant_context_prints_json(tmp_path, capsys):
     assert payload["schema_version"] == "assistant_context_pack.v1"
     assert payload["generation_focus"]["operators"] == ["rank", "ts_delta"]
     assert "WorldQuant BRAIN FASTEXPR" in payload["prompt"]
+    assert "storage_dir" not in payload
+    assert "storage_dir" in payload["sensitive_fields_redacted"]
 
 
 def test_cli_assistant_context_prompt_only(tmp_path, capsys):
@@ -287,6 +289,19 @@ def test_cli_assistant_context_prompt_only(tmp_path, capsys):
     output = capsys.readouterr().out
     assert output.startswith("You are the quant investment AI assistant")
     assert "schema_version" not in output
+
+
+def test_cli_assistant_context_requires_explicit_sensitive_flag(tmp_path, capsys):
+    config = RunConfig(environment="mock")
+    config.ops.storage_dir = str(tmp_path / "data")
+    config_path = tmp_path / "run_config.json"
+    write_run_config(config, config_path)
+
+    code = main(["assistant-context", "--config", str(config_path), "--include-sensitive", "--no-prompt"])
+
+    assert code == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["storage_dir"] == str(tmp_path / "data")
 
 
 def test_cli_assistant_request_prints_llm_envelope(tmp_path, capsys):
@@ -314,6 +329,7 @@ def test_cli_assistant_request_prints_llm_envelope(tmp_path, capsys):
     assert payload["request"]["messages"][0]["role"] == "system"
     assert payload["request"]["response_schema"]["schema_version"] == "assistant_response.v1"
     assert payload["offline_draft"]["candidate_adjustments"]
+    assert "storage_dir" not in str(payload)
 
 
 def test_cli_assistant_request_can_omit_prompt_and_draft(tmp_path, capsys):
@@ -646,8 +662,8 @@ def test_cli_run_validates_overridden_arguments(tmp_path, capsys):
     assert "max_candidates_per_cycle" in payload["error"]
 
 
-def test_cli_run_rejects_command_line_credentials_in_production(tmp_path, capsys):
-    config = RunConfig(environment="production")
+def test_cli_run_rejects_command_line_credentials_by_default(tmp_path, capsys):
+    config = RunConfig(environment="mock")
     config.ops.storage_dir = str(tmp_path / "data")
     config_path = tmp_path / "run_config.json"
     write_run_config(config, config_path)
@@ -658,3 +674,32 @@ def test_cli_run_rejects_command_line_credentials_in_production(tmp_path, capsys
     payload = json.loads(capsys.readouterr().out)
     assert payload["error_code"] == "CONFIG_VALIDATION_ERROR"
     assert "command-line credentials are disabled" in payload["error"]
+    assert "--allow-insecure-cli-credentials" in payload["error"]
+
+
+def test_cli_run_can_explicitly_allow_insecure_command_line_credentials(tmp_path, monkeypatch, capsys):
+    config = RunConfig(environment="mock")
+    config.ops.storage_dir = str(tmp_path / "data")
+    config_path = tmp_path / "run_config.json"
+    write_run_config(config, config_path)
+
+    seen = {}
+
+    def fake_run_pipeline(run_config):
+        seen["token"] = run_config.credentials.token
+        return type("Result", (), {"to_dict": lambda self: {"ok": True}})()
+
+    monkeypatch.setattr("brain_alpha_ops.cli.run_pipeline_from_config", fake_run_pipeline)
+
+    code = main([
+        "run",
+        "--config",
+        str(config_path),
+        "--token",
+        "secret-token",
+        "--allow-insecure-cli-credentials",
+    ])
+
+    assert code == 0
+    assert seen["token"] == "secret-token"
+    assert json.loads(capsys.readouterr().out)["ok"] is True

@@ -16,12 +16,14 @@ from typing import Any
 from brain_alpha_ops.models import utc_now
 from brain_alpha_ops.research.context import render_context_prompt
 from brain_alpha_ops.research.guidance import assistant_guidance_digest
+from brain_alpha_ops.research.robustness_context import assistant_robustness_signals, robustness_evidence, robustness_gate_adjustment
 
 
 ASSISTANT_REQUEST_SCHEMA_VERSION = "assistant_request_pack.v1"
 ASSISTANT_RESPONSE_SCHEMA_VERSION = "assistant_response.v1"
 ASSISTANT_GUIDANCE_SCHEMA_VERSION = "assistant_generation_guidance.v1"
 DEFAULT_MAX_PROMPT_TOKENS = 6000
+INTERNAL_CONTEXT_METADATA_KEYS = {"sensitive_fields_redacted"}
 
 SYSTEM_PROMPT = (
     "You are a quantitative investment research assistant for WorldQuant BRAIN FASTEXPR. "
@@ -76,10 +78,10 @@ def build_assistant_request_pack(
     max_prompt_tokens: int = DEFAULT_MAX_PROMPT_TOKENS,
 ) -> dict[str, Any]:
     """Build a provider-neutral LLM request envelope from a context pack."""
-    original_context = dict(context_pack or {})
+    original_context = _strip_internal_context_metadata(dict(context_pack or {}))
     context = _budgeted_context(original_context, max_prompt_tokens=max_prompt_tokens)
     prompt = render_assistant_request_prompt(context)
-    context_payload = dict(context)
+    context_payload = _strip_internal_context_metadata(dict(context))
     context_payload.pop("prompt", None)
     prompt_diagnostics = _assistant_prompt_diagnostics(context_payload, prompt)
     payload: dict[str, Any] = {
@@ -139,6 +141,20 @@ def build_assistant_request_pack(
     return payload
 
 
+def _strip_internal_context_metadata(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {
+            key: _strip_internal_context_metadata(item)
+            for key, item in value.items()
+            if str(key) not in INTERNAL_CONTEXT_METADATA_KEYS
+        }
+    if isinstance(value, list):
+        return [_strip_internal_context_metadata(item) for item in value]
+    if isinstance(value, tuple):
+        return tuple(_strip_internal_context_metadata(item) for item in value)
+    return value
+
+
 def render_assistant_request_prompt(context_pack: dict[str, Any]) -> str:
     """Render the user message that should be sent with ``SYSTEM_PROMPT``."""
     context_prompt = str(context_pack.get("prompt") or render_context_prompt(context_pack)).strip()
@@ -165,6 +181,7 @@ def build_offline_assistant_response(context_pack: dict[str, Any]) -> dict[str, 
     cloud = _as_dict(context.get("cloud_alphas"))
     guardrails = _as_dict(context.get("risk_controls"))
     observability = _as_dict(context.get("observability"))
+    robustness = _as_dict(context.get("robustness"))
 
     fields = _string_items(focus.get("fields"))[:5]
     operators = _string_items(focus.get("operators"))[:5]
@@ -187,9 +204,12 @@ def build_offline_assistant_response(context_pack: dict[str, Any]) -> dict[str, 
     observability_guard_blocked = int(observability.get("official_guard_blocked_count") or 0)
     observability_guard_validation_blocked = int(observability.get("official_guard_validation_blocked_count") or 0)
     observability_guard_simulation_blocked = int(observability.get("official_guard_simulation_blocked_count") or 0)
+    robustness_signals = assistant_robustness_signals(robustness)
+    robustness_flags = list(robustness_signals["flags"])
 
     actions = _unique_strings(context.get("recommended_next_actions") or [])
     actions.extend(observability_actions)
+    actions.extend(robustness_signals["actions"])
     if fields or operators:
         actions.append("Bias the next candidate batch toward the strongest memory-supported fields/operators while reserving room for exploration.")
     if windows:
@@ -222,6 +242,10 @@ def build_offline_assistant_response(context_pack: dict[str, Any]) -> dict[str, 
             "Review official-call guard history before more validation/simulation calls; "
             f"{observability_guard_blocked} recent duplicate-expression official calls were blocked."
         )
+    if "anti_overfit_block" in robustness_flags:
+        actions.append("Remove or materially revise anti-overfit blocked candidates before official simulation.")
+    if "rolling_validation_weak" in robustness_flags:
+        actions.append("Prioritize rolling-stable candidates before spending additional official backtest budget.")
     if not actions:
         actions.append("Run another local production cycle to collect enough evidence for model-guided recommendations.")
     actions = _unique_strings(actions)[:8]
@@ -245,6 +269,7 @@ def build_offline_assistant_response(context_pack: dict[str, Any]) -> dict[str, 
         risk_flags.append("persisted_backtest_state_available")
     if observability_guard_blocked:
         risk_flags.append("observability_official_call_guard_active")
+    risk_flags.extend(robustness_flags)
     risk_flags.extend(observability_warning_flags)
     risk_flags.extend(observability_blocking_flags)
     risk_flags = _unique_strings(risk_flags)
@@ -296,6 +321,9 @@ def build_offline_assistant_response(context_pack: dict[str, Any]) -> dict[str, 
             },
             "rationale": "Duplicate-expression official-call guard history should slow or diversify official validation/simulation targets.",
         })
+    robustness_adjustment = robustness_gate_adjustment(robustness_signals)
+    if robustness_adjustment:
+        adjustments.append(robustness_adjustment)
     failures = focus.get("failure_patterns") if isinstance(focus.get("failure_patterns"), list) else []
     if failures:
         first = _as_dict(failures[0])
@@ -316,6 +344,8 @@ def build_offline_assistant_response(context_pack: dict[str, Any]) -> dict[str, 
         questions.append("Should blocking observability flags be resolved before any submission-sensitive step?")
     if observability_guard_blocked:
         questions.append("Should the next official-call batch exclude all recent guard-blocked expression fingerprints?")
+    if robustness_flags:
+        questions.append("Should robustness-flagged candidates be revised before the next official simulation batch?")
 
     summary = _offline_summary(
         fields,
@@ -331,6 +361,8 @@ def build_offline_assistant_response(context_pack: dict[str, Any]) -> dict[str, 
         summary += f" Observability risk is {observability_risk_level}; review {', '.join(observability_warning_flags[:3] or observability_health_flags[:3])}."
     if observability_guard_blocked:
         summary += f" Official-call guard blocked {observability_guard_blocked} recent duplicate-expression attempts."
+    if robustness_flags:
+        summary += " Robustness flags active: " + ", ".join(robustness_flags[:3]) + "."
     confidence = _offline_confidence(
         memory_samples,
         fields,
@@ -372,6 +404,7 @@ def build_offline_assistant_response(context_pack: dict[str, Any]) -> dict[str, 
             "observability_official_guard_blocked_count": observability_guard_blocked,
             "observability_official_guard_validation_blocked_count": observability_guard_validation_blocked,
             "observability_official_guard_simulation_blocked_count": observability_guard_simulation_blocked,
+            **robustness_evidence(robustness_signals),
         },
     }
 
@@ -490,11 +523,15 @@ def _assistant_prompt_diagnostics(context: dict[str, Any], prompt: str) -> dict[
     focus = _as_dict(context.get("generation_focus"))
     observability = _as_dict(context.get("observability"))
     latest = _as_dict(context.get("latest_result"))
+    robustness = _as_dict(context.get("robustness"))
     risk_flags = _unique_strings(
         list(context_diagnostics.get("risk_flags") or [])
         + list(observability.get("warning_flags") or [])
         + list(observability.get("blocking_flags") or [])
+        + list(robustness.get("risk_flags") or [])
     )
+    anti = _as_dict(robustness.get("anti_overfit"))
+    rolling = _as_dict(robustness.get("rolling_validation"))
     prompt_tokens = max(1, len(str(prompt or "")) // 4)
     return {
         "schema_version": "assistant_request_prompt_diagnostics.v1",
@@ -509,11 +546,14 @@ def _assistant_prompt_diagnostics(context: dict[str, Any], prompt: str) -> dict[
         "risk_flags": risk_flags[:10],
         "observability_risk_level": str(observability.get("risk_level") or "unknown"),
         "pending_backtest_count": int(latest.get("pending_backtest_count") or 0),
+        "anti_overfit_available_count": int(anti.get("available_count") or 0),
+        "rolling_validation_available_count": int(rolling.get("available_count") or 0),
         "evidence_digest": context_diagnostics.get("evidence_digest") or _digest_json(
             {
                 "focus": focus,
                 "risk_flags": risk_flags,
                 "observability": observability,
+                "robustness": robustness,
             }
         )[:12],
     }

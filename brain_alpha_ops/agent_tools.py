@@ -381,11 +381,13 @@ class BrainAlphaToolbox:
         limit = _bounded_int(args.get("limit", 5000), 1, 50000)
         top_n = _bounded_int(args.get("top_n", 10), 1, 50)
         include_prompt = _truthy(args.get("include_prompt", True))
+        include_sensitive = _truthy(args.get("include_sensitive", False))
         return build_assistant_context_pack(
             self.run_config,
             limit=limit,
             top_n=top_n,
             include_prompt=include_prompt,
+            include_sensitive=include_sensitive,
         )
 
     def _build_assistant_request(self, args: dict[str, Any]) -> dict[str, Any]:
@@ -393,11 +395,13 @@ class BrainAlphaToolbox:
         top_n = _bounded_int(args.get("top_n", 10), 1, 50)
         include_prompt = _truthy(args.get("include_prompt", True))
         include_draft = _truthy(args.get("include_offline_draft", True))
+        include_sensitive = _truthy(args.get("include_sensitive", False))
         context = build_assistant_context_pack(
             self.run_config,
             limit=limit,
             top_n=top_n,
             include_prompt=True,
+            include_sensitive=include_sensitive,
         )
         return build_assistant_request_pack(
             context,

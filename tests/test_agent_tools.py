@@ -251,6 +251,11 @@ def test_agent_toolbox_builds_assistant_context_pack(tmp_path):
     assert result["schema_version"] == "assistant_context_pack.v1"
     assert result["generation_focus"]["operators"] == ["rank", "ts_delta"]
     assert "WorldQuant BRAIN FASTEXPR" in result["prompt"]
+    assert "storage_dir" not in result
+    assert "storage_dir" in result["sensitive_fields_redacted"]
+
+    sensitive = toolbox.call("build_assistant_context", {"top_n": 3, "include_prompt": False, "include_sensitive": True})
+    assert sensitive["storage_dir"] == str(tmp_path)
 
 
 def test_agent_toolbox_builds_assistant_request_pack(tmp_path):

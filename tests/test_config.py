@@ -136,6 +136,26 @@ def test_web_allow_remote_must_be_boolean():
             load_run_config(path)
 
 
+def test_web_secure_cookies_must_be_boolean():
+    with tempfile.TemporaryDirectory() as tmp:
+        path = os.path.join(tmp, "run_config.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump({"web": {"secure_cookies": "yes"}}, handle)
+
+        with pytest.raises(ConfigValidationError, match="web.secure_cookies"):
+            load_run_config(path)
+
+
+def test_web_admin_token_env_must_be_non_empty_string():
+    with tempfile.TemporaryDirectory() as tmp:
+        path = os.path.join(tmp, "run_config.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump({"web": {"admin_token_env": ""}}, handle)
+
+        with pytest.raises(ConfigValidationError, match="web.admin_token_env"):
+            load_run_config(path)
+
+
 def test_load_run_config_rejects_invalid_scoring_weights():
     with tempfile.TemporaryDirectory() as tmp:
         path = os.path.join(tmp, "run_config.json")
@@ -175,6 +195,38 @@ def test_load_run_config_rejects_invalid_official_api_url():
 
         with pytest.raises(ConfigValidationError, match="base_url"):
             load_run_config(path)
+
+
+def test_load_run_config_requires_https_official_api_url_in_production():
+    with tempfile.TemporaryDirectory() as tmp:
+        path = os.path.join(tmp, "run_config.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(
+                {
+                    "environment": "production",
+                    "ops": {"official_api": {"base_url": "http://api.worldquantbrain.com"}},
+                },
+                handle,
+            )
+
+        with pytest.raises(ConfigValidationError, match="must use https"):
+            load_run_config(path)
+
+
+def test_load_run_config_allows_http_official_api_url_in_mock():
+    with tempfile.TemporaryDirectory() as tmp:
+        path = os.path.join(tmp, "run_config.json")
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(
+                {
+                    "environment": "mock",
+                    "ops": {"official_api": {"base_url": "http://127.0.0.1:8080"}},
+                },
+                handle,
+            )
+
+        config = load_run_config(path)
+        assert config.ops.official_api.base_url == "http://127.0.0.1:8080"
 
 
 def test_config_and_web_settings_enums_use_canonical_contract():

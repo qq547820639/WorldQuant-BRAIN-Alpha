@@ -38,6 +38,14 @@ _RECORD_INDEXED_FILES = {
     "cloud_alphas.jsonl",
     "backtests.jsonl",
 }
+_REPOSITORY_JSONL_FILES = _EXPRESSION_INDEXED_FILES | _RECORD_INDEXED_FILES | {
+    "ab_tests.jsonl",
+    "assistant_guidance.jsonl",
+    "events.jsonl",
+    "families.jsonl",
+    "strategy_lifecycle.jsonl",
+}
+_REPOSITORY_LOCK_NAMES = _REPOSITORY_JSONL_FILES | {"run_history"}
 
 
 class ResearchRepository:
@@ -103,7 +111,7 @@ class ResearchRepository:
         return list(self._latest_cloud_alpha_rows().values())
 
     def latest_backtest_records(self, *, limit: int = 500) -> list[dict[str, Any]]:
-        return read_jsonl_tail(Path(self.storage_dir) / "backtests.jsonl", limit=max(1, int(limit or 1)))
+        return read_jsonl_tail(self._safe_storage_path("backtests.jsonl"), limit=max(1, int(limit or 1)))
 
     def merge_cloud_alphas(self, rows: list[dict[str, Any]], *, sync_range: str = "") -> dict[str, int]:
         """Append only new or changed cloud Alpha records.
@@ -165,12 +173,12 @@ class ResearchRepository:
             return self._latest_cloud_alpha_rows_unlocked()
 
     def _latest_cloud_alpha_rows_unlocked(self) -> dict[str, dict[str, Any]]:
-        path = os.path.join(self.storage_dir, "cloud_alphas.jsonl")
+        path = self._safe_storage_path("cloud_alphas.jsonl")
         latest: dict[str, dict[str, Any]] = {}
-        if not os.path.exists(path):
+        if not path.exists():
             return latest
         try:
-            with open(path, "r", encoding="utf-8") as f:
+            with path.open("r", encoding="utf-8") as f:
                 for line in f:
                     try:
                         record = json.loads(line)
@@ -205,10 +213,8 @@ class ResearchRepository:
         archives older than max_age_days.
         """
         from datetime import datetime, timedelta
-        from pathlib import Path
-
         with self._file_lock(filename):
-            path = Path(self.storage_dir) / filename
+            path = self._safe_storage_path(filename)
             if not path.is_file():
                 return
             size_mb = path.stat().st_size / (1024 * 1024)
@@ -216,7 +222,7 @@ class ResearchRepository:
                 return
 
             suffix = datetime.now().strftime("%Y%m%d_%H%M%S")
-            archive_path = Path(self.storage_dir) / f"{Path(filename).stem}_{suffix}.jsonl"
+            archive_path = self._safe_archive_path(filename, suffix)
             try:
                 path.rename(archive_path)
             except OSError:
@@ -225,7 +231,7 @@ class ResearchRepository:
         # Clean up old archives
         cutoff = datetime.now() - timedelta(days=max_age_days)
         stem = Path(filename).stem
-        for old in sorted(Path(self.storage_dir).glob(f"{stem}_*.jsonl")):
+        for old in sorted(self._storage_root().glob(f"{stem}_*.jsonl")):
             try:
                 mtime = datetime.fromtimestamp(old.stat().st_mtime)
                 if mtime < cutoff:
@@ -250,14 +256,41 @@ class ResearchRepository:
             self._append_unlocked(filename, record)
 
     def _append_unlocked(self, filename: str, record: dict[str, Any]):
+        path = self._safe_storage_path(filename)
         record = _repository_safe(record)
-        with open(os.path.join(self.storage_dir, filename), "a", encoding="utf-8") as f:
+        with path.open("a", encoding="utf-8") as f:
             f.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")
         self._update_expression_sqlite_cache(filename, record)
         self._update_record_sqlite_cache(filename, record)
 
     def _file_lock(self, filename: str):
-        return _RepositoryFileLock(os.path.join(self.storage_dir, f"{filename}.lock"))
+        return _RepositoryFileLock(str(self._safe_lock_path(filename)))
+
+    def _storage_root(self) -> Path:
+        return Path(self.storage_dir).expanduser().resolve()
+
+    def _safe_storage_path(self, filename: str) -> Path:
+        if filename not in _REPOSITORY_JSONL_FILES:
+            raise ValueError(f"unsupported repository JSONL file: {filename}")
+        if Path(filename).name != filename or Path(filename).is_absolute():
+            raise ValueError(f"unsafe repository JSONL file: {filename}")
+        path = (self._storage_root() / filename).resolve()
+        _ensure_contained(path, self._storage_root())
+        return path
+
+    def _safe_lock_path(self, filename: str) -> Path:
+        if filename not in _REPOSITORY_LOCK_NAMES:
+            raise ValueError(f"unsupported repository lock target: {filename}")
+        if Path(filename).name != filename or Path(filename).is_absolute():
+            raise ValueError(f"unsafe repository lock target: {filename}")
+        path = (self._storage_root() / f"{filename}.lock").resolve()
+        _ensure_contained(path, self._storage_root())
+        return path
+
+    def _safe_archive_path(self, filename: str, suffix: str) -> Path:
+        path = (self._storage_root() / f"{Path(filename).stem}_{suffix}.jsonl").resolve()
+        _ensure_contained(path, self._storage_root())
+        return path
 
     def _update_expression_sqlite_cache(self, filename: str, record: dict[str, Any]) -> None:
         if filename not in _EXPRESSION_INDEXED_FILES:
@@ -359,3 +392,10 @@ def _with_expression_summary(record: dict[str, Any]) -> dict[str, Any]:
 def _repository_safe(record: dict[str, Any]) -> dict[str, Any]:
     clean = redact_data(record)
     return clean if isinstance(clean, dict) else {}
+
+
+def _ensure_contained(path: Path, root: Path) -> None:
+    try:
+        path.relative_to(root)
+    except ValueError:
+        raise ValueError(f"repository path escapes storage root: {path}") from None

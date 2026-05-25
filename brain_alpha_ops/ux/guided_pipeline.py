@@ -29,6 +29,7 @@ from typing import Any, Callable, Dict, List, Optional
 from brain_alpha_ops.config import RunConfig
 from brain_alpha_ops.models import Candidate, PipelineEvent, PipelineResult
 from brain_alpha_ops.runner import run_pipeline_from_config
+from brain_alpha_ops.ux.history import RunHistoryAnalytics
 
 logger = logging.getLogger(__name__)
 
@@ -193,7 +194,9 @@ class GuidedPipeline:
         self.phases: Dict[str, PipelinePhase] = {}
         self._progress_callback: Optional[Callable] = None
         self._stop_flag = False
-        self._checkpoint_dir = Path("data/checkpoints")
+        self._storage_dir = Path(getattr(run_config.ops, "storage_dir", "data") or "data")
+        self._checkpoint_dir = self._storage_dir / "checkpoints"
+        self._history_dir = self._storage_dir / "run_history"
         self._last_result: Optional[PipelineResult] = None
 
         # Initialize phases
@@ -336,10 +339,13 @@ class GuidedPipeline:
                 self._notify("redline", "failed", {
                     "overall": report.overall,
                     "violations": len(report.violations),
+                    "blocking": len(blocking),
                 })
-                # Don't raise — continue with warnings logged
                 phase.warnings.extend(
                     f"[{v.redline_id}] {v.check_name}: {v.fix_guidance}" for v in blocking
+                )
+                raise RuntimeError(
+                    f"TECH_REDLINE_BLOCKED: {len(blocking)} blocking violations detected"
                 )
             else:
                 phase.complete(f"通过: {report.passed}/{report.total_checks} 项")
@@ -347,11 +353,14 @@ class GuidedPipeline:
                     "overall": report.overall,
                     "passed": report.passed,
                 })
-        except ImportError:
-            phase.complete("红线验证模块未加载 (跳过)")
-            self._notify("redline", "completed", {"skipped": True})
+        except ImportError as e:
+            phase.fail("红线验证模块不可用")
+            self._notify("redline", "failed", {"error": str(e)})
+            raise RuntimeError("TECH_REDLINE_BLOCKED: redline verifier unavailable") from e
         except Exception as e:
             phase.fail(str(e))
+            self._notify("redline", "failed", classify_error(e))
+            raise
 
         return result
 
@@ -401,11 +410,20 @@ class GuidedPipeline:
             self.phases["simulation"].complete(
                 f"官方仿真 {summary.get('officially_simulated', 0)} 个"
             )
+            self.phases["validation"].complete(
+                f"官方预验证 {summary.get('official_validation_passed', 0)}/"
+                f"{summary.get('official_validation_attempted', 0)} 通过"
+            )
             self.phases["submission"].complete(
                 f"提交 {summary.get('auto_submitted', 0)} 个"
             )
             self.phases["scoring"].complete(
                 f"评分分布: {summary.get('score_distribution', {})}"
+            )
+            gate_summary = summary.get("gate_summary") or {}
+            ready = summary.get("submission_ready", 0)
+            self.phases["gating"].complete(
+                f"门禁可提交 {ready} 个; 分布 {gate_summary}"
             )
 
             return pipeline_result
@@ -528,7 +546,7 @@ class GuidedPipeline:
     # ── Run History ──
 
     def _save_run_record(self, result: PipelineResult) -> None:
-        history_dir = Path("data/run_history")
+        history_dir = self._history_dir
         history_dir.mkdir(parents=True, exist_ok=True)
 
         record = RunRecord(
@@ -548,35 +566,13 @@ class GuidedPipeline:
         )
 
     def list_history(self) -> List[Dict[str, Any]]:
-        history_dir = Path("data/run_history")
-        if not history_dir.exists():
-            return []
-
-        records = []
-        for f in sorted(history_dir.glob("*.json"), reverse=True):
-            try:
-                data = json.loads(f.read_text(encoding="utf-8"))
-                records.append({
-                    "run_id": data.get("run_id", f.stem),
-                    "started_at": data.get("started_at", ""),
-                    "completed_at": data.get("completed_at", ""),
-                    "status": data.get("status", "unknown"),
-                    "candidates": data.get("summary", {}).get("total_candidates", 0),
-                    "submissions": data.get("summary", {}).get("auto_submitted", 0),
-                    "phases_completed": sum(
-                        1 for p in data.get("phases", [])
-                        if p.get("status") == "completed"
-                    ),
-                })
-            except Exception:
-                continue
-        return records
+        return RunHistoryAnalytics(str(self._storage_dir)).list_history(limit=10)
 
     def show_run(self, run_id: str) -> Optional[Dict[str, Any]]:
-        path = Path("data/run_history") / f"{run_id}.json"
-        if not path.exists():
-            return None
-        return json.loads(path.read_text(encoding="utf-8"))
+        return RunHistoryAnalytics(str(self._storage_dir)).load_run(run_id)
+
+    def history_analytics(self, *, limit: int = 10) -> Dict[str, Any]:
+        return RunHistoryAnalytics(str(self._storage_dir)).analytics(limit=limit)
 
     # ── Progress Display ──
 

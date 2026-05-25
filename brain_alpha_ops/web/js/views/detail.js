@@ -11,6 +11,7 @@
   var formatScore = window.Utils.formatScore;
   var humanCheckName = window.Utils.humanCheckName;
   var renderRiskExplanation = window.Utils.renderRiskExplanation;
+  var applyDataStyles = window.Utils.applyDataStyles;
   var scoreSpan = window.Utils.scoreSpan;
   var statusBadge = window.Utils.statusBadge;
   var S = window.AppState;
@@ -59,11 +60,11 @@
       return '<tr><td class="field-label ' + cls + '">' + esc(label) + '</td>' +
         '<td class="field-value ' + cls + '">' + value + '</td></tr>';
     }).join('');
-    return '<table class="detail-table"><thead><tr><th colspan="2" style="font-weight:var(--fw-bold);font-size:var(--fs-sm)">' + esc(title) + '</th></tr></thead><tbody>' + rows + '</tbody></table>';
+    return '<table class="detail-table"><thead><tr><th colspan="2">' + esc(title) + '</th></tr></thead><tbody>' + rows + '</tbody></table>';
   }
 
   function showEmpty() {
-    var bodyEl = $('detail'); if (bodyEl) bodyEl.innerHTML = '<div class="text-center text-muted" style="padding:var(--sp-8)">暂无详情数据。</div>';
+    var bodyEl = $('detail'); if (bodyEl) bodyEl.innerHTML = '<div class="text-center text-muted detail-empty">暂无详情数据。</div>';
   }
 
   // ── MODAL OPEN/CLOSE ──────────────────────────────────────────────────
@@ -172,10 +173,11 @@
 
     bodyEl.innerHTML = parts.map(function (html) {
       return '<div class="detail-section">' +
-        '<div class="detail-section-title" style="font-size:var(--fs-sm);font-weight:var(--fw-extrabold)">' + (html.title || '') + '</div>' +
+        '<div class="detail-section-title detail-heading">' + (html.title || '') + '</div>' +
         '<div class="detail-section-body">' + (html.body || html) + '</div>' +
         '</div>';
     }).join('');
+    applyDataStyles(bodyEl);
 
     openDetailModal();
   };
@@ -188,7 +190,7 @@
 
     // Overall
     if (sc.total_score !== undefined || sc.local_rank_score !== undefined) {
-      parts.push('<div style="font-weight:var(--fw-bold);margin-bottom:var(--sp-2)">总分：' +
+      parts.push('<div class="scorecard-total">总分：' +
         scoreSpan(sc.total_score || sc.local_rank_score || 0) + '</div>');
     }
 
@@ -206,11 +208,11 @@
           var pctScore = Math.max(0, Math.min(100, (score + 10) / 20 * 100)); // normalize to 0-100
           var barClass = pctScore >= 70 ? 'high' : pctScore >= 40 ? 'mid' : 'low';
           parts.push('<div class="sc-dim-row">' +
-            '<span style="font-size:var(--fs-2xs);color:var(--text-muted)">' + esc(name.slice(0, 2)) + '</span>' +
-            '<span style="font-size:var(--fs-xs)">' + esc(name) + '</span>' +
-            '<div class="sc-dim-bar-wrap"><div class="sc-dim-bar ' + barClass + '" style="width:' + pctScore + '%"></div></div>' +
+            '<span class="sc-dim-key">' + esc(name.slice(0, 2)) + '</span>' +
+            '<span class="sc-dim-name">' + esc(name) + '</span>' +
+            '<div class="sc-dim-bar-wrap"><div class="sc-dim-bar ' + barClass + '" data-style-width="' + pctScore.toFixed(3) + '"></div></div>' +
             '<span class="sc-dim-val">' + scoreSpan(score) + '</span>' +
-            '<span style="font-size:var(--fs-2xs);color:var(--text-muted);text-align:right">' + (weight * 100).toFixed(0) + '%</span>' +
+            '<span class="sc-dim-weight">' + (weight * 100).toFixed(0) + '%</span>' +
             '</div>');
         });
       });
@@ -309,8 +311,9 @@
 
     var checks = Array.isArray(check.checks) ? check.checks : [];
     var checkHtml = checks.length > 0 ? renderFieldTableHTML('检查项', checks.map(function (c) {
-      return { label: humanCheckName(c.name || c), value: (c.passed !== undefined ? (c.passed ? '✓ 通过' : '✗ 未通过') : fmtVal(c)) + (c.message ? ' — ' + esc(c.message) : ''), format: c.passed ? 'badge' : 'text' };
-    })) : '<div class="text-muted" style="padding:var(--sp-2)">暂无检查项详情。</div>';
+      var note = c.message || c.suggestion || '';
+      return { label: humanCheckName(c.name || c), value: (c.passed !== undefined ? (c.passed ? '通过' : '未通过') : fmtVal(c)) + (note ? ' - ' + note : ''), format: c.passed ? 'badge' : 'text' };
+    })) : '<div class="text-muted p-sm">暂无检查项详情。</div>';
 
     bodyEl.innerHTML = sectionBlock('检查结果', renderFieldTableHTML('', [
       { label: 'Alpha ID', value: check.alpha_id },

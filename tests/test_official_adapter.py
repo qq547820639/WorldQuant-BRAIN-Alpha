@@ -581,6 +581,140 @@ def test_list_user_alphas_stops_on_repeated_full_page():
         assert progress[-1]["truncated"] is True
 
 
+def test_list_user_alphas_fetches_past_previous_10000_cap():
+    calls = []
+
+    class Response:
+        headers = {"Content-Type": "application/json"}
+
+        def __init__(self, offset: int):
+            self.offset = offset
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self):
+            rows = (
+                []
+                if self.offset >= 10100
+                else [{"id": f"a{self.offset + index}", "regular": f"rank(field_{self.offset + index})"} for index in range(100)]
+            )
+            return json.dumps({"count": 10100, "results": rows}).encode()
+
+    with tempfile.TemporaryDirectory() as tmp:
+        api = OfficialBrainAPI(
+            OfficialAPIConfig(base_url="https://example.test", cache_dir=tmp, min_request_interval_seconds=0),
+            token="token",
+        )
+
+        def fake_open(req, timeout=None):
+            calls.append(req.full_url)
+            offset = int(req.full_url.rsplit("offset=", 1)[-1].split("&", 1)[0])
+            return Response(offset)
+
+        api._open = fake_open
+        rows = api.list_user_alphas("3d")
+        assert len(rows) == 10100
+        assert len(calls) == 102
+        assert rows[-1]["id"] == "a10099"
+
+
+def test_list_user_alphas_ignores_reported_10000_total_when_pages_continue():
+    calls = []
+    pages = {
+        0: [{"id": f"a{index}", "regular": f"rank(field_{index})"} for index in range(100)],
+        100: [{"id": f"a{100 + index}", "regular": f"rank(field_{100 + index})"} for index in range(100)],
+        200: [],
+    }
+
+    class Response:
+        headers = {"Content-Type": "application/json"}
+
+        def __init__(self, offset: int):
+            self.offset = offset
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self):
+            return json.dumps({"count": 100, "results": pages[self.offset]}).encode()
+
+    with tempfile.TemporaryDirectory() as tmp:
+        api = OfficialBrainAPI(
+            OfficialAPIConfig(base_url="https://example.test", cache_dir=tmp, min_request_interval_seconds=0),
+            token="token",
+        )
+
+        def fake_open(req, timeout=None):
+            calls.append(req.full_url)
+            offset = int(req.full_url.rsplit("offset=", 1)[-1].split("&", 1)[0])
+            return Response(offset)
+
+        api._open = fake_open
+        rows = api.list_user_alphas("all")
+        assert len(rows) == 200
+        assert len(calls) == 3
+        assert rows[-1]["id"] == "a199"
+
+
+def test_list_user_alphas_narrows_by_created_date_after_offset_limit():
+    calls = []
+    progress = []
+
+    with tempfile.TemporaryDirectory() as tmp:
+        api = OfficialBrainAPI(
+            OfficialAPIConfig(base_url="https://example.test", cache_dir=tmp, min_request_interval_seconds=0),
+            token="token",
+        )
+
+        def fake_request(_method, _path, *, query=None, **_kwargs):
+            query = dict(query or {})
+            calls.append(query)
+            offset = int(query.get("offset", 0))
+            cursor = query.get("dateCreated<")
+            if not cursor and offset == 0:
+                return {
+                    "count": 10000,
+                    "results": [
+                        {"id": f"new_{index}", "regular": "rank(close)", "dateCreated": f"2026-01-02T00:{index:02d}:00-04:00"}
+                        for index in range(100)
+                    ],
+                }, {}
+            if not cursor and offset == 100:
+                return {
+                    "count": 10000,
+                    "results": [
+                        {"id": f"mid_{index}", "regular": "rank(close)", "dateCreated": f"2026-01-01T23:{index:02d}:00-04:00"}
+                        for index in range(100)
+                    ],
+                }, {}
+            if not cursor and offset == 200:
+                raise BrainAPIError("HTTP 400: ['Invalid offset. Please use filters to narrow down the result.']", status_code=400)
+            if cursor and offset == 0:
+                return {
+                    "count": 2,
+                    "results": [
+                        {"id": "old_1", "regular": "rank(open)", "dateCreated": "2025-12-31T00:00:00-04:00"},
+                        {"id": "old_2", "regular": "rank(volume)", "dateCreated": "2025-12-30T00:00:00-04:00"},
+                    ],
+                }, {}
+            raise AssertionError(f"unexpected query {query}")
+
+        api._request = fake_request
+        rows = api.list_user_alphas("all", progress_callback=progress.append)
+
+        assert len(rows) == 202
+        assert any(call.get("dateCreated<") for call in calls)
+        assert progress[-2]["warning"] == "offset_limit_narrowed_by_date"
+        assert rows[-1]["id"] == "old_2"
+
+
 def test_cookie_auth_preferred_over_bearer_when_available():
     captured = {}
 
@@ -656,3 +790,96 @@ def test_bearer_401_falls_back_to_basic_auth():
     assert data["status"] == "ok"
     assert calls[0].startswith("Bearer ")
     assert calls[1].startswith("Basic ")
+
+
+def test_request_rejects_cross_origin_absolute_url():
+    api = OfficialBrainAPI(
+        OfficialAPIConfig(base_url="https://example.test", min_request_interval_seconds=0),
+        token="token",
+    )
+
+    try:
+        api._request("GET", "https://evil.example/data-fields")
+    except BrainAPIError as exc:
+        assert "cross-origin" in str(exc)
+    else:
+        raise AssertionError("expected cross-origin URL to be rejected")
+
+
+def test_request_allows_same_origin_absolute_url():
+    captured = {}
+
+    class Response:
+        headers = {"Content-Type": "application/json"}
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self):
+            return b'{"status": "ok"}'
+
+    def fake_open(req, timeout):
+        captured["url"] = req.full_url
+        return Response()
+
+    api = OfficialBrainAPI(
+        OfficialAPIConfig(base_url="https://example.test", min_request_interval_seconds=0),
+        token="token",
+    )
+    api._open = fake_open
+    data, _headers = api._request("GET", "https://example.test/data-fields", query={"limit": 1})
+    assert data["status"] == "ok"
+    assert captured["url"] == "https://example.test/data-fields?limit=1"
+
+
+def test_submit_simulation_rejects_cross_origin_location_header():
+    class Response:
+        headers = {"Content-Type": "application/json", "Location": "https://evil.example/simulations/1"}
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self):
+            return b"{}"
+
+    api = OfficialBrainAPI(
+        OfficialAPIConfig(base_url="https://example.test", min_request_interval_seconds=0),
+        token="token",
+    )
+    api._open = lambda _req, timeout: Response()
+
+    try:
+        api.submit_simulation("rank(close)", BrainSettings(region="USA", universe="TOP3000"))
+    except BrainAPIError as exc:
+        assert "cross-origin" in str(exc)
+    else:
+        raise AssertionError("expected cross-origin Location to be rejected")
+
+
+def test_throttle_uses_shared_lock_across_instances(monkeypatch):
+    import brain_alpha_ops.brain_api.official as official
+
+    sleeps = []
+    ticks = iter([100.1, 103.0, 103.0, 106.0])
+
+    monkeypatch.setattr(official, "_GLOBAL_LAST_REQUEST_AT", 100.0)
+    monkeypatch.setattr(official.time, "monotonic", lambda: next(ticks))
+    monkeypatch.setattr(official.time, "sleep", lambda seconds: sleeps.append(seconds))
+
+    config = OfficialAPIConfig(base_url="https://example.test", min_request_interval_seconds=3.0)
+    first = OfficialBrainAPI(config, token="token")
+    second = OfficialBrainAPI(config, token="token")
+
+    first._throttle()
+    second._throttle()
+
+    assert len(sleeps) == 2
+    assert round(sleeps[0], 6) == 2.9
+    assert sleeps[1] == 3.0
+    assert official._GLOBAL_LAST_REQUEST_AT == 106.0

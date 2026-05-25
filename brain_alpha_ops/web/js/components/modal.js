@@ -51,7 +51,7 @@
       // v3: Icon
       if (iconEl) {
         iconEl.style.display = opts.icon === false ? 'none' : '';
-        iconEl.textContent = opts.icon || '⚠';
+        iconEl.textContent = opts.icon || '!';
       }
 
       overlay.classList.remove('hidden');
@@ -69,7 +69,7 @@
       document.addEventListener('keydown', onKeyDown);
 
       function cleanup() {
-        document.removeEventListener('keydown', onKeyDown);
+        if (document.removeEventListener) document.removeEventListener('keydown', onKeyDown);
         overlay.classList.add('hidden');
         overlay.setAttribute('aria-hidden', 'true');
         yesBtn.removeEventListener('click', onYes);
@@ -89,7 +89,7 @@
 
   // v3: Danger confirmation shortcut
   function confirmDanger(msg, yesText) {
-    return confirmAction(msg, yesText || '确认删除', '取消', { variant: 'danger', icon: '⚠' });
+    return confirmAction(msg, yesText || '确认删除', '取消', { variant: 'danger', icon: '!' });
   }
 
   window.Modal = {

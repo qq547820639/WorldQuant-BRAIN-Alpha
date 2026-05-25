@@ -134,7 +134,14 @@ def check_candidate_availability(
         score -= 12
     failed_reasons = [row["detail"] or row["name"] for row in checks if not row["passed"]]
     risk_explanations = [row["risk_explanation"] for row in checks if not row["passed"] and isinstance(row.get("risk_explanation"), dict)]
-    state_navigation = next((row.get("state_navigation") for row in checks if not row["passed"] and isinstance(row.get("state_navigation"), dict)), {})
+    state_navigation: dict[str, Any] = {}
+    for row in checks:
+        if row["passed"]:
+            continue
+        raw_navigation = row.get("state_navigation")
+        if isinstance(raw_navigation, dict):
+            state_navigation = raw_navigation
+            break
     return {
         "ok": True,
         "alpha_id": candidate.get("alpha_id", ""),
@@ -160,9 +167,12 @@ def check_candidate_availability(
 
 
 def _cloud_self_correlation_check_context(observability_preflight: dict[str, Any]) -> dict[str, Any]:
-    details = observability_preflight.get("flag_details") if isinstance(observability_preflight.get("flag_details"), dict) else {}
-    saturation = details.get("cloud_self_correlation_saturation") if isinstance(details.get("cloud_self_correlation_saturation"), dict) else {}
-    evidence = saturation.get("evidence") if isinstance(saturation.get("evidence"), dict) else {}
+    raw_details = observability_preflight.get("flag_details")
+    details = raw_details if isinstance(raw_details, dict) else {}
+    raw_saturation = details.get("cloud_self_correlation_saturation")
+    saturation = raw_saturation if isinstance(raw_saturation, dict) else {}
+    raw_evidence = saturation.get("evidence")
+    evidence = raw_evidence if isinstance(raw_evidence, dict) else {}
     if not evidence:
         return {}
     return {
@@ -188,7 +198,7 @@ def cloud_status_for(candidate: dict[str, Any], cloud_alphas: list[dict[str, Any
 
 def cloud_similarity_risk(candidate: dict[str, Any], cloud_alphas: list[dict[str, Any]]) -> dict[str, Any]:
     official_id = official_alpha_id(candidate)
-    best = {"score": 0.0, "id": "", "status": ""}
+    best: dict[str, Any] = {"score": 0.0, "id": "", "status": ""}
     for row in cloud_alphas:
         row_id = str(row.get("id") or row.get("alpha_id") or "")
         if official_id and row_id == official_id:

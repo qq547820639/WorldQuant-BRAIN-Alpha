@@ -7,13 +7,47 @@
 
   var $ = window.Utils.$;
   var esc = window.Utils.escapeHtml;
+  var renderSafeHtmlFragment = window.Utils.renderSafeHtmlFragment;
   var statusBadge = window.Utils.statusBadge;
   var scoreSpan = window.Utils.scoreSpan;
+
+  function attachRowActionHandlers(container, mobileEl, onClick) {
+    function detach(el) {
+      if (el && el._tableActionClick) {
+        el.removeEventListener('click', el._tableActionClick);
+        el.removeEventListener('keydown', el._tableActionKeydown);
+        el._tableActionClick = null;
+        el._tableActionKeydown = null;
+      }
+    }
+    function invoke(target, event) {
+      var row = target;
+      while (row && row.getAttribute && row.getAttribute('data-table-action') !== 'row-click') row = row.parentElement;
+      if (!row) return;
+      if (event && event.preventDefault) event.preventDefault();
+      if (event && event.stopPropagation) event.stopPropagation();
+      if (typeof onClick === 'function') onClick(row);
+      else if (typeof onClick === 'string' && typeof window[onClick] === 'function') window[onClick](row);
+    }
+    function attach(el) {
+      if (!el) return;
+      detach(el);
+      if (!onClick) return;
+      el._tableActionClick = function (event) { invoke(event.target, event); };
+      el._tableActionKeydown = function (event) {
+        if (event.key === 'Enter' || event.key === ' ') invoke(event.target, event);
+      };
+      el.addEventListener('click', el._tableActionClick);
+      el.addEventListener('keydown', el._tableActionKeydown);
+    }
+    attach(container);
+    attach(mobileEl);
+  }
 
   /**
    * v3: Full-featured table renderer.
    * @param {string} containerId - Tbody element ID
-   * @param {Array} columns - [{ accessor, render, trustedHtml, className }]
+   * @param {Array} columns - [{ accessor, render, htmlType, className }]
    * @param {Array} rows - Row data objects
    * @param {object} options - { maxRows, emptyText, emptyDesc, emptyIcon, onClick, mobileColumns, mobileTitle, mobileActions }
    */
@@ -33,12 +67,15 @@
       if (emptyEl) emptyEl.classList.remove('hidden');
       if (tableEl) tableEl.classList.add('hidden');
       if (mobileEl) mobileEl.classList.add('hidden');
+      if (!emptyEl && options.emptyText) {
+        container.innerHTML = '<tr><td colspan="' + Math.max(1, columns.length) + '">' + esc(options.emptyText) + '</td></tr>';
+      }
 
       if (emptyEl && options.emptyText) {
         var iconEl = document.getElementById('tableEmptyIcon');
         var titleEl = emptyEl.querySelector('.empty-state-title');
         var descEl = document.getElementById('tableEmptyDescription');
-        if (iconEl) iconEl.textContent = options.emptyIcon || '📊';
+        if (iconEl) iconEl.textContent = options.emptyIcon || '--';
         if (titleEl) titleEl.textContent = options.emptyText || '暂无数据';
         if (descEl) descEl.textContent = options.emptyDesc || '';
       }
@@ -50,31 +87,28 @@
     var displayRows = rows.slice(0, maxRows);
 
     // Desktop table
-    if (tableEl) {
-      tableEl.classList.remove('hidden');
-      if (container) {
-        container.innerHTML = displayRows.map(function (row, idx) {
-          var rowId = row.id || '';
-          var rowKind = row.kind || '';
-          var selectedCls = row._selected ? ' class="is-selected"' : '';
-          var clickHandler = options.onClick ? ' onclick="' + options.onClick + '(this)"' : '';
+    if (tableEl) tableEl.classList.remove('hidden');
+    if (container) {
+      container.innerHTML = displayRows.map(function (row, idx) {
+        var rowId = row.id || '';
+        var rowKind = row.kind || '';
+        var selectedCls = row._selected ? ' class="is-selected"' : '';
+        var clickAction = options.onClick ? ' data-table-action="row-click"' : '';
 
-          return '<tr data-kind="' + esc(rowKind) + '" data-id="' + esc(rowId) + '"' +
-            selectedCls + ' tabindex="0" role="button" aria-label="查看详情"' + clickHandler +
-            ' onkeydown="if(event.key===\'Enter\')this.click()">' +
-            columns.map(function (col) {
-              var value = typeof col.accessor === 'function'
-                ? col.accessor(row, idx)
-                : (row.raw || row)[col.accessor];
-              var cls = col.className || '';
-              if (col.render) {
-                var rendered = col.render(value, row, idx);
-                return '<td class="' + esc(cls) + '">' + (col.trustedHtml ? rendered : esc(String(rendered ?? ''))) + '</td>';
-              }
-              return '<td class="' + esc(cls) + '">' + esc(String(value ?? '')) + '</td>';
-            }).join('') + '</tr>';
-        }).join('');
-      }
+        return '<tr data-kind="' + esc(rowKind) + '" data-id="' + esc(rowId) + '"' +
+          selectedCls + ' tabindex="0" role="button" aria-label="查看详情"' + clickAction + '>' +
+          columns.map(function (col) {
+            var value = typeof col.accessor === 'function'
+              ? col.accessor(row, idx)
+              : (row[col.accessor] !== undefined ? row[col.accessor] : (row.raw || {})[col.accessor]);
+            var cls = col.className || '';
+            if (col.render) {
+              var rendered = col.render(value, row, idx);
+              return '<td class="' + esc(cls) + '">' + renderSafeHtmlFragment(rendered, col.htmlType) + '</td>';
+            }
+            return '<td class="' + esc(cls) + '">' + esc(String(value ?? '')) + '</td>';
+          }).join('') + '</tr>';
+      }).join('');
     }
 
     // Mobile cards
@@ -90,11 +124,11 @@
           var selectedCls = row._selected ? ' is-selected' : '';
 
           var metaItems = options.mobileColumns.map(function (col) {
-            var value = typeof col.accessor === 'function' ? col.accessor(row, idx) : (row.raw || row)[col.accessor];
-            var rendered = col.render ? col.render(value, row, idx) : esc(String(value ?? ''));
+            var value = typeof col.accessor === 'function' ? col.accessor(row, idx) : (row[col.accessor] !== undefined ? row[col.accessor] : (row.raw || {})[col.accessor]);
+            var rendered = col.render ? col.render(value, row, idx) : String(value ?? '');
             return '<div class="mobile-card-meta-item">' +
-              '<span style="color:var(--text-muted);font-size:var(--fs-2xs)">' + esc(col.label || '') + '</span><br>' +
-              (col.trustedHtml ? rendered : esc(String(rendered ?? '-'))) +
+              '<span class="mobile-card-meta-label">' + esc(col.label || '') + '</span><br>' +
+              renderSafeHtmlFragment(rendered || '-', col.htmlType) +
               '</div>';
           });
 
@@ -102,8 +136,7 @@
 
           return '<div class="mobile-card' + selectedCls + '" ' +
             'data-kind="' + esc(rowKind) + '" data-id="' + esc(rowId) + '" ' +
-            'tabindex="0" role="button"' + (options.onClick ? ' onclick="' + options.onClick + '(this)"' : '') +
-            ' onkeydown="if(event.key===\'Enter\')this.click()">' +
+            (options.onClick ? 'tabindex="0" role="button" data-table-action="row-click"' : '') + '>' +
             '<div class="mobile-card-header">' +
             '<div class="mobile-card-title">' + esc(String(title)) + '</div>' +
             (subtitle ? '<div class="text-xs text-muted">' + subtitle + '</div>' : '') +
@@ -114,6 +147,8 @@
         }).join('');
       }
     }
+
+    attachRowActionHandlers(container, mobileEl, options.onClick);
   }
 
   window.Table = {

@@ -101,7 +101,7 @@ def submission_preflight_advisory(
     if cloud_self_block:
         return cloud_self_block
 
-    cloud_snapshot = cloud_alpha_snapshot(limit=2000)
+    cloud_snapshot = cloud_alpha_snapshot()
     cloud_rows = cloud_snapshot.get("alphas") or []
     cloud_summary = cloud_snapshot.get("summary") or {}
     if run_config.ops.budget.require_cloud_sync:

@@ -2,8 +2,6 @@ from __future__ import annotations
 
 import importlib.util
 from pathlib import Path
-import subprocess
-import sys
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -11,8 +9,8 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def _load_build_inline(path: Path):
     spec = importlib.util.spec_from_file_location("web_build_inline", path)
-    module = importlib.util.module_from_spec(spec)
     assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
 
@@ -49,6 +47,8 @@ def test_build_inline_writes_expected_output(tmp_path):
     assert output.is_file()
     assert build_inline.check(output)["ok"] is True
     assert result["replaced"] >= 13
+    assert result["css_replaced"] == 1
+    assert "css/app.css" in result["css_sources"]
 
 
 def test_legacy_build_inline_entrypoint_delegates_to_web_builder():
@@ -61,14 +61,12 @@ def test_legacy_build_inline_entrypoint_delegates_to_web_builder():
     assert legacy.check(ROOT / "brain_alpha_ops" / "web" / "index.html")["ok"] is True
 
 
-def test_legacy_build_inline_cli_check_uses_current_template():
-    proc = subprocess.run(
-        [sys.executable, str(ROOT / "brain_alpha_ops" / "build_inline.py"), "--check", "--json"],
-        cwd=str(ROOT),
-        text=True,
-        capture_output=True,
-    )
+def test_legacy_build_inline_cli_check_uses_current_template(capsys):
+    legacy = _load_build_inline(ROOT / "brain_alpha_ops" / "build_inline.py")
 
-    assert proc.returncode == 0
-    assert '"ok": true' in proc.stdout
-    assert '"replaced":' in proc.stdout
+    return_code = legacy.main(["--check", "--json"])
+    captured = capsys.readouterr()
+
+    assert return_code == 0
+    assert '"ok": true' in captured.out
+    assert '"replaced":' in captured.out

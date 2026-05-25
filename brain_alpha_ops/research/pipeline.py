@@ -1,8 +1,7 @@
-"""End-to-end alpha research, simulation, scoring, and optional submission."""
+﻿"""End-to-end alpha research, simulation, scoring, and optional submission."""
 
 from __future__ import annotations
 
-import dataclasses
 import enum
 import logging
 from pathlib import Path
@@ -12,7 +11,6 @@ from typing import Callable
 logger = logging.getLogger(__name__)
 
 from brain_alpha_ops.brain_api.base import BrainAPI, BrainAPIError
-from brain_alpha_ops.brain_api.context_defaults import DEFAULT_FIELDS, DEFAULT_OPERATORS
 from brain_alpha_ops.config import OpsConfig, runtime_project_root
 from brain_alpha_ops.models import Candidate, PipelineEvent, PipelineResult, new_id
 from brain_alpha_ops.observability import context_payload, error_payload
@@ -20,15 +18,10 @@ from brain_alpha_ops.redaction import redact_error_message
 
 from .generator import CandidateGenerator, extract_fields, extract_operators, local_quality, mutate_expression
 from .guidance import assistant_guidance_candidate_metadata, ensure_assistant_guidance_digest
-from .expression_ast import expression_key, expression_similarity
 from .memory import ResearchMemory
-from .observability import (
-    actionable_duplicate_expression_buckets,
-    build_research_observability_snapshot,
-    observability_context,
-)
+from .observability import build_research_observability_snapshot
 from .repository import ResearchRepository
-from .safety import SubmissionLedger, mock_source_reasons, normalize
+from .safety import SubmissionLedger, mock_source_reasons
 from .scoring import build_scorecard, evaluate_quality_gate
 from .alpha_checks import AlphaCheckRegistry
 from .anti_overfit import AntiOverfitService
@@ -38,7 +31,7 @@ from .backtest_polling import BacktestPollingService
 from .backtest_slots import BacktestSlotManager
 from .backtest_submission import BacktestSubmissionService
 from .batch_backtest_coordinator import BatchBacktestCoordinator
-from .candidate_pool import CandidatePoolService
+from .candidate_pool import CandidatePoolService, is_active_backtest_candidate, pending_simulation_targets
 from .dataset_selection import DatasetSelectionService
 from .experience_feedback import ExperienceFeedbackService
 from .fusion_candidates import FusionCandidateService
@@ -46,6 +39,38 @@ from .official_call_guard import OfficialCallGuard
 from .official_validation import OfficialValidationService
 from .official_workflow import OfficialWorkflowService
 from .generation_phase import GenerationPhaseService
+from .pipeline_snapshot import (
+    PipelineSnapshotBuilder,
+    PipelineSnapshotServices,
+    PipelineSnapshotState,
+    backtest_slot_snapshot,
+)
+from .pipeline_state import CycleState, record_strategy_reward
+from .pipeline_helpers import (
+    assistant_guidance_for_generator as _assistant_guidance_for_generator,
+    blocked_gate as _blocked_gate,
+    expr_key as _expr_key,
+    rank_candidates,
+)
+from .pipeline_official_context import (
+    OfficialContextLoadService,
+    active_dataset_field_names,
+    configured_official_context_files_exist,
+    official_context_reasons,
+    refresh_context_validation_cache,
+)
+from .pipeline_observability import (
+    apply_observability_generation_guidance,
+    refresh_observability_throttle,
+)
+from .pipeline_cloud import (
+    build_cloud_similarity_rows,
+    cloud_correlation_risk,
+    cloud_status_for_candidate,
+    remember_accepted,
+    smart_rank_candidates,
+    smart_ranking_score,
+)
 from .secondary_fusion import SecondaryFusionService
 from .strategy_plugins import StrategyPluginRegistry
 from .strategy_lifecycle import StrategyLifecycleTracker
@@ -57,28 +82,7 @@ from .research_cycle_orchestrator import ResearchCycleOrchestrator
 from .rolling_validation import RollingValidationService
 from .robustness_policy import RobustnessPolicy
 
-# Lazy imports for optional components (wired in _load_official_context)
-_DS_SELECTOR_IMPORTED = False
-_THEME_ENGINE_IMPORTED = False
-_MAPPER_IMPORTED = False
-
-
 SUBMITTED_CLOUD_STATUSES = {"ACTIVE", "SUBMITTED", "PRODUCTION", "CONDUCTED"}
-
-
-@dataclasses.dataclass
-class _CycleState:
-    """P3 refactor: mutable state shared across pipeline helper methods.
-
-    Encapsulates the 5 mutable containers that were historically passed as
-    individual parameters to _fill_backtest_slots, _poll_due_backtests,
-    _top_up_candidate_pool, _validate_for_open_backtest_slots, etc.
-    """
-    pool_by_expression: dict[str, Candidate] = dataclasses.field(default_factory=dict)
-    accepted_candidates: list[Candidate] = dataclasses.field(default_factory=list)
-    archive_stats: dict[str, int] = dataclasses.field(default_factory=dict)
-    archive_samples: list[Candidate] = dataclasses.field(default_factory=list)
-    blocked_expressions: set[str] = dataclasses.field(default_factory=set)
 
 
 class AlphaResearchPipeline:
@@ -179,7 +183,7 @@ class AlphaResearchPipeline:
         run_id = new_id("run")
         self.run_id = run_id
         submitted_this_run = 0
-        state = _CycleState()  # P3 refactor: shared mutable state
+        state = CycleState()
         # Local aliases for backward-compat with existing code
         archive_stats = state.archive_stats
         archive_samples = state.archive_samples
@@ -429,22 +433,13 @@ class AlphaResearchPipeline:
 
             # ── P3-1: Record bandit reward for current strategy profile ──
             idx = self.strategy_profile_index
-            sharpe_vals = [c.official_metrics.get("sharpe", 0) for c in pool_values if c.official_metrics]
-            avg_sharpe = sum(sharpe_vals) / max(len(sharpe_vals), 1)
-            pass_rate = sum(1 for c in pool_values if c.gate.get("submission_ready")) / max(len(pool_values), 1)
-            reward = avg_sharpe * (0.5 + 0.5 * pass_rate)
-            self._bandit_rewards.setdefault(idx, []).append(reward)
-            self._bandit_counts[idx] = self._bandit_counts.get(idx, 0) + 1
+            reward_snapshot = record_strategy_reward(idx, pool_values, self._bandit_rewards, self._bandit_counts)
             self.strategy_lifecycle.record_reward(
                 self._current_strategy_profile(),
                 index=idx,
                 cycle=cycle,
-                reward=reward,
-                metrics={
-                    "avg_sharpe": round(avg_sharpe, 6),
-                    "pass_rate": round(pass_rate, 6),
-                    "pool_size": len(pool_values),
-                },
+                reward=reward_snapshot.reward,
+                metrics=reward_snapshot.metrics,
             )
 
             # ── P2-2: Output convergence report every 10 cycles ──
@@ -632,7 +627,7 @@ class AlphaResearchPipeline:
         )
 
         # Fill backtest slots
-        cyc_state = _CycleState(
+        cyc_state = CycleState(
             pool_by_expression=pool_by_expression,
             accepted_candidates=accepted_candidates,
             archive_stats=archive_stats,
@@ -792,238 +787,29 @@ class AlphaResearchPipeline:
         )
 
     def _load_official_context(self) -> tuple[list[dict], list[dict]]:
-        fields: list[dict] = []
-        operators: list[dict] = []
-        context_warning = ""
+        result = OfficialContextLoadService(
+            config=self.config,
+            api=self.api,
+            generator=self.generator,
+            local_data_dir_existed_at_start=self._local_data_dir_existed_at_start,
+            progress=self._progress,
+            event=self._event,
+            halt_official_calls=self._halt_official_calls,
+        ).load()
+        self.generator = result.generator
+        self._loader = result.loader
+        self._mapper = result.mapper
+        self._theme_engine = result.theme_engine
+        self._selector = result.selector
+        self._hypothesis_library = result.hypothesis_library
+        self.optimizer = result.optimizer
+        self._active_dataset_id = result.active_dataset_id
+        self.context_summary = result.context_summary
+        self._refresh_context_validation_cache(result.fields, result.operators)
+        return result.fields, result.operators
 
-        # ── P0: JSON-first loading from OfficialDataLoader ──
-        try:
-            from brain_alpha_ops.data import OfficialDataLoader
-            loader = OfficialDataLoader.instance()
-            loader.refresh(self.config.storage_dir, max_retries=1)
-            fields = [
-                {
-                    "id": f.id,
-                    "name": f.id,
-                    "category": f.category,
-                    "delay": f.delay,
-                    "coverage": f.coverage,
-                    "type": f.type,
-                    "dataset": f.dataset.id if f.dataset else "",
-                }
-                for f in loader.get_fields()
-            ]
-            operators = [
-                {"name": op.name, "category": op.category, "definition": op.definition, "description": op.description}
-                for op in loader.get_operators()
-            ]
-            if not fields and not operators:
-                if self._local_data_dir_existed_at_start:
-                    context_warning = "Local data directory exists but official context files are empty; using built-in context until manual sync."
-                    fields = list(DEFAULT_FIELDS)
-                    operators = list(DEFAULT_OPERATORS)
-                    self.generator.update_context(fields, operators)
-                    self._refresh_context_validation_cache(fields, operators)
-                    self.context_summary = {
-                        "fields_count": len(fields),
-                        "operators_count": len(operators),
-                        "source": "builtin_context_manual_sync_required",
-                        "warning": context_warning,
-                    }
-                    self._event("context_manual_sync_required", context_warning, level="WARN")
-                    return fields, operators
-                raise RuntimeError("official context JSON files are missing or empty")
-            self._event("context_loaded_from_json", f"Loaded {len(fields)} fields, {len(operators)} operators from official_*.json")
-            self.generator.update_context(fields, operators)
-            self.context_summary = {
-                "fields_count": len(fields), "operators_count": len(operators),
-                "source": "official_json_files", "warning": "",
-            }
-
-            # ── Wire advanced components (DatasetSelector, FieldDatasetMapper, DynamicThemeEngine) ──
-            try:
-                from brain_alpha_ops.data import FieldDatasetMapper
-                from brain_alpha_ops.research.theme_engine import DynamicThemeEngine
-                from brain_alpha_ops.research.dataset_selector import DatasetSelector
-
-                self._mapper = FieldDatasetMapper()
-                self._mapper.build(loader)
-                self._theme_engine = DynamicThemeEngine(loader)
-                self._theme_engine.build_categories()
-                self._selector = DatasetSelector()
-                self._selector.initialize(loader)
-
-                # ── P0-3 guard: verify datasets are available ──
-                if not self._selector.available_datasets:
-                    self._event("dataset_unavailable",
-                        "DatasetSelector initialized but no datasets available. "
-                        "Check data/official_datasets.json or BRAIN API connectivity.",
-                        level="WARN")
-
-                # ── Initialize HypothesisLibrary ──
-                hypothesis_dir = getattr(
-                    self.config.budget, 'hypothesis_library_dir',
-                    'brain_alpha_ops/research/hypotheses',
-                )
-                from brain_alpha_ops.research.hypothesis_library import HypothesisLibrary
-                self._hypothesis_library = HypothesisLibrary(hypothesis_dir).load_all()
-
-                # ── Rebuild generator with hypothesis-driven capabilities ──
-                from brain_alpha_ops.research.hypothesis_driven_generator import (
-                    HypothesisDrivenGenerator,
-                )
-                ratio = getattr(self.config.budget, 'generation_mode_ratio', '70/20/10')
-                self.generator = HypothesisDrivenGenerator(
-                    loader=loader,
-                    mapper=self._mapper,
-                    theme_engine=self._theme_engine,
-                    selector=self._selector,
-                    library=self._hypothesis_library,
-                    ratio_str=ratio,
-                )
-                self.generator.update_context(fields, operators)
-
-                # Set initial dataset
-                strategy = getattr(self.config.budget, 'dataset_strategy', 'rotate')
-                ds_ids = self._selector.select(strategy)
-                if ds_ids:
-                    self._active_dataset_id = ds_ids[0]
-                    self.generator.set_dataset(self._active_dataset_id)
-                    if hasattr(self.config.settings, 'dataset'):
-                        self.config.settings.dataset = self._active_dataset_id
-
-                # ── P0-2: Wire IterativeOptimizer ──
-                self.optimizer = IterativeOptimizer(loader=loader, mapper=self._mapper)
-
-                self._event("advanced_components_wired",
-                    f"DatasetSelector(strategy={strategy}), DynamicThemeEngine, FieldDatasetMapper ready. "
-                    f"Active dataset: {self._active_dataset_id or '(none)'}")
-            except Exception as exc:
-                self._event("advanced_components_fallback",
-                    f"Could not wire advanced components: {exc}. "
-                    f"DatasetSelector/DynamicThemeEngine/FieldDatasetMapper unavailable "
-                    f"— generator will use full field pool from OfficialDataLoader.",
-                    level="ERROR")
-
-            self._event("context_loaded", f"Loaded {len(fields)} fields and {len(operators)} operators.")
-            self._refresh_context_validation_cache(fields, operators)
-            return fields, operators
-        except Exception as exc:
-            context_warning = f"Official JSON load failed ({exc}), falling back to API..."
-
-        # ── Fallback: API ──
-        self._progress(
-            "context",
-            0,
-            3,
-            "加载官方字段列表。",
-            data={"context_load": {"status": "running", "status_code": "CONTEXT_FIELDS", "current": 0, "total": 3, "fields_count": 0, "operators_count": 0}},
-        )
-        try:
-            fields = self.api.list_fields(
-                "all",
-                self.config.settings.region,
-                dataset=self.config.settings.dataset,
-                progress_callback=lambda progress: self._progress(
-                    "context",
-                    1,
-                    3,
-                    f"加载官方字段列表：{progress.get('scanned', 0)} / {progress.get('total') or '总量确认中'}。",
-                    data={
-                        "context_load": {
-                            "status": "running",
-                            "status_code": "CONTEXT_FIELDS",
-                            "current": 1,
-                            "total": 3,
-                            "fields_count": int(progress.get("scanned", 0) or 0),
-                            "fields_total": int(progress.get("total", 0) or 0),
-                            "operators_count": 0,
-                            "cached": bool(progress.get("cached")),
-                        }
-                    },
-                ),
-            )
-            self._progress(
-                "context",
-                2,
-                3,
-                "加载官方算子列表。",
-                data={"context_load": {"status": "running", "status_code": "CONTEXT_OPERATORS", "current": 2, "total": 3, "fields_count": len(fields), "operators_count": 0}},
-            )
-            operators = self.api.list_operators(
-                "all",
-                progress_callback=lambda progress: self._progress(
-                    "context",
-                    2,
-                    3,
-                    f"加载官方算子列表：{progress.get('scanned', 0)} / {progress.get('total') or '总量确认中'}。",
-                    data={
-                        "context_load": {
-                            "status": "running",
-                            "status_code": "CONTEXT_OPERATORS",
-                            "current": 2,
-                            "total": 3,
-                            "fields_count": len(fields),
-                            "operators_count": int(progress.get("scanned", 0) or 0),
-                            "operators_total": int(progress.get("total", 0) or 0),
-                            "cached": bool(progress.get("cached")),
-                        }
-                    },
-                ),
-            )
-        except BrainAPIError as exc:
-            if exc.status_code == 429:
-                context_warning = "官方上下文接口触发限流，本轮先继续本地生产与排序，稍后再恢复官方调用。"
-                self._halt_official_calls(f"{context_warning} {exc}")
-                self._event("official_context_deferred", self.official_halt_reason, level="WARN")
-                self._progress(
-                    "official_deferred",
-                    0,
-                    1,
-                    context_warning,
-                    data={"retry_seconds": self.config.budget.official_retry_pause_seconds},
-                )
-            else:
-                raise
-        if not fields:
-            fields = list(DEFAULT_FIELDS)
-            context_warning = (context_warning + " " if context_warning else "") + "使用内置字段基础上下文，登录成功后会自动更新官方字段缓存。"
-        if not operators:
-            operators = list(DEFAULT_OPERATORS)
-            context_warning = (context_warning + " " if context_warning else "") + "使用内置算子基础上下文，登录成功后会自动更新官方算子缓存。"
-        fields = _merge_context_defaults(fields, DEFAULT_FIELDS)
-        operators = _merge_context_defaults(operators, DEFAULT_OPERATORS)
-        self.generator.update_context(fields, operators)
-        self._refresh_context_validation_cache(fields, operators)
-        from brain_alpha_ops.research.generator import update_known_fields
-        update_known_fields(fields)
-
-        self.context_summary = {
-            "fields_count": len(fields),
-            "operators_count": len(operators),
-            "source": "official_api_or_cache",
-            "warning": context_warning,
-            "operator_usage_note": "系统通过官方 /operators 接口校验可用算子；完整 Learn 页面说明不在本地硬编码，仍以官网当前文档为准。",
-        }
-        self._event("context_loaded", f"Loaded {len(fields)} fields and {len(operators)} operators.")
-        self._progress(
-            "context",
-            3,
-            3,
-            f"上下文已加载：{len(fields)} 个字段，{len(operators)} 个算子。",
-            data={
-                "official_context": self.context_summary,
-                "context_load": {
-                    "status": "synced",
-                    "status_code": "CONTEXT_READY",
-                    "current": 3,
-                    "total": 3,
-                    "fields_count": len(fields),
-                    "operators_count": len(operators),
-                },
-            },
-        )
-        return fields, operators
+    def _configured_official_context_files_exist(self) -> bool:
+        return configured_official_context_files_exist(self.config.storage_dir)
 
     def _record_lifecycle(self, candidate: Candidate, stage: str, note: str = ""):
         row = {
@@ -1253,75 +1039,17 @@ class AlphaResearchPipeline:
         return not self._should_stop()
 
     def _refresh_observability_throttle(self, cycle: int) -> dict:
-        try:
-            snapshot = build_research_observability_snapshot(
-                self.config.storage_dir,
-                limit=5000,
-                top_n=5,
-                include_cloud=True,
-            )
-            context = observability_context(snapshot, top_n=5)
-            self._apply_observability_generation_guidance(snapshot, context, cycle)
-        except Exception as exc:
-            message = redact_error_message(exc, max_length=180)
-            self.observability_generation_guidance = {
-                "schema_version": "observability_generation_guidance_summary.v1",
-                "active": False,
-                "cycle": cycle,
-                "source": "research_observability",
-                "status": "refresh_failed",
-                "risk_level": "unknown",
-                "health_flags": [],
-                "duplicate_ratio": 0.0,
-                "avoid_expression_count": 0,
-                "top_duplicate_expressions": [],
-                "top_duplicate_fingerprints": [],
-                "applied_to_generator": False,
-                "generator_type": type(self.generator).__name__,
-                "error": message,
-            }
-            self.observability_throttle = {
-                "ok": False,
-                "status": "refresh_failed",
-                "risk_level": "unknown",
-                "health_flags": [],
-                "blocking_flags": [],
-                "warning_flags": [],
-                "recommended_actions": [],
-                "error": message,
-                "generation_guidance": dict(self.observability_generation_guidance),
-                "official_call_guard": self._observability_official_call_guard_snapshot(),
-            }
-            logger.warning("observability refresh failed in cycle %s: %s", cycle, message, exc_info=True)
-            self._event(
-                "observability_refresh_failed",
-                f"Cycle {cycle}: observability refresh failed; local generation continues.",
-                data=error_payload(
-                    exc,
-                    error_code="OBSERVABILITY_REFRESH_FAILED",
-                    max_length=180,
-                    phase="observability",
-                    cycle=cycle,
-                ),
-                level="WARN",
-            )
-            return self.observability_throttle
-
-        self.observability_throttle = {
-            "ok": True,
-            "status": "ready",
-            "risk_level": context.get("risk_level", "unknown"),
-            "health_flags": list(context.get("health_flags") or []),
-            "blocking_flags": list(context.get("blocking_flags") or []),
-            "warning_flags": list(context.get("warning_flags") or []),
-            "recommended_actions": list(context.get("recommended_actions") or context.get("recommendations") or []),
-            "backtest_failure_rate": context.get("backtest_failure_rate", 0.0),
-            "retryable_error_count": context.get("retryable_error_count", 0),
-            "generated_at": context.get("generated_at", ""),
-            "generation_guidance": dict(self.observability_generation_guidance),
-            "official_call_guard": self._observability_official_call_guard_snapshot(),
-        }
-        blocking_flags = list(self.observability_throttle.get("blocking_flags") or [])
+        result = refresh_observability_throttle(
+            storage_dir=self.config.storage_dir,
+            cycle=cycle,
+            generator=self.generator,
+            event=self._event,
+            guard_snapshot=self._observability_official_call_guard_snapshot,
+            observability_builder=build_research_observability_snapshot,
+        )
+        self.observability_generation_guidance = result.generation_guidance
+        self.observability_throttle = result.throttle
+        blocking_flags = result.blocking_flags
         if blocking_flags:
             reason = "observability blocking flags: " + ", ".join(blocking_flags[:5])
             self._halt_official_calls(reason, self.config.budget.official_retry_pause_seconds)
@@ -1334,89 +1062,13 @@ class AlphaResearchPipeline:
         return self.observability_throttle
 
     def _apply_observability_generation_guidance(self, snapshot: dict, context: dict, cycle: int) -> None:
-        expression_index = snapshot.get("expression_index") if isinstance(snapshot.get("expression_index"), dict) else {}
-        top_duplicates = actionable_duplicate_expression_buckets(expression_index.get("top_duplicates") or [])[:10]
-        health_flags = list(context.get("health_flags") or [])
-        duplicate_ratio = float(context.get("duplicate_ratio") or 0.0)
-        active = bool(top_duplicates or "high_duplicate_expression_ratio" in health_flags)
-        guidance = {
-            "schema_version": "observability_generation_guidance.v1",
-            "source": "research_observability",
-            "risk_level": context.get("risk_level", "unknown"),
-            "health_flags": health_flags,
-            "duplicate_ratio": duplicate_ratio,
-            "avoid_expressions": top_duplicates,
-        }
-        setter = getattr(self.generator, "set_observability_guidance", None)
-        applied_to_generator = False
-        guidance_status = "idle" if not active else "no_generator_hook"
-        guidance_error = ""
-        if callable(setter):
-            try:
-                setter(guidance)
-                applied_to_generator = True
-                guidance_status = "applied" if active else "idle"
-            except Exception as exc:
-                guidance_error = redact_error_message(exc, max_length=180)
-                guidance_status = "apply_failed"
-                logger.warning(
-                    "observability generation guidance failed in cycle %s for %s: %s",
-                    cycle,
-                    type(self.generator).__name__,
-                    guidance_error,
-                    exc_info=True,
-                )
-                self._event(
-                    "observability_generation_guidance_failed",
-                    f"Cycle {cycle}: observability generation guidance could not be applied; generation continues.",
-                    data=error_payload(
-                        exc,
-                        error_code="OBSERVABILITY_GENERATION_GUIDANCE_FAILED",
-                        max_length=180,
-                        phase="observability_generation",
-                        cycle=cycle,
-                        generator_type=type(self.generator).__name__,
-                    ),
-                    level="WARN",
-                )
-        compact_guidance = {
-            "schema_version": "observability_generation_guidance_summary.v1",
-            "active": active,
-            "cycle": cycle,
-            "source": "research_observability",
-            "status": guidance_status,
-            "risk_level": context.get("risk_level", "unknown"),
-            "health_flags": health_flags[:5],
-            "duplicate_ratio": duplicate_ratio,
-            "avoid_expression_count": len(top_duplicates),
-            "top_duplicate_expressions": [
-                str(row.get("expression_canonical") or row.get("expression") or "")[:160]
-                for row in top_duplicates[:5]
-                if isinstance(row, dict)
-            ],
-            "top_duplicate_fingerprints": [
-                str(row.get("expression_fingerprint") or "")[:16]
-                for row in top_duplicates[:5]
-                if isinstance(row, dict) and row.get("expression_fingerprint")
-            ],
-            "applied_to_generator": applied_to_generator,
-            "generator_type": type(self.generator).__name__,
-        }
-        if guidance_error:
-            compact_guidance["error"] = guidance_error
-        self.observability_generation_guidance = compact_guidance
-        if active and applied_to_generator:
-            self._event(
-                "observability_generation_guidance_applied",
-                f"Cycle {cycle}: observability diversified generation "
-                f"(duplicates={len(top_duplicates)}, duplicate_ratio={duplicate_ratio}).",
-                data={
-                    "cycle": cycle,
-                    "observability_generation_guidance": guidance,
-                    "observability_generation_guidance_summary": compact_guidance,
-                },
-                level="INFO",
-            )
+        self.observability_generation_guidance = apply_observability_generation_guidance(
+            snapshot=snapshot,
+            context=context,
+            cycle=cycle,
+            generator=self.generator,
+            event=self._event,
+        )
 
     def _runtime_data(
         self,
@@ -1426,86 +1078,69 @@ class AlphaResearchPipeline:
         archive_stats: dict[str, int],
         extra: dict | None = None,
     ) -> dict:
-        candidate_pool = self._candidate_pool_candidates(pool)
-        pending_backtests = self._pending_backtest_candidates(pool)
-        validation_attempted = self.official_validation_attempted_count
-        validation_passed = self.official_validation_passed_count
-        pending_validation = len(self._validation_targets(pool))
-        active_backtest_limit = self._active_backtest_limit()
-        data = {
-            "cycle": cycle,
-            "candidates": self._candidate_snapshot(candidate_pool),
-            "candidate_pool_available_count": len(candidate_pool),
-            "candidate_pool_source_count": len(pool),
-            "candidate_pool_excludes_waiting_backtests": True,
-            "pending_backtest_candidates": self._candidate_snapshot(pending_backtests, limit=50, retained=False),
-            "pending_backtest_count": len(pending_backtests),
-            "passed_candidates": self._candidate_snapshot(accepted_candidates, limit=50, retained=False),
-            "produced_count": self.produced_count,
-            "ready_results_count": len(accepted_candidates),
-            "official_validation_attempted": validation_attempted,
-            "official_validation_passed": validation_passed,
-            "pending_validation_count": pending_validation,
-            "simulation_retry_pending": sum(1 for candidate in pool if candidate.lifecycle_status == "simulation_retry_pending"),
-            "secondary_fusion_candidates": sum(1 for candidate in pool if candidate.mutation_type == "secondary_fusion"),
-            "rejected_count": sum(archive_stats.values()),
-            "rejected_stats": archive_stats,
-            "archive_count": sum(archive_stats.values()),
-            "archive_stats": archive_stats,
-            "backtest_slot_limit": active_backtest_limit,
-            "recovered_backtest_slot_count": self.recovered_backtest_slot_count,
-            "backtests": self._slot_snapshot(),
-            "official_call_policy": {
-                "local_first": True,
-                "retained_alpha_pool_size": self.config.budget.retained_alpha_pool_size,
-                "official_backtest_batch_size": self.config.budget.official_backtest_batch_size,
-                "max_official_validations_per_cycle": self.config.budget.max_official_validations_per_cycle,
-                "max_official_simulations_per_cycle": self.config.budget.max_official_simulations_per_cycle,
-                "max_official_concurrent_simulations": self.config.budget.max_official_concurrent_simulations,
-                "active_backtest_slot_limit": active_backtest_limit,
-                "max_simulation_retries": self.config.budget.max_simulation_retries,
-                "enable_secondary_fusion": self.config.budget.enable_secondary_fusion,
-                "resume_persisted_backtests": getattr(self.config.budget, "resume_persisted_backtests", True),
-                "poll_interval_seconds": self._poll_interval_seconds(),
-                "poll_attempt_limit": None,
-                "min_prior_score_for_official_validation": self.config.budget.min_prior_score_for_official_validation,
-                "min_prior_score_for_official_simulation": self.config.budget.min_prior_score_for_official_simulation,
-            },
-            "strategy_profile": self._current_strategy_profile(),
-            "strategy_switch_count": self.strategy_switch_count,
-            "official_calls_halted": self.official_calls_halted,
-            "official_halt_reason": self.official_halt_reason,
-            "official_retry_remaining_seconds": self._official_retry_remaining_seconds(),
-            "observability_throttle": dict(self.observability_throttle),
-            "observability_generation_guidance": dict(self.observability_generation_guidance),
-            "observability_official_call_guard": self._observability_official_call_guard_snapshot(),
-            "cloud_sync": self.cloud_sync,
-            "cloud_alphas": self.cloud_alphas,
-            "lifecycle_records": self.lifecycle_records,
-            "backtest_records": self.backtest_records[-50:],
-            "convergence": self.convergence.summary(),
-            # P1-8: User profile for web dashboard display
-            "user_profile": self.user_profile,
-            # P3-1: Bandit stats for strategy selection
-            "bandit": {
-                "active_profile": self._current_strategy_profile().get("name", "unknown"),
-                "profile_rewards": {str(k): round(sum(v)/max(len(v),1), 3)
-                                    for k, v in self._bandit_rewards.items()},
-                "profile_counts": self._bandit_counts,
-                "total_switches": self.strategy_switch_count,
-            },
-            "strategy_lifecycle": self.strategy_lifecycle.summary(
-                active_profile=self._current_strategy_profile(),
-                active_index=self.strategy_profile_index,
+        return self._snapshot_builder().runtime_data(
+            cycle,
+            pool,
+            accepted_candidates,
+            archive_stats,
+            self._snapshot_state(),
+            extra=extra,
+        )
+
+    def _snapshot_builder(self) -> PipelineSnapshotBuilder:
+        return PipelineSnapshotBuilder(
+            config=self.config,
+            services=PipelineSnapshotServices(
+                candidate_pool_candidates=self._candidate_pool_candidates,
+                pending_backtest_candidates=self._pending_backtest_candidates,
+                validation_targets=self._validation_targets,
+                active_backtest_limit=self._active_backtest_limit,
+                poll_interval_seconds=self._poll_interval_seconds,
+                slot_snapshot=self._slot_snapshot,
+                current_strategy_profile=self._current_strategy_profile,
+                strategy_lifecycle_summary=lambda profile, index: self.strategy_lifecycle.summary(
+                    active_profile=profile,
+                    active_index=index,
+                ),
+                strategy_plugin_summary=self._strategy_plugin_summary,
+                observability_official_call_guard_snapshot=self._observability_official_call_guard_snapshot,
+                assess_auto_submission=self._assess_auto_submission,
+                smart_rank_candidates=self._smart_rank_candidates,
+                smart_ranking_score=self._smart_ranking_score,
+                cloud_correlation_risk=self._cloud_correlation_risk,
             ),
-            "strategy_plugins": self._strategy_plugin_summary(),
-            # P0 UX: Dataset rotation & calibration visibility
-            "active_dataset_id": self._active_dataset_id,
-            "auto_calibrator_status": self.auto_calibrator.calibrate.__doc__[:1] if hasattr(self.auto_calibrator, 'calibrate') else "ready",
-            "scoring_calibrated": bool(getattr(self.config.scoring, 'prior_weights_override', None)),
-        }
-        data.update(extra or {})
-        return data
+        )
+
+    def _snapshot_state(self) -> PipelineSnapshotState:
+        return PipelineSnapshotState(
+            produced_count=self.produced_count,
+            officially_simulated_count=self.officially_simulated_count,
+            official_validation_attempted_count=self.official_validation_attempted_count,
+            official_validation_passed_count=self.official_validation_passed_count,
+            backtests_submitted=self.backtests_submitted,
+            recovered_backtest_slot_count=self.recovered_backtest_slot_count,
+            official_calls_halted=self.official_calls_halted,
+            official_halt_reason=self.official_halt_reason,
+            official_retry_remaining_seconds=self._official_retry_remaining_seconds(),
+            observability_throttle=dict(self.observability_throttle),
+            observability_generation_guidance=dict(self.observability_generation_guidance),
+            context_summary=dict(self.context_summary),
+            cloud_sync=self.cloud_sync,
+            cloud_alphas=self.cloud_alphas,
+            lifecycle_records=self.lifecycle_records,
+            backtest_records=self.backtest_records,
+            convergence=self.convergence.summary(),
+            user_profile=self.user_profile,
+            bandit_rewards=self._bandit_rewards,
+            bandit_counts=self._bandit_counts,
+            strategy_switch_count=self.strategy_switch_count,
+            strategy_profile_index=self.strategy_profile_index,
+            active_dataset_id=self._active_dataset_id,
+            auto_calibrator_status=(
+                self.auto_calibrator.calibrate.__doc__[:1] if hasattr(self.auto_calibrator, "calibrate") else "ready"
+            ),
+            scoring_calibrated=bool(getattr(self.config.scoring, "prior_weights_override", None)),
+        )
 
     def _halt_official_calls(self, reason: str, retry_seconds: float | None = None):
         self.official_calls_halted = True
@@ -1581,6 +1216,7 @@ class AlphaResearchPipeline:
             generator=self.generator,
             settings=self.config.settings,
             strategy=getattr(self.config.budget, "dataset_strategy", "rotate"),
+            allow_datasetless=bool(self.context_summary.get("fields_count", 0) or self.context_summary.get("operators_count", 0)),
             event=self._event,
         )
 
@@ -1901,60 +1537,29 @@ class AlphaResearchPipeline:
             )
 
     def _refresh_context_validation_cache(self, fields: list[dict], operators: list[dict]) -> None:
-        field_names: set[str] = set()
-        for item in fields:
-            for key in ("id", "name"):
-                value = str(item.get(key, "")).strip().lower()
-                if value:
-                    field_names.add(value)
-        self._context_field_names = field_names
-        self._context_operator_names = {
-            str(item.get("name", "")).strip().lower()
-            for item in operators
-            if item.get("name")
-        }
-        self._dataset_field_names_cache.clear()
+        state = refresh_context_validation_cache(fields, operators)
+        self._context_field_names = state.field_names
+        self._context_operator_names = state.operator_names
+        self._dataset_field_names_cache = state.dataset_field_names_cache
 
     def _active_dataset_field_names(self) -> set[str]:
-        dataset_id = str(self._active_dataset_id or "")
-        if not dataset_id or not self._mapper:
-            return set()
-        cached = self._dataset_field_names_cache.get(dataset_id)
-        if cached is not None:
-            return cached
-        try:
-            fields = {str(field).lower() for field in self._mapper.fields_for(dataset_id)}
-        except Exception:
-            fields = set()
-        self._dataset_field_names_cache[dataset_id] = fields
-        return fields
+        return active_dataset_field_names(
+            self._active_dataset_id,
+            self._mapper,
+            self._dataset_field_names_cache,
+        )
 
     def _official_context_reasons(self, candidate: Candidate, fields: list[dict], operators: list[dict]) -> list[str]:
         if (fields and not self._context_field_names) or (operators and not self._context_operator_names):
             self._refresh_context_validation_cache(fields, operators)
-        available_fields = self._context_field_names
-        available_operators = self._context_operator_names
-        reasons = []
-        if available_fields:
-            missing_fields = sorted(field for field in candidate.data_fields if field.lower() not in available_fields)
-            if missing_fields:
-                reasons.append("fields unavailable in current official context: " + ", ".join(missing_fields))
-        if available_operators:
-            missing_operators = sorted(operator for operator in candidate.operators if operator.lower() not in available_operators)
-            if missing_operators:
-                reasons.append("operators unavailable in current official context: " + ", ".join(missing_operators))
-
-        # P1-1: Dataset consistency check — fields must belong to active dataset
-        if self._active_dataset_id and self._mapper:
-            ds_fields = self._active_dataset_field_names()
-            for field in candidate.data_fields:
-                if field.lower() not in ds_fields and field.lower() not in {"returns", "sector", "industry", "subindustry", "market"}:
-                    reasons.append(
-                        f"field '{field}' not in active dataset '{self._active_dataset_id}'. "
-                        f"Expression may use fields from wrong dataset."
-                    )
-                    break  # one warning is sufficient
-        return reasons
+        return official_context_reasons(
+            candidate,
+            available_fields=self._context_field_names,
+            available_operators=self._context_operator_names,
+            active_dataset_id=self._active_dataset_id,
+            mapper=self._mapper,
+            dataset_field_names_cache=self._dataset_field_names_cache,
+        )
 
     def _merge_into_pool(
         self,
@@ -2132,15 +1737,7 @@ class AlphaResearchPipeline:
         return True
 
     def _is_active_backtest_candidate(self, candidate: Candidate) -> bool:
-        if not candidate.simulation_id or candidate.official_metrics:
-            return False
-        return candidate.lifecycle_status not in {
-            "simulation_failed",
-            "simulation_poll_failed",
-            "simulation_request_failed",
-            "official_standard_rejected",
-            "submission_ready",
-        }
+        return is_active_backtest_candidate(candidate)
 
     def _candidate_pool_candidates(self, pool: list[Candidate]) -> list[Candidate]:
         return self._candidate_pool_service().candidate_pool_candidates(
@@ -2149,25 +1746,12 @@ class AlphaResearchPipeline:
         )
 
     def _pending_simulation_targets(self, pool: list[Candidate]) -> list[Candidate]:
-        return [
-            candidate
-            for candidate in pool
-            if candidate.simulation_id
-            and not candidate.official_metrics
-            and candidate.lifecycle_status
-            not in {
-                "simulation_failed",
-                "simulation_poll_failed",
-                "simulation_request_failed",
-                "official_standard_rejected",
-                "submission_ready",
-            }
-        ]
+        return pending_simulation_targets(pool)
 
     def _fill_backtest_slots(
         self,
         cycle: int,
-        state: _CycleState,
+        state: CycleState,
     ):
         if self.official_calls_halted:
             return
@@ -2814,115 +2398,16 @@ class AlphaResearchPipeline:
         pool_by_expression: dict[str, Candidate],
         archive_stats: dict[str, int],
     ) -> dict:
-        ready = [candidate for candidate in candidates if candidate.gate.get("submission_ready")]
-        pool_values = list(pool_by_expression.values())
-        candidate_pool = self._candidate_pool_candidates(pool_values)
-        pending_backtests = self._pending_backtest_candidates(pool_values)
-        validation_attempted = self.official_validation_attempted_count
-        validation_passed = self.official_validation_passed_count
-        auto_allowed = [
-            candidate
-            for candidate in ready
-            if not self._assess_auto_submission(candidate, 0)["failed_reasons"]
-        ]
-        active_backtest_limit = self._active_backtest_limit()
-        return {
-            "total_candidates": self.produced_count,
-            "produced_count": self.produced_count,
-            "retained_pool_size": len(candidate_pool),
-            "candidate_pool_available_count": len(candidate_pool),
-            "candidate_pool_source_count": len(pool_values),
-            "candidate_pool_excludes_waiting_backtests": True,
-            "retained_pool_limit": self.config.budget.retained_alpha_pool_size,
-            "rejected_count": sum(archive_stats.values()),
-            "rejected_stats": dict(archive_stats),
-            "archive_count": sum(archive_stats.values()),
-            "archive_stats": dict(archive_stats),
-            "backtest_batch_size": self.config.budget.official_backtest_batch_size,
-            "backtest_slot_limit": active_backtest_limit,
-            "backtests_submitted": self.backtests_submitted,
-            "recovered_backtest_slot_count": self.recovered_backtest_slot_count,
-            "local_ranked": sum(1 for candidate in candidates if candidate.scorecard.get("score_basis") == "local_prior"),
-            "official_validation_attempted": validation_attempted,
-            "official_validation_passed": validation_passed,
-            "pending_validation_count": len(self._validation_targets(pool_values)),
-            "officially_simulated": self.officially_simulated_count,
-            "official_deferred": sum(1 for candidate in candidates if str(candidate.lifecycle_status).startswith("simulation_deferred")),
-            "simulation_retry_pending": sum(1 for candidate in pool_values if candidate.lifecycle_status == "simulation_retry_pending"),
-            "secondary_fusion_candidates": sum(1 for candidate in pool_values if candidate.mutation_type == "secondary_fusion"),
-            "pending_backtest_count": len(pending_backtests),
-            "submission_ready": len(ready),
-            "ready_results_count": len(ready),
-            "auto_submit_ready": len(auto_allowed),
-            "submitted_this_run": submitted_this_run,
-            "best_score": max((candidate.scorecard.get("total_score", 0.0) for candidate in candidates), default=0.0),
-            "operating_mode": "local_autonomous_loop_top10_top3",
-            "run_forever": self.config.budget.run_forever,
-            "official_calls_halted": self.official_calls_halted,
-            "official_halt_reason": self.official_halt_reason,
-            "observability_throttle": dict(self.observability_throttle),
-            "observability_generation_guidance": dict(self.observability_generation_guidance),
-            "observability_official_call_guard": self._observability_official_call_guard_snapshot(),
-            "official_context": dict(self.context_summary),
-            "backtest_slots": self._slot_snapshot(),
-            "strategy_profile": self._current_strategy_profile(),
-            "strategy_switch_count": self.strategy_switch_count,
-            "strategy_lifecycle": self.strategy_lifecycle.summary(
-                active_profile=self._current_strategy_profile(),
-                active_index=self.strategy_profile_index,
-            ),
-            "strategy_plugins": self._strategy_plugin_summary(),
-            "cloud_sync": dict(self.cloud_sync),
-            "cloud_alphas": list(self.cloud_alphas),
-            "lifecycle_records": list(self.lifecycle_records),
-            "backtest_records": list(self.backtest_records[-50:]),
-            "convergence": self.convergence.summary(),
-            "candidates": self._candidate_snapshot(candidate_pool),
-            "passed_candidates": self._candidate_snapshot(ready, limit=50, retained=False),
-            "pending_backtest_candidates": self._candidate_snapshot(pending_backtests, limit=50, retained=False),
-            "official_call_policy": {
-                "local_first": True,
-                "retained_alpha_pool_size": self.config.budget.retained_alpha_pool_size,
-                "official_backtest_batch_size": self.config.budget.official_backtest_batch_size,
-                "max_official_validations_per_cycle": self.config.budget.max_official_validations_per_cycle,
-                "max_official_simulations_per_cycle": self.config.budget.max_official_simulations_per_cycle,
-                "max_official_concurrent_simulations": self.config.budget.max_official_concurrent_simulations,
-                "active_backtest_slot_limit": active_backtest_limit,
-                "max_simulation_retries": self.config.budget.max_simulation_retries,
-                "enable_secondary_fusion": self.config.budget.enable_secondary_fusion,
-                "resume_persisted_backtests": getattr(self.config.budget, "resume_persisted_backtests", True),
-                "poll_interval_seconds": self._poll_interval_seconds(),
-                "poll_attempt_limit": None,
-                "min_prior_score_for_official_validation": self.config.budget.min_prior_score_for_official_validation,
-                "min_prior_score_for_official_simulation": self.config.budget.min_prior_score_for_official_simulation,
-            },
-            "can_complete_goal": {
-                "local_production_evaluation_ranking_loop": True,
-                "retains_top_10_before_backtest": True,
-                "submits_top_3_backtests_per_cycle": True,
-                "waits_for_backtest_results": True,
-                "screen_progress_updates": True,
-                "caveat": "Official rate limits can still defer a batch; deferred candidates are not treated as alpha-quality failures.",
-            },
-            # P2-8: CLI-readable summary fields
-            "user_profile": self.user_profile,
-            "score_distribution": _compute_score_distribution(candidates),
-            "gate_summary": _compute_gate_summary(candidates),
-            "auto_submitted": submitted_this_run,
-        }
+        return self._snapshot_builder().summary(
+            candidates,
+            submitted_this_run,
+            pool_by_expression,
+            archive_stats,
+            self._snapshot_state(),
+        )
 
     def _candidate_snapshot(self, pool: list[Candidate], *, limit: int | None = None, retained: bool = True) -> list[dict]:
-        limit = self.config.budget.retained_alpha_pool_size if limit is None else max(0, int(limit))
-        return [
-            {
-                **candidate.to_dict(),
-                "pool_rank": index,
-                "in_retained_pool": retained,
-                "smart_rank_score": self._smart_ranking_score(candidate),
-                "cloud_correlation_risk": self._cloud_correlation_risk(candidate),
-            }
-            for index, candidate in enumerate(self._smart_rank_candidates(pool)[:limit], start=1)
-        ]
+        return self._snapshot_builder().candidate_snapshot(pool, limit=limit, retained=retained)
 
     def _archive(
         self,
@@ -2945,25 +2430,10 @@ class AlphaResearchPipeline:
                 archive_samples.append(candidate)
 
     def _refresh_cloud_similarity_index(self) -> None:
-        rows: list[dict[str, object]] = []
-        for row in self.cloud_alphas:
-            expr = _cloud_row_expression(row)
-            norm = normalize(expr)
-            rows.append(
-                {
-                    "id": str(row.get("id") or row.get("alpha_id") or ""),
-                    "status": str(row.get("status", "")),
-                    "expression": expr,
-                    "norm": norm,
-                    "tokens": set(norm.split()) if norm else set(),
-                }
-            )
-        self._cloud_similarity_rows = rows
+        self._cloud_similarity_rows = build_cloud_similarity_rows(self.cloud_alphas)
         self._cloud_risk_cache.clear()
 
     def _cloud_correlation_risk(self, candidate: Candidate) -> dict:
-        if not self.cloud_alphas:
-            return {"level": "unknown", "max_similarity": 0.0, "matched_alpha_id": "", "note": "cloud alpha sync unavailable"}
         official_alpha_id = candidate.official_alpha_id or candidate.official_metrics.get("official_alpha_id", "")
         if not self._cloud_similarity_rows:
             self._refresh_cloud_similarity_index()
@@ -2971,137 +2441,34 @@ class AlphaResearchPipeline:
         cached = self._cloud_risk_cache.get(cache_key)
         if cached is not None:
             return dict(cached)
-        candidate_norm = normalize(candidate.expression)
-        candidate_tokens = set(candidate_norm.split()) if candidate_norm else set()
-        best = {"score": 0.0, "id": "", "status": ""}
-        top_matches: list[tuple[float, dict[str, object]]] = []
-        for row in self._cloud_similarity_rows:
-            row_id = str(row.get("id") or "")
-            if official_alpha_id and row_id == official_alpha_id:
-                continue
-            row_tokens = row.get("tokens") or set()
-            union = candidate_tokens | row_tokens
-            score = (len(candidate_tokens & row_tokens) / len(union)) if union else 0.0
-            if score > best["score"]:
-                best = {"score": round(score, 4), "id": row_id, "status": str(row.get("status", ""))}
-            if score > 0.0:
-                top_matches.append((score, row))
-                if len(top_matches) > 25:
-                    top_matches.sort(key=lambda item: item[0], reverse=True)
-                    del top_matches[25:]
-        for token_score, row in sorted(top_matches, key=lambda item: item[0], reverse=True):
-            ast_score = expression_similarity(candidate.expression, str(row.get("expression") or ""))
-            score = round(max(token_score, ast_score), 4)
-            if score > best["score"]:
-                best = {"score": score, "id": str(row.get("id") or ""), "status": str(row.get("status", ""))}
-        level = "high" if best["score"] >= 0.90 else "medium" if best["score"] >= 0.75 else "low"
-        result = {
-            "level": level,
-            "max_similarity": best["score"],
-            "matched_alpha_id": best["id"],
-            "matched_status": best["status"],
-            "note": "用于避免自相关/重复提交，不用于绕过合规限制",
-        }
+        result = cloud_correlation_risk(
+            candidate,
+            self._cloud_similarity_rows,
+            official_alpha_id=official_alpha_id,
+        )
         self._cloud_risk_cache[cache_key] = dict(result)
         return result
 
     def _cloud_status_for_candidate(self, candidate: Candidate) -> dict:
-        official_alpha_id = candidate.official_alpha_id or candidate.official_metrics.get("official_alpha_id", "")
-        candidate_expr_key = _expr_key(candidate)
-        for row in self.cloud_alphas:
-            row_id = str(row.get("id") or row.get("alpha_id") or "")
-            if official_alpha_id and row_id == official_alpha_id:
-                return {"id": row_id, "status": str(row.get("status", "")), "match": "official_id"}
-        for row in self.cloud_alphas:
-            row_expression = expression_key(_cloud_row_expression(row))
-            if candidate_expr_key and row_expression == candidate_expr_key:
-                return {"id": str(row.get("id") or row.get("alpha_id") or ""), "status": str(row.get("status", "")), "match": "expression"}
-        return {"id": "", "status": "", "match": "none"}
+        return cloud_status_for_candidate(candidate, self.cloud_alphas)
 
     def _remember_accepted(self, accepted_candidates: list[Candidate], candidate: Candidate):
-        key = _expr_key(candidate)
-        if any(_expr_key(item) == key for item in accepted_candidates):
-            return
-        candidate.lifecycle_status = "submission_ready"
-        accepted_candidates.append(candidate)
-        accepted_candidates.sort(key=_ranking_score, reverse=True)
-        del accepted_candidates[50:]
+        remember_accepted(accepted_candidates, candidate)
 
     def _smart_rank_candidates(self, candidates: list[Candidate]) -> list[Candidate]:
-        return sorted(
-            candidates,
-            key=lambda candidate: (
-                bool(candidate.gate.get("submission_ready")),
-                bool(candidate.official_metrics),
-                self._smart_ranking_score(candidate),
-                candidate.scorecard.get("local_rank_score", 0.0),
-                candidate.local_quality.get("score", 0.0),
-            ),
-            reverse=True,
-        )
+        return smart_rank_candidates(candidates, self._cloud_correlation_risk)
 
     def _smart_ranking_score(self, candidate: Candidate) -> float:
-        score = _ranking_score(candidate)
-        risk = self._cloud_correlation_risk(candidate)
-        if risk.get("level") == "high":
-            score -= 30.0
-        elif risk.get("level") == "medium":
-            score -= 10.0
-        return round(score, 2)
+        return smart_ranking_score(candidate, self._cloud_correlation_risk(candidate))
 
     def _slot_snapshot(self) -> list[dict]:
-        active_limit = self._active_backtest_limit()
-        rows = []
-        for slot in range(1, active_limit + 1):
-            candidate = self.backtest_slot_manager.get(slot)
-            if not candidate:
-                status = "CAPACITY_WAIT" if self.official_calls_halted else "EMPTY"
-                rows.append(
-                    {
-                        "slot": slot,
-                        "alpha_id": "",
-                        "simulation_id": "",
-                        "status": status,
-                        "official_alpha_id": "",
-                        "score": 0.0,
-                        "poll_count": 0,
-                        "progress_percent": 0,
-                        "next_poll_seconds": 0,
-                        "message": (
-                            f"官方调用暂停：{self.official_halt_reason}"
-                            if self.official_calls_halted
-                            else "等待候选补位"
-                        ),
-                    }
-                )
-                continue
-            status = candidate.submission.get("simulation_status") or candidate.lifecycle_status
-            next_poll_at = float(candidate.submission.get("next_poll_at", 0.0) or 0.0)
-            rows.append(
-                {
-                    "slot": slot,
-                    "alpha_id": candidate.alpha_id,
-                    "simulation_id": candidate.simulation_id,
-                    "status": status,
-                    "lifecycle_status": candidate.lifecycle_status,
-                    "official_alpha_id": candidate.official_alpha_id,
-                    "score": candidate.scorecard.get("total_score", 0.0),
-                    "family": candidate.family,
-                    "hypothesis": candidate.hypothesis,
-                    "expression": candidate.expression,
-                    "scorecard": candidate.scorecard,
-                    "local_quality": candidate.local_quality,
-                    "validation": candidate.validation,
-                    "official_metrics": candidate.official_metrics,
-                    "gate": candidate.gate,
-                    "cloud_correlation_risk": self._cloud_correlation_risk(candidate),
-                    "poll_count": candidate.submission.get("poll_count", 0),
-                    "progress_percent": _slot_progress_percent(status),
-                    "next_poll_seconds": round(max(0.0, next_poll_at - time.monotonic()), 1),
-                    "message": _slot_message(status),
-                }
-            )
-        return rows
+        return backtest_slot_snapshot(
+            active_limit=self._active_backtest_limit(),
+            candidate_at_slot=self.backtest_slot_manager.get,
+            official_calls_halted=self.official_calls_halted,
+            official_halt_reason=self.official_halt_reason,
+            cloud_correlation_risk=self._cloud_correlation_risk,
+        )
 
     def _active_backtest_limit(self) -> int:
         return min(
@@ -3111,16 +2478,7 @@ class AlphaResearchPipeline:
         )
 
     def _backtest_snapshot(self, candidates: list[Candidate]) -> list[dict]:
-        return [
-            {
-                "alpha_id": candidate.alpha_id,
-                "simulation_id": candidate.simulation_id,
-                "status": candidate.submission.get("simulation_status") or candidate.lifecycle_status,
-                "official_alpha_id": candidate.official_alpha_id,
-                "score": candidate.scorecard.get("total_score", 0.0),
-            }
-            for candidate in candidates
-        ]
+        return self._snapshot_builder().backtest_snapshot(candidates)
 
     def _should_stop(self) -> bool:
         return bool(self.stop_callback and self.stop_callback())
@@ -3183,47 +2541,6 @@ class AlphaResearchPipeline:
             self.progress_callback(payload)
 
 
-def rank_candidates(candidates: list[Candidate]) -> list[Candidate]:
-    return sorted(
-        candidates,
-        key=lambda c: (
-            bool(c.gate.get("submission_ready")),
-            bool(c.official_metrics),
-            _ranking_score(c),
-            c.scorecard.get("local_rank_score", 0.0),
-            c.local_quality.get("score", 0.0),
-        ),
-        reverse=True,
-    )
-
-
-def _ranking_score(candidate: Candidate) -> float:
-    return float(candidate.scorecard.get("total_score", 0.0) or 0.0)
-
-
-def _assistant_guidance_for_generator(guidance: dict) -> dict:
-    if not guidance or guidance.get("ok") is False:
-        return {}
-    if not _truthy(guidance.get("usable", True)):
-        return {}
-    top_operators = _unique_strings(guidance.get("top_operators"))
-    preferred_windows = _unique_numbers(guidance.get("preferred_windows"))
-    field_combinations = _field_combinations(guidance.get("field_combinations"))
-    top_fields = _unique_strings(guidance.get("top_fields"))
-    if top_fields:
-        field_combinations = _unique_field_combinations(
-            field_combinations + [{"fields": top_fields, "rationale": "assistant top fields"}]
-        )
-    if not top_operators and not preferred_windows and not field_combinations:
-        return {}
-    return {
-        "sample_size": max(3, _safe_int(guidance.get("sample_size"), 0)),
-        "top_operators": top_operators,
-        "preferred_windows": preferred_windows,
-        "field_combinations": field_combinations,
-    }
-
-
 def _attach_assistant_guidance(candidate: Candidate, guidance: dict) -> None:
     guidance = ensure_assistant_guidance_digest(guidance)
     digest = str(guidance.get("guidance_digest") or "")
@@ -3236,234 +2553,3 @@ def _attach_assistant_guidance(candidate: Candidate, guidance: dict) -> None:
     submission.update(assistant_guidance_candidate_metadata(guidance))
     candidate.submission = submission
 
-
-def _truthy(value) -> bool:
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, str):
-        return value.strip().lower() not in {"0", "false", "no", "off"}
-    return bool(value)
-
-
-def _string_items(value) -> list[str]:
-    if value is None:
-        return []
-    values = value if isinstance(value, list) else [value]
-    return [str(item).strip() for item in values if str(item).strip()]
-
-
-def _unique_strings(value) -> list[str]:
-    seen: set[str] = set()
-    unique: list[str] = []
-    for item in _string_items(value):
-        marker = item.lower()
-        if marker in seen:
-            continue
-        seen.add(marker)
-        unique.append(item)
-    return unique
-
-
-def _number_items(value) -> list[int | float]:
-    if value is None:
-        return []
-    values = value if isinstance(value, list) else [value]
-    rows: list[int | float] = []
-    for item in values:
-        try:
-            number = float(item)
-        except (TypeError, ValueError):
-            continue
-        if number != number or number in (float("inf"), float("-inf")):
-            continue
-        rows.append(int(number) if number.is_integer() else number)
-    return rows
-
-
-def _unique_numbers(value) -> list[int | float]:
-    seen: set[float] = set()
-    unique: list[int | float] = []
-    for item in _number_items(value):
-        marker = float(item)
-        if marker in seen:
-            continue
-        seen.add(marker)
-        unique.append(item)
-    return unique
-
-
-def _field_combinations(value) -> list[dict]:
-    if not isinstance(value, list):
-        return []
-    rows: list[dict] = []
-    for item in value:
-        if isinstance(item, dict):
-            fields = _unique_strings(item.get("fields") or item.get("field") or item.get("value"))
-            rationale = str(item.get("rationale") or "")
-        else:
-            fields = _unique_strings(item)
-            rationale = ""
-        if fields:
-            rows.append({"fields": fields, "rationale": rationale})
-    return rows
-
-
-def _unique_field_combinations(value) -> list[dict]:
-    seen: set[tuple[str, ...]] = set()
-    unique: list[dict] = []
-    for combo in _field_combinations(value):
-        fields = _unique_strings(combo.get("fields"))
-        marker = tuple(field.lower() for field in fields)
-        if not marker or marker in seen:
-            continue
-        seen.add(marker)
-        unique.append({"fields": fields, "rationale": str(combo.get("rationale") or "")})
-    return unique
-
-
-def _safe_int(value, default: int) -> int:
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return default
-
-
-def _is_hard_backtest_blocked(status: str) -> bool:
-    text = str(status or "").lower()
-    if "simulation_deferred_concurrency_limit" in text or "simulation_deferred_rate_limit" in text:
-        return False
-    return any(
-        marker in text
-        for marker in (
-            "official_validation_failed",
-            "observability_duplicate_blocked",
-            "local_standard_rejected",
-            "official_standard_rejected",
-            "simulation_request_failed",
-            "simulation_poll_failed",
-            "simulation_result_failed",
-            "simulation_failed",
-            "simulation_timeout",
-            "rejected",
-        )
-    )
-
-
-def _merge_context_defaults(items: list[dict], defaults: list[dict]) -> list[dict]:
-    merged = list(items)
-    seen = {str(item.get("name", "")).lower() for item in merged if item.get("name")}
-    for item in defaults:
-        name = str(item.get("name", "")).lower()
-        if name and name not in seen:
-            merged.append(dict(item))
-            seen.add(name)
-    return merged
-
-
-def _expr_key(candidate: Candidate) -> str:
-    return expression_key(candidate.expression)
-
-
-def _cloud_row_expression(row: dict) -> str:
-    expression = row.get("expression", "")
-    if isinstance(expression, dict):
-        code = expression.get("code") or expression.get("regular")
-        if code:
-            return str(code)
-    regular = row.get("regular")
-    if isinstance(regular, dict) and regular.get("code"):
-        return str(regular.get("code"))
-    raw = row.get("raw")
-    if isinstance(raw, dict):
-        raw_regular = raw.get("regular")
-        if isinstance(raw_regular, dict) and raw_regular.get("code"):
-            return str(raw_regular.get("code"))
-    return str(expression or "")
-
-
-def _blocked_gate(status: str, reasons: list[str]) -> dict:
-    return {
-        "schema_version": "production-gate-v2.1",
-        "submission_ready": False,
-        "status": status,
-        "failed_reasons": list(reasons),
-        "warnings": [],
-    }
-
-
-def _slot_progress_percent(status: str) -> int:
-    value = str(status or "").upper()
-    if value == "EMPTY":
-        return 0
-    if value == "CAPACITY_WAIT":
-        return 5
-    if value in {"SUBMITTED", "SIMULATION_SUBMITTED"}:
-        return 25
-    if value in {"RUNNING", "SIMULATION_RUNNING"}:
-        return 65
-    if value in {"COMPLETED", "OFFICIAL_SIMULATED", "SUBMISSION_READY"}:
-        return 100
-    if "DEFERRED" in value:
-        return 40
-    if "FAILED" in value or "REJECTED" in value:
-        return 100
-    return 50
-
-
-def _slot_message(status: str) -> str:
-    value = str(status or "").upper()
-    if value == "CAPACITY_WAIT":
-        return "官方并发容量占满，暂缓提交新回测。"
-    if value == "EMPTY":
-        return "等待排名靠前的候选 Alpha。"
-    if value in {"SUBMITTED", "SIMULATION_SUBMITTED"}:
-        return "已提交，等待官方开始计算。"
-    if value in {"RUNNING", "SIMULATION_RUNNING"}:
-        return "官方回测运行中，按 6 秒节奏顺序轮询。"
-    if value in {"COMPLETED", "OFFICIAL_SIMULATED", "SUBMISSION_READY"}:
-        return "回测完成，结果已进入评价/排序。"
-    if "DEFERRED" in value:
-        return "官方限流或并发限制，保持本地生产并稍后恢复。"
-    if "FAILED" in value:
-        return "未达标，已进入生命周期回溯。"
-    if "REJECTED" in value:
-        return "未通过官方/本地门禁，已记录原因。"
-    return "状态更新中。"
-
-
-# ═══════════════════════════════════════════════════════════════════════
-# P2-8: CLI summary helpers
-# ═══════════════════════════════════════════════════════════════════════
-def _compute_score_distribution(candidates: list) -> dict:
-    """Compute score band distribution for display."""
-    from collections import Counter
-    dist = Counter()
-    for c in candidates:
-        s = c.scorecard.get("total_score", 0.0)
-        if s >= 85:    dist["submit (≥85)"] += 1
-        elif s >= 70:  dist["optimize (70-84)"] += 1
-        elif s >= 50:  dist["research (50-69)"] += 1
-        else:          dist["abandon (<50)"] += 1
-    return dict(dist)
-
-
-def _compute_gate_summary(candidates: list) -> dict:
-    """Compute gate pass/fail/block summary for display."""
-    result = {"local_prefilter": {"pass": 0, "fail": 0, "block": 0},
-              "expression_validate": {"pass": 0, "fail": 0, "block": 0},
-              "official_simulation": {"pass": 0, "fail": 0, "block": 0},
-              "quality_gate": {"pass": 0, "fail": 0, "block": 0}}
-    for c in candidates:
-        if c.lifecycle_status == "local_prefilter_rejected":
-            result["local_prefilter"]["fail"] += 1
-        elif c.lifecycle_status in ("validation_rejected", "expression_invalid"):
-            result["expression_validate"]["fail"] += 1
-        elif c.lifecycle_status in ("simulation_failed", "simulation_rejected"):
-            result["official_simulation"]["fail"] += 1
-        elif c.gate.get("submission_ready"):
-            result["quality_gate"]["pass"] += 1
-        elif c.gate.get("hard_gate_blocked"):
-            result["quality_gate"]["block"] += 1
-        elif c.official_metrics:
-            result["quality_gate"]["fail"] += 1
-    return result

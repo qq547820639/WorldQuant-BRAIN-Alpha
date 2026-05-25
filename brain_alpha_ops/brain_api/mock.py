@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 import hashlib
+import os
 import re
 from typing import Any
 
@@ -55,6 +56,8 @@ def _init_from_official_loader():
     if _OFFICIAL_LOADED:
         return
     _OFFICIAL_LOADED = True
+    if str(os.getenv("BRAIN_ALPHA_OPS_MOCK_USE_OFFICIAL_CONTEXT", "")).strip().lower() not in {"1", "true", "yes", "on"}:
+        return
     try:
         from brain_alpha_ops.data import OfficialDataLoader
 
@@ -101,7 +104,7 @@ class MockBrainAPI:
             },
         }
 
-    def list_fields(self, query: str = "all", region: str = "", progress_callback=None) -> list[dict]:
+    def list_fields(self, query: str = "all", region: str = "", dataset: str = "", progress_callback=None) -> list[dict]:
         if query in ("", "all", None):
             items = list(FIELDS)
         else:

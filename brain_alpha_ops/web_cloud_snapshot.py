@@ -12,12 +12,13 @@ from typing import Any, Callable
 
 from brain_alpha_ops.config import load_run_config, runtime_project_root
 from brain_alpha_ops.data.cache_metadata import read_context_cache_metadata, write_context_cache_metadata
-from brain_alpha_ops.jsonl import read_jsonl_tail, read_jsonl_tail_with_stats
+from brain_alpha_ops.jsonl import read_jsonl_records, read_jsonl_tail, read_jsonl_tail_with_stats
 
 
 logger = logging.getLogger(__name__)
 
 CLOUD_SYNC_STALE_SECONDS = 24 * 60 * 60
+MAX_CACHED_USER_ALPHA_FILES = 50
 CONTEXT_CACHE_MANIFEST_SCHEMA = "official_context_cache_manifest.v1"
 OFFICIAL_CONTEXT_FILES = (
     ("fields_count", "official_fields.json"),
@@ -39,8 +40,8 @@ def storage_jsonl_path(filename: str, *, load_config: LoadConfig = load_run_conf
     return Path(config.ops.storage_dir) / filename
 
 
-def read_storage_jsonl(filename: str, *, limit: int = 500, load_config: LoadConfig = load_run_config) -> list[dict[str, Any]]:
-    return read_jsonl_tail(storage_jsonl_path(filename, load_config=load_config), limit=limit)
+def read_storage_jsonl(filename: str, *, limit: int | None = 500, load_config: LoadConfig = load_run_config) -> list[dict[str, Any]]:
+    return read_jsonl_records(storage_jsonl_path(filename, load_config=load_config), limit=limit)
 
 
 def read_storage_jsonl_stats(filename: str, *, limit: int = 500, load_config: LoadConfig = load_run_config) -> dict[str, Any]:
@@ -48,7 +49,7 @@ def read_storage_jsonl_stats(filename: str, *, limit: int = 500, load_config: Lo
 
 
 def cloud_alpha_snapshot(
-    limit: int = 10000,
+    limit: int | None = None,
     *,
     load_config: LoadConfig = load_run_config,
     runtime_root: RuntimeRoot = runtime_project_root,
@@ -93,20 +94,29 @@ def dedupe_cloud_alpha_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return deduped
 
 
-def latest_cached_user_alphas(limit: int = 10000, *, load_config: LoadConfig = load_run_config) -> list[dict[str, Any]]:
-    for path in cached_user_alpha_paths(load_config=load_config):
+def latest_cached_user_alphas(
+    limit: int | None = None,
+    *,
+    load_config: LoadConfig = load_run_config,
+    max_files: int = MAX_CACHED_USER_ALPHA_FILES,
+) -> list[dict[str, Any]]:
+    for path in cached_user_alpha_paths(load_config=load_config, max_files=max_files):
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
             continue
         rows = extract_alpha_rows(data)
         if rows:
-            return rows[-limit:]
+            return rows if limit is None else rows[-max(1, int(limit or 1)):]
     return []
 
 
-def latest_cached_user_alpha_path(*, load_config: LoadConfig = load_run_config) -> Path | None:
-    for path in cached_user_alpha_paths(load_config=load_config):
+def latest_cached_user_alpha_path(
+    *,
+    load_config: LoadConfig = load_run_config,
+    max_files: int = MAX_CACHED_USER_ALPHA_FILES,
+) -> Path | None:
+    for path in cached_user_alpha_paths(load_config=load_config, max_files=max_files):
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
@@ -116,13 +126,24 @@ def latest_cached_user_alpha_path(*, load_config: LoadConfig = load_run_config) 
     return None
 
 
-def cached_user_alpha_paths(*, load_config: LoadConfig = load_run_config) -> list[Path]:
+def cached_user_alpha_paths(
+    *,
+    load_config: LoadConfig = load_run_config,
+    max_files: int = MAX_CACHED_USER_ALPHA_FILES,
+) -> list[Path]:
     config = load_config()
     cache_dir = Path(config.ops.official_api.cache_dir)
     if not cache_dir.is_absolute():
         cache_dir = Path.cwd() / cache_dir
     try:
-        return sorted(cache_dir.glob("user_alphas_*.json"), key=lambda item: item.stat().st_mtime, reverse=True)
+        candidates = []
+        for path in cache_dir.glob("user_alphas_*.json"):
+            try:
+                candidates.append((path.stat().st_mtime, path))
+            except OSError:
+                continue
+        safe_max_files = max(1, int(max_files or MAX_CACHED_USER_ALPHA_FILES))
+        return [path for _mtime, path in sorted(candidates, reverse=True)[:safe_max_files]]
     except OSError:
         return []
 
@@ -274,10 +295,10 @@ def read_official_context_metadata(
         roots.append(Path(load_config().ops.storage_dir))
     except Exception as exc:
         logger.warning("failed to resolve configured storage dir for official context metadata: %s", safe_error_message(exc))
-    roots.extend([
-        runtime_root() / "data",
-        Path(__file__).resolve().parents[1] / "data",
-    ])
+        roots.extend([
+            runtime_root() / "data",
+            Path(__file__).resolve().parents[1] / "data",
+        ])
     seen: set[Path] = set()
     for root in roots:
         path = root / filename

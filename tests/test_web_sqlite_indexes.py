@@ -60,6 +60,7 @@ def test_sqlite_expression_lookup_payload_reads_expression_cache(tmp_path):
     assert payload["ok"] is True
     assert payload["exact_match"] is True
     assert payload["exact_records"][0]["alpha_id"] == "a1"
+    assert payload["similar_scan_limit"] == 2000
 
 
 def test_sqlite_record_lookup_payload_reads_record_cache(tmp_path):

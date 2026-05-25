@@ -21,25 +21,22 @@ import math
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional
 
-from brain_alpha_ops.config import OpsConfig, QualityThresholds, ScoringConfig
+from brain_alpha_ops.config import OpsConfig
 from brain_alpha_ops.jsonl import read_jsonl_records
 from brain_alpha_ops.models import Candidate
 
 from brain_alpha_ops.research.scoring import (
     build_scorecard,
-    calculate_fitness,
-    empirical_score,
     evaluate_quality_gate,
-    prior_score,
-    submission_checklist,
 )
 from brain_alpha_ops.scoring.attribution import (
     AttributionNode,
     build_attribution_tree,
     dim_explanation,
 )
+from brain_alpha_ops.scoring.gates import GateConfig, GateResult, OFFICIAL_HARD_GATE_NAMES
 
 logger = logging.getLogger(__name__)
 
@@ -47,27 +44,6 @@ logger = logging.getLogger(__name__)
 # ═══════════════════════════════════════════════════════════════════════
 # Data Structures
 # ═══════════════════════════════════════════════════════════════════════
-
-@dataclass
-class GateResult:
-    """Pass/Fail gate result with full traceability."""
-    gate_name: str
-    passed: bool
-    check_items: List[Dict[str, Any]] = field(default_factory=list)
-    failed_items: List[str] = field(default_factory=list)
-    threshold_source: str = "BRAIN_Official"
-    notes: List[str] = field(default_factory=list)
-
-    def to_dict(self) -> dict:
-        return {
-            "gate_name": self.gate_name,
-            "passed": self.passed,
-            "check_items": self.check_items,
-            "failed_items": self.failed_items,
-            "threshold_source": self.threshold_source,
-            "notes": self.notes,
-        }
-
 
 @dataclass
 class ScoringResult:
@@ -103,6 +79,10 @@ class ScoringResult:
     threshold_version: str = "CANONICAL_v2"
     scoring_schema: str = "scorecard-v2.3"
     config_hash: str = ""
+    score_basis: str = ""
+    settings_trace: Dict[str, Any] = field(default_factory=dict)
+    threshold_trace: Dict[str, Any] = field(default_factory=dict)
+    calibration: Dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict:
         return {
@@ -127,6 +107,10 @@ class ScoringResult:
             "threshold_version": self.threshold_version,
             "scoring_schema": self.scoring_schema,
             "config_hash": self.config_hash,
+            "score_basis": self.score_basis,
+            "settings_trace": self.settings_trace,
+            "threshold_trace": self.threshold_trace,
+            "calibration": self.calibration,
         }
 
     def attribution_report(self) -> str:
@@ -265,6 +249,10 @@ class OfficialScoringSystem:
             api_output_deviation=api_dev,
             deviation_details=dev_details,
             config_hash=self._config_hash(),
+            score_basis=scorecard.get("score_basis", ""),
+            settings_trace=scorecard.get("settings_trace", {}),
+            threshold_trace=self._threshold_trace(),
+            calibration=scorecard.get("calibration", {}),
         )
 
         # Track history
@@ -604,76 +592,40 @@ class OfficialScoringSystem:
             },
             "scoring": self.scoring.get_layer_weights(),
         }, sort_keys=True)
-        return hashlib.md5(data.encode()).hexdigest()[:12]
+        return hashlib.sha256(data.encode()).hexdigest()[:12]
+
+    def _threshold_trace(self) -> Dict[str, Any]:
+        keys = [
+            "min_sharpe",
+            "min_sharpe_delay0",
+            "min_fitness",
+            "min_fitness_delay0",
+            "min_turnover",
+            "platform_max_turnover",
+            "max_self_correlation",
+            "max_prod_correlation",
+            "max_weight_concentration",
+            "sub_universe_sharpe_min_ratio",
+        ]
+        return {
+            key: {
+                "value": getattr(self.thresholds, key),
+                "source": "BRAIN_Official" if key != "max_prod_correlation" else "derived_from_SELF_CORRELATION",
+            }
+            for key in keys
+        }
 
     def _settings_for(self, candidate: Candidate) -> dict:
         submission = candidate.submission if isinstance(candidate.submission, dict) else {}
         stored = submission.get("settings")
         if isinstance(stored, dict) and stored:
-            return dict(stored)
-        return self.ops_config.settings.to_platform_dict()["settings"]
-
-
-# ═══════════════════════════════════════════════════════════════════════
-# Configurable Gate Builder
-# ═══════════════════════════════════════════════════════════════════════
-
-class GateConfig:
-    """Configurable Pass/Fail gate with zero-deviation thresholds."""
-
-    def __init__(self, thresholds: QualityThresholds):
-        self.thresholds = thresholds
-        self._gates: List[Dict[str, Any]] = []
-
-    @classmethod
-    def from_thresholds(cls, thresholds: QualityThresholds) -> "GateConfig":
-        return cls(thresholds)
-
-    def add_hard_gate(self, name: str, check_fn, description: str = "") -> "GateConfig":
-        self._gates.append({
-            "name": name,
-            "type": "HARD",
-            "check": check_fn,
-            "description": description,
-            "source": "BRAIN_Official",
-        })
-        return self
-
-    def add_soft_gate(self, name: str, check_fn, description: str = "") -> "GateConfig":
-        self._gates.append({
-            "name": name,
-            "type": "SOFT",
-            "check": check_fn,
-            "description": description,
-            "source": "Advisor_Standard",
-        })
-        return self
-
-    def evaluate(self, metrics: dict) -> GateResult:
-        passed_all = True
-        items = []
-        failed = []
-        for gate in self._gates:
-            passed = gate["check"](metrics, self.thresholds)
-            items.append({
-                "name": gate["name"],
-                "type": gate["type"],
-                "passed": passed,
-                "source": gate["source"],
-                "description": gate["description"],
-            })
-            if not passed:
-                failed.append(gate["name"])
-                if gate["type"] == "HARD":
-                    passed_all = False
-
-        return GateResult(
-            gate_name="CustomGating",
-            passed=passed_all,
-            check_items=items,
-            failed_items=failed,
-            threshold_source="Configurable",
-        )
+            trace = dict(stored)
+            trace.setdefault("type", str(submission.get("type") or self.ops_config.settings.type))
+            return trace
+        platform = self.ops_config.settings.to_platform_dict()
+        trace = dict(platform["settings"])
+        trace["type"] = platform["type"]
+        return trace
 
 
 # ═══════════════════════════════════════════════════════════════════════

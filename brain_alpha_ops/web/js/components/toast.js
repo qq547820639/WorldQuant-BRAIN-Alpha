@@ -8,7 +8,7 @@
   var $ = window.Utils.$;
   var escapeHtml = window.Utils.escapeHtml;
 
-  var ICONS = { success: '✓', error: '✗', warning: '⚠', info: 'ℹ' };
+  var ICONS = { success: 'OK', error: 'ERR', warning: '!', info: 'i' };
   var activeToasts = [];
   var MAX_VISIBLE = 5;
 
@@ -39,11 +39,17 @@
     toastEl.setAttribute('aria-live', 'polite');
 
     toastEl.innerHTML =
-      '<span class="toast-icon">' + (ICONS[type] || 'ℹ') + '</span>' +
+      '<span class="toast-icon">' + (ICONS[type] || 'i') + '</span>' +
       '<span class="toast-msg">' + escapeHtml(String(msg)) + '</span>' +
-      '<span class="toast-close" role="button" tabindex="0" aria-label="关闭通知" ' +
-      'onclick="event.stopPropagation();window.Toast.removeToast(this.parentElement)" ' +
-      'onkeydown="if(event.key===\'Enter\'){event.stopPropagation();window.Toast.removeToast(this.parentElement)}">✕</span>';
+      '<span class="toast-close" role="button" tabindex="0" aria-label="关闭通知">x</span>';
+
+    toastEl.addEventListener('keydown', function (event) {
+      var target = event.target || {};
+      if ((event.key !== 'Enter' && event.key !== ' ') || !(target.classList && target.classList.contains('toast-close'))) return;
+      if (event.preventDefault) event.preventDefault();
+      if (event.stopPropagation) event.stopPropagation();
+      removeToast(toastEl);
+    });
 
     // Click anywhere on toast to dismiss
     toastEl.addEventListener('click', function () { removeToast(toastEl); });

@@ -17,7 +17,7 @@ class StrategyPluginRegistry:
     plugins: dict[str, StrategyLifecyclePlugin] = field(default_factory=dict)
     load_errors: list[dict[str, str]] = field(default_factory=list)
     runtime_events: list[dict[str, Any]] = field(default_factory=list)
-    runtime_errors: list[dict[str, str]] = field(default_factory=list)
+    runtime_errors: list[dict[str, Any]] = field(default_factory=list)
 
     @classmethod
     def from_specs(cls, specs: list[str]) -> "StrategyPluginRegistry":

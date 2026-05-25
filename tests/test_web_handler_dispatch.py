@@ -1,10 +1,16 @@
 from __future__ import annotations
 
-from types import SimpleNamespace
+import dataclasses
 from urllib.parse import urlparse
 
-from brain_alpha_ops.web_handler_dispatch import WebHandlerDispatchContext, dispatch_get, dispatch_post
-from brain_alpha_ops.web_routes import route_for
+from brain_alpha_ops.web_handler_dispatch import (
+    _GET_DISPATCH_HANDLERS,
+    _POST_DISPATCH_HANDLERS,
+    WebHandlerDispatchContext,
+    dispatch_get,
+    dispatch_post,
+)
+from brain_alpha_ops.web_routes import GET_ROUTES, POST_ROUTES, route_for
 
 
 class _Store:
@@ -39,10 +45,11 @@ class _Lock:
 
 
 class _Handler:
-    def __init__(self, *, body=None, allowed=True, session=True):
+    def __init__(self, *, body=None, allowed=True, session=True, headers=None):
         self.body = body or {}
         self.allowed = allowed
         self.session = session
+        self.headers = headers or {}
         self.json_calls = []
         self.html_calls = []
         self.stream_queries = []
@@ -90,6 +97,8 @@ def _ctx():
         payload_truthy=lambda value: value not in (False, "false", "0", 0, None),
         bounded_query_int=lambda value, low, high: max(low, min(high, int(value))),
         bounded_query_float=lambda value, low, high: max(low, min(high, float(value))),
+        remote_admin_required=lambda: False,
+        has_valid_admin_token=lambda headers: headers.get("Authorization") == "Bearer admin-token",
         get_or_create_session=lambda existing: ("session_1", "csrf_1"),
         stream_token_for_session=lambda session_id: "stream_1",
         session_cookie_header=lambda session_id: f"cookie={session_id}",
@@ -107,7 +116,7 @@ def _ctx():
         public_run_config=lambda: {"environment": "mock"},
         latest_result_snapshot=lambda: {"ok": True, "source": "latest"},
         lifecycle_from_job=lambda job: [{"stage": "x"}],
-        cloud_alpha_snapshot=lambda: {"alphas": [], "summary": {}},
+        cloud_alpha_snapshot=lambda **kwargs: {"alphas": [], "summary": {"limit": kwargs.get("limit")}},
         research_memory_snapshot=lambda **kwargs: {"ok": True, "memory": kwargs},
         research_knowledge_snapshot=lambda **kwargs: {"ok": True, "knowledge": kwargs},
         research_observability_snapshot=lambda **kwargs: {"ok": True, "observability": kwargs},
@@ -125,6 +134,7 @@ def _ctx():
         load_presets=lambda: {"default": {}},
         connection_test_post_payload=lambda payload, handler: handler(payload),
         test_connection=lambda payload: {"ok": True, "dry_run": payload.get("dry_run")},
+        validate_run_payload=lambda payload: None,
         background_job_start_payload=lambda store, payload, starter, conflict_error: (starter("job_1", payload) or {"ok": True, "job_id": "job_1"}, 200),
         start_run_job=lambda job_id, payload: started.append(("run", job_id, payload)),
         stop_job_payload=lambda store, payload: {"ok": True, "stopped": payload.get("job_id", "")},
@@ -166,6 +176,20 @@ def test_dispatch_get_handles_root_status_and_query_bounds():
     dispatch_get(memory, urlparse("/api/research_memory?limit=3&top_n=2"), ctx)
     assert memory.json_calls[0][0]["memory"] == {"limit": 3, "top_n": 2}
 
+    cloud = _Handler()
+    dispatch_get(cloud, urlparse("/api/cloud_alphas?limit=25"), ctx)
+    assert cloud.json_calls[0][0]["summary"]["limit"] == 25
+
+    ctx.sync_jobs.rows["sync_1"] = {
+        "status": "completed",
+        "progress": {"phase": "cloud_sync"},
+        "result": {"ok": True, "alphas": [{"id": "a1"}], "count": 1},
+    }
+    sync_status = _Handler()
+    dispatch_get(sync_status, urlparse("/api/sync_status?job_id=sync_1&compact=1"), ctx)
+    assert "alphas" not in sync_status.json_calls[0][0]["result"]
+    assert sync_status.json_calls[0][0]["result"]["alphas_count"] == 1
+
     knowledge = _Handler()
     dispatch_get(knowledge, urlparse("/api/research_knowledge?limit=4&min_confidence=0.7"), ctx)
     assert knowledge.json_calls[0][0]["knowledge"] == {"limit": 4, "min_confidence": 0.7}
@@ -174,13 +198,33 @@ def test_dispatch_get_handles_root_status_and_query_bounds():
     dispatch_get(prompt_runs, urlparse("/api/prompt_runs?limit=6"), ctx)
     assert prompt_runs.json_calls[0][0]["prompt_runs"] == {"limit": 6}
 
+
+def test_dispatch_root_requires_admin_token_when_remote_admin_is_enabled():
+    ctx, _started, _lock = _ctx()
+    ctx = dataclasses.replace(ctx, remote_admin_required=lambda: True)
+
+    missing = _Handler()
+    dispatch_get(missing, urlparse("/"), ctx)
+    assert missing.json_calls[0][1] == 401
+    assert missing.json_calls[0][0]["error_code"] == "ADMIN_AUTH_REQUIRED"
+    assert missing.html_calls == []
+
+    allowed = _Handler(headers={"Authorization": "Bearer admin-token"})
+    dispatch_get(allowed, urlparse("/"), ctx)
+    assert allowed.html_calls == [("html csrf_1 stream_1", [("Set-Cookie", "cookie=session_1")])]
+
     sqlite = _Handler()
     dispatch_get(sqlite, urlparse("/api/sqlite_indexes?top_n=7"), ctx)
     assert sqlite.json_calls[0][0]["sqlite"] == {"top_n": 7}
 
     expression_lookup = _Handler()
-    dispatch_get(expression_lookup, urlparse("/api/sqlite_expression_lookup?expression=rank(close)&top_n=3&min_similarity=0.8"), ctx)
-    assert expression_lookup.json_calls[0][0]["expression_lookup"] == {"expression": "rank(close)", "top_n": 3, "min_similarity": 0.8}
+    dispatch_get(expression_lookup, urlparse("/api/sqlite_expression_lookup?expression=rank(close)&top_n=3&min_similarity=0.8&max_scan_rows=7"), ctx)
+    assert expression_lookup.json_calls[0][0]["expression_lookup"] == {
+        "expression": "rank(close)",
+        "top_n": 3,
+        "min_similarity": 0.8,
+        "max_scan_rows": 7,
+    }
 
     record_lookup = _Handler()
     dispatch_get(record_lookup, urlparse("/api/sqlite_record_lookup?alpha_id=a1&limit=4"), ctx)
@@ -193,6 +237,47 @@ def test_dispatch_get_handles_root_status_and_query_bounds():
     rolling = _Handler()
     dispatch_get(rolling, urlparse("/api/rolling_validation?candidate_id=a1&windows=5"), ctx)
     assert rolling.json_calls[0][0]["rolling"] == {"candidate_id": "a1", "windows": 5}
+
+
+def test_route_metadata_handlers_are_mapped():
+    assert {route.handler for route in GET_ROUTES.values()} <= set(_GET_DISPATCH_HANDLERS)
+    assert {route.handler for route in POST_ROUTES.values()} <= set(_POST_DISPATCH_HANDLERS)
+
+
+def test_dispatch_get_clamps_high_cost_history_limits():
+    ctx, _started, _lock = _ctx()
+
+    memory = _Handler()
+    dispatch_get(memory, urlparse("/api/research_memory?limit=999999"), ctx)
+    assert memory.json_calls[0][0]["memory"]["limit"] == 10000
+
+    observability = _Handler()
+    dispatch_get(observability, urlparse("/api/research_observability?limit=999999"), ctx)
+    assert observability.json_calls[0][0]["observability"]["limit"] == 10000
+
+    context = _Handler()
+    dispatch_get(context, urlparse("/api/assistant_context?limit=999999"), ctx)
+    assert context.json_calls[0][0]["context"]["limit"] == 10000
+
+    request = _Handler()
+    dispatch_get(request, urlparse("/api/assistant_request?limit=999999"), ctx)
+    assert request.json_calls[0][0]["request"]["limit"] == 10000
+
+    knowledge = _Handler()
+    dispatch_get(knowledge, urlparse("/api/research_knowledge?limit=999999"), ctx)
+    assert knowledge.json_calls[0][0]["knowledge"]["limit"] == 5000
+
+    prompt_runs = _Handler()
+    dispatch_get(prompt_runs, urlparse("/api/prompt_runs?limit=999999"), ctx)
+    assert prompt_runs.json_calls[0][0]["prompt_runs"]["limit"] == 5000
+
+    guidance = _Handler()
+    dispatch_get(guidance, urlparse("/api/assistant_guidance?limit=999999"), ctx)
+    assert guidance.json_calls[0][0]["guidance"]["limit"] == 5000
+
+    record_lookup = _Handler()
+    dispatch_get(record_lookup, urlparse("/api/sqlite_record_lookup?alpha_id=a1&limit=999999"), ctx)
+    assert record_lookup.json_calls[0][0]["record_lookup"]["limit"] == 500
 
 
 def test_dispatch_get_blocks_origin_missing_route_and_session():
@@ -229,6 +314,22 @@ def test_dispatch_post_starts_jobs_and_handles_submit_lock():
     review = _Handler(body={"request_pack": {}, "primary_response": "{}"})
     dispatch_post(review, urlparse("/api/assistant_cross_review"), ctx)
     assert review.json_calls[0][0]["review"] == {"request_pack": {}, "primary_response": "{}"}
+
+
+def test_dispatch_post_run_validates_before_starting_job():
+    ctx, started, _lock = _ctx()
+    ctx = dataclasses.replace(
+        ctx,
+        validate_run_payload=lambda _payload: (_ for _ in ()).throw(ValueError("settings.decay must be >= 0")),
+    )
+
+    run = _Handler(body={"settings": {"decay": -1}})
+    dispatch_post(run, urlparse("/api/run"), ctx)
+
+    assert run.json_calls[0][1] == 400
+    assert run.json_calls[0][0]["error_code"] == "RUN_ERROR"
+    assert "settings.decay" in run.json_calls[0][0]["error"]
+    assert started == []
 
 
 def test_dispatch_post_logout_and_shutdown_expire_session():

@@ -75,3 +75,36 @@ def test_scoring_health_reports_auto_calibration_status(monkeypatch, tmp_path):
     assert payload["auto_calibration"]["available"] is True
     assert payload["auto_calibration"]["total_pass_records"] == 2
     assert payload["auto_calibration"]["triggered"] is False
+
+
+def test_checkpoint_status_uses_configured_storage_for_resume_and_history(monkeypatch, tmp_path):
+    config = RunConfig(environment="mock")
+    config.ops.storage_dir = str(tmp_path)
+    checkpoint_dir = tmp_path / "checkpoints"
+    checkpoint_dir.mkdir()
+    (checkpoint_dir / "run_1.checkpoint.json").write_text(
+        '{"run_id":"run_1","phase_completed":"redline","candidates_generated":2,'
+        '"simulations_completed":1,"submissions_made":0,"cycle_number":1,'
+        '"timestamp":"2026-05-22T00:00:00+00:00","snapshot":{}}',
+        encoding="utf-8",
+    )
+    history_dir = tmp_path / "run_history"
+    history_dir.mkdir()
+    (history_dir / "run_1.json").write_text(
+        '{"run_id":"run_1","started_at":"2026-05-22T00:00:00+00:00",'
+        '"completed_at":"2026-05-22T00:01:00+00:00","status":"completed",'
+        '"phases":[{"status":"completed"}],"summary":{"total_candidates":2,"auto_submitted":0,"best_score":75}}',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(web_redline_scoring, "load_run_config", lambda: config)
+
+    payload = web_redline_scoring.handle_checkpoint_status({})
+
+    assert payload["ok"] is True
+    assert payload["storage_dir"] == str(tmp_path)
+    assert payload["resume_available"] is True
+    assert payload["latest"]["phase_completed"] == "redline"
+    assert payload["history_count"] == 1
+    assert payload["latest_history"]["run_id"] == "run_1"
+    assert payload["history_analytics"]["schema_version"] == "run_history_analytics.v1"
+    assert payload["history_analytics"]["latest"]["best_score"] == 75

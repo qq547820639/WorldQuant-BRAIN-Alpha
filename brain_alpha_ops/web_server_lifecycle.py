@@ -20,8 +20,8 @@ class SafeThreadingHTTPServer(ThreadingHTTPServer):
         # can raise UnicodeDecodeError on some Windows hosts.
         socketserver.TCPServer.server_bind(self)
         host, port = self.server_address[:2]
-        self.server_name = host if host else "localhost"
-        self.server_port = port
+        self.server_name = str(host) if host else "localhost"
+        self.server_port = int(port)
 
 
 def find_free_port(start: int, *, host: str, scan_limit: int = 100) -> int:
@@ -55,18 +55,19 @@ def serve(
     default_port: int,
     handler_class: type,
     stop_event: threading.Event,
-    configure_session_policy: Callable[[int | None, bool | None], None],
+    configure_session_policy: Callable[..., None],
     normalize_host: Callable[[str | None], str],
     loopback_bind_hosts: set[str] | frozenset[str],
     allow_remote: bool,
     session_ttl_seconds: int | None = None,
     allow_multiple_sessions: bool | None = None,
+    secure_cookies: bool | None = None,
     server_factory: Callable[[tuple[str, int], type], ThreadingHTTPServer] = SafeThreadingHTTPServer,
     browser_open: Callable[[str], Any] = webbrowser.open,
     thread_factory: Callable[..., threading.Thread] = threading.Thread,
 ) -> tuple[str, ThreadingHTTPServer]:
     stop_event.clear()
-    configure_session_policy(session_ttl_seconds, allow_multiple_sessions)
+    configure_session_policy(session_ttl_seconds, allow_multiple_sessions, secure_cookies)
     bind_host = normalize_host(host)
     if bind_host not in loopback_bind_hosts and not allow_remote:
         raise ValueError("remote web bind requires web.allow_remote=true")

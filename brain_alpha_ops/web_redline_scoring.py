@@ -255,12 +255,20 @@ def handle_checkpoint_status(query: dict[str, Any]) -> dict[str, Any]:
         gp = GuidedPipeline(config)
         checkpoints = gp.list_checkpoints()
         latest = gp.latest_checkpoint()
+        history = gp.list_history()
+        analytics = gp.history_analytics(limit=10)
         return {
             "ok": True,
             "schema_version": "checkpoint_status.v1",
+            "storage_dir": config.ops.storage_dir,
             "checkpoint_count": len(checkpoints),
             "checkpoints": checkpoints[:10],
             "latest": latest.to_dict() if latest else None,
+            "history_count": len(history),
+            "history": history[:10],
+            "latest_history": history[0] if history else None,
+            "history_analytics": analytics,
+            "latest_comparison": analytics.get("latest_comparison"),
             "resume_available": latest is not None,
         }
     except Exception as exc:

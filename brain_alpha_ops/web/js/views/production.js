@@ -160,6 +160,7 @@
       if (window._app.loadCloudSnapshot) window._app.loadCloudSnapshot();
       if (window._app.loadResearchMemory) window._app.loadResearchMemory();
     }
+    if (typeof window.loadCheckpointStatus === 'function') window.loadCheckpointStatus();
 
     _jobId = '';
   }
@@ -242,6 +243,42 @@
     updateRunButton();
   }
 
+  async function loadCheckpointStatus() {
+    var el = $('checkpointSummary');
+    try {
+      var data = await Api.get('/api/checkpoint/status');
+      if (!data || !data.ok) throw new Error((data && data.error) || '断点状态不可用');
+      S.set('checkpointStatus', data);
+      var checkpointCount = Number(data.checkpoint_count || 0);
+      var historyCount = Number(data.history_count || 0);
+      var latest = data.latest || {};
+      var latestHistory = data.latest_history || {};
+      var comparison = data.latest_comparison || {};
+      var deltas = comparison.deltas || {};
+      var phase = latest.phase_completed || latest.phase || '';
+      var status = latestHistory.status || '';
+      var parts = [];
+      parts.push(data.resume_available ? '断点可续跑' : '暂无断点');
+      parts.push('断点 ' + checkpointCount);
+      parts.push('历史 ' + historyCount);
+      if (phase) parts.push(window.Utils.phaseName(phase));
+      if (status) parts.push(status);
+      if (typeof deltas.best_score === 'number') parts.push('分数Δ ' + deltas.best_score);
+      if (typeof deltas.submission_ready === 'number') parts.push('达标Δ ' + deltas.submission_ready);
+      if (el) {
+        el.textContent = parts.join(' · ');
+        el.title = latest.run_id || latestHistory.run_id || '';
+      }
+      return data;
+    } catch (e) {
+      if (el) {
+        el.textContent = '断点状态不可用';
+        el.title = e.message || '';
+      }
+      return { ok: false, error: e.message || String(e) };
+    }
+  }
+
   // ── Init listener ──────────────────────────────────────────────────────
   S.onUpdate(function (path) {
     if (path === 'isRunning' || (path === 'activeJobId' && !S.get('isRunning'))) {
@@ -255,6 +292,7 @@
     return startProduction({ resume: true });
   };
   window.stopProduction = stopProduction;
+  window.loadCheckpointStatus = loadCheckpointStatus;
   window.connectSSE = connectSSE;
   window.disconnectSSE = disconnectSSE;
 })();

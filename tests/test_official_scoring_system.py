@@ -43,6 +43,11 @@ def test_official_scoring_uses_official_pass_fail_for_api_simulation():
     assert simulated["gate"]["submission_ready"] is True
     assert simulated["gate"]["reconstructed_hard_gate_passed"] is True
     assert result.api_output_deviation == 0.0
+    payload = result.to_dict()
+    assert payload["settings_trace"]["delay"] == 1
+    assert payload["settings_trace"]["type"] == "REGULAR"
+    assert payload["threshold_trace"]["min_sharpe"]["source"] == "BRAIN_Official"
+    assert payload["calibration"]["purpose"].startswith("Track whether local priors")
     assert set(simulated["checks"]) >= {
         "sharpe",
         "fitness",
@@ -104,7 +109,10 @@ def test_gate_config_and_score_history_are_structured(tmp_path):
         .evaluate({"sharpe": 1.8, "margin": 6.0})
     )
     assert gate.passed is True
+    assert gate.gate_name == "OFFICIAL_CONFIGURED_GATE"
+    assert gate.threshold_source == "BRAIN_Official"
     assert gate.check_items[0]["source"] == "BRAIN_Official"
+    assert gate.check_items[0]["zero_deviation"] is True
 
     history_path = tmp_path / "score_history.jsonl"
     db = ScoreHistoryDB(str(history_path))
@@ -140,3 +148,32 @@ def test_scoring_web_cli_compatibility_helpers(tmp_path):
     db = ScoreHistoryDB(str(tmp_path))
     db.append(result)
     assert (tmp_path / "score_history.jsonl").is_file()
+
+
+def test_gate_config_rejects_non_official_hard_gate():
+    scoring = OfficialScoringSystem()
+
+    try:
+        GateConfig(scoring.thresholds).add_hard_gate(
+            "drawdown",
+            lambda metrics, thresholds: metrics["drawdown"] <= thresholds.max_drawdown,
+        )
+    except ValueError as exc:
+        assert "not a BRAIN official hard check" in str(exc)
+    else:
+        raise AssertionError("GateConfig accepted a non-official hard gate")
+
+
+def test_gate_config_flags_configured_hard_gate_deviation():
+    scoring = OfficialScoringSystem()
+    gate = (
+        GateConfig(scoring.thresholds)
+        .add_hard_gate("sharpe", lambda _metrics, _thresholds: False)
+        .evaluate({"sharpe": 1.8, "fitness": 1.2, "turnover": 0.2})
+    )
+
+    assert gate.passed is False
+    assert gate.check_items[0]["official_passed"] is True
+    assert gate.check_items[0]["configured_passed"] is False
+    assert gate.check_items[0]["zero_deviation"] is False
+    assert "deviates from BRAIN official check" in gate.failed_items[0]

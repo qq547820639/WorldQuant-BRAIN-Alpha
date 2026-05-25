@@ -28,7 +28,7 @@ class ExpressionValidationIssue:
     detail: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
-        payload = {
+        payload: dict[str, Any] = {
             "code": self.code,
             "severity": self.severity,
             "message": self.message,

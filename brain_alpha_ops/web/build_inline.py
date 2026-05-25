@@ -13,13 +13,31 @@ WEB_DIR = Path(__file__).resolve().parent
 TEMPLATE_PATH = WEB_DIR / "index_template.html"
 OUTPUT_PATH = WEB_DIR / "index.html"
 INLINE_PATTERN = re.compile(r"<!--\s*inline:(js/.+?\.js)\s*-->")
+INLINE_CSS_PATTERN = re.compile(r"<!--\s*inline-css:(css/.+?\.css)\s*-->")
 SCRIPT_TEMPLATE = "<script>\n{content}\n</script>"
+STYLE_TEMPLATE = "<style>\n{content}\n</style>"
 
 
 def build_inline(template_text: str, *, strict: bool = True) -> tuple[str, dict]:
     replaced = 0
+    css_replaced = 0
     missing: list[str] = []
     sources: list[str] = []
+    css_sources: list[str] = []
+
+    def replace_css_inline(match: re.Match) -> str:
+        nonlocal css_replaced
+        rel_path = match.group(1)
+        css_path = WEB_DIR / rel_path
+        if not css_path.is_file():
+            missing.append(rel_path)
+            if strict:
+                raise FileNotFoundError(f"inline CSS source not found: {rel_path}")
+            return match.group(0)
+        css_replaced += 1
+        css_sources.append(rel_path)
+        css_content = css_path.read_text(encoding="utf-8")
+        return STYLE_TEMPLATE.format(content=css_content)
 
     def replace_inline(match: re.Match) -> str:
         nonlocal replaced
@@ -35,8 +53,15 @@ def build_inline(template_text: str, *, strict: bool = True) -> tuple[str, dict]
         js_content = js_path.read_text(encoding="utf-8")
         return SCRIPT_TEMPLATE.format(content=js_content)
 
-    html = INLINE_PATTERN.sub(replace_inline, template_text)
-    return html, {"replaced": replaced, "missing": missing, "sources": sources}
+    html = INLINE_CSS_PATTERN.sub(replace_css_inline, template_text)
+    html = INLINE_PATTERN.sub(replace_inline, html)
+    return html, {
+        "replaced": replaced,
+        "css_replaced": css_replaced,
+        "missing": missing,
+        "sources": sources,
+        "css_sources": css_sources,
+    }
 
 
 def build(*, output_path: Path = OUTPUT_PATH, strict: bool = True, write: bool = True) -> dict:
