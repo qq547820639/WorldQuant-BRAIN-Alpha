@@ -62,6 +62,7 @@ def check_diagnostic_report(
     refresh = snapshot.get("official_refresh", {})
     validation = snapshot.get("official_context_validation", {})
     history = snapshot.get("history_replay", {})
+    parameter_audit = snapshot.get("parameter_audit", {})
     _expect(
         text,
         f"Red lines: {redline['overall']} ({redline['passed']}/{redline['total_checks']} passed",
@@ -72,6 +73,12 @@ def check_diagnostic_report(
         text,
         f"Official context: fields={context['fields']}, operators={context['operators']}, datasets={context['datasets']}",
         "official_context_counts",
+        findings,
+    )
+    _expect(
+        text,
+        f"Parameter audit: hash={str(parameter_audit.get('config_hash', ''))[:12]}",
+        "parameter_audit_hash",
         findings,
     )
     _expect(text, f"Official refresh: status={refresh.get('status')}", "official_refresh_status", findings)

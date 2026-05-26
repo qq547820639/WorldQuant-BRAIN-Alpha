@@ -14,6 +14,7 @@ from brain_alpha_ops.config import RunConfig, load_run_config
 from brain_alpha_ops.data.official_context_validation import validate_official_context
 from brain_alpha_ops.data.loader import OfficialDataLoader
 from brain_alpha_ops.models import Candidate
+from brain_alpha_ops.parameter_audit import build_parameter_audit_snapshot
 from brain_alpha_ops.scoring.official_scoring import OfficialScoringSystem
 from brain_alpha_ops.ux.history import RunHistoryAnalytics
 from brain_alpha_ops.web_cloud_snapshot import official_context_file_counts
@@ -48,6 +49,7 @@ def build_diagnostic_snapshot(config_path: str | Path | None = None) -> dict[str
     history_replay = _history_replay_status(run_config)
     official_refresh = _official_refresh_status(run_config)
     official_validation = validate_official_context(config_path=config_path)
+    parameter_audit = build_parameter_audit_snapshot(run_config, source="production_diagnostics")
     context_counts = _official_context_counts(loader, official_refresh)
     contract = _contract_comparison(
         run_config,
@@ -58,6 +60,7 @@ def build_diagnostic_snapshot(config_path: str | Path | None = None) -> dict[str
         history_replay,
         official_refresh,
         official_validation,
+        parameter_audit,
     )
     gap_matrix = _gap_matrix(
         run_config,
@@ -68,6 +71,7 @@ def build_diagnostic_snapshot(config_path: str | Path | None = None) -> dict[str
         history_replay,
         official_refresh,
         official_validation,
+        parameter_audit,
     )
     priorities = _priority_items(
         redline_report,
@@ -77,6 +81,7 @@ def build_diagnostic_snapshot(config_path: str | Path | None = None) -> dict[str
         history_replay,
         official_refresh,
         official_validation,
+        parameter_audit,
     )
 
     return {
@@ -94,6 +99,7 @@ def build_diagnostic_snapshot(config_path: str | Path | None = None) -> dict[str
         "official_context": context_counts,
         "official_refresh": official_refresh,
         "official_context_validation": official_validation,
+        "parameter_audit": parameter_audit,
         "contract_comparison": contract,
         "scoring_probe": scoring_probe,
         "frontend_inline": inline_status,
@@ -121,6 +127,11 @@ def render_one_page_markdown(snapshot: dict[str, Any]) -> str:
         f"- Verdict: {_report_verdict(snapshot)}",
         f"- Red lines: {redline['overall']} ({redline['passed']}/{redline['total_checks']} passed, {redline['failed']} blocking)",
         f"- Official context: fields={context['fields']}, operators={context['operators']}, datasets={context['datasets']}",
+        (
+            f"- Parameter audit: hash={snapshot.get('parameter_audit', {}).get('config_hash', '')[:12]}, "
+            f"sections={len(snapshot.get('parameter_audit', {}).get('traceable_sections', []))}, "
+            f"thresholds_zero_deviation={snapshot.get('parameter_audit', {}).get('thresholds_zero_deviation', False)}"
+        ),
         (
             f"- Context validation: blocking_ok={snapshot.get('official_context_validation', {}).get('blocking_ok', False)}, "
             f"p1_findings={snapshot.get('official_context_validation', {}).get('p1_count', 0)}, "
@@ -230,6 +241,7 @@ def _scoring_probe(run_config: RunConfig) -> dict[str, Any]:
         "config_hash": result.config_hash,
         "settings_trace": getattr(result, "settings_trace", {}),
         "threshold_trace": getattr(result, "threshold_trace", {}),
+        "attribution_summary": result.to_dict().get("attribution_summary", {}),
     }
 
 
@@ -325,6 +337,7 @@ def _contract_comparison(
     history_replay: dict[str, Any],
     official_refresh: dict[str, Any],
     official_validation: dict[str, Any],
+    parameter_audit: dict[str, Any],
 ) -> dict[str, Any]:
     thresholds = run_config.ops.thresholds
     threshold_diffs = {
@@ -348,6 +361,8 @@ def _contract_comparison(
         "frontend_inline_synced": inline_status["ok"],
         "history_replay_ready": history_replay.get("capability") == "ready",
         "official_refresh_recorded": official_refresh.get("last_attempt_status") != "not_recorded",
+        "parameter_audit_complete": bool(parameter_audit.get("ok")),
+        "parameter_audit_hash": parameter_audit.get("config_hash", ""),
     }
 
 
@@ -360,6 +375,7 @@ def _gap_matrix(
     history_replay: dict[str, Any],
     official_refresh: dict[str, Any],
     official_validation: dict[str, Any],
+    parameter_audit: dict[str, Any],
 ) -> list[GapRow]:
     lineage = official_validation.get("lineage") or {}
     validation_blocking_ok = bool(official_validation.get("blocking_ok"))
@@ -407,7 +423,11 @@ def _gap_matrix(
             "Thresholds, settings, API paths, and score config are traceable.",
             parameter_gap,
             "P1" if official_refresh.get("last_attempt_ok") is not True else "PASS",
-            f"config_hash={scoring_probe['config_hash']}, refresh_status={official_refresh.get('last_attempt_status')}",
+            (
+                f"config_hash={scoring_probe['config_hash']}, "
+                f"parameter_hash={str(parameter_audit.get('config_hash', ''))[:12]}, "
+                f"refresh_status={official_refresh.get('last_attempt_status')}"
+            ),
             parameter_upgrade,
         ),
         GapRow(
@@ -451,6 +471,7 @@ def _priority_items(
     history_replay: dict[str, Any],
     official_refresh: dict[str, Any],
     official_validation: dict[str, Any],
+    parameter_audit: dict[str, Any],
 ) -> list[PriorityItem]:
     items: list[PriorityItem] = []
     if not redline_report.ok:
@@ -467,6 +488,8 @@ def _priority_items(
         items.append(PriorityItem("P1", "official context refresh", "Official context metadata is stale or incomplete.", "Refresh official context with BRAIN credentials and rerun validation.", "python fetch_official_context.py --config config/run_config.json --json"))
     if official_refresh.get("last_attempt_ok") is not True:
         items.append(PriorityItem("P1", "official refresh", "Live BRAIN context refresh has not completed in the current evidence record.", "Run online refresh and keep the failure reason in the report if blocked.", "python fetch_official_context.py --config config/run_config.json --json"))
+    if not parameter_audit.get("ok"):
+        items.append(PriorityItem("P0", "parameter audit", "Runtime parameter audit snapshot has blocking findings.", "Fix threshold/API drift or missing trace sections.", "python scripts/check_diagnosis_gap_coverage.py --json"))
     if history_replay.get("capability") != "ready":
         items.append(PriorityItem("P2", "history replay", "Checkpoint/run-history analytics capability is unavailable.", "Restore RunHistoryAnalytics integration.", "python -m pytest tests/test_run_history_analytics.py tests/test_web_redline_scoring.py -q"))
     items.extend([
@@ -481,6 +504,7 @@ def _completed_items(history_replay: dict[str, Any]) -> list[str]:
         "Unified BRAIN contract comparison is quality-gated in default and strict-freshness modes.",
         "OfficialScoringSystem exposes API-shaped simulation, zero-deviation gates, traces, and attribution.",
         "Scoring settings trace covers the complete BRAIN platform settings envelope, including alpha type.",
+        "Run parameter audit snapshots cover ops.settings, ops.budget, ops.thresholds, ops.submission_policy, scoring, and official API paths.",
         "Web frontend inline bundle, syntax, and approved innerHTML sinks are quality-gated.",
         f"Checkpoint/run-history analytics are wired (history_count={history_replay.get('history_count', 0)}, comparison={history_replay.get('latest_comparison_available', False)}).",
         "Assistant context/request output includes redline, scoring, observability, anti-overfit, rolling-validation, and duplicate-expression evidence.",

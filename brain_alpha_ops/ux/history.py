@@ -96,6 +96,7 @@ class RunHistoryAnalytics:
             "phase_count": len(phases),
             "duration_seconds": _duration_seconds(payload),
             "checkpoint_path": str(payload.get("checkpoint_path") or ""),
+            "parameter_audit": _parameter_audit_summary(payload.get("parameter_audit")),
             "file": str(path) if path else "",
         }
 
@@ -194,6 +195,18 @@ def _num(value: Any) -> float:
         return float(value)
     except (TypeError, ValueError):
         return 0.0
+
+
+def _parameter_audit_summary(value: Any) -> dict[str, Any]:
+    audit = value if isinstance(value, dict) else {}
+    return {
+        "schema_version": str(audit.get("schema_version") or ""),
+        "ok": bool(audit.get("ok")) if audit else False,
+        "config_hash": str(audit.get("config_hash") or ""),
+        "traceable_sections": list(audit.get("traceable_sections") or []),
+        "thresholds_zero_deviation": bool(audit.get("thresholds_zero_deviation")) if audit else False,
+        "api_paths_aligned": bool(audit.get("api_paths_aligned")) if audit else False,
+    }
 
 
 def _history_file_sort_key(path: Path) -> tuple[str, float, str]:

@@ -81,7 +81,14 @@ class ResearchRepository:
     def save_strategy_lifecycle_record(self, run_id: str, record: dict[str, Any]) -> None:
         self._append("strategy_lifecycle.jsonl", strategy_lifecycle_record(run_id, record))
 
-    def save_run_history(self, run_id: str, result: dict[str, Any], *, status: str = "completed") -> Path:
+    def save_run_history(
+        self,
+        run_id: str,
+        result: dict[str, Any],
+        *,
+        status: str = "completed",
+        parameter_audit: dict[str, Any] | None = None,
+    ) -> Path:
         """Persist the latest run snapshot for UI recovery after app restart."""
         history_dir = Path(self.storage_dir) / "run_history"
         history_dir.mkdir(parents=True, exist_ok=True)
@@ -91,6 +98,8 @@ class ResearchRepository:
             "status": status,
             "timestamp": utc_now(),
         }
+        if parameter_audit is not None:
+            payload["parameter_audit"] = parameter_audit
         payload = _repository_safe(payload)
         with self._file_lock("run_history"):
             target = history_dir / f"{run_id}.json"

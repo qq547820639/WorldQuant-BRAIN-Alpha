@@ -23,7 +23,10 @@ def test_production_diagnostic_snapshot_has_gap_matrix(tmp_path):
     assert snapshot["history_replay"]["capability"] == "ready"
     assert snapshot["official_refresh"]["schema_version"] == "official_refresh_status.v1"
     assert snapshot["official_context_validation"]["schema_version"] == "official_context_validation.v1"
+    assert snapshot["parameter_audit"]["schema_version"] == "parameter_audit_snapshot.v1"
+    assert snapshot["parameter_audit"]["thresholds_zero_deviation"] is True
     assert snapshot["contract_comparison"]["history_replay_ready"] is True
+    assert snapshot["contract_comparison"]["parameter_audit_complete"] is True
     assert snapshot["frontend_inline"]["css_replaced"] == 1
     assert snapshot["frontend_inline"]["css_sources"] == ["css/app.css"]
     assert [row["dimension"] for row in snapshot["gap_matrix"]] == [
@@ -49,6 +52,7 @@ def test_production_diagnostic_markdown_renders_one_page_sections(tmp_path):
     assert "# Alpha Production Diagnosis and Gap Matrix" in markdown
     assert "## Gap Matrix" in markdown
     assert "Official refresh:" in markdown
+    assert "Parameter audit:" in markdown
     assert "Context validation:" in markdown
     assert "History replay:" in markdown
     assert "## Current Execution Checklist" in markdown

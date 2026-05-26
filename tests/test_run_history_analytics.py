@@ -21,6 +21,14 @@ def _write_run(path, run_id, *, best_score, candidates, ready, submitted, comple
                     "official_validation_attempted": candidates,
                     "official_validation_passed": ready,
                 },
+                "parameter_audit": {
+                    "schema_version": "parameter_audit_snapshot.v1",
+                    "ok": True,
+                    "config_hash": "abc123",
+                    "traceable_sections": ["ops.settings", "ops.thresholds"],
+                    "thresholds_zero_deviation": True,
+                    "api_paths_aligned": True,
+                },
             },
             ensure_ascii=False,
         ),
@@ -45,6 +53,8 @@ def test_run_history_analytics_compares_latest_with_previous(tmp_path):
     assert analytics["latest_comparison"]["deltas"]["submission_ready"] == 2
     assert analytics["latest_comparison"]["better_than_right"]["best_score"] is True
     assert analytics["trend"]["status"] == "ready"
+    assert analytics["latest"]["parameter_audit"]["schema_version"] == "parameter_audit_snapshot.v1"
+    assert analytics["latest"]["parameter_audit"]["thresholds_zero_deviation"] is True
 
 
 def test_run_history_analytics_loads_specific_comparison(tmp_path):

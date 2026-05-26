@@ -28,6 +28,7 @@ from typing import Any, Callable, Dict, List, Optional
 
 from brain_alpha_ops.config import RunConfig
 from brain_alpha_ops.models import Candidate, PipelineEvent, PipelineResult
+from brain_alpha_ops.parameter_audit import build_parameter_audit_snapshot
 from brain_alpha_ops.runner import run_pipeline_from_config
 from brain_alpha_ops.ux.history import RunHistoryAnalytics
 
@@ -120,6 +121,7 @@ class RunRecord:
     phases: List[Dict[str, Any]] = field(default_factory=list)
     summary: Dict[str, Any] = field(default_factory=dict)
     checkpoint_path: str = ""
+    parameter_audit: Dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict:
         return {
@@ -130,6 +132,7 @@ class RunRecord:
             "phases": self.phases,
             "summary": self.summary,
             "checkpoint_path": self.checkpoint_path,
+            "parameter_audit": self.parameter_audit,
         }
 
 
@@ -557,6 +560,10 @@ class GuidedPipeline:
             phases=[p.to_dict() for p in self.phases.values()],
             summary=result.summary,
             checkpoint_path=str(self._checkpoint_dir / f"{result.run_id}.checkpoint.json"),
+            parameter_audit=build_parameter_audit_snapshot(
+                self.run_config,
+                source="guided_pipeline",
+            ),
         )
 
         path = history_dir / f"{result.run_id}.json"
