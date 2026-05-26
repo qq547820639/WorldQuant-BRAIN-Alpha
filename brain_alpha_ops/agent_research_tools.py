@@ -72,6 +72,8 @@ def build_vectorized_market_data_from_args(storage_dir: str | Path, args: dict[s
         storage_dir,
         fields=field_list,
         limit_symbols=_bounded_int(args.get("limit_symbols", 200), 1, 5000),
+        min_field_coverage=_bounded_float(args.get("min_field_coverage", 0.0), 0.0, 1.0),
+        normalize=_truthy(args.get("normalize", False)),
     )
 
 
@@ -80,8 +82,16 @@ def build_vectorized_market_data_tool(
     *,
     fields: list[str] | None,
     limit_symbols: int,
+    min_field_coverage: float = 0.0,
+    normalize: bool = False,
 ) -> dict[str, Any]:
-    return build_vectorized_market_data(storage_dir, fields=fields, limit_symbols=limit_symbols)
+    return build_vectorized_market_data(
+        storage_dir,
+        fields=fields,
+        limit_symbols=limit_symbols,
+        min_field_coverage=min_field_coverage,
+        normalize=normalize,
+    )
 
 
 def search_parameters_tool(candidate: Candidate, *, max_mutations: int) -> dict[str, Any]:

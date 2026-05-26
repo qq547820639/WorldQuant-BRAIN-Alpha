@@ -251,7 +251,7 @@ def build_default_tool_registry() -> ToolRegistry:
         ToolDefinition(
             "build_vectorized_market_data",
             "Build a bounded symbol-by-feature matrix from the local market-data cache for vector-style screening.",
-            _schema({"fields": "array", "limit_symbols": "integer"}),
+            _schema({"fields": "array", "limit_symbols": "integer", "min_field_coverage": "number", "normalize": "boolean"}),
             category="data",
             chain_stage="vectorize",
         )

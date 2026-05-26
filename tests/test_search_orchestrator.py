@@ -19,3 +19,6 @@ def test_parameter_search_orchestrator_runs_bounded_rounds():
     assert result["budget"]["live_api_calls"] == 0
     assert result["result_count"] >= 1
     assert result["best_result"]
+    assert result["round_summaries"][0]["selected_count"] >= 1
+    assert result["budget"]["evaluated_candidates"] >= 1
+    assert result["termination_reason"] in {"round_budget_exhausted", "frontier_exhausted"}

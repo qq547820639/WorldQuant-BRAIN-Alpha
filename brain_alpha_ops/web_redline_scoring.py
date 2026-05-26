@@ -78,6 +78,7 @@ def handle_scoring_attribution(body: dict[str, Any]) -> dict[str, Any]:
     return {
         "ok": True,
         "attribution": result.get("attribution_tree"),
+        "attribution_summary": result.get("attribution_summary"),
         "hard_gates": result.get("hard_gates"),
         "soft_gates": result.get("soft_gates"),
         "top_failures": result.get("top_failures"),

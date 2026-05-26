@@ -53,6 +53,7 @@ class ParameterSearchService:
         diagnosis = diagnosis or diagnose(candidate, thresholds or _fallback_thresholds())
         mutations = self._bounded_mutations(candidate, diagnosis, max_mutations=max_mutations)
         ranked = self.rank(candidate, mutations, diagnosis=diagnosis)
+        requested_mutations = max(1, int(max_mutations or 1))
         return {
             "ok": True,
             "schema_version": "parameter_search_result.v1",
@@ -60,6 +61,17 @@ class ParameterSearchService:
             "candidate": candidate.to_dict(),
             "diagnosis": diagnosis,
             "mutation_count": len(mutations),
+            "unique_expression_count": len({item.candidate.expression for item in ranked}),
+            "budget": {
+                "requested_mutations": requested_mutations,
+                "evaluated_mutations": len(ranked),
+                "search_budget": self.search_budget,
+                "bounded": True,
+                "live_api_calls": 0,
+            },
+            "termination_reason": "budget_exhausted"
+            if len(ranked) >= min(requested_mutations, self.search_budget)
+            else "mutation_space_exhausted",
             "results": [item.to_dict() for item in ranked],
             "best_result": ranked[0].to_dict() if ranked else {},
         }
@@ -93,12 +105,18 @@ class ParameterSearchService:
     ) -> list[ParameterSearchResult]:
         diagnosis = diagnosis or {}
         results: list[ParameterSearchResult] = []
+        seen_expressions = {str(candidate.expression or "").strip().lower()}
         for index, mutation in enumerate(mutations):
-            if index >= self.search_budget:
+            if len(results) >= self.search_budget:
                 break
-            score = self._score_candidate(candidate, mutation.expression, diagnosis)
+            expression = str(getattr(mutation, "expression", "") or "").strip()
+            marker = expression.lower()
+            if not expression or marker in seen_expressions:
+                continue
+            seen_expressions.add(marker)
+            score = self._score_candidate(candidate, expression, diagnosis)
             mutated_candidate = Candidate.from_dict(candidate.to_dict())
-            mutated_candidate.expression = mutation.expression
+            mutated_candidate.expression = expression
             mutated_candidate.data_fields = list(getattr(mutation, "metadata", {}).get("data_fields") or candidate.data_fields)
             mutated_candidate.operators = list(getattr(mutation, "metadata", {}).get("operators") or candidate.operators)
             mutated_candidate.parent_id = candidate.alpha_id
@@ -114,6 +132,11 @@ class ParameterSearchService:
                     diagnosis=diagnosis,
                     mutation_mode=getattr(mutation, "mode", ""),
                     metadata={
+                        "rank_input_index": index,
+                        "lineage": {
+                            "parent_alpha_id": candidate.alpha_id,
+                            "parent_expression": candidate.expression,
+                        },
                         "reason": getattr(mutation, "reason", ""),
                         "parent_failure": getattr(mutation, "parent_failure", ""),
                     },

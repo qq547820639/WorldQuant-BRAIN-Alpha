@@ -1,7 +1,7 @@
 {
   "schema_version": "official_context_refresh.v1",
-  "generated_at": "2026-05-25T01:45:01.603233+00:00",
-  "started_at": "2026-05-25T01:37:14.066044+00:00",
+  "generated_at": "2026-05-26T02:01:41.766843+00:00",
+  "started_at": "2026-05-26T01:53:42.607282+00:00",
   "environment": "production",
   "storage_dir": "D:\\Works\\WorldQuant BRAIN Alpha\\data",
   "base_url": "https://api.worldquantbrain.com",
@@ -17,9 +17,9 @@
     "auth": "session_cookie"
   },
   "counts": {
-    "fields": 7642,
+    "fields": 7780,
     "operators": 66,
-    "datasets": 16
+    "datasets": 17
   },
   "before": {
     "fields": 7642,
@@ -29,17 +29,17 @@
     "manifest_stale": true
   },
   "after": {
-    "fields": 7642,
+    "fields": 7780,
     "operators": 66,
-    "datasets": 16,
+    "datasets": 17,
     "manifest_complete": true,
     "manifest_stale": false
   },
   "progress": {
     "fields": {
-      "events": 153,
-      "scanned": 7642,
-      "total": 7642,
+      "events": 156,
+      "scanned": 7780,
+      "total": 7780,
       "cached": false,
       "truncated": false,
       "warning": ""

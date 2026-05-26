@@ -48,6 +48,7 @@ def test_official_scoring_uses_official_pass_fail_for_api_simulation():
     assert payload["settings_trace"]["type"] == "REGULAR"
     assert payload["threshold_trace"]["min_sharpe"]["source"] == "BRAIN_Official"
     assert payload["calibration"]["purpose"].startswith("Track whether local priors")
+    assert payload["attribution_summary"]["visualization"]["node_count"] >= 1
     assert set(simulated["checks"]) >= {
         "sharpe",
         "fitness",

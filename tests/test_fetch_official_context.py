@@ -3,6 +3,7 @@ import json
 import pytest
 
 import fetch_official_context
+from brain_alpha_ops.brain_api.base import BrainAPIError
 from brain_alpha_ops.config import RunConfig, write_run_config
 from brain_alpha_ops.data.loader import (
     PACKAGED_OFFICIAL_CONTEXT_FILES,
@@ -42,6 +43,11 @@ class FakeOfficialBrainAPI:
         if progress_callback:
             progress_callback({"scanned": 1, "total": 1})
         return [{"id": "pv1", "name": "Price Volume", "field_count": 1}]
+
+
+class RateLimitedOfficialBrainAPI(FakeOfficialBrainAPI):
+    def list_fields(self, *_args, progress_callback=None):
+        raise BrainAPIError("HTTP 429: rate limit", status_code=429, retry_after=12)
 
 
 def _write_config(tmp_path):
@@ -99,6 +105,23 @@ def test_refresh_official_context_records_missing_credentials(tmp_path):
     assert result["error_code"] == "MISSING_CREDENTIALS"
     assert "environment variables" in result["error"]
     assert json.loads(status_path.read_text(encoding="utf-8"))["ok"] is False
+
+
+def test_refresh_official_context_records_retryable_rate_limit(monkeypatch, tmp_path):
+    monkeypatch.setattr(fetch_official_context, "OfficialBrainAPI", RateLimitedOfficialBrainAPI)
+    config_path = _write_config(tmp_path)
+    status_path = tmp_path / "refresh_status.json"
+
+    result = fetch_official_context.refresh_official_context(config_path, status_output=status_path)
+    saved_status = json.loads(status_path.read_text(encoding="utf-8"))
+
+    assert result["ok"] is False
+    assert result["error_code"] == "RATE_LIMITED"
+    assert result["error_category"] == "rate_limit"
+    assert result["retryable"] is True
+    assert result["retry_after_seconds"] == 12
+    assert result["next_retry_at"]
+    assert saved_status["retryable"] is True
 
 
 def test_official_loader_accepts_name_only_field_records(tmp_path):
