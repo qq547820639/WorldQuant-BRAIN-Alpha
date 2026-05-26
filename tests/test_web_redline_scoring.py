@@ -39,6 +39,7 @@ def test_scoring_attribution_resolves_candidate_from_alpha_id(monkeypatch, tmp_p
 
     assert payload["ok"] is True
     assert payload["attribution"]["name"] == "total_score"
+    assert payload["attribution_summary"]["visualization"]["node_count"] >= 1
     assert payload["hard_gates"][0]["gate_name"] == "BRAIN_HARD_GATES"
     assert "improvement_hints" in payload
 

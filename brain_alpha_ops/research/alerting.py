@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 import json
 from typing import Any, Callable
-from urllib import request
+from urllib import error, request
 
 
 @dataclass
@@ -59,23 +59,29 @@ class AlertDeliveryService:
         channel: str = "local",
         metadata: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
+        clean_severity = _normalize_severity(severity)
+        clean_channel = str(channel or "local").strip() or "local"
         event = AlertEvent(
-            channel=channel,
+            channel=clean_channel,
             title=title,
             message=message,
-            severity=severity,
+            severity=clean_severity,
             metadata=dict(metadata or {}),
         )
         payload = event.to_dict()
-        self._persist(payload)
+        persist_result = self._persist(payload)
         transport = self._deliver_webhook(payload)
+        sender_result = {"delivered": False, "reason": "sender_not_configured"}
         if self.sender:
             try:
                 self.sender(payload)
+                sender_result = {"delivered": True}
             except Exception as exc:
-                payload["sender_error"] = str(exc)
+                sender_result = {"delivered": False, "error": str(exc)}
         payload["transport"] = transport
-        payload["ok"] = True
+        payload["sender"] = sender_result
+        payload["persisted"] = persist_result
+        payload["ok"] = bool(persist_result.get("persisted")) and not bool(transport.get("blocking_error")) and not bool(sender_result.get("blocking_error"))
         return payload
 
     def recent(self, limit: int = 50) -> dict[str, Any]:
@@ -103,10 +109,14 @@ class AlertDeliveryService:
             "storage_dir": str(self.storage_dir),
         }
 
-    def _persist(self, payload: dict[str, Any]) -> None:
-        self.storage_dir.mkdir(parents=True, exist_ok=True)
-        with self.alert_path.open("a", encoding="utf-8") as handle:
-            handle.write(json.dumps(payload, ensure_ascii=False) + "\n")
+    def _persist(self, payload: dict[str, Any]) -> dict[str, Any]:
+        try:
+            self.storage_dir.mkdir(parents=True, exist_ok=True)
+            with self.alert_path.open("a", encoding="utf-8") as handle:
+                handle.write(json.dumps(payload, ensure_ascii=False) + "\n")
+            return {"persisted": True, "path": str(self.alert_path)}
+        except OSError as exc:
+            return {"persisted": False, "path": str(self.alert_path), "error": str(exc), "blocking_error": True}
 
     def _deliver_webhook(self, payload: dict[str, Any]) -> dict[str, Any]:
         if not self.webhook_url:
@@ -116,8 +126,10 @@ class AlertDeliveryService:
             req = request.Request(self.webhook_url, data=data, headers={"Content-Type": "application/json"})
             with request.urlopen(req, timeout=5) as response:
                 return {"delivered": True, "status": getattr(response, "status", 200)}
+        except error.HTTPError as exc:
+            return {"delivered": False, "status": exc.code, "error": str(exc), "blocking_error": exc.code >= 500}
         except Exception as exc:
-            return {"delivered": False, "error": str(exc)}
+            return {"delivered": False, "error": str(exc), "blocking_error": False}
 
 
 class AlertRouter:
@@ -153,11 +165,13 @@ class AlertRouter:
                 sender=self.sender if channel == "callback" else None,
             ).alert(title, message, severity=severity, channel=channel, metadata=metadata)
             deliveries.append(delivery)
+        failed = [item for item in deliveries if not _delivery_ok(item)]
         return {
-            "ok": all(item.get("ok") for item in deliveries),
+            "ok": not failed,
             "schema_version": "alert_route_result.v1",
             "channel_count": len(selected_channels),
             "channels": selected_channels,
+            "failed_count": len(failed),
             "deliveries": deliveries,
         }
 
@@ -173,3 +187,26 @@ def _unique_channels(channels: list[str]) -> list[str]:
         seen.add(marker)
         rows.append(text)
     return rows
+
+
+def _normalize_severity(value: str) -> str:
+    text = str(value or "info").strip().lower()
+    if text in {"debug", "info", "warning", "error", "critical"}:
+        return text
+    if text in {"warn", "medium"}:
+        return "warning"
+    if text in {"high", "fatal"}:
+        return "critical"
+    return "info"
+
+
+def _delivery_ok(payload: dict[str, Any]) -> bool:
+    if not payload.get("ok"):
+        return False
+    transport = payload.get("transport") if isinstance(payload.get("transport"), dict) else {}
+    sender = payload.get("sender") if isinstance(payload.get("sender"), dict) else {}
+    persisted = payload.get("persisted") if isinstance(payload.get("persisted"), dict) else {}
+    return not any(
+        bool(item.get("blocking_error"))
+        for item in (transport, sender, persisted)
+    )

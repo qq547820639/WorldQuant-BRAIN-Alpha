@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import argparse
 from copy import deepcopy
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import json
 from pathlib import Path
 import tempfile
@@ -91,12 +91,17 @@ def refresh_official_context(
             _write_status_file(status_path, result)
             return result
     except Exception as exc:
+        retry_after = _retry_after_seconds(exc)
         result = _base_result(run_config, started_at, status_path, write=write)
         result.update(
             {
                 "ok": False,
                 "status": "failed",
                 "error_code": _error_code(exc, run_config),
+                "error_category": _error_category(exc, run_config),
+                "retryable": _retryable(exc),
+                "retry_after_seconds": retry_after,
+                "next_retry_at": _next_retry_at(retry_after) if retry_after is not None else "",
                 "error": redact_error_message(exc),
                 "before": _context_counts(before),
                 "after": _context_counts(official_context_file_counts(load_config=lambda: run_config)),
@@ -165,6 +170,41 @@ def _error_code(exc: Exception, run_config: RunConfig) -> str:
     if status_code:
         return f"HTTP_{status_code}"
     return "OFFICIAL_CONTEXT_REFRESH_FAILED"
+
+
+def _error_category(exc: Exception, run_config: RunConfig) -> str:
+    code = _error_code(exc, run_config)
+    if code == "RATE_LIMITED":
+        return "rate_limit"
+    if code == "MISSING_CREDENTIALS":
+        return "auth"
+    if code.startswith("HTTP_"):
+        return "http"
+    return "internal"
+
+
+def _retryable(exc: Exception) -> bool:
+    status_code = getattr(exc, "status_code", None)
+    if status_code in {408, 429, 500, 502, 503, 504}:
+        return True
+    return "rate limit" in str(exc).lower()
+
+
+def _retry_after_seconds(exc: Exception) -> float | None:
+    value = getattr(exc, "retry_after", None)
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        parsed = 0.0
+    if parsed > 0:
+        return parsed
+    if getattr(exc, "status_code", None) == 429 or "rate limit" in str(exc).lower():
+        return 15 * 60
+    return None
+
+
+def _next_retry_at(retry_after_seconds: float) -> str:
+    return (datetime.now(timezone.utc) + timedelta(seconds=max(0.0, retry_after_seconds))).isoformat()
 
 
 def _status_output_path(run_config: RunConfig, override: str | Path | None) -> Path:

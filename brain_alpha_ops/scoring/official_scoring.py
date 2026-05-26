@@ -37,6 +37,7 @@ from brain_alpha_ops.scoring.attribution import (
     dim_explanation,
 )
 from brain_alpha_ops.scoring.gates import GateConfig, GateResult, OFFICIAL_HARD_GATE_NAMES
+from brain_alpha_ops.scoring.visualization import summarize_score_attribution
 
 logger = logging.getLogger(__name__)
 
@@ -111,6 +112,15 @@ class ScoringResult:
             "settings_trace": self.settings_trace,
             "threshold_trace": self.threshold_trace,
             "calibration": self.calibration,
+            "attribution_summary": summarize_score_attribution(
+                {
+                    "total_score": self.total_score,
+                    "decision_band": self.decision_band,
+                    "attribution_tree": self.attribution_tree.to_dict() if self.attribution_tree else None,
+                    "top_failures": self.top_failures,
+                    "improvement_hints": self.improvement_hints,
+                }
+            ),
         }
 
     def attribution_report(self) -> str:

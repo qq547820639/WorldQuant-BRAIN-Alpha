@@ -55,6 +55,18 @@ Source checklist: user-provided QuantGPT comparison recommendations on architect
   - Extracted assistant-guidance conversion helpers into `brain_alpha_ops/agent_guidance_tools.py`, bringing `brain_alpha_ops/agent_tools.py` back under the configured module-size baseline.
   - Added deterministic fallback mutations in `brain_alpha_ops/research/parameter_search.py` so parameter search can fill the requested bounded mutation budget when the optimizer returns too few variants.
   - Re-ran focused tests, module-size audit, standard quality gate, strict official-context quality gate, and full pytest successfully.
+- [x] AM-13 Hardened the local productization extensions for operational use.
+  - Extended `brain_alpha_ops/research/market_data_cache.py` with JSON/JSONL path ingestion, multi-source refresh, nested metric extraction, field coverage stats, time ranges, and cache-health metadata.
+  - Extended `brain_alpha_ops/research/market_data_vector.py` with missing-value accounting, row stats, minimum field-coverage filtering, optional min-max normalization, and cache-health propagation.
+  - Extended `brain_alpha_ops/research/parallel_backtest.py` with duplicate-expression reporting, empty-plan safety payloads, progress events/callbacks, terminal FAILED/ERROR normalization, and failure-code aggregation.
+  - Extended `brain_alpha_ops/research/parameter_search.py` and `brain_alpha_ops/research/search_orchestrator.py` with mutation budgets, termination reasons, duplicate-expression filtering, lineage metadata, round summaries, and evaluated-candidate accounting.
+  - Extended `brain_alpha_ops/research/alerting.py` with severity normalization, persistence status, sender/transport diagnostics, and routed failed-delivery counts.
+  - Added `brain_alpha_ops/scoring/visualization.py` and exposed `attribution_summary` from official scoring/Web scoring attribution responses for stable UI/tool consumption.
+- [x] AM-14 Refreshed credential-backed official BRAIN context and cleared the strict-freshness blocker.
+  - Ran the official context refresh with process-scoped BRAIN credentials only; no credentials were written into config, docs, or status artifacts.
+  - Refreshed official context to 7,780 fields, 66 operators, and 17 datasets; metadata now expires on 2026-05-27T02:01:41Z.
+  - Added retryable rate-limit metadata to `fetch_official_context.py` so failed refresh attempts include `error_category`, `retryable`, `retry_after_seconds`, and `next_retry_at`.
+  - Regenerated `docs/ALPHA_PRODUCTION_DIAGNOSIS_20260522.md` against the current refreshed context; the local production diagnosis now reports no unfinished local code checklist items.
 
 ## Pending
 
@@ -109,3 +121,17 @@ Source checklist: user-provided QuantGPT comparison recommendations on architect
   - Standard quality gate: `scripts/quality_gate.py --skip-tests --json` passed.
   - Strict quality gate: `scripts/quality_gate.py --strict-official-context --skip-tests --json` passed with strict freshness.
   - Full repository pytest: `738 passed`.
+- [x] Current AM-13 focused verification:
+  - `tests/test_market_data_cache.py tests/test_market_data_vector.py tests/test_parallel_backtest.py tests/test_parameter_search.py tests/test_search_orchestrator.py tests/test_alerting.py tests/test_scoring_visualization.py tests/test_official_scoring_system.py tests/test_web_redline_scoring.py`: `28 passed`.
+  - `python -m compileall -q brain_alpha_ops tests`: passed.
+  - `scripts/check_module_size.py --json`: passed with no oversized-module findings.
+  - Standard quality gate: `scripts/quality_gate.py --skip-tests --json` passed.
+  - Strict quality gate: `scripts/quality_gate.py --strict-official-context --skip-tests --json` blocked only on expired official-context metadata (`p1_count=3`, `stale_count=3`); code, redline, frontend, module-size, secret-scan, and report-sync steps passed.
+  - Full repository pytest: `745 passed`.
+- [x] Current AM-14 official-context verification:
+  - `scripts/check_official_context.py --config config/run_config.json --strict-freshness --json`: passed with `p1_count=0`, `field_count=7780`, `dataset_count=17`, and `dataset_field_count_sum=7780`.
+  - `scripts/check_brain_contract.py --config config/run_config.json --strict-freshness --json`: passed with no findings and `blocking_count=0`.
+  - Standard quality gate: `scripts/quality_gate.py --skip-tests --json` passed.
+  - Strict quality gate: `scripts/quality_gate.py --strict-official-context --skip-tests --json` passed.
+  - Official-refresh/diagnosis focused slice passed: `16 passed`.
+  - Full repository pytest: `746 passed`.
