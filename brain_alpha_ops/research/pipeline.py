@@ -14,6 +14,7 @@ from brain_alpha_ops.brain_api.base import BrainAPI, BrainAPIError
 from brain_alpha_ops.config import OpsConfig, runtime_project_root
 from brain_alpha_ops.models import Candidate, PipelineEvent, PipelineResult, new_id
 from brain_alpha_ops.observability import context_payload, error_payload
+from brain_alpha_ops.parameter_audit import build_parameter_audit_snapshot
 from brain_alpha_ops.redaction import redact_error_message
 
 from .generator import CandidateGenerator, extract_fields, extract_operators, local_quality, mutate_expression
@@ -524,7 +525,16 @@ class AlphaResearchPipeline:
             self.repository.save_event(run_id, event)
         result = PipelineResult(run_id=run_id, candidates=final_candidates, events=self.events, summary=summary)
         try:
-            self.repository.save_run_history(run_id, result.to_dict(), status=run_status)
+            self.repository.save_run_history(
+                run_id,
+                result.to_dict(),
+                status=run_status,
+                parameter_audit=build_parameter_audit_snapshot(
+                    self.config,
+                    auto_submit=auto_submit,
+                    source="pipeline_run",
+                ),
+            )
         except Exception:
             logger.warning("failed to persist run history for %s", run_id, exc_info=True)
 

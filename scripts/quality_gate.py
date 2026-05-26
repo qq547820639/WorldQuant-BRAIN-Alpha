@@ -83,6 +83,7 @@ STATIC_ANALYSIS_TARGETS = [
     "scripts/check_dependency_policy.py",
     "scripts/check_brain_contract.py",
     "scripts/check_diagnostic_report.py",
+    "scripts/check_diagnosis_gap_coverage.py",
     "scripts/final_release_gate.py",
     "scripts/check_module_size.py",
     "scripts/check_optional_tooling.py",
@@ -224,6 +225,13 @@ def _brain_contract_validation(config_path: Path, *, strict: bool = False) -> tu
     return _run_python_module(args)
 
 
+def _diagnosis_gap_coverage(config_path: Path, *, strict: bool = False) -> tuple[bool, dict]:
+    args = ["scripts/check_diagnosis_gap_coverage.py", "--config", str(config_path), "--json"]
+    if strict:
+        args.append("--strict-freshness")
+    return _run_python_module(args)
+
+
 def _final_release_gate(config_path: Path) -> tuple[bool, dict]:
     return _run_python_module(["scripts/final_release_gate.py", "--config", str(config_path), "--json"])
 
@@ -316,6 +324,7 @@ def run_quality_gate(
         _step("dependency_policy", _dependency_policy),
         _step("redline_verification", _redline_verification),
         _step("brain_contract_validation", lambda: _brain_contract_validation(config_path, strict=strict_official_context)),
+        _step("diagnosis_gap_coverage", lambda: _diagnosis_gap_coverage(config_path, strict=strict_official_context)),
     ])
     if final_release:
         steps.append(_step("final_release_gate", lambda: _final_release_gate(config_path)))

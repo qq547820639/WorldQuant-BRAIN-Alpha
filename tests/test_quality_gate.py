@@ -30,6 +30,7 @@ def test_quality_gate_runs_core_steps_and_skips_pytest(monkeypatch, tmp_path):
         "dependency_policy",
         "redline_verification",
         "brain_contract_validation",
+        "diagnosis_gap_coverage",
         "frontend_inline_sync",
         "frontend_syntax",
         "frontend_innerhtml_guard",
@@ -64,6 +65,7 @@ def test_quality_gate_includes_pytest_args_and_propagates_failure(monkeypatch, t
         "dependency_policy",
         "redline_verification",
         "brain_contract_validation",
+        "diagnosis_gap_coverage",
         "frontend_inline_sync",
         "frontend_syntax",
         "frontend_innerhtml_guard",
@@ -75,8 +77,8 @@ def test_quality_gate_includes_pytest_args_and_propagates_failure(monkeypatch, t
         "diagnostic_report_sync",
         "pytest",
     ]
-    assert "--include-all" in result["steps"][11]["command"]
-    assert result["steps"][14]["command"][-1] == "tests/test_web.py"
+    assert "--include-all" in result["steps"][12]["command"]
+    assert result["steps"][15]["command"][-1] == "tests/test_web.py"
 
 
 def test_quality_gate_can_skip_compile(monkeypatch, tmp_path):
@@ -96,7 +98,7 @@ def test_quality_gate_can_skip_compile(monkeypatch, tmp_path):
     )
 
     assert result["ok"] is True
-    assert [step["name"] for step in result["steps"]] == ["config", "dependency_policy", "redline_verification", "brain_contract_validation", "frontend_inline_sync", "frontend_syntax", "frontend_innerhtml_guard", "text_encoding_scan", "official_context_validation", "module_size_audit", "secret_scan", "cache_metadata_audit", "diagnostic_report_sync"]
+    assert [step["name"] for step in result["steps"]] == ["config", "dependency_policy", "redline_verification", "brain_contract_validation", "diagnosis_gap_coverage", "frontend_inline_sync", "frontend_syntax", "frontend_innerhtml_guard", "text_encoding_scan", "official_context_validation", "module_size_audit", "secret_scan", "cache_metadata_audit", "diagnostic_report_sync"]
     assert not any("compileall" in call for call in calls)
 
 
@@ -123,6 +125,7 @@ def test_quality_gate_can_include_dependency_audit(monkeypatch, tmp_path):
         "dependency_policy",
         "redline_verification",
         "brain_contract_validation",
+        "diagnosis_gap_coverage",
         "frontend_inline_sync",
         "frontend_syntax",
         "frontend_innerhtml_guard",

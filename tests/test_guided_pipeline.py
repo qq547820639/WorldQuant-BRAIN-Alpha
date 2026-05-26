@@ -1,3 +1,5 @@
+import json
+
 from brain_alpha_ops.config import RunConfig
 from brain_alpha_ops.models import PipelineResult
 from brain_alpha_ops.ux import guided_pipeline
@@ -35,8 +37,13 @@ def test_guided_pipeline_completes_core_phases_and_uses_configured_storage(monke
 
     assert pipeline.phases["validation"].status == "completed"
     assert pipeline.phases["gating"].status == "completed"
-    assert (tmp_path / "run_history" / "run_guided_test.json").is_file()
+    history_path = tmp_path / "run_history" / "run_guided_test.json"
+    assert history_path.is_file()
+    history_payload = json.loads(history_path.read_text(encoding="utf-8"))
+    assert history_payload["parameter_audit"]["schema_version"] == "parameter_audit_snapshot.v1"
+    assert history_payload["parameter_audit"]["thresholds_zero_deviation"] is True
     assert pipeline.list_history()[0]["run_id"] == "run_guided_test"
+    assert pipeline.list_history()[0]["parameter_audit"]["ok"] is True
 
 
 def test_guided_pipeline_accepts_fixed_dataset_strategy(monkeypatch, tmp_path):
