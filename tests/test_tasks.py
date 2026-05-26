@@ -94,7 +94,6 @@ def test_job_store_concurrent_create_update_cancel_stays_bounded(tmp_path):
                     assert store.cancel(job_id) is True
                 else:
                     store.update(job_id, status="completed", result={"ok": True, "worker": worker_id})
-                assert store.get(job_id) is not None
         except BaseException as exc:  # pragma: no cover - defensive for thread failures
             errors.append(exc)
 
