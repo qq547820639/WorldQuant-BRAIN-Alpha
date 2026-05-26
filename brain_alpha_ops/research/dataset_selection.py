@@ -66,7 +66,8 @@ class DatasetSelectionService:
 
     def select(self) -> DatasetSelectionResult:
         if self.selector and getattr(self.selector, "available_datasets", None):
-            dataset_ids = list(self.selector.select(self.strategy) or [])
+            strategy = str(self.strategy or "rotate").strip().lower()
+            dataset_ids = self._selector_dataset_ids(strategy)
             dataset_id = str(dataset_ids[0] if dataset_ids else "")
             if dataset_id:
                 self._apply(dataset_id)
@@ -130,6 +131,13 @@ class DatasetSelectionService:
     def _apply(self, dataset_id: str) -> None:
         self.generator.set_dataset(dataset_id)
         self.settings.dataset = dataset_id
+
+    def _selector_dataset_ids(self, strategy: str) -> list[str]:
+        if strategy in {"fixed", "locked", "specific"}:
+            dataset_id = str(getattr(self.settings, "dataset", "") or "").strip()
+            if dataset_id:
+                return list(self.selector.select(strategy, dataset_ids=[dataset_id]) or [])
+        return list(self.selector.select(strategy) or [])
 
     def _emit(self, result: DatasetSelectionResult) -> None:
         if self.event and result.event:

@@ -78,10 +78,12 @@ STATIC_ANALYSIS_TARGETS = [
     "brain_alpha_ops/research/strategy_plugins.py",
     "brain_alpha_ops/research/strategy_switch.py",
     "brain_alpha_ops/research/production_context.py",
+    "brain_alpha_ops/scoring/release_score_gate.py",
     "brain_alpha_ops/data/official_context_validation.py",
     "scripts/check_dependency_policy.py",
     "scripts/check_brain_contract.py",
     "scripts/check_diagnostic_report.py",
+    "scripts/final_release_gate.py",
     "scripts/check_module_size.py",
     "scripts/check_optional_tooling.py",
     "scripts/check_official_context.py",
@@ -222,6 +224,10 @@ def _brain_contract_validation(config_path: Path, *, strict: bool = False) -> tu
     return _run_python_module(args)
 
 
+def _final_release_gate(config_path: Path) -> tuple[bool, dict]:
+    return _run_python_module(["scripts/final_release_gate.py", "--config", str(config_path), "--json"])
+
+
 def _redline_verification() -> tuple[bool, dict]:
     return _run_python_module(["-m", "brain_alpha_ops.compliance.redline_verifier", "--block", "--json"])
 
@@ -300,6 +306,7 @@ def run_quality_gate(
     mypy: bool = False,
     strict_optional_tooling: bool = False,
     strict_official_context: bool = False,
+    final_release: bool = False,
 ) -> dict:
     steps = []
     if not skip_compile:
@@ -309,6 +316,10 @@ def run_quality_gate(
         _step("dependency_policy", _dependency_policy),
         _step("redline_verification", _redline_verification),
         _step("brain_contract_validation", lambda: _brain_contract_validation(config_path, strict=strict_official_context)),
+    ])
+    if final_release:
+        steps.append(_step("final_release_gate", lambda: _final_release_gate(config_path)))
+    steps.extend([
         _step("frontend_inline_sync", _frontend_inline_sync),
         _step("frontend_syntax", lambda: _frontend_syntax(html_path)),
         _step("frontend_innerhtml_guard", _frontend_innerhtml_guard),
@@ -346,6 +357,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--optional-tooling", action="store_true", help="Report optional ruff/mypy/pip-audit availability without enforcing it.")
     parser.add_argument("--strict-optional-tooling", action="store_true", help="Fail optional tooling check when ruff/mypy/pip-audit are missing.")
     parser.add_argument("--strict-official-context", action="store_true", help="Fail when official fields/operators/datasets metadata is stale.")
+    parser.add_argument("--final-release", action="store_true", help="Run fail-closed final release readiness checks.")
     parser.add_argument("--ruff", action="store_true", help="Run ruff on the incremental static-analysis target set.")
     parser.add_argument("--mypy", action="store_true", help="Run mypy on the incremental static-analysis target set.")
     parser.add_argument("--skip-compile", action="store_true", help="Skip Python compileall syntax checks.")
@@ -365,6 +377,7 @@ def main(argv: list[str] | None = None) -> int:
         optional_tooling=args.optional_tooling,
         strict_optional_tooling=args.strict_optional_tooling,
         strict_official_context=args.strict_official_context,
+        final_release=args.final_release,
         ruff=args.ruff,
         mypy=args.mypy,
         skip_compile=args.skip_compile,

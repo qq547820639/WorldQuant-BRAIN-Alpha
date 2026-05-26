@@ -37,6 +37,9 @@ from brain_alpha_ops.scoring.attribution import (
     dim_explanation,
 )
 from brain_alpha_ops.scoring.gates import GateConfig, GateResult, OFFICIAL_HARD_GATE_NAMES
+from brain_alpha_ops.scoring.release_score_gate import (
+    evaluate_release_score,
+)
 from brain_alpha_ops.scoring.visualization import summarize_score_attribution
 
 logger = logging.getLogger(__name__)
@@ -65,6 +68,7 @@ class ScoringResult:
     # Gates
     hard_gates: List[GateResult] = field(default_factory=list)
     soft_gates: List[GateResult] = field(default_factory=list)
+    release_gate: Dict[str, Any] = field(default_factory=dict)
 
     # Attribution
     attribution_tree: Optional[AttributionNode] = None
@@ -99,6 +103,7 @@ class ScoringResult:
             "layer_weights": self.layer_weights,
             "hard_gates": [g.to_dict() for g in self.hard_gates],
             "soft_gates": [g.to_dict() for g in self.soft_gates],
+            "release_gate": self.release_gate,
             "attribution_tree": self.attribution_tree.to_dict() if self.attribution_tree else None,
             "top_failures": self.top_failures,
             "improvement_hints": self.improvement_hints,
@@ -227,6 +232,11 @@ class OfficialScoringSystem:
             configured_gate = self.gate_config.evaluate(candidate.official_metrics)
             configured_gate.gate_name = "CONFIGURED_GATE"
             soft_gates.append(configured_gate)
+        release_gate = (
+            evaluate_release_score(candidate.official_metrics, self.thresholds).to_dict()
+            if candidate.official_metrics
+            else {}
+        )
 
         # 4. Build attribution tree
         attribution = self._build_attribution_tree(scorecard)
@@ -252,6 +262,7 @@ class OfficialScoringSystem:
             layer_weights=scorecard.get("layer_weights", {}),
             hard_gates=hard_gates,
             soft_gates=soft_gates,
+            release_gate=release_gate,
             attribution_tree=attribution,
             top_failures=top_failures,
             improvement_hints=hints,

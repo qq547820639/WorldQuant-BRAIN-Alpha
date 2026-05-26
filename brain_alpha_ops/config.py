@@ -36,7 +36,7 @@ _VALID_UNIVERSES = SUPPORTED_UNIVERSES
 _VALID_DELAYS = SUPPORTED_DELAYS
 _VALID_NEUTRALIZATIONS = SUPPORTED_NEUTRALIZATIONS
 _VALID_ALPHA_TYPES = SUPPORTED_ALPHA_TYPES
-_VALID_DATASET_STRATEGIES = {"all", "rotate", "random", "specific"}
+_VALID_DATASET_STRATEGIES = {"all", "rotate", "random", "specific", "fixed", "locked"}
 _VALID_MARKET_REGIMES = {"normal", "low_vol", "high_vol"}
 _VALID_ON_OFF = SUPPORTED_PASTEURIZATION
 _VALID_UNIT_HANDLING = SUPPORTED_UNIT_HANDLING
@@ -371,10 +371,7 @@ def validate_run_config(config: RunConfig) -> RunConfig:
     _validate_credentials(errors, config.credentials)
     _validate_web(errors, config.web)
     dataset = getattr(config.ops.settings, "dataset", "")
-    config.ops.settings.dataset = dataset.strip() if isinstance(dataset, str) and dataset.strip() else resolve_default_dataset_id(
-        config.ops.storage_dir,
-        runtime_root=runtime_project_root,
-    )
+    config.ops.settings.dataset = dataset.strip() if isinstance(dataset, str) and dataset.strip() else resolve_default_dataset_id(config.ops.storage_dir, runtime_root=runtime_project_root)
     _validate_ops(errors, config.ops, environment=config.environment)
     if errors:
         raise ConfigValidationError("Invalid run configuration: " + "; ".join(errors))

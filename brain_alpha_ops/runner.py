@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from brain_alpha_ops.brain_api import MockBrainAPI, OfficialBrainAPI
+from brain_alpha_ops.brain_api import OfficialBrainAPI
 from brain_alpha_ops.config import RunConfig, validate_run_config
 from brain_alpha_ops.research.pipeline import AlphaResearchPipeline
 
@@ -10,14 +10,14 @@ from brain_alpha_ops.research.pipeline import AlphaResearchPipeline
 def api_from_run_config(run_config: RunConfig):
     validate_run_config(run_config)
     environment = run_config.environment.lower()
-    if environment == "mock":
-        return MockBrainAPI()
     if environment == "production":
         credentials = run_config.credentials.resolve()
         api = OfficialBrainAPI(run_config.ops.official_api, **credentials)
         api.set_market_scope(run_config.ops.settings)
         return api
-    raise ValueError(f"unknown environment: {run_config.environment}")
+    raise ValueError(
+        "runtime pipeline execution only supports production; inject a test API for offline tests"
+    )
 
 
 def run_pipeline_from_config(run_config: RunConfig, progress_callback=None, stop_callback=None):

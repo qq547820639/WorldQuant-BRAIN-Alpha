@@ -72,6 +72,9 @@ def test_load_run_config_fills_empty_dataset_from_official_cache(tmp_path):
     config = load_run_config(path)
 
     assert config.ops.settings.dataset == "pv1"
+    assert config.ops.budget.dataset_strategy == "rotate"
+    assert config.ops.budget.require_cloud_sync is True
+    assert config.ops.official_api.allow_stale_context_on_rate_limit is True
 
 
 def test_credentials_resolve_from_environment():
@@ -268,6 +271,43 @@ def test_load_run_config_allows_http_official_api_url_in_mock():
 
         config = load_run_config(path)
         assert config.ops.official_api.base_url == "http://127.0.0.1:8080"
+
+
+def test_load_run_config_accepts_release_dataset_strategies():
+    with tempfile.TemporaryDirectory() as tmp:
+        data_dir = Path(tmp) / "data"
+        data_dir.mkdir()
+        (data_dir / "official_datasets.json").write_text(
+            json.dumps([{"id": "pv1", "name": "Price Volume", "field_count": 24}]),
+            encoding="utf-8",
+        )
+        path = Path(tmp) / "run_config.json"
+        path.write_text(
+            json.dumps(
+                {
+                    "environment": "production",
+                    "ops": {
+                        "storage_dir": str(data_dir),
+                        "settings": {"dataset": "pv1"},
+                        "budget": {
+                            "dataset_strategy": "fixed",
+                            "require_cloud_sync": True,
+                            "run_forever": False,
+                        },
+                        "official_api": {"allow_stale_context_on_rate_limit": False},
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        config = load_run_config(path)
+
+        assert config.ops.settings.dataset == "pv1"
+        assert config.ops.budget.dataset_strategy == "fixed"
+        assert config.ops.budget.require_cloud_sync is True
+        assert config.ops.budget.run_forever is False
+        assert config.ops.official_api.allow_stale_context_on_rate_limit is False
 
 
 def test_config_and_web_settings_enums_use_canonical_contract():

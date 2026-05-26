@@ -37,3 +37,22 @@ def test_guided_pipeline_completes_core_phases_and_uses_configured_storage(monke
     assert pipeline.phases["gating"].status == "completed"
     assert (tmp_path / "run_history" / "run_guided_test.json").is_file()
     assert pipeline.list_history()[0]["run_id"] == "run_guided_test"
+
+
+def test_guided_pipeline_accepts_fixed_dataset_strategy(monkeypatch, tmp_path):
+    config = RunConfig(environment="mock")
+    config.ops.storage_dir = str(tmp_path)
+    config.ops.settings.dataset = "pv1"
+    config.ops.budget.dataset_strategy = "fixed"
+    pipeline = GuidedPipeline(config)
+
+    def fake_run_pipeline(run_config, *, progress_callback, stop_callback):
+        return PipelineResult(run_id="run_guided_test", candidates=[], events=[], summary={})
+
+    monkeypatch.setattr(guided_pipeline, "run_pipeline_from_config", fake_run_pipeline)
+
+    result = pipeline._phase_core_pipeline(
+        PipelineResult(run_id="run_guided_test", candidates=[], events=[], summary={})
+    )
+
+    assert result.run_id == "run_guided_test"

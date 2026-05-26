@@ -21,7 +21,7 @@ class DatasetSelector:
         ds = selector.select("all")        # → ["model77","analyst4",...] (all 16)
     """
 
-    STRATEGIES = ("all", "rotate", "random", "specific")
+    STRATEGIES = ("all", "rotate", "random", "specific", "fixed", "locked")
 
     def __init__(self) -> None:
         self._datasets: List[str] = []
@@ -58,7 +58,7 @@ class DatasetSelector:
                 n=kwargs.get("n", 3),
                 seed=kwargs.get("seed"),
             )
-        if strategy == "specific":
+        if strategy in {"specific", "fixed", "locked"}:
             ds_ids = kwargs.get("dataset_ids", [])
             return [d for d in ds_ids if d in self._datasets]
         # default: "all"
