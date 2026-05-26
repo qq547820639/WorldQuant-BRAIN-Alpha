@@ -96,6 +96,14 @@
         eta_seconds: Number(progress.eta_seconds || 0),
       });
     }
+    S.setBatch({
+      runtimeStatusStartedAt: S.get('runtimeStatusStartedAt') || S.get('syncStartedAt') || Date.now(),
+      runtimeStatusUpdatedAt: Date.now(),
+      liveProgress: {
+        phase: progress.phase || 'cloud_sync',
+        data: { cloud_sync: Object.assign({}, progress, { percent: percent, scanned: scanned, total: total, message: progress.message || fallbackMessage || '云端同步进行中' }) },
+      },
+    });
   }
 
   function failedSyncPayload(range, message) {
@@ -127,7 +135,7 @@
       var snapshot = await Api.get('/api/sync_status?compact=1&job_id=' + encodeURIComponent(jobId), { timeout: 120000 });
       if (!snapshot || !snapshot.ok) throw new Error((snapshot && snapshot.error) || '同步状态不可用');
       var progress = snapshot.progress || {};
-      S.set('liveProgress', { phase: progress.phase || 'cloud_sync', data: { cloud_sync: progress } });
+      S.setBatch({ runtimeStatusUpdatedAt: Date.now(), liveProgress: { phase: progress.phase || 'cloud_sync', data: { cloud_sync: progress } } });
       renderSyncProgress(progress, progress.message || '云端同步进行中');
       if (window._app && window._app.renderJobSnapshot) window._app.renderJobSnapshot(snapshot);
       if (terminal[String(snapshot.status || '').toLowerCase()]) {
@@ -146,7 +154,17 @@
     if (S.get('syncInFlight')) return;
     var reason = window.operationBlockReason ? window.operationBlockReason('sync') : '';
     if (reason) { Toast.warning(reason); return; }
-    S.setBatch({ syncInFlight: true, syncStartedAt: Date.now() });
+    var startedAt = Date.now();
+    S.setBatch({
+      syncInFlight: true,
+      syncStartedAt: startedAt,
+      runtimeStatusStartedAt: startedAt,
+      runtimeStatusUpdatedAt: startedAt,
+      liveProgress: {
+        phase: 'cloud_sync',
+        data: { cloud_sync: { phase: 'cloud_sync', phase_label: '云端同步', message: '正在启动云端同步，请稍候。', percent: 0, scanned: 0, total: 0 } },
+      },
+    });
     if (typeof window.renderBusyControls === 'function') window.renderBusyControls();
     Toast.info('开始同步云端数据...');
     var range = ($('syncRange') || {}).value || '3d';
@@ -167,12 +185,12 @@
     } catch (e) {
       var errorMessage = (e && e.message) ? e.message : '云端同步失败';
       var failedPayload = failedSyncPayload(range, errorMessage);
-      S.set('liveProgress', { phase: 'failed', data: { cloud_sync: failedPayload.cloud_sync } });
+      S.setBatch({ runtimeStatusUpdatedAt: Date.now(), liveProgress: { phase: 'failed', data: { cloud_sync: failedPayload.cloud_sync } } });
       applySyncResultPayload(failedPayload);
       renderSyncProgress(failedPayload.cloud_sync);
       Toast.error('云端同步失败：' + errorMessage);
     } finally {
-      S.set('syncInFlight', false);
+      S.setBatch({ syncInFlight: false, runtimeStatusStartedAt: 0, runtimeStatusUpdatedAt: 0 });
       if (typeof window.renderBusyControls === 'function') window.renderBusyControls();
     }
   };

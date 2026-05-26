@@ -50,6 +50,8 @@
     checkStartedAt: 0,
     syncStartedAt: 0,
     backtestSnapshotUpdatedAt: 0,
+    runtimeStatusStartedAt: 0,
+    runtimeStatusUpdatedAt: 0,
     rowCache: {},
     viewCounts: {},  // v3: cached per-view counts for tab badges
   };

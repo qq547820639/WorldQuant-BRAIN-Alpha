@@ -58,6 +58,149 @@
     if (S.get('isRunning')) return '生产任务正在运行。';
     return '';
   }
+  function activeRuntimeKind() {
+    if (S.get('isRunning')) return 'production';
+    if (syncInFlight()) return 'sync';
+    if (batchCheckJobId()) return 'check';
+    if (submitInFlight()) return 'submit';
+    return '';
+  }
+  function runtimeKindLabel(kind) {
+    if (kind === 'production') return '生产搜索';
+    if (kind === 'sync') return '云端同步';
+    if (kind === 'check') return '达标检查';
+    if (kind === 'submit') return '提交处理';
+    return '后台任务';
+  }
+  function runtimeDefaultMessage(kind) {
+    if (kind === 'production') return '正在生成、回测并筛选 Alpha，结果会陆续刷新。';
+    if (kind === 'sync') return '正在读取官方云端数据，列表会在完成后更新。';
+    if (kind === 'check') return '正在向官方发送预提交检查，请等待结果返回。';
+    if (kind === 'submit') return '正在提交已选择的 Alpha，请不要重复点击。';
+    return '后台正在处理，请稍候。';
+  }
+  function formatDuration(ms) {
+    var seconds = Math.max(0, Math.floor(Number(ms || 0) / 1000));
+    if (seconds < 60) return seconds + ' 秒';
+    var minutes = Math.floor(seconds / 60);
+    var remain = seconds % 60;
+    if (minutes < 60) return minutes + ' 分 ' + remain + ' 秒';
+    var hours = Math.floor(minutes / 60);
+    return hours + ' 小时 ' + (minutes % 60) + ' 分';
+  }
+  function formatClock(ts, now) {
+    ts = Number(ts || 0);
+    if (!ts) return '等待首次进度';
+    var diff = Math.max(0, Number(now || Date.now()) - ts);
+    if (diff < 5000) return '刚刚';
+    return formatDuration(diff) + '前';
+  }
+  function numberText(value) {
+    var num = Number(value);
+    return Number.isFinite(num) ? String(num) : '';
+  }
+  function runtimeProgressData(kind) {
+    var live = S.get('liveProgress') || {};
+    var data = live.data || {};
+    if (kind === 'submit') return data || {};
+    if (kind === 'sync') {
+      if (data.cloud_sync) return data.cloud_sync || {};
+      if (data.progress) return data.progress || {};
+      return data || {};
+    }
+    if (kind === 'check') return data || {};
+    if (kind === 'production') {
+      if (data.progress) return data.progress || {};
+      if (data.phase || data.message || data.percent !== undefined) return data || {};
+      return data || {};
+    }
+    if (data.cloud_sync) return data.cloud_sync || {};
+    if (data.progress) return data.progress || {};
+    return data || {};
+  }
+  function runtimeProgressPercent(progress) {
+    if (!progress) return null;
+    var percent = Number(progress.percent);
+    if (Number.isFinite(percent)) return Math.min(100, Math.max(0, percent));
+    var scanned = Number(progress.scanned || progress.current || progress.done || 0);
+    var total = Number(progress.total || 0);
+    if (total > 0) return Math.min(100, Math.max(0, scanned / total * 100));
+    return null;
+  }
+  function runtimeCountText(progress) {
+    progress = progress || {};
+    var scanned = numberText(progress.scanned || progress.current || progress.done);
+    var total = numberText(progress.total);
+    if (scanned && total) return scanned + ' / ' + total;
+    if (scanned) return scanned;
+    if (progress.added !== undefined || progress.updated !== undefined || progress.skipped !== undefined) {
+      var parts = [];
+      if (progress.added !== undefined) parts.push('新增 ' + Number(progress.added || 0));
+      if (progress.updated !== undefined) parts.push('更新 ' + Number(progress.updated || 0));
+      if (progress.skipped !== undefined) parts.push('跳过 ' + Number(progress.skipped || 0));
+      return parts.join('，');
+    }
+    return '-';
+  }
+  function runtimeTitle(kind, progress) {
+    var phase = progress && (progress.phase_label || phaseName(progress.phase || ''));
+    if (phase) return runtimeKindLabel(kind) + '：' + phase;
+    return runtimeKindLabel(kind) + '正在进行';
+  }
+  function touchRuntimeStatus(startedAt, progress) {
+    var now = Date.now();
+    var batch = {
+      runtimeStatusStartedAt: startedAt || S.get('runtimeStatusStartedAt') || now,
+      runtimeStatusUpdatedAt: now,
+    };
+    if (progress) batch.liveProgress = progress;
+    S.setBatch(batch);
+    if (typeof window.renderRuntimeStatus === 'function') window.renderRuntimeStatus();
+  }
+  function clearRuntimeStatus() {
+    S.setBatch({ runtimeStatusStartedAt: 0, runtimeStatusUpdatedAt: 0 });
+    if (typeof window.renderRuntimeStatus === 'function') window.renderRuntimeStatus();
+  }
+  window.renderRuntimeStatus = function () {
+    var panel = $('runtimeStatusPanel');
+    if (!panel) return;
+    var kind = activeRuntimeKind();
+    var active = Boolean(kind);
+    panel.classList.toggle('hidden', !active);
+    if (!active) return;
+
+    var now = Date.now();
+    var startedAt = Number(S.get('runtimeStatusStartedAt') || S.get('syncStartedAt') || S.get('checkStartedAt') || now);
+    var updatedAt = Number(S.get('runtimeStatusUpdatedAt') || startedAt || now);
+    var progress = runtimeProgressData(kind);
+    var percent = runtimeProgressPercent(progress);
+    var stale = now - updatedAt > 120000;
+    var phase = (progress && (progress.phase_label || phaseName(progress.phase || ''))) || runtimeKindLabel(kind);
+    var message = (progress && progress.message) || runtimeDefaultMessage(kind);
+    var title = runtimeTitle(kind, progress);
+    var hint = stale
+      ? '已经超过 2 分钟没有收到新进度，后台可能仍在等待官方接口返回；如果长时间不动，可点击停止后重试。'
+      : '页面没有卡死；系统会在收到新进度后自动刷新。';
+    var progressTrack = panel.querySelector('.runtime-progress');
+    var fill = $('runtimeProgressFill');
+
+    panel.classList.toggle('is-warning', stale);
+    if ($('runtimeStatusBadge')) $('runtimeStatusBadge').textContent = stale ? '等待中' : '运行中';
+    if ($('runtimeStatusTitle')) $('runtimeStatusTitle').textContent = title;
+    if ($('runtimeStatusMessage')) $('runtimeStatusMessage').textContent = message;
+    if ($('runtimeStatusHint')) $('runtimeStatusHint').textContent = hint;
+    if ($('runtimePhaseText')) $('runtimePhaseText').textContent = phase || '准备中';
+    if ($('runtimePercentText')) $('runtimePercentText').textContent = percent === null ? '计算中' : Math.round(percent) + '%';
+    if ($('runtimeCountText')) $('runtimeCountText').textContent = runtimeCountText(progress);
+    if ($('runtimeUpdatedText')) $('runtimeUpdatedText').textContent = formatClock(updatedAt, now);
+    if ($('runtimeElapsedText')) $('runtimeElapsedText').textContent = formatDuration(now - startedAt);
+    if (progressTrack) {
+      progressTrack.classList.toggle('is-indeterminate', percent === null);
+      progressTrack.setAttribute('aria-valuenow', percent === null ? '0' : String(Math.round(percent)));
+      progressTrack.setAttribute('aria-label', title);
+    }
+    if (fill) fill.style.width = percent === null ? '' : Math.round(percent) + '%';
+  };
   window.renderBusyControls = function () {
     var prodReason = window.operationBlockReason('production');
     var syncReason = window.operationBlockReason('sync');
@@ -89,6 +232,7 @@
     }
     syncStrategyPluginControls();
     renderTaskRail();
+    window.renderRuntimeStatus();
   };
   function currentSummary() { return S.get('currentResult.summary') || {}; }
   function currentCandidates() { return S.get('currentResult.candidates') || []; }
@@ -237,6 +381,15 @@
       runBtn.classList.toggle('btn-danger', running);
       runBtn.classList.toggle('btn-primary', !running);
       runBtn.classList.toggle('is-stopping', running);
+    }
+    var runtimeStopBtn = $('runtimeStopButton');
+    if (runtimeStopBtn) {
+      var canStopProduction = Boolean(S.get('isRunning'));
+      runtimeStopBtn.disabled = !canStopProduction;
+      runtimeStopBtn.setAttribute('aria-disabled', !canStopProduction);
+      runtimeStopBtn.textContent = canStopProduction ? '停止生产' : '等待完成';
+      if (!canStopProduction) runtimeStopBtn.setAttribute('title', '当前任务会自动结束，暂不支持手动停止。');
+      else runtimeStopBtn.removeAttribute('title');
     }
   }
   function updateActionBarVisibility(view) {
@@ -576,8 +729,21 @@
     var confirmed = await window.Modal.confirmAction('确认提交 ' + selectedSubmitCount() + ' 个 Alpha？', '确认提交', '取消');
     if (!confirmed) return;
     try {
-      S.set('submitInFlight', true);
       var ids = selectedSubmitList();
+      var submitStarted = Date.now();
+      S.setBatch({
+        submitInFlight: true,
+        runtimeStatusStartedAt: submitStarted,
+        runtimeStatusUpdatedAt: submitStarted,
+        liveProgress: {
+          phase: 'submit',
+          data: {
+            phase: 'submit',
+            phase_label: '提交处理',
+            message: '正在提交 ' + ids.length + ' 个 Alpha，请等待官方返回结果。',
+          },
+        },
+      });
       var payload = Object.assign(window.collectPayload ? window.collectPayload() : {}, { alpha_ids: ids });
       var resp = await Api.post('/api/submit_batch', payload);
       if (resp.ok) {
@@ -586,18 +752,31 @@
         if (typeof window.loadCheckResults === 'function') window.loadCheckResults();
       }
     } catch (e) { Toast.error('提交失败：' + e.message); }
-    finally { S.set('submitInFlight', false); _renderCurrentView(); window.renderBusyControls(); }
+    finally { S.set('submitInFlight', false); clearRuntimeStatus(); _renderCurrentView(); window.renderBusyControls(); }
   };
   window.submitSingleCandidate = async function (alphaId) {
     var confirmed = await window.Modal.confirmAction('确认提交 Alpha ' + alphaId + '？', '提交', '取消');
     if (!confirmed) return;
     try {
-      S.set('submitInFlight', true);
+      var submitStarted = Date.now();
+      S.setBatch({
+        submitInFlight: true,
+        runtimeStatusStartedAt: submitStarted,
+        runtimeStatusUpdatedAt: submitStarted,
+        liveProgress: {
+          phase: 'submit',
+          data: {
+            phase: 'submit',
+            phase_label: '提交处理',
+            message: '正在提交 Alpha ' + alphaId + '，请等待官方返回结果。',
+          },
+        },
+      });
       var payload = Object.assign(window.collectPayload ? window.collectPayload() : {}, { alpha_id: alphaId });
       var resp = await Api.post('/api/submit', payload);
       if (resp.ok) Toast.success('提交成功：' + alphaId);
     } catch (e) { Toast.error('提交失败：' + e.message); }
-    finally { S.set('submitInFlight', false); _renderCurrentView(); window.renderBusyControls(); }
+    finally { S.set('submitInFlight', false); clearRuntimeStatus(); _renderCurrentView(); window.renderBusyControls(); }
   };
   if (typeof window.syncCloud !== 'function') {
     window.syncCloud = function () {
@@ -611,10 +790,22 @@
     if (reason) { Toast.warning(reason); return; }
     var passed = currentCandidates().filter(function (c) { return c.lifecycle_status === 'submission_ready' || ((c.gate || {}).submission_ready); });
     if (!passed.length) { Toast.warning('暂无达标 Alpha 可检查。'); return; }
-    S.setBatch({ batchCheckJobId: 'check_' + Date.now(), checkStartedAt: Date.now() });
+    var checkStarted = Date.now();
+    S.setBatch({ batchCheckJobId: 'check_' + checkStarted, checkStartedAt: checkStarted, runtimeStatusStartedAt: checkStarted, runtimeStatusUpdatedAt: checkStarted });
     renderBusyControls();
     try {
       var alphaIds = (mode === 'all' ? passed : passed.slice(0, 10)).map(function (c) { return c.alpha_id || candidateIdentity(c); });
+      touchRuntimeStatus(checkStarted, {
+        phase: 'official_pre_submit_check',
+        data: {
+          phase: 'official_pre_submit_check',
+          phase_label: '官方预提交检查',
+          message: '正在检查 ' + alphaIds.length + ' 个 Alpha。',
+          scanned: 0,
+          total: alphaIds.length,
+          percent: 0,
+        },
+      });
       var payload = Object.assign(window.collectPayload ? window.collectPayload() : {}, { alpha_ids: alphaIds });
       var resp = await Api.post('/api/check_batch', payload);
       if (resp.ok && resp.check_results) {
@@ -622,6 +813,17 @@
         Object.assign(checks, resp.check_results);
         S.set('checkResults', checks);
         var passedCount = Object.values(resp.check_results).filter(function (c) { return c.passed; }).length;
+        touchRuntimeStatus(checkStarted, {
+          phase: 'official_pre_submit_check',
+          data: {
+            phase: 'official_pre_submit_check',
+            phase_label: '官方预提交检查',
+            message: '检查完成：' + passedCount + ' 通过 / ' + alphaIds.length + ' 总数。',
+            scanned: alphaIds.length,
+            total: alphaIds.length,
+            percent: 100,
+          },
+        });
         Toast.success('检查完成：' + passedCount + ' 通过 / ' + alphaIds.length + ' 总数');
         if (($('autoSubmitToggle') || {}).checked && passedCount > 0) {
           var passedIds = Object.entries(resp.check_results).filter(function (e) { return e[1].passed; }).map(function (e) { return e[0]; });
@@ -633,7 +835,7 @@
         }
       }
     } catch (e) { Toast.error('检查失败：' + e.message); }
-    finally { S.set('batchCheckJobId', ''); renderBusyControls(); renderAll(); }
+    finally { S.set('batchCheckJobId', ''); clearRuntimeStatus(); renderBusyControls(); renderAll(); }
   };
   window.handleAutoSubmitToggle = function () {
     S.set('config.autoSubmit', Boolean(($('autoSubmitToggle') || {}).checked));
@@ -721,13 +923,17 @@
     if (typeof window.loadCheckResults === 'function') window.loadCheckResults();
     var toggle = $('displayModeToggle'); if (toggle) toggle.classList.remove('hidden');
     window.renderBusyControls();
+    var runtimeTimer = setInterval(function () {
+      if (activeRuntimeKind() && typeof window.renderRuntimeStatus === 'function') window.renderRuntimeStatus();
+    }, 1000);
+    if (runtimeTimer && typeof runtimeTimer.unref === 'function') runtimeTimer.unref();
   }
   S.onUpdate(function (path) {
     var pathName = String(path || '');
-    var busyPaths = ['isRunning', 'activeJobId', 'syncInFlight', 'batchCheckJobId', 'submitInFlight', 'selectedSubmitIds', 'batch'];
+    var busyPaths = ['isRunning', 'activeJobId', 'syncInFlight', 'batchCheckJobId', 'submitInFlight', 'selectedSubmitIds', 'batch', 'liveProgress', 'runtimeStatusStartedAt', 'runtimeStatusUpdatedAt', 'syncStartedAt', 'checkStartedAt'];
     if (busyPaths.indexOf(pathName) !== -1) window.renderBusyControls();
     if (busyPaths.indexOf(pathName) !== -1 || pathName === 'activeView' || pathName === 'checkResults' || pathName.indexOf('currentResult') === 0) renderTaskRail();
-    if (pathName === 'isRunning' || pathName === 'activeJobId') {
+    if (pathName === 'isRunning' || pathName === 'activeJobId' || pathName === 'liveProgress' || pathName === 'runtimeStatusStartedAt' || pathName === 'runtimeStatusUpdatedAt' || pathName === 'syncStartedAt' || pathName === 'checkStartedAt' || pathName === 'batch') {
       var statusEl = $('globalStatus');
       var dotEl = $('headerStatusDot');
       if (statusEl) {

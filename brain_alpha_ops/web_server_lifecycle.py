@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from http.server import ThreadingHTTPServer
 import json
+import sys
 import socket
 import socketserver
 import threading
@@ -14,6 +15,12 @@ import webbrowser
 
 class SafeThreadingHTTPServer(ThreadingHTTPServer):
     allow_reuse_address = True
+
+    def handle_error(self, request, client_address) -> None:
+        _exc_type, exc, _tb = sys.exc_info()
+        if isinstance(exc, (BrokenPipeError, ConnectionAbortedError, ConnectionResetError, OSError)):
+            return
+        super().handle_error(request, client_address)
 
     def server_bind(self) -> None:
         # Avoid HTTPServer.server_bind -> socket.getfqdn reverse lookup, which

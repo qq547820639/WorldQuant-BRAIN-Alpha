@@ -72,10 +72,13 @@
   function handleSSEMessage(data) {
     if (!data.ok) return;
 
+    var now = Date.now();
     S.setBatch({
       'activeJobId': data.job_id || _jobId,
       'isRunning': true,
       'liveProgress': { phase: (data.progress || {}).phase || '', data: data.progress || {} },
+      'runtimeStatusStartedAt': S.get('runtimeStatusStartedAt') || now,
+      'runtimeStatusUpdatedAt': now,
     });
 
     // Update header status dot
@@ -135,7 +138,7 @@
     disconnectSSE();
     if (_pollTimer) { clearInterval(_pollTimer); _pollTimer = null; }
     _running = false;
-    S.setBatch({ 'isRunning': false, 'activeJobId': '' });
+    S.setBatch({ 'isRunning': false, 'activeJobId': '', 'runtimeStatusStartedAt': 0, 'runtimeStatusUpdatedAt': 0 });
 
     var statusDot = $('headerStatusDot');
     if (statusDot) statusDot.className = 'header-status-dot';
@@ -200,9 +203,24 @@
     }
 
     _running = true;
-    S.set('isRunning', true);
+    var startedAt = Date.now();
+    S.setBatch({
+      'isRunning': true,
+      'runtimeStatusStartedAt': startedAt,
+      'runtimeStatusUpdatedAt': startedAt,
+      'liveProgress': {
+        phase: 'production',
+        data: {
+          phase: 'production',
+          phase_label: '生产搜索',
+          message: '正在启动生产搜索，请稍候。',
+          percent: 0,
+        },
+      },
+    });
     updateRunButton();
     Toast.info(options.resume ? '正在从断点恢复...' : '正在创建引导式生产任务...');
+    if (typeof window.renderRuntimeStatus === 'function') window.renderRuntimeStatus();
 
     try {
       var payload = window.collectPayload ? window.collectPayload() : {};
@@ -214,13 +232,25 @@
       if (!resp.ok) throw new Error(resp.error || '启动失败');
 
       _jobId = resp.job_id;
-      S.set('activeJobId', _jobId);
+      S.setBatch({
+        'activeJobId': _jobId,
+        'runtimeStatusUpdatedAt': Date.now(),
+        'liveProgress': {
+          phase: 'production',
+          data: {
+            phase: 'production',
+            phase_label: '生产搜索',
+            message: '任务已启动，等待第一条进度。',
+            percent: 0,
+          },
+        },
+      });
       Toast.success((options.resume ? '断点续跑已启动' : '引导式生产已启动') + ' (job: ' + _jobId.slice(0, 8) + ')');
 
       connectSSE(_jobId);
     } catch (e) {
       _running = false;
-      S.setBatch({ 'isRunning': false, 'activeJobId': '' });
+      S.setBatch({ 'isRunning': false, 'activeJobId': '', 'runtimeStatusStartedAt': 0, 'runtimeStatusUpdatedAt': 0 });
       updateRunButton();
       disconnectSSE();
       Toast.error('启动失败: ' + e.message);
@@ -239,7 +269,7 @@
 
     _running = false;
     _jobId = '';
-    S.setBatch({ 'isRunning': false, 'activeJobId': '' });
+    S.setBatch({ 'isRunning': false, 'activeJobId': '', 'runtimeStatusStartedAt': 0, 'runtimeStatusUpdatedAt': 0 });
     updateRunButton();
   }
 
