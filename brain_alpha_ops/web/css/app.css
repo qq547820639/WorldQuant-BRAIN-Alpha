@@ -318,6 +318,52 @@
     .workflow-actions .workflow-primary-action{grid-column:auto}
     .workflow-actions .btn{min-height:28px;padding:0 var(--sp-2);font-size:var(--fs-xs)}
 
+    /* ── RUNTIME STATUS ────────────────────────────────────────────────── */
+    .runtime-status-panel{
+      display:grid;grid-template-columns:minmax(0,1fr) minmax(360px,auto) auto;
+      gap:var(--sp-3);align-items:center;padding:var(--sp-3);
+      border-bottom:1px solid var(--border-default);
+      background:var(--bg-info-soft);box-shadow:inset 4px 0 0 var(--info);
+    }
+    .runtime-status-panel.hidden{display:none}
+    .runtime-status-panel.is-warning{
+      background:var(--bg-warning-soft);box-shadow:inset 4px 0 0 var(--warning);
+    }
+    .runtime-status-main{min-width:0;display:flex;flex-direction:column;gap:var(--sp-2)}
+    .runtime-status-head{display:flex;align-items:flex-start;gap:var(--sp-3);min-width:0}
+    .runtime-status-badge{
+      display:inline-flex;align-items:center;justify-content:center;min-width:56px;height:24px;
+      padding:0 var(--sp-2);border-radius:var(--r-full);background:var(--info);
+      color:#fff;font-size:var(--fs-2xs);font-weight:var(--fw-extrabold);white-space:nowrap;
+    }
+    .runtime-status-panel.is-warning .runtime-status-badge{background:var(--warning)}
+    .runtime-status-title{font-size:var(--fs-base);font-weight:var(--fw-extrabold);color:var(--text-primary)}
+    .runtime-status-message{font-size:var(--fs-xs);color:var(--text-secondary);line-height:1.4}
+    .runtime-status-hint{font-size:var(--fs-2xs);color:var(--text-secondary);line-height:1.4}
+    .runtime-progress{height:8px;border-radius:var(--r-full);background:rgba(255,255,255,.75);overflow:hidden;border:1px solid var(--border-default)}
+    .runtime-progress-fill{height:100%;width:0%;border-radius:var(--r-full);background:var(--info);transition:width 300ms ease}
+    .runtime-status-panel.is-warning .runtime-progress-fill{background:var(--warning)}
+    .runtime-progress.is-indeterminate .runtime-progress-fill{
+      width:38%!important;animation:progressIndeterminate 1.5s ease-in-out infinite;
+    }
+    .runtime-status-meta{
+      display:grid;grid-template-columns:repeat(5,minmax(68px,auto));gap:var(--sp-2);
+      min-width:0;
+    }
+    .runtime-status-meta div{
+      padding:var(--sp-2);border:1px solid var(--border-default);border-radius:var(--r-sm);
+      background:rgba(255,255,255,.72);min-width:0;
+    }
+    .runtime-status-meta span{
+      display:block;font-size:var(--fs-2xs);font-weight:var(--fw-bold);color:var(--text-secondary);
+      white-space:nowrap;
+    }
+    .runtime-status-meta strong{
+      display:block;margin-top:1px;font-size:var(--fs-xs);font-weight:var(--fw-extrabold);
+      color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+    }
+    .runtime-status-actions{display:flex;gap:var(--sp-2);justify-content:flex-end;flex-wrap:wrap}
+
     /* ── VIEW TABS ──────────────────────────────────────────────────────── */
     .view-tabs{
       display:flex;flex-wrap:wrap;align-items:center;gap:var(--sp-1) var(--sp-3);

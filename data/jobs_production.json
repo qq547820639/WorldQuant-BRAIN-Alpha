@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated_at": 1779762502.3327467,
+  "updated_at": 1779785595.7334201,
   "jobs": {
     "job_0001": {
       "status": "failed",
@@ -112,6 +112,24 @@
           "redacted_message": "生产环境需要 BRAIN 凭据。请设置 BRAIN_USERNAME/BRAIN_PASSWORD 或 BRAIN_TOKEN 环境变量。详见 README.md。",
           "retryable": false
         }
+      }
+    },
+    "job_0005": {
+      "status": "failed",
+      "result": null,
+      "error": "Process restarted before this task completed.",
+      "cancel": false,
+      "created_at": 1779785096.4053144,
+      "updated_at": 1779785595.7334201,
+      "progress": {
+        "phase": "failed",
+        "status": "running",
+        "current": 9,
+        "total": 10,
+        "percent": 100,
+        "message": "Process restarted before this task completed.",
+        "alpha_id": "",
+        "data": {}
       }
     }
   }
