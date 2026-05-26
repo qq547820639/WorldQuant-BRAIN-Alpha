@@ -9,11 +9,17 @@ import sqlite3
 import time
 from typing import Any
 
-from brain_alpha_ops.errors import classify_error
 from brain_alpha_ops.jsonl import read_jsonl_tail_with_stats
 from brain_alpha_ops.redaction import redact_error_message, redact_text
 from brain_alpha_ops.research.expression_ast import expression_key
 from brain_alpha_ops.research.expression_index import ExpressionHistoryIndex
+from brain_alpha_ops.research.observability_errors import observability_error_rows
+from brain_alpha_ops.research.observability_extensions import (
+    load_optional_observability_sources,
+    optional_observability_context,
+    optional_vector_snapshot,
+    optional_research_health_payload,
+)
 
 
 JSONL_FILES = ("candidates.jsonl", "lifecycle.jsonl", "checks.jsonl", "backtests.jsonl")
@@ -50,7 +56,7 @@ def build_research_observability_snapshot(
     backtest_rows = source_rows.get("backtests.jsonl", [])
     lifecycle_rows = source_rows.get("lifecycle.jsonl", [])
     check_rows = source_rows.get("checks.jsonl", [])
-    error_rows = _observability_error_rows(
+    error_rows = observability_error_rows(
         backtest_rows,
         lifecycle_rows,
         check_rows,
@@ -63,6 +69,8 @@ def build_research_observability_snapshot(
     official_call_guard = official_call_guard_observability(lifecycle_rows, top_n=safe_top_n)
     jsonl_payload = {name: result.to_dict() for name, result in jsonl_results.items()}
     sqlite_payload = _expression_sqlite_status(root / "expression_index.sqlite")
+    market_cache_payload, alert_payload = load_optional_observability_sources(root, top_n=safe_top_n)
+    market_vector_payload = optional_vector_snapshot(root, top_n=safe_top_n)
     health = diagnose_research_health(
         expression_payload=expression_payload,
         backtests=backtest_payload,
@@ -70,6 +78,8 @@ def build_research_observability_snapshot(
         errors=error_payload,
         jsonl=jsonl_payload,
         sqlite_cache=sqlite_payload,
+        market_data_cache=market_cache_payload,
+        alerts=alert_payload,
     )
     partial_errors = []
     if expression_payload.get("error"):
@@ -95,6 +105,9 @@ def build_research_observability_snapshot(
         "official_call_guard": official_call_guard,
         "jsonl": jsonl_payload,
         "sqlite_cache": sqlite_payload,
+        "market_data_cache": market_cache_payload,
+        "market_data_vector": market_vector_payload,
+        "alerts": alert_payload,
         "health": health,
         "partial_errors": partial_errors,
         "recommendations": list(health.get("actions") or []),
@@ -111,7 +124,7 @@ def observability_context(snapshot: dict[str, Any] | None, *, top_n: int = 10) -
     official_guard = snapshot.get("official_call_guard") if isinstance(snapshot.get("official_call_guard"), dict) else {}
     sqlite_cache = snapshot.get("sqlite_cache") if isinstance(snapshot.get("sqlite_cache"), dict) else {}
     health = snapshot.get("health") if isinstance(snapshot.get("health"), dict) else {}
-    return {
+    context = {
         "schema_version": snapshot.get("schema_version", "research_observability_snapshot.v1"),
         "source": snapshot.get("source", "local_research_jsonl"),
         "generated_at": snapshot.get("generated_at", ""),
@@ -143,6 +156,8 @@ def observability_context(snapshot: dict[str, Any] | None, *, top_n: int = 10) -
         "recommended_actions": list(health.get("actions") or snapshot.get("recommendations") or [])[:top_n],
         "recommendations": list(health.get("actions") or snapshot.get("recommendations") or [])[:top_n],
     }
+    context.update(optional_observability_context(snapshot, top_n=top_n))
+    return context
 
 
 def official_call_guard_observability(rows: list[dict[str, Any]], *, top_n: int = 10) -> dict[str, Any]:
@@ -257,6 +272,8 @@ def diagnose_research_health(
     errors: dict[str, Any] | None = None,
     jsonl: dict[str, Any] | None = None,
     sqlite_cache: dict[str, Any] | None = None,
+    market_data_cache: dict[str, Any] | None = None,
+    alerts: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Convert observability counters into pre-execution risk diagnostics."""
     snapshot = snapshot or {}
@@ -289,6 +306,16 @@ def diagnose_research_health(
         sqlite_cache
         if isinstance(sqlite_cache, dict)
         else snapshot.get("sqlite_cache") if isinstance(snapshot.get("sqlite_cache"), dict) else {}
+    )
+    market_cache_payload = (
+        market_data_cache
+        if isinstance(market_data_cache, dict)
+        else snapshot.get("market_data_cache") if isinstance(snapshot.get("market_data_cache"), dict) else {}
+    )
+    alert_payload = (
+        alerts
+        if isinstance(alerts, dict)
+        else snapshot.get("alerts") if isinstance(snapshot.get("alerts"), dict) else {}
     )
 
     total_expression_records = _int_from_any(expression.get("total_expression_records"))
@@ -325,6 +352,10 @@ def diagnose_research_health(
     blocking_flags: list[str] = []
     actions: list[str] = []
     details: dict[str, dict[str, Any]] = {}
+    optional_payload = optional_research_health_payload(market_cache_payload, alert_payload)
+    health_flags.extend(optional_payload["health_flags"])
+    actions.extend(optional_payload["actions"])
+    details.update(optional_payload["details"])
 
     def add_flag(
         flag: str,
@@ -524,6 +555,7 @@ def diagnose_research_health(
             "jsonl_invalid_count": jsonl_invalid,
             "jsonl_read_error_count": len(jsonl_errors),
             "sqlite_cache_ready": bool(sqlite_payload.get("exists") and not sqlite_payload.get("error")),
+            **optional_payload["evidence"],
         },
     }
 
@@ -705,76 +737,6 @@ def _error_observability(rows: list[dict[str, Any]], *, top_n: int) -> dict[str,
         "source_counts": dict(source_counts.most_common()),
         "latest": latest[-top_n:][::-1],
     }
-
-
-def _observability_error_rows(
-    backtest_rows: list[dict[str, Any]],
-    lifecycle_rows: list[dict[str, Any]],
-    check_rows: list[dict[str, Any]],
-    job_rows: list[dict[str, Any]],
-) -> list[dict[str, Any]]:
-    rows: list[dict[str, Any]] = []
-    for source, items in (
-        ("backtests", backtest_rows),
-        ("lifecycle", lifecycle_rows),
-        ("checks", check_rows),
-        ("jobs", job_rows),
-    ):
-        for row in items:
-            error = _error_from_observability_row(row)
-            if error:
-                error_source = _text(row.get("source")) if source == "jobs" else source
-                rows.append({"source": error_source or source, **error})
-    return rows
-
-
-def _error_from_observability_row(row: dict[str, Any]) -> dict[str, Any] | None:
-    contexts: list[dict[str, Any]] = []
-    for key in ("error_context", "error"):
-        value = row.get(key)
-        if isinstance(value, dict):
-            contexts.append(value)
-    progress = row.get("progress") if isinstance(row.get("progress"), dict) else {}
-    value = progress.get("error_context")
-    if isinstance(value, dict):
-        contexts.append(value)
-    for context in contexts:
-        payload = {
-            **context,
-            "alpha_id": row.get("alpha_id") or context.get("alpha_id") or "",
-            "timestamp": row.get("timestamp") or row.get("updated_at") or row.get("checked_at") or "",
-        }
-        payload["message"] = payload.get("error") or payload.get("message") or row.get("note") or ""
-        return payload
-
-    message = _text(row.get("error") or row.get("failure_reason"))
-    status_text = " ".join(
-        _text(row.get(key))
-        for key in ("status", "stage", "action", "lifecycle_status", "note")
-        if row.get(key) is not None
-    )
-    if not message and not _looks_failed_status(status_text):
-        return None
-    exc = RuntimeError(message or status_text or "recorded failure")
-    info = classify_error(exc, default_code=_default_error_code_for_row(row))
-    payload = info.to_dict()
-    payload.update({
-        "alpha_id": row.get("alpha_id", ""),
-        "timestamp": row.get("timestamp") or row.get("updated_at") or row.get("checked_at") or "",
-        "message": payload.get("error", ""),
-    })
-    return payload
-
-
-def _default_error_code_for_row(row: dict[str, Any]) -> str:
-    text = f"{row.get('action', '')} {row.get('stage', '')} {row.get('status', '')}".upper()
-    if "CHECK" in text:
-        return "CHECK_ERROR"
-    if "SUBMIT" in text:
-        return "SUBMIT_ERROR"
-    if "SIMULATION" in text or "BACKTEST" in text:
-        return "BACKTEST_ERROR"
-    return "RECORDED_ERROR"
 
 
 def _expression_sqlite_status(path: Path) -> dict[str, Any]:

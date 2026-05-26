@@ -19,6 +19,8 @@ class BacktestBatchPlan:
     skipped: tuple[dict[str, Any], ...]
     capacity: int
     requested: int
+    rate_limit: dict[str, Any] | None = None
+    account_safety: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -27,6 +29,8 @@ class BacktestBatchPlan:
             "skipped_count": len(self.skipped),
             "capacity": self.capacity,
             "requested": self.requested,
+            "rate_limit": dict(self.rate_limit or {}),
+            "account_safety": dict(self.account_safety or {}),
             "selected": [
                 {
                     "alpha_id": candidate.alpha_id,
@@ -48,14 +52,22 @@ class BatchBacktestCoordinator:
         ranker: CandidateRanker,
         min_score: float,
         batch_size: int,
+        max_workers: int = 1,
+        max_live_submissions_per_batch: int | None = None,
     ) -> None:
         self.ranker = ranker
         self.min_score = float(min_score)
         self.batch_size = max(0, int(batch_size or 0))
+        self.max_workers = max(1, int(max_workers or 1))
+        self.max_live_submissions_per_batch = (
+            max(0, int(max_live_submissions_per_batch))
+            if max_live_submissions_per_batch is not None
+            else self.batch_size
+        )
 
     def plan(self, candidates: list[Candidate], *, capacity: int | None = None) -> BacktestBatchPlan:
         capacity_value = self.batch_size if capacity is None else max(0, int(capacity or 0))
-        requested = min(self.batch_size, capacity_value)
+        requested = min(self.batch_size, capacity_value, self.max_live_submissions_per_batch)
         skipped: list[dict[str, Any]] = []
         eligible: list[Candidate] = []
         seen: set[str] = set()
@@ -79,6 +91,16 @@ class BatchBacktestCoordinator:
             skipped=tuple(skipped),
             capacity=capacity_value,
             requested=requested,
+            rate_limit={
+                "max_workers": min(self.max_workers, max(1, requested or 1)),
+                "max_live_submissions_per_batch": self.max_live_submissions_per_batch,
+                "bounded": True,
+            },
+            account_safety={
+                "requires_explicit_live_confirmation": True,
+                "duplicate_preflight_required": True,
+                "score_threshold": self.min_score,
+            },
         )
 
 
