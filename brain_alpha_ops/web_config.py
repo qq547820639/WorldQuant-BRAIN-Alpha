@@ -340,7 +340,14 @@ def run_config_from_payload(payload: dict, *, loader: RunConfigLoader = load_run
         run_config.ops.official_api.rate_limit_retry_attempts,
         lower=0,
     )
-    return validate_run_config(run_config)
+    validated = validate_run_config(run_config)
+    if "continuousMode" in payload:
+        validated.ops.budget.run_forever = payload_bool(
+            payload,
+            "continuousMode",
+            validated.ops.budget.run_forever,
+        )
+    return validated
 
 
 def payload_int(

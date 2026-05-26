@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from scripts import quality_gate
+from scripts.final_release_gate import run_final_release_gate
 from scripts.check_dependency_policy import check_dependency_policy
 from scripts.check_module_size import check_module_size
 from scripts.check_optional_tooling import check_optional_tooling
@@ -184,6 +185,26 @@ def test_quality_gate_can_include_static_analysis(monkeypatch, tmp_path):
     assert any("mypy" in call for call in calls)
 
 
+def test_quality_gate_can_include_final_release_gate(monkeypatch, tmp_path):
+    calls = []
+
+    def fake_run(args):
+        calls.append(args)
+        return True, {"command": args, "exit_code": 0, "duration_seconds": 0.01, "stdout": "", "stderr": ""}
+
+    monkeypatch.setattr(quality_gate, "_run_python_module", fake_run)
+
+    result = quality_gate.run_quality_gate(
+        config_path=tmp_path / "run_config.json",
+        html_path=tmp_path / "index.html",
+        final_release=True,
+        skip_tests=True,
+    )
+
+    assert result["ok"] is True
+    assert any("scripts/final_release_gate.py" in str(call) for call in calls)
+
+
 def test_quality_gate_can_require_fresh_official_context(monkeypatch, tmp_path):
     calls = []
 
@@ -289,3 +310,12 @@ def test_module_size_audit_accepts_current_workspace():
     assert result["ok"] is True
     assert result["findings"] == []
     assert result["hotspots"]
+
+
+def test_final_release_gate_passes_with_release_config():
+    report = run_final_release_gate()
+
+    assert report.passed is True
+    assert report.redlines["code_strong_alignment"] is True
+    assert report.redlines["dataset_id_fully_available"] is True
+    assert report.redlines["full_factor_coverage"] is True

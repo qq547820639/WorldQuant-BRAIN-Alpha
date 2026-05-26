@@ -252,7 +252,10 @@ class OfficialContextLoadService:
             generator.update_context(result.fields, result.operators)
             active_dataset_id = ""
             strategy = getattr(self.config.budget, "dataset_strategy", "rotate")
-            dataset_ids = selector.select(strategy)
+            if str(strategy).lower() in {"fixed", "locked", "specific"} and getattr(self.config.settings, "dataset", ""):
+                dataset_ids = selector.select(strategy, dataset_ids=[self.config.settings.dataset])
+            else:
+                dataset_ids = selector.select(strategy)
             if dataset_ids:
                 active_dataset_id = dataset_ids[0]
                 generator.set_dataset(active_dataset_id)

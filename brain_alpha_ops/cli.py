@@ -180,6 +180,10 @@ def build_parser() -> argparse.ArgumentParser:
     redline.add_argument("--block", action="store_true", help="exit with code 1 on violations")
     redline.add_argument("--json", action="store_true", help="print machine-readable JSON")
 
+    release_gate = sub.add_parser("release-gate", help="run fail-closed final release readiness checks")
+    release_gate.add_argument("--config", default=str(DEFAULT_RUN_CONFIG_PATH))
+    release_gate.add_argument("--json", action="store_true", help="print machine-readable JSON")
+
     score = sub.add_parser("score", help="evaluate a candidate alpha via the full scoring pipeline")
     score.add_argument("--candidate-json", required=True, help="candidate JSON text or path to a JSON file")
     score.add_argument("--config", default=str(DEFAULT_RUN_CONFIG_PATH))
@@ -473,6 +477,21 @@ def _main(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
             if not report.ok:
                 print(f"WARNING: {len(report.violations)} violation(s) found.")
         return 0
+
+    if args.command == "release-gate":
+        from scripts.final_release_gate import run_final_release_gate
+
+        report = run_final_release_gate(config_path=args.config)
+        payload = report.to_dict()
+        if args.json:
+            print(json.dumps(payload, ensure_ascii=False, indent=2, default=str))
+        elif report.passed:
+            print(f"Final release gate passed. manifest_hash={report.manifest_hash}")
+        else:
+            print("Final release gate failed.")
+            for finding in report.findings:
+                print(f"[{finding.severity}] {finding.code}: {finding.message}")
+        return 0 if report.passed else 1
 
     if args.command == "score":
         from brain_alpha_ops.models import Candidate
