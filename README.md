@@ -1,44 +1,33 @@
 # BRAIN Alpha Ops
 
-BRAIN Alpha Ops 是面向 WorldQuant BRAIN 的本地 Alpha 研究与生产辅助工具。项目把候选 Alpha 生成、本地预筛选、官方 Check、官方 Simulation、提交前检查、运行历史、Web 控制台和诊断门禁组织成一条可审计的工作流。
+欢迎使用 BRAIN Alpha Ops。它是一个帮助你在本地管理 WorldQuant BRAIN Alpha 研究流程的小工具：从生成想法、筛选候选、查看运行结果，到打开本地网页控制台，都可以在一个项目里完成。
 
-项目的目标不是绕过 BRAIN 平台规则，而是把关键动作尽量对齐官方 API、官方字段、官方算子、官方数据集和可追踪配置，减少手工试错、重复提交和不安全操作。
+你不需要一开始就理解所有内部细节。按下面的步骤走，先把项目跑起来，再逐步使用更多功能。
 
-## 当前状态
+## 项目简介
 
-最近一次本地源码验证时间：2026-05-26。
+BRAIN Alpha Ops 主要解决四件事：
 
-| 项目 | 当前结果 |
-|---|---|
-| 全量测试 | 755 passed |
-| CI 修复验证 | `tests/test_tasks.py` 与 `tests/test_windows_packaging.py` 聚焦通过 |
-| 官方上下文文件 | 字段、算子、数据集、元数据和刷新状态均被打包清单覆盖 |
-| Windows 打包清单 | `BrainAlphaOps.spec` 已作为源码文件纳入仓库 |
-| Web 控制台 | 本地标准库服务，无独立前端构建链路 |
+1. 帮你生成和整理 Alpha 候选。
+2. 在本地先做基础检查，减少无效尝试。
+3. 连接 WorldQuant BRAIN 官方接口，执行必要的检查、回测和同步。
+4. 提供一个本地网页控制台，让你更直观地查看进度、结果和问题。
 
-最终发布判断仍应把源码测试和打包后 `dist\BrainAlphaOps.exe` 的真实启动验证分开处理。测试通过说明源码行为健康；EXE 是否能在目标机器启动，是独立发布门禁。
+项目默认不会自动提交 Alpha。提交相关操作需要满足配置、检查和安全条件后才会执行。
 
-## 核心能力
+## 快速入门
 
-- 生成候选 Alpha：支持假设驱动、经验反馈、随机探索、主题模板和助手指导等生成路径。
-- 本地预筛选：用表达式检查、去重、数据合规、风险门槛、参数审计和质量评分减少无效官方调用。
-- 官方 API 对接：支持认证、官方字段/算子/数据集刷新、Alpha Check、Simulation、云端 Alpha 同步和提交。
-- 安全提交：默认关闭自动提交，提交前执行官方 Check、相似度、质量门槛和提交策略约束。
-- Web 控制台：在本地浏览器查看候选池、云端 Alpha、回测队列、运行状态、历史记录、风险提示和诊断结果。
-- 研究记忆：保存运行摘要、候选结果、经验反馈、checkpoint、表达式索引和云端记录索引。
-- 质量门禁：串联配置校验、文本编码、模块体量、官方上下文、BRAIN contract、诊断 Gap、敏感信息扫描和测试。
-- Windows 打包：通过 PyInstaller 生成 `BrainAlphaOps.exe`，并携带官方上下文、Web 页面、假设库和提示词模板。
+### 1. 准备环境
 
-## 环境要求
+你需要：
 
 - Python 3.10 或更高版本
-- Windows PowerShell，用于本地 EXE 打包脚本
-- WorldQuant BRAIN 账号，用于真实官方接口
-- 可选：PyInstaller，用于构建 Windows EXE
+- 一个 WorldQuant BRAIN 账号
+- Windows PowerShell，推荐在 Windows 上使用本项目
 
-Web 控制台服务端使用 Python 标准库实现，不需要 Node、Vite 或其他前端构建工具。
+### 2. 安装项目
 
-## 安装
+打开 PowerShell，进入你想保存项目的目录，然后执行：
 
 ```powershell
 git clone https://github.com/qq547820639/WorldQuant-BRAIN-Alpha.git
@@ -50,318 +39,211 @@ python -m venv venv
 pip install -e .
 ```
 
-开发和测试环境：
+如果你还要运行测试或参与开发，可以安装开发依赖：
 
 ```powershell
 pip install -e ".[test,dev]"
 ```
 
-如果在 Codex 桌面环境中运行，通常使用内置 Python，并让 `PYTHONPATH` 包含 `.codex_pydeps`：
+### 3. 设置 BRAIN 登录信息
 
-```powershell
-$env:PYTHONPATH = ".codex_pydeps"
-& "C:\Users\54782\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe" -m pytest -q --basetemp .pytest_tmp
-```
-
-## 凭据设置
-
-不要把 BRAIN 用户名、密码或 token 写进代码、配置文件、README、日志或提交记录。运行时通过进程环境变量传入：
+请不要把账号密码写进代码或配置文件。运行前在 PowerShell 里设置环境变量：
 
 ```powershell
 $env:BRAIN_USERNAME = "your@email.com"
 $env:BRAIN_PASSWORD = "your_password"
 ```
 
-如果使用 token：
+如果你使用 token，也可以设置：
 
 ```powershell
 $env:BRAIN_TOKEN = "your_token"
 ```
 
-[config/run_config.json](config/run_config.json) 只保存环境变量名称，不保存真实凭据。
+### 4. 检查配置
 
-## 快速开始
-
-校验配置：
+先确认项目配置可以正常读取：
 
 ```powershell
 python -m brain_alpha_ops.cli validate-config --config config/run_config.json
 ```
 
-刷新官方字段、算子和数据集上下文：
-
-```powershell
-python fetch_official_context.py --config config/run_config.json --json
-```
-
-运行一轮研究流水线：
-
-```powershell
-python -m brain_alpha_ops.cli run --config config/run_config.json --cycles 1 --candidates 20
-```
-
-运行带 checkpoint 和进度阶段的引导模式：
-
-```powershell
-python -m brain_alpha_ops.cli guided-run --config config/run_config.json
-```
-
-启动本地 Web 控制台：
+### 5. 启动本地网页控制台
 
 ```powershell
 python launch_web.py
 ```
 
-默认地址：
+启动后在浏览器打开：
 
 ```text
 http://127.0.0.1:8765
 ```
 
-## Web 控制台
+如果页面能打开，你就可以开始使用项目了。
 
-Web 控制台适合日常操作和排查。它覆盖候选生成、云端同步、批量 Check、Simulation 状态、提交前检查、运行历史和诊断视图。
+## 常用操作
 
-| 视图 | 用途 |
-|---|---|
-| 候选池 | 查看当前生成、保留和评分后的 Alpha 候选 |
-| 待回测 | 查看通过本地门槛、准备进入官方 Simulation 的候选 |
-| 回测中 | 查看正在等待官方 Simulation 结果的任务 |
-| 达标 | 查看通过质量门槛的候选 |
-| 可提交 | 查看满足提交前置条件的候选 |
-| 已提交 | 查看已经提交到 BRAIN 的记录 |
-| 不达标 | 查看失败候选和原因 |
-| 云端数据 | 同步和去重 BRAIN 平台已有 Alpha |
-| 研究记忆 | 查看历史运行摘要、经验反馈和对比 |
-| 诊断 | 查看红线、参数、数据链路、评分、UX 和 Gap 覆盖状态 |
+### 刷新官方字段和数据
 
-Web 控制台默认只监听本机 `127.0.0.1`。如果需要远程访问，先审查 [config/run_config.json](config/run_config.json) 中的 `web.allow_remote` 和管理 token 设置。
-
-## 常用 CLI
-
-所有命令都通过 `python -m brain_alpha_ops.cli <command>` 调用。
-
-| 命令 | 用途 |
-|---|---|
-| `run` | 运行完整研究流水线 |
-| `guided-run` | 运行带 checkpoint、阶段进度和历史记录的引导流程 |
-| `validate-config` | 校验配置文件 |
-| `init-config` | 生成默认配置 |
-| `diagnose` | 生成生产诊断、Gap 矩阵和升级建议 |
-| `score` | 对单个候选 Alpha 执行完整评分 |
-| `redline` | 执行六大技术红线检查 |
-| `release-gate` | 执行最终发布就绪检查 |
-| `memory-summary` | 汇总本地研究记忆 |
-| `memory-guidance` | 导出生成器可用的研究记忆指导 |
-| `expression-index` | 查询 FASTEXPR 表达式历史索引 |
-| `record-index` | 查询云端 Alpha/backtest 记录索引 |
-| `research-observability` | 汇总研究健康状态、回测、错误和日志 |
-| `assistant-context` | 导出 LLM 可用上下文包 |
-| `assistant-request` | 生成 provider-neutral 的 LLM 请求包 |
-| `assistant-parse` | 解析并规范化 LLM JSON 响应 |
-| `assistant-guidance` | 把 LLM 响应转换成生成器指导 |
-| `assistant-save-guidance` | 保存可复用 LLM 指导 |
-| `assistant-guidance-audit` | 审计已保存指导的复用价值 |
-| `assistant-cross-review` | 对 LLM 响应做交叉审查 |
-| `anti-overfit` | 对候选执行反过拟合检查 |
-| `rolling-validate` | 对候选执行滚动窗口验证 |
-
-示例：
+第一次使用，或很久没有更新过官方数据时，可以运行：
 
 ```powershell
-python -m brain_alpha_ops.cli diagnose --config config/run_config.json --json --output docs/ALPHA_PRODUCTION_DIAGNOSIS_20260522.md
-python -m brain_alpha_ops.cli redline --json
-python -m brain_alpha_ops.cli release-gate --config config/run_config.json --json
+python fetch_official_context.py --config config/run_config.json --json
 ```
 
-## 配置重点
+### 运行一轮 Alpha 研究
 
-主配置文件是 [config/run_config.json](config/run_config.json)。
+```powershell
+python -m brain_alpha_ops.cli run --config config/run_config.json --cycles 1 --candidates 20
+```
 
-| 配置区 | 说明 |
-|---|---|
-| `environment` | 当前支持 `production` |
-| `auto_submit` | 是否允许自动提交，默认 `false` |
-| `credentials` | 凭据环境变量名称，不保存真实凭据 |
-| `web` | 本地控制台 host、port、浏览器打开策略和管理 token |
-| `ops.settings` | BRAIN 平台设置，如 region、universe、delay、neutralization、truncation |
-| `ops.budget` | 每轮候选数、官方 Check 数、Simulation 数、并发数和 retained pool |
-| `ops.thresholds` | Sharpe、Fitness、Turnover、Correlation、Concentration 等硬门槛 |
-| `ops.submission_policy` | 每日提交上限、相似度上限、微变体阻断和提交前 Check |
-| `ops.official_api` | 官方 API path、超时、轮询、速率限制和缓存 TTL |
+这会生成一批候选，并按配置进行本地筛选和记录。
 
-关键默认阈值：
+### 使用带进度提示的模式
 
-| 阈值 | 默认值 |
-|---|---|
-| `min_sharpe` | `1.25` |
-| `min_sharpe_delay0` | `2.0` |
-| `min_fitness` | `1.0` |
-| `min_fitness_delay0` | `1.3` |
-| `min_turnover` | `0.01` |
-| `platform_max_turnover` | `0.70` |
-| `max_self_correlation` | `0.70` |
-| `max_prod_correlation` | `0.70` |
-| `max_weight_concentration` | `0.10` |
-| `sub_universe_sharpe_min_ratio` | `0.75` |
+```powershell
+python -m brain_alpha_ops.cli guided-run --config config/run_config.json
+```
 
-## 质量门禁
+这个模式更适合新手，因为它会记录阶段进度和中间结果。
 
-快速门禁：
+### 运行项目自检
 
 ```powershell
 python scripts/quality_gate.py --skip-tests --json
 ```
 
-严格官方上下文门禁：
+如果你想运行完整测试：
 
 ```powershell
-python scripts/quality_gate.py --strict-official-context --skip-tests --json
+pytest tests/ -q --basetemp .pytest_tmp
 ```
 
-完整门禁和测试：
+## 核心功能说明
 
-```powershell
-python scripts/quality_gate.py --strict-official-context --json
-```
+### 本地网页控制台
 
-常用单项检查：
+网页控制台是最推荐的日常入口。你可以在里面查看：
 
-```powershell
-python -m compileall -q brain_alpha_ops scripts tests
-python scripts/check_text_encoding.py --root . --json
-python scripts/check_module_size.py --json
-python scripts/check_official_context.py --config config/run_config.json --strict-freshness --json
-python scripts/check_brain_contract.py --config config/run_config.json --strict-freshness --json
-python scripts/check_diagnosis_gap_coverage.py --config config/run_config.json --strict-freshness --json
-python scripts/scan_sensitive_artifacts.py --root . --json --fail-on-findings
-```
+- 当前候选 Alpha
+- 等待回测的候选
+- 正在运行的任务
+- 已通过筛选的结果
+- 可提交的 Alpha
+- 已提交记录
+- 云端同步数据
+- 运行历史和诊断结果
 
-全量测试：
+默认情况下，网页控制台只在你的电脑本机开放。
 
-```powershell
-pytest -q --basetemp .pytest_tmp
-```
+### Alpha 候选生成
 
-GitHub Actions 中的测试在 Linux 环境运行，因此不要依赖仅存在于本地但未提交的文件。打包相关测试会读取仓库根目录的 `BrainAlphaOps.spec`。
+项目可以根据配置和历史结果生成 Alpha 候选。你可以先让系统生成一批，再从结果里挑选更有希望的方向继续研究。
 
-## 生产诊断报告
+### 本地筛选
 
-生成最新诊断报告：
+在调用官方接口前，项目会先做一些本地检查，比如表达式是否合理、是否重复、是否明显不符合配置门槛。这样可以减少浪费时间的官方调用。
 
-```powershell
-python -m brain_alpha_ops.cli diagnose --config config/run_config.json --json --output docs/ALPHA_PRODUCTION_DIAGNOSIS_20260522.md
-```
+### 官方检查与回测
 
-报告覆盖：
+配置好 BRAIN 登录信息后，项目可以连接官方接口，执行官方 Check、Simulation、云端 Alpha 同步等操作。
 
-- 六大技术红线
-- 官方字段、算子、数据集加载和 freshness
-- 参数审计和阈值零偏差
-- BRAIN contract 对齐
-- 本地评分、API-shaped simulation 和归因摘要
-- Web 前端 inline 同步
-- checkpoint 和 run-history replay
-- 诊断 Gap 矩阵
-- 已完成项和未完成项
+### 提交保护
 
-## Windows EXE 打包
+项目默认关闭自动提交。即使开启提交相关功能，也会先检查相似度、质量门槛、官方状态和提交策略，尽量避免误提交。
 
-打包前先跑门禁：
+### Windows EXE 打包
 
-```powershell
-python scripts/quality_gate.py --strict-official-context --skip-tests --json
-```
-
-构建 EXE：
+如果你想把项目打包成 Windows 可执行文件，可以运行：
 
 ```powershell
 .\scripts\build_windows.ps1
 ```
 
-输出位置：
+打包结果会放在：
 
 ```text
 dist\BrainAlphaOps.exe
 ```
 
-打包清单由 [BrainAlphaOps.spec](BrainAlphaOps.spec) 维护。它会把以下资源纳入发布包：
+打包后建议真实启动一次，确认页面和健康接口都能访问。
 
-- `config/run_config.json`
-- `data/official_fields.json`
-- `data/official_fields.meta.json`
-- `data/official_operators.json`
-- `data/official_operators.meta.json`
-- `data/official_datasets.json`
-- `data/official_datasets.meta.json`
-- `data/official_context_refresh_status.json`
-- `brain_alpha_ops/web/index.html`
-- `brain_alpha_ops/research/hypotheses`
-- `brain_alpha_ops/research/prompts`
+## 常见问题排查
 
-构建后建议执行真实启动验证：
+### 页面打不开怎么办？
+
+先确认启动命令还在运行：
 
 ```powershell
-.\dist\BrainAlphaOps.exe --smoke-test --port 8765
+python launch_web.py
 ```
 
-再检查本地页面和健康接口：
+然后访问：
 
 ```text
-http://127.0.0.1:8765/
-http://127.0.0.1:8765/api/health
+http://127.0.0.1:8765
 ```
 
-## CI 排障
+如果端口被占用，可以在配置文件 [config/run_config.json](config/run_config.json) 中修改 `web.port`。
 
-当前 CI 失败修复点：
+### 提示缺少 BRAIN 凭据怎么办？
 
-- 并发任务存储测试不再假设刚创建的 job 一定还在缓存中，因为 `JobStore(max_jobs=75)` 会在多线程创建 150 条 job 时按设计裁剪旧记录。
-- `BrainAlphaOps.spec` 不再被 `.gitignore` 排除，Linux checkout 能读取打包清单并验证官方上下文、假设库和提示词模板。
-
-推荐本地复现顺序：
+说明项目没有读到账号信息。重新设置环境变量：
 
 ```powershell
-pytest tests/test_tasks.py tests/test_windows_packaging.py -q --basetemp .pytest_tmp_ci_fix_focus
-pytest tests/ -v --tb=short --basetemp .pytest_tmp_ci_fix_full
+$env:BRAIN_USERNAME = "your@email.com"
+$env:BRAIN_PASSWORD = "your_password"
 ```
 
-如果 CI 报 `FileNotFoundError: BrainAlphaOps.spec`，先确认该文件已被 Git 跟踪：
+设置后，在同一个 PowerShell 窗口里重新运行命令。
 
-```powershell
-git ls-files BrainAlphaOps.spec
-```
+### 运行测试时失败怎么办？
 
-## 安全边界
-
-- 默认不自动提交 Alpha。
-- 真实凭据只通过环境变量传入。
-- Web 控制台默认只绑定本机地址。
-- 任务持久化会遮蔽密码、token、cookie、Authorization header 等敏感内容。
-- 官方调用受速率限制、重试和缓存策略约束。
-- 发布前应同时通过源码测试、严格官方上下文门禁、敏感信息扫描和 EXE 启动验证。
-
-## 目录速览
-
-| 路径 | 说明 |
-|---|---|
-| `brain_alpha_ops/` | 核心 Python 包 |
-| `brain_alpha_ops/brain_api/` | BRAIN 官方 API 与 mock API |
-| `brain_alpha_ops/research/` | 生成、评分、回测、记忆、假设库和流水线 |
-| `brain_alpha_ops/web/` | Web 静态页面 |
-| `config/run_config.json` | 默认运行配置 |
-| `data/` | 本地缓存、官方上下文、任务和运行数据 |
-| `scripts/` | 质量门禁、打包、检查和维护脚本 |
-| `tests/` | pytest 测试 |
-| `docs/` | 诊断报告、架构说明和审计材料 |
-
-## 贡献前检查
-
-提交前建议至少运行：
+先运行更小范围的检查：
 
 ```powershell
 python scripts/quality_gate.py --skip-tests --json
-pytest tests/test_tasks.py tests/test_windows_packaging.py -q --basetemp .pytest_tmp_focus
 ```
 
-改动触及官方上下文、Web 控制台、提交策略、打包或任务持久化时，运行完整测试并补充对应聚焦测试。
+如果是测试临时文件导致的问题，可以换一个临时目录：
+
+```powershell
+pytest tests/ -q --basetemp .pytest_tmp_retry
+```
+
+### 官方数据过期怎么办？
+
+刷新官方上下文：
+
+```powershell
+python fetch_official_context.py --config config/run_config.json --json
+```
+
+如果仍然失败，通常是账号、网络或官方接口限流问题。稍后重试，并确认 BRAIN 登录信息正确。
+
+### 为什么本地通过不代表可以提交？
+
+本地通过只说明候选没有明显问题。真正提交前，还需要官方 Check、回测状态、相似度、质量门槛和账号状态都满足要求。
+
+### README 里的命令应该在哪运行？
+
+除非特别说明，所有命令都在项目根目录运行，也就是包含 [config](config)、[brain_alpha_ops](brain_alpha_ops)、[scripts](scripts) 的目录。
+
+## 安全提醒
+
+- 不要把 BRAIN 账号、密码或 token 写进 README、配置文件、日志或提交记录。
+- 不确定时，先关闭自动提交。
+- 打包后的 EXE 也要单独启动验证，不要只依赖源码测试结果。
+- 如果怀疑凭据泄露，请立即修改 BRAIN 密码或重置 token。
+
+## 下一步建议
+
+第一次使用时，推荐顺序是：
+
+1. 安装项目。
+2. 设置 BRAIN 登录信息。
+3. 运行配置检查。
+4. 打开本地网页控制台。
+5. 先运行一轮小规模研究。
+6. 查看结果和诊断信息，再逐步扩大候选数量。
