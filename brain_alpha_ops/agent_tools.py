@@ -15,28 +15,47 @@ from brain_alpha_ops.brain_api import MockBrainAPI
 from brain_alpha_ops.config import RunConfig, load_run_config
 from brain_alpha_ops.error_payloads import user_error_payload
 from brain_alpha_ops.models import Candidate
+from brain_alpha_ops.agent_guidance_tools import (
+    assistant_guidance_for_generator,
+    assistant_guidance_summary,
+    attach_assistant_guidance,
+    guidance_sample_size,
+    has_generator_bias,
+    merge_generation_guidance,
+)
+from brain_alpha_ops.agent_research_tools import (
+    assistant_response_guidance_tool,
+    build_market_data_cache_tool,
+    build_assistant_context_tool,
+    build_assistant_request_tool,
+    build_vectorized_market_data_from_args,
+    collect_job_rows,
+    cross_review_assistant_response_tool,
+    orchestrate_parameter_search_from_args,
+    plan_parallel_backtest_from_args,
+    parse_assistant_response_tool,
+    query_research_observability_snapshot,
+    route_alert_from_args,
+    run_anti_overfit_tool,
+    run_parallel_backtest_from_args,
+    run_rolling_validation_tool,
+    search_parameters_tool,
+    send_alert_tool,
+)
 from brain_alpha_ops.redaction import redact_data, redact_error_message
 from brain_alpha_ops.research.assistant import (
     AssistantResponseParseError,
     assistant_response_to_generation_guidance,
-    build_assistant_request_pack,
     parse_assistant_response,
 )
-from brain_alpha_ops.research.anti_overfit import AntiOverfitService
-from brain_alpha_ops.research.context import build_assistant_context_pack
 from brain_alpha_ops.research.expression_ast import expression_key
 from brain_alpha_ops.research.expression_index import ExpressionHistoryIndex
 from brain_alpha_ops.research.generator import CandidateGenerator, extract_fields, extract_operators
-from brain_alpha_ops.research.guidance import assistant_guidance_candidate_metadata, ensure_assistant_guidance_digest
-from brain_alpha_ops.research.llm_review import cross_review_assistant_response
+from brain_alpha_ops.research.guidance import ensure_assistant_guidance_digest
 from brain_alpha_ops.research.memory import ResearchMemory
-from brain_alpha_ops.research.observability import (
-    actionable_duplicate_expression_records,
-    build_research_observability_snapshot,
-)
+from brain_alpha_ops.research.observability import actionable_duplicate_expression_records
 from brain_alpha_ops.research.repository import ResearchRepository
 from brain_alpha_ops.research.scoring import build_scorecard
-from brain_alpha_ops.research.rolling_validation import RollingValidationService
 from brain_alpha_ops.research.validated_generator import validate_expression as local_validate_expression
 from brain_alpha_ops.runner import api_from_run_config
 from brain_alpha_ops.tasks import JobStore
@@ -81,6 +100,14 @@ class BrainAlphaToolbox:
             "query_research_memory": self._query_research_memory,
             "query_expression_index": self._query_expression_index,
             "query_research_observability": self._query_research_observability,
+            "build_market_data_cache": self._build_market_data_cache,
+            "build_vectorized_market_data": self._build_vectorized_market_data,
+            "search_parameters": self._search_parameters,
+            "orchestrate_parameter_search": self._orchestrate_parameter_search,
+            "plan_parallel_backtest": self._plan_parallel_backtest,
+            "run_parallel_backtest": self._run_parallel_backtest,
+            "send_alert": self._send_alert,
+            "route_alert": self._route_alert,
             "build_assistant_context": self._build_assistant_context,
             "build_assistant_request": self._build_assistant_request,
             "parse_assistant_response": self._parse_assistant_response,
@@ -162,7 +189,7 @@ class BrainAlphaToolbox:
         if use_memory:
             memory_guidance = self._research_memory_guidance(args)
             if memory_guidance:
-                if _has_generator_bias(memory_guidance):
+                if has_generator_bias(memory_guidance):
                     generator.set_experience_guidance(memory_guidance)
 
         assistant_guidance: dict[str, Any] | None = None
@@ -174,10 +201,10 @@ class BrainAlphaToolbox:
 
         if assistant_guidance:
             assistant_guidance = ensure_assistant_guidance_digest(assistant_guidance)
-            assistant_generator_guidance = _assistant_guidance_for_generator(assistant_guidance)
-            if _has_generator_bias(assistant_generator_guidance):
+            assistant_generator_guidance = assistant_guidance_for_generator(assistant_guidance)
+            if has_generator_bias(assistant_generator_guidance):
                 if memory_guidance:
-                    assistant_generator_guidance = _merge_generation_guidance(
+                    assistant_generator_guidance = merge_generation_guidance(
                         memory_guidance,
                         assistant_generator_guidance,
                     )
@@ -187,14 +214,14 @@ class BrainAlphaToolbox:
         candidates = generator.generate(count, dataset_id=dataset_id)
         if assistant_guidance_applied and assistant_guidance:
             for candidate in candidates:
-                _attach_assistant_guidance(candidate, assistant_guidance)
+                attach_assistant_guidance(candidate, assistant_guidance)
         payload = {
             "ok": True,
             "count": len(candidates),
             "candidates": [candidate.to_dict() for candidate in candidates],
         }
         if assistant_guidance is not None:
-            payload["assistant_guidance"] = _assistant_guidance_summary(
+            payload["assistant_guidance"] = assistant_guidance_summary(
                 assistant_guidance,
                 applied=assistant_guidance_applied,
             )
@@ -320,6 +347,16 @@ class BrainAlphaToolbox:
             "skipped_count": len(skipped),
             "requested_max_workers": requested_max_workers,
             "max_workers": effective_workers,
+            "rate_limit": {
+                "max_batch_size": max_batch_size,
+                "max_workers": effective_workers,
+                "bounded": True,
+            },
+            "account_safety": {
+                "live_api_confirmation_required_outside_mock": True,
+                "duplicate_preflight_required": True,
+                "validate_before_submit": True,
+            },
             "results": item_results,
             "skipped": skipped,
         }
@@ -339,6 +376,15 @@ class BrainAlphaToolbox:
         return result
 
     def _run_simulation_with_api(self, args: dict[str, Any], api: Any) -> dict[str, Any]:
+        return self._run_simulation_with_api_and_settings(args, api)
+
+    def _run_simulation_with_api_and_settings(
+        self,
+        args: dict[str, Any],
+        api: Any,
+        *,
+        settings_overrides: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
         blocked = self._live_api_blocked(args, tool="run_simulation")
         if blocked:
             return blocked
@@ -346,16 +392,17 @@ class BrainAlphaToolbox:
         blocked = self._duplicate_live_expression_block(expression, tool="run_simulation")
         if blocked:
             return blocked
+        settings = self._simulation_settings(settings_overrides)
         api.authenticate()
         validation = api.validate_expression(
             expression,
-            self.run_config.ops.settings.to_platform_dict()["settings"],
+            settings,
         )
         if str(validation.get("status", "")).upper() not in {"PASS", "PASSED", "OK"}:
             return {"ok": False, "error_code": "VALIDATION_FAILED", "validation": validation}
         simulation_id = api.submit_simulation(
             expression,
-            self.run_config.ops.settings.to_platform_dict()["settings"],
+            settings,
         )
         max_polls = _bounded_int(args.get("max_polls", 5), 1, 20)
         status = ""
@@ -363,7 +410,7 @@ class BrainAlphaToolbox:
             status = str(api.poll_simulation(simulation_id))
             if status.upper() in {"COMPLETED", "FAILED", "ERROR"}:
                 break
-        payload = {"ok": True, "simulation_id": simulation_id, "status": status}
+        payload = {"ok": True, "simulation_id": simulation_id, "status": status, "settings": settings}
         if status.upper() == "COMPLETED":
             payload["result"] = api.fetch_result(simulation_id)
         elif status.upper() in {"FAILED", "ERROR"}:
@@ -380,6 +427,13 @@ class BrainAlphaToolbox:
                 self._batch_mock_api = MockBrainAPI()
             return self._batch_mock_api
         return api_from_run_config(self.run_config)
+
+    def _simulation_settings(self, overrides: dict[str, Any] | None = None) -> dict[str, Any]:
+        settings = dict(self.run_config.ops.settings.to_platform_dict()["settings"])
+        for key, value in dict(overrides or {}).items():
+            if value is not None and str(value).strip():
+                settings[str(key)] = value
+        return settings
 
     def _check_alpha(self, args: dict[str, Any]) -> dict[str, Any]:
         blocked = self._live_api_blocked(args, tool="check_alpha")
@@ -481,99 +535,104 @@ class BrainAlphaToolbox:
         limit = _bounded_int(args.get("limit", 5000), 1, 50000)
         top_n = _bounded_int(args.get("top_n", 10), 1, 50)
         include_cloud = _truthy(args.get("include_cloud", True))
-        return build_research_observability_snapshot(
+        return query_research_observability_snapshot(
             self.run_config.ops.storage_dir,
             limit=limit,
             top_n=top_n,
             include_cloud=include_cloud,
-            job_rows=self._tool_job_rows(limit=min(limit, 1000)),
+            job_rows=collect_job_rows(self.job_stores, limit=min(limit, 1000)),
         )
+
+    def _build_market_data_cache(self, args: dict[str, Any]) -> dict[str, Any]:
+        refresh = _truthy(args.get("refresh", True))
+        source_file = str(args.get("source_file", "") or "").strip()
+        limit = _bounded_int(args.get("limit", 5000), 1, 50000)
+        return build_market_data_cache_tool(
+            self.run_config.ops.storage_dir,
+            refresh=refresh,
+            source_file=source_file,
+            limit=limit,
+        )
+
+    def _build_vectorized_market_data(self, args: dict[str, Any]) -> dict[str, Any]:
+        return build_vectorized_market_data_from_args(self.run_config.ops.storage_dir, args)
+
+    def _search_parameters(self, args: dict[str, Any]) -> dict[str, Any]:
+        candidate = Candidate.from_dict(_candidate_argument(args))
+        max_mutations = _bounded_int(args.get("max_mutations", 4), 1, 12)
+        return search_parameters_tool(candidate, max_mutations=max_mutations)
+
+    def _orchestrate_parameter_search(self, args: dict[str, Any]) -> dict[str, Any]:
+        return orchestrate_parameter_search_from_args(args)
+
+    def _plan_parallel_backtest(self, args: dict[str, Any]) -> dict[str, Any]:
+        return plan_parallel_backtest_from_args(args)
+
+    def _run_parallel_backtest(self, args: dict[str, Any]) -> dict[str, Any]:
+        blocked = self._live_api_blocked(args, tool="run_parallel_backtest")
+        if blocked:
+            return blocked
+
+        def runner(job: dict[str, Any]) -> dict[str, Any]:
+            item_args = dict(args)
+            item_args["expression"] = str(job.get("expression") or "")
+            for key in ("expressions", "markets", "max_workers", "max_batches", "per_account_limit"):
+                item_args.pop(key, None)
+            settings_overrides = job.get("settings_overrides") if isinstance(job.get("settings_overrides"), dict) else {}
+            result = self._run_simulation_with_api_and_settings(
+                item_args,
+                self._batch_api_for_item(),
+                settings_overrides=settings_overrides,
+            )
+            result.setdefault("market", job.get("market", ""))
+            return result
+
+        return run_parallel_backtest_from_args(
+            args,
+            runner=runner,
+            default_market=self.run_config.ops.settings.region,
+        )
+
+    def _send_alert(self, args: dict[str, Any]) -> dict[str, Any]:
+        title = _required_text(args, "title")
+        message = _required_text(args, "message")
+        severity = str(args.get("severity", "info") or "info").strip() or "info"
+        channel = str(args.get("channel", "local") or "local").strip() or "local"
+        webhook_url = str(args.get("webhook_url", "") or "").strip()
+        metadata = dict(args.get("metadata") or {})
+        return send_alert_tool(
+            self.run_config.ops.storage_dir,
+            title=title,
+            message=message,
+            severity=severity,
+            channel=channel,
+            webhook_url=webhook_url,
+            metadata=metadata,
+        )
+
+    def _route_alert(self, args: dict[str, Any]) -> dict[str, Any]:
+        return route_alert_from_args(self.run_config.ops.storage_dir, args)
 
     def _build_assistant_context(self, args: dict[str, Any]) -> dict[str, Any]:
-        limit = _bounded_int(args.get("limit", 5000), 1, 50000)
-        top_n = _bounded_int(args.get("top_n", 10), 1, 50)
-        include_prompt = _truthy(args.get("include_prompt", True))
-        include_sensitive = _truthy(args.get("include_sensitive", False))
-        return build_assistant_context_pack(
-            self.run_config,
-            limit=limit,
-            top_n=top_n,
-            include_prompt=include_prompt,
-            include_sensitive=include_sensitive,
-        )
+        return build_assistant_context_tool(self.run_config, args)
 
     def _build_assistant_request(self, args: dict[str, Any]) -> dict[str, Any]:
-        limit = _bounded_int(args.get("limit", 5000), 1, 50000)
-        top_n = _bounded_int(args.get("top_n", 10), 1, 50)
-        include_prompt = _truthy(args.get("include_prompt", True))
-        include_draft = _truthy(args.get("include_offline_draft", True))
-        include_sensitive = _truthy(args.get("include_sensitive", False))
-        context = build_assistant_context_pack(
-            self.run_config,
-            limit=limit,
-            top_n=top_n,
-            include_prompt=True,
-            include_sensitive=include_sensitive,
-        )
-        return build_assistant_request_pack(
-            context,
-            include_prompt=include_prompt,
-            include_offline_draft=include_draft,
-        )
-
-    def _tool_job_rows(self, *, limit: int) -> list[dict[str, Any]]:
-        rows: list[dict[str, Any]] = []
-        for kind, store in self.job_stores.items():
-            all_jobs = getattr(store, "all", None)
-            if not callable(all_jobs):
-                continue
-            try:
-                for job_id, job in all_jobs(limit=limit):
-                    rows.append({"source": f"{kind}_job", "job_id": job_id, **job})
-            except Exception:
-                continue
-        return rows[-limit:]
+        return build_assistant_request_tool(self.run_config, args)
 
     def _parse_assistant_response(self, args: dict[str, Any]) -> dict[str, Any]:
-        raw_output = str(args.get("raw_output") or args.get("text") or "")
-        try:
-            return parse_assistant_response(raw_output)
-        except AssistantResponseParseError as exc:
-            return _tool_error(exc, "ASSISTANT_RESPONSE_PARSE_ERROR")
+        return parse_assistant_response_tool(args)
 
     def _assistant_response_guidance(self, args: dict[str, Any]) -> dict[str, Any]:
-        raw_output = str(args.get("raw_output") or args.get("text") or "")
-        min_confidence = _bounded_float(args.get("min_confidence", 0.0), 0.0, 1.0)
-        try:
-            response = parse_assistant_response(raw_output)
-            return assistant_response_to_generation_guidance(response, min_confidence=min_confidence)
-        except AssistantResponseParseError as exc:
-            return _tool_error(exc, "ASSISTANT_RESPONSE_PARSE_ERROR")
+        return assistant_response_guidance_tool(args)
 
     def _run_anti_overfit(self, args: dict[str, Any]) -> dict[str, Any]:
-        candidate = _candidate_argument(args)
-        return AntiOverfitService().evaluate(candidate)
+        return run_anti_overfit_tool(args)
 
     def _run_rolling_validation(self, args: dict[str, Any]) -> dict[str, Any]:
-        candidate = _candidate_argument(args)
-        windows = _bounded_int(args.get("windows", 4), 2, 20)
-        return RollingValidationService().evaluate(candidate, windows=windows)
+        return run_rolling_validation_tool(args)
 
     def _cross_review_assistant_response(self, args: dict[str, Any]) -> dict[str, Any]:
-        request_pack = args.get("request_pack")
-        if not isinstance(request_pack, dict):
-            return _tool_error(ValueError("request_pack must be an object"), "INVALID_REQUEST_PACK")
-        primary = args.get("primary_response") or args.get("primary")
-        reviewer = args.get("reviewer_response") or args.get("reviewer")
-        try:
-            return cross_review_assistant_response(
-                request_pack,
-                primary if primary is not None else "",
-                reviewer_response=reviewer,
-                min_confidence=_bounded_float(args.get("min_confidence", 0.6), 0.0, 1.0),
-            )
-        except AssistantResponseParseError as exc:
-            return _tool_error(exc, "ASSISTANT_CROSS_REVIEW_PARSE_ERROR")
+        return cross_review_assistant_response_tool(args)
 
     def _assistant_generation_guidance(self, args: dict[str, Any]) -> dict[str, Any] | None:
         min_confidence = _bounded_float(args.get("assistant_min_confidence", 0.0), 0.0, 1.0)
@@ -583,7 +642,7 @@ class BrainAlphaToolbox:
             guidance.setdefault("ok", True)
             guidance.setdefault("source", "assistant_guidance_argument")
             guidance.setdefault("min_confidence", min_confidence)
-            guidance.setdefault("sample_size", _guidance_sample_size(guidance))
+            guidance.setdefault("sample_size", guidance_sample_size(guidance))
             guidance = ensure_assistant_guidance_digest(guidance)
             confidence = guidance.get("confidence")
             confidence_ok = True
@@ -733,195 +792,6 @@ def _expression_batch_argument(args: dict[str, Any]) -> list[str]:
         seen.add(marker)
         expressions.append(expression)
     return expressions
-
-
-def _has_generator_bias(guidance: dict[str, Any] | None) -> bool:
-    if not guidance:
-        return False
-    return bool(
-        guidance.get("top_operators")
-        or guidance.get("preferred_windows")
-        or guidance.get("field_combinations")
-    )
-
-
-def _assistant_guidance_for_generator(guidance: dict[str, Any]) -> dict[str, Any]:
-    if guidance.get("ok") is False or not _truthy(guidance.get("usable", True)):
-        return {}
-
-    top_operators = _unique_text_items(guidance.get("top_operators"))
-    preferred_windows = _unique_number_items(guidance.get("preferred_windows"))
-    field_combinations = _field_combinations(guidance.get("field_combinations"))
-    top_fields = _unique_text_items(guidance.get("top_fields"))
-    if top_fields:
-        field_combinations.append({"fields": top_fields, "rationale": "assistant top fields"})
-        field_combinations = _unique_field_combinations(field_combinations)
-
-    if not top_operators and not preferred_windows and not field_combinations:
-        return {}
-
-    return {
-        "sample_size": max(3, _safe_int(guidance.get("sample_size"), 0)),
-        "top_operators": top_operators,
-        "preferred_windows": preferred_windows,
-        "field_combinations": field_combinations,
-    }
-
-
-def _merge_generation_guidance(base: dict[str, Any], overlay: dict[str, Any]) -> dict[str, Any]:
-    merged = {
-        "sample_size": max(
-            3,
-            _safe_int(base.get("sample_size"), 0) + _safe_int(overlay.get("sample_size"), 0),
-        ),
-        "top_operators": _unique_text_items(
-            _text_items(base.get("top_operators")) + _text_items(overlay.get("top_operators"))
-        ),
-        "preferred_windows": _unique_number_items(
-            _number_items(base.get("preferred_windows")) + _number_items(overlay.get("preferred_windows"))
-        ),
-        "field_combinations": _unique_field_combinations(
-            _field_combinations(base.get("field_combinations")) + _field_combinations(overlay.get("field_combinations"))
-        ),
-    }
-    return merged
-
-
-def _assistant_guidance_summary(guidance: dict[str, Any], *, applied: bool) -> dict[str, Any]:
-    guidance = ensure_assistant_guidance_digest(guidance)
-    metadata = assistant_guidance_candidate_metadata(guidance)
-    usable = guidance.get("ok") is not False and _truthy(guidance.get("usable", True))
-    if applied:
-        reason = "applied_to_generator"
-    elif not usable:
-        reason = "not_usable"
-    else:
-        reason = "no_generator_bias"
-    return {
-        "ok": guidance.get("ok", True),
-        "source": guidance.get("source", ""),
-        "usable": usable,
-        "applied": applied,
-        "reason": reason,
-        "guidance_digest": guidance.get("guidance_digest"),
-        "confidence": guidance.get("confidence"),
-        "min_confidence": guidance.get("min_confidence"),
-        "sample_size": guidance.get("sample_size"),
-        "top_fields": _unique_text_items(guidance.get("top_fields"))[:10],
-        "top_operators": _unique_text_items(guidance.get("top_operators"))[:10],
-        "preferred_windows": _unique_number_items(guidance.get("preferred_windows"))[:10],
-        "field_combinations": _field_combinations(guidance.get("field_combinations"))[:10],
-        "field_combinations_count": len(_field_combinations(guidance.get("field_combinations"))),
-        "risk_flags": _unique_text_items(guidance.get("risk_flags"))[:10],
-        "operational_flags": guidance.get("operational_flags") if isinstance(guidance.get("operational_flags"), dict) else {},
-        "historical_outcome_status": metadata.get("assistant_guidance_outcome_status", "unknown"),
-        "historical_outcome": metadata.get("assistant_guidance_outcome", {}),
-    }
-
-
-def _attach_assistant_guidance(candidate: Candidate, guidance: dict[str, Any]) -> None:
-    guidance = ensure_assistant_guidance_digest(guidance)
-    digest = str(guidance.get("guidance_digest") or "")
-    tags = list(candidate.source_tags or [])
-    for tag in ("assistant_guided", f"assistant_guidance_{digest}"):
-        if tag and tag not in tags:
-            tags.append(tag)
-    candidate.source_tags = tags
-    submission = dict(candidate.submission or {})
-    submission.update(assistant_guidance_candidate_metadata(guidance))
-    candidate.submission = submission
-
-
-def _guidance_sample_size(guidance: dict[str, Any]) -> int:
-    return max(
-        len(_text_items(guidance.get("top_fields"))),
-        len(_text_items(guidance.get("top_operators"))),
-        len(_number_items(guidance.get("preferred_windows"))),
-        len(_field_combinations(guidance.get("field_combinations"))),
-    )
-
-
-def _text_items(value: Any) -> list[str]:
-    if value is None:
-        return []
-    values = value if isinstance(value, list) else [value]
-    return [str(item).strip() for item in values if str(item).strip()]
-
-
-def _unique_text_items(value: Any) -> list[str]:
-    seen: set[str] = set()
-    unique: list[str] = []
-    for item in _text_items(value):
-        marker = item.lower()
-        if marker in seen:
-            continue
-        seen.add(marker)
-        unique.append(item)
-    return unique
-
-
-def _number_items(value: Any) -> list[int | float]:
-    if value is None:
-        return []
-    values = value if isinstance(value, list) else [value]
-    rows: list[int | float] = []
-    for item in values:
-        try:
-            number = float(item)
-        except (TypeError, ValueError):
-            continue
-        if number != number or number in (float("inf"), float("-inf")):
-            continue
-        rows.append(int(number) if number.is_integer() else number)
-    return rows
-
-
-def _unique_number_items(value: Any) -> list[int | float]:
-    seen: set[float] = set()
-    unique: list[int | float] = []
-    for item in _number_items(value):
-        marker = float(item)
-        if marker in seen:
-            continue
-        seen.add(marker)
-        unique.append(item)
-    return unique
-
-
-def _field_combinations(value: Any) -> list[dict[str, Any]]:
-    if not isinstance(value, list):
-        return []
-    rows: list[dict[str, Any]] = []
-    for item in value:
-        if isinstance(item, dict):
-            fields = _unique_text_items(item.get("fields") or item.get("field") or item.get("value"))
-            rationale = str(item.get("rationale") or "")
-        else:
-            fields = _unique_text_items(item)
-            rationale = ""
-        if fields:
-            rows.append({"fields": fields, "rationale": rationale})
-    return rows
-
-
-def _unique_field_combinations(value: Any) -> list[dict[str, Any]]:
-    seen: set[tuple[str, ...]] = set()
-    unique: list[dict[str, Any]] = []
-    for combo in _field_combinations(value):
-        fields = _unique_text_items(combo.get("fields"))
-        marker = tuple(field.lower() for field in fields)
-        if not marker or marker in seen:
-            continue
-        seen.add(marker)
-        unique.append({"fields": fields, "rationale": str(combo.get("rationale") or "")})
-    return unique
-
-
-def _safe_int(value: Any, default: int) -> int:
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return default
 
 
 def _field_to_dict(field: Any) -> dict[str, Any]:

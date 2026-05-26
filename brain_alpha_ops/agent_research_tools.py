@@ -1,0 +1,372 @@
+"""Shared agent-facing helpers for the research tool surface."""
+
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Any, Mapping
+
+from brain_alpha_ops.brain_api import MockBrainAPI
+from brain_alpha_ops.config import RunConfig
+from brain_alpha_ops.error_payloads import user_error_payload
+from brain_alpha_ops.models import Candidate
+from brain_alpha_ops.research.assistant import (
+    AssistantResponseParseError,
+    assistant_response_to_generation_guidance,
+    build_assistant_request_pack,
+    parse_assistant_response,
+)
+from brain_alpha_ops.research.alerting import AlertDeliveryService, AlertRouter
+from brain_alpha_ops.research.anti_overfit import AntiOverfitService
+from brain_alpha_ops.research.context import build_assistant_context_pack
+from brain_alpha_ops.research.llm_review import cross_review_assistant_response
+from brain_alpha_ops.research.market_data_cache import build_market_data_cache
+from brain_alpha_ops.research.market_data_vector import build_vectorized_market_data
+from brain_alpha_ops.research.observability import build_research_observability_snapshot
+from brain_alpha_ops.research.parallel_backtest import ParallelBacktestExecutor, ParallelBacktestPlanner
+from brain_alpha_ops.research.parameter_search import ParameterSearchService
+from brain_alpha_ops.research.repository import ResearchRepository
+from brain_alpha_ops.research.rolling_validation import RollingValidationService
+from brain_alpha_ops.research.search_orchestrator import ParameterSearchOrchestrator
+
+
+def query_research_observability_snapshot(
+    storage_dir: str | Path,
+    *,
+    limit: int,
+    top_n: int,
+    include_cloud: bool,
+    job_rows: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    return build_research_observability_snapshot(
+        storage_dir,
+        limit=limit,
+        top_n=top_n,
+        include_cloud=include_cloud,
+        job_rows=job_rows,
+    )
+
+
+def build_market_data_cache_tool(
+    storage_dir: str | Path,
+    *,
+    refresh: bool,
+    source_file: str,
+    limit: int,
+) -> dict[str, Any]:
+    cache = build_market_data_cache(storage_dir)
+    if refresh:
+        if source_file:
+            source_path = Path(source_file)
+            if source_path.is_absolute():
+                return cache.refresh_from_path(source_path, source=source_path.name, limit=limit)
+            return cache.refresh_from_jsonl(source_file, limit=limit)
+        rows = ResearchRepository(storage_dir).latest_backtest_records(limit=limit)
+        if rows:
+            return cache.refresh_from_records(rows, source="backtests.jsonl")
+    return cache.summary()
+
+
+def build_vectorized_market_data_from_args(storage_dir: str | Path, args: dict[str, Any]) -> dict[str, Any]:
+    field_list = _list_text(args.get("fields"))
+    return build_vectorized_market_data_tool(
+        storage_dir,
+        fields=field_list,
+        limit_symbols=_bounded_int(args.get("limit_symbols", 200), 1, 5000),
+    )
+
+
+def build_vectorized_market_data_tool(
+    storage_dir: str | Path,
+    *,
+    fields: list[str] | None,
+    limit_symbols: int,
+) -> dict[str, Any]:
+    return build_vectorized_market_data(storage_dir, fields=fields, limit_symbols=limit_symbols)
+
+
+def search_parameters_tool(candidate: Candidate, *, max_mutations: int) -> dict[str, Any]:
+    return ParameterSearchService().search(candidate, max_mutations=max_mutations)
+
+
+def orchestrate_parameter_search_from_args(args: dict[str, Any]) -> dict[str, Any]:
+    return orchestrate_parameter_search_tool(
+        Candidate.from_dict(_candidate_argument(args)),
+        rounds=_bounded_int(args.get("rounds", 2), 1, 8),
+        max_mutations=_bounded_int(args.get("max_mutations", 4), 1, 12),
+        keep_top=_bounded_int(args.get("keep_top", 3), 1, 20),
+    )
+
+
+def orchestrate_parameter_search_tool(
+    candidate: Candidate,
+    *,
+    rounds: int,
+    max_mutations: int,
+    keep_top: int,
+) -> dict[str, Any]:
+    return ParameterSearchOrchestrator().run(
+        candidate,
+        rounds=rounds,
+        max_mutations=max_mutations,
+        keep_top=keep_top,
+    )
+
+
+def plan_parallel_backtest_tool(
+    expressions: list[str],
+    *,
+    markets: list[str] | None,
+    max_workers: int,
+    max_batches: int,
+    per_account_limit: int,
+) -> dict[str, Any]:
+    return ParallelBacktestPlanner().plan(
+        expressions,
+        markets=markets,
+        max_workers=max_workers,
+        max_batches=max_batches,
+        per_account_limit=per_account_limit,
+    )
+
+
+def plan_parallel_backtest_from_args(args: dict[str, Any]) -> dict[str, Any]:
+    markets = _list_text(args.get("markets")) or None
+    return plan_parallel_backtest_tool(
+        _expression_batch_argument(args),
+        markets=markets,
+        max_workers=_bounded_int(args.get("max_workers", 4), 1, 32),
+        max_batches=_bounded_int(args.get("max_batches", 10), 1, 100),
+        per_account_limit=_bounded_int(args.get("per_account_limit", 20), 1, 1000),
+    )
+
+
+def run_parallel_backtest_from_args(
+    args: dict[str, Any],
+    *,
+    runner: Any,
+    default_market: str,
+) -> dict[str, Any]:
+    return ParallelBacktestExecutor().execute(
+        _expression_batch_argument(args),
+        runner=runner,
+        markets=_list_text(args.get("markets")) or [default_market],
+        max_workers=_bounded_int(args.get("max_workers", 1), 1, 3),
+        max_batches=_bounded_int(args.get("max_batches", 1), 1, 10),
+        per_account_limit=_bounded_int(args.get("per_account_limit", 10), 1, 10),
+    )
+
+
+def send_alert_tool(
+    storage_dir: str | Path,
+    *,
+    title: str,
+    message: str,
+    severity: str,
+    channel: str,
+    webhook_url: str,
+    metadata: dict[str, Any],
+) -> dict[str, Any]:
+    return AlertDeliveryService(storage_dir=storage_dir, webhook_url=webhook_url).alert(
+        title,
+        message,
+        severity=severity,
+        channel=channel,
+        metadata=metadata,
+    )
+
+
+def route_alert_from_args(storage_dir: str | Path, args: dict[str, Any]) -> dict[str, Any]:
+    return route_alert_tool(
+        storage_dir,
+        title=_required_text(args, "title"),
+        message=_required_text(args, "message"),
+        severity=str(args.get("severity", "info") or "info").strip() or "info",
+        channels=_list_text(args.get("channels")) or ["local"],
+        routes=dict(args.get("routes") or {}),
+        metadata=dict(args.get("metadata") or {}),
+    )
+
+
+def route_alert_tool(
+    storage_dir: str | Path,
+    *,
+    title: str,
+    message: str,
+    severity: str,
+    channels: list[str],
+    routes: dict[str, str],
+    metadata: dict[str, Any],
+) -> dict[str, Any]:
+    return AlertRouter(storage_dir=storage_dir, routes=routes).route(
+        title,
+        message,
+        severity=severity,
+        channels=channels,
+        metadata=metadata,
+    )
+
+
+def build_assistant_context_tool(run_config: RunConfig, args: dict[str, Any]) -> dict[str, Any]:
+    return build_assistant_context_pack(
+        run_config,
+        limit=_bounded_int(args.get("limit", 5000), 1, 50000),
+        top_n=_bounded_int(args.get("top_n", 10), 1, 50),
+        include_prompt=_truthy(args.get("include_prompt", True)),
+        include_sensitive=_truthy(args.get("include_sensitive", False)),
+    )
+
+
+def build_assistant_request_tool(run_config: RunConfig, args: dict[str, Any]) -> dict[str, Any]:
+    context = build_assistant_context_pack(
+        run_config,
+        limit=_bounded_int(args.get("limit", 5000), 1, 50000),
+        top_n=_bounded_int(args.get("top_n", 10), 1, 50),
+        include_prompt=True,
+        include_sensitive=_truthy(args.get("include_sensitive", False)),
+    )
+    return build_assistant_request_pack(
+        context,
+        include_prompt=_truthy(args.get("include_prompt", True)),
+        include_offline_draft=_truthy(args.get("include_offline_draft", True)),
+    )
+
+
+def parse_assistant_response_tool(args: dict[str, Any]) -> dict[str, Any]:
+    raw_output = str(args.get("raw_output") or args.get("text") or "")
+    try:
+        return parse_assistant_response(raw_output)
+    except AssistantResponseParseError as exc:
+        return user_error_payload(exc, error_code="ASSISTANT_RESPONSE_PARSE_ERROR")
+
+
+def assistant_response_guidance_tool(args: dict[str, Any]) -> dict[str, Any]:
+    raw_output = str(args.get("raw_output") or args.get("text") or "")
+    try:
+        response = parse_assistant_response(raw_output)
+        return assistant_response_to_generation_guidance(
+            response,
+            min_confidence=_bounded_float(args.get("min_confidence", 0.0), 0.0, 1.0),
+        )
+    except AssistantResponseParseError as exc:
+        return user_error_payload(exc, error_code="ASSISTANT_RESPONSE_PARSE_ERROR")
+
+
+def run_anti_overfit_tool(args: dict[str, Any]) -> dict[str, Any]:
+    return AntiOverfitService().evaluate(_candidate_argument(args))
+
+
+def run_rolling_validation_tool(args: dict[str, Any]) -> dict[str, Any]:
+    return RollingValidationService().evaluate(
+        _candidate_argument(args),
+        windows=_bounded_int(args.get("windows", 4), 2, 20),
+    )
+
+
+def cross_review_assistant_response_tool(args: dict[str, Any]) -> dict[str, Any]:
+    request_pack = args.get("request_pack")
+    if not isinstance(request_pack, dict):
+        return user_error_payload(ValueError("request_pack must be an object"), error_code="INVALID_REQUEST_PACK")
+    primary = args.get("primary_response") or args.get("primary")
+    reviewer = args.get("reviewer_response") or args.get("reviewer")
+    try:
+        return cross_review_assistant_response(
+            request_pack,
+            primary if primary is not None else "",
+            reviewer_response=reviewer,
+            min_confidence=_bounded_float(args.get("min_confidence", 0.6), 0.0, 1.0),
+        )
+    except AssistantResponseParseError as exc:
+        return user_error_payload(exc, error_code="ASSISTANT_CROSS_REVIEW_PARSE_ERROR")
+
+
+def collect_job_rows(job_stores: Mapping[str, Any], *, limit: int) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for kind, store in job_stores.items():
+        all_jobs = getattr(store, "all", None)
+        if not callable(all_jobs):
+            continue
+        try:
+            for job_id, job in all_jobs(limit=limit):
+                rows.append({"source": f"{kind}_job", "job_id": job_id, **job})
+        except Exception:
+            continue
+    return rows[-limit:]
+
+
+def _bounded_int(value: Any, lower: int, upper: int) -> int:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        parsed = lower
+    return min(max(parsed, lower), upper)
+
+
+def _bounded_float(value: Any, lower: float, upper: float) -> float:
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        parsed = lower
+    return min(max(parsed, lower), upper)
+
+
+def _truthy(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() not in {"0", "false", "no", "off"}
+    return bool(value)
+
+
+def _candidate_argument(args: dict[str, Any]) -> dict[str, Any]:
+    candidate = args.get("candidate")
+    if isinstance(candidate, dict):
+        return candidate
+    expression = str(args.get("expression", "") or "").strip()
+    if not expression:
+        raise ValueError("missing required argument: expression")
+    return {
+        "alpha_id": str(args.get("alpha_id", "agent_candidate") or "agent_candidate"),
+        "expression": expression,
+        "family": str(args.get("family", "Agent") or "Agent"),
+        "hypothesis": str(args.get("hypothesis", "Agent supplied expression") or "Agent supplied expression"),
+        "official_metrics": dict(args.get("official_metrics") or {}),
+        "submission": dict(args.get("submission") or {}),
+    }
+
+
+def _expression_batch_argument(args: dict[str, Any]) -> list[str]:
+    raw = args.get("expressions")
+    values = raw if isinstance(raw, list) else [raw or args.get("expression", "")]
+    rows: list[str] = []
+    seen: set[str] = set()
+    for item in values:
+        expression = str(item or "").strip()
+        marker = expression.lower()
+        if not expression or marker in seen:
+            continue
+        seen.add(marker)
+        rows.append(expression)
+    return rows
+
+
+def _list_text(value: Any) -> list[str]:
+    if value is None:
+        return []
+    values = value if isinstance(value, list) else [value]
+    rows: list[str] = []
+    seen: set[str] = set()
+    for item in values:
+        text = str(item or "").strip()
+        key = text.lower()
+        if not text or key in seen:
+            continue
+        seen.add(key)
+        rows.append(text)
+    return rows
+
+
+def _required_text(args: dict[str, Any], key: str) -> str:
+    value = str(args.get(key, "") or "").strip()
+    if not value:
+        raise ValueError(f"missing required argument: {key}")
+    return value

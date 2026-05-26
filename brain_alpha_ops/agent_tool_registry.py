@@ -240,6 +240,89 @@ def build_default_tool_registry() -> ToolRegistry:
     )
     registry.register(
         ToolDefinition(
+            "build_market_data_cache",
+            "Refresh or summarize the lightweight local market-data cache used by research screening and search helpers.",
+            _schema({"source_file": "string", "limit": "integer", "refresh": "boolean"}),
+            category="data",
+            chain_stage="context_refresh",
+        )
+    )
+    registry.register(
+        ToolDefinition(
+            "build_vectorized_market_data",
+            "Build a bounded symbol-by-feature matrix from the local market-data cache for vector-style screening.",
+            _schema({"fields": "array", "limit_symbols": "integer"}),
+            category="data",
+            chain_stage="vectorize",
+        )
+    )
+    registry.register(
+        ToolDefinition(
+            "search_parameters",
+            "Run a bounded local parameter search over a candidate using diagnostics-guided mutations.",
+            _schema({"candidate": "object", "max_mutations": "integer"}, required=["candidate"]),
+            category="optimization",
+            chain_stage="search",
+        )
+    )
+    registry.register(
+        ToolDefinition(
+            "orchestrate_parameter_search",
+            "Run a multi-round bounded local parameter-search workflow with explicit mutation and keep-top budgets.",
+            _schema({"candidate": "object", "rounds": "integer", "max_mutations": "integer", "keep_top": "integer"}, required=["candidate"]),
+            category="optimization",
+            chain_stage="search",
+        )
+    )
+    registry.register(
+        ToolDefinition(
+            "plan_parallel_backtest",
+            "Plan a capacity-limited full-market backtest schedule with rate-limit and account-safety metadata.",
+            _schema({"expressions": "array", "markets": "array", "max_workers": "integer", "max_batches": "integer", "per_account_limit": "integer"}, required=["expressions"]),
+            category="backtest",
+            chain_stage="plan",
+        )
+    )
+    registry.register(
+        ToolDefinition(
+            "run_parallel_backtest",
+            "Execute a capacity-limited multi-market simulation batch with per-job validation, duplicate preflight, failure accounting, and rate-limit metadata.",
+            _schema(
+                {
+                    "expressions": "array",
+                    "markets": "array",
+                    "max_workers": "integer",
+                    "max_batches": "integer",
+                    "per_account_limit": "integer",
+                    "confirm_live_api": "boolean",
+                },
+                required=["expressions"],
+            ),
+            live_api=True,
+            category="backtest",
+            chain_stage="deep_validate",
+        )
+    )
+    registry.register(
+        ToolDefinition(
+            "send_alert",
+            "Emit a local or webhook alert for observability and operator notifications.",
+            _schema({"title": "string", "message": "string", "severity": "string", "channel": "string", "webhook_url": "string", "metadata": "object"}),
+            category="observability",
+            chain_stage="alert",
+        )
+    )
+    registry.register(
+        ToolDefinition(
+            "route_alert",
+            "Route an alert through one or more configured local/webhook/callback channels.",
+            _schema({"title": "string", "message": "string", "severity": "string", "channels": "array", "routes": "object"}),
+            category="observability",
+            chain_stage="alert",
+        )
+    )
+    registry.register(
+        ToolDefinition(
             "build_assistant_context",
             "Build an LLM-ready context pack from run config, latest local results, cloud cache, and research memory guidance.",
             _schema({"limit": "integer", "top_n": "integer", "include_prompt": "boolean"}),

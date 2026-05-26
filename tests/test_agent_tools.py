@@ -28,6 +28,7 @@ def test_agent_tool_manifest_exposes_safe_whitelist():
     assert "query_expression_index" in tools
     assert "query_research_observability" in tools
     assert "run_simulation_batch" in tools
+    assert "run_parallel_backtest" in tools
     assert "score_factor" in tools
     assert "run_backtest" in tools
     assert "run_batch_backtest" in tools
@@ -35,6 +36,7 @@ def test_agent_tool_manifest_exposes_safe_whitelist():
     assert tools["submit_alpha"].destructive is True
     assert tools["run_simulation"].live_api is True
     assert tools["run_simulation_batch"].live_api is True
+    assert tools["run_parallel_backtest"].live_api is True
     assert tools["score_factor"].alias_for == "score_candidate"
     assert tools["run_backtest"].alias_for == "run_simulation"
     assert tools["run_batch_backtest"].alias_for == "run_simulation_batch"
@@ -591,6 +593,31 @@ def test_agent_toolbox_batch_simulation_counts_terminal_failed_status(tmp_path):
     assert result["results"][0]["status"] == "FAILED"
 
 
+def test_agent_toolbox_runs_bounded_mock_parallel_backtest(tmp_path):
+    toolbox = mock_toolbox(storage_dir=tmp_path)
+
+    result = toolbox.call(
+        "run_parallel_backtest",
+        {
+            "expressions": ["rank(ts_delta(close, 20))", "rank(ts_mean(volume, 10))"],
+            "markets": ["USA", "EUR"],
+            "max_workers": 2,
+            "max_batches": 1,
+            "per_account_limit": 3,
+        },
+    )
+
+    assert result["ok"] is True
+    assert result["schema_version"] == "parallel_backtest_execution.v1"
+    assert result["requested_jobs"] == 4
+    assert result["selected_jobs"] == 3
+    assert result["skipped_jobs"] == 1
+    assert result["submitted_count"] == 3
+    assert result["completed_count"] == 3
+    assert {item["market"] for item in result["results"]} <= {"USA", "EUR"}
+    assert all(item["settings"]["region"] in {"USA", "EUR"} for item in result["results"])
+
+
 def test_agent_toolbox_blocks_production_simulation_batch_without_confirmation(tmp_path):
     config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path)
@@ -604,6 +631,21 @@ def test_agent_toolbox_blocks_production_simulation_batch_without_confirmation(t
     assert result["ok"] is False
     assert result["error_code"] == "LIVE_API_NOT_ALLOWED"
     assert result["tool"] == "run_simulation_batch"
+
+
+def test_agent_toolbox_blocks_production_parallel_backtest_without_confirmation(tmp_path):
+    config = RunConfig(environment="production")
+    config.ops.storage_dir = str(tmp_path)
+    toolbox = BrainAlphaToolbox(run_config=config, api=MockBrainAPI(), allow_live_api=False)
+
+    result = toolbox.call(
+        "run_parallel_backtest",
+        {"expressions": ["rank(ts_delta(close, 20))"], "markets": ["USA"]},
+    )
+
+    assert result["ok"] is False
+    assert result["error_code"] == "LIVE_API_NOT_ALLOWED"
+    assert result["tool"] == "run_parallel_backtest"
 
 
 def test_agent_toolbox_blocks_production_live_api_without_confirmation(tmp_path):
