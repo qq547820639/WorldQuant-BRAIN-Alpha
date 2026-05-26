@@ -12,6 +12,7 @@ __pycache__/
 dist/
 build/
 *.spec
+!BrainAlphaOps.spec
 .pytest_cache/
 .pytest_cache_runtime/
 .mypy_cache/
@@ -52,7 +53,6 @@ data/*.log
 *.cache
 
 # ---- Build artifacts ----
-BrainAlphaOps.spec
 build/
 dist/
 
