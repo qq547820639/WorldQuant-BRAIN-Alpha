@@ -1,1 +1,1 @@
-"""User experience layer — guided pipeline, real-time feedback, checkpoint resume."""
+"""User experience and error messaging module."""

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, fields
 from datetime import datetime, timezone
 from typing import Any
 import uuid
@@ -46,7 +46,7 @@ class Candidate:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "Candidate":
-        known = {field.name for field in cls.__dataclass_fields__.values()}
+        known = {f.name for f in fields(cls)}
         known_data = {key: value for key, value in data.items() if key in known}
         extra = dict(known_data.get("extra_fields") or {})
         extra.update({key: value for key, value in data.items() if key not in known})
