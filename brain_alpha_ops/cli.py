@@ -214,6 +214,10 @@ def main(argv: list[str] | None = None) -> int:
     except json.JSONDecodeError as exc:
         _print_cli_error("CONFIG_JSON_ERROR", exc, config_path=getattr(args, "config", ""))
         return 1
+    except Exception as exc:
+        # Catch-all: prevent raw traceback from leaking to CLI output.
+        _print_cli_error("UNEXPECTED_ERROR", exc)
+        return 1
 
 
 def _main(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
@@ -551,7 +555,8 @@ def _main(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
     if args.cycles is not None:
         run_config.ops.budget.max_cycles = args.cycles
     if args.storage_dir is not None:
-        run_config.ops.storage_dir = args.storage_dir
+        from pathlib import Path
+        run_config.ops.storage_dir = str(Path(args.storage_dir).resolve())
     if args.base_url is not None:
         run_config.ops.official_api.base_url = args.base_url
     if _has_cli_credentials(args) and not args.allow_insecure_cli_credentials:
@@ -598,7 +603,7 @@ def _load_json_argument(value: str) -> dict:
     raw = _read_text_or_literal(value)
     data = json.loads(raw)
     if not isinstance(data, dict):
-        raise json.JSONDecodeError("expected JSON object", raw, 0)
+        raise json.JSONDecodeError("expected JSON object", "<redacted>", 0)
     return data
 
 

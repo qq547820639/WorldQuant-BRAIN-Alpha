@@ -15,6 +15,7 @@ from brain_alpha_ops.research.assistant import (
     build_assistant_request_pack,
     parse_assistant_response,
 )
+from brain_alpha_ops.research.expression_ast import expression_key
 from brain_alpha_ops.research.alerting import AlertDeliveryService, AlertRouter
 from brain_alpha_ops.research.anti_overfit import AntiOverfitService
 from brain_alpha_ops.research.context import build_assistant_context_pack
@@ -351,7 +352,7 @@ def _expression_batch_argument(args: dict[str, Any]) -> list[str]:
     seen: set[str] = set()
     for item in values:
         expression = str(item or "").strip()
-        marker = expression.lower()
+        marker = expression_key(expression)
         if not expression or marker in seen:
             continue
         seen.add(marker)

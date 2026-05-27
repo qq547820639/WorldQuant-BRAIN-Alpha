@@ -337,8 +337,9 @@ class _LegacyInMemoryJobStore:
         with self.lock:
             if job_id not in self.jobs:
                 return
-            kwargs.setdefault("updated_at", time.time())
-            self.jobs[job_id].update(kwargs)
+            kw = dict(kwargs)
+            kw.setdefault("updated_at", time.time())
+            self.jobs[job_id].update(kw)
 
     def cancel(self, job_id: str):
         with self.lock:
@@ -527,6 +528,11 @@ class Handler(BaseHTTPRequestHandler):
         Replaces the legacy setInterval polling pattern.  The browser
         EventSource API automatically reconnects on disconnect.
         """
+        # Enforce session authentication parity with other endpoints
+        if not self._has_valid_session():
+            self._json({"ok": False, "error_code": "AUTH_REQUIRED", "error": "session required"}, status=401)
+            return
+
         job_id = (parse_qs(query_string).get("job_id") or [""])[0]
         if not job_id:
             self._json({"ok": False, "error_code": "VALIDATION_ERROR", "error": "missing job_id"}, status=400)
@@ -541,8 +547,15 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
 
         interval = 1.0  # push interval in seconds
+        _MAX_SSE_DURATION = 600  # 10-minute hard cap to prevent thread leak
+        started = time.monotonic()
         try:
             while True:
+                if time.monotonic() - started > _MAX_SSE_DURATION:
+                    self.wfile.write(f"data: {json.dumps({'ok': False, 'error': 'sse stream timeout'})}\n\n".encode("utf-8"))
+                    self.wfile.flush()
+                    break
+
                 job = JOBS.get(job_id)
                 if not job:
                     self.wfile.write(f"data: {json.dumps({'ok': False, 'error': 'job not found'})}\n\n".encode("utf-8"))
@@ -1201,11 +1214,26 @@ def record_submit_blocked(payload: dict, candidate: dict, run_config: RunConfig,
                 "note": failure_reason,
             },
         )
+    except OSError as exc:
+        logger.error(
+            "I/O error recording submission blocked for alpha_id=%s reason=%s: %s",
+            candidate.get("alpha_id", "?"), failure_reason, exc,
+        )
     except Exception:
         logger.warning(
             "failed to record submission blocked for alpha_id=%s reason=%s",
             candidate.get("alpha_id", "?"), failure_reason, exc_info=True,
         )
+        # Surface the failure as a WARNING-level violation in the compliance
+        # report so the audit trail is preserved even when persistence fails.
+        try:
+            _research_repo().add_compliance_note(
+                candidate.get("alpha_id", "?"),
+                "submit_blocked_persistence_failed",
+                {"reason": failure_reason},
+            )
+        except Exception:
+            pass
 
 
 def submit_candidate(payload: dict) -> dict:

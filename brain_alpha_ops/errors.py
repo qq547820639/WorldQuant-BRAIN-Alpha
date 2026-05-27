@@ -138,8 +138,13 @@ def classify_error(exc: Exception | object, *, default_code: str = "UNHANDLED_ER
             retry_after=_safe_float(retry_after),
         )
 
-    if explicit_category != "internal":
+    if explicit_category != "internal" and _safe_status(status_code) == 0 and not isinstance(exc, (ValueError, json.JSONDecodeError)):
+        # The caller provided an explicit default code that maps to a non-internal
+        # category (e.g. "auth", "validation").  Without a status code or known
+        # error type we trust the caller's classification.
         return ErrorInfo(default_code, explicit_category, message, error_type, _retryable_for_code(default_code), _safe_status(status_code), _safe_float(retry_after))
+    # Fall through to fine-grained text-based classification when we have more
+    # signal (status code, known exception type, or recognised keyword).
     if _safe_status(status_code) == 429 or "rate limit" in text or "too many requests" in text:
         return ErrorInfo(default_code, "rate_limit", message, error_type, True, _safe_status(status_code), _safe_float(retry_after))
     if _safe_status(status_code) in {401, 403} or "auth" in text or "credential" in text or "unauthorized" in text or "forbidden" in text:

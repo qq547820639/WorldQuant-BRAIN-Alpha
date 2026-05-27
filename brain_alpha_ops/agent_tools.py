@@ -8,6 +8,7 @@ arbitrary Python code.
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import time
 from typing import Any, Callable, Mapping
 
 from brain_alpha_ops.agent_tool_registry import resolve_tool_name, tool_definitions
@@ -313,7 +314,15 @@ class BrainAlphaToolbox:
         if effective_workers == 1 or len(selected) == 1:
             api = self._batch_api_for_item()
             for index, expression in enumerate(selected):
-                results[index] = self._run_single_batch_simulation(index, expression, shared_args, api=api)
+                try:
+                    results[index] = self._run_single_batch_simulation(index, expression, shared_args, api=api)
+                except Exception as exc:
+                    results[index] = _tool_error(
+                        exc,
+                        "SIMULATION_BATCH_ITEM_ERROR",
+                        tool="run_simulation_batch",
+                        index=index,
+                    )
         else:
             with ThreadPoolExecutor(max_workers=effective_workers) as executor:
                 future_map = {}
@@ -324,7 +333,7 @@ class BrainAlphaToolbox:
                 for future in as_completed(future_map):
                     index = future_map[future]
                     try:
-                        results[index] = future.result()
+                        results[index] = future.result(timeout=600)
                     except Exception as exc:
                         results[index] = _tool_error(
                             exc,
@@ -405,11 +414,14 @@ class BrainAlphaToolbox:
             settings,
         )
         max_polls = _bounded_int(args.get("max_polls", 5), 1, 20)
+        poll_interval = float(args.get("poll_interval_seconds", 2.0))
+        poll_interval = _bounded_float(poll_interval, 0.5, 30.0, default=2.0)
         status = ""
         for _ in range(max_polls):
             status = str(api.poll_simulation(simulation_id))
             if status.upper() in {"COMPLETED", "FAILED", "ERROR"}:
                 break
+            time.sleep(poll_interval)
         payload = {"ok": True, "simulation_id": simulation_id, "status": status, "settings": settings}
         if status.upper() == "COMPLETED":
             payload["result"] = api.fetch_result(simulation_id)

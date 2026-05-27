@@ -171,15 +171,20 @@ class JobStore:
         if len(self.jobs) <= self.max_jobs:
             return
         ordered = sorted(self.jobs.items(), key=lambda item: _updated_at(item[1]))
+        # Phase 1: remove non-active (terminal) jobs, oldest first.
         for job_id, job in ordered:
             if len(self.jobs) <= self.max_jobs:
                 break
             if job.get("status") not in ACTIVE_STATUSES:
                 self.jobs.pop(job_id, None)
-        for job_id, _job in ordered:
-            if len(self.jobs) <= self.max_jobs:
-                break
-            self.jobs.pop(job_id, None)
+        # Phase 2: if still over the limit, only remove long-completed jobs
+        # (status completed / failed) rather than active ones.
+        if len(self.jobs) > self.max_jobs:
+            for job_id, job in ordered:
+                if len(self.jobs) <= self.max_jobs:
+                    break
+                if job.get("status") in ("completed", "failed"):
+                    self.jobs.pop(job_id, None)
 
     def _persist_locked(self) -> None:
         if not self.persistence_path:
