@@ -28,7 +28,10 @@ def _configure_logging() -> None:
     handler.setLevel(logging.WARNING)
     handler._brain_alpha_ops_handler = True  # type: ignore[attr-defined]
     root.addHandler(handler)
-    root.setLevel(logging.WARNING)
+    # NOTE: intentionally do NOT call root.setLevel(...) here.
+    # Setting the root logger level is a global side effect that can mask
+    # DEBUG/INFO messages from other libraries.  Our handler is already set
+    # to WARNING, which is sufficient for library-level output.
 
 
 _configure_logging()

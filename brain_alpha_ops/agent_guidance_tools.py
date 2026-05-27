@@ -9,12 +9,19 @@ from brain_alpha_ops.research.guidance import assistant_guidance_candidate_metad
 
 
 def has_generator_bias(guidance: dict[str, Any] | None) -> bool:
+    """Return True when guidance contains bias keys that the generator applies.
+
+    Covers both the keys that ``assistant_guidance_for_generator`` consumes
+    (top_operators, preferred_windows, field_combinations, top_fields) and
+    any raw guidance key that directly biases generation.
+    """
     if not guidance:
         return False
     return bool(
         guidance.get("top_operators")
         or guidance.get("preferred_windows")
         or guidance.get("field_combinations")
+        or guidance.get("top_fields")
     )
 
 

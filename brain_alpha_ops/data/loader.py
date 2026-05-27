@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import logging
+import threading
 from pathlib import Path
 import shutil
 import sys
@@ -138,16 +139,25 @@ class OfficialDataLoader:
     """Singleton that loads official_fields/operators/datasets JSON files on first use."""
 
     _instance: Optional["OfficialDataLoader"] = None
+    _instance_lock = threading.Lock()
 
     # ------------------------------------------------------------------
     # Singleton
     # ------------------------------------------------------------------
     @classmethod
     def instance(cls) -> "OfficialDataLoader":
-        """Return (and auto-create) the singleton instance."""
+        """Return (and auto-create) the singleton instance.
+
+        Thread-safe: uses double-checked locking so that only one
+        OfficialDataLoader is ever created even when multiple threads
+        call instance() concurrently on first access.
+        """
         if cls._instance is None:
-            cls._instance = cls()
-            cls._instance.load_all()
+            with cls._instance_lock:
+                if cls._instance is None:
+                    loader = cls()
+                    loader.load_all()
+                    cls._instance = loader
         return cls._instance
 
     @classmethod
@@ -275,6 +285,14 @@ class OfficialDataLoader:
                 # Verify loaded content is non-trivial
                 if not self._fields and not self._operators and not self._datasets:
                     raise RuntimeError("refresh produced empty data sets")
+                # Verify each category loaded individually to detect partial
+                # failures masked by the combined emptiness check above.
+                if old_fields > 0 and not self._fields:
+                    raise RuntimeError("refresh dropped all fields")
+                if old_operators > 0 and not self._operators:
+                    raise RuntimeError("refresh dropped all operators")
+                if old_datasets > 0 and not self._datasets:
+                    raise RuntimeError("refresh dropped all datasets")
                     
                 # Success — return diff
                 return {

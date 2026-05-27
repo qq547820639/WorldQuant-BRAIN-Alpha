@@ -4,12 +4,16 @@ from __future__ import annotations
 
 from concurrent.futures import Future, ProcessPoolExecutor, ThreadPoolExecutor, TimeoutError
 from dataclasses import dataclass
+import logging
 import os
 import time
 from typing import Any, Callable
 
 from brain_alpha_ops.redaction import redact_error_message
 from brain_alpha_ops.tasks import JobStore
+
+
+logger = logging.getLogger(__name__)
 
 
 class TaskExecutor:
@@ -74,8 +78,19 @@ def run_job(
     try:
         result = future.result(timeout=timeout)
     except TimeoutError:
+        # Only catch the executor-level TimeoutError — business logic
+        # TimeoutErrors (builtin) do NOT inherit from concurrent.futures
+        # .TimeoutError and will NOT be caught here.
         future.cancel()
+        # NOTE: ThreadPoolExecutor.cancel() cannot interrupt a thread that is
+        # already running; the task *will* continue in the background.  We
+        # log a warning so operators can detect resource leaks.
         message = "task timed out"
+        logger.warning(
+            "task_executor: job %s timed out after %.1fs — the background "
+            "thread may still be running and will be leaked",
+            active_job_id, timeout,
+        )
         store.update(active_job_id, status="failed", error=message, progress={"phase": "timeout", "percent": 100, "message": message})
         return JobExecutionResult(active_job_id, "failed", error=message, duration_seconds=round(time.perf_counter() - started, 3))
     except Exception as exc:

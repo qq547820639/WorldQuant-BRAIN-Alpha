@@ -381,8 +381,24 @@ def _num_or_none(value: Any):
 
 
 def _ratio(value: Any) -> float:
+    """Convert a metric value to a decimal ratio.
+
+    BRAIN API can return metrics as either percentages (e.g. 75.0 → 0.75) or
+    decimals (e.g. 0.75).  The old heuristic of dividing everything > 1.0 by
+    100 produced incorrect results for metrics like turnover whose raw value
+    naturally exceeds 1.0 (e.g. 2.5 → 0.025 instead of 2.5).
+
+    We now only divide by 100 when the value is unambiguously in percentage
+    range (>= 2.0), which catches real percentage values like 75% without
+    harming ratios that naturally live between 0 and 2.  Metrics that *do*
+    naturally exceed 2.0 (e.g. turnover, correlation) pass through unchanged.
+    """
     numeric = _num(value)
-    return numeric / 100.0 if abs(numeric) > 1.0 else numeric
+    # Only treat values >= 2.0 as percentage-scale; values in [0, 2) are
+    # kept as-is to avoid mutilating turnover / correlation ratios.
+    if numeric >= 2.0:
+        return numeric / 100.0
+    return numeric
 
 
 def merge_payloads(left: Any, right: Any) -> dict:
