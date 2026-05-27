@@ -465,7 +465,10 @@ class OfficialBrainAPI:
             page_params = dict(params)
             total = 0
             seen_page_signatures: set[str] = set()
+            _MAX_ALPHA_PAGES = 500  # safety cap: ~50,000 alphas at limit=100
+            _page = 0
             while True:
+                _page += 1
                 try:
                     data, _headers = self._request("GET", self.config.user_alphas_path, query=page_params)
                 except BrainAPIError as exc:
@@ -505,6 +508,15 @@ class OfficialBrainAPI:
                     break
                 if len(page_items) < int(page_params["limit"]):
                     break
+                if _page >= _MAX_ALPHA_PAGES:
+                    logger.warning(
+                        "list_user_alphas hit maximum page limit (%d pages); "
+                        "truncating to protect against infinite pagination",
+                        _MAX_ALPHA_PAGES,
+                    )
+                    if progress_callback:
+                        progress_callback(_user_alpha_progress(sync_range, items, total, page_size=0, truncated=True, warning="max_pages"))
+                    break
                 page_params["offset"] = int(page_params.get("offset", 0)) + int(page_params["limit"])
             self._write_cache(cache_key, items, total)
             return items
@@ -528,9 +540,17 @@ class OfficialBrainAPI:
           5. Expression length (advisory, >250 chars = WARNING)
           6. Function completeness (no dangling commas, no bare operators)
           7. Nesting depth (advisory, >6 = WARNING)
+          8. NUL byte / non-printable character detection (P2-4)
+          9. Empty function call detection (e.g. "ts_mean()")
         """
         errors = []
         warnings = []
+
+        # ── P2-4: Null / non-printable character detection ──
+        if not isinstance(expression, str):
+            return {"status": "FAIL", "errors": ["Expression must be a string"]}
+        if "\x00" in expression:
+            errors.append("Expression contains null bytes")
 
         # Basic structure
         if not expression.strip():
@@ -551,6 +571,14 @@ class OfficialBrainAPI:
         if re.search(r",\s*,", expression):
             errors.append("Consecutive commas in function arguments")
 
+        # ── P2-4: Empty function calls ──
+        if re.search(r"\b\w+\s*\(\s*\)", expression):
+            warnings.append("Empty function call detected — ensure all functions have arguments")
+
+        # ── P2-4: Unmatched quotes ──
+        if expression.count('"') % 2 != 0 or expression.count("'") % 2 != 0:
+            warnings.append("Unmatched quotes in expression")
+
         # Nesting depth
         depth = 0
         max_depth = 0
@@ -560,6 +588,9 @@ class OfficialBrainAPI:
                 max_depth = max(max_depth, depth)
             elif char == ")":
                 depth -= 1
+                if depth < 0:
+                    errors.append("Unmatched closing parenthesis — depth went negative")
+                    break
         if max_depth > 6:
             warnings.append(f"Nesting depth {max_depth} > 6 (may reduce interpretability)")
 
@@ -783,15 +814,20 @@ class OfficialBrainAPI:
                     if self._has_session_cookie():
                         self._prefer_cookie_auth = True
                     continue
-                auth_debug = {
-                    "method": method,
-                    "path": path_or_url,
-                    "auth_mode": auth_mode,
-                    "has_session_cookie": self._has_session_cookie(),
-                    "has_username_password": bool(self.username and self.password),
-                }
+                # Log auth context separately for internal diagnostics without
+                # embedding it in the user-facing error message, which could
+                # leak internal authentication state to logs / API responses.
+                logger.debug(
+                    "API auth context: method=%s path=%s auth_mode=%s "
+                    "has_cookie=%s has_user_pass=%s",
+                    method,
+                    path_or_url,
+                    auth_mode,
+                    self._has_session_cookie(),
+                    bool(self.username and self.password),
+                )
                 last_error = BrainAPIError(
-                    f"HTTP {exc.code}: {_scrub(parsed)} | auth_debug={auth_debug}",
+                    f"HTTP {exc.code}: {_scrub(parsed)}",
                     status_code=exc.code,
                     payload=_scrub(parsed),
                     retry_after=_retry_after(exc.headers),

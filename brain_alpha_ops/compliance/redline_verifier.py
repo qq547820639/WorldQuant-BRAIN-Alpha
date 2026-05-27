@@ -402,9 +402,11 @@ def _verify_redline_3_dataset_ids(report: ComplianceReport) -> None:
                     report.add_pass()
                 # Check field completeness
                 required = {"id", "name", "field_count"}
+                field_ok = True
                 for ds in datasets:
                     missing = required - set(ds.keys())
                     if missing:
+                        field_ok = False
                         report.add(RedLineViolation(
                             redline_id=redline_id, redline_name="Dataset ID 全量可用",
                             severity="WARNING", file_path=str(datasets_path),
@@ -413,7 +415,8 @@ def _verify_redline_3_dataset_ids(report: ComplianceReport) -> None:
                             deviation="数据集缺少必要字段",
                             fix_guidance="检查 BRAIN API 返回格式",
                         ))
-                report.add_pass()
+                if field_ok:
+                    report.add_pass()
         except json.JSONDecodeError as e:
             report.add(RedLineViolation(
                 redline_id=redline_id, redline_name="Dataset ID 全量可用",
@@ -450,11 +453,39 @@ def _verify_redline_3_dataset_ids(report: ComplianceReport) -> None:
             ))
     except Exception:
         report.add_pass()
-    from brain_alpha_ops.data.official_context_validation import validate_official_context
-    if validate_official_context(data_dir=_project_root() / "data").get("blocking_ok"):
-        report.add_pass()
-    else:
-        report.add(RedLineViolation(redline_id, "Dataset ID 全量可用", "BLOCKING", "data/official_datasets.json", "官方上下文 Dataset 血缘不一致", "invalid", "matching official field counts", "context lineage failed", "运行 fetch_official_context.py 后复核 metadata hash。"))
+
+    # 3c. Verify official context dataset lineage
+    try:
+        from brain_alpha_ops.data.official_context_validation import validate_official_context
+        validation = validate_official_context(data_dir=_project_root() / "data")
+        if validation.get("blocking_ok"):
+            report.add_pass()
+        else:
+            report.add(RedLineViolation(
+                redline_id=redline_id,
+                redline_name="Dataset ID 全量可用",
+                severity="BLOCKING",
+                file_path="data/official_datasets.json",
+                check_name="官方上下文 Dataset 血缘不一致",
+                actual_value=validation.get("detail", "invalid"),
+                expected_value="matching official field counts",
+                deviation="context lineage failed",
+                fix_guidance="运行 fetch_official_context.py 后复核 metadata hash。",
+            ))
+    except Exception as exc:
+        report.add(RedLineViolation(
+            redline_id=redline_id,
+            redline_name="Dataset ID 全量可用",
+            severity="WARNING",
+            file_path="data/official_datasets.json",
+            check_name="官方上下文血缘校验不可用",
+            actual_value=str(exc)[:200],
+            expected_value="可执行 validate_official_context",
+            deviation="无法完成数据集血缘校验",
+            fix_guidance="确保 official_context_validation 模块可导入。",
+        ))
+
+
 def _verify_redline_4_parameter_traceability(report: ComplianceReport) -> None:
     """Red Line 4: 参数全链路可溯."""
     redline_id = 4
@@ -539,7 +570,9 @@ def _verify_redline_4_parameter_traceability(report: ComplianceReport) -> None:
                 ))
         except Exception:
             pass
-    report.add_pass()
+    # NOTE: individual sub-checks (4a-4d) each add their own pass when
+    # successful.  This is intentional — we report granular results.  No
+    # blanket pass is added here to avoid inflating the pass count.
 
 
 def _verify_redline_5_factor_coverage(report: ComplianceReport) -> None:
@@ -574,10 +607,21 @@ def _verify_redline_5_factor_coverage(report: ComplianceReport) -> None:
                     deviation=f"empirical_score 未覆盖 {check_id}",
                     fix_guidance=f"在 empirical_score 的 items 中添加 {check_name} 检查项",
                 ))
-    except Exception:
-        # Fallback: assume covered
-        for _check_id, _check_name, _tag in required_checks:
-            report.add_pass()
+    except Exception as exc:
+        # Import or source inspection failure means we cannot verify the
+        # coverage — report as a WARNING (not BLOCKING) so the operator
+        # can investigate without the pipeline being blocked.
+        import logging as _log
+        _log.warning("redline_5: could not verify factor coverage: %s", exc)
+        for check_id, check_name, _tag in required_checks:
+            report.add(RedLineViolation(
+                redline_id=redline_id, redline_name="要素全覆盖",
+                severity="WARNING", file_path="brain_alpha_ops/research/scoring.py",
+                check_name=f"无法验证覆盖: {check_id}",
+                actual_value=str(exc)[:200], expected_value=f"包含 {check_id} ({check_name})",
+                deviation="覆盖验证不可用",
+                fix_guidance=f"修复 empirical_score 导入或代码检查",
+            ))
 
     # 5b. Verify fitness_crosscheck exists
     try:
