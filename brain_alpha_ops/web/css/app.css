@@ -831,6 +831,13 @@
     .toast-msg{flex:1;min-width:0}
     .toast-close{flex-shrink:0;cursor:pointer;opacity:0.6;font-size:var(--fs-md);line-height:1}
     .toast-close:hover{opacity:1}
+    .toast-action-btn{
+      flex-shrink:0;cursor:pointer;padding:2px var(--sp-2);border:1px solid currentColor;
+      border-radius:var(--r-sm);background:transparent;color:inherit;
+      font:inherit;font-size:var(--fs-xs);font-weight:var(--fw-bold);
+      opacity:0.8;transition:opacity var(--t-fast);
+    }
+    .toast-action-btn:hover{opacity:1}
 
     /* ── SPINNER ────────────────────────────────────────────────────────── */
     .spinner-overlay{
@@ -919,6 +926,12 @@
     .risk-card{padding:var(--sp-3);border:1px solid var(--border-default);border-radius:var(--r-md);background:var(--bg-surface);display:grid;gap:var(--sp-2)}
     .risk-card.blocking{border-color:#fecaca;background:var(--bg-danger-soft)}
     .risk-card.warning{border-color:#fde68a;background:var(--bg-warning-soft)}
+    .risk-card-head{display:flex;justify-content:space-between;align-items:flex-start;gap:var(--sp-2)}
+    .risk-title{font-weight:var(--fw-bold);font-size:var(--fs-sm);margin-bottom:2px}
+    .risk-summary{font-size:var(--fs-xs);color:var(--text-secondary);line-height:1.4}
+    .risk-score{font-size:var(--fs-lg);font-weight:var(--fw-extrabold);color:var(--text-primary);flex-shrink:0}
+    .risk-list-title{font-size:var(--fs-xs);font-weight:var(--fw-bold);color:var(--text-secondary);margin-top:var(--sp-2);margin-bottom:2px}
+    .risk-list{margin:0;padding-left:var(--sp-4);display:grid;gap:var(--sp-1);font-size:var(--fs-xs);color:var(--text-secondary)}
     .risk-meter{position:relative;height:8px;border-radius:var(--r-full);background:var(--border-default);overflow:hidden}
     .risk-meter-fill{height:100%;max-width:100%;border-radius:inherit;background:linear-gradient(90deg,var(--accent),var(--warning),var(--danger))}
     .risk-threshold{position:absolute;top:0;bottom:0;width:2px;background:var(--text-primary);opacity:.65}
@@ -969,6 +982,16 @@
     @keyframes spin{to{transform:rotate(360deg)}}
     @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.5}}
     @keyframes progressIndeterminate{0%{transform:translateX(-100%)}100%{transform:translateX(350%)}}
+
+    /* Reduced motion preference */
+    @media(prefers-reduced-motion:reduce){
+      *,*::before,*::after{
+        animation-duration:0.01ms!important;
+        animation-iteration-count:1!important;
+        transition-duration:0.01ms!important;
+        scroll-behavior:auto!important;
+      }
+    }
 
     /* ── RESPONSIVE ─────────────────────────────────────────────────────── */
     @media(max-width:1200px){

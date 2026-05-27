@@ -838,6 +838,13 @@
     .toast-msg{flex:1;min-width:0}
     .toast-close{flex-shrink:0;cursor:pointer;opacity:0.6;font-size:var(--fs-md);line-height:1}
     .toast-close:hover{opacity:1}
+    .toast-action-btn{
+      flex-shrink:0;cursor:pointer;padding:2px var(--sp-2);border:1px solid currentColor;
+      border-radius:var(--r-sm);background:transparent;color:inherit;
+      font:inherit;font-size:var(--fs-xs);font-weight:var(--fw-bold);
+      opacity:0.8;transition:opacity var(--t-fast);
+    }
+    .toast-action-btn:hover{opacity:1}
 
     /* ── SPINNER ────────────────────────────────────────────────────────── */
     .spinner-overlay{
@@ -926,6 +933,12 @@
     .risk-card{padding:var(--sp-3);border:1px solid var(--border-default);border-radius:var(--r-md);background:var(--bg-surface);display:grid;gap:var(--sp-2)}
     .risk-card.blocking{border-color:#fecaca;background:var(--bg-danger-soft)}
     .risk-card.warning{border-color:#fde68a;background:var(--bg-warning-soft)}
+    .risk-card-head{display:flex;justify-content:space-between;align-items:flex-start;gap:var(--sp-2)}
+    .risk-title{font-weight:var(--fw-bold);font-size:var(--fs-sm);margin-bottom:2px}
+    .risk-summary{font-size:var(--fs-xs);color:var(--text-secondary);line-height:1.4}
+    .risk-score{font-size:var(--fs-lg);font-weight:var(--fw-extrabold);color:var(--text-primary);flex-shrink:0}
+    .risk-list-title{font-size:var(--fs-xs);font-weight:var(--fw-bold);color:var(--text-secondary);margin-top:var(--sp-2);margin-bottom:2px}
+    .risk-list{margin:0;padding-left:var(--sp-4);display:grid;gap:var(--sp-1);font-size:var(--fs-xs);color:var(--text-secondary)}
     .risk-meter{position:relative;height:8px;border-radius:var(--r-full);background:var(--border-default);overflow:hidden}
     .risk-meter-fill{height:100%;max-width:100%;border-radius:inherit;background:linear-gradient(90deg,var(--accent),var(--warning),var(--danger))}
     .risk-threshold{position:absolute;top:0;bottom:0;width:2px;background:var(--text-primary);opacity:.65}
@@ -976,6 +989,16 @@
     @keyframes spin{to{transform:rotate(360deg)}}
     @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.5}}
     @keyframes progressIndeterminate{0%{transform:translateX(-100%)}100%{transform:translateX(350%)}}
+
+    /* Reduced motion preference */
+    @media(prefers-reduced-motion:reduce){
+      *,*::before,*::after{
+        animation-duration:0.01ms!important;
+        animation-iteration-count:1!important;
+        transition-duration:0.01ms!important;
+        scroll-behavior:auto!important;
+      }
+    }
 
     /* ── RESPONSIVE ─────────────────────────────────────────────────────── */
     @media(max-width:1200px){
@@ -1034,6 +1057,853 @@
     [data-theme="dark"] .filter-chip:hover{border-color:var(--border-hover)}
     [data-theme="dark"] .view-tab:hover{background:var(--bg-surface-hover)}
     [data-theme="dark"] .workflow-step:hover{background:var(--bg-surface-hover)}
+
+</style>
+  <style>
+/* ═══════════════════════════════════════════════════════════════════════
+   BRAIN Alpha Ops — UX ENHANCEMENTS v1.0
+   Skeleton screens, transitions, accessibility, responsive polish.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* ── Reduced Motion ──────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ── Focus Indicators (WCAG 2.4.7) ──────────────────────────────────── */
+:root {
+  --focus-outline: 3px solid var(--accent-ring, rgba(15,118,110,0.4));
+  --focus-outline-offset: 2px;
+}
+
+*:focus-visible {
+  outline: var(--focus-outline);
+  outline-offset: var(--focus-outline-offset);
+}
+
+/* Remove focus ring for mouse clicks, keep for keyboard */
+*:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* ── SKELETON SCREENS ────────────────────────────────────────────────── */
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--border-default) 25%,
+    var(--bg-muted) 50%,
+    var(--border-default) 75%
+  );
+  background-size: 200% 100%;
+  animation: skeletonShimmer 1.5s ease-in-out infinite;
+  border-radius: var(--r-sm);
+}
+
+@keyframes skeletonShimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* Table skeleton */
+.skeleton-table {
+  padding: var(--sp-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.skeleton-row {
+  display: grid;
+  grid-template-columns: 32px minmax(120px, 2fr) 80px 100px 72px 96px 120px 80px;
+  gap: var(--sp-2);
+  align-items: center;
+  padding: var(--sp-1) var(--sp-2);
+}
+
+.skeleton-cell {
+  height: 14px;
+  border-radius: var(--r-sm);
+  background: var(--border-default);
+  animation: skeletonPulse 1.5s ease-in-out infinite;
+}
+
+.skeleton-cell.short  { width: 60%; }
+.skeleton-cell.medium { width: 80%; }
+.skeleton-row .skeleton-cell:first-child { width: 24px; height: 24px; border-radius: var(--r-sm); }
+
+@keyframes skeletonPulse {
+  0%, 100% { opacity: 0.45; }
+  50%      { opacity: 0.8; }
+}
+
+/* Sidebar skeleton */
+.skeleton-sidebar {
+  padding: var(--sp-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+.skeleton-sidebar .skeleton-block {
+  height: 80px;
+  border-radius: var(--r-md);
+}
+
+/* Workflow skeleton */
+.skeleton-workflow {
+  padding: var(--sp-1) var(--sp-3);
+  display: flex;
+  gap: var(--sp-2);
+}
+
+.skeleton-workflow .skeleton-block {
+  height: 42px;
+  flex: 1;
+  border-radius: var(--r-md);
+}
+
+/* ── PAGE TRANSITIONS ────────────────────────────────────────────────── */
+.page-enter {
+  animation: pageFadeIn 220ms ease-out both;
+}
+
+.page-enter-delayed {
+  animation: pageFadeIn 220ms ease-out 60ms both;
+}
+
+@keyframes pageFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Table row enter animation */
+@keyframes rowSlideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.data-table tbody tr.new-row {
+  animation: rowSlideIn 280ms ease-out both;
+}
+
+/* ── LOADING STATES ───────────────────────────────────────────────────── */
+/* Inline loading dot */
+.loading-dots::after {
+  content: '';
+  animation: loadingDots 1.2s steps(3, end) infinite;
+}
+
+@keyframes loadingDots {
+  0%   { content: ''; }
+  25%  { content: '.'; }
+  50%  { content: '..'; }
+  75%  { content: '...'; }
+  100% { content: ''; }
+}
+
+/* Button loading state enhanced */
+.btn.is-loading {
+  position: relative;
+  color: transparent !important;
+  pointer-events: none;
+}
+
+.btn.is-loading::after {
+  content: '';
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+.btn-secondary.is-loading::after {
+  border-color: rgba(0, 0, 0, 0.12);
+  border-top-color: var(--accent);
+}
+
+/* Pulse indicator */
+.pulse-indicator {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: pulse 1.8s ease-in-out infinite;
+  margin-right: var(--sp-1);
+  vertical-align: middle;
+}
+
+/* ── FORM ENHANCEMENTS ────────────────────────────────────────────────── */
+/* Inline validation */
+.form-group {
+  position: relative;
+}
+
+.form-group.has-error .form-input,
+.form-group.has-error .form-select,
+.form-group.has-error .form-textarea {
+  border-color: var(--danger);
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.12);
+}
+
+.form-group.has-error .form-label {
+  color: var(--danger);
+}
+
+.form-error-message {
+  font-size: var(--fs-2xs);
+  font-weight: var(--fw-semibold);
+  color: var(--danger);
+  margin-top: 2px;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  animation: formErrorFadeIn 180ms ease-out;
+}
+
+@keyframes formErrorFadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.form-error-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--danger);
+  color: #fff;
+  font-size: 8px;
+  font-weight: var(--fw-extrabold);
+  flex-shrink: 0;
+}
+
+.form-group.has-success .form-input,
+.form-group.has-success .form-select {
+  border-color: var(--success);
+  box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.12);
+}
+
+.form-group.has-success .form-label {
+  color: var(--success);
+}
+
+/* Input character count */
+.form-char-count {
+  font-size: var(--fs-2xs);
+  color: var(--text-muted);
+  text-align: right;
+  margin-top: 1px;
+}
+
+.form-char-count.is-over {
+  color: var(--danger);
+  font-weight: var(--fw-bold);
+}
+
+/* Required field indicator */
+.form-label .required-indicator {
+  color: var(--danger);
+  font-weight: var(--fw-bold);
+  margin-left: 1px;
+}
+
+/* Inline help tooltip */
+.form-help-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--bg-muted);
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: var(--fw-extrabold);
+  cursor: help;
+  border: 1px solid var(--border-default);
+  margin-left: var(--sp-1);
+}
+
+.form-help-trigger:hover {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
+/* ── IMPROVED TOAST NOTIFICATIONS ─────────────────────────────────────── */
+.toast .toast-progress {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 3px;
+  background: currentColor;
+  opacity: 0.35;
+  border-radius: 0 0 var(--r-md) var(--r-md);
+  transition: width 100ms linear;
+}
+
+.toast.has-progress {
+  position: relative;
+  padding-bottom: calc(var(--sp-2) + 5px);
+  overflow: hidden;
+}
+
+/* Toast dismiss animation enhancement */
+@keyframes toastSlideOut {
+  from { opacity: 1; transform: translateX(0) scale(1); }
+  to   { opacity: 0; transform: translateX(24px) scale(0.95); }
+}
+
+/* ── IMPROVED CONFIRM DIALOG ──────────────────────────────────────────── */
+.confirm-dialog {
+  backdrop-filter: none;
+}
+
+.confirm-dialog-icon {
+  transition: transform var(--t-spring);
+}
+
+.confirm-overlay:not(.hidden) .confirm-dialog-icon {
+  animation: confirmIconPop 320ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+@keyframes confirmIconPop {
+  from { transform: scale(0.6); }
+  to   { transform: scale(1); }
+}
+
+/* ── ACCESSIBILITY ENHANCEMENTS ───────────────────────────────────────── */
+/* Skip link enhancement */
+.skip-link:focus {
+  transform: translateY(0);
+  box-shadow: var(--shadow-lg);
+  z-index: calc(var(--z-overlay) + 5);
+}
+
+/* Screen reader only (enhanced) */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.sr-only-focusable:focus {
+  position: static;
+  width: auto;
+  height: auto;
+  overflow: visible;
+  clip: auto;
+  white-space: normal;
+}
+
+/* High contrast focus for interactive elements */
+[role="button"]:focus-visible,
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 3px solid var(--accent-ring);
+  outline-offset: 2px;
+}
+
+/* Improve focus visibility in dark mode */
+[data-theme="dark"] *:focus-visible {
+  outline-color: rgba(45, 212, 191, 0.5);
+  outline-offset: 2px;
+}
+
+/* Live region for dynamic content */
+[aria-live="polite"] {
+  scroll-behavior: smooth;
+}
+
+/* ── KEYBOARD SHORTCUT INDICATOR ──────────────────────────────────────── */
+.kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 4px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--r-sm);
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: var(--fs-2xs);
+  font-weight: var(--fw-extrabold);
+  box-shadow: 0 1px 0 var(--border-default);
+  line-height: 1;
+}
+
+/* Keyboard shortcuts panel */
+.keyboard-shortcuts-panel {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: calc(var(--z-modal) + 2);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-xl);
+  padding: var(--sp-5);
+  min-width: 360px;
+  max-width: 480px;
+  max-height: 80vh;
+  overflow-y: auto;
+  animation: slideUp 200ms ease;
+}
+
+.keyboard-shortcuts-panel.hidden {
+  display: none;
+}
+
+.shortcuts-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--sp-3);
+  padding-bottom: var(--sp-2);
+  border-bottom: 1px solid var(--border-default);
+}
+
+.shortcuts-header h2 {
+  font-size: var(--fs-md);
+}
+
+.shortcuts-list {
+  display: grid;
+  gap: var(--sp-1);
+}
+
+.shortcut-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--sp-1) var(--sp-2);
+  border-radius: var(--r-sm);
+  font-size: var(--fs-sm);
+}
+
+.shortcut-item:hover {
+  background: var(--bg-surface-hover);
+}
+
+.shortcut-item .shortcut-keys {
+  display: flex;
+  gap: 2px;
+}
+
+.shortcut-item .shortcut-desc {
+  color: var(--text-secondary);
+  font-size: var(--fs-xs);
+}
+
+/* ── WORKFLOW WIZARD ENHANCEMENT ──────────────────────────────────────── */
+.workflow-wizard-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: calc(var(--z-modal) + 1);
+  background: rgba(15, 23, 42, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fadeIn 200ms ease;
+}
+
+.workflow-wizard-overlay.hidden {
+  display: none;
+}
+
+.workflow-wizard {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-xl);
+  padding: var(--sp-6);
+  max-width: 540px;
+  width: 90vw;
+  animation: slideUp 240ms ease;
+}
+
+.workflow-wizard-header {
+  margin-bottom: var(--sp-4);
+  text-align: center;
+}
+
+.workflow-wizard-header h2 {
+  font-size: var(--fs-xl);
+  margin-bottom: var(--sp-1);
+}
+
+.workflow-wizard-header p {
+  color: var(--text-secondary);
+  font-size: var(--fs-sm);
+}
+
+.workflow-wizard-steps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-4);
+}
+
+.workflow-wizard-step {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-3);
+  border: 1px solid var(--border-default);
+  border-radius: var(--r-md);
+  cursor: pointer;
+  transition: all var(--t-base);
+  background: var(--bg-surface);
+}
+
+.workflow-wizard-step:hover {
+  border-color: var(--border-hover);
+  box-shadow: var(--shadow-sm);
+  transform: translateX(2px);
+}
+
+.workflow-wizard-step.is-completed {
+  border-color: var(--success);
+  background: var(--bg-success-soft);
+}
+
+.workflow-wizard-step.is-active {
+  border-color: var(--accent);
+  background: var(--bg-accent-soft);
+}
+
+.workflow-wizard-step-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--bg-muted);
+  border: 2px solid var(--border-default);
+  font-weight: var(--fw-extrabold);
+  color: var(--text-secondary);
+  flex-shrink: 0;
+  transition: all var(--t-base);
+}
+
+.workflow-wizard-step.is-completed .workflow-wizard-step-icon {
+  background: var(--success);
+  border-color: var(--success);
+  color: #fff;
+}
+
+.workflow-wizard-step.is-active .workflow-wizard-step-icon {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.workflow-wizard-step-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.workflow-wizard-step-body h3 {
+  font-size: var(--fs-sm);
+  margin-bottom: 2px;
+}
+
+.workflow-wizard-step-body p {
+  font-size: var(--fs-xs);
+  color: var(--text-secondary);
+}
+
+.workflow-wizard-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--sp-2);
+}
+
+/* ── TOOLTIP ──────────────────────────────────────────────────────────── */
+.tooltip-container {
+  position: relative;
+}
+
+.tooltip {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: var(--sp-1) var(--sp-2);
+  border-radius: var(--r-sm);
+  background: var(--text-primary);
+  color: var(--text-inverse);
+  font-size: var(--fs-2xs);
+  font-weight: var(--fw-semibold);
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--t-fast);
+  z-index: var(--z-dropdown);
+  box-shadow: var(--shadow-md);
+}
+
+.tooltip::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  margin-left: -4px;
+  border: 4px solid transparent;
+  border-top-color: var(--text-primary);
+}
+
+.tooltip-container:hover .tooltip,
+.tooltip-container:focus-within .tooltip {
+  opacity: 1;
+}
+
+/* ── RESPONSIVE ENHANCEMENTS ──────────────────────────────────────────── */
+/* Improved touch targets for mobile */
+@media (max-width: 640px) {
+  /* Larger touch targets */
+  .btn {
+    min-height: 40px;
+    padding: 0 var(--sp-4);
+  }
+
+  .btn-sm {
+    min-height: 34px;
+  }
+
+  .view-tab {
+    min-height: 34px;
+    padding: 0 var(--sp-2);
+  }
+
+  /* Full-width sidebar sections */
+  .app-sidebar {
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
+  }
+
+  /* Improved mobile table cards */
+  .mobile-card {
+    padding: var(--sp-3);
+    margin-bottom: var(--sp-2);
+  }
+
+  .mobile-card:active {
+    background: var(--bg-accent-soft);
+    transform: scale(0.98);
+  }
+
+  .mobile-card-header {
+    font-size: var(--fs-md);
+  }
+
+  /* Vertical workflow steps */
+  .workflow-steps {
+    grid-template-columns: 1fr;
+  }
+
+  .workflow-step {
+    min-height: 48px;
+    padding: var(--sp-2) var(--sp-3);
+  }
+
+  /* Full-width search */
+  .content-toolbar .search-wrap {
+    max-width: 100%;
+    flex: 1 1 100%;
+  }
+
+  /* Stacked action bar */
+  .action-bar {
+    grid-template-columns: 1fr;
+    gap: var(--sp-3);
+  }
+
+  .action-bar .action-controls {
+    justify-content: flex-start;
+  }
+
+  /* Bottom sheet modal on mobile */
+  @media (max-height: 700px) {
+    .modal-panel {
+      max-height: 96vh;
+      border-radius: var(--r-lg) var(--r-lg) 0 0;
+      margin-top: auto;
+    }
+  }
+
+  /* Toast full width */
+  .toast-container {
+    left: var(--sp-2);
+    right: var(--sp-2);
+    bottom: var(--sp-2);
+    max-width: none;
+  }
+}
+
+/* Tablet improvements */
+@media (min-width: 641px) and (max-width: 960px) {
+  .app-main {
+    gap: var(--sp-3);
+  }
+
+  .workflow-rail {
+    gap: var(--sp-3);
+  }
+
+  .insight-strip {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* ── MISC ENHANCEMENTS ────────────────────────────────────────────────── */
+/* Stagger animation for insight tiles */
+.insight-tile {
+  animation: pageFadeIn 300ms ease-out both;
+}
+
+.insight-tile:nth-child(1) { animation-delay: 0ms; }
+.insight-tile:nth-child(2) { animation-delay: 50ms; }
+.insight-tile:nth-child(3) { animation-delay: 100ms; }
+.insight-tile:nth-child(4) { animation-delay: 150ms; }
+.insight-tile:nth-child(5) { animation-delay: 200ms; }
+
+/* Connection indicator animation */
+.connection-result {
+  transition: all var(--t-base);
+}
+
+.connection-result.is-pending {
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+/* Table row hover enhancement */
+.data-table tbody tr {
+  transition: background var(--t-fast), transform var(--t-fast);
+}
+
+/* Scrollbar styling for all scrollable areas */
+.scroll-list-sm::-webkit-scrollbar,
+.modal-panel::-webkit-scrollbar {
+  width: 6px;
+}
+
+.scroll-list-sm::-webkit-scrollbar-thumb,
+.modal-panel::-webkit-scrollbar-thumb {
+  background: var(--border-default);
+  border-radius: 3px;
+}
+
+.scroll-list-sm::-webkit-scrollbar-thumb:hover,
+.modal-panel::-webkit-scrollbar-thumb:hover {
+  background: var(--border-hover);
+}
+
+/* ── STATUS TRANSITIONS ───────────────────────────────────────────────── */
+.runtime-status-panel {
+  transition: all 300ms ease;
+}
+
+.runtime-status-panel:not(.hidden) {
+  animation: runtimeStatusSlideIn 280ms ease-out both;
+}
+
+@keyframes runtimeStatusSlideIn {
+  from {
+    opacity: 0;
+    max-height: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    border-bottom-width: 0;
+  }
+  to {
+    opacity: 1;
+    max-height: 200px;
+  }
+}
+
+/* Progress indeterminate animation smoother */
+@keyframes progressIndeterminate {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(350%); }
+}
+
+/* Count badge update animation */
+.workflow-count.updating {
+  animation: countPop 300ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes countPop {
+  0%   { transform: scale(1); }
+  50%  { transform: scale(1.25); }
+  100% { transform: scale(1); }
+}
+
+/* ── PRINT STYLES ─────────────────────────────────────────────────────── */
+@media print {
+  .app-sidebar,
+  .workflow-rail,
+  .view-tabs,
+  .content-toolbar,
+  .action-bar,
+  .filter-chips,
+  .status-bar,
+  .runtime-status-panel,
+  .toast-container,
+  .spinner-overlay {
+    display: none !important;
+  }
+
+  .app-main {
+    grid-template-columns: 1fr;
+  }
+
+  .data-table-wrap {
+    max-height: none;
+    overflow: visible;
+  }
+
+  table.data-table {
+    font-size: 10pt;
+  }
+}
 
 </style>
 </head>
@@ -1255,7 +2125,7 @@
       </aside>
 
       <!-- ═══════════ CONTENT PANEL ═══════════ -->
-      <section class="app-content" id="mainContent" aria-label="数据面板">
+      <section class="app-content page-enter" id="mainContent" aria-label="数据面板" tabindex="-1">
 
         <!-- Core Workflow Rail -->
         <section class="workflow-rail" id="workflowRail" aria-label="核心任务导航">
@@ -2145,7 +3015,7 @@
   <script>
 // brain_alpha_ops/web/js/components/toast.js
 // Toast notification component — success/error/warning/info.
-// v3: Enhanced with icons, stacking, duration, and queue management.
+// v4: Enhanced with progress bar, actionable toasts, rich icons, undo support.
 
 (function () {
   'use strict';
@@ -2153,12 +3023,27 @@
   var $ = window.Utils.$;
   var escapeHtml = window.Utils.escapeHtml;
 
-  var ICONS = { success: 'OK', error: 'ERR', warning: '!', info: 'i' };
+  var ICONS = {
+    success: '\u2713',
+    error: '\u2717',
+    warning: '\u26A0',
+    info: '\u24D8',
+  };
+
+  var ICON_EMOJI = {
+    success: '\u2705',
+    error: '\u274C',
+    warning: '\u26A0\uFE0F',
+    info: '\u2139\uFE0F',
+  };
+
   var activeToasts = [];
   var MAX_VISIBLE = 5;
 
   function removeToast(el) {
     if (!el) return;
+    if (el._removeTimer) { clearTimeout(el._removeTimer); el._removeTimer = null; }
+    if (el._progressTimer) { clearInterval(el._progressTimer); el._progressTimer = null; }
     el.classList.add('removing');
     setTimeout(function () {
       if (el.parentNode) el.parentNode.removeChild(el);
@@ -2166,9 +3051,32 @@
     }, 260);
   }
 
-  function toast(msg, type, duration) {
+  /**
+   * v4: Enhanced toast with optional progress bar and action button.
+   * @param {string} msg - Message text
+   * @param {string} type - success | error | warning | info
+   * @param {number|object} options - Duration in ms, or options object
+   *   { duration, showProgress, action, actionLabel, icon }
+   * @returns {HTMLElement}
+   */
+  function toast(msg, type, options) {
     type = type || 'info';
-    duration = duration !== undefined ? duration : 4000;
+    var duration;
+    var showProgress = false;
+    var actionCallback = null;
+    var actionLabel = '';
+    var customIcon = null;
+
+    if (typeof options === 'number') {
+      duration = options;
+    } else if (options && typeof options === 'object') {
+      duration = options.duration;
+      showProgress = Boolean(options.showProgress);
+      actionCallback = options.action || null;
+      actionLabel = options.actionLabel || '';
+      customIcon = options.icon || null;
+    }
+    if (duration === undefined) duration = 4000;
 
     var container = $('toastContainer');
     if (!container) return;
@@ -2179,45 +3087,134 @@
     }
 
     var toastEl = document.createElement('div');
-    toastEl.className = 'toast is-' + type;
+    toastEl.className = 'toast is-' + type + (showProgress && duration > 0 ? ' has-progress' : '');
     toastEl.setAttribute('role', type === 'error' ? 'alert' : 'status');
     toastEl.setAttribute('aria-live', 'polite');
+    toastEl.setAttribute('aria-atomic', 'true');
 
-    toastEl.innerHTML =
-      '<span class="toast-icon">' + (ICONS[type] || 'i') + '</span>' +
-      '<span class="toast-msg">' + escapeHtml(String(msg)) + '</span>' +
-      '<span class="toast-close" role="button" tabindex="0" aria-label="关闭通知">x</span>';
+    // Build toast HTML
+    var iconChar = customIcon || ICONS[type] || 'i';
+    var html = '<span class="toast-icon" aria-hidden="true">' + iconChar + '</span>' +
+      '<span class="toast-msg">' + escapeHtml(String(msg)) + '</span>';
 
+    if (actionCallback && typeof actionCallback === 'function') {
+      html += '<button class="toast-action-btn" data-action="toast-action">' +
+        escapeHtml(actionLabel || '\u21A9') + '</button>';
+    }
+
+    html += '<span class="toast-close" role="button" tabindex="0" aria-label="\u5173\u95ED\u901A\u77E5">&times;</span>';
+
+    if (showProgress && duration > 0) {
+      html += '<div class="toast-progress" style="width:100%"></div>';
+    }
+
+    toastEl.innerHTML = html;
+
+    // Keyboard support for close button
     toastEl.addEventListener('keydown', function (event) {
       var target = event.target || {};
-      if ((event.key !== 'Enter' && event.key !== ' ') || !(target.classList && target.classList.contains('toast-close'))) return;
+      var isCloseBtn = target.classList && target.classList.contains('toast-close');
+      if ((event.key !== 'Enter' && event.key !== ' ') || !isCloseBtn) return;
       if (event.preventDefault) event.preventDefault();
       if (event.stopPropagation) event.stopPropagation();
       removeToast(toastEl);
     });
 
-    // Click anywhere on toast to dismiss
-    toastEl.addEventListener('click', function () { removeToast(toastEl); });
+    // Click handler: close button dismisses, action button triggers callback
+    toastEl.addEventListener('click', function (event) {
+      var target = event.target || {};
+      if (target.classList && target.classList.contains('toast-close')) {
+        if (event.stopPropagation) event.stopPropagation();
+        removeToast(toastEl);
+        return;
+      }
+      if (target.classList && target.classList.contains('toast-action-btn')) {
+        if (event.stopPropagation) event.stopPropagation();
+        try { actionCallback(); } catch (e) { /* ignore */ }
+        removeToast(toastEl);
+        return;
+      }
+      // Click anywhere else dismisses
+      removeToast(toastEl);
+    });
 
     container.appendChild(toastEl);
     activeToasts.push(toastEl);
 
+    // Auto-dismiss with optional progress bar
     if (duration > 0) {
-      setTimeout(function () { removeToast(toastEl); }, duration);
+      var progressEl = toastEl.querySelector('.toast-progress');
+
+      if (showProgress && progressEl) {
+        var startTime = Date.now();
+        var totalMs = duration;
+
+        toastEl._progressTimer = setInterval(function () {
+          var elapsed = Date.now() - startTime;
+          var remaining = Math.max(0, totalMs - elapsed);
+          var pct = (remaining / totalMs) * 100;
+          progressEl.style.width = pct + '%';
+          if (remaining <= 0) {
+            clearInterval(toastEl._progressTimer);
+            toastEl._progressTimer = null;
+          }
+        }, 50);
+      }
+
+      toastEl._removeTimer = setTimeout(function () {
+        removeToast(toastEl);
+      }, duration);
     }
 
     return toastEl;
   }
 
-  // Convenience methods
-  function success(msg, duration) { return toast(msg, 'success', duration); }
-  function error(msg, duration) { return toast(msg, 'error', duration || 6000); }
-  function warning(msg, duration) { return toast(msg, 'warning', duration); }
-  function info(msg, duration) { return toast(msg, 'info', duration); }
+  // ── Convenience methods ───────────────────────────────────────────────
 
-  // v3: Clear all toasts
+  function success(msg, duration) {
+    return toast(msg, 'success', duration);
+  }
+
+  function error(msg, duration) {
+    return toast(msg, 'error', duration || 8000);
+  }
+
+  function warning(msg, duration) {
+    return toast(msg, 'warning', duration);
+  }
+
+  function info(msg, duration) {
+    return toast(msg, 'info', duration);
+  }
+
+  // v4: Actionable toast with undo support
+  function withAction(msg, type, actionLabel, actionFn, duration) {
+    return toast(msg, type, {
+      duration: duration || 6000,
+      action: actionFn,
+      actionLabel: actionLabel,
+      showProgress: true,
+    });
+  }
+
+  // v4: Persistent toast (no auto-dismiss)
+  function persistent(msg, type, actionLabel, actionFn) {
+    return toast(msg, type, {
+      duration: 0,
+      action: actionFn || null,
+      actionLabel: actionLabel || '',
+      showProgress: false,
+    });
+  }
+
+  // v4: Clear all toasts
   function clearAll() {
     activeToasts.slice().forEach(function (t) { removeToast(t); });
+  }
+
+  // v4: Get active toast count
+  function count() {
+    return activeToasts.length;
   }
 
   window.Toast = {
@@ -2226,8 +3223,11 @@
     error: error,
     warning: warning,
     info: info,
+    withAction: withAction,
+    persistent: persistent,
     removeToast: removeToast,
     clearAll: clearAll,
+    count: count,
   };
 })();
 
@@ -2235,13 +3235,19 @@
   <script>
 // brain_alpha_ops/web/js/components/spinner.js
 // Loading spinner overlay component.
-// v3: Enhanced with progress message and keyboard trap prevention.
+// v4: Enhanced with skeleton screens, staged messages, and progress feedback.
 
 (function () {
   'use strict';
 
   var $ = window.Utils.$;
+  var esc = window.Utils.escapeHtml;
   var visible = false;
+  var _messageTimer = null;
+  var _stageMessages = [];
+  var _stageInterval = 2000;
+
+  // ── Spinner Overlay ───────────────────────────────────────────────────
 
   function showSpinner(text) {
     text = text || '处理中...';
@@ -2250,13 +3256,17 @@
     if (overlay) {
       overlay.classList.remove('hidden');
       overlay.setAttribute('aria-hidden', 'false');
+      overlay.setAttribute('aria-label', text);
     }
     if (spinnerText) {
       spinnerText.textContent = text;
     }
     visible = true;
 
-    // Trap focus inside spinner to prevent interaction with background
+    // Announce to screen readers
+    announceToScreenReader(text);
+
+    // Trap focus to prevent interaction with background
     if (overlay) {
       overlay.addEventListener('keydown', trapFocus);
     }
@@ -2267,9 +3277,11 @@
     if (overlay) {
       overlay.classList.add('hidden');
       overlay.setAttribute('aria-hidden', 'true');
+      overlay.removeAttribute('aria-label');
       overlay.removeEventListener('keydown', trapFocus);
     }
     visible = false;
+    stopStageMessages();
   }
 
   function isSpinnerVisible() {
@@ -2282,9 +3294,92 @@
     }
   }
 
-  // v3: Async wrapper — show spinner, run action, hide spinner. Handles errors.
-  async function withSpinner(text, action) {
+  // v4: Staged messages — cycles through messages during long operations
+  function startStageMessages(messages, interval) {
+    stopStageMessages();
+    _stageMessages = Array.isArray(messages) ? messages : [];
+    _stageInterval = interval || 2000;
+    if (!_stageMessages.length || !visible) return;
+
+    var idx = 0;
+    _messageTimer = setInterval(function () {
+      idx = (idx + 1) % _stageMessages.length;
+      var spinnerText = $('spinnerText');
+      if (spinnerText) spinnerText.textContent = _stageMessages[idx];
+    }, _stageInterval);
+  }
+
+  function stopStageMessages() {
+    if (_messageTimer) {
+      clearInterval(_messageTimer);
+      _messageTimer = null;
+    }
+    _stageMessages = [];
+  }
+
+  // v4: Update spinner text in-place
+  function updateSpinnerText(text) {
+    var spinnerText = $('spinnerText');
+    if (spinnerText && visible) {
+      spinnerText.textContent = text;
+    }
+  }
+
+  // ── Skeleton Screens ──────────────────────────────────────────────────
+
+  /**
+   * v4: Show a table skeleton with N rows.
+   * @param {number} rowCount - number of skeleton rows (default 5)
+   */
+  function showTableSkeleton(rowCount) {
+    rowCount = rowCount || 5;
+    var tableBody = $('candidateRows');
+    if (!tableBody) return;
+
+    var cells = [32, 1, 80, 100, 72, 96, 120, 80]; // column widths pattern
+    var skeletonHtml = '';
+    for (var r = 0; r < rowCount; r++) {
+      skeletonHtml += '<tr class="skeleton-row" aria-hidden="true">';
+      for (var c = 0; c < cells.length; c++) {
+        skeletonHtml += '<td><div class="skeleton skeleton-cell"></div></td>';
+      }
+      skeletonHtml += '</tr>';
+    }
+    tableBody.innerHTML = skeletonHtml;
+
+    // Hide empty state
+    var emptyEl = $('tableEmptyState');
+    if (emptyEl) emptyEl.classList.add('hidden');
+  }
+
+  function hideTableSkeleton() {
+    // Skeleton is replaced by actual render, no explicit hide needed
+  }
+
+  /**
+   * v4: Show a content area skeleton (sidebar, workflow, etc.)
+   */
+  function showContentSkeleton(containerId, blockCount) {
+    blockCount = blockCount || 3;
+    var container = typeof containerId === 'string' ? $(containerId) : containerId;
+    if (!container) return;
+
+    var blocks = '';
+    for (var i = 0; i < blockCount; i++) {
+      var delay = i * 80;
+      blocks += '<div class="skeleton" style="height:48px;margin-bottom:8px;animation-delay:' + delay + 'ms"></div>';
+    }
+    container.innerHTML = blocks;
+  }
+
+  // ── Async wrapper ─────────────────────────────────────────────────────
+
+  // v4: Enhanced with staged messages support
+  async function withSpinner(text, action, stageMessages) {
     showSpinner(text);
+    if (stageMessages && stageMessages.length) {
+      startStageMessages(stageMessages, 1800);
+    }
     try {
       return await action();
     } finally {
@@ -2292,11 +3387,39 @@
     }
   }
 
+  // ── Screen reader announcements ───────────────────────────────────────
+
+  function announceToScreenReader(message) {
+    var announcer = $('srAnnouncer');
+    if (!announcer) {
+      announcer = document.createElement('div');
+      announcer.id = 'srAnnouncer';
+      announcer.className = 'sr-only';
+      announcer.setAttribute('aria-live', 'assertive');
+      announcer.setAttribute('aria-atomic', 'true');
+      document.body.appendChild(announcer);
+    }
+    // Clear and repopulate to trigger announcement
+    announcer.textContent = '';
+    setTimeout(function () {
+      announcer.textContent = message;
+    }, 50);
+  }
+
+  // ── Export ────────────────────────────────────────────────────────────
+
   window.Spinner = {
     showSpinner: showSpinner,
     hideSpinner: hideSpinner,
     isSpinnerVisible: isSpinnerVisible,
     withSpinner: withSpinner,
+    updateSpinnerText: updateSpinnerText,
+    startStageMessages: startStageMessages,
+    stopStageMessages: stopStageMessages,
+    showTableSkeleton: showTableSkeleton,
+    hideTableSkeleton: hideTableSkeleton,
+    showContentSkeleton: showContentSkeleton,
+    announceToScreenReader: announceToScreenReader,
   };
 })();
 
@@ -2683,7 +3806,7 @@
   <script>
 // brain_alpha_ops/web/js/views/detail.js
 // Detail modal rendering — candidate, cloud, lifecycle, check details.
-// v3: Enhanced with better formatting, performance, and accessibility.
+// v4: Enhanced with focus trapping, keyboard navigation, ARIA live regions.
 
 (function () {
   'use strict';
@@ -2699,6 +3822,10 @@
   var statusBadge = window.Utils.statusBadge;
   var S = window.AppState;
   var previousFocus = null;
+  var Spinner = window.Spinner || {};
+
+  // v4: Focusable elements within modal for focus trapping
+  var FOCUSABLE_SELECTOR = 'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
   // ── Helpers ────────────────────────────────────────────────────────────
 
@@ -2754,9 +3881,48 @@
 
   window.closeDetailModal = function () {
     var overlay = $('detailModal');
-    if (overlay) { overlay.classList.add('hidden'); overlay.setAttribute('aria-hidden', 'true'); }
-    if (previousFocus && typeof previousFocus.focus === 'function') { try { previousFocus.focus(); } catch (e) {} }
+    if (overlay) {
+      overlay.classList.add('hidden');
+      overlay.setAttribute('aria-hidden', 'true');
+      document.removeEventListener('keydown', trapModalFocus);
+    }
+    if (previousFocus && typeof previousFocus.focus === 'function') {
+      try { previousFocus.focus(); } catch (e) {
+        // Fallback: focus main content
+        var main = $('mainContent');
+        if (main) main.focus();
+      }
+    }
+    // Announce closure
+    if (Spinner.announceToScreenReader) {
+      Spinner.announceToScreenReader('\u8BE6\u60C5\u5DF2\u5173\u95ED'); // 详情已关闭
+    }
   };
+
+  // v4: Focus trap within modal
+  function trapModalFocus(event) {
+    if (event.key !== 'Tab') return;
+    var overlay = $('detailModal');
+    if (!overlay || overlay.classList.contains('hidden')) return;
+
+    var focusable = overlay.querySelectorAll(FOCUSABLE_SELECTOR);
+    if (!focusable.length) return;
+
+    var first = focusable[0];
+    var last = focusable[focusable.length - 1];
+
+    if (event.shiftKey) {
+      if (document.activeElement === first) {
+        last.focus();
+        event.preventDefault();
+      }
+    } else {
+      if (document.activeElement === last) {
+        first.focus();
+        event.preventDefault();
+      }
+    }
+  }
 
   function openDetailModal() {
     var overlay = $('detailModal');
@@ -2764,8 +3930,26 @@
       previousFocus = document.activeElement;
       overlay.classList.remove('hidden');
       overlay.setAttribute('aria-hidden', 'false');
+      document.addEventListener('keydown', trapModalFocus);
+
+      // Focus close button or first focusable element
       var closeBtn = $('detailCloseButton');
-      if (closeBtn) setTimeout(function () { closeBtn.focus(); }, 80);
+      if (closeBtn) {
+        setTimeout(function () { closeBtn.focus(); }, 80);
+      } else {
+        // Focus modal panel itself
+        var panel = overlay.querySelector('.modal-panel');
+        if (panel) {
+          panel.setAttribute('tabindex', '-1');
+          setTimeout(function () { panel.focus(); }, 80);
+        }
+      }
+
+      // Announce to screen readers
+      var title = ($('modalTitle') || {}).textContent || '\u8BE6\u60C5'; // 详情
+      if (Spinner.announceToScreenReader) {
+        Spinner.announceToScreenReader('\u5DF2\u6253\u5F00' + title); // 已打开X
+      }
     }
   }
 
@@ -4679,6 +5863,158 @@
     );
   }
 
+  // ── v4: Inline Validation ──────────────────────────────────────────────
+
+  /**
+   * Validate a single field and show/hide error message.
+   * @returns {boolean} whether the field is valid
+   */
+  function validateField(fieldId, rules) {
+    var el = $(fieldId);
+    if (!el) return true;
+    rules = rules || {};
+
+    var value = String(el.value || '').trim();
+    var group = el.closest('.form-group');
+    if (!group) return true;
+
+    // Remove previous error
+    var existingError = group.querySelector('.form-error-message');
+    if (existingError) existingError.remove();
+    group.classList.remove('has-error', 'has-success');
+
+    var errorMsg = '';
+
+    // Required check
+    if (rules.required && !value) {
+      errorMsg = (rules.requiredMessage || '此字段为必填项。');
+    }
+
+    // Min length check
+    if (!errorMsg && rules.minLength && value.length < rules.minLength) {
+      errorMsg = '\u81F3\u5C11\u9700\u8981 ' + rules.minLength + ' \u4E2A\u5B57\u7B26\u3002'; // 至少需要 X 个字符
+    }
+
+    // Max length check
+    if (!errorMsg && rules.maxLength && value.length > rules.maxLength) {
+      errorMsg = '\u6700\u591A\u5141\u8BB8 ' + rules.maxLength + ' \u4E2A\u5B57\u7B26\u3002'; // 最多允许 X 个字符
+    }
+
+    // Pattern check
+    if (!errorMsg && rules.pattern && value) {
+      var re = new RegExp(rules.pattern);
+      if (!re.test(value)) {
+        errorMsg = rules.patternMessage || '\u683C\u5F0F\u4E0D\u6B63\u786E\u3002'; // 格式不正确
+      }
+    }
+
+    // Number range check
+    if (!errorMsg && rules.min !== undefined && value) {
+      var num = Number(value);
+      if (Number.isFinite(num) && num < rules.min) {
+        errorMsg = '\u6700\u5C0F\u503C\u4E3A ' + rules.min + '\u3002'; // 最小值为 X
+      }
+    }
+    if (!errorMsg && rules.max !== undefined && value) {
+      var num2 = Number(value);
+      if (Number.isFinite(num2) && num2 > rules.max) {
+        errorMsg = '\u6700\u5927\u503C\u4E3A ' + rules.max + '\u3002'; // 最大值为 X
+      }
+    }
+
+    // URL format check
+    if (!errorMsg && rules.isUrl && value && !/^https?:\/\/.+/.test(value)) {
+      errorMsg = '\u8BF7\u8F93\u5165\u6709\u6548\u7684 URL\uFF0C\u4EE5 http:// \u6216 https:// \u5F00\u5934\u3002'; // 请输入有效的URL
+    }
+
+    if (errorMsg) {
+      group.classList.add('has-error');
+      el.classList.add('is-invalid');
+      el.setAttribute('aria-invalid', 'true');
+      el.setAttribute('aria-describedby', fieldId + '-error');
+
+      var errorEl = document.createElement('div');
+      errorEl.id = fieldId + '-error';
+      errorEl.className = 'form-error-message';
+      errorEl.setAttribute('role', 'alert');
+      errorEl.innerHTML = '<span class="form-error-icon">!</span>' + errorMsg;
+      group.appendChild(errorEl);
+
+      return false;
+    }
+
+    // Valid
+    if (value) {
+      group.classList.add('has-success');
+    }
+    el.classList.remove('is-invalid');
+    el.removeAttribute('aria-invalid');
+    el.removeAttribute('aria-describedby');
+    return true;
+  }
+
+  /**
+   * Clear validation for a field.
+   */
+  function clearFieldValidation(fieldId) {
+    var el = $(fieldId);
+    if (!el) return;
+    var group = el.closest('.form-group');
+    if (!group) return;
+    var existingError = group.querySelector('.form-error-message');
+    if (existingError) existingError.remove();
+    group.classList.remove('has-error', 'has-success');
+    el.classList.remove('is-invalid');
+    el.removeAttribute('aria-invalid');
+    el.removeAttribute('aria-describedby');
+  }
+
+  /**
+   * Validate connection form fields.
+   */
+  function validateConnection() {
+    var valid = true;
+    valid = validateField('username', {
+      minLength: 1,
+      requiredMessage: '\u8BF7\u8F93\u5165 BRAIN \u8D26\u53F7\u3002', // 请输入BRAIN账号
+    }) && valid;
+    valid = validateField('baseUrl', {
+      isUrl: true,
+      patternMessage: '\u8BF7\u8F93\u5165\u6709\u6548\u7684 API \u5730\u5740\u3002', // 请输入有效的API地址
+    }) && valid;
+    return valid;
+  }
+
+  /**
+   * v4: Bind live validation to form fields with debounce.
+   */
+  function bindFieldValidation(fieldId, rules) {
+    var el = $(fieldId);
+    if (!el) return;
+    var timer = null;
+
+    var handler = function () {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(function () {
+        validateField(fieldId, rules);
+      }, 400);
+    };
+
+    el.addEventListener('input', handler);
+    el.addEventListener('change', handler);
+    el.addEventListener('blur', function () {
+      if (timer) clearTimeout(timer);
+      validateField(fieldId, rules);
+    });
+
+    // Clear validation on focus
+    el.addEventListener('focus', function () {
+      if (el.classList.contains('is-invalid')) {
+        clearFieldValidation(fieldId);
+      }
+    });
+  }
+
   window.FormControls = {
     applyConfig: applyConfig,
     applyPreset: applyPreset,
@@ -4687,6 +6023,11 @@
     fieldValue: fieldValue,
     numericValue: numericValue,
     setControlValue: setControlValue,
+    // v4: Validation
+    validateField: validateField,
+    clearFieldValidation: clearFieldValidation,
+    validateConnection: validateConnection,
+    bindFieldValidation: bindFieldValidation,
   };
 })();
 
@@ -4974,7 +6315,7 @@
   <script>
 // brain_alpha_ops/web/js/app.js
 // Application entry point: render dispatch, view state, and page-level actions.
-// v3: Redesigned with tab-based navigation, simplified rendering, and enhanced UX.
+// v4: Keyboard shortcuts, skeleton screens, workflow wizard, view transitions.
 (function () {
   'use strict';
   var $ = window.Utils.$;
@@ -4984,6 +6325,7 @@
   var Api = window.ApiClient;
   var S = window.AppState;
   var Toast = window.Toast;
+  var Spinner = window.Spinner || {};
   var VM = window.ViewModel;
   var Registry = window.ViewRegistry;
   var ViewRenderers = window.ViewRenderers;
@@ -5855,27 +7197,309 @@
     try { var data = await Api.get('/api/presets'); if (data && data.presets) presets = data.presets; } catch (e) {}
   }
   window.testConnection = async function () {
+    // v4: Validate connection fields first
+    if (FormControls.validateConnection && !FormControls.validateConnection()) {
+      return;
+    }
     var resultEl = $('connTestResult');
     if (!resultEl) return;
     resultEl.classList.remove('hidden');
-    resultEl.textContent = '测试中...';
+    resultEl.textContent = '\u6D4B\u8BD5\u4E2D...';
     resultEl.className = 'connection-result is-pending';
+    resultEl.setAttribute('role', 'status');
+    resultEl.setAttribute('aria-live', 'polite');
     try {
       var resp = await Api.post('/api/test_connection', FormControls.connectionPayload());
-      if (resp.ok) { resultEl.textContent = '连接成功'; resultEl.className = 'connection-result is-success'; }
-      else { resultEl.textContent = '连接失败：' + (resp.error || '未知错误'); resultEl.className = 'connection-result is-error'; }
-    } catch (e) { resultEl.textContent = '连接失败：' + e.message; resultEl.className = 'connection-result is-error'; }
+      if (resp.ok) {
+        resultEl.textContent = '\u8FDE\u63A5\u6210\u529F';
+        resultEl.className = 'connection-result is-success';
+      } else {
+        resultEl.textContent = '\u8FDE\u63A5\u5931\u8D25\uFF1A' + (resp.error || '\u672A\u77E5\u9519\u8BEF');
+        resultEl.className = 'connection-result is-error';
+      }
+    } catch (e) {
+      resultEl.textContent = '\u8FDE\u63A5\u5931\u8D25\uFF1A' + e.message;
+      resultEl.className = 'connection-result is-error';
+    }
   };
   window.collectPayload = function () {
     return FormControls.collectPayload();
   };
+  // ── v4: KEYBOARD SHORTCUTS ─────────────────────────────────────────────
+
+  var SHORTCUTS = [
+    { keys: '?', desc: '显示/隐藏快捷键列表', action: 'toggleShortcuts' },
+    { keys: 'Ctrl+Enter', desc: '开始/停止生产搜索', action: 'toggle-run' },
+    { keys: 'Ctrl+S', desc: '同步云端数据', action: 'sync-cloud' },
+    { keys: 'Ctrl+K', desc: '聚焦搜索框', action: 'focus-search' },
+    { keys: 'Ctrl+1', desc: '切换到候选池', action: 'switch-view', arg: 'candidates' },
+    { keys: 'Ctrl+2', desc: '切换到达标视图', action: 'switch-view', arg: 'passed' },
+    { keys: 'Ctrl+3', desc: '切换到可提交', action: 'switch-view', arg: 'submittable' },
+    { keys: 'Ctrl+4', desc: '切换到云端', action: 'switch-view', arg: 'cloud' },
+    { keys: 'Escape', desc: '关闭模态框/弹窗', action: 'close-modal' },
+    { keys: 'Ctrl+Shift+T', desc: '切换主题', action: 'toggle-theme' },
+  ];
+
+  var shortcutsVisible = false;
+
+  function createShortcutsPanel() {
+    var existing = $('shortcutsPanel');
+    if (existing) return existing;
+
+    var panel = document.createElement('div');
+    panel.id = 'shortcutsPanel';
+    panel.className = 'keyboard-shortcuts-panel hidden';
+    panel.setAttribute('role', 'dialog');
+    panel.setAttribute('aria-modal', 'true');
+    panel.setAttribute('aria-label', '键盘快捷键');
+
+    var itemsHtml = SHORTCUTS.map(function (s) {
+      var keysHtml = s.keys.split('+').map(function (k) {
+        return '<span class="kbd">' + esc(k.trim()) + '</span>';
+      }).join('<span style="margin:0 1px">+</span>');
+      return '<div class="shortcut-item">' +
+        '<span class="shortcut-desc">' + esc(s.desc) + '</span>' +
+        '<span class="shortcut-keys">' + keysHtml + '</span>' +
+        '</div>';
+    }).join('');
+
+    panel.innerHTML =
+      '<div class="shortcuts-header">' +
+        '<h2>键盘快捷键</h2>' +
+        '<button class="btn btn-secondary btn-sm" data-action="toggle-shortcuts">关闭</button>' +
+      '</div>' +
+      '<div class="shortcuts-list">' + itemsHtml + '</div>';
+
+    document.body.appendChild(panel);
+
+    panel.addEventListener('click', function (event) {
+      var el = findActionElement(event.target, panel);
+      if (!el) return;
+      if (el.getAttribute('data-action') === 'toggle-shortcuts') {
+        toggleShortcutsPanel();
+      }
+    });
+
+    panel.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape') toggleShortcutsPanel();
+    });
+
+    return panel;
+  }
+
+  function toggleShortcutsPanel() {
+    var panel = createShortcutsPanel();
+    shortcutsVisible = !shortcutsVisible;
+    panel.classList.toggle('hidden', !shortcutsVisible);
+    if (shortcutsVisible) {
+      var closeBtn = panel.querySelector('.btn-secondary');
+      if (closeBtn) setTimeout(function () { closeBtn.focus(); }, 60);
+    }
+  }
+
+  function focusSearchInput() {
+    var searchEl = $('tableSearch');
+    if (searchEl) {
+      searchEl.focus();
+      searchEl.select();
+    }
+  }
+
+  function handleKeyboardShortcut(event) {
+    // Don't capture shortcuts when in input fields (except Escape and ?)
+    var tag = String((event.target.tagName || '')).toUpperCase();
+    var isInput = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || event.target.isContentEditable;
+
+    // Special keys always work
+    if (event.key === 'Escape') {
+      if (shortcutsVisible) { toggleShortcutsPanel(); event.preventDefault(); return; }
+      if (window.closeDetailModal && !$('detailModal').classList.contains('hidden')) {
+        window.closeDetailModal();
+        event.preventDefault();
+        return;
+      }
+      if (window.hideConfirm && !$('confirmOverlay').classList.contains('hidden')) {
+        window.hideConfirm();
+        event.preventDefault();
+        return;
+      }
+      focusSearchInput();
+      return;
+    }
+
+    if (isInput && event.key !== '?') return;
+
+    var ctrl = event.ctrlKey || event.metaKey;
+    var shift = event.shiftKey;
+
+    // ? — toggle shortcuts (always)
+    if (event.key === '?') {
+      toggleShortcutsPanel();
+      event.preventDefault();
+      return;
+    }
+
+    // Ctrl+Enter — toggle run
+    if (ctrl && event.key === 'Enter') {
+      invokeWindowAction('toggleRun');
+      event.preventDefault();
+      return;
+    }
+
+    // Ctrl+S — sync cloud (prevent browser save)
+    if (ctrl && !shift && (event.key === 's' || event.key === 'S')) {
+      invokeWindowAction('syncCloud');
+      event.preventDefault();
+      return;
+    }
+
+    // Ctrl+K — focus search
+    if (ctrl && !shift && (event.key === 'k' || event.key === 'K')) {
+      focusSearchInput();
+      event.preventDefault();
+      return;
+    }
+
+    // Ctrl+Shift+T — toggle theme
+    if (ctrl && shift && (event.key === 't' || event.key === 'T')) {
+      invokeWindowAction('toggleTheme');
+      event.preventDefault();
+      return;
+    }
+
+    // Ctrl+1-4 — switch views
+    if (ctrl && !shift) {
+      var viewMap = { '1': 'candidates', '2': 'passed', '3': 'submittable', '4': 'cloud' };
+      var view = viewMap[event.key];
+      if (view) {
+        invokeWindowAction('switchView', [view]);
+        event.preventDefault();
+      }
+    }
+  }
+
+  // ── v4: WORKFLOW WIZARD ────────────────────────────────────────────────
+
+  function showWorkflowWizard() {
+    var existing = $('workflowWizardOverlay');
+    if (existing) existing.remove();
+
+    var totalSteps = 4;
+    var candidateCount = S.viewCount('candidates');
+    var passedCount = S.viewCount('passed');
+    var submittableCount = S.viewCount('submittable');
+    var cloudCount = S.viewCount('cloud');
+
+    var steps = [
+      { title: '连接与配置', desc: '填写 BRAIN 账号并测试连接', completed: Boolean((S.get('userProfile') || {}).tier && (S.get('userProfile') || {}).tier !== '--'), icon: '1' },
+      { title: '生产候选 Alpha', desc: '启动引导式生产搜索，生成并回测 Alpha', completed: candidateCount > 0, icon: '2' },
+      { title: '达标检查与提交', desc: '对达标 Alpha 执行预提交检查并提交', completed: submittableCount > 0, icon: '3' },
+      { title: '云端同步', desc: '刷新官方数据快照，核对线上状态', completed: cloudCount > 0, icon: '4' },
+    ];
+
+    var stepsHtml = steps.map(function (step, i) {
+      var cls = step.completed ? ' is-completed' : '';
+      return '<div class="workflow-wizard-step' + cls + '">' +
+        '<div class="workflow-wizard-step-icon">' + (step.completed ? '\u2713' : step.icon) + '</div>' +
+        '<div class="workflow-wizard-step-body">' +
+          '<h3>' + esc(step.title) + '</h3>' +
+          '<p>' + esc(step.desc) + '</p>' +
+        '</div>' +
+        '</div>';
+    }).join('');
+
+    var overlay = document.createElement('div');
+    overlay.id = 'workflowWizardOverlay';
+    overlay.className = 'workflow-wizard-overlay';
+    overlay.setAttribute('role', 'dialog');
+    overlay.setAttribute('aria-modal', 'true');
+    overlay.setAttribute('aria-label', '操作指引');
+
+    overlay.innerHTML =
+      '<div class="workflow-wizard">' +
+        '<div class="workflow-wizard-header">' +
+          '<h2>快速开始</h2>' +
+          '<p>按 ? 查看键盘快捷键，或按以下步骤操作：</p>' +
+        '</div>' +
+        '<div class="workflow-wizard-steps">' + stepsHtml + '</div>' +
+        '<div class="workflow-wizard-actions">' +
+          '<button class="btn btn-secondary btn-sm" data-action="close-wizard">跳过</button>' +
+          '<button class="btn btn-primary btn-sm" data-action="start-wizard-run">开始生产</button>' +
+        '</div>' +
+      '</div>';
+
+    document.body.appendChild(overlay);
+
+    overlay.addEventListener('click', function (event) {
+      if (event.target === overlay) removeWizard();
+    });
+
+    overlay.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape') { removeWizard(); event.preventDefault(); }
+    });
+
+    // Delegate button clicks
+    overlay.querySelector('.workflow-wizard').addEventListener('click', function (event) {
+      var el = findActionElement(event.target, overlay.querySelector('.workflow-wizard'));
+      if (!el) return;
+      var action = el.getAttribute('data-action');
+      if (action === 'close-wizard' || action === 'start-wizard-run') {
+        removeWizard();
+        if (action === 'start-wizard-run') invokeWindowAction('toggleRun');
+      }
+    });
+
+    // Focus first action button
+    var startBtn = overlay.querySelector('[data-action="start-wizard-run"]');
+    if (startBtn) setTimeout(function () { startBtn.focus(); }, 80);
+  }
+
+  function removeWizard() {
+    var overlay = $('workflowWizardOverlay');
+    if (overlay) overlay.remove();
+  }
+
+  // ── v4: VIEW TRANSITION ────────────────────────────────────────────────
+
+  var _prevSwitchView = window.switchView;
+  window.switchView = function (view) {
+    if (VIEW_ORDER.indexOf(view) === -1) view = 'candidates';
+    // Show skeleton before render for perceived performance
+    if (view !== activeView()) {
+      Spinner.showTableSkeleton && Spinner.showTableSkeleton(Math.min(5, S.viewCount(view) || 5));
+    }
+    if (_prevSwitchView) {
+      _prevSwitchView(view);
+    } else {
+      S.set('activeView', view);
+      renderViewTabs();
+      _renderCurrentView();
+      updatePanelHeader();
+      updateActionBarVisibility(view);
+      renderTaskRail();
+    }
+    // Announce view change to screen readers
+    if (Spinner.announceToScreenReader) {
+      Spinner.announceToScreenReader('\u5DF2\u5207\u6362\u5230' + (Registry.VIEW_TITLES[view] || view));
+    }
+  };
+
+  // ── v4: INIT ───────────────────────────────────────────────────────────
+
   async function init() {
+    // Show skeleton screens immediately
+    if (Spinner.showTableSkeleton) Spinner.showTableSkeleton(6);
+
     renderViewTabs();
     updatePanelHeader();
     renderTaskRail();
     installStaticActionHandlers();
     installViewTabDelegates();
     installResultDelegates();
+
+    // v4: Install keyboard shortcuts
+    document.addEventListener('keydown', handleKeyboardShortcut);
+
     try {
       var results = await Promise.all([
         Api.get('/api/latest_result').catch(function () { return {}; }),
@@ -5947,6 +7571,10 @@
   window.renderCurrentView = _renderCurrentView;
   window.renderTaskRail = renderTaskRail;
   window.renderAll = renderAll;
+  window.toggleShortcutsPanel = toggleShortcutsPanel;
+  window.showWorkflowWizard = showWorkflowWizard;
+  window.SHORTCUTS = SHORTCUTS;
+
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
   else setTimeout(init, 10);
 })();
