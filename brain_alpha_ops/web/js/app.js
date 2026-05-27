@@ -1,6 +1,6 @@
 ﻿// brain_alpha_ops/web/js/app.js
 // Application entry point: render dispatch, view state, and page-level actions.
-// v3: Redesigned with tab-based navigation, simplified rendering, and enhanced UX.
+// v4: Keyboard shortcuts, skeleton screens, workflow wizard, view transitions.
 (function () {
   'use strict';
   var $ = window.Utils.$;
@@ -10,6 +10,7 @@
   var Api = window.ApiClient;
   var S = window.AppState;
   var Toast = window.Toast;
+  var Spinner = window.Spinner || {};
   var VM = window.ViewModel;
   var Registry = window.ViewRegistry;
   var ViewRenderers = window.ViewRenderers;
@@ -881,27 +882,309 @@
     try { var data = await Api.get('/api/presets'); if (data && data.presets) presets = data.presets; } catch (e) {}
   }
   window.testConnection = async function () {
+    // v4: Validate connection fields first
+    if (FormControls.validateConnection && !FormControls.validateConnection()) {
+      return;
+    }
     var resultEl = $('connTestResult');
     if (!resultEl) return;
     resultEl.classList.remove('hidden');
-    resultEl.textContent = '测试中...';
+    resultEl.textContent = '\u6D4B\u8BD5\u4E2D...';
     resultEl.className = 'connection-result is-pending';
+    resultEl.setAttribute('role', 'status');
+    resultEl.setAttribute('aria-live', 'polite');
     try {
       var resp = await Api.post('/api/test_connection', FormControls.connectionPayload());
-      if (resp.ok) { resultEl.textContent = '连接成功'; resultEl.className = 'connection-result is-success'; }
-      else { resultEl.textContent = '连接失败：' + (resp.error || '未知错误'); resultEl.className = 'connection-result is-error'; }
-    } catch (e) { resultEl.textContent = '连接失败：' + e.message; resultEl.className = 'connection-result is-error'; }
+      if (resp.ok) {
+        resultEl.textContent = '\u8FDE\u63A5\u6210\u529F';
+        resultEl.className = 'connection-result is-success';
+      } else {
+        resultEl.textContent = '\u8FDE\u63A5\u5931\u8D25\uFF1A' + (resp.error || '\u672A\u77E5\u9519\u8BEF');
+        resultEl.className = 'connection-result is-error';
+      }
+    } catch (e) {
+      resultEl.textContent = '\u8FDE\u63A5\u5931\u8D25\uFF1A' + e.message;
+      resultEl.className = 'connection-result is-error';
+    }
   };
   window.collectPayload = function () {
     return FormControls.collectPayload();
   };
+  // ── v4: KEYBOARD SHORTCUTS ─────────────────────────────────────────────
+
+  var SHORTCUTS = [
+    { keys: '?', desc: '显示/隐藏快捷键列表', action: 'toggleShortcuts' },
+    { keys: 'Ctrl+Enter', desc: '开始/停止生产搜索', action: 'toggle-run' },
+    { keys: 'Ctrl+S', desc: '同步云端数据', action: 'sync-cloud' },
+    { keys: 'Ctrl+K', desc: '聚焦搜索框', action: 'focus-search' },
+    { keys: 'Ctrl+1', desc: '切换到候选池', action: 'switch-view', arg: 'candidates' },
+    { keys: 'Ctrl+2', desc: '切换到达标视图', action: 'switch-view', arg: 'passed' },
+    { keys: 'Ctrl+3', desc: '切换到可提交', action: 'switch-view', arg: 'submittable' },
+    { keys: 'Ctrl+4', desc: '切换到云端', action: 'switch-view', arg: 'cloud' },
+    { keys: 'Escape', desc: '关闭模态框/弹窗', action: 'close-modal' },
+    { keys: 'Ctrl+Shift+T', desc: '切换主题', action: 'toggle-theme' },
+  ];
+
+  var shortcutsVisible = false;
+
+  function createShortcutsPanel() {
+    var existing = $('shortcutsPanel');
+    if (existing) return existing;
+
+    var panel = document.createElement('div');
+    panel.id = 'shortcutsPanel';
+    panel.className = 'keyboard-shortcuts-panel hidden';
+    panel.setAttribute('role', 'dialog');
+    panel.setAttribute('aria-modal', 'true');
+    panel.setAttribute('aria-label', '键盘快捷键');
+
+    var itemsHtml = SHORTCUTS.map(function (s) {
+      var keysHtml = s.keys.split('+').map(function (k) {
+        return '<span class="kbd">' + esc(k.trim()) + '</span>';
+      }).join('<span style="margin:0 1px">+</span>');
+      return '<div class="shortcut-item">' +
+        '<span class="shortcut-desc">' + esc(s.desc) + '</span>' +
+        '<span class="shortcut-keys">' + keysHtml + '</span>' +
+        '</div>';
+    }).join('');
+
+    panel.innerHTML =
+      '<div class="shortcuts-header">' +
+        '<h2>键盘快捷键</h2>' +
+        '<button class="btn btn-secondary btn-sm" data-action="toggle-shortcuts">关闭</button>' +
+      '</div>' +
+      '<div class="shortcuts-list">' + itemsHtml + '</div>';
+
+    document.body.appendChild(panel);
+
+    panel.addEventListener('click', function (event) {
+      var el = findActionElement(event.target, panel);
+      if (!el) return;
+      if (el.getAttribute('data-action') === 'toggle-shortcuts') {
+        toggleShortcutsPanel();
+      }
+    });
+
+    panel.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape') toggleShortcutsPanel();
+    });
+
+    return panel;
+  }
+
+  function toggleShortcutsPanel() {
+    var panel = createShortcutsPanel();
+    shortcutsVisible = !shortcutsVisible;
+    panel.classList.toggle('hidden', !shortcutsVisible);
+    if (shortcutsVisible) {
+      var closeBtn = panel.querySelector('.btn-secondary');
+      if (closeBtn) setTimeout(function () { closeBtn.focus(); }, 60);
+    }
+  }
+
+  function focusSearchInput() {
+    var searchEl = $('tableSearch');
+    if (searchEl) {
+      searchEl.focus();
+      searchEl.select();
+    }
+  }
+
+  function handleKeyboardShortcut(event) {
+    // Don't capture shortcuts when in input fields (except Escape and ?)
+    var tag = String((event.target.tagName || '')).toUpperCase();
+    var isInput = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || event.target.isContentEditable;
+
+    // Special keys always work
+    if (event.key === 'Escape') {
+      if (shortcutsVisible) { toggleShortcutsPanel(); event.preventDefault(); return; }
+      if (window.closeDetailModal && !$('detailModal').classList.contains('hidden')) {
+        window.closeDetailModal();
+        event.preventDefault();
+        return;
+      }
+      if (window.hideConfirm && !$('confirmOverlay').classList.contains('hidden')) {
+        window.hideConfirm();
+        event.preventDefault();
+        return;
+      }
+      focusSearchInput();
+      return;
+    }
+
+    if (isInput && event.key !== '?') return;
+
+    var ctrl = event.ctrlKey || event.metaKey;
+    var shift = event.shiftKey;
+
+    // ? — toggle shortcuts (always)
+    if (event.key === '?') {
+      toggleShortcutsPanel();
+      event.preventDefault();
+      return;
+    }
+
+    // Ctrl+Enter — toggle run
+    if (ctrl && event.key === 'Enter') {
+      invokeWindowAction('toggleRun');
+      event.preventDefault();
+      return;
+    }
+
+    // Ctrl+S — sync cloud (prevent browser save)
+    if (ctrl && !shift && (event.key === 's' || event.key === 'S')) {
+      invokeWindowAction('syncCloud');
+      event.preventDefault();
+      return;
+    }
+
+    // Ctrl+K — focus search
+    if (ctrl && !shift && (event.key === 'k' || event.key === 'K')) {
+      focusSearchInput();
+      event.preventDefault();
+      return;
+    }
+
+    // Ctrl+Shift+T — toggle theme
+    if (ctrl && shift && (event.key === 't' || event.key === 'T')) {
+      invokeWindowAction('toggleTheme');
+      event.preventDefault();
+      return;
+    }
+
+    // Ctrl+1-4 — switch views
+    if (ctrl && !shift) {
+      var viewMap = { '1': 'candidates', '2': 'passed', '3': 'submittable', '4': 'cloud' };
+      var view = viewMap[event.key];
+      if (view) {
+        invokeWindowAction('switchView', [view]);
+        event.preventDefault();
+      }
+    }
+  }
+
+  // ── v4: WORKFLOW WIZARD ────────────────────────────────────────────────
+
+  function showWorkflowWizard() {
+    var existing = $('workflowWizardOverlay');
+    if (existing) existing.remove();
+
+    var totalSteps = 4;
+    var candidateCount = S.viewCount('candidates');
+    var passedCount = S.viewCount('passed');
+    var submittableCount = S.viewCount('submittable');
+    var cloudCount = S.viewCount('cloud');
+
+    var steps = [
+      { title: '连接与配置', desc: '填写 BRAIN 账号并测试连接', completed: Boolean((S.get('userProfile') || {}).tier && (S.get('userProfile') || {}).tier !== '--'), icon: '1' },
+      { title: '生产候选 Alpha', desc: '启动引导式生产搜索，生成并回测 Alpha', completed: candidateCount > 0, icon: '2' },
+      { title: '达标检查与提交', desc: '对达标 Alpha 执行预提交检查并提交', completed: submittableCount > 0, icon: '3' },
+      { title: '云端同步', desc: '刷新官方数据快照，核对线上状态', completed: cloudCount > 0, icon: '4' },
+    ];
+
+    var stepsHtml = steps.map(function (step, i) {
+      var cls = step.completed ? ' is-completed' : '';
+      return '<div class="workflow-wizard-step' + cls + '">' +
+        '<div class="workflow-wizard-step-icon">' + (step.completed ? '\u2713' : step.icon) + '</div>' +
+        '<div class="workflow-wizard-step-body">' +
+          '<h3>' + esc(step.title) + '</h3>' +
+          '<p>' + esc(step.desc) + '</p>' +
+        '</div>' +
+        '</div>';
+    }).join('');
+
+    var overlay = document.createElement('div');
+    overlay.id = 'workflowWizardOverlay';
+    overlay.className = 'workflow-wizard-overlay';
+    overlay.setAttribute('role', 'dialog');
+    overlay.setAttribute('aria-modal', 'true');
+    overlay.setAttribute('aria-label', '操作指引');
+
+    overlay.innerHTML =
+      '<div class="workflow-wizard">' +
+        '<div class="workflow-wizard-header">' +
+          '<h2>快速开始</h2>' +
+          '<p>按 ? 查看键盘快捷键，或按以下步骤操作：</p>' +
+        '</div>' +
+        '<div class="workflow-wizard-steps">' + stepsHtml + '</div>' +
+        '<div class="workflow-wizard-actions">' +
+          '<button class="btn btn-secondary btn-sm" data-action="close-wizard">跳过</button>' +
+          '<button class="btn btn-primary btn-sm" data-action="start-wizard-run">开始生产</button>' +
+        '</div>' +
+      '</div>';
+
+    document.body.appendChild(overlay);
+
+    overlay.addEventListener('click', function (event) {
+      if (event.target === overlay) removeWizard();
+    });
+
+    overlay.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape') { removeWizard(); event.preventDefault(); }
+    });
+
+    // Delegate button clicks
+    overlay.querySelector('.workflow-wizard').addEventListener('click', function (event) {
+      var el = findActionElement(event.target, overlay.querySelector('.workflow-wizard'));
+      if (!el) return;
+      var action = el.getAttribute('data-action');
+      if (action === 'close-wizard' || action === 'start-wizard-run') {
+        removeWizard();
+        if (action === 'start-wizard-run') invokeWindowAction('toggleRun');
+      }
+    });
+
+    // Focus first action button
+    var startBtn = overlay.querySelector('[data-action="start-wizard-run"]');
+    if (startBtn) setTimeout(function () { startBtn.focus(); }, 80);
+  }
+
+  function removeWizard() {
+    var overlay = $('workflowWizardOverlay');
+    if (overlay) overlay.remove();
+  }
+
+  // ── v4: VIEW TRANSITION ────────────────────────────────────────────────
+
+  var _prevSwitchView = window.switchView;
+  window.switchView = function (view) {
+    if (VIEW_ORDER.indexOf(view) === -1) view = 'candidates';
+    // Show skeleton before render for perceived performance
+    if (view !== activeView()) {
+      Spinner.showTableSkeleton && Spinner.showTableSkeleton(Math.min(5, S.viewCount(view) || 5));
+    }
+    if (_prevSwitchView) {
+      _prevSwitchView(view);
+    } else {
+      S.set('activeView', view);
+      renderViewTabs();
+      _renderCurrentView();
+      updatePanelHeader();
+      updateActionBarVisibility(view);
+      renderTaskRail();
+    }
+    // Announce view change to screen readers
+    if (Spinner.announceToScreenReader) {
+      Spinner.announceToScreenReader('\u5DF2\u5207\u6362\u5230' + (Registry.VIEW_TITLES[view] || view));
+    }
+  };
+
+  // ── v4: INIT ───────────────────────────────────────────────────────────
+
   async function init() {
+    // Show skeleton screens immediately
+    if (Spinner.showTableSkeleton) Spinner.showTableSkeleton(6);
+
     renderViewTabs();
     updatePanelHeader();
     renderTaskRail();
     installStaticActionHandlers();
     installViewTabDelegates();
     installResultDelegates();
+
+    // v4: Install keyboard shortcuts
+    document.addEventListener('keydown', handleKeyboardShortcut);
+
     try {
       var results = await Promise.all([
         Api.get('/api/latest_result').catch(function () { return {}; }),
@@ -973,6 +1256,10 @@
   window.renderCurrentView = _renderCurrentView;
   window.renderTaskRail = renderTaskRail;
   window.renderAll = renderAll;
+  window.toggleShortcutsPanel = toggleShortcutsPanel;
+  window.showWorkflowWizard = showWorkflowWizard;
+  window.SHORTCUTS = SHORTCUTS;
+
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
   else setTimeout(init, 10);
 })();

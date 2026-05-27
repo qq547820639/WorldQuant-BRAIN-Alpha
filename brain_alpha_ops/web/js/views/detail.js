@@ -1,6 +1,6 @@
 // brain_alpha_ops/web/js/views/detail.js
 // Detail modal rendering — candidate, cloud, lifecycle, check details.
-// v3: Enhanced with better formatting, performance, and accessibility.
+// v4: Enhanced with focus trapping, keyboard navigation, ARIA live regions.
 
 (function () {
   'use strict';
@@ -16,6 +16,10 @@
   var statusBadge = window.Utils.statusBadge;
   var S = window.AppState;
   var previousFocus = null;
+  var Spinner = window.Spinner || {};
+
+  // v4: Focusable elements within modal for focus trapping
+  var FOCUSABLE_SELECTOR = 'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
   // ── Helpers ────────────────────────────────────────────────────────────
 
@@ -71,9 +75,48 @@
 
   window.closeDetailModal = function () {
     var overlay = $('detailModal');
-    if (overlay) { overlay.classList.add('hidden'); overlay.setAttribute('aria-hidden', 'true'); }
-    if (previousFocus && typeof previousFocus.focus === 'function') { try { previousFocus.focus(); } catch (e) {} }
+    if (overlay) {
+      overlay.classList.add('hidden');
+      overlay.setAttribute('aria-hidden', 'true');
+      document.removeEventListener('keydown', trapModalFocus);
+    }
+    if (previousFocus && typeof previousFocus.focus === 'function') {
+      try { previousFocus.focus(); } catch (e) {
+        // Fallback: focus main content
+        var main = $('mainContent');
+        if (main) main.focus();
+      }
+    }
+    // Announce closure
+    if (Spinner.announceToScreenReader) {
+      Spinner.announceToScreenReader('\u8BE6\u60C5\u5DF2\u5173\u95ED'); // 详情已关闭
+    }
   };
+
+  // v4: Focus trap within modal
+  function trapModalFocus(event) {
+    if (event.key !== 'Tab') return;
+    var overlay = $('detailModal');
+    if (!overlay || overlay.classList.contains('hidden')) return;
+
+    var focusable = overlay.querySelectorAll(FOCUSABLE_SELECTOR);
+    if (!focusable.length) return;
+
+    var first = focusable[0];
+    var last = focusable[focusable.length - 1];
+
+    if (event.shiftKey) {
+      if (document.activeElement === first) {
+        last.focus();
+        event.preventDefault();
+      }
+    } else {
+      if (document.activeElement === last) {
+        first.focus();
+        event.preventDefault();
+      }
+    }
+  }
 
   function openDetailModal() {
     var overlay = $('detailModal');
@@ -81,8 +124,26 @@
       previousFocus = document.activeElement;
       overlay.classList.remove('hidden');
       overlay.setAttribute('aria-hidden', 'false');
+      document.addEventListener('keydown', trapModalFocus);
+
+      // Focus close button or first focusable element
       var closeBtn = $('detailCloseButton');
-      if (closeBtn) setTimeout(function () { closeBtn.focus(); }, 80);
+      if (closeBtn) {
+        setTimeout(function () { closeBtn.focus(); }, 80);
+      } else {
+        // Focus modal panel itself
+        var panel = overlay.querySelector('.modal-panel');
+        if (panel) {
+          panel.setAttribute('tabindex', '-1');
+          setTimeout(function () { panel.focus(); }, 80);
+        }
+      }
+
+      // Announce to screen readers
+      var title = ($('modalTitle') || {}).textContent || '\u8BE6\u60C5'; // 详情
+      if (Spinner.announceToScreenReader) {
+        Spinner.announceToScreenReader('\u5DF2\u6253\u5F00' + title); // 已打开X
+      }
     }
   }
 
