@@ -335,7 +335,37 @@ def load_run_config(path: str | Path | None = None) -> RunConfig:
     config_path = Path(path) if path else default_run_config_path()
     if not config_path.exists():
         return _normalize_runtime_paths(validate_run_config(RunConfig()))
-    data = json.loads(config_path.read_text(encoding="utf-8"))
+
+    # ── Step 1: parse JSON with explicit error wrapping ──
+    try:
+        raw_text = config_path.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise ConfigValidationError(
+            f"无法读取配置文件 {config_path}: {exc}"
+        ) from exc
+    try:
+        data = json.loads(raw_text)
+    except json.JSONDecodeError as exc:
+        raise ConfigValidationError(
+            f"配置文件 JSON 格式错误 {config_path}: {exc}"
+        ) from exc
+    if not isinstance(data, dict):
+        raise ConfigValidationError(
+            f"配置文件根元素必须是 JSON 对象，实际类型: {type(data).__name__} — {config_path}"
+        )
+
+    # ── Step 2: jsonschema structural validation ──
+    from brain_alpha_ops.config_schema import validate_config_with_jsonschema
+    schema_errors = validate_config_with_jsonschema(data)
+    if schema_errors:
+        raise ConfigValidationError(
+            "配置文件结构不符合 schema 要求 ("
+            + "; ".join(schema_errors[:6])
+            + (" 等" if len(schema_errors) > 6 else "")
+            + f")\n配置文件: {config_path}"
+        )
+
+    # ── Step 3: dataclass population + procedural validation ──
     config = _update_dataclass(RunConfig(), data)
     return _normalize_runtime_paths(validate_run_config(config))
 
@@ -371,7 +401,16 @@ def validate_run_config(config: RunConfig) -> RunConfig:
     _validate_credentials(errors, config.credentials)
     _validate_web(errors, config.web)
     dataset = getattr(config.ops.settings, "dataset", "")
-    config.ops.settings.dataset = dataset.strip() if isinstance(dataset, str) and dataset.strip() else resolve_default_dataset_id(config.ops.storage_dir, runtime_root=runtime_project_root)
+    resolved = dataset.strip() if isinstance(dataset, str) and dataset.strip() else ""
+    if not resolved:
+        try:
+            resolved = resolve_default_dataset_id(config.ops.storage_dir, runtime_root=runtime_project_root)
+        except Exception as exc:
+            errors.append(f"failed to resolve default dataset_id: {exc}")
+            resolved = ""
+    # Only mutate settings if resolution succeeded; pure validation otherwise.
+    if resolved:
+        config.ops.settings.dataset = resolved
     _validate_ops(errors, config.ops, environment=config.environment)
     if errors:
         raise ConfigValidationError("Invalid run configuration: " + "; ".join(errors))
@@ -769,6 +808,8 @@ def _validate_weight_group(errors: list[str], group_name: str, weights: dict[str
         total += float(value)
     if valid and total <= 0:
         errors.append(f"{group_name} must have a positive total weight")
+    elif valid and abs(total - 1.0) > 1e-6:
+        errors.append(f"{group_name} weights should sum to 1.0 (got {total:.4f})")
 
 
 def _validate_regime_adjustments(errors: list[str], value: Any) -> None:
@@ -831,6 +872,10 @@ def _update_dataclass(instance, data: dict[str, Any]):
         current = getattr(instance, key)
         if is_dataclass(current) and isinstance(value, dict):
             setattr(instance, key, _update_dataclass(current, value))
+        elif is_dataclass(current):
+            # value is not a dict — skip to avoid replacing a dataclass
+            # instance with a primitive (e.g. string / number / null).
+            continue
         else:
             setattr(instance, key, value)
     return instance

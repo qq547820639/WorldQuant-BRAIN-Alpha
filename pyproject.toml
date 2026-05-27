@@ -11,9 +11,25 @@ name = "brain-alpha-ops"
 version = "0.3.0"
 description = "Account-safety-first WorldQuant BRAIN alpha research operations toolkit."
 requires-python = ">=3.10"
+license = {text = "MIT"}
+readme = "README.md"
+authors = [
+    {name = "Brain Alpha Ops Contributors"},
+]
+keywords = ["worldquant", "brain", "alpha", "quantitative-finance", "research"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Financial and Insurance Industry",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Office/Business :: Financial :: Investment",
+]
 dependencies = [
     "pyyaml>=6.0,<7",
     "requests>=2.32.4,<3",
+    "jsonschema>=4.20,<5",
 ]
 
 [project.optional-dependencies]
@@ -43,3 +59,21 @@ markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
     "integration: marks tests that require network or external services",
 ]
+
+[tool.coverage.run]
+source = ["brain_alpha_ops"]
+omit = [
+    "brain_alpha_ops/web/index.html",
+    "brain_alpha_ops/brain_api/mock.py",
+]
+branch = true
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+    "if __name__ == .__main__.:",
+    "@abstractmethod",
+]
+fail_under = 80
