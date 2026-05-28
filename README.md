@@ -1,467 +1,244 @@
-# BRAIN Alpha Ops
+# brain-alpha-ops
 
-欢迎使用 BRAIN Alpha Ops。
+WorldQuant BRAIN Alpha 研究的本地工作台。
 
-这是一个面向 WorldQuant BRAIN 的本地网页工作台。你打开电脑浏览器后，可以在同一个页面里完成账号连接、云端同步、候选生成、结果查看、达标检查和提交前确认。
+`brain-alpha-ops` 把 Alpha 候选生成、官方回测、云端 Alpha 同步、提交前检查、风险原因追踪和交付门禁放在同一个本地工具里。项目默认使用生产环境的 WorldQuant BRAIN API，默认不自动提交 Alpha，凭据推荐只通过环境变量或本地 Web 会话输入。
 
-这份说明以电脑端 Web 控制台为准。第一次使用时，只要按顺序照着点即可。
+> 版本：v0.3.0
+> 运行环境：Python 3.10+
+> 交付形态：PyPI 包 + 本地 Web 控制台
+> Web 服务：Python 标准库 HTTP Server
+> 前端：内联 Web 控制台，另含 React 18 控制台源码
 
-## 项目简介
+## 核心能力
 
-BRAIN Alpha Ops 帮你把 Alpha 研究流程放到一个清晰的网页里：
+- 本地 Web 控制台：在浏览器中完成连接、同步、生产搜索、检查和提交前确认。
+- 生产配置校验：`run_config.json` 支持片段覆盖，加载时会合并默认值并执行 schema 与过程校验。
+- 官方 BRAIN 对齐：区域、Universe、Delay、Neutralization、Alpha Type、API 路径和阈值来自统一 canonical 定义。
+- 提交保护：默认关闭自动提交，提交前执行云端同步、重复检查、官方指标和安全门禁。
+- 研究记忆：保留候选、回测、云端 Alpha、检查结果和诊断信息，便于复盘。
+- 安全交付门禁：包含秘密扫描、XSS sink 检查、依赖策略、模块尺寸、官方契约和最终发布门禁。
 
-1. 连接你的 BRAIN 账号。
-2. 同步账号里已有的 Alpha。
-3. 生成新的候选 Alpha。
-4. 查看候选状态、分数和风险原因。
-5. 对达标候选做提交前检查。
-6. 在确认无误后，再谨慎处理提交。
+## 快速开始
 
-项目默认不会自动提交 Alpha。页面会尽量把“下一步该做什么”和“为什么不能做”直接显示出来，方便你判断。
-
-## 快速入门步骤
-
-### 第 1 步：准备使用环境
-
-你需要：
-
-1. 一台 Windows 电脑。
-2. Python 3.10 或更高版本。
-3. 一个 WorldQuant BRAIN 账号。
-4. PowerShell。
-
-### 第 2 步：安装项目
-
-打开 PowerShell，进入你想保存项目的文件夹，然后运行：
-
-```powershell
+```bash
 git clone <your-repository-url>
 cd WorldQuant-BRAIN-Alpha
 
-python -m venv venv
-.\venv\Scripts\Activate.ps1
+python3 -m venv .venv
+source .venv/bin/activate
 
-pip install -e .
+python3 -m pip install --upgrade pip
+python3 -m pip install -e ".[test]"
 ```
 
-以后每次重新使用本项目时，先进入项目文件夹并启用环境：
+Windows PowerShell：
 
 ```powershell
-cd WorldQuant-BRAIN-Alpha
-.\venv\Scripts\Activate.ps1
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -e ".[test]"
 ```
 
-### 第 3 步：启动电脑端 Web 控制台
+## 凭据配置
 
-在项目文件夹中运行：
+不要把 BRAIN 账号、密码、Token、Cookie 写入 README、配置文件、测试文件、截图或提交记录。
+
+推荐使用环境变量：
+
+```bash
+export BRAIN_USERNAME="your-email@example.com"
+export BRAIN_PASSWORD="your-password"
+# 或者使用 token
+export BRAIN_TOKEN="your-token"
+```
+
+Windows PowerShell：
 
 ```powershell
-python launch_web.py
+$env:BRAIN_USERNAME="your-email@example.com"
+$env:BRAIN_PASSWORD="your-password"
+# 或者使用 token
+$env:BRAIN_TOKEN="your-token"
 ```
 
-然后用电脑浏览器打开：
+Web 控制台也支持在本地页面中临时填写账号信息。命令行参数 `--username`、`--password`、`--token` 已废弃，默认会被拒绝，避免凭据进入 shell 历史或进程列表。
+
+## 启动 Web 控制台
+
+```bash
+python3 launch_web.py
+```
+
+默认地址：
 
 ```text
 http://127.0.0.1:8765
 ```
 
-看到 `BRAIN Alpha Ops` 页面后，就可以开始操作。
+推荐第一次使用顺序：
 
-## Web 控制台界面总览
+1. 打开 Web 控制台。
+2. 确认运行环境为 production。
+3. 输入本地会话凭据，或先设置环境变量。
+4. 点击“同步云端数据”。
+5. 点击“开始生产搜索”。
+6. 在候选池查看排序分、状态和风险原因。
+7. 对达标候选执行“检查”。
+8. 只在确认通过检查后再处理提交队列。
 
-![电脑端 Web 控制台主页面](docs/ux_refactor_desktop_chrome_20260521.png)
+如果端口被占用，修改 [config/run_config.json](config/run_config.json) 中的 `web.port`，或让服务自动选择可用本地端口。
 
-请先认识页面上的几个固定位置：
+## CLI 用法
 
-1. **顶部状态栏**：在页面最上方，显示当前环境、连接状态、系统状态和关闭服务按钮。刚打开时通常会看到“未连接”。
-2. **左侧操作栏**：页面左侧，从上到下依次是“连接与身份”“生产搜索”“市场与回测参数”“云端数据”等区域。账号填写和主要按钮都在这里。
-3. **上方流程卡片**：页面中上方有 5 个步骤卡片，分别是“生产候选”“官方回测”“达标检查”“提交队列”“诊断复盘”。这里用来快速判断流程走到哪一步。
-4. **中间结果区**：页面中间显示候选池、回测状态、达标数量、可提交数量和数据表格。
-5. **表格 / 图表切换**：结果区右上角可以在“表格”和“图表”之间切换。新手建议先看“表格”。
+校验配置：
 
-## 账号设置：在 Web 控制台里完成
+```bash
+python3 -m brain_alpha_ops.cli validate-config --config config/run_config.json
+```
 
-不需要在 README 或配置文件里写账号密码。请直接在电脑端 Web 控制台中填写。
+运行生产管线：
 
-![账号设置区域](docs/readme_web_account_settings.png)
+```bash
+python3 -m brain_alpha_ops.cli run --config config/run_config.json
+```
 
-### 操作路径
+也可以使用编辑器友好的入口：
 
-页面左侧操作栏 → **连接与身份**
+```bash
+python3 run_pipeline.py --config config/run_config.json --validate-only
+python3 run_pipeline.py --config config/run_config.json
+```
 
-### 使用账号和密码登录
+常用只读诊断：
 
-1. 看左侧操作栏最上方，找到标题为“连接与身份”的卡片。
-2. 在“BRAIN 账号”输入框中输入你的用户名或邮箱。
-   - 示例：`your@email.com`
-3. 在“BRAIN 密码”输入框中输入你的 BRAIN 密码。
-   - 输入时页面会隐藏密码，这是正常现象。
-4. 确认“运行环境”保持为“生产环境：官方 BRAIN API”。
-5. 不需要单独点击“保存账号”。填写后，点击“同步云端数据”或“开始生产搜索”时，页面会使用当前填写的信息连接 BRAIN。
+```bash
+python3 -m brain_alpha_ops.cli memory-summary --config config/run_config.json
+python3 -m brain_alpha_ops.cli research-observability --config config/run_config.json
+python3 -m brain_alpha_ops.cli diagnose --config config/run_config.json --json
+python3 -m brain_alpha_ops.cli release-gate --config config/run_config.json --json
+```
 
-### 使用令牌登录
+## 配置文件
 
-如果你使用登录令牌：
+默认配置位于 [config/run_config.json](config/run_config.json)。关键字段：
 
-1. 在左侧“连接与身份”卡片底部点击 **高级连接设置**。
-2. 找到“令牌 Token”输入框。
-3. 输入你的令牌。
-   - 示例：`eyJ...`
-4. 如果使用令牌，可以把“BRAIN 密码”留空。
-5. 点击“同步云端数据”测试是否能连接。
-
-### 如何判断账号是否连接成功
-
-连接成功后，你会看到这些反馈之一：
-
-1. 顶部状态从“未连接”变成已连接或显示账号相关状态。
-2. 点击“同步云端数据”后，左侧“云端数据”区域的进度条开始变化。
-3. 页面出现“开始同步云端数据...”之类的提示。
-4. 中间结果区开始显示云端 Alpha 数量或同步状态。
-
-如果仍显示“未连接”，通常是账号、密码、令牌或网络有问题。请回到“连接与身份”重新检查输入。
-
-## 第一次使用：推荐操作顺序
-
-### 1. 同步云端数据
-
-点击位置：
-
-左侧操作栏 → **云端数据** → **同步云端数据**
-
-输入示例：
-
-1. “同步范围”选择“近 3 天”。
-2. 点击“同步云端数据”。
-
-你会看到：
-
-1. “进度：0%”开始变化。
-2. 顶部或页面提示正在同步。
-3. 同步完成后，中间结果区会显示云端 Alpha 相关信息。
-
-为什么先做这一步：
-
-同步后，页面更容易判断哪些 Alpha 已经存在、哪些可能重复、哪些需要谨慎处理。
-
-### 2. 生成候选
-
-点击位置：
-
-左侧操作栏 → **生产搜索** → **开始生产搜索**
-
-你会看到：
-
-1. 按钮文字可能变成“停止生产”。
-2. 上方“生产候选”卡片数量开始变化。
-3. 中间“候选池”出现新的候选。
-4. 表格中出现每条 Alpha 的状态、排序分和风险原因。
-
-如果你第一次使用，建议先保持默认设置，不要急着改市场参数。
-
-### 3. 查看候选结果
-
-点击位置：
-
-中间结果区 → 右上角选择 **表格**
-
-重点看这些列：
-
-1. **Alpha / 记录**：候选内容或记录名称。
-2. **排序分**：越高通常越值得优先查看。
-3. **状态**：候选当前处在哪一步。
-4. **官方 ID**：有官方回测记录后会显示。
-5. **风险 / 原因**：如果不能继续，通常会写明原因。
-6. **操作**：当前候选可执行的动作。
-
-常见状态含义：
-
-| 状态 | 含义 | 你可以做什么 |
-|---|---|---|
-| 候选池 | 已生成，等待进一步筛选 | 查看分数和风险原因 |
-| 等待回测 | 排队等待官方回测 | 等待或继续生成其他候选 |
-| 回测中 | 正在等待官方结果 | 不要重复提交，等结果返回 |
-| 达标 | 看起来满足进一步检查条件 | 点击“检查” |
-| 可提交 | 已通过必要检查 | 谨慎确认后再提交 |
-| 不达标 | 没有通过筛选或检查 | 查看原因，通常不建议提交 |
-
-### 4. 切换图表查看趋势
-
-![电脑端图表视图](docs/ux_review_chart_chrome_20260521.png)
-
-点击位置：
-
-中间结果区右上角 → **图表**
-
-你会看到：
-
-1. 排序分趋势。
-2. Sharpe 分布。
-3. 门禁通过率。
-4. Turnover 质量目标。
-
-如果图表区域显示“暂无数据”，说明当前还没有足够候选结果。先回到“表格”，继续生成或同步数据。
-
-### 5. 做达标检查
-
-![结果区与流程状态，已标出检查达标、达标检查、检查和提交勾选的大致位置](docs/readme_web_check_submit_area.png)
-
-点击位置：
-
-入口一：左侧操作栏 → **生产搜索** → **检查达标**
-
-入口二：中间结果区 → 点击上方第 3 张流程卡片 **达标检查**
-
-进入达标检查后，在结果区上方的操作条里找到 **快速 / 全部** 下拉框、**检查** 按钮和 **提交勾选** 按钮。不同视图里，按钮会出现在同一操作区附近。
-
-检查前先选择模式：
-
-| 选项 | 适合什么时候用 |
+| 字段 | 说明 |
 |---|---|
-| 快速 | 检查本次新生成、还没检查过的达标候选 |
-| 全部 | 同步云端数据后，重新检查所有达标候选 |
+| `environment` | 只支持 `production` |
+| `auto_submit` | 默认 `false`，建议保持关闭 |
+| `credentials.*_env` | 凭据环境变量名称 |
+| `web.host` / `web.port` | 本地 Web 控制台监听地址 |
+| `ops.storage_dir` | 运行数据、任务状态和研究记忆目录 |
+| `ops.settings` | BRAIN 官方回测设置 |
+| `ops.budget` | 候选数量、官方调用预算和运行节奏 |
+| `ops.thresholds` | 官方检查和本地质量目标 |
+| `ops.submission_policy` | 自动提交限额与重复保护 |
+| `ops.official_api` | BRAIN API 路径、超时、缓存和限速设置 |
 
-推荐新手选择“快速”。
+配置文件可以只写需要覆盖的片段，加载时会合并 dataclass 默认值，再执行完整校验。
 
-具体操作：
+## 安全默认值
 
-1. 先看左侧“生产搜索”卡片，确认里面有“检查达标”按钮。
-2. 点击“检查达标”，或点击中间上方第 3 张流程卡片“达标检查”。
-3. 看结果区上方的操作条。
-4. 在下拉框中选择“快速”。
-5. 点击旁边的“检查”按钮。
-6. 检查过程中，不要重复点击“检查”或“提交”。
+- 默认只绑定 `127.0.0.1`。
+- 默认关闭自动提交。
+- 默认不把凭据写入配置文件。
+- Web 会话有本地 session 和 CSRF 保护。
+- 远程访问需要显式配置并设置管理 Token。
+- 测试截图目录 `data/e2e_screenshots/` 已被忽略。
+- CI 秘密扫描覆盖测试目录和 Git 历史。
+- 认证响应、Token、Cookie 和敏感片段会在用户可见输出中脱敏。
 
-你会看到：
+安全扫描：
 
-1. 检查进度开始变化。
-2. 按钮可能暂时不可点，表示检查正在进行。
-3. 完成后页面会显示通过数量和失败原因。
-4. 通过检查的候选会进入“可提交”视图，或在上方“提交队列”卡片里显示数量。
-
-### 6. 提交前确认
-
-点击位置：
-
-中间结果区 → 点击上方流程卡片 **提交队列**，或切到 **可提交** 视图 → 勾选要处理的 Alpha → 点击 **提交勾选**
-
-新手建议：
-
-1. 先不要打开“自动提交”。
-2. 先查看“风险 / 原因”列。
-3. 确认候选已经通过检查。
-4. 确认云端数据刚同步过。
-5. 确认没有重复或已提交提示。
-
-提交按钮什么时候会出现或可用：
-
-1. 上方“提交队列”卡片里的“可提交”数量大于 0。
-2. 当前视图是“达标”或“可提交”。
-3. 表格里至少有一条可处理的 Alpha。
-4. 你已经勾选了要提交的 Alpha。
-5. 没有生产搜索、云端同步、达标检查或提交任务正在运行。
-6. 页面没有显示阻断风险。
-
-如果按钮不可点，鼠标放到按钮上或查看页面提示，通常会看到原因，例如“请先选择要提交的 Alpha”“达标检查正在进行”“云端同步正在进行”。
-
-小提示：
-
-1. 在“达标”视图里，先用“检查”把候选送进可提交状态。
-2. 在“可提交”视图里，再勾选条目并点“提交勾选”。
-3. 如果你只想先看结果，不要急着点提交，先确认“风险 / 原因”列。
-
-## 常用操作指引
-
-### 查看当前是否有任务在运行
-
-点击位置：
-
-页面顶部状态栏，或左侧“生产搜索”区域。
-
-你会看到：
-
-1. “系统空闲”：当前没有运行中的任务。
-2. “生产任务正在运行”：正在生成或处理候选。
-3. “云端同步正在进行”：正在读取云端 Alpha。
-4. “达标检查正在进行”：正在做提交前检查。
-5. “提交处理中”：正在等待提交结果。
-
-当一个任务正在运行时，其他冲突按钮会暂时不可点。这是正常保护。
-
-### 修改市场与回测参数
-
-点击位置：
-
-左侧操作栏 → **市场与回测参数**
-
-推荐做法：
-
-1. 新手先使用默认预设，例如“美股标准生产”。
-2. 需要微调时，再展开“官方回测设置”。
-3. 改完参数后，再点击“开始生产搜索”。
-
-状态反馈：
-
-如果你手动改了下方设置，页面会以手动设置为准。若不确定，先回到默认预设。
-
-### 查看为什么没有数据
-
-点击位置：
-
-中间结果区 → 候选池表格下方的空状态提示。
-
-常见提示：
-
-1. “暂无数据”：还没开始生成或同步。
-2. “点击开始生产搜索”：可以直接点击页面里的按钮开始。
-3. “同步云端数据”：可以先读取账号里的已有 Alpha。
-
-### 查看失败原因
-
-点击位置：
-
-中间结果区 → 表格中的 **风险 / 原因** 列。
-
-常见原因：
-
-1. 候选不满足筛选条件。
-2. 缺少官方回测结果。
-3. 与已有 Alpha 太相似。
-4. 云端数据未同步或太旧。
-5. 已经提交过。
-
-看到失败原因后，不要急着重复提交。先按原因处理，例如重新同步云端数据、重新检查，或放弃该候选。
-
-## 常见问题排查
-
-### 1. 打不开 Web 控制台
-
-先确认 PowerShell 里还在运行：
-
-```powershell
-python launch_web.py
+```bash
+python3 scripts/scan_sensitive_artifacts.py --root . --json --fail-on-findings --include-all --include-git-history
 ```
 
-然后打开：
+## 质量门禁
+
+本地快速验证：
+
+```bash
+python3 -m pytest tests/ -v --tb=short
+```
+
+交付前建议执行：
+
+```bash
+python3 scripts/check_dependency_policy.py
+python3 scripts/check_frontend_innerhtml.py
+python3 scripts/check_module_size.py
+python3 scripts/check_brain_contract.py
+python3 scripts/check_diagnosis_gap_coverage.py --strict-freshness
+python3 scripts/final_release_gate.py
+```
+
+CI 使用 `requirements.lock` 安装依赖，并执行秘密扫描、契约检查和测试套件。
+
+## 前端与 Web 资源
+
+主要 Web 入口：
+
+- [launch_web.py](launch_web.py)
+- [brain_alpha_ops/web.py](brain_alpha_ops/web.py)
+- [brain_alpha_ops/web/index.html](brain_alpha_ops/web/index.html)
+- [brain_alpha_ops/web/index_template.html](brain_alpha_ops/web/index_template.html)
+- [brain_alpha_ops/web/js/app.js](brain_alpha_ops/web/js/app.js)
+
+如果修改了 `brain_alpha_ops/web/js/`、`brain_alpha_ops/web/css/` 或模板文件，需要同步内联 HTML：
+
+```bash
+python3 brain_alpha_ops/web/build_inline.py --check --json
+```
+
+## 目录结构
 
 ```text
-http://127.0.0.1:8765
+brain_alpha_ops/
+  brain_api/              官方 BRAIN API 适配与 canonical 定义
+  compliance/             红线检查与发布合规
+  research/               Alpha 生成、回测、评分、记忆与管线
+  scoring/                官方评分、门禁和归因
+  web/                    本地 Web 控制台资源
+  web_*.py                Web API、任务、会话和安全模块
+config/
+  run_config.json         默认运行配置
+data/
+  api_cache/              官方上下文缓存
+  *.jsonl                 本地运行与研究记录
+docs/
+  *.md                    交付、诊断和验收文档
+scripts/
+  *.py                    CI、质量门禁和交付检查脚本
+tests/
+  test_*.py               单元、契约和集成测试
 ```
 
-如果还是打不开，可能是默认网页地址被占用。打开 [config/run_config.json](config/run_config.json)，把 `web.port` 后面的数字改成 `8766`，重新启动后访问：
+## 故障排查
 
-```text
-http://127.0.0.1:8766
-```
+| 现象 | 处理方式 |
+|---|---|
+| Web 页面打不开 | 确认 `launch_web.py` 仍在运行；检查 `web.port` 是否被占用 |
+| 页面显示未连接 | 检查环境变量或 Web 控制台中的账号输入 |
+| 同步云端失败 | 检查凭据、网络、BRAIN 登录状态和限速 |
+| 没有候选 | 先同步云端数据，再保持默认参数运行生产搜索 |
+| 检查按钮不可用 | 确认存在达标候选，且没有其他任务正在运行 |
+| 提交按钮不可用 | 查看“风险 / 原因”列，确认候选已通过提交前检查 |
+| 配置校验失败 | 运行 `python3 -m brain_alpha_ops.cli validate-config --config config/run_config.json` 查看具体字段 |
 
-### 2. 页面一直显示“未连接”
+## 交付状态
 
-请按这个顺序检查：
+当前交付重点：
 
-1. 左侧“连接与身份”里的“BRAIN 账号”是否填对。
-2. “BRAIN 密码”是否填对。
-3. 如果使用令牌，是否展开“高级连接设置”并填写“令牌 Token”。
-4. 填完后是否点击过“同步云端数据”来测试连接。
-5. 当前网络是否能访问 WorldQuant BRAIN。
+- P0：硬编码凭据清理、敏感截图忽略、CI 秘密扫描全覆盖。
+- P1：测试依赖声明、lockfile、配置校验、XSS sink 检查。
+- P2：命令行凭据参数废弃、认证响应脱敏。
+- P3：可访问性和架构拆分持续迭代。
 
-### 3. 点击“同步云端数据”失败
+详细任务目标见 [docs/TASK_OBJECTIVES.md](docs/TASK_OBJECTIVES.md)。
 
-常见原因：
+## 许可证
 
-1. 账号或密码错误。
-2. 登录令牌过期。
-3. 网络暂时不可用。
-4. 连续操作太频繁，官方临时限制。
-
-处理方法：
-
-1. 回到“连接与身份”重新输入账号信息。
-2. 先选“近 3 天”同步范围。
-3. 等几分钟后再试。
-
-### 4. 点击“开始生产搜索”后没有候选
-
-可能原因：
-
-1. 账号还没有连接成功。
-2. 云端数据还没有同步。
-3. 当前筛选太严格。
-4. 任务还在启动中。
-
-建议：
-
-1. 先点击“同步云端数据”。
-2. 再点击“开始生产搜索”。
-3. 在中间“候选池”等待一会儿。
-4. 如果仍没有候选，先保持默认市场预设，不要改太多参数。
-
-### 5. “检查”按钮不可点
-
-常见原因：
-
-1. 当前没有达标候选。
-2. 生产搜索还在运行。
-3. 云端同步还在进行。
-4. 已经有达标检查任务在运行。
-
-处理方法：
-
-1. 等当前任务完成。
-2. 切换到“达标”视图。
-3. 确认达标数量大于 0。
-4. 再点击“检查”。
-
-### 6. “提交勾选”按钮不可点
-
-常见原因：
-
-1. 还没有勾选 Alpha。
-2. 候选还没有通过检查。
-3. 云端同步或达标检查正在进行。
-4. 页面判断该候选存在风险。
-
-处理方法：
-
-1. 先看“风险 / 原因”列。
-2. 确认候选位于“可提交”区域。
-3. 勾选要提交的 Alpha。
-4. 再点击“提交勾选”。
-
-### 7. 不知道该选“快速”还是“全部”
-
-选择“快速”：
-
-适合日常使用，优先检查本次新生成、还没检查过的达标候选。
-
-选择“全部”：
-
-适合刚同步过云端数据后，想重新确认所有达标候选。
-
-### 8. 担心误提交
-
-保持默认设置即可。默认不会自动提交。
-
-如果看到“自动提交”开关，新手建议保持关闭。先手动同步、手动检查、手动查看结果，熟悉流程后再决定是否使用。
-
-## 新手推荐路线
-
-第一次完整使用时，建议按这个顺序：
-
-1. 启动 Web 控制台。
-2. 在左侧“连接与身份”填写 BRAIN 账号和密码。
-3. 点击“同步云端数据”。
-4. 点击“开始生产搜索”。
-5. 在“候选池”查看结果。
-6. 切到“达标”视图。
-7. 选择“快速”，点击“检查”。
-8. 查看“风险 / 原因”列。
-9. 暂时不要打开“自动提交”。
-
-## 安全提醒
-
-- 不要把 BRAIN 账号、密码或登录令牌写进 README、配置文件、日志或提交记录。
-- 命令行启动生产任务时，也不要使用 `--password` 或 `--token` 传入凭据；请使用 `BRAIN_USERNAME` / `BRAIN_PASSWORD` / `BRAIN_TOKEN` 环境变量。
-- 电脑离开时，关闭浏览器页面或点击右上角“关闭服务”。
-- 提交前先同步云端数据，再做达标检查。
-- 不确定时，保持“自动提交”关闭。
-- 如果怀疑账号信息泄露，请立即修改 BRAIN 密码，或重置登录令牌。
+MIT。详见 [LICENSE](LICENSE)。
