@@ -49,18 +49,18 @@ python -m pip install -e ".[test]"
 
 ```bash
 export BRAIN_USERNAME="your-email@example.com"
-export BRAIN_PASSWORD="your-password"
+export BRAIN_PASSWORD="your_password_here"
 # 或者使用 token
-export BRAIN_TOKEN="your-token"
+export BRAIN_TOKEN="your_token"
 ```
 
 Windows PowerShell：
 
 ```powershell
 $env:BRAIN_USERNAME="your-email@example.com"
-$env:BRAIN_PASSWORD="your-password"
+$env:BRAIN_PASSWORD="your_password_here"
 # 或者使用 token
-$env:BRAIN_TOKEN="your-token"
+$env:BRAIN_TOKEN="your_token"
 ```
 
 Web 控制台也支持在本地页面中临时填写账号信息。命令行参数 `--username`、`--password`、`--token` 已废弃，默认会被拒绝，避免凭据进入 shell 历史或进程列表。
