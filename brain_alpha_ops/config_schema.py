@@ -232,6 +232,9 @@ def validate_config_with_jsonschema(
     Returns:
         List of error message strings (empty = valid).
     """
+    if not isinstance(config_data, dict):
+        return _validate_config_without_jsonschema(config_data, schema or RUN_CONFIG_SCHEMA)
+
     if jsonschema is None:
         print(
             "jsonschema: jsonschema not installed; using built-in limited validation. "
@@ -241,9 +244,10 @@ def validate_config_with_jsonschema(
         return _validate_config_without_jsonschema(config_data, schema or RUN_CONFIG_SCHEMA)
 
     effective_schema = schema or RUN_CONFIG_SCHEMA
+    validation_schema = _partial_schema(effective_schema) if schema is None and config_data else effective_schema
     errors: list[str] = []
     try:
-        validator = jsonschema.Draft202012Validator(effective_schema)
+        validator = jsonschema.Draft202012Validator(validation_schema)
         for error in sorted(validator.iter_errors(config_data), key=lambda e: e.path):
             path = ".".join(str(p) for p in error.path) if error.path else "(root)"
             errors.append(f"{path}: {error.message}")
@@ -327,6 +331,19 @@ def _validate_config_without_jsonschema(
     validate_node(config_data, schema, ())
 
     return errors
+
+
+def _partial_schema(schema: dict[str, Any]) -> dict[str, Any]:
+    """Return a copy of ``schema`` that validates explicit override fields only."""
+    cloned = dict(schema)
+    cloned.pop("required", None)
+    properties = cloned.get("properties")
+    if isinstance(properties, dict):
+        cloned["properties"] = {
+            key: _partial_schema(value) if isinstance(value, dict) else value
+            for key, value in properties.items()
+        }
+    return cloned
 
 
 def validate_config_file(path: str | Path) -> tuple[bool, list[str]]:

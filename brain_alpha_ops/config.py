@@ -367,6 +367,14 @@ def load_run_config(path: str | Path | None = None) -> RunConfig:
 
     # ── Step 3: dataclass population + procedural validation ──
     config = _update_dataclass(RunConfig(), data)
+    complete_schema_errors = validate_config_with_jsonschema(config.to_dict())
+    if complete_schema_errors:
+        raise ConfigValidationError(
+            "配置文件结构不符合 schema 要求 ("
+            + "; ".join(complete_schema_errors[:6])
+            + (" 等" if len(complete_schema_errors) > 6 else "")
+            + f")\n配置文件: {config_path}"
+        )
     return _normalize_runtime_paths(validate_run_config(config))
 
 

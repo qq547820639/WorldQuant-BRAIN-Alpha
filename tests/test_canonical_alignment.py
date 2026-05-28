@@ -566,12 +566,8 @@ class TestBoundaryConditions:
             pytest.skip("jsonschema not installed")
 
         from brain_alpha_ops.config_schema import validate_config_with_jsonschema
-        # List is not valid JSON Schema object
-        with pytest.raises(Exception):
-            pass  # jsonschema will handle this with a TypeError or similar
-        # But our function just wraps it, should handle gracefully
         errors = validate_config_with_jsonschema([1, 2, 3])
-        # jsonschema will raise a TypeError — but our function catches it via jsonschema error
+        # The public helper should normalize non-object input into an error list.
         assert isinstance(errors, list)
 
     def test_config_file_invalid_json(self):
