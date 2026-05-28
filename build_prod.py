@@ -25,7 +25,6 @@ PyInstaller.__main__.run([
     "--hidden-import=brain_alpha_ops.research.repository",
     "--hidden-import=brain_alpha_ops.research.convergence",
     "--hidden-import=brain_alpha_ops.brain_api",
-    "--hidden-import=brain_alpha_ops.brain_api.mock",
     "--hidden-import=brain_alpha_ops.brain_api.official",
     "--hidden-import=brain_alpha_ops.brain_api.context_defaults",
     "--hidden-import=brain_alpha_ops.data",

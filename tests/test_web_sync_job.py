@@ -1,13 +1,17 @@
 from brain_alpha_ops.config import RunConfig
-from brain_alpha_ops.web_sync_job import run_sync_job_service
+from brain_alpha_ops.web_sync_job import _timing_payload, run_sync_job_service
 
 
 class Store:
     def __init__(self):
         self.updates = []
+        self.cancelled = False
 
     def update(self, job_id, **kwargs):
         self.updates.append({"job_id": job_id, **kwargs})
+
+    def is_cancelled(self, _job_id):
+        return self.cancelled
 
 
 class Api:
@@ -47,7 +51,7 @@ class Repo:
 
 
 def test_run_sync_job_service_completes_and_persists_context(tmp_path):
-    run_config = RunConfig(environment="mock")
+    run_config = RunConfig(environment="production")
     run_config.ops.storage_dir = str(tmp_path)
     store = Store()
     persisted = []
@@ -73,10 +77,21 @@ def test_run_sync_job_service_completes_and_persists_context(tmp_path):
     assert result["count"] == 2
     assert result["fields_count"] == 1
     assert persisted[0][1] == [{"name": "rank"}]
+    assert store.updates[-1]["progress"]["started_at_ms"] > 0
+    assert "updated_at_ms" in store.updates[-1]["progress"]
+
+
+def test_timing_payload_estimates_remaining_time_from_scan_rate():
+    payload = _timing_payload(100.0, done=25, total=100, now=110.0)
+
+    assert payload["elapsed_seconds"] == 10.0
+    assert payload["rate_per_second"] == 2.5
+    assert payload["eta_seconds"] == 30
+    assert payload["eta_deadline_at_ms"] == 140000
 
 
 def test_run_sync_job_service_marks_failed_on_auth_error(tmp_path):
-    run_config = RunConfig(environment="mock")
+    run_config = RunConfig(environment="production")
     run_config.ops.storage_dir = str(tmp_path)
     store = Store()
 
@@ -100,7 +115,7 @@ def test_run_sync_job_service_marks_failed_on_auth_error(tmp_path):
 
 
 def test_run_sync_job_service_marks_context_failure_as_warning(tmp_path):
-    run_config = RunConfig(environment="mock")
+    run_config = RunConfig(environment="production")
     run_config.ops.storage_dir = str(tmp_path)
     store = Store()
 
@@ -125,3 +140,29 @@ def test_run_sync_job_service_marks_context_failure_as_warning(tmp_path):
     assert final["result"]["context_error"] == "context failed"
     assert final["result"]["fields_count"] == 1
     assert final["progress"]["status_code"] == "COMPLETED_WITH_WARNINGS"
+
+
+def test_run_sync_job_service_honors_cancel_before_remote_calls(tmp_path):
+    run_config = RunConfig(environment="production")
+    run_config.ops.storage_dir = str(tmp_path)
+    store = Store()
+    store.cancelled = True
+
+    run_sync_job_service(
+        "sync_1",
+        {"syncRange": "3d"},
+        store=store,
+        run_config_from_payload=lambda payload: run_config,
+        api_from_run_config=lambda config: Api(),
+        repository_factory=Repo,
+        datasets_from_fields=lambda fields: [],
+        persist_official_context=lambda fields, operators, datasets: None,
+        default_fields=[],
+        default_operators=[],
+        safe_error_message=str,
+        error_payload=lambda exc, **kwargs: {"error": str(exc), **kwargs},
+    )
+
+    assert store.updates[-1]["status"] == "stopped"
+    assert store.updates[-1]["progress"]["status_code"] == "STOPPED"
+    assert store.updates[-1]["result"]["status"] == "stopped"

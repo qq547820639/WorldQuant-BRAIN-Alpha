@@ -14,6 +14,8 @@ LOCAL_HOSTS = {"127.0.0.1", "localhost", "::1"}
 LOOPBACK_BIND_HOSTS = {"127.0.0.1", "localhost", "::1"}
 SESSION_COOKIE_NAME = "brain_alpha_ops_session"
 DEFAULT_SESSION_TTL_SECONDS = 12 * 60 * 60
+REQUEST_REPLAY_TTL_SECONDS = 5 * 60
+MAX_REQUEST_ID_LENGTH = 128
 
 
 def header_hostname(host_header: str) -> str:
@@ -139,6 +141,7 @@ class LocalSessionManager:
             self.sessions[session_id] = {
                 "csrf": csrf_token,
                 "stream": stream_token,
+                "request_replay": {},
                 "expires_at": time.time() + self.ttl_seconds,
             }
         return session_id, csrf_token
@@ -167,6 +170,49 @@ class LocalSessionManager:
 
     def validate_stream(self, session_id: str, stream_token: str) -> bool:
         return self.validate_token(session_id, stream_token, "stream")
+
+    def validate_replay(
+        self,
+        session_id: str,
+        request_id: str,
+        request_timestamp: str,
+        *,
+        now: float | None = None,
+        ttl_seconds: int = REQUEST_REPLAY_TTL_SECONDS,
+    ) -> dict[str, Any]:
+        current = time.time() if now is None else now
+        request_id = str(request_id or "").strip()
+        if not session_id:
+            return {"ok": False, "error_code": "SESSION_INVALID", "error": "invalid local session"}
+        if not request_id:
+            return {"ok": False, "error_code": "REPLAY_TOKEN_REQUIRED", "error": "missing request id"}
+        if len(request_id) > MAX_REQUEST_ID_LENGTH:
+            return {"ok": False, "error_code": "REPLAY_TOKEN_INVALID", "error": "request id is too long"}
+        if any(ch.isspace() for ch in request_id):
+            return {"ok": False, "error_code": "REPLAY_TOKEN_INVALID", "error": "request id must not contain whitespace"}
+        try:
+            timestamp = float(str(request_timestamp or "").strip())
+        except (TypeError, ValueError):
+            return {"ok": False, "error_code": "REPLAY_TIMESTAMP_INVALID", "error": "invalid request timestamp"}
+        if timestamp > 10_000_000_000:
+            timestamp = timestamp / 1000.0
+        if abs(current - timestamp) > ttl_seconds:
+            return {"ok": False, "error_code": "REPLAY_TIMESTAMP_STALE", "error": "stale request timestamp"}
+
+        self.prune(current)
+        with self.lock:
+            row = self.sessions.get(session_id)
+            if not row:
+                return {"ok": False, "error_code": "SESSION_INVALID", "error": "invalid local session"}
+            replay_cache = row.setdefault("request_replay", {})
+            for cached_id, expires_at in list(replay_cache.items()):
+                if float(expires_at or 0.0) <= current:
+                    replay_cache.pop(cached_id, None)
+            if request_id in replay_cache:
+                return {"ok": False, "error_code": "REPLAY_DETECTED", "error": "duplicate request id"}
+            replay_cache[request_id] = current + ttl_seconds
+            row["expires_at"] = current + self.ttl_seconds
+        return {"ok": True}
 
     def csrf_for_session(self, session_id: str) -> str:
         if not session_id:

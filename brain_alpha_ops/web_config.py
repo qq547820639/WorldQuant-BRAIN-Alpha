@@ -63,7 +63,7 @@ def payload_web_environment(payload: dict) -> str | None:
         return None
     environment = str(payload.get("environment") or "production").strip().lower()
     if environment != "production":
-        raise ValueError("web console only supports production environment; mock mode is not available")
+        raise ValueError("web console only supports production environment")
     return "production"
 
 

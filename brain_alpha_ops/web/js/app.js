@@ -6,6 +6,7 @@
   var $ = window.Utils.$;
   var esc = window.Utils.escapeHtml;
   var escapeAttr = window.Utils.escapeAttr;
+  var setSafeHtml = window.Utils.setSafeHtml;
   var phaseName = window.Utils.phaseName;
   var Api = window.ApiClient;
   var S = window.AppState;
@@ -73,6 +74,21 @@
     if (kind === 'submit') return '提交处理';
     return '后台任务';
   }
+  function connectionStatusLabel() {
+    var connectionStatus = String(S.get('connectionStatus') || 'disconnected');
+    var env = S.get('connectionEnvironment') || '';
+    var auth = S.get('connectionAuth') || '';
+    if (connectionStatus === 'connected') {
+      return '已连接' + (env ? ' — ' + env : '') + (auth ? ' · ' + auth : '');
+    }
+    if (connectionStatus === 'failed') return '连接失败';
+    return '未连接';
+  }
+  function renderHeaderStatus() {
+    if (window.HeaderStatus && window.HeaderStatus.render) {
+      window.HeaderStatus.render(activeRuntimeKind(), runtimeKindLabel);
+    }
+  }
   function runtimeDefaultMessage(kind) {
     if (kind === 'production') return '正在生成、回测并筛选 Alpha，结果会陆续刷新。';
     if (kind === 'sync') return '正在读取官方云端数据，列表会在完成后更新。';
@@ -95,6 +111,42 @@
     var diff = Math.max(0, Number(now || Date.now()) - ts);
     if (diff < 5000) return '刚刚';
     return formatDuration(diff) + '前';
+  }
+  function formatEtaClock(ts) {
+    try {
+      return new Date(Number(ts || 0)).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    } catch (e) {
+      return '';
+    }
+  }
+  function runtimeRemainingSeconds(progress, now, updatedAt) {
+    progress = progress || {};
+    var deadline = Number(progress.eta_deadline_at_ms || 0);
+    if (deadline > 0) return Math.max(0, Math.ceil((deadline - now) / 1000));
+    var eta = Number(progress.eta_seconds || 0);
+    if (eta > 0) {
+      var calculatedAt = Number(progress.updated_at_ms || updatedAt || now);
+      return Math.max(0, Math.ceil(eta - ((now - calculatedAt) / 1000)));
+    }
+    return null;
+  }
+  function runtimeDynamicHint(kind, progress, now, updatedAt, stale) {
+    var remaining = runtimeRemainingSeconds(progress, now, updatedAt);
+    if (remaining !== null) {
+      if (remaining > 0) {
+        var deadline = Number((progress || {}).eta_deadline_at_ms || 0) || (now + remaining * 1000);
+        var clock = formatEtaClock(deadline);
+        return '预计剩余 ' + formatDuration(remaining * 1000) + (clock ? '，预计 ' + clock + ' 完成。' : '。');
+      }
+      return '已到预计完成时间，正在等待官方接口返回最新结果。';
+    }
+    var nextPollAt = Number((progress || {}).next_poll_at_ms || 0);
+    if (nextPollAt > now) {
+      return '下一次状态刷新倒计时 ' + formatDuration(nextPollAt - now) + '，系统会自动继续检查。';
+    }
+    if (stale) return '已经超过 2 分钟没有收到新进度，后台可能仍在等待官方接口返回；如果长时间不动，可点击停止后重试。';
+    if (kind === 'sync') return '正在等待官方接口返回；页面会按倒计时自动刷新状态。';
+    return '页面没有卡死；系统会在收到新进度后自动刷新。';
   }
   function numberText(value) {
     var num = Number(value);
@@ -159,7 +211,7 @@
     if (typeof window.renderRuntimeStatus === 'function') window.renderRuntimeStatus();
   }
   function clearRuntimeStatus() {
-    S.setBatch({ runtimeStatusStartedAt: 0, runtimeStatusUpdatedAt: 0 });
+    S.setBatch({ runtimeStatusStartedAt: 0, runtimeStatusUpdatedAt: 0, liveProgress: {} });
     if (typeof window.renderRuntimeStatus === 'function') window.renderRuntimeStatus();
   }
   window.renderRuntimeStatus = function () {
@@ -179,9 +231,7 @@
     var phase = (progress && (progress.phase_label || phaseName(progress.phase || ''))) || runtimeKindLabel(kind);
     var message = (progress && progress.message) || runtimeDefaultMessage(kind);
     var title = runtimeTitle(kind, progress);
-    var hint = stale
-      ? '已经超过 2 分钟没有收到新进度，后台可能仍在等待官方接口返回；如果长时间不动，可点击停止后重试。'
-      : '页面没有卡死；系统会在收到新进度后自动刷新。';
+    var hint = runtimeDynamicHint(kind, progress, now, updatedAt, stale);
     var progressTrack = panel.querySelector('.runtime-progress');
     var fill = $('runtimeProgressFill');
 
@@ -270,25 +320,16 @@
       }
     } catch (e) {}
   })();
-  window.toggleEnvironment = function () {
-    var envEl = $('environment');
-    if (envEl) envEl.value = 'production';
-    var prodNote = $('productionNote');
-    if (prodNote) prodNote.classList.remove('hidden');
-    var envBadge = $('envBadge');
-    if (envBadge) envBadge.textContent = '生产环境';
-    window.renderBusyControls();
-  };
   function renderViewTabs() {
     var container = $('viewTabs');
     if (!container) return;
     var currentView = activeView();
-    container.innerHTML = VIEW_GROUPS.map(function (group) {
+    setSafeHtml(container, VIEW_GROUPS.map(function (group) {
       return '<div class="view-tab-group" aria-label="' + esc(group.label) + '">' +
         '<div class="view-tab-group-label"><span>' + esc(group.label) + '</span><small>' + esc(group.hint) + '</small></div>' +
         '<div class="view-tab-row">' + group.views.map(function (view) { return renderTab(view, currentView); }).join('') + '</div>' +
         '</div>';
-    }).join('');
+    }).join(''));
   }
   function renderTab(view, currentView) {
     var title = VIEW_TITLES[view] || view;
@@ -385,12 +426,30 @@
     }
     var runtimeStopBtn = $('runtimeStopButton');
     if (runtimeStopBtn) {
-      var canStopProduction = Boolean(S.get('isRunning'));
-      runtimeStopBtn.disabled = !canStopProduction;
-      runtimeStopBtn.setAttribute('aria-disabled', !canStopProduction);
-      runtimeStopBtn.textContent = canStopProduction ? '停止生产' : '等待完成';
-      if (!canStopProduction) runtimeStopBtn.setAttribute('title', '当前任务会自动结束，暂不支持手动停止。');
+      var kind = activeRuntimeKind();
+      var canStopProduction = kind === 'production' && Boolean(S.get('isRunning'));
+      var canStopSync = kind === 'sync' && Boolean(S.get('syncJobId') || S.get('syncRecoverable'));
+      runtimeStopBtn.disabled = !(canStopProduction || canStopSync);
+      runtimeStopBtn.setAttribute('aria-disabled', !(canStopProduction || canStopSync));
+      runtimeStopBtn.setAttribute('data-action', canStopSync ? 'cancel-sync-cloud' : 'toggle-run');
+      runtimeStopBtn.textContent = canStopSync ? '停止同步' : (canStopProduction ? '停止生产' : '等待完成');
+      if (canStopSync) runtimeStopBtn.setAttribute('title', '停止当前云端同步，随后可调整范围并重试。');
+      else if (!canStopProduction) runtimeStopBtn.setAttribute('title', '当前任务会自动结束，暂不支持手动停止。');
       else runtimeStopBtn.removeAttribute('title');
+    }
+    var retryBtn = $('runtimeRetryButton');
+    if (retryBtn) {
+      var showRetry = activeRuntimeKind() === 'sync' && Boolean(S.get('syncRecoverable'));
+      retryBtn.classList.toggle('hidden', !showRetry);
+      retryBtn.disabled = !showRetry;
+      retryBtn.setAttribute('aria-disabled', !showRetry);
+    }
+    var logBtn = $('runtimeLogButton');
+    if (logBtn) {
+      var showLog = activeRuntimeKind() === 'sync';
+      logBtn.classList.toggle('hidden', !showLog);
+      logBtn.disabled = !showLog;
+      logBtn.setAttribute('aria-disabled', !showLog);
     }
   }
   function updateActionBarVisibility(view) {
@@ -468,6 +527,7 @@
     renderMobileActions: renderMobileActions,
     state: S,
   });
+  window.ResultTable = resultTable;
   function updatePanelHeader() { resultTable.updatePanelHeader(); }
   window.renderStrategyPolicy = function (config) { if (StrategyPanel.renderPolicy) StrategyPanel.renderPolicy(config); };
   function renderResult(result) {
@@ -547,6 +607,42 @@
     }
     return false;
   }
+  function validatePageAction(action, el) {
+    if (!action || !el) return false;
+    if (el.disabled || el.getAttribute('aria-disabled') === 'true') {
+      if (Toast && Toast.warning) Toast.warning(el.getAttribute('title') || '当前操作不可用，请等待正在执行的任务完成。');
+      return false;
+    }
+    var blockMap = {
+      'toggle-run': 'production',
+      'sync-cloud': 'sync',
+      'check-batch': 'check',
+      'submit-selected': 'submit',
+      'assistant-generate-candidates': 'production',
+    };
+    var blockAction = blockMap[action] || '';
+    if (blockAction && typeof window.operationBlockReason === 'function') {
+      var reason = window.operationBlockReason(blockAction);
+      if (reason) { if (Toast && Toast.warning) Toast.warning(reason); return false; }
+    }
+    if (action === 'switch-view' && VIEW_ORDER.indexOf(el.getAttribute('data-view') || '') === -1) {
+      if (Toast && Toast.warning) Toast.warning('视图参数无效。');
+      return false;
+    }
+    if (action === 'set-result-display-mode' && ['table', 'charts'].indexOf(el.getAttribute('data-mode') || '') === -1) {
+      if (Toast && Toast.warning) Toast.warning('展示模式参数无效。');
+      return false;
+    }
+    if ((action === 'toggle-sidebar-section' || action === 'toggle-collapsible') && !$(el.getAttribute('data-target') || '')) {
+      if (Toast && Toast.warning) Toast.warning('目标区域不存在，请刷新页面后重试。');
+      return false;
+    }
+    if (action === 'submit-selected' && selectedSubmitCount() === 0) {
+      if (Toast && Toast.warning) Toast.warning('请先选择要提交的 Alpha。');
+      return false;
+    }
+    return true;
+  }
   function invokeWindowAction(name, args) {
     var fn = window[name];
     if (typeof fn !== 'function') {
@@ -571,6 +667,10 @@
     if (!action) return;
     if (el.id === 'detailModal' && hasAncestorClass(event.target, 'modal-panel', el)) return;
     if (el.id === 'confirmOverlay' && hasAncestorClass(event.target, 'confirm-dialog', el)) return;
+    if (!validatePageAction(action, el)) {
+      if (event.preventDefault) event.preventDefault();
+      return;
+    }
     switch (action) {
       case 'toggle-theme':
         invokeWindowAction('toggleTheme');
@@ -603,6 +703,12 @@
       case 'sync-cloud':
         invokeWindowAction('syncCloud');
         break;
+      case 'cancel-sync-cloud':
+        invokeWindowAction('cancelSyncCloud');
+        break;
+      case 'retry-sync-cloud':
+        invokeWindowAction('retrySyncCloud');
+        break;
       case 'set-result-display-mode':
         invokeWindowAction('setResultDisplayMode', [el.getAttribute('data-mode') || 'table']);
         break;
@@ -612,6 +718,11 @@
         _renderCurrentView();
         break;
       }
+      case 'sort-table':
+        if (window.ResultTable && typeof window.ResultTable.toggleSort === 'function') {
+          window.ResultTable.toggleSort(el.getAttribute('data-sort-key') || '');
+        }
+        break;
       case 'check-batch':
         invokeWindowAction('checkBatch', [(($('checkMode') || {}).value) || 'quick']);
         break;
@@ -663,9 +774,6 @@
     var target = event.target;
     if (!target || !target.getAttribute) return;
     switch (target.getAttribute('data-change-action') || '') {
-      case 'toggle-environment':
-        invokeWindowAction('toggleEnvironment');
-        break;
       case 'apply-preset':
         invokeWindowAction('applyPreset');
         break;
@@ -845,7 +953,7 @@
     var confirmed = await window.Modal.confirmAction('确认关闭本地服务并终止所有后台任务？', '关闭服务', '取消', { variant: 'danger' });
     if (!confirmed) return;
     try { await Api.post('/api/shutdown', {}); } catch (e) {}
-    document.body.innerHTML = '<div class="shutdown-screen"><div class="shutdown-title">服务已关闭</div><div class="shutdown-note">可以安全关闭此窗口。</div></div>';
+    setSafeHtml(document.body, '<div class="shutdown-screen"><div class="shutdown-title">服务已关闭</div><div class="shutdown-note">可以安全关闭此窗口。</div></div>');
   };
   async function loadProfile() {
     try {
@@ -854,14 +962,21 @@
       renderUserProfile();
     } catch (e) { /* silent */ }
   }
-  function renderUserProfile() {
-    var profile = S.get('userProfile') || {}, el = $('userProfile');
-    if (!el) return;
-    if (profile.tier && profile.tier !== '--') {
-      el.innerHTML = '<span class="profile-tier">' + esc(profile.tier || '') + '</span> <span class="profile-points">' + esc(String(profile.points ?? '--')) + '</span>';
-    } else {
-      el.innerHTML = '<span class="text-muted">未连接</span>';
-    }
+	  function renderUserProfile() {
+	    var profile = S.get('userProfile') || {}, el = $('userProfile');
+	    if (!el) return;
+	    var tier = String(profile.tier || '');
+	    if (tier && tier !== '--' && tier !== 'offline' && tier !== 'loading') {
+	      el.textContent = String(profile.tier || '') + ' ' + String(profile.points ?? '--');
+	    } else if (S.get('connectionStatus') === 'connected') {
+	      el.textContent = connectionStatusLabel();
+	    } else {
+	      el.textContent = '未连接';
+	    }
+	  }
+  function submitConnectionForm(event) {
+    if (event && typeof event.preventDefault === 'function') event.preventDefault();
+    window.testConnection();
   }
   window.loadConfig = async function () {
     try {
@@ -898,276 +1013,52 @@
       if (resp.ok) {
         resultEl.textContent = '\u8FDE\u63A5\u6210\u529F';
         resultEl.className = 'connection-result is-success';
+        S.setBatch({
+          connectionStatus: 'connected',
+          connectionEnvironment: resp.environment || '',
+          connectionAuth: resp.auth || '',
+          lastConnectionError: '',
+        });
+        loadProfile();
+        renderHeaderStatus();
       } else {
         resultEl.textContent = '\u8FDE\u63A5\u5931\u8D25\uFF1A' + (resp.error || '\u672A\u77E5\u9519\u8BEF');
         resultEl.className = 'connection-result is-error';
+        S.setBatch({ connectionStatus: 'failed', lastConnectionError: resp.error || '未知错误' });
+        renderHeaderStatus();
       }
     } catch (e) {
       resultEl.textContent = '\u8FDE\u63A5\u5931\u8D25\uFF1A' + e.message;
       resultEl.className = 'connection-result is-error';
+      S.setBatch({ connectionStatus: 'failed', lastConnectionError: e.message || String(e) });
+      renderHeaderStatus();
     }
   };
   window.collectPayload = function () {
     return FormControls.collectPayload();
   };
-  // ── v4: KEYBOARD SHORTCUTS ─────────────────────────────────────────────
-
-  var SHORTCUTS = [
-    { keys: '?', desc: '显示/隐藏快捷键列表', action: 'toggleShortcuts' },
-    { keys: 'Ctrl+Enter', desc: '开始/停止生产搜索', action: 'toggle-run' },
-    { keys: 'Ctrl+S', desc: '同步云端数据', action: 'sync-cloud' },
-    { keys: 'Ctrl+K', desc: '聚焦搜索框', action: 'focus-search' },
-    { keys: 'Ctrl+1', desc: '切换到候选池', action: 'switch-view', arg: 'candidates' },
-    { keys: 'Ctrl+2', desc: '切换到达标视图', action: 'switch-view', arg: 'passed' },
-    { keys: 'Ctrl+3', desc: '切换到可提交', action: 'switch-view', arg: 'submittable' },
-    { keys: 'Ctrl+4', desc: '切换到云端', action: 'switch-view', arg: 'cloud' },
-    { keys: 'Escape', desc: '关闭模态框/弹窗', action: 'close-modal' },
-    { keys: 'Ctrl+Shift+T', desc: '切换主题', action: 'toggle-theme' },
-  ];
-
-  var shortcutsVisible = false;
-
-  function createShortcutsPanel() {
-    var existing = $('shortcutsPanel');
-    if (existing) return existing;
-
-    var panel = document.createElement('div');
-    panel.id = 'shortcutsPanel';
-    panel.className = 'keyboard-shortcuts-panel hidden';
-    panel.setAttribute('role', 'dialog');
-    panel.setAttribute('aria-modal', 'true');
-    panel.setAttribute('aria-label', '键盘快捷键');
-
-    var itemsHtml = SHORTCUTS.map(function (s) {
-      var keysHtml = s.keys.split('+').map(function (k) {
-        return '<span class="kbd">' + esc(k.trim()) + '</span>';
-      }).join('<span style="margin:0 1px">+</span>');
-      return '<div class="shortcut-item">' +
-        '<span class="shortcut-desc">' + esc(s.desc) + '</span>' +
-        '<span class="shortcut-keys">' + keysHtml + '</span>' +
-        '</div>';
-    }).join('');
-
-    panel.innerHTML =
-      '<div class="shortcuts-header">' +
-        '<h2>键盘快捷键</h2>' +
-        '<button class="btn btn-secondary btn-sm" data-action="toggle-shortcuts">关闭</button>' +
-      '</div>' +
-      '<div class="shortcuts-list">' + itemsHtml + '</div>';
-
-    document.body.appendChild(panel);
-
-    panel.addEventListener('click', function (event) {
-      var el = findActionElement(event.target, panel);
-      if (!el) return;
-      if (el.getAttribute('data-action') === 'toggle-shortcuts') {
-        toggleShortcutsPanel();
-      }
-    });
-
-    panel.addEventListener('keydown', function (event) {
-      if (event.key === 'Escape') toggleShortcutsPanel();
-    });
-
-    return panel;
-  }
-
-  function toggleShortcutsPanel() {
-    var panel = createShortcutsPanel();
-    shortcutsVisible = !shortcutsVisible;
-    panel.classList.toggle('hidden', !shortcutsVisible);
-    if (shortcutsVisible) {
-      var closeBtn = panel.querySelector('.btn-secondary');
-      if (closeBtn) setTimeout(function () { closeBtn.focus(); }, 60);
-    }
-  }
-
-  function focusSearchInput() {
-    var searchEl = $('tableSearch');
-    if (searchEl) {
-      searchEl.focus();
-      searchEl.select();
-    }
-  }
-
-  function handleKeyboardShortcut(event) {
-    // Don't capture shortcuts when in input fields (except Escape and ?)
-    var tag = String((event.target.tagName || '')).toUpperCase();
-    var isInput = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || event.target.isContentEditable;
-
-    // Special keys always work
-    if (event.key === 'Escape') {
-      if (shortcutsVisible) { toggleShortcutsPanel(); event.preventDefault(); return; }
-      if (window.closeDetailModal && !$('detailModal').classList.contains('hidden')) {
-        window.closeDetailModal();
-        event.preventDefault();
-        return;
-      }
-      if (window.hideConfirm && !$('confirmOverlay').classList.contains('hidden')) {
-        window.hideConfirm();
-        event.preventDefault();
-        return;
-      }
-      focusSearchInput();
-      return;
-    }
-
-    if (isInput && event.key !== '?') return;
-
-    var ctrl = event.ctrlKey || event.metaKey;
-    var shift = event.shiftKey;
-
-    // ? — toggle shortcuts (always)
-    if (event.key === '?') {
-      toggleShortcutsPanel();
-      event.preventDefault();
-      return;
-    }
-
-    // Ctrl+Enter — toggle run
-    if (ctrl && event.key === 'Enter') {
-      invokeWindowAction('toggleRun');
-      event.preventDefault();
-      return;
-    }
-
-    // Ctrl+S — sync cloud (prevent browser save)
-    if (ctrl && !shift && (event.key === 's' || event.key === 'S')) {
-      invokeWindowAction('syncCloud');
-      event.preventDefault();
-      return;
-    }
-
-    // Ctrl+K — focus search
-    if (ctrl && !shift && (event.key === 'k' || event.key === 'K')) {
-      focusSearchInput();
-      event.preventDefault();
-      return;
-    }
-
-    // Ctrl+Shift+T — toggle theme
-    if (ctrl && shift && (event.key === 't' || event.key === 'T')) {
-      invokeWindowAction('toggleTheme');
-      event.preventDefault();
-      return;
-    }
-
-    // Ctrl+1-4 — switch views
-    if (ctrl && !shift) {
-      var viewMap = { '1': 'candidates', '2': 'passed', '3': 'submittable', '4': 'cloud' };
-      var view = viewMap[event.key];
-      if (view) {
-        invokeWindowAction('switchView', [view]);
-        event.preventDefault();
-      }
-    }
-  }
-
-  // ── v4: WORKFLOW WIZARD ────────────────────────────────────────────────
-
-  function showWorkflowWizard() {
-    var existing = $('workflowWizardOverlay');
-    if (existing) existing.remove();
-
-    var totalSteps = 4;
-    var candidateCount = S.viewCount('candidates');
-    var passedCount = S.viewCount('passed');
-    var submittableCount = S.viewCount('submittable');
-    var cloudCount = S.viewCount('cloud');
-
-    var steps = [
-      { title: '连接与配置', desc: '填写 BRAIN 账号并测试连接', completed: Boolean((S.get('userProfile') || {}).tier && (S.get('userProfile') || {}).tier !== '--'), icon: '1' },
-      { title: '生产候选 Alpha', desc: '启动引导式生产搜索，生成并回测 Alpha', completed: candidateCount > 0, icon: '2' },
-      { title: '达标检查与提交', desc: '对达标 Alpha 执行预提交检查并提交', completed: submittableCount > 0, icon: '3' },
-      { title: '云端同步', desc: '刷新官方数据快照，核对线上状态', completed: cloudCount > 0, icon: '4' },
-    ];
-
-    var stepsHtml = steps.map(function (step, i) {
-      var cls = step.completed ? ' is-completed' : '';
-      return '<div class="workflow-wizard-step' + cls + '">' +
-        '<div class="workflow-wizard-step-icon">' + (step.completed ? '\u2713' : step.icon) + '</div>' +
-        '<div class="workflow-wizard-step-body">' +
-          '<h3>' + esc(step.title) + '</h3>' +
-          '<p>' + esc(step.desc) + '</p>' +
-        '</div>' +
-        '</div>';
-    }).join('');
-
-    var overlay = document.createElement('div');
-    overlay.id = 'workflowWizardOverlay';
-    overlay.className = 'workflow-wizard-overlay';
-    overlay.setAttribute('role', 'dialog');
-    overlay.setAttribute('aria-modal', 'true');
-    overlay.setAttribute('aria-label', '操作指引');
-
-    overlay.innerHTML =
-      '<div class="workflow-wizard">' +
-        '<div class="workflow-wizard-header">' +
-          '<h2>快速开始</h2>' +
-          '<p>按 ? 查看键盘快捷键，或按以下步骤操作：</p>' +
-        '</div>' +
-        '<div class="workflow-wizard-steps">' + stepsHtml + '</div>' +
-        '<div class="workflow-wizard-actions">' +
-          '<button class="btn btn-secondary btn-sm" data-action="close-wizard">跳过</button>' +
-          '<button class="btn btn-primary btn-sm" data-action="start-wizard-run">开始生产</button>' +
-        '</div>' +
-      '</div>';
-
-    document.body.appendChild(overlay);
-
-    overlay.addEventListener('click', function (event) {
-      if (event.target === overlay) removeWizard();
-    });
-
-    overlay.addEventListener('keydown', function (event) {
-      if (event.key === 'Escape') { removeWizard(); event.preventDefault(); }
-    });
-
-    // Delegate button clicks
-    overlay.querySelector('.workflow-wizard').addEventListener('click', function (event) {
-      var el = findActionElement(event.target, overlay.querySelector('.workflow-wizard'));
-      if (!el) return;
-      var action = el.getAttribute('data-action');
-      if (action === 'close-wizard' || action === 'start-wizard-run') {
-        removeWizard();
-        if (action === 'start-wizard-run') invokeWindowAction('toggleRun');
-      }
-    });
-
-    // Focus first action button
-    var startBtn = overlay.querySelector('[data-action="start-wizard-run"]');
-    if (startBtn) setTimeout(function () { startBtn.focus(); }, 80);
-  }
-
-  function removeWizard() {
-    var overlay = $('workflowWizardOverlay');
-    if (overlay) overlay.remove();
-  }
-
-  // ── v4: VIEW TRANSITION ────────────────────────────────────────────────
-
+  var Enhancements = window.AppEnhancements && window.AppEnhancements.create ? window.AppEnhancements.create({
+    $: $,
+    activeView: activeView,
+    esc: esc,
+    findActionElement: findActionElement,
+    invokeWindowAction: invokeWindowAction,
+    registry: Registry,
+    renderCurrentView: function () { _renderCurrentView(); },
+    renderTaskRail: renderTaskRail,
+    renderViewTabs: renderViewTabs,
+    spinner: Spinner,
+    state: S,
+    updateActionBarVisibility: updateActionBarVisibility,
+    updatePanelHeader: updatePanelHeader,
+    viewOrder: VIEW_ORDER,
+  }) : {};
+  var SHORTCUTS = Enhancements.SHORTCUTS || [];
+  var handleKeyboardShortcut = Enhancements.handleKeyboardShortcut || function () {};
+  var toggleShortcutsPanel = Enhancements.toggleShortcutsPanel || function () {};
+  var showWorkflowWizard = Enhancements.showWorkflowWizard || function () {};
   var _prevSwitchView = window.switchView;
-  window.switchView = function (view) {
-    if (VIEW_ORDER.indexOf(view) === -1) view = 'candidates';
-    // Show skeleton before render for perceived performance
-    if (view !== activeView()) {
-      Spinner.showTableSkeleton && Spinner.showTableSkeleton(Math.min(5, S.viewCount(view) || 5));
-    }
-    if (_prevSwitchView) {
-      _prevSwitchView(view);
-    } else {
-      S.set('activeView', view);
-      renderViewTabs();
-      _renderCurrentView();
-      updatePanelHeader();
-      updateActionBarVisibility(view);
-      renderTaskRail();
-    }
-    // Announce view change to screen readers
-    if (Spinner.announceToScreenReader) {
-      Spinner.announceToScreenReader('\u5DF2\u5207\u6362\u5230' + (Registry.VIEW_TITLES[view] || view));
-    }
-  };
+  if (Enhancements.wrapSwitchView) window.switchView = Enhancements.wrapSwitchView(_prevSwitchView);
 
   // ── v4: INIT ───────────────────────────────────────────────────────────
 
@@ -1181,6 +1072,11 @@
     installStaticActionHandlers();
     installViewTabDelegates();
     installResultDelegates();
+    var connectionForm = $('connectionForm');
+    if (connectionForm && !connectionForm.dataset.boundSubmit) {
+      connectionForm.dataset.boundSubmit = '1';
+      connectionForm.addEventListener('submit', submitConnectionForm);
+    }
 
     // v4: Install keyboard shortcuts
     document.addEventListener('keydown', handleKeyboardShortcut);
@@ -1213,26 +1109,11 @@
   }
   S.onUpdate(function (path) {
     var pathName = String(path || '');
-    var busyPaths = ['isRunning', 'activeJobId', 'syncInFlight', 'batchCheckJobId', 'submitInFlight', 'selectedSubmitIds', 'batch', 'liveProgress', 'runtimeStatusStartedAt', 'runtimeStatusUpdatedAt', 'syncStartedAt', 'checkStartedAt'];
+    var busyPaths = ['isRunning', 'activeJobId', 'syncInFlight', 'syncJobId', 'syncRecoverable', 'batchCheckJobId', 'submitInFlight', 'selectedSubmitIds', 'batch', 'liveProgress', 'runtimeStatusStartedAt', 'runtimeStatusUpdatedAt', 'syncStartedAt', 'checkStartedAt'];
     if (busyPaths.indexOf(pathName) !== -1) window.renderBusyControls();
     if (busyPaths.indexOf(pathName) !== -1 || pathName === 'activeView' || pathName === 'checkResults' || pathName.indexOf('currentResult') === 0) renderTaskRail();
-    if (pathName === 'isRunning' || pathName === 'activeJobId' || pathName === 'liveProgress' || pathName === 'runtimeStatusStartedAt' || pathName === 'runtimeStatusUpdatedAt' || pathName === 'syncStartedAt' || pathName === 'checkStartedAt' || pathName === 'batch') {
-      var statusEl = $('globalStatus');
-      var dotEl = $('headerStatusDot');
-      if (statusEl) {
-        var isRunning = S.get('isRunning');
-        if (isRunning) {
-          var live = S.get('liveProgress') || {}, phase = live.phase || '';
-          statusEl.textContent = '运行中 — ' + phaseName(phase);
-          statusEl.className = 'text-sm text-success fw-bold';
-        } else {
-          statusEl.textContent = '系统空闲';
-          statusEl.className = 'text-sm text-muted';
-        }
-      }
-      if (dotEl) {
-        dotEl.className = 'header-status-dot' + (S.get('isRunning') ? ' is-running' : '');
-      }
+    if (busyPaths.indexOf(pathName) !== -1 || pathName === 'connectionStatus' || pathName === 'connectionEnvironment' || pathName === 'connectionAuth') {
+      renderHeaderStatus();
     }
   });
   window.addEventListener('resize', function () { _renderCurrentView(); });
@@ -1241,6 +1122,7 @@
     renderJobSnapshot: renderJobSnapshot,
     renderAll: renderAll,
     renderTaskRail: renderTaskRail,
+    renderHeaderStatus: renderHeaderStatus,
     loadConfig: window.loadConfig,
     loadProfile: loadProfile,
     loadCheckResults: function () {

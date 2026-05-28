@@ -1,0 +1,1033 @@
+{
+  "ok": true,
+  "schema_version": "e2e_artifact_summary.v1",
+  "generated_at": "2026-05-28T08:09:14.112688+00:00",
+  "root": "/Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha",
+  "evidence_dir": "data/e2e_screenshots",
+  "file_counts": {
+    "console_log": 1,
+    "dom_snapshot": 21,
+    "screenshot": 24,
+    "summary_json": 3
+  },
+  "files_indexed": 49,
+  "screenshots": [
+    {
+      "path": "data/e2e_screenshots/01-chrome-page-loaded.png",
+      "category": "screenshot",
+      "size_bytes": 81182,
+      "modified_at": "2026-05-27T15:51:51.925130+00:00"
+    },
+    {
+      "path": "data/e2e_screenshots/01-page-load.png",
+      "category": "screenshot",
+      "size_bytes": 84728,
+      "modified_at": "2026-05-28T01:15:24.145945+00:00"
+    },
+    {
+      "path": "data/e2e_screenshots/01-page-loaded.png",
+      "category": "screenshot",
+      "size_bytes": 79977,
+      "modified_at": "2026-05-27T15:44:36.496918+00:00"
+    },
+    {
+      "path": "data/e2e_screenshots/02-connection.png",
+      "category": "screenshot",
+      "size_bytes": 85104,
+      "modified_at": "2026-05-28T01:21:32.735038+00:00"
+    },
+    {
+      "path": "data/e2e_screenshots/03-cloud-sync.png",
+      "category": "screenshot",
+      "size_bytes": 86381,
+      "modified_at": "2026-05-28T01:23:07.905161+00:00"
+    },
+    {
+      "path": "data/e2e_screenshots/03-sync-start.png",
+      "category": "screenshot",
+      "size_bytes": 99784,
+      "modified_at": "2026-05-28T01:23:07.889112+00:00"
+    },
+    {
+      "path": "data/e2e_screenshots/04-chrome-view-cloud.png",
+      "category": "screenshot",
+      "size_bytes": 81485,
+      "modified_at": "2026-05-27T15:57:17.994478+00:00"
+    },
+    {
+      "path": "data/e2e_screenshots/04-chrome-view-passed.png",
+      "category": "screenshot",
+      "size_bytes": 89461,
+      "modified_at": "2026-05-27T15:57:17.967565+00:00"
+    },
+    {
+      "path": "data/e2e_screenshots/04-chrome-view-research-memory.png",
+      "category": "screenshot",
+      "size_bytes": 80068,
+      "modified_at": "2026-05-27T15:57:17.994325+00:00"
+    },
+    {
+      "path": "data/e2e_screenshots/04-chrome-view-submittable.png",
+      "category": "screenshot",
+      "size_bytes": 87655,
+      "modified_at": "2026-05-27T15:57:17.979809+00:00"
+    },
+    {
+      "path": "data/e2e_screenshots/04-view-candidates.png",
+      "category": "screenshot",
+      "size_bytes": 91391,
+      "modified_at": "2026-05-28T01:24:41.024582+00:00"
+    },
+    {
+      "path": "data/e2e_screenshots/04-view-cloud.png",
+      "category": "screenshot",
+      "size_bytes": 100564,
+      "modified_at": "2026-05-28T01:24:41.086267+00:00"
+    },
+    {
+      "path": "data/e2e_screenshots/04-view-lifecycle.png",
+      "category": "screenshot",
+      "size_bytes": 84831,
+      "modified_at": "2026-05-28T01:24:41.081790+00:00"
+    },
+    {
+      "path": "data/e2e_screenshots/04-view-passed.png",
+      "category": "screenshot",
+      "size_bytes": 92999,
+      "modified_at": "2026-05-28T01:24:41.069282+00:00"
+    },
+    {
+      "path": "data/e2e_screenshots/04-view-submittable.png",
+      "category": "screenshot",
+      "size_bytes": 91158,
+      "modified_at": "2026-05-28T01:24:41.076855+00:00"
+    },
+    {
+      "path": "data/e2e_screenshots/05-chrome-search-rank.png",
+      "category": "screenshot",
+      "size_bytes": 86744,
+      "modified_at": "2026-05-27T15:57:18.025615+00:00"
+    },
+    {
+      "path": "data/e2e_screenshots/05-search-filter.png",
+      "category": "screenshot",
+      "size_bytes": 87256,
+      "modified_at": "2026-05-28T01:25:17.586483+00:00"
+    },
+    {
+      "path": "data/e2e_screenshots/05-search-nohit.png",
+      "category": "screenshot",
+      "size_bytes": 85044,
+      "modified_at": "2026-05-28T01:25:17.615669+00:00"
+    },
+    {
+      "path": "data/e2e_screenshots/06-charts.png",
+      "category": "screenshot",
+      "size_bytes": 148028,
+      "modified_at": "2026-05-28T01:27:16.749584+00:00"
+    },
+    {
+      "path": "data/e2e_screenshots/06-chrome-charts.png",
+      "category": "screenshot",
+      "size_bytes": 88327,
+      "modified_at": "2026-05-27T15:57:18.032018+00:00"
+    },
+    {
+      "path": "data/e2e_screenshots/07-production-stop.png",
+      "category": "screenshot",
+      "size_bytes": 84458,
+      "modified_at": "2026-05-28T01:38:51.885355+00:00"
+    },
+    {
+      "path": "data/e2e_screenshots/08-chrome-empty-check-toast.png",
+      "category": "screenshot",
+      "size_bytes": 89104,
+      "modified_at": "2026-05-27T15:57:32.512283+00:00"
+    },
+    {
+      "path": "data/e2e_screenshots/08-error-recovery.png",
+      "category": "screenshot",
+      "size_bytes": 89241,
+      "modified_at": "2026-05-28T01:40:23.986425+00:00"
+    },
+    {
+      "path": "data/e2e_screenshots/page-2026-05-28T04-04-11-373Z.png",
+      "category": "screenshot",
+      "size_bytes": 197205,
+      "modified_at": "2026-05-28T04:04:11.373798+00:00"
+    }
+  ],
+  "dom_snapshots": [
+    {
+      "path": "data/e2e_screenshots/01-chrome-page-loaded.dom.txt",
+      "category": "dom_snapshot",
+      "size_bytes": 7174,
+      "modified_at": "2026-05-27T15:51:51.944893+00:00"
+    },
+    {
+      "path": "data/e2e_screenshots/01-page-loaded.dom.txt",
+      "category": "dom_snapshot",
+      "size_bytes": 7174,
+      "modified_at": "2026-05-27T15:44:44.719535+00:00"
+    },
+    {
+      "path": "data/e2e_screenshots/20260528-01-page-load.dom.yml",
+      "category": "dom_snapshot",
+      "size_bytes": 16167,
+      "modified_at": "2026-05-28T03:02:38.111262+00:00"
+    },
+    {
+      "path": "data/e2e_screenshots/20260528-02-connection.dom.yml",
+      "category": "dom_snapshot",
+      "size_bytes": 18120,
+      "modified_at": "2026-05-28T03:02:38.114320+00:00"
+    },
+    {
+      "path": "data/e2e_screenshots/20260528-03-cloud-sync-start.dom.yml",
+      "category": "dom_snapshot",
+      "size_bytes": 19794,
+      "modified_at": "2026-05-28T03:02:38.117305+00:00"
+    },
+    {
+      "path": "data/e2e_screenshots/20260528-04-cloud-view.dom.yml",
+      "category": "dom_snapshot",
+      "size_bytes": 164008,
+      "modified_at": "2026-05-28T03:02:38.121032+00:00"
+    },
+    {
+      "path": "data/e2e_screenshots/20260528-06-charts.dom.yml",
+      "category": "dom_snapshot",
+      "size_bytes": 15715,
+      "modified_at": "2026-05-28T03:02:38.124768+00:00"
+    },
+    {
+      "path": "data/e2e_screenshots/20260528-08-error-recovery.dom.yml",
+      "category": "dom_snapshot",
+      "size_bytes": 15516,
+      "modified_at": "2026-05-28T03:02:38.127283+00:00"
+    },
+    {
+      "path": "data/e2e_screenshots/page-2026-05-28T03-47-28-760Z.yml",
+      "category": "dom_snapshot",
+      "size_bytes": 14982,
+      "modified_at": "2026-05-28T03:47:28.761034+00:00"
+    },
+    {
+      "path": "data/e2e_screenshots/page-2026-05-28T03-50-16-501Z.yml",
+      "category": "dom_snapshot",
+      "size_bytes": 14428,
+      "modified_at": "2026-05-28T03:50:16.502847+00:00"
+    },
+    {
+      "path": "data/e2e_screenshots/page-2026-05-28T03-50-54-296Z.yml",
+      "category": "dom_snapshot",
+      "size_bytes": 14518,
+      "modified_at": "2026-05-28T03:50:54.297448+00:00"
+    },
+    {
+      "path": "data/e2e_screenshots/page-2026-05-28T03-52-13-612Z.yml",
+      "category": "dom_snapshot",
+      "size_bytes": 16363,
+      "modified_at": "2026-05-28T03:52:13.612413+00:00"
+    },
+    {
+      "path": "data/e2e_screenshots/page-2026-05-28T03-53-43-802Z.yml",
+      "category": "dom_snapshot",
+      "size_bytes": 16281,
+      "modified_at": "2026-05-28T03:53:43.803210+00:00"
+    },
+    {
+      "path": "data/e2e_screenshots/page-2026-05-28T03-57-28-719Z.yml",
+      "category": "dom_snapshot",
+      "size_bytes": 15969,
+      "modified_at": "2026-05-28T03:57:28.731354+00:00"
+    },
+    {
+      "path": "data/e2e_screenshots/page-2026-05-28T03-58-42-764Z.yml",
+      "category": "dom_snapshot",
+      "size_bytes": 15045,
+      "modified_at": "2026-05-28T03:58:42.765347+00:00"
+    },
+    {
+      "path": "data/e2e_screenshots/page-2026-05-28T03-58-43-399Z.yml",
+      "category": "dom_snapshot",
+      "size_bytes": 15045,
+      "modified_at": "2026-05-28T03:58:43.399643+00:00"
+    },
+    {
+      "path": "data/e2e_screenshots/page-2026-05-28T04-00-25-269Z.yml",
+      "category": "dom_snapshot",
+      "size_bytes": 161178,
+      "modified_at": "2026-05-28T04:00:25.269660+00:00"
+    },
+    {
+      "path": "data/e2e_screenshots/page-2026-05-28T04-01-17-968Z.yml",
+      "category": "dom_snapshot",
+      "size_bytes": 15084,
+      "modified_at": "2026-05-28T04:01:17.970138+00:00"
+    },
+    {
+      "path": "data/e2e_screenshots/page-2026-05-28T04-02-26-552Z.yml",
+      "category": "dom_snapshot",
+      "size_bytes": 27950,
+      "modified_at": "2026-05-28T04:02:26.553179+00:00"
+    },
+    {
+      "path": "data/e2e_screenshots/page-2026-05-28T04-03-21-535Z.yml",
+      "category": "dom_snapshot",
+      "size_bytes": 16016,
+      "modified_at": "2026-05-28T04:03:21.536444+00:00"
+    },
+    {
+      "path": "data/e2e_screenshots/page-2026-05-28T04-03-44-263Z.yml",
+      "category": "dom_snapshot",
+      "size_bytes": 16191,
+      "modified_at": "2026-05-28T04:03:44.264384+00:00"
+    }
+  ],
+  "console_logs": [
+    {
+      "path": "data/e2e_screenshots/console-2026-05-28T03-47-28-618Z.log",
+      "line_count": 3,
+      "notable_count": 1,
+      "severity_counts": {
+        "error": 1,
+        "verbose": 2
+      }
+    }
+  ],
+  "summaries": [
+    {
+      "path": "data/e2e_screenshots/20260528-production-e2e-summary.json",
+      "ok": true,
+      "error": "",
+      "summary": {
+        "tested_at": "2026-05-28T12:04:00+08:00",
+        "browser": "Google Chrome via playwright-cli (executable path /Volumes/Extra/Applications/Google Chrome.app)",
+        "service_url": "http://127.0.0.1:18766/",
+        "connection": {
+          "ok": true,
+          "environment": "production",
+          "auth": "session_cookie",
+          "header": "已连接 — production · session_cookie"
+        },
+        "cloud_sync": {
+          "job_id": "job_0005",
+          "status": "completed",
+          "scanned": 23254,
+          "added": 0,
+          "updated": 0,
+          "skipped": 23254,
+          "failed": 0,
+          "fields_count": 7780,
+          "operators_count": 66,
+          "context_status": "refreshed",
+          "cloud_cache_rows": 23243
+        },
+        "production_run": {
+          "job_id": "job_0008",
+          "status": "stopped",
+          "cancel": true,
+          "produced_count": 3,
+          "official_validation_passed": 1,
+          "officially_simulated": 0,
+          "submitted_this_run": 0,
+          "auto_submitted": 0,
+          "candidate_preview_count": 1,
+          "candidate_preview": {
+            "alpha_id": "alpha_790728a432",
+            "expression": "rank(ts_delta(returns, 10))",
+            "lifecycle_status": "official_validation_passed",
+            "local_quality_passed": true,
+            "local_backtest_pass_local": false,
+            "score_basis": "local_prior",
+            "decision_band": "research_only",
+            "cloud_correlation_risk": {
+              "level": "high",
+              "max_similarity": 1.0,
+              "matched_status": "UNSUBMITTED"
+            }
+          }
+        },
+        "safety": {
+          "auto_submit_default_off": true,
+          "cloud_sync_before_submit": true,
+          "pre_submit_check_required": true,
+          "daily_submit_limit": 3,
+          "similarity_block_threshold": 0.9,
+          "submissions_ledger_exists": false,
+          "submit_requests_observed": 0
+        },
+        "ui_checks": {
+          "search_term": "rank",
+          "fallback_canvas_charts": true,
+          "plugin_toggle_summary_synced": true,
+          "empty_check_toast": "暂无达标 Alpha 可检查。"
+        },
+        "known_failures_resolved": [
+          "/api/stream 401 from job_0007 was fixed and retested with job_0008",
+          "stale offline header was fixed; current header shows connected production session",
+          "strategy plugin summary now follows the toggle state"
+        ],
+        "remaining_observations_count": 3
+      }
+    },
+    {
+      "path": "data/e2e_screenshots/chrome-api-summary.json",
+      "ok": true,
+      "error": "",
+      "summary": {
+        "checkResults": {
+          "keys": [],
+          "status": 0
+        },
+        "cloud": {
+          "alphasLength": null,
+          "hasTopLevelCount": false,
+          "status": 0
+        },
+        "config": {
+          "status": 0
+        },
+        "errors": {
+          "emptyPost": {
+            "error": "XMLHttpRequest is not a constructor",
+            "ok": false,
+            "status": 0
+          },
+          "nonexistent": {
+            "error": "XMLHttpRequest is not a constructor",
+            "ok": false,
+            "status": 0
+          }
+        },
+        "health": {
+          "error": "XMLHttpRequest is not a constructor",
+          "ok": false,
+          "status": 0
+        },
+        "memory": {
+          "failure_patterns": null,
+          "families": null,
+          "fields": null,
+          "keys": [],
+          "status": 0
+        },
+        "presets": {
+          "count": 0,
+          "status": 0
+        },
+        "status": {
+          "error": "XMLHttpRequest is not a constructor",
+          "ok": false,
+          "status": 0
+        }
+      }
+    },
+    {
+      "path": "data/e2e_screenshots/chrome-ui-walkthrough-summary.json",
+      "ok": true,
+      "error": "",
+      "summary": {
+        "steps": {
+          "items_count": 11,
+          "items_preview": [
+            {
+              "label": "switch passed",
+              "selector": "#viewTabs button[data-view=\"passed\"]",
+              "ok": true,
+              "count": 1
+            },
+            {
+              "label": "switch submittable",
+              "selector": "#viewTabs button[data-view=\"submittable\"]",
+              "ok": true,
+              "count": 1
+            },
+            {
+              "label": "switch cloud",
+              "selector": "#viewTabs button[data-view=\"cloud\"]",
+              "ok": true,
+              "count": 1
+            },
+            {
+              "label": "switch research memory",
+              "selector": "#viewTabs button[data-view=\"research_memory\"]",
+              "ok": true,
+              "count": 1
+            },
+            {
+              "label": "switch candidates",
+              "selector": "#viewTabs button[data-view=\"candidates\"]",
+              "ok": true,
+              "count": 1
+            },
+            {
+              "label": "filter rank",
+              "selector": "#tableSearch",
+              "ok": true,
+              "count": 1
+            },
+            {
+              "label": "clear filter",
+              "selector": "#tableSearch",
+              "ok": true,
+              "count": 1
+            },
+            {
+              "label": "show charts",
+              "selector": "#chartModeBtn",
+              "ok": true,
+              "count": 1
+            }
+          ]
+        },
+        "uiState": {
+          "activeView": "passed",
+          "chartPanelVisible": false,
+          "checkButtonHidden": false,
+          "controlButtonDisabled": false,
+          "displayModeToggleVisible": true,
+          "emptyStateDesc": "没有匹配当前筛选条件的数据，请调整搜索词或清空筛选。",
+          "emptyStateTitle": "暂无数据",
+          "roleGridCount": 0,
+          "runtimePanelVisible": false,
+          "searchValue": "rank",
+          "sideSubmitDisabled": true,
+          "submitButtonHidden": false,
+          "tableExists": true,
+          "tableRows": 0,
+          "tableTitle": "达标",
+          "toastCount": 1,
+          "toastTexts": [
+            "⚠暂无达标 Alpha 可检查。×"
+          ]
+        }
+      }
+    }
+  ],
+  "web_console_contract": {
+    "ok": true,
+    "schema_version": "web_console_contract_check.v1",
+    "html": "brain_alpha_ops/web/index.html",
+    "facts": {
+      "title": "BRAIN Alpha Ops",
+      "favicon_count": 1,
+      "connection_form_tag": "form",
+      "password_inside_connection_form": true,
+      "conn_test_button_type": "submit",
+      "conn_test_button_action": "test-connection",
+      "conn_test_button_inside_connection_form": true,
+      "lifecycle_snippets": {
+        "connection_form_submit_handler": true,
+        "connection_form_submit_function": true,
+        "lifecycle_data_view": true,
+        "lifecycle_title": true,
+        "lifecycle_renderer": true
+      }
+    },
+    "findings": []
+  },
+  "job_ledgers": [
+    {
+      "path": "data/jobs_sync.json",
+      "exists": true,
+      "ok": true,
+      "version": 1,
+      "updated_at": 1779954910.787777,
+      "job_count": 5,
+      "status_counts": {
+        "completed": 4,
+        "failed": 1
+      },
+      "latest_job": {
+        "job_id": "job_0005",
+        "status": "completed",
+        "cancel": false,
+        "created_at": 1779940331.596247,
+        "updated_at": 1779940347.924342,
+        "error": "",
+        "progress": {
+          "phase": "completed",
+          "percent": null,
+          "message": "Cloud sync completed: scanned 23254, added 0, updated 0, skipped 23254, failed 0.",
+          "status_code": "COMPLETED",
+          "current": null,
+          "total": 23254,
+          "scanned": 23254,
+          "failed": 0
+        },
+        "result_summary": {
+          "ok": true,
+          "range": "3d",
+          "scanned": 23254,
+          "total": 23254,
+          "updated": 0,
+          "skipped": 23254,
+          "failed": 0,
+          "datasets_count": 17,
+          "count": 23254,
+          "alphas_count": 23254,
+          "fields_count": 7780,
+          "operators_count": 66,
+          "context_status": "refreshed",
+          "updated_at_ms": 1779940346556
+        }
+      },
+      "jobs_preview": [
+        {
+          "job_id": "job_0005",
+          "status": "completed",
+          "cancel": false,
+          "created_at": 1779940331.596247,
+          "updated_at": 1779940347.924342,
+          "error": "",
+          "progress": {
+            "phase": "completed",
+            "percent": null,
+            "message": "Cloud sync completed: scanned 23254, added 0, updated 0, skipped 23254, failed 0.",
+            "status_code": "COMPLETED",
+            "current": null,
+            "total": 23254,
+            "scanned": 23254,
+            "failed": 0
+          },
+          "result_summary": {
+            "ok": true,
+            "range": "3d",
+            "scanned": 23254,
+            "total": 23254,
+            "updated": 0,
+            "skipped": 23254,
+            "failed": 0,
+            "datasets_count": 17,
+            "count": 23254,
+            "alphas_count": 23254,
+            "fields_count": 7780,
+            "operators_count": 66,
+            "context_status": "refreshed",
+            "updated_at_ms": 1779940346556
+          }
+        },
+        {
+          "job_id": "job_0004",
+          "status": "completed",
+          "cancel": false,
+          "created_at": 1779935899.6735969,
+          "updated_at": 1779935971.49493,
+          "error": "",
+          "progress": {
+            "phase": "completed",
+            "percent": null,
+            "message": "Cloud sync completed: scanned 23254, added 0, updated 0, skipped 23254, failed 0.",
+            "status_code": "COMPLETED",
+            "current": null,
+            "total": 23254,
+            "scanned": 23254,
+            "failed": 0
+          },
+          "result_summary": {
+            "ok": true,
+            "range": "3d",
+            "scanned": 23254,
+            "total": 23254,
+            "updated": 0,
+            "skipped": 23254,
+            "failed": 0,
+            "datasets_count": 17,
+            "count": 23254,
+            "alphas_count": 23254,
+            "fields_count": 7780,
+            "operators_count": 66,
+            "context_status": "refreshed",
+            "updated_at_ms": 1779935962786
+          }
+        },
+        {
+          "job_id": "job_0003",
+          "status": "completed",
+          "cancel": false,
+          "created_at": 1779931324.127468,
+          "updated_at": 1779931367.0716212,
+          "error": "",
+          "progress": {
+            "phase": "completed",
+            "percent": null,
+            "message": "Cloud sync completed: scanned 23254, added 0, updated 0, skipped 23254, failed 0.",
+            "status_code": "COMPLETED",
+            "current": null,
+            "total": 23254,
+            "scanned": 23254,
+            "failed": 0
+          },
+          "result_summary": {
+            "ok": true,
+            "range": "3d",
+            "scanned": 23254,
+            "total": 23254,
+            "updated": 0,
+            "skipped": 23254,
+            "failed": 0,
+            "datasets_count": 17,
+            "count": 23254,
+            "alphas_count": 23254,
+            "fields_count": 7780,
+            "operators_count": 66,
+            "context_status": "refreshed",
+            "updated_at_ms": 1779931358578
+          }
+        },
+        {
+          "job_id": "job_0002",
+          "status": "completed",
+          "cancel": false,
+          "created_at": 1779898063.027916,
+          "updated_at": 1779900046.845509,
+          "error": "",
+          "progress": {
+            "phase": "completed",
+            "percent": null,
+            "message": "Cloud sync completed: scanned 23254, added 23243, updated 0, skipped 11, failed 0.",
+            "status_code": "COMPLETED",
+            "current": null,
+            "total": 23254,
+            "scanned": 23254,
+            "failed": 0
+          },
+          "result_summary": {
+            "ok": true,
+            "range": "3d",
+            "scanned": 23254,
+            "total": 23254,
+            "updated": 0,
+            "skipped": 11,
+            "failed": 0,
+            "datasets_count": 17,
+            "count": 23254,
+            "alphas_count": 23254,
+            "fields_count": 7780,
+            "operators_count": 66,
+            "context_status": "refreshed"
+          }
+        },
+        {
+          "job_id": "job_0001",
+          "status": "failed",
+          "cancel": false,
+          "created_at": 1779890699.634374,
+          "updated_at": 1779893158.229723,
+          "error": "Process restarted before this task completed.",
+          "progress": {
+            "phase": "failed",
+            "percent": 100,
+            "message": "Process restarted before this task completed.",
+            "status_code": "SCAN",
+            "current": null,
+            "total": 13200,
+            "scanned": 13200,
+            "failed": 0
+          },
+          "result_summary": {}
+        }
+      ]
+    },
+    {
+      "path": "data/jobs_production.json",
+      "exists": true,
+      "ok": true,
+      "version": 1,
+      "updated_at": 1779954910.7684631,
+      "job_count": 8,
+      "status_counts": {
+        "failed": 6,
+        "stopped": 2
+      },
+      "latest_job": {
+        "job_id": "job_0008",
+        "status": "stopped",
+        "cancel": true,
+        "created_at": 1779940421.744645,
+        "updated_at": 1779940791.156877,
+        "error": "",
+        "progress": {
+          "phase": "stopped",
+          "percent": 100,
+          "message": "任务已停止。",
+          "status_code": null,
+          "current": 1,
+          "total": 1,
+          "scanned": null,
+          "failed": null
+        },
+        "result_summary": {
+          "total_candidates": 3,
+          "produced_count": 3,
+          "candidate_pool_available_count": 1,
+          "candidate_pool_source_count": 1,
+          "retained_pool_limit": 10,
+          "rejected_count": 0,
+          "rejected_stats": {},
+          "archive_count": 0,
+          "archive_stats": {},
+          "backtest_slot_limit": 3,
+          "backtests_submitted": 0,
+          "recovered_backtest_slot_count": 0,
+          "official_validation_attempted": 1,
+          "official_validation_passed": 1,
+          "pending_validation_count": 0,
+          "officially_simulated": 0,
+          "official_deferred": 0,
+          "simulation_retry_pending": 0,
+          "pending_backtest_count": 0,
+          "submission_ready": 0,
+          "ready_results_count": 0,
+          "auto_submit_ready": 0,
+          "submitted_this_run": 0,
+          "best_score": 66.9,
+          "operating_mode": "local_autonomous_loop_top10_top3",
+          "official_calls_halted": false,
+          "official_halt_reason": "",
+          "backtest_slots_count": 3,
+          "strategy_switch_count": 0,
+          "cloud_alphas_count": 23243,
+          "lifecycle_records_count": 7,
+          "backtest_records_count": 0,
+          "candidates_count": 1,
+          "passed_candidates_count": 0,
+          "pending_backtest_candidates_count": 0,
+          "auto_submitted": 0
+        }
+      },
+      "jobs_preview": [
+        {
+          "job_id": "job_0008",
+          "status": "stopped",
+          "cancel": true,
+          "created_at": 1779940421.744645,
+          "updated_at": 1779940791.156877,
+          "error": "",
+          "progress": {
+            "phase": "stopped",
+            "percent": 100,
+            "message": "任务已停止。",
+            "status_code": null,
+            "current": 1,
+            "total": 1,
+            "scanned": null,
+            "failed": null
+          },
+          "result_summary": {
+            "total_candidates": 3,
+            "produced_count": 3,
+            "candidate_pool_available_count": 1,
+            "candidate_pool_source_count": 1,
+            "retained_pool_limit": 10,
+            "rejected_count": 0,
+            "rejected_stats": {},
+            "archive_count": 0,
+            "archive_stats": {},
+            "backtest_slot_limit": 3,
+            "backtests_submitted": 0,
+            "recovered_backtest_slot_count": 0,
+            "official_validation_attempted": 1,
+            "official_validation_passed": 1,
+            "pending_validation_count": 0,
+            "officially_simulated": 0,
+            "official_deferred": 0,
+            "simulation_retry_pending": 0,
+            "pending_backtest_count": 0,
+            "submission_ready": 0,
+            "ready_results_count": 0,
+            "auto_submit_ready": 0,
+            "submitted_this_run": 0,
+            "best_score": 66.9,
+            "operating_mode": "local_autonomous_loop_top10_top3",
+            "official_calls_halted": false,
+            "official_halt_reason": "",
+            "backtest_slots_count": 3,
+            "strategy_switch_count": 0,
+            "cloud_alphas_count": 23243,
+            "lifecycle_records_count": 7,
+            "backtest_records_count": 0,
+            "candidates_count": 1,
+            "passed_candidates_count": 0,
+            "pending_backtest_candidates_count": 0,
+            "auto_submitted": 0
+          }
+        },
+        {
+          "job_id": "job_0007",
+          "status": "stopped",
+          "cancel": true,
+          "created_at": 1779936374.149964,
+          "updated_at": 1779936668.0223181,
+          "error": "",
+          "progress": {
+            "phase": "stopped",
+            "percent": 100,
+            "message": "任务已停止。",
+            "status_code": null,
+            "current": 1,
+            "total": 1,
+            "scanned": null,
+            "failed": null
+          },
+          "result_summary": {
+            "total_candidates": 4,
+            "produced_count": 4,
+            "candidate_pool_available_count": 1,
+            "candidate_pool_source_count": 1,
+            "retained_pool_limit": 10,
+            "rejected_count": 0,
+            "rejected_stats": {},
+            "archive_count": 0,
+            "archive_stats": {},
+            "backtest_slot_limit": 3,
+            "backtests_submitted": 0,
+            "recovered_backtest_slot_count": 0,
+            "official_validation_attempted": 1,
+            "official_validation_passed": 1,
+            "pending_validation_count": 0,
+            "officially_simulated": 0,
+            "official_deferred": 0,
+            "simulation_retry_pending": 0,
+            "pending_backtest_count": 0,
+            "submission_ready": 0,
+            "ready_results_count": 0,
+            "auto_submit_ready": 0,
+            "submitted_this_run": 0,
+            "best_score": 66.9,
+            "operating_mode": "local_autonomous_loop_top10_top3",
+            "official_calls_halted": false,
+            "official_halt_reason": "",
+            "backtest_slots_count": 3,
+            "strategy_switch_count": 0,
+            "cloud_alphas_count": 23243,
+            "lifecycle_records_count": 9,
+            "backtest_records_count": 0,
+            "candidates_count": 1,
+            "passed_candidates_count": 0,
+            "pending_backtest_candidates_count": 0,
+            "auto_submitted": 0
+          }
+        },
+        {
+          "job_id": "job_0006",
+          "status": "failed",
+          "cancel": false,
+          "created_at": 1779931807.765931,
+          "updated_at": 1779933243.462694,
+          "error": "Process restarted before this task completed.",
+          "progress": {
+            "phase": "failed",
+            "percent": 100,
+            "message": "Process restarted before this task completed.",
+            "status_code": null,
+            "current": 9,
+            "total": 10,
+            "scanned": null,
+            "failed": null
+          },
+          "result_summary": {}
+        },
+        {
+          "job_id": "job_0005",
+          "status": "failed",
+          "cancel": false,
+          "created_at": 1779785096.4053144,
+          "updated_at": 1779785595.7334201,
+          "error": "Process restarted before this task completed.",
+          "progress": {
+            "phase": "failed",
+            "percent": 100,
+            "message": "Process restarted before this task completed.",
+            "status_code": null,
+            "current": 9,
+            "total": 10,
+            "scanned": null,
+            "failed": null
+          },
+          "result_summary": {}
+        },
+        {
+          "job_id": "job_0004",
+          "status": "failed",
+          "cancel": false,
+          "created_at": 1779443043.675404,
+          "updated_at": 1779443043.8855655,
+          "error": "Authentication failed; check credentials or connection settings.",
+          "progress": {
+            "phase": "failed",
+            "percent": 100,
+            "message": "Authentication failed; check credentials or connection settings.",
+            "status_code": null,
+            "current": 1,
+            "total": 1,
+            "scanned": null,
+            "failed": null
+          },
+          "result_summary": {}
+        }
+      ]
+    },
+    {
+      "path": "data/jobs_check.json",
+      "exists": true,
+      "ok": true,
+      "version": 1,
+      "updated_at": 1779954910.791945,
+      "job_count": 1,
+      "status_counts": {
+        "failed": 1
+      },
+      "latest_job": {
+        "job_id": "job_0001",
+        "status": "failed",
+        "cancel": false,
+        "created_at": 1779932373.2872388,
+        "updated_at": 1779932374.086166,
+        "error": "production mode requires BRAIN_USERNAME/BRAIN_PASSWORD or BRAIN_TOKEN",
+        "progress": {
+          "phase": "failed",
+          "percent": null,
+          "message": "production mode requires BRAIN_USERNAME/BRAIN_PASSWORD or BRAIN_TOKEN",
+          "status_code": "CHECK_FAILED",
+          "current": null,
+          "total": 0,
+          "scanned": null,
+          "failed": 1
+        },
+        "result_summary": {}
+      },
+      "jobs_preview": [
+        {
+          "job_id": "job_0001",
+          "status": "failed",
+          "cancel": false,
+          "created_at": 1779932373.2872388,
+          "updated_at": 1779932374.086166,
+          "error": "production mode requires BRAIN_USERNAME/BRAIN_PASSWORD or BRAIN_TOKEN",
+          "progress": {
+            "phase": "failed",
+            "percent": null,
+            "message": "production mode requires BRAIN_USERNAME/BRAIN_PASSWORD or BRAIN_TOKEN",
+            "status_code": "CHECK_FAILED",
+            "current": null,
+            "total": 0,
+            "scanned": null,
+            "failed": 1
+          },
+          "result_summary": {}
+        }
+      ]
+    }
+  ],
+  "sensitive_handling": {
+    "redaction_applied": true,
+    "redacted_keys": [],
+    "notes": [
+      "emails, auth headers, token-like fragments, and sensitive key values are redacted",
+      "artifact contents are summarized rather than copied wholesale"
+    ]
+  }
+}

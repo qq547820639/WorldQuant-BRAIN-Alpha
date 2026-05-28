@@ -7,7 +7,7 @@ from brain_alpha_ops.research.repository import ResearchRepository
 
 
 def test_cli_memory_summary_prints_json(tmp_path, capsys):
-    config = RunConfig(environment="mock")
+    config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path / "data")
     config_path = tmp_path / "run_config.json"
     write_run_config(config, config_path)
@@ -40,7 +40,7 @@ def test_cli_json_file_argument_accepts_utf8_bom(tmp_path):
 
 
 def test_cli_memory_summary_writes_file(tmp_path, capsys):
-    config = RunConfig(environment="mock")
+    config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path / "data")
     config_path = tmp_path / "run_config.json"
     write_run_config(config, config_path)
@@ -57,7 +57,7 @@ def test_cli_memory_summary_writes_file(tmp_path, capsys):
 
 
 def test_cli_memory_guidance_prints_generator_ready_json(tmp_path, capsys):
-    config = RunConfig(environment="mock")
+    config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path / "data")
     config_path = tmp_path / "run_config.json"
     write_run_config(config, config_path)
@@ -88,7 +88,7 @@ def test_cli_memory_guidance_prints_generator_ready_json(tmp_path, capsys):
 
 
 def test_cli_expression_index_prints_summary_and_lookup(tmp_path, capsys):
-    config = RunConfig(environment="mock")
+    config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path / "data")
     config_path = tmp_path / "run_config.json"
     write_run_config(config, config_path)
@@ -125,7 +125,7 @@ def test_cli_expression_index_prints_summary_and_lookup(tmp_path, capsys):
 
 
 def test_cli_expression_index_can_use_sqlite_cache(tmp_path, capsys):
-    config = RunConfig(environment="mock")
+    config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path / "data")
     config_path = tmp_path / "run_config.json"
     write_run_config(config, config_path)
@@ -151,7 +151,7 @@ def test_cli_expression_index_can_use_sqlite_cache(tmp_path, capsys):
 
 
 def test_cli_record_index_refreshes_and_looks_up_records(tmp_path, capsys):
-    config = RunConfig(environment="mock")
+    config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path / "data")
     config_path = tmp_path / "run_config.json"
     write_run_config(config, config_path)
@@ -192,7 +192,7 @@ def test_cli_record_index_refreshes_and_looks_up_records(tmp_path, capsys):
 
 
 def test_cli_research_observability_prints_health_snapshot(tmp_path, capsys):
-    config = RunConfig(environment="mock")
+    config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path / "data")
     config_path = tmp_path / "run_config.json"
     write_run_config(config, config_path)
@@ -250,7 +250,7 @@ def test_cli_research_observability_prints_health_snapshot(tmp_path, capsys):
 
 
 def test_cli_assistant_context_prints_json(tmp_path, capsys):
-    config = RunConfig(environment="mock")
+    config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path / "data")
     config_path = tmp_path / "run_config.json"
     write_run_config(config, config_path)
@@ -278,7 +278,7 @@ def test_cli_assistant_context_prints_json(tmp_path, capsys):
 
 
 def test_cli_assistant_context_prompt_only(tmp_path, capsys):
-    config = RunConfig(environment="mock")
+    config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path / "data")
     config_path = tmp_path / "run_config.json"
     write_run_config(config, config_path)
@@ -292,7 +292,7 @@ def test_cli_assistant_context_prompt_only(tmp_path, capsys):
 
 
 def test_cli_assistant_context_requires_explicit_sensitive_flag(tmp_path, capsys):
-    config = RunConfig(environment="mock")
+    config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path / "data")
     config_path = tmp_path / "run_config.json"
     write_run_config(config, config_path)
@@ -305,7 +305,7 @@ def test_cli_assistant_context_requires_explicit_sensitive_flag(tmp_path, capsys
 
 
 def test_cli_assistant_request_prints_llm_envelope(tmp_path, capsys):
-    config = RunConfig(environment="mock")
+    config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path / "data")
     config_path = tmp_path / "run_config.json"
     write_run_config(config, config_path)
@@ -333,7 +333,7 @@ def test_cli_assistant_request_prints_llm_envelope(tmp_path, capsys):
 
 
 def test_cli_assistant_request_can_omit_prompt_and_draft(tmp_path, capsys):
-    config = RunConfig(environment="mock")
+    config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path / "data")
     config_path = tmp_path / "run_config.json"
     write_run_config(config, config_path)
@@ -410,7 +410,7 @@ def test_cli_assistant_guidance_maps_response_to_generator_fields(tmp_path, caps
 
 
 def test_cli_assistant_save_guidance_persists_response_guidance(tmp_path, capsys):
-    config = RunConfig(environment="mock")
+    config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path / "data")
     config_path = tmp_path / "run_config.json"
     write_run_config(config, config_path)
@@ -453,7 +453,7 @@ def test_cli_assistant_save_guidance_persists_response_guidance(tmp_path, capsys
 
 
 def test_cli_assistant_save_guidance_skips_low_confidence(tmp_path, capsys):
-    config = RunConfig(environment="mock")
+    config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path / "data")
     config_path = tmp_path / "run_config.json"
     write_run_config(config, config_path)
@@ -515,7 +515,7 @@ def test_cli_anti_overfit_and_rolling_validate_print_reports(tmp_path, capsys):
 
 
 def test_cli_assistant_cross_review_can_record_ledger(tmp_path, capsys):
-    config = RunConfig(environment="mock")
+    config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path / "data")
     config_path = tmp_path / "run_config.json"
     write_run_config(config, config_path)
@@ -552,7 +552,7 @@ def test_cli_assistant_cross_review_can_record_ledger(tmp_path, capsys):
 
 
 def test_cli_assistant_guidance_audit_reports_scoring_eligibility(tmp_path, capsys):
-    config = RunConfig(environment="mock")
+    config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path / "data")
     config.ops.budget.assistant_guidance_min_confidence = 0.7
     config.ops.scoring.assistant_guidance_score_min_confidence = 0.8
@@ -605,7 +605,7 @@ def test_cli_assistant_guidance_audit_reports_scoring_eligibility(tmp_path, caps
 
 
 def test_cli_validate_config_reports_valid_config(tmp_path, capsys):
-    config = RunConfig(environment="mock")
+    config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path / "data")
     config_path = tmp_path / "run_config.json"
     write_run_config(config, config_path)
@@ -616,7 +616,7 @@ def test_cli_validate_config_reports_valid_config(tmp_path, capsys):
     payload = json.loads(capsys.readouterr().out)
     assert payload["ok"] is True
     assert payload["schema_version"] == "config_validation.v1"
-    assert payload["environment"] == "mock"
+    assert payload["environment"] == "production"
 
 
 def test_cli_validate_config_reports_validation_error(tmp_path, capsys):
@@ -642,13 +642,13 @@ def test_cli_validate_config_reports_json_error(tmp_path, capsys):
     assert code == 1
     payload = json.loads(capsys.readouterr().out)
     assert payload["ok"] is False
-    assert payload["error_code"] == "CONFIG_JSON_ERROR"
+    assert payload["error_code"] == "CONFIG_VALIDATION_ERROR"
     assert payload["error_category"] == "validation"
-    assert payload["error_type"] == "JSONDecodeError"
+    assert payload["error_type"] in {"ConfigValidationError", "ValueError"}
 
 
 def test_cli_run_validates_overridden_arguments(tmp_path, capsys):
-    config = RunConfig(environment="mock")
+    config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path / "data")
     config_path = tmp_path / "run_config.json"
     write_run_config(config, config_path)
@@ -663,7 +663,7 @@ def test_cli_run_validates_overridden_arguments(tmp_path, capsys):
 
 
 def test_cli_run_rejects_command_line_credentials_by_default(tmp_path, capsys):
-    config = RunConfig(environment="mock")
+    config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path / "data")
     config_path = tmp_path / "run_config.json"
     write_run_config(config, config_path)
@@ -678,7 +678,7 @@ def test_cli_run_rejects_command_line_credentials_by_default(tmp_path, capsys):
 
 
 def test_cli_run_can_explicitly_allow_insecure_command_line_credentials(tmp_path, monkeypatch, capsys):
-    config = RunConfig(environment="mock")
+    config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path / "data")
     config_path = tmp_path / "run_config.json"
     write_run_config(config, config_path)

@@ -1,6 +1,6 @@
 import textwrap
 
-from brain_alpha_ops.brain_api.mock import MockBrainAPI
+from tests.production_api_stub import ProductionBrainAPIStub
 from brain_alpha_ops.config import OpsConfig, ResearchBudget
 from brain_alpha_ops.research.pipeline import AlphaResearchPipeline
 from brain_alpha_ops.research.strategy_plugins import StrategyPluginRegistry
@@ -137,7 +137,7 @@ def test_pipeline_summary_exposes_strategy_plugin_runtime_state(tmp_path, monkey
         storage_dir=str(tmp_path / "data"),
     )
 
-    result = AlphaResearchPipeline(config=config, api=MockBrainAPI()).run(auto_submit=False)
+    result = AlphaResearchPipeline(config=config, api=ProductionBrainAPIStub()).run(auto_submit=False)
     plugin_summary = result.summary["strategy_plugins"]
 
     assert plugin_summary["enabled"] is True

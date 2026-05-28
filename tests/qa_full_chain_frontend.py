@@ -39,6 +39,7 @@ CHAIN_MODULES = [
     "js/form-controls.js",
     "js/strategy-panel.js",
     "js/cloud-sync.js",
+    "js/header-status.js",
     "js/app.js",
 ]
 

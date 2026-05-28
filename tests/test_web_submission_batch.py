@@ -3,7 +3,7 @@ from brain_alpha_ops.web_submission_batch import submit_batch_payload
 
 
 def test_submit_batch_payload_blocks_on_observability_confirmation(tmp_path):
-    run_config = RunConfig(environment="mock")
+    run_config = RunConfig(environment="production")
     run_config.ops.storage_dir = str(tmp_path)
     advisory = {"requires_confirmation": True, "blocking_flags": ["rate_limit_pressure"]}
 
@@ -25,7 +25,7 @@ def test_submit_batch_payload_blocks_on_observability_confirmation(tmp_path):
 
 
 def test_submit_batch_payload_deduplicates_successful_alpha_ids(tmp_path):
-    run_config = RunConfig(environment="mock")
+    run_config = RunConfig(environment="production")
     run_config.ops.storage_dir = str(tmp_path)
     submitted = []
 

@@ -6,6 +6,7 @@ import argparse
 import json
 import os
 import sys
+import warnings
 
 from brain_alpha_ops.config import (
     DEFAULT_RUN_CONFIG_PATH,
@@ -45,7 +46,7 @@ from brain_alpha_ops.runner import run_pipeline_from_config
 
 
 _CRED_DEPRECATION = (
-    "WARNING: command-line credentials are deprecated because they can leak through shell history and process lists.\n"
+    "command-line credentials are deprecated because they can leak through shell history and process lists. "
     "Use BRAIN_USERNAME / BRAIN_PASSWORD / BRAIN_TOKEN environment variables instead."
 )
 
@@ -56,7 +57,6 @@ def build_parser() -> argparse.ArgumentParser:
 
     run = sub.add_parser("run", help="run the research pipeline")
     run.add_argument("--config", default=str(DEFAULT_RUN_CONFIG_PATH))
-    run.add_argument("--env", choices=["production"], default=None)
     run.add_argument("--cycles", type=int, default=None)
     run.add_argument("--candidates", type=int, default=None)
     run.add_argument("--validations", type=int, default=None)
@@ -192,7 +192,6 @@ def build_parser() -> argparse.ArgumentParser:
 
     guided = sub.add_parser("guided-run", help="run the research pipeline with guided UX (checkpoints, progress, redline)")
     guided.add_argument("--config", default=str(DEFAULT_RUN_CONFIG_PATH))
-    guided.add_argument("--env", choices=["production"], default=None)
     guided.add_argument("--cycles", type=int, default=None)
     guided.add_argument("--resume", action="store_true", help="resume from the latest checkpoint")
 
@@ -515,8 +514,6 @@ def _main(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
     if args.command == "guided-run":
         from brain_alpha_ops.ux.guided_pipeline import GuidedPipeline
         run_config = load_run_config(args.config)
-        if args.env is not None:
-            run_config.environment = args.env
         if args.cycles is not None:
             run_config.ops.budget.max_cycles = args.cycles
         pipeline = GuidedPipeline(run_config)
@@ -542,8 +539,6 @@ def _main(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
         return 2
 
     run_config = load_run_config(args.config)
-    if args.env is not None:
-        run_config.environment = args.env
     if args.auto_submit is not None:
         run_config.auto_submit = args.auto_submit
     if args.candidates is not None:
@@ -559,19 +554,18 @@ def _main(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
         run_config.ops.storage_dir = str(Path(args.storage_dir).resolve())
     if args.base_url is not None:
         run_config.ops.official_api.base_url = args.base_url
+    if _has_cli_credentials(args):
+        _warn_cli_credentials_deprecated()
     if _has_cli_credentials(args) and not args.allow_insecure_cli_credentials:
         raise ConfigValidationError(
             "command-line credentials are disabled; use BRAIN_USERNAME / BRAIN_PASSWORD / "
             "BRAIN_TOKEN environment variables, or pass --allow-insecure-cli-credentials for temporary local debugging"
         )
     if args.username is not None:
-        print(_CRED_DEPRECATION, file=sys.stderr)
         run_config.credentials.username = args.username
     if args.password is not None:
-        print(_CRED_DEPRECATION, file=sys.stderr)
         run_config.credentials.password = args.password
     if args.token is not None:
-        print(_CRED_DEPRECATION, file=sys.stderr)
         run_config.credentials.token = args.token
 
     validate_run_config(run_config)
@@ -582,6 +576,11 @@ def _main(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
 
 def _has_cli_credentials(args: argparse.Namespace) -> bool:
     return any(getattr(args, name, None) is not None for name in ("username", "password", "token"))
+
+
+def _warn_cli_credentials_deprecated() -> None:
+    warnings.warn(_CRED_DEPRECATION, DeprecationWarning, stacklevel=3)
+    print(f"DeprecationWarning: {_CRED_DEPRECATION}", file=sys.stderr)
 
 
 def _read_text_file(path: str) -> str:

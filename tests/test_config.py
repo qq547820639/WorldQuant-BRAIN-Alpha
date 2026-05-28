@@ -257,20 +257,20 @@ def test_load_run_config_requires_https_official_api_url_in_production():
             load_run_config(path)
 
 
-def test_load_run_config_allows_http_official_api_url_in_mock():
+def test_load_run_config_rejects_non_production_environment():
     with tempfile.TemporaryDirectory() as tmp:
         path = os.path.join(tmp, "run_config.json")
         with open(path, "w", encoding="utf-8") as handle:
             json.dump(
                 {
                     "environment": "mock",
-                    "ops": {"official_api": {"base_url": "http://127.0.0.1:8080"}},
+                    "ops": {"official_api": {"base_url": "https://api.worldquantbrain.com"}},
                 },
                 handle,
             )
 
-        config = load_run_config(path)
-        assert config.ops.official_api.base_url == "http://127.0.0.1:8080"
+        with pytest.raises(ConfigValidationError, match="environment"):
+            load_run_config(path)
 
 
 def test_load_run_config_accepts_release_dataset_strategies():

@@ -40,6 +40,8 @@ data/*.jsonl
 data/api_cache/
 data/jobs_sync.json
 data/jobs_production.json
+data/e2e_screenshots/
+data/run_history/
 data/*.sqlite
 data/checkpoints/
 data/*.log
@@ -87,6 +89,7 @@ $RECYCLE.BIN/
 .codebuddy/
 
 # ---- Test output artifacts ----
+.playwright-cli/
 test_results.txt
 _run_new_tests.py
 _coverage/

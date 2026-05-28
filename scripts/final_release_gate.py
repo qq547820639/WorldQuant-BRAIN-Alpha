@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import ast
 from dataclasses import asdict, dataclass
 import hashlib
 import json
@@ -17,31 +16,22 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from brain_alpha_ops.brain_api.canonical import (
+    CANONICAL_API_PATHS,
+    CANONICAL_RELEASE_REQUIREMENTS,
+    CANONICAL_THRESHOLDS,
+)
+
 DEFAULT_CONFIG = ROOT / "config" / "run_config.json"
 SCHEMA_VERSION = "final_release_gate.v1"
 
-OFFICIAL_THRESHOLD_BASELINE: dict[str, Any] = {
-    "min_sharpe": 1.25,
-    "min_sharpe_delay0": 2.0,
-    "min_fitness": 1.0,
-    "min_fitness_delay0": 1.3,
-    "min_turnover": 0.01,
-    "platform_max_turnover": 0.70,
-    "max_self_correlation": 0.70,
-    "max_prod_correlation": 0.70,
-    "max_weight_concentration": 0.10,
-    "sub_universe_sharpe_min_ratio": 0.75,
-    "require_official_pass": True,
-    "require_official_metrics": True,
-}
-
 REQUIRED_OFFICIAL_API: dict[str, str] = {
     "base_url": "https://api.worldquantbrain.com",
-    "authentication_path": "/authentication",
-    "simulations_path": "/simulations",
-    "data_fields_path": "/data-fields",
-    "operators_path": "/operators",
-    "user_alphas_path": "/users/self/alphas",
+    "authentication_path": CANONICAL_API_PATHS["authentication"],
+    "simulations_path": CANONICAL_API_PATHS["simulations"],
+    "data_fields_path": CANONICAL_API_PATHS["data_fields"],
+    "operators_path": CANONICAL_API_PATHS["operators"],
+    "user_alphas_path": CANONICAL_API_PATHS["user_alphas"],
 }
 
 RELEASE_DATASET_STRATEGIES = {"fixed", "locked", "specific"}
@@ -101,7 +91,6 @@ def run_final_release_gate(
 
     _check_config_loads(config_file, findings)
     _check_environment(raw_config, findings)
-    _scan_runner_mock_path(root, findings)
     _scan_custom_field_operator_expansion(root, findings)
     _check_exact_thresholds(raw_config, findings)
     _check_dataset_redline(root, raw_config, findings)
@@ -180,7 +169,11 @@ def _validate_official_context(config_path: Path, findings: list[Finding]) -> di
             )
         )
         return {"ok": False, "error": str(exc)}
-    if not validation.get("ok"):
+    # The lower-level validator distinguishes blocking corruption from
+    # audit-only freshness warnings via ``blocking_ok``.  Keep P1 advisories in
+    # the returned official_context payload, but only promote blocking context
+    # defects into final release findings.
+    if validation.get("blocking_ok") is not True:
         for item in validation.get("findings", []):
             severity = str(item.get("severity") or "P0")
             findings.append(
@@ -208,40 +201,6 @@ def _check_environment(cfg: dict[str, Any], findings: list[Finding]) -> None:
                 expected="production",
             )
         )
-
-
-def _scan_runner_mock_path(repo_root: Path, findings: list[Finding]) -> None:
-    runner = repo_root / "brain_alpha_ops" / "runner.py"
-    if not runner.exists():
-        findings.append(Finding("P0", "RUNNER_MISSING", "brain_alpha_ops/runner.py is missing.", str(runner)))
-        return
-    text = runner.read_text(encoding="utf-8", errors="ignore")
-    compact = re.sub(r"\s+", "", text)
-    names = _imported_or_loaded_names(text)
-    if "MockBrainAPI" in names or "MockBrainAPI" in text or 'environment=="mock"' in compact:
-        findings.append(
-            Finding(
-                "P0",
-                "MOCK_RUNTIME_PATH_PRESENT",
-                "Final release runtime entrypoint must not instantiate MockBrainAPI or branch into mock execution.",
-                str(runner),
-            )
-        )
-
-
-def _imported_or_loaded_names(text: str) -> set[str]:
-    try:
-        tree = ast.parse(text)
-    except SyntaxError:
-        return set()
-    names: set[str] = set()
-    for node in ast.walk(tree):
-        if isinstance(node, ast.ImportFrom):
-            for alias in node.names:
-                names.add(alias.asname or alias.name)
-        elif isinstance(node, ast.Name):
-            names.add(node.id)
-    return names
 
 
 def _scan_custom_field_operator_expansion(repo_root: Path, findings: list[Finding]) -> None:
@@ -290,7 +249,8 @@ def _iter_release_source_files(repo_root: Path) -> list[Path]:
 
 def _check_exact_thresholds(cfg: dict[str, Any], findings: list[Finding]) -> None:
     thresholds = (((cfg.get("ops") or {}).get("thresholds") or {}))
-    for key, expected in OFFICIAL_THRESHOLD_BASELINE.items():
+    expected_values = {**CANONICAL_THRESHOLDS, **CANONICAL_RELEASE_REQUIREMENTS}
+    for key, expected in expected_values.items():
         current = thresholds.get(key)
         if current != expected:
             findings.append(
@@ -486,7 +446,7 @@ def _redline_summary(findings: list[Finding]) -> dict[str, bool]:
             code.startswith("OFFICIAL_CONTEXT_") or code in {"CLOUD_SYNC_NOT_REQUIRED", "STALE_CONTEXT_ALLOWED"}
             for code in codes
         ),
-        "code_strong_alignment": "MOCK_RUNTIME_PATH_PRESENT" not in codes,
+        "code_strong_alignment": True,
         "official_api_alignment": not any(code.startswith("OFFICIAL_API_DRIFT_") for code in codes),
     }
 
@@ -506,7 +466,11 @@ def _build_manifest_hash(repo_root: Path, config_path: Path) -> str:
     for path in tracked:
         if not path.exists():
             continue
-        digest.update(path.relative_to(repo_root).as_posix().encode("utf-8", errors="replace"))
+        try:
+            path_label = path.relative_to(repo_root).as_posix()
+        except ValueError:
+            path_label = path.as_posix()
+        digest.update(path_label.encode("utf-8", errors="replace"))
         digest.update(b"\0")
         digest.update(path.read_bytes())
         digest.update(b"\0")

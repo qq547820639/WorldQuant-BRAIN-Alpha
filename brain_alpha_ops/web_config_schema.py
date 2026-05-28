@@ -20,7 +20,6 @@ def public_config_schema() -> dict[str, Any]:
         "environment": {
             "allowed": ["production"],
             "default": "production",
-            "mock_available": False,
         },
         "required_payload_fields": [
             "environment",

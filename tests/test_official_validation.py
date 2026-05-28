@@ -1,5 +1,5 @@
 from brain_alpha_ops.brain_api.base import BrainAPIError
-from brain_alpha_ops.brain_api.mock import MockBrainAPI
+from tests.production_api_stub import ProductionBrainAPIStub
 from brain_alpha_ops.models import Candidate
 from brain_alpha_ops.research.official_validation import OfficialValidationService
 
@@ -14,7 +14,7 @@ def _candidate(alpha_id: str, expression: str = "rank(close)") -> Candidate:
     )
 
 
-class ValidationRateLimitedAPI(MockBrainAPI):
+class ValidationRateLimitedAPI(ProductionBrainAPIStub):
     def validate_expression(self, expression: str, settings: dict) -> dict:
         raise BrainAPIError("HTTP 429: too many requests", status_code=429)
 
@@ -25,7 +25,7 @@ def test_official_validation_service_records_pass_and_failure():
     lifecycle = []
 
     service = OfficialValidationService(
-        api=MockBrainAPI(),
+        api=ProductionBrainAPIStub(),
         settings_payload={},
         progress=lambda *args: progress.append(args),
         event=lambda *args, **kwargs: events.append((args, kwargs)),

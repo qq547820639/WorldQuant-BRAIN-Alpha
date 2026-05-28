@@ -474,6 +474,11 @@ class HypothesisDrivenGenerator:
         self._observability_avoid_keys: Set[str] = set()
         self._observability_guidance: Dict[str, Any] = {}
         self._warned_empty_hypothesis_library: bool = False
+        self._knowledge_constraints: Dict[str, Any] = {
+            "preferred_fields": [],
+            "preferred_operators": [],
+            "forbidden_patterns": [],
+        }
 
     # ── Public API (CandidateGenerator-compatible) ──────────────────
 
@@ -542,6 +547,22 @@ class HypothesisDrivenGenerator:
             "avoid_expression_count": len(self._observability_avoid_keys),
             "diversity_boost": self._observability_diversity_boost,
         }
+
+    def set_knowledge_constraints(self, constraints: dict[str, Any] | None) -> None:
+        """Bias generation using structured knowledge-base constraints."""
+        constraints = dict(constraints or {})
+        preferred_fields = [str(item).lower() for item in constraints.get("preferred_fields") or [] if str(item)]
+        preferred_operators = [str(item).lower() for item in constraints.get("preferred_operators") or [] if str(item)]
+        forbidden_patterns = [str(item).strip() for item in constraints.get("forbidden_patterns") or [] if str(item)]
+        self._knowledge_constraints = {
+            "preferred_fields": preferred_fields,
+            "preferred_operators": preferred_operators,
+            "forbidden_patterns": forbidden_patterns,
+        }
+        if preferred_fields:
+            self._fields.update(preferred_fields)
+        if preferred_operators:
+            self._operators.update(preferred_operators)
 
     def generate(self, count: int, dataset_id: str = "") -> List[Candidate]:
         """Generate *count* alpha candidates for *dataset_id*."""
@@ -645,6 +666,7 @@ class HypothesisDrivenGenerator:
         if self._field_selector is None:
             return self._generate_random_exploration(dataset_id)
         selected_fields = self._field_selector.select_fields(hypothesis, dataset_id, count=2)
+        selected_fields = self._prioritize_knowledge_fields(selected_fields)
         if not selected_fields:
             return self._generate_random_exploration(dataset_id)
 
@@ -677,7 +699,6 @@ class HypothesisDrivenGenerator:
             universe=context["universe"],
             delay=context["delay"],
         )
-
         candidate = Candidate(
             alpha_id=new_id("alpha"),
             expression=expression,
@@ -689,6 +710,8 @@ class HypothesisDrivenGenerator:
             dataset_id=dataset_id or self._dataset_id,
             template_source=meta.to_json(),
         )
+        if self._expression_forbidden(candidate.expression):
+            return self._generate_random_exploration(dataset_id)
         return candidate
 
     def _generate_experience_feedback(self, dataset_id: str) -> Optional[Candidate]:
@@ -741,6 +764,8 @@ class HypothesisDrivenGenerator:
                 dataset_id=ds,
                 template_source=meta.to_json(),
             )
+            if self._expression_forbidden(candidate.expression):
+                return self._generate_random_exploration(dataset_id)
             return candidate
         except Exception as exc:
             logger.warning("_generate_experience_feedback failed: %s", exc)
@@ -786,6 +811,8 @@ class HypothesisDrivenGenerator:
                 dataset_id=ds,
                 template_source=meta.to_json(),
             )
+            if self._expression_forbidden(candidate.expression):
+                return self._generate_bare_fallback(dataset_id)
             return candidate
         except Exception as exc:
             logger.warning("_generate_random_exploration: ThemeEngine failed: %s", exc)
@@ -795,6 +822,7 @@ class HypothesisDrivenGenerator:
         """Absolute last-resort fallback when ThemeEngine is unavailable."""
         ds = dataset_id or self._dataset_id or "default"
         fields = sorted(self._fields) if self._fields else ["returns"]
+        fields = self._prioritize_knowledge_fields(fields)
         f1 = fields[0] if fields else "returns"
         w = 10
         expression = _normalize_operator_aliases(f"rank(ts_delta({f1}, {w}))")
@@ -823,6 +851,23 @@ class HypothesisDrivenGenerator:
             template_source=meta.to_json(),
         )
 
+    def _expression_forbidden(self, expression: str) -> bool:
+        expression_lower = str(expression or "").lower()
+        for pattern in self._knowledge_constraints.get("forbidden_patterns") or []:
+            if not pattern:
+                continue
+            if pattern.lower() in expression_lower:
+                return True
+        return False
+
+    def _prioritize_knowledge_fields(self, fields: List[str]) -> List[str]:
+        preferred = set(self._knowledge_constraints.get("preferred_fields") or [])
+        if not preferred:
+            return list(fields)
+        front = [field for field in fields if field.lower() in preferred]
+        rest = [field for field in fields if field.lower() not in preferred]
+        return front + rest
+
     # ── Expression Building ─────────────────────────────────────────
 
     def _build_expression(
@@ -835,7 +880,7 @@ class HypothesisDrivenGenerator:
         """Build a concrete expression from an ExpressionFamily template.
 
         Placeholders resolved (in order):
-          {field_xxx}   → matcheed via field_categories (e.g. {field_illiq} → analyst4_illiq)
+          {field_xxx}   → matched via field_categories (e.g. {field_illiq} → analyst4_illiq)
           {field}       → replaced with fields[0]
           {f1}, {f2}    → replaced with fields[0], fields[1]
           {window}, {w} → replaced with window size

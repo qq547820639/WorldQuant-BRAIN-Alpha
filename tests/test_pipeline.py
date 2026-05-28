@@ -3,14 +3,15 @@ import json
 from pathlib import Path
 
 from brain_alpha_ops.brain_api.base import BrainAPIError
-from brain_alpha_ops.brain_api.mock import MockBrainAPI
+from tests.production_api_stub import ProductionBrainAPIStub
 from brain_alpha_ops.config import OfficialAPIConfig, OpsConfig, ResearchBudget
 from brain_alpha_ops.models import Candidate
+from brain_alpha_ops.research.knowledge_base import KnowledgeEntry, StructuredKnowledgeBase
 from brain_alpha_ops.research.pipeline import AlphaResearchPipeline
 from brain_alpha_ops.research.repository import ResearchRepository
 
 
-def test_pipeline_runs_mock_end_to_end():
+def test_pipeline_runs_production_stub_end_to_end():
     with tempfile.TemporaryDirectory() as tmp:
         config = OpsConfig(
             budget=ResearchBudget(
@@ -21,7 +22,7 @@ def test_pipeline_runs_mock_end_to_end():
             ),
             storage_dir=tmp,
         )
-        result = AlphaResearchPipeline(config=config, api=MockBrainAPI()).run(auto_submit=False)
+        result = AlphaResearchPipeline(config=config, api=ProductionBrainAPIStub()).run(auto_submit=False)
         data = result.to_dict()
         assert data["summary"]["total_candidates"] >= 5
         assert data["summary"]["officially_simulated"] > 0
@@ -44,7 +45,7 @@ def test_pipeline_auto_submit_is_guarded():
             ),
             storage_dir=tmp,
         )
-        result = AlphaResearchPipeline(config=config, api=MockBrainAPI()).run(auto_submit=True)
+        result = AlphaResearchPipeline(config=config, api=ProductionBrainAPIStub()).run(auto_submit=True)
         assert result.summary["submitted_this_run"] <= config.submission_policy.max_auto_submissions_per_run
 
 
@@ -60,7 +61,7 @@ def test_pipeline_scores_and_sorts_before_official_metrics():
             ),
             storage_dir=tmp,
         )
-        result = AlphaResearchPipeline(config=config, api=MockBrainAPI()).run(auto_submit=False)
+        result = AlphaResearchPipeline(config=config, api=ProductionBrainAPIStub()).run(auto_submit=False)
         candidates = result.candidates
         assert candidates
         assert all(candidate.scorecard.get("total_score", 0) > 0 for candidate in candidates)
@@ -69,7 +70,111 @@ def test_pipeline_scores_and_sorts_before_official_metrics():
         assert any(candidate.scorecard.get("score_basis") == "local_prior" for candidate in candidates)
 
 
-class ConcurrencyLimitedAPI(MockBrainAPI):
+def test_pipeline_applies_knowledge_constraints_to_generator(monkeypatch):
+    with tempfile.TemporaryDirectory() as tmp:
+        kb = StructuredKnowledgeBase(tmp)
+        kb.save(
+            KnowledgeEntry(
+                layer="rule",
+                category="field_selection",
+                title="Prefer close",
+                fields_involved=["close"],
+            )
+        )
+        config = OpsConfig(storage_dir=tmp)
+        pipeline = AlphaResearchPipeline(config=config, api=ProductionBrainAPIStub())
+        captured = {}
+
+        def fake_set_knowledge_constraints(constraints):
+            captured["constraints"] = constraints
+
+        monkeypatch.setattr(pipeline.generator, "set_knowledge_constraints", fake_set_knowledge_constraints)
+
+        pipeline._apply_knowledge_constraints_to_generator()
+
+        assert captured["constraints"]["preferred_fields"] == ["close"]
+        assert any(event.event == "knowledge_constraints_applied" for event in pipeline.events)
+
+
+def test_pipeline_local_prefilter_attaches_local_backtest_result(monkeypatch):
+    with tempfile.TemporaryDirectory() as tmp:
+        config = OpsConfig(storage_dir=tmp)
+        pipeline = AlphaResearchPipeline(config=config, api=ProductionBrainAPIStub())
+        candidate = Candidate(
+            alpha_id="alpha_local",
+            expression="rank(close)",
+            family="test",
+            hypothesis="local backtest supported candidate",
+            data_fields=["close"],
+            operators=["rank"],
+        )
+
+        monkeypatch.setattr(
+            pipeline._local_backtest_engine,
+            "evaluate",
+            lambda expression, cache_key="default": {
+                "ok": True,
+                "expression": expression,
+                "pass_local": True,
+                "sharpe": 1.5,
+                "fitness": 1.2,
+                "turnover": 0.2,
+                "weight_concentration": 0.05,
+                "pass_reasons": ["Sharpe 1.50 >= 1.25"],
+            },
+        )
+
+        passed = pipeline._local_prefilter([candidate], 1, [{"name": "close"}], [{"name": "rank"}])
+
+        assert passed == [candidate]
+        assert candidate.submission["local_backtest"]["pass_local"] is True
+        assert candidate.local_quality["local_backtest"]["sharpe"] == 1.5
+        assert candidate.local_quality["local_backtest_support"]["supported"] is True
+
+
+def test_pipeline_auto_submit_blocks_when_cross_review_rejects(monkeypatch):
+    with tempfile.TemporaryDirectory() as tmp:
+        config = OpsConfig(
+            budget=ResearchBudget(require_cloud_sync=False),
+            storage_dir=tmp,
+        )
+        pipeline = AlphaResearchPipeline(config=config, api=ProductionBrainAPIStub())
+        pipeline.cloud_sync = {"status": "loaded", "stale": False, "warning": ""}
+        pipeline.cloud_alphas = [{"id": "existing", "status": "SUBMITTED", "expression": "rank(volume)"}]
+        candidate = Candidate(
+            alpha_id="alpha_review",
+            expression="rank(close)",
+            family="test",
+            hypothesis="candidate ready for auto submit review",
+            data_fields=["close"],
+            operators=["rank"],
+            official_alpha_id="prod_stub_alpha_9999",
+            official_metrics={
+                "sharpe": 2.0,
+                "fitness": 1.6,
+                "turnover": 0.2,
+                "correlation": 0.1,
+                "weight_concentration": 0.05,
+                "sub_universe_sharpe": 1.7,
+                "pass_fail": "PASS",
+            },
+            gate={"submission_ready": True},
+        )
+
+        monkeypatch.setattr(
+            pipeline,
+            "_pre_submit_cross_review",
+            lambda candidate: {"allowed": False, "failed_reasons": ["manual_review_required"]},
+        )
+
+        submitted = pipeline._try_auto_submit(candidate, 0)
+
+        assert submitted == 0
+        assert candidate.gate["status"] == "CROSS_REVIEW_BLOCKED"
+        assert candidate.lifecycle_status == "auto_submit_cross_review_blocked"
+
+
+class ConcurrencyLimitedAPI(ProductionBrainAPIStub):
     def submit_simulation(self, expression: str, settings: dict) -> str:
         raise BrainAPIError(
             "HTTP 400: {'detail': 'CONCURRENT_SIMULATION_LIMIT_EXCEEDED'}",
@@ -78,7 +183,7 @@ class ConcurrencyLimitedAPI(MockBrainAPI):
         )
 
 
-class SimulationSubmitRateLimitedAPI(MockBrainAPI):
+class SimulationSubmitRateLimitedAPI(ProductionBrainAPIStub):
     def submit_simulation(self, expression: str, settings: dict) -> str:
         raise BrainAPIError(
             "HTTP 429: rate limit token=secret-token-123",
@@ -87,7 +192,7 @@ class SimulationSubmitRateLimitedAPI(MockBrainAPI):
         )
 
 
-class CountingMockBrainAPI(MockBrainAPI):
+class CountingProductionBrainAPIStub(ProductionBrainAPIStub):
     def __init__(self):
         super().__init__()
         self.validation_expressions: list[str] = []
@@ -102,7 +207,7 @@ class CountingMockBrainAPI(MockBrainAPI):
         return super().submit_simulation(expression, settings)
 
 
-class CloudSyncForbiddenAPI(MockBrainAPI):
+class CloudSyncForbiddenAPI(ProductionBrainAPIStub):
     def list_user_alphas(self, sync_range: str = "3d", progress_callback=None) -> list[dict]:
         raise AssertionError("cloud sync should not run when a local cache already exists")
 
@@ -113,7 +218,7 @@ def test_pipeline_runs_initial_cloud_sync_when_cache_is_empty_and_per_run_sync_d
             budget=ResearchBudget(require_cloud_sync=False, cloud_sync_range="3d"),
             storage_dir=tmp,
         )
-        pipeline = AlphaResearchPipeline(config=config, api=MockBrainAPI())
+        pipeline = AlphaResearchPipeline(config=config, api=ProductionBrainAPIStub())
         pipeline._sync_cloud_alphas()
         assert pipeline.cloud_sync["status"] == "synced"
         assert pipeline.cloud_sync["count"] > 0
@@ -174,7 +279,7 @@ def test_pipeline_applies_persisted_assistant_guidance(monkeypatch):
         monkeypatch.setattr("brain_alpha_ops.research.generator.CandidateGenerator.set_experience_guidance", fake_set_experience_guidance)
         monkeypatch.setattr("brain_alpha_ops.research.hypothesis_driven_generator.HypothesisDrivenGenerator.set_experience_guidance", fake_set_experience_guidance)
 
-        result = AlphaResearchPipeline(config=config, api=MockBrainAPI()).run(auto_submit=False)
+        result = AlphaResearchPipeline(config=config, api=ProductionBrainAPIStub()).run(auto_submit=False)
 
         assert captured["patterns"]["sample_size"] == 3
         assert captured["patterns"]["top_operators"] == ["ts_rank"]
@@ -238,7 +343,7 @@ def test_pipeline_attaches_structured_assistant_guidance_outcome_metadata(monkey
         monkeypatch.setattr("brain_alpha_ops.research.generator.CandidateGenerator.set_experience_guidance", lambda self, patterns: None)
         monkeypatch.setattr("brain_alpha_ops.research.hypothesis_driven_generator.HypothesisDrivenGenerator.set_experience_guidance", lambda self, patterns: None)
 
-        result = AlphaResearchPipeline(config=config, api=MockBrainAPI()).run(auto_submit=False)
+        result = AlphaResearchPipeline(config=config, api=ProductionBrainAPIStub()).run(auto_submit=False)
 
         assert result.candidates
         assert any(candidate.submission.get("assistant_guidance_outcome_status") == "strong" for candidate in result.candidates)
@@ -331,7 +436,7 @@ def test_pipeline_observability_blocks_official_calls_but_keeps_local_generation
             ),
             storage_dir=tmp,
         )
-        result = AlphaResearchPipeline(config=config, api=MockBrainAPI()).run(auto_submit=False)
+        result = AlphaResearchPipeline(config=config, api=ProductionBrainAPIStub()).run(auto_submit=False)
 
         assert result.summary["produced_count"] > 0
         assert result.summary["official_validation_attempted"] == 0
@@ -389,7 +494,7 @@ def test_pipeline_passes_observability_duplicates_to_generator(monkeypatch):
             storage_dir=tmp,
         )
 
-        result = AlphaResearchPipeline(config=config, api=MockBrainAPI()).run(auto_submit=False)
+        result = AlphaResearchPipeline(config=config, api=ProductionBrainAPIStub()).run(auto_submit=False)
 
         assert result.summary["produced_count"] > 0
         assert captured
@@ -423,7 +528,7 @@ def test_pipeline_records_observability_refresh_failure(monkeypatch):
             storage_dir=tmp,
         )
 
-        result = AlphaResearchPipeline(config=config, api=MockBrainAPI()).run(auto_submit=False)
+        result = AlphaResearchPipeline(config=config, api=ProductionBrainAPIStub()).run(auto_submit=False)
 
         throttle = result.summary["observability_throttle"]
         guidance = result.summary["observability_generation_guidance"]
@@ -486,7 +591,7 @@ def test_pipeline_records_observability_guidance_apply_failure(monkeypatch):
             storage_dir=tmp,
         )
 
-        result = AlphaResearchPipeline(config=config, api=MockBrainAPI()).run(auto_submit=False)
+        result = AlphaResearchPipeline(config=config, api=ProductionBrainAPIStub()).run(auto_submit=False)
 
         throttle = result.summary["observability_throttle"]
         guidance = result.summary["observability_generation_guidance"]
@@ -571,7 +676,7 @@ def test_pipeline_observability_duplicate_guard_blocks_official_validation(monke
             ),
             storage_dir=tmp,
         )
-        api = CountingMockBrainAPI()
+        api = CountingProductionBrainAPIStub()
 
         result = AlphaResearchPipeline(config=config, api=api).run(auto_submit=False)
 
@@ -627,7 +732,7 @@ def test_pipeline_keeps_top10_and_submits_top3_backtests():
             ),
             storage_dir=tmp,
         )
-        result = AlphaResearchPipeline(config=config, api=MockBrainAPI()).run(auto_submit=False)
+        result = AlphaResearchPipeline(config=config, api=ProductionBrainAPIStub()).run(auto_submit=False)
         assert result.summary["retained_pool_limit"] == 5
         assert result.summary["backtest_batch_size"] == 3
         assert result.summary["backtests_submitted"] >= 1
@@ -649,7 +754,7 @@ def test_pipeline_emits_three_backtest_statuses():
             ),
             storage_dir=tmp,
         )
-        AlphaResearchPipeline(config=config, api=MockBrainAPI(), progress_callback=events.append).run(auto_submit=False)
+        AlphaResearchPipeline(config=config, api=ProductionBrainAPIStub(), progress_callback=events.append).run(auto_submit=False)
         backtest_events = [event for event in events if len(event.get("data", {}).get("backtests", [])) == 3]
         assert backtest_events
         assert any(event["phase"] == "simulation_wait" for event in backtest_events)
@@ -669,7 +774,7 @@ def test_pipeline_persists_backtest_state_records():
             storage_dir=tmp,
         )
 
-        result = AlphaResearchPipeline(config=config, api=MockBrainAPI()).run(auto_submit=False)
+        result = AlphaResearchPipeline(config=config, api=ProductionBrainAPIStub()).run(auto_submit=False)
         rows = [
             json.loads(line)
             for line in (Path(tmp) / "backtests.jsonl").read_text(encoding="utf-8").splitlines()
@@ -684,7 +789,7 @@ def test_pipeline_persists_backtest_state_records():
         assert {row["schema_version"] for row in [rows[0]["expression_profile"]]} == {"expression-profile.v1"}
 
 
-class SlowCompletingAPI(MockBrainAPI):
+class SlowCompletingAPI(ProductionBrainAPIStub):
     def __init__(self):
         super().__init__()
         self.poll_counts = {}

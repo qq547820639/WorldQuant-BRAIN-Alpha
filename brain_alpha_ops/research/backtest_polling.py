@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Callable
+from typing import Callable, Optional
 
 from brain_alpha_ops.brain_api.base import BrainAPI, BrainAPIError
 from brain_alpha_ops.models import Candidate
@@ -12,7 +12,7 @@ from brain_alpha_ops.redaction import redact_error_message
 from .candidate_pool import blocked_gate
 
 
-HaltCallback = Callable[[str, float | None], None]
+HaltCallback = Callable[[str, Optional[float]], None]
 EventCallback = Callable[..., None]
 
 
@@ -21,7 +21,7 @@ class BacktestRecordIntent:
     action: str
     status: str = ""
     note: str = ""
-    error: BrainAPIError | None = None
+    error: Optional[BrainAPIError] = None
     error_code: str = ""
     phase: str = "simulation_wait"
 

@@ -151,6 +151,11 @@
     return html;
   };
 
+  Utils.setSafeHtml = function (el, html) {
+    if (!el) return;
+    el.innerHTML = String(html ?? '');
+  };
+
   Utils.applyDataStyles = function (root) {
     root = root || document;
     var scoped = root.querySelectorAll ? root : document;

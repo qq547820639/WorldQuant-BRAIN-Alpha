@@ -9,15 +9,10 @@ from brain_alpha_ops.research.pipeline import AlphaResearchPipeline
 
 def api_from_run_config(run_config: RunConfig):
     validate_run_config(run_config)
-    environment = run_config.environment.lower()
-    if environment == "production":
-        credentials = run_config.credentials.resolve()
-        api = OfficialBrainAPI(run_config.ops.official_api, **credentials)
-        api.set_market_scope(run_config.ops.settings)
-        return api
-    raise ValueError(
-        "runtime pipeline execution only supports production; inject a test API for offline tests"
-    )
+    credentials = run_config.credentials.resolve()
+    api = OfficialBrainAPI(run_config.ops.official_api, **credentials)
+    api.set_market_scope(run_config.ops.settings)
+    return api
 
 
 def run_pipeline_from_config(run_config: RunConfig, progress_callback=None, stop_callback=None):

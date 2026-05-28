@@ -12,8 +12,12 @@
   var humanCheckName = window.Utils.humanCheckName;
   var renderRiskExplanation = window.Utils.renderRiskExplanation;
   var applyDataStyles = window.Utils.applyDataStyles;
+  var setSafeHtml = window.Utils.setSafeHtml;
   var scoreSpan = window.Utils.scoreSpan;
   var statusBadge = window.Utils.statusBadge;
+  var lifecycleStatusLabel = window.ViewModel && window.ViewModel.lifecycleStatusLabel
+    ? window.ViewModel.lifecycleStatusLabel
+    : function (row) { return String((row || {}).lifecycle_status || (row || {}).status || ''); };
   var S = window.AppState;
   var previousFocus = null;
   var Spinner = window.Spinner || {};
@@ -68,7 +72,7 @@
   }
 
   function showEmpty() {
-    var bodyEl = $('detail'); if (bodyEl) bodyEl.innerHTML = '<div class="text-center text-muted detail-empty">暂无详情数据。</div>';
+    var bodyEl = $('detail'); setSafeHtml(bodyEl, '<div class="text-center text-muted detail-empty">暂无详情数据。</div>');
   }
 
   // ── MODAL OPEN/CLOSE ──────────────────────────────────────────────────
@@ -166,7 +170,7 @@
       { label: '算子', value: (candidate.operators || []).join(', ') },
       { label: '来源标签', value: (candidate.source_tags || []).join(', ') },
       { label: '模板来源', value: candidate.template_source || '-' },
-      { label: '生命周期', value: candidate.lifecycle_status || '-' },
+      { label: '生命周期', value: lifecycleStatusLabel(candidate) || '-' },
     ]));
 
     // Scorecard
@@ -232,12 +236,12 @@
       parts.push(renderRiskExplanation(risk.explanation || risk));
     }
 
-    bodyEl.innerHTML = parts.map(function (html) {
+    setSafeHtml(bodyEl, parts.map(function (html) {
       return '<div class="detail-section">' +
         '<div class="detail-section-title detail-heading">' + (html.title || '') + '</div>' +
         '<div class="detail-section-body">' + (html.body || html) + '</div>' +
         '</div>';
-    }).join('');
+    }).join(''));
     applyDataStyles(bodyEl);
 
     openDetailModal();
@@ -377,7 +381,7 @@
     var titleEl = $('modalTitle'); if (titleEl) titleEl.textContent = '云端 Alpha: ' + (row.alpha_id || id);
     var bodyEl = $('detail'); if (!bodyEl) return;
 
-    bodyEl.innerHTML = sectionBlock('云端记录', renderFieldTableHTML('', [
+    setSafeHtml(bodyEl, sectionBlock('云端记录', renderFieldTableHTML('', [
       { label: 'Alpha ID', value: row.alpha_id },
       { label: '状态', value: row.status, format: 'badge' },
       { label: 'Sharpe', value: row.sharpe, format: 'number' },
@@ -385,7 +389,7 @@
       { label: 'Turnover', value: row.turnover, format: 'number' },
       { label: 'Self Correlation', value: row.self_correlation, format: 'number' },
       { label: 'Date', value: row.date_created || row.date || '-' },
-    ]));
+    ])));
 
     openDetailModal();
   };
@@ -401,14 +405,14 @@
     var titleEl = $('modalTitle'); if (titleEl) titleEl.textContent = '生命周期: ' + (record.alpha_id || id);
     var bodyEl = $('detail'); if (!bodyEl) return;
 
-    bodyEl.innerHTML = sectionBlock('生命周期记录', renderFieldTableHTML('', [
+    setSafeHtml(bodyEl, sectionBlock('生命周期记录', renderFieldTableHTML('', [
       { label: 'Alpha ID', value: record.alpha_id },
       { label: '阶段', value: record.stage },
       { label: '状态', value: record.status, format: 'badge' },
       { label: '时间', value: record.timestamp },
       { label: '消息', value: record.message || '' },
       { label: '详情', value: record.details || record.note || '-' },
-    ]));
+    ])));
 
     openDetailModal();
   };
@@ -426,13 +430,13 @@
       return { label: humanCheckName(c.name || c), value: (c.passed !== undefined ? (c.passed ? '通过' : '未通过') : fmtVal(c)) + (note ? ' - ' + note : ''), format: c.passed ? 'badge' : 'text' };
     })) : '<div class="text-muted p-sm">暂无检查项详情。</div>';
 
-    bodyEl.innerHTML = sectionBlock('检查结果', renderFieldTableHTML('', [
+    setSafeHtml(bodyEl, sectionBlock('检查结果', renderFieldTableHTML('', [
       { label: 'Alpha ID', value: check.alpha_id },
       { label: '通过', value: check.passed, format: 'badge' },
       { label: '检查时间', value: check.checked_at || '-' },
       { label: '是否过期', value: check.is_stale ? '是' : '否', format: 'badge' },
       { label: '错误', value: check.error || '-' },
-    ])) + sectionBlock('检查详情', checkHtml);
+    ])) + sectionBlock('检查详情', checkHtml));
 
     openDetailModal();
   };

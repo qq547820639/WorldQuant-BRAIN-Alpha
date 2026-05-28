@@ -31,6 +31,7 @@ class GateResult:
     failed_items: list[str] = field(default_factory=list)
     threshold_source: str = "BRAIN_Official"
     notes: list[str] = field(default_factory=list)
+    zero_deviation: bool = True
 
     def to_dict(self) -> dict:
         return {
@@ -40,14 +41,15 @@ class GateResult:
             "failed_items": self.failed_items,
             "threshold_source": self.threshold_source,
             "notes": self.notes,
+            "zero_deviation": self.zero_deviation,
         }
 
 
 class GateConfig:
     """Configurable Pass/Fail gate constrained to BRAIN official hard checks."""
 
-    def __init__(self, thresholds: QualityThresholds):
-        self.thresholds = thresholds
+    def __init__(self, thresholds: QualityThresholds | None = None):
+        self.thresholds = thresholds or QualityThresholds()
         self._gates: list[dict[str, Any]] = []
 
     @classmethod
@@ -79,6 +81,10 @@ class GateConfig:
         })
         return self
 
+    @property
+    def hard_gates(self) -> list[dict[str, Any]]:
+        return [gate for gate in self._gates if gate.get("type") == "HARD"]
+
     def evaluate(self, metrics: dict) -> GateResult:
         passed_all = True
         items: list[dict[str, Any]] = []
@@ -97,6 +103,7 @@ class GateConfig:
             check_items=items,
             failed_items=failed,
             threshold_source="BRAIN_Official",
+            zero_deviation=all(bool(item.get("zero_deviation", True)) for item in items),
         )
 
 
@@ -120,7 +127,7 @@ def _evaluate_gate(
 ) -> tuple[bool, dict[str, Any], str]:
     error = ""
     try:
-        configured_passed = bool(gate["check"](metrics, thresholds))
+        configured_passed = _call_gate_check(gate["check"], metrics, thresholds)
     except Exception as exc:
         configured_passed = False
         error = str(exc)
@@ -147,6 +154,16 @@ def _evaluate_gate(
     if error:
         payload["error"] = error
     return passed, payload, _failure_reason(gate["name"], zero_deviation, error)
+
+
+def _call_gate_check(check_fn: Callable, metrics: dict, thresholds: QualityThresholds) -> bool:
+    try:
+        return bool(check_fn(metrics, thresholds))
+    except TypeError as original:
+        try:
+            return bool(check_fn(metrics))
+        except TypeError:
+            raise original
 
 
 def _failure_reason(name: str, zero_deviation: bool, error: str) -> str:

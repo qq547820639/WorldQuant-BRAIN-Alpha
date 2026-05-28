@@ -18,6 +18,15 @@ class _Generator:
         ]
 
 
+class _DuplicateGenerator:
+    def generate(self, count, *, dataset_id=""):
+        return [
+            Candidate(alpha_id="a1", expression="rank(close)", family="Value", hypothesis="base"),
+            Candidate(alpha_id="a2", expression=" rank( close ) ", family="Value", hypothesis="same"),
+            Candidate(alpha_id="a3", expression="rank(open)", family="Value", hypothesis="different"),
+        ][:count]
+
+
 def test_generation_phase_service_attaches_assistant_guidance():
     generator = _Generator()
     attached = []
@@ -33,3 +42,15 @@ def test_generation_phase_service_attaches_assistant_guidance():
     assert generator.calls == [(3, "fundamental6")]
     assert [candidate.alpha_id for candidate in candidates] == ["a1"]
     assert attached == [("a1", "ag_1")]
+
+
+def test_generation_phase_service_deduplicates_similar_expressions():
+    service = GenerationPhaseService(
+        generator=_DuplicateGenerator(),
+        max_candidates=3,
+        max_expression_similarity=0.9,
+    )
+
+    candidates = service.generate()
+
+    assert [candidate.alpha_id for candidate in candidates] == ["a1", "a3"]

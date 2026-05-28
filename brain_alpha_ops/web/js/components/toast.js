@@ -7,6 +7,7 @@
 
   var $ = window.Utils.$;
   var escapeHtml = window.Utils.escapeHtml;
+  var setSafeHtml = window.Utils.setSafeHtml;
 
   var ICONS = {
     success: '\u2713',
@@ -90,10 +91,10 @@
     html += '<span class="toast-close" role="button" tabindex="0" aria-label="\u5173\u95ED\u901A\u77E5">&times;</span>';
 
     if (showProgress && duration > 0) {
-      html += '<div class="toast-progress" style="width:100%"></div>';
+      html += '<div class="toast-progress"></div>';
     }
 
-    toastEl.innerHTML = html;
+    setSafeHtml(toastEl, html);
 
     // Keyboard support for close button
     toastEl.addEventListener('keydown', function (event) {

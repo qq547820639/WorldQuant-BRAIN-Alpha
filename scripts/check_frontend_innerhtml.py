@@ -15,30 +15,10 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 FRONTEND_ROOT = PROJECT_ROOT / "brain_alpha_ops" / "web" / "js"
 
-ALLOWED_INNERHTML_SINKS = {
-    ("app.js", 141),
-    ("app.js", 645),
-    ("app.js", 658),
-    ("app.js", 660),
-    ("components/table.js", 66),
-    ("components/table.js", 71),
-    ("components/table.js", 92),
-    ("components/table.js", 119),
-    ("components/toast.js", 41),
-    ("result-table.js", 39),
-    ("result-table.js", 67),
-    ("result-table.js", 72),
-    ("result-table.js", 94),
-    ("strategy-panel.js", 55),
-    ("views/detail.js", 67),
-    ("views/detail.js", 174),
-    ("views/detail.js", 319),
-    ("views/detail.js", 343),
-    ("views/detail.js", 368),
-    ("views/monitor.js", 90),
-    ("views/monitor.js", 144),
-    ("views/monitor.js", 162),
-    ("views/monitor.js", 167),
+ALLOWED_INNERHTML_SINKS: set[tuple[str, int]] = set()
+
+ALLOWED_INNERHTML_SNIPPETS = {
+    ("utils.js", "el.innerHTML = String(html ?? '');"),
 }
 
 
@@ -55,18 +35,23 @@ def check_frontend_innerhtml(root: Path = FRONTEND_ROOT) -> dict:
             if ".innerHTML" not in line:
                 continue
             checked += 1
-            if (rel, line_number) not in ALLOWED_INNERHTML_SINKS:
+            stripped = line.strip()
+            snippet_allowed = any(
+                allowed_rel == rel and snippet in stripped
+                for allowed_rel, snippet in ALLOWED_INNERHTML_SNIPPETS
+            )
+            if (rel, line_number) not in ALLOWED_INNERHTML_SINKS and not snippet_allowed:
                 findings.append({
                     "file": rel,
                     "line": line_number,
-                    "text": line.strip(),
+                    "text": stripped,
                 })
     return {
         "ok": not findings,
         "schema_version": "frontend_innerhtml_guard.v1",
         "root": str(root),
         "checked": checked,
-        "allowed": len(ALLOWED_INNERHTML_SINKS),
+        "allowed": len(ALLOWED_INNERHTML_SINKS) + len(ALLOWED_INNERHTML_SNIPPETS),
         "findings": findings,
     }
 

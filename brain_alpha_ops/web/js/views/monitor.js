@@ -8,6 +8,7 @@
   var $ = window.Utils.$;
   var esc = window.Utils.escapeHtml;
   var formatScore = window.Utils.formatScore;
+  var setSafeHtml = window.Utils.setSafeHtml;
   var scoreSpan = window.Utils.scoreSpan;
   var S = window.AppState;
 
@@ -87,7 +88,7 @@
         accent: runningBT > 0 },
     ];
 
-    container.innerHTML = cards.map(function (card) {
+    setSafeHtml(container, cards.map(function (card) {
       var cls = 'insight-tile';
       if (card.accent) cls += ' is-accent';
       if (card.style) cls += ' ' + card.style;
@@ -98,7 +99,7 @@
         '<div class="insight-tile-value">' + esc(String(card.value)) + '</div>' +
         (card.note ? '<div class="insight-tile-note">' + esc(card.note) + '</div>' : '') +
         '</div></div>';
-    }).join('');
+    }).join(''));
     syncMonitorPanelVisibility();
   }
 
@@ -141,13 +142,13 @@
       { label: '官方容量', value: capacityUsed + '/' + capacityTotal, note: '已用/总计' },
     ];
 
-    container.innerHTML = tiles.map(function (tile) {
+    setSafeHtml(container, tiles.map(function (tile) {
       return '<div class="stat-tile">' +
         '<div class="stat-label">' + esc(tile.label) + '</div>' +
         '<div class="stat-value">' + esc(String(tile.value)) + '</div>' +
         (tile.note ? '<div class="stat-note">' + esc(tile.note) + '</div>' : '') +
         '</div>';
-    }).join('');
+    }).join(''));
     container.classList.remove('hidden');
     syncMonitorPanelVisibility();
   }
@@ -159,12 +160,12 @@
     if (!container) return;
 
     if (!backtests || !backtests.length) {
-      container.innerHTML = '<div class="slot-empty">暂无回测槽位。启动生产后将自动填充。</div>';
+      setSafeHtml(container, '<div class="slot-empty">暂无回测槽位。启动生产后将自动填充。</div>');
       syncMonitorPanelVisibility();
       return;
     }
 
-    container.innerHTML = backtests.map(function (bt, idx) {
+    setSafeHtml(container, backtests.map(function (bt, idx) {
       var status = bt.status || 'idle';
       var statusClass, badgeClass;
       switch (status) {
@@ -188,7 +189,7 @@
         '<div>Alpha: ' + esc(alphaId) + '</div>' +
         '<div>Sharpe: ' + scoreSpan(Number(sharpe) || 0) + ' | Fitness: ' + scoreSpan(Number(fitness) || 0) + '</div>' +
         '</div></div>';
-    }).join('');
+    }).join(''));
     syncMonitorPanelVisibility();
   }
 

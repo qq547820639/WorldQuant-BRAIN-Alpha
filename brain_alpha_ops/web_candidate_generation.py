@@ -7,6 +7,7 @@ from typing import Any, Callable, Protocol
 from brain_alpha_ops.agent_tools import BrainAlphaToolbox
 from brain_alpha_ops.config import RunConfig, resolve_default_dataset_id
 from brain_alpha_ops.error_payloads import user_error_payload
+from brain_alpha_ops.errors import ValidationError
 from brain_alpha_ops.models import Candidate
 from brain_alpha_ops.research.generator import local_quality
 from brain_alpha_ops.research.guidance import (
@@ -71,7 +72,7 @@ def generate_candidates_payload(
         )
     if not isinstance(result, dict):
         return user_error_payload(
-            TypeError("candidate generator returned a non-object response"),
+            ValidationError("candidate generator returned a non-object response"),
             error_code="GENERATE_CANDIDATES_VALIDATION_ERROR",
             phase="web_generate_candidates",
         )

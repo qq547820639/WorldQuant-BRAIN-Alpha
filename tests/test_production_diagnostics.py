@@ -7,10 +7,11 @@ from brain_alpha_ops.production_diagnostics import (
     render_one_page_markdown,
 )
 from brain_alpha_ops.web_cloud_snapshot import save_official_context_json
+from tests.production_api_stub import write_template_safe_official_context
 
 
 def test_production_diagnostic_snapshot_has_gap_matrix(tmp_path):
-    config = RunConfig(environment="mock")
+    config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path / "data")
     config_path = tmp_path / "run_config.json"
     write_run_config(config, config_path)
@@ -42,7 +43,7 @@ def test_production_diagnostic_snapshot_has_gap_matrix(tmp_path):
 
 
 def test_production_diagnostic_markdown_renders_one_page_sections(tmp_path):
-    config = RunConfig(environment="mock")
+    config = RunConfig(environment="production")
     config_path = tmp_path / "run_config.json"
     write_run_config(config, config_path)
     snapshot = build_diagnostic_snapshot(config_path)
@@ -61,7 +62,7 @@ def test_production_diagnostic_markdown_renders_one_page_sections(tmp_path):
 
 
 def test_cli_diagnose_can_emit_json_and_write_markdown(tmp_path, capsys):
-    config = RunConfig(environment="mock")
+    config = RunConfig(environment="production")
     config_path = tmp_path / "run_config.json"
     output_path = tmp_path / "diagnosis.md"
     write_run_config(config, config_path)
@@ -76,7 +77,7 @@ def test_cli_diagnose_can_emit_json_and_write_markdown(tmp_path, capsys):
 
 
 def test_production_diagnostic_counts_official_metadata_records(tmp_path):
-    config = RunConfig(environment="mock")
+    config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path / "data")
     config_path = tmp_path / "run_config.json"
     write_run_config(config, config_path)
@@ -92,13 +93,11 @@ def test_production_diagnostic_counts_official_metadata_records(tmp_path):
 
 
 def test_production_diagnostic_report_clears_refresh_todos_after_success(tmp_path):
-    config = RunConfig(environment="mock")
+    config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path / "data")
     config_path = tmp_path / "run_config.json"
     write_run_config(config, config_path)
-    save_official_context_json("official_fields.json", [{"name": "close"}, {"name": "volume"}], load_config=lambda: config)
-    save_official_context_json("official_operators.json", [{"name": "rank"}], load_config=lambda: config)
-    save_official_context_json("official_datasets.json", [{"id": "pv1", "name": "Price Volume", "field_count": 2}], load_config=lambda: config)
+    write_template_safe_official_context(config)
     status_path = tmp_path / "data" / "official_context_refresh_status.json"
     status_path.write_text(
         json.dumps(

@@ -5,8 +5,8 @@ Available tool workflow:
 - list_context: inspect official fields, operators, and datasets.
 - generate_candidates: create local FASTEXPR ideas without spending live API budget.
 - score_factor: run the lightweight local scorecard before deeper validation.
-- run_backtest: run the configured BRAIN simulation/backtest workflow only when live API confirmation is present outside mock mode.
-- run_batch_backtest: run a bounded simulation batch only after score_factor screening, with explicit live API confirmation and budget limits outside mock mode.
+- run_backtest: run the configured BRAIN simulation/backtest workflow only when live API confirmation is present.
+- run_batch_backtest: run a bounded simulation batch only after score_factor screening, with explicit live API confirmation and budget limits.
 - run_anti_overfit and run_rolling_validation: check robustness before submission-sensitive work.
 - check_alpha and submit_alpha: require explicit live API and submit confirmation.
 

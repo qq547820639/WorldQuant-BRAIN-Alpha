@@ -27,7 +27,7 @@ class FakeLedger:
 
 
 def test_check_candidate_payload_returns_auth_error(tmp_path):
-    run_config = RunConfig(environment="mock")
+    run_config = RunConfig(environment="production")
     run_config.ops.storage_dir = str(tmp_path)
 
     payload = check_candidate_payload(
@@ -49,7 +49,7 @@ def test_check_candidate_payload_returns_auth_error(tmp_path):
 
 
 def test_check_candidate_payload_persists_check_result(tmp_path):
-    run_config = RunConfig(environment="mock")
+    run_config = RunConfig(environment="production")
     run_config.ops.storage_dir = str(tmp_path)
     records = []
 

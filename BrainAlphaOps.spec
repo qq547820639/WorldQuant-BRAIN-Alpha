@@ -47,7 +47,6 @@ a = Analysis(
         'brain_alpha_ops.research.hypothesis_driven_generator',
         'brain_alpha_ops.brain_api',
         'brain_alpha_ops.brain_api.base',
-        'brain_alpha_ops.brain_api.mock',
         'brain_alpha_ops.brain_api.official',
         'brain_alpha_ops.brain_api.context_defaults',
         'brain_alpha_ops.data',

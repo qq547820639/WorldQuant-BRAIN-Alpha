@@ -1,0 +1,77 @@
+{
+  "schema_version": "brain_alpha_ops_delivery_diagnostics.v1",
+  "generated_at": "2026-05-28T13:24:40+08:00",
+  "project": "brain-alpha-ops v0.3.0",
+  "environment": "production",
+  "verdict": "PASS",
+  "p0_p2": {
+    "redline": {
+      "overall": "PASS",
+      "passed": 76,
+      "total_checks": 76,
+      "blocking": 0
+    },
+    "brain_contract": "PASS",
+    "diagnosis_gap_coverage": "PASS",
+    "diagnostic_report": "PASS",
+    "frontend_inline_contract": "PASS",
+    "release_gate": "PASS",
+    "quality_gate": "PASS"
+  },
+  "official_context": {
+    "fields": 7780,
+    "operators": 66,
+    "datasets": 17,
+    "refresh_status": "metadata_verified",
+    "source": "official_api",
+    "stale_count": 0,
+    "blocking_ok": true,
+    "dataset_field_count_sum": 7780
+  },
+  "parameter_contract": {
+    "thresholds_zero_deviation": true,
+    "api_paths_aligned": true,
+    "parameter_audit_hash_prefix": "7776cac7b513",
+    "scoring_probe_status": "PASS",
+    "scoring_probe_score": 95.37,
+    "history_replay": "ready",
+    "history_count": 6
+  },
+  "web_console": {
+    "host_policy": "127.0.0.1 local-only by default",
+    "inline_bundle_synced": true,
+    "react_sync_target_present": true,
+    "route_dispatch_synced": true,
+    "session_csrf_stream_controls": true
+  },
+  "production_e2e": {
+    "report": "docs/E2E_PRODUCTION_TEST_REPORT_20260528.md",
+    "evidence_dir": "data/e2e_screenshots/",
+    "service_url": "http://127.0.0.1:18766/",
+    "connection": "production session_cookie",
+    "cloud_sync_job": "job_0005",
+    "cloud_sync_status": "completed",
+    "cloud_sync_scanned": 23254,
+    "production_job": "job_0008",
+    "production_job_status": "stopped",
+    "produced_count": 3,
+    "official_validation_passed": 1,
+    "officially_simulated": 0,
+    "submitted_this_run": 0,
+    "auto_submitted": 0,
+    "submission_block_reason": "high cloud correlation risk; max_similarity=1.0",
+    "submissions_ledger_exists": false
+  },
+  "deliverables": {
+    "diagnostic_markdown": "docs/DIAGNOSTIC_REPORT_20260528.md",
+    "diagnostic_json": "docs/PRODUCTION_DIAGNOSTICS_20260528.json",
+    "quantgpt_comparison": "docs/QUANTGPT_COMPARISON_20260528.md",
+    "e2e_report": "docs/E2E_PRODUCTION_TEST_REPORT_20260528.md",
+    "acceptance_report": "docs/DELIVERY_ACCEPTANCE_20260528.md"
+  },
+  "residual_risks": [
+    "jsonschema is not installed in this environment; built-in limited validation was used by the gates.",
+    "Official score calibration still needs more real PASS/FAIL samples before auto-calibration is enabled.",
+    "E2E found no safe submission candidate; no real submit was performed."
+  ]
+}

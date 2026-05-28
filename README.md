@@ -35,7 +35,7 @@ BRAIN Alpha Ops 帮你把 Alpha 研究流程放到一个清晰的网页里：
 打开 PowerShell，进入你想保存项目的文件夹，然后运行：
 
 ```powershell
-git clone https://github.com/qq547820639/WorldQuant-BRAIN-Alpha.git
+git clone <your-repository-url>
 cd WorldQuant-BRAIN-Alpha
 
 python -m venv venv
@@ -460,6 +460,7 @@ http://127.0.0.1:8766
 ## 安全提醒
 
 - 不要把 BRAIN 账号、密码或登录令牌写进 README、配置文件、日志或提交记录。
+- 命令行启动生产任务时，也不要使用 `--password` 或 `--token` 传入凭据；请使用 `BRAIN_USERNAME` / `BRAIN_PASSWORD` / `BRAIN_TOKEN` 环境变量。
 - 电脑离开时，关闭浏览器页面或点击右上角“关闭服务”。
 - 提交前先同步云端数据，再做达标检查。
 - 不确定时，保持“自动提交”关闭。

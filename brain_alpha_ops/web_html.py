@@ -21,7 +21,20 @@ _HTML_LOCK = threading.RLock()
 
 
 def default_html_path() -> Path:
-    return Path(__file__).resolve().parent / "web" / "index.html"
+    """Return the primary HTML template path.
+
+    Priority:
+      1. web/index.html                  (canonical production SPA)
+      2. web/react_app/dist/index.html   (legacy React build artifact)
+    """
+    base = Path(__file__).resolve().parent
+    legacy_path = base / "web" / "index.html"
+    if legacy_path.is_file():
+        return legacy_path
+    react_path = base / "web" / "react_app" / "dist" / "index.html"
+    if react_path.is_file():
+        return react_path
+    return legacy_path
 
 
 def load_html(path: Path | None = None) -> str:

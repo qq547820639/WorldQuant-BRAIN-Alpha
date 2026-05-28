@@ -7,6 +7,7 @@
 
   var $ = window.Utils.$;
   var esc = window.Utils.escapeHtml;
+  var setSafeHtml = window.Utils.setSafeHtml;
   var visible = false;
   var _messageTimer = null;
   var _stageMessages = [];
@@ -42,7 +43,7 @@
     if (overlay) {
       overlay.classList.add('hidden');
       overlay.setAttribute('aria-hidden', 'true');
-      overlay.removeAttribute('aria-label');
+      if (typeof overlay.removeAttribute === 'function') overlay.removeAttribute('aria-label');
       overlay.removeEventListener('keydown', trapFocus);
     }
     visible = false;
@@ -110,7 +111,7 @@
       }
       skeletonHtml += '</tr>';
     }
-    tableBody.innerHTML = skeletonHtml;
+    setSafeHtml(tableBody, skeletonHtml);
 
     // Hide empty state
     var emptyEl = $('tableEmptyState');
@@ -132,9 +133,16 @@
     var blocks = '';
     for (var i = 0; i < blockCount; i++) {
       var delay = i * 80;
-      blocks += '<div class="skeleton" style="height:48px;margin-bottom:8px;animation-delay:' + delay + 'ms"></div>';
+      blocks += '<div class="skeleton skeleton-content" data-delay="' + delay + '"></div>';
     }
-    container.innerHTML = blocks;
+    setSafeHtml(container, blocks);
+    var nodes = container.querySelectorAll('.skeleton-content');
+    for (var j = 0; j < nodes.length; j++) {
+      nodes[j].style.height = '48px';
+      nodes[j].style.marginBottom = '8px';
+      var nodeDelay = typeof nodes[j].getAttribute === 'function' ? nodes[j].getAttribute('data-delay') : '0';
+      nodes[j].style.animationDelay = nodeDelay + 'ms';
+    }
   }
 
   // ── Async wrapper ─────────────────────────────────────────────────────

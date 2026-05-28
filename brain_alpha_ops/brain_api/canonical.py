@@ -17,6 +17,11 @@ CANONICAL_THRESHOLDS = {
     "sub_universe_sharpe_min_ratio": 0.75,
 }
 
+CANONICAL_RELEASE_REQUIREMENTS = {
+    "require_official_pass": True,
+    "require_official_metrics": True,
+}
+
 CANONICAL_API_PATHS = {
     "authentication": "/authentication",
     "simulations": "/simulations",

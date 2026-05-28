@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import logging
-from typing import Callable
+from typing import Callable, Optional
 
 from brain_alpha_ops.config import OpsConfig
 from brain_alpha_ops.models import Candidate
@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 RecordLifecycle = Callable[[Candidate, str, str], None]
 RememberAccepted = Callable[[list[Candidate], Candidate], None]
 RetrySimulation = Callable[[Candidate, dict[str, Candidate], str], bool]
-SecondaryFusion = Callable[[Candidate, dict[str, Candidate], set[str], str], Candidate | None]
+SecondaryFusion = Callable[[Candidate, dict[str, Candidate], set[str], str], Optional[Candidate]]
 ArchiveCandidates = Callable[[dict[str, int], list[Candidate], list[Candidate]], None]
 AutoSubmit = Callable[[Candidate, int], int]
 ShouldRemove = Callable[[Candidate], bool]
@@ -42,7 +42,7 @@ class BacktestFinalizationOutcome:
 class BacktestFinalizationService:
     config: OpsConfig
     check_registry: object
-    scoring_params: object | None
+    scoring_params: Optional[object]
     record_lifecycle: RecordLifecycle
     remember_accepted: RememberAccepted
     retry_simulation: RetrySimulation

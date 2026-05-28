@@ -30,7 +30,7 @@ from brain_alpha_ops.dataset_defaults import resolve_default_dataset_id
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_RUN_CONFIG_PATH = PROJECT_ROOT / "config" / "run_config.json"
 
-_VALID_ENVIRONMENTS = {"mock", "production"}
+_VALID_ENVIRONMENT = "production"
 _VALID_REGIONS = SUPPORTED_REGIONS
 _VALID_UNIVERSES = SUPPORTED_UNIVERSES
 _VALID_DELAYS = SUPPORTED_DELAYS
@@ -396,7 +396,8 @@ def validate_run_config(config: RunConfig) -> RunConfig:
         raise ConfigValidationError("run_config must be a RunConfig instance")
 
     errors: list[str] = []
-    _require_enum(errors, "environment", config.environment, _VALID_ENVIRONMENTS)
+    if str(config.environment).lower() != "production":
+        errors.append(f"environment must be 'production', got: {config.environment}")
     _require_bool(errors, "auto_submit", config.auto_submit)
     _validate_credentials(errors, config.credentials)
     _validate_web(errors, config.web)
@@ -411,7 +412,7 @@ def validate_run_config(config: RunConfig) -> RunConfig:
     # Only mutate settings if resolution succeeded; pure validation otherwise.
     if resolved:
         config.ops.settings.dataset = resolved
-    _validate_ops(errors, config.ops, environment=config.environment)
+    _validate_ops(errors, config.ops)
     if errors:
         raise ConfigValidationError("Invalid run configuration: " + "; ".join(errors))
     return config
@@ -439,7 +440,7 @@ def _validate_web(errors: list[str], web: WebConfig) -> None:
     _require_str(errors, "web.admin_token_env", web.admin_token_env, allow_empty=False)
 
 
-def _validate_ops(errors: list[str], ops: OpsConfig, *, environment: str = "") -> None:
+def _validate_ops(errors: list[str], ops: OpsConfig) -> None:
     if not isinstance(ops, OpsConfig):
         errors.append("ops must be an object")
         return
@@ -448,7 +449,7 @@ def _validate_ops(errors: list[str], ops: OpsConfig, *, environment: str = "") -
     _validate_scoring(errors, ops.scoring)
     _validate_thresholds(errors, ops.thresholds)
     _validate_submission_policy(errors, ops.submission_policy)
-    _validate_official_api(errors, ops.official_api, environment=environment)
+    _validate_official_api(errors, ops.official_api)
     _require_str(errors, "ops.storage_dir", ops.storage_dir, allow_empty=False)
     _require_str(errors, "ops.source_tag_policy", ops.source_tag_policy, allow_empty=False)
 
@@ -665,11 +666,11 @@ def _validate_submission_policy(errors: list[str], policy: SubmissionPolicy) -> 
     )
 
 
-def _validate_official_api(errors: list[str], api: OfficialAPIConfig, *, environment: str = "") -> None:
+def _validate_official_api(errors: list[str], api: OfficialAPIConfig) -> None:
     if not isinstance(api, OfficialAPIConfig):
         errors.append("ops.official_api must be an object")
         return
-    _validate_http_url(errors, "ops.official_api.base_url", api.base_url, require_https=(environment == "production"))
+    _validate_http_url(errors, "ops.official_api.base_url", api.base_url, require_https=True)
     for field_name in (
         "authentication_path",
         "simulations_path",

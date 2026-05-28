@@ -5,7 +5,7 @@ from brain_alpha_ops import web_redline_scoring
 
 
 def test_scoring_attribution_resolves_candidate_from_alpha_id(monkeypatch, tmp_path):
-    config = RunConfig(environment="mock")
+    config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path)
     repo = ResearchRepository(str(tmp_path))
     repo.save_candidate(
@@ -45,7 +45,7 @@ def test_scoring_attribution_resolves_candidate_from_alpha_id(monkeypatch, tmp_p
 
 
 def test_scoring_attribution_reports_missing_candidate(monkeypatch, tmp_path):
-    config = RunConfig(environment="mock")
+    config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path)
     monkeypatch.setattr(web_redline_scoring, "load_run_config", lambda: config)
 
@@ -56,7 +56,7 @@ def test_scoring_attribution_reports_missing_candidate(monkeypatch, tmp_path):
 
 
 def test_scoring_health_reports_auto_calibration_status(monkeypatch, tmp_path):
-    config = RunConfig(environment="mock")
+    config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path)
     (tmp_path / "alpha_features.jsonl").write_text(
         "\n".join(
@@ -79,7 +79,7 @@ def test_scoring_health_reports_auto_calibration_status(monkeypatch, tmp_path):
 
 
 def test_checkpoint_status_uses_configured_storage_for_resume_and_history(monkeypatch, tmp_path):
-    config = RunConfig(environment="mock")
+    config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path)
     checkpoint_dir = tmp_path / "checkpoints"
     checkpoint_dir.mkdir()

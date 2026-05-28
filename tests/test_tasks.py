@@ -1,6 +1,7 @@
 import threading
+import json
 
-from brain_alpha_ops.tasks import DEFAULT_RECOVERY_ERROR, JobStore
+from brain_alpha_ops.tasks import DEFAULT_RECOVERY_ERROR, JobStore, _compact_runtime_result
 
 
 def test_job_store_persists_completed_jobs(tmp_path):
@@ -110,3 +111,51 @@ def test_job_store_concurrent_create_update_cancel_stays_bounded(tmp_path):
     assert 1 <= len(rows) <= 75
     assert len(restored.all()) <= 75
     assert all(job_id.startswith("job_") for job_id, _job in rows)
+
+
+def test_job_store_load_prunes_large_history_before_redaction(tmp_path):
+    path = tmp_path / "jobs.json"
+    jobs = {}
+    for index in range(20):
+        jobs[f"job_{index:04d}"] = {
+            "status": "completed",
+            "updated_at": index,
+            "result": {"rows": [{"token": f"secret-token-{index}-{inner}"} for inner in range(20)]},
+        }
+    path.write_text(json.dumps({"version": 1, "jobs": jobs}), encoding="utf-8")
+
+    restored = JobStore(path, max_jobs=5, recover_active_as="")
+    rows = restored.all()
+
+    assert len(rows) == 5
+    assert [job_id for job_id, _job in rows] == [
+        "job_0019",
+        "job_0018",
+        "job_0017",
+        "job_0016",
+        "job_0015",
+    ]
+    assert all(job["result"]["rows"]["items_count"] == 20 for _job_id, job in rows)
+    assert all(
+        item["token"] == "<redacted>"
+        for _job_id, job in rows
+        for item in job["result"]["rows"]["items_preview"]
+    )
+
+
+def test_compact_runtime_result_replaces_heavy_runtime_lists_with_counts_and_preview():
+    result = {
+        "ok": True,
+        "alphas": [{"id": f"a{index}", "nested": [{"token": f"secret-token-{index}-{inner}"} for inner in range(8)]} for index in range(12)],
+        "candidates": [{"alpha_id": "c1"}],
+    }
+
+    compact = _compact_runtime_result(result, preview_rows=3)
+
+    assert "alphas" not in compact
+    assert compact["alphas_count"] == 12
+    assert len(compact["alphas_preview"]) == 3
+    assert compact["alphas_preview"][0]["nested"]["items_count"] == 8
+    assert len(compact["alphas_preview"][0]["nested"]["items_preview"]) == 3
+    assert compact["candidates_count"] == 1
+    assert compact["candidates_preview"] == [{"alpha_id": "c1"}]

@@ -2,15 +2,15 @@ import json
 from io import StringIO
 
 from brain_alpha_ops.agent_tools import BrainAlphaToolbox
-from brain_alpha_ops.brain_api import MockBrainAPI
+from tests.production_api_stub import ProductionBrainAPIStub
 from brain_alpha_ops.config import RunConfig
 from brain_alpha_ops.mcp_server import handle_request, serve_stdio
 
 
 def toolbox(tmp_path):
-    config = RunConfig(environment="mock")
+    config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path)
-    return BrainAlphaToolbox(run_config=config, api=MockBrainAPI())
+    return BrainAlphaToolbox(run_config=config, api=ProductionBrainAPIStub())
 
 
 def test_mcp_initialize_and_tool_list(tmp_path):

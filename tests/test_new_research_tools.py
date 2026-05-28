@@ -1,13 +1,13 @@
 from brain_alpha_ops.agent_tools import BrainAlphaToolbox
-from brain_alpha_ops.brain_api import MockBrainAPI
+from tests.production_api_stub import ProductionBrainAPIStub
 from brain_alpha_ops.config import RunConfig
 from brain_alpha_ops.models import Candidate
 
 
 def _toolbox(tmp_path):
-    config = RunConfig(environment="mock")
+    config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path)
-    return BrainAlphaToolbox(run_config=config, api=MockBrainAPI())
+    return BrainAlphaToolbox(run_config=config, api=ProductionBrainAPIStub())
 
 
 def test_new_tool_manifest_entries_exist():

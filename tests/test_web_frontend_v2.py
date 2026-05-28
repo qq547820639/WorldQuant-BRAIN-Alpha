@@ -34,7 +34,9 @@ ALL_MODULES = {
     "js/components/spinner.js",
     "js/components/table.js",
     "js/components/toast.js",
+    "js/cloud-sync.js",
     "js/form-controls.js",
+    "js/header-status.js",
     "js/result-state.js",
     "js/result-table.js",
     "js/state.js",
@@ -301,7 +303,7 @@ def _frontend_module_load_order(modules: list[str]) -> list[str]:
     ordered = list(modules)
     if "js/app.js" not in ordered:
         return ordered
-    for dependency in ["js/result-state.js", "js/result-table.js", "js/form-controls.js", "js/strategy-panel.js"]:
+    for dependency in ["js/result-state.js", "js/result-table.js", "js/form-controls.js", "js/strategy-panel.js", "js/cloud-sync.js", "js/header-status.js"]:
         if dependency in ordered:
             continue
         insert_at = ordered.index("js/app.js")
@@ -515,6 +517,9 @@ def test_template_has_ux_refactor_shell_contract():
     assert "policy-card" in app_js + css
     assert "policy-card.is-wide" in css
     assert "connection-result" in template
+    assert 'rel="icon"' in template
+    assert 'id="connectionForm"' in template
+    assert "addEventListener('submit'" in app_js
     assert "assistant-generate-inputs" in template
     assert "sync-card" in template
     assert "slot-panel" in template
@@ -852,6 +857,11 @@ assertDefined(VM, "ViewModel defined");
 assertEqual(VM.candidateIdentity({ alpha_id: "ABC" }), "ABC", "alpha_id");
 assertEqual(VM.candidateIdentity({ official_alpha_id: "OFF" }), "OFF", "official_alpha_id");
 assertEqual(VM.candidateIdentity({ simulation_id: "SIM" }), "SIM", "simulation_id");
+
+// lifecycle status labels must distinguish expression validation from official simulation.
+assertEqual(VM.lifecycleStatusLabel({ lifecycle_status: "official_validation_passed" }), "官方表达式验证通过", "validation label");
+assertEqual(VM.lifecycleStatusLabel({ lifecycle_status: "official_simulated" }), "官方回测完成", "simulation label");
+assertEqual(VM.lifecycleStatusLabel({ lifecycle_status: "submission_ready" }), "可提交", "ready label");
 
 // normalizedExpression
 assertEqual(VM.normalizedExpression("a + b  *  c"), "a + b * c", "normalize whitespace");
@@ -1272,14 +1282,14 @@ try {
 } catch (e) {
   assert(false, "renderCharts should not throw: " + e.message);
 }
-assertContains(document.getElementById("chartFallback").textContent, "Chart.js 未加载", "offline fallback text");
+assertContains(document.getElementById("chartFallback").textContent, "表格视图仍可继续使用", "offline fallback text");
 
 window.AppState.set("currentResult.candidates", [
   { alpha_id: "A1", scorecard: { total_score: 80, sharpe: 1.2, turnover: 0.18 }, gate: { submission_ready: true } },
   { alpha_id: "A2", scorecard: { total_score: 65, sharpe: 0.9, turnover: 0.25 }, gate: { passed: false } },
 ]);
 window.ChartView.renderCharts();
-assertContains(document.getElementById("chartFallback").textContent, "本地 canvas", "native fallback text");
+assertContains(document.getElementById("chartFallback").textContent, "本地简版图表", "native fallback text");
 assert(document.getElementById("scoreTrendChart").drawOps.length > 0, "score fallback drawn");
 assertContains(document.getElementById("gatePieChart").drawOps.join("|"), "arc", "gate pie fallback drawn");
 
@@ -1398,11 +1408,12 @@ assertDefined(window.renderBusyControls, "renderBusyControls exported");
 assertDefined(window.collectPayload, "collectPayload exported");
 assertDefined(window.renderStrategyPolicy, "renderStrategyPolicy exported");
 assertDefined(window.toggleTheme, "toggleTheme exported");
-assertDefined(window.toggleEnvironment, "toggleEnvironment exported");
 assertDefined(window.toggleSelectCandidate, "toggleSelectCandidate exported");
 assertDefined(window.submitSelectedCandidates, "submitSelectedCandidates exported");
 assertDefined(window.submitSingleCandidate, "submitSingleCandidate exported");
 assertDefined(window.syncCloud, "syncCloud exported");
+assertDefined(window.cancelSyncCloud, "cancelSyncCloud exported");
+assertDefined(window.retrySyncCloud, "retrySyncCloud exported");
 assertDefined(window.checkBatch, "checkBatch exported");
 assertDefined(window.shutdownApp, "shutdownApp exported");
 assertDefined(window.applyPreset, "applyPreset exported");
@@ -1522,20 +1533,35 @@ assertEqual(document.getElementById("workflowStepCheck").classList.contains("is-
 assertContains(document.getElementById("workflowStatus").textContent, "可提交", "status guides next step");
 
 window.AppState.set("syncInFlight", true);
+window.AppState.set("syncJobId", "sync_1");
+window.AppState.set("syncRecoverable", true);
 window.renderBusyControls();
 assertEqual(document.getElementById("workflowRunButton").disabled, true, "run disabled during sync");
 assertEqual(document.getElementById("sideSyncButton").disabled, true, "side sync disabled during sync");
 assertContains(document.getElementById("sideTaskReason").textContent, "云端同步", "side console explains sync lock");
 assertEqual(document.getElementById("workflowStatus").classList.contains("is-busy"), true, "busy status class");
+assertEqual(document.getElementById("runtimeStopButton").getAttribute("data-action"), "cancel-sync-cloud", "runtime stop cancels sync");
+assertContains(document.getElementById("runtimeStopButton").textContent, "停止同步", "runtime stop label explains sync cancel");
+assertEqual(document.getElementById("runtimeRetryButton").classList.contains("hidden"), false, "sync recovery shows retry action");
 window.AppState.set("syncInFlight", false);
+window.AppState.set("syncJobId", "");
+window.AppState.set("syncRecoverable", false);
 
 document.getElementById("strategyPluginsEnabled").checked = false;
+document.getElementById("strategyPluginSpecs").value = "brain_alpha_ops.examples.strategy_plugin:ExampleStrategyPlugin";
 window.renderBusyControls();
 assertEqual(document.getElementById("strategyPluginSpecs").disabled, true, "plugin specs disabled when plugin switch is off");
 assertEqual(document.getElementById("strategyPluginSpecsGroup").classList.contains("is-disabled"), true, "plugin specs group visibly disabled");
+assertContains(document.getElementById("strategyPluginSpecsHelp").textContent, "已保留但不会使用", "plugin help explains retained inactive value");
 document.getElementById("strategyPluginsEnabled").checked = true;
 window.renderBusyControls();
 assertEqual(document.getElementById("strategyPluginSpecs").disabled, false, "plugin specs enabled when plugin switch is on");
+
+window.AppState.setBatch({ connectionStatus: "connected", connectionEnvironment: "production", connectionAuth: "password" });
+window._app.renderHeaderStatus();
+assertContains(document.getElementById("globalStatus").textContent, "已连接", "header shows successful connection");
+assertContains(document.getElementById("globalStatus").textContent, "production", "header keeps environment visible");
+assertContains(document.getElementById("headerStatusDot").className, "is-connected", "connected status dot");
 
 window.AppState.setBatch({
   "currentResult.candidates": [],
@@ -1588,6 +1614,7 @@ assertContains(tbody.innerHTML, "ALPHA001", "first alpha rendered");
 assertContains(tbody.innerHTML, "ALPHA002", "second alpha rendered");
 assertEqual(document.getElementById("tableWrap").classList.contains("is-empty"), false, "data table wrapper exits empty layout when rows exist");
 assertContains(tbody.innerHTML, "badge-success", "app keeps whitelisted badges as html");
+assertContains(tbody.innerHTML, "可提交", "submission_ready label is human readable");
 
 var pill = document.getElementById("countPill");
 assertContains(pill.textContent, "2", "count pill shows 2");
@@ -1810,6 +1837,15 @@ assertContains(target.innerHTML, "池容量", "shows pool size label");
 assertContains(target.innerHTML, "10", "shows pool size value");
 assertContains(target.innerHTML, "连续生产", "shows run forever");
 assertContains(target.innerHTML, "策略插件", "shows plugin policy label");
+
+document.getElementById("strategyPluginsEnabled").checked = false;
+document.getElementById("strategyPluginSpecs").value = "mod:Plugin";
+window.StrategyPanel.syncPluginControls();
+assertContains(target.innerHTML, "关闭", "plugin summary follows disabled control state");
+assertContains(target.innerHTML, "关闭时不会加载", "plugin summary explains retained disabled specs");
+document.getElementById("strategyPluginsEnabled").checked = true;
+window.StrategyPanel.syncPluginControls();
+assertContains(target.innerHTML, "开启 | 1 条", "plugin summary follows enabled control state");
 """
 
     _run_node_script(_build_test_script(
@@ -1897,5 +1933,3 @@ assertEqual(titleEl.textContent, "候选池", "title correct");
          "js/views/monitor.js", "js/app.js"],
         test_code
     ))
-
-

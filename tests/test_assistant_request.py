@@ -13,7 +13,7 @@ from brain_alpha_ops.research.repository import ResearchRepository
 
 
 def test_assistant_request_pack_wraps_context_with_schema_and_draft(tmp_path):
-    config = RunConfig(environment="mock")
+    config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path)
     ResearchRepository(str(tmp_path)).save_candidate(
         "run_1",

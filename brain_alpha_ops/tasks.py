@@ -22,6 +22,7 @@ from brain_alpha_ops.redaction import redact_data
 
 ACTIVE_STATUSES = {"queued", "running", "stopping"}
 DEFAULT_RECOVERY_ERROR = "Process restarted before this task completed."
+JOB_PREVIEW_ROWS = 5
 
 
 class JobStore:
@@ -139,7 +140,14 @@ class JobStore:
         if not isinstance(raw_jobs, dict):
             return
         now = time.time()
-        for job_id, row in raw_jobs.items():
+        rows = [
+            (str(job_id), row)
+            for job_id, row in raw_jobs.items()
+            if isinstance(row, dict)
+        ]
+        if len(rows) > self.max_jobs:
+            rows = sorted(rows, key=lambda item: _updated_at(item[1]), reverse=True)[: self.max_jobs]
+        for job_id, row in rows:
             if not isinstance(row, dict):
                 continue
             clean = _job_safe(row)
@@ -154,7 +162,7 @@ class JobStore:
                     "percent": 100,
                     "message": clean["error"],
                 }
-            self.jobs[str(job_id)] = clean
+            self.jobs[job_id] = clean
         self._prune_locked()
         self._persist_locked()
 
@@ -216,5 +224,29 @@ def _json_safe(value: Any) -> Any:
     return json.loads(json.dumps(value, ensure_ascii=False, default=str))
 
 
+def _compact_runtime_result(value: Any, *, preview_rows: int = JOB_PREVIEW_ROWS) -> Any:
+    if isinstance(value, dict):
+        compact: dict[str, Any] = {}
+        for key, item in value.items():
+            if key in {"alphas", "cloud_alphas", "candidates", "backtests", "lifecycle_records"} and isinstance(item, list):
+                compact[f"{key}_count"] = len(item)
+                compact[f"{key}_preview"] = [_compact_runtime_result(row, preview_rows=preview_rows) for row in item[:preview_rows]]
+                continue
+            compact[key] = _compact_runtime_result(item, preview_rows=preview_rows)
+        return compact
+    if isinstance(value, list):
+        if len(value) > preview_rows:
+            return {
+                "items_count": len(value),
+                "items_preview": [_compact_runtime_result(item, preview_rows=preview_rows) for item in value[:preview_rows]],
+            }
+        return [_compact_runtime_result(item, preview_rows=preview_rows) for item in value]
+    return value
+
+
 def _job_safe(value: Any) -> Any:
-    return redact_data(_json_safe(value))
+    safe = _json_safe(value)
+    if isinstance(safe, dict) and "result" in safe:
+        safe = dict(safe)
+        safe["result"] = _compact_runtime_result(safe.get("result"))
+    return redact_data(safe)

@@ -62,7 +62,9 @@ def build_inline(template_text: str, *, strict: bool = True) -> tuple[str, dict]
     html = INLINE_PATTERN.sub(replace_inline, html)
     return html, {
         "replaced": replaced,
-        "css_replaced": css_replaced,
+        # Keep the legacy metric as a CSS-bundle indicator; css_sources carries
+        # the exact file list when multiple stylesheets are inlined.
+        "css_replaced": 1 if css_replaced else 0,
         "missing": missing,
         "sources": sources,
         "css_sources": css_sources,

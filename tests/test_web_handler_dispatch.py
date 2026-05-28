@@ -45,11 +45,12 @@ class _Lock:
 
 
 class _Handler:
-    def __init__(self, *, body=None, allowed=True, session=True, headers=None):
+    def __init__(self, *, body=None, allowed=True, session=True, headers=None, replay=None):
         self.body = body or {}
         self.allowed = allowed
         self.session = session
         self.headers = headers or {}
+        self.replay = replay or {"ok": True}
         self.json_calls = []
         self.html_calls = []
         self.stream_queries = []
@@ -59,6 +60,9 @@ class _Handler:
 
     def _has_valid_session(self, query):
         return self.session
+
+    def _validate_replay_request(self):
+        return self.replay
 
     def _session_id_from_cookie(self):
         return "session_1"
@@ -113,7 +117,7 @@ def _ctx():
         sync_jobs=sync_jobs,
         check_jobs=check_jobs,
         enrich_progress=lambda progress: {**progress, "enriched": True},
-        public_run_config=lambda: {"environment": "mock"},
+        public_run_config=lambda: {"environment": "production"},
         public_config_schema=lambda: {"schema_version": "test_schema"},
         latest_result_snapshot=lambda: {"ok": True, "source": "latest"},
         lifecycle_from_job=lambda job: [{"stage": "x"}],
@@ -319,6 +323,47 @@ def test_dispatch_post_starts_jobs_and_handles_submit_lock():
     review = _Handler(body={"request_pack": {}, "primary_response": "{}"})
     dispatch_post(review, urlparse("/api/assistant_cross_review"), ctx)
     assert review.json_calls[0][0]["review"] == {"request_pack": {}, "primary_response": "{}"}
+
+
+def test_dispatch_post_check_batch_validates_candidate_ids_before_starting_job():
+    ctx, started, _lock = _ctx()
+
+    check_batch = _Handler(body={"candidate_ids": "not-a-list"})
+    dispatch_post(check_batch, urlparse("/api/check_batch"), ctx)
+
+    assert check_batch.json_calls[0][1] == 400
+    assert check_batch.json_calls[0][0]["error_code"] == "VALIDATION_ERROR"
+    assert "candidate_ids" in check_batch.json_calls[0][0]["error"]
+    assert started == []
+
+
+def test_dispatch_post_requires_valid_replay_headers():
+    ctx, started, _lock = _ctx()
+
+    missing = _Handler(body={"alpha": 1}, replay={"ok": False, "error_code": "REPLAY_TOKEN_REQUIRED", "error": "missing request id"})
+    dispatch_post(missing, urlparse("/api/run"), ctx)
+    assert missing.json_calls[0][1] == 400
+    assert missing.json_calls[0][0]["error_code"] == "REPLAY_TOKEN_REQUIRED"
+    assert started == []
+
+    duplicate = _Handler(body={"alpha": 1}, replay={"ok": False, "error_code": "REPLAY_DETECTED", "error": "duplicate request id"})
+    dispatch_post(duplicate, urlparse("/api/run"), ctx)
+    assert duplicate.json_calls[0][1] == 409
+    assert duplicate.json_calls[0][0]["error_code"] == "REPLAY_DETECTED"
+
+
+def test_dispatch_post_can_cancel_sync_job():
+    ctx, _started, _lock = _ctx()
+
+    cancel = _Handler(body={"job_id": "sync_1"})
+    dispatch_post(cancel, urlparse("/api/sync_cancel"), ctx)
+
+    payload, status, _headers = cancel.json_calls[0]
+    assert status == 200
+    assert payload["ok"] is True
+    assert payload["job_id"] == "sync_1"
+    assert payload["status"] == "stopping"
+    assert "云端同步" in payload["message"]
 
 
 def test_dispatch_post_run_validates_before_starting_job():

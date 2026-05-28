@@ -2,7 +2,7 @@ import json
 from pathlib import Path
 
 from brain_alpha_ops.agent_tools import BrainAlphaToolbox
-from brain_alpha_ops.brain_api import MockBrainAPI
+from tests.production_api_stub import ProductionBrainAPIStub
 from brain_alpha_ops.config import RunConfig
 from brain_alpha_ops.models import Candidate
 from brain_alpha_ops.research.memory import ResearchMemory
@@ -313,9 +313,9 @@ def test_agent_toolbox_queries_research_memory(tmp_path):
             operators=["rank", "ts_delta"],
         ),
     )
-    config = RunConfig(environment="mock")
+    config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path)
-    toolbox = BrainAlphaToolbox(run_config=config, api=MockBrainAPI())
+    toolbox = BrainAlphaToolbox(run_config=config, api=ProductionBrainAPIStub())
 
     result = toolbox.call("query_research_memory", {"top_n": 3, "persist": True})
 

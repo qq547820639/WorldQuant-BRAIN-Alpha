@@ -22,6 +22,13 @@ from scripts.check_frontend_syntax import check_scripts
 from tests.test_web_frontend_v2 import _build_test_script, _run_node_script
 
 
+def _free_port_or_skip(start: int, host: str = "127.0.0.1") -> int:
+    try:
+        return web.find_free_port(start=start, host=host)
+    except (OSError, RuntimeError, PermissionError) as exc:
+        pytest.skip(f"local web server ports unavailable in this environment: {exc}")
+
+
 APP_TEST_MODULES = [
     "js/utils.js",
     "js/api-client.js",
@@ -42,6 +49,7 @@ APP_TEST_MODULES = [
     "js/result-table.js",
     "js/form-controls.js",
     "js/cloud-sync.js",
+    "js/header-status.js",
     "js/app.js",
 ]
 
@@ -101,6 +109,8 @@ def test_web_html_contains_chinese_console():
         "sideSyncButton",
         "sideCheckButton",
         "sideSubmitButton",
+        "runtimeRetryButton",
+        "runtimeLogButton",
         "slotPolicyText",
         "assistantGenerateInputs",
         "assistantUseDraftButton",
@@ -116,6 +126,7 @@ def test_web_html_contains_chinese_console():
         "getEmptyDescription",
         "switchView",
         "renderStrategyPolicy",
+        "HeaderStatus",
         "renderOpsMonitor",
         "buildResearchRows",
         "monitor-stats-grid",
@@ -129,6 +140,8 @@ def test_web_html_contains_chinese_console():
         "payload.guided = true",
         "resumeProductionFromCheckpoint",
         "pollJob",
+        "cancelSyncCloud",
+        "retrySyncCloud",
         "slot-card",
         "phaseName",
         "official_validation",
@@ -175,6 +188,7 @@ def test_web_html_contains_chinese_console():
         "/api/submit",
         "/api/submit_batch",
         "/api/sync_alphas",
+        "/api/sync_cancel",
     ):
         assert path in HTML
 
@@ -277,7 +291,8 @@ def test_web_static_html_uses_delegated_handlers_without_inline_events():
         assert "onkeydown=" not in html
         assert 'data-action="toggle-run"' in html
         assert 'data-action="sync-cloud"' in html
-        assert 'data-change-action="toggle-environment"' in html
+        assert 'data-change-action="toggle-environment"' not in html
+        assert '<select id="environment" class="form-select" disabled>' in html
         assert 'value="mock"' not in html
         assert "本地模拟环境" not in html
 
@@ -447,7 +462,8 @@ def test_charts_handle_empty_and_large_datasets():
     assert "function renderCharts(options)" in charts_js
     assert "Array.isArray(options.candidates)" in charts_js
     assert "sampleRows(candidateRows(candidates)" in charts_js
-    assert "已启用本地 canvas 简版图表" in charts_js
+    assert "已启用本地简版图表" in charts_js
+    assert "表格视图仍可继续使用" in charts_js
     assert "cdn.jsdelivr.net" not in template
     assert "api.fontshare.com" not in template
     assert "code.iconify.design" not in template
@@ -682,7 +698,7 @@ def test_web_config_from_payload_rejects_invalid_numbers():
         config_from_payload({"cyclePauseSeconds": -1})
 
 
-def test_web_config_from_payload_rejects_user_facing_mock_environment():
+def test_web_config_from_payload_rejects_non_production_environment():
     with pytest.raises(ValueError, match="only supports production"):
         config_from_payload({"environment": "mock"})
 
@@ -752,7 +768,7 @@ def test_web_routes_define_session_policy_and_known_paths():
 
 
 def test_official_context_save_writes_cache_metadata(monkeypatch, tmp_path):
-    config = RunConfig(environment="mock")
+    config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path)
     config.ops.official_api.context_cache_ttl_seconds = 123
     monkeypatch.setattr(web, "load_run_config", lambda *args, **kwargs: config)
@@ -795,7 +811,7 @@ def test_run_job_failure_records_error_context(monkeypatch, tmp_path):
     def boom(_run_config, **_kwargs):
         raise RuntimeError("secret-token-123 failed")
 
-    monkeypatch.setattr(web, "run_config_from_payload", lambda payload: RunConfig(environment="mock"))
+    monkeypatch.setattr(web, "run_config_from_payload", lambda payload: RunConfig(environment="production"))
     monkeypatch.setattr(web, "run_pipeline_from_config", boom)
     try:
         web.run_job(job_id, {})
@@ -843,7 +859,7 @@ def test_web_error_payload_preserves_endpoint_code_and_classification():
 
 @pytest.mark.skipif(os.getenv("CI") == "true", reason="skipping live server test in CI environment")
 def test_web_smoke_test_server_exercises_session_lifecycle():
-    port = web.find_free_port(start=8876)
+    port = _free_port_or_skip(start=8876)
 
     result = web.smoke_test_server(port=port)
 
@@ -874,9 +890,35 @@ def test_stream_uses_separate_session_token():
         web._expire_session(session_id)
 
 
+def test_sse_handler_accepts_stream_token_query_for_session_auth():
+    session_id, _csrf_token = web._create_session()
+    try:
+        stream_token = web._stream_token_for_session(session_id)
+
+        class _Probe(web.Handler):
+            def __init__(self):
+                self.path = "/api/stream"
+                self.headers = {"Cookie": web._session_cookie_header(session_id)}
+                self.json_calls = []
+
+            def _json(self, payload, status=200, *, extra_headers=None):
+                self.json_calls.append((payload, status, extra_headers or []))
+
+        handler = _Probe()
+        handler._handle_sse_stream(f"stream_token={stream_token}")
+
+        assert handler.json_calls
+        payload, status, _headers = handler.json_calls[0]
+        assert status == 400
+        assert payload["error_code"] == "VALIDATION_ERROR"
+        assert payload["error"] == "missing job_id"
+    finally:
+        web._expire_session(session_id)
+
+
 @pytest.mark.skipif(os.getenv("CI") == "true", reason="skipping live server test in CI environment")
 def test_web_responses_include_security_headers():
-    port = web.find_free_port(start=8976)
+    port = _free_port_or_skip(start=8976)
     url = web.serve(port=port, open_browser=False)
     try:
         root_response = urllib.request.urlopen(url, timeout=5)
@@ -895,14 +937,14 @@ def test_web_responses_include_security_headers():
 
 
 def test_remote_bind_requires_explicit_allow_remote():
-    port = web.find_free_port(start=9076, host="127.0.0.1")
+    port = _free_port_or_skip(start=9076, host="127.0.0.1")
 
     with pytest.raises(ValueError, match="allow_remote"):
         web.serve(port=port, host="0.0.0.0", open_browser=False)
 
 
 def test_remote_bind_requires_admin_token_env(monkeypatch):
-    config = RunConfig(environment="mock")
+    config = RunConfig(environment="production")
     config.web.admin_token_env = "BRAIN_ALPHA_OPS_TEST_ADMIN_TOKEN"
     monkeypatch.setattr(web, "load_run_config", lambda *args, **kwargs: config)
     monkeypatch.delenv("BRAIN_ALPHA_OPS_TEST_ADMIN_TOKEN", raising=False)
@@ -1053,7 +1095,7 @@ def test_check_candidate_availability_includes_observability_preflight(tmp_path)
 def test_observability_submission_preflight_includes_official_call_guard(monkeypatch, tmp_path):
     storage = tmp_path / "data"
     storage.mkdir()
-    config = RunConfig(environment="mock")
+    config = RunConfig(environment="production")
     config.ops.storage_dir = str(storage)
     repo = ResearchRepository(str(storage))
     repo.save_lifecycle_record(
@@ -1098,7 +1140,7 @@ def test_observability_submission_preflight_failure_requires_confirmation(monkey
 
 
 def test_submit_candidate_reports_duplicate_expression_code(monkeypatch, tmp_path):
-    config = RunConfig(environment="mock")
+    config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path)
     config.ops.budget.require_cloud_sync = False
     expression = "rank(ts_delta(close, 20))"
@@ -1135,7 +1177,7 @@ def test_submit_candidate_reports_duplicate_expression_code(monkeypatch, tmp_pat
 
 
 def test_submission_preflight_reports_stale_cloud_code(monkeypatch, tmp_path):
-    config = RunConfig(environment="mock")
+    config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path)
     config.ops.budget.require_cloud_sync = True
     candidate = Candidate(
@@ -1163,7 +1205,7 @@ def test_submission_preflight_reports_stale_cloud_code(monkeypatch, tmp_path):
 
 
 def test_submit_candidate_requires_observability_confirmation(monkeypatch, tmp_path):
-    config = RunConfig(environment="mock")
+    config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path)
     config.ops.budget.require_cloud_sync = False
     candidate = Candidate(
@@ -1212,7 +1254,7 @@ def test_submit_candidate_requires_observability_confirmation(monkeypatch, tmp_p
 
 
 def test_submit_candidate_requires_confirmation_when_observability_preflight_fails(monkeypatch, tmp_path):
-    config = RunConfig(environment="mock")
+    config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path)
     config.ops.budget.require_cloud_sync = False
     candidate = Candidate(
@@ -1262,7 +1304,7 @@ def test_submit_candidate_requires_confirmation_when_observability_preflight_fai
 
 
 def test_submit_batch_requires_observability_confirmation(monkeypatch, tmp_path):
-    config = RunConfig(environment="mock")
+    config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path)
     candidate = Candidate(
         alpha_id="a1",
@@ -1296,7 +1338,7 @@ def test_submit_batch_requires_observability_confirmation(monkeypatch, tmp_path)
 
 
 def test_submit_batch_requires_confirmation_when_observability_preflight_fails(monkeypatch, tmp_path):
-    config = RunConfig(environment="mock")
+    config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path)
     candidate = Candidate(
         alpha_id="a1",
@@ -1374,7 +1416,7 @@ def test_research_memory_snapshot_reads_local_records():
 def test_research_observability_snapshot_summarizes_expression_backtest_and_errors(monkeypatch, tmp_path):
     storage = tmp_path / "data"
     storage.mkdir()
-    config = RunConfig(environment="mock")
+    config = RunConfig(environment="production")
     config.ops.storage_dir = str(storage)
     repo = ResearchRepository(str(storage))
     repo.save_candidate(
@@ -1434,7 +1476,7 @@ def test_research_observability_snapshot_summarizes_expression_backtest_and_erro
 def test_assistant_context_snapshot_uses_web_runtime_sources(monkeypatch, tmp_path):
     storage = tmp_path / "data"
     storage.mkdir()
-    config = RunConfig(environment="mock")
+    config = RunConfig(environment="production")
     config.ops.storage_dir = str(storage)
     ResearchRepository(str(storage)).save_candidate(
         "run_1",
@@ -1499,7 +1541,7 @@ def test_assistant_context_snapshot_uses_web_runtime_sources(monkeypatch, tmp_pa
 def test_assistant_guidance_snapshot_reads_latest_usable_guidance(monkeypatch, tmp_path):
     storage = tmp_path / "data"
     storage.mkdir()
-    config = RunConfig(environment="mock")
+    config = RunConfig(environment="production")
     config.ops.storage_dir = str(storage)
     config.ops.budget.use_assistant_guidance = False
     config.ops.budget.assistant_guidance_min_confidence = 0.7
@@ -1580,7 +1622,7 @@ def test_assistant_guidance_snapshot_reads_latest_usable_guidance(monkeypatch, t
 def test_assistant_guidance_snapshot_marks_weak_historical_outcomes(monkeypatch, tmp_path):
     storage = tmp_path / "data"
     storage.mkdir()
-    config = RunConfig(environment="mock")
+    config = RunConfig(environment="production")
     config.ops.storage_dir = str(storage)
     repo = ResearchRepository(str(storage))
     repo.save_assistant_guidance(
@@ -1639,7 +1681,7 @@ def test_assistant_guidance_snapshot_marks_weak_historical_outcomes(monkeypatch,
 def test_assistant_guidance_snapshot_history_filters_confidence_flag(monkeypatch, tmp_path):
     storage = tmp_path / "data"
     storage.mkdir()
-    config = RunConfig(environment="mock")
+    config = RunConfig(environment="production")
     config.ops.storage_dir = str(storage)
     repo = ResearchRepository(str(storage))
     repo.save_assistant_guidance(
@@ -1682,7 +1724,7 @@ def test_assistant_guidance_snapshot_history_filters_confidence_flag(monkeypatch
 def test_assistant_request_snapshot_returns_llm_envelope(monkeypatch, tmp_path):
     storage = tmp_path / "data"
     storage.mkdir()
-    config = RunConfig(environment="mock")
+    config = RunConfig(environment="production")
     config.ops.storage_dir = str(storage)
     ResearchRepository(str(storage)).save_candidate(
         "run_1",
@@ -1841,7 +1883,7 @@ def test_assistant_cross_review_payload_accepts_consistent_responses():
 
 
 def test_save_assistant_guidance_payload_persists_usable_guidance(monkeypatch, tmp_path):
-    config = RunConfig(environment="mock")
+    config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path)
     monkeypatch.setattr(web, "load_run_config", lambda *args, **kwargs: config)
 
@@ -1869,7 +1911,7 @@ def test_save_assistant_guidance_payload_persists_usable_guidance(monkeypatch, t
 
 
 def test_save_assistant_guidance_payload_skips_low_confidence(monkeypatch, tmp_path):
-    config = RunConfig(environment="mock")
+    config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path)
     monkeypatch.setattr(web, "load_run_config", lambda *args, **kwargs: config)
 
@@ -1893,7 +1935,7 @@ def test_save_assistant_guidance_payload_skips_low_confidence(monkeypatch, tmp_p
 
 
 def test_generate_candidates_payload_applies_assistant_guidance(monkeypatch, tmp_path):
-    config = RunConfig(environment="mock")
+    config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path)
     monkeypatch.setattr(web, "load_run_config", lambda *args, **kwargs: config)
     captured = {}
@@ -1936,7 +1978,7 @@ def test_generate_candidates_payload_applies_assistant_guidance(monkeypatch, tmp
 
 
 def test_generate_candidates_payload_attaches_guidance_outcome_metadata(monkeypatch, tmp_path):
-    config = RunConfig(environment="mock")
+    config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path)
     monkeypatch.setattr(web, "load_run_config", lambda *args, **kwargs: config)
     monkeypatch.setattr(
@@ -2021,7 +2063,7 @@ def test_load_check_results_reports_recovery_warning(monkeypatch, caplog):
 
 
 def test_web_storage_jsonl_stats_reports_invalid_lines(monkeypatch, tmp_path):
-    config = RunConfig(environment="mock")
+    config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path)
     (tmp_path / "checks.jsonl").write_text('{"ok":true}\nnot-json\n', encoding="utf-8")
     monkeypatch.setattr(web, "load_run_config", lambda *args, **kwargs: config)
@@ -2034,7 +2076,7 @@ def test_web_storage_jsonl_stats_reports_invalid_lines(monkeypatch, tmp_path):
 
 
 def test_read_official_context_json_logs_invalid_file(monkeypatch, tmp_path, caplog):
-    config = RunConfig(environment="mock")
+    config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path)
     (tmp_path / "official_fields.json").write_text("{bad-json", encoding="utf-8")
     monkeypatch.setattr(web, "load_run_config", lambda *args, **kwargs: config)

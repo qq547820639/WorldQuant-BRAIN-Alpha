@@ -462,6 +462,9 @@ class OfficialScoringSystem:
                 deviations.append(
                     f"pass_fail mismatch: official={official_pass}, reconstructed={reconstructed_status}"
                 )
+            elif official_pass == "FAIL" and empirical.get("hard_gate_failed"):
+                for reason in empirical.get("hard_gate_failures", [])[:3]:
+                    deviations.append(f"official FAIL reconstructed from hard gate: {reason}")
 
             # Check specific metric deviations
             for check_name in ["sharpe", "fitness"]:

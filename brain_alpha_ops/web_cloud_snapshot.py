@@ -10,6 +10,7 @@ from pathlib import Path
 import time
 from typing import Any, Callable
 
+from brain_alpha_ops.brain_api.official_helpers import looks_non_production_alpha_id
 from brain_alpha_ops.config import load_run_config, runtime_project_root
 from brain_alpha_ops.data.cache_metadata import read_context_cache_metadata, write_context_cache_metadata
 from brain_alpha_ops.jsonl import read_jsonl_records, read_jsonl_tail, read_jsonl_tail_with_stats
@@ -17,9 +18,13 @@ from brain_alpha_ops.jsonl import read_jsonl_records, read_jsonl_tail, read_json
 
 logger = logging.getLogger(__name__)
 
-CLOUD_SYNC_STALE_SECONDS = 24 * 60 * 60
-MAX_CACHED_USER_ALPHA_FILES = 50
-CONTEXT_CACHE_MANIFEST_SCHEMA = "official_context_cache_manifest.v1"
+# ── Centralized constants (source of truth: runtime_constants.py) ──
+from brain_alpha_ops.runtime_constants import CloudDefaults
+
+CLOUD_SYNC_STALE_SECONDS = CloudDefaults.CLOUD_SYNC_STALE_SECONDS
+MAX_CACHED_USER_ALPHA_FILES = CloudDefaults.MAX_CACHED_USER_ALPHA_FILES
+CONTEXT_CACHE_MANIFEST_SCHEMA = CloudDefaults.CONTEXT_CACHE_MANIFEST_SCHEMA
+FULL_CLOUD_ALPHA_MAX_ROWS = 100_000
 OFFICIAL_CONTEXT_FILES = (
     ("fields_count", "official_fields.json"),
     ("operators_count", "official_operators.json"),
@@ -41,7 +46,8 @@ def storage_jsonl_path(filename: str, *, load_config: LoadConfig = load_run_conf
 
 
 def read_storage_jsonl(filename: str, *, limit: int | None = 500, load_config: LoadConfig = load_run_config) -> list[dict[str, Any]]:
-    return read_jsonl_records(storage_jsonl_path(filename, load_config=load_config), limit=limit)
+    max_rows = FULL_CLOUD_ALPHA_MAX_ROWS if limit is None and filename == "cloud_alphas.jsonl" else 10_000
+    return read_jsonl_records(storage_jsonl_path(filename, load_config=load_config), limit=limit, max_rows=max_rows)
 
 
 def read_storage_jsonl_stats(filename: str, *, limit: int = 500, load_config: LoadConfig = load_run_config) -> dict[str, Any]:
@@ -63,7 +69,6 @@ def cloud_alpha_snapshot(
         cache_path = latest_cached_user_alpha_path(load_config=load_config)
         rows = dedupe_cloud_alpha_rows(latest_cached_user_alphas(limit=limit, load_config=load_config))
         source = "api_cache" if rows else "empty"
-    rows = drop_mock_rows_if_real(rows)
     summary = cloud_alpha_summary(
         rows,
         load_config=load_config,
@@ -87,6 +92,8 @@ def dedupe_cloud_alpha_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         alpha_id = cloud_alpha_id(row)
         if not alpha_id:
             no_id.append(row)
+            continue
+        if looks_non_production_alpha_id(alpha_id):
             continue
         latest[alpha_id] = row
     deduped = list(latest.values()) + no_id
@@ -389,11 +396,6 @@ def cloud_alpha_summary(
     }
 
 
-def drop_mock_rows_if_real(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    real = [row for row in rows if not cloud_alpha_id(row).startswith("mock_")]
-    return real or rows
-
-
 def cloud_alpha_id(row: dict[str, Any]) -> str:
     return str(row.get("id") or row.get("alpha_id") or "")
 
@@ -473,7 +475,7 @@ def persist_official_context(
             data_dir = str(Path(load_config().ops.storage_dir))
         except Exception as exc:
             logger.warning("failed to resolve configured storage dir after official context persist: %s", safe_error_message(exc))
-            data_dir = "data"
+            data_dir = CloudDefaults.OFFICIAL_CONTEXT_DATA_DIR
         OfficialDataLoader.instance().refresh(data_dir)
 
 
@@ -484,13 +486,13 @@ def save_official_context_json(
     load_config: LoadConfig = load_run_config,
     runtime_root: RuntimeRoot = runtime_project_root,
 ) -> None:
-    ttl_seconds = 86400
+    ttl_seconds = CloudDefaults.CONTEXT_CACHE_TTL_SECONDS
     try:
         run_config = load_config()
         data_dir = Path(run_config.ops.storage_dir)
         ttl_seconds = int(run_config.ops.official_api.context_cache_ttl_seconds)
     except Exception:
-        data_dir = runtime_root() / "data"
+        data_dir = runtime_root() / CloudDefaults.OFFICIAL_CONTEXT_DATA_DIR
     data_dir.mkdir(parents=True, exist_ok=True)
     target = data_dir / filename
     tmp = data_dir / f".{filename}.tmp"

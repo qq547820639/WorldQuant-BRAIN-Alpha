@@ -30,16 +30,16 @@ class OfficialSnapshot:
     def from_metrics(cls, metrics: Mapping[str, Any] | None) -> "OfficialSnapshot":
         raw: Mapping[str, Any] = dict(metrics or {})
         return cls(
-            sharpe=_num(raw.get("sharpe")),
-            fitness=_num(raw.get("fitness")),
-            turnover=_num(raw.get("turnover")),
-            returns=_num(raw.get("returns")),
-            drawdown=_num(raw.get("drawdown")),
-            margin=_num(raw.get("margin")),
-            self_correlation=_num(raw.get("self_correlation", raw.get("correlation"))),
-            prod_correlation=_num(raw.get("prod_correlation")),
-            weight_concentration=_num(raw.get("weight_concentration")),
-            sub_universe_sharpe=_num(raw.get("sub_universe_sharpe")),
+            sharpe=_num_or_zero(raw.get("sharpe")),
+            fitness=_num_or_zero(raw.get("fitness")),
+            turnover=_num_or_zero(raw.get("turnover")),
+            returns=_num_or_zero(raw.get("returns")),
+            drawdown=_num_or_zero(raw.get("drawdown")),
+            margin=_num_or_zero(raw.get("margin")),
+            self_correlation=_num_or_zero(raw.get("self_correlation", raw.get("correlation"))),
+            prod_correlation=_num_or_zero(raw.get("prod_correlation", raw.get("correlation"))),
+            weight_concentration=_num_or_zero(raw.get("weight_concentration")),
+            sub_universe_sharpe=_num_or_zero(raw.get("sub_universe_sharpe")),
             pass_fail=_text(raw.get("pass_fail")),
             raw=raw,
         )
@@ -191,6 +191,11 @@ def _num(value: Any) -> float | None:
         return float(value)
     except (TypeError, ValueError):
         return None
+
+
+def _num_or_zero(value: Any) -> float:
+    parsed = _num(value)
+    return 0.0 if parsed is None else parsed
 
 
 def _text(value: Any) -> str | None:

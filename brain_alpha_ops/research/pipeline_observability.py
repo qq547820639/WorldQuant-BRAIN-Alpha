@@ -58,6 +58,7 @@ def failed_observability_throttle(
         "ok": False,
         "status": "refresh_failed",
         "risk_level": "unknown",
+        "active": False,
         "health_flags": [],
         "blocking_flags": [],
         "warning_flags": [],
@@ -234,6 +235,7 @@ def refresh_observability_throttle(
         generation_guidance=guidance,
         guard_snapshot=guard_snapshot(),
     )
+    throttle["ok"] = True
     return ObservabilityRefreshResult(
         throttle=throttle,
         generation_guidance=guidance,

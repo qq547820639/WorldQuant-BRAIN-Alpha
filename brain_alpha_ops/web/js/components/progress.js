@@ -73,13 +73,17 @@
       }
 
       // ETA
-      if (progress.eta_seconds !== undefined && progress.eta_seconds > 0) {
-        var eta = Math.round(progress.eta_seconds);
+      var etaSeconds = Number(progress.eta_seconds || 0);
+      if ((!etaSeconds || etaSeconds < 0) && progress.eta_deadline_at_ms) {
+        etaSeconds = Math.max(0, Math.ceil((Number(progress.eta_deadline_at_ms) - Date.now()) / 1000));
+      }
+      if (etaSeconds > 0) {
+        var eta = Math.round(etaSeconds);
         var etaStr;
         if (eta < 60) etaStr = eta + ' 秒';
         else if (eta < 3600) etaStr = Math.floor(eta / 60) + ' 分';
         else etaStr = Math.floor(eta / 3600) + ' 时';
-        parts.push('预计 ' + etaStr);
+        parts.push('预计 ' + etaStr + '（预计剩余 ' + etaStr + '）');
       }
 
       metaEl.textContent = parts.join(' | ');

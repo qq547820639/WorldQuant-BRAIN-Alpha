@@ -37,6 +37,11 @@
     NETWORK_ERROR: '网络连接失败，请检查服务是否运行。',
     TIMEOUT_ERROR: '请求超时，请稍后重试。',
     NOT_FOUND: '请求的资源不存在。',
+    REPLAY_TOKEN_REQUIRED: '请求缺少防重放标识，请刷新页面后重试。',
+    REPLAY_TOKEN_INVALID: '请求防重放标识无效，请刷新页面后重试。',
+    REPLAY_TIMESTAMP_INVALID: '请求时间戳无效，请刷新页面后重试。',
+    REPLAY_TIMESTAMP_STALE: '请求已过期，请刷新页面后重试。',
+    REPLAY_DETECTED: '重复请求已被拦截，请勿重复点击。',
   };
 
   function userMessage(errorCode, fallback) {
@@ -46,6 +51,18 @@
   /**
    * v3: Core fetch with timeout support and retry logic.
    */
+  function createRequestId() {
+    if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+      return window.crypto.randomUUID();
+    }
+    var suffix = Math.random().toString(36).slice(2);
+    return 'req_' + Date.now().toString(36) + '_' + suffix;
+  }
+
+  function unsafeMethod(method) {
+    return ['POST', 'PUT', 'PATCH', 'DELETE'].indexOf(String(method || '').toUpperCase()) !== -1;
+  }
+
   async function apiFetch(path, options) {
     options = options || {};
     var timeoutMs = options.timeout || 30000; // default 30s
@@ -65,12 +82,18 @@
         var timeoutId = controller ? setTimeout(function () { controller.abort(); }, timeoutMs) : null;
 
         var fetchFn = typeof window.fetch === 'function' ? window.fetch.bind(window) : fetch;
+        var method = options.method || 'GET';
+        var headers = Object.assign(
+          { 'X-Brain-Alpha-CSRF': CSRF_TOKEN },
+          options.headers || {}
+        );
+        if (unsafeMethod(method)) {
+          headers['X-Brain-Alpha-Request-ID'] = createRequestId();
+          headers['X-Brain-Alpha-Request-Timestamp'] = String(Date.now());
+        }
         var requestOptions = {
-          method: options.method || 'GET',
-          headers: Object.assign(
-            { 'X-Brain-Alpha-CSRF': CSRF_TOKEN },
-            options.headers || {}
-          ),
+          method: method,
+          headers: headers,
           body: options.body || undefined,
         };
         if (controller) requestOptions.signal = controller.signal;

@@ -300,7 +300,7 @@ def _risk_controls(config: RunConfig, cloud_snapshot: dict[str, Any] | None) -> 
     cloud_snapshot = cloud_snapshot or {}
     cloud_summary = cloud_snapshot.get("summary") if isinstance(cloud_snapshot.get("summary"), dict) else {}
     return {
-        "live_api_default_allowed": str(config.environment).lower() == "mock",
+        "live_api_default_allowed": False,
         "submit_requires_confirmation": True,
         "auto_submit_enabled": bool(config.auto_submit),
         "cloud_sync_required": bool(config.ops.budget.require_cloud_sync),
@@ -318,7 +318,12 @@ def _risk_controls(config: RunConfig, cloud_snapshot: dict[str, Any] | None) -> 
 
 
 def _compliance_context(config: RunConfig) -> dict[str, Any]:
-    """Build lightweight redline + scoring health snapshot."""
+    """Build lightweight redline + scoring health snapshot.
+
+    On import or execution failure, redline is conservatively reported as
+    "unknown" rather than silently defaulting to "ok".  This prevents
+    silently masking redline violations when the verifier cannot be loaded.
+    """
     try:
         from brain_alpha_ops.compliance.redline_verifier import RedLineVerifier
         verifier = RedLineVerifier(config)
@@ -328,16 +333,28 @@ def _compliance_context(config: RunConfig) -> dict[str, Any]:
             "violations": len(report.violations),
             "summary": report.report()[:300],
         }
-    except Exception:
-        redline = {"ok": True, "violations": 0, "summary": "redline unavailable"}
+    except ImportError:
+        import logging
+        logging.getLogger(__name__).debug("RedLineVerifier import failed; reporting redline as unknown.")
+        redline = {"ok": False, "violations": -1, "summary": "redline verifier not available"}
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).warning("RedLineVerifier execution failed: %s", exc)
+        redline = {"ok": False, "violations": -1, "summary": f"redline verification error: {exc}"}
 
     try:
         from brain_alpha_ops.scoring.official_scoring import ScoreHistoryDB
         db = ScoreHistoryDB(config.ops.storage_dir)
         stats = db.convergence_stats()
         scoring_health = stats
-    except Exception:
-        scoring_health = {"available": False}
+    except ImportError:
+        import logging
+        logging.getLogger(__name__).debug("ScoreHistoryDB not available.")
+        scoring_health = {"available": False, "error": "module not found"}
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).warning("ScoreHistoryDB failed: %s", exc)
+        scoring_health = {"available": False, "error": str(exc)}
 
     return {
         "redline": redline,

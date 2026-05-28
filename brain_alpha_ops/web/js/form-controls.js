@@ -193,7 +193,12 @@
       errorEl.id = fieldId + '-error';
       errorEl.className = 'form-error-message';
       errorEl.setAttribute('role', 'alert');
-      errorEl.innerHTML = '<span class="form-error-icon">!</span>' + errorMsg;
+      var iconEl = document.createElement('span');
+      iconEl.className = 'form-error-icon';
+      iconEl.setAttribute('aria-hidden', 'true');
+      iconEl.textContent = '!';
+      errorEl.appendChild(iconEl);
+      errorEl.appendChild(document.createTextNode(errorMsg));
       group.appendChild(errorEl);
 
       return false;

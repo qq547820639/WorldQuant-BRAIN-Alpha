@@ -37,7 +37,13 @@
     lastSubmitPayload: null,
     syncInFlight: false,
     syncJobId: '',
+    syncRecoverable: false,
+    syncLastError: '',
     cloudSyncCountdownUntil: 0,
+    connectionStatus: 'disconnected',
+    connectionEnvironment: '',
+    connectionAuth: '',
+    lastConnectionError: '',
     liveProgress: {},
     jobStatusCountdownUntil: 0,
     checkCountdownUntil: 0,
@@ -53,6 +59,7 @@
     runtimeStatusStartedAt: 0,
     runtimeStatusUpdatedAt: 0,
     rowCache: {},
+    tableSort: { key: 'score', direction: 'desc' },
     viewCounts: {},  // v3: cached per-view counts for tab badges
   };
 

@@ -12,10 +12,17 @@ import time
 from typing import Any, Callable, Mapping
 
 from brain_alpha_ops.agent_tool_registry import resolve_tool_name, tool_definitions
-from brain_alpha_ops.brain_api import MockBrainAPI
 from brain_alpha_ops.config import RunConfig, load_run_config
 from brain_alpha_ops.error_payloads import user_error_payload
 from brain_alpha_ops.models import Candidate
+from brain_alpha_ops.shared_bounds import (
+    bounded_float,
+    bounded_int,
+    candidate_argument,
+    expression_batch_argument,
+    required_text,
+    truthy,
+)
 from brain_alpha_ops.agent_guidance_tools import (
     assistant_guidance_for_generator,
     assistant_guidance_summary,
@@ -138,7 +145,7 @@ class BrainAlphaToolbox:
 
     def _list_context(self, args: dict[str, Any]) -> dict[str, Any]:
         query = str(args.get("query", "all") or "all")
-        limit = _bounded_int(args.get("limit", 20), 1, 200)
+        limit = bounded_int(args.get("limit", 20), 1, 200)
         fields: list[dict[str, Any]]
         operators: list[dict[str, Any]]
         datasets: list[dict[str, Any]]
@@ -182,11 +189,11 @@ class BrainAlphaToolbox:
         }
 
     def _generate_candidates(self, args: dict[str, Any]) -> dict[str, Any]:
-        count = _bounded_int(args.get("count", 10), 1, MAX_TOOL_CANDIDATES)
+        count = bounded_int(args.get("count", 10), 1, MAX_TOOL_CANDIDATES)
         dataset_id = str(args.get("dataset_id", "") or "")
         generator = CandidateGenerator()
         memory_guidance: dict[str, Any] = {}
-        use_memory = self.use_research_memory_guidance and _truthy(args.get("use_research_memory", True))
+        use_memory = self.use_research_memory_guidance and truthy(args.get("use_research_memory", True))
         if use_memory:
             memory_guidance = self._research_memory_guidance(args)
             if memory_guidance:
@@ -229,7 +236,7 @@ class BrainAlphaToolbox:
         return payload
 
     def _validate_expression(self, args: dict[str, Any]) -> dict[str, Any]:
-        expression = _required_text(args, "expression")
+        expression = required_text(args, "expression")
         result = {
             "ok": True,
             "expression": expression,
@@ -251,7 +258,7 @@ class BrainAlphaToolbox:
         return result
 
     def _score_candidate(self, args: dict[str, Any]) -> dict[str, Any]:
-        expression = _required_text(args, "expression")
+        expression = required_text(args, "expression")
         candidate = Candidate(
             alpha_id=str(args.get("alpha_id", "agent_candidate") or "agent_candidate"),
             expression=expression,
@@ -271,8 +278,8 @@ class BrainAlphaToolbox:
         blocked = self._live_api_blocked(args, tool="run_simulation_batch")
         if blocked:
             return blocked
-        expressions = _expression_batch_argument(args)
-        max_batch_size = _bounded_int(args.get("max_batch_size", MAX_BATCH_SIMULATIONS), 1, MAX_BATCH_SIMULATIONS)
+        expressions = expression_batch_argument(args)
+        max_batch_size = bounded_int(args.get("max_batch_size", MAX_BATCH_SIMULATIONS), 1, MAX_BATCH_SIMULATIONS)
         selected = expressions[:max_batch_size]
         skipped = [
             {
@@ -297,7 +304,7 @@ class BrainAlphaToolbox:
                 "skipped": skipped,
             }
 
-        requested_max_workers = _bounded_int(args.get("max_workers", 1), 1, MAX_BATCH_SIMULATION_WORKERS)
+        requested_max_workers = bounded_int(args.get("max_workers", 1), 1, MAX_BATCH_SIMULATION_WORKERS)
         shared_args = dict(args)
         shared_args.pop("expressions", None)
         shared_args.pop("max_batch_size", None)
@@ -306,8 +313,6 @@ class BrainAlphaToolbox:
         results: list[dict[str, Any] | None] = [None] * len(selected)
         if self.api is not None:
             effective_workers = 1
-        elif str(self.run_config.environment).lower() == "mock":
-            effective_workers = min(requested_max_workers, len(selected))
         else:
             effective_workers = min(requested_max_workers, len(selected))
 
@@ -362,7 +367,7 @@ class BrainAlphaToolbox:
                 "bounded": True,
             },
             "account_safety": {
-                "live_api_confirmation_required_outside_mock": True,
+                "live_api_confirmation_required": True,
                 "duplicate_preflight_required": True,
                 "validate_before_submit": True,
             },
@@ -397,7 +402,7 @@ class BrainAlphaToolbox:
         blocked = self._live_api_blocked(args, tool="run_simulation")
         if blocked:
             return blocked
-        expression = _required_text(args, "expression")
+        expression = required_text(args, "expression")
         blocked = self._duplicate_live_expression_block(expression, tool="run_simulation")
         if blocked:
             return blocked
@@ -413,9 +418,9 @@ class BrainAlphaToolbox:
             expression,
             settings,
         )
-        max_polls = _bounded_int(args.get("max_polls", 5), 1, 20)
+        max_polls = bounded_int(args.get("max_polls", 5), 1, 20)
         poll_interval = float(args.get("poll_interval_seconds", 2.0))
-        poll_interval = _bounded_float(poll_interval, 0.5, 30.0, default=2.0)
+        poll_interval = bounded_float(poll_interval, 0.5, 30.0, default=2.0)
         status = ""
         for _ in range(max_polls):
             status = str(api.poll_simulation(simulation_id))
@@ -434,10 +439,6 @@ class BrainAlphaToolbox:
     def _batch_api_for_item(self):
         if self.api is not None:
             return self.api
-        if str(self.run_config.environment).lower() == "mock":
-            if not hasattr(self, "_batch_mock_api"):
-                self._batch_mock_api = MockBrainAPI()
-            return self._batch_mock_api
         return api_from_run_config(self.run_config)
 
     def _simulation_settings(self, overrides: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -451,7 +452,7 @@ class BrainAlphaToolbox:
         blocked = self._live_api_blocked(args, tool="check_alpha")
         if blocked:
             return blocked
-        alpha_id = _required_text(args, "alpha_id")
+        alpha_id = required_text(args, "alpha_id")
         api = self._api()
         api.authenticate()
         return {"ok": True, "alpha_id": alpha_id, "check": api.check_alpha(alpha_id)}
@@ -466,8 +467,8 @@ class BrainAlphaToolbox:
         blocked = self._live_api_blocked(args, tool="submit_alpha")
         if blocked:
             return blocked
-        alpha_id = _required_text(args, "alpha_id")
-        expression = _required_text(args, "expression")
+        alpha_id = required_text(args, "alpha_id")
+        expression = required_text(args, "expression")
         api = self._api()
         api.authenticate()
         check = api.check_alpha(alpha_id)
@@ -499,7 +500,7 @@ class BrainAlphaToolbox:
             "range": sync_range,
             "count": len(rows),
             "merge": merge_stats,
-            "alphas": rows[: _bounded_int(args.get("limit", 20), 1, 200)],
+            "alphas": rows[: bounded_int(args.get("limit", 20), 1, 200)],
         }
 
     def _get_job_status(self, args: dict[str, Any]) -> dict[str, Any]:
@@ -518,8 +519,8 @@ class BrainAlphaToolbox:
         return {"ok": True, "job_id": latest_id, **job}
 
     def _query_research_memory(self, args: dict[str, Any]) -> dict[str, Any]:
-        limit = _bounded_int(args.get("limit", 5000), 1, 50000)
-        top_n = _bounded_int(args.get("top_n", 10), 1, 50)
+        limit = bounded_int(args.get("limit", 5000), 1, 50000)
+        top_n = bounded_int(args.get("top_n", 10), 1, 50)
         persist = bool(args.get("persist"))
         memory = ResearchMemory(self.run_config.ops.storage_dir)
         summary = memory.summary(limit=limit, top_n=top_n)
@@ -528,9 +529,9 @@ class BrainAlphaToolbox:
         return summary
 
     def _query_expression_index(self, args: dict[str, Any]) -> dict[str, Any]:
-        limit = _bounded_int(args.get("limit", 5000), 1, 50000)
-        top_n = _bounded_int(args.get("top_n", 10), 1, 50)
-        include_cloud = _truthy(args.get("include_cloud", True))
+        limit = bounded_int(args.get("limit", 5000), 1, 50000)
+        top_n = bounded_int(args.get("top_n", 10), 1, 50)
+        include_cloud = truthy(args.get("include_cloud", True))
         index = ExpressionHistoryIndex(self.run_config.ops.storage_dir)
         expression = str(args.get("expression") or "").strip()
         if expression:
@@ -539,14 +540,14 @@ class BrainAlphaToolbox:
                 limit=limit,
                 top_n=top_n,
                 include_cloud=include_cloud,
-                min_similarity=_bounded_float(args.get("min_similarity", 0.75), 0.0, 1.0),
+                min_similarity=bounded_float(args.get("min_similarity", 0.75), 0.0, 1.0),
             )
         return index.summary(limit=limit, top_n=top_n, include_cloud=include_cloud)
 
     def _query_research_observability(self, args: dict[str, Any]) -> dict[str, Any]:
-        limit = _bounded_int(args.get("limit", 5000), 1, 50000)
-        top_n = _bounded_int(args.get("top_n", 10), 1, 50)
-        include_cloud = _truthy(args.get("include_cloud", True))
+        limit = bounded_int(args.get("limit", 5000), 1, 50000)
+        top_n = bounded_int(args.get("top_n", 10), 1, 50)
+        include_cloud = truthy(args.get("include_cloud", True))
         return query_research_observability_snapshot(
             self.run_config.ops.storage_dir,
             limit=limit,
@@ -556,9 +557,9 @@ class BrainAlphaToolbox:
         )
 
     def _build_market_data_cache(self, args: dict[str, Any]) -> dict[str, Any]:
-        refresh = _truthy(args.get("refresh", True))
+        refresh = truthy(args.get("refresh", True))
         source_file = str(args.get("source_file", "") or "").strip()
-        limit = _bounded_int(args.get("limit", 5000), 1, 50000)
+        limit = bounded_int(args.get("limit", 5000), 1, 50000)
         return build_market_data_cache_tool(
             self.run_config.ops.storage_dir,
             refresh=refresh,
@@ -570,8 +571,8 @@ class BrainAlphaToolbox:
         return build_vectorized_market_data_from_args(self.run_config.ops.storage_dir, args)
 
     def _search_parameters(self, args: dict[str, Any]) -> dict[str, Any]:
-        candidate = Candidate.from_dict(_candidate_argument(args))
-        max_mutations = _bounded_int(args.get("max_mutations", 4), 1, 12)
+        candidate = Candidate.from_dict(candidate_argument(args))
+        max_mutations = bounded_int(args.get("max_mutations", 4), 1, 12)
         return search_parameters_tool(candidate, max_mutations=max_mutations)
 
     def _orchestrate_parameter_search(self, args: dict[str, Any]) -> dict[str, Any]:
@@ -606,8 +607,8 @@ class BrainAlphaToolbox:
         )
 
     def _send_alert(self, args: dict[str, Any]) -> dict[str, Any]:
-        title = _required_text(args, "title")
-        message = _required_text(args, "message")
+        title = required_text(args, "title")
+        message = required_text(args, "message")
         severity = str(args.get("severity", "info") or "info").strip() or "info"
         channel = str(args.get("channel", "local") or "local").strip() or "local"
         webhook_url = str(args.get("webhook_url", "") or "").strip()
@@ -647,7 +648,7 @@ class BrainAlphaToolbox:
         return cross_review_assistant_response_tool(args)
 
     def _assistant_generation_guidance(self, args: dict[str, Any]) -> dict[str, Any] | None:
-        min_confidence = _bounded_float(args.get("assistant_min_confidence", 0.0), 0.0, 1.0)
+        min_confidence = bounded_float(args.get("assistant_min_confidence", 0.0), 0.0, 1.0)
         supplied_guidance = args.get("assistant_guidance")
         if isinstance(supplied_guidance, dict):
             guidance = dict(supplied_guidance)
@@ -659,8 +660,8 @@ class BrainAlphaToolbox:
             confidence = guidance.get("confidence")
             confidence_ok = True
             if confidence is not None:
-                confidence_ok = _bounded_float(confidence, 0.0, 1.0) >= min_confidence
-            guidance["usable"] = _truthy(guidance.get("usable", True)) and confidence_ok
+                confidence_ok = bounded_float(confidence, 0.0, 1.0) >= min_confidence
+            guidance["usable"] = truthy(guidance.get("usable", True)) and confidence_ok
             return guidance
 
         raw_output = args.get("assistant_response") or args.get("assistant_raw_output")
@@ -671,8 +672,8 @@ class BrainAlphaToolbox:
 
     def _research_memory_guidance(self, args: dict[str, Any] | None = None) -> dict[str, Any]:
         args = dict(args or {})
-        limit = _bounded_int(args.get("limit", 5000), 1, 50000)
-        top_n = _bounded_int(args.get("top_n", 10), 1, 50)
+        limit = bounded_int(args.get("limit", 5000), 1, 50000)
+        top_n = bounded_int(args.get("top_n", 10), 1, 50)
         min_success_rate = float(args.get("min_success_rate", 0.0) or 0.0)
         memory = ResearchMemory(self.run_config.ops.storage_dir)
         try:
@@ -683,27 +684,20 @@ class BrainAlphaToolbox:
     def _api(self):
         if self.api is not None:
             return self.api
-        if str(self.run_config.environment).lower() == "mock":
-            return MockBrainAPI()
         return api_from_run_config(self.run_config)
 
     def _live_api_blocked(self, args: dict[str, Any], *, tool: str) -> dict[str, Any] | None:
-        environment = str(self.run_config.environment).lower()
-        if environment == "mock":
-            return None
         if not self.allow_live_api or not bool(args.get("confirm_live_api")):
             return {
                 "ok": False,
                 "error_code": "LIVE_API_NOT_ALLOWED",
                 "tool": tool,
-                "environment": environment,
-                "error": f"{tool} requires allow_live_api=True and confirm_live_api=True outside mock mode",
+                "environment": "production",
+                "error": f"{tool} requires allow_live_api=True and confirm_live_api=True",
             }
         return None
 
     def _duplicate_live_expression_block(self, expression: str, *, tool: str) -> dict[str, Any] | None:
-        if str(self.run_config.environment).lower() == "mock":
-            return None
         if not str(expression or "").strip():
             return None
         try:
@@ -738,72 +732,6 @@ class BrainAlphaToolbox:
 
 def _tool_error(exc: Exception, error_code: str, **context: Any) -> dict[str, Any]:
     return user_error_payload(exc, error_code=error_code, **context)
-
-
-def _bounded_int(value: Any, lower: int, upper: int) -> int:
-    try:
-        parsed = int(value)
-    except (TypeError, ValueError):
-        parsed = lower
-    return min(max(parsed, lower), upper)
-
-
-def _bounded_float(value: Any, lower: float, upper: float) -> float:
-    try:
-        parsed = float(value)
-    except (TypeError, ValueError):
-        parsed = lower
-    return min(max(parsed, lower), upper)
-
-
-def _truthy(value: Any) -> bool:
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, str):
-        return value.strip().lower() not in {"0", "false", "no", "off"}
-    return bool(value)
-
-
-def _required_text(args: dict[str, Any], key: str) -> str:
-    value = str(args.get(key, "") or "").strip()
-    if not value:
-        raise ValueError(f"missing required argument: {key}")
-    return value
-
-
-def _candidate_argument(args: dict[str, Any]) -> dict[str, Any]:
-    candidate = args.get("candidate")
-    if isinstance(candidate, dict):
-        return candidate
-    expression = _required_text(args, "expression")
-    return {
-        "alpha_id": str(args.get("alpha_id", "agent_candidate") or "agent_candidate"),
-        "expression": expression,
-        "family": str(args.get("family", "Agent") or "Agent"),
-        "hypothesis": str(args.get("hypothesis", "Agent supplied expression") or "Agent supplied expression"),
-        "official_metrics": dict(args.get("official_metrics") or {}),
-        "submission": dict(args.get("submission") or {}),
-    }
-
-
-def _expression_batch_argument(args: dict[str, Any]) -> list[str]:
-    raw = args.get("expressions")
-    if raw is None:
-        single = str(args.get("expression", "") or "").strip()
-        return [single] if single else []
-    values = raw if isinstance(raw, list) else [raw]
-    expressions: list[str] = []
-    seen: set[str] = set()
-    for item in values:
-        expression = str(item or "").strip()
-        if not expression:
-            continue
-        marker = expression_key(expression)
-        if marker in seen:
-            continue
-        seen.add(marker)
-        expressions.append(expression)
-    return expressions
 
 
 def _field_to_dict(field: Any) -> dict[str, Any]:

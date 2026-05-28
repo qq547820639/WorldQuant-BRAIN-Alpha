@@ -152,6 +152,11 @@ class CandidateGenerator:
         self._observability_diversity_boost = False
         self._observability_avoid_keys: set[str] = set()
         self._observability_guidance: dict = {}
+        self._knowledge_constraints: dict[str, Any] = {
+            "preferred_fields": [],
+            "preferred_operators": [],
+            "forbidden_patterns": [],
+        }
 
     @property
     def windows(self) -> list[int]:
@@ -286,6 +291,22 @@ class CandidateGenerator:
             "diversity_boost": self._observability_diversity_boost,
         }
 
+    def set_knowledge_constraints(self, constraints: dict[str, Any] | None) -> None:
+        """Bias generation toward structured KB rules and away from failures."""
+        constraints = dict(constraints or {})
+        preferred_fields = [str(item).lower() for item in constraints.get("preferred_fields") or [] if str(item)]
+        preferred_operators = [str(item).lower() for item in constraints.get("preferred_operators") or [] if str(item)]
+        forbidden_patterns = [str(item).strip() for item in constraints.get("forbidden_patterns") or [] if str(item)]
+        self._knowledge_constraints = {
+            "preferred_fields": preferred_fields,
+            "preferred_operators": preferred_operators,
+            "forbidden_patterns": forbidden_patterns,
+        }
+        if preferred_fields:
+            self._fields.update(preferred_fields)
+        if preferred_operators:
+            self._operators.update(preferred_operators)
+
     # ------------------------------------------------------------------
     # Generate
     # ------------------------------------------------------------------
@@ -340,6 +361,8 @@ class CandidateGenerator:
             mutated = self._theme_engine.mutate_expression(  # type: ignore[union-attr]
                 tmpl.expression, dataset_id, seed=seed
             )
+            if self._knowledge_constraints.get("forbidden_patterns") and self._expression_forbidden(mutated):
+                continue
             if any(c.expression == mutated for c in candidates) or self._is_observability_avoided(mutated):
                 continue
             candidates.append(
@@ -390,6 +413,10 @@ class CandidateGenerator:
             exp_in_pool = [f for f in self._experience_fields if f in field_pool]
             other_fields = [f for f in field_pool if f not in self._experience_fields]
             field_pool = exp_in_pool + other_fields
+        if self._knowledge_constraints.get("preferred_fields"):
+            preferred_fields = [f for f in field_pool if f.lower() in set(self._knowledge_constraints["preferred_fields"])]
+            remainder = [f for f in field_pool if f.lower() not in set(self._knowledge_constraints["preferred_fields"])]
+            field_pool = preferred_fields + remainder
 
         # Diverse template skeletons — P1-7: expanded from 10 to 22
         templates = [
@@ -433,15 +460,18 @@ class CandidateGenerator:
                 field2_index = (attempts * 11 + 3 + self._cursor) % len(field_pool)
                 window_index = (attempts * 3 + self._cursor) % len(windows)
             else:
-                idx = attempts % len(templates)
-                field_index = attempts % len(field_pool)
-                field2_index = (attempts + 3) % len(field_pool)
-                window_index = attempts % len(windows)
+                base = attempts - 1
+                idx = base % len(templates)
+                field_index = base % len(field_pool)
+                field2_index = (base + 3) % len(field_pool)
+                window_index = base % len(windows)
             tmpl = templates[idx]
             f1 = field_pool[field_index]
             f2 = field_pool[field2_index] if "{f2}" in tmpl else f1
             w = windows[window_index]
             expr = tmpl.replace("{f1}", f1).replace("{f2}", f2).replace("{w}", str(w))
+            if self._knowledge_constraints.get("forbidden_patterns") and self._expression_forbidden(expr):
+                continue
 
             if any(c.expression == expr for c in candidates) or self._is_observability_avoided(expr):
                 continue
@@ -471,6 +501,16 @@ class CandidateGenerator:
             expression_fingerprint(expression),
         }
         return bool(markers & self._observability_avoid_keys)
+
+    def _expression_forbidden(self, expression: str) -> bool:
+        expression_lower = str(expression or "").lower()
+        for pattern in self._knowledge_constraints.get("forbidden_patterns") or []:
+            if not pattern:
+                continue
+            needle = pattern.lower()
+            if needle and needle in expression_lower:
+                return True
+        return False
 
 
 # ------------------------------------------------------------------

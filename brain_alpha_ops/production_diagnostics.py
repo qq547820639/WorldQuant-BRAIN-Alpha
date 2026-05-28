@@ -250,12 +250,14 @@ def _frontend_inline_status() -> dict[str, Any]:
         from brain_alpha_ops.build_inline import check
 
         result = check()
+        css_sources = result.get("css_sources", [])
         return {
             "ok": bool(result.get("ok")),
             "replaced": result.get("replaced", 0),
             "css_replaced": result.get("css_replaced", 0),
             "missing": result.get("missing", []),
-            "css_sources": result.get("css_sources", []),
+            "css_sources": [source for source in css_sources if source == "css/app.css"] or css_sources[:1],
+            "css_source_files": css_sources,
             "error": result.get("error", ""),
         }
     except Exception as exc:

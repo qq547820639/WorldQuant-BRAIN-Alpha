@@ -7,7 +7,7 @@ from brain_alpha_ops.research.repository import ResearchRepository
 
 
 def test_assistant_context_pack_merges_runtime_memory_and_guidance(tmp_path):
-    config = RunConfig(environment="mock")
+    config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path)
     config.ops.official_api.cache_dir = str(tmp_path / "api_cache")
     repo = ResearchRepository(str(tmp_path))
@@ -174,7 +174,7 @@ def test_assistant_context_pack_merges_runtime_memory_and_guidance(tmp_path):
 
 
 def test_assistant_context_pack_can_redact_sensitive_paths(tmp_path):
-    config = RunConfig(environment="mock")
+    config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path)
 
     pack = build_assistant_context_pack(
@@ -257,7 +257,7 @@ def test_assistant_context_pack_can_redact_sensitive_paths(tmp_path):
 
 
 def test_assistant_context_pack_reuses_memory_summary_for_guidance(monkeypatch, tmp_path):
-    config = RunConfig(environment="mock")
+    config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path)
     ResearchRepository(str(tmp_path)).save_candidate(
         "run_1",

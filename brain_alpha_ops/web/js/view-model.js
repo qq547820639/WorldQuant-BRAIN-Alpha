@@ -27,6 +27,32 @@
     return expr ? 'expr:' + expr : '';
   }
 
+  function lifecycleStatusLabel(row) {
+    row = row || {};
+    var status = String(row.lifecycle_status || row.status || '');
+    var gate = row.gate || {};
+    if (status === 'official_validation_passed') return '官方表达式验证通过';
+    if (status === 'official_simulated') return '官方回测完成';
+    if (status === 'submission_ready' || gate.submission_ready) return '可提交';
+    if (status === 'official_standard_rejected') return '官方门禁未通过';
+    if (status === 'pending_backtest') return '待回测';
+    if (status === 'running_backtest' || status === 'running') return '回测中';
+    if (status === 'failed' || status === 'rejected' || status === 'blocked') return '未通过';
+    if (status === 'candidate') return '候选';
+    return status;
+  }
+
+  function lifecycleStatusColor(row) {
+    row = row || {};
+    var status = String(row.lifecycle_status || row.status || '');
+    var gate = row.gate || {};
+    if (status === 'official_validation_passed') return 'info';
+    if (status === 'official_simulated' || status === 'submission_ready' || gate.submission_ready) return 'good';
+    if (status === 'official_standard_rejected' || status === 'failed' || status === 'rejected' || status === 'blocked') return 'bad';
+    if (status === 'pending_backtest' || status === 'running_backtest' || status === 'running') return 'info';
+    return 'muted';
+  }
+
   function lifecycleIdentity(row) {
     row = row || {};
     return [
@@ -128,6 +154,8 @@
     firstFiniteNumber: firstFiniteNumber,
     firstPositiveFiniteNumber: firstPositiveFiniteNumber,
     lifecycleIdentity: lifecycleIdentity,
+    lifecycleStatusColor: lifecycleStatusColor,
+    lifecycleStatusLabel: lifecycleStatusLabel,
     normalizedExpression: normalizedExpression,
     officialMetric: officialMetric,
     uniqueBacktestSlots: uniqueBacktestSlots,

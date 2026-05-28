@@ -32,7 +32,7 @@ class FakeRepository:
 
 
 def test_generate_candidates_payload_delegates_to_toolbox_and_scores_candidates(tmp_path):
-    run_config = RunConfig(environment="mock")
+    run_config = RunConfig(environment="production")
     run_config.ops.storage_dir = str(tmp_path)
     calls = []
     saves = []
@@ -81,7 +81,7 @@ def test_generate_candidates_payload_delegates_to_toolbox_and_scores_candidates(
 
 
 def test_generate_candidates_payload_empty_payload_uses_defaults(tmp_path):
-    run_config = RunConfig(environment="mock")
+    run_config = RunConfig(environment="production")
     run_config.ops.storage_dir = str(tmp_path)
     run_config.ops.settings.dataset = "dataset_default"
     calls = []
@@ -104,7 +104,7 @@ def test_generate_candidates_payload_empty_payload_uses_defaults(tmp_path):
 
 
 def test_generate_candidates_payload_resolves_empty_dataset_from_cache(tmp_path):
-    run_config = RunConfig(environment="mock")
+    run_config = RunConfig(environment="production")
     run_config.ops.storage_dir = str(tmp_path)
     (tmp_path / "official_datasets.json").write_text(
         '[{"id":"ds_a"},{"id":"pv1"},{"id":"ds_b"}]',
@@ -126,7 +126,7 @@ def test_generate_candidates_payload_resolves_empty_dataset_from_cache(tmp_path)
 
 
 def test_generate_candidates_payload_returns_toolbox_error_without_post_processing(tmp_path):
-    run_config = RunConfig(environment="mock")
+    run_config = RunConfig(environment="production")
     run_config.ops.storage_dir = str(tmp_path)
 
     payload = generate_candidates_payload(
@@ -140,7 +140,7 @@ def test_generate_candidates_payload_returns_toolbox_error_without_post_processi
 
 
 def test_generate_candidates_payload_returns_structured_error_on_toolbox_exception(tmp_path):
-    run_config = RunConfig(environment="mock")
+    run_config = RunConfig(environment="production")
     run_config.ops.storage_dir = str(tmp_path)
     calls = []
 
@@ -160,7 +160,7 @@ def test_generate_candidates_payload_returns_structured_error_on_toolbox_excepti
 
 
 def test_generate_candidates_payload_rejects_non_mapping_toolbox_response(tmp_path):
-    run_config = RunConfig(environment="mock")
+    run_config = RunConfig(environment="production")
     run_config.ops.storage_dir = str(tmp_path)
 
     payload = generate_candidates_payload(

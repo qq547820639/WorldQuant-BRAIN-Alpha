@@ -16,6 +16,7 @@ MAX_LEDGER_LIMIT = 5000
 MAX_RECORD_LOOKUP_LIMIT = 500
 DEFAULT_CLOUD_ALPHA_LIMIT = 500
 MAX_CLOUD_ALPHA_LIMIT = 2000
+ALLOWED_SYNC_RANGES = {"3d", "7d", "all"}
 
 
 @dataclass(frozen=True)
@@ -116,6 +117,14 @@ def _dispatch_route(
     if route.requires_session and not handler._has_valid_session(parsed.query):
         handler._json({"ok": False, "error_code": "SESSION_INVALID", "error": "invalid local session"}, status=403)
         return
+    if method not in {"GET", "HEAD", "OPTIONS"} and route.requires_session:
+        replay_validator = getattr(handler, "_validate_replay_request", None)
+        if callable(replay_validator):
+            replay_result = replay_validator()
+            if not replay_result.get("ok"):
+                status = 409 if replay_result.get("error_code") == "REPLAY_DETECTED" else 400
+                handler._json({"ok": False, **replay_result}, status=status)
+                return
     route_handler = handlers.get(str(route.handler))
     if route_handler is None:
         handler._json({"ok": False, "error_code": "NOT_FOUND", "error": "not found"}, status=404)
@@ -167,6 +176,14 @@ def _get_stream(handler: Any, parsed: Any, _ctx: WebHandlerDispatchContext) -> N
 def _get_lifecycle(handler: Any, parsed: Any, ctx: WebHandlerDispatchContext) -> None:
     job_id = (parse_qs(parsed.query).get("job_id") or [""])[0]
     handler._json(ctx.lifecycle_payload(ctx.jobs, job_id, ctx.lifecycle_from_job))
+
+
+def _get_candidates(handler: Any, parsed: Any, ctx: WebHandlerDispatchContext) -> None:
+    """Return lifecycle records wrapped as {candidates: [...]} for the React frontend."""
+    job_id = (parse_qs(parsed.query).get("job_id") or [""])[0]
+    lifecycle = ctx.lifecycle_payload(ctx.jobs, job_id, ctx.lifecycle_from_job)
+    rows = lifecycle.get("records") if isinstance(lifecycle.get("records"), list) else []
+    handler._json({"ok": True, "candidates": rows, "count": len(rows)})
 
 
 def _compact_job_result(payload: dict[str, Any]) -> dict[str, Any]:
@@ -333,9 +350,6 @@ def _get_checkpoint_status(handler: Any, parsed: Any, _ctx: WebHandlerDispatchCo
 def _post_run(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext) -> None:
     try:
         payload = handler._read_json()
-        if ctx.payload_truthy(payload.get("dry_run")):
-            handler._json(ctx.connection_test_post_payload(payload, ctx.test_connection))
-            return
         ctx.validate_run_payload(payload)
         active = ctx.jobs.latest_active()
         if active:
@@ -377,10 +391,37 @@ def _post_sync_alphas(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext
             handler._json({"ok": False, "error_code": "CONFLICT_AUX_OP", "error": message}, status=409)
             return
         payload = handler._read_json()
+        sync_range = str((payload or {}).get("syncRange") or (payload or {}).get("range") or "3d")
+        if sync_range not in ALLOWED_SYNC_RANGES:
+            handler._json({"ok": False, "error_code": "VALIDATION_ERROR", "error": "syncRange must be one of 3d, 7d, all"}, status=400)
+            return
         response, status = ctx.background_job_start_payload(ctx.sync_jobs, payload, ctx.start_sync_job, conflict_error="active cloud sync job")
         handler._json(response, status=status)
     except Exception as exc:
         handler._json(ctx.web_error(exc, "SYNC_ERROR"), status=400)
+
+
+def _post_sync_cancel(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext) -> None:
+    try:
+        payload = handler._read_json()
+        result = ctx.stop_job_payload(ctx.sync_jobs, payload)
+        job_id = str((payload or {}).get("job_id") or "")
+        if result.get("ok"):
+            handler._json({
+                **result,
+                "job_id": job_id,
+                "status": "stopping",
+                "message": "云端同步停止请求已发送，后台会在当前官方接口返回后结束。",
+            })
+            return
+        handler._json({
+            **result,
+            "job_id": job_id,
+            "error_code": "SYNC_JOB_NOT_FOUND",
+            "error": "未找到可停止的云端同步任务。",
+        }, status=404)
+    except Exception as exc:
+        handler._json(ctx.web_error(exc, "SYNC_CANCEL_ERROR"), status=400)
 
 
 def _post_check(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext) -> None:
@@ -408,6 +449,11 @@ def _post_generate_candidates(handler: Any, _parsed: Any, ctx: WebHandlerDispatc
 
 def _post_check_batch(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext) -> None:
     try:
+        payload = handler._read_json()
+        validation_error = _validate_check_batch_payload(payload)
+        if validation_error:
+            handler._json({"ok": False, "error_code": "VALIDATION_ERROR", "error": validation_error}, status=400)
+            return
         active = ctx.check_jobs.latest_active()
         if active:
             active_job_id, _job = active
@@ -418,11 +464,25 @@ def _post_check_batch(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext
             _kind, message = conflict
             handler._json({"ok": False, "error_code": "CONFLICT_AUX_OP", "error": message}, status=409)
             return
-        payload = handler._read_json()
         response, status = ctx.background_job_start_payload(ctx.check_jobs, payload, ctx.start_check_batch_job, conflict_error="active batch check job")
         handler._json(response, status=status)
     except Exception as exc:
         handler._json(ctx.web_error(exc, "CHECK_BATCH_ERROR"), status=400)
+
+
+def _validate_check_batch_payload(payload: dict[str, Any] | None) -> str:
+    if payload is None:
+        return ""
+    candidate_ids = payload.get("candidate_ids")
+    if candidate_ids is not None:
+        if not isinstance(candidate_ids, list):
+            return "candidate_ids must be a list of Alpha IDs"
+        if any(not isinstance(item, str) or not item.strip() for item in candidate_ids):
+            return "candidate_ids must contain non-empty string Alpha IDs"
+    mode = payload.get("mode")
+    if mode is not None and str(mode) not in {"quick", "all"}:
+        return "mode must be quick or all"
+    return ""
 
 
 def _post_submit(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext) -> None:
@@ -511,6 +571,7 @@ _GET_DISPATCH_HANDLERS: dict[str, RouteDispatcher] = {
     "health": _get_health,
     "stream": _get_stream,
     "lifecycle": _get_lifecycle,
+    "candidates": _get_candidates,
     "cloud_alphas": _get_cloud_alphas,
     "research_memory": _get_research_memory,
     "research_knowledge": _get_research_knowledge,
@@ -540,6 +601,7 @@ _POST_DISPATCH_HANDLERS: dict[str, RouteDispatcher] = {
     "test_connection": _post_test_connection,
     "stop": _post_stop,
     "sync_alphas": _post_sync_alphas,
+    "sync_cancel": _post_sync_cancel,
     "check": _post_check,
     "generate_candidates": _post_generate_candidates,
     "check_batch": _post_check_batch,

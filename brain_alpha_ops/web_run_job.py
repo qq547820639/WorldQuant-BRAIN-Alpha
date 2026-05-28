@@ -43,7 +43,10 @@ def run_guided_job_service(
             progress={"phase": "startup", "current": 0, "total": 1, "percent": 0, "message": "引导式生产任务启动...", "alpha_id": ""},
         )
         run_config = run_config_from_payload(payload)
-        guided = GuidedPipeline(run_config)
+        guided = GuidedPipeline(
+            run_config,
+            stop_callback=lambda: job_store.is_cancelled(job_id),
+        )
 
         phase_names = list(getattr(guided, "phases", {}) or {}) or ["guided"]
 

@@ -85,6 +85,8 @@ STATIC_ANALYSIS_TARGETS = [
     "scripts/check_diagnostic_report.py",
     "scripts/check_diagnosis_gap_coverage.py",
     "scripts/final_release_gate.py",
+    "scripts/check_web_console_contract.py",
+    "scripts/check_react_build_env.py",
     "scripts/check_module_size.py",
     "scripts/check_optional_tooling.py",
     "scripts/check_official_context.py",
@@ -96,6 +98,8 @@ STATIC_ANALYSIS_TARGETS = [
     "tests/test_official_context_validation.py",
     "tests/test_web_assistant_snapshots.py",
     "tests/test_web_build_inline.py",
+    "tests/test_web_console_contract.py",
+    "tests/test_react_build_env_check.py",
     "tests/test_web_check_batch_job.py",
     "tests/test_web_check_availability.py",
     "tests/test_web_candidate_check.py",
@@ -140,6 +144,8 @@ StepRunner = Callable[[], tuple[bool, dict]]
 def _subprocess_env() -> dict[str, str]:
     env = os.environ.copy()
     local_deps = ROOT / ".codex_pydeps"
+    pycache_prefix = ROOT / ".pytest_cache_runtime" / "pycache"
+    pycache_prefix.mkdir(parents=True, exist_ok=True)
     python_paths: list[str] = []
     if local_deps.exists():
         python_paths.append(str(local_deps))
@@ -149,6 +155,7 @@ def _subprocess_env() -> dict[str, str]:
     if python_paths:
         env["PYTHONPATH"] = os.pathsep.join(python_paths)
     env.setdefault("PYTHONUTF8", "1")
+    env["PYTHONPYCACHEPREFIX"] = str(pycache_prefix)
     return env
 
 
@@ -177,7 +184,12 @@ def _validate_config(config_path: Path) -> tuple[bool, dict]:
 
 
 def _compile_python() -> tuple[bool, dict]:
-    return _run_python_module(["-m", "compileall", "-q", *COMPILE_TARGETS])
+    existing_targets = [target for target in COMPILE_TARGETS if (ROOT / target).exists()]
+    ok, detail = _run_python_module(["-m", "compileall", "-q", *existing_targets])
+    missing_targets = [target for target in COMPILE_TARGETS if not (ROOT / target).exists()]
+    detail["compiled_targets"] = existing_targets
+    detail["missing_targets_skipped"] = missing_targets
+    return ok, detail
 
 
 def _frontend_syntax(html_path: Path) -> tuple[bool, dict]:
@@ -188,14 +200,29 @@ def _frontend_innerhtml_guard() -> tuple[bool, dict]:
     return _run_python_module(["scripts/check_frontend_innerhtml.py", "--json"])
 
 
+def _web_console_contract(html_path: Path) -> tuple[bool, dict]:
+    return _run_python_module(["scripts/check_web_console_contract.py", "--html", str(html_path), "--json"])
+
+
+def _react_build_env(*, strict: bool = False, run_build: bool = False) -> tuple[bool, dict]:
+    args = ["scripts/check_react_build_env.py", "--json"]
+    if strict:
+        args.append("--strict")
+    if run_build:
+        args.append("--run-build")
+    return _run_python_module(args)
+
+
 def _frontend_inline_sync() -> tuple[bool, dict]:
     return _run_python_module([str(FRONTEND_INLINE_BUILDER), "--check", "--json"])
 
 
-def _secret_scan(include_all: bool) -> tuple[bool, dict]:
+def _secret_scan(include_all: bool, include_git_history: bool = False) -> tuple[bool, dict]:
     args = ["scripts/scan_sensitive_artifacts.py", "--root", str(ROOT), "--json", "--fail-on-findings"]
     if include_all:
         args.append("--include-all")
+    if include_git_history:
+        args.append("--include-git-history")
     return _run_python_module(args)
 
 
@@ -236,18 +263,26 @@ def _final_release_gate(config_path: Path) -> tuple[bool, dict]:
     return _run_python_module(["scripts/final_release_gate.py", "--config", str(config_path), "--json"])
 
 
-def _redline_verification() -> tuple[bool, dict]:
-    return _run_python_module(["-m", "brain_alpha_ops.compliance.redline_verifier", "--block", "--json"])
+def _redline_verification(config_path: Path) -> tuple[bool, dict]:
+    return _run_python_module(
+        ["-m", "brain_alpha_ops.compliance.redline_verifier", "--config", str(config_path), "--block", "--json"]
+    )
 
 
 def _cache_metadata_audit() -> tuple[bool, dict]:
     """Check cache metadata freshness (non-blocking advisory)."""
+    started = time.perf_counter()
     from brain_alpha_ops.data.cache_metadata import build_cache_audit_snapshot
     from brain_alpha_ops.config import runtime_project_root
     cache_dir = runtime_project_root() / "data" / "api_cache"
     snapshot = build_cache_audit_snapshot(cache_dir)
     ok = snapshot.get("stale_count", 0) == 0
-    return ok, {"exit_code": 0, "command": "cache_metadata_audit", **snapshot}
+    return ok, {
+        "exit_code": 0,
+        "command": "cache_metadata_audit",
+        "duration_seconds": round(time.perf_counter() - started, 3),
+        **snapshot,
+    }
 
 
 def _diagnostic_report_sync(config_path: Path) -> tuple[bool, dict]:
@@ -297,6 +332,8 @@ def _mypy_check() -> tuple[bool, dict]:
 
 def _step(name: str, runner: StepRunner) -> dict:
     ok, detail = runner()
+    detail.setdefault("duration_seconds", 0.0)
+    detail.setdefault("exit_code", 0 if ok else 1)
     return {"name": name, "ok": ok, **detail}
 
 
@@ -305,6 +342,7 @@ def run_quality_gate(
     config_path: Path = DEFAULT_CONFIG,
     html_path: Path = DEFAULT_HTML,
     include_all_secrets: bool = False,
+    include_git_history_secrets: bool = False,
     dependency_audit: bool = False,
     optional_tooling: bool = False,
     skip_compile: bool = False,
@@ -314,6 +352,8 @@ def run_quality_gate(
     mypy: bool = False,
     strict_optional_tooling: bool = False,
     strict_official_context: bool = False,
+    strict_react_build: bool = False,
+    run_react_build: bool = False,
     final_release: bool = False,
 ) -> dict:
     steps = []
@@ -322,7 +362,7 @@ def run_quality_gate(
     steps.extend([
         _step("config", lambda: _validate_config(config_path)),
         _step("dependency_policy", _dependency_policy),
-        _step("redline_verification", _redline_verification),
+        _step("redline_verification", lambda: _redline_verification(config_path)),
         _step("brain_contract_validation", lambda: _brain_contract_validation(config_path, strict=strict_official_context)),
         _step("diagnosis_gap_coverage", lambda: _diagnosis_gap_coverage(config_path, strict=strict_official_context)),
     ])
@@ -332,10 +372,12 @@ def run_quality_gate(
         _step("frontend_inline_sync", _frontend_inline_sync),
         _step("frontend_syntax", lambda: _frontend_syntax(html_path)),
         _step("frontend_innerhtml_guard", _frontend_innerhtml_guard),
+        _step("web_console_contract", lambda: _web_console_contract(html_path)),
+        _step("react_build_env", lambda: _react_build_env(strict=strict_react_build, run_build=run_react_build)),
         _step("text_encoding_scan", _text_encoding_scan),
         _step("official_context_validation", lambda: _official_context_validation(config_path, strict=strict_official_context)),
         _step("module_size_audit", _module_size_audit),
-        _step("secret_scan", lambda: _secret_scan(include_all_secrets)),
+        _step("secret_scan", lambda: _secret_scan(include_all_secrets, include_git_history_secrets)),
         _step("cache_metadata_audit", _cache_metadata_audit),
         _step("diagnostic_report_sync", lambda: _diagnostic_report_sync(config_path)),
     ])
@@ -362,10 +404,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--config", default=str(DEFAULT_CONFIG), help="Run config path to validate.")
     parser.add_argument("--html", default=str(DEFAULT_HTML), help="Built Web HTML path to syntax-check.")
     parser.add_argument("--include-all-secrets", action="store_true", help="Scan all text-like files for secrets.")
+    parser.add_argument("--include-git-history-secrets", action="store_true", help="Also scan Git history for known leaked secret hashes.")
     parser.add_argument("--dependency-audit", action="store_true", help="Run pip-audit when installed.")
     parser.add_argument("--optional-tooling", action="store_true", help="Report optional ruff/mypy/pip-audit availability without enforcing it.")
     parser.add_argument("--strict-optional-tooling", action="store_true", help="Fail optional tooling check when ruff/mypy/pip-audit are missing.")
     parser.add_argument("--strict-official-context", action="store_true", help="Fail when official fields/operators/datasets metadata is stale.")
+    parser.add_argument("--strict-react-build", action="store_true", help="Fail when React build prerequisites are missing.")
+    parser.add_argument("--run-react-build", action="store_true", help="Run npm run build after React build prerequisites are available.")
     parser.add_argument("--final-release", action="store_true", help="Run fail-closed final release readiness checks.")
     parser.add_argument("--ruff", action="store_true", help="Run ruff on the incremental static-analysis target set.")
     parser.add_argument("--mypy", action="store_true", help="Run mypy on the incremental static-analysis target set.")
@@ -382,10 +427,13 @@ def main(argv: list[str] | None = None) -> int:
         config_path=Path(args.config),
         html_path=Path(args.html),
         include_all_secrets=args.include_all_secrets,
+        include_git_history_secrets=args.include_git_history_secrets,
         dependency_audit=args.dependency_audit,
         optional_tooling=args.optional_tooling,
         strict_optional_tooling=args.strict_optional_tooling,
         strict_official_context=args.strict_official_context,
+        strict_react_build=args.strict_react_build,
+        run_react_build=args.run_react_build,
         final_release=args.final_release,
         ruff=args.ruff,
         mypy=args.mypy,
@@ -398,7 +446,7 @@ def main(argv: list[str] | None = None) -> int:
     else:
         for step in result["steps"]:
             status = "PASS" if step["ok"] else "FAIL"
-            print(f"[{status}] {step['name']} ({step['duration_seconds']}s)")
+            print(f"[{status}] {step['name']} ({step.get('duration_seconds', 0)}s)")
             if not step["ok"]:
                 output = (step.get("stdout") or "") + (step.get("stderr") or "")
                 if output.strip():

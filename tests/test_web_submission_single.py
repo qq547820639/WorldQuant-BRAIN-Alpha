@@ -46,7 +46,7 @@ def _candidate():
 
 
 def test_submit_candidate_payload_submits_and_records(tmp_path):
-    run_config = RunConfig(environment="mock")
+    run_config = RunConfig(environment="production")
     run_config.ops.storage_dir = str(tmp_path)
     api_calls = []
     ledger_records = []
@@ -80,7 +80,7 @@ def test_submit_candidate_payload_submits_and_records(tmp_path):
 
 
 def test_submit_candidate_payload_records_preflight_block(tmp_path):
-    run_config = RunConfig(environment="mock")
+    run_config = RunConfig(environment="production")
     run_config.ops.storage_dir = str(tmp_path)
     blocked = []
 

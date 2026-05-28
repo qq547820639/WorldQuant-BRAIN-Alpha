@@ -5,17 +5,24 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Mapping
 
-from brain_alpha_ops.brain_api import MockBrainAPI
 from brain_alpha_ops.config import RunConfig
 from brain_alpha_ops.error_payloads import user_error_payload
 from brain_alpha_ops.models import Candidate
+from brain_alpha_ops.shared_bounds import (
+    bounded_float,
+    bounded_int,
+    candidate_argument,
+    expression_batch_argument,
+    list_text,
+    required_text,
+    truthy,
+)
 from brain_alpha_ops.research.assistant import (
     AssistantResponseParseError,
     assistant_response_to_generation_guidance,
     build_assistant_request_pack,
     parse_assistant_response,
 )
-from brain_alpha_ops.research.expression_ast import expression_key
 from brain_alpha_ops.research.alerting import AlertDeliveryService, AlertRouter
 from brain_alpha_ops.research.anti_overfit import AntiOverfitService
 from brain_alpha_ops.research.context import build_assistant_context_pack
@@ -68,13 +75,13 @@ def build_market_data_cache_tool(
 
 
 def build_vectorized_market_data_from_args(storage_dir: str | Path, args: dict[str, Any]) -> dict[str, Any]:
-    field_list = _list_text(args.get("fields"))
+    field_list = list_text(args.get("fields"))
     return build_vectorized_market_data_tool(
         storage_dir,
         fields=field_list,
-        limit_symbols=_bounded_int(args.get("limit_symbols", 200), 1, 5000),
-        min_field_coverage=_bounded_float(args.get("min_field_coverage", 0.0), 0.0, 1.0),
-        normalize=_truthy(args.get("normalize", False)),
+        limit_symbols=bounded_int(args.get("limit_symbols", 200), 1, 5000),
+        min_field_coverage=bounded_float(args.get("min_field_coverage", 0.0), 0.0, 1.0),
+        normalize=truthy(args.get("normalize", False)),
     )
 
 
@@ -101,10 +108,10 @@ def search_parameters_tool(candidate: Candidate, *, max_mutations: int) -> dict[
 
 def orchestrate_parameter_search_from_args(args: dict[str, Any]) -> dict[str, Any]:
     return orchestrate_parameter_search_tool(
-        Candidate.from_dict(_candidate_argument(args)),
-        rounds=_bounded_int(args.get("rounds", 2), 1, 8),
-        max_mutations=_bounded_int(args.get("max_mutations", 4), 1, 12),
-        keep_top=_bounded_int(args.get("keep_top", 3), 1, 20),
+        Candidate.from_dict(candidate_argument(args)),
+        rounds=bounded_int(args.get("rounds", 2), 1, 8),
+        max_mutations=bounded_int(args.get("max_mutations", 4), 1, 12),
+        keep_top=bounded_int(args.get("keep_top", 3), 1, 20),
     )
 
 
@@ -141,13 +148,13 @@ def plan_parallel_backtest_tool(
 
 
 def plan_parallel_backtest_from_args(args: dict[str, Any]) -> dict[str, Any]:
-    markets = _list_text(args.get("markets")) or None
+    markets = list_text(args.get("markets")) or None
     return plan_parallel_backtest_tool(
-        _expression_batch_argument(args),
+        expression_batch_argument(args),
         markets=markets,
-        max_workers=_bounded_int(args.get("max_workers", 4), 1, 32),
-        max_batches=_bounded_int(args.get("max_batches", 10), 1, 100),
-        per_account_limit=_bounded_int(args.get("per_account_limit", 20), 1, 1000),
+        max_workers=bounded_int(args.get("max_workers", 4), 1, 32),
+        max_batches=bounded_int(args.get("max_batches", 10), 1, 100),
+        per_account_limit=bounded_int(args.get("per_account_limit", 20), 1, 1000),
     )
 
 
@@ -158,12 +165,12 @@ def run_parallel_backtest_from_args(
     default_market: str,
 ) -> dict[str, Any]:
     return ParallelBacktestExecutor().execute(
-        _expression_batch_argument(args),
+        expression_batch_argument(args),
         runner=runner,
-        markets=_list_text(args.get("markets")) or [default_market],
-        max_workers=_bounded_int(args.get("max_workers", 1), 1, 3),
-        max_batches=_bounded_int(args.get("max_batches", 1), 1, 10),
-        per_account_limit=_bounded_int(args.get("per_account_limit", 10), 1, 10),
+        markets=list_text(args.get("markets")) or [default_market],
+        max_workers=bounded_int(args.get("max_workers", 1), 1, 3),
+        max_batches=bounded_int(args.get("max_batches", 1), 1, 10),
+        per_account_limit=bounded_int(args.get("per_account_limit", 10), 1, 10),
     )
 
 
@@ -189,10 +196,10 @@ def send_alert_tool(
 def route_alert_from_args(storage_dir: str | Path, args: dict[str, Any]) -> dict[str, Any]:
     return route_alert_tool(
         storage_dir,
-        title=_required_text(args, "title"),
-        message=_required_text(args, "message"),
+        title=required_text(args, "title"),
+        message=required_text(args, "message"),
         severity=str(args.get("severity", "info") or "info").strip() or "info",
-        channels=_list_text(args.get("channels")) or ["local"],
+        channels=list_text(args.get("channels")) or ["local"],
         routes=dict(args.get("routes") or {}),
         metadata=dict(args.get("metadata") or {}),
     )
@@ -220,25 +227,25 @@ def route_alert_tool(
 def build_assistant_context_tool(run_config: RunConfig, args: dict[str, Any]) -> dict[str, Any]:
     return build_assistant_context_pack(
         run_config,
-        limit=_bounded_int(args.get("limit", 5000), 1, 50000),
-        top_n=_bounded_int(args.get("top_n", 10), 1, 50),
-        include_prompt=_truthy(args.get("include_prompt", True)),
-        include_sensitive=_truthy(args.get("include_sensitive", False)),
+        limit=bounded_int(args.get("limit", 5000), 1, 50000),
+        top_n=bounded_int(args.get("top_n", 10), 1, 50),
+        include_prompt=truthy(args.get("include_prompt", True)),
+        include_sensitive=truthy(args.get("include_sensitive", False)),
     )
 
 
 def build_assistant_request_tool(run_config: RunConfig, args: dict[str, Any]) -> dict[str, Any]:
     context = build_assistant_context_pack(
         run_config,
-        limit=_bounded_int(args.get("limit", 5000), 1, 50000),
-        top_n=_bounded_int(args.get("top_n", 10), 1, 50),
+        limit=bounded_int(args.get("limit", 5000), 1, 50000),
+        top_n=bounded_int(args.get("top_n", 10), 1, 50),
         include_prompt=True,
-        include_sensitive=_truthy(args.get("include_sensitive", False)),
+        include_sensitive=truthy(args.get("include_sensitive", False)),
     )
     return build_assistant_request_pack(
         context,
-        include_prompt=_truthy(args.get("include_prompt", True)),
-        include_offline_draft=_truthy(args.get("include_offline_draft", True)),
+        include_prompt=truthy(args.get("include_prompt", True)),
+        include_offline_draft=truthy(args.get("include_offline_draft", True)),
     )
 
 
@@ -256,20 +263,20 @@ def assistant_response_guidance_tool(args: dict[str, Any]) -> dict[str, Any]:
         response = parse_assistant_response(raw_output)
         return assistant_response_to_generation_guidance(
             response,
-            min_confidence=_bounded_float(args.get("min_confidence", 0.0), 0.0, 1.0),
+            min_confidence=bounded_float(args.get("min_confidence", 0.0), 0.0, 1.0),
         )
     except AssistantResponseParseError as exc:
         return user_error_payload(exc, error_code="ASSISTANT_RESPONSE_PARSE_ERROR")
 
 
 def run_anti_overfit_tool(args: dict[str, Any]) -> dict[str, Any]:
-    return AntiOverfitService().evaluate(_candidate_argument(args))
+    return AntiOverfitService().evaluate(candidate_argument(args))
 
 
 def run_rolling_validation_tool(args: dict[str, Any]) -> dict[str, Any]:
     return RollingValidationService().evaluate(
-        _candidate_argument(args),
-        windows=_bounded_int(args.get("windows", 4), 2, 20),
+        candidate_argument(args),
+        windows=bounded_int(args.get("windows", 4), 2, 20),
     )
 
 
@@ -284,7 +291,7 @@ def cross_review_assistant_response_tool(args: dict[str, Any]) -> dict[str, Any]
             request_pack,
             primary if primary is not None else "",
             reviewer_response=reviewer,
-            min_confidence=_bounded_float(args.get("min_confidence", 0.6), 0.0, 1.0),
+            min_confidence=bounded_float(args.get("min_confidence", 0.6), 0.0, 1.0),
         )
     except AssistantResponseParseError as exc:
         return user_error_payload(exc, error_code="ASSISTANT_CROSS_REVIEW_PARSE_ERROR")
@@ -302,82 +309,3 @@ def collect_job_rows(job_stores: Mapping[str, Any], *, limit: int) -> list[dict[
         except Exception:
             continue
     return rows[-limit:]
-
-
-def _bounded_int(value: Any, lower: int, upper: int) -> int:
-    try:
-        parsed = int(value)
-    except (TypeError, ValueError):
-        parsed = lower
-    return min(max(parsed, lower), upper)
-
-
-def _bounded_float(value: Any, lower: float, upper: float) -> float:
-    try:
-        parsed = float(value)
-    except (TypeError, ValueError):
-        parsed = lower
-    return min(max(parsed, lower), upper)
-
-
-def _truthy(value: Any) -> bool:
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, str):
-        return value.strip().lower() not in {"0", "false", "no", "off"}
-    return bool(value)
-
-
-def _candidate_argument(args: dict[str, Any]) -> dict[str, Any]:
-    candidate = args.get("candidate")
-    if isinstance(candidate, dict):
-        return candidate
-    expression = str(args.get("expression", "") or "").strip()
-    if not expression:
-        raise ValueError("missing required argument: expression")
-    return {
-        "alpha_id": str(args.get("alpha_id", "agent_candidate") or "agent_candidate"),
-        "expression": expression,
-        "family": str(args.get("family", "Agent") or "Agent"),
-        "hypothesis": str(args.get("hypothesis", "Agent supplied expression") or "Agent supplied expression"),
-        "official_metrics": dict(args.get("official_metrics") or {}),
-        "submission": dict(args.get("submission") or {}),
-    }
-
-
-def _expression_batch_argument(args: dict[str, Any]) -> list[str]:
-    raw = args.get("expressions")
-    values = raw if isinstance(raw, list) else [raw or args.get("expression", "")]
-    rows: list[str] = []
-    seen: set[str] = set()
-    for item in values:
-        expression = str(item or "").strip()
-        marker = expression_key(expression)
-        if not expression or marker in seen:
-            continue
-        seen.add(marker)
-        rows.append(expression)
-    return rows
-
-
-def _list_text(value: Any) -> list[str]:
-    if value is None:
-        return []
-    values = value if isinstance(value, list) else [value]
-    rows: list[str] = []
-    seen: set[str] = set()
-    for item in values:
-        text = str(item or "").strip()
-        key = text.lower()
-        if not text or key in seen:
-            continue
-        seen.add(key)
-        rows.append(text)
-    return rows
-
-
-def _required_text(args: dict[str, Any], key: str) -> str:
-    value = str(args.get(key, "") or "").strip()
-    if not value:
-        raise ValueError(f"missing required argument: {key}")
-    return value

@@ -31,8 +31,9 @@ class SafeThreadingHTTPServer(ThreadingHTTPServer):
         self.server_port = int(port)
 
 
-def find_free_port(start: int, *, host: str, scan_limit: int = 100) -> int:
-    for port in range(start, start + scan_limit):
+def find_free_port(start: int, *, host: str, scan_limit: int = 10000) -> int:
+    upper = min(65535, start + max(1, scan_limit))
+    for port in range(start, upper + 1):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
             sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             try:
@@ -78,7 +79,15 @@ def serve(
     bind_host = normalize_host(host)
     if bind_host not in loopback_bind_hosts and not allow_remote:
         raise ValueError("remote web bind requires web.allow_remote=true")
-    bind_port = find_free_port(start=port or default_port, host=bind_host)
+    requested_port = port or default_port
+    try:
+        bind_port = find_free_port(start=requested_port, host=bind_host)
+    except RuntimeError:
+        if server_factory is SafeThreadingHTTPServer:
+            raise
+        # Unit tests and embedding callers may supply a fake server factory
+        # that does not need a real socket probe.
+        bind_port = requested_port
     server = server_factory((bind_host, bind_port), handler_class)
     url = f"http://{display_host_for_bind(bind_host)}:{bind_port}/"
     if open_browser:

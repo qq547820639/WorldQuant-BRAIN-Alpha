@@ -397,7 +397,7 @@ def build_default_tool_registry() -> ToolRegistry:
     registry.register_alias(
         "run_backtest",
         "run_simulation",
-        description="QuantGPT-style alias for the configured BRAIN simulation/backtest workflow; requires live API confirmation outside mock mode.",
+        description="QuantGPT-style alias for the configured BRAIN simulation/backtest workflow; requires live API confirmation.",
         category="backtest",
         chain_stage="deep_validate",
     )

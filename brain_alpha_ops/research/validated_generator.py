@@ -3,6 +3,8 @@
 Replaces random field/operator assembly with signature-validated templates.
 Target: reduce BRAIN rejection rate from ~39% to ~10%.
 """
+from __future__ import annotations
+
 import re
 import random
 from typing import Any, Dict, List, Optional, Set, Tuple

@@ -381,7 +381,9 @@
 
   function renderNativeCharts(summary, candidates) {
     var rows = candidateRows(candidates);
-    setChartFallback(rows.length ? 'Chart.js 未加载，已启用本地 canvas 简版图表。' : 'Chart.js 未加载，当前视图暂无可绘制数据。');
+    setChartFallback(rows.length
+      ? 'Chart.js 未加载，已启用本地简版图表（本地 canvas）；表格视图仍可继续使用。'
+      : '当前没有可绘制数据；表格视图仍可继续使用。');
     var sampled = sampleRows(rows, MAX_CHART_POINTS);
     var scores = sampled.map(function (c) {
       var score = metricNumber(c, ['total_score', 'local_rank_score'], NaN);

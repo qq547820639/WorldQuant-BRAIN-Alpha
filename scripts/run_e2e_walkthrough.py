@@ -1,7 +1,7 @@
 """
 Manual E2E Walkthrough — executes the full new-user journey step by step.
 """
-import json, os, re, sys, time, traceback
+import json, os, re, sys, time, traceback, uuid
 from pathlib import Path
 
 # Ensure project root is on sys.path
@@ -11,13 +11,21 @@ os.environ["BRAIN_ALPHA_OPS_HOME"] = PROJECT_ROOT
 
 import requests
 
-# Config
-TEST_EMAIL = "BRAIN_E2E_USERNAME_PLACEHOLDER@qq.com"
-TEST_PASSWORD = "BRAIN_E2E_PASSWORD_PLACEHOLDER."
-
 from brain_alpha_ops import web
+from brain_alpha_ops.redaction import redact_text
+
+# Config: live credentials must be supplied at runtime, never committed.
+TEST_EMAIL = os.getenv("BRAIN_E2E_USERNAME") or os.getenv("BRAIN_USERNAME", "")
+TEST_PASSWORD = os.getenv("BRAIN_E2E_PASSWORD") or os.getenv("BRAIN_PASSWORD", "")
+TEST_TOKEN = os.getenv("BRAIN_E2E_TOKEN") or os.getenv("BRAIN_TOKEN", "")
 
 results = {"stages": {}, "metrics": {}, "errors": [], "warnings": []}
+
+def has_live_credentials():
+    return bool(TEST_TOKEN or (TEST_EMAIL and TEST_PASSWORD))
+
+def credential_payload():
+    return {"username": TEST_EMAIL, "password": TEST_PASSWORD, "token": TEST_TOKEN}
 
 def safe_get(url, headers, cookies, **kw):
     t0 = time.time()
@@ -27,7 +35,12 @@ def safe_get(url, headers, cookies, **kw):
 
 def safe_post(url, headers, cookies, data, **kw):
     t0 = time.time()
-    r = requests.post(url, json=data, headers=headers, cookies=cookies, timeout=30, **kw)
+    post_headers = {
+        **headers,
+        "X-Brain-Alpha-Request-ID": str(uuid.uuid4()),
+        "X-Brain-Alpha-Request-Timestamp": str(int(time.time() * 1000)),
+    }
+    r = requests.post(url, json=data, headers=post_headers, cookies=cookies, timeout=30, **kw)
     results["metrics"][f"POST:{url.split('/')[-1][:20]}"] = round(time.time()-t0,2)
     return r
 
@@ -84,26 +97,43 @@ results["stages"]["config"] = "PASS"
 
 # === STAGE 3: Connection Test ===
 print("\n[3] Connection Test (Live BRAIN API)")
-payload = {
-    "environment": "production",
-    "username": TEST_EMAIL, "password": TEST_PASSWORD,
-    "token": "", "baseUrl": "https://api.worldquantbrain.com",
-    "preset": "usa_standard",
-    "settings": {"region":"USA","universe":"TOP3000","delay":1,"neutralization":"SUBINDUSTRY",
-                 "instrumentType":"EQUITY","type":"REGULAR","decay":10,"truncation":0.05,
-                 "pasteurization":"ON","nanHandling":"ON","unitHandling":"VERIFY","language":"FASTEXPR"}
-}
-r = safe_post(f"{BASE}/api/test_connection", headers, cookies, payload)
-data = r.json()
-connected = data.get("ok", False)
-print(f"    {'OK Connected' if connected else 'FAILED: ' + data.get('error','?')[:100]}")
-results["stages"]["connection"] = "PASS" if connected else "SKIP"
+if not has_live_credentials():
+    print("    SKIPPED: set BRAIN_USERNAME/BRAIN_PASSWORD or BRAIN_TOKEN to run live connection checks")
+    connected = False
+    results["stages"]["connection"] = "SKIP"
+else:
+    payload = {
+        "environment": "production",
+        **credential_payload(),
+        "baseUrl": "https://api.worldquantbrain.com",
+        "preset": "usa_standard",
+        "settings": {
+            "region": "USA",
+            "universe": "TOP3000",
+            "delay": 1,
+            "neutralization": "SUBINDUSTRY",
+            "instrumentType": "EQUITY",
+            "type": "REGULAR",
+            "decay": 10,
+            "truncation": 0.05,
+            "pasteurization": "ON",
+            "nanHandling": "ON",
+            "unitHandling": "VERIFY",
+            "language": "FASTEXPR",
+        },
+    }
+    r = safe_post(f"{BASE}/api/test_connection", headers, cookies, payload)
+    data = r.json()
+    connected = data.get("ok", False)
+    error_text = redact_text(data.get("error", "?"), max_length=100)
+    print(f"    {'OK Connected' if connected else 'FAILED: ' + error_text}")
+    results["stages"]["connection"] = "PASS" if connected else "SKIP"
 
 # === STAGE 4: Cloud Sync ===
 if connected:
     print("\n[4] Cloud Sync")
     r = safe_post(f"{BASE}/api/sync_alphas", headers, cookies, {
-        "environment":"production","username":TEST_EMAIL,"password":TEST_PASSWORD,
+        "environment":"production", **credential_payload(),
         "baseUrl":"https://api.worldquantbrain.com","syncRange":"3d",
         "settings":{"region":"USA","universe":"TOP3000"}})
     d = r.json()
@@ -142,7 +172,7 @@ for ep,label in [("/api/research_memory","memory"),("/api/lifecycle","lifecycle"
         _sz = len(_r.text)
         print(f"    {label}: {_r.status_code}, {_sz} bytes")
     except Exception as e:
-        print(f"    {label}: ERROR {e}")
+        print(f"    {label}: ERROR {redact_text(e, max_length=120)}")
 results["stages"]["research"] = "PASS"
 
 # === STAGE 6: All GET endpoints health check ===

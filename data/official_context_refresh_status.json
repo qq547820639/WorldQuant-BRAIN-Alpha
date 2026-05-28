@@ -1,15 +1,15 @@
 {
   "schema_version": "official_context_refresh.v1",
-  "generated_at": "2026-05-26T05:38:23.482801+00:00",
-  "started_at": "2026-05-26T05:38:21.882758+00:00",
+  "generated_at": "2026-05-27T15:05:26.067044+00:00",
+  "started_at": "2026-05-27T14:56:46.315402+00:00",
   "environment": "production",
-  "storage_dir": "D:\\Works\\WorldQuant BRAIN Alpha\\data",
+  "storage_dir": "/Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/data",
   "base_url": "https://api.worldquantbrain.com",
   "region": "USA",
   "universe": "TOP3000",
   "delay": 1,
   "write_enabled": true,
-  "status_path": "D:\\Works\\WorldQuant BRAIN Alpha\\data\\official_context_refresh_status.json",
+  "status_path": "/Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/data/official_context_refresh_status.json",
   "ok": true,
   "status": "refreshed",
   "auth": {
@@ -26,7 +26,7 @@
     "operators": 66,
     "datasets": 17,
     "manifest_complete": true,
-    "manifest_stale": false
+    "manifest_stale": true
   },
   "after": {
     "fields": 7780,
@@ -37,10 +37,10 @@
   },
   "progress": {
     "fields": {
-      "events": 1,
+      "events": 156,
       "scanned": 7780,
       "total": 7780,
-      "cached": true,
+      "cached": false,
       "truncated": false,
       "warning": ""
     },
@@ -48,7 +48,7 @@
       "events": 1,
       "scanned": 66,
       "total": 66,
-      "cached": true,
+      "cached": false,
       "truncated": false,
       "warning": ""
     },

@@ -121,3 +121,34 @@ def test_has_valid_request_session_allows_header_csrf_or_stream_query_only():
         csrf_header="",
         cookie_header=cookie,
     )
+
+
+def test_session_manager_rejects_replayed_or_stale_post_requests():
+    manager = LocalSessionManager(ttl_seconds=120)
+    session_id, _csrf_token = manager.create()
+
+    accepted = manager.validate_replay(
+        session_id=session_id,
+        request_id="req-1",
+        request_timestamp=str(int(1_700_000_000 * 1000)),
+        now=1_700_000_000,
+    )
+    assert accepted["ok"] is True
+
+    duplicate = manager.validate_replay(
+        session_id=session_id,
+        request_id="req-1",
+        request_timestamp=str(int(1_700_000_001 * 1000)),
+        now=1_700_000_001,
+    )
+    assert duplicate["ok"] is False
+    assert duplicate["error_code"] == "REPLAY_DETECTED"
+
+    stale = manager.validate_replay(
+        session_id=session_id,
+        request_id="req-2",
+        request_timestamp=str(int(1_699_999_000 * 1000)),
+        now=1_700_000_001,
+    )
+    assert stale["ok"] is False
+    assert stale["error_code"] == "REPLAY_TIMESTAMP_STALE"

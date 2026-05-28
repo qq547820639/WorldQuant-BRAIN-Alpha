@@ -721,7 +721,7 @@ def _check_self_correlation_with_exception(
     # Exception: Sharpe advantage
     sharpe = _num(metrics.get("sharpe", 0))
     related_sharpe = _num(metrics.get("related_alpha_sharpe", metrics.get("relatedAlphaSharpe", 0)))
-    if related_sharpe > 0 and sharpe >= related_sharpe * 1.10:
+    if related_sharpe > 0 and sharpe + 1e-12 >= related_sharpe * 1.10:
         return True
     return False
 
@@ -737,20 +737,20 @@ def _build_self_correlation_item(
     exception_applied and exception_note fields when the BRAIN Sharpe
     advantage exception is applied.
     """
-    passed = self_correlation <= thresholds.max_self_correlation
+    passed = self_correlation < thresholds.max_self_correlation
     exception_applied = False
     exception_note = ""
     if not passed:
         sharpe = _num(metrics.get("sharpe", 0))
         related_sharpe = _num(metrics.get("related_alpha_sharpe", metrics.get("relatedAlphaSharpe", 0)))
-        if related_sharpe > 0 and sharpe >= related_sharpe * 1.10:
+        if related_sharpe > 0 and sharpe + 1e-12 >= related_sharpe * 1.10:
             passed = True
             exception_applied = True
             exception_note = (
                 f"BRAIN exception: Sharpe {sharpe:.3f} >= "
                 f"related Sharpe {related_sharpe:.3f} × 1.10"
             )
-    result = item("self_correlation", self_correlation, "<=",
+    result = item("self_correlation", self_correlation, "<",
                   thresholds.max_self_correlation, passed, 14, is_hard_gate=True)
     result["exception_applied"] = exception_applied
     if exception_applied:
@@ -901,9 +901,9 @@ def estimate_score_confidence(scorecard: dict) -> dict:
         std_dev = variance ** 0.5
         dispersion = std_dev / max(mean_score, 0.01)
 
-        if dispersion < 0.25 and data_completeness > 0.8:
+        if dispersion < 0.50 and data_completeness > 0.8:
             confidence_level = "high"
-        elif dispersion < 0.50:
+        elif dispersion < 0.75:
             confidence_level = "medium"
         else:
             confidence_level = "low"

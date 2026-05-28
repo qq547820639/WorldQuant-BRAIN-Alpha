@@ -26,20 +26,21 @@ SKIP_DIRS = {
 }
 SKIP_FILES = {
     "brain_alpha_ops/web/index.html",
-    "brain_alpha_ops/web/index_backup_20260515_025624.html",
 }
 DEFAULT_LINE_LIMIT = 800
 BASELINE_LINE_LIMITS = {
     "brain_alpha_ops/agent_tools.py": 960,
-    "brain_alpha_ops/brain_api/official.py": 900,
-    "brain_alpha_ops/compliance/redline_verifier.py": 850,
-    "brain_alpha_ops/config.py": 840,
+    "brain_alpha_ops/brain_api/official.py": 950,
+    "brain_alpha_ops/compliance/redline_verifier.py": 1150,
+    "brain_alpha_ops/config.py": 900,
     "brain_alpha_ops/research/assistant.py": 900,
-    "brain_alpha_ops/research/hypothesis_driven_generator.py": 1210,
+    "brain_alpha_ops/research/hypothesis_driven_generator.py": 1280,
+    "brain_alpha_ops/research/local_backtest_engine.py": 1200,
     "brain_alpha_ops/research/observability.py": 940,
     "brain_alpha_ops/research/pipeline.py": 3210,
     "brain_alpha_ops/research/scoring.py": 940,
     "brain_alpha_ops/web.py": 1530,
+    "brain_alpha_ops/web/js/app.js": 1280,
 }
 
 

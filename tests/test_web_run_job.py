@@ -95,9 +95,10 @@ def test_run_guided_job_service_registers_phase_progress(monkeypatch):
     store = _Store()
 
     class FakeGuidedPipeline:
-        def __init__(self, _config):
+        def __init__(self, _config, *, stop_callback=None):
             self.phases = {"init": object(), "redline": object(), "finalize": object()}
             self.callback = None
+            self.stop_callback = stop_callback
 
         def on_progress(self, callback):
             self.callback = callback
@@ -105,6 +106,8 @@ def test_run_guided_job_service_registers_phase_progress(monkeypatch):
 
         def run(self):
             assert self.callback is not None
+            assert self.stop_callback is not None
+            assert self.stop_callback() is False
             self.callback("redline", "running", {"message": "checking red lines", "percent": 33, "alpha_id": "a1"})
             return PipelineResult(run_id="run_guided", candidates=[], events=[], summary={"candidates": [{"alpha_id": "a1"}]})
 

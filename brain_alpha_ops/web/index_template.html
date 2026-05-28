@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>BRAIN Alpha Ops</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230f766e'/%3E%3Cpath d='M9 23V9h10.4c2.8 0 4.6 1.9 4.6 4.3 0 1.9-1 3.2-2.4 3.8 1.8.5 3 1.9 3 4.2 0 2.8-2 4.7-5.2 4.7H9zm4-8h5.4c1.1 0 1.8-.6 1.8-1.6 0-.9-.7-1.5-1.8-1.5H13v3.1zm0 5.2h5.8c1.2 0 2-.7 2-1.7 0-1.1-.8-1.8-2-1.8H13v3.5z' fill='%23ffffff'/%3E%3C/svg%3E">
   <!-- inline-css:css/app.css -->
   <!-- inline-css:css/ux-enhancements.css -->
 </head>
@@ -71,14 +72,14 @@
             <div class="sbar-section-body">
               <div class="form-group">
                 <label class="form-label" for="environment">运行环境</label>
-                <select id="environment" class="form-select" data-change-action="toggle-environment" disabled>
+                <select id="environment" class="form-select" disabled>
                   <option value="production" selected>生产环境：官方 BRAIN API</option>
                 </select>
               </div>
               <div id="productionNote" class="alert alert-warning">
                 <span class="alert-icon">!</span> 当前版本仅保留真实线上 BRAIN API 路径；登录后会先同步云端数据。
               </div>
-              <div id="credentials">
+              <form id="connectionForm" autocomplete="on">
                 <div class="form-group">
                   <label class="form-label" for="username">BRAIN 账号</label>
                   <input id="username" class="form-input" autocomplete="username" placeholder="用户名或邮箱">
@@ -100,11 +101,11 @@
                       <label class="form-label" for="baseUrl">API 地址</label>
                       <input id="baseUrl" class="form-input" value="https://api.worldquantbrain.com">
                     </div>
-                    <button id="connTestBtn" class="btn btn-secondary btn-sm btn-block" data-action="test-connection">测试连接</button>
+                    <button id="connTestBtn" class="btn btn-secondary btn-sm btn-block" type="submit" data-action="test-connection">测试连接</button>
                     <div id="connTestResult" class="connection-result hidden"></div>
                   </div>
                 </div>
-              </div>
+              </form>
             </div>
           </div>
 
@@ -225,7 +226,7 @@
       </aside>
 
       <!-- ═══════════ CONTENT PANEL ═══════════ -->
-      <section class="app-content page-enter" id="mainContent" aria-label="数据面板" tabindex="-1">
+      <section class="app-content" id="mainContent" aria-label="数据面板" tabindex="-1">
 
         <!-- Core Workflow Rail -->
         <section class="workflow-rail" id="workflowRail" aria-label="核心任务导航">
@@ -294,6 +295,8 @@
           </div>
           <div class="runtime-status-actions">
             <button id="runtimeStopButton" class="btn btn-danger btn-sm" data-action="toggle-run">停止生产</button>
+            <button id="runtimeRetryButton" class="btn btn-secondary btn-sm hidden" data-action="retry-sync-cloud">重试同步</button>
+            <button id="runtimeLogButton" class="btn btn-secondary btn-sm hidden" data-action="switch-view" data-view="cloud">查看云端记录</button>
             <button class="btn btn-secondary btn-sm" data-action="scroll-main">查看结果区</button>
           </div>
         </section>
@@ -427,7 +430,16 @@
         <div id="tableWrap" class="data-table-wrap">
           <table id="candidateTable" class="data-table" aria-label="Alpha 候选与生命周期记录">
             <caption class="sr-only">Alpha 候选、回测、检查、提交和生命周期记录</caption>
-            <thead><tr><th>#</th><th>Alpha / 记录</th><th>家族</th><th>排序分</th><th>状态</th><th>官方 ID</th><th>风险 / 原因</th><th>操作</th></tr></thead>
+            <thead><tr>
+              <th>#</th>
+              <th data-sort-key="id" aria-sort="none"><button type="button" class="table-sort-btn" data-action="sort-table" data-sort-key="id">Alpha / 记录</button></th>
+              <th data-sort-key="family" aria-sort="none"><button type="button" class="table-sort-btn" data-action="sort-table" data-sort-key="family">家族</button></th>
+              <th data-sort-key="score" aria-sort="descending"><button type="button" class="table-sort-btn" data-action="sort-table" data-sort-key="score">排序分</button></th>
+              <th data-sort-key="status" aria-sort="none"><button type="button" class="table-sort-btn" data-action="sort-table" data-sort-key="status">状态</button></th>
+              <th data-sort-key="official_id" aria-sort="none"><button type="button" class="table-sort-btn" data-action="sort-table" data-sort-key="official_id">官方 ID</button></th>
+              <th data-sort-key="risk" aria-sort="none"><button type="button" class="table-sort-btn" data-action="sort-table" data-sort-key="risk">风险 / 原因</button></th>
+              <th>操作</th>
+            </tr></thead>
             <tbody id="candidateRows"></tbody>
           </table>
           <div id="mobileCardList" class="mobile-cards hidden" aria-label="移动端 Alpha 卡片列表"></div>
@@ -502,7 +514,8 @@
   <!-- inline:js/form-controls.js -->
   <!-- inline:js/strategy-panel.js -->
   <!-- inline:js/cloud-sync.js -->
+  <!-- inline:js/header-status.js -->
+  <!-- inline:js/workflow-assist.js -->
   <!-- inline:js/app.js -->
 </body>
 </html>
-

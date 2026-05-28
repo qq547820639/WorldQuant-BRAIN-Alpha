@@ -760,7 +760,7 @@ class TestApiSimulation:
         assert "simulated_api_output" in result.to_dict()
         assert result.simulated_api_output["meta"]["simulated"] is True
 
-    def test_qos_score_trend_tracking(self, strong_official_metrics):
+    def test_qos_score_trend_tracking(self, strong_official_metrics, weak_official_metrics):
         """Score trend should work over multiple evaluations."""
         qos = OfficialScoringSystem()
         candidate = Candidate(

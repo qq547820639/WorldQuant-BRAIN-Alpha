@@ -1,7 +1,7 @@
 from brain_alpha_ops.brain_api.base import BrainAPIError
 from brain_alpha_ops.errors import ValidationError, classify_error
 from brain_alpha_ops.observability import error_payload
-from brain_alpha_ops.redaction import redact_text
+from brain_alpha_ops.redaction import redact_data, redact_text
 
 
 def test_classify_error_marks_rate_limit_retryable():
@@ -49,12 +49,45 @@ def test_redaction_catches_freeform_secret_fragments():
     assert "<redacted>" in text
 
 
+def test_redaction_catches_email_addresses_next_to_secrets():
+    text = redact_text("auth failed for researcher@example.com with token=SECRET456")
+
+    assert "researcher@example.com" not in text
+    assert "SECRET456" not in text
+    assert "***@***" in text
+    assert "token=<redacted>" in text
+
+
 def test_error_payload_redacts_freeform_secret_fragments():
     payload = error_payload(RuntimeError("secret-token-123 failed"), error_code="RUN_JOB_FAILED")
 
     assert "secret-token-123" not in payload["error"]
     assert "<redacted>" in payload["error"]
     assert payload["redacted_message"] == payload["error"]
+
+
+def test_redaction_redacts_user_profile_contact_fields():
+    payload = redact_data({
+        "username": "researcher@example.com",
+        "raw": {
+            "email": "researcher@example.com",
+            "telephone": "+1234567890",
+            "firstName": "Research",
+            "fullName": "Research User",
+            "address": {"country": "CN"},
+            "employment": {"employer": "Example Capital"},
+        },
+    })
+    encoded = str(payload)
+
+    assert "researcher@example.com" not in encoded
+    assert "+1234567890" not in encoded
+    assert "Research User" not in encoded
+    assert payload["raw"]["email"] == "<redacted>"
+    assert payload["raw"]["telephone"] == "<redacted>"
+    assert payload["raw"]["firstName"] == "<redacted>"
+    assert payload["raw"]["fullName"] == "<redacted>"
+    assert payload["raw"]["employment"] == "<redacted>"
 
 
 def test_classify_error_marks_5xx_retryable_network():

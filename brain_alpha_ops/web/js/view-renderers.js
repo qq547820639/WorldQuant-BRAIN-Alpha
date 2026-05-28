@@ -15,6 +15,11 @@
   var candidateIdentity = VM.candidateIdentity;
   var expressionFromRow = VM.expressionFromRow;
   var uniqueBy = VM.uniqueBy;
+  var lifecycleStatusLabel = VM.lifecycleStatusLabel || function (row) {
+    row = row || {};
+    return String(row.lifecycle_status || row.status || '');
+  };
+  var lifecycleStatusColor = VM.lifecycleStatusColor || function () { return 'muted'; };
 
   function getRowsForView(view, data) {
     data = data || {};
@@ -149,10 +154,8 @@
         { accessor: 'score', render: function (v, r) { var sc = (r.raw || {}).scorecard || {}; return scoreSpan(sc.total_score || sc.local_rank_score || 0); }, htmlType: 'score' },
         { accessor: 'status', render: function (v, r) {
           var raw = r.raw || {};
-          var status = raw.lifecycle_status || raw.status || '';
-          var gate = raw.gate || {};
-          var color = status === 'submission_ready' || gate.submission_ready ? 'good' : status === 'failed' || status === 'rejected' ? 'bad' : status === 'running' || status === 'pending_backtest' ? 'info' : 'muted';
-          return statusBadge(status || '-', color);
+          var status = lifecycleStatusLabel(raw);
+          return statusBadge(status || '-', lifecycleStatusColor(raw));
         }, htmlType: 'badge' },
         { accessor: 'official_id', render: function (v, r) { return esc(String((r.raw || {}).official_alpha_id || '-')); } },
         { accessor: 'risk', render: function (v, r) {
@@ -175,7 +178,7 @@
   function getMobileColumns() {
     return [
       { label: '排序分', accessor: 'score', render: function (v, r) { return scoreSpan(((r.raw || {}).scorecard || {}).total_score || 0); }, htmlType: 'score' },
-      { label: '状态', accessor: 'status', render: function (v, r) { var s = (r.raw || {}).lifecycle_status || '-'; return statusBadge(s, s === 'submission_ready' ? 'good' : 'muted'); }, htmlType: 'badge' },
+      { label: '状态', accessor: 'status', render: function (v, r) { return statusBadge(lifecycleStatusLabel(r.raw || {}), lifecycleStatusColor(r.raw || {})); }, htmlType: 'badge' },
       { label: '官方 ID', accessor: 'official_id', render: function (v, r) { return esc(String((r.raw || {}).official_alpha_id || '-')); } },
     ];
   }

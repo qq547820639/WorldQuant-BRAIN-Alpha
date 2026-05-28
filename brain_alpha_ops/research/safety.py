@@ -14,10 +14,6 @@ from brain_alpha_ops.research.contracts import correlation_id
 from brain_alpha_ops.research.expression_ast import expression_key, expression_profile_summary, expression_similarity, lexical_normalize
 
 
-MOCK_SOURCE_VALUES = {"mock", "demo", "dry-run", "dry_run", "dryrun", "test", "testing", "fake", "sample"}
-MOCK_ID_PREFIXES = tuple(f"{value}_" for value in MOCK_SOURCE_VALUES) + tuple(f"{value}-" for value in MOCK_SOURCE_VALUES)
-
-
 class SubmissionLedger:
     def __init__(self, storage_dir: str = "data"):
         self.path = os.path.join(storage_dir, "submissions.jsonl")
@@ -101,8 +97,16 @@ class SubmissionLedger:
             from brain_alpha_ops.research.expression_sqlite_index import ExpressionSqliteIndex
 
             ExpressionSqliteIndex(os.path.dirname(self.path)).append_record(record, source_file="submissions.jsonl")
-        except Exception:
-            pass
+        except ImportError:
+            import logging
+            logging.getLogger(__name__).debug(
+                "ExpressionSqliteIndex not available; submission record not indexed in SQLite.",
+            )
+        except Exception as exc:
+            import logging
+            logging.getLogger(__name__).warning(
+                "Failed to index submission record in SQLite index: %s", exc,
+            )
 
     def records(self) -> list[dict]:
         if not os.path.exists(self.path):
@@ -136,54 +140,49 @@ def normalize(expression: str) -> str:
     return lexical_normalize(expression)
 
 
-def mock_source_reasons(candidate) -> list[str]:
-    reasons = []
-    alpha_id = _candidate_value(candidate, "alpha_id")
-    official_alpha_id = _candidate_value(candidate, "official_alpha_id") or _mapping_value(_candidate_value(candidate, "official_metrics"), "official_alpha_id")
-    simulation_id = _candidate_value(candidate, "simulation_id")
-    if _looks_mock_identifier(alpha_id):
-        reasons.append(f"local alpha_id looks non-production: {alpha_id}")
-    if _looks_mock_identifier(official_alpha_id):
-        reasons.append(f"official_alpha_id looks non-production: {official_alpha_id}")
-    if _looks_mock_identifier(simulation_id):
-        reasons.append(f"simulation_id looks non-production: {simulation_id}")
-
-    source_values = []
-    source_tags = _candidate_value(candidate, "source_tags")
-    if isinstance(source_tags, (list, tuple, set)):
-        source_values.extend(source_tags)
-    for field in ("environment", "source", "source_type", "origin", "mode"):
-        value = _candidate_value(candidate, field)
-        if value:
-            source_values.append(value)
-    for value in source_values:
-        normalized = _normalize_source_value(value)
-        if normalized in MOCK_SOURCE_VALUES:
-            reasons.append(f"candidate source is non-production: {value}")
-    return reasons
-
-
-def _candidate_value(candidate, key: str):
-    if isinstance(candidate, dict):
-        return candidate.get(key, "")
-    return getattr(candidate, key, "")
-
-
-def _mapping_value(value, key: str):
-    return value.get(key, "") if isinstance(value, dict) else ""
-
-
-def _normalize_source_value(value) -> str:
-    return str(value or "").strip().lower().replace(" ", "_")
-
-
-def _looks_mock_identifier(value) -> bool:
-    text = str(value or "").strip().lower()
-    return bool(text and (text in MOCK_SOURCE_VALUES or text.startswith(MOCK_ID_PREFIXES)))
-
-
 def similarity(left: str, right: str) -> float:
     return expression_similarity(left, right)
+
+
+NON_PRODUCTION_SOURCE_VALUES = {
+    "mock",
+    "demo",
+    "dry-run",
+    "dry_run",
+    "dryrun",
+    "test",
+    "testing",
+    "fake",
+    "sample",
+}
+NON_PRODUCTION_ID_PREFIXES = tuple(f"{value}_" for value in NON_PRODUCTION_SOURCE_VALUES) + tuple(
+    f"{value}-" for value in NON_PRODUCTION_SOURCE_VALUES
+)
+
+
+def non_production_source_reasons(candidate: Candidate | dict[str, object]) -> list[str]:
+    """Return reasons a candidate should be blocked from production submission."""
+    data = candidate if isinstance(candidate, dict) else candidate.__dict__
+    reasons: list[str] = []
+    alpha_id = str(data.get("alpha_id") or "").strip()
+    official_alpha_id = str(data.get("official_alpha_id") or "").strip()
+    simulation_id = str(data.get("simulation_id") or "").strip()
+    source_tags = [str(tag).strip().lower() for tag in (data.get("source_tags") or []) if str(tag).strip()]
+
+    for label, value in (("alpha_id", alpha_id), ("official_alpha_id", official_alpha_id), ("simulation_id", simulation_id)):
+        if looks_non_production_identifier(value):
+            reasons.append(f"{label} is a non-production identifier")
+
+    if any(tag in NON_PRODUCTION_SOURCE_VALUES for tag in source_tags):
+        reasons.append("source_tags include non-production markers")
+
+    if str(data.get("source") or "").strip().lower() in NON_PRODUCTION_SOURCE_VALUES:
+        reasons.append("source indicates non-production content")
+    if str(data.get("environment") or "").strip().lower() != "production" and str(data.get("environment") or "").strip():
+        reasons.append("environment is not production")
+    if str(data.get("mode") or "").strip().lower() in NON_PRODUCTION_SOURCE_VALUES:
+        reasons.append("mode is not production")
+    return reasons
 
 
 def _ratio(value) -> float:
@@ -211,3 +210,8 @@ def _date(record: dict):
 def _last_auto(records: list[dict]) -> dict | None:
     auto = [record for record in records if record.get("mode") == "auto"]
     return max(auto, key=_time) if auto else None
+
+
+def looks_non_production_identifier(value: str) -> bool:
+    text = str(value or "").strip().lower()
+    return bool(text and (text in NON_PRODUCTION_SOURCE_VALUES or text.startswith(NON_PRODUCTION_ID_PREFIXES)))

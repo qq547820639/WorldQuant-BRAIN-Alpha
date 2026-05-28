@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from typing import Any, Callable, Protocol
 
 from brain_alpha_ops.config import RunConfig
@@ -17,6 +18,13 @@ class JobStoreLike(Protocol):
     def update(self, job_id: str, **kwargs: Any) -> None:
         ...
 
+    def is_cancelled(self, job_id: str) -> bool:
+        ...
+
+
+class SyncJobCancelled(RuntimeError):
+    """Raised internally when a user asks to stop a cloud sync job."""
+
 
 RunConfigFromPayload = Callable[[dict[str, Any]], RunConfig]
 ApiFromRunConfig = Callable[[RunConfig], Any]
@@ -25,6 +33,33 @@ DatasetsFromFields = Callable[[list[dict[str, Any]]], list[dict[str, Any]]]
 PersistOfficialContext = Callable[[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]], None]
 SafeErrorMessage = Callable[[Exception], str]
 ErrorPayload = Callable[..., dict[str, Any]]
+
+
+def _timing_payload(started_at: float, *, done: int = 0, total: int = 0, now: float | None = None) -> dict[str, Any]:
+    current = time.time() if now is None else now
+    start = float(started_at or current)
+    elapsed = max(0.0, current - start)
+    payload: dict[str, Any] = {
+        "started_at_ms": int(start * 1000),
+        "updated_at_ms": int(current * 1000),
+        "elapsed_seconds": round(elapsed, 1),
+    }
+    done = max(0, int(done or 0))
+    total = max(0, int(total or 0))
+    if done > 0 and total > done and elapsed > 0:
+        rate = done / elapsed
+        eta_seconds = max(1, int(round((total - done) / rate))) if rate > 0 else 0
+        payload.update({
+            "rate_per_second": round(rate, 3),
+            "eta_seconds": eta_seconds,
+            "eta_deadline_at_ms": int((current + eta_seconds) * 1000),
+        })
+    elif total and done >= total:
+        payload.update({
+            "rate_per_second": round(done / elapsed, 3) if elapsed > 0 else 0,
+            "eta_seconds": 0,
+        })
+    return payload
 
 
 def run_sync_job_service(
@@ -43,20 +78,58 @@ def run_sync_job_service(
     error_payload: ErrorPayload,
 ) -> None:
     sync_range = str(payload.get("syncRange", "3d"))
+    started_at = time.time()
     stats: dict[str, Any] = {"range": sync_range, "scanned": 0, "total": 0, "added": 0, "updated": 0, "skipped": 0, "failed": 0}
     context_error = ""
+
+    def ensure_not_cancelled() -> None:
+        checker = getattr(store, "is_cancelled", None)
+        if callable(checker) and checker(job_id):
+            raise SyncJobCancelled("云端同步已停止。")
+
+    def mark_cancelled() -> None:
+        store.update(
+            job_id,
+            status="stopped",
+            result={
+                "ok": False,
+                "status": "stopped",
+                "range": sync_range,
+                **stats,
+                **_timing_payload(started_at, done=int(stats.get("scanned", 0) or 0), total=int(stats.get("total", 0) or 0)),
+                "message": "云端同步已停止。",
+            },
+            progress={
+                "phase": "stopped",
+                "status_code": "STOPPED",
+                "message": "云端同步已停止，可调整范围后重试。",
+                "percent": 100,
+                **stats,
+                **_timing_payload(started_at, done=int(stats.get("scanned", 0) or 0), total=int(stats.get("total", 0) or 0)),
+            },
+        )
+
     try:
         store.update(
             job_id,
             status="running",
-            progress={"phase": "auth", "status_code": "AUTH", "message": f"Preparing cloud sync for {sync_range}.", **stats},
+            progress={
+                "phase": "auth",
+                "status_code": "AUTH",
+                "message": f"Preparing cloud sync for {sync_range}.",
+                **stats,
+                **_timing_payload(started_at),
+            },
         )
+        ensure_not_cancelled()
         run_config = run_config_from_payload(payload)
         api = api_from_run_config(run_config)
         api.authenticate()
+        ensure_not_cancelled()
         repo = repository_factory(run_config.ops.storage_dir)
 
         def on_page(progress: dict[str, Any]) -> None:
+            ensure_not_cancelled()
             stats["scanned"] = int(progress.get("scanned", stats["scanned"]) or 0)
             stats["total"] = int(progress.get("total", stats["total"]) or 0)
             stats["page_size"] = int(progress.get("page_size", stats.get("page_size", 0)) or 0)
@@ -69,10 +142,13 @@ def run_sync_job_service(
                     "status_code": "SCAN",
                     "message": f"Scanning cloud alphas: {stats['scanned']} / {stats['total'] or 'unknown'}",
                     **stats,
+                    **_timing_payload(started_at, done=stats["scanned"], total=stats["total"]),
                 },
             )
+            ensure_not_cancelled()
 
         rows = api.list_user_alphas(sync_range, progress_callback=on_page)
+        ensure_not_cancelled()
         if not stats["total"]:
             stats["total"] = len(rows)
         merge_stats = repo.merge_cloud_alphas(rows, sync_range=sync_range)
@@ -92,8 +168,10 @@ def run_sync_job_service(
                 "status_code": "MERGE",
                 "message": f"Merged cloud records: added {stats['added']}, updated {stats['updated']}, skipped {stats['skipped']}.",
                 **stats,
+                **_timing_payload(started_at, done=stats["scanned"], total=stats["total"]),
             },
         )
+        ensure_not_cancelled()
 
         store.update(
             job_id,
@@ -105,13 +183,13 @@ def run_sync_job_service(
                 "current": 1,
                 "total_steps": 3,
                 **stats,
+                **_timing_payload(started_at, done=stats["scanned"], total=stats["total"]),
             },
         )
         try:
-            fields = api.list_fields(
-                "all",
-                run_config.ops.settings.region,
-                progress_callback=lambda progress: store.update(
+            def on_fields_progress(progress: dict[str, Any]) -> None:
+                ensure_not_cancelled()
+                store.update(
                     job_id,
                     status="running",
                     progress={
@@ -123,9 +201,17 @@ def run_sync_job_service(
                         "fields_count": int(progress.get("scanned", 0) or 0),
                         "fields_total": int(progress.get("total", 0) or 0),
                         **stats,
+                        **_timing_payload(started_at, done=stats["scanned"], total=stats["total"]),
                     },
-                ),
+                )
+                ensure_not_cancelled()
+
+            fields = api.list_fields(
+                "all",
+                run_config.ops.settings.region,
+                progress_callback=on_fields_progress,
             )
+            ensure_not_cancelled()
             datasets = list_official_datasets_or_derive(
                 api,
                 fields,
@@ -144,11 +230,13 @@ def run_sync_job_service(
                     "total_steps": 3,
                     "fields_count": len(fields),
                     **stats,
+                    **_timing_payload(started_at, done=stats["scanned"], total=stats["total"]),
                 },
             )
-            operators = api.list_operators(
-                "all",
-                progress_callback=lambda progress: store.update(
+
+            def on_operators_progress(progress: dict[str, Any]) -> None:
+                ensure_not_cancelled()
+                store.update(
                     job_id,
                     status="running",
                     progress={
@@ -161,10 +249,19 @@ def run_sync_job_service(
                         "operators_count": int(progress.get("scanned", 0) or 0),
                         "operators_total": int(progress.get("total", 0) or 0),
                         **stats,
+                        **_timing_payload(started_at, done=stats["scanned"], total=stats["total"]),
                     },
-                ),
+                )
+                ensure_not_cancelled()
+
+            operators = api.list_operators(
+                "all",
+                progress_callback=on_operators_progress,
             )
+            ensure_not_cancelled()
             persist_official_context(fields, operators, datasets)
+        except SyncJobCancelled:
+            raise
         except Exception as exc:
             context_error = safe_error_message(exc)
             stats["failed"] += 1
@@ -182,8 +279,10 @@ def run_sync_job_service(
                     "current": 3,
                     "total_steps": 3,
                     **stats,
+                    **_timing_payload(started_at, done=stats["scanned"], total=stats["total"]),
                 },
             )
+        ensure_not_cancelled()
         result = {
             "ok": True,
             **stats,
@@ -195,6 +294,7 @@ def run_sync_job_service(
             "datasets_count": len(datasets),
             "context_status": "failed" if context_error else "refreshed",
             "context_error": context_error,
+            **_timing_payload(started_at, done=stats["scanned"], total=stats["total"]),
         }
         final_status = "completed_with_warnings" if context_error else "completed"
         store.update(
@@ -211,6 +311,7 @@ def run_sync_job_service(
                     f"updated {stats.get('updated', 0)}, skipped {stats['skipped']}, failed {stats['failed']}."
                 ),
                 **stats,
+                **_timing_payload(started_at, done=stats["scanned"], total=stats["total"]),
                 "fields_count": len(fields),
                 "operators_count": len(operators),
                 "datasets_count": len(datasets),
@@ -218,6 +319,8 @@ def run_sync_job_service(
                 "context_error": context_error,
             },
         )
+    except SyncJobCancelled:
+        mark_cancelled()
     except Exception as exc:
         message = safe_error_message(exc)
         error_context = error_payload(exc, error_code="SYNC_JOB_FAILED", job_id=job_id, phase="sync_job")
@@ -227,5 +330,12 @@ def run_sync_job_service(
             job_id,
             status="failed",
             error=message,
-            progress={"phase": "failed", "status_code": "FAILED", "message": message, "error_context": error_context, **stats},
+            progress={
+                "phase": "failed",
+                "status_code": "FAILED",
+                "message": message,
+                "error_context": error_context,
+                **stats,
+                **_timing_payload(started_at, done=int(stats.get("scanned", 0) or 0), total=int(stats.get("total", 0) or 0)),
+            },
         )

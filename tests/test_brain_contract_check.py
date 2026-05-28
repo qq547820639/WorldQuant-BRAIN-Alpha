@@ -1,11 +1,11 @@
 from scripts.check_brain_contract import check_brain_contract
 
 from brain_alpha_ops.config import RunConfig, write_run_config
-from brain_alpha_ops.web_cloud_snapshot import save_official_context_json
+from tests.production_api_stub import write_template_safe_official_context
 
 
 def test_brain_contract_check_passes_blocking_mode_with_structural_context(tmp_path):
-    config = RunConfig(environment="mock")
+    config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path / "data")
     config_path = tmp_path / "run_config.json"
     write_run_config(config, config_path)
@@ -21,7 +21,7 @@ def test_brain_contract_check_passes_blocking_mode_with_structural_context(tmp_p
 
 
 def test_brain_contract_check_strict_mode_blocks_unverified_refresh(tmp_path):
-    config = RunConfig(environment="mock")
+    config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path / "data")
     config_path = tmp_path / "run_config.json"
     write_run_config(config, config_path)
@@ -35,19 +35,4 @@ def test_brain_contract_check_strict_mode_blocks_unverified_refresh(tmp_path):
 
 
 def _write_context(config: RunConfig) -> None:
-    load_config = lambda: config
-    save_official_context_json(
-        "official_fields.json",
-        [{"name": "close"}, {"name": "volume"}],
-        load_config=load_config,
-    )
-    save_official_context_json(
-        "official_operators.json",
-        [{"name": "rank"}],
-        load_config=load_config,
-    )
-    save_official_context_json(
-        "official_datasets.json",
-        [{"id": "pv1", "name": "Price Volume", "field_count": 2}],
-        load_config=load_config,
-    )
+    write_template_safe_official_context(config)

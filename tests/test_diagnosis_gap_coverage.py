@@ -1,20 +1,14 @@
 from brain_alpha_ops.config import RunConfig, write_run_config
 from brain_alpha_ops.diagnosis_gap_coverage import check_diagnosis_gap_coverage
-from brain_alpha_ops.web_cloud_snapshot import save_official_context_json
+from tests.production_api_stub import write_template_safe_official_context
 
 
 def test_diagnosis_gap_coverage_accepts_current_executable_plan(tmp_path):
-    config = RunConfig(environment="mock")
+    config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path / "data")
     config_path = tmp_path / "run_config.json"
     write_run_config(config, config_path)
-    save_official_context_json("official_fields.json", [{"name": "close"}, {"name": "volume"}], load_config=lambda: config)
-    save_official_context_json("official_operators.json", [{"name": "rank"}], load_config=lambda: config)
-    save_official_context_json(
-        "official_datasets.json",
-        [{"id": "pv1", "name": "Price Volume", "field_count": 2}],
-        load_config=lambda: config,
-    )
+    write_template_safe_official_context(config)
 
     result = check_diagnosis_gap_coverage(config_path)
 
@@ -25,7 +19,7 @@ def test_diagnosis_gap_coverage_accepts_current_executable_plan(tmp_path):
 
 
 def test_diagnosis_gap_coverage_blocks_threshold_drift(tmp_path):
-    config = RunConfig(environment="mock")
+    config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path / "data")
     config.ops.thresholds.min_sharpe = 1.20
     config_path = tmp_path / "run_config.json"

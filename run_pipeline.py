@@ -6,10 +6,12 @@ config/run_config.json unless another JSON path is passed as argv[1].
 
 from __future__ import annotations
 
+import argparse
 import json
 import sys
+from pathlib import Path
 
-from brain_alpha_ops.config import DEFAULT_RUN_CONFIG_PATH, load_run_config
+from brain_alpha_ops.config import DEFAULT_RUN_CONFIG_PATH, ConfigValidationError, load_run_config
 from brain_alpha_ops.runner import run_pipeline_from_config
 
 
@@ -90,35 +92,128 @@ def _print_failure(message: str, *, detail: Exception | str = "", suggestions: l
         print(f"Next {index}: {suggestion}")
 
 
-def main() -> int:
-    config_path = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_RUN_CONFIG_PATH
+def _build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description="Run or validate the BRAIN Alpha Ops production pipeline config.",
+    )
+    parser.add_argument(
+        "config_path",
+        nargs="?",
+        help="backward-compatible JSON config path; defaults to config/run_config.json",
+    )
+    parser.add_argument(
+        "--config",
+        dest="config_option",
+        default=None,
+        help="JSON config path; preferred over the positional compatibility argument",
+    )
+    parser.add_argument(
+        "--validate-only",
+        action="store_true",
+        help="load and validate the config without starting the production pipeline",
+    )
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        dest="json_output",
+        help="print machine-readable JSON for validation results or pipeline output",
+    )
+    return parser
+
+
+def _resolve_config_path(args: argparse.Namespace, parser: argparse.ArgumentParser) -> Path | str:
+    if args.config_path and args.config_option:
+        parser.error("pass either positional config_path or --config, not both")
+    return args.config_option or args.config_path or DEFAULT_RUN_CONFIG_PATH
+
+
+def _print_json_payload(payload: dict) -> None:
+    print(json.dumps(payload, ensure_ascii=False, indent=2, default=str))
+
+
+def _print_error(
+    message: str,
+    *,
+    detail: Exception | str = "",
+    suggestions: list[str] | None = None,
+    json_output: bool = False,
+    config_path: Path | str | None = None,
+) -> None:
+    if json_output:
+        _print_json_payload({
+            "ok": False,
+            "error": message,
+            "detail": str(detail) if detail else "",
+            "suggestions": suggestions or [],
+            "config": str(config_path or ""),
+        })
+        return
+    _print_failure(message, detail=detail, suggestions=suggestions)
+
+
+def _result_to_dict(result) -> dict:
+    if hasattr(result, "to_dict"):
+        data = result.to_dict()
+        if isinstance(data, dict):
+            return data
+    summary = getattr(result, "summary", {})
+    return {
+        "ok": True,
+        "run_id": getattr(result, "run_id", ""),
+        "summary": summary if isinstance(summary, dict) else {},
+    }
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = _build_parser()
+    args = parser.parse_args(sys.argv[1:] if argv is None else argv)
+    config_path = _resolve_config_path(args, parser)
     try:
         run_config = load_run_config(config_path)
     except FileNotFoundError as exc:
-        _print_failure(
+        _print_error(
             f"Config file was not found: {config_path}",
             detail=exc,
             suggestions=[
                 "Check the config path passed to run_pipeline.py.",
                 "Create or restore config/run_config.json before running the pipeline.",
             ],
+            json_output=args.json_output,
+            config_path=config_path,
         )
         return 1
-    except (json.JSONDecodeError, ValueError) as exc:
-        _print_failure(
+    except (json.JSONDecodeError, ConfigValidationError, ValueError) as exc:
+        _print_error(
             f"Config file is invalid: {config_path}",
             detail=exc,
             suggestions=[
                 "Fix the JSON/config validation error shown above.",
                 "Run the config validation command from the CLI before starting production.",
             ],
+            json_output=args.json_output,
+            config_path=config_path,
         )
         return 1
+
+    if args.validate_only:
+        payload = {
+            "ok": True,
+            "schema_version": "run_pipeline_entrypoint.v1",
+            "mode": "validate-only",
+            "config": str(config_path),
+            "environment": run_config.environment,
+            "storage_dir": run_config.ops.storage_dir,
+        }
+        if args.json_output:
+            _print_json_payload(payload)
+        else:
+            print(f"Config valid: {config_path}")
+        return 0
 
     try:
         result = run_pipeline_from_config(run_config)
     except Exception as exc:
-        _print_failure(
+        _print_error(
             "Pipeline run failed.",
             detail=exc,
             suggestions=[
@@ -126,15 +221,20 @@ def main() -> int:
                 "Check network access and BRAIN API availability.",
                 "Validate config/run_config.json before retrying.",
             ],
+            json_output=args.json_output,
+            config_path=config_path,
         )
         return 1
 
     try:
-        print(_format_result(result))
+        if args.json_output:
+            _print_json_payload(_result_to_dict(result))
+        else:
+            print(_format_result(result))
     except Exception:
-        print(json.dumps(result.to_dict(), ensure_ascii=False, indent=2, default=str))
+        _print_json_payload(_result_to_dict(result))
     return 0
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(main(sys.argv[1:]))

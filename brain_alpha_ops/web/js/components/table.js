@@ -8,6 +8,7 @@
   var $ = window.Utils.$;
   var esc = window.Utils.escapeHtml;
   var renderSafeHtmlFragment = window.Utils.renderSafeHtmlFragment;
+  var setSafeHtml = window.Utils.setSafeHtml;
   var statusBadge = window.Utils.statusBadge;
   var scoreSpan = window.Utils.scoreSpan;
 
@@ -63,12 +64,12 @@
 
     // Empty state
     if (!rows || !rows.length) {
-      if (container) container.innerHTML = '';
+      setSafeHtml(container, '');
       if (emptyEl) emptyEl.classList.remove('hidden');
       if (tableEl) tableEl.classList.add('hidden');
       if (mobileEl) mobileEl.classList.add('hidden');
       if (!emptyEl && options.emptyText) {
-        container.innerHTML = '<tr><td colspan="' + Math.max(1, columns.length) + '">' + esc(options.emptyText) + '</td></tr>';
+        setSafeHtml(container, '<tr><td colspan="' + Math.max(1, columns.length) + '">' + esc(options.emptyText) + '</td></tr>');
       }
 
       if (emptyEl && options.emptyText) {
@@ -89,7 +90,7 @@
     // Desktop table
     if (tableEl) tableEl.classList.remove('hidden');
     if (container) {
-      container.innerHTML = displayRows.map(function (row, idx) {
+      setSafeHtml(container, displayRows.map(function (row, idx) {
         var rowId = row.id || '';
         var rowKind = row.kind || '';
         var selectedCls = row._selected ? ' class="is-selected"' : '';
@@ -108,7 +109,7 @@
             }
             return '<td class="' + esc(cls) + '">' + esc(String(value ?? '')) + '</td>';
           }).join('') + '</tr>';
-      }).join('');
+      }).join(''));
     }
 
     // Mobile cards
@@ -116,7 +117,7 @@
       var isMobile = window.innerWidth <= 640;
       mobileEl.classList.toggle('hidden', !isMobile);
       if (isMobile) {
-        mobileEl.innerHTML = displayRows.map(function (row, idx) {
+        setSafeHtml(mobileEl, displayRows.map(function (row, idx) {
           var rowId = row.id || '';
           var rowKind = row.kind || '';
           var title = options.mobileTitle ? options.mobileTitle(row) : (rowId || ('条目 ' + (idx + 1)));
@@ -144,7 +145,7 @@
             '<div class="mobile-card-meta">' + metaItems.join('') + '</div>' +
             (actions ? '<div class="mobile-card-actions">' + actions + '</div>' : '') +
             '</div>';
-        }).join('');
+        }).join(''));
       }
     }
 

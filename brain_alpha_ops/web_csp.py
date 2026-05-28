@@ -22,7 +22,12 @@ def style_hash_sources(html: str) -> str:
 def content_security_policy_for_html(html: str) -> str:
     script_hashes = script_hash_sources(html)
     style_hashes = style_hash_sources(html)
-    script_src = "script-src 'self'" + (f" {script_hashes}" if script_hashes else "")
+
+    # Detect if the HTML uses CDN scripts (React app) — allow unpkg.com + tailwind CDN
+    uses_cdn = "unpkg.com" in html or "cdn.tailwindcss.com" in html
+    cdn_sources = "https://unpkg.com https://cdn.tailwindcss.com" if uses_cdn else ""
+
+    script_src = f"script-src 'self'{cdn_sources}" + (f" {script_hashes}" if script_hashes else "")
     style_src = "style-src 'self'" + (f" {style_hashes}" if style_hashes else "")
     return (
         f"default-src 'self'; {script_src}; "

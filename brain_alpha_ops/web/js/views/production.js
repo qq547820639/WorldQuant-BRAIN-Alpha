@@ -18,13 +18,19 @@
   var _pollTimer = null;
   var _eventSource = null;
   var _reconnectAttempts = 0;
+  var _sseFallbackAnnounced = false;
   var MAX_RECONNECT = 5;
+  var POLL_INTERVAL_MS = 5000;
 
   // ── SSE connection ─────────────────────────────────────────────────────
   function connectSSE(jobId) {
     disconnectSSE();
     _reconnectAttempts = 0;
+    _sseFallbackAnnounced = false;
+    openSSE(jobId);
+  }
 
+  function openSSE(jobId) {
     var url = '/api/stream?job_id=' + encodeURIComponent(jobId) +
               '&stream_token=' + encodeURIComponent(STREAM_TOKEN);
 
@@ -40,24 +46,23 @@
       };
 
       _eventSource.onerror = function () {
-        if (_eventSource && _eventSource.readyState === EventSource.CLOSED) {
+        if (!_running || !_jobId) {
           disconnectSSE();
-          if (_running && _jobId && _reconnectAttempts < MAX_RECONNECT) {
-            _reconnectAttempts++;
-            setTimeout(function () {
-              if (_running && _jobId) connectSSE(_jobId);
-            }, Math.min(2000 * _reconnectAttempts, 10000));
-          } else if (_running && _jobId) {
-            // Fallback to polling
-            if (!_pollTimer) _pollTimer = setInterval(pollJobProgress, 5000);
-          }
+          return;
+        }
+        disconnectSSE();
+        _reconnectAttempts++;
+        if (_reconnectAttempts <= MAX_RECONNECT) {
+          setTimeout(function () {
+            if (_running && _jobId) openSSE(_jobId);
+          }, Math.min(2000 * _reconnectAttempts, 10000));
+        } else {
+          startPollingFallback('实时进度流连接失败，已切换为状态轮询。');
         }
       };
     } catch (e) {
       _eventSource = null;
-      if (_running && _jobId && !_pollTimer) {
-        _pollTimer = setInterval(pollJobProgress, 5000);
-      }
+      if (_running && _jobId) startPollingFallback('实时进度流不可用，已切换为状态轮询。');
     }
   }
 
@@ -66,6 +71,30 @@
       try { _eventSource.close(); } catch (e) { /* ignore */ }
       _eventSource = null;
     }
+  }
+
+  function startPollingFallback(message) {
+    if (!_running || !_jobId) return;
+    disconnectSSE();
+    if (!_pollTimer) _pollTimer = setInterval(pollJobProgress, POLL_INTERVAL_MS);
+    if (!_sseFallbackAnnounced) {
+      _sseFallbackAnnounced = true;
+      Toast.warning(message);
+    }
+    S.setBatch({
+      'liveProgress': {
+        phase: 'production',
+        data: {
+          phase: 'production',
+          phase_label: '生产搜索',
+          message: message,
+          percent: 0,
+        },
+      },
+      'runtimeStatusUpdatedAt': Date.now(),
+    });
+    if (typeof window.renderRuntimeStatus === 'function') window.renderRuntimeStatus();
+    pollJobProgress();
   }
 
   // ── SSE message handler ────────────────────────────────────────────────
@@ -121,16 +150,23 @@
   // ── Polling fallback ───────────────────────────────────────────────────
   async function pollJobProgress() {
     try {
-      var d = await Api.get('/api/active_job');
-      if (!d.ok || !d.job) return;
-      var job = d.job;
+      var path = _jobId ? '/api/status?job_id=' + encodeURIComponent(_jobId) : '/api/active_job';
+      var job = await Api.get(path);
+      if (!job || !job.ok) return;
       handleSSEMessage({
         ok: true,
-        job_id: _jobId,
+        job_id: job.job_id || _jobId,
         status: job.status || 'running',
         progress: job.progress || {},
+        error: job.error || '',
       });
-    } catch (e) { /* silent */ }
+    } catch (e) {
+      if (e && e.code === 'SESSION_INVALID') {
+        Toast.error('本地会话已过期，请刷新页面后重试。');
+        disconnectSSE();
+        if (_pollTimer) { clearInterval(_pollTimer); _pollTimer = null; }
+      }
+    }
   }
 
   // ── Job completion ─────────────────────────────────────────────────────
@@ -138,7 +174,7 @@
     disconnectSSE();
     if (_pollTimer) { clearInterval(_pollTimer); _pollTimer = null; }
     _running = false;
-    S.setBatch({ 'isRunning': false, 'activeJobId': '', 'runtimeStatusStartedAt': 0, 'runtimeStatusUpdatedAt': 0 });
+    S.setBatch({ 'isRunning': false, 'activeJobId': '', 'runtimeStatusStartedAt': 0, 'runtimeStatusUpdatedAt': 0, 'liveProgress': {} });
 
     var statusDot = $('headerStatusDot');
     if (statusDot) statusDot.className = 'header-status-dot';
@@ -250,9 +286,10 @@
       connectSSE(_jobId);
     } catch (e) {
       _running = false;
-      S.setBatch({ 'isRunning': false, 'activeJobId': '', 'runtimeStatusStartedAt': 0, 'runtimeStatusUpdatedAt': 0 });
+      S.setBatch({ 'isRunning': false, 'activeJobId': '', 'runtimeStatusStartedAt': 0, 'runtimeStatusUpdatedAt': 0, 'liveProgress': {} });
       updateRunButton();
       disconnectSSE();
+      if (_pollTimer) { clearInterval(_pollTimer); _pollTimer = null; }
       Toast.error('启动失败: ' + e.message);
     }
   }
@@ -269,7 +306,7 @@
 
     _running = false;
     _jobId = '';
-    S.setBatch({ 'isRunning': false, 'activeJobId': '', 'runtimeStatusStartedAt': 0, 'runtimeStatusUpdatedAt': 0 });
+    S.setBatch({ 'isRunning': false, 'activeJobId': '', 'runtimeStatusStartedAt': 0, 'runtimeStatusUpdatedAt': 0, 'liveProgress': {} });
     updateRunButton();
   }
 

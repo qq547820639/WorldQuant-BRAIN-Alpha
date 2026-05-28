@@ -24,7 +24,7 @@ def _candidate():
 
 
 def test_submission_preflight_advisory_reports_cloud_stale(tmp_path):
-    run_config = RunConfig(environment="mock")
+    run_config = RunConfig(environment="production")
     run_config.ops.storage_dir = str(tmp_path)
     run_config.ops.budget.require_cloud_sync = True
 
@@ -41,7 +41,7 @@ def test_submission_preflight_advisory_reports_cloud_stale(tmp_path):
 
 
 def test_submission_preflight_advisory_reports_duplicate_expression(tmp_path):
-    run_config = RunConfig(environment="mock")
+    run_config = RunConfig(environment="production")
     run_config.ops.storage_dir = str(tmp_path)
     run_config.ops.budget.require_cloud_sync = False
 
@@ -58,7 +58,7 @@ def test_submission_preflight_advisory_reports_duplicate_expression(tmp_path):
 
 
 def test_submission_preflight_advisory_blocks_cloud_self_correlation_check(tmp_path):
-    run_config = RunConfig(environment="mock")
+    run_config = RunConfig(environment="production")
     run_config.ops.storage_dir = str(tmp_path)
     run_config.ops.budget.require_cloud_sync = False
     (tmp_path / "checks.jsonl").write_text(

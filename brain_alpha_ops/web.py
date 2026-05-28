@@ -1,4 +1,4 @@
-﻿"""Tiny local web console for BRAIN Alpha Ops.
+"""Tiny local web console for BRAIN Alpha Ops.
 
 The server uses only Python's standard library. It is intentionally local-only
 and keeps credentials in memory for the current request.
@@ -6,11 +6,10 @@ and keeps credentials in memory for the current request.
 
 from __future__ import annotations
 
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import parse_qs, urlparse
-import json
+from http.server import ThreadingHTTPServer
 import logging
 from pathlib import Path
+import sys
 import threading
 import time
 
@@ -38,18 +37,14 @@ from brain_alpha_ops.web_config import (
 )
 from brain_alpha_ops.web_config_schema import public_config_schema
 from brain_alpha_ops import web_html
+from brain_alpha_ops import web_runtime_facade as _runtime_facade
 from brain_alpha_ops.brain_api.context_defaults import DEFAULT_FIELDS, DEFAULT_OPERATORS
 from brain_alpha_ops.jsonl import tail_text_lines
-from brain_alpha_ops.models import utc_now
 from brain_alpha_ops.observability import error_payload
-from brain_alpha_ops.research.guidance import (
-    assistant_guidance_outcome_status,
-)
 from brain_alpha_ops.task_executor import ThreadTaskExecutor
-from brain_alpha_ops.research.expression_ast import expression_key
 from brain_alpha_ops.research.observability import build_research_observability_snapshot
 from brain_alpha_ops.research.repository import ResearchRepository
-from brain_alpha_ops.research.safety import SubmissionLedger, mock_source_reasons
+from brain_alpha_ops.research.safety import SubmissionLedger
 from brain_alpha_ops.runner import api_from_run_config, run_pipeline_from_config
 from brain_alpha_ops.tasks import JobStore as DurableJobStore
 from brain_alpha_ops.web_check_availability import (
@@ -60,16 +55,20 @@ from brain_alpha_ops.web_check_availability import (
 )
 from brain_alpha_ops.web_check_batch_job import run_check_batch_job_service
 from brain_alpha_ops.web_cloud_snapshot import (
+    cached_user_alpha_paths as _cached_user_alpha_paths_service,
     cloud_alpha_snapshot as _cloud_alpha_snapshot_service,
     cloud_alpha_summary as _cloud_alpha_summary_service,
+    cloud_alpha_id as _cloud_alpha_id_service,
+    cloud_row_sort_key as _cloud_row_sort_key_service,
     datasets_from_fields as _datasets_from_fields_service,
     dedupe_cloud_alpha_rows as _dedupe_cloud_alpha_rows_service,
-    drop_mock_rows_if_real as _drop_mock_rows_if_real_service,
+    extract_alpha_rows as _extract_alpha_rows_service,
     latest_cached_user_alpha_path as _latest_cached_user_alpha_path_service,
     latest_cached_user_alphas as _latest_cached_user_alphas_service,
     official_context_file_counts as _official_context_file_counts_service,
     path_modified_at as _path_modified_at_service,
     persist_official_context as _persist_official_context_service,
+    read_official_context_metadata as _read_official_context_metadata_service,
     read_official_context_json as _read_official_context_json_service,
     read_storage_jsonl as _read_storage_jsonl_service,
     read_storage_jsonl_stats as _read_storage_jsonl_stats_service,
@@ -104,6 +103,7 @@ from brain_alpha_ops.web_post_handlers import (
     stop_job_payload,
 )
 from brain_alpha_ops.web_handler_dispatch import WebHandlerDispatchContext, dispatch_get, dispatch_post
+from brain_alpha_ops.web_http_handler import create_handler_class
 from brain_alpha_ops.web_routes import route_for
 from brain_alpha_ops.web_run_job import run_guided_job_service, run_job_service
 from brain_alpha_ops.web_runtime_state import (
@@ -129,6 +129,7 @@ from brain_alpha_ops.web_server_lifecycle import (
     smoke_test_server as _smoke_test_server_service,
 )
 from brain_alpha_ops import web_session
+from brain_alpha_ops.web_snapshot_facade import WebSnapshotFacade
 from brain_alpha_ops.web_snapshot_runtime import WebSnapshotRuntime
 from brain_alpha_ops.web_security import (
     DEFAULT_SESSION_TTL_SECONDS,
@@ -148,16 +149,21 @@ from brain_alpha_ops.web_submission_batch import submit_batch_payload
 from brain_alpha_ops.web_submission_single import submit_candidate_payload
 from brain_alpha_ops.web_submission_safety import (
     observability_submission_preflight as _observability_submission_preflight,
+    record_submit_blocked_event as _record_submit_blocked_event,
     submission_preflight_advisory as _submission_preflight_advisory,
+    submission_preflight_error_message as _submission_preflight_error_message,
     submit_preflight_block as _submission_preflight_block_service,
 )
 from brain_alpha_ops.web_sync_job import run_sync_job_service
 from brain_alpha_ops.web_sync_payload import sync_cloud_alphas_payload
 
 
-HOST = "127.0.0.1"
-DEFAULT_PORT = 8765
-CLOUD_SYNC_STALE_SECONDS = 24 * 60 * 60
+# ── Runtime constants (centralized in runtime_constants.py) ──
+from brain_alpha_ops.runtime_constants import CloudDefaults, WebDefaults, SnapshotDefaults
+
+HOST = WebDefaults.HOST
+DEFAULT_PORT = WebDefaults.PORT
+CLOUD_SYNC_STALE_SECONDS = CloudDefaults.CLOUD_SYNC_STALE_SECONDS
 SESSION_TTL_SECONDS = DEFAULT_SESSION_TTL_SECONDS
 SESSION_ALLOW_MULTIPLE = True
 SESSION_MANAGER = web_session.SESSION_MANAGER
@@ -168,16 +174,9 @@ SESSION_LOCK = web_session.SESSION_LOCK
 HTML = _HTML_CACHE = ""
 
 
-def _header_hostname(host_header: str) -> str:
-    return _header_hostname_service(host_header)
-
-
-def _header_port(host_header: str) -> int | None:
-    return _header_port_service(host_header)
-
-
-def _path_requires_session(path: str) -> bool:
-    return _path_requires_session_service(path)
+_header_hostname = _header_hostname_service
+_header_port = _header_port_service
+_path_requires_session = _path_requires_session_service
 
 
 def configure_session_policy(
@@ -191,191 +190,38 @@ def configure_session_policy(
     SESSION_ALLOW_MULTIPLE = web_session.session_allow_multiple()
 
 
-def _parse_cookies(cookie_header: str) -> dict[str, str]:
-    return _parse_cookies_service(cookie_header)
+_parse_cookies = _parse_cookies_service
+_session_cookie_header = web_session.session_cookie_header
+_expired_session_cookie_header = web_session.expired_session_cookie_header
+_prune_sessions = web_session.prune_sessions
+_create_session = web_session.create_session
+_expire_session = web_session.expire_session
+_validate_session_token = web_session.validate_session_token
+_validate_session = web_session.validate_session
+_validate_stream_session = web_session.validate_stream_session
+_csrf_for_session = web_session.csrf_for_session
+_stream_token_for_session = web_session.stream_token_for_session
+_get_or_create_session = web_session.get_or_create_session
+_remote_admin_required = web_session.remote_admin_required
+_has_valid_admin_token = web_session.has_valid_admin_token
+
+safe_error_message = _safe_error_message_service
+safe_error_payload = _safe_error_payload_service
+_web_error = _web_error_payload_service
+_load_html = web_html.load_html
+_render_html = web_html.render_html
+_script_hash_sources = web_html.script_hash_sources
+_style_hash_sources = web_html.style_hash_sources
+content_security_policy_for_html = web_html.content_security_policy_for_html
+
+run_config_from_payload = lambda payload: _run_config_from_payload(payload, loader=load_run_config)
+config_from_payload = lambda payload: _config_from_payload(payload, loader=load_run_config)
 
 
-def _session_cookie_header(session_id: str, *, max_age: int | None = None) -> str:
-    return web_session.session_cookie_header(session_id, max_age=max_age)
+test_connection = lambda payload: _runtime_facade.test_connection(sys.modules[__name__], payload)
 
 
-def _expired_session_cookie_header() -> str:
-    return web_session.expired_session_cookie_header()
-
-
-def _prune_sessions(now: float | None = None) -> None:
-    web_session.prune_sessions(now)
-
-
-def _create_session() -> tuple[str, str]:
-    return web_session.create_session()
-
-
-def _expire_session(session_id: str) -> None:
-    web_session.expire_session(session_id)
-
-
-def _validate_session_token(session_id: str, token: str, token_key: str) -> bool:
-    return web_session.validate_session_token(session_id, token, token_key)
-
-
-def _validate_session(session_id: str, csrf_token: str) -> bool:
-    return web_session.validate_session(session_id, csrf_token)
-
-
-def _validate_stream_session(session_id: str, stream_token: str) -> bool:
-    return web_session.validate_stream_session(session_id, stream_token)
-
-
-def _csrf_for_session(session_id: str) -> str:
-    return web_session.csrf_for_session(session_id)
-
-
-def _stream_token_for_session(session_id: str) -> str:
-    return web_session.stream_token_for_session(session_id)
-
-
-def _get_or_create_session(existing_session_id: str) -> tuple[str, str]:
-    return web_session.get_or_create_session(existing_session_id)
-
-
-def _remote_admin_required() -> bool:
-    return web_session.remote_admin_required()
-
-
-def _has_valid_admin_token(headers) -> bool:
-    return web_session.has_valid_admin_token(headers)
-
-
-def safe_error_message(exc: Exception) -> str:
-    return _safe_error_message_service(exc)
-
-
-def safe_error_payload(exc: Exception, *, error_code: str = "UNHANDLED_ERROR") -> dict:
-    return _safe_error_payload_service(exc, error_code=error_code)
-
-
-def _web_error(exc: Exception, error_code: str) -> dict:
-    return _web_error_payload_service(exc, error_code)
-
-
-def _load_html() -> str:
-    global _HTML_CACHE
-    _HTML_CACHE = web_html.load_html()
-    return _HTML_CACHE
-
-
-def _render_html(csrf_token: str, stream_token: str) -> str:
-    return web_html.render_html(csrf_token, stream_token)
-
-
-def _script_hash_sources(html: str) -> str:
-    return web_html.script_hash_sources(html)
-
-
-def _style_hash_sources(html: str) -> str:
-    return web_html.style_hash_sources(html)
-
-
-def content_security_policy_for_html(html: str | None = None) -> str:
-    return web_html.content_security_policy_for_html(html)
-
-
-def run_config_from_payload(payload: dict) -> RunConfig:
-    return _run_config_from_payload(payload, loader=load_run_config)
-
-
-def config_from_payload(payload: dict):
-    return _config_from_payload(payload, loader=load_run_config)
-
-
-def test_connection(payload: dict) -> dict:
-    try:
-        run_config = run_config_from_payload(payload)
-        api = api_from_run_config(run_config)
-        auth_result = api.authenticate()
-        if str(run_config.environment).lower() == "production" and hasattr(api, "get_user_profile"):
-            api.get_user_profile()
-        auth_mode = ""
-        if isinstance(auth_result, dict):
-            auth_mode = str(auth_result.get("auth") or auth_result.get("environment") or "")
-        return {"ok": True, "environment": str(run_config.environment), "auth": auth_mode}
-    except Exception as exc:
-        return _web_error(exc, "CONNECTION_FAILED")
-
-
-def _enrich_progress(progress: dict) -> dict:
-    return _enrich_progress_service(progress)
-
-
-class _LegacyInMemoryJobStore:
-    def __init__(self):
-        self.lock = threading.Lock()
-        self.jobs: dict[str, dict] = {}
-
-    def create(self) -> str:
-        with self.lock:
-            job_id = f"job_{len(self.jobs) + 1:04d}"
-            self.jobs[job_id] = {
-                "status": "queued",
-                "result": None,
-                "error": "",
-                "cancel": False,
-                "updated_at": time.time(),
-                "progress": {
-                    "phase": "queued",
-                    "current": 0,
-                    "total": 1,
-                    "percent": 0,
-                    "message": "任务已排队。",
-                    "alpha_id": "",
-                },
-            }
-            return job_id
-
-    def update(self, job_id: str, **kwargs):
-        with self.lock:
-            if job_id not in self.jobs:
-                return
-            kw = dict(kwargs)
-            kw.setdefault("updated_at", time.time())
-            self.jobs[job_id].update(kw)
-
-    def cancel(self, job_id: str):
-        with self.lock:
-            if job_id in self.jobs:
-                self.jobs[job_id]["cancel"] = True
-                self.jobs[job_id]["status"] = "stopping"
-                return True
-            return False
-
-    def is_cancelled(self, job_id: str) -> bool:
-        with self.lock:
-            return bool(self.jobs.get(job_id, {}).get("cancel"))
-
-    def get(self, job_id: str) -> dict | None:
-        with self.lock:
-            value = self.jobs.get(job_id)
-            return dict(value) if value else None
-
-    def latest_active(self) -> tuple[str, dict] | None:
-        with self.lock:
-            active = [
-                (job_id, job)
-                for job_id, job in self.jobs.items()
-                if job.get("status") in {"queued", "running", "stopping"}
-            ]
-            if not active:
-                return None
-            job_id, job = max(active, key=lambda item: float(item[1].get("updated_at", 0.0) or 0.0))
-            return job_id, dict(job)
-
-    def latest_any(self) -> tuple[str, dict] | None:
-        with self.lock:
-            if not self.jobs:
-                return None
-            job_id, job = max(self.jobs.items(), key=lambda item: float(item[1].get("updated_at", 0.0) or 0.0))
-            return job_id, dict(job)
+_enrich_progress = _enrich_progress_service
 
 
 JOBS = DurableJobStore(runtime_project_root() / "data" / "jobs_production.json")
@@ -387,15 +233,7 @@ SERVER: ThreadingHTTPServer | None = None
 SERVER_STOP = threading.Event()
 
 
-def active_auxiliary_operation(exclude: str = "", *, allow_production: bool = False) -> tuple[str, str] | None:
-    return _active_auxiliary_operation_service(
-        production_store=JOBS,
-        sync_store=SYNC_JOBS,
-        check_store=CHECK_JOBS,
-        submit_lock=SUBMIT_LOCK,
-        exclude=exclude,
-        allow_production=allow_production,
-    )
+active_auxiliary_operation = lambda exclude="", allow_production=False: _active_auxiliary_operation_service(production_store=JOBS, sync_store=SYNC_JOBS, check_store=CHECK_JOBS, submit_lock=SUBMIT_LOCK, exclude=exclude, allow_production=allow_production)
 
 
 def normalize_host(host: str | None) -> str:
@@ -410,243 +248,32 @@ def _submit_background_job(target, *args) -> None:
     TASK_EXECUTOR.submit(target, *args)
 
 
-def _handler_dispatch_context() -> WebHandlerDispatchContext:
-    return WebHandlerDispatchContext(
-        route_for=route_for,
-        web_error=_web_error,
-        payload_truthy=payload_truthy,
-        bounded_query_int=_bounded_query_int,
-        bounded_query_float=_bounded_query_float,
-        remote_admin_required=_remote_admin_required,
-        has_valid_admin_token=_has_valid_admin_token,
-        get_or_create_session=_get_or_create_session,
-        stream_token_for_session=_stream_token_for_session,
-        session_cookie_header=_session_cookie_header,
-        render_html=_render_html,
-        job_status_payload=job_status_payload,
-        active_job_payload=active_job_payload,
-        lifecycle_payload=lifecycle_payload,
-        health_payload=health_payload,
-        profile_payload=profile_payload,
-        presets_payload=presets_payload,
-        jobs=JOBS,
-        sync_jobs=SYNC_JOBS,
-        check_jobs=CHECK_JOBS,
-        enrich_progress=_enrich_progress,
-        public_run_config=public_run_config,
-        public_config_schema=public_config_schema,
-        latest_result_snapshot=latest_result_snapshot,
-        lifecycle_from_job=lifecycle_from_job,
-        cloud_alpha_snapshot=cloud_alpha_snapshot,
-        research_memory_snapshot=research_memory_snapshot,
-        research_knowledge_snapshot=research_knowledge_snapshot,
-        research_observability_snapshot=research_observability_snapshot,
-        prompt_run_ledger_snapshot=prompt_run_ledger_snapshot,
-        sqlite_index_snapshot=sqlite_index_snapshot,
-        sqlite_expression_lookup_payload=sqlite_expression_lookup_payload,
-        sqlite_record_lookup_payload=sqlite_record_lookup_payload,
-        assistant_context_snapshot=assistant_context_snapshot,
-        assistant_guidance_snapshot=assistant_guidance_snapshot,
-        assistant_request_snapshot=assistant_request_snapshot,
-        anti_overfit_snapshot=anti_overfit_snapshot,
-        rolling_validation_snapshot=rolling_validation_snapshot,
-        load_check_results=load_check_results,
-        user_profile_snapshot=_user_profile_snapshot,
-        load_presets=_load_presets,
-        connection_test_post_payload=connection_test_post_payload,
-        test_connection=test_connection,
-        validate_run_payload=lambda body: run_config_from_payload(body),
-        background_job_start_payload=background_job_start_payload,
-        start_run_job=lambda job_id, body: _submit_background_job(run_job, job_id, body),
-        stop_job_payload=stop_job_payload,
-        active_auxiliary_operation=active_auxiliary_operation,
-        start_sync_job=lambda job_id, body: _submit_background_job(run_sync_job, job_id, body),
-        check_candidate=check_candidate,
-        generate_candidates_payload=generate_candidates_payload,
-        start_check_batch_job=lambda job_id, body: _submit_background_job(run_check_batch_job, job_id, body),
-        submit_lock=SUBMIT_LOCK,
-        submit_candidate=submit_candidate,
-        submit_batch=submit_batch,
-        assistant_response_parse_post_payload=assistant_response_parse_post_payload,
-        assistant_response_parse_payload=assistant_response_parse_payload,
-        assistant_response_guidance_post_payload=assistant_response_guidance_post_payload,
-        assistant_response_guidance_payload=assistant_response_guidance_payload,
-        assistant_cross_review_payload=assistant_cross_review_payload,
-        save_assistant_guidance_post_payload=save_assistant_guidance_post_payload,
-        save_assistant_guidance_payload=save_assistant_guidance_payload,
-        session_end_payload=session_end_payload,
-        expire_session=_expire_session,
-        expired_session_cookie_header=_expired_session_cookie_header,
-        start_shutdown=lambda: _start_thread(shutdown_server),
-    )
+_handler_dispatch_context = lambda: _runtime_facade.handler_dispatch_context(sys.modules[__name__])
+
+Handler = create_handler_class(
+    server_version=WebDefaults.SERVER_VERSION,
+    max_body_bytes=WebDefaults.MAX_BODY_BYTES,
+    dispatch_get=dispatch_get,
+    dispatch_post=dispatch_post,
+    dispatch_context=_handler_dispatch_context,
+    web_session=web_session,
+    jobs=JOBS,
+    enrich_progress=_enrich_progress,
+    content_security_policy_for_html=content_security_policy_for_html,
+    sse_push_interval=WebDefaults.SSE_PUSH_INTERVAL,
+    max_sse_duration=WebDefaults.MAX_SSE_DURATION,
+)
+
+run_job = lambda job_id, payload: _runtime_facade.run_job(sys.modules[__name__], job_id, payload)
 
 
-class Handler(BaseHTTPRequestHandler):
-    server_version = "BrainAlphaOps/0.1"
-
-    def do_GET(self):
-        dispatch_get(self, urlparse(self.path), _handler_dispatch_context())
-
-    def do_POST(self):
-        dispatch_post(self, urlparse(self.path), _handler_dispatch_context())
-
-    def log_message(self, _format, *args):
-        return
-
-    _MAX_BODY_BYTES = 2 * 1024 * 1024  # 2 MB
-
-    def _read_json(self) -> dict:
-        length = int(self.headers.get("Content-Length", "0"))
-        if length < 0:
-            raise ValueError("invalid request body length")
-        if length > self._MAX_BODY_BYTES:
-            raise ValueError("request body too large")
-        raw = self.rfile.read(length) if length else b"{}"
-        return json.loads(raw.decode("utf-8"))
-
-    def _is_allowed_local_request(self) -> bool:
-        return web_session.is_allowed_request(
-            host_header=self.headers.get("Host", ""),
-            origin_header=self.headers.get("Origin", ""),
-            referer_header=self.headers.get("Referer", ""),
-        )
-
-    def _has_valid_session(self, query_string: str = "") -> bool:
-        return web_session.has_valid_request_session(
-            path=urlparse(self.path).path,
-            query_string=query_string,
-            csrf_header=str(self.headers.get("X-Brain-Alpha-CSRF", "")),
-            cookie_header=self.headers.get("Cookie", ""),
-        )
-
-    def _session_id_from_cookie(self) -> str:
-        return web_session.session_id_from_cookie(self.headers.get("Cookie", ""))
-
-    def _handle_sse_stream(self, query_string: str):
-        """P2: Server-Sent Events endpoint for real-time status updates.
-
-        Replaces the legacy setInterval polling pattern.  The browser
-        EventSource API automatically reconnects on disconnect.
-        """
-        # Enforce session authentication parity with other endpoints
-        if not self._has_valid_session():
-            self._json({"ok": False, "error_code": "AUTH_REQUIRED", "error": "session required"}, status=401)
-            return
-
-        job_id = (parse_qs(query_string).get("job_id") or [""])[0]
-        if not job_id:
-            self._json({"ok": False, "error_code": "VALIDATION_ERROR", "error": "missing job_id"}, status=400)
-            return
-
-        self.send_response(200)
-        self.send_header("Content-Type", "text/event-stream")
-        self.send_header("Cache-Control", "no-cache")
-        self.send_header("Connection", "keep-alive")
-        self.send_header("X-Content-Type-Options", "nosniff")
-        self.send_header("Referrer-Policy", "no-referrer")
-        self.end_headers()
-
-        interval = 1.0  # push interval in seconds
-        _MAX_SSE_DURATION = 600  # 10-minute hard cap to prevent thread leak
-        started = time.monotonic()
-        try:
-            while True:
-                if time.monotonic() - started > _MAX_SSE_DURATION:
-                    self.wfile.write(f"data: {json.dumps({'ok': False, 'error': 'sse stream timeout'})}\n\n".encode("utf-8"))
-                    self.wfile.flush()
-                    break
-
-                job = JOBS.get(job_id)
-                if not job:
-                    self.wfile.write(f"data: {json.dumps({'ok': False, 'error': 'job not found'})}\n\n".encode("utf-8"))
-                    self.wfile.flush()
-                    break
-
-                payload = {
-                    "ok": True,
-                    "job_id": job_id,
-                    "status": job.get("status", "unknown"),
-                    "progress": _enrich_progress(dict(job.get("progress", {}))),
-                    "error": job.get("error", ""),
-                }
-                self.wfile.write(f"data: {json.dumps(payload, default=str)}\n\n".encode("utf-8"))
-                self.wfile.flush()
-
-                if job.get("status") in ("completed", "stopped", "failed"):
-                    break
-
-                time.sleep(interval)
-        except (BrokenPipeError, ConnectionResetError, OSError):
-            pass  # client disconnected — clean exit
-
-    def _html(self, html: str, *, extra_headers: list[tuple[str, str]] | None = None):
-        data = html.encode("utf-8")
-        self.send_response(200)
-        self.send_header("Content-Type", "text/html; charset=utf-8")
-        self.send_header("Cache-Control", "no-store")
-        self._send_security_headers(html)
-        for name, value in extra_headers or []:
-            self.send_header(name, value)
-        self.send_header("Content-Length", str(len(data)))
-        self.end_headers()
-        self.wfile.write(data)
-
-    def _json(self, payload: dict, status: int = 200, *, extra_headers: list[tuple[str, str]] | None = None):
-        data = json.dumps(payload, ensure_ascii=False, default=str).encode("utf-8")
-        self.send_response(status)
-        self.send_header("Content-Type", "application/json; charset=utf-8")
-        self.send_header("Cache-Control", "no-store")
-        self._send_security_headers()
-        for name, value in extra_headers or []:
-            self.send_header(name, value)
-        self.send_header("Content-Length", str(len(data)))
-        self.end_headers()
-        self.wfile.write(data)
-
-    def _send_security_headers(self, html: str | None = None):
-        self.send_header("X-Content-Type-Options", "nosniff")
-        self.send_header("X-Frame-Options", "DENY")
-        self.send_header("Referrer-Policy", "no-referrer")
-        self.send_header(
-            "Content-Security-Policy",
-            content_security_policy_for_html(html),
-        )
+_compute_run_stats = lambda data, run_config: _compute_run_stats_service(data, run_config)
 
 
-def run_job(job_id: str, payload: dict):
-    if payload.get("guided"):
-        run_guided_job_service(
-            job_id,
-            payload,
-            job_store=JOBS,
-            run_config_from_payload=run_config_from_payload,
-            compute_run_stats=_compute_run_stats,
-            safe_error_message=safe_error_message,
-            log=logger,
-        )
-        return
-    run_job_service(
-        job_id,
-        payload,
-        job_store=JOBS,
-        run_config_from_payload=run_config_from_payload,
-        run_pipeline_from_config=run_pipeline_from_config,
-        compute_run_stats=_compute_run_stats,
-        safe_error_message=safe_error_message,
-        log=logger,
-    )
+generate_candidates_payload = lambda payload: _runtime_facade.generate_candidates_payload(sys.modules[__name__], payload)
 
 
-def _compute_run_stats(data: dict, run_config) -> dict:
-    return _compute_run_stats_service(data, run_config)
-
-
-def generate_candidates_payload(payload: dict) -> dict:
-    return _generate_candidates_payload(payload, run_config_from_payload=run_config_from_payload)
-
-
-def lifecycle_from_job(job: dict) -> list[dict]:
-    return _lifecycle_from_job_service(job, read_storage_jsonl=_read_storage_jsonl, limit=1000)
+lifecycle_from_job = lambda job: _runtime_facade.lifecycle_from_job(sys.modules[__name__], job)
 
 
 # C4: Periodic lifecycle file archiving — prevent unbounded growth (>50MB → archive)
@@ -654,757 +281,204 @@ _LAST_ARCHIVE_CHECK: float = 0.0
 _ARCHIVE_CHECK_INTERVAL: float = 3600.0  # check every hour
 
 
-def _maybe_archive_lifecycle() -> None:
-    """Archive lifecycle.jsonl if > 50MB, throttled to once per hour."""
-    global _LAST_ARCHIVE_CHECK
-    _LAST_ARCHIVE_CHECK = _maybe_archive_lifecycle_service(
-        last_archive_check=_LAST_ARCHIVE_CHECK,
-        interval_seconds=_ARCHIVE_CHECK_INTERVAL,
-        load_config=load_run_config,
-        repository_factory=ResearchRepository,
-        safe_error_message=safe_error_message,
-        log=logger,
-    )
+_maybe_archive_lifecycle = lambda: _runtime_facade.maybe_archive_lifecycle(sys.modules[__name__])
 
 
 # C2: Settings enum validation — fail fast on invalid values
-def _status_category(row: dict) -> str:
-    return _status_category_service(row)
+_status_category = _status_category_service
 
 
-def cloud_alpha_snapshot(limit: int | None = None) -> dict:
-    return _cloud_alpha_snapshot_service(
-        limit=limit,
-        load_config=load_run_config,
-        runtime_root=runtime_project_root,
-        safe_error_message=safe_error_message,
-        stale_seconds=CLOUD_SYNC_STALE_SECONDS,
-    )
+cloud_alpha_snapshot = lambda limit=None: _runtime_facade.cloud_alpha_snapshot(sys.modules[__name__], limit=limit)
 
 
-def _snapshot_runtime() -> WebSnapshotRuntime:
-    return WebSnapshotRuntime(
-        load_config=load_run_config,
-        web_error=_web_error,
-        bounded_query_float=_bounded_query_float,
-        payload_truthy=payload_truthy,
-        read_storage_jsonl=_read_storage_jsonl,
-        run_config_from_payload=run_config_from_payload,
-        cloud_alpha_snapshot=cloud_alpha_snapshot,
-        storage_jsonl_path=_storage_jsonl_path,
-        safe_error_message=safe_error_message,
-        job_store=JOBS,
-        sync_job_store=SYNC_JOBS,
-        check_job_store=CHECK_JOBS,
-        enrich_progress=_enrich_progress,
-        observability_builder=build_research_observability_snapshot,
-    )
+_snapshot_runtime = lambda: _runtime_facade.snapshot_runtime(sys.modules[__name__])
 
 
-def research_memory_snapshot(*, limit: int = 5000, top_n: int = 10) -> dict:
-    return _snapshot_runtime().research_memory_snapshot(limit=limit, top_n=top_n)
+_snapshot_facade = lambda: _runtime_facade.snapshot_facade(sys.modules[__name__])
 
 
-def research_knowledge_snapshot(*, limit: int = 100, min_confidence: float = 0.0) -> dict:
-    return _snapshot_runtime().research_knowledge_snapshot(limit=limit, min_confidence=min_confidence)
+research_memory_snapshot = lambda *, limit=5000, top_n=10: _snapshot_facade().research_memory_snapshot(limit=limit, top_n=top_n)
+research_knowledge_snapshot = lambda *, limit=100, min_confidence=0.0: _snapshot_facade().research_knowledge_snapshot(
+    limit=limit, min_confidence=min_confidence
+)
+research_observability_snapshot = lambda *, limit=5000, top_n=10, include_cloud=True: _snapshot_facade().research_observability_snapshot(
+    limit=limit, top_n=top_n, include_cloud=include_cloud
+)
+prompt_run_ledger_snapshot = lambda *, limit=100: _snapshot_facade().prompt_run_ledger_snapshot(limit=limit)
+sqlite_index_snapshot = lambda *, top_n=10: _sqlite_index_snapshot_service(
+    top_n=top_n, load_config=load_run_config, web_error=_web_error
+)
+sqlite_expression_lookup_payload = lambda *, expression, top_n=10, min_similarity=0.75, max_scan_rows=2000: _sqlite_expression_lookup_payload_service(
+    expression=expression,
+    top_n=top_n,
+    min_similarity=min_similarity,
+    max_scan_rows=max_scan_rows,
+    load_config=load_run_config,
+    web_error=_web_error,
+)
+sqlite_record_lookup_payload = lambda *, alpha_id, limit=50: _sqlite_record_lookup_payload_service(
+    alpha_id=alpha_id, limit=limit, load_config=load_run_config, web_error=_web_error
+)
+_durable_job_rows = lambda *, limit: _snapshot_facade().durable_job_rows(limit=limit)
+assistant_guidance_snapshot = lambda *, limit=100, min_confidence=None: _snapshot_facade().assistant_guidance_snapshot(
+    limit=limit, min_confidence=min_confidence
+)
+_assistant_guidance_history = lambda rows, *, min_confidence, scoring_policy=None, outcomes_by_guidance=None: _snapshot_facade().assistant_guidance_history(
+    rows,
+    min_confidence=min_confidence,
+    scoring_policy=scoring_policy,
+    outcomes_by_guidance=outcomes_by_guidance,
+)
+assistant_context_snapshot = lambda *, limit=5000, top_n=10, include_prompt=True, include_sensitive=False: _snapshot_facade().assistant_context_snapshot(
+    limit=limit, top_n=top_n, include_prompt=include_prompt, include_sensitive=include_sensitive
+)
+assistant_request_snapshot = lambda *, limit=5000, top_n=10, include_prompt=True, include_offline_draft=True, include_sensitive=False: _snapshot_facade().assistant_request_snapshot(
+    limit=limit,
+    top_n=top_n,
+    include_prompt=include_prompt,
+    include_offline_draft=include_offline_draft,
+    include_sensitive=include_sensitive,
+)
+assistant_response_parse_payload = lambda payload: _snapshot_facade().assistant_response_parse_payload(payload)
+assistant_response_guidance_payload = lambda payload: _snapshot_facade().assistant_response_guidance_payload(payload)
+anti_overfit_snapshot = lambda candidate_id="": _snapshot_facade().anti_overfit_snapshot(candidate_id)
+rolling_validation_snapshot = lambda candidate_id="", windows=4: _snapshot_facade().rolling_validation_snapshot(candidate_id, windows)
+assistant_cross_review_payload = lambda payload: _snapshot_facade().assistant_cross_review_payload(payload)
+save_assistant_guidance_payload = lambda payload: _snapshot_facade().save_assistant_guidance_payload(payload)
 
 
-def research_observability_snapshot(*, limit: int = 5000, top_n: int = 10, include_cloud: bool = True) -> dict:
-    return _snapshot_runtime().research_observability_snapshot(limit=limit, top_n=top_n, include_cloud=include_cloud)
+latest_result_snapshot = lambda: _runtime_facade.latest_result_snapshot(sys.modules[__name__])
 
+_latest_run_history_path = lambda: _runtime_facade.latest_run_history_path(sys.modules[__name__])
 
-def prompt_run_ledger_snapshot(*, limit: int = 100) -> dict:
-    return _snapshot_runtime().prompt_run_ledger_snapshot(limit=limit)
-
-
-def sqlite_index_snapshot(*, top_n: int = 10) -> dict:
-    return _sqlite_index_snapshot_service(
-        top_n=top_n,
-        load_config=load_run_config,
-        web_error=_web_error,
-    )
-
-
-def sqlite_expression_lookup_payload(
-    *,
-    expression: str,
-    top_n: int = 10,
-    min_similarity: float = 0.75,
-    max_scan_rows: int = 2000,
-) -> dict:
-    return _sqlite_expression_lookup_payload_service(
-        expression=expression,
-        top_n=top_n,
-        min_similarity=min_similarity,
-        max_scan_rows=max_scan_rows,
-        load_config=load_run_config,
-        web_error=_web_error,
-    )
-
-
-def sqlite_record_lookup_payload(*, alpha_id: str, limit: int = 50) -> dict:
-    return _sqlite_record_lookup_payload_service(
-        alpha_id=alpha_id,
-        limit=limit,
-        load_config=load_run_config,
-        web_error=_web_error,
-    )
-
-
-def _durable_job_rows(*, limit: int) -> list[dict]:
-    return _snapshot_runtime().durable_job_rows(limit=limit)
-
-
-def assistant_guidance_snapshot(*, limit: int = 100, min_confidence: float | None = None) -> dict:
-    return _snapshot_runtime().assistant_guidance_snapshot(limit=limit, min_confidence=min_confidence)
-
-
-def _assistant_guidance_history(
-    rows: list[dict],
-    *,
-    min_confidence: float,
-    scoring_policy: dict | None = None,
-    outcomes_by_guidance: dict[str, dict] | None = None,
-) -> list[dict]:
-    return _snapshot_runtime().assistant_guidance_history(
-        rows,
-        min_confidence=min_confidence,
-        scoring_policy=scoring_policy,
-        outcomes_by_guidance=outcomes_by_guidance,
-    )
-
-
-def _assistant_guidance_outcome_status(row: dict) -> str:
-    return assistant_guidance_outcome_status(row)
-
-
-def _int_from_any(value: object) -> int:
-    try:
-        return int(float(value))
-    except (TypeError, ValueError):
-        return 0
-
-
-def _float_from_any(value: object) -> float:
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return 0.0
-
-
-def assistant_context_snapshot(
-    *,
-    limit: int = 5000,
-    top_n: int = 10,
-    include_prompt: bool = True,
-    include_sensitive: bool = False,
-) -> dict:
-    return _snapshot_runtime().assistant_context_snapshot(
-        limit=limit,
-        top_n=top_n,
-        include_prompt=include_prompt,
-        include_sensitive=include_sensitive,
-        latest_result_snapshot=latest_result_snapshot,
-    )
-
-
-def assistant_request_snapshot(
-    *,
-    limit: int = 5000,
-    top_n: int = 10,
-    include_prompt: bool = True,
-    include_offline_draft: bool = True,
-    include_sensitive: bool = False,
-) -> dict:
-    return _snapshot_runtime().assistant_request_snapshot(
-        limit=limit,
-        top_n=top_n,
-        include_prompt=include_prompt,
-        include_offline_draft=include_offline_draft,
-        include_sensitive=include_sensitive,
-        assistant_context_snapshot=assistant_context_snapshot,
-    )
-
-
-def assistant_response_parse_payload(payload: dict) -> dict:
-    return _snapshot_runtime().assistant_response_parse_payload(payload)
-
-
-def assistant_response_guidance_payload(payload: dict) -> dict:
-    return _snapshot_runtime().assistant_response_guidance_payload(payload)
-
-
-def anti_overfit_snapshot(candidate_id: str = "") -> dict:
-    return _snapshot_runtime().anti_overfit_snapshot(candidate_id, latest_result_snapshot)
-
-
-def rolling_validation_snapshot(candidate_id: str = "", windows: int = 4) -> dict:
-    return _snapshot_runtime().rolling_validation_snapshot(candidate_id, windows, latest_result_snapshot)
-
-
-def assistant_cross_review_payload(payload: dict) -> dict:
-    return _snapshot_runtime().assistant_cross_review_payload(payload)
-
-
-def save_assistant_guidance_payload(payload: dict) -> dict:
-    return _snapshot_runtime().save_assistant_guidance_payload(payload, assistant_guidance_snapshot)
-
-
-def latest_result_snapshot() -> dict:
-    return _snapshot_runtime().latest_result_snapshot(_latest_run_history_path)
-
-def _latest_run_history_path() -> Path | None:
-    return _snapshot_runtime().latest_run_history_path()
-
-def _user_profile_snapshot() -> dict:
-    return _snapshot_runtime().user_profile_snapshot()
+_user_profile_snapshot = lambda: _runtime_facade.user_profile_snapshot(sys.modules[__name__])
 
 # D1: Preset configuration — single source of truth for market presets
-def _load_presets() -> dict:
-    return _load_presets_service(runtime_root=runtime_project_root, log=logger)
+_load_presets = lambda: _runtime_facade.load_presets(sys.modules[__name__])
 
 
-def _match_preset_id(settings: dict) -> str:
-    return _match_preset_id_service(settings, _load_presets())
+_match_preset_id = lambda settings: _runtime_facade.match_preset_id(sys.modules[__name__], settings)
 
 
-def _dedupe_cloud_alpha_rows(rows: list[dict]) -> list[dict]:
-    return _dedupe_cloud_alpha_rows_service(rows)
+_dedupe_cloud_alpha_rows = _dedupe_cloud_alpha_rows_service
+_latest_cached_user_alphas = lambda limit=None: _latest_cached_user_alphas_service(limit=limit, load_config=load_run_config)
+_latest_cached_user_alpha_path = lambda: _latest_cached_user_alpha_path_service(load_config=load_run_config)
+_cached_user_alpha_paths = lambda: _cached_user_alpha_paths_service(load_config=load_run_config)
+_path_modified_at = _path_modified_at_service
+_extract_alpha_rows = _extract_alpha_rows_service
+_official_context_file_counts = lambda: _official_context_file_counts_service(
+    load_config=load_run_config, runtime_root=runtime_project_root, safe_error_message=safe_error_message
+)
+_read_official_context_metadata = lambda filename: _read_official_context_metadata_service(
+    filename,
+    load_config=load_run_config,
+    runtime_root=runtime_project_root,
+    safe_error_message=safe_error_message,
+)
+_read_official_context_json = lambda filename: _read_official_context_json_service(
+    filename, load_config=load_run_config, runtime_root=runtime_project_root, safe_error_message=safe_error_message
+)
+_cloud_alpha_summary = lambda rows: _cloud_alpha_summary_service(
+    rows, load_config=load_run_config, runtime_root=runtime_project_root, safe_error_message=safe_error_message
+)
+_cloud_alpha_id = _cloud_alpha_id_service
+_cloud_row_sort_key = _cloud_row_sort_key_service
 
 
-def _latest_cached_user_alphas(limit: int | None = None) -> list[dict]:
-    return _latest_cached_user_alphas_service(limit=limit, load_config=load_run_config)
+candidate_from_payload = lambda payload: _runtime_facade.candidate_from_payload(sys.modules[__name__], payload)
 
 
-def _latest_cached_user_alpha_path() -> Path | None:
-    return _latest_cached_user_alpha_path_service(load_config=load_run_config)
+sync_cloud_alphas = lambda payload: _runtime_facade.sync_cloud_alphas(sys.modules[__name__], payload)
 
 
-def _cached_user_alpha_paths() -> list[Path]:
-    from brain_alpha_ops.web_cloud_snapshot import cached_user_alpha_paths
+run_sync_job = lambda job_id, payload: _runtime_facade.run_sync_job(sys.modules[__name__], job_id, payload)
 
-    return cached_user_alpha_paths(load_config=load_run_config)
 
+run_check_batch_job = lambda job_id, payload: _runtime_facade.run_check_batch_job(sys.modules[__name__], job_id, payload)
 
-def _path_modified_at(path: Path | None) -> tuple[str, int | None]:
-    return _path_modified_at_service(path)
 
+refresh_cloud_context_for_check = lambda api, repo, sync_range, job_id, total, mode, region="", refresh_remote=False: _runtime_facade.refresh_cloud_context_for_check(sys.modules[__name__], api, repo, sync_range, job_id, total, mode, region, refresh_remote=refresh_remote)
 
-def _extract_alpha_rows(data) -> list[dict]:
-    from brain_alpha_ops.web_cloud_snapshot import extract_alpha_rows
 
-    return extract_alpha_rows(data)
+_datasets_from_fields = lambda fields: _runtime_facade.datasets_from_fields(sys.modules[__name__], fields)
 
 
-def _official_context_file_counts() -> dict[str, int]:
-    return _official_context_file_counts_service(
-        load_config=load_run_config,
-        runtime_root=runtime_project_root,
-        safe_error_message=safe_error_message,
-    )
+_persist_official_context = lambda fields, operators, datasets: _runtime_facade.persist_official_context(sys.modules[__name__], fields, operators, datasets)
 
 
-def _read_official_context_metadata(filename: str) -> dict:
-    from brain_alpha_ops.web_cloud_snapshot import read_official_context_metadata
+_save_official_context_json = lambda filename, items: _runtime_facade.save_official_context_json(sys.modules[__name__], filename, items)
 
-    return read_official_context_metadata(
-        filename,
-        load_config=load_run_config,
-        runtime_root=runtime_project_root,
-        safe_error_message=safe_error_message,
-    )
 
+passed_candidates_from_payload = lambda payload: _runtime_facade.passed_candidates_from_payload(sys.modules[__name__], payload)
 
-def _read_official_context_json(filename: str) -> list[dict]:
-    return _read_official_context_json_service(
-        filename,
-        load_config=load_run_config,
-        runtime_root=runtime_project_root,
-        safe_error_message=safe_error_message,
-    )
 
+check_candidate_availability = lambda candidate, mode, api, ledger, cloud_alphas, cloud_error="", observability_preflight=None: _runtime_facade.check_candidate_availability(sys.modules[__name__], candidate, mode, api, ledger, cloud_alphas, cloud_error, observability_preflight)
 
-def _cloud_alpha_summary(rows: list[dict]) -> dict:
-    return _cloud_alpha_summary_service(
-        rows,
-        load_config=load_run_config,
-        runtime_root=runtime_project_root,
-        safe_error_message=safe_error_message,
-    )
 
+cloud_status_for = lambda candidate, cloud_alphas: _runtime_facade.cloud_status_for(sys.modules[__name__], candidate, cloud_alphas)
 
-def _drop_mock_rows_if_real(rows: list[dict]) -> list[dict]:
-    return _drop_mock_rows_if_real_service(rows)
 
+cloud_similarity_risk = lambda candidate, cloud_alphas: _runtime_facade.cloud_similarity_risk(sys.modules[__name__], candidate, cloud_alphas)
 
-def _cloud_alpha_id(row: dict) -> str:
-    from brain_alpha_ops.web_cloud_snapshot import cloud_alpha_id
 
-    return cloud_alpha_id(row)
+check_candidate = lambda payload: _runtime_facade.check_candidate(sys.modules[__name__], payload)
 
 
-def _cloud_row_sort_key(row: dict) -> str:
-    from brain_alpha_ops.web_cloud_snapshot import cloud_row_sort_key
+submission_preflight_error = lambda candidate, run_config: _runtime_facade.submission_preflight_error(sys.modules[__name__], candidate, run_config)
 
-    return cloud_row_sort_key(row)
 
+_submit_preflight_block = _submission_preflight_block_service
 
-def candidate_from_payload(payload: dict) -> dict:
-    return _candidate_from_payload(payload, JOBS)
 
+submission_preflight_advisory = lambda candidate, run_config: _runtime_facade.submission_preflight_advisory(sys.modules[__name__], candidate, run_config)
 
-def sync_cloud_alphas(payload: dict) -> dict:
-    return sync_cloud_alphas_payload(
-        payload,
-        run_config_from_payload=run_config_from_payload,
-        api_from_run_config=api_from_run_config,
-        repository_factory=ResearchRepository,
-        datasets_from_fields=_datasets_from_fields,
-        persist_official_context=_persist_official_context,
-        default_fields=list(DEFAULT_FIELDS),
-        default_operators=list(DEFAULT_OPERATORS),
-    )
-
-
-def run_sync_job(job_id: str, payload: dict):
-    return run_sync_job_service(
-        job_id,
-        payload,
-        store=SYNC_JOBS,
-        run_config_from_payload=run_config_from_payload,
-        api_from_run_config=api_from_run_config,
-        repository_factory=ResearchRepository,
-        datasets_from_fields=_datasets_from_fields,
-        persist_official_context=_persist_official_context,
-        default_fields=list(DEFAULT_FIELDS),
-        default_operators=list(DEFAULT_OPERATORS),
-        safe_error_message=safe_error_message,
-        error_payload=error_payload,
-    )
-
-
-def run_check_batch_job(job_id: str, payload: dict):
-    return run_check_batch_job_service(
-        job_id,
-        payload,
-        store=CHECK_JOBS,
-        passed_candidates_from_payload=passed_candidates_from_payload,
-        run_config_from_payload=run_config_from_payload,
-        api_from_run_config=api_from_run_config,
-        repository_factory=ResearchRepository,
-        ledger_factory=SubmissionLedger,
-        refresh_cloud_context_for_check=refresh_cloud_context_for_check,
-        payload_truthy=payload_truthy,
-        check_candidate_availability=check_candidate_availability,
-        observability_submission_preflight=observability_submission_preflight,
-        safe_error_message=safe_error_message,
-        error_payload=error_payload,
-    )
-
-
-def refresh_cloud_context_for_check(
-    api,
-    repo: ResearchRepository,
-    sync_range: str,
-    job_id: str,
-    total: int,
-    mode: str,
-    region: str = "",
-    *,
-    refresh_remote: bool = False,
-) -> tuple[list[dict], str]:
-    """Refresh cloud alphas AND fields/operators context for batch check.
-
-    Returns (cloud_alphas, context_error). context_error is empty on success,
-    or a human-readable message describing what failed during context refresh.
-
-    P0-2 修复: fields/operators 拉取结果不再丢弃，异常不再静默忽略。
-    """
-    return refresh_cloud_context_for_check_service(
-        api,
-        repo,
-        sync_range,
-        job_id,
-        total,
-        mode,
-        region,
-        refresh_remote=refresh_remote,
-        store=CHECK_JOBS,
-        official_context_file_counts=_official_context_file_counts,
-        datasets_from_fields=_datasets_from_fields,
-        persist_official_context=_persist_official_context,
-        safe_error_message=safe_error_message,
-    )
-
-
-def _datasets_from_fields(fields: list[dict]) -> list[dict]:
-    return _datasets_from_fields_service(
-        fields,
-        load_config=load_run_config,
-        runtime_root=runtime_project_root,
-        safe_error_message=safe_error_message,
-    )
-
-
-def _persist_official_context(fields: list[dict], operators: list[dict], datasets: list[dict]) -> None:
-    _persist_official_context_service(
-        fields,
-        operators,
-        datasets,
-        load_config=load_run_config,
-        runtime_root=runtime_project_root,
-        safe_error_message=safe_error_message,
-    )
-
-
-def _save_official_context_json(filename: str, items: list[dict]) -> None:
-    _save_official_context_json_service(
-        filename,
-        items,
-        load_config=load_run_config,
-        runtime_root=runtime_project_root,
-    )
-
-
-def passed_candidates_from_payload(payload: dict) -> list[dict]:
-    return _passed_candidates_from_payload(payload, JOBS)
-
-
-def check_candidate_availability(
-    candidate: dict,
-    mode: str,
-    api,
-    ledger: SubmissionLedger,
-    cloud_alphas: list[dict],
-    cloud_error: str = "",
-    observability_preflight: dict | None = None,
-) -> dict:
-    return _check_candidate_availability(
-        candidate,
-        mode,
-        api,
-        ledger,
-        cloud_alphas,
-        cloud_error,
-        observability_preflight,
-        safe_error_message=safe_error_message,
-        observability_submission_preflight=observability_submission_preflight,
-    )
-
-
-def cloud_status_for(candidate: dict, cloud_alphas: list[dict]) -> dict:
-    return _cloud_status_for(candidate, cloud_alphas)
-
-
-def cloud_similarity_risk(candidate: dict, cloud_alphas: list[dict]) -> dict:
-    return _cloud_similarity_risk(candidate, cloud_alphas)
-
-
-def check_candidate(payload: dict) -> dict:
-    """Single Alpha pre-submit check — called by POST /api/check.
-
-    Uses check_candidate_availability for the full 8-check suite (label_cn,
-    suggestion, cloud context), then persists the result.
-    """
-    return check_candidate_payload(
-        payload,
-        candidate_from_payload=candidate_from_payload,
-        run_config_from_payload=run_config_from_payload,
-        api_from_run_config=api_from_run_config,
-        repository_factory=ResearchRepository,
-        ledger_factory=SubmissionLedger,
-        refresh_cloud_context_for_check=refresh_cloud_context_for_check,
-        payload_truthy=payload_truthy,
-        check_candidate_availability=check_candidate_availability,
-        observability_submission_preflight=observability_submission_preflight,
-        web_error=_web_error,
-    )
-
-
-def submission_preflight_error(candidate: dict, run_config: RunConfig) -> str:
-    official_id = official_alpha_id(candidate)
-    if not official_id:
-        return "缺少官方 Alpha ID，请先完成官方回测。"
-    if str(run_config.environment).lower() == "production":
-        mock_reasons = mock_source_reasons(candidate)
-        if mock_reasons:
-            return "Production submit blocked non-production mock/demo/test candidate: " + "; ".join(mock_reasons)
-    gate = candidate.get("gate") or {}
-    if not (gate.get("submission_ready") or candidate.get("lifecycle_status") == "submission_ready"):
-        return "该 Alpha 尚未达到可提交状态，请先在达标列表完成检查。"
-    status_text = f"{candidate.get('lifecycle_status', '')} {gate.get('status', '')}".lower()
-    if any(word in status_text for word in ("failed", "rejected", "不达标")):
-        return "该 Alpha 已标记为失败或不达标，不能提交。"
-
-    ledger = SubmissionLedger(run_config.ops.storage_dir)
-    records = ledger.records()
-    candidate_expr_key = expression_key(str(candidate.get("expression", "")))
-    duplicate_id = any(str(row.get("official_alpha_id") or "") == official_id for row in records)
-    duplicate_expr = bool(candidate_expr_key) and any(expression_key(str(row.get("expression", ""))) == candidate_expr_key for row in records)
-    if duplicate_id:
-        return "本地提交记录中已存在该官方 Alpha ID。"
-    if duplicate_expr:
-        return "本地提交记录中已存在相同表达式。"
-
-    cloud_snapshot = cloud_alpha_snapshot()
-    cloud_rows = cloud_snapshot.get("alphas") or []
-    cloud_summary = cloud_snapshot.get("summary") or {}
-    if run_config.ops.budget.require_cloud_sync:
-        if not cloud_rows:
-            return "提交前请先同步云端数据。"
-        if cloud_summary.get("is_stale"):
-            return "云端数据已超过 24 小时未刷新，请先同步云端数据。"
-
-    cloud_status = cloud_status_for(candidate, cloud_rows)
-    if str(cloud_status.get("status", "")).upper() in {"ACTIVE", "SUBMITTED", "PRODUCTION", "CONDUCTED"}:
-        return "云端缓存显示该 Alpha 已提交。"
-    return ""
-
-
-def _submit_preflight_block(error_code: str, error: str, *, category: str = "validation", action: str = "") -> dict:
-    return _submission_preflight_block_service(error_code, error, category=category, action=action)
-
-
-def submission_preflight_advisory(candidate: dict, run_config: RunConfig) -> dict:
-    return _submission_preflight_advisory(
-        candidate,
-        run_config,
-        ledger_factory=SubmissionLedger,
-        cloud_alpha_snapshot=cloud_alpha_snapshot,
-        cloud_status_for=cloud_status_for,
-    )
-
-
-def observability_submission_preflight(storage_dir: str, *, limit: int = 5000, top_n: int = 5) -> dict:
-    return _observability_submission_preflight(
-        storage_dir,
-        limit=limit,
-        top_n=top_n,
-        observability_builder=build_research_observability_snapshot,
-        safe_error_message=safe_error_message,
-    )
-
-
-def _compact_expression(value: object) -> str:
-    return " ".join(str(value or "").split())
-
-
-def cloud_row_expression(row: dict) -> str:
-    return _cloud_row_expression(row)
-
-
-def record_submit_blocked(payload: dict, candidate: dict, run_config: RunConfig, failure_reason: str):
-    try:
-        official_id = official_alpha_id(candidate)
-        ResearchRepository(run_config.ops.storage_dir).save_lifecycle_record(
-            str(payload.get("job_id", "")) or "manual_submit",
-            {
-                "timestamp": utc_now(),
-                "alpha_id": candidate.get("alpha_id", ""),
-                "official_alpha_id": official_id,
-                "simulation_id": candidate.get("simulation_id", ""),
-                "stage": "submission_blocked",
-                "status": "BLOCKED",
-                "family": candidate.get("family", ""),
-                "score": (candidate.get("scorecard") or {}).get("total_score", 0.0),
-                "expression": candidate.get("expression", ""),
-                "submit_trigger": str(payload.get("submit_mode", "manual")),
-                "environment": str(run_config.environment),
-                "failure_reason": failure_reason,
-                "note": failure_reason,
-            },
-        )
-    except OSError as exc:
-        logger.error(
-            "I/O error recording submission blocked for alpha_id=%s reason=%s: %s",
-            candidate.get("alpha_id", "?"), failure_reason, exc,
-        )
-    except Exception:
-        logger.warning(
-            "failed to record submission blocked for alpha_id=%s reason=%s",
-            candidate.get("alpha_id", "?"), failure_reason, exc_info=True,
-        )
-        # Surface the failure as a WARNING-level violation in the compliance
-        # report so the audit trail is preserved even when persistence fails.
-        try:
-            _research_repo().add_compliance_note(
-                candidate.get("alpha_id", "?"),
-                "submit_blocked_persistence_failed",
-                {"reason": failure_reason},
-            )
-        except Exception:
-            pass
-
-
-def submit_candidate(payload: dict) -> dict:
-    return submit_candidate_payload(
-        payload,
-        candidate_from_payload=candidate_from_payload,
-        run_config_from_payload=run_config_from_payload,
-        submission_preflight_advisory=submission_preflight_advisory,
-        record_submit_blocked=record_submit_blocked,
-        official_alpha_id=official_alpha_id,
-        observability_submission_preflight=observability_submission_preflight,
-        payload_truthy=payload_truthy,
-        api_from_run_config=api_from_run_config,
-    )
-
-
-def load_check_results() -> dict:
-    return _load_check_results_service(
-        read_storage_jsonl=_read_storage_jsonl,
-        safe_error_message=safe_error_message,
-        log=logger,
-        limit=5000,
-    )
-
-
-def submit_batch(payload: dict) -> dict:
-    return submit_batch_payload(
-        payload,
-        run_config_from_payload=run_config_from_payload,
-        observability_submission_preflight=observability_submission_preflight,
-        submit_candidate=submit_candidate,
-        candidate_from_payload=candidate_from_payload,
-        web_error=_web_error,
-        payload_truthy=payload_truthy,
-    )
-
-
-def _storage_jsonl_path(filename: str) -> Path:
-    return _storage_jsonl_path_service(filename, load_config=load_run_config)
-
-
-def _read_storage_jsonl(filename: str, *, limit: int = 500) -> list[dict]:
-    return _read_storage_jsonl_service(filename, limit=limit, load_config=load_run_config)
-
-
-def _read_storage_jsonl_stats(filename: str, *, limit: int = 500) -> dict:
-    return _read_storage_jsonl_stats_service(filename, limit=limit, load_config=load_run_config)
-
-
-def _tail_text_lines(path: Path, limit: int, *, chunk_size: int = 1024 * 1024) -> list[str]:
-    return tail_text_lines(path, limit, chunk_size=chunk_size)
-
-
-def public_run_config() -> dict:
-    config = load_run_config().to_dict()
-    credentials = config.get("credentials", {})
-    config["credentials"] = {
-        "username": "",
-        "password": "",
-        "token": "",
-        "username_env": credentials.get("username_env", "BRAIN_USERNAME"),
-        "password_env": credentials.get("password_env", "BRAIN_PASSWORD"),
-        "token_env": credentials.get("token_env", "BRAIN_TOKEN"),
-    }
-    return config
-
-
-def find_free_port(start: int = DEFAULT_PORT, host: str = HOST) -> int:
-    return _find_free_port_service(start, host=host)
-
-
-def shutdown_server():
-    _shutdown_server_service(SERVER, SERVER_STOP)
-
-
-def serve(
-    port: int | None = None,
-    open_browser: bool = True,
-    host: str = HOST,
-    session_ttl_seconds: int | None = None,
-    allow_multiple_sessions: bool | None = None,
-    allow_remote: bool = False,
-    secure_cookies: bool | None = None,
-) -> str:
-    global SERVER
-    run_config = load_run_config()
-    web_session.set_remote_policy(
-        allow_remote=allow_remote,
-        admin_token_env=str(getattr(run_config.web, "admin_token_env", web_session.DEFAULT_ADMIN_TOKEN_ENV)),
-    )
-    web_session.require_remote_admin_token()
-    configure_session_policy(
-        session_ttl_seconds,
-        allow_multiple_sessions,
-        secure_cookies=bool(allow_remote) if secure_cookies is None else secure_cookies,
-    )
-    url, SERVER = _serve_service(
-        port=port,
-        open_browser=open_browser,
-        host=host,
-        default_port=DEFAULT_PORT,
-        handler_class=Handler,
-        stop_event=SERVER_STOP,
-        configure_session_policy=configure_session_policy,
-        normalize_host=normalize_host,
-        loopback_bind_hosts=LOOPBACK_BIND_HOSTS,
-        allow_remote=allow_remote,
-        session_ttl_seconds=session_ttl_seconds,
-        allow_multiple_sessions=allow_multiple_sessions,
-        secure_cookies=web_session.SESSION_MANAGER.secure_cookies,
-    )
-    return url
-
-
-def smoke_test_server(port: int | None = None) -> dict:
-    """Exercise the local HTTP session lifecycle without opening a browser."""
-    return _smoke_test_server_service(
-        port=port,
-        default_port=DEFAULT_PORT,
-        serve_func=serve,
-        shutdown_func=shutdown_server,
-        parse_cookies=_parse_cookies,
-        cookie_name=SESSION_COOKIE_NAME,
-        csrf_for_session=_csrf_for_session,
-    )
-
-
-def main(argv: list[str] | None = None) -> int:
-    import argparse
-    import sys
-    import time
-
-    def safe_print(message: str) -> None:
-        stream = getattr(sys, "stdout", None)
-        if stream is None:
-            return
-        try:
-            print(message)
-        except Exception:
-            return
-
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--config", default="")
-    parser.add_argument("--port", type=int, default=0)
-    parser.add_argument("--no-browser", action="store_true")
-    parser.add_argument("--smoke-test", action="store_true")
-    args = parser.parse_args(argv)
-    run_config = load_run_config(args.config or None)
-    if args.smoke_test:
-        config_from_payload({"environment": "production"})
-        result = smoke_test_server(port=args.port or run_config.web.port)
-        safe_print(json.dumps({"ok": True, "status": "web ready", **result}, ensure_ascii=False))
-        return 0
-    url = serve(
-        port=args.port or run_config.web.port,
-        open_browser=run_config.web.open_browser and not args.no_browser,
-        host=run_config.web.host,
-        session_ttl_seconds=run_config.web.session_ttl_seconds,
-        allow_multiple_sessions=run_config.web.allow_multiple_sessions,
-        allow_remote=run_config.web.allow_remote,
-        secure_cookies=run_config.web.secure_cookies or run_config.web.allow_remote,
-    )
-    safe_print("BRAIN Alpha Ops 已启动")
-    safe_print(f"访问地址：{url}")
-    safe_print("关闭此窗口或按 Ctrl+C 可停止本地服务。")
-    try:
-        while not SERVER_STOP.wait(3600):
-            pass
-    except KeyboardInterrupt:
-        shutdown_server()
-    return 0
+
+observability_submission_preflight = lambda storage_dir, limit=5000, top_n=5: _runtime_facade.observability_submission_preflight(sys.modules[__name__], storage_dir, limit=limit, top_n=top_n)
+
+
+cloud_row_expression = _cloud_row_expression
+
+
+record_submit_blocked = lambda payload, candidate, run_config, failure_reason: _runtime_facade.record_submit_blocked(sys.modules[__name__], payload, candidate, run_config, failure_reason)
+
+
+submit_candidate = lambda payload: _runtime_facade.submit_candidate(sys.modules[__name__], payload)
+
+
+load_check_results = lambda: _runtime_facade.load_check_results(sys.modules[__name__])
+
+
+submit_batch = lambda payload: _runtime_facade.submit_batch(sys.modules[__name__], payload)
+
+
+_storage_jsonl_path = lambda filename: _runtime_facade.storage_jsonl_path(sys.modules[__name__], filename)
+
+
+_read_storage_jsonl = lambda filename, limit=500: _runtime_facade.read_storage_jsonl(sys.modules[__name__], filename, limit=limit)
+
+
+_read_storage_jsonl_stats = lambda filename, limit=500: _runtime_facade.read_storage_jsonl_stats(sys.modules[__name__], filename, limit=limit)
+
+
+_tail_text_lines = tail_text_lines
+
+
+public_run_config = lambda: _runtime_facade.public_run_config(sys.modules[__name__])
+
+
+find_free_port = lambda start=DEFAULT_PORT, host=HOST: _runtime_facade.find_free_port(sys.modules[__name__], start, host)
+
+
+shutdown_server = lambda: _runtime_facade.shutdown_server(sys.modules[__name__])
+
+
+serve = lambda port=None, open_browser=True, host=HOST, session_ttl_seconds=None, allow_multiple_sessions=None, allow_remote=False, secure_cookies=None: _runtime_facade.serve(sys.modules[__name__], port=port, open_browser=open_browser, host=host, session_ttl_seconds=session_ttl_seconds, allow_multiple_sessions=allow_multiple_sessions, allow_remote=allow_remote, secure_cookies=secure_cookies)
+
+
+smoke_test_server = lambda port=None: _runtime_facade.smoke_test_server(sys.modules[__name__], port=port)
+
+
+main = lambda argv=None: _runtime_facade.main(sys.modules[__name__], argv)
 
 
 if __name__ == "__main__":

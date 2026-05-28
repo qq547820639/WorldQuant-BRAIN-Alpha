@@ -2,7 +2,7 @@
 Fast Local UX Walkthrough — verifies all local server endpoints and UX structure.
 Uses subprocess with strict timeout (no live BRAIN API calls that can hang).
 """
-import json, os, re, sys, time
+import json, os, re, sys, time, uuid
 from pathlib import Path
 
 PROJECT_ROOT = str(Path(__file__).resolve().parents[1])
@@ -37,6 +37,13 @@ sid = r.cookies.get("brain_alpha_ops_session")
 csrf = web._csrf_for_session(sid)
 H = {"X-Brain-Alpha-CSRF": csrf}
 C = {"brain_alpha_ops_session": sid}
+
+def post_headers():
+    return {
+        **H,
+        "X-Brain-Alpha-Request-ID": str(uuid.uuid4()),
+        "X-Brain-Alpha-Request-Timestamp": str(int(time.time() * 1000)),
+    }
 
 # v3 base elements
 v3 = ["app-shell","app-header","app-sidebar","app-content","viewTabs","candidateTable",
@@ -139,7 +146,7 @@ record_stage("v4 JS Features", "PASS" if js_ok==len(js_v4_features) else "WARN",
 # ── Stage 4: Shutdown ──────────────────────────────────────────────────
 print("\n[4] Shutdown")
 try:
-    requests.post(f"{BASE}/api/shutdown", json={}, headers=H, cookies=C, timeout=5)
+    requests.post(f"{BASE}/api/shutdown", json={}, headers=post_headers(), cookies=C, timeout=5)
     time.sleep(0.3)
     try: requests.get(BASE, timeout=2)
     except: pass

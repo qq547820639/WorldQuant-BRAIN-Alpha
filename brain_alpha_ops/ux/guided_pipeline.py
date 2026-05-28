@@ -192,11 +192,12 @@ class GuidedPipeline:
         ("finalize", "结果汇总与持久化"),
     ]
 
-    def __init__(self, run_config: RunConfig):
+    def __init__(self, run_config: RunConfig, *, stop_callback: Callable[[], bool] | None = None):
         self.run_config = run_config
         self.phases: Dict[str, PipelinePhase] = {}
         self._progress_callback: Optional[Callable] = None
         self._stop_flag = False
+        self._external_stop_callback = stop_callback
         self._storage_dir = Path(getattr(run_config.ops, "storage_dir", "data") or "data")
         self._checkpoint_dir = self._storage_dir / "checkpoints"
         self._history_dir = self._storage_dir / "run_history"
@@ -214,6 +215,16 @@ class GuidedPipeline:
     def stop(self) -> None:
         """Signal guided pipeline to stop gracefully."""
         self._stop_flag = True
+
+    def _should_stop(self) -> bool:
+        if self._stop_flag:
+            return True
+        if not self._external_stop_callback:
+            return False
+        try:
+            return bool(self._external_stop_callback())
+        except Exception:
+            return False
 
     # ── Main Entry Point ──
 
@@ -333,7 +344,7 @@ class GuidedPipeline:
 
         try:
             from brain_alpha_ops.compliance.redline_verifier import RedLineVerifier
-            verifier = RedLineVerifier()
+            verifier = RedLineVerifier(self.run_config)
             report = verifier.verify_all()
 
             if report.overall == "FAIL":
@@ -375,7 +386,12 @@ class GuidedPipeline:
             self._notify(phase_id, "running", {})
 
         try:
-            def progress_callback(event: PipelineEvent) -> None:
+            def progress_callback(event: PipelineEvent | dict) -> None:
+                if isinstance(event, dict):
+                    phase = self._phase_id_from_core_progress(str(event.get("phase") or ""))
+                    status = str(event.get("status") or "progress")
+                    self._notify(phase, status, dict(event))
+                    return
                 if hasattr(event, 'event') and hasattr(event, 'level'):
                     phase_map = {
                         "generation": "generation",
@@ -397,7 +413,7 @@ class GuidedPipeline:
                     })
 
             def stop_callback() -> bool:
-                return self._stop_flag
+                return self._should_stop()
 
             pipeline_result = run_pipeline_from_config(
                 self.run_config,
@@ -428,13 +444,29 @@ class GuidedPipeline:
             self.phases["gating"].complete(
                 f"门禁可提交 {ready} 个; 分布 {gate_summary}"
             )
-
             return pipeline_result
         except Exception as e:
             for pid in ["generation", "validation", "simulation", "scoring", "gating", "submission"]:
                 if self.phases[pid].status == "running":
                     self.phases[pid].fail("核心流水线异常终止")
             raise
+
+    @staticmethod
+    def _phase_id_from_core_progress(phase: str) -> str:
+        normalized = (phase or "").lower()
+        phase_map = (
+            ("generation", ("generation", "production", "candidate")),
+            ("validation", ("validation", "local_scoring", "prefilter")),
+            ("simulation", ("simulation", "backtest", "official")),
+            ("scoring", ("score",)),
+            ("gating", ("gate",)),
+            ("submission", ("submit",)),
+            ("finalize", ("completed", "stopped", "failed")),
+        )
+        for phase_id, keys in phase_map:
+            if any(key in normalized for key in keys):
+                return phase_id
+        return "generation"
 
     def _phase_finalize(self, result: PipelineResult) -> PipelineResult:
         phase = self.phases["finalize"]

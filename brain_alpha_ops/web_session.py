@@ -138,3 +138,16 @@ def has_valid_request_session(
         csrf_header=csrf_header,
         cookie_header=cookie_header,
     )
+
+
+def validate_replay_request(
+    *,
+    session_id: str,
+    request_id: str,
+    request_timestamp: str,
+) -> dict[str, Any]:
+    return SESSION_MANAGER.validate_replay(
+        session_id=session_id,
+        request_id=request_id,
+        request_timestamp=request_timestamp,
+    )

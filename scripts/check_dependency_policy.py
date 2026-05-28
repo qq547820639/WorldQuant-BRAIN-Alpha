@@ -76,10 +76,21 @@ def _minimal_pyproject_parse(text: str) -> dict[str, Any]:
             continue
         if section == "project" and line.startswith("dependencies"):
             active_key = "dependencies"
+            if "=" in line:
+                values, closed = _parse_toml_string_array(line.split("=", 1)[1])
+                result["project"]["dependencies"].extend(values)
+                active_key = "" if closed else active_key
             continue
         if section == "project.optional-dependencies" and line.endswith("["):
             active_key = line.split("=", 1)[0].strip()
             result["project"]["optional-dependencies"].setdefault(active_key, [])
+            continue
+        if section == "project.optional-dependencies" and "=" in line:
+            active_key = line.split("=", 1)[0].strip()
+            result["project"]["optional-dependencies"].setdefault(active_key, [])
+            values, closed = _parse_toml_string_array(line.split("=", 1)[1])
+            result["project"]["optional-dependencies"][active_key].extend(values)
+            active_key = "" if closed else active_key
             continue
         if active_key and line.startswith("]"):
             active_key = ""
@@ -91,6 +102,14 @@ def _minimal_pyproject_parse(text: str) -> dict[str, Any]:
             elif section == "project.optional-dependencies":
                 result["project"]["optional-dependencies"].setdefault(active_key, []).append(value)
     return result
+
+
+def _parse_toml_string_array(fragment: str) -> tuple[list[str], bool]:
+    text = fragment.strip()
+    if not text.startswith("["):
+        return [], False
+    values = [match.replace('\\"', '"') for match in re.findall(r'"((?:\\.|[^"\\])*)"', text)]
+    return values, "]" in text
 
 
 def _has_lower_bound(dependency: str) -> bool:

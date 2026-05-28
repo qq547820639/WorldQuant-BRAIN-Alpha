@@ -8,14 +8,28 @@ from typing import Any
 
 SENSITIVE_KEYS = {
     "access_token",
+    "address",
     "api_key",
     "authorization",
     "cookie",
     "csrf",
+    "education",
+    "email",
+    "employer",
+    "employment",
+    "first_name",
+    "firstname",
+    "full_name",
+    "fullname",
+    "image",
+    "last_name",
+    "lastname",
     "password",
+    "phone",
     "secret",
     "session",
     "set-cookie",
+    "telephone",
     "token",
 }
 
@@ -30,10 +44,12 @@ _SECRET_FRAGMENT_RE = re.compile(
     r"(?:access[-_]?token|authorization|cookie|csrf|password|secret|session|token)"
     r"[-_][A-Za-z0-9._~+/=-]*\d[A-Za-z0-9._~+/=-]*\b"
 )
+_EMAIL_RE = re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b")
 
 
 def redact_text(value: object, *, max_length: int | None = None) -> str:
     text = str(value or "")
+    text = _EMAIL_RE.sub("***@***", text)
     text = _AUTH_RE.sub(lambda match: f"{match.group(1)} <redacted>", text)
     text = _KEY_VALUE_RE.sub(lambda match: f"{match.group(1)}{match.group(2)}<redacted>", text)
     text = _SECRET_FRAGMENT_RE.sub("<redacted>", text)

@@ -25,12 +25,14 @@ MODULE_TEST_COVERAGE = {
     "js/state.js": "nested state set/merge, listeners, cache, check freshness",
     "js/utils.js": "escaping, labels, risk/state navigation rendering",
     "js/form-controls.js": "form value writes, config hydration, and payload assembly",
+    "js/header-status.js": "header connection status and profile summary rendering",
     "js/strategy-panel.js": "strategy policy summary and plugin-control state",
     "js/result-state.js": "result snapshot merging and cloud sync preservation",
     "js/result-table.js": "main result table, mobile cards, and empty-state rendering",
     "js/view-model.js": "identity, normalization, dedupe, runtime array selection",
     "js/view-registry.js": "view ordering, labels, navigation groups, and empty-state hints",
     "js/view-renderers.js": "result row sources, filters, and column renderer definitions",
+    "js/workflow-assist.js": "keyboard shortcuts, quick-start wizard, and view transition wrapper",
     "js/cloud-sync.js": "production cloud snapshot loading, sync polling, and state hydration",
     "js/views/charts.js": "offline canvas fallback and empty dataset rendering",
     "js/views/detail.js": "detail modal rendering, escaping, and check suggestions",
@@ -270,6 +272,7 @@ function load(context, relPath) {
   load(context, "js/view-renderers.js");
   load(context, "js/result-state.js");
   load(context, "js/result-table.js");
+  load(context, "js/workflow-assist.js");
   load(context, "js/form-controls.js");
   load(context, "js/strategy-panel.js");
   load(context, "js/components/toast.js");
@@ -292,6 +295,8 @@ function load(context, relPath) {
   assert(apiOk.value === 42, "api-client must return successful payload");
   assert(apiRequest.url === "/api/demo?x=1", "api-client must preserve local api path");
   assert(apiRequest.options.headers["X-Brain-Alpha-CSRF"], "api-client must send csrf header");
+  assert(apiRequest.options.headers["X-Brain-Alpha-Request-ID"], "api-client must send replay request id on POST");
+  assert(apiRequest.options.headers["X-Brain-Alpha-Request-Timestamp"], "api-client must send replay timestamp on POST");
   context.fetch = async function() { return { json: async () => ({ ok: false, error_code: "SUBMIT_BLOCKED", error: "raw" }) }; };
   let rejected = false;
   try { await context.ApiClient.get("/api/fail"); } catch (err) { rejected = err.code === "SUBMIT_BLOCKED" && err.message.includes("提交被安全门禁阻断"); }
@@ -313,6 +318,19 @@ function load(context, relPath) {
   assert(viewRows.length === 1 && viewRows[0].kind === "passed", "view-renderers row source failed");
   const resultBatch = context.ResultState.buildResultBatch({ summary: { cloud_sync: { status: "empty" } }, candidates: [{ alpha_id: "A1" }] }, { currentSummary: {}, currentCandidates: [], liveCloudSyncProgress: () => ({ status: "running", scanned: 3 }) });
   assert(resultBatch["currentResult.summary"].cloud_sync.scanned === 3, "result-state must preserve active cloud progress over empty snapshots");
+  const assist = context.AppEnhancements.create({
+    $: id => document.getElementById(id),
+    activeView: () => "candidates",
+    state: context.AppState,
+    registry: context.ViewRegistry,
+    viewOrder: context.ViewRegistry.VIEW_ORDER,
+    invokeWindowAction(name) { context.lastAssistAction = name; },
+    renderCurrentView() { context.assistRendered = true; },
+  });
+  assert(assist.SHORTCUTS.length >= 4 && typeof assist.handleKeyboardShortcut === "function", "workflow assist must expose shortcut contracts");
+  let switchedView = "";
+  assist.wrapSwitchView(view => { switchedView = view; })("cloud");
+  assert(switchedView === "cloud", "workflow assist must wrap view transitions");
   document.register("region", "select").value = "USA";
   document.register("universe", "select").value = "TOP3000";
   document.register("delay", "input").value = "1";
@@ -422,11 +440,12 @@ function load(context, relPath) {
   context.Spinner.hideSpinner();
   assert(document.getElementById("spinnerOverlay").classList.contains("hidden"), "spinner hide contract failed");
 
-  context.Progress.renderProgress("progress", { percent: 150, message: "Sync", scanned: 2, total: 4, added: 1, skipped: 3 });
+  context.Progress.renderProgress("progress", { percent: 150, message: "Sync", scanned: 2, total: 4, added: 1, skipped: 3, eta_seconds: 65 });
   assert(document.getElementById("progressFill").style.width === "100%", "progress must clamp fill width");
   assert(context.Utils.renderSafeHtmlFragment('<img src=x onerror=alert(1)>', 'badge').includes("&lt;img"), "safe fragment helper must reject dangerous tags");
   assert(context.Utils.renderSafeHtmlFragment(context.Utils.statusBadge("OK", "good"), "badge").includes("badge-success"), "safe fragment helper must allow whitelisted badges");
   assert(document.getElementById("progressMeta").textContent.includes("2/4") && document.getElementById("progressMeta").textContent.includes("跳过 3"), "progress meta rendering failed");
+  assert(document.getElementById("progressMeta").textContent.includes("预计剩余"), "progress meta must render ETA countdown text");
 
   const confirmed = context.Modal.confirmAction("Continue?", "Yes", "No");
   assert(!document.getElementById("confirmOverlay").classList.contains("hidden"), "modal must show confirm overlay");

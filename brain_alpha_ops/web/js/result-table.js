@@ -10,6 +10,7 @@
   var esc = Utils.escapeHtml;
   var escapeAttr = Utils.escapeAttr;
   var renderSafeHtmlFragment = Utils.renderSafeHtmlFragment;
+  var setSafeHtml = Utils.setSafeHtml;
   var candidateIdentity = VM.candidateIdentity;
 
   function create(deps) {
@@ -29,6 +30,7 @@
       var view = activeView();
       var rows = rowsFor(view);
       if (deps.applySearchFilter) deps.applySearchFilter(rows);
+      applySort(rows);
       var columns = deps.getColumnsForView ? deps.getColumnsForView(view) : [];
       var tableBody = $('candidateRows');
       var emptyEl = document.getElementById('tableEmptyState');
@@ -36,7 +38,10 @@
       var tableEl = document.getElementById('candidateTable');
       var mobileEl = document.getElementById('mobileCardList');
       if (!rows.length) {
-        if (tableBody) tableBody.innerHTML = '';
+        if (tableBody) {
+          if (typeof tableBody.replaceChildren === 'function') tableBody.replaceChildren();
+          else setSafeHtml(tableBody, '');
+        }
         if (tableWrap) tableWrap.classList.add('is-empty');
         if (tableEl) tableEl.classList.add('hidden');
         if (mobileEl) mobileEl.classList.add('hidden');
@@ -53,6 +58,7 @@
       if (tableEl) tableEl.classList.remove('hidden');
       var displayRows = rows.slice(0, maxRows);
       renderDesktopRows(tableBody, displayRows, columns);
+      updateHeaderSortState();
       renderMobileRows(mobileEl, displayRows, view);
       updateCountPill(rows.length);
       updateSortHint(view);
@@ -64,12 +70,12 @@
       var iconEl = document.getElementById('tableEmptyIcon');
       if (iconEl) iconEl.textContent = (Registry.VIEW_ICONS || {})[view] || '--';
       var actionsEl = document.getElementById('tableEmptyActions');
-      if (actionsEl) actionsEl.innerHTML = getEmptyActionsHtml(view);
+      if (actionsEl) setSafeHtml(actionsEl, getEmptyActionsHtml(view));
     }
 
     function renderDesktopRows(tableBody, rows, columns) {
       if (!tableBody) return;
-      tableBody.innerHTML = rows.map(function (row, idx) {
+      setSafeHtml(tableBody, rows.map(function (row, idx) {
         var isSelected = isSelectedRow(row);
         state.setCached(row, row.raw || row);
         var rowHtml = '<tr data-action="open-row" data-kind="' + escapeAttr(row.kind || '') + '" data-id="' + escapeAttr(row.id || '') + '"' +
@@ -80,7 +86,7 @@
           return '<td>' + renderSafeHtmlFragment(rendered, col.htmlType) + '</td>';
         }).join('');
         return rowHtml + '</tr>';
-      }).join('');
+      }).join(''));
     }
 
     function renderMobileRows(mobileEl, rows, view) {
@@ -91,7 +97,7 @@
       }
       mobileEl.classList.remove('hidden');
       var mobileCols = deps.getMobileColumns ? deps.getMobileColumns(view) : [];
-      mobileEl.innerHTML = rows.map(function (row, idx) {
+      setSafeHtml(mobileEl, rows.map(function (row, idx) {
         var isSelected = isSelectedRow(row);
         var title = row.id || candidateIdentity(row.raw || {}) || ('条目 ' + (idx + 1));
         var metaHtml = mobileCols.map(function (col) {
@@ -107,7 +113,7 @@
           '<div class="mobile-card-meta">' + metaHtml + '</div>' +
           (actionsHtml ? '<div class="mobile-card-actions">' + actionsHtml + '</div>' : '') +
           '</div>';
-      }).join('');
+      }).join(''));
     }
 
     function isSelectedRow(row) {
@@ -152,8 +158,61 @@
     function updateSortHint(view) {
       var el = $('sortHint');
       if (!el) return;
+      var sort = currentSort();
+      var labels = { id: 'Alpha', family: '家族', score: '排序分', status: '状态', official_id: '官方 ID', risk: '风险' };
+      var dir = sort.direction === 'asc' ? '升序' : '降序';
       var hints = { candidates: '按排序分降序', passed: '按排序分降序', submittable: '按可提交状态排序' };
-      el.textContent = hints[view] || '';
+      el.textContent = (labels[sort.key] ? ('按' + labels[sort.key] + dir) : (hints[view] || ''));
+    }
+
+    function currentSort() {
+      var sort = state.get('tableSort') || {};
+      return {
+        key: sort.key || 'score',
+        direction: sort.direction === 'asc' ? 'asc' : 'desc',
+      };
+    }
+
+    function toggleSort(key) {
+      if (!key) return;
+      var sort = currentSort();
+      var nextDirection = sort.key === key && sort.direction === 'desc' ? 'asc' : 'desc';
+      state.set('tableSort', { key: key, direction: nextDirection });
+      renderCurrentView();
+    }
+
+    function applySort(rows) {
+      if (!rows || rows.length < 2) return;
+      var sort = currentSort();
+      var direction = sort.direction === 'asc' ? 1 : -1;
+      rows.sort(function (left, right) {
+        var a = sortableValue(left, sort.key);
+        var b = sortableValue(right, sort.key);
+        if (typeof a === 'number' && typeof b === 'number') return (a - b) * direction;
+        return String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: 'base' }) * direction;
+      });
+    }
+
+    function sortableValue(row, key) {
+      var raw = row.raw || {};
+      var scorecard = raw.scorecard || {};
+      if (key === 'id') return raw.alpha_id || row.id || '';
+      if (key === 'family') return raw.family || raw.stage || raw.status || '';
+      if (key === 'score') return Number(scorecard.total_score || scorecard.local_rank_score || raw.sharpe || raw.score || 0);
+      if (key === 'status') return raw.lifecycle_status || raw.status || '';
+      if (key === 'official_id') return raw.official_alpha_id || raw.id || '';
+      if (key === 'risk') return raw.submission_risk || raw.risk || raw.failure_reason || '';
+      return row._rowIndex || 0;
+    }
+
+    function updateHeaderSortState() {
+      var table = document.getElementById('candidateTable');
+      if (!table) return;
+      var sort = currentSort();
+      Array.prototype.forEach.call(table.querySelectorAll('th[data-sort-key]'), function (th) {
+        var active = th.getAttribute('data-sort-key') === sort.key;
+        th.setAttribute('aria-sort', active ? (sort.direction === 'asc' ? 'ascending' : 'descending') : 'none');
+      });
     }
 
     function updatePanelHeader() {
@@ -189,6 +248,7 @@
       getEmptyActionsHtml: getEmptyActionsHtml,
       getEmptyDescription: getEmptyDescription,
       renderCurrentView: renderCurrentView,
+      toggleSort: toggleSort,
       updateCountPill: updateCountPill,
       updatePanelHeader: updatePanelHeader,
       updateSortHint: updateSortHint,

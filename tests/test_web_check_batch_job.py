@@ -35,7 +35,7 @@ class Ledger:
 
 
 def test_run_check_batch_job_service_updates_counts_and_persists(tmp_path):
-    run_config = RunConfig(environment="mock")
+    run_config = RunConfig(environment="production")
     run_config.ops.storage_dir = str(tmp_path)
     store = Store()
     records = []
@@ -76,7 +76,7 @@ def test_run_check_batch_job_service_updates_counts_and_persists(tmp_path):
 
 
 def test_run_check_batch_job_service_marks_failed_on_exception(tmp_path):
-    run_config = RunConfig(environment="mock")
+    run_config = RunConfig(environment="production")
     run_config.ops.storage_dir = str(tmp_path)
     store = Store()
 

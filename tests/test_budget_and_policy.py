@@ -4,7 +4,7 @@ Covers components that had archive test coverage but with current API signatures
 - ResearchBudget limits (config.py)
 - SubmissionPolicy daily/run/interval limits
 - SubmissionLedger safety checks (safety.py)
-- Mock source detection
+- Non-production source detection
 """
 
 import pytest
@@ -16,7 +16,12 @@ from brain_alpha_ops.config import (
     QualityThresholds,
     validate_run_config,
 )
-from brain_alpha_ops.research.safety import SubmissionLedger, mock_source_reasons, normalize, similarity
+from brain_alpha_ops.research.safety import (
+    SubmissionLedger,
+    non_production_source_reasons,
+    normalize,
+    similarity,
+)
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -113,13 +118,12 @@ class TestSafety:
         b = normalize("rank(ts_delta(close,20))")
         assert a == b
 
-    def test_mock_source_detection(self):
-        # mock_source_reasons accepts a candidate-like dict and returns reasons list
-        assert len(mock_source_reasons({"alpha_id": "mock_alpha_001"})) > 0
-        assert len(mock_source_reasons({"alpha_id": "demo_alpha_001"})) > 0
-        assert len(mock_source_reasons({"alpha_id": "test_something"})) > 0
-        assert len(mock_source_reasons({"alpha_id": "dry_run_test"})) > 0
-        assert len(mock_source_reasons({"alpha_id": "real_alpha_id"})) == 0
+    def test_non_production_source_detection(self):
+        assert len(non_production_source_reasons({"alpha_id": "mock_alpha_001"})) > 0
+        assert len(non_production_source_reasons({"alpha_id": "demo_alpha_001"})) > 0
+        assert len(non_production_source_reasons({"alpha_id": "test_something"})) > 0
+        assert len(non_production_source_reasons({"alpha_id": "dry_run_test"})) > 0
+        assert len(non_production_source_reasons({"alpha_id": "real_alpha_id"})) == 0
 
 
 # ═══════════════════════════════════════════════════════════════════════

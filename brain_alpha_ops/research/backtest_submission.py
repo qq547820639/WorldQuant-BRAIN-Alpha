@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import time
-from typing import Callable
+from typing import Callable, Optional
 
 from brain_alpha_ops.brain_api.base import BrainAPI, BrainAPIError
 from brain_alpha_ops.models import Candidate
@@ -16,7 +16,7 @@ from .candidate_pool import blocked_gate
 
 SettingsProvider = Callable[[], dict]
 PollIntervalProvider = Callable[[], float]
-HaltCallback = Callable[[str, float | None], None]
+HaltCallback = Callable[[str, Optional[float]], None]
 EventCallback = Callable[..., None]
 
 
@@ -25,7 +25,7 @@ class BacktestSubmitOutcome:
     submitted: bool
     halted: bool = False
     simulation_id: str = ""
-    error: BrainAPIError | None = None
+    error: Optional[BrainAPIError] = None
     error_code: str = ""
     note: str = ""
 

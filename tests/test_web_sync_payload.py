@@ -35,7 +35,7 @@ class Repo:
 
 
 def test_sync_cloud_alphas_payload_merges_and_persists_context(tmp_path):
-    run_config = RunConfig(environment="mock")
+    run_config = RunConfig(environment="production")
     run_config.ops.storage_dir = str(tmp_path)
     persisted = []
 
@@ -59,7 +59,7 @@ def test_sync_cloud_alphas_payload_merges_and_persists_context(tmp_path):
 
 
 def test_sync_cloud_alphas_payload_prefers_official_datasets(tmp_path):
-    run_config = RunConfig(environment="mock")
+    run_config = RunConfig(environment="production")
     run_config.ops.storage_dir = str(tmp_path)
     persisted = []
 
@@ -79,7 +79,7 @@ def test_sync_cloud_alphas_payload_prefers_official_datasets(tmp_path):
 
 
 def test_sync_cloud_alphas_payload_uses_context_fallback(tmp_path):
-    run_config = RunConfig(environment="mock")
+    run_config = RunConfig(environment="production")
     run_config.ops.storage_dir = str(tmp_path)
 
     payload = sync_cloud_alphas_payload(

@@ -25,9 +25,13 @@ GET_ROUTES = {
         WebRoute("GET", "/api/latest_result", "latest_result"),
         WebRoute("GET", "/api/health", "health", requires_session=False),
         WebRoute("GET", "/api/stream", "stream"),
+        WebRoute("GET", "/sse", "stream"),  # alias for React frontend SSE EventSource
         WebRoute("GET", "/api/lifecycle", "lifecycle"),
+        WebRoute("GET", "/api/candidates", "candidates"),  # React frontend candidates endpoint
         WebRoute("GET", "/api/cloud_alphas", "cloud_alphas"),
+        WebRoute("GET", "/api/snapshot/cloud", "cloud_alphas"),  # alias for React frontend
         WebRoute("GET", "/api/research_memory", "research_memory"),
+        WebRoute("GET", "/api/snapshot/memory", "research_memory"),  # alias for React frontend
         WebRoute("GET", "/api/research_knowledge", "research_knowledge"),
         WebRoute("GET", "/api/research_observability", "research_observability"),
         WebRoute("GET", "/api/prompt_runs", "prompt_runs"),
@@ -58,6 +62,7 @@ POST_ROUTES = {
         WebRoute("POST", "/api/test_connection", "test_connection"),
         WebRoute("POST", "/api/stop", "stop"),
         WebRoute("POST", "/api/sync_alphas", "sync_alphas"),
+        WebRoute("POST", "/api/sync_cancel", "sync_cancel"),
         WebRoute("POST", "/api/check", "check"),
         WebRoute("POST", "/api/generate_candidates", "generate_candidates"),
         WebRoute("POST", "/api/check_batch", "check_batch"),
