@@ -3891,6 +3891,28 @@ textarea:focus-visible {
   var setSafeHtml = window.Utils.setSafeHtml;
   var scoreSpan = window.Utils.scoreSpan;
   var statusBadge = window.Utils.statusBadge;
+  var cloudMetric = window.ViewModel && window.ViewModel.cloudMetric
+    ? window.ViewModel.cloudMetric
+    : function (row, key) {
+      row = row || {};
+      var metrics = row.metrics || row.official_metrics || {};
+      var raw = row.raw || {};
+      var rawMetrics = raw.metrics || {};
+      var rawIs = raw.is || {};
+      var value = firstDefinedValue(row[key], metrics[key], rawMetrics[key], rawIs[key]);
+      if (value == null) return null;
+      var n = Number(value);
+      return Number.isFinite(n) ? n : value;
+    };
+  var firstDefinedValue = window.ViewModel && window.ViewModel.firstDefinedValue
+    ? window.ViewModel.firstDefinedValue
+    : function () {
+      for (var i = 0; i < arguments.length; i += 1) {
+        var value = arguments[i];
+        if (value !== undefined && value !== null && value !== '') return value;
+      }
+      return null;
+    };
   var lifecycleStatusLabel = window.ViewModel && window.ViewModel.lifecycleStatusLabel
     ? window.ViewModel.lifecycleStatusLabel
     : function (row) { return String((row || {}).lifecycle_status || (row || {}).status || ''); };
@@ -4258,13 +4280,15 @@ textarea:focus-visible {
     var bodyEl = $('detail'); if (!bodyEl) return;
 
     setSafeHtml(bodyEl, sectionBlock('云端记录', renderFieldTableHTML('', [
-      { label: 'Alpha ID', value: row.alpha_id },
+      { label: 'Alpha ID', value: row.alpha_id || row.id },
       { label: '状态', value: row.status, format: 'badge' },
-      { label: 'Sharpe', value: row.sharpe, format: 'number' },
-      { label: 'Fitness', value: row.fitness, format: 'number' },
-      { label: 'Turnover', value: row.turnover, format: 'number' },
-      { label: 'Self Correlation', value: row.self_correlation, format: 'number' },
-      { label: 'Date', value: row.date_created || row.date || '-' },
+      { label: 'Sharpe', value: cloudMetric(row, 'sharpe'), format: 'number' },
+      { label: 'Fitness', value: cloudMetric(row, 'fitness'), format: 'number' },
+      { label: 'Turnover', value: cloudMetric(row, 'turnover'), format: 'number' },
+      { label: 'Self Correlation', value: cloudMetric(row, 'self_correlation'), format: 'number' },
+      { label: '检查结论', value: firstDefinedValue((row.metrics || {}).pass_fail, row.pass_fail), format: 'badge' },
+      { label: '失败原因', value: firstDefinedValue((row.metrics || {}).failure_reason, row.failure_reason, '-') },
+      { label: 'Date', value: row.date_created || row.created_at || row.date || '-' },
     ])));
 
     openDetailModal();
@@ -5262,6 +5286,27 @@ textarea:focus-visible {
     return Number.isFinite(Number(value)) ? Number(value) : 0;
   }
 
+  function firstDefinedValue() {
+    for (var i = 0; i < arguments.length; i += 1) {
+      var value = arguments[i];
+      if (value !== undefined && value !== null && value !== '') return value;
+    }
+    return null;
+  }
+
+  function cloudMetric(row, key) {
+    row = row || {};
+    var metrics = row.metrics || row.official_metrics || {};
+    var raw = row.raw || {};
+    var rawMetrics = raw.metrics || {};
+    var rawIs = raw.is || {};
+    var rawRegular = raw.regular || {};
+    var value = firstDefinedValue(row[key], metrics[key], rawMetrics[key], rawIs[key], rawRegular[key]);
+    if (value == null) return null;
+    var n = Number(value);
+    return Number.isFinite(n) ? n : value;
+  }
+
   function firstFiniteNumber() {
     for (var i = 0; i < arguments.length; i += 1) {
       var n = Number(arguments[i]);
@@ -5281,7 +5326,9 @@ textarea:focus-visible {
   window.ViewModel = {
     candidateIdentity: candidateIdentity,
     candidateDisplayScore: candidateDisplayScore,
+    cloudMetric: cloudMetric,
     chooseRuntimeArray: chooseRuntimeArray,
+    firstDefinedValue: firstDefinedValue,
     expressionFromRow: expressionFromRow,
     firstArrayWithItems: firstArrayWithItems,
     firstFiniteNumber: firstFiniteNumber,
@@ -5391,6 +5438,7 @@ textarea:focus-visible {
   var scoreSpan = Utils.scoreSpan;
   var statusBadge = Utils.statusBadge;
   var candidateIdentity = VM.candidateIdentity;
+  var cloudMetric = VM.cloudMetric || function (row, key) { return (row || {})[key]; };
   var expressionFromRow = VM.expressionFromRow;
   var uniqueBy = VM.uniqueBy;
   var lifecycleStatusLabel = VM.lifecycleStatusLabel || function (row) {
@@ -5505,10 +5553,10 @@ textarea:focus-visible {
         { accessor: '_rowIndex', render: function (v, r, i) { return String(i + 1); } },
         { accessor: 'id', render: function (v, r) { return esc(String((r.raw || {}).alpha_id || r.id || '-')); } },
         { accessor: 'status', render: function (v, r) { var s = (r.raw || {}).status || ''; return statusBadge(s, s === 'APPROVED' || s === 'PRODUCTION' ? 'good' : s === 'REJECTED' ? 'bad' : 'info'); }, htmlType: 'badge' },
-        { accessor: 'sharpe', render: function (v, r) { return scoreSpan((r.raw || {}).sharpe); }, htmlType: 'score' },
-        { accessor: 'fitness', render: function (v, r) { return scoreSpan((r.raw || {}).fitness); }, htmlType: 'score' },
-        { accessor: 'turnover', render: function (v, r) { return num((r.raw || {}).turnover, 4); } },
-        { accessor: 'self_correlation', render: function (v, r) { return num((r.raw || {}).self_correlation, 4); } },
+        { accessor: 'sharpe', render: function (v, r) { return scoreSpan(cloudMetric(r.raw || {}, 'sharpe')); }, htmlType: 'score' },
+        { accessor: 'fitness', render: function (v, r) { return scoreSpan(cloudMetric(r.raw || {}, 'fitness')); }, htmlType: 'score' },
+        { accessor: 'turnover', render: function (v, r) { return num(cloudMetric(r.raw || {}, 'turnover'), 4); } },
+        { accessor: 'self_correlation', render: function (v, r) { return num(cloudMetric(r.raw || {}, 'self_correlation'), 4); } },
         { accessor: 'actions', render: function (v, r) { return actionButton('open-row', '详情', r, 'btn btn-secondary btn-sm'); }, htmlType: 'buttonGroup' },
       ];
       case 'lifecycle': return [
@@ -5723,6 +5771,7 @@ textarea:focus-visible {
       var tableWrap = document.getElementById('tableWrap');
       var tableEl = document.getElementById('candidateTable');
       var mobileEl = document.getElementById('mobileCardList');
+      updateTableHeaders(view);
       if (!rows.length) {
         if (tableBody) {
           if (typeof tableBody.replaceChildren === 'function') tableBody.replaceChildren();
@@ -5748,6 +5797,37 @@ textarea:focus-visible {
       renderMobileRows(mobileEl, displayRows, view);
       updateCountPill(rows.length);
       updateSortHint(view);
+    }
+
+    function headerLabelMap(view) {
+      if (view === 'cloud') {
+        return {
+          id: 'Alpha ID',
+          family: '状态',
+          score: 'Sharpe',
+          status: 'Fitness',
+          official_id: 'Turnover',
+          risk: 'Self Corr',
+        };
+      }
+      return {
+        id: 'Alpha / 记录',
+        family: '家族',
+        score: '排序分',
+        status: '状态',
+        official_id: '官方 ID',
+        risk: '风险 / 原因',
+      };
+    }
+
+    function updateTableHeaders(view) {
+      var table = document.getElementById('candidateTable');
+      if (!table) return;
+      var labels = headerLabelMap(view);
+      Object.keys(labels).forEach(function (key) {
+        var button = table.querySelector('th[data-sort-key="' + key + '"] .table-sort-btn');
+        if (button) button.textContent = labels[key];
+      });
     }
 
     function renderEmptyState(view) {
@@ -5882,6 +5962,15 @@ textarea:focus-visible {
     function sortableValue(row, key) {
       var raw = row.raw || {};
       var scorecard = raw.scorecard || {};
+      var cloudMetric = VM.cloudMetric || function (item, metricKey) { return (item || {})[metricKey]; };
+      if (row.kind === 'cloud') {
+        if (key === 'id') return raw.alpha_id || raw.id || row.id || '';
+        if (key === 'family') return raw.status || '';
+        if (key === 'score') return Number(cloudMetric(raw, 'sharpe') || 0);
+        if (key === 'status') return Number(cloudMetric(raw, 'fitness') || 0);
+        if (key === 'official_id') return Number(cloudMetric(raw, 'turnover') || 0);
+        if (key === 'risk') return Number(cloudMetric(raw, 'self_correlation') || 0);
+      }
       if (key === 'id') return raw.alpha_id || row.id || '';
       if (key === 'family') return raw.family || raw.stage || raw.status || '';
       if (key === 'score') return Number(scorecard.total_score || scorecard.local_rank_score || raw.sharpe || raw.score || 0);

@@ -13,6 +13,7 @@
   var scoreSpan = Utils.scoreSpan;
   var statusBadge = Utils.statusBadge;
   var candidateIdentity = VM.candidateIdentity;
+  var cloudMetric = VM.cloudMetric || function (row, key) { return (row || {})[key]; };
   var expressionFromRow = VM.expressionFromRow;
   var uniqueBy = VM.uniqueBy;
   var lifecycleStatusLabel = VM.lifecycleStatusLabel || function (row) {
@@ -127,10 +128,10 @@
         { accessor: '_rowIndex', render: function (v, r, i) { return String(i + 1); } },
         { accessor: 'id', render: function (v, r) { return esc(String((r.raw || {}).alpha_id || r.id || '-')); } },
         { accessor: 'status', render: function (v, r) { var s = (r.raw || {}).status || ''; return statusBadge(s, s === 'APPROVED' || s === 'PRODUCTION' ? 'good' : s === 'REJECTED' ? 'bad' : 'info'); }, htmlType: 'badge' },
-        { accessor: 'sharpe', render: function (v, r) { return scoreSpan((r.raw || {}).sharpe); }, htmlType: 'score' },
-        { accessor: 'fitness', render: function (v, r) { return scoreSpan((r.raw || {}).fitness); }, htmlType: 'score' },
-        { accessor: 'turnover', render: function (v, r) { return num((r.raw || {}).turnover, 4); } },
-        { accessor: 'self_correlation', render: function (v, r) { return num((r.raw || {}).self_correlation, 4); } },
+        { accessor: 'sharpe', render: function (v, r) { return scoreSpan(cloudMetric(r.raw || {}, 'sharpe')); }, htmlType: 'score' },
+        { accessor: 'fitness', render: function (v, r) { return scoreSpan(cloudMetric(r.raw || {}, 'fitness')); }, htmlType: 'score' },
+        { accessor: 'turnover', render: function (v, r) { return num(cloudMetric(r.raw || {}, 'turnover'), 4); } },
+        { accessor: 'self_correlation', render: function (v, r) { return num(cloudMetric(r.raw || {}, 'self_correlation'), 4); } },
         { accessor: 'actions', render: function (v, r) { return actionButton('open-row', '详情', r, 'btn btn-secondary btn-sm'); }, htmlType: 'buttonGroup' },
       ];
       case 'lifecycle': return [

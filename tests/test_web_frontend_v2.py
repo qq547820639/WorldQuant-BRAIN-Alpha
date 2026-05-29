@@ -901,6 +901,8 @@ assertEqual(VM.candidateDisplayScore(c2), 70, "display score local");
 // v3: officialMetric
 var c3 = { official_metrics: { sharpe: 1.5 } };
 assertEqual(VM.officialMetric(c3, "sharpe"), 1.5, "official metric");
+assertEqual(VM.cloudMetric({ metrics: { sharpe: 1.92 } }, "sharpe"), 1.92, "cloud metric reads nested metrics");
+assertEqual(VM.cloudMetric({ raw: { is: { fitness: 2.15 } } }, "fitness"), 2.15, "cloud metric reads raw IS metrics");
 
 // v3: firstFiniteNumber / firstPositiveFiniteNumber
 // Number(null) = 0, 0 is finite, so firstFiniteNumber(null, ...) = 0
@@ -1379,6 +1381,23 @@ window.viewCheckDetail({
 });
 assertContains(detailEl.innerHTML, "CHK1", "check shows ID");
 
+window.AppState.set("currentResult.cloud_alphas", [{
+  id: "CLD1",
+  status: "UNSUBMITTED",
+  metrics: {
+    sharpe: 1.92,
+    fitness: 2.15,
+    turnover: 0.0313,
+    pass_fail: "FAIL",
+    failure_reason: "LOW_SUB_UNIVERSE_SHARPE"
+  },
+  created_at: "2026-05-09T13:13:32-04:00"
+}]);
+window.viewCloudDetail({ getAttribute: function () { return "CLD1"; } });
+assertContains(detailEl.innerHTML, "1.9200", "cloud detail shows nested sharpe");
+assertContains(detailEl.innerHTML, "2.1500", "cloud detail shows nested fitness");
+assertContains(detailEl.innerHTML, "LOW_SUB_UNIVERSE_SHARPE", "cloud detail shows failure reason");
+
 // Close modal
 window.closeDetailModal();
 var overlay = document.getElementById("detailModal");
@@ -1386,7 +1405,7 @@ assertEqual(overlay.classList.contains("hidden"), true, "modal closed");
 """
 
     _run_node_script(_build_test_script(
-        ["js/utils.js", "js/components/table.js", "js/state.js", "js/views/detail.js"],
+        ["js/utils.js", "js/view-model.js", "js/components/table.js", "js/state.js", "js/views/detail.js"],
         test_code
     ))
 

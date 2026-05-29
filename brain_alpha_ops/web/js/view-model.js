@@ -129,6 +129,27 @@
     return Number.isFinite(Number(value)) ? Number(value) : 0;
   }
 
+  function firstDefinedValue() {
+    for (var i = 0; i < arguments.length; i += 1) {
+      var value = arguments[i];
+      if (value !== undefined && value !== null && value !== '') return value;
+    }
+    return null;
+  }
+
+  function cloudMetric(row, key) {
+    row = row || {};
+    var metrics = row.metrics || row.official_metrics || {};
+    var raw = row.raw || {};
+    var rawMetrics = raw.metrics || {};
+    var rawIs = raw.is || {};
+    var rawRegular = raw.regular || {};
+    var value = firstDefinedValue(row[key], metrics[key], rawMetrics[key], rawIs[key], rawRegular[key]);
+    if (value == null) return null;
+    var n = Number(value);
+    return Number.isFinite(n) ? n : value;
+  }
+
   function firstFiniteNumber() {
     for (var i = 0; i < arguments.length; i += 1) {
       var n = Number(arguments[i]);
@@ -148,7 +169,9 @@
   window.ViewModel = {
     candidateIdentity: candidateIdentity,
     candidateDisplayScore: candidateDisplayScore,
+    cloudMetric: cloudMetric,
     chooseRuntimeArray: chooseRuntimeArray,
+    firstDefinedValue: firstDefinedValue,
     expressionFromRow: expressionFromRow,
     firstArrayWithItems: firstArrayWithItems,
     firstFiniteNumber: firstFiniteNumber,

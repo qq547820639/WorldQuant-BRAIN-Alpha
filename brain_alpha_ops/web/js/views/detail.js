@@ -15,6 +15,28 @@
   var setSafeHtml = window.Utils.setSafeHtml;
   var scoreSpan = window.Utils.scoreSpan;
   var statusBadge = window.Utils.statusBadge;
+  var cloudMetric = window.ViewModel && window.ViewModel.cloudMetric
+    ? window.ViewModel.cloudMetric
+    : function (row, key) {
+      row = row || {};
+      var metrics = row.metrics || row.official_metrics || {};
+      var raw = row.raw || {};
+      var rawMetrics = raw.metrics || {};
+      var rawIs = raw.is || {};
+      var value = firstDefinedValue(row[key], metrics[key], rawMetrics[key], rawIs[key]);
+      if (value == null) return null;
+      var n = Number(value);
+      return Number.isFinite(n) ? n : value;
+    };
+  var firstDefinedValue = window.ViewModel && window.ViewModel.firstDefinedValue
+    ? window.ViewModel.firstDefinedValue
+    : function () {
+      for (var i = 0; i < arguments.length; i += 1) {
+        var value = arguments[i];
+        if (value !== undefined && value !== null && value !== '') return value;
+      }
+      return null;
+    };
   var lifecycleStatusLabel = window.ViewModel && window.ViewModel.lifecycleStatusLabel
     ? window.ViewModel.lifecycleStatusLabel
     : function (row) { return String((row || {}).lifecycle_status || (row || {}).status || ''); };
@@ -382,13 +404,15 @@
     var bodyEl = $('detail'); if (!bodyEl) return;
 
     setSafeHtml(bodyEl, sectionBlock('云端记录', renderFieldTableHTML('', [
-      { label: 'Alpha ID', value: row.alpha_id },
+      { label: 'Alpha ID', value: row.alpha_id || row.id },
       { label: '状态', value: row.status, format: 'badge' },
-      { label: 'Sharpe', value: row.sharpe, format: 'number' },
-      { label: 'Fitness', value: row.fitness, format: 'number' },
-      { label: 'Turnover', value: row.turnover, format: 'number' },
-      { label: 'Self Correlation', value: row.self_correlation, format: 'number' },
-      { label: 'Date', value: row.date_created || row.date || '-' },
+      { label: 'Sharpe', value: cloudMetric(row, 'sharpe'), format: 'number' },
+      { label: 'Fitness', value: cloudMetric(row, 'fitness'), format: 'number' },
+      { label: 'Turnover', value: cloudMetric(row, 'turnover'), format: 'number' },
+      { label: 'Self Correlation', value: cloudMetric(row, 'self_correlation'), format: 'number' },
+      { label: '检查结论', value: firstDefinedValue((row.metrics || {}).pass_fail, row.pass_fail), format: 'badge' },
+      { label: '失败原因', value: firstDefinedValue((row.metrics || {}).failure_reason, row.failure_reason, '-') },
+      { label: 'Date', value: row.date_created || row.created_at || row.date || '-' },
     ])));
 
     openDetailModal();

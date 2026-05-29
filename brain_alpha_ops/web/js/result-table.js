@@ -37,6 +37,7 @@
       var tableWrap = document.getElementById('tableWrap');
       var tableEl = document.getElementById('candidateTable');
       var mobileEl = document.getElementById('mobileCardList');
+      updateTableHeaders(view);
       if (!rows.length) {
         if (tableBody) {
           if (typeof tableBody.replaceChildren === 'function') tableBody.replaceChildren();
@@ -62,6 +63,37 @@
       renderMobileRows(mobileEl, displayRows, view);
       updateCountPill(rows.length);
       updateSortHint(view);
+    }
+
+    function headerLabelMap(view) {
+      if (view === 'cloud') {
+        return {
+          id: 'Alpha ID',
+          family: '状态',
+          score: 'Sharpe',
+          status: 'Fitness',
+          official_id: 'Turnover',
+          risk: 'Self Corr',
+        };
+      }
+      return {
+        id: 'Alpha / 记录',
+        family: '家族',
+        score: '排序分',
+        status: '状态',
+        official_id: '官方 ID',
+        risk: '风险 / 原因',
+      };
+    }
+
+    function updateTableHeaders(view) {
+      var table = document.getElementById('candidateTable');
+      if (!table) return;
+      var labels = headerLabelMap(view);
+      Object.keys(labels).forEach(function (key) {
+        var button = table.querySelector('th[data-sort-key="' + key + '"] .table-sort-btn');
+        if (button) button.textContent = labels[key];
+      });
     }
 
     function renderEmptyState(view) {
@@ -196,6 +228,15 @@
     function sortableValue(row, key) {
       var raw = row.raw || {};
       var scorecard = raw.scorecard || {};
+      var cloudMetric = VM.cloudMetric || function (item, metricKey) { return (item || {})[metricKey]; };
+      if (row.kind === 'cloud') {
+        if (key === 'id') return raw.alpha_id || raw.id || row.id || '';
+        if (key === 'family') return raw.status || '';
+        if (key === 'score') return Number(cloudMetric(raw, 'sharpe') || 0);
+        if (key === 'status') return Number(cloudMetric(raw, 'fitness') || 0);
+        if (key === 'official_id') return Number(cloudMetric(raw, 'turnover') || 0);
+        if (key === 'risk') return Number(cloudMetric(raw, 'self_correlation') || 0);
+      }
       if (key === 'id') return raw.alpha_id || row.id || '';
       if (key === 'family') return raw.family || raw.stage || raw.status || '';
       if (key === 'score') return Number(scorecard.total_score || scorecard.local_rank_score || raw.sharpe || raw.score || 0);
