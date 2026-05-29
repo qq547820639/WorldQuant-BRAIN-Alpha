@@ -13,6 +13,10 @@
     return new Promise(function (resolve) { setTimeout(resolve, ms); });
   }
 
+  function etaDeadline(seconds) {
+    return Date.now() + Math.max(1, Number(seconds || 1)) * 1000;
+  }
+
   function currentSummary() {
     return S.get('currentResult.summary') || {};
   }
@@ -192,6 +196,8 @@
           status_code: live.status_code || 'WAITING',
           job_id: jobId,
           next_poll_at_ms: Date.now() + waitMs,
+          eta_seconds: Math.max(1, Math.ceil(waitMs / 1000)),
+          eta_deadline_at_ms: Date.now() + waitMs,
           message: live.message || '等待官方接口返回进度，系统会自动刷新。',
         }));
       }
@@ -283,7 +289,7 @@
       runtimeStatusUpdatedAt: startedAt,
       liveProgress: {
         phase: 'cloud_sync',
-        data: { cloud_sync: { phase: 'cloud_sync', phase_label: '云端同步', message: '正在启动云端同步，请稍候。', percent: 0, scanned: 0, total: 0 } },
+        data: { cloud_sync: { phase: 'cloud_sync', phase_label: '云端同步', message: '正在启动云端同步，请稍候。', percent: 0, scanned: 0, total: 0, eta_seconds: 10, eta_deadline_at_ms: startedAt + 10000, updated_at_ms: startedAt } },
       },
     });
     if (typeof window.renderBusyControls === 'function') window.renderBusyControls();
@@ -301,7 +307,28 @@
         } else {
           applySyncResultPayload(resp);
         }
+        renderSyncProgress({
+          phase: 'snapshot_refresh',
+          phase_label: '刷新云端快照',
+          status_code: 'SNAPSHOT_REFRESH',
+          message: '同步已完成，正在刷新云端 Alpha 列表。',
+          percent: 96,
+          scanned: 1,
+          total: 1,
+          eta_seconds: 5,
+          eta_deadline_at_ms: etaDeadline(5),
+        });
         await loadSnapshot().catch(function () {});
+        renderSyncProgress({
+          phase: 'completed',
+          phase_label: '同步完成',
+          status_code: 'COMPLETED',
+          message: '云端 Alpha 列表已刷新。',
+          percent: 100,
+          scanned: 1,
+          total: 1,
+          eta_seconds: 0,
+        });
         Toast.success('云端同步完成');
       }
     } catch (e) {

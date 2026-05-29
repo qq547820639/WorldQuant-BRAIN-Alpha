@@ -37,6 +37,7 @@ ALL_MODULES = {
     "js/cloud-sync.js",
     "js/form-controls.js",
     "js/header-status.js",
+    "js/loading-feedback.js",
     "js/result-state.js",
     "js/result-table.js",
     "js/state.js",
@@ -303,7 +304,7 @@ def _frontend_module_load_order(modules: list[str]) -> list[str]:
     ordered = list(modules)
     if "js/app.js" not in ordered:
         return ordered
-    for dependency in ["js/result-state.js", "js/result-table.js", "js/form-controls.js", "js/strategy-panel.js", "js/cloud-sync.js", "js/header-status.js"]:
+    for dependency in ["js/result-state.js", "js/result-table.js", "js/form-controls.js", "js/strategy-panel.js", "js/cloud-sync.js", "js/header-status.js", "js/loading-feedback.js"]:
         if dependency in ordered:
             continue
         insert_at = ordered.index("js/app.js")
@@ -1438,6 +1439,9 @@ assertDefined(window.shutdownApp, "shutdownApp exported");
 assertDefined(window.applyPreset, "applyPreset exported");
 assertDefined(window.testConnection, "testConnection exported");
 assertDefined(window.loadConfig, "loadConfig exported");
+assertDefined(window.loadCheckpointStatus, "loadCheckpointStatus exported");
+assertDefined(window.loadRedlineReport, "loadRedlineReport exported");
+assertDefined(window.LoadingFeedback, "LoadingFeedback exported");
 """
 
     _run_node_script(_build_test_script(
@@ -1446,6 +1450,60 @@ assertDefined(window.loadConfig, "loadConfig exported");
          "js/view-renderers.js",
          "js/components/toast.js", "js/components/spinner.js", "js/components/modal.js",
          "js/components/progress.js", "js/components/table.js",
+         "js/views/detail.js", "js/views/production.js", "js/views/charts.js",
+         "js/views/monitor.js", "js/app.js"],
+        test_code
+    ))
+
+
+def test_loading_feedback_module_tracks_startup_and_blocking_states():
+    test_code = r"""
+async function main() {
+assertDefined(window.LoadingFeedback, "LoadingFeedback defined");
+assertEqual(typeof window.LoadingFeedback.runStartup, "function", "runStartup exists");
+assertEqual(typeof window.LoadingFeedback.loadRedlineReport, "function", "loadRedlineReport exists");
+assertEqual(typeof window.LoadingFeedback.loadCheckpointStatus, "function", "loadCheckpointStatus exists");
+
+var calls = [];
+window.ApiClient.get = async function(path) {
+  calls.push(path);
+  if (path === '/api/latest_result') return { result: { summary: { candidates: [{ alpha_id: 'A1' }] } } };
+  if (path === '/api/config') return { config: { ops: { settings: { region: 'USA' }, official_api: {} } } };
+  if (path === '/api/profile') return { profile: { tier: 'pro', points: 99 } };
+  if (path === '/api/presets') return { presets: { usa_standard: { settings: { region: 'USA' } } } };
+  if (path === '/api/cloud_alphas?limit=500') return { alphas: [{ alpha_id: 'C1' }], summary: { status: 'completed' } };
+  if (path === '/api/redline/report') return { ok: true, overall: 'PASS', passed: 6, total_checks: 6, failed: 0 };
+  if (path === '/api/check_results') return { check_results: { A1: { passed: true } } };
+  if (path === '/api/research_memory') return { notes: ['x'] };
+  return {};
+};
+window.renderResult = function () {};
+window.renderStrategyPolicy = function () {};
+window.FormControls = { applyConfig: function () {} };
+window.CloudSync = { applyCloudSnapshotPayload: function () {}, loadSnapshot: async function () { return { alphas: [{ alpha_id: 'C1' }] }; } };
+window.ProductionView = { loadCheckpointStatus: async function () { document.getElementById('checkpointSummary').textContent = '断点 2'; return { ok: true, resume_available: true, checkpoint_count: 2, history_count: 4 }; } };
+window.renderUserProfile = function () {};
+window.renderBusyControls = function () {};
+window.renderRuntimeStatus = function () {};
+window.syncStrategyPluginControls = function () {};
+window.AppState.set('pageLoadInFlight', false);
+await window.LoadingFeedback.runStartup({ apply: function () {} });
+assert(calls.indexOf('/api/latest_result') !== -1, 'startup should load latest result');
+assert(document.getElementById('redlineSummary').textContent.indexOf('红线通过') !== -1, 'redline summary should update');
+assert(document.getElementById('checkpointSummary').textContent.indexOf('断点') !== -1, 'checkpoint summary should update');
+window.AppState.set('connectionTestInFlight', true);
+assert(window.operationBlockReason('production').indexOf('连接测试') !== -1, 'connection test should block production');
+window.AppState.set('connectionTestInFlight', false);
+}
+main();
+"""
+
+    _run_node_script(_build_test_script(
+        ["js/utils.js", "js/api-client.js", "js/state.js", "js/view-model.js",
+         "js/view-registry.js", "js/view-renderers.js", "js/result-state.js", "js/result-table.js",
+         "js/form-controls.js", "js/strategy-panel.js", "js/cloud-sync.js", "js/header-status.js",
+         "js/loading-feedback.js", "js/components/toast.js", "js/components/spinner.js",
+         "js/components/modal.js", "js/components/progress.js", "js/components/table.js",
          "js/views/detail.js", "js/views/production.js", "js/views/charts.js",
          "js/views/monitor.js", "js/app.js"],
         test_code
@@ -1554,11 +1612,20 @@ assertContains(document.getElementById("workflowStatus").textContent, "可提交
 window.AppState.set("syncInFlight", true);
 window.AppState.set("syncJobId", "sync_1");
 window.AppState.set("syncRecoverable", true);
+window.AppState.setBatch({
+  "liveProgress": {
+    phase: "cloud_sync",
+    data: { cloud_sync: { phase: "cloud_sync", phase_label: "云端同步", message: "等待官方接口返回进度。", percent: 25, scanned: 25, total: 100, eta_seconds: 12, eta_deadline_at_ms: Date.now() + 12000, updated_at_ms: Date.now() } },
+  },
+  "runtimeStatusStartedAt": Date.now() - 4000,
+  "runtimeStatusUpdatedAt": Date.now(),
+});
 window.renderBusyControls();
 assertEqual(document.getElementById("workflowRunButton").disabled, true, "run disabled during sync");
 assertEqual(document.getElementById("sideSyncButton").disabled, true, "side sync disabled during sync");
 assertContains(document.getElementById("sideTaskReason").textContent, "云端同步", "side console explains sync lock");
 assertEqual(document.getElementById("workflowStatus").classList.contains("is-busy"), true, "busy status class");
+assertContains(document.getElementById("runtimeStatusHint").textContent, "预计剩余", "runtime status shows countdown");
 assertEqual(document.getElementById("runtimeStopButton").getAttribute("data-action"), "cancel-sync-cloud", "runtime stop cancels sync");
 assertContains(document.getElementById("runtimeStopButton").textContent, "停止同步", "runtime stop label explains sync cancel");
 assertEqual(document.getElementById("runtimeRetryButton").classList.contains("hidden"), false, "sync recovery shows retry action");
@@ -1811,9 +1878,18 @@ assertContains(window.operationBlockReason("submit"), "达标", "submit blocked 
 window.AppState.set("batchCheckJobId", "");
 
 window.AppState.set("submitInFlight", true);
+window.AppState.setBatch({
+  "liveProgress": {
+    phase: "submit",
+    data: { phase: "submit", phase_label: "提交处理", message: "正在提交 2 个 Alpha。", scanned: 0, total: 2, percent: 20, eta_seconds: 9, eta_deadline_at_ms: Date.now() + 9000, updated_at_ms: Date.now() },
+  },
+  "runtimeStatusStartedAt": Date.now() - 2000,
+  "runtimeStatusUpdatedAt": Date.now(),
+});
 assertContains(window.operationBlockReason("production"), "提交", "production blocked during submit");
 assertContains(window.operationBlockReason("sync"), "提交", "sync blocked during submit");
 assertContains(window.operationBlockReason("check"), "提交", "check blocked during submit");
+assertContains(document.getElementById("runtimePercentText").textContent, "%", "submit progress percent visible");
 window.AppState.set("submitInFlight", false);
 """
 

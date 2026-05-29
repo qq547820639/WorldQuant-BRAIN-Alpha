@@ -2877,6 +2877,13 @@ textarea:focus-visible {
     syncJobId: '',
     syncRecoverable: false,
     syncLastError: '',
+    pageLoadInFlight: false,
+    pageLoadStartedAt: 0,
+    pageLoadTotal: 0,
+    pageLoadDone: 0,
+    pageLoadMessage: '',
+    pageLoadEtaSeconds: 0,
+    connectionTestInFlight: false,
     cloudSyncCountdownUntil: 0,
     connectionStatus: 'disconnected',
     connectionEnvironment: '',
@@ -4710,6 +4717,8 @@ textarea:focus-visible {
 
   // Expose
   window.startProduction = startProduction;
+  window.ProductionView = window.ProductionView || {};
+  window.ProductionView.loadCheckpointStatus = loadCheckpointStatus;
   window.resumeProductionFromCheckpoint = function () {
     return startProduction({ resume: true });
   };
@@ -6433,6 +6442,10 @@ textarea:focus-visible {
     return new Promise(function (resolve) { setTimeout(resolve, ms); });
   }
 
+  function etaDeadline(seconds) {
+    return Date.now() + Math.max(1, Number(seconds || 1)) * 1000;
+  }
+
   function currentSummary() {
     return S.get('currentResult.summary') || {};
   }
@@ -6612,6 +6625,8 @@ textarea:focus-visible {
           status_code: live.status_code || 'WAITING',
           job_id: jobId,
           next_poll_at_ms: Date.now() + waitMs,
+          eta_seconds: Math.max(1, Math.ceil(waitMs / 1000)),
+          eta_deadline_at_ms: Date.now() + waitMs,
           message: live.message || '等待官方接口返回进度，系统会自动刷新。',
         }));
       }
@@ -6703,7 +6718,7 @@ textarea:focus-visible {
       runtimeStatusUpdatedAt: startedAt,
       liveProgress: {
         phase: 'cloud_sync',
-        data: { cloud_sync: { phase: 'cloud_sync', phase_label: '云端同步', message: '正在启动云端同步，请稍候。', percent: 0, scanned: 0, total: 0 } },
+        data: { cloud_sync: { phase: 'cloud_sync', phase_label: '云端同步', message: '正在启动云端同步，请稍候。', percent: 0, scanned: 0, total: 0, eta_seconds: 10, eta_deadline_at_ms: startedAt + 10000, updated_at_ms: startedAt } },
       },
     });
     if (typeof window.renderBusyControls === 'function') window.renderBusyControls();
@@ -6721,7 +6736,28 @@ textarea:focus-visible {
         } else {
           applySyncResultPayload(resp);
         }
+        renderSyncProgress({
+          phase: 'snapshot_refresh',
+          phase_label: '刷新云端快照',
+          status_code: 'SNAPSHOT_REFRESH',
+          message: '同步已完成，正在刷新云端 Alpha 列表。',
+          percent: 96,
+          scanned: 1,
+          total: 1,
+          eta_seconds: 5,
+          eta_deadline_at_ms: etaDeadline(5),
+        });
         await loadSnapshot().catch(function () {});
+        renderSyncProgress({
+          phase: 'completed',
+          phase_label: '同步完成',
+          status_code: 'COMPLETED',
+          message: '云端 Alpha 列表已刷新。',
+          percent: 100,
+          scanned: 1,
+          total: 1,
+          eta_seconds: 0,
+        });
         Toast.success('云端同步完成');
       }
     } catch (e) {
@@ -6802,6 +6838,256 @@ textarea:focus-visible {
   }
 
   window.HeaderStatus = { render: render };
+})();
+
+</script>
+  <script>
+// brain_alpha_ops/web/js/loading-feedback.js
+// Page-level waiting feedback for startup, refreshes, and short blocking calls.
+(function () {
+  'use strict';
+
+  var $ = window.Utils.$;
+  var Api = window.ApiClient;
+  var S = window.AppState;
+  var Toast = window.Toast;
+
+  function taskTotal(total) {
+    total = Number(total || S.get('pageLoadTotal') || 1);
+    return Math.max(1, total);
+  }
+
+  function setTaskProgress(message, done, total, opts) {
+    opts = opts || {};
+    var now = Date.now();
+    total = taskTotal(total);
+    done = Math.min(total, Math.max(0, Number(done || 0)));
+    var percent = Math.round(done / total * 100);
+    var batch = {
+      pageLoadInFlight: done < total,
+      pageLoadStartedAt: S.get('pageLoadStartedAt') || now,
+      pageLoadTotal: total,
+      pageLoadDone: done,
+      pageLoadMessage: message || '正在刷新页面数据。',
+      pageLoadEtaSeconds: opts.eta_seconds || (done < total ? Math.max(3, (total - done) * 2) : 0),
+      runtimeStatusStartedAt: S.get('runtimeStatusStartedAt') || S.get('pageLoadStartedAt') || now,
+      runtimeStatusUpdatedAt: now,
+      liveProgress: {
+        phase: 'page_load',
+        data: {
+          phase: 'page_load',
+          phase_label: opts.phase_label || '页面加载',
+          message: message || '正在刷新页面数据。',
+          scanned: done,
+          total: total,
+          percent: percent,
+          eta_seconds: opts.eta_seconds || (done < total ? Math.max(3, (total - done) * 2) : 0),
+          updated_at_ms: now,
+        },
+      },
+    };
+    S.setBatch(batch);
+    if (typeof window.renderRuntimeStatus === 'function') window.renderRuntimeStatus();
+    return done;
+  }
+
+  function begin(total, message, opts) {
+    S.setBatch({ pageLoadStartedAt: Date.now(), pageLoadDone: 0, pageLoadTotal: taskTotal(total) });
+    return setTaskProgress(message || '正在加载生产工作台数据。', 0, total, opts);
+  }
+
+  function finish(message) {
+    var total = taskTotal();
+    setTaskProgress(message || '页面数据已刷新。', total, total, { eta_seconds: 0 });
+    setTimeout(function () {
+      if (!S.get('pageLoadInFlight')) {
+        S.setBatch({ pageLoadStartedAt: 0, pageLoadTotal: 0, pageLoadDone: 0, pageLoadMessage: '', pageLoadEtaSeconds: 0 });
+        if (typeof window.renderRuntimeStatus === 'function') window.renderRuntimeStatus();
+      }
+    }, 400);
+  }
+
+  function standaloneProgress() {
+    return !S.get('pageLoadInFlight') && !S.get('connectionTestInFlight') &&
+      !S.get('syncInFlight') && !S.get('batchCheckJobId') &&
+      !S.get('submitInFlight') && !S.get('isRunning');
+  }
+
+  async function track(label, action) {
+    var total = taskTotal();
+    var done = Number(S.get('pageLoadDone') || 0);
+    setTaskProgress(label + '...', done, total);
+    try {
+      return await action();
+    } finally {
+      setTaskProgress(label + '完成', Math.min(total, done + 1), total);
+    }
+  }
+
+  function renderRedlineReport(data) {
+    var el = $('redlineSummary');
+    if (!el) return;
+    var ok = Boolean(data && (data.ok || data.overall === 'PASS'));
+    var passed = Number((data && data.passed) || 0);
+    var total = Number((data && data.total_checks) || (data && data.total) || 0);
+    var failed = Number((data && data.failed) || 0);
+    el.textContent = ok ? '红线通过' + (total ? '：' + passed + '/' + total : '') : '红线需处理' + (failed ? '：' + failed + ' 项' : '');
+    el.title = ok ? '技术红线验证已通过' : '技术红线验证存在阻断项，请查看诊断信息';
+    el.className = 'status-pill ' + (ok ? 'badge-success' : 'badge-danger');
+  }
+
+  function markStatus(id, text, title, className) {
+    var el = $(id);
+    if (!el) return;
+    el.textContent = text;
+    if (title) el.title = title;
+    if (className) el.className = 'status-pill ' + className;
+  }
+
+  async function loadProfile() {
+    var standalone = standaloneProgress();
+    if (standalone) begin(1, '正在刷新账户状态。');
+    try {
+      var data = await Api.get('/api/profile');
+      if (data && data.profile) S.set('userProfile', data.profile);
+      if (typeof window.renderUserProfile === 'function') window.renderUserProfile();
+      return data;
+    } catch (e) { return null; }
+    finally { if (standalone) finish('账户状态已刷新。'); }
+  }
+
+  async function loadConfig(presetsRef) {
+    var standalone = standaloneProgress();
+    if (standalone) begin(1, '正在刷新运行配置。');
+    try {
+      var data = await Api.get('/api/config');
+      if (data && data.config) {
+        S.set('config', data.config);
+        if (typeof window.renderStrategyPolicy === 'function') window.renderStrategyPolicy(data.config);
+        if (window.FormControls && window.FormControls.applyConfig) window.FormControls.applyConfig(data.config);
+        if (window.syncStrategyPluginControls) window.syncStrategyPluginControls();
+      }
+      return data;
+    } catch (e) { return null; }
+    finally { if (standalone) finish('运行配置已刷新。'); }
+  }
+
+  async function loadPresets(setter) {
+    var standalone = standaloneProgress();
+    if (standalone) begin(1, '正在加载市场预设。');
+    try {
+      var data = await Api.get('/api/presets');
+      if (data && data.presets && typeof setter === 'function') setter(data.presets);
+      return data;
+    } catch (e) { return null; }
+    finally { if (standalone) finish('市场预设已刷新。'); }
+  }
+
+  async function loadCloudSnapshot() {
+    var standalone = standaloneProgress();
+    if (standalone) begin(1, '正在加载云端快照。');
+    try {
+      if (!window.CloudSync || !window.CloudSync.loadSnapshot) return null;
+      return await window.CloudSync.loadSnapshot().catch(function () { return null; });
+    } finally {
+      if (standalone) finish('云端快照已刷新。');
+    }
+  }
+
+  async function loadCheckResults() {
+    var standalone = standaloneProgress();
+    if (standalone) begin(1, '正在刷新检查结果。');
+    try {
+      var data = await Api.get('/api/check_results');
+      if (data && data.check_results) S.set('checkResults', data.check_results);
+      return data;
+    } catch (e) { return null; }
+    finally { if (standalone) finish('检查结果已刷新。'); }
+  }
+
+  async function loadResearchMemory() {
+    var standalone = standaloneProgress();
+    if (standalone) begin(1, '正在加载研究记忆。');
+    try {
+      var data = await Api.get('/api/research_memory');
+      if (data) S.set('currentResult.research_memory', data);
+      return data;
+    } catch (e) { return null; }
+    finally { if (standalone) finish('研究记忆已刷新。'); }
+  }
+
+  async function loadRedlineReport() {
+    var standalone = standaloneProgress();
+    if (standalone) begin(1, '正在验证技术红线。');
+    markStatus('redlineSummary', '红线验证中...', '', 'badge-warning');
+    try {
+      var data = await Api.get('/api/redline/report', { timeout: 120000 });
+      S.set('redlineReport', data || {});
+      renderRedlineReport(data || {});
+      return data;
+    } catch (e) {
+      markStatus('redlineSummary', '红线验证不可用', e.message || String(e), 'badge-danger');
+      return null;
+    } finally {
+      if (standalone) finish('技术红线已刷新。');
+    }
+  }
+
+  async function loadCheckpointStatus() {
+    var loader = window.ProductionView && window.ProductionView.loadCheckpointStatus;
+    if (typeof loader !== 'function') return null;
+    var standalone = standaloneProgress();
+    if (standalone) begin(1, '正在刷新断点状态。');
+    markStatus('checkpointSummary', '断点刷新中...', '', 'badge-info');
+    try {
+      var data = await loader();
+      var ok = Boolean(data && data.ok);
+      markStatus('checkpointSummary', ok
+        ? ((data.resume_available ? '断点可续跑' : '暂无断点') + ' · 断点 ' + Number(data.checkpoint_count || 0) + ' · 历史 ' + Number(data.history_count || 0))
+        : '断点状态不可用',
+        ok ? '' : (data && data.error) || '',
+        ok ? (data.resume_available ? 'badge-success' : 'badge-warning') : 'badge-danger');
+      return data;
+    } finally {
+      if (standalone) finish('断点状态已刷新。');
+    }
+  }
+
+  async function runStartup(options) {
+    options = options || {};
+    begin(9, '正在加载生产工作台数据。');
+    var result = {};
+    result.latest = await track('读取最近生产结果', function () {
+      return Api.get('/api/latest_result').catch(function () { return {}; });
+    });
+    result.config = await track('读取运行配置', function () { return Api.get('/api/config').catch(function () { return {}; }); });
+    result.profile = await track('刷新账户状态', function () { return Api.get('/api/profile').catch(function () { return {}; }); });
+    result.presets = await track('加载市场预设', function () { return Api.get('/api/presets').catch(function () { return {}; }); });
+    result.cloud = await track('加载云端快照', loadCloudSnapshot);
+    result.redline = await track('验证技术红线', loadRedlineReport);
+    result.checkpoint = await track('刷新断点状态', loadCheckpointStatus);
+    result.checks = await track('刷新检查结果', loadCheckResults);
+    result.research = await track('加载研究记忆', loadResearchMemory);
+    if (typeof options.apply === 'function') options.apply(result);
+    finish('生产工作台数据已加载。');
+    return result;
+  }
+
+  window.LoadingFeedback = {
+    begin: begin,
+    finish: finish,
+    loadCheckResults: loadCheckResults,
+    loadCheckpointStatus: loadCheckpointStatus,
+    loadCloudSnapshot: loadCloudSnapshot,
+    loadConfig: loadConfig,
+    loadPresets: loadPresets,
+    loadProfile: loadProfile,
+    loadRedlineReport: loadRedlineReport,
+    loadResearchMemory: loadResearchMemory,
+    runStartup: runStartup,
+    setTaskProgress: setTaskProgress,
+    track: track,
+  };
 })();
 
 </script>
@@ -7045,6 +7331,7 @@ textarea:focus-visible {
   var ResultState = window.ResultState;
   var FormControls = window.FormControls;
   var StrategyPanel = window.StrategyPanel || {};
+  var LoadingFeedback = window.LoadingFeedback || {};
   var candidateIdentity = VM.candidateIdentity;
   window.$ = $;
   var VIEW_ORDER = Registry.VIEW_ORDER;
@@ -7057,6 +7344,14 @@ textarea:focus-visible {
   function submitInFlight() { return Boolean(S.get('submitInFlight')); }
   function selectedSubmitList() { return S.get('selectedSubmitIds') || []; }
   function selectedSubmitCount() { return selectedSubmitList().length; }
+  function requestEtaSeconds(count, perItem, minSeconds, maxSeconds) {
+    count = Math.max(1, Number(count || 1));
+    var estimate = Math.ceil(count * Number(perItem || 2));
+    return Math.min(Number(maxSeconds || 60), Math.max(Number(minSeconds || 6), estimate));
+  }
+  function etaDeadline(startedAt, seconds) {
+    return Number(startedAt || Date.now()) + Math.max(1, Number(seconds || 1)) * 1000;
+  }
   function isSelectedSubmitId(id) { return selectedSubmitList().indexOf(id) !== -1; }
   function selectedSubmitIdSet() { return new Set(selectedSubmitList()); }
   function setSelectedSubmitIds(ids) { S.set('selectedSubmitIds', Array.from(ids || [])); }
@@ -7070,8 +7365,27 @@ textarea:focus-visible {
     else el.removeAttribute('title');
   }
   function syncStrategyPluginControls() { if (StrategyPanel.syncPluginControls) StrategyPanel.syncPluginControls(); }
+  window.syncStrategyPluginControls = syncStrategyPluginControls;
+  function syncStartupState(snapshot) {
+    snapshot = snapshot || {};
+    if (snapshot.latest && snapshot.latest.result) renderResult(snapshot.latest.result);
+    if (snapshot.config && snapshot.config.config) {
+      S.set('config', snapshot.config.config);
+      if (typeof window.renderStrategyPolicy === 'function') window.renderStrategyPolicy(snapshot.config.config);
+      FormControls.applyConfig(snapshot.config.config);
+      syncStrategyPluginControls();
+    }
+    if (snapshot.profile && snapshot.profile.profile) S.set('userProfile', snapshot.profile.profile);
+    if (snapshot.presets && snapshot.presets.presets) presets = snapshot.presets.presets;
+    if (snapshot.cloud && window.CloudSync && window.CloudSync.applyCloudSnapshotPayload) window.CloudSync.applyCloudSnapshotPayload(snapshot.cloud);
+    if (snapshot.redline && S.set) S.set('redlineReport', snapshot.redline);
+    if (snapshot.checkResults && snapshot.checkResults.check_results) S.set('checkResults', snapshot.checkResults.check_results);
+    if (snapshot.research && snapshot.research.research_memory) S.set('currentResult.research_memory', snapshot.research.research_memory);
+  }
   window.operationBlockReason = function (action) {
     var running = Boolean(S.get('isRunning'));
+    if (S.get('connectionTestInFlight')) return '连接测试正在进行。';
+    if (S.get('pageLoadInFlight')) return '页面数据正在加载。';
     switch (action) {
       case 'production': if (syncInFlight()) return '云端同步正在进行。'; if (batchCheckJobId()) return '达标检查正在进行。'; if (submitInFlight()) return '提交正在进行。'; return '';
       case 'sync': if (running) return '生产任务运行中。'; if (batchCheckJobId()) return '达标检查正在进行。'; if (submitInFlight()) return '提交正在进行。'; if (syncInFlight()) return '云端同步正在进行。'; return '';
@@ -7085,6 +7399,8 @@ textarea:focus-visible {
     if (batchCheckJobId()) return '达标检查正在进行，其他冲突操作已暂时锁定。';
     if (submitInFlight()) return '提交正在进行，其他冲突操作已暂时锁定。';
     if (S.get('isRunning')) return '生产任务正在运行。';
+    if (S.get('connectionTestInFlight')) return '连接测试正在进行，核心操作已暂时锁定。';
+    if (S.get('pageLoadInFlight')) return '页面数据正在加载，核心操作已暂时锁定。';
     return '';
   }
   function activeRuntimeKind() {
@@ -7092,6 +7408,8 @@ textarea:focus-visible {
     if (syncInFlight()) return 'sync';
     if (batchCheckJobId()) return 'check';
     if (submitInFlight()) return 'submit';
+    if (S.get('connectionTestInFlight')) return 'connection';
+    if (S.get('pageLoadInFlight')) return 'page_load';
     return '';
   }
   function runtimeKindLabel(kind) {
@@ -7099,6 +7417,8 @@ textarea:focus-visible {
     if (kind === 'sync') return '云端同步';
     if (kind === 'check') return '达标检查';
     if (kind === 'submit') return '提交处理';
+    if (kind === 'connection') return '连接测试';
+    if (kind === 'page_load') return '页面加载';
     return '后台任务';
   }
   function connectionStatusLabel() {
@@ -7121,6 +7441,8 @@ textarea:focus-visible {
     if (kind === 'sync') return '正在读取官方云端数据，列表会在完成后更新。';
     if (kind === 'check') return '正在向官方发送预提交检查，请等待结果返回。';
     if (kind === 'submit') return '正在提交已选择的 Alpha，请不要重复点击。';
+    if (kind === 'connection') return '正在验证账号与官方生产环境连接。';
+    if (kind === 'page_load') return '正在加载页面数据，完成后会自动刷新界面。';
     return '后台正在处理，请稍候。';
   }
   function formatDuration(ms) {
@@ -7289,6 +7611,7 @@ textarea:focus-visible {
     setControlState('syncButton', Boolean(syncReason), syncReason);
     setControlState('workflowSyncButton', Boolean(syncReason), syncReason);
     setControlState('sideSyncButton', Boolean(syncReason), syncReason);
+    setControlState('connTestBtn', Boolean(S.get('connectionTestInFlight')), S.get('connectionTestInFlight') ? '连接测试正在进行。' : '');
     var syncRange = $('syncRange'); if (syncRange) syncRange.disabled = Boolean(syncReason);
     setControlState('checkButton', Boolean(checkReason) || Boolean(batchCheckJobId()), checkReason);
     setControlState('workflowCheckButton', Boolean(checkReason) || Boolean(batchCheckJobId()), checkReason || (batchCheckJobId() ? '达标检查正在进行。' : ''));
@@ -7867,6 +8190,7 @@ textarea:focus-visible {
     try {
       var ids = selectedSubmitList();
       var submitStarted = Date.now();
+      var submitEta = requestEtaSeconds(ids.length, 3, 8, 45);
       S.setBatch({
         submitInFlight: true,
         runtimeStatusStartedAt: submitStarted,
@@ -7877,15 +8201,35 @@ textarea:focus-visible {
             phase: 'submit',
             phase_label: '提交处理',
             message: '正在提交 ' + ids.length + ' 个 Alpha，请等待官方返回结果。',
+            scanned: 0,
+            total: ids.length,
+            percent: 15,
+            eta_seconds: submitEta,
+            eta_deadline_at_ms: etaDeadline(submitStarted, submitEta),
+            updated_at_ms: submitStarted,
           },
         },
       });
       var payload = Object.assign(window.collectPayload ? window.collectPayload() : {}, { alpha_ids: ids });
       var resp = await Api.post('/api/submit_batch', payload);
       if (resp.ok) {
+        touchRuntimeStatus(submitStarted, {
+          phase: 'submit',
+          data: {
+            phase: 'submit',
+            phase_label: '提交处理',
+            message: '提交已返回，正在刷新检查结果。',
+            scanned: ids.length,
+            total: ids.length,
+            percent: 95,
+            eta_seconds: 3,
+            eta_deadline_at_ms: etaDeadline(Date.now(), 3),
+            updated_at_ms: Date.now(),
+          },
+        });
         Toast.success('提交成功：' + (resp.submitted || ids.length) + ' 个 Alpha');
         setSelectedSubmitIds([]);
-        if (typeof window.loadCheckResults === 'function') window.loadCheckResults();
+        if (typeof window.loadCheckResults === 'function') await window.loadCheckResults();
       }
     } catch (e) { Toast.error('提交失败：' + e.message); }
     finally { S.set('submitInFlight', false); clearRuntimeStatus(); _renderCurrentView(); window.renderBusyControls(); }
@@ -7895,6 +8239,7 @@ textarea:focus-visible {
     if (!confirmed) return;
     try {
       var submitStarted = Date.now();
+      var submitEta = requestEtaSeconds(1, 3, 8, 30);
       S.setBatch({
         submitInFlight: true,
         runtimeStatusStartedAt: submitStarted,
@@ -7905,6 +8250,12 @@ textarea:focus-visible {
             phase: 'submit',
             phase_label: '提交处理',
             message: '正在提交 Alpha ' + alphaId + '，请等待官方返回结果。',
+            scanned: 0,
+            total: 1,
+            percent: 20,
+            eta_seconds: submitEta,
+            eta_deadline_at_ms: etaDeadline(submitStarted, submitEta),
+            updated_at_ms: submitStarted,
           },
         },
       });
@@ -7931,6 +8282,7 @@ textarea:focus-visible {
     renderBusyControls();
     try {
       var alphaIds = (mode === 'all' ? passed : passed.slice(0, 10)).map(function (c) { return c.alpha_id || candidateIdentity(c); });
+      var checkEta = requestEtaSeconds(alphaIds.length, 4, 10, 60);
       touchRuntimeStatus(checkStarted, {
         phase: 'official_pre_submit_check',
         data: {
@@ -7940,6 +8292,9 @@ textarea:focus-visible {
           scanned: 0,
           total: alphaIds.length,
           percent: 0,
+          eta_seconds: checkEta,
+          eta_deadline_at_ms: etaDeadline(checkStarted, checkEta),
+          updated_at_ms: checkStarted,
         },
       });
       var payload = Object.assign(window.collectPayload ? window.collectPayload() : {}, { alpha_ids: alphaIds });
@@ -7964,8 +8319,36 @@ textarea:focus-visible {
         if (($('autoSubmitToggle') || {}).checked && passedCount > 0) {
           var passedIds = Object.entries(resp.check_results).filter(function (e) { return e[1].passed; }).map(function (e) { return e[0]; });
           try {
+            var autoSubmitEta = requestEtaSeconds(passedIds.length, 3, 8, 45);
+            touchRuntimeStatus(checkStarted, {
+              phase: 'auto_submit',
+              data: {
+                phase: 'auto_submit',
+                phase_label: '自动提交',
+                message: '检查通过后正在自动提交 ' + passedIds.length + ' 个 Alpha。',
+                scanned: 0,
+                total: passedIds.length,
+                percent: 80,
+                eta_seconds: autoSubmitEta,
+                eta_deadline_at_ms: etaDeadline(Date.now(), autoSubmitEta),
+                updated_at_ms: Date.now(),
+              },
+            });
             var submitPayload = Object.assign(window.collectPayload ? window.collectPayload() : {}, { alpha_ids: passedIds });
             await Api.post('/api/submit_batch', submitPayload);
+            touchRuntimeStatus(checkStarted, {
+              phase: 'auto_submit',
+              data: {
+                phase: 'auto_submit',
+                phase_label: '自动提交',
+                message: '自动提交完成。',
+                scanned: passedIds.length,
+                total: passedIds.length,
+                percent: 100,
+                eta_seconds: 0,
+                updated_at_ms: Date.now(),
+              },
+            });
             Toast.success('自动提交完成');
           } catch (e) {}
         }
@@ -7983,6 +8366,7 @@ textarea:focus-visible {
     setSafeHtml(document.body, '<div class="shutdown-screen"><div class="shutdown-title">服务已关闭</div><div class="shutdown-note">可以安全关闭此窗口。</div></div>');
   };
   async function loadProfile() {
+    if (LoadingFeedback.loadProfile) return LoadingFeedback.loadProfile();
     try {
       var data = await Api.get('/api/profile');
       if (data && data.profile) S.set('userProfile', data.profile);
@@ -8006,6 +8390,7 @@ textarea:focus-visible {
     window.testConnection();
   }
   window.loadConfig = async function () {
+    if (LoadingFeedback.loadConfig) return LoadingFeedback.loadConfig();
     try {
       var data = await Api.get('/api/config');
       if (data && data.config) {
@@ -8021,8 +8406,13 @@ textarea:focus-visible {
     syncStrategyPluginControls();
   };
   async function loadPresets() {
+    if (LoadingFeedback.loadPresets) return LoadingFeedback.loadPresets(function (items) { presets = items || {}; });
     try { var data = await Api.get('/api/presets'); if (data && data.presets) presets = data.presets; } catch (e) {}
   }
+  window.loadRedlineReport = LoadingFeedback.loadRedlineReport || window.loadRedlineReport;
+  window.loadCheckResults = LoadingFeedback.loadCheckResults || window.loadCheckResults;
+  window.loadResearchMemory = LoadingFeedback.loadResearchMemory || window.loadResearchMemory;
+  window.loadCheckpointStatus = LoadingFeedback.loadCheckpointStatus || window.loadCheckpointStatus;
   window.testConnection = async function () {
     // v4: Validate connection fields first
     if (FormControls.validateConnection && !FormControls.validateConnection()) {
@@ -8035,6 +8425,15 @@ textarea:focus-visible {
     resultEl.className = 'connection-result is-pending';
     resultEl.setAttribute('role', 'status');
     resultEl.setAttribute('aria-live', 'polite');
+    var startedAt = Date.now();
+    var connectionEta = 8;
+    S.setBatch({
+      connectionTestInFlight: true,
+      runtimeStatusStartedAt: startedAt,
+      runtimeStatusUpdatedAt: startedAt,
+      liveProgress: { phase: 'connection', data: { phase: 'connection', phase_label: '连接测试', message: '正在验证 BRAIN 生产环境凭证，请等待官方返回。', percent: 15, eta_seconds: connectionEta, eta_deadline_at_ms: etaDeadline(startedAt, connectionEta), updated_at_ms: startedAt } },
+    });
+    renderBusyControls();
     try {
       var resp = await Api.post('/api/test_connection', FormControls.connectionPayload());
       if (resp.ok) {
@@ -8059,8 +8458,12 @@ textarea:focus-visible {
       resultEl.className = 'connection-result is-error';
       S.setBatch({ connectionStatus: 'failed', lastConnectionError: e.message || String(e) });
       renderHeaderStatus();
+    } finally {
+      S.setBatch({ connectionTestInFlight: false, runtimeStatusStartedAt: 0, runtimeStatusUpdatedAt: 0, liveProgress: {} });
+      renderBusyControls();
     }
   };
+  window._appPreRenderResult = renderResult;
   window.collectPayload = function () {
     return FormControls.collectPayload();
   };
@@ -8108,25 +8511,31 @@ textarea:focus-visible {
     // v4: Install keyboard shortcuts
     document.addEventListener('keydown', handleKeyboardShortcut);
 
-    try {
-      var results = await Promise.all([
-        Api.get('/api/latest_result').catch(function () { return {}; }),
-        Api.get('/api/config').catch(function () { return {}; }),
-      ]);
-      if (results[0] && results[0].result) renderResult(results[0].result);
-      if (results[1] && results[1].config) {
-        S.set('config', results[1].config);
-        if (typeof window.renderStrategyPolicy === 'function') window.renderStrategyPolicy(results[1].config);
-        FormControls.applyConfig(results[1].config);
-        syncStrategyPluginControls();
-      }
-    } catch (e) { /* ignore */ }
-    loadProfile();
-    loadPresets();
-    if (window.CloudSync && window.CloudSync.loadSnapshot) window.CloudSync.loadSnapshot().catch(function () {});
-    if (typeof window.loadRedlineReport === 'function') window.loadRedlineReport();
-    if (typeof window.loadCheckpointStatus === 'function') window.loadCheckpointStatus();
-    if (typeof window.loadCheckResults === 'function') window.loadCheckResults();
+    window._appPreRenderResult = renderResult;
+    if (LoadingFeedback.runStartup) {
+      await LoadingFeedback.runStartup({ apply: syncStartupState, setPresets: function (items) { presets = items || {}; } });
+    } else {
+      try {
+        var results = await Promise.all([
+          Api.get('/api/latest_result').catch(function () { return {}; }),
+          Api.get('/api/config').catch(function () { return {}; }),
+        ]);
+        if (results[0] && results[0].result) renderResult(results[0].result);
+        if (results[1] && results[1].config) {
+          S.set('config', results[1].config);
+          if (typeof window.renderStrategyPolicy === 'function') window.renderStrategyPolicy(results[1].config);
+          FormControls.applyConfig(results[1].config);
+          syncStrategyPluginControls();
+        }
+      } catch (e) { /* ignore */ }
+      loadProfile();
+      loadPresets();
+      if (LoadingFeedback.loadCloudSnapshot) LoadingFeedback.loadCloudSnapshot();
+      else if (window.CloudSync && window.CloudSync.loadSnapshot) window.CloudSync.loadSnapshot().catch(function () {});
+      if (typeof window.loadRedlineReport === 'function') window.loadRedlineReport();
+      if (typeof window.loadCheckpointStatus === 'function') window.loadCheckpointStatus();
+      if (typeof window.loadCheckResults === 'function') window.loadCheckResults();
+    }
     var toggle = $('displayModeToggle'); if (toggle) toggle.classList.remove('hidden');
     window.renderBusyControls();
     var runtimeTimer = setInterval(function () {
@@ -8136,7 +8545,7 @@ textarea:focus-visible {
   }
   S.onUpdate(function (path) {
     var pathName = String(path || '');
-    var busyPaths = ['isRunning', 'activeJobId', 'syncInFlight', 'syncJobId', 'syncRecoverable', 'batchCheckJobId', 'submitInFlight', 'selectedSubmitIds', 'batch', 'liveProgress', 'runtimeStatusStartedAt', 'runtimeStatusUpdatedAt', 'syncStartedAt', 'checkStartedAt'];
+    var busyPaths = ['isRunning', 'activeJobId', 'syncInFlight', 'syncJobId', 'syncRecoverable', 'batchCheckJobId', 'submitInFlight', 'selectedSubmitIds', 'batch', 'liveProgress', 'runtimeStatusStartedAt', 'runtimeStatusUpdatedAt', 'syncStartedAt', 'checkStartedAt', 'pageLoadInFlight', 'connectionTestInFlight'];
     if (busyPaths.indexOf(pathName) !== -1) window.renderBusyControls();
     if (busyPaths.indexOf(pathName) !== -1 || pathName === 'activeView' || pathName === 'checkResults' || pathName.indexOf('currentResult') === 0) renderTaskRail();
     if (busyPaths.indexOf(pathName) !== -1 || pathName === 'connectionStatus' || pathName === 'connectionEnvironment' || pathName === 'connectionAuth') {
@@ -8150,17 +8559,13 @@ textarea:focus-visible {
     renderAll: renderAll,
     renderTaskRail: renderTaskRail,
     renderHeaderStatus: renderHeaderStatus,
+    syncStartupState: syncStartupState,
     loadConfig: window.loadConfig,
     loadProfile: loadProfile,
-    loadCheckResults: function () {
-      Api.get('/api/check_results').then(function (data) { if (data && data.check_results) S.set('checkResults', data.check_results); }).catch(function () {});
-    },
-    loadCloudSnapshot: function () {
-      return window.CloudSync && window.CloudSync.loadSnapshot ? window.CloudSync.loadSnapshot().catch(function () {}) : Promise.resolve();
-    },
-    loadResearchMemory: function () {
-      Api.get('/api/research_memory').then(function (data) { if (data) S.set('currentResult.research_memory', data); }).catch(function () {});
-    },
+    loadCheckResults: function () { return LoadingFeedback.loadCheckResults ? LoadingFeedback.loadCheckResults() : Promise.resolve(); },
+    loadCheckpointStatus: function () { return LoadingFeedback.loadCheckpointStatus ? LoadingFeedback.loadCheckpointStatus() : Promise.resolve(); },
+    loadCloudSnapshot: function () { return LoadingFeedback.loadCloudSnapshot ? LoadingFeedback.loadCloudSnapshot() : Promise.resolve(); },
+    loadResearchMemory: function () { return LoadingFeedback.loadResearchMemory ? LoadingFeedback.loadResearchMemory() : Promise.resolve(); },
   };
   window.renderCurrentView = _renderCurrentView;
   window.renderTaskRail = renderTaskRail;

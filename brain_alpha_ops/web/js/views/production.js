@@ -355,6 +355,8 @@
 
   // Expose
   window.startProduction = startProduction;
+  window.ProductionView = window.ProductionView || {};
+  window.ProductionView.loadCheckpointStatus = loadCheckpointStatus;
   window.resumeProductionFromCheckpoint = function () {
     return startProduction({ resume: true });
   };

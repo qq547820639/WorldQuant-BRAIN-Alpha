@@ -26,6 +26,7 @@ MODULE_TEST_COVERAGE = {
     "js/utils.js": "escaping, labels, risk/state navigation rendering",
     "js/form-controls.js": "form value writes, config hydration, and payload assembly",
     "js/header-status.js": "header connection status and profile summary rendering",
+    "js/loading-feedback.js": "page-load progress, startup refreshes, and redline status hydration",
     "js/strategy-panel.js": "strategy policy summary and plugin-control state",
     "js/result-state.js": "result snapshot merging and cloud sync preservation",
     "js/result-table.js": "main result table, mobile cards, and empty-state rendering",
@@ -576,6 +577,8 @@ def test_app_ux_orchestrator_has_tested_navigation_empty_and_busy_contracts():
     assert "setControlState('sideCheckButton'" in app_js
     assert "sideTaskReason" in app_js
     assert "operationGuard" in app_js
+    assert "function syncStartupState(snapshot)" in app_js
+    assert "window.LoadingFeedback" in (WEB_JS / "loading-feedback.js").read_text(encoding="utf-8")
 
     assert 'id="viewTabs"' in template
     assert "action-card" in template
