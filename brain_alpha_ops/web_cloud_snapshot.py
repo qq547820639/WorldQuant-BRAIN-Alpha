@@ -63,24 +63,34 @@ def cloud_alpha_snapshot(
     stale_seconds: int = CLOUD_SYNC_STALE_SECONDS,
 ) -> dict[str, Any]:
     cache_path: Path | None = storage_jsonl_path("cloud_alphas.jsonl", load_config=load_config)
-    rows = dedupe_cloud_alpha_rows(read_storage_jsonl("cloud_alphas.jsonl", limit=limit, load_config=load_config))
+    all_rows = dedupe_cloud_alpha_rows(read_storage_jsonl("cloud_alphas.jsonl", limit=None, load_config=load_config))
+    rows = _bounded_rows(all_rows, limit)
     source = "storage"
-    if not rows:
+    if not all_rows:
         cache_path = latest_cached_user_alpha_path(load_config=load_config)
-        rows = dedupe_cloud_alpha_rows(latest_cached_user_alphas(limit=limit, load_config=load_config))
-        source = "api_cache" if rows else "empty"
+        all_rows = dedupe_cloud_alpha_rows(latest_cached_user_alphas(limit=None, load_config=load_config))
+        rows = _bounded_rows(all_rows, limit)
+        source = "api_cache" if all_rows else "empty"
     summary = cloud_alpha_summary(
-        rows,
+        all_rows,
         load_config=load_config,
         runtime_root=runtime_root,
         safe_error_message=safe_error_message,
     )
     summary["source"] = source
+    summary["returned_count"] = len(rows)
+    summary["display_limit"] = limit
     loaded_at, age_seconds = path_modified_at(cache_path if rows else None)
     summary["loaded_at"] = loaded_at
     summary["age_seconds"] = age_seconds
     summary["is_stale"] = bool(age_seconds is not None and age_seconds > stale_seconds)
     return {"alphas": rows, "summary": summary}
+
+
+def _bounded_rows(rows: list[dict[str, Any]], limit: int | None) -> list[dict[str, Any]]:
+    if limit is None:
+        return rows
+    return rows[: max(1, int(limit or 1))]
 
 
 def dedupe_cloud_alpha_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:

@@ -14,6 +14,7 @@
   var statusBadge = Utils.statusBadge;
   var candidateIdentity = VM.candidateIdentity;
   var cloudMetric = VM.cloudMetric || function (row, key) { return (row || {})[key]; };
+  var cloudSelfCorrelationDisplay = VM.cloudSelfCorrelationDisplay || function (row) { return num(cloudMetric(row || {}, 'self_correlation'), 4); };
   var expressionFromRow = VM.expressionFromRow;
   var uniqueBy = VM.uniqueBy;
   var lifecycleStatusLabel = VM.lifecycleStatusLabel || function (row) {
@@ -131,7 +132,7 @@
         { accessor: 'sharpe', render: function (v, r) { return scoreSpan(cloudMetric(r.raw || {}, 'sharpe')); }, htmlType: 'score' },
         { accessor: 'fitness', render: function (v, r) { return scoreSpan(cloudMetric(r.raw || {}, 'fitness')); }, htmlType: 'score' },
         { accessor: 'turnover', render: function (v, r) { return num(cloudMetric(r.raw || {}, 'turnover'), 4); } },
-        { accessor: 'self_correlation', render: function (v, r) { return num(cloudMetric(r.raw || {}, 'self_correlation'), 4); } },
+        { accessor: 'self_correlation', render: function (v, r) { return cloudSelfCorrelationDisplay(r.raw || {}); } },
         { accessor: 'actions', render: function (v, r) { return actionButton('open-row', '详情', r, 'btn btn-secondary btn-sm'); }, htmlType: 'buttonGroup' },
       ];
       case 'lifecycle': return [
@@ -168,6 +169,7 @@
           var raw = r.raw || {}, aid = raw.alpha_id || r.id || '';
           var viewName = activeView();
           var buttons = [actionButton('open-row', '详情', r, 'btn btn-secondary btn-sm')];
+          if (viewName === 'candidates') buttons.push(actionButton('score-candidate', '评分', r, 'btn btn-primary btn-sm'));
           if (viewName === 'submittable' && !submitInFlight()) buttons.push(actionButton('submit-single', '提交', r, 'btn btn-primary btn-sm'));
           if (viewName === 'passed') buttons.push(actionButton('toggle-select', isSelectedSubmitId(aid) ? '已选' : '选择', r, 'btn btn-secondary btn-sm', { pressed: isSelectedSubmitId(aid) }));
           return buttons.join(' ');
@@ -191,6 +193,7 @@
     var isSelectedSubmitId = options.isSelectedSubmitId || function () { return false; };
     var raw = row.raw || {}, aid = raw.alpha_id || row.id || '';
     var buttons = [actionButton('open-row', '详情', row, 'btn btn-secondary btn-sm')];
+    if (view === 'candidates') buttons.push(actionButton('score-candidate', '评分', row, 'btn btn-primary btn-sm'));
     if (view === 'submittable' && !submitInFlight()) buttons.push(actionButton('submit-single', '提交', row, 'btn btn-primary btn-sm'));
     if (view === 'passed') buttons.push(actionButton('toggle-select', isSelectedSubmitId(aid) ? '已选' : '选择', row, 'btn btn-secondary btn-sm', { pressed: isSelectedSubmitId(aid) }));
     return buttons.join(' ');

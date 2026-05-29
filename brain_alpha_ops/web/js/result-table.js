@@ -26,6 +26,17 @@
       return deps.getRowsForView ? deps.getRowsForView(view) : [];
     }
 
+    function formatCount(value) {
+      var num = Number(value);
+      if (!Number.isFinite(num)) return String(value || 0);
+      return String(Math.floor(num)).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    }
+
+    function countForView(view, rowCount, countOverride) {
+      if (view === 'cloud' && state && typeof state.viewCount === 'function') return state.viewCount('cloud');
+      return typeof countOverride === 'number' ? countOverride : rowCount;
+    }
+
     function renderCurrentView() {
       var view = activeView();
       var rows = rowsFor(view);
@@ -73,7 +84,7 @@
           score: 'Sharpe',
           status: 'Fitness',
           official_id: 'Turnover',
-          risk: 'Self Corr',
+          risk: 'Self Correlation',
         };
       }
       return {
@@ -235,7 +246,11 @@
         if (key === 'score') return Number(cloudMetric(raw, 'sharpe') || 0);
         if (key === 'status') return Number(cloudMetric(raw, 'fitness') || 0);
         if (key === 'official_id') return Number(cloudMetric(raw, 'turnover') || 0);
-        if (key === 'risk') return Number(cloudMetric(raw, 'self_correlation') || 0);
+        if (key === 'risk') {
+          var selfCorr = VM.cloudSelfCorrelationValue ? VM.cloudSelfCorrelationValue(raw) : (cloudMetric(raw, 'self_correlation') ?? cloudMetric(raw, 'correlation'));
+          var selfCorrNumber = Number(selfCorr);
+          return Number.isFinite(selfCorrNumber) ? selfCorrNumber : -1;
+        }
       }
       if (key === 'id') return raw.alpha_id || row.id || '';
       if (key === 'family') return raw.family || raw.stage || raw.status || '';
@@ -269,8 +284,9 @@
       var pill = $('countPill');
       if (!pill) return;
       var rows = rowsFor(activeView());
-      var count = typeof countOverride === 'number' ? countOverride : rows.length;
-      pill.textContent = count + ' 条';
+      var view = activeView();
+      var count = countForView(view, rows.length, countOverride);
+      pill.textContent = formatCount(count) + ' 条';
       pill.className = 'badge ' + (count > 0 ? 'badge-accent' : 'badge-default');
     }
 

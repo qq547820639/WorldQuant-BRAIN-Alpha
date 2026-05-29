@@ -52,7 +52,7 @@ export function useSSE(
       close();
 
       try {
-        const es = new EventSource(url);
+        const es = new EventSource(url, { withCredentials: true });
         eventSourceRef.current = es;
 
         es.onopen = () => {

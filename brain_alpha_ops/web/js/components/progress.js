@@ -38,7 +38,9 @@
       fillEl.parentElement.classList.remove('is-indeterminate');
     }
 
-    var pct = progress.percent;
+    var pct = progress.percent_complete !== undefined && progress.percent_complete !== null
+      ? progress.percent_complete
+      : progress.percent;
     if (typeof pct === 'number' && fillEl) {
       fillEl.style.width = Math.min(100, Math.max(0, pct)) + '%';
       var track = fillEl.parentElement;
@@ -54,9 +56,12 @@
         parts.push(progress.message);
       }
 
-      if (progress.percent !== undefined && progress.percent !== null) {
+      var displayPercent = progress.percent_complete !== undefined && progress.percent_complete !== null
+        ? progress.percent_complete
+        : progress.percent;
+      if (displayPercent !== undefined && displayPercent !== null) {
         if (!progress.message || progress.message.indexOf('%') === -1) {
-          parts.push(Math.round(progress.percent) + '%');
+          parts.push(Math.round(displayPercent) + '%');
         }
       }
 

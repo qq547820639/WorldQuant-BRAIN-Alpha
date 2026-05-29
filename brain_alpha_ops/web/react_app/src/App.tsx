@@ -1,7 +1,7 @@
 /** Root application component with tab-based navigation. */
 
 import { useState, useCallback, useMemo } from "react";
-import type { TabId } from "@/types";
+import type { Candidate, TabId } from "@/types";
 import { useToast } from "@/hooks/useToast";
 import ToastContainer from "@/components/ToastContainer";
 import Dashboard from "@/components/Dashboard";
@@ -20,6 +20,7 @@ const TABS: { id: TabId; label: string; icon: string }[] = [
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<TabId>("dashboard");
+  const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null);
   const { toasts, addToast, dismissToast } = useToast();
 
   const notify = useCallback(
@@ -34,9 +35,17 @@ export default function App() {
       case "dashboard":
         return <Dashboard notify={notify} />;
       case "candidates":
-        return <CandidateTable notify={notify} />;
+        return (
+          <CandidateTable
+            notify={notify}
+            onScore={(candidate) => {
+              setSelectedCandidate(candidate);
+              setActiveTab("scoring");
+            }}
+          />
+        );
       case "scoring":
-        return <ScoringPanel notify={notify} />;
+        return <ScoringPanel notify={notify} candidate={selectedCandidate} />;
       case "submission":
         return <SubmissionPanel notify={notify} />;
       case "config":
@@ -44,7 +53,7 @@ export default function App() {
       default:
         return null;
     }
-  }, [activeTab, notify]);
+  }, [activeTab, notify, selectedCandidate]);
 
   return (
     <div className="min-h-screen flex flex-col">

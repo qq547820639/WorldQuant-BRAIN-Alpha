@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { useApi } from "@/hooks/useApi";
 import type { RunConfig } from "@/types";
+import ProgressFeedback from "@/components/ProgressFeedback";
 
 interface Props {
   notify: (type: "success" | "error" | "warning" | "info", msg: string) => void;
@@ -19,7 +20,13 @@ export default function ConfigPanel({ notify }: Props) {
   const cfg = api.data;
 
   if (api.loading) {
-    return <div className="card animate-pulse"><p className="text-muted text-sm">Loading config...</p></div>;
+    return (
+      <ProgressFeedback
+        state="loading"
+        title="Configuration"
+        progress={{ phase: "config_load", status_message: "Loading configuration." }}
+      />
+    );
   }
 
   if (api.error) {

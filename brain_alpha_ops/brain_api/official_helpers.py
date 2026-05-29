@@ -71,6 +71,25 @@ def normalize_metrics(payload: Any) -> dict:
     is_sharpe = _num(_first_value(metrics_root, ["sharpe", "Sharpe"]))
     is_oos_ratio = round(is_sharpe / os_sharpe, 4) if os_sharpe != 0 else 0.0
 
+    self_correlation_check = brain_checks.get("SELF_CORRELATION") if isinstance(brain_checks, dict) else None
+    self_correlation_status = ""
+    self_correlation_check_value = None
+    if isinstance(self_correlation_check, dict):
+        self_correlation_status = str(self_correlation_check.get("result") or "")
+        self_correlation_check_value = _num_or_none(self_correlation_check.get("value"))
+    correlation_value = _num_or_none(_first_value(
+        metrics_root,
+        ["correlation", "prodCorrelation", "selfCorrelation", "self_correlation"],
+        None,
+    ))
+    self_correlation_value = _num_or_none(_first_value(
+        metrics_root,
+        ["selfCorrelation", "self_correlation", "correlation", "prodCorrelation"],
+        None,
+    ))
+    if self_correlation_value is None:
+        self_correlation_value = self_correlation_check_value
+
     metrics = {
         "sharpe": is_sharpe,
         "fitness": _num(_first_value(metrics_root, ["fitness", "Fitness"])),
@@ -80,7 +99,9 @@ def normalize_metrics(payload: Any) -> dict:
         "drawdown": abs(_ratio(_first_value(metrics_root, ["drawdown", "maxDrawdown", "MaxDrawdown"]))),
         "margin": _num_or_none(_first_value(metrics_root, ["margin", "Margin"], None)),
         "sub_universe_sharpe": _num(_first_value(metrics_root, ["subUniverseSharpe", "sub_universe_sharpe"])),
-        "correlation": abs(_ratio(_first_value(metrics_root, ["correlation", "selfCorrelation", "prodCorrelation"], 0.0))),
+        "correlation": abs(_ratio(correlation_value)) if correlation_value is not None else None,
+        "self_correlation": abs(_ratio(self_correlation_value)) if self_correlation_value is not None else None,
+        "self_correlation_status": self_correlation_status or None,
         "weight_concentration": _ratio(_first_value(metrics_root, ["weightConcentration", "weight_concentration"], 0.0)),
         "pass_fail": "FAIL" if failed else "PASS",
         "failure_reason": ", ".join(str(_first_value(item, ["name", "title", "check"], "FAILED_CHECK")) for item in failed[:3]) or None,

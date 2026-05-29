@@ -13,6 +13,7 @@ SubmitCandidate = Callable[[dict[str, Any]], dict[str, Any]]
 CandidateFromPayload = Callable[[dict[str, Any]], dict[str, Any]]
 WebError = Callable[[Exception, str], dict[str, Any]]
 PayloadTruthy = Callable[[object], bool]
+ProgressCallback = Callable[[dict[str, Any]], None]
 
 
 def submit_batch_payload(
@@ -24,6 +25,7 @@ def submit_batch_payload(
     candidate_from_payload: CandidateFromPayload,
     web_error: WebError,
     payload_truthy: PayloadTruthy,
+    progress_callback: ProgressCallback | None = None,
 ) -> dict[str, Any]:
     alpha_ids = [str(item) for item in payload.get("alpha_ids", []) if str(item)]
     raw_candidates = payload.get("submit_candidates")
@@ -46,7 +48,27 @@ def submit_batch_payload(
         }
     results = []
     submitted_set: set[str] = set()
-    for alpha_id in alpha_ids:
+    total = len(alpha_ids)
+    if progress_callback:
+        progress_callback({
+            "phase": "submitting",
+            "message": f"Preparing batch submission for {total} alpha(s).",
+            "submitted": 0,
+            "failed": 0,
+            "total": total,
+            "percent": 0 if total else 100,
+        })
+    for index, alpha_id in enumerate(alpha_ids, start=1):
+        if progress_callback:
+            progress_callback({
+                "phase": "submitting",
+                "message": f"Submitting alpha {index}/{total}: {alpha_id}",
+                "current_alpha_id": alpha_id,
+                "submitted": len(submitted_set),
+                "failed": sum(1 for item in results if not item.get("ok")),
+                "done": index - 1,
+                "total": total,
+            })
         if alpha_id in submitted_set:
             results.append({
                 "alpha_id": alpha_id,
@@ -66,6 +88,16 @@ def submit_batch_payload(
         if result.get("ok"):
             submitted_set.add(alpha_id)
         results.append({"alpha_id": alpha_id, **result})
+        if progress_callback:
+            progress_callback({
+                "phase": "submitting",
+                "message": f"Submitted {index}/{total}; accepted {len(submitted_set)}, failed {sum(1 for item in results if not item.get('ok'))}.",
+                "current_alpha_id": alpha_id,
+                "submitted": len(submitted_set),
+                "failed": sum(1 for item in results if not item.get("ok")),
+                "done": index,
+                "total": total,
+            })
     return {
         "ok": True,
         "schema_version": "submission_batch_result.v2",

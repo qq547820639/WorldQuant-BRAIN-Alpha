@@ -41,6 +41,7 @@ class WebHandlerDispatchContext:
     jobs: Any
     sync_jobs: Any
     check_jobs: Any
+    async_jobs: Any
     enrich_progress: Callable[[dict[str, Any]], dict[str, Any]]
     public_run_config: Callable[[], dict[str, Any]]
     public_config_schema: Callable[[], dict[str, Any]]
@@ -72,7 +73,10 @@ class WebHandlerDispatchContext:
     start_sync_job: Callable[[str, dict[str, Any]], None]
     check_candidate: Callable[[dict[str, Any]], dict[str, Any]]
     generate_candidates_payload: Callable[[dict[str, Any]], dict[str, Any]]
+    start_generate_candidates_job: Callable[[str, dict[str, Any]], None]
     start_check_batch_job: Callable[[str, dict[str, Any]], None]
+    start_scoring_evaluate_job: Callable[[str, dict[str, Any]], None]
+    start_submit_batch_job: Callable[[str, dict[str, Any]], None]
     submit_lock: Any
     submit_candidate: Callable[[dict[str, Any]], dict[str, Any]]
     submit_batch: Callable[[dict[str, Any]], dict[str, Any]]
@@ -145,8 +149,24 @@ def _get_root(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext) -> Non
 
 def _get_status(handler: Any, parsed: Any, ctx: WebHandlerDispatchContext) -> None:
     job_id = (parse_qs(parsed.query).get("job_id") or [""])[0]
-    payload, status = ctx.job_status_payload(ctx.jobs, job_id, ctx.enrich_progress, error="unknown job")
+    if not job_id:
+        handler._json(ctx.active_job_payload(ctx.jobs, ctx.enrich_progress))
+        return
+    payload, status = _job_status_from_any_store(ctx, job_id)
     handler._json(payload, status=status)
+
+
+def _job_status_from_any_store(ctx: WebHandlerDispatchContext, job_id: str) -> tuple[dict[str, Any], int]:
+    for store, error in (
+        (ctx.jobs, "unknown job"),
+        (ctx.sync_jobs, "unknown sync job"),
+        (ctx.check_jobs, "unknown check job"),
+        (ctx.async_jobs, "unknown async job"),
+    ):
+        payload, status = ctx.job_status_payload(store, job_id, ctx.enrich_progress, error=error)
+        if status == 200:
+            return payload, status
+    return {"ok": False, "error_code": "JOB_NOT_FOUND", "error": "unknown job"}, 404
 
 
 def _get_config(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext) -> None:
@@ -183,7 +203,39 @@ def _get_candidates(handler: Any, parsed: Any, ctx: WebHandlerDispatchContext) -
     job_id = (parse_qs(parsed.query).get("job_id") or [""])[0]
     lifecycle = ctx.lifecycle_payload(ctx.jobs, job_id, ctx.lifecycle_from_job)
     rows = lifecycle.get("records") if isinstance(lifecycle.get("records"), list) else []
+    if not _has_candidate_like_rows(rows):
+        rows = _latest_async_candidates(ctx.async_jobs)
     handler._json({"ok": True, "candidates": rows, "count": len(rows)})
+
+
+def _has_candidate_like_rows(rows: list[Any]) -> bool:
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        candidate = row.get("candidate") if isinstance(row.get("candidate"), dict) else row
+        if candidate.get("alpha_id") or candidate.get("official_alpha_id") or candidate.get("expression"):
+            return True
+    return False
+
+
+def _latest_async_candidates(async_jobs: Any) -> list[dict[str, Any]]:
+    latest_any = getattr(async_jobs, "all", None)
+    rows = []
+    if callable(latest_any):
+        rows = latest_any(limit=25)
+    else:
+        latest = getattr(async_jobs, "latest_any", None)
+        if callable(latest):
+            item = latest()
+            rows = [item] if item else []
+    for _job_id, job in rows:
+        result = job.get("result") if isinstance(job, dict) else {}
+        if not isinstance(result, dict):
+            continue
+        candidates = result.get("candidates") or result.get("candidates_preview") or []
+        if isinstance(candidates, list) and candidates:
+            return [row for row in candidates if isinstance(row, dict)]
+    return []
 
 
 def _compact_job_result(payload: dict[str, Any]) -> dict[str, Any]:
@@ -440,7 +492,13 @@ def _post_check(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext) -> N
 def _post_generate_candidates(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext) -> None:
     try:
         payload = handler._read_json()
-        handler._json(ctx.generate_candidates_payload(payload))
+        response, status = ctx.background_job_start_payload(
+            ctx.async_jobs,
+            payload,
+            ctx.start_generate_candidates_job,
+            conflict_error="active async job",
+        )
+        handler._json(response, status=status)
     except AssistantResponseParseError as exc:
         handler._json(ctx.web_error(exc, "ASSISTANT_RESPONSE_PARSE_ERROR"), status=400)
     except Exception as exc:
@@ -490,7 +548,25 @@ def _post_submit(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext) -> 
 
 
 def _post_submit_batch(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext) -> None:
-    _submit_with_lock(handler, ctx, ctx.submit_batch, "SUBMIT_BATCH_ERROR")
+    try:
+        conflict = ctx.active_auxiliary_operation(exclude="submit", allow_production=True)
+        if conflict:
+            _kind, message = conflict
+            handler._json({"ok": False, "error_code": "CONFLICT_AUX_OP", "error": message}, status=409)
+            return
+        if ctx.submit_lock.locked():
+            handler._json({"ok": False, "error_code": "CONFLICT_RUNNING", "error": "已有提交任务正在运行，请完成后再操作。"}, status=409)
+            return
+        payload = handler._read_json()
+        response, status = ctx.background_job_start_payload(
+            ctx.async_jobs,
+            payload,
+            ctx.start_submit_batch_job,
+            conflict_error="active async job",
+        )
+        handler._json(response, status=status)
+    except Exception as exc:
+        handler._json(ctx.web_error(exc, "SUBMIT_BATCH_ERROR"), status=400)
 
 
 def _post_assistant_response_parse(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext) -> None:
@@ -546,8 +622,13 @@ def _post_shutdown(handler: Any, parsed: Any, ctx: WebHandlerDispatchContext) ->
 def _post_scoring_evaluate(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext) -> None:
     try:
         payload = handler._read_json()
-        from brain_alpha_ops.web_redline_scoring import handle_scoring_evaluate
-        handler._json(handle_scoring_evaluate(payload))
+        response, status = ctx.background_job_start_payload(
+            ctx.async_jobs,
+            payload,
+            ctx.start_scoring_evaluate_job,
+            conflict_error="active async job",
+        )
+        handler._json(response, status=status)
     except Exception as exc:
         handler._json(ctx.web_error(exc, "SCORING_ERROR"), status=400)
 

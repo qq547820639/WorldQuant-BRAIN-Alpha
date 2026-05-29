@@ -39,6 +39,23 @@ def test_normalize_metrics_extracts_checks():
     assert metrics["sharpe"] == 1.4
     assert metrics["pass_fail"] == "PASS"
     assert metrics["correlation"] == 0.3
+    assert metrics["self_correlation"] == 0.3
+
+
+def test_normalize_metrics_preserves_self_correlation_check_status():
+    metrics = normalize_metrics(
+        {
+            "is": {
+                "sharpe": 1.4,
+                "fitness": 1.1,
+                "turnover": 0.2,
+                "checks": [{"name": "SELF_CORRELATION", "result": "PENDING"}],
+            },
+        }
+    )
+
+    assert metrics["self_correlation_status"] == "PENDING"
+    assert "self_correlation" not in metrics
 
 
 def test_request_retries_after_429():
@@ -524,6 +541,31 @@ def test_list_user_alphas_progress_includes_total():
         assert len(rows) == 2
         assert progress[-1]["scanned"] == 2
         assert progress[-1]["total"] == 3
+
+
+def test_list_user_alphas_cached_progress_preserves_cached_total():
+    progress = []
+
+    with tempfile.TemporaryDirectory() as tmp:
+        config = OfficialAPIConfig(
+            base_url="https://example.test",
+            cache_dir=tmp,
+            min_request_interval_seconds=0,
+            context_cache_ttl_seconds=3600,
+        )
+        api = OfficialBrainAPI(config, token="token")
+        cache_name = api._cache_key("user_alphas", {"limit": 100, "offset": 0, "days": 3})
+        api._cache_path(cache_name).write_text(
+            json.dumps({"created_at": time.time(), "total": 25549, "items": [{"id": "a1"}, {"id": "a2"}]}),
+            encoding="utf-8",
+        )
+
+        rows = api.list_user_alphas("3d", progress_callback=progress.append)
+
+    assert len(rows) == 2
+    assert progress[-1]["scanned"] == 2
+    assert progress[-1]["total"] == 25549
+    assert progress[-1]["cached"] is True
 
 
 def test_list_user_alphas_stops_when_total_reached():

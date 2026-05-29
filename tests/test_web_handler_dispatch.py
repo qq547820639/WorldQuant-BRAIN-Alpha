@@ -25,6 +25,15 @@ class _Store:
     def get(self, job_id):
         return self.rows.get(job_id)
 
+    def all(self, *, limit=None):
+        rows = list(self.rows.items())
+        rows = rows[:limit] if limit is not None else rows
+        return rows
+
+    def latest_any(self):
+        rows = self.all(limit=1)
+        return rows[0] if rows else None
+
     def create(self):
         job_id = f"job_{len(self.created) + 1}"
         self.created.append(job_id)
@@ -42,6 +51,9 @@ class _Lock:
 
     def release(self):
         self.released = True
+
+    def locked(self):
+        return False
 
 
 class _Handler:
@@ -84,6 +96,7 @@ def _ctx():
     jobs = _Store()
     sync_jobs = _Store()
     check_jobs = _Store()
+    async_jobs = _Store()
     started = []
     submit_lock = _Lock()
 
@@ -116,6 +129,7 @@ def _ctx():
         jobs=jobs,
         sync_jobs=sync_jobs,
         check_jobs=check_jobs,
+        async_jobs=async_jobs,
         enrich_progress=lambda progress: {**progress, "enriched": True},
         public_run_config=lambda: {"environment": "production"},
         public_config_schema=lambda: {"schema_version": "test_schema"},
@@ -140,14 +154,26 @@ def _ctx():
         connection_test_post_payload=lambda payload, handler: handler(payload),
         test_connection=lambda payload: {"ok": True, "dry_run": payload.get("dry_run")},
         validate_run_payload=lambda payload: None,
-        background_job_start_payload=lambda store, payload, starter, conflict_error: (starter("job_1", payload) or {"ok": True, "job_id": "job_1"}, 200),
+        background_job_start_payload=lambda store, payload, starter, conflict_error: (
+            starter("job_1", payload) or {
+                "ok": True,
+                "job_id": "job_1",
+                "task_id": "job_1",
+                "sse_url": "/sse?job_id=job_1",
+                "status_url": "/api/status?job_id=job_1",
+            },
+            200,
+        ),
         start_run_job=lambda job_id, payload: started.append(("run", job_id, payload)),
         stop_job_payload=lambda store, payload: {"ok": True, "stopped": payload.get("job_id", "")},
         active_auxiliary_operation=lambda **kwargs: None,
         start_sync_job=lambda job_id, payload: started.append(("sync", job_id, payload)),
         check_candidate=lambda payload: {"ok": True, "checked": payload},
         generate_candidates_payload=lambda payload: {"ok": True, "generated": payload},
+        start_generate_candidates_job=lambda job_id, payload: started.append(("generate_candidates", job_id, payload)),
         start_check_batch_job=lambda job_id, payload: started.append(("check_batch", job_id, payload)),
+        start_scoring_evaluate_job=lambda job_id, payload: started.append(("scoring_evaluate", job_id, payload)),
+        start_submit_batch_job=lambda job_id, payload: started.append(("submit_batch", job_id, payload)),
         submit_lock=submit_lock,
         submit_candidate=lambda payload: {"ok": True, "submitted": payload},
         submit_batch=lambda payload: {"ok": True, "submitted_batch": payload},
@@ -206,6 +232,26 @@ def test_dispatch_get_handles_root_status_and_query_bounds():
     prompt_runs = _Handler()
     dispatch_get(prompt_runs, urlparse("/api/prompt_runs?limit=6"), ctx)
     assert prompt_runs.json_calls[0][0]["prompt_runs"] == {"limit": 6}
+
+
+def test_dispatch_get_candidates_falls_back_to_latest_async_generation_result():
+    ctx, _started, _lock = _ctx()
+    ctx.jobs.rows.clear()
+    ctx.async_jobs.rows = {
+        "task_0001": {
+            "status": "completed",
+            "result": {"ok": True, "candidates": [{"alpha_id": "alpha_real_1", "expression": "rank(close)"}]},
+            "progress": {"phase": "completed"},
+        }
+    }
+
+    handler = _Handler()
+    dispatch_get(handler, urlparse("/api/candidates?limit=100"), ctx)
+
+    payload = handler.json_calls[0][0]
+    assert payload["ok"] is True
+    assert payload["count"] == 1
+    assert payload["candidates"][0]["alpha_id"] == "alpha_real_1"
 
 
 def test_dispatch_root_requires_admin_token_when_remote_admin_is_enabled():
@@ -311,7 +357,13 @@ def test_dispatch_post_starts_jobs_and_handles_submit_lock():
 
     run = _Handler(body={"alpha": 1})
     dispatch_post(run, urlparse("/api/run"), ctx)
-    assert run.json_calls[0][0] == {"ok": True, "job_id": "job_1"}
+    assert run.json_calls[0][0] == {
+        "ok": True,
+        "job_id": "job_1",
+        "task_id": "job_1",
+        "sse_url": "/sse?job_id=job_1",
+        "status_url": "/api/status?job_id=job_1",
+    }
     assert started[0] == ("run", "job_1", {"alpha": 1})
 
     submit = _Handler(body={"alpha_id": "a1"})
@@ -323,6 +375,25 @@ def test_dispatch_post_starts_jobs_and_handles_submit_lock():
     review = _Handler(body={"request_pack": {}, "primary_response": "{}"})
     dispatch_post(review, urlparse("/api/assistant_cross_review"), ctx)
     assert review.json_calls[0][0]["review"] == {"request_pack": {}, "primary_response": "{}"}
+
+
+def test_dispatch_post_starts_async_operation_jobs():
+    ctx, started, _lock = _ctx()
+
+    generate = _Handler(body={"count": 3})
+    dispatch_post(generate, urlparse("/api/generate_candidates"), ctx)
+    assert generate.json_calls[0][0]["task_id"] == "job_1"
+    assert started[-1] == ("generate_candidates", "job_1", {"count": 3})
+
+    scoring = _Handler(body={"candidate": {"alpha_id": "a1"}})
+    dispatch_post(scoring, urlparse("/api/scoring/evaluate"), ctx)
+    assert scoring.json_calls[0][0]["sse_url"] == "/sse?job_id=job_1"
+    assert started[-1] == ("scoring_evaluate", "job_1", {"candidate": {"alpha_id": "a1"}})
+
+    submit_batch = _Handler(body={"alpha_ids": ["a1"]})
+    dispatch_post(submit_batch, urlparse("/api/submit_batch"), ctx)
+    assert submit_batch.json_calls[0][0]["status_url"] == "/api/status?job_id=job_1"
+    assert started[-1] == ("submit_batch", "job_1", {"alpha_ids": ["a1"]})
 
 
 def test_dispatch_post_check_batch_validates_candidate_ids_before_starting_job():

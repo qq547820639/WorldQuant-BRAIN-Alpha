@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Callable, Protocol
 
+from brain_alpha_ops.web_progress import normalize_progress
+
 
 class JobStoreLike(Protocol):
     def get(self, job_id: str) -> dict | None:
@@ -16,6 +18,21 @@ class JobStoreLike(Protocol):
 ProgressEnricher = Callable[[dict], dict]
 
 
+def _job_payload(job_id: str, job: dict, enrich_progress: ProgressEnricher) -> dict:
+    payload = dict(job or {})
+    status = str(payload.get("status") or "unknown")
+    progress = enrich_progress(dict(payload.get("progress") or {}))
+    progress = normalize_progress(progress, task_id=job_id, status=status)
+    payload["progress"] = progress
+    payload.setdefault("job_id", job_id)
+    payload["task_id"] = job_id
+    payload["phase"] = progress.get("phase", payload.get("phase", ""))
+    payload["percent_complete"] = progress.get("percent_complete")
+    payload["eta_seconds"] = progress.get("eta_seconds", 0)
+    payload["status_message"] = progress.get("status_message", "")
+    return payload
+
+
 def job_status_payload(
     store: JobStoreLike,
     job_id: str,
@@ -25,11 +42,9 @@ def job_status_payload(
     error: str = "unknown job",
 ) -> tuple[dict, int]:
     job = store.get(job_id)
-    if job and "progress" in job:
-        job["progress"] = enrich_progress(dict(job["progress"]))
     if not job:
         return {"ok": False, "error_code": error_code, "error": error}, 404
-    return {"ok": True, **job}, 200
+    return {"ok": True, **_job_payload(job_id, job, enrich_progress)}, 200
 
 
 def active_job_payload(store: JobStoreLike, enrich_progress: ProgressEnricher) -> dict:
@@ -37,9 +52,7 @@ def active_job_payload(store: JobStoreLike, enrich_progress: ProgressEnricher) -
     if not active:
         return {"ok": True, "job_id": "", "status": "idle"}
     job_id, job = active
-    if "progress" in job:
-        job["progress"] = enrich_progress(dict(job["progress"]))
-    return {"ok": True, "job_id": job_id, **job}
+    return {"ok": True, **_job_payload(job_id, job, enrich_progress)}
 
 
 def lifecycle_payload(store: JobStoreLike, job_id: str, lifecycle_from_job: Callable[[dict], list[dict]]) -> dict:

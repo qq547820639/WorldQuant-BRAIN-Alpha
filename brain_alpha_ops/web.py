@@ -105,6 +105,7 @@ from brain_alpha_ops.web_post_handlers import (
 from brain_alpha_ops.web_handler_dispatch import WebHandlerDispatchContext, dispatch_get, dispatch_post
 from brain_alpha_ops.web_http_handler import create_handler_class
 from brain_alpha_ops.web_routes import route_for
+from brain_alpha_ops.web_async_jobs import progress_update, run_simple_async_job_service
 from brain_alpha_ops.web_run_job import run_guided_job_service, run_job_service
 from brain_alpha_ops.web_runtime_state import (
     active_auxiliary_operation as _active_auxiliary_operation_service,
@@ -225,8 +226,9 @@ _enrich_progress = _enrich_progress_service
 
 
 JOBS = DurableJobStore(runtime_project_root() / "data" / "jobs_production.json")
-SYNC_JOBS = DurableJobStore(runtime_project_root() / "data" / "jobs_sync.json")
-CHECK_JOBS = DurableJobStore(runtime_project_root() / "data" / "jobs_check.json")
+SYNC_JOBS = DurableJobStore(runtime_project_root() / "data" / "jobs_sync.json", job_prefix="sync")
+CHECK_JOBS = DurableJobStore(runtime_project_root() / "data" / "jobs_check.json", job_prefix="check")
+ASYNC_JOBS = DurableJobStore(runtime_project_root() / "data" / "jobs_async.json", job_prefix="task")
 SUBMIT_LOCK = threading.Lock()
 TASK_EXECUTOR = ThreadTaskExecutor(max_workers=4)
 SERVER: ThreadingHTTPServer | None = None
@@ -249,6 +251,7 @@ def _submit_background_job(target, *args) -> None:
 
 
 _handler_dispatch_context = lambda: _runtime_facade.handler_dispatch_context(sys.modules[__name__])
+_lookup_sse_job = lambda job_id: _runtime_facade.lookup_sse_job(sys.modules[__name__], job_id)
 
 Handler = create_handler_class(
     server_version=WebDefaults.SERVER_VERSION,
@@ -258,6 +261,7 @@ Handler = create_handler_class(
     dispatch_context=_handler_dispatch_context,
     web_session=web_session,
     jobs=JOBS,
+    resolve_sse_job=_lookup_sse_job,
     enrich_progress=_enrich_progress,
     content_security_policy_for_html=content_security_policy_for_html,
     sse_push_interval=WebDefaults.SSE_PUSH_INTERVAL,
@@ -271,6 +275,12 @@ _compute_run_stats = lambda data, run_config: _compute_run_stats_service(data, r
 
 
 generate_candidates_payload = lambda payload: _runtime_facade.generate_candidates_payload(sys.modules[__name__], payload)
+
+run_generate_candidates_job = lambda job_id, payload: _runtime_facade.run_generate_candidates_job(sys.modules[__name__], job_id, payload)
+
+run_scoring_evaluate_job = lambda job_id, payload: _runtime_facade.run_scoring_evaluate_job(sys.modules[__name__], job_id, payload)
+
+run_submit_batch_job = lambda job_id, payload: _runtime_facade.run_submit_batch_job(sys.modules[__name__], job_id, payload)
 
 
 lifecycle_from_job = lambda job: _runtime_facade.lifecycle_from_job(sys.modules[__name__], job)

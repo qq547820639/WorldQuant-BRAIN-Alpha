@@ -1,333 +1,237 @@
-# brain-alpha-ops 用户操作指南
+# BRAIN Alpha Ops
 
-`brain-alpha-ops` 是一个在本机浏览器中使用的 WorldQuant BRAIN Alpha 操作工作台。它把生产环境连接、云端 Alpha 同步、候选查看、达标检查和提交确认放在同一个页面里，帮助你按顺序完成可审计的 Alpha 操作流程。
+Local production workbench for WorldQuant BRAIN alpha research, validation, and submission review.
 
-本文档面向最终用户。你可以把它当作从启动、连接、同步、查看、检查到提交前确认的操作指引。文档截图来自真实生产环境页面，截图区域避开账号、密码、Token 等敏感输入，不使用 Mock 数据、空状态截图或演示数据截图。
+![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-3776AB)
+![Local Web Console](https://img.shields.io/badge/Web-local%20console-0F766E)
+![BRAIN API](https://img.shields.io/badge/BRAIN%20API-production-16A34A)
+![License MIT](https://img.shields.io/badge/License-MIT-111827)
 
-## 1. 截图与数据说明
+BRAIN Alpha Ops runs on your machine and talks to the official WorldQuant BRAIN API from a local browser page. Use it to connect your account, sync cloud alphas, discover candidates, score and validate ideas, review submission readiness, and monitor long-running jobs without losing sight of what is happening.
 
-本文截图基于 2026-05-29 连接 BRAIN 生产环境后的页面状态：
+The screenshots in this manual live in [docs/screenshots](docs/screenshots/). They are captured from the production UI with real BRAIN data, including real Alpha IDs such as `N1Axlk7X`, `gJmj3ml0`, `zqPEEEjR`, and numeric official metrics such as Sharpe, Fitness, Turnover, and Self Correlation. No mock data, placeholder rows, passwords, or tokens are used in the screenshots.
 
-| 项目 | 结果 |
-|---|---|
-| 运行环境 | `production` / 官方 BRAIN API |
-| 连接状态 | 已连接，认证模式为 `session_cookie` |
-| 云端数据 | 页面显示 500 条云端 Alpha 记录 |
-| 示例字段 | Alpha 记录 ID、状态、同步阶段、等待时间、详情弹窗 |
-| 提交状态 | 未触发真实提交 |
-| 凭据处理 | 凭据仅用于登录，不写入 README、配置文件或截图 |
+## Quick Start
 
-不同账号看到的数据量、Alpha ID、状态和指标会不同。请以你自己账号下的页面结果为准。
+### Prerequisites
 
-## 2. 你可以完成什么
+Before you launch the workbench, make sure you have:
 
-| 功能模块 | 你能做什么 | 页面入口 |
-|---|---|---|
-| 连接与身份 | 连接真实 BRAIN 生产环境账号 | 左侧“连接与身份” |
-| 市场与回测 | 选择市场预设，确认回测配置 | 左侧“市场 & 回测” |
-| 云端数据 | 同步并查看账号下已有 Alpha | 左侧“云端数据”、中部“云端数据”标签 |
-| 策略与插件 | 控制助手指导、排序微调和策略插件 | 左侧“策略 & 插件” |
-| 生产候选 | 启动候选生成、回测和排序流程 | “开始生产搜索” |
-| 达标检查 | 对达标候选执行提交前检查 | “达标检查”或“检查” |
-| 提交确认 | 对通过检查的候选做提交前复核 | “可提交”“提交确认”“提交勾选” |
-| 审计追踪 | 查看云端同步、生命周期、检查记录和运行状态 | 页面中部视图标签 |
+1. Python 3.10 or newer.
+2. Network access to `https://api.worldquantbrain.com`.
+3. A WorldQuant BRAIN account.
+4. Google Chrome, Edge, Safari, or Firefox. The production screenshots in this manual were verified in Google Chrome.
+5. This repository checked out locally.
 
-建议顺序是：先连接账号，再同步云端数据，再启动或查看候选，最后才做检查和提交前确认。
+### Install
 
-## 3. 安装与启动
-
-### 3.1 准备环境
-
-开始前请准备：
-
-1. 可以访问 WorldQuant BRAIN 的电脑。
-2. Python 3.10 或更高版本。
-3. 可用的 WorldQuant BRAIN 账号。
-4. Chrome、Edge、Safari 或 Firefox 等浏览器。
-5. 已下载的 `WorldQuant-BRAIN-Alpha` 项目目录。
-
-### 3.2 进入项目目录
-
-macOS / Linux：
+macOS / Linux:
 
 ```bash
 cd WorldQuant-BRAIN-Alpha
-```
-
-Windows PowerShell：
-
-```powershell
-cd WorldQuant-BRAIN-Alpha
-```
-
-### 3.3 创建并启用本地运行环境
-
-macOS / Linux：
-
-```bash
 python3 -m venv .venv
 source .venv/bin/activate
 python3 -m pip install --upgrade pip
-python3 -m pip install -e .
+python3 -m pip install -e ".[test]"
 ```
 
-Windows PowerShell：
+Windows PowerShell:
 
 ```powershell
+cd WorldQuant-BRAIN-Alpha
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
-python -m pip install -e .
+python -m pip install -e ".[test]"
 ```
 
-### 3.4 配置登录信息
+### Set Credentials
 
-推荐使用环境变量，避免把凭据保存到仓库文件中。
-
-| 变量名 | 用途 |
-|---|---|
-| `BRAIN_USERNAME` | BRAIN 登录邮箱或用户名 |
-| `BRAIN_PASSWORD` | BRAIN 登录密码 |
-| `BRAIN_TOKEN` | 可选访问令牌 |
-
-macOS / Linux：
+Use environment variables for credentials:
 
 ```bash
 export BRAIN_USERNAME="your_email_here"
 export BRAIN_PASSWORD="your_password_here"
 ```
 
-Windows PowerShell：
+You can also use `BRAIN_TOKEN`. Do not write real credentials into `README.md`, `config/run_config.json`, screenshots, commits, or logs.
 
-```powershell
-$env:BRAIN_USERNAME="your_email_here"
-$env:BRAIN_PASSWORD="your_password_here"
-```
-
-也可以在 Web 页面左侧“连接与身份”区域临时输入账号信息。临时输入只用于当前会话，不建议截图保存该区域。
-
-### 3.5 检查基础配置
-
-默认配置文件是 [config/run_config.json](config/run_config.json)。首次使用时重点确认：
-
-| 配置项 | 建议值 | 说明 |
-|---|---|---|
-| `environment` | `production` | 使用官方 BRAIN 生产环境 |
-| `auto_submit` | `false` | 默认不自动提交 |
-| `web.host` | `127.0.0.1` | 仅允许本机访问 |
-| `web.port` | `8765` | 本地 Web 控制台端口 |
-| `ops.storage_dir` | `data` | 本地运行数据目录 |
-
-### 3.6 启动 Web 控制台
-
-macOS / Linux：
+### Launch
 
 ```bash
 python3 launch_web.py
 ```
 
-Windows PowerShell：
-
-```powershell
-python launch_web.py
-```
-
-启动成功后，终端会显示本地访问地址。默认地址是：
+Open:
 
 ```text
 http://127.0.0.1:8765
 ```
 
-打开该地址即可进入 `brain-alpha-ops` Web 控制台。
+The production surface is the local HTML/JS console served by `launch_web.py`. A React mirror is also available for development:
 
-## 4. 完整使用流程
+```bash
+cd brain_alpha_ops/web/react_app
+npm run dev
+```
 
-### 4.1 连接生产账号
+### First Login
 
-1. 打开本地控制台。
-2. 确认顶部显示“生产环境”。
-3. 在左侧“连接与身份”中输入账号信息，或使用已设置的环境变量。
-4. 展开“高级连接设置”，确认 API 地址是官方 BRAIN 地址。
-5. 点击“测试连接”。
-6. 等顶部显示“已连接 — production · session_cookie”后再继续。
+1. Open the local workbench in Chrome.
+2. Confirm the runtime is `production`.
+3. Click the connection test button. If credentials are in environment variables, you do not need to type them into the page.
+4. Wait for the connection result before starting sync, generation, checks, or submission review.
+5. Choose `7d` for a fresh cloud sync when you want the latest production context.
 
-截图或分享页面前，请确认账号、密码、Token 等输入区域没有出现在画面中。
+![Connection and authentication](docs/screenshots/connection-authentication.png)
 
-下面这张图展示左侧真实配置区和右侧等待反馈区，适合先看整体布局。
+## Core Features
 
-![真实生产控制台：配置区与等待反馈](docs/readme_assets/production-connection-market.jpg)
+### Connection & Authentication
 
-### 4.2 等待加载、同步和长任务
+The connection panel verifies that the local server can authenticate against the official BRAIN API. In production mode, authentication uses `BRAIN_USERNAME` / `BRAIN_PASSWORD` or `BRAIN_TOKEN`; the browser session receives only local session and CSRF state.
 
-页面遇到耗时操作时，会显示运行状态面板、进度条、当前阶段、已处理数量和预计剩余时间。等待过程中不要重复点击生产、同步、检查或提交按钮；按钮被禁用时，页面会在按钮提示和左侧任务操作台说明原因。
+Successful authentication enables cloud sync, candidate generation, official scoring, batch checks, and submission review. Failed authentication returns a visible error message instead of leaving the interface frozen.
 
-下面的真实生产截图展示了云端同步等待官方接口返回时的状态：页面显示“当前阶段”“进度”“最后更新”“已等待”，并提供停止同步、重试同步、查看云端记录等操作。
+![Connected production console](docs/screenshots/connection-authentication.png)
 
-![真实生产控制台：云端同步等待反馈](docs/readme_assets/production-waiting-status.jpg)
+### Dashboard Overview
 
-### 4.3 查看真实云端 Alpha 数据
+The dashboard is the daily starting point. It shows cloud alpha inventory, production workflow counts, research memory, checkpoint status, redline status, and the current runtime state.
 
-1. 点击“云端数据”标签。
-2. 等待表格出现 Alpha 行。
-3. 确认表格中有真实 Alpha 记录 ID、状态和操作入口。
-4. 如需刷新最新记录，在左侧“云端数据”中选择同步范围并点击“同步云端数据”。
+Cloud totals are not guessed. The workbench reads the full cloud cache, deduplicates by real Alpha ID, and displays the actual count it has loaded. In the captured production session, the cloud view shows `25,549` alphas and real records such as `N1Axlk7X`, `gJmj3ml0`, `zqPEEEjR`, and `A1nVX57R`.
 
-下方截图来自生产环境中的非空云端数据表，页面显示 500 条云端记录，表格行包含 `gJR5QVIM`、`78arNEv8`、`qMPpxEYZ`、`N1gGaEO7` 等真实记录。
+`Last updated` and similar freshness labels describe when the local cache or progress state was refreshed. They do not describe Alpha quality, submission status, or whether an Alpha is new.
 
-![真实生产控制台：云端 Alpha 记录表](docs/readme_assets/production-cloud-table.jpg)
+![Dashboard overview with production cloud data](docs/screenshots/dashboard-overview.png)
 
-### 4.4 查看单条 Alpha 详情
+The cloud table includes official metrics from BRAIN. `Self Correlation` shows the numeric value returned by the API when available; when BRAIN has not completed the check, the UI shows the official state such as `PENDING`.
 
-1. 在“云端数据”表格中找到目标 Alpha。
-2. 点击该行右侧“详情”。
-3. 在弹窗中核对云端 Alpha 记录、状态和指标字段。
-4. 查看完毕后点击“关闭”。
+![Cloud alpha table](docs/screenshots/dashboard-cloud-table.png)
 
-下面的示例详情来自生产环境中的 Alpha `9qaOZVno`，状态为 `UNSUBMITTED`，并展示真实的业务字段和检查结论。
+### Candidate Discovery
 
-![真实生产控制台：单条云端 Alpha 详情](docs/readme_assets/production-alpha-detail.jpg)
+Candidate discovery starts from **Start production search** or the candidate generation action. The generator uses the current production configuration, official context cache, and research memory to create real candidate records for review.
 
-### 4.5 设置市场与回测参数
+Typical flow:
 
-1. 在左侧“市场 & 回测”中选择市场预设。
-2. 首次使用建议保持“美股标准生产”等默认预设。
-3. 如需手动调整，再展开“高级回测设置”。
-4. 修改地区、股票池、Delay、中性化、Decay、Truncation 等参数后再启动生产。
+1. Test the production connection.
+2. Sync cloud alphas for `7d` so existing account context is available.
+3. Generate candidates.
+4. Filter by Alpha ID, family, expression, score, or lifecycle status.
+5. Score or check the candidates you want to advance.
 
-预设会覆盖一组常用官方回测参数。手动修改下方设置后，以手动设置为准。
+The candidate table never uses mock rows. If no real candidate records exist, it stays empty with explicit actions; after generation, it displays the generated candidate IDs, expressions, scorecards, and lifecycle status.
 
-![真实生产控制台：市场预设与回测设置](docs/readme_assets/production-connection-market.jpg)
+![Candidate discovery and filtering](docs/screenshots/candidate-discovery-overview.png)
 
-### 4.6 设置策略与插件
+### Scoring & Validation
 
-1. 在左侧“策略 & 插件”确认“助手指导”和“指导排序微调”开关。
-2. 如果不需要加载本地策略插件，保持“策略插件”关闭。
-3. 如果启用策略插件，在“插件规格”中填写插件路径。
-4. 调整置信度、加分上限、扣分上限时，建议一次只改一项，便于比较效果。
+Scoring and validation help you decide whether a candidate is ready for more official work. The scoring flow combines local scorecards, official metrics, gate checks, anti-overfit context, rolling validation context, and BRAIN check results.
 
-![真实生产控制台：策略与插件设置](docs/readme_assets/production-strategy-panel.jpg)
+Use this view to inspect:
 
-### 4.7 启动生产搜索
+1. Sharpe, Fitness, Turnover, Returns, Drawdown, and Self Correlation.
+2. Hard and soft gate status.
+3. Top failure reasons and improvement hints.
+4. Anti-overfit and rolling validation evidence.
+5. Whether a candidate should remain research-only, be optimized, or proceed to submission review.
 
-1. 确认账号已经连接。
-2. 优先加载或同步云端数据，避免与已有 Alpha 重复。
-3. 选择市场预设。
-4. 点击“开始生产搜索”。
-5. 等候选进入“候选池”“等待回测”“回测中”“二次融合”等阶段。
-6. 查看排序分、状态和风险原因。
+![Scoring and validation panel](docs/screenshots/scoring-validation-detail.png)
 
-候选池为空不代表云端数据为空。云端数据表示账号已有线上 Alpha；候选池表示本地生产搜索生成的新候选。
+Alpha details preserve the official status returned by BRAIN. For example, the production cloud data includes active Alpha IDs with numeric Self Correlation values such as `0.6302`, `0.0082`, and `0.0000`.
 
-### 4.8 执行达标检查
+![Alpha detail with official metrics](docs/screenshots/scoring-alpha-detail.png)
 
-1. 等候选进入可检查阶段。
-2. 点击“达标”或“可提交”相关视图。
-3. 选择候选后点击“检查”。
-4. 等待检查结束。
-5. 查看通过数量、失败数量和失败原因。
+### Submission Workflow
 
-如果没有可检查候选，“检查”按钮可能不可用，这是安全设计，不是页面异常。
+Submission is intentionally staged. The workbench separates check, review, and submit so you can see why an Alpha is blocked before any irreversible action.
 
-### 4.9 提交前确认
+Recommended flow:
 
-1. 只在候选通过达标检查后进入“可提交”或“提交确认”视图。
-2. 再次核对 Alpha ID、官方 ID、状态和风险原因。
-3. 勾选确实要处理的候选。
-4. 确认 `auto_submit=false`，除非你明确需要自动提交。
-5. 点击“提交勾选”前最后核对数量。
+1. Select only Alpha records that are eligible for review.
+2. Run pre-submit check or batch check.
+3. Review duplicate risk, cloud status, observability warnings, and failed BRAIN checks.
+4. Confirm the submission intent.
+5. Submit only after checks are visible and current.
 
-阅读指南或做只读确认时，不需要勾选提交项，也不要触发真实提交。
+Batch submission uses the same progress channel as other long-running operations. The UI keeps the submit action disabled while another conflicting job is running.
 
-## 5. 只读验证模式
+![Submission workflow](docs/screenshots/submission-workflow-overview.png)
 
-如果你只想确认项目能读取真实生产数据，不希望触发候选生产或提交，可以按以下只读路径操作：
+### Configuration
 
-1. 启动 Web 控制台。
-2. 连接生产环境账号。
-3. 打开“云端数据”标签。
-4. 查看表格中的真实 Alpha 记录 ID 和状态。
-5. 打开一条 Alpha 详情。
-6. 不点击“开始生产搜索”。
-7. 不勾选提交项。
-8. 不点击“提交勾选”。
+Configuration controls the production profile used by generation, sync, validation, and submission review. Start with the provided US equity production preset, then adjust region, universe, delay, neutralization, decay, truncation, and data handling only when you need a specific research scope.
 
-这一路径适合新用户熟悉页面，也适合在提交前确认账号、数据和页面状态是否正常。
+![Market preset and sync range](docs/screenshots/quick-start-market-settings.png)
 
-## 6. 常见问题排查
+Strategy settings include assistant guidance, guidance score adjustment, confidence thresholds, and local strategy plugin loading. Disabled plugins are not loaded.
 
-### 6.1 Web 页面打不开
+![Strategy and plugin settings](docs/screenshots/configuration-strategy-panel.png)
 
-可能原因：
+### Monitoring
 
-1. Web 控制台没有启动。
-2. 浏览器地址输入错误。
-3. 默认端口被占用。
-4. 本机安全软件阻止了本地端口访问。
+Long-running operations always show progress. Cloud sync, candidate generation, scoring, batch check, and batch submit all publish the same progress contract:
 
-处理方式：
-
-1. 确认终端中启动命令仍在运行。
-2. 打开 `http://127.0.0.1:8765`。
-3. 如果端口被占用，修改 [config/run_config.json](config/run_config.json) 中的 `web.port`，例如改为 `8766`。
-4. 保存配置后重新启动 Web 控制台。
-
-### 6.2 页面显示未连接
-
-可能原因：
-
-1. 登录环境变量未设置。
-2. 页面输入的账号或密码不正确。
-3. Token 已过期。
-4. 网络暂时无法访问 BRAIN。
-
-处理方式：
-
-1. 重新确认 `BRAIN_USERNAME`。
-2. 重新设置 `BRAIN_PASSWORD` 或 `BRAIN_TOKEN`。
-3. 确认 API 地址为 `https://api.worldquantbrain.com`。
-4. 点击“测试连接”重新验证。
-
-### 6.3 云端数据为空或数量不符合预期
-
-可能原因：
-
-1. 当前账号本身没有对应范围内的 Alpha。
-2. 同步范围过窄。
-3. 官方接口仍在处理同步任务。
-4. 网络或登录会话临时失效。
-
-处理方式：
-
-1. 把同步范围从“近 3 天”改为更长范围。
-2. 等页面运行状态面板显示同步完成。
-3. 如提示可重试，点击“重试同步”。
-4. 仍然异常时，重新测试连接后再同步。
-
-### 6.4 按钮被禁用
-
-按钮禁用通常是为了防止冲突操作。页面会在任务操作台、按钮标题或运行状态面板说明原因，例如：
-
-| 提示 | 含义 |
+| Field | Meaning |
 |---|---|
-| 页面数据正在加载 | 等待启动数据加载完成 |
-| 云端同步正在进行 | 请等待同步完成后再生产、检查或提交 |
-| 达标检查正在进行 | 请等待官方检查返回 |
-| 提交正在进行 | 请不要重复提交 |
-| 请先选择要提交的 Alpha | 当前没有可提交选择 |
+| `task_id` | Stable job identifier for status polling and SSE |
+| `phase` | Current stage, such as `scan`, `candidate_generation`, `scoring`, `checking`, or `submitting` |
+| `percent_complete` | Determinate progress value when it can be calculated |
+| `eta_seconds` | Remaining time estimate when available |
+| `status_message` | Human-readable message for the current phase |
 
-### 6.5 不想触发真实提交
+The frontend displays a determinate bar when progress is known and an indeterminate state when the backend is waiting on the official API. Errors include a retry path instead of a silent failure.
 
-保持以下习惯：
+![Unified job progress](docs/screenshots/monitoring-progress.png)
 
-1. 不勾选提交项。
-2. 不点击“提交勾选”。
-3. 保持 `auto_submit=false`。
-4. 只查看云端数据、详情和检查结果。
+## Architecture
 
-## 7. 安全提醒
+BRAIN Alpha Ops is local-first. The browser talks to a loopback HTTP server, and the server talks to the official BRAIN API.
 
-1. 不要把账号、密码、Token 写入 README、截图或聊天记录。
-2. 不要提交含有真实凭据的配置文件。
-3. 分享截图前，确认输入框、浏览器地址栏和终端输出没有敏感信息。
-4. 提交 Alpha 前确认它来自真实生产路径，并已经通过本地与官方检查。
-5. 默认把本地控制台绑定到 `127.0.0.1`，不要暴露到公网。
+| Layer | Files | Purpose |
+|---|---|---|
+| Web server | [brain_alpha_ops/web.py](brain_alpha_ops/web.py) | Local HTTP server and runtime facade |
+| Routes | [brain_alpha_ops/web_routes.py](brain_alpha_ops/web_routes.py), [brain_alpha_ops/web_handler_dispatch.py](brain_alpha_ops/web_handler_dispatch.py) | GET/POST routing, session checks, replay protection |
+| Progress | [brain_alpha_ops/web_progress.py](brain_alpha_ops/web_progress.py), [brain_alpha_ops/web_async_jobs.py](brain_alpha_ops/web_async_jobs.py) | Unified progress fields, async jobs, SSE/status payloads |
+| Production jobs | [brain_alpha_ops/web_sync_job.py](brain_alpha_ops/web_sync_job.py), [brain_alpha_ops/web_check_batch_job.py](brain_alpha_ops/web_check_batch_job.py), [brain_alpha_ops/web_submission_batch.py](brain_alpha_ops/web_submission_batch.py) | Sync, batch check, and batch submit work |
+| BRAIN API | [brain_alpha_ops/brain_api](brain_alpha_ops/brain_api) | Official authentication, pagination, metrics normalization |
+| Scoring | [brain_alpha_ops/web_redline_scoring.py](brain_alpha_ops/web_redline_scoring.py), [brain_alpha_ops/scoring](brain_alpha_ops/scoring) | Scorecards, redlines, gates, attribution |
+| Frontend | [brain_alpha_ops/web/js](brain_alpha_ops/web/js), [brain_alpha_ops/web/react_app](brain_alpha_ops/web/react_app) | Production console and React mirror |
+| Storage | [data](data) | JSONL caches, job state, run history, research memory |
+
+Key endpoints:
+
+| Endpoint | Purpose |
+|---|---|
+| `POST /api/test_connection` | Verify production authentication |
+| `POST /api/sync_alphas` | Start cloud alpha sync |
+| `GET /api/cloud_alphas` | Read cloud alpha snapshot |
+| `POST /api/generate_candidates` | Start candidate generation |
+| `POST /api/scoring/evaluate` | Score a candidate |
+| `POST /api/check_batch` | Run batch pre-submit checks |
+| `POST /api/submit_batch` | Start batch submission |
+| `GET /sse?job_id=...` | Stream job progress |
+| `GET /api/status?job_id=...` | Poll job status |
+
+## Appendix: Verification
+
+Verification focuses on production behavior, not demo data.
+
+1. Authentication was exercised through the production BRAIN API using environment-provided credentials.
+2. Cloud sync and `GET /api/cloud_alphas` displayed real BRAIN Alpha IDs and official metrics.
+3. Candidate generation, scoring, batch check, and batch submit route through async job stores with SSE/status progress.
+4. Self Correlation is normalized from official metrics or BRAIN check state and displayed as a number or official status.
+5. The UI renders explicit feedback for loading, progress, success, and error states.
+6. Local safety controls include loopback origin checks, session cookies, CSRF, replay protection, submit locks, and credential redaction.
+
+Useful verification commands:
+
+```bash
+python3 brain_alpha_ops/web/build_inline.py --check --json
+python3 scripts/check_frontend_syntax.py --json
+python3 -m pytest tests/test_web_async_jobs.py tests/test_web_progress.py tests/test_web_cloud_snapshot.py -q
+python3 -m pytest tests/test_web_handler_dispatch.py tests/test_web_post_handlers.py tests/test_web_check_batch_job.py tests/test_web_submission_batch.py -q
+python3 -m pytest tests/test_official_adapter.py -q
+python3 scripts/final_release_gate.py --json
+```

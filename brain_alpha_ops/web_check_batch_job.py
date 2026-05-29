@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections import Counter
 import logging
+import time
 from typing import Any, Callable, Protocol
 
 from brain_alpha_ops.config import RunConfig
@@ -30,6 +31,26 @@ CheckAvailability = Callable[..., dict[str, Any]]
 ObservabilityPreflight = Callable[[str], dict[str, Any]]
 SafeErrorMessage = Callable[[Exception], str]
 ErrorPayload = Callable[..., dict[str, Any]]
+
+
+def _timing_payload(started_at: float, *, done: int = 0, total: int = 0) -> dict[str, Any]:
+    current = time.time()
+    elapsed = max(0.0, current - float(started_at or current))
+    payload: dict[str, Any] = {
+        "started_at_ms": int(float(started_at or current) * 1000),
+        "updated_at_ms": int(current * 1000),
+        "elapsed_seconds": round(elapsed, 1),
+    }
+    done = max(0, int(done or 0))
+    total = max(0, int(total or 0))
+    if done > 0 and total > done and elapsed > 0:
+        rate = done / elapsed
+        eta_seconds = max(1, int(round((total - done) / rate))) if rate > 0 else 0
+        payload["eta_seconds"] = eta_seconds
+        payload["eta_deadline_at_ms"] = int((current + eta_seconds) * 1000)
+    elif total and done >= total:
+        payload["eta_seconds"] = 0
+    return payload
 
 
 def run_check_batch_job_service(
@@ -61,21 +82,29 @@ def run_check_batch_job_service(
     results: list[dict[str, Any]] = []
     cloud_alphas: list[dict[str, Any]] = []
     cloud_error = ""
+    started_at = time.time()
     try:
         store.update(
             job_id,
             status="running",
             progress={
+                "task_id": job_id,
+                "job_id": job_id,
+                "operation": "check_batch",
                 "phase": "cloud_sync",
                 "status_code": "CHECK_CLOUD_SYNC",
                 "mode": mode,
                 "range": sync_range,
                 "total": total,
+                "percent": 0 if total else 100,
+                "percent_complete": 0 if total else 100,
                 "checked": 0,
                 "submittable": 0,
                 "blocked": 0,
                 "failed": 0,
+                "status_message": f"Preparing real-time checks for {total} passed alpha(s).",
                 "message": f"Preparing real-time checks for {total} passed alpha(s).",
+                **_timing_payload(started_at, done=0, total=total),
                 "items": [],
             },
         )
@@ -101,17 +130,24 @@ def run_check_batch_job_service(
                 job_id,
                 status="running",
                 progress={
+                    "task_id": job_id,
+                    "job_id": job_id,
+                    "operation": "check_batch",
                     "phase": "checking",
                     "status_code": "CHECK_RUNNING",
                     "mode": mode,
                     "range": sync_range,
                     "total": total,
+                    "percent": (checked / total * 100) if total else 100,
+                    "percent_complete": (checked / total * 100) if total else 100,
                     "checked": checked,
                     "submittable": submittable,
                     "blocked": blocked,
                     "failed": failed,
                     "current_alpha_id": candidate.get("alpha_id", ""),
+                    "status_message": f"Checking {index}/{total}: {candidate.get('alpha_id', '')}",
                     "message": f"Checking {index}/{total}: {candidate.get('alpha_id', '')}",
+                    **_timing_payload(started_at, done=checked, total=total),
                     "items": results,
                 },
             )
@@ -140,18 +176,25 @@ def run_check_batch_job_service(
                 job_id,
                 status="running",
                 progress={
+                    "task_id": job_id,
+                    "job_id": job_id,
+                    "operation": "check_batch",
                     "phase": "checking",
                     "status_code": "CHECK_RUNNING",
                     "mode": mode,
                     "range": sync_range,
                     "total": total,
+                    "percent": (checked / total * 100) if total else 100,
+                    "percent_complete": (checked / total * 100) if total else 100,
                     "checked": checked,
                     "submittable": submittable,
                     "blocked": blocked,
                     "failed": failed,
                     "blockers": dict(blocker_counts.most_common(5)),
                     "current_alpha_id": candidate.get("alpha_id", ""),
+                    "status_message": f"Checked {checked}/{total}; submittable {submittable}, blocked {blocked}, failed {failed}.",
                     "message": f"Checked {checked}/{total}; submittable {submittable}, blocked {blocked}, failed {failed}.",
+                    **_timing_payload(started_at, done=checked, total=total),
                     "items": results,
                 },
             )
@@ -173,9 +216,16 @@ def run_check_batch_job_service(
             status="completed",
             result={"ok": True, "summary": summary, "items": results},
             progress={
+                "task_id": job_id,
+                "job_id": job_id,
+                "operation": "check_batch",
                 "phase": "completed",
                 "status_code": "CHECK_COMPLETED",
+                "percent": 100,
+                "percent_complete": 100,
+                "status_message": "Batch check completed.",
                 "message": "Batch check completed.",
+                **_timing_payload(started_at, done=checked, total=total),
                 "items": results,
                 **summary,
             },
@@ -189,16 +239,23 @@ def run_check_batch_job_service(
             status="failed",
             error=message,
             progress={
+                "task_id": job_id,
+                "job_id": job_id,
+                "operation": "check_batch",
                 "phase": "failed",
                 "status_code": "CHECK_FAILED",
                 "mode": mode,
                 "range": sync_range,
                 "total": total,
+                "percent": 100,
+                "percent_complete": 100,
                 "checked": checked,
                 "submittable": submittable,
                 "blocked": blocked,
                 "failed": failed + 1,
+                "status_message": message,
                 "message": message,
+                **_timing_payload(started_at, done=checked, total=total),
                 "items": results,
                 "error_context": error_context,
             },

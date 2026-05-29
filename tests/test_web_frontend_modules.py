@@ -17,6 +17,7 @@ TEMPLATE_PATH = WEB_DIR / "index_template.html"
 MODULE_TEST_COVERAGE = {
     "js/api-client.js": "api request, csrf header, and error mapping",
     "js/app.js": "ux orchestration, workflow nav, busy guards, and app actions",
+    "js/app-runtime.js": "runtime progress, operation locks, busy controls, and async job feedback",
     "js/components/modal.js": "confirm dialog visibility, focus, and resolution",
     "js/components/progress.js": "progress bar clamp and status text rendering",
     "js/components/spinner.js": "loading overlay visibility and message rendering",
@@ -525,6 +526,7 @@ function load(context, relPath) {
 
 def test_app_ux_orchestrator_has_tested_navigation_empty_and_busy_contracts():
     app_js = (WEB_JS / "app.js").read_text(encoding="utf-8")
+    app_runtime_js = (WEB_JS / "app-runtime.js").read_text(encoding="utf-8")
     view_registry_js = (WEB_JS / "view-registry.js").read_text(encoding="utf-8")
     view_renderers_js = (WEB_JS / "view-renderers.js").read_text(encoding="utf-8")
     result_table_js = (WEB_JS / "result-table.js").read_text(encoding="utf-8")
@@ -566,17 +568,17 @@ def test_app_ux_orchestrator_has_tested_navigation_empty_and_busy_contracts():
     assert "function getColumnsForView" in view_renderers_js
     assert "function buildCandidateRows" in view_renderers_js
 
-    assert "window.operationBlockReason = function (action)" in app_js
-    assert "window.renderBusyControls = function ()" in app_js
+    assert "function operationBlockReason(action)" in app_runtime_js
+    assert "function renderBusyControls()" in app_runtime_js
     assert "function syncStrategyPluginControls()" in app_js
     assert "function syncPluginControls()" in strategy_panel_js
     assert "function renderPolicy(config)" in strategy_panel_js
-    assert "setControlState('controlButton'" in app_js
-    assert "setControlState('syncButton'" in app_js
-    assert "setControlState('sideSyncButton'" in app_js
-    assert "setControlState('sideCheckButton'" in app_js
-    assert "sideTaskReason" in app_js
-    assert "operationGuard" in app_js
+    assert "setControlState('controlButton'" in app_runtime_js
+    assert "setControlState('syncButton'" in app_runtime_js
+    assert "setControlState('sideSyncButton'" in app_runtime_js
+    assert "setControlState('sideCheckButton'" in app_runtime_js
+    assert "sideTaskReason" in app_runtime_js
+    assert "operationGuard" in app_runtime_js
     assert "function syncStartupState(snapshot)" in app_js
     assert "window.LoadingFeedback" in (WEB_JS / "loading-feedback.js").read_text(encoding="utf-8")
 

@@ -87,7 +87,7 @@
     progress = progress || {};
     var scanned = Number(progress.scanned || progress.current || 0);
     var total = Number(progress.total || 0);
-    var percent = Number(progress.percent);
+    var percent = Number(progress.percent_complete !== undefined && progress.percent_complete !== null ? progress.percent_complete : progress.percent);
     if (!Number.isFinite(percent)) percent = total > 0 ? scanned / total * 100 : 0;
     if (typeof window.Progress === 'object' && window.Progress.renderProgress) {
       window.Progress.renderProgress('cloudSync', {
@@ -159,15 +159,20 @@
   }
 
   function markSyncRecoverable(range, message) {
+    var lastProgress = S.get('liveProgress') || {};
+    var lastCloudSync = lastProgress.cloud_sync || {};
+    var lastScanned = Number(lastCloudSync.scanned || S.get('syncScanned') || 0);
+    var lastTotal = Number(lastCloudSync.total || S.get('syncTotal') || 0);
+    var lastPercent = Number(lastCloudSync.percent || S.get('syncPercent') || 0);
     var progress = {
       phase: 'waiting',
       phase_label: '等待官方接口',
       status_code: 'RECOVERABLE_TIMEOUT',
       range: range,
       job_id: S.get('syncJobId') || '',
-      percent: 0,
-      scanned: 0,
-      total: 0,
+      percent: lastPercent > 0 ? lastPercent : undefined,
+      scanned: lastScanned,
+      total: lastTotal,
       message: message,
       eta_seconds: 0,
       eta_deadline_at_ms: 0,

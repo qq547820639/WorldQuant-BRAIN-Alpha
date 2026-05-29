@@ -11,21 +11,67 @@ export interface ApiResponse<T = unknown> {
 
 export interface JobStatus {
   job_id: string;
+  task_id?: string;
   status: "idle" | "running" | "completed" | "failed" | "cancelled";
-  phase: string;
-  cycle: number;
-  max_cycles: number;
-  started_at: string;
+  phase?: string;
+  cycle?: number;
+  max_cycles?: number;
+  started_at?: string;
+  percent_complete?: number | null;
+  eta_seconds?: number;
+  status_message?: string;
+  result?: unknown;
+  error?: string;
   progress?: JobProgress;
 }
 
 export interface JobProgress {
-  candidates_generated: number;
-  candidates_passed: number;
-  backtests_completed: number;
-  backtests_pending: number;
-  submissions: number;
-  elapsed_seconds: number;
+  task_id?: string;
+  job_id?: string;
+  phase?: string;
+  phase_label?: string;
+  status?: string;
+  status_message?: string;
+  message?: string;
+  percent?: number;
+  percent_complete?: number;
+  eta_seconds?: number;
+  elapsed_seconds?: number;
+  candidates_generated?: number;
+  candidates_passed?: number;
+  backtests_completed?: number;
+  backtests_pending?: number;
+  submissions?: number;
+  done?: number;
+  current?: number;
+  total?: number;
+  checked?: number;
+  submitted?: number;
+  failed?: number;
+  scanned?: number;
+  current_alpha_id?: string;
+  [key: string]: unknown;
+}
+
+export type ProgressLifecycle = "idle" | "loading" | "progress" | "success" | "error";
+
+export interface UnifiedProgress {
+  task_id?: string;
+  job_id?: string;
+  phase?: string;
+  phase_label?: string;
+  status?: string;
+  status_message?: string;
+  message?: string;
+  percent?: number | null;
+  percent_complete?: number | null;
+  eta_seconds?: number | null;
+  done?: number;
+  checked?: number;
+  submitted?: number;
+  scanned?: number;
+  total?: number;
+  error?: string;
 }
 
 // ── Candidate Types ───────────────────────────────────────────────────────
@@ -68,6 +114,8 @@ export interface OfficialMetrics {
   returns: number;
   drawdown: number;
   correlation: number;
+  self_correlation?: number;
+  self_correlation_status?: string;
   weight_concentration: number;
   sub_universe_sharpe?: number;
   margin?: number;
@@ -86,6 +134,98 @@ export interface GateCheck {
   passed: boolean;
   detail: string;
   severity: "ERROR" | "WARNING";
+}
+
+// ── Official Scoring Types ───────────────────────────────────────────────
+
+export interface ScoringResult {
+  alpha_id: string;
+  expression: string;
+  total_score: number;
+  decision_band: string;
+  passed_gate: boolean;
+  evaluated_at?: string;
+  prior?: ScoreLayer;
+  empirical?: ScoreLayer;
+  checklist?: ScoreLayer;
+  layer_weights?: Record<string, number>;
+  hard_gates?: OfficialGateResult[];
+  soft_gates?: OfficialGateResult[];
+  release_gate?: Record<string, unknown>;
+  attribution_tree?: AttributionNode | null;
+  top_failures?: FailureItem[];
+  improvement_hints?: string[];
+  api_output_deviation?: number;
+  deviation_details?: string[];
+  scoring_schema?: string;
+  score_basis?: string;
+  attribution_summary?: Record<string, unknown>;
+}
+
+export interface ScoreLayer {
+  score?: number;
+  raw_score?: number;
+  weight?: number;
+  max_points?: number;
+  items?: ScoreLayerItem[];
+  [key: string]: unknown;
+}
+
+export interface ScoreLayerItem {
+  name?: string;
+  passed?: boolean;
+  points?: number;
+  actual?: number | string | null;
+  target?: number | string | null;
+  direction?: string;
+  meaning?: string;
+  source?: string;
+  is_hard_gate?: boolean;
+}
+
+export interface OfficialGateResult {
+  gate_name: string;
+  passed: boolean;
+  check_items?: OfficialGateCheckItem[];
+  failed_items?: string[];
+  threshold_source?: string;
+  notes?: string[];
+}
+
+export interface OfficialGateCheckItem {
+  name: string;
+  passed: boolean;
+  actual?: number | string | null;
+  target?: number | string | null;
+  direction?: string;
+  meaning?: string;
+  source?: string;
+}
+
+export interface AttributionNode {
+  name: string;
+  score: number;
+  weight: number;
+  contribution?: number;
+  explanation?: string;
+  historical_trend?: string;
+  children?: AttributionNode[];
+}
+
+export interface ScoringAttributionResponse {
+  ok: boolean;
+  attribution?: AttributionNode | null;
+  attribution_summary?: Record<string, unknown>;
+  hard_gates?: OfficialGateResult[];
+  soft_gates?: OfficialGateResult[];
+  top_failures?: FailureItem[];
+  improvement_hints?: string[];
+}
+
+export interface FailureItem {
+  item?: string;
+  reason?: string;
+  severity?: string;
 }
 
 // ── Pipeline / Run Types ──────────────────────────────────────────────────
@@ -135,8 +275,19 @@ export interface ScoringConfig {
 // ── SSE Event Types ───────────────────────────────────────────────────────
 
 export interface SSEEvent {
-  type: "progress" | "candidate" | "backtest" | "submission" | "error" | "complete";
-  data: Record<string, unknown>;
+  type?: "progress" | "candidate" | "backtest" | "submission" | "error" | "complete";
+  ok?: boolean;
+  job_id?: string;
+  task_id?: string;
+  status?: string;
+  phase?: string;
+  percent_complete?: number | null;
+  eta_seconds?: number;
+  status_message?: string;
+  progress?: JobProgress;
+  result?: unknown;
+  error?: string;
+  data?: Record<string, unknown>;
 }
 
 // ── Cloud / Snapshot Types ────────────────────────────────────────────────

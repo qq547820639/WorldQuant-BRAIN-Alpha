@@ -313,7 +313,7 @@
   async function loadCheckpointStatus() {
     var el = $('checkpointSummary');
     try {
-      var data = await Api.get('/api/checkpoint/status');
+      var data = await Api.get('/api/checkpoint/status', { timeout: 15000 });
       if (!data || !data.ok) throw new Error((data && data.error) || '断点状态不可用');
       S.set('checkpointStatus', data);
       var checkpointCount = Number(data.checkpoint_count || 0);

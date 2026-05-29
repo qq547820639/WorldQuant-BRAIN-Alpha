@@ -8,6 +8,10 @@
   var S = window.AppState;
   var Toast = window.Toast;
 
+  function refreshBusyControls() {
+    if (typeof window.renderBusyControls === 'function') window.renderBusyControls();
+  }
+
   function taskTotal(total) {
     total = Number(total || S.get('pageLoadTotal') || 1);
     return Math.max(1, total);
@@ -44,6 +48,7 @@
     };
     S.setBatch(batch);
     if (typeof window.renderRuntimeStatus === 'function') window.renderRuntimeStatus();
+    refreshBusyControls();
     return done;
   }
 
@@ -59,6 +64,7 @@
       if (!S.get('pageLoadInFlight')) {
         S.setBatch({ pageLoadStartedAt: 0, pageLoadTotal: 0, pageLoadDone: 0, pageLoadMessage: '', pageLoadEtaSeconds: 0 });
         if (typeof window.renderRuntimeStatus === 'function') window.renderRuntimeStatus();
+        refreshBusyControls();
       }
     }, 400);
   }
@@ -69,12 +75,30 @@
       !S.get('submitInFlight') && !S.get('isRunning');
   }
 
-  async function track(label, action) {
+  function withTimeout(work, label, timeoutMs) {
+    timeoutMs = Math.max(1000, Number(timeoutMs || 15000));
+    var timerId = null;
+    return Promise.race([
+      Promise.resolve().then(work),
+      new Promise(function (resolve) {
+        timerId = setTimeout(function () {
+          resolve({ ok: false, error: label + '超时，已跳过并继续加载。' });
+        }, timeoutMs);
+      }),
+    ]).finally(function () {
+      if (timerId) clearTimeout(timerId);
+    });
+  }
+
+  async function track(label, action, timeoutMs) {
     var total = taskTotal();
     var done = Number(S.get('pageLoadDone') || 0);
     setTaskProgress(label + '...', done, total);
     try {
-      return await action();
+      return await withTimeout(action, label, timeoutMs);
+    } catch (e) {
+      if (Toast && Toast.warning) Toast.warning(label + '失败：' + (e.message || String(e)));
+      return { ok: false, error: e.message || String(e) };
     } finally {
       setTaskProgress(label + '完成', Math.min(total, done + 1), total);
     }
@@ -214,16 +238,16 @@
     begin(9, '正在加载生产工作台数据。');
     var result = {};
     result.latest = await track('读取最近生产结果', function () {
-      return Api.get('/api/latest_result').catch(function () { return {}; });
-    });
-    result.config = await track('读取运行配置', function () { return Api.get('/api/config').catch(function () { return {}; }); });
-    result.profile = await track('刷新账户状态', function () { return Api.get('/api/profile').catch(function () { return {}; }); });
-    result.presets = await track('加载市场预设', function () { return Api.get('/api/presets').catch(function () { return {}; }); });
-    result.cloud = await track('加载云端快照', loadCloudSnapshot);
-    result.redline = await track('验证技术红线', loadRedlineReport);
-    result.checkpoint = await track('刷新断点状态', loadCheckpointStatus);
-    result.checks = await track('刷新检查结果', loadCheckResults);
-    result.research = await track('加载研究记忆', loadResearchMemory);
+      return Api.get('/api/latest_result', { timeout: 30000 }).catch(function () { return {}; });
+    }, 30000);
+    result.config = await track('读取运行配置', function () { return Api.get('/api/config', { timeout: 15000 }).catch(function () { return {}; }); }, 15000);
+    result.profile = await track('刷新账户状态', function () { return Api.get('/api/profile', { timeout: 15000 }).catch(function () { return {}; }); }, 15000);
+    result.presets = await track('加载市场预设', function () { return Api.get('/api/presets', { timeout: 15000 }).catch(function () { return {}; }); }, 15000);
+    result.cloud = await track('加载云端快照', loadCloudSnapshot, 120000);
+    result.redline = await track('验证技术红线', loadRedlineReport, 120000);
+    result.checkpoint = await track('刷新断点状态', loadCheckpointStatus, 15000);
+    result.checks = await track('刷新检查结果', loadCheckResults, 30000);
+    result.research = await track('加载研究记忆', loadResearchMemory, 30000);
     if (typeof options.apply === 'function') options.apply(result);
     finish('生产工作台数据已加载。');
     return result;

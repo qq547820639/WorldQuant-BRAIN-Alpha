@@ -22,11 +22,13 @@ def create_handler_class(
     content_security_policy_for_html: Callable[[str | None], str],
     sse_push_interval: float,
     max_sse_duration: float,
+    resolve_sse_job: Callable[[str], dict | None] | None = None,
 ) -> type[BaseHTTPRequestHandler]:
     server_version_value = server_version
     max_body_bytes_value = max_body_bytes
     sse_push_interval_value = sse_push_interval
     max_sse_duration_value = max_sse_duration
+    resolve_sse_job_value = resolve_sse_job or (lambda job_id: jobs.get(job_id))
 
     class Handler(BaseHTTPRequestHandler):
         server_version = server_version_value
@@ -101,23 +103,37 @@ def create_handler_class(
                         self.wfile.flush()
                         break
 
-                    job = jobs.get(job_id)
+                    job = resolve_sse_job_value(job_id)
                     if not job:
-                        self.wfile.write(f"data: {json.dumps({'ok': False, 'error': 'job not found'})}\n\n".encode("utf-8"))
+                        self.wfile.write(f"data: {json.dumps({'ok': False, 'type': 'error', 'task_id': job_id, 'job_id': job_id, 'error': 'job not found'})}\n\n".encode("utf-8"))
                         self.wfile.flush()
                         break
 
+                    status = str(job.get("status", "unknown"))
+                    progress = enrich_progress(dict(job.get("progress", {})))
+                    progress.setdefault("task_id", job_id)
+                    progress.setdefault("job_id", job_id)
+                    progress.setdefault("status", status)
+                    event_type = _sse_event_type(status)
                     payload = {
                         "ok": True,
+                        "type": event_type,
                         "job_id": job_id,
-                        "status": job.get("status", "unknown"),
-                        "progress": enrich_progress(dict(job.get("progress", {}))),
+                        "task_id": job_id,
+                        "status": status,
+                        "phase": progress.get("phase", ""),
+                        "percent_complete": progress.get("percent_complete"),
+                        "eta_seconds": progress.get("eta_seconds", 0),
+                        "status_message": progress.get("status_message", ""),
+                        "progress": progress,
                         "error": job.get("error", ""),
                     }
+                    if event_type in {"complete", "error"}:
+                        payload["result"] = job.get("result")
                     self.wfile.write(f"data: {json.dumps(payload, default=str)}\n\n".encode("utf-8"))
                     self.wfile.flush()
 
-                    if job.get("status") in ("completed", "stopped", "failed"):
+                    if _is_terminal_status(status):
                         break
 
                     time.sleep(sse_push_interval_value)
@@ -158,3 +174,23 @@ def create_handler_class(
             )
 
     return Handler
+
+
+def _is_terminal_status(status: str) -> bool:
+    return str(status or "").lower() in {
+        "completed",
+        "completed_with_warnings",
+        "stopped",
+        "failed",
+        "cancelled",
+        "canceled",
+    }
+
+
+def _sse_event_type(status: str) -> str:
+    normalized = str(status or "").lower()
+    if normalized == "failed":
+        return "error"
+    if _is_terminal_status(normalized):
+        return "complete"
+    return "progress"

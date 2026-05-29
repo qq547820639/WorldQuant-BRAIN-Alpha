@@ -235,10 +235,9 @@
    */
   function validateConnection() {
     var valid = true;
-    valid = validateField('username', {
-      minLength: 1,
-      requiredMessage: '\u8BF7\u8F93\u5165 BRAIN \u8D26\u53F7\u3002', // 请输入BRAIN账号
-    }) && valid;
+    clearFieldValidation('username');
+    clearFieldValidation('password');
+    clearFieldValidation('token');
     valid = validateField('baseUrl', {
       isUrl: true,
       patternMessage: '\u8BF7\u8F93\u5165\u6709\u6548\u7684 API \u5730\u5740\u3002', // 请输入有效的API地址

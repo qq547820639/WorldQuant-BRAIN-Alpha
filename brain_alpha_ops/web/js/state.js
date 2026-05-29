@@ -72,6 +72,28 @@
 
   var listeners = [];
 
+  function finiteCount(value) {
+    var num = Number(value);
+    if (!Number.isFinite(num) || num < 0) return null;
+    return Math.floor(num);
+  }
+
+  function firstCount() {
+    for (var i = 0; i < arguments.length; i++) {
+      var count = finiteCount(arguments[i]);
+      if (count !== null) return count;
+    }
+    return null;
+  }
+
+  function cloudAlphaTotal() {
+    var cloud = state.currentResult.cloud_alphas || [];
+    var summary = ((state.currentResult || {}).summary || {}).cloud_sync || {};
+    var live = (((state.liveProgress || {}).data || {}).cloud_sync) || {};
+    var count = firstCount(summary.count, summary.total, live.total, summary.scanned, live.scanned, summary.loaded, summary.returned_count);
+    return count !== null ? count : cloud.length;
+  }
+
   function resolvePath(key) {
     if (!key) return [state];
     var keys = key.split('.');
@@ -200,7 +222,6 @@
       var checks = state.checkResults || {};
       var candidates = state.currentResult.candidates || [];
       var lifecycle = state.currentResult.lifecycle_records || [];
-      var cloud = state.currentResult.cloud_alphas || [];
       switch (view) {
         case 'candidates': return candidates.length;
         case 'pending_backtest': return candidates.filter(function (c) { return (c.lifecycle_status || c.status || '') === 'pending_backtest'; }).length;
@@ -210,7 +231,7 @@
         case 'submittable': return candidates.filter(function (c) { return AppState.isFreshPassedCheck(checks[c.alpha_id]); }).length;
         case 'submitted': return lifecycle.filter(function (r) { return r.stage === 'submitted' || r.status === 'submitted'; }).length;
         case 'failed': return candidates.filter(function (c) { var s = c.lifecycle_status || c.status || ''; return s === 'failed' || s === 'rejected' || s === 'blocked'; }).length;
-        case 'cloud': return cloud.length;
+        case 'cloud': return cloudAlphaTotal();
         case 'lifecycle': return lifecycle.length;
         default: return 0;
       }

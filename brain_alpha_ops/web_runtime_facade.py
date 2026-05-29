@@ -28,6 +28,7 @@ def handler_dispatch_context(web):
         jobs=web.JOBS,
         sync_jobs=web.SYNC_JOBS,
         check_jobs=web.CHECK_JOBS,
+        async_jobs=web.ASYNC_JOBS,
         enrich_progress=web._enrich_progress,
         public_run_config=web.public_run_config,
         public_config_schema=web.public_config_schema,
@@ -59,7 +60,10 @@ def handler_dispatch_context(web):
         start_sync_job=lambda job_id, body: web._submit_background_job(web.run_sync_job, job_id, body),
         check_candidate=web.check_candidate,
         generate_candidates_payload=web.generate_candidates_payload,
+        start_generate_candidates_job=lambda job_id, body: web._submit_background_job(web.run_generate_candidates_job, job_id, body),
         start_check_batch_job=lambda job_id, body: web._submit_background_job(web.run_check_batch_job, job_id, body),
+        start_scoring_evaluate_job=lambda job_id, body: web._submit_background_job(web.run_scoring_evaluate_job, job_id, body),
+        start_submit_batch_job=lambda job_id, body: web._submit_background_job(web.run_submit_batch_job, job_id, body),
         submit_lock=web.SUBMIT_LOCK,
         submit_candidate=web.submit_candidate,
         submit_batch=web.submit_batch,
@@ -126,6 +130,44 @@ def run_job(web, job_id: str, payload: dict):
 
 def generate_candidates_payload(web, payload: dict) -> dict:
     return web._generate_candidates_payload(payload, run_config_from_payload=web.run_config_from_payload)
+
+
+def lookup_sse_job(web, job_id: str) -> dict | None:
+    for store in (web.JOBS, web.SYNC_JOBS, web.CHECK_JOBS, web.ASYNC_JOBS):
+        row = store.get(job_id)
+        if row:
+            return row
+    return None
+
+
+def run_generate_candidates_job(web, job_id: str, payload: dict):
+    return web.run_simple_async_job_service(
+        job_id,
+        payload,
+        store=web.ASYNC_JOBS,
+        operation="generate_candidates",
+        start_phase="candidate_generation",
+        start_message="Generating candidate alphas.",
+        worker=web.generate_candidates_payload,
+        safe_error_message=web.safe_error_message,
+        error_payload=web.error_payload,
+    )
+
+
+def run_scoring_evaluate_job(web, job_id: str, payload: dict):
+    from brain_alpha_ops.web_redline_scoring import handle_scoring_evaluate
+
+    return web.run_simple_async_job_service(
+        job_id,
+        payload,
+        store=web.ASYNC_JOBS,
+        operation="scoring_evaluate",
+        start_phase="scoring",
+        start_message="Scoring candidate through the official scoring pipeline.",
+        worker=handle_scoring_evaluate,
+        safe_error_message=web.safe_error_message,
+        error_payload=web.error_payload,
+    )
 
 
 def lifecycle_from_job(web, job: dict) -> list[dict]:
@@ -431,6 +473,60 @@ def submit_batch(web, payload: dict) -> dict:
         candidate_from_payload=web.candidate_from_payload,
         web_error=web._web_error,
         payload_truthy=web.payload_truthy,
+    )
+
+
+def run_submit_batch_job(web, job_id: str, payload: dict):
+    import time
+
+    started_at = time.time()
+
+    def _progress(progress: dict) -> None:
+        progress = dict(progress or {})
+        message = str(progress.get("message") or "Submitting batch.")
+        done = int(progress.get("done", progress.get("submitted", 0)) or 0)
+        total = int(progress.get("total", 0) or 0)
+        web.progress_update(
+            web.ASYNC_JOBS,
+            job_id,
+            started_at,
+            operation="submit_batch",
+            phase=str(progress.get("phase") or "submitting"),
+            message=message,
+            done=done,
+            total=total,
+            submitted=int(progress.get("submitted", 0) or 0),
+            failed=int(progress.get("failed", 0) or 0),
+            current_alpha_id=str(progress.get("current_alpha_id") or ""),
+        )
+
+    def _worker(body: dict) -> dict:
+        if not web.SUBMIT_LOCK.acquire(blocking=False):
+            return {"ok": False, "error_code": "CONFLICT_RUNNING", "error": "已有提交任务正在运行，请完成后再操作。"}
+        try:
+            return web.submit_batch_payload(
+                body,
+                run_config_from_payload=web.run_config_from_payload,
+                observability_submission_preflight=web.observability_submission_preflight,
+                submit_candidate=web.submit_candidate,
+                candidate_from_payload=web.candidate_from_payload,
+                web_error=web._web_error,
+                payload_truthy=web.payload_truthy,
+                progress_callback=_progress,
+            )
+        finally:
+            web.SUBMIT_LOCK.release()
+
+    return web.run_simple_async_job_service(
+        job_id,
+        payload,
+        store=web.ASYNC_JOBS,
+        operation="submit_batch",
+        start_phase="submitting",
+        start_message="Preparing batch submission.",
+        worker=_worker,
+        safe_error_message=web.safe_error_message,
+        error_payload=web.error_payload,
     )
 
 

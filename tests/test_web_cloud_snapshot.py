@@ -99,6 +99,27 @@ def test_cloud_alpha_snapshot_default_reads_full_cloud_cache(tmp_path):
     assert {row["id"] for row in snapshot["alphas"]} >= {"a0", "a10004"}
 
 
+def test_cloud_alpha_snapshot_limit_only_bounds_returned_rows_not_total(tmp_path):
+    storage = tmp_path / "storage"
+    cache = tmp_path / "cache"
+    storage.mkdir()
+    cache.mkdir()
+    load_config = _loader(storage, cache)
+    rows = [{"id": f"a{index}", "updated_at": f"2026-01-01T00:00:{index % 60:02d}Z"} for index in range(12)]
+    (storage / "cloud_alphas.jsonl").write_text(
+        "\n".join(json.dumps(row) for row in rows) + "\n",
+        encoding="utf-8",
+    )
+
+    snapshot = cloud_alpha_snapshot(limit=5, load_config=load_config, runtime_root=lambda: tmp_path)
+
+    assert len(snapshot["alphas"]) == 5
+    assert snapshot["summary"]["count"] == 12
+    assert snapshot["summary"]["total"] == 12
+    assert snapshot["summary"]["returned_count"] == 5
+    assert snapshot["summary"]["display_limit"] == 5
+
+
 def test_cached_user_alpha_paths_are_bounded_to_recent_files(tmp_path):
     storage = tmp_path / "storage"
     cache = tmp_path / "cache"

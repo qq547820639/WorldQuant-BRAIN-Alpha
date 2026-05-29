@@ -2,30 +2,85 @@
 
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { useApi } from "@/hooks/useApi";
-import type { Candidate } from "@/types";
+import { useSSE } from "@/hooks/useSSE";
+import type { Candidate, SSEEvent, UnifiedProgress } from "@/types";
+import ProgressFeedback from "@/components/ProgressFeedback";
 
 interface Props {
   notify: (type: "success" | "error" | "warning" | "info", msg: string) => void;
+  onScore?: (candidate: Candidate) => void;
 }
 
 type SortKey = "score" | "sharpe" | "fitness" | "turnover" | "status";
 
-export default function CandidateTable({ notify }: Props) {
+export default function CandidateTable({ notify, onScore }: Props) {
   const api = useApi<{ candidates: Candidate[] }>();
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [filter, setFilter] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("score");
   const [sortAsc, setSortAsc] = useState(false);
+  const [taskId, setTaskId] = useState<string | null>(null);
+  const [taskState, setTaskState] = useState<"idle" | "loading" | "progress" | "success" | "error">("idle");
+  const [taskProgress, setTaskProgress] = useState<UnifiedProgress | null>(null);
+  const [taskError, setTaskError] = useState<string | null>(null);
+  const callApi = api.call;
 
   const load = useCallback(async () => {
-    const result = await api.call("/api/candidates?limit=100");
+    const result = await callApi("/api/candidates?limit=100");
     if (result?.ok) {
       const data = result as unknown as { candidates: Candidate[] };
-      setCandidates(data.candidates || []);
+      const nextRows = data.candidates || [];
+      setCandidates((current) => nextRows.length || current.length === 0 ? nextRows : current);
+    } else if (result?.error) {
+      notify("error", result.error);
     }
-  }, [api]);
+  }, [callApi, notify]);
 
   useEffect(() => { load(); }, [load]);
+
+  const handleTaskEvent = useCallback((event: SSEEvent) => {
+    const progress = event.progress || event.data || {};
+    setTaskProgress(progress as UnifiedProgress);
+    if (event.type === "error" || event.ok === false || event.status === "failed") {
+      setTaskState("error");
+      setTaskError(event.error || event.status_message || "Candidate generation failed");
+      notify("error", event.error || "Candidate generation failed");
+      return;
+    }
+    if (event.type === "complete") {
+      setTaskState("success");
+      const result = event.result as { candidates?: Candidate[]; candidates_preview?: Candidate[]; count?: number } | undefined;
+      const rows = result?.candidates || result?.candidates_preview || [];
+      if (rows.length) setCandidates(rows);
+      void load();
+      notify("success", `Candidate generation completed${result?.count ? `: ${result.count}` : ""}`);
+      setTaskId(null);
+      return;
+    }
+    setTaskState("progress");
+  }, [load, notify]);
+
+  useSSE(taskId ? `/sse?job_id=${encodeURIComponent(taskId)}` : null, { onEvent: handleTaskEvent });
+
+  const generateCandidates = useCallback(async () => {
+    setTaskState("loading");
+    setTaskError(null);
+    setTaskProgress({ phase: "candidate_generation", status_message: "Starting candidate generation." });
+    const result = await callApi<{ job_id: string; task_id?: string }>("/api/generate_candidates", {
+      method: "POST",
+      body: JSON.stringify({ count: 5 }),
+    });
+    const nextTaskId = String((result as unknown as { task_id?: string; job_id?: string } | null)?.task_id || (result as unknown as { job_id?: string } | null)?.job_id || "");
+    if (result?.ok && nextTaskId) {
+      setTaskId(nextTaskId);
+      setTaskState("progress");
+      notify("info", `Candidate generation started: ${nextTaskId}`);
+    } else {
+      setTaskState("error");
+      setTaskError(result?.error || "Failed to start candidate generation");
+      notify("error", result?.error || "Failed to start candidate generation");
+    }
+  }, [callApi, notify]);
 
   const sorted = useMemo(() => {
     const filtered = filter
@@ -65,7 +120,13 @@ export default function CandidateTable({ notify }: Props) {
   };
 
   if (api.loading && candidates.length === 0) {
-    return <div className="card animate-pulse"><p className="text-muted text-sm">Loading candidates...</p></div>;
+    return (
+      <ProgressFeedback
+        state="loading"
+        title="Candidates"
+        progress={{ phase: "candidate_load", status_message: "Loading candidates." }}
+      />
+    );
   }
 
   return (
@@ -81,7 +142,39 @@ export default function CandidateTable({ notify }: Props) {
         <button onClick={load} className="btn-secondary text-sm" disabled={api.loading}>
           ↻ Refresh
         </button>
+        <button onClick={generateCandidates} className="btn-primary text-sm" disabled={taskState === "loading" || taskState === "progress"}>
+          Generate
+        </button>
       </div>
+
+      <ProgressFeedback
+        state={taskState}
+        title="Candidate generation"
+        progress={taskProgress}
+        error={taskError}
+        onRetry={generateCandidates}
+        compact={taskState === "idle" || taskState === "success"}
+      />
+
+      {api.loading && candidates.length > 0 && (
+        <ProgressFeedback
+          state="loading"
+          title="Candidates"
+          progress={{ phase: "candidate_load", status_message: "Refreshing candidate records." }}
+          compact
+        />
+      )}
+
+      {api.error && (
+        <div className="card border-danger/40 bg-danger/10">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-danger text-sm">Failed to load candidates: {api.error}</p>
+            <button onClick={load} className="btn-secondary text-sm" disabled={api.loading}>
+              Retry
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="card overflow-x-auto p-0">
         <table className="w-full text-sm">
@@ -102,11 +195,12 @@ export default function CandidateTable({ notify }: Props) {
                 TO {sortKey === "turnover" ? (sortAsc ? "↑" : "↓") : ""}
               </th>
               <th className="p-3">Status</th>
+              <th className="p-3">Actions</th>
             </tr>
           </thead>
           <tbody>
             {sorted.length === 0 ? (
-              <tr><td colSpan={7} className="p-6 text-center text-muted">No candidates found</td></tr>
+              <tr><td colSpan={8} className="p-6 text-center text-muted">No candidates found</td></tr>
             ) : (
               sorted.slice(0, 50).map((c) => (
                 <tr key={c.alpha_id} className="border-b border-gray-800/50 hover:bg-gray-800/30 transition-colors">
@@ -119,6 +213,16 @@ export default function CandidateTable({ notify }: Props) {
                   <td className="p-3 font-mono">{c.official_metrics?.fitness?.toFixed(2) ?? "-"}</td>
                   <td className="p-3 font-mono">{c.official_metrics?.turnover != null ? `${(c.official_metrics.turnover * 100).toFixed(1)}%` : "-"}</td>
                   <td className="p-3"><span className={`badge text-xs ${statusBadge(c.lifecycle_status)}`}>{c.lifecycle_status}</span></td>
+                  <td className="p-3">
+                    <button
+                      type="button"
+                      className="btn-secondary text-xs"
+                      onClick={() => onScore?.(c)}
+                      disabled={!onScore}
+                    >
+                      Score
+                    </button>
+                  </td>
                 </tr>
               ))
             )}

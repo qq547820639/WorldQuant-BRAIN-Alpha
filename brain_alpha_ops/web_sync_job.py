@@ -100,10 +100,15 @@ def run_sync_job_service(
                 "message": "云端同步已停止。",
             },
             progress={
+                "task_id": job_id,
+                "job_id": job_id,
+                "operation": "sync_alphas",
                 "phase": "stopped",
                 "status_code": "STOPPED",
+                "status_message": "云端同步已停止，可调整范围后重试。",
                 "message": "云端同步已停止，可调整范围后重试。",
                 "percent": 100,
+                "percent_complete": 100,
                 **stats,
                 **_timing_payload(started_at, done=int(stats.get("scanned", 0) or 0), total=int(stats.get("total", 0) or 0)),
             },
@@ -114,8 +119,12 @@ def run_sync_job_service(
             job_id,
             status="running",
             progress={
+                "task_id": job_id,
+                "job_id": job_id,
+                "operation": "sync_alphas",
                 "phase": "auth",
                 "status_code": "AUTH",
+                "status_message": f"Preparing cloud sync for {sync_range}.",
                 "message": f"Preparing cloud sync for {sync_range}.",
                 **stats,
                 **_timing_payload(started_at),
@@ -138,8 +147,12 @@ def run_sync_job_service(
                 job_id,
                 status="running",
                 progress={
+                    "task_id": job_id,
+                    "job_id": job_id,
+                    "operation": "sync_alphas",
                     "phase": "scan",
                     "status_code": "SCAN",
+                    "status_message": f"Scanning cloud alphas: {stats['scanned']} / {stats['total'] or 'unknown'}",
                     "message": f"Scanning cloud alphas: {stats['scanned']} / {stats['total'] or 'unknown'}",
                     **stats,
                     **_timing_payload(started_at, done=stats["scanned"], total=stats["total"]),
@@ -164,8 +177,12 @@ def run_sync_job_service(
             job_id,
             status="running",
             progress={
+                "task_id": job_id,
+                "job_id": job_id,
+                "operation": "sync_alphas",
                 "phase": "merge",
                 "status_code": "MERGE",
+                "status_message": f"Merged cloud records: added {stats['added']}, updated {stats['updated']}, skipped {stats['skipped']}.",
                 "message": f"Merged cloud records: added {stats['added']}, updated {stats['updated']}, skipped {stats['skipped']}.",
                 **stats,
                 **_timing_payload(started_at, done=stats["scanned"], total=stats["total"]),
@@ -177,8 +194,12 @@ def run_sync_job_service(
             job_id,
             status="running",
             progress={
+                "task_id": job_id,
+                "job_id": job_id,
+                "operation": "sync_alphas",
                 "phase": "context",
                 "status_code": "CONTEXT_FIELDS",
+                "status_message": "Updating official fields cache.",
                 "message": "Updating official fields cache.",
                 "current": 1,
                 "total_steps": 3,
@@ -193,8 +214,12 @@ def run_sync_job_service(
                     job_id,
                     status="running",
                     progress={
+                        "task_id": job_id,
+                        "job_id": job_id,
+                        "operation": "sync_alphas",
                         "phase": "context",
                         "status_code": "CONTEXT_FIELDS",
+                        "status_message": f"Updating official fields cache: {progress.get('scanned', 0)} / {progress.get('total') or 'unknown'}",
                         "message": f"Updating official fields cache: {progress.get('scanned', 0)} / {progress.get('total') or 'unknown'}",
                         "current": 1,
                         "total_steps": 3,
@@ -223,8 +248,12 @@ def run_sync_job_service(
                 job_id,
                 status="running",
                 progress={
+                    "task_id": job_id,
+                    "job_id": job_id,
+                    "operation": "sync_alphas",
                     "phase": "context",
                     "status_code": "CONTEXT_OPERATORS",
+                    "status_message": "Updating official operators cache.",
                     "message": "Updating official operators cache.",
                     "current": 2,
                     "total_steps": 3,
@@ -240,8 +269,12 @@ def run_sync_job_service(
                     job_id,
                     status="running",
                     progress={
+                        "task_id": job_id,
+                        "job_id": job_id,
+                        "operation": "sync_alphas",
                         "phase": "context",
                         "status_code": "CONTEXT_OPERATORS",
+                        "status_message": f"Updating official operators cache: {progress.get('scanned', 0)} / {progress.get('total') or 'unknown'}",
                         "message": f"Updating official operators cache: {progress.get('scanned', 0)} / {progress.get('total') or 'unknown'}",
                         "current": 2,
                         "total_steps": 3,
@@ -272,8 +305,12 @@ def run_sync_job_service(
                 job_id,
                 status="running",
                 progress={
+                    "task_id": job_id,
+                    "job_id": job_id,
+                    "operation": "sync_alphas",
                     "phase": "context",
                     "status_code": "CONTEXT_FAILED",
+                    "status_message": f"Official context refresh failed; using fallback context: {context_error}",
                     "message": f"Official context refresh failed; using fallback context: {context_error}",
                     "context_error": context_error,
                     "current": 3,
@@ -302,8 +339,19 @@ def run_sync_job_service(
             status=final_status,
             result=result,
             progress={
+                "task_id": job_id,
+                "job_id": job_id,
+                "operation": "sync_alphas",
                 "phase": final_status,
                 "status_code": "COMPLETED_WITH_WARNINGS" if context_error else "COMPLETED",
+                "percent": 100,
+                "percent_complete": 100,
+                "status_message": (
+                    f"Cloud sync completed with context warning: {context_error}"
+                    if context_error else
+                    f"Cloud sync completed: scanned {stats['scanned']}, added {stats['added']}, "
+                    f"updated {stats.get('updated', 0)}, skipped {stats['skipped']}, failed {stats['failed']}."
+                ),
                 "message": (
                     f"Cloud sync completed with context warning: {context_error}"
                     if context_error else
@@ -333,7 +381,13 @@ def run_sync_job_service(
             progress={
                 "phase": "failed",
                 "status_code": "FAILED",
+                "task_id": job_id,
+                "job_id": job_id,
+                "operation": "sync_alphas",
+                "status_message": message,
                 "message": message,
+                "percent": 100,
+                "percent_complete": 100,
                 "error_context": error_context,
                 **stats,
                 **_timing_payload(started_at, done=int(stats.get("scanned", 0) or 0), total=int(stats.get("total", 0) or 0)),

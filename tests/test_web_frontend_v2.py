@@ -29,6 +29,7 @@ TEMPLATE_PATH = WEB_DIR / "index_template.html"
 ALL_MODULES = {
     "js/api-client.js",
     "js/app.js",
+    "js/app-runtime.js",
     "js/components/modal.js",
     "js/components/progress.js",
     "js/components/spinner.js",
@@ -304,12 +305,20 @@ def _frontend_module_load_order(modules: list[str]) -> list[str]:
     ordered = list(modules)
     if "js/app.js" not in ordered:
         return ordered
-    for dependency in ["js/result-state.js", "js/result-table.js", "js/form-controls.js", "js/strategy-panel.js", "js/cloud-sync.js", "js/header-status.js", "js/loading-feedback.js"]:
-        if dependency in ordered:
-            continue
-        insert_at = ordered.index("js/app.js")
-        ordered.insert(insert_at, dependency)
-    return ordered
+    dependencies = [
+        "js/result-state.js",
+        "js/result-table.js",
+        "js/form-controls.js",
+        "js/strategy-panel.js",
+        "js/cloud-sync.js",
+        "js/header-status.js",
+        "js/app-runtime.js",
+        "js/loading-feedback.js",
+    ]
+    app_index = ordered.index("js/app.js")
+    before_app = [item for item in ordered[:app_index] if item not in dependencies]
+    after_app = [item for item in ordered[app_index + 1:] if item not in dependencies]
+    return before_app + dependencies + ["js/app.js"] + after_app
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -542,6 +551,18 @@ def test_template_has_ux_refactor_shell_contract():
     assert '<span class="search-icon">/</span>' in template
 
 
+def test_inline_candidate_generation_uses_compacted_preview_rows():
+    app_js = (WEB_JS / "app.js").read_text(encoding="utf-8")
+    assert "result.candidates || result.candidates_preview || []" in app_js
+    assert "result.count || result.candidates_count || generated.length" in app_js
+
+
+def test_inline_profile_renderer_is_available_to_loading_feedback():
+    app_js = (WEB_JS / "app.js").read_text(encoding="utf-8")
+    assert "window.renderUserProfile = renderUserProfile" in app_js
+    assert "var profileData = await LoadingFeedback.loadProfile()" in app_js
+
+
 def test_template_form_elements_use_v3_classes():
     template = TEMPLATE_PATH.read_text(encoding="utf-8")
     assert 'class="form-input"' in template
@@ -675,6 +696,11 @@ s.set("currentResult.candidates", [
 assertEqual(s.viewCount("candidates"), 2, "viewCount candidates");
 assertEqual(s.viewCount("passed"), 1, "viewCount passed");
 assertEqual(s.viewCount("cloud"), 0, "viewCount cloud with no data");
+s.setBatch({
+  "currentResult.cloud_alphas": [{ alpha_id: "CLD001" }, { alpha_id: "CLD002" }],
+  "currentResult.summary.cloud_sync": { count: 25559, returned_count: 2, status: "completed" },
+});
+assertEqual(s.viewCount("cloud"), 25559, "viewCount cloud uses production total, not returned rows");
 
 // passCount
 s.set("checkResults", {
@@ -904,6 +930,10 @@ var c3 = { official_metrics: { sharpe: 1.5 } };
 assertEqual(VM.officialMetric(c3, "sharpe"), 1.5, "official metric");
 assertEqual(VM.cloudMetric({ metrics: { sharpe: 1.92 } }, "sharpe"), 1.92, "cloud metric reads nested metrics");
 assertEqual(VM.cloudMetric({ raw: { is: { fitness: 2.15 } } }, "fitness"), 2.15, "cloud metric reads raw IS metrics");
+assertEqual(VM.cloudMetric({ metrics: { correlation: 0.42 } }, "self_correlation"), 0.42, "self correlation falls back to correlation");
+assertEqual(VM.cloudMetric({ raw: { is: { selfCorrelation: 0.33 } } }, "self_correlation"), 0.33, "self correlation reads camelCase official metric");
+assertEqual(VM.cloudSelfCorrelationDisplay({ raw: { is: { checks: [{ name: "SELF_CORRELATION", result: "PENDING" }] } } }), "PENDING", "self correlation displays official pending status");
+assertEqual(VM.cloudSelfCorrelationDisplay({ metrics: { self_correlation: 0.12 } }), "0.1200", "self correlation formats numeric values");
 
 // v3: firstFiniteNumber / firstPositiveFiniteNumber
 // Number(null) = 0, 0 is finite, so firstFiniteNumber(null, ...) = 0
@@ -1456,6 +1486,128 @@ assertDefined(window.LoadingFeedback, "LoadingFeedback exported");
     ))
 
 
+def test_app_batch_check_and_submit_wait_for_async_jobs():
+    """Verify inline check/submit flows consume async job completion events."""
+    test_code = r"""
+async function main() {
+var posts = [];
+var events = [];
+globalThis.EventSource = function(url) {
+  this.url = url;
+  this.close = function() {};
+  var self = this;
+  setTimeout(function() {
+    var event = events.shift();
+    if (event && self.onmessage) self.onmessage({ data: JSON.stringify(event) });
+  }, 0);
+};
+window.EventSource = globalThis.EventSource;
+window.Modal.confirmAction = async function() { return true; };
+window.loadCheckResults = async function() { return { check_results: window.AppState.get("checkResults") || {} }; };
+window.ApiClient.post = async function(path, payload) {
+  posts.push({ path: path, payload: payload });
+  if (path === "/api/check_batch") {
+    events.push({
+      ok: true,
+      type: "complete",
+      status: "completed",
+      job_id: "check_job_1",
+      task_id: "check_job_1",
+      progress: { phase: "completed", percent_complete: 100, status_message: "Batch check completed." },
+      result: { ok: true, items: [{ alpha_id: "A1", passed: true, submittable: true }] },
+    });
+    return { ok: true, job_id: "check_job_1", task_id: "check_job_1", sse_url: "/sse?job_id=check_job_1", status_url: "/api/status?job_id=check_job_1" };
+  }
+  if (path === "/api/submit_batch") {
+    events.push({
+      ok: true,
+      type: "complete",
+      status: "completed",
+      job_id: "submit_job_1",
+      task_id: "submit_job_1",
+      progress: { phase: "completed", percent_complete: 100, status_message: "Batch submission completed." },
+      result: { ok: true, submitted: 1, submitted_alpha_ids: ["A1"], results: [{ alpha_id: "A1", ok: true }] },
+    });
+    return { ok: true, job_id: "submit_job_1", task_id: "submit_job_1", sse_url: "/sse?job_id=submit_job_1", status_url: "/api/status?job_id=submit_job_1" };
+  }
+  return { ok: true };
+};
+window.ApiClient.get = async function() { return { ok: true }; };
+window.AppState.setBatch({
+  "currentResult.candidates": [
+    { alpha_id: "A1", expression: "rank(close)", family: "price", lifecycle_status: "submission_ready", gate: { submission_ready: true } },
+  ],
+  "selectedSubmitIds": ["A1"],
+  "submitInFlight": false,
+  "batchCheckJobId": "",
+  "asyncOperationJobId": "",
+  "pageLoadInFlight": false,
+  "connectionTestInFlight": false,
+});
+document.getElementById("autoSubmitToggle").checked = false;
+await window.checkBatch("quick");
+assertEqual(posts[0].path, "/api/check_batch", "check starts async endpoint");
+assertEqual(posts[0].payload.check_candidates.length, 1, "check payload includes candidate rows");
+assertEqual(window.AppState.get("checkResults").A1.submittable, true, "check results stored from async result");
+assertEqual(window.AppState.get("batchCheckJobId"), "", "check job id cleared after completion");
+
+await window.submitSelectedCandidates();
+assertEqual(posts[1].path, "/api/submit_batch", "submit starts async endpoint");
+assertEqual(posts[1].payload.submit_candidates.length, 1, "submit payload includes candidate rows");
+assertEqual(window.AppState.get("lastSubmitResults")[0].alpha_id, "A1", "submit result stored from async result");
+assertEqual(window.AppState.get("selectedSubmitIds").length, 0, "selection cleared after async submit");
+assertEqual(window.AppState.get("asyncOperationJobId"), "", "async job id cleared after submit");
+}
+main();
+"""
+
+    _run_node_script(_build_test_script(
+        ["js/utils.js", "js/api-client.js", "js/state.js", "js/view-model.js",
+         "js/view-registry.js", "js/view-renderers.js", "js/result-state.js",
+         "js/result-table.js", "js/form-controls.js", "js/strategy-panel.js",
+         "js/cloud-sync.js", "js/header-status.js", "js/loading-feedback.js",
+         "js/components/toast.js", "js/components/spinner.js", "js/components/modal.js",
+         "js/components/progress.js", "js/components/table.js",
+         "js/views/detail.js", "js/views/production.js", "js/views/charts.js",
+         "js/views/monitor.js", "js/app.js"],
+        test_code
+    ))
+
+
+def test_app_runtime_clears_transient_loading_titles():
+    """Loading locks should not become permanent button tooltips."""
+    test_code = r"""
+window.AppState.setBatch({
+  "pageLoadInFlight": true,
+  "connectionTestInFlight": false,
+  "syncInFlight": false,
+  "batchCheckJobId": "",
+  "submitInFlight": false,
+  "selectedSubmitIds": [],
+});
+var syncButton = document.getElementById("syncButton");
+syncButton.setAttribute("title", "同步云端数据");
+var sideSyncButton = document.getElementById("sideSyncButton");
+
+window.renderBusyControls();
+assertEqual(syncButton.disabled, true, "sync disabled during page load");
+assertEqual(syncButton.getAttribute("title"), "页面数据正在加载。", "sync shows loading reason");
+assertEqual(sideSyncButton.getAttribute("title"), "页面数据正在加载。", "side sync shows loading reason");
+
+window.AppState.set("pageLoadInFlight", false);
+window.renderBusyControls();
+assertEqual(syncButton.disabled, false, "sync enabled after page load");
+assertEqual(syncButton.getAttribute("title"), "同步云端数据", "sync restores original title");
+assertEqual(sideSyncButton.disabled, false, "side sync enabled after page load");
+assertEqual(sideSyncButton.getAttribute("title"), null, "side sync clears transient loading title");
+"""
+
+    _run_node_script(_build_test_script(
+        ["js/utils.js", "js/api-client.js", "js/state.js", "js/header-status.js", "js/app-runtime.js"],
+        test_code
+    ))
+
+
 def test_loading_feedback_module_tracks_startup_and_blocking_states():
     test_code = r"""
 async function main() {
@@ -1483,12 +1635,15 @@ window.FormControls = { applyConfig: function () {} };
 window.CloudSync = { applyCloudSnapshotPayload: function () {}, loadSnapshot: async function () { return { alphas: [{ alpha_id: 'C1' }] }; } };
 window.ProductionView = { loadCheckpointStatus: async function () { document.getElementById('checkpointSummary').textContent = '断点 2'; return { ok: true, resume_available: true, checkpoint_count: 2, history_count: 4 }; } };
 window.renderUserProfile = function () {};
-window.renderBusyControls = function () {};
+var busyRenderCalls = 0;
+window.renderBusyControls = function () { busyRenderCalls += 1; };
 window.renderRuntimeStatus = function () {};
 window.syncStrategyPluginControls = function () {};
 window.AppState.set('pageLoadInFlight', false);
 await window.LoadingFeedback.runStartup({ apply: function () {} });
 assert(calls.indexOf('/api/latest_result') !== -1, 'startup should load latest result');
+assertEqual(window.AppState.get('pageLoadInFlight'), false, 'startup should clear page load state');
+assert(busyRenderCalls > 0, 'startup progress should refresh disabled control state');
 assert(document.getElementById('redlineSummary').textContent.indexOf('红线通过') !== -1, 'redline summary should update');
 assert(document.getElementById('checkpointSummary').textContent.indexOf('断点') !== -1, 'checkpoint summary should update');
 window.AppState.set('connectionTestInFlight', true);
@@ -1595,6 +1750,7 @@ window.AppState.setBatch({
     { alpha_id: "CAND001", lifecycle_status: "candidate", scorecard: { total_score: 70 }, gate: {} },
   ],
   "currentResult.cloud_alphas": [{ alpha_id: "CLD001", status: "APPROVED" }],
+  "currentResult.summary.cloud_sync": { count: 25559, returned_count: 1, status: "completed" },
   "checkResults": {
     READY001: { alpha_id: "READY001", passed: true, checked_at: checkedAt, checks: [{ name: "official_pre_submit_check", passed: true }] },
   },
@@ -1605,7 +1761,7 @@ window.renderTaskRail();
 assertEqual(document.getElementById("workflowCandidateCount").textContent, "2", "candidate count");
 assertEqual(document.getElementById("workflowPassedCount").textContent, "1", "passed count");
 assertEqual(document.getElementById("workflowSubmittableCount").textContent, "1", "submittable count");
-assertEqual(document.getElementById("workflowCloudCount").textContent, "1", "cloud count");
+assertEqual(document.getElementById("workflowCloudCount").textContent, "25,559", "cloud count uses full production total");
 assertEqual(document.getElementById("workflowStepCheck").classList.contains("is-active"), true, "check step active");
 assertContains(document.getElementById("workflowStatus").textContent, "可提交", "status guides next step");
 

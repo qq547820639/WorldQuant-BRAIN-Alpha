@@ -458,17 +458,20 @@ class OfficialBrainAPI:
         cached = self._read_cache(cache_key)
         if cached["fresh"]:
             if progress_callback:
-                progress_callback(_user_alpha_progress(sync_range, cached["items"], len(cached["items"]), cached=True, stale=False))
+                progress_callback(_user_alpha_progress(
+                    sync_range,
+                    cached["items"],
+                    cached.get("total") or len(cached["items"]),
+                    cached=True,
+                    stale=False,
+                ))
             return cached["items"]
         try:
             items = []
             page_params = dict(params)
             total = 0
             seen_page_signatures: set[str] = set()
-            _MAX_ALPHA_PAGES = 500  # safety cap: ~50,000 alphas at limit=100
-            _page = 0
             while True:
-                _page += 1
                 try:
                     data, _headers = self._request("GET", self.config.user_alphas_path, query=page_params)
                 except BrainAPIError as exc:
@@ -507,15 +510,6 @@ class OfficialBrainAPI:
                 if not page_items:
                     break
                 if len(page_items) < int(page_params["limit"]):
-                    break
-                if _page >= _MAX_ALPHA_PAGES:
-                    logger.warning(
-                        "list_user_alphas hit maximum page limit (%d pages); "
-                        "truncating to protect against infinite pagination",
-                        _MAX_ALPHA_PAGES,
-                    )
-                    if progress_callback:
-                        progress_callback(_user_alpha_progress(sync_range, items, total, page_size=0, truncated=True, warning="max_pages"))
                     break
                 page_params["offset"] = int(page_params.get("offset", 0)) + int(page_params["limit"])
             self._write_cache(cache_key, items, total)

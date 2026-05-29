@@ -14,4 +14,15 @@ def test_enrich_progress_adds_known_phase_label_without_overwriting_existing_lab
 
 def test_enrich_progress_falls_back_to_unknown_phase_value():
     assert enrich_progress({"phase": "custom_phase"})["phase_label"] == "custom_phase"
-    assert enrich_progress({"message": "no phase"}) == {"message": "no phase"}
+    enriched = enrich_progress({"message": "no phase"})
+    assert enriched["message"] == "no phase"
+    assert enriched["status_message"] == "no phase"
+    assert enriched["eta_seconds"] == 0
+
+
+def test_enrich_progress_adds_unified_progress_fields():
+    progress = enrich_progress({"phase": "checking", "checked": 2, "total": 4, "message": "Checking 2/4"})
+
+    assert progress["percent_complete"] == 50.0
+    assert progress["percent"] == 50.0
+    assert progress["status_message"] == "Checking 2/4"

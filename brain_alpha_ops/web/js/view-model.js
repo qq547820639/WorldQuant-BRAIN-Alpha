@@ -144,10 +144,96 @@
     var rawMetrics = raw.metrics || {};
     var rawIs = raw.is || {};
     var rawRegular = raw.regular || {};
-    var value = firstDefinedValue(row[key], metrics[key], rawMetrics[key], rawIs[key], rawRegular[key]);
+    var aliases = {
+      self_correlation: ['self_correlation', 'correlation', 'selfCorrelation', 'prodCorrelation'],
+      correlation: ['correlation', 'self_correlation', 'selfCorrelation', 'prodCorrelation'],
+    };
+    var lookupKeys = aliases[key] || [key];
+    var value = firstDefinedValue(
+      row[lookupKeys[0]],
+      metrics[lookupKeys[0]],
+      rawMetrics[lookupKeys[0]],
+      rawIs[lookupKeys[0]],
+      rawRegular[lookupKeys[0]],
+      row[lookupKeys[1]],
+      metrics[lookupKeys[1]],
+      rawMetrics[lookupKeys[1]],
+      rawIs[lookupKeys[1]],
+      rawRegular[lookupKeys[1]],
+      row[lookupKeys[2]],
+      metrics[lookupKeys[2]],
+      rawMetrics[lookupKeys[2]],
+      rawIs[lookupKeys[2]],
+      rawRegular[lookupKeys[2]]
+    );
     if (value == null) return null;
     var n = Number(value);
     return Number.isFinite(n) ? n : value;
+  }
+
+  function cloudCheck(row, name) {
+    row = row || {};
+    var metrics = row.metrics || row.official_metrics || {};
+    var raw = row.raw || {};
+    var candidates = [
+      metrics.brain_checks,
+      row.brain_checks,
+      raw.brain_checks,
+      raw.checks,
+      raw.is && raw.is.checks,
+    ];
+    var target = String(name || '').toUpperCase();
+    for (var i = 0; i < candidates.length; i += 1) {
+      var checks = candidates[i];
+      if (!checks) continue;
+      if (Array.isArray(checks)) {
+        for (var j = 0; j < checks.length; j += 1) {
+          var item = checks[j] || {};
+          var itemName = String(item.name || item.check || '').toUpperCase();
+          if (itemName === target) return item;
+        }
+      } else if (typeof checks === 'object') {
+        var direct = checks[name] || checks[target];
+        if (direct) return direct;
+      }
+    }
+    return null;
+  }
+
+  function cloudSelfCorrelationValue(row) {
+    row = row || {};
+    var metrics = row.metrics || row.official_metrics || {};
+    var raw = row.raw || {};
+    var rawMetrics = raw.metrics || {};
+    var rawIs = raw.is || {};
+    var explicit = firstDefinedValue(
+      row.self_correlation,
+      row.selfCorrelation,
+      metrics.self_correlation,
+      metrics.selfCorrelation,
+      rawMetrics.self_correlation,
+      rawMetrics.selfCorrelation,
+      rawIs.self_correlation,
+      rawIs.selfCorrelation
+    );
+    if (explicit !== null) {
+      var explicitNumber = Number(explicit);
+      return Number.isFinite(explicitNumber) ? explicitNumber : explicit;
+    }
+    var selfCheck = cloudCheck(row, 'SELF_CORRELATION');
+    if (selfCheck && selfCheck.value !== undefined && selfCheck.value !== null && selfCheck.value !== '') {
+      var checkNumber = Number(selfCheck.value);
+      return Number.isFinite(checkNumber) ? checkNumber : selfCheck.value;
+    }
+    if (selfCheck && selfCheck.result) return String(selfCheck.result);
+    return cloudMetric(row, 'self_correlation');
+  }
+
+  function cloudSelfCorrelationDisplay(row) {
+    var value = cloudSelfCorrelationValue(row);
+    if (value == null || value === '') return '-';
+    var n = Number(value);
+    return Number.isFinite(n) ? n.toFixed(4) : String(value);
   }
 
   function firstFiniteNumber() {
@@ -169,7 +255,10 @@
   window.ViewModel = {
     candidateIdentity: candidateIdentity,
     candidateDisplayScore: candidateDisplayScore,
+    cloudCheck: cloudCheck,
     cloudMetric: cloudMetric,
+    cloudSelfCorrelationDisplay: cloudSelfCorrelationDisplay,
+    cloudSelfCorrelationValue: cloudSelfCorrelationValue,
     chooseRuntimeArray: chooseRuntimeArray,
     firstDefinedValue: firstDefinedValue,
     expressionFromRow: expressionFromRow,
