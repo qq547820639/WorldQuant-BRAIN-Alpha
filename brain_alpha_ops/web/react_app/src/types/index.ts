@@ -79,6 +79,7 @@ export interface UnifiedProgress {
 export interface Candidate {
   alpha_id: string;
   official_alpha_id?: string;
+  simulation_id?: string;
   expression: string;
   family: string;
   hypothesis: string;
@@ -233,19 +234,32 @@ export interface FailureItem {
 export interface RunConfig {
   environment: string;
   auto_submit: boolean;
-  settings: BrainSettings;
-  budget: BudgetConfig;
-  thresholds: ThresholdConfig;
-  scoring: ScoringConfig;
+  settings?: BrainSettings;
+  budget?: BudgetConfig;
+  thresholds?: ThresholdConfig;
+  scoring?: ScoringConfig;
+  ops?: {
+    settings?: BrainSettings;
+    budget?: BudgetConfig;
+    thresholds?: ThresholdConfig;
+    scoring?: ScoringConfig;
+  };
 }
 
 export interface BrainSettings {
+  instrumentType?: string;
   region: string;
   universe: string;
   delay: number;
   decay: number;
   neutralization: string;
   dataset?: string;
+  truncation?: number;
+  pasteurization?: string;
+  unitHandling?: string;
+  nanHandling?: string;
+  language?: string;
+  type?: string;
 }
 
 export interface BudgetConfig {
@@ -348,11 +362,34 @@ export interface FailurePattern {
 
 // ── UI State Types ────────────────────────────────────────────────────────
 
-export type TabId = "dashboard" | "candidates" | "scoring" | "submission" | "config" | "knowledge";
+export type TabId =
+  | "dashboard"
+  | "candidates"
+  | "pending_backtest"
+  | "running_backtest"
+  | "backtest_rework"
+  | "passed"
+  | "submittable"
+  | "submitted"
+  | "failed"
+  | "cloud"
+  | "lifecycle"
+  | "research_memory"
+  | "research_knowledge"
+  | "research_observability"
+  | "prompt_runs"
+  | "sqlite_indexes"
+  | "robustness"
+  | "scoring"
+  | "submission"
+  | "config"
+  | "knowledge";
 
 export interface Toast {
   id: string;
   type: "success" | "error" | "warning" | "info";
   message: string;
   duration_ms?: number;
+  action_label?: string;
+  on_action?: () => void;
 }

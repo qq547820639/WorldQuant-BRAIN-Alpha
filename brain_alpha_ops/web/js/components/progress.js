@@ -27,7 +27,12 @@
     if (opts.indeterminate) {
       if (fillEl) {
         fillEl.style.width = '';
-        fillEl.parentElement && fillEl.parentElement.classList.add('is-indeterminate');
+        if (fillEl.parentElement) {
+          fillEl.parentElement.classList.add('is-indeterminate');
+          if (fillEl.parentElement.getAttribute('role') === 'progressbar') {
+            fillEl.parentElement.setAttribute('aria-valuetext', progress.message || '处理中');
+          }
+        }
       }
       if (metaEl) metaEl.textContent = progress.message || '处理中...';
       return;
@@ -36,6 +41,9 @@
     // Remove indeterminate
     if (fillEl && fillEl.parentElement) {
       fillEl.parentElement.classList.remove('is-indeterminate');
+      if (fillEl.parentElement.getAttribute('role') === 'progressbar') {
+        fillEl.parentElement.removeAttribute('aria-valuetext');
+      }
     }
 
     var pct = progress.percent_complete !== undefined && progress.percent_complete !== null

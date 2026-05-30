@@ -99,7 +99,7 @@ export default function ScoringPanel({ notify, candidate }: Props) {
   const softGates = attributionApi.data?.soft_gates || scoring?.soft_gates || [];
   const failures = attributionApi.data?.top_failures || scoring?.top_failures || [];
   const hints = attributionApi.data?.improvement_hints || scoring?.improvement_hints || [];
-  const m = candidate?.official_metrics || {};
+  const m = candidate?.official_metrics;
   const selfCorrelation = metricWithStatus(m?.self_correlation, m?.self_correlation_status, m?.correlation);
   const loading = scoreState === "loading" || scoreState === "progress" || attributionApi.loading;
   const error = scoreError || scoreApi.error || attributionApi.error;
@@ -132,7 +132,7 @@ export default function ScoringPanel({ notify, candidate }: Props) {
 
   if (!candidate) {
     return (
-      <div className="card max-w-2xl">
+      <div className="card w-full max-w-2xl min-w-0">
         <h3 className="text-sm font-semibold text-gray-200 mb-2">Select a Candidate</h3>
         <p className="text-sm text-muted">
           Open Candidates, choose a real candidate, then click Score to evaluate it through
@@ -143,10 +143,10 @@ export default function ScoringPanel({ notify, candidate }: Props) {
   }
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="min-w-0 space-y-6 animate-fade-in">
       {error && (
-        <div className="card border-danger/40 bg-danger/10">
-          <div className="flex items-center justify-between gap-3">
+        <div className="card border-danger/40 bg-danger/10" role="alert" aria-live="assertive">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <p className="text-danger text-sm">Failed to load official scoring: {error}</p>
             <button onClick={loadScore} className="btn-secondary text-sm" disabled={loading}>
               Retry
@@ -166,7 +166,7 @@ export default function ScoringPanel({ notify, candidate }: Props) {
 
       {/* Expression overview */}
       <div className="card">
-        <div className="flex items-center justify-between gap-3 mb-2">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-2">
           <h3 className="text-sm font-semibold text-gray-200">Alpha Expression</h3>
           <button onClick={loadScore} className="btn-secondary text-xs" disabled={loading}>
             {loading ? "Scoring..." : "Refresh Score"}
@@ -175,7 +175,7 @@ export default function ScoringPanel({ notify, candidate }: Props) {
         <code className="block bg-gray-950 rounded-lg p-3 text-xs text-brand-300 font-mono break-all">
           {candidate.expression}
         </code>
-        <div className="flex gap-3 mt-3 text-xs text-muted">
+        <div className="flex flex-wrap gap-x-3 gap-y-1 mt-3 text-xs text-muted">
           <span>Family: <span className="text-gray-300">{candidate.family}</span></span>
           <span>Status: <span className={`badge ${scoring?.passed_gate || candidate.gate?.passed ? "badge-success" : "badge-danger"}`}>{candidate.lifecycle_status}</span></span>
           <span>ID: <span className="text-gray-300 font-mono">{candidate.alpha_id}</span></span>
@@ -254,7 +254,14 @@ function ScoreBar({ label, value, max, color }: { label: string; value: number; 
         <span className="text-gray-400">{label}</span>
         <span className="text-muted font-mono">{value.toFixed(1)}/{max}</span>
       </div>
-      <div className="w-full bg-gray-800 rounded-full h-1.5 overflow-hidden">
+      <div
+        className="w-full bg-gray-800 rounded-full h-1.5 overflow-hidden"
+        role="progressbar"
+        aria-label={`${label} score`}
+        aria-valuemin={0}
+        aria-valuemax={max}
+        aria-valuenow={Math.max(0, Math.min(max, value))}
+      >
         <div className={`${color} h-1.5 rounded-full transition-all duration-300`} style={{ width: `${pct}%` }} />
       </div>
     </div>
@@ -263,7 +270,7 @@ function ScoreBar({ label, value, max, color }: { label: string; value: number; 
 
 function InfoPill({ label, value }: { label: string; value: unknown }) {
   return (
-    <div className="bg-gray-800/50 rounded-lg p-2">
+    <div className="min-w-0 bg-gray-800/50 rounded-lg p-2">
       <span className="block text-gray-400">{label}</span>
       <span className="block text-gray-200 font-mono truncate">{String(value ?? "-")}</span>
     </div>
@@ -287,7 +294,7 @@ function GateGroup({ title, gates }: { title: string; gates: OfficialGateResult[
                   check.passed ? "bg-success/10 border border-success/20" : "bg-danger/10 border border-danger/20"
                 }`}
               >
-                <span className={check.passed ? "text-success" : "text-danger"}>{check.passed ? "✓" : "✕"}</span>
+                <span className={check.passed ? "text-success" : "text-danger"} aria-hidden="true">{check.passed ? "✓" : "✕"}</span>
                 <div>
                   <span className="font-medium">{check.name}</span>
                   <p className="text-muted">
@@ -345,10 +352,13 @@ function formatNumber(value: unknown, digits: number) {
   return Number.isFinite(num) ? num.toFixed(digits) : "-";
 }
 
-function metricWithStatus(primary: unknown, status: unknown, fallback: unknown) {
-  if (primary !== undefined && primary !== null && primary !== "") return primary;
-  if (status !== undefined && status !== null && status !== "") return status;
-  return fallback;
+function metricWithStatus(primary: unknown, status: unknown, fallback: unknown): string | number | undefined {
+  return metricValue(primary) ?? metricValue(status) ?? metricValue(fallback);
+}
+
+function metricValue(value: unknown): string | number | undefined {
+  if (value === undefined || value === null || value === "") return undefined;
+  return typeof value === "number" || typeof value === "string" ? value : undefined;
 }
 
 /** Metric row with threshold indication */
@@ -369,9 +379,9 @@ function MetricRow({ label, value, threshold, max, format }: {
     ? threshold != null ? numericValue >= threshold : max != null ? numericValue <= max : true
     : true;
   return (
-    <div className="flex justify-between items-center p-2 bg-gray-800/50 rounded-lg">
+    <div className="flex min-w-0 justify-between items-center gap-3 p-2 bg-gray-800/50 rounded-lg">
       <span className="text-gray-400">{label}</span>
-      <span className={`font-mono ${threshold != null || max != null ? (ok ? "text-success" : "text-danger") : "text-gray-200"}`}>
+      <span className={`min-w-0 truncate font-mono ${threshold != null || max != null ? (ok ? "text-success" : "text-danger") : "text-gray-200"}`}>
         {formatted}
       </span>
     </div>

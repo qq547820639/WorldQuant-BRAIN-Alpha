@@ -4,6 +4,9 @@ from types import SimpleNamespace
 import json
 import os
 import re
+import threading
+import time
+import urllib.error
 import urllib.request
 
 import pytest
@@ -17,6 +20,8 @@ from brain_alpha_ops.research.repository import ResearchRepository
 from brain_alpha_ops.research.safety import SubmissionLedger
 from brain_alpha_ops.tasks import JobStore
 from brain_alpha_ops.web import _load_html, anti_overfit_snapshot, assistant_context_snapshot, assistant_cross_review_payload, assistant_guidance_snapshot, assistant_request_snapshot, assistant_response_guidance_payload, assistant_response_parse_payload, cloud_alpha_snapshot, config_from_payload, generate_candidates_payload, passed_candidates_from_payload, public_run_config, research_memory_snapshot, research_observability_snapshot, rolling_validation_snapshot, save_assistant_guidance_payload, sqlite_expression_lookup_payload, sqlite_index_snapshot, sqlite_record_lookup_payload
+from brain_alpha_ops.web_config import save_run_config_payload as save_run_config_payload_service
+from brain_alpha_ops.web_rate_limit import RateLimitPolicy, RequestRateLimiter
 from brain_alpha_ops.web_routes import GET_ROUTES, POST_ROUTES, route_for
 from scripts.check_frontend_syntax import check_scripts
 from tests.test_web_frontend_v2 import _build_test_script, _run_node_script
@@ -27,6 +32,53 @@ def _free_port_or_skip(start: int, host: str = "127.0.0.1") -> int:
         return web.find_free_port(start=start, host=host)
     except (OSError, RuntimeError, PermissionError) as exc:
         pytest.skip(f"local web server ports unavailable in this environment: {exc}")
+
+
+def _live_session_credentials(url: str) -> tuple[str, str]:
+    root_response = urllib.request.urlopen(url, timeout=5)
+    cookie = str(root_response.headers.get("Set-Cookie", "")).split(";", 1)[0]
+    html = root_response.read().decode("utf-8")
+    csrf_match = re.search(r"var CSRF_TOKEN = '([^']+)'", html)
+    assert csrf_match
+    assert csrf_match.group(1) != "__BRAIN_ALPHA_OPS_CSRF_TOKEN__"
+    return cookie, csrf_match.group(1)
+
+
+def _live_react_session_credentials(url: str) -> tuple[str, str, str]:
+    root_response = urllib.request.urlopen(url, timeout=5)
+    cookie = str(root_response.headers.get("Set-Cookie", "")).split(";", 1)[0]
+    html = root_response.read().decode("utf-8")
+    csrf_match = re.search(r'<meta name="brain-alpha-csrf" content="([^"]+)"', html)
+    stream_match = re.search(r'<meta name="brain-alpha-stream" content="([^"]+)"', html)
+    assert csrf_match
+    assert stream_match
+    assert csrf_match.group(1) != "__BRAIN_ALPHA_OPS_CSRF_TOKEN__"
+    assert stream_match.group(1) != "__BRAIN_ALPHA_OPS_STREAM_TOKEN__"
+    return cookie, csrf_match.group(1), html
+
+
+def _live_json_post(
+    url: str,
+    path: str,
+    payload: dict,
+    *,
+    cookie: str,
+    csrf_token: str,
+    request_id: str,
+):
+    request = urllib.request.Request(
+        f"{url.rstrip('/')}{path}",
+        data=json.dumps(payload).encode("utf-8"),
+        headers={
+            "Content-Type": "application/json",
+            "Cookie": cookie,
+            "X-Brain-Alpha-CSRF": csrf_token,
+            "X-Brain-Alpha-Request-ID": request_id,
+            "X-Brain-Alpha-Request-Timestamp": str(int(time.time() * 1000)),
+        },
+        method="POST",
+    )
+    return urllib.request.urlopen(request, timeout=5)
 
 
 APP_TEST_MODULES = [
@@ -392,7 +444,7 @@ window.renderCurrentView();
 
 var html = document.getElementById("candidateRows").innerHTML;
 assertContains(html, "expression_index", "sqlite index key rendered");
-assertContains(html, "查看详情", "row action rendered");
+assertContains(html, 'data-action="open-row"', "row action rendered as data-action");
 var cached = window.AppState.getCached("sqlite_index", "expression_index");
 assertEqual(cached.raw.key, "expression_index", "sqlite row cached by key");
 """
@@ -439,6 +491,8 @@ window.renderCurrentView();
 var html = document.getElementById("candidateRows").innerHTML;
 assertContains(html, 'data-action="open-row"', "open row action rendered as data-action");
 assertContains(html, 'data-action="toggle-select"', "select action rendered as data-action");
+assertContains(html, 'role="row"', "interactive row keeps table row semantics");
+assertContains(html, 'aria-keyshortcuts="Enter Space"', "keyboard row action is advertised");
 assertContains(html, "&lt;b&gt;unsafe&lt;/b&gt;", "family is escaped in row html");
 assertNotContains(html, "onclick=", "row actions avoid inline click handlers");
 assertNotContains(html, "onkeydown=", "row actions avoid inline key handlers");
@@ -507,7 +561,8 @@ window.renderAll();
 var tabs = document.getElementById("viewTabs").innerHTML;
 assertContains(tabs, "<button", "tabs render as buttons");
 assertContains(tabs, 'data-action="switch-view"', "tabs use delegated switch action");
-assertContains(tabs, 'aria-pressed="true"', "active tab exposes pressed state");
+assertContains(tabs, 'role="tab"', "view controls use tab semantics");
+assertContains(tabs, 'aria-selected="true"', "active tab exposes selected state");
 
 window.setResultDisplayMode("charts");
 assertEqual(document.getElementById("chartsPanel").classList.contains("visible"), true, "charts panel visible");
@@ -557,6 +612,9 @@ window.renderAll();
 
 assertContains(document.getElementById("viewTabs").innerHTML, "view-tab-group", "view tabs grouped");
 assertContains(document.getElementById("viewTabs").innerHTML, "tab-marker", "tab marker visible");
+assertContains(document.getElementById("viewTabs").innerHTML, 'role="tab"', "view tabs expose tab semantics");
+assertContains(document.getElementById("viewTabs").innerHTML, 'aria-controls="mainContent"', "view tabs target main panel");
+assertContains(document.getElementById("viewTabs").innerHTML, 'aria-selected="true"', "active view tab selected");
 assertEqual(document.getElementById("tableEmptyState").classList.contains("hidden"), false, "empty state visible");
 assertContains(document.getElementById("tableEmptyDescription").textContent, "启动生产搜索", "empty state actionable copy");
 assertContains(document.getElementById("panelHint").textContent, "按排序分", "panel hint follows active view");
@@ -729,6 +787,49 @@ def test_public_config_redacts_credentials():
     assert config["credentials"]["token"] == ""
 
 
+def test_save_run_config_payload_persists_editable_config_surface(tmp_path):
+    base = RunConfig(environment="production")
+    base.ops.settings.dataset = "pv1"
+    saved = []
+
+    def writer(config):
+        saved.append(config)
+        return tmp_path / "run_config.json"
+
+    payload = {
+        "environment": "production",
+        "settings": {
+            "region": "USA",
+            "universe": "TOP3000",
+            "delay": 1,
+            "decay": 12,
+            "neutralization": "INDUSTRY",
+            "dataset": "pv1",
+        },
+        "candidates": 33,
+        "cycles": 7,
+        "poolSize": 21,
+        "backtestBatchSize": 4,
+        "requireCloudSync": False,
+        "minSharpe": 1.5,
+        "minFitness": 1.1,
+        "minTurnover": 0.02,
+        "platformMaxTurnover": 0.6,
+        "maxSelfCorrelation": 0.65,
+        "maxWeightConcentration": 0.08,
+    }
+
+    result = save_run_config_payload_service(payload, loader=lambda: base, writer=writer)
+
+    assert result["ok"] is True
+    assert result["config"]["credentials"]["password"] == ""
+    assert saved[0].ops.settings.decay == 12
+    assert saved[0].ops.budget.max_candidates_per_cycle == 33
+    assert saved[0].ops.budget.require_cloud_sync is False
+    assert saved[0].ops.thresholds.min_sharpe == 1.5
+    assert saved[0].ops.thresholds.platform_max_turnover == 0.6
+
+
 def test_public_config_schema_exposes_required_panel_contract():
     schema = web.public_config_schema()
     control_paths = {item["payload_path"] for item in schema["controls"]}
@@ -753,7 +854,10 @@ def test_web_routes_define_session_policy_and_known_paths():
     assert route_for("GET", "/api/health").requires_session is False
     assert route_for("GET", "/").category == "html"
     assert route_for("POST", "/api/run").requires_session is True
+    assert route_for("POST", "/api/config").handler == "config"
     assert route_for("GET", "/api/config_schema").handler == "config_schema"
+    assert route_for("GET", "/api/snapshot/cloud").handler == "cloud_alphas"
+    assert route_for("GET", "/api/snapshot/memory").handler == "research_memory"
     assert route_for("GET", "/missing") is None
     assert "/api/assistant_request" in GET_ROUTES
     assert "/api/research_knowledge" in GET_ROUTES
@@ -896,24 +1000,375 @@ def test_sse_handler_accepts_stream_token_query_for_session_auth():
         stream_token = web._stream_token_for_session(session_id)
 
         class _Probe(web.Handler):
-            def __init__(self):
-                self.path = "/api/stream"
+            def __init__(self, path):
+                self.path = path
                 self.headers = {"Cookie": web._session_cookie_header(session_id)}
                 self.json_calls = []
 
             def _json(self, payload, status=200, *, extra_headers=None):
                 self.json_calls.append((payload, status, extra_headers or []))
 
-        handler = _Probe()
-        handler._handle_sse_stream(f"stream_token={stream_token}")
+        for path in ("/api/stream", "/sse"):
+            handler = _Probe(path)
+            handler._handle_sse_stream(f"stream_token={stream_token}")
 
-        assert handler.json_calls
-        payload, status, _headers = handler.json_calls[0]
-        assert status == 400
-        assert payload["error_code"] == "VALIDATION_ERROR"
-        assert payload["error"] == "missing job_id"
+            assert handler.json_calls
+            payload, status, _headers = handler.json_calls[0]
+            assert status == 400
+            assert payload["error_code"] == "VALIDATION_ERROR"
+            assert payload["error"] == "missing job_id"
     finally:
         web._expire_session(session_id)
+
+
+@pytest.mark.skipif(os.getenv("CI") == "true", reason="skipping live server test in CI environment")
+def test_live_sse_alias_accepts_rendered_stream_token():
+    port = _free_port_or_skip(start=8986)
+    url = web.serve(port=port, open_browser=False)
+    try:
+        root_response = urllib.request.urlopen(url, timeout=5)
+        cookie = root_response.headers.get("Set-Cookie", "")
+        html = root_response.read().decode("utf-8")
+        stream_match = re.search(r"var STREAM_TOKEN = '([^']+)'", html)
+        assert stream_match
+        assert stream_match.group(1) != "__BRAIN_ALPHA_OPS_STREAM_TOKEN__"
+
+        request = urllib.request.Request(
+            f"{url.rstrip('/')}/sse?job_id=missing_job&stream_token={stream_match.group(1)}",
+            headers={"Cookie": cookie},
+        )
+        with urllib.request.urlopen(request, timeout=5) as sse_response:
+            event_line = sse_response.readline().decode("utf-8")
+
+            assert sse_response.status == 200
+            assert sse_response.headers.get("Content-Type") == "text/event-stream"
+            assert '"job_id": "missing_job"' in event_line
+            assert '"error": "job not found"' in event_line
+    finally:
+        web.shutdown_server()
+
+
+@pytest.mark.skipif(os.getenv("CI") == "true", reason="skipping live server test in CI environment")
+def test_live_react_preview_serves_dist_assets_and_keeps_inline_default(monkeypatch):
+    port = _free_port_or_skip(start=9046)
+    monkeypatch.setenv("BRAIN_ALPHA_OPS_WEB_FRONTEND", "react")
+    web.web_html.reset_html_cache()
+    url = web.serve(port=port, open_browser=False)
+    try:
+        cookie, csrf_token, html = _live_react_session_credentials(url)
+        asset_paths = re.findall(r'/(assets/[^"\']+)', html)
+
+        assert '<div id="root"></div>' in html
+        assert "var CSRF_TOKEN" not in html
+        assert asset_paths
+        assert any(path.endswith(".js") for path in asset_paths)
+        assert any(path.endswith(".css") for path in asset_paths)
+
+        for asset_path in asset_paths:
+            asset_response = urllib.request.urlopen(f"{url.rstrip('/')}/{asset_path}", timeout=5)
+            asset_body = asset_response.read(128)
+            assert asset_response.status == 200
+            assert asset_body
+            assert asset_response.headers.get("Cache-Control") == "no-store"
+            assert asset_response.headers.get("X-Content-Type-Options") == "nosniff"
+
+        config_request = urllib.request.Request(
+            f"{url.rstrip('/')}/api/config",
+            headers={
+                "Cookie": cookie,
+                "X-Brain-Alpha-CSRF": csrf_token,
+            },
+        )
+        config_response = urllib.request.urlopen(config_request, timeout=5)
+        config_body = json.loads(config_response.read().decode("utf-8"))
+        assert config_response.status == 200
+        assert config_body["ok"] is True
+        assert config_body["config"]["environment"]
+    finally:
+        web.shutdown_server()
+        web.web_html.reset_html_cache()
+
+    default_port = _free_port_or_skip(start=9056)
+    monkeypatch.delenv("BRAIN_ALPHA_OPS_WEB_FRONTEND", raising=False)
+    web.web_html.reset_html_cache()
+    default_url = web.serve(port=default_port, open_browser=False)
+    try:
+        default_response = urllib.request.urlopen(default_url, timeout=5)
+        default_html = default_response.read().decode("utf-8")
+        assert default_response.status == 200
+        assert 'lang="zh-CN"' in default_html
+        assert "var CSRF_TOKEN" in default_html
+        assert '<div id="root"></div>' not in default_html
+    finally:
+        web.shutdown_server()
+        web.web_html.reset_html_cache()
+
+
+@pytest.mark.skipif(os.getenv("CI") == "true", reason="skipping live server test in CI environment")
+def test_live_config_save_accepts_rendered_session_csrf_and_replay_headers():
+    port = _free_port_or_skip(start=8996)
+    saved_payloads = []
+    original_save = web.save_run_config_payload
+    web.save_run_config_payload = lambda payload: (
+        saved_payloads.append(payload)
+        or {"ok": True, "path": "config/run_config.json", "config": {"environment": payload.get("environment")}}
+    )
+    url = web.serve(port=port, open_browser=False)
+    try:
+        root_response = urllib.request.urlopen(url, timeout=5)
+        cookie = str(root_response.headers.get("Set-Cookie", "")).split(";", 1)[0]
+        html = root_response.read().decode("utf-8")
+        csrf_match = re.search(r"var CSRF_TOKEN = '([^']+)'", html)
+        assert csrf_match
+        assert csrf_match.group(1) != "__BRAIN_ALPHA_OPS_CSRF_TOKEN__"
+
+        payload = {"environment": "production", "settings": {"region": "USA"}}
+        request = urllib.request.Request(
+            f"{url.rstrip('/')}/api/config",
+            data=json.dumps(payload).encode("utf-8"),
+            headers={
+                "Content-Type": "application/json",
+                "Cookie": cookie,
+                "X-Brain-Alpha-CSRF": csrf_match.group(1),
+                "X-Brain-Alpha-Request-ID": f"config_save_{int(time.time() * 1000)}",
+                "X-Brain-Alpha-Request-Timestamp": str(int(time.time() * 1000)),
+            },
+            method="POST",
+        )
+        response = urllib.request.urlopen(request, timeout=5)
+        body = json.loads(response.read().decode("utf-8"))
+
+        assert response.status == 200
+        assert body["ok"] is True
+        assert body["config"]["environment"] == "production"
+        assert saved_payloads == [payload]
+    finally:
+        web.save_run_config_payload = original_save
+        web.shutdown_server()
+
+
+@pytest.mark.skipif(os.getenv("CI") == "true", reason="skipping live server test in CI environment")
+def test_live_generate_candidates_accepts_count_and_rejects_out_of_range_value():
+    port = _free_port_or_skip(start=9006)
+    submitted_jobs = []
+    original_async_jobs = web.ASYNC_JOBS
+    original_submit = web._submit_background_job
+    web.ASYNC_JOBS = JobStore()
+    web._submit_background_job = lambda target, *args: submitted_jobs.append((target, *args))
+    url = web.serve(port=port, open_browser=False)
+    try:
+        root_response = urllib.request.urlopen(url, timeout=5)
+        cookie = str(root_response.headers.get("Set-Cookie", "")).split(";", 1)[0]
+        html = root_response.read().decode("utf-8")
+        csrf_match = re.search(r"var CSRF_TOKEN = '([^']+)'", html)
+        assert csrf_match
+
+        def post_count(count: int, request_id: str):
+            request = urllib.request.Request(
+                f"{url.rstrip('/')}/api/generate_candidates",
+                data=json.dumps({"count": count}).encode("utf-8"),
+                headers={
+                    "Content-Type": "application/json",
+                    "Cookie": cookie,
+                    "X-Brain-Alpha-CSRF": csrf_match.group(1),
+                    "X-Brain-Alpha-Request-ID": request_id,
+                    "X-Brain-Alpha-Request-Timestamp": str(int(time.time() * 1000)),
+                },
+                method="POST",
+            )
+            return urllib.request.urlopen(request, timeout=5)
+
+        response = post_count(7, f"generate_valid_{int(time.time() * 1000)}")
+        body = json.loads(response.read().decode("utf-8"))
+        assert response.status == 200
+        assert body["ok"] is True
+        assert body["task_id"]
+        assert len(submitted_jobs) == 1
+        assert submitted_jobs[0][2] == {"count": 7}
+
+        with pytest.raises(urllib.error.HTTPError) as exc_info:
+            post_count(101, f"generate_invalid_{int(time.time() * 1000)}")
+        error_body = json.loads(exc_info.value.read().decode("utf-8"))
+        assert exc_info.value.code == 400
+        assert error_body["error_code"] == "VALIDATION_ERROR"
+        assert "between 1 and 100" in error_body["error"]
+        assert len(submitted_jobs) == 1
+    finally:
+        web.ASYNC_JOBS = original_async_jobs
+        web._submit_background_job = original_submit
+        web.shutdown_server()
+
+
+@pytest.mark.skipif(os.getenv("CI") == "true", reason="skipping live server test in CI environment")
+def test_live_api_rate_limiter_throttles_same_session_writes_and_recovers_after_window():
+    port = _free_port_or_skip(start=9016)
+    saved_payloads = []
+    now = [100.0]
+    limiter = RequestRateLimiter(RateLimitPolicy(window_seconds=10, read_requests=99, write_requests=1, submit_requests=1))
+    original_save = web.save_run_config_payload
+    original_rate_limit_request = web.rate_limit_request
+    web.save_run_config_payload = lambda payload: (
+        saved_payloads.append(payload)
+        or {"ok": True, "path": "config/run_config.json", "config": {"environment": payload.get("environment")}}
+    )
+    web.rate_limit_request = lambda key, method, path: limiter.check(key=key, method=method, path=path, now=now[0])
+    url = web.serve(port=port, open_browser=False)
+    try:
+        cookie, csrf_token = _live_session_credentials(url)
+
+        response = _live_json_post(
+            url,
+            "/api/config",
+            {"environment": "production"},
+            cookie=cookie,
+            csrf_token=csrf_token,
+            request_id=f"rate_first_{time.time_ns()}",
+        )
+        body = json.loads(response.read().decode("utf-8"))
+        assert response.status == 200
+        assert body["ok"] is True
+        assert len(saved_payloads) == 1
+
+        now[0] = 101.0
+        with pytest.raises(urllib.error.HTTPError) as exc_info:
+            _live_json_post(
+                url,
+                "/api/config",
+                {"environment": "staging"},
+                cookie=cookie,
+                csrf_token=csrf_token,
+                request_id=f"rate_second_{time.time_ns()}",
+            )
+        error_body = json.loads(exc_info.value.read().decode("utf-8"))
+        assert exc_info.value.code == 429
+        assert exc_info.value.headers.get("Retry-After") == "9"
+        assert error_body["error_code"] == "RATE_LIMITED"
+        assert len(saved_payloads) == 1
+
+        now[0] = 111.0
+        recovered = _live_json_post(
+            url,
+            "/api/config",
+            {"environment": "research"},
+            cookie=cookie,
+            csrf_token=csrf_token,
+            request_id=f"rate_recovered_{time.time_ns()}",
+        )
+        recovered_body = json.loads(recovered.read().decode("utf-8"))
+        assert recovered.status == 200
+        assert recovered_body["ok"] is True
+        assert saved_payloads == [{"environment": "production"}, {"environment": "research"}]
+    finally:
+        web.save_run_config_payload = original_save
+        web.rate_limit_request = original_rate_limit_request
+        web.shutdown_server()
+
+
+@pytest.mark.skipif(os.getenv("CI") == "true", reason="skipping live server test in CI environment")
+def test_live_check_batch_rejects_malformed_candidates_before_starting_background_job():
+    port = _free_port_or_skip(start=9026)
+    submitted_jobs = []
+    original_check_jobs = web.CHECK_JOBS
+    original_sync_jobs = web.SYNC_JOBS
+    original_submit_lock = web.SUBMIT_LOCK
+    original_submit = web._submit_background_job
+    web.CHECK_JOBS = JobStore()
+    web.SYNC_JOBS = JobStore()
+    web.SUBMIT_LOCK = threading.Lock()
+    web._submit_background_job = lambda target, *args: submitted_jobs.append((target, *args))
+    url = web.serve(port=port, open_browser=False)
+    try:
+        cookie, csrf_token = _live_session_credentials(url)
+
+        with pytest.raises(urllib.error.HTTPError) as exc_info:
+            _live_json_post(
+                url,
+                "/api/check_batch",
+                {"check_candidates": {}},
+                cookie=cookie,
+                csrf_token=csrf_token,
+                request_id=f"check_batch_invalid_{time.time_ns()}",
+            )
+        error_body = json.loads(exc_info.value.read().decode("utf-8"))
+        assert exc_info.value.code == 400
+        assert error_body["error_code"] == "VALIDATION_ERROR"
+        assert "check_candidates" in error_body["error"]
+        assert submitted_jobs == []
+        assert web.CHECK_JOBS.latest_active() is None
+
+        response = _live_json_post(
+            url,
+            "/api/check_batch",
+            {"check_candidates": [{"alpha_id": "alpha_live_1"}]},
+            cookie=cookie,
+            csrf_token=csrf_token,
+            request_id=f"check_batch_valid_{time.time_ns()}",
+        )
+        body = json.loads(response.read().decode("utf-8"))
+        assert response.status == 200
+        assert body["ok"] is True
+        assert body["job_id"]
+        assert len(submitted_jobs) == 1
+        assert submitted_jobs[0][2] == {"check_candidates": [{"alpha_id": "alpha_live_1"}]}
+    finally:
+        web.CHECK_JOBS = original_check_jobs
+        web.SYNC_JOBS = original_sync_jobs
+        web.SUBMIT_LOCK = original_submit_lock
+        web._submit_background_job = original_submit
+        web.shutdown_server()
+
+
+@pytest.mark.skipif(os.getenv("CI") == "true", reason="skipping live server test in CI environment")
+def test_live_alpha_id_validation_rejects_check_submit_and_batch_before_side_effects():
+    port = _free_port_or_skip(start=9036)
+    checked_payloads = []
+    submitted_payloads = []
+    background_jobs = []
+    original_check_candidate = web.check_candidate
+    original_submit_candidate = web.submit_candidate
+    original_async_jobs = web.ASYNC_JOBS
+    original_submit_background = web._submit_background_job
+    original_submit_lock = web.SUBMIT_LOCK
+    web.check_candidate = lambda payload: checked_payloads.append(payload) or {"ok": True}
+    web.submit_candidate = lambda payload: submitted_payloads.append(payload) or {"ok": True}
+    web.ASYNC_JOBS = JobStore()
+    web._submit_background_job = lambda target, *args: background_jobs.append((target, *args))
+    web.SUBMIT_LOCK = threading.Lock()
+    url = web.serve(port=port, open_browser=False)
+    try:
+        cookie, csrf_token = _live_session_credentials(url)
+
+        for path, payload, expected_fragment in (
+            ("/api/check", {"alpha_id": "bad id!"}, "alpha_id"),
+            ("/api/submit", {"alpha_id": "bad id!"}, "alpha_id"),
+            ("/api/submit_batch", {"alpha_ids": ["good_1", "bad id!"]}, "alpha_ids[]"),
+        ):
+            with pytest.raises(urllib.error.HTTPError) as exc_info:
+                _live_json_post(
+                    url,
+                    path,
+                    payload,
+                    cookie=cookie,
+                    csrf_token=csrf_token,
+                    request_id=f"invalid_alpha_{path.rsplit('/', 1)[-1]}_{time.time_ns()}",
+                )
+            error_body = json.loads(exc_info.value.read().decode("utf-8"))
+            assert exc_info.value.code == 400
+            assert error_body["error_code"] == "VALIDATION_ERROR"
+            assert expected_fragment in error_body["error"]
+
+        assert checked_payloads == []
+        assert submitted_payloads == []
+        assert background_jobs == []
+        assert web.SUBMIT_LOCK.locked() is False
+        assert web.ASYNC_JOBS.latest_active() is None
+    finally:
+        web.check_candidate = original_check_candidate
+        web.submit_candidate = original_submit_candidate
+        web.ASYNC_JOBS = original_async_jobs
+        web._submit_background_job = original_submit_background
+        web.SUBMIT_LOCK = original_submit_lock
+        web.shutdown_server()
 
 
 @pytest.mark.skipif(os.getenv("CI") == "true", reason="skipping live server test in CI environment")

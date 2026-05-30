@@ -32,6 +32,7 @@
     return new Promise(function (resolve) {
       var overlay = $('confirmOverlay');
       var textEl = $('confirmText');
+      var titleEl = $('confirmTitle');
       var yesBtn = $('confirmYes');
       var noBtn = $('confirmNo');
       var iconEl = overlay ? overlay.querySelector('.confirm-dialog-icon') : null;
@@ -42,6 +43,7 @@
       }
 
       textEl.textContent = msg;
+      if (titleEl) titleEl.textContent = opts.title || yesText || '确认操作';
       yesBtn.textContent = yesText;
       noBtn.textContent = noText;
 

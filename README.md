@@ -75,6 +75,14 @@ cd brain_alpha_ops/web/react_app
 npm run dev
 ```
 
+To preview the built React artifact through the same local backend, opt in explicitly:
+
+```bash
+python3 launch_web.py --frontend react --no-browser
+```
+
+Without `--frontend react` or `BRAIN_ALPHA_OPS_WEB_FRONTEND=react`, `launch_web.py` continues to serve the inline production console by default.
+
 ### First Login
 
 1. Open the local workbench in Chrome.

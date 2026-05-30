@@ -73,6 +73,7 @@ export default function ProgressFeedback({
         <div
           className={`progress-feedback-track ${isDeterminate ? "" : "is-indeterminate"}`}
           role="progressbar"
+          aria-label={`${title}: ${label}`}
           aria-valuemin={0}
           aria-valuemax={100}
           aria-valuenow={isDeterminate ? roundedPercent : undefined}

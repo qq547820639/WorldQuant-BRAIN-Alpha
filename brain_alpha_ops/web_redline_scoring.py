@@ -9,6 +9,7 @@ Exposes:
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 from typing import Any
 
@@ -20,6 +21,8 @@ from brain_alpha_ops.scoring.official_scoring import (
     OfficialScoringSystem,
     ScoreHistoryDB,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def _get_storage_dir() -> str:
@@ -49,8 +52,8 @@ def handle_scoring_evaluate(body: dict[str, Any]) -> dict[str, Any]:
     try:
         db = ScoreHistoryDB(config.ops.storage_dir)
         db.append(result)
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("score history append failed for alpha_id=%s: %s", result.alpha_id, exc)
 
     return result.to_dict()
 

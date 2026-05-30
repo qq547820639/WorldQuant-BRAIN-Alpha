@@ -120,7 +120,20 @@ def test_repository_redacts_sensitive_values_before_persisting(tmp_path):
     ])
     repo.save_run_history(
         "run_1",
-        {"credentials": {"password": "pw", "token": "secret-token-222"}, "error": "cookie=session-cookie-333"},
+        {
+            "summary": {
+                "user_profile": {
+                    "username": "researcher@example.com",
+                    "raw": {
+                        "username": "researcher@example.com",
+                        "email": "researcher@example.com",
+                        "telephone": "+1234567890",
+                    },
+                }
+            },
+            "credentials": {"password": "pw", "token": "secret-token-222"},
+            "error": "cookie=session-cookie-333",
+        },
     )
 
     persisted = "\n".join(
@@ -130,6 +143,7 @@ def test_repository_redacts_sensitive_values_before_persisting(tmp_path):
             tmp_path / "checks.jsonl",
             tmp_path / "cloud_alphas.jsonl",
             tmp_path / "run_history" / "latest.json",
+            tmp_path / "run_history" / "run_1.json",
         ]
     )
 
@@ -139,6 +153,8 @@ def test_repository_redacts_sensitive_values_before_persisting(tmp_path):
     assert "cloud-token-111" not in persisted
     assert "secret-token-222" not in persisted
     assert "session-cookie-333" not in persisted
+    assert "researcher@example.com" not in persisted
+    assert "+1234567890" not in persisted
     assert "<redacted>" in persisted
 
 

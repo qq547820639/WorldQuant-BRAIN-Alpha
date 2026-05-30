@@ -43,7 +43,7 @@
 
       --text-primary: #0f172a;
       --text-secondary: #475569;
-      --text-muted: #94a3b8;
+      --text-muted: #64748b;
       --text-inverse: #ffffff;
       --text-accent: #0f766e;
       --text-on-accent: #ffffff;
@@ -58,11 +58,11 @@
       --accent-hover: #115e59;
       --accent-ring: rgba(15,118,110,0.25);
       --accent-gradient: linear-gradient(135deg, #0f766e 0%, #0d9488 100%);
-      --success: #16a34a;
+      --success: #15803d;
       --success-soft: #dcfce7;
-      --warning: #ca8a04;
+      --warning: #854d0e;
       --warning-soft: #fef9c3;
-      --danger: #dc2626;
+      --danger: #b91c1c;
       --danger-soft: #fee2e2;
       --info: #2563eb;
       --info-soft: #dbeafe;
@@ -680,7 +680,9 @@
     .form-input:focus,.form-select:focus,.form-textarea:focus{border-color:var(--border-focus);box-shadow:0 0 0 3px var(--accent-ring)}
     .form-row{display:grid;grid-template-columns:1fr 1fr;gap:var(--sp-2)}
     .form-help{font-size:var(--fs-2xs);color:var(--text-muted);line-height:1.35;margin-top:var(--sp-1)}
-    .form-group.is-disabled{opacity:.62}
+    .form-group.is-disabled{opacity:1}
+    .form-group.is-disabled .form-label,
+    .form-group.is-disabled .form-help{color:var(--text-secondary)}
     .form-group.is-disabled .form-textarea{background:var(--bg-muted);cursor:not-allowed}
     .form-group.is-disabled .form-textarea.is-inactive-value{border-style:dashed}
     .form-input.is-invalid,.form-select.is-invalid{border-color:var(--danger);box-shadow:0 0 0 2px rgba(220,38,38,0.15)}
@@ -1031,6 +1033,11 @@
       .workflow-step-hint{display:none}
       .workflow-panel{grid-template-columns:1fr}
       .workflow-actions{min-width:0;width:100%}
+      .workflow-actions .btn{min-height:40px}
+      .runtime-status-panel{grid-template-columns:1fr;align-items:stretch}
+      .runtime-status-meta{grid-template-columns:repeat(2,minmax(0,1fr));width:100%}
+      .runtime-status-actions{width:100%;justify-content:stretch}
+      .runtime-status-actions .btn{flex:1 1 140px;min-height:40px}
       .task-console-actions{grid-template-columns:1fr}
       .view-tabs{padding:var(--sp-2);gap:var(--sp-2)}
       .view-tab{min-width:128px;max-width:160px}

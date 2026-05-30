@@ -10,9 +10,21 @@ export function useToast(maxToasts = 5) {
   const timersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
   const addToast = useCallback(
-    (type: Toast["type"], message: string, durationMs = 5000) => {
+    (
+      type: Toast["type"],
+      message: string,
+      durationMs = 5000,
+      action?: { label: string; onClick: () => void },
+    ) => {
       const id = `toast_${++toastIdCounter}_${Date.now()}`;
-      const toast: Toast = { id, type, message, duration_ms: durationMs };
+      const toast: Toast = {
+        id,
+        type,
+        message,
+        duration_ms: durationMs,
+        action_label: action?.label,
+        on_action: action?.onClick,
+      };
 
       setToasts((prev) => {
         const next = [...prev, toast];

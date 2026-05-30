@@ -38,10 +38,14 @@ Thumbs.db
 # ---- Data & Logs (large / sensitive / runtime-generated) ----
 data/*.jsonl
 data/api_cache/
+data/_codex_bench*/
 data/jobs_sync.json
 data/jobs_production.json
+data/jobs_check.json
+data/jobs_async.json
 data/e2e_screenshots/
 data/run_history/
+data/knowledge/
 data/*.sqlite
 data/checkpoints/
 data/*.log
@@ -55,8 +59,11 @@ data/*.log
 *.cache
 
 # ---- Build artifacts ----
+node_modules/
 build/
 dist/
+!brain_alpha_ops/web/react_app/dist/
+!brain_alpha_ops/web/react_app/dist/index.html
 
 # ---- Archive ----
 _archive_before_rebuild_*/

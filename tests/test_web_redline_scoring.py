@@ -55,6 +55,50 @@ def test_scoring_attribution_reports_missing_candidate(monkeypatch, tmp_path):
     assert payload["error_code"] == "SCORING_CANDIDATE_NOT_FOUND"
 
 
+def test_scoring_evaluate_logs_score_history_append_failure(monkeypatch, tmp_path, caplog):
+    config = RunConfig(environment="production")
+    config.ops.storage_dir = str(tmp_path)
+    candidate = Candidate(
+        alpha_id="alpha_history_warning",
+        expression="rank(close)",
+        family="Momentum",
+        hypothesis="Recent price strength can persist after ranking.",
+        data_fields=["close"],
+        operators=["rank"],
+        official_metrics={
+            "pass_fail": "PASS",
+            "sharpe": 1.6,
+            "fitness": 1.2,
+            "turnover": 0.2,
+            "returns": 0.05,
+            "drawdown": 0.04,
+            "correlation": 0.2,
+            "weight_concentration": 0.04,
+            "sub_universe_sharpe": 1.3,
+            "subUniverseSize": 1000,
+            "alphaSize": 1000,
+            "margin": 5.0,
+        },
+    )
+
+    class FailingScoreHistoryDB:
+        def __init__(self, _storage_dir):
+            pass
+
+        def append(self, _result):
+            raise OSError("history store unavailable")
+
+    monkeypatch.setattr(web_redline_scoring, "load_run_config", lambda: config)
+    monkeypatch.setattr(web_redline_scoring, "ScoreHistoryDB", FailingScoreHistoryDB)
+    caplog.set_level("WARNING", logger=web_redline_scoring.__name__)
+
+    payload = web_redline_scoring.handle_scoring_evaluate({"candidate": candidate.to_dict()})
+
+    assert payload["alpha_id"] == "alpha_history_warning"
+    assert "score history append failed for alpha_id=alpha_history_warning" in caplog.text
+    assert "history store unavailable" in caplog.text
+
+
 def test_scoring_health_reports_auto_calibration_status(monkeypatch, tmp_path):
     config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path)

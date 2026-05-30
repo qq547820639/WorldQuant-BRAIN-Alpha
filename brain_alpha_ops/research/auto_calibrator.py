@@ -398,12 +398,7 @@ class AutoCalibrator:
         combinations = self._generate_grid_combinations(grid_config)
 
         for combo in combinations:
-            test_dim = DimensionParam(
-                name=dim_name,
-                weight=base_dim.weight,
-                enabled=base_dim.enabled,
-                **{k: base_dim.__dict__.get(k, 0) for k in base_dim.__dict__},
-            )
+            test_dim = DimensionParam(**{**base_dim.__dict__, "name": dim_name})
             for i, name in enumerate(param_names):
                 setattr(test_dim, name, combo[i])
 

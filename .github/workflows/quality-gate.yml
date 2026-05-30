@@ -43,4 +43,4 @@ jobs:
         run: python scripts/scan_sensitive_artifacts.py --root . --json --fail-on-findings --include-all --include-git-history
 
       - name: 6/6 - Tests
-        run: python -m pytest tests/ -v --tb=short
+        run: python -m pytest tests/ --cov=brain_alpha_ops --cov-report=term --cov-fail-under=80 -v --tb=short

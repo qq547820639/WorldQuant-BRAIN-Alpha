@@ -13,7 +13,15 @@ from brain_alpha_ops.brain_api.canonical import (
     SUPPORTED_REGIONS,
     SUPPORTED_UNIVERSES,
 )
-from brain_alpha_ops.config import BrainSettings, OpsConfig, ResearchBudget, RunConfig, load_run_config, validate_run_config
+from brain_alpha_ops.config import (
+    BrainSettings,
+    OpsConfig,
+    ResearchBudget,
+    RunConfig,
+    load_run_config,
+    validate_run_config,
+    write_run_config,
+)
 
 
 # Allowed base URLs for user-facing web payloads; production is the only
@@ -40,10 +48,42 @@ _VALID_TYPES = SUPPORTED_ALPHA_TYPES
 
 
 RunConfigLoader = Callable[[], RunConfig]
+RunConfigWriter = Callable[[RunConfig], object]
 
 
 def config_from_payload(payload: dict, *, loader: RunConfigLoader = load_run_config) -> OpsConfig:
     return run_config_from_payload(payload, loader=loader).ops
+
+
+def public_run_config_dict(config: RunConfig) -> dict[str, Any]:
+    data = config.to_dict()
+    credentials = data.get("credentials", {})
+    data["credentials"] = {
+        "username": "",
+        "password": "",
+        "token": "",
+        "username_env": credentials.get("username_env", "BRAIN_USERNAME"),
+        "password_env": credentials.get("password_env", "BRAIN_PASSWORD"),
+        "token_env": credentials.get("token_env", "BRAIN_TOKEN"),
+    }
+    return data
+
+
+def save_run_config_payload(
+    payload: dict,
+    *,
+    loader: RunConfigLoader = load_run_config,
+    writer: RunConfigWriter = write_run_config,
+) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        raise ValueError("request body must be a JSON object")
+    run_config = run_config_from_payload(payload, loader=loader)
+    saved_path = writer(run_config)
+    return {
+        "ok": True,
+        "config": public_run_config_dict(run_config),
+        "path": str(saved_path),
+    }
 
 
 def payload_truthy(value: object) -> bool:
@@ -121,6 +161,7 @@ def run_config_from_payload(payload: dict, *, loader: RunConfigLoader = load_run
         instrumentType=str(settings_data.get("instrumentType", current_settings.instrumentType)),
         region=str(settings_data.get("region", current_settings.region)),
         universe=str(settings_data.get("universe", current_settings.universe)),
+        dataset=str(settings_data.get("dataset", current_settings.dataset)),
         delay=payload_int(
             settings_data,
             "delay",
@@ -294,6 +335,31 @@ def run_config_from_payload(payload: dict, *, loader: RunConfigLoader = load_run
             current_budget.resume_persisted_backtests,
         ),
     )
+    threshold_payload = payload.get("thresholds") if isinstance(payload.get("thresholds"), dict) else {}
+    current_thresholds = run_config.ops.thresholds
+    for top_key, nested_key, attr, upper in (
+        ("minSharpe", "min_sharpe", "min_sharpe", None),
+        ("minFitness", "min_fitness", "min_fitness", None),
+        ("minTurnover", "min_turnover", "min_turnover", 1.0),
+        ("platformMaxTurnover", "platform_max_turnover", "platform_max_turnover", 1.0),
+        ("maxSelfCorrelation", "max_self_correlation", "max_self_correlation", 1.0),
+        ("maxWeightConcentration", "max_weight_concentration", "max_weight_concentration", 1.0),
+    ):
+        source = payload if top_key in payload else threshold_payload
+        source_key = top_key if top_key in payload else nested_key
+        if source_key in source:
+            setattr(
+                current_thresholds,
+                attr,
+                payload_float(
+                    source,
+                    source_key,
+                    getattr(current_thresholds, attr),
+                    lower=0.0,
+                    upper=upper,
+                    label=f"thresholds.{attr}",
+                ),
+            )
     current_scoring = run_config.ops.scoring
     current_scoring.assistant_guidance_score_adjustment_enabled = payload_bool(
         payload,

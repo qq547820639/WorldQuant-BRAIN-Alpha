@@ -215,8 +215,9 @@ class LocalScoringStage(PipelineStage):
         passed = []
         failed = []
         for candidate in candidates:
-            quality = local_quality(candidate)
-            if quality.get("total", 0) < min_quality:
+            quality = local_quality(candidate, min_quality)
+            candidate.local_quality = quality
+            if not quality.get("passed", quality.get("score", 0) >= min_quality * 10):
                 candidate.lifecycle_status = "local_quality_failed"
                 failed.append(candidate)
                 continue

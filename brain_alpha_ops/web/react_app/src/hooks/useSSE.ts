@@ -45,6 +45,7 @@ export function useSSE(
       return;
     }
 
+    const streamUrl = url;
     reconnectCountRef.current = 0;
     connect();
 
@@ -52,7 +53,7 @@ export function useSSE(
       close();
 
       try {
-        const es = new EventSource(url, { withCredentials: true });
+        const es = new EventSource(withStreamToken(streamUrl), { withCredentials: true });
         eventSourceRef.current = es;
 
         es.onopen = () => {
@@ -92,4 +93,19 @@ export function useSSE(
   }, [url, close, onEvent, onError, reconnectIntervalMs, maxReconnectAttempts]);
 
   return { connected, lastEvent, close };
+}
+
+function withStreamToken(url: string) {
+  const token = streamToken();
+  if (!token) return url;
+  const separator = url.includes("?") ? "&" : "?";
+  return `${url}${separator}stream_token=${encodeURIComponent(token)}`;
+}
+
+function streamToken() {
+  const meta = document.querySelector<HTMLMetaElement>('meta[name="brain-alpha-stream"]');
+  const fromMeta = meta?.content || "";
+  const fromWindow = String((window as unknown as { __BRAIN_ALPHA_OPS_STREAM_TOKEN__?: string }).__BRAIN_ALPHA_OPS_STREAM_TOKEN__ || "");
+  const token = fromMeta || fromWindow;
+  return token && !token.startsWith("__BRAIN_ALPHA_OPS") ? token : "";
 }

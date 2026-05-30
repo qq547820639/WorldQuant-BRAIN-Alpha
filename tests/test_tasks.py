@@ -68,7 +68,7 @@ def test_job_store_redacts_sensitive_payloads_before_persisting(tmp_path):
     job = store.get(job_id)
     persisted = path.read_text(encoding="utf-8")
 
-    assert job["credentials"]["username"] == "user"
+    assert job["credentials"]["username"] == "<redacted>"
     assert job["credentials"]["password"] == "<redacted>"
     assert job["credentials"]["token"] == "<redacted>"
     assert "secret-token-456" not in job["error"]

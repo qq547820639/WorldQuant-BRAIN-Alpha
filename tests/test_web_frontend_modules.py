@@ -549,7 +549,9 @@ def test_app_ux_orchestrator_has_tested_navigation_empty_and_busy_contracts():
     assert "workflowStepCloud" in template
     assert "workflowStatusText" in app_js
     assert "workflowCandidateCount" in app_js
-    assert "aria-pressed=\"" in app_js
+    assert 'role="tab"' in app_js
+    assert 'aria-selected="' in app_js
+    assert 'aria-controls="mainContent"' in app_js
     assert "renderViewTabs();" in app_js
     assert "renderInsight" in app_js
 

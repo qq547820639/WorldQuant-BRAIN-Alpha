@@ -11,6 +11,7 @@ from brain_alpha_ops.web_security import (
     path_requires_session,
     validate_admin_token,
 )
+from brain_alpha_ops.web_rate_limit import RateLimitPolicy, RequestRateLimiter
 
 
 def test_host_cookie_and_path_helpers_normalize_inputs():
@@ -115,6 +116,12 @@ def test_has_valid_request_session_allows_header_csrf_or_stream_query_only():
         csrf_header="",
         cookie_header=cookie,
     )
+    assert manager.has_valid_request_session(
+        path="/sse",
+        query_string=f"job_id=job_1&stream_token={stream_token}",
+        csrf_header="",
+        cookie_header=cookie,
+    )
     assert not manager.has_valid_request_session(
         path="/api/status",
         query_string=f"stream_token={stream_token}",
@@ -152,3 +159,22 @@ def test_session_manager_rejects_replayed_or_stale_post_requests():
     )
     assert stale["ok"] is False
     assert stale["error_code"] == "REPLAY_TIMESTAMP_STALE"
+
+
+def test_request_rate_limiter_uses_separate_read_write_and_submit_buckets():
+    limiter = RequestRateLimiter(RateLimitPolicy(window_seconds=10, read_requests=2, write_requests=1, submit_requests=1))
+
+    assert limiter.check(key="session-1", method="GET", path="/api/status", now=100)["ok"] is True
+    assert limiter.check(key="session-1", method="GET", path="/api/status", now=101)["ok"] is True
+    limited_read = limiter.check(key="session-1", method="GET", path="/api/status", now=102)
+    assert limited_read["ok"] is False
+    assert limited_read["error_code"] == "RATE_LIMITED"
+
+    assert limiter.check(key="session-1", method="POST", path="/api/run", now=102)["ok"] is True
+    limited_write = limiter.check(key="session-1", method="POST", path="/api/run", now=103)
+    assert limited_write["ok"] is False
+    assert limited_write["retry_after"] > 0
+
+    assert limiter.check(key="session-1", method="POST", path="/api/submit", now=103)["ok"] is True
+    assert limiter.check(key="session-1", method="POST", path="/api/submit", now=104)["ok"] is False
+    assert limiter.check(key="session-1", method="GET", path="/api/status", now=112)["ok"] is True

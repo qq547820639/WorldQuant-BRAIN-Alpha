@@ -258,7 +258,7 @@ class LocalSessionManager:
         session_id = self.session_id_from_cookie(cookie_header)
         if csrf_header:
             return self.validate_csrf(session_id, csrf_header)
-        if path == "/api/stream":
+        if path in {"/api/stream", "/sse"}:
             stream_token = (parse_qs(query_string).get("stream_token") or [""])[0]
             return self.validate_stream(session_id, stream_token)
         return False

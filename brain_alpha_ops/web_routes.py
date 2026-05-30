@@ -59,6 +59,7 @@ POST_ROUTES = {
     route.path: route
     for route in [
         WebRoute("POST", "/api/run", "run"),
+        WebRoute("POST", "/api/config", "config"),
         WebRoute("POST", "/api/test_connection", "test_connection"),
         WebRoute("POST", "/api/stop", "stop"),
         WebRoute("POST", "/api/sync_alphas", "sync_alphas"),

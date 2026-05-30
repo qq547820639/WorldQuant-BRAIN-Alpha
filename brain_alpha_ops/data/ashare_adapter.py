@@ -597,7 +597,7 @@ def _baostock_code(symbol: str) -> str:
 def _safe_float(value: str, default: float = 0.0) -> float:
     try:
         return float(value.strip() or "0")
-    except (TypeError, ValueError):
+    except (AttributeError, TypeError, ValueError):
         return default
 
 

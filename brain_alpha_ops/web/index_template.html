@@ -177,8 +177,8 @@
                 </select>
               </div>
               <button id="syncButton" class="btn btn-secondary btn-block" data-action="sync-cloud">同步云端数据</button>
-              <div class="progress"><div id="cloudSyncFill" class="progress-fill is-empty"></div></div>
-              <div id="cloudSyncMeta" class="progress-meta">进度：0% | 待确认 | 预计剩余：-</div>
+              <div class="progress" role="progressbar" aria-labelledby="syncButton" aria-describedby="cloudSyncMeta" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="cloudSyncFill" class="progress-fill is-empty"></div></div>
+              <div id="cloudSyncMeta" class="progress-meta" role="status" aria-live="polite">进度：0% | 待确认 | 预计剩余：-</div>
             </div>
           </div>
 
@@ -226,37 +226,37 @@
       </aside>
 
       <!-- ═══════════ CONTENT PANEL ═══════════ -->
-      <section class="app-content" id="mainContent" aria-label="数据面板" tabindex="-1">
+      <section class="app-content" id="mainContent" role="tabpanel" aria-labelledby="tableTitle" tabindex="-1">
 
         <!-- Core Workflow Rail -->
-        <section class="workflow-rail" id="workflowRail" aria-label="核心任务导航">
-          <div class="workflow-steps" role="list">
-            <button id="workflowStepProduce" class="workflow-step is-active" type="button" data-action="switch-view" data-view="candidates" role="listitem" aria-current="step">
+        <section class="workflow-rail" id="workflowRail" role="navigation" aria-label="核心任务导航" aria-describedby="workflowStatus">
+          <div class="workflow-steps" role="group" aria-label="核心任务步骤">
+            <button id="workflowStepProduce" class="workflow-step is-active" type="button" data-action="switch-view" data-view="candidates" aria-current="step" aria-describedby="workflowProduceHint">
               <span class="workflow-step-index">1</span>
               <span class="workflow-step-body">
                 <span class="workflow-step-title"><span class="workflow-step-name">生产候选</span><span id="workflowCandidateCount" class="workflow-count">0</span></span>
-                <span class="workflow-step-hint">生成、评分并进入回测队列。</span>
+                <span class="workflow-step-hint" id="workflowProduceHint">生成、评分并进入回测队列。</span>
               </span>
             </button>
-            <button id="workflowStepCheck" class="workflow-step" type="button" data-action="switch-view" data-view="passed" role="listitem">
+            <button id="workflowStepCheck" class="workflow-step" type="button" data-action="switch-view" data-view="passed" aria-describedby="workflowCheckHint">
               <span class="workflow-step-index">2</span>
               <span class="workflow-step-body">
                 <span class="workflow-step-title"><span class="workflow-step-name">达标检查</span><span id="workflowPassedCount" class="workflow-count">0</span></span>
-                <span class="workflow-step-hint">对达标 Alpha 执行官方预提交检查。</span>
+                <span class="workflow-step-hint" id="workflowCheckHint">对达标 Alpha 执行官方预提交检查。</span>
               </span>
             </button>
-            <button id="workflowStepSubmit" class="workflow-step" type="button" data-action="switch-view" data-view="submittable" role="listitem">
+            <button id="workflowStepSubmit" class="workflow-step" type="button" data-action="switch-view" data-view="submittable" aria-describedby="workflowSubmitHint">
               <span class="workflow-step-index">3</span>
               <span class="workflow-step-body">
                 <span class="workflow-step-title"><span class="workflow-step-name">提交确认</span><span id="workflowSubmittableCount" class="workflow-count">0</span></span>
-                <span class="workflow-step-hint">只提交检查仍在有效期内的 Alpha。</span>
+                <span class="workflow-step-hint" id="workflowSubmitHint">只提交检查仍在有效期内的 Alpha。</span>
               </span>
             </button>
-            <button id="workflowStepCloud" class="workflow-step" type="button" data-action="switch-view" data-view="cloud" role="listitem">
+            <button id="workflowStepCloud" class="workflow-step" type="button" data-action="switch-view" data-view="cloud" aria-describedby="workflowCloudHint">
               <span class="workflow-step-index">4</span>
               <span class="workflow-step-body">
                 <span class="workflow-step-title"><span class="workflow-step-name">云端同步</span><span id="workflowCloudCount" class="workflow-count">0</span></span>
-                <span class="workflow-step-hint">刷新官方快照，核对线上状态。</span>
+                <span class="workflow-step-hint" id="workflowCloudHint">刷新官方快照，核对线上状态。</span>
               </span>
             </button>
           </div>
@@ -302,7 +302,7 @@
         </section>
 
         <!-- View Tabs -->
-        <nav class="view-tabs" id="viewTabs" aria-label="视图导航"></nav>
+        <nav class="view-tabs" id="viewTabs" role="tablist" aria-label="视图导航"></nav>
 
         <!-- Panel Header -->
         <div class="panel-header">
@@ -349,11 +349,11 @@
           <div class="slot-panel">
             <div class="sync-card">
               <div class="flex justify-between items-center mb-sm">
-                <span class="fw-bold text-sm">数据同步</span>
+                <span class="fw-bold text-sm" id="monitorCloudLabel">数据同步</span>
                 <span id="monitorCloudStatus" class="badge badge-default">未同步</span>
               </div>
-              <div class="progress mb-sm"><div id="monitorCloudFill" class="progress-fill is-empty"></div></div>
-              <div id="monitorCloudMeta" class="progress-meta">进度：0% | 预计剩余：-</div>
+              <div class="progress mb-sm" role="progressbar" aria-labelledby="monitorCloudLabel" aria-describedby="monitorCloudMeta" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="monitorCloudFill" class="progress-fill is-empty"></div></div>
+              <div id="monitorCloudMeta" class="progress-meta" role="status" aria-live="polite">进度：0% | 预计剩余：-</div>
             </div>
             <div>
               <div class="flex justify-between items-center mb-sm">
@@ -385,8 +385,8 @@
             </div>
             <div class="action-hint" id="moduleActionHint">批量核验全部达标 Alpha 当前是否仍可提交。</div>
             <div class="text-xs text-muted mt-xs" id="checkStats">尚未检查。</div>
-            <div class="progress mt-sm"><div id="checkProgressFill" class="progress-fill is-empty"></div></div>
-            <div id="checkProgressMeta" class="progress-meta">进度：0%</div>
+            <div class="progress mt-sm" role="progressbar" aria-labelledby="moduleActionTitle" aria-describedby="checkProgressMeta" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="checkProgressFill" class="progress-fill is-empty"></div></div>
+            <div id="checkProgressMeta" class="progress-meta" role="status" aria-live="polite">进度：0%</div>
             <div id="assistantGenerateInputs" class="assistant-generate-inputs hidden">
               <div class="form-group"><label class="form-label" for="assistantResponseInput">助手 JSON</label><textarea id="assistantResponseInput" class="form-textarea" rows="2" placeholder="粘贴外部 LLM 返回的 JSON；留空则仅使用本地研究记忆"></textarea></div>
               <div class="form-group"><label class="form-label" for="assistantCandidateCount">数量</label><input id="assistantCandidateCount" class="form-input" type="number" min="1" max="100" step="1" value="10"></div>
@@ -485,8 +485,9 @@
 
   <!-- Confirm Dialog -->
   <div id="confirmOverlay" class="confirm-overlay hidden" aria-hidden="true" data-action="hide-confirm">
-    <div class="confirm-dialog" role="dialog" aria-modal="true" tabindex="-1">
-      <div class="confirm-dialog-icon">!</div>
+    <div class="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="confirmTitle" aria-describedby="confirmText" tabindex="-1">
+      <h2 id="confirmTitle" class="sr-only">确认操作</h2>
+      <div class="confirm-dialog-icon" aria-hidden="true">!</div>
       <p id="confirmText"></p>
       <div class="confirm-actions">
         <button class="btn btn-secondary btn-sm" id="confirmNo">取消</button>

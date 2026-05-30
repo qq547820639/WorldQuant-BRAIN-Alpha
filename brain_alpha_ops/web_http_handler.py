@@ -23,19 +23,25 @@ def create_handler_class(
     sse_push_interval: float,
     max_sse_duration: float,
     resolve_sse_job: Callable[[str], dict | None] | None = None,
+    resolve_static_asset: Callable[[str], tuple[bytes, str] | None] | None = None,
 ) -> type[BaseHTTPRequestHandler]:
     server_version_value = server_version
     max_body_bytes_value = max_body_bytes
     sse_push_interval_value = sse_push_interval
     max_sse_duration_value = max_sse_duration
     resolve_sse_job_value = resolve_sse_job or (lambda job_id: jobs.get(job_id))
+    resolve_static_asset_value = resolve_static_asset or (lambda _path: None)
 
     class Handler(BaseHTTPRequestHandler):
         server_version = server_version_value
         _MAX_BODY_BYTES = max_body_bytes_value
 
         def do_GET(self):
-            dispatch_get(self, urlparse(self.path), dispatch_context())
+            parsed = urlparse(self.path)
+            if parsed.path.startswith("/assets/"):
+                self._handle_static_asset(parsed.path)
+                return
+            dispatch_get(self, parsed, dispatch_context())
 
         def do_POST(self):
             dispatch_post(self, urlparse(self.path), dispatch_context())
@@ -139,6 +145,23 @@ def create_handler_class(
                     time.sleep(sse_push_interval_value)
             except (BrokenPipeError, ConnectionResetError, OSError):
                 pass
+
+        def _handle_static_asset(self, request_path: str):
+            if not self._is_allowed_local_request():
+                self._json({"ok": False, "error_code": "ORIGIN_FORBIDDEN", "error": "forbidden local request origin"}, status=403)
+                return
+            asset = resolve_static_asset_value(request_path)
+            if asset is None:
+                self._json({"ok": False, "error_code": "NOT_FOUND", "error": "not found"}, status=404)
+                return
+            data, content_type = asset
+            self.send_response(200)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Cache-Control", "no-store")
+            self._send_security_headers()
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
 
         def _html(self, html: str, *, extra_headers: list[tuple[str, str]] | None = None):
             data = html.encode("utf-8")

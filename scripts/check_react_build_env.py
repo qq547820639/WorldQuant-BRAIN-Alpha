@@ -18,6 +18,8 @@ from typing import Callable
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_APP_DIR = PROJECT_ROOT / "brain_alpha_ops" / "web" / "react_app"
+CSRF_TOKEN_PLACEHOLDER = "__BRAIN_ALPHA_OPS_CSRF_TOKEN__"
+STREAM_TOKEN_PLACEHOLDER = "__BRAIN_ALPHA_OPS_STREAM_TOKEN__"
 LOCKFILES = ("package-lock.json", "npm-shrinkwrap.json", "pnpm-lock.yaml", "yarn.lock")
 REQUIRED_PACKAGES = ("react", "react-dom", "typescript", "vite", "@vitejs/plugin-react")
 
@@ -38,6 +40,7 @@ def check_react_build_env(
     node_path = shutil.which("node")
     node_modules = app_dir / "node_modules"
     installed = _installed_packages(node_modules)
+    artifact = _artifact_snapshot(app_dir)
 
     findings: list[dict] = []
     _require(findings, package_json.is_file(), "missing_package_json", f"{package_json} does not exist")
@@ -56,9 +59,10 @@ def check_react_build_env(
         })
 
     build_result = None
-    ready = not findings
-    if run_build and ready:
+    prerequisites_ready = not findings
+    if run_build and prerequisites_ready:
         build_result = _run_build(app_dir, runner=runner)
+        artifact = _artifact_snapshot(app_dir)
         if not build_result["ok"]:
             findings.append({
                 "code": "react_build_failed",
@@ -66,6 +70,8 @@ def check_react_build_env(
                 "message": "npm run build returned a non-zero exit code",
                 "exit_code": build_result["exit_code"],
             })
+        else:
+            findings.extend(_artifact_findings(artifact))
 
     ok = not findings if strict or run_build else True
     return {
@@ -76,7 +82,7 @@ def check_react_build_env(
         "app_dir": str(app_dir),
         "production_surface": "inline_html_js",
         "react_surface": "mirror",
-        "ready": ready and (build_result is None or build_result["ok"]),
+        "ready": not findings and (build_result is None or build_result["ok"]),
         "tooling": {
             "node": node_path or "",
             "npm": npm_path or "",
@@ -84,6 +90,7 @@ def check_react_build_env(
             "node_modules": str(node_modules) if node_modules.is_dir() else "",
             "installed_required_packages": sorted(installed),
         },
+        "artifact": artifact,
         "build": build_result,
         "findings": findings,
         "recommendation": _recommendation(findings),
@@ -99,6 +106,66 @@ def _installed_packages(node_modules: Path) -> set[str]:
         if package_path.is_dir():
             installed.add(name)
     return installed
+
+
+def _artifact_snapshot(app_dir: Path) -> dict:
+    index_path = app_dir / "dist" / "index.html"
+    exists = index_path.is_file()
+    html = index_path.read_text(encoding="utf-8") if exists else ""
+    source_snapshot = _source_snapshot(app_dir)
+    artifact_mtime = index_path.stat().st_mtime if exists else 0.0
+    source_newer_than_artifact = bool(exists and source_snapshot["latest_mtime"] > artifact_mtime)
+    return {
+        "path": str(index_path),
+        "exists": exists,
+        "bytes": index_path.stat().st_size if exists else 0,
+        "mtime": artifact_mtime,
+        "source_files": source_snapshot["files"],
+        "latest_source_path": source_snapshot["latest_path"],
+        "latest_source_mtime": source_snapshot["latest_mtime"],
+        "source_newer_than_artifact": source_newer_than_artifact,
+        "recommendation": (
+            "React source is newer than dist/index.html; rebuild the React artifact after installing the toolchain."
+            if source_newer_than_artifact else ""
+        ),
+        "has_root_mount": 'id="root"' in html,
+        "has_csrf_placeholder": CSRF_TOKEN_PLACEHOLDER in html,
+        "has_stream_placeholder": STREAM_TOKEN_PLACEHOLDER in html,
+        "contains_react_runtime": "React" in html or "/assets/" in html,
+    }
+
+
+def _source_snapshot(app_dir: Path) -> dict:
+    source_dir = app_dir / "src"
+    latest_path = ""
+    latest_mtime = 0.0
+    files = 0
+    if not source_dir.is_dir():
+        return {"files": files, "latest_path": latest_path, "latest_mtime": latest_mtime}
+    for source_path in sorted(source_dir.rglob("*")):
+        if source_path.suffix not in {".ts", ".tsx", ".js", ".jsx", ".css"} or not source_path.is_file():
+            continue
+        files += 1
+        mtime = source_path.stat().st_mtime
+        if mtime > latest_mtime:
+            latest_mtime = mtime
+            latest_path = str(source_path.relative_to(app_dir))
+    return {"files": files, "latest_path": latest_path, "latest_mtime": latest_mtime}
+
+
+def _artifact_findings(artifact: dict) -> list[dict]:
+    checks = [
+        ("missing_react_dist_artifact", artifact.get("exists"), "React build did not produce dist/index.html"),
+        ("missing_react_root_mount", artifact.get("has_root_mount"), "React artifact is missing the root mount element"),
+        ("missing_react_csrf_placeholder", artifact.get("has_csrf_placeholder"), "React artifact is missing the CSRF placeholder"),
+        ("missing_react_stream_placeholder", artifact.get("has_stream_placeholder"), "React artifact is missing the stream token placeholder"),
+        ("missing_react_runtime", artifact.get("contains_react_runtime"), "React artifact does not reference the React runtime or bundled assets"),
+    ]
+    return [
+        {"code": code, "severity": "blocking", "message": message}
+        for code, condition, message in checks
+        if not condition
+    ]
 
 
 def _require(findings: list[dict], condition: bool, code: str, message: str) -> None:

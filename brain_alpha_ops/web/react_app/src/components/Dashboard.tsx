@@ -43,7 +43,7 @@ export default function Dashboard({ notify }: Props) {
   return (
     <div className="space-y-6 animate-fade-in">
       {errors.length > 0 && (
-        <div className="card border-danger/40 bg-danger/10">
+        <div className="card border-danger/40 bg-danger/10" role="alert" aria-live="assertive">
           <div className="flex items-start justify-between gap-3">
             <div>
               <h3 className="text-sm font-semibold text-danger mb-2">Dashboard data needs attention</h3>
@@ -68,7 +68,7 @@ export default function Dashboard({ notify }: Props) {
       />
 
       {/* KPIs */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <KpiCard
           label="Total Candidates"
           value={memory?.total_candidates ?? status?.progress?.candidates_generated ?? "-"}

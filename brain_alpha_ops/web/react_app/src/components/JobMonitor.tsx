@@ -53,7 +53,7 @@ export default function JobMonitor({ notify }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [notify]);
 
-  const sseUrl = jobId ? `/sse?job_id=${jobId}` : null;
+  const sseUrl = jobId ? `/sse?job_id=${encodeURIComponent(jobId)}` : null;
   const { connected } = useSSE(sseUrl, { onEvent: handleSSEEvent });
 
   const startJob = useCallback(async () => {
@@ -103,7 +103,7 @@ export default function JobMonitor({ notify }: Props) {
   useEffect(() => {
     if (!running) return;
     const interval = setInterval(async () => {
-      const result = await api.call<JobStatus>(`/api/status?job_id=${jobId || ""}`);
+      const result = await api.call<JobStatus>(`/api/status?job_id=${encodeURIComponent(jobId || "")}`);
       if (result?.ok) {
         setStatus(result as unknown as JobStatus);
       }
@@ -122,12 +122,12 @@ export default function JobMonitor({ notify }: Props) {
   };
 
   return (
-    <div className="card space-y-4">
-      <div className="flex items-center justify-between">
+    <div className="card min-w-0 space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h3 className="text-sm font-semibold text-gray-200">Pipeline Status</h3>
         <div className="flex items-center gap-2">
-          <span className={`h-2 w-2 rounded-full ${connected ? "bg-success" : "bg-danger"}`} />
-          <span className={`badge ${running ? "badge-success" : "badge-neutral"}`}>
+          <span className={`h-2 w-2 rounded-full ${connected ? "bg-success" : "bg-danger"}`} aria-hidden="true" />
+          <span className={`badge ${running ? "badge-success" : "badge-neutral"}`} role="status" aria-label={`Pipeline is ${running ? "running" : "idle"}`}>
             {running ? "Running" : "Idle"}
           </span>
         </div>
@@ -142,7 +142,7 @@ export default function JobMonitor({ notify }: Props) {
             error={progressError}
             compact
           />
-          <div className="grid grid-cols-2 gap-3 text-xs text-muted">
+          <div className="grid grid-cols-1 gap-3 text-xs text-muted sm:grid-cols-2">
             <span>Cycle: {status?.cycle ?? 0}/{status?.max_cycles ?? 0}</span>
             <span>Phase: {status?.phase ?? "-"}</span>
             <span>Candidates: {status?.progress?.candidates_generated ?? 0}</span>
@@ -162,17 +162,17 @@ export default function JobMonitor({ notify }: Props) {
         />
       )}
 
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <button onClick={startJob} disabled={running} className="btn-primary text-sm">
-          ▶ Start Pipeline
+          <span aria-hidden="true">▶</span> Start Pipeline
         </button>
         <button onClick={stopJob} disabled={!running} className="btn-secondary text-sm">
-          ⏹ Stop
+          <span aria-hidden="true">⏹</span> Stop
         </button>
       </div>
 
       {events.length > 0 && (
-        <div className="max-h-32 overflow-y-auto bg-gray-950 rounded-lg p-3 font-mono text-xs text-gray-400 space-y-1">
+        <div className="max-h-32 min-w-0 overflow-y-auto bg-gray-950 rounded-lg p-3 font-mono text-xs text-gray-400 space-y-1" role="log" aria-live="polite" aria-label="Pipeline event log">
           {events.map((e, i) => (
             <div key={i}>{e}</div>
           ))}

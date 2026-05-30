@@ -1,6 +1,5 @@
 ﻿// brain_alpha_ops/web/js/app.js
 // Application entry point: render dispatch, view state, and page-level actions.
-// v4: Keyboard shortcuts, skeleton screens, workflow wizard, view transitions.
 (function () {
   'use strict';
   var $ = window.Utils.$;
@@ -145,9 +144,9 @@
     if (!container) return;
     var currentView = activeView();
     setSafeHtml(container, VIEW_GROUPS.map(function (group) {
-      return '<div class="view-tab-group" aria-label="' + esc(group.label) + '">' +
-        '<div class="view-tab-group-label"><span>' + esc(group.label) + '</span><small>' + esc(group.hint) + '</small></div>' +
-        '<div class="view-tab-row">' + group.views.map(function (view) { return renderTab(view, currentView); }).join('') + '</div>' +
+      return '<div class="view-tab-group" role="presentation">' +
+        '<div class="view-tab-group-label" aria-hidden="true"><span>' + esc(group.label) + '</span><small>' + esc(group.hint) + '</small></div>' +
+        '<div class="view-tab-row" role="presentation">' + group.views.map(function (view) { return renderTab(view, currentView); }).join('') + '</div>' +
         '</div>';
     }).join(''));
   }
@@ -159,8 +158,10 @@
     var countText = formatCount(count);
     var badgeHtml = count > 0 ? '<span class="tab-badge">' + esc(countText) + '</span>' : '';
     return '<button type="button" class="view-tab' + (isActive ? ' is-active' : '') + '"' +
+      ' id="viewTab-' + escapeAttr(view) + '"' +
+      ' role="tab" aria-selected="' + isActive + '" tabindex="' + (isActive ? '0' : '-1') + '"' +
+      ' aria-controls="mainContent"' +
       ' data-action="switch-view" data-view="' + escapeAttr(view) + '"' +
-      ' aria-pressed="' + isActive + '"' +
       ' title="' + esc(title) + (count > 0 ? ' (' + countText + ')' : '') + '"' +
       '><span class="tab-marker" aria-hidden="true">' + esc(icon) + '</span>' +
       '<span class="view-tab-label">' + esc(title) + '</span>' + badgeHtml + '</button>';
@@ -176,6 +177,22 @@
       if (event.stopPropagation) event.stopPropagation();
       window.switchView(button.getAttribute('data-view') || 'candidates');
     });
+    container.addEventListener('keydown', function (event) {
+      var button = findActionElement(event.target, container);
+      if (!button || button.getAttribute('role') !== 'tab') return;
+      var tabs = Array.prototype.slice.call(container.querySelectorAll('[role="tab"]'));
+      var index = tabs.indexOf(button);
+      if (index < 0 || !tabs.length) return;
+      var nextIndex = null;
+      if (event.key === 'ArrowRight' || event.key === 'ArrowDown') nextIndex = (index + 1) % tabs.length;
+      if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') nextIndex = (index - 1 + tabs.length) % tabs.length;
+      if (event.key === 'Home') nextIndex = 0;
+      if (event.key === 'End') nextIndex = tabs.length - 1;
+      if (nextIndex === null) return;
+      if (event.preventDefault) event.preventDefault();
+      tabs[nextIndex].focus();
+      window.switchView(tabs[nextIndex].getAttribute('data-view') || 'candidates');
+    });
   }
   window.switchView = function (view) {
     if (VIEW_ORDER.indexOf(view) === -1) view = 'candidates';
@@ -184,7 +201,6 @@
     _renderCurrentView();
     if (typeof window.renderInsight === 'function') window.renderInsight();
     updatePanelHeader();
-    // Show/hide action bar based on view
     updateActionBarVisibility(view);
     renderTaskRail();
   };
@@ -278,7 +294,6 @@
     if (!bar) return;
     var showFor = ['passed', 'submittable', 'candidates'];
     bar.classList.toggle('hidden', showFor.indexOf(view) === -1);
-    // Update title
     var titleEl = $('moduleActionTitle');
     if (titleEl) {
       titleEl.textContent = view === 'submittable' ? '提交操作' : view === 'passed' ? '达标检查' : view === 'candidates' ? '候选生成' : '批量操作';
@@ -287,7 +302,6 @@
     if (hintEl) {
       hintEl.textContent = view === 'submittable' ? '勾选已通过检查的 Alpha 后提交。' : view === 'passed' ? '先跑官方预提交检查，再进入可提交列表。' : view === 'candidates' ? '生成候选后可在表格中逐条评分。' : '查看候选详情，必要时切换到达标视图执行检查。';
     }
-    // Show/hide specific buttons
     var checkBtn = $('checkButton');
     var submitBtn = $('submitSelectedButton');
     var checkMode = $('checkMode');
@@ -1182,11 +1196,7 @@
   var showWorkflowWizard = Enhancements.showWorkflowWizard || function () {};
   var _prevSwitchView = window.switchView;
   if (Enhancements.wrapSwitchView) window.switchView = Enhancements.wrapSwitchView(_prevSwitchView);
-
-  // ── v4: INIT ───────────────────────────────────────────────────────────
-
   async function init() {
-    // Show skeleton screens immediately
     if (Spinner.showTableSkeleton) Spinner.showTableSkeleton(6);
 
     renderViewTabs();
@@ -1200,8 +1210,6 @@
       connectionForm.dataset.boundSubmit = '1';
       connectionForm.addEventListener('submit', submitConnectionForm);
     }
-
-    // v4: Install keyboard shortcuts
     document.addEventListener('keydown', handleKeyboardShortcut);
 
     window._appPreRenderResult = renderResult;

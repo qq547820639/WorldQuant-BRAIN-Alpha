@@ -1,0 +1,12 @@
+{
+  "schema_version": "tracked_data_boundary_plan.v1",
+  "updated_at": "2026-05-30",
+  "policy": "Only intentionally retained tracked runtime-generated data should appear here; cleanup candidates removed from Git tracking must be pruned so --fail-on-stale-boundary stays green.",
+  "tracked_runtime_generated_data": {
+    "data/jobs_production.json": {
+      "status": "keep",
+      "category": "runtime_generated",
+      "note": "Keep for now: directly referenced by e2e_report.py and delivery evidence docs; remove only after those references are retired or rewritten."
+    }
+  }
+}

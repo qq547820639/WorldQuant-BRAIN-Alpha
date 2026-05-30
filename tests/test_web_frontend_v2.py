@@ -383,6 +383,23 @@ def test_template_has_responsive_breakpoints():
     assert "@media(max-width:640px)" in css or "@media (max-width: 640px)" in css
 
 
+def test_mobile_runtime_status_stacks_without_overflow():
+    """Verify mobile runtime feedback stacks instead of overflowing the panel."""
+    css = (WEB_CSS / "app.css").read_text(encoding="utf-8")
+    ux_css = re.sub(r"\s+", "", (WEB_CSS / "ux-enhancements.css").read_text(encoding="utf-8"))
+
+    assert ".workflow-actions .btn{min-height:40px}" in css
+    assert ".runtime-status-panel{grid-template-columns:1fr;align-items:stretch}" in css
+    assert ".runtime-status-meta{grid-template-columns:repeat(2,minmax(0,1fr));width:100%}" in css
+    assert ".runtime-status-actions{width:100%;justify-content:stretch}" in css
+    assert ".runtime-status-actions .btn{flex:1 1 140px;min-height:40px}" in css
+    assert ".btn-sm{min-height:40px;}" in ux_css
+    assert ".btn-icon,.btn-icon.btn-sm{width:40px;height:40px;}" in ux_css
+    assert ".view-tab{min-height:40px" in ux_css
+    assert ".collapsible-header{min-height:40px;}" in ux_css
+    assert "max-height:520px" in ux_css
+
+
 def test_template_has_empty_state_v3():
     """Verify the v3 empty state UI elements exist with illustration."""
     template = TEMPLATE_PATH.read_text(encoding="utf-8")
@@ -607,6 +624,13 @@ def test_template_has_aria_attributes():
     assert 'role="banner"' in template
     assert 'role="main"' in template
     assert 'role="complementary"' in template
+    assert 'role="tabpanel"' in template
+    assert 'role="tablist"' in template
+    assert 'role="navigation" aria-label="核心任务导航"' in template
+    assert 'id="workflowStepProduce" class="workflow-step is-active"' in template
+    assert 'role="progressbar" aria-labelledby="syncButton" aria-describedby="cloudSyncMeta"' in template
+    assert 'role="progressbar" aria-labelledby="moduleActionTitle" aria-describedby="checkProgressMeta"' in template
+    assert 'aria-labelledby="confirmTitle" aria-describedby="confirmText"' in template
     assert 'aria-live="polite"' in template
     assert 'aria-atomic="true"' in template
     assert 'aria-label' in template
@@ -1054,6 +1078,8 @@ M.confirmAction("确认删除？", "删除", "取消").then(function(result) {
   var overlay = document.getElementById("confirmOverlay");
   assertEqual(overlay.classList.contains("hidden"), false, "overlay visible");
   assertEqual(overlay.getAttribute("aria-hidden"), "false", "aria-hidden");
+  assertEqual(document.getElementById("confirmTitle").textContent, "删除", "confirm title follows action label");
+  assertEqual(document.getElementById("confirmText").textContent, "确认删除？", "confirm description text");
 
   // Click confirm
   document.getElementById("confirmYes").click();
@@ -1684,8 +1710,15 @@ assertContains(tabs.innerHTML, "数据审计", "data group label");
 assertContains(tabs.innerHTML, "研究工具", "research group label");
 assertContains(tabs.innerHTML, "tab-marker", "plain tab marker");
 assertContains(tabs.innerHTML, "01", "candidate step marker");
+assertContains(tabs.innerHTML, 'role="tab"', "view buttons expose tab role");
+assertContains(tabs.innerHTML, 'aria-selected="true"', "active view tab is selected");
+assertContains(tabs.innerHTML, 'tabindex="0"', "active view tab remains keyboard reachable");
+assertContains(tabs.innerHTML, 'aria-controls="mainContent"', "view tabs control the main content panel");
 
 window.switchView("passed");
+assertContains(tabs.innerHTML, 'data-view="passed"', "passed tab rendered before switch");
+assertContains(document.getElementById("viewTabs").innerHTML, 'data-view="passed"', "passed tab still rendered after switch");
+assertContains(document.getElementById("viewTabs").innerHTML, 'aria-selected="true"', "selected state refreshed after switch");
 var actionBar = document.getElementById("moduleActions");
 assertEqual(actionBar.classList.contains("hidden"), false, "passed action bar visible");
 assertContains(document.getElementById("moduleActionHint").textContent, "官方预提交检查", "check guidance copy");
@@ -1763,6 +1796,7 @@ assertEqual(document.getElementById("workflowPassedCount").textContent, "1", "pa
 assertEqual(document.getElementById("workflowSubmittableCount").textContent, "1", "submittable count");
 assertEqual(document.getElementById("workflowCloudCount").textContent, "25,559", "cloud count uses full production total");
 assertEqual(document.getElementById("workflowStepCheck").classList.contains("is-active"), true, "check step active");
+assertEqual(document.getElementById("workflowStepCheck").getAttribute("aria-current"), "step", "active workflow step is announced");
 assertContains(document.getElementById("workflowStatus").textContent, "可提交", "status guides next step");
 
 window.AppState.set("syncInFlight", true);

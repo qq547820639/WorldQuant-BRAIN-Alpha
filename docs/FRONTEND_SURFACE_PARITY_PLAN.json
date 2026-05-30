@@ -1,0 +1,113 @@
+{
+  "schema_version": "frontend_surface_parity_plan.v1",
+  "updated_at": "2026-05-30",
+  "promotion_rule": "React can become the single production surface only after every inline view is implemented or explicitly retired, every React-only operational tab is explicitly accepted or removed, strict parity checks pass, and browser smoke covers the promoted surface.",
+  "status_values": {
+    "implemented": "The React target exists and has direct local verification evidence.",
+    "planned": "The inline view has an assigned React target but is not yet claimable as implemented.",
+    "retired": "The inline view has an explicit product decision to remove it from the promoted surface."
+  },
+  "react_only_status_values": {
+    "accepted": "The React-only tab is an intentional operational surface that has no direct inline equivalent and is non-blocking for strict parity."
+  },
+  "react_only_tab_policy": {
+    "dashboard": {
+      "status": "accepted",
+      "evidence": "React-only overview surface for KPIs, job monitoring, and cache summary; it does not replace a single inline table view."
+    },
+    "scoring": {
+      "status": "accepted",
+      "evidence": "React-only detail workflow opened from CandidateTable score actions; it is an operational tool rather than an inline table view."
+    },
+    "submission": {
+      "status": "accepted",
+      "evidence": "React-only explicit submit/check workflow with validation and confirmation controls; inline submission readiness remains covered by the submittable/submitted views."
+    },
+    "config": {
+      "status": "accepted",
+      "evidence": "React-only editable configuration workflow with import/export; it is an operational tool rather than an inline table view."
+    }
+  },
+  "inline_view_mappings": {
+    "candidates": {
+      "react_target": "candidates",
+      "status": "implemented",
+      "evidence": "CandidateTable covers candidate list, filtering, virtual scrolling, score action, and generation flow."
+    },
+    "pending_backtest": {
+      "react_target": "pending_backtest",
+      "status": "implemented",
+      "evidence": "React exposes a Waiting tab backed by CandidateTable viewMode='pending_backtest' and filters lifecycle/status='pending_backtest'."
+    },
+    "running_backtest": {
+      "react_target": "running_backtest",
+      "status": "implemented",
+      "evidence": "React exposes a Backtesting tab backed by CandidateTable viewMode='running_backtest' and filters lifecycle/status='running_backtest' or 'running'."
+    },
+    "backtest_rework": {
+      "react_target": "backtest_rework",
+      "status": "implemented",
+      "evidence": "React exposes a Rework tab backed by CandidateTable viewMode='backtest_rework' and filters lifecycle/status='backtest_rework', 'failed_backtest', or 'rejected'."
+    },
+    "passed": {
+      "react_target": "passed",
+      "status": "implemented",
+      "evidence": "React exposes a Passed tab backed by CandidateTable viewMode='passed' and filters lifecycle_status='submission_ready' or gate.submission_ready."
+    },
+    "submittable": {
+      "react_target": "submittable",
+      "status": "implemented",
+      "evidence": "React exposes a Ready tab backed by CandidateTable viewMode='submittable' and filters candidates with a fresh passed/submittable /api/check_results entry."
+    },
+    "submitted": {
+      "react_target": "submitted",
+      "status": "implemented",
+      "evidence": "React exposes a Submitted tab backed by CandidateTable viewMode='submitted' and filters lifecycle status/stage='submitted'."
+    },
+    "failed": {
+      "react_target": "failed",
+      "status": "implemented",
+      "evidence": "React exposes a Blocked tab backed by CandidateTable viewMode='failed' and filters lifecycle/status failed, rejected, or blocked."
+    },
+    "cloud": {
+      "react_target": "cloud",
+      "status": "implemented",
+      "evidence": "React exposes a Cloud tab backed by SnapshotPanel viewMode='cloud' and /api/snapshot/cloud."
+    },
+    "lifecycle": {
+      "react_target": "lifecycle",
+      "status": "implemented",
+      "evidence": "React exposes a Lifecycle tab backed by SnapshotPanel viewMode='lifecycle' and /api/lifecycle."
+    },
+    "research_memory": {
+      "react_target": "research_memory",
+      "status": "implemented",
+      "evidence": "React exposes a Memory tab backed by SnapshotPanel viewMode='research_memory' and /api/research_memory."
+    },
+    "research_knowledge": {
+      "react_target": "research_knowledge",
+      "status": "implemented",
+      "evidence": "React exposes a Knowledge tab backed by SnapshotPanel viewMode='research_knowledge' and /api/research_knowledge."
+    },
+    "research_observability": {
+      "react_target": "research_observability",
+      "status": "implemented",
+      "evidence": "React exposes an Observability tab backed by SnapshotPanel viewMode='research_observability' and /api/research_observability."
+    },
+    "prompt_runs": {
+      "react_target": "prompt_runs",
+      "status": "implemented",
+      "evidence": "React exposes a Prompts tab backed by SnapshotPanel viewMode='prompt_runs' and /api/prompt_runs."
+    },
+    "sqlite_indexes": {
+      "react_target": "sqlite_indexes",
+      "status": "implemented",
+      "evidence": "React exposes a SQLite tab backed by SnapshotPanel viewMode='sqlite_indexes' and /api/sqlite_indexes."
+    },
+    "robustness": {
+      "react_target": "robustness",
+      "status": "implemented",
+      "evidence": "React exposes a Robustness tab backed by SnapshotPanel viewMode='robustness' and /api/latest_result robustness evidence."
+    }
+  }
+}

@@ -31,6 +31,7 @@ SENSITIVE_KEYS = {
     "set-cookie",
     "telephone",
     "token",
+    "username",
 }
 
 _KEY_VALUE_RE = re.compile(

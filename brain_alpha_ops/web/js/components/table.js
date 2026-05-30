@@ -7,6 +7,7 @@
 
   var $ = window.Utils.$;
   var esc = window.Utils.escapeHtml;
+  var escapeAttr = window.Utils.escapeAttr;
   var renderSafeHtmlFragment = window.Utils.renderSafeHtmlFragment;
   var setSafeHtml = window.Utils.setSafeHtml;
   var statusBadge = window.Utils.statusBadge;
@@ -93,11 +94,12 @@
       setSafeHtml(container, displayRows.map(function (row, idx) {
         var rowId = row.id || '';
         var rowKind = row.kind || '';
+        var rowTitle = rowId || ('row ' + (idx + 1));
         var selectedCls = row._selected ? ' class="is-selected"' : '';
         var clickAction = options.onClick ? ' data-table-action="row-click"' : '';
 
-        return '<tr data-kind="' + esc(rowKind) + '" data-id="' + esc(rowId) + '"' +
-          selectedCls + ' tabindex="0" role="button" aria-label="查看详情"' + clickAction + '>' +
+        return '<tr data-kind="' + escapeAttr(rowKind) + '" data-id="' + escapeAttr(rowId) + '"' +
+          selectedCls + ' tabindex="0" role="row" aria-keyshortcuts="Enter Space" aria-label="打开详情：' + escapeAttr(rowTitle) + '"' + clickAction + '>' +
           columns.map(function (col) {
             var value = typeof col.accessor === 'function'
               ? col.accessor(row, idx)

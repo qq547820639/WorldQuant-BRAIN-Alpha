@@ -83,6 +83,7 @@ def test_redaction_redacts_user_profile_contact_fields():
     assert "researcher@example.com" not in encoded
     assert "+1234567890" not in encoded
     assert "Research User" not in encoded
+    assert payload["username"] == "<redacted>"
     assert payload["raw"]["email"] == "<redacted>"
     assert payload["raw"]["telephone"] == "<redacted>"
     assert payload["raw"]["firstName"] == "<redacted>"

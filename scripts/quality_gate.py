@@ -6,6 +6,7 @@ import argparse
 import json
 import os
 from pathlib import Path
+import socket
 import subprocess
 import sys
 import time
@@ -17,6 +18,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 DEFAULT_CONFIG = ROOT / "config" / "run_config.json"
 DEFAULT_HTML = ROOT / "brain_alpha_ops" / "web" / "index.html"
+COVERAGE_PYTEST_ARGS = ["--cov=brain_alpha_ops", "--cov-report=term", "--cov-fail-under=80"]
 COMPILE_TARGETS = [
     "brain_alpha_ops",
     "scripts",
@@ -90,9 +92,13 @@ STATIC_ANALYSIS_TARGETS = [
     "scripts/check_module_size.py",
     "scripts/check_optional_tooling.py",
     "scripts/check_official_context.py",
+    "scripts/check_frontend_surface_parity.py",
     "scripts/check_text_encoding.py",
+    "scripts/check_tracked_data_inventory.py",
     "scripts/quality_gate.py",
+    "tests/test_frontend_surface_parity.py",
     "tests/test_quality_gate.py",
+    "tests/test_tracked_data_inventory.py",
     "tests/test_strategy_plugins.py",
     "tests/test_production_context.py",
     "tests/test_official_context_validation.py",
@@ -204,6 +210,25 @@ def _web_console_contract(html_path: Path) -> tuple[bool, dict]:
     return _run_python_module(["scripts/check_web_console_contract.py", "--html", str(html_path), "--json"])
 
 
+def _frontend_surface_parity(
+    *,
+    fail_on_gaps: bool = False,
+    fail_on_unmapped_plan: bool = False,
+    fail_on_unimplemented_plan: bool = False,
+    fail_on_stale_plan: bool = False,
+) -> tuple[bool, dict]:
+    args = ["scripts/check_frontend_surface_parity.py", "--json"]
+    if fail_on_gaps:
+        args.append("--fail-on-gaps")
+    if fail_on_unmapped_plan:
+        args.append("--fail-on-unmapped-plan")
+    if fail_on_unimplemented_plan:
+        args.append("--fail-on-unimplemented-plan")
+    if fail_on_stale_plan:
+        args.append("--fail-on-stale-plan")
+    return _run_python_module(args)
+
+
 def _react_build_env(*, strict: bool = False, run_build: bool = False) -> tuple[bool, dict]:
     args = ["scripts/check_react_build_env.py", "--json"]
     if strict:
@@ -211,6 +236,25 @@ def _react_build_env(*, strict: bool = False, run_build: bool = False) -> tuple[
     if run_build:
         args.append("--run-build")
     return _run_python_module(args)
+
+
+def _free_local_port() -> int:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.bind(("127.0.0.1", 0))
+        return int(sock.getsockname()[1])
+
+
+def _react_preview_smoke() -> tuple[bool, dict]:
+    return _run_python_module(
+        [
+            "launch_web.py",
+            "--smoke-test",
+            "--frontend",
+            "react",
+            "--port",
+            str(_free_local_port()),
+        ]
+    )
 
 
 def _frontend_inline_sync() -> tuple[bool, dict]:
@@ -228,6 +272,25 @@ def _secret_scan(include_all: bool, include_git_history: bool = False) -> tuple[
 
 def _text_encoding_scan() -> tuple[bool, dict]:
     return _run_python_module(["scripts/check_text_encoding.py", "--root", str(ROOT), "--json"])
+
+
+def _tracked_data_inventory(
+    *,
+    fail_on_runtime_generated: bool = False,
+    fail_on_changed_runtime_generated: bool = False,
+    fail_on_unresolved_boundary: bool = False,
+    fail_on_stale_boundary: bool = False,
+) -> tuple[bool, dict]:
+    args = ["scripts/check_tracked_data_inventory.py", "--root", str(ROOT), "--json"]
+    if fail_on_runtime_generated:
+        args.append("--fail-on-runtime-generated")
+    if fail_on_changed_runtime_generated:
+        args.append("--fail-on-changed-runtime-generated")
+    if fail_on_unresolved_boundary:
+        args.append("--fail-on-unresolved-boundary")
+    if fail_on_stale_boundary:
+        args.append("--fail-on-stale-boundary")
+    return _run_python_module(args)
 
 
 def _module_size_audit() -> tuple[bool, dict]:
@@ -298,8 +361,9 @@ def _diagnostic_report_sync(config_path: Path) -> tuple[bool, dict]:
     )
 
 
-def _pytest(pytest_args: list[str]) -> tuple[bool, dict]:
-    return _run_python_module(["-m", "pytest", *(pytest_args or [])])
+def _pytest(pytest_args: list[str], *, coverage: bool = False) -> tuple[bool, dict]:
+    coverage_args = COVERAGE_PYTEST_ARGS if coverage else []
+    return _run_python_module(["-m", "pytest", *coverage_args, *(pytest_args or [])])
 
 
 def _dependency_audit() -> tuple[bool, dict]:
@@ -347,6 +411,7 @@ def run_quality_gate(
     optional_tooling: bool = False,
     skip_compile: bool = False,
     skip_tests: bool = False,
+    coverage: bool = False,
     pytest_args: list[str] | None = None,
     ruff: bool = False,
     mypy: bool = False,
@@ -354,6 +419,15 @@ def run_quality_gate(
     strict_official_context: bool = False,
     strict_react_build: bool = False,
     run_react_build: bool = False,
+    react_preview_smoke: bool = False,
+    fail_on_frontend_surface_gaps: bool = False,
+    fail_on_unmapped_frontend_surface_plan: bool = False,
+    fail_on_unimplemented_frontend_surface_plan: bool = False,
+    fail_on_stale_frontend_surface_plan: bool = False,
+    fail_on_runtime_generated_data: bool = False,
+    fail_on_changed_runtime_generated_data: bool = False,
+    fail_on_unresolved_tracked_data_boundary: bool = False,
+    fail_on_stale_tracked_data_boundary: bool = False,
     final_release: bool = False,
 ) -> dict:
     steps = []
@@ -373,8 +447,30 @@ def run_quality_gate(
         _step("frontend_syntax", lambda: _frontend_syntax(html_path)),
         _step("frontend_innerhtml_guard", _frontend_innerhtml_guard),
         _step("web_console_contract", lambda: _web_console_contract(html_path)),
+        _step(
+            "frontend_surface_parity",
+            lambda: _frontend_surface_parity(
+                fail_on_gaps=fail_on_frontend_surface_gaps,
+                fail_on_unmapped_plan=fail_on_unmapped_frontend_surface_plan,
+                fail_on_unimplemented_plan=fail_on_unimplemented_frontend_surface_plan,
+                fail_on_stale_plan=fail_on_stale_frontend_surface_plan,
+            ),
+        ),
         _step("react_build_env", lambda: _react_build_env(strict=strict_react_build, run_build=run_react_build)),
+    ])
+    if react_preview_smoke:
+        steps.append(_step("react_preview_smoke", _react_preview_smoke))
+    steps.extend([
         _step("text_encoding_scan", _text_encoding_scan),
+        _step(
+            "tracked_data_inventory",
+            lambda: _tracked_data_inventory(
+                fail_on_runtime_generated=fail_on_runtime_generated_data,
+                fail_on_changed_runtime_generated=fail_on_changed_runtime_generated_data,
+                fail_on_unresolved_boundary=fail_on_unresolved_tracked_data_boundary,
+                fail_on_stale_boundary=fail_on_stale_tracked_data_boundary,
+            ),
+        ),
         _step("official_context_validation", lambda: _official_context_validation(config_path, strict=strict_official_context)),
         _step("module_size_audit", _module_size_audit),
         _step("secret_scan", lambda: _secret_scan(include_all_secrets, include_git_history_secrets)),
@@ -390,7 +486,7 @@ def run_quality_gate(
     if mypy:
         steps.append(_step("mypy", _mypy_check))
     if not skip_tests:
-        steps.append(_step("pytest", lambda: _pytest(pytest_args or [])))
+        steps.append(_step("pytest", lambda: _pytest(pytest_args or [], coverage=coverage or final_release)))
     return {
         "ok": all(step["ok"] for step in steps),
         "schema_version": "quality_gate.v1",
@@ -411,11 +507,37 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--strict-official-context", action="store_true", help="Fail when official fields/operators/datasets metadata is stale.")
     parser.add_argument("--strict-react-build", action="store_true", help="Fail when React build prerequisites are missing.")
     parser.add_argument("--run-react-build", action="store_true", help="Run npm run build after React build prerequisites are available.")
+    parser.add_argument("--react-preview-smoke", action="store_true", help="Smoke-test the built React artifact through launch_web.py --frontend react.")
+    parser.add_argument("--fail-on-frontend-surface-gaps", action="store_true", help="Fail when inline production views and React mirror tabs have navigation gaps.")
+    parser.add_argument("--fail-on-unmapped-frontend-surface-plan", action="store_true", help="Fail when an inline view has no frontend surface parity plan entry.")
+    parser.add_argument("--fail-on-unimplemented-frontend-surface-plan", action="store_true", help="Fail when frontend surface parity plan entries are still planned.")
+    parser.add_argument("--fail-on-stale-frontend-surface-plan", action="store_true", help="Fail when the frontend surface parity plan references removed inline views.")
+    parser.add_argument(
+        "--fail-on-runtime-generated-data",
+        action="store_true",
+        help="Fail when tracked data files match known runtime-generated paths.",
+    )
+    parser.add_argument(
+        "--fail-on-changed-runtime-generated-data",
+        action="store_true",
+        help="Fail when tracked runtime-generated data files have local changes.",
+    )
+    parser.add_argument(
+        "--fail-on-unresolved-tracked-data-boundary",
+        action="store_true",
+        help="Fail when tracked runtime-generated data lacks explicit keep/remove decisions.",
+    )
+    parser.add_argument(
+        "--fail-on-stale-tracked-data-boundary",
+        action="store_true",
+        help="Fail when the tracked data boundary plan references files that are no longer tracked.",
+    )
     parser.add_argument("--final-release", action="store_true", help="Run fail-closed final release readiness checks.")
     parser.add_argument("--ruff", action="store_true", help="Run ruff on the incremental static-analysis target set.")
     parser.add_argument("--mypy", action="store_true", help="Run mypy on the incremental static-analysis target set.")
     parser.add_argument("--skip-compile", action="store_true", help="Skip Python compileall syntax checks.")
     parser.add_argument("--skip-tests", action="store_true", help="Skip pytest for a fast preflight.")
+    parser.add_argument("--coverage", action="store_true", help="Run pytest with the configured 80% coverage threshold.")
     parser.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
     parser.add_argument("pytest_args", nargs=argparse.REMAINDER, help="Optional pytest args after --.")
     args = parser.parse_args(argv)
@@ -434,11 +556,21 @@ def main(argv: list[str] | None = None) -> int:
         strict_official_context=args.strict_official_context,
         strict_react_build=args.strict_react_build,
         run_react_build=args.run_react_build,
+        react_preview_smoke=args.react_preview_smoke,
+        fail_on_frontend_surface_gaps=args.fail_on_frontend_surface_gaps,
+        fail_on_unmapped_frontend_surface_plan=args.fail_on_unmapped_frontend_surface_plan,
+        fail_on_unimplemented_frontend_surface_plan=args.fail_on_unimplemented_frontend_surface_plan,
+        fail_on_stale_frontend_surface_plan=args.fail_on_stale_frontend_surface_plan,
+        fail_on_runtime_generated_data=args.fail_on_runtime_generated_data,
+        fail_on_changed_runtime_generated_data=args.fail_on_changed_runtime_generated_data,
+        fail_on_unresolved_tracked_data_boundary=args.fail_on_unresolved_tracked_data_boundary,
+        fail_on_stale_tracked_data_boundary=args.fail_on_stale_tracked_data_boundary,
         final_release=args.final_release,
         ruff=args.ruff,
         mypy=args.mypy,
         skip_compile=args.skip_compile,
         skip_tests=args.skip_tests,
+        coverage=args.coverage,
         pytest_args=pytest_args,
     )
     if args.json:

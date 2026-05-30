@@ -120,9 +120,10 @@
       if (!tableBody) return;
       setSafeHtml(tableBody, rows.map(function (row, idx) {
         var isSelected = isSelectedRow(row);
+        var title = row.id || candidateIdentity(row.raw || {}) || ('row ' + (idx + 1));
         state.setCached(row, row.raw || row);
         var rowHtml = '<tr data-action="open-row" data-kind="' + escapeAttr(row.kind || '') + '" data-id="' + escapeAttr(row.id || '') + '"' +
-          (isSelected ? ' class="is-selected"' : '') + ' tabindex="0" role="button" aria-label="查看详情">';
+          (isSelected ? ' class="is-selected"' : '') + ' tabindex="0" role="row" aria-keyshortcuts="Enter Space" aria-label="打开详情：' + escapeAttr(title) + '">';
         rowHtml += columns.map(function (col) {
           var value = typeof col.accessor === 'function' ? col.accessor(row, idx) : (row.raw || row)[col.accessor];
           var rendered = col.render ? col.render(value, row, idx) : String(value ?? '');

@@ -34,6 +34,7 @@ from brain_alpha_ops.web_config import (
     config_from_payload as _config_from_payload,
     payload_truthy,
     run_config_from_payload as _run_config_from_payload,
+    save_run_config_payload as _save_run_config_payload,
 )
 from brain_alpha_ops.web_config_schema import public_config_schema
 from brain_alpha_ops import web_html
@@ -102,6 +103,7 @@ from brain_alpha_ops.web_post_handlers import (
     session_end_payload,
     stop_job_payload,
 )
+from brain_alpha_ops.web_rate_limit import RequestRateLimiter
 from brain_alpha_ops.web_handler_dispatch import WebHandlerDispatchContext, dispatch_get, dispatch_post
 from brain_alpha_ops.web_http_handler import create_handler_class
 from brain_alpha_ops.web_routes import route_for
@@ -217,6 +219,7 @@ content_security_policy_for_html = web_html.content_security_policy_for_html
 
 run_config_from_payload = lambda payload: _run_config_from_payload(payload, loader=load_run_config)
 config_from_payload = lambda payload: _config_from_payload(payload, loader=load_run_config)
+save_run_config_payload = lambda payload: _save_run_config_payload(payload, loader=load_run_config)
 
 
 test_connection = lambda payload: _runtime_facade.test_connection(sys.modules[__name__], payload)
@@ -230,12 +233,14 @@ SYNC_JOBS = DurableJobStore(runtime_project_root() / "data" / "jobs_sync.json", 
 CHECK_JOBS = DurableJobStore(runtime_project_root() / "data" / "jobs_check.json", job_prefix="check")
 ASYNC_JOBS = DurableJobStore(runtime_project_root() / "data" / "jobs_async.json", job_prefix="task")
 SUBMIT_LOCK = threading.Lock()
+RATE_LIMITER = RequestRateLimiter()
 TASK_EXECUTOR = ThreadTaskExecutor(max_workers=4)
 SERVER: ThreadingHTTPServer | None = None
 SERVER_STOP = threading.Event()
 
 
 active_auxiliary_operation = lambda exclude="", allow_production=False: _active_auxiliary_operation_service(production_store=JOBS, sync_store=SYNC_JOBS, check_store=CHECK_JOBS, submit_lock=SUBMIT_LOCK, exclude=exclude, allow_production=allow_production)
+rate_limit_request = lambda key, method, path: RATE_LIMITER.check(key=key, method=method, path=path)
 
 
 def normalize_host(host: str | None) -> str:
@@ -266,6 +271,7 @@ Handler = create_handler_class(
     content_security_policy_for_html=content_security_policy_for_html,
     sse_push_interval=WebDefaults.SSE_PUSH_INTERVAL,
     max_sse_duration=WebDefaults.MAX_SSE_DURATION,
+    resolve_static_asset=web_html.resolve_react_asset,
 )
 
 run_job = lambda job_id, payload: _runtime_facade.run_job(sys.modules[__name__], job_id, payload)

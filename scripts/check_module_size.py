@@ -23,6 +23,7 @@ SKIP_DIRS = {
     "__pycache__",
     "build",
     "dist",
+    "node_modules",
 }
 SKIP_FILES = {
     "brain_alpha_ops/web/index.html",

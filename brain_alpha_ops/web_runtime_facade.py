@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 
 
@@ -32,6 +33,8 @@ def handler_dispatch_context(web):
         enrich_progress=web._enrich_progress,
         public_run_config=web.public_run_config,
         public_config_schema=web.public_config_schema,
+        save_run_config_payload=web.save_run_config_payload,
+        rate_limit_request=web.rate_limit_request,
         latest_result_snapshot=web.latest_result_snapshot,
         lifecycle_from_job=web.lifecycle_from_job,
         cloud_alpha_snapshot=web.cloud_alpha_snapshot,
@@ -634,7 +637,14 @@ def main(web, argv: list[str] | None = None) -> int:
     parser.add_argument("--port", type=int, default=0)
     parser.add_argument("--no-browser", action="store_true")
     parser.add_argument("--smoke-test", action="store_true")
+    parser.add_argument("--frontend", choices=("inline", "react"), default="")
     args = parser.parse_args(argv)
+    if args.frontend:
+        env_name = getattr(getattr(web, "web_html", None), "WEB_FRONTEND_ENV", "BRAIN_ALPHA_OPS_WEB_FRONTEND")
+        os.environ[env_name] = args.frontend
+        reset_cache = getattr(getattr(web, "web_html", None), "reset_html_cache", None)
+        if callable(reset_cache):
+            reset_cache()
     run_config = web.load_run_config(args.config or None)
     if args.smoke_test:
         web.config_from_payload({"environment": "production"})

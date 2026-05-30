@@ -38,6 +38,7 @@ SKIP_DIRS = {
     "__pycache__",
     "build",
     "dist",
+    "node_modules",
 }
 SKIP_FILES = {
     "docs/CODE_REVIEW_20260521.md",
