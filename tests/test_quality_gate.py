@@ -1,4 +1,5 @@
 import json
+import subprocess
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -9,6 +10,42 @@ from scripts.check_module_size import check_module_size
 from scripts.check_optional_tooling import check_optional_tooling
 from scripts.check_text_encoding import check_text_encoding
 from tests.production_api_stub import write_template_safe_official_context
+
+
+def test_quality_gate_subprocess_env_filters_sensitive_values(monkeypatch):
+    monkeypatch.setenv("PATH", "/usr/bin")
+    monkeypatch.setenv("PYTHONPATH", "/tmp/custom-pythonpath")
+    monkeypatch.setenv("BRAIN_PASSWORD", "super-secret")
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-secret")
+
+    env = quality_gate._subprocess_env()
+
+    assert env["PATH"] == "/usr/bin"
+    assert env["PYTHONUTF8"] == "1"
+    assert env["PYTHONPYCACHEPREFIX"].endswith(".pytest_cache_runtime/pycache")
+    assert env["PYTHONPATH"].endswith("/tmp/custom-pythonpath")
+    assert "BRAIN_PASSWORD" not in env
+    assert "OPENAI_API_KEY" not in env
+
+
+def test_quality_gate_run_python_module_sets_timeout_and_reports_timeout(monkeypatch):
+    captured = {}
+
+    def fake_run(command, **kwargs):
+        captured.update(kwargs)
+        raise subprocess.TimeoutExpired(command, timeout=7, output="partial stdout", stderr=b"partial stderr")
+
+    monkeypatch.setattr(quality_gate.subprocess, "run", fake_run)
+
+    ok, detail = quality_gate._run_python_module(["slow.py"], timeout_seconds=7)
+
+    assert ok is False
+    assert captured["timeout"] == 7
+    assert "BRAIN_PASSWORD" not in captured["env"]
+    assert detail["exit_code"] == 124
+    assert detail["timeout_seconds"] == 7
+    assert detail["stdout"] == "partial stdout"
+    assert detail["stderr"] == "partial stderr"
 
 
 def test_quality_gate_runs_core_steps_and_skips_pytest(monkeypatch, tmp_path):
@@ -47,6 +84,7 @@ def test_quality_gate_runs_core_steps_and_skips_pytest(monkeypatch, tmp_path):
         "secret_scan",
         "cache_metadata_audit",
         "diagnostic_report_sync",
+        "review_gap_closure_tracker",
     ]
     assert all("-m" not in call or "pytest" not in call for call in calls)
 
@@ -86,6 +124,7 @@ def test_quality_gate_includes_pytest_args_and_propagates_failure(monkeypatch, t
         "secret_scan",
         "cache_metadata_audit",
         "diagnostic_report_sync",
+        "review_gap_closure_tracker",
         "pytest",
     ]
     secret_scan_step = next(step for step in result["steps"] if step["name"] == "secret_scan")
@@ -131,7 +170,7 @@ def test_quality_gate_can_skip_compile(monkeypatch, tmp_path):
     )
 
     assert result["ok"] is True
-    assert [step["name"] for step in result["steps"]] == ["config", "dependency_policy", "redline_verification", "brain_contract_validation", "diagnosis_gap_coverage", "frontend_inline_sync", "frontend_syntax", "frontend_innerhtml_guard", "web_console_contract", "frontend_surface_parity", "react_build_env", "text_encoding_scan", "tracked_data_inventory", "official_context_validation", "module_size_audit", "secret_scan", "cache_metadata_audit", "diagnostic_report_sync"]
+    assert [step["name"] for step in result["steps"]] == ["config", "dependency_policy", "redline_verification", "brain_contract_validation", "diagnosis_gap_coverage", "frontend_inline_sync", "frontend_syntax", "frontend_innerhtml_guard", "web_console_contract", "frontend_surface_parity", "react_build_env", "text_encoding_scan", "tracked_data_inventory", "official_context_validation", "module_size_audit", "secret_scan", "cache_metadata_audit", "diagnostic_report_sync", "review_gap_closure_tracker"]
     assert not any("compileall" in call for call in calls)
 
 
@@ -172,6 +211,7 @@ def test_quality_gate_can_include_dependency_audit(monkeypatch, tmp_path):
         "secret_scan",
         "cache_metadata_audit",
         "diagnostic_report_sync",
+        "review_gap_closure_tracker",
         "dependency_audit",
     ]
     assert any("pip_audit" in call for call in calls)
@@ -223,6 +263,14 @@ def test_quality_gate_can_include_static_analysis(monkeypatch, tmp_path):
     assert any("--strict" in call for call in calls if "check_optional_tooling.py" in str(call))
     assert any("ruff" in call for call in calls)
     assert any("mypy" in call for call in calls)
+    assert any("scripts/check_review_gap_closure_tracker.py" in call for call in calls if "ruff" in call)
+    assert any("scripts/check_review_gap_closure_tracker.py" in call for call in calls if "mypy" in call)
+    assert any("scripts/check_frontend_innerhtml.py" in call for call in calls if "ruff" in call)
+    assert any("scripts/check_frontend_innerhtml.py" in call for call in calls if "mypy" in call)
+    assert any("tests/test_review_gap_closure_tracker.py" in call for call in calls if "ruff" in call)
+    assert any("tests/test_review_gap_closure_tracker.py" in call for call in calls if "mypy" in call)
+    assert any("tests/test_frontend_innerhtml_guard.py" in call for call in calls if "ruff" in call)
+    assert any("tests/test_frontend_innerhtml_guard.py" in call for call in calls if "mypy" in call)
 
 
 def test_quality_gate_can_require_react_build(monkeypatch, tmp_path):
@@ -257,7 +305,6 @@ def test_quality_gate_can_include_react_preview_smoke(monkeypatch, tmp_path):
         return True, {"command": args, "exit_code": 0, "duration_seconds": 0.01, "stdout": "", "stderr": ""}
 
     monkeypatch.setattr(quality_gate, "_run_python_module", fake_run)
-    monkeypatch.setattr(quality_gate, "_free_local_port", lambda: 19066)
 
     result = quality_gate.run_quality_gate(
         config_path=tmp_path / "run_config.json",
@@ -269,7 +316,7 @@ def test_quality_gate_can_include_react_preview_smoke(monkeypatch, tmp_path):
     assert result["ok"] is True
     assert "react_preview_smoke" in [step["name"] for step in result["steps"]]
     smoke_call = next(call for call in calls if call[:4] == ["launch_web.py", "--smoke-test", "--frontend", "react"])
-    assert smoke_call == ["launch_web.py", "--smoke-test", "--frontend", "react", "--port", "19066"]
+    assert smoke_call == ["launch_web.py", "--smoke-test", "--frontend", "react", "--port", "0"]
 
 
 def test_quality_gate_runs_frontend_surface_parity_and_forwards_strict_flags(monkeypatch, tmp_path):

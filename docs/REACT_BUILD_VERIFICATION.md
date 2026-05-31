@@ -37,10 +37,11 @@ python3 scripts/quality_gate.py --final-release --react-preview-smoke --json
 
 Strict build mode requires:
 
-1. `node` and `npm` on `PATH`.
-2. A committed package-manager lockfile in `brain_alpha_ops/web/react_app`.
-3. Installed dependencies in `brain_alpha_ops/web/react_app/node_modules`.
-4. Required packages: `react`, `react-dom`, `typescript`, `vite`, and `@vitejs/plugin-react`.
+1. `node` on `PATH`.
+2. Local build entrypoints in `brain_alpha_ops/web/react_app/node_modules`: `typescript/bin/tsc` and `vite/bin/vite.js`.
+3. A committed package-manager lockfile in `brain_alpha_ops/web/react_app`.
+4. Installed dependencies in `brain_alpha_ops/web/react_app/node_modules`.
+5. Required packages: `react`, `react-dom`, `typescript`, `vite`, and `@vitejs/plugin-react`.
 
 ## Direct Preflight
 
@@ -75,11 +76,11 @@ In this mode, `launch_web.py` serves `brain_alpha_ops/web/react_app/dist/index.h
 The same backend preview can be smoke-tested directly:
 
 ```bash
-python3 launch_web.py --smoke-test --frontend react --port 9066
+python3 launch_web.py --smoke-test --frontend react --port 0
 ```
 
 ## Current Local Status
 
-On the 2026-05-30 local verification machine, the React mirror has a lockfile, installed `node_modules`, required React packages, and a fresh `brain_alpha_ops/web/react_app/dist/index.html` artifact. The default advisory preflight still reports `ready=false` when `npm` is not on `PATH`, but the missing tool is now the only reported prerequisite gap on the default shell path. This remains an environment/tooling issue, not a production inline Web console failure.
+On the 2026-05-31 local verification machine, the React mirror has a lockfile, installed `node_modules`, required React packages, local `typescript`/`vite` build entrypoints, and a fresh `brain_alpha_ops/web/react_app/dist/index.html` artifact. The default advisory preflight now reports `ready=true` with `build_runner=local_node_modules`; `npm` is not a hard prerequisite for the strict React build path. The production inline Web console remains the release surface unless React preview or strict React verification is explicitly enabled.
 
-The current local evidence also includes a successful `quality_gate.py --react-preview-smoke` run. That check launched `launch_web.py --smoke-test --frontend react` on a temporary loopback port, verified the backend-served React page and `/api/config`, then shut down cleanly.
+The current local evidence also includes a successful `quality_gate.py --react-preview-smoke` run. That check launched `launch_web.py --smoke-test --frontend react --port 0`, let the OS assign the port atomically, verified the backend-served React page and `/api/config`, then shut down cleanly.

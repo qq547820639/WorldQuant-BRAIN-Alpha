@@ -44,6 +44,7 @@ SKIP_DIRS = {
     "dist",
     "env",
     "node_modules",
+    "output",
     "venv",
     "_archive_before_rebuild_20260512_152528",
 }
@@ -301,7 +302,7 @@ def _cookie_match_is_actionable(line: str) -> bool:
         return False
     if lowered_value.startswith(("manager.", "web.", "self.", "ctx.")):
         return False
-    if lowered_value.startswith("session_") or "cookie=session_" in lowered:
+    if lowered_value.startswith(("session_", "session-cookie")) or "cookie=session_" in lowered or "cookie=session-cookie" in lowered:
         return False
     return True
 

@@ -72,6 +72,10 @@ def test_scan_artifacts_include_all_skips_tooling_and_code_references(tmp_path):
     hidden_dep = tmp_path / ".codex_pydeps" / "pkg"
     hidden_dep.mkdir(parents=True)
     hidden_dep.joinpath("parser.py").write_text("token = current_token\n", encoding="utf-8")
+    output_dir = tmp_path / "output" / "browser-smoke"
+    output_dir.mkdir(parents=True)
+    artifact_value = "realish-" + "csrf-token-" + "1234567890"
+    output_dir.joinpath("artifact.json").write_text(json.dumps({"csrf": artifact_value}) + "\n", encoding="utf-8")
     (tmp_path / "app.py").write_text(
         "password = os.getenv('BRAIN_PASSWORD', '')\n"
         "self.token = token\n",
@@ -93,6 +97,10 @@ def test_scan_artifacts_include_all_scans_tests_and_skips_placeholder_cookies(tm
     tests_dir.mkdir()
     dummy_value = "realish-" + "private-token-12345"
     tests_dir.joinpath("test_secret_scan.py").write_text(f"token='{dummy_value}'\n", encoding="utf-8")
+    tests_dir.joinpath("test_redacted_fixture.py").write_text(
+        '"error": "cookie=session-cookie-333"\n',
+        encoding="utf-8",
+    )
     docs_dir = tmp_path / "docs"
     docs_dir.mkdir()
     docs_dir.joinpath("api.md").write_text(

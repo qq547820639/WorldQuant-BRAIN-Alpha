@@ -240,9 +240,15 @@ def test_runtime_facade_main_smoke_serve_and_keyboard_interrupt(capsys, monkeypa
     web.serve = lambda **kwargs: "http://127.0.0.1:7777"
 
     assert facade.main(web, ["--smoke-test", "--port", "9001", "--frontend", "react"]) == 0
-    assert '"status": "web ready"' in capsys.readouterr().out
+    first_out = capsys.readouterr().out
+    assert '"status": "web ready"' in first_out
+    assert '"port": 9001' in first_out
     assert os.environ["BRAIN_ALPHA_OPS_WEB_FRONTEND"] == "react"
     assert ("reset_html_cache", (), {}) in web.calls
+
+    assert facade.main(web, ["--smoke-test", "--port", "0"]) == 0
+    zero_out = capsys.readouterr().out
+    assert '"port": 0' in zero_out
 
     assert facade.main(web, ["--no-browser", "--frontend", "inline"]) == 0
     assert "BRAIN Alpha Ops 已启动" in capsys.readouterr().out

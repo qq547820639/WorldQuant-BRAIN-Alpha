@@ -22,6 +22,10 @@ CSRF_TOKEN_PLACEHOLDER = "__BRAIN_ALPHA_OPS_CSRF_TOKEN__"
 STREAM_TOKEN_PLACEHOLDER = "__BRAIN_ALPHA_OPS_STREAM_TOKEN__"
 LOCKFILES = ("package-lock.json", "npm-shrinkwrap.json", "pnpm-lock.yaml", "yarn.lock")
 REQUIRED_PACKAGES = ("react", "react-dom", "typescript", "vite", "@vitejs/plugin-react")
+LOCAL_BUILD_TOOLS = {
+    "typescript": ("node_modules", "typescript", "bin", "tsc"),
+    "vite": ("node_modules", "vite", "bin", "vite.js"),
+}
 
 Runner = Callable[[list[str], Path, float], tuple[int, str, str, float]]
 
@@ -40,12 +44,12 @@ def check_react_build_env(
     node_path = shutil.which("node")
     node_modules = app_dir / "node_modules"
     installed = _installed_packages(node_modules)
+    local_build_tools = _local_build_tools(app_dir, node_path)
     artifact = _artifact_snapshot(app_dir)
 
     findings: list[dict] = []
     _require(findings, package_json.is_file(), "missing_package_json", f"{package_json} does not exist")
     _require(findings, bool(node_path), "missing_node", "node executable was not found on PATH")
-    _require(findings, bool(npm_path), "missing_npm", "npm executable was not found on PATH")
     _require(findings, bool(lockfiles), "missing_lockfile", "React app has no package manager lockfile")
     _require(findings, node_modules.is_dir(), "missing_node_modules", "React app dependencies are not installed")
 
@@ -57,17 +61,25 @@ def check_react_build_env(
             "message": "React app node_modules is missing required packages",
             "packages": missing_packages,
         })
+    missing_build_tools = [name for name, command in local_build_tools.items() if command is None]
+    if node_modules.is_dir() and missing_build_tools:
+        findings.append({
+            "code": "missing_react_build_tools",
+            "severity": "blocking",
+            "message": "React app node_modules is missing local build tool entrypoints",
+            "tools": missing_build_tools,
+        })
 
     build_result = None
     prerequisites_ready = not findings
     if run_build and prerequisites_ready:
-        build_result = _run_build(app_dir, runner=runner)
+        build_result = _run_build(app_dir, local_build_tools=local_build_tools, runner=runner)
         artifact = _artifact_snapshot(app_dir)
         if not build_result["ok"]:
             findings.append({
                 "code": "react_build_failed",
                 "severity": "blocking",
-                "message": "npm run build returned a non-zero exit code",
+                "message": "React local build returned a non-zero exit code",
                 "exit_code": build_result["exit_code"],
             })
         else:
@@ -86,6 +98,11 @@ def check_react_build_env(
         "tooling": {
             "node": node_path or "",
             "npm": npm_path or "",
+            "build_runner": "local_node_modules",
+            "local_build_tools": {
+                name: " ".join(command) if command else ""
+                for name, command in local_build_tools.items()
+            },
             "lockfiles": lockfiles,
             "node_modules": str(node_modules) if node_modules.is_dir() else "",
             "installed_required_packages": sorted(installed),
@@ -106,6 +123,15 @@ def _installed_packages(node_modules: Path) -> set[str]:
         if package_path.is_dir():
             installed.add(name)
     return installed
+
+
+def _local_build_tools(app_dir: Path, node_path: str | None) -> dict[str, list[str] | None]:
+    node_executable = node_path or "node"
+    commands: dict[str, list[str] | None] = {}
+    for name, parts in LOCAL_BUILD_TOOLS.items():
+        tool_path = app_dir.joinpath(*parts)
+        commands[name] = [node_executable, str(tool_path)] if tool_path.is_file() else None
+    return commands
 
 
 def _artifact_snapshot(app_dir: Path) -> dict:
@@ -173,16 +199,51 @@ def _require(findings: list[dict], condition: bool, code: str, message: str) -> 
         findings.append({"code": code, "severity": "blocking", "message": message})
 
 
-def _run_build(app_dir: Path, *, runner: Runner | None = None) -> dict:
+def _run_build(
+    app_dir: Path,
+    *,
+    local_build_tools: dict[str, list[str] | None],
+    runner: Runner | None = None,
+) -> dict:
     started = time.perf_counter()
-    command = ["npm", "run", "build"]
+    typescript_command = local_build_tools.get("typescript")
+    vite_command = local_build_tools.get("vite")
+    if not typescript_command or not vite_command:
+        missing = [name for name, command in local_build_tools.items() if command is None]
+        raise RuntimeError(f"missing local build tools: {', '.join(missing) or 'unknown'}")
+    commands = [
+        [*typescript_command, "-b"],
+        [*vite_command, "build"],
+    ]
     active_runner = runner or _subprocess_runner
-    exit_code, stdout, stderr, duration = active_runner(command, app_dir, 120.0)
+    stdout_parts: list[str] = []
+    stderr_parts: list[str] = []
+    step_details: list[dict] = []
+    exit_code = 0
+    duration = 0.0
+    for command in commands:
+        exit_code, stdout, stderr, step_duration = active_runner(command, app_dir, 120.0)
+        duration += step_duration or 0.0
+        stdout_parts.append(stdout)
+        stderr_parts.append(stderr)
+        step_details.append({
+            "command": command,
+            "exit_code": exit_code,
+            "duration_seconds": round(step_duration, 3),
+            "stdout": stdout[-2000:],
+            "stderr": stderr[-2000:],
+        })
+        if exit_code != 0:
+            break
+    stdout = "\n".join(part for part in stdout_parts if part)
+    stderr = "\n".join(part for part in stderr_parts if part)
     return {
         "ok": exit_code == 0,
-        "command": command,
+        "command": " && ".join(" ".join(command) for command in commands),
+        "commands": commands,
         "exit_code": exit_code,
         "duration_seconds": round(duration or (time.perf_counter() - started), 3),
+        "steps": step_details,
         "stdout": stdout[-4000:],
         "stderr": stderr[-4000:],
     }
@@ -215,14 +276,14 @@ def _text(value: str | bytes | None, default: str = "") -> str:
 
 def _recommendation(findings: list[dict]) -> str:
     if not findings:
-        return "React build tooling is ready; run with --run-build to execute npm run build."
+        return "React build tooling is ready; run with --run-build to execute the local TypeScript and Vite build."
     codes = {finding["code"] for finding in findings}
     actions = []
-    if "missing_npm" in codes:
-        actions.append("install Node.js with npm available on PATH")
     if "missing_lockfile" in codes:
         actions.append("commit a package manager lockfile")
-    if "missing_node_modules" in codes or "missing_react_dependencies" in codes:
+    if "missing_node" in codes:
+        actions.append("install Node.js with node available on PATH")
+    if "missing_node_modules" in codes or "missing_react_dependencies" in codes or "missing_react_build_tools" in codes:
         actions.append("install React app dependencies from the lockfile")
     if not actions:
         actions.append("inspect the build failure above")

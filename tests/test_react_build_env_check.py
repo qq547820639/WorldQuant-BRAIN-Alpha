@@ -9,6 +9,15 @@ def _write_package_json(app_dir):
     (app_dir / "package.json").write_text('{"scripts":{"build":"vite build"}}\n', encoding="utf-8")
 
 
+def _write_local_build_tools(app_dir):
+    tsc = app_dir / "node_modules" / "typescript" / "bin" / "tsc"
+    vite = app_dir / "node_modules" / "vite" / "bin" / "vite.js"
+    tsc.parent.mkdir(parents=True, exist_ok=True)
+    vite.parent.mkdir(parents=True, exist_ok=True)
+    tsc.write_text("#!/usr/bin/env node\n", encoding="utf-8")
+    vite.write_text("#!/usr/bin/env node\n", encoding="utf-8")
+
+
 def test_react_build_env_reports_missing_tooling_without_failing_by_default(tmp_path, monkeypatch):
     app_dir = tmp_path / "react_app"
     _write_package_json(app_dir)
@@ -31,9 +40,9 @@ def test_react_build_env_reports_missing_tooling_without_failing_by_default(tmp_
     assert result["artifact"]["contains_react_runtime"] is True
     assert {finding["code"] for finding in result["findings"]} >= {
         "missing_node",
-        "missing_npm",
         "missing_lockfile",
         "missing_node_modules",
+        "missing_react_dependencies",
     }
 
 
@@ -86,7 +95,7 @@ def test_react_build_env_reports_when_source_is_newer_than_dist(tmp_path, monkey
     assert result["artifact"]["recommendation"].startswith("React source is newer than dist/index.html")
 
 
-def test_react_build_env_runs_build_when_prerequisites_are_ready(tmp_path, monkeypatch):
+def test_react_build_env_requires_local_build_tool_entrypoints(tmp_path, monkeypatch):
     app_dir = tmp_path / "react_app"
     _write_package_json(app_dir)
     (app_dir / "package-lock.json").write_text("{}\n", encoding="utf-8")
@@ -95,14 +104,34 @@ def test_react_build_env_runs_build_when_prerequisites_are_ready(tmp_path, monke
     (app_dir / "node_modules" / "@vitejs" / "plugin-react").mkdir(parents=True)
     monkeypatch.setattr(
         "scripts.check_react_build_env.shutil.which",
-        lambda name: f"/usr/local/bin/{name}" if name in {"node", "npm"} else "",
+        lambda name: "/usr/local/bin/node" if name == "node" else "",
+    )
+
+    result = check_react_build_env(app_dir, strict=True)
+
+    assert result["ok"] is False
+    assert result["ready"] is False
+    assert any(finding["code"] == "missing_react_build_tools" for finding in result["findings"])
+
+
+def test_react_build_env_runs_build_when_prerequisites_are_ready(tmp_path, monkeypatch):
+    app_dir = tmp_path / "react_app"
+    _write_package_json(app_dir)
+    (app_dir / "package-lock.json").write_text("{}\n", encoding="utf-8")
+    for package in ["react", "react-dom", "typescript", "vite"]:
+        (app_dir / "node_modules" / package).mkdir(parents=True)
+    (app_dir / "node_modules" / "@vitejs" / "plugin-react").mkdir(parents=True)
+    _write_local_build_tools(app_dir)
+    monkeypatch.setattr(
+        "scripts.check_react_build_env.shutil.which",
+        lambda name: "/usr/local/bin/node" if name == "node" else "",
     )
     calls = []
 
     def runner(command, cwd, timeout):
         calls.append((command, cwd, timeout))
         dist = cwd / "dist"
-        dist.mkdir()
+        dist.mkdir(exist_ok=True)
         (dist / "index.html").write_text(
             '<div id="root"></div>'
             '<meta name="brain-alpha-csrf" content="__BRAIN_ALPHA_OPS_CSRF_TOKEN__">'
@@ -117,10 +146,18 @@ def test_react_build_env_runs_build_when_prerequisites_are_ready(tmp_path, monke
     assert result["ok"] is True
     assert result["ready"] is True
     assert result["build"]["ok"] is True
+    assert result["tooling"]["npm"] == ""
+    assert result["tooling"]["build_runner"] == "local_node_modules"
     assert result["artifact"]["exists"] is True
     assert result["artifact"]["has_csrf_placeholder"] is True
     assert result["artifact"]["source_newer_than_artifact"] is False
-    assert calls[0][0] == ["npm", "run", "build"]
+    assert len(calls) == 2
+    assert calls[0][0][0] == "/usr/local/bin/node"
+    assert calls[0][0][1].endswith("node_modules/typescript/bin/tsc")
+    assert calls[0][0][2] == "-b"
+    assert calls[1][0][0] == "/usr/local/bin/node"
+    assert calls[1][0][1].endswith("node_modules/vite/bin/vite.js")
+    assert calls[1][0][2] == "build"
 
 
 def test_react_build_env_fails_run_build_when_artifact_contract_is_incomplete(tmp_path, monkeypatch):
@@ -130,14 +167,15 @@ def test_react_build_env_fails_run_build_when_artifact_contract_is_incomplete(tm
     for package in ["react", "react-dom", "typescript", "vite"]:
         (app_dir / "node_modules" / package).mkdir(parents=True)
     (app_dir / "node_modules" / "@vitejs" / "plugin-react").mkdir(parents=True)
+    _write_local_build_tools(app_dir)
     monkeypatch.setattr(
         "scripts.check_react_build_env.shutil.which",
-        lambda name: f"/usr/local/bin/{name}" if name in {"node", "npm"} else "",
+        lambda name: "/usr/local/bin/node" if name == "node" else "",
     )
 
     def runner(command, cwd, timeout):
         dist = cwd / "dist"
-        dist.mkdir()
+        dist.mkdir(exist_ok=True)
         (dist / "index.html").write_text('<div id="root"></div><script type="module" src="/assets/index.js"></script>', encoding="utf-8")
         return 0, "built", "", 0.01
 

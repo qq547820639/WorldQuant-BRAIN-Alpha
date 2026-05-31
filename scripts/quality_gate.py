@@ -6,7 +6,6 @@ import argparse
 import json
 import os
 from pathlib import Path
-import socket
 import subprocess
 import sys
 import time
@@ -18,7 +17,31 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 DEFAULT_CONFIG = ROOT / "config" / "run_config.json"
 DEFAULT_HTML = ROOT / "brain_alpha_ops" / "web" / "index.html"
+DEFAULT_SUBPROCESS_TIMEOUT_SECONDS = 300
 COVERAGE_PYTEST_ARGS = ["--cov=brain_alpha_ops", "--cov-report=term", "--cov-fail-under=80"]
+SUBPROCESS_ENV_ALLOWLIST = {
+    "CI",
+    "COMSPEC",
+    "HOME",
+    "LANG",
+    "LC_ALL",
+    "LC_CTYPE",
+    "LOGNAME",
+    "PATH",
+    "PATHEXT",
+    "PYTHONHOME",
+    "PYTHONIOENCODING",
+    "PYTHONNOUSERSITE",
+    "PYTHONPATH",
+    "PYTHONUTF8",
+    "RUNNER_OS",
+    "SYSTEMROOT",
+    "TEMP",
+    "TMP",
+    "TMPDIR",
+    "USER",
+    "VIRTUAL_ENV",
+}
 COMPILE_TARGETS = [
     "brain_alpha_ops",
     "scripts",
@@ -88,16 +111,19 @@ STATIC_ANALYSIS_TARGETS = [
     "scripts/check_diagnosis_gap_coverage.py",
     "scripts/final_release_gate.py",
     "scripts/check_web_console_contract.py",
+    "scripts/check_frontend_innerhtml.py",
     "scripts/check_react_build_env.py",
     "scripts/check_module_size.py",
     "scripts/check_optional_tooling.py",
     "scripts/check_official_context.py",
     "scripts/check_frontend_surface_parity.py",
+    "scripts/check_review_gap_closure_tracker.py",
     "scripts/check_text_encoding.py",
     "scripts/check_tracked_data_inventory.py",
     "scripts/quality_gate.py",
     "tests/test_frontend_surface_parity.py",
     "tests/test_quality_gate.py",
+    "tests/test_review_gap_closure_tracker.py",
     "tests/test_tracked_data_inventory.py",
     "tests/test_strategy_plugins.py",
     "tests/test_production_context.py",
@@ -105,6 +131,7 @@ STATIC_ANALYSIS_TARGETS = [
     "tests/test_web_assistant_snapshots.py",
     "tests/test_web_build_inline.py",
     "tests/test_web_console_contract.py",
+    "tests/test_frontend_innerhtml_guard.py",
     "tests/test_react_build_env_check.py",
     "tests/test_web_check_batch_job.py",
     "tests/test_web_check_availability.py",
@@ -148,7 +175,7 @@ StepRunner = Callable[[], tuple[bool, dict]]
 
 
 def _subprocess_env() -> dict[str, str]:
-    env = os.environ.copy()
+    env = {key: value for key, value in os.environ.items() if key in SUBPROCESS_ENV_ALLOWLIST}
     local_deps = ROOT / ".codex_pydeps"
     pycache_prefix = ROOT / ".pytest_cache_runtime" / "pycache"
     pycache_prefix.mkdir(parents=True, exist_ok=True)
@@ -165,24 +192,52 @@ def _subprocess_env() -> dict[str, str]:
     return env
 
 
-def _run_python_module(args: list[str]) -> tuple[bool, dict]:
+def _run_python_module(
+    args: list[str],
+    *,
+    timeout_seconds: int | float = DEFAULT_SUBPROCESS_TIMEOUT_SECONDS,
+) -> tuple[bool, dict]:
     started = time.perf_counter()
-    proc = subprocess.run(
-        [sys.executable, *args],
-        cwd=str(ROOT),
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        capture_output=True,
-        env=_subprocess_env(),
-    )
+    command = [sys.executable, *args]
+    try:
+        proc = subprocess.run(
+            command,
+            cwd=str(ROOT),
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=True,
+            env=_subprocess_env(),
+            timeout=timeout_seconds,
+        )
+    except subprocess.TimeoutExpired as exc:
+        duration = round(time.perf_counter() - started, 3)
+        stdout = _timeout_text(exc.stdout)
+        stderr = _timeout_text(exc.stderr, f"command timed out after {timeout_seconds}s")
+        return False, {
+            "command": command,
+            "exit_code": 124,
+            "duration_seconds": duration,
+            "timeout_seconds": timeout_seconds,
+            "stdout": stdout[-4000:],
+            "stderr": stderr[-4000:],
+        }
     return proc.returncode == 0, {
-        "command": [sys.executable, *args],
+        "command": command,
         "exit_code": proc.returncode,
         "duration_seconds": round(time.perf_counter() - started, 3),
+        "timeout_seconds": timeout_seconds,
         "stdout": proc.stdout[-4000:],
         "stderr": proc.stderr[-4000:],
     }
+
+
+def _timeout_text(value: str | bytes | None, default: str = "") -> str:
+    if value is None:
+        return default
+    if isinstance(value, bytes):
+        return value.decode("utf-8", errors="replace")
+    return value
 
 
 def _validate_config(config_path: Path) -> tuple[bool, dict]:
@@ -238,12 +293,6 @@ def _react_build_env(*, strict: bool = False, run_build: bool = False) -> tuple[
     return _run_python_module(args)
 
 
-def _free_local_port() -> int:
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-        sock.bind(("127.0.0.1", 0))
-        return int(sock.getsockname()[1])
-
-
 def _react_preview_smoke() -> tuple[bool, dict]:
     return _run_python_module(
         [
@@ -252,7 +301,7 @@ def _react_preview_smoke() -> tuple[bool, dict]:
             "--frontend",
             "react",
             "--port",
-            str(_free_local_port()),
+            "0",
         ]
     )
 
@@ -359,6 +408,10 @@ def _diagnostic_report_sync(config_path: Path) -> tuple[bool, dict]:
             "--json",
         ]
     )
+
+
+def _review_gap_closure_tracker() -> tuple[bool, dict]:
+    return _run_python_module(["scripts/check_review_gap_closure_tracker.py", "--json"])
 
 
 def _pytest(pytest_args: list[str], *, coverage: bool = False) -> tuple[bool, dict]:
@@ -476,6 +529,7 @@ def run_quality_gate(
         _step("secret_scan", lambda: _secret_scan(include_all_secrets, include_git_history_secrets)),
         _step("cache_metadata_audit", _cache_metadata_audit),
         _step("diagnostic_report_sync", lambda: _diagnostic_report_sync(config_path)),
+        _step("review_gap_closure_tracker", _review_gap_closure_tracker),
     ])
     if dependency_audit:
         steps.append(_step("dependency_audit", _dependency_audit))

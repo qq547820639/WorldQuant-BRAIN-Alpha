@@ -64,6 +64,9 @@ build/
 dist/
 !brain_alpha_ops/web/react_app/dist/
 !brain_alpha_ops/web/react_app/dist/index.html
+brain_alpha_ops/web/react_app/*.tsbuildinfo
+brain_alpha_ops/web/react_app/vite.config.js
+brain_alpha_ops/web/react_app/vite.config.d.ts
 
 # ---- Archive ----
 _archive_before_rebuild_*/

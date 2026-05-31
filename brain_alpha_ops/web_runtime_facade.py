@@ -634,7 +634,7 @@ def main(web, argv: list[str] | None = None) -> int:
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", default="")
-    parser.add_argument("--port", type=int, default=0)
+    parser.add_argument("--port", type=int, default=None)
     parser.add_argument("--no-browser", action="store_true")
     parser.add_argument("--smoke-test", action="store_true")
     parser.add_argument("--frontend", choices=("inline", "react"), default="")
@@ -646,13 +646,14 @@ def main(web, argv: list[str] | None = None) -> int:
         if callable(reset_cache):
             reset_cache()
     run_config = web.load_run_config(args.config or None)
+    selected_port = run_config.web.port if args.port is None else args.port
     if args.smoke_test:
         web.config_from_payload({"environment": "production"})
-        result = web.smoke_test_server(port=args.port or run_config.web.port)
+        result = web.smoke_test_server(port=selected_port)
         safe_print(json.dumps({"ok": True, "status": "web ready", **result}, ensure_ascii=False))
         return 0
     url = web.serve(
-        port=args.port or run_config.web.port,
+        port=selected_port,
         open_browser=run_config.web.open_browser and not args.no_browser,
         host=run_config.web.host,
         session_ttl_seconds=run_config.web.session_ttl_seconds,

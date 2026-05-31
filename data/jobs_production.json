@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated_at": 1780016138.919348,
+  "updated_at": 1780172382.32152,
   "jobs": {
     "job_0001": {
       "status": "failed",
@@ -3121,7 +3121,7 @@
             "account_tier": "BASIC",
             "level": null,
             "points": null,
-            "username": "***@***",
+            "username": "<redacted>",
             "raw": {
               "id": "PH81847",
               "email": "<redacted>",
@@ -7106,7 +7106,7 @@
             "account_tier": "BASIC",
             "level": null,
             "points": null,
-            "username": "***@***",
+            "username": "<redacted>",
             "raw": {
               "id": "PH81847",
               "email": "<redacted>",
