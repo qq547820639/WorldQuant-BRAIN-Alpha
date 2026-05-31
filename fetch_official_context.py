@@ -46,7 +46,7 @@ def refresh_official_context(
     try:
         _require_credentials(run_config)
         with _api_cache_scope(run_config, write=write) as api_config:
-            api = OfficialBrainAPI(api_config, **run_config.credentials.resolve())
+            api = OfficialBrainAPI(api_config, disable_proxy=True, **run_config.credentials.resolve())
             api.set_market_scope(run_config.ops.settings)
             auth = api.authenticate()
             progress: dict[str, list[dict[str, Any]]] = {"fields": [], "operators": [], "datasets": []}

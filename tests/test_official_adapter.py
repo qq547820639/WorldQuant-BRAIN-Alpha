@@ -5,6 +5,7 @@ import sys
 import tempfile
 import time
 import urllib.error
+import urllib.request
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -56,6 +57,31 @@ def test_normalize_metrics_preserves_self_correlation_check_status():
 
     assert metrics["self_correlation_status"] == "PENDING"
     assert "self_correlation" not in metrics
+
+
+def test_official_api_can_disable_proxy_handlers(monkeypatch):
+    captured = {}
+
+    def fake_build_opener(*handlers):
+        captured["handlers"] = handlers
+
+        class Opener:
+            def open(self, _req, timeout=None):
+                raise AssertionError("open should not be called in this test")
+
+        return Opener()
+
+    monkeypatch.setattr(urllib.request, "build_opener", fake_build_opener)
+
+    OfficialBrainAPI(
+        OfficialAPIConfig(base_url="https://example.test"),
+        token="token",
+        disable_proxy=True,
+    )
+
+    proxy_handlers = [handler for handler in captured["handlers"] if isinstance(handler, urllib.request.ProxyHandler)]
+    assert len(proxy_handlers) == 1
+    assert getattr(proxy_handlers[0], "proxies", None) == {}
 
 
 def test_request_retries_after_429():

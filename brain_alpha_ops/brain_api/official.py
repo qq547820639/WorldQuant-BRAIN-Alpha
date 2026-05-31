@@ -73,13 +73,17 @@ class OfficialBrainAPI:
         username: str = "",
         password: str = "",
         token: str = "",
+        disable_proxy: bool = False,
     ):
         self.config = config or OfficialAPIConfig()
         self.username = username or os.getenv("BRAIN_USERNAME", "")
         self.password = password or os.getenv("BRAIN_PASSWORD", "")
         self.token = token or os.getenv("BRAIN_TOKEN", "")
         self._cookie_jar = http.cookiejar.CookieJar()
-        self._opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(self._cookie_jar))
+        opener_handlers: list[Any] = [urllib.request.HTTPCookieProcessor(self._cookie_jar)]
+        if disable_proxy:
+            opener_handlers.insert(0, urllib.request.ProxyHandler({}))
+        self._opener = urllib.request.build_opener(*opener_handlers)
         default_scope = BrainSettings()
         self._market_scope = {
             "instrumentType": default_scope.instrumentType,

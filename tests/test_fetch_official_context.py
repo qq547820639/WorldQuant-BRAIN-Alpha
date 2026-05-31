@@ -50,6 +50,14 @@ class RateLimitedOfficialBrainAPI(FakeOfficialBrainAPI):
         raise BrainAPIError("HTTP 429: rate limit", status_code=429, retry_after=12)
 
 
+class DirectOnlyOfficialBrainAPI(FakeOfficialBrainAPI):
+    last_disable_proxy: bool | None = None
+
+    def __init__(self, config, **credentials):
+        DirectOnlyOfficialBrainAPI.last_disable_proxy = credentials.pop("disable_proxy", False)
+        super().__init__(config, **credentials)
+
+
 def _write_config(tmp_path):
     config = RunConfig(environment="production")
     config.credentials.token = "test-token"
@@ -122,6 +130,21 @@ def test_refresh_official_context_records_retryable_rate_limit(monkeypatch, tmp_
     assert result["retry_after_seconds"] == 12
     assert result["next_retry_at"]
     assert saved_status["retryable"] is True
+
+
+def test_refresh_official_context_uses_direct_official_api(monkeypatch, tmp_path):
+    monkeypatch.setattr(fetch_official_context, "OfficialBrainAPI", DirectOnlyOfficialBrainAPI)
+    DirectOnlyOfficialBrainAPI.last_disable_proxy = None
+    config_path = _write_config(tmp_path)
+
+    result = fetch_official_context.refresh_official_context(config_path, write=False)
+
+    assert result["ok"] is True
+    assert result["status"] == "fetched_no_write"
+    assert result["write_enabled"] is False
+    assert result["auth"]["auth"] == "token"
+    assert result["counts"] == {"fields": 1, "operators": 1, "datasets": 1}
+    assert DirectOnlyOfficialBrainAPI.last_disable_proxy is True
 
 
 def test_official_loader_accepts_name_only_field_records(tmp_path):

@@ -1,7 +1,7 @@
 {
   "schema_version": "official_context_refresh.v1",
-  "generated_at": "2026-05-27T15:05:26.067044+00:00",
-  "started_at": "2026-05-27T14:56:46.315402+00:00",
+  "generated_at": "2026-05-31T14:52:24.565869+00:00",
+  "started_at": "2026-05-31T14:44:26.920669+00:00",
   "environment": "production",
   "storage_dir": "/Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/data",
   "base_url": "https://api.worldquantbrain.com",
