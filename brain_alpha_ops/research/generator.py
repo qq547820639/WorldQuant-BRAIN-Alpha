@@ -6,9 +6,10 @@ Zero hard-coded fields or templates.
 
 from __future__ import annotations
 
+import logging
 import random
 import re
-from typing import Optional, TYPE_CHECKING
+from typing import Any, TYPE_CHECKING
 
 from brain_alpha_ops.models import Candidate, new_id
 from brain_alpha_ops.research.expression_ast import expression_fingerprint, expression_key, ordered_operators, profile_expression
@@ -17,6 +18,8 @@ if TYPE_CHECKING:
     from brain_alpha_ops.data import OfficialDataLoader, FieldDatasetMapper
     from .theme_engine import DynamicThemeEngine
     from .dataset_selector import DatasetSelector
+
+logger = logging.getLogger(__name__)
 
 # Default window sizes — can be overridden per dataset frequency (P1-4 TODO).
 DEFAULT_WINDOWS = [3, 5, 8, 10, 12, 15, 20, 30, 40, 60, 90, 120, 180, 252]
@@ -33,7 +36,7 @@ def _get_default_winsor_stds() -> list[int]:
     return list(DEFAULT_WINSOR_STD)
 
 
-def _load_operators_windows(loader: "Optional[OfficialDataLoader]" = None) -> tuple[list[int], list[int]]:
+def _load_operators_windows(loader: "OfficialDataLoader | None" = None) -> tuple[list[int], list[int]]:
     """Derive generation knobs from official operator metadata when available."""
     try:
         if loader is None:
@@ -42,6 +45,7 @@ def _load_operators_windows(loader: "Optional[OfficialDataLoader]" = None) -> tu
             loader = OfficialDataLoader.instance()
         operators = loader.get_operators()
     except Exception:
+        logger.warning("operator metadata unavailable; using default generation windows", exc_info=True)
         return _get_default_windows(), _get_default_winsor_stds()
 
     windows: set[int] = set()
@@ -125,10 +129,10 @@ class CandidateGenerator:
 
     def __init__(
         self,
-        loader: "Optional[OfficialDataLoader]" = None,
-        mapper: "Optional[FieldDatasetMapper]" = None,
-        theme_engine: "Optional[DynamicThemeEngine]" = None,
-        selector: "Optional[DatasetSelector]" = None,
+        loader: "OfficialDataLoader | None" = None,
+        mapper: "FieldDatasetMapper | None" = None,
+        theme_engine: "DynamicThemeEngine | None" = None,
+        selector: "DatasetSelector | None" = None,
         *,
         max_field_pool_size: int = 50,
     ) -> None:
@@ -199,7 +203,7 @@ class CandidateGenerator:
         if self._loader:
             try:
                 # Treat empty string as None (all datasets)
-                ds_id: Optional[str] = dataset_id if dataset_id else None
+                ds_id: str | None = dataset_id if dataset_id else None
                 ds_fields = self._loader.get_fields(ds_id)
                 if ds_fields:
                     # Score fields by coverage, pick top N
@@ -230,7 +234,7 @@ class CandidateGenerator:
             if default_fields:
                 return [str(f.get("name", "")) for f in default_fields if f.get("name")]
         except Exception:
-            pass
+            logger.warning("context default fields unavailable; using in-memory field fallback", exc_info=True)
 
         # Priority 3: self._fields (set by update_context with official API data)
         if self._fields:
@@ -517,7 +521,7 @@ class CandidateGenerator:
 # Field / operator extraction
 # ------------------------------------------------------------------
 
-def extract_fields(expression: str, known_fields: Optional[set[str]] = None) -> list[str]:
+def extract_fields(expression: str, known_fields: set[str] | None = None) -> list[str]:
     """Extract field names from *expression* that match *known_fields*."""
     profile = profile_expression(expression)
     if known_fields is None:
@@ -526,6 +530,7 @@ def extract_fields(expression: str, known_fields: Optional[set[str]] = None) -> 
             loader = OfficialDataLoader.instance()
             known_fields = {f.id.lower() for f in loader.get_fields()}
         except Exception:
+            logger.warning("official field metadata unavailable; using parsed expression fields", exc_info=True)
             return list(profile.fields)
     tokens = {token.lower() for token in profile.fields}
     return sorted(known_fields & tokens)
@@ -651,10 +656,10 @@ def mutate_expression(expression: str, index: int, mode: str = "default",
             mutated = re.sub(rf"\b{re.escape(number)}\b", str(replacement), mutated, count=1)
         return mutated
 
-    # ── P0-2: New directional mutation modes ──
+    # P0-2: new directional mutation modes.
 
     if mode == "window_perturb":
-        """窗口 ±20% 随机扰动（限制在 [3, 252] 范围内）。"""
+        """Randomly perturb windows by +/-20%, clamped to [3, 252]."""
         def _perturb(m: re.Match) -> str:
             val = int(m.group(0))
             if val < 2 or val > 1000:
@@ -665,7 +670,7 @@ def mutate_expression(expression: str, index: int, mode: str = "default",
         return re.sub(r"\b\d+\b", _perturb, expression)
 
     if mode == "field_swap_semantic":
-        """语义级字段替换：替换表达式中的字段为 field_pool 中的其他字段。"""
+        """Replace a field in the expression with another field from field_pool."""
         if not field_pool or len(field_pool) < 2:
             return expression
         field_tokens = re.findall(r"\b([a-zA-Z_]\w*)\b", expression)
@@ -674,7 +679,7 @@ def mutate_expression(expression: str, index: int, mode: str = "default",
             if t in field_pool
         ]
         if not candidate_fields:
-            # fallback: 替换 fields 中出现的关键词
+            # Fallback: replace field-like keywords that appear in the expression.
             candidate_fields = [
                 t for t in field_tokens
                 if len(t) > 1 and "_" in t and not t.isdigit()
@@ -689,8 +694,8 @@ def mutate_expression(expression: str, index: int, mode: str = "default",
         return re.sub(r"\b" + re.escape(target) + r"\b", replacement, expression, count=1)
 
     if mode == "operator_substitute":
-        """同族算子替换：从算子功能分组中选择替代算子。"""
-        # 同族算子分组（与 iterative_optimizer 保持一致）
+        """Replace an operator with a same-family alternative."""
+        # Operator families kept consistent with iterative_optimizer.
         _families = {
             "ranking": ["ts_rank", "rank", "group_rank"],
             "standardization": ["zscore", "scale", "group_zscore"],
@@ -705,7 +710,7 @@ def mutate_expression(expression: str, index: int, mode: str = "default",
         for _family, _ops in _families.items():
             for _op in _ops:
                 _alt[_op] = [o for o in _ops if o != _op]
-        # 找表达式中的算子
+        # Find operators in the expression.
         op_pattern = re.findall(r"\b([a-zA-Z_]\w*)\s*\(", expression)
         for op in op_pattern:
             if op in _alt and _alt[op]:

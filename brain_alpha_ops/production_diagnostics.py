@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 import json
+import logging
 from pathlib import Path
 from typing import Any
 
@@ -18,6 +19,9 @@ from brain_alpha_ops.parameter_audit import build_parameter_audit_snapshot
 from brain_alpha_ops.scoring.official_scoring import OfficialScoringSystem
 from brain_alpha_ops.ux.history import RunHistoryAnalytics
 from brain_alpha_ops.web_cloud_snapshot import official_context_file_counts
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -261,6 +265,7 @@ def _frontend_inline_status() -> dict[str, Any]:
             "error": result.get("error", ""),
         }
     except Exception as exc:
+        logger.warning("frontend inline status check failed during production diagnosis", exc_info=True)
         return {"ok": False, "replaced": 0, "missing": [], "error": str(exc)}
 
 

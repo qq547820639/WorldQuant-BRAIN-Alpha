@@ -1,3 +1,5 @@
+import logging
+
 from brain_alpha_ops.config import ResearchBudget
 from brain_alpha_ops.research.generator import CandidateGenerator, extract_fields, extract_operators, local_quality, nesting_depth
 from brain_alpha_ops.research.generator import _get_default_windows, _load_operators_windows
@@ -38,6 +40,20 @@ def test_generator_windows_are_instance_properties_from_operator_metadata():
     assert generator.windows == windows
     assert generator.winsor_stds == winsor_stds
     assert generator.windows is not generator.windows
+
+
+def test_generator_logs_operator_metadata_fallback(caplog):
+    class Loader:
+        def get_operators(self):
+            raise RuntimeError("operator metadata unavailable")
+
+    with caplog.at_level(logging.WARNING, logger="brain_alpha_ops.research.generator"):
+        windows, winsor_stds = _load_operators_windows(Loader())
+
+    assert windows == _get_default_windows()
+    assert winsor_stds
+    assert "operator metadata unavailable; using default generation windows" in caplog.text
+    assert "operator metadata unavailable" in caplog.text
 
 
 def test_default_windows_helper_returns_copy():

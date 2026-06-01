@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from types import SimpleNamespace
 
 import pytest
@@ -112,6 +113,20 @@ def test_dataset_selector_handles_uninitialized_and_loader_failures():
     selector.initialize(_FailingFieldLoader())
     assert selector.get_all_categories() == []
     assert selector.get_fields_by_category("anything") == []
+
+
+def test_dataset_selector_logs_category_index_failure(caplog):
+    class Loader(_Loader):
+        def get_fields(self, dataset_id: str = ""):
+            raise RuntimeError("category metadata unavailable")
+
+    selector = DatasetSelector()
+    with caplog.at_level(logging.WARNING, logger="brain_alpha_ops.research.dataset_selector"):
+        selector.initialize(Loader())
+
+    assert selector.get_all_categories() == []
+    assert "dataset selector category index unavailable" in caplog.text
+    assert "category metadata unavailable" in caplog.text
 
 
 def test_template_registry_loads_builtin_templates_and_instantiates_placeholders():

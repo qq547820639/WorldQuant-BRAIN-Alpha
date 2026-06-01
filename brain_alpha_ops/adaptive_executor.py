@@ -25,7 +25,8 @@ import threading
 import time
 from typing import Any, Callable
 
-from brain_alpha_ops.redaction import redact_error_message
+from brain_alpha_ops.job_types import JobExecutionResult
+from brain_alpha_ops.redaction import redact_error_message, redact_text
 from brain_alpha_ops.tasks import JobStore
 
 logger = logging.getLogger(__name__)
@@ -126,7 +127,7 @@ class AdaptiveExecutor:
                     "AdaptiveExecutor: CPU pool submission failed (%s), "
                     "falling back to thread pool for this task. "
                     "On Windows this is normal for non-picklable functions.",
-                    exc,
+                    redact_error_message(exc),
                 )
             return self._get_io_pool().submit(fn, *args, **kwargs)
 
@@ -238,7 +239,7 @@ class CachedAPIRateLimiter:
                     logger.debug(
                         "CachedAPIRateLimiter: attempt %d/%d for %s failed (%s), "
                         "retrying in %.1fs",
-                        attempt + 1, self.max_retries + 1, key,
+                        attempt + 1, self.max_retries + 1, redact_text(key, max_length=120),
                         redact_error_message(exc, max_length=100), delay,
                     )
                     time.sleep(delay)
@@ -249,7 +250,8 @@ class CachedAPIRateLimiter:
         if entry is not None:
             logger.warning(
                 "CachedAPIRateLimiter: serving stale cache for %s (fetch failed: %s)",
-                key, redact_error_message(last_error, max_length=120),
+                redact_text(key, max_length=120),
+                redact_error_message(last_error, max_length=120),
             )
             return entry.value
         raise last_error or RuntimeError(f"fetch failed for {key}")
@@ -297,15 +299,6 @@ class CachedAPIRateLimiter:
 
 
 # ── Convenience: run job through adaptive executor ──
-
-@dataclass
-class JobExecutionResult:
-    job_id: str
-    status: str
-    result: Any = None
-    error: str = ""
-    duration_seconds: float = 0.0
-
 
 def run_adaptive_job(
     store: JobStore,

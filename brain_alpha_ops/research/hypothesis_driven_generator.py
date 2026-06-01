@@ -22,9 +22,10 @@ import logging
 import random
 import re
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Set, TYPE_CHECKING
+from typing import Any, TYPE_CHECKING
 
 from brain_alpha_ops.models import Candidate, new_id
+from brain_alpha_ops.redaction import redact_error_message
 from brain_alpha_ops.research.expression_ast import (
     expression_fingerprint,
     expression_key,
@@ -80,7 +81,7 @@ class GenerationModeRouter:
         mode = router.route()  # → "hypothesis_driven" (70% of the time)
     """
 
-    VALID_MODES: tuple = ("hypothesis_driven", "experience_feedback", "random_exploration")
+    VALID_MODES: tuple[str, ...] = ("hypothesis_driven", "experience_feedback", "random_exploration")
 
     def __init__(self, ratio_str: str = "70/20/10") -> None:
         """Parse ratio string like "70/20/10" into per-mode weights."""
@@ -127,7 +128,7 @@ class GenerationModeRouter:
         self._random_count = 0
 
     @property
-    def actual_ratios(self) -> Dict[str, float]:
+    def actual_ratios(self) -> dict[str, float]:
         """Return observed ratios from counters."""
         total = self._hypothesis_count + self._experience_count + self._random_count
         if total == 0:
@@ -154,10 +155,10 @@ class HypothesisSelector:
 
     def __init__(self, library: "HypothesisLibrary") -> None:
         self._library = library
-        self._recently_used: List[str] = []
+        self._recently_used: list[str] = []
         self._max_recency: int = self.DEFAULT_RECENCY_SIZE
 
-    def select(self) -> Optional["Hypothesis"]:
+    def select(self) -> "Hypothesis | None":
         """Select a hypothesis by weighted random choice.
 
         Returns None if no hypotheses are available.
@@ -167,7 +168,7 @@ class HypothesisSelector:
             return None
 
         # Build candidate pool, excluding recently used if possible
-        excluded_ids: Set[str] = set(self._recently_used[-self._max_recency:])
+        excluded_ids: set[str] = set(self._recently_used[-self._max_recency:])
         pool = [h for h in all_h if h.id not in excluded_ids]
         if not pool:
             # All hypotheses recently used — fall back to full pool
@@ -203,7 +204,7 @@ class ExpressionFamilySelector:
     def __init__(self) -> None:
         pass
 
-    def select(self, hypothesis: "Hypothesis") -> Optional["ExpressionFamily"]:
+    def select(self, hypothesis: "Hypothesis") -> "ExpressionFamily | None":
         """Select an expression family weighted by its experience weight."""
         families = hypothesis.expression_families
         if not families:
@@ -213,7 +214,7 @@ class ExpressionFamilySelector:
         return chosen
 
     def select_window(self, expr_family: "ExpressionFamily",
-                      window_weights: Optional[Dict[str, float]] = None) -> int:
+                      window_weights: dict[str, float] | None = None) -> int:
         """Select a window size from the expression family's window list.
 
         Window selection is weighted by *window_weights* (from experience_weights)
@@ -247,15 +248,15 @@ class FieldSelector:
 
     def __init__(self, selector: "DatasetSelector") -> None:
         self._selector = selector
-        self._field_cache: Dict[str, List[str]] = {}
-        self._dataset_field_cache: Dict[str, set[str]] = {}
+        self._field_cache: dict[str, list[str]] = {}
+        self._dataset_field_cache: dict[str, set[str]] = {}
 
     def select_fields(
         self,
         hypothesis: "Hypothesis",
         dataset_id: str = "",
         count: int = 2,
-    ) -> List[str]:
+    ) -> list[str]:
         """Select *count* concrete field names for *hypothesis*.
 
         Strategy:
@@ -297,14 +298,14 @@ class FieldSelector:
 
         return []
 
-    def _resolve_category(self, category_name: str, dataset_id: str = "") -> List[str]:
+    def _resolve_category(self, category_name: str, dataset_id: str = "") -> list[str]:
         """Resolve a semantic field category to concrete field name list."""
         cache_key = f"{dataset_id}::{category_name}"
         if cache_key in self._field_cache:
             return self._field_cache[cache_key]
 
         # Try get_fields_by_category if dataset_selector supports it
-        fields: List[str] = []
+        fields: list[str] = []
         if hasattr(self._selector, 'get_fields_by_category'):
             try:
                 fields = self._selector.get_fields_by_category(category_name, dataset_id)  # type: ignore[attr-defined]
@@ -331,6 +332,11 @@ class FieldSelector:
             self._dataset_field_cache[dataset_id] = fields
             return fields
         except Exception:
+            logger.warning(
+                "dataset field metadata unavailable for dataset_id=%s",
+                dataset_id,
+                exc_info=True,
+            )
             return set()
 
 
@@ -346,21 +352,21 @@ class ContextAdapter:
     """
 
     # Default available context — used when no external info is provided
-    DEFAULT_REGIONS: List[str] = ["USA", "EUROPE", "DEV", "ASIA", "DEV_EX_US", "FRONTIER"]
-    DEFAULT_UNIVERSES: List[str] = ["TOP3000", "TOP1000", "MID_LARGE_CAP", "SMID_CAP",
+    DEFAULT_REGIONS: list[str] = ["USA", "EUROPE", "DEV", "ASIA", "DEV_EX_US", "FRONTIER"]
+    DEFAULT_UNIVERSES: list[str] = ["TOP3000", "TOP1000", "MID_LARGE_CAP", "SMID_CAP",
                                      "SMALL_CAP", "MICRO_CAP", "ALL_CAP"]
-    DEFAULT_DELAYS: List[int] = [1, 2, 3, 4, 5]
+    DEFAULT_DELAYS: list[int] = [1, 2, 3, 4, 5]
 
     def __init__(self) -> None:
-        self._available_regions: List[str] = list(self.DEFAULT_REGIONS)
-        self._available_universes: List[str] = list(self.DEFAULT_UNIVERSES)
-        self._available_delays: List[int] = list(self.DEFAULT_DELAYS)
+        self._available_regions: list[str] = list(self.DEFAULT_REGIONS)
+        self._available_universes: list[str] = list(self.DEFAULT_UNIVERSES)
+        self._available_delays: list[int] = list(self.DEFAULT_DELAYS)
 
     def set_available_context(
         self,
-        regions: Optional[List[str]] = None,
-        universes: Optional[List[str]] = None,
-        delays: Optional[List[int]] = None,
+        regions: list[str] | None = None,
+        universes: list[str] | None = None,
+        delays: list[int] | None = None,
     ) -> None:
         """Override the default available context."""
         if regions is not None:
@@ -370,7 +376,7 @@ class ContextAdapter:
         if delays is not None:
             self._available_delays = list(delays)
 
-    def adapt(self, hypothesis: "Hypothesis") -> Dict[str, Any]:
+    def adapt(self, hypothesis: "Hypothesis") -> dict[str, Any]:
         """Generate a concrete context dict for *hypothesis*.
 
         Returns:
@@ -398,7 +404,7 @@ class ContextAdapter:
         return {"region": region, "universe": universe, "delay": delay}
 
 
-def _pick_unused(fields: List[str], index: int, used: set[str]) -> str:
+def _pick_unused(fields: list[str], index: int, used: set[str]) -> str:
     """Pick fields[index] if available and unused; otherwise pick the first unused field.
 
     BUG-10: prevents the same field being assigned to multiple placeholders
@@ -440,11 +446,11 @@ class HypothesisDrivenGenerator:
 
     def __init__(
         self,
-        loader: Optional["OfficialDataLoader"] = None,
-        mapper: Optional["FieldDatasetMapper"] = None,
-        theme_engine: Optional["DynamicThemeEngine"] = None,
-        selector: Optional["DatasetSelector"] = None,
-        library: Optional["HypothesisLibrary"] = None,
+        loader: "OfficialDataLoader | None" = None,
+        mapper: "FieldDatasetMapper | None" = None,
+        theme_engine: "DynamicThemeEngine | None" = None,
+        selector: "DatasetSelector | None" = None,
+        library: "HypothesisLibrary | None" = None,
         ratio_str: str = "70/20/10",
     ) -> None:
         self._loader = loader
@@ -454,8 +460,8 @@ class HypothesisDrivenGenerator:
         self._library = library
 
         # Fields / operators context (mirrors CandidateGenerator)
-        self._fields: Set[str] = set()
-        self._operators: Set[str] = set()
+        self._fields: set[str] = set()
+        self._operators: set[str] = set()
         self._dataset_id: str = ""
 
         # Sub-components
@@ -466,15 +472,15 @@ class HypothesisDrivenGenerator:
         self._adapter = ContextAdapter()
 
         # Experience guidance (from experience.py)
-        self._experience_operators: List[str] = []
-        self._experience_windows: List[int] = []
-        self._experience_fields: List[str] = []
-        self._experience_patterns: Optional[Dict[str, Any]] = None
+        self._experience_operators: list[str] = []
+        self._experience_windows: list[int] = []
+        self._experience_fields: list[str] = []
+        self._experience_patterns: dict[str, Any] | None = None
         self._observability_diversity_boost: bool = False
-        self._observability_avoid_keys: Set[str] = set()
-        self._observability_guidance: Dict[str, Any] = {}
+        self._observability_avoid_keys: set[str] = set()
+        self._observability_guidance: dict[str, Any] = {}
         self._warned_empty_hypothesis_library: bool = False
-        self._knowledge_constraints: Dict[str, Any] = {
+        self._knowledge_constraints: dict[str, Any] = {
             "preferred_fields": [],
             "preferred_operators": [],
             "forbidden_patterns": [],
@@ -482,7 +488,7 @@ class HypothesisDrivenGenerator:
 
     # ── Public API (CandidateGenerator-compatible) ──────────────────
 
-    def update_context(self, fields: list, operators: list) -> None:
+    def update_context(self, fields: list[Any], operators: list[Any]) -> None:
         """Update known fields/operators."""
         if fields:
             if isinstance(fields[0], dict):
@@ -502,7 +508,7 @@ class HypothesisDrivenGenerator:
             mapper_fields = self._mapper.fields_for(dataset_id)
             self._fields = set(mapper_fields)
 
-    def set_experience_guidance(self, patterns: dict) -> None:
+    def set_experience_guidance(self, patterns: dict[str, Any]) -> None:
         """Apply winning alpha patterns to bias future generation."""
         if not patterns or patterns.get("sample_size", 0) < 3:
             return
@@ -510,7 +516,7 @@ class HypothesisDrivenGenerator:
         self._experience_operators = patterns.get("top_operators", [])
         self._experience_windows = [int(w) for w in patterns.get("preferred_windows", []) if w]
         field_combos = patterns.get("field_combinations", [])
-        seen: Set[str] = set()
+        seen: set[str] = set()
         for combo in field_combos:
             for f in combo.get("fields", []):
                 seen.add(str(f).lower())
@@ -521,7 +527,7 @@ class HypothesisDrivenGenerator:
         guidance = dict(guidance or {})
         flags = {str(flag) for flag in guidance.get("health_flags") or []}
         duplicate_ratio = _safe_float(guidance.get("duplicate_ratio"))
-        avoid_keys: Set[str] = set()
+        avoid_keys: set[str] = set()
         for row in guidance.get("avoid_expressions") or guidance.get("top_duplicates") or []:
             if isinstance(row, dict):
                 for key in ("expression_canonical", "expression_fingerprint", "expression"):
@@ -564,13 +570,13 @@ class HypothesisDrivenGenerator:
         if preferred_operators:
             self._operators.update(preferred_operators)
 
-    def generate(self, count: int, dataset_id: str = "") -> List[Candidate]:
+    def generate(self, count: int, dataset_id: str = "") -> list[Candidate]:
         """Generate *count* alpha candidates for *dataset_id*."""
         ds = dataset_id or self._dataset_id
-        candidates: List[Candidate] = []
+        candidates: list[Candidate] = []
         attempts = 0
         attempt_limit = max(count, count * (5 if self._observability_diversity_boost else 1))
-        seen_keys: Set[str] = set()
+        seen_keys: set[str] = set()
 
         while len(candidates) < count and attempts < attempt_limit:
             i = attempts
@@ -596,7 +602,7 @@ class HypothesisDrivenGenerator:
             except Exception as exc:
                 logger.warning(
                     "HypothesisDrivenGenerator: %s mode failed for candidate %d: %s",
-                    mode, i, exc,
+                    mode, i, redact_error_message(exc),
                 )
                 # Fallback: try random exploration
                 try:
@@ -610,6 +616,7 @@ class HypothesisDrivenGenerator:
                             self._mark_observability_candidate(fallback)
                         candidates.append(fallback)
                 except Exception:
+                    logger.warning("random exploration fallback generation failed", exc_info=True)
                     continue
 
         # Log generation summary
@@ -627,7 +634,7 @@ class HypothesisDrivenGenerator:
 
     # ── Generation Modes ────────────────────────────────────────────
 
-    def _generate_hypothesis_driven(self, dataset_id: str) -> Optional[Candidate]:
+    def _generate_hypothesis_driven(self, dataset_id: str) -> Candidate | None:
         """Execute the 6-step hypothesis-driven generation pipeline.
 
         Steps:
@@ -714,7 +721,7 @@ class HypothesisDrivenGenerator:
             return self._generate_random_exploration(dataset_id)
         return candidate
 
-    def _generate_experience_feedback(self, dataset_id: str) -> Optional[Candidate]:
+    def _generate_experience_feedback(self, dataset_id: str) -> Candidate | None:
         """Generate a candidate biased by experience-winning patterns.
 
         Uses DynamicThemeEngine with experience operator/window preferences.
@@ -768,10 +775,13 @@ class HypothesisDrivenGenerator:
                 return self._generate_random_exploration(dataset_id)
             return candidate
         except Exception as exc:
-            logger.warning("_generate_experience_feedback failed: %s", exc)
+            logger.warning(
+                "_generate_experience_feedback failed: %s",
+                redact_error_message(exc, max_length=160),
+            )
             return self._generate_random_exploration(dataset_id)
 
-    def _generate_random_exploration(self, dataset_id: str) -> Optional[Candidate]:
+    def _generate_random_exploration(self, dataset_id: str) -> Candidate | None:
         """Fallback to DynamicThemeEngine for pure random exploration."""
         if self._theme_engine is None:
             return self._generate_bare_fallback(dataset_id)
@@ -815,10 +825,13 @@ class HypothesisDrivenGenerator:
                 return self._generate_bare_fallback(dataset_id)
             return candidate
         except Exception as exc:
-            logger.warning("_generate_random_exploration: ThemeEngine failed: %s", exc)
+            logger.warning(
+                "_generate_random_exploration: ThemeEngine failed: %s",
+                redact_error_message(exc, max_length=160),
+            )
             return self._generate_bare_fallback(dataset_id)
 
-    def _generate_bare_fallback(self, dataset_id: str) -> Optional[Candidate]:
+    def _generate_bare_fallback(self, dataset_id: str) -> Candidate | None:
         """Absolute last-resort fallback when ThemeEngine is unavailable."""
         ds = dataset_id or self._dataset_id or "default"
         fields = sorted(self._fields) if self._fields else ["returns"]
@@ -860,7 +873,7 @@ class HypothesisDrivenGenerator:
                 return True
         return False
 
-    def _prioritize_knowledge_fields(self, fields: List[str]) -> List[str]:
+    def _prioritize_knowledge_fields(self, fields: list[str]) -> list[str]:
         preferred = set(self._knowledge_constraints.get("preferred_fields") or [])
         if not preferred:
             return list(fields)
@@ -873,9 +886,9 @@ class HypothesisDrivenGenerator:
     def _build_expression(
         self,
         family: "ExpressionFamily",
-        fields: List[str],
+        fields: list[str],
         window: int,
-        field_categories: Optional[List["FieldCategoryDef"]] = None,
+        field_categories: list["FieldCategoryDef"] | None = None,
     ) -> str:
         """Build a concrete expression from an ExpressionFamily template.
 
@@ -952,7 +965,7 @@ class HypothesisDrivenGenerator:
     def _sanitize_expression(
         self,
         expr: str,
-        fields: List[str],
+        fields: list[str],
         already_used: set[str] | None = None,
     ) -> str:
         """Replace remaining semantic tokens with actual dataset field names.
@@ -1110,8 +1123,8 @@ class HypothesisDrivenGenerator:
     def _resolve_named_field(
         self,
         name: str,
-        field_categories: List["FieldCategoryDef"],
-        selected_fields: List[str],
+        field_categories: list["FieldCategoryDef"],
+        selected_fields: list[str],
         exclude: set[str] | None = None,
     ) -> str:
         """Resolve a named field placeholder (e.g. 'illiq') to a concrete BRAIN field.
@@ -1206,7 +1219,7 @@ class HypothesisDrivenGenerator:
 
     # ── Helpers ─────────────────────────────────────────────────────
 
-    def _extract_fields(self, expression: str) -> List[str]:
+    def _extract_fields(self, expression: str) -> list[str]:
         """Extract active-dataset field names used in an expression."""
         profile = profile_expression(expression)
         fields = self._fields
@@ -1214,13 +1227,18 @@ class HypothesisDrivenGenerator:
             try:
                 fields = {field.id.lower() for field in self._loader.get_fields(self._dataset_id or None)}
             except Exception:
+                logger.warning(
+                    "generator field extraction metadata unavailable for dataset_id=%s",
+                    self._dataset_id or "",
+                    exc_info=True,
+                )
                 fields = set()
         if not fields:
             return list(profile.fields)
         tokens = {token.lower() for token in profile.fields}
         return sorted(fields & tokens)
 
-    def _extract_operators(self, expression: str) -> List[str]:
+    def _extract_operators(self, expression: str) -> list[str]:
         """Extract operator names (function-like tokens) from an expression."""
         return ordered_operators(expression)
 

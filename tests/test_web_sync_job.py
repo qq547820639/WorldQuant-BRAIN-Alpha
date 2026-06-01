@@ -1,3 +1,5 @@
+import logging
+
 from brain_alpha_ops.config import RunConfig
 from brain_alpha_ops.web_sync_job import _timing_payload, run_sync_job_service
 
@@ -15,9 +17,10 @@ class Store:
 
 
 class Api:
-    def __init__(self, fail_auth=False, fail_context=False):
+    def __init__(self, fail_auth=False, fail_context=False, fail_datasets=False):
         self.fail_auth = fail_auth
         self.fail_context = fail_context
+        self.fail_datasets = fail_datasets
 
     def authenticate(self):
         if self.fail_auth:
@@ -40,6 +43,11 @@ class Api:
         if progress_callback:
             progress_callback({"scanned": 1, "total": 1})
         return [{"name": "rank"}]
+
+    def list_datasets(self, *_args):
+        if self.fail_datasets:
+            raise RuntimeError("datasets failed")
+        return [{"id": "fundamental", "name": "Fundamental"}]
 
 
 class Repo:
@@ -140,6 +148,33 @@ def test_run_sync_job_service_marks_context_failure_as_warning(tmp_path):
     assert final["result"]["context_error"] == "context failed"
     assert final["result"]["fields_count"] == 1
     assert final["progress"]["status_code"] == "COMPLETED_WITH_WARNINGS"
+
+
+def test_run_sync_job_service_logs_dataset_fallback_warning(tmp_path, caplog):
+    run_config = RunConfig(environment="production")
+    run_config.ops.storage_dir = str(tmp_path)
+    store = Store()
+    persisted = []
+
+    with caplog.at_level(logging.WARNING):
+        run_sync_job_service(
+            "sync_1",
+            {"syncRange": "7d"},
+            store=store,
+            run_config_from_payload=lambda payload: run_config,
+            api_from_run_config=lambda config: Api(fail_datasets=True),
+            repository_factory=Repo,
+            datasets_from_fields=lambda fields: [{"id": "fundamental", "field_count": len(fields)}],
+            persist_official_context=lambda fields, operators, datasets: persisted.append((fields, operators, datasets)),
+            default_fields=[{"id": "fallback_field"}],
+            default_operators=[{"name": "fallback_operator"}],
+            safe_error_message=str,
+            error_payload=lambda exc, **kwargs: {"error": str(exc), **kwargs},
+        )
+
+    assert store.updates[-1]["status"] == "completed"
+    assert persisted[0][2] == [{"id": "fundamental", "field_count": 1}]
+    assert "official datasets API unavailable; deriving datasets from fields" in caplog.text
 
 
 def test_run_sync_job_service_honors_cancel_before_remote_calls(tmp_path):

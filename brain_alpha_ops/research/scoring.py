@@ -30,7 +30,7 @@ def build_scorecard(
     local_rank_score = _bounded_score(base_local_rank_score + float(guidance_adjustment.get("adjustment", 0.0) or 0.0))
     official_verified = bool(candidate.official_metrics)
 
-    # ── 三层权重：从 ScoringConfig 读取，fallback 到原始 30/45/25 ──
+    # Three-layer weights from ScoringConfig, falling back to the original 30/45/25.
     lw = scoring.get_layer_weights() if scoring else {"prior": 0.30, "empirical": 0.45, "checklist": 0.25}
     if official_verified:
         total = _bounded_score(
@@ -80,13 +80,14 @@ def prior_score(
     weights_override: dict | None = None,
     params: "ScoringParams | None" = None,
 ) -> dict:
-    """先验评分：8 个维度的加权综合。
+    """Prior score as a weighted combination of 8 dimensions.
 
     Args:
-        candidate: 候选 alpha
-        weights_override: 维度权重覆盖字典（向后兼容）
-        params: 可校准评分参数。None 时使用硬编码公式（向后兼容）；
-                非 None 时使用参数化公式，并优先使用 params 中的 weight。
+        candidate: candidate Alpha
+        weights_override: optional dimension weight overrides for backward compatibility
+        params: calibratable scoring parameters. None keeps the hard-coded
+                formulas for backward compatibility; otherwise parameterized
+                formulas are used and params weights take priority.
 
     Returns:
         {"score": float, "dimensions": dict, "weights": dict, "source": str}
@@ -101,14 +102,14 @@ def prior_score(
     has_risk_control = any(op in operators for op in ("winsorize", "zscore", "scale", "group_rank")) or "adv20" in fields
     median_window = sorted(windows)[len(windows) // 2] if windows else 0
 
-    # P0 优化：economic_logic 从二值化改为经济概念关键词分类打分
+    # P0 improvement: economic_logic now uses keyword concept scoring, not binary scoring.
     economic_result = _economic_logic_score(
         candidate.hypothesis, expression, fields, operators
     )
     dims["economic_logic"] = economic_result["score"]
     dims["economic_concepts"] = economic_result["concepts_detected"]
 
-    # ── 各维度评分：优先使用参数化公式 ──
+    # Dimension scoring: prefer parameterized formulas.
     if params:
         dims.update(_parameterized_dimensions(
             params, fields, operators, windows, median_window,
@@ -124,7 +125,7 @@ def prior_score(
         dims["diversity"] = 80 if candidate.family in {"Liquidity", "Volatility", "Hybrid"} else 65
         dims["explainability"] = 85 if len(candidate.expression) < 140 else 60
 
-    # ── 权重：可通过 weights_override 注入校准值，params 提供第二来源 ──
+    # Weights: weights_override can inject calibration values; params is the second source.
     source_parts = ["经验"]
     default_weights = {
         "economic_logic": 0.18, "structure": 0.14,
@@ -133,7 +134,7 @@ def prior_score(
         "diversity": 0.07, "explainability": 0.05,
     }
     if params and not weights_override:
-        # 从 params 提取校准后的权重
+        # Extract calibrated weights from params.
         calib_weights = params.get_weights_override()
         if calib_weights:
             weights = dict(default_weights, **calib_weights)
@@ -160,7 +161,7 @@ def _parameterized_dimensions(
     median_window: int, has_cs: bool, has_ts: bool, has_rc: bool,
     candidate: Candidate, expression: str, economic_result: dict,
 ) -> dict:
-    """使用 ScoringParams 参数化计算各维度分数。"""
+    """Compute dimension scores using ScoringParams."""
     dims = {}
     op_count = len(operators)
     unique_ops = len(set(operators))
@@ -182,7 +183,7 @@ def _parameterized_dimensions(
     if p and p.enabled:
         dims["data_compliance"] = p.high_score if fields else p.low_score
 
-    # horizon_turnover_proxy: 三档（窗口内 / 窗口外 / 无数据）
+    # horizon_turnover_proxy: three tiers (inside window / outside window / no data).
     p = params.get_dimension("horizon_turnover_proxy")
     if p and p.enabled:
         if not median_window:
@@ -192,7 +193,7 @@ def _parameterized_dimensions(
         else:
             dims["horizon_turnover_proxy"] = p.score_out_range
 
-    # risk_control_proxy: 三条件分层
+    # risk_control_proxy: three-condition tiering.
     p = params.get_dimension("risk_control_proxy")
     if p and p.enabled:
         conditions = sum([has_cs, has_ts, has_rc])
@@ -203,13 +204,13 @@ def _parameterized_dimensions(
         else:
             dims["risk_control_proxy"] = p.tier_1_score
 
-    # diversity: 分类匹配
+    # diversity: category match.
     p = params.get_dimension("diversity")
     if p and p.enabled:
         high_set = set(p.high_value_set or [])
         dims["diversity"] = p.high_score if candidate.family in high_set else p.low_score
 
-    # explainability: 表达式长度阈值
+    # explainability: expression length threshold.
     p = params.get_dimension("explainability")
     if p and p.enabled:
         dims["explainability"] = p.score_in_range if len(expression) < p.threshold_high else p.score_out_range
@@ -221,7 +222,7 @@ def _parameterized_dimensions(
 
 
 # ═══════════════════════════════════════════════════════════════════════
-# P0 优化：economic_logic 关键词概念检测
+# P0 improvement: economic_logic keyword concept detection.
 # ═══════════════════════════════════════════════════════════════════════
 
 def _economic_logic_score(
@@ -230,15 +231,15 @@ def _economic_logic_score(
     fields: set[str],
     operators: list[str],
 ) -> dict:
-    """基于经济概念关键词检测评估 Alpha 的经济逻辑质量。
+    """Evaluate Alpha economic-logic quality via keyword concept detection.
 
-    替代原来的二值化判定（hypothesis 长度 >= 40 → 85 / 否则 45）。
+    Replaces the previous binary rule (hypothesis length >= 40 -> 85, else 45).
 
-    返回: {"score": int, "concepts_detected": [str], "source": str}
+    Returns: {"score": int, "concepts_detected": [str], "source": str}
     """
     text = f"{hypothesis} {expression} {' '.join(fields)} {' '.join(operators)}".lower()
 
-    # ── 经济概念词典 ──
+    # Economic concept dictionary.
     concepts = {
         "momentum": {
             "keywords": ["momentum", "trend", "ts_delta", "ts_rank", "ts_mean",
@@ -293,7 +294,7 @@ def _economic_logic_score(
             detected.append(concept_name)
 
     if not detected:
-        # hypothesis 内容不足但仍有长度兜底
+        # Use length fallback when hypothesis content is thin.
         if len(hypothesis) >= 60:
             return {"score": 52, "concepts_detected": [], "source": "length_fallback"}
         return {"score": 40, "concepts_detected": [], "source": "insufficient"}
@@ -326,7 +327,7 @@ def local_convergence_score(
     local_quality_score = float(candidate.local_quality.get("score", 0.0) or 0.0)
     if not candidate.local_quality:
         local_quality_score = prior["score"]
-    # ── 权重从 ScoringConfig 读取，fallback 到原始 0.65/0.35 ──
+    # Read weights from ScoringConfig, falling back to the original 0.65/0.35.
     lw = scoring.get_local_weights() if scoring else {"prior": 0.65, "quality": 0.35}
     return _bounded_score(lw["prior"] * prior["score"] + lw["quality"] * local_quality_score)
 
@@ -484,7 +485,7 @@ def empirical_score(metrics: dict, thresholds: QualityThresholds, settings: dict
     prod_correlation = abs(_ratio(metrics.get("prod_correlation", 0.0)))
     concentration = _ratio(metrics.get("weight_concentration"))
     sub_universe_sharpe = _num(metrics.get("sub_universe_sharpe", 0.0))
-    # BRAIN: LOW_SUB_UNIVERSE_SHARPE — sub_sharpe < 0.75 × √(sub_size/alpha_size) × alpha_sharpe
+    # BRAIN: LOW_SUB_UNIVERSE_SHARPE when sub_sharpe < 0.75 * sqrt(sub_size/alpha_size) * alpha_sharpe.
     import math
     sub_size = _num(metrics.get("subUniverseSize", metrics.get("sub_universe_size", 1000)))
     alpha_size = _num(metrics.get("alphaSize", metrics.get("alpha_size", 1000)))
@@ -496,7 +497,7 @@ def empirical_score(metrics: dict, thresholds: QualityThresholds, settings: dict
     sub_sharpe_threshold = round(
         thresholds.sub_universe_sharpe_min_ratio * size_factor * max(sharpe, 0.01), 4
     ) if sharpe > 0 else 0.0
-    # Margin (BRAIN 顾问标准): prefer API-provided margin in bps
+    # Margin (BRAIN advisor target): prefer API-provided margin in bps.
     # P2-3: API margin preferred; fall back to local estimate only when API absent
     margin = _num(metrics.get("margin", None))
     margin_source = "BRAIN_API"
@@ -505,7 +506,7 @@ def empirical_score(metrics: dict, thresholds: QualityThresholds, settings: dict
         margin_source = "estimated"
     margin_threshold = getattr(thresholds, "min_margin_bps", 4.0)
 
-    # P1-1: 换手率阈值策略 — turnover_quality 可配置为硬门禁
+    # P1-1: turnover threshold policy; turnover_quality can be configured as a hard gate.
     _turnover_quality_is_hard = getattr(thresholds, "enforce_target_turnover_as_hard_gate", False)
 
     items = [
@@ -520,10 +521,10 @@ def empirical_score(metrics: dict, thresholds: QualityThresholds, settings: dict
              abs(fitness - calculate_fitness(sharpe, returns, turnover, raw_turnover=turnover_raw)) <= 0.05, 0),
         # BRAIN: LOW_TURNOVER if < 1% (0.01)
         item("turnover_min", turnover, ">=", thresholds.min_turnover, turnover >= thresholds.min_turnover, 8, is_hard_gate=True),
-        # BRAIN 平台硬门槛: HIGH_TURNOVER if > 70% (0.70) — 合规底线
+        # BRAIN platform hard gate: HIGH_TURNOVER if > 70% (0.70).
         item("turnover_platform", turnover, "<=", getattr(thresholds, "platform_max_turnover", 0.70),
              turnover <= getattr(thresholds, "platform_max_turnover", 0.70), 8, is_hard_gate=True),
-        # 顾问质量目标: Turnover < 30% — 可通过 enforce_target_turnover_as_hard_gate 升级为硬门禁
+        # Advisor quality target: turnover < 30%, optionally promoted to a hard gate.
         item("turnover_quality", turnover, "<=", getattr(thresholds, "target_max_turnover", 0.30),
              turnover <= getattr(thresholds, "target_max_turnover", 0.30), 6,
              is_hard_gate=_turnover_quality_is_hard),
@@ -545,7 +546,7 @@ def empirical_score(metrics: dict, thresholds: QualityThresholds, settings: dict
              round(sub_universe_sharpe / max(sharpe, 0.01), 4) if sharpe > 0 else 0.0,
              ">=", 0.5,
              (sub_universe_sharpe / max(sharpe, 0.01)) >= 0.5 if sharpe > 0 else False, 8),
-        # BRAIN 顾问标准: margin >= min_margin_bps (default 4.0 bps)
+        # BRAIN advisor target: margin >= min_margin_bps (default 4.0 bps).
         item("margin_bps", round(margin, 4), ">=", margin_threshold, margin >= margin_threshold, 10),
     ]
     # P2-3: Annotate margin source
@@ -854,7 +855,7 @@ def _turnover_ratio(value) -> float:
 
 
 # ═══════════════════════════════════════════════════════════════════════
-# P2: 评分置信度估算 — 从点估计 → 区间估计
+# P2: score confidence estimation from point estimate to interval estimate.
 # ═══════════════════════════════════════════════════════════════════════
 
 def estimate_score_confidence(scorecard: dict) -> dict:
@@ -867,9 +868,9 @@ def estimate_score_confidence(scorecard: dict) -> dict:
             "confidence_level": "high" | "medium" | "low",
             "item_count": int,
             "passed_count": int,
-            "score_variance": float,        # item 得分方差
-            "score_dispersion": float,       # 离散系数 (std/mean)
-            "data_completeness": float,      # 0-1 之间
+            "score_variance": float,        # Item score variance.
+            "score_dispersion": float,       # Coefficient of variation (std/mean).
+            "data_completeness": float,      # Between 0 and 1.
             "interpretation": str,
         }
     """
@@ -885,7 +886,7 @@ def estimate_score_confidence(scorecard: dict) -> dict:
             "interpretation": "No empirical items — score based on prior only.",
         }
 
-    # 得分项的点值
+    # Point values for passed score items.
     scores = [row.get("points", 0) for row in items if row.get("passed")]
     n_items = len(scores)
     passed_count = len(scores)
@@ -908,7 +909,7 @@ def estimate_score_confidence(scorecard: dict) -> dict:
         else:
             confidence_level = "low"
 
-    # 解读
+    # Interpretation.
     if confidence_level == "high":
         interpretation = (
             f"Score estimate is robust: {passed_count}/{len(items)} items passed, "

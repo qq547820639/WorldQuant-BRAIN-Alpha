@@ -1,6 +1,9 @@
+import logging
+
 from brain_alpha_ops.config import RunConfig
 from brain_alpha_ops.models import Candidate
 from brain_alpha_ops.research.repository import ResearchRepository
+from brain_alpha_ops.research import auto_calibrator as auto_calibrator_mod
 from brain_alpha_ops import web_redline_scoring
 
 
@@ -99,6 +102,26 @@ def test_scoring_evaluate_logs_score_history_append_failure(monkeypatch, tmp_pat
     assert "history store unavailable" in caplog.text
 
 
+def test_scoring_health_warns_when_auto_calibration_status_fails(monkeypatch, tmp_path, caplog):
+    config = RunConfig(environment="production")
+    config.ops.storage_dir = str(tmp_path)
+
+    class FailingAutoCalibrator:
+        def __init__(self, _storage_dir):
+            raise OSError("calibrator unavailable")
+
+    monkeypatch.setattr(auto_calibrator_mod, "AutoCalibrator", FailingAutoCalibrator)
+    monkeypatch.setattr(web_redline_scoring, "load_run_config", lambda: config)
+
+    with caplog.at_level(logging.WARNING, logger="brain_alpha_ops.web_redline_scoring"):
+        payload = web_redline_scoring.handle_scoring_health({})
+
+    assert payload["auto_calibration"]["available"] is False
+    assert payload["auto_calibration"]["trigger_requested"] is False
+    assert "scoring auto-calibration status unavailable" in caplog.text
+    assert "calibrator unavailable" in caplog.text
+
+
 def test_scoring_health_reports_auto_calibration_status(monkeypatch, tmp_path):
     config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path)
@@ -120,6 +143,21 @@ def test_scoring_health_reports_auto_calibration_status(monkeypatch, tmp_path):
     assert payload["auto_calibration"]["available"] is True
     assert payload["auto_calibration"]["total_pass_records"] == 2
     assert payload["auto_calibration"]["triggered"] is False
+
+
+def test_checkpoint_status_warns_when_config_load_fails(monkeypatch, caplog):
+    def fail_load_run_config():
+        raise RuntimeError("config unavailable")
+
+    monkeypatch.setattr(web_redline_scoring, "load_run_config", fail_load_run_config)
+
+    with caplog.at_level(logging.WARNING, logger="brain_alpha_ops.web_redline_scoring"):
+        payload = web_redline_scoring.handle_checkpoint_status({})
+
+    assert payload["ok"] is False
+    assert payload["resume_available"] is False
+    assert "checkpoint status unavailable" in caplog.text
+    assert "config unavailable" in caplog.text
 
 
 def test_checkpoint_status_uses_configured_storage_for_resume_and_history(monkeypatch, tmp_path):

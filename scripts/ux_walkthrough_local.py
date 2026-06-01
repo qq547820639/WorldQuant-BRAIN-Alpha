@@ -148,9 +148,12 @@ print("\n[4] Shutdown")
 try:
     requests.post(f"{BASE}/api/shutdown", json={}, headers=post_headers(), cookies=C, timeout=5)
     time.sleep(0.3)
-    try: requests.get(BASE, timeout=2)
-    except: pass
-except: pass
+    try:
+        requests.get(BASE, timeout=2)
+    except Exception as exc:
+        RESULTS["warnings"].append(f"shutdown probe failed: {exc}")
+except Exception as exc:
+    RESULTS["warnings"].append(f"shutdown request failed: {exc}")
 record_stage("Shutdown", "PASS")
 
 # ── Report ─────────────────────────────────────────────────────────────

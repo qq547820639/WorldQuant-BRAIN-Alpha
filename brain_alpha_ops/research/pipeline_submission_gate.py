@@ -39,7 +39,10 @@ class PipelineSubmissionMixin:
         try:
             sim_result["settings"] = self.config.settings.__dict__
         except Exception as exc:
-            logger.warning("Failed to serialize settings for check registry: %s", exc)
+            logger.warning(
+                "Failed to serialize settings for check registry: %s",
+                redact_error_message(exc),
+            )
 
         try:
             report = self.check_registry.evaluate(sim_result)

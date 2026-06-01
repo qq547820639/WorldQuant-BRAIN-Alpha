@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import logging
-from typing import Callable, Optional
+from typing import Callable
 
 from brain_alpha_ops.config import OpsConfig
 from brain_alpha_ops.models import Candidate
-from brain_alpha_ops.redaction import redact_error_message
+from brain_alpha_ops.redaction import redact_error_message, redact_text
 
 from .scoring import build_scorecard, evaluate_quality_gate
 
@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 RecordLifecycle = Callable[[Candidate, str, str], None]
 RememberAccepted = Callable[[list[Candidate], Candidate], None]
 RetrySimulation = Callable[[Candidate, dict[str, Candidate], str], bool]
-SecondaryFusion = Callable[[Candidate, dict[str, Candidate], set[str], str], Optional[Candidate]]
+SecondaryFusion = Callable[[Candidate, dict[str, Candidate], set[str], str], Candidate | None]
 ArchiveCandidates = Callable[[dict[str, int], list[Candidate], list[Candidate]], None]
 AutoSubmit = Callable[[Candidate, int], int]
 ShouldRemove = Callable[[Candidate], bool]
@@ -42,7 +42,7 @@ class BacktestFinalizationOutcome:
 class BacktestFinalizationService:
     config: OpsConfig
     check_registry: object
-    scoring_params: Optional[object]
+    scoring_params: object | None
     record_lifecycle: RecordLifecycle
     remember_accepted: RememberAccepted
     retry_simulation: RetrySimulation
@@ -174,4 +174,4 @@ class BacktestFinalizationService:
 
             record_alpha_result(candidate, self.config.storage_dir)
         except Exception:
-            logger.warning("ExperienceDB record failed for %s", candidate.alpha_id, exc_info=True)
+            logger.warning("ExperienceDB record failed for %s", redact_text(candidate.alpha_id, max_length=64))

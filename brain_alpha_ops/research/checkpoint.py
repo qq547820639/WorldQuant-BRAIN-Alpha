@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import Any
 
 from brain_alpha_ops.models import Candidate, PipelineEvent
+from brain_alpha_ops.redaction import redact_error_message, redact_text
 
 logger = logging.getLogger(__name__)
 
@@ -145,7 +146,11 @@ class CheckpointManager:
             tmp_path.write_text(payload, encoding="utf-8")
             os.replace(tmp_path, filepath)
         except OSError as exc:
-            logger.error("CheckpointManager: failed to write checkpoint %s: %s", filepath, exc)
+            logger.error(
+                "CheckpointManager: failed to write checkpoint %s: %s",
+                redact_text(filepath, max_length=180),
+                redact_error_message(exc),
+            )
             try:
                 tmp_path.unlink()
             except OSError:
@@ -169,7 +174,7 @@ class CheckpointManager:
             data = json.loads(index_path.read_text(encoding="utf-8"))
             return data if isinstance(data, list) else []
         except (OSError, json.JSONDecodeError) as exc:
-            logger.warning("CheckpointManager: corrupted index: %s", exc)
+            logger.warning("CheckpointManager: corrupted index: %s", redact_error_message(exc))
             return []
 
     def _save_index(self, entries: list[dict[str, Any]]) -> None:
@@ -180,7 +185,7 @@ class CheckpointManager:
             tmp.write_text(payload, encoding="utf-8")
             os.replace(tmp, index_path)
         except OSError as exc:
-            logger.error("CheckpointManager: failed to save index: %s", exc)
+            logger.error("CheckpointManager: failed to save index: %s", redact_error_message(exc))
             try:
                 tmp.unlink()
             except OSError:
@@ -220,7 +225,11 @@ class CheckpointManager:
             data = json.loads(filepath.read_text(encoding="utf-8"))
             return Checkpoint.from_dict(data)
         except (OSError, json.JSONDecodeError) as exc:
-            logger.warning("CheckpointManager: failed to load %s: %s", filepath, exc)
+            logger.warning(
+                "CheckpointManager: failed to load %s: %s",
+                redact_text(filepath, max_length=180),
+                redact_error_message(exc),
+            )
             return None
 
     def _prune_old(self) -> None:

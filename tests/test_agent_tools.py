@@ -1,7 +1,10 @@
+import logging
+
 from brain_alpha_ops.agent_tool_registry import resolve_tool_name, tool_aliases, tool_definitions
 from brain_alpha_ops.agent_tools import BrainAlphaToolbox
 from tests.production_api_stub import ProductionBrainAPIStub
 from brain_alpha_ops.config import RunConfig
+from brain_alpha_ops.data import OfficialDataLoader
 from brain_alpha_ops.models import Candidate
 from brain_alpha_ops.research.expression_ast import expression_key
 from brain_alpha_ops.research.repository import ResearchRepository
@@ -65,6 +68,23 @@ def test_agent_toolbox_lists_context_and_generates_candidates(tmp_path):
     assert generated["candidates"][0]["expression"]
 
 
+def test_agent_toolbox_list_context_warns_when_loader_falls_back(tmp_path, monkeypatch, caplog):
+    def fail_instance(cls):
+        raise RuntimeError("official context unavailable")
+
+    monkeypatch.setattr(OfficialDataLoader, "instance", classmethod(fail_instance))
+    toolbox = production_toolbox(storage_dir=tmp_path)
+
+    with caplog.at_level(logging.WARNING, logger="brain_alpha_ops.agent_tools"):
+        context = toolbox.call("list_context", {"limit": 5})
+
+    assert context["ok"] is True
+    assert context["source"] == "context_defaults"
+    assert context["fields_count"] > 0
+    assert context["operators_count"] > 0
+    assert "official context loader unavailable; using default agent context" in caplog.text
+
+
 def test_agent_toolbox_unknown_tool_returns_structured_error(tmp_path):
     toolbox = production_toolbox(storage_dir=tmp_path)
 
@@ -118,6 +138,20 @@ def test_agent_toolbox_generate_candidates_uses_research_memory_guidance(tmp_pat
     assert captured["patterns"]["sample_size"] == 1
     assert "top_operators" in captured["patterns"]
     assert "preferred_windows" in captured["patterns"]
+
+
+def test_agent_toolbox_research_memory_guidance_warns_on_failure(tmp_path, monkeypatch, caplog):
+    def fail_generation_guidance(self, **_kwargs):
+        raise RuntimeError("research memory unavailable")
+
+    monkeypatch.setattr("brain_alpha_ops.agent_tools.ResearchMemory.generation_guidance", fail_generation_guidance)
+    toolbox = production_toolbox(storage_dir=tmp_path)
+
+    with caplog.at_level(logging.WARNING, logger="brain_alpha_ops.agent_tools"):
+        guidance = toolbox._research_memory_guidance({"limit": 5})
+
+    assert guidance == {}
+    assert "research memory guidance unavailable; using empty guidance" in caplog.text
 
 
 def test_agent_toolbox_generate_candidates_uses_assistant_response_guidance(tmp_path, monkeypatch):

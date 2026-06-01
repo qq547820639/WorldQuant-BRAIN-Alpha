@@ -1,5 +1,6 @@
 """Tests for HypothesisDrivenGenerator — mode routing, generation, output compatibility."""
 
+import logging
 import os
 import sys
 import json
@@ -449,6 +450,28 @@ def test_generator_private_extract_fields_falls_back_without_known_field_set():
     )
 
     assert gen._extract_fields("rank(ts_delta(custom_field, 20))") == ["custom_field"]
+
+
+def test_generator_private_extract_fields_logs_loader_failure(caplog):
+    class Loader:
+        def get_fields(self, dataset_id=None):
+            raise RuntimeError(f"fields unavailable for {dataset_id}")
+
+    gen = HypothesisDrivenGenerator(
+        loader=Loader(),
+        mapper=None,
+        theme_engine=None,
+        selector=None,
+        library=None,
+    )
+    gen.set_dataset("pv1")
+
+    with caplog.at_level(logging.WARNING, logger="brain_alpha_ops.research.hypothesis_driven_generator"):
+        fields = gen._extract_fields("rank(ts_delta(custom_field, 20))")
+
+    assert fields == ["custom_field"]
+    assert "generator field extraction metadata unavailable for dataset_id=pv1" in caplog.text
+    assert "fields unavailable for pv1" in caplog.text
 
 
 def test_generator_set_experience_guidance():

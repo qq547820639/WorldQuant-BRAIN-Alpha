@@ -8,6 +8,7 @@ arbitrary Python code.
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import logging
 import time
 from typing import Any, Callable, Mapping
 
@@ -73,6 +74,8 @@ MAX_TOOL_CANDIDATES = 100
 MAX_SYNC_RANGE = {"1d", "3d", "7d", "all"}
 MAX_BATCH_SIMULATIONS = 10
 MAX_BATCH_SIMULATION_WORKERS = 3
+
+logger = logging.getLogger(__name__)
 
 
 class BrainAlphaToolbox:
@@ -158,6 +161,7 @@ class BrainAlphaToolbox:
             operators = [_operator_to_dict(operator) for operator in loader.get_operators()]
             datasets = [_dataset_to_dict(dataset) for dataset in loader.get_datasets()]
         except Exception:
+            logger.warning("official context loader unavailable; using default agent context", exc_info=True)
             from brain_alpha_ops.brain_api.context_defaults import DEFAULT_FIELDS, DEFAULT_OPERATORS
 
             source = "context_defaults"
@@ -679,6 +683,7 @@ class BrainAlphaToolbox:
         try:
             return memory.generation_guidance(limit=limit, top_n=top_n, min_success_rate=min_success_rate)
         except Exception:
+            logger.warning("research memory guidance unavailable; using empty guidance", exc_info=True)
             return {}
 
     def _api(self):

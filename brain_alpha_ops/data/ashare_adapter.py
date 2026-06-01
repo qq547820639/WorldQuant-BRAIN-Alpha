@@ -30,6 +30,8 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+from brain_alpha_ops.redaction import redact_error_message, redact_text
+
 logger = logging.getLogger(__name__)
 
 # ── Performance: try fast Parquet, fall back to CSV ──
@@ -104,7 +106,11 @@ class CacheStore:
                     table = pq.read_table(str(path))
                     return table.to_pylist()
                 except Exception as exc:
-                    logger.warning("Parquet read failed for %s: %s — re-fetching", key, exc)
+                    logger.warning(
+                        "Parquet read failed for %s: %s — re-fetching",
+                        redact_text(key, max_length=120),
+                        redact_error_message(exc),
+                    )
                     return None
         # Fallback: JSON
         path = self.cache_dir / f"{key}.json"
@@ -124,7 +130,11 @@ class CacheStore:
                 pq.write_table(table, str(path))
                 return
             except Exception as exc:
-                logger.warning("Parquet write failed for %s: %s — using JSON fallback", key, exc)
+                logger.warning(
+                    "Parquet write failed for %s: %s — using JSON fallback",
+                    redact_text(key, max_length=120),
+                    redact_error_message(exc),
+                )
         # Fallback: JSON
         path = self.cache_dir / f"{key}.json"
         path.write_text(json.dumps(rows, ensure_ascii=False, default=str), encoding="utf-8")
@@ -233,7 +243,11 @@ class BaoStockAdapter:
                 adjustflag=adjustment,
             )
         if rs.error_code != "0":
-            logger.warning("baostock query failed for %s: %s", symbol, rs.error_msg)
+            logger.warning(
+                "baostock query failed for %s: %s",
+                redact_text(symbol, max_length=64),
+                redact_text(rs.error_msg, max_length=180),
+            )
             return []
 
         rows: list[dict[str, Any]] = []
@@ -339,7 +353,11 @@ class AKShareAdapter:
                 effective_date=date.today().isoformat(),
             )
         except Exception as exc:
-            logger.warning("akshare index constituents failed for %s: %s", index_code, exc)
+            logger.warning(
+                "akshare index constituents failed for %s: %s",
+                redact_text(index_code, max_length=64),
+                redact_error_message(exc),
+            )
             return IndexConstituents(index_code=index_code, index_name=name)
 
     def fetch_industry_classification(self) -> dict[str, str]:
@@ -362,7 +380,7 @@ class AKShareAdapter:
                         mapping[code] = name
             return mapping
         except Exception as exc:
-            logger.warning("akshare industry classification failed: %s", exc)
+            logger.warning("akshare industry classification failed: %s", redact_error_message(exc))
             return {}
 
 
@@ -441,7 +459,11 @@ class AShareDataProvider:
                     self.cache.put(cache_key, rows)
                 result[symbol] = rows
             except Exception as exc:
-                logger.warning("fetch_daily failed for %s: %s", symbol, exc)
+                logger.warning(
+                    "fetch_daily failed for %s: %s",
+                    redact_text(symbol, max_length=64),
+                    redact_error_message(exc),
+                )
                 result[symbol] = []
 
         self._baostock.logout()

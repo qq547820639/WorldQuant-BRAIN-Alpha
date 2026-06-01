@@ -18,12 +18,15 @@ class Ledger:
 
 
 class Api:
-    def __init__(self, status="PASSED"):
+    def __init__(self, status="PASSED", fail_check=False):
         self.status = status
+        self.fail_check = fail_check
         self.calls = 0
 
     def check_alpha(self, alpha_id):
         self.calls += 1
+        if self.fail_check:
+            raise RuntimeError("official failed")
         return {"status": self.status}
 
 
@@ -119,3 +122,36 @@ def test_check_candidate_availability_frontloads_cloud_self_correlation_risk(tmp
     assert official_check["detail"].startswith("Skipped")
     assert result["state_navigation"]["reason_code"] == "CLOUD_SELF_CORRELATION_BLOCKED"
     assert api.calls == 0
+
+
+def test_check_candidate_availability_logs_official_check_failure(tmp_path, caplog):
+    candidate = {
+        "alpha_id": "a1",
+        "official_alpha_id": "off_1",
+        "expression": "rank(close)",
+        "gate": {"submission_ready": True},
+        "lifecycle_status": "submission_ready",
+        "scorecard": {"total_score": 80},
+    }
+    api = Api(fail_check=True)
+
+    with caplog.at_level("WARNING"):
+        result = check_candidate_availability(
+            candidate,
+            "quick",
+            api,
+            Ledger(tmp_path / "ledger.jsonl"),
+            [],
+            "",
+            safe_error_message=str,
+            observability_submission_preflight=lambda storage_dir: {"requires_confirmation": False},
+        )
+
+    official_check = next(item for item in result["checks"] if item["name"] == "official_pre_submit_check")
+
+    assert result["status"] == "CHECK_PASSED_NEEDS_OFFICIAL"
+    assert result["local_preflight_passed"] is True
+    assert official_check["passed"] is False
+    assert official_check["detail"] == "official failed"
+    assert api.calls == 1
+    assert any("official pre-submit check failed" in record.getMessage() for record in caplog.records)

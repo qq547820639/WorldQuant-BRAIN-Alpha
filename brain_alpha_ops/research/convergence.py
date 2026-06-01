@@ -1,17 +1,18 @@
-"""Alpha 收敛追踪器 — 衡量生产→迭代→收敛闭环质量。
+"""Alpha convergence tracker for the production-iteration-convergence loop.
 
-追踪维度:
-  1. 每轮生产的 Alpha 质量趋势 (Sharpe/Fitness 均值)
-  2. 迭代前后的改进率 (secondary fusion 效果)
-  3. 经验反馈有效性 (experience guidance 是否提升了产出)
-  4. 收敛状态判定 (质量是否在持续提升)
+Tracked dimensions:
+  1. Alpha quality trend per production cycle (average Sharpe/Fitness)
+  2. Improvement before and after iteration (secondary fusion effect)
+  3. Experience feedback effectiveness (whether guidance improves output)
+  4. Convergence status (whether quality keeps improving)
 
-当连续 N 轮无质量改善时，建议切换 strategy profile。
+When quality fails to improve for N consecutive cycles, the tracker recommends
+switching strategy profile.
 
-P1 增强:
-  - Bootstrap 置信区间：用重采样估计 avg_sharpe 的 90% CI
-  - Spearman 秩相关趋势检验：替代简单的前后半均值比较
-  - 统计显著性 stall 判定：stall = 连续 N 轮 avg_sharpe 无显著改善
+P1 enhancements:
+  - Bootstrap confidence intervals estimate avg_sharpe 90% CI.
+  - Spearman rank-correlation trend checks replace simple split-window means.
+  - Statistical stall detection flags N cycles without significant avg_sharpe improvement.
 
 Usage::
 
@@ -29,7 +30,7 @@ from __future__ import annotations
 import random
 from collections import deque
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 
 @dataclass
@@ -48,9 +49,9 @@ class CycleRecord:
     fusion_created: int = 0
     fusion_improvement_rate: float = 0.0
     # P1: bootstrap-compatible raw data
-    raw_sharpes: List[float] = field(default_factory=list)
-    raw_fitnesses: List[float] = field(default_factory=list)
-    raw_turnovers: List[float] = field(default_factory=list)
+    raw_sharpes: list[float] = field(default_factory=list)
+    raw_fitnesses: list[float] = field(default_factory=list)
+    raw_turnovers: list[float] = field(default_factory=list)
 
 
 @dataclass
@@ -66,12 +67,12 @@ class ConvergenceStatus:
     stalled: bool = False
     stall_cycles: int = 0
     recommendation: str = ""
-    cycle_history: List[Dict[str, Any]] = field(default_factory=list)
-    # P1: 统计字段
-    sharpe_ci_low: Optional[float] = None     # bootstrap 90% CI lower bound
-    sharpe_ci_high: Optional[float] = None    # bootstrap 90% CI upper bound
+    cycle_history: list[dict[str, Any]] = field(default_factory=list)
+    # P1: statistical fields
+    sharpe_ci_low: float | None = None     # bootstrap 90% CI lower bound
+    sharpe_ci_high: float | None = None    # bootstrap 90% CI upper bound
     trend_confidence: float = 0.0             # Spearman ρ or trend strength
-    stall_is_significant: bool = False        # 统计显著性确认的停滞
+    stall_is_significant: bool = False        # statistically significant stall
 
 
 class ConvergenceTracker:
@@ -92,7 +93,7 @@ class ConvergenceTracker:
         self._stall_threshold = max(3, int(stall_threshold))
         self._bootstrap_samples = max(100, int(bootstrap_samples))
         self._records: deque[CycleRecord] = deque(maxlen=self._window_size)
-        self._all_records: List[CycleRecord] = []
+        self._all_records: list[CycleRecord] = []
         self._stall_counter: int = 0
         self._best_sharpe: float = 0.0
         # P1: track smoothed trend for significance
@@ -104,8 +105,8 @@ class ConvergenceTracker:
     def record_cycle(
         self,
         cycle: int,
-        candidates: Optional[List[Any]] = None,
-        accepted: Optional[List[Any]] = None,
+        candidates: list[Any] | None = None,
+        accepted: list[Any] | None = None,
         *,
         produced: int = 0,
         passed_local: int = 0,
@@ -159,7 +160,7 @@ class ConvergenceTracker:
         self._records.append(rec)
         self._all_records.append(rec)
 
-        # ── P1: Stall detection with bootstrap CI comparison ──
+        # P1: stall detection with bootstrap CI comparison.
         # Compute bootstrap CI for current window if enough data
         if len(self._records) >= 3 and rec.raw_sharpes:
             current_ci = self._bootstrap_ci(rec.raw_sharpes)
@@ -278,7 +279,7 @@ class ConvergenceTracker:
         self._stall_counter = 0
         self._best_sharpe = 0.0
 
-    def summary(self) -> Dict[str, Any]:
+    def summary(self) -> dict[str, Any]:
         """Return a compact summary dict for pipeline reports."""
         s = self.status()
         return {
@@ -292,7 +293,7 @@ class ConvergenceTracker:
             "stalled": s.stalled,
             "stall_cycles": s.stall_cycles,
             "recommendation": s.recommendation,
-            # P1: 统计字段
+            # P1: statistical fields.
             "sharpe_ci_90": [s.sharpe_ci_low or 0.0, s.sharpe_ci_high or 0.0],
             "trend_confidence": s.trend_confidence,
             "stall_is_significant": s.stall_is_significant,
@@ -302,7 +303,7 @@ class ConvergenceTracker:
     # Internal
     # ------------------------------------------------------------------
     @staticmethod
-    def _record_to_dict(rec: CycleRecord) -> Dict[str, Any]:
+    def _record_to_dict(rec: CycleRecord) -> dict[str, Any]:
         return {
             "cycle": rec.cycle,
             "produced": rec.produced,
@@ -317,7 +318,7 @@ class ConvergenceTracker:
 
     # ── P1: Bootstrap CI ────────────────────────────────────────────
 
-    def _bootstrap_ci(self, values: List[float]) -> tuple[float, float]:
+    def _bootstrap_ci(self, values: list[float]) -> tuple[float, float]:
         """Compute 90% bootstrap confidence interval for the mean.
 
         Uses simple percentile bootstrap with replacement.
@@ -348,7 +349,7 @@ class ConvergenceTracker:
 
     # ── P1: Spearman rank trend ─────────────────────────────────────
 
-    def _spearman_trend(self, records: List[CycleRecord]) -> tuple[float, Optional[bool]]:
+    def _spearman_trend(self, records: list[CycleRecord]) -> tuple[float, bool | None]:
         """Spearman rank correlation between cycle number and avg_sharpe.
 
         Returns (rho, trend_direction) where:
@@ -363,7 +364,7 @@ class ConvergenceTracker:
             return (0.0, None)
 
         # Rank cycles and sharpes
-        def rank_values(vals: List[float]) -> List[float]:
+        def rank_values(vals: list[float]) -> list[float]:
             sorted_vals = sorted((v, i) for i, v in enumerate(vals))
             ranks = [0.0] * len(vals)
             i = 0

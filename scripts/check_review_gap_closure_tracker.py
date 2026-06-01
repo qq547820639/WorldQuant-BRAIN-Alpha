@@ -16,6 +16,8 @@ if str(ROOT) not in sys.path:
 from scripts.check_review_gap_closure_tracker_helpers import (  # noqa: E402
     finding as _finding,
     check_real_submit_queue as _check_real_submit_queue,
+    ADDITIONAL_TRIAGE_ITEMS as _ADDITIONAL_TRIAGE_ITEMS,
+    ADDITIONAL_TRIAGE_SNIPPETS as _ADDITIONAL_TRIAGE_SNIPPETS,
     expect_all as _expect_all,
     live_submit_readiness_status as _live_submit_readiness_status,
     frontend_mirror_only_decision as _frontend_mirror_only_decision,
@@ -101,7 +103,7 @@ TRIAGE_SNIPPETS = (
     "launch_web.py --smoke-test --frontend react --port 0",
     "explicit `0`",
     "OS-assigned",
-)
+) + _ADDITIONAL_TRIAGE_SNIPPETS
 TRIAGE_ITEMS = (
     ("Review P0 hardcoded E2E credentials", "CLOSED_CURRENT"),
     ("Review P0 E2E screenshot ignore policy", "CLOSED_CURRENT"),
@@ -110,7 +112,7 @@ TRIAGE_ITEMS = (
     ("Review P1 quality-gate subprocess environment", "CLOSED_CURRENT"),
     ("Review P1 quality-gate subprocess timeout", "CLOSED_CURRENT"),
     ("Review P2 quality-gate preview smoke port race", "CLOSED_CURRENT"),
-)
+) + _ADDITIONAL_TRIAGE_ITEMS
 STATUS_MATRIX_ITEMS = (
     ("P0-2 React strict build", "CLOSED_CURRENT"),
     ("P2-6 Frontend automated tests", "CLOSED_LOCAL_WITH_TOOLCHAIN"),

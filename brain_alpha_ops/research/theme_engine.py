@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import random
 from dataclasses import dataclass, field
-from typing import ClassVar, Dict, List, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from brain_alpha_ops.data import OfficialDataLoader, OfficialField
@@ -19,14 +19,14 @@ class ThemeTemplate:
     name: str
     category: str                      # "momentum", "value", "quality", "volatility", "hybrid", etc.
     expression: str                    # expression with {FIELD} / {WINDOW} placeholders
-    field_slots: List[str] = field(default_factory=list)
+    field_slots: list[str] = field(default_factory=list)
     description: str = ""
 
 
 # --- Template skeletons: category → expression skeleton list ---
 # P1-7: Expanded from ~38 to 52+ templates to improve expression diversity.
 # checks.jsonl analysis showed 75%+ BLOCKED due to skeleton convergence.
-TEMPLATE_SKELETONS: Dict[str, List[str]] = {
+TEMPLATE_SKELETONS: dict[str, list[str]] = {
     "momentum": [
         "ts_rank({FIELD}, {WINDOW})",
         "ts_delta({FIELD}, {WINDOW})",
@@ -232,7 +232,7 @@ class DynamicThemeEngine:
 
     def __init__(self, loader: "OfficialDataLoader") -> None:
         self._loader = loader
-        self._categories: Dict[str, List["OfficialField"]] = {}
+        self._categories: dict[str, list["OfficialField"]] = {}
         self._windows = list(DEFAULT_WINDOWS)
         self._groups = list(DEFAULT_GROUPS)
 
@@ -251,7 +251,7 @@ class DynamicThemeEngine:
     # ------------------------------------------------------------------
     # P0-3: Auto-generate skeletons from BRAIN official operators
     # ------------------------------------------------------------------
-    def _build_auto_skeletons(self) -> Dict[str, List[str]]:
+    def _build_auto_skeletons(self) -> dict[str, list[str]]:
         """Generate expression skeletons by combining BRAIN official operators.
         
         Sources all operator names from OfficialDataLoader (data/official_operators.json),
@@ -261,10 +261,10 @@ class DynamicThemeEngine:
         """
         # Get operators by category from official data
         ops = self._loader.get_operators()
-        ts_ops: List[str] = []       # Time Series
-        cs_ops: List[str] = []       # Cross Sectional
-        group_ops: List[str] = []    # Group
-        arith_ops: List[str] = []    # Arithmetic (binary/comparison only)
+        ts_ops: list[str] = []       # Time Series
+        cs_ops: list[str] = []       # Cross Sectional
+        group_ops: list[str] = []    # Group
+        arith_ops: list[str] = []    # Arithmetic (binary/comparison only)
 
         for op in ops:
             cat = (op.category or "").lower()
@@ -304,7 +304,7 @@ class DynamicThemeEngine:
         )] or group_ops
 
         # ── Generate skeletons ──
-        auto: Dict[str, List[str]] = {"momentum": [], "reversal": [], "value": [],
+        auto: dict[str, list[str]] = {"momentum": [], "reversal": [], "value": [],
                                         "quality": [], "growth": [], "volatility": [],
                                         "liquidity": [], "cross_sectional": [], "hybrid": [],
                                         # P1-7: new categories
@@ -414,7 +414,7 @@ class DynamicThemeEngine:
         return {k: v for k, v in auto.items() if v}  # only non-empty categories
 
     # P1-7: Skeleton diversity tracker — counts per skeleton-normalized form
-    _skeleton_usage: Dict[str, int] = {}
+    _skeleton_usage: dict[str, int] = {}
 
     def record_skeleton_usage(self, expression: str, category: str, blocked: bool = False) -> None:
         """Track skeleton usage frequency. Blocked skeletons get deprioritized."""
@@ -440,7 +440,7 @@ class DynamicThemeEngine:
         return self._skeleton_usage.get(key, 0) >= max_usage
 
     @property
-    def auto_skeletons(self) -> Dict[str, List[str]]:
+    def auto_skeletons(self) -> dict[str, list[str]]:
         """Return auto-generated skeletons (available after build_categories)."""
         return getattr(self, '_auto_generated_skeletons', {})
 
@@ -451,8 +451,8 @@ class DynamicThemeEngine:
         self,
         dataset_id: str,
         n: int = 50,
-        seed: Optional[int] = None,
-    ) -> List[ThemeTemplate]:
+        seed: int | None = None,
+    ) -> list[ThemeTemplate]:
         """Generate *n* expression templates for *dataset_id*."""
         if seed is not None:
             random.seed(seed)
@@ -462,7 +462,7 @@ class DynamicThemeEngine:
             return []
 
         # Build per-category field pools for this dataset
-        cat_fields: Dict[str, List[str]] = {}
+        cat_fields: dict[str, list[str]] = {}
         for f in fields:
             cat = (f.category or "unknown").lower()
             cat_fields.setdefault(cat, []).append(f.id)
@@ -472,12 +472,12 @@ class DynamicThemeEngine:
 
         # Merge proven TEMPLATE_SKELETONS with auto-generated skeletons
         auto_skel = self.auto_skeletons
-        merged_skeletons: Dict[str, List[str]] = {}
+        merged_skeletons: dict[str, list[str]] = {}
         for cat in set(list(TEMPLATE_SKELETONS.keys()) + list(auto_skel.keys())):
             merged_skeletons[cat] = (TEMPLATE_SKELETONS.get(cat, []) +
                                      auto_skel.get(cat, []))
 
-        templates: List[ThemeTemplate] = []
+        templates: list[ThemeTemplate] = []
         attempts = 0
         while len(templates) < n and attempts < n * 3:
             attempts += 1
@@ -520,7 +520,7 @@ class DynamicThemeEngine:
         self,
         expression: str,
         dataset_id: str,
-        seed: Optional[int] = None,
+        seed: int | None = None,
     ) -> str:
         """Produce a variant of *expression* using fields from *dataset_id*."""
         if seed is not None:
@@ -559,11 +559,11 @@ class DynamicThemeEngine:
     def _fill_placeholders(
         self,
         skeleton: str,
-        available_cats: List[str],
-        cat_fields: Dict[str, List[str]],
+        available_cats: list[str],
+        cat_fields: dict[str, list[str]],
     ) -> str:
         result = skeleton
-        used_fields: List[str] = []
+        used_fields: list[str] = []
 
         # {FIELD_A}, {FIELD_B}, {FIELD}
         for placeholder in ("{FIELD_A}", "{FIELD_B}", "{FIELD}"):
@@ -596,7 +596,7 @@ class DynamicThemeEngine:
 
         return result
 
-    def _extract_field_slots(self, expression: str, fields: List["OfficialField"]) -> List[str]:
+    def _extract_field_slots(self, expression: str, fields: list["OfficialField"]) -> list[str]:
         """Return dataset field ids present in the generated expression."""
         import re as _re
 
@@ -607,7 +607,7 @@ class DynamicThemeEngine:
     def _validate_fill_result(
         self,
         result: str,
-        cat_fields: Dict[str, List[str]],
+        cat_fields: dict[str, list[str]],
     ) -> str:
         """Ensure every field-like token in *result* exists in official field data.
 
@@ -654,19 +654,19 @@ class DynamicThemeEngine:
     # Properties
     # ------------------------------------------------------------------
     @property
-    def windows(self) -> List[int]:
+    def windows(self) -> list[int]:
         return list(self._windows)
 
     @windows.setter
-    def windows(self, value: List[int]) -> None:
+    def windows(self, value: list[int]) -> None:
         self._windows = list(value)
 
     @property
-    def categories(self) -> List[str]:
+    def categories(self) -> list[str]:
         return sorted(self._categories.keys())
 
 
-def _build_category_map() -> Dict[str, List[str]]:
+def _build_category_map() -> dict[str, list[str]]:
     """Map skeleton category → field categories that can fill its slots."""
     return {
         "momentum": ["price", "model", "technical", "momentum", "analyst"],

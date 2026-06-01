@@ -1,5 +1,7 @@
 import json
 
+import brain_alpha_ops.build_inline as build_inline
+import brain_alpha_ops.production_diagnostics as production_diagnostics
 from brain_alpha_ops.cli import main
 from brain_alpha_ops.config import RunConfig, write_run_config
 from brain_alpha_ops.production_diagnostics import (
@@ -119,3 +121,16 @@ def test_production_diagnostic_report_clears_refresh_todos_after_success(tmp_pat
     assert not any(item["area"] == "official refresh" for item in snapshot["priority_items"])
     assert "No parameter-accuracy gap in the current evidence record." in markdown
     assert "### Unfinished\n- None in the current local code checklist." in markdown
+
+
+def test_frontend_inline_status_failure_logs_warning(monkeypatch, caplog):
+    def fail_check():
+        raise RuntimeError("inline check failed")
+
+    monkeypatch.setattr(build_inline, "check", fail_check)
+
+    with caplog.at_level("WARNING"):
+        result = production_diagnostics._frontend_inline_status()
+
+    assert result == {"ok": False, "replaced": 0, "missing": [], "error": "inline check failed"}
+    assert any("frontend inline status check failed" in record.getMessage() for record in caplog.records)

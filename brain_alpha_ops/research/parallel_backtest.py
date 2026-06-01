@@ -5,7 +5,11 @@ from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from datetime import datetime, timezone
+import logging
 from typing import Any, Callable
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -280,6 +284,12 @@ def _run_job(index: int, job: dict[str, Any], runner: BacktestJobRunner) -> dict
 
 
 def _job_error(index: int, job: dict[str, Any], exc: Exception) -> dict[str, Any]:
+    logger.warning(
+        "parallel backtest job failed: job_index=%s market=%s",
+        index,
+        job.get("market", ""),
+        exc_info=True,
+    )
     return {
         "ok": False,
         "error_code": "PARALLEL_BACKTEST_JOB_ERROR",
@@ -357,4 +367,5 @@ def _emit_event(events: list[dict[str, Any]], callback: ProgressCallback | None,
     try:
         callback(dict(payload))
     except Exception:
+        logger.warning("parallel backtest progress callback failed; continuing execution", exc_info=True)
         return

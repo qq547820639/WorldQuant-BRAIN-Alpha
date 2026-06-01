@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any, Callable, Protocol
 
 from brain_alpha_ops.official_context_datasets import list_official_datasets_or_derive
 from brain_alpha_ops.research.repository import ResearchRepository
+
+
+logger = logging.getLogger(__name__)
 
 
 class JobStoreLike(Protocol):
@@ -88,7 +92,15 @@ def refresh_cloud_context_for_check_service(
             ),
         )
     except Exception as exc:
-        return [], safe_error_message(exc)
+        message = safe_error_message(exc)
+        logger.warning(
+            "cloud alpha refresh failed for check job_id=%s range=%s: %s",
+            job_id,
+            sync_range,
+            message,
+            exc_info=True,
+        )
+        return [], message
 
     fields: list[dict[str, Any]] = []
     operators: list[dict[str, Any]] = []
@@ -115,7 +127,15 @@ def refresh_cloud_context_for_check_service(
             },
         )
     except Exception as exc:
-        context_errors.append(f"fields refresh failed: {safe_error_message(exc)}")
+        message = safe_error_message(exc)
+        logger.warning(
+            "official fields refresh failed for check job_id=%s range=%s: %s",
+            job_id,
+            sync_range,
+            message,
+            exc_info=True,
+        )
+        context_errors.append(f"fields refresh failed: {message}")
 
     try:
         operators = api.list_operators("all")
@@ -138,7 +158,15 @@ def refresh_cloud_context_for_check_service(
             },
         )
     except Exception as exc:
-        context_errors.append(f"operators refresh failed: {safe_error_message(exc)}")
+        message = safe_error_message(exc)
+        logger.warning(
+            "official operators refresh failed for check job_id=%s range=%s: %s",
+            job_id,
+            sync_range,
+            message,
+            exc_info=True,
+        )
+        context_errors.append(f"operators refresh failed: {message}")
 
     try:
         datasets = (
@@ -157,7 +185,15 @@ def refresh_cloud_context_for_check_service(
             datasets,
         )
     except Exception as exc:
-        context_errors.append(f"persist context failed: {safe_error_message(exc)}")
+        message = safe_error_message(exc)
+        logger.warning(
+            "persist official context failed for check job_id=%s range=%s: %s",
+            job_id,
+            sync_range,
+            message,
+            exc_info=True,
+        )
+        context_errors.append(f"persist context failed: {message}")
 
     repo.merge_cloud_alphas(rows, sync_range=sync_range)
     error_msg = "; ".join(context_errors)[:500] if context_errors else ""

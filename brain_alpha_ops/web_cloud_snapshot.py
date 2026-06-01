@@ -14,6 +14,7 @@ from brain_alpha_ops.brain_api.official_helpers import looks_non_production_alph
 from brain_alpha_ops.config import load_run_config, runtime_project_root
 from brain_alpha_ops.data.cache_metadata import read_context_cache_metadata, write_context_cache_metadata
 from brain_alpha_ops.jsonl import read_jsonl_records, read_jsonl_tail, read_jsonl_tail_with_stats
+from brain_alpha_ops.redaction import redact_error_message, redact_text
 
 
 logger = logging.getLogger(__name__)
@@ -37,7 +38,7 @@ SafeErrorMessage = Callable[[Exception], str]
 
 
 def _safe_error_message(exc: Exception) -> str:
-    return str(exc)
+    return redact_error_message(exc)
 
 
 def storage_jsonl_path(filename: str, *, load_config: LoadConfig = load_run_config) -> Path:
@@ -121,6 +122,7 @@ def latest_cached_user_alphas(
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
+            logger.warning("failed to read cached user alpha file %s", redact_text(path, max_length=180))
             continue
         rows = extract_alpha_rows(data)
         if rows:
@@ -137,6 +139,7 @@ def latest_cached_user_alpha_path(
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
+            logger.warning("failed to read cached user alpha file %s", redact_text(path, max_length=180))
             continue
         if extract_alpha_rows(data):
             return path
@@ -162,6 +165,7 @@ def cached_user_alpha_paths(
         safe_max_files = max(1, int(max_files or MAX_CACHED_USER_ALPHA_FILES))
         return [path for _mtime, path in sorted(candidates, reverse=True)[:safe_max_files]]
     except OSError:
+        logger.warning("failed to list cached user alpha files from %s", redact_text(cache_dir, max_length=180))
         return []
 
 
@@ -355,7 +359,11 @@ def read_official_context_json(
         except FileNotFoundError:
             continue
         except (OSError, json.JSONDecodeError) as exc:
-            logger.warning("failed to read official context file %s: %s", path, safe_error_message(exc))
+            logger.warning(
+                "failed to read official context file %s: %s",
+                redact_text(path, max_length=180),
+                safe_error_message(exc),
+            )
             continue
         if isinstance(rows, list):
             return [row for row in rows if isinstance(row, dict)]
@@ -501,7 +509,11 @@ def save_official_context_json(
         run_config = load_config()
         data_dir = Path(run_config.ops.storage_dir)
         ttl_seconds = int(run_config.ops.official_api.context_cache_ttl_seconds)
-    except Exception:
+    except Exception as exc:
+        logger.warning(
+            "failed to resolve configured storage dir while saving official context: %s; falling back to runtime root",
+            redact_error_message(exc),
+        )
         data_dir = runtime_root() / CloudDefaults.OFFICIAL_CONTEXT_DATA_DIR
     data_dir.mkdir(parents=True, exist_ok=True)
     target = data_dir / filename

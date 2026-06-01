@@ -6,7 +6,7 @@ import json
 import random
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from brain_alpha_ops.data import OfficialDataLoader, FieldDatasetMapper
@@ -19,9 +19,9 @@ class AlphaTemplate:
     name: str
     description: str
     expression_template: str           # contains {FIELD_*} / {WINDOW} placeholders
-    required_field_types: List[str] = field(default_factory=list)
-    applicable_datasets: List[str] = field(default_factory=list)  # empty = all
-    tags: List[str] = field(default_factory=list)
+    required_field_types: list[str] = field(default_factory=list)
+    applicable_datasets: list[str] = field(default_factory=list)  # empty = all
+    tags: list[str] = field(default_factory=list)
 
 
 # Built-in minimal template set (used when data/alpha_templates.json is absent)
@@ -95,7 +95,7 @@ class AlphaTemplateRegistry:
     ) -> None:
         self._loader = loader
         self._mapper = mapper
-        self._templates: Dict[str, AlphaTemplate] = {}
+        self._templates: dict[str, AlphaTemplate] = {}
 
     # ------------------------------------------------------------------
     # Load
@@ -127,7 +127,7 @@ class AlphaTemplateRegistry:
     # ------------------------------------------------------------------
     # Query
     # ------------------------------------------------------------------
-    def get_for_dataset(self, dataset_id: str) -> List[AlphaTemplate]:
+    def get_for_dataset(self, dataset_id: str) -> list[AlphaTemplate]:
         """Return templates applicable to *dataset_id*."""
         result = []
         for tmpl in self._templates.values():
@@ -143,10 +143,10 @@ class AlphaTemplateRegistry:
                     result.append(tmpl)
         return result
 
-    def get(self, template_id: str) -> Optional[AlphaTemplate]:
+    def get(self, template_id: str) -> AlphaTemplate | None:
         return self._templates.get(template_id)
 
-    def get_all(self) -> List[AlphaTemplate]:
+    def get_all(self) -> list[AlphaTemplate]:
         return list(self._templates.values())
 
     # ------------------------------------------------------------------
@@ -156,7 +156,7 @@ class AlphaTemplateRegistry:
         self,
         template_id: str,
         dataset_id: str,
-        seed: Optional[int] = None,
+        seed: int | None = None,
     ) -> str:
         """Fill template placeholders with concrete fields from *dataset_id*."""
         tmpl = self._templates.get(template_id)

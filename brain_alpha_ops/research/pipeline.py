@@ -51,7 +51,7 @@ from .pipeline_snapshot import (
     PipelineSnapshotState,
     backtest_slot_snapshot,
 )
-from .pipeline_state import CycleState, record_strategy_reward
+from .pipeline_state import CycleState, PipelineRuntimeState, bind_runtime_state_properties, record_strategy_reward
 from .pipeline_helpers import (
     assistant_guidance_for_generator as _assistant_guidance_for_generator,
     blocked_gate as _blocked_gate,
@@ -135,64 +135,35 @@ class AlphaResearchPipeline(
         progress_callback: Callable[[dict], None] | None = None,
         stop_callback: Callable[[], bool] | None = None,
     ):
-        self.config = config
-        self.api = api
-        self._local_data_dir_existed_at_start = Path(config.storage_dir).exists()
-        self.repository = repository or ResearchRepository(config.storage_dir)
-        self.ledger = ledger or SubmissionLedger(config.storage_dir)
-        self.generator = CandidateGenerator()
-        self.events: list[PipelineEvent] = []
-        self.progress_callback = progress_callback
-        self.stop_callback = stop_callback
-        self.official_calls_halted = False
-        self.official_halt_reason = ""
-        self.observability_throttle: dict = {}
-        self.observability_generation_guidance: dict = {}
-        self.official_call_guard = OfficialCallGuard()
-        self.backtests_submitted = 0
-        self.officially_simulated_count = 0
-        self.official_validation_attempted_count = 0
-        self.official_validation_passed_count = 0
-        self.produced_count = 0
-        self.context_summary: dict[str, object] = {}
-        self.last_backtests: list[dict] = []
-        self.last_runtime_data: dict = {}
-        self._knowledge_base = StructuredKnowledgeBase(config.storage_dir)
-        self._local_backtest_engine = LocalBacktestEngine()
-        self._cross_review_service = CrossReviewService()
-        self.backtest_slot_manager = BacktestSlotManager()
-        self.backtest_slots: dict[int, Candidate] = self.backtest_slot_manager.slots
-        self.official_resume_at = 0.0
+        backtest_slot_manager = BacktestSlotManager()
+        self._runtime_state = PipelineRuntimeState(
+            config=config,
+            api=api,
+            repository=repository or ResearchRepository(config.storage_dir),
+            ledger=ledger or SubmissionLedger(config.storage_dir),
+            generator=CandidateGenerator(),
+            progress_callback=progress_callback,
+            stop_callback=stop_callback,
+            _local_data_dir_existed_at_start=Path(config.storage_dir).exists(),
+            official_call_guard=OfficialCallGuard(),
+            _knowledge_base=StructuredKnowledgeBase(config.storage_dir),
+            _local_backtest_engine=LocalBacktestEngine(),
+            _cross_review_service=CrossReviewService(),
+            backtest_slot_manager=backtest_slot_manager,
+            backtest_slots=backtest_slot_manager.slots,
+            strategy_lifecycle=StrategyLifecycleTracker(record_sink=self._record_strategy_lifecycle),
+            cloud_sync={
+                "status": "not_started",
+                "range": config.budget.cloud_sync_range,
+                "count": 0,
+                "warning": "",
+            },
+            check_registry=AlphaCheckRegistry(),
+            convergence=ConvergenceTracker(window_size=10, stall_threshold=5),
+            auto_calibrator=AutoCalibrator(storage_dir=getattr(config, "storage_dir", "data")),
+        )
         self.strategy_profile_index = self._initial_strategy_profile_index()
-        self.strategy_switch_count = 0
-        self.cycles_since_strategy_switch = 0
-        self.official_results_since_strategy_switch = 0
-        self.ready_since_strategy_switch = 0
-        self.official_rejections_since_strategy_switch = 0
-        self.run_id = ""
-        # P3-1: Multi-armed bandit for adaptive strategy selection
-        self._bandit_rewards: dict[int, list[float]] = {}  # profile_idx → [reward, ...]
-        self._bandit_counts: dict[int, int] = {}           # profile_idx → selections
-        self.strategy_lifecycle = StrategyLifecycleTracker(record_sink=self._record_strategy_lifecycle)
-        self.strategy_plugins = self._load_strategy_plugins()
-        self.cloud_alphas: list[dict] = []
-        self.cloud_sync: dict = {"status": "not_started", "range": config.budget.cloud_sync_range, "count": 0, "warning": ""}
-        self.lifecycle_records: list[dict] = []
-        self.backtest_records: list[dict] = []
-        self.recovered_backtest_slot_count = 0
-        # Optional advanced components — wired in _load_official_context when available
-        self._loader = None
-        self._mapper = None
-        self._theme_engine = None
-        self._selector = None
-        self._active_dataset_id: str = ""
-        self._context_field_names: set[str] = set()
-        self._context_operator_names: set[str] = set()
-        self._dataset_field_names_cache: dict[str, set[str]] = {}
-        self._cloud_similarity_rows: list[dict[str, object]] = []
-        self._cloud_risk_cache: dict[tuple[str, str, int], dict] = {}
         # ── P1-2: AlphaCheckRegistry for BRAIN-standard quality checks ──
-        self.check_registry = AlphaCheckRegistry()
         self.check_registry.build_default_checks()
         # P1-5: Register type-specific checks (POWER_POOL / ATOM / PYRAMID)
         alpha_type = str(getattr(config.settings, 'type', 'REGULAR') or 'REGULAR').upper()
@@ -201,14 +172,8 @@ class AlphaResearchPipeline(
             self._event("type_checks_registered",
                 f"Alpha type '{alpha_type}': registered type-specific checks.",
                 level="INFO")
-        # ── P2-5: Context refresh tracking ──
-        self._last_context_refresh: float = 0.0
-        # ── P2-2: Convergence tracker ──
-        self.convergence = ConvergenceTracker(window_size=10, stall_threshold=5)
-        # ── P0-1: Auto-calibrator for scoring parameters ──
-        self.auto_calibrator = AutoCalibrator(storage_dir=getattr(config, 'storage_dir', 'data'))
+        self.strategy_plugins = self._load_strategy_plugins()
         # ── P0-2: Iterative optimizer (lazy-init with loader/mapper after context load) ──
-        self.optimizer: IterativeOptimizer | None = None
 
     def run(self, *, auto_submit: bool = False) -> PipelineResult:
         run_id = new_id("run")
@@ -310,12 +275,11 @@ class AlphaResearchPipeline(
             self._refresh_observability_throttle(cycle)
 
             # ── P2-5: Periodic context refresh (every ~24h / 50 cycles) ──
-            import time as _time
             if self._loader and (cycle == 1 or (cycle % 50 == 0) or
-                                (_time.time() - self._last_context_refresh > 86400)):
+                                (time.time() - self._last_context_refresh > 86400)):
                 try:
                     refresh_result = self._loader.refresh()
-                    self._last_context_refresh = _time.time()
+                    self._last_context_refresh = time.time()
                     if refresh_result.get("status") == "refreshed":
                         f_delta = refresh_result.get("fields_delta", 0)
                         o_delta = refresh_result.get("operators_delta", 0)
@@ -332,6 +296,7 @@ class AlphaResearchPipeline(
                             f"Cycle {cycle}: Context refresh FAILED — {error_detail}",
                             level="ERROR")
                 except Exception as exc:
+                    logger.warning("Context refresh exception in cycle %s", cycle, exc_info=True)
                     self._event("context_refresh_error",
                         f"Cycle {cycle}: Context refresh exception — {exc}",
                         level="ERROR")
@@ -502,6 +467,7 @@ class AlphaResearchPipeline(
                             data=calib_report,
                         )
                 except Exception as exc:
+                    logger.warning("Scoring auto-calibration failed in cycle %s", cycle, exc_info=True)
                     self._event(
                         "scoring_calibration_failed",
                         f"Auto-calibration failed: {exc}",
@@ -519,6 +485,7 @@ class AlphaResearchPipeline(
                 try:
                     self._try_fusion_top_candidates(pool_by_expression, blocked_expressions, cycle)
                 except Exception as exc:
+                    logger.warning("Secondary fusion attempt failed in cycle %s", cycle, exc_info=True)
                     self._event(
                         "fusion_attempt_failed",
                         f"Fusion attempt during convergence stall failed: {exc}",
@@ -570,16 +537,19 @@ class AlphaResearchPipeline(
 
         # Auto-calibration check (non-blocking)
         try:
-            from calibrate_weights import auto_calibrate_if_stalled
-            calib = auto_calibrate_if_stalled(self.ops_config.storage_dir)
+            from .calibration import auto_calibrate_if_stalled
+            calib = auto_calibrate_if_stalled(self.config.storage_dir)
             if calib.get("triggered") and calib.get("advice"):
-                logger.info("auto_calibration triggered: %s", calib.get("reason"))
-                self.events.append(PipelineEvent(
-                    event="auto_calibration",
-                    data={"triggered": True, "reason": calib.get("reason"), "advice": calib.get("advice")},
-                ))
+                reason = calib.get("reason")
+                advice = calib.get("advice")
+                logger.info("auto_calibration triggered: %s", reason)
+                self._event(
+                    "auto_calibration",
+                    f"Auto-calibration triggered: {reason}",
+                    data={"triggered": True, "reason": reason, "advice": advice},
+                )
         except Exception:
-            logger.debug("auto_calibration skipped", exc_info=True)
+            logger.warning("auto_calibration skipped", exc_info=True)
 
         return result
 
@@ -693,3 +663,4 @@ class AlphaResearchPipeline(
     # Backtest result checks ──
 
 
+bind_runtime_state_properties(AlphaResearchPipeline)

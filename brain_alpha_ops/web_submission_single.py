@@ -7,6 +7,7 @@ from typing import Any, Callable
 
 from brain_alpha_ops.config import RunConfig
 from brain_alpha_ops.models import Candidate, utc_now
+from brain_alpha_ops.redaction import redact_error_message, redact_text
 from brain_alpha_ops.research.repository import ResearchRepository
 from brain_alpha_ops.research.safety import SubmissionLedger
 
@@ -70,8 +71,12 @@ def submit_candidate_payload(
             result,
             mode=str(payload.get("submit_mode", "manual")),
         )
-    except Exception:
-        logger.warning("failed to record submission ledger for alpha_id=%s", candidate.get("alpha_id", "?"), exc_info=True)
+    except Exception as exc:
+        logger.warning(
+            "failed to record submission ledger for alpha_id=%s: %s",
+            redact_text(candidate.get("alpha_id", "?"), max_length=64),
+            redact_error_message(exc),
+        )
     repository_factory(run_config.ops.storage_dir).save_lifecycle_record(
         str(payload.get("job_id", "")) or "manual_submit",
         {

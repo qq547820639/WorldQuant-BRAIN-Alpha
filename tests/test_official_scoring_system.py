@@ -1,4 +1,5 @@
 import json
+import logging
 
 from brain_alpha_ops.models import Candidate
 from brain_alpha_ops.scoring.official_scoring import GateConfig, OfficialScoringSystem, ScoreHistoryDB
@@ -178,3 +179,21 @@ def test_gate_config_flags_configured_hard_gate_deviation():
     assert gate.check_items[0]["configured_passed"] is False
     assert gate.check_items[0]["zero_deviation"] is False
     assert "deviates from BRAIN official check" in gate.failed_items[0]
+
+
+def test_gate_config_warns_when_configured_check_raises(caplog):
+    scoring = OfficialScoringSystem()
+
+    def broken_check(_metrics, _thresholds):
+        raise RuntimeError("gate backend unavailable")
+
+    with caplog.at_level(logging.WARNING, logger="brain_alpha_ops.scoring.gates"):
+        gate = GateConfig(scoring.thresholds).add_hard_gate("sharpe", broken_check).evaluate(
+            {"sharpe": 1.8, "fitness": 1.2, "turnover": 0.2}
+        )
+
+    assert gate.passed is False
+    assert gate.check_items[0]["configured_passed"] is False
+    assert gate.check_items[0]["error"] == "gate backend unavailable"
+    assert "configured gate check failed: gate=sharpe" in caplog.text
+    assert "gate backend unavailable" in caplog.text

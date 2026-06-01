@@ -29,6 +29,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from brain_alpha_ops.redaction import redact_error_message, redact_text
+
 from brain_alpha_ops.brain_api.canonical import (
     CANONICAL_API_PATHS,
     CANONICAL_METRIC_NAMES,
@@ -183,13 +185,21 @@ def _verification_blocked(
     expected: str,
     fix_guidance: str,
 ) -> None:
+    message = redact_error_message(error)
+    logger.warning(
+        "redline verification blocked: redline_id=%s check=%s file=%s error=%s",
+        redline_id,
+        check_name,
+        redact_text(file_path, max_length=180),
+        message,
+    )
     report.add(RedLineViolation(
         redline_id=redline_id,
         redline_name=redline_name,
         severity="BLOCKING",
         file_path=file_path,
         check_name=check_name,
-        actual_value=str(error)[:300],
+        actual_value=message[:300],
         expected_value=expected,
         deviation="关键红线证据无法验证，按失败关闭处理",
         fix_guidance=fix_guidance,
@@ -296,6 +306,10 @@ def _verify_generator_templates_against_official_context(data_dir: Path) -> dict
             if str(getattr(operator, "name", "") or "")
         }
     except Exception as exc:
+        logger.warning(
+            "redline verifier official context unavailable for generator template validation",
+            exc_info=True,
+        )
         return {"ok": False, "reason": f"official context unavailable: {exc}"}
 
     templates = _candidate_generator_fallback_templates()
@@ -367,6 +381,7 @@ def _candidate_generator_fallback_templates() -> list[str]:
                             values.append(elt.value)
                     return values
     except Exception:
+        logger.warning("redline verifier failed to extract generator fallback templates", exc_info=True)
         return []
     return []
 

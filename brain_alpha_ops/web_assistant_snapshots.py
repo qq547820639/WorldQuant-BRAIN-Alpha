@@ -22,6 +22,7 @@ from brain_alpha_ops.research.guidance import (
     assistant_guidance_scoring_policy,
     ensure_assistant_guidance_digest,
 )
+from brain_alpha_ops.redaction import redact_error_message, redact_text
 from brain_alpha_ops.research.knowledge_base import ResearchKnowledgeBase
 from brain_alpha_ops.research.memory import ResearchMemory
 from brain_alpha_ops.research.observability import build_research_observability_snapshot
@@ -160,6 +161,7 @@ def durable_job_rows(*, stores: list[tuple[str, Any]], limit: int) -> list[dict[
             for job_id, job in all_jobs(limit=limit):
                 rows.append({"source": source, "job_id": job_id, **job})
         except Exception:
+            logger.warning("durable job rows unavailable for source=%s", source, exc_info=True)
             continue
     return rows[-limit:]
 
@@ -495,6 +497,7 @@ def latest_run_history_path(*, load_config: LoadConfig = load_run_config) -> Pat
     try:
         files = [path for path in history_dir.glob("*.json") if path.is_file()]
     except Exception:
+        logger.warning("failed to list run history files from %s", history_dir, exc_info=True)
         return None
     if not files:
         return None
@@ -505,7 +508,7 @@ def user_profile_snapshot(
     *,
     job_store: Any,
     storage_jsonl_path: StoragePath,
-    safe_error_message: SafeErrorMessage = str,
+    safe_error_message: SafeErrorMessage = redact_error_message,
 ) -> dict[str, Any]:
     active = job_store.latest_active()
     if not active:
@@ -514,7 +517,11 @@ def user_profile_snapshot(
             try:
                 return json.loads(profile_path.read_text(encoding="utf-8"))
             except Exception as exc:
-                logger.warning("failed to read user profile from %s: %s", profile_path, safe_error_message(exc), exc_info=True)
+                logger.warning(
+                    "failed to read user profile from %s: %s",
+                    redact_text(profile_path, max_length=180),
+                    safe_error_message(exc),
+                )
         return {"tier": "offline", "level": None, "points": None, "username": ""}
 
     _job_id, job = active

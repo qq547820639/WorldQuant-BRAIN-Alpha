@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field, fields, is_dataclass
 import json
 import math
+import logging
 import os
 from pathlib import Path
 import sys
@@ -40,6 +41,8 @@ _VALID_DATASET_STRATEGIES = {"all", "rotate", "random", "specific", "fixed", "lo
 _VALID_MARKET_REGIMES = {"normal", "low_vol", "high_vol"}
 _VALID_ON_OFF = SUPPORTED_PASTEURIZATION
 _VALID_UNIT_HANDLING = SUPPORTED_UNIT_HANDLING
+
+logger = logging.getLogger(__name__)
 
 
 class ConfigValidationError(ValueError):
@@ -131,21 +134,23 @@ class ResearchBudget:
 
 @dataclass
 class ScoringConfig:
-    """可配置的评分权重 — 支持 calibrate_weights.py 输出直接注入。
+    """Configurable scoring weights that accept calibrate_weights.py output.
 
-    所有权重均可在校准后覆盖，未覆盖的维度使用默认经验值。
-    Schema version 在 scorecard 中独立追踪，不与此 dataclass 耦合。
+    Calibrated weights can override any dimension; dimensions without
+    overrides keep the empirical defaults. Scorecard schema versions are
+    tracked in scorecard payloads and intentionally stay decoupled from this
+    dataclass.
     """
-    # ── Scorecard 三层权重 ──
-    prior_layer_weight: float = 0.30      # prior_score 在 total_score 中的权重
-    empirical_layer_weight: float = 0.45  # empirical_score 在 total_score 中的权重
-    checklist_layer_weight: float = 0.25  # submission_checklist 在 total_score 中的权重
+    # Scorecard three-layer weights.
+    prior_layer_weight: float = 0.30      # prior_score contribution to total_score
+    empirical_layer_weight: float = 0.45  # empirical_score contribution to total_score
+    checklist_layer_weight: float = 0.25  # submission_checklist contribution to total_score
 
-    # ── Local convergence 权重 ──
-    local_prior_weight: float = 0.65   # prior_score 在 local_rank 中的权重
-    local_quality_weight: float = 0.35 # local_quality 在 local_rank 中的权重
+    # Local convergence weights.
+    local_prior_weight: float = 0.65   # prior_score contribution to local_rank
+    local_quality_weight: float = 0.35 # local_quality contribution to local_rank
 
-    # ── 可覆盖的 prior 维度权重（None = 使用默认经验值） ──
+    # Optional prior dimension overrides; None keeps empirical defaults.
     prior_weights_override: dict[str, float] | None = None
     decision_thresholds: dict[str, float] = field(default_factory=lambda: {"submit": 85.0, "optimize": 70.0, "research": 50.0})
 
@@ -156,7 +161,7 @@ class ScoringConfig:
     assistant_guidance_score_bonus_cap: float = 4.0
     assistant_guidance_score_penalty_cap: float = 5.0
 
-    # ── 市场环境分层 ──
+    # Market-regime tier.
     market_regime: str = "normal"  # "normal" | "low_vol" | "high_vol"
 
     def get_layer_weights(self) -> dict[str, float]:
@@ -189,7 +194,7 @@ class QualityThresholds:
     #   LOW_SUB_UNIVERSE_SHARPE : sub_sharpe < 0.75 × √(sub/alpha) × sharpe
     #
     # ── Quality targets (WARNING — guide optimization & submission priority) ──
-    #   Turnover < 30%  — target_max_turnover, 稳健 alpha 建议上限
+    #   Turnover < 30%  — target_max_turnover, preferred upper bound for robust alphas
     #   Margin  >= 4.0 bps — min_margin_bps
     #
     #   Drawdown is NOT a BRAIN hard check — qualitative guidance only.
@@ -200,27 +205,29 @@ class QualityThresholds:
     min_sharpe_delay0: float = 2.0        # BRAIN: LOW_SHARPE if < 2.0 (Delay-0)
     min_fitness_delay0: float = 1.3       # BRAIN: LOW_FITNESS if < 1.3 (Delay-0)
     min_turnover: float = 0.01            # BRAIN: LOW_TURNOVER if < 1%
-    platform_max_turnover: float = 0.70   # BRAIN: HIGH_TURNOVER if > 70% (平台硬门槛)
+    platform_max_turnover: float = 0.70   # BRAIN: HIGH_TURNOVER if > 70% (platform hard gate)
     max_self_correlation: float = 0.70    # BRAIN: SELF_CORRELATION if >= 0.70 (PnL correlation)
     max_prod_correlation: float = 0.70    # derived from BRAIN SELF_CORRELATION standard
     max_weight_concentration: float = 0.10 # BRAIN: CONCENTRATED_WEIGHT if single stock > 10%
     sub_universe_sharpe_min_ratio: float = 0.75  # BRAIN: LOW_SUB_UNIVERSE_SHARPE formula factor
     # Quality targets (advisor standard — WARNING, not hard gate)
-    target_max_turnover: float = 0.30     # 顾问标准: Turnover < 30% 优先提交; 30%-70% 需优化
-    min_margin_bps: float = 4.0           # 顾问标准: minimum margin in basis points
+    target_max_turnover: float = 0.30     # Advisor target: submit first below 30%; optimize between 30%-70%
+    min_margin_bps: float = 4.0           # Advisor target: minimum margin in basis points
     max_drawdown: float = 0.25            # qualitative — NOT a BRAIN hard check; guidance only
     min_returns: float = 0.0              # qualitative — positive returns expected
-    # ── Turnover 策略控制 ──
-    # enforce_target_turnover_as_hard_gate: True → turnover_quality (≤30%) 升级为硬门禁
-    #   （与 BRAIN 官方 70% 标准不同的自定义强化约束）
-    #   False (default) → turnover_quality 为 WARNING 级，仅标记不阻断
+    # Turnover policy control.
+    # enforce_target_turnover_as_hard_gate=True promotes turnover_quality
+    # (<=30%) to a hard gate. This is a stricter custom policy than BRAIN's
+    # official 70% platform gate.
+    # False (default) keeps turnover_quality at WARNING severity.
     enforce_target_turnover_as_hard_gate: bool = False
-    # ── 市场环境分层调整 ──
+    # Market-regime adjustments.
     market_regime: str = "normal"         # "normal" | "low_vol" | "high_vol"
     #
-    # 调整说明：高波动环境下 Sharpe 往往被压低、turnover 偏高。
-    # 低波动环境下 Sharpe 可能虚高。regime_adjustments 仅作为本地归因/
-    # 校准元数据，不能改变 BRAIN 官方硬门槛。
+    # Rationale: high-volatility regimes often depress Sharpe and raise
+    # turnover, while low-volatility regimes can inflate Sharpe.
+    # regime_adjustments are local attribution/calibration metadata only; they
+    # must not change BRAIN official hard gates.
     regime_adjustments: dict = field(default_factory=lambda: {
         "normal": {"sharpe_factor": 1.0, "fitness_factor": 1.0, "turnover_factor": 1.0},
         "low_vol": {"sharpe_factor": 1.15, "fitness_factor": 1.10, "turnover_factor": 0.90},
@@ -415,6 +422,7 @@ def validate_run_config(config: RunConfig) -> RunConfig:
         try:
             resolved = resolve_default_dataset_id(config.ops.storage_dir, runtime_root=runtime_project_root)
         except Exception as exc:
+            logger.warning("failed to resolve default dataset_id; leaving validation to fail closed", exc_info=True)
             errors.append(f"failed to resolve default dataset_id: {exc}")
             resolved = ""
     # Only mutate settings if resolution succeeded; pure validation otherwise.

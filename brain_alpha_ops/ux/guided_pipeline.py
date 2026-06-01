@@ -1,4 +1,4 @@
-"""用户体验优化 — 流程引导、实时状态反馈、可操作错误提示、断点续跑与历史回溯。
+"""Guided user experience layer for progress, feedback, resume, and history.
 
 GuidedPipeline — wraps AlphaResearchPipeline with:
   1. Step-by-step process guidance with progress indicators
@@ -29,6 +29,7 @@ from typing import Any, Callable, Dict, List, Optional
 from brain_alpha_ops.config import RunConfig
 from brain_alpha_ops.models import Candidate, PipelineEvent, PipelineResult
 from brain_alpha_ops.parameter_audit import build_parameter_audit_snapshot
+from brain_alpha_ops.redaction import redact_error_message
 from brain_alpha_ops.runner import run_pipeline_from_config
 from brain_alpha_ops.ux.history import RunHistoryAnalytics
 
@@ -150,14 +151,15 @@ def classify_error(error: Exception) -> Dict[str, str]:
         info = _unified_classify(error)
         return {
             "type": info.error_code or type(error).__name__,
-            "message": str(error)[:200],
+            "message": redact_error_message(error, max_length=200),
             "fix": info.fix_hint or "未知错误。请检查日志文件 data/*.log 获取详细信息。",
             "retry": "yes" if info.retryable else ("maybe" if info.retryable is None else "no"),
         }
     except Exception:
+        logger.warning("guided pipeline error classification fallback failed", exc_info=True)
         return {
             "type": type(error).__name__,
-            "message": str(error)[:200],
+            "message": redact_error_message(error, max_length=200),
             "fix": "未知错误。请检查日志文件 data/*.log 获取详细信息。",
             "retry": "maybe",
         }
@@ -168,13 +170,13 @@ def classify_error(error: Exception) -> Dict[str, str]:
 # ═══════════════════════════════════════════════════════════════════════
 
 class GuidedPipeline:
-    """用户体验优化管道 — 包装标准流水线，增加流程引导和反馈。
+    """Guided UX pipeline wrapper around the standard pipeline.
 
-    使用方式:
+    Usage:
         gp = GuidedPipeline(run_config)
-        gp.run_guided()  # 交互式运行
+        gp.run_guided()  # interactive run
 
-        # 或查看历史
+        # Or inspect history.
         gp.list_history()
         gp.show_run("run_20260517_001")
     """
@@ -224,6 +226,7 @@ class GuidedPipeline:
         try:
             return bool(self._external_stop_callback())
         except Exception:
+            logger.warning("guided pipeline external stop callback failed; continuing execution", exc_info=True)
             return False
 
     # ── Main Entry Point ──
@@ -231,7 +234,7 @@ class GuidedPipeline:
     def run_guided(self) -> PipelineResult:
         """Run the complete guided pipeline with progress tracking."""
         run_id = f"run_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-        logger.info(f"GuidedPipeline started: {run_id}")
+        logger.info("GuidedPipeline started: %s", run_id)
         self._notify("init", "running", {"run_id": run_id})
 
         result = None
@@ -253,7 +256,7 @@ class GuidedPipeline:
 
         except Exception as e:
             error_info = classify_error(e)
-            logger.error(f"Pipeline failed: {error_info['type']} — {error_info['message']}")
+            logger.error("Pipeline failed: %s — %s", error_info["type"], error_info["message"])
             self._notify("error", "failed", error_info)
             # Save checkpoint for resume
             self._save_checkpoint(run_id, "error", result)
@@ -332,6 +335,7 @@ class GuidedPipeline:
                 "operators_count": ops_count,
             })
         except Exception as e:
+            logger.warning("guided pipeline context phase failed", exc_info=True)
             phase.fail(str(e))
             self._notify("context", "failed", classify_error(e))
 
@@ -372,6 +376,7 @@ class GuidedPipeline:
             self._notify("redline", "failed", {"error": str(e)})
             raise RuntimeError("TECH_REDLINE_BLOCKED: redline verifier unavailable") from e
         except Exception as e:
+            logger.warning("guided pipeline redline phase failed", exc_info=True)
             phase.fail(str(e))
             self._notify("redline", "failed", classify_error(e))
             raise
@@ -445,7 +450,8 @@ class GuidedPipeline:
                 f"门禁可提交 {ready} 个; 分布 {gate_summary}"
             )
             return pipeline_result
-        except Exception as e:
+        except Exception:
+            logger.warning("guided pipeline core pipeline phase failed", exc_info=True)
             for pid in ["generation", "validation", "simulation", "scoring", "gating", "submission"]:
                 if self.phases[pid].status == "running":
                     self.phases[pid].fail("核心流水线异常终止")
@@ -488,6 +494,7 @@ class GuidedPipeline:
                 "summary": summary,
             })
         except Exception as e:
+            logger.warning("guided pipeline finalize phase failed", exc_info=True)
             phase.fail(str(e))
 
         return result
@@ -498,8 +505,13 @@ class GuidedPipeline:
         if self._progress_callback:
             try:
                 self._progress_callback(phase_id, status, data)
-            except Exception:
-                pass  # Don't let callback failures break the pipeline
+            except Exception as exc:
+                logger.warning(
+                    "guided pipeline progress callback failed for phase=%s status=%s: %s",
+                    phase_id,
+                    status,
+                    redact_error_message(exc),
+                )
 
     # ── Checkpoint / Resume ──
 
@@ -543,6 +555,7 @@ class GuidedPipeline:
                     "file": str(f),
                 })
             except Exception:
+                logger.warning("guided pipeline checkpoint file skipped: %s", f, exc_info=True)
                 continue
         return checkpoints
 
@@ -576,6 +589,7 @@ class GuidedPipeline:
                 summary=summary,
             )
         except Exception:
+            logger.warning("guided pipeline snapshot could not be restored", exc_info=True)
             return None
 
     # ── Run History ──

@@ -26,7 +26,15 @@ class _WebDouble:
         self.SYNC_JOBS = {}
         self.CHECK_JOBS = {}
         self.ASYNC_JOBS = {}
+        self.SUBMIT_LOCK = object()
         self.WebHandlerDispatchContext = _Collector
+        self.WebDispatchCoreContext = _Collector
+        self.WebDispatchSessionContext = _Collector
+        self.WebDispatchJobContext = _Collector
+        self.WebDispatchConfigContext = _Collector
+        self.WebDispatchResearchContext = _Collector
+        self.WebDispatchAssistantContext = _Collector
+        self.WebDispatchActionContext = _Collector
         self.WebSnapshotRuntime = _Collector
         self.WebSnapshotFacade = _Collector
         self.runtime_project_root = "/tmp/project"
@@ -62,7 +70,9 @@ def test_runtime_facade_context_and_snapshot_factories_collect_dependencies():
     runtime = facade.snapshot_runtime(web)
     snapshots = facade.snapshot_facade(web)
 
-    assert ctx.kwargs["route_for"] is not None
+    assert ctx.kwargs["core"].kwargs["route_for"] is not None
+    assert ctx.kwargs["job"].kwargs["jobs"] is web.JOBS
+    assert ctx.kwargs["actions"].kwargs["submit_lock"] is web.SUBMIT_LOCK
     assert runtime.kwargs["job_store"] is web.JOBS
     assert snapshots.kwargs["runtime_factory"] is not None
 
@@ -263,3 +273,32 @@ def test_runtime_facade_main_smoke_serve_and_keyboard_interrupt(capsys, monkeypa
     web.shutdown_server = lambda: shutdown_called.append(True)
     assert facade.main(web, []) == 0
     assert shutdown_called == [True]
+
+
+def test_runtime_facade_main_warns_when_safe_print_fails(monkeypatch):
+    web = _WebDouble()
+    web.load_run_config = lambda _path=None: SimpleNamespace(
+        web=SimpleNamespace(
+            port=7777,
+            open_browser=False,
+            host="127.0.0.1",
+            session_ttl_seconds=60,
+            allow_multiple_sessions=False,
+            allow_remote=False,
+            secure_cookies=False,
+        )
+    )
+    web.config_from_payload = lambda payload: web.calls.append(("config_from_payload", (), payload))
+    web.smoke_test_server = lambda port=None: {"port": port}
+
+    def fail_print(*_args, **_kwargs):
+        raise OSError("stdout unavailable")
+
+    warnings = []
+    monkeypatch.setattr("builtins.print", fail_print)
+    monkeypatch.setattr(facade.logger, "warning", lambda *args, **kwargs: warnings.append((args, kwargs)))
+
+    assert facade.main(web, ["--smoke-test"]) == 0
+
+    assert warnings
+    assert warnings[0][0][0] == "failed to write web runtime CLI output"

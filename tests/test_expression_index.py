@@ -1,4 +1,7 @@
 import json
+import logging
+import sys
+import types
 
 from brain_alpha_ops.models import Candidate
 from brain_alpha_ops.research.expression_index import ExpressionHistoryIndex
@@ -87,3 +90,24 @@ def test_expression_index_summary_reuses_preloaded_source_rows(tmp_path):
     assert summary["total_expression_records"] == 2
     assert summary["duplicate_expression_count"] == 1
     assert summary["duplicates"][0]["sources"] == {"candidate": 1, "backtest": 1}
+
+
+def test_expression_index_logs_sqlite_summary_failure(monkeypatch, tmp_path, caplog):
+    (tmp_path / "expression_index.sqlite").write_text("placeholder", encoding="utf-8")
+
+    class BrokenExpressionSqliteIndex:
+        def __init__(self, storage_dir):
+            self.storage_dir = storage_dir
+
+        def summary(self, *, top_n):
+            raise RuntimeError("sqlite index unavailable")
+
+    module = types.SimpleNamespace(ExpressionSqliteIndex=BrokenExpressionSqliteIndex)
+    monkeypatch.setitem(sys.modules, "brain_alpha_ops.research.expression_sqlite_index", module)
+
+    with caplog.at_level(logging.WARNING, logger="brain_alpha_ops.research.expression_index"):
+        summary = ExpressionHistoryIndex(tmp_path)._sqlite_summary(top_n=5)
+
+    assert summary == {}
+    assert "sqlite expression index summary unavailable" in caplog.text
+    assert "sqlite index unavailable" in caplog.text

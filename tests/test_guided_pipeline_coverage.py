@@ -55,7 +55,7 @@ def _result(run_id: str = "run_cov") -> PipelineResult:
     )
 
 
-def test_guided_data_structures_and_error_fallback(monkeypatch):
+def test_guided_data_structures_and_error_fallback(monkeypatch, caplog):
     phase = PipelinePhase(name="init", description="Init")
     phase.start()
     phase.complete("ready")
@@ -82,16 +82,18 @@ def test_guided_data_structures_and_error_fallback(monkeypatch):
     assert record.to_dict()["status"] == "completed"
 
     monkeypatch.setattr(guided_pipeline, "_unified_classify", lambda _error: (_ for _ in ()).throw(RuntimeError("boom")))
-    info = classify_error(ValueError("bad value"))
+    with caplog.at_level("WARNING", logger="brain_alpha_ops.ux.guided_pipeline"):
+        info = classify_error(ValueError("bad value"))
     assert info == {
         "type": "ValueError",
         "message": "bad value",
         "fix": "未知错误。请检查日志文件 data/*.log 获取详细信息。",
         "retry": "maybe",
     }
+    assert "guided pipeline error classification fallback failed" in caplog.text
 
 
-def test_guided_pipeline_init_context_redline_and_stop_paths(monkeypatch, tmp_path):
+def test_guided_pipeline_init_context_redline_and_stop_paths(monkeypatch, tmp_path, caplog):
     monkeypatch.delenv("BRAIN_USERNAME", raising=False)
     monkeypatch.delenv("BRAIN_PASSWORD", raising=False)
     monkeypatch.delenv("BRAIN_TOKEN", raising=False)
@@ -100,7 +102,9 @@ def test_guided_pipeline_init_context_redline_and_stop_paths(monkeypatch, tmp_pa
     assert pipeline._should_stop() is False
     pipeline.stop()
     assert pipeline._should_stop() is True
-    assert GuidedPipeline(_config(tmp_path), stop_callback=lambda: (_ for _ in ()).throw(RuntimeError("stop")))._should_stop() is False
+    with caplog.at_level("WARNING", logger="brain_alpha_ops.ux.guided_pipeline"):
+        assert GuidedPipeline(_config(tmp_path), stop_callback=lambda: (_ for _ in ()).throw(RuntimeError("stop")))._should_stop() is False
+    assert "guided pipeline external stop callback failed; continuing execution" in caplog.text
 
     with pytest.raises(RuntimeError, match="生产环境需要"):
         pipeline._phase_init("run_missing_auth")
@@ -157,12 +161,14 @@ def test_guided_pipeline_init_context_redline_and_stop_paths(monkeypatch, tmp_pa
 
     failing_pipeline = GuidedPipeline(_config(tmp_path))
     monkeypatch.setattr(redline_verifier, "RedLineVerifier", FailingVerifier)
-    with pytest.raises(RuntimeError, match="TECH_REDLINE_BLOCKED"):
-        failing_pipeline._phase_redline(init_result)
+    with caplog.at_level("WARNING", logger="brain_alpha_ops.ux.guided_pipeline"):
+        with pytest.raises(RuntimeError, match="TECH_REDLINE_BLOCKED"):
+            failing_pipeline._phase_redline(init_result)
     assert "[RL-1]" in failing_pipeline.phases["redline"].warnings[0]
+    assert "guided pipeline redline phase failed" in caplog.text
 
 
-def test_guided_pipeline_core_events_failure_finalize_and_checkpoints(monkeypatch, tmp_path):
+def test_guided_pipeline_core_events_failure_finalize_and_checkpoints(monkeypatch, tmp_path, caplog):
     pipeline = GuidedPipeline(_config(tmp_path))
     progress_events: list[tuple[str, str, dict]] = []
     pipeline.on_progress(lambda phase, status, data: progress_events.append((phase, status, data)))
@@ -178,8 +184,10 @@ def test_guided_pipeline_core_events_failure_finalize_and_checkpoints(monkeypatc
     assert GuidedPipeline._phase_id_from_core_progress("unknown") == "generation"
 
     monkeypatch.setattr(pipeline, "_save_run_record", lambda _result: (_ for _ in ()).throw(OSError("no disk")))
-    pipeline._phase_finalize(result)
+    with caplog.at_level("WARNING", logger="brain_alpha_ops.ux.guided_pipeline"):
+        pipeline._phase_finalize(result)
     assert pipeline.phases["finalize"].status == "failed"
+    assert "guided pipeline finalize phase failed" in caplog.text
 
     checkpoint_path = pipeline._save_checkpoint("run_cov", "finalize", result)
     assert checkpoint_path.endswith("run_cov.checkpoint.json")
@@ -188,11 +196,15 @@ def test_guided_pipeline_core_events_failure_finalize_and_checkpoints(monkeypatc
 
     corrupt = pipeline._checkpoint_dir / "zz_corrupt.checkpoint.json"
     corrupt.write_text("{", encoding="utf-8")
-    checkpoints = pipeline.list_checkpoints()
+    with caplog.at_level("WARNING", logger="brain_alpha_ops.ux.guided_pipeline"):
+        checkpoints = pipeline.list_checkpoints()
     assert checkpoints[0]["run_id"] == "run_cov"
+    assert "guided pipeline checkpoint file skipped" in caplog.text
     assert pipeline.latest_checkpoint().run_id == "run_cov"
     assert GuidedPipeline._result_from_snapshot({}) is None
-    assert GuidedPipeline._result_from_snapshot({"run_id": "bad", "events": [{"event": "missing_message"}]}) is None
+    with caplog.at_level("WARNING", logger="brain_alpha_ops.ux.guided_pipeline"):
+        assert GuidedPipeline._result_from_snapshot({"run_id": "bad", "events": [{"event": "missing_message"}]}) is None
+    assert "guided pipeline snapshot could not be restored" in caplog.text
 
     resumed = pipeline.resume("run_cov")
     assert resumed.run_id == "run_cov"
@@ -212,9 +224,11 @@ def test_guided_pipeline_core_events_failure_finalize_and_checkpoints(monkeypatc
 
     failing = GuidedPipeline(_config(tmp_path))
     monkeypatch.setattr(guided_pipeline, "run_pipeline_from_config", failing_run_pipeline)
-    with pytest.raises(RuntimeError, match="core failed"):
-        failing._phase_core_pipeline(PipelineResult(run_id="x", candidates=[], events=[], summary={}))
+    with caplog.at_level("WARNING", logger="brain_alpha_ops.ux.guided_pipeline"):
+        with pytest.raises(RuntimeError, match="core failed"):
+            failing._phase_core_pipeline(PipelineResult(run_id="x", candidates=[], events=[], summary={}))
     assert failing.phases["generation"].status == "failed"
+    assert "guided pipeline core pipeline phase failed" in caplog.text
 
 
 def test_guided_pipeline_print_and_format_helpers(capsys, tmp_path):

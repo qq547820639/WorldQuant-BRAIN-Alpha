@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from scripts.check_review_gap_closure_tracker import DEFAULT_TRACKER, check_review_gap_closure_tracker
 
+ROOT = DEFAULT_TRACKER.parents[1]
+
 
 OFFICIAL_QUEUE_ROW = (
     "| Official context refresh | Not claimable as fresh; current validation is structurally safe with "
@@ -135,6 +137,11 @@ def test_review_gap_closure_tracker_accepts_current_document():
         "Review P1 quality-gate subprocess environment": "CLOSED_CURRENT",
         "Review P1 quality-gate subprocess timeout": "CLOSED_CURRENT",
         "Review P2 quality-gate preview smoke port race": "CLOSED_CURRENT",
+        "Review 2026-06-01 P0 baseUrl SSRF risk": "CLOSED_CURRENT",
+        "Review 2026-06-01 P0 request body size limit": "CLOSED_CURRENT",
+        "Review 2026-06-01 P1 traceback leakage": "CLOSED_CURRENT",
+        "Review 2026-06-01 P1 production budget numeric limits": "CLOSED_CURRENT",
+        "Review 2026-06-01 P1 silent exception swallowing": "CLOSED_CURRENT",
     }
     assert {
         item["gap"]: item["status"]
@@ -187,6 +194,37 @@ def test_review_gap_closure_tracker_accepts_current_document():
     assert result["summary"]["production_surface"] == "inline_html_js"
     assert result["summary"]["react_surface"] == "mirror"
     assert result["findings"] == []
+
+
+def test_current_silent_exception_review_evidence_matches_source():
+    guided_source = (ROOT / "brain_alpha_ops" / "ux" / "guided_pipeline.py").read_text(encoding="utf-8")
+    walkthrough_source = (ROOT / "scripts" / "ux_walkthrough_local.py").read_text(encoding="utf-8")
+
+    assert "pass  # Don't let callback failures break the pipeline" not in guided_source
+    assert "guided pipeline progress callback failed" in guided_source
+    assert "except: pass" not in walkthrough_source
+    assert "shutdown probe failed" in walkthrough_source
+    assert "shutdown request failed" in walkthrough_source
+
+
+def test_review_gap_closure_tracker_rejects_missing_current_review_triage_row(tmp_path):
+    text = DEFAULT_TRACKER.read_text(encoding="utf-8")
+    missing_item = "Review 2026-06-01 P0 baseUrl SSRF risk"
+    row = next(line for line in text.splitlines() if line.startswith(f"| {missing_item} |"))
+    tracker = _write_tracker_text(tmp_path, text.replace(f"{row}\n", "", 1))
+
+    result = check_review_gap_closure_tracker(
+        tracker,
+        official_context_validation=_official_context_validation(),
+        react_build_env_validation=_react_surface_validation(),
+        live_submit_readiness_validation=_live_submit_readiness_validation(),
+    )
+
+    assert result["ok"] is False
+    assert any(
+        finding["code"] == "review_triage_item" and finding["expected"] == missing_item
+        for finding in result["findings"]
+    )
 
 
 def test_review_gap_closure_tracker_rejects_missing_queue(tmp_path):

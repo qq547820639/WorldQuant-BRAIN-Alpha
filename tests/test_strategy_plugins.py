@@ -56,7 +56,7 @@ def test_example_strategy_plugin_spec_loads():
     assert rows[0]["result"]["profile"]["family"] == "mean_reversion"
 
 
-def test_strategy_plugin_registry_records_load_and_runtime_errors(tmp_path, monkeypatch):
+def test_strategy_plugin_registry_records_load_and_runtime_errors(tmp_path, monkeypatch, caplog):
     plugin_path = tmp_path / "bad_strategy_plugin.py"
     plugin_path.write_text(
         textwrap.dedent(
@@ -71,7 +71,7 @@ def test_strategy_plugin_registry_records_load_and_runtime_errors(tmp_path, monk
                 name = "runtime_fail"
 
                 def propose(self, context):
-                    raise RuntimeError("boom")
+                    raise RuntimeError("boom token=secret-plugin-123")
 
                 def validate(self, profile, context):
                     return {}
@@ -87,10 +87,11 @@ def test_strategy_plugin_registry_records_load_and_runtime_errors(tmp_path, monk
     )
     monkeypatch.syspath_prepend(str(tmp_path))
 
-    registry = StrategyPluginRegistry.from_specs(
-        ["bad_strategy_plugin:IncompletePlugin", "bad_strategy_plugin:RuntimeFailingPlugin"]
-    )
-    rows = registry.notify("propose", context={"cycle": 1})
+    with caplog.at_level("WARNING"):
+        registry = StrategyPluginRegistry.from_specs(
+            ["bad_strategy_plugin:IncompletePlugin", "bad_strategy_plugin:RuntimeFailingPlugin"]
+        )
+        rows = registry.notify("propose", context={"cycle": 1})
     summary = registry.summary()
 
     assert summary["enabled_count"] == 1
@@ -98,6 +99,10 @@ def test_strategy_plugin_registry_records_load_and_runtime_errors(tmp_path, monk
     assert "missing methods" in summary["load_errors"][0]["error"]
     assert rows[0]["status"] == "error"
     assert summary["runtime_errors"][0]["plugin"] == "runtime_fail"
+    assert "secret-plugin-123" not in summary["runtime_errors"][0]["error"]
+    assert "secret-plugin-123" not in caplog.text
+    assert any("strategy plugin load failed" in record.getMessage() for record in caplog.records)
+    assert any("strategy plugin runtime failed" in record.getMessage() for record in caplog.records)
 
 
 def test_pipeline_summary_exposes_strategy_plugin_runtime_state(tmp_path, monkeypatch):

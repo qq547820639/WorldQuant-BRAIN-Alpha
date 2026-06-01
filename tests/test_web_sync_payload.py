@@ -1,3 +1,5 @@
+import logging
+
 from brain_alpha_ops.config import RunConfig
 from brain_alpha_ops.web_sync_payload import sync_cloud_alphas_payload
 
@@ -96,3 +98,25 @@ def test_sync_cloud_alphas_payload_uses_context_fallback(tmp_path):
     assert payload["fields_count"] == 1
     assert payload["operators_count"] == 1
     assert payload["datasets_count"] == 0
+
+
+def test_sync_cloud_alphas_payload_logs_context_failure(tmp_path, caplog):
+    run_config = RunConfig(environment="production")
+    run_config.ops.storage_dir = str(tmp_path)
+
+    with caplog.at_level(logging.WARNING, logger="brain_alpha_ops.web_sync_payload"):
+        payload = sync_cloud_alphas_payload(
+            {},
+            run_config_from_payload=lambda body: run_config,
+            api_from_run_config=lambda config: Api(fail_context=True),
+            repository_factory=Repo,
+            datasets_from_fields=lambda fields: [],
+            persist_official_context=lambda fields, operators, datasets: None,
+            default_fields=[{"id": "fallback"}],
+            default_operators=[{"name": "fallback_op"}],
+        )
+
+    assert payload["fields_count"] == 1
+    assert payload["operators_count"] == 1
+    assert "official context sync failed; falling back to default fields/operators" in caplog.text
+    assert "context failed" in caplog.text

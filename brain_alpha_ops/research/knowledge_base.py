@@ -29,6 +29,7 @@ from brain_alpha_ops.research.expression_ast import (
     expression_key,
     expression_profile_summary,
 )
+from brain_alpha_ops.redaction import redact_error_message, redact_text
 
 logger = logging.getLogger(__name__)
 
@@ -177,6 +178,7 @@ def _stringify_evidence(value: Any) -> str:
     try:
         return json.dumps(value, ensure_ascii=False, default=str)
     except Exception:
+        logger.warning("knowledge_base: failed to serialize evidence value; using string fallback", exc_info=True)
         return str(value)
 
 
@@ -486,7 +488,11 @@ class StructuredKnowledgeBase:
                 if k in {f.name for f in KnowledgeEntry.__dataclass_fields__.values()}
             })
         except (json.JSONDecodeError, TypeError, OSError) as exc:
-            logger.warning("knowledge_base: failed to load %s: %s", path, exc)
+            logger.warning(
+                "knowledge_base: failed to load %s: %s",
+                redact_text(path, max_length=180),
+                redact_error_message(exc),
+            )
             return None
 
 
@@ -504,16 +510,17 @@ class ResearchKnowledgeBase:
         now = datetime.now(timezone.utc).isoformat()
         created_at = item.created_at or now
         metadata = dict(item.metadata or {})
+        evidence_values = [_stringify_evidence(value) for value in item.evidence]
         if item.source_run_id:
             metadata["source_run_id"] = item.source_run_id
         if item.evidence:
-            metadata["evidence_payload"] = item.evidence
+            metadata["evidence_payload"] = evidence_values
         entry = KnowledgeEntry(
             layer=_RESEARCH_KIND_TO_LAYER[kind],
             category=_DEFAULT_CATEGORY_BY_KIND[kind],
             title=item.title,
             description=item.body,
-            evidence=[_stringify_evidence(value) for value in item.evidence],
+            evidence=evidence_values,
             confidence=_bounded_confidence(item.confidence),
             source_tags=[str(tag) for tag in item.source_tags if str(tag)],
             expression_pattern=item.expression_pattern,

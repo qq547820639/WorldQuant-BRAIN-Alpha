@@ -1,3 +1,6 @@
+import logging
+
+from brain_alpha_ops.scoring import attribution
 from brain_alpha_ops.scoring.visualization import build_score_visualization_payload, summarize_score_attribution
 
 
@@ -27,3 +30,25 @@ def test_score_visualization_payload_flattens_attribution_tree():
     assert payload["contribution_bars"][0]["name"] == "total_score"
     assert summary["top_failures"][0]["item"] == "turnover"
     assert summary["visualization"]["decision_band"] == "optimize_before_submit"
+
+
+def test_score_visualization_warns_when_attribution_tree_build_fails(monkeypatch, caplog):
+    def fail_build_attribution_tree(_scorecard):
+        raise RuntimeError("attribution unavailable")
+
+    monkeypatch.setattr(attribution, "build_attribution_tree", fail_build_attribution_tree)
+
+    with caplog.at_level(logging.WARNING, logger="brain_alpha_ops.scoring.visualization"):
+        payload = build_score_visualization_payload(
+            {
+                "total_score": 80,
+                "prior": {"score": 70},
+                "empirical": {"score": 90},
+                "submission_checklist": {"score": 80},
+            }
+        )
+
+    assert payload["ok"] is False
+    assert payload["node_count"] == 0
+    assert payload["total_score"] == 80.0
+    assert "failed to build score attribution tree visualization" in caplog.text

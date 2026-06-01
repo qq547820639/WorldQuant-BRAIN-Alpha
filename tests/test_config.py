@@ -8,6 +8,7 @@ from brain_alpha_ops import config as config_mod
 from brain_alpha_ops import web_config as web_config_mod
 from brain_alpha_ops.brain_api.canonical import CANONICAL_API_PATHS, CANONICAL_SETTINGS
 import pytest
+import logging
 
 from brain_alpha_ops.config import (
     ConfigValidationError,
@@ -75,6 +76,23 @@ def test_load_run_config_fills_empty_dataset_from_official_cache(tmp_path):
     assert config.ops.budget.dataset_strategy == "rotate"
     assert config.ops.budget.require_cloud_sync is True
     assert config.ops.official_api.allow_stale_context_on_rate_limit is True
+
+
+def test_validate_run_config_logs_when_default_dataset_resolution_fails(monkeypatch, caplog):
+    config = RunConfig()
+    config.ops.settings.dataset = ""
+
+    def fail_resolve_default_dataset_id(*_args, **_kwargs):
+        raise RuntimeError("dataset cache unavailable")
+
+    monkeypatch.setattr(config_mod, "resolve_default_dataset_id", fail_resolve_default_dataset_id)
+
+    with caplog.at_level(logging.WARNING, logger="brain_alpha_ops.config"):
+        with pytest.raises(ConfigValidationError, match="failed to resolve default dataset_id"):
+            config_mod.validate_run_config(config)
+
+    assert "failed to resolve default dataset_id; leaving validation to fail closed" in caplog.text
+    assert "dataset cache unavailable" in caplog.text
 
 
 def test_credentials_resolve_from_environment():

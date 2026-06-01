@@ -17,6 +17,7 @@ from brain_alpha_ops.compliance.redline_verifier import RedLineVerifier
 from brain_alpha_ops.config import load_run_config
 from brain_alpha_ops.jsonl import read_jsonl_tail
 from brain_alpha_ops.models import Candidate
+from brain_alpha_ops.redaction import redact_error_message, redact_text
 from brain_alpha_ops.scoring.official_scoring import (
     OfficialScoringSystem,
     ScoreHistoryDB,
@@ -53,7 +54,11 @@ def handle_scoring_evaluate(body: dict[str, Any]) -> dict[str, Any]:
         db = ScoreHistoryDB(config.ops.storage_dir)
         db.append(result)
     except Exception as exc:
-        logger.warning("score history append failed for alpha_id=%s: %s", result.alpha_id, exc)
+        logger.warning(
+            "score history append failed for alpha_id=%s: %s",
+            redact_text(result.alpha_id, max_length=64),
+            redact_error_message(exc),
+        )
 
     return result.to_dict()
 
@@ -243,6 +248,7 @@ def _auto_calibration_status(storage_dir: str, *, trigger: bool = False) -> dict
             status["triggered"] = False
         return status
     except Exception as exc:
+        logger.warning("scoring auto-calibration status unavailable", exc_info=True)
         return {
             "available": False,
             "trigger_requested": bool(trigger),
@@ -276,4 +282,5 @@ def handle_checkpoint_status(query: dict[str, Any]) -> dict[str, Any]:
             "resume_available": latest is not None,
         }
     except Exception as exc:
+        logger.warning("checkpoint status unavailable", exc_info=True)
         return {"ok": False, "error": str(exc), "resume_available": False}

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import os
 import sys
 import warnings
@@ -50,6 +51,8 @@ _CRED_DEPRECATION = (
     "Use BRAIN_USERNAME / BRAIN_PASSWORD / BRAIN_TOKEN environment variables instead."
 )
 
+logger = logging.getLogger(__name__)
+
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="brain-alpha-ops")
@@ -68,15 +71,15 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--base-url", default=None)
     run.add_argument(
         "--username", default=None,
-        help="[弃用] 凭据请使用环境变量 BRAIN_USERNAME，此参数会暴露在 shell 历史中",
+        help="[deprecated] Use the BRAIN_USERNAME environment variable; this option can leak into shell history",
     )
     run.add_argument(
         "--password", default=None,
-        help="[弃用] 凭据请使用环境变量 BRAIN_PASSWORD，此参数会暴露在 shell 历史中",
+        help="[deprecated] Use the BRAIN_PASSWORD environment variable; this option can leak into shell history",
     )
     run.add_argument(
         "--token", default=None,
-        help="[弃用] 凭据请使用环境变量 BRAIN_TOKEN，此参数会暴露在 shell 历史中",
+        help="[deprecated] Use the BRAIN_TOKEN environment variable; this option can leak into shell history",
     )
     run.add_argument(
         "--allow-insecure-cli-credentials",
@@ -215,6 +218,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     except Exception as exc:
         # Catch-all: prevent raw traceback from leaking to CLI output.
+        logger.warning("brain-alpha-ops CLI command failed unexpectedly", exc_info=True)
         _print_cli_error("UNEXPECTED_ERROR", exc)
         return 1
 
@@ -553,7 +557,16 @@ def _main(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
         from pathlib import Path
         run_config.ops.storage_dir = str(Path(args.storage_dir).resolve())
     if args.base_url is not None:
-        run_config.ops.official_api.base_url = args.base_url
+        from brain_alpha_ops.web_config import _ALLOWED_BASE_URLS
+
+        base_url = str(args.base_url).rstrip("/")
+        allowed = _ALLOWED_BASE_URLS.get(run_config.environment, set())
+        if allowed and base_url not in allowed:
+            raise ConfigValidationError(
+                f"base-url not allowed for environment '{run_config.environment}'; "
+                f"allowed: {sorted(allowed)}"
+            )
+        run_config.ops.official_api.base_url = base_url
     if _has_cli_credentials(args):
         _warn_cli_credentials_deprecated()
     if _has_cli_credentials(args) and not args.allow_insecure_cli_credentials:

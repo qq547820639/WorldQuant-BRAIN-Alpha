@@ -266,6 +266,29 @@ class TestCachedAPIRateLimiter:
 
 
 # ═══════════════════════════════════════════
+# Iterative optimizer tests
+# ═══════════════════════════════════════════
+
+class TestIterativeOptimizer:
+    def test_strategy_failures_are_logged(self, monkeypatch, caplog):
+        from brain_alpha_ops.research.iterative_optimizer import IterativeOptimizer
+
+        optimizer = IterativeOptimizer(loader=object(), mapper=None)
+
+        def fail_field_swap(*_args, **_kwargs):
+            raise RuntimeError("mutation backend unavailable")
+
+        monkeypatch.setattr(optimizer, "field_swap", fail_field_swap)
+
+        with caplog.at_level(logging.WARNING, logger="brain_alpha_ops.research.iterative_optimizer"):
+            result = optimizer._apply_strategy("field_swap", "rank(close)", ["close"], "", "sharpe")
+
+        assert result is None
+        assert "iterative optimizer strategy failed: strategy=field_swap failure_dim=sharpe" in caplog.text
+        assert "mutation backend unavailable" in caplog.text
+
+
+# ═══════════════════════════════════════════
 # Secure Credentials tests
 # ═══════════════════════════════════════════
 

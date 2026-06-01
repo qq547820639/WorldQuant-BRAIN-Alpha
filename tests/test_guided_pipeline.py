@@ -1,4 +1,5 @@
 import json
+import logging
 
 from brain_alpha_ops.config import RunConfig
 from brain_alpha_ops.models import PipelineResult
@@ -44,6 +45,24 @@ def test_guided_pipeline_completes_core_phases_and_uses_configured_storage(monke
     assert history_payload["parameter_audit"]["thresholds_zero_deviation"] is True
     assert pipeline.list_history()[0]["run_id"] == "run_guided_test"
     assert pipeline.list_history()[0]["parameter_audit"]["ok"] is True
+
+
+def test_guided_pipeline_logs_progress_callback_failures(caplog, tmp_path):
+    config = RunConfig(environment="production")
+    config.ops.storage_dir = str(tmp_path)
+    pipeline = GuidedPipeline(config)
+
+    def failing_callback(_phase, _status, _data):
+        raise RuntimeError("callback failed token=secret-progress-123")
+
+    pipeline.on_progress(failing_callback)
+
+    with caplog.at_level(logging.WARNING, logger="brain_alpha_ops.ux.guided_pipeline"):
+        pipeline._notify("init", "running", {})
+
+    assert "guided pipeline progress callback failed" in caplog.text
+    assert "callback failed" in caplog.text
+    assert "secret-progress-123" not in caplog.text
 
 
 def test_guided_pipeline_accepts_fixed_dataset_strategy(monkeypatch, tmp_path):

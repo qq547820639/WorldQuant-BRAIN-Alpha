@@ -1,3 +1,6 @@
+import logging
+
+from brain_alpha_ops.agent_research_tools import collect_job_rows
 from brain_alpha_ops.agent_tools import BrainAlphaToolbox
 from tests.production_api_stub import ProductionBrainAPIStub
 from brain_alpha_ops.config import RunConfig
@@ -22,6 +25,22 @@ def test_new_tool_manifest_entries_exist():
     assert "run_parallel_backtest" in names
     assert "send_alert" in names
     assert "route_alert" in names
+
+
+def test_collect_job_rows_warns_when_store_fails(caplog):
+    class BrokenStore:
+        def all(self, *, limit):
+            raise RuntimeError("job store unavailable")
+
+    class GoodStore:
+        def all(self, *, limit):
+            return [("job_1", {"status": "completed"})]
+
+    with caplog.at_level(logging.WARNING, logger="brain_alpha_ops.agent_research_tools"):
+        rows = collect_job_rows({"broken": BrokenStore(), "good": GoodStore()}, limit=10)
+
+    assert rows == [{"source": "good_job", "job_id": "job_1", "status": "completed"}]
+    assert "failed to collect broken job rows for agent research context" in caplog.text
 
 
 def test_market_data_cache_tool_and_alert_tool(tmp_path):

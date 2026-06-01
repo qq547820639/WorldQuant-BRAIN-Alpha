@@ -6,6 +6,7 @@ import logging
 from typing import Any, Callable
 
 from brain_alpha_ops.config import RunConfig
+from brain_alpha_ops.redaction import redact_error_message, redact_text
 from brain_alpha_ops.research.repository import ResearchRepository
 from brain_alpha_ops.research.safety import SubmissionLedger
 
@@ -79,7 +80,11 @@ def check_candidate_payload(
 
     try:
         repo.save_check_record({"job_id": str(payload.get("job_id", "")), **result})
-    except Exception:
-        logger.warning("failed to persist check record for alpha_id=%s", result.get("alpha_id", "?"), exc_info=True)
+    except Exception as exc:
+        logger.warning(
+            "failed to persist check record for alpha_id=%s: %s",
+            redact_text(result.get("alpha_id", "?"), max_length=64),
+            redact_error_message(exc),
+        )
 
     return result

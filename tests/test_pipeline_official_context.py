@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import logging
+
 from brain_alpha_ops.brain_api.base import BrainAPIError
 from brain_alpha_ops.config import OpsConfig
 from brain_alpha_ops.models import Candidate
 from brain_alpha_ops.research.generator import CandidateGenerator
 from brain_alpha_ops.research.pipeline_official_context import (
+    OfficialContextLoadResult,
     OfficialContextLoadService,
     active_dataset_field_names,
     configured_official_context_files_exist,
@@ -94,7 +97,22 @@ def test_context_validation_reasons_cover_fields_operators_and_dataset():
     assert mapper.calls == 1
 
 
-def test_official_context_service_falls_back_to_api_when_json_unavailable(tmp_path, monkeypatch):
+def test_active_dataset_field_names_logs_mapper_failure(caplog):
+    class FailingMapper:
+        def fields_for(self, dataset_id):
+            raise RuntimeError(f"mapper unavailable for {dataset_id}")
+
+    cache = {}
+    with caplog.at_level(logging.WARNING, logger="brain_alpha_ops.research.pipeline_official_context"):
+        fields = active_dataset_field_names("pv1", FailingMapper(), cache)
+
+    assert fields == set()
+    assert cache["pv1"] == set()
+    assert "active dataset field lookup unavailable for dataset_id=pv1" in caplog.text
+    assert "mapper unavailable for pv1" in caplog.text
+
+
+def test_official_context_service_falls_back_to_api_when_json_unavailable(tmp_path, monkeypatch, caplog):
     service, events, progress, halts = _service(tmp_path)
 
     class EmptyLoader:
@@ -112,7 +130,8 @@ def test_official_context_service_falls_back_to_api_when_json_unavailable(tmp_pa
         lambda: EmptyLoader(),
     )
 
-    result = service.load()
+    with caplog.at_level(logging.WARNING, logger="brain_alpha_ops.research.pipeline_official_context"):
+        result = service.load()
 
     assert result.context_summary["source"] == "official_api_or_cache"
     field_names = [str(row.get("id") or row.get("name") or "") for row in result.fields]
@@ -122,6 +141,32 @@ def test_official_context_service_falls_back_to_api_when_json_unavailable(tmp_pa
     assert progress
     assert halts == []
     assert any(args[0] == "context_loaded" for args, _kwargs in events)
+    assert "official context JSON load failed; falling back to API" in caplog.text
+    assert "official context JSON files are missing or empty" in caplog.text
+
+
+def test_official_context_service_logs_advanced_component_fallback(tmp_path, monkeypatch, caplog):
+    service, events, _progress, _halts = _service(tmp_path)
+
+    class FailingMapper:
+        def build(self, _loader):
+            raise RuntimeError("mapper build unavailable")
+
+    monkeypatch.setattr("brain_alpha_ops.data.FieldDatasetMapper", FailingMapper)
+    result = OfficialContextLoadResult(
+        fields=[{"id": "close", "name": "close"}],
+        operators=[{"name": "rank"}],
+        context_summary={},
+        generator=CandidateGenerator(),
+        loader=object(),
+    )
+
+    with caplog.at_level(logging.WARNING, logger="brain_alpha_ops.research.pipeline_official_context"):
+        service._wire_advanced_components(result)
+
+    assert any(args[0] == "advanced_components_fallback" for args, _kwargs in events)
+    assert "advanced official context components unavailable; using base generator context" in caplog.text
+    assert "mapper build unavailable" in caplog.text
 
 
 def test_official_context_service_uses_local_official_cache_shape_on_rate_limit(tmp_path, monkeypatch):

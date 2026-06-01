@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -35,6 +36,9 @@ from brain_alpha_ops.research.parameter_search import ParameterSearchService
 from brain_alpha_ops.research.repository import ResearchRepository
 from brain_alpha_ops.research.rolling_validation import RollingValidationService
 from brain_alpha_ops.research.search_orchestrator import ParameterSearchOrchestrator
+
+
+logger = logging.getLogger(__name__)
 
 
 def query_research_observability_snapshot(
@@ -307,5 +311,6 @@ def collect_job_rows(job_stores: Mapping[str, Any], *, limit: int) -> list[dict[
             for job_id, job in all_jobs(limit=limit):
                 rows.append({"source": f"{kind}_job", "job_id": job_id, **job})
         except Exception:
+            logger.warning("failed to collect %s job rows for agent research context", kind, exc_info=True)
             continue
     return rows[-limit:]

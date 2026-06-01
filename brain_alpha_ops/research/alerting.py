@@ -11,8 +11,14 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 import json
+import logging
 from typing import Any, Callable
 from urllib import error, request
+
+from brain_alpha_ops.redaction import redact_error_message, redact_text
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -77,7 +83,13 @@ class AlertDeliveryService:
                 self.sender(payload)
                 sender_result = {"delivered": True}
             except Exception as exc:
-                sender_result = {"delivered": False, "error": str(exc)}
+                message = redact_error_message(exc)
+                logger.warning(
+                    "alert callback sender failed for channel=%s: %s",
+                    redact_text(clean_channel, max_length=80),
+                    message,
+                )
+                sender_result = {"delivered": False, "error": message}
         payload["transport"] = transport
         payload["sender"] = sender_result
         payload["persisted"] = persist_result
@@ -127,9 +139,17 @@ class AlertDeliveryService:
             with request.urlopen(req, timeout=5) as response:
                 return {"delivered": True, "status": getattr(response, "status", 200)}
         except error.HTTPError as exc:
-            return {"delivered": False, "status": exc.code, "error": str(exc), "blocking_error": exc.code >= 500}
+            logger.warning("alert webhook returned HTTP error status=%s", exc.code)
+            return {
+                "delivered": False,
+                "status": exc.code,
+                "error": redact_error_message(exc),
+                "blocking_error": exc.code >= 500,
+            }
         except Exception as exc:
-            return {"delivered": False, "error": str(exc), "blocking_error": False}
+            message = redact_error_message(exc)
+            logger.warning("alert webhook delivery failed: %s", message)
+            return {"delivered": False, "error": message, "blocking_error": False}
 
 
 class AlertRouter:

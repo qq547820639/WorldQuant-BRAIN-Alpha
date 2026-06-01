@@ -31,6 +31,8 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
+from brain_alpha_ops.redaction import redact_error_message, redact_text
+
 logger = logging.getLogger(__name__)
 
 # Pre-compiled tokenizer regex — executed once at import, not per-expression
@@ -1003,8 +1005,11 @@ class LocalBacktestEngine:
                 "pass_local": False,
             }
         except Exception as exc:
-            # Unexpected: log full traceback for debugging
-            logger.exception("unexpected error evaluating expression: %s", expression)
+            logger.error(
+                "unexpected error evaluating expression: %s; error=%s",
+                redact_text(expression, max_length=180),
+                redact_error_message(exc),
+            )
             return {
                 "ok": False,
                 "expression": expression,

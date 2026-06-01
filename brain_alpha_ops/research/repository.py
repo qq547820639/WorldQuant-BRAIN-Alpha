@@ -12,7 +12,7 @@ from typing import Any
 
 from brain_alpha_ops.jsonl import read_jsonl_tail
 from brain_alpha_ops.models import Candidate, PipelineEvent, utc_now
-from brain_alpha_ops.redaction import redact_data
+from brain_alpha_ops.redaction import redact_data, redact_error_message, redact_text
 from brain_alpha_ops.research.contracts import (
     assistant_guidance_record,
     backtest_record,
@@ -309,11 +309,10 @@ class ResearchRepository:
 
             ExpressionSqliteIndex(self.storage_dir).append_record(record, source_file=filename)
         except Exception as exc:
-            logger.debug(
+            logger.warning(
                 "failed to update incremental expression sqlite cache for %s: %s",
-                filename,
-                exc,
-                exc_info=True,
+                redact_text(filename, max_length=120),
+                redact_error_message(exc),
             )
 
     def _update_record_sqlite_cache(self, filename: str, record: dict[str, Any]) -> None:
@@ -324,11 +323,10 @@ class ResearchRepository:
 
             RecordSqliteIndex(self.storage_dir).append_record(record, source_file=filename)
         except Exception as exc:
-            logger.debug(
+            logger.warning(
                 "failed to update incremental record sqlite cache for %s: %s",
-                filename,
-                exc,
-                exc_info=True,
+                redact_text(filename, max_length=120),
+                redact_error_message(exc),
             )
 
 

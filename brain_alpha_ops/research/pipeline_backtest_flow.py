@@ -6,7 +6,7 @@ import logging
 import time
 
 from brain_alpha_ops.models import Candidate
-from brain_alpha_ops.redaction import redact_error_message
+from brain_alpha_ops.redaction import redact_error_message, redact_text
 
 from .anti_overfit import AntiOverfitService
 from .pipeline_helpers import blocked_gate as _blocked_gate, expr_key as _expr_key, rank_candidates
@@ -221,7 +221,7 @@ class PipelineBacktestMixin:
                     f"Cycle {cycle}: Alpha {candidate.alpha_id} passed {report.passed_count}/{report.total} checks.",
                     candidate.alpha_id, level="INFO")
         except Exception:
-            logger.warning("AlphaCheckRegistry failed for %s", candidate.alpha_id, exc_info=True)
+            logger.warning("AlphaCheckRegistry failed for %s", redact_text(candidate.alpha_id, max_length=64))
 
     def _run_robustness_checks(self, candidate: Candidate, cycle: int) -> None:
         """Attach deterministic robustness reports after official metrics arrive."""

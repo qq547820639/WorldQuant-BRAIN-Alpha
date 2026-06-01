@@ -40,6 +40,8 @@ from enum import Enum, auto
 from pathlib import Path
 from typing import Any, Callable
 
+from brain_alpha_ops.redaction import redact_error_message, redact_text
+
 logger = logging.getLogger(__name__)
 
 STAGE_SCHEMA_VERSION = "pipeline_stages.v1"
@@ -119,9 +121,9 @@ class PipelineStage(ABC):
                 _merge_context(ctx, updated_ctx)
         except Exception as exc:
             result.status = StageStatus.FAILED
-            result.error = str(exc)
+            result.error = redact_error_message(exc)
             result.duration_seconds = time.perf_counter() - started
-            logger.error("pipeline stage %s failed: %s", self.stage_name, exc, exc_info=True)
+            logger.error("pipeline stage %s failed: %s", self.stage_name, result.error)
 
         result.completed_at = datetime.now(timezone.utc).isoformat()
         return result
@@ -270,7 +272,11 @@ class OfficialValidationStage(PipelineStage):
                     candidate.lifecycle_status = "validation_failed"
                 validated.append(candidate)
             except Exception as exc:
-                logger.warning("validation failed for %s: %s", candidate.alpha_id, exc)
+                logger.warning(
+                    "validation failed for %s: %s",
+                    redact_text(candidate.alpha_id, max_length=64),
+                    redact_error_message(exc),
+                )
                 candidate.lifecycle_status = "validation_error"
                 validated.append(candidate)
 
@@ -321,7 +327,11 @@ class SimulationStage(PipelineStage):
                 else:
                     candidate.lifecycle_status = "simulation_failed"
             except Exception as exc:
-                logger.warning("simulation failed for %s: %s", candidate.alpha_id, exc)
+                logger.warning(
+                    "simulation failed for %s: %s",
+                    redact_text(candidate.alpha_id, max_length=64),
+                    redact_error_message(exc),
+                )
                 candidate.lifecycle_status = "simulation_error"
 
         return pipeline
@@ -424,7 +434,7 @@ class SubmissionStage(PipelineStage):
                 api.authenticate()
                 check = api.check_alpha(candidate.official_alpha_id)
                 if str(check.get("status", "")).upper() not in {"PASS", "PASSED"}:
-                    logger.warning("pre-submit check failed for %s", candidate.official_alpha_id)
+                    logger.warning("pre-submit check failed for %s", redact_text(candidate.official_alpha_id, max_length=64))
                     continue
 
                 settings = pipeline.ops.settings.to_platform_dict()["settings"]
@@ -436,9 +446,13 @@ class SubmissionStage(PipelineStage):
                 ledger.record(candidate, result, mode="auto")
                 candidate.lifecycle_status = "submitted"
                 submitted += 1
-                logger.info("submitted alpha %s", candidate.official_alpha_id)
+                logger.info("submitted alpha %s", redact_text(candidate.official_alpha_id, max_length=64))
             except Exception as exc:
-                logger.error("submission failed for %s: %s", candidate.official_alpha_id, exc)
+                logger.error(
+                    "submission failed for %s: %s",
+                    redact_text(candidate.official_alpha_id, max_length=64),
+                    redact_error_message(exc),
+                )
 
         logger.info("submission stage: %d submitted", submitted)
         return pipeline

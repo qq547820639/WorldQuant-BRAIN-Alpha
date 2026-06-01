@@ -39,6 +39,7 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from brain_alpha_ops.redaction import redact_data
+from brain_alpha_ops.redaction import redact_error_message
 
 logger = logging.getLogger(__name__)
 
@@ -348,7 +349,10 @@ class CrossReviewPipeline:
                 min_confidence=min_confidence,
             )
         except Exception as exc:
-            logger.warning("cross_review failed, falling back to offline reviewer: %s", exc)
+            logger.warning(
+                "cross_review failed, falling back to offline reviewer: %s",
+                redact_error_message(exc, max_length=160),
+            )
             from brain_alpha_ops.research.llm_review import CrossReviewService
             primary = _ensure_dict_response(primary_response)
             service = CrossReviewService(provider=None)
@@ -470,7 +474,7 @@ class CrossReviewPipeline:
             })
             audit_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, default=str) + "\n", encoding="utf-8")
         except OSError as exc:
-            logger.warning("failed to write review audit trail: %s", exc)
+            logger.warning("failed to write review audit trail: %s", redact_error_message(exc, max_length=160))
 
 
 # ═══════════════════════════════════════════════════════════════════════════

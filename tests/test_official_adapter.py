@@ -1,5 +1,6 @@
 import io
 import json
+import logging
 import os
 import sys
 import tempfile
@@ -10,6 +11,7 @@ import urllib.request
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from brain_alpha_ops.brain_api.base import BrainAPIError
+from brain_alpha_ops.brain_api import official as official_module
 from brain_alpha_ops.brain_api.official import OfficialBrainAPI, build_simulation_payload, normalize_metrics
 from brain_alpha_ops.config import BrainSettings, OfficialAPIConfig
 
@@ -263,6 +265,22 @@ def test_list_fields_uses_stale_cache_on_429():
             assert fields[0]["name"] == "close"
         finally:
             time.sleep = original_sleep
+
+
+def test_read_cache_warns_on_invalid_cache_file(caplog):
+    with tempfile.TemporaryDirectory() as tmp:
+        api = OfficialBrainAPI(
+            OfficialAPIConfig(base_url="https://example.test", cache_dir=tmp),
+            token="token",
+        )
+        cache_name = "fields_bad.json"
+        api._cache_path(cache_name).write_text("{not-json", encoding="utf-8")
+
+        with caplog.at_level(logging.WARNING):
+            result = api._read_cache(cache_name)
+
+    assert result == {"items": [], "fresh": False}
+    assert "failed to read official API cache" in caplog.text
 
 
 def test_429_error_exposes_status_code():
@@ -647,6 +665,46 @@ def test_list_user_alphas_stops_on_repeated_full_page():
         assert len(calls) == 2
         assert progress[-1]["warning"] == "repeated_page"
         assert progress[-1]["truncated"] is True
+
+
+def test_list_user_alphas_stops_at_max_pages_limit(monkeypatch, caplog):
+    calls = []
+
+    class Response:
+        headers = {"Content-Type": "application/json"}
+
+        def __init__(self, offset: int):
+            self.offset = offset
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self):
+            rows = [{"id": f"a{self.offset + index}", "regular": f"rank(field_{self.offset + index})"} for index in range(100)]
+            return json.dumps({"count": 1000, "results": rows}).encode()
+
+    monkeypatch.setattr(official_module, "_MAX_USER_ALPHAS_PAGES", 2)
+
+    with tempfile.TemporaryDirectory() as tmp, caplog.at_level(logging.WARNING):
+        api = OfficialBrainAPI(
+            OfficialAPIConfig(base_url="https://example.test", cache_dir=tmp, min_request_interval_seconds=0),
+            token="token",
+        )
+
+        def fake_open(req, timeout=None):
+            calls.append(req.full_url)
+            offset = int(req.full_url.rsplit("offset=", 1)[-1].split("&", 1)[0])
+            return Response(offset)
+
+        api._open = fake_open
+        rows = api.list_user_alphas("3d")
+
+    assert len(rows) == 200
+    assert len(calls) == 2
+    assert "user_alphas pagination reached max pages limit (2)" in caplog.text
 
 
 def test_list_user_alphas_fetches_past_previous_10000_cap():

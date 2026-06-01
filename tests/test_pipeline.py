@@ -1,5 +1,6 @@
-import tempfile
 import json
+import logging
+import tempfile
 from pathlib import Path
 
 from brain_alpha_ops.brain_api.base import BrainAPIError
@@ -9,6 +10,18 @@ from brain_alpha_ops.models import Candidate
 from brain_alpha_ops.research.knowledge_base import KnowledgeEntry, StructuredKnowledgeBase
 from brain_alpha_ops.research.pipeline import AlphaResearchPipeline
 from brain_alpha_ops.research.repository import ResearchRepository
+
+
+def _single_cycle_config(tmp_path, **budget_overrides):
+    budget_kwargs = {
+        "max_candidates_per_cycle": 3,
+        "max_official_validations_per_cycle": 0,
+        "max_official_simulations_per_cycle": 0,
+        "max_cycles": 1,
+        "require_cloud_sync": False,
+    }
+    budget_kwargs.update(budget_overrides)
+    return OpsConfig(budget=ResearchBudget(**budget_kwargs), storage_dir=str(tmp_path))
 
 
 def test_pipeline_runs_production_stub_end_to_end():
@@ -32,6 +45,124 @@ def test_pipeline_runs_production_stub_end_to_end():
         assert first_event["data"]["schema_version"] == "observability.v1"
         assert first_event["data"]["run_id"] == data["run_id"]
         assert first_event["data"]["event"] == first_event["event"]
+
+
+def test_pipeline_auto_calibration_uses_config_storage_dir(monkeypatch, tmp_path):
+    captured = {}
+
+    def fake_auto_calibrate_if_stalled(storage_dir):
+        captured["storage_dir"] = storage_dir
+        return {
+            "ok": True,
+            "triggered": True,
+            "reason": "score_history_stalled",
+            "advice": {"prior_layer_weight": 0.31},
+        }
+
+    monkeypatch.setattr(
+        "brain_alpha_ops.research.calibration.auto_calibrate_if_stalled",
+        fake_auto_calibrate_if_stalled,
+    )
+    config = OpsConfig(
+        budget=ResearchBudget(
+            max_candidates_per_cycle=3,
+            max_official_validations_per_cycle=0,
+            max_official_simulations_per_cycle=0,
+            max_cycles=1,
+            require_cloud_sync=False,
+        ),
+        storage_dir=str(tmp_path),
+    )
+
+    result = AlphaResearchPipeline(config=config, api=ProductionBrainAPIStub()).run(auto_submit=False)
+
+    assert captured["storage_dir"] == str(tmp_path)
+    event = next(event for event in result.events if event.event == "auto_calibration")
+    assert event.message == "Auto-calibration triggered: score_history_stalled"
+    assert event.data["triggered"] is True
+    assert event.data["reason"] == "score_history_stalled"
+    assert event.data["advice"] == {"prior_layer_weight": 0.31}
+
+
+def test_pipeline_logs_context_refresh_exceptions(monkeypatch, caplog, tmp_path):
+    class FailingContextLoader:
+        def refresh(self):
+            raise RuntimeError("context refresh unavailable")
+
+        def get_datasets(self):
+            class Dataset:
+                id = "pv1"
+
+            return [Dataset()]
+
+    pipeline = AlphaResearchPipeline(
+        config=_single_cycle_config(tmp_path),
+        api=ProductionBrainAPIStub(),
+    )
+    pipeline._loader = FailingContextLoader()
+    monkeypatch.setattr(
+        pipeline,
+        "_load_official_context",
+        lambda: ([{"id": "close", "name": "close", "dataset": "pv1"}], [{"name": "rank"}]),
+    )
+
+    with caplog.at_level(logging.WARNING, logger="brain_alpha_ops.research.pipeline"):
+        result = pipeline.run(auto_submit=False)
+
+    event = next(event for event in result.events if event.event == "context_refresh_error")
+    assert event.level == "ERROR"
+    assert "context refresh unavailable" in event.message
+    assert "Context refresh exception in cycle 1" in caplog.text
+    assert "context refresh unavailable" in caplog.text
+
+
+def test_pipeline_logs_scoring_calibration_exceptions(monkeypatch, caplog, tmp_path):
+    pipeline = AlphaResearchPipeline(
+        config=_single_cycle_config(tmp_path),
+        api=ProductionBrainAPIStub(),
+    )
+    monkeypatch.setattr(pipeline.auto_calibrator, "needs_calibration", lambda: True)
+
+    def fail_calibrate():
+        """Fail during calibration for warning coverage."""
+        raise RuntimeError("score calibration unavailable")
+
+    monkeypatch.setattr(pipeline.auto_calibrator, "calibrate", fail_calibrate)
+
+    with caplog.at_level(logging.WARNING, logger="brain_alpha_ops.research.pipeline"):
+        result = pipeline.run(auto_submit=False)
+
+    event = next(event for event in result.events if event.event == "scoring_calibration_failed")
+    assert event.level == "WARN"
+    assert "score calibration unavailable" in event.message
+    assert "Scoring auto-calibration failed in cycle 1" in caplog.text
+    assert "score calibration unavailable" in caplog.text
+
+
+def test_pipeline_logs_secondary_fusion_exceptions(monkeypatch, caplog, tmp_path):
+    pipeline = AlphaResearchPipeline(
+        config=_single_cycle_config(tmp_path, enable_secondary_fusion=True),
+        api=ProductionBrainAPIStub(),
+    )
+    monkeypatch.setattr(
+        pipeline.convergence,
+        "summary",
+        lambda: {"stalled": True, "stall_cycles": 3},
+    )
+
+    def fail_fusion(*_args, **_kwargs):
+        raise RuntimeError("fusion unavailable")
+
+    monkeypatch.setattr(pipeline, "_try_fusion_top_candidates", fail_fusion)
+
+    with caplog.at_level(logging.WARNING, logger="brain_alpha_ops.research.pipeline"):
+        result = pipeline.run(auto_submit=False)
+
+    event = next(event for event in result.events if event.event == "fusion_attempt_failed")
+    assert event.level == "WARN"
+    assert "fusion unavailable" in event.message
+    assert "Secondary fusion attempt failed in cycle 1" in caplog.text
+    assert "fusion unavailable" in caplog.text
 
 
 def test_pipeline_auto_submit_is_guarded():

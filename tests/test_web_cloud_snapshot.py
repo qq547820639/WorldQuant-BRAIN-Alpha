@@ -2,12 +2,17 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 import json
+import logging
+import os
+from pathlib import Path
 from types import SimpleNamespace
 
+from brain_alpha_ops.runtime_constants import CloudDefaults
 from brain_alpha_ops.web_cloud_snapshot import (
     cached_user_alpha_paths,
     cloud_alpha_snapshot,
     datasets_from_fields,
+    latest_cached_user_alphas,
     official_context_file_counts,
     read_storage_jsonl_stats,
     save_official_context_json,
@@ -135,6 +140,69 @@ def test_cached_user_alpha_paths_are_bounded_to_recent_files(tmp_path):
 
     assert len(paths) == 3
     assert all(path.name.startswith("user_alphas_") for path in paths)
+
+
+def test_cached_user_alpha_paths_warns_when_cache_dir_unreadable(monkeypatch, tmp_path, caplog):
+    storage = tmp_path / "storage"
+    cache = tmp_path / "cache"
+    storage.mkdir()
+    cache.mkdir()
+    load_config = _loader(storage, cache)
+    original_glob = Path.glob
+
+    def fail_glob(self, pattern):
+        if self == cache:
+            raise OSError("permission denied")
+        return original_glob(self, pattern)
+
+    monkeypatch.setattr(Path, "glob", fail_glob)
+
+    with caplog.at_level(logging.WARNING):
+        paths = cached_user_alpha_paths(load_config=load_config, max_files=3)
+
+    assert paths == []
+    assert "failed to list cached user alpha files from" in caplog.text
+
+
+def test_latest_cached_user_alphas_warns_and_skips_bad_cache_files(tmp_path, caplog):
+    storage = tmp_path / "storage"
+    cache = tmp_path / "cache"
+    storage.mkdir()
+    cache.mkdir()
+    load_config = _loader(storage, cache)
+    bad = cache / "user_alphas_bad.json"
+    good = cache / "user_alphas_good.json"
+    bad.write_text("{not-json", encoding="utf-8")
+    good.write_text(json.dumps({"results": [{"id": "cloud_1"}]}), encoding="utf-8")
+    os.utime(good, (1, 1))
+    os.utime(bad, (2, 2))
+
+    with caplog.at_level(logging.WARNING):
+        rows = latest_cached_user_alphas(load_config=load_config, max_files=3)
+
+    assert rows == [{"id": "cloud_1"}]
+    assert "failed to read cached user alpha file" in caplog.text
+    assert str(bad) in caplog.text
+
+
+def test_save_official_context_json_warns_when_config_resolution_fails(tmp_path, caplog):
+    def fail_load_config():
+        raise RuntimeError("config unavailable")
+
+    with caplog.at_level(logging.WARNING):
+        save_official_context_json(
+            "official_fields.json",
+            [{"id": "close"}],
+            load_config=fail_load_config,
+            runtime_root=lambda: tmp_path,
+        )
+
+    target = tmp_path / CloudDefaults.OFFICIAL_CONTEXT_DATA_DIR / "official_fields.json"
+    metadata = tmp_path / CloudDefaults.OFFICIAL_CONTEXT_DATA_DIR / "official_fields.meta.json"
+    assert target.exists()
+    assert metadata.exists()
+    assert "failed to resolve configured storage dir while saving official context" in caplog.text
+    assert "config unavailable" in caplog.text
 
 
 def test_datasets_from_fields_aggregates_dataset_references(tmp_path):

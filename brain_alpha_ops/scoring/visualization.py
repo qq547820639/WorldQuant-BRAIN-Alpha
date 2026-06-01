@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
+
+
+logger = logging.getLogger(__name__)
 
 
 def build_score_visualization_payload(scorecard: dict[str, Any], *, max_nodes: int = 40) -> dict[str, Any]:
@@ -14,10 +18,12 @@ def build_score_visualization_payload(scorecard: dict[str, Any], *, max_nodes: i
 
             tree = build_attribution_tree(scorecard).to_dict()
         except Exception:
+            logger.warning("failed to build score attribution tree visualization", exc_info=True)
             tree = {}
 
     nodes: list[dict[str, Any]] = []
-    _flatten_tree(tree, nodes, parent="", depth=0, max_nodes=max(1, int(max_nodes or 1)))
+    if tree:
+        _flatten_tree(tree, nodes, parent="", depth=0, max_nodes=max(1, int(max_nodes or 1)))
     bars = [
         {
             "name": node["name"],

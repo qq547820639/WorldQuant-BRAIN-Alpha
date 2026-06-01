@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any, Callable
 
 from brain_alpha_ops.config import RunConfig
 from brain_alpha_ops.official_context_datasets import list_official_datasets_or_derive
 from brain_alpha_ops.research.repository import ResearchRepository
+
+logger = logging.getLogger(__name__)
 
 
 RunConfigFromPayload = Callable[[dict[str, Any]], RunConfig]
@@ -45,6 +48,7 @@ def sync_cloud_alphas_payload(
         )
         persist_official_context(fields, operators, datasets)
     except Exception:
+        logger.warning("official context sync failed; falling back to default fields/operators", exc_info=True)
         fields = list(default_fields)
         operators = list(default_operators)
         datasets = []

@@ -8,7 +8,7 @@ from typing import Callable
 
 from brain_alpha_ops.config import OpsConfig
 from brain_alpha_ops.models import Candidate, new_id
-from brain_alpha_ops.redaction import redact_error_message
+from brain_alpha_ops.redaction import redact_error_message, redact_text
 
 from .expression_ast import expression_key
 from .generator import extract_fields, extract_operators, local_quality, mutate_expression
@@ -105,14 +105,14 @@ class SecondaryFusionService:
             message = redact_error_message(exc)
             logger.warning(
                 "diagnostics unavailable for secondary fusion candidate %s: %s",
-                candidate.alpha_id,
+                redact_text(candidate.alpha_id, max_length=64),
                 message,
                 exc_info=True,
             )
             self.event(
                 "secondary_fusion_diagnostics_unavailable",
                 f"Falling back to simple mutation heuristics: {message}",
-                candidate.alpha_id,
+                redact_text(candidate.alpha_id, max_length=64),
                 level="WARN",
             )
             diagnostic = {}

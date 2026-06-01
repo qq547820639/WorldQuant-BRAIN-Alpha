@@ -1,3 +1,4 @@
+import builtins
 import json
 
 from brain_alpha_ops.e2e_report import build_e2e_artifact_summary, render_markdown_summary
@@ -73,6 +74,29 @@ def test_render_markdown_summary_contains_core_sections(tmp_path):
     assert "## Evidence Files" in markdown
     assert "## Sensitive Handling" in markdown
     assert "screenshot" in markdown
+
+
+def test_e2e_artifact_summary_logs_unavailable_contract_checker(tmp_path, monkeypatch, caplog):
+    html_path = tmp_path / "brain_alpha_ops" / "web" / "index.html"
+    html_path.parent.mkdir(parents=True)
+    html_path.write_text("<html></html>", encoding="utf-8")
+
+    original_import = builtins.__import__
+
+    def fail_contract_checker_import(name, globals=None, locals=None, fromlist=(), level=0):
+        if name == "scripts.check_web_console_contract":
+            raise RuntimeError("checker unavailable")
+        return original_import(name, globals, locals, fromlist, level)
+
+    monkeypatch.setattr(builtins, "__import__", fail_contract_checker_import)
+
+    with caplog.at_level("WARNING"):
+        payload = build_e2e_artifact_summary(root=tmp_path)
+
+    contract = payload["web_console_contract"]
+    assert contract["ok"] is False
+    assert contract["findings"][0]["code"] == "checker_unavailable"
+    assert any("web console contract checker unavailable" in record.getMessage() for record in caplog.records)
 
 
 def test_summarize_e2e_artifacts_cli_writes_json_and_markdown(tmp_path, capsys):

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import logging
 from pathlib import Path
 from typing import Any, Callable
 
@@ -19,6 +20,8 @@ EventCallback = Callable[..., None]
 HaltCallback = Callable[[str], None]
 
 GENERAL_DATASET_FIELDS = {"returns", "sector", "industry", "subindustry", "market"}
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -80,6 +83,7 @@ def active_dataset_field_names(dataset_id: str, mapper: Any, cache: dict[str, se
     try:
         fields = {str(field).lower() for field in mapper.fields_for(dataset)}
     except Exception:
+        logger.warning("active dataset field lookup unavailable for dataset_id=%s", dataset, exc_info=True)
         fields = set()
     cache[dataset] = fields
     return fields
@@ -140,6 +144,10 @@ class OfficialContextLoadService:
             return self._load_from_json()
         except Exception as exc:
             context_warning = f"Official JSON load failed ({exc}), falling back to API..."
+            logger.warning(
+                "official context JSON load failed; falling back to API",
+                exc_info=True,
+            )
         return self._load_from_api(context_warning)
 
     def _load_from_json(self) -> OfficialContextLoadResult:
@@ -274,6 +282,7 @@ class OfficialContextLoadService:
                 f"Active dataset: {active_dataset_id or '(none)'}",
             )
         except Exception as exc:
+            logger.warning("advanced official context components unavailable; using base generator context", exc_info=True)
             self.event(
                 "advanced_components_fallback",
                 f"Could not wire advanced components: {exc}. "

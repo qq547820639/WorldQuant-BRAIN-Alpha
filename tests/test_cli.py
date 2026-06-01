@@ -1,5 +1,7 @@
 import json
+import logging
 
+from brain_alpha_ops import cli
 from brain_alpha_ops.cli import _load_json_argument, main
 from brain_alpha_ops.config import RunConfig, write_run_config
 from brain_alpha_ops.models import Candidate
@@ -37,6 +39,22 @@ def test_cli_json_file_argument_accepts_utf8_bom(tmp_path):
     candidate_path.write_text('{"alpha_id": "bom_ok"}', encoding="utf-8-sig")
 
     assert _load_json_argument(str(candidate_path)) == {"alpha_id": "bom_ok"}
+
+
+def test_cli_unexpected_error_logs_warning(monkeypatch, caplog, capsys):
+    def fail_main(_args, _parser):
+        raise RuntimeError("backend unavailable")
+
+    monkeypatch.setattr(cli, "_main", fail_main)
+
+    with caplog.at_level(logging.WARNING, logger="brain_alpha_ops.cli"):
+        code = cli.main(["validate-config"])
+
+    payload = json.loads(capsys.readouterr().out)
+    assert code == 1
+    assert payload["error_code"] == "UNEXPECTED_ERROR"
+    assert "brain-alpha-ops CLI command failed unexpectedly" in caplog.text
+    assert "backend unavailable" in caplog.text
 
 
 def test_cli_memory_summary_writes_file(tmp_path, capsys):
@@ -660,6 +678,46 @@ def test_cli_run_validates_overridden_arguments(tmp_path, capsys):
     assert payload["ok"] is False
     assert payload["error_code"] == "CONFIG_VALIDATION_ERROR"
     assert "max_candidates_per_cycle" in payload["error"]
+
+
+def test_cli_run_rejects_non_official_base_url_override(tmp_path, capsys):
+    config = RunConfig(environment="production")
+    config.ops.storage_dir = str(tmp_path / "data")
+    config_path = tmp_path / "run_config.json"
+    write_run_config(config, config_path)
+
+    code = main(["run", "--config", str(config_path), "--base-url", "http://evil.internal:8080"])
+
+    assert code == 1
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["error_code"] == "CONFIG_VALIDATION_ERROR"
+    assert "base-url not allowed" in payload["error"]
+
+
+def test_cli_run_accepts_official_base_url_override(tmp_path, monkeypatch, capsys):
+    config = RunConfig(environment="production")
+    config.ops.storage_dir = str(tmp_path / "data")
+    config_path = tmp_path / "run_config.json"
+    write_run_config(config, config_path)
+    seen = {}
+
+    def fake_run_pipeline(run_config):
+        seen["base_url"] = run_config.ops.official_api.base_url
+        return type("Result", (), {"to_dict": lambda self: {"ok": True}})()
+
+    monkeypatch.setattr("brain_alpha_ops.cli.run_pipeline_from_config", fake_run_pipeline)
+
+    code = main([
+        "run",
+        "--config",
+        str(config_path),
+        "--base-url",
+        "https://api.worldquantbrain.com/",
+    ])
+
+    assert code == 0
+    assert seen["base_url"] == "https://api.worldquantbrain.com"
+    assert json.loads(capsys.readouterr().out)["ok"] is True
 
 
 def test_cli_run_rejects_command_line_credentials_by_default(tmp_path, capsys):

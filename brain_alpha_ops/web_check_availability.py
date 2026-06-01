@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Any, Callable
 
 from brain_alpha_ops.models import utc_now
+from brain_alpha_ops.redaction import redact_text
 from brain_alpha_ops.research.expression_ast import expression_key
 from brain_alpha_ops.research.safety import similarity
 from brain_alpha_ops.web_candidate_selection import is_passed_candidate_for_check, official_alpha_id
@@ -18,6 +20,8 @@ from brain_alpha_ops.web_risk_guidance import (
 
 SafeErrorMessage = Callable[[Exception], str]
 ObservabilityPreflight = Callable[[str], dict[str, Any]]
+
+logger = logging.getLogger(__name__)
 
 
 CHECK_LABELS: dict[str, tuple[str, str]] = {
@@ -107,7 +111,14 @@ def check_candidate_availability(
         try:
             official_check = api.check_alpha(official_id)
         except Exception as exc:
-            add("official_pre_submit_check", False, safe_error_message(exc))
+            message = safe_error_message(exc)
+            logger.warning(
+                "official pre-submit check failed for alpha_id=%s official_alpha_id=%s: %s",
+                redact_text(candidate.get("alpha_id", ""), max_length=64),
+                redact_text(official_id, max_length=64),
+                message,
+            )
+            add("official_pre_submit_check", False, message)
         else:
             official_check_passed = official_check.get("status") == "PASSED"
             add("official_pre_submit_check", official_check_passed, official_check.get("status", ""))

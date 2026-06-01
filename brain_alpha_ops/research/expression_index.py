@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 from collections import Counter, defaultdict
+import logging
 from pathlib import Path
 from typing import Any, Iterable
 
 from brain_alpha_ops.jsonl import read_jsonl_tail
 from brain_alpha_ops.research.expression_ast import expression_profile_summary, expression_similarity
+
+logger = logging.getLogger(__name__)
 
 
 DEFAULT_SOURCES = {
@@ -145,6 +148,7 @@ class ExpressionHistoryIndex:
 
             return ExpressionSqliteIndex(self.storage_dir).summary(top_n=top_n)
         except Exception:
+            logger.warning("sqlite expression index summary unavailable", exc_info=True)
             return {}
 
     def _sqlite_lookup(self, expression: str, *, top_n: int, min_similarity: float, max_scan_rows: int) -> dict[str, Any]:
@@ -161,6 +165,7 @@ class ExpressionHistoryIndex:
                 max_scan_rows=max_scan_rows,
             )
         except Exception:
+            logger.warning("sqlite expression index lookup unavailable", exc_info=True)
             return {}
 
     def records(

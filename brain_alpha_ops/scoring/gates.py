@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import logging
 from typing import Any, Callable
 
 from brain_alpha_ops.config import QualityThresholds
 from brain_alpha_ops.research.scoring import empirical_score
+
+logger = logging.getLogger(__name__)
 
 
 OFFICIAL_HARD_GATE_NAMES: set[str] = {
@@ -129,6 +132,7 @@ def _evaluate_gate(
     try:
         configured_passed = _call_gate_check(gate["check"], metrics, thresholds)
     except Exception as exc:
+        logger.warning("configured gate check failed: gate=%s", gate.get("name", ""), exc_info=True)
         configured_passed = False
         error = str(exc)
     official_row = official_rows.get(gate["name"]) if gate["type"] == "HARD" else None

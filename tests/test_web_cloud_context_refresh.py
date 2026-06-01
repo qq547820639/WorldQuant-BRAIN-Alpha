@@ -23,10 +23,13 @@ class Repo:
 
 
 class Api:
-    def __init__(self, fail_fields=False):
+    def __init__(self, fail_remote=False, fail_fields=False):
+        self.fail_remote = fail_remote
         self.fail_fields = fail_fields
 
     def list_user_alphas(self, sync_range, progress_callback=None):
+        if self.fail_remote:
+            raise RuntimeError("remote failed")
         if progress_callback:
             progress_callback({"scanned": 1, "total": 1})
         return [{"id": "remote_1"}]
@@ -63,29 +66,57 @@ def test_refresh_cloud_context_uses_local_cache():
     assert store.updates[-1]["progress"]["status_code"] == "CHECK_LOCAL_CACHE"
 
 
-def test_refresh_cloud_context_remote_persists_and_reports_partial_errors():
+def test_refresh_cloud_context_remote_failure_logs_warning_and_returns_error(caplog):
+    store = Store()
+    repo = Repo()
+
+    with caplog.at_level("WARNING"):
+        rows, error = refresh_cloud_context_for_check_service(
+            Api(fail_remote=True),
+            repo,
+            "7d",
+            "job_1",
+            1,
+            "full",
+            region="USA",
+            refresh_remote=True,
+            store=store,
+            official_context_file_counts=lambda: {},
+            datasets_from_fields=lambda fields: [{"id": "dataset"}],
+            persist_official_context=lambda fields, operators, datasets: None,
+            safe_error_message=str,
+        )
+
+    assert rows == []
+    assert error == "remote failed"
+    assert any("cloud alpha refresh failed" in record.getMessage() for record in caplog.records)
+
+
+def test_refresh_cloud_context_remote_persists_and_reports_partial_errors(caplog):
     store = Store()
     repo = Repo()
     persisted = []
 
-    rows, error = refresh_cloud_context_for_check_service(
-        Api(fail_fields=True),
-        repo,
-        "7d",
-        "job_1",
-        1,
-        "full",
-        region="USA",
-        refresh_remote=True,
-        store=store,
-        official_context_file_counts=lambda: {},
-        datasets_from_fields=lambda fields: [{"id": "dataset"}],
-        persist_official_context=lambda fields, operators, datasets: persisted.append((fields, operators, datasets)),
-        safe_error_message=str,
-    )
+    with caplog.at_level("WARNING"):
+        rows, error = refresh_cloud_context_for_check_service(
+            Api(fail_fields=True),
+            repo,
+            "7d",
+            "job_1",
+            1,
+            "full",
+            region="USA",
+            refresh_remote=True,
+            store=store,
+            official_context_file_counts=lambda: {},
+            datasets_from_fields=lambda fields: [{"id": "dataset"}],
+            persist_official_context=lambda fields, operators, datasets: persisted.append((fields, operators, datasets)),
+            safe_error_message=str,
+        )
 
     assert rows == [{"id": "remote_1"}]
     assert "fields refresh failed" in error
     assert repo.merged[0][1] == "7d"
     assert persisted[0][0] == []
     assert persisted[0][1] == [{"name": "rank"}]
+    assert any("official fields refresh failed" in record.getMessage() for record in caplog.records)

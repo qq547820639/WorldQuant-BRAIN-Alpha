@@ -9,6 +9,7 @@ from typing import Any, Callable
 from brain_alpha_ops.config import RunConfig
 from brain_alpha_ops.jsonl import read_jsonl_tail
 from brain_alpha_ops.models import utc_now
+from brain_alpha_ops.redaction import redact_error_message, redact_text
 from brain_alpha_ops.research.expression_ast import expression_key
 from brain_alpha_ops.research.observability import build_research_observability_snapshot
 from brain_alpha_ops.research.repository import ResearchRepository
@@ -335,10 +336,14 @@ def record_submit_blocked_event(
     except OSError as exc:
         log.error(
             "I/O error recording submission blocked for alpha_id=%s reason=%s: %s",
-            candidate.get("alpha_id", "?"), failure_reason, exc,
+            redact_text(candidate.get("alpha_id", "?"), max_length=64),
+            redact_text(failure_reason, max_length=160),
+            redact_error_message(exc),
         )
-    except Exception:
+    except Exception as exc:
         log.warning(
-            "failed to record submission blocked for alpha_id=%s reason=%s",
-            candidate.get("alpha_id", "?"), failure_reason, exc_info=True,
+            "failed to record submission blocked for alpha_id=%s reason=%s: %s",
+            redact_text(candidate.get("alpha_id", "?"), max_length=64),
+            redact_text(failure_reason, max_length=160),
+            redact_error_message(exc),
         )

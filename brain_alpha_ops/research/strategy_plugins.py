@@ -4,12 +4,16 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 import importlib
+import logging
 from typing import Any
+
+from brain_alpha_ops.redaction import redact_error_message, redact_text
 
 from .strategy_lifecycle import StrategyLifecyclePlugin
 
 
 REQUIRED_PLUGIN_METHODS = ("propose", "validate", "mutate", "retire")
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -26,7 +30,13 @@ class StrategyPluginRegistry:
             try:
                 registry.register(load_strategy_plugin(spec), spec=spec)
             except Exception as exc:
-                registry.load_errors.append({"spec": str(spec), "error": str(exc)})
+                message = redact_error_message(exc)
+                logger.warning(
+                    "strategy plugin load failed for spec=%s: %s",
+                    redact_text(spec, max_length=160),
+                    message,
+                )
+                registry.load_errors.append({"spec": str(spec), "error": message})
         return registry
 
     def register(self, plugin: StrategyLifecyclePlugin, *, spec: str = "") -> None:
@@ -70,9 +80,16 @@ class StrategyPluginRegistry:
                 rows.append(row)
                 self.runtime_events.append(row)
             except Exception as exc:
-                row = {"plugin": name, "action": action, "error": str(exc)}
+                message = redact_error_message(exc)
+                row = {"plugin": name, "action": action, "error": message}
                 self.runtime_errors.append(row)
-                rows.append({"plugin": name, "action": action, "status": "error", "error": str(exc)})
+                rows.append({"plugin": name, "action": action, "status": "error", "error": message})
+                logger.warning(
+                    "strategy plugin runtime failed for plugin=%s action=%s: %s",
+                    redact_text(name, max_length=120),
+                    action,
+                    message,
+                )
         self.runtime_events = self.runtime_events[-100:]
         self.runtime_errors = self.runtime_errors[-100:]
         return rows

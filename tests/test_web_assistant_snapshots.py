@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import json
+import logging
+from pathlib import Path
 
 from brain_alpha_ops.web_assistant_snapshots import (
     assistant_response_guidance_payload,
     durable_job_rows,
     latest_result_snapshot,
+    latest_run_history_path,
     prompt_run_ledger_snapshot,
     research_knowledge_snapshot,
 )
@@ -29,20 +32,22 @@ class _EmptyJobStore:
         return None
 
 
-def test_durable_job_rows_merges_available_stores_and_ignores_failures():
-    rows = durable_job_rows(
-        stores=[
-            ("production_job", _Store([("job_1", {"status": "completed"})])),
-            ("sync_job", _FailingStore()),
-            ("check_job", _Store([("job_2", {"status": "running"})])),
-        ],
-        limit=10,
-    )
+def test_durable_job_rows_merges_available_stores_and_warns_on_failures(caplog):
+    with caplog.at_level(logging.WARNING):
+        rows = durable_job_rows(
+            stores=[
+                ("production_job", _Store([("job_1", {"status": "completed"})])),
+                ("sync_job", _FailingStore()),
+                ("check_job", _Store([("job_2", {"status": "running"})])),
+            ],
+            limit=10,
+        )
 
     assert rows == [
         {"source": "production_job", "job_id": "job_1", "status": "completed"},
         {"source": "check_job", "job_id": "job_2", "status": "running"},
     ]
+    assert "durable job rows unavailable for source=sync_job" in caplog.text
 
 
 def test_latest_result_snapshot_restores_run_history(tmp_path):
@@ -68,6 +73,26 @@ def test_latest_result_snapshot_restores_run_history(tmp_path):
     assert snapshot["job_id"] == "run_1"
     assert snapshot["progress"]["phase_label"] == "最近结果"
     assert snapshot["result"]["candidates"] == [{"alpha_id": "a1"}]
+
+
+def test_latest_run_history_path_warns_when_history_dir_unreadable(monkeypatch, tmp_path, caplog):
+    storage = tmp_path / "data"
+    history_dir = storage / "run_history"
+    config = type("Config", (), {"ops": type("Ops", (), {"storage_dir": str(storage)})()})()
+    original_glob = Path.glob
+
+    def fail_glob(self, pattern):
+        if self == history_dir:
+            raise OSError("permission denied")
+        return original_glob(self, pattern)
+
+    monkeypatch.setattr(Path, "glob", fail_glob)
+
+    with caplog.at_level(logging.WARNING):
+        result = latest_run_history_path(load_config=lambda: config)
+
+    assert result is None
+    assert "failed to list run history files from" in caplog.text
 
 
 def test_assistant_response_guidance_payload_uses_bounded_min_confidence():

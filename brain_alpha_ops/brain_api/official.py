@@ -22,7 +22,7 @@ import urllib.request
 from typing import Any
 
 from brain_alpha_ops.config import BrainSettings, OfficialAPIConfig
-from brain_alpha_ops.redaction import redact_error_message
+from brain_alpha_ops.redaction import redact_error_message, redact_text
 
 from .base import BrainAPIError
 from .official_helpers import (
@@ -57,6 +57,7 @@ logger = logging.getLogger(__name__)
 _MAX_FIELDS_PAGES = 200
 _MAX_DATASETS_PAGES = 20
 _MAX_OPERATORS_PAGES = 20
+_MAX_USER_ALPHAS_PAGES = 500
 _MAX_FIELDS_ITEMS = 20_000
 _MAX_DATASETS_ITEMS = 2_000
 _MAX_OPERATORS_ITEMS = 2_000
@@ -90,7 +91,7 @@ class OfficialBrainAPI:
             "region": default_scope.region,
             "delay": int(default_scope.delay),
             "universe": default_scope.universe,
-            "dataset": default_scope.dataset,  # P1 修复：添加 dataset 字段
+            "dataset": default_scope.dataset,  # P1 fix: include dataset
         }
         self._prefer_cookie_auth = False
         self._last_request_at = 0.0
@@ -98,9 +99,7 @@ class OfficialBrainAPI:
         self._cache_lock = threading.Lock()
 
     def set_market_scope(self, settings: BrainSettings | dict | None):
-        # =========================================================================
-        # P1 修复：添加 dataset 字段传递，确保数据集选择器正确工作
-        # =========================================================================
+        # Keep dataset in the market scope so dataset selection continues to work.
         if isinstance(settings, BrainSettings):
             data = settings.__dict__
         elif isinstance(settings, dict):
@@ -112,7 +111,7 @@ class OfficialBrainAPI:
             "region": str(data.get("region", self._market_scope.get("region", "USA"))),
             "delay": int(data.get("delay", self._market_scope.get("delay", 1))),
             "universe": str(data.get("universe", self._market_scope.get("universe", "TOP3000"))),
-            "dataset": str(data.get("dataset", self._market_scope.get("dataset", ""))),  # P1 修复
+            "dataset": str(data.get("dataset", self._market_scope.get("dataset", ""))),  # P1 fix
         }
 
     def authenticate(self) -> dict:
@@ -475,7 +474,7 @@ class OfficialBrainAPI:
             page_params = dict(params)
             total = 0
             seen_page_signatures: set[str] = set()
-            while True:
+            for _page in range(1, _MAX_USER_ALPHAS_PAGES + 1):
                 try:
                     data, _headers = self._request("GET", self.config.user_alphas_path, query=page_params)
                 except BrainAPIError as exc:
@@ -516,6 +515,13 @@ class OfficialBrainAPI:
                 if len(page_items) < int(page_params["limit"]):
                     break
                 page_params["offset"] = int(page_params.get("offset", 0)) + int(page_params["limit"])
+            else:
+                logger.warning(
+                    "user_alphas pagination reached max pages limit (%d), items=%d total=%d",
+                    _MAX_USER_ALPHAS_PAGES,
+                    len(items),
+                    total,
+                )
             self._write_cache(cache_key, items, total)
             return items
         except BrainAPIError as exc:
@@ -615,7 +621,7 @@ class OfficialBrainAPI:
                 if op not in _known_ops and op.lower() not in _known_ops:
                     errors.append(f"Unknown operator: {op}")
             if len(set(used_ops)) > 8:
-                warnings.append(f"High operator count: {len(set(used_ops))} unique operators (BRAIN 建议 <= 8)")
+                warnings.append(f"High operator count: {len(set(used_ops))} unique operators (BRAIN recommends <= 8)")
 
         # P2-1: field existence check (against official field list)
         if _known_flds:
@@ -897,6 +903,7 @@ class OfficialBrainAPI:
                 "age_seconds": max(0, int(age)),
             }
         except (OSError, ValueError, TypeError, json.JSONDecodeError):
+            logger.warning("failed to read official API cache %s", redact_text(path, max_length=180))
             return {"items": [], "fresh": False}
 
     def _write_cache(self, name: str, items: list[dict], total: int = 0):
@@ -914,10 +921,14 @@ class OfficialBrainAPI:
                 tmp.write_text(payload, encoding="utf-8")
                 tmp.replace(path)
         except OSError as exc:
-            logger.warning("failed to write official API cache %s: %s", path, redact_error_message(exc))
+            logger.warning("failed to write official API cache %s: %s", redact_text(path, max_length=180), redact_error_message(exc))
             if tmp is not None:
                 try:
                     tmp.unlink()
                 except Exception as cleanup_exc:
-                    logger.debug("failed to remove temporary cache file %s: %s", tmp, redact_error_message(cleanup_exc))
+                    logger.debug(
+                        "failed to remove temporary cache file %s: %s",
+                        redact_text(tmp, max_length=180),
+                        redact_error_message(cleanup_exc),
+                    )
             return

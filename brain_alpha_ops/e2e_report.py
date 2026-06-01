@@ -5,10 +5,14 @@ from __future__ import annotations
 from collections import Counter
 from datetime import datetime, timezone
 import json
+import logging
 from pathlib import Path
 from typing import Any
 
 from brain_alpha_ops.redaction import redact_data, redact_text
+
+
+logger = logging.getLogger(__name__)
 
 
 SCHEMA_VERSION = "e2e_artifact_summary.v1"
@@ -360,6 +364,7 @@ def _read_web_console_contract(root: Path) -> dict[str, Any]:
     try:
         from scripts.check_web_console_contract import check_web_console_contract
     except Exception as exc:  # pragma: no cover - defensive for packaged use without scripts.
+        logger.warning("web console contract checker unavailable while building E2E summary", exc_info=True)
         return {
             "ok": False,
             "schema_version": "web_console_contract_check.v1",
