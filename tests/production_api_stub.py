@@ -243,7 +243,7 @@ class ProductionBrainAPIStub:
 
 
 def _metrics_for(expression: str) -> dict[str, Any]:
-    digest = hashlib.md5(expression.encode("utf-8")).hexdigest()
+    digest = hashlib.sha256(expression.encode("utf-8")).hexdigest()
     bucket = int(digest[:8], 16) % 100
     expr = expression.lower()
     quality_bonus = 0.0

@@ -8,7 +8,7 @@
     var Utils = window.Utils || {};
     var $ = deps.$ || Utils.$ || function (id) { return document.getElementById(id); };
     var esc = deps.esc || Utils.escapeHtml || function (value) { return String(value ?? ''); };
-    var setSafeHtml = deps.setSafeHtml || Utils.setSafeHtml || function (el, html) { if (el) el.textContent = String(html ?? ''); };
+    var setSafeHtml = deps.setSafeHtml || Utils.setRawHtml || function (el, html) { if (el) el.textContent = String(html ?? ''); };
     var state = deps.state || window.AppState;
     var Registry = deps.registry || window.ViewRegistry || {};
     var Spinner = deps.spinner || window.Spinner || {};

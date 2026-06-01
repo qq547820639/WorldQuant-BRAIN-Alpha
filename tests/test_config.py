@@ -57,6 +57,17 @@ def test_load_run_config_merges_nested_values():
         assert config.ops.thresholds.min_sharpe == 1.25
 
 
+def test_update_dataclass_rejects_invalid_field_types(caplog):
+    with caplog.at_level(logging.WARNING, logger="brain_alpha_ops.config"):
+        with pytest.raises(ConfigValidationError, match="ops.budget.max_cycles"):
+            config_mod._update_dataclass(
+                RunConfig(),
+                {"ops": {"budget": {"max_cycles": "forever"}}},
+            )
+
+    assert "invalid config type for ops.budget.max_cycles" in caplog.text
+
+
 def test_load_run_config_fills_empty_dataset_from_official_cache(tmp_path):
     data_dir = tmp_path / "data"
     data_dir.mkdir()

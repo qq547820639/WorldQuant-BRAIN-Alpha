@@ -1,6 +1,8 @@
 import json
 import logging
 
+import pytest
+
 from brain_alpha_ops import cli
 from brain_alpha_ops.cli import _load_json_argument, main
 from brain_alpha_ops.config import RunConfig, write_run_config
@@ -720,44 +722,14 @@ def test_cli_run_accepts_official_base_url_override(tmp_path, monkeypatch, capsy
     assert json.loads(capsys.readouterr().out)["ok"] is True
 
 
-def test_cli_run_rejects_command_line_credentials_by_default(tmp_path, capsys):
+def test_cli_run_rejects_command_line_credentials_arguments(tmp_path, capsys):
     config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path / "data")
     config_path = tmp_path / "run_config.json"
     write_run_config(config, config_path)
 
-    code = main(["run", "--config", str(config_path), "--token", "secret-token"])
+    with pytest.raises(SystemExit) as exc:
+        main(["run", "--config", str(config_path), "--token", "secret-token"])
 
-    assert code == 1
-    payload = json.loads(capsys.readouterr().out)
-    assert payload["error_code"] == "CONFIG_VALIDATION_ERROR"
-    assert "command-line credentials are disabled" in payload["error"]
-    assert "--allow-insecure-cli-credentials" in payload["error"]
-
-
-def test_cli_run_can_explicitly_allow_insecure_command_line_credentials(tmp_path, monkeypatch, capsys):
-    config = RunConfig(environment="production")
-    config.ops.storage_dir = str(tmp_path / "data")
-    config_path = tmp_path / "run_config.json"
-    write_run_config(config, config_path)
-
-    seen = {}
-
-    def fake_run_pipeline(run_config):
-        seen["token"] = run_config.credentials.token
-        return type("Result", (), {"to_dict": lambda self: {"ok": True}})()
-
-    monkeypatch.setattr("brain_alpha_ops.cli.run_pipeline_from_config", fake_run_pipeline)
-
-    code = main([
-        "run",
-        "--config",
-        str(config_path),
-        "--token",
-        "secret-token",
-        "--allow-insecure-cli-credentials",
-    ])
-
-    assert code == 0
-    assert seen["token"] == "secret-token"
-    assert json.loads(capsys.readouterr().out)["ok"] is True
+    assert exc.value.code == 2
+    assert "unrecognized arguments: --token secret-token" in capsys.readouterr().err

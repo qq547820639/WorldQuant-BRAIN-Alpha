@@ -10,7 +10,7 @@
   var esc = Utils.escapeHtml;
   var escapeAttr = Utils.escapeAttr;
   var renderSafeHtmlFragment = Utils.renderSafeHtmlFragment;
-  var setSafeHtml = Utils.setSafeHtml;
+  var setSafeHtml = Utils.setRawHtml;
   var candidateIdentity = VM.candidateIdentity;
 
   function create(deps) {

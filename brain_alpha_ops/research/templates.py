@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import random
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -10,6 +11,9 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from brain_alpha_ops.data import OfficialDataLoader, FieldDatasetMapper
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -117,8 +121,8 @@ class AlphaTemplateRegistry:
                         tags=list(item.get("tags", [])),
                     )
                     self._templates[tmpl.id] = tmpl
-            except (json.JSONDecodeError, OSError):
-                pass
+            except (json.JSONDecodeError, OSError) as exc:
+                logger.warning("failed to load alpha template JSON; using built-in templates: %s", exc)
 
         if not self._templates:
             for tmpl in _BUILTIN_TEMPLATES:

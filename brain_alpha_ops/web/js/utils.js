@@ -153,6 +153,11 @@
 
   Utils.setSafeHtml = function (el, html) {
     if (!el) return;
+    el.innerHTML = Utils.escapeHtml(String(html ?? ''));
+  };
+
+  Utils.setRawHtml = function (el, html) {
+    if (!el) return;
     el.innerHTML = String(html ?? '');
   };
 

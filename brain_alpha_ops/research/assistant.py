@@ -9,11 +9,12 @@ from __future__ import annotations
 
 from hashlib import sha256
 import json
+import logging
 import math
-import re
 from typing import Any
 
 from brain_alpha_ops.models import utc_now
+from brain_alpha_ops.research.assistant_json import AssistantResponseParseError, extract_json_payload as _extract_json_payload
 from brain_alpha_ops.research.context import render_context_prompt
 from brain_alpha_ops.research.guidance import assistant_guidance_digest
 from brain_alpha_ops.research.prompt_templates import load_system_prompt
@@ -25,6 +26,7 @@ ASSISTANT_RESPONSE_SCHEMA_VERSION = "assistant_response.v1"
 ASSISTANT_GUIDANCE_SCHEMA_VERSION = "assistant_generation_guidance.v1"
 DEFAULT_MAX_PROMPT_TOKENS = 6000
 INTERNAL_CONTEXT_METADATA_KEYS = {"sensitive_fields_redacted"}
+logger = logging.getLogger(__name__)
 
 ASSISTANT_RESPONSE_SCHEMA: dict[str, Any] = {
     "schema_version": ASSISTANT_RESPONSE_SCHEMA_VERSION,
@@ -60,10 +62,6 @@ ASSISTANT_RESPONSE_SCHEMA: dict[str, Any] = {
     },
     "additionalProperties": True,
 }
-
-
-class AssistantResponseParseError(ValueError):
-    """Raised when an assistant response cannot be parsed as useful JSON."""
 
 
 def build_assistant_request_pack(
@@ -604,33 +602,6 @@ def _compact_context_lists(value: Any, *, list_limit: int) -> Any:
 
 def _estimated_tokens(text: str) -> int:
     return max(1, len(str(text or "")) // 4)
-
-
-def _extract_json_payload(raw_output: str) -> Any:
-    raw = str(raw_output or "").strip()
-    if not raw:
-        raise AssistantResponseParseError("assistant response is empty")
-    if raw.startswith(("{", "[")):
-        try:
-            return json.loads(raw)
-        except json.JSONDecodeError:
-            pass
-
-    fenced = re.search(r"```(?:json)?\s*\n?(.*?)\n?```", raw, re.DOTALL | re.IGNORECASE)
-    if fenced:
-        try:
-            return json.loads(fenced.group(1).strip())
-        except json.JSONDecodeError:
-            pass
-
-    for pattern in (r"(\{.*\})", r"(\[.*\])"):
-        match = re.search(pattern, raw, re.DOTALL)
-        if match:
-            try:
-                return json.loads(match.group(1))
-            except json.JSONDecodeError:
-                continue
-    raise AssistantResponseParseError(f"cannot extract valid JSON from assistant response: {raw[:200]}")
 
 
 def _offline_summary(

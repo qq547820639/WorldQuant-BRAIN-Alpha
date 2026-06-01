@@ -1,4 +1,5 @@
 import json
+import logging
 import tempfile
 from pathlib import Path
 
@@ -65,6 +66,18 @@ def test_ledger_persists_expression_summary():
         assert row["expression_fingerprint"]
         assert row["expression_profile"]["operators"] == ["rank", "ts_delta"]
         assert row["expression_profile"]["fields"] == ["close"]
+
+
+def test_ledger_records_warns_on_corrupt_json_line(tmp_path, caplog):
+    path = tmp_path / "submissions.jsonl"
+    path.write_text('{"status": "SUBMITTED"}\n{bad json\n', encoding="utf-8")
+    ledger = SubmissionLedger(str(tmp_path))
+
+    with caplog.at_level(logging.WARNING, logger="brain_alpha_ops.research.safety"):
+        records = ledger.records()
+
+    assert records == [{"status": "SUBMITTED"}]
+    assert "corrupt submission ledger JSON line skipped" in caplog.text
 
 
 def test_similarity_detects_micro_variant():

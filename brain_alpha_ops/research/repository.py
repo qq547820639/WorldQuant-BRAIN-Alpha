@@ -188,10 +188,16 @@ class ResearchRepository:
             return latest
         try:
             with path.open("r", encoding="utf-8") as f:
-                for line in f:
+                for line_number, line in enumerate(f, start=1):
                     try:
                         record = json.loads(line)
-                    except json.JSONDecodeError:
+                    except json.JSONDecodeError as exc:
+                        logger.warning(
+                            "corrupt cloud alpha JSON line skipped: %s:%d: %s",
+                            path,
+                            line_number,
+                            redact_error_message(exc),
+                        )
                         continue
                     alpha_id = _cloud_alpha_id(record)
                     if alpha_id:

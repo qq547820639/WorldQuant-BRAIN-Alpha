@@ -15,6 +15,7 @@ Usage:
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import math
@@ -607,7 +608,6 @@ class OfficialScoringSystem:
     # ── Config Hash ──
 
     def _config_hash(self) -> str:
-        import hashlib
         data = json.dumps({
             "thresholds": {
                 k: getattr(self.thresholds, k)

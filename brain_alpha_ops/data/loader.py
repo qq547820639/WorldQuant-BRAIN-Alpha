@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 import logging
 import threading
+import time
 from pathlib import Path
 import shutil
 import sys
@@ -186,8 +187,7 @@ class OfficialDataLoader:
         self._load_datasets(root / "official_datasets.json")
         # Warn if all official JSON files failed to load — fallback will be used
         if not self._fields and not self._operators and not self._datasets:
-            import logging
-            logging.warning(
+            _log.warning(
                 "OfficialDataLoader: No official data JSON files loaded "
                 "(%s/*.json). Falling back to context_defaults built-in lists. "
                 "Run pipeline with valid credentials to refresh from BRAIN API.",
@@ -309,12 +309,11 @@ class OfficialDataLoader:
             except Exception as exc:
                 last_error = redact_error_message(exc)
                 if attempt < max_retries:
-                    import time as _time
                     _log.warning(
                         "OfficialDataLoader.refresh() attempt %d/%d failed: %s. Retrying...",
                         attempt, max_retries, last_error[:120]
                     )
-                    _time.sleep(1.0 * attempt)  # progressive backoff
+                    time.sleep(1.0 * attempt)  # progressive backoff
                     # Restore backups for retry
                     self._fields = dict(backup_fields)
                     self._fields_by_name = self._rebuild_name_index(self._fields)

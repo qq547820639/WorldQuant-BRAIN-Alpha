@@ -7,7 +7,7 @@
 
   var $ = window.Utils.$;
   var esc = window.Utils.escapeHtml;
-  var setSafeHtml = window.Utils.setSafeHtml;
+  var setSafeHtml = window.Utils.setRawHtml;
   var visible = false;
   var _messageTimer = null;
   var _stageMessages = [];

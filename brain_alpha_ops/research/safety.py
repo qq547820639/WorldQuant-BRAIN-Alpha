@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import asdict
 from datetime import datetime, timezone
 import json
+import logging
 import os
 import re
 
@@ -12,6 +13,9 @@ from brain_alpha_ops.config import SubmissionPolicy
 from brain_alpha_ops.models import Candidate
 from brain_alpha_ops.research.contracts import correlation_id
 from brain_alpha_ops.research.expression_ast import expression_key, expression_profile_summary, expression_similarity, lexical_normalize
+
+
+logger = logging.getLogger(__name__)
 
 
 class SubmissionLedger:
@@ -98,13 +102,11 @@ class SubmissionLedger:
 
             ExpressionSqliteIndex(os.path.dirname(self.path)).append_record(record, source_file="submissions.jsonl")
         except ImportError:
-            import logging
-            logging.getLogger(__name__).debug(
+            logger.debug(
                 "ExpressionSqliteIndex not available; submission record not indexed in SQLite.",
             )
         except Exception as exc:
-            import logging
-            logging.getLogger(__name__).warning(
+            logger.warning(
                 "Failed to index submission record in SQLite index: %s", exc,
             )
 
@@ -113,11 +115,16 @@ class SubmissionLedger:
             return []
         records = []
         with open(self.path, encoding="utf-8") as f:
-            for line in f:
+            for line_number, line in enumerate(f, start=1):
                 try:
                     records.append(json.loads(line))
-                except json.JSONDecodeError:
-                    pass
+                except json.JSONDecodeError as exc:
+                    logger.warning(
+                        "corrupt submission ledger JSON line skipped: %s:%d: %s",
+                        self.path,
+                        line_number,
+                        exc,
+                    )
         return records
 
 

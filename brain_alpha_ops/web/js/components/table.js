@@ -9,7 +9,7 @@
   var esc = window.Utils.escapeHtml;
   var escapeAttr = window.Utils.escapeAttr;
   var renderSafeHtmlFragment = window.Utils.renderSafeHtmlFragment;
-  var setSafeHtml = window.Utils.setSafeHtml;
+  var setSafeHtml = window.Utils.setRawHtml;
   var statusBadge = window.Utils.statusBadge;
   var scoreSpan = window.Utils.scoreSpan;
 

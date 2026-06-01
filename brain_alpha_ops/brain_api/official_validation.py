@@ -1,0 +1,107 @@
+"""Expression validation helpers for the official BRAIN API adapter."""
+
+from __future__ import annotations
+
+import logging
+import re
+
+
+logger = logging.getLogger("brain_alpha_ops.brain_api.official")
+
+
+class OfficialExpressionValidationMixin:
+    def validate_expression(
+        self,
+        expression: str,
+        settings: dict,
+        known_operators: set | None = None,
+        known_fields: set | None = None,
+    ) -> dict:
+        """Validate expression before simulation submission.
+
+        Local checks catch common syntax and context mistakes before BRAIN
+        performs the authoritative compile during simulation submission.
+        """
+        errors = []
+        warnings = []
+
+        if not isinstance(expression, str):
+            return {"status": "FAIL", "errors": ["Expression must be a string"]}
+        if "\x00" in expression:
+            errors.append("Expression contains null bytes")
+
+        if not expression.strip():
+            return {"status": "FAIL", "errors": ["Empty expression"]}
+
+        if expression.count("(") != expression.count(")"):
+            return {"status": "FAIL", "errors": ["Unbalanced parentheses"]}
+
+        if len(expression) > 250:
+            warnings.append(f"Expression length {len(expression)} > 250 (may cause compile issues)")
+
+        if re.search(r",\s*\)", expression):
+            errors.append("Dangling comma before closing parenthesis")
+        if re.search(r"\(\s*,", expression):
+            errors.append("Leading comma after opening parenthesis")
+        if re.search(r",\s*,", expression):
+            errors.append("Consecutive commas in function arguments")
+
+        if re.search(r"\b\w+\s*\(\s*\)", expression):
+            warnings.append("Empty function call detected — ensure all functions have arguments")
+
+        if expression.count('"') % 2 != 0 or expression.count("'") % 2 != 0:
+            warnings.append("Unmatched quotes in expression")
+
+        depth = 0
+        max_depth = 0
+        for char in expression:
+            if char == "(":
+                depth += 1
+                max_depth = max(max_depth, depth)
+            elif char == ")":
+                depth -= 1
+                if depth < 0:
+                    errors.append("Unmatched closing parenthesis — depth went negative")
+                    break
+        if max_depth > 6:
+            warnings.append(f"Nesting depth {max_depth} > 6 (may reduce interpretability)")
+
+        known_ops: set = known_operators or set()
+        known_flds: set = known_fields or set()
+        if not known_ops or not known_flds:
+            try:
+                from brain_alpha_ops.data import OfficialDataLoader
+
+                loader = OfficialDataLoader.instance()
+                if not known_ops:
+                    known_ops = {op.name.lower() for op in loader.get_operators() if op.name}
+                if not known_flds:
+                    known_flds = {field.id.lower() for field in loader.get_fields() if field.id}
+            except Exception:
+                logger.warning(
+                    "OfficialDataLoader unavailable — skipping local field/operator validation",
+                    exc_info=True,
+                )
+
+        if known_ops:
+            used_ops = re.findall(r"\b([a-zA-Z_]\w*)\s*\(", expression)
+            for op in used_ops:
+                if op not in known_ops and op.lower() not in known_ops:
+                    errors.append(f"Unknown operator: {op}")
+            if len(set(used_ops)) > 8:
+                warnings.append(f"High operator count: {len(set(used_ops))} unique operators (BRAIN recommends <= 8)")
+
+        if known_flds:
+            tokens = re.findall(r"\b([a-zA-Z_]\w+)\b", expression)
+            field_tokens = [token for token in tokens if token.lower() in known_flds]
+            if not field_tokens:
+                errors.append("No known BRAIN data fields found in expression")
+
+        if errors:
+            return {"status": "FAIL", "errors": errors, "warnings": warnings}
+        return {
+            "status": "PASS",
+            "errors": [],
+            "warnings": warnings,
+            "note": "simulation submission will confirm official BRAIN compile",
+        }

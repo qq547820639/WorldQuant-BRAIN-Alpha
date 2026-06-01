@@ -2578,6 +2578,11 @@ textarea:focus-visible {
 
   Utils.setSafeHtml = function (el, html) {
     if (!el) return;
+    el.innerHTML = Utils.escapeHtml(String(html ?? ''));
+  };
+
+  Utils.setRawHtml = function (el, html) {
+    if (!el) return;
     el.innerHTML = String(html ?? '');
   };
 
@@ -3124,7 +3129,7 @@ textarea:focus-visible {
 
   var $ = window.Utils.$;
   var escapeHtml = window.Utils.escapeHtml;
-  var setSafeHtml = window.Utils.setSafeHtml;
+  var setSafeHtml = window.Utils.setRawHtml;
 
   var ICONS = {
     success: '\u2713',
@@ -3345,7 +3350,7 @@ textarea:focus-visible {
 
   var $ = window.Utils.$;
   var esc = window.Utils.escapeHtml;
-  var setSafeHtml = window.Utils.setSafeHtml;
+  var setSafeHtml = window.Utils.setRawHtml;
   var visible = false;
   var _messageTimer = null;
   var _stageMessages = [];
@@ -3783,7 +3788,7 @@ textarea:focus-visible {
   var esc = window.Utils.escapeHtml;
   var escapeAttr = window.Utils.escapeAttr;
   var renderSafeHtmlFragment = window.Utils.renderSafeHtmlFragment;
-  var setSafeHtml = window.Utils.setSafeHtml;
+  var setSafeHtml = window.Utils.setRawHtml;
   var statusBadge = window.Utils.statusBadge;
   var scoreSpan = window.Utils.scoreSpan;
 
@@ -3951,7 +3956,7 @@ textarea:focus-visible {
   var humanCheckName = window.Utils.humanCheckName;
   var renderRiskExplanation = window.Utils.renderRiskExplanation;
   var applyDataStyles = window.Utils.applyDataStyles;
-  var setSafeHtml = window.Utils.setSafeHtml;
+  var setSafeHtml = window.Utils.setRawHtml;
   var scoreSpan = window.Utils.scoreSpan;
   var statusBadge = window.Utils.statusBadge;
 	  var cloudMetric = window.ViewModel && window.ViewModel.cloudMetric
@@ -5932,7 +5937,7 @@ textarea:focus-visible {
   var esc = Utils.escapeHtml;
   var escapeAttr = Utils.escapeAttr;
   var renderSafeHtmlFragment = Utils.renderSafeHtmlFragment;
-  var setSafeHtml = Utils.setSafeHtml;
+  var setSafeHtml = Utils.setRawHtml;
   var candidateIdentity = VM.candidateIdentity;
 
   function create(deps) {
@@ -6544,7 +6549,7 @@ textarea:focus-visible {
   var $ = Utils.$;
   var esc = Utils.escapeHtml;
   var escapeAttr = Utils.escapeAttr;
-  var setSafeHtml = Utils.setSafeHtml;
+  var setSafeHtml = Utils.setRawHtml;
   var lastPolicyConfig = null;
 
   function syncPluginControls() {
@@ -7804,7 +7809,7 @@ textarea:focus-visible {
     var Utils = window.Utils || {};
     var $ = deps.$ || Utils.$ || function (id) { return document.getElementById(id); };
     var esc = deps.esc || Utils.escapeHtml || function (value) { return String(value ?? ''); };
-    var setSafeHtml = deps.setSafeHtml || Utils.setSafeHtml || function (el, html) { if (el) el.textContent = String(html ?? ''); };
+    var setSafeHtml = deps.setSafeHtml || Utils.setRawHtml || function (el, html) { if (el) el.textContent = String(html ?? ''); };
     var state = deps.state || window.AppState;
     var Registry = deps.registry || window.ViewRegistry || {};
     var Spinner = deps.spinner || window.Spinner || {};
@@ -8020,7 +8025,7 @@ textarea:focus-visible {
   var $ = window.Utils.$;
   var esc = window.Utils.escapeHtml;
   var escapeAttr = window.Utils.escapeAttr;
-  var setSafeHtml = window.Utils.setSafeHtml;
+  var setSafeHtml = window.Utils.setRawHtml;
   var phaseName = window.Utils.phaseName;
   var Api = window.ApiClient;
   var S = window.AppState;

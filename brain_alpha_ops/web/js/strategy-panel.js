@@ -7,7 +7,7 @@
   var $ = Utils.$;
   var esc = Utils.escapeHtml;
   var escapeAttr = Utils.escapeAttr;
-  var setSafeHtml = Utils.setSafeHtml;
+  var setSafeHtml = Utils.setRawHtml;
   var lastPolicyConfig = null;
 
   function syncPluginControls() {

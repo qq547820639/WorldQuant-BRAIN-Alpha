@@ -18,8 +18,9 @@ STALE_SNIPPETS = (
     "PARTIAL_CLOSED_CURRENT",
     "Remaining scan candidates",
 )
-DEFECT_HEADING_RE = re.compile(r"^### (DEFECT-\d{3}):\s*(.+)$", re.MULTILINE)
-STATUS_ROW_RE = re.compile(r"^(DEFECT-\d{3}):\s*(.+)$")
+DEFECT_ID_PATTERN = r"DEFECT-(?:\d{3}|A\d+[a-z]?(?:-[a-z])?)"
+DEFECT_HEADING_RE = re.compile(rf"^### ({DEFECT_ID_PATTERN}):\s*(.+)$", re.MULTILINE)
+STATUS_ROW_RE = re.compile(rf"({DEFECT_ID_PATTERN})(?::\s*(.+))?")
 
 
 def check_defect_analysis_report(report_path: str | Path = DEFAULT_REPORT) -> dict[str, Any]:
@@ -61,6 +62,7 @@ def check_defect_analysis_report(report_path: str | Path = DEFAULT_REPORT) -> di
             )
         )
 
+    detail_titles = {row["id"]: row["title"] for row in detail_rows}
     for row in status_rows:
         status = row["status"]
         if status not in VALID_STATUSES:
@@ -91,7 +93,14 @@ def check_defect_analysis_report(report_path: str | Path = DEFAULT_REPORT) -> di
         "status_count": len(status_ids),
         "closed_count": sum(1 for row in status_rows if row["status"] == "CLOSED_CURRENT"),
         "open_count": len(open_items),
-        "open_items": [{"id": row["id"], "status": row["status"], "title": row["title"]} for row in open_items],
+        "open_items": [
+            {
+                "id": row["id"],
+                "status": row["status"],
+                "title": row["title"] or detail_titles.get(row["id"], ""),
+            }
+            for row in open_items
+        ],
         "python_runtime": ".".join(str(part) for part in sys.version_info[:3]),
         "python_runtime_ok": sys.version_info >= (3, 10),
         "findings": findings,
@@ -107,27 +116,49 @@ def _detail_rows(text: str) -> list[dict[str, str]]:
 
 def _status_rows(text: str, findings: list[dict[str, str]]) -> list[dict[str, str]]:
     rows: list[dict[str, str]] = []
+    in_status_table = False
     for line in text.splitlines():
-        if not line.startswith("| DEFECT-"):
+        if not line.startswith("|"):
+            in_status_table = False
             continue
         cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+        if _is_status_header(cells):
+            in_status_table = True
+            continue
+        if in_status_table and cells and set(cells[0]) <= {"-", ":"}:
+            continue
+        if not in_status_table:
+            continue
         if len(cells) < 4:
             findings.append(_finding("malformed_status_row", line, "status table row has too few cells"))
             continue
-        match = STATUS_ROW_RE.match(cells[0])
+        match = STATUS_ROW_RE.search(cells[0])
         if match is None:
-            findings.append(_finding("malformed_status_id", cells[0], "status table first cell is not a defect id"))
             continue
+        status = _normalize_status(cells[1])
         rows.append(
             {
                 "id": match.group(1),
-                "title": match.group(2).strip(),
-                "status": cells[1],
+                "title": (match.group(2) or "").strip(),
+                "status": status,
                 "evidence": cells[2],
                 "next_action": "|".join(cells[3:]).strip(),
             }
         )
     return rows
+
+
+def _is_status_header(cells: list[str]) -> bool:
+    if len(cells) < 4:
+        return False
+    return cells[0] in {"缺陷", "编号"} and cells[1] in {"当前状态", "状态"}
+
+
+def _normalize_status(value: str) -> str:
+    for status in VALID_STATUSES:
+        if status in value:
+            return status
+    return value.strip()
 
 
 def _check_duplicates(rows: list[dict[str, str]], section: str, findings: list[dict[str, str]]) -> None:

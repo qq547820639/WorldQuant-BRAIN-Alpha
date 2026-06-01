@@ -2,7 +2,38 @@ import logging
 import inspect
 
 from brain_alpha_ops import data as data_module
+from brain_alpha_ops.compliance import redline_check_alignment
+from brain_alpha_ops.compliance import redline_check_coverage
+from brain_alpha_ops.compliance import redline_check_datasets
+from brain_alpha_ops.compliance import redline_check_no_custom_extension
+from brain_alpha_ops.compliance import redline_check_thresholds
+from brain_alpha_ops.compliance import redline_check_traceability
+from brain_alpha_ops.compliance import redline_models
 from brain_alpha_ops.compliance import redline_verifier
+
+
+def test_redline_verifier_reexports_report_models():
+    assert redline_verifier.RedLineViolation is redline_models.RedLineViolation
+    assert redline_verifier.ComplianceReport is redline_models.ComplianceReport
+    assert redline_verifier.RedLineBlockedError is redline_models.RedLineBlockedError
+
+
+def test_redline_verifier_reexports_check_functions():
+    assert (
+        redline_verifier._verify_redline_1_no_custom_extension
+        is redline_check_no_custom_extension._verify_redline_1_no_custom_extension
+    )
+    assert (
+        redline_verifier._verify_redline_2_threshold_zero_deviation
+        is redline_check_thresholds._verify_redline_2_threshold_zero_deviation
+    )
+    assert redline_verifier._verify_redline_3_dataset_ids is redline_check_datasets._verify_redline_3_dataset_ids
+    assert (
+        redline_verifier._verify_redline_4_parameter_traceability
+        is redline_check_traceability._verify_redline_4_parameter_traceability
+    )
+    assert redline_verifier._verify_redline_5_factor_coverage is redline_check_coverage._verify_redline_5_factor_coverage
+    assert redline_verifier._verify_redline_6_code_alignment is redline_check_alignment._verify_redline_6_code_alignment
 
 
 def test_candidate_generator_fallback_template_extraction_warns_on_failure(monkeypatch, caplog):

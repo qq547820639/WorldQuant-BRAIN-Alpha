@@ -1,4 +1,5 @@
 import json
+import logging
 from pathlib import Path
 
 from brain_alpha_ops.agent_tools import BrainAlphaToolbox
@@ -156,6 +157,20 @@ def test_repository_redacts_sensitive_values_before_persisting(tmp_path):
     assert "researcher@example.com" not in persisted
     assert "+1234567890" not in persisted
     assert "<redacted>" in persisted
+
+
+def test_repository_latest_cloud_alphas_warns_on_corrupt_json_line(tmp_path, caplog):
+    (tmp_path / "cloud_alphas.jsonl").write_text(
+        '{"id": "cloud_1", "status": "UNSUBMITTED"}\n{bad json\n',
+        encoding="utf-8",
+    )
+    repo = ResearchRepository(str(tmp_path))
+
+    with caplog.at_level(logging.WARNING, logger="brain_alpha_ops.research.repository"):
+        rows = repo.latest_cloud_alphas()
+
+    assert [row["id"] for row in rows] == ["cloud_1"]
+    assert "corrupt cloud alpha JSON line skipped" in caplog.text
 
 
 def test_research_memory_writes_summary_file(tmp_path):

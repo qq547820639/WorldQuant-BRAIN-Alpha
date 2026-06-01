@@ -26,10 +26,6 @@ HTML_SINK_PATTERNS = (
 
 ALLOWED_HTML_SINKS: set[tuple[str, int, str]] = set()
 
-ALLOWED_HTML_SINK_SNIPPETS = {
-    ("innerHTML", "utils.js", "el.innerHTML = String(html ?? '');"),
-}
-
 
 def _rel(path: Path, root: Path) -> str:
     return path.relative_to(root).as_posix()
@@ -40,13 +36,14 @@ def check_frontend_innerhtml(root: Path = FRONTEND_ROOT) -> dict:
     checked = 0
     for path in sorted(root.rglob("*.js")):
         rel = _rel(path, root)
-        for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+        lines = path.read_text(encoding="utf-8").splitlines()
+        for line_number, line in enumerate(lines, start=1):
             stripped = line.strip()
             for sink, marker in HTML_SINK_PATTERNS:
                 if marker not in line:
                     continue
                 checked += 1
-                if _is_allowed_sink(rel, line_number, sink, stripped):
+                if _is_allowed_sink(rel, line_number, sink, stripped, lines):
                     continue
                 findings.append({
                     "file": rel,
@@ -59,18 +56,22 @@ def check_frontend_innerhtml(root: Path = FRONTEND_ROOT) -> dict:
         "schema_version": "frontend_innerhtml_guard.v1",
         "root": str(root),
         "checked": checked,
-        "allowed": len(ALLOWED_HTML_SINKS) + len(ALLOWED_HTML_SINK_SNIPPETS),
+        "allowed": len(ALLOWED_HTML_SINKS) + 2,
         "findings": findings,
     }
 
 
-def _is_allowed_sink(rel: str, line_number: int, sink: str, stripped: str) -> bool:
+def _is_allowed_sink(rel: str, line_number: int, sink: str, stripped: str, lines: list[str]) -> bool:
     if (rel, line_number, sink) in ALLOWED_HTML_SINKS:
         return True
-    return any(
-        allowed_sink == sink and allowed_rel == rel and snippet in stripped
-        for allowed_sink, allowed_rel, snippet in ALLOWED_HTML_SINK_SNIPPETS
-    )
+    if rel != "utils.js" or sink != "innerHTML":
+        return False
+    if stripped == "el.innerHTML = Utils.escapeHtml(String(html ?? ''));":
+        return True
+    if stripped == "el.innerHTML = String(html ?? '');":
+        context = "\n".join(lines[max(0, line_number - 4):line_number])
+        return "Utils.setRawHtml = function" in context
+    return False
 
 
 def main(argv: list[str] | None = None) -> int:

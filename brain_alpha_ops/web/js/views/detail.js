@@ -12,7 +12,7 @@
   var humanCheckName = window.Utils.humanCheckName;
   var renderRiskExplanation = window.Utils.renderRiskExplanation;
   var applyDataStyles = window.Utils.applyDataStyles;
-  var setSafeHtml = window.Utils.setSafeHtml;
+  var setSafeHtml = window.Utils.setRawHtml;
   var scoreSpan = window.Utils.scoreSpan;
   var statusBadge = window.Utils.statusBadge;
 	  var cloudMetric = window.ViewModel && window.ViewModel.cloudMetric

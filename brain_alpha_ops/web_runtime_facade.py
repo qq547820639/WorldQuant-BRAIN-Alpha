@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from contextlib import nullcontext
 import json
 import logging
 import os
@@ -9,6 +10,11 @@ import sys
 
 
 logger = logging.getLogger(__name__)
+
+
+def _server_lock(web):
+    lock = getattr(web, "SERVER_LOCK", None)
+    return lock if hasattr(lock, "__enter__") else nullcontext()
 
 
 def handler_dispatch_context(web):
@@ -582,7 +588,10 @@ def find_free_port(web, start: int, host: str) -> int:
 
 
 def shutdown_server(web):
-    web._shutdown_server_service(web.SERVER, web.SERVER_STOP)
+    with _server_lock(web):
+        server = web.SERVER
+        web.SERVER = None
+    web._shutdown_server_service(server, web.SERVER_STOP)
 
 
 def serve(
@@ -622,7 +631,8 @@ def serve(
         allow_multiple_sessions=allow_multiple_sessions,
         secure_cookies=web.web_session.SESSION_MANAGER.secure_cookies,
     )
-    web.SERVER = server
+    with _server_lock(web):
+        web.SERVER = server
     return url
 
 

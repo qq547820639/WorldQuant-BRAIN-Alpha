@@ -145,7 +145,7 @@ def test_template_registry_loads_builtin_templates_and_instantiates_placeholders
     assert any(field in expr for field in ["close", "volume"])
 
 
-def test_template_registry_loads_custom_file_and_handles_invalid_json(tmp_path):
+def test_template_registry_loads_custom_file_and_handles_invalid_json(tmp_path, caplog):
     custom = tmp_path / "custom_templates.json"
     custom.write_text(
         json.dumps([
@@ -174,8 +174,10 @@ def test_template_registry_loads_custom_file_and_handles_invalid_json(tmp_path):
     invalid = tmp_path / "invalid.json"
     invalid.write_text("{", encoding="utf-8")
     fallback = AlphaTemplateRegistry(loader, _Mapper(loader.fields_by_dataset))
-    fallback.load_templates(str(invalid))
+    with caplog.at_level(logging.WARNING, logger="brain_alpha_ops.research.templates"):
+        fallback.load_templates(str(invalid))
     assert fallback.get("momentum_price") is not None
+    assert "failed to load alpha template JSON" in caplog.text
 
 
 def test_template_registry_unknown_and_empty_field_cases():

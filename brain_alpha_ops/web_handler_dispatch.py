@@ -2,11 +2,21 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from functools import wraps
 from typing import Any, Callable
 from urllib.parse import parse_qs
 
 from brain_alpha_ops.research.assistant import AssistantResponseParseError
+from brain_alpha_ops.web_dispatch_context import (
+    WebDispatchActionContext,
+    WebDispatchAssistantContext,
+    WebDispatchConfigContext,
+    WebDispatchCoreContext,
+    WebDispatchJobContext,
+    WebDispatchResearchContext,
+    WebDispatchSessionContext,
+    WebHandlerDispatchContext,
+)
 from brain_alpha_ops.web_payload_validation import (
     validate_assistant_cross_review_payload,
     validate_assistant_guidance_save_payload,
@@ -29,197 +39,9 @@ MAX_RECORD_LOOKUP_LIMIT = 500
 DEFAULT_CLOUD_ALPHA_LIMIT = 500
 MAX_CLOUD_ALPHA_LIMIT = 2000
 
-@dataclass(frozen=True)
-class WebDispatchCoreContext:
-    route_for: Callable[[str, str], Any]
-    web_error: Callable[[Exception, str], dict[str, Any]]
-    payload_truthy: Callable[[Any], bool]
-    bounded_query_int: Callable[[Any, int, int], int]
-    bounded_query_float: Callable[[Any, float, float], float]
-    rate_limit_request: Callable[[str, str, str], dict[str, Any]]
-
-
-@dataclass(frozen=True)
-class WebDispatchSessionContext:
-    remote_admin_required: Callable[[], bool]
-    has_valid_admin_token: Callable[[Any], bool]
-    get_or_create_session: Callable[[str], tuple[str, str]]
-    stream_token_for_session: Callable[[str], str]
-    session_cookie_header: Callable[[str], str]
-    render_html: Callable[[str, str], str]
-    session_end_payload: Callable[..., tuple[dict[str, Any], list[tuple[str, str]]]]
-    expire_session: Callable[[str], None]
-    expired_session_cookie_header: Callable[[], str]
-    start_shutdown: Callable[[], None]
-
-
-@dataclass(frozen=True)
-class WebDispatchJobContext:
-    job_status_payload: Callable[..., tuple[dict[str, Any], int]]
-    active_job_payload: Callable[..., dict[str, Any]]
-    lifecycle_payload: Callable[..., dict[str, Any]]
-    jobs: Any
-    sync_jobs: Any
-    check_jobs: Any
-    async_jobs: Any
-    enrich_progress: Callable[[dict[str, Any]], dict[str, Any]]
-    background_job_start_payload: Callable[..., tuple[dict[str, Any], int]]
-    start_run_job: Callable[[str, dict[str, Any]], None]
-    stop_job_payload: Callable[..., dict[str, Any]]
-    active_auxiliary_operation: Callable[..., tuple[str, str] | None]
-
-
-@dataclass(frozen=True)
-class WebDispatchConfigContext:
-    health_payload: Callable[[], dict[str, Any]]
-    profile_payload: Callable[..., dict[str, Any]]
-    presets_payload: Callable[..., dict[str, Any]]
-    public_run_config: Callable[[], dict[str, Any]]
-    public_config_schema: Callable[[], dict[str, Any]]
-    save_run_config_payload: Callable[[dict[str, Any]], dict[str, Any]]
-    connection_test_post_payload: Callable[..., dict[str, Any]]
-    test_connection: Callable[[dict[str, Any]], dict[str, Any]]
-    validate_run_payload: Callable[[dict[str, Any]], None]
-    load_presets: Callable[[], dict[str, Any]]
-
-
-@dataclass(frozen=True)
-class WebDispatchResearchContext:
-    latest_result_snapshot: Callable[[], dict[str, Any]]
-    lifecycle_from_job: Callable[[dict[str, Any]], list[dict[str, Any]]]
-    cloud_alpha_snapshot: Callable[..., dict[str, Any]]
-    research_memory_snapshot: Callable[..., dict[str, Any]]
-    research_knowledge_snapshot: Callable[..., dict[str, Any]]
-    research_observability_snapshot: Callable[..., dict[str, Any]]
-    prompt_run_ledger_snapshot: Callable[..., dict[str, Any]]
-    sqlite_index_snapshot: Callable[..., dict[str, Any]]
-    sqlite_expression_lookup_payload: Callable[..., dict[str, Any]]
-    sqlite_record_lookup_payload: Callable[..., dict[str, Any]]
-    load_check_results: Callable[[], dict[str, Any]]
-    user_profile_snapshot: Callable[[], dict[str, Any]]
-
-
-@dataclass(frozen=True)
-class WebDispatchAssistantContext:
-    assistant_context_snapshot: Callable[..., dict[str, Any]]
-    assistant_guidance_snapshot: Callable[..., dict[str, Any]]
-    assistant_request_snapshot: Callable[..., dict[str, Any]]
-    anti_overfit_snapshot: Callable[..., dict[str, Any]]
-    rolling_validation_snapshot: Callable[..., dict[str, Any]]
-    assistant_response_parse_post_payload: Callable[..., dict[str, Any]]
-    assistant_response_parse_payload: Callable[[dict[str, Any]], dict[str, Any]]
-    assistant_response_guidance_post_payload: Callable[..., dict[str, Any]]
-    assistant_response_guidance_payload: Callable[[dict[str, Any]], dict[str, Any]]
-    assistant_cross_review_payload: Callable[[dict[str, Any]], dict[str, Any]]
-    save_assistant_guidance_post_payload: Callable[..., dict[str, Any]]
-    save_assistant_guidance_payload: Callable[[dict[str, Any]], dict[str, Any]]
-
-
-@dataclass(frozen=True)
-class WebDispatchActionContext:
-    start_sync_job: Callable[[str, dict[str, Any]], None]
-    check_candidate: Callable[[dict[str, Any]], dict[str, Any]]
-    generate_candidates_payload: Callable[[dict[str, Any]], dict[str, Any]]
-    start_generate_candidates_job: Callable[[str, dict[str, Any]], None]
-    start_check_batch_job: Callable[[str, dict[str, Any]], None]
-    start_scoring_evaluate_job: Callable[[str, dict[str, Any]], None]
-    start_submit_batch_job: Callable[[str, dict[str, Any]], None]
-    submit_lock: Any
-    submit_candidate: Callable[[dict[str, Any]], dict[str, Any]]
-    submit_batch: Callable[[dict[str, Any]], dict[str, Any]]
-
-
-_CONTEXT_GROUPS = (
-    "core",
-    "session",
-    "job",
-    "config",
-    "research",
-    "assistant",
-    "actions",
-)
-_GROUP_CLASSES = {
-    "core": WebDispatchCoreContext,
-    "session": WebDispatchSessionContext,
-    "job": WebDispatchJobContext,
-    "config": WebDispatchConfigContext,
-    "research": WebDispatchResearchContext,
-    "assistant": WebDispatchAssistantContext,
-    "actions": WebDispatchActionContext,
-}
-
-
-@dataclass(frozen=True, init=False)
-class WebHandlerDispatchContext:
-    core: WebDispatchCoreContext
-    session: WebDispatchSessionContext
-    job: WebDispatchJobContext
-    config: WebDispatchConfigContext
-    research: WebDispatchResearchContext
-    assistant: WebDispatchAssistantContext
-    actions: WebDispatchActionContext
-
-    def __init__(
-        self,
-        *,
-        core: WebDispatchCoreContext | None = None,
-        session: WebDispatchSessionContext | None = None,
-        job: WebDispatchJobContext | None = None,
-        config: WebDispatchConfigContext | None = None,
-        research: WebDispatchResearchContext | None = None,
-        assistant: WebDispatchAssistantContext | None = None,
-        actions: WebDispatchActionContext | None = None,
-        **flat: Any,
-    ) -> None:
-        provided = {
-            "core": core,
-            "session": session,
-            "job": job,
-            "config": config,
-            "research": research,
-            "assistant": assistant,
-            "actions": actions,
-        }
-        remaining = dict(flat)
-        for group_name, group in list(provided.items()):
-            if group is not None and not isinstance(group, _GROUP_CLASSES[group_name]):
-                remaining[group_name] = group
-                provided[group_name] = None
-        for group_name in _CONTEXT_GROUPS:
-            group = provided[group_name]
-            if group is None:
-                group = _build_context_group(_GROUP_CLASSES[group_name], remaining)
-            else:
-                overrides = {}
-                for field_name in _GROUP_CLASSES[group_name].__dataclass_fields__:
-                    if field_name in remaining:
-                        overrides[field_name] = remaining.pop(field_name)
-                if overrides:
-                    group = replace(group, **overrides)
-            object.__setattr__(self, group_name, group)
-        if remaining:
-            unknown = ", ".join(sorted(remaining))
-            raise TypeError(f"unknown WebHandlerDispatchContext fields: {unknown}")
-
-    def __getattr__(self, name: str) -> Any:
-        for group_name in _CONTEXT_GROUPS:
-            group = object.__getattribute__(self, group_name)
-            if name in getattr(group, "__dataclass_fields__", {}):
-                return getattr(group, name)
-        raise AttributeError(name)
-
-
-def _build_context_group(group_class: type, values: dict[str, Any]) -> Any:
-    fields = group_class.__dataclass_fields__
-    payload = {}
-    for name in fields:
-        if name not in values:
-            raise TypeError(f"missing WebHandlerDispatchContext field: {name}")
-        payload[name] = values.pop(name)
-    return group_class(**payload)
-
-
 RouteDispatcher = Callable[[Any, Any, WebHandlerDispatchContext], None]
+PayloadValidator = Callable[[Any], str]
+PayloadRouteDispatcher = Callable[[Any, Any, WebHandlerDispatchContext, dict[str, Any]], None]
 
 
 def dispatch_get(handler: Any, parsed: Any, ctx: WebHandlerDispatchContext) -> None:
@@ -285,6 +107,46 @@ def _reject_invalid_payload(handler: Any, error: str) -> bool:
     if error:
         handler._json({"ok": False, "error_code": "VALIDATION_ERROR", "error": error}, status=400)
     return bool(error)
+
+
+def _read_validated_payload(handler: Any, validator: PayloadValidator) -> dict[str, Any] | None:
+    payload = handler._read_json()
+    if _reject_invalid_payload(handler, validator(payload)):
+        return None
+    return payload
+
+
+def _validated_post_route(
+    validator: PayloadValidator,
+    error_code: str,
+    *,
+    assistant_error_code: str | None = None,
+) -> Callable[[PayloadRouteDispatcher], RouteDispatcher]:
+    def _decorate(route_handler: PayloadRouteDispatcher) -> RouteDispatcher:
+        @wraps(route_handler)
+        def _wrapper(handler: Any, parsed: Any, ctx: WebHandlerDispatchContext) -> None:
+            try:
+                payload = _read_validated_payload(handler, validator)
+                if payload is None:
+                    return
+                route_handler(handler, parsed, ctx, payload)
+            except AssistantResponseParseError as exc:
+                handler._json(ctx.web_error(exc, assistant_error_code or error_code), status=400)
+            except Exception as exc:
+                handler._json(ctx.web_error(exc, error_code), status=400)
+
+        return _wrapper
+
+    return _decorate
+
+
+def _reject_auxiliary_conflict(handler: Any, ctx: WebHandlerDispatchContext, **kwargs: Any) -> bool:
+    conflict = ctx.active_auxiliary_operation(**kwargs)
+    if not conflict:
+        return False
+    _kind, message = conflict
+    handler._json({"ok": False, "error_code": "CONFLICT_AUX_OP", "error": message}, status=409)
+    return True
 
 
 def _get_root(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext) -> None:
@@ -548,249 +410,156 @@ def _get_checkpoint_status(handler: Any, parsed: Any, _ctx: WebHandlerDispatchCo
     handler._json(handle_checkpoint_status(parse_qs(parsed.query)))
 
 
-def _post_run(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext) -> None:
-    try:
-        payload = handler._read_json()
-        validation_error = validate_json_object_payload(payload)
-        if _reject_invalid_payload(handler, validation_error):
-            return
-        ctx.validate_run_payload(payload)
-        active = ctx.jobs.latest_active()
-        if active:
-            active_job_id, _job = active
-            handler._json({"ok": False, "error_code": "CONFLICT_RUNNING", "error": "已有生产任务正在运行，请先停止当前任务。", "job_id": active_job_id}, status=409)
-            return
-        response, status = ctx.background_job_start_payload(ctx.jobs, payload, ctx.start_run_job, conflict_error="active production job")
-        handler._json(response, status=status)
-    except Exception as exc:
-        handler._json(ctx.web_error(exc, "RUN_ERROR"), status=400)
+@_validated_post_route(validate_json_object_payload, "RUN_ERROR")
+def _post_run(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext, payload: dict[str, Any]) -> None:
+    ctx.validate_run_payload(payload)
+    active = ctx.jobs.latest_active()
+    if active:
+        active_job_id, _job = active
+        handler._json({"ok": False, "error_code": "CONFLICT_RUNNING", "error": "已有生产任务正在运行，请先停止当前任务。", "job_id": active_job_id}, status=409)
+        return
+    response, status = ctx.background_job_start_payload(ctx.jobs, payload, ctx.start_run_job, conflict_error="active production job")
+    handler._json(response, status=status)
 
 
-def _post_test_connection(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext) -> None:
-    try:
-        payload = handler._read_json()
-        validation_error = validate_json_object_payload(payload)
-        if _reject_invalid_payload(handler, validation_error):
-            return
-        handler._json(ctx.connection_test_post_payload(payload, ctx.test_connection))
-    except Exception as exc:
-        handler._json(ctx.web_error(exc, "CONNECTION_ERROR"), status=400)
+@_validated_post_route(validate_json_object_payload, "CONNECTION_ERROR")
+def _post_test_connection(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext, payload: dict[str, Any]) -> None:
+    handler._json(ctx.connection_test_post_payload(payload, ctx.test_connection))
 
 
-def _post_config_save(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext) -> None:
-    try:
-        payload = handler._read_json()
-        validation_error = validate_json_object_payload(payload)
-        if _reject_invalid_payload(handler, validation_error):
-            return
-        handler._json(ctx.save_run_config_payload(payload))
-    except Exception as exc:
-        handler._json(ctx.web_error(exc, "CONFIG_SAVE_ERROR"), status=400)
+@_validated_post_route(validate_json_object_payload, "CONFIG_SAVE_ERROR")
+def _post_config_save(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext, payload: dict[str, Any]) -> None:
+    handler._json(ctx.save_run_config_payload(payload))
 
 
-def _post_stop(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext) -> None:
-    try:
-        payload = handler._read_json()
-        validation_error = validate_job_cancel_payload(payload)
-        if _reject_invalid_payload(handler, validation_error):
-            return
-        handler._json(ctx.stop_job_payload(ctx.jobs, payload))
-    except Exception as exc:
-        handler._json(ctx.web_error(exc, "STOP_ERROR"), status=400)
+@_validated_post_route(validate_job_cancel_payload, "STOP_ERROR")
+def _post_stop(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext, payload: dict[str, Any]) -> None:
+    handler._json(ctx.stop_job_payload(ctx.jobs, payload))
 
 
-def _post_sync_alphas(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext) -> None:
-    try:
-        payload = handler._read_json()
-        validation_error = validate_sync_alphas_payload(payload)
-        if _reject_invalid_payload(handler, validation_error):
-            return
-        active = ctx.sync_jobs.latest_active()
-        if active:
-            active_job_id, _job = active
-            handler._json({"ok": False, "error": "已有云端同步任务正在运行。", "job_id": active_job_id}, status=409)
-            return
-        conflict = ctx.active_auxiliary_operation(exclude="sync")
-        if conflict:
-            _kind, message = conflict
-            handler._json({"ok": False, "error_code": "CONFLICT_AUX_OP", "error": message}, status=409)
-            return
-        response, status = ctx.background_job_start_payload(ctx.sync_jobs, payload, ctx.start_sync_job, conflict_error="active cloud sync job")
-        handler._json(response, status=status)
-    except Exception as exc:
-        handler._json(ctx.web_error(exc, "SYNC_ERROR"), status=400)
+@_validated_post_route(validate_sync_alphas_payload, "SYNC_ERROR")
+def _post_sync_alphas(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext, payload: dict[str, Any]) -> None:
+    active = ctx.sync_jobs.latest_active()
+    if active:
+        active_job_id, _job = active
+        handler._json({"ok": False, "error": "已有云端同步任务正在运行。", "job_id": active_job_id}, status=409)
+        return
+    if _reject_auxiliary_conflict(handler, ctx, exclude="sync"):
+        return
+    response, status = ctx.background_job_start_payload(ctx.sync_jobs, payload, ctx.start_sync_job, conflict_error="active cloud sync job")
+    handler._json(response, status=status)
 
 
-def _post_sync_cancel(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext) -> None:
-    try:
-        payload = handler._read_json()
-        validation_error = validate_job_cancel_payload(payload)
-        if _reject_invalid_payload(handler, validation_error):
-            return
-        result = ctx.stop_job_payload(ctx.sync_jobs, payload)
-        job_id = str((payload or {}).get("job_id") or "")
-        if result.get("ok"):
-            handler._json({
-                **result,
-                "job_id": job_id,
-                "status": "stopping",
-                "message": "云端同步停止请求已发送，后台会在当前官方接口返回后结束。",
-            })
-            return
+@_validated_post_route(validate_job_cancel_payload, "SYNC_CANCEL_ERROR")
+def _post_sync_cancel(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext, payload: dict[str, Any]) -> None:
+    result = ctx.stop_job_payload(ctx.sync_jobs, payload)
+    job_id = str((payload or {}).get("job_id") or "")
+    if result.get("ok"):
         handler._json({
             **result,
             "job_id": job_id,
-            "error_code": "SYNC_JOB_NOT_FOUND",
-            "error": "未找到可停止的云端同步任务。",
-        }, status=404)
-    except Exception as exc:
-        handler._json(ctx.web_error(exc, "SYNC_CANCEL_ERROR"), status=400)
-
-
-def _post_check(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext) -> None:
-    try:
-        payload = handler._read_json()
-        validation_error = validate_alpha_action_payload(payload)
-        if _reject_invalid_payload(handler, validation_error):
-            return
-        conflict = ctx.active_auxiliary_operation(allow_production=True)
-        if conflict:
-            _kind, message = conflict
-            handler._json({"ok": False, "error_code": "CONFLICT_AUX_OP", "error": message}, status=409)
-            return
-        handler._json(ctx.check_candidate(payload))
-    except Exception as exc:
-        handler._json(ctx.web_error(exc, "CHECK_ERROR"), status=400)
-
-
-def _post_generate_candidates(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext) -> None:
-    try:
-        payload = handler._read_json()
-        validation_error = validate_generate_candidates_payload(payload)
-        if _reject_invalid_payload(handler, validation_error):
-            return
-        response, status = ctx.background_job_start_payload(
-            ctx.async_jobs,
-            payload,
-            ctx.start_generate_candidates_job,
-            conflict_error="active async job",
-        )
-        handler._json(response, status=status)
-    except AssistantResponseParseError as exc:
-        handler._json(ctx.web_error(exc, "ASSISTANT_RESPONSE_PARSE_ERROR"), status=400)
-    except Exception as exc:
-        handler._json(ctx.web_error(exc, "GENERATE_CANDIDATES_ERROR"), status=400)
-
-
-def _post_check_batch(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext) -> None:
-    try:
-        payload = handler._read_json()
-        validation_error = validate_check_batch_payload(payload)
-        if _reject_invalid_payload(handler, validation_error):
-            return
-        active = ctx.check_jobs.latest_active()
-        if active:
-            active_job_id, _job = active
-            handler._json({"ok": False, "error": "已有批量检查任务正在运行。", "job_id": active_job_id}, status=409)
-            return
-        conflict = ctx.active_auxiliary_operation(exclude="check", allow_production=True)
-        if conflict:
-            _kind, message = conflict
-            handler._json({"ok": False, "error_code": "CONFLICT_AUX_OP", "error": message}, status=409)
-            return
-        response, status = ctx.background_job_start_payload(ctx.check_jobs, payload, ctx.start_check_batch_job, conflict_error="active batch check job")
-        handler._json(response, status=status)
-    except Exception as exc:
-        handler._json(ctx.web_error(exc, "CHECK_BATCH_ERROR"), status=400)
-
-
-def _post_submit(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext) -> None:
-    try:
-        payload = handler._read_json()
-        validation_error = validate_alpha_action_payload(payload)
-        if _reject_invalid_payload(handler, validation_error):
-            return
-    except Exception as exc:
-        handler._json(ctx.web_error(exc, "SUBMIT_ERROR"), status=400)
+            "status": "stopping",
+            "message": "云端同步停止请求已发送，后台会在当前官方接口返回后结束。",
+        })
         return
+    handler._json({
+        **result,
+        "job_id": job_id,
+        "error_code": "SYNC_JOB_NOT_FOUND",
+        "error": "未找到可停止的云端同步任务。",
+    }, status=404)
+
+
+@_validated_post_route(validate_alpha_action_payload, "CHECK_ERROR")
+def _post_check(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext, payload: dict[str, Any]) -> None:
+    if _reject_auxiliary_conflict(handler, ctx, allow_production=True):
+        return
+    handler._json(ctx.check_candidate(payload))
+
+
+@_validated_post_route(
+    validate_generate_candidates_payload,
+    "GENERATE_CANDIDATES_ERROR",
+    assistant_error_code="ASSISTANT_RESPONSE_PARSE_ERROR",
+)
+def _post_generate_candidates(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext, payload: dict[str, Any]) -> None:
+    response, status = ctx.background_job_start_payload(
+        ctx.async_jobs,
+        payload,
+        ctx.start_generate_candidates_job,
+        conflict_error="active async job",
+    )
+    handler._json(response, status=status)
+
+
+@_validated_post_route(validate_check_batch_payload, "CHECK_BATCH_ERROR")
+def _post_check_batch(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext, payload: dict[str, Any]) -> None:
+    active = ctx.check_jobs.latest_active()
+    if active:
+        active_job_id, _job = active
+        handler._json({"ok": False, "error": "已有批量检查任务正在运行。", "job_id": active_job_id}, status=409)
+        return
+    if _reject_auxiliary_conflict(handler, ctx, exclude="check", allow_production=True):
+        return
+    response, status = ctx.background_job_start_payload(ctx.check_jobs, payload, ctx.start_check_batch_job, conflict_error="active batch check job")
+    handler._json(response, status=status)
+
+
+@_validated_post_route(validate_alpha_action_payload, "SUBMIT_ERROR")
+def _post_submit(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext, payload: dict[str, Any]) -> None:
     _submit_with_lock(handler, ctx, ctx.submit_candidate, "SUBMIT_ERROR", payload=payload)
 
 
-def _post_submit_batch(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext) -> None:
-    try:
-        payload = handler._read_json()
-        validation_error = validate_submit_batch_payload(payload)
-        if _reject_invalid_payload(handler, validation_error):
-            return
-        conflict = ctx.active_auxiliary_operation(exclude="submit", allow_production=True)
-        if conflict:
-            _kind, message = conflict
-            handler._json({"ok": False, "error_code": "CONFLICT_AUX_OP", "error": message}, status=409)
-            return
-        if ctx.submit_lock.locked():
-            handler._json({"ok": False, "error_code": "CONFLICT_RUNNING", "error": "已有提交任务正在运行，请完成后再操作。"}, status=409)
-            return
-        response, status = ctx.background_job_start_payload(
-            ctx.async_jobs,
-            payload,
-            ctx.start_submit_batch_job,
-            conflict_error="active async job",
-        )
-        handler._json(response, status=status)
-    except Exception as exc:
-        handler._json(ctx.web_error(exc, "SUBMIT_BATCH_ERROR"), status=400)
+@_validated_post_route(validate_submit_batch_payload, "SUBMIT_BATCH_ERROR")
+def _post_submit_batch(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext, payload: dict[str, Any]) -> None:
+    if _reject_auxiliary_conflict(handler, ctx, exclude="submit", allow_production=True):
+        return
+    if ctx.submit_lock.locked():
+        handler._json({"ok": False, "error_code": "CONFLICT_RUNNING", "error": "已有提交任务正在运行，请完成后再操作。"}, status=409)
+        return
+    response, status = ctx.background_job_start_payload(
+        ctx.async_jobs,
+        payload,
+        ctx.start_submit_batch_job,
+        conflict_error="active async job",
+    )
+    handler._json(response, status=status)
 
 
-def _post_assistant_response_parse(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext) -> None:
-    try:
-        payload = handler._read_json()
-        validation_error = validate_assistant_text_payload(payload)
-        if _reject_invalid_payload(handler, validation_error):
-            return
-        handler._json(ctx.assistant_response_parse_post_payload(payload, ctx.assistant_response_parse_payload))
-    except AssistantResponseParseError as exc:
-        handler._json(ctx.web_error(exc, "ASSISTANT_RESPONSE_PARSE_ERROR"), status=400)
-    except Exception as exc:
-        handler._json(ctx.web_error(exc, "ASSISTANT_RESPONSE_PARSE_ERROR"), status=400)
+@_validated_post_route(
+    validate_assistant_text_payload,
+    "ASSISTANT_RESPONSE_PARSE_ERROR",
+    assistant_error_code="ASSISTANT_RESPONSE_PARSE_ERROR",
+)
+def _post_assistant_response_parse(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext, payload: dict[str, Any]) -> None:
+    handler._json(ctx.assistant_response_parse_post_payload(payload, ctx.assistant_response_parse_payload))
 
 
-def _post_assistant_response_guidance(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext) -> None:
-    try:
-        payload = handler._read_json()
-        validation_error = validate_assistant_text_payload(payload)
-        if _reject_invalid_payload(handler, validation_error):
-            return
-        handler._json(ctx.assistant_response_guidance_post_payload(payload, ctx.assistant_response_guidance_payload))
-    except AssistantResponseParseError as exc:
-        handler._json(ctx.web_error(exc, "ASSISTANT_RESPONSE_PARSE_ERROR"), status=400)
-    except Exception as exc:
-        handler._json(ctx.web_error(exc, "ASSISTANT_RESPONSE_GUIDANCE_ERROR"), status=400)
+@_validated_post_route(
+    validate_assistant_text_payload,
+    "ASSISTANT_RESPONSE_GUIDANCE_ERROR",
+    assistant_error_code="ASSISTANT_RESPONSE_PARSE_ERROR",
+)
+def _post_assistant_response_guidance(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext, payload: dict[str, Any]) -> None:
+    handler._json(ctx.assistant_response_guidance_post_payload(payload, ctx.assistant_response_guidance_payload))
 
 
-def _post_assistant_cross_review(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext) -> None:
-    try:
-        payload = handler._read_json()
-        validation_error = validate_assistant_cross_review_payload(payload)
-        if _reject_invalid_payload(handler, validation_error):
-            return
-        handler._json(ctx.assistant_cross_review_payload(payload))
-    except AssistantResponseParseError as exc:
-        handler._json(ctx.web_error(exc, "ASSISTANT_CROSS_REVIEW_PARSE_ERROR"), status=400)
-    except Exception as exc:
-        handler._json(ctx.web_error(exc, "ASSISTANT_CROSS_REVIEW_ERROR"), status=400)
+@_validated_post_route(
+    validate_assistant_cross_review_payload,
+    "ASSISTANT_CROSS_REVIEW_ERROR",
+    assistant_error_code="ASSISTANT_CROSS_REVIEW_PARSE_ERROR",
+)
+def _post_assistant_cross_review(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext, payload: dict[str, Any]) -> None:
+    handler._json(ctx.assistant_cross_review_payload(payload))
 
 
-def _post_assistant_guidance(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext) -> None:
-    try:
-        payload = handler._read_json()
-        validation_error = validate_assistant_guidance_save_payload(payload)
-        if _reject_invalid_payload(handler, validation_error):
-            return
-        handler._json(ctx.save_assistant_guidance_post_payload(payload, ctx.save_assistant_guidance_payload))
-    except AssistantResponseParseError as exc:
-        handler._json(ctx.web_error(exc, "ASSISTANT_RESPONSE_PARSE_ERROR"), status=400)
-    except Exception as exc:
-        handler._json(ctx.web_error(exc, "ASSISTANT_GUIDANCE_SAVE_ERROR"), status=400)
+@_validated_post_route(
+    validate_assistant_guidance_save_payload,
+    "ASSISTANT_GUIDANCE_SAVE_ERROR",
+    assistant_error_code="ASSISTANT_RESPONSE_PARSE_ERROR",
+)
+def _post_assistant_guidance(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext, payload: dict[str, Any]) -> None:
+    handler._json(ctx.save_assistant_guidance_post_payload(payload, ctx.save_assistant_guidance_payload))
 
 
 def _post_logout(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext) -> None:
@@ -803,33 +572,21 @@ def _post_shutdown(handler: Any, parsed: Any, ctx: WebHandlerDispatchContext) ->
     ctx.start_shutdown()
 
 
-def _post_scoring_evaluate(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext) -> None:
-    try:
-        payload = handler._read_json()
-        validation_error = validate_alpha_action_payload(payload)
-        if _reject_invalid_payload(handler, validation_error):
-            return
-        response, status = ctx.background_job_start_payload(
-            ctx.async_jobs,
-            payload,
-            ctx.start_scoring_evaluate_job,
-            conflict_error="active async job",
-        )
-        handler._json(response, status=status)
-    except Exception as exc:
-        handler._json(ctx.web_error(exc, "SCORING_ERROR"), status=400)
+@_validated_post_route(validate_alpha_action_payload, "SCORING_ERROR")
+def _post_scoring_evaluate(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext, payload: dict[str, Any]) -> None:
+    response, status = ctx.background_job_start_payload(
+        ctx.async_jobs,
+        payload,
+        ctx.start_scoring_evaluate_job,
+        conflict_error="active async job",
+    )
+    handler._json(response, status=status)
 
 
-def _post_scoring_attribution(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext) -> None:
-    try:
-        payload = handler._read_json()
-        validation_error = validate_alpha_action_payload(payload)
-        if _reject_invalid_payload(handler, validation_error):
-            return
-        from brain_alpha_ops.web_redline_scoring import handle_scoring_attribution
-        handler._json(handle_scoring_attribution(payload))
-    except Exception as exc:
-        handler._json(ctx.web_error(exc, "SCORING_ERROR"), status=400)
+@_validated_post_route(validate_alpha_action_payload, "SCORING_ERROR")
+def _post_scoring_attribution(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext, payload: dict[str, Any]) -> None:
+    from brain_alpha_ops.web_redline_scoring import handle_scoring_attribution
+    handler._json(handle_scoring_attribution(payload))
 
 
 _GET_DISPATCH_HANDLERS: dict[str, RouteDispatcher] = {
@@ -898,10 +655,7 @@ def _submit_with_lock(
     *,
     payload: dict[str, Any] | None = None,
 ) -> None:
-    conflict = ctx.active_auxiliary_operation(exclude="submit", allow_production=True)
-    if conflict:
-        _kind, message = conflict
-        handler._json({"ok": False, "error_code": "CONFLICT_AUX_OP", "error": message}, status=409)
+    if _reject_auxiliary_conflict(handler, ctx, exclude="submit", allow_production=True):
         return
     if not ctx.submit_lock.acquire(blocking=False):
         handler._json({"ok": False, "error": "已有提交任务正在运行，请完成后再操作。"}, status=409)

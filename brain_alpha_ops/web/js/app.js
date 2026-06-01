@@ -5,7 +5,7 @@
   var $ = window.Utils.$;
   var esc = window.Utils.escapeHtml;
   var escapeAttr = window.Utils.escapeAttr;
-  var setSafeHtml = window.Utils.setSafeHtml;
+  var setSafeHtml = window.Utils.setRawHtml;
   var phaseName = window.Utils.phaseName;
   var Api = window.ApiClient;
   var S = window.AppState;

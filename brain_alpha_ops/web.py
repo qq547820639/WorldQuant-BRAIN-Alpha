@@ -359,6 +359,7 @@ ASYNC_JOBS = _DurableJobStore(_runtime_project_root() / "data" / "jobs_async.jso
 SUBMIT_LOCK = threading.Lock()
 RATE_LIMITER = _RequestRateLimiter()
 TASK_EXECUTOR = _ThreadTaskExecutor(max_workers=4)
+SERVER_LOCK = threading.Lock()
 SERVER: ThreadingHTTPServer | None = None
 SERVER_STOP = threading.Event()
 

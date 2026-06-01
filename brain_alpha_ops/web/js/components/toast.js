@@ -7,7 +7,7 @@
 
   var $ = window.Utils.$;
   var escapeHtml = window.Utils.escapeHtml;
-  var setSafeHtml = window.Utils.setSafeHtml;
+  var setSafeHtml = window.Utils.setRawHtml;
 
   var ICONS = {
     success: '\u2713',

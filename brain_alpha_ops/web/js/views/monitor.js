@@ -8,7 +8,7 @@
   var $ = window.Utils.$;
   var esc = window.Utils.escapeHtml;
   var formatScore = window.Utils.formatScore;
-  var setSafeHtml = window.Utils.setSafeHtml;
+  var setSafeHtml = window.Utils.setRawHtml;
   var scoreSpan = window.Utils.scoreSpan;
   var S = window.AppState;
 
