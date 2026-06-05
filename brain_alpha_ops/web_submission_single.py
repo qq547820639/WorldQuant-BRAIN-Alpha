@@ -44,11 +44,28 @@ def submit_candidate_payload(
     if not candidate:
         return {"ok": False, "error_code": "VALIDATION_ERROR", "error": "candidate not found"}
     run_config = run_config_from_payload(payload)
+    official_id = official_alpha_id(candidate)
+    if not payload_truthy(payload.get("confirm_submit")):
+        return _submission_contract_payload({
+            "ok": False,
+            "error_code": "SUBMIT_CONFIRMATION_REQUIRED",
+            "error": "Production submit requires explicit confirm_submit=true.",
+            "error_category": "confirmation",
+            "action": "Review submit readiness and resend with confirm_submit=true only for an intentional production submit.",
+            "state_navigation": {
+                "schema_version": "abnormal_state_navigation.v1",
+                "state": "blocked",
+                "reason_code": "SUBMIT_CONFIRMATION_REQUIRED",
+                "title": "需要提交确认",
+                "summary": "后端未收到明确的生产提交确认，已在调用官方 API 前阻断。",
+                "target_view": "submit",
+                "primary_action": "确认官方证据完整后再执行提交。",
+            },
+        }, candidate, official_id)
     preflight = submission_preflight_advisory(candidate, run_config)
     if not preflight.get("ok"):
         record_submit_blocked(payload, candidate, run_config, str(preflight.get("error") or "Submission blocked."))
-        return _submission_contract_payload(preflight, candidate, official_alpha_id(candidate))
-    official_id = official_alpha_id(candidate)
+        return _submission_contract_payload(preflight, candidate, official_id)
     observability_preflight = observability_submission_preflight(run_config.ops.storage_dir)
     if observability_preflight.get("requires_confirmation") and not payload_truthy(payload.get("confirm_observability_risk")):
         error = "Observability diagnostics recommend pausing submission until blocking flags are acknowledged."

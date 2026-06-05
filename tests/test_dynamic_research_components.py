@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import random
 from types import SimpleNamespace
 
 import pytest
@@ -137,7 +138,8 @@ def test_template_registry_loads_builtin_templates_and_instantiates_placeholders
     all_templates = registry.get_all()
     assert {template.id for template in all_templates} >= {"momentum_price", "cross_sectional"}
     assert registry.get("momentum_price") is not None
-    assert registry.get_for_dataset("pv1")
+    pv1_templates = {template.id for template in registry.get_for_dataset("pv1")}
+    assert pv1_templates == {"liquidity_volume", "momentum_price", "reversal_short_term"}
 
     expr = registry.instantiate("cross_sectional", dataset_id="pv1", seed=1)
     assert "{FIELD_1}" not in expr
@@ -180,6 +182,62 @@ def test_template_registry_loads_custom_file_and_handles_invalid_json(tmp_path, 
     assert "failed to load alpha template JSON" in caplog.text
 
 
+def test_template_registry_field_type_matching_is_dataset_specific():
+    class CountingLoader(_Loader):
+        def __init__(self):
+            super().__init__()
+            self.calls = 0
+
+        def get_fields(self, dataset_id: str = ""):
+            self.calls += 1
+            return super().get_fields(dataset_id)
+
+    class CountingMapper(_Mapper):
+        def __init__(self, fields_by_dataset):
+            super().__init__(fields_by_dataset)
+            self.calls = 0
+
+        def fields_for(self, dataset_id):
+            self.calls += 1
+            return super().fields_for(dataset_id)
+
+    loader = CountingLoader()
+    mapper = CountingMapper(loader.fields_by_dataset)
+    registry = AlphaTemplateRegistry(loader, mapper)
+    registry.load_templates("missing_templates.json")
+
+    analyst_templates = {template.id for template in registry.get_for_dataset("analyst4")}
+    analyst_templates_again = {template.id for template in registry.get_for_dataset("analyst4")}
+    analyst_expr = registry.instantiate("momentum_price", "analyst4", seed=3)
+
+    assert "quality_composite" in analyst_templates
+    assert "value_fundamental" not in analyst_templates
+    assert analyst_templates_again == analyst_templates
+    assert "{" not in analyst_expr
+    assert loader.calls == 1
+    assert mapper.calls == 1
+
+    pv1_templates = {template.id for template in registry.get_for_dataset("pv1")}
+    assert pv1_templates == {"liquidity_volume", "momentum_price", "reversal_short_term"}
+    assert loader.calls == 2
+    assert mapper.calls == 2
+
+
+def test_template_registry_seed_does_not_mutate_global_random_state():
+    loader = _Loader()
+    registry = AlphaTemplateRegistry(loader, _Mapper(loader.fields_by_dataset))
+    registry.load_templates("missing_templates.json")
+
+    state = random.getstate()
+    try:
+        random.seed(12345)
+        expected = random.Random(12345).random()
+        registry.instantiate("momentum_price", "analyst4", seed=7)
+        assert random.random() == expected
+    finally:
+        random.setstate(state)
+
+
 def test_template_registry_unknown_and_empty_field_cases():
     loader = _Loader()
     mapper = _Mapper(loader.fields_by_dataset)
@@ -192,7 +250,8 @@ def test_template_registry_unknown_and_empty_field_cases():
     mapper.fields_by_dataset["empty"] = []
     template = registry.get("momentum_price")
     assert template is not None
-    assert registry.instantiate("momentum_price", "empty") == template.expression_template
+    with pytest.raises(ValueError):
+        registry.instantiate("momentum_price", "empty")
 
 
 def test_dynamic_theme_engine_builds_auto_skeletons_and_generates_templates():

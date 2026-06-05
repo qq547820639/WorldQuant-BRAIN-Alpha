@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import dataclasses
+import logging
+from types import SimpleNamespace
 from urllib.parse import urlparse
 
 from brain_alpha_ops.web_handler_dispatch import (
     _GET_DISPATCH_HANDLERS,
     _POST_DISPATCH_HANDLERS,
+    _rate_limit_key,
     WebHandlerDispatchContext,
     dispatch_get,
     dispatch_post,
@@ -243,6 +246,58 @@ def test_dispatch_get_handles_root_status_and_query_bounds():
     prompt_runs = _Handler()
     dispatch_get(prompt_runs, urlparse("/api/prompt_runs?limit=6"), ctx)
     assert prompt_runs.json_calls[0][0]["prompt_runs"] == {"limit": 6}
+
+
+def test_dispatch_get_logs_handler_exceptions(monkeypatch, caplog):
+    ctx, _started, _lock = _ctx()
+
+    def boom(*_args, **_kwargs):
+        raise RuntimeError("boom")
+
+    monkeypatch.setitem(_GET_DISPATCH_HANDLERS, "boom", boom)
+    ctx = dataclasses.replace(
+        ctx,
+        route_for=lambda _method, _path: SimpleNamespace(handler="boom", requires_session=False, category="api"),
+    )
+
+    handler = _Handler()
+    with caplog.at_level(logging.ERROR, logger="brain_alpha_ops.web_handler_dispatch"):
+        dispatch_get(handler, urlparse("/boom"), ctx)
+
+    assert handler.json_calls[0][0]["error_code"] == "GET_ROUTE_ERROR"
+    assert "web route dispatch failed" in caplog.text
+
+
+def test_dispatch_post_logs_handler_exceptions(caplog):
+    ctx, _started, _lock = _ctx()
+
+    def boom(*_args, **_kwargs):
+        raise RuntimeError("boom")
+
+    ctx = dataclasses.replace(ctx, connection_test_post_payload=boom)
+
+    handler = _Handler(body={"dry_run": True})
+    with caplog.at_level(logging.ERROR, logger="brain_alpha_ops.web_handler_dispatch"):
+        dispatch_post(handler, urlparse("/api/test_connection"), ctx)
+
+    assert handler.json_calls[0][0]["error_code"] == "CONNECTION_ERROR"
+    assert "web post route failed" in caplog.text
+
+
+def test_submit_with_lock_logs_exceptions(caplog):
+    ctx, _started, _lock = _ctx()
+    handler = _Handler(body={"alpha_id": "A1"})
+
+    def boom(_payload):
+        raise RuntimeError("boom")
+
+    with caplog.at_level(logging.ERROR, logger="brain_alpha_ops.web_handler_dispatch"):
+        from brain_alpha_ops.web_handler_dispatch import _submit_with_lock
+
+        _submit_with_lock(handler, ctx, boom, "SUBMIT_ERROR", payload={"alpha_id": "A1"})
+
+    assert handler.json_calls[0][0]["error_code"] == "SUBMIT_ERROR"
+    assert "web submit route failed" in caplog.text
 
 
 def test_dispatch_get_candidates_falls_back_to_latest_async_generation_result():
@@ -652,6 +707,14 @@ def test_dispatch_rate_limiter_throttles_repeated_writes_and_recovers_after_wind
     dispatch_post(third, urlparse("/api/run"), ctx)
     assert third.json_calls[0][1] == 200
     assert len(started) == 2
+
+
+def test_rate_limit_key_falls_back_to_client_address_without_session():
+    handler = _Handler(body={"alpha": 1})
+    handler._session_id_from_cookie = lambda: ""
+    handler.client_address = ("10.0.0.1", 61234)
+
+    assert _rate_limit_key(handler) == "client:10.0.0.1"
 
 
 def test_dispatch_post_can_cancel_sync_job():

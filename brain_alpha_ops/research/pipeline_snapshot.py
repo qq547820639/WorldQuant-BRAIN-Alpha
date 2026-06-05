@@ -8,6 +8,11 @@ from typing import Any, Callable
 
 from brain_alpha_ops.models import Candidate
 
+from .alpha_quality import (
+    build_alpha_output_config,
+    diagnose_alpha_candidate,
+    summarize_quality_diagnostics,
+)
 from .pipeline_helpers import compute_gate_summary, compute_score_distribution, slot_message, slot_progress_percent
 from .pipeline_state import bandit_runtime_summary
 
@@ -84,16 +89,30 @@ class PipelineSnapshotBuilder:
         pending_validation = len(self.services.validation_targets(pool))
         active_backtest_limit = self.services.active_backtest_limit()
         current_profile = self.services.current_strategy_profile()
+        candidate_rows = self.candidate_snapshot(candidate_pool)
+        pending_rows = self.candidate_snapshot(pending_backtests, limit=50, retained=False)
+        passed_rows = self.candidate_snapshot(accepted_candidates, limit=50, retained=False)
         data = {
             "cycle": cycle,
-            "candidates": self.candidate_snapshot(candidate_pool),
+            "candidates": candidate_rows,
             "candidate_pool_available_count": len(candidate_pool),
             "candidate_pool_source_count": len(pool),
             "candidate_pool_excludes_waiting_backtests": True,
-            "pending_backtest_candidates": self.candidate_snapshot(pending_backtests, limit=50, retained=False),
+            "pending_backtest_candidates": pending_rows,
             "pending_backtest_count": len(pending_backtests),
-            "passed_candidates": self.candidate_snapshot(accepted_candidates, limit=50, retained=False),
+            "passed_candidates": passed_rows,
             "produced_count": state.produced_count,
+            "alpha_output_config": self._alpha_output_config(
+                dataset_id=state.active_dataset_id,
+                official_api_called=(
+                    state.official_validation_attempted_count > 0
+                    or state.backtests_submitted > 0
+                    or state.officially_simulated_count > 0
+                ),
+            ),
+            "quality_summary": self._quality_summary(
+                list(candidate_pool) + list(pending_backtests) + list(accepted_candidates)
+            ),
             "ready_results_count": len(accepted_candidates),
             "official_validation_attempted": state.official_validation_attempted_count,
             "official_validation_passed": state.official_validation_passed_count,
@@ -155,10 +174,24 @@ class PipelineSnapshotBuilder:
             if not self.services.assess_auto_submission(candidate, 0)["failed_reasons"]
         ]
         active_backtest_limit = self.services.active_backtest_limit()
+        backtest_slots = self.services.slot_snapshot()
         current_profile = self.services.current_strategy_profile()
+        candidate_rows = self.candidate_snapshot(candidate_pool)
+        ready_rows = self.candidate_snapshot(ready, limit=50, retained=False)
+        pending_rows = self.candidate_snapshot(pending_backtests, limit=50, retained=False)
+        official_api_called = (
+            state.official_validation_attempted_count > 0
+            or state.backtests_submitted > 0
+            or state.officially_simulated_count > 0
+        )
         return {
             "total_candidates": state.produced_count,
             "produced_count": state.produced_count,
+            "alpha_output_config": self._alpha_output_config(
+                dataset_id=state.active_dataset_id,
+                official_api_called=official_api_called,
+            ),
+            "quality_summary": self._quality_summary(candidates),
             "retained_pool_size": len(candidate_pool),
             "candidate_pool_available_count": len(candidate_pool),
             "candidate_pool_source_count": len(pool_values),
@@ -194,7 +227,7 @@ class PipelineSnapshotBuilder:
             "observability_generation_guidance": dict(state.observability_generation_guidance),
             "observability_official_call_guard": self.services.observability_official_call_guard_snapshot(),
             "official_context": dict(state.context_summary),
-            "backtest_slots": self.services.slot_snapshot(),
+            "backtest_slots": backtest_slots,
             "strategy_profile": current_profile,
             "strategy_switch_count": state.strategy_switch_count,
             "strategy_lifecycle": self.services.strategy_lifecycle_summary(current_profile, state.strategy_profile_index),
@@ -204,14 +237,17 @@ class PipelineSnapshotBuilder:
             "lifecycle_records": list(state.lifecycle_records),
             "backtest_records": list(state.backtest_records[-50:]),
             "convergence": state.convergence,
-            "candidates": self.candidate_snapshot(candidate_pool),
-            "passed_candidates": self.candidate_snapshot(ready, limit=50, retained=False),
-            "pending_backtest_candidates": self.candidate_snapshot(pending_backtests, limit=50, retained=False),
+            "candidates": candidate_rows,
+            "passed_candidates": ready_rows,
+            "pending_backtest_candidates": pending_rows,
             "official_call_policy": self._official_call_policy(active_backtest_limit),
             "can_complete_goal": {
                 "local_production_evaluation_ranking_loop": True,
                 "retains_top_10_before_backtest": True,
-                "submits_top_3_backtests_per_cycle": True,
+                "submits_configured_backtests_per_cycle": True,
+                "submits_top_3_backtests_per_cycle": active_backtest_limit >= 3,
+                "official_backtest_capacity": active_backtest_limit,
+                "visible_three_independent_backtest_slots": len(backtest_slots) >= 3,
                 "waits_for_backtest_results": True,
                 "screen_progress_updates": True,
                 "caveat": "Official rate limits can still defer a batch; deferred candidates are not treated as alpha-quality failures.",
@@ -226,7 +262,7 @@ class PipelineSnapshotBuilder:
         limit = self.config.budget.retained_alpha_pool_size if limit is None else max(0, int(limit))
         return [
             {
-                **candidate.to_dict(),
+                **self.prepare_candidate_for_snapshot(candidate),
                 "pool_rank": index,
                 "in_retained_pool": retained,
                 "smart_rank_score": self.services.smart_ranking_score(candidate),
@@ -234,6 +270,17 @@ class PipelineSnapshotBuilder:
             }
             for index, candidate in enumerate(self.services.smart_rank_candidates(pool)[:limit], start=1)
         ]
+
+    def prepare_candidate_for_snapshot(self, candidate: Candidate) -> dict:
+        if self._supports_alpha_quality():
+            output_config = self._candidate_alpha_output_config(candidate)
+            candidate.alpha_output_config = output_config
+            candidate.quality_diagnosis = diagnose_alpha_candidate(
+                candidate,
+                run_config=self.config,
+                output_config=output_config,
+            )
+        return candidate.to_dict()
 
     def backtest_snapshot(self, candidates: list[Candidate]) -> list[dict]:
         return [
@@ -243,9 +290,60 @@ class PipelineSnapshotBuilder:
                 "status": candidate.submission.get("simulation_status") or candidate.lifecycle_status,
                 "official_alpha_id": candidate.official_alpha_id,
                 "score": candidate.scorecard.get("total_score", 0.0),
+                "alpha_output_config": candidate.alpha_output_config,
+                "quality_diagnosis": candidate.quality_diagnosis,
             }
             for candidate in candidates
         ]
+
+    def _supports_alpha_quality(self) -> bool:
+        return all(
+            hasattr(self.config, name)
+            for name in ("settings", "budget", "thresholds", "scoring", "submission_policy")
+        )
+
+    def _candidate_alpha_output_config(self, candidate: Candidate) -> dict:
+        return self._alpha_output_config(
+            dataset_id=candidate.dataset_id or getattr(self.config.settings, "dataset", ""),
+            official_api_called=bool(
+                candidate.validation
+                or candidate.simulation_id
+                or candidate.official_alpha_id
+                or candidate.official_metrics
+            ),
+        )
+
+    def _alpha_output_config(self, *, dataset_id: str = "", official_api_called: bool = False) -> dict:
+        if not self._supports_alpha_quality():
+            return {}
+        return build_alpha_output_config(
+            self.config,
+            dataset_id=dataset_id,
+            generation_args={
+                "mode": "production_pipeline",
+                "local_only": False,
+                "official_api_called": official_api_called,
+                "allow_submit": False,
+            },
+        )
+
+    def _quality_summary(self, candidates: list[Candidate]) -> dict:
+        if not self._supports_alpha_quality():
+            return {}
+        rows: list[dict[str, Any]] = []
+        seen: set[str] = set()
+        for candidate in candidates:
+            key = (
+                candidate.official_alpha_id
+                or candidate.simulation_id
+                or candidate.alpha_id
+                or candidate.expression
+            )
+            if key in seen:
+                continue
+            seen.add(key)
+            rows.append(self.prepare_candidate_for_snapshot(candidate))
+        return summarize_quality_diagnostics(rows)
 
     def _official_call_policy(self, active_backtest_limit: int) -> dict:
         budget = self.config.budget
@@ -291,14 +389,14 @@ def backtest_slot_snapshot(
                     "simulation_id": "",
                     "status": status,
                     "official_alpha_id": "",
-                    "score": 0.0,
+                    "score": None,
                     "poll_count": 0,
                     "progress_percent": 0,
                     "next_poll_seconds": 0,
                     "message": (
-                        f"Official calls paused: {official_halt_reason}"
+                        f"官方调用暂停：{official_halt_reason}"
                         if official_calls_halted
-                        else "Waiting for candidate backfill."
+                        else "空闲，等待候选进入官方回测。"
                     ),
                 }
             )

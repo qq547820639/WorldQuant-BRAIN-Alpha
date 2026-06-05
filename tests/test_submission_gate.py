@@ -80,6 +80,9 @@ def _stub_official_api() -> tuple[OfficialBrainAPI, list[tuple]]:
         "dryrun_abc",
         "fake_alpha",
         "sample-alpha",
+        "stub_alpha",
+        "prod_stub_alpha_0001",
+        "prod-stub-alpha-0001",
     ],
 )
 def test_non_production_identifiers_are_detected(value: str):

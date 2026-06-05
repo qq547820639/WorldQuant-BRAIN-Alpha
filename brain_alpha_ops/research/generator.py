@@ -12,7 +12,18 @@ import re
 from typing import Any, TYPE_CHECKING
 
 from brain_alpha_ops.models import Candidate, new_id
-from brain_alpha_ops.research.expression_ast import expression_fingerprint, expression_key, ordered_operators, profile_expression
+from brain_alpha_ops.research.expression_ast import (
+    expression_fingerprint,
+    expression_key,
+    expression_similarity,
+    ordered_operators,
+    profile_expression,
+)
+from brain_alpha_ops.research.field_quality import filter_generation_fields
+from brain_alpha_ops.research.fallback_generation import (
+    high_turnover_generation_risk_reasons,
+    is_high_turnover_generation_risk,
+)
 
 if TYPE_CHECKING:
     from brain_alpha_ops.data import OfficialDataLoader, FieldDatasetMapper
@@ -24,6 +35,7 @@ logger = logging.getLogger(__name__)
 # Default window sizes — can be overridden per dataset frequency (P1-4 TODO).
 DEFAULT_WINDOWS = [3, 5, 8, 10, 12, 15, 20, 30, 40, 60, 90, 120, 180, 252]
 DEFAULT_WINSOR_STD = [3, 4, 5, 6]
+FORBIDDEN_PATTERN_SIMILARITY_THRESHOLD = 0.90
 
 
 def _get_default_windows() -> list[int]:
@@ -204,7 +216,8 @@ class CandidateGenerator:
             try:
                 # Treat empty string as None (all datasets)
                 ds_id: str | None = dataset_id if dataset_id else None
-                ds_fields = self._loader.get_fields(ds_id)
+                raw_fields = self._loader.get_fields(ds_id)
+                ds_fields = filter_generation_fields(raw_fields) or raw_fields
                 if ds_fields:
                     # Score fields by coverage, pick top N
                     # P1-5: Dynamic field pool — larger pools for datasets with more fields
@@ -323,7 +336,7 @@ class CandidateGenerator:
             return self._generate_dynamic(count, ds)
 
         # Fallback: use existing fields-based generation
-        return self._generate_fallback(count)
+        return self._generate_fallback(count, ds)
 
     def _generate_dynamic(self, count: int, dataset_id: str) -> list[Candidate]:
         """Use DynamicThemeEngine to produce varied candidates."""
@@ -365,6 +378,8 @@ class CandidateGenerator:
             mutated = self._theme_engine.mutate_expression(  # type: ignore[union-attr]
                 tmpl.expression, dataset_id, seed=seed
             )
+            if is_high_turnover_generation_risk(mutated):
+                continue
             if self._knowledge_constraints.get("forbidden_patterns") and self._expression_forbidden(mutated):
                 continue
             if any(c.expression == mutated for c in candidates) or self._is_observability_avoided(mutated):
@@ -422,37 +437,38 @@ class CandidateGenerator:
             remainder = [f for f in field_pool if f.lower() not in set(self._knowledge_constraints["preferred_fields"])]
             field_pool = preferred_fields + remainder
 
-        # Diverse template skeletons — P1-7: expanded from 10 to 22
+        # Template skeletons must never name fields directly.  Even common
+        # BRAIN fields such as returns/sector are unavailable when the local
+        # official context is partial, so every field reference is supplied
+        # from field_pool via f1/f2.
         templates = [
-            "rank(ts_delta({f1}, {w}) / ts_std_dev(returns, {w}))",
+            "rank(ts_delta({f1}, {w}) / ts_std_dev({f2}, {w}))",
             "rank(ts_rank({f1}, {w}))",
             "rank(zscore({f1}))",
             "rank(-{f1})",
             "rank(ts_mean({f1}, {w}))",
-            "group_rank({f1}, sector)",
+            "rank(ts_delta({f1}, {w}) - ts_delta({f2}, {w}))",
             "-1 * ts_rank({f1}, {w})",
             "rank({f1}) * rank(ts_delta({f2}, {w}))",
-            "rank(ts_corr({f1}, returns, {w}))",
+            "rank(ts_corr({f1}, {f2}, {w}))",
             "ts_rank(ts_delta({f1}, {w}), {w})",
-            # P1-7 additions
             "rank(ts_decay_linear(ts_delta({f1}, {w}), {w}))",
             "rank(-ts_std_dev({f1}, {w}))",
             "rank(ts_delta({f1}, {w}) / ts_std_dev({f1}, {w}))",
-            "group_neutralize(zscore({f1}), sector)",
+            "rank(zscore({f1}) - zscore({f2}))",
             "rank(divide({f1}, ts_mean({f1}, {w})))",
-            "rank(ts_mean({f1}, {w}) - ts_mean({f1}, {w}))",
-            "rank(ts_corr({f1}, {f2}, {w}))",
+            "rank(ts_mean({f1}, {w}) - ts_mean({f2}, {w}))",
+            "rank(ts_covariance({f1}, {f2}, {w}))",
             "rank(if_else(greater(ts_delta({f1}, {w}), 0), {f1}, -{f1}))",
             "rank(winsorize(ts_delta({f1}, {w}), 3))",
-            "rank(ts_std_dev({f1}, {w}) / ts_std_dev({f1}, {w}))",
+            "rank(ts_std_dev({f1}, {w}) / ts_std_dev({f2}, {w}))",
             "rank(ts_mean({f1}, {w}) / ts_std_dev({f2}, {w}))",
             "rank(ts_sum(ts_delta({f1}, {w}), {w}))",
         ]
         families = ["momentum", "momentum", "quality", "value", "liquidity",
-                     "cross_sectional", "reversal", "hybrid", "liquidity", "momentum",
-                     # P1-7 additions
-                     "decay", "volatility", "momentum", "cross_sectional", "liquidity",
-                     "momentum", "hybrid", "conditional", "momentum", "volatility",
+                     "relative_momentum", "reversal", "hybrid", "co_movement", "momentum",
+                     "decay", "volatility", "momentum", "relative_value", "liquidity",
+                     "relative_momentum", "co_movement", "conditional", "momentum", "volatility",
                      "hybrid", "momentum"]
 
         attempt_limit = count * (16 if diversity_boost else 8)
@@ -474,6 +490,8 @@ class CandidateGenerator:
             f2 = field_pool[field2_index] if "{f2}" in tmpl else f1
             w = windows[window_index]
             expr = tmpl.replace("{f1}", f1).replace("{f2}", f2).replace("{w}", str(w))
+            if is_high_turnover_generation_risk(expr):
+                continue
             if self._knowledge_constraints.get("forbidden_patterns") and self._expression_forbidden(expr):
                 continue
 
@@ -507,13 +525,42 @@ class CandidateGenerator:
         return bool(markers & self._observability_avoid_keys)
 
     def _expression_forbidden(self, expression: str) -> bool:
-        expression_lower = str(expression or "").lower()
+        expression_text = str(expression or "").strip()
+        if not expression_text:
+            return False
+        expression_lower = expression_text.lower()
+        if is_high_turnover_generation_risk(expression_text):
+            return True
+        try:
+            current_key = expression_key(expression_text)
+            current_fingerprint = expression_fingerprint(expression_text)
+        except Exception:
+            current_key = ""
+            current_fingerprint = ""
         for pattern in self._knowledge_constraints.get("forbidden_patterns") or []:
-            if not pattern:
+            pattern_text = str(pattern or "").strip()
+            if not pattern_text:
                 continue
-            needle = pattern.lower()
+            needle = pattern_text.lower()
             if needle and needle in expression_lower:
                 return True
+            if pattern_text in {expression_text, current_key, current_fingerprint}:
+                return True
+            try:
+                pattern_key = expression_key(pattern_text)
+                pattern_fingerprint = expression_fingerprint(pattern_text)
+            except Exception:
+                pattern_key = ""
+                pattern_fingerprint = ""
+            if current_key and pattern_key and current_key == pattern_key:
+                return True
+            if current_fingerprint and pattern_fingerprint and current_fingerprint == pattern_fingerprint:
+                return True
+            try:
+                if expression_similarity(expression_text, pattern_text) >= FORBIDDEN_PATTERN_SIMILARITY_THRESHOLD:
+                    return True
+            except Exception:
+                logger.debug("failed to compare forbidden expression pattern", exc_info=True)
         return False
 
 
@@ -558,6 +605,7 @@ def local_quality(candidate: Candidate, min_score: float) -> dict:
     fields = candidate.data_fields or extract_fields(expression)
     operators = candidate.operators or extract_operators(expression)
     depth = nesting_depth(expression)
+    generation_risks = high_turnover_generation_risk_reasons(expression)
 
     if not fields:
         score -= 30
@@ -587,9 +635,12 @@ def local_quality(candidate: Candidate, min_score: float) -> dict:
         score += 8
     if "adv20" in expression or "vwap" in expression:
         score += 4
+    if generation_risks:
+        score -= 35
+        reasons.extend("high_turnover_generation_risk:" + reason for reason in generation_risks)
 
     score = max(0.0, min(100.0, round(score, 2)))
-    passed = score >= min_score * 10
+    passed = score >= min_score * 10 and not generation_risks
     return {
         "schema_version": "local-quality-v2",
         "score": score,

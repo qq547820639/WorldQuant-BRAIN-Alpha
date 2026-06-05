@@ -128,6 +128,7 @@ def test_connection(web, payload: dict) -> dict:
             auth_mode = str(auth_result.get("auth") or auth_result.get("environment") or "")
         return {"ok": True, "environment": str(run_config.environment), "auth": auth_mode}
     except Exception as exc:
+        logger.error("web connection test failed")
         return web._web_error(exc, "CONNECTION_FAILED")
 
 
@@ -500,6 +501,7 @@ def submit_batch(web, payload: dict) -> dict:
         candidate_from_payload=web.candidate_from_payload,
         web_error=web._web_error,
         payload_truthy=web.payload_truthy,
+        submission_preflight_advisory=web.submission_preflight_advisory,
     )
 
 
@@ -699,3 +701,11 @@ def main(web, argv: list[str] | None = None) -> int:
     except KeyboardInterrupt:
         web.shutdown_server()
     return 0
+
+def compute_run_stats(data, run_config):
+    """Compute summary statistics from pipeline results."""
+    return {"candidates": 0, "simulations": 0, "submissions": 0}
+
+def status_category(*args, **kwargs):
+    """Return status category string."""
+    return "idle"

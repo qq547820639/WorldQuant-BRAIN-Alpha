@@ -7,22 +7,35 @@ import json
 from pathlib import Path
 from typing import Any
 
+from brain_alpha_ops.config import ConfigValidationError, QualityThresholds, load_run_config
+from brain_alpha_ops.brain_api.official_helpers import looks_non_production_alpha_id
+from brain_alpha_ops.research.fallback_generation import high_turnover_generation_risk_reasons
+from brain_alpha_ops.scoring.release_score_gate import evaluate_release_score
+from brain_alpha_ops.submission_readiness import (
+    REQUIRED_OFFICIAL_METRIC_FIELDS,
+    missing_official_metric_fields,
+)
+
 
 ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_CONFIG = ROOT / "config" / "run_config.json"
 DEFAULT_JOBS = ROOT / "data" / "jobs_production.json"
 DEFAULT_JOB_LEDGER_GLOB = "jobs_*.json"
 SCHEMA_VERSION = "live_submit_readiness.v1"
 DEFAULT_SIMILARITY_THRESHOLD = 0.90
 
-
 def check_live_submit_readiness(
     jobs_path: str | Path = DEFAULT_JOBS,
     *,
+    config_path: str | Path = DEFAULT_CONFIG,
     similarity_threshold: float = DEFAULT_SIMILARITY_THRESHOLD,
     related_jobs_paths: list[str | Path] | None = None,
 ) -> dict[str, Any]:
     path = Path(jobs_path)
     findings: list[dict[str, str]] = []
+    thresholds, threshold_finding = _load_thresholds(config_path)
+    if threshold_finding:
+        findings.append(threshold_finding)
     jobs, error = _read_jobs_ledger(path)
     if error:
         return _error_result(path, error)
@@ -38,8 +51,14 @@ def check_live_submit_readiness(
             findings.append({"code": "jobs_ledger_error", "message": ledger_error, "jobs": str(ledger_path)})
             ledger_audits.append(_error_ledger_audit(ledger_path, ledger_error))
             continue
-        ledger_audit = _audit_ledger(ledger_path, ledger_jobs, similarity_threshold=similarity_threshold)
+        ledger_audit = _audit_ledger(
+            ledger_path,
+            ledger_jobs,
+            thresholds=thresholds,
+            similarity_threshold=similarity_threshold,
+        )
         ledger_audits.append(ledger_audit)
+        findings.extend(ledger_audit.get("candidate_evidence_findings") or [])
         family_candidates.extend(ledger_audit["candidates"])
         family_eligible_candidates.extend(ledger_audit["ledger_eligible_candidates"])
         family_max_similarity_values.extend(
@@ -60,6 +79,7 @@ def check_live_submit_readiness(
                 "message": "no current candidate has complete official metrics, low similarity risk, and submission-ready status",
             }
         )
+        findings.extend(_production_gap_findings(primary_audit, ledger_audits, family_candidates))
 
     latest_job_id = primary_audit.get("latest_job_id", "")
     latest_job_status = primary_audit.get("latest_job_status", "")
@@ -68,7 +88,16 @@ def check_live_submit_readiness(
     ]
     max_similarity = max(max_similarity_values) if max_similarity_values else None
     family_max_similarity = max(family_max_similarity_values) if family_max_similarity_values else None
-    evidence_ok = not any(finding.get("code") == "jobs_ledger_error" for finding in findings)
+    latest_blocking_reason_counts = _blocking_reason_counts(assessed)
+    ledger_blocking_reason_counts = _blocking_reason_counts(primary_audit.get("candidates") or [])
+    family_blocking_reason_counts = _blocking_reason_counts(family_candidates)
+    primary_chain_summary = dict(primary_audit.get("chain_summary") or {})
+    family_chain_summary = _merge_chain_summaries(ledger_audits)
+    primary_candidate_evidence_incomplete = _candidate_evidence_incomplete([primary_audit])
+    evidence_ok = not any(
+        finding.get("code") in {"jobs_ledger_error", "readiness_config_error"}
+        for finding in findings
+    )
     return {
         "ok": evidence_ok,
         "schema_version": SCHEMA_VERSION,
@@ -86,6 +115,7 @@ def check_live_submit_readiness(
         "ready_to_submit": bool(eligible),
         "human_confirmation_required": bool(eligible),
         "similarity_threshold": similarity_threshold,
+        "threshold_summary": _threshold_summary(thresholds),
         "max_similarity": max_similarity,
         "job_family_jobs_checked": sum(int(item.get("jobs_checked") or 0) for item in ledger_audits),
         "job_family_candidate_count": sum(int(item.get("ledger_candidate_count") or 0) for item in ledger_audits),
@@ -93,6 +123,19 @@ def check_live_submit_readiness(
         "job_family_ready_to_submit": bool(family_eligible_candidates),
         "job_family_max_similarity": family_max_similarity,
         "summary_counts": dict(primary_audit.get("summary_counts") or {}),
+        "latest_blocking_reason_counts": latest_blocking_reason_counts,
+        "ledger_blocking_reason_counts": ledger_blocking_reason_counts,
+        "job_family_blocking_reason_counts": family_blocking_reason_counts,
+        "primary_chain_summary": primary_chain_summary,
+        "job_family_chain_summary": family_chain_summary,
+        "production_gap_summary": _production_gap_summary(
+            primary_audit=primary_audit,
+            latest_blocking_reason_counts=latest_blocking_reason_counts,
+            family_blocking_reason_counts=family_blocking_reason_counts,
+            primary_chain_summary=primary_chain_summary,
+            family_chain_summary=family_chain_summary,
+            candidate_evidence_incomplete=primary_candidate_evidence_incomplete,
+        ),
         "best_candidate": best,
         "job_family_best_candidate": _best_candidate(family_candidates),
         "job_audits": primary_audit.get("job_audits") or [],
@@ -122,6 +165,7 @@ def _error_result(path: Path, message: str) -> dict[str, Any]:
         "ready_to_submit": False,
         "human_confirmation_required": False,
         "similarity_threshold": DEFAULT_SIMILARITY_THRESHOLD,
+        "threshold_summary": _threshold_summary(QualityThresholds()),
         "max_similarity": None,
         "job_family_jobs_checked": 0,
         "job_family_candidate_count": 0,
@@ -129,6 +173,12 @@ def _error_result(path: Path, message: str) -> dict[str, Any]:
         "job_family_ready_to_submit": False,
         "job_family_max_similarity": None,
         "summary_counts": {},
+        "latest_blocking_reason_counts": {},
+        "ledger_blocking_reason_counts": {},
+        "job_family_blocking_reason_counts": {},
+        "primary_chain_summary": {},
+        "job_family_chain_summary": {},
+        "production_gap_summary": {"gap_count": 0, "gaps": []},
         "best_candidate": {},
         "job_family_best_candidate": {},
         "job_audits": [],
@@ -172,8 +222,14 @@ def _job_ledger_paths(path: Path, related_jobs_paths: list[str | Path] | None) -
     return unique
 
 
-def _audit_ledger(jobs_path: Path, jobs: dict[str, Any], *, similarity_threshold: float) -> dict[str, Any]:
-    job_audits = _audit_jobs(jobs, similarity_threshold=similarity_threshold)
+def _audit_ledger(
+    jobs_path: Path,
+    jobs: dict[str, Any],
+    *,
+    thresholds: QualityThresholds,
+    similarity_threshold: float,
+) -> dict[str, Any]:
+    job_audits = _audit_jobs(jobs, thresholds=thresholds, similarity_threshold=similarity_threshold)
     latest_job_id = _latest_job_id(jobs)
     latest_job = jobs.get(latest_job_id) or {}
     latest_audit = next((item for item in job_audits if item["job_id"] == latest_job_id), {})
@@ -203,6 +259,7 @@ def _audit_ledger(jobs_path: Path, jobs: dict[str, Any], *, similarity_threshold
         "ready_to_submit": bool(eligible),
         "human_confirmation_required": bool(eligible),
         "similarity_threshold": similarity_threshold,
+        "threshold_summary": _threshold_summary(thresholds),
         "max_similarity": max_similarity,
         "summary_counts": {
             "submission_ready": _int(summary.get("submission_ready")),
@@ -214,6 +271,12 @@ def _audit_ledger(jobs_path: Path, jobs: dict[str, Any], *, similarity_threshold
         },
         "best_candidate": _best_candidate(assessed),
         "job_audits": job_audits,
+        "chain_summary": _merge_chain_summaries(job_audits),
+        "candidate_evidence_findings": [
+            dict(finding, jobs=str(jobs_path), job_ledger=jobs_path.name)
+            for audit in job_audits
+            for finding in audit.get("candidate_evidence_findings", [])
+        ],
         "eligible_candidates": eligible,
         "ledger_eligible_candidates": ledger_eligible,
         "latest_candidates": assessed,
@@ -236,10 +299,12 @@ def _error_ledger_audit(jobs_path: Path, message: str) -> dict[str, Any]:
         "ready_to_submit": False,
         "human_confirmation_required": False,
         "similarity_threshold": DEFAULT_SIMILARITY_THRESHOLD,
+        "threshold_summary": _threshold_summary(QualityThresholds()),
         "max_similarity": None,
         "summary_counts": {},
         "best_candidate": {},
         "job_audits": [],
+        "chain_summary": {},
         "eligible_candidates": [],
         "ledger_eligible_candidates": [],
         "latest_candidates": [],
@@ -256,52 +321,134 @@ def _latest_job_id(jobs: dict[str, Any]) -> str:
     return sorted((str(job_id) for job_id in jobs), key=sort_key)[-1]
 
 
-def _audit_jobs(jobs: dict[str, Any], *, similarity_threshold: float) -> list[dict[str, Any]]:
+def _audit_jobs(
+    jobs: dict[str, Any],
+    *,
+    thresholds: QualityThresholds,
+    similarity_threshold: float,
+) -> list[dict[str, Any]]:
     audits: list[dict[str, Any]] = []
     for job_id in sorted((str(job_id) for job_id in jobs), key=lambda item: (_int(item.rsplit("_", 1)[-1]), item)):
         job = jobs.get(job_id) or {}
         if not isinstance(job, dict):
             job = {}
-        candidates = [
-            _assess_candidate(item, similarity_threshold=similarity_threshold)
-            for item in _collect_candidates(job)
+        candidates, evidence_findings = _collect_candidates(job)
+        assessed_candidates = [
+            _assess_candidate(item, thresholds=thresholds, similarity_threshold=similarity_threshold)
+            for item in candidates
         ]
-        eligible = [dict(item, job_id=job_id) for item in candidates if item["eligible"]]
+        eligible = [dict(item, job_id=job_id) for item in assessed_candidates if item["eligible"]]
         audits.append(
             {
                 "job_id": job_id,
                 "status": str(job.get("status") or ""),
-                "candidate_count": len(candidates),
+                "candidate_count": len(assessed_candidates),
                 "eligible_count": len(eligible),
-                "candidates": candidates,
+                "candidates": assessed_candidates,
                 "eligible_candidates": eligible,
+                "chain_summary": _job_chain_summary(job),
+                "candidate_evidence_findings": [
+                    dict(finding, job_id=job_id)
+                    for finding in evidence_findings
+                ],
             }
         )
     return audits
 
 
-def _collect_candidates(job: dict[str, Any]) -> list[dict[str, Any]]:
+def _collect_candidates(job: dict[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str, str]]]:
     result = job.get("result") or {}
     progress_data = (job.get("progress") or {}).get("data") or {}
-    pools = (
-        progress_data.get("candidates") or [],
-        progress_data.get("passed_candidates") or [],
-        result.get("candidates") or [],
-        (result.get("summary") or {}).get("passed_candidates") or [],
-        result.get("candidates_preview") or [],
+    summary = result.get("summary") if isinstance(result.get("summary"), dict) else {}
+    pool_sources = (
+        ("progress.candidates", progress_data, "candidates"),
+        ("progress.passed_candidates", progress_data, "passed_candidates"),
+        ("result.candidates", result, "candidates"),
+        ("summary.passed_candidates", summary, "passed_candidates"),
     )
     candidates: list[dict[str, Any]] = []
+    findings: list[dict[str, str]] = []
     seen: set[str] = set()
-    for pool in pools:
+    for source, container, pool_key in pool_sources:
+        pool, source_findings = _candidate_pool_from_container(container, pool_key, source=source)
+        findings.extend(source_findings)
         for candidate in pool:
             if not isinstance(candidate, dict):
                 continue
-            key = _candidate_key(candidate)
-            if key in seen:
+            candidate_key = _candidate_key(candidate)
+            if candidate_key in seen:
                 continue
-            seen.add(key)
+            seen.add(candidate_key)
             candidates.append(candidate)
-    return candidates
+    return candidates, findings
+
+
+def _job_chain_summary(job: dict[str, Any]) -> dict[str, Any]:
+    result = job.get("result") if isinstance(job.get("result"), dict) else {}
+    summary = result.get("summary") if isinstance(result.get("summary"), dict) else {}
+    return {
+        "local_only_jobs": 1 if summary.get("local_only") is True else 0,
+        "official_api_called_jobs": 1 if summary.get("official_api_called") is True else 0,
+        "official_validation_passed": _int(summary.get("official_validation_passed")),
+        "officially_simulated": _int(summary.get("officially_simulated")),
+        "submission_ready": _int(summary.get("submission_ready")),
+        "submitted_this_run": _int(summary.get("submitted_this_run")),
+    }
+
+
+def _candidate_pool_from_container(
+    container: dict[str, Any],
+    key: str,
+    *,
+    source: str,
+) -> tuple[list[dict[str, Any]], list[dict[str, str]]]:
+    direct = container.get(key)
+    if isinstance(direct, list):
+        return [item for item in direct if isinstance(item, dict)], []
+
+    candidates: list[dict[str, Any]] = []
+    findings: list[dict[str, str]] = []
+    preview = container.get(f"{key}_preview")
+    if isinstance(preview, list):
+        candidates.extend(item for item in preview if isinstance(item, dict))
+    elif isinstance(direct, dict) and isinstance(direct.get("items_preview"), list):
+        preview = direct.get("items_preview") or []
+        candidates.extend(item for item in preview if isinstance(item, dict))
+
+    evidence = container.get(f"{key}_submission_evidence")
+    if isinstance(evidence, list):
+        candidates.extend(item for item in evidence if isinstance(item, dict))
+    candidates = _dedupe_candidates(candidates)
+
+    raw_count = container.get(f"{key}_count")
+    if raw_count is None and isinstance(direct, dict):
+        raw_count = direct.get("items_count")
+    total_count = _int(raw_count)
+    if total_count and len(candidates) < total_count:
+        findings.append(
+            {
+                "code": "candidate_pool_truncated",
+                "source": source,
+                "message": (
+                    f"{source} only contains {len(candidates)} auditable candidate(s) for "
+                    f"{total_count} persisted candidate(s); rerun the job after complete "
+                    "submission-evidence persistence is available to audit hidden candidates."
+                ),
+            }
+        )
+    return candidates, findings
+
+
+def _dedupe_candidates(candidates: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    deduped: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for candidate in candidates:
+        key = _candidate_key(candidate)
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(candidate)
+    return deduped
 
 
 def _candidate_key(candidate: dict[str, Any]) -> str:
@@ -314,42 +461,246 @@ def _candidate_key(candidate: dict[str, Any]) -> str:
     )
 
 
-def _assess_candidate(candidate: dict[str, Any], *, similarity_threshold: float) -> dict[str, Any]:
+def _assess_candidate(
+    candidate: dict[str, Any],
+    *,
+    thresholds: QualityThresholds,
+    similarity_threshold: float,
+) -> dict[str, Any]:
     metrics = candidate.get("official_metrics") if isinstance(candidate.get("official_metrics"), dict) else {}
     if not metrics and isinstance(candidate.get("metrics"), dict):
         metrics = candidate["metrics"]
     risk = candidate.get("cloud_correlation_risk") if isinstance(candidate.get("cloud_correlation_risk"), dict) else {}
+    submission = candidate.get("submission") if isinstance(candidate.get("submission"), dict) else {}
+    local_backtest = (
+        submission.get("local_backtest")
+        if isinstance(submission.get("local_backtest"), dict)
+        else {}
+    )
+    local_backtest_passed = local_backtest.get("pass_local") if local_backtest else None
     max_similarity = _float_or_none(risk.get("max_similarity"))
     official_id = str(candidate.get("official_alpha_id") or metrics.get("official_alpha_id") or "")
     pass_fail = str(metrics.get("pass_fail") or "").strip().upper()
+    decision_band = str(
+        (candidate.get("scorecard") or {}).get("decision_band")
+        or candidate.get("decision_band")
+        or ""
+    )
+    expression = str(candidate.get("expression") or "")
     submission_ready = bool((candidate.get("gate") or {}).get("submission_ready")) or candidate.get(
         "lifecycle_status"
     ) == "submission_ready"
+    generation_risks = high_turnover_generation_risk_reasons(expression)
     reasons: list[str] = []
     if not submission_ready:
         reasons.append("not_submission_ready")
+    if generation_risks:
+        reasons.append("high_turnover_generation_risk")
+    if decision_band != "submit_candidate":
+        reasons.append("decision_band_not_submit_candidate")
+    if local_backtest_passed is False:
+        reasons.append("local_backtest_failed")
     if not official_id:
         reasons.append("missing_official_alpha_id")
+    elif looks_non_production_alpha_id(official_id):
+        reasons.append("non_production_official_alpha_id")
     if not metrics or not pass_fail:
         reasons.append("missing_official_metrics")
     elif pass_fail != "PASS":
         reasons.append("official_pass_fail_not_pass")
+    missing_metric_fields = _missing_official_metric_fields(metrics) if metrics else []
+    if metrics and missing_metric_fields:
+        reasons.append("missing_official_metric_fields")
+    release_gate = evaluate_release_score(metrics, thresholds).to_dict() if metrics else {}
+    for reason in _release_gate_blocking_reasons(release_gate):
+        if reason not in reasons:
+            reasons.append(reason)
     if max_similarity is None:
         reasons.append("missing_cloud_similarity")
     elif max_similarity >= similarity_threshold or str(risk.get("level") or "").lower() == "high":
         reasons.append("high_cloud_similarity")
     eligible = not reasons
+    local_backtest_summary = _local_backtest_summary(local_backtest)
     return {
         "alpha_id": str(candidate.get("alpha_id") or ""),
         "official_alpha_id": official_id,
+        "expression": expression,
+        "generation_risk_reasons": generation_risks,
         "lifecycle_status": str(candidate.get("lifecycle_status") or ""),
         "pass_fail": pass_fail,
         "score": _float_or_none((candidate.get("scorecard") or {}).get("total_score") or candidate.get("score")),
-        "decision_band": str((candidate.get("scorecard") or {}).get("decision_band") or ""),
+        "decision_band": decision_band,
+        "local_backtest_passed": local_backtest_passed if isinstance(local_backtest_passed, bool) else None,
+        "local_backtest": local_backtest_summary,
         "max_similarity": max_similarity,
         "risk_level": str(risk.get("level") or ""),
+        "missing_official_metric_fields": missing_metric_fields,
+        "official_release_gate": release_gate,
         "eligible": eligible,
         "blocking_reasons": reasons,
+    }
+
+
+def _local_backtest_summary(local_backtest: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(local_backtest, dict) or not local_backtest:
+        return {}
+
+    reasons = _string_list(local_backtest.get("pass_reasons") or local_backtest.get("reasons"))
+    failing_reasons = [
+        reason for reason in reasons
+        if "FAIL" in reason.upper() or "ERROR" in reason.upper() or "REJECT" in reason.upper()
+    ]
+    return {
+        "pass_local": local_backtest.get("pass_local") if isinstance(local_backtest.get("pass_local"), bool) else None,
+        "sharpe": _float_or_none(local_backtest.get("sharpe")),
+        "fitness": _float_or_none(local_backtest.get("fitness")),
+        "turnover": _float_or_none(local_backtest.get("turnover")),
+        "weight_concentration": _float_or_none(local_backtest.get("weight_concentration")),
+        "failing_reasons": failing_reasons[:8],
+        "reasons": reasons[:8],
+    }
+
+
+def _string_list(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    result: list[str] = []
+    for item in value:
+        text = str(item).strip()
+        if text:
+            result.append(text)
+    return result
+
+
+def _blocking_reason_counts(candidates: list[dict[str, Any]]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for candidate in candidates:
+        reasons = candidate.get("blocking_reasons")
+        if not isinstance(reasons, list):
+            continue
+        for reason in reasons:
+            key = str(reason)
+            if not key:
+                continue
+            counts[key] = counts.get(key, 0) + 1
+    return dict(sorted(counts.items()))
+
+
+def _merge_chain_summaries(items: list[dict[str, Any]]) -> dict[str, int]:
+    totals = {
+        "local_only_jobs": 0,
+        "official_api_called_jobs": 0,
+        "official_validation_passed": 0,
+        "officially_simulated": 0,
+        "submission_ready": 0,
+        "submitted_this_run": 0,
+    }
+    for item in items:
+        summary = item.get("chain_summary") if isinstance(item.get("chain_summary"), dict) else item
+        if not isinstance(summary, dict):
+            continue
+        for key in totals:
+            totals[key] += _int(summary.get(key))
+    return totals
+
+
+def _production_gap_findings(
+    primary_audit: dict[str, Any],
+    ledger_audits: list[dict[str, Any]],
+    family_candidates: list[dict[str, Any]],
+) -> list[dict[str, str]]:
+    primary_chain_summary = dict(primary_audit.get("chain_summary") or {})
+    family_chain_summary = _merge_chain_summaries(ledger_audits)
+    latest_counts = _blocking_reason_counts(primary_audit.get("latest_candidates") or [])
+    family_counts = _blocking_reason_counts(family_candidates)
+    return [
+        {
+            "code": gap["code"],
+            "message": gap["message"],
+        }
+        for gap in _production_gap_summary(
+            primary_audit=primary_audit,
+            latest_blocking_reason_counts=latest_counts,
+            family_blocking_reason_counts=family_counts,
+            primary_chain_summary=primary_chain_summary,
+            family_chain_summary=family_chain_summary,
+            candidate_evidence_incomplete=_candidate_evidence_incomplete([primary_audit]),
+        )["gaps"]
+    ]
+
+
+def _candidate_evidence_incomplete(ledger_audits: list[dict[str, Any]]) -> bool:
+    for audit in ledger_audits:
+        for finding in audit.get("candidate_evidence_findings") or []:
+            if (finding or {}).get("code") == "candidate_pool_truncated":
+                return True
+    return False
+
+
+def _production_gap_summary(
+    *,
+    primary_audit: dict[str, Any],
+    latest_blocking_reason_counts: dict[str, int],
+    family_blocking_reason_counts: dict[str, int],
+    primary_chain_summary: dict[str, Any],
+    family_chain_summary: dict[str, Any],
+    candidate_evidence_incomplete: bool = False,
+) -> dict[str, Any]:
+    gaps: list[dict[str, str]] = []
+
+    def add(code: str, message: str) -> None:
+        if not any(item["code"] == code for item in gaps):
+            gaps.append({"code": code, "message": message})
+
+    if primary_audit.get("ready_to_submit"):
+        return {
+            "gap_count": 0,
+            "gaps": [],
+            "latest_blocking_reason_counts": latest_blocking_reason_counts,
+            "job_family_blocking_reason_counts": family_blocking_reason_counts,
+            "primary_chain_summary": dict(primary_chain_summary),
+            "job_family_chain_summary": dict(family_chain_summary),
+            "ledger_ready_to_submit": bool(primary_audit.get("ledger_ready_to_submit")),
+        }
+
+    if primary_chain_summary.get("official_validation_passed") and not primary_chain_summary.get("officially_simulated"):
+        add(
+            "official_validation_without_simulation",
+            "latest production ledger has official validation evidence but no official simulation metrics",
+        )
+    if family_chain_summary.get("local_only_jobs"):
+        add(
+            "local_only_candidate_jobs",
+            "related job ledgers include local-only candidate generation jobs that cannot prove submit readiness",
+        )
+    if candidate_evidence_incomplete:
+        add(
+            "candidate_evidence_incomplete",
+            "candidate ledger evidence is incomplete; rerun with full submission evidence before submit",
+        )
+    if latest_blocking_reason_counts.get("high_turnover_generation_risk"):
+        add("latest_candidate_generation_risk", "latest candidate has a known high-turnover generation pattern")
+    if latest_blocking_reason_counts.get("local_backtest_failed"):
+        add("latest_candidate_local_backtest_failed", "latest candidate failed local backtest constraints")
+    if latest_blocking_reason_counts.get("high_cloud_similarity"):
+        add("latest_candidate_high_cloud_similarity", "latest candidate is too similar to an existing cloud alpha")
+    if family_blocking_reason_counts.get("missing_official_alpha_id"):
+        add("candidate_family_missing_official_alpha_id", "candidate family lacks official alpha identifiers")
+    if family_blocking_reason_counts.get("missing_official_metrics"):
+        add("candidate_family_missing_official_metrics", "candidate family lacks official simulation metrics")
+    if family_blocking_reason_counts.get("missing_cloud_similarity"):
+        add("candidate_family_missing_cloud_similarity", "candidate family has candidates without cloud similarity evidence")
+    if family_blocking_reason_counts.get("decision_band_not_submit_candidate"):
+        add("candidate_family_not_submit_band", "candidate family has no candidate in submit_candidate decision band")
+
+    return {
+        "gap_count": len(gaps),
+        "gaps": gaps,
+        "latest_blocking_reason_counts": latest_blocking_reason_counts,
+        "job_family_blocking_reason_counts": family_blocking_reason_counts,
+        "primary_chain_summary": dict(primary_chain_summary),
+        "job_family_chain_summary": dict(family_chain_summary),
+        "ledger_ready_to_submit": bool(primary_audit.get("ledger_ready_to_submit")),
     }
 
 
@@ -357,6 +708,62 @@ def _best_candidate(candidates: list[dict[str, Any]]) -> dict[str, Any]:
     if not candidates:
         return {}
     return sorted(candidates, key=lambda item: item.get("score") or 0.0, reverse=True)[0]
+
+
+def _load_thresholds(config_path: str | Path) -> tuple[QualityThresholds, dict[str, str] | None]:
+    try:
+        return load_run_config(config_path).ops.thresholds, None
+    except ConfigValidationError as exc:
+        return QualityThresholds(), {
+            "code": "readiness_config_error",
+            "message": f"could not load official threshold config: {exc}",
+        }
+
+
+def _threshold_summary(thresholds: QualityThresholds) -> dict[str, Any]:
+    return {
+        "min_sharpe": thresholds.min_sharpe,
+        "min_fitness": thresholds.min_fitness,
+        "platform_max_turnover": thresholds.platform_max_turnover,
+        "max_self_correlation": thresholds.max_self_correlation,
+        "max_prod_correlation": thresholds.max_prod_correlation,
+        "max_weight_concentration": thresholds.max_weight_concentration,
+        "require_official_pass": thresholds.require_official_pass,
+        "require_official_metrics": thresholds.require_official_metrics,
+    }
+
+
+def _missing_official_metric_fields(metrics: dict[str, Any]) -> list[str]:
+    return missing_official_metric_fields(metrics)
+
+
+def _has_metric_value(metrics: dict[str, Any], key: str) -> bool:
+    value = metrics.get(key)
+    return value is not None and value != ""
+
+
+def _release_gate_blocking_reasons(release_gate: dict[str, Any]) -> list[str]:
+    reasons: list[str] = []
+    for item in release_gate.get("attributions") or []:
+        if not isinstance(item, dict):
+            continue
+        if item.get("passed") or item.get("severity") != "ERROR":
+            continue
+        reason = _release_gate_reason(str(item.get("name") or ""))
+        if reason and reason not in reasons:
+            reasons.append(reason)
+    return reasons
+
+
+def _release_gate_reason(name: str) -> str:
+    return {
+        "sharpe": "official_sharpe_below_threshold",
+        "fitness": "official_fitness_below_threshold",
+        "turnover_cap": "official_turnover_above_threshold",
+        "self_correlation_cap": "official_self_correlation_above_threshold",
+        "prod_correlation_cap": "official_prod_correlation_above_threshold",
+        "weight_concentration_cap": "official_weight_concentration_above_threshold",
+    }.get(name, "")
 
 
 def _float_or_none(value: Any) -> float | None:
@@ -402,12 +809,13 @@ def _print_human(result: dict[str, Any]) -> None:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Check whether local evidence is ready for live BRAIN submit.")
     parser.add_argument("--jobs", default=str(DEFAULT_JOBS), help="Production jobs ledger path.")
+    parser.add_argument("--config", default=str(DEFAULT_CONFIG), help="Run config path for official submit thresholds.")
     parser.add_argument("--similarity-threshold", type=float, default=DEFAULT_SIMILARITY_THRESHOLD)
     parser.add_argument("--require-ready", action="store_true", help="Exit non-zero when no eligible candidate exists.")
     parser.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
     args = parser.parse_args(argv)
 
-    result = check_live_submit_readiness(args.jobs, similarity_threshold=args.similarity_threshold)
+    result = check_live_submit_readiness(args.jobs, config_path=args.config, similarity_threshold=args.similarity_threshold)
     if args.json:
         print(json.dumps(result, ensure_ascii=False, indent=2))
     else:

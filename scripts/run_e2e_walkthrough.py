@@ -88,7 +88,8 @@ print(f"    OK Config loaded, {len(prs)} presets: {list(prs.keys())[:5]}")
 r3 = safe_get(f"{BASE}/api/latest_result", headers, cookies)
 try:
     lr = r3.json() or {}
-except Exception:
+except Exception as e:
+    results["warnings"].append(f"latest_result JSON parse failed: {redact_text(e, max_length=120)}")
     lr = {}
 cands = len((lr.get("result") or {}).get("candidates") or [])
 cloud = len((lr.get("result") or {}).get("cloud_alphas") or [])
@@ -188,8 +189,8 @@ for ep in all_gets:
     try:
         r = safe_get(f"{BASE}{ep}", headers, cookies)
         ok_count += 1
-    except:
-        pass
+    except Exception as e:
+        print(f"    {ep}: ERROR {redact_text(e, max_length=120)}")
 print(f"    {ok_count}/{len(all_gets)} endpoints reachable")
 results["stages"]["api_surface"] = f"{ok_count}/{len(all_gets)} OK"
 
@@ -200,8 +201,8 @@ time.sleep(0.5)
 try:
     requests.get(BASE, timeout=2)
     print("    WARN Server still up")
-except:
-    print("    OK Server down")
+except Exception as e:
+    print(f"    OK Server down ({redact_text(e, max_length=120)})")
 results["stages"]["shutdown"] = "PASS"
 
 # === UX Report ===

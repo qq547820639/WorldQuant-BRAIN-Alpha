@@ -109,7 +109,19 @@ def test_run_guided_job_service_registers_phase_progress(monkeypatch):
             assert self.stop_callback is not None
             assert self.stop_callback() is False
             self.callback("redline", "running", {"message": "checking red lines", "percent": 33, "alpha_id": "a1"})
-            return PipelineResult(run_id="run_guided", candidates=[], events=[], summary={"candidates": [{"alpha_id": "a1"}]})
+            return PipelineResult(
+                run_id="run_guided",
+                candidates=[],
+                events=[],
+                summary={
+                    "candidates": [{"alpha_id": "a1"}],
+                    "backtest_slots": [
+                        {"slot": 1, "status": "RUNNING", "alpha_id": "a1"},
+                        {"slot": 2, "status": "PENDING", "alpha_id": "a2"},
+                        {"slot": 3, "status": "EMPTY", "alpha_id": ""},
+                    ],
+                },
+            )
 
         def resume(self):
             return self.run()
@@ -135,3 +147,8 @@ def test_run_guided_job_service_registers_phase_progress(monkeypatch):
     row = store.get("job_1")
     assert row["status"] == "completed"
     assert row["progress"]["data"]["stats"] == {"candidate_count": 1}
+    assert row["progress"]["data"]["backtests"] == [
+        {"slot": 1, "status": "RUNNING", "alpha_id": "a1"},
+        {"slot": 2, "status": "PENDING", "alpha_id": "a2"},
+        {"slot": 3, "status": "EMPTY", "alpha_id": ""},
+    ]

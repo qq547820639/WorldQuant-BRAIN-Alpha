@@ -1,4 +1,4 @@
-"""Cloud sync background job service for the local web console."""
+"""Cloud sync jobs and payload builders."""
 
 from __future__ import annotations
 
@@ -9,6 +9,15 @@ from typing import Any, Callable, Protocol
 from brain_alpha_ops.config import RunConfig
 from brain_alpha_ops.official_context_datasets import list_official_datasets_or_derive
 from brain_alpha_ops.research.repository import ResearchRepository
+from brain_alpha_ops.web_cloud_snapshot import cloud_alpha_id, cloud_row_sort_key, path_modified_at
+from brain_alpha_ops.web_get_handlers import (
+    active_job_payload,
+    health_payload,
+    job_status_payload,
+    lifecycle_payload,
+    presets_payload,
+    profile_payload,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -81,11 +90,34 @@ def run_sync_job_service(
     started_at = time.time()
     stats: dict[str, Any] = {"range": sync_range, "scanned": 0, "total": 0, "added": 0, "updated": 0, "skipped": 0, "failed": 0}
     context_error = ""
+    context_warnings: list[str] = []
+    stop_state = {
+        "requested": False,
+        "message": "云端同步已停止。",
+        "status_message": "云端同步已停止，可调整范围后重试。",
+    }
+
+    def cancel_requested() -> bool:
+        checker = getattr(store, "is_cancelled", None)
+        return bool(callable(checker) and checker(job_id))
+
+    def request_stop(message: str, status_message: str | None = None) -> None:
+        stop_state["requested"] = True
+        stop_state["message"] = message
+        stop_state["status_message"] = status_message or message
 
     def ensure_not_cancelled() -> None:
-        checker = getattr(store, "is_cancelled", None)
-        if callable(checker) and checker(job_id):
-            raise SyncJobCancelled("云端同步已停止。")
+        if cancel_requested():
+            request_stop("云端同步已停止。", "云端同步已停止，可调整范围后重试。")
+            raise SyncJobCancelled(stop_state["message"])
+        if stop_state["requested"]:
+            raise SyncJobCancelled(stop_state["message"])
+
+    def elapsed_limit_reached(limit_seconds: float) -> bool:
+        return limit_seconds > 0 and (time.time() - started_at) >= limit_seconds
+
+    def on_dataset_fallback(message: str, exc: Exception) -> None:
+        context_warnings.append(f"{message}: {safe_error_message(exc)}")
 
     def mark_cancelled() -> None:
         store.update(
@@ -97,7 +129,7 @@ def run_sync_job_service(
                 "range": sync_range,
                 **stats,
                 **_timing_payload(started_at, done=int(stats.get("scanned", 0) or 0), total=int(stats.get("total", 0) or 0)),
-                "message": "云端同步已停止。",
+                "message": stop_state["message"],
             },
             progress={
                 "task_id": job_id,
@@ -105,8 +137,8 @@ def run_sync_job_service(
                 "operation": "sync_alphas",
                 "phase": "stopped",
                 "status_code": "STOPPED",
-                "status_message": "云端同步已停止，可调整范围后重试。",
-                "message": "云端同步已停止，可调整范围后重试。",
+                "status_message": stop_state["status_message"],
+                "message": stop_state["status_message"],
                 "percent": 100,
                 "percent_complete": 100,
                 **stats,
@@ -132,12 +164,13 @@ def run_sync_job_service(
         )
         ensure_not_cancelled()
         run_config = run_config_from_payload(payload)
+        elapsed_limit_seconds = float(getattr(run_config.ops.budget, "cloud_sync_max_elapsed_seconds", 0.0) or 0.0)
         api = api_from_run_config(run_config)
         api.authenticate()
         ensure_not_cancelled()
         repo = repository_factory(run_config.ops.storage_dir)
 
-        def on_page(progress: dict[str, Any]) -> None:
+        def on_page(progress: dict[str, Any]) -> bool:
             ensure_not_cancelled()
             stats["scanned"] = int(progress.get("scanned", stats["scanned"]) or 0)
             stats["total"] = int(progress.get("total", stats["total"]) or 0)
@@ -158,7 +191,16 @@ def run_sync_job_service(
                     **_timing_payload(started_at, done=stats["scanned"], total=stats["total"]),
                 },
             )
-            ensure_not_cancelled()
+            if cancel_requested():
+                request_stop("云端同步已停止。", "云端同步已停止，可调整范围后重试。")
+                return False
+            if elapsed_limit_reached(elapsed_limit_seconds):
+                request_stop(
+                    f"云端同步已达到耗时上限 {elapsed_limit_seconds:g}s。",
+                    "云端同步达到耗时上限，可缩小同步范围或稍后继续。",
+                )
+                return False
+            return True
 
         rows = api.list_user_alphas(sync_range, progress_callback=on_page)
         ensure_not_cancelled()
@@ -208,7 +250,7 @@ def run_sync_job_service(
             },
         )
         try:
-            def on_fields_progress(progress: dict[str, Any]) -> None:
+            def on_fields_progress(progress: dict[str, Any]) -> bool:
                 ensure_not_cancelled()
                 store.update(
                     job_id,
@@ -229,7 +271,16 @@ def run_sync_job_service(
                         **_timing_payload(started_at, done=stats["scanned"], total=stats["total"]),
                     },
                 )
-                ensure_not_cancelled()
+                if cancel_requested():
+                    request_stop("云端同步已停止。", "云端同步已停止，可调整范围后重试。")
+                    return False
+                if elapsed_limit_reached(elapsed_limit_seconds):
+                    request_stop(
+                        f"云端同步已达到耗时上限 {elapsed_limit_seconds:g}s。",
+                        "云端同步达到耗时上限，可缩小同步范围或稍后继续。",
+                    )
+                    return False
+                return True
 
             fields = api.list_fields(
                 "all",
@@ -242,6 +293,7 @@ def run_sync_job_service(
                 fields,
                 region=run_config.ops.settings.region,
                 datasets_from_fields=datasets_from_fields,
+                fallback_warning=on_dataset_fallback,
             )
             stats["datasets_count"] = len(datasets)
             store.update(
@@ -263,7 +315,7 @@ def run_sync_job_service(
                 },
             )
 
-            def on_operators_progress(progress: dict[str, Any]) -> None:
+            def on_operators_progress(progress: dict[str, Any]) -> bool:
                 ensure_not_cancelled()
                 store.update(
                     job_id,
@@ -285,7 +337,16 @@ def run_sync_job_service(
                         **_timing_payload(started_at, done=stats["scanned"], total=stats["total"]),
                     },
                 )
-                ensure_not_cancelled()
+                if cancel_requested():
+                    request_stop("云端同步已停止。", "云端同步已停止，可调整范围后重试。")
+                    return False
+                if elapsed_limit_reached(elapsed_limit_seconds):
+                    request_stop(
+                        f"云端同步已达到耗时上限 {elapsed_limit_seconds:g}s。",
+                        "云端同步达到耗时上限，可缩小同步范围或稍后继续。",
+                    )
+                    return False
+                return True
 
             operators = api.list_operators(
                 "all",
@@ -329,11 +390,19 @@ def run_sync_job_service(
             "fields_count": len(fields),
             "operators_count": len(operators),
             "datasets_count": len(datasets),
-            "context_status": "failed" if context_error else "refreshed",
+            "context_status": (
+                "failed"
+                if context_error
+                else "refreshed_with_warnings"
+                if context_warnings
+                else "refreshed"
+            ),
             "context_error": context_error,
+            "context_warnings": context_warnings,
             **_timing_payload(started_at, done=stats["scanned"], total=stats["total"]),
         }
-        final_status = "completed_with_warnings" if context_error else "completed"
+        final_status = "completed_with_warnings" if context_error or context_warnings else "completed"
+        warning_message = "; ".join(context_warnings)
         store.update(
             job_id,
             status=final_status,
@@ -349,12 +418,16 @@ def run_sync_job_service(
                 "status_message": (
                     f"Cloud sync completed with context warning: {context_error}"
                     if context_error else
+                    f"Cloud sync completed with context warning: {warning_message}"
+                    if context_warnings else
                     f"Cloud sync completed: scanned {stats['scanned']}, added {stats['added']}, "
                     f"updated {stats.get('updated', 0)}, skipped {stats['skipped']}, failed {stats['failed']}."
                 ),
                 "message": (
                     f"Cloud sync completed with context warning: {context_error}"
                     if context_error else
+                    f"Cloud sync completed with context warning: {warning_message}"
+                    if context_warnings else
                     f"Cloud sync completed: scanned {stats['scanned']}, added {stats['added']}, "
                     f"updated {stats.get('updated', 0)}, skipped {stats['skipped']}, failed {stats['failed']}."
                 ),
@@ -363,8 +436,15 @@ def run_sync_job_service(
                 "fields_count": len(fields),
                 "operators_count": len(operators),
                 "datasets_count": len(datasets),
-                "context_status": "failed" if context_error else "refreshed",
+                "context_status": (
+                    "failed"
+                    if context_error
+                    else "refreshed_with_warnings"
+                    if context_warnings
+                    else "refreshed"
+                ),
                 "context_error": context_error,
+                "context_warnings": context_warnings,
             },
         )
     except SyncJobCancelled:
@@ -393,3 +473,85 @@ def run_sync_job_service(
                 **_timing_payload(started_at, done=int(stats.get("scanned", 0) or 0), total=int(stats.get("total", 0) or 0)),
             },
         )
+
+"""Synchronous cloud sync payload service for the local web API."""
+
+import logging
+from typing import Any, Callable
+
+from brain_alpha_ops.config import RunConfig
+from brain_alpha_ops.official_context_datasets import list_official_datasets_or_derive
+from brain_alpha_ops.redaction import redact_error_message
+from brain_alpha_ops.research.repository import ResearchRepository
+
+logger = logging.getLogger(__name__)
+
+
+RunConfigFromPayload = Callable[[dict[str, Any]], RunConfig]
+ApiFromRunConfig = Callable[[RunConfig], Any]
+RepositoryFactory = Callable[[str], ResearchRepository]
+DatasetsFromFields = Callable[[list[dict[str, Any]]], list[dict[str, Any]]]
+PersistOfficialContext = Callable[[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]], None]
+
+
+def sync_cloud_alphas_payload(
+    payload: dict[str, Any],
+    *,
+    run_config_from_payload: RunConfigFromPayload,
+    api_from_run_config: ApiFromRunConfig,
+    repository_factory: RepositoryFactory,
+    datasets_from_fields: DatasetsFromFields,
+    persist_official_context: PersistOfficialContext,
+    default_fields: list[dict[str, Any]],
+    default_operators: list[dict[str, Any]],
+) -> dict[str, Any]:
+    run_config = run_config_from_payload(payload)
+    sync_range = str(payload.get("syncRange", run_config.ops.budget.cloud_sync_range))
+    api = api_from_run_config(run_config)
+    api.authenticate()
+    rows = api.list_user_alphas(sync_range)
+    repo = repository_factory(run_config.ops.storage_dir)
+    merge_stats = repo.merge_cloud_alphas(rows, sync_range=sync_range)
+    context_error = ""
+    context_warnings: list[str] = []
+
+    def on_dataset_fallback(message: str, exc: Exception) -> None:
+        context_warnings.append(f"{message}: {redact_error_message(exc)}")
+
+    try:
+        fields = api.list_fields("all", run_config.ops.settings.region)
+        operators = api.list_operators("all")
+        datasets = list_official_datasets_or_derive(
+            api,
+            fields,
+            region=run_config.ops.settings.region,
+            datasets_from_fields=datasets_from_fields,
+            fallback_warning=on_dataset_fallback,
+        )
+        persist_official_context(fields, operators, datasets)
+    except Exception as exc:
+        context_error = redact_error_message(exc)
+        logger.warning("official context sync failed; falling back to default fields/operators", exc_info=True)
+        fields = list(default_fields)
+        operators = list(default_operators)
+        datasets = []
+    context_status = "fallback" if context_error else ("refreshed_with_warnings" if context_warnings else "refreshed")
+    final_status = "completed_with_warnings" if context_error or context_warnings else "completed"
+    return {
+        "ok": True,
+        "status": final_status,
+        "range": sync_range,
+        "count": len(rows),
+        "scanned": len(rows),
+        "added": merge_stats["added"],
+        "updated": merge_stats["updated"],
+        "skipped": merge_stats["skipped"],
+        "failed": merge_stats["failed"],
+        "alphas": rows,
+        "fields_count": len(fields),
+        "operators_count": len(operators),
+        "datasets_count": len(datasets),
+        "context_status": context_status,
+        "context_error": context_error,
+        "context_warnings": context_warnings,
+    }

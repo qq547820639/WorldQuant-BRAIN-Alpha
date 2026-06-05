@@ -13,23 +13,19 @@ def _component(name: str) -> str:
     return (REACT_COMPONENTS / name).read_text(encoding="utf-8")
 
 
-def test_react_app_tabs_have_accessible_semantics_and_keyboard_navigation():
-    source = APP.read_text(encoding="utf-8")
+def test_react_app_state_cards_have_accessible_navigation_semantics():
+    app = APP.read_text(encoding="utf-8")
+    state_cards = _component("StateCards.tsx")
 
-    assert 'role="tablist"' in source
-    assert 'aria-label="Primary sections"' in source
-    assert 'role="tab"' in source
-    assert "aria-selected={activeTab === tab.id}" in source
-    assert "aria-controls={tabPanelId(tab.id)}" in source
-    assert "tabIndex={activeTab === tab.id ? 0 : -1}" in source
-    assert "onKeyDown={(event) => handleTabKeyDown(event, index)}" in source
-    assert 'role="tabpanel"' in source
-    assert "aria-labelledby={tabButtonId(activeTab)}" in source
-    assert "activateTabByIndex(index + 1)" in source
-    assert "activateTabByIndex(index - 1)" in source
-    assert 'event.key === "Home"' in source
-    assert 'event.key === "End"' in source
-    assert 'aria-hidden="true">{tab.icon}</span>' in source
+    assert 'useState<CardViewId | "cards">("cards")' in app
+    assert 'aria-label="返回状态卡"' in app
+    assert 'aria-label="打开系统配置"' in app
+    assert "onClick={() => onNavigate(config.id)}" in state_cards
+    assert 'type="button"' in state_cards
+    assert "focus:outline-none focus:ring-2 focus:ring-brand-500/50" in state_cards
+    assert 'role="alert"' in state_cards
+    assert 'aria-live="assertive"' in state_cards
+    assert 'aria-hidden="true"' in state_cards
 
 
 def test_react_dashboard_and_candidate_errors_are_announced():
@@ -39,11 +35,11 @@ def test_react_dashboard_and_candidate_errors_are_announced():
 
     assert 'role="alert"' in dashboard
     assert 'aria-live="assertive"' in dashboard
-    assert 'aria-label="Filter candidates"' in candidates
-    assert 'aria-label="Refresh candidates"' in candidates
+    assert 'aria-label="过滤候选"' in candidates
+    assert 'aria-label="刷新候选"' in candidates
     assert 'role="alert"' in candidates
-    assert 'aria-label={`Filter ${config.title}`}' in snapshots
-    assert 'aria-label={`${config.title} rows`}' in snapshots
+    assert 'aria-label={`筛选 ${config.title}`}' in snapshots
+    assert 'aria-label={`${config.title}表格`}' in snapshots
 
 
 def test_react_submission_inputs_expose_validation_and_confirmation_context():
@@ -73,9 +69,9 @@ def test_react_job_monitor_exposes_status_and_event_log_to_assistive_tech():
     job_monitor = _component("JobMonitor.tsx")
 
     assert 'role="status"' in job_monitor
-    assert "Pipeline is ${running ? \"running\" : \"idle\"}" in job_monitor
+    assert "流水线${running ? \"运行中\" : \"空闲\"}" in job_monitor
     assert 'role="log"' in job_monitor
-    assert 'aria-label="Pipeline event log"' in job_monitor
+    assert 'aria-label="流水线事件日志"' in job_monitor
     assert 'aria-hidden="true">▶' in job_monitor
     assert 'aria-hidden="true">⏹' in job_monitor
 
@@ -92,4 +88,4 @@ def test_react_toasts_announce_errors_assertively_and_other_messages_politely():
     assert 'role={urgent ? "alert" : "status"}' in toast
     assert 'aria-live={urgent ? "assertive" : "polite"}' in toast
     assert 'aria-atomic="true"' in toast
-    assert 'aria-label="Dismiss notification"' in toast
+    assert 'aria-label="关闭通知"' in toast

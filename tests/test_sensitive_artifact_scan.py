@@ -119,6 +119,34 @@ def test_scan_artifacts_include_all_scans_tests_and_skips_placeholder_cookies(tm
     assert result["findings"][0]["path"] == f"tests{os.sep}test_secret_scan.py"
 
 
+def test_scan_artifacts_include_all_skips_explicit_placeholder_test_credentials(tmp_path):
+    tests_dir = tmp_path / "tests"
+    tests_dir.mkdir()
+    tests_dir.joinpath("test_placeholders.py").write_text(
+        "\n".join(
+            [
+                "password = 'plain-password'",
+                "token = 'plain-token'",
+                "api_key = 'live-key'",
+                "raise RuntimeError('callback failed token=secret-progress-123')",
+                '"UNRELATED_SECRET": "not-allowlisted",',
+            ]
+        ),
+        encoding="utf-8",
+    )
+    docs_dir = tmp_path / "docs"
+    docs_dir.mkdir()
+    docs_dir.joinpath("credential_example.md").write_text(
+        "resolve_credentials(username=username, password=password, token=token)\n",
+        encoding="utf-8",
+    )
+
+    result = scan_artifacts(tmp_path, include_all=True)
+
+    assert result["ok"] is True
+    assert result["findings"] == []
+
+
 def test_scan_artifacts_include_all_scans_shell_scripts(tmp_path):
     dummy_value = "super-" + "private-password-12345"
     (tmp_path / "launch.ps1").write_text(f'$env:BRAIN_PASSWORD = "{dummy_value}"\n', encoding="utf-8")

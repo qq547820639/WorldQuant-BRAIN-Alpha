@@ -20,6 +20,7 @@ import tempfile
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_HTML = PROJECT_ROOT / "brain_alpha_ops" / "web" / "index.html"
+REACT_DIST_HTML = PROJECT_ROOT / "brain_alpha_ops" / "web" / "react_app" / "dist" / "index.html"
 BUNDLED_NODE_DIR = Path.home() / ".cache" / "codex-runtimes" / "codex-primary-runtime" / "dependencies" / "node" / "bin"
 BUNDLED_NODE_CANDIDATES = [BUNDLED_NODE_DIR / "node.exe", BUNDLED_NODE_DIR / "node"]
 
@@ -72,7 +73,15 @@ def check_scripts(html_path: Path, *, node: str = "") -> dict:
     node_path = _node_path(node)
     if not node_path:
         return {"ok": False, "error": "node executable not found", "checked": 0, "failures": []}
-    html = html_path.read_text(encoding="utf-8")
+    resolved_html_path = _resolve_html_path(html_path)
+    if not resolved_html_path.is_file():
+        return {
+            "ok": False,
+            "error": f"HTML file does not exist: {html_path}",
+            "checked": 0,
+            "failures": [],
+        }
+    html = resolved_html_path.read_text(encoding="utf-8")
     blocks = extract_inline_scripts(html)
     failures: list[dict] = []
 
@@ -110,7 +119,21 @@ try {
                     "error": (proc.stderr or proc.stdout).strip(),
                 })
 
-    return {"ok": not failures, "checked": len(blocks), "failures": failures}
+    return {
+        "ok": not failures,
+        "html": str(resolved_html_path),
+        "checked": len(blocks),
+        "failures": failures,
+    }
+
+
+def _resolve_html_path(html_path: Path) -> Path:
+    path = Path(html_path)
+    if path.is_file():
+        return path
+    if path.resolve() == DEFAULT_HTML.resolve() and REACT_DIST_HTML.is_file():
+        return REACT_DIST_HTML
+    return path
 
 
 def main(argv: list[str] | None = None) -> int:

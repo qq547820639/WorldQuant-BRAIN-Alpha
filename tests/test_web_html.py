@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 import threading
+import os
 
 import pytest
 
@@ -46,17 +47,16 @@ def test_render_html_keeps_react_window_token_property_names():
     assert f"const stream = window.{web_html.STREAM_TOKEN_PLACEHOLDER};" in rendered
 
 
-def test_default_load_html_uses_cache(monkeypatch, tmp_path):
+def test_default_load_html_refreshes_when_template_changes(monkeypatch, tmp_path):
     path = tmp_path / "index.html"
     path.write_text("<html>first</html>", encoding="utf-8")
+    os.utime(path, (1, 1))
     monkeypatch.setattr(web_html, "default_html_path", lambda: path)
 
     web_html.reset_html_cache()
     assert web_html.load_html() == "<html>first</html>"
     path.write_text("<html>second</html>", encoding="utf-8")
-    assert web_html.load_html() == "<html>first</html>"
-
-    web_html.reset_html_cache()
+    os.utime(path, (2, 2))
     assert web_html.load_html() == "<html>second</html>"
 
 
@@ -201,6 +201,8 @@ def test_react_dist_artifact_uses_csp_compatible_runtime_injection():
 
 
 def test_production_html_view_navigation_has_tab_semantics():
+    if not web_html.inline_html_path().is_file():
+        pytest.skip("inline frontend artifact is not present in this React-only checkout")
     html = web_html.load_html()
 
     assert 'id="mainContent" role="tabpanel" aria-labelledby="tableTitle"' in html
@@ -214,6 +216,8 @@ def test_production_html_view_navigation_has_tab_semantics():
 
 
 def test_production_html_workflow_progress_and_confirm_dialog_have_accessible_names():
+    if not web_html.inline_html_path().is_file():
+        pytest.skip("inline frontend artifact is not present in this React-only checkout")
     html = web_html.load_html()
 
     assert 'id="workflowRail" role="navigation" aria-label="核心任务导航" aria-describedby="workflowStatus"' in html

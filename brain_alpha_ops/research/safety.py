@@ -11,6 +11,7 @@ import re
 
 from brain_alpha_ops.config import SubmissionPolicy
 from brain_alpha_ops.models import Candidate
+from brain_alpha_ops.redaction import redact_error_message, redact_text
 from brain_alpha_ops.research.contracts import correlation_id
 from brain_alpha_ops.research.expression_ast import expression_key, expression_profile_summary, expression_similarity, lexical_normalize
 
@@ -107,7 +108,8 @@ class SubmissionLedger:
             )
         except Exception as exc:
             logger.warning(
-                "Failed to index submission record in SQLite index: %s", exc,
+                "Failed to index submission record in SQLite index: %s",
+                redact_error_message(exc),
             )
 
     def records(self) -> list[dict]:
@@ -121,9 +123,9 @@ class SubmissionLedger:
                 except json.JSONDecodeError as exc:
                     logger.warning(
                         "corrupt submission ledger JSON line skipped: %s:%d: %s",
-                        self.path,
+                        redact_text(self.path, max_length=180),
                         line_number,
-                        exc,
+                        redact_error_message(exc),
                     )
         return records
 
@@ -161,6 +163,9 @@ NON_PRODUCTION_SOURCE_VALUES = {
     "testing",
     "fake",
     "sample",
+    "stub",
+    "prod_stub",
+    "prod-stub",
 }
 NON_PRODUCTION_ID_PREFIXES = tuple(f"{value}_" for value in NON_PRODUCTION_SOURCE_VALUES) + tuple(
     f"{value}-" for value in NON_PRODUCTION_SOURCE_VALUES
@@ -193,12 +198,26 @@ def non_production_source_reasons(candidate: Candidate | dict[str, object]) -> l
 
 
 def _ratio(value) -> float:
+    """Normalize ratio values from BRAIN API responses.
+
+    BRAIN may return metrics as percentages (e.g. 70 meaning 70%) or as
+    decimals (e.g. 0.70).  The old heuristic of abs > 1.0 -> /100 produces
+    incorrect results for metrics like turnover whose raw value naturally
+    exceeds 1.0 (e.g. 2.5 -> 0.025 instead of 2.5).
+
+    We now only divide by 100 when the value is unambiguously in percentage
+    range (>= 2.0), which catches real percentage values like 75% without
+    harming ratios that naturally live between 1.0 and 2.0.  Metrics that
+    naturally exceed 2.0 (e.g. turnover, correlation) pass through unchanged.
+    """
     try:
         numeric = float(value or 0.0)
     except (TypeError, ValueError):
         numeric = 0.0
-    return numeric / 100.0 if abs(numeric) > 1.0 else numeric
-
+    # Only treat abs(value) >= 2.0 as percentage-scale
+    if abs(numeric) >= 2.0:
+        return numeric / 100.0
+    return numeric
 
 def _time(record: dict) -> datetime:
     try:

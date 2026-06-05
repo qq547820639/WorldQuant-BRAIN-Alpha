@@ -16,6 +16,14 @@ class Store:
         return self.cancelled
 
 
+class CancelAfterScanStore(Store):
+    def update(self, job_id, **kwargs):
+        super().update(job_id, **kwargs)
+        progress = kwargs.get("progress") or {}
+        if progress.get("status_code") == "SCAN":
+            self.cancelled = True
+
+
 class Api:
     def __init__(self, fail_auth=False, fail_context=False, fail_datasets=False):
         self.fail_auth = fail_auth
@@ -48,6 +56,30 @@ class Api:
         if self.fail_datasets:
             raise RuntimeError("datasets failed")
         return [{"id": "fundamental", "name": "Fundamental"}]
+
+
+class CancellableScanApi(Api):
+    def __init__(self):
+        super().__init__()
+        self.pages_requested = 0
+        self.callback_results = []
+
+    def list_user_alphas(self, sync_range, progress_callback=None):
+        rows = []
+        for page in range(3):
+            self.pages_requested += 1
+            rows.append({"id": f"a{page + 1}"})
+            if progress_callback:
+                keep_going = progress_callback({
+                    "scanned": len(rows),
+                    "total": 300,
+                    "page_size": 1,
+                    "offset": page,
+                })
+                self.callback_results.append(keep_going)
+                if keep_going is False:
+                    break
+        return rows
 
 
 class Repo:
@@ -172,8 +204,12 @@ def test_run_sync_job_service_logs_dataset_fallback_warning(tmp_path, caplog):
             error_payload=lambda exc, **kwargs: {"error": str(exc), **kwargs},
         )
 
-    assert store.updates[-1]["status"] == "completed"
+    assert store.updates[-1]["status"] == "completed_with_warnings"
     assert persisted[0][2] == [{"id": "fundamental", "field_count": 1}]
+    assert store.updates[-1]["result"]["context_status"] == "refreshed_with_warnings"
+    assert store.updates[-1]["result"]["context_warnings"] == [
+        "official datasets API unavailable; deriving datasets from fields: datasets failed"
+    ]
     assert "official datasets API unavailable; deriving datasets from fields" in caplog.text
 
 
@@ -201,3 +237,59 @@ def test_run_sync_job_service_honors_cancel_before_remote_calls(tmp_path):
     assert store.updates[-1]["status"] == "stopped"
     assert store.updates[-1]["progress"]["status_code"] == "STOPPED"
     assert store.updates[-1]["result"]["status"] == "stopped"
+
+
+def test_run_sync_job_service_returns_false_to_cancel_alpha_scan(tmp_path):
+    run_config = RunConfig(environment="production")
+    run_config.ops.storage_dir = str(tmp_path)
+    store = CancelAfterScanStore()
+    api = CancellableScanApi()
+
+    run_sync_job_service(
+        "sync_1",
+        {"syncRange": "3d"},
+        store=store,
+        run_config_from_payload=lambda payload: run_config,
+        api_from_run_config=lambda config: api,
+        repository_factory=Repo,
+        datasets_from_fields=lambda fields: [],
+        persist_official_context=lambda fields, operators, datasets: None,
+        default_fields=[],
+        default_operators=[],
+        safe_error_message=str,
+        error_payload=lambda exc, **kwargs: {"error": str(exc), **kwargs},
+    )
+
+    assert api.pages_requested == 1
+    assert api.callback_results == [False]
+    assert store.updates[-1]["status"] == "stopped"
+    assert store.updates[-1]["progress"]["status_code"] == "STOPPED"
+
+
+def test_run_sync_job_service_stops_alpha_scan_on_elapsed_limit(tmp_path):
+    run_config = RunConfig(environment="production")
+    run_config.ops.storage_dir = str(tmp_path)
+    run_config.ops.budget.cloud_sync_max_elapsed_seconds = 0.000001
+    store = Store()
+    api = CancellableScanApi()
+
+    run_sync_job_service(
+        "sync_1",
+        {"syncRange": "3d"},
+        store=store,
+        run_config_from_payload=lambda payload: run_config,
+        api_from_run_config=lambda config: api,
+        repository_factory=Repo,
+        datasets_from_fields=lambda fields: [],
+        persist_official_context=lambda fields, operators, datasets: None,
+        default_fields=[],
+        default_operators=[],
+        safe_error_message=str,
+        error_payload=lambda exc, **kwargs: {"error": str(exc), **kwargs},
+    )
+
+    assert api.pages_requested == 1
+    assert api.callback_results == [False]
+    assert store.updates[-1]["status"] == "stopped"
+    assert store.updates[-1]["result"]["message"] == "云端同步已达到耗时上限 1e-06s。"
+    assert store.updates[-1]["progress"]["status_message"] == "云端同步达到耗时上限，可缩小同步范围或稍后继续。"

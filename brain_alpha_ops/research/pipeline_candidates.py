@@ -5,9 +5,15 @@ from __future__ import annotations
 from brain_alpha_ops.models import Candidate
 from brain_alpha_ops.redaction import redact_error_message
 
+from .batch_backtest_coordinator import (
+    _cloud_similarity_details,
+    _is_high_cloud_similarity,
+    _reject_high_cloud_similarity_candidate,
+)
 from .candidate_pool import is_active_backtest_candidate, pending_simulation_targets
 from .generator import extract_fields, extract_operators, local_quality
 from .knowledge_base import KnowledgeEntry
+from .local_backtest_gate import apply_local_backtest_gate
 from .pipeline_cloud import (
     build_cloud_similarity_rows,
     cloud_correlation_risk,
@@ -19,6 +25,24 @@ from .pipeline_cloud import (
 from .pipeline_helpers import blocked_gate as _blocked_gate, expr_key as _expr_key, rank_candidates
 from .pipeline_official_context import active_dataset_field_names, official_context_reasons, refresh_context_validation_cache
 from .scoring import build_scorecard
+
+
+def _local_backtest_failure_category(result: dict) -> str:
+    """Classify failed local backtests for generation feedback."""
+    turnover = _safe_float(result.get("turnover"))
+    if turnover is not None and turnover > 0.70:
+        return "high_turnover"
+    reasons = " ".join(str(reason).lower() for reason in (result.get("pass_reasons") or []))
+    if "turnover" in reasons and "(fail)" in reasons and ("70%" in reasons or "0.70" in reasons):
+        return "high_turnover"
+    return "low_signal"
+
+
+def _safe_float(value: object) -> float | None:
+    try:
+        return float(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return None
 
 
 class PipelineCandidatePoolMixin:
@@ -34,8 +58,12 @@ class PipelineCandidatePoolMixin:
         for index, candidate in enumerate(generated, start=1):
             candidate.local_quality = local_quality(candidate, self.config.budget.min_local_quality_score)
             self._apply_local_backtest_prefilter(candidate)
-            build_scorecard(candidate, self.config.thresholds, self.config.scoring,
-                          params=self.auto_calibrator.params)
+            candidate.scorecard = build_scorecard(
+                candidate,
+                self.config.thresholds,
+                self.config.scoring,
+                params=self.auto_calibrator.params,
+            )
             candidate.submission["cycle"] = cycle
             context_reasons = self._official_context_reasons(candidate, fields, operators)
             if context_reasons:
@@ -79,69 +107,15 @@ class PipelineCandidatePoolMixin:
         return ranked
 
     def _apply_local_backtest_prefilter(self, candidate: Candidate) -> None:
-        support = self._local_backtest_support(candidate)
-        candidate.local_quality["local_backtest_support"] = support
-        if not support["supported"]:
-            candidate.local_quality.setdefault("warnings", []).append(
-                "local_backtest_skipped:" + "; ".join(support["reasons"])
-            )
-            candidate.submission["local_backtest"] = {
-                "ok": False,
-                "skipped": True,
-                "reasons": support["reasons"],
-            }
-            return
-
-        result = self._local_backtest_engine.evaluate(
-            candidate.expression,
+        outcome = apply_local_backtest_gate(
+            candidate,
+            engine=self._local_backtest_engine,
             cache_key=candidate.dataset_id or self._active_dataset_id or "default",
+            extract_fields=extract_fields,
+            extract_operators=extract_operators,
         )
-        candidate.submission["local_backtest"] = dict(result)
-        candidate.local_quality["local_backtest"] = {
-            "ok": bool(result.get("ok")),
-            "pass_local": bool(result.get("pass_local")),
-            "sharpe": result.get("sharpe"),
-            "fitness": result.get("fitness"),
-            "turnover": result.get("turnover"),
-            "weight_concentration": result.get("weight_concentration"),
-            "reasons": list(result.get("pass_reasons") or []),
-        }
-        if not result.get("ok"):
-            candidate.local_quality["passed"] = False
-            candidate.local_quality.setdefault("reasons", []).append(
-                "local_backtest_error:" + str(result.get("error") or result.get("error_type") or "unknown")
-            )
-            return
-        if not result.get("pass_local"):
-            candidate.local_quality["score"] = max(
-                0.0,
-                round(float(candidate.local_quality.get("score", 0.0) or 0.0) - 8.0, 2),
-            )
-            candidate.local_quality.setdefault("warnings", []).extend(
-                f"local_backtest:{reason}" for reason in list(result.get("pass_reasons") or []) if "(FAIL)" in str(reason)
-            )
-        self._record_local_backtest_knowledge(candidate, result)
-
-    def _local_backtest_support(self, candidate: Candidate) -> dict:
-        fields = {str(field).lower() for field in (candidate.data_fields or extract_fields(candidate.expression)) if str(field)}
-        operators = {str(operator).lower() for operator in (candidate.operators or extract_operators(candidate.expression)) if str(operator)}
-        supported_fields = self._local_backtest_engine.supported_fields
-        supported_operators = self._local_backtest_engine.supported_operators
-        unsupported_fields = sorted(field for field in fields if field not in supported_fields)
-        unsupported_operators = sorted(operator for operator in operators if operator not in supported_operators)
-        reasons = []
-        if unsupported_fields:
-            reasons.append("unsupported_fields=" + ",".join(unsupported_fields[:8]))
-        if unsupported_operators:
-            reasons.append("unsupported_operators=" + ",".join(unsupported_operators[:8]))
-        return {
-            "supported": not reasons,
-            "fields": sorted(fields),
-            "operators": sorted(operators),
-            "unsupported_fields": unsupported_fields,
-            "unsupported_operators": unsupported_operators,
-            "reasons": reasons or ["supported"],
-        }
+        if outcome.get("result") is not None:
+            self._record_local_backtest_knowledge(candidate, outcome["result"])
 
     def _record_local_backtest_knowledge(self, candidate: Candidate, result: dict) -> None:
         try:
@@ -155,7 +129,7 @@ class PipelineCandidatePoolMixin:
                 title = f"Local backtest passed for {candidate.alpha_id}"
             else:
                 layer = "failure"
-                category = "low_signal"
+                category = _local_backtest_failure_category(result)
                 title = f"Local backtest rejected {candidate.alpha_id}"
             entry = KnowledgeEntry(
                 layer=layer,
@@ -164,13 +138,14 @@ class PipelineCandidatePoolMixin:
                 description=f"Expression {candidate.expression} evaluated locally with status={result.get('ok')} pass_local={result.get('pass_local')}.",
                 evidence=[str(result.get("pass_reasons") or result.get("error") or result.get("error_type") or "")],
                 confidence=0.8 if result.get("pass_local") else 0.55,
-                source_tags=["pipeline", "local_backtest"],
+                source_tags=["pipeline", "local_backtest", category],
                 expression_pattern=candidate.expression,
                 fields_involved=list(candidate.data_fields or []),
                 operators_involved=list(candidate.operators or []),
                 metadata={
                     "alpha_id": candidate.alpha_id,
                     "dataset_id": candidate.dataset_id,
+                    "failure_category": category,
                     "local_backtest": dict(result),
                 },
             )
@@ -287,11 +262,20 @@ class PipelineCandidatePoolMixin:
         )
 
     def _validation_targets(self, pool: list[Candidate]) -> list[Candidate]:
-        return self._candidate_pool_service().validation_targets(pool)
+        targets = self._candidate_pool_service().validation_targets(pool)
+        filtered: list[Candidate] = []
+        for candidate in targets:
+            if self._block_observability_duplicate_before_official(candidate, phase="official_validation"):
+                continue
+            if self._reject_high_cloud_similarity_before_official(candidate):
+                continue
+            filtered.append(candidate)
+        return filtered
 
     def _validation_quota(self, pool: list[Candidate]) -> int:
         active_limit = self._active_backtest_limit()
         active_count = self.backtest_slot_manager.active_count()
+        self._preflight_pending_backtest_candidates(pool)
         pending_count = len(self._pending_backtest_candidates(pool))
         needed_for_slots = max(0, active_limit - active_count - pending_count)
         return min(
@@ -299,16 +283,23 @@ class PipelineCandidatePoolMixin:
             needed_for_slots,
         )
 
-    def _backtest_targets(self, pool: list[Candidate]) -> list[Candidate]:
-        candidates = self._candidate_pool_service().backtest_targets(
+    def _pending_backtest_plan(self, pool: list[Candidate]):
+        candidates = self._candidate_pool_service().pending_backtest_candidates(
             pool,
-            batch_size=self._active_backtest_limit(),
+            threshold=self.config.budget.min_prior_score_for_official_simulation,
         )
         plan = self._batch_backtest_coordinator().plan(
             candidates,
             capacity=self._active_backtest_limit(),
         )
         self.last_runtime_data["backtest_batch_plan"] = plan.to_dict()
+        return plan
+
+    def _preflight_pending_backtest_candidates(self, pool: list[Candidate]) -> None:
+        self._pending_backtest_plan(pool)
+
+    def _backtest_targets(self, pool: list[Candidate]) -> list[Candidate]:
+        plan = self._pending_backtest_plan(pool)
         return list(plan.selected)
 
     def _pending_backtest_candidates(self, pool: list[Candidate], threshold: float | None = None) -> list[Candidate]:
@@ -348,6 +339,14 @@ class PipelineCandidatePoolMixin:
         )
         self._cloud_risk_cache[cache_key] = dict(result)
         return result
+
+    def _reject_high_cloud_similarity_before_official(self, candidate: Candidate) -> bool:
+        risk = self._cloud_correlation_risk(candidate)
+        threshold = self.config.submission_policy.max_expression_similarity
+        if not _is_high_cloud_similarity(risk, threshold):
+            return False
+        _reject_high_cloud_similarity_candidate(candidate, _cloud_similarity_details(risk, threshold))
+        return True
 
     def _cloud_status_for_candidate(self, candidate: Candidate) -> dict:
         return cloud_status_for_candidate(candidate, self.cloud_alphas)

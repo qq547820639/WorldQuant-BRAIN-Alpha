@@ -168,7 +168,7 @@ class PipelineRuntimeMixin:
             rows = self.repository.latest_backtest_records(limit=1000)
             recovered = self.backtest_slot_manager.recover_from_records(
                 rows,
-                max_slots=self._active_backtest_limit(),
+                max_slots=self._visible_backtest_slot_limit(),
             )
         except Exception as exc:
             message = redact_error_message(exc, max_length=160)

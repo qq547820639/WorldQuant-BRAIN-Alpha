@@ -37,9 +37,16 @@ class Candidate:
     scorecard: dict[str, Any] = field(default_factory=dict)
     gate: dict[str, Any] = field(default_factory=dict)
     submission: dict[str, Any] = field(default_factory=dict)
+    alpha_output_config: dict[str, Any] = field(default_factory=dict)
+    quality_diagnosis: dict[str, Any] = field(default_factory=dict)
     lifecycle_status: str = "created"
     created_at: str = field(default_factory=utc_now)
     extra_fields: dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        self.data_fields = list(self.data_fields or [])
+        self.operators = list(self.operators or [])
+        self.source_tags = list(self.source_tags or [])
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -48,8 +55,8 @@ class Candidate:
     def from_dict(cls, data: dict[str, Any]) -> "Candidate":
         known = {f.name for f in fields(cls)}
         known_data = {key: value for key, value in data.items() if key in known}
-        extra = dict(known_data.get("extra_fields") or {})
-        extra.update({key: value for key, value in data.items() if key not in known})
+        overflow = {key: value for key, value in data.items() if key not in known}
+        extra = {**overflow, **dict(known_data.get("extra_fields") or {})}
         known_data["extra_fields"] = extra
         return cls(**known_data)
 

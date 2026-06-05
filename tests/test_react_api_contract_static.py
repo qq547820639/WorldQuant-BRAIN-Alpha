@@ -70,6 +70,7 @@ def test_react_candidate_and_scoring_contracts_match_backend_routes():
 
 def test_react_submission_config_and_job_contracts_match_backend_routes():
     submission = _source("components/SubmissionPanel.tsx")
+    app = _source("App.tsx")
     config = _source("components/ConfigPanel.tsx")
     monitor = _source("components/JobMonitor.tsx")
 
@@ -79,7 +80,12 @@ def test_react_submission_config_and_job_contracts_match_backend_routes():
     for endpoint in ("/api/config", "/api/config_schema"):
         assert f'"{endpoint}"' in config
         assert route_for("GET", endpoint) is not None
+    assert 'connectionApi.call("/api/test_connection"' in config
     assert route_for("POST", "/api/config") is not None
+    assert route_for("POST", "/api/test_connection") is not None
+    assert "import ConfigPanel" in app
+    assert 'case "config":' in app
+    assert "detailContent = <ConfigPanel notify={notify} />" in app
     assert 'api.call<{ job_id: string }>("/api/run"' in monitor
     assert 'api.call("/api/stop", { method: "POST"' in monitor
     assert "const sseUrl = jobId ? `/sse?job_id=${encodeURIComponent(jobId)}` : null;" in monitor
@@ -94,6 +100,7 @@ def test_react_snapshot_panel_contracts_match_backend_routes():
 
     for endpoint in (
         "/api/snapshot/cloud",
+        "/api/checkpoint_status",
         "/api/lifecycle",
         "/api/research_memory",
         "/api/research_knowledge",
@@ -104,6 +111,20 @@ def test_react_snapshot_panel_contracts_match_backend_routes():
     ):
         assert f'"{endpoint}' in snapshot
         assert route_for("GET", endpoint) is not None
+
+
+def test_react_state_cards_include_checkpoint_history_entry():
+    app = _source("App.tsx")
+    state_cards = _source("components/StateCards.tsx")
+    types = _source("types/index.ts")
+
+    assert '"checkpoint_status"' in types
+    assert 'checkpoint_status: { title: "断点历史"' in app
+    assert 'case "checkpoint_status":' in app
+    assert 'viewMode="checkpoint_status"' in app
+    assert 'checkpointApi.call("/api/checkpoint_status")' in state_cards
+    assert 'title: "断点历史"' in state_cards
+    assert 'description: "断点续跑与运行历史回溯"' in state_cards
 
 
 def test_react_fetch_helpers_keep_session_csrf_replay_and_sse_credentials():

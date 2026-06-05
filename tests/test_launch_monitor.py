@@ -18,6 +18,8 @@ def test_launch_monitor_sanitized_child_env_removes_brain_credentials():
 
     env = module.sanitized_child_env({
         "PATH": "/usr/bin",
+        "PYTHONHOME": "/tmp/fake-python-home",
+        "PYTHONPATH": "/tmp/malicious",
         "BRAIN_USERNAME": "user@example.com",
         "BRAIN_PASSWORD": "secret",
         "BRAIN_TOKEN": "token",

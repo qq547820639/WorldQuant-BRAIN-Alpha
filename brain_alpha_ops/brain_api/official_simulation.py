@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+import urllib.parse
 
 from .base import BrainAPIError
 from .official_helpers import (
@@ -26,7 +27,9 @@ class OfficialSimulationSubmissionMixin:
         if not sim_id:
             raise BrainAPIError(f"simulation submission did not return a location/id: {_scrub(data)}")
         if str(sim_id).startswith(("http://", "https://")):
-            build_official_url(self.config.base_url, str(sim_id), None)
+            normalized = build_official_url(self.config.base_url, str(sim_id), None)
+            parsed = urllib.parse.urlparse(normalized)
+            sim_id = urllib.parse.urlunparse(("", "", parsed.path or "/", "", parsed.query, ""))
         return str(sim_id)
 
     def poll_simulation(self, simulation_id: str) -> str:
@@ -77,6 +80,8 @@ class OfficialSimulationSubmissionMixin:
         return {"status": "FAILED" if failed else "PASSED", "failed_checks": failed, "raw": _scrub(data)}
 
     def submit_alpha(self, alpha_id: str, expression: str, settings: dict) -> dict:
+        if not alpha_id or not str(alpha_id).strip():
+            raise BrainAPIError("cannot submit alpha without a valid alpha_id")
         if _looks_non_production_alpha_id(alpha_id):
             raise BrainAPIError(f"refusing to submit non-production alpha_id through OfficialBrainAPI: {alpha_id}")
         check = self.check_alpha(alpha_id)
@@ -127,6 +132,7 @@ class OfficialSimulationSubmissionMixin:
 
     def poll_until_complete(self, simulation_id: str) -> str:
         for _attempt in range(self.config.poll_attempts):
+            self._throttle()
             status = self.poll_simulation(simulation_id)
             if status in {"COMPLETED", "FAILED"}:
                 return status

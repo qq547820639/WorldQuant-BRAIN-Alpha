@@ -11,12 +11,15 @@ import argparse
 from html.parser import HTMLParser
 import json
 from pathlib import Path
+import re
 import sys
 from typing import Any
 
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_HTML = ROOT / "brain_alpha_ops" / "web" / "index.html"
+REACT_DIST_HTML = ROOT / "brain_alpha_ops" / "web" / "react_app" / "dist" / "index.html"
+ASSET_REF_RE = re.compile(r"""(?:src|href)=["'](/assets/[^"']+)["']""")
 VOID_TAGS = {
     "area",
     "base",
@@ -47,6 +50,7 @@ class ConsoleContractParser(HTMLParser):
         super().__init__(convert_charrefs=True)
         self.elements_by_id: dict[str, dict[str, Any]] = {}
         self.icon_links: list[dict[str, str]] = []
+        self.meta_by_name: dict[str, dict[str, str]] = {}
         self.title_text = ""
         self._stack: list[dict[str, Any]] = []
 
@@ -61,6 +65,8 @@ class ConsoleContractParser(HTMLParser):
             self.elements_by_id[node_id] = node
         if tag_name == "link" and "icon" in attr_map.get("rel", "").lower().split():
             self.icon_links.append(attr_map)
+        if tag_name == "meta" and attr_map.get("name"):
+            self.meta_by_name[attr_map["name"]] = attr_map
         if tag_name not in VOID_TAGS:
             self._stack.append(node)
 
@@ -77,19 +83,48 @@ class ConsoleContractParser(HTMLParser):
 
 
 def check_web_console_contract(html_path: str | Path = DEFAULT_HTML) -> dict[str, Any]:
-    path = Path(html_path)
+    requested_path = Path(html_path)
+    path = _resolve_html_path(requested_path)
     findings: list[dict[str, str]] = []
     try:
         html = path.read_text(encoding="utf-8-sig")
     except FileNotFoundError:
-        return _result(path, findings=[_finding("missing_html", str(path), "HTML file does not exist")])
+        return _result(requested_path, findings=[_finding("missing_html", str(requested_path), "HTML file does not exist")])
     except OSError as exc:
         return _result(path, findings=[_finding("read_error", str(path), str(exc))])
 
     parser = ConsoleContractParser()
     parser.feed(html)
+    if _is_react_shell(parser, html):
+        return _check_react_shell_contract(path, parser, html, findings)
 
+    return _check_legacy_inline_contract(path, parser, html, findings)
+
+
+def _resolve_html_path(html_path: Path) -> Path:
+    if html_path.is_file():
+        return html_path
+    if html_path.resolve() == DEFAULT_HTML.resolve() and REACT_DIST_HTML.is_file():
+        return REACT_DIST_HTML
+    return html_path
+
+
+def _is_react_shell(parser: ConsoleContractParser, html: str) -> bool:
+    return "root" in parser.elements_by_id and (
+        "brain-alpha-csrf" in parser.meta_by_name
+        or "brain-alpha-stream" in parser.meta_by_name
+        or "/assets/" in html
+    )
+
+
+def _check_legacy_inline_contract(
+    path: Path,
+    parser: ConsoleContractParser,
+    html: str,
+    findings: list[dict[str, str]],
+) -> dict[str, Any]:
     facts = {
+        "surface": "legacy_inline",
         "title": parser.title_text.strip(),
         "favicon_count": len(parser.icon_links),
         "connection_form_tag": _element_tag(parser, "connectionForm"),
@@ -139,6 +174,53 @@ def check_web_console_contract(html_path: str | Path = DEFAULT_HTML) -> dict[str
         _expect(present, code, snippet, "missing", findings)
     facts["lifecycle_snippets"] = lifecycle_facts
 
+    return _result(path, facts=facts, findings=findings)
+
+
+def _check_react_shell_contract(
+    path: Path,
+    parser: ConsoleContractParser,
+    html: str,
+    findings: list[dict[str, str]],
+) -> dict[str, Any]:
+    asset_refs = sorted(set(ASSET_REF_RE.findall(html)))
+    facts = {
+        "surface": "react_dist",
+        "title": parser.title_text.strip(),
+        "favicon_count": len(parser.icon_links),
+        "root_tag": _element_tag(parser, "root"),
+        "csrf_meta_present": "brain-alpha-csrf" in parser.meta_by_name,
+        "stream_meta_present": "brain-alpha-stream" in parser.meta_by_name,
+        "asset_refs": asset_refs,
+    }
+
+    _expect(facts["title"] == "BRAIN Alpha Ops", "title", "BRAIN Alpha Ops", facts["title"], findings)
+    _expect(bool(parser.icon_links), "favicon_present", "link rel=icon", "missing", findings)
+    for index, icon in enumerate(parser.icon_links):
+        href = icon.get("href", "")
+        if href == "/favicon.ico" or href.endswith("/favicon.ico"):
+            findings.append(_finding("favicon_no_default_ico", href, "favicon must not fall back to /favicon.ico"))
+        if not href:
+            findings.append(_finding("favicon_href", f"icon[{index}]", "favicon link is missing href"))
+    _expect(facts["root_tag"] == "div", "react_root", "div#root", facts["root_tag"], findings)
+    _expect(
+        bool(facts["csrf_meta_present"]),
+        "csrf_meta",
+        "meta[name=brain-alpha-csrf]",
+        "missing",
+        findings,
+    )
+    _expect(
+        bool(facts["stream_meta_present"]),
+        "stream_meta",
+        "meta[name=brain-alpha-stream]",
+        "missing",
+        findings,
+    )
+    _expect(bool(asset_refs), "react_assets", "/assets/*.js and /assets/*.css", "missing", findings)
+    missing_assets = [ref for ref in asset_refs if not (path.parent / ref.lstrip("/")).is_file()]
+    if missing_assets:
+        findings.append(_finding("missing_react_asset", ",".join(missing_assets), "React shell references missing assets"))
     return _result(path, facts=facts, findings=findings)
 
 

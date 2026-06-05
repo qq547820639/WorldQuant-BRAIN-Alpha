@@ -232,6 +232,9 @@ def main(argv: list[str] | None = None) -> int:
         else:
             print(_format_result(result))
     except Exception:
+        import logging as _logging
+        _logging.getLogger(__name__).exception("Failed to format human-readable result summary")
+        print("⚠️  人类可读摘要生成失败（详情见日志）。以下是原始 JSON 结果：\n")
         _print_json_payload(_result_to_dict(result))
     return 0
 

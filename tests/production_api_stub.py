@@ -11,6 +11,7 @@ from datetime import datetime, timedelta, timezone
 import hashlib
 import re
 import threading
+from types import SimpleNamespace
 from typing import Any
 
 from brain_alpha_ops.brain_api.base import BrainAPIError
@@ -37,6 +38,7 @@ TEMPLATE_SAFE_OPERATOR_NAMES = (
     "ts_mean",
     "group_rank",
     "ts_corr",
+    "ts_covariance",
     "ts_decay_linear",
     "group_neutralize",
     "divide",
@@ -51,7 +53,8 @@ def write_template_safe_official_context(config: Any) -> None:
     """Write the smallest context that satisfies generator-template redlines."""
     from brain_alpha_ops.web_cloud_snapshot import save_official_context_json
 
-    load_config = lambda: config
+    run_config = config if hasattr(config, "ops") else SimpleNamespace(ops=config)
+    load_config = lambda: run_config
     dataset = {"id": "pv1", "name": "Price Volume"}
     datasets = [
         {

@@ -19,11 +19,11 @@ from brain_alpha_ops.research.observability_extensions import (
     optional_observability_context,
     optional_vector_snapshot,
     optional_research_health_payload,
+    sqlite_index_diagnostics,
 )
 
-
-JSONL_FILES = ("candidates.jsonl", "lifecycle.jsonl", "checks.jsonl", "backtests.jsonl")
-
+SQLITE_INDEX_DIAGNOSTICS_FILE = "sqlite_index_diagnostics.jsonl"
+JSONL_FILES = ("candidates.jsonl", "lifecycle.jsonl", "checks.jsonl", "backtests.jsonl", SQLITE_INDEX_DIAGNOSTICS_FILE)
 
 def build_research_observability_snapshot(
     storage_dir: str | Path,
@@ -32,6 +32,7 @@ def build_research_observability_snapshot(
     top_n: int = 10,
     include_cloud: bool = True,
     job_rows: list[dict[str, Any]] | None = None,
+    job_diagnostics: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Build a local-only health snapshot from append-only research history."""
     root = Path(storage_dir)
@@ -56,11 +57,14 @@ def build_research_observability_snapshot(
     backtest_rows = source_rows.get("backtests.jsonl", [])
     lifecycle_rows = source_rows.get("lifecycle.jsonl", [])
     check_rows = source_rows.get("checks.jsonl", [])
+    job_diagnostic_rows = list(job_diagnostics or [])
+    sqlite_diagnostic_rows = source_rows.get(SQLITE_INDEX_DIAGNOSTICS_FILE, [])
+    combined_job_rows = list(job_rows or []) + job_diagnostic_rows + sqlite_diagnostic_rows
     error_rows = observability_error_rows(
         backtest_rows,
         lifecycle_rows,
         check_rows,
-        list(job_rows or []),
+        combined_job_rows,
     )
     expression_payload = _observability_expression_payload(expression, top_n=safe_top_n)
     backtest_payload = _backtest_observability(backtest_rows, top_n=safe_top_n)
@@ -69,6 +73,7 @@ def build_research_observability_snapshot(
     official_call_guard = official_call_guard_observability(lifecycle_rows, top_n=safe_top_n)
     jsonl_payload = {name: result.to_dict() for name, result in jsonl_results.items()}
     sqlite_payload = _expression_sqlite_status(root / "expression_index.sqlite")
+    sqlite_diagnostics_payload = sqlite_index_diagnostics(sqlite_diagnostic_rows, top_n=safe_top_n)
     market_cache_payload, alert_payload = load_optional_observability_sources(root, top_n=safe_top_n)
     market_vector_payload = optional_vector_snapshot(root, top_n=safe_top_n)
     health = diagnose_research_health(
@@ -78,6 +83,7 @@ def build_research_observability_snapshot(
         errors=error_payload,
         jsonl=jsonl_payload,
         sqlite_cache=sqlite_payload,
+        sqlite_index_diagnostics=sqlite_diagnostics_payload,
         market_data_cache=market_cache_payload,
         alerts=alert_payload,
     )
@@ -89,6 +95,18 @@ def build_research_observability_snapshot(
                 "error": expression_payload.get("error", ""),
             }
         )
+    for row in job_diagnostic_rows:
+        partial_errors.append({
+            "component": "job_rows",
+            "source": row.get("source", ""),
+            "error": row.get("error", ""),
+        })
+    for row in sqlite_diagnostic_rows:
+        partial_errors.append({
+            "component": "sqlite_index",
+            "source": row.get("source_file", ""),
+            "error": row.get("error", ""),
+        })
     return {
         "ok": True,
         "schema_version": "research_observability_snapshot.v1",
@@ -103,8 +121,10 @@ def build_research_observability_snapshot(
         "checks": check_payload,
         "errors": error_payload,
         "official_call_guard": official_call_guard,
+        "job_diagnostics": job_diagnostic_rows,
         "jsonl": jsonl_payload,
         "sqlite_cache": sqlite_payload,
+        "sqlite_index_diagnostics": sqlite_diagnostics_payload,
         "market_data_cache": market_cache_payload,
         "market_data_vector": market_vector_payload,
         "alerts": alert_payload,
@@ -123,6 +143,7 @@ def observability_context(snapshot: dict[str, Any] | None, *, top_n: int = 10) -
     errors = snapshot.get("errors") if isinstance(snapshot.get("errors"), dict) else {}
     official_guard = snapshot.get("official_call_guard") if isinstance(snapshot.get("official_call_guard"), dict) else {}
     sqlite_cache = snapshot.get("sqlite_cache") if isinstance(snapshot.get("sqlite_cache"), dict) else {}
+    sqlite_diagnostics = snapshot.get("sqlite_index_diagnostics") if isinstance(snapshot.get("sqlite_index_diagnostics"), dict) else {}
     health = snapshot.get("health") if isinstance(snapshot.get("health"), dict) else {}
     context = {
         "schema_version": snapshot.get("schema_version", "research_observability_snapshot.v1"),
@@ -153,6 +174,7 @@ def observability_context(snapshot: dict[str, Any] | None, *, top_n: int = 10) -
         "top_error_codes": dict(errors.get("code_counts") or {}),
         "top_backtest_failures": list(backtests.get("failure_patterns") or [])[:top_n],
         "sqlite_cache_ready": bool(sqlite_cache.get("exists") and not sqlite_cache.get("error")),
+        "sqlite_index_update_failure_count": sqlite_diagnostics.get("failure_count", 0),
         "recommended_actions": list(health.get("actions") or snapshot.get("recommendations") or [])[:top_n],
         "recommendations": list(health.get("actions") or snapshot.get("recommendations") or [])[:top_n],
     }
@@ -272,6 +294,7 @@ def diagnose_research_health(
     errors: dict[str, Any] | None = None,
     jsonl: dict[str, Any] | None = None,
     sqlite_cache: dict[str, Any] | None = None,
+    sqlite_index_diagnostics: dict[str, Any] | None = None,
     market_data_cache: dict[str, Any] | None = None,
     alerts: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
@@ -306,6 +329,11 @@ def diagnose_research_health(
         sqlite_cache
         if isinstance(sqlite_cache, dict)
         else snapshot.get("sqlite_cache") if isinstance(snapshot.get("sqlite_cache"), dict) else {}
+    )
+    sqlite_diagnostics_payload = (
+        sqlite_index_diagnostics
+        if isinstance(sqlite_index_diagnostics, dict)
+        else snapshot.get("sqlite_index_diagnostics") if isinstance(snapshot.get("sqlite_index_diagnostics"), dict) else {}
     )
     market_cache_payload = (
         market_data_cache
@@ -346,6 +374,7 @@ def diagnose_research_health(
         if isinstance(row, dict) and str(row.get("error") or "").strip()
     ]
     expression_index_error = str(expression.get("error") or "").strip()
+    sqlite_index_update_failures = _int_from_any(sqlite_diagnostics_payload.get("failure_count"))
 
     health_flags: list[str] = []
     warning_flags: list[str] = []
@@ -492,6 +521,18 @@ def diagnose_research_health(
             action="Rebuild the SQLite expression cache or fall back to bounded JSONL lookups.",
             evidence={"sqlite_error": sqlite_payload.get("error", "")},
         )
+    if sqlite_index_update_failures > 0:
+        add_flag(
+            "sqlite_index_incremental_update_failed",
+            severity="warning",
+            message="Incremental SQLite research index updates failed after JSONL writes succeeded.",
+            action="Rebuild the SQLite research indexes or continue with bounded JSONL lookups until the cache is healthy.",
+            evidence={
+                "failure_count": sqlite_index_update_failures,
+                "component_counts": sqlite_diagnostics_payload.get("component_counts", {}),
+                "source_file_counts": sqlite_diagnostics_payload.get("source_file_counts", {}),
+            },
+        )
     elif not sqlite_payload.get("exists"):
         health_flags.append("sqlite_cache_missing_optional")
         details["sqlite_cache_missing_optional"] = {
@@ -555,6 +596,7 @@ def diagnose_research_health(
             "jsonl_invalid_count": jsonl_invalid,
             "jsonl_read_error_count": len(jsonl_errors),
             "sqlite_cache_ready": bool(sqlite_payload.get("exists") and not sqlite_payload.get("error")),
+            "sqlite_index_update_failure_count": sqlite_index_update_failures,
             **optional_payload["evidence"],
         },
     }

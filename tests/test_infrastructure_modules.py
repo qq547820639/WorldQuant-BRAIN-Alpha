@@ -329,6 +329,21 @@ class TestSecureCredentials:
         assert masked["auth_method"] == "userpass"
         assert masked["has_username"] is True
 
+    def test_credential_bundle_repr_is_masked(self):
+        from brain_alpha_ops.secure_credentials import resolve_credentials
+
+        bundle = resolve_credentials(
+            username="researcher@example.com",
+            password="plain-password",
+            token="plain-token",
+        )
+
+        text = repr(bundle)
+        assert "plain-password" not in text
+        assert "plain-token" not in text
+        assert "researcher@example.com" not in text
+        assert "has_password" in text
+
     def test_trace_completeness(self):
         from brain_alpha_ops.secure_credentials import resolve_credentials
 
@@ -372,6 +387,74 @@ class TestSecureCredentials:
         assert fil.filter(record) is True
         assert record.args["password"] == "<REDACTED>"
         assert record.args["username"] == "user"
+
+    def test_redaction_filter_tuple_args_uses_message_context(self):
+        from brain_alpha_ops.secure_credentials import CredentialRedactionFilter
+
+        fil = CredentialRedactionFilter()
+        record = logging.LogRecord(
+            "test", logging.INFO, "", 0, "token=%s", ("secret-token-123",), None
+        )
+
+        assert fil.filter(record) is True
+        assert record.getMessage() == "token=<REDACTED>"
+        assert "secret-token-123" not in record.getMessage()
+
+    def test_redaction_filter_tuple_args_redacts_only_sensitive_positions(self):
+        from brain_alpha_ops.secure_credentials import CredentialRedactionFilter
+
+        fil = CredentialRedactionFilter()
+        record = logging.LogRecord(
+            "test",
+            logging.INFO,
+            "",
+            0,
+            "path=%s token=%s retry=%s",
+            ("/api/data-fields", "secret-token-123", 2),
+            None,
+        )
+
+        assert fil.filter(record) is True
+        assert record.getMessage() == "path=/api/data-fields token=<REDACTED> retry=2"
+        assert "secret-token-123" not in record.getMessage()
+
+    def test_redaction_filter_tuple_args_redacts_inline_json_values(self):
+        from brain_alpha_ops.secure_credentials import CredentialRedactionFilter
+
+        fil = CredentialRedactionFilter()
+        record = logging.LogRecord(
+            "test",
+            logging.INFO,
+            "",
+            0,
+            "payload=%s",
+            ('{"api_key":"live-key","safe":"ok"}',),
+            None,
+        )
+
+        assert fil.filter(record) is True
+        assert "live-key" not in record.getMessage()
+        assert "<redacted>" in record.getMessage()
+
+    def test_redaction_filter_tuple_args_redacts_nested_values(self):
+        from brain_alpha_ops.secure_credentials import CredentialRedactionFilter
+
+        fil = CredentialRedactionFilter()
+        record = logging.LogRecord(
+            "test",
+            logging.INFO,
+            "",
+            0,
+            "payload=%s",
+            ({"safe": "ok", "token": "secret-token-123"},),
+            None,
+        )
+
+        assert fil.filter(record) is True
+        message = record.getMessage()
+        assert "secret-token-123" not in message
+        assert "'safe': 'ok'" in message
+        assert "'token': '<REDACTED>'" in message
 
     def test_require_env_missing(self):
         from brain_alpha_ops.secure_credentials import require_env

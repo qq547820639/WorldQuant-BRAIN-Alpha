@@ -6,6 +6,8 @@ import logging
 import time
 from typing import Any, Callable, Protocol
 
+from brain_alpha_ops.web_post_handlers import background_job_start_payload
+
 
 logger = logging.getLogger(__name__)
 

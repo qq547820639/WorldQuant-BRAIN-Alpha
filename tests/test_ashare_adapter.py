@@ -11,6 +11,7 @@ from brain_alpha_ops.data.ashare_adapter import (
     AShareDataProvider,
     BaoStockAdapter,
     CacheStore,
+    IndexConstituents,
     _baostock_code,
     _safe_float,
 )
@@ -149,9 +150,12 @@ def test_akshare_adapter_constituents_and_industry_mapping(monkeypatch):
     adapter = AKShareAdapter()
     constituents = adapter.fetch_index_constituents("000300")
     assert constituents.index_name == "沪深300"
+    assert constituents.status == "ok"
     assert constituents.constituents == ["000001", "600000"]
     assert adapter.fetch_industry_classification() == {"000001": "Bank", "600000": "Finance"}
-    assert adapter.fetch_index_constituents("999999").constituents == []
+    unsupported = adapter.fetch_index_constituents("999999")
+    assert unsupported.constituents == []
+    assert unsupported.status == "unsupported_index"
 
 
 def test_akshare_adapter_handles_missing_package_empty_frames_and_exceptions(monkeypatch):
@@ -169,7 +173,9 @@ def test_akshare_adapter_handles_missing_package_empty_frames_and_exceptions(mon
     monkeypatch.setitem(sys.modules, "akshare", fake_ak)
     monkeypatch.setattr(ashare, "_AKSHARE_AVAILABLE", False)
     adapter = AKShareAdapter()
-    assert adapter.fetch_index_constituents("000300").constituents == []
+    empty_constituents = adapter.fetch_index_constituents("000300")
+    assert empty_constituents.constituents == []
+    assert empty_constituents.status == "empty"
     assert adapter.fetch_industry_classification() == {}
 
 
@@ -178,7 +184,9 @@ def test_provider_loads_batch_from_cache_fetches_and_converts_to_backtest_format
     provider = AShareDataProvider(cache_dir=tmp_path)
     provider._baostock = SimpleNamespace(
         available=True,
-        fetch_daily=lambda symbol, **_kwargs: [{"date": "2024-01-01", "symbol": symbol, "close": "10", "volume": 100}],
+        fetch_daily=lambda symbol, **_kwargs: [
+            {"date": "2024-01-01", "symbol": symbol, "close": "10", "volume": 100}
+        ],
         logout=lambda: None,
     )
 
@@ -193,6 +201,45 @@ def test_provider_loads_batch_from_cache_fetches_and_converts_to_backtest_format
     assert stats["keys"] == 1
     assert stats["parquet_available"] is False
     assert provider.clear_cache() == 1
+
+
+def test_provider_validates_external_daily_rows_before_cache_and_backtest(tmp_path, monkeypatch):
+    monkeypatch.setattr(ashare, "_PARQUET_AVAILABLE", False)
+    provider = AShareDataProvider(cache_dir=tmp_path)
+    fetch_calls = []
+    provider.cache.put("daily_000001_2024-01-01_2024-01-03", [{"date": "bad-cache-date", "close": 10}])
+
+    def fetch_daily(symbol, **_kwargs):
+        fetch_calls.append(symbol)
+        return [
+            {"date": "not-a-date", "symbol": symbol, "close": "10"},
+            {"date": "2024-01-01", "symbol": symbol, "close": "not-a-number"},
+            {"date": "2024-01-02", "close": "10.5", "volume": "1000"},
+        ]
+
+    provider._baostock = SimpleNamespace(
+        available=True,
+        fetch_daily=fetch_daily,
+        logout=lambda: None,
+    )
+
+    rows_by_symbol = provider.load_daily_batch(["000001"], start="2024-01-01", end="2024-01-03")
+    diagnostics = provider.last_diagnostics()
+
+    assert fetch_calls == ["000001"]
+    assert rows_by_symbol == {
+        "000001": [
+            {"date": "2024-01-02", "close": "10.5", "volume": "1000", "symbol": "000001"}
+        ]
+    }
+    assert [item["status"] for item in diagnostics] == [
+        "daily_row_invalid",
+        "daily_row_invalid",
+        "daily_row_invalid",
+    ]
+    assert diagnostics[0]["source"] == "cache"
+    assert diagnostics[1]["source"] == "baostock"
+    assert diagnostics[2]["error"] == "daily row has non-numeric fields: close"
 
 
 def test_provider_handles_fetch_failures_and_index_universe_sources(tmp_path, monkeypatch):
@@ -211,6 +258,7 @@ def test_provider_handles_fetch_failures_and_index_universe_sources(tmp_path, mo
 
     assert provider.available is True
     assert provider.load_daily_batch(["000001"], start="2024-01-01", end="2024-01-02") == {"000001": []}
+    assert provider.last_diagnostics()[0]["status"] == "daily_fetch_failed"
 
     provider._baostock.fetch_daily = lambda symbol, **_kwargs: [{"date": "2024-01-01", "symbol": symbol, "close": 1}]
     fallback = provider.load_index_universe("000300", start="2024-01-01", end="2024-01-02", force_refresh=True)
@@ -222,6 +270,25 @@ def test_provider_handles_fetch_failures_and_index_universe_sources(tmp_path, mo
     )
     akshare_result = provider.load_index_universe("000300", start="2024-01-01", end="2024-01-02", force_refresh=True)
     assert list(akshare_result) == ["600000"]
+
+    provider._akshare = SimpleNamespace(
+        available=True,
+        fetch_index_constituents=lambda _index: IndexConstituents(
+            index_code="000300",
+            index_name="沪深300",
+            status="failed",
+            error="akshare unavailable",
+        ),
+    )
+    failed_index_result = provider.load_index_universe(
+        "000300",
+        start="2024-01-01",
+        end="2024-01-02",
+        force_refresh=True,
+    )
+    assert failed_index_result == {}
+    assert provider.last_diagnostics()[0]["status"] == "failed"
+    assert provider.last_diagnostics()[0]["error"] == "akshare unavailable"
 
     cached_flat = [{"date": "2024-01-01", "symbol": "600000", "close": 2}]
     provider.cache.put("index_universe_000300_2024-01-01_2024-01-02", cached_flat)

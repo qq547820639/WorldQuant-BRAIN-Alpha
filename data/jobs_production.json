@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated_at": 1780284411.8256488,
+  "updated_at": 1780658282.4596858,
   "jobs": {
     "job_0001": {
       "status": "failed",
@@ -247,7 +247,8 @@
               "last_blocked_phase": "",
               "last_blocked_expression": "",
               "last_blocked_at": null,
-              "blocked_candidates": []
+              "blocked_candidates_count": 0,
+              "blocked_candidates_preview": []
             }
           },
           "observability_generation_guidance": {
@@ -290,7 +291,8 @@
             "last_blocked_phase": "",
             "last_blocked_expression": "",
             "last_blocked_at": null,
-            "blocked_candidates": []
+            "blocked_candidates_count": 0,
+            "blocked_candidates_preview": []
           },
           "official_context": {
             "fields_count": 7780,
@@ -3090,8 +3092,10 @@
               }
             }
           ],
-          "passed_candidates": [],
-          "pending_backtest_candidates": [],
+          "passed_candidates_count": 0,
+          "passed_candidates_preview": [],
+          "pending_backtest_candidates_count": 0,
+          "pending_backtest_candidates_preview": [],
           "official_call_policy": {
             "local_first": true,
             "retained_alpha_pool_size": 10,
@@ -4232,7 +4236,8 @@
               "last_blocked_phase": "",
               "last_blocked_expression": "",
               "last_blocked_at": null,
-              "blocked_candidates": []
+              "blocked_candidates_count": 0,
+              "blocked_candidates_preview": []
             }
           },
           "observability_generation_guidance": {
@@ -4275,7 +4280,8 @@
             "last_blocked_phase": "",
             "last_blocked_expression": "",
             "last_blocked_at": null,
-            "blocked_candidates": []
+            "blocked_candidates_count": 0,
+            "blocked_candidates_preview": []
           },
           "official_context": {
             "fields_count": 7780,
@@ -7075,8 +7081,10 @@
               }
             }
           ],
-          "passed_candidates": [],
-          "pending_backtest_candidates": [],
+          "passed_candidates_count": 0,
+          "passed_candidates_preview": [],
+          "pending_backtest_candidates_count": 0,
+          "pending_backtest_candidates_preview": [],
           "official_call_policy": {
             "local_first": true,
             "retained_alpha_pool_size": 10,

@@ -176,6 +176,7 @@ class OfficialDataLoader:
         self._operators: Dict[str, OfficialOperator] = {}
         self._datasets: Dict[str, OfficialDataset] = {}
         self._loaded_root: Path | None = None
+        self._data_lock = threading.RLock()
 
     def load_all(self, data_dir: str | Path = "data") -> None:
         """Read all three official JSON files and build in-memory indexes."""
@@ -199,29 +200,50 @@ class OfficialDataLoader:
     # ------------------------------------------------------------------
     def get_fields(self, dataset_id: Optional[str] = None) -> List[OfficialField]:
         """Return all fields, optionally filtered by *dataset_id*."""
-        if dataset_id is None:
-            return list(self._fields.values())
-        return [
-            f
-            for f in self._fields.values()
-            if f.dataset is not None and f.dataset.id == dataset_id
-        ]
+        with self._data_lock:
+            if dataset_id is None:
+                return list(self._fields.values())
+            exact = [
+                f
+                for f in self._fields.values()
+                if f.dataset is not None and f.dataset.id == dataset_id
+            ]
+            if exact:
+                return exact
+            dataset = self._datasets.get(dataset_id)
+            category = str(getattr(dataset, "category", "") or "").lower() if dataset else ""
+            if not category:
+                return []
+            return [
+                f
+                for f in self._fields.values()
+                if f.dataset is None and str(f.category or "").lower() == category
+            ]
 
     def get_field_by_name(self, name: str) -> Optional[OfficialField]:
         """Return the first field whose id equals *name* (case-insensitive)."""
-        results = self._fields_by_name.get(name.lower())
-        if results:
-            return results[0]
-        return None
+        with self._data_lock:
+            results = self._fields_by_name.get(name.lower())
+            if results:
+                return results[0]
+            return None
 
     def validate_field(self, name: str, dataset_id: Optional[str] = None) -> bool:
         """Check whether *name* is a known official field."""
-        entries = self._fields_by_name.get(name.lower(), [])
-        if not entries:
-            return False
-        if dataset_id is not None:
-            return any(f.dataset and f.dataset.id == dataset_id for f in entries)
-        return True
+        with self._data_lock:
+            entries = self._fields_by_name.get(name.lower(), [])
+            if not entries:
+                return False
+            if dataset_id is not None:
+                if any(f.dataset and f.dataset.id == dataset_id for f in entries):
+                    return True
+                dataset = self._datasets.get(dataset_id)
+                category = str(getattr(dataset, "category", "") or "").lower() if dataset else ""
+                return bool(category) and any(
+                    f.dataset is None and str(f.category or "").lower() == category
+                    for f in entries
+                )
+            return True
 
     def search_fields(self, keyword: str, dataset_id: Optional[str] = None) -> List[OfficialField]:
         """Case-insensitive substring search across field ids and descriptions."""
@@ -236,22 +258,27 @@ class OfficialDataLoader:
     # Operator queries
     # ------------------------------------------------------------------
     def get_operators(self) -> List[OfficialOperator]:
-        return list(self._operators.values())
+        with self._data_lock:
+            return list(self._operators.values())
 
     def get_operator(self, name: str) -> Optional[OfficialOperator]:
-        return self._operators.get(name.lower())
+        with self._data_lock:
+            return self._operators.get(name.lower())
 
     def validate_operator(self, name: str) -> bool:
-        return name.lower() in self._operators
+        with self._data_lock:
+            return name.lower() in self._operators
 
     # ------------------------------------------------------------------
     # Dataset queries
     # ------------------------------------------------------------------
     def get_datasets(self) -> List[OfficialDataset]:
-        return list(self._datasets.values())
+        with self._data_lock:
+            return list(self._datasets.values())
 
     def get_dataset(self, dataset_id: str) -> Optional[OfficialDataset]:
-        return self._datasets.get(dataset_id)
+        with self._data_lock:
+            return self._datasets.get(dataset_id)
 
     # ------------------------------------------------------------------
     # P2-5: Context refresh
@@ -268,32 +295,31 @@ class OfficialDataLoader:
         old_fields = self.field_count
         old_operators = self.operator_count
         old_datasets = self.dataset_count
-        # Backup existing data in case reload fails
-        backup_fields = dict(self._fields)
-        backup_operators = dict(self._operators)
-        backup_datasets = dict(self._datasets)
-
         last_error = ""
         for attempt in range(1, max_retries + 1):
             try:
-                self._fields.clear()
-                self._fields_by_name.clear()
-                self._operators.clear()
-                self._datasets.clear()
-                self.load_all(data_dir)
+                fresh = OfficialDataLoader()
+                fresh.load_all(data_dir)
                 
                 # Verify loaded content is non-trivial
-                if not self._fields and not self._operators and not self._datasets:
+                if not fresh._fields and not fresh._operators and not fresh._datasets:
                     raise RuntimeError("refresh produced empty data sets")
                 # Verify each category loaded individually to detect partial
                 # failures masked by the combined emptiness check above.
-                if old_fields > 0 and not self._fields:
+                if old_fields > 0 and not fresh._fields:
                     raise RuntimeError("refresh dropped all fields")
-                if old_operators > 0 and not self._operators:
+                if old_operators > 0 and not fresh._operators:
                     raise RuntimeError("refresh dropped all operators")
-                if old_datasets > 0 and not self._datasets:
+                if old_datasets > 0 and not fresh._datasets:
                     raise RuntimeError("refresh dropped all datasets")
-                    
+
+                with self._data_lock:
+                    self._fields = dict(fresh._fields)
+                    self._fields_by_name = self._rebuild_name_index(self._fields)
+                    self._operators = dict(fresh._operators)
+                    self._datasets = dict(fresh._datasets)
+                    self._loaded_root = fresh._loaded_root
+
                 # Success — return diff
                 return {
                     "status": "refreshed",
@@ -314,20 +340,11 @@ class OfficialDataLoader:
                         attempt, max_retries, last_error[:120]
                     )
                     time.sleep(1.0 * attempt)  # progressive backoff
-                    # Restore backups for retry
-                    self._fields = dict(backup_fields)
-                    self._fields_by_name = self._rebuild_name_index(self._fields)
-                    self._operators = dict(backup_operators)
-                    self._datasets = dict(backup_datasets)
 
-        # All retries exhausted — restore backup and report failure
-        self._fields = backup_fields
-        self._fields_by_name = self._rebuild_name_index(self._fields)
-        self._operators = backup_operators
-        self._datasets = backup_datasets
+        # All retries exhausted — existing data was never mutated.
         _log.error(
             "OfficialDataLoader.refresh() FAILED after %d attempt(s): %s. "
-            "Restored backup data (fields=%d, operators=%d, datasets=%d). "
+            "Preserved existing data (fields=%d, operators=%d, datasets=%d). "
             "Check that data/official_*.json files exist and are valid JSON.",
             max_retries, last_error[:200], old_fields, old_operators, old_datasets
         )
@@ -345,15 +362,18 @@ class OfficialDataLoader:
     # ------------------------------------------------------------------
     @property
     def field_count(self) -> int:
-        return len(self._fields)
+        with self._data_lock:
+            return len(self._fields)
 
     @property
     def operator_count(self) -> int:
-        return len(self._operators)
+        with self._data_lock:
+            return len(self._operators)
 
     @property
     def dataset_count(self) -> int:
-        return len(self._datasets)
+        with self._data_lock:
+            return len(self._datasets)
 
     # ==================================================================
     # Internal helpers
@@ -383,7 +403,7 @@ class OfficialDataLoader:
             cat_raw = item.get("category") if isinstance(item.get("category"), dict) else None
             field = OfficialField(
                 id=field_id,
-                description=str(item.get("description", "")),
+                description=str(item.get("description") or ""),
                 dataset=DatasetRef(id=str(ds_raw.get("id", "")), name=str(ds_raw.get("name", ""))) if ds_raw else None,
                 category=str(cat_raw.get("id", "") if cat_raw else item.get("category", "")),
                 region=str(item.get("region", "USA")),
@@ -420,9 +440,11 @@ class OfficialDataLoader:
         if not isinstance(raw, list):
             return
         for item in raw:
+            cat_raw = item.get("category") if isinstance(item.get("category"), dict) else None
             ds = OfficialDataset(
                 id=str(item.get("id", "")),
                 name=str(item.get("name", "")),
                 field_count=int(item.get("field_count", 0)),
+                category=str(cat_raw.get("id", "") if cat_raw else item.get("category", "")),
             )
             self._datasets[ds.id] = ds

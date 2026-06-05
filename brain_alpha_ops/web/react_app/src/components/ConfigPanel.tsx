@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent, type ReactNode } from "react";
 import { useApi } from "@/hooks/useApi";
-import type { RunConfig, ScoringConfig } from "@/types";
+import type { RunConfig } from "@/types";
 import ProgressFeedback from "@/components/ProgressFeedback";
 
 interface Props {
@@ -14,22 +14,47 @@ interface ConfigResponse {
   config?: RunConfig;
 }
 
+interface DatasetOption {
+  id: string;
+  name?: string;
+  field_count?: number;
+  category?: string;
+  label?: string;
+}
+
+interface ConfigSchema {
+  settings_options?: Record<string, Array<string | number>>;
+  dataset_options?: DatasetOption[];
+}
+
 interface ConfigSchemaResponse {
   ok: boolean;
-  schema?: {
-    settings_options?: Record<string, Array<string | number>>;
-  };
+  schema?: ConfigSchema;
+}
+
+interface ConnectionTestResponse {
+  ok: boolean;
+  environment?: string;
+  auth?: string;
+  error?: string;
+  error_code?: string;
 }
 
 interface ConfigForm {
   environment: string;
   autoSubmit: boolean;
+  instrumentType: string;
   region: string;
   universe: string;
   delay: number;
   decay: number;
   neutralization: string;
   dataset: string;
+  pasteurization: string;
+  unitHandling: string;
+  nanHandling: string;
+  language: string;
+  alphaType: string;
   candidates: number;
   cycles: number;
   poolSize: number;
@@ -47,12 +72,22 @@ const MAX_CONFIG_TEXT_LENGTH = 128;
 const CONFIG_TEXT_PATTERN = /^[A-Za-z0-9_.:-]*$/;
 const DEFAULT_REGION_OPTIONS = ["USA", "CHN", "EUR", "GLB"];
 const DEFAULT_UNIVERSE_OPTIONS = ["TOP3000", "TOP1000", "TOP500"];
+const DEFAULT_DELAY_OPTIONS = ["0", "1"];
 const DEFAULT_NEUTRALIZATION_OPTIONS = ["SUBINDUSTRY", "INDUSTRY", "SECTOR", "MARKET", "NONE"];
+const DEFAULT_INSTRUMENT_TYPE_OPTIONS = ["EQUITY"];
+const DEFAULT_PASTEURIZATION_OPTIONS = ["ON", "OFF"];
+const DEFAULT_UNIT_HANDLING_OPTIONS = ["VERIFY", "RAW", "NONE"];
+const DEFAULT_NAN_HANDLING_OPTIONS = ["ON", "OFF"];
+const DEFAULT_LANGUAGE_OPTIONS = ["FASTEXPR"];
+const DEFAULT_ALPHA_TYPE_OPTIONS = ["REGULAR", "POWER_POOL", "ATOM", "PYRAMID"];
+
+type SelectOption = string | { value: string; label: string };
 
 export default function ConfigPanel({ notify }: Props) {
   const configApi = useApi<ConfigResponse>();
   const schemaApi = useApi<ConfigSchemaResponse>();
   const saveApi = useApi<ConfigResponse>();
+  const connectionApi = useApi<ConnectionTestResponse>();
   const [form, setForm] = useState<ConfigForm | null>(null);
   const [initialForm, setInitialForm] = useState<ConfigForm | null>(null);
   const importInputRef = useRef<HTMLInputElement | null>(null);
@@ -76,7 +111,7 @@ export default function ConfigPanel({ notify }: Props) {
     () => Boolean(form && initialForm && JSON.stringify(form) !== JSON.stringify(initialForm)),
     [form, initialForm],
   );
-  const validationError = form ? validateForm(form, schema?.settings_options) : "";
+  const validationError = form ? validateForm(form, schema) : "";
 
   const update = <K extends keyof ConfigForm>(key: K, value: ConfigForm[K]) => {
     setForm((current) => current ? { ...current, [key]: value } : current);
@@ -90,7 +125,7 @@ export default function ConfigPanel({ notify }: Props) {
   const save = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!form || validationError) {
-      notify("warning", validationError || "Configuration is not ready to save");
+      notify("warning", validationError || "配置尚未准备好保存");
       return;
     }
     const result = await saveApi.call("/api/config", {
@@ -98,10 +133,10 @@ export default function ConfigPanel({ notify }: Props) {
       body: JSON.stringify(payloadFromForm(form)),
     });
     if (!result?.ok) {
-      notify("error", result?.error || "Failed to save configuration");
+      notify("error", result?.error || "保存配置失败");
       return;
     }
-    notify("success", "Configuration saved");
+    notify("success", "配置已保存");
     void configApi.call("/api/config");
   };
 
@@ -114,7 +149,7 @@ export default function ConfigPanel({ notify }: Props) {
     link.download = `brain-alpha-config-${new Date().toISOString().slice(0, 10)}.json`;
     link.click();
     URL.revokeObjectURL(url);
-    notify("success", "Configuration exported");
+    notify("success", "配置已导出");
   };
 
   const importConfig = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -123,24 +158,40 @@ export default function ConfigPanel({ notify }: Props) {
     if (!file || !form) return;
     try {
       const imported = formFromImport(JSON.parse(await file.text()), form);
-      const error = validateForm(imported, schema?.settings_options);
+      const error = validateForm(imported, schema);
       if (error) {
         notify("error", error);
         return;
       }
       setForm(imported);
-      notify("success", "Configuration imported");
+      notify("success", "配置已导入");
     } catch (error) {
-      notify("error", error instanceof Error ? error.message : "Invalid configuration JSON");
+      notify("error", error instanceof Error ? error.message : "无效的配置JSON");
     }
+  };
+
+  const testConnection = async () => {
+    if (!form || validationError) {
+      notify("warning", validationError || "配置尚未准备好测试连接");
+      return;
+    }
+    const result = await connectionApi.call("/api/test_connection", {
+      method: "POST",
+      body: JSON.stringify(payloadFromForm(form)),
+    });
+    if (!result?.ok) {
+      notify("error", result?.error || "BRAIN 连接测试失败");
+      return;
+    }
+    notify("success", "BRAIN 连接测试通过");
   };
 
   if (configApi.loading && !config) {
     return (
       <ProgressFeedback
         state="loading"
-        title="Configuration"
-        progress={{ phase: "config_load", status_message: "Loading configuration." }}
+        title="配置"
+        progress={{ phase: "config_load", status_message: "正在加载配置。" }}
       />
     );
   }
@@ -148,8 +199,8 @@ export default function ConfigPanel({ notify }: Props) {
   if (configApi.error && !config) {
     return (
       <div className="card">
-        <p className="text-danger text-sm">Failed to load config: {configApi.error}</p>
-        <button type="button" onClick={reload} className="btn-secondary text-sm mt-3">Retry</button>
+        <p className="text-danger text-sm">加载配置失败: {configApi.error}</p>
+        <button type="button" onClick={reload} className="btn-secondary text-sm mt-3">重试</button>
       </div>
     );
   }
@@ -157,13 +208,14 @@ export default function ConfigPanel({ notify }: Props) {
   if (!form) return null;
 
   const options = schema?.settings_options;
+  const datasetChoices = datasetSelectOptions(schema, form.dataset);
   const scoring = config?.ops?.scoring ?? config?.scoring;
 
   return (
     <form onSubmit={save} className="w-full max-w-4xl min-w-0 space-y-6 animate-fade-in">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
-          <h2 className="text-base font-semibold text-gray-100">Configuration</h2>
+          <h2 className="text-base font-semibold text-gray-100">配置管理</h2>
           <p className="truncate text-xs text-muted">{form.environment}</p>
         </div>
         <div className="flex w-full flex-wrap justify-end gap-2 sm:w-auto">
@@ -172,7 +224,7 @@ export default function ConfigPanel({ notify }: Props) {
             type="file"
             accept="application/json,.json"
             className="hidden"
-            aria-label="Import configuration JSON"
+            aria-label="导入配置JSON"
             onChange={importConfig}
           />
           <button
@@ -181,7 +233,7 @@ export default function ConfigPanel({ notify }: Props) {
             className="btn-secondary text-sm"
             disabled={saveApi.loading}
           >
-            Import
+            导入
           </button>
           <button
             type="button"
@@ -189,7 +241,7 @@ export default function ConfigPanel({ notify }: Props) {
             className="btn-secondary text-sm"
             disabled={saveApi.loading}
           >
-            Export
+            导出
           </button>
           <button
             type="button"
@@ -197,14 +249,14 @@ export default function ConfigPanel({ notify }: Props) {
             className="btn-secondary text-sm disabled:opacity-50"
             disabled={!dirty || saveApi.loading}
           >
-            Reset
+            重置
           </button>
           <button
             type="submit"
             className="btn-primary text-sm"
             disabled={!dirty || Boolean(validationError) || saveApi.loading}
           >
-            {saveApi.loading ? "Saving..." : "Save"}
+            {saveApi.loading ? "保存中..." : "保存"}
           </button>
         </div>
       </div>
@@ -212,46 +264,86 @@ export default function ConfigPanel({ notify }: Props) {
       {validationError && <p role="alert" className="text-xs text-danger">{validationError}</p>}
       {saveApi.error && <p role="alert" className="text-xs text-danger">{saveApi.error}</p>}
 
-      <ConfigSection title="Brain Settings">
-        <SelectField label="Region" value={form.region} options={optionValues(options, "region", form.region)} onChange={(value) => update("region", value)} />
-        <SelectField label="Universe" value={form.universe} options={optionValues(options, "universe", form.universe)} onChange={(value) => update("universe", value)} />
-        <SelectField label="Delay" value={String(form.delay)} options={optionValues(options, "delay", String(form.delay))} onChange={(value) => update("delay", Number(value))} />
-        <NumberField label="Decay" value={form.decay} min={0} step={1} onChange={(value) => update("decay", value)} />
-        <SelectField label="Neutralization" value={form.neutralization} options={optionValues(options, "neutralization", form.neutralization)} onChange={(value) => update("neutralization", value)} />
-        <TextField
-          label="Dataset"
-          value={form.dataset}
-          maxLength={MAX_CONFIG_TEXT_LENGTH}
-          onChange={(value) => update("dataset", sanitizeConfigText(value))}
-        />
+      <ConfigSection title="BRAIN 连接">
+        <div className="space-y-2">
+          <p className="text-xs text-muted">当前凭据</p>
+          <p className="text-sm font-medium text-gray-200">配置或环境变量</p>
+        </div>
+        <div className="flex flex-col gap-2 sm:items-start">
+          <button
+            type="button"
+            onClick={testConnection}
+            className="btn-secondary text-sm"
+            disabled={connectionApi.loading || Boolean(validationError)}
+          >
+            {connectionApi.loading ? "测试中..." : "测试 BRAIN 连接"}
+          </button>
+          <p className={`text-xs ${connectionApi.error ? "text-danger" : connectionApi.data?.ok ? "text-success" : "text-muted"}`} role="status" aria-live="polite">
+            {connectionApi.error
+              ? `连接失败: ${connectionApi.error}`
+              : connectionApi.data?.ok
+                ? `连接正常: ${connectionApi.data.environment || form.environment}`
+                : "尚未测试"}
+          </p>
+        </div>
       </ConfigSection>
 
-      <ConfigSection title="Budget">
-        <NumberField label="Max Candidates/Cycle" value={form.candidates} min={1} max={1000} step={1} onChange={(value) => update("candidates", value)} />
-        <NumberField label="Max Cycles" value={form.cycles} min={1} max={10000} step={1} onChange={(value) => update("cycles", value)} />
-        <NumberField label="Pool Size" value={form.poolSize} min={1} max={5000} step={1} onChange={(value) => update("poolSize", value)} />
-        <NumberField label="Backtest Batch Size" value={form.backtestBatchSize} min={1} max={100} step={1} onChange={(value) => update("backtestBatchSize", value)} />
-        <CheckboxField label="Cloud Sync Required" checked={form.requireCloudSync} onChange={(value) => update("requireCloudSync", value)} />
+      <ConfigSection title="BRAIN 设置">
+        <SelectField label="资产类型" value={form.instrumentType} options={optionValues(options, "instrumentType", form.instrumentType, DEFAULT_INSTRUMENT_TYPE_OPTIONS)} onChange={(value) => update("instrumentType", value)} />
+        <SelectField label="区域" value={form.region} options={optionValues(options, "region", form.region, DEFAULT_REGION_OPTIONS)} onChange={(value) => update("region", value)} />
+        <SelectField label="股票池" value={form.universe} options={optionValues(options, "universe", form.universe, DEFAULT_UNIVERSE_OPTIONS)} onChange={(value) => update("universe", value)} />
+        <SelectField label="延迟" value={String(form.delay)} options={optionValues(options, "delay", String(form.delay), DEFAULT_DELAY_OPTIONS)} onChange={(value) => update("delay", Number(value))} />
+        <NumberField label="衰减" value={form.decay} min={0} step={1} onChange={(value) => update("decay", value)} />
+        <SelectField label="中性化" value={form.neutralization} options={optionValues(options, "neutralization", form.neutralization, DEFAULT_NEUTRALIZATION_OPTIONS)} onChange={(value) => update("neutralization", value)} />
+        {datasetChoices.length ? (
+          <SelectField
+            label="数据集"
+            value={form.dataset}
+            options={datasetChoices}
+            placeholder="自动选择"
+            onChange={(value) => update("dataset", value)}
+          />
+        ) : (
+          <TextField
+            label="数据集"
+            value={form.dataset}
+            maxLength={MAX_CONFIG_TEXT_LENGTH}
+            onChange={(value) => update("dataset", sanitizeConfigText(value))}
+          />
+        )}
+        <SelectField label="Alpha 类型" value={form.alphaType} options={optionValues(options, "type", form.alphaType, DEFAULT_ALPHA_TYPE_OPTIONS)} onChange={(value) => update("alphaType", value)} />
+        <SelectField label="数据净化" value={form.pasteurization} options={optionValues(options, "pasteurization", form.pasteurization, DEFAULT_PASTEURIZATION_OPTIONS)} onChange={(value) => update("pasteurization", value)} />
+        <SelectField label="单位处理" value={form.unitHandling} options={optionValues(options, "unitHandling", form.unitHandling, DEFAULT_UNIT_HANDLING_OPTIONS)} onChange={(value) => update("unitHandling", value)} />
+        <SelectField label="空值处理" value={form.nanHandling} options={optionValues(options, "nanHandling", form.nanHandling, DEFAULT_NAN_HANDLING_OPTIONS)} onChange={(value) => update("nanHandling", value)} />
+        <SelectField label="语言" value={form.language} options={optionValues(options, "language", form.language, DEFAULT_LANGUAGE_OPTIONS)} onChange={(value) => update("language", value)} />
       </ConfigSection>
 
-      <ConfigSection title="Quality Thresholds">
-        <NumberField label="Min Sharpe" value={form.minSharpe} min={0} step={0.01} onChange={(value) => update("minSharpe", value)} />
-        <NumberField label="Min Fitness" value={form.minFitness} min={0} step={0.01} onChange={(value) => update("minFitness", value)} />
-        <NumberField label="Min Turnover" value={form.minTurnover} min={0} max={1} step={0.01} onChange={(value) => update("minTurnover", value)} />
-        <NumberField label="Max Turnover" value={form.platformMaxTurnover} min={0} max={1} step={0.01} onChange={(value) => update("platformMaxTurnover", value)} />
-        <NumberField label="Max Self Correlation" value={form.maxSelfCorrelation} min={0} max={1} step={0.01} onChange={(value) => update("maxSelfCorrelation", value)} />
-        <NumberField label="Max Weight Concentration" value={form.maxWeightConcentration} min={0} max={1} step={0.01} onChange={(value) => update("maxWeightConcentration", value)} />
+      <ConfigSection title="预算控制">
+        <NumberField label="每轮最大候选数" value={form.candidates} min={1} max={1000} step={1} onChange={(value) => update("candidates", value)} />
+        <NumberField label="最大轮次" value={form.cycles} min={1} max={10000} step={1} onChange={(value) => update("cycles", value)} />
+        <NumberField label="候选池大小" value={form.poolSize} min={1} max={5000} step={1} onChange={(value) => update("poolSize", value)} />
+        <NumberField label="回测批处理大小" value={form.backtestBatchSize} min={1} max={100} step={1} onChange={(value) => update("backtestBatchSize", value)} />
+        <CheckboxField label="需要云端同步" checked={form.requireCloudSync} onChange={(value) => update("requireCloudSync", value)} />
       </ConfigSection>
 
-      <ConfigSection title="Scoring">
-        <ConfigValue label="Prior Weight" value={scoring?.prior_layer_weight} />
-        <ConfigValue label="Empirical Weight" value={scoring?.empirical_layer_weight} />
-        <ConfigValue label="Checklist Weight" value={scoring?.checklist_layer_weight} />
-        <ConfigValue label="Market Regime" value={scoring?.market_regime} />
+      <ConfigSection title="质量阈值">
+        <NumberField label="最低夏普比率" value={form.minSharpe} min={0} step={0.01} onChange={(value) => update("minSharpe", value)} />
+        <NumberField label="最低适应度" value={form.minFitness} min={0} step={0.01} onChange={(value) => update("minFitness", value)} />
+        <NumberField label="最低换手率" value={form.minTurnover} min={0} max={1} step={0.01} onChange={(value) => update("minTurnover", value)} />
+        <NumberField label="最高换手率" value={form.platformMaxTurnover} min={0} max={1} step={0.01} onChange={(value) => update("platformMaxTurnover", value)} />
+        <NumberField label="最大自相关性" value={form.maxSelfCorrelation} min={0} max={1} step={0.01} onChange={(value) => update("maxSelfCorrelation", value)} />
+        <NumberField label="最大权重集中度" value={form.maxWeightConcentration} min={0} max={1} step={0.01} onChange={(value) => update("maxWeightConcentration", value)} />
       </ConfigSection>
 
-      <ConfigSection title="Environment">
-        <CheckboxField label="Auto Submit" checked={form.autoSubmit} onChange={(value) => update("autoSubmit", value)} />
+      <ConfigSection title="评分配置">
+        <ConfigValue label="先验权重" value={scoring?.prior_layer_weight} />
+        <ConfigValue label="经验权重" value={scoring?.empirical_layer_weight} />
+        <ConfigValue label="检查清单权重" value={scoring?.checklist_layer_weight} />
+        <ConfigValue label="市场状态" value={scoring?.market_regime} />
+      </ConfigSection>
+
+      <ConfigSection title="环境设置">
+        <CheckboxField label="自动提交" checked={form.autoSubmit} onChange={(value) => update("autoSubmit", value)} />
       </ConfigSection>
     </form>
   );
@@ -264,12 +356,18 @@ function formFromConfig(config: RunConfig): ConfigForm {
   return {
     environment: config.environment || "production",
     autoSubmit: Boolean(config.auto_submit),
+    instrumentType: String(settings?.instrumentType || "EQUITY"),
     region: String(settings?.region || "USA"),
     universe: String(settings?.universe || "TOP3000"),
     delay: Number(settings?.delay ?? 1),
     decay: Number(settings?.decay ?? 10),
     neutralization: String(settings?.neutralization || "SUBINDUSTRY"),
     dataset: String(settings?.dataset || ""),
+    pasteurization: String(settings?.pasteurization || "ON"),
+    unitHandling: String(settings?.unitHandling || "VERIFY"),
+    nanHandling: String(settings?.nanHandling || "ON"),
+    language: String(settings?.language || "FASTEXPR"),
+    alphaType: String(settings?.type || "REGULAR"),
     candidates: Number(budget?.max_candidates_per_cycle ?? 20),
     cycles: Number(budget?.max_cycles ?? 10),
     poolSize: Number(budget?.retained_alpha_pool_size ?? 10),
@@ -289,12 +387,18 @@ function payloadFromForm(form: ConfigForm) {
     environment: form.environment,
     autoSubmit: form.autoSubmit,
     settings: {
+      instrumentType: form.instrumentType,
       region: form.region,
       universe: form.universe,
       delay: form.delay,
       decay: form.decay,
       neutralization: form.neutralization,
       dataset: form.dataset,
+      pasteurization: form.pasteurization,
+      unitHandling: form.unitHandling,
+      nanHandling: form.nanHandling,
+      language: form.language,
+      type: form.alphaType,
     },
     candidates: form.candidates,
     cycles: form.cycles,
@@ -312,7 +416,7 @@ function payloadFromForm(form: ConfigForm) {
 
 function formFromImport(value: unknown, fallback: ConfigForm): ConfigForm {
   const root = asRecord(value);
-  if (!root) throw new Error("Configuration JSON must be an object.");
+  if (!root) throw new Error("配置JSON必须是一个对象。");
   const source = asRecord(root.config) || root;
   if (asRecord(source.ops)) {
     return formFromConfig(source as unknown as RunConfig);
@@ -322,12 +426,18 @@ function formFromImport(value: unknown, fallback: ConfigForm): ConfigForm {
     ...fallback,
     environment: stringValue(source.environment, fallback.environment),
     autoSubmit: booleanValue(source.autoSubmit ?? source.auto_submit, fallback.autoSubmit),
+    instrumentType: stringValue(settings.instrumentType, fallback.instrumentType),
     region: stringValue(settings.region, fallback.region),
     universe: stringValue(settings.universe, fallback.universe),
     delay: numberValue(settings.delay, fallback.delay),
     decay: numberValue(settings.decay, fallback.decay),
     neutralization: stringValue(settings.neutralization, fallback.neutralization),
     dataset: stringValue(settings.dataset, fallback.dataset),
+    pasteurization: stringValue(settings.pasteurization, fallback.pasteurization),
+    unitHandling: stringValue(settings.unitHandling, fallback.unitHandling),
+    nanHandling: stringValue(settings.nanHandling, fallback.nanHandling),
+    language: stringValue(settings.language, fallback.language),
+    alphaType: stringValue(settings.type ?? settings.alphaType, fallback.alphaType),
     candidates: numberValue(source.candidates, fallback.candidates),
     cycles: numberValue(source.cycles, fallback.cycles),
     poolSize: numberValue(source.poolSize, fallback.poolSize),
@@ -342,38 +452,63 @@ function formFromImport(value: unknown, fallback: ConfigForm): ConfigForm {
   };
 }
 
-function validateForm(form: ConfigForm, options?: Record<string, Array<string | number>>) {
-  if (!form.region || !form.universe || !form.neutralization) return "Brain settings are incomplete.";
-  if (!isAllowedOption(form.region, options, "region", DEFAULT_REGION_OPTIONS)) return "Region is not supported.";
-  if (!isAllowedOption(form.universe, options, "universe", DEFAULT_UNIVERSE_OPTIONS)) return "Universe is not supported.";
+function validateForm(form: ConfigForm, schema?: ConfigSchema) {
+  const options = schema?.settings_options;
+  if (!form.instrumentType || !form.region || !form.universe || !form.neutralization || !form.alphaType) {
+    return "BRAIN 设置不完整。";
+  }
+  if (!isAllowedOption(form.instrumentType, options, "instrumentType", DEFAULT_INSTRUMENT_TYPE_OPTIONS)) {
+    return "不支持的资产类型。";
+  }
+  if (!isAllowedOption(form.region, options, "region", DEFAULT_REGION_OPTIONS)) return "不支持的区域。";
+  if (!isAllowedOption(form.universe, options, "universe", DEFAULT_UNIVERSE_OPTIONS)) return "不支持的股票池。";
   if (!isAllowedOption(form.neutralization, options, "neutralization", DEFAULT_NEUTRALIZATION_OPTIONS)) {
-    return "Neutralization is not supported.";
+    return "不支持的中性化方式。";
   }
-  if (form.dataset.length > MAX_CONFIG_TEXT_LENGTH) return `Dataset must be ${MAX_CONFIG_TEXT_LENGTH} characters or fewer.`;
+  if (!isAllowedOption(form.alphaType, options, "type", DEFAULT_ALPHA_TYPE_OPTIONS)) {
+    return "不支持的 Alpha 类型。";
+  }
+  if (!isAllowedOption(form.pasteurization, options, "pasteurization", DEFAULT_PASTEURIZATION_OPTIONS)) {
+    return "不支持的数据净化方式。";
+  }
+  if (!isAllowedOption(form.unitHandling, options, "unitHandling", DEFAULT_UNIT_HANDLING_OPTIONS)) {
+    return "不支持的单位处理方式。";
+  }
+  if (!isAllowedOption(form.nanHandling, options, "nanHandling", DEFAULT_NAN_HANDLING_OPTIONS)) {
+    return "不支持的空值处理方式。";
+  }
+  if (!isAllowedOption(form.language, options, "language", DEFAULT_LANGUAGE_OPTIONS)) {
+    return "不支持的表达式语言。";
+  }
+  if (form.dataset.length > MAX_CONFIG_TEXT_LENGTH) return `数据集长度不能超过 ${MAX_CONFIG_TEXT_LENGTH} 个字符。`;
   if (form.dataset && !CONFIG_TEXT_PATTERN.test(form.dataset)) {
-    return "Dataset may only contain letters, numbers, underscore, dash, dot, or colon.";
+    return "数据集只能包含字母、数字、下划线、短横线、点或冒号。";
   }
-  if (!isIntegerInRange(form.delay, 0, 1)) return "Delay must be 0 or 1.";
-  if (!isIntegerInRange(form.decay, 0)) return "Decay must be a non-negative integer.";
-  if (!isIntegerInRange(form.candidates, 1, 1000)) return "Max candidates per cycle must be between 1 and 1000.";
-  if (!isIntegerInRange(form.cycles, 1, 10000)) return "Max cycles must be between 1 and 10000.";
-  if (!isIntegerInRange(form.poolSize, 1, 5000)) return "Pool size must be between 1 and 5000.";
-  if (!isIntegerInRange(form.backtestBatchSize, 1, 100)) return "Backtest batch size must be between 1 and 100.";
+  const datasetValues = datasetAllowedValues(schema);
+  if (form.dataset && datasetValues.length && !datasetValues.includes(form.dataset)) {
+    return "不支持的数据集，请从下拉列表选择。";
+  }
+  if (!isIntegerInRange(form.delay, 0, 1)) return "延迟必须为 0 或 1。";
+  if (!isIntegerInRange(form.decay, 0)) return "衰减必须为非负整数。";
+  if (!isIntegerInRange(form.candidates, 1, 1000)) return "每轮最大候选数必须在 1 到 1000 之间。";
+  if (!isIntegerInRange(form.cycles, 1, 10000)) return "最大轮次必须在 1 到 10000 之间。";
+  if (!isIntegerInRange(form.poolSize, 1, 5000)) return "候选池大小必须在 1 到 5000 之间。";
+  if (!isIntegerInRange(form.backtestBatchSize, 1, 100)) return "回测批处理大小必须在 1 到 100 之间。";
   for (const [label, value] of [
-    ["Min Sharpe", form.minSharpe],
-    ["Min Fitness", form.minFitness],
+    ["最低夏普比率", form.minSharpe],
+    ["最低适应度", form.minFitness],
   ] as const) {
-    if (!Number.isFinite(value) || value < 0) return `${label} must be a non-negative number.`;
+    if (!Number.isFinite(value) || value < 0) return `${label} 必须为非负数。`;
   }
   for (const [label, value] of [
-    ["Min Turnover", form.minTurnover],
-    ["Max Turnover", form.platformMaxTurnover],
-    ["Max Self Correlation", form.maxSelfCorrelation],
-    ["Max Weight Concentration", form.maxWeightConcentration],
+    ["最低换手率", form.minTurnover],
+    ["最高换手率", form.platformMaxTurnover],
+    ["最大自相关性", form.maxSelfCorrelation],
+    ["最大权重集中度", form.maxWeightConcentration],
   ] as const) {
-    if (!Number.isFinite(value) || value < 0 || value > 1) return `${label} must be between 0 and 1.`;
+    if (!Number.isFinite(value) || value < 0 || value > 1) return `${label} 必须在 0 到 1 之间。`;
   }
-  if (form.minTurnover > form.platformMaxTurnover) return "Min turnover cannot exceed max turnover.";
+  if (form.minTurnover > form.platformMaxTurnover) return "最低换手率不能超过最高换手率。";
   return "";
 }
 
@@ -381,8 +516,43 @@ function optionValues(
   options: Record<string, Array<string | number>> | undefined,
   key: string,
   current: string,
+  fallback: string[] = [],
 ) {
-  return Array.from(new Set([...(options?.[key] || []).map(String), current].filter(Boolean)));
+  const values = options?.[key]?.map(String).filter(Boolean) || fallback;
+  return Array.from(new Set([...values, current].filter(Boolean)));
+}
+
+function datasetSelectOptions(schema: ConfigSchema | undefined, current: string): SelectOption[] {
+  const seen = new Set<string>();
+  const rows = schema?.dataset_options || [];
+  const choices: SelectOption[] = [];
+  for (const row of rows) {
+    const value = String(row.id || "").trim();
+    if (!value || seen.has(value)) continue;
+    choices.push({ value, label: datasetOptionLabel(row, value) });
+    seen.add(value);
+  }
+  for (const value of schema?.settings_options?.dataset?.map(String).filter(Boolean) || []) {
+    if (seen.has(value)) continue;
+    choices.push({ value, label: value });
+    seen.add(value);
+  }
+  if (current && !seen.has(current)) {
+    choices.unshift({ value: current, label: `当前值 - ${current}` });
+  }
+  return choices;
+}
+
+function datasetAllowedValues(schema: ConfigSchema | undefined) {
+  return datasetSelectOptions(schema, "").map((option) => typeof option === "string" ? option : option.value);
+}
+
+function datasetOptionLabel(row: DatasetOption, fallback: string) {
+  if (row.label) return row.label;
+  const name = row.name ? ` - ${row.name}` : "";
+  const fieldCount = Number(row.field_count || 0);
+  const count = Number.isFinite(fieldCount) && fieldCount > 0 ? `, ${fieldCount} fields` : "";
+  return `${fallback}${name}${count}`;
 }
 
 function allowedOptionValues(
@@ -497,12 +667,30 @@ function NumberField({
   );
 }
 
-function SelectField({ label, value, options, onChange }: { label: string; value: string; options: string[]; onChange: (value: string) => void }) {
+function normalizeSelectOptions(options: SelectOption[]) {
+  return options.map((option) => typeof option === "string" ? { value: option, label: option } : option);
+}
+
+function SelectField({
+  label,
+  value,
+  options,
+  placeholder,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  options: SelectOption[];
+  placeholder?: string;
+  onChange: (value: string) => void;
+}) {
+  const choices = normalizeSelectOptions(options);
   return (
     <label className="text-xs text-gray-400">
       <span className="block mb-1">{label}</span>
       <select value={value} onChange={(event) => onChange(event.currentTarget.value)} className={inputClass}>
-        {options.map((option) => <option key={option} value={option}>{option}</option>)}
+        {placeholder ? <option value="">{placeholder}</option> : null}
+        {choices.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
       </select>
     </label>
   );

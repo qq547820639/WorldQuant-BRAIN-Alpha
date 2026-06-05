@@ -41,6 +41,7 @@ class OfficialRequestMixin:
         if self.token and (self._has_session_cookie() or (self.username and self.password)):
             attempts = max(attempts, 2)
         last_error: BrainAPIError | None = None
+        token_before_auth_fallback: str | None = None
         for attempt in range(attempts):
             request_headers = {"Content-Type": "application/json", "Accept": "application/json"}
             auth_mode = "none"
@@ -65,7 +66,10 @@ class OfficialRequestMixin:
                     return _parse(raw), dict(resp.headers.items())
             except urllib.error.HTTPError as exc:
                 raw = exc.read().decode("utf-8", errors="replace")
-                parsed = _parse(raw)
+                try:
+                    parsed = _parse(raw)
+                except BrainAPIError:
+                    parsed = {"raw": raw[:500]}
                 rate_limit_text = json.dumps(parsed, ensure_ascii=False, default=str)
                 concurrency_limit = "CONCURRENT_SIMULATION_LIMIT_EXCEEDED" in rate_limit_text
                 if (
@@ -77,6 +81,7 @@ class OfficialRequestMixin:
                     time.sleep(_retry_delay(exc.headers, attempt, self.config.rate_limit_backoff_seconds))
                     continue
                 if exc.code == 401 and auth_mode == "bearer" and attempt < attempts - 1:
+                    token_before_auth_fallback = self.token
                     self.token = ""
                     if self._has_session_cookie():
                         self._prefer_cookie_auth = True
@@ -96,14 +101,20 @@ class OfficialRequestMixin:
                     payload=_scrub(parsed),
                     retry_after=_retry_after(exc.headers),
                 )
+                if token_before_auth_fallback is not None and not self.token:
+                    self.token = token_before_auth_fallback
                 raise last_error from exc
             except urllib.error.URLError as exc:
                 last_error = BrainAPIError(f"network error: {exc}")
                 if self.config.rate_limit_retry_attempts > 0 and attempt < attempts - 1:
                     time.sleep(_retry_delay(None, attempt, self.config.rate_limit_backoff_seconds))
                     continue
+                if token_before_auth_fallback is not None and not self.token:
+                    self.token = token_before_auth_fallback
                 raise last_error from exc
         if last_error is not None:
+            if token_before_auth_fallback is not None and not self.token:
+                self.token = token_before_auth_fallback
             raise BrainAPIError(
                 f"request failed after retries: {redact_error_message(last_error)}",
                 status_code=last_error.status_code,

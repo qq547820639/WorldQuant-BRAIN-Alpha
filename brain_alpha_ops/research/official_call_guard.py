@@ -59,6 +59,16 @@ class OfficialCallGuard:
         candidate.lifecycle_status = "observability_duplicate_blocked"
         candidate.gate = blocked_gate("OBSERVABILITY_DUPLICATE_EXPRESSION_BLOCKED", [reason])
         candidate.submission["observability_duplicate_blocked_phase"] = phase
+        existing_guard = self._existing_block(candidate, phase=phase, expression_canonical=candidate_key)
+        if existing_guard:
+            return {
+                "blocked": True,
+                "phase": phase,
+                "reason": reason,
+                "expression_canonical": candidate_key,
+                "guard": existing_guard,
+                "already_recorded": True,
+            }
         guard_summary = self.record_block(
             candidate,
             phase=phase,
@@ -72,6 +82,20 @@ class OfficialCallGuard:
             "expression_canonical": candidate_key,
             "guard": guard_summary,
         }
+
+    def _existing_block(self, candidate: Candidate, *, phase: str, expression_canonical: str) -> dict:
+        guard = self.snapshot()
+        expression_marker = expression_canonical[:160]
+        for row in guard.get("blocked_candidates") or []:
+            if not isinstance(row, dict):
+                continue
+            if (
+                str(row.get("alpha_id") or "") == candidate.alpha_id
+                and str(row.get("phase") or "") == phase
+                and str(row.get("expression_canonical") or "") == expression_marker
+            ):
+                return guard
+        return {}
 
     def record_block(
         self,

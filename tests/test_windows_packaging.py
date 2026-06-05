@@ -45,3 +45,17 @@ def test_windows_build_copies_assistant_prompt_templates_to_dist_runtime_path():
 
     assert "brain_alpha_ops\\research\\prompts" in script_text
     assert "dist\\brain_alpha_ops\\research\\prompts" in script_text
+
+
+def test_build_prod_uses_platform_path_separator_for_add_data():
+    build_text = Path("build_prod.py").read_text(encoding="utf-8")
+
+    assert "os.pathsep" in build_text
+    assert "--add-data=config/run_config.json;config" not in build_text
+
+
+def test_windows_build_does_not_embed_user_specific_python_path():
+    script_text = Path("scripts/build_windows.ps1").read_text(encoding="utf-8")
+
+    assert "54782" not in script_text
+    assert '$Python = "python"' in script_text

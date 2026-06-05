@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import time
+
 from brain_alpha_ops.web_security import (
     LocalSessionManager,
     admin_token_from_headers,
@@ -82,6 +84,25 @@ def test_session_manager_can_mark_cookies_secure_for_remote_https():
 
     assert "Secure" in manager.cookie_header(session_id)
     assert "Secure" in manager.expired_cookie_header()
+
+
+def test_session_manager_enforces_absolute_max_lifetime():
+    manager = LocalSessionManager(ttl_seconds=120, absolute_max_seconds=180)
+    session_id, csrf_token = manager.create()
+    manager.sessions[session_id]["absolute_expires_at"] = time.time() - 1
+
+    assert manager.validate_csrf(session_id, csrf_token) is False
+    assert session_id not in manager.sessions
+
+
+def test_session_manager_sliding_expiry_never_exceeds_absolute_max_lifetime():
+    manager = LocalSessionManager(ttl_seconds=120, absolute_max_seconds=180)
+    session_id, csrf_token = manager.create()
+    absolute_expires_at = time.time() + 30
+    manager.sessions[session_id]["absolute_expires_at"] = absolute_expires_at
+
+    assert manager.validate_csrf(session_id, csrf_token) is True
+    assert manager.sessions[session_id]["expires_at"] <= absolute_expires_at
 
 
 def test_session_manager_prunes_and_single_session_policy():
@@ -178,3 +199,11 @@ def test_request_rate_limiter_uses_separate_read_write_and_submit_buckets():
     assert limiter.check(key="session-1", method="POST", path="/api/submit", now=103)["ok"] is True
     assert limiter.check(key="session-1", method="POST", path="/api/submit", now=104)["ok"] is False
     assert limiter.check(key="session-1", method="GET", path="/api/status", now=112)["ok"] is True
+
+
+def test_request_rate_limiter_falls_back_to_client_address_not_shared_anonymous_bucket():
+    limiter = RequestRateLimiter(RateLimitPolicy(window_seconds=10, read_requests=2, write_requests=1, submit_requests=1))
+
+    assert limiter.check(key="", client_addr="10.0.0.1", method="POST", path="/api/run", now=100)["ok"] is True
+    assert limiter.check(key="", client_addr="10.0.0.1", method="POST", path="/api/run", now=101)["ok"] is False
+    assert limiter.check(key="", client_addr="10.0.0.2", method="POST", path="/api/run", now=101)["ok"] is True

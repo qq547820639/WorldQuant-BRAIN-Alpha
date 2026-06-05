@@ -13,7 +13,7 @@ function hasFlag(name) {
 
 function usage() {
   return [
-    "Usage: node scripts/browser_react_artifact_smoke.mjs --url <local-react-dist-url>",
+    "Usage: node scripts/browser_react_artifact_smoke.mjs --url <local-react-url>",
     "",
     "Options:",
     "  --devtools-url <url>   Chrome DevTools HTTP URL, default http://127.0.0.1:9224",
@@ -91,7 +91,7 @@ class CdpSession {
     }
     if (message.method === "Network.loadingFailed") {
       this.networkFailures.push({
-        url: message.params?.requestId || "",
+        requestId: message.params?.requestId || "",
         errorText: message.params?.errorText || "",
         blockedReason: message.params?.blockedReason || "",
       });
@@ -157,6 +157,12 @@ class CdpSession {
     return result.result ? result.result.value : undefined;
   }
 
+  async captureScreenshot(filePath) {
+    const screenshot = await this.send("Page.captureScreenshot", { format: "png", captureBeyondViewport: false });
+    fs.writeFileSync(filePath, Buffer.from(screenshot.data, "base64"));
+    return filePath;
+  }
+
   async fulfillMockRequest(params) {
     const requestId = params.requestId;
     const request = params.request || {};
@@ -169,6 +175,7 @@ class CdpSession {
     this.mockRequests.push({
       method: request.method || "GET",
       path: url.pathname,
+      search: url.search,
       status: payload.status || 200,
       body: request.postData || "",
     });
@@ -192,28 +199,107 @@ function mockApiPayload(rawUrl, method) {
   const url = new URL(rawUrl);
   const pathname = url.pathname;
   const ok = (json) => ({ status: 200, json });
-  if (method === "GET" && pathname === "/api/status") {
+
+  if (method === "GET" && pathname === "/api/candidates") {
     return ok({
       ok: true,
-      status: "idle",
-      progress: {
-        candidates_generated: 12,
-        backtests_completed: 4,
-        backtests_pending: 1,
-        submissions: 0,
+      total: 3,
+      candidates: [
+        candidateFixture("ALPHA_RT_001", "submission_ready", 82),
+        candidateFixture("ALPHA_RT_002", "running_backtest", 67),
+        candidateFixture("ALPHA_RT_003", "pending_backtest", 48),
+      ],
+    });
+  }
+  if (method === "GET" && pathname === "/api/backtest_slots") {
+    return ok({
+      ok: true,
+      slot_limit: 3,
+      queue_summary: { slot_limit: 3 },
+      slots: [
+        { slot: 1, status: "RUNNING", alpha_id: "ALPHA_RT_002" },
+        { slot: 2, status: "EMPTY" },
+        { slot: 3, status: "COMPLETED", alpha_id: "ALPHA_RT_001" },
+      ],
+    });
+  }
+  if (method === "GET" && pathname === "/api/submit_readiness") {
+    return ok({ ok: true, eligible_count: 1, blocked_count: 1 });
+  }
+  if (method === "GET" && pathname === "/api/checkpoint_status") {
+    return ok({
+      ok: true,
+      schema_version: "checkpoint_status.v1",
+      checkpoint_count: 1,
+      history_count: 2,
+      resume_available: true,
+      storage_dir: "data",
+      latest: {
+        run_id: "run_resume",
+        phase_completed: "official_validation",
+        saved_at: "2026-06-05T00:00:00Z",
+      },
+      history: [
+        {
+          run_id: "run_resume",
+          status: "completed",
+          best_score: 88.5,
+          completed_at: "2026-06-05T00:05:00Z",
+        },
+      ],
+      latest_comparison: {
+        deltas: { best_score: 4.5, submission_ready: 1 },
+      },
+      history_analytics: {
+        schema_version: "run_history_analytics.v1",
+        trend_status: "ready",
+        latest_run_id: "run_resume",
       },
     });
+  }
+  if (method === "GET" && pathname === "/api/config") {
+    return ok({ ok: true, config: configFixture() });
+  }
+  if (method === "GET" && pathname === "/api/config_schema") {
+    return ok({
+      ok: true,
+      schema: {
+        settings_options: {
+          instrumentType: ["EQUITY"],
+          region: ["USA", "CHN", "EUR", "GLB"],
+          universe: ["TOP3000", "TOP1000", "TOP500"],
+          delay: [0, 1],
+          neutralization: ["SUBINDUSTRY", "INDUSTRY", "SECTOR", "MARKET", "NONE"],
+          dataset: ["pv1", "fundamental6", "analyst4"],
+          pasteurization: ["ON", "OFF"],
+          unitHandling: ["VERIFY", "RAW", "NONE"],
+          nanHandling: ["ON", "OFF"],
+          language: ["FASTEXPR"],
+          type: ["REGULAR", "POWER_POOL", "ATOM", "PYRAMID"],
+        },
+        dataset_options: [
+          { id: "pv1", name: "Price Volume Data for Equity", field_count: 24 },
+          { id: "fundamental6", name: "Company Fundamental Data for Equity", field_count: 886 },
+          { id: "analyst4", name: "Analyst Estimate Data for Equity", field_count: 1324 },
+        ],
+      },
+    });
+  }
+  if (method === "POST" && pathname === "/api/config") {
+    return ok({ ok: true, config: configFixture() });
+  }
+  if (method === "POST" && pathname === "/api/test_connection") {
+    return ok({ ok: true, environment: "production", auth: "token" });
   }
   if (method === "GET" && pathname === "/api/snapshot/cloud") {
     return ok({
       ok: true,
       count: 2,
+      total: 2,
       submitted_count: 1,
       passed_unsubmitted_count: 1,
       is_stale: false,
       summary: {
-        count: 2,
-        total: 2,
         returned_count: 2,
         submitted_count: 1,
         passed_unsubmitted_count: 1,
@@ -240,315 +326,37 @@ function mockApiPayload(rawUrl, method) {
           sharpe: 0.82,
           fitness: 0.71,
           turnover: 0.12,
-          code: "decay_linear(volume, 5)",
+          expression: "decay_linear(volume, 5)",
           updated_at: "2026-05-30T00:10:00Z",
         },
       ],
-      sample_alphas: [
-        { alpha_id: "ALPHA_RT_001", pass_fail: "PASS", sharpe: 1.42, fitness: 1.16 },
-        { alpha_id: "ALPHA_RT_002", pass_fail: "FAIL", sharpe: 0.82, fitness: 0.71 },
-      ],
     });
-  }
-  if (method === "GET" && pathname === "/api/lifecycle") {
-    return ok({
-      ok: true,
-      records: [
-        {
-          alpha_id: "ALPHA_LIFE_1",
-          status: "submission_ready",
-          stage: "ready",
-          message: "Ready for submission",
-          timestamp: "2026-05-30T00:11:00Z",
-        },
-        {
-          alpha_id: "ALPHA_LIFE_2",
-          status: "submitted",
-          stage: "submitted",
-          note: "Queued for downstream sync",
-          timestamp: "2026-05-30T00:12:00Z",
-        },
-      ],
-    });
-  }
-  if (method === "GET" && pathname === "/api/snapshot/memory") {
-    return ok({
-      ok: true,
-      total_candidates: 1005,
-      families: [{ name: "momentum", count: 40, success_rate: 0.31 }],
-      fields: [{ name: "close", count: 25, success_rate: 0.28 }],
-      operators: [{ name: "rank", count: 18, success_rate: 0.42 }],
-      failure_patterns: [{ reason: "self_correlation", count: 3 }],
-      recommendations: ["Review turnover constraints", "Refresh research cache"],
-      total_lifecycle_records: 42,
-      total_check_records: 12,
-    });
-  }
-  if (method === "GET" && pathname === "/api/research_memory") {
-    return ok({
-      ok: true,
-      total_candidates: 1005,
-      total_lifecycle_records: 42,
-      total_check_records: 12,
-      families: [{ name: "momentum", count: 40, success_rate: 0.31 }],
-      fields: [{ name: "close", count: 25, success_rate: 0.28 }],
-      operators: [{ name: "rank", count: 18, success_rate: 0.42 }],
-      failure_patterns: [{ reason: "self_correlation", count: 3 }],
-      recommendations: ["Review turnover constraints", "Refresh research cache"],
-    });
-  }
-  if (method === "GET" && pathname === "/api/research_knowledge") {
-    return ok({
-      ok: true,
-      counts: { rules: 3, findings: 2, failures: 1 },
-      items: [
-        {
-          kind: "rule",
-          title: "Promote stable momentum",
-          confidence: 0.94,
-          evidence: [{ id: "run_1" }, { id: "run_2" }],
-          source_run_id: "run_2",
-          body: "Use rank(close) with turnover guard.",
-          updated_at: "2026-05-30T00:13:00Z",
-        },
-        {
-          kind: "finding",
-          knowledge_id: "knowledge_2",
-          confidence: 0.81,
-          evidence: [{ id: "run_3" }],
-          expression_pattern: "decay_linear(volume, 5)",
-          category: "turnover",
-          created_at: "2026-05-30T00:14:00Z",
-        },
-      ],
-    });
-  }
-  if (method === "GET" && pathname === "/api/research_observability") {
-    return ok({
-      ok: true,
-      health: {
-        risk_level: "medium",
-        blocking_flags: ["duplicate_expression_history"],
-        warning_flags: ["retryable_official_errors_present"],
-        health_flags: ["stable_cache"],
-      },
-      errors: {
-        total: 2,
-        recent_errors: [
-          { error_code: "rate_limit", detail: "Retry later", timestamp: "2026-05-30T00:15:00Z" },
-        ],
-      },
-      backtests: {
-        failure_patterns: [{ reason: "sharpe_decay", count: 4 }],
-      },
-      checks: {
-        failure_patterns: [{ reason: "self_correlation", count: 1 }],
-      },
-      recommendations: ["Reduce request rate", "Inspect duplicate expressions"],
-    });
-  }
-  if (method === "GET" && pathname === "/api/prompt_runs") {
-    return ok({
-      ok: true,
-      count: 2,
-      items: [
-        {
-          timestamp: "2026-05-30T00:16:00Z",
-          prompt_digest: "prompt_digest_1",
-          context_digest: "context_digest_1",
-          model: "gpt-4.1-mini",
-          temperature: 0.2,
-          response_digest: "response_digest_1",
-          parse_status: "ok",
-        },
-        {
-          timestamp: "2026-05-30T00:17:00Z",
-          prompt_digest: "prompt_digest_2",
-          context_digest: "context_digest_2",
-          model: "gpt-4.1-mini",
-          temperature: 0.3,
-          response_digest: "response_digest_2",
-          parse_status: "recorded",
-        },
-      ],
-    });
-  }
-  if (method === "GET" && pathname === "/api/sqlite_indexes") {
-    return ok({
-      ok: true,
-      expression_index: {
-        total_expression_records: 24,
-        duplicate_expression_count: 2,
-        duplicates: [
-          { expression_canonical: "rank(close)", count: 4, success_rate: 0.5, detail: "duplicate cluster" },
-        ],
-        frequent_expressions: [
-          { expression_canonical: "decay_linear(volume, 5)", count: 6, avg_score: 71 },
-        ],
-        fields: [{ name: "close", count: 8, success_rate: 0.44 }],
-        operators: [{ name: "rank", count: 10, score: 0.9 }],
-        windows: [{ window: 5, count: 4, score: 0.88 }],
-      },
-      record_index: {
-        ok: true,
-        row_count: 128,
-        db_path: "/tmp/mock.sqlite",
-        latest_timestamp: "2026-05-30T00:18:00Z",
-      },
-    });
-  }
-  if (method === "GET" && pathname === "/api/latest_result") {
-    const candidate = {
-      alpha_id: "ALPHA_RT_001",
-      submission: {
-        anti_overfit_report: {
-          recommendation: "pass",
-          score: 92,
-          tests: [{ name: "overfit_gap", passed: true }],
-          generated_at: "2026-05-30T00:19:00Z",
-        },
-        rolling_validation_report: {
-          status: "pass",
-          score: 88,
-          sample_size: 24,
-          tests: [{ name: "window_stability", passed: true }],
-          generated_at: "2026-05-30T00:19:30Z",
-        },
-      },
-      updated_at: "2026-05-30T00:20:00Z",
-    };
-    return ok({
-      ok: true,
-      source: "run_history",
-      job_id: "run_1",
-      status: "completed",
-      summary: { candidates: [candidate] },
-      result: { candidates: [candidate] },
-    });
-  }
-  if (method === "GET" && pathname === "/api/candidates") {
-    return ok({
-      ok: true,
-      candidates: candidateFixtures(1005),
-    });
-  }
-  if (method === "GET" && pathname === "/api/check_results") {
-    return ok({
-      ok: true,
-      items: [
-        { alpha_id: "ALPHA_RT_001", official_alpha_id: "OFFICIAL_RT_001", passed: true, submittable: true, is_stale: false },
-        { alpha_id: "ALPHA_RT_006", passed: true, submittable: true, is_stale: true },
-      ],
-    });
-  }
-  if (method === "GET" && pathname === "/api/config") {
-    return ok({ ok: true, config: configFixture() });
-  }
-  if (method === "GET" && pathname === "/api/config_schema") {
-    return ok({
-      ok: true,
-      schema: {
-        settings_options: {
-          region: ["USA", "CHN", "EUR", "GLB"],
-          universe: ["TOP3000", "TOP1000", "TOP500"],
-          delay: [0, 1],
-          neutralization: ["SUBINDUSTRY", "INDUSTRY", "SECTOR", "MARKET", "NONE"],
-        },
-      },
-    });
-  }
-  if (method === "POST" && pathname === "/api/config") {
-    return ok({ ok: true, config: configFixture() });
-  }
-  if (method === "POST" && pathname === "/api/generate_candidates") {
-    return ok({ ok: true, job_id: "task_react_smoke_generate" });
-  }
-  if (method === "POST" && pathname === "/api/scoring/evaluate") {
-    return ok({ ok: true, job_id: "task_react_smoke_score" });
-  }
-  if (method === "POST" && pathname === "/api/scoring/attribution") {
-    return ok({
-      ok: true,
-      attribution: { name: "total", score: 82, weight: 1, children: [] },
-      hard_gates: [{ name: "sharpe", passed: true, value: 1.42, threshold: 1.25 }],
-      soft_gates: [{ name: "turnover", passed: true, value: 0.08, threshold: 0.7 }],
-      top_failures: [],
-      improvement_hints: ["Keep monitoring self-correlation."],
-    });
-  }
-  if (method === "POST" && pathname === "/api/check") {
-    return ok({ ok: true, alpha_id: "ALPHA_RT_001", checks: [{ name: "mock_check", passed: true }] });
-  }
-  if (method === "POST" && pathname === "/api/submit") {
-    return ok({ ok: true, alpha_id: "ALPHA_RT_001", submitted: true });
-  }
-  if (method === "POST" && pathname === "/api/check_batch") {
-    return ok({ ok: true, job_id: "task_react_smoke_batch_check" });
-  }
-  if (method === "POST" && pathname === "/api/submit_batch") {
-    return ok({ ok: true, job_id: "task_react_smoke_batch_submit" });
   }
   if (method === "GET" && pathname === "/sse") {
     return {
       status: 200,
       contentType: "text/event-stream; charset=utf-8",
-      body: [
-        "data: {\"type\":\"complete\",\"ok\":true,\"result\":{\"total_score\":82,\"passed_gate\":true}}",
-        "",
-        "",
-      ].join("\n"),
+      body: "data: {\"type\":\"complete\",\"ok\":true}\n\n",
     };
   }
   return null;
 }
 
-function candidateFixtures(count) {
-  const ids = ["ALPHA_RT_001", "ALPHA_RT_002"];
-  for (let index = 3; index <= count; index += 1) {
-    ids.push(`ALPHA_RT_${String(index).padStart(3, "0")}`);
-  }
-  return ids.map((alphaId, index) => candidateFixture(alphaId, index));
-}
-
-function candidateFixture(alphaId, index = 0) {
-  const topCandidate = alphaId === "ALPHA_RT_001";
-  const runnerUp = alphaId === "ALPHA_RT_002";
-  const score = topCandidate ? 82 : runnerUp ? 67 : 45 - (index % 20) * 0.5;
-  const lifecycleStatus = topCandidate
-    ? "submission_ready"
-    : runnerUp
-      ? "running_backtest"
-      : index === 2
-        ? "backtest_rework"
-        : index === 3
-          ? "blocked"
-          : index === 4
-            ? "submitted"
-            : "pending_backtest";
+function candidateFixture(alphaId, lifecycleStatus, score) {
   return {
     alpha_id: alphaId,
     official_alpha_id: alphaId === "ALPHA_RT_001" ? "OFFICIAL_RT_001" : "",
     simulation_id: `SIM_${alphaId}`,
-    expression: `rank(ts_mean(close, ${10 + (index % 12)})) - group_neutralize(volume, industry)`,
-    family: index % 3 === 0 ? "value" : "momentum",
+    expression: "rank(ts_mean(close, 10)) - group_neutralize(volume, industry)",
+    family: "momentum",
     lifecycle_status: lifecycleStatus,
-    scorecard: {
-      total_score: score,
-      prior_score: 24,
-      empirical_score: 38,
-      checklist_score: 20,
-    },
+    scorecard: { total_score: score },
     official_metrics: {
-      sharpe: topCandidate ? 1.42 : runnerUp ? 0.88 : 0.7 + (index % 30) / 100,
-      fitness: topCandidate ? 1.16 : runnerUp ? 0.74 : 0.6 + (index % 25) / 100,
+      sharpe: alphaId === "ALPHA_RT_001" ? 1.42 : 0.86,
+      fitness: alphaId === "ALPHA_RT_001" ? 1.16 : 0.74,
       turnover: 0.08,
-      returns: 0.12,
-      drawdown: 0.04,
-      self_correlation: 0.22,
-      weight_concentration: 0.05,
     },
-    gate: { passed: topCandidate, submission_ready: topCandidate },
-    stage: lifecycleStatus === "submitted" ? "submitted" : "",
+    gate: { passed: alphaId === "ALPHA_RT_001", submission_ready: alphaId === "ALPHA_RT_001" },
   };
 }
 
@@ -563,7 +371,7 @@ function configFixture() {
         delay: 1,
         decay: 10,
         neutralization: "SUBINDUSTRY",
-        dataset: "fundamental_v0",
+        dataset: "pv1",
       },
       budget: {
         max_candidates_per_cycle: 20,
@@ -597,6 +405,7 @@ function metricsExpression() {
     const resources = performance.getEntriesByType("resource")
       .map((entry) => ({ name: entry.name, transferSize: entry.transferSize || 0 }))
       .filter((entry) => /\\/assets\\//.test(entry.name));
+    const cardTitles = ["候选管理", "回测监控", "质量门禁", "提交管理", "断点历史", "系统配置", "云端快照"];
     return {
       title: document.title,
       readyState: document.readyState,
@@ -605,12 +414,12 @@ function metricsExpression() {
       rootChildCount: root ? root.childElementCount : 0,
       rootTextLength: root ? root.innerText.length : 0,
       hasHeading: /BRAIN Alpha Ops/.test(text),
-      hasVersionLabel: /Research Console v0\\.3/.test(text),
+      hasLocalSession: /本地会话/.test(text),
+      hasSettingsShortcut: Boolean(document.querySelector('button[aria-label="打开系统配置"]')),
+      visibleCardTitles: cardTitles.filter((title) => text.includes(title)),
+      misleadingOnlineLabel: /在线/.test(text),
       roles: {
-        tablist: document.querySelectorAll('[role="tablist"]').length,
-        tab: document.querySelectorAll('[role="tab"]').length,
-        selectedTabs: document.querySelectorAll('[role="tab"][aria-selected="true"]').length,
-        tabpanel: document.querySelectorAll('[role="tabpanel"]').length,
+        alerts: document.querySelectorAll('[role="alert"]').length,
         liveRegions: document.querySelectorAll('[aria-live]').length,
       },
       meta: {
@@ -621,6 +430,7 @@ function metricsExpression() {
       bodyWidth: document.body ? document.body.scrollWidth : 0,
       viewportWidth: window.innerWidth,
       pageOverflowX: document.body ? document.body.scrollWidth > window.innerWidth + 1 : false,
+      textSample: text.slice(0, 500),
     };
   })()`;
 }
@@ -631,6 +441,22 @@ function interactionExpression() {
       for (let index = 0; index < count; index += 1) {
         await new Promise((resolve) => requestAnimationFrame(resolve));
       }
+    };
+    const waitUntil = async (predicate, attempts = 100) => {
+      for (let index = 0; index < attempts; index += 1) {
+        if (predicate()) return true;
+        await waitFrames(1);
+      }
+      return false;
+    };
+    const text = () => document.body?.innerText || "";
+    const buttonByText = (needle) => Array.from(document.querySelectorAll("button"))
+      .find((button) => (button.textContent || "").includes(needle));
+    const buttonByAria = (label) => document.querySelector('button[aria-label="' + label + '"]');
+    const labelControl = (labelText) => {
+      const labels = Array.from(document.querySelectorAll("label"));
+      const label = labels.find((node) => (node.innerText || "").includes(labelText));
+      return label ? label.querySelector("input, textarea, select") : null;
     };
     const setValue = (element, value) => {
       if (!element) return;
@@ -645,405 +471,91 @@ function interactionExpression() {
       element.dispatchEvent(new Event("input", { bubbles: true }));
       element.dispatchEvent(new Event("change", { bubbles: true }));
     };
-    const setChecked = (element, value) => {
-      if (!element) return;
-      const descriptor = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "checked");
-      if (descriptor?.set) descriptor.set.call(element, value);
-      else element.checked = value;
-      element.dispatchEvent(new Event("input", { bubbles: true }));
-      element.dispatchEvent(new Event("change", { bubbles: true }));
-    };
-    const setJsonFile = async (input, name, value) => {
-      if (!input) return false;
-      const file = new File([JSON.stringify(value)], name, { type: "application/json" });
-      const transfer = new DataTransfer();
-      transfer.items.add(file);
-      Object.defineProperty(input, "files", { configurable: true, value: transfer.files });
-      input.dispatchEvent(new Event("change", { bubbles: true }));
-      await waitFrames(12);
-      return true;
-    };
-    const clickTab = async (id) => {
-      document.getElementById("app-tab-" + id).click();
-      await waitFrames(8);
-    };
-    const panelText = () => document.querySelector('[role="tabpanel"]')?.innerText || "";
-    const bodyText = () => document.body?.innerText || "";
-    const labelControl = (labelText) => {
-      const labels = Array.from(document.querySelectorAll("label"));
-      const label = labels.find((node) => (node.innerText || "").includes(labelText));
-      return label ? label.querySelector("input, textarea, select") : null;
-    };
-    const buttonByText = (text) => Array.from(document.querySelectorAll("button"))
-      .find((button) => (button.textContent || "").trim() === text);
-    const buttonContaining = (text) => Array.from(document.querySelectorAll("button"))
-      .find((button) => (button.textContent || "").includes(text));
-    const waitUntil = async (predicate, attempts = 80) => {
-      for (let index = 0; index < attempts; index += 1) {
-        if (predicate()) return true;
-        await waitFrames(1);
-      }
-      return false;
-    };
-    const parseShowingStatus = () => {
-      const match = panelText().match(/Showing (\\d+)-(\\d+) of (\\d+) candidates/);
-      return match ? { start: Number(match[1]), end: Number(match[2]), total: Number(match[3]), text: match[0] } : null;
-    };
-    const visibleVirtualRowIndexes = () => Array.from(document.querySelectorAll('[data-virtualized-candidate-table="true"] tbody tr[aria-rowindex]'))
-      .map((row) => Number(row.getAttribute("aria-rowindex") || "0"))
-      .filter(Boolean);
-    const hasToast = (message) => bodyText().includes(message);
-    const toastAction = (label) => Array.from(document.querySelectorAll('[role="status"] button, [role="alert"] button'))
-      .find((button) => (button.textContent || "").trim() === label);
-    const controlValue = (label) => labelControl(label)?.value || "";
-    const controlChecked = (label) => Boolean(labelControl(label)?.checked);
 
-    await clickTab("dashboard");
-    await waitUntil(() => /Cloud Alphas/i.test(panelText()) || /Dashboard data needs attention/i.test(panelText()));
-    const report = {};
-
-    report.dashboard = {
-      selected: document.querySelector('[role="tab"][aria-selected="true"]')?.id || "",
-      hasCloudKpi: /Cloud Alphas/i.test(panelText()),
-      hasMemoryKpi: /Total Candidates/i.test(panelText()),
-      hasDashboardError: /Dashboard data needs attention/i.test(panelText()),
-      textSample: panelText().slice(0, 240),
-    };
-
-    await clickTab("candidates");
-    const candidateLoadStartedAt = performance.now();
-    await waitUntil(() => /Showing \\d+-\\d+ of 1005 candidates/.test(panelText()), 160);
-    const largeListLoadMs = Math.round(performance.now() - candidateLoadStartedAt);
-    const virtualViewport = document.querySelector('[data-virtualized-candidate-table="true"]');
-    const candidateTable = document.querySelector('table[aria-label="Candidate results"]');
-    const largeListAriaRowCount = Number(candidateTable?.getAttribute("aria-rowcount") || "0");
-    const initialStatus = parseShowingStatus();
-    const initialRowIndexes = visibleVirtualRowIndexes();
-    const scrollStartedAt = performance.now();
-    if (virtualViewport) {
-      virtualViewport.scrollTop = Math.max(0, virtualViewport.scrollHeight - virtualViewport.clientHeight - 120);
-      virtualViewport.dispatchEvent(new Event("scroll", { bubbles: true }));
-    }
-    await waitFrames(12);
-    const scrolledRowIndexes = visibleVirtualRowIndexes();
-    const scrollInteractionMs = Math.round(performance.now() - scrollStartedAt);
-    const filterInput = document.querySelector('input[aria-label="Filter candidates"]');
-    const countInput = document.querySelector('input[type="number"][max="100"]');
-    if (filterInput) setValue(filterInput, "ALPHA_RT_001\\u0007" + "x".repeat(260));
-    await waitFrames(6);
-    const filterSanitized = Boolean(filterInput && !filterInput.value.includes("\\u0007") && filterInput.value.length <= 200);
-    if (filterInput) setValue(filterInput, "ALPHA_RT_001");
-    await waitUntil(() => /Showing 1-1 of 1 candidates/.test(panelText()) || /ALPHA_RT_001/.test(panelText()));
-    if (countInput) setValue(countInput, "1010");
-    await waitFrames(6);
-    const clampedCount = countInput?.value || "";
-    if (countInput) setValue(countInput, "7");
-    await waitFrames(3);
-    const generateButton = buttonByText("Generate");
-    if (generateButton) generateButton.click();
-    await waitFrames(10);
-    report.candidates = {
-      selected: document.querySelector('[role="tab"][aria-selected="true"]')?.id || "",
-      hasFilter: Boolean(filterInput),
-      filterValue: filterInput?.value || "",
-      countClampedTo: clampedCount,
-      countSubmittedAs: countInput?.value || "",
-      hasCandidate: /ALPHA_RT_001/.test(panelText()),
-      hasVirtualTable: Boolean(document.querySelector('[data-virtualized-candidate-table="true"]')),
-      largeListStatus: initialStatus,
-      largeListAriaRowCount,
-      renderedInitialRows: initialRowIndexes.length,
-      renderedAfterScrollRows: scrolledRowIndexes.length,
-      rowWindowChangedAfterScroll: Boolean(initialRowIndexes[0] && scrolledRowIndexes[0] && scrolledRowIndexes[0] > initialRowIndexes[0]),
-      filterSanitized,
-      largeListLoadMs,
-      scrollInteractionMs,
-      generateClicked: Boolean(generateButton),
-    };
-
-    const queueViews = [
-      ["pending_backtest", /Waiting for backtest/i, 1000],
-      ["running_backtest", /Backtesting/i, 1],
-      ["backtest_rework", /Backtest rework/i, 1],
-      ["passed", /Passed candidates/i, 1],
-      ["submittable", /Ready to submit/i, 1],
-      ["submitted", /Submitted candidates/i, 1],
-      ["failed", /Blocked candidates/i, 1],
-    ];
-    report.queueViews = [];
-    for (const [id, titlePattern, expectedTotal] of queueViews) {
-      await clickTab(id);
-      await waitUntil(() => titlePattern.test(panelText()), 80);
-      await waitUntil(() => parseShowingStatus()?.total === expectedTotal || panelText().includes("No candidates"), 120);
-      report.queueViews.push({
-        id,
-        selected: document.querySelector('[role="tab"][aria-selected="true"]')?.id || "",
-        titleVisible: titlePattern.test(panelText()),
-        status: parseShowingStatus(),
-        hasVirtualTable: Boolean(document.querySelector('[data-virtualized-candidate-table="true"]')),
-      });
-    }
-
-    const snapshotViews = [
-      ["cloud", /Cloud data/i, /ALPHA_CLOUD_1/],
-      ["lifecycle", /Lifecycle/i, /Ready for submission/],
-      ["research_memory", /Research memory/i, /momentum/],
-      ["research_knowledge", /Knowledge base/i, /Promote stable momentum/],
-      ["research_observability", /Observability/i, /duplicate_expression_history/],
-      ["prompt_runs", /Prompt runs/i, /prompt_digest_1/],
-      ["sqlite_indexes", /SQLite indexes/i, /record_index/],
-      ["robustness", /Robustness/i, /ALPHA_RT_001/],
-    ];
-    report.snapshotViews = [];
-    for (const [id, titlePattern, rowPattern] of snapshotViews) {
-      await clickTab(id);
-      await waitUntil(() => titlePattern.test(panelText()), 80);
-      await waitUntil(() => rowPattern.test(panelText()) || /rows/.test(panelText()), 120);
-      report.snapshotViews.push({
-        id,
-        selected: document.querySelector('[role="tab"][aria-selected="true"]')?.id || "",
-        titleVisible: titlePattern.test(panelText()),
-        rowVisible: rowPattern.test(panelText()),
-        hasTable: Boolean(document.querySelector('table[aria-label$=" rows"]')),
-      });
-    }
-
-    await clickTab("candidates");
-    const refreshedFilterInput = document.querySelector('input[aria-label="Filter candidates"]');
-    if (refreshedFilterInput) setValue(refreshedFilterInput, "ALPHA_RT_001");
-    await waitUntil(() => /ALPHA_RT_001/.test(panelText()), 80);
-    const scoreButton = buttonByText("Score");
-    if (scoreButton) scoreButton.click();
-    await waitFrames(12);
-    report.scoring = {
-      selected: document.querySelector('[role="tab"][aria-selected="true"]')?.id || "",
-      hasAlphaExpression: /Alpha Expression/.test(panelText()),
-      hasCandidateId: /ALPHA_RT_001/.test(panelText()),
-      hasScorecard: /Scorecard/.test(panelText()),
-    };
-
-    await clickTab("submission");
-    const alphaInput = document.querySelector('input[placeholder^="e.g. alpha"]');
-    if (alphaInput) setValue(alphaInput, "BAD ID!");
-    await waitFrames(4);
-    const invalidMessage = panelText();
-    if (alphaInput) setValue(alphaInput, "ALPHA_RT_001");
-    await waitFrames(4);
-    const preCheck = buttonByText("Pre-Submit Check");
-    const validAlphaAccepted = Boolean(preCheck && !preCheck.disabled);
-    if (preCheck) preCheck.click();
-    await waitUntil(() => /Pre-submit check completed|mock_check/.test(panelText()) || hasToast("Check completed for ALPHA_RT_001"));
-    const preCheckCompleted = /Pre-submit check completed|mock_check/.test(panelText()) || hasToast("Check completed for ALPHA_RT_001");
-    const submitButton = buttonByText("Submit Alpha");
-    if (submitButton) submitButton.click();
-    await waitUntil(() => hasToast("Confirm submission before proceeding"), 40);
-    const submitWithoutConfirmWarned = hasToast("Confirm submission before proceeding");
-    const confirmCheckbox = document.querySelector('input[type="checkbox"][aria-describedby="confirm-submit-help"]');
-    if (confirmCheckbox) confirmCheckbox.click();
-    await waitFrames(12);
-    const confirmedSubmitButton = buttonByText("Submit Alpha");
-    if (confirmedSubmitButton) confirmedSubmitButton.click();
-    await waitUntil(() => hasToast("submitted successfully"), 120);
-    const receiptAction = toastAction("View receipt");
-    const receiptActionAvailable = Boolean(receiptAction);
-    if (receiptAction) receiptAction.click();
-    await waitFrames(12);
-    const receiptRegion = Array.from(document.querySelectorAll('[role="status"]'))
-      .find((node) => /Latest submission receipt/.test(node.textContent || ""));
-    await waitUntil(() => Boolean(receiptRegion && document.activeElement && receiptRegion.contains(document.activeElement)), 60);
-    const receiptFocused = Boolean(receiptRegion && document.activeElement && receiptRegion.contains(document.activeElement));
-    const receiptRegionExists = Boolean(receiptRegion);
-    const receiptActiveElementText = (document.activeElement?.textContent || "").slice(0, 160);
-    const receiptActiveElementTag = document.activeElement?.tagName || "";
-
-    const candidateJson = document.querySelector('textarea[aria-describedby="candidate-json-validation"]');
-    const checkJsonValidation = async (name, value, expectedText) => {
-      setValue(candidateJson, value);
-      const rejected = await waitUntil(() => panelText().includes(expectedText), 50);
-      return {
-        name,
-        hasControl: Boolean(candidateJson),
-        rejected,
-        batchCheckDisabled: Boolean(buttonByText("Batch Check")?.disabled),
-        batchSubmitDisabled: Boolean(buttonByText("Batch Submit")?.disabled),
-      };
-    };
-    const jsonValidationChecks = [];
-    jsonValidationChecks.push(await checkJsonValidation("invalid-json", "{", "Candidate JSON is not valid JSON."));
-    jsonValidationChecks.push(await checkJsonValidation("non-array", "{}", "Candidate JSON must be an array."));
-    jsonValidationChecks.push(await checkJsonValidation("non-object-row", "[1]", "Every candidate row must be an object."));
-    jsonValidationChecks.push(await checkJsonValidation("invalid-alpha-id", '[{"alpha_id":"BAD ID!"}]', "Candidate row 1 alpha_id: Alpha ID may only contain"));
-    setValue(candidateJson, '[{"simulation_id":"SIM_ONLY_001","expression":"rank(close)"}]');
-    await waitFrames(8);
-    const batchSubmitBlockedWithoutAlpha = Boolean(buttonByText("Batch Submit")?.disabled) && /At least one candidate row/.test(panelText());
-    setValue(candidateJson, '[{"official_alpha_id":"OFFICIAL_RT_001","simulation_id":"SIM_RT_001","expression":"rank(close)"}]');
-    await waitUntil(() => Boolean(buttonByText("Batch Check") && !buttonByText("Batch Check").disabled), 50);
-    const batchCheck = buttonByText("Batch Check");
-    const batchSubmit = buttonByText("Batch Submit");
-    if (batchCheck) batchCheck.click();
-    await waitUntil(() => hasToast("Batch check started") || hasToast("Batch check completed"), 80);
-    if (batchSubmit) batchSubmit.click();
-    await waitUntil(() => hasToast("Batch submission completed"), 120);
-    const batchStatusAction = toastAction("View status");
-    if (batchStatusAction) batchStatusAction.click();
-    await waitUntil(() => Boolean(document.activeElement && (document.activeElement.textContent || "").includes("Batch submission")), 60);
-    const batchStatusFocused = Boolean(document.activeElement && (document.activeElement.textContent || "").includes("Batch submission"));
-
-    report.submission = {
-      selected: document.querySelector('[role="tab"][aria-selected="true"]')?.id || "",
-      hasAlphaInput: Boolean(alphaInput),
-      invalidAlphaRejected: /Alpha ID may only contain/.test(invalidMessage),
-      validAlphaAccepted,
-      hasConfirmCheckbox: Boolean(confirmCheckbox),
-      preCheckCompleted,
-      submitWithoutConfirmWarned,
-      receiptActionAvailable,
-      receiptRegionExists,
-      receiptActiveElementText,
-      receiptActiveElementTag,
-      submissionActionFocusedReceipt: receiptFocused,
-      jsonValidationChecks,
-      batchSubmitBlockedWithoutAlpha,
-      batchCheckClicked: Boolean(batchCheck),
-      batchSubmitClicked: Boolean(batchSubmit),
-      batchSubmissionActionFocusedStatus: batchStatusFocused,
-    };
-
-    await clickTab("config");
-    await waitFrames(12);
-    await waitUntil(() => Boolean(labelControl("Dataset")), 80);
-    const datasetInput = labelControl("Dataset");
-    const initialSaveDisabled = Boolean(buttonByText("Save")?.disabled);
-    const exportProbe = { objectUrlCreated: false, revoked: false, downloaded: "", blobType: "", toastShown: false, error: "" };
-    const originalCreateObjectURL = URL.createObjectURL;
-    const originalRevokeObjectURL = URL.revokeObjectURL;
-    const originalAnchorClick = HTMLAnchorElement.prototype.click;
-    try {
-      URL.createObjectURL = (blob) => {
-        exportProbe.objectUrlCreated = true;
-        exportProbe.blobType = blob?.type || "";
-        return "blob:react-config-export";
-      };
-      URL.revokeObjectURL = (url) => {
-        exportProbe.revoked = url === "blob:react-config-export";
-      };
-      HTMLAnchorElement.prototype.click = function click() {
-        exportProbe.downloaded = this.download || "";
-      };
-      const exportButton = buttonByText("Export");
-      if (exportButton) exportButton.click();
-      await waitUntil(() => hasToast("Configuration exported"), 40);
-      exportProbe.toastShown = hasToast("Configuration exported");
-    } catch (error) {
-      exportProbe.error = String(error);
-    } finally {
-      URL.createObjectURL = originalCreateObjectURL;
-      URL.revokeObjectURL = originalRevokeObjectURL;
-      HTMLAnchorElement.prototype.click = originalAnchorClick;
-    }
-
-    const importInput = document.querySelector('input[type="file"][aria-label="Import configuration JSON"]');
-    await setJsonFile(importInput, "invalid-config.json", {
-      settings: { region: "MARS", universe: "TOP3000", delay: 1, neutralization: "SUBINDUSTRY", dataset: "fundamental_v0" },
-    });
-    await waitUntil(() => hasToast("Region is not supported."), 50);
-    const invalidImportRejected = hasToast("Region is not supported.");
-    const validImportApplied = await setJsonFile(importInput, "valid-config.json", {
-      environment: "production",
-      autoSubmit: true,
-      settings: {
-        region: "CHN",
-        universe: "TOP1000",
-        delay: 0,
-        decay: 6,
-        neutralization: "MARKET",
-        dataset: "imported_v2",
+    await waitUntil(() => /生产流程/.test(text()) && /系统配置/.test(text()) && /云端快照/.test(text()), 160);
+    const cardTitles = ["候选管理", "回测监控", "质量门禁", "提交管理", "断点历史", "系统配置", "云端快照"];
+    const report = {
+      home: {
+        hasLocalSession: /本地会话/.test(text()),
+        hasTopSettings: Boolean(buttonByAria("打开系统配置")),
+        cardTitlesVisible: cardTitles.filter((title) => text().includes(title)),
+        hasConfigCardAction: Boolean(buttonByText("系统设置")),
+        hasCheckpointCardAction: Boolean(buttonByText("查看历史")),
+        hasCloudCardAction: Boolean(buttonByText("查看快照")),
+        noMisleadingOnline: !/在线/.test(text()),
+        sample: text().slice(0, 300),
       },
-      candidates: 33,
-      cycles: 12,
-      poolSize: 44,
-      backtestBatchSize: 5,
-      requireCloudSync: false,
-      minSharpe: 1.11,
-      minFitness: 1.02,
-      minTurnover: 0.02,
-      platformMaxTurnover: 0.61,
-      maxSelfCorrelation: 0.55,
-      maxWeightConcentration: 0.09,
-    });
-    await waitUntil(() => controlValue("Dataset") === "imported_v2" && hasToast("Configuration imported"), 80);
-    const validImportDatasetApplied = controlValue("Dataset") === "imported_v2";
-
-    const selectChanges = [
-      ["Region", "USA"],
-      ["Universe", "TOP500"],
-      ["Delay", "1"],
-      ["Neutralization", "SECTOR"],
-    ].map(([label, value]) => {
-      const control = labelControl(label);
-      setValue(control, value);
-      return { label, hasControl: Boolean(control), value: control?.value || "" };
-    });
-    await waitFrames(6);
-    const cloudBefore = controlChecked("Cloud Sync Required");
-    setChecked(labelControl("Cloud Sync Required"), !cloudBefore);
-    const autoSubmitBefore = controlChecked("Auto Submit");
-    setChecked(labelControl("Auto Submit"), !autoSubmitBefore);
-    await waitFrames(6);
-
-    const checkConfigInvalid = async (label, invalidValue, validValue, expectedText) => {
-      const control = labelControl(label);
-      setValue(control, invalidValue);
-      const rejected = await waitUntil(() => panelText().includes(expectedText), 50);
-      const saveDisabled = Boolean(buttonByText("Save")?.disabled);
-      setValue(control, validValue);
-      await waitUntil(() => !panelText().includes(expectedText), 50);
-      return { label, hasControl: Boolean(control), rejected, saveDisabled };
     };
-    const validationChecks = [];
-    validationChecks.push(await checkConfigInvalid("Dataset", "bad value!", "fundamental_v1", "Dataset may only contain"));
-    validationChecks.push(await checkConfigInvalid("Decay", "-1", "6", "Decay must be a non-negative integer."));
-    validationChecks.push(await checkConfigInvalid("Max Candidates/Cycle", "0", "33", "Max candidates per cycle must be between 1 and 1000."));
-    validationChecks.push(await checkConfigInvalid("Max Cycles", "0", "12", "Max cycles must be between 1 and 10000."));
-    validationChecks.push(await checkConfigInvalid("Pool Size", "0", "44", "Pool size must be between 1 and 5000."));
-    validationChecks.push(await checkConfigInvalid("Backtest Batch Size", "101", "5", "Backtest batch size must be between 1 and 100."));
-    validationChecks.push(await checkConfigInvalid("Min Sharpe", "-0.1", "1.11", "Min Sharpe must be a non-negative number."));
-    validationChecks.push(await checkConfigInvalid("Min Fitness", "-0.1", "1.02", "Min Fitness must be a non-negative number."));
-    validationChecks.push(await checkConfigInvalid("Min Turnover", "-0.1", "0.02", "Min Turnover must be between 0 and 1."));
-    validationChecks.push(await checkConfigInvalid("Max Turnover", "1.2", "0.61", "Max Turnover must be between 0 and 1."));
-    validationChecks.push(await checkConfigInvalid("Max Self Correlation", "2", "0.55", "Max Self Correlation must be between 0 and 1."));
-    validationChecks.push(await checkConfigInvalid("Max Weight Concentration", "2", "0.09", "Max Weight Concentration must be between 0 and 1."));
-    setValue(labelControl("Min Turnover"), "0.8");
-    setValue(labelControl("Max Turnover"), "0.2");
-    const turnoverRelationRejected = await waitUntil(() => panelText().includes("Min turnover cannot exceed max turnover."), 50);
-    const turnoverRelationSaveDisabled = Boolean(buttonByText("Save")?.disabled);
-    setValue(labelControl("Min Turnover"), "0.02");
-    setValue(labelControl("Max Turnover"), "0.61");
-    await waitUntil(() => !panelText().includes("Min turnover cannot exceed max turnover."), 50);
-    if (datasetInput) setValue(datasetInput, "fundamental_v1");
-    await waitFrames(4);
-    const saveEnabledAfterValidEdit = Boolean(buttonByText("Save") && !buttonByText("Save").disabled);
-    const saveButton = buttonByText("Save");
-    if (saveButton) saveButton.click();
-    await waitUntil(() => hasToast("Configuration saved"), 80);
-    report.config = {
-      selected: document.querySelector('[role="tab"][aria-selected="true"]')?.id || "",
+
+    buttonByAria("打开系统配置")?.click();
+    await waitUntil(() => /配置管理/.test(text()) && /BRAIN 设置/.test(text()) && /预算控制/.test(text()), 160);
+    const connectionButton = buttonByText("测试 BRAIN 连接");
+    const connectionEnabled = Boolean(connectionButton && !connectionButton.disabled);
+    if (connectionEnabled) connectionButton.click();
+    await waitUntil(() => /连接正常|BRAIN 连接测试通过/.test(text()), 120);
+    const datasetInput = labelControl("数据集");
+    if (datasetInput) setValue(datasetInput, "fundamental6");
+    await waitFrames(8);
+    const saveButton = buttonByText("保存");
+    const saveEnabledBeforeClick = Boolean(saveButton && !saveButton.disabled);
+    if (saveEnabledBeforeClick) saveButton.click();
+    await waitUntil(() => /配置已保存/.test(text()) || Boolean(saveButton?.disabled), 80);
+    report.configTopShortcut = {
+      reached: /配置管理/.test(text()),
+      hasBrainSettings: /BRAIN 设置/.test(text()),
+      hasBudget: /预算控制/.test(text()),
+      hasQualityThresholds: /质量阈值/.test(text()),
+      hasEnvironmentSettings: /环境设置/.test(text()),
+      hasConnectionSection: /BRAIN 连接/.test(text()),
+      connectionClicked: connectionEnabled,
+      connectionOk: /连接正常/.test(text()),
+      hasLocalSessionBadge: /本地会话/.test(text()),
       hasDatasetInput: Boolean(datasetInput),
-      initialSaveDisabled,
-      invalidDatasetRejected: validationChecks.some((item) => item.label === "Dataset" && item.rejected),
-      validDatasetEnablesSave: saveEnabledAfterValidEdit,
-      saveClicked: Boolean(saveButton),
-      saveToastShown: hasToast("Configuration saved"),
-      hasImportExport: Boolean(buttonByText("Import")) && Boolean(buttonByText("Export")),
-      exportProbe,
-      invalidImportRejected,
-      validImportApplied: Boolean(validImportApplied && validImportDatasetApplied),
-      importToastShown: hasToast("Configuration imported"),
-      selectChanges,
-      checkboxesToggled: controlChecked("Cloud Sync Required") !== cloudBefore && controlChecked("Auto Submit") !== autoSubmitBefore,
-      validationChecks,
-      turnoverRelation: { rejected: turnoverRelationRejected, saveDisabled: turnoverRelationSaveDisabled },
+      saveClicked: saveEnabledBeforeClick,
+      saveToastShown: /配置已保存/.test(text()),
     };
+
+    buttonByAria("返回状态卡")?.click();
+    await waitUntil(() => /生产流程/.test(text()) && /查看快照/.test(text()), 120);
+    report.returnedAfterConfig = /生产流程/.test(text());
+
+    buttonByText("查看快照")?.click();
+    await waitUntil(() => /云端数据/.test(text()) && /ALPHA_CLOUD_1/.test(text()), 160);
+    const cloudFilter = document.querySelector('input[aria-label="筛选 云端数据"]');
+    if (cloudFilter) setValue(cloudFilter, "ALPHA_CLOUD_2");
+    await waitUntil(() => /1 \\/ 2 行/.test(text()) || /ALPHA_CLOUD_2/.test(text()), 80);
+    report.cloud = {
+      reached: /云端数据/.test(text()),
+      hasRefresh: Boolean(buttonByText("刷新")),
+      hasMetrics: /返回数量/.test(text()) && /已提交/.test(text()) && /已通过/.test(text()),
+      hasTable: Boolean(document.querySelector('table[aria-label="云端数据表格"]')),
+      hasFirstAlpha: /ALPHA_CLOUD_1|ALPHA_CLOUD_2/.test(text()),
+      hasFilter: Boolean(cloudFilter),
+      filterWorked: /ALPHA_CLOUD_2/.test(text()) && !/ALPHA_CLOUD_1/.test(text()),
+    };
+
+    buttonByAria("返回状态卡")?.click();
+    await waitUntil(() => /生产流程/.test(text()) && /查看历史/.test(text()), 120);
+    buttonByText("查看历史")?.click();
+    await waitUntil(() => /断点历史/.test(text()) && /run_resume/.test(text()), 160);
+    report.checkpoint = {
+      reached: /断点历史/.test(text()),
+      hasMetrics: /断点数量/.test(text()) && /历史记录/.test(text()) && /可续跑/.test(text()),
+      hasTable: Boolean(document.querySelector('table[aria-label="断点历史表格"]')),
+      hasResumeRun: /run_resume/.test(text()),
+      hasComparison: /comparison/.test(text()),
+    };
+
+    buttonByAria("返回状态卡")?.click();
+    await waitUntil(() => /生产流程/.test(text()) && /系统设置/.test(text()), 120);
+    buttonByText("系统设置")?.click();
+    await waitUntil(() => /配置管理/.test(text()) && /BRAIN 设置/.test(text()), 120);
+    report.configCard = {
+      reached: /配置管理/.test(text()),
+      activeTitle: /系统配置/.test(text()),
+      hasBrainSettings: /BRAIN 设置/.test(text()),
+    };
+
     return report;
   })()`;
 }
@@ -1055,11 +567,10 @@ function validateMetrics(metrics, session) {
   if (!metrics.rootExists) failures.push("missing React root");
   if (metrics.rootChildCount < 1) failures.push("React root did not render children");
   if (!metrics.hasHeading) failures.push("missing app heading");
-  if (!metrics.hasVersionLabel) failures.push("missing app version label");
-  if (metrics.roles.tablist !== 1) failures.push("expected one tablist");
-  if (metrics.roles.tab !== 20) failures.push("expected twenty React tabs");
-  if (metrics.roles.selectedTabs !== 1) failures.push("expected one selected tab");
-  if (metrics.roles.tabpanel !== 1) failures.push("expected one tabpanel");
+  if (!metrics.hasLocalSession) failures.push("local session badge is not visible");
+  if (!metrics.hasSettingsShortcut) failures.push("top-level settings shortcut is missing");
+  if ((metrics.visibleCardTitles || []).length !== 7) failures.push("state-card navigation did not render all seven cards");
+  if (metrics.misleadingOnlineLabel) failures.push("page still shows the misleading online label");
   if (!metrics.meta.csrf || !metrics.meta.stream) failures.push("missing CSRF or stream meta token placeholder");
   if (metrics.resources.length < 2) failures.push("expected JS and CSS assets to load");
   if (metrics.pageOverflowX) failures.push("page overflows horizontally");
@@ -1073,133 +584,44 @@ function validateMetrics(metrics, session) {
 
 function validateInteractions(interactions, session) {
   const failures = [];
-  const posted = (path) => session.mockRequests.some((request) => request.method === "POST" && request.path === path);
-  const postedPayload = (path) => {
-    const request = [...session.mockRequests].reverse().find((entry) => entry.method === "POST" && entry.path === path && entry.body);
-    if (!request) return null;
-    try {
-      return JSON.parse(request.body);
-    } catch {
-      return null;
-    }
-  };
-  if (!interactions.dashboard?.hasCloudKpi || !interactions.dashboard?.hasMemoryKpi) {
-    failures.push("dashboard did not render mocked KPI data");
+  const requested = (method, pathname) => session.mockRequests.some((request) => request.method === method && request.path === pathname);
+  const home = interactions.home || {};
+  if (!home.hasLocalSession || !home.hasTopSettings) failures.push("home shell does not expose local session and settings shortcut");
+  if ((home.cardTitlesVisible || []).length !== 7) failures.push("home state-card set is incomplete");
+  if (!home.hasConfigCardAction || !home.hasCheckpointCardAction || !home.hasCloudCardAction) {
+    failures.push("config/checkpoint/cloud card actions are not discoverable");
   }
-  if (interactions.dashboard?.hasDashboardError) failures.push("dashboard rendered an unexpected data error");
-  if (!interactions.candidates?.hasFilter || !interactions.candidates?.hasCandidate) {
-    failures.push("candidate tab did not render filterable candidate data");
+  if (!home.noMisleadingOnline) failures.push("home still implies a remote online login state");
+
+  const configTop = interactions.configTopShortcut || {};
+  if (!configTop.reached || !configTop.hasBrainSettings || !configTop.hasBudget || !configTop.hasQualityThresholds) {
+    failures.push("top settings shortcut did not open the complete config panel");
   }
-  if (interactions.candidates?.countClampedTo !== "100") failures.push("candidate generate count did not clamp to 100");
-  if (interactions.candidates?.countSubmittedAs !== "7" || !posted("/api/generate_candidates")) {
-    failures.push("candidate generate action did not submit the edited count flow");
+  if (!configTop.hasConnectionSection || !configTop.connectionClicked || !configTop.connectionOk || !requested("POST", "/api/test_connection")) {
+    failures.push("config panel did not expose and complete the BRAIN connection test");
   }
-  const generatePayload = postedPayload("/api/generate_candidates");
-  if (!generatePayload || generatePayload.count !== 7) failures.push("candidate generate POST body did not include count 7");
-  if (!interactions.candidates?.hasVirtualTable) failures.push("candidate table virtualization marker is missing");
-  const largeListTotal = interactions.candidates?.largeListStatus?.total || 0;
-  if (largeListTotal < 1000) {
-    failures.push("candidate browser smoke did not load a 1000+ row list");
-  }
-  if ((interactions.candidates?.largeListAriaRowCount || 0) < 1001) {
-    failures.push("candidate table did not expose large-list aria row count");
-  }
-  if (
-    !interactions.candidates?.renderedInitialRows ||
-    interactions.candidates.renderedInitialRows >= largeListTotal
-  ) {
-    failures.push("candidate table rendered the whole large list instead of a virtual window");
-  }
-  if (!interactions.candidates?.rowWindowChangedAfterScroll) {
-    failures.push("candidate virtual window did not move after scrolling");
-  }
-  if (!interactions.candidates?.filterSanitized) failures.push("candidate filter did not sanitize control characters or length");
-  if ((interactions.candidates?.largeListLoadMs || 0) > 8000) failures.push("candidate large-list browser load exceeded 8s");
-  if ((interactions.candidates?.scrollInteractionMs || 0) > 2000) failures.push("candidate virtual scroll interaction exceeded 2s");
-  const queueExpectations = {
-    pending_backtest: 1000,
-    running_backtest: 1,
-    backtest_rework: 1,
-    passed: 1,
-    submittable: 1,
-    submitted: 1,
-    failed: 1,
-  };
-  for (const [id, expectedTotal] of Object.entries(queueExpectations)) {
-    const view = (interactions.queueViews || []).find((item) => item.id === id);
-    if (!view?.titleVisible || view?.selected !== `app-tab-${id}` || view?.status?.total !== expectedTotal || !view?.hasVirtualTable) {
-      failures.push(`candidate queue view ${id} did not render the expected filtered rows`);
-    }
-  }
-  if (interactions.snapshotViews?.length !== 8) {
-    failures.push("snapshot tabs did not render the expected eight data views");
-  }
-  for (const item of interactions.snapshotViews || []) {
-    if (!item.titleVisible || item.selected !== `app-tab-${item.id}` || !item.hasTable || !item.rowVisible) {
-      failures.push(`snapshot view ${item.id} did not render the expected snapshot data`);
-    }
-  }
-  if (!interactions.scoring?.hasAlphaExpression || !interactions.scoring?.hasCandidateId || !interactions.scoring?.hasScorecard) {
-    failures.push("score action did not open candidate scoring details");
-  }
-  if (!interactions.submission?.invalidAlphaRejected || !interactions.submission?.validAlphaAccepted) {
-    failures.push("submission alpha-id validation did not behave as expected");
-  }
-  if (!interactions.submission?.hasConfirmCheckbox) failures.push("submission confirmation checkbox is missing");
-  if (!interactions.submission?.preCheckCompleted || !posted("/api/check")) {
-    failures.push("submission pre-check did not complete through the browser UI");
-  }
-  if (!interactions.submission?.submitWithoutConfirmWarned) failures.push("submission did not warn before unconfirmed submit");
-  if (!interactions.submission?.submissionActionFocusedReceipt || !posted("/api/submit")) {
-    failures.push("submission success toast action did not focus the receipt");
-  }
-  if (!interactions.submission?.jsonValidationChecks?.every((item) => item.hasControl && item.rejected && item.batchCheckDisabled && item.batchSubmitDisabled)) {
-    failures.push("submission candidate JSON browser validation did not reject every malformed case");
-  }
-  if (!interactions.submission?.batchSubmitBlockedWithoutAlpha) {
-    failures.push("batch submit did not require alpha_id or official_alpha_id");
-  }
-  if (!interactions.submission?.batchCheckClicked || !posted("/api/check_batch")) {
-    failures.push("batch check browser flow did not post to the API");
-  }
-  if (!interactions.submission?.batchSubmitClicked || !posted("/api/submit_batch")) {
-    failures.push("batch submit browser flow did not post to the API");
-  }
-  if (!interactions.submission?.batchSubmissionActionFocusedStatus) {
-    failures.push("batch submission toast action did not focus the status panel");
-  }
-  const batchSubmitPayload = postedPayload("/api/submit_batch");
-  if (!batchSubmitPayload?.alpha_ids?.includes("OFFICIAL_RT_001")) {
-    failures.push("batch submit POST body did not include the validated official alpha ID");
-  }
-  if (!interactions.config?.initialSaveDisabled || !interactions.config?.invalidDatasetRejected || !interactions.config?.validDatasetEnablesSave) {
-    failures.push("config edit validation/save state did not behave as expected");
-  }
-  if (!interactions.config?.saveToastShown || !posted("/api/config")) {
+  if (!configTop.hasDatasetInput) failures.push("config panel did not expose dataset settings");
+  if (!configTop.saveClicked || !configTop.saveToastShown || !requested("POST", "/api/config")) {
     failures.push("config save flow did not complete through the browser UI");
   }
-  if (!interactions.config?.hasImportExport) failures.push("config import/export controls are missing");
-  if (
-    !interactions.config?.exportProbe?.objectUrlCreated ||
-    !interactions.config?.exportProbe?.revoked ||
-    !/^brain-alpha-config-\d{4}-\d{2}-\d{2}\.json$/.test(interactions.config.exportProbe.downloaded || "") ||
-    interactions.config.exportProbe.blobType !== "application/json" ||
-    !interactions.config.exportProbe.toastShown
-  ) {
-    failures.push("config export browser flow did not create a downloadable JSON file");
+  if (!interactions.returnedAfterConfig) failures.push("back button did not return from config to state cards");
+
+  const cloud = interactions.cloud || {};
+  if (!cloud.reached || !cloud.hasMetrics || !cloud.hasTable || !cloud.hasFirstAlpha) {
+    failures.push("cloud snapshot card did not render mocked cloud data");
   }
-  if (!interactions.config?.invalidImportRejected || !interactions.config?.validImportApplied || !interactions.config?.importToastShown) {
-    failures.push("config import browser flow did not validate and apply JSON files");
+  if (!cloud.hasFilter || !cloud.filterWorked) failures.push("cloud snapshot filter did not narrow mocked rows");
+
+  const checkpoint = interactions.checkpoint || {};
+  if (!checkpoint.reached || !checkpoint.hasMetrics || !checkpoint.hasTable || !checkpoint.hasResumeRun || !checkpoint.hasComparison) {
+    failures.push("checkpoint history card did not render mocked resume and history data");
   }
-  if (!interactions.config?.selectChanges?.every((item) => item.hasControl && item.value)) {
-    failures.push("config select controls did not accept valid browser edits");
-  }
-  if (!interactions.config?.checkboxesToggled) failures.push("config checkbox controls did not toggle in the browser");
-  if (!interactions.config?.validationChecks?.every((item) => item.hasControl && item.rejected && item.saveDisabled)) {
-    failures.push("config browser validation did not reject every invalid editable field");
-  }
-  if (!interactions.config?.turnoverRelation?.rejected || !interactions.config?.turnoverRelation?.saveDisabled) {
-    failures.push("config turnover cross-field validation did not run in the browser");
+
+  const configCard = interactions.configCard || {};
+  if (!configCard.reached || !configCard.hasBrainSettings) failures.push("state-card config entry did not open config");
+
+  for (const endpoint of ["/api/candidates", "/api/backtest_slots", "/api/submit_readiness", "/api/checkpoint_status", "/api/config", "/api/config_schema", "/api/snapshot/cloud"]) {
+    if (!requested("GET", endpoint)) failures.push(`expected mocked GET ${endpoint}`);
   }
   return failures;
 }
@@ -1232,18 +654,20 @@ async function runViewport(session, url, viewport, outputDir) {
   await session.send("Page.navigate", { url: navigationUrl.toString() });
   await loaded;
   await session.evaluate("new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))");
+
   const metrics = await session.evaluate(metricsExpression());
+  const homeScreenshotPath = path.join(outputDir, `react-artifact-smoke-${viewport.name}-home.png`);
+  await session.captureScreenshot(homeScreenshotPath);
   const interactions = await session.evaluate(interactionExpression());
-  const screenshot = await session.send("Page.captureScreenshot", { format: "png", captureBeyondViewport: false });
-  const screenshotPath = path.join(outputDir, `react-artifact-smoke-${viewport.name}.png`);
-  fs.writeFileSync(screenshotPath, Buffer.from(screenshot.data, "base64"));
+  const finalScreenshotPath = path.join(outputDir, `react-artifact-smoke-${viewport.name}-final.png`);
+  await session.captureScreenshot(finalScreenshotPath);
 
   const failures = [...validateMetrics(metrics, session), ...validateInteractions(interactions, session)];
   return {
     name: viewport.name,
     ok: failures.length === 0,
     failures,
-    screenshot: screenshotPath,
+    screenshots: { home: homeScreenshotPath, final: finalScreenshotPath },
     metrics,
     interactions,
     consoleMessages: [...session.consoleMessages],
@@ -1285,7 +709,7 @@ async function main() {
     }
     const result = {
       ok: runs.every((run) => run.ok),
-      schema_version: "browser_react_artifact_smoke.v1",
+      schema_version: "browser_react_artifact_smoke.v2",
       url,
       devtoolsUrl,
       generated_at: new Date().toISOString(),

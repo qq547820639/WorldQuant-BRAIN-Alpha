@@ -136,8 +136,14 @@ def write_run_config(config: RunConfig, path: str | Path | None = None) -> Path:
     validate_run_config(config)
     config_path = Path(path) if path else default_run_config_path()
     config_path.parent.mkdir(parents=True, exist_ok=True)
+    # Sanitize credentials before persisting — never write secrets to disk
+    data = config.to_dict()
+    if isinstance(data.get("credentials"), dict):
+        data["credentials"]["username"] = ""
+        data["credentials"]["password"] = ""
+        data["credentials"]["token"] = ""
     config_path.write_text(
-        json.dumps(config.to_dict(), ensure_ascii=False, indent=2) + "\n",
+        json.dumps(data, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )
     return config_path

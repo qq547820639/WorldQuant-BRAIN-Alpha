@@ -15,25 +15,27 @@ def _source(path: Path) -> str:
 def test_app_shell_uses_mobile_safe_spacing_and_horizontal_tab_scroll():
     source = _source(REACT_SRC / "App.tsx")
 
-    assert 'className="min-h-screen min-w-0 flex flex-col"' in source
-    assert "px-4 py-3 sm:px-6 flex flex-wrap items-center justify-between gap-3" in source
-    assert 'className="flex min-w-0 items-center gap-3"' in source
-    assert 'className="truncate text-xs text-muted"' in source
-    assert "px-4 sm:px-6 flex gap-1 shrink-0 overflow-x-auto" in source
-    assert "shrink-0 px-3 py-2.5 sm:px-4" in source
-    assert 'className="flex-1 min-w-0 p-4 sm:p-6 overflow-auto"' in source
+    assert "min-h-[100dvh] min-w-0 flex flex-col bg-gray-950" in source
+    assert "px-4 py-4 sm:px-6 lg:px-8 shrink-0" in source
+    assert "mx-auto flex max-w-7xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between" in source
+    assert "flex w-full items-center justify-between gap-3 sm:w-auto sm:justify-end" in source
+    assert "text-xl font-bold text-white tracking-tight" in source
+    assert 'aria-label="返回状态卡"' in source
+    assert 'aria-label="打开系统配置"' in source
+    assert "flex-1 min-w-0 p-4 sm:p-6 lg:p-8 overflow-auto" in source
 
 
 def test_candidate_toolbar_wraps_and_keeps_filter_input_shrinkable():
     source = _source(COMPONENTS / "CandidateTable.tsx")
 
-    assert 'className="min-w-0 space-y-4"' in source
+    assert 'className="min-w-0 space-y-4 animate-fade-in"' in source
     assert 'className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center"' in source
     assert "w-full min-w-0 bg-gray-800" in source
     assert "sm:flex-1" in source
     assert 'className="card min-w-0 overflow-hidden p-0"' in source
-    assert 'className="max-w-full overflow-auto"' in source
-    assert 'className="min-w-[760px] w-full text-sm"' in source
+    assert 'aria-label="候选结果移动列表"' in source
+    assert 'className="hidden max-w-full overflow-auto md:block"' in source
+    assert 'className="min-w-[1280px] w-full text-sm"' in source
 
 
 def test_config_actions_and_toasts_fit_narrow_viewports():
@@ -45,8 +47,8 @@ def test_config_actions_and_toasts_fit_narrow_viewports():
     assert 'className="card min-w-0"' in config
     assert "grid grid-cols-1 gap-x-5 gap-y-3 mt-2 md:grid-cols-2" in config
     assert "w-full min-w-0 bg-gray-800" in config
-    assert "fixed bottom-4 left-4 right-4" in toast
-    assert "sm:left-auto sm:max-w-sm" in toast
+    assert "fixed left-4 right-4 top-4" in toast
+    assert "sm:bottom-4 sm:left-auto sm:top-auto sm:max-w-sm" in toast
 
 
 def test_operational_panels_wrap_on_narrow_viewports():
@@ -67,3 +69,5 @@ def test_operational_panels_wrap_on_narrow_viewports():
     assert 'className="min-w-0 space-y-4 animate-fade-in"' in snapshot
     assert 'className="grid grid-cols-2 gap-3 lg:grid-cols-4"' in snapshot
     assert 'className="card min-w-0 overflow-hidden p-0"' in snapshot
+    assert 'aria-label={`${config.title}移动列表`}' in snapshot
+    assert 'className="hidden max-w-full overflow-auto md:block"' in snapshot

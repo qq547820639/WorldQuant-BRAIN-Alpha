@@ -41,7 +41,7 @@ from brain_alpha_ops.agent_research_tools import (
     build_assistant_context_tool,
     build_assistant_request_tool,
     build_vectorized_market_data_from_args,
-    collect_job_rows,
+    collect_job_rows_with_diagnostics,
     cross_review_assistant_response_tool,
     orchestrate_parameter_search_from_args,
     plan_parallel_backtest_from_args,
@@ -271,6 +271,7 @@ class BrainAlphaToolbox(AgentLiveToolsMixin):
             official_metrics=dict(args.get("official_metrics") or {}),
         )
         scorecard = build_scorecard(candidate, self.run_config.ops.thresholds, self.run_config.ops.scoring)
+        candidate.scorecard = scorecard
         return {"ok": True, "candidate": candidate.to_dict(), "scorecard": scorecard}
 
     def _get_job_status(self, args: dict[str, Any]) -> dict[str, Any]:
@@ -318,12 +319,14 @@ class BrainAlphaToolbox(AgentLiveToolsMixin):
         limit = bounded_int(args.get("limit", 5000), 1, 50000)
         top_n = bounded_int(args.get("top_n", 10), 1, 50)
         include_cloud = truthy(args.get("include_cloud", True))
+        job_payload = collect_job_rows_with_diagnostics(self.job_stores, limit=min(limit, 1000))
         return query_research_observability_snapshot(
             self.run_config.ops.storage_dir,
             limit=limit,
             top_n=top_n,
             include_cloud=include_cloud,
-            job_rows=collect_job_rows(self.job_stores, limit=min(limit, 1000)),
+            job_rows=job_payload["rows"],
+            job_diagnostics=job_payload["diagnostics"],
         )
 
     def _build_market_data_cache(self, args: dict[str, Any]) -> dict[str, Any]:

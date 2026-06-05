@@ -20,7 +20,7 @@ def check_web_facade_contract(web_path: str | Path = DEFAULT_WEB) -> dict[str, A
     text = path.read_text(encoding="utf-8")
     tree = ast.parse(text, filename=str(path))
 
-    has_context_class = any(isinstance(node, ast.ClassDef) and node.name == "WebApplicationContext" for node in tree.body)
+    has_context_class = _has_web_application_context_binding(tree)
     has_context_factory = any(isinstance(node, ast.FunctionDef) and node.name == "web_application_context" for node in tree.body)
     direct_sys_modules_count = _direct_sys_modules_count(tree)
     lambda_alias_count = _module_lambda_alias_count(tree)
@@ -61,6 +61,21 @@ def _module_lambda_alias_count(tree: ast.Module) -> int:
         for node in tree.body
         if isinstance(node, ast.Assign) and isinstance(node.value, ast.Lambda)
     )
+
+
+def _has_web_application_context_binding(tree: ast.Module) -> bool:
+    for node in tree.body:
+        if isinstance(node, ast.ClassDef) and node.name == "WebApplicationContext":
+            return True
+        if isinstance(node, ast.Assign) and any(_is_name(target, "WebApplicationContext") for target in node.targets):
+            return True
+        if isinstance(node, ast.AnnAssign) and _is_name(node.target, "WebApplicationContext"):
+            return True
+    return False
+
+
+def _is_name(node: ast.AST, name: str) -> bool:
+    return isinstance(node, ast.Name) and node.id == name
 
 
 def _runtime_facade_direct_sys_modules(tree: ast.Module) -> list[int]:

@@ -34,7 +34,8 @@ class GenerationPhaseService:
             remaining = max_candidates - len(candidates)
             if remaining <= 0:
                 break
-            batch = list(self.generator.generate(remaining, dataset_id=self.dataset_id))
+            request_count = max(remaining, max_candidates)
+            batch = list(self.generator.generate(request_count, dataset_id=self.dataset_id))
             if not batch:
                 break
             added_this_attempt = 0

@@ -48,8 +48,21 @@ def _num(value: Any) -> float:
 
 
 def _ratio(value: Any) -> float:
+    """Normalize ratio values from BRAIN API responses.
+
+    BRAIN may return metrics as percentages (e.g. 70 meaning 70%) or as
+    decimals (e.g. 0.70).  Only divide by 100 when the value is unambiguously
+    in percentage range (abs >= 2.0), which catches real percentage values
+    like 75% without harming ratios that naturally live between 1.0 and 2.0.
+    Metrics that naturally exceed 2.0 (e.g. turnover, correlation) pass
+    through unchanged.
+
+    Aligned with safety.py:_ratio() and official_helpers.py:_ratio().
+    """
     numeric = _num(value)
-    return numeric / 100.0 if abs(numeric) > 1.0 else numeric
+    if abs(numeric) >= 2.0:
+        return numeric / 100.0
+    return numeric
 
 
 # Record

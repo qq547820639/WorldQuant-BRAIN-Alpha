@@ -100,6 +100,12 @@ class TestSchemaEnumAlignment:
     def test_environment_aligned(self):
         assert self._get_schema_enum("environment") == {"production"}
 
+    def test_parameter_traceability_settings_aligned(self):
+        from scripts.check_parameter_traceability import OFFICIAL_BRAIN_SETTINGS
+
+        for key, allowed in CANONICAL_SETTINGS.items():
+            assert set(OFFICIAL_BRAIN_SETTINGS[key]["allowed"]) == allowed
+
 
 class TestSchemaValidation:
     """Verify jsonschema validation accepts canonical values."""
@@ -244,6 +250,7 @@ class TestThresholdAlignment:
             "min_turnover": dt.min_turnover,
             "platform_max_turnover": dt.platform_max_turnover,
             "max_self_correlation": dt.max_self_correlation,
+            "max_prod_correlation": dt.max_prod_correlation,
             "max_weight_concentration": dt.max_weight_concentration,
             "sub_universe_sharpe_min_ratio": dt.sub_universe_sharpe_min_ratio,
         }
@@ -598,7 +605,7 @@ class TestCanonicalCompleteness:
         required = {
             "min_sharpe", "min_sharpe_delay0", "min_fitness", "min_fitness_delay0",
             "min_turnover", "platform_max_turnover", "max_self_correlation",
-            "max_weight_concentration", "sub_universe_sharpe_min_ratio",
+            "max_prod_correlation", "max_weight_concentration", "sub_universe_sharpe_min_ratio",
         }
         assert set(CANONICAL_THRESHOLDS.keys()) == required
 

@@ -13,14 +13,54 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_REPORT = ROOT / "docs" / "DEFECT_ANALYSIS_REPORT_20260601.md"
 SCHEMA_VERSION = "defect_analysis_report_check.v1"
-VALID_STATUSES = {"CLOSED_CURRENT", "TRACKED_OPEN", "TRACKED_DEFERRED", "TRACKED_ENVIRONMENT"}
+STATUS_VALUES = (
+    "FIXED_LOCAL_VERIFIED",
+    "TRACKED_LEGACY_COMPAT",
+    "TRACKED_ENVIRONMENT",
+    "TRACKED_DEFERRED",
+    "TRACKED_OPEN",
+    "CLOSED_CURRENT",
+    "FIXED",
+)
+VALID_STATUSES = set(STATUS_VALUES)
+RESOLVED_STATUSES = {"CLOSED_CURRENT", "FIXED", "TRACKED_LEGACY_COMPAT"}
 STALE_SNIPPETS = (
     "PARTIAL_CLOSED_CURRENT",
     "Remaining scan candidates",
 )
-DEFECT_ID_PATTERN = r"DEFECT-(?:\d{3}|A\d+[a-z]?(?:-[a-z])?)"
+DEFECT_ID_PATTERN = r"(?:DEFECT-(?:\d{3}|A\d+[a-z]?(?:-[a-z])?)|P[0-3]-\d+)"
 DEFECT_HEADING_RE = re.compile(rf"^### ({DEFECT_ID_PATTERN}):\s*(.+)$", re.MULTILINE)
 STATUS_ROW_RE = re.compile(rf"({DEFECT_ID_PATTERN})(?::\s*(.+))?")
+REQUIRED_REPORT_BOUNDARIES = {
+    "STATIC_ANALYSIS_DEFECT_REPORT_20260603.md": {
+        "P0-3": {
+            "status": "TRACKED_DEFERRED",
+            "evidence": "no_new_unique_items",
+            "next_action": "不添加硬分页上限",
+            "report_text": (
+                "stalled_unique_pages",
+                "duplicate_unique_items",
+                "tests/test_official_adapter.py::test_list_user_alphas_can_be_cancelled_by_progress_callback_without_page_cap",
+                "tests/test_web_sync_job.py::test_run_sync_job_service_returns_false_to_cancel_alpha_scan",
+                "tests/test_web_sync_job.py::test_run_sync_job_service_stops_alpha_scan_on_elapsed_limit",
+                "tests/test_pipeline.py::test_pipeline_cloud_sync_cancel_does_not_merge_partial_rows",
+                "tests/test_pipeline.py::test_pipeline_cloud_sync_elapsed_limit_does_not_merge_partial_rows",
+            ),
+        },
+        "P2-6": {
+            "status": "FIXED",
+            "evidence": '{"ok": true, "status": "web ready"',
+            "report_text": (
+                "python -m brain_alpha_ops.web --smoke-test --port 0",
+                "PermissionError: [Errno 1] Operation not permitted",
+                '{"ok": true, "status": "web ready"',
+            ),
+        },
+    }
+}
+REQUIRED_REPORT_OPEN_ITEMS = {
+    "STATIC_ANALYSIS_DEFECT_REPORT_20260603.md": {"P0-3"},
+}
 
 
 def check_defect_analysis_report(report_path: str | Path = DEFAULT_REPORT) -> dict[str, Any]:
@@ -61,13 +101,19 @@ def check_defect_analysis_report(report_path: str | Path = DEFAULT_REPORT) -> di
                 f"overview total does not match {len(detail_ids)} detailed defect sections",
             )
         )
+    overview_priority_counts = _overview_priority_counts(text)
+    detail_priority_counts = _priority_counts(detail_rows)
+    status_priority_counts = _priority_counts(status_rows)
+    if overview_priority_counts:
+        _check_priority_counts("detail", overview_priority_counts, detail_priority_counts, findings)
+        _check_priority_counts("status", overview_priority_counts, status_priority_counts, findings)
 
     detail_titles = {row["id"]: row["title"] for row in detail_rows}
     for row in status_rows:
         status = row["status"]
         if status not in VALID_STATUSES:
             findings.append(_finding("invalid_status", f"{row['id']}:{status}", "unknown defect status"))
-        if status != "CLOSED_CURRENT" and not row["next_action"]:
+        if status not in RESOLVED_STATUSES and not row["next_action"]:
             findings.append(
                 _finding("missing_next_action", row["id"], "open or deferred defects need an explicit next action")
             )
@@ -84,15 +130,23 @@ def check_defect_analysis_report(report_path: str | Path = DEFAULT_REPORT) -> di
         if stale in text:
             findings.append(_finding("stale_report_fact", stale, "stale defect tracking fact is still present"))
 
-    open_items = [row for row in status_rows if row["status"] != "CLOSED_CURRENT"]
+    _check_required_report_boundaries(path, text, status_rows, findings)
+
+    open_items = [row for row in status_rows if row["status"] not in RESOLVED_STATUSES]
+    _check_required_open_items(path, open_items, findings)
     return {
         "ok": not findings,
         "schema_version": SCHEMA_VERSION,
         "report": str(path),
         "detailed_count": len(detail_ids),
         "status_count": len(status_ids),
-        "closed_count": sum(1 for row in status_rows if row["status"] == "CLOSED_CURRENT"),
+        "closed_count": sum(1 for row in status_rows if row["status"] in RESOLVED_STATUSES),
         "open_count": len(open_items),
+        "priority_counts": {
+            "overview": overview_priority_counts,
+            "detail": detail_priority_counts,
+            "status": status_priority_counts,
+        },
         "open_items": [
             {
                 "id": row["id"],
@@ -151,14 +205,132 @@ def _status_rows(text: str, findings: list[dict[str, str]]) -> list[dict[str, st
 def _is_status_header(cells: list[str]) -> bool:
     if len(cells) < 4:
         return False
-    return cells[0] in {"缺陷", "编号"} and cells[1] in {"当前状态", "状态"}
+    return cells[0] in {"缺陷", "编号", "ID"} and cells[1] in {"当前状态", "状态"}
 
 
 def _normalize_status(value: str) -> str:
-    for status in VALID_STATUSES:
+    for status in STATUS_VALUES:
         if status in value:
             return status
     return value.strip()
+
+
+def _check_required_report_boundaries(
+    path: Path,
+    text: str,
+    status_rows: list[dict[str, str]],
+    findings: list[dict[str, str]],
+) -> None:
+    requirements = REQUIRED_REPORT_BOUNDARIES.get(path.name)
+    if not requirements:
+        return
+    rows_by_id = {row["id"]: row for row in status_rows}
+    for defect_id, expected in requirements.items():
+        row = rows_by_id.get(defect_id)
+        if row is None:
+            findings.append(_finding("missing_required_boundary", defect_id, "required tracked boundary is missing"))
+            continue
+        expected_status = expected.get("status")
+        if expected_status and row["status"] != expected_status:
+            findings.append(
+                _finding(
+                    "boundary_status_mismatch",
+                    f"{defect_id}:{expected_status}",
+                    "required tracked boundary has stale status",
+                )
+            )
+        expected_evidence = expected.get("evidence")
+        if expected_evidence and expected_evidence not in row["evidence"]:
+            findings.append(
+                _finding(
+                    "boundary_evidence_mismatch",
+                    f"{defect_id}:{expected_evidence}",
+                    "required tracked boundary is missing current evidence",
+                )
+            )
+        expected_next_action = expected.get("next_action")
+        if expected_next_action and expected_next_action not in row["next_action"]:
+            findings.append(
+                _finding(
+                    "boundary_next_action_mismatch",
+                    f"{defect_id}:{expected_next_action}",
+                    "required tracked boundary is missing current next action",
+                )
+            )
+        expected_report_text = expected.get("report_text")
+        if isinstance(expected_report_text, str):
+            expected_report_snippets = (expected_report_text,)
+        else:
+            expected_report_snippets = tuple(expected_report_text or ())
+        for snippet in expected_report_snippets:
+            if snippet not in text:
+                findings.append(
+                    _finding(
+                        "boundary_report_text_mismatch",
+                        f"{defect_id}:{snippet}",
+                        "required tracked boundary is missing report evidence text",
+                    )
+                )
+
+
+def _check_required_open_items(
+    path: Path,
+    open_items: list[dict[str, str]],
+    findings: list[dict[str, str]],
+) -> None:
+    expected_open_items = REQUIRED_REPORT_OPEN_ITEMS.get(path.name)
+    if expected_open_items is None:
+        return
+    actual_open_items = {row["id"] for row in open_items}
+    if actual_open_items != expected_open_items:
+        expected = ",".join(sorted(expected_open_items))
+        actual = ",".join(sorted(actual_open_items)) or "<none>"
+        findings.append(
+            _finding(
+                "open_items_mismatch",
+                f"{path.name}:{expected}",
+                f"open items are {actual}",
+            )
+        )
+
+
+def _priority_counts(rows: list[dict[str, str]]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for row in rows:
+        match = re.match(r"(P[0-3])-", row["id"])
+        if not match:
+            continue
+        priority = match.group(1)
+        counts[priority] = counts.get(priority, 0) + 1
+    return counts
+
+
+def _overview_priority_counts(text: str) -> dict[str, int]:
+    match = re.search(r"发现缺陷总数\*\*:\s*\d+\s*项（(.+?)）", text)
+    if not match:
+        return {}
+    counts: dict[str, int] = {}
+    for priority, count in re.findall(r"(P[0-3])×(\d+)", match.group(1)):
+        counts[priority] = int(count)
+    return counts
+
+
+def _check_priority_counts(
+    section: str,
+    expected_counts: dict[str, int],
+    actual_counts: dict[str, int],
+    findings: list[dict[str, str]],
+) -> None:
+    for priority, expected in sorted(expected_counts.items()):
+        actual = actual_counts.get(priority, 0)
+        if actual != expected:
+            findings.append(
+                _finding(
+                    "priority_count_mismatch",
+                    f"{section}:{priority}={expected}",
+                    f"overview priority count does not match {actual} {section} rows",
+                )
+            )
 
 
 def _check_duplicates(rows: list[dict[str, str]], section: str, findings: list[dict[str, str]]) -> None:
@@ -175,6 +347,9 @@ def _check_duplicates(rows: list[dict[str, str]], section: str, findings: list[d
 
 def _overview_total(text: str) -> int | None:
     match = re.search(r"\|\s*\*\*合计\*\*\s*\|\s*\*\*(\d+)\*\*", text)
+    if match:
+        return int(match.group(1))
+    match = re.search(r"发现缺陷总数\*\*:\s*(\d+)\s*项", text)
     return int(match.group(1)) if match else None
 
 

@@ -34,6 +34,7 @@ class BrainSettings:
 @dataclass
 class ResearchBudget:
     max_candidates_per_cycle: int = 20
+    max_generation_attempts: int = 5
     max_official_validations_per_cycle: int = 10
     max_official_simulations_per_cycle: int = 3
     max_official_concurrent_simulations: int = 3
@@ -45,7 +46,7 @@ class ResearchBudget:
     stop_official_calls_on_rate_limit: bool = True
     run_forever: bool = False
     cycle_pause_seconds: float = 2.0
-    official_retry_pause_seconds: float = 6.0
+    official_retry_pause_seconds: float = 60.0
     adaptive_strategy_enabled: bool = True
     adaptive_min_official_results: int = 12
     adaptive_min_cycles: int = 20
@@ -54,6 +55,7 @@ class ResearchBudget:
     enable_secondary_fusion: bool = True
     require_cloud_sync: bool = True
     cloud_sync_range: str = "3d"
+    cloud_sync_max_elapsed_seconds: float = 0.0
     resume_persisted_backtests: bool = True
     max_cycles: int = 10
     dataset_strategy: str = "rotate"  # all | rotate | random | specific
@@ -162,12 +164,12 @@ class OfficialAPIConfig:
     timeout_seconds: int = 60
     poll_attempts: int = 120
     poll_interval_seconds: float = 6.0
-    min_request_interval_seconds: float = 3.0
+    min_request_interval_seconds: float = 3.0  # Per-request minimum; batch delay is separate
     rate_limit_retry_attempts: int = 0
-    rate_limit_backoff_seconds: float = 15.0
+    rate_limit_backoff_seconds: float = 60.0  # Aligned with BRAIN community best practice
     cache_dir: str = "data/api_cache"
     context_cache_ttl_seconds: int = 86400
-    allow_stale_context_on_rate_limit: bool = True
+    allow_stale_context_on_rate_limit: bool = False
 
 
 @dataclass

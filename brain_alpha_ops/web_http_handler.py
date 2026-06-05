@@ -17,7 +17,7 @@ def create_handler_class(
     dispatch_post: Callable[[Any, Any, Any], None],
     dispatch_context: Callable[[], Any],
     web_session: Any,
-    jobs: Any,
+    jobs: Any | None = None,
     enrich_progress: Callable[[dict], dict],
     content_security_policy_for_html: Callable[[str | None], str],
     sse_push_interval: float,
@@ -29,7 +29,12 @@ def create_handler_class(
     max_body_bytes_value = max_body_bytes
     sse_push_interval_value = sse_push_interval
     max_sse_duration_value = max_sse_duration
-    resolve_sse_job_value = resolve_sse_job or (lambda job_id: jobs.get(job_id))
+    if resolve_sse_job is not None:
+        resolve_sse_job_value = resolve_sse_job
+    else:
+        if jobs is None:
+            raise ValueError("jobs or resolve_sse_job is required")
+        resolve_sse_job_value = lambda job_id: jobs.get(job_id)
     resolve_static_asset_value = resolve_static_asset or (lambda _path: None)
 
     class Handler(BaseHTTPRequestHandler):

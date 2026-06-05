@@ -1,8 +1,21 @@
+/**
+ * BRAIN Alpha Ops - 全局样式
+ * 
+ * 设计原则：
+ * 1. 统一排版系统
+ * 2. 一致的间距和颜色
+ * 3. 清晰的视觉层次
+ * 4. 优化的动画效果
+ */
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+/* ── 基础样式 ───────────────────────────────────────────────── */
+
 @layer base {
+  /* 滚动条样式 */
   * {
     scrollbar-width: thin;
     scrollbar-color: #374151 transparent;
@@ -18,81 +31,139 @@
     background: #374151;
     border-radius: 3px;
   }
+  
+  /* 全局字体优化 */
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+  
+  /* 焦点样式 */
+  :focus-visible {
+    outline: 2px solid rgba(99, 102, 241, 0.6);
+    outline-offset: 2px;
+  }
 }
 
+/* ── 组件样式 ───────────────────────────────────────────────── */
+
 @layer components {
+  /* 按钮系统 */
   .btn-primary {
-    @apply bg-brand-600 hover:bg-brand-700 text-white font-medium py-2 px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed;
+    @apply bg-brand-600 hover:bg-brand-700 text-white font-medium py-2.5 px-5 rounded-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed;
   }
   .btn-secondary {
-    @apply bg-gray-700 hover:bg-gray-600 text-gray-100 font-medium py-2 px-4 rounded-lg transition-colors;
+    @apply bg-gray-800 hover:bg-gray-700 text-gray-100 font-medium py-2.5 px-5 rounded-xl transition-all duration-200;
   }
   .btn-danger {
-    @apply bg-danger/20 hover:bg-danger/30 text-danger border border-danger/30 font-medium py-2 px-4 rounded-lg transition-colors;
+    @apply bg-danger/20 hover:bg-danger/30 text-danger border border-danger/30 font-medium py-2.5 px-5 rounded-xl transition-all duration-200;
   }
+  .btn-ghost {
+    @apply text-gray-300 hover:text-white hover:bg-gray-800/50 font-medium py-2 px-4 rounded-lg transition-all duration-200;
+  }
+  
+  /* 卡片系统 */
   .card {
-    @apply bg-gray-900 border border-gray-800 rounded-xl p-5;
+    @apply bg-gray-900/80 border border-gray-800/50 rounded-2xl p-6 backdrop-blur-sm;
+  }
+  .card-compact {
+    @apply bg-gray-900/60 border border-gray-800/30 rounded-xl p-4;
+  }
+  
+  /* 徽章系统 */
+  .badge {
+    @apply inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium;
   }
   .badge-success {
-    @apply bg-success/20 text-success text-xs font-medium px-2 py-0.5 rounded-full;
+    @apply bg-success/20 text-success border border-success/20;
   }
   .badge-warning {
-    @apply bg-warning/20 text-warning text-xs font-medium px-2 py-0.5 rounded-full;
+    @apply bg-warning/20 text-warning border border-warning/20;
   }
   .badge-danger {
-    @apply bg-danger/20 text-danger text-xs font-medium px-2 py-0.5 rounded-full;
+    @apply bg-danger/20 text-danger border border-danger/20;
+  }
+  .badge-info {
+    @apply bg-blue-500/20 text-blue-400 border border-blue-500/20;
   }
   .badge-neutral {
-    @apply bg-gray-700 text-gray-300 text-xs font-medium px-2 py-0.5 rounded-full;
+    @apply bg-gray-800 text-gray-300 border border-gray-700;
   }
+  
+  /* 进度反馈组件 */
   .progress-feedback {
-    @apply border border-gray-800 bg-gray-900 rounded-lg p-4 space-y-3 text-sm;
+    @apply border border-gray-800/50 bg-gray-900/80 rounded-xl p-5 space-y-4 text-sm backdrop-blur-sm;
   }
   .progress-feedback-compact {
-    @apply p-3 space-y-2;
+    @apply p-4 space-y-3;
   }
   .progress-feedback.is-error {
-    @apply border-danger/40 bg-danger/10;
+    @apply border-danger/30 bg-danger/5;
   }
   .progress-feedback.is-success {
-    @apply border-success/30 bg-success/10;
+    @apply border-success/30 bg-success/5;
   }
   .progress-feedback-header {
-    @apply flex items-start justify-between gap-3;
+    @apply flex items-start justify-between gap-4;
   }
   .progress-feedback-title {
-    @apply text-xs font-semibold text-gray-200;
+    @apply text-sm font-semibold text-gray-200;
   }
   .progress-feedback-phase {
-    @apply text-xs text-muted mt-0.5;
+    @apply text-sm text-gray-400 mt-1;
   }
   .progress-feedback-percent {
-    @apply text-xs font-mono text-brand-300;
+    @apply text-sm font-mono text-brand-300;
   }
   .progress-feedback-done {
-    @apply inline-flex h-5 w-5 items-center justify-center rounded-full bg-success/20 text-xs font-semibold text-success;
+    @apply inline-flex h-6 w-6 items-center justify-center rounded-full bg-success/20 text-sm font-semibold text-success;
   }
   .progress-feedback-track {
-    @apply relative h-2 w-full overflow-hidden rounded bg-gray-800;
+    @apply relative h-2 w-full overflow-hidden rounded-full bg-gray-800;
   }
   .progress-feedback-fill {
-    @apply h-full rounded bg-brand-500 transition-all duration-500;
+    @apply h-full rounded-full bg-gradient-to-r from-brand-500 to-brand-600 transition-all duration-500;
   }
   .progress-feedback-track.is-indeterminate .progress-feedback-fill {
     @apply absolute w-1/3;
     animation: progress-indeterminate 1.2s ease-in-out infinite;
   }
   .progress-feedback-body {
-    @apply flex flex-wrap items-center justify-between gap-2 text-xs text-gray-300;
+    @apply flex flex-wrap items-center justify-between gap-3 text-sm text-gray-300;
   }
   .progress-feedback-eta {
-    @apply font-mono text-muted;
+    @apply font-mono text-gray-400;
   }
   .progress-spinner {
-    @apply h-4 w-4 rounded-full border-2 border-gray-700 border-t-brand-400;
+    @apply h-5 w-5 rounded-full border-2 border-gray-700 border-t-brand-400;
     animation: spin 0.8s linear infinite;
   }
+  
+  /* 表单元素 */
+  .input {
+    @apply w-full px-4 py-2.5 bg-gray-900/80 border border-gray-800/50 rounded-xl text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500/50 transition-all duration-200;
+  }
+  .select {
+    @apply w-full px-4 py-2.5 bg-gray-900/80 border border-gray-800/50 rounded-xl text-gray-100 focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500/50 transition-all duration-200 appearance-none;
+  }
+  
+  /* 表格样式 */
+  .table {
+    @apply w-full text-sm text-gray-300;
+  }
+  .table th {
+    @apply px-4 py-3 text-left font-semibold text-gray-200 bg-gray-900/50 border-b border-gray-800/50;
+  }
+  .table td {
+    @apply px-4 py-3 border-b border-gray-800/30;
+  }
+  .table tr:hover td {
+    @apply bg-gray-900/30;
+  }
 }
+
+/* ── 动画关键帧 ─────────────────────────────────────────────── */
 
 @keyframes progress-indeterminate {
   0% {
@@ -100,5 +171,181 @@
   }
   100% {
     left: 100%;
+  }
+}
+
+@keyframes fade-in {
+  from { 
+    opacity: 0; 
+    transform: translateY(8px); 
+  }
+  to { 
+    opacity: 1; 
+    transform: translateY(0); 
+  }
+}
+
+@keyframes slide-up {
+  from { 
+    opacity: 0; 
+    transform: translateY(16px); 
+  }
+  to { 
+    opacity: 1; 
+    transform: translateY(0); 
+  }
+}
+
+@keyframes scale-in {
+  from { 
+    opacity: 0; 
+    transform: scale(0.95); 
+  }
+  to { 
+    opacity: 1; 
+    transform: scale(1); 
+  }
+}
+
+@keyframes pulse-soft {
+  0%, 100% { 
+    opacity: 1; 
+  }
+  50% { 
+    opacity: 0.7; 
+  }
+}
+
+/* ── 动画类 ─────────────────────────────────────────────────── */
+
+.animate-fade-in {
+  animation: fade-in 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.animate-slide-up {
+  animation: slide-up 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.animate-scale-in {
+  animation: scale-in 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.animate-pulse-soft {
+  animation: pulse-soft 2s ease-in-out infinite;
+}
+
+/* ── 工具类 ─────────────────────────────────────────────────── */
+
+/* 文本截断 */
+.line-clamp-1 {
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.line-clamp-3 {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* 玻璃效果 */
+.glass {
+  background: rgba(17, 24, 39, 0.8);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(55, 65, 81, 0.3);
+}
+
+/* 渐变文字 */
+.text-gradient {
+  background: linear-gradient(135deg, #818cf8, #6366f1);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* 阴影效果 */
+.shadow-glow {
+  box-shadow: 0 0 20px rgba(99, 102, 241, 0.15);
+}
+
+.shadow-glow-success {
+  box-shadow: 0 0 20px rgba(16, 185, 129, 0.15);
+}
+
+.shadow-glow-warning {
+  box-shadow: 0 0 20px rgba(245, 158, 11, 0.15);
+}
+
+.shadow-glow-danger {
+  box-shadow: 0 0 20px rgba(239, 68, 68, 0.15);
+}
+
+/* ── 响应式工具 ─────────────────────────────────────────────── */
+
+/* 移动端优化 */
+@media (max-width: 640px) {
+  .mobile-full {
+    width: 100%;
+  }
+  .mobile-p-4 {
+    padding: 1rem;
+  }
+  .mobile-text-sm {
+    font-size: 0.875rem;
+  }
+}
+
+/* 平板优化 */
+@media (min-width: 641px) and (max-width: 1024px) {
+  .tablet-p-6 {
+    padding: 1.5rem;
+  }
+}
+
+/* 桌面优化 */
+@media (min-width: 1025px) {
+  .desktop-p-8 {
+    padding: 2rem;
+  }
+}
+
+/* ── 深色主题优化 ───────────────────────────────────────────── */
+
+/* 确保深色主题下的对比度 */
+.dark-high-contrast {
+  --tw-text-opacity: 1;
+  color: rgb(243 244 246 / var(--tw-text-opacity));
+}
+
+/* 深色主题下的边框 */
+.dark-border {
+  border-color: rgba(55, 65, 81, 0.5);
+}
+
+/* 深色主题下的背景 */
+.dark-bg {
+  background-color: rgba(17, 24, 39, 0.8);
+}
+
+/* ── 打印样式 ───────────────────────────────────────────────── */
+
+@media print {
+  body {
+    background: white !important;
+    color: black !important;
+  }
+  .no-print {
+    display: none !important;
   }
 }

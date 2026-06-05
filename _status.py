@@ -13,8 +13,8 @@ if os.path.exists(f):
         try:
             e = json.loads(line)
             print(f"  {e.get('alpha_id','?')[:15]} | status={e.get('lifecycle_status',e.get('status','?'))} | score={e.get('total_score',e.get('score','?'))} | sim={e.get('simulation_id',e.get('official_alpha_id','?'))[:15]}")
-        except:
-            print(f"  (parse error: {line[:80]})")
+        except json.JSONDecodeError as exc:
+            print(f"  (parse error: {exc}: {line[:80]})")
 
 # Check if events.jsonl changed
 f = "data/events.jsonl"

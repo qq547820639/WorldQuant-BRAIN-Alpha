@@ -17,12 +17,12 @@ interface Props {
 
 export default function ProgressFeedback({
   state,
-  title = "Progress",
+  title = "进度",
   progress,
   error,
-  idleText = "Ready",
-  successText = "Done",
-  retryLabel = "Retry",
+  idleText = "就绪",
+  successText = "完成",
+  retryLabel = "重试",
   compact = false,
   onRetry,
 }: Props) {
@@ -83,8 +83,8 @@ export default function ProgressFeedback({
       )}
 
       <div className="progress-feedback-body">
-        <span>{state === "error" ? error || progress?.error || "Operation failed." : message}</span>
-        {eta && <span className="progress-feedback-eta">ETA {eta}</span>}
+        <span>{state === "error" ? error || progress?.error || "操作失败。" : message}</span>
+        {eta && <span className="progress-feedback-eta">预计剩余 {eta}</span>}
       </div>
 
       {state === "error" && onRetry && (
@@ -113,8 +113,8 @@ function normalizedPercent(progress?: UnifiedProgress | null): number | null {
 function statusText(state: ProgressLifecycle, idleText: string, successText: string) {
   if (state === "idle") return idleText;
   if (state === "success") return successText;
-  if (state === "error") return "Operation failed.";
-  return "Working...";
+  if (state === "error") return "操作失败。";
+  return "处理中...";
 }
 
 function formatDuration(seconds: number) {

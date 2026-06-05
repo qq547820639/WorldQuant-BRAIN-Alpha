@@ -98,6 +98,8 @@ def test_scoring_evaluate_logs_score_history_append_failure(monkeypatch, tmp_pat
     payload = web_redline_scoring.handle_scoring_evaluate({"candidate": candidate.to_dict()})
 
     assert payload["alpha_id"] == "alpha_history_warning"
+    assert payload["score_history_status"] == "failed"
+    assert payload["score_history_error"] == "history store unavailable"
     assert "score history append failed for alpha_id=alpha_history_warning" in caplog.text
     assert "history store unavailable" in caplog.text
 

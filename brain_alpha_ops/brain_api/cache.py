@@ -20,7 +20,7 @@ logger = logging.getLogger("brain_alpha_ops.brain_api.official")
 
 def cache_key(kind: str, params: dict[str, Any]) -> str:
     raw = json.dumps({"kind": kind, "params": params}, sort_keys=True, ensure_ascii=False)
-    digest = hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
+    digest = hashlib.sha256(raw.encode("utf-8")).hexdigest()
     return f"{kind}_{digest}.json"
 
 
@@ -34,23 +34,31 @@ def read_cache(
     *,
     cache_path_builder: Any = cache_path,
     log: logging.Logger | None = None,
+    cache_lock: threading.Lock | threading.RLock | None = None,
 ) -> dict[str, Any]:
     active_logger = log or logger
     path = cache_path_builder(config, name)
-    if not path.exists():
-        return {"items": [], "fresh": False}
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-        age = time.time() - float(data.get("created_at", 0.0))
-        return {
-            "items": data.get("items", []),
-            "total": int(data.get("total", 0) or 0),
-            "fresh": age <= max(0, int(config.context_cache_ttl_seconds)),
-            "age_seconds": max(0, int(age)),
-        }
-    except (OSError, ValueError, TypeError, json.JSONDecodeError):
-        active_logger.warning("failed to read official API cache %s", redact_text(path, max_length=180))
-        return {"items": [], "fresh": False}
+
+    def _do_read() -> dict[str, Any]:
+        if not path.exists():
+            return {"items": [], "fresh": False, "missing": True}
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            age = time.time() - float(data.get("created_at", 0.0))
+            return {
+                "items": data.get("items", []),
+                "total": int(data.get("total", 0) or 0),
+                "fresh": age <= max(0, int(config.context_cache_ttl_seconds)),
+                "age_seconds": max(0, int(age)),
+            }
+        except (OSError, ValueError, TypeError, json.JSONDecodeError) as exc:
+            active_logger.warning("failed to read official API cache %s: %s", redact_text(path, max_length=180), redact_error_message(exc))
+            return {"items": [], "fresh": False, "error": str(exc)}
+
+    if cache_lock is not None:
+        with cache_lock:
+            return _do_read()
+    return _do_read()
 
 
 def write_cache(

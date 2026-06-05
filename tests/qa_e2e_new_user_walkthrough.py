@@ -900,8 +900,8 @@ def test_full_new_user_walkthrough():
             try:
                 web.shutdown_server()
                 time.sleep(0.5)
-            except Exception:
-                pass
+            except Exception as e:
+                session.record_warning("SHUTDOWN", redact_text(e, max_length=180))
 
         # Generate report
         report = generate_ux_report(session)

@@ -178,9 +178,11 @@ class ConvergenceTracker:
                 self._prev_window_ci = current_ci
             else:
                 # CIs overlap — no significant change
-                self._stall_counter += 1
                 if rec.max_sharpe > self._best_sharpe:
                     self._best_sharpe = rec.max_sharpe
+                    self._stall_counter = 0
+                else:
+                    self._stall_counter += 1
                 self._prev_window_ci = current_ci
         else:
             # Fallback: best_sharpe-based (backward compat, low-sample)

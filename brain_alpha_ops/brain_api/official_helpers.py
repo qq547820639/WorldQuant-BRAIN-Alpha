@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 import json
 import urllib.parse
 from typing import Any
@@ -11,6 +12,13 @@ from brain_alpha_ops.config import BrainSettings
 from brain_alpha_ops.redaction import redact_data
 
 from .base import BrainAPIError
+
+
+_logger = logging.getLogger("brain_alpha_ops.brain_api.official_helpers")
+
+
+ALLOWED_OFFICIAL_API_HOSTS = frozenset({"api.worldquantbrain.com"})
+RESERVED_OFFLINE_TEST_HOST_SUFFIXES = (".test", ".invalid")
 
 
 def looks_partial_context_cache(kind: str, items: list[dict], total: int, page_limit: int) -> bool:
@@ -117,9 +125,11 @@ def normalize_metrics(payload: Any) -> dict:
 
 
 def build_official_url(base: str, path_or_url: str, query: dict | None) -> str:
+    base_parts = urllib.parse.urlparse(base)
+    _validate_official_api_origin(base_parts, label="base_url")
     if path_or_url.startswith(("http://", "https://")):
-        base_parts = urllib.parse.urlparse(base)
         target_parts = urllib.parse.urlparse(path_or_url)
+        _validate_official_api_origin(target_parts, label="target URL")
         base_origin = (base_parts.scheme.lower(), base_parts.netloc.lower())
         target_origin = (target_parts.scheme.lower(), target_parts.netloc.lower())
         if target_origin != base_origin:
@@ -132,6 +142,22 @@ def build_official_url(base: str, path_or_url: str, query: dict | None) -> str:
         if clean:
             url += "?" + urllib.parse.urlencode(clean)
     return url
+
+
+def _validate_official_api_origin(parts: urllib.parse.ParseResult, *, label: str) -> None:
+    scheme = parts.scheme.lower()
+    hostname = (parts.hostname or "").lower()
+    if scheme != "https" or not hostname:
+        raise BrainAPIError(f"{label} must be an https URL with a host")
+    try:
+        hostname.encode("ascii")
+    except UnicodeEncodeError as exc:
+        raise BrainAPIError(f"{label} host contains non-ASCII characters") from exc
+    if hostname in ALLOWED_OFFICIAL_API_HOSTS:
+        return
+    if hostname.endswith(RESERVED_OFFLINE_TEST_HOST_SUFFIXES):
+        return
+    raise BrainAPIError(f"{label} host {hostname!r} is not a known BRAIN API endpoint")
 
 
 def retry_after(headers) -> float | None:
@@ -163,7 +189,8 @@ def parse_response(raw: str) -> Any:
     try:
         return json.loads(raw)
     except json.JSONDecodeError:
-        return {"raw": raw}
+        _logger.warning("API returned non-JSON response (first 200 chars): %s", raw[:200])
+        raise BrainAPIError("API returned non-JSON response", payload={"raw_preview": raw[:500]})
 
 
 def looks_non_production_alpha_id(value: str) -> bool:
@@ -182,8 +209,28 @@ def looks_non_production_alpha_id(value: str) -> bool:
         "fake-",
         "sample_",
         "sample-",
+        "stub_",
+        "stub-",
+        "prod_stub_",
+        "prod_stub-",
+        "prod-stub_",
+        "prod-stub-",
     )
-    return bool(text and (text in {"mock", "demo", "dry-run", "dry_run", "dryrun", "test", "testing", "fake", "sample"} or text.startswith(prefixes)))
+    non_production_values = {
+        "mock",
+        "demo",
+        "dry-run",
+        "dry_run",
+        "dryrun",
+        "test",
+        "testing",
+        "fake",
+        "sample",
+        "stub",
+        "prod_stub",
+        "prod-stub",
+    }
+    return bool(text and (text in non_production_values or text.startswith(prefixes)))
 
 
 def items(data: Any) -> list:
@@ -225,7 +272,7 @@ def page_signature(items: list[dict], *, keys: tuple[str, ...]) -> str:
             row = item
         rows.append(row)
     raw = json.dumps(rows, sort_keys=True, ensure_ascii=False, default=str)
-    return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
 def _first_value(data: Any, keys: list[str], default: Any = None) -> Any:
@@ -390,6 +437,8 @@ def _num(value: Any) -> float:
     try:
         if value in (None, ""):
             return 0.0
+        if isinstance(value, bool):
+            return float(value)
         return float(value)
     except (TypeError, ValueError):
         return 0.0

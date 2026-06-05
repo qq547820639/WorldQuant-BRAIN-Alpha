@@ -90,6 +90,73 @@ export interface Candidate {
   decision_band?: string;
   data_fields?: string[];
   operators?: string[];
+  source_tags?: string[];
+  dataset_id?: string;
+  local_quality?: LocalQuality;
+  alpha_output_config?: AlphaOutputConfig;
+  quality_diagnosis?: QualityDiagnosis;
+  submission?: Record<string, unknown>;
+  validation?: Record<string, unknown>;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface LocalQuality {
+  score?: number;
+  threshold?: number;
+  passed?: boolean;
+  reasons?: string[];
+  warnings?: string[];
+  local_backtest?: Record<string, unknown>;
+  local_backtest_support?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+export interface AlphaOutputConfig {
+  schema_version?: string;
+  local_only?: boolean;
+  official_api_called?: boolean;
+  allow_submit?: boolean;
+  alpha_type?: string;
+  dataset_id?: string;
+  settings?: Record<string, unknown>;
+  platform_payload?: Record<string, unknown>;
+  generation?: Record<string, unknown>;
+  local_gate?: Record<string, unknown>;
+  official_thresholds?: Record<string, unknown>;
+  submission_policy?: Record<string, unknown>;
+  qualified_alpha_definition?: Record<string, string[]>;
+  [key: string]: unknown;
+}
+
+export interface AlphaQualityReason {
+  code?: string;
+  category?: string;
+  severity?: string;
+  message?: string;
+  field?: string;
+  expected?: unknown;
+  value?: unknown;
+  [key: string]: unknown;
+}
+
+export interface QualityDiagnosis {
+  schema_version?: string;
+  qualified?: boolean;
+  submission_ready?: boolean;
+  local_candidate_valid?: boolean;
+  status?: string;
+  status_label?: string;
+  primary_reason?: AlphaQualityReason | null;
+  blocking_reasons?: string[];
+  warning_reasons?: string[];
+  reason_counts?: Record<string, number>;
+  category_counts?: Record<string, number>;
+  reasons?: AlphaQualityReason[];
+  missing_fields?: string[];
+  format_checks?: Record<string, unknown>;
+  numeric_bounds?: Record<string, unknown>;
+  [key: string]: unknown;
 }
 
 export interface Scorecard {
@@ -316,6 +383,119 @@ export interface CloudAlphaSummary {
   sample_alphas: CloudAlpha[];
 }
 
+// ── Backtest Slot Types ──────────────────────────────────────────────────
+
+export interface BacktestSlot {
+  slot: number;
+  alpha_id?: string;
+  official_alpha_id?: string;
+  simulation_id?: string;
+  status?: string;
+  lifecycle_status?: string;
+  score?: number | null;
+  poll_count?: number;
+  progress_percent?: number;
+  next_poll_seconds?: number;
+  message?: string;
+  expression?: string;
+  family?: string;
+  hypothesis?: string;
+  official_metrics?: OfficialMetrics;
+  gate?: QualityGate;
+}
+
+export interface BacktestSlotsResponse {
+  ok: boolean;
+  source?: string;
+  slot_limit: number;
+  active_count: number;
+  slots: BacktestSlot[];
+  updated_at?: string;
+  queue_summary?: BacktestQueueSummary;
+}
+
+export interface BacktestQueueSummary {
+  schema_version?: string;
+  source?: string;
+  official_api_called?: boolean;
+  official_slot_record_count?: number;
+  candidate_path?: string;
+  candidate_count?: number;
+  returned_candidate_count?: number;
+  slot_limit?: number;
+  active_slot_count?: number;
+  open_slot_count?: number;
+  empty_slot_count?: number;
+  local_valid_count?: number;
+  above_simulation_score_count?: number;
+  review_candidate_count?: number;
+  blocked_candidate_count?: number;
+  submit_evidence_blocking_count?: number;
+  min_prior_score_for_official_simulation?: number;
+  top_blocking_reasons?: { reason: string; count: number }[];
+  top_submit_blocking_reasons?: { reason: string; count: number }[];
+  next_action?: string;
+}
+
+// ── Submit Readiness Types ───────────────────────────────────────────────
+
+export interface ReadinessReasonCount {
+  reason: string;
+  count: number;
+}
+
+export interface SubmitReadinessFinding {
+  code?: string;
+  message?: string;
+}
+
+export interface SubmitReadinessCandidate {
+  alpha_id?: string;
+  official_alpha_id?: string;
+  lifecycle_status?: string;
+  pass_fail?: string;
+  score?: number | null;
+  decision_band?: string;
+  local_backtest_passed?: boolean | null;
+  max_similarity?: number | null;
+  risk_level?: string;
+  blocking_reasons?: string[];
+}
+
+export interface SubmitReadinessResponse {
+  ok: boolean;
+  schema_version?: string;
+  source?: string;
+  official_api_called?: boolean;
+  ready_to_submit?: boolean;
+  ledger_ready_to_submit?: boolean;
+  job_family_ready_to_submit?: boolean;
+  candidate_count?: number;
+  ledger_candidate_count?: number;
+  job_family_candidate_count?: number;
+  eligible_count?: number;
+  ledger_eligible_count?: number;
+  job_family_eligible_count?: number;
+  latest_job_id?: string;
+  latest_job_status?: string;
+  threshold_summary?: Record<string, unknown>;
+  summary_counts?: {
+    official_validation_passed?: number;
+    officially_simulated?: number;
+    submission_ready?: number;
+    submitted_this_run?: number;
+  };
+  max_similarity?: number | null;
+  job_family_max_similarity?: number | null;
+  top_blocking_reasons?: ReadinessReasonCount[];
+  top_family_blocking_reasons?: ReadinessReasonCount[];
+  findings?: SubmitReadinessFinding[];
+  production_gaps?: SubmitReadinessFinding[];
+  best_candidate?: SubmitReadinessCandidate;
+  required_next_steps?: string[];
+  error?: string;
+}
+
 export interface CloudAlpha {
   alpha_id: string;
   status: string;
@@ -363,8 +543,13 @@ export interface FailurePattern {
 // ── UI State Types ────────────────────────────────────────────────────────
 
 export type TabId =
-  | "dashboard"
   | "candidates"
+  | "official_backtests"
+  | "quality_check"
+  | "submission_confirm"
+  | "checkpoint_status"
+  | "cloud"
+  | "dashboard"
   | "pending_backtest"
   | "running_backtest"
   | "backtest_rework"
@@ -372,7 +557,6 @@ export type TabId =
   | "submittable"
   | "submitted"
   | "failed"
-  | "cloud"
   | "lifecycle"
   | "research_memory"
   | "research_knowledge"
@@ -393,3 +577,16 @@ export interface Toast {
   action_label?: string;
   on_action?: () => void;
 }
+
+/**
+ * Card-based navigation view identifier.
+ * A subset of TabId used by the StateCards detail view routing.
+ */
+export type CardViewId =
+  | "candidates"
+  | "official_backtests"
+  | "quality_check"
+  | "submission_confirm"
+  | "config"
+  | "checkpoint_status"
+  | "cloud";

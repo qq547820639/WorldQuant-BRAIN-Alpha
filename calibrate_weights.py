@@ -29,6 +29,8 @@ import sys
 from collections import defaultdict
 from typing import Any, Dict, List, Optional, Tuple
 
+from brain_alpha_ops.scoring.shared_scores import default_prior_dimensions
+
 
 # ═══════════════════════════════════════════════════════════════════════
 # 数据加载
@@ -55,58 +57,27 @@ def load_alpha_features(path: str) -> List[Dict[str, Any]]:
 
 
 # ═══════════════════════════════════════════════════════════════════════
-# Prior Score 维度计算（复刻 scoring.prior_score 逻辑，无依赖）
+# Prior Score 维度计算（复用 runtime scoring 默认逻辑）
 # ═══════════════════════════════════════════════════════════════════════
 
 def compute_prior_dimensions(record: Dict[str, Any]) -> Dict[str, float]:
-    """复刻 prior_score 的 8 维打分逻辑。
+    """Compute the same eight default dimensions used by ``prior_score``.
 
     返回: {"economic_logic": 85, "structure": 74, ...}
     """
-    import re
-
     expression = str(record.get("expression", ""))
     fields = set(str(f).lower() for f in (record.get("field_set") or []))
     operators = list(record.get("operator_set") or [])
     hypothesis = str(record.get("hypothesis", ""))
     family = str(record.get("family", ""))
 
-    windows = [int(v) for v in re.findall(r"\b\d+\b", expression)]
-    has_cs = any(op in operators for op in ("rank", "zscore", "scale", "group_rank", "group_zscore"))
-    has_ts = any(op.startswith("ts_") for op in operators)
-    has_rc = any(op in operators for op in ("winsorize", "zscore", "scale", "group_rank")) or "adv20" in fields
-    median_window = sorted(windows)[len(windows) // 2] if windows else 0
-
-    # economic_logic: 使用新的关键词检测逻辑
-    dims = {}
-    text = f"{hypothesis} {expression} {' '.join(fields)} {' '.join(operators)}".lower()
-    concepts = {
-        "momentum": {"keywords": ["momentum", "trend", "ts_delta", "ts_rank", "ts_mean"]},
-        "mean_reversion": {"keywords": ["reversal", "mean_revert", "zscore", "ts_zscore"]},
-        "value": {"keywords": ["value", "cheap", "undervalue", "pe_ratio", "pb_ratio", "market_cap"]},
-        "quality": {"keywords": ["quality", "profit", "margin", "roe", "roa"]},
-        "volatility": {"keywords": ["volatility", "vol", "ts_std", "std", "ivol", "beta"]},
-        "liquidity": {"keywords": ["liquidity", "volume", "turn", "adv", "vwap"]},
-        "growth": {"keywords": ["growth", "earnings", "revenue"]},
-        "risk_management": {"keywords": ["winsorize", "truncation", "neutralize", "group_neutralize"]},
-        "cross_sectional": {"keywords": ["cross_section", "rank", "group_rank", "sector"]},
-    }
-    detected = [c for c, info in concepts.items() if any(kw in text for kw in info["keywords"])]
-    if not detected:
-        dims["economic_logic"] = 52 if len(hypothesis) >= 60 else 40
-    else:
-        n = len(detected)
-        dims["economic_logic"] = 92 if n >= 4 else 85 if n == 3 else 78 if n == 2 else 68
-
-    dims["structure"] = max(25, 90 - max(0, len(operators) - 4) * 8)
-    dims["field_operator_support"] = min(92, 42 + len(fields) * 8 + len(set(operators)) * 4)
-    dims["data_compliance"] = 82 if fields else 35
-    dims["horizon_turnover_proxy"] = 82 if 5 <= median_window <= 90 else 68 if median_window else 50
-    dims["risk_control_proxy"] = 84 if has_cs and has_ts and has_rc else 66 if has_cs and has_ts else 48
-    dims["diversity"] = 80 if family in {"Liquidity", "Volatility", "Hybrid"} else 65
-    dims["explainability"] = 85 if len(expression) < 140 else 60
-
-    return dims
+    return default_prior_dimensions(
+        expression=expression,
+        fields=fields,
+        operators=operators,
+        hypothesis=hypothesis,
+        family=family,
+    )
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -528,7 +499,7 @@ def auto_calibrate_if_stalled(
     Returns a dict with advice / override config, or ok: False if not triggered.
     """
     try:
-        from brain_alpha_ops.scoring.official_scoring import ScoreHistoryDB
+        from brain_alpha_ops.scoring.history import ScoreHistoryDB
         db = ScoreHistoryDB(storage_dir)
         stats = db.convergence_stats()
     except Exception as exc:

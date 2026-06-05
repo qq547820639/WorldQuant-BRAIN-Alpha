@@ -13,6 +13,7 @@ def test_parameter_audit_snapshot_covers_trace_sections_and_canonical_thresholds
     assert snapshot["api_paths_aligned"] is True
     assert snapshot["sections"]["ops.settings"]["type"] == "REGULAR"
     assert snapshot["canonical_thresholds"]["min_sharpe"]["canonical"] == 1.25
+    assert snapshot["canonical_thresholds"]["max_prod_correlation"]["canonical"] == 0.70
     assert set(snapshot["traceable_sections"]) == {
         "ops.settings",
         "ops.budget",
@@ -34,3 +35,18 @@ def test_parameter_audit_snapshot_flags_threshold_drift():
     assert snapshot["blocking_count"] == 1
     assert snapshot["canonical_thresholds"]["min_sharpe"]["match"] is False
     assert snapshot["findings"][0]["code"] == "threshold_drift"
+
+
+def test_parameter_audit_snapshot_flags_prod_correlation_threshold_drift():
+    config = RunConfig(environment="production")
+    config.ops.thresholds.max_prod_correlation = 0.95
+
+    snapshot = build_parameter_audit_snapshot(config)
+
+    assert snapshot["ok"] is False
+    assert snapshot["canonical_thresholds"]["max_prod_correlation"]["match"] is False
+    assert any(
+        finding["parameter"] == "max_prod_correlation"
+        and finding["code"] == "threshold_drift"
+        for finding in snapshot["findings"]
+    )

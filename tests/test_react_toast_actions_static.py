@@ -23,13 +23,13 @@ def test_submission_success_toasts_offer_actionable_receipts():
 
     assert "submissionReceiptRef" in source
     assert "focusSubmissionReceipt" in source
-    assert 'label: "View receipt"' in source
-    assert "Latest submission receipt" in source
+    assert 'label: "查看回执"' in source
+    assert "最新提交回执" in source
     assert 'role="status"' in source
     assert 'aria-live="polite"' in source
     assert "batchSubmissionStatusRef" in source
     assert "focusBatchSubmissionStatus" in source
-    assert 'label: "View status"' in source
+    assert 'label: "查看状态"' in source
 
 
 def test_toast_action_button_is_accessible_and_dismisses_after_action():

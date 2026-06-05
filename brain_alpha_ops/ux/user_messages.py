@@ -200,6 +200,76 @@ MESSAGE_CATALOG: dict[str, UserMessage] = {
         error_code="UNKNOWN_TOOL",
     ),
 
+    # ── Scoring / Gate ──
+    "SCORE_INSUFFICIENT": UserMessage(
+        title="评分未达到提交标准",
+        detail="Alpha total score is below the configured submission threshold.",
+        suggestion="请查看评分面板的归因树，针对低分维度优化表达式。"
+                  "可尝试：增加经济概念多样性、添加风控算子、缩短窗口参数。",
+        severity="warning",
+        error_code="SCORE_INSUFFICIENT",
+    ),
+    "GATE_CONFIG_DEVIATION": UserMessage(
+        title="门禁配置存在偏差",
+        detail="Configured gates deviate from BRAIN official check specifications.",
+        suggestion="请检查 run_config.json 中的 thresholds 值是否与 BRAIN 官方文档一致。"
+                  "运行 'python scripts/verify_canonical_compliance.py' 进行自动化验证。",
+        severity="error",
+        error_code="GATE_CONFIG_DEVIATION",
+    ),
+    "API_DEVIATION_DETECTED": UserMessage(
+        title="评分系统与官方 API 存在偏差",
+        detail="Local scoring system output deviates from BRAIN official API results.",
+        suggestion="偏差可能由指标归一化差异引起。请检查 official_helpers.py 中的 normalize_metrics。"
+                  "重新运行 BRAIN API 仿真以获取最新官方指标。",
+        severity="error",
+        error_code="API_DEVIATION_DETECTED",
+    ),
+
+    # ── Data / Context ──
+    "CONTEXT_STALE": UserMessage(
+        title="BRAIN 上下文数据过期",
+        detail="Official fields/operators/datasets cache is stale and may not reflect current BRAIN platform state.",
+        suggestion="请运行 'python fetch_official_context.py' 刷新官方上下文，"
+                  "或在 Web 控制台点击 '同步云端数据' 使用最新数据。",
+        severity="warning",
+        error_code="CONTEXT_STALE",
+    ),
+    "OFFICIAL_FIELDS_EMPTY": UserMessage(
+        title="官方字段列表为空",
+        detail="No official BRAIN fields are loaded — fetch_official_context.py may not have been run.",
+        suggestion="请先运行 fetch_official_context.py 拉取 BRAIN 平台字段列表，"
+                  "然后重新启动 Web 服务。",
+        severity="error",
+        error_code="OFFICIAL_FIELDS_EMPTY",
+    ),
+    "OFFICIAL_OPERATORS_EMPTY": UserMessage(
+        title="官方算子列表为空",
+        detail="No official BRAIN operators are loaded.",
+        suggestion="请先运行 fetch_official_context.py 拉取 BRAIN 平台算子列表，"
+                  "然后重新启动 Web 服务。",
+        severity="error",
+        error_code="OFFICIAL_OPERATORS_EMPTY",
+    ),
+
+    # ── Threshold / Compliance ──
+    "THRESHOLD_DRIFT_DETECTED": UserMessage(
+        title="阈值与 BRAIN 官方不一致",
+        detail="Some scoring thresholds in the configuration differ from BRAIN canonical values.",
+        suggestion="运行 'python -m brain_alpha_ops.compliance.redline_verifier --json' 查看偏差详情。"
+                  "所有阈值必须严格对齐 BRAIN 官方文档值。",
+        severity="error",
+        error_code="THRESHOLD_DRIFT_DETECTED",
+    ),
+    "DATASET_NOT_IN_OFFICIAL_CONTEXT": UserMessage(
+        title="数据集不在官方上下文中",
+        detail="The specified dataset_id was not found in official BRAIN datasets.",
+        suggestion="检查 data/official_datasets.json 确认该数据集是否已从 BRAIN API 同步。"
+                  "确保 dataset_id 与官方 ID 完全一致。",
+        severity="error",
+        error_code="DATASET_NOT_IN_OFFICIAL_CONTEXT",
+    ),
+
     # ── Operational ──
     "JOBS_FULL": UserMessage(
         title="任务队列已满",

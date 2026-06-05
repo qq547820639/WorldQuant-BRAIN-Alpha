@@ -11,6 +11,7 @@ from typing import Any, Iterable
 from brain_alpha_ops.config import RunConfig
 from brain_alpha_ops.models import Candidate, PipelineEvent, PipelineResult
 from brain_alpha_ops.parameter_audit import build_parameter_audit_snapshot
+from brain_alpha_ops.redaction import redact_text
 from brain_alpha_ops.ux.guided_models import CheckpointData, PipelinePhase, RunRecord
 from brain_alpha_ops.ux.history import RunHistoryAnalytics
 
@@ -65,7 +66,11 @@ def list_checkpoints(checkpoint_dir: Path) -> list[dict[str, Any]]:
                 "file": str(path),
             })
         except Exception:
-            logger.warning("guided pipeline checkpoint file skipped: %s", path, exc_info=True)
+            logger.warning(
+                "guided pipeline checkpoint file skipped: %s",
+                redact_text(str(path), max_length=180),
+                exc_info=True,
+            )
             continue
     return checkpoints
 

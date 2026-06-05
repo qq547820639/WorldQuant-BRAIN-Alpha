@@ -33,6 +33,16 @@ from typing import Any
 from brain_alpha_ops.redaction import redact_error_message, redact_text
 
 logger = logging.getLogger(__name__)
+_DAILY_NUMERIC_FIELDS = (
+    "open",
+    "high",
+    "low",
+    "close",
+    "volume",
+    "amount",
+    "turnover_rate",
+    "adj_factor",
+)
 
 # ── Performance: try fast Parquet, fall back to CSV ──
 try:
@@ -84,6 +94,9 @@ class IndexConstituents:
     index_name: str = ""
     constituents: list[str] = field(default_factory=list)
     effective_date: str = ""
+    status: str = "ok"
+    source: str = "akshare"
+    error: str = ""
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -333,15 +346,30 @@ class AKShareAdapter:
 
         name, func_name, code = index_map.get(index_code, ("未知", "", index_code))
         if not func_name:
-            return IndexConstituents(index_code=index_code, index_name=name)
+            return IndexConstituents(
+                index_code=index_code,
+                index_name=name,
+                status="unsupported_index",
+                error=f"unsupported index code: {index_code}",
+            )
 
         try:
             func = getattr(ak, func_name, None)
             if func is None:
-                return IndexConstituents(index_code=index_code, index_name=name)
+                return IndexConstituents(
+                    index_code=index_code,
+                    index_name=name,
+                    status="source_function_missing",
+                    error=f"akshare function missing: {func_name}",
+                )
             df = func(code)
             if df is None or df.empty:
-                return IndexConstituents(index_code=index_code, index_name=name)
+                return IndexConstituents(
+                    index_code=index_code,
+                    index_name=name,
+                    status="empty",
+                    error="akshare returned empty index constituents",
+                )
 
             symbols = [str(row.get("成分券代码", row.get("constituent_code", ""))).strip()
                        for _, row in df.iterrows()]
@@ -353,12 +381,18 @@ class AKShareAdapter:
                 effective_date=date.today().isoformat(),
             )
         except Exception as exc:
+            message = redact_error_message(exc)
             logger.warning(
                 "akshare index constituents failed for %s: %s",
                 redact_text(index_code, max_length=64),
-                redact_error_message(exc),
+                message,
             )
-            return IndexConstituents(index_code=index_code, index_name=name)
+            return IndexConstituents(
+                index_code=index_code,
+                index_name=name,
+                status="failed",
+                error=message,
+            )
 
     def fetch_industry_classification(self) -> dict[str, str]:
         """Fetch industry → sector mapping for A-share stocks.
@@ -413,6 +447,7 @@ class AShareDataProvider:
         self._baostock = BaoStockAdapter()
         self._akshare = AKShareAdapter()
         self._stock_list: list[dict[str, Any]] | None = None
+        self._diagnostics: list[dict[str, Any]] = []
 
     @property
     def available(self) -> bool:
@@ -425,6 +460,7 @@ class AShareDataProvider:
         start: str = "2020-01-01",
         end: str | None = None,
         force_refresh: bool = False,
+        reset_diagnostics: bool = True,
     ) -> dict[str, list[dict[str, Any]]]:
         """Load daily OHLCV data for multiple stocks.
 
@@ -442,6 +478,8 @@ class AShareDataProvider:
         """
         if end is None:
             end = date.today().isoformat()
+        if reset_diagnostics:
+            self._diagnostics = []
 
         result: dict[str, list[dict[str, Any]]] = {}
         for symbol in symbols:
@@ -449,20 +487,30 @@ class AShareDataProvider:
             if not force_refresh:
                 cached = self.cache.get(cache_key)
                 if cached:
-                    result[symbol] = cached
-                    continue
+                    validated_cached = self._validate_daily_rows(symbol, cached, source="cache")
+                    if validated_cached:
+                        result[symbol] = validated_cached
+                        continue
 
             # Fetch from source
             try:
                 rows = self._baostock.fetch_daily(symbol, start_date=start, end_date=end)
-                if rows:
-                    self.cache.put(cache_key, rows)
-                result[symbol] = rows
+                validated_rows = self._validate_daily_rows(symbol, rows, source="baostock")
+                if validated_rows:
+                    self.cache.put(cache_key, validated_rows)
+                result[symbol] = validated_rows
             except Exception as exc:
+                message = redact_error_message(exc)
                 logger.warning(
                     "fetch_daily failed for %s: %s",
                     redact_text(symbol, max_length=64),
-                    redact_error_message(exc),
+                    message,
+                )
+                self._record_diagnostic(
+                    source="baostock",
+                    status="daily_fetch_failed",
+                    symbol=symbol,
+                    error=message,
                 )
                 result[symbol] = []
 
@@ -490,6 +538,7 @@ class AShareDataProvider:
             Same format as load_daily_batch.
         """
         cache_key = f"index_universe_{index_code}_{start}_{end}"
+        self._diagnostics = []
 
         # Check for all-in-one cache first
         if not force_refresh:
@@ -506,14 +555,34 @@ class AShareDataProvider:
         if self._akshare.available:
             constituents = self._akshare.fetch_index_constituents(index_code)
             symbols = constituents.constituents
+            if getattr(constituents, "status", "ok") != "ok" or not symbols:
+                self._record_diagnostic(
+                    source=getattr(constituents, "source", "akshare"),
+                    status=getattr(constituents, "status", "empty") or "empty",
+                    index_code=index_code,
+                    error=getattr(constituents, "error", "") or "index constituents unavailable",
+                )
         else:
             # Fallback: use stock_list to get all stocks
             if self._stock_list is None and self._baostock.available:
                 self._stock_list = self._baostock.fetch_stock_list()
             symbols = [s.get("symbol", "") for s in (self._stock_list or [])]
             symbols = symbols[:500]  # Limit
+            if not symbols:
+                self._record_diagnostic(
+                    source="baostock",
+                    status="fallback_stock_list_empty",
+                    index_code=index_code,
+                    error="akshare unavailable and baostock fallback stock list is empty",
+                )
 
-        result = self.load_daily_batch(symbols, start=start, end=end, force_refresh=force_refresh)
+        result = self.load_daily_batch(
+            symbols,
+            start=start,
+            end=end,
+            force_refresh=force_refresh,
+            reset_diagnostics=False,
+        )
 
         # Cache in flat format
         if result:
@@ -594,10 +663,79 @@ class AShareDataProvider:
             "baostock_available": self._baostock.available,
             "akshare_available": self._akshare.available,
             "cache_dir": str(self.cache.cache_dir),
+            "diagnostics": self.last_diagnostics(),
         }
 
     def clear_cache(self) -> int:
         return self.cache.clear()
+
+    def last_diagnostics(self) -> list[dict[str, Any]]:
+        return [dict(item) for item in self._diagnostics]
+
+    def _validate_daily_rows(self, symbol: str, rows: Any, *, source: str) -> list[dict[str, Any]]:
+        if not isinstance(rows, list):
+            self._record_diagnostic(
+                source=source,
+                status="daily_rows_invalid",
+                symbol=symbol,
+                error=f"daily rows must be a list, got {type(rows).__name__}",
+            )
+            return []
+
+        valid_rows: list[dict[str, Any]] = []
+        for row_index, row in enumerate(rows):
+            if not isinstance(row, dict):
+                self._record_diagnostic(
+                    source=source,
+                    status="daily_row_invalid",
+                    symbol=symbol,
+                    row_index=row_index,
+                    error=f"daily row must be an object, got {type(row).__name__}",
+                )
+                continue
+
+            row_date = str(row.get("date", "")).strip()
+            try:
+                date.fromisoformat(row_date)
+            except ValueError:
+                self._record_diagnostic(
+                    source=source,
+                    status="daily_row_invalid",
+                    symbol=symbol,
+                    row_index=row_index,
+                    error="daily row has invalid ISO date",
+                )
+                continue
+
+            invalid_fields: list[str] = []
+            for field_name in _DAILY_NUMERIC_FIELDS:
+                if field_name not in row:
+                    continue
+                try:
+                    float(row[field_name])
+                except (TypeError, ValueError):
+                    invalid_fields.append(field_name)
+            if invalid_fields:
+                self._record_diagnostic(
+                    source=source,
+                    status="daily_row_invalid",
+                    symbol=symbol,
+                    row_index=row_index,
+                    error="daily row has non-numeric fields: " + ", ".join(invalid_fields),
+                )
+                continue
+
+            if not str(row.get("symbol", "")).strip():
+                row = {**row, "symbol": symbol}
+            valid_rows.append(row)
+
+        return valid_rows
+
+    def _record_diagnostic(self, **payload: Any) -> None:
+        self._diagnostics.append({
+            "timestamp": datetime.now().isoformat(),
+            **payload,
+        })
 
 
 # ═══════════════════════════════════════════════════════════════════════════

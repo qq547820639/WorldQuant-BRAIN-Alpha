@@ -5,16 +5,59 @@ from __future__ import annotations
 from typing import Any
 
 from brain_alpha_ops.brain_api.canonical import CANONICAL_SETTINGS
+from brain_alpha_ops.data import OfficialDataLoader
 
 
 def _sorted_values(values: set[Any]) -> list[Any]:
     return sorted(values)
 
 
+def _dataset_options() -> list[dict[str, Any]]:
+    try:
+        datasets = OfficialDataLoader.instance().get_datasets()
+    except Exception:
+        return []
+    rows: list[dict[str, Any]] = []
+    for dataset in sorted(
+        datasets,
+        key=lambda item: (
+            str(getattr(item, "category", "") or ""),
+            str(getattr(item, "name", "") or ""),
+            str(getattr(item, "id", "") or ""),
+        ),
+    ):
+        dataset_id = str(getattr(dataset, "id", "") or "").strip()
+        if not dataset_id:
+            continue
+        name = str(getattr(dataset, "name", "") or "").strip() or dataset_id
+        try:
+            field_count = int(getattr(dataset, "field_count", 0) or 0)
+        except (TypeError, ValueError):
+            field_count = 0
+        rows.append(
+            {
+                "id": dataset_id,
+                "name": name,
+                "field_count": field_count,
+                "category": str(getattr(dataset, "category", "") or ""),
+                "label": _dataset_label(dataset_id, name, field_count),
+            }
+        )
+    return rows
+
+
+def _dataset_label(dataset_id: str, name: str, field_count: int) -> str:
+    count = f", {field_count} fields" if field_count > 0 else ""
+    return f"{dataset_id} - {name}{count}"
+
+
 def public_config_schema() -> dict[str, Any]:
     """Return the auditable UI-to-backend contract for production config."""
 
     settings_options = {key: _sorted_values(values) for key, values in CANONICAL_SETTINGS.items()}
+    dataset_options = _dataset_options()
+    if dataset_options:
+        settings_options["dataset"] = [str(row["id"]) for row in dataset_options]
     return {
         "schema_version": "web_config_schema.v1",
         "environment": {
@@ -40,11 +83,18 @@ def public_config_schema() -> dict[str, Any]:
             "language",
         ],
         "settings_options": settings_options,
+        "dataset_options": dataset_options,
         "controls": [
             {"id": "region", "payload_path": "settings.region", "required": True},
             {"id": "universe", "payload_path": "settings.universe", "required": True},
             {"id": "delay", "payload_path": "settings.delay", "required": True},
             {"id": "neutralization", "payload_path": "settings.neutralization", "required": True},
+            {
+                "id": "dataset",
+                "payload_path": "settings.dataset",
+                "required": False,
+                "options_source": "dataset_options",
+            },
             {"id": "instrumentType", "payload_path": "settings.instrumentType", "required": True},
             {"id": "alphaType", "payload_path": "settings.type", "required": True},
             {"id": "decay", "payload_path": "settings.decay", "required": True},

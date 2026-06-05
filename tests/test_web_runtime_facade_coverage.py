@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import logging
 import os
 from types import SimpleNamespace
 
 from brain_alpha_ops import web_runtime_facade as facade
+from brain_alpha_ops.web_job_registry import resolve_web_job_registry
 
 
 class _Collector:
@@ -77,7 +79,50 @@ def test_runtime_facade_context_and_snapshot_factories_collect_dependencies():
     assert snapshots.kwargs["runtime_factory"] is not None
 
 
-def test_runtime_facade_connection_success_and_failure():
+def test_runtime_facade_prefers_job_registry_and_honors_legacy_overrides():
+    web = _WebDouble()
+    registry = SimpleNamespace(
+        jobs={"registry": "jobs"},
+        sync_jobs={"registry": "sync"},
+        check_jobs={"registry": "check"},
+        async_jobs={"registry": "async"},
+        submit_lock=object(),
+        rate_limiter=object(),
+        task_executor=object(),
+    )
+    web.JOB_REGISTRY = registry
+    web.JOBS = registry.jobs
+    web.SYNC_JOBS = registry.sync_jobs
+    web.CHECK_JOBS = registry.check_jobs
+    web.ASYNC_JOBS = registry.async_jobs
+    web.SUBMIT_LOCK = registry.submit_lock
+
+    ctx = facade.handler_dispatch_context(web)
+    runtime = facade.snapshot_runtime(web)
+
+    assert ctx.kwargs["job"].kwargs["jobs"] is registry.jobs
+    assert ctx.kwargs["job"].kwargs["sync_jobs"] is registry.sync_jobs
+    assert ctx.kwargs["job"].kwargs["check_jobs"] is registry.check_jobs
+    assert ctx.kwargs["job"].kwargs["async_jobs"] is registry.async_jobs
+    assert ctx.kwargs["actions"].kwargs["submit_lock"] is registry.submit_lock
+    assert runtime.kwargs["job_store"] is registry.jobs
+    assert resolve_web_job_registry(web).rate_limiter is registry.rate_limiter
+
+    legacy_jobs = {"legacy": "jobs"}
+    legacy_lock = object()
+    web.JOBS = legacy_jobs
+    web.SUBMIT_LOCK = legacy_lock
+
+    ctx = facade.handler_dispatch_context(web)
+    runtime = facade.snapshot_runtime(web)
+
+    assert ctx.kwargs["job"].kwargs["jobs"] is legacy_jobs
+    assert ctx.kwargs["actions"].kwargs["submit_lock"] is legacy_lock
+    assert runtime.kwargs["job_store"] is legacy_jobs
+    assert ctx.kwargs["job"].kwargs["sync_jobs"] is registry.sync_jobs
+
+
+def test_runtime_facade_connection_success_and_failure(caplog):
     class API:
         def __init__(self):
             self.profile_called = False
@@ -99,7 +144,9 @@ def test_runtime_facade_connection_success_and_failure():
     assert api.profile_called is True
 
     web.run_config_from_payload = lambda payload: (_ for _ in ()).throw(RuntimeError("bad config"))
-    assert facade.test_connection(web, {})["error_code"] == "CONNECTION_FAILED"
+    with caplog.at_level(logging.ERROR, logger="brain_alpha_ops.web_runtime_facade"):
+        assert facade.test_connection(web, {})["error_code"] == "CONNECTION_FAILED"
+    assert "web connection test failed" in caplog.text
 
 
 def test_runtime_facade_job_selection_lookup_and_simple_delegates():

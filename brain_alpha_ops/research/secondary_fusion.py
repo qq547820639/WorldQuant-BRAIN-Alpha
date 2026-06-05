@@ -64,7 +64,12 @@ class SecondaryFusionService:
                 continue
             child = self._build_child(candidate, expression, note)
             child.local_quality = local_quality(child, self.config.budget.min_local_quality_score)
-            build_scorecard(child, self.config.thresholds, self.config.scoring, params=self.scoring_params)
+            child.scorecard = build_scorecard(
+                child,
+                self.config.thresholds,
+                self.config.scoring,
+                params=self.scoring_params,
+            )
             if (
                 not child.local_quality.get("passed")
                 or child.scorecard.get("total_score", 0.0) < self.config.budget.min_prior_score_for_official_validation

@@ -56,26 +56,9 @@ WINDOW_CONSTRAINTS: dict[str, dict[str, int]] = {
 }
 
 # ═══════════════════════════════════════════════════════════════════
-# P0: Field whitelist — verified BRAIN fields from official_fields.json
+# P0: Field whitelist — loaded from official_fields.json
 # ═══════════════════════════════════════════════════════════════════
-# All fields verified against data/official_fields.json (7,642 total).
-# Every field name exists in BRAIN API — zero custom/fictional fields.
-
-SAFE_FIELDS: set[str] = {
-    # ── Price & Volume (pv1, coverage 1.0) ──
-    "close", "open", "high", "low",
-    "volume", "returns",
-    "vwap", "adv20",
-    # ── Fundamental (fundamental6, coverage ≥ 0.5) ──
-    "assets", "revenue", "eps", "operating_income",
-    "enterprise_value",
-    # ── Analyst Estimates (analyst4, MATRIX type only) ──
-    "anl4_ebit_value", "anl4_ebitda_value",
-    # ── Cash Flow (analyst4) ──
-    "anl4_cfo_value", "anl4_cfi_value", "anl4_fcf_value",
-    # ── Revisions (analyst4) ──
-    "anl4_epsr_value", "anl4_epsr_mean",
-}
+SAFE_FIELDS: set[str] = set()
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -172,25 +155,25 @@ TEMPLATES: dict[str, list[tuple[str, list[str]]]] = {
         ("-rank(zscore({f1}) + zscore({f2}))",                               ["f1", "f2"]),
     ],
     "cross_sectional": [
-        ("group_rank(ts_delta({f1}, {d1}), sector)",                        ["f1", "d1"]),
-        ("group_neutralize(zscore({f1}), sector)",                          ["f1"]),
-        ("group_rank({f1}, subindustry)",                                    ["f1"]),
-        ("rank(zscore({f1}) - group_neutralize(zscore({f1}), sector))",    ["f1"]),
+        ("group_rank(ts_delta({f1}, {d1}), {f2})",                          ["f1", "d1", "f2"]),
+        ("group_neutralize(zscore({f1}), {f2})",                            ["f1", "f2"]),
+        ("group_rank({f1}, {f2})",                                          ["f1", "f2"]),
+        ("rank(zscore({f1}) - group_neutralize(zscore({f1}), {f2}))",      ["f1", "f2"]),
     ],
 }
 
-# Expanded field pools with logical groupings — verified BRAIN field IDs
+# Logical field pool names. Values are injected from official context at runtime.
 FIELD_POOLS: dict[str, list[str]] = {
-    "price":       ["close", "open", "vwap", "high", "low"],
-    "volume":      ["volume", "adv20"],
-    "returns":     ["returns"],
-    "value":       ["enterprise_value"],
-    "momentum":    ["close", "vwap", "returns"],
-    "volatility":  ["close", "returns", "vwap"],
-    "fundamental": ["revenue", "eps", "operating_income", "assets"],
-    "analyst":     ["anl4_ebit_value", "anl4_ebitda_value"],
-    "cashflow":    ["anl4_cfo_value", "anl4_fcf_value"],
-    "quality":     ["anl4_epsr_value", "anl4_epsr_mean"],
+    "price": [],
+    "volume": [],
+    "returns": [],
+    "value": [],
+    "momentum": [],
+    "volatility": [],
+    "fundamental": [],
+    "analyst": [],
+    "cashflow": [],
+    "quality": [],
 }
 
 # Logical field pairings for 2-field templates: (pool_for_f1, pool_for_f2)
@@ -235,9 +218,10 @@ def validate_expression(expression: str) -> dict[str, Any]:
     reserved = {"if", "else", "and", "or", "not", "true", "false", "none"}
 
     candidate_fields = tokens - known_ops - reserved
+    safe_fields = get_active_safe_fields()
     unknown_fields = sorted(
         t for t in candidate_fields
-        if not t.isdigit() and t not in SAFE_FIELDS
+        if not t.isdigit() and t not in safe_fields
     )
     if unknown_fields:
         errors.append(f"Unknown fields: {', '.join(unknown_fields)}")
@@ -377,6 +361,9 @@ def generate_validated_candidates(
 
     candidates: list[dict[str, Any]] = []
     attempts = 0
+    active_field_pools = get_active_field_pools()
+    if not active_field_pools:
+        return []
 
     while len(candidates) < count and attempts < max_attempts:
         attempts += 1
@@ -402,7 +389,9 @@ def generate_validated_candidates(
                     pool_names = ["price", "volume", "returns"]
 
                 pool_name = random.choice(pool_names)
-                field_pool = FIELD_POOLS.get(pool_name, FIELD_POOLS["price"])
+                field_pool = active_field_pools.get(pool_name) or next(iter(active_field_pools.values()), [])
+                if not field_pool:
+                    continue
                 values[slot] = random.choice(field_pool)
             elif slot.startswith("d"):
                 # P0-8: stratified window selection — short for delta, long for mean/std
@@ -481,20 +470,42 @@ def _tokenize(expression: str) -> list[str]:
 #   from brain_alpha_ops.research.validated_generator import set_active_safe_fields
 #   set_active_safe_fields(production_context["safe_fields"])
 
-_ACTIVE_SAFE_FIELDS: set[str] | None = None  # None = use static SAFE_FIELDS
+_ACTIVE_SAFE_FIELDS: set[str] | None = None
 _ACTIVE_FIELD_POOLS: dict[str, list[str]] | None = None
 
 
 def get_active_safe_fields() -> set[str]:
     """Return the currently active safe-fields set."""
-    return _ACTIVE_SAFE_FIELDS if _ACTIVE_SAFE_FIELDS is not None else SAFE_FIELDS
+    if _ACTIVE_SAFE_FIELDS is not None:
+        return set(_ACTIVE_SAFE_FIELDS)
+    try:
+        from brain_alpha_ops.data import OfficialDataLoader
+
+        return {
+            str(getattr(field, "id", "") or getattr(field, "name", "") or "").strip()
+            for field in OfficialDataLoader.instance().get_fields()
+            if str(getattr(field, "id", "") or getattr(field, "name", "") or "").strip()
+        }
+    except Exception:
+        return set()
+
+
+def get_active_field_pools() -> dict[str, list[str]]:
+    """Return official field pools for generation without static field fallback."""
+    if _ACTIVE_FIELD_POOLS is not None:
+        return {key: list(value) for key, value in _ACTIVE_FIELD_POOLS.items()}
+    fields = sorted(get_active_safe_fields())
+    if not fields:
+        return {}
+    return {pool_name: list(fields) for pool_name in FIELD_POOLS}
 
 
 def set_active_safe_fields(field_ids: list[str], field_pools: dict[str, list[str]] | None = None) -> None:
     """Inject live-verified fields from production context.
 
     Called by pipeline after authenticating and discovering available fields.
-    Falls back to static SAFE_FIELDS if never called.
+    If never called, local official_fields.json is used; unavailable context
+    returns an empty set so validation fails closed.
     """
     global _ACTIVE_SAFE_FIELDS, _ACTIVE_FIELD_POOLS
     _ACTIVE_SAFE_FIELDS = set(field_ids)

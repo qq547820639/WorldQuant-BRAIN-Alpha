@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import time
+
 from brain_alpha_ops.brain_api.base import BrainAPIError
 from brain_alpha_ops.redaction import redact_error_message
 
@@ -71,9 +73,15 @@ class PipelineContextSyncMixin:
             f"同步云端 Alpha：{sync_range}",
             data={"cloud_sync": {"status": "running", "status_code": "RUNNING", "range": sync_range, "scanned": 0, "added": 0, "skipped": 0, "failed": 0}},
         )
-        sync_meta = {"cached": False, "stale": False, "warning": ""}
+        sync_meta = {"cached": False, "stale": False, "warning": "", "cancelled": False}
+        elapsed_limit_seconds = float(getattr(self.config.budget, "cloud_sync_max_elapsed_seconds", 0.0) or 0.0)
+        sync_started_at = time.monotonic()
 
-        def on_cloud_progress(progress: dict):
+        def on_cloud_progress(progress: dict) -> bool:
+            if self._should_stop():
+                sync_meta["cancelled"] = True
+                sync_meta["warning"] = "Cloud alpha sync stopped before merge."
+                return False
             sync_meta["cached"] = sync_meta["cached"] or bool(progress.get("cached"))
             sync_meta["stale"] = sync_meta["stale"] or bool(progress.get("stale"))
             sync_meta["warning"] = str(progress.get("warning") or sync_meta["warning"] or "")
@@ -100,6 +108,15 @@ class PipelineContextSyncMixin:
                     }
                 },
             )
+            if self._should_stop():
+                sync_meta["cancelled"] = True
+                sync_meta["warning"] = "Cloud alpha sync stopped before merge."
+                return False
+            if elapsed_limit_seconds > 0 and (time.monotonic() - sync_started_at) >= elapsed_limit_seconds:
+                sync_meta["cancelled"] = True
+                sync_meta["warning"] = f"Cloud alpha sync reached elapsed limit {elapsed_limit_seconds:g}s before merge."
+                return False
+            return True
 
         try:
             rows = self.api.list_user_alphas(sync_range, progress_callback=on_cloud_progress)
@@ -119,6 +136,34 @@ class PipelineContextSyncMixin:
             }
             self._event("cloud_sync_failed", self.cloud_sync["warning"], level="WARN")
         else:
+            if sync_meta["cancelled"] or self._should_stop():
+                self.cloud_alphas = []
+                self._refresh_cloud_similarity_index()
+                self.cloud_sync = {
+                    "status": "stopped",
+                    "status_code": "STOPPED",
+                    "range": sync_range,
+                    "count": 0,
+                    "scanned": 0,
+                    "total": 0,
+                    "added": 0,
+                    "updated": 0,
+                    "skipped": 0,
+                    "failed": 0,
+                    "cached": bool(sync_meta["cached"]),
+                    "stale": bool(sync_meta["stale"]),
+                    "warning": str(sync_meta["warning"] or "Cloud alpha sync stopped before merge."),
+                    "run_status": "stopped",
+                }
+                self._event("cloud_sync_stopped", self.cloud_sync["warning"], level="WARN")
+                self._progress(
+                    "cloud_sync",
+                    1,
+                    1,
+                    "云端 Alpha 同步已停止，未合并部分结果。",
+                    data={"cloud_sync": self.cloud_sync, "cloud_alphas": self.cloud_alphas},
+                )
+                return
             self.cloud_alphas = rows
             self._refresh_cloud_similarity_index()
             merge_stats = self.repository.merge_cloud_alphas(rows, sync_range=sync_range)

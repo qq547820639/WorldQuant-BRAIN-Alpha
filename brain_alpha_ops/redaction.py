@@ -24,6 +24,7 @@ SENSITIVE_KEYS = {
     "image",
     "last_name",
     "lastname",
+    "passwd",
     "password",
     "phone",
     "secret",
@@ -34,10 +35,24 @@ SENSITIVE_KEYS = {
     "username",
 }
 
+
+def _key_regex_fragment(key: str) -> str:
+    normalized = key.strip().lower().replace("-", "_")
+    parts = [re.escape(part) for part in normalized.split("_") if part]
+    return r"[-_]?".join(parts)
+
+
+_SENSITIVE_KEY_RE = "|".join(
+    sorted(
+        {_key_regex_fragment(key) for key in SENSITIVE_KEYS},
+        key=len,
+        reverse=True,
+    )
+)
 _KEY_VALUE_RE = re.compile(
-    r"(?i)\b(access_token|authorization|cookie|csrf|password|secret|session|set-cookie|token)\b"
+    rf"(?i)([\"']?)\b({_SENSITIVE_KEY_RE})\b([\"']?)"
     r"(\s*[:=]\s*)"
-    r"([^,\s;]+)"
+    r"(\"[^\"]*\"|'[^']*'|[^,\s;}}]+)"
 )
 _AUTH_RE = re.compile(r"(?i)\b(Basic|Bearer)\s+[A-Za-z0-9._~+/=-]+")
 _SECRET_FRAGMENT_RE = re.compile(
@@ -52,7 +67,10 @@ def redact_text(value: object, *, max_length: int | None = None) -> str:
     text = str(value or "")
     text = _EMAIL_RE.sub("***@***", text)
     text = _AUTH_RE.sub(lambda match: f"{match.group(1)} <redacted>", text)
-    text = _KEY_VALUE_RE.sub(lambda match: f"{match.group(1)}{match.group(2)}<redacted>", text)
+    text = _KEY_VALUE_RE.sub(
+        lambda match: f"{match.group(1)}{match.group(2)}{match.group(3)}{match.group(4)}<redacted>",
+        text,
+    )
     text = _SECRET_FRAGMENT_RE.sub("<redacted>", text)
     if max_length is not None and len(text) > max_length:
         return text[:max_length]

@@ -1,6 +1,14 @@
 from brain_alpha_ops.config import QualityThresholds, ScoringConfig
 from brain_alpha_ops.models import Candidate
-from brain_alpha_ops.research.scoring import build_scorecard, decision_band, empirical_score, evaluate_quality_gate
+from brain_alpha_ops.research.scoring import (
+    build_scorecard,
+    decision_band,
+    empirical_score,
+    evaluate_quality_gate,
+    prior_score,
+    submission_checklist,
+)
+from brain_alpha_ops.research.scoring_params import ScoringParams
 
 
 def _candidate(metrics):
@@ -36,6 +44,29 @@ def test_gate_accepts_strong_official_candidate():
     build_scorecard(c, QualityThresholds())
     gate = evaluate_quality_gate(c, QualityThresholds())
     assert gate["submission_ready"]
+
+
+def test_build_scorecard_does_not_mutate_candidate_scorecard():
+    c = _candidate(
+        {
+            "sharpe": 1.4,
+            "fitness": 1.1,
+            "turnover": 0.25,
+            "returns": 0.08,
+            "drawdown": 0.08,
+            "sub_universe_sharpe": 1.2,
+            "correlation": 0.3,
+            "weight_concentration": 0.08,
+            "margin": 5.0,
+            "pass_fail": "PASS",
+        }
+    )
+    assert c.scorecard == {}
+
+    scorecard = build_scorecard(c, QualityThresholds())
+
+    assert c.scorecard == {}
+    assert scorecard["total_score"] >= 0
 
 
 def test_gate_rejects_high_correlation():
@@ -157,6 +188,54 @@ def test_scorecard_passes_configurable_decision_thresholds():
 
     assert default["decision_band"] in {"optimize_before_submit", "submit_candidate"}
     assert configured["decision_band"] == "research_only"
+
+
+def test_prior_score_normalizes_family_case_for_diversity():
+    upper = Candidate(
+        alpha_id="upper_family",
+        expression="rank(ts_delta(close, 20) / ts_std_dev(returns, 20))",
+        family="Hybrid",
+        hypothesis="Risk-adjusted hybrid signal combines price movement and volatility.",
+        data_fields=["close", "returns"],
+        operators=["rank", "ts_delta", "ts_std_dev"],
+    )
+    lower = Candidate(
+        alpha_id="lower_family",
+        expression=upper.expression,
+        family="hybrid",
+        hypothesis=upper.hypothesis,
+        data_fields=list(upper.data_fields),
+        operators=list(upper.operators),
+    )
+
+    default_upper = prior_score(upper)
+    default_lower = prior_score(lower)
+    param_lower = prior_score(lower, params=ScoringParams.defaults())
+
+    assert default_upper["dimensions"]["diversity"] == 80
+    assert default_lower["dimensions"]["diversity"] == default_upper["dimensions"]["diversity"]
+    assert param_lower["dimensions"]["diversity"] == ScoringParams.defaults().dimensions["diversity"].high_score
+
+
+def test_submission_checklist_normalizes_momentum_family_case():
+    c = Candidate(
+        alpha_id="lower_momentum",
+        expression="rank(ts_delta(close, 20))",
+        family="momentum",
+        hypothesis="Plain price momentum without a liquidity or volume confirmation.",
+        data_fields=["close"],
+        operators=["rank", "ts_delta"],
+        local_quality={"passed": True, "score": 80},
+        official_metrics={
+            "pass_fail": "PASS",
+            "correlation": 0.2,
+        },
+    )
+
+    checklist = submission_checklist(c, QualityThresholds())
+    diversity = next(item for item in checklist["items"] if item["name"] == "diversity")
+
+    assert diversity["passed"] is False
 
 
 def test_empirical_score_handles_zero_alpha_size_and_negative_sharpe():

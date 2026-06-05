@@ -53,6 +53,21 @@ def test_job_store_cancel_sets_stopping_and_persists(tmp_path):
     assert restored.get(job_id)["status"] == "stopping"
 
 
+def test_job_store_clear_does_not_persist_by_default(tmp_path):
+    path = tmp_path / "jobs.json"
+    store = JobStore(path)
+    job_id = store.create()
+
+    store.clear()
+
+    assert store.all() == []
+    assert JobStore(path, recover_active_as="").get(job_id) is not None
+
+    store.clear(persist=True)
+
+    assert JobStore(path, recover_active_as="").all() == []
+
+
 def test_job_store_redacts_sensitive_payloads_before_persisting(tmp_path):
     path = tmp_path / "jobs.json"
     store = JobStore(path)
@@ -159,3 +174,49 @@ def test_compact_runtime_result_replaces_heavy_runtime_lists_with_counts_and_pre
     assert len(compact["alphas_preview"][0]["nested"]["items_preview"]) == 3
     assert compact["candidates_count"] == 1
     assert compact["candidates_preview"] == [{"alpha_id": "c1"}]
+
+
+def test_compact_runtime_result_keeps_submission_evidence_outside_preview():
+    candidates = [
+        {"alpha_id": f"local_{index}", "scorecard": {"decision_band": "research_only"}}
+        for index in range(5)
+    ]
+    candidates.append(
+        {
+            "alpha_id": "local_hidden",
+            "lifecycle_status": "generated",
+            "scorecard": {"total_score": 62.0, "decision_band": "research_only"},
+            "debug_payload": {"large": "not needed for submit audit"},
+        }
+    )
+    candidates.append(
+        {
+            "alpha_id": "ready_hidden",
+            "official_alpha_id": "official_ready_hidden",
+            "lifecycle_status": "submission_ready",
+            "gate": {"submission_ready": True},
+            "official_metrics": {"pass_fail": "PASS"},
+            "scorecard": {"decision_band": "submit_candidate"},
+            "cloud_correlation_risk": {"level": "low", "max_similarity": 0.1},
+        }
+    )
+
+    compact = _compact_runtime_result({"candidates": candidates}, preview_rows=5)
+
+    assert compact["candidates_count"] == 7
+    assert [item["alpha_id"] for item in compact["candidates_preview"]] == [
+        "local_0",
+        "local_1",
+        "local_2",
+        "local_3",
+        "local_4",
+    ]
+    assert [item["alpha_id"] for item in compact["candidates_submission_evidence"]] == [
+        "local_hidden",
+        "ready_hidden",
+    ]
+    assert compact["candidates_submission_evidence"][0]["scorecard"] == {
+        "total_score": 62.0,
+        "decision_band": "research_only",
+    }
+    assert "debug_payload" not in compact["candidates_submission_evidence"][0]

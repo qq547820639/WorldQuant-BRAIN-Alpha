@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 from functools import wraps
+import logging
 from typing import Any, Callable
 from urllib.parse import parse_qs
 
 from brain_alpha_ops.research.assistant import AssistantResponseParseError
+from brain_alpha_ops.redaction import redact_text
 from brain_alpha_ops.web_dispatch_context import (
     WebDispatchActionContext,
     WebDispatchAssistantContext,
@@ -18,18 +20,21 @@ from brain_alpha_ops.web_dispatch_context import (
     WebHandlerDispatchContext,
 )
 from brain_alpha_ops.web_payload_validation import (
+    validate_alpha_action_payload,
     validate_assistant_cross_review_payload,
     validate_assistant_guidance_save_payload,
     validate_assistant_text_payload,
-    validate_alpha_action_payload,
     validate_check_batch_payload,
     validate_generate_candidates_payload,
-    validate_json_object_payload,
     validate_job_cancel_payload,
+    validate_json_object_payload,
     validate_submit_batch_payload,
     validate_sync_alphas_payload,
 )
+from brain_alpha_ops.web_post_handlers import stop_job_payload
 
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_HISTORY_LIMIT = 5000
 MAX_HISTORY_LIMIT = 10000
@@ -80,7 +85,11 @@ def _dispatch_route(
     if getattr(route, "category", "api") == "api":
         rate_result = ctx.rate_limit_request(_rate_limit_key(handler), method, parsed.path)
         if not rate_result.get("ok"):
-            retry_after = str(rate_result.get("retry_after") or 1)
+            retry_value = rate_result.get("retry_after") or 1
+            try:
+                retry_after = str(int(float(retry_value)))
+            except (TypeError, ValueError):
+                retry_after = "1"
             handler._json({"ok": False, **rate_result}, status=429, extra_headers=[("Retry-After", retry_after)])
             return
     route_handler = handlers.get(str(route.handler))
@@ -90,6 +99,7 @@ def _dispatch_route(
     try:
         route_handler(handler, parsed, ctx)
     except Exception as exc:
+        logger.error("web route dispatch failed: %s %s", method, redact_text(parsed.path), exc_info=True)
         handler._json(ctx.web_error(exc, f"{method}_ROUTE_ERROR"), status=500)
 
 
@@ -99,6 +109,9 @@ def _rate_limit_key(handler: Any) -> str:
         session_id = str(session_getter() or "").strip()
         if session_id:
             return f"session:{session_id}"
+    client_address = getattr(handler, "client_address", ("local", 0))
+    if isinstance(client_address, tuple) and client_address:
+        return f"client:{client_address[0]}"
     headers = getattr(handler, "headers", {}) or {}
     return f"host:{headers.get('Host', 'local')}"
 
@@ -131,8 +144,10 @@ def _validated_post_route(
                     return
                 route_handler(handler, parsed, ctx, payload)
             except AssistantResponseParseError as exc:
+                logger.error("web post route failed: %s", redact_text(parsed.path), exc_info=True)
                 handler._json(ctx.web_error(exc, assistant_error_code or error_code), status=400)
             except Exception as exc:
+                logger.error("web post route failed: %s", redact_text(parsed.path), exc_info=True)
                 handler._json(ctx.web_error(exc, error_code), status=400)
 
         return _wrapper
@@ -210,7 +225,6 @@ def _get_lifecycle(handler: Any, parsed: Any, ctx: WebHandlerDispatchContext) ->
 
 
 def _get_candidates(handler: Any, parsed: Any, ctx: WebHandlerDispatchContext) -> None:
-    """Return lifecycle records wrapped as {candidates: [...]} for the React frontend."""
     job_id = (parse_qs(parsed.query).get("job_id") or [""])[0]
     lifecycle = ctx.lifecycle_payload(ctx.jobs, job_id, ctx.lifecycle_from_job)
     rows = lifecycle.get("records") if isinstance(lifecycle.get("records"), list) else []
@@ -231,10 +245,8 @@ def _has_candidate_like_rows(rows: list[Any]) -> bool:
 
 def _latest_async_candidates(async_jobs: Any) -> list[dict[str, Any]]:
     latest_any = getattr(async_jobs, "all", None)
-    rows = []
-    if callable(latest_any):
-        rows = latest_any(limit=25)
-    else:
+    rows = latest_any(limit=25) if callable(latest_any) else []
+    if not rows:
         latest = getattr(async_jobs, "latest_any", None)
         if callable(latest):
             item = latest()
@@ -308,12 +320,7 @@ def _get_sqlite_expression_lookup(handler: Any, parsed: Any, ctx: WebHandlerDisp
     top_n = ctx.bounded_query_int((query.get("top_n") or ["10"])[0], 1, 100)
     min_similarity = ctx.bounded_query_float((query.get("min_similarity") or ["0.75"])[0], 0.0, 1.0)
     max_scan_rows = ctx.bounded_query_int((query.get("max_scan_rows") or ["2000"])[0], 1, 10000)
-    handler._json(ctx.sqlite_expression_lookup_payload(
-        expression=expression,
-        top_n=top_n,
-        min_similarity=min_similarity,
-        max_scan_rows=max_scan_rows,
-    ))
+    handler._json(ctx.sqlite_expression_lookup_payload(expression=expression, top_n=top_n, min_similarity=min_similarity, max_scan_rows=max_scan_rows))
 
 
 def _get_sqlite_record_lookup(handler: Any, parsed: Any, ctx: WebHandlerDispatchContext) -> None:
@@ -347,13 +354,7 @@ def _get_assistant_request(handler: Any, parsed: Any, ctx: WebHandlerDispatchCon
     include_prompt = ctx.payload_truthy((query.get("include_prompt") or ["true"])[0])
     include_draft = ctx.payload_truthy((query.get("include_draft") or ["true"])[0])
     include_sensitive = ctx.payload_truthy((query.get("include_sensitive") or ["false"])[0])
-    handler._json(ctx.assistant_request_snapshot(
-        limit=limit,
-        top_n=top_n,
-        include_prompt=include_prompt,
-        include_offline_draft=include_draft,
-        include_sensitive=include_sensitive,
-    ))
+    handler._json(ctx.assistant_request_snapshot(limit=limit, top_n=top_n, include_prompt=include_prompt, include_offline_draft=include_draft, include_sensitive=include_sensitive))
 
 
 def _get_anti_overfit(handler: Any, parsed: Any, ctx: WebHandlerDispatchContext) -> None:
@@ -371,8 +372,7 @@ def _get_rolling_validation(handler: Any, parsed: Any, ctx: WebHandlerDispatchCo
 def _get_sync_status(handler: Any, parsed: Any, ctx: WebHandlerDispatchContext) -> None:
     job_id = (parse_qs(parsed.query).get("job_id") or [""])[0]
     payload, status = ctx.job_status_payload(ctx.sync_jobs, job_id, ctx.enrich_progress, error="unknown sync job")
-    query = parse_qs(parsed.query)
-    if ctx.payload_truthy((query.get("compact") or ["false"])[0]):
+    if ctx.payload_truthy((parse_qs(parsed.query).get("compact") or ["false"])[0]):
         payload = _compact_job_result(payload)
     handler._json(payload, status=status)
 
@@ -408,6 +408,18 @@ def _get_scoring_health(handler: Any, parsed: Any, _ctx: WebHandlerDispatchConte
 def _get_checkpoint_status(handler: Any, parsed: Any, _ctx: WebHandlerDispatchContext) -> None:
     from brain_alpha_ops.web_redline_scoring import handle_checkpoint_status
     handler._json(handle_checkpoint_status(parse_qs(parsed.query)))
+
+
+def _get_backtest_slots(handler: Any, _parsed: Any, _ctx: WebHandlerDispatchContext) -> None:
+    from brain_alpha_ops.web_routes import _backtest_slots_payload
+
+    handler._json(_backtest_slots_payload())
+
+
+def _get_submit_readiness(handler: Any, _parsed: Any, _ctx: WebHandlerDispatchContext) -> None:
+    from brain_alpha_ops.web_routes import _submit_readiness_payload
+
+    handler._json(_submit_readiness_payload())
 
 
 @_validated_post_route(validate_json_object_payload, "RUN_ERROR")
@@ -455,19 +467,9 @@ def _post_sync_cancel(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext
     result = ctx.stop_job_payload(ctx.sync_jobs, payload)
     job_id = str((payload or {}).get("job_id") or "")
     if result.get("ok"):
-        handler._json({
-            **result,
-            "job_id": job_id,
-            "status": "stopping",
-            "message": "云端同步停止请求已发送，后台会在当前官方接口返回后结束。",
-        })
+        handler._json({**result, "job_id": job_id, "status": "stopping", "message": "云端同步停止请求已发送，后台会在当前官方接口返回后结束。"})
         return
-    handler._json({
-        **result,
-        "job_id": job_id,
-        "error_code": "SYNC_JOB_NOT_FOUND",
-        "error": "未找到可停止的云端同步任务。",
-    }, status=404)
+    handler._json({**result, "job_id": job_id, "error_code": "SYNC_JOB_NOT_FOUND", "error": "未找到可停止的云端同步任务。"}, status=404)
 
 
 @_validated_post_route(validate_alpha_action_payload, "CHECK_ERROR")
@@ -477,18 +479,9 @@ def _post_check(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext, payl
     handler._json(ctx.check_candidate(payload))
 
 
-@_validated_post_route(
-    validate_generate_candidates_payload,
-    "GENERATE_CANDIDATES_ERROR",
-    assistant_error_code="ASSISTANT_RESPONSE_PARSE_ERROR",
-)
+@_validated_post_route(validate_generate_candidates_payload, "GENERATE_CANDIDATES_ERROR", assistant_error_code="ASSISTANT_RESPONSE_PARSE_ERROR")
 def _post_generate_candidates(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext, payload: dict[str, Any]) -> None:
-    response, status = ctx.background_job_start_payload(
-        ctx.async_jobs,
-        payload,
-        ctx.start_generate_candidates_job,
-        conflict_error="active async job",
-    )
+    response, status = ctx.background_job_start_payload(ctx.async_jobs, payload, ctx.start_generate_candidates_job, conflict_error="active async job")
     handler._json(response, status=status)
 
 
@@ -517,47 +510,26 @@ def _post_submit_batch(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContex
     if ctx.submit_lock.locked():
         handler._json({"ok": False, "error_code": "CONFLICT_RUNNING", "error": "已有提交任务正在运行，请完成后再操作。"}, status=409)
         return
-    response, status = ctx.background_job_start_payload(
-        ctx.async_jobs,
-        payload,
-        ctx.start_submit_batch_job,
-        conflict_error="active async job",
-    )
+    response, status = ctx.background_job_start_payload(ctx.async_jobs, payload, ctx.start_submit_batch_job, conflict_error="active async job")
     handler._json(response, status=status)
 
 
-@_validated_post_route(
-    validate_assistant_text_payload,
-    "ASSISTANT_RESPONSE_PARSE_ERROR",
-    assistant_error_code="ASSISTANT_RESPONSE_PARSE_ERROR",
-)
+@_validated_post_route(validate_assistant_text_payload, "ASSISTANT_RESPONSE_PARSE_ERROR", assistant_error_code="ASSISTANT_RESPONSE_PARSE_ERROR")
 def _post_assistant_response_parse(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext, payload: dict[str, Any]) -> None:
     handler._json(ctx.assistant_response_parse_post_payload(payload, ctx.assistant_response_parse_payload))
 
 
-@_validated_post_route(
-    validate_assistant_text_payload,
-    "ASSISTANT_RESPONSE_GUIDANCE_ERROR",
-    assistant_error_code="ASSISTANT_RESPONSE_PARSE_ERROR",
-)
+@_validated_post_route(validate_assistant_text_payload, "ASSISTANT_RESPONSE_GUIDANCE_ERROR", assistant_error_code="ASSISTANT_RESPONSE_PARSE_ERROR")
 def _post_assistant_response_guidance(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext, payload: dict[str, Any]) -> None:
     handler._json(ctx.assistant_response_guidance_post_payload(payload, ctx.assistant_response_guidance_payload))
 
 
-@_validated_post_route(
-    validate_assistant_cross_review_payload,
-    "ASSISTANT_CROSS_REVIEW_ERROR",
-    assistant_error_code="ASSISTANT_CROSS_REVIEW_PARSE_ERROR",
-)
+@_validated_post_route(validate_assistant_cross_review_payload, "ASSISTANT_CROSS_REVIEW_ERROR", assistant_error_code="ASSISTANT_CROSS_REVIEW_PARSE_ERROR")
 def _post_assistant_cross_review(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext, payload: dict[str, Any]) -> None:
     handler._json(ctx.assistant_cross_review_payload(payload))
 
 
-@_validated_post_route(
-    validate_assistant_guidance_save_payload,
-    "ASSISTANT_GUIDANCE_SAVE_ERROR",
-    assistant_error_code="ASSISTANT_RESPONSE_PARSE_ERROR",
-)
+@_validated_post_route(validate_assistant_guidance_save_payload, "ASSISTANT_GUIDANCE_SAVE_ERROR", assistant_error_code="ASSISTANT_RESPONSE_PARSE_ERROR")
 def _post_assistant_guidance(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext, payload: dict[str, Any]) -> None:
     handler._json(ctx.save_assistant_guidance_post_payload(payload, ctx.save_assistant_guidance_payload))
 
@@ -574,17 +546,12 @@ def _post_shutdown(handler: Any, parsed: Any, ctx: WebHandlerDispatchContext) ->
 
 @_validated_post_route(validate_alpha_action_payload, "SCORING_ERROR")
 def _post_scoring_evaluate(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext, payload: dict[str, Any]) -> None:
-    response, status = ctx.background_job_start_payload(
-        ctx.async_jobs,
-        payload,
-        ctx.start_scoring_evaluate_job,
-        conflict_error="active async job",
-    )
+    response, status = ctx.background_job_start_payload(ctx.async_jobs, payload, ctx.start_scoring_evaluate_job, conflict_error="active async job")
     handler._json(response, status=status)
 
 
 @_validated_post_route(validate_alpha_action_payload, "SCORING_ERROR")
-def _post_scoring_attribution(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext, payload: dict[str, Any]) -> None:
+def _post_scoring_attribution(handler: Any, _parsed: Any, _ctx: WebHandlerDispatchContext, payload: dict[str, Any]) -> None:
     from brain_alpha_ops.web_redline_scoring import handle_scoring_attribution
     handler._json(handle_scoring_attribution(payload))
 
@@ -621,6 +588,8 @@ _GET_DISPATCH_HANDLERS: dict[str, RouteDispatcher] = {
     "redline_report": _get_redline_report,
     "scoring_health": _get_scoring_health,
     "checkpoint_status": _get_checkpoint_status,
+    "backtest_slots": _get_backtest_slots,
+    "submit_readiness": _get_submit_readiness,
 }
 
 
@@ -664,6 +633,7 @@ def _submit_with_lock(
         payload = handler._read_json() if payload is None else payload
         handler._json(submitter(payload))
     except Exception as exc:
+        logger.error("web submit route failed: %s", error_code, exc_info=True)
         handler._json(ctx.web_error(exc, error_code), status=400)
     finally:
         ctx.submit_lock.release()

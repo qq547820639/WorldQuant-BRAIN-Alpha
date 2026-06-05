@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from brain_alpha_ops.web_progress import enrich_progress
+from brain_alpha_ops.web_progress import ProgressPayload, enrich_progress
 
 
 def test_enrich_progress_adds_known_phase_label_without_overwriting_existing_label():
@@ -26,3 +26,15 @@ def test_enrich_progress_adds_unified_progress_fields():
     assert progress["percent_complete"] == 50.0
     assert progress["percent"] == 50.0
     assert progress["status_message"] == "Checking 2/4"
+
+
+def test_progress_payload_documents_unified_fields():
+    assert {
+        "task_id",
+        "job_id",
+        "phase",
+        "phase_label",
+        "percent_complete",
+        "status_message",
+        "eta_seconds",
+    }.issubset(ProgressPayload.__annotations__)

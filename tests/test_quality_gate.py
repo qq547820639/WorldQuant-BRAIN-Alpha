@@ -75,6 +75,8 @@ def test_quality_gate_runs_core_steps_and_skips_pytest(monkeypatch, tmp_path):
         "frontend_inline_sync",
         "frontend_syntax",
         "frontend_innerhtml_guard",
+        "frontend_silent_catch_guard",
+        "python_silent_broad_exception_guard",
         "web_console_contract",
         "frontend_surface_parity",
         "react_build_env",
@@ -86,8 +88,22 @@ def test_quality_gate_runs_core_steps_and_skips_pytest(monkeypatch, tmp_path):
         "cache_metadata_audit",
         "diagnostic_report_sync",
         "review_gap_closure_tracker",
+        "static_defect_analysis_report",
+        "v5_defect_tracking",
+        "prod_defect_tracking",
     ]
     assert all("-m" not in call or "pytest" not in call for call in calls)
+    assert any(
+        call == [
+            "scripts/check_defect_analysis_report.py",
+            "--report",
+            "docs/STATIC_ANALYSIS_DEFECT_REPORT_20260603.md",
+            "--json",
+        ]
+        for call in calls
+    )
+    assert any(call == ["scripts/check_v5_defect_tracking.py", "--json"] for call in calls)
+    assert any(call == ["scripts/check_prod_defect_tracking.py", "--json"] for call in calls)
 
 
 def test_quality_gate_includes_pytest_args_and_propagates_failure(monkeypatch, tmp_path):
@@ -115,6 +131,8 @@ def test_quality_gate_includes_pytest_args_and_propagates_failure(monkeypatch, t
         "frontend_inline_sync",
         "frontend_syntax",
         "frontend_innerhtml_guard",
+        "frontend_silent_catch_guard",
+        "python_silent_broad_exception_guard",
         "web_console_contract",
         "frontend_surface_parity",
         "react_build_env",
@@ -126,6 +144,9 @@ def test_quality_gate_includes_pytest_args_and_propagates_failure(monkeypatch, t
         "cache_metadata_audit",
         "diagnostic_report_sync",
         "review_gap_closure_tracker",
+        "static_defect_analysis_report",
+        "v5_defect_tracking",
+        "prod_defect_tracking",
         "pytest",
     ]
     secret_scan_step = next(step for step in result["steps"] if step["name"] == "secret_scan")
@@ -171,7 +192,7 @@ def test_quality_gate_can_skip_compile(monkeypatch, tmp_path):
     )
 
     assert result["ok"] is True
-    assert [step["name"] for step in result["steps"]] == ["config", "dependency_policy", "redline_verification", "brain_contract_validation", "diagnosis_gap_coverage", "frontend_inline_sync", "frontend_syntax", "frontend_innerhtml_guard", "web_console_contract", "frontend_surface_parity", "react_build_env", "text_encoding_scan", "tracked_data_inventory", "official_context_validation", "module_size_audit", "secret_scan", "cache_metadata_audit", "diagnostic_report_sync", "review_gap_closure_tracker"]
+    assert [step["name"] for step in result["steps"]] == ["config", "dependency_policy", "redline_verification", "brain_contract_validation", "diagnosis_gap_coverage", "frontend_inline_sync", "frontend_syntax", "frontend_innerhtml_guard", "frontend_silent_catch_guard", "python_silent_broad_exception_guard", "web_console_contract", "frontend_surface_parity", "react_build_env", "text_encoding_scan", "tracked_data_inventory", "official_context_validation", "module_size_audit", "secret_scan", "cache_metadata_audit", "diagnostic_report_sync", "review_gap_closure_tracker", "static_defect_analysis_report", "v5_defect_tracking", "prod_defect_tracking"]
     assert not any("compileall" in call for call in calls)
 
 
@@ -202,6 +223,8 @@ def test_quality_gate_can_include_dependency_audit(monkeypatch, tmp_path):
         "frontend_inline_sync",
         "frontend_syntax",
         "frontend_innerhtml_guard",
+        "frontend_silent_catch_guard",
+        "python_silent_broad_exception_guard",
         "web_console_contract",
         "frontend_surface_parity",
         "react_build_env",
@@ -213,6 +236,9 @@ def test_quality_gate_can_include_dependency_audit(monkeypatch, tmp_path):
         "cache_metadata_audit",
         "diagnostic_report_sync",
         "review_gap_closure_tracker",
+        "static_defect_analysis_report",
+        "v5_defect_tracking",
+        "prod_defect_tracking",
         "dependency_audit",
     ]
     assert any("pip_audit" in call for call in calls)
@@ -266,12 +292,32 @@ def test_quality_gate_can_include_static_analysis(monkeypatch, tmp_path):
     assert any("mypy" in call for call in calls)
     assert any("scripts/check_review_gap_closure_tracker.py" in call for call in calls if "ruff" in call)
     assert any("scripts/check_review_gap_closure_tracker.py" in call for call in calls if "mypy" in call)
+    assert any("scripts/check_defect_analysis_report.py" in call for call in calls if "ruff" in call)
+    assert any("scripts/check_defect_analysis_report.py" in call for call in calls if "mypy" in call)
+    assert any("scripts/check_v5_defect_tracking.py" in call for call in calls if "ruff" in call)
+    assert any("scripts/check_v5_defect_tracking.py" in call for call in calls if "mypy" in call)
+    assert any("scripts/check_prod_defect_tracking.py" in call for call in calls if "ruff" in call)
+    assert any("scripts/check_prod_defect_tracking.py" in call for call in calls if "mypy" in call)
     assert any("scripts/check_frontend_innerhtml.py" in call for call in calls if "ruff" in call)
     assert any("scripts/check_frontend_innerhtml.py" in call for call in calls if "mypy" in call)
+    assert any("scripts/check_frontend_silent_catches.py" in call for call in calls if "ruff" in call)
+    assert any("scripts/check_frontend_silent_catches.py" in call for call in calls if "mypy" in call)
+    assert any("scripts/check_python_silent_broad_exceptions.py" in call for call in calls if "ruff" in call)
+    assert any("scripts/check_python_silent_broad_exceptions.py" in call for call in calls if "mypy" in call)
     assert any("tests/test_review_gap_closure_tracker.py" in call for call in calls if "ruff" in call)
     assert any("tests/test_review_gap_closure_tracker.py" in call for call in calls if "mypy" in call)
+    assert any("tests/test_defect_analysis_report.py" in call for call in calls if "ruff" in call)
+    assert any("tests/test_defect_analysis_report.py" in call for call in calls if "mypy" in call)
+    assert any("tests/test_v5_defect_tracking.py" in call for call in calls if "ruff" in call)
+    assert any("tests/test_v5_defect_tracking.py" in call for call in calls if "mypy" in call)
+    assert any("tests/test_prod_defect_tracking.py" in call for call in calls if "ruff" in call)
+    assert any("tests/test_prod_defect_tracking.py" in call for call in calls if "mypy" in call)
     assert any("tests/test_frontend_innerhtml_guard.py" in call for call in calls if "ruff" in call)
     assert any("tests/test_frontend_innerhtml_guard.py" in call for call in calls if "mypy" in call)
+    assert any("tests/test_frontend_silent_catches_guard.py" in call for call in calls if "ruff" in call)
+    assert any("tests/test_frontend_silent_catches_guard.py" in call for call in calls if "mypy" in call)
+    assert any("tests/test_python_silent_broad_exceptions_guard.py" in call for call in calls if "ruff" in call)
+    assert any("tests/test_python_silent_broad_exceptions_guard.py" in call for call in calls if "mypy" in call)
 
 
 def test_quality_gate_can_require_react_build(monkeypatch, tmp_path):
@@ -725,3 +771,112 @@ def test_final_release_gate_passes_with_release_config(tmp_path):
     assert report.redlines["code_strong_alignment"] is True
     assert report.redlines["dataset_id_fully_available"] is True
     assert report.redlines["full_factor_coverage"] is True
+
+
+def test_final_release_gate_accepts_fresh_official_metadata_when_status_failed(tmp_path):
+    config = json.loads((Path(__file__).resolve().parents[1] / "config" / "run_config.json").read_text(encoding="utf-8"))
+    config["ops"]["storage_dir"] = str(tmp_path / "data")
+    config_path = tmp_path / "run_config.json"
+    config_path.write_text(json.dumps(config), encoding="utf-8")
+    fixture_config = SimpleNamespace(
+        ops=SimpleNamespace(
+            storage_dir=config["ops"]["storage_dir"],
+            official_api=SimpleNamespace(context_cache_ttl_seconds=3600),
+        )
+    )
+    write_template_safe_official_context(fixture_config)
+    (tmp_path / "data" / "official_context_refresh_status.json").write_text(
+        json.dumps({"schema_version": "official_context_refresh.v1", "ok": False, "status": "failed"}),
+        encoding="utf-8",
+    )
+
+    report = run_final_release_gate(config_path=config_path)
+
+    assert report.passed is True
+    assert not any(finding.code == "OFFICIAL_REFRESH_NOT_VERIFIED" for finding in report.findings)
+
+
+def test_final_release_gate_blocks_failed_status_when_official_metadata_is_stale(tmp_path):
+    config = json.loads((Path(__file__).resolve().parents[1] / "config" / "run_config.json").read_text(encoding="utf-8"))
+    config["ops"]["storage_dir"] = str(tmp_path / "data")
+    config_path = tmp_path / "run_config.json"
+    config_path.write_text(json.dumps(config), encoding="utf-8")
+    fixture_config = SimpleNamespace(
+        ops=SimpleNamespace(
+            storage_dir=config["ops"]["storage_dir"],
+            official_api=SimpleNamespace(context_cache_ttl_seconds=3600),
+        )
+    )
+    write_template_safe_official_context(fixture_config)
+    fields_meta_path = tmp_path / "data" / "official_fields.meta.json"
+    fields_meta = json.loads(fields_meta_path.read_text(encoding="utf-8"))
+    fields_meta["expires_at"] = "2000-01-01T00:00:00+00:00"
+    fields_meta_path.write_text(json.dumps(fields_meta), encoding="utf-8")
+    (tmp_path / "data" / "official_context_refresh_status.json").write_text(
+        json.dumps({"schema_version": "official_context_refresh.v1", "ok": False, "status": "failed"}),
+        encoding="utf-8",
+    )
+
+    report = run_final_release_gate(config_path=config_path)
+
+    assert report.passed is False
+    assert any(finding.code == "OFFICIAL_REFRESH_NOT_VERIFIED" for finding in report.findings)
+
+
+def test_final_release_gate_blocks_prod_correlation_threshold_drift(tmp_path):
+    config = json.loads((Path(__file__).resolve().parents[1] / "config" / "run_config.json").read_text(encoding="utf-8"))
+    config["ops"]["storage_dir"] = str(tmp_path / "data")
+    config["ops"]["thresholds"]["max_prod_correlation"] = 0.95
+    config_path = tmp_path / "run_config.json"
+    config_path.write_text(json.dumps(config), encoding="utf-8")
+    fixture_config = SimpleNamespace(
+        ops=SimpleNamespace(
+            storage_dir=config["ops"]["storage_dir"],
+            official_api=SimpleNamespace(context_cache_ttl_seconds=3600),
+        )
+    )
+    write_template_safe_official_context(fixture_config)
+    (tmp_path / "data" / "official_context_refresh_status.json").write_text(
+        json.dumps({"schema_version": "official_context_refresh.v1", "ok": True, "status": "refreshed"}),
+        encoding="utf-8",
+    )
+
+    report = run_final_release_gate(config_path=config_path)
+
+    assert report.passed is False
+    assert report.redlines["zero_threshold_drift"] is False
+    assert any(
+        finding.code == "THRESHOLD_DRIFT_MAX_PROD_CORRELATION"
+        for finding in report.findings
+    )
+
+
+def test_final_release_gate_maps_official_context_lineage_to_dataset_redline(tmp_path):
+    config = json.loads((Path(__file__).resolve().parents[1] / "config" / "run_config.json").read_text(encoding="utf-8"))
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+    config["ops"]["storage_dir"] = str(data_dir)
+    config_path = tmp_path / "run_config.json"
+    config_path.write_text(json.dumps(config), encoding="utf-8")
+    (data_dir / "official_fields.json").write_text(
+        json.dumps([{"id": "close", "dataset": {"id": "pv1"}}]),
+        encoding="utf-8",
+    )
+    (data_dir / "official_operators.json").write_text(
+        json.dumps([{"name": "rank"}, {"name": "ts_delta"}]),
+        encoding="utf-8",
+    )
+    (data_dir / "official_datasets.json").write_text(
+        json.dumps([{"id": "pv1", "name": "Price Volume", "field_count": 2}]),
+        encoding="utf-8",
+    )
+    (data_dir / "official_context_refresh_status.json").write_text(
+        json.dumps({"schema_version": "official_context_refresh.v1", "ok": True, "status": "refreshed"}),
+        encoding="utf-8",
+    )
+
+    report = run_final_release_gate(config_path=config_path)
+
+    assert report.passed is False
+    assert report.redlines["dataset_id_fully_available"] is False
+    assert any(finding.code == "OFFICIAL_CONTEXT_DATASET_FIELD_COUNT_MISMATCH" for finding in report.findings)

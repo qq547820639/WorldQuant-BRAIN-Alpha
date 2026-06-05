@@ -10,15 +10,20 @@ from brain_alpha_ops.config import RunConfig
 from brain_alpha_ops.jsonl import read_jsonl_tail
 from brain_alpha_ops.models import utc_now
 from brain_alpha_ops.redaction import redact_error_message, redact_text
+from brain_alpha_ops.brain_api.official_helpers import looks_non_production_alpha_id
 from brain_alpha_ops.research.expression_ast import expression_key
 from brain_alpha_ops.research.observability import build_research_observability_snapshot
 from brain_alpha_ops.research.repository import ResearchRepository
 from brain_alpha_ops.research.safety import SubmissionLedger
+from brain_alpha_ops.submission_readiness import missing_official_metric_fields
 from brain_alpha_ops.web_candidate_selection import official_alpha_id
-from brain_alpha_ops.web_risk_guidance import (
+from brain_alpha_ops.web_candidate_selection import candidate_official_metrics
+from brain_alpha_ops.web_check_availability import (
     build_cloud_self_correlation_explanation,
     build_context_health_explanation,
 )
+from brain_alpha_ops.web_cloud_snapshot import dedupe_cloud_alpha_rows, extract_alpha_rows
+from brain_alpha_ops.web_post_handlers import save_assistant_guidance_post_payload
 
 
 LedgerFactory = Callable[[str], SubmissionLedger]
@@ -46,6 +51,9 @@ def submit_preflight_block(
     return payload
 
 
+submission_preflight_block = submit_preflight_block
+
+
 def submission_preflight_error_message(
     candidate: dict[str, Any],
     run_config: RunConfig,
@@ -54,7 +62,6 @@ def submission_preflight_error_message(
     cloud_alpha_snapshot: CloudAlphaSnapshot,
     cloud_status_for: CloudStatusFor,
 ) -> str:
-    """Legacy string preflight used by older web callers."""
     official_id = official_alpha_id(candidate)
     if not official_id:
         return "缺少官方 Alpha ID，请先完成官方回测。"
@@ -89,6 +96,9 @@ def submission_preflight_error_message(
     return ""
 
 
+submission_preflight_error = submission_preflight_error_message
+
+
 def submission_preflight_advisory(
     candidate: dict[str, Any],
     run_config: RunConfig,
@@ -103,6 +113,42 @@ def submission_preflight_advisory(
             "MISSING_OFFICIAL_ID",
             "Missing official Alpha ID; run an official simulation before production submit.",
             action="Run an official simulation before submitting.",
+        )
+    metrics = candidate_official_metrics(candidate)
+    metrics_official_id = str(metrics.get("official_alpha_id") or "").strip()
+    if looks_non_production_alpha_id(official_id) or looks_non_production_alpha_id(metrics_official_id):
+        return submit_preflight_block(
+            "NON_PRODUCTION_ALPHA_ID",
+            "Official Alpha ID looks like a mock, stub, or test identifier.",
+            action="Run a real official simulation and select its official Alpha ID before submitting.",
+            reasons=["official_alpha_id_non_production"],
+        )
+    if not metrics:
+        return submit_preflight_block(
+            "MISSING_OFFICIAL_METRICS",
+            "Official metrics are required before production submit.",
+            action="Run official simulation/check and refresh submit readiness before submitting.",
+        )
+    if str(metrics.get("pass_fail") or "").upper() != "PASS":
+        return submit_preflight_block(
+            "OFFICIAL_ALPHA_CHECK_NOT_PASS",
+            "Official alpha check did not return PASS.",
+            action="Fix the Alpha and rerun official checks before submitting.",
+        )
+    missing_fields = missing_official_metric_fields(metrics)
+    if missing_fields:
+        return submit_preflight_block(
+            "MISSING_OFFICIAL_METRIC_FIELDS",
+            "Official metrics are incomplete for production submit.",
+            action="Run official simulation/check and refresh submit readiness before submitting.",
+            missing_fields=missing_fields,
+        )
+    scorecard = candidate.get("scorecard") if isinstance(candidate.get("scorecard"), dict) else {}
+    if str(scorecard.get("decision_band") or "") != "submit_candidate":
+        return submit_preflight_block(
+            "SUBMIT_DECISION_BAND_NOT_READY",
+            "Scorecard decision band is not submit_candidate.",
+            action="Improve the Alpha until the scoring gate reaches submit_candidate.",
         )
     gate = candidate.get("gate") or {}
     if not (gate.get("submission_ready") or candidate.get("lifecycle_status") == "submission_ready"):
@@ -242,12 +288,7 @@ def observability_submission_preflight(
     safe_error_message: SafeErrorMessage = str,
 ) -> dict[str, Any]:
     try:
-        snapshot = observability_builder(
-            storage_dir,
-            limit=limit,
-            top_n=top_n,
-            include_cloud=True,
-        )
+        snapshot = observability_builder(storage_dir, limit=limit, top_n=top_n, include_cloud=True)
     except Exception as exc:
         fallback_explanation = build_context_health_explanation({
             "risk_level": "unknown",

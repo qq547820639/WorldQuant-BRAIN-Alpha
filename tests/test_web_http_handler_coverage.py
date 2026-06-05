@@ -34,25 +34,27 @@ class _Jobs:
         return self.row
 
 
-def _handler(row=None, *, session=None, resolve=None, resolve_static_asset=None):
+def _handler(row=None, *, session=None, resolve=None, resolve_static_asset=None, include_jobs=True):
     session = session or _Session()
     calls = []
 
-    Handler = create_handler_class(
-        server_version="TestServer/1",
-        max_body_bytes=32,
-        dispatch_get=lambda handler, parsed, ctx: handler._json({"ok": True, "path": parsed.path, "ctx": ctx}),
-        dispatch_post=lambda handler, parsed, ctx: handler._json({"ok": True, "posted": parsed.path, "ctx": ctx}),
-        dispatch_context=lambda: {"ctx": "value"},
-        web_session=session,
-        jobs=_Jobs(row),
-        enrich_progress=lambda progress: {**progress, "enriched": True},
-        content_security_policy_for_html=lambda html=None: "default-src 'self'" if html is None else "script-src 'self'",
-        sse_push_interval=0,
-        max_sse_duration=1,
-        resolve_sse_job=resolve,
-        resolve_static_asset=resolve_static_asset,
-    )
+    handler_kwargs = {
+        "server_version": "TestServer/1",
+        "max_body_bytes": 32,
+        "dispatch_get": lambda handler, parsed, ctx: handler._json({"ok": True, "path": parsed.path, "ctx": ctx}),
+        "dispatch_post": lambda handler, parsed, ctx: handler._json({"ok": True, "posted": parsed.path, "ctx": ctx}),
+        "dispatch_context": lambda: {"ctx": "value"},
+        "web_session": session,
+        "enrich_progress": lambda progress: {**progress, "enriched": True},
+        "content_security_policy_for_html": lambda html=None: "default-src 'self'" if html is None else "script-src 'self'",
+        "sse_push_interval": 0,
+        "max_sse_duration": 1,
+        "resolve_sse_job": resolve,
+        "resolve_static_asset": resolve_static_asset,
+    }
+    if include_jobs:
+        handler_kwargs["jobs"] = _Jobs(row)
+    Handler = create_handler_class(**handler_kwargs)
     handler = object.__new__(Handler)
     handler.path = "/api/status"
     handler.headers = {
@@ -185,6 +187,20 @@ def test_sse_stream_handles_auth_validation_missing_unknown_and_complete():
     assert b'"type": "complete"' in payload
     assert b'"enriched": true' in payload
     assert ("header", "Content-Type", "text/event-stream") in calls
+
+
+def test_sse_stream_uses_explicit_resolver_without_static_jobs():
+    row = {
+        "status": "completed",
+        "progress": {"phase": "done", "percent_complete": 100},
+        "result": {"count": 1},
+        "error": "",
+    }
+    handler, _calls, _session = _handler(resolve=lambda _job_id: row, include_jobs=False)
+
+    handler._handle_sse_stream("job_id=job_1")
+
+    assert b'"type": "complete"' in handler.wfile.getvalue()
 
 
 def test_sse_stream_timeout_and_broken_pipe_are_safe(monkeypatch):

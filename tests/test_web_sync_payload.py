@@ -5,8 +5,9 @@ from brain_alpha_ops.web_sync_payload import sync_cloud_alphas_payload
 
 
 class Api:
-    def __init__(self, fail_context=False):
+    def __init__(self, fail_context=False, fail_datasets=False):
         self.fail_context = fail_context
+        self.fail_datasets = fail_datasets
 
     def authenticate(self):
         return {"ok": True}
@@ -21,6 +22,11 @@ class Api:
 
     def list_operators(self, *_args):
         return [{"name": "rank"}]
+
+    def list_datasets(self, *_args):
+        if self.fail_datasets:
+            raise RuntimeError("datasets failed")
+        return [{"id": "official_ds", "name": "Official Dataset", "field_count": 9}]
 
 
 class ApiWithDatasets(Api):
@@ -55,8 +61,11 @@ def test_sync_cloud_alphas_payload_merges_and_persists_context(tmp_path):
     assert payload["ok"] is True
     assert payload["range"] == "7d"
     assert payload["count"] == 2
+    assert payload["status"] == "completed"
     assert payload["fields_count"] == 1
     assert payload["operators_count"] == 1
+    assert payload["context_status"] == "refreshed"
+    assert payload["context_warnings"] == []
     assert persisted
 
 
@@ -98,6 +107,9 @@ def test_sync_cloud_alphas_payload_uses_context_fallback(tmp_path):
     assert payload["fields_count"] == 1
     assert payload["operators_count"] == 1
     assert payload["datasets_count"] == 0
+    assert payload["status"] == "completed_with_warnings"
+    assert payload["context_status"] == "fallback"
+    assert payload["context_error"] == "context failed"
 
 
 def test_sync_cloud_alphas_payload_logs_context_failure(tmp_path, caplog):
@@ -120,3 +132,29 @@ def test_sync_cloud_alphas_payload_logs_context_failure(tmp_path, caplog):
     assert payload["operators_count"] == 1
     assert "official context sync failed; falling back to default fields/operators" in caplog.text
     assert "context failed" in caplog.text
+
+
+def test_sync_cloud_alphas_payload_reports_dataset_fallback_warning(tmp_path, caplog):
+    run_config = RunConfig(environment="production")
+    run_config.ops.storage_dir = str(tmp_path)
+    persisted = []
+
+    with caplog.at_level(logging.WARNING, logger="brain_alpha_ops.web_sync_payload"):
+        payload = sync_cloud_alphas_payload(
+            {},
+            run_config_from_payload=lambda body: run_config,
+            api_from_run_config=lambda config: Api(fail_datasets=True),
+            repository_factory=Repo,
+            datasets_from_fields=lambda fields: [{"id": "derived", "field_count": len(fields)}],
+            persist_official_context=lambda fields, operators, datasets: persisted.append((fields, operators, datasets)),
+            default_fields=[],
+            default_operators=[],
+        )
+
+    assert payload["status"] == "completed_with_warnings"
+    assert payload["context_status"] == "refreshed_with_warnings"
+    assert payload["context_warnings"] == [
+        "official datasets API unavailable; deriving datasets from fields: datasets failed"
+    ]
+    assert persisted[0][2] == [{"id": "derived", "field_count": 1}]
+    assert "official datasets API unavailable; deriving datasets from fields" in caplog.text

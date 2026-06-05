@@ -3,15 +3,34 @@
 from __future__ import annotations
 
 import re
+import math
 from typing import TYPE_CHECKING
 
 from brain_alpha_ops.config import QualityThresholds, ScoringConfig
 from brain_alpha_ops.models import Candidate
 from brain_alpha_ops.scoring.attribution import build_attribution_tree
+from brain_alpha_ops.scoring.shared_scores import (
+    DEFAULT_PRIOR_WEIGHTS,
+    default_prior_dimensions,
+    economic_logic_score,
+    normalize_family_label,
+)
 from brain_alpha_ops.research.scoring_explainability import scorecard_improvement_hints, scorecard_top_failures
 
 if TYPE_CHECKING:
     from brain_alpha_ops.research.scoring_params import ScoringParams
+
+
+_economic_logic_score = economic_logic_score
+
+
+def _format_empirical_failure(row: dict) -> str:
+    return (
+        f"{str(row.get('name', 'check'))} "
+        f"{str(row.get('direction', '-'))} "
+        f"{str(row.get('target', '-'))} "
+        f"(actual: {row.get('actual', '-')})"
+    )
 
 
 def build_scorecard(
@@ -71,7 +90,6 @@ def build_scorecard(
     scorecard["attribution_tree"] = build_attribution_tree(scorecard).to_dict()
     scorecard["top_failures"] = scorecard_top_failures(scorecard)
     scorecard["improvement_hints"] = scorecard_improvement_hints(scorecard)
-    candidate.scorecard = scorecard
     return scorecard
 
 
@@ -92,47 +110,42 @@ def prior_score(
     Returns:
         {"score": float, "dimensions": dict, "weights": dict, "source": str}
     """
-    dims = {}
     expression = candidate.expression or ""
-    fields = set(candidate.data_fields or [])
-    operators = list(candidate.operators or [])
-    windows = [int(value) for value in re.findall(r"\b\d+\b", expression)]
-    has_cross_section = any(op in operators for op in ("rank", "zscore", "scale", "group_rank", "group_zscore"))
-    has_time_series = any(op.startswith("ts_") for op in operators)
-    has_risk_control = any(op in operators for op in ("winsorize", "zscore", "scale", "group_rank")) or "adv20" in fields
-    median_window = sorted(windows)[len(windows) // 2] if windows else 0
+    fields = {str(field).lower() for field in (candidate.data_fields or [])}
+    operators = [str(operator) for operator in (candidate.operators or [])]
 
     # P0 improvement: economic_logic now uses keyword concept scoring, not binary scoring.
-    economic_result = _economic_logic_score(
+    economic_result = economic_logic_score(
         candidate.hypothesis, expression, fields, operators
     )
-    dims["economic_logic"] = economic_result["score"]
-    dims["economic_concepts"] = economic_result["concepts_detected"]
 
     # Dimension scoring: prefer parameterized formulas.
     if params:
+        windows = [int(value) for value in re.findall(r"\b\d+\b", expression)]
+        has_cross_section = any(op in operators for op in ("rank", "zscore", "scale", "group_rank", "group_zscore"))
+        has_time_series = any(op.startswith("ts_") for op in operators)
+        has_risk_control = any(op in operators for op in ("winsorize", "zscore", "scale", "group_rank")) or "adv20" in fields
+        median_window = sorted(windows)[len(windows) // 2] if windows else 0
+        dims = {"economic_logic": economic_result["score"]}
         dims.update(_parameterized_dimensions(
             params, fields, operators, windows, median_window,
             has_cross_section, has_time_series, has_risk_control,
             candidate, expression, economic_result,
         ))
     else:
-        dims["structure"] = max(25, 90 - max(0, len(operators) - 4) * 8)
-        dims["field_operator_support"] = min(92, 42 + len(fields) * 8 + len(set(operators)) * 4)
-        dims["data_compliance"] = 82 if fields else 35
-        dims["horizon_turnover_proxy"] = 82 if 5 <= median_window <= 90 else 68 if median_window else 50
-        dims["risk_control_proxy"] = 84 if has_cross_section and has_time_series and has_risk_control else 66 if has_cross_section and has_time_series else 48
-        dims["diversity"] = 80 if candidate.family in {"Liquidity", "Volatility", "Hybrid"} else 65
-        dims["explainability"] = 85 if len(candidate.expression) < 140 else 60
+        dims = default_prior_dimensions(
+            expression=expression,
+            fields=fields,
+            operators=operators,
+            hypothesis=candidate.hypothesis,
+            family=candidate.family,
+            economic_result=economic_result,
+        )
+    dims["economic_concepts"] = economic_result["concepts_detected"]
 
     # Weights: weights_override can inject calibration values; params is the second source.
     source_parts = ["经验"]
-    default_weights = {
-        "economic_logic": 0.18, "structure": 0.14,
-        "field_operator_support": 0.16, "data_compliance": 0.12,
-        "horizon_turnover_proxy": 0.14, "risk_control_proxy": 0.14,
-        "diversity": 0.07, "explainability": 0.05,
-    }
+    default_weights = DEFAULT_PRIOR_WEIGHTS
     if params and not weights_override:
         # Extract calibrated weights from params.
         calib_weights = params.get_weights_override()
@@ -207,113 +220,18 @@ def _parameterized_dimensions(
     # diversity: category match.
     p = params.get_dimension("diversity")
     if p and p.enabled:
-        high_set = set(p.high_value_set or [])
-        dims["diversity"] = p.high_score if candidate.family in high_set else p.low_score
+        high_set = {normalize_family_label(value) for value in (p.high_value_set or [])}
+        dims["diversity"] = p.high_score if normalize_family_label(candidate.family) in high_set else p.low_score
 
     # explainability: expression length threshold.
     p = params.get_dimension("explainability")
     if p and p.enabled:
         dims["explainability"] = p.score_in_range if len(expression) < p.threshold_high else p.score_out_range
 
-    # economic_logic is already computed via _economic_logic_score — keep as-is
+    # economic_logic is already computed via shared keyword scoring.
     # (its keyword-based detection is hard to parameterize meaningfully)
 
     return dims
-
-
-# ═══════════════════════════════════════════════════════════════════════
-# P0 improvement: economic_logic keyword concept detection.
-# ═══════════════════════════════════════════════════════════════════════
-
-def _economic_logic_score(
-    hypothesis: str,
-    expression: str,
-    fields: set[str],
-    operators: list[str],
-) -> dict:
-    """Evaluate Alpha economic-logic quality via keyword concept detection.
-
-    Replaces the previous binary rule (hypothesis length >= 40 -> 85, else 45).
-
-    Returns: {"score": int, "concepts_detected": [str], "source": str}
-    """
-    text = f"{hypothesis} {expression} {' '.join(fields)} {' '.join(operators)}".lower()
-
-    # Economic concept dictionary.
-    concepts = {
-        "momentum": {
-            "keywords": ["momentum", "trend", "ts_delta", "ts_rank", "ts_mean",
-                         "moving_average", "breakout", "continuation"],
-            "base": 78,
-        },
-        "mean_reversion": {
-            "keywords": ["reversal", "mean_revert", "zscore", "ts_zscore",
-                         "overbought", "oversold", "-ts_", "bounce", "revert"],
-            "base": 78,
-        },
-        "value": {
-            "keywords": ["value", "cheap", "undervalue", "pe_ratio", "pb_ratio",
-                         "market_cap", "book", "dividend_yield", "earnings_yield"],
-            "base": 78,
-        },
-        "quality": {
-            "keywords": ["quality", "profit", "margin", "roe", "roa",
-                         "stable", "fundamental", "balance_sheet"],
-            "base": 78,
-        },
-        "volatility": {
-            "keywords": ["volatility", "vol", "ts_std", "std", "ivol",
-                         "beta", "risk", "variance", "uncertainty"],
-            "base": 78,
-        },
-        "liquidity": {
-            "keywords": ["liquidity", "volume", "turn", "adv", "vwap",
-                         "bid", "spread", "depth", "market_impact"],
-            "base": 78,
-        },
-        "growth": {
-            "keywords": ["growth", "earnings", "revenue", "sales_growth",
-                         "expansion", "accelerat"],
-            "base": 78,
-        },
-        "risk_management": {
-            "keywords": ["winsorize", "truncation", "neutralize", "group_neutralize",
-                         "hedge", "sector_neutral", "risk_adjust"],
-            "base": 82,
-        },
-        "cross_sectional": {
-            "keywords": ["cross_section", "rank", "group_rank", "sector",
-                         "industry", "subindustry", "relative", "peer"],
-            "base": 80,
-        },
-    }
-
-    detected = []
-    for concept_name, info in concepts.items():
-        if any(keyword in text for keyword in info["keywords"]):
-            detected.append(concept_name)
-
-    if not detected:
-        # Use length fallback when hypothesis content is thin.
-        if len(hypothesis) >= 60:
-            return {"score": 52, "concepts_detected": [], "source": "length_fallback"}
-        return {"score": 40, "concepts_detected": [], "source": "insufficient"}
-
-    concept_count = len(detected)
-    if concept_count >= 4:
-        score = 92
-    elif concept_count == 3:
-        score = 85
-    elif concept_count == 2:
-        score = 78
-    else:
-        score = 68
-
-    return {
-        "score": score,
-        "concepts_detected": detected,
-        "source": "keyword_concept_detection",
-    }
 
 
 def local_convergence_score(
@@ -480,13 +398,12 @@ def empirical_score(metrics: dict, thresholds: QualityThresholds, settings: dict
     turnover = _ratio(metrics.get("turnover"))
     turnover_raw = _num(metrics.get("turnover_raw", metrics.get("turnover", 0)))
     returns = _num(metrics.get("returns"))
-    drawdown = abs(_ratio(metrics.get("drawdown")))
-    self_correlation = abs(_ratio(metrics.get("correlation")))
-    prod_correlation = abs(_ratio(metrics.get("prod_correlation", 0.0)))
-    concentration = _ratio(metrics.get("weight_concentration"))
+    drawdown = abs(_ratio(metrics.get("drawdown"), bounded=True))
+    self_correlation = abs(_ratio(metrics.get("correlation"), bounded=True))
+    prod_correlation = abs(_ratio(metrics.get("prod_correlation", 0.0), bounded=True))
+    concentration = _ratio(metrics.get("weight_concentration"), bounded=True)
     sub_universe_sharpe = _num(metrics.get("sub_universe_sharpe", 0.0))
     # BRAIN: LOW_SUB_UNIVERSE_SHARPE when sub_sharpe < 0.75 * sqrt(sub_size/alpha_size) * alpha_sharpe.
-    import math
     sub_size = _num(metrics.get("subUniverseSize", metrics.get("sub_universe_size", 1000)))
     alpha_size = _num(metrics.get("alphaSize", metrics.get("alpha_size", 1000)))
     if alpha_size <= 0:
@@ -551,7 +468,7 @@ def empirical_score(metrics: dict, thresholds: QualityThresholds, settings: dict
     ]
     # P2-3: Annotate margin source
     for row in items:
-        if row["name"] == "margin_bps":
+        if row.get("name") == "margin_bps":
             row["margin_source"] = margin_source
     # P1-3: Log WARNING when BRAIN API fitness differs significantly from local calculation
     fitness_diff = abs(fitness - calculate_fitness(sharpe, returns, turnover, raw_turnover=turnover_raw))
@@ -562,13 +479,13 @@ def empirical_score(metrics: dict, thresholds: QualityThresholds, settings: dict
             "This may indicate formula mismatch or API version differences.",
             fitness, calculate_fitness(sharpe, returns, turnover, raw_turnover=turnover_raw), fitness_diff
         )
-    score = _bounded_score(sum(row["points"] for row in items if row["passed"]))
+    score = _bounded_score(sum(row.get("points", 0) for row in items if bool(row.get("passed", False))))
 
     # P1-2: Separate hard gate failures from soft indicator scores
     hard_gate_failures = [
-        f"{row['name']} {row['direction']} {row['target']} (actual: {row['actual']})"
+        _format_empirical_failure(row)
         for row in items
-        if not row["passed"] and row.get("is_hard_gate") and row.get("points", 0) > 0
+        if not bool(row.get("passed", False)) and row.get("is_hard_gate")
     ]
     hard_gate_failed = bool(hard_gate_failures)
 
@@ -598,10 +515,17 @@ def submission_checklist(candidate: Candidate, thresholds: QualityThresholds) ->
         check("economic_logic", len(candidate.hypothesis) >= 40 or not thresholds.require_economic_logic, 15, "One-sentence economic/behavioral thesis."),
         check("data_delay_conservative", True, 10, "Default settings use Delay 1 unless changed by user."),
         check("local_quality", candidate.local_quality.get("passed", False), 15, "Local prefilter quality."),
-        check("self_correlation_proxy", _ratio(metrics.get("correlation")) <= thresholds.max_self_correlation if metrics else False, 20, "Official/local correlation proxy."),
-        check("diversity", candidate.family not in {"Momentum"} or "adv20" in candidate.expression or "vwap" in candidate.expression, 10, "Avoid plain crowded templates."),
+        check("self_correlation_proxy", _ratio(metrics.get("correlation"), bounded=True) <= thresholds.max_self_correlation if metrics else False, 20, "Official/local correlation proxy."),
+        check(
+            "diversity",
+            normalize_family_label(candidate.family) != "momentum"
+            or "adv20" in candidate.expression
+            or "vwap" in candidate.expression,
+            10,
+            "Avoid plain crowded templates.",
+        ),
     ]
-    score = _bounded_score(sum(row["points"] for row in checks if row["passed"]))
+    score = _bounded_score(sum(row.get("points", 0) for row in checks if bool(row.get("passed", False))))
     return {"score": score, "items": checks}
 
 
@@ -611,7 +535,9 @@ def evaluate_quality_gate(
     *,
     settings: dict | None = None,
 ) -> dict:
-    scorecard = candidate.scorecard or build_scorecard(candidate, thresholds, settings=settings)
+    if not candidate.scorecard:
+        candidate.scorecard = build_scorecard(candidate, thresholds, settings=settings)
+    scorecard = candidate.scorecard
     empirical = scorecard["empirical"]
     failed = []
     warnings = []
@@ -623,11 +549,11 @@ def evaluate_quality_gate(
 
     # Collect all remaining failed items (soft indicators + submission checklist)
     for row in empirical.get("items", []):
-        if not row["passed"] and row.get("points", 1) > 0 and not row.get("is_hard_gate"):
-            failed.append(f"{row['name']} {row['direction']} {row['target']} (actual: {row['actual']})")
+        if not bool(row.get("passed", False)) and row.get("points", 1) > 0 and not row.get("is_hard_gate"):
+            failed.append(_format_empirical_failure(row))
     for row in scorecard["submission_checklist"]["items"]:
-        if not row["passed"]:
-            failed.append(row["name"] + ": " + row["meaning"])
+        if not bool(row.get("passed", False)):
+            failed.append(str(row.get("name", "check")) + ": " + str(row.get("meaning", "")))
     if not candidate.official_metrics:
         failed.append("official_metrics_present: missing official simulation result")
 
@@ -692,13 +618,12 @@ def calculate_fitness(sharpe: float, returns: float, turnover: float,
     """BRAIN 官方 Fitness 公式: Sharpe x sqrt(|Returns| / max(Turnover, 0.125)).
 
     IMPORTANT: BRAIN API 返回的 turnover 是原始十进制 (e.g. 1.2 = 120%)。
-    normalize_metrics() 中的 _ratio() 会对 abs>1.0 的值除以 100，
-    导致 fitness 公式使用了错误的 turnover 值。
+    _ratio() 会保留自然 turnover 值，仅对明确百分比尺度的值归一化；
+    fitness 公式仍优先使用 raw_turnover，避免任何展示归一化影响官方公式。
     
     使用 raw_turnover (未除以 100 的原始值) 来正确计算公式。
-    如果 raw_turnover 未提供，回退到 adjustd turnover。
+    如果 raw_turnover 未提供，回退到 adjusted turnover。
     """
-    import math
     used_turnover = raw_turnover if (raw_turnover is not None and raw_turnover > 0) else turnover
     denominator = max(used_turnover, 0.125)
     ratio = abs(returns) / denominator
@@ -812,48 +737,26 @@ def _num(value) -> float:
         return 0.0
 
 
-def _ratio(value) -> float:
+def _ratio(value, *, bounded: bool = False) -> float:
     """Normalize ratio values from BRAIN API responses.
 
     BRAIN may return metrics as percentages (e.g. 70 meaning 70%) or as
-    decimals (e.g. 0.70).  This function applies heuristics to normalize:
-      - abs > 1.0  → assumed percentage, divide by 100
-      - abs <= 1.0 → assumed decimal, pass through
+    decimals (e.g. 0.70).  The old heuristic of abs > 1.0 -> /100 produces
+    incorrect results for metrics like turnover whose raw value naturally
+    exceeds 1.0 (e.g. 2.5 -> 0.025 instead of 2.5).
 
-    P1-3: Added logging for ambiguous values and dedicated turnover handling.
+    By default, only values in a clearly percentage-style range (abs >= 100)
+    are divided by 100.  For naturally bounded metrics such as drawdown,
+    correlation, and concentration, values with abs > 1 are also interpreted
+    as percentages because the decimal metric cannot legitimately exceed 1.
     """
     numeric = _num(value)
     if numeric == 0.0:
         return 0.0
-
-    if abs(numeric) <= 1.0:
-        return numeric
-
-    # abs > 1.0 — could be percentage or genuinely large ratio
-    if abs(numeric) > 100.0:
-        # Values > 100 are almost certainly not percentages
-        import logging
-        logging.warning(
-            "_ratio: unusually large value %.4f — treating as raw (not percentage). "
-            "If BRAIN changed metric format, this may need adjustment.", numeric
-        )
-        return numeric
-
-    # Likely a percentage (e.g. 70 → 0.70)
-    import logging
-    logging.debug("_ratio: normalizing %.4f → %.4f (assumed percentage)", numeric, numeric / 100.0)
-    return numeric / 100.0
-
-
-def _turnover_ratio(value) -> float:
-    """Normalize turnover specifically, with BRAIN-aware heuristics.
-
-    BRAIN turnover: typically 0-100 range where > 1.0 means percentage.
-    Special case: a value like 2.5 could be 2.5% (correctly / 100 → 0.025).
-    """
-    return _ratio(value)
-
-
+    abs_numeric = abs(numeric)
+    if abs_numeric >= 100.0 or (bounded and abs_numeric > 1.0):
+        return numeric / 100.0
+    return numeric
 # ═══════════════════════════════════════════════════════════════════════
 # P2: score confidence estimation from point estimate to interval estimate.
 # ═══════════════════════════════════════════════════════════════════════

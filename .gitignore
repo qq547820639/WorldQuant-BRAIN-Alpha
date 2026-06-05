@@ -105,3 +105,5 @@ _run_new_tests.py
 _coverage/
 htmlcov/
 .coverage
+experiments/scratch/
+brain_alpha_ops/_web_legacy.py

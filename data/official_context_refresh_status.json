@@ -1,7 +1,7 @@
 {
   "schema_version": "official_context_refresh.v1",
-  "generated_at": "2026-05-31T14:52:24.565869+00:00",
-  "started_at": "2026-05-31T14:44:26.920669+00:00",
+  "generated_at": "2026-06-05T09:34:08+00:00",
+  "started_at": "2026-06-05T09:34:08+00:00",
   "environment": "production",
   "storage_dir": "/Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/data",
   "base_url": "https://api.worldquantbrain.com",
@@ -9,9 +9,11 @@
   "universe": "TOP3000",
   "delay": 1,
   "write_enabled": true,
+  "proxy_mode": "system",
   "status_path": "/Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/data/official_context_refresh_status.json",
   "ok": true,
-  "status": "refreshed",
+  "status": "metadata_verified",
+  "verification_source": "local_official_context_validation",
   "auth": {
     "status": "ok",
     "auth": "session_cookie"
@@ -26,7 +28,7 @@
     "operators": 66,
     "datasets": 17,
     "manifest_complete": true,
-    "manifest_stale": true
+    "manifest_stale": false
   },
   "after": {
     "fields": 7780,
@@ -35,30 +37,10 @@
     "manifest_complete": true,
     "manifest_stale": false
   },
-  "progress": {
-    "fields": {
-      "events": 156,
-      "scanned": 7780,
-      "total": 7780,
-      "cached": false,
-      "truncated": false,
-      "warning": ""
-    },
-    "operators": {
-      "events": 1,
-      "scanned": 66,
-      "total": 66,
-      "cached": false,
-      "truncated": false,
-      "warning": ""
-    },
-    "datasets": {
-      "events": 0,
-      "scanned": 0,
-      "total": 0,
-      "cached": false,
-      "truncated": false,
-      "warning": ""
-    }
+  "full_refresh_attempt": {
+    "ok": false,
+    "status": "interrupted",
+    "stage": "data-fields pagination",
+    "reason": "official API field pagination did not return within the interactive verification window"
   }
 }

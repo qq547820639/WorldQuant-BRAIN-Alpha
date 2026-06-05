@@ -7,10 +7,14 @@ from typing import Any, Callable
 
 from brain_alpha_ops.models import Candidate
 
+from .pipeline_helpers import blocked_gate
+
 
 BATCH_BACKTEST_PLAN_SCHEMA_VERSION = "batch_backtest_plan.v1"
+HIGH_CLOUD_SIMILARITY_REJECTED = "HIGH_CLOUD_SIMILARITY_REJECTED"
 
 CandidateRanker = Callable[[list[Candidate]], list[Candidate]]
+CandidateRiskEvaluator = Callable[[Candidate], dict[str, Any]]
 
 
 @dataclass(frozen=True)
@@ -54,6 +58,8 @@ class BatchBacktestCoordinator:
         batch_size: int,
         max_workers: int = 1,
         max_live_submissions_per_batch: int | None = None,
+        risk_evaluator: CandidateRiskEvaluator | None = None,
+        max_similarity_threshold: float | None = None,
     ) -> None:
         self.ranker = ranker
         self.min_score = float(min_score)
@@ -63,6 +69,12 @@ class BatchBacktestCoordinator:
             max(0, int(max_live_submissions_per_batch))
             if max_live_submissions_per_batch is not None
             else self.batch_size
+        )
+        self.risk_evaluator = risk_evaluator
+        self.max_similarity_threshold = (
+            float(max_similarity_threshold)
+            if max_similarity_threshold is not None
+            else None
         )
 
     def plan(self, candidates: list[Candidate], *, capacity: int | None = None) -> BacktestBatchPlan:
@@ -84,6 +96,17 @@ class BatchBacktestCoordinator:
             if candidate.simulation_id or candidate.official_metrics:
                 skipped.append(_skip(candidate, "already_has_official_work", score))
                 continue
+            risk = self._risk(candidate)
+            if _is_high_cloud_similarity(risk, self.max_similarity_threshold):
+                details = _cloud_similarity_details(risk, self.max_similarity_threshold)
+                _reject_high_cloud_similarity_candidate(candidate, details)
+                skipped.append(_skip(
+                    candidate,
+                    "high_cloud_similarity",
+                    score,
+                    extra=details,
+                ))
+                continue
             eligible.append(candidate)
         selected = tuple(self.ranker(eligible)[:requested])
         return BacktestBatchPlan(
@@ -99,15 +122,85 @@ class BatchBacktestCoordinator:
             account_safety={
                 "requires_explicit_live_confirmation": True,
                 "duplicate_preflight_required": True,
+                "cloud_similarity_preflight_required": bool(self.risk_evaluator),
+                "similarity_threshold": self.max_similarity_threshold,
                 "score_threshold": self.min_score,
             },
         )
 
+    def _risk(self, candidate: Candidate) -> dict[str, Any]:
+        if not self.risk_evaluator:
+            return {}
+        try:
+            risk = self.risk_evaluator(candidate)
+        except Exception as exc:
+            return {
+                "level": "high",
+                "max_similarity": None,
+                "matched_alpha_id": "",
+                "matched_status": "",
+                "error": str(exc),
+            }
+        return risk if isinstance(risk, dict) else {}
 
-def _skip(candidate: Candidate, reason: str, score: float) -> dict[str, Any]:
-    return {
+
+def _skip(candidate: Candidate, reason: str, score: float, *, extra: dict[str, Any] | None = None) -> dict[str, Any]:
+    row = {
         "alpha_id": candidate.alpha_id,
         "reason": reason,
         "score": round(score, 4),
         "expression": candidate.expression,
     }
+    if extra:
+        row.update(extra)
+    return row
+
+
+def _reject_high_cloud_similarity_candidate(candidate: Candidate, details: dict[str, Any]) -> None:
+    candidate.lifecycle_status = "high_cloud_similarity_rejected"
+    reasons = ["cloud_similarity_preflight_failed"]
+    risk_level = str(details.get("risk_level") or "")
+    if risk_level:
+        reasons.append(f"risk_level={risk_level}")
+    max_similarity = details.get("max_similarity")
+    threshold = details.get("similarity_threshold")
+    if max_similarity is not None and threshold is not None:
+        reasons.append(f"max_similarity={max_similarity} >= threshold={threshold}")
+    matched_alpha_id = str(details.get("matched_alpha_id") or "")
+    if matched_alpha_id:
+        reasons.append(f"matched_alpha_id={matched_alpha_id}")
+    preflight = {
+        "schema_version": "cloud_similarity_preflight.v1",
+        "status": HIGH_CLOUD_SIMILARITY_REJECTED,
+        **details,
+    }
+    candidate.gate = blocked_gate(HIGH_CLOUD_SIMILARITY_REJECTED, reasons)
+    candidate.submission["cloud_similarity_preflight"] = preflight
+    candidate.extra_fields["cloud_similarity_preflight"] = preflight
+
+
+def _cloud_similarity_details(risk: dict[str, Any], threshold: float | None) -> dict[str, Any]:
+    return {
+        "risk_level": str(risk.get("level") or ""),
+        "max_similarity": _float_or_none(risk.get("max_similarity")),
+        "matched_alpha_id": str(risk.get("matched_alpha_id") or ""),
+        "matched_status": str(risk.get("matched_status") or ""),
+        "similarity_threshold": threshold,
+    }
+
+
+def _is_high_cloud_similarity(risk: dict[str, Any], threshold: float | None) -> bool:
+    if not risk:
+        return False
+    level = str(risk.get("level") or "").lower()
+    max_similarity = _float_or_none(risk.get("max_similarity"))
+    if level == "high":
+        return True
+    return threshold is not None and max_similarity is not None and max_similarity >= threshold
+
+
+def _float_or_none(value: Any) -> float | None:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None

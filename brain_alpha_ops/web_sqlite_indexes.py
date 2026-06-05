@@ -1,4 +1,4 @@
-"""Read-only SQLite index snapshots for the local web API."""
+"""SQLite index web helpers."""
 
 from __future__ import annotations
 

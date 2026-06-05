@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from brain_alpha_ops.error_payloads import user_error_payload
 from brain_alpha_ops.redaction import redact_error_message
-from brain_alpha_ops.web_risk_guidance import build_cloud_self_correlation_explanation
+from brain_alpha_ops.web_check_availability import build_cloud_self_correlation_explanation
 
 
 AUTH_ERROR_MARKERS = ("authorization", "cookie", "token", "password")

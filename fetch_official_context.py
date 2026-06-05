@@ -36,6 +36,7 @@ def refresh_official_context(
     write: bool = True,
     status_output: str | Path | None = None,
     write_status: bool = True,
+    disable_proxy: bool = True,
 ) -> dict[str, Any]:
     """Fetch official context and optionally persist it into configured storage."""
     run_config = load_run_config(config_path)
@@ -46,7 +47,7 @@ def refresh_official_context(
     try:
         _require_credentials(run_config)
         with _api_cache_scope(run_config, write=write) as api_config:
-            api = OfficialBrainAPI(api_config, disable_proxy=True, **run_config.credentials.resolve())
+            api = OfficialBrainAPI(api_config, disable_proxy=disable_proxy, **run_config.credentials.resolve())
             api.set_market_scope(run_config.ops.settings)
             auth = api.authenticate()
             progress: dict[str, list[dict[str, Any]]] = {"fields": [], "operators": [], "datasets": []}
@@ -72,11 +73,12 @@ def refresh_official_context(
                     load_config=lambda: run_config,
                 )
             after = official_context_file_counts(load_config=lambda: run_config)
-            result = _base_result(run_config, started_at, status_path, write=write)
+            freshness_findings = _post_refresh_freshness_findings(after) if write else []
+            result = _base_result(run_config, started_at, status_path, write=write, disable_proxy=disable_proxy)
             result.update(
                 {
-                    "ok": True,
-                    "status": "refreshed" if write else "fetched_no_write",
+                    "ok": not freshness_findings,
+                    "status": "refresh_incomplete" if freshness_findings else ("refreshed" if write else "fetched_no_write"),
                     "auth": _safe_auth_summary(auth),
                     "counts": {
                         "fields": len(fields),
@@ -88,11 +90,20 @@ def refresh_official_context(
                     "progress": _compact_progress(progress),
                 }
             )
+            if freshness_findings:
+                result.update(
+                    {
+                        "error_code": "OFFICIAL_CONTEXT_METADATA_STALE",
+                        "error_category": "freshness",
+                        "retryable": False,
+                        "freshness_findings": freshness_findings,
+                    }
+                )
             _write_status_file(status_path, result)
             return result
     except Exception as exc:
         retry_after = _retry_after_seconds(exc)
-        result = _base_result(run_config, started_at, status_path, write=write)
+        result = _base_result(run_config, started_at, status_path, write=write, disable_proxy=disable_proxy)
         result.update(
             {
                 "ok": False,
@@ -137,7 +148,14 @@ def _progress(progress: dict[str, list[dict[str, Any]]], key: str):
     return _record
 
 
-def _base_result(run_config: RunConfig, started_at: str, status_path: Path | None, *, write: bool) -> dict[str, Any]:
+def _base_result(
+    run_config: RunConfig,
+    started_at: str,
+    status_path: Path | None,
+    *,
+    write: bool,
+    disable_proxy: bool,
+) -> dict[str, Any]:
     return {
         "schema_version": SCHEMA_VERSION,
         "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -149,6 +167,7 @@ def _base_result(run_config: RunConfig, started_at: str, status_path: Path | Non
         "universe": run_config.ops.settings.universe,
         "delay": run_config.ops.settings.delay,
         "write_enabled": bool(write),
+        "proxy_mode": "direct" if disable_proxy else "system",
         "status_path": str(status_path or ""),
     }
 
@@ -235,6 +254,43 @@ def _context_counts(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _post_refresh_freshness_findings(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    manifest = payload.get("context_cache_manifest") if isinstance(payload.get("context_cache_manifest"), dict) else {}
+    if not manifest:
+        return [
+            {
+                "code": "missing_context_cache_manifest",
+                "message": "official context refresh wrote files but did not produce cache metadata manifest",
+            }
+        ]
+
+    findings: list[dict[str, Any]] = []
+    if not manifest.get("complete"):
+        findings.append(
+            {
+                "code": "context_cache_manifest_incomplete",
+                "message": "official context cache manifest is incomplete after refresh",
+            }
+        )
+    for filename in manifest.get("missing_files") or []:
+        findings.append(
+            {
+                "code": "context_cache_file_missing",
+                "filename": str(filename),
+                "message": f"{filename} is missing after official context refresh",
+            }
+        )
+    for filename in manifest.get("stale_files") or manifest.get("expired_files") or []:
+        findings.append(
+            {
+                "code": "context_cache_metadata_stale",
+                "filename": str(filename),
+                "message": f"{filename} metadata is stale after official context refresh",
+            }
+        )
+    return findings
+
+
 def _compact_progress(progress: dict[str, list[dict[str, Any]]]) -> dict[str, Any]:
     compact: dict[str, Any] = {}
     for key, rows in progress.items():
@@ -265,6 +321,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--no-write", action="store_true", help="Fetch and compare without overwriting official context JSON files.")
     parser.add_argument("--status-output", default="", help="Optional non-sensitive refresh status JSON path.")
     parser.add_argument("--no-status-file", action="store_true", help="Do not write the refresh status JSON file.")
+    parser.add_argument(
+        "--use-proxy",
+        action="store_true",
+        help="Honor system proxy settings for environments that cannot reach BRAIN directly.",
+    )
     args = parser.parse_args(argv)
 
     result = refresh_official_context(
@@ -272,6 +333,7 @@ def main(argv: list[str] | None = None) -> int:
         write=not args.no_write,
         status_output=args.status_output or None,
         write_status=not args.no_status_file,
+        disable_proxy=not args.use_proxy,
     )
     if args.json:
         print(json.dumps(result, ensure_ascii=False, indent=2, default=str))

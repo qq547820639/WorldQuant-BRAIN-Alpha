@@ -16,7 +16,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 DEFAULT_CONFIG = ROOT / "config" / "run_config.json"
-DEFAULT_HTML = ROOT / "brain_alpha_ops" / "web" / "index.html"
+DEFAULT_HTML = ROOT / "brain_alpha_ops" / "web" / "react_app" / "dist" / "index.html"
 DEFAULT_SUBPROCESS_TIMEOUT_SECONDS = 300
 COVERAGE_PYTEST_ARGS = ["--cov=brain_alpha_ops", "--cov-report=term", "--cov-fail-under=80"]
 SUBPROCESS_ENV_ALLOWLIST = {
@@ -59,10 +59,9 @@ COMPILE_TARGETS = [
     "_launch_monitor.py",
     "_status.py",
 ]
-FRONTEND_INLINE_BUILDER = ROOT / "brain_alpha_ops" / "web" / "build_inline.py"
+FRONTEND_INLINE_BUILDER = ROOT / "brain_alpha_ops" / "build_inline.py"
 STATIC_ANALYSIS_TARGETS = [
     "brain_alpha_ops/build_inline.py",
-    "brain_alpha_ops/web/build_inline.py",
     "brain_alpha_ops/web_config.py",
     "brain_alpha_ops/web_assistant_snapshots.py",
     "brain_alpha_ops/web_check_batch_job.py",
@@ -112,18 +111,26 @@ STATIC_ANALYSIS_TARGETS = [
     "scripts/final_release_gate.py",
     "scripts/check_web_console_contract.py",
     "scripts/check_frontend_innerhtml.py",
+    "scripts/check_frontend_silent_catches.py",
     "scripts/check_react_build_env.py",
     "scripts/check_module_size.py",
     "scripts/check_optional_tooling.py",
     "scripts/check_official_context.py",
+    "scripts/check_python_silent_broad_exceptions.py",
     "scripts/check_frontend_surface_parity.py",
     "scripts/check_review_gap_closure_tracker.py",
+    "scripts/check_defect_analysis_report.py",
+    "scripts/check_v5_defect_tracking.py",
+    "scripts/check_prod_defect_tracking.py",
     "scripts/check_text_encoding.py",
     "scripts/check_tracked_data_inventory.py",
     "scripts/quality_gate.py",
     "tests/test_frontend_surface_parity.py",
     "tests/test_quality_gate.py",
     "tests/test_review_gap_closure_tracker.py",
+    "tests/test_defect_analysis_report.py",
+    "tests/test_v5_defect_tracking.py",
+    "tests/test_prod_defect_tracking.py",
     "tests/test_tracked_data_inventory.py",
     "tests/test_strategy_plugins.py",
     "tests/test_production_context.py",
@@ -132,6 +139,8 @@ STATIC_ANALYSIS_TARGETS = [
     "tests/test_web_build_inline.py",
     "tests/test_web_console_contract.py",
     "tests/test_frontend_innerhtml_guard.py",
+    "tests/test_frontend_silent_catches_guard.py",
+    "tests/test_python_silent_broad_exceptions_guard.py",
     "tests/test_react_build_env_check.py",
     "tests/test_web_check_batch_job.py",
     "tests/test_web_check_availability.py",
@@ -259,6 +268,14 @@ def _frontend_syntax(html_path: Path) -> tuple[bool, dict]:
 
 def _frontend_innerhtml_guard() -> tuple[bool, dict]:
     return _run_python_module(["scripts/check_frontend_innerhtml.py", "--json"])
+
+
+def _frontend_silent_catch_guard() -> tuple[bool, dict]:
+    return _run_python_module(["scripts/check_frontend_silent_catches.py", "--json"])
+
+
+def _python_silent_broad_exception_guard() -> tuple[bool, dict]:
+    return _run_python_module(["scripts/check_python_silent_broad_exceptions.py", "--json"])
 
 
 def _web_console_contract(html_path: Path) -> tuple[bool, dict]:
@@ -414,6 +431,23 @@ def _review_gap_closure_tracker() -> tuple[bool, dict]:
     return _run_python_module(["scripts/check_review_gap_closure_tracker.py", "--json"])
 
 
+def _static_defect_analysis_report() -> tuple[bool, dict]:
+    return _run_python_module([
+        "scripts/check_defect_analysis_report.py",
+        "--report",
+        "docs/STATIC_ANALYSIS_DEFECT_REPORT_20260603.md",
+        "--json",
+    ])
+
+
+def _v5_defect_tracking() -> tuple[bool, dict]:
+    return _run_python_module(["scripts/check_v5_defect_tracking.py", "--json"])
+
+
+def _prod_defect_tracking() -> tuple[bool, dict]:
+    return _run_python_module(["scripts/check_prod_defect_tracking.py", "--json"])
+
+
 def _pytest(pytest_args: list[str], *, coverage: bool = False) -> tuple[bool, dict]:
     coverage_args = COVERAGE_PYTEST_ARGS if coverage else []
     return _run_python_module(["-m", "pytest", *coverage_args, *(pytest_args or [])])
@@ -499,6 +533,8 @@ def run_quality_gate(
         _step("frontend_inline_sync", _frontend_inline_sync),
         _step("frontend_syntax", lambda: _frontend_syntax(html_path)),
         _step("frontend_innerhtml_guard", _frontend_innerhtml_guard),
+        _step("frontend_silent_catch_guard", _frontend_silent_catch_guard),
+        _step("python_silent_broad_exception_guard", _python_silent_broad_exception_guard),
         _step("web_console_contract", lambda: _web_console_contract(html_path)),
         _step(
             "frontend_surface_parity",
@@ -530,6 +566,9 @@ def run_quality_gate(
         _step("cache_metadata_audit", _cache_metadata_audit),
         _step("diagnostic_report_sync", lambda: _diagnostic_report_sync(config_path)),
         _step("review_gap_closure_tracker", _review_gap_closure_tracker),
+        _step("static_defect_analysis_report", _static_defect_analysis_report),
+        _step("v5_defect_tracking", _v5_defect_tracking),
+        _step("prod_defect_tracking", _prod_defect_tracking),
     ])
     if dependency_audit:
         steps.append(_step("dependency_audit", _dependency_audit))

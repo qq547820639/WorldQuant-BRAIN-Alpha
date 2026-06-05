@@ -123,6 +123,7 @@ RUN_CONFIG_SCHEMA: dict[str, Any] = {
                     "type": "object",
                     "properties": {
                         "max_candidates_per_cycle": {"type": "integer", "minimum": 1},
+                        "max_generation_attempts": {"type": "integer", "minimum": 1},
                         "max_official_validations_per_cycle": {"type": "integer", "minimum": 0},
                         "max_official_simulations_per_cycle": {"type": "integer", "minimum": 0},
                         "max_official_concurrent_simulations": {"type": "integer", "minimum": 1},
@@ -139,6 +140,7 @@ RUN_CONFIG_SCHEMA: dict[str, Any] = {
                                              "enum": ["all", "rotate", "random",
                                                       "specific", "fixed", "locked"]},
                         "require_cloud_sync": {"type": "boolean"},
+                        "cloud_sync_max_elapsed_seconds": {"type": "number", "minimum": 0.0},
                         "use_assistant_guidance": {"type": "boolean"},
                         "assistant_guidance_min_confidence": {
                             "type": "number", "minimum": 0.0, "maximum": 1.0,

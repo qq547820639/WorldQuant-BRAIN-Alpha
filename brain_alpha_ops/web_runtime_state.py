@@ -45,17 +45,14 @@ def compute_run_stats(data: dict[str, Any], run_config: Any) -> dict[str, Any]:
     candidates = data.get("candidates", [])
     backtests = data.get("backtests", [])
     summary = data.get("summary", {})
-
     active_statuses = {"ACTIVE", "RUNNING", "SUBMITTED", "POLLING", "SIMULATION_RUNNING", "SIMULATION_SUBMITTED"}
     active_backtests = sum(1 for row in backtests if str(row.get("status", "")).upper() in active_statuses)
-
     passed_candidates = [
         row
         for row in candidates
         if row.get("lifecycle_status") == "submission_ready"
         or (row.get("gate") or {}).get("submission_ready")
     ]
-
     return {
         "produced_count": int(summary.get("produced_count", len(candidates))),
         "passed_count": len(passed_candidates),

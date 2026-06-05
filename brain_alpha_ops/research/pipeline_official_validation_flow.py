@@ -28,6 +28,13 @@ class PipelineOfficialValidationMixin:
         for candidate in validation_targets:
             pool = rank_candidates(list(pool_by_expression.values()))
             active_count = self.backtest_slot_manager.active_count()
+            self._preflight_pending_backtest_candidates(pool)
+            self._archive(
+                archive_stats,
+                [],
+                self._archive_validation_failures(pool_by_expression, pool, blocked_expressions),
+            )
+            pool = rank_candidates(list(pool_by_expression.values()))
             pending_count = len(self._pending_backtest_candidates(pool))
             if active_count + pending_count >= active_limit:
                 break
@@ -91,6 +98,11 @@ class PipelineOfficialValidationMixin:
                 pool_by_expression.pop(key, None)
                 blocked_expressions.add(key)
                 archived.append(candidate)
+            elif candidate.lifecycle_status == "high_cloud_similarity_rejected":
+                key = _expr_key(candidate)
+                pool_by_expression.pop(key, None)
+                blocked_expressions.add(key)
+                archived.append(candidate)
         return archived
 
     def _is_observability_duplicate_before_official(self, candidate: Candidate) -> bool:
@@ -117,17 +129,18 @@ class PipelineOfficialValidationMixin:
             return False
         if isinstance(self.observability_throttle, dict):
             self.observability_throttle["official_call_guard"] = block["guard"]
-        self._record_lifecycle(candidate, "observability_duplicate_blocked", phase)
-        self._event(
-            "observability_duplicate_official_call_blocked",
-            block["reason"],
-            candidate.alpha_id,
-            data={
-                "phase": phase,
-                "expression_canonical": block["expression_canonical"],
-                "observability_generation_guidance": dict(guidance),
-                "observability_official_call_guard": block["guard"],
-            },
-            level="WARN",
-        )
+        if not block.get("already_recorded"):
+            self._record_lifecycle(candidate, "observability_duplicate_blocked", phase)
+            self._event(
+                "observability_duplicate_official_call_blocked",
+                block["reason"],
+                candidate.alpha_id,
+                data={
+                    "phase": phase,
+                    "expression_canonical": block["expression_canonical"],
+                    "observability_generation_guidance": dict(guidance),
+                    "observability_official_call_guard": block["guard"],
+                },
+                level="WARN",
+            )
         return True

@@ -21,11 +21,10 @@ import logging
 import math
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from brain_alpha_ops.brain_api.canonical import CANONICAL_THRESHOLDS
 from brain_alpha_ops.config import OpsConfig
-from brain_alpha_ops.jsonl import read_jsonl_records
 from brain_alpha_ops.models import Candidate
 
 from brain_alpha_ops.research.scoring import (
@@ -38,12 +37,31 @@ from brain_alpha_ops.scoring.attribution import (
     dim_explanation,
 )
 from brain_alpha_ops.scoring.gates import GateConfig, GateResult, OFFICIAL_HARD_GATE_NAMES
+from brain_alpha_ops.scoring.history import ScoreHistoryDB
 from brain_alpha_ops.scoring.release_score_gate import (
     evaluate_release_score,
 )
+from brain_alpha_ops.scoring.scoring_comparison import simulate_brain_api_output
 from brain_alpha_ops.scoring.visualization import summarize_score_attribution
 
 logger = logging.getLogger(__name__)
+
+_MAX_SCORE_HISTORY_PER_ALPHA = 100
+_MAX_SCORE_HISTORY_TOTAL_ENTRIES = 10_000
+
+
+def _gate_item_value(row: dict, key: str, default: str = "-") -> str:
+    value = row.get(key, default)
+    return str(value if value not in (None, "") else default)
+
+
+def _format_gate_failure(row: dict) -> str:
+    return (
+        f"{_gate_item_value(row, 'name')} "
+        f"(actual={row.get('actual', '-')} "
+        f"{_gate_item_value(row, 'direction')} "
+        f"{row.get('target', '-')})"
+    )
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -222,6 +240,7 @@ class OfficialScoringSystem:
             params=params,
             settings=self._settings_for(candidate),
         )
+        candidate.scorecard = scorecard
 
         # 2. Evaluate quality gate
         gate = evaluate_quality_gate(candidate, self.thresholds, settings=self._settings_for(candidate))
@@ -294,19 +313,18 @@ class OfficialScoringSystem:
         empirical = scorecard.get("empirical", {})
         hard_gate_items = [
             row for row in empirical.get("items", [])
-            if row.get("is_hard_gate") and row.get("points", 0) > 0
+            if row.get("is_hard_gate")
         ]
-        hard_failed = [row for row in hard_gate_items if not row["passed"]]
-        hard_passed = [row for row in hard_gate_items if row["passed"]]
+        hard_failed = [row for row in hard_gate_items if not bool(row.get("passed", False))]
 
         gate_items = []
         for row in hard_gate_items:
             gate_items.append({
-                "name": row["name"],
-                "passed": row["passed"],
-                "actual": row["actual"],
-                "target": row["target"],
-                "direction": row["direction"],
+                "name": _gate_item_value(row, "name"),
+                "passed": bool(row.get("passed", False)),
+                "actual": row.get("actual"),
+                "target": row.get("target"),
+                "direction": _gate_item_value(row, "direction"),
                 "source": "BRAIN_Official_Alpha_Check",
             })
 
@@ -314,7 +332,7 @@ class OfficialScoringSystem:
             gate_name="BRAIN_HARD_GATES",
             passed=not bool(hard_failed),
             check_items=gate_items,
-            failed_items=[f"{r['name']} (actual={r['actual']} {r['direction']} {r['target']})" for r in hard_failed],
+            failed_items=[_format_gate_failure(r) for r in hard_failed],
             threshold_source="BRAIN_Official",
             notes=[f"Delay-aware thresholds: min_sharpe={self.thresholds.min_sharpe}, min_fitness={self.thresholds.min_fitness}"],
         ))
@@ -330,18 +348,18 @@ class OfficialScoringSystem:
         empirical = scorecard.get("empirical", {})
         soft_items = [
             row for row in empirical.get("items", [])
-            if not row.get("is_hard_gate") or row.get("points", 0) == 0
+            if not row.get("is_hard_gate")
         ]
 
         if soft_items:
-            soft_failed = [row for row in soft_items if not row["passed"]]
+            soft_failed = [row for row in soft_items if not bool(row.get("passed", False))]
             gate_items = [
                 {
-                    "name": row["name"],
-                    "passed": row["passed"],
-                    "actual": row["actual"],
-                    "target": row["target"],
-                    "direction": row["direction"],
+                    "name": _gate_item_value(row, "name"),
+                    "passed": bool(row.get("passed", False)),
+                    "actual": row.get("actual"),
+                    "target": row.get("target"),
+                    "direction": _gate_item_value(row, "direction"),
                     "source": row.get("source", "Advisor_Standard"),
                 }
                 for row in soft_items
@@ -350,7 +368,7 @@ class OfficialScoringSystem:
                 gate_name="QUALITY_TARGETS",
                 passed=len(soft_failed) <= 2,  # Allow up to 2 warnings
                 check_items=gate_items,
-                failed_items=[f"{r['name']} (actual={r['actual']} {r['direction']} {r['target']})" for r in soft_failed],
+                failed_items=[_format_gate_failure(r) for r in soft_failed],
                 threshold_source="Advisor_Standard",
                 notes=["These are quality targets, not BRAIN hard gates"],
             ))
@@ -389,96 +407,8 @@ class OfficialScoringSystem:
     def _simulate_api_output(
         self, candidate: Candidate, scorecard: dict
     ) -> tuple:
-        """Simulate what the BRAIN API would return for this alpha.
-
-        Returns (simulated_output, deviation, deviation_details).
-        deviation = 0.0 means perfect match with API format.
-        """
-        deviations = []
-
-        # Construct a BRAIN-alpha-check-like response from the same empirical
-        # items used by the gate. Official pass_fail, when present, remains the
-        # source of truth; local reconstruction is compared against it.
-        empirical = scorecard.get("empirical", {})
-        metrics = candidate.official_metrics or {}
-        local_hard_gate_passed = not bool(empirical.get("hard_gate_failed", False))
-        official_pass = str(metrics.get("pass_fail") or "").upper()
-        reconstructed_status = "PASS" if local_hard_gate_passed and metrics else "FAIL"
-        api_status = official_pass if official_pass in {"PASS", "FAIL"} else reconstructed_status
-
-        check_items = {}
-        for row in empirical.get("items", []):
-            if not row.get("is_hard_gate"):
-                continue
-            check_items[row["name"]] = {
-                "value": row.get("actual"),
-                "threshold": row.get("target"),
-                "direction": row.get("direction"),
-                "passed": bool(row.get("passed")),
-                "source": row.get("source", "BRAIN_Official_Alpha_Check"),
-            }
-
-        simulated = {
-            "alpha_id": candidate.official_alpha_id or candidate.alpha_id,
-            "expression": candidate.expression,
-            "status": api_status,
-            "checks": check_items,
-            "score": {
-                "total": scorecard["total_score"],
-                "prior": scorecard["prior"]["score"],
-                "empirical": scorecard["empirical"]["score"],
-                "checklist": scorecard["submission_checklist"]["score"],
-            },
-            "gate": {
-                "hard_gate_passed": api_status == "PASS",
-                "reconstructed_hard_gate_passed": local_hard_gate_passed,
-                "soft_gate_warnings": [],
-                "submission_ready": api_status == "PASS",
-                "local_submission_ready": scorecard.get("decision_band") == "submit_candidate",
-            },
-            "meta": {
-                "simulated": True,
-                "scoring_schema": "scorecard-v2.3",
-                "threshold_version": "CANONICAL_v2",
-                "official_pass_fail_source": "candidate.official_metrics.pass_fail" if official_pass else "reconstructed_hard_gates",
-                "thresholds_used": {
-                    "min_sharpe": self.thresholds.min_sharpe,
-                    "min_sharpe_delay0": self.thresholds.min_sharpe_delay0,
-                    "min_fitness": self.thresholds.min_fitness,
-                    "min_fitness_delay0": self.thresholds.min_fitness_delay0,
-                    "min_turnover": self.thresholds.min_turnover,
-                    "platform_max_turnover": self.thresholds.platform_max_turnover,
-                    "max_self_correlation": self.thresholds.max_self_correlation,
-                    "max_weight_concentration": self.thresholds.max_weight_concentration,
-                    "sub_universe_sharpe_min_ratio": self.thresholds.sub_universe_sharpe_min_ratio,
-                },
-            },
-        }
-
-        # Compare with official metrics if available
-        deviation = 0.0
-        if candidate.official_metrics:
-            if official_pass and official_pass != reconstructed_status:
-                deviation = 1.0
-                deviations.append(
-                    f"pass_fail mismatch: official={official_pass}, reconstructed={reconstructed_status}"
-                )
-            elif official_pass == "FAIL" and empirical.get("hard_gate_failed"):
-                for reason in empirical.get("hard_gate_failures", [])[:3]:
-                    deviations.append(f"official FAIL reconstructed from hard gate: {reason}")
-
-            # Check specific metric deviations
-            for check_name in ["sharpe", "fitness"]:
-                if check_name in candidate.official_metrics:
-                    official_val = candidate.official_metrics[check_name]
-                    sim_val = simulated["checks"].get(check_name, {}).get("value")
-                    if abs((official_val or 0) - (sim_val or 0)) > 0.001:
-                        deviations.append(
-                            f"{check_name} mismatch: official={official_val}, simulated={sim_val}"
-                        )
-                        deviation = max(deviation, 0.5)
-
-        return simulated, deviation, deviations
+        """Delegate BRAIN API simulation/comparison to the standalone module."""
+        return simulate_brain_api_output(candidate, scorecard, self.thresholds)
 
     # ── Improvement Hints ──
 
@@ -583,13 +513,40 @@ class OfficialScoringSystem:
     def _record_history(self, alpha_id: str, result: ScoringResult) -> None:
         if alpha_id not in self._score_history:
             self._score_history[alpha_id] = []
-        self._score_history[alpha_id].append({
+        history = self._score_history[alpha_id]
+        history.append({
             "timestamp": result.evaluated_at,
             "total_score": result.total_score,
             "decision_band": result.decision_band,
             "passed_gate": result.passed_gate,
             "api_deviation": result.api_output_deviation,
         })
+        if len(history) > _MAX_SCORE_HISTORY_PER_ALPHA:
+            del history[:-_MAX_SCORE_HISTORY_PER_ALPHA]
+        self._trim_score_history()
+
+    def _trim_score_history(self) -> None:
+        total_entries = sum(len(history) for history in self._score_history.values())
+        while total_entries > _MAX_SCORE_HISTORY_TOTAL_ENTRIES:
+            oldest_alpha: str | None = None
+            oldest_timestamp = ""
+            for alpha_id, history in self._score_history.items():
+                if not history:
+                    oldest_alpha = alpha_id
+                    oldest_timestamp = ""
+                    break
+                timestamp = str(history[0].get("timestamp", ""))
+                if oldest_alpha is None or timestamp < oldest_timestamp:
+                    oldest_alpha = alpha_id
+                    oldest_timestamp = timestamp
+            if oldest_alpha is None:
+                break
+            history = self._score_history.get(oldest_alpha, [])
+            if history:
+                history.pop(0)
+                total_entries -= 1
+            if not history:
+                self._score_history.pop(oldest_alpha, None)
 
     def get_score_trend(self, alpha_id: str) -> Optional[str]:
         """Get score trend over evaluations: improving/stable/declining."""
@@ -610,33 +567,20 @@ class OfficialScoringSystem:
     def _config_hash(self) -> str:
         data = json.dumps({
             "thresholds": {
-                k: getattr(self.thresholds, k)
-                for k in ["min_sharpe", "min_fitness", "platform_max_turnover",
-                          "max_self_correlation", "max_weight_concentration"]
+                key: getattr(self.thresholds, key)
+                for key in CANONICAL_THRESHOLDS
             },
             "scoring": self.scoring.get_layer_weights(),
         }, sort_keys=True)
         return hashlib.sha256(data.encode()).hexdigest()[:12]
 
     def _threshold_trace(self) -> Dict[str, Any]:
-        keys = [
-            "min_sharpe",
-            "min_sharpe_delay0",
-            "min_fitness",
-            "min_fitness_delay0",
-            "min_turnover",
-            "platform_max_turnover",
-            "max_self_correlation",
-            "max_prod_correlation",
-            "max_weight_concentration",
-            "sub_universe_sharpe_min_ratio",
-        ]
         return {
             key: {
                 "value": getattr(self.thresholds, key),
-                "source": "BRAIN_Official" if key != "max_prod_correlation" else "derived_from_SELF_CORRELATION",
+                "source": "BRAIN_Official",
             }
-            for key in keys
+            for key in CANONICAL_THRESHOLDS
         }
 
     def _settings_for(self, candidate: Candidate) -> dict:
@@ -650,64 +594,3 @@ class OfficialScoringSystem:
         trace = dict(platform["settings"])
         trace["type"] = platform["type"]
         return trace
-
-
-# ═══════════════════════════════════════════════════════════════════════
-# Score History Database (simple JSONL-based)
-# ═══════════════════════════════════════════════════════════════════════
-
-class ScoreHistoryDB:
-    """Lightweight score history store for convergence analysis."""
-
-    DEFAULT_HISTORY_LIMIT = 5000
-
-    def __init__(self, path: str = "data/score_history.jsonl"):
-        target = Path(path)
-        self._path = target if target.suffix.lower() == ".jsonl" else target / "score_history.jsonl"
-        self._path.parent.mkdir(parents=True, exist_ok=True)
-
-    def append(self, result: ScoringResult) -> None:
-        record = {
-            "timestamp": result.evaluated_at,
-            "alpha_id": result.alpha_id,
-            "total_score": result.total_score,
-            "decision_band": result.decision_band,
-            "passed_gate": result.passed_gate,
-            "api_deviation": result.api_output_deviation,
-            "prior": result.prior.get("score"),
-            "empirical": result.empirical.get("score"),
-            "checklist": result.checklist.get("score"),
-            "config_hash": result.config_hash,
-        }
-        with open(self._path, "a", encoding="utf-8") as f:
-            f.write(json.dumps(record, ensure_ascii=False) + "\n")
-
-    def load_all(self, *, limit: int | None = None) -> List[Dict[str, Any]]:
-        return read_jsonl_records(self._path, limit=limit)
-
-    def convergence_stats(self, *, limit: int = DEFAULT_HISTORY_LIMIT) -> Dict[str, Any]:
-        """Compute convergence statistics from score history."""
-        records = self.load_all(limit=limit)
-        if len(records) < 3:
-            return {"status": "insufficient_data", "count": len(records)}
-
-        scores = [r["total_score"] for r in records]
-        recent = scores[-10:] if len(scores) > 10 else scores
-
-        return {
-            "status": "ready",
-            "total_evaluations": len(records),
-            "history_limit": limit,
-            "avg_score": round(sum(scores) / len(scores), 2),
-            "recent_avg": round(sum(recent) / len(recent), 2),
-            "std_dev": round(
-                (sum((s - sum(scores)/len(scores))**2 for s in scores) / len(scores)) ** 0.5, 2
-            ),
-            "trend": "improving" if recent[-1] > scores[0] + 3 else "declining" if recent[-1] < scores[0] - 3 else "stable",
-            "pass_rate": round(
-                sum(1 for r in records if r["passed_gate"]) / len(records), 3
-            ),
-            "api_zero_deviation_rate": round(
-                sum(1 for r in records if r["api_deviation"] == 0.0) / len(records), 3
-            ),
-        }

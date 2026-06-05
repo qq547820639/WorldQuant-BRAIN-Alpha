@@ -1,6 +1,6 @@
 import logging
 
-from brain_alpha_ops.agent_research_tools import collect_job_rows
+from brain_alpha_ops.agent_research_tools import collect_job_rows, collect_job_rows_with_diagnostics
 from brain_alpha_ops.agent_tools import BrainAlphaToolbox
 from tests.production_api_stub import ProductionBrainAPIStub
 from brain_alpha_ops.config import RunConfig
@@ -41,6 +41,48 @@ def test_collect_job_rows_warns_when_store_fails(caplog):
 
     assert rows == [{"source": "good_job", "job_id": "job_1", "status": "completed"}]
     assert "failed to collect broken job rows for agent research context" in caplog.text
+
+
+def test_collect_job_rows_with_diagnostics_reports_partial_failures(caplog):
+    class BrokenStore:
+        def all(self, *, limit):
+            raise RuntimeError("job store unavailable")
+
+    class GoodStore:
+        def all(self, *, limit):
+            return [("job_1", {"status": "completed"})]
+
+    with caplog.at_level(logging.WARNING, logger="brain_alpha_ops.agent_research_tools"):
+        payload = collect_job_rows_with_diagnostics({"broken": BrokenStore(), "good": GoodStore()}, limit=10)
+
+    assert payload["ok"] is False
+    assert payload["partial"] is True
+    assert payload["rows"] == [{"source": "good_job", "job_id": "job_1", "status": "completed"}]
+    assert payload["diagnostics"][0]["source"] == "broken_job"
+    assert payload["diagnostics"][0]["error_context"]["error_code"] == "JOB_ROWS_COLLECTION_FAILED"
+    assert "failed to collect broken job rows for agent research context" in caplog.text
+
+
+def test_query_research_observability_surfaces_job_collection_diagnostics(tmp_path):
+    class BrokenStore:
+        def all(self, *, limit):
+            raise RuntimeError("job store unavailable")
+
+    config = RunConfig(environment="production")
+    config.ops.storage_dir = str(tmp_path)
+    toolbox = BrainAlphaToolbox(
+        run_config=config,
+        api=ProductionBrainAPIStub(),
+        job_stores={"broken": BrokenStore()},
+    )
+
+    result = toolbox.call("query_research_observability", {"limit": 10, "top_n": 3, "include_cloud": False})
+
+    assert result["ok"] is True
+    assert result["job_diagnostics"][0]["source"] == "broken_job"
+    assert result["partial_errors"][0]["component"] == "job_rows"
+    assert result["errors"]["total"] >= 1
+    assert result["errors"]["code_counts"]["JOB_ROWS_COLLECTION_FAILED"] == 1
 
 
 def test_market_data_cache_tool_and_alert_tool(tmp_path):

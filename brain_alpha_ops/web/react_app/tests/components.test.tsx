@@ -20,13 +20,28 @@ describe("ConfigPanel", () => {
           ok: true,
           schema: {
             settings_options: {
+              instrumentType: ["EQUITY"],
               region: ["USA"],
               universe: ["TOP3000"],
               delay: [0, 1],
               neutralization: ["SUBINDUSTRY"],
+              dataset: ["analyst4", "fundamental6", "pv1"],
+              pasteurization: ["ON", "OFF"],
+              unitHandling: ["VERIFY", "RAW", "NONE"],
+              nanHandling: ["ON", "OFF"],
+              language: ["FASTEXPR"],
+              type: ["REGULAR", "POWER_POOL"],
             },
+            dataset_options: [
+              { id: "analyst4", name: "Analyst Estimate Data for Equity", field_count: 1324 },
+              { id: "fundamental6", name: "Company Fundamental Data for Equity", field_count: 886 },
+              { id: "pv1", name: "Price Volume Data for Equity", field_count: 24 },
+            ],
           },
         });
+      }
+      if (path === "/api/test_connection" && options?.method === "POST") {
+        return jsonResponse({ ok: true, environment: "production", auth: "token" });
       }
       throw new Error(`Unexpected fetch: ${path}`);
     });
@@ -34,15 +49,13 @@ describe("ConfigPanel", () => {
 
     render(<ConfigPanel notify={notify} />);
 
-    await screen.findByRole("heading", { name: "Configuration" });
-    const dataset = screen.getByLabelText("Dataset");
-    const save = screen.getByRole("button", { name: "Save" });
+    await screen.findByRole("heading", { name: "配置管理" });
+    const dataset = screen.getByRole("combobox", { name: "数据集" });
+    const save = screen.getByRole("button", { name: "保存" });
 
-    fireEvent.change(dataset, { target: { value: "bad value!" } });
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      "Dataset may only contain letters, numbers, underscore, dash, dot, or colon.",
-    );
-    expect(save).toBeDisabled();
+    expect(within(dataset).getByRole("option", {
+      name: "fundamental6 - Company Fundamental Data for Equity, 886 fields",
+    })).toBeInTheDocument();
 
     fireEvent.change(dataset, { target: { value: "fundamental6" } });
     await waitFor(() => expect(save).toBeEnabled());
@@ -58,11 +71,27 @@ describe("ConfigPanel", () => {
       String(url) === "/api/config" && options?.method === "POST"
     ));
     expect(JSON.parse(String(saveCall?.[1]?.body))).toMatchObject({
-      settings: { dataset: "fundamental6", region: "USA", universe: "TOP3000" },
+      settings: {
+        dataset: "fundamental6",
+        region: "USA",
+        universe: "TOP3000",
+        instrumentType: "EQUITY",
+        type: "REGULAR",
+      },
       candidates: 20,
       cycles: 10,
     });
-    expect(notify).toHaveBeenCalledWith("success", "Configuration saved");
+    expect(notify).toHaveBeenCalledWith("success", "配置已保存");
+
+    fireEvent.click(screen.getByRole("button", { name: "测试 BRAIN 连接" }));
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/test_connection",
+        expect.objectContaining({ method: "POST" }),
+      );
+    });
+    expect(await screen.findByText("连接正常: production")).toBeInTheDocument();
+    expect(notify).toHaveBeenCalledWith("success", "BRAIN 连接测试通过");
   });
 });
 
@@ -81,6 +110,9 @@ describe("CandidateTable", () => {
           ],
         });
       }
+      if (path === "/api/check_results") {
+        return jsonResponse({ ok: true, items: [] });
+      }
       if (path === "/api/generate_candidates" && options?.method === "POST") {
         return jsonResponse({ ok: true, job_id: "job_7" });
       }
@@ -88,20 +120,20 @@ describe("CandidateTable", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    render(<CandidateTable notify={notify} onScore={onScore} />);
+    render(<CandidateTable notify={notify} onScore={onScore} showRowActions />);
 
-    await screen.findByText("rank(close)");
-    fireEvent.change(screen.getByLabelText("Filter candidates"), { target: { value: "decay" } });
+    expect((await screen.findAllByText("rank(close)")).length).toBeGreaterThan(0);
+    fireEvent.change(screen.getByLabelText("过滤候选"), { target: { value: "decay" } });
 
-    expect(await screen.findByText("decay_linear(volume, 5)")).toBeInTheDocument();
+    expect((await screen.findAllByText("decay_linear(volume, 5)")).length).toBeGreaterThan(0);
     expect(screen.queryByText("rank(close)")).not.toBeInTheDocument();
 
-    const count = screen.getByLabelText("Count");
+    const count = screen.getByLabelText("数量");
     fireEvent.change(count, { target: { value: "1010" } });
     expect(count).toHaveValue(100);
 
     fireEvent.change(count, { target: { value: "7" } });
-    fireEvent.click(screen.getByRole("button", { name: "Generate" }));
+    fireEvent.click(screen.getByRole("button", { name: "生成候选" }));
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
@@ -113,10 +145,10 @@ describe("CandidateTable", () => {
       String(url) === "/api/generate_candidates" && options?.method === "POST"
     ));
     expect(JSON.parse(String(generateCall?.[1]?.body))).toEqual({ count: 7 });
-    expect(notify).toHaveBeenCalledWith("info", "Candidate generation started: job_7");
+    expect(notify).toHaveBeenCalledWith("info", "候选生成已启动: job_7");
 
-    const table = screen.getByRole("table", { name: "Candidate results" });
-    fireEvent.click(within(table).getByRole("button", { name: "Score alpha_decay" }));
+    const table = screen.getByRole("table", { name: "候选结果" });
+    fireEvent.click(within(table).getByRole("button", { name: "评分 alpha_decay" }));
     expect(onScore).toHaveBeenCalledWith(expect.objectContaining({ alpha_id: "alpha_decay" }));
   });
 
@@ -147,21 +179,21 @@ describe("CandidateTable", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const { rerender } = render(<CandidateTable notify={notify} viewMode="passed" />);
-    await screen.findByRole("heading", { name: "Passed candidates" });
-    expect(await screen.findByText("passed_expr")).toBeInTheDocument();
+    await screen.findByRole("heading", { name: "已达标候选" });
+    expect((await screen.findAllByText("passed_expr")).length).toBeGreaterThan(0);
     expect(screen.queryByText("submitted_expr")).not.toBeInTheDocument();
 
     rerender(<CandidateTable notify={notify} viewMode="submittable" />);
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/check_results", expect.any(Object)));
-    expect(await screen.findByText("passed_expr")).toBeInTheDocument();
+    expect((await screen.findAllByText("passed_expr")).length).toBeGreaterThan(0);
     expect(screen.queryByText("stale_expr")).not.toBeInTheDocument();
 
     rerender(<CandidateTable notify={notify} viewMode="submitted" />);
-    expect(await screen.findByText("submitted_expr")).toBeInTheDocument();
+    expect((await screen.findAllByText("submitted_expr")).length).toBeGreaterThan(0);
     expect(screen.queryByText("failed_expr")).not.toBeInTheDocument();
 
     rerender(<CandidateTable notify={notify} viewMode="failed" />);
-    expect(await screen.findByText("failed_expr")).toBeInTheDocument();
+    expect((await screen.findAllByText("failed_expr")).length).toBeGreaterThan(0);
     expect(screen.queryByText("passed_expr")).not.toBeInTheDocument();
   });
 });
@@ -199,13 +231,60 @@ describe("SnapshotPanel", () => {
 
     render(<SnapshotPanel notify={notify} viewMode="cloud" />);
 
-    expect(await screen.findByText("ALPHA_CLOUD_1")).toBeInTheDocument();
-    expect(screen.getByRole("table", { name: "Cloud data rows" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /Refresh/ }));
+    expect((await screen.findAllByText("ALPHA_CLOUD_1")).length).toBeGreaterThan(0);
+    expect(screen.getByRole("table", { name: "云端数据表格" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /刷新/ }));
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledTimes(2);
     });
+  });
+
+  it("loads checkpoint history rows for resume and history review", async () => {
+    const notify = vi.fn();
+    const fetchMock = vi.fn(async (url: RequestInfo | URL) => {
+      const path = String(url);
+      if (path === "/api/checkpoint_status") {
+        return jsonResponse({
+          ok: true,
+          checkpoint_count: 1,
+          history_count: 2,
+          resume_available: true,
+          storage_dir: "data",
+          latest: {
+            run_id: "run_resume",
+            phase_completed: "official_validation",
+            saved_at: "2026-06-05T00:00:00Z",
+          },
+          history: [
+            {
+              run_id: "run_resume",
+              status: "completed",
+              best_score: 88.5,
+              completed_at: "2026-06-05T00:05:00Z",
+            },
+          ],
+          latest_comparison: {
+            deltas: { best_score: 4.5, submission_ready: 1 },
+          },
+          history_analytics: {
+            schema_version: "run_history_analytics.v1",
+            trend_status: "ready",
+            latest_run_id: "run_resume",
+          },
+        });
+      }
+      throw new Error(`Unexpected fetch: ${path}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<SnapshotPanel notify={notify} viewMode="checkpoint_status" />);
+
+    expect((await screen.findAllByText("run_resume")).length).toBeGreaterThan(0);
+    expect(screen.getByRole("table", { name: "断点历史表格" })).toBeInTheDocument();
+    expect(screen.getByText("可续跑")).toBeInTheDocument();
+    expect(screen.getByText("comparison 对比 2 项: best_score, submission_ready")).toBeInTheDocument();
+    expect(screen.getAllByText("comparison").length).toBeGreaterThan(0);
   });
 });
 
@@ -221,12 +300,18 @@ function baseConfig(dataset: string) {
     auto_submit: false,
     ops: {
       settings: {
+        instrumentType: "EQUITY",
         region: "USA",
         universe: "TOP3000",
         delay: 1,
         decay: 10,
         neutralization: "SUBINDUSTRY",
         dataset,
+        pasteurization: "ON",
+        unitHandling: "VERIFY",
+        nanHandling: "ON",
+        language: "FASTEXPR",
+        type: "REGULAR",
       },
       budget: {
         max_candidates_per_cycle: 20,

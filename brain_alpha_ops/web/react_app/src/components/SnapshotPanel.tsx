@@ -3,9 +3,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useApi } from "@/hooks/useApi";
 import ProgressFeedback from "@/components/ProgressFeedback";
+import type { CardViewId } from "@/types";
 
 export type SnapshotView =
   | "cloud"
+  | "checkpoint_status"
   | "lifecycle"
   | "research_memory"
   | "research_knowledge"
@@ -17,6 +19,7 @@ export type SnapshotView =
 interface Props {
   notify: (type: "success" | "error" | "warning" | "info", msg: string) => void;
   viewMode: SnapshotView;
+  onNavigate?: (view: CardViewId) => void;
 }
 
 interface SnapshotRow {
@@ -48,70 +51,78 @@ type SnapshotPayload = Record<string, unknown>;
 const MAX_FILTER_LENGTH = 200;
 const SNAPSHOT_VIEWS: Record<SnapshotView, SnapshotConfig> = {
   cloud: {
-    title: "Cloud data",
-    subtitle: "Cached alpha state",
+    title: "云端数据",
+    subtitle: "缓存的 Alpha 状态",
     endpoint: "/api/snapshot/cloud?limit=100",
-    empty: "No cached cloud alpha records",
+    empty: "暂无云端 Alpha 记录",
     rows: cloudRows,
     metrics: cloudMetrics,
   },
+  checkpoint_status: {
+    title: "断点历史",
+    subtitle: "断点续跑、运行历史与收敛趋势",
+    endpoint: "/api/checkpoint_status",
+    empty: "暂无断点或运行历史",
+    rows: checkpointStatusRows,
+    metrics: checkpointStatusMetrics,
+  },
   lifecycle: {
-    title: "Lifecycle",
-    subtitle: "Audit trail",
+    title: "生命周期",
+    subtitle: "审计跟踪",
     endpoint: "/api/lifecycle",
-    empty: "No lifecycle events",
+    empty: "暂无生命周期事件",
     rows: lifecycleRows,
   },
   research_memory: {
-    title: "Research memory",
-    subtitle: "Local research summary",
+    title: "研究记忆",
+    subtitle: "本地研究摘要",
     endpoint: "/api/research_memory?limit=5000&top_n=10",
-    empty: "No research memory rows",
+    empty: "暂无研究记忆记录",
     rows: researchMemoryRows,
     metrics: researchMemoryMetrics,
   },
   research_knowledge: {
-    title: "Knowledge base",
-    subtitle: "Rules, findings, failures",
+    title: "知识库",
+    subtitle: "规则、发现、失败",
     endpoint: "/api/research_knowledge?limit=100&min_confidence=0",
-    empty: "No knowledge records",
+    empty: "暂无知识记录",
     rows: researchKnowledgeRows,
     metrics: researchKnowledgeMetrics,
   },
   research_observability: {
-    title: "Observability",
-    subtitle: "Research health",
+    title: "可观测性",
+    subtitle: "研究健康状态",
     endpoint: "/api/research_observability?limit=5000&top_n=10&include_cloud=true",
-    empty: "No observability signals",
+    empty: "暂无可观测性信号",
     rows: researchObservabilityRows,
     metrics: researchObservabilityMetrics,
   },
   prompt_runs: {
-    title: "Prompt runs",
-    subtitle: "Prompt ledger",
+    title: "提示运行",
+    subtitle: "提示账本",
     endpoint: "/api/prompt_runs?limit=100",
-    empty: "No prompt run records",
+    empty: "暂无提示运行记录",
     rows: promptRunRows,
   },
   sqlite_indexes: {
-    title: "SQLite indexes",
-    subtitle: "Cache health",
+    title: "SQLite 索引",
+    subtitle: "缓存健康状态",
     endpoint: "/api/sqlite_indexes?top_n=10",
-    empty: "No SQLite index rows",
+    empty: "暂无 SQLite 索引记录",
     rows: sqliteIndexRows,
     metrics: sqliteIndexMetrics,
   },
   robustness: {
-    title: "Robustness",
-    subtitle: "Anti-overfit and rolling validation",
+    title: "稳健性",
+    subtitle: "防过拟合与滚动验证",
     endpoint: "/api/latest_result",
-    empty: "No robustness evidence",
+    empty: "暂无稳健性证据",
     rows: robustnessRows,
     metrics: robustnessMetrics,
   },
 };
 
-export default function SnapshotPanel({ notify, viewMode }: Props) {
+export default function SnapshotPanel({ notify, viewMode, onNavigate }: Props) {
   const api = useApi<SnapshotPayload>();
   const [filter, setFilter] = useState("");
   const config = SNAPSHOT_VIEWS[viewMode];
@@ -131,13 +142,14 @@ export default function SnapshotPanel({ notify, viewMode }: Props) {
   const filteredRows = normalizedFilter
     ? rows.filter((row) => rowText(row).includes(normalizedFilter))
     : rows;
+  const comparisonSummary = viewMode === "checkpoint_status" ? checkpointComparisonSummary(payload) : "";
 
   if (api.loading && !api.data) {
     return (
       <ProgressFeedback
         state="loading"
         title={config.title}
-        progress={{ phase: "snapshot_load", status_message: `Loading ${config.title}.` }}
+        progress={{ phase: "snapshot_load", status_message: `正在加载 ${config.title}。` }}
       />
     );
   }
@@ -150,25 +162,65 @@ export default function SnapshotPanel({ notify, viewMode }: Props) {
           <p className="text-xs text-muted">{config.subtitle}</p>
         </div>
         <button type="button" onClick={load} className="btn-secondary text-sm" disabled={api.loading}>
-          Refresh
+          刷新
         </button>
       </div>
 
       <ProgressFeedback
         state={api.error ? "error" : api.loading ? "loading" : "idle"}
         title={config.title}
-        progress={{ phase: api.loading ? "snapshot_load" : "completed", status_message: api.loading ? `Refreshing ${config.title}.` : `${config.title} snapshot loaded.` }}
+        progress={{ phase: api.loading ? "snapshot_load" : "completed", status_message: api.loading ? `正在刷新 ${config.title}。` : `${config.title} 快照已加载。` }}
         error={api.error}
         onRetry={load}
         compact={!api.loading && !api.error}
       />
 
+      {viewMode === "checkpoint_status" && (
+        <div className="rounded-xl border border-brand-500/25 bg-brand-500/10 p-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-brand-200">
+                {truthy(payload.resume_available) ? "检测到可续跑断点" : "暂无可续跑断点"}
+              </p>
+              <p className="mt-1 text-xs text-gray-300">
+                {truthy(payload.resume_available)
+                  ? "先回到候选管理确认候选状态，再进入质量门禁复核是否满足提交前检查。"
+                  : "新的生产搜索会在候选管理中创建断点与历史记录。"}
+              </p>
+              {comparisonSummary && (
+                <p className="mt-2 text-xs text-brand-100">
+                  {comparisonSummary}
+                </p>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                className="btn-secondary min-h-11 text-sm"
+                onClick={() => onNavigate?.("candidates")}
+                disabled={!onNavigate}
+              >
+                进入候选管理
+              </button>
+              <button
+                type="button"
+                className="btn-ghost min-h-11 text-sm"
+                onClick={() => onNavigate?.("quality_check")}
+                disabled={!onNavigate}
+              >
+                查看质量门禁
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {api.error && (
         <div className="card border-danger/40 bg-danger/10" role="alert" aria-live="assertive">
           <div className="flex items-center justify-between gap-3">
-            <p className="text-danger text-sm">Failed to load {config.title}: {api.error}</p>
+            <p className="text-danger text-sm">加载 {config.title} 失败: {api.error}</p>
             <button type="button" onClick={load} className="btn-secondary text-sm" disabled={api.loading}>
-              Retry
+              重试
             </button>
           </div>
         </div>
@@ -186,29 +238,39 @@ export default function SnapshotPanel({ notify, viewMode }: Props) {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
         <input
           type="text"
-          aria-label={`Filter ${config.title}`}
-          placeholder="Filter rows..."
+          aria-label={`筛选 ${config.title}`}
+          placeholder="筛选行..."
           value={filter}
           maxLength={MAX_FILTER_LENGTH}
           onChange={(event) => setFilter(sanitizeTextInput(event.target.value, MAX_FILTER_LENGTH))}
           className="w-full min-w-0 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-brand-500 sm:flex-1"
         />
         <p className="text-xs text-muted" role="status" aria-live="polite">
-          {filteredRows.length} of {rows.length} rows
+          {filteredRows.length} / {rows.length} 行
         </p>
       </div>
 
       <div className="card min-w-0 overflow-hidden p-0">
-        <div className="max-w-full overflow-auto">
-          <table className="min-w-[820px] w-full text-sm" aria-label={`${config.title} rows`}>
+        <div className="space-y-3 p-3 md:hidden" aria-label={`${config.title}移动列表`}>
+          {filteredRows.length === 0 ? (
+            <div className="rounded-lg border border-gray-800/60 bg-gray-900/50 px-4 py-6 text-center text-sm text-muted">
+              {config.empty}
+            </div>
+          ) : (
+            filteredRows.map((row, index) => <SnapshotMobileCard key={`${row.kind}_${row.id}_mobile_${index}`} row={row} />)
+          )}
+        </div>
+
+        <div className="hidden max-w-full overflow-auto md:block">
+          <table className="min-w-[820px] w-full text-sm" aria-label={`${config.title}表格`}>
             <thead>
               <tr className="border-b border-gray-800 text-left text-xs text-muted uppercase tracking-wider">
-                <th scope="col" className="p-3">Type</th>
-                <th scope="col" className="p-3">Name</th>
-                <th scope="col" className="p-3">Status</th>
-                <th scope="col" className="p-3">Metric</th>
-                <th scope="col" className="p-3">Detail</th>
-                <th scope="col" className="p-3">Time</th>
+                <th scope="col" className="p-3">类型</th>
+                <th scope="col" className="p-3">名称</th>
+                <th scope="col" className="p-3">状态</th>
+                <th scope="col" className="p-3">指标</th>
+                <th scope="col" className="p-3">详情</th>
+                <th scope="col" className="p-3">时间</th>
               </tr>
             </thead>
             <tbody>
@@ -236,39 +298,85 @@ export default function SnapshotPanel({ notify, viewMode }: Props) {
 
 function defaultMetrics(payload: SnapshotPayload, rows: SnapshotRow[]) {
   return [
-    { label: "Rows", value: String(rows.length) },
-    { label: "Source", value: text(payload.source || "snapshot") },
-    { label: "Schema", value: text(payload.schema_version || "-") },
-    { label: "Status", value: payload.ok === false ? "Error" : "Ready" },
+    { label: "行数", value: String(rows.length) },
+    { label: "来源", value: text(payload.source || "快照") },
+    { label: "版本", value: text(payload.schema_version || "-") },
+    { label: "状态", value: payload.ok === false ? "错误" : "就绪" },
   ];
+}
+
+function SnapshotMobileCard({ row }: { row: SnapshotRow }) {
+  return (
+    <article className="rounded-lg border border-gray-800/70 bg-gray-900/70 p-4 text-sm">
+      <div className="flex min-w-0 items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-xs uppercase tracking-wide text-muted">{row.kind || "snapshot"}</p>
+          <p className="mt-1 break-words font-mono text-xs text-brand-400">{row.title || row.id || "-"}</p>
+        </div>
+        <span className={`badge shrink-0 text-xs ${statusBadge(row.status)}`}>{row.status || "-"}</span>
+      </div>
+      <dl className="mt-4 grid gap-3 text-xs">
+        <div>
+          <dt className="text-muted">指标</dt>
+          <dd className="mt-1 break-words font-mono text-gray-100">{row.metric || "-"}</dd>
+        </div>
+        <div>
+          <dt className="text-muted">详情</dt>
+          <dd className="mt-1 break-words text-gray-300">{row.detail || "-"}</dd>
+        </div>
+        <div>
+          <dt className="text-muted">时间</dt>
+          <dd className="mt-1 break-words font-mono text-muted">{row.timestamp || "-"}</dd>
+        </div>
+      </dl>
+    </article>
+  );
 }
 
 function cloudMetrics(payload: SnapshotPayload, rows: SnapshotRow[]) {
   const summary = record(payload.summary);
   return [
-    { label: "Returned", value: text(summary.returned_count ?? rows.length) },
-    { label: "Submitted", value: text(summary.submitted_count ?? "-") },
-    { label: "Passed", value: text(summary.passed_unsubmitted_count ?? "-") },
-    { label: "Stale", value: truthy(summary.is_stale) ? "Yes" : "No" },
+    { label: "返回数量", value: text(summary.returned_count ?? rows.length) },
+    { label: "已提交", value: text(summary.submitted_count ?? "-") },
+    { label: "已通过", value: text(summary.passed_unsubmitted_count ?? "-") },
+    { label: "过期", value: truthy(summary.is_stale) ? "是" : "否" },
   ];
+}
+
+function checkpointStatusMetrics(payload: SnapshotPayload, _rows: SnapshotRow[]) {
+  const analytics = record(payload.history_analytics);
+  return [
+    { label: "断点数量", value: text(payload.checkpoint_count ?? "0") },
+    { label: "历史记录", value: text(payload.history_count ?? "0") },
+    { label: "可续跑", value: truthy(payload.resume_available) ? "是" : "否" },
+    { label: "趋势", value: text(analytics.trend_status || analytics.status || "-") },
+  ];
+}
+
+function checkpointComparisonSummary(payload: SnapshotPayload) {
+  const latestComparison = record(payload.latest_comparison);
+  const deltas = record(latestComparison.deltas);
+  const keys = Object.keys(deltas);
+  if (!keys.length) return "";
+  return `comparison 对比 ${keys.length} 项: ${keys.slice(0, 3).join(", ")}`;
 }
 
 function researchMemoryMetrics(payload: SnapshotPayload, rows: SnapshotRow[]) {
   return [
-    { label: "Rows", value: String(rows.length) },
-    { label: "Candidates", value: text(payload.total_candidates ?? "0") },
-    { label: "Lifecycle", value: text(payload.total_lifecycle_records ?? "0") },
-    { label: "Checks", value: text(payload.total_check_records ?? "0") },
+    { label: "行数", value: String(rows.length) },
+    { label: "候选数量", value: text(payload.total_candidates ?? "0") },
+    { label: "生命周期", value: text(payload.total_lifecycle_records ?? "0") },
+    { label: "检查记录", value: text(payload.total_check_records ?? "0") },
   ];
 }
 
 function researchKnowledgeMetrics(payload: SnapshotPayload, rows: SnapshotRow[]) {
   const counts = record(payload.counts);
   return [
-    { label: "Rows", value: String(rows.length) },
-    { label: "Rules", value: text(counts.rules ?? "0") },
-    { label: "Findings", value: text(counts.findings ?? "0") },
-    { label: "Failures", value: text(counts.failures ?? "0") },
+    { label: "行数", value: String(rows.length) },
+    { label: "规则", value: text(counts.rules ?? "0") },
+    { label: "发现", value: text(counts.findings ?? "0") },
+    { label: "失败", value: text(counts.failures ?? "0") },
   ];
 }
 
@@ -276,10 +384,10 @@ function researchObservabilityMetrics(payload: SnapshotPayload, rows: SnapshotRo
   const health = record(payload.health);
   const errors = record(payload.errors);
   return [
-    { label: "Rows", value: String(rows.length) },
-    { label: "Risk", value: text(health.risk_level || "unknown") },
-    { label: "Errors", value: text(errors.total ?? "0") },
-    { label: "Blocks", value: text(array(health.blocking_flags).length) },
+    { label: "行数", value: String(rows.length) },
+    { label: "风险", value: text(health.risk_level || "未知") },
+    { label: "错误", value: text(errors.total ?? "0") },
+    { label: "阻断", value: text(array(health.blocking_flags).length) },
   ];
 }
 
@@ -287,10 +395,10 @@ function sqliteIndexMetrics(payload: SnapshotPayload, rows: SnapshotRow[]) {
   const expression = record(payload.expression_index);
   const recordIndex = record(payload.record_index);
   return [
-    { label: "Rows", value: String(rows.length) },
-    { label: "Expressions", value: text(expression.total_expression_records ?? "0") },
-    { label: "Duplicates", value: text(expression.duplicate_expression_count ?? "0") },
-    { label: "Records", value: text(recordIndex.row_count ?? "0") },
+    { label: "行数", value: String(rows.length) },
+    { label: "表达式", value: text(expression.total_expression_records ?? "0") },
+    { label: "重复", value: text(expression.duplicate_expression_count ?? "0") },
+    { label: "记录", value: text(recordIndex.row_count ?? "0") },
   ];
 }
 
@@ -298,10 +406,10 @@ function robustnessMetrics(_payload: SnapshotPayload, rows: SnapshotRow[]) {
   const antiRows = rows.filter((row) => row.kind === "anti_overfit");
   const rollingRows = rows.filter((row) => row.kind === "rolling_validation");
   return [
-    { label: "Rows", value: String(rows.length) },
-    { label: "Anti-overfit", value: String(antiRows.length) },
-    { label: "Rolling", value: String(rollingRows.length) },
-    { label: "Warnings", value: String(rows.filter((row) => row.status && row.status !== "pass" && row.status !== "passed").length) },
+    { label: "行数", value: String(rows.length) },
+    { label: "防过拟合", value: String(antiRows.length) },
+    { label: "滚动验证", value: String(rollingRows.length) },
+    { label: "警告", value: String(rows.filter((row) => row.status && row.status !== "pass" && row.status !== "passed").length) },
   ];
 }
 
@@ -339,6 +447,99 @@ function lifecycleRows(payload: SnapshotPayload) {
       timestamp: text(row.timestamp || row.created_at || row.updated_at),
     };
   });
+}
+
+function checkpointStatusRows(payload: SnapshotPayload) {
+  const latest = record(payload.latest);
+  const latestHistory = record(payload.latest_history);
+  const latestComparison = record(payload.latest_comparison);
+  const analytics = record(payload.history_analytics);
+  const rows: SnapshotRow[] = [];
+
+  if (Object.keys(latest).length) {
+    rows.push({
+      id: rowId(latest, "latest_checkpoint"),
+      kind: "checkpoint",
+      title: text(latest.run_id || latest.checkpoint_id || "latest_checkpoint"),
+      status: truthy(payload.resume_available) ? "resume_available" : "recorded",
+      metric: text(latest.phase_completed || latest.stage || latest.cycle_number || ""),
+      detail: text(latest.summary || latest.message || latest.error || payload.storage_dir),
+      timestamp: text(latest.saved_at || latest.timestamp || latest.updated_at),
+    });
+  }
+
+  rows.push(...array(payload.checkpoints).map((item, index) => {
+    const row = record(item);
+    return {
+      id: rowId(row, `checkpoint_${index}`),
+      kind: "checkpoint",
+      title: text(row.run_id || row.checkpoint_id || `checkpoint_${index + 1}`),
+      status: text(row.status || row.phase_completed || row.stage || "recorded"),
+      metric: text(row.cycle_number ?? row.step ?? ""),
+      detail: text(row.summary || row.message || row.error || row.path),
+      timestamp: text(row.saved_at || row.timestamp || row.updated_at),
+    };
+  }));
+
+  if (Object.keys(latestHistory).length) {
+    rows.push({
+      id: rowId(latestHistory, "latest_history"),
+      kind: "history",
+      title: text(latestHistory.run_id || "latest_history"),
+      status: text(latestHistory.status || latestHistory.outcome || "recorded"),
+      metric: metricText("score", latestHistory.best_score ?? latestHistory.score),
+      detail: text(latestHistory.summary || latestHistory.message || latestHistory.error || latestHistory.best_alpha_id),
+      timestamp: text(latestHistory.completed_at || latestHistory.started_at || latestHistory.timestamp),
+    });
+  }
+
+  rows.push(...array(payload.history).map((item, index) => {
+    const row = record(item);
+    return {
+      id: rowId(row, `history_${index}`),
+      kind: "history",
+      title: text(row.run_id || `history_${index + 1}`),
+      status: text(row.status || row.outcome || "recorded"),
+      metric: metricText("score", row.best_score ?? row.score),
+      detail: text(row.summary || row.message || row.error || row.best_alpha_id),
+      timestamp: text(row.completed_at || row.started_at || row.timestamp),
+    };
+  }));
+
+  rows.push(...comparisonRows(latestComparison));
+  rows.push(...analyticsRows(analytics));
+  return dedupeSnapshotRows(rows);
+}
+
+function comparisonRows(comparison: SnapshotPayload) {
+  const deltas = record(comparison.deltas);
+  return Object.entries(deltas).map(([key, value]) => ({
+    id: `comparison_${key}`,
+    kind: "comparison",
+    title: key,
+    status: "delta",
+    metric: text(value),
+    detail: text(comparison.summary || comparison.baseline_run_id || comparison.current_run_id),
+    timestamp: text(comparison.generated_at || comparison.timestamp),
+  }));
+}
+
+function analyticsRows(analytics: SnapshotPayload) {
+  const rows = [
+    { key: "trend_status", value: analytics.trend_status || analytics.status },
+    { key: "latest_run_id", value: analytics.latest_run_id },
+    { key: "history_count", value: analytics.history_count },
+    { key: "latest_comparison_available", value: analytics.latest_comparison_available },
+  ].filter((item) => item.value !== undefined && item.value !== null && item.value !== "");
+  return rows.map((item) => ({
+    id: `analytics_${item.key}`,
+    kind: "analytics",
+    title: item.key,
+    status: "ready",
+    metric: text(item.value),
+    detail: text(analytics.schema_version || "run_history_analytics"),
+    timestamp: text(analytics.generated_at || analytics.timestamp),
+  }));
 }
 
 function researchMemoryRows(payload: SnapshotPayload) {
@@ -530,8 +731,20 @@ function dedupeRows(rows: unknown[]) {
   return result;
 }
 
+function dedupeSnapshotRows(rows: SnapshotRow[]) {
+  const seen = new Set<string>();
+  const result: SnapshotRow[] = [];
+  for (const row of rows) {
+    const key = `${row.kind}:${row.id}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(row);
+  }
+  return result;
+}
+
 function rowId(row: SnapshotPayload, fallback: string) {
-  return text(row.alpha_id || row.official_alpha_id || row.simulation_id || row.id || row.knowledge_id || row.entry_id || row.run_id || row.prompt_digest || row.expression_fingerprint || fallback);
+  return text(row.alpha_id || row.official_alpha_id || row.simulation_id || row.id || row.checkpoint_id || row.knowledge_id || row.entry_id || row.run_id || row.prompt_digest || row.expression_fingerprint || fallback);
 }
 
 function rowText(row: SnapshotRow) {

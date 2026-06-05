@@ -14,6 +14,7 @@ LOCAL_HOSTS = {"127.0.0.1", "localhost", "::1"}
 LOOPBACK_BIND_HOSTS = {"127.0.0.1", "localhost", "::1"}
 SESSION_COOKIE_NAME = "brain_alpha_ops_session"
 DEFAULT_SESSION_TTL_SECONDS = 12 * 60 * 60
+DEFAULT_SESSION_ABSOLUTE_MAX_SECONDS = 24 * 60 * 60
 REQUEST_REPLAY_TTL_SECONDS = 5 * 60
 MAX_REQUEST_ID_LENGTH = 128
 
@@ -93,6 +94,7 @@ def validate_admin_token(provided_token: str, expected_token: str) -> bool:
 class LocalSessionManager:
     cookie_name: str = SESSION_COOKIE_NAME
     ttl_seconds: int = DEFAULT_SESSION_TTL_SECONDS
+    absolute_max_seconds: int = DEFAULT_SESSION_ABSOLUTE_MAX_SECONDS
     allow_multiple_sessions: bool = True
     secure_cookies: bool = False
     sessions: dict[str, dict[str, Any]] = field(default_factory=dict)
@@ -127,7 +129,9 @@ class LocalSessionManager:
         current = time.time() if now is None else now
         with self.lock:
             for session_id, row in list(self.sessions.items()):
-                if float(row.get("expires_at", 0.0) or 0.0) <= current:
+                expires_at = float(row.get("expires_at", 0.0) or 0.0)
+                absolute_expires_at = float(row.get("absolute_expires_at", expires_at) or expires_at)
+                if expires_at <= current or absolute_expires_at <= current:
                     self.sessions.pop(session_id, None)
 
     def create(self) -> tuple[str, str]:
@@ -138,11 +142,16 @@ class LocalSessionManager:
         with self.lock:
             if not self.allow_multiple_sessions:
                 self.sessions.clear()
+            created_at = time.time()
+            absolute_expires_at = created_at + max(1, int(self.absolute_max_seconds))
             self.sessions[session_id] = {
                 "csrf": csrf_token,
                 "stream": stream_token,
                 "request_replay": {},
-                "expires_at": time.time() + self.ttl_seconds,
+                "created_at": created_at,
+                "last_accessed": created_at,
+                "expires_at": min(created_at + self.ttl_seconds, absolute_expires_at),
+                "absolute_expires_at": absolute_expires_at,
             }
         return session_id, csrf_token
 
@@ -160,9 +169,15 @@ class LocalSessionManager:
             row = self.sessions.get(session_id)
             if not row:
                 return False
+            current = time.time()
+            absolute_expires_at = float(row.get("absolute_expires_at", row.get("expires_at", 0.0)) or 0.0)
+            if absolute_expires_at <= current:
+                self.sessions.pop(session_id, None)
+                return False
             if not secrets.compare_digest(str(row.get(token_key, "")), token):
                 return False
-            row["expires_at"] = time.time() + self.ttl_seconds
+            row["last_accessed"] = current
+            row["expires_at"] = min(current + self.ttl_seconds, absolute_expires_at)
             return True
 
     def validate_csrf(self, session_id: str, csrf_token: str) -> bool:
@@ -211,7 +226,9 @@ class LocalSessionManager:
             if request_id in replay_cache:
                 return {"ok": False, "error_code": "REPLAY_DETECTED", "error": "duplicate request id"}
             replay_cache[request_id] = current + ttl_seconds
-            row["expires_at"] = current + self.ttl_seconds
+            absolute_expires_at = float(row.get("absolute_expires_at", row.get("expires_at", 0.0)) or 0.0)
+            row["last_accessed"] = current
+            row["expires_at"] = min(current + self.ttl_seconds, absolute_expires_at)
         return {"ok": True}
 
     def csrf_for_session(self, session_id: str) -> str:
@@ -222,7 +239,10 @@ class LocalSessionManager:
             row = self.sessions.get(session_id)
             if not row:
                 return ""
-            row["expires_at"] = time.time() + self.ttl_seconds
+            current = time.time()
+            absolute_expires_at = float(row.get("absolute_expires_at", row.get("expires_at", 0.0)) or 0.0)
+            row["last_accessed"] = current
+            row["expires_at"] = min(current + self.ttl_seconds, absolute_expires_at)
             return str(row.get("csrf", ""))
 
     def stream_token_for_session(self, session_id: str) -> str:
@@ -235,7 +255,10 @@ class LocalSessionManager:
                 return ""
             if not row.get("stream"):
                 row["stream"] = secrets.token_urlsafe(32)
-            row["expires_at"] = time.time() + self.ttl_seconds
+            current = time.time()
+            absolute_expires_at = float(row.get("absolute_expires_at", row.get("expires_at", 0.0)) or 0.0)
+            row["last_accessed"] = current
+            row["expires_at"] = min(current + self.ttl_seconds, absolute_expires_at)
             return str(row.get("stream", ""))
 
     def get_or_create(self, existing_session_id: str) -> tuple[str, str]:

@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import calibrate_weights as cw
 
+from brain_alpha_ops.models import Candidate
+from brain_alpha_ops.research.scoring import prior_score
+
 
 class _ScoreHistoryDBNotReady:
     def __init__(self, storage_dir):
@@ -26,8 +29,30 @@ class _ScoreHistoryDBStalled:
         }
 
 
+def test_compute_prior_dimensions_matches_runtime_prior_score_defaults():
+    record = {
+        "expression": "rank(ts_delta(close, 20)) + winsorize(volume)",
+        "field_set": ["close", "volume", "adv20"],
+        "operator_set": ["rank", "ts_delta", "winsorize"],
+        "hypothesis": "price momentum with liquidity and risk management confirmation",
+        "family": "Liquidity",
+    }
+    candidate = Candidate(
+        alpha_id="alpha_shared_prior",
+        expression=record["expression"],
+        family=record["family"],
+        hypothesis=record["hypothesis"],
+        data_fields=list(record["field_set"]),
+        operators=list(record["operator_set"]),
+    )
+    runtime_dims = dict(prior_score(candidate)["dimensions"])
+    runtime_dims.pop("economic_concepts", None)
+
+    assert cw.compute_prior_dimensions(record) == runtime_dims
+
+
 def test_auto_calibrate_if_stalled_returns_not_triggered_when_not_ready(monkeypatch):
-    monkeypatch.setattr("brain_alpha_ops.scoring.official_scoring.ScoreHistoryDB", _ScoreHistoryDBNotReady)
+    monkeypatch.setattr("brain_alpha_ops.scoring.history.ScoreHistoryDB", _ScoreHistoryDBNotReady)
 
     result = cw.auto_calibrate_if_stalled("data")
 
@@ -38,7 +63,7 @@ def test_auto_calibrate_if_stalled_returns_not_triggered_when_not_ready(monkeypa
 
 
 def test_auto_calibrate_if_stalled_reports_calibration_failure_when_features_are_insufficient(monkeypatch):
-    monkeypatch.setattr("brain_alpha_ops.scoring.official_scoring.ScoreHistoryDB", _ScoreHistoryDBStalled)
+    monkeypatch.setattr("brain_alpha_ops.scoring.history.ScoreHistoryDB", _ScoreHistoryDBStalled)
     monkeypatch.setattr(cw, "load_alpha_features", lambda path: [{"row": index} for index in range(7)])
 
     result = cw.auto_calibrate_if_stalled("data")
@@ -51,7 +76,7 @@ def test_auto_calibrate_if_stalled_reports_calibration_failure_when_features_are
 
 
 def test_auto_calibrate_if_stalled_merges_advice_when_stalled(monkeypatch):
-    monkeypatch.setattr("brain_alpha_ops.scoring.official_scoring.ScoreHistoryDB", _ScoreHistoryDBStalled)
+    monkeypatch.setattr("brain_alpha_ops.scoring.history.ScoreHistoryDB", _ScoreHistoryDBStalled)
     monkeypatch.setattr(cw, "load_alpha_features", lambda path: [{"row": index} for index in range(8)])
     monkeypatch.setattr(
         cw,

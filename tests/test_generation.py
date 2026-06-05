@@ -4,6 +4,7 @@ from brain_alpha_ops.config import ResearchBudget
 from brain_alpha_ops.research.generator import CandidateGenerator, extract_fields, extract_operators, local_quality, nesting_depth
 from brain_alpha_ops.research.generator import _get_default_windows, _load_operators_windows
 from brain_alpha_ops.research.expression_ast import expression_key
+from brain_alpha_ops.research.fallback_generation import build_bare_fallback_spec
 from brain_alpha_ops.research.validated_generator import _passes_diversity, _tokenize, prefilter_quality
 
 
@@ -131,3 +132,46 @@ def test_generator_observability_guidance_skips_duplicate_expression():
     assert candidates
     assert all(expression_key(candidate.expression) != expression_key(avoided) for candidate in candidates)
     assert any(":observability" in candidate.template_source for candidate in candidates)
+
+
+def test_candidate_generator_blocks_direct_returns_delta_risk(monkeypatch):
+    generator = CandidateGenerator()
+    generator.update_context(
+        [{"name": "returns"}],
+        [{"name": "rank"}, {"name": "ts_delta"}, {"name": "ts_mean"}],
+    )
+    monkeypatch.setattr(generator, "_build_official_field_pool", lambda dataset_id="": ["returns"])
+
+    assert generator._expression_forbidden("rank(ts_delta(returns, 10))")
+    assert not generator._expression_forbidden("rank(ts_corr(close, returns, 20))")
+
+    candidates = generator._generate_fallback(4, "pv1")
+
+    assert candidates
+    assert not any("ts_delta(returns" in candidate.expression for candidate in candidates)
+
+
+def test_candidate_generator_fallback_preserves_dataset_id(monkeypatch):
+    generator = CandidateGenerator()
+    generator.update_context(
+        [{"name": "close"}],
+        [{"name": "rank"}, {"name": "ts_mean"}],
+    )
+    monkeypatch.setattr(generator, "_build_official_field_pool", lambda dataset_id="": ["close"])
+
+    candidates = generator.generate(2, dataset_id="pv1")
+
+    assert candidates
+    assert all(candidate.dataset_id == "pv1" for candidate in candidates)
+
+
+def test_bare_fallback_spec_avoids_direct_returns_delta_when_returns_only():
+    spec = build_bare_fallback_spec(
+        fields=[],
+        operators={"rank", "ts_delta", "ts_rank", "ts_mean"},
+        windows=[10],
+        cursor=0,
+    )
+
+    assert spec.expression != "rank(ts_delta(returns, 10))"
+    assert "ts_delta(returns" not in spec.expression

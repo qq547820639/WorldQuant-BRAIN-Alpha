@@ -1,6 +1,11 @@
 from brain_alpha_ops.models import Candidate
 from brain_alpha_ops.research import candidate_pool
-from brain_alpha_ops.research.candidate_pool import CandidatePoolService, is_active_backtest_candidate, pending_simulation_targets
+from brain_alpha_ops.research.candidate_pool import (
+    CandidatePoolService,
+    candidate_official_work_blockers,
+    is_active_backtest_candidate,
+    pending_simulation_targets,
+)
 from brain_alpha_ops.research.pipeline_helpers import is_hard_backtest_blocked
 
 
@@ -48,15 +53,58 @@ def test_candidate_pool_service_merges_best_expression_and_blocks_rejected_keys(
 
 def test_candidate_pool_service_filters_validation_and_backtest_targets():
     service = _service()
-    validation = _candidate("validation", "rank(open)", 61)
+    validation = _candidate("validation", "rank(open)", 72)
+    validation_only_dead_end = _candidate("validation_only_dead_end", "rank(close)", 61)
     too_low = _candidate("too_low", "rank(low)", 59)
     ready = _candidate("ready", "rank(high)", 82)
     ready.validation = {"status": "PASS"}
     deferred = _candidate("deferred", "rank(volume)", 75, status="simulation_deferred_rate_limit")
 
-    assert service.validation_targets([validation, too_low, ready]) == [validation]
+    assert service.validation_targets([validation, validation_only_dead_end, too_low, ready]) == [validation]
     assert [row.alpha_id for row in service.pending_backtest_candidates([ready, deferred, too_low])] == ["ready", "deferred"]
     assert [row.alpha_id for row in service.backtest_targets([ready, deferred], batch_size=1)] == ["ready"]
+
+
+def test_candidate_pool_blocks_known_local_risks_from_official_work():
+    service = _service()
+    high_turnover = _candidate("high_turnover", "rank(ts_delta(returns, 10))", 95)
+    high_turnover.local_quality = {"passed": True}
+    local_failed = _candidate("local_failed", "rank(ts_mean(close, 20))", 96)
+    local_failed.local_quality = {
+        "passed": False,
+        "local_backtest": {"pass_local": False},
+    }
+    ready = _candidate("ready", "rank(ts_mean(volume, 20))", 90)
+    ready.local_quality = {"passed": True}
+
+    assert "high_turnover_generation_risk:direct_returns_delta_window=10" in candidate_official_work_blockers(high_turnover)
+    assert candidate_official_work_blockers(local_failed) == ["local_backtest_failed", "local_quality_failed"]
+    assert service.validation_targets([high_turnover, local_failed, ready]) == [ready]
+
+    high_turnover.validation = {"status": "PASS"}
+    local_failed.validation = {"status": "PASS"}
+    ready.validation = {"status": "PASS"}
+
+    assert service.pending_backtest_candidates([high_turnover, local_failed, ready]) == [ready]
+
+
+def test_candidate_pool_blocks_official_context_warnings_from_official_work():
+    service = _service()
+    candidate = _candidate("context_warning", "rank(not_an_official_field)", 95)
+    candidate.local_quality = {"passed": True}
+    candidate.gate = {
+        "status": "OFFICIAL_CONTEXT_WARNING",
+        "warnings": ["field 'not_an_official_field' is not in official context"],
+    }
+
+    assert candidate_official_work_blockers(candidate) == [
+        "official_context_warning:field 'not_an_official_field' is not in official context"
+    ]
+    assert service.validation_targets([candidate]) == []
+
+    candidate.validation = {"status": "PASS"}
+
+    assert service.pending_backtest_candidates([candidate]) == []
 
 
 def test_candidate_pool_uses_shared_hard_backtest_block_helper():

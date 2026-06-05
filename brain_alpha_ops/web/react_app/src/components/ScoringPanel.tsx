@@ -36,7 +36,7 @@ export default function ScoringPanel({ notify, candidate }: Props) {
     const progress = (event.progress || event.data || {}) as UnifiedProgress;
     setScoreProgress(progress);
     if (event.type === "error" || event.ok === false || event.status === "failed") {
-      const message = event.error || event.status_message || "Scoring failed";
+      const message = event.error || event.status_message || "评分失败";
       setScoreState("error");
       setScoreError(message);
       notify("error", message);
@@ -48,7 +48,7 @@ export default function ScoringPanel({ notify, candidate }: Props) {
       if (result) setScoring(result);
       setScoreState("success");
       setScoreTaskId(null);
-      notify("success", `Scoring refreshed for ${candidate?.alpha_id || "candidate"}`);
+      notify("success", `${candidate?.alpha_id || "候选"} 评分已刷新`);
       return;
     }
     setScoreState("progress");
@@ -61,7 +61,7 @@ export default function ScoringPanel({ notify, candidate }: Props) {
     setScoring(null);
     setScoreState("loading");
     setScoreError(null);
-    setScoreProgress({ phase: "scoring", status_message: `Starting scoring for ${candidate.alpha_id || "candidate"}.` });
+    setScoreProgress({ phase: "scoring", status_message: `正在为 ${candidate.alpha_id || "候选"} 启动评分。` });
     const payload = candidate.alpha_id
       ? { alpha_id: candidate.alpha_id, candidate }
       : { candidate };
@@ -133,10 +133,9 @@ export default function ScoringPanel({ notify, candidate }: Props) {
   if (!candidate) {
     return (
       <div className="card w-full max-w-2xl min-w-0">
-        <h3 className="text-sm font-semibold text-gray-200 mb-2">Select a Candidate</h3>
+        <h3 className="text-sm font-semibold text-gray-200 mb-2">选择候选</h3>
         <p className="text-sm text-muted">
-          Open Candidates, choose a real candidate, then click Score to evaluate it through
-          /api/scoring/evaluate and /api/scoring/attribution.
+          打开候选管理，选择一个真实候选，然后点击评分以通过 /api/scoring/evaluate 和 /api/scoring/attribution 进行评估。
         </p>
       </div>
     );
@@ -147,9 +146,9 @@ export default function ScoringPanel({ notify, candidate }: Props) {
       {error && (
         <div className="card border-danger/40 bg-danger/10" role="alert" aria-live="assertive">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <p className="text-danger text-sm">Failed to load official scoring: {error}</p>
+            <p className="text-danger text-sm">加载官方评分失败: {error}</p>
             <button onClick={loadScore} className="btn-secondary text-sm" disabled={loading}>
-              Retry
+              重试
             </button>
           </div>
         </div>
@@ -157,7 +156,7 @@ export default function ScoringPanel({ notify, candidate }: Props) {
 
       <ProgressFeedback
         state={error ? "error" : scoreState}
-        title="Scoring and validation"
+        title="评分与验证"
         progress={scoreProgress}
         error={error}
         onRetry={loadScore}
@@ -167,17 +166,17 @@ export default function ScoringPanel({ notify, candidate }: Props) {
       {/* Expression overview */}
       <div className="card">
         <div className="flex flex-wrap items-center justify-between gap-3 mb-2">
-          <h3 className="text-sm font-semibold text-gray-200">Alpha Expression</h3>
+          <h3 className="text-sm font-semibold text-gray-200">Alpha表达式</h3>
           <button onClick={loadScore} className="btn-secondary text-xs" disabled={loading}>
-            {loading ? "Scoring..." : "Refresh Score"}
+            {loading ? "评分中..." : "刷新评分"}
           </button>
         </div>
         <code className="block bg-gray-950 rounded-lg p-3 text-xs text-brand-300 font-mono break-all">
           {candidate.expression}
         </code>
         <div className="flex flex-wrap gap-x-3 gap-y-1 mt-3 text-xs text-muted">
-          <span>Family: <span className="text-gray-300">{candidate.family}</span></span>
-          <span>Status: <span className={`badge ${scoring?.passed_gate || candidate.gate?.passed ? "badge-success" : "badge-danger"}`}>{candidate.lifecycle_status}</span></span>
+          <span>家族: <span className="text-gray-300">{candidate.family}</span></span>
+          <span>状态: <span className={`badge ${scoring?.passed_gate || candidate.gate?.passed ? "badge-success" : "badge-danger"}`}>{candidate.lifecycle_status}</span></span>
           <span>ID: <span className="text-gray-300 font-mono">{candidate.alpha_id}</span></span>
         </div>
       </div>
@@ -185,7 +184,7 @@ export default function ScoringPanel({ notify, candidate }: Props) {
       {/* Scorecard */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="card">
-          <h3 className="text-sm font-semibold text-gray-200 mb-3">Scorecard</h3>
+          <h3 className="text-sm font-semibold text-gray-200 mb-3">评分卡</h3>
           <div className="text-center mb-4">
             <span className="text-4xl font-bold text-brand-400">
               {formatNumber(scoring?.total_score ?? candidate.scorecard?.total_score, 1)}
@@ -193,19 +192,19 @@ export default function ScoringPanel({ notify, candidate }: Props) {
             <span className="text-muted text-lg">/100</span>
           </div>
           <div className="space-y-2">
-            <ScoreBar label="Prior" value={layerScores.prior} max={30} color="bg-blue-500" />
-            <ScoreBar label="Empirical" value={layerScores.empirical} max={45} color="bg-green-500" />
-            <ScoreBar label="Checklist" value={layerScores.checklist} max={25} color="bg-yellow-500" />
+            <ScoreBar label="先验" value={layerScores.prior} max={30} color="bg-blue-500" />
+            <ScoreBar label="经验" value={layerScores.empirical} max={45} color="bg-green-500" />
+            <ScoreBar label="检查清单" value={layerScores.checklist} max={25} color="bg-yellow-500" />
           </div>
           <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
-            <InfoPill label="Decision" value={scoring?.decision_band || candidate.decision_band || "-"} />
-            <InfoPill label="Schema" value={scoring?.scoring_schema || "-"} />
-            <InfoPill label="Gate" value={scoring?.passed_gate ? "PASS" : "FAIL"} />
-            <InfoPill label="API Dev." value={formatNumber(scoring?.api_output_deviation, 4)} />
+            <InfoPill label="决策" value={scoring?.decision_band || candidate.decision_band || "-"} />
+            <InfoPill label="模式" value={scoring?.scoring_schema || "-"} />
+            <InfoPill label="门禁" value={scoring?.passed_gate ? "通过" : "失败"} />
+            <InfoPill label="API偏差" value={formatNumber(scoring?.api_output_deviation, 4)} />
           </div>
           {attribution && (
             <div className="mt-4">
-              <p className="text-xs font-semibold text-gray-300 mb-2">Attribution</p>
+              <p className="text-xs font-semibold text-gray-300 mb-2">归因分析</p>
               {renderAttribution(attribution)}
             </div>
           )}
@@ -213,32 +212,32 @@ export default function ScoringPanel({ notify, candidate }: Props) {
 
         {/* Official Metrics */}
         <div className="card">
-          <h3 className="text-sm font-semibold text-gray-200 mb-3">Official Metrics</h3>
+          <h3 className="text-sm font-semibold text-gray-200 mb-3">官方指标</h3>
           <div className="grid grid-cols-2 gap-3 text-xs">
-            <MetricRow label="Sharpe" value={m?.sharpe} threshold={1.25} />
-            <MetricRow label="Fitness" value={m?.fitness} threshold={1.0} />
-            <MetricRow label="Turnover" value={m?.turnover} threshold={0.01} format="percent" />
-            <MetricRow label="Returns" value={m?.returns} format="percent" />
-            <MetricRow label="Drawdown" value={m?.drawdown} format="percent" max={0.25} />
-            <MetricRow label="Self Correlation" value={selfCorrelation} max={0.70} />
-            <MetricRow label="Concentration" value={m?.weight_concentration} max={0.10} format="percent" />
+            <MetricRow label="夏普比率" value={m?.sharpe} threshold={1.25} />
+            <MetricRow label="适应度" value={m?.fitness} threshold={1.0} />
+            <MetricRow label="换手率" value={m?.turnover} threshold={0.01} format="percent" />
+            <MetricRow label="收益率" value={m?.returns} format="percent" />
+            <MetricRow label="回撤" value={m?.drawdown} format="percent" max={0.25} />
+            <MetricRow label="自相关性" value={selfCorrelation} max={0.70} />
+            <MetricRow label="集中度" value={m?.weight_concentration} max={0.10} format="percent" />
           </div>
         </div>
       </div>
 
       {/* Gate Checks */}
       <div className="card">
-        <h3 className="text-sm font-semibold text-gray-200 mb-3">Official Gate Checks</h3>
+        <h3 className="text-sm font-semibold text-gray-200 mb-3">官方门禁检查</h3>
         <div className="space-y-4">
-          <GateGroup title="Hard Gates" gates={hardGates} />
-          <GateGroup title="Soft Gates" gates={softGates} />
+          <GateGroup title="硬门禁" gates={hardGates} />
+          <GateGroup title="软门禁" gates={softGates} />
         </div>
       </div>
 
       {(failures.length > 0 || hints.length > 0) && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <InsightList title="Top Failures" items={failures} />
-          <HintList title="Improvement Hints" items={hints} />
+          <InsightList title="主要失败原因" items={failures} />
+          <HintList title="改进建议" items={hints} />
         </div>
       )}
     </div>
@@ -278,7 +277,7 @@ function InfoPill({ label, value }: { label: string; value: unknown }) {
 }
 
 function GateGroup({ title, gates }: { title: string; gates: OfficialGateResult[] }) {
-  if (!gates.length) return <p className="text-xs text-muted">{title}: No data</p>;
+  if (!gates.length) return <p className="text-xs text-muted">{title}: 暂无数据</p>;
   return (
     <div>
       <p className="text-xs font-semibold text-gray-300 mb-2">{title}</p>
@@ -317,7 +316,7 @@ function InsightList({ title, items }: { title: string; items: FailureItem[] }) 
       <div className="space-y-2">
         {items.map((item, i) => (
           <div key={`${item.item || "failure"}-${i}`} className="text-xs border-b border-gray-800/50 pb-2 last:border-0">
-            <p className="text-danger/90 font-medium">{item.item || "Failure"}</p>
+            <p className="text-danger/90 font-medium">{item.item || "失败"}</p>
             <p className="text-muted">{item.reason || item.severity || "-"}</p>
           </div>
         ))}

@@ -9,7 +9,7 @@ import re
 logger = logging.getLogger("brain_alpha_ops.brain_api.official")
 
 
-class OfficialExpressionValidationMixin:
+class OfficialExpressionValidator:
     def validate_expression(
         self,
         expression: str,
@@ -105,3 +105,21 @@ class OfficialExpressionValidationMixin:
             "warnings": warnings,
             "note": "simulation submission will confirm official BRAIN compile",
         }
+
+
+class OfficialExpressionValidationMixin:
+    def validate_expression(
+        self,
+        expression: str,
+        settings: dict,
+        known_operators: set | None = None,
+        known_fields: set | None = None,
+    ) -> dict:
+        """Compatibility wrapper for callers that still compose the old mixin."""
+        validator = getattr(self, "_expression_validator", None) or OfficialExpressionValidator()
+        return validator.validate_expression(
+            expression,
+            settings,
+            known_operators=known_operators,
+            known_fields=known_fields,
+        )

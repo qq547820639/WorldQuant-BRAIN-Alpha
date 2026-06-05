@@ -58,6 +58,20 @@ def test_redaction_catches_email_addresses_next_to_secrets():
     assert "token=<redacted>" in text
 
 
+def test_redaction_key_value_pattern_tracks_sensitive_keys():
+    text = redact_text(
+        "api_key=live-key username=researcher@example.com email='researcher@example.com' passwd: secret"
+    )
+
+    assert "live-key" not in text
+    assert "researcher@example.com" not in text
+    assert "secret" not in text
+    assert "api_key=<redacted>" in text
+    assert "username=<redacted>" in text
+    assert "email=<redacted>" in text
+    assert "passwd: <redacted>" in text
+
+
 def test_error_payload_redacts_freeform_secret_fragments():
     payload = error_payload(RuntimeError("secret-token-123 failed"), error_code="RUN_JOB_FAILED")
 

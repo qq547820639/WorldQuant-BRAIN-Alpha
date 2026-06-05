@@ -296,9 +296,11 @@ class AlphaResearchPipeline(
                             f"Cycle {cycle}: Context refresh FAILED — {error_detail}",
                             level="ERROR")
                 except Exception as exc:
-                    logger.warning("Context refresh exception in cycle %s", cycle, exc_info=True)
+                    message = redact_error_message(exc)
+                    logger.warning("Context refresh exception in cycle %s: %s", cycle, message)
+                    logger.debug("Context refresh exception traceback in cycle %s", cycle, exc_info=True)
                     self._event("context_refresh_error",
-                        f"Cycle {cycle}: Context refresh exception — {exc}",
+                        f"Cycle {cycle}: Context refresh exception — {message}",
                         level="ERROR")
             generated = self._generation_phase_service().generate(
                 assistant_guidance=assistant_guidance if assistant_guidance_applied else None,
@@ -358,6 +360,12 @@ class AlphaResearchPipeline(
             pool = rank_candidates(list(pool_by_expression.values()))
             validation_quota = self._validation_quota(pool)
             self._validate(validation_targets[:validation_quota])
+            pool = rank_candidates(list(pool_by_expression.values()))
+            self._archive(
+                archive_stats,
+                archive_samples,
+                self._archive_validation_failures(pool_by_expression, pool, blocked_expressions),
+            )
             self._archive(
                 archive_stats,
                 archive_samples,
@@ -467,10 +475,12 @@ class AlphaResearchPipeline(
                             data=calib_report,
                         )
                 except Exception as exc:
-                    logger.warning("Scoring auto-calibration failed in cycle %s", cycle, exc_info=True)
+                    message = redact_error_message(exc)
+                    logger.warning("Scoring auto-calibration failed in cycle %s: %s", cycle, message)
+                    logger.debug("Scoring auto-calibration traceback in cycle %s", cycle, exc_info=True)
                     self._event(
                         "scoring_calibration_failed",
-                        f"Auto-calibration failed: {exc}",
+                        f"Auto-calibration failed: {message}",
                         level="WARN",
                     )
 
@@ -532,8 +542,9 @@ class AlphaResearchPipeline(
                     source="pipeline_run",
                 ),
             )
-        except Exception:
-            logger.warning("failed to persist run history for %s", run_id, exc_info=True)
+        except Exception as exc:
+            logger.warning("failed to persist run history for %s: %s", run_id, redact_error_message(exc))
+            logger.debug("run history persistence traceback for %s", run_id, exc_info=True)
 
         # Auto-calibration check (non-blocking)
         try:
@@ -548,8 +559,9 @@ class AlphaResearchPipeline(
                     f"Auto-calibration triggered: {reason}",
                     data={"triggered": True, "reason": reason, "advice": advice},
                 )
-        except Exception:
-            logger.warning("auto_calibration skipped", exc_info=True)
+        except Exception as exc:
+            logger.warning("auto_calibration skipped: %s", redact_error_message(exc))
+            logger.debug("auto_calibration skipped traceback", exc_info=True)
 
         return result
 
@@ -603,8 +615,9 @@ class AlphaResearchPipeline(
                 },
             )
             return guidance
-        except Exception:
-            logger.warning("Assistant guidance unavailable in cycle %s", cycle, exc_info=True)
+        except Exception as exc:
+            logger.warning("Assistant guidance unavailable in cycle %s: %s", cycle, redact_error_message(exc))
+            logger.debug("Assistant guidance traceback in cycle %s", cycle, exc_info=True)
         return None
 
     def _cycle_simulate_and_submit(

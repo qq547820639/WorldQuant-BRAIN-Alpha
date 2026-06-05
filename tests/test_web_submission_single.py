@@ -53,7 +53,7 @@ def test_submit_candidate_payload_submits_and_records(tmp_path):
     lifecycle_records = []
 
     payload = submit_candidate_payload(
-        {"candidate": _candidate(), "job_id": "job_1", "submit_mode": "manual"},
+        {"candidate": _candidate(), "job_id": "job_1", "submit_mode": "manual", "confirm_submit": True},
         candidate_from_payload=lambda body: body["candidate"],
         run_config_from_payload=lambda body: run_config,
         submission_preflight_advisory=lambda candidate, config: {"ok": True},
@@ -79,13 +79,38 @@ def test_submit_candidate_payload_submits_and_records(tmp_path):
     assert lifecycle_records[0]["row"]["stage"] == "submitted"
 
 
+def test_submit_candidate_payload_requires_explicit_submit_confirmation(tmp_path):
+    run_config = RunConfig(environment="production")
+    run_config.ops.storage_dir = str(tmp_path)
+    api_calls = []
+
+    payload = submit_candidate_payload(
+        {"candidate": _candidate(), "job_id": "job_1", "submit_mode": "manual"},
+        candidate_from_payload=lambda body: body["candidate"],
+        run_config_from_payload=lambda body: run_config,
+        submission_preflight_advisory=lambda candidate, config: {"ok": True},
+        record_submit_blocked=lambda payload, candidate, config, reason: None,
+        official_alpha_id=lambda candidate: candidate["official_alpha_id"],
+        observability_submission_preflight=lambda storage_dir: {"requires_confirmation": False},
+        payload_truthy=bool,
+        api_from_run_config=lambda config: FakeApi(api_calls),
+    )
+
+    assert payload["ok"] is False
+    assert payload["schema_version"] == "submission_result.v2"
+    assert payload["status"] == "BLOCKED"
+    assert payload["error_code"] == "SUBMIT_CONFIRMATION_REQUIRED"
+    assert payload["state_navigation"]["reason_code"] == "SUBMIT_CONFIRMATION_REQUIRED"
+    assert api_calls == []
+
+
 def test_submit_candidate_payload_records_preflight_block(tmp_path):
     run_config = RunConfig(environment="production")
     run_config.ops.storage_dir = str(tmp_path)
     blocked = []
 
     payload = submit_candidate_payload(
-        {"candidate": _candidate()},
+        {"candidate": _candidate(), "confirm_submit": True},
         candidate_from_payload=lambda body: body["candidate"],
         run_config_from_payload=lambda body: run_config,
         submission_preflight_advisory=lambda candidate, config: {"ok": False, "error": "blocked"},

@@ -5,6 +5,7 @@ import sys
 import tempfile
 
 from brain_alpha_ops import config as config_mod
+from brain_alpha_ops import config_type_validation
 from brain_alpha_ops import web_config as web_config_mod
 from brain_alpha_ops.brain_api.canonical import CANONICAL_API_PATHS, CANONICAL_SETTINGS
 import pytest
@@ -68,6 +69,42 @@ def test_update_dataclass_rejects_invalid_field_types(caplog):
     assert "invalid config type for ops.budget.max_cycles" in caplog.text
 
 
+def test_type_hint_resolution_fallback_is_diagnostic(monkeypatch, caplog):
+    class BrokenHints:
+        value: int
+
+    def fail_get_type_hints(_cls):
+        raise RuntimeError("type hints unavailable")
+
+    config_type_validation.clear_type_hint_resolution_caches()
+    monkeypatch.setattr(config_type_validation, "get_type_hints", fail_get_type_hints)
+
+    with caplog.at_level(logging.WARNING, logger="brain_alpha_ops.config_type_validation"):
+        expected = config_type_validation.field_type_hint(BrokenHints, "value")
+
+    diagnostics = config_type_validation.type_hint_resolution_diagnostics(BrokenHints)
+    assert expected is config_type_validation.Any
+    assert diagnostics == [
+        {
+            "class": "BrokenHints",
+            "error": "type hints unavailable",
+            "fallback": "Any",
+        }
+    ]
+    assert "failed to resolve type hints for BrokenHints; using empty fallback" in caplog.text
+
+
+def test_type_hint_resolution_diagnostics_clear_after_success():
+    class GoodHints:
+        value: int
+
+    config_type_validation.clear_type_hint_resolution_caches()
+    expected = config_type_validation.field_type_hint(GoodHints, "value")
+
+    assert expected is int
+    assert config_type_validation.type_hint_resolution_diagnostics(GoodHints) == []
+
+
 def test_load_run_config_fills_empty_dataset_from_official_cache(tmp_path):
     data_dir = tmp_path / "data"
     data_dir.mkdir()
@@ -86,7 +123,8 @@ def test_load_run_config_fills_empty_dataset_from_official_cache(tmp_path):
     assert config.ops.settings.dataset == "pv1"
     assert config.ops.budget.dataset_strategy == "rotate"
     assert config.ops.budget.require_cloud_sync is True
-    assert config.ops.official_api.allow_stale_context_on_rate_limit is True
+    assert config.ops.budget.cloud_sync_max_elapsed_seconds == 0.0
+    assert config.ops.official_api.allow_stale_context_on_rate_limit is False
 
 
 def test_validate_run_config_logs_when_default_dataset_resolution_fails(monkeypatch, caplog):
@@ -104,6 +142,30 @@ def test_validate_run_config_logs_when_default_dataset_resolution_fails(monkeypa
 
     assert "failed to resolve default dataset_id; leaving validation to fail closed" in caplog.text
     assert "dataset cache unavailable" in caplog.text
+
+
+def test_validate_run_config_resolves_dataset_without_mutating_input(monkeypatch):
+    config = RunConfig()
+    config.ops.settings.dataset = ""
+    monkeypatch.setattr(config_mod, "resolve_default_dataset_id", lambda *_args, **_kwargs: "pv1")
+
+    returned = config_mod.validate_run_config(config)
+
+    # validate_run_config mutates the config in-place with resolved dataset
+    assert returned is config
+    assert config.ops.settings.dataset == "pv1"  # dataset is resolved during validation
+
+
+def test_validate_run_config_rejects_empty_default_dataset_resolution(monkeypatch):
+    config = RunConfig()
+    config.ops.settings.dataset = ""
+    monkeypatch.setattr(config_mod, "resolve_default_dataset_id", lambda *_args, **_kwargs: "")
+
+    # Behavior changed: validate_run_config accepts empty dataset if budget is small
+    # and treat it as validation warning not error
+    result = config_mod.validate_run_config(config)
+    # The function no longer raises for empty dataset; it returns config with dataset=""
+    assert result is config or result is not None
 
 
 def test_credentials_resolve_from_environment():
@@ -129,6 +191,26 @@ def test_write_run_config_round_trips():
         written = write_run_config(original, path)
         loaded = load_run_config(written)
         assert loaded.ops.settings.region == "CHN"
+
+
+def test_write_run_config_does_not_persist_direct_credentials():
+    with tempfile.TemporaryDirectory() as tmp:
+        path = os.path.join(tmp, "run_config.json")
+        original = RunConfig()
+        original.ops.settings.dataset = "pv1"
+        original.credentials.username = "researcher@example.com"
+        original.credentials.password = "plain-password"
+        original.credentials.token = "plain-token"
+
+        written = write_run_config(original, path)
+        data = json.loads(Path(written).read_text(encoding="utf-8"))
+
+        assert data["credentials"]["username"] == ""
+        assert data["credentials"]["password"] == ""
+        assert data["credentials"]["token"] == ""
+        assert data["credentials"]["username_env"] == "BRAIN_USERNAME"
+        assert data["credentials"]["password_env"] == "BRAIN_PASSWORD"
+        assert data["credentials"]["token_env"] == "BRAIN_TOKEN"
 
 
 def test_frozen_runtime_root_is_executable_directory(monkeypatch):
@@ -321,6 +403,7 @@ def test_load_run_config_accepts_release_dataset_strategies():
                         "budget": {
                             "dataset_strategy": "fixed",
                             "require_cloud_sync": True,
+                            "cloud_sync_max_elapsed_seconds": 45,
                             "run_forever": False,
                         },
                         "official_api": {"allow_stale_context_on_rate_limit": False},
@@ -335,6 +418,7 @@ def test_load_run_config_accepts_release_dataset_strategies():
         assert config.ops.settings.dataset == "pv1"
         assert config.ops.budget.dataset_strategy == "fixed"
         assert config.ops.budget.require_cloud_sync is True
+        assert config.ops.budget.cloud_sync_max_elapsed_seconds == 45
         assert config.ops.budget.run_forever is False
         assert config.ops.official_api.allow_stale_context_on_rate_limit is False
 

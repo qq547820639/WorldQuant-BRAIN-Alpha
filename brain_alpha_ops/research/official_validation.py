@@ -8,7 +8,7 @@ from typing import Callable
 from brain_alpha_ops.brain_api.base import BrainAPI, BrainAPIError
 from brain_alpha_ops.models import Candidate
 
-from .candidate_pool import blocked_gate
+from .candidate_pool import blocked_gate, candidate_official_work_blockers
 
 
 ProgressCallback = Callable[[str, int, int, str, str], None]
@@ -46,6 +46,25 @@ class OfficialValidationService:
                 f"回测前预检 {index}/{total}: {candidate.alpha_id}",
                 candidate.alpha_id,
             )
+            preflight_blockers = candidate_official_work_blockers(candidate)
+            if preflight_blockers:
+                candidate.lifecycle_status = "official_review_preflight_blocked"
+                candidate.gate = blocked_gate("OFFICIAL_REVIEW_PREFLIGHT_BLOCKED", preflight_blockers)
+                self.event(
+                    "official_review_preflight_blocked",
+                    "; ".join(preflight_blockers),
+                    candidate.alpha_id,
+                    level="WARN",
+                )
+                self.record_lifecycle(candidate, "official_review_preflight", "BLOCKED")
+                self.progress(
+                    "official_validation",
+                    index,
+                    total,
+                    f"回测前预检 {index}/{total} 已阻断。",
+                    candidate.alpha_id,
+                )
+                continue
             try:
                 result = self.api.validate_expression(candidate.expression, self.settings_payload)
             except BrainAPIError as exc:

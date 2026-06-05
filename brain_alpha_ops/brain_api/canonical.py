@@ -13,6 +13,7 @@ CANONICAL_THRESHOLDS = {
     "min_turnover": 0.01,
     "platform_max_turnover": 0.70,
     "max_self_correlation": 0.70,
+    "max_prod_correlation": 0.70,
     "max_weight_concentration": 0.10,
     "sub_universe_sharpe_min_ratio": 0.75,
 }

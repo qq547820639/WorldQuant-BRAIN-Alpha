@@ -71,6 +71,7 @@ class PipelineServiceFactoryMixin:
             dataset_id=self._active_dataset_id,
             attach_assistant_guidance=_attach_assistant_guidance,
             max_expression_similarity=self.config.submission_policy.max_expression_similarity,
+            max_generation_attempts=self.config.budget.max_generation_attempts,
         )
 
     def _dataset_selection_service(self) -> DatasetSelectionService:
@@ -105,6 +106,8 @@ class PipelineServiceFactoryMixin:
             ranker=self._smart_rank_candidates,
             min_score=self.config.budget.min_prior_score_for_official_simulation,
             batch_size=self._active_backtest_limit(),
+            risk_evaluator=self._cloud_correlation_risk,
+            max_similarity_threshold=self.config.submission_policy.max_expression_similarity,
         )
 
     def _secondary_fusion_service(self) -> SecondaryFusionService:

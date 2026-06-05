@@ -506,47 +506,32 @@ def test_frontend_surface_parity_reports_current_workspace_gap():
     )
 
     assert result["ok"] is True
+    assert result["inline_surface_retired"] is True
     assert result["parity"]["matches"] is False
     assert result["parity"]["strict_matches"] is True
-    assert "candidates" in result["parity"]["shared_ids"]
-    assert "pending_backtest" in result["parity"]["shared_ids"]
-    assert "running_backtest" in result["parity"]["shared_ids"]
-    assert "backtest_rework" in result["parity"]["shared_ids"]
-    assert "passed" in result["parity"]["shared_ids"]
-    assert "submittable" in result["parity"]["shared_ids"]
-    assert "submitted" in result["parity"]["shared_ids"]
-    assert "failed" in result["parity"]["shared_ids"]
-    assert "cloud" in result["parity"]["shared_ids"]
-    assert "lifecycle" in result["parity"]["shared_ids"]
-    assert "research_memory" in result["parity"]["shared_ids"]
-    assert "research_knowledge" in result["parity"]["shared_ids"]
-    assert "research_observability" in result["parity"]["shared_ids"]
-    assert "prompt_runs" in result["parity"]["shared_ids"]
-    assert "sqlite_indexes" in result["parity"]["shared_ids"]
-    assert "robustness" in result["parity"]["shared_ids"]
+    assert result["parity"]["shared_ids"] == []
     assert result["parity"]["inline_only_views"] == []
-    assert result["parity"]["react_only_tabs"] == ["dashboard", "scoring", "submission", "config"]
-    assert result["parity"]["accepted_react_only_tabs"] == ["dashboard", "scoring", "submission", "config"]
+    assert result["parity"]["react_only_tabs"] == [
+        "candidates",
+        "official_backtests",
+        "quality_check",
+        "submission_confirm",
+        "checkpoint_status",
+        "config",
+        "cloud",
+    ]
+    assert result["parity"]["accepted_react_only_tabs"] == [
+        "candidates",
+        "official_backtests",
+        "quality_check",
+        "submission_confirm",
+        "checkpoint_status",
+        "config",
+        "cloud",
+    ]
     assert result["parity"]["unaccepted_react_only_tabs"] == []
     assert result["plan"]["unmapped_inline_views"] == []
     assert result["plan"]["stale_inline_view_mappings"] == []
-    assert result["plan"]["implemented_inline_views"] == [
-        "candidates",
-        "pending_backtest",
-        "running_backtest",
-        "backtest_rework",
-        "passed",
-        "submittable",
-        "submitted",
-        "failed",
-        "cloud",
-        "lifecycle",
-        "research_memory",
-        "research_knowledge",
-        "research_observability",
-        "prompt_runs",
-        "sqlite_indexes",
-        "robustness",
-    ]
+    assert result["plan"]["implemented_inline_views"] == []
     assert result["plan"]["planned_inline_views"] == []
-    assert result["plan"]["accepted_react_only_tabs"] == ["dashboard", "scoring", "submission", "config"]
+    assert result["plan"]["schema_version"] == "frontend_surface_parity_plan.retired_inline"

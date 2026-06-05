@@ -219,6 +219,11 @@ def _match_is_placeholder_fixture(line: str, path: Path, root: Path) -> bool:
         marker in lowered
         for marker in (
             "secret-token",
+            "secret-xyz",
+            "secret-local-",
+            "secret-expression-",
+            "secret-progress-",
+            "secret-plugin-",
             "wrong-password",
             "wrong_password",
             "fixture-token",
@@ -232,9 +237,13 @@ def _match_is_placeholder_fixture(line: str, path: Path, root: Path) -> bool:
             "sk-local-secret",
             "local-token",
             "cloud-token",
+            "live-key",
             "guidance-token",
             "guidance-password",
             "observability-password",
+            "plain-password",
+            "plain-token",
+            "rotated-token",
             "test-key",
             "test-token",
             "stale-token",
@@ -243,6 +252,7 @@ def _match_is_placeholder_fixture(line: str, path: Path, root: Path) -> bool:
             "secret456",
             "secret-api-key",
             "secret-session-id",
+            "not-allowlisted",
             "index damaged token",
             "provider down token",
             "token=<redacted>",
@@ -261,6 +271,8 @@ def _secret_key_match_is_actionable(match: re.Match, line: str, path: Path) -> b
     lowered_line = line.lower()
     lowered_value = value.lower()
     if len(value) < 8:
+        return False
+    if lowered_value in {"api_key", "csrf_token", "password", "session_id", "token", "username"}:
         return False
     if lowered_value.startswith("...") or lowered_value.startswith("__brain_alpha_ops_"):
         return False

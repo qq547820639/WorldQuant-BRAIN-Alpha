@@ -114,14 +114,24 @@ __all__ = [*_LAZY_EXPORTS, "alpha_fusion"]
 
 def __getattr__(name: str) -> Any:
     if name == "alpha_fusion":
-        module = importlib.import_module("brain_alpha_ops.research.fusion")
-        globals()[name] = module
-        return module
+        try:
+            module = importlib.import_module("brain_alpha_ops.research.fusion")
+            globals()[name] = module
+            return module
+        except ImportError as exc:
+            raise ImportError(
+                f"Failed to import {name!r} from {__name__!r}: {exc}"
+            ) from exc
     target = _LAZY_EXPORTS.get(name)
     if target is None:
         raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
     module_name, attr_name = target
-    module = importlib.import_module(module_name)
-    value = getattr(module, attr_name)
-    globals()[name] = value
-    return value
+    try:
+        module = importlib.import_module(module_name)
+        value = getattr(module, attr_name)
+        globals()[name] = value
+        return value
+    except (ImportError, AttributeError) as exc:
+        raise type(exc)(
+            f"Failed to import {name!r} from {module_name!r}: {exc}"
+        ) from exc

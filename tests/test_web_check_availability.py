@@ -30,6 +30,18 @@ class Api:
         return {"status": self.status}
 
 
+def complete_official_metrics():
+    return {
+        "pass_fail": "PASS",
+        "sharpe": 1.5,
+        "fitness": 1.1,
+        "turnover": 0.2,
+        "self_correlation": 0.1,
+        "prod_correlation": 0.2,
+        "weight_concentration": 0.03,
+    }
+
+
 def test_cloud_row_status_and_similarity_helpers():
     candidate = {"official_alpha_id": "off_1", "expression": "rank(close)"}
     rows = [
@@ -128,10 +140,11 @@ def test_check_candidate_availability_logs_official_check_failure(tmp_path, capl
     candidate = {
         "alpha_id": "a1",
         "official_alpha_id": "off_1",
+        "official_metrics": complete_official_metrics(),
         "expression": "rank(close)",
         "gate": {"submission_ready": True},
         "lifecycle_status": "submission_ready",
-        "scorecard": {"total_score": 80},
+        "scorecard": {"total_score": 91, "decision_band": "submit_candidate"},
     }
     api = Api(fail_check=True)
 
@@ -155,3 +168,72 @@ def test_check_candidate_availability_logs_official_check_failure(tmp_path, capl
     assert official_check["detail"] == "official failed"
     assert api.calls == 1
     assert any("official pre-submit check failed" in record.getMessage() for record in caplog.records)
+
+
+def test_check_candidate_availability_blocks_non_submit_candidate_band(tmp_path):
+    candidate = {
+        "alpha_id": "a1",
+        "official_alpha_id": "off_1",
+        "official_metrics": complete_official_metrics(),
+        "expression": "rank(close)",
+        "gate": {"submission_ready": True},
+        "lifecycle_status": "submission_ready",
+        "scorecard": {"total_score": 78, "decision_band": "optimize_before_submit"},
+    }
+    api = Api()
+
+    result = check_candidate_availability(
+        candidate,
+        "quick",
+        api,
+        Ledger(tmp_path / "ledger.jsonl"),
+        [],
+        "",
+        safe_error_message=str,
+        observability_submission_preflight=lambda storage_dir: {"requires_confirmation": False},
+    )
+
+    band_check = next(item for item in result["checks"] if item["name"] == "decision_band_submit_candidate")
+    official_check = next(item for item in result["checks"] if item["name"] == "official_pre_submit_check")
+
+    assert result["status"] == "BLOCKED"
+    assert result["submittable"] is False
+    assert result["local_preflight_passed"] is False
+    assert band_check["passed"] is False
+    assert band_check["detail"] == "optimize_before_submit"
+    assert official_check["detail"].startswith("Skipped")
+    assert api.calls == 0
+
+
+def test_check_candidate_availability_blocks_sparse_official_metrics_before_official_call(tmp_path):
+    candidate = {
+        "alpha_id": "a1",
+        "official_alpha_id": "off_1",
+        "official_metrics": {"pass_fail": "PASS"},
+        "expression": "rank(close)",
+        "gate": {"submission_ready": True},
+        "lifecycle_status": "submission_ready",
+        "scorecard": {"total_score": 91, "decision_band": "submit_candidate"},
+    }
+    api = Api()
+
+    result = check_candidate_availability(
+        candidate,
+        "quick",
+        api,
+        Ledger(tmp_path / "ledger.jsonl"),
+        [],
+        "",
+        safe_error_message=str,
+        observability_submission_preflight=lambda storage_dir: {"requires_confirmation": False},
+    )
+
+    metric_fields_check = next(item for item in result["checks"] if item["name"] == "official_metric_fields_complete")
+    official_check = next(item for item in result["checks"] if item["name"] == "official_pre_submit_check")
+
+    assert result["status"] == "BLOCKED"
+    assert result["local_preflight_passed"] is False
+    assert metric_fields_check["passed"] is False
+    assert "sharpe" in metric_fields_check["missing_fields"]
+    assert official_check["detail"].startswith("Skipped")
+    assert api.calls == 0

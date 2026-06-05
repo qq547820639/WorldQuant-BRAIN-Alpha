@@ -105,7 +105,7 @@ class PipelineSnapshotMixin:
 
     def _slot_snapshot(self) -> list[dict]:
         return backtest_slot_snapshot(
-            active_limit=self._active_backtest_limit(),
+            active_limit=self._visible_backtest_slot_limit(),
             candidate_at_slot=self.backtest_slot_manager.get,
             official_calls_halted=self.official_calls_halted,
             official_halt_reason=self.official_halt_reason,
@@ -118,6 +118,10 @@ class PipelineSnapshotMixin:
             max(1, int(self.config.budget.max_official_simulations_per_cycle)),
             max(1, int(self.config.budget.max_official_concurrent_simulations)),
         )
+
+    def _visible_backtest_slot_limit(self) -> int:
+        max_observed_slot = max(self.backtest_slots.keys(), default=0)
+        return max(3, self._active_backtest_limit(), max_observed_slot)
 
     def _backtest_snapshot(self, candidates: list[Candidate]) -> list[dict]:
         return self._snapshot_builder().backtest_snapshot(candidates)

@@ -9,6 +9,7 @@ from brain_alpha_ops.config import OfficialAPIConfig, OpsConfig, ResearchBudget
 from brain_alpha_ops.models import Candidate
 from brain_alpha_ops.research.knowledge_base import KnowledgeEntry, StructuredKnowledgeBase
 from brain_alpha_ops.research.pipeline import AlphaResearchPipeline
+from brain_alpha_ops.research.pipeline_helpers import expr_key
 from brain_alpha_ops.research.repository import ResearchRepository
 
 
@@ -22,6 +23,23 @@ def _single_cycle_config(tmp_path, **budget_overrides):
     }
     budget_kwargs.update(budget_overrides)
     return OpsConfig(budget=ResearchBudget(**budget_kwargs), storage_dir=str(tmp_path))
+
+
+def test_pipeline_keeps_visible_backtest_slots_separate_from_official_capacity(tmp_path):
+    config = _single_cycle_config(
+        tmp_path,
+        max_official_simulations_per_cycle=1,
+        max_official_concurrent_simulations=1,
+        official_backtest_batch_size=1,
+    )
+    pipeline = AlphaResearchPipeline(config=config, api=ProductionBrainAPIStub())
+
+    assert pipeline._active_backtest_limit() == 1
+
+    slots = pipeline._slot_snapshot()
+
+    assert [slot["slot"] for slot in slots] == [1, 2, 3]
+    assert {slot["status"] for slot in slots} == {"EMPTY"}
 
 
 def test_pipeline_runs_production_stub_end_to_end():
@@ -87,7 +105,7 @@ def test_pipeline_auto_calibration_uses_config_storage_dir(monkeypatch, tmp_path
 def test_pipeline_logs_context_refresh_exceptions(monkeypatch, caplog, tmp_path):
     class FailingContextLoader:
         def refresh(self):
-            raise RuntimeError("context refresh unavailable")
+            raise RuntimeError("context refresh unavailable Bearer token_12345")
 
         def get_datasets(self):
             class Dataset:
@@ -108,12 +126,20 @@ def test_pipeline_logs_context_refresh_exceptions(monkeypatch, caplog, tmp_path)
 
     with caplog.at_level(logging.WARNING, logger="brain_alpha_ops.research.pipeline"):
         result = pipeline.run(auto_submit=False)
+    pipeline_log_text = "\n".join(
+        str(record.message)
+        for record in caplog.records
+        if record.name == "brain_alpha_ops.research.pipeline"
+    )
 
     event = next(event for event in result.events if event.event == "context_refresh_error")
     assert event.level == "ERROR"
     assert "context refresh unavailable" in event.message
-    assert "Context refresh exception in cycle 1" in caplog.text
-    assert "context refresh unavailable" in caplog.text
+    assert "token_12345" not in event.message
+    assert "Context refresh exception in cycle 1" in pipeline_log_text
+    assert "context refresh unavailable" in pipeline_log_text
+    assert "token_12345" not in pipeline_log_text
+    assert "Traceback" not in pipeline_log_text
 
 
 def test_pipeline_logs_scoring_calibration_exceptions(monkeypatch, caplog, tmp_path):
@@ -125,18 +151,26 @@ def test_pipeline_logs_scoring_calibration_exceptions(monkeypatch, caplog, tmp_p
 
     def fail_calibrate():
         """Fail during calibration for warning coverage."""
-        raise RuntimeError("score calibration unavailable")
+        raise RuntimeError("score calibration unavailable password=dummy1")
 
     monkeypatch.setattr(pipeline.auto_calibrator, "calibrate", fail_calibrate)
 
     with caplog.at_level(logging.WARNING, logger="brain_alpha_ops.research.pipeline"):
         result = pipeline.run(auto_submit=False)
+    pipeline_log_text = "\n".join(
+        str(record.message)
+        for record in caplog.records
+        if record.name == "brain_alpha_ops.research.pipeline"
+    )
 
     event = next(event for event in result.events if event.event == "scoring_calibration_failed")
     assert event.level == "WARN"
     assert "score calibration unavailable" in event.message
-    assert "Scoring auto-calibration failed in cycle 1" in caplog.text
-    assert "score calibration unavailable" in caplog.text
+    assert "dummy1" not in event.message
+    assert "Scoring auto-calibration failed in cycle 1" in pipeline_log_text
+    assert "score calibration unavailable" in pipeline_log_text
+    assert "dummy1" not in pipeline_log_text
+    assert "Traceback" not in pipeline_log_text
 
 
 def test_pipeline_logs_secondary_fusion_exceptions(monkeypatch, caplog, tmp_path):
@@ -187,7 +221,6 @@ def test_pipeline_scores_and_sorts_before_official_metrics():
                 max_candidates_per_cycle=12,
                 max_official_validations_per_cycle=2,
                 max_official_simulations_per_cycle=1,
-                min_prior_score_for_official_validation=60,  # lowered: new generator uses real BRAIN fields
                 max_cycles=1,
             ),
             storage_dir=tmp,
@@ -263,6 +296,48 @@ def test_pipeline_local_prefilter_attaches_local_backtest_result(monkeypatch):
         assert candidate.local_quality["local_backtest_support"]["supported"] is True
 
 
+def test_pipeline_local_prefilter_rejects_failed_local_backtest(monkeypatch):
+    with tempfile.TemporaryDirectory() as tmp:
+        config = OpsConfig(storage_dir=tmp)
+        pipeline = AlphaResearchPipeline(config=config, api=ProductionBrainAPIStub())
+        candidate = Candidate(
+            alpha_id="alpha_local_fail",
+            expression="rank(close)",
+            family="test",
+            hypothesis="local backtest failed candidate with enough context for scoring",
+            data_fields=["close"],
+            operators=["rank"],
+        )
+
+        monkeypatch.setattr(
+            pipeline._local_backtest_engine,
+            "evaluate",
+            lambda expression, cache_key="default": {
+                "ok": True,
+                "expression": expression,
+                "pass_local": False,
+                "sharpe": 1.5,
+                "fitness": 1.2,
+                "turnover": 0.8,
+                "weight_concentration": 0.12,
+                "pass_reasons": ["Turnover 80.00% > 70% (FAIL)"],
+            },
+        )
+
+        passed = pipeline._local_prefilter([candidate], 1, [{"name": "close"}], [{"name": "rank"}])
+
+        assert passed == []
+        assert candidate.lifecycle_status == "local_prefilter_rejected"
+        assert candidate.gate["status"] == "LOCAL_PREFILTER_REJECTED"
+        assert any(reason.startswith("local_backtest_failed:") for reason in candidate.local_quality["reasons"])
+        assert candidate.submission["local_backtest"]["pass_local"] is False
+        failures = pipeline._knowledge_base.list_layer("failure")
+        high_turnover_failures = [entry for entry in failures if entry.category == "high_turnover"]
+        assert high_turnover_failures
+        assert high_turnover_failures[0].metadata["failure_category"] == "high_turnover"
+        assert "high_turnover" in high_turnover_failures[0].source_tags
+
+
 def test_pipeline_auto_submit_blocks_when_cross_review_rejects(monkeypatch):
     with tempfile.TemporaryDirectory() as tmp:
         config = OpsConfig(
@@ -305,6 +380,115 @@ def test_pipeline_auto_submit_blocks_when_cross_review_rejects(monkeypatch):
         assert candidate.lifecycle_status == "auto_submit_cross_review_blocked"
 
 
+def test_pipeline_auto_submit_blocks_incomplete_official_metric_fields(monkeypatch):
+    with tempfile.TemporaryDirectory() as tmp:
+        config = OpsConfig(
+            budget=ResearchBudget(require_cloud_sync=False),
+            storage_dir=tmp,
+        )
+        class RecordingAPI(ProductionBrainAPIStub):
+            def __init__(self):
+                super().__init__()
+                self.submissions = []
+
+            def submit_alpha(self, alpha_id, expression, settings):
+                self.submissions.append((alpha_id, expression, settings))
+                return super().submit_alpha(alpha_id, expression, settings)
+
+        api = RecordingAPI()
+        pipeline = AlphaResearchPipeline(config=config, api=api)
+        pipeline.cloud_sync = {"status": "loaded", "stale": False, "warning": ""}
+        pipeline.cloud_alphas = [{"id": "existing", "status": "UNSUBMITTED", "expression": "rank(volume)"}]
+        candidate = Candidate(
+            alpha_id="alpha_sparse_metrics",
+            expression="rank(close)",
+            family="test",
+            hypothesis="sparse official metrics must not auto submit",
+            data_fields=["close"],
+            operators=["rank"],
+            official_alpha_id="prod_alpha_1234",
+            official_metrics={"pass_fail": "PASS"},
+            gate={"submission_ready": True},
+            scorecard={"total_score": 93, "decision_band": "submit_candidate"},
+        )
+        cross_review_called = {"value": False}
+
+        def cross_review(_candidate):
+            cross_review_called["value"] = True
+            return {"allowed": True, "failed_reasons": []}
+
+        monkeypatch.setattr(pipeline, "_pre_submit_cross_review", cross_review)
+
+        submitted = pipeline._try_auto_submit(candidate, 0)
+
+        assert submitted == 0
+        assert cross_review_called["value"] is False
+        assert api.submissions == []
+        assert candidate.submission["safety"]["allowed"] is False
+        assert candidate.submission["safety"]["status"] == "BLOCK"
+        assert any(reason.startswith("missing_official_metric_fields:") for reason in candidate.submission["safety"]["failed_reasons"])
+
+
+def test_pipeline_auto_submit_reports_exact_missing_official_metric_field(monkeypatch):
+    with tempfile.TemporaryDirectory() as tmp:
+        config = OpsConfig(
+            budget=ResearchBudget(require_cloud_sync=False),
+            storage_dir=tmp,
+        )
+
+        class RecordingAPI(ProductionBrainAPIStub):
+            def __init__(self):
+                super().__init__()
+                self.submissions = []
+
+            def submit_alpha(self, alpha_id, expression, settings):
+                self.submissions.append((alpha_id, expression, settings))
+                return super().submit_alpha(alpha_id, expression, settings)
+
+        api = RecordingAPI()
+        pipeline = AlphaResearchPipeline(config=config, api=api)
+        pipeline.cloud_sync = {"status": "loaded", "stale": False, "warning": ""}
+        pipeline.cloud_alphas = [{"id": "existing", "status": "UNSUBMITTED", "expression": "rank(volume)"}]
+        candidate = Candidate(
+            alpha_id="alpha_missing_one_metric",
+            expression="rank(close)",
+            family="test",
+            hypothesis="single missing official metric must be visible",
+            data_fields=["close"],
+            operators=["rank"],
+            official_alpha_id="prod_alpha_5678",
+            official_metrics={
+                "sharpe": 2.0,
+                "fitness": 1.5,
+                "turnover": 0.2,
+                "correlation": 0.1,
+                "prod_correlation": 0.1,
+                "pass_fail": "PASS",
+            },
+            gate={"submission_ready": True},
+            scorecard={"total_score": 93, "decision_band": "submit_candidate"},
+        )
+        cross_review_called = {"value": False}
+
+        def cross_review(_candidate):
+            cross_review_called["value"] = True
+            return {"allowed": True, "failed_reasons": []}
+
+        monkeypatch.setattr(pipeline, "_pre_submit_cross_review", cross_review)
+
+        submitted = pipeline._try_auto_submit(candidate, 0)
+
+        metric_check = next(
+            check for check in candidate.submission["safety"]["checks"]
+            if check["name"] == "official_metric_fields_complete"
+        )
+        assert submitted == 0
+        assert cross_review_called["value"] is False
+        assert api.submissions == []
+        assert metric_check["passed"] is False
+        assert metric_check["detail"] == "missing_official_metric_fields:weight_concentration"
+
+
 class ConcurrencyLimitedAPI(ProductionBrainAPIStub):
     def submit_simulation(self, expression: str, settings: dict) -> str:
         raise BrainAPIError(
@@ -343,6 +527,30 @@ class CloudSyncForbiddenAPI(ProductionBrainAPIStub):
         raise AssertionError("cloud sync should not run when a local cache already exists")
 
 
+class CallbackStoppingCloudSyncAPI(ProductionBrainAPIStub):
+    def __init__(self):
+        super().__init__()
+        self.pages_requested = 0
+        self.callback_results = []
+
+    def list_user_alphas(self, sync_range: str = "3d", progress_callback=None) -> list[dict]:
+        rows = []
+        for index in range(3):
+            self.pages_requested += 1
+            rows.append({"id": f"partial_alpha_{index + 1}", "status": "UNSUBMITTED"})
+            if progress_callback:
+                keep_going = progress_callback({
+                    "scanned": len(rows),
+                    "total": 300,
+                    "page_size": 1,
+                    "offset": index,
+                })
+                self.callback_results.append(keep_going)
+                if keep_going is False:
+                    break
+        return rows
+
+
 def test_pipeline_runs_initial_cloud_sync_when_cache_is_empty_and_per_run_sync_disabled():
     with tempfile.TemporaryDirectory() as tmp:
         config = OpsConfig(
@@ -373,6 +581,62 @@ def test_pipeline_uses_cached_cloud_alphas_when_per_run_sync_disabled():
         assert pipeline.cloud_sync["run_status"] == "skipped"
         assert pipeline.cloud_sync["count"] == 1
         assert pipeline.cloud_alphas[0]["id"] == "cached_alpha"
+
+
+def test_pipeline_cloud_sync_cancel_does_not_merge_partial_rows():
+    stop_requested = {"value": False}
+    events = []
+
+    def on_progress(event):
+        events.append(event)
+        if event["phase"] == "cloud_sync" and event.get("data", {}).get("cloud_sync", {}).get("status") == "running":
+            stop_requested["value"] = True
+
+    with tempfile.TemporaryDirectory() as tmp:
+        api = CallbackStoppingCloudSyncAPI()
+        config = OpsConfig(
+            budget=ResearchBudget(require_cloud_sync=False, cloud_sync_range="3d"),
+            storage_dir=tmp,
+        )
+        pipeline = AlphaResearchPipeline(
+            config=config,
+            api=api,
+            progress_callback=on_progress,
+            stop_callback=lambda: stop_requested["value"],
+        )
+
+        pipeline._sync_cloud_alphas()
+
+        assert api.pages_requested == 1
+        assert api.callback_results == [False]
+        assert pipeline.cloud_sync["status"] == "stopped"
+        assert pipeline.cloud_sync["run_status"] == "stopped"
+        assert pipeline.cloud_alphas == []
+        assert ResearchRepository(tmp).latest_cloud_alphas() == []
+
+
+def test_pipeline_cloud_sync_elapsed_limit_does_not_merge_partial_rows():
+    with tempfile.TemporaryDirectory() as tmp:
+        api = CallbackStoppingCloudSyncAPI()
+        config = OpsConfig(
+            budget=ResearchBudget(
+                require_cloud_sync=False,
+                cloud_sync_range="3d",
+                cloud_sync_max_elapsed_seconds=0.000001,
+            ),
+            storage_dir=tmp,
+        )
+        pipeline = AlphaResearchPipeline(config=config, api=api)
+
+        pipeline._sync_cloud_alphas()
+
+        assert api.pages_requested == 1
+        assert api.callback_results == [False]
+        assert pipeline.cloud_sync["status"] == "stopped"
+        assert pipeline.cloud_sync["run_status"] == "stopped"
+        assert "elapsed limit" in pipeline.cloud_sync["warning"]
+        assert pipeline.cloud_alphas == []
+        assert ResearchRepository(tmp).latest_cloud_alphas() == []
 
 
 def test_pipeline_applies_persisted_assistant_guidance(monkeypatch):
@@ -511,8 +775,6 @@ def test_pipeline_persists_structured_backtest_error_context_for_rate_limit():
                 max_candidates_per_cycle=12,
                 max_official_validations_per_cycle=8,
                 max_official_simulations_per_cycle=3,
-                min_prior_score_for_official_validation=0,
-                min_prior_score_for_official_simulation=0,
                 max_cycles=1,
                 official_retry_pause_seconds=0.1,
             ),
@@ -741,18 +1003,18 @@ def test_pipeline_records_observability_guidance_apply_failure(monkeypatch):
 
 
 def test_pipeline_observability_duplicate_guard_blocks_official_validation(monkeypatch):
-    duplicate_expression = "rank(ts_delta(close, 20))"
-    alternative_expression = "rank(ts_mean(volume, 5))"
+    duplicate_expression = "rank(ts_mean(volume / adv20, 10))"
+    alternative_expression = "rank(ts_mean(returns, 10))"
 
     def fake_generate(self, count, dataset_id=""):
         return [
             Candidate(
                 alpha_id="dup_candidate",
                 expression=duplicate_expression,
-                family="Momentum",
+                family="Liquidity",
                 hypothesis="duplicate history candidate",
-                data_fields=["close"],
-                operators=["rank", "ts_delta"],
+                data_fields=["volume", "adv20"],
+                operators=["rank", "ts_mean", "divide"],
                 scorecard={"total_score": 95},
             ),
             Candidate(
@@ -760,7 +1022,7 @@ def test_pipeline_observability_duplicate_guard_blocks_official_validation(monke
                 expression=alternative_expression,
                 family="Liquidity",
                 hypothesis="fresh candidate",
-                data_fields=["volume"],
+                data_fields=["returns"],
                 operators=["rank", "ts_mean"],
                 scorecard={"total_score": 90},
             ),
@@ -774,6 +1036,19 @@ def test_pipeline_observability_duplicate_guard_blocks_official_validation(monke
         "brain_alpha_ops.research.generator.CandidateGenerator.generate",
         fake_generate,
     )
+    monkeypatch.setattr(
+        "brain_alpha_ops.research.local_backtest_engine.LocalBacktestEngine.evaluate",
+        lambda self, expression, **_kwargs: {
+            "ok": True,
+            "expression": expression,
+            "pass_local": True,
+            "sharpe": 1.5,
+            "fitness": 1.2,
+            "turnover": 0.2,
+            "weight_concentration": 0.05,
+            "pass_reasons": ["fixture local backtest pass"],
+        },
+    )
     with tempfile.TemporaryDirectory() as tmp:
         repo = ResearchRepository(tmp)
         repo.save_candidate(
@@ -781,10 +1056,10 @@ def test_pipeline_observability_duplicate_guard_blocks_official_validation(monke
             Candidate(
                 alpha_id="hist_candidate",
                 expression=duplicate_expression,
-                family="Momentum",
+                family="Liquidity",
                 hypothesis="duplicate expression history",
-                data_fields=["close"],
-                operators=["rank", "ts_delta"],
+                data_fields=["volume", "adv20"],
+                operators=["rank", "ts_mean", "divide"],
             ),
         )
         repo.save_backtest_record(
@@ -823,7 +1098,304 @@ def test_pipeline_observability_duplicate_guard_blocks_official_validation(monke
         assert guard["phase_counts"]["official_validation"] == 1
         assert guard["blocked_candidates"][0]["alpha_id"] == "dup_candidate"
         assert result.summary["observability_throttle"]["official_call_guard"]["blocked_count"] == 1
-        assert any(event.event == "observability_duplicate_official_call_blocked" for event in result.events)
+        assert sum(
+            event.event == "observability_duplicate_official_call_blocked"
+            for event in result.events
+        ) == 1
+
+
+def test_pipeline_backtest_targets_fill_slot_after_high_similarity_skip():
+    with tempfile.TemporaryDirectory() as tmp:
+        config = OpsConfig(
+            budget=ResearchBudget(
+                max_official_simulations_per_cycle=1,
+                official_backtest_batch_size=1,
+            ),
+            storage_dir=tmp,
+        )
+        pipeline = AlphaResearchPipeline(config=config, api=ProductionBrainAPIStub())
+        crowded = Candidate(
+            alpha_id="crowded_candidate",
+            expression="rank(ts_mean(volume / adv20, 20))",
+            family="Liquidity",
+            hypothesis="high score but cloud-crowded expression",
+            data_fields=["volume", "adv20"],
+            operators=["rank", "ts_mean", "divide"],
+            validation={"status": "PASS"},
+            scorecard={"total_score": 100.0},
+        )
+        safe = Candidate(
+            alpha_id="safe_candidate",
+            expression="rank(ts_mean(returns, 10))",
+            family="Liquidity",
+            hypothesis="lower score but low cloud similarity",
+            data_fields=["returns"],
+            operators=["rank", "ts_mean"],
+            validation={"status": "PASS"},
+            scorecard={"total_score": config.budget.min_prior_score_for_official_simulation},
+        )
+        pipeline.cloud_alphas = [
+            {
+                "id": "cloud_1",
+                "status": "PRODUCTION",
+                "expression": crowded.expression,
+            }
+        ]
+        pipeline._refresh_cloud_similarity_index()
+
+        targets = pipeline._backtest_targets([crowded, safe])
+
+        assert [candidate.alpha_id for candidate in targets] == ["safe_candidate"]
+        assert crowded.lifecycle_status == "high_cloud_similarity_rejected"
+        assert crowded.gate["status"] == "HIGH_CLOUD_SIMILARITY_REJECTED"
+        assert crowded.gate["submission_ready"] is False
+        assert crowded.submission["cloud_similarity_preflight"]["matched_alpha_id"] == "cloud_1"
+        pending = pipeline._pending_backtest_candidates([crowded, safe])
+        assert [candidate.alpha_id for candidate in pending] == ["safe_candidate"]
+        plan = pipeline.last_runtime_data["backtest_batch_plan"]
+        assert plan["selected"][0]["alpha_id"] == "safe_candidate"
+        assert plan["skipped"][0]["alpha_id"] == "crowded_candidate"
+
+
+def test_pipeline_validation_quota_ignores_high_similarity_pending_candidate():
+    with tempfile.TemporaryDirectory() as tmp:
+        config = OpsConfig(
+            budget=ResearchBudget(
+                max_official_validations_per_cycle=2,
+                max_official_simulations_per_cycle=1,
+                official_backtest_batch_size=1,
+            ),
+            storage_dir=tmp,
+        )
+        pipeline = AlphaResearchPipeline(config=config, api=ProductionBrainAPIStub())
+        crowded = Candidate(
+            alpha_id="crowded_candidate",
+            expression="rank(ts_mean(volume / adv20, 20))",
+            family="Liquidity",
+            hypothesis="already validated but too similar to cloud alpha",
+            data_fields=["volume", "adv20"],
+            operators=["rank", "ts_mean", "divide"],
+            validation={"status": "PASS"},
+            scorecard={"total_score": 100.0},
+        )
+        safe = Candidate(
+            alpha_id="safe_candidate",
+            expression="rank(ts_mean(returns, 10))",
+            family="Liquidity",
+            hypothesis="safe candidate still needs validation",
+            data_fields=["returns"],
+            operators=["rank", "ts_mean"],
+            scorecard={"total_score": config.budget.min_prior_score_for_official_simulation},
+        )
+        pipeline.cloud_alphas = [
+            {
+                "id": "cloud_1",
+                "status": "PRODUCTION",
+                "expression": crowded.expression,
+            }
+        ]
+        pipeline._refresh_cloud_similarity_index()
+
+        quota = pipeline._validation_quota([crowded, safe])
+
+        assert quota == 1
+        assert crowded.lifecycle_status == "high_cloud_similarity_rejected"
+        assert crowded.gate["status"] == "HIGH_CLOUD_SIMILARITY_REJECTED"
+        assert pipeline._validation_targets([crowded, safe]) == [safe]
+        assert pipeline._pending_backtest_candidates([crowded, safe]) == []
+
+
+def test_pipeline_validate_slots_archives_high_similarity_pending_candidate():
+    with tempfile.TemporaryDirectory() as tmp:
+        config = OpsConfig(
+            budget=ResearchBudget(
+                max_official_validations_per_cycle=2,
+                max_official_simulations_per_cycle=1,
+                official_backtest_batch_size=1,
+            ),
+            storage_dir=tmp,
+        )
+        api = CountingProductionBrainAPIStub()
+        pipeline = AlphaResearchPipeline(config=config, api=api)
+        crowded = Candidate(
+            alpha_id="crowded_candidate",
+            expression="rank(ts_mean(volume / adv20, 20))",
+            family="Liquidity",
+            hypothesis="already validated but too similar to cloud alpha",
+            data_fields=["volume", "adv20"],
+            operators=["rank", "ts_mean", "divide"],
+            validation={"status": "PASS"},
+            scorecard={"total_score": 100.0},
+        )
+        safe = Candidate(
+            alpha_id="safe_candidate",
+            expression="rank(ts_mean(returns, 10))",
+            family="Liquidity",
+            hypothesis="safe candidate still needs validation",
+            data_fields=["returns"],
+            operators=["rank", "ts_mean"],
+            scorecard={"total_score": config.budget.min_prior_score_for_official_simulation},
+        )
+        pipeline.cloud_alphas = [
+            {
+                "id": "cloud_1",
+                "status": "PRODUCTION",
+                "expression": crowded.expression,
+            }
+        ]
+        pipeline._refresh_cloud_similarity_index()
+        pool_by_expression = {expr_key(candidate): candidate for candidate in (crowded, safe)}
+        archive_stats: dict[str, int] = {}
+        blocked_expressions: set[str] = set()
+
+        pipeline._validate_for_open_backtest_slots(
+            1,
+            pool_by_expression,
+            [],
+            archive_stats,
+            blocked_expressions,
+        )
+
+        assert expr_key(crowded) not in pool_by_expression
+        assert expr_key(crowded) in blocked_expressions
+        assert archive_stats["HIGH_CLOUD_SIMILARITY_REJECTED"] == 1
+        assert api.validation_expressions == [safe.expression]
+        assert safe.validation["status"] == "PASS"
+
+
+def test_pipeline_skips_high_cloud_similarity_before_official_validation():
+    with tempfile.TemporaryDirectory() as tmp:
+        config = OpsConfig(
+            budget=ResearchBudget(
+                max_official_validations_per_cycle=2,
+                max_official_simulations_per_cycle=1,
+                official_backtest_batch_size=1,
+            ),
+            storage_dir=tmp,
+        )
+        api = CountingProductionBrainAPIStub()
+        pipeline = AlphaResearchPipeline(config=config, api=api)
+        crowded = Candidate(
+            alpha_id="crowded_candidate",
+            expression="rank(ts_mean(volume / adv20, 20))",
+            family="Liquidity",
+            hypothesis="high score but cloud-crowded expression",
+            data_fields=["volume", "adv20"],
+            operators=["rank", "ts_mean", "divide"],
+            scorecard={"total_score": 100.0},
+        )
+        safe = Candidate(
+            alpha_id="safe_candidate",
+            expression="rank(ts_mean(returns, 10))",
+            family="Liquidity",
+            hypothesis="safe candidate still needs official validation",
+            data_fields=["returns"],
+            operators=["rank", "ts_mean"],
+            scorecard={"total_score": config.budget.min_prior_score_for_official_simulation},
+        )
+        pipeline.cloud_alphas = [
+            {
+                "id": "cloud_1",
+                "status": "PRODUCTION",
+                "expression": crowded.expression,
+            }
+        ]
+        pipeline._refresh_cloud_similarity_index()
+        pool_by_expression = {expr_key(candidate): candidate for candidate in (crowded, safe)}
+        archive_stats: dict[str, int] = {}
+        blocked_expressions: set[str] = set()
+
+        pipeline._validate_for_open_backtest_slots(
+            1,
+            pool_by_expression,
+            [],
+            archive_stats,
+            blocked_expressions,
+        )
+
+        assert crowded.lifecycle_status == "high_cloud_similarity_rejected"
+        assert crowded.gate["status"] == "HIGH_CLOUD_SIMILARITY_REJECTED"
+        assert expr_key(crowded) not in pool_by_expression
+        assert expr_key(crowded) in blocked_expressions
+        assert archive_stats["HIGH_CLOUD_SIMILARITY_REJECTED"] == 1
+        assert api.validation_expressions == [safe.expression]
+        assert safe.validation["status"] == "PASS"
+
+
+def test_pipeline_skips_high_cloud_similarity_before_official_simulation(monkeypatch):
+    crowded_expression = "rank(ts_mean(volume / adv20, 20))"
+    safe_expression = "rank(ts_mean(returns, 10))"
+
+    def fake_generate(self, count, dataset_id=""):
+        return [
+            Candidate(
+                alpha_id="crowded_candidate",
+                expression=crowded_expression,
+                family="Liquidity",
+                hypothesis="crowded liquidity candidate that should be preflight blocked",
+                data_fields=["volume", "adv20"],
+                operators=["rank", "ts_mean", "divide"],
+            ),
+            Candidate(
+                alpha_id="safe_candidate",
+                expression=safe_expression,
+                family="Liquidity",
+                hypothesis="fresh returns candidate with production-quality local evidence",
+                data_fields=["returns"],
+                operators=["rank", "ts_mean"],
+            ),
+        ]
+
+    monkeypatch.setattr(
+        "brain_alpha_ops.research.hypothesis_driven_generator.HypothesisDrivenGenerator.generate",
+        fake_generate,
+    )
+    monkeypatch.setattr(
+        "brain_alpha_ops.research.generator.CandidateGenerator.generate",
+        fake_generate,
+    )
+    monkeypatch.setattr(
+        "brain_alpha_ops.research.local_backtest_engine.LocalBacktestEngine.evaluate",
+        lambda self, expression, **_kwargs: {
+            "ok": True,
+            "expression": expression,
+            "pass_local": True,
+            "sharpe": 1.5,
+            "fitness": 1.2,
+            "turnover": 0.2,
+            "weight_concentration": 0.05,
+            "pass_reasons": ["fixture local backtest pass"],
+        },
+    )
+
+    with tempfile.TemporaryDirectory() as tmp:
+        config = OpsConfig(
+            budget=ResearchBudget(
+                max_candidates_per_cycle=2,
+                max_official_validations_per_cycle=2,
+                max_official_simulations_per_cycle=2,
+                official_backtest_batch_size=2,
+                max_cycles=1,
+                require_cloud_sync=True,
+                cloud_sync_range="3d",
+            ),
+            storage_dir=tmp,
+        )
+        api = CountingProductionBrainAPIStub()
+
+        result = AlphaResearchPipeline(config=config, api=api).run(auto_submit=False)
+
+        assert crowded_expression not in api.validation_expressions
+        assert safe_expression in api.validation_expressions
+        assert crowded_expression not in api.simulation_expressions
+        assert safe_expression in api.simulation_expressions
+        assert result.summary["backtests_submitted"] == 1
+        assert result.summary["cloud_sync"]["status"] in {"synced", "loaded"}
+        assert result.summary["archive_stats"]["HIGH_CLOUD_SIMILARITY_REJECTED"] == 1
+        pending_alpha_ids = {row["alpha_id"] for row in result.summary["pending_backtest_candidates"]}
+        assert "crowded_candidate" not in pending_alpha_ids
+        final_alpha_ids = {candidate.alpha_id for candidate in result.candidates}
+        assert "crowded_candidate" not in final_alpha_ids
 
 
 def test_candidate_pool_excludes_waiting_backtest_queue():

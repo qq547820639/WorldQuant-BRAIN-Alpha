@@ -343,7 +343,7 @@ def _compliance_context(config: RunConfig) -> dict[str, Any]:
         redline = {"ok": False, "violations": -1, "summary": f"redline verification error: {exc}"}
 
     try:
-        from brain_alpha_ops.scoring.official_scoring import ScoreHistoryDB
+        from brain_alpha_ops.scoring.history import ScoreHistoryDB
         db = ScoreHistoryDB(config.ops.storage_dir)
         stats = db.convergence_stats()
         scoring_health = stats

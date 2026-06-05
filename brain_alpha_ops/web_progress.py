@@ -2,7 +2,29 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, TypedDict
+
+
+class ProgressPayload(TypedDict, total=False):
+    """Public progress contract shared by polling, SSE, and UI rendering."""
+
+    task_id: str
+    job_id: str
+    status: str
+    phase: str
+    phase_label: str
+    percent: float
+    percent_complete: float
+    status_message: str
+    message: str
+    eta_seconds: int
+    total: int | float
+    done: int | float
+    scanned: int | float
+    checked: int | float
+    submitted: int | float
+    current: int | float
+    total_steps: int | float
 
 
 PHASE_LABELS: dict[str, str] = {
@@ -28,11 +50,6 @@ PHASE_LABELS: dict[str, str] = {
     "stopped": "已停止",
     "failed": "失败",
     "stopping": "正在停止",
-    "context_fields": "更新字段缓存",
-    "context_operators": "更新算子缓存",
-    "page_load": "页面加载",
-    "dashboard_load": "仪表盘加载",
-    "cloud_cache": "云端缓存",
 }
 
 
@@ -64,7 +81,6 @@ def _ratio_percent(progress: dict[str, Any]) -> float | None:
 
 
 def progress_percent(progress: dict[str, Any]) -> float | None:
-    """Return a normalized 0-100 progress value when it can be derived."""
     explicit = _bounded_percent(progress.get("percent_complete"))
     if explicit is not None:
         return explicit
@@ -75,7 +91,6 @@ def progress_percent(progress: dict[str, Any]) -> float | None:
 
 
 def normalize_progress(progress: dict[str, Any], *, task_id: str = "", status: str = "") -> dict[str, Any]:
-    """Add the unified progress fields expected by API and React consumers."""
     normalized = dict(progress or {})
     if task_id:
         normalized.setdefault("task_id", task_id)
@@ -88,7 +103,13 @@ def normalize_progress(progress: dict[str, Any], *, task_id: str = "", status: s
     if percent is not None:
         normalized["percent_complete"] = round(percent, 1)
         normalized.setdefault("percent", round(percent, 1))
-    message = normalized.get("status_message") or normalized.get("message") or normalized.get("phase_label") or normalized.get("phase") or status
+    message = (
+        normalized.get("status_message")
+        or normalized.get("message")
+        or normalized.get("phase_label")
+        or normalized.get("phase")
+        or status
+    )
     if message:
         normalized["status_message"] = str(message)
         normalized.setdefault("message", str(message))
@@ -101,7 +122,4 @@ def normalize_progress(progress: dict[str, Any], *, task_id: str = "", status: s
 
 
 def enrich_progress(progress: dict) -> dict:
-    progress = normalize_progress(progress)
-    if "phase" in progress and "phase_label" not in progress:
-        progress["phase_label"] = PHASE_LABELS.get(str(progress["phase"]), str(progress["phase"]))
-    return progress
+    return normalize_progress(progress)

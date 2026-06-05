@@ -25,6 +25,7 @@ REACT_FRONTEND = "react"
 
 _HTML_CACHE = ""
 _HTML_CACHE_PATH: Path | None = None
+_HTML_CACHE_SIGNATURE: tuple[int, int] | None = None
 _HTML_LOCK = threading.RLock()
 
 
@@ -63,7 +64,8 @@ def default_html_path(frontend: str | None = None) -> Path:
 
 
 def resolve_react_asset(request_path: str, frontend: str | None = None) -> tuple[bytes, str] | None:
-    if selected_frontend(frontend) != REACT_FRONTEND:
+    inline_missing_react_available = not inline_html_path().is_file() and (react_dist_path() / "index.html").is_file()
+    if selected_frontend(frontend) != REACT_FRONTEND and not inline_missing_react_available:
         return None
     decoded_path = unquote(str(request_path or ""))
     if not decoded_path.startswith("/assets/"):
@@ -81,15 +83,17 @@ def resolve_react_asset(request_path: str, frontend: str | None = None) -> tuple
 
 
 def load_html(path: Path | None = None) -> str:
-    global _HTML_CACHE, _HTML_CACHE_PATH
+    global _HTML_CACHE, _HTML_CACHE_PATH, _HTML_CACHE_SIGNATURE
     if path is None:
         with _HTML_LOCK:
             template_path = default_html_path()
-            if _HTML_CACHE and _HTML_CACHE_PATH == template_path:
+            signature = _html_cache_signature(template_path)
+            if _HTML_CACHE and _HTML_CACHE_PATH == template_path and _HTML_CACHE_SIGNATURE == signature:
                 return _HTML_CACHE
             html = template_path.read_text(encoding="utf-8") if template_path.is_file() else MISSING_TEMPLATE_HTML
             _HTML_CACHE = html
             _HTML_CACHE_PATH = template_path
+            _HTML_CACHE_SIGNATURE = signature
             return html
     template_path = path
     with _HTML_LOCK:
@@ -97,10 +101,19 @@ def load_html(path: Path | None = None) -> str:
 
 
 def reset_html_cache() -> None:
-    global _HTML_CACHE, _HTML_CACHE_PATH
+    global _HTML_CACHE, _HTML_CACHE_PATH, _HTML_CACHE_SIGNATURE
     with _HTML_LOCK:
         _HTML_CACHE = ""
         _HTML_CACHE_PATH = None
+        _HTML_CACHE_SIGNATURE = None
+
+
+def _html_cache_signature(path: Path) -> tuple[int, int] | None:
+    try:
+        stat = path.stat()
+    except OSError:
+        return None
+    return stat.st_mtime_ns, stat.st_size
 
 
 def render_html(csrf_token: str, stream_token: str, html: str | None = None) -> str:

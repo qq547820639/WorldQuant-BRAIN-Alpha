@@ -29,8 +29,16 @@ from brain_alpha_ops.redaction import redact_error_message
 from brain_alpha_ops.research.expression_ast import (
     expression_fingerprint,
     expression_key,
-    ordered_operators,
-    profile_expression,
+    expression_similarity,
+)
+from brain_alpha_ops.research.hypothesis_expression_support import HypothesisExpressionSupport
+from brain_alpha_ops.research.field_quality import generation_field_ids
+from brain_alpha_ops.research.fallback_generation import (
+    DEFAULT_WINDOWS,
+    build_bare_fallback_spec,
+    is_high_turnover_generation_risk,
+    is_generated_duplicate,
+    normalize_operator_aliases,
 )
 from brain_alpha_ops.research.hypothesis_library import (
     Hypothesis,
@@ -47,22 +55,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# Default windows for random exploration fallback
-_DEFAULT_WINDOWS = [3, 5, 8, 10, 12, 15, 20, 30, 40, 60, 90, 120, 180, 252]
-
-
-def _normalize_operator_aliases(expression: str) -> str:
-    """Normalize legacy shorthand to official BRAIN operator names."""
-    replacements = {
-        "ts_std": "ts_std_dev",
-        "ts_argmax": "ts_arg_max",
-        "ts_argmin": "ts_arg_min",
-        "ts_cov": "ts_covariance",
-    }
-    normalized = expression
-    for old, new in replacements.items():
-        normalized = re.sub(rf"\b{old}\s*\(", f"{new}(", normalized)
-    return normalized
+_FORBIDDEN_PATTERN_SIMILARITY_THRESHOLD = 0.90
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -284,13 +277,7 @@ class FieldSelector:
             chosen_cat: FieldCategoryDef = random.choices(remaining, weights=weights, k=1)[0]
             remaining.remove(chosen_cat)
 
-            fields = self._resolve_category(chosen_cat.category, dataset_id)
-            if not fields and chosen_cat.examples and dataset_fields:
-                fields = [
-                    str(example).lower()
-                    for example in chosen_cat.examples
-                    if str(example).lower() in dataset_fields
-                ]
+            fields = self._resolve_category(chosen_cat.category, dataset_id, examples=chosen_cat.examples)
 
             if fields:
                 k = min(count, len(fields))
@@ -298,9 +285,16 @@ class FieldSelector:
 
         return []
 
-    def _resolve_category(self, category_name: str, dataset_id: str = "") -> list[str]:
+    def _resolve_category(
+        self,
+        category_name: str,
+        dataset_id: str = "",
+        *,
+        examples: list[str] | None = None,
+    ) -> list[str]:
         """Resolve a semantic field category to concrete field name list."""
-        cache_key = f"{dataset_id}::{category_name}"
+        examples_key = ",".join(str(item).lower() for item in (examples or []))
+        cache_key = f"{dataset_id}::{category_name}::{examples_key}"
         if cache_key in self._field_cache:
             return self._field_cache[cache_key]
 
@@ -315,6 +309,12 @@ class FieldSelector:
         dataset_fields = self._dataset_field_set(dataset_id)
         if dataset_fields:
             fields = [field for field in fields if field.lower() in dataset_fields]
+        if not fields and dataset_fields:
+            fields = self._resolve_semantic_dataset_fields(
+                category_name,
+                examples=examples or [],
+                dataset_fields=dataset_fields,
+            )
 
         self._field_cache[cache_key] = fields
         return fields
@@ -328,7 +328,9 @@ class FieldSelector:
         if loader is None:
             return set()
         try:
-            fields = {field.id.lower() for field in loader.get_fields(dataset_id)}
+            fields = set(generation_field_ids(loader.get_fields(dataset_id)))
+            if not fields:
+                fields = {field.id.lower() for field in loader.get_fields(dataset_id)}
             self._dataset_field_cache[dataset_id] = fields
             return fields
         except Exception:
@@ -338,6 +340,107 @@ class FieldSelector:
                 exc_info=True,
             )
             return set()
+
+    def _resolve_semantic_dataset_fields(
+        self,
+        category_name: str,
+        *,
+        examples: list[str],
+        dataset_fields: set[str],
+        limit: int = 60,
+    ) -> list[str]:
+        """Map hypothesis semantic categories to real official dataset fields.
+
+        Official context often exposes only coarse categories such as
+        ``analyst`` while the hypothesis library uses finer concepts such as
+        ``earnings_estimate_revision``.  This fallback never invents names; it
+        ranks fields already present in the active dataset by semantic tokens
+        from the hypothesis category and its examples.
+        """
+        weighted_tokens = _semantic_field_tokens(category_name, examples)
+        if not weighted_tokens:
+            return []
+        scored: list[tuple[float, str]] = []
+        for field in sorted(dataset_fields):
+            field_key = field.lower()
+            score = 0.0
+            for token, weight in weighted_tokens.items():
+                if token in field_key:
+                    score += weight
+            if score >= 5.0:
+                scored.append((score, field))
+        scored.sort(key=lambda item: (-item[0], item[1]))
+        return [field for _score, field in scored[:limit]]
+
+
+_SEMANTIC_TOKEN_ALIASES: dict[str, tuple[str, ...]] = {
+    "accruals": ("accrual",),
+    "analyst": ("anl4",),
+    "beta": ("beta",),
+    "cash": ("cash", "cfo", "cff", "cfi"),
+    "consensus": ("consensus", "mean", "median"),
+    "coverage": ("numest", "number", "num"),
+    "dispersion": ("dispersion", "std", "stddev", "high", "low"),
+    "dividend": ("div", "dividend"),
+    "earnings": ("eps", "earnings", "income", "netincome", "net_income"),
+    "estimate": ("estimate", "est", "mean", "median"),
+    "float": ("float", "shares"),
+    "growth": ("growth", "sales", "revenue"),
+    "margin": ("margin", "gross", "operating"),
+    "price": ("price", "value"),
+    "profitability": ("profit", "income", "roe", "roa"),
+    "rating": ("rating", "rec"),
+    "recommendation": ("rec", "rating"),
+    "revenue": ("sales", "revenue"),
+    "revision": ("revision", "revisions", "previosestimate", "previous", "preest", "chg", "change"),
+    "sales": ("sales", "revenue"),
+    "surprise": ("surprise", "actual"),
+    "target": ("target", "tp"),
+}
+
+_SEMANTIC_STOP_TOKENS = {
+    "and",
+    "change",
+    "count",
+    "history",
+    "historical",
+    "long",
+    "ratio",
+    "short",
+    "term",
+    "the",
+    "to",
+}
+
+
+def _semantic_field_tokens(category_name: str, examples: list[str]) -> dict[str, float]:
+    tokens: dict[str, float] = {}
+    for token in _split_semantic_tokens(category_name):
+        _add_semantic_token(tokens, token, 2.0)
+        for alias in _SEMANTIC_TOKEN_ALIASES.get(token, ()):
+            _add_semantic_token(tokens, alias, 2.5)
+    for example in examples:
+        for token in _split_semantic_tokens(example):
+            _add_semantic_token(tokens, token, 3.0)
+            for alias in _SEMANTIC_TOKEN_ALIASES.get(token, ()):
+                _add_semantic_token(tokens, alias, 3.0)
+    return tokens
+
+
+def _split_semantic_tokens(value: str) -> list[str]:
+    raw_tokens = re.split(r"[^a-zA-Z0-9]+", str(value or "").lower())
+    return [
+        token
+        for token in raw_tokens
+        if len(token) >= 3 and token not in _SEMANTIC_STOP_TOKENS
+    ]
+
+
+def _add_semantic_token(tokens: dict[str, float], token: str, weight: float) -> None:
+    token = str(token or "").lower().strip()
+    if len(token) < 3 or token in _SEMANTIC_STOP_TOKENS:
+        return
+    tokens[token] = max(tokens.get(token, 0.0), weight)
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -480,6 +583,7 @@ class HypothesisDrivenGenerator:
         self._observability_avoid_keys: set[str] = set()
         self._observability_guidance: dict[str, Any] = {}
         self._warned_empty_hypothesis_library: bool = False
+        self._fallback_cursor: int = 0
         self._knowledge_constraints: dict[str, Any] = {
             "preferred_fields": [],
             "preferred_operators": [],
@@ -507,6 +611,17 @@ class HypothesisDrivenGenerator:
         if self._mapper:
             mapper_fields = self._mapper.fields_for(dataset_id)
             self._fields = set(mapper_fields)
+        if self._loader:
+            try:
+                eligible_fields = generation_field_ids(self._loader.get_fields(dataset_id))
+                if eligible_fields:
+                    self._fields = set(eligible_fields)
+            except Exception:
+                logger.warning(
+                    "generation field eligibility metadata unavailable for dataset_id=%s",
+                    dataset_id,
+                    exc_info=True,
+                )
 
     def set_experience_guidance(self, patterns: dict[str, Any]) -> None:
         """Apply winning alpha patterns to bias future generation."""
@@ -570,13 +685,23 @@ class HypothesisDrivenGenerator:
         if preferred_operators:
             self._operators.update(preferred_operators)
 
+    def _expression_support(self) -> HypothesisExpressionSupport:
+        return HypothesisExpressionSupport(
+            fields=self._fields,
+            operators=self._operators,
+            loader=self._loader,
+            dataset_id=self._dataset_id,
+            logger=logger,
+        )
+
     def generate(self, count: int, dataset_id: str = "") -> list[Candidate]:
         """Generate *count* alpha candidates for *dataset_id*."""
         ds = dataset_id or self._dataset_id
         candidates: list[Candidate] = []
         attempts = 0
-        attempt_limit = max(count, count * (5 if self._observability_diversity_boost else 1))
+        attempt_limit = max(count, count * (8 if self._observability_diversity_boost else 5))
         seen_keys: set[str] = set()
+        seen_expressions: list[str] = []
 
         while len(candidates) < count and attempts < attempt_limit:
             i = attempts
@@ -592,12 +717,19 @@ class HypothesisDrivenGenerator:
                     candidate = self._generate_random_exploration(ds)
 
                 if candidate is not None:
+                    if is_high_turnover_generation_risk(candidate.expression):
+                        candidate.lifecycle_status = "generation_risk_skipped"
+                        continue
+                    if is_generated_duplicate(candidate.expression, seen_keys, seen_expressions):
+                        candidate.lifecycle_status = "duplicate_expression_skipped"
+                        continue
+                    key = expression_key(candidate.expression)
                     if self._observability_diversity_boost:
-                        key = expression_key(candidate.expression)
                         if key in seen_keys or self._is_observability_avoided(candidate.expression):
                             continue
-                        seen_keys.add(key)
                         self._mark_observability_candidate(candidate)
+                    seen_keys.add(key)
+                    seen_expressions.append(candidate.expression)
                     candidates.append(candidate)
             except Exception as exc:
                 logger.warning(
@@ -608,12 +740,19 @@ class HypothesisDrivenGenerator:
                 try:
                     fallback = self._generate_random_exploration(ds)
                     if fallback is not None:
+                        if is_high_turnover_generation_risk(fallback.expression):
+                            fallback.lifecycle_status = "generation_risk_skipped"
+                            continue
+                        if is_generated_duplicate(fallback.expression, seen_keys, seen_expressions):
+                            fallback.lifecycle_status = "duplicate_expression_skipped"
+                            continue
+                        key = expression_key(fallback.expression)
                         if self._observability_diversity_boost:
-                            key = expression_key(fallback.expression)
                             if key in seen_keys or self._is_observability_avoided(fallback.expression):
                                 continue
-                            seen_keys.add(key)
                             self._mark_observability_candidate(fallback)
+                        seen_keys.add(key)
+                        seen_expressions.append(fallback.expression)
                         candidates.append(fallback)
                 except Exception:
                     logger.warning("random exploration fallback generation failed", exc_info=True)
@@ -711,7 +850,7 @@ class HypothesisDrivenGenerator:
             expression=expression,
             family=hypothesis.category,
             hypothesis=f"Hypothesis-driven: {hypothesis.name} — {expr_family.description}",
-            data_fields=sorted(selected_fields),
+            data_fields=self._extract_fields(expression) or sorted(selected_fields),
             operators=self._extract_operators(expression),
             source_tags=["hypothesis_driven"],
             dataset_id=dataset_id or self._dataset_id,
@@ -735,7 +874,7 @@ class HypothesisDrivenGenerator:
             if self._experience_windows and hasattr(self._theme_engine, '_windows'):
                 self._theme_engine._windows = list(  # type: ignore[union-attr]
                     self._experience_windows if self._experience_windows
-                    else _DEFAULT_WINDOWS
+                    else DEFAULT_WINDOWS
                 )
 
             themes = self._theme_engine.generate(ds, n=1)  # type: ignore[union-attr]
@@ -746,7 +885,7 @@ class HypothesisDrivenGenerator:
             mutated = self._theme_engine.mutate_expression(  # type: ignore[union-attr]
                 tmpl.expression, ds, seed=random.randint(0, 1000)
             )
-            mutated = _normalize_operator_aliases(mutated)
+            mutated = self._normalize_generated_expression(mutated)
 
             meta = GenerationMeta(
                 mode="experience_feedback",
@@ -796,7 +935,7 @@ class HypothesisDrivenGenerator:
             mutated = self._theme_engine.mutate_expression(  # type: ignore[union-attr]
                 tmpl.expression, ds, seed=random.randint(0, 10000)
             )
-            mutated = _normalize_operator_aliases(mutated)
+            mutated = self._normalize_generated_expression(mutated)
 
             meta = GenerationMeta(
                 mode="random_exploration",
@@ -836,41 +975,97 @@ class HypothesisDrivenGenerator:
         ds = dataset_id or self._dataset_id or "default"
         fields = sorted(self._fields) if self._fields else ["returns"]
         fields = self._prioritize_knowledge_fields(fields)
-        f1 = fields[0] if fields else "returns"
-        w = 10
-        expression = _normalize_operator_aliases(f"rank(ts_delta({f1}, {w}))")
+        if not fields:
+            fields = ["returns"]
+        operators = {str(item).lower() for item in self._operators if str(item)}
+        windows = self._experience_windows or DEFAULT_WINDOWS
+        attempt_limit = max(1, len(fields) * len(windows))
+        for _ in range(attempt_limit):
+            spec = build_bare_fallback_spec(
+                fields=fields,
+                operators=operators,
+                windows=windows,
+                cursor=self._fallback_cursor,
+            )
+            self._fallback_cursor = spec.next_cursor
+            expression = normalize_operator_aliases(spec.expression)
+            if self._expression_forbidden(expression):
+                continue
 
-        meta = GenerationMeta(
-            mode="random_exploration",
-            hypothesis_id="fallback",
-            hypothesis_name="Bare Fallback",
-            expression_family_id="fallback",
-            field_category="fallback",
-            selected_fields=[f1],
-            region="USA",
-            universe="TOP3000",
-            delay=1,
-        )
+            meta = GenerationMeta(
+                mode="random_exploration",
+                hypothesis_id="fallback",
+                hypothesis_name="Bare Fallback",
+                expression_family_id="fallback",
+                field_category="fallback",
+                selected_fields=spec.data_fields,
+                region="USA",
+                universe="TOP3000",
+                delay=1,
+            )
 
-        return Candidate(
-            alpha_id=new_id("alpha"),
-            expression=expression,
-            family="hybrid",
-            hypothesis=f"Bare fallback alpha from {ds}",
-            data_fields=[f1],
-            operators=self._extract_operators(expression),
-            source_tags=["random_exploration", "fallback"],
-            dataset_id=ds,
-            template_source=meta.to_json(),
-        )
+            return Candidate(
+                alpha_id=new_id("alpha"),
+                expression=expression,
+                family=spec.family,
+                hypothesis=f"Bare fallback alpha from {ds}",
+                data_fields=spec.data_fields,
+                operators=self._extract_operators(expression),
+                source_tags=["random_exploration", "fallback"],
+                dataset_id=ds,
+                template_source=meta.to_json(),
+            )
+        return None
+
+    def _normalize_generated_expression(self, expression: str) -> str:
+        fallback_fields = sorted(self._fields)
+        normalized = normalize_operator_aliases(expression)
+        if fallback_fields:
+            normalized = self._sanitize_expression(normalized, fallback_fields)
+            normalized = self._validate_dataset_fields(normalized, fallback_fields)
+            normalized = self._normalize_wq_expression_shape(normalized)
+        return normalize_operator_aliases(normalized)
 
     def _expression_forbidden(self, expression: str) -> bool:
-        expression_lower = str(expression or "").lower()
+        expression_text = str(expression or "").strip()
+        if not expression_text:
+            return False
+        expression_lower = expression_text.lower()
+        if is_high_turnover_generation_risk(expression_text):
+            return True
+        try:
+            current_key = expression_key(expression_text)
+            current_fingerprint = expression_fingerprint(expression_text)
+        except Exception:
+            current_key = ""
+            current_fingerprint = ""
         for pattern in self._knowledge_constraints.get("forbidden_patterns") or []:
-            if not pattern:
+            pattern_text = str(pattern or "").strip()
+            if not pattern_text:
                 continue
-            if pattern.lower() in expression_lower:
+            needle = pattern_text.lower()
+            if needle and needle in expression_lower:
                 return True
+            if pattern_text in {expression_text, current_key, current_fingerprint}:
+                return True
+            try:
+                pattern_key = expression_key(pattern_text)
+                pattern_fingerprint = expression_fingerprint(pattern_text)
+            except Exception:
+                pattern_key = ""
+                pattern_fingerprint = ""
+            if current_key and pattern_key and current_key == pattern_key:
+                return True
+            if current_fingerprint and pattern_fingerprint and current_fingerprint == pattern_fingerprint:
+                return True
+            try:
+                if (
+                    expression_similarity(expression_text, pattern_text)
+                    >= _FORBIDDEN_PATTERN_SIMILARITY_THRESHOLD
+                ):
+                    return True
+            except Exception:
+                logger.debug("failed to compare forbidden expression pattern", exc_info=True)
         return False
 
     def _prioritize_knowledge_fields(self, fields: list[str]) -> list[str]:
@@ -960,7 +1155,33 @@ class HypothesisDrivenGenerator:
         # ── Phase 5: validate all fields exist in dataset ──
         expr = self._validate_dataset_fields(expr, fields)
 
-        return _normalize_operator_aliases(expr)
+        # ── Phase 6: normalize semantic YAML shorthands into real operators ──
+        expr = self._normalize_wq_expression_shape(expr, window)
+
+        return normalize_operator_aliases(expr)
+
+    def _normalize_wq_expression_shape(self, expr: str, window: int | None = None) -> str:
+        return self._expression_support().normalize_wq_expression_shape(expr, window)
+
+    def _operator_available(self, name: str) -> bool:
+        return self._expression_support().operator_available(name)
+
+    def _normalize_field_function_calls(self, expr: str, window: int | None = None) -> str:
+        return self._expression_support().normalize_field_function_calls(expr, window)
+
+    def _rewrite_field_function_node(self, node, window: int | None = None):
+        return self._expression_support().rewrite_field_function_node(node, window)
+
+    def _is_field_function_name(self, name: str) -> bool:
+        return self._expression_support().is_field_function_name(name)
+
+    def _replacement_for_field_function(
+        self,
+        field_name: str,
+        args,
+        window: int | None = None,
+    ):
+        return self._expression_support().replacement_for_field_function(field_name, args, window)
 
     def _sanitize_expression(
         self,
@@ -968,71 +1189,7 @@ class HypothesisDrivenGenerator:
         fields: list[str],
         already_used: set[str] | None = None,
     ) -> str:
-        """Replace remaining semantic tokens with actual dataset field names.
-
-        After template resolution, tokens like 'estimate_dispersion' or
-        'analyst_count_change' that aren't real BRAIN fields/operators are
-        detected and replaced with the best matching dataset field using
-        substring similarity.
-
-        *already_used* carries fields already assigned in earlier phases of
-        _build_expression so we avoid duplicate-field expressions (BUG-10).
-        """
-        if not fields:
-            return expr
-
-        dataset_fields = sorted(self._fields) if self._fields else []
-        dataset_fields_lower = {f.lower() for f in dataset_fields}
-        field_set_lower = {f.lower() for f in fields}
-        known_ops = self._operators if self._operators else set()
-
-        # BRAIN operator whitelist
-        _BRAIN_OPS = {
-            'rank', 'zscore', 'winsorize', 'group_zscore', 'group_rank', 'group_mean',
-            'ts_rank', 'ts_delta', 'ts_sum', 'ts_mean', 'ts_std', 'ts_zscore',
-            'ts_count_nans', 'ts_decay_linear', 'ts_std_dev', 'ts_regression',
-            'ts_av_diff', 'ts_kurtosis', 'ts_skewness', 'ts_scale', 'ts_step',
-            'ts_product', 'ts_corr', 'ts_covariance', 'ts_min', 'ts_max',
-            'ts_argmax', 'ts_argmin', 'ts_percentage', 'quantile', 'normalize',
-            'kth_element', 'log', 'signed_power', 'inverse', 'scale', 'power',
-            'returns', 'sector', 'industry', 'market', 'subindustry',
-            'group_backfill', 'backfill', 'fill_na',
-        }
-
-        tokens = re.findall(r'\b([a-zA-Z_]\w+)\b', expr)
-        replacements: dict[str, str] = {}
-        used_fields: set[str] = set(already_used or set())
-
-        for token in tokens:
-            t_lower = token.lower()
-            if (t_lower in dataset_fields_lower
-                or t_lower in known_ops
-                or t_lower in field_set_lower
-                or token in _BRAIN_OPS
-                or t_lower in {'-1', 'nan', 'inf'}):
-                continue
-
-            # Token is unknown — find best matching dataset field
-            best_field = self._find_best_field_match(token, dataset_fields, used_fields)
-            if best_field:
-                replacements[token] = best_field
-                used_fields.add(best_field)
-            else:
-                # No match in dataset — replace with first unused dataset field
-                for df in dataset_fields:
-                    if df not in used_fields:
-                        replacements[token] = df
-                        used_fields.add(df)
-                        break
-
-        if not replacements:
-            return expr
-
-        # Apply replacements (longest token first to avoid partial overlaps)
-        for token, field in sorted(replacements.items(), key=lambda x: -len(x[0])):
-            expr = re.sub(rf'\b{re.escape(token)}\b', field, expr)
-
-        return expr
+        return self._expression_support().sanitize_expression(expr, fields, already_used)
 
     def _find_best_field_match(
         self,
@@ -1040,85 +1197,10 @@ class HypothesisDrivenGenerator:
         dataset_fields: list[str],
         used_fields: set[str],
     ) -> str | None:
-        """Find best dataset field matching an unknown token."""
-        t_lower = token.lower()
-        t_tokens = set(t_lower.split('_'))
-        scored: list[tuple[int, str]] = []
-
-        for df in dataset_fields:
-            if df in used_fields:
-                continue
-            df_lower = df.lower()
-            score = 0
-            if t_lower == df_lower:
-                score += 100
-            if t_lower in df_lower:
-                score += 25
-            df_tokens = set(df_lower.split('_'))
-            common = t_tokens & df_tokens
-            score += len(common) * 8
-            if score > 0:
-                scored.append((score, df))
-
-        if not scored:
-            return None
-
-        scored.sort(key=lambda x: -x[0])
-        return scored[0][1]
+        return self._expression_support().find_best_field_match(token, dataset_fields, used_fields)
 
     def _validate_dataset_fields(self, expr: str, fallback_fields: list[str]) -> str:
-        """Verify every field-like token in expr exists in self._fields (dataset pool).
-
-        Replaces any field token NOT in the dataset with one from fallback_fields.
-        This is a safety net to catch phantom fields from edge-case matching.
-        """
-        if not self._fields:
-            return expr
-
-        ds_fields_lower = {f.lower() for f in self._fields}
-        fallback_fields = [field for field in fallback_fields if field.lower() in ds_fields_lower]
-        if not fallback_fields:
-            fallback_fields = sorted(self._fields)
-        if not fallback_fields:
-            return expr
-        tokens = re.findall(r'\b([a-zA-Z_]\w+)\b', expr)
-        _OPS = {
-            'rank', 'zscore', 'winsorize', 'group_zscore', 'group_rank', 'group_mean',
-            'ts_rank', 'ts_delta', 'ts_sum', 'ts_mean', 'ts_std', 'ts_zscore',
-            'ts_count_nans', 'ts_decay_linear', 'ts_std_dev', 'quantile', 'normalize',
-            'kth_element', 'log', 'returns', 'sector', 'industry', 'market', 'subindustry',
-            'group_backfill', 'backfill', 'fill_na', 'subtract', 'divide', 'greater',
-            'if_else', 'signed_power', 'inverse', 'scale', 'power', 'ts_step',
-            'ts_product', 'ts_corr', 'ts_covariance', 'ts_min', 'ts_max',
-            'ts_argmax', 'ts_argmin', 'ts_percentage', 'ts_delay',
-            'last_diff_value', 'days_from_last_change', 'ts_av_diff',
-            'ts_kurtosis', 'ts_skewness', 'ts_scale', 'ts_regression',
-            'ts_backfill', 'hump', 'ts_quantile',
-        }
-        field_like = []
-        for t in tokens:
-            t_lower = t.lower()
-            if (t not in _OPS and t_lower not in ds_fields_lower
-                and not t.isdigit() and t not in {'-1', 'nan', 'inf', 'std'}):
-                field_like.append(t)
-
-        if not field_like:
-            return expr
-
-        # Replace phantom fields with real dataset fields
-        fi = iter(fallback_fields)
-        used: set[str] = set()
-        for token in field_like:
-            try:
-                replacement = next(fi)
-            except StopIteration:
-                replacement = fallback_fields[0]
-            if replacement in used:
-                continue
-            used.add(replacement)
-            expr = re.sub(rf'\b{re.escape(token)}\b', replacement, expr)
-
-        return expr
+        return self._expression_support().validate_dataset_fields(expr, fallback_fields)
 
     def _resolve_named_field(
         self,
@@ -1127,120 +1209,20 @@ class HypothesisDrivenGenerator:
         selected_fields: list[str],
         exclude: set[str] | None = None,
     ) -> str:
-        """Resolve a named field placeholder (e.g. 'illiq') to a concrete BRAIN field.
-
-        Uses the dataset's actual field pool (self._fields) for matching.
-        Strategy:
-          1. Substring match: name in dataset field ID (e.g. 'illiq' → 'amihud_ratio')
-          2. Category-guided: match YAML category name against BRAIN field categories
-          3. Selected fields fallback
-          4. First available dataset field
-
-        If *exclude* is provided, fields already used in the expression are skipped
-        to avoid producing redundant expressions like ``log(mcap) * mcap``.
-        """
-        name_lower = name.lower()
-        dataset_fields = sorted(self._fields) if self._fields else []
-        ds_fields_lower = {f.lower() for f in dataset_fields}
-        excluded = (exclude or set())
-
-        # ── Strategy 1: Exact match (only if in dataset and not excluded) ──
-        if name_lower in ds_fields_lower:
-            candidate = next(f for f in dataset_fields if f.lower() == name_lower)
-            if candidate not in excluded:
-                return candidate
-
-        # Decompose name into tokens for better matching
-        name_tokens = set(name_lower.split('_'))
-        scored: list[tuple[int, str]] = []  # (score, field_id)
-        for df in dataset_fields:
-            df_lower = df.lower()
-            score = 0
-            # Exact substring
-            if name_lower == df_lower:
-                score += 100
-            if name_lower in df_lower:
-                score += 30
-            # Token matching
-            df_tokens = set(df_lower.split('_'))
-            common = name_tokens & df_tokens
-            score += len(common) * 10
-            if score > 0:
-                scored.append((score, df))
-
-        if scored:
-            scored.sort(key=lambda x: -x[0])
-            for _, f in scored:
-                if f not in excluded:
-                    return f
-            # All scored fields excluded — fall through to next strategy
-
-        # ── Strategy 2: Category-guided search ──
-        if field_categories:
-            # Build search terms from matching field categories
-            for fc in field_categories:
-                cat_lower = fc.category.lower()
-                if name_lower in cat_lower or cat_lower in name_lower:
-                    # Search category name tokens in dataset fields
-                    cat_tokens = set(cat_lower.split('_'))
-                    cat_scored: list[tuple[int, str]] = []
-                    for df in dataset_fields:
-                        df_lower = df.lower()
-                        df_tokens = set(df_lower.split('_'))
-                        common = cat_tokens & df_tokens
-                        score = len(common) * 5
-                        if name_lower in df_lower:
-                            score += 20
-                        if score > 0:
-                            cat_scored.append((score, df))
-                    if cat_scored:
-                        cat_scored.sort(key=lambda x: -x[0])
-                        for _, f in cat_scored:
-                            if f not in excluded:
-                                return f
-
-        # ── Strategy 3: Selected fields (skip excluded) ──
-        for sf in selected_fields:
-            sf_lower = sf.lower()
-            if name_lower in sf_lower and sf not in excluded:
-                return sf
-
-        # ── Strategy 4: First available field (skip excluded) ──
-        if dataset_fields:
-            for df in dataset_fields:
-                if df not in excluded:
-                    return df
-            return dataset_fields[0]  # all excluded — use first anyway
-
-        for sf in selected_fields:
-            if sf not in excluded:
-                return sf
-        return selected_fields[0] if selected_fields else "returns"
+        return self._expression_support().resolve_named_field(
+            name,
+            field_categories,
+            selected_fields,
+            exclude,
+        )
 
     # ── Helpers ─────────────────────────────────────────────────────
 
     def _extract_fields(self, expression: str) -> list[str]:
-        """Extract active-dataset field names used in an expression."""
-        profile = profile_expression(expression)
-        fields = self._fields
-        if not fields and self._loader:
-            try:
-                fields = {field.id.lower() for field in self._loader.get_fields(self._dataset_id or None)}
-            except Exception:
-                logger.warning(
-                    "generator field extraction metadata unavailable for dataset_id=%s",
-                    self._dataset_id or "",
-                    exc_info=True,
-                )
-                fields = set()
-        if not fields:
-            return list(profile.fields)
-        tokens = {token.lower() for token in profile.fields}
-        return sorted(fields & tokens)
+        return self._expression_support().extract_fields(expression)
 
     def _extract_operators(self, expression: str) -> list[str]:
-        """Extract operator names (function-like tokens) from an expression."""
-        return ordered_operators(expression)
+        return self._expression_support().extract_operators(expression)
 
     def _is_observability_avoided(self, expression: str) -> bool:
         if not self._observability_avoid_keys:

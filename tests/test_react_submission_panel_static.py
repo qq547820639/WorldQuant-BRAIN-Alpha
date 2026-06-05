@@ -25,12 +25,12 @@ def test_submission_panel_bounds_batch_json_and_validates_candidate_ids():
 
     assert "const MAX_BATCH_ALPHA_IDS = 100;" in source
     assert "if (rows.length > MAX_BATCH_ALPHA_IDS)" in source
-    assert "Candidate JSON must contain at most ${MAX_BATCH_ALPHA_IDS} rows." in source
+    assert "候选JSON最多包含 ${MAX_BATCH_ALPHA_IDS} 行。" in source
     assert "setCandidateJsonError(validateCandidateJsonRows(rows));" in source
     assert "function validateCandidateJsonRows(candidates: Candidate[])" in source
     assert 'for (const field of ["alpha_id", "official_alpha_id", "simulation_id"] as const)' in source
-    assert "Candidate row ${index + 1} ${field} must be a string." in source
-    assert "Candidate row ${index + 1} ${field}: ${error}" in source
+    assert "候选行 ${index + 1} 的 ${field} 必须为字符串。" in source
+    assert "候选行 ${index + 1} 的 ${field}: ${error}" in source
 
 
 def test_submission_panel_blocks_batch_submit_without_valid_alpha_ids():
@@ -41,8 +41,8 @@ def test_submission_panel_blocks_batch_submit_without_valid_alpha_ids():
     assert 'notify("warning", validationError);' in source
     assert "alpha_ids: submitCandidates.map(candidateAlphaId).filter(Boolean)" in source
     assert "function validateBatchSubmitCandidates(candidates: Candidate[])" in source
-    assert "Batch submit supports at most ${MAX_BATCH_ALPHA_IDS} candidates." in source
-    assert "At least one candidate row must include alpha_id or official_alpha_id before batch submit." in source
+    assert "批量提交最多支持 ${MAX_BATCH_ALPHA_IDS} 个候选。" in source
+    assert "批量提交前，至少一个候选行必须包含 alpha_id 或 official_alpha_id。" in source
     assert "disabled={!submitCandidates.length || Boolean(candidateJsonError) || Boolean(batchSubmitError) || batchSubmitApi.loading}" in source
     assert 'id="batch-submit-validation"' in source
 

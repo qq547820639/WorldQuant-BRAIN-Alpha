@@ -37,10 +37,11 @@ def check_frontend_surface_parity(
     react_app = react_app.resolve()
     findings: list[dict[str, Any]] = []
 
-    inline_source = _read_text(inline_registry, findings)
+    inline_source = _read_text(inline_registry, findings, required=False)
     react_source = _read_text(react_app, findings)
     inline_views = extract_inline_views(inline_source) if inline_source else []
     react_tabs = extract_react_tabs(react_source) if react_source else []
+    inline_retired = not inline_source and react_source and inline_registry == DEFAULT_INLINE_REGISTRY.resolve()
 
     if inline_source and not inline_views:
         findings.append(_finding("missing_inline_views", str(inline_registry), "No inline VIEW_ORDER entries were detected."))
@@ -54,20 +55,26 @@ def check_frontend_surface_parity(
     inline_only = [view_id for view_id in inline_ids if view_id not in react_id_set]
     react_only = [tab_id for tab_id in react_ids if tab_id not in inline_id_set]
     shared = [view_id for view_id in inline_ids if view_id in react_id_set]
-    plan = _plan_summary(
-        plan_path,
-        inline_ids,
-        react_id_set,
-        react_only,
-        findings,
-        fail_on_unmapped_plan=fail_on_unmapped_plan,
-        fail_on_unimplemented_plan=fail_on_unimplemented_plan,
-        fail_on_stale_plan=fail_on_stale_plan,
-    )
+    if inline_retired:
+        plan = _retired_inline_plan_summary(plan_path, react_only)
+    else:
+        plan = _plan_summary(
+            plan_path,
+            inline_ids,
+            react_id_set,
+            react_only,
+            findings,
+            fail_on_unmapped_plan=fail_on_unmapped_plan,
+            fail_on_unimplemented_plan=fail_on_unimplemented_plan,
+            fail_on_stale_plan=fail_on_stale_plan,
+        )
     accepted_react_only = plan["accepted_react_only_tabs"]
     unaccepted_react_only = [tab_id for tab_id in react_only if tab_id not in set(accepted_react_only)]
     parity_matches = bool(inline_views and react_tabs and not inline_only and not react_only)
-    strict_matches = bool(inline_views and react_tabs and not inline_only and not unaccepted_react_only)
+    strict_matches = (
+        bool(inline_views and react_tabs and not inline_only and not unaccepted_react_only)
+        or bool(inline_retired and react_tabs)
+    )
 
     if fail_on_gaps and inline_views and react_tabs and not strict_matches:
         findings.append(
@@ -86,6 +93,7 @@ def check_frontend_surface_parity(
         "inline_registry": str(inline_registry),
         "react_app": str(react_app),
         "fail_on_gaps": bool(fail_on_gaps),
+        "inline_surface_retired": bool(inline_retired),
         "inline_view_count": len(inline_views),
         "react_tab_count": len(react_tabs),
         "plan": plan,
@@ -112,15 +120,32 @@ def extract_inline_views(source: str) -> list[dict[str, str]]:
 
 def extract_react_tabs(source: str) -> list[dict[str, str]]:
     tabs_match = re.search(r"const\s+TABS\b[^=]*=\s*\[(?P<body>.*?)\];", source, flags=re.DOTALL)
-    if not tabs_match:
+    if tabs_match:
+        tabs: list[dict[str, str]] = []
+        for match in re.finditer(
+            r"\{\s*id:\s*['\"](?P<id>[^'\"]+)['\"]\s*,\s*label:\s*['\"](?P<label>[^'\"]+)['\"]",
+            tabs_match.group("body"),
+        ):
+            tabs.append({"id": match.group("id"), "label": match.group("label")})
+        return tabs
+    return _extract_react_card_config(source)
+
+
+def _extract_react_card_config(source: str) -> list[dict[str, str]]:
+    config_match = re.search(
+        r"const\s+CARD_CONFIG\s*=\s*\{(?P<body>.*?)\}\s+as\s+const;",
+        source,
+        flags=re.DOTALL,
+    )
+    if not config_match:
         return []
-    tabs: list[dict[str, str]] = []
+    cards: list[dict[str, str]] = []
     for match in re.finditer(
-        r"\{\s*id:\s*['\"](?P<id>[^'\"]+)['\"]\s*,\s*label:\s*['\"](?P<label>[^'\"]+)['\"]",
-        tabs_match.group("body"),
+        r"(?P<id>[A-Za-z0-9_]+)\s*:\s*\{\s*title:\s*['\"](?P<label>[^'\"]+)['\"]",
+        config_match.group("body"),
     ):
-        tabs.append({"id": match.group("id"), "label": match.group("label")})
-    return tabs
+        cards.append({"id": match.group("id"), "label": match.group("label")})
+    return cards
 
 
 def _extract_inline_view_order(source: str) -> list[str]:
@@ -153,11 +178,12 @@ def _string_literals(source: str) -> list[str]:
     return [match.group("value") for match in re.finditer(r"['\"](?P<value>[^'\"]+)['\"]", source)]
 
 
-def _read_text(path: Path, findings: list[dict[str, Any]]) -> str:
+def _read_text(path: Path, findings: list[dict[str, Any]], *, required: bool = True) -> str:
     try:
         return path.read_text(encoding="utf-8")
     except FileNotFoundError:
-        findings.append(_finding("missing_file", str(path), "Required frontend source file does not exist."))
+        if required:
+            findings.append(_finding("missing_file", str(path), "Required frontend source file does not exist."))
     except OSError as exc:
         findings.append(_finding("read_error", str(path), str(exc)))
     return ""
@@ -304,6 +330,17 @@ def _empty_plan_summary() -> dict[str, Any]:
         "accepted_react_only_tabs": [],
         "unaccepted_react_only_tabs": [],
         "invalid_react_only_entries": [],
+    }
+
+
+def _retired_inline_plan_summary(plan_path: Path | None, react_only_ids: list[str]) -> dict[str, Any]:
+    path = str(Path(plan_path).resolve()) if plan_path is not None else ""
+    return {
+        **_empty_plan_summary(),
+        "path": path,
+        "present": bool(plan_path and Path(plan_path).exists()),
+        "schema_version": "frontend_surface_parity_plan.retired_inline",
+        "accepted_react_only_tabs": list(react_only_ids),
     }
 
 

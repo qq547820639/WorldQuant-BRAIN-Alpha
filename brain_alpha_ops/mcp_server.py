@@ -13,7 +13,7 @@ from typing import Any, TextIO
 
 from brain_alpha_ops.agent_tools import BrainAlphaToolbox
 from brain_alpha_ops.config import load_run_config
-from brain_alpha_ops.web import CHECK_JOBS, JOBS, SYNC_JOBS
+from brain_alpha_ops.tasks import JobStore
 
 
 JSONRPC_VERSION = "2.0"
@@ -88,14 +88,16 @@ def serve_stdio(toolbox: BrainAlphaToolbox, stdin: TextIO | None = None, stdout:
 
 def build_toolbox(config_path: str = "", *, allow_live_api: bool = False, allow_submit: bool = False) -> BrainAlphaToolbox:
     run_config = load_run_config(config_path or None)
+    # Create fresh JobStore instances — the old web.py globals have been
+    # refactored into per-module WebJobRegistry / JobStore patterns.
     return BrainAlphaToolbox(
         run_config=run_config,
         allow_live_api=allow_live_api,
         allow_submit=allow_submit,
         job_stores={
-            "production": JOBS,
-            "sync": SYNC_JOBS,
-            "check": CHECK_JOBS,
+            "production": JobStore(job_prefix="prod"),
+            "sync": JobStore(job_prefix="sync"),
+            "check": JobStore(job_prefix="check"),
         },
     )
 

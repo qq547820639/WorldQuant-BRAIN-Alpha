@@ -52,10 +52,7 @@ def validate_submit_batch_payload(payload: dict[str, Any] | None) -> str:
     raw_candidates = payload.get("submit_candidates")
     if raw_candidates is not None and not isinstance(raw_candidates, list):
         return "submit_candidates must be a list when provided"
-    error = validate_candidate_rows(raw_candidates, "submit_candidates")
-    if error:
-        return error
-    return ""
+    return validate_candidate_rows(raw_candidates, "submit_candidates")
 
 
 def validate_check_batch_payload(payload: dict[str, Any] | None) -> str:

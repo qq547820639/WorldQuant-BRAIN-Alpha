@@ -46,13 +46,13 @@ export default function Dashboard({ notify }: Props) {
         <div className="card border-danger/40 bg-danger/10" role="alert" aria-live="assertive">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <h3 className="text-sm font-semibold text-danger mb-2">Dashboard data needs attention</h3>
+              <h3 className="text-sm font-semibold text-danger mb-2">仪表盘数据需要关注</h3>
               {errors.map((err) => (
                 <p key={err} className="text-xs text-danger/90">{err}</p>
               ))}
             </div>
             <button onClick={retryAll} className="btn-secondary text-sm">
-              Retry
+              重试
             </button>
           </div>
         </div>
@@ -60,8 +60,8 @@ export default function Dashboard({ notify }: Props) {
 
       <ProgressFeedback
         state={errors.length ? "error" : loading ? "loading" : "idle"}
-        title="Dashboard data"
-        progress={{ phase: loading ? "dashboard_load" : "completed", status_message: loading ? "Refreshing dashboard snapshots." : "Dashboard snapshots are current." }}
+        title="仪表盘数据"
+        progress={{ phase: loading ? "dashboard_load" : "completed", status_message: loading ? "正在刷新仪表盘快照。" : "仪表盘快照已更新。" }}
         error={errors.join(" / ")}
         onRetry={retryAll}
         compact={!loading && errors.length === 0}
@@ -70,23 +70,23 @@ export default function Dashboard({ notify }: Props) {
       {/* KPIs */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <KpiCard
-          label="Total Candidates"
+          label="候选总数"
           value={memory?.total_candidates ?? status?.progress?.candidates_generated ?? "-"}
-          subtitle={memory ? `${memory.families?.length ?? 0} families` : "等待刷新"}
+          subtitle={memory ? `${memory.families?.length ?? 0} 个家族` : "等待刷新"}
         />
         <KpiCard
-          label="Cloud Alphas"
+          label="云端Alpha"
           value={cloud?.count ?? "-"}
-          subtitle={cloud ? `${cloud.submitted_count} submitted` : "等待刷新"}
+          subtitle={cloud ? `${cloud.submitted_count} 已提交` : "等待刷新"}
           trend={cloud && cloud.submitted_count > 0 ? "up" : "neutral"}
         />
         <KpiCard
-          label="Backtests"
+          label="回测数"
           value={status?.progress?.backtests_completed ?? "-"}
-          subtitle={status ? `${status.progress?.backtests_pending ?? 0} pending` : undefined}
+          subtitle={status ? `${status.progress?.backtests_pending ?? 0} 待处理` : undefined}
         />
         <KpiCard
-          label="Submissions"
+          label="提交数"
           value={status?.progress?.submissions ?? cloud?.submitted_count ?? "-"}
           trend={cloud && cloud.passed_unsubmitted_count > 0 ? "up" : "neutral"}
         />
@@ -98,18 +98,18 @@ export default function Dashboard({ notify }: Props) {
 
         {/* Cloud Alpha Summary */}
         <div className="card space-y-3">
-          <h3 className="text-sm font-semibold text-gray-200">Cloud Alpha Cache</h3>
+          <h3 className="text-sm font-semibold text-gray-200">云端Alpha缓存</h3>
           {cloudApi.loading ? (
             <ProgressFeedback
               state="loading"
-              title="Cloud alpha cache"
-              progress={{ phase: "cloud_cache", status_message: "Loading cached cloud alphas." }}
+              title="云端Alpha缓存"
+              progress={{ phase: "cloud_cache", status_message: "正在加载缓存的云端Alpha。" }}
               compact
             />
           ) : cloudApi.error ? (
             <ProgressFeedback
               state="error"
-              title="Cloud alpha cache"
+              title="云端Alpha缓存"
               error={cloudApi.error}
               onRetry={() => cloudApi.call("/api/snapshot/cloud?limit=10")}
               compact
@@ -117,14 +117,14 @@ export default function Dashboard({ notify }: Props) {
           ) : cloud ? (
             <>
               <div className="grid grid-cols-2 gap-2 text-xs">
-                <span className="text-muted">Total cached</span>
+                <span className="text-muted">缓存总数</span>
                 <span className="text-right">{cloud.count}</span>
-                <span className="text-muted">Submitted</span>
+                <span className="text-muted">已提交</span>
                 <span className="text-right text-success">{cloud.submitted_count}</span>
-                <span className="text-muted">Passed (unsubmitted)</span>
+                <span className="text-muted">已通过（未提交）</span>
                 <span className="text-right text-warning">{cloud.passed_unsubmitted_count}</span>
-                <span className="text-muted">Cache stale</span>
-                <span className="text-right">{cloud.is_stale ? "⚠ Yes" : "✓ No"}</span>
+                <span className="text-muted">缓存过期</span>
+                <span className="text-right">{cloud.is_stale ? "⚠ 是" : "✓ 否"}</span>
               </div>
               {cloud.sample_alphas && cloud.sample_alphas.length > 0 && (
                 <div className="max-h-40 overflow-y-auto bg-gray-950 rounded-lg p-2 text-xs font-mono">
@@ -145,31 +145,31 @@ export default function Dashboard({ notify }: Props) {
       {/* Top Families & Fields */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className="card">
-          <h3 className="text-sm font-semibold text-gray-200 mb-3">Top Families</h3>
+          <h3 className="text-sm font-semibold text-gray-200 mb-3">热门家族</h3>
           {memory?.families?.slice(0, 5).map((f) => (
             <div key={f.name} className="flex justify-between text-xs py-1.5 border-b border-gray-800 last:border-0">
               <span className="text-gray-300">{f.name}</span>
-              <span className="text-muted">n={f.count} SR:{f.success_rate?.toFixed(2)}</span>
+              <span className="text-muted">n={f.count} 成功率:{f.success_rate?.toFixed(2)}</span>
             </div>
-          )) || <p className="text-xs text-muted">No data</p>}
+          )) || <p className="text-xs text-muted">暂无数据</p>}
         </div>
         <div className="card">
-          <h3 className="text-sm font-semibold text-gray-200 mb-3">Top Fields</h3>
+          <h3 className="text-sm font-semibold text-gray-200 mb-3">热门字段</h3>
           {memory?.fields?.slice(0, 5).map((f) => (
             <div key={f.name} className="flex justify-between text-xs py-1.5 border-b border-gray-800 last:border-0">
               <span className="text-gray-300">{f.name}</span>
-              <span className="text-muted">n={f.count} SR:{f.success_rate?.toFixed(2)}</span>
+              <span className="text-muted">n={f.count} 成功率:{f.success_rate?.toFixed(2)}</span>
             </div>
-          )) || <p className="text-xs text-muted">No data</p>}
+          )) || <p className="text-xs text-muted">暂无数据</p>}
         </div>
         <div className="card">
-          <h3 className="text-sm font-semibold text-gray-200 mb-3">Failure Patterns</h3>
+          <h3 className="text-sm font-semibold text-gray-200 mb-3">失败模式</h3>
           {memory?.failure_patterns?.slice(0, 5).map((fp) => (
             <div key={fp.reason} className="flex justify-between text-xs py-1.5 border-b border-gray-800 last:border-0">
               <span className="text-danger/80">{fp.reason}</span>
               <span className="text-muted">x{fp.count}</span>
             </div>
-          )) || <p className="text-xs text-muted">No failures</p>}
+          )) || <p className="text-xs text-muted">暂无失败记录</p>}
         </div>
       </div>
     </div>

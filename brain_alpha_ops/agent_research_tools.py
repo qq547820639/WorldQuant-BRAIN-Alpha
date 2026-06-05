@@ -36,6 +36,7 @@ from brain_alpha_ops.research.parameter_search import ParameterSearchService
 from brain_alpha_ops.research.repository import ResearchRepository
 from brain_alpha_ops.research.rolling_validation import RollingValidationService
 from brain_alpha_ops.research.search_orchestrator import ParameterSearchOrchestrator
+from brain_alpha_ops.redaction import redact_error_message
 
 
 logger = logging.getLogger(__name__)
@@ -48,6 +49,7 @@ def query_research_observability_snapshot(
     top_n: int,
     include_cloud: bool,
     job_rows: list[dict[str, Any]] | None = None,
+    job_diagnostics: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     return build_research_observability_snapshot(
         storage_dir,
@@ -55,6 +57,7 @@ def query_research_observability_snapshot(
         top_n=top_n,
         include_cloud=include_cloud,
         job_rows=job_rows,
+        job_diagnostics=job_diagnostics,
     )
 
 
@@ -302,7 +305,12 @@ def cross_review_assistant_response_tool(args: dict[str, Any]) -> dict[str, Any]
 
 
 def collect_job_rows(job_stores: Mapping[str, Any], *, limit: int) -> list[dict[str, Any]]:
+    return collect_job_rows_with_diagnostics(job_stores, limit=limit)["rows"]
+
+
+def collect_job_rows_with_diagnostics(job_stores: Mapping[str, Any], *, limit: int) -> dict[str, Any]:
     rows: list[dict[str, Any]] = []
+    diagnostics: list[dict[str, Any]] = []
     for kind, store in job_stores.items():
         all_jobs = getattr(store, "all", None)
         if not callable(all_jobs):
@@ -310,7 +318,23 @@ def collect_job_rows(job_stores: Mapping[str, Any], *, limit: int) -> list[dict[
         try:
             for job_id, job in all_jobs(limit=limit):
                 rows.append({"source": f"{kind}_job", "job_id": job_id, **job})
-        except Exception:
+        except Exception as exc:
+            message = redact_error_message(exc, max_length=240)
             logger.warning("failed to collect %s job rows for agent research context", kind, exc_info=True)
+            diagnostics.append({
+                "source": f"{kind}_job",
+                "status": "collection_failed",
+                "error": message,
+                "error_context": {
+                    "error_code": "JOB_ROWS_COLLECTION_FAILED",
+                    "error": message,
+                    "source": f"{kind}_job",
+                },
+            })
             continue
-    return rows[-limit:]
+    return {
+        "ok": not diagnostics,
+        "partial": bool(diagnostics),
+        "rows": rows[-limit:],
+        "diagnostics": diagnostics,
+    }

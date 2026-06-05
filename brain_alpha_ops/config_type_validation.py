@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any, Union, get_args, get_origin, get_type_hints
 
 
+logger = logging.getLogger(__name__)
 _TYPE_HINTS_CACHE: dict[type, dict[str, Any]] = {}
+_TYPE_HINTS_DIAGNOSTICS: dict[type, dict[str, Any]] = {}
 _UNION_ORIGINS: set[Any] = {Union}
 try:
     from types import UnionType as _UnionType
@@ -20,10 +23,36 @@ def field_type_hint(cls: type, field_name: str) -> Any:
     if hints is None:
         try:
             hints = get_type_hints(cls)
-        except Exception:
+        except Exception as exc:
+            message = str(exc)
+            logger.warning(
+                "failed to resolve type hints for %s; using empty fallback",
+                getattr(cls, "__name__", cls),
+                exc_info=True,
+            )
+            _TYPE_HINTS_DIAGNOSTICS[cls] = {
+                "class": getattr(cls, "__name__", str(cls)),
+                "error": message,
+                "fallback": "Any",
+            }
             hints = {}
+        else:
+            _TYPE_HINTS_DIAGNOSTICS.pop(cls, None)
         _TYPE_HINTS_CACHE[cls] = hints
     return hints.get(field_name, Any)
+
+
+def type_hint_resolution_diagnostics(cls: type | None = None) -> list[dict[str, Any]]:
+    """Return cached type-hint resolution fallbacks for monitoring/tests."""
+    if cls is not None:
+        diagnostic = _TYPE_HINTS_DIAGNOSTICS.get(cls)
+        return [dict(diagnostic)] if diagnostic else []
+    return [dict(item) for item in _TYPE_HINTS_DIAGNOSTICS.values()]
+
+
+def clear_type_hint_resolution_caches() -> None:
+    _TYPE_HINTS_CACHE.clear()
+    _TYPE_HINTS_DIAGNOSTICS.clear()
 
 
 def value_matches_type_hint(value: Any, expected: Any) -> bool:

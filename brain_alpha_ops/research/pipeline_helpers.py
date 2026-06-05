@@ -209,7 +209,6 @@ def blocked_gate(status: str, reasons: list[str]) -> dict:
 def attach_assistant_guidance(candidate: Candidate, guidance: dict) -> None:
     guidance = ensure_assistant_guidance_digest(guidance)
     digest = str(guidance.get("guidance_digest") or "")
-    candidate.assistant_guidance_digest = digest
     metadata = assistant_guidance_candidate_metadata(guidance)
     candidate.submission.update(metadata)
     candidate.submission.setdefault("assistant_guidance", {}).update(metadata)

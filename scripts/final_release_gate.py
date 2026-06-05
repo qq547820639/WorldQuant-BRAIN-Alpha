@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import argparse
+import ast
 from dataclasses import asdict, dataclass
 import hashlib
 import json
 from pathlib import Path
-import re
 import sys
 from typing import Any
 
@@ -35,13 +35,13 @@ REQUIRED_OFFICIAL_API: dict[str, str] = {
 }
 
 RELEASE_DATASET_STRATEGIES = {"fixed", "locked", "specific"}
-CUSTOM_EXTENSION_PATTERNS = (
-    r"custom[_-]?operator",
-    r"register[_-]?operator",
-    r"extend[_-]?operator",
-    r"custom[_-]?field",
-    r"register[_-]?field",
-    r"extend[_-]?field",
+CUSTOM_EXTENSION_NAMES = (
+    "custom_operator",
+    "register_operator",
+    "extend_operator",
+    "custom_field",
+    "register_field",
+    "extend_field",
 )
 
 
@@ -97,7 +97,7 @@ def run_final_release_gate(
     _check_traceability_redline(raw_config, findings)
     _check_official_context_redline(raw_config, findings)
     _check_official_api_alignment(raw_config, findings)
-    _check_refresh_status(root, raw_config, findings)
+    _check_refresh_status(root, raw_config, findings, official_context=official_context)
 
     manifest_hash = _build_manifest_hash(root, config_file)
     redlines = _redline_summary(findings)
@@ -206,8 +206,7 @@ def _check_environment(cfg: dict[str, Any], findings: list[Finding]) -> None:
 def _scan_custom_field_operator_expansion(repo_root: Path, findings: list[Finding]) -> None:
     suspicious: list[str] = []
     for path in _iter_release_source_files(repo_root):
-        text = path.read_text(encoding="utf-8", errors="ignore")
-        if any(re.search(pattern, text, flags=re.IGNORECASE) for pattern in CUSTOM_EXTENSION_PATTERNS):
+        if _source_registers_custom_field_or_operator(path):
             suspicious.append(path.relative_to(repo_root).as_posix())
     if suspicious:
         findings.append(
@@ -218,6 +217,47 @@ def _scan_custom_field_operator_expansion(repo_root: Path, findings: list[Findin
                 current=suspicious[:20],
             )
         )
+
+
+def _source_registers_custom_field_or_operator(path: Path) -> bool:
+    """Detect executable custom field/operator extension hooks.
+
+    The release gate should not fail because an audit script contains a string
+    such as ``custom_field`` in a diagnostic message.  We only flag code-level
+    names and call targets that would actually register or expose extensions.
+    """
+    try:
+        tree = ast.parse(path.read_text(encoding="utf-8-sig"))
+    except (SyntaxError, OSError):
+        return True
+    suspicious_names = {name.lower() for name in CUSTOM_EXTENSION_NAMES}
+    for node in ast.walk(tree):
+        name = ""
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            name = node.name
+        elif isinstance(node, ast.Call):
+            name = _call_name(node.func)
+        elif isinstance(node, ast.Assign):
+            for target in node.targets:
+                if isinstance(target, ast.Name):
+                    name = target.id
+                    break
+        elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+            name = node.target.id
+        if not name:
+            continue
+        normalized = name.lower().replace("-", "_")
+        if normalized in suspicious_names:
+            return True
+    return False
+
+
+def _call_name(node: ast.AST) -> str:
+    if isinstance(node, ast.Name):
+        return node.id
+    if isinstance(node, ast.Attribute):
+        return node.attr
+    return ""
 
 
 def _iter_release_source_files(repo_root: Path) -> list[Path]:
@@ -389,7 +429,53 @@ def _check_official_api_alignment(cfg: dict[str, Any], findings: list[Finding]) 
             )
 
 
-def _check_refresh_status(repo_root: Path, cfg: dict[str, Any], findings: list[Finding]) -> None:
+def _official_context_has_fresh_refresh_evidence(official_context: dict[str, Any] | None) -> bool:
+    """Accept cache metadata as refresh evidence when a later attempt overwrote status.
+
+    A failed manual refresh can replace ``official_context_refresh_status.json``
+    even while all official cache files remain complete, fresh, and sourced from
+    the official API.  Final release should fail closed on stale or incomplete
+    metadata, but it should not ignore stronger per-file evidence.
+    """
+    if not isinstance(official_context, dict) or official_context.get("ok") is not True:
+        return False
+    files = official_context.get("files")
+    if not isinstance(files, dict):
+        return False
+    required = ("official_fields.json", "official_operators.json", "official_datasets.json")
+    for filename in required:
+        payload = files.get(filename)
+        if not isinstance(payload, dict):
+            return False
+        metadata = payload.get("metadata")
+        if not isinstance(metadata, dict):
+            return False
+        if metadata.get("present") is not True:
+            return False
+        if metadata.get("source") != "official_api":
+            return False
+        if metadata.get("complete") is not True:
+            return False
+        if metadata.get("schema_ok") is not True:
+            return False
+        if metadata.get("sha256_matches") is not True:
+            return False
+        if metadata.get("record_count_matches") is not True:
+            return False
+        if metadata.get("is_stale") is True:
+            return False
+        if int(payload.get("record_count") or 0) <= 0:
+            return False
+    return True
+
+
+def _check_refresh_status(
+    repo_root: Path,
+    cfg: dict[str, Any],
+    findings: list[Finding],
+    *,
+    official_context: dict[str, Any] | None = None,
+) -> None:
     ops = cfg.get("ops") or {}
     storage_dir = Path(str(ops.get("storage_dir") or "data"))
     if not storage_dir.is_absolute():
@@ -417,17 +503,20 @@ def _check_refresh_status(repo_root: Path, cfg: dict[str, Any], findings: list[F
             )
         )
         return
-    if status.get("ok") is not True or str(status.get("status") or "").lower() not in {"refreshed", "ok"}:
-        findings.append(
-            Finding(
-                "P1",
-                "OFFICIAL_REFRESH_NOT_VERIFIED",
-                "Final release requires a successful official context refresh status.",
-                str(status_path),
-                current={"ok": status.get("ok"), "status": status.get("status")},
-                expected={"ok": True, "status": "refreshed"},
-            )
+    if status.get("ok") is True and str(status.get("status") or "").lower() in {"refreshed", "ok"}:
+        return
+    if _official_context_has_fresh_refresh_evidence(official_context):
+        return
+    findings.append(
+        Finding(
+            "P1",
+            "OFFICIAL_REFRESH_NOT_VERIFIED",
+            "Final release requires successful official context refresh evidence.",
+            str(status_path),
+            current={"ok": status.get("ok"), "status": status.get("status")},
+            expected={"ok": True, "status": "refreshed"},
         )
+    )
 
 
 def _redline_summary(findings: list[Finding]) -> dict[str, bool]:
@@ -437,6 +526,7 @@ def _redline_summary(findings: list[Finding]) -> dict[str, bool]:
         "zero_threshold_drift": not any(code.startswith("THRESHOLD_DRIFT_") for code in codes),
         "dataset_id_fully_available": not any(
             code in {"DATASET_ID_EMPTY", "DATASET_STRATEGY_NOT_FIXED", "DATASET_ID_NOT_IN_OFFICIAL_CONTEXT"}
+            or code.startswith("OFFICIAL_CONTEXT_DATASET_")
             for code in codes
         ),
         "full_parameter_traceability": not any(
@@ -446,7 +536,15 @@ def _redline_summary(findings: list[Finding]) -> dict[str, bool]:
             code.startswith("OFFICIAL_CONTEXT_") or code in {"CLOUD_SYNC_NOT_REQUIRED", "STALE_CONTEXT_ALLOWED"}
             for code in codes
         ),
-        "code_strong_alignment": True,
+        "code_strong_alignment": not any(
+            code.startswith("OFFICIAL_API_DRIFT_")
+            or code in {
+                "CUSTOM_FIELD_OPERATOR_RISK",
+                "CONFIG_NOT_LOADABLE",
+                "ENVIRONMENT_NOT_PRODUCTION",
+            }
+            for code in codes
+        ),
         "official_api_alignment": not any(code.startswith("OFFICIAL_API_DRIFT_") for code in codes),
     }
 

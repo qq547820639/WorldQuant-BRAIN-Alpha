@@ -14,7 +14,11 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from scripts.check_review_gap_closure_tracker_helpers import (  # noqa: E402
+    OFFICIAL_CONTEXT_QUEUE_ITEM,
     finding as _finding,
+    check_official_context_queue as _check_official_context_queue,
+    check_official_context_refresh_baseline as _check_official_context_refresh_baseline,
+    check_official_context_refresh_queue as _check_official_context_refresh_queue,
     check_real_submit_queue as _check_real_submit_queue,
     ADDITIONAL_TRIAGE_ITEMS as _ADDITIONAL_TRIAGE_ITEMS,
     ADDITIONAL_TRIAGE_SNIPPETS as _ADDITIONAL_TRIAGE_SNIPPETS,
@@ -24,6 +28,8 @@ from scripts.check_review_gap_closure_tracker_helpers import (  # noqa: E402
     frontend_surface_requires_queue as _frontend_surface_requires_queue,
     has_fact as _has_fact,
     reject_any as _reject_any,
+    official_context_refresh_status as _official_context_refresh_status,
+    official_context_status as _official_context_status,
     section as _section,
     table_cells as _table_cells,
     table_row as _table_row,
@@ -33,6 +39,7 @@ DEFAULT_TRACKER = ROOT / "docs" / "REVIEW_GAP_CLOSURE_20260530.md"
 DEFAULT_DELIVERY_AUDIT = ROOT / "docs" / "DELIVERY_COMPLETION_AUDIT_20260528.md"
 DEFAULT_CONFIG = ROOT / "config" / "run_config.json"
 DEFAULT_JOBS = ROOT / "data" / "jobs_production.json"
+DEFAULT_REFRESH_STATUS = ROOT / "data" / "official_context_refresh_status.json"
 DEFAULT_REACT_APP_DIR = ROOT / "brain_alpha_ops" / "web" / "react_app"
 SCHEMA_VERSION = "review_gap_closure_tracker_check.v1"
 
@@ -54,6 +61,7 @@ BASELINE_SNIPPETS = (
     "build_runner=local_node_modules",
     "scripts/check_live_submit_readiness.py --json",
     "scan_sensitive_artifacts.py --root . --json --fail-on-findings --include-all --include-git-history",
+    "scripts/check_v5_defect_tracking.py --json",
 )
 BASELINE_CHECKS = (
     ("run_pipeline.py --validate-only --config config/run_config.json --json", ("PASS",)),
@@ -67,24 +75,14 @@ BASELINE_CHECKS = (
     ("scripts/check_react_build_env.py --json", ("PASS", "ready=true", "build_runner=local_node_modules")),
     (
         "scripts/check_live_submit_readiness.py --json",
-        (
-            "PASS",
-            "ready_to_submit=false",
-            "eligible_count=0",
-            "jobs_checked=8",
-            "job_ledgers_checked=4",
-            "ledger_eligible_count=0",
-            "job_family_candidate_count=17",
-            "job_family_eligible_count=0",
-            "submission_ready=0",
-            "max_similarity=1.0",
-        ),
+        ("PASS",),
     ),
     (
         "scripts/scan_sensitive_artifacts.py --root . --json --fail-on-findings --include-all --include-git-history",
         ("PASS", "findings=[]"),
     ),
     ("scripts/check_review_gap_closure_tracker.py --json", ("PASS", "tracker_contract_ok=true")),
+    ("scripts/check_v5_defect_tracking.py --json", ("PASS", "required_validation_count=29", "findings=[]")),
 )
 TRIAGE_SNIPPETS = (
     "BRAIN_E2E_*",
@@ -118,10 +116,15 @@ STATUS_MATRIX_ITEMS = (
     ("P2-6 Frontend automated tests", "CLOSED_LOCAL_WITH_TOOLCHAIN"),
     ("P3-1 Dual frontend unification", "CLOSED_CURRENT"),
 )
-BASE_QUEUE_ITEMS = ("Real BRAIN submit E2E",)
-OFFICIAL_CONTEXT_QUEUE_ITEM = "Official context refresh"
+BASE_QUEUE_ITEMS: tuple[str, ...] = ()
 FRONTEND_SURFACE_QUEUE_ITEM = "Frontend production-surface promotion"
-NOT_YET_SNIPPETS = ("Real BRAIN submit success is not claimable",)
+NOT_YET_SNIPPETS = (
+    "Real BRAIN submit success is not claimable",
+    "non-blocking follow-up",
+    "eligible_count=0",
+    "ledger_eligible_count=0",
+    "job_family_eligible_count=0",
+)
 DELIVERY_AUDIT_SNIPPETS = (
     "docs/REVIEW_GAP_CLOSURE_20260530.md",
     "ready=true",
@@ -141,6 +144,8 @@ TRACKER_STALE_SNIPPETS = (
     "npm-enabled local toolchain path",
     "current default PATH still needs npm",
     "React strict-build reproducibility on the current default PATH is not claimable",
+    "live BRAIN submit as the only active queue item",
+    "Official context validation is fresh with `p1_findings=0`",
 )
 
 
@@ -150,7 +155,9 @@ def check_review_gap_closure_tracker(
     *,
     config_path: str | Path = DEFAULT_CONFIG,
     jobs_path: str | Path = DEFAULT_JOBS,
+    refresh_status_path: str | Path = DEFAULT_REFRESH_STATUS,
     official_context_validation: dict[str, Any] | None = None,
+    official_context_refresh_status_validation: dict[str, Any] | None = None,
     react_build_env_validation: dict[str, Any] | None = None,
     live_submit_readiness_validation: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
@@ -179,6 +186,12 @@ def check_review_gap_closure_tracker(
     baseline = _section(text, "Current Run Baseline")
     _expect_all(baseline, BASELINE_SNIPPETS, "baseline_fact", findings)
     current_run_baseline = _current_run_baseline_payload(baseline, findings)
+    official_context_refresh = _official_context_refresh_status(
+        refresh_status_path=refresh_status_path,
+        validation=official_context_refresh_status_validation,
+        findings=findings,
+    )
+    _check_official_context_refresh_baseline(current_run_baseline, official_context_refresh, findings)
     triage = _section(text, "2026-05-31 Delivery Review Triage")
     _expect_all(triage, TRIAGE_SNIPPETS, "review_triage_fact", findings)
     delivery_review_triage = _delivery_review_triage_payload(triage, findings)
@@ -202,6 +215,7 @@ def check_review_gap_closure_tracker(
         validation=live_submit_readiness_validation,
         findings=findings,
     )
+    _check_live_submit_baseline_facts(current_run_baseline, live_submit, findings)
     active_queue = _active_queue_payload(
         queue,
         findings,
@@ -212,13 +226,15 @@ def check_review_gap_closure_tracker(
             live_submit=live_submit,
         ),
     )
+    _check_active_queue_summary(queue, active_queue, findings)
 
     not_yet = _section(text, "Not Yet Claimable")
     _expect_all(not_yet, NOT_YET_SNIPPETS, "not_yet_claimable", findings)
-    _check_real_submit_queue(queue, not_yet, findings, live_submit)
+    _check_real_submit_queue(text, not_yet, findings, live_submit)
     _expect_all(delivery_text, DELIVERY_AUDIT_SNIPPETS, "delivery_audit_fact", findings)
     _reject_any(delivery_text, STALE_DELIVERY_AUDIT_SNIPPETS, "stale_delivery_audit_fact", findings)
     _check_official_context_queue(text, queue, not_yet, official_context, findings)
+    _check_official_context_refresh_queue(queue, official_context_refresh, findings)
     _check_frontend_surface_queue(text, queue, not_yet, react_surface, status_matrix, findings)
     current_completion = _tracker_summary_payload(
         status_matrix=status_matrix,
@@ -249,6 +265,7 @@ def check_review_gap_closure_tracker(
         "status_matrix": status_matrix,
         "active_queue": active_queue,
         "official_context": official_context,
+        "official_context_refresh": official_context_refresh,
         "react_surface": react_surface,
         "live_submit": live_submit,
         "summary": summary,
@@ -400,6 +417,22 @@ def _active_queue_payload(
     return rows
 
 
+def _check_active_queue_summary(
+    section: str,
+    active_queue: list[dict[str, str]],
+    findings: list[dict[str, str]],
+) -> None:
+    stale_empty_queue_text = "No active blocking queue items remain"
+    if active_queue and stale_empty_queue_text in section:
+        findings.append(
+            _finding(
+                "active_queue_summary_fact",
+                stale_empty_queue_text,
+                "active work queue summary claims no active blockers while queue items are present",
+            )
+        )
+
+
 def _check_tracker_self_summary_baseline(
     rows: list[dict[str, str]],
     summary: dict[str, Any],
@@ -415,6 +448,48 @@ def _check_tracker_self_summary_baseline(
     for blocker in summary["completion_blockers"]:
         if blocker not in result:
             findings.append(_finding("tracker_self_summary_fact", blocker, "tracker self-check baseline row is missing a current completion blocker"))
+
+
+def _check_live_submit_baseline_facts(
+    rows: list[dict[str, str]],
+    live_submit: dict[str, Any],
+    findings: list[dict[str, str]],
+) -> None:
+    if not live_submit.get("available"):
+        return
+    result = next(
+        (row["result"] for row in rows if "scripts/check_live_submit_readiness.py --json" in row["check"]),
+        "",
+    )
+    if not result:
+        return
+    expected_values = [
+        f"ready_to_submit={str(bool(live_submit.get('ready_to_submit'))).lower()}",
+        f"eligible_count={int(live_submit.get('eligible_count') or 0)}",
+        f"jobs_checked={int(live_submit.get('jobs_checked') or 0)}",
+        f"job_ledgers_checked={int(live_submit.get('job_ledgers_checked') or 0)}",
+        f"ledger_candidate_count={int(live_submit.get('ledger_candidate_count') or 0)}",
+        f"ledger_eligible_count={int(live_submit.get('ledger_eligible_count') or 0)}",
+        f"job_family_candidate_count={int(live_submit.get('job_family_candidate_count') or 0)}",
+        f"job_family_eligible_count={int(live_submit.get('job_family_eligible_count') or 0)}",
+        f"submission_ready={int(live_submit.get('submission_ready') or 0)}",
+    ]
+    latest_job_id = str(live_submit.get("latest_job_id") or "")
+    if latest_job_id:
+        expected_values.append(f"latest_job={latest_job_id}")
+    max_similarity = live_submit.get("max_similarity")
+    if max_similarity is not None:
+        expected_values.append(f"max_similarity={max_similarity}")
+
+    for expected in expected_values:
+        if not _has_fact(result, expected):
+            findings.append(
+                _finding(
+                    "baseline_row_fact",
+                    f"scripts/check_live_submit_readiness.py --json:{expected}",
+                    "current run baseline row does not contain the required result evidence",
+                )
+            )
 
 
 def _table_payload(
@@ -530,89 +605,6 @@ def _tracker_summary_payload(
         "live_submit_max_similarity": live_submit.get("max_similarity"),
         "live_submit_latest_job_id": str(live_submit.get("latest_job_id") or ""),
     }
-
-
-def _official_context_status(
-    *,
-    config_path: str | Path,
-    validation: dict[str, Any] | None,
-    findings: list[dict[str, str]],
-) -> dict[str, Any]:
-    try:
-        payload = validation if validation is not None else _load_official_context_validation(config_path)
-        return {
-            "available": True,
-            "blocking_ok": bool(payload.get("blocking_ok")),
-            "blocking_count": int(payload.get("blocking_count") or 0),
-            "p1_count": int(payload.get("p1_count") or 0),
-        }
-    except Exception as exc:
-        findings.append(
-            _finding(
-                "official_context_validation_error",
-                str(config_path),
-                f"could not validate current official context: {exc}",
-            )
-        )
-        return {"available": False, "blocking_ok": False, "blocking_count": 0, "p1_count": 0}
-
-
-def _load_official_context_validation(config_path: str | Path) -> dict[str, Any]:
-    from brain_alpha_ops.data.official_context_validation import validate_official_context
-
-    return validate_official_context(config_path=config_path)
-
-
-def _check_official_context_queue(
-    _text: str,
-    queue: str,
-    not_yet: str,
-    official_context: dict[str, Any],
-    findings: list[dict[str, str]],
-) -> None:
-    if not official_context.get("available"):
-        return
-
-    blocking_count = int(official_context.get("blocking_count") or 0)
-    p1_count = int(official_context.get("p1_count") or 0)
-    row = _table_row(queue, OFFICIAL_CONTEXT_QUEUE_ITEM)
-    has_refresh_item = bool(row)
-
-    if blocking_count:
-        if not has_refresh_item:
-            findings.append(_finding("official_context_queue_fact", OFFICIAL_CONTEXT_QUEUE_ITEM, "official context has blocking findings but the active queue is missing the refresh item"))
-        if f"blocking_count={blocking_count}" not in row:
-            findings.append(_finding("official_context_queue_fact", f"blocking_count={blocking_count}", "official context queue item does not reflect current blocking findings"))
-        return
-
-    if p1_count:
-        if not has_refresh_item:
-            findings.append(_finding("official_context_queue_fact", OFFICIAL_CONTEXT_QUEUE_ITEM, "official context has P1 freshness findings but the active queue is missing the refresh item"))
-        if f"p1_findings={p1_count}" not in row:
-            findings.append(_finding("official_context_queue_fact", f"p1_findings={p1_count}", "official context queue item does not match the current P1 finding count"))
-        if "expired official metadata" not in row:
-            findings.append(_finding("official_context_queue_fact", "expired official metadata", "official context queue item does not name the current freshness reason"))
-        if "Official context freshness is not claimable" not in not_yet:
-            findings.append(_finding("official_context_not_yet_fact", "Official context freshness is not claimable", "not-yet-claimable section does not reflect stale official context"))
-        return
-
-    if has_refresh_item:
-        findings.append(_finding("stale_official_context_queue_fact", OFFICIAL_CONTEXT_QUEUE_ITEM, "tracker still reports official-context refresh work after current validation is fresh"))
-    _reject_any(
-        not_yet,
-        ("Official context freshness is not claimable", "expired official metadata"),
-        "stale_official_context_queue_fact",
-        findings,
-        "tracker still reports official-context freshness work after current validation has no findings",
-    )
-    if row:
-        _reject_any(
-            row,
-            ("p1_findings=", "expired official metadata"),
-            "stale_official_context_queue_fact",
-            findings,
-            "tracker still reports official-context freshness work after current validation has no findings",
-        )
 
 
 def _react_surface_status(

@@ -31,6 +31,7 @@ from brain_alpha_ops.config import (
 )
 from brain_alpha_ops.models import Candidate
 from brain_alpha_ops.research.scoring import (
+    _ratio,
     build_scorecard,
     calculate_fitness,
     empirical_score,
@@ -186,6 +187,17 @@ class TestNullMetricsHandling:
 
 class TestExtremeValues:
 
+    def test_ratio_normalizes_values_above_100_as_percentages(self):
+        """Ratio-like metrics above 100 should still normalize to decimals."""
+        assert _ratio(125) == pytest.approx(1.25)
+        assert _ratio("175") == pytest.approx(1.75)
+        assert _ratio(-150) == pytest.approx(-1.5)
+
+    def test_ratio_preserves_unbounded_turnover_values_but_normalizes_bounded_metrics(self):
+        """Turnover may naturally exceed 1, while bounded ratios above 1 are percentages."""
+        assert _ratio(2.5) == pytest.approx(2.5)
+        assert _ratio("1.5", bounded=True) == pytest.approx(0.015)
+
     def test_empirical_score_negative_sharpe(self, default_thresholds):
         """Negative sharpe should not cause crash; fitness crosscheck handles gracefully."""
         metrics = {
@@ -260,6 +272,84 @@ class TestExtremeValues:
         }
         result = empirical_score(metrics, default_thresholds)
         assert result["score"] >= 0
+
+    def test_empirical_score_normalizes_large_ratio_metrics(self, default_thresholds):
+        """Percentage-style values above 100 must be thresholded as decimals."""
+        metrics = {
+            "sharpe": 1.5,
+            "fitness": 1.2,
+            "turnover": 125,
+            "turnover_raw": 125,
+            "returns": 0.01,
+            "drawdown": 150,
+            "correlation": 125,
+            "prod_correlation": 175,
+            "weight_concentration": 125,
+            "sub_universe_sharpe": 1.3,
+            "margin": 4.0,
+        }
+
+        result = empirical_score(metrics, default_thresholds)
+        items = {row["name"]: row for row in result["items"]}
+
+        assert items["turnover_platform"]["actual"] == pytest.approx(1.25)
+        assert items["turnover_platform"]["passed"] is False
+        assert items["drawdown"]["actual"] == pytest.approx(1.5)
+        assert items["drawdown"]["passed"] is False
+        assert items["self_correlation"]["actual"] == pytest.approx(1.25)
+        assert items["self_correlation"]["passed"] is False
+        assert items["prod_correlation"]["actual"] == pytest.approx(1.75)
+        assert items["prod_correlation"]["passed"] is False
+        assert items["weight_concentration"]["actual"] == pytest.approx(1.25)
+        assert items["weight_concentration"]["passed"] is False
+        assert result["hard_gate_failed"] is True
+
+    def test_empirical_score_preserves_natural_high_turnover(self, default_thresholds):
+        """Natural turnover above 1 must stay high instead of being converted to a small percentage."""
+        metrics = {
+            "sharpe": 1.5,
+            "fitness": 1.2,
+            "turnover": 2.5,
+            "turnover_raw": 2.5,
+            "returns": 0.01,
+            "drawdown": 0.01,
+            "correlation": 0.1,
+            "prod_correlation": 0.1,
+            "weight_concentration": 0.05,
+            "sub_universe_sharpe": 1.3,
+            "margin": 4.0,
+        }
+
+        result = empirical_score(metrics, default_thresholds)
+        items = {row["name"]: row for row in result["items"]}
+
+        assert items["turnover_platform"]["actual"] == pytest.approx(2.5)
+        assert items["turnover_platform"]["passed"] is False
+        assert result["hard_gate_failed"] is True
+
+    def test_empirical_score_normalizes_bounded_percent_values_below_two(self, default_thresholds):
+        """Bounded ratio metrics such as drawdown/correlation can arrive as small percentages."""
+        metrics = {
+            "sharpe": 1.5,
+            "fitness": 1.2,
+            "turnover": 0.25,
+            "turnover_raw": 0.25,
+            "returns": 0.01,
+            "drawdown": 1.5,
+            "correlation": 1.5,
+            "prod_correlation": 1.5,
+            "weight_concentration": 1.5,
+            "sub_universe_sharpe": 1.3,
+            "margin": 4.0,
+        }
+
+        result = empirical_score(metrics, default_thresholds)
+        items = {row["name"]: row for row in result["items"]}
+
+        assert items["drawdown"]["actual"] == pytest.approx(0.015)
+        assert items["self_correlation"]["actual"] == pytest.approx(0.015)
+        assert items["prod_correlation"]["actual"] == pytest.approx(0.015)
+        assert items["weight_concentration"]["actual"] == pytest.approx(0.015)
 
     def test_empirical_score_nan_returns(self, default_thresholds):
         """NaN values in metrics should produce 0.0 via _num()."""
@@ -759,6 +849,9 @@ class TestApiSimulation:
         result = qos.evaluate(candidate)
         assert "simulated_api_output" in result.to_dict()
         assert result.simulated_api_output["meta"]["simulated"] is True
+        assert result.simulated_api_output["status"] == "UNKNOWN"
+        assert result.simulated_api_output["gate"]["submission_ready"] is False
+        assert result.simulated_api_output["meta"]["official_pass_fail_source"] == "missing_official_metrics"
 
     def test_qos_score_trend_tracking(self, strong_official_metrics, weak_official_metrics):
         """Score trend should work over multiple evaluations."""

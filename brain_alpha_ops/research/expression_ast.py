@@ -9,8 +9,8 @@ import re
 from typing import Iterable
 
 
-_TOKEN_RE = re.compile(r"\s*(>=|<=|==|!=|[A-Za-z_][A-Za-z0-9_]*|\d+(?:\.\d+)?|[(),+\-*/?:<>])")
-_LEXICAL_TOKEN_RE = re.compile(r">=|<=|==|!=|[a-zA-Z_][a-zA-Z0-9_]*|\d+(?:\.\d+)?|[-+*/(),?:<>]")
+_TOKEN_RE = re.compile(r"\s*(>=|<=|==|!=|[A-Za-z_][A-Za-z0-9_]*|\d+(?:\.\d+)?|[(),+\-*/?:<>=])")
+_LEXICAL_TOKEN_RE = re.compile(r">=|<=|==|!=|[a-zA-Z_][a-zA-Z0-9_]*|\d+(?:\.\d+)?|[-+*/(),?:<>=]")
 
 
 class ExpressionParseError(ValueError):
@@ -171,6 +171,9 @@ class _Parser:
     def peek(self) -> str:
         return "" if self.at_end() else self.tokens[self.index]
 
+    def peek_next(self) -> str:
+        return "" if self.index + 1 >= len(self.tokens) else self.tokens[self.index + 1]
+
     def advance(self) -> str:
         token = self.peek()
         self.index += 1
@@ -250,6 +253,7 @@ class _Parser:
             "<=",
             "==",
             "!=",
+            "=",
         }:
             raise ExpressionParseError(f"unexpected token: {token}")
         if _is_number(token):
@@ -261,12 +265,19 @@ class _Parser:
         args: list[ExprNode] = []
         if self.peek() != ")":
             while True:
-                args.append(self.parse_expression())
+                args.append(self.parse_call_argument())
                 if self.peek() != ",":
                     break
                 self.advance()
         self.consume(")")
         return ExprNode("call", ident, tuple(args))
+
+    def parse_call_argument(self) -> ExprNode:
+        if _is_identifier_token(self.peek()) and self.peek_next() == "=":
+            keyword = self.advance().lower()
+            self.consume("=")
+            return ExprNode("keyword", keyword, (self.parse_expression(),))
+        return self.parse_expression()
 
 
 def _tokenize(expression: str) -> list[str]:
@@ -291,6 +302,8 @@ def canonicalize(node: ExprNode) -> str:
         return node.value
     if node.kind == "call":
         return f"{node.value}({','.join(canonicalize(child) for child in node.children)})"
+    if node.kind == "keyword":
+        return f"{node.value}={canonicalize(node.children[0])}"
     if node.kind == "unary":
         child = node.children[0]
         child_text = canonicalize(child)
@@ -333,12 +346,16 @@ def _flatten(node: ExprNode, op: str) -> Iterable[ExprNode]:
 
 
 def _collect(node: ExprNode, operators: list[str], fields: list[str], windows: list[int]) -> None:
+    if node.kind == "keyword":
+        _collect(node.children[0], operators, fields, windows)
+        return
     if node.kind == "call":
         operators.append(node.value)
         for index, child in enumerate(node.children):
-            if index > 0 and child.kind == "number":
+            value_node = child.children[0] if child.kind == "keyword" else child
+            if index > 0 and value_node.kind == "number":
                 try:
-                    windows.append(int(float(child.value)))
+                    windows.append(int(float(value_node.value)))
                 except ValueError:
                     pass
             _collect(child, operators, fields, windows)
@@ -419,6 +436,10 @@ def _jaccard(left: set[str], right: set[str]) -> float:
 
 def _is_number(token: str) -> bool:
     return bool(re.fullmatch(r"\d+(?:\.\d+)?", token))
+
+
+def _is_identifier_token(token: str) -> bool:
+    return bool(re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", token or ""))
 
 
 def _normalize_number(token: str) -> str:

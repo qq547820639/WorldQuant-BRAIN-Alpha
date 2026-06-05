@@ -3,7 +3,7 @@ import json
 import brain_alpha_ops.build_inline as build_inline
 import brain_alpha_ops.production_diagnostics as production_diagnostics
 from brain_alpha_ops.cli import main
-from brain_alpha_ops.config import RunConfig, write_run_config
+from brain_alpha_ops.config import OpsConfig, RunConfig, write_run_config
 from brain_alpha_ops.production_diagnostics import (
     build_diagnostic_snapshot,
     render_one_page_markdown,
@@ -30,8 +30,9 @@ def test_production_diagnostic_snapshot_has_gap_matrix(tmp_path):
     assert snapshot["parameter_audit"]["thresholds_zero_deviation"] is True
     assert snapshot["contract_comparison"]["history_replay_ready"] is True
     assert snapshot["contract_comparison"]["parameter_audit_complete"] is True
-    assert snapshot["frontend_inline"]["css_replaced"] == 1
-    assert snapshot["frontend_inline"]["css_sources"] == ["css/app.css"]
+    assert snapshot["frontend_inline"]["ok"] is True
+    assert snapshot["frontend_inline"]["css_replaced"] == 0
+    assert snapshot["frontend_inline"]["css_sources"] == []
     assert [row["dimension"] for row in snapshot["gap_matrix"]] == [
         "Functional closure",
         "Technical compliance",
@@ -92,6 +93,16 @@ def test_production_diagnostic_counts_official_metadata_records(tmp_path):
     assert snapshot["official_context"] == {"fields": 2, "operators": 1, "datasets": 1}
     assert snapshot["official_context_validation"]["lineage"]["field_count_sum_matches"] is True
     assert "fields=2, operators=1, datasets=1" in render_one_page_markdown(snapshot)
+
+
+def test_template_safe_context_writes_to_ops_config_storage_dir(tmp_path):
+    config = OpsConfig(storage_dir=str(tmp_path / "ops-data"))
+
+    write_template_safe_official_context(config)
+
+    assert (tmp_path / "ops-data" / "official_fields.json").is_file()
+    assert (tmp_path / "ops-data" / "official_operators.json").is_file()
+    assert (tmp_path / "ops-data" / "official_datasets.json").is_file()
 
 
 def test_production_diagnostic_report_clears_refresh_todos_after_success(tmp_path):

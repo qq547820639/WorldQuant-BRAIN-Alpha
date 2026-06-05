@@ -7,6 +7,7 @@ import logging
 from brain_alpha_ops.config import RunConfig
 from brain_alpha_ops.models import Candidate
 from brain_alpha_ops.redaction import redact_error_message
+from brain_alpha_ops.submission_readiness import missing_official_metric_fields
 
 from .assistant import build_assistant_request_pack
 from .context import build_assistant_context_pack
@@ -167,6 +168,19 @@ class PipelineSubmissionMixin:
             checks.append({"name": name, "passed": bool(passed), "detail": detail})
             if not passed:
                 failed.append(detail or name)
+
+        metrics = candidate.official_metrics if isinstance(candidate.official_metrics, dict) else {}
+        if not metrics:
+            add("official_metric_fields_complete", False, "missing_official_metrics")
+        else:
+            missing_metric_fields = missing_official_metric_fields(metrics)
+            add(
+                "official_metric_fields_complete",
+                not missing_metric_fields,
+                "missing_official_metric_fields:" + ",".join(missing_metric_fields)
+                if missing_metric_fields
+                else "complete official metrics",
+            )
 
         if self.config.budget.require_cloud_sync:
             cloud_status = str(self.cloud_sync.get("status", "")).lower()

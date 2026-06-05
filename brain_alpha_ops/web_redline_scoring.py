@@ -1,10 +1,4 @@
-"""Web API endpoints for redline verification and scoring attribution.
-
-Exposes:
-  GET  /api/redline/report        -> ComplianceReport JSON
-  POST /api/scoring/evaluate      -> ScoringResult JSON
-  GET  /api/scoring/health        -> ScoreHistoryDB convergence stats
-"""
+"""Red-line scoring web integration."""
 
 from __future__ import annotations
 
@@ -18,9 +12,9 @@ from brain_alpha_ops.config import load_run_config
 from brain_alpha_ops.jsonl import read_jsonl_tail
 from brain_alpha_ops.models import Candidate
 from brain_alpha_ops.redaction import redact_error_message, redact_text
+from brain_alpha_ops.scoring.history import ScoreHistoryDB
 from brain_alpha_ops.scoring.official_scoring import (
     OfficialScoringSystem,
-    ScoreHistoryDB,
 )
 
 logger = logging.getLogger(__name__)
@@ -50,17 +44,25 @@ def handle_scoring_evaluate(body: dict[str, Any]) -> dict[str, Any]:
     result = system.evaluate(candidate)
 
     # Persist to score history
+    score_history_status = "persisted"
+    score_history_error = ""
     try:
         db = ScoreHistoryDB(config.ops.storage_dir)
         db.append(result)
     except Exception as exc:
+        score_history_status = "failed"
+        score_history_error = redact_error_message(exc)
         logger.warning(
             "score history append failed for alpha_id=%s: %s",
             redact_text(result.alpha_id, max_length=64),
-            redact_error_message(exc),
+            score_history_error,
         )
 
-    return result.to_dict()
+    payload = result.to_dict()
+    payload["score_history_status"] = score_history_status
+    if score_history_error:
+        payload["score_history_error"] = score_history_error
+    return payload
 
 
 def handle_scoring_health(query: dict[str, Any]) -> dict[str, Any]:

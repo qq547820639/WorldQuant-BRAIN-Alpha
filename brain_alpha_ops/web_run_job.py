@@ -1,9 +1,4 @@
-"""Background production job runner for the local web console.
-
-Supports two modes:
-  run_job_service()       — raw AlphaResearchPipeline (backward-compat)
-  run_guided_job_service() — GuidedPipeline with checkpoint/resume/history
-"""
+"""Background production job runner for the local web console."""
 
 from __future__ import annotations
 
@@ -29,11 +24,6 @@ def run_guided_job_service(
     safe_error_message: SafeErrorMessage,
     log: logging.Logger,
 ) -> None:
-    """Run a production job using GuidedPipeline with checkpoint/resume support.
-
-    The 'guided' mode in the web payload toggles this path; otherwise
-    run_job_service() is used for backward compatibility.
-    """
     try:
         from brain_alpha_ops.ux.guided_pipeline import GuidedPipeline
 
@@ -43,11 +33,7 @@ def run_guided_job_service(
             progress={"phase": "startup", "current": 0, "total": 1, "percent": 0, "message": "引导式生产任务启动...", "alpha_id": ""},
         )
         run_config = run_config_from_payload(payload)
-        guided = GuidedPipeline(
-            run_config,
-            stop_callback=lambda: job_store.is_cancelled(job_id),
-        )
-
+        guided = GuidedPipeline(run_config, stop_callback=lambda: job_store.is_cancelled(job_id))
         phase_names = list(getattr(guided, "phases", {}) or {}) or ["guided"]
 
         def _progress_cb(phase: str, status: str = "", data: dict[str, Any] | None = None) -> None:
@@ -63,7 +49,6 @@ def run_guided_job_service(
             except (TypeError, ValueError):
                 base = (current - 1) / total * 100.0
                 percent = current / total * 100.0 if status == "completed" else max(5.0, base)
-            percent = max(0.0, min(100.0, percent))
             message = (
                 progress_data.get("message")
                 or progress_data.get("summary")
@@ -76,25 +61,21 @@ def run_guided_job_service(
                 "status": status,
                 "current": current,
                 "total": total,
-                "percent": round(percent, 1),
+                "percent": max(0.0, min(100.0, percent)),
                 "message": str(message),
                 "alpha_id": str(progress_data.get("alpha_id") or ""),
                 "data": progress_data,
             })
 
         guided.on_progress(_progress_cb)
-
-        if payload.get("resume"):
-            result = guided.resume()
-        else:
-            result = guided.run()
+        result = guided.resume() if payload.get("resume") else guided.run()
 
         final_status = "stopped" if job_store.is_cancelled(job_id) else "completed"
-        raw_result_data = result.to_dict() if hasattr(result, "to_dict") else result
-        result_data: dict[str, Any] = raw_result_data if isinstance(raw_result_data, dict) else {}
-        raw_summary = result_data.get("summary")
-        summary: dict[str, Any] = raw_summary if isinstance(raw_summary, dict) else {}
+        result_data = result.to_dict() if hasattr(result, "to_dict") else result
+        result_data = result_data if isinstance(result_data, dict) else {}
+        summary = result_data.get("summary") if isinstance(result_data.get("summary"), dict) else {}
         candidates = summary.get("candidates") or result_data.get("candidates", [])
+        backtests = summary.get("backtest_slots") or result_data.get("backtests") or []
 
         job_store.update(
             job_id,
@@ -109,7 +90,8 @@ def run_guided_job_service(
                 "alpha_id": "",
                 "data": {
                     "candidates": candidates,
-                    "stats": compute_run_stats({"candidates": candidates}, run_config),
+                    "backtests": backtests,
+                    "stats": compute_run_stats({"candidates": candidates, "backtests": backtests}, run_config),
                     "checkpoint_available": True,
                 },
             },

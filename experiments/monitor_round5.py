@@ -16,6 +16,7 @@ Usage:
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 import subprocess
@@ -30,6 +31,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 _EXPERIMENT_DIR = Path(__file__).resolve().parent
 _PROJECT_ROOT = _EXPERIMENT_DIR.parent
+logger = logging.getLogger(__name__)
 
 
 # ===========================================================================
@@ -203,7 +205,7 @@ class DataCollector:
                     mtime = datetime.fromtimestamp(self._log.stat().st_mtime)
                     return str(timedelta(seconds=int(time.time() - self._log.stat().st_ctime)))
             except Exception:
-                pass
+                logger.debug("failed to infer elapsed time from experiment log", exc_info=True)
         return "??:??:??"
 
     def _extract_sharpes(self, records: list) -> List[float]:
@@ -238,6 +240,7 @@ class DataCollector:
         try:
             text = self._log.read_text(encoding="utf-8", errors="replace")
         except Exception:
+            logger.debug("failed to read experiment generation log", exc_info=True)
             return
 
         # Generation count
@@ -263,7 +266,7 @@ class DataCollector:
                 if m:
                     return int(m.group(1))
             except Exception:
-                pass
+                logger.debug("failed to parse experiment pid from log", exc_info=True)
         return 0
 
     def _log_size_mb(self) -> float:

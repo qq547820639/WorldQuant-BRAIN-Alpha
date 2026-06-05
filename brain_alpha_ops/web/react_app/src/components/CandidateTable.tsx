@@ -1,20 +1,24 @@
-/** Filterable, sortable candidate data table. */
+/**
+ * Candidate management table for the state-card UI.
+ *
+ * The table keeps the compact card-first workflow, but preserves the production
+ * semantics users need before official validation or submit readiness checks.
+ */
 
-import { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import type { UIEvent } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useApi } from "@/hooks/useApi";
 import { useSSE } from "@/hooks/useSSE";
 import type { Candidate, SSEEvent, UnifiedProgress } from "@/types";
 import ProgressFeedback from "@/components/ProgressFeedback";
 
-interface Props {
-  notify: (type: "success" | "error" | "warning" | "info", msg: string) => void;
-  onScore?: (candidate: Candidate) => void;
-  viewMode?: CandidateQueueView;
-}
+const MIN_GENERATE_COUNT = 1;
+const MAX_GENERATE_COUNT = 100;
+const MAX_FILTER_LENGTH = 200;
+const CANDIDATE_FETCH_LIMIT = 1000;
+const PAGE_SIZE = 20;
 
-type SortKey = "score" | "sharpe" | "fitness" | "turnover" | "status";
-type CandidateQueueView =
+type SortKey = "score" | "status" | "created";
+export type CandidateQueueView =
   | "candidates"
   | "pending_backtest"
   | "running_backtest"
@@ -23,88 +27,74 @@ type CandidateQueueView =
   | "submittable"
   | "submitted"
   | "failed";
-interface CandidateCheckResult {
+
+type CandidateCheckResult = {
   alpha_id?: string;
   official_alpha_id?: string;
   simulation_id?: string;
+  status?: string;
   passed?: boolean;
   submittable?: boolean;
   is_stale?: boolean;
-}
-type CandidateCheckIndex = Record<string, CandidateCheckResult>;
-const MIN_GENERATE_COUNT = 1;
-const MAX_GENERATE_COUNT = 100;
-const MAX_FILTER_LENGTH = 200;
-const CANDIDATE_FETCH_LIMIT = 1000;
-const VIRTUAL_ROW_HEIGHT = 48;
-const VIRTUAL_OVERSCAN = 8;
-const VIRTUAL_VIEWPORT_HEIGHT = 520;
-const QUEUE_VIEW_META: Record<CandidateQueueView, { title: string; empty: string }> = {
-  candidates: {
-    title: "Candidates",
-    empty: "No candidates found",
-  },
-  pending_backtest: {
-    title: "Waiting for backtest",
-    empty: "No candidates are waiting for backtest",
-  },
-  running_backtest: {
-    title: "Backtesting",
-    empty: "No candidates are currently backtesting",
-  },
-  backtest_rework: {
-    title: "Backtest rework",
-    empty: "No candidates need backtest rework",
-  },
-  passed: {
-    title: "Passed candidates",
-    empty: "No candidates have reached the submission gate",
-  },
-  submittable: {
-    title: "Ready to submit",
-    empty: "No candidates have a fresh passed pre-submit check",
-  },
-  submitted: {
-    title: "Submitted candidates",
-    empty: "No submitted candidate records found",
-  },
-  failed: {
-    title: "Blocked candidates",
-    empty: "No failed, rejected, or blocked candidates found",
-  },
+  score?: number;
+  failed_reasons?: string[];
+  checked_at?: string;
 };
 
-export default function CandidateTable({ notify, onScore, viewMode = "candidates" }: Props) {
+interface Props {
+  notify: (type: "success" | "error" | "warning" | "info", msg: string) => void;
+  onScore?: (candidate: Candidate) => void;
+  showProductionControls?: boolean;
+  showRowActions?: boolean;
+  viewMode?: CandidateQueueView;
+}
+
+export default function CandidateTable({
+  notify,
+  onScore,
+  showProductionControls = true,
+  showRowActions = false,
+  viewMode = "candidates",
+}: Props) {
   const api = useApi<{ candidates: Candidate[] }>();
   const checkResultsApi = useApi<{ items?: CandidateCheckResult[] }>();
+  const callApi = api.call;
+  const callCheckResultsApi = checkResultsApi.call;
   const [candidates, setCandidates] = useState<Candidate[]>([]);
-  const [checkResults, setCheckResults] = useState<CandidateCheckIndex>({});
+  const [checkResults, setCheckResults] = useState<Map<string, CandidateCheckResult>>(new Map());
+
   const [filter, setFilter] = useState("");
-  const [generateCount, setGenerateCount] = useState(5);
+  const [currentPage, setCurrentPage] = useState(1);
   const [sortKey, setSortKey] = useState<SortKey>("score");
   const [sortAsc, setSortAsc] = useState(false);
-  const [scrollTop, setScrollTop] = useState(0);
+
+  const [generateCount, setGenerateCount] = useState(5);
   const [taskId, setTaskId] = useState<string | null>(null);
   const [taskState, setTaskState] = useState<"idle" | "loading" | "progress" | "success" | "error">("idle");
   const [taskProgress, setTaskProgress] = useState<UnifiedProgress | null>(null);
   const [taskError, setTaskError] = useState<string | null>(null);
-  const tableViewportRef = useRef<HTMLDivElement | null>(null);
-  const callApi = api.call;
-  const callCheckResultsApi = checkResultsApi.call;
-  const viewMeta = QUEUE_VIEW_META[viewMode];
 
   const loadCandidates = useCallback(async () => {
-    const result = await callApi(`/api/candidates?limit=${CANDIDATE_FETCH_LIMIT}`);
+    const [result, checkResultsResult] = await Promise.all([
+      callApi(`/api/candidates?limit=${CANDIDATE_FETCH_LIMIT}`),
+      callCheckResultsApi<{ items?: CandidateCheckResult[] }>("/api/check_results"),
+    ]);
     if (result?.ok) {
-      const data = result as unknown as { candidates: Candidate[] };
-      const nextRows = data.candidates || [];
+      const data = result as unknown as { candidates?: Candidate[]; items?: Candidate[] };
+      const nextRows = data.candidates || data.items || [];
       setCandidates((current) => nextRows.length || current.length === 0 ? nextRows : current);
     } else if (result?.error) {
       notify("error", result.error);
     }
-  }, [callApi, notify]);
+    if (checkResultsResult?.ok) {
+      const data = checkResultsResult as unknown as { items?: CandidateCheckResult[] };
+      setCheckResults(indexCheckResults(data.items || []));
+    } else if (checkResultsResult?.error) {
+      notify("error", checkResultsResult.error);
+    }
+  }, [callApi, callCheckResultsApi, notify]);
 
-  const loadCheckResults = useCallback(async () => {
+  const refreshCheckResults = useCallback(async () => {
     if (viewMode !== "submittable") return;
     const result = await callCheckResultsApi<{ items?: CandidateCheckResult[] }>("/api/check_results");
     if (result?.ok) {
@@ -115,293 +105,487 @@ export default function CandidateTable({ notify, onScore, viewMode = "candidates
     }
   }, [callCheckResultsApi, notify, viewMode]);
 
-  const load = useCallback(async () => {
-    await Promise.all([loadCandidates(), loadCheckResults()]);
-  }, [loadCandidates, loadCheckResults]);
+  useEffect(() => {
+    void loadCandidates();
+  }, [loadCandidates]);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    void refreshCheckResults();
+  }, [refreshCheckResults]);
 
   const handleTaskEvent = useCallback((event: SSEEvent) => {
     const progress = event.progress || event.data || {};
     setTaskProgress(progress as UnifiedProgress);
+
     if (event.type === "error" || event.ok === false || event.status === "failed") {
       setTaskState("error");
-      setTaskError(event.error || event.status_message || "Candidate generation failed");
-      notify("error", event.error || "Candidate generation failed");
+      setTaskError(event.error || event.status_message || "候选生成失败");
+      notify("error", event.error || "候选生成失败");
       return;
     }
+
     if (event.type === "complete") {
       setTaskState("success");
       const result = event.result as { candidates?: Candidate[]; candidates_preview?: Candidate[]; count?: number } | undefined;
       const rows = result?.candidates || result?.candidates_preview || [];
       if (rows.length) setCandidates(rows);
-      void load();
-      notify("success", `Candidate generation completed${result?.count ? `: ${result.count}` : ""}`);
+      void loadCandidates();
+      notify("success", `候选生成完成${result?.count ? `: ${result.count}` : ""}`);
       setTaskId(null);
       return;
     }
+
     setTaskState("progress");
-  }, [load, notify]);
+  }, [loadCandidates, notify]);
 
   useSSE(taskId ? `/sse?job_id=${encodeURIComponent(taskId)}` : null, { onEvent: handleTaskEvent });
 
   const generateCandidates = useCallback(async () => {
     setTaskState("loading");
     setTaskError(null);
-    setTaskProgress({ phase: "candidate_generation", status_message: "Starting candidate generation." });
+    setTaskProgress({ phase: "candidate_generation", status_message: "正在启动候选生成。" });
+
     const result = await callApi<{ job_id: string; task_id?: string }>("/api/generate_candidates", {
       method: "POST",
       body: JSON.stringify({ count: clampGenerateCount(generateCount) }),
     });
-    const nextTaskId = String((result as unknown as { task_id?: string; job_id?: string } | null)?.task_id || (result as unknown as { job_id?: string } | null)?.job_id || "");
+
+    const nextTaskId = String(
+      (result as unknown as { task_id?: string; job_id?: string } | null)?.task_id ||
+      (result as unknown as { job_id?: string } | null)?.job_id ||
+      ""
+    );
+
     if (result?.ok && nextTaskId) {
       setTaskId(nextTaskId);
       setTaskState("progress");
-      notify("info", `Candidate generation started: ${nextTaskId}`);
+      notify("info", `候选生成已启动: ${nextTaskId}`);
     } else {
       setTaskState("error");
-      setTaskError(result?.error || "Failed to start candidate generation");
-      notify("error", result?.error || "Failed to start candidate generation");
+      setTaskError(result?.error || "启动候选生成失败");
+      notify("error", result?.error || "启动候选生成失败");
     }
   }, [callApi, generateCount, notify]);
 
-  const updateGenerateCount = (value: string) => {
-    setGenerateCount(clampGenerateCount(value));
-  };
+  const queueCandidates = useMemo(
+    () => candidates.filter((candidate) => candidateMatchesQueueView(candidate, viewMode, checkResults)),
+    [candidates, checkResults, viewMode],
+  );
 
-  const updateFilter = (value: string) => {
-    setFilter(sanitizeTextInput(value, MAX_FILTER_LENGTH));
-  };
-
-  const sorted = useMemo(() => {
+  const sortedCandidates = useMemo(() => {
     const normalizedFilter = filter.trim().toLowerCase();
-    const viewRows = candidates.filter((candidate) => candidateMatchesQueueView(candidate, viewMode, checkResults));
     const filtered = normalizedFilter
-      ? viewRows.filter((c) =>
+      ? queueCandidates.filter((c) =>
           candidateText(c.expression).toLowerCase().includes(normalizedFilter) ||
           candidateText(c.family).toLowerCase().includes(normalizedFilter) ||
-          candidateIdentity(c).toLowerCase().includes(normalizedFilter),
+          candidateIdentity(c).toLowerCase().includes(normalizedFilter) ||
+          candidateQualitySearchText(c).toLowerCase().includes(normalizedFilter)
         )
-      : viewRows;
+      : queueCandidates;
 
     return [...filtered].sort((a, b) => {
-      let va: number, vb: number;
+      let va: number;
+      let vb: number;
       switch (sortKey) {
-        case "score": va = a.scorecard?.total_score ?? 0; vb = b.scorecard?.total_score ?? 0; break;
-        case "sharpe": va = a.official_metrics?.sharpe ?? 0; vb = b.official_metrics?.sharpe ?? 0; break;
-        case "fitness": va = a.official_metrics?.fitness ?? 0; vb = b.official_metrics?.fitness ?? 0; break;
-        case "turnover": va = a.official_metrics?.turnover ?? 0; vb = b.official_metrics?.turnover ?? 0; break;
-        case "status": return candidateStatus(a).localeCompare(candidateStatus(b)) * (sortAsc ? 1 : -1);
-        default: return 0;
+        case "score":
+          va = a.scorecard?.total_score ?? 0;
+          vb = b.scorecard?.total_score ?? 0;
+          break;
+        case "status":
+          return candidateStatus(a).localeCompare(candidateStatus(b)) * (sortAsc ? 1 : -1);
+        case "created":
+          va = candidateCreatedAt(a);
+          vb = candidateCreatedAt(b);
+          break;
+        default:
+          return 0;
       }
       return sortAsc ? va - vb : vb - va;
     });
-  }, [candidates, checkResults, filter, sortKey, sortAsc, viewMode]);
+  }, [filter, queueCandidates, sortAsc, sortKey]);
+
+  const qualitySummary = useMemo(() => summarizeCandidateQuality(queueCandidates), [queueCandidates]);
+  const totalPages = Math.max(1, Math.ceil(sortedCandidates.length / PAGE_SIZE));
+  const paginatedCandidates = useMemo(() => {
+    const startIndex = (currentPage - 1) * PAGE_SIZE;
+    return sortedCandidates.slice(startIndex, startIndex + PAGE_SIZE);
+  }, [currentPage, sortedCandidates]);
+  const canShowRowActions = showRowActions && Boolean(onScore);
 
   useEffect(() => {
-    setScrollTop(0);
-    tableViewportRef.current?.scrollTo({ top: 0 });
-  }, [candidates.length, filter, sortAsc, sortKey]);
+    setCurrentPage(1);
+  }, [filter, sortKey, sortAsc, viewMode]);
 
-  const virtualStartIndex = Math.max(0, Math.floor(scrollTop / VIRTUAL_ROW_HEIGHT) - VIRTUAL_OVERSCAN);
-  const virtualWindowSize = Math.ceil(VIRTUAL_VIEWPORT_HEIGHT / VIRTUAL_ROW_HEIGHT) + VIRTUAL_OVERSCAN * 2;
-  const virtualEndIndex = Math.min(sorted.length, virtualStartIndex + virtualWindowSize);
-  const virtualRows = sorted.slice(virtualStartIndex, virtualEndIndex);
-  const topSpacerHeight = virtualStartIndex * VIRTUAL_ROW_HEIGHT;
-  const bottomSpacerHeight = Math.max(sorted.length - virtualEndIndex, 0) * VIRTUAL_ROW_HEIGHT;
-  const visibleStartRow = sorted.length ? virtualStartIndex + 1 : 0;
-  const visibleEndRow = virtualEndIndex;
-
-  const handleVirtualScroll = (event: UIEvent<HTMLDivElement>) => {
-    setScrollTop(event.currentTarget.scrollTop);
-  };
+  useEffect(() => {
+    setCurrentPage((page) => Math.min(page, totalPages));
+  }, [totalPages]);
 
   const handleSort = (key: SortKey) => {
-    if (sortKey === key) { setSortAsc(!sortAsc); return; }
-    setSortKey(key);
-    setSortAsc(false);
+    if (sortKey === key) {
+      setSortAsc(!sortAsc);
+    } else {
+      setSortKey(key);
+      setSortAsc(false);
+    }
   };
 
-  const statusBadge = (s?: string) => {
-    const normalized = candidateText(s);
-    if (normalized.includes("submitted")) return "badge-success";
-    if (normalized.includes("completed") || normalized.includes("gated:submit")) return "badge-success";
-    if (normalized.includes("failed") || normalized.includes("blocked")) return "badge-danger";
-    if (normalized.includes("validat") || normalized.includes("simulat")) return "badge-warning";
-    return "badge-neutral";
+  const handleGenerateCountChange = (value: string) => {
+    setGenerateCount(clampGenerateCount(value));
   };
 
-  const loading = api.loading || (viewMode === "submittable" && checkResultsApi.loading);
-  const loadError = api.error || (viewMode === "submittable" ? checkResultsApi.error : null);
+  const handleFilterChange = (value: string) => {
+    setFilter(sanitizeTextInput(value, MAX_FILTER_LENGTH));
+  };
 
-  if (loading && candidates.length === 0) {
+  const loading = api.loading && candidates.length === 0;
+  const loadError = api.error;
+  const visibleStart = sortedCandidates.length === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1;
+  const visibleEnd = Math.min(currentPage * PAGE_SIZE, sortedCandidates.length);
+  const title = viewMode === "candidates" ? "候选管理" : `${queueViewLabel(viewMode)}候选`;
+
+  if (loading) {
     return (
       <ProgressFeedback
         state="loading"
-        title="Candidates"
-        progress={{ phase: "candidate_load", status_message: "Loading candidates." }}
+        title="候选管理"
+        progress={{ phase: "candidate_load", status_message: "正在加载候选数据。" }}
       />
     );
   }
 
   return (
-    <div className="min-w-0 space-y-4">
-      <div className="flex flex-col gap-1">
-        <h2 className="text-base font-semibold text-gray-100">{viewMeta.title}</h2>
-        {viewMode !== "candidates" && (
-          <p className="text-xs text-muted" role="status" aria-live="polite">
-            Queue filter: {viewMode.replace(/_/g, " ")}
+    <div className="min-w-0 space-y-4 animate-fade-in">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <h2 className="text-xl font-bold text-white tracking-tight">{title}</h2>
+          <p className="text-sm text-gray-400 mt-1" role="status" aria-live="polite">
+            显示 {sortedCandidates.length} / {queueCandidates.length} 个候选
+            {viewMode !== "candidates" && ` · ${queueViewLabel(viewMode)}`}
+            {filter && " · 已过滤"}
           </p>
+        </div>
+
+        {showProductionControls && (
+          <div className="flex flex-wrap items-center gap-3">
+            <label className="flex items-center gap-2 text-sm text-gray-300">
+              数量
+              <input
+                type="number"
+                min={MIN_GENERATE_COUNT}
+                max={MAX_GENERATE_COUNT}
+                value={generateCount}
+                onChange={(event) => handleGenerateCountChange(event.target.value)}
+                className="w-20 input text-sm"
+              />
+            </label>
+            <button
+              type="button"
+              onClick={generateCandidates}
+              disabled={taskState === "loading" || taskState === "progress"}
+              className="btn-primary"
+            >
+              {taskState === "loading" || taskState === "progress" ? "生成中..." : "生成候选"}
+            </button>
+          </div>
         )}
       </div>
 
-      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
-        <input
-          type="text"
-          aria-label="Filter candidates"
-          placeholder="Filter by expression, family, or ID..."
-          value={filter}
-          maxLength={MAX_FILTER_LENGTH}
-          onChange={(e) => updateFilter(e.target.value)}
-          className="w-full min-w-0 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-brand-500 sm:flex-1"
-        />
-        <button onClick={load} className="btn-secondary text-sm" disabled={loading} aria-label="Refresh candidates">
-          <span aria-hidden="true">↻</span> Refresh
-        </button>
-        <label className="flex items-center gap-2 text-xs text-muted">
-          Count
-          <input
-            type="number"
-            min={MIN_GENERATE_COUNT}
-            max={MAX_GENERATE_COUNT}
-            value={generateCount}
-            onChange={(e) => updateGenerateCount(e.target.value)}
-            className="w-20 bg-gray-800 border border-gray-700 rounded-lg px-2 py-2 text-sm text-gray-200 focus:outline-none focus:border-brand-500"
-          />
-        </label>
-        <button onClick={generateCandidates} className="btn-primary text-sm" disabled={taskState === "loading" || taskState === "progress"}>
-          Generate
-        </button>
+      <div className="grid grid-cols-2 gap-3 text-xs sm:grid-cols-5">
+        <QualitySummaryItem label="达标" value={String(qualitySummary.ready)} />
+        <QualitySummaryItem label="本地通过" value={String(qualitySummary.localValid)} />
+        <QualitySummaryItem label="阻断" value={String(qualitySummary.blocked)} />
+        <QualitySummaryItem label="输出模式" value={qualitySummary.outputMode} />
+        <QualitySummaryItem label="Dataset" value={qualitySummary.dataset} />
       </div>
 
-      <ProgressFeedback
-        state={taskState}
-        title="Candidate generation"
-        progress={taskProgress}
-        error={taskError}
-        onRetry={generateCandidates}
-        compact={taskState === "idle" || taskState === "success"}
-      />
-
-      {loading && candidates.length > 0 && (
+      {showProductionControls && taskState !== "idle" && (
         <ProgressFeedback
-          state="loading"
-          title="Candidates"
-          progress={{ phase: "candidate_load", status_message: "Refreshing candidate records." }}
-          compact
+          state={taskState}
+          title="候选生成"
+          progress={taskProgress}
+          error={taskError}
+          onRetry={generateCandidates}
+          compact={taskState === "success"}
         />
       )}
 
       {loadError && (
-        <div className="card border-danger/40 bg-danger/10" role="alert" aria-live="assertive">
+        <div className="p-4 rounded-xl border border-danger/30 bg-danger/5" role="alert" aria-live="assertive">
           <div className="flex items-center justify-between gap-3">
-            <p className="text-danger text-sm">Failed to load candidates: {loadError}</p>
-            <button onClick={load} className="btn-secondary text-sm" disabled={loading}>
-              Retry
+            <p className="text-sm text-danger">加载候选失败: {loadError}</p>
+            <button type="button" onClick={loadCandidates} className="btn-secondary text-sm" aria-label="刷新候选">
+              重试
             </button>
           </div>
         </div>
       )}
 
-      <div className="card min-w-0 overflow-hidden p-0">
-        <div
-          ref={tableViewportRef}
-          className="max-w-full overflow-auto"
-          style={{ maxHeight: VIRTUAL_VIEWPORT_HEIGHT }}
-          onScroll={handleVirtualScroll}
-          data-virtualized-candidate-table="true"
-          aria-label="Scrollable candidate results"
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+        <input
+          type="text"
+          aria-label="过滤候选"
+          placeholder="按表达式、家族、ID、质量原因搜索..."
+          value={filter}
+          maxLength={MAX_FILTER_LENGTH}
+          onChange={(event) => handleFilterChange(event.target.value)}
+          className="w-full min-w-0 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-brand-500 sm:flex-1"
+        />
+        <button
+          type="button"
+          onClick={loadCandidates}
+          disabled={api.loading}
+          className="btn-secondary"
+          aria-label="刷新候选"
         >
-          <table
-            className="min-w-[760px] w-full text-sm"
-            aria-label="Candidate results"
-            aria-rowcount={sorted.length > 0 ? sorted.length + 1 : undefined}
-          >
+          {api.loading ? "刷新中..." : "刷新"}
+        </button>
+      </div>
+
+      <div className="card min-w-0 overflow-hidden p-0">
+        <div className="space-y-3 p-3 md:hidden" aria-label="候选结果移动列表">
+          {paginatedCandidates.length === 0 ? (
+            <div className="rounded-lg border border-gray-800/60 bg-gray-900/50 px-4 py-6 text-center text-sm text-gray-500">
+              {filter ? "没有匹配的候选" : "暂无候选记录"}
+            </div>
+          ) : (
+            paginatedCandidates.map((candidate, index) => (
+              <CandidateMobileCard
+                key={`${candidateIdentity(candidate)}_mobile_${index}`}
+                candidate={candidate}
+                checkResults={checkResults}
+                canShowRowActions={canShowRowActions}
+                onScore={onScore}
+              />
+            ))
+          )}
+        </div>
+
+        <div className="hidden max-w-full overflow-auto md:block">
+          <table className="min-w-[1280px] w-full text-sm" aria-label="候选结果">
             <thead>
-              <tr className="border-b border-gray-800 text-left text-xs text-muted uppercase tracking-wider">
-                <th scope="col" className="p-3">ID</th>
-                <th scope="col" className="p-3">Expression</th>
-                <SortHeader label="Score" column="score" sortKey={sortKey} sortAsc={sortAsc} onSort={handleSort} />
-                <SortHeader label="Sharpe" column="sharpe" sortKey={sortKey} sortAsc={sortAsc} onSort={handleSort} />
-                <SortHeader label="Fitness" column="fitness" sortKey={sortKey} sortAsc={sortAsc} onSort={handleSort} />
-                <SortHeader label="TO" column="turnover" sortKey={sortKey} sortAsc={sortAsc} onSort={handleSort} />
-                <th scope="col" className="p-3">Status</th>
-                <th scope="col" className="p-3">Actions</th>
+              <tr className="border-b border-gray-800/50 text-left text-xs text-gray-400 uppercase tracking-wider">
+                <th scope="col" className="w-[8rem] p-3 font-medium">ID</th>
+                <th scope="col" className="w-[24rem] p-3 font-medium">表达式</th>
+                <SortHeader column="score" label="评分" sortKey={sortKey} sortAsc={sortAsc} onSort={handleSort} />
+                <SortHeader column="status" label="状态" sortKey={sortKey} sortAsc={sortAsc} onSort={handleSort} />
+                <th scope="col" className="w-[7rem] p-3">质量</th>
+                <th scope="col" className="w-[14rem] p-3">阻断原因</th>
+                <th scope="col" className="w-[18rem] p-3">输出</th>
+                <th scope="col" className="w-[14rem] p-3">官方证据</th>
+                {canShowRowActions && <th scope="col" className="w-[6rem] p-3">操作</th>}
               </tr>
             </thead>
             <tbody>
-              {sorted.length === 0 ? (
-                <tr><td colSpan={8} className="p-6 text-center text-muted">{viewMeta.empty}</td></tr>
+              {paginatedCandidates.length === 0 ? (
+                <tr>
+                  <td colSpan={canShowRowActions ? 9 : 8} className="px-4 py-8 text-center text-gray-500">
+                    {filter ? "没有匹配的候选" : "暂无候选记录"}
+                  </td>
+                </tr>
               ) : (
-                <>
-                  {topSpacerHeight > 0 && (
-                    <tr aria-hidden="true">
-                      <td colSpan={8} style={{ height: topSpacerHeight, padding: 0, border: 0 }} />
-                    </tr>
-                  )}
-                  {virtualRows.map((c, index) => (
+                paginatedCandidates.map((candidate, index) => {
+                  const quality = candidateQualityBadge(candidate);
+                  const evidence = officialEvidenceText(candidate, checkResults);
+                  return (
                     <tr
-                      key={`${candidateIdentity(c) || candidateText(c.expression)}_${virtualStartIndex + index}`}
-                      className="border-b border-gray-800/50 hover:bg-gray-800/30 transition-colors"
-                      aria-rowindex={virtualStartIndex + index + 2}
-                      style={{ height: VIRTUAL_ROW_HEIGHT }}
+                      key={`${candidateIdentity(candidate)}_${index}`}
+                      className="border-b border-gray-800/30 hover:bg-gray-900/50 transition-colors"
                     >
-                      <td className="p-3 text-brand-400 font-mono text-xs">{candidateIdentity(c).slice(0, 12) || "-"}</td>
-                      <td className="p-3 font-mono text-xs max-w-xs truncate" title={candidateText(c.expression)}>
-                        {candidateText(c.expression) || "-"}
-                      </td>
-                      <td className="p-3 font-mono">{c.scorecard?.total_score?.toFixed(1) ?? "-"}</td>
-                      <td className="p-3 font-mono">{c.official_metrics?.sharpe?.toFixed(2) ?? "-"}</td>
-                      <td className="p-3 font-mono">{c.official_metrics?.fitness?.toFixed(2) ?? "-"}</td>
-                      <td className="p-3 font-mono">{c.official_metrics?.turnover != null ? `${(c.official_metrics.turnover * 100).toFixed(1)}%` : "-"}</td>
-                      <td className="p-3"><span className={`badge text-xs ${statusBadge(candidateStatus(c))}`}>{candidateStatus(c) || "-"}</span></td>
                       <td className="p-3">
-                        <button
-                          type="button"
-                          className="btn-secondary text-xs"
-                          aria-label={`Score ${candidateIdentity(c) || candidateText(c.expression) || "candidate"}`}
-                          onClick={() => onScore?.(c)}
-                          disabled={!onScore}
-                        >
-                          Score
-                        </button>
+                        <span className="font-mono text-xs text-brand-400" title={candidateIds(candidate).join(" / ")}>
+                          {candidateIdentity(candidate).slice(0, 16) || "-"}
+                        </span>
                       </td>
-                    </tr>
-                  ))}
-                  {bottomSpacerHeight > 0 && (
-                    <tr aria-hidden="true">
-                      <td
-                        colSpan={8}
-                        style={{ height: bottomSpacerHeight, padding: 0, border: 0 }}
-                      >
-                        &nbsp;
+                      <td className="p-3">
+                        <div className="font-mono text-xs text-gray-300 truncate" title={candidateText(candidate.expression)}>
+                          {candidateText(candidate.expression) || "-"}
+                        </div>
+                        <div className="text-xs text-gray-500 mt-1 truncate" title={candidateText(candidate.family)}>
+                          {candidateText(candidate.family)}
+                        </div>
                       </td>
+                      <td className="p-3">
+                        <span className="font-mono font-medium text-white">
+                          {candidate.scorecard?.total_score?.toFixed(1) ?? "-"}
+                        </span>
+                      </td>
+                      <td className="p-3">
+                        <span className={`badge ${statusBadgeClass(candidateStatus(candidate))}`}>
+                          {candidateStatus(candidate) || "-"}
+                        </span>
+                      </td>
+                      <td className="p-3">
+                        <span className={`badge ${quality.tone}`} title={quality.title}>
+                          {quality.label}
+                        </span>
+                      </td>
+                      <td className="p-3 text-xs text-gray-300">
+                        <div className="line-clamp-2" title={candidateBlockerText(candidate)}>
+                          {candidateBlockerText(candidate)}
+                        </div>
+                      </td>
+                      <td className="p-3 text-xs text-gray-300">
+                        <div className="font-medium text-gray-200">{candidateOutputSummary(candidate)}</div>
+                        <div className="mt-1 truncate text-muted" title={candidateOutputDetail(candidate)}>
+                          {candidateOutputDetail(candidate)}
+                        </div>
+                      </td>
+                      <td className="p-3 text-xs text-gray-300">
+                        <div className="truncate" title={evidence}>{evidence}</div>
+                        <div className="mt-1 truncate text-muted" title={candidateText(candidate.simulation_id)}>
+                          {candidateText(candidate.simulation_id) || "simulation:-"}
+                        </div>
+                      </td>
+                      {canShowRowActions && (
+                        <td className="p-3">
+                          <button
+                            type="button"
+                            className="btn-ghost text-xs"
+                            aria-label={`评分 ${candidateIdentity(candidate)}`}
+                            onClick={() => onScore?.(candidate)}
+                          >
+                            评分
+                          </button>
+                        </td>
+                      )}
                     </tr>
-                  )}
-                </>
+                  );
+                })
               )}
             </tbody>
           </table>
         </div>
-        {sorted.length > 0 && (
-          <div className="flex flex-col gap-2 border-t border-gray-800 px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-xs text-muted" role="status" aria-live="polite">
-              Showing {visibleStartRow}-{visibleEndRow} of {sorted.length} candidates
-            </p>
+
+        <div className="flex flex-col gap-3 px-4 py-3 border-t border-gray-800/30 sm:flex-row sm:items-center sm:justify-between">
+          <div className="text-sm text-gray-400" role="status" aria-live="polite">
+            显示 {visibleStart}-{visibleEnd}，共 {sortedCandidates.length} 条
           </div>
-        )}
+          {sortedCandidates.length > PAGE_SIZE && (
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                disabled={currentPage === 1}
+                className="btn-ghost text-sm disabled:opacity-50"
+              >
+                上一页
+              </button>
+              <span className="text-sm text-gray-400">
+                {currentPage} / {totalPages}
+              </span>
+              <button
+                type="button"
+                onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+                disabled={currentPage === totalPages}
+                className="btn-ghost text-sm disabled:opacity-50"
+              >
+                下一页
+              </button>
+            </div>
+          )}
+        </div>
       </div>
     </div>
+  );
+}
+
+function SortHeader({
+  column,
+  label,
+  sortKey,
+  sortAsc,
+  onSort,
+}: {
+  column: SortKey;
+  label: string;
+  sortKey: SortKey;
+  sortAsc: boolean;
+  onSort: (column: SortKey) => void;
+}) {
+  const active = sortKey === column;
+  return (
+    <th scope="col" className="w-[7rem] p-3 font-medium" aria-sort={active ? (sortAsc ? "ascending" : "descending") : "none"}>
+      <button type="button" className="flex items-center gap-1 hover:text-white transition-colors" onClick={() => onSort(column)}>
+        {label}
+        <span className="text-brand-400" aria-hidden="true">{active ? (sortAsc ? "↑" : "↓") : ""}</span>
+      </button>
+    </th>
+  );
+}
+
+function QualitySummaryItem({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="card min-w-0 p-3">
+      <p className="text-muted">{label}</p>
+      <p className="mt-1 truncate font-semibold text-gray-100" title={value}>{value}</p>
+    </div>
+  );
+}
+
+function CandidateMobileCard({
+  candidate,
+  checkResults,
+  canShowRowActions,
+  onScore,
+}: {
+  candidate: Candidate;
+  checkResults: Map<string, CandidateCheckResult>;
+  canShowRowActions: boolean;
+  onScore?: (candidate: Candidate) => void;
+}) {
+  const quality = candidateQualityBadge(candidate);
+  const evidence = officialEvidenceText(candidate, checkResults);
+  return (
+    <article className="rounded-lg border border-gray-800/70 bg-gray-900/70 p-4 text-sm">
+      <div className="flex min-w-0 items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="font-mono text-xs text-brand-400" title={candidateIds(candidate).join(" / ")}>
+            {candidateIdentity(candidate).slice(0, 24) || "-"}
+          </p>
+          <p className="mt-2 line-clamp-3 break-words font-mono text-xs text-gray-200" title={candidateText(candidate.expression)}>
+            {candidateText(candidate.expression) || "-"}
+          </p>
+        </div>
+        <span className={`badge shrink-0 ${quality.tone}`} title={quality.title}>
+          {quality.label}
+        </span>
+      </div>
+
+      <dl className="mt-4 grid grid-cols-2 gap-3 text-xs">
+        <div>
+          <dt className="text-muted">评分</dt>
+          <dd className="mt-1 font-mono font-semibold text-white">{candidate.scorecard?.total_score?.toFixed(1) ?? "-"}</dd>
+        </div>
+        <div>
+          <dt className="text-muted">状态</dt>
+          <dd className="mt-1"><span className={`badge ${statusBadgeClass(candidateStatus(candidate))}`}>{candidateStatus(candidate) || "-"}</span></dd>
+        </div>
+        <div className="col-span-2">
+          <dt className="text-muted">阻断原因</dt>
+          <dd className="mt-1 break-words text-gray-300">{candidateBlockerText(candidate)}</dd>
+        </div>
+        <div className="col-span-2">
+          <dt className="text-muted">官方证据</dt>
+          <dd className="mt-1 break-words text-gray-300">{evidence}</dd>
+        </div>
+        <div className="col-span-2">
+          <dt className="text-muted">输出</dt>
+          <dd className="mt-1 text-gray-200">{candidateOutputSummary(candidate)}</dd>
+          <dd className="mt-1 break-words text-muted">{candidateOutputDetail(candidate)}</dd>
+        </div>
+      </dl>
+
+      {canShowRowActions && (
+        <button
+          type="button"
+          className="btn-ghost mt-4 min-h-11 w-full text-sm"
+          aria-label={`评分 ${candidateIdentity(candidate)}`}
+          onClick={() => onScore?.(candidate)}
+        >
+          评分
+        </button>
+      )}
+    </article>
   );
 }
 
@@ -411,84 +595,203 @@ function clampGenerateCount(value: string | number) {
   return Math.min(Math.max(Math.trunc(parsed), MIN_GENERATE_COUNT), MAX_GENERATE_COUNT);
 }
 
-function SortHeader({
-  label,
-  column,
-  sortKey,
-  sortAsc,
-  onSort,
-}: {
-  label: string;
-  column: SortKey;
-  sortKey: SortKey;
-  sortAsc: boolean;
-  onSort: (key: SortKey) => void;
-}) {
-  const active = sortKey === column;
-  return (
-    <th scope="col" className="p-3" aria-sort={active ? (sortAsc ? "ascending" : "descending") : "none"}>
-      <button
-        type="button"
-        className="inline-flex items-center gap-1 uppercase tracking-wider text-left"
-        onClick={() => onSort(column)}
-      >
-        <span>{label}</span>
-        <span aria-hidden="true">{active ? (sortAsc ? "↑" : "↓") : ""}</span>
-      </button>
-    </th>
-  );
-}
-
 function sanitizeTextInput(value: string, maxLength: number) {
   return value.replace(/[\x00-\x1F\x7F]/g, "").slice(0, maxLength);
+}
+
+function indexCheckResults(rows: CandidateCheckResult[]) {
+  const index = new Map<string, CandidateCheckResult>();
+  for (const row of rows) {
+    for (const id of candidateIds(row)) index.set(id, row);
+  }
+  return index;
+}
+
+function checkResultForCandidate(candidate: Candidate, checkResults: Map<string, CandidateCheckResult>) {
+  for (const id of candidateIds(candidate)) {
+    const result = checkResults.get(id);
+    if (result) return result;
+  }
+  return undefined;
+}
+
+function candidateMatchesQueueView(
+  candidate: Candidate,
+  viewMode: CandidateQueueView,
+  checkResults: Map<string, CandidateCheckResult>,
+) {
+  if (viewMode === "candidates") return true;
+  const status = candidateStatus(candidate);
+  const stage = candidateStage(candidate);
+  const result = checkResultForCandidate(candidate, checkResults);
+  if (viewMode === "pending_backtest") return status === "pending_backtest";
+  if (viewMode === "running_backtest") return status === "running_backtest" || status === "running";
+  if (viewMode === "backtest_rework") return status === "backtest_rework" || status === "failed_backtest" || status === "rejected";
+  if (viewMode === "passed") return status === "submission_ready" || candidate.quality_diagnosis?.submission_ready === true || candidate.gate?.passed === true;
+  if (viewMode === "submittable") return status !== "submitted" && result?.is_stale !== true && Boolean(result?.submittable ?? result?.passed ?? candidate.quality_diagnosis?.submission_ready);
+  if (viewMode === "submitted") return status === "submitted" || stage === "submitted";
+  return status === "failed" || status === "rejected" || status === "blocked";
+}
+
+function queueViewLabel(viewMode: CandidateQueueView) {
+  const labels: Record<CandidateQueueView, string> = {
+    candidates: "全部候选",
+    pending_backtest: "等待回测",
+    running_backtest: "回测中",
+    backtest_rework: "需返工",
+    passed: "已达标",
+    submittable: "可提交预检",
+    submitted: "已提交",
+    failed: "失败/阻断",
+  };
+  return labels[viewMode];
 }
 
 function candidateIdentity(candidate: Candidate) {
   return candidateIds(candidate)[0] || "";
 }
 
+function candidateIds(candidate: Pick<Candidate, "alpha_id" | "official_alpha_id" | "simulation_id"> | CandidateCheckResult) {
+  return [candidate.alpha_id, candidate.official_alpha_id, candidate.simulation_id]
+    .map((value) => String(value || "").trim())
+    .filter(Boolean);
+}
+
 function candidateStatus(candidate: Candidate) {
-  return candidateText(candidate.lifecycle_status || (candidate as Candidate & { status?: unknown }).status);
+  const normalized = candidateText(candidate.lifecycle_status || candidate.quality_diagnosis?.status || candidate.gate?.status);
+  return normalized.toLowerCase();
+}
+
+function candidateStage(candidate: Candidate) {
+  const submission = record(candidate.submission);
+  return candidateText(submission.stage || submission.status || candidate.lifecycle_status).toLowerCase();
 }
 
 function candidateText(value: unknown) {
   return String(value || "");
 }
 
-function candidateIds(candidate: Pick<Candidate, "alpha_id" | "official_alpha_id" | "simulation_id">) {
-  return [candidate.alpha_id, candidate.official_alpha_id, candidate.simulation_id]
-    .map(candidateText)
-    .filter(Boolean);
+function candidateCreatedAt(candidate: Candidate) {
+  return new Date(candidate.created_at || candidate.updated_at || 0).getTime();
 }
 
-function candidateStage(candidate: Candidate) {
-  return candidateText((candidate as Candidate & { stage?: unknown }).stage).toLowerCase();
+function candidateQualitySearchText(candidate: Candidate) {
+  return [
+    candidateBlockerText(candidate),
+    candidateOutputSummary(candidate),
+    candidateOutputDetail(candidate),
+    candidate.official_alpha_id,
+    candidate.simulation_id,
+    candidate.dataset_id,
+  ].filter(Boolean).join(" ");
 }
 
-function indexCheckResults(items: CandidateCheckResult[]) {
-  const index: CandidateCheckIndex = {};
-  for (const item of items) {
-    for (const id of candidateIds(item as Candidate)) index[id] = item;
+function candidateQualityBadge(candidate: Candidate) {
+  const diagnosis = candidate.quality_diagnosis || {};
+  if (diagnosis.qualified || diagnosis.submission_ready) {
+    return { label: "达标", tone: "badge-success", title: "符合提交前质量门禁" };
   }
-  return index;
-}
-
-function freshPassedCheckForCandidate(candidate: Candidate, checkResults: CandidateCheckIndex) {
-  for (const id of candidateIds(candidate)) {
-    const result = checkResults[id];
-    if (result && result.is_stale !== true && (result.submittable ?? result.passed)) return true;
+  if (candidateLocalValid(candidate)) {
+    return { label: "本地通过", tone: "badge-warning", title: "本地质量通过，仍需官方证据" };
   }
-  return false;
+  if (candidateHasBlockingQuality(candidate)) {
+    return { label: "阻断", tone: "badge-danger", title: candidateBlockerText(candidate) };
+  }
+  return { label: "未验证", tone: "badge-neutral", title: "缺少质量诊断" };
 }
 
-function candidateMatchesQueueView(candidate: Candidate, viewMode: CandidateQueueView, checkResults: CandidateCheckIndex) {
-  if (viewMode === "candidates") return true;
-  const status = candidateStatus(candidate).toLowerCase();
-  if (viewMode === "pending_backtest") return status === "pending_backtest";
-  if (viewMode === "running_backtest") return status === "running_backtest" || status === "running";
-  if (viewMode === "backtest_rework") return status === "backtest_rework" || status === "failed_backtest" || status === "rejected";
-  if (viewMode === "passed") return status === "submission_ready" || Boolean((candidate.gate as { submission_ready?: unknown } | undefined)?.submission_ready);
-  if (viewMode === "submittable") return status !== "submitted" && candidateStage(candidate) !== "submitted" && freshPassedCheckForCandidate(candidate, checkResults);
-  if (viewMode === "submitted") return status === "submitted" || candidateStage(candidate) === "submitted";
-  return status === "failed" || status === "rejected" || status === "blocked";
+function candidateBlockerText(candidate: Candidate) {
+  const diagnosis = candidate.quality_diagnosis || {};
+  const primary = record(diagnosis.primary_reason);
+  const primaryText = candidateText(primary.message || primary.code || primary.category);
+  if (primaryText) return primaryText;
+  if ((diagnosis.blocking_reasons || []).length) return (diagnosis.blocking_reasons || []).join("; ");
+  if ((candidate.local_quality?.reasons || []).length) return candidate.local_quality?.reasons?.join("; ") || "";
+  if ((candidate.gate?.failed_reasons || []).length) return candidate.gate?.failed_reasons?.join("; ") || "";
+  if (candidate.local_quality?.passed === false) return "local_quality_failed";
+  if (!candidate.quality_diagnosis) return "missing_quality_diagnosis";
+  return "-";
+}
+
+function candidateLocalValid(candidate: Candidate) {
+  const diagnosis = candidate.quality_diagnosis || {};
+  if (typeof diagnosis.local_candidate_valid === "boolean") {
+    return diagnosis.local_candidate_valid;
+  }
+  return candidate.local_quality?.passed === true;
+}
+
+function candidateHasBlockingQuality(candidate: Candidate) {
+  const diagnosis = candidate.quality_diagnosis || {};
+  return Boolean(
+    diagnosis.primary_reason ||
+    (diagnosis.blocking_reasons || []).length ||
+    (candidate.local_quality?.reasons || []).length ||
+    candidate.local_quality?.passed === false ||
+    (candidate.gate?.failed_reasons || []).length
+  );
+}
+
+function candidateOutputSummary(candidate: Candidate) {
+  const config = candidate.alpha_output_config || {};
+  if (config.local_only === true) return "本地输出";
+  if (config.official_api_called === true) return "官方证据";
+  if (config.allow_submit === false) return "禁止提交";
+  return config.alpha_type || candidate.decision_band || "-";
+}
+
+function candidateOutputDetail(candidate: Candidate) {
+  const config = candidate.alpha_output_config || {};
+  const settings = record(config.settings);
+  const dataset = config.dataset_id || candidate.dataset_id || settings.dataset;
+  const alphaType = config.alpha_type || settings.type;
+  const official = config.official_api_called === true ? "official_called" : "official_not_called";
+  return [dataset ? `dataset:${dataset}` : "", alphaType ? `type:${alphaType}` : "", official].filter(Boolean).join(" · ");
+}
+
+function officialEvidenceText(candidate: Candidate, checkResults: Map<string, CandidateCheckResult>) {
+  const result = checkResultForCandidate(candidate, checkResults);
+  if (result) {
+    const status = result.status || (result.submittable ? "submittable" : result.passed ? "passed" : "blocked");
+    const stale = result.is_stale ? " · stale" : "";
+    return `${candidateText(result.official_alpha_id || candidate.official_alpha_id || "official:-")} · ${status}${stale}`;
+  }
+  return candidateText(candidate.official_alpha_id || "official:-");
+}
+
+function summarizeCandidateQuality(candidates: Candidate[]) {
+  const ready = candidates.filter((candidate) => candidate.quality_diagnosis?.submission_ready || candidate.gate?.passed).length;
+  const localValid = candidates.filter(candidateLocalValid).length;
+  const blocked = candidates.filter(candidateHasBlockingQuality).length;
+  const outputModes = candidates.map(candidateOutputSummary).filter((value) => value && value !== "-");
+  const datasets = candidates.map((candidate) => candidate.alpha_output_config?.dataset_id || candidate.dataset_id).filter(Boolean);
+  return {
+    ready,
+    localValid,
+    blocked,
+    outputMode: mostCommon(outputModes) || "-",
+    dataset: mostCommon(datasets) || "-",
+  };
+}
+
+function statusBadgeClass(status: string) {
+  const normalized = status.toLowerCase();
+  if (normalized.includes("submitted") || normalized.includes("completed")) return "badge-success";
+  if (normalized.includes("failed") || normalized.includes("blocked") || normalized.includes("rejected")) return "badge-danger";
+  if (normalized.includes("validat") || normalized.includes("simulat") || normalized.includes("running")) return "badge-warning";
+  return "badge-neutral";
+}
+
+function mostCommon(values: unknown[]) {
+  const counts = new Map<string, number>();
+  for (const value of values) {
+    const text = candidateText(value);
+    if (!text) continue;
+    counts.set(text, (counts.get(text) || 0) + 1);
+  }
+  return [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || "";
+}
+
+function record(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }

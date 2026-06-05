@@ -5,8 +5,11 @@ Generates alpha expression templates from official fields & operators.
 from __future__ import annotations
 
 import random
+import re
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
+
+from brain_alpha_ops.research.field_quality import filter_generation_fields
 
 if TYPE_CHECKING:
     from brain_alpha_ops.data import OfficialDataLoader, OfficialField
@@ -195,6 +198,17 @@ TEMPLATE_SKELETONS: dict[str, list[str]] = {
         "rank(ts_std_dev({FIELD}, {WINDOW}) - ts_std_dev({FIELD}, {WINDOW2})) * sign(ts_delta({FIELD}, {WINDOW3}))",
     ],
 }
+
+# High-structure templates are used first when the active dataset has enough
+# eligible fields.  They improve candidate quality by changing the expression
+# itself: multi-field signal construction, time-series normalization, and
+# cross-sectional risk control.  Submission gates still require official PASS.
+PRODUCTION_STRUCTURE_SKELETONS: list[str] = [
+    "rank(winsorize(ts_delta({FIELD_A}, {WINDOW}) / ts_std_dev({FIELD_B}, {WINDOW2}) + {FIELD_C} - {FIELD_D}, std=4))",
+    "rank(winsorize(ts_mean({FIELD_A}, {WINDOW}) / ts_std_dev({FIELD_B}, {WINDOW2}) + {FIELD_C} - {FIELD_D}, std=4))",
+    "zscore(winsorize(ts_delta({FIELD_A}, {WINDOW}) / ts_std_dev({FIELD_B}, {WINDOW2}) + {FIELD_C} - {FIELD_D}, std=4))",
+    "group_rank(winsorize(ts_delta({FIELD_A}, {WINDOW}) / ts_std_dev({FIELD_B}, {WINDOW2}) + {FIELD_C} - {FIELD_D}, std=4), {GROUP})",
+]
 
 # Default window sizes for template generation
 # M-01 v3: Extended window set — fine-grained short windows for reversal/liquidity,
@@ -457,7 +471,8 @@ class DynamicThemeEngine:
         if seed is not None:
             random.seed(seed)
 
-        fields = self._loader.get_fields(dataset_id)
+        raw_fields = self._loader.get_fields(dataset_id)
+        fields = filter_generation_fields(raw_fields) or raw_fields
         if not fields:
             return []
 
@@ -482,14 +497,23 @@ class DynamicThemeEngine:
         while len(templates) < n and attempts < n * 3:
             attempts += 1
 
+            field_universe = {field for values in cat_fields.values() for field in values}
+
+            # Seed each batch with structurally complete hybrid templates when
+            # possible. This improves actual expression quality without changing
+            # scoring or submit thresholds.
+            if len(field_universe) >= 4 and len(templates) < min(n, len(PRODUCTION_STRUCTURE_SKELETONS)):
+                skeleton_cat = "hybrid"
+                skeleton = PRODUCTION_STRUCTURE_SKELETONS[len(templates) % len(PRODUCTION_STRUCTURE_SKELETONS)]
             # Pick a skeleton category (70% auto-generated, 30% proven templates for exploration)
-            if random.random() < 0.7 and auto_skel:
+            elif random.random() < 0.7 and auto_skel:
                 skeleton_cat = random.choice(list(auto_skel.keys()))
                 skeletons = auto_skel[skeleton_cat]
+                skeleton = random.choice(skeletons)
             else:
                 skeleton_cat = random.choice(list(TEMPLATE_SKELETONS.keys()))
                 skeletons = TEMPLATE_SKELETONS[skeleton_cat]
-            skeleton = random.choice(skeletons)
+                skeleton = random.choice(skeletons)
 
             # Map to field categories
             mapped_cats = category_map.get(skeleton_cat, [skeleton_cat])
@@ -534,15 +558,18 @@ class DynamicThemeEngine:
         windows = self._windows
 
         # Replace numeric literals with varied windows
-        # P2 fix: skip numbers that are part of field names (regex uses lookahead/behind
-        # to require whitespace/parentheses/operators on both sides)
-        import re
-        mutated = expression
-        for m in re.finditer(r"(?<![a-zA-Z_])(\d+)(?![a-zA-Z_])", expression):
-            num = int(m.group(1))
+        # Skip numbers that are part of field names by requiring non-identifier
+        # boundaries on both sides.
+        def _replace_window(match: re.Match) -> str:
+            prefix = expression[: match.start()]
+            if re.search(r"[A-Za-z_][A-Za-z0-9_]*\s*=\s*$", prefix):
+                return match.group(0)
+            num = int(match.group(1))
             if 3 <= num <= 252:
-                new_win = random.choice(windows)
-                mutated = mutated.replace(m.group(0), str(new_win), 1)
+                return str(random.choice(windows))
+            return match.group(0)
+
+        mutated = re.sub(r"(?<![a-zA-Z0-9_])(\d+)(?![a-zA-Z0-9_])", _replace_window, expression)
 
         # Optionally wrap with transform
         variant = random.randint(0, 3)
@@ -565,22 +592,22 @@ class DynamicThemeEngine:
         result = skeleton
         used_fields: list[str] = []
 
-        # {FIELD_A}, {FIELD_B}, {FIELD}
-        for placeholder in ("{FIELD_A}", "{FIELD_B}", "{FIELD}"):
+        all_fields = [field for cat in available_cats for field in cat_fields[cat]]
+
+        def choose_field() -> str:
+            unused = [field for field in all_fields if field not in used_fields]
+            pool = unused or all_fields
+            return random.choice(pool) if pool else "returns"
+
+        # {FIELD_A}, {FIELD_B}, {FIELD_C}, {FIELD_D}, {FIELD}
+        for placeholder in ("{FIELD_A}", "{FIELD_B}", "{FIELD_C}", "{FIELD_D}", "{FIELD}"):
             if placeholder in result:
-                cat = random.choice(available_cats)
-                field = random.choice(cat_fields[cat])
+                field = choose_field()
                 result = result.replace(placeholder, field)
                 used_fields.append(field)
 
-        # {WINDOW}, {WINDOW2}
-        # P2 fix: don't add window if operator before the placeholder
-        # only takes 1 arg (e.g. zscore(expr, WINDOW) → zscore takes only 1)
-        _ONE_ARG_OPS = {"zscore", "scale", "normalize", "quantile"}
-        for placeholder in ("{WINDOW}", "{WINDOW2}"):
-            if placeholder in result:
-                win = str(random.choice(self._windows))
-                result = result.replace(placeholder, win)
+        # {WINDOW}, {WINDOW2}, {WINDOW3}, ... each receive a legal window value.
+        result = re.sub(r"\{WINDOW\d*\}", lambda _match: str(random.choice(self._windows)), result)
 
         # {GROUP}
         if "{GROUP}" in result:

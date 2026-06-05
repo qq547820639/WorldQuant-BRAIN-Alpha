@@ -78,6 +78,9 @@ def save_run_config_payload(
     if not isinstance(payload, dict):
         raise ValueError("request body must be a JSON object")
     run_config = run_config_from_payload(payload, loader=loader)
+    run_config.credentials.username = ""
+    run_config.credentials.password = ""
+    run_config.credentials.token = ""
     saved_path = writer(run_config)
     return {
         "ok": True,
@@ -298,6 +301,12 @@ def run_config_from_payload(payload: dict, *, loader: RunConfigLoader = load_run
         ),
         require_cloud_sync=payload_bool(payload, "requireCloudSync", current_budget.require_cloud_sync),
         cloud_sync_range=str(payload.get("syncRange", current_budget.cloud_sync_range)),
+        cloud_sync_max_elapsed_seconds=payload_float(
+            payload,
+            "cloudSyncMaxElapsedSeconds",
+            current_budget.cloud_sync_max_elapsed_seconds,
+            lower=0.0,
+        ),
         max_cycles=payload_int(
             payload,
             "cycles" if "cycles" in payload else "max_cycles",

@@ -25,7 +25,7 @@ export default function ToastContainer({ toasts, onDismiss }: Props) {
   if (toasts.length === 0) return null;
 
   return (
-    <div className="fixed bottom-4 left-4 right-4 z-50 flex flex-col gap-2 sm:left-auto sm:max-w-sm">
+    <div className="fixed left-4 right-4 top-4 z-50 flex flex-col gap-2 sm:bottom-4 sm:left-auto sm:top-auto sm:max-w-sm">
       {toasts.map((toast) => {
         const urgent = toast.type === "error";
         return (
@@ -54,7 +54,7 @@ export default function ToastContainer({ toasts, onDismiss }: Props) {
             <button
               type="button"
               className="text-xs text-gray-300 hover:text-white"
-              aria-label="Dismiss notification"
+              aria-label="关闭通知"
               onClick={() => onDismiss(toast.id)}
             >
               x
