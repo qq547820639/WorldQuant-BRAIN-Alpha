@@ -49,26 +49,51 @@
 /* ── 组件样式 ───────────────────────────────────────────────── */
 
 @layer components {
+  .app-shell {
+    @apply bg-slate-50 text-slate-900;
+  }
+  .app-header {
+    @apply border-slate-200 bg-white/95 shadow-sm backdrop-blur;
+  }
+  .workflow-panel {
+    @apply rounded-lg border border-slate-200 bg-white p-5 shadow-sm;
+  }
+  .workflow-panel-primary {
+    @apply border-brand-200 bg-white;
+  }
+  .workflow-note {
+    @apply rounded-lg border border-slate-200 bg-slate-50 p-4 text-slate-700;
+  }
+  .workflow-steps {
+    @apply rounded-lg border border-slate-200 bg-white p-4 text-slate-600 shadow-sm;
+  }
+
   /* 按钮系统 */
   .btn-primary {
-    @apply bg-brand-600 hover:bg-brand-700 text-white font-medium py-2.5 px-5 rounded-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed;
+    @apply inline-flex min-h-11 items-center justify-center gap-2 bg-brand-600 hover:bg-brand-700 text-white font-medium py-2.5 px-5 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed;
   }
   .btn-secondary {
-    @apply bg-gray-800 hover:bg-gray-700 text-gray-100 font-medium py-2.5 px-5 rounded-xl transition-all duration-200;
+    @apply inline-flex min-h-11 items-center justify-center gap-2 border border-slate-300 bg-white hover:bg-slate-50 text-slate-800 font-medium py-2.5 px-5 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed;
   }
   .btn-danger {
-    @apply bg-danger/20 hover:bg-danger/30 text-danger border border-danger/30 font-medium py-2.5 px-5 rounded-xl transition-all duration-200;
+    @apply inline-flex min-h-11 items-center justify-center gap-2 bg-danger/20 hover:bg-danger/30 text-danger border border-danger/30 font-medium py-2.5 px-5 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed;
   }
   .btn-ghost {
-    @apply text-gray-300 hover:text-white hover:bg-gray-800/50 font-medium py-2 px-4 rounded-lg transition-all duration-200;
+    @apply inline-flex min-h-11 items-center justify-center gap-2 text-slate-600 hover:text-slate-950 hover:bg-slate-100 font-medium py-2 px-4 rounded-lg transition-all duration-200;
   }
   
   /* 卡片系统 */
   .card {
-    @apply bg-gray-900/80 border border-gray-800/50 rounded-2xl p-6 backdrop-blur-sm;
+    @apply bg-white border border-slate-200 rounded-lg p-5 shadow-sm;
   }
   .card-compact {
-    @apply bg-gray-900/60 border border-gray-800/30 rounded-xl p-4;
+    @apply bg-white border border-slate-200 rounded-lg p-4;
+  }
+  .reader-panel {
+    @apply rounded-lg border border-slate-200 bg-white p-5 shadow-sm;
+  }
+  .reader-panel-soft {
+    @apply rounded-lg border border-slate-200 bg-slate-50 p-4;
   }
   
   /* 徽章系统 */
@@ -76,24 +101,24 @@
     @apply inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium;
   }
   .badge-success {
-    @apply bg-success/20 text-success border border-success/20;
+    @apply bg-emerald-50 text-emerald-700 border border-emerald-200;
   }
   .badge-warning {
-    @apply bg-warning/20 text-warning border border-warning/20;
+    @apply bg-amber-50 text-amber-800 border border-amber-200;
   }
   .badge-danger {
-    @apply bg-danger/20 text-danger border border-danger/20;
+    @apply bg-red-50 text-red-700 border border-red-200;
   }
   .badge-info {
-    @apply bg-blue-500/20 text-blue-400 border border-blue-500/20;
+    @apply bg-blue-50 text-blue-700 border border-blue-200;
   }
   .badge-neutral {
-    @apply bg-gray-800 text-gray-300 border border-gray-700;
+    @apply bg-slate-100 text-slate-700 border border-slate-200;
   }
   
   /* 进度反馈组件 */
   .progress-feedback {
-    @apply border border-gray-800/50 bg-gray-900/80 rounded-xl p-5 space-y-4 text-sm backdrop-blur-sm;
+    @apply min-w-0 max-w-full border border-slate-200 bg-white rounded-lg p-5 space-y-4 text-sm;
   }
   .progress-feedback-compact {
     @apply p-4 space-y-3;
@@ -105,22 +130,22 @@
     @apply border-success/30 bg-success/5;
   }
   .progress-feedback-header {
-    @apply flex items-start justify-between gap-4;
+    @apply flex min-w-0 items-start justify-between gap-4;
   }
   .progress-feedback-title {
-    @apply text-sm font-semibold text-gray-200;
+    @apply text-base font-semibold text-slate-950;
   }
   .progress-feedback-phase {
-    @apply text-sm text-gray-400 mt-1;
+    @apply text-sm text-slate-700 mt-1;
   }
   .progress-feedback-percent {
-    @apply text-sm font-mono text-brand-300;
+    @apply text-sm font-mono text-brand-700;
   }
   .progress-feedback-done {
     @apply inline-flex h-6 w-6 items-center justify-center rounded-full bg-success/20 text-sm font-semibold text-success;
   }
   .progress-feedback-track {
-    @apply relative h-2 w-full overflow-hidden rounded-full bg-gray-800;
+    @apply relative h-2 w-full overflow-hidden rounded-full bg-slate-200;
   }
   .progress-feedback-fill {
     @apply h-full rounded-full bg-gradient-to-r from-brand-500 to-brand-600 transition-all duration-500;
@@ -130,36 +155,42 @@
     animation: progress-indeterminate 1.2s ease-in-out infinite;
   }
   .progress-feedback-body {
-    @apply flex flex-wrap items-center justify-between gap-3 text-sm text-gray-300;
+    @apply flex min-w-0 flex-wrap items-center justify-between gap-3 text-sm leading-6 text-slate-800;
   }
   .progress-feedback-eta {
-    @apply font-mono text-gray-400;
+    @apply font-mono text-slate-500;
   }
   .progress-spinner {
-    @apply h-5 w-5 rounded-full border-2 border-gray-700 border-t-brand-400;
+    @apply h-5 w-5 rounded-full border-2 border-slate-200 border-t-brand-600;
     animation: spin 0.8s linear infinite;
   }
   
   /* 表单元素 */
   .input {
-    @apply w-full px-4 py-2.5 bg-gray-900/80 border border-gray-800/50 rounded-xl text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500/50 transition-all duration-200;
+    @apply min-h-11 w-full px-4 py-2.5 bg-white border border-slate-300 rounded-lg text-slate-950 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500 transition-all duration-200;
   }
   .select {
-    @apply w-full px-4 py-2.5 bg-gray-900/80 border border-gray-800/50 rounded-xl text-gray-100 focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500/50 transition-all duration-200 appearance-none;
+    @apply min-h-11 w-full px-4 py-2.5 bg-white border border-slate-300 rounded-lg text-slate-950 focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500 transition-all duration-200 appearance-none;
+  }
+  .form-label {
+    @apply text-sm font-medium text-slate-700;
+  }
+  .form-input {
+    @apply min-h-11 w-full min-w-0 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-950 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:border-brand-500;
   }
   
   /* 表格样式 */
   .table {
-    @apply w-full text-sm text-gray-300;
+    @apply w-full text-sm text-slate-700;
   }
   .table th {
-    @apply px-4 py-3 text-left font-semibold text-gray-200 bg-gray-900/50 border-b border-gray-800/50;
+    @apply px-4 py-3 text-left font-semibold text-slate-700 bg-slate-50 border-b border-slate-200;
   }
   .table td {
-    @apply px-4 py-3 border-b border-gray-800/30;
+    @apply px-4 py-3 border-b border-slate-100;
   }
   .table tr:hover td {
-    @apply bg-gray-900/30;
+    @apply bg-slate-50;
   }
 }
 
@@ -348,4 +379,74 @@
   .no-print {
     display: none !important;
   }
+}
+
+/* ── 旧深色组件的阅读对比兼容层 ─────────────────────────────── */
+.app-shell {
+  color-scheme: light;
+}
+
+.app-shell .card .text-white,
+.app-shell .reader-panel .text-white,
+.app-shell .reader-panel-soft .text-white,
+.app-shell main .text-white,
+.app-shell main .text-gray-100 {
+  color: #0f172a;
+}
+
+.app-shell .card .text-gray-100,
+.app-shell .reader-panel .text-gray-100,
+.app-shell .reader-panel-soft .text-gray-100,
+.app-shell .progress-feedback .text-gray-100,
+.app-shell main .text-gray-200 {
+  color: #0f172a;
+}
+
+.app-shell .card .text-gray-200,
+.app-shell .card .text-gray-300,
+.app-shell .card .text-gray-400,
+.app-shell .reader-panel .text-gray-200,
+.app-shell .reader-panel .text-gray-300,
+.app-shell .reader-panel .text-gray-400,
+.app-shell .reader-panel-soft .text-gray-200,
+.app-shell .reader-panel-soft .text-gray-300,
+.app-shell .reader-panel-soft .text-gray-400,
+.app-shell main .text-gray-300,
+.app-shell main .text-gray-400,
+.app-shell main .text-gray-500,
+.app-shell main .text-muted {
+  color: #475569;
+}
+
+.app-shell main .text-brand-300,
+.app-shell main .text-brand-400 {
+  color: #1d4ed8;
+}
+
+.app-shell main .border-gray-600,
+.app-shell main .border-gray-700,
+.app-shell main .border-gray-800,
+.app-shell main [class*="border-gray-800/"] {
+  border-color: #e2e8f0;
+}
+
+.app-shell main .bg-gray-800,
+.app-shell main .bg-gray-950,
+.app-shell main [class*="bg-gray-800/"],
+.app-shell main [class*="bg-gray-900/"],
+.app-shell main [class*="bg-gray-950"] {
+  background-color: #f8fafc;
+}
+
+.app-shell main .btn-primary,
+.app-shell .card .btn-primary,
+.app-shell .reader-panel .btn-primary,
+.app-shell .reader-panel-soft .btn-primary {
+  color: #ffffff;
+}
+
+.app-shell main pre,
+.app-shell main code {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }

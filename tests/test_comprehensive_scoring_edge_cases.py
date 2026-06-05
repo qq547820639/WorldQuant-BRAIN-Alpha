@@ -103,6 +103,8 @@ def strong_official_metrics():
         "returns": 0.012,
         "drawdown": 0.08,
         "correlation": 0.35,
+        "self_correlation": 0.35,
+        "prod_correlation": 0.35,
         "weight_concentration": 0.045,
         "sub_universe_sharpe": 1.6,
         "subUniverseSize": 2000,
@@ -995,7 +997,7 @@ class TestResilience:
         snap = OfficialSnapshot.from_metrics(partial)
         assert snap.sharpe == 1.5
         assert snap.fitness == 1.0
-        assert snap.turnover == 0.0  # default for missing
+        assert snap.turnover is None
 
 
 # ═══════════════════════════════════════════════════════════════════════

@@ -67,6 +67,32 @@ def test_run_job_service_marks_completed_with_summary_stats():
     assert row["progress"]["data"]["stats"] == {"produced_count": 2}
 
 
+def test_run_job_service_promotes_stopped_progress_to_top_level_status():
+    store = _Store()
+
+    def run_pipeline(_config, *, progress_callback, stop_callback):
+        store.cancelled = True
+        progress_callback({"phase": "stopped", "message": "用户已停止连续生产队列。"})
+        assert stop_callback() is True
+        assert store.get("job_1")["status"] == "stopped"
+        return _Result()
+
+    run_job_service(
+        "job_1",
+        {"env": "mock"},
+        job_store=store,
+        run_config_from_payload=lambda payload: _config(),
+        run_pipeline_from_config=run_pipeline,
+        compute_run_stats=lambda data, config: {},
+        safe_error_message=str,
+        log=logging.getLogger("tests.web_run_job"),
+    )
+
+    row = store.get("job_1")
+    assert row["status"] == "stopped"
+    assert row["progress"]["phase"] == "stopped"
+
+
 def test_run_job_service_records_redacted_failure_context():
     store = _Store()
 

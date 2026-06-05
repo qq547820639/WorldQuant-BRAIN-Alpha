@@ -82,17 +82,88 @@ def redact_data(
     *,
     key_fragments: tuple[str, ...] | None = None,
     redacted_keys: set[str] | None = None,
+    max_depth: int = 64,
 ) -> Any:
     fragments = tuple(_normalize_key(fragment) for fragment in (key_fragments or ()))
+    return _redact_data(
+        data,
+        fragments=fragments,
+        redacted_keys=redacted_keys,
+        max_depth=max(1, int(max_depth or 1)),
+        seen=set(),
+        depth=0,
+    )
+
+
+def _redact_data(
+    data: Any,
+    *,
+    fragments: tuple[str, ...],
+    redacted_keys: set[str] | None,
+    max_depth: int,
+    seen: set[int],
+    depth: int,
+) -> Any:
+    if depth >= max_depth and isinstance(data, (dict, list, tuple)):
+        return "<redacted-depth-limit>"
     if isinstance(data, dict):
-        return {
-            key: _redact_value_for_key(key, value, fragments=fragments, redacted_keys=redacted_keys)
-            for key, value in data.items()
-        }
+        data_id = id(data)
+        if data_id in seen:
+            return "<redacted-recursive-reference>"
+        seen.add(data_id)
+        try:
+            return {
+                key: _redact_value_for_key(
+                    key,
+                    value,
+                    fragments=fragments,
+                    redacted_keys=redacted_keys,
+                    max_depth=max_depth,
+                    seen=seen,
+                    depth=depth + 1,
+                )
+                for key, value in data.items()
+            }
+        finally:
+            seen.remove(data_id)
     if isinstance(data, list):
-        return [redact_data(item, key_fragments=key_fragments, redacted_keys=redacted_keys) for item in data]
+        data_id = id(data)
+        if data_id in seen:
+            return "<redacted-recursive-reference>"
+        seen.add(data_id)
+        try:
+            return [
+                _redact_data(
+                    item,
+                    fragments=fragments,
+                    redacted_keys=redacted_keys,
+                    max_depth=max_depth,
+                    seen=seen,
+                    depth=depth + 1,
+                )
+                for item in data
+            ]
+        finally:
+            seen.remove(data_id)
     if isinstance(data, tuple):
-        return tuple(redact_data(item, key_fragments=key_fragments, redacted_keys=redacted_keys) for item in data)
+        data_id = id(data)
+        if data_id in seen:
+            return "<redacted-recursive-reference>"
+        seen.add(data_id)
+        try:
+            return tuple(
+                _redact_data(
+                    item,
+                    fragments=fragments,
+                    redacted_keys=redacted_keys,
+                    max_depth=max_depth,
+                    seen=seen,
+                    depth=depth + 1,
+                )
+                for item in data
+            )
+        finally:
+            seen.remove(data_id)
     if isinstance(data, str):
         return redact_text(data)
     return data
@@ -104,13 +175,23 @@ def _redact_value_for_key(
     *,
     fragments: tuple[str, ...],
     redacted_keys: set[str] | None,
+    max_depth: int,
+    seen: set[int],
+    depth: int,
 ) -> Any:
     normalized = _normalize_key(str(key))
     if _is_sensitive_key(normalized, fragments):
         if redacted_keys is not None:
             redacted_keys.add(str(key))
         return "<redacted>"
-    return redact_data(value, key_fragments=fragments, redacted_keys=redacted_keys)
+    return _redact_data(
+        value,
+        fragments=fragments,
+        redacted_keys=redacted_keys,
+        max_depth=max_depth,
+        seen=seen,
+        depth=depth,
+    )
 
 
 def _is_sensitive_key(normalized_key: str, fragments: tuple[str, ...]) -> bool:

@@ -17,15 +17,21 @@ def test_config_panel_exposes_import_export_controls():
     assert "导出" in source
 
 
-def test_config_panel_exposes_brain_connection_test_without_custom_auth_form():
+def test_config_panel_exposes_session_only_brain_connection_credentials():
     source = CONFIG_PANEL.read_text(encoding="utf-8")
 
-    assert 'ConfigSection title="BRAIN 连接"' in source
+    assert 'title="BRAIN 连接"' in source
+    assert 'description="这些字段只保留在当前浏览器内存里，用于连接测试和本次流水线请求。"' in source
+    assert 'label="账户邮箱"' in source
+    assert 'label="密码"' in source
+    assert 'label="Token"' in source
+    assert 'type="password"' in source
     assert 'connectionApi.call("/api/test_connection"' in source
     assert "测试 BRAIN 连接" in source
     assert "BRAIN 连接测试通过" in source
-    assert "payloadFromForm(form)" in source
-    assert 'type="password"' not in source
+    assert "payloadFromForm(form, credentials)" in source
+    assert "hasSessionCredentials" in source
+    assert "保存配置不会保存账号、密码或 token" in source
 
 
 def test_config_panel_exports_current_edit_payload_without_saving():
@@ -56,7 +62,9 @@ def test_config_panel_import_accepts_export_payload_and_public_config_shapes():
     assert "const source = asRecord(root.config) || root" in source
     assert "if (asRecord(source.ops))" in source
     assert "return formFromConfig(source as unknown as RunConfig)" in source
-    assert "autoSubmit: booleanValue(source.autoSubmit ?? source.auto_submit" in source
+    assert "autoSubmit: false" in source
+    assert '<CheckboxField label="自动提交"' not in source
+    assert 'value="关闭（Web 保存强制）"' in source
     assert "instrumentType: stringValue(settings.instrumentType" in source
     assert "region: stringValue(settings.region" in source
     assert "alphaType: stringValue(settings.type ?? settings.alphaType" in source

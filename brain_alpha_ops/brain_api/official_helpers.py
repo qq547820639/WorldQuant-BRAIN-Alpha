@@ -87,16 +87,21 @@ def normalize_metrics(payload: Any) -> dict:
         self_correlation_check_value = _num_or_none(self_correlation_check.get("value"))
     correlation_value = _num_or_none(_first_value(
         metrics_root,
-        ["correlation", "prodCorrelation", "selfCorrelation", "self_correlation"],
+        ["correlation", "selfCorrelation", "self_correlation", "prodCorrelation", "prod_correlation"],
         None,
     ))
     self_correlation_value = _num_or_none(_first_value(
         metrics_root,
-        ["selfCorrelation", "self_correlation", "correlation", "prodCorrelation"],
+        ["selfCorrelation", "self_correlation"],
         None,
     ))
     if self_correlation_value is None:
         self_correlation_value = self_correlation_check_value
+    prod_correlation_value = _num_or_none(_first_value(
+        metrics_root,
+        ["prodCorrelation", "prod_correlation"],
+        None,
+    ))
 
     metrics = {
         "sharpe": is_sharpe,
@@ -109,6 +114,7 @@ def normalize_metrics(payload: Any) -> dict:
         "sub_universe_sharpe": _num(_first_value(metrics_root, ["subUniverseSharpe", "sub_universe_sharpe"])),
         "correlation": abs(_ratio(correlation_value)) if correlation_value is not None else None,
         "self_correlation": abs(_ratio(self_correlation_value)) if self_correlation_value is not None else None,
+        "prod_correlation": abs(_ratio(prod_correlation_value)) if prod_correlation_value is not None else None,
         "self_correlation_status": self_correlation_status or None,
         "weight_concentration": _ratio(_first_value(metrics_root, ["weightConcentration", "weight_concentration"], 0.0)),
         "pass_fail": "FAIL" if failed else "PASS",

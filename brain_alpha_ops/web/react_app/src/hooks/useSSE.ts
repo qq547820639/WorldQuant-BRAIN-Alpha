@@ -6,6 +6,7 @@ import type { SSEEvent } from "@/types";
 interface UseSSEOptions {
   onEvent?: (event: SSEEvent) => void;
   onError?: (error: Event) => void;
+  onExhausted?: () => void;
   reconnectIntervalMs?: number;
   maxReconnectAttempts?: number;
 }
@@ -17,11 +18,14 @@ export function useSSE(
   const {
     onEvent,
     onError,
+    onExhausted,
     reconnectIntervalMs = 3000,
     maxReconnectAttempts = 10,
   } = options;
 
   const [connected, setConnected] = useState(false);
+  const [exhausted, setExhausted] = useState(false);
+  const [reconnectAttempts, setReconnectAttempts] = useState(0);
   const [lastEvent, setLastEvent] = useState<SSEEvent | null>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
   const reconnectCountRef = useRef(0);
@@ -36,7 +40,7 @@ export function useSSE(
       clearTimeout(reconnectTimerRef.current);
       reconnectTimerRef.current = null;
     }
-    setConnected(false);
+	    setConnected(false);
   }, []);
 
   useEffect(() => {
@@ -47,6 +51,8 @@ export function useSSE(
 
     const streamUrl = url;
     reconnectCountRef.current = 0;
+    setExhausted(false);
+    setReconnectAttempts(0);
     connect();
 
     function connect() {
@@ -56,10 +62,12 @@ export function useSSE(
         const es = new EventSource(withStreamToken(streamUrl), { withCredentials: true });
         eventSourceRef.current = es;
 
-        es.onopen = () => {
-          setConnected(true);
-          reconnectCountRef.current = 0;
-        };
+	        es.onopen = () => {
+	          setConnected(true);
+	          setExhausted(false);
+	          reconnectCountRef.current = 0;
+	          setReconnectAttempts(0);
+	        };
 
         es.onmessage = (msg: MessageEvent) => {
           try {
@@ -75,24 +83,32 @@ export function useSSE(
           setConnected(false);
           onError?.(err);
 
-          if (reconnectCountRef.current < maxReconnectAttempts) {
-            reconnectCountRef.current += 1;
-            reconnectTimerRef.current = setTimeout(connect, reconnectIntervalMs);
-          }
-        };
-      } catch {
-        // EventSource constructor failed — retry
-        if (reconnectCountRef.current < maxReconnectAttempts) {
-          reconnectCountRef.current += 1;
-          reconnectTimerRef.current = setTimeout(connect, reconnectIntervalMs);
-        }
-      }
-    }
+	          if (reconnectCountRef.current < maxReconnectAttempts) {
+	            reconnectCountRef.current += 1;
+	            setReconnectAttempts(reconnectCountRef.current);
+	            reconnectTimerRef.current = setTimeout(connect, reconnectIntervalMs);
+	          } else {
+	            setExhausted(true);
+	            onExhausted?.();
+	          }
+	        };
+	      } catch {
+	        // EventSource constructor failed — retry
+	        if (reconnectCountRef.current < maxReconnectAttempts) {
+	          reconnectCountRef.current += 1;
+	          setReconnectAttempts(reconnectCountRef.current);
+	          reconnectTimerRef.current = setTimeout(connect, reconnectIntervalMs);
+	        } else {
+	          setExhausted(true);
+	          onExhausted?.();
+	        }
+	      }
+	    }
 
-    return close;
-  }, [url, close, onEvent, onError, reconnectIntervalMs, maxReconnectAttempts]);
+	    return close;
+	  }, [url, close, onEvent, onError, onExhausted, reconnectIntervalMs, maxReconnectAttempts]);
 
-  return { connected, lastEvent, close };
+	  return { connected, exhausted, reconnectAttempts, lastEvent, close };
 }
 
 function withStreamToken(url: string) {

@@ -72,8 +72,9 @@ def test_react_job_monitor_exposes_status_and_event_log_to_assistive_tech():
     assert "流水线${running ? \"运行中\" : \"空闲\"}" in job_monitor
     assert 'role="log"' in job_monitor
     assert 'aria-label="流水线事件日志"' in job_monitor
-    assert 'aria-hidden="true">▶' in job_monitor
-    assert 'aria-hidden="true">⏹' in job_monitor
+    assert "function PlayIcon" in job_monitor
+    assert "function StopIcon" in job_monitor
+    assert 'aria-hidden="true" width="16" height="16"' in job_monitor
 
 
 def test_react_gate_status_icons_are_visual_only():

@@ -24,6 +24,7 @@ ACTIVE_STATUSES = {"queued", "running", "stopping"}
 DEFAULT_RECOVERY_ERROR = "Process restarted before this task completed."
 JOB_PREVIEW_ROWS = 5
 COMPACT_LIST_KEYS = {"alphas", "cloud_alphas", "candidates", "backtests", "lifecycle_records"}
+DEFAULT_MAX_PERSISTENCE_LOAD_BYTES = 50 * 1024 * 1024
 
 
 class JobStore:
@@ -36,6 +37,7 @@ class JobStore:
         job_prefix: str = "job",
         max_jobs: int = 200,
         recover_active_as: str = "failed",
+        max_load_bytes: int = DEFAULT_MAX_PERSISTENCE_LOAD_BYTES,
     ):
         self.lock = threading.Lock()
         self.jobs: dict[str, dict[str, Any]] = {}
@@ -43,7 +45,9 @@ class JobStore:
         self.job_prefix = job_prefix or "job"
         self.max_jobs = max(1, int(max_jobs or 1))
         self.recover_active_as = recover_active_as
+        self.max_load_bytes = max(1, int(max_load_bytes or 1))
         self.last_persist_error = ""
+        self.persistence_load_skipped = False
         self._load()
 
     def create(self, initial: dict[str, Any] | None = None) -> str:
@@ -140,6 +144,18 @@ class JobStore:
         if not self.persistence_path or not self.persistence_path.is_file():
             return
         try:
+            size = self.persistence_path.stat().st_size
+        except OSError as exc:
+            self.last_persist_error = str(exc)
+            return
+        if size > self.max_load_bytes:
+            self.persistence_load_skipped = True
+            self.last_persist_error = (
+                f"job store file too large to load safely "
+                f"({size} bytes > {self.max_load_bytes}); preserved without loading"
+            )
+            return
+        try:
             payload = json.loads(self.persistence_path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
             return
@@ -203,6 +219,9 @@ class JobStore:
 
     def _persist_locked(self) -> None:
         if not self.persistence_path:
+            return
+        if self.persistence_load_skipped:
+            self.last_persist_error = self.last_persist_error or "job store persistence skipped after oversized load"
             return
         try:
             self.persistence_path.parent.mkdir(parents=True, exist_ok=True)

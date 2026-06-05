@@ -83,7 +83,7 @@ export default function ProgressFeedback({
       )}
 
       <div className="progress-feedback-body">
-        <span>{state === "error" ? error || progress?.error || "操作失败。" : message}</span>
+        <span className="min-w-0 break-words">{state === "error" ? error || progress?.error || "操作失败。" : message}</span>
         {eta && <span className="progress-feedback-eta">预计剩余 {eta}</span>}
       </div>
 

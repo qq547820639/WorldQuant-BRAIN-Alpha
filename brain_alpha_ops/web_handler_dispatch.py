@@ -424,14 +424,59 @@ def _get_submit_readiness(handler: Any, _parsed: Any, _ctx: WebHandlerDispatchCo
 
 @_validated_post_route(validate_json_object_payload, "RUN_ERROR")
 def _post_run(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext, payload: dict[str, Any]) -> None:
-    ctx.validate_run_payload(payload)
+    safe_payload = _non_submit_run_payload(payload)
+    ctx.validate_run_payload(safe_payload)
     active = ctx.jobs.latest_active()
     if active:
         active_job_id, _job = active
         handler._json({"ok": False, "error_code": "CONFLICT_RUNNING", "error": "已有生产任务正在运行，请先停止当前任务。", "job_id": active_job_id}, status=409)
         return
-    response, status = ctx.background_job_start_payload(ctx.jobs, payload, ctx.start_run_job, conflict_error="active production job")
-    handler._json(response, status=status)
+    job_id = _create_non_submit_run_job(ctx.jobs)
+    ctx.start_run_job(job_id, safe_payload)
+    handler._json({
+        "ok": True,
+        "job_id": job_id,
+        "task_id": job_id,
+        "auto_submit": False,
+        "submitted": False,
+        "sse_url": f"/sse?job_id={job_id}",
+        "status_url": f"/api/status?job_id={job_id}",
+    })
+
+
+def _non_submit_run_payload(payload: dict[str, Any] | None) -> dict[str, Any]:
+    safe_payload = dict(payload or {})
+    safe_payload["autoSubmit"] = False
+    safe_payload["auto_submit"] = False
+    return safe_payload
+
+
+def _create_non_submit_run_job(store: Any) -> str:
+    initial = {
+        "operation": "production_run",
+        "safe_mode": {
+            "autoSubmit": False,
+            "auto_submit": False,
+            "submit_endpoint_required": True,
+        },
+        "result": {
+            "summary": {
+                "submitted_this_run": 0,
+                "auto_submitted": 0,
+            },
+        },
+        "progress": {
+            "phase": "queued",
+            "current": 0,
+            "total": 1,
+            "percent": 0,
+            "percent_complete": 0,
+            "message": "Non-submit production run queued.",
+            "status_message": "非提交流水线已排队。",
+            "alpha_id": "",
+        },
+    }
+    return store.create(initial)
 
 
 @_validated_post_route(validate_json_object_payload, "CONNECTION_ERROR")

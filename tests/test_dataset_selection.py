@@ -92,3 +92,22 @@ def test_dataset_selection_breaks_without_sources():
 
     assert result.should_break is True
     assert result.level == "ERROR"
+
+
+def test_dataset_selection_uses_configured_dataset_when_only_context_loaded():
+    generator = Generator()
+    settings = SimpleNamespace(dataset="pv1")
+    events = []
+
+    result = DatasetSelectionService(
+        generator=generator,
+        settings=settings,
+        allow_datasetless=True,
+        event=lambda *args, **kwargs: events.append((args, kwargs)),
+    ).select()
+
+    assert result.should_continue is True
+    assert result.dataset_id == "pv1"
+    assert generator.dataset == "pv1"
+    assert settings.dataset == "pv1"
+    assert events[0][0][0] == "dataset_fallback_configured"

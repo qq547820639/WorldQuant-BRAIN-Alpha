@@ -16,7 +16,6 @@ import type {
   CardViewId,
   CloudAlphaSummary,
   RunConfig,
-  SubmitReadinessResponse,
 } from "@/types";
 import ProgressFeedback from "@/components/ProgressFeedback";
 
@@ -43,10 +42,18 @@ interface CardConfig {
 
 const CARD_CONFIGS: CardConfig[] = [
   {
+    id: "dashboard",
+    title: "运行总览",
+    description: "流水线状态、进度与运行快照",
+    icon: "01",
+    color: "from-slate-500 to-slate-700",
+    action: "查看总览",
+  },
+  {
     id: "candidates",
     title: "候选管理",
     description: "生成、查看、筛选候选Alpha",
-    icon: "📊",
+    icon: "02",
     color: "from-brand-500 to-brand-700",
     action: "管理候选",
   },
@@ -54,31 +61,47 @@ const CARD_CONFIGS: CardConfig[] = [
     id: "official_backtests",
     title: "回测监控",
     description: "官方回测槽位状态监控",
-    icon: "⏱",
+    icon: "03",
     color: "from-blue-500 to-blue-700",
     action: "监控回测",
+  },
+  {
+    id: "scoring",
+    title: "科学评分",
+    description: "官方指标、归因与门禁评分",
+    icon: "04",
+    color: "from-violet-500 to-violet-700",
+    action: "查看评分",
   },
   {
     id: "quality_check",
     title: "质量门禁",
     description: "达标检查与质量评估",
-    icon: "✅",
+    icon: "05",
     color: "from-success to-emerald-700",
     action: "检查质量",
   },
   {
     id: "submission_confirm",
-    title: "提交管理",
-    description: "提交前确认与提交操作",
-    icon: "🚀",
+    title: "提交确认",
+    description: "提交前阻断原因与候选审计",
+    icon: "06",
     color: "from-warning to-amber-700",
-    action: "管理提交",
+    action: "查看确认",
+  },
+  {
+    id: "submission",
+    title: "手动提交",
+    description: "人工确认后的检查与提交操作",
+    icon: "07",
+    color: "from-orange-500 to-rose-700",
+    action: "进入提交",
   },
   {
     id: "checkpoint_status",
     title: "断点历史",
     description: "断点续跑与运行历史回溯",
-    icon: "↻",
+    icon: "08",
     color: "from-teal-500 to-emerald-700",
     action: "查看历史",
   },
@@ -86,7 +109,7 @@ const CARD_CONFIGS: CardConfig[] = [
     id: "config",
     title: "系统配置",
     description: "参数、阈值与运行预算",
-    icon: "⚙",
+    icon: "09",
     color: "from-indigo-500 to-indigo-700",
     action: "系统设置",
   },
@@ -94,7 +117,7 @@ const CARD_CONFIGS: CardConfig[] = [
     id: "cloud",
     title: "云端快照",
     description: "云端Alpha缓存与同步状态",
-    icon: "☁",
+    icon: "10",
     color: "from-cyan-500 to-blue-700",
     action: "查看快照",
   },
@@ -104,7 +127,6 @@ export default function StateCards({ onNavigate, notify }: Props) {
   // API调用
   const candidatesApi = useApi<{ candidates?: Candidate[]; items?: Candidate[]; total?: number }>();
   const slotsApi = useApi<BacktestSlotsResponse>();
-  const readinessApi = useApi<SubmitReadinessResponse>();
   const configApi = useApi<{ config?: RunConfig }>();
   const checkpointApi = useApi<CheckpointStatusSummary>();
   const cloudApi = useApi<CloudAlphaSummary & { summary?: Record<string, unknown>; total?: number }>();
@@ -112,11 +134,10 @@ export default function StateCards({ onNavigate, notify }: Props) {
   const loadStateSnapshots = useCallback(() => {
     void candidatesApi.call("/api/candidates?limit=1000");
     void slotsApi.call("/api/backtest_slots");
-    void readinessApi.call("/api/submit_readiness");
     void configApi.call("/api/config");
     void checkpointApi.call("/api/checkpoint_status");
     void cloudApi.call("/api/snapshot/cloud?limit=10");
-  }, [candidatesApi.call, slotsApi.call, readinessApi.call, configApi.call, checkpointApi.call, cloudApi.call]);
+  }, [candidatesApi.call, slotsApi.call, configApi.call, checkpointApi.call, cloudApi.call]);
 
   // 加载数据
   useEffect(() => {
@@ -128,12 +149,11 @@ export default function StateCards({ onNavigate, notify }: Props) {
     () => [
       labeledError("候选", candidatesApi.error),
       labeledError("回测", slotsApi.error),
-      labeledError("提交", readinessApi.error),
       labeledError("配置", configApi.error),
       labeledError("历史", checkpointApi.error),
       labeledError("云端", cloudApi.error),
     ].filter(Boolean),
-    [candidatesApi.error, slotsApi.error, readinessApi.error, configApi.error, checkpointApi.error, cloudApi.error],
+    [candidatesApi.error, slotsApi.error, configApi.error, checkpointApi.error, cloudApi.error],
   );
 
   useEffect(() => {
@@ -147,7 +167,6 @@ export default function StateCards({ onNavigate, notify }: Props) {
     const slotLimit = backtestSlotLimit(slotsApi.data);
     const activeSlots = slots.filter((slot) => isActiveSlot(slot.status)).length;
     const qualityCount = candidates.filter(isSubmissionReadyCandidate).length;
-    const submitCount = readinessApi.data?.eligible_count ?? 0;
     const cloudCount = cloudTotal(cloudApi.data);
 
     return {
@@ -161,9 +180,9 @@ export default function StateCards({ onNavigate, notify }: Props) {
         label: "达标数量",
       },
       submission_confirm: {
-        eligible: submitCount,
-        caption: "可提交 Alpha",
-        label: "可提交数",
+        eligible: "打开",
+        caption: "提交审计",
+        label: "提交审计",
       },
       checkpoint_status: {
         history: checkpointApi.data?.history_count ?? 0,
@@ -178,10 +197,16 @@ export default function StateCards({ onNavigate, notify }: Props) {
         label: "云端缓存",
       },
     };
-  }, [candidates, candidatesApi.data?.total, readinessApi.data, configApi.data, checkpointApi.data, cloudApi.data, slotsApi.data]);
+  }, [candidates, candidatesApi.data?.total, configApi.data, checkpointApi.data, cloudApi.data, slotsApi.data]);
 
   // 加载状态
-  const loading = candidatesApi.loading && !candidatesApi.data;
+  const loading = [
+    candidatesApi,
+    slotsApi,
+    configApi,
+    checkpointApi,
+    cloudApi,
+  ].some((api) => api.loading && !api.data);
   const loadError = stateErrors.length ? stateErrors.join("；") : "";
 
   // 获取指标值
@@ -189,8 +214,12 @@ export default function StateCards({ onNavigate, notify }: Props) {
     switch (id) {
       case "candidates":
         return String(metrics.candidates.total);
+      case "dashboard":
+        return "本地";
       case "official_backtests":
         return metrics.official_backtests;
+      case "scoring":
+        return String(metrics.quality_check.ready);
       case "quality_check":
         return String(metrics.quality_check.ready);
       case "submission_confirm":
@@ -211,8 +240,12 @@ export default function StateCards({ onNavigate, notify }: Props) {
     switch (id) {
       case "candidates":
         return metrics.candidates.label;
+      case "dashboard":
+        return "本地服务";
       case "official_backtests":
         return "回测槽位";
+      case "scoring":
+        return "可评分候选";
       case "quality_check":
         return metrics.quality_check.label;
       case "submission_confirm":
@@ -229,10 +262,10 @@ export default function StateCards({ onNavigate, notify }: Props) {
   };
 
   return (
-    <div className="min-w-0 animate-fade-in">
+    <div className="w-full min-w-0 max-w-full animate-fade-in">
       {/* 加载状态 */}
       {loading && (
-        <div className="mb-8">
+        <div className="mb-8 w-full max-w-full overflow-hidden">
           <ProgressFeedback
             state="loading"
             title="状态卡"
@@ -265,39 +298,39 @@ export default function StateCards({ onNavigate, notify }: Props) {
       )}
 
       {/* 状态卡网格 */}
-      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-7">
+      <div className="grid w-full max-w-full grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">
         {CARD_CONFIGS.map((config) => (
           <button
             key={config.id}
             type="button"
             onClick={() => onNavigate(config.id)}
-            className="group relative overflow-hidden rounded-2xl border border-gray-800/50 bg-gray-900/80 p-6 text-left transition-all duration-300 hover:border-gray-700/50 hover:bg-gray-900 hover:shadow-xl hover:shadow-gray-900/50 focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:ring-offset-2 focus:ring-offset-gray-950"
+            className="group relative min-w-0 overflow-hidden rounded-lg border border-slate-200 bg-white p-5 text-left shadow-sm transition-all duration-200 hover:border-brand-200 hover:bg-brand-50/40 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:ring-offset-2 focus:ring-offset-slate-50"
           >
             {/* 背景渐变 */}
-            <div className={`absolute inset-0 bg-gradient-to-br ${config.color} opacity-0 group-hover:opacity-5 transition-opacity duration-300`} />
+            <div className={`absolute inset-x-0 top-0 h-1 bg-gradient-to-r ${config.color} opacity-80`} />
             
             {/* 图标 */}
             <div className="relative mb-4">
-              <span className="text-3xl" aria-hidden="true">{config.icon}</span>
+              <span className="font-mono text-xs font-semibold tracking-wide text-brand-700" aria-hidden="true">{config.icon}</span>
             </div>
             
             {/* 标题和描述 */}
             <div className="relative">
-              <h3 className="text-lg font-bold text-white tracking-tight">
+              <h3 className="text-lg font-bold text-slate-950 tracking-tight">
                 {config.title}
               </h3>
-              <p className="mt-2 text-sm text-gray-400 leading-relaxed">
+              <p className="mt-2 text-sm text-slate-600 leading-6">
                 {config.description}
               </p>
             </div>
             
             {/* 指标显示 */}
-            <div className="relative mt-6 pt-4 border-t border-gray-800/50">
+            <div className="relative mt-6 pt-4 border-t border-slate-200">
               <div className="grid min-w-0 gap-2">
-                <span className="min-w-0 text-sm font-medium leading-tight text-gray-300">
+                <span className="min-w-0 text-sm font-medium leading-tight text-slate-600">
                   {getMetricLabel(config.id)}
                 </span>
-                <span className="min-w-0 max-w-full break-words text-right text-2xl font-bold leading-tight tabular-nums text-white xl:text-xl 2xl:text-2xl">
+                <span className="min-w-0 max-w-full break-words text-right text-2xl font-bold leading-tight tabular-nums text-slate-950 xl:text-xl 2xl:text-2xl">
                   {getMetricValue(config.id)}
                 </span>
               </div>
@@ -305,7 +338,7 @@ export default function StateCards({ onNavigate, notify }: Props) {
             
             {/* 操作提示 */}
             <div className="relative mt-4">
-              <span className="inline-flex items-center gap-2 text-sm font-medium text-brand-400 group-hover:text-brand-300 transition-colors">
+              <span className="inline-flex items-center gap-2 text-sm font-medium text-brand-700 group-hover:text-brand-800 transition-colors">
                 {config.action}
                 <svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="transition-transform group-hover:translate-x-1">
                   <path d="M5 12h14M12 5l7 7-7 7" />
@@ -317,10 +350,10 @@ export default function StateCards({ onNavigate, notify }: Props) {
       </div>
 
       {/* 流程说明 */}
-      <div className="mt-8 p-4 rounded-xl border border-gray-800/30 bg-gray-900/30">
+      <div className="mt-8 max-w-full rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
         <div className="flex items-center gap-3">
-          <span className="text-gray-500" aria-hidden="true">💡</span>
-          <p className="text-sm text-gray-400">
+          <span className="h-2 w-2 rounded-full bg-brand-600" aria-hidden="true" />
+          <p className="text-sm text-slate-600">
             点击状态卡进入对应功能模块，完成从候选生成到提交的全流程管理
           </p>
         </div>

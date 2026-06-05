@@ -12,7 +12,7 @@ export interface ApiResponse<T = unknown> {
 export interface JobStatus {
   job_id: string;
   task_id?: string;
-  status: "idle" | "running" | "completed" | "failed" | "cancelled";
+  status: "idle" | "queued" | "running" | "stopping" | "stopped" | "completed" | "failed" | "cancelled" | "missing";
   phase?: string;
   cycle?: number;
   max_cycles?: number;
@@ -578,15 +578,24 @@ export interface Toast {
   on_action?: () => void;
 }
 
+export interface BrainCredentials {
+  username: string;
+  password: string;
+  token: string;
+}
+
 /**
  * Card-based navigation view identifier.
  * A subset of TabId used by the StateCards detail view routing.
  */
 export type CardViewId =
+  | "dashboard"
   | "candidates"
   | "official_backtests"
+  | "scoring"
   | "quality_check"
   | "submission_confirm"
+  | "submission"
   | "config"
   | "checkpoint_status"
   | "cloud";

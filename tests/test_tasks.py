@@ -158,6 +158,23 @@ def test_job_store_load_prunes_large_history_before_redaction(tmp_path):
     )
 
 
+def test_job_store_skips_oversized_persistence_without_overwriting(tmp_path):
+    path = tmp_path / "jobs.json"
+    original = json.dumps({"version": 1, "jobs": {"job_0001": {"status": "completed"}}})
+    path.write_text(original + (" " * 64), encoding="utf-8")
+
+    store = JobStore(path, max_load_bytes=32)
+
+    assert store.all() == []
+    assert store.persistence_load_skipped is True
+    assert "too large to load safely" in store.last_persist_error
+
+    store.create({"status": "completed", "result": {"ok": True}})
+
+    assert path.read_text(encoding="utf-8") == original + (" " * 64)
+    assert "too large to load safely" in store.last_persist_error
+
+
 def test_compact_runtime_result_replaces_heavy_runtime_lists_with_counts_and_preview():
     result = {
         "ok": True,

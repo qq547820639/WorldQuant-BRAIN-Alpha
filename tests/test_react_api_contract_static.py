@@ -59,6 +59,7 @@ def test_react_candidate_and_scoring_contracts_match_backend_routes():
     assert 'callScoreApi("/api/scoring/evaluate"' in scoring
     assert 'callAttributionApi("/api/scoring/attribution"' in scoring
     assert "useSSE(scoreTaskId ? `/sse?job_id=${encodeURIComponent(scoreTaskId)}`" in scoring
+    assert "nonEmpty(scoring?.hard_gates) || nonEmpty(attributionApi.data?.hard_gates)" in scoring
 
     assert route_for("GET", "/api/candidates") is not None
     assert route_for("GET", "/api/check_results") is not None
@@ -84,12 +85,32 @@ def test_react_submission_config_and_job_contracts_match_backend_routes():
     assert route_for("POST", "/api/config") is not None
     assert route_for("POST", "/api/test_connection") is not None
     assert "import ConfigPanel" in app
+    assert "function CredentialQuickStart" in app
+    assert 'connectionApi.call("/api/test_connection"' in app
+    assert "JobMonitor notify={notify} credentials={credentials}" in app
+    assert "onNeedCredentials={focusCredentials}" in app
+    assert "usernameInputRef.current?.focus()" in app
+    assert "BRAIN 账户连接" in app
+    assert "保存: 不落盘" in app
+    assert "不写入配置文件、导出文件或任务账本" in app
     assert 'case "config":' in app
-    assert "detailContent = <ConfigPanel notify={notify} />" in app
+    assert "credentials={credentials}" in app
+    assert "onCredentialsChange={setCredentials}" in app
     assert 'api.call<{ job_id: string }>("/api/run"' in monitor
     assert 'api.call("/api/stop", { method: "POST"' in monitor
     assert "const sseUrl = jobId ? `/sse?job_id=${encodeURIComponent(jobId)}` : null;" in monitor
-    assert "api.call<JobStatus>(`/api/status?job_id=${encodeURIComponent(jobId || \"\")}`)" in monitor
+    assert "body: JSON.stringify(runPayload(resume, credentials))" in monitor
+    assert "autoSubmit: false" in monitor
+    assert "auto_submit: false" in monitor
+    assert "auto_submit" in monitor
+    assert "页面凭证为空" in monitor
+    assert "填写 BRAIN 凭证" in monitor
+    assert "if (password) payload.password = password;" in monitor
+    assert "if (!running || !jobId) return;" in monitor
+    assert "api.call<JobStatus>(`/api/status?job_id=${encodeURIComponent(jobId)}`)" in monitor
+    assert "运行证明" in monitor
+    assert "submittedThisRun" in monitor
+    assert "autoSubmitted" in monitor
     assert route_for("POST", "/api/run") is not None
     assert route_for("POST", "/api/stop") is not None
     assert route_for("GET", "/api/status") is not None
@@ -137,6 +158,8 @@ def test_react_fetch_helpers_keep_session_csrf_replay_and_sse_credentials():
     assert 'headers["X-Brain-Alpha-Request-Timestamp"] = String(Date.now());' in use_api
     assert 'headers["Content-Type"] = "application/json";' in use_api
     assert "new EventSource(withStreamToken(streamUrl), { withCredentials: true })" in use_sse
+    assert "onExhausted?.();" in use_sse
+    assert "return { connected, exhausted, reconnectAttempts, lastEvent, close };" in use_sse
     assert 'meta[name="brain-alpha-stream"]' in use_sse
     assert "stream_token=${encodeURIComponent(token)}" in use_sse
 

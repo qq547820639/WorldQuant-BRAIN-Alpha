@@ -59,10 +59,13 @@ LEGACY_INLINE_MODULES = (
 )
 
 CARD_VIEW_IDS = (
+    "dashboard",
     "candidates",
     "official_backtests",
+    "scoring",
     "quality_check",
     "submission_confirm",
+    "submission",
     "checkpoint_status",
     "config",
     "cloud",
@@ -225,6 +228,8 @@ def test_all_card_views_are_typed_configured_and_routed_to_detail_components():
     assert "const CARD_CONFIG = {" in app
     assert "const CARD_CONFIGS: CardConfig[] = [" in state_cards
     assert "CandidateTable" in app
+    assert 'key="scoring_candidate_picker"' in app
+    assert "selectedCandidate ? (" in app
     assert "OfficialBacktestSlots" in app
     assert "QualityCheckPanel" in app
     assert "SubmissionConfirmPanel" in app
@@ -251,7 +256,7 @@ def test_state_card_navigation_preserves_priority_and_minimal_chrome():
             "setActiveView(view)",
             'aria-label="返回状态卡"',
             'aria-label="打开系统配置"',
-            "grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-7",
+            "grid w-full max-w-full grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5",
             "onClick={() => onNavigate(config.id)}",
             'role="alert"',
             'aria-live="assertive"',
@@ -304,7 +309,7 @@ def test_app_submit_selected_candidates_handles_missing_async_job_result():
         submission,
         [
             "const result = event.result as { items?: unknown[] } | undefined;",
-            "setBatchCheckResult(result ? (result as Record<string, unknown>) : null);",
+            "setBatchCheckResult(result ? (result as Record<string, unknown>) : { ok: true });",
             "(result as unknown as { task_id?: string; job_id?: string } | null)?.task_id",
             'setBatchCheckError(result?.error || "批量检查失败");',
             'setSubmitError(result?.error || "批量提交失败");',
@@ -324,7 +329,6 @@ def test_loading_feedback_runstartup_launches_all_tasks_concurrently():
     expected_calls = [
         'void candidatesApi.call("/api/candidates?limit=1000");',
         'void slotsApi.call("/api/backtest_slots");',
-        'void readinessApi.call("/api/submit_readiness");',
         'void configApi.call("/api/config");',
         'void checkpointApi.call("/api/checkpoint_status");',
         'void cloudApi.call("/api/snapshot/cloud?limit=10");',
@@ -420,6 +424,7 @@ def test_sse_hook_preserves_stream_token_credentials_and_reconnect_contract():
             "reconnectIntervalMs = 3000",
             "maxReconnectAttempts = 10",
             "reconnectCountRef.current += 1",
+            "onExhausted?.();",
             'meta[name="brain-alpha-stream"]',
             "stream_token=${encodeURIComponent(token)}",
             "!token.startsWith(\"__BRAIN_ALPHA_OPS\")",

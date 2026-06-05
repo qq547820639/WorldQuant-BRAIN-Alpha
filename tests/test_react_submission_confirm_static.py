@@ -24,16 +24,17 @@ def test_submit_readiness_contract_is_typed_for_react():
     assert "required_next_steps?: string[];" in types
 
 
-def test_state_cards_use_submit_readiness_for_submit_count():
+def test_state_cards_defer_heavy_submit_readiness_to_confirm_panel():
     source = _source(COMPONENTS / "StateCards.tsx")
 
-    assert 'const readinessApi = useApi<SubmitReadinessResponse>();' in source
-    assert 'void readinessApi.call("/api/submit_readiness");' in source
-    assert "const submitCount = readinessApi.data?.eligible_count ?? 0;" in source
+    assert 'const readinessApi = useApi<SubmitReadinessResponse>();' not in source
+    assert 'void readinessApi.call("/api/submit_readiness");' not in source
+    assert "const submitCount = readinessApi.data?.eligible_count ?? 0;" not in source
     assert "const slotLimit = backtestSlotLimit(slotsApi.data);" in source
     assert 'official_backtests: `${activeSlots}/${slotLimit}`,' in source
     assert "Array.from({ length: backtestSlotLimit(payload) }" in source
-    assert 'caption: "可提交 Alpha",' in source
+    assert 'caption: "提交审计",' in source
+    assert 'eligible: "打开",' in source
 
 
 def test_submission_confirm_panel_exposes_readiness_summary():

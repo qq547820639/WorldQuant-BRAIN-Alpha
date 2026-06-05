@@ -217,6 +217,39 @@ class TestJobPersistence:
             assert row["status"] == "running"
             assert row["custom_field"] == "hello"
 
+    def test_job_update_redacts_sensitive_fields_before_memory_and_jsonl_persistence(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            set_jobs_storage_dir(tmpdir)
+
+            jid = new_job_id("safe")
+            row = job_update(
+                jid,
+                status="running",
+                username="reader@example.com",
+                password="plain-password",
+                token="secret-token-123",
+                progress={
+                    "message": "token=SECRET789",
+                    "headers": {"Authorization": "Bearer live-token-123"},
+                },
+                result={"cookie": "session-cookie-123", "note": "ok"},
+            )
+
+            stored = job_get(jid)
+            persisted = (Path(tmpdir) / "web_jobs.jsonl").read_text(encoding="utf-8")
+
+            assert row["username"] == "<redacted>"
+            assert row["password"] == "<redacted>"
+            assert row["token"] == "<redacted>"
+            assert stored is not None
+            assert stored["progress"]["headers"]["Authorization"] == "<redacted>"
+            assert stored["result"]["cookie"] == "<redacted>"
+            assert "reader@example.com" not in persisted
+            assert "plain-password" not in persisted
+            assert "secret-token-123" not in persisted
+            assert "SECRET789" not in persisted
+            assert "live-token-123" not in persisted
+
     def test_terminal_jobs_not_restored(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             set_jobs_storage_dir(tmpdir)

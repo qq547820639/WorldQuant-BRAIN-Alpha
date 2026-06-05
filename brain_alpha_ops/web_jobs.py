@@ -18,7 +18,7 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-from brain_alpha_ops.redaction import redact_error_message
+from brain_alpha_ops.redaction import redact_data, redact_error_message
 
 logger = logging.getLogger(__name__)
 
@@ -103,7 +103,7 @@ def load_jobs_from_jsonl() -> int:
                 if not jid:
                     continue
                 # Keep only the last snapshot per job_id (JSONL is append-only)
-                latest_by_id[jid] = row
+                latest_by_id[jid] = _job_safe(row)
     except OSError as exc:
         logger.warning("Failed to read job persistence file: %s", redact_error_message(exc))
         return 0
@@ -138,12 +138,19 @@ def job_update(job_id: str, **fields: Any) -> dict:
         row["job_id"] = job_id
         row["task_id"] = job_id
         row["updated_at"] = utc_timestamp()
+        row = _job_safe(row)
         ASYNC_JOBS[job_id] = row
         _prune_async_jobs()
         result = dict(row)
     # Persist outside the lock to avoid I/O contention
     _persist_job_to_jsonl(result)
     return result
+
+
+def _job_safe(row: dict[str, Any]) -> dict[str, Any]:
+    """Return a JSON-serializable job row with credentials redacted."""
+    safe = redact_data(row)
+    return safe if isinstance(safe, dict) else {}
 
 
 def job_get(job_id: str) -> dict | None:

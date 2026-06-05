@@ -31,6 +31,7 @@ export default function ScoringPanel({ notify, candidate }: Props) {
   const [scoreError, setScoreError] = useState<string | null>(null);
   const callScoreApi = scoreApi.call;
   const callAttributionApi = attributionApi.call;
+  const resetAttributionApi = attributionApi.reset;
 
   const handleScoreEvent = useCallback((event: SSEEvent) => {
     const progress = (event.progress || event.data || {}) as UnifiedProgress;
@@ -54,11 +55,22 @@ export default function ScoringPanel({ notify, candidate }: Props) {
     setScoreState("progress");
   }, [candidate?.alpha_id, notify]);
 
-  useSSE(scoreTaskId ? `/sse?job_id=${encodeURIComponent(scoreTaskId)}` : null, { onEvent: handleScoreEvent });
+  const handleScoreStreamExhausted = useCallback(() => {
+    const message = "评分实时流已断开，请重试以确认最新评分。";
+    setScoreState("error");
+    setScoreError(message);
+    notify("warning", message);
+  }, [notify]);
+
+  useSSE(scoreTaskId ? `/sse?job_id=${encodeURIComponent(scoreTaskId)}` : null, {
+    onEvent: handleScoreEvent,
+    onExhausted: handleScoreStreamExhausted,
+  });
 
   const loadScore = useCallback(async () => {
     if (!candidate) return;
     setScoring(null);
+    resetAttributionApi();
     setScoreState("loading");
     setScoreError(null);
     setScoreProgress({ phase: "scoring", status_message: `正在为 ${candidate.alpha_id || "候选"} 启动评分。` });
@@ -87,22 +99,23 @@ export default function ScoringPanel({ notify, candidate }: Props) {
     if (attributionResult && !attributionResult.ok && attributionResult.error) {
       notify("error", attributionResult.error);
     }
-  }, [callAttributionApi, callScoreApi, candidate, notify]);
+  }, [callAttributionApi, callScoreApi, candidate, notify, resetAttributionApi]);
 
   useEffect(() => {
     if (candidate) loadScore();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [candidate?.alpha_id]);
 
-  const attribution = attributionApi.data?.attribution || scoring?.attribution_tree || null;
-  const hardGates = attributionApi.data?.hard_gates || scoring?.hard_gates || [];
-  const softGates = attributionApi.data?.soft_gates || scoring?.soft_gates || [];
-  const failures = attributionApi.data?.top_failures || scoring?.top_failures || [];
-  const hints = attributionApi.data?.improvement_hints || scoring?.improvement_hints || [];
+  const attribution = scoring?.attribution_tree || attributionApi.data?.attribution || null;
+  const hardGates = nonEmpty(scoring?.hard_gates) || nonEmpty(attributionApi.data?.hard_gates) || [];
+  const softGates = nonEmpty(scoring?.soft_gates) || nonEmpty(attributionApi.data?.soft_gates) || [];
+  const failures = nonEmpty(scoring?.top_failures) || nonEmpty(attributionApi.data?.top_failures) || [];
+  const hints = nonEmpty(scoring?.improvement_hints) || nonEmpty(attributionApi.data?.improvement_hints) || [];
   const m = candidate?.official_metrics;
   const selfCorrelation = metricWithStatus(m?.self_correlation, m?.self_correlation_status, m?.correlation);
   const loading = scoreState === "loading" || scoreState === "progress" || attributionApi.loading;
   const error = scoreError || scoreApi.error || attributionApi.error;
+  const lifecycleStatus = String(candidate?.lifecycle_status || "-");
   const layerScores = useMemo(() => {
     const prior = Number(scoring?.prior?.score ?? candidate?.scorecard?.prior_score ?? 0);
     const empirical = Number(scoring?.empirical?.score ?? candidate?.scorecard?.empirical_score ?? 0);
@@ -122,7 +135,7 @@ export default function ScoringPanel({ notify, candidate }: Props) {
             </span>
           </div>
           {node.explanation && <p className="text-[11px] text-muted pb-1">{node.explanation}</p>}
-          {node.children?.map((child) => (
+          {childNodes(node).map((child) => (
             <div key={`${child.name}-${depth}`}>{renderAttribution(child, depth + 1)}</div>
           ))}
         </div>
@@ -176,7 +189,7 @@ export default function ScoringPanel({ notify, candidate }: Props) {
         </code>
         <div className="flex flex-wrap gap-x-3 gap-y-1 mt-3 text-xs text-muted">
           <span>家族: <span className="text-gray-300">{candidate.family}</span></span>
-          <span>状态: <span className={`badge ${scoring?.passed_gate || candidate.gate?.passed ? "badge-success" : "badge-danger"}`}>{candidate.lifecycle_status}</span></span>
+          <span>状态: <span className={`badge ${scoring?.passed_gate || candidate.gate?.passed ? "badge-success" : "badge-danger"}`}>{lifecycleStatus}</span></span>
           <span>ID: <span className="text-gray-300 font-mono">{candidate.alpha_id}</span></span>
         </div>
       </div>
@@ -277,14 +290,16 @@ function InfoPill({ label, value }: { label: string; value: unknown }) {
 }
 
 function GateGroup({ title, gates }: { title: string; gates: OfficialGateResult[] }) {
-  if (!gates.length) return <p className="text-xs text-muted">{title}: 暂无数据</p>;
+  const safeGates = Array.isArray(gates) ? gates : [];
+  if (!safeGates.length) return <p className="text-xs text-muted">{title}: 暂无数据</p>;
   return (
     <div>
       <p className="text-xs font-semibold text-gray-300 mb-2">{title}</p>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-        {gates.flatMap((gate) => {
-          const checks: OfficialGateCheckItem[] = gate.check_items?.length
-            ? gate.check_items
+        {safeGates.flatMap((gate) => {
+          const checkItems = Array.isArray(gate.check_items) ? gate.check_items : [];
+          const checks: OfficialGateCheckItem[] = checkItems.length
+            ? checkItems
             : [{ name: gate.gate_name, passed: gate.passed }];
           return checks.map((check, i) => (
               <div
@@ -358,6 +373,14 @@ function metricWithStatus(primary: unknown, status: unknown, fallback: unknown):
 function metricValue(value: unknown): string | number | undefined {
   if (value === undefined || value === null || value === "") return undefined;
   return typeof value === "number" || typeof value === "string" ? value : undefined;
+}
+
+function nonEmpty<T>(items?: T[] | null): T[] | null {
+  return Array.isArray(items) && items.length ? items : null;
+}
+
+function childNodes(node: AttributionNode): AttributionNode[] {
+  return Array.isArray(node.children) ? node.children : [];
 }
 
 /** Metric row with threshold indication */

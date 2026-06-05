@@ -7,6 +7,7 @@ export default {
         brand: {
           50: "#eef2ff",
           100: "#e0e7ff",
+          200: "#c7d2fe",
           300: "#a5b4fc",
           400: "#818cf8",
           500: "#6366f1",
@@ -16,7 +17,7 @@ export default {
         success: "#10b981",
         warning: "#f59e0b",
         danger: "#ef4444",
-        muted: "#6b7280",
+        muted: "#64748b",
       },
     },
   },

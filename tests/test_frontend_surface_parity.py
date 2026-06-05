@@ -512,19 +512,25 @@ def test_frontend_surface_parity_reports_current_workspace_gap():
     assert result["parity"]["shared_ids"] == []
     assert result["parity"]["inline_only_views"] == []
     assert result["parity"]["react_only_tabs"] == [
+        "dashboard",
         "candidates",
         "official_backtests",
+        "scoring",
         "quality_check",
         "submission_confirm",
+        "submission",
         "checkpoint_status",
         "config",
         "cloud",
     ]
     assert result["parity"]["accepted_react_only_tabs"] == [
+        "dashboard",
         "candidates",
         "official_backtests",
+        "scoring",
         "quality_check",
         "submission_confirm",
+        "submission",
         "checkpoint_status",
         "config",
         "cloud",

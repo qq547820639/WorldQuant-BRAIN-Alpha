@@ -15,7 +15,7 @@ export default function KpiCard({ label, value, subtitle, trend, className = "" 
   return (
     <div className={`card ${className}`} role="status" aria-label={accessibleLabel}>
       <p className="text-xs text-muted uppercase tracking-wider mb-1">{label}</p>
-      <p className="text-2xl font-bold text-white">{value}</p>
+      <p className="text-2xl font-bold text-slate-950">{value}</p>
       {subtitle && <p className={`text-xs mt-1 ${trendColor}`}>{subtitle}</p>}
     </div>
   );

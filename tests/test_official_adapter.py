@@ -50,6 +50,27 @@ def test_normalize_metrics_extracts_checks():
     assert metrics["pass_fail"] == "PASS"
     assert metrics["correlation"] == 0.3
     assert metrics["self_correlation"] == 0.3
+    assert "prod_correlation" not in metrics
+
+
+def test_normalize_metrics_keeps_prod_correlation_separate_from_generic_correlation():
+    metrics = normalize_metrics(
+        {
+            "is": {
+                "sharpe": 1.4,
+                "fitness": 1.1,
+                "turnover": 0.2,
+                "correlation": 0.31,
+                "prodCorrelation": 0.27,
+                "selfCorrelation": 0.22,
+            },
+            "checks": [{"name": "LOW_SHARPE", "result": "PASS"}],
+        }
+    )
+
+    assert metrics["correlation"] == 0.31
+    assert metrics["self_correlation"] == 0.22
+    assert metrics["prod_correlation"] == 0.27
 
 
 def test_normalize_metrics_preserves_self_correlation_check_status():

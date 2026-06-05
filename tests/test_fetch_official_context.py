@@ -50,6 +50,16 @@ class RateLimitedOfficialBrainAPI(FakeOfficialBrainAPI):
         raise BrainAPIError("HTTP 429: rate limit", status_code=429, retry_after=12)
 
 
+class ServerErrorOfficialBrainAPI(FakeOfficialBrainAPI):
+    def list_fields(self, *_args, progress_callback=None):
+        raise BrainAPIError("HTTP 503: service unavailable", status_code=503)
+
+
+class GenericFailureOfficialBrainAPI(FakeOfficialBrainAPI):
+    def list_fields(self, *_args, progress_callback=None):
+        raise RuntimeError("unexpected local refresh failure")
+
+
 class DirectOnlyOfficialBrainAPI(FakeOfficialBrainAPI):
     last_disable_proxy: bool | None = None
 
@@ -179,6 +189,39 @@ def test_refresh_official_context_records_retryable_rate_limit(monkeypatch, tmp_
     assert result["retry_after_seconds"] == 12
     assert result["next_retry_at"]
     assert saved_status["retryable"] is True
+
+
+def test_refresh_official_context_records_retryable_http_5xx(monkeypatch, tmp_path):
+    monkeypatch.setattr(fetch_official_context, "OfficialBrainAPI", ServerErrorOfficialBrainAPI)
+    config_path = _write_config(tmp_path, monkeypatch)
+    status_path = tmp_path / "refresh_status.json"
+
+    result = fetch_official_context.refresh_official_context(config_path, status_output=status_path)
+    saved_status = json.loads(status_path.read_text(encoding="utf-8"))
+
+    assert result["ok"] is False
+    assert result["error_code"] == "HTTP_503"
+    assert result["error_category"] == "http"
+    assert result["retryable"] is True
+    assert result["retry_after_seconds"] is None
+    assert saved_status["error_code"] == "HTTP_503"
+
+
+def test_refresh_official_context_records_generic_internal_failure(monkeypatch, tmp_path):
+    monkeypatch.setattr(fetch_official_context, "OfficialBrainAPI", GenericFailureOfficialBrainAPI)
+    config_path = _write_config(tmp_path, monkeypatch)
+    status_path = tmp_path / "refresh_status.json"
+
+    result = fetch_official_context.refresh_official_context(config_path, status_output=status_path)
+    saved_status = json.loads(status_path.read_text(encoding="utf-8"))
+
+    assert result["ok"] is False
+    assert result["error_code"] == "OFFICIAL_CONTEXT_REFRESH_FAILED"
+    assert result["error_category"] == "internal"
+    assert result["retryable"] is False
+    assert result["retry_after_seconds"] is None
+    assert "unexpected local refresh failure" in result["error"]
+    assert saved_status["error_category"] == "internal"
 
 
 def test_refresh_official_context_uses_direct_official_api(monkeypatch, tmp_path):

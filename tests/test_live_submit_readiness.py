@@ -13,6 +13,8 @@ def _official_metrics(**overrides):
         "fitness": 1.2,
         "turnover": 0.25,
         "correlation": 0.2,
+        "self_correlation": 0.2,
+        "prod_correlation": 0.2,
         "weight_concentration": 0.05,
     }
     metrics.update(overrides)
@@ -664,6 +666,46 @@ def test_live_submit_readiness_fails_closed_on_broken_related_ledger(tmp_path):
     assert result["job_ledgers_checked"] == 2
     assert any(finding["code"] == "jobs_ledger_error" for finding in result["findings"])
     assert main(["--jobs", str(jobs), "--json"]) == 1
+
+
+def test_live_submit_readiness_fails_closed_when_primary_ledger_missing(tmp_path):
+    jobs = tmp_path / "jobs_production.json"
+
+    result = check_live_submit_readiness(jobs, related_jobs_paths=[])
+
+    assert result["ok"] is False
+    assert result["ready_to_submit"] is False
+    assert result["job_ledgers_checked"] == 0
+    assert result["findings"] == [
+        {"code": "jobs_ledger_error", "message": f"jobs ledger not found: {jobs}"}
+    ]
+
+
+def test_live_submit_readiness_fails_closed_when_primary_ledger_invalid_json(tmp_path):
+    jobs = tmp_path / "jobs_production.json"
+    jobs.write_text("{broken", encoding="utf-8")
+
+    result = check_live_submit_readiness(jobs, related_jobs_paths=[])
+
+    assert result["ok"] is False
+    assert result["ready_to_submit"] is False
+    assert result["job_ledgers_checked"] == 0
+    assert result["findings"][0]["code"] == "jobs_ledger_error"
+    assert "not valid JSON" in result["findings"][0]["message"]
+
+
+def test_live_submit_readiness_fails_closed_when_primary_ledger_has_no_jobs(tmp_path):
+    jobs = tmp_path / "jobs_production.json"
+    jobs.write_text(json.dumps({"version": 1, "jobs": {}}), encoding="utf-8")
+
+    result = check_live_submit_readiness(jobs, related_jobs_paths=[])
+
+    assert result["ok"] is False
+    assert result["ready_to_submit"] is False
+    assert result["job_ledgers_checked"] == 0
+    assert result["findings"] == [
+        {"code": "jobs_ledger_error", "message": f"jobs ledger does not contain any jobs: {jobs}"}
+    ]
 
 
 def test_live_submit_readiness_discovers_repo_job_ledgers():

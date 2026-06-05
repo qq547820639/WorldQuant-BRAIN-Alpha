@@ -43,7 +43,9 @@ def test_submission_panel_blocks_batch_submit_without_valid_alpha_ids():
     assert "function validateBatchSubmitCandidates(candidates: Candidate[])" in source
     assert "批量提交最多支持 ${MAX_BATCH_ALPHA_IDS} 个候选。" in source
     assert "批量提交前，至少一个候选行必须包含 alpha_id 或 official_alpha_id。" in source
-    assert "disabled={!submitCandidates.length || Boolean(candidateJsonError) || Boolean(batchSubmitError) || batchSubmitApi.loading}" in source
+    assert "hasFreshBatchCheck" in source
+    assert "batchCheckedSignature === batchCandidateSignature" in source
+    assert "disabled={!submitCandidates.length || !batchConfirmEnabled || !hasFreshBatchCheck || Boolean(candidateJsonError) || Boolean(batchSubmitError) || batchSubmitApi.loading}" in source
     assert 'id="batch-submit-validation"' in source
 
 
@@ -55,7 +57,17 @@ def test_submission_panel_retry_paths_revalidate_candidate_json_before_requests(
     assert "if (validationError) {" in source
     assert 'notify("warning", validationError);' in source
     assert "[batchCheckApi, candidateJsonError, notify, submitCandidates]" in source
-    assert "[batchSubmitApi, candidateJsonError, notify, submitCandidates]" in source
+    assert "[batchConfirmEnabled, batchSubmitApi, candidateJsonError, hasFreshBatchCheck, notify, submitCandidates]" in source
+
+
+def test_submission_panel_requires_fresh_single_and_batch_checks_before_submit():
+    source = _source()
+
+    assert "const hasFreshSingleCheck = Boolean(checkResult && checkedAlphaId === normalizedAlphaId);" in source
+    assert "提交前请先完成同一Alpha ID的检查" in source
+    assert "disabled={!normalizedAlphaId || !confirmEnabled || !hasFreshSingleCheck || Boolean(alphaIdError) || api.loading}" in source
+    assert "批量提交前请先完成当前候选集的批量检查" in source
+    assert "function candidateBatchSignature(candidates: Candidate[])" in source
 
 
 def test_react_candidate_contract_includes_simulation_id():

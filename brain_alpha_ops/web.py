@@ -14,6 +14,8 @@ from http.server import BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
 
 from brain_alpha_ops.config import load_run_config as _load_run_config
+from brain_alpha_ops import web_session as _web_session
+from brain_alpha_ops.runtime_constants import WebDefaults as _WebDefaults
 from brain_alpha_ops.web_application_context import WebApplicationContext as _WebApplicationContext
 from brain_alpha_ops.web_facade_bindings import build_web_facade_bindings as _build_web_facade_bindings
 from brain_alpha_ops.web_html import (
@@ -293,28 +295,85 @@ def _submit_disabled_payload() -> dict:
 
 def _real_connection(payload):
     try:
-        from brain_alpha_ops.config import load_run_config
         from brain_alpha_ops.runner import api_from_run_config
-        config = load_run_config()
+        config = run_config_from_payload(_safe_non_submit_run_payload(payload))
         api = api_from_run_config(config)
-        profile = api.get_user_profile()
+        auth_result = api.authenticate()
+        profile = api.get_user_profile() if hasattr(api, "get_user_profile") else {}
+        auth_mode = ""
+        if isinstance(auth_result, dict):
+            auth_mode = str(auth_result.get("auth") or "")
         return {"ok": True, "connected": True, "environment": config.environment,
-                "tier": profile.get("tier", "unknown")}
+                "auth": auth_mode, "tier": profile.get("tier", "unknown") if isinstance(profile, dict) else "unknown"}
     except Exception as e:
-        return {"ok": False, "connected": False, "error": str(e)}
+        return _web_error(e, "CONNECTION_FAILED") if "_web_error" in globals() else {"ok": False, "connected": False, "error": str(e)}
 
 def _real_run(payload):
     try:
-        from brain_alpha_ops.config import load_run_config
-        from brain_alpha_ops.runner import run_pipeline_from_config
-        config = load_run_config()
-        result = run_pipeline_from_config(config)
-        return {"ok": True, "run_id": getattr(result, "run_id", ""),
-                "summary": str(getattr(result, "summary", {}))[:200]}
+        safe_payload = _safe_non_submit_run_payload(payload)
+        # Validate before queuing so bad UI payloads fail synchronously. This
+        # does not persist request credentials; run_config_from_payload only
+        # applies them to the in-memory RunConfig used by this request.
+        run_config_from_payload(safe_payload)
+        jobs = _production_job_store()
+        if jobs is None:
+            return {"ok": False, "error_code": "JOB_STORE_UNAVAILABLE", "error": "production job store is not available"}
+        active = jobs.latest_active()
+        if active:
+            active_job_id, _job = active
+            return {
+                "ok": False,
+                "error_code": "CONFLICT_RUNNING",
+                "error": "已有生产任务正在运行，请先停止当前任务。",
+                "job_id": active_job_id,
+                "task_id": active_job_id,
+            }
+        job_id = jobs.create({
+            "operation": "production_run",
+            "safe_mode": {"auto_submit": False, "submit_endpoint_required": True},
+            "result": {
+                "summary": {
+                    "submitted_this_run": 0,
+                    "auto_submitted": 0,
+                },
+            },
+            "progress": {
+                "phase": "queued",
+                "percent": 0,
+                "percent_complete": 0,
+                "message": "Non-submit production run queued.",
+                "status_message": "非提交流水线已排队。",
+            },
+        })
+        starter = globals().get("_submit_background_job")
+        if callable(starter):
+            starter(run_job, job_id, safe_payload)
+        else:
+            threading.Thread(target=run_job, args=(job_id, safe_payload), daemon=True).start()
+        return {
+            "ok": True,
+            "job_id": job_id,
+            "task_id": job_id,
+            "auto_submit": False,
+            "submitted": False,
+            "sse_url": f"/sse?job_id={job_id}",
+            "status_url": f"/api/status?job_id={job_id}",
+        }
     except Exception as e:
-        import traceback
-        traceback.print_exc()
-        return {"ok": False, "error": str(e)}
+        logger.exception("failed to start non-submit production job")
+        return _web_error(e, "RUN_ERROR") if "_web_error" in globals() else {"ok": False, "error": str(e)}
+
+
+def _safe_non_submit_run_payload(payload: dict | None) -> dict:
+    safe_payload = dict(payload or {})
+    safe_payload["autoSubmit"] = False
+    safe_payload["auto_submit"] = False
+    return safe_payload
+
+
+def _production_job_store():
+    registry = globals().get("JOB_REGISTRY")
+    return getattr(registry, "jobs", None)
 
 def _real_check_batch(payload):
     """Batch expression validation against local and official context."""
@@ -378,10 +437,13 @@ def _real_attribution(payload):
         return {"ok": False, "error": str(e)}
 
 def _real_stop(payload):
-    """Trigger pipeline stop via server stop event."""
+    """Request cancellation for the active production job."""
     try:
-        SERVER_STOP.set()
-        return {"ok": True, "status": "stopped", "message": "Server stop signal sent"}
+        job_id = str((payload or {}).get("job_id") or "")
+        jobs = _production_job_store()
+        if jobs is None:
+            return {"ok": False, "error_code": "JOB_STORE_UNAVAILABLE", "error": "production job store is not available"}
+        return {"ok": jobs.cancel(job_id), "job_id": job_id, "status": "stopping"}
     except Exception as e:
         return {"ok": False, "error": str(e)}
 
@@ -419,6 +481,7 @@ def dispatch_post(handler, path, body):
         "/api/scoring/attribution": _real_attribution,
         "/api/run": _real_run,
         "/api/stop": _real_stop,
+        "/api/test_connection": _real_connection,
         "/api/connection_test": _real_connection,
         "/api/session": _real_session,
     }
@@ -434,8 +497,56 @@ def dispatch_post(handler, path, body):
 
 # ═══════════════════════ Handler ═══════════════════════════════
 class Handler(BaseHTTPRequestHandler):
+    _MAX_BODY_BYTES = _WebDefaults.MAX_BODY_BYTES
+
     def log_message(self, fmt, *args):
         logger.debug(fmt, *args)
+
+    def _session_id_from_cookie(self):
+        return _web_session.session_id_from_cookie(str(self.headers.get("Cookie", "")))
+
+    def _has_valid_session(self, query_string=""):
+        return _web_session.has_valid_request_session(
+            path=urlparse(self.path).path,
+            query_string=query_string,
+            csrf_header=str(self.headers.get("X-Brain-Alpha-CSRF", "")),
+            cookie_header=str(self.headers.get("Cookie", "")),
+        )
+
+    def _validate_replay_request(self):
+        return _web_session.validate_replay_request(
+            session_id=self._session_id_from_cookie(),
+            request_id=str(self.headers.get("X-Brain-Alpha-Request-ID", "")),
+            request_timestamp=str(self.headers.get("X-Brain-Alpha-Request-Timestamp", "")),
+        )
+
+    def _is_allowed_local_request(self):
+        return _web_session.is_allowed_request(
+            host_header=str(self.headers.get("Host", "")),
+            origin_header=str(self.headers.get("Origin", "")),
+            referer_header=str(self.headers.get("Referer", "")),
+        )
+
+    def _read_json(self):
+        length = int(self.headers.get("Content-Length", "0"))
+        if length < 0:
+            raise ValueError("invalid request body length")
+        if length > self._MAX_BODY_BYTES:
+            raise ValueError("request body too large")
+        raw = self.rfile.read(length) if length else b"{}"
+        return json.loads(raw.decode("utf-8"))
+
+    def _handle_sse_stream(self, query_string):
+        if not self._has_valid_session(query_string):
+            self._json({"ok": False, "error_code": "AUTH_REQUIRED", "error": "session required"}, status=401)
+            return
+        _handle_sse_request(self, parse_qs(query_string))
+
+    def _html(self, html, *, extra_headers=None):
+        self._send_html(html, extra_headers=extra_headers)
+
+    def _json(self, payload, status=200, *, extra_headers=None):
+        self._send_json(payload, status=status, extra_headers=extra_headers)
     
     def _send_security_headers(self):
         """Add standard security headers to response."""
@@ -443,21 +554,25 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("X-Frame-Options", "DENY")
         self.send_header("Referrer-Policy", "no-referrer")
 
-    def _send_json(self, data, status=200):
+    def _send_json(self, data, status=200, *, extra_headers=None):
         body = json.dumps(data, ensure_ascii=False, default=str).encode()
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
+        for key, value in extra_headers or []:
+            self.send_header(key, value)
         self._cors()
         self._send_security_headers()
         self.end_headers()
         self.wfile.write(body)
     
-    def _send_html(self, html, status=200):
+    def _send_html(self, html, status=200, *, extra_headers=None):
         body = html.encode()
         self.send_response(status)
         self.send_header("Content-Type", "text/html; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
+        for key, value in extra_headers or []:
+            self.send_header(key, value)
         self._cors()
         self._send_security_headers()
         self.end_headers()
@@ -489,6 +604,9 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Access-Control-Allow-Credentials", "true")
     
     def _serve_static(self, path):
+        if not self._is_allowed_local_request():
+            self._send_json({"ok": False, "error_code": "ORIGIN_FORBIDDEN", "error": "forbidden local request origin"}, status=403)
+            return
         asset = _resolve_react_asset(path)
         if asset:
             data, mime = asset
@@ -502,15 +620,15 @@ class Handler(BaseHTTPRequestHandler):
     
     def do_GET(self):
         p = urlparse(self.path)
-        if p.path == "/sse":
-            _handle_sse_request(self, parse_qs(p.query))
+        if p.path.startswith("/assets/"):
+            self._serve_static(p.path)
             return
-        dispatch_get(self, p.path, parse_qs(p.query))
+        from brain_alpha_ops.web_handler_dispatch import dispatch_get as _dispatch_get
+        _dispatch_get(self, p, _web_handler_dispatch_context())
     
     def do_POST(self):
-        cl = int(self.headers.get("Content-Length", 0))
-        body = self.rfile.read(cl).decode() if cl else ""
-        dispatch_post(self, urlparse(self.path).path, body)
+        from brain_alpha_ops.web_handler_dispatch import dispatch_post as _dispatch_post
+        _dispatch_post(self, urlparse(self.path), _web_handler_dispatch_context())
     
     def do_OPTIONS(self):
         self.send_response(204)

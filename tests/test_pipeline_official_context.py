@@ -134,15 +134,53 @@ def test_official_context_service_falls_back_to_api_when_json_unavailable(tmp_pa
         result = service.load()
 
     assert result.context_summary["source"] == "official_api_or_cache"
+    assert result.context_summary["degraded"] is False
     field_names = [str(row.get("id") or row.get("name") or "") for row in result.fields]
     operator_names = [str(row.get("name") or "") for row in result.operators]
     assert field_names[0] == "close"
     assert operator_names[0] == "rank"
+    assert result.active_dataset_id == "pv1"
+    assert result.context_summary["active_dataset_id"] == "pv1"
     assert progress
     assert halts == []
     assert any(args[0] == "context_loaded" for args, _kwargs in events)
     assert "official context JSON load failed; falling back to API" in caplog.text
     assert "official context JSON files are missing or empty" in caplog.text
+
+
+def test_official_context_service_marks_cache_fallback_as_degraded(tmp_path, monkeypatch):
+    service, events, progress, _halts = _service(tmp_path)
+
+    class EmptyAPI:
+        def list_fields(self, *_args, **_kwargs):
+            return []
+
+        def list_operators(self, *_args, **_kwargs):
+            return []
+
+    class EmptyLoader:
+        def refresh(self, *_args, **_kwargs):
+            return {"status": "refresh_failed"}
+
+        def get_fields(self):
+            return []
+
+        def get_operators(self):
+            return []
+
+    service.api = EmptyAPI()
+    monkeypatch.setattr(
+        "brain_alpha_ops.data.OfficialDataLoader.instance",
+        lambda: EmptyLoader(),
+    )
+
+    result = service.load()
+
+    assert result.context_summary["degraded"] is True
+    assert result.context_summary["degraded_reason"]
+    assert progress[-1][1]["data"]["context_load"]["status"] == "degraded"
+    assert progress[-1][1]["data"]["context_load"]["status_code"] == "CONTEXT_DEGRADED"
+    assert any(args[0] == "context_degraded" for args, _kwargs in events)
 
 
 def test_official_context_service_logs_advanced_component_fallback(tmp_path, monkeypatch, caplog):

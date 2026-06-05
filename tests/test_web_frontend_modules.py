@@ -13,7 +13,7 @@ REACT_CONTRACT_COVERAGE = {
     "App.tsx": "state-card router, shell chrome, and detail view selection",
     "main.tsx": "React root bootstrap",
     "components/CandidateTable.tsx": "candidate generation, filters, queue views, and SSE completion",
-    "components/ConfigPanel.tsx": "config hydration, schema options, validation, import/export, and save",
+    "components/ConfigPanel.tsx": "session credentials, config hydration, schema options, validation, import/export, and save",
     "components/Dashboard.tsx": "dashboard snapshots and landing metrics",
     "components/JobMonitor.tsx": "production job start/stop/status and SSE progress",
     "components/KpiCard.tsx": "compact KPI presentation",
@@ -86,6 +86,8 @@ def test_frontend_runtime_modules_render_state_and_interaction_contracts():
             "validateAlphaId(alphaId)",
             "validateCandidateJsonRows(rows)",
             "validateBatchSubmitCandidates(submitCandidates)",
+            "hasFreshSingleCheck",
+            "hasFreshBatchCheck",
             '"/api/check_batch"',
             '"/api/submit_batch"',
             'useSSE(batchCheckTaskId ? `/sse?job_id=${encodeURIComponent(batchCheckTaskId)}` : null',
@@ -102,6 +104,7 @@ def test_frontend_runtime_modules_render_state_and_interaction_contracts():
             'headers["X-Brain-Alpha-CSRF"] = csrf',
             'headers["X-Brain-Alpha-Request-ID"] = createRequestId();',
             "new EventSource(withStreamToken(streamUrl), { withCredentials: true })",
+            "onExhausted?.();",
             "stream_token=${encodeURIComponent(token)}",
         ],
     )
@@ -110,18 +113,26 @@ def test_frontend_runtime_modules_render_state_and_interaction_contracts():
 def test_app_ux_orchestrator_has_tested_navigation_empty_and_busy_contracts():
     app = _source("App.tsx")
     state_cards = _source("components/StateCards.tsx")
+    job_monitor = _source("components/JobMonitor.tsx")
     confirm = _source("components/SubmissionConfirmPanel.tsx")
 
     _assert_snippets(
-        app + state_cards,
+        app + state_cards + job_monitor,
         [
             'useState<CardViewId | "cards">("cards")',
             "StateCards onNavigate={handleNavigate} notify={notify}",
             "setActiveView(view)",
             'aria-label="返回状态卡"',
             'aria-label="打开系统配置"',
-            "候选生成 → 官方回测 → 质量检查 → 提交确认",
-            "grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-7",
+            "登录、运行、证明可用",
+            "输入 BRAIN 账户，测试连接，启动强制非提交的生产验证",
+            "BRAIN 账户连接",
+            "非提交生产验证",
+            "填写 BRAIN 凭证",
+            "页面凭证为空",
+            'key="scoring_candidate_picker"',
+            "selectedCandidate ? (",
+            "grid w-full max-w-full grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5",
             "onClick={() => onNavigate(config.id)}",
             'role="alert"',
             'aria-live="assertive"',
@@ -130,10 +141,13 @@ def test_app_ux_orchestrator_has_tested_navigation_empty_and_busy_contracts():
         ],
     )
     for view_id in (
+        "dashboard",
         "candidates",
         "official_backtests",
+        "scoring",
         "quality_check",
         "submission_confirm",
+        "submission",
         "checkpoint_status",
         "config",
         "cloud",
@@ -159,6 +173,7 @@ def test_ux_styles_cover_interaction_feedback_and_responsive_layout():
     css = _source("index.css")
     app = _source("App.tsx")
     candidate = _source("components/CandidateTable.tsx")
+    config = _source("components/ConfigPanel.tsx")
     toast = _source("components/ToastContainer.tsx")
 
     _assert_snippets(
@@ -169,6 +184,9 @@ def test_ux_styles_cover_interaction_feedback_and_responsive_layout():
             ".btn-secondary",
             ".btn-danger",
             ".card",
+            ".reader-panel",
+            ".workflow-panel",
+            ".workflow-steps",
             ".progress-feedback",
             ".progress-spinner",
             "@keyframes progress-indeterminate",
@@ -177,13 +195,13 @@ def test_ux_styles_cover_interaction_feedback_and_responsive_layout():
         ],
     )
     _assert_snippets(
-        app + candidate + toast,
+        css + app + candidate + config + toast,
         [
-            "min-h-[100dvh] min-w-0 flex flex-col",
+            "min-h-[100dvh] w-full min-w-0 overflow-x-hidden flex flex-col",
             "px-4 py-4 sm:px-6 lg:px-8",
-            "flex-1 min-w-0 p-4 sm:p-6 lg:p-8 overflow-auto",
+            "flex-1 w-full min-w-0 overflow-auto p-4 sm:p-6 lg:p-8",
             "flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center",
-            "w-full min-w-0 bg-gray-800",
+            "form-input",
             "max-w-full overflow-auto",
             "fixed left-4 right-4 top-4",
             "sm:bottom-4 sm:left-auto sm:top-auto sm:max-w-sm",

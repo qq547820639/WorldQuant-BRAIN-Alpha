@@ -1,6 +1,6 @@
 /** Submission panel with pre-flight safety checks and confirmations. */
 
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { useApi } from "@/hooks/useApi";
 import { useSSE } from "@/hooks/useSSE";
 import ProgressFeedback from "@/components/ProgressFeedback";
@@ -23,6 +23,9 @@ export default function SubmissionPanel({ notify }: Props) {
   const [candidateJson, setCandidateJson] = useState("");
   const [candidateJsonError, setCandidateJsonError] = useState("");
   const [confirmEnabled, setConfirmEnabled] = useState(false);
+  const [batchConfirmEnabled, setBatchConfirmEnabled] = useState(false);
+  const [checkedAlphaId, setCheckedAlphaId] = useState("");
+  const [batchCheckedSignature, setBatchCheckedSignature] = useState("");
   const [lastSubmission, setLastSubmission] = useState<{ alphaId: string; submittedAt: string } | null>(null);
   const [checkResult, setCheckResult] = useState<Record<string, unknown> | null>(null);
   const [batchCheckResult, setBatchCheckResult] = useState<Record<string, unknown> | null>(null);
@@ -44,6 +47,9 @@ export default function SubmissionPanel({ notify }: Props) {
   const normalizedAlphaId = alphaId.trim();
   const alphaIdError = alphaId ? validateAlphaId(alphaId) : "";
   const batchSubmitError = submitCandidates.length ? validateBatchSubmitCandidates(submitCandidates) : "";
+  const batchCandidateSignature = useMemo(() => candidateBatchSignature(submitCandidates), [submitCandidates]);
+  const hasFreshSingleCheck = Boolean(checkResult && checkedAlphaId === normalizedAlphaId);
+  const hasFreshBatchCheck = Boolean(batchCheckResult && batchCheckedSignature === batchCandidateSignature);
 
   const focusSubmissionReceipt = useCallback(() => {
     requestAnimationFrame(() => {
@@ -60,6 +66,9 @@ export default function SubmissionPanel({ notify }: Props) {
   }, []);
 
   useEffect(() => {
+    setBatchConfirmEnabled(false);
+    setBatchCheckResult(null);
+    setBatchCheckedSignature("");
     if (candidateJson.trim()) {
       try {
         const parsed = JSON.parse(candidateJson);
@@ -89,6 +98,13 @@ export default function SubmissionPanel({ notify }: Props) {
     }
   }, [candidateJson]);
 
+  useEffect(() => {
+    setConfirmEnabled(false);
+    if (checkedAlphaId !== normalizedAlphaId) {
+      setCheckResult(null);
+    }
+  }, [checkedAlphaId, normalizedAlphaId]);
+
   const runCheck = useCallback(async () => {
     if (!normalizedAlphaId) {
       notify("warning", "请输入要检查的Alpha ID");
@@ -105,6 +121,7 @@ export default function SubmissionPanel({ notify }: Props) {
     if (result?.ok) {
       const data = result as unknown as Record<string, unknown>;
       setCheckResult(data);
+      setCheckedAlphaId(normalizedAlphaId);
       notify("success", `${normalizedAlphaId} 检查完成`);
     } else {
       notify("error", result?.error || "检查失败");
@@ -124,6 +141,10 @@ export default function SubmissionPanel({ notify }: Props) {
       notify("warning", alphaIdError);
       return;
     }
+    if (!hasFreshSingleCheck) {
+      notify("warning", "提交前请先完成同一Alpha ID的检查");
+      return;
+    }
     const result = await api.call("/api/submit", {
       method: "POST",
       body: JSON.stringify({ alpha_id: normalizedAlphaId, confirm_submit: true }),
@@ -141,7 +162,7 @@ export default function SubmissionPanel({ notify }: Props) {
     } else {
       notify("error", result?.error || "提交失败");
     }
-  }, [api, alphaIdError, confirmEnabled, focusSubmissionReceipt, normalizedAlphaId, notify]);
+  }, [api, alphaIdError, confirmEnabled, focusSubmissionReceipt, hasFreshSingleCheck, normalizedAlphaId, notify]);
 
   const runBatchCheck = useCallback(async () => {
     if (!submitCandidates.length) {
@@ -171,6 +192,7 @@ export default function SubmissionPanel({ notify }: Props) {
     if (result?.ok && nextTaskId) {
       setBatchCheckTaskId(nextTaskId);
       setBatchCheckState("progress");
+      setBatchCheckedSignature("");
       notify("info", `批量检查已启动: ${nextTaskId}`);
     } else {
       setBatchCheckState("error");
@@ -187,6 +209,14 @@ export default function SubmissionPanel({ notify }: Props) {
     const validationError = candidateJsonError || validateBatchSubmitCandidates(submitCandidates);
     if (validationError) {
       notify("warning", validationError);
+      return;
+    }
+    if (!batchConfirmEnabled) {
+      notify("warning", "批量提交前请先确认候选已通过提交前检查");
+      return;
+    }
+    if (!hasFreshBatchCheck) {
+      notify("warning", "批量提交前请先完成当前候选集的批量检查");
       return;
     }
     setSubmitState("loading");
@@ -211,7 +241,7 @@ export default function SubmissionPanel({ notify }: Props) {
       setSubmitError(result?.error || "批量提交失败");
       notify("error", result?.error || "批量提交失败");
     }
-  }, [batchSubmitApi, candidateJsonError, notify, submitCandidates]);
+  }, [batchConfirmEnabled, batchSubmitApi, candidateJsonError, hasFreshBatchCheck, notify, submitCandidates]);
 
   const handleBatchCheckEvent = useCallback((event: SSEEvent) => {
     const progress = (event.progress || event.data || {}) as UnifiedProgress;
@@ -228,12 +258,13 @@ export default function SubmissionPanel({ notify }: Props) {
       const result = event.result as { items?: unknown[] } | undefined;
       setBatchCheckState("success");
       setBatchCheckTaskId(null);
-      setBatchCheckResult(result ? (result as Record<string, unknown>) : null);
+      setBatchCheckResult(result ? (result as Record<string, unknown>) : { ok: true });
+      setBatchCheckedSignature(batchCandidateSignature);
       notify("success", "批量检查完成");
       return;
     }
     setBatchCheckState("progress");
-  }, [notify]);
+  }, [batchCandidateSignature, notify]);
 
   const handleBatchSubmitEvent = useCallback((event: SSEEvent) => {
     const progress = (event.progress || event.data || {}) as UnifiedProgress;
@@ -258,8 +289,28 @@ export default function SubmissionPanel({ notify }: Props) {
     setSubmitState("progress");
   }, [focusBatchSubmissionStatus, notify]);
 
-  useSSE(batchCheckTaskId ? `/sse?job_id=${encodeURIComponent(batchCheckTaskId)}` : null, { onEvent: handleBatchCheckEvent });
-  useSSE(submitTaskId ? `/sse?job_id=${encodeURIComponent(submitTaskId)}` : null, { onEvent: handleBatchSubmitEvent });
+  const handleBatchCheckStreamExhausted = useCallback(() => {
+    const message = "批量检查实时流已断开，请稍后重试或刷新状态。";
+    setBatchCheckState("error");
+    setBatchCheckError(message);
+    notify("warning", message);
+  }, [notify]);
+
+  const handleBatchSubmitStreamExhausted = useCallback(() => {
+    const message = "批量提交实时流已断开，请刷新状态确认提交结果。";
+    setSubmitState("error");
+    setSubmitError(message);
+    notify("warning", message);
+  }, [notify]);
+
+  useSSE(batchCheckTaskId ? `/sse?job_id=${encodeURIComponent(batchCheckTaskId)}` : null, {
+    onEvent: handleBatchCheckEvent,
+    onExhausted: handleBatchCheckStreamExhausted,
+  });
+  useSSE(submitTaskId ? `/sse?job_id=${encodeURIComponent(submitTaskId)}` : null, {
+    onEvent: handleBatchSubmitEvent,
+    onExhausted: handleBatchSubmitStreamExhausted,
+  });
 
   return (
     <div className="w-full max-w-3xl min-w-0 space-y-6 animate-fade-in">
@@ -301,7 +352,7 @@ export default function SubmissionPanel({ notify }: Props) {
           </button>
           <button
             onClick={handleSubmit}
-            disabled={!normalizedAlphaId || Boolean(alphaIdError) || api.loading}
+            disabled={!normalizedAlphaId || !confirmEnabled || !hasFreshSingleCheck || Boolean(alphaIdError) || api.loading}
             className="btn-danger text-sm"
           >
             提交Alpha
@@ -388,12 +439,25 @@ export default function SubmissionPanel({ notify }: Props) {
           </button>
           <button
             onClick={runBatchSubmit}
-            disabled={!submitCandidates.length || Boolean(candidateJsonError) || Boolean(batchSubmitError) || batchSubmitApi.loading}
+            disabled={!submitCandidates.length || !batchConfirmEnabled || !hasFreshBatchCheck || Boolean(candidateJsonError) || Boolean(batchSubmitError) || batchSubmitApi.loading}
             className="btn-danger text-sm"
           >
             批量提交
           </button>
         </div>
+        <label className="flex items-start gap-2 text-xs text-gray-300 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={batchConfirmEnabled}
+            onChange={(e) => setBatchConfirmEnabled(e.target.checked)}
+            disabled={!submitCandidates.length || Boolean(candidateJsonError) || Boolean(batchSubmitError)}
+            aria-describedby="batch-confirm-submit-help"
+            className="mt-0.5 rounded border-gray-600 bg-gray-800 text-brand-500 focus:ring-brand-500"
+          />
+          <span id="batch-confirm-submit-help">
+            我确认这些候选已完成官方检查、提交前阻断项已复核，并允许执行批量提交。
+          </span>
+        </label>
         {batchSubmitError && !candidateJsonError && (
           <p id="batch-submit-validation" className="text-xs text-warning" role="alert">
             {batchSubmitError}
@@ -476,4 +540,15 @@ function validateBatchSubmitCandidates(candidates: Candidate[]) {
 
 function candidateAlphaId(candidate: Candidate) {
   return String(candidate.alpha_id || candidate.official_alpha_id || "").trim();
+}
+
+function candidateBatchSignature(candidates: Candidate[]) {
+  return JSON.stringify(
+    candidates.map((candidate) => ({
+      alpha_id: candidateAlphaId(candidate),
+      official_alpha_id: candidate.official_alpha_id || "",
+      simulation_id: candidate.simulation_id || "",
+      expression: candidate.expression || "",
+    })),
+  );
 }

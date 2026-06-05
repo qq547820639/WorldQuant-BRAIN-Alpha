@@ -462,6 +462,7 @@ def test_pipeline_auto_submit_reports_exact_missing_official_metric_field(monkey
                 "fitness": 1.5,
                 "turnover": 0.2,
                 "correlation": 0.1,
+                "self_correlation": 0.1,
                 "prod_correlation": 0.1,
                 "pass_fail": "PASS",
             },

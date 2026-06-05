@@ -1,8 +1,69 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
+import App from "@/App";
 import CandidateTable from "@/components/CandidateTable";
 import ConfigPanel from "@/components/ConfigPanel";
+import JobMonitor from "@/components/JobMonitor";
+import ScoringPanel from "@/components/ScoringPanel";
 import SnapshotPanel from "@/components/SnapshotPanel";
+import SubmissionPanel from "@/components/SubmissionPanel";
+
+describe("App credential quick start", () => {
+  it("lets operators enter BRAIN credentials and start a non-submit production proof", async () => {
+    const fetchMock = vi.fn(async (url: RequestInfo | URL, options?: RequestInit) => {
+      const path = String(url);
+      if (path.startsWith("/api/candidates")) return jsonResponse({ ok: true, candidates: [], total: 0 });
+      if (path === "/api/backtest_slots") return jsonResponse({ ok: true, slot_limit: 3, active_count: 0, slots: [] });
+      if (path === "/api/submit_readiness") return jsonResponse({ ok: true, eligible_count: 0, ready_to_submit: false });
+      if (path === "/api/config") return jsonResponse({ ok: true, config: baseConfig("pv1") });
+      if (path === "/api/checkpoint_status") return jsonResponse({ ok: true, history_count: 0, checkpoint_count: 0, resume_available: false });
+      if (path.startsWith("/api/snapshot/cloud")) return jsonResponse({ ok: true, total: 0, summary: { returned_count: 0 } });
+      if (path === "/api/test_connection" && options?.method === "POST") {
+        return jsonResponse({ ok: true, environment: "production", auth: "basic" });
+      }
+      if (path === "/api/run" && options?.method === "POST") {
+        return jsonResponse({ ok: true, job_id: "job_homepage_proof", auto_submit: false, submitted: false });
+      }
+      if (path.startsWith("/api/status")) return jsonResponse({ ok: true, job_id: "job_homepage_proof", status: "running" });
+      throw new Error(`Unexpected fetch: ${path}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<App />);
+
+    await screen.findByRole("heading", { name: "BRAIN 账户连接" });
+    fireEvent.change(screen.getByLabelText("账户邮箱"), { target: { value: "reader@example.com" } });
+    fireEvent.change(screen.getByLabelText("密码"), { target: { value: "session-secret" } });
+    fireEvent.change(screen.getByLabelText("Token（可选）"), { target: { value: "session-token" } });
+
+    fireEvent.click(screen.getByRole("button", { name: "测试 BRAIN 连接" }));
+    await screen.findByText("连接正常: production");
+
+    const connectionCall = fetchMock.mock.calls.find(([url, options]) => (
+      String(url) === "/api/test_connection" && options?.method === "POST"
+    ));
+    expect(JSON.parse(String(connectionCall?.[1]?.body))).toEqual({
+      username: "reader@example.com",
+      password: "session-secret",
+      token: "session-token",
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "运行非提交验证" }));
+    await screen.findByText("job_homepage_proof");
+
+    const runCall = fetchMock.mock.calls.find(([url, options]) => (
+      String(url) === "/api/run" && options?.method === "POST"
+    ));
+    expect(JSON.parse(String(runCall?.[1]?.body))).toEqual({
+      autoSubmit: false,
+      auto_submit: false,
+      username: "reader@example.com",
+      password: "session-secret",
+      token: "session-token",
+    });
+  });
+});
 
 describe("ConfigPanel", () => {
   it("validates editable fields and posts the saved config payload", async () => {
@@ -47,11 +108,13 @@ describe("ConfigPanel", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    render(<ConfigPanel notify={notify} />);
+    render(<ConfigPanelHarness notify={notify} />);
 
-    await screen.findByRole("heading", { name: "配置管理" });
+    await screen.findByRole("heading", { name: "连接与生产参数" });
     const dataset = screen.getByRole("combobox", { name: "数据集" });
     const save = screen.getByRole("button", { name: "保存" });
+    const username = screen.getByLabelText("账户邮箱");
+    const password = screen.getByLabelText("密码");
 
     expect(within(dataset).getByRole("option", {
       name: "fundamental6 - Company Fundamental Data for Equity, 886 fields",
@@ -70,7 +133,8 @@ describe("ConfigPanel", () => {
     const saveCall = fetchMock.mock.calls.find(([url, options]) => (
       String(url) === "/api/config" && options?.method === "POST"
     ));
-    expect(JSON.parse(String(saveCall?.[1]?.body))).toMatchObject({
+    const savedPayload = JSON.parse(String(saveCall?.[1]?.body));
+    expect(savedPayload).toMatchObject({
       settings: {
         dataset: "fundamental6",
         region: "USA",
@@ -81,14 +145,25 @@ describe("ConfigPanel", () => {
       candidates: 20,
       cycles: 10,
     });
+    expect(savedPayload.username).toBeUndefined();
+    expect(savedPayload.password).toBeUndefined();
     expect(notify).toHaveBeenCalledWith("success", "配置已保存");
 
+    fireEvent.change(username, { target: { value: "reader@example.com" } });
+    fireEvent.change(password, { target: { value: "session-secret" } });
     fireEvent.click(screen.getByRole("button", { name: "测试 BRAIN 连接" }));
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
         "/api/test_connection",
         expect.objectContaining({ method: "POST" }),
       );
+    });
+    const connectionCall = fetchMock.mock.calls.find(([url, options]) => (
+      String(url) === "/api/test_connection" && options?.method === "POST"
+    ));
+    expect(JSON.parse(String(connectionCall?.[1]?.body))).toMatchObject({
+      username: "reader@example.com",
+      password: "session-secret",
     });
     expect(await screen.findByText("连接正常: production")).toBeInTheDocument();
     expect(notify).toHaveBeenCalledWith("success", "BRAIN 连接测试通过");
@@ -198,6 +273,164 @@ describe("CandidateTable", () => {
   });
 });
 
+describe("SubmissionPanel", () => {
+  it("requires a fresh successful check before submitting an alpha", async () => {
+    const notify = vi.fn();
+    const fetchMock = vi.fn(async (url: RequestInfo | URL, options?: RequestInit) => {
+      const path = String(url);
+      if (path === "/api/check" && options?.method === "POST") {
+        return jsonResponse({ ok: true, alpha_id: "alpha_checked", passed: true });
+      }
+      if (path === "/api/submit" && options?.method === "POST") {
+        return jsonResponse({ ok: true, alpha_id: "alpha_checked" });
+      }
+      throw new Error(`Unexpected fetch: ${path}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<SubmissionPanel notify={notify} />);
+
+    const alphaInput = screen.getByPlaceholderText("例如 alpha_abc123...");
+    fireEvent.change(alphaInput, { target: { value: "alpha_checked" } });
+    const submit = screen.getByRole("button", { name: "提交Alpha" });
+    expect(submit).toBeDisabled();
+
+    fireEvent.click(screen.getByRole("button", { name: "提交前检查" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
+      "/api/check",
+      expect.objectContaining({ method: "POST" }),
+    ));
+    fireEvent.click(screen.getByLabelText(/我确认此Alpha已通过所有提交前检查/));
+    await waitFor(() => expect(submit).toBeEnabled());
+
+    fireEvent.click(submit);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
+      "/api/submit",
+      expect.objectContaining({ method: "POST" }),
+    ));
+    const submitCall = fetchMock.mock.calls.find(([url, options]) => (
+      String(url) === "/api/submit" && options?.method === "POST"
+    ));
+    expect(JSON.parse(String(submitCall?.[1]?.body))).toEqual({
+      alpha_id: "alpha_checked",
+      confirm_submit: true,
+    });
+  });
+});
+
+describe("ScoringPanel", () => {
+  it("does not crash when attribution children are not an array", async () => {
+    const notify = vi.fn();
+    const fetchMock = vi.fn(async (url: RequestInfo | URL, options?: RequestInit) => {
+      const path = String(url);
+      if (path === "/api/scoring/evaluate" && options?.method === "POST") {
+        return jsonResponse({ ok: true });
+      }
+      if (path === "/api/scoring/attribution" && options?.method === "POST") {
+        return jsonResponse({
+          ok: true,
+          attribution: {
+            name: "root",
+            score: 1,
+            weight: 1,
+            children: { invalid: true },
+          },
+          hard_gates: { invalid: true },
+          soft_gates: null,
+          top_failures: { invalid: true },
+          improvement_hints: "retry with official evidence",
+        });
+      }
+      throw new Error(`Unexpected fetch: ${path}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<ScoringPanel notify={notify} candidate={candidate({
+      alpha_id: "alpha_scoring",
+      expression: "rank(close)",
+      score: 80,
+    })} />);
+
+    expect(await screen.findByText("root")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Alpha表达式" })).toBeInTheDocument();
+  });
+});
+
+describe("JobMonitor", () => {
+  it("keeps non-submit proof visible after a production run is stopped", async () => {
+    const notify = vi.fn();
+    const fetchMock = vi.fn(async (url: RequestInfo | URL, options?: RequestInit) => {
+      const path = String(url);
+      if (path === "/api/run" && options?.method === "POST") {
+        return jsonResponse({ ok: true, job_id: "job_proof" });
+      }
+      if (path === "/api/stop" && options?.method === "POST") {
+        return jsonResponse({ ok: true, job_id: "job_proof", status: "stopping" });
+      }
+      if (path.startsWith("/api/status")) {
+        return jsonResponse({
+          ok: true,
+          job_id: "job_proof",
+          status: "running",
+          result: { summary: { submitted_this_run: 0, auto_submitted: 0, official_validation_attempted: 1, official_validation_passed: 1 } },
+        });
+      }
+      throw new Error(`Unexpected fetch: ${path}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<JobMonitor notify={notify} credentials={{ username: "runner@example.com", password: "run-secret", token: "" }} />);
+    fireEvent.click(screen.getByRole("button", { name: "运行非提交验证" }));
+
+    await screen.findByText("job_proof");
+    expect(screen.getByText("运行证明")).toBeInTheDocument();
+    expect(screen.getByText("本轮提交")).toBeInTheDocument();
+    expect(screen.getByText("自动提交")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "停止" }));
+
+    await waitFor(() => expect(notify).toHaveBeenCalledWith("info", "任务已停止"));
+    expect(screen.getByText("任务已停止，非提交证据已保留。")).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/stop",
+      expect.objectContaining({ method: "POST" }),
+    );
+  });
+
+  it("sends resume=true when starting from the resume control", async () => {
+    const notify = vi.fn();
+    const fetchMock = vi.fn(async (url: RequestInfo | URL, options?: RequestInit) => {
+      const path = String(url);
+      if (path === "/api/run" && options?.method === "POST") {
+        return jsonResponse({ ok: true, job_id: "job_resume" });
+      }
+      if (path.startsWith("/api/status")) {
+        return jsonResponse({ ok: true, job_id: "job_resume", status: "running" });
+      }
+      throw new Error(`Unexpected fetch: ${path}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<JobMonitor notify={notify} credentials={{ username: "runner@example.com", password: "run-secret", token: "" }} />);
+    fireEvent.click(screen.getByRole("button", { name: "续跑非提交断点" }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
+      "/api/run",
+      expect.objectContaining({ method: "POST" }),
+    ));
+    const runCall = fetchMock.mock.calls.find(([url, options]) => (
+      String(url) === "/api/run" && options?.method === "POST"
+    ));
+    expect(JSON.parse(String(runCall?.[1]?.body))).toEqual({
+      resume: true,
+      autoSubmit: false,
+      auto_submit: false,
+      username: "runner@example.com",
+      password: "run-secret",
+    });
+  });
+});
+
 describe("SnapshotPanel", () => {
   it("loads cloud snapshot rows and refreshes the data view", async () => {
     const notify = vi.fn();
@@ -292,6 +525,11 @@ function jsonResponse(body: unknown) {
   return new Response(JSON.stringify(body), {
     headers: { "Content-Type": "application/json" },
   });
+}
+
+function ConfigPanelHarness({ notify }: { notify: (type: "success" | "error" | "warning" | "info", msg: string) => void }) {
+  const [credentials, setCredentials] = useState({ username: "", password: "", token: "" });
+  return <ConfigPanel notify={notify} credentials={credentials} onCredentialsChange={setCredentials} />;
 }
 
 function baseConfig(dataset: string) {

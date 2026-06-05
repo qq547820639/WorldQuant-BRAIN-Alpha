@@ -265,11 +265,28 @@ def _status_payload(query: dict) -> dict:
     if job_id:
         row = job_get(job_id)
         if not row:
+            durable_store = _durable_production_job_store()
+            row = durable_store.get(job_id) if durable_store is not None else None
+        if not row:
             return {"ok": False, "error": "job not found", "job_id": job_id, "status": "missing"}
-        return {"ok": True, **row}
+        return {"ok": True, "job_id": job_id, "task_id": job_id, **row}
     with ASYNC_JOBS_LOCK:
         latest = max(ASYNC_JOBS.values(), key=lambda item: str(item.get("updated_at") or ""), default=None)
+    durable_store = _durable_production_job_store()
+    durable_latest = durable_store.latest_any() if durable_store is not None else None
+    if durable_latest:
+        durable_job_id, durable_row = durable_latest
+        latest = {"job_id": durable_job_id, "task_id": durable_job_id, **durable_row}
     return {"ok": True, "status": "idle" if not latest else latest.get("status", "idle"), "latest_job": latest or {}}
+
+
+def _durable_production_job_store():
+    try:
+        from brain_alpha_ops.web_job_bindings import job_registry_view
+
+        return job_registry_view().jobs
+    except Exception:
+        return None
 
 
 def _query_limit(query: dict, *, default: int = 1000, maximum: int = 5000) -> int:

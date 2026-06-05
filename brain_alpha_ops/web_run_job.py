@@ -134,9 +134,15 @@ def run_job_service(
             progress={"phase": "startup", "current": 0, "total": 1, "percent": 0, "message": "后台任务启动。", "alpha_id": ""},
         )
         run_config = run_config_from_payload(payload)
+        def _progress_update(progress: dict[str, Any]) -> None:
+            fields: dict[str, Any] = {"progress": progress}
+            if _progress_terminal_status(progress) in {"stopped", "cancelled"}:
+                fields["status"] = _progress_terminal_status(progress)
+            job_store.update(job_id, **fields)
+
         result = run_pipeline_from_config(
             run_config,
-            progress_callback=lambda progress: job_store.update(job_id, progress=progress),
+            progress_callback=_progress_update,
             stop_callback=lambda: job_store.is_cancelled(job_id),
         )
         final_status = "stopped" if job_store.is_cancelled(job_id) else "completed"
@@ -180,3 +186,14 @@ def run_job_service(
                 "error_context": error_context,
             },
         )
+
+
+def _progress_terminal_status(progress: dict[str, Any]) -> str:
+    if not isinstance(progress, dict):
+        return ""
+    status = str(progress.get("status") or "").strip().lower()
+    phase = str(progress.get("phase") or "").strip().lower()
+    for value in (status, phase):
+        if value in {"stopped", "cancelled", "canceled"}:
+            return "cancelled" if value == "canceled" else value
+    return ""

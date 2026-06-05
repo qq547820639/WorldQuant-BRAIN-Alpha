@@ -2,16 +2,17 @@
 
 import { useEffect } from "react";
 import { useApi } from "@/hooks/useApi";
-import type { JobStatus, CloudAlphaSummary, ResearchMemorySummary } from "@/types";
+import type { BrainCredentials, JobStatus, CloudAlphaSummary, ResearchMemorySummary } from "@/types";
 import KpiCard from "@/components/KpiCard";
 import JobMonitor from "@/components/JobMonitor";
 import ProgressFeedback from "@/components/ProgressFeedback";
 
 interface Props {
   notify: (type: "success" | "error" | "warning" | "info", msg: string) => void;
+  credentials?: BrainCredentials;
 }
 
-export default function Dashboard({ notify }: Props) {
+export default function Dashboard({ notify, credentials }: Props) {
   const statusApi = useApi<JobStatus>();
   const cloudApi = useApi<CloudAlphaSummary>();
   const memoryApi = useApi<ResearchMemorySummary>();
@@ -94,7 +95,7 @@ export default function Dashboard({ notify }: Props) {
 
       {/* Job Monitor + Cloud */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <JobMonitor notify={notify} />
+        <JobMonitor notify={notify} credentials={credentials} />
 
         {/* Cloud Alpha Summary */}
         <div className="card space-y-3">

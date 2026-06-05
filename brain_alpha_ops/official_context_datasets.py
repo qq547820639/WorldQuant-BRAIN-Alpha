@@ -50,11 +50,18 @@ def list_official_datasets_or_derive(
         raise BrainAPIError("field-derived dataset fallback failed") from exc
     if derived:
         return derived
+    message = _empty_dataset_error_message(
+        api_returned_empty=callable(list_datasets) and api_error is None,
+    )
     if api_error is not None:
-        raise BrainAPIError(
-            "official datasets API unavailable and field-derived dataset fallback returned no datasets"
-        ) from api_error
-    return []
+        raise BrainAPIError(message) from api_error
+    raise BrainAPIError(message)
+
+
+def _empty_dataset_error_message(*, api_returned_empty: bool) -> str:
+    if api_returned_empty:
+        return "official datasets API returned no datasets and field-derived dataset fallback returned no datasets"
+    return "official datasets API unavailable and field-derived dataset fallback returned no datasets"
 
 
 def _warn_dataset_fallback(exc: Exception, fallback_warning: DatasetFallbackWarning | None) -> None:

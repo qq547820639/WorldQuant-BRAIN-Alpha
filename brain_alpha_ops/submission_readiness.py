@@ -9,8 +9,8 @@ REQUIRED_OFFICIAL_METRIC_FIELDS = (
     ("sharpe",),
     ("fitness",),
     ("turnover",),
-    ("self_correlation", "correlation"),
-    ("prod_correlation", "correlation"),
+    ("self_correlation",),
+    ("prod_correlation",),
     ("weight_concentration",),
 )
 

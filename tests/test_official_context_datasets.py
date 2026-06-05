@@ -50,6 +50,15 @@ def test_list_official_datasets_raises_when_api_and_fallback_both_empty():
         )
 
 
+def test_list_official_datasets_raises_when_api_returns_empty_and_fallback_empty():
+    with pytest.raises(BrainAPIError, match="official datasets API returned no datasets"):
+        list_official_datasets_or_derive(
+            DatasetAPI(datasets=[]),
+            [{"id": "close"}],
+            datasets_from_fields=lambda _fields: [],
+        )
+
+
 def test_list_official_datasets_raises_when_fallback_fails_after_api_error():
     with pytest.raises(BrainAPIError, match="fallback failed"):
         list_official_datasets_or_derive(

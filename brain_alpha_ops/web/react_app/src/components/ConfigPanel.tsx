@@ -2,11 +2,13 @@
 
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent, type ReactNode } from "react";
 import { useApi } from "@/hooks/useApi";
-import type { RunConfig } from "@/types";
+import type { BrainCredentials, RunConfig } from "@/types";
 import ProgressFeedback from "@/components/ProgressFeedback";
 
 interface Props {
   notify: (type: "success" | "error" | "warning" | "info", msg: string) => void;
+  credentials: BrainCredentials;
+  onCredentialsChange: (credentials: BrainCredentials) => void;
 }
 
 interface ConfigResponse {
@@ -83,7 +85,7 @@ const DEFAULT_ALPHA_TYPE_OPTIONS = ["REGULAR", "POWER_POOL", "ATOM", "PYRAMID"];
 
 type SelectOption = string | { value: string; label: string };
 
-export default function ConfigPanel({ notify }: Props) {
+export default function ConfigPanel({ notify, credentials, onCredentialsChange }: Props) {
   const configApi = useApi<ConfigResponse>();
   const schemaApi = useApi<ConfigSchemaResponse>();
   const saveApi = useApi<ConfigResponse>();
@@ -115,6 +117,10 @@ export default function ConfigPanel({ notify }: Props) {
 
   const update = <K extends keyof ConfigForm>(key: K, value: ConfigForm[K]) => {
     setForm((current) => current ? { ...current, [key]: value } : current);
+  };
+
+  const updateCredential = <K extends keyof BrainCredentials>(key: K, value: BrainCredentials[K]) => {
+    onCredentialsChange({ ...credentials, [key]: value });
   };
 
   const reload = () => {
@@ -177,7 +183,7 @@ export default function ConfigPanel({ notify }: Props) {
     }
     const result = await connectionApi.call("/api/test_connection", {
       method: "POST",
-      body: JSON.stringify(payloadFromForm(form)),
+      body: JSON.stringify(payloadFromForm(form, credentials)),
     });
     if (!result?.ok) {
       notify("error", result?.error || "BRAIN 连接测试失败");
@@ -210,13 +216,16 @@ export default function ConfigPanel({ notify }: Props) {
   const options = schema?.settings_options;
   const datasetChoices = datasetSelectOptions(schema, form.dataset);
   const scoring = config?.ops?.scoring ?? config?.scoring;
+  const hasSessionCredentials = Boolean(credentials.username || credentials.password || credentials.token);
 
   return (
-    <form onSubmit={save} className="w-full max-w-4xl min-w-0 space-y-6 animate-fade-in">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="min-w-0">
-          <h2 className="text-base font-semibold text-gray-100">配置管理</h2>
-          <p className="truncate text-xs text-muted">{form.environment}</p>
+    <form onSubmit={save} className="w-full max-w-5xl min-w-0 space-y-5 animate-fade-in">
+      <div className="reader-panel flex flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0 max-w-2xl">
+          <h2 className="text-xl font-semibold text-slate-950">连接与生产参数</h2>
+          <p className="mt-2 text-sm leading-6 text-slate-600">
+            先填写 BRAIN 会话凭证并测试连接，再调整本次运行参数。保存配置不会保存账号、密码或 token。
+          </p>
         </div>
         <div className="flex w-full flex-wrap justify-end gap-2 sm:w-auto">
           <input
@@ -264,11 +273,30 @@ export default function ConfigPanel({ notify }: Props) {
       {validationError && <p role="alert" className="text-xs text-danger">{validationError}</p>}
       {saveApi.error && <p role="alert" className="text-xs text-danger">{saveApi.error}</p>}
 
-      <ConfigSection title="BRAIN 连接">
-        <div className="space-y-2">
-          <p className="text-xs text-muted">当前凭据</p>
-          <p className="text-sm font-medium text-gray-200">配置或环境变量</p>
-        </div>
+      <ConfigSection
+        title="BRAIN 连接"
+        description="这些字段只保留在当前浏览器内存里，用于连接测试和本次流水线请求。"
+      >
+        <TextField
+          label="账户邮箱"
+          value={credentials.username}
+          autoComplete="username"
+          inputMode="email"
+          maxLength={160}
+          onChange={(value) => updateCredential("username", value.trim())}
+        />
+        <PasswordField
+          label="密码"
+          value={credentials.password}
+          onChange={(value) => updateCredential("password", value)}
+        />
+        <TextField
+          label="Token"
+          value={credentials.token}
+          autoComplete="off"
+          maxLength={512}
+          onChange={(value) => updateCredential("token", value.trim())}
+        />
         <div className="flex flex-col gap-2 sm:items-start">
           <button
             type="button"
@@ -283,12 +311,14 @@ export default function ConfigPanel({ notify }: Props) {
               ? `连接失败: ${connectionApi.error}`
               : connectionApi.data?.ok
                 ? `连接正常: ${connectionApi.data.environment || form.environment}`
-                : "尚未测试"}
+                : hasSessionCredentials
+                  ? "凭证已填写，尚未测试"
+                  : "未填写则使用服务端环境变量"}
           </p>
         </div>
       </ConfigSection>
 
-      <ConfigSection title="BRAIN 设置">
+      <ConfigSection title="BRAIN 设置" description="字段和选项来自后端公开的官方能力集校验，不在前端自定义扩展。">
         <SelectField label="资产类型" value={form.instrumentType} options={optionValues(options, "instrumentType", form.instrumentType, DEFAULT_INSTRUMENT_TYPE_OPTIONS)} onChange={(value) => update("instrumentType", value)} />
         <SelectField label="区域" value={form.region} options={optionValues(options, "region", form.region, DEFAULT_REGION_OPTIONS)} onChange={(value) => update("region", value)} />
         <SelectField label="股票池" value={form.universe} options={optionValues(options, "universe", form.universe, DEFAULT_UNIVERSE_OPTIONS)} onChange={(value) => update("universe", value)} />
@@ -318,7 +348,7 @@ export default function ConfigPanel({ notify }: Props) {
         <SelectField label="语言" value={form.language} options={optionValues(options, "language", form.language, DEFAULT_LANGUAGE_OPTIONS)} onChange={(value) => update("language", value)} />
       </ConfigSection>
 
-      <ConfigSection title="预算控制">
+      <ConfigSection title="预算控制" description="用于限制单次生产运行的候选数量、轮次和回测批量。">
         <NumberField label="每轮最大候选数" value={form.candidates} min={1} max={1000} step={1} onChange={(value) => update("candidates", value)} />
         <NumberField label="最大轮次" value={form.cycles} min={1} max={10000} step={1} onChange={(value) => update("cycles", value)} />
         <NumberField label="候选池大小" value={form.poolSize} min={1} max={5000} step={1} onChange={(value) => update("poolSize", value)} />
@@ -326,7 +356,7 @@ export default function ConfigPanel({ notify }: Props) {
         <CheckboxField label="需要云端同步" checked={form.requireCloudSync} onChange={(value) => update("requireCloudSync", value)} />
       </ConfigSection>
 
-      <ConfigSection title="质量阈值">
+      <ConfigSection title="质量阈值" description="提交前门禁，低于阈值的候选只能进入研究或优化状态。">
         <NumberField label="最低夏普比率" value={form.minSharpe} min={0} step={0.01} onChange={(value) => update("minSharpe", value)} />
         <NumberField label="最低适应度" value={form.minFitness} min={0} step={0.01} onChange={(value) => update("minFitness", value)} />
         <NumberField label="最低换手率" value={form.minTurnover} min={0} max={1} step={0.01} onChange={(value) => update("minTurnover", value)} />
@@ -335,15 +365,15 @@ export default function ConfigPanel({ notify }: Props) {
         <NumberField label="最大权重集中度" value={form.maxWeightConcentration} min={0} max={1} step={0.01} onChange={(value) => update("maxWeightConcentration", value)} />
       </ConfigSection>
 
-      <ConfigSection title="评分配置">
+      <ConfigSection title="评分配置" description="当前评分层权重为只读展示，避免和官方门禁配置混淆。">
         <ConfigValue label="先验权重" value={scoring?.prior_layer_weight} />
         <ConfigValue label="经验权重" value={scoring?.empirical_layer_weight} />
         <ConfigValue label="检查清单权重" value={scoring?.checklist_layer_weight} />
         <ConfigValue label="市场状态" value={scoring?.market_regime} />
       </ConfigSection>
 
-      <ConfigSection title="环境设置">
-        <CheckboxField label="自动提交" checked={form.autoSubmit} onChange={(value) => update("autoSubmit", value)} />
+      <ConfigSection title="环境设置" description="Web 控制台只允许保存非提交运行配置；真实提交必须走单独的人工确认流程。">
+        <ConfigValue label="自动提交" value="关闭（Web 保存强制）" />
       </ConfigSection>
     </form>
   );
@@ -355,7 +385,7 @@ function formFromConfig(config: RunConfig): ConfigForm {
   const thresholds = config.ops?.thresholds ?? config.thresholds;
   return {
     environment: config.environment || "production",
-    autoSubmit: Boolean(config.auto_submit),
+    autoSubmit: false,
     instrumentType: String(settings?.instrumentType || "EQUITY"),
     region: String(settings?.region || "USA"),
     universe: String(settings?.universe || "TOP3000"),
@@ -382,10 +412,10 @@ function formFromConfig(config: RunConfig): ConfigForm {
   };
 }
 
-function payloadFromForm(form: ConfigForm) {
-  return {
+function payloadFromForm(form: ConfigForm, credentials?: BrainCredentials) {
+  const payload: Record<string, unknown> = {
     environment: form.environment,
-    autoSubmit: form.autoSubmit,
+    autoSubmit: false,
     settings: {
       instrumentType: form.instrumentType,
       region: form.region,
@@ -412,6 +442,13 @@ function payloadFromForm(form: ConfigForm) {
     maxSelfCorrelation: form.maxSelfCorrelation,
     maxWeightConcentration: form.maxWeightConcentration,
   };
+  const username = credentials?.username.trim() || "";
+  const password = credentials?.password || "";
+  const token = credentials?.token.trim() || "";
+  if (username) payload.username = username;
+  if (password) payload.password = password;
+  if (token) payload.token = token;
+  return payload;
 }
 
 function formFromImport(value: unknown, fallback: ConfigForm): ConfigForm {
@@ -425,7 +462,7 @@ function formFromImport(value: unknown, fallback: ConfigForm): ConfigForm {
   return {
     ...fallback,
     environment: stringValue(source.environment, fallback.environment),
-    autoSubmit: booleanValue(source.autoSubmit ?? source.auto_submit, fallback.autoSubmit),
+    autoSubmit: false,
     instrumentType: stringValue(settings.instrumentType, fallback.instrumentType),
     region: stringValue(settings.region, fallback.region),
     universe: stringValue(settings.universe, fallback.universe),
@@ -602,11 +639,12 @@ function sanitizeConfigText(value: string) {
   return value.replace(/[\x00-\x1F\x7F]/g, "").slice(0, MAX_CONFIG_TEXT_LENGTH);
 }
 
-function ConfigSection({ title, children }: { title: string; children: ReactNode }) {
+function ConfigSection({ title, description, children }: { title: string; description?: string; children: ReactNode }) {
   return (
-    <fieldset className="card min-w-0">
-      <legend className="text-sm font-semibold text-gray-200 px-1">{title}</legend>
-      <div className="grid grid-cols-1 gap-x-5 gap-y-3 mt-2 md:grid-cols-2">{children}</div>
+    <fieldset className="reader-panel min-w-0">
+      <legend className="px-1 text-base font-semibold text-slate-950">{title}</legend>
+      {description ? <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">{description}</p> : null}
+      <div className="mt-4 grid grid-cols-1 gap-x-5 gap-y-4 md:grid-cols-2">{children}</div>
     </fieldset>
   );
 }
@@ -615,20 +653,49 @@ function TextField({
   label,
   value,
   maxLength,
+  autoComplete,
+  inputMode,
   onChange,
 }: {
   label: string;
   value: string;
   maxLength?: number;
+  autoComplete?: string;
+  inputMode?: "email" | "text";
   onChange: (value: string) => void;
 }) {
   return (
-    <label className="text-xs text-gray-400">
+    <label className="form-label">
       <span className="block mb-1">{label}</span>
       <input
         type="text"
         value={value}
         maxLength={maxLength}
+        autoComplete={autoComplete}
+        inputMode={inputMode}
+        onChange={(event) => onChange(event.currentTarget.value)}
+        className={inputClass}
+      />
+    </label>
+  );
+}
+
+function PasswordField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="form-label">
+      <span className="mb-1 block">{label}</span>
+      <input
+        type="password"
+        value={value}
+        autoComplete="current-password"
         onChange={(event) => onChange(event.currentTarget.value)}
         className={inputClass}
       />
@@ -652,7 +719,7 @@ function NumberField({
   onChange: (value: number) => void;
 }) {
   return (
-    <label className="text-xs text-gray-400">
+    <label className="form-label">
       <span className="block mb-1">{label}</span>
       <input
         type="number"
@@ -686,7 +753,7 @@ function SelectField({
 }) {
   const choices = normalizeSelectOptions(options);
   return (
-    <label className="text-xs text-gray-400">
+    <label className="form-label">
       <span className="block mb-1">{label}</span>
       <select value={value} onChange={(event) => onChange(event.currentTarget.value)} className={inputClass}>
         {placeholder ? <option value="">{placeholder}</option> : null}
@@ -698,7 +765,7 @@ function SelectField({
 
 function CheckboxField({ label, checked, onChange }: { label: string; checked: boolean; onChange: (value: boolean) => void }) {
   return (
-    <label className="flex items-center justify-between gap-3 text-xs text-gray-400 border-b border-gray-800/50 py-2">
+    <label className="flex items-center justify-between gap-3 border-b border-slate-200 py-2 text-sm font-medium text-slate-700">
       <span>{label}</span>
       <input type="checkbox" checked={checked} onChange={(event) => onChange(event.currentTarget.checked)} className="h-4 w-4 accent-brand-500" />
     </label>
@@ -707,11 +774,11 @@ function CheckboxField({ label, checked, onChange }: { label: string; checked: b
 
 function ConfigValue({ label, value }: { label: string; value: unknown }) {
   return (
-    <div className="flex min-w-0 flex-wrap justify-between gap-x-3 gap-y-1 text-xs py-1.5 border-b border-gray-800/50">
-      <span className="text-gray-400">{label}</span>
-      <span className="min-w-0 break-all text-gray-200 font-mono">{String(value ?? "-")}</span>
+    <div className="flex min-w-0 flex-wrap justify-between gap-x-3 gap-y-1 border-b border-slate-200 py-1.5 text-sm">
+      <span className="text-slate-600">{label}</span>
+      <span className="min-w-0 break-all font-mono text-slate-900">{String(value ?? "-")}</span>
     </div>
   );
 }
 
-const inputClass = "w-full min-w-0 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-brand-500";
+const inputClass = "form-input";

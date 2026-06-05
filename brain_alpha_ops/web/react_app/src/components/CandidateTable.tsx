@@ -41,6 +41,12 @@ type CandidateCheckResult = {
   checked_at?: string;
 };
 
+type CandidateListMeta = {
+  returned: number;
+  total: number;
+  limit: number;
+};
+
 interface Props {
   notify: (type: "success" | "error" | "warning" | "info", msg: string) => void;
   onScore?: (candidate: Candidate) => void;
@@ -61,6 +67,7 @@ export default function CandidateTable({
   const callApi = api.call;
   const callCheckResultsApi = checkResultsApi.call;
   const [candidates, setCandidates] = useState<Candidate[]>([]);
+  const [candidateMeta, setCandidateMeta] = useState<CandidateListMeta>({ returned: 0, total: 0, limit: CANDIDATE_FETCH_LIMIT });
   const [checkResults, setCheckResults] = useState<Map<string, CandidateCheckResult>>(new Map());
 
   const [filter, setFilter] = useState("");
@@ -80,9 +87,21 @@ export default function CandidateTable({
       callCheckResultsApi<{ items?: CandidateCheckResult[] }>("/api/check_results"),
     ]);
     if (result?.ok) {
-      const data = result as unknown as { candidates?: Candidate[]; items?: Candidate[] };
+      const data = result as unknown as {
+        candidates?: Candidate[];
+        items?: Candidate[];
+        returned_count?: number;
+        total?: number;
+        total_count?: number;
+        limit?: number;
+      };
       const nextRows = data.candidates || data.items || [];
       setCandidates((current) => nextRows.length || current.length === 0 ? nextRows : current);
+      setCandidateMeta({
+        returned: Number(data.returned_count ?? nextRows.length),
+        total: Number(data.total ?? data.total_count ?? nextRows.length),
+        limit: Number(data.limit ?? CANDIDATE_FETCH_LIMIT),
+      });
     } else if (result?.error) {
       notify("error", result.error);
     }
@@ -138,7 +157,22 @@ export default function CandidateTable({
     setTaskState("progress");
   }, [loadCandidates, notify]);
 
-  useSSE(taskId ? `/sse?job_id=${encodeURIComponent(taskId)}` : null, { onEvent: handleTaskEvent });
+  const handleTaskStreamExhausted = useCallback(() => {
+    if (!taskId) return;
+    const message = "实时进度流已断开，请刷新候选状态确认任务结果。";
+    setTaskProgress((current) => ({
+      ...(current || {}),
+      phase: current?.phase || "candidate_generation",
+      status_message: message,
+    }));
+    notify("warning", message);
+    void loadCandidates();
+  }, [loadCandidates, notify, taskId]);
+
+  const taskStream = useSSE(taskId ? `/sse?job_id=${encodeURIComponent(taskId)}` : null, {
+    onEvent: handleTaskEvent,
+    onExhausted: handleTaskStreamExhausted,
+  });
 
   const generateCandidates = useCallback(async () => {
     setTaskState("loading");
@@ -242,6 +276,7 @@ export default function CandidateTable({
   const visibleStart = sortedCandidates.length === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1;
   const visibleEnd = Math.min(currentPage * PAGE_SIZE, sortedCandidates.length);
   const title = viewMode === "candidates" ? "候选管理" : `${queueViewLabel(viewMode)}候选`;
+  const remoteTruncated = candidateMeta.total > candidateMeta.returned;
 
   if (loading) {
     return (
@@ -257,9 +292,10 @@ export default function CandidateTable({
     <div className="min-w-0 space-y-4 animate-fade-in">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
-          <h2 className="text-xl font-bold text-white tracking-tight">{title}</h2>
-          <p className="text-sm text-gray-400 mt-1" role="status" aria-live="polite">
+          <h2 className="text-xl font-bold tracking-tight text-slate-950">{title}</h2>
+          <p className="mt-1 text-sm leading-6 text-slate-600" role="status" aria-live="polite">
             显示 {sortedCandidates.length} / {queueCandidates.length} 个候选
+            {candidateMeta.total > 0 && ` · 已返回 ${candidateMeta.returned}/${candidateMeta.total}`}
             {viewMode !== "candidates" && ` · ${queueViewLabel(viewMode)}`}
             {filter && " · 已过滤"}
           </p>
@@ -267,7 +303,7 @@ export default function CandidateTable({
 
         {showProductionControls && (
           <div className="flex flex-wrap items-center gap-3">
-            <label className="flex items-center gap-2 text-sm text-gray-300">
+            <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
               数量
               <input
                 type="number"
@@ -300,13 +336,19 @@ export default function CandidateTable({
 
       {showProductionControls && taskState !== "idle" && (
         <ProgressFeedback
-          state={taskState}
+          state={taskStream.exhausted && taskState === "progress" ? "error" : taskState}
           title="候选生成"
           progress={taskProgress}
-          error={taskError}
+          error={taskError || (taskStream.exhausted && taskState === "progress" ? "实时进度流已断开，候选状态可能需要手动刷新。" : null)}
           onRetry={generateCandidates}
           compact={taskState === "success"}
         />
+      )}
+
+      {remoteTruncated && (
+        <div className="rounded-xl border border-warning/30 bg-warning/10 p-3 text-xs text-warning" role="status" aria-live="polite">
+          当前只加载了前 {candidateMeta.returned} 条候选，服务端报告总量为 {candidateMeta.total} 条；请使用过滤或刷新查看最新状态，避免把当前列表误认为全集。
+        </div>
       )}
 
       {loadError && (
@@ -328,7 +370,7 @@ export default function CandidateTable({
           value={filter}
           maxLength={MAX_FILTER_LENGTH}
           onChange={(event) => handleFilterChange(event.target.value)}
-          className="w-full min-w-0 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-brand-500 sm:flex-1"
+          className="w-full min-w-0 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-950 placeholder-slate-400 focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/30 sm:flex-1"
         />
         <button
           type="button"
@@ -344,7 +386,7 @@ export default function CandidateTable({
       <div className="card min-w-0 overflow-hidden p-0">
         <div className="space-y-3 p-3 md:hidden" aria-label="候选结果移动列表">
           {paginatedCandidates.length === 0 ? (
-            <div className="rounded-lg border border-gray-800/60 bg-gray-900/50 px-4 py-6 text-center text-sm text-gray-500">
+            <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm text-slate-500">
               {filter ? "没有匹配的候选" : "暂无候选记录"}
             </div>
           ) : (
@@ -361,24 +403,24 @@ export default function CandidateTable({
         </div>
 
         <div className="hidden max-w-full overflow-auto md:block">
-          <table className="min-w-[1280px] w-full text-sm" aria-label="候选结果">
+          <table className="min-w-[980px] w-full text-sm" aria-label="候选结果">
             <thead>
-              <tr className="border-b border-gray-800/50 text-left text-xs text-gray-400 uppercase tracking-wider">
+              <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-600">
                 <th scope="col" className="w-[8rem] p-3 font-medium">ID</th>
-                <th scope="col" className="w-[24rem] p-3 font-medium">表达式</th>
+                <th scope="col" className="w-[20rem] p-3 font-medium">表达式</th>
                 <SortHeader column="score" label="评分" sortKey={sortKey} sortAsc={sortAsc} onSort={handleSort} />
                 <SortHeader column="status" label="状态" sortKey={sortKey} sortAsc={sortAsc} onSort={handleSort} />
                 <th scope="col" className="w-[7rem] p-3">质量</th>
-                <th scope="col" className="w-[14rem] p-3">阻断原因</th>
-                <th scope="col" className="w-[18rem] p-3">输出</th>
-                <th scope="col" className="w-[14rem] p-3">官方证据</th>
+                <th scope="col" className="w-[16rem] p-3">阻断原因</th>
+                <th scope="col" className="w-[16rem] p-3">输出</th>
+                <th scope="col" className="w-[16rem] p-3">官方证据</th>
                 {canShowRowActions && <th scope="col" className="w-[6rem] p-3">操作</th>}
               </tr>
             </thead>
             <tbody>
               {paginatedCandidates.length === 0 ? (
                 <tr>
-                  <td colSpan={canShowRowActions ? 9 : 8} className="px-4 py-8 text-center text-gray-500">
+                  <td colSpan={canShowRowActions ? 9 : 8} className="px-4 py-8 text-center text-slate-500">
                     {filter ? "没有匹配的候选" : "暂无候选记录"}
                   </td>
                 </tr>
@@ -389,23 +431,23 @@ export default function CandidateTable({
                   return (
                     <tr
                       key={`${candidateIdentity(candidate)}_${index}`}
-                      className="border-b border-gray-800/30 hover:bg-gray-900/50 transition-colors"
+                      className="align-top border-b border-slate-100 transition-colors hover:bg-slate-50"
                     >
                       <td className="p-3">
-                        <span className="font-mono text-xs text-brand-400" title={candidateIds(candidate).join(" / ")}>
+                        <span className="font-mono text-xs text-brand-700" title={candidateIds(candidate).join(" / ")}>
                           {candidateIdentity(candidate).slice(0, 16) || "-"}
                         </span>
                       </td>
                       <td className="p-3">
-                        <div className="font-mono text-xs text-gray-300 truncate" title={candidateText(candidate.expression)}>
+                        <div className="whitespace-normal break-words font-mono text-xs leading-6 text-slate-900" title={candidateText(candidate.expression)}>
                           {candidateText(candidate.expression) || "-"}
                         </div>
-                        <div className="text-xs text-gray-500 mt-1 truncate" title={candidateText(candidate.family)}>
+                        <div className="mt-1 break-words text-xs text-slate-500" title={candidateText(candidate.family)}>
                           {candidateText(candidate.family)}
                         </div>
                       </td>
                       <td className="p-3">
-                        <span className="font-mono font-medium text-white">
+                        <span className="font-mono font-semibold text-slate-950">
                           {candidate.scorecard?.total_score?.toFixed(1) ?? "-"}
                         </span>
                       </td>
@@ -419,20 +461,20 @@ export default function CandidateTable({
                           {quality.label}
                         </span>
                       </td>
-                      <td className="p-3 text-xs text-gray-300">
-                        <div className="line-clamp-2" title={candidateBlockerText(candidate)}>
+                      <td className="p-3 text-xs leading-6 text-slate-700">
+                        <div className="whitespace-normal break-words" title={candidateBlockerText(candidate)}>
                           {candidateBlockerText(candidate)}
                         </div>
                       </td>
-                      <td className="p-3 text-xs text-gray-300">
-                        <div className="font-medium text-gray-200">{candidateOutputSummary(candidate)}</div>
-                        <div className="mt-1 truncate text-muted" title={candidateOutputDetail(candidate)}>
+                      <td className="p-3 text-xs leading-6 text-slate-700">
+                        <div className="font-medium text-slate-900">{candidateOutputSummary(candidate)}</div>
+                        <div className="mt-1 break-words text-slate-600" title={candidateOutputDetail(candidate)}>
                           {candidateOutputDetail(candidate)}
                         </div>
                       </td>
-                      <td className="p-3 text-xs text-gray-300">
-                        <div className="truncate" title={evidence}>{evidence}</div>
-                        <div className="mt-1 truncate text-muted" title={candidateText(candidate.simulation_id)}>
+                      <td className="p-3 text-xs leading-6 text-slate-700">
+                        <div className="break-words" title={evidence}>{evidence}</div>
+                        <div className="mt-1 break-words text-slate-600" title={candidateText(candidate.simulation_id)}>
                           {candidateText(candidate.simulation_id) || "simulation:-"}
                         </div>
                       </td>
@@ -456,8 +498,8 @@ export default function CandidateTable({
           </table>
         </div>
 
-        <div className="flex flex-col gap-3 px-4 py-3 border-t border-gray-800/30 sm:flex-row sm:items-center sm:justify-between">
-          <div className="text-sm text-gray-400" role="status" aria-live="polite">
+        <div className="flex flex-col gap-3 border-t border-slate-200 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="text-sm text-slate-600" role="status" aria-live="polite">
             显示 {visibleStart}-{visibleEnd}，共 {sortedCandidates.length} 条
           </div>
           {sortedCandidates.length > PAGE_SIZE && (
@@ -470,7 +512,7 @@ export default function CandidateTable({
               >
                 上一页
               </button>
-              <span className="text-sm text-gray-400">
+              <span className="text-sm text-slate-600">
                 {currentPage} / {totalPages}
               </span>
               <button
@@ -505,9 +547,9 @@ function SortHeader({
   const active = sortKey === column;
   return (
     <th scope="col" className="w-[7rem] p-3 font-medium" aria-sort={active ? (sortAsc ? "ascending" : "descending") : "none"}>
-      <button type="button" className="flex items-center gap-1 hover:text-white transition-colors" onClick={() => onSort(column)}>
+      <button type="button" className="flex items-center gap-1 transition-colors hover:text-slate-950" onClick={() => onSort(column)}>
         {label}
-        <span className="text-brand-400" aria-hidden="true">{active ? (sortAsc ? "↑" : "↓") : ""}</span>
+        <span className="text-brand-700" aria-hidden="true">{active ? (sortAsc ? "↑" : "↓") : ""}</span>
       </button>
     </th>
   );
@@ -517,7 +559,7 @@ function QualitySummaryItem({ label, value }: { label: string; value: string }) 
   return (
     <div className="card min-w-0 p-3">
       <p className="text-muted">{label}</p>
-      <p className="mt-1 truncate font-semibold text-gray-100" title={value}>{value}</p>
+      <p className="mt-1 break-words font-semibold text-slate-950" title={value}>{value}</p>
     </div>
   );
 }
@@ -536,13 +578,13 @@ function CandidateMobileCard({
   const quality = candidateQualityBadge(candidate);
   const evidence = officialEvidenceText(candidate, checkResults);
   return (
-    <article className="rounded-lg border border-gray-800/70 bg-gray-900/70 p-4 text-sm">
+    <article className="rounded-lg border border-slate-200 bg-white p-4 text-sm shadow-sm">
       <div className="flex min-w-0 items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="font-mono text-xs text-brand-400" title={candidateIds(candidate).join(" / ")}>
+          <p className="font-mono text-xs text-brand-700" title={candidateIds(candidate).join(" / ")}>
             {candidateIdentity(candidate).slice(0, 24) || "-"}
           </p>
-          <p className="mt-2 line-clamp-3 break-words font-mono text-xs text-gray-200" title={candidateText(candidate.expression)}>
+          <p className="mt-2 break-words font-mono text-xs leading-6 text-slate-900" title={candidateText(candidate.expression)}>
             {candidateText(candidate.expression) || "-"}
           </p>
         </div>
@@ -554,7 +596,7 @@ function CandidateMobileCard({
       <dl className="mt-4 grid grid-cols-2 gap-3 text-xs">
         <div>
           <dt className="text-muted">评分</dt>
-          <dd className="mt-1 font-mono font-semibold text-white">{candidate.scorecard?.total_score?.toFixed(1) ?? "-"}</dd>
+          <dd className="mt-1 font-mono font-semibold text-slate-950">{candidate.scorecard?.total_score?.toFixed(1) ?? "-"}</dd>
         </div>
         <div>
           <dt className="text-muted">状态</dt>
@@ -562,15 +604,15 @@ function CandidateMobileCard({
         </div>
         <div className="col-span-2">
           <dt className="text-muted">阻断原因</dt>
-          <dd className="mt-1 break-words text-gray-300">{candidateBlockerText(candidate)}</dd>
+          <dd className="mt-1 break-words leading-6 text-slate-700">{candidateBlockerText(candidate)}</dd>
         </div>
         <div className="col-span-2">
           <dt className="text-muted">官方证据</dt>
-          <dd className="mt-1 break-words text-gray-300">{evidence}</dd>
+          <dd className="mt-1 break-words leading-6 text-slate-700">{evidence}</dd>
         </div>
         <div className="col-span-2">
           <dt className="text-muted">输出</dt>
-          <dd className="mt-1 text-gray-200">{candidateOutputSummary(candidate)}</dd>
+          <dd className="mt-1 text-slate-900">{candidateOutputSummary(candidate)}</dd>
           <dd className="mt-1 break-words text-muted">{candidateOutputDetail(candidate)}</dd>
         </div>
       </dl>

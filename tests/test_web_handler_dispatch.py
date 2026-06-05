@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import dataclasses
+import json
 import logging
 from types import SimpleNamespace
 from urllib.parse import urlparse
 
+from brain_alpha_ops.tasks import JobStore
 from brain_alpha_ops.web_handler_dispatch import (
     _GET_DISPATCH_HANDLERS,
     _POST_DISPATCH_HANDLERS,
@@ -38,9 +40,11 @@ class _Store:
         rows = self.all(limit=1)
         return rows[0] if rows else None
 
-    def create(self):
+    def create(self, initial=None):
         job_id = f"job_{len(self.created) + 1}"
         self.created.append(job_id)
+        if isinstance(initial, dict):
+            self.rows[job_id] = dict(initial)
         return job_id
 
 
@@ -462,10 +466,12 @@ def test_dispatch_post_starts_jobs_and_handles_submit_lock():
         "ok": True,
         "job_id": "job_1",
         "task_id": "job_1",
+        "auto_submit": False,
+        "submitted": False,
         "sse_url": "/sse?job_id=job_1",
         "status_url": "/api/status?job_id=job_1",
     }
-    assert started[0] == ("run", "job_1", {"alpha": 1})
+    assert started[0] == ("run", "job_1", {"alpha": 1, "autoSubmit": False, "auto_submit": False})
 
     submit = _Handler(body={"alpha_id": "a1"})
     dispatch_post(submit, urlparse("/api/submit"), ctx)
@@ -745,6 +751,86 @@ def test_dispatch_post_run_validates_before_starting_job():
     assert run.json_calls[0][0]["error_code"] == "RUN_ERROR"
     assert "settings.decay" in run.json_calls[0][0]["error"]
     assert started == []
+
+
+def test_dispatch_post_run_forces_non_submit_before_validation_and_queueing():
+    ctx, started, _lock = _ctx()
+    validated_payloads: list[dict] = []
+    ctx = dataclasses.replace(
+        ctx,
+        validate_run_payload=lambda payload: validated_payloads.append(dict(payload)),
+    )
+
+    run = _Handler(body={"autoSubmit": True, "auto_submit": True, "username": "tester@example.com", "password": "session-password"})
+    dispatch_post(run, urlparse("/api/run"), ctx)
+
+    payload, status, _headers = run.json_calls[0]
+    assert status == 200
+    assert payload["ok"] is True
+    assert payload["auto_submit"] is False
+    assert payload["submitted"] is False
+    assert validated_payloads[0]["autoSubmit"] is False
+    assert validated_payloads[0]["auto_submit"] is False
+    assert started == [("run", "job_1", validated_payloads[0])]
+
+
+def test_dispatch_post_run_stores_executes_non_submit_and_redacts_session_credentials(tmp_path):
+    ctx, started, _lock = _ctx()
+    jobs = JobStore(tmp_path / "jobs.json", job_prefix="job")
+    ctx = dataclasses.replace(
+        ctx,
+        jobs=jobs,
+        start_run_job=lambda job_id, payload: started.append(("run", job_id, dict(payload))),
+    )
+
+    run = _Handler(body={
+        "autoSubmit": True,
+        "auto_submit": True,
+        "username": "tester@example.com",
+        "password": "session-password",
+        "token": "session-token",
+    })
+    dispatch_post(run, urlparse("/api/run"), ctx)
+
+    response, status, _headers = run.json_calls[0]
+    job_id = response["job_id"]
+    assert status == 200
+    assert response["auto_submit"] is False
+    assert response["submitted"] is False
+    assert started == [(
+        "run",
+        job_id,
+        {
+            "autoSubmit": False,
+            "auto_submit": False,
+            "username": "tester@example.com",
+            "password": "session-password",
+            "token": "session-token",
+        },
+    )]
+
+    stored = jobs.get(job_id)
+    assert stored is not None
+    assert stored["safe_mode"] == {
+        "autoSubmit": False,
+        "auto_submit": False,
+        "submit_endpoint_required": True,
+    }
+    assert stored["result"]["summary"] == {
+        "submitted_this_run": 0,
+        "auto_submitted": 0,
+    }
+
+    status_handler = _Handler()
+    dispatch_get(status_handler, urlparse(f"/api/status?job_id={job_id}"), ctx)
+    status_payload = status_handler.json_calls[0][0]
+    encoded_status = json.dumps(status_payload, ensure_ascii=False)
+    encoded_store = json.dumps(stored, ensure_ascii=False)
+    persisted = (tmp_path / "jobs.json").read_text(encoding="utf-8")
+    for secret in ("tester@example.com", "session-password", "session-token"):
+        assert secret not in encoded_status
+        assert secret not in encoded_store
+        assert secret not in persisted
 
 
 def test_dispatch_post_logout_and_shutdown_expire_session():

@@ -118,8 +118,8 @@ def test_submission_preflight_advisory_requires_complete_official_metric_fields(
         "sharpe",
         "fitness",
         "turnover",
-        "self_correlation/correlation",
-        "prod_correlation/correlation",
+        "self_correlation",
+        "prod_correlation",
         "weight_concentration",
     ]
 

@@ -388,14 +388,18 @@ class OfficialContextLoadService:
                 )
             else:
                 raise
+        used_default_fields = False
+        used_default_operators = False
         if not fields:
             fields = list(DEFAULT_FIELDS)
+            used_default_fields = True
             context_warning = (
                 (context_warning + " " if context_warning else "")
                 + "Using locally cached official field context; successful login refreshes the official field cache."
             )
         if not operators:
             operators = list(DEFAULT_OPERATORS)
+            used_default_operators = True
             context_warning = (
                 (context_warning + " " if context_warning else "")
                 + "Using locally cached official operator context; successful login refreshes the official operator cache."
@@ -406,17 +410,35 @@ class OfficialContextLoadService:
         from brain_alpha_ops.research.generator import update_known_fields
 
         update_known_fields(fields)
+        active_dataset_id = _active_dataset_from_context(self.config.settings, fields)
+        if active_dataset_id and hasattr(self.generator, "set_dataset"):
+            self.generator.set_dataset(active_dataset_id)
+        degraded = used_default_fields or used_default_operators or not fields or not operators
         context_summary = {
             "fields_count": len(fields),
             "operators_count": len(operators),
             "source": "official_api_or_cache",
             "warning": context_warning,
+            "active_dataset_id": active_dataset_id,
+            "degraded": degraded,
+            "degraded_reason": _context_degraded_reason(
+                fields_count=len(fields),
+                operators_count=len(operators),
+                used_default_fields=used_default_fields,
+                used_default_operators=used_default_operators,
+            ),
             "operator_usage_note": (
                 "Available operators are validated through the official /operators API or local official cache; "
                 "the live BRAIN documentation remains authoritative."
             ),
         }
-        self.event("context_loaded", f"Loaded {len(fields)} fields and {len(operators)} operators.")
+        self.event(
+            "context_degraded" if degraded else "context_loaded",
+            f"Loaded {len(fields)} fields and {len(operators)} operators."
+            if not degraded else
+            f"Official context degraded: {len(fields)} fields and {len(operators)} operators available.",
+            level="WARN" if degraded else "INFO",
+        )
         self.progress(
             "context",
             3,
@@ -425,8 +447,8 @@ class OfficialContextLoadService:
             data={
                 "official_context": context_summary,
                 "context_load": {
-                    "status": "synced",
-                    "status_code": "CONTEXT_READY",
+                    "status": "degraded" if degraded else "synced",
+                    "status_code": "CONTEXT_DEGRADED" if degraded else "CONTEXT_READY",
                     "current": 3,
                     "total": 3,
                     "fields_count": len(fields),
@@ -439,4 +461,35 @@ class OfficialContextLoadService:
             operators=operators,
             context_summary=context_summary,
             generator=self.generator,
+            active_dataset_id=active_dataset_id,
         )
+
+
+def _active_dataset_from_context(settings: Any, fields: list[dict]) -> str:
+    configured_dataset = str(getattr(settings, "dataset", "") or "").strip()
+    if configured_dataset:
+        return configured_dataset
+    for field in fields:
+        dataset_id = str(field.get("dataset") or field.get("dataset_id") or "").strip()
+        if dataset_id:
+            return dataset_id
+    return ""
+
+
+def _context_degraded_reason(
+    *,
+    fields_count: int,
+    operators_count: int,
+    used_default_fields: bool,
+    used_default_operators: bool,
+) -> str:
+    reasons: list[str] = []
+    if fields_count == 0:
+        reasons.append("no official fields available")
+    elif used_default_fields:
+        reasons.append("fields loaded from local official cache")
+    if operators_count == 0:
+        reasons.append("no official operators available")
+    elif used_default_operators:
+        reasons.append("operators loaded from local official cache")
+    return "; ".join(reasons)

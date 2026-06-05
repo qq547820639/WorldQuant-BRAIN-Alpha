@@ -138,13 +138,14 @@ def test_web_html_serves_current_react_shell():
 
     app_tsx = _react_source("App.tsx")
     state_cards_tsx = _react_source("components", "StateCards.tsx")
+    job_monitor_tsx = _react_source("components", "JobMonitor.tsx")
     for text in (
         "BRAIN Alpha Ops",
-        "生产流程",
+        "生产验证工作台",
         "候选管理",
         "回测监控",
         "质量门禁",
-        "提交管理",
+        "提交确认",
         "系统配置",
         "云端快照",
         "返回状态卡",
@@ -332,24 +333,31 @@ def test_react_candidate_table_keeps_filter_sort_and_mobile_safe_table_contract(
 def test_react_state_cards_keep_core_flow_visible_and_actionable():
     app_tsx = _react_source("App.tsx")
     state_cards_tsx = _react_source("components", "StateCards.tsx")
+    job_monitor_tsx = _react_source("components", "JobMonitor.tsx")
 
     for contract in (
         'useState<CardViewId | "cards">("cards")',
         'aria-label="返回状态卡"',
         "StateCards onNavigate={handleNavigate}",
-        "候选生成 → 官方回测 → 质量检查 → 提交确认",
-        "本地会话",
+        "登录、运行、证明可用",
+        "输入 BRAIN 账户，测试连接，启动强制非提交的生产验证",
+        "BRAIN 账户连接",
+        "非提交生产验证",
+        "填写 BRAIN 凭证",
+        "未连接 BRAIN",
         "打开系统配置",
         "/api/candidates?limit=1000",
         "/api/backtest_slots",
-        "/api/submit_readiness",
         "/api/config",
         "/api/snapshot/cloud?limit=10",
-        "grid grid-cols-1",
-        "xl:grid-cols-7",
+        "grid w-full max-w-full grid-cols-1",
+        "2xl:grid-cols-5",
         "onClick={() => onNavigate(config.id)}",
+        'caption: "提交审计"',
     ):
-        assert contract in app_tsx or contract in state_cards_tsx
+        assert contract in app_tsx or contract in state_cards_tsx or contract in job_monitor_tsx
+
+    assert "/api/submit_readiness" not in state_cards_tsx
 
     for view_id in (
         'id: "candidates"',
@@ -364,7 +372,7 @@ def test_react_state_cards_keep_core_flow_visible_and_actionable():
 
     assert "import ConfigPanel" in app_tsx
     assert 'case "config":' in app_tsx
-    assert "detailContent = <ConfigPanel notify={notify} />" in app_tsx
+    assert "detailContent = <ConfigPanel notify={notify} credentials={credentials} onCredentialsChange={setCredentials} />" in app_tsx
 
 
 def test_react_quality_submit_and_backtest_panels_cover_conflict_guards():
@@ -561,6 +569,8 @@ def test_save_run_config_payload_persists_editable_config_surface(tmp_path):
 
     payload = {
         "environment": "production",
+        "autoSubmit": True,
+        "auto_submit": True,
         "username": "researcher@example.com",
         "password": "plain-password",
         "token": "plain-token",
@@ -594,6 +604,8 @@ def test_save_run_config_payload_persists_editable_config_surface(tmp_path):
     assert saved[0].credentials.username == ""
     assert saved[0].credentials.password == ""
     assert saved[0].credentials.token == ""
+    assert result["config"]["auto_submit"] is False
+    assert saved[0].auto_submit is False
     assert saved[0].ops.settings.decay == 12
     assert saved[0].ops.budget.max_candidates_per_cycle == 33
     assert saved[0].ops.budget.require_cloud_sync is False
@@ -961,6 +973,33 @@ def test_live_react_preview_serves_dist_assets_and_keeps_inline_default(monkeypa
     finally:
         web.shutdown_server()
         web.web_html.reset_html_cache()
+
+
+@pytest.mark.skipif(os.getenv("CI") == "true", reason="skipping live server test in CI environment")
+def test_live_run_post_requires_rendered_session_csrf_and_replay_headers():
+    port = _free_port_or_skip(start=9086)
+    url = web.serve(port=port, open_browser=False)
+    try:
+        root_response = urllib.request.urlopen(url, timeout=5)
+        html = root_response.read().decode("utf-8")
+
+        assert root_response.headers.get("Set-Cookie", "")
+        assert "brain-alpha-csrf" in html or "CSRF_TOKEN" in html
+
+        request = urllib.request.Request(
+            f"{url.rstrip('/')}/api/run",
+            data=json.dumps({"autoSubmit": True, "auto_submit": True}).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with pytest.raises(urllib.error.HTTPError) as exc_info:
+            urllib.request.urlopen(request, timeout=5)
+
+        body = json.loads(exc_info.value.read().decode("utf-8"))
+        assert exc_info.value.code == 403
+        assert body["error_code"] == "SESSION_INVALID"
+    finally:
+        web.shutdown_server()
 
 
 @pytest.mark.skipif(os.getenv("CI") == "true", reason="skipping live server test in CI environment")
@@ -1406,6 +1445,10 @@ def test_observability_submission_preflight_includes_official_call_guard(monkeyp
     storage.mkdir()
     config = RunConfig(environment="production")
     config.ops.storage_dir = str(storage)
+    registry = WebJobRegistry.create(storage)
+    monkeypatch.setattr(web, "JOB_REGISTRY", registry)
+    for name, value in registry.legacy_exports().items():
+        monkeypatch.setattr(web, name, value, raising=False)
     repo = ResearchRepository(str(storage))
     repo.save_lifecycle_record(
         "run_1",
@@ -1734,6 +1777,10 @@ def test_research_observability_snapshot_summarizes_expression_backtest_and_erro
     storage.mkdir()
     config = RunConfig(environment="production")
     config.ops.storage_dir = str(storage)
+    registry = WebJobRegistry.create(storage)
+    monkeypatch.setattr(web, "JOB_REGISTRY", registry)
+    for name, value in registry.legacy_exports().items():
+        monkeypatch.setattr(web, name, value, raising=False)
     repo = ResearchRepository(str(storage))
     repo.save_candidate(
         "run_1",
