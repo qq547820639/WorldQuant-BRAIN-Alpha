@@ -20,10 +20,49 @@ Usage::
 
 from __future__ import annotations
 
+import json
 import re
 from collections import Counter
 from dataclasses import dataclass, field
+from functools import lru_cache
+from pathlib import Path
 from typing import Any
+
+from brain_alpha_ops.research.fallback_generation import normalize_operator_aliases
+
+
+_OFFICIAL_OPERATOR_FALLBACK = frozenset(
+    {
+        "abs", "add", "and", "bucket", "days_from_last_change", "densify",
+        "divide", "equal", "greater", "greater_equal", "group_backfill",
+        "group_mean", "group_neutralize", "group_rank", "group_scale",
+        "group_zscore", "hump", "if_else", "inverse", "is_nan",
+        "kth_element", "last_diff_value", "less", "less_equal", "log",
+        "max", "min", "multiply", "normalize", "not", "not_equal", "or",
+        "power", "quantile", "rank", "reverse", "scale", "sign",
+        "signed_power", "sqrt", "subtract", "trade_when", "ts_arg_max",
+        "ts_arg_min", "ts_av_diff", "ts_backfill", "ts_corr",
+        "ts_count_nans", "ts_covariance", "ts_decay_linear", "ts_delay",
+        "ts_delta", "ts_mean", "ts_product", "ts_quantile", "ts_rank",
+        "ts_regression", "ts_scale", "ts_std_dev", "ts_step", "ts_sum",
+        "ts_zscore", "vec_avg", "vec_sum", "winsorize", "zscore",
+    }
+)
+
+
+@lru_cache(maxsize=1)
+def _current_official_operator_names() -> frozenset[str]:
+    path = Path(__file__).resolve().parents[2] / "data" / "official_operators.json"
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return _OFFICIAL_OPERATOR_FALLBACK
+    names = {
+        str(item.get("name", "")).lower()
+        for item in payload
+        if isinstance(item, dict) and str(item.get("name", "")).strip()
+    }
+    return frozenset(names or _OFFICIAL_OPERATOR_FALLBACK)
 
 
 @dataclass
@@ -98,24 +137,14 @@ class ExpressionDiversityGuard:
             group_rank(ts_delta(volume,5), sector) → group_rank(ts_delta(FIELD, N), FIELD)
         """
         # Normalize whitespace
-        expr = " ".join(expression.split())
+        expr = " ".join(normalize_operator_aliases(expression).split())
 
         # Replace numeric literals (integers and floats) with N
         expr = re.sub(r"\b\d+(?:\.\d+)?\b", "N", expr)
 
         # Replace field names inside parentheses
         # Fields are word-like tokens that aren't operators
-        KNOWN_OPERATORS = {
-            "rank", "zscore", "scale", "ts_mean", "ts_std", "ts_min", "ts_max",
-            "ts_sum", "ts_delta", "ts_rank", "ts_corr", "ts_regression",
-            "ts_zscore", "ts_skewness", "ts_kurtosis", "ts_quantile",
-            "ts_arg_max", "ts_arg_min", "ts_av_diff", "ts_product",
-            "ts_weighted_mean", "ts_entropy", "group_rank", "group_zscore",
-            "group_neutralize", "group_backfill", "group_scale",
-            "winsorize", "decay_linear", "sigmoid", "tanh", "sign_power",
-            "trade_when", "where", "vector_neutralize", "vector_projection",
-            "demean", "bquantile",
-        }
+        KNOWN_OPERATORS = set(_current_official_operator_names())
 
         # Tokenize and rebuild
         tokens = re.findall(r"[a-zA-Z_]\w*|\S", expr)
@@ -270,7 +299,7 @@ class ExpressionDiversityGuard:
         if "ts_" in expression:
             strategies.append("replace_time_series: switch ts_ operators to group_ cross-sectional")
         else:
-            strategies.append("add_time_series: add ts_mean, ts_std, or ts_delta operators")
+            strategies.append("add_time_series: add ts_mean, ts_std_dev, or ts_delta operators")
 
         # Strategy 2: Increase nesting depth
         depth = expression.count("(")
@@ -282,7 +311,7 @@ class ExpressionDiversityGuard:
 
         # Strategy 4: Add neutralization
         if "neutralize" not in expression.lower():
-            strategies.append("add_neutralization: add group_neutralize or vector_neutralize")
+            strategies.append("add_neutralization: add group_neutralize")
 
         # Strategy 5: Change window parameters significantly
         strategies.append("change_windows: use substantially different lookback windows")
@@ -295,7 +324,7 @@ class ExpressionDiversityGuard:
         if "+" not in expression and "-" not in expression:
             strategies.append("combine_signals: combine two independent sub-signals with +")
 
-        # Strategy 8: Switch to decay_linear weighting
-        strategies.append("use_decay_linear: replace simple mean with decay_linear for recency weighting")
+        # Strategy 8: Switch to official time-series decay weighting
+        strategies.append("use_ts_decay_linear: replace simple mean with ts_decay_linear for recency weighting")
 
         return strategies[:max_attempts]

@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>云端 Alpha 表格 — Terminal Precision</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --surface-root:    #141311;
+    --surface-1:       #1a1917;
+    --surface-2:       #201f1d;
+    --surface-3:       #282724;
+    --surface-hover:   #2d2b28;
+    --surface-active:  #35332f;
+    --text-primary:    #e8e6e1;
+    --text-secondary:  #b0ada6;
+    --text-tertiary:   #78756e;
+    --text-disabled:   #55524c;
+    --text-inverse:    #141311;
+    --border-subtle:   #2a2824;
+    --border-default:  #3a3731;
+    --border-strong:   #4d4a43;
+    --accent-default:  #d4991a;
+    --accent-hover:    #e6a820;
+    --accent-pressed:  #b38014;
+    --accent-subtle:   rgba(212, 153, 26, 0.12);
+    --accent-text:     #e6a820;
+    --positive-default:#3d9960;
+    --positive-subtle: rgba(61, 153, 96, 0.15);
+    --positive-text:   #4db872;
+    --negative-default:#c04040;
+    --negative-subtle: rgba(192, 64, 64, 0.15);
+    --negative-text:   #d45555;
+    --warning-default: #b3941a;
+    --warning-subtle:  rgba(179, 148, 26, 0.15);
+    --warning-text:    #ccaa1f;
+    --info-default:    #3d7fb8;
+    --info-subtle:     rgba(61, 127, 184, 0.12);
+    --info-text:       #4d94d4;
+    --font-sans: 'DM Sans', system-ui, -apple-system, sans-serif;
+    --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: var(--font-sans); font-size: 14px;
+    background: var(--surface-root); color: var(--text-primary);
+    -webkit-font-smoothing: antialiased; padding: 24px;
+    min-height: 100vh;
+  }
+  .kpi-row { display: grid; grid-template-columns: repeat(5, minmax(0,1fr)); gap: 10px; margin-bottom: 20px; }
+  .kpi-card {
+    background: var(--surface-1); border: 0.5px solid var(--border-subtle);
+    border-radius: 6px; padding: 12px 14px 10px;
+  }
+  .kpi-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-tertiary); margin-bottom: 6px; }
+  .kpi-value { font-family: var(--font-mono); font-size: 26px; font-weight: 500; color: var(--text-primary); }
+  .kpi-sub { font-size: 11px; color: var(--text-tertiary); margin-top: 4px; }
+  .panel {
+    background: var(--surface-1); border: 0.5px solid var(--border-subtle);
+    border-radius: 6px; overflow: hidden; margin-bottom: 16px;
+  }
+  .panel-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 14px; border-bottom: 0.5px solid var(--border-subtle);
+    font-size: 10px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.05em; color: var(--text-tertiary);
+  }
+  h1 { font-size: 18px; font-weight: 600; margin-bottom: 4px; }
+  .subtitle { font-size: 12px; color: var(--text-tertiary); margin-bottom: 20px; }
+  .data-table { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
+  .data-table th {
+    padding: 8px 12px; text-align: left; font-size: 10px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-tertiary);
+    background: var(--surface-2); border-bottom: 0.5px solid var(--border-default); white-space: nowrap;
+  }
+  .data-table td {
+    padding: 8px 12px; border-bottom: 0.5px solid var(--border-subtle);
+    color: var(--text-secondary);
+  }
+  .data-table tr:hover td { background: var(--surface-hover); }
+  .data-table .mono { font-family: var(--font-mono); font-size: 12px; }
+  .badge {
+    padding: 1px 6px; border-radius: 2px; font-size: 10px; font-weight: 600;
+    font-family: var(--font-mono); text-transform: uppercase;
+  }
+  .badge-active { background: var(--positive-subtle); color: var(--positive-text); }
+  .badge-pending { background: var(--warning-subtle); color: var(--warning-text); }
+  .badge-inactive { background: var(--surface-3); color: var(--text-tertiary); }
+  .badge-green { background: var(--positive-subtle); color: var(--positive-text); }
+  .page-header { margin-bottom: 20px; }
+  .toolbar { display: flex; gap: 8px; margin-bottom: 14px; align-items: center; }
+  .toolbar input {
+    padding: 6px 10px; background: var(--surface-3); border: 0.5px solid var(--border-default);
+    border-radius: 4px; color: var(--text-primary); font-size: 12px; font-family: var(--font-mono);
+    width: 220px; outline: none;
+  }
+  .toolbar input:focus { border-color: var(--accent-default); }
+  .toolbar .count { margin-left: auto; font-size: 11px; color: var(--text-tertiary); font-family: var(--font-mono); }
+</style>
+</head>
+<body>
+<div class="page-header">
+  <h1>☁️ 云端 Alpha 库存</h1>
+  <div class="subtitle">实时同步自 api.worldquantbrain.com · 最后更新: 2026-06-09 03:15:22 UTC</div>
+</div>
+
+<div class="kpi-row">
+  <div class="kpi-card">
+    <div class="kpi-label">总 Alpha 数</div>
+    <div class="kpi-value">25,549</div>
+    <div class="kpi-sub">去重计数</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-label">活跃 Alpha</div>
+    <div class="kpi-value" style="color:var(--positive-text)">18,342</div>
+    <div class="kpi-sub">71.8%</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-label">平均 Sharpe</div>
+    <div class="kpi-value">1.63</div>
+    <div class="kpi-sub">中位数 1.42</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-label">平均 Fitness</div>
+    <div class="kpi-value">1.28</div>
+    <div class="kpi-sub">中位数 1.18</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-label">已提交</div>
+    <div class="kpi-value" style="color:var(--accent-text)">847</div>
+    <div class="kpi-sub">已通过审查</div>
+  </div>
+</div>
+
+<div class="panel">
+  <div class="panel-header">
+    <span>Alpha 库存明细</span>
+    <span style="font-weight:400">25,549 条记录</span>
+  </div>
+  <div style="padding:10px 14px">
+    <div class="toolbar">
+      <input type="text" placeholder="搜索 Alpha ID...">
+      <span class="count">显示 1-10 / 25,549</span>
+    </div>
+  </div>
+  <div style="overflow-x:auto">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Alpha ID</th>
+          <th>Sharpe</th>
+          <th>Fitness</th>
+          <th>Turnover</th>
+          <th>Returns</th>
+          <th>Drawdown</th>
+          <th>Self Corr</th>
+          <th>状态</th>
+          <th>提交状态</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="mono" style="color:var(--accent-text)">N1Axlk7X</td>
+          <td class="mono" style="color:var(--positive-text)">2.84</td>
+          <td class="mono">1.92</td>
+          <td class="mono">0.18</td>
+          <td class="mono" style="color:var(--positive-text)">+0.042</td>
+          <td class="mono">-0.08</td>
+          <td class="mono">0.6302</td>
+          <td><span class="badge badge-active">ACTIVE</span></td>
+          <td><span class="badge badge-green">已提交</span></td>
+        </tr>
+        <tr>
+          <td class="mono" style="color:var(--accent-text)">gJmj3ml0</td>
+          <td class="mono" style="color:var(--positive-text)">2.31</td>
+          <td class="mono">1.65</td>
+          <td class="mono">0.22</td>
+          <td class="mono" style="color:var(--positive-text)">+0.031</td>
+          <td class="mono">-0.11</td>
+          <td class="mono">0.0082</td>
+          <td><span class="badge badge-active">ACTIVE</span></td>
+          <td><span class="badge badge-green">已提交</span></td>
+        </tr>
+        <tr>
+          <td class="mono" style="color:var(--accent-text)">zqPEEEjR</td>
+          <td class="mono">1.87</td>
+          <td class="mono">1.44</td>
+          <td class="mono">0.31</td>
+          <td class="mono">+0.019</td>
+          <td class="mono">-0.15</td>
+          <td class="mono">0.0000</td>
+          <td><span class="badge badge-active">ACTIVE</span></td>
+          <td><span class="badge badge-green">已提交</span></td>
+        </tr>
+        <tr>
+          <td class="mono" style="color:var(--accent-text)">A1nVX57R</td>
+          <td class="mono">1.45</td>
+          <td class="mono">1.12</td>
+          <td class="mono">0.41</td>
+          <td class="mono">+0.012</td>
+          <td class="mono">-0.22</td>
+          <td class="mono">0.3500</td>
+          <td><span class="badge badge-active">ACTIVE</span></td>
+          <td><span class="badge badge-pending">审查中</span></td>
+        </tr>
+        <tr>
+          <td class="mono" style="color:var(--accent-text)">B2kWp84Q</td>
+          <td class="mono">1.18</td>
+          <td class="mono">0.95</td>
+          <td class="mono">0.55</td>
+          <td class="mono" style="color:var(--negative-text)">-0.003</td>
+          <td class="mono" style="color:var(--negative-text)">-0.28</td>
+          <td class="mono">PENDING</td>
+          <td><span class="badge badge-pending">PENDING</span></td>
+          <td><span class="badge badge-inactive">未提交</span></td>
+        </tr>
+        <tr>
+          <td class="mono" style="color:var(--accent-text)">C3xLq96M</td>
+          <td class="mono">2.12</td>
+          <td class="mono">1.73</td>
+          <td class="mono">0.14</td>
+          <td class="mono" style="color:var(--positive-text)">+0.035</td>
+          <td class="mono">-0.06</td>
+          <td class="mono">0.1200</td>
+          <td><span class="badge badge-active">ACTIVE</span></td>
+          <td><span class="badge badge-green">已提交</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+</body>
+</html>

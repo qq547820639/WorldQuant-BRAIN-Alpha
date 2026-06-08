@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent, type ReactNode } from "react";
 import { useApi } from "@/hooks/useApi";
-import type { BrainCredentials, RunConfig } from "@/types";
+import type { BrainCredentials, BrainSettings, BudgetConfig, RunConfig, ThresholdConfig } from "@/types";
 import ProgressFeedback from "@/components/ProgressFeedback";
 
 interface Props {
@@ -113,7 +113,7 @@ export default function ConfigPanel({ notify, credentials, onCredentialsChange }
     () => Boolean(form && initialForm && JSON.stringify(form) !== JSON.stringify(initialForm)),
     [form, initialForm],
   );
-  const validationError = form ? validateForm(form, schema) : "";
+  const validationError = form ? validateForm(form, schema) : null;
 
   const update = <K extends keyof ConfigForm>(key: K, value: ConfigForm[K]) => {
     setForm((current) => current ? { ...current, [key]: value } : current);
@@ -130,7 +130,7 @@ export default function ConfigPanel({ notify, credentials, onCredentialsChange }
 
   const save = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!form || validationError) {
+    if (!form || validationError !== null) {
       notify("warning", validationError || "配置尚未准备好保存");
       return;
     }
@@ -165,7 +165,7 @@ export default function ConfigPanel({ notify, credentials, onCredentialsChange }
     try {
       const imported = formFromImport(JSON.parse(await file.text()), form);
       const error = validateForm(imported, schema);
-      if (error) {
+      if (error !== null) {
         notify("error", error);
         return;
       }
@@ -177,7 +177,7 @@ export default function ConfigPanel({ notify, credentials, onCredentialsChange }
   };
 
   const testConnection = async () => {
-    if (!form || validationError) {
+    if (!form || validationError !== null) {
       notify("warning", validationError || "配置尚未准备好测试连接");
       return;
     }
@@ -204,9 +204,9 @@ export default function ConfigPanel({ notify, credentials, onCredentialsChange }
 
   if (configApi.error && !config) {
     return (
-      <div className="card">
-        <p className="text-danger text-sm">加载配置失败: {configApi.error}</p>
-        <button type="button" onClick={reload} className="btn-secondary text-sm mt-3">重试</button>
+      <div className="panel">
+        <p className="text-negative text-sm">加载配置失败: {configApi.error}</p>
+        <button type="button" onClick={reload} className="btn btn-secondary btn-sm">重试</button>
       </div>
     );
   }
@@ -220,10 +220,10 @@ export default function ConfigPanel({ notify, credentials, onCredentialsChange }
 
   return (
     <form onSubmit={save} className="w-full max-w-5xl min-w-0 space-y-5 animate-fade-in">
-      <div className="reader-panel flex flex-wrap items-start justify-between gap-4">
+      <div className="panel flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0 max-w-2xl">
-          <h2 className="text-xl font-semibold text-slate-950">连接与生产参数</h2>
-          <p className="mt-2 text-sm leading-6 text-slate-600">
+          <h2 className="text-xl font-semibold text-text-primary">连接与生产参数</h2>
+          <p className="mt-2 text-sm leading-6 text-text-secondary">
             先填写 BRAIN 会话凭证并测试连接，再调整本次运行参数。保存配置不会保存账号、密码或 token。
           </p>
         </div>
@@ -239,7 +239,7 @@ export default function ConfigPanel({ notify, credentials, onCredentialsChange }
           <button
             type="button"
             onClick={() => importInputRef.current?.click()}
-            className="btn-secondary text-sm"
+            className="btn btn-secondary btn-sm"
             disabled={saveApi.loading}
           >
             导入
@@ -247,7 +247,7 @@ export default function ConfigPanel({ notify, credentials, onCredentialsChange }
           <button
             type="button"
             onClick={exportConfig}
-            className="btn-secondary text-sm"
+            className="btn btn-secondary btn-sm"
             disabled={saveApi.loading}
           >
             导出
@@ -255,27 +255,27 @@ export default function ConfigPanel({ notify, credentials, onCredentialsChange }
           <button
             type="button"
             onClick={() => initialForm && setForm({ ...initialForm })}
-            className="btn-secondary text-sm disabled:opacity-50"
+            className="btn btn-secondary btn-sm disabled:opacity-50"
             disabled={!dirty || saveApi.loading}
           >
             重置
           </button>
           <button
             type="submit"
-            className="btn-primary text-sm"
-            disabled={!dirty || Boolean(validationError) || saveApi.loading}
+            className="btn btn-primary btn-sm"
+            disabled={!dirty || validationError !== null || saveApi.loading}
           >
             {saveApi.loading ? "保存中..." : "保存"}
           </button>
         </div>
       </div>
 
-      {validationError && <p role="alert" className="text-xs text-danger">{validationError}</p>}
-      {saveApi.error && <p role="alert" className="text-xs text-danger">{saveApi.error}</p>}
+      {validationError !== null && <p role="alert" className="text-xs text-negative">{validationError}</p>}
+      {saveApi.error && <p role="alert" className="text-xs text-negative">{saveApi.error}</p>}
 
       <ConfigSection
         title="BRAIN 连接"
-        description="这些字段只保留在当前浏览器内存里，用于连接测试和本次流水线请求。"
+        description="这些字段只保留在当前页面，用于本次连接测试和验证。"
       >
         <TextField
           label="账户邮箱"
@@ -301,19 +301,19 @@ export default function ConfigPanel({ notify, credentials, onCredentialsChange }
           <button
             type="button"
             onClick={testConnection}
-            className="btn-secondary text-sm"
-            disabled={connectionApi.loading || Boolean(validationError)}
+            className="btn btn-secondary btn-sm"
+            disabled={connectionApi.loading || validationError !== null}
           >
             {connectionApi.loading ? "测试中..." : "测试 BRAIN 连接"}
           </button>
-          <p className={`text-xs ${connectionApi.error ? "text-danger" : connectionApi.data?.ok ? "text-success" : "text-muted"}`} role="status" aria-live="polite">
+          <p className={`text-xs ${connectionApi.error ? "text-negative" : connectionApi.data?.ok ? "text-positive" : "text-text-tertiary"}`} role="status" aria-live="polite">
             {connectionApi.error
               ? `连接失败: ${connectionApi.error}`
               : connectionApi.data?.ok
                 ? `连接正常: ${connectionApi.data.environment || form.environment}`
                 : hasSessionCredentials
                   ? "凭证已填写，尚未测试"
-                  : "未填写则使用服务端环境变量"}
+                  : "未填写则使用维护者配置的托管凭证"}
           </p>
         </div>
       </ConfigSection>
@@ -372,7 +372,7 @@ export default function ConfigPanel({ notify, credentials, onCredentialsChange }
         <ConfigValue label="市场状态" value={scoring?.market_regime} />
       </ConfigSection>
 
-      <ConfigSection title="环境设置" description="Web 控制台只允许保存非提交运行配置；真实提交必须走单独的人工确认流程。">
+      <ConfigSection title="环境设置" description="本地 Web 页面只允许保存非提交运行配置；真实提交必须走单独的人工确认流程。">
         <ConfigValue label="自动提交" value="关闭（Web 保存强制）" />
       </ConfigSection>
     </form>
@@ -456,7 +456,18 @@ function formFromImport(value: unknown, fallback: ConfigForm): ConfigForm {
   if (!root) throw new Error("配置JSON必须是一个对象。");
   const source = asRecord(root.config) || root;
   if (asRecord(source.ops)) {
-    return formFromConfig(source as unknown as RunConfig);
+    const ops = asRecord(source.ops);
+    // JSON import boundary: formFromConfig uses optional chaining (?.) and nullish
+    // coalescing (??) for every field — the assertions below are safe at runtime.
+    return formFromConfig({
+      environment: String(source.environment || "production"),
+      auto_submit: false,
+      ops: {
+        settings: asRecord(ops?.settings) as unknown as BrainSettings,
+        budget: asRecord(ops?.budget) as unknown as BudgetConfig,
+        thresholds: asRecord(ops?.thresholds) as unknown as ThresholdConfig,
+      },
+    });
   }
   const settings = asRecord(source.settings) || {};
   return {
@@ -546,7 +557,7 @@ function validateForm(form: ConfigForm, schema?: ConfigSchema) {
     if (!Number.isFinite(value) || value < 0 || value > 1) return `${label} 必须在 0 到 1 之间。`;
   }
   if (form.minTurnover > form.platformMaxTurnover) return "最低换手率不能超过最高换手率。";
-  return "";
+  return null;
 }
 
 function optionValues(
@@ -641,9 +652,9 @@ function sanitizeConfigText(value: string) {
 
 function ConfigSection({ title, description, children }: { title: string; description?: string; children: ReactNode }) {
   return (
-    <fieldset className="reader-panel min-w-0">
-      <legend className="px-1 text-base font-semibold text-slate-950">{title}</legend>
-      {description ? <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">{description}</p> : null}
+    <fieldset className="panel min-w-0">
+      <legend className="px-1 text-base font-semibold text-text-primary">{title}</legend>
+      {description ? <p className="mt-2 max-w-3xl text-sm leading-6 text-text-secondary">{description}</p> : null}
       <div className="mt-4 grid grid-cols-1 gap-x-5 gap-y-4 md:grid-cols-2">{children}</div>
     </fieldset>
   );
@@ -765,18 +776,30 @@ function SelectField({
 
 function CheckboxField({ label, checked, onChange }: { label: string; checked: boolean; onChange: (value: boolean) => void }) {
   return (
-    <label className="flex items-center justify-between gap-3 border-b border-slate-200 py-2 text-sm font-medium text-slate-700">
+    <label
+      className="flex items-center justify-between gap-3 py-2 text-sm font-medium text-text-secondary"
+      style={{ borderBottom: '1px solid', borderBottomColor: 'oklch(0.22 0.007 45)' }}
+    >
       <span>{label}</span>
-      <input type="checkbox" checked={checked} onChange={(event) => onChange(event.currentTarget.checked)} className="h-4 w-4 accent-brand-500" />
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(event) => onChange(event.currentTarget.checked)}
+        className="h-4 w-4"
+        style={{ accentColor: 'oklch(0.65 0.14 80)' }}
+      />
     </label>
   );
 }
 
 function ConfigValue({ label, value }: { label: string; value: unknown }) {
   return (
-    <div className="flex min-w-0 flex-wrap justify-between gap-x-3 gap-y-1 border-b border-slate-200 py-1.5 text-sm">
-      <span className="text-slate-600">{label}</span>
-      <span className="min-w-0 break-all font-mono text-slate-900">{String(value ?? "-")}</span>
+    <div
+      className="flex min-w-0 flex-wrap justify-between gap-x-3 gap-y-1 py-1.5 text-sm"
+      style={{ borderBottom: '1px solid', borderBottomColor: 'oklch(0.22 0.007 45)' }}
+    >
+      <span className="text-text-secondary">{label}</span>
+      <span className="min-w-0 break-all font-mono-value text-text-primary">{String(value ?? "-")}</span>
     </div>
   );
 }

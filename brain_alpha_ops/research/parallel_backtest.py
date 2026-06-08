@@ -290,10 +290,11 @@ def _job_error(index: int, job: dict[str, Any], exc: Exception) -> dict[str, Any
         job.get("market", ""),
         exc_info=True,
     )
+    from brain_alpha_ops.redaction import redact_error_message
     return {
         "ok": False,
         "error_code": "PARALLEL_BACKTEST_JOB_ERROR",
-        "error": str(exc),
+        "error": redact_error_message(exc),
         "job_index": index,
         "market": job.get("market", ""),
         "expression": job.get("expression", ""),

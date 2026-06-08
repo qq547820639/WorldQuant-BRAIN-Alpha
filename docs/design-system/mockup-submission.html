@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>提交就绪审查 — Terminal Precision</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --surface-root:    #141311;
+    --surface-1:       #1a1917;
+    --surface-2:       #201f1d;
+    --surface-3:       #282724;
+    --surface-hover:   #2d2b28;
+    --text-primary:    #e8e6e1;
+    --text-secondary:  #b0ada6;
+    --text-tertiary:   #78756e;
+    --text-inverse:    #141311;
+    --border-subtle:   #2a2824;
+    --border-default:  #3a3731;
+    --accent-default:  #d4991a;
+    --accent-hover:    #e6a820;
+    --accent-subtle:   rgba(212, 153, 26, 0.12);
+    --accent-text:     #e6a820;
+    --positive-default:#3d9960;
+    --positive-subtle: rgba(61, 153, 96, 0.15);
+    --positive-text:   #4db872;
+    --negative-default:#c04040;
+    --negative-subtle: rgba(192, 64, 64, 0.15);
+    --negative-text:   #d45555;
+    --warning-default: #b3941a;
+    --warning-subtle:  rgba(179, 148, 26, 0.15);
+    --warning-text:    #ccaa1f;
+    --info-default:    #3d7fb8;
+    --info-subtle:     rgba(61, 127, 184, 0.12);
+    --info-text:       #4d94d4;
+    --font-sans: 'DM Sans', system-ui, -apple-system, sans-serif;
+    --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: var(--font-sans); font-size: 14px;
+    background: var(--surface-root); color: var(--text-primary);
+    -webkit-font-smoothing: antialiased; padding: 24px;
+  }
+  h1 { font-size: 18px; font-weight: 600; margin-bottom: 4px; }
+  .subtitle { font-size: 12px; color: var(--text-tertiary); margin-bottom: 20px; }
+  .panel {
+    background: var(--surface-1); border: 0.5px solid var(--border-subtle);
+    border-radius: 6px; overflow: hidden; margin-bottom: 16px;
+  }
+  .panel-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 14px; border-bottom: 0.5px solid var(--border-subtle);
+    font-size: 10px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.05em; color: var(--text-tertiary);
+  }
+  .panel-body { padding: 14px; }
+  .workflow { display: flex; gap: 0; align-items: flex-start; }
+  .wf-step {
+    flex: 1; padding: 16px; text-align: center; position: relative;
+  }
+  .wf-step:not(:last-child)::after {
+    content: '→'; position: absolute; right: -4px; top: 50%; transform: translateY(-50%);
+    color: var(--text-tertiary); font-size: 18px;
+  }
+  .wf-num {
+    width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-family: var(--font-mono); font-size: 14px; font-weight: 600; margin: 0 auto 8px;
+  }
+  .wf-num.done { background: var(--positive-default); color: #fff; }
+  .wf-num.active { background: var(--accent-default); color: var(--text-inverse); }
+  .wf-num.pending { background: var(--surface-3); color: var(--text-disabled); }
+  .wf-label { font-size: 12px; color: var(--text-secondary); }
+  .wf-detail { font-size: 10px; color: var(--text-tertiary); margin-top: 4px; }
+  .checklist { display: flex; flex-direction: column; gap: 0; }
+  .check-item {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 14px; border-bottom: 0.5px solid var(--border-subtle);
+    font-size: 13px;
+  }
+  .check-item:last-child { border-bottom: none; }
+  .check-name { color: var(--text-primary); }
+  .check-result { font-family: var(--font-mono); font-size: 11px; }
+  .badge { padding: 2px 8px; border-radius: 2px; font-size: 10px; font-weight: 600; font-family: var(--font-mono); }
+  .badge-ok { background: var(--positive-subtle); color: var(--positive-text); }
+  .badge-warn { background: var(--warning-subtle); color: var(--warning-text); }
+  .badge-block { background: var(--negative-subtle); color: var(--negative-text); }
+  .alert { padding: 12px 14px; border-radius: 4px; margin-bottom: 16px; font-size: 13px; display: flex; align-items: center; gap: 8px; }
+  .alert-warn { background: var(--warning-subtle); border: 0.5px solid rgba(179,148,26,0.25); color: var(--warning-text); }
+  .alert-block { background: var(--negative-subtle); border: 0.5px solid rgba(192,64,64,0.25); color: var(--negative-text); }
+  .alert-ok { background: var(--positive-subtle); border: 0.5px solid rgba(61,153,96,0.25); color: var(--positive-text); }
+  .mono { font-family: var(--font-mono); }
+</style>
+</head>
+<body>
+<h1>🔒 提交就绪审查</h1>
+<div class="subtitle">预设审查流程 · 审查通过后仍需独立审批路径执行实际提交</div>
+
+<div class="alert alert-block">
+  ⚠️ <strong>注意：</strong>此页面仅提供预提交审查功能。实际提交操作需通过独立的审批路径执行。Web 控制台不执行不可逆提交。
+</div>
+
+<div class="panel">
+  <div class="panel-header">审查流程</div>
+  <div class="panel-body">
+    <div class="workflow">
+      <div class="wf-step">
+        <div class="wf-num done">✓</div>
+        <div class="wf-label">筛选候选</div>
+        <div class="wf-detail">3 个通过门禁</div>
+      </div>
+      <div class="wf-step">
+        <div class="wf-num done">✓</div>
+        <div class="wf-label">批量检查</div>
+        <div class="wf-detail">8/8 检查完成</div>
+      </div>
+      <div class="wf-step">
+        <div class="wf-num active">3</div>
+        <div class="wf-label">审查阻断项</div>
+        <div class="wf-detail">2 个警告 · 0 阻断</div>
+      </div>
+      <div class="wf-step">
+        <div class="wf-num pending">4</div>
+        <div class="wf-label">确认就绪</div>
+        <div class="wf-detail">待人类审批</div>
+      </div>
+      <div class="wf-step">
+        <div class="wf-num pending">5</div>
+        <div class="wf-label">独立审批路径</div>
+        <div class="wf-detail">外部执行</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="panel">
+  <div class="panel-header">审查清单 — Alpha N1Axlk7X</div>
+  <div class="checklist">
+    <div class="check-item">
+      <span class="check-name">重复风险检查</span>
+      <span class="check-result"><span class="badge badge-ok">PASS</span> 最高相似度 0.34</span>
+    </div>
+    <div class="check-item">
+      <span class="check-name">云端状态验证</span>
+      <span class="check-result"><span class="badge badge-ok">PASS</span> Alpha Check 通过</span>
+    </div>
+    <div class="check-item">
+      <span class="check-name">表达式合规性</span>
+      <span class="check-result"><span class="badge badge-ok">PASS</span> 数据字段可用</span>
+    </div>
+    <div class="check-item">
+      <span class="check-name">观测性警告</span>
+      <span class="check-result"><span class="badge badge-warn">WARN</span> Self Corr 接近上限</span>
+    </div>
+    <div class="check-item">
+      <span class="check-name">微变体检测</span>
+      <span class="check-result"><span class="badge badge-warn">WARN</span> 1 个相似变体存在</span>
+    </div>
+    <div class="check-item">
+      <span class="check-name">数据质量检查</span>
+      <span class="check-result"><span class="badge badge-ok">PASS</span> 无异常值</span>
+    </div>
+    <div class="check-item">
+      <span class="check-name">官方回测状态</span>
+      <span class="check-result"><span class="badge badge-ok">PASS</span> 回测已完成</span>
+    </div>
+    <div class="check-item">
+      <span class="check-name">提交限额检查</span>
+      <span class="check-result"><span class="badge badge-ok">PASS</span> 今日 0/3</span>
+    </div>
+  </div>
+</div>
+
+<div class="alert alert-ok">
+  ✓ <strong>审查结论：</strong>ready_to_submit = true · 2 项警告已记录 · 建议人工复核后通过独立审批路径提交
+</div>
+</body>
+</html>

@@ -28,7 +28,7 @@ RUNTIME_GENERATED_PREFIXES = (
     "data/run_history/",
 )
 SNAPSHOT_PREFIXES = ("data/official_",)
-REVIEW_ARTIFACT_PREFIXES = ("data/prd_", "data/qa_")
+REVIEW_ARTIFACT_PREFIXES = ("data/prd_", "data/qa_", "data/audit/")
 REFERENCE_EXCLUDED_PREFIXES = ("data/", "tests/")
 REFERENCE_EXCLUDED_PATHS = {
     ".gitignore",

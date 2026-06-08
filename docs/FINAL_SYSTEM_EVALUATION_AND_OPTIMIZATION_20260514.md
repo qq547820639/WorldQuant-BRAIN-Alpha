@@ -257,7 +257,7 @@ ConvergenceTracker
 | 轮询回测 | `poll_simulation()` | GET `/simulations/{id}`，最多 60 次 × 6s | ✅ |
 | 获取结果 | `fetch_result()` | GET `/simulations/{id}`，可重试 | ✅ |
 | Alpha Check | `check_alpha()` | POST `/alphas/{id}/check` | ✅ |
-| Alpha Submit | `submit_alpha()` | POST `/alphas/{id}/submit` | ✅ |
+| Alpha Submit | Web staged readiness + `submit_alpha()` backend adapter | POST `/alphas/{id}/submit` | ✅，仅 Web 分阶段确认后可达 |
 
 ### 3.2 Mock/Official 双环境
 
@@ -284,9 +284,9 @@ Mock API 使用确定性哈希模拟回测结果，完全隔离测试与生产�
 
 | 渠道 | 技术 | 能力 |
 |------|------|------|
-| Web 控制台 | `ThreadingHTTPServer` + SSE 流 + REST API | run/stop/sync/check/submit/shutdown + 实时进度 |
-| CLI | argparse + `run_pipeline.py` | 命令行启动 + 人类可读摘要 |
-| 进度回调 | `progress_callback` 函数注入 | Web 和 CLI 共享同一 pipeline，仅 UI 层不同 |
+| Web 控制台 | `ThreadingHTTPServer` + SSE 流 + REST API | run/stop/sync/check/readiness/review/shutdown + 实时进度 |
+| 内部自动化接口 | 维护脚本、CI 和 packaged launcher | 只能作为维护与验证入口，不能作为最终用户操作路径 |
+| 进度回调 | `progress_callback` 函数注入 | Web 与内部自动化共享同一 pipeline，最终用户只通过 Web 控制台操作 |
 
 ### 4.2 Web 控制台功能矩阵
 

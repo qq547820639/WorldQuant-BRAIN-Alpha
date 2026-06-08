@@ -2,11 +2,28 @@
 
 from __future__ import annotations
 
+from datetime import date, datetime
+from decimal import Decimal
 from http.server import BaseHTTPRequestHandler
 from urllib.parse import parse_qs, urlparse
 from typing import Any, Callable
 import json
+import logging
 import time
+
+logger = logging.getLogger(__name__)
+
+
+def _json_default(obj: Any) -> str:
+    """Safe JSON default: handles datetime/date/Decimal, warns on unknowns."""
+    if isinstance(obj, (datetime, date)):
+        return obj.isoformat()
+    if isinstance(obj, Decimal):
+        return float(obj)
+    logger.warning(
+        "JSON fallback: %s of type %s", repr(obj)[:100], type(obj).__name__
+    )
+    return repr(obj)
 
 
 def create_handler_class(
@@ -50,6 +67,22 @@ def create_handler_class(
 
         def do_POST(self):
             dispatch_post(self, urlparse(self.path), dispatch_context())
+
+        def do_OPTIONS(self):
+            self.send_response(204)
+            # R-02 fix: Use explicit origin validation instead of wildcard fallback.
+            # When Origin is missing (same-origin or non-browser client), derive from Host
+            # so we never respond with Access-Control-Allow-Origin: *.
+            origin = self.headers.get("Origin", "")
+            if not origin:
+                host = self.headers.get("Host", "127.0.0.1")
+                origin = f"http://{host}" if "://" not in host else f"https://{host}"
+            self.send_header("Access-Control-Allow-Origin", origin)
+            self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+            self.send_header("Access-Control-Allow-Headers", "Content-Type, X-Brain-Alpha-CSRF")
+            self.send_header("Access-Control-Allow-Credentials", "true")
+            self._send_security_headers()
+            self.end_headers()
 
         def log_message(self, _format, *args):
             return
@@ -110,7 +143,18 @@ def create_handler_class(
             try:
                 while True:
                     if time.monotonic() - started > max_sse_duration_value:
-                        self.wfile.write(f"data: {json.dumps({'ok': False, 'error': 'sse stream timeout'})}\n\n".encode("utf-8"))
+                        payload = {
+                            "ok": True,
+                            "type": "stream_timeout",
+                            "job_id": job_id,
+                            "task_id": job_id,
+                            "status": "stream_timeout",
+                            "phase": "stream_timeout",
+                            "status_message": "SSE stream duration elapsed; reconnect to continue receiving job updates.",
+                            "retryable": True,
+                            "transport": "sse",
+                        }
+                        self.wfile.write(f"data: {json.dumps(payload)}\n\n".encode("utf-8"))
                         self.wfile.flush()
                         break
 
@@ -141,7 +185,7 @@ def create_handler_class(
                     }
                     if event_type in {"complete", "error"}:
                         payload["result"] = job.get("result")
-                    self.wfile.write(f"data: {json.dumps(payload, default=str)}\n\n".encode("utf-8"))
+                    self.wfile.write(f"data: {json.dumps(payload, default=_json_default)}\n\n".encode("utf-8"))
                     self.wfile.flush()
 
                     if _is_terminal_status(status):
@@ -181,7 +225,7 @@ def create_handler_class(
             self.wfile.write(data)
 
         def _json(self, payload: dict, status: int = 200, *, extra_headers: list[tuple[str, str]] | None = None):
-            data = json.dumps(payload, ensure_ascii=False, default=str).encode("utf-8")
+            data = json.dumps(payload, ensure_ascii=False, default=_json_default).encode("utf-8")
             self.send_response(status)
             self.send_header("Content-Type", "application/json; charset=utf-8")
             self.send_header("Cache-Control", "no-store")
@@ -217,6 +261,8 @@ def _is_terminal_status(status: str) -> bool:
 
 def _sse_event_type(status: str) -> str:
     normalized = str(status or "").lower()
+    if normalized == "stream_timeout":
+        return "stream_timeout"
     if normalized == "failed":
         return "error"
     if _is_terminal_status(normalized):

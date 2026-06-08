@@ -511,30 +511,9 @@ def test_frontend_surface_parity_reports_current_workspace_gap():
     assert result["parity"]["strict_matches"] is True
     assert result["parity"]["shared_ids"] == []
     assert result["parity"]["inline_only_views"] == []
-    assert result["parity"]["react_only_tabs"] == [
-        "dashboard",
-        "candidates",
-        "official_backtests",
-        "scoring",
-        "quality_check",
-        "submission_confirm",
-        "submission",
-        "checkpoint_status",
-        "config",
-        "cloud",
-    ]
-    assert result["parity"]["accepted_react_only_tabs"] == [
-        "dashboard",
-        "candidates",
-        "official_backtests",
-        "scoring",
-        "quality_check",
-        "submission_confirm",
-        "submission",
-        "checkpoint_status",
-        "config",
-        "cloud",
-    ]
+    # v3.0: phase-grouped navigation exposes only tools as react_only; phase items share inline ids
+    assert sorted(result["parity"]["react_only_tabs"]) == sorted(["dashboard", "cloud", "checkpoint_status", "config"])
+    assert sorted(result["parity"]["accepted_react_only_tabs"]) == sorted(["dashboard", "cloud", "checkpoint_status", "config"])
     assert result["parity"]["unaccepted_react_only_tabs"] == []
     assert result["plan"]["unmapped_inline_views"] == []
     assert result["plan"]["stale_inline_view_mappings"] == []

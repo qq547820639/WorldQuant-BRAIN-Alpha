@@ -10,6 +10,7 @@ from brain_alpha_ops.models import Candidate, utc_now
 from brain_alpha_ops.redaction import redact_error_message, redact_text
 from brain_alpha_ops.research.repository import ResearchRepository
 from brain_alpha_ops.research.safety import SubmissionLedger
+from brain_alpha_ops.submission_readiness import live_submit_readiness_hard_gate
 
 
 logger = logging.getLogger(__name__)
@@ -24,6 +25,7 @@ PayloadTruthy = Callable[[object], bool]
 ApiFromRunConfig = Callable[[RunConfig], Any]
 LedgerFactory = Callable[[str], SubmissionLedger]
 RepositoryFactory = Callable[[str], ResearchRepository]
+SubmitReadinessHardGate = Callable[[dict[str, Any], RunConfig, str], dict[str, Any]]
 
 
 def submit_candidate_payload(
@@ -37,6 +39,7 @@ def submit_candidate_payload(
     observability_submission_preflight: ObservabilityPreflight,
     payload_truthy: PayloadTruthy,
     api_from_run_config: ApiFromRunConfig,
+    submit_readiness_hard_gate: SubmitReadinessHardGate = live_submit_readiness_hard_gate,
     ledger_factory: LedgerFactory = SubmissionLedger,
     repository_factory: RepositoryFactory = ResearchRepository,
 ) -> dict[str, Any]:
@@ -51,15 +54,15 @@ def submit_candidate_payload(
             "error_code": "SUBMIT_CONFIRMATION_REQUIRED",
             "error": "Production submit requires explicit confirm_submit=true.",
             "error_category": "confirmation",
-            "action": "Review submit readiness and resend with confirm_submit=true only for an intentional production submit.",
+            "action": "Complete readiness review first; real submit is outside the ordinary Web flow and requires separate approval.",
             "state_navigation": {
                 "schema_version": "abnormal_state_navigation.v1",
                 "state": "blocked",
                 "reason_code": "SUBMIT_CONFIRMATION_REQUIRED",
-                "title": "需要提交确认",
-                "summary": "后端未收到明确的生产提交确认，已在调用官方 API 前阻断。",
+                "title": "需要单独提交审批",
+                "summary": "普通 Web 就绪复核流程不会执行真实提交；后端已在调用官方提交 API 前阻断。",
                 "target_view": "submit",
-                "primary_action": "确认官方证据完整后再执行提交。",
+                "primary_action": "先完成提交前就绪复核；如需真实提交，走单独审批路径。",
             },
         }, candidate, official_id)
     preflight = submission_preflight_advisory(candidate, run_config)
@@ -79,6 +82,10 @@ def submit_candidate_payload(
             "risk_explanations": [risk_explanation] if risk_explanation else [],
             "state_navigation": observability_preflight.get("state_navigation") if isinstance(observability_preflight.get("state_navigation"), dict) else {},
         }, candidate, official_id)
+    readiness_gate = submit_readiness_hard_gate(candidate, run_config, official_id)
+    if not readiness_gate.get("ok"):
+        record_submit_blocked(payload, candidate, run_config, str(readiness_gate.get("error") or "Submit readiness hard gate blocked submission."))
+        return _submission_contract_payload(readiness_gate, candidate, official_id)
     api = api_from_run_config(run_config)
     api.authenticate()
     result = api.submit_alpha(official_id, candidate.get("expression", ""), run_config.ops.settings.to_platform_dict()["settings"])

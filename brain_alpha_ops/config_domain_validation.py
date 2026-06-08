@@ -97,7 +97,7 @@ def validate_settings(errors: list[str], settings: BrainSettings) -> None:
     require_enum(errors, "ops.settings.instrumentType", settings.instrumentType, SUPPORTED_INSTRUMENT_TYPES)
     require_enum(errors, "ops.settings.region", settings.region, _VALID_REGIONS)
     require_enum(errors, "ops.settings.universe", settings.universe, _VALID_UNIVERSES)
-    require_str(errors, "ops.settings.dataset", settings.dataset)
+    require_str(errors, "ops.settings.dataset", settings.dataset, allow_empty=False)
     require_enum(errors, "ops.settings.delay", settings.delay, _VALID_DELAYS)
     require_int_range(errors, "ops.settings.decay", settings.decay, min_value=0)
     require_enum(errors, "ops.settings.neutralization", settings.neutralization, _VALID_NEUTRALIZATIONS)

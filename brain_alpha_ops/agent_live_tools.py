@@ -208,28 +208,11 @@ class AgentLiveToolsMixin:
         return {"ok": True, "alpha_id": alpha_id, "check": api.check_alpha(alpha_id)}
 
     def _submit_alpha(self, args: dict[str, Any]) -> dict[str, Any]:
-        if not self.allow_submit or not bool(args.get("confirm_submit")):
-            return {
-                "ok": False,
-                "error_code": "SUBMIT_NOT_ALLOWED",
-                "error": "submit_alpha requires allow_submit=True and confirm_submit=True",
-            }
-        blocked = self._live_api_blocked(args, tool="submit_alpha")
-        if blocked:
-            return blocked
-        alpha_id = required_text(args, "alpha_id")
-        expression = required_text(args, "expression")
-        api = self._api()
-        api.authenticate()
-        check = api.check_alpha(alpha_id)
-        if str(check.get("status", "")).upper() not in {"PASS", "PASSED"}:
-            return {"ok": False, "error_code": "PRE_SUBMIT_CHECK_FAILED", "check": check}
-        result = api.submit_alpha(
-            alpha_id,
-            expression,
-            self.run_config.ops.settings.to_platform_dict()["settings"],
-        )
-        return {"ok": True, "alpha_id": alpha_id, "submission": result, "pre_submit_check": check}
+        return {
+            "ok": False,
+            "error_code": "WEB_ONLY_SUBMIT_REQUIRED",
+            "error": "Official Alpha submission is available only through the Web staged readiness and confirmation flow.",
+        }
 
     def _sync_cloud_alphas(self, args: dict[str, Any]) -> dict[str, Any]:
         blocked = self._live_api_blocked(args, tool="sync_cloud_alphas")

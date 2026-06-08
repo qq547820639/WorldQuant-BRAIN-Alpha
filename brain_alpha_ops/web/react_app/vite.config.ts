@@ -18,6 +18,16 @@ export default defineConfig({
     outDir: "dist",
     emptyOutDir: true,
     sourcemap: false,
+    target: "es2022",
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vendor: ["react", "react-dom"],
+        },
+      },
+    },
+    // Warn if chunks exceed recommended size
+    chunkSizeWarningLimit: 300,
   },
   test: {
     environment: "jsdom",

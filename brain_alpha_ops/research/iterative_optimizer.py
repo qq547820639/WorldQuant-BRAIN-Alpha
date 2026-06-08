@@ -26,16 +26,49 @@ Usage::
 from __future__ import annotations
 
 import logging
+import json
 import random
 import re
 from dataclasses import dataclass, field
+from functools import lru_cache
+from pathlib import Path
 from typing import Any
 
 from brain_alpha_ops.data.loader import OfficialDataLoader
 from brain_alpha_ops.data.field_dataset_mapper import FieldDatasetMapper
 from brain_alpha_ops.models import Candidate
+from brain_alpha_ops.research.fallback_generation import normalize_operator_aliases
 
 logger = logging.getLogger(__name__)
+
+
+@lru_cache(maxsize=1)
+def _current_official_operator_names() -> frozenset[str]:
+    path = Path(__file__).resolve().parents[2] / "data" / "official_operators.json"
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return frozenset()
+    return frozenset(
+        str(item.get("name", "")).lower()
+        for item in payload
+        if isinstance(item, dict) and str(item.get("name", "")).strip()
+    )
+
+
+def _operator_names_from_loader(loader: Any) -> set[str]:
+    get_operators = getattr(loader, "get_operators", None)
+    if not callable(get_operators):
+        return set()
+    try:
+        return {
+            str(getattr(op, "name", "")).lower()
+            for op in get_operators()
+            if str(getattr(op, "name", "")).strip()
+        }
+    except Exception:
+        logger.warning("official operator metadata unavailable for iterative optimizer", exc_info=True)
+        return set()
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -56,11 +89,6 @@ _OPERATOR_FAMILIES: dict[str, list[str]] = {
 }
 
 # Alternative operators per family, used by operator_substitute.
-_FAMILY_ALTERNATIVES: dict[str, list[str]] = {}
-for _family, _ops in _OPERATOR_FAMILIES.items():
-    for _op in _ops:
-        _FAMILY_ALTERNATIVES[_op] = [o for o in _ops if o != _op]
-
 _STRUCTURE_WRAPS: list[str] = ["winsorize", "zscore", "scale"]
 
 
@@ -110,6 +138,17 @@ class IterativeOptimizer:
     ):
         self._loader = loader or OfficialDataLoader.instance()
         self._mapper = mapper
+        self._official_operators = _operator_names_from_loader(self._loader) or set(_current_official_operator_names())
+        self._family_alternatives = self._build_family_alternatives()
+
+    def _build_family_alternatives(self) -> dict[str, list[str]]:
+        """Return same-family alternatives restricted to official operators."""
+        alternatives: dict[str, list[str]] = {}
+        for _family, ops in _OPERATOR_FAMILIES.items():
+            official_ops = [op for op in ops if op in self._official_operators]
+            for op in official_ops:
+                alternatives[op] = [candidate for candidate in official_ops if candidate != op]
+        return alternatives
 
     # Main entry point.
 
@@ -132,7 +171,7 @@ class IterativeOptimizer:
         Returns:
             List of MutationResult objects (possibly fewer than max_mutations)
         """
-        expression = candidate.expression or ""
+        expression = normalize_operator_aliases(candidate.expression or "")
         fields = candidate.data_fields or []
         dataset_id = getattr(candidate, "dataset_id", "") or ""
 
@@ -269,9 +308,10 @@ class IterativeOptimizer:
 
         Uses FieldDatasetMapper to find a closely related field from the same dataset.
         """
+        expression = normalize_operator_aliases(expression)
         field_tokens = re.findall(r"\b([a-zA-Z_]\w*)\b", expression)
         # Filter tokens that could be field names (exclude operators and numbers).
-        operator_names = {op for family in _OPERATOR_FAMILIES.values() for op in family}
+        operator_names = set(self._family_alternatives.keys())
         candidate_fields = [
             t for t in field_tokens
             if t not in operator_names and not t.isdigit()
@@ -322,8 +362,8 @@ class IterativeOptimizer:
             for existing_wrap in _STRUCTURE_WRAPS:
                 if stripped.startswith(f"{existing_wrap}(") and stripped.endswith(")"):
                     return expression  # Already wrapped; do not wrap again.
-            # winsorize and truncation require a std parameter.
-            if wrap in ("winsorize", "truncation"):
+            # winsorize requires a std parameter.
+            if wrap == "winsorize":
                 return f"{wrap}({expression}, std=4)"
             return f"{wrap}({expression})"
         else:
@@ -346,15 +386,16 @@ class IterativeOptimizer:
         Identify operators in the expression and replace one with a family peer.
         """
         # Extract all operator names.
+        expression = normalize_operator_aliases(expression)
         op_pattern = re.findall(r"\b([a-zA-Z_]\w*)\s*\(", expression)
-        known_ops = set(_FAMILY_ALTERNATIVES.keys())
+        known_ops = set(self._family_alternatives.keys())
 
         substituted = False
         result = expression
 
         for op in op_pattern:
-            if op in known_ops and op in _FAMILY_ALTERNATIVES:
-                alternatives = _FAMILY_ALTERNATIVES[op]
+            if op in known_ops and op in self._family_alternatives:
+                alternatives = self._family_alternatives[op]
                 if alternatives:
                     replacement = random.choice(alternatives)
                     # Safe replacement as a whole token, not a substring.
@@ -392,7 +433,7 @@ def window_perturb_expression(expression: str, factor: float = 0.2) -> str:
 def operator_substitute_expression(expression: str) -> str:
     """Standalone operator substitution helper for mutate_expression mode='operator_substitute'."""
     opt = IterativeOptimizer()
-    return opt.operator_substitute(expression)
+    return opt.operator_substitute(normalize_operator_aliases(expression))
 
 
 def structure_refine_expression(expression: str) -> str:

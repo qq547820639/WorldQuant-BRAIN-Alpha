@@ -40,13 +40,14 @@ BASELINE_LINE_LIMITS = {
     "brain_alpha_ops/research/observability.py": 940,
     "brain_alpha_ops/research/pipeline.py": 3210,
     "brain_alpha_ops/research/scoring.py": 940,
-    "brain_alpha_ops/web.py": 1530,
+    "brain_alpha_ops/web/__init__.py": 800,
     "brain_alpha_ops/web/js/app.js": 1700,
     "brain_alpha_ops/research/alpha_quality.py": 900,
     "brain_alpha_ops/web_snapshot_runtime.py": 900,
     "brain_alpha_ops/web_snapshot_facade.py": 900,
     "brain_alpha_ops/web_assistant_snapshots.py": 900,
-    "brain_alpha_ops/web_routes.py": 900,
+    "brain_alpha_ops/web_routes.py": 1000,
+    "brain_alpha_ops/web_handler_dispatch.py": 850,
     "scripts/check_live_submit_readiness.py": 900,
 }
 

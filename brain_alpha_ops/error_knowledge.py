@@ -73,7 +73,7 @@ UX_ERROR_CODES: dict[str, dict] = {
     "REDLINE_FAILED": {
         "category": "compliance",
         "retryable": False,
-        "fix_hint": "Run 'brain-alpha-ops redline --block' to see violations. Fix config/generator/data sources.",
+        "fix_hint": "Review Web redline/compliance results or maintainer quality-gate output. Fix config/generator/data sources.",
     },
     # Scoring
     "SCORE_LOW": {

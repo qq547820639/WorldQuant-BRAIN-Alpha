@@ -40,8 +40,16 @@ class TestExpressionSkeleton:
 
     def test_skeleton_preserves_operators(self):
         s1 = self.guard.skeleton("ts_mean(close, 20)")
-        s2 = self.guard.skeleton("ts_std(close, 20)")
+        s2 = self.guard.skeleton("ts_std_dev(close, 20)")
         assert s1 != s2  # Different operators
+
+    def test_skeleton_normalizes_legacy_operator_aliases(self):
+        alias = self.guard.skeleton("ts_std(close, 20) + ts_argmax(open, 5)")
+        official = self.guard.skeleton("ts_std_dev(close, 20) + ts_arg_max(open, 5)")
+
+        assert alias == official
+        assert "ts_std " not in alias
+        assert "ts_argmax" not in alias
 
     def test_complex_skeleton(self):
         skeleton = self.guard.skeleton(
@@ -100,8 +108,8 @@ class TestExpressionDiversityGuardConvergence:
             "rank(returns)",
             "ts_mean(close, 20)",
             "group_rank(volume, sector)",
-            "ts_std(returns, 60)",
-            "decay_linear(close, 10)",
+            "ts_std_dev(returns, 60)",
+            "ts_decay_linear(close, 10)",
         ]
         assert self.guard.is_converged("winsorize(market_cap, 0.01)", pool) is False
 
@@ -132,8 +140,8 @@ class TestExpressionDiversityGuardAnalyze:
             "rank(returns)",
             "ts_mean(close, 20)",
             "group_rank(volume, sector)",
-            "ts_std(returns, 60)",
-            "decay_linear(close, 10)",
+            "ts_std_dev(returns, 60)",
+            "ts_decay_linear(close, 10)",
         ]
         report = self.guard.analyze_pool(pool)
         assert report.total_expressions == 5
@@ -205,6 +213,10 @@ class TestExpressionDiversityGuardForceDiversify:
         strategies = self.guard.force_diversify("rank(returns)")
         has_ts_suggestion = any("ts_" in s or "time_series" in s.lower() for s in strategies)
         assert has_ts_suggestion
+        assert all("ts_std," not in strategy for strategy in strategies)
+        assert all("use_decay_linear:" not in strategy for strategy in strategies)
+        assert all("with decay_linear" not in strategy for strategy in strategies)
+        assert all("vector_neutralize" not in strategy for strategy in strategies)
 
     def test_complex_expression_without_arithmetic(self):
         strategies = self.guard.force_diversify("rank(returns)")
@@ -251,7 +263,7 @@ class TestExpressionDiversityEdgeCases:
         self.guard = ExpressionDiversityGuard()
 
     def test_very_long_expression(self):
-        expr = "group_neutralize(decay_linear(ts_delta(winsorize(market_cap, 0.01), 60), 20), industry)"
+        expr = "group_neutralize(ts_decay_linear(ts_delta(winsorize(market_cap, 0.01), 60), 20), industry)"
         skeleton = self.guard.skeleton(expr)
         assert isinstance(skeleton, str)
         assert len(skeleton) > 0

@@ -103,7 +103,6 @@ class BrainAlphaToolbox(AgentLiveToolsMixin):
             "run_simulation": self._run_simulation,
             "run_simulation_batch": self._run_simulation_batch,
             "check_alpha": self._check_alpha,
-            "submit_alpha": self._submit_alpha,
             "sync_cloud_alphas": self._sync_cloud_alphas,
             "get_job_status": self._get_job_status,
             "query_research_memory": self._query_research_memory,

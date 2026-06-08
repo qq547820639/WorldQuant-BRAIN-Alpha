@@ -53,7 +53,7 @@ def read_cache(
             }
         except (OSError, ValueError, TypeError, json.JSONDecodeError) as exc:
             active_logger.warning("failed to read official API cache %s: %s", redact_text(path, max_length=180), redact_error_message(exc))
-            return {"items": [], "fresh": False, "error": str(exc)}
+            return {"items": [], "fresh": False, "error": redact_error_message(exc)}
 
     if cache_lock is not None:
         with cache_lock:

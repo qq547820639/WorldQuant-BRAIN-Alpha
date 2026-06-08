@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import logging
 import secrets
 import threading
 import time
@@ -12,11 +13,13 @@ from urllib.parse import parse_qs, urlparse
 
 LOCAL_HOSTS = {"127.0.0.1", "localhost", "::1"}
 LOOPBACK_BIND_HOSTS = {"127.0.0.1", "localhost", "::1"}
+logger = logging.getLogger(__name__)
 SESSION_COOKIE_NAME = "brain_alpha_ops_session"
 DEFAULT_SESSION_TTL_SECONDS = 12 * 60 * 60
 DEFAULT_SESSION_ABSOLUTE_MAX_SECONDS = 24 * 60 * 60
 REQUEST_REPLAY_TTL_SECONDS = 5 * 60
 MAX_REQUEST_ID_LENGTH = 128
+MAX_REPLAY_CACHE_SIZE = 10_000  # R-03: hard cap to prevent DoS memory exhaustion
 
 
 def header_hostname(host_header: str) -> str:
@@ -225,6 +228,17 @@ class LocalSessionManager:
                     replay_cache.pop(cached_id, None)
             if request_id in replay_cache:
                 return {"ok": False, "error_code": "REPLAY_DETECTED", "error": "duplicate request id"}
+            # R-03: Hard cap on replay cache size to prevent DoS memory exhaustion
+            if len(replay_cache) >= MAX_REPLAY_CACHE_SIZE:
+                logger.warning(
+                    "Replay cache full for session %s (size=%d), rejecting request",
+                    session_id[:8], len(replay_cache),
+                )
+                return {
+                    "ok": False,
+                    "error_code": "REPLAY_CACHE_FULL",
+                    "error": "too many concurrent requests — please retry later",
+                }
             replay_cache[request_id] = current + ttl_seconds
             absolute_expires_at = float(row.get("absolute_expires_at", row.get("expires_at", 0.0)) or 0.0)
             row["last_accessed"] = current

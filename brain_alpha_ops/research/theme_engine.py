@@ -487,10 +487,33 @@ class DynamicThemeEngine:
 
         # Merge proven TEMPLATE_SKELETONS with auto-generated skeletons
         auto_skel = self.auto_skeletons
+        official_ops = self._official_operator_names()
+        production_skeletons = [
+            skeleton
+            for skeleton in PRODUCTION_STRUCTURE_SKELETONS
+            if self._skeleton_uses_only_official_operators(skeleton, official_ops)
+        ]
+        filtered_auto_skel = {
+            cat: [
+                skeleton
+                for skeleton in skeletons
+                if self._skeleton_uses_only_official_operators(skeleton, official_ops)
+            ]
+            for cat, skeletons in auto_skel.items()
+        }
+        filtered_auto_skel = {cat: skeletons for cat, skeletons in filtered_auto_skel.items() if skeletons}
         merged_skeletons: dict[str, list[str]] = {}
         for cat in set(list(TEMPLATE_SKELETONS.keys()) + list(auto_skel.keys())):
-            merged_skeletons[cat] = (TEMPLATE_SKELETONS.get(cat, []) +
-                                     auto_skel.get(cat, []))
+            candidates = TEMPLATE_SKELETONS.get(cat, []) + filtered_auto_skel.get(cat, [])
+            filtered = [
+                skeleton
+                for skeleton in candidates
+                if self._skeleton_uses_only_official_operators(skeleton, official_ops)
+            ]
+            if filtered:
+                merged_skeletons[cat] = filtered
+        if not merged_skeletons and not production_skeletons:
+            return []
 
         templates: list[ThemeTemplate] = []
         attempts = 0
@@ -502,17 +525,17 @@ class DynamicThemeEngine:
             # Seed each batch with structurally complete hybrid templates when
             # possible. This improves actual expression quality without changing
             # scoring or submit thresholds.
-            if len(field_universe) >= 4 and len(templates) < min(n, len(PRODUCTION_STRUCTURE_SKELETONS)):
+            if len(field_universe) >= 4 and len(templates) < min(n, len(production_skeletons)):
                 skeleton_cat = "hybrid"
-                skeleton = PRODUCTION_STRUCTURE_SKELETONS[len(templates) % len(PRODUCTION_STRUCTURE_SKELETONS)]
+                skeleton = production_skeletons[len(templates) % len(production_skeletons)]
             # Pick a skeleton category (70% auto-generated, 30% proven templates for exploration)
-            elif random.random() < 0.7 and auto_skel:
-                skeleton_cat = random.choice(list(auto_skel.keys()))
-                skeletons = auto_skel[skeleton_cat]
+            elif random.random() < 0.7 and filtered_auto_skel:
+                skeleton_cat = random.choice(list(filtered_auto_skel.keys()))
+                skeletons = filtered_auto_skel[skeleton_cat]
                 skeleton = random.choice(skeletons)
             else:
-                skeleton_cat = random.choice(list(TEMPLATE_SKELETONS.keys()))
-                skeletons = TEMPLATE_SKELETONS[skeleton_cat]
+                skeleton_cat = random.choice(list(merged_skeletons.keys()))
+                skeletons = merged_skeletons[skeleton_cat]
                 skeleton = random.choice(skeletons)
 
             # Map to field categories
@@ -648,22 +671,8 @@ class DynamicThemeEngine:
         import re as _re
 
         valid_ids = {field.lower() for fields in cat_fields.values() for field in fields}
-        _OPS = {
-            "rank", "zscore", "winsorize", "group_zscore", "group_rank",
-            "group_mean", "group_scale", "group_backfill", "group_neutralize",
-            "ts_rank", "ts_delta", "ts_sum", "ts_mean", "ts_std", "ts_zscore",
-            "ts_count_nans", "ts_decay_linear", "ts_std_dev", "ts_regression",
-            "ts_av_diff", "ts_kurtosis", "ts_skewness", "ts_scale", "ts_step",
-            "ts_product", "ts_corr", "ts_covariance", "ts_min", "ts_max",
-            "ts_argmax", "ts_argmin", "ts_percentage", "ts_delay",
-            "ts_backfill", "ts_quantile", "ts_arg_max", "ts_arg_min",
-            "last_diff_value", "days_from_last_change",
-            "kth_element", "log", "signed_power", "inverse", "scale", "power",
-            "normalize", "quantile", "returns", "sector", "industry", "market",
-            "subindustry", "backfill", "fill_na",
-            "subtract", "divide", "greater", "less", "add", "multiply",
-            "min", "max", "if_else", "hump",
-        }
+        _OPS = {op.name.lower() for op in self._loader.get_operators()}
+        _OPS.update({"returns", "sector", "industry", "market", "subindustry"})
 
         tokens = _re.findall(r"\b([a-zA-Z_]\w+)\b", result)
         all_cat_fields = [f for fields in cat_fields.values() for f in fields]
@@ -676,6 +685,22 @@ class DynamicThemeEngine:
                 result = _re.sub(rf"\b{_re.escape(t)}\b", replacement, result)
 
         return result
+
+    def _official_operator_names(self) -> set[str]:
+        return {op.name.lower() for op in self._loader.get_operators()}
+
+    @staticmethod
+    def _operators_in_skeleton(skeleton: str) -> set[str]:
+        normalized = _normalize_operator_aliases(skeleton)
+        return {
+            token.lower()
+            for token in re.findall(r"\b([A-Za-z_]\w*)\s*\(", normalized)
+        }
+
+    @classmethod
+    def _skeleton_uses_only_official_operators(cls, skeleton: str, official_ops: set[str]) -> bool:
+        operators = cls._operators_in_skeleton(skeleton)
+        return bool(operators) and operators <= official_ops
 
     # ------------------------------------------------------------------
     # Properties

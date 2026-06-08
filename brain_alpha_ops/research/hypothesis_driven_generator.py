@@ -973,10 +973,15 @@ class HypothesisDrivenGenerator:
     def _generate_bare_fallback(self, dataset_id: str) -> Candidate | None:
         """Absolute last-resort fallback when ThemeEngine is unavailable."""
         ds = dataset_id or self._dataset_id or "default"
-        fields = sorted(self._fields) if self._fields else ["returns"]
+        fields = sorted(self._fields)
         fields = self._prioritize_knowledge_fields(fields)
         if not fields:
-            fields = ["returns"]
+            logger.warning(
+                "HypothesisDrivenGenerator: bare fallback blocked because official field context is empty "
+                "for dataset_id=%s",
+                ds,
+            )
+            return None
         operators = {str(item).lower() for item in self._operators if str(item)}
         windows = self._experience_windows or DEFAULT_WINDOWS
         attempt_limit = max(1, len(fields) * len(windows))

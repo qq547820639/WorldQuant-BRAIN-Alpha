@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import logging
+import threading
+import time
 from typing import Any, Callable
 
 from brain_alpha_ops.observability import error_payload
@@ -126,7 +128,10 @@ def run_job_service(
     compute_run_stats: ComputeRunStats,
     safe_error_message: SafeErrorMessage,
     log: logging.Logger,
+    heartbeat_interval_seconds: float = 30.0,
 ) -> None:
+    heartbeat_stop = threading.Event()
+    heartbeat_thread: threading.Thread | None = None
     try:
         job_store.update(
             job_id,
@@ -134,6 +139,14 @@ def run_job_service(
             progress={"phase": "startup", "current": 0, "total": 1, "percent": 0, "message": "后台任务启动。", "alpha_id": ""},
         )
         run_config = run_config_from_payload(payload)
+        heartbeat_thread = _start_pipeline_heartbeat(
+            job_id,
+            job_store=job_store,
+            stop_event=heartbeat_stop,
+            interval_seconds=heartbeat_interval_seconds,
+            log=log,
+        )
+
         def _progress_update(progress: dict[str, Any]) -> None:
             fields: dict[str, Any] = {"progress": progress}
             if _progress_terminal_status(progress) in {"stopped", "cancelled"}:
@@ -145,6 +158,8 @@ def run_job_service(
             progress_callback=_progress_update,
             stop_callback=lambda: job_store.is_cancelled(job_id),
         )
+        _stop_pipeline_heartbeat(heartbeat_stop, heartbeat_thread)
+        heartbeat_thread = None
         final_status = "stopped" if job_store.is_cancelled(job_id) else "completed"
         result_data = result.to_dict()
         last_progress = (job_store.get(job_id) or {}).get("progress", {})
@@ -169,6 +184,7 @@ def run_job_service(
             },
         )
     except Exception as exc:
+        _stop_pipeline_heartbeat(heartbeat_stop, heartbeat_thread)
         message = safe_error_message(exc)
         error_context = error_payload(exc, error_code="RUN_JOB_FAILED", job_id=job_id, phase="run_job")
         log.error("production job failed: %s", error_context, exc_info=True)
@@ -186,6 +202,81 @@ def run_job_service(
                 "error_context": error_context,
             },
         )
+
+
+def _start_pipeline_heartbeat(
+    job_id: str,
+    *,
+    job_store: Any,
+    stop_event: threading.Event,
+    interval_seconds: float,
+    log: logging.Logger,
+) -> threading.Thread | None:
+    interval = max(0.0, float(interval_seconds or 0.0))
+    if interval <= 0:
+        return None
+
+    def _heartbeat_loop() -> None:
+        count = 0
+        while not stop_event.wait(interval):
+            try:
+                if job_store.is_cancelled(job_id):
+                    return
+                count += 1
+                heartbeat_result = _store_heartbeat(job_store, job_id, heartbeat_count=count)
+                if heartbeat_result is True:
+                    continue
+                if heartbeat_result is False:
+                    return
+                row = job_store.get(job_id) or {}
+                status = str(row.get("status") or "").strip().lower()
+                if status not in {"queued", "running", "stopping"}:
+                    return
+                progress = row.get("progress") if isinstance(row.get("progress"), dict) else {}
+                message = str(
+                    progress.get("status_message")
+                    or progress.get("message")
+                    or "等待官方接口或流水线进度回调。"
+                )
+                next_progress = dict(progress)
+                next_progress.update({
+                    "phase": str(progress.get("phase") or "pipeline_waiting"),
+                    "status_message": f"{message} 后台仍在运行。",
+                    "message": f"{message} 后台仍在运行。",
+                    "heartbeat": {
+                        "count": count,
+                        "source": "web_run_job",
+                        "updated_at": time.time(),
+                    },
+                })
+                job_store.update(job_id, progress=next_progress)
+            except Exception:
+                log.warning("production job heartbeat failed", exc_info=True)
+                return
+
+    thread = threading.Thread(target=_heartbeat_loop, name=f"brain-alpha-heartbeat-{job_id}", daemon=True)
+    thread.start()
+    return thread
+
+
+def _store_heartbeat(job_store: Any, job_id: str, *, heartbeat_count: int) -> bool | None:
+    heartbeat = getattr(job_store, "heartbeat", None)
+    if not callable(heartbeat):
+        return None
+    return bool(
+        heartbeat(
+            job_id,
+            operation="run_pipeline",
+            heartbeat_count=heartbeat_count,
+            source="web_run_job",
+        )
+    )
+
+
+def _stop_pipeline_heartbeat(stop_event: threading.Event, thread: threading.Thread | None) -> None:
+    stop_event.set()
+    if thread is not None:
+        thread.join(timeout=1.0)
 
 
 def _progress_terminal_status(progress: dict[str, Any]) -> str:

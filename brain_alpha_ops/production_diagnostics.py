@@ -265,8 +265,9 @@ def _frontend_inline_status() -> dict[str, Any]:
             "error": result.get("error", ""),
         }
     except Exception as exc:
+        from brain_alpha_ops.redaction import redact_error_message
         logger.warning("frontend inline status check failed during production diagnosis", exc_info=True)
-        return {"ok": False, "replaced": 0, "missing": [], "error": str(exc)}
+        return {"ok": False, "replaced": 0, "missing": [], "error": redact_error_message(exc)}
 
 
 def _history_replay_status(run_config: RunConfig) -> dict[str, Any]:

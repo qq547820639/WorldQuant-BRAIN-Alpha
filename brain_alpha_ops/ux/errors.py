@@ -64,7 +64,7 @@ STATUS_CODE_ZH: dict[str, str] = {
     "idle": "空闲",
     "stopping": "正在停止",
     "stopped": "已停止",
-    "missing": "任务不存在",
+    "missing": "验证流程不存在",
     "not_started": "未开始",
 
     # Gate/Check statuses
@@ -107,32 +107,32 @@ _ERROR_PATTERNS: list[tuple[str, str, str]] = [
     (
         "authentication",
         "BRAIN 平台认证失败",
-        "请检查 BRAIN_USERNAME 和 BRAIN_PASSWORD 环境变量是否正确设置，或运行 fetch_official_context.py 验证网络连接。",
+        "请在 BRAIN 账户连接区重新测试连接；如果仍失败，请让维护者检查托管凭证和网络状态。",
     ),
     (
         "rate limit",
         "API 请求频率超限，请稍后重试",
-        "系统会自动等待后重试。如果频繁遇到此问题，请在 run_config.json 中增加 official_retry_pause_seconds。",
+        "系统会自动等待后重试。如果频繁遇到此问题，请在系统配置中降低并发或让维护者调整请求间隔。",
     ),
     (
         "connection",
         "无法连接到 BRAIN API 服务器",
-        "请确认网络连接正常，并检查是否在公司 VPN 或防火墙之后。可以尝试运行 fetch_official_context.py --use-proxy。",
+        "请确认网络连接正常，并检查是否在公司 VPN 或防火墙之后。可在 Web 控制台重新测试连接。",
     ),
     (
         "timeout",
         "API 请求超时",
-        "BRAIN 模拟任务可能需要几分钟才能完成。系统会自动轮询结果，请耐心等待。",
+        "BRAIN 模拟流程可能需要几分钟才能完成。系统会自动轮询结果，请耐心等待。",
     ),
     (
         "json",
         "数据格式解析错误",
-        "返回数据格式异常。请检查 run_config.json 配置是否正确，或尝试重新同步云端数据。",
+        "返回数据格式异常。请在系统配置中检查参数，或尝试重新同步云端数据。",
     ),
     (
         "config",
         "配置文件验证失败",
-        "请检查 config/run_config.json 是否符合 schema 要求。可运行 run_pipeline.py --validate-only 查看具体错误。",
+        "请在 Web 控制台的系统配置页检查参数；维护者可使用质量门禁中的配置验证结果定位具体错误。",
     ),
     (
         "validation",
@@ -157,7 +157,7 @@ _ERROR_PATTERNS: list[tuple[str, str, str]] = [
     (
         "not found",
         "请求的资源不存在",
-        "请检查所请求的候选 ID 或任务 ID 是否正确。",
+        "请回到候选管理或运行总览重新选择可见记录。",
     ),
     (
         "permission",
@@ -167,12 +167,12 @@ _ERROR_PATTERNS: list[tuple[str, str, str]] = [
     (
         "memory",
         "系统内存不足",
-        "当前数据处理量过大。请减少 max_candidates_per_cycle 或 retained_alpha_pool_size 配置。",
+        "当前数据处理量过大。请在系统配置中减少候选数量或保留池规模。",
     ),
     (
         "disk",
         "磁盘空间不足",
-        "数据缓存目录空间不足。请清理 data/api_cache/ 目录或调整 storage_dir 配置到空间更大的位置。",
+        "本地缓存空间不足。请让维护者清理缓存或调整存储位置。",
     ),
     (
         "syntax",
@@ -182,7 +182,7 @@ _ERROR_PATTERNS: list[tuple[str, str, str]] = [
     (
         "token",
         "访问令牌无效或已过期",
-        "请重新设置 BRAIN_TOKEN 环境变量。如果使用 BRAIN_USERNAME/BRAIN_PASSWORD，系统会自动获取新令牌。",
+        "请在 BRAIN 账户连接区重新测试连接；如果使用托管凭证，请让维护者刷新凭证。",
     ),
     (
         "convergence_stalled",
@@ -222,7 +222,7 @@ def translate_error(error_message: str) -> dict[str, str]:
         return {
             "original": "",
             "friendly": "发生未知错误",
-            "suggested_action": "请重试操作。如果问题持续出现，请查看服务器日志。",
+            "suggested_action": "请重试操作。如果问题持续出现，请让维护者查看诊断信息。",
             "error_code": "UNKNOWN",
         }
 
@@ -241,7 +241,7 @@ def translate_error(error_message: str) -> dict[str, str]:
     return {
         "original": str(error_message)[:200],
         "friendly": "操作未能完成",
-        "suggested_action": "请重试操作。如果问题持续出现，请查看「事件日志」了解详细错误信息。",
+        "suggested_action": "请重试操作。如果问题持续出现，请查看页面事件记录或让维护者查看诊断信息。",
         "error_code": _extract_error_code(error_message) or "GENERIC_ERROR",
     }
 
@@ -336,7 +336,7 @@ PHASE_GUIDANCE: dict[str, dict[str, str]] = {
     "connection": {
         "title": "连接与认证",
         "description": "验证本地服务能否通过 BRAIN API 认证。认证成功后，可以进行云端同步和候选生成。",
-        "action": "点击「测试连接」按钮。如果失败，请检查 BRAIN_USERNAME/BRAIN_PASSWORD 环境变量。",
+        "action": "点击「测试连接」按钮。如果失败，请重新填写凭证或让维护者检查托管凭证。",
     },
     "sync": {
         "title": "云端数据同步",

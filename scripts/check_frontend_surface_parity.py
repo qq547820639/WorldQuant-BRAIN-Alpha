@@ -41,6 +41,17 @@ def check_frontend_surface_parity(
     react_source = _read_text(react_app, findings)
     inline_views = extract_inline_views(inline_source) if inline_source else []
     react_tabs = extract_react_tabs(react_source) if react_source else []
+
+    # Fallback: Terminal Precision v2.0 uses Sidebar.tsx NAV_ITEMS for navigation
+    if react_source and not react_tabs:
+        sidebar_path = react_app.parent / "components" / "Sidebar.tsx"
+        if sidebar_path.exists():
+            try:
+                sidebar_source = sidebar_path.read_text(encoding="utf-8")
+                react_tabs = _extract_sidebar_nav_items(sidebar_source)
+            except OSError:
+                pass  # Sidebar file unreadable — best-effort extraction, failures are non-fatal
+
     inline_retired = not inline_source and react_source and inline_registry == DEFAULT_INLINE_REGISTRY.resolve()
 
     if inline_source and not inline_views:
@@ -129,6 +140,38 @@ def extract_react_tabs(source: str) -> list[dict[str, str]]:
             tabs.append({"id": match.group("id"), "label": match.group("label")})
         return tabs
     return _extract_react_card_config(source)
+
+
+def _extract_sidebar_nav_items(source: str) -> list[dict[str, str]]:
+    """Extract navigation items from Sidebar.tsx — supports v2.0 NAV_ITEMS and v3.0 phase groups."""
+    items: list[dict[str, str]] = []
+
+    # v3.0: phase group items ({ id: "xxx" as CardViewId, label: "xxx" })
+    for match in re.finditer(
+        r"""\{\s*id:\s*['\"](?P<id>[^'\"]+)['\"]\s+as\s+CardViewId\s*,\s*label:\s*['\"](?P<label>[^'\"]+)['\"]""",
+        source,
+    ):
+        items.append({"id": match.group("id"), "label": match.group("label")})
+
+    # v2.0: TOOLS_ITEMS array
+    tools_match = re.search(r"const\s+TOOLS_ITEMS\b[^=]*=\s*\[(?P<body>.*?)\];", source, flags=re.DOTALL)
+    if tools_match:
+        for match in re.finditer(
+            r"\{\s*id:\s*['\"](?P<id>[^'\"]+)['\"]\s*,\s*label:\s*['\"](?P<label>[^'\"]+)['\"]",
+            tools_match.group("body"),
+        ):
+            items.append({"id": match.group("id"), "label": match.group("label")})
+
+    # Legacy: v2.0 NAV_ITEMS
+    nav_match = re.search(r"const\s+NAV_ITEMS\b[^=]*=\s*\[(?P<body>.*?)\];", source, flags=re.DOTALL)
+    if nav_match:
+        for match in re.finditer(
+            r"\{\s*id:\s*['\"](?P<id>[^'\"]+)['\"]\s*,\s*label:\s*['\"](?P<label>[^'\"]+)['\"]",
+            nav_match.group("body"),
+        ):
+            items.append({"id": match.group("id"), "label": match.group("label")})
+
+    return items
 
 
 def _extract_react_card_config(source: str) -> list[dict[str, str]]:

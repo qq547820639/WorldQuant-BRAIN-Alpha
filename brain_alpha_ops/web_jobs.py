@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from brain_alpha_ops.redaction import redact_data, redact_error_message
+from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +50,6 @@ def new_job_id(prefix: str = "job") -> str:
 # ═══════════════════════ Timestamp Helpers ════════════════════════════
 def utc_timestamp() -> str:
     """Get current UTC timestamp in ISO format."""
-    from datetime import datetime, timezone
     return datetime.now(timezone.utc).isoformat()
 
 
@@ -212,6 +212,15 @@ def job_fail(job_id: str, error: str, **extra: Any) -> dict:
 def job_cancel(job_id: str, **extra: Any) -> dict:
     """Mark job as cancelled."""
     return job_update(job_id, status="cancelled", **extra)
+
+
+def is_cancelled(job_id: str) -> bool:
+    """Check if a job has been cancelled or stopped."""
+    with ASYNC_JOBS_LOCK:
+        row = ASYNC_JOBS.get(job_id)
+    if not isinstance(row, dict):
+        return False
+    return str(row.get("status", "")).lower() in {"cancelled", "canceled", "stopped"}
 
 
 # ═══════════════════════ Job Pruning ══════════════════════════════════

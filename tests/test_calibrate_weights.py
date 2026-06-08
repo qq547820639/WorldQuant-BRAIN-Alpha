@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-import calibrate_weights as cw
+import pytest
+
+cw = pytest.importorskip("calibrate_weights", reason="calibrate_weights standalone module not installed")
 
 from brain_alpha_ops.models import Candidate
 from brain_alpha_ops.research.scoring import prior_score

@@ -55,7 +55,7 @@ class ResearchBudget:
     enable_secondary_fusion: bool = True
     require_cloud_sync: bool = True
     cloud_sync_range: str = "3d"
-    cloud_sync_max_elapsed_seconds: float = 0.0
+    cloud_sync_max_elapsed_seconds: float = 300.0
     resume_persisted_backtests: bool = True
     max_cycles: int = 10
     dataset_strategy: str = "rotate"  # all | rotate | random | specific

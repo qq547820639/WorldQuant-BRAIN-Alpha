@@ -26,7 +26,7 @@ def test_mcp_initialize_and_tool_list(tmp_path):
     assert "run_backtest" in names
     assert "run_batch_backtest" in names
     assert "run_parallel_backtest" in names
-    assert "submit_alpha" in names
+    assert "submit_alpha" not in names
     listed = {tool["name"]: tool for tool in tools["result"]["tools"]}
     assert listed["score_factor"]["annotations"]["aliasFor"] == "score_candidate"
     assert listed["score_factor"]["annotations"]["chainStage"] == "screen"

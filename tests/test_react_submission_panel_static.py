@@ -23,51 +23,35 @@ def _source() -> str:
 def test_submission_panel_bounds_batch_json_and_validates_candidate_ids():
     source = _source()
 
-    assert "const MAX_BATCH_ALPHA_IDS = 100;" in source
-    assert "if (rows.length > MAX_BATCH_ALPHA_IDS)" in source
-    assert "候选JSON最多包含 ${MAX_BATCH_ALPHA_IDS} 行。" in source
-    assert "setCandidateJsonError(validateCandidateJsonRows(rows));" in source
-    assert "function validateCandidateJsonRows(candidates: Candidate[])" in source
-    assert 'for (const field of ["alpha_id", "official_alpha_id", "simulation_id"] as const)' in source
-    assert "候选行 ${index + 1} 的 ${field} 必须为字符串。" in source
-    assert "候选行 ${index + 1} 的 ${field}: ${error}" in source
+    assert "Retired submit surface kept as a compatibility alias" in source
+    assert "SubmissionConfirmPanel notify={notify}" in source
+    assert "/api/submit" not in source
+    assert "/api/submit_batch" not in source
 
 
 def test_submission_panel_blocks_batch_submit_without_valid_alpha_ids():
     source = _source()
 
-    assert "const batchSubmitError = submitCandidates.length ? validateBatchSubmitCandidates(submitCandidates) : \"\";" in source
-    assert "const validationError = candidateJsonError || validateBatchSubmitCandidates(submitCandidates);" in source
-    assert 'notify("warning", validationError);' in source
-    assert "alpha_ids: submitCandidates.map(candidateAlphaId).filter(Boolean)" in source
-    assert "function validateBatchSubmitCandidates(candidates: Candidate[])" in source
-    assert "批量提交最多支持 ${MAX_BATCH_ALPHA_IDS} 个候选。" in source
-    assert "批量提交前，至少一个候选行必须包含 alpha_id 或 official_alpha_id。" in source
-    assert "hasFreshBatchCheck" in source
-    assert "batchCheckedSignature === batchCandidateSignature" in source
-    assert "disabled={!submitCandidates.length || !batchConfirmEnabled || !hasFreshBatchCheck || Boolean(candidateJsonError) || Boolean(batchSubmitError) || batchSubmitApi.loading}" in source
-    assert 'id="batch-submit-validation"' in source
+    assert "旧提交面板已退役" in source
+    assert "Web 页面不执行真实提交" in source
+    assert "任何真实提交需另走人工审批" in source
 
 
 def test_submission_panel_retry_paths_revalidate_candidate_json_before_requests():
     source = _source()
 
-    assert "const validationError = candidateJsonError || validateCandidateJsonRows(submitCandidates);" in source
-    assert "const validationError = candidateJsonError || validateBatchSubmitCandidates(submitCandidates);" in source
-    assert "if (validationError) {" in source
-    assert 'notify("warning", validationError);' in source
-    assert "[batchCheckApi, candidateJsonError, notify, submitCandidates]" in source
-    assert "[batchConfirmEnabled, batchSubmitApi, candidateJsonError, hasFreshBatchCheck, notify, submitCandidates]" in source
+    assert 'role="status"' in source
+    assert 'aria-live="polite"' in source
+    assert "focus:ring-2 focus:ring-brand-500/50" in source
 
 
 def test_submission_panel_requires_fresh_single_and_batch_checks_before_submit():
     source = _source()
 
-    assert "const hasFreshSingleCheck = Boolean(checkResult && checkedAlphaId === normalizedAlphaId);" in source
-    assert "提交前请先完成同一Alpha ID的检查" in source
-    assert "disabled={!normalizedAlphaId || !confirmEnabled || !hasFreshSingleCheck || Boolean(alphaIdError) || api.loading}" in source
-    assert "批量提交前请先完成当前候选集的批量检查" in source
-    assert "function candidateBatchSignature(candidates: Candidate[])" in source
+    assert "Retired submit surface kept as a compatibility alias for read-only review" in source
+    assert "useApi" not in source
+    assert "useSSE" not in source
+    assert "requestJobCancel" not in source
 
 
 def test_react_candidate_contract_includes_simulation_id():

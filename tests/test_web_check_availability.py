@@ -39,6 +39,7 @@ def complete_official_metrics():
         "self_correlation": 0.1,
         "prod_correlation": 0.2,
         "weight_concentration": 0.03,
+        "sub_universe_sharpe": 1.2,
     }
 
 

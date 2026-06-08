@@ -10,7 +10,7 @@ from typing import Any
 
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_WEB = ROOT / "brain_alpha_ops" / "web.py"
+DEFAULT_WEB = ROOT / "brain_alpha_ops" / "web" / "__init__.py"
 SCHEMA_VERSION = "web_facade_contract_check.v1"
 
 
@@ -138,7 +138,7 @@ def _finding(code: str, value: str) -> dict[str, str]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Check web.py facade hardening contract.")
-    parser.add_argument("--web", default=str(DEFAULT_WEB), help="Path to brain_alpha_ops/web.py")
+    parser.add_argument("--web", default=str(DEFAULT_WEB), help="Path to brain_alpha_ops/web/__init__.py")
     parser.add_argument("--json", action="store_true", help="Emit JSON instead of text")
     args = parser.parse_args()
 

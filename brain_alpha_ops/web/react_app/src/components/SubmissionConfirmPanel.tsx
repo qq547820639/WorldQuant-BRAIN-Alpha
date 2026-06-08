@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo } from "react";
 import { useApi } from "@/hooks/useApi";
 import type { Candidate, SubmitReadinessResponse } from "@/types";
 import ProgressFeedback from "@/components/ProgressFeedback";
+import StatusFlowDiagram from "@/components/StatusFlowDiagram";
 
 interface Props {
   notify: (type: "success" | "error" | "warning" | "info", msg: string) => void;
@@ -65,13 +66,24 @@ export default function SubmissionConfirmPanel({ notify }: Props) {
     && !candidatesApi.data
     && !checksApi.data
     && !readinessApi.data;
-  const error = candidatesApi.error || checksApi.error || readinessApi.error;
+      const error = candidatesApi.error || checksApi.error || readinessApi.error;
+
+  // Flow stages for StatusFlowDiagram
+  const flowStages = useMemo(() => {
+    const checked = checks.filter((c) => c.passed || c.submittable).length;
+    const ready = readyCount;
+    return [
+      { label: "批量检查", count: checked, status: checked > 0 ? "complete" as const : "active" as const },
+      { label: "阻断复核", count: ready, status: ready > 0 ? "complete" as const : checked > 0 ? "active" as const : "pending" as const },
+      { label: "可提交", count: readiness?.ready_to_submit ? ready : 0, status: readiness?.ready_to_submit ? "complete" as const : blockedCount > 0 ? "blocked" as const : "pending" as const },
+    ];
+  }, [checks, readyCount, blockedCount, readiness?.ready_to_submit]);
 
   if (loading) {
     return (
       <ProgressFeedback
         state="loading"
-        title="提交确认"
+        title="提交前阻断复核"
         progress={{ phase: "submission_confirm_load", status_message: "正在加载提交前检查记录。" }}
       />
     );
@@ -80,22 +92,24 @@ export default function SubmissionConfirmPanel({ notify }: Props) {
   return (
     <div className="min-w-0 space-y-5 animate-fade-in">
       <div className="flex flex-col gap-1">
-        <h2 className="text-base font-semibold text-gray-100">提交前确认</h2>
-        <p className="text-xs text-muted" role="status" aria-live="polite">
-          可提交 {readyCount} · 阻断 {blockedCount}
+        <h2 className="text-base font-semibold text-text-primary">提交前阻断复核</h2>
+        <p className="text-xs text-text-tertiary" role="status" aria-live="polite">
+          复核候选 {readyCount} · 阻断 {blockedCount}
         </p>
       </div>
 
       {error && (
-        <div className="card border-danger/40 bg-danger/10" role="alert" aria-live="assertive">
+        <div className="rounded-md border border-[oklch(0.48_0.08_22/0.30)] bg-[oklch(0.48_0.06_22/0.08)] p-4" role="alert" aria-live="assertive">
           <div className="flex items-center justify-between gap-3">
-            <p className="text-sm text-danger">提交确认数据加载失败: {error}</p>
-            <button type="button" onClick={load} className="btn-secondary text-sm">
+            <p className="text-sm text-negative">提交前阻断复核数据加载失败: {error}</p>
+            <button type="button" onClick={load} className="btn btn-secondary text-sm">
               重试
             </button>
           </div>
         </div>
       )}
+
+      <StatusFlowDiagram stages={flowStages} />
 
       <ReadinessSummary readiness={readiness} />
 
@@ -118,43 +132,43 @@ function ReadinessSummary({ readiness }: { readiness: SubmitReadinessResponse | 
   const summary = readiness?.summary_counts || {};
   const blockers = (readiness?.top_blocking_reasons || [])
     .slice(0, 4)
-    .map((row) => `${row.reason} ${row.count}`)
+    .map((row) => `${readinessReasonLabel(row.reason)} ${row.count}`)
     .join(" · ");
   const familyBlockers = (readiness?.top_family_blocking_reasons || [])
     .slice(0, 4)
-    .map((row) => `${row.reason} ${row.count}`)
+    .map((row) => `${readinessReasonLabel(row.reason)} ${row.count}`)
     .join(" · ");
   const productionGaps = (readiness?.production_gaps || [])
     .slice(0, 4)
-    .map((row) => row.code || row.message)
+    .map((row) => readinessReasonLabel(row.code || row.message || ""))
     .filter(Boolean)
     .join(" · ");
   const nextSteps = (readiness?.required_next_steps || []).slice(0, 4).join(" · ");
   const best = readiness?.best_candidate || {};
   return (
-    <section className="rounded-lg border border-gray-800 bg-gray-900/60 px-3 py-3">
+    <section className="rounded-md border border-border-subtle bg-[oklch(0.115_0.007_45)] px-3 py-3">
       <dl className="grid grid-cols-2 gap-3 text-xs sm:grid-cols-4">
-        <ReadinessMetric label="Ready" value={readiness?.ready_to_submit ? "yes" : "no"} tone={readiness?.ready_to_submit ? "text-success" : "text-warning"} />
-        <ReadinessMetric label="Eligible" value={formatCount(readiness?.eligible_count)} />
-        <ReadinessMetric label="Official sim" value={formatCount(summary.officially_simulated)} />
-        <ReadinessMetric label="Live API" value={readiness?.official_api_called ? "called" : "not called"} />
+        <ReadinessMetric label="阻断复核" value={readiness?.ready_to_submit ? "通过" : "未通过"} tone={readiness?.ready_to_submit ? "text-positive" : "text-warning"} />
+        <ReadinessMetric label="复核候选" value={formatCount(readiness?.eligible_count)} />
+        <ReadinessMetric label="官方仿真" value={formatCount(summary.officially_simulated)} />
+        <ReadinessMetric label="官方接口" value={readiness?.official_api_called ? "已调用" : "未调用"} />
         <ReadinessMetric label="最佳 Alpha" value={best.alpha_id || "-"} mono />
       </dl>
-      <div className="mt-3 space-y-1 text-xs text-muted">
-        <p className="truncate" title={blockers || "none"}>Blocking: {blockers || "none"}</p>
-        <p className="truncate" title={familyBlockers || "none"}>Family blockers: {familyBlockers || "none"}</p>
-        <p className="truncate" title={productionGaps || "none"}>Production gaps: {productionGaps || "none"}</p>
-        <p className="truncate" title={nextSteps || "none"}>Next: {nextSteps || "none"}</p>
+      <div className="mt-3 space-y-1 text-xs text-text-tertiary">
+        <p className="break-words" title={blockers || "无"}>当前阻断: {blockers || "无"}</p>
+        <p className="break-words" title={familyBlockers || "无"}>候选族阻断: {familyBlockers || "无"}</p>
+        <p className="break-words" title={productionGaps || "无"}>生产缺口: {productionGaps || "无"}</p>
+        <p className="break-words" title={nextSteps || "无"}>下一步: {nextSteps || "无"}</p>
       </div>
     </section>
   );
 }
 
-function ReadinessMetric({ label, value, tone = "text-gray-100", mono = false }: { label: string; value: string; tone?: string; mono?: boolean }) {
+function ReadinessMetric({ label, value, tone = "text-text-primary", mono = false }: { label: string; value: string; tone?: string; mono?: boolean }) {
   return (
     <div className="min-w-0">
-      <dt className="text-muted">{label}</dt>
-      <dd className={`mt-0.5 truncate font-medium ${tone} ${mono ? "font-mono" : ""}`} title={value}>{value}</dd>
+      <dt className="text-text-tertiary">{label}</dt>
+      <dd className={`mt-0.5 truncate font-medium ${tone} ${mono ? "font-mono-value" : ""}`} title={value}>{value}</dd>
     </div>
   );
 }
@@ -162,12 +176,45 @@ function ReadinessMetric({ label, value, tone = "text-gray-100", mono = false }:
 function ConfirmationTable({ title, empty, rows }: { title: string; empty: string; rows: ConfirmationRow[] }) {
   return (
     <section className="min-w-0 space-y-3">
-      <h3 className="text-sm font-semibold text-gray-200">{title}</h3>
-      <div className="card min-w-0 overflow-hidden p-0">
+      <h3 className="text-sm font-semibold text-text-secondary">{title}</h3>
+      <div className="space-y-3 md:hidden" aria-label={`${title} 移动端卡片`}>
+        {rows.length === 0 ? (
+          <div className="rounded-md border border-border-subtle bg-[oklch(0.115_0.007_45)] p-4 text-center text-sm text-text-tertiary">{empty}</div>
+        ) : (
+          rows.map((row) => (
+            <article key={`${title}_mobile_${row.id}`} className="rounded-md border border-border-subtle bg-[oklch(0.115_0.007_45)] p-4 text-sm">
+              <div className="flex min-w-0 items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="break-all font-mono-value text-xs text-accent">{row.id}</p>
+                  <p className="mt-1 break-words font-mono-value text-xs text-text-secondary">{row.expression || "-"}</p>
+                </div>
+                <span className={`badge shrink-0 text-xs ${row.status === "READY" ? "badge-positive" : "badge-warning"}`}>
+                  {readinessStatusLabel(row.status)}
+                </span>
+              </div>
+              <dl className="mt-3 grid grid-cols-2 gap-3 text-xs">
+                <div>
+                  <dt className="text-text-tertiary">得分</dt>
+                  <dd className="mt-1 font-mono-value text-text-primary">{row.score}</dd>
+                </div>
+                <div>
+                  <dt className="text-text-tertiary">检查时间</dt>
+                  <dd className="mt-1 break-words font-mono-value text-text-primary">{row.checkedAt || "-"}</dd>
+                </div>
+                <div className="col-span-2">
+                  <dt className="text-text-tertiary">原因</dt>
+                  <dd className="mt-1 break-words text-text-secondary">{row.reasons || "-"}</dd>
+                </div>
+              </dl>
+            </article>
+          ))
+        )}
+      </div>
+      <div className="hidden min-w-0 overflow-hidden md:block rounded-md border border-border-subtle bg-[oklch(0.100_0.007_45)]">
         <div className="max-w-full overflow-auto">
           <table className="min-w-[760px] w-full text-sm" aria-label={title}>
             <thead>
-              <tr className="border-b border-gray-800 text-left text-xs uppercase tracking-wider text-muted">
+              <tr className="border-b border-border-subtle text-left text-xs uppercase tracking-wider text-text-tertiary">
                 <th scope="col" className="p-3">Alpha ID</th>
                 <th scope="col" className="p-3">表达式</th>
                 <th scope="col" className="p-3">状态</th>
@@ -178,16 +225,16 @@ function ConfirmationTable({ title, empty, rows }: { title: string; empty: strin
             </thead>
             <tbody>
               {rows.length === 0 ? (
-                <tr><td colSpan={6} className="p-6 text-center text-muted">{empty}</td></tr>
+                <tr><td colSpan={6} className="p-6 text-center text-text-tertiary">{empty}</td></tr>
               ) : (
                 rows.map((row) => (
-                  <tr key={`${title}_${row.id}`} className="border-b border-gray-800/50">
-                    <td className="p-3 font-mono text-xs text-brand-400">{row.id}</td>
-                    <td className="max-w-xs truncate p-3 font-mono text-xs" title={row.expression}>{row.expression || "-"}</td>
-                    <td className="p-3"><span className={`badge text-xs ${row.status === "READY" ? "badge-success" : "badge-warning"}`}>{row.status}</span></td>
-                    <td className="p-3 font-mono text-xs">{row.score}</td>
-                    <td className="max-w-sm truncate p-3 text-xs text-gray-300" title={row.reasons}>{row.reasons || "-"}</td>
-                    <td className="p-3 font-mono text-xs text-muted">{row.checkedAt || "-"}</td>
+                  <tr key={`${title}_${row.id}`} className="border-b border-border-subtle">
+                    <td className="p-3 font-mono-value text-xs text-accent">{row.id}</td>
+                    <td className="max-w-xs truncate p-3 font-mono-value text-xs" title={row.expression}>{row.expression || "-"}</td>
+                    <td className="p-3"><span className={`badge text-xs ${row.status === "READY" ? "badge-positive" : "badge-warning"}`}>{readinessStatusLabel(row.status)}</span></td>
+                    <td className="p-3 font-mono-value text-xs">{row.score}</td>
+                    <td className="max-w-sm break-words p-3 text-xs text-text-secondary" title={row.reasons}>{row.reasons || "-"}</td>
+                    <td className="p-3 font-mono-value text-xs text-text-tertiary">{row.checkedAt || "-"}</td>
                   </tr>
                 ))
               )}
@@ -197,6 +244,33 @@ function ConfirmationTable({ title, empty, rows }: { title: string; empty: strin
       </div>
     </section>
   );
+}
+
+function readinessStatusLabel(status: string) {
+  if (status === "READY") return "可复核";
+  if (status === "BLOCKED") return "阻断";
+  if (status === "FAILED") return "失败";
+  if (status === "PENDING") return "待检查";
+  return status || "-";
+}
+
+function readinessReasonLabel(reason: string) {
+  const labels: Record<string, string> = {
+    candidate_family_missing_official_alpha_id: "候选族缺少官方 Alpha ID",
+    candidate_family_missing_official_metrics: "候选族缺少官方仿真指标",
+    candidate_family_not_submit_band: "候选族尚未进入复核带",
+    decision_band_not_submit_candidate: "评分决策仍非提交候选",
+    high_cloud_similarity: "云端相似度过高",
+    high_turnover_generation_risk: "生成表达式存在高换手风险",
+    local_backtest_failed: "本地回测未通过",
+    missing_cloud_similarity: "缺少云端相似度证据",
+    missing_official_alpha_id: "缺少官方 Alpha ID",
+    missing_official_metrics: "缺少官方仿真指标",
+    no_submit_ready_candidate: "没有提交前复核候选",
+    not_submission_ready: "尚未达到阻断复核通过标准",
+    official_validation_without_simulation: "有官方验证但缺少官方仿真指标",
+  };
+  return labels[reason] || reason || "-";
 }
 
 function buildRows(candidates: Candidate[], checks: CheckResult[]) {

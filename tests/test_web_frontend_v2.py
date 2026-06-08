@@ -59,17 +59,19 @@ LEGACY_INLINE_MODULES = (
 )
 
 CARD_VIEW_IDS = (
+    "official_operations",
     "dashboard",
     "candidates",
     "official_backtests",
     "scoring",
     "quality_check",
     "submission_confirm",
-    "submission",
     "checkpoint_status",
     "config",
     "cloud",
 )
+
+COMPAT_CARD_VIEW_IDS = ("submission",)
 
 
 def _source(relative: str) -> str:
@@ -224,12 +226,12 @@ def test_all_card_views_are_typed_configured_and_routed_to_detail_components():
     types = _source("types/index.ts")
     state_cards = _component("StateCards.tsx")
 
-    assert 'useState<CardViewId | "cards">("cards")' in app
-    assert "const CARD_CONFIG = {" in app
-    assert "const CARD_CONFIGS: CardConfig[] = [" in state_cards
+    assert 'useState<CardViewId>("dashboard")' in app
+    assert "const VIEW_LABELS: Record<string, string> = {" in app
+    assert "phase-group" in _component("Sidebar.tsx")  # v3.0 phase grouped nav
     assert "CandidateTable" in app
-    assert 'key="scoring_candidate_picker"' in app
-    assert "selectedCandidate ? (" in app
+    assert 'key="scoring_picker"' in app
+    assert "selectedCandidate" in app
     assert "OfficialBacktestSlots" in app
     assert "QualityCheckPanel" in app
     assert "SubmissionConfirmPanel" in app
@@ -239,6 +241,11 @@ def test_all_card_views_are_typed_configured_and_routed_to_detail_components():
         assert f'| "{view_id}"' in types
         assert f'{view_id}:' in app
         assert f'id: "{view_id}"' in state_cards
+        assert f'case "{view_id}":' in app
+    for view_id in COMPAT_CARD_VIEW_IDS:
+        assert f'| "{view_id}"' in types
+        assert f'{view_id}:' in app
+        assert f'id: "{view_id}"' not in state_cards
         assert f'case "{view_id}":' in app
 
 
@@ -252,10 +259,10 @@ def test_state_card_navigation_preserves_priority_and_minimal_chrome():
         app + state_cards,
         [
             "BRAIN Alpha Ops",
-            "StateCards onNavigate={handleNavigate} notify={notify}",
+            "Sidebar",
             "setActiveView(view)",
-            'aria-label="返回状态卡"',
-            'aria-label="打开系统配置"',
+            'aria-label="切换导航菜单"',
+            'import Sidebar from "@/components/Sidebar"',
             "grid w-full max-w-full grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5",
             "onClick={() => onNavigate(config.id)}",
             'role="alert"',
@@ -283,7 +290,6 @@ def test_react_core_workflow_api_paths_are_registered_in_backend_routes():
         ("GET", "/api/check_results"),
         ("GET", "/api/submit_readiness"),
         ("POST", "/api/check_batch"),
-        ("POST", "/api/submit_batch"),
         ("GET", "/sse"),
     ]:
         assert route_for(method, endpoint) is not None
@@ -300,7 +306,7 @@ def test_app_submit_selected_candidates_handles_missing_async_job_result():
             "const result = event.result as { candidates?: Candidate[]; candidates_preview?: Candidate[]; count?: number } | undefined;",
             "const rows = result?.candidates || result?.candidates_preview || [];",
             "if (rows.length) setCandidates(rows);",
-            "(result as unknown as { task_id?: string; job_id?: string } | null)?.task_id",
+            "result?.task_id || result?.job_id || \"\"",
             'setTaskError(result?.error || "启动候选生成失败");',
             'useSSE(taskId ? `/sse?job_id=${encodeURIComponent(taskId)}` : null',
         ],
@@ -308,15 +314,13 @@ def test_app_submit_selected_candidates_handles_missing_async_job_result():
     _assert_snippets(
         submission,
         [
-            "const result = event.result as { items?: unknown[] } | undefined;",
-            "setBatchCheckResult(result ? (result as Record<string, unknown>) : { ok: true });",
-            "(result as unknown as { task_id?: string; job_id?: string } | null)?.task_id",
-            'setBatchCheckError(result?.error || "批量检查失败");',
-            'setSubmitError(result?.error || "批量提交失败");',
-            'useSSE(batchCheckTaskId ? `/sse?job_id=${encodeURIComponent(batchCheckTaskId)}` : null',
-            'useSSE(submitTaskId ? `/sse?job_id=${encodeURIComponent(submitTaskId)}` : null',
+            "Retired submit surface kept as a compatibility alias",
+            "SubmissionConfirmPanel notify={notify}",
+            "旧提交面板已退役",
         ],
     )
+    assert "/api/submit" not in submission
+    assert "/api/submit_batch" not in submission
 
 
 def test_loading_feedback_runstartup_launches_all_tasks_concurrently():
@@ -373,21 +377,21 @@ def test_spinner_component():
         [
             'role={isBusy ? "status" : undefined}',
             'aria-live={state === "error" ? "assertive" : "polite"}',
-            'className="progress-spinner"',
+            'className="spinner"',
             'role="progressbar"',
             'aria-label={`${title}: ${label}`}',
             "aria-valuenow={isDeterminate ? roundedPercent : undefined}",
             "normalizedPercent(progress)",
-            "formatDuration(remaining)",
+            "fmtDuration(remaining)",
             "onRetry",
         ],
     )
     _assert_snippets(
         css,
         [
-            ".progress-spinner",
-            "animation: spin 0.8s linear infinite;",
-            ".progress-feedback-track.is-indeterminate .progress-feedback-fill",
+            ".spinner",
+            "animation: spin 0.7s linear infinite;",
+            ".progress-bar.indeterminate .progress-bar-fill",
             "@keyframes progress-indeterminate",
         ],
     )
@@ -416,15 +420,16 @@ def test_submission_confirmation_panel_stays_read_only_and_local_boundary_aware(
 def test_sse_hook_preserves_stream_token_credentials_and_reconnect_contract():
     use_sse = _source("hooks/useSSE.ts")
     types = _source("types/index.ts")
+    csrf_utils = _source("utils/csrf.ts")
 
     _assert_snippets(
-        use_sse,
+        use_sse + csrf_utils,
         [
             "new EventSource(withStreamToken(streamUrl), { withCredentials: true })",
-            "reconnectIntervalMs = 3000",
-            "maxReconnectAttempts = 10",
+            "reconnectIntervalMs = 5000",
+            "maxReconnectAttempts = 30",
             "reconnectCountRef.current += 1",
-            "onExhausted?.();",
+            "onExhaustedRef.current?.();",
             'meta[name="brain-alpha-stream"]',
             "stream_token=${encodeURIComponent(token)}",
             "!token.startsWith(\"__BRAIN_ALPHA_OPS\")",

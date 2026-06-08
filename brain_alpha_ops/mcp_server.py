@@ -86,14 +86,13 @@ def serve_stdio(toolbox: BrainAlphaToolbox, stdin: TextIO | None = None, stdout:
         output_stream.flush()
 
 
-def build_toolbox(config_path: str = "", *, allow_live_api: bool = False, allow_submit: bool = False) -> BrainAlphaToolbox:
+def build_toolbox(config_path: str = "", *, allow_live_api: bool = False) -> BrainAlphaToolbox:
     run_config = load_run_config(config_path or None)
     # Create fresh JobStore instances — the old web.py globals have been
     # refactored into per-module WebJobRegistry / JobStore patterns.
     return BrainAlphaToolbox(
         run_config=run_config,
         allow_live_api=allow_live_api,
-        allow_submit=allow_submit,
         job_stores={
             "production": JobStore(job_prefix="prod"),
             "sync": JobStore(job_prefix="sync"),
@@ -106,14 +105,12 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Run the Brain Alpha Ops MCP-style stdio adapter.")
     parser.add_argument("--config", default="")
     parser.add_argument("--allow-live-api", action="store_true")
-    parser.add_argument("--allow-submit", action="store_true")
     args = parser.parse_args(argv)
 
     serve_stdio(
         build_toolbox(
             args.config,
             allow_live_api=args.allow_live_api,
-            allow_submit=args.allow_submit,
         )
     )
     return 0

@@ -1,6 +1,7 @@
-/** Reusable KPI card for dashboard metrics. */
+import { memo } from "react";
 
-interface Props {
+/** Reusable KPI card — Terminal Precision design */
+interface KpiCardProps {
   label: string;
   value: string | number;
   subtitle?: string;
@@ -8,15 +9,17 @@ interface Props {
   className?: string;
 }
 
-export default function KpiCard({ label, value, subtitle, trend, className = "" }: Props) {
-  const trendColor = trend === "up" ? "text-success" : trend === "down" ? "text-danger" : "text-muted";
+const KpiCard = memo(function KpiCard({ label, value, subtitle, trend, className = "" }: KpiCardProps) {
+  const trendClass = trend === "up" ? "text-positive" : trend === "down" ? "text-negative" : "text-text-tertiary";
   const accessibleLabel = `${label}: ${String(value)}${subtitle ? `, ${subtitle}` : ""}`;
 
   return (
-    <div className={`card ${className}`} role="status" aria-label={accessibleLabel}>
-      <p className="text-xs text-muted uppercase tracking-wider mb-1">{label}</p>
-      <p className="text-2xl font-bold text-slate-950">{value}</p>
-      {subtitle && <p className={`text-xs mt-1 ${trendColor}`}>{subtitle}</p>}
+    <div className={`kpi-card ${className}`} role="status" aria-label={accessibleLabel}>
+      <p className="kpi-card-label">{label}</p>
+      <p className="kpi-card-value">{value}</p>
+      {subtitle && <p className={`kpi-card-sub ${trendClass}`}>{subtitle}</p>}
     </div>
   );
-}
+});
+
+export default KpiCard;

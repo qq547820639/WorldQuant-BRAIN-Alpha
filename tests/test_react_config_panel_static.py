@@ -21,7 +21,7 @@ def test_config_panel_exposes_session_only_brain_connection_credentials():
     source = CONFIG_PANEL.read_text(encoding="utf-8")
 
     assert 'title="BRAIN 连接"' in source
-    assert 'description="这些字段只保留在当前浏览器内存里，用于连接测试和本次流水线请求。"' in source
+    assert 'description="这些字段只保留在当前页面，用于本次连接测试和验证。"' in source
     assert 'label="账户邮箱"' in source
     assert 'label="密码"' in source
     assert 'label="Token"' in source
@@ -61,7 +61,8 @@ def test_config_panel_import_accepts_export_payload_and_public_config_shapes():
 
     assert "const source = asRecord(root.config) || root" in source
     assert "if (asRecord(source.ops))" in source
-    assert "return formFromConfig(source as unknown as RunConfig)" in source
+    assert 'return formFromConfig({' in source
+    assert 'environment: String(source.environment ?? "production")' in source
     assert "autoSubmit: false" in source
     assert '<CheckboxField label="自动提交"' not in source
     assert 'value="关闭（Web 保存强制）"' in source

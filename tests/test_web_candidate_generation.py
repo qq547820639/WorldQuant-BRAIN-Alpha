@@ -61,6 +61,7 @@ class FakeLocalBacktestEngine:
 def test_generate_candidates_payload_delegates_to_toolbox_and_scores_candidates(tmp_path):
     run_config = RunConfig(environment="production")
     run_config.ops.storage_dir = str(tmp_path)
+    run_config.ops.settings.dataset = "pv1"
     calls = []
     saves = []
     toolbox_result = {
@@ -227,9 +228,30 @@ def test_generate_candidates_payload_resolves_empty_dataset_from_cache(tmp_path)
     assert run_config.ops.settings.dataset == "pv1"
 
 
+def test_generate_candidates_payload_fails_closed_without_dataset_trace(tmp_path):
+    run_config = RunConfig(environment="production")
+    run_config.ops.storage_dir = str(tmp_path)
+    run_config.ops.settings.dataset = ""
+    calls = []
+
+    payload = generate_candidates_payload(
+        {},
+        run_config_from_payload=lambda body: run_config,
+        toolbox_factory=lambda config: FakeToolbox({"ok": True, "candidates": []}, calls),
+        repository_factory=lambda storage_dir: FakeRepository(storage_dir, []),
+    )
+
+    assert payload["ok"] is False
+    assert payload["error_code"] == "GENERATE_CANDIDATES_DATASET_ERROR"
+    assert payload["phase"] == "web_generate_candidates"
+    assert "official dataset cache" in payload["error"]
+    assert calls == []
+
+
 def test_generate_candidates_payload_returns_toolbox_error_without_post_processing(tmp_path):
     run_config = RunConfig(environment="production")
     run_config.ops.storage_dir = str(tmp_path)
+    run_config.ops.settings.dataset = "pv1"
 
     payload = generate_candidates_payload(
         {"count": 3},
@@ -244,6 +266,7 @@ def test_generate_candidates_payload_returns_toolbox_error_without_post_processi
 def test_generate_candidates_payload_returns_structured_error_on_toolbox_exception(tmp_path):
     run_config = RunConfig(environment="production")
     run_config.ops.storage_dir = str(tmp_path)
+    run_config.ops.settings.dataset = "pv1"
     calls = []
 
     payload = generate_candidates_payload(
@@ -335,12 +358,13 @@ def test_web_local_check_and_submit_routes_do_not_claim_official_actions():
     submit = web._real_submit({"alpha_id": "alpha_1"})
     assert submit["ok"] is False
     assert submit["submitted"] is False
-    assert submit["error_code"] == "SUBMIT_DISABLED_REQUIRES_OFFICIAL_PREFLIGHT"
+    assert submit["error_code"] == "REAL_SUBMIT_DISABLED_WEB_FLOW"
 
 
 def test_generate_candidates_payload_rejects_non_mapping_toolbox_response(tmp_path):
     run_config = RunConfig(environment="production")
     run_config.ops.storage_dir = str(tmp_path)
+    run_config.ops.settings.dataset = "pv1"
 
     payload = generate_candidates_payload(
         {"count": 3},

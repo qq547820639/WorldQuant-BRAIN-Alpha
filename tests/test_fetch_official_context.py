@@ -1,4 +1,5 @@
 import json
+import time
 
 import pytest
 
@@ -60,6 +61,12 @@ class GenericFailureOfficialBrainAPI(FakeOfficialBrainAPI):
         raise RuntimeError("unexpected local refresh failure")
 
 
+class SlowOfficialBrainAPI(FakeOfficialBrainAPI):
+    def list_fields(self, *_args, progress_callback=None):
+        time.sleep(2)
+        return super().list_fields(*_args, progress_callback=progress_callback)
+
+
 class DirectOnlyOfficialBrainAPI(FakeOfficialBrainAPI):
     last_disable_proxy: bool | None = None
 
@@ -72,6 +79,7 @@ def _write_config(tmp_path, monkeypatch):
     config = RunConfig(environment="production")
     config.credentials.token_env = "TEST_BRAIN_TOKEN"
     config.ops.storage_dir = str(tmp_path / "data")
+    config.ops.settings.dataset = "pv1"
     config.ops.official_api.cache_dir = str(tmp_path / "api_cache")
     monkeypatch.setenv("TEST_BRAIN_TOKEN", "test-token")
     config_path = tmp_path / "run_config.json"
@@ -162,6 +170,7 @@ def test_refresh_official_context_fails_when_written_metadata_remains_stale(monk
 def test_refresh_official_context_records_missing_credentials(tmp_path):
     config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path / "data")
+    config.ops.settings.dataset = "pv1"
     config_path = tmp_path / "run_config.json"
     status_path = tmp_path / "refresh_status.json"
     write_run_config(config, config_path)
@@ -222,6 +231,48 @@ def test_refresh_official_context_records_generic_internal_failure(monkeypatch, 
     assert result["retry_after_seconds"] is None
     assert "unexpected local refresh failure" in result["error"]
     assert saved_status["error_category"] == "internal"
+
+
+def test_refresh_official_context_records_timeout(monkeypatch, tmp_path):
+    monkeypatch.setattr(fetch_official_context, "OfficialBrainAPI", SlowOfficialBrainAPI)
+    config_path = _write_config(tmp_path, monkeypatch)
+    status_path = tmp_path / "refresh_status.json"
+
+    result = fetch_official_context.refresh_official_context(
+        config_path,
+        status_output=status_path,
+        timeout_seconds=0.2,
+    )
+    saved_status = json.loads(status_path.read_text(encoding="utf-8"))
+
+    assert result["ok"] is False
+    assert result["status"] == "failed"
+    assert result["error_code"] == "OFFICIAL_CONTEXT_REFRESH_TIMEOUT"
+    assert result["error_category"] == "timeout"
+    assert result["retryable"] is True
+    assert result["retry_after_seconds"] == 15 * 60
+    assert result["timeout_seconds"] == 0.2
+    assert saved_status["error_code"] == "OFFICIAL_CONTEXT_REFRESH_TIMEOUT"
+
+
+def test_refresh_official_context_zero_timeout_disables_deadline(monkeypatch, tmp_path):
+    monkeypatch.setattr(fetch_official_context, "OfficialBrainAPI", SlowOfficialBrainAPI)
+    config_path = _write_config(tmp_path, monkeypatch)
+    status_path = tmp_path / "refresh_status.json"
+
+    result = fetch_official_context.refresh_official_context(
+        config_path,
+        write=False,
+        status_output=status_path,
+        timeout_seconds=0,
+    )
+    saved_status = json.loads(status_path.read_text(encoding="utf-8"))
+
+    assert result["ok"] is True
+    assert result["status"] == "fetched_no_write"
+    assert result["timeout_seconds"] == 0
+    assert saved_status["status"] == "fetched_no_write"
+    assert "error_code" not in saved_status
 
 
 def test_refresh_official_context_uses_direct_official_api(monkeypatch, tmp_path):

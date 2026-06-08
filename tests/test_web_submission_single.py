@@ -45,6 +45,10 @@ def _candidate():
     }
 
 
+def _readiness_ok(candidate, run_config, official_id):
+    return {"ok": True}
+
+
 def test_submit_candidate_payload_submits_and_records(tmp_path):
     run_config = RunConfig(environment="production")
     run_config.ops.storage_dir = str(tmp_path)
@@ -62,6 +66,7 @@ def test_submit_candidate_payload_submits_and_records(tmp_path):
         observability_submission_preflight=lambda storage_dir: {"requires_confirmation": False},
         payload_truthy=bool,
         api_from_run_config=lambda config: FakeApi(api_calls),
+        submit_readiness_hard_gate=_readiness_ok,
         ledger_factory=lambda storage_dir: FakeLedger(storage_dir, ledger_records),
         repository_factory=lambda storage_dir: FakeRepository(storage_dir, lifecycle_records),
     )
@@ -127,3 +132,34 @@ def test_submit_candidate_payload_records_preflight_block(tmp_path):
     assert payload["alpha_id"] == "a1"
     assert payload["status"] == "BLOCKED"
     assert blocked == ["blocked"]
+
+
+def test_submit_candidate_payload_blocks_when_live_readiness_not_ready(tmp_path):
+    run_config = RunConfig(environment="production")
+    run_config.ops.storage_dir = str(tmp_path)
+    api_calls = []
+    blocked = []
+
+    payload = submit_candidate_payload(
+        {"candidate": _candidate(), "confirm_submit": True},
+        candidate_from_payload=lambda body: body["candidate"],
+        run_config_from_payload=lambda body: run_config,
+        submission_preflight_advisory=lambda candidate, config: {"ok": True},
+        record_submit_blocked=lambda body, candidate, config, reason: blocked.append(reason),
+        official_alpha_id=lambda candidate: candidate["official_alpha_id"],
+        observability_submission_preflight=lambda storage_dir: {"requires_confirmation": False},
+        payload_truthy=bool,
+        api_from_run_config=lambda config: FakeApi(api_calls),
+        submit_readiness_hard_gate=lambda candidate, config, official_id: {
+            "ok": False,
+            "error_code": "SUBMIT_READINESS_NOT_READY",
+            "error": "check_live_submit_readiness.py has not reported a submit-ready candidate.",
+        },
+    )
+
+    assert payload["ok"] is False
+    assert payload["schema_version"] == "submission_result.v2"
+    assert payload["status"] == "BLOCKED"
+    assert payload["error_code"] == "SUBMIT_READINESS_NOT_READY"
+    assert api_calls == []
+    assert blocked == ["check_live_submit_readiness.py has not reported a submit-ready candidate."]

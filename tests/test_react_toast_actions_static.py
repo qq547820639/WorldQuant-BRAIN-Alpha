@@ -18,18 +18,13 @@ def test_app_notify_forwards_toast_actions():
     assert "addToast(type, msg, 5000, action)" in source
 
 
-def test_submission_success_toasts_offer_actionable_receipts():
+def test_retired_submission_panel_does_not_emit_submit_toasts():
     source = _source("components/SubmissionPanel.tsx")
 
-    assert "submissionReceiptRef" in source
-    assert "focusSubmissionReceipt" in source
-    assert 'label: "查看回执"' in source
-    assert "最新提交回执" in source
     assert 'role="status"' in source
     assert 'aria-live="polite"' in source
-    assert "batchSubmissionStatusRef" in source
-    assert "focusBatchSubmissionStatus" in source
-    assert 'label: "查看状态"' in source
+    assert "旧提交面板已退役" in source
+    assert "/api/submit" not in source
 
 
 def test_toast_action_button_is_accessible_and_dismisses_after_action():
@@ -37,6 +32,9 @@ def test_toast_action_button_is_accessible_and_dismisses_after_action():
 
     assert 'role={urgent ? "alert" : "status"}' in source
     assert 'aria-live={urgent ? "assertive" : "polite"}' in source
+    assert "MAX_VISIBLE = 3" in source
+    assert "toasts.slice(-MAX_VISIBLE)" in source
+    assert 'className="toast-container"' in source
     assert "toast.action_label && toast.on_action" in source
     assert 'aria-label={`${toast.action_label}: ${toast.message}`}' in source
     assert "toast.on_action?.();" in source

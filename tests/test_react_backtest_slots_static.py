@@ -31,10 +31,10 @@ def test_official_backtest_slots_expose_readonly_queue_summary():
     assert "const slotLimit = backtestSlotLimit(api.data);" in source
     assert "<BacktestQueueSummaryStrip summary={queueSummary} activeCount={activeCount} slotLimit={slotLimit} />" in source
     assert "Array.from({ length: backtestSlotLimit(payload) }" in source
-    assert '<QueueMetric label="Open slots" value={`${openSlots}/${slotLimit}`} />' in source
-    assert '<QueueMetric label="Submit evidence" value={formatCount(summary?.submit_evidence_blocking_count)} />' in source
-    assert '<QueueMetric label="Live API" value={summary?.official_api_called ? "called" : "not called"} />' in source
-    assert '<QueueMetric label="Slot records" value={formatCount(summary?.official_slot_record_count)} />' in source
-    assert "Review blockers: {reviewBlockers || \"none\"}" in source
-    assert "Submit evidence: {submitBlockers || \"none\"}" in source
-    assert 'if (text === "trusted_environment_official_simulation_required") return "official review";' in source
+    assert '<QueueMetric label="可用槽位" value={`${openSlots}/${slotLimit}`} />' in source
+    assert '<QueueMetric label="提交证据缺口" value={formatCount(summary?.submit_evidence_blocking_count)} />' in source
+    assert '<QueueMetric label="官方接口" value={summary?.official_api_called ? "已调用" : "未调用"} />' in source
+    assert '<QueueMetric label="槽位记录" value={formatCount(summary?.official_slot_record_count)} />' in source
+    assert "官方工作阻断: {reviewBlockers || \"暂无\"}" in source
+    assert "提交证据阻断: {submitBlockers || \"暂无\"}" in source
+    assert 'if (text === "trusted_environment_official_simulation_required") return "官方复核";' in source

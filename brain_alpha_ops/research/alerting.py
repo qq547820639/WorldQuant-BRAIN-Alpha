@@ -128,7 +128,8 @@ class AlertDeliveryService:
                 handle.write(json.dumps(payload, ensure_ascii=False) + "\n")
             return {"persisted": True, "path": str(self.alert_path)}
         except OSError as exc:
-            return {"persisted": False, "path": str(self.alert_path), "error": str(exc), "blocking_error": True}
+            from brain_alpha_ops.redaction import redact_error_message
+            return {"persisted": False, "path": str(self.alert_path), "error": redact_error_message(exc), "blocking_error": True}
 
     def _deliver_webhook(self, payload: dict[str, Any]) -> dict[str, Any]:
         if not self.webhook_url:

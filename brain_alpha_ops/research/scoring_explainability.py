@@ -52,6 +52,12 @@ def scorecard_improvement_hints(scorecard: dict, *, limit: int = 6) -> list[str]
         hints.append("Run official simulation so the local score is backed by BRAIN metrics.")
     if "official_pass" in failed_checklist:
         hints.append("Resolve failed official Alpha Check items before submission.")
+    if "margin_bps" in failed_names:
+        hints.append("Improve margin (returns/turnover ratio) or ensure API margin is available.")
+    if "fitness_crosscheck" in failed_names:
+        hints.append("BRAIN API fitness differs from local calculation — check formula version.")
+    if "is_oos_ratio" in failed_names:
+        hints.append("Sub-universe Sharpe is low relative to full-universe Sharpe — improve robustness.")
     if not hints:
         hints.append("No blocking scoring failures detected; keep monitoring freshness, duplication, and submission preflight.")
     return hints[: max(1, int(limit or 1))]

@@ -27,7 +27,7 @@ def test_legacy_run_endpoint_forces_non_submit_and_keeps_credentials_out_of_job_
         "autoSubmit": True,
         "auto_submit": True,
         "username": "tester@example.com",
-        "password": "session-password",
+        "password": "dummy-password",
     })
 
     assert result["ok"] is True

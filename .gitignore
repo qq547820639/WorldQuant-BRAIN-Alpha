@@ -48,6 +48,7 @@ data/run_history/
 data/knowledge/
 data/*.sqlite
 data/checkpoints/
+data/audit/
 data/*.log
 *.log
 *.err.log

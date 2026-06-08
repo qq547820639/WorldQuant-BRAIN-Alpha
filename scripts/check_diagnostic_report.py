@@ -103,7 +103,7 @@ def check_diagnostic_report(
     for dimension in REQUIRED_DIMENSIONS:
         _expect(text, f"| {dimension} |", f"gap_dimension:{dimension}", findings)
     for area in REQUIRED_UPGRADE_AREAS:
-        _expect(text, f"**{next(item['priority'] for item in snapshot['upgrade_plan'] if item['area'] == area)} {area}**", f"upgrade_area:{area}", findings)
+        _expect(text, f"**{next((item['priority'] for item in snapshot['upgrade_plan'] if item['area'] == area), '?')} {area}**", f"upgrade_area:{area}", findings)
     for item in snapshot.get("priority_items") or []:
         _expect(text, f"**{item['priority']} {item['area']}**", f"priority_item:{item['area']}", findings)
 

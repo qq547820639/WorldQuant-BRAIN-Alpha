@@ -22,18 +22,6 @@ class OfficialAuthProfileMixin:
                 {"Authorization": f"Basic {self._basic_auth()}"},
                 None,
             )),
-            ("json_body", lambda: (
-                "POST",
-                self.config.authentication_path,
-                {"X-Auth-Mode": "json"},
-                {"email": self.username, "password": self.password},
-            )),
-            ("json_body_username", lambda: (
-                "POST",
-                self.config.authentication_path,
-                {"X-Auth-Mode": "json"},
-                {"username": self.username, "password": self.password},
-            )),
         ]:
             try:
                 method, path, headers, body = build_request()
@@ -48,10 +36,13 @@ class OfficialAuthProfileMixin:
                     return {"status": "ok", "auth": "token", "response": _scrub(data)}
             except BrainAPIError as exc:
                 if exc.status_code in (401, 400):
+                    # 401 = correct format, wrong credentials — stop
+                    if exc.status_code == 401:
+                        break
                     continue
                 raise
 
-        raise BrainAPIError("authentication did not provide token or session cookie; check credentials")
+        raise BrainAPIError("BRAIN API authentication failed: invalid credentials (HTTP 401). Check username/password or generate a new token.")
 
     def get_user_profile(self) -> dict:
         """Fetch current user profile from BRAIN /users/self endpoint."""

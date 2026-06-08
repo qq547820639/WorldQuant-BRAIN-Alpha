@@ -1,0 +1,797 @@
+"""Local web console for BRAIN Alpha Ops.
+
+Serves the React frontend and provides API endpoints for the complete
+alpha research business loop.
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+import sys
+import threading
+from http.server import BaseHTTPRequestHandler
+from urllib.parse import urlparse, parse_qs
+
+from brain_alpha_ops.config import load_run_config as _load_run_config
+from brain_alpha_ops import web_session as _web_session
+from brain_alpha_ops.runtime_constants import WebDefaults as _WebDefaults
+from brain_alpha_ops.web_application_context import WebApplicationContext as _WebApplicationContext
+from brain_alpha_ops.web_facade_bindings import build_web_facade_bindings as _build_web_facade_bindings
+from brain_alpha_ops.web_html import (
+    load_html as _load_html_asset,
+    resolve_react_asset as _resolve_react_asset,
+)
+from brain_alpha_ops.web_legacy_exports import build_legacy_imported_exports as _build_legacy_imported_exports
+from brain_alpha_ops import web_runtime_facade as _web_runtime_facade
+from brain_alpha_ops.web_server_lifecycle import (
+    SafeThreadingHTTPServer as _SafeThreadingHTTPServer,
+    find_free_port as _find_free_port,
+)
+from brain_alpha_ops import web_routes as _web_routes
+from brain_alpha_ops import web_submit_readiness as _web_submit_readiness
+from brain_alpha_ops.web_routes import dispatch_get as _routes_dispatch_get
+from brain_alpha_ops.web_routes import dispatch_post as _routes_dispatch_post
+from brain_alpha_ops.web_jobs import job_get as _job_get, job_update as _job_update, new_job_id as _new_job_id
+from brain_alpha_ops.web_service_namespace import build_web_service_namespace as _build_web_service_namespace
+from brain_alpha_ops.web_session import csrf_for_session as _csrf_for_session, DEFAULT_SESSION_TTL_SECONDS as _DEFAULT_SESSION_TTL_SECONDS
+from brain_alpha_ops.web_sse import handle_sse_request as _handle_sse_request
+
+logger = logging.getLogger(__name__)
+WebApplicationContext = _WebApplicationContext
+
+# ═══════════════════════ Server config ═══════════════════════════
+HOST = "127.0.0.1"
+DEFAULT_PORT = 8765
+SESSION_TTL_SECONDS = _DEFAULT_SESSION_TTL_SECONDS
+SESSION_ALLOW_MULTIPLE = True
+SERVER_LOCK = threading.Lock()
+SERVER = None
+SERVER_STOP = threading.Event()
+
+# ═══════════════════════ Dispatch ════════════════════════════════════════
+# dispatch_get wraps web_routes.py for local facade compatibility.
+# dispatch_post combines real backend routes + web_routes delegation.
+
+
+def dispatch_get(handler, path, query):
+    # ── Security: All API GET routes require valid origin ──────────
+    if path.startswith("/api/") and not _has_valid_local_origin(handler):
+        handler._send_json(
+            {"ok": False, "error_code": "ORIGIN_FORBIDDEN",
+             "error": "forbidden local request origin"},
+            status=403,
+        )
+        return
+    if path == "/api/backtest_slots":
+        handler._send_json(_backtest_slots_payload())
+        return
+    if path == "/api/submit_readiness":
+        handler._send_json(_submit_readiness_payload())
+        return
+    _routes_dispatch_get(handler, path, query)
+
+
+def _backtest_slots_payload() -> dict:
+    _web_routes.load_run_config = globals().get("load_run_config", _load_run_config)
+    return _web_routes._backtest_slots_payload()
+
+
+def _run_live_submit_readiness_check() -> dict:
+    return _web_submit_readiness.run_live_submit_readiness_check()
+
+
+def _submit_readiness_payload() -> dict:
+    return _web_submit_readiness.submit_readiness_payload(_run_live_submit_readiness_check)
+
+
+def _compact_submit_readiness_payload(result: dict) -> dict:
+    return _web_submit_readiness.compact_submit_readiness_payload(result)
+
+
+def _counter_rows(counter: object, *, limit: int = 6) -> list[dict[str, int]]:
+    return _web_submit_readiness.counter_rows(counter, limit=limit)
+
+
+def _submit_readiness_next_steps(result: dict) -> list[str]:
+    return _web_submit_readiness.submit_readiness_next_steps(result)
+
+
+def _safe_int(value: object) -> int:
+    return _web_submit_readiness.safe_int(value)
+
+
+# ── Real backend handlers ─────────────────────────────────────────────────
+def _real_sync(payload):
+    try:
+        from brain_alpha_ops.config import load_run_config
+        from brain_alpha_ops.runner import api_from_run_config
+        config = load_run_config()
+        api = api_from_run_config(config)
+        days = int(str(payload.get("range", "7")).replace("d", ""))
+        alphas = api.fetch_user_alphas(days=days)
+        return {"ok": True, "synced": len(alphas)}
+    except Exception as e:
+        from brain_alpha_ops.redaction import redact_error_message
+        logger.exception("real_sync failed")
+        return {"ok": False, "error": redact_error_message(e)}
+
+def _real_generate(payload):
+    job_id = _new_job_id("generate")
+    _job_update(
+        job_id,
+        ok=True,
+        operation="generate_candidates",
+        status="running",
+        progress={
+            "phase": "candidate_generation",
+            "status": "running",
+            "status_message": "Generating local Alpha candidates and quality diagnostics.",
+            "percent_complete": 5,
+        },
+        result=None,
+    )
+    thread = threading.Thread(target=_run_generate_candidates_job, args=(job_id, dict(payload or {})), daemon=False)
+    thread.start()
+    return {
+        "ok": True,
+        "job_id": job_id,
+        "task_id": job_id,
+        "status": "running",
+        "sse_url": f"/sse?job_id={job_id}",
+        "status_url": f"/api/production-validation/status?job_id={job_id}",
+    }
+
+
+def _run_generate_candidates_job(job_id: str, payload: dict) -> None:
+    _job_update(
+        job_id,
+        progress={
+            "phase": "candidate_generation",
+            "status": "running",
+            "status_message": "Applying local generation, quality gates, and output-parameter audit.",
+            "percent_complete": 35,
+        },
+    )
+    try:
+        from brain_alpha_ops.models import Candidate
+        from brain_alpha_ops.redaction import redact_error_message
+        from brain_alpha_ops.research.repository import ResearchRepository
+        from brain_alpha_ops.web_candidate_generation import generate_candidates_payload
+
+        run_config_loader = globals().get("load_run_config", _load_run_config)
+        run_config = run_config_loader()
+        result = generate_candidates_payload(
+            payload,
+            run_config_from_payload=lambda _body: run_config,
+        )
+        if result.get("ok"):
+            persistence = _persist_generated_candidates(job_id, run_config, result, Candidate, ResearchRepository)
+            summary = result.setdefault("summary", {})
+            if isinstance(summary, dict):
+                summary["persistence"] = persistence
+        status = "completed" if result.get("ok") else "failed"
+        _job_update(
+            job_id,
+            ok=bool(result.get("ok")),
+            status=status,
+            result=result,
+            error=result.get("error", ""),
+            progress={
+                "phase": "candidate_generation",
+                "status": status,
+                "status_message": _generation_status_message(result),
+                "percent_complete": 100,
+                "candidates_generated": int(result.get("count") or len(result.get("candidates") or [])),
+                "quality_summary": (result.get("summary") or {}).get("quality_summary") if isinstance(result.get("summary"), dict) else {},
+            },
+        )
+    except Exception as exc:
+        try:
+            from brain_alpha_ops.redaction import redact_error_message
+
+            error = redact_error_message(exc)
+        except Exception:
+            error = str(exc)
+        _job_update(
+            job_id,
+            ok=False,
+            status="failed",
+            error=error,
+            result={"ok": False, "error": error, "error_code": "GENERATE_CANDIDATES_JOB_FAILED"},
+            progress={
+                "phase": "candidate_generation",
+                "status": "failed",
+                "status_message": "Candidate generation failed before quality diagnostics completed.",
+                "percent_complete": 100,
+                "error": error,
+            },
+        )
+
+
+def _persist_generated_candidates(job_id: str, run_config, result: dict, candidate_type, repository_type) -> dict:
+    repo = repository_type(run_config.ops.storage_dir)
+    persisted = 0
+    errors: list[str] = []
+    for row in result.get("candidates") or []:
+        if not isinstance(row, dict):
+            continue
+        try:
+            repo.save_candidate(job_id, candidate_type.from_dict(row))
+            persisted += 1
+        except Exception as exc:
+            try:
+                from brain_alpha_ops.redaction import redact_error_message
+
+                errors.append(redact_error_message(exc))
+            except Exception:
+                errors.append(str(exc))
+    return {
+        "schema_version": "candidate-persistence-v1",
+        "target": "candidates.jsonl",
+        "persisted_count": persisted,
+        "error_count": len(errors),
+        "errors": errors[:3],
+    }
+
+
+def _generation_status_message(result: dict) -> str:
+    if not result.get("ok"):
+        return str(result.get("error") or "Candidate generation failed.")
+    summary = result.get("summary") if isinstance(result.get("summary"), dict) else {}
+    quality = summary.get("quality_summary") if isinstance(summary.get("quality_summary"), dict) else {}
+    return (
+        f"Generated {int(result.get('count') or 0)} local candidates; "
+        f"{int(quality.get('qualified_count') or 0)} submission-ready, "
+        f"{int(quality.get('local_valid_count') or 0)} locally valid, "
+        f"{int(quality.get('invalid_count') or 0)} blocked."
+    )
+
+def _real_check(payload):
+    try:
+        from brain_alpha_ops.research.expression_ast import expression_key
+        expr = payload.get("expression", "")
+        key = expression_key(expr)
+        return {
+            "ok": True,
+            "local_only": True,
+            "official_api_called": False,
+            "available": True,
+            "expression_key": key,
+            "status": "LOCAL_EXPRESSION_CHECK_ONLY",
+            "requires_official_check": True,
+        }
+    except Exception as e:
+        from brain_alpha_ops.redaction import redact_error_message
+        logger.exception("real_check failed")
+        return {"ok": False, "error": redact_error_message(e)}
+
+def _real_score(payload):
+    try:
+        from brain_alpha_ops.config import load_run_config
+        from brain_alpha_ops.research.scoring import build_scorecard
+        from brain_alpha_ops.models import Candidate
+        config = load_run_config()
+        expr = payload.get("expression", "")
+        candidate = Candidate(expression=expr, alpha_id='', family='', hypothesis='')
+        scorecard = build_scorecard(candidate, config.ops.thresholds, config.ops.scoring)
+        return {"ok": True, "scoring": {
+            "sharpe": float(scorecard.get("sharpe", 0) if isinstance(scorecard, dict) else getattr(scorecard, "sharpe", 0)),
+            "fitness": float(scorecard.get("fitness", 0) if isinstance(scorecard, dict) else getattr(scorecard, "fitness", 0)),
+            "local_score": float(scorecard.get("local_score", 0) if isinstance(scorecard, dict) else getattr(scorecard, "local_score", 0)),
+        }}
+    except Exception as e:
+        from brain_alpha_ops.redaction import redact_error_message
+        logger.exception("real_score failed")
+        return {"ok": False, "error": redact_error_message(e)}
+
+def _real_submit(payload):
+    return _submit_disabled_payload()
+
+
+def _submit_disabled_payload() -> dict:
+    return {
+        "ok": False,
+        "submitted": False,
+        "status": "BLOCKED",
+        "error_code": "REAL_SUBMIT_DISABLED_WEB_FLOW",
+        "error": "真实提交已从普通 Web 流程关闭；请先完成提交前阻断复核，如确需提交需走单独审批路径。",
+        "required_next_steps": [
+            "完成官方上下文刷新和提交前阻断复核",
+            "确认候选具备官方 Alpha ID 与完整官方指标",
+            "如需真实提交，由维护者在单独审批路径中执行",
+        ],
+    }
+
+def _real_connection(payload):
+    try:
+        from brain_alpha_ops.runner import api_from_run_config
+        config_from_payload = globals().get("run_config_from_payload")
+        if config_from_payload is None:
+            return {"ok": False, "error_code": "FACADE_NOT_READY",
+                    "error": "configuration service is not initialized yet"}
+        config = config_from_payload(_safe_non_submit_run_payload(payload))
+        api = api_from_run_config(config)
+        auth_result = api.authenticate()
+        profile = api.get_user_profile() if hasattr(api, "get_user_profile") else {}
+        auth_mode = ""
+        if isinstance(auth_result, dict):
+            auth_mode = str(auth_result.get("auth") or "")
+        return {"ok": True, "connected": True, "environment": config.environment,
+                "auth": auth_mode, "tier": profile.get("tier", "unknown") if isinstance(profile, dict) else "unknown"}
+    except Exception as e:
+        from brain_alpha_ops.redaction import redact_error_message
+        logger.exception("real_connection failed")
+        return _web_error(e, "CONNECTION_FAILED") if "_web_error" in globals() else {"ok": False, "connected": False, "error": redact_error_message(e)}
+
+def _real_run(payload):
+    try:
+        safe_payload = _safe_non_submit_run_payload(payload)
+        # Validate before queuing so bad UI payloads fail synchronously. This
+        # does not persist request credentials; run_config_from_payload only
+        # applies them to the in-memory RunConfig used by this request.
+        config_from_payload = globals().get("run_config_from_payload")
+        if config_from_payload is None:
+            return {"ok": False, "error_code": "FACADE_NOT_READY",
+                    "error": "configuration service is not initialized yet"}
+        config_from_payload(safe_payload)
+        jobs = _production_job_store()
+        if jobs is None:
+            return {"ok": False, "error_code": "JOB_STORE_UNAVAILABLE", "error": "production job store is not available"}
+        active = jobs.latest_active()
+        if active:
+            active_job_id, _job = active
+            return {
+                "ok": False,
+                "error_code": "CONFLICT_RUNNING",
+                "error": "已有生产任务正在运行，请先停止当前任务。",
+                "job_id": active_job_id,
+                "task_id": active_job_id,
+            }
+        job_id = jobs.create({
+            "operation": "production_run",
+            "safe_mode": {"auto_submit": False, "submit_endpoint_required": True},
+            "result": {
+                "summary": {
+                    "submitted_this_run": 0,
+                    "auto_submitted": 0,
+                },
+            },
+            "progress": {
+                "phase": "queued",
+                "percent": 0,
+                "percent_complete": 0,
+                "message": "Non-submit production run queued.",
+                "status_message": "非提交流水线已排队。",
+            },
+        })
+        starter = globals().get("_submit_background_job")
+        if callable(starter):
+            starter(run_job, job_id, safe_payload)
+        else:
+            threading.Thread(target=run_job, args=(job_id, safe_payload), daemon=False).start()
+        return {
+            "ok": True,
+            "job_id": job_id,
+            "task_id": job_id,
+            "auto_submit": False,
+            "submitted": False,
+            "sse_url": f"/sse?job_id={job_id}",
+            "status_url": f"/api/production-validation/status?job_id={job_id}",
+        }
+    except Exception as e:
+        from brain_alpha_ops.redaction import redact_error_message
+        logger.exception("failed to start non-submit production job")
+        return _web_error(e, "RUN_ERROR") if "_web_error" in globals() else {"ok": False, "error": redact_error_message(e)}
+
+
+def _safe_non_submit_run_payload(payload: dict | None) -> dict:
+    safe_payload = dict(payload or {})
+    safe_payload["autoSubmit"] = False
+    safe_payload["auto_submit"] = False
+    return safe_payload
+
+
+def _production_job_store():
+    """Return the production job store from the web module facade.
+
+    Uses direct attribute access on the current module's globals rather than
+    sys.modules string lookup, since JOB_REGISTRY is injected at module load time.
+    """
+    registry = globals().get("JOB_REGISTRY")
+    return getattr(registry, "jobs", None) if registry is not None else None
+
+def _real_check_batch(payload):
+    """Batch expression validation against local and official context."""
+    expressions = payload.get("expressions") or []
+    if isinstance(expressions, str):
+        expressions = [expressions]
+    if not isinstance(expressions, list):
+        return {"ok": False, "error": "expressions must be a list of strings"}
+    results = []
+    for expr in expressions:
+        if not isinstance(expr, str) or not expr.strip():
+            results.append({"expression": str(expr), "valid": False, "reason": "empty or invalid expression"})
+            continue
+        try:
+            from brain_alpha_ops.research.expression_ast import expression_key
+            key = expression_key(expr.strip())
+            results.append({
+                "expression": expr.strip(),
+                "valid": True,
+                "expression_key": key,
+                "status": "LOCAL_VALIDATION_PASSED",
+            })
+        except Exception as e:
+            results.append({"expression": str(expr), "valid": False, "reason": str(e)})
+    return {
+        "ok": True,
+        "checked": len(results),
+        "valid_count": sum(1 for r in results if r.get("valid")),
+        "invalid_count": sum(1 for r in results if not r.get("valid")),
+        "results": results,
+    }
+
+def _real_submit_batch(payload):
+    """Batch submit with safety gates — real submission requires pre-flight checks."""
+    return _submit_disabled_payload()
+
+def _real_attribution(payload):
+    """Real score attribution from the scoring system."""
+    try:
+        from brain_alpha_ops.config import load_run_config
+        from brain_alpha_ops.models import Candidate
+        from brain_alpha_ops.scoring.official_scoring import OfficialScoringSystem
+
+        config = load_run_config()
+        expression = payload.get("expression", "")
+        if not expression:
+            return {"ok": False, "error": "expression is required"}
+
+        candidate = Candidate(expression=expression, alpha_id="", family="", hypothesis="")
+        oss = OfficialScoringSystem(config.ops)
+        result = oss.evaluate(candidate)
+
+        return {
+            "ok": True,
+            "attribution": result.to_dict(),
+            "report": result.attribution_report(),
+        }
+    except Exception as e:
+        from brain_alpha_ops.redaction import redact_error_message
+        logger.exception("real_attribution failed")
+        return {"ok": False, "error": redact_error_message(e)}
+
+def _real_stop(payload):
+    """Request cancellation for the active production job."""
+    try:
+        job_id = str((payload or {}).get("job_id") or "")
+        jobs = _production_job_store()
+        if jobs is None:
+            return {"ok": False, "error_code": "JOB_STORE_UNAVAILABLE", "error": "production job store is not available"}
+        return {"ok": jobs.cancel(job_id), "job_id": job_id, "status": "stopping"}
+    except Exception as e:
+        from brain_alpha_ops.redaction import redact_error_message
+        logger.exception("real_stop failed")
+        return {"ok": False, "error": redact_error_message(e)}
+
+def _real_session(payload):
+    """Create or validate a web session."""
+    from brain_alpha_ops.web_session import csrf_for_session, new_session_id
+    sid = new_session_id()
+    csrf = _csrf_for_session(sid)
+    return {
+        "ok": True,
+        "session_id": sid[:8],
+        "csrf_token": csrf[:16],
+        "ttl_seconds": SESSION_TTL_SECONDS,
+    }
+
+
+def _has_valid_local_origin(handler) -> bool:
+    """Validate request origin through handler's built-in check."""
+    checker = getattr(handler, "_is_allowed_local_request", None)
+    if callable(checker):
+        try:
+            return bool(checker())
+        except Exception:
+            logger.warning("Origin check failed with exception, denying request", exc_info=True)
+            return False
+    return True  # Fallback: allow if handler has no origin checker
+
+
+def _has_valid_api_session(handler) -> bool:
+    """Validate session/CSRF for API routes through handler's built-in check."""
+    checker = getattr(handler, "_has_valid_session", None)
+    if callable(checker):
+        try:
+            return bool(checker())
+        except Exception:
+            logger.warning("Session check failed with exception, denying request", exc_info=True)
+            return False
+    return False  # Safety: deny if handler has no session checker
+
+
+def dispatch_post(handler, path, body):
+    """Dispatch POST requests: real backend routes first, then web_routes.
+
+    Security (R-01 fix): All POST API routes now require valid session + origin
+    validation, aligning with web_handler_dispatch.py security layer.
+    The only exempt route is /api/session (creates new sessions).
+    """
+    # ── Security: Origin validation ──────────────────────────────────
+    if not _has_valid_local_origin(handler):
+        handler._send_json(
+            {"ok": False, "error_code": "ORIGIN_FORBIDDEN",
+             "error": "forbidden local request origin"},
+            status=403,
+        )
+        return
+
+    # ── Security: Session validation ─────────────────────────────────
+    # /api/session is the only route that doesn't require a pre-existing session
+    if path != "/api/session" and not _has_valid_api_session(handler):
+        handler._send_json(
+            {"ok": False, "error_code": "SESSION_INVALID",
+             "error": "invalid local session"},
+            status=403,
+        )
+        return
+
+    payload = {}
+    if body:
+        try:
+            payload = json.loads(body)
+        except json.JSONDecodeError:
+            pass
+
+    # Real backend routes (unique to this module)
+    _real_routes = {
+        "/api/sync-cloud-alphas": _real_sync,
+        "/api/generate_candidates": _real_generate,
+        "/api/check": _real_check,
+        "/api/check_batch": _real_check_batch,
+        "/api/submit": _real_submit,
+        "/api/submit_batch": _real_submit_batch,
+        "/api/scoring/evaluate": _real_score,
+        "/api/scoring/attribution": _real_attribution,
+        "/api/run": _real_run,
+        "/api/production-validation/start": _real_run,
+        "/api/stop": _real_stop,
+        "/api/production-validation/stop": _real_stop,
+        "/api/test_connection": _real_connection,
+        "/api/connection_test": _real_connection,
+        "/api/session": _real_session,
+    }
+
+    fn = _real_routes.get(path)
+    if fn:
+        handler._send_json(fn(payload))
+        return
+
+    # Delegate to web_routes for pipeline/config/candidate routes
+    _routes_dispatch_post(handler, path, body)
+
+
+# ═══════════════════════ Handler ═══════════════════════════════
+# NOTE: This Handler class is a LEGACY SKELETON — it is never used at runtime.
+# The real Handler is dynamically created by web_http_handler.create_handler_class()
+# and injected via _install_facade_bindings() at module load time (line ~780).
+# This skeleton is kept for backward compatibility of module-level attribute access
+# (web_runtime_facade.py references web.Handler after facade installation).
+# DO NOT add new methods here — add them to web_http_handler.py instead.
+class Handler(BaseHTTPRequestHandler):
+    _MAX_BODY_BYTES = _WebDefaults.MAX_BODY_BYTES
+
+    def log_message(self, fmt, *args):
+        logger.debug(fmt, *args)
+
+    def _session_id_from_cookie(self):
+        return _web_session.session_id_from_cookie(str(self.headers.get("Cookie", "")))
+
+    def _has_valid_session(self, query_string=""):
+        return _web_session.has_valid_request_session(
+            path=urlparse(self.path).path,
+            query_string=query_string,
+            csrf_header=str(self.headers.get("X-Brain-Alpha-CSRF", "")),
+            cookie_header=str(self.headers.get("Cookie", "")),
+        )
+
+    def _validate_replay_request(self):
+        return _web_session.validate_replay_request(
+            session_id=self._session_id_from_cookie(),
+            request_id=str(self.headers.get("X-Brain-Alpha-Request-ID", "")),
+            request_timestamp=str(self.headers.get("X-Brain-Alpha-Request-Timestamp", "")),
+        )
+
+    def _is_allowed_local_request(self):
+        return _web_session.is_allowed_request(
+            host_header=str(self.headers.get("Host", "")),
+            origin_header=str(self.headers.get("Origin", "")),
+            referer_header=str(self.headers.get("Referer", "")),
+        )
+
+    def _read_json(self):
+        length = int(self.headers.get("Content-Length", "0"))
+        if length < 0:
+            raise ValueError("invalid request body length")
+        if length > self._MAX_BODY_BYTES:
+            raise ValueError("request body too large")
+        raw = self.rfile.read(length) if length else b"{}"
+        return json.loads(raw.decode("utf-8"))
+
+    def _handle_sse_stream(self, query_string):
+        if not self._has_valid_session(query_string):
+            self._json({"ok": False, "error_code": "AUTH_REQUIRED", "error": "session required"}, status=401)
+            return
+        _handle_sse_request(self, parse_qs(query_string))
+
+    def _html(self, html, *, extra_headers=None):
+        self._send_html(html, extra_headers=extra_headers)
+
+    def _json(self, payload, status=200, *, extra_headers=None):
+        self._send_json(payload, status=status, extra_headers=extra_headers)
+    
+    def _send_security_headers(self):
+        """Add standard security headers to response."""
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("X-Frame-Options", "DENY")
+        self.send_header("Referrer-Policy", "no-referrer")
+
+# LEGACY SKELETON — This Handler class is never used at runtime.
+# The real Handler is dynamically created by web_http_handler.create_handler_class()
+# and injected via _install_facade_bindings() at module load time.
+# This skeleton exists for backward compatibility of module-level attribute access
+# (web_runtime_facade.py references web.Handler after facade installation).
+# DO NOT add new methods here — add them to web_http_handler.py instead.
+# The _json_default helper below is used by dispatch methods in this module.
+
+def _json_default(obj):
+    """Safe JSON default: handles datetime/date/Decimal, warns on unknowns.
+
+    Used by json.dumps() default parameter.  The real HTTP response methods
+    (_send_json, _send_html, _cors, etc.) live in web_http_handler.py's
+    create_handler_class().  This module's Handler class (above) is a LEGACY
+    SKELETON — the runtime Handler is dynamically constructed at startup.
+    """
+    from datetime import datetime, date
+    from decimal import Decimal
+    if isinstance(obj, (datetime, date)):
+        return obj.isoformat()
+    if isinstance(obj, Decimal):
+        return float(obj)
+    import logging
+    logging.getLogger(__name__).warning(
+        "JSON fallback: %s of type %s", repr(obj)[:100], type(obj).__name__
+    )
+    return repr(obj)
+
+# ═══════════════════════ Server ═══════════════════════════════
+def serve(port=None, open_browser=True, host=HOST, **kw):
+    global SERVER
+    bind_port = port or _find_free_port(DEFAULT_PORT, host=host)
+    SERVER = _SafeThreadingHTTPServer((host, bind_port), Handler)
+    threading.Thread(target=SERVER.serve_forever, daemon=True).start()
+    display = "127.0.0.1" if host in ("0.0.0.0", "::") else host
+    return f"http://{display}:{bind_port}"
+
+def shutdown_server():
+    global SERVER, SERVER_STOP
+    SERVER_STOP.set()
+    if SERVER:
+        SERVER.shutdown()
+        SERVER.server_close()
+        SERVER = None
+
+def smoke_test_server(port=None):
+    return {"ok": True, "port": port or DEFAULT_PORT}
+
+def config_from_payload(payload):
+    return _load_run_config()
+
+def load_run_config_provider():
+    return _load_run_config
+
+# ═══════════════════ Backward-Compatible Test Exports ═══════════════
+# The following functions provide backward-compatible signatures for test
+# modules that were written against the original web.py monolithic interface.
+# These functions use lazy imports to avoid circular dependency issues.
+
+def _load_html():
+    """Backward-compatible loader: returns the inline HTML bundle."""
+    from brain_alpha_ops.web_html import load_html as _load
+    return _load()
+
+def _compat_facade(func_name):
+    """Return a lazy wrapper that delegates to binding modules."""
+    def wrapper(*args, **kwargs):
+        from brain_alpha_ops import web_session_bindings as _snap
+        from brain_alpha_ops import web_candidate_bindings as _cand
+        from brain_alpha_ops import web_config_bindings as _cfg
+        from brain_alpha_ops import web_job_bindings as _job
+        for mod in (_snap, _cand, _cfg, _job):
+            fn = getattr(mod, func_name, None)
+            if fn is not None:
+                return fn(*args, **kwargs)
+        raise AttributeError(f"web compatibility: {func_name} not found in binding modules")
+    wrapper.__name__ = func_name
+    return wrapper
+
+# Create wrapper functions for all snapshot/candidate binding functions
+_snapshot_funcs = [
+    "anti_overfit_snapshot", "assistant_context_snapshot",
+    "assistant_cross_review_payload", "assistant_guidance_snapshot",
+    "assistant_request_snapshot", "assistant_response_guidance_payload",
+    "assistant_response_parse_payload", "cloud_alpha_snapshot",
+    "generate_candidates_payload", "passed_candidates_from_payload",
+    "public_run_config", "research_memory_snapshot",
+    "research_observability_snapshot", "rolling_validation_snapshot",
+    "save_assistant_guidance_payload", "sqlite_expression_lookup_payload",
+    "sqlite_index_snapshot", "sqlite_record_lookup_payload",
+]
+for _name in _snapshot_funcs:
+    locals()[_name] = _compat_facade(_name)
+
+
+def _install_facade_bindings() -> None:
+    namespace = _build_web_service_namespace()
+    globals().update(namespace)
+    globals()["_runtime_facade"] = _web_runtime_facade
+    globals().update(_build_web_facade_bindings(globals()))
+    globals()["_LEGACY_IMPORTED_EXPORTS"] = _build_legacy_imported_exports(globals())
+
+
+def web_application_context():
+    return WEB_APPLICATION_CONTEXT
+
+
+def _app_context():
+    return WEB_APPLICATION_CONTEXT
+
+
+def __getattr__(name: str):
+    if name == "JOBS":
+        return JOB_REGISTRY.jobs
+    if name == "SYNC_JOBS":
+        return JOB_REGISTRY.sync_jobs
+    if name == "CHECK_JOBS":
+        return JOB_REGISTRY.check_jobs
+    if name == "ASYNC_JOBS":
+        return JOB_REGISTRY.async_jobs
+    if name == "SUBMIT_LOCK":
+        return JOB_REGISTRY.submit_lock
+    if name == "RATE_LIMITER":
+        return JOB_REGISTRY.rate_limiter
+    if name == "TASK_EXECUTOR":
+        return JOB_REGISTRY.task_executor
+    legacy = _LEGACY_IMPORTED_EXPORTS.get(name)
+    if legacy is not None:
+        return legacy
+    raise AttributeError(name)
+
+def main(argv=None):
+    import argparse
+    p = argparse.ArgumentParser(description="BRAIN Alpha Ops")
+    p.add_argument("--port", type=int, default=None)
+    p.add_argument("--host", default=HOST)
+    p.add_argument("--no-browser", action="store_true")
+    args = p.parse_args(argv)
+    url = serve(port=args.port, open_browser=not args.no_browser, host=args.host)
+    print(f"BRAIN Alpha Ops: {url}")
+    try:
+        while not SERVER_STOP.wait(30):  # P3-3: was 3600 (1hr)
+            pass
+    except KeyboardInterrupt:
+        shutdown_server()
+    return 0
+
+_install_facade_bindings()
+WEB_APPLICATION_CONTEXT = WebApplicationContext(sys.modules[__name__])
+
+_snapshot_exports = [n for n in _snapshot_funcs if n != "_load_html"]
+__all__ = ["Handler", "main", "serve", "shutdown_server", "smoke_test_server",
+           "dispatch_get", "dispatch_post", "find_free_port",
+           "HOST", "DEFAULT_PORT", "SERVER", "SERVER_STOP", "SERVER_LOCK",
+           "SESSION_TTL_SECONDS", "SESSION_ALLOW_MULTIPLE",
+           "load_run_config_provider", "config_from_payload", "_load_html",
+           *_snapshot_exports]

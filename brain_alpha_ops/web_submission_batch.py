@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any, Callable
 
 from brain_alpha_ops.config import RunConfig
+from brain_alpha_ops.submission_readiness import live_submit_readiness_hard_gate
 
 
 RunConfigFromPayload = Callable[[dict[str, Any]], RunConfig]
@@ -12,6 +13,7 @@ ObservabilityPreflight = Callable[[str], dict[str, Any]]
 SubmitCandidate = Callable[[dict[str, Any]], dict[str, Any]]
 CandidateFromPayload = Callable[[dict[str, Any]], dict[str, Any]]
 SubmissionPreflight = Callable[[dict[str, Any], RunConfig], dict[str, Any]]
+SubmitReadinessHardGate = Callable[[dict[str, Any], RunConfig], dict[str, Any]]
 WebError = Callable[[Exception, str], dict[str, Any]]
 PayloadTruthy = Callable[[object], bool]
 ProgressCallback = Callable[[dict[str, Any]], None]
@@ -27,6 +29,7 @@ def submit_batch_payload(
     web_error: WebError,
     payload_truthy: PayloadTruthy,
     submission_preflight_advisory: SubmissionPreflight | None = None,
+    submit_readiness_hard_gate: SubmitReadinessHardGate = live_submit_readiness_hard_gate,
     progress_callback: ProgressCallback | None = None,
 ) -> dict[str, Any]:
     alpha_ids = [str(item) for item in payload.get("alpha_ids", []) if str(item)]
@@ -42,15 +45,15 @@ def submit_batch_payload(
             "error_code": "SUBMIT_CONFIRMATION_REQUIRED",
             "error": "Production batch submit requires explicit confirm_submit=true.",
             "error_category": "confirmation",
-            "action": "Review submit readiness and resend with confirm_submit=true only for an intentional production batch submit.",
+            "action": "Complete readiness review first; real batch submit is outside the ordinary Web flow and requires separate approval.",
             "state_navigation": {
                 "schema_version": "abnormal_state_navigation.v1",
                 "state": "blocked",
                 "reason_code": "SUBMIT_CONFIRMATION_REQUIRED",
-                "title": "需要批量提交确认",
-                "summary": "后端未收到明确的批量生产提交确认，已在调用官方 API 前阻断。",
+                "title": "需要单独批量提交审批",
+                "summary": "普通 Web 就绪复核流程不会执行批量真实提交；后端已在调用官方提交 API 前阻断。",
                 "target_view": "submit",
-                "primary_action": "确认所有候选的官方证据完整后再执行批量提交。",
+                "primary_action": "先完成全部候选的提交前就绪复核；如需真实批量提交，走单独审批路径。",
             },
         }
     observability_preflight = observability_submission_preflight(run_config.ops.storage_dir)
@@ -78,6 +81,16 @@ def submit_batch_payload(
         )
         if blocked:
             return _batch_preflight_block_payload(blocked)
+    readiness_blocked = _candidate_readiness_blocks(
+        alpha_ids,
+        by_id,
+        run_config,
+        candidate_from_payload=candidate_from_payload,
+        submit_readiness_hard_gate=submit_readiness_hard_gate,
+        progress_callback=progress_callback,
+    )
+    if readiness_blocked:
+        return _batch_preflight_block_payload(readiness_blocked)
     results = []
     submitted_set: set[str] = set()
     total = len(alpha_ids)
@@ -148,6 +161,50 @@ def _candidate_preflight_blocks(
                 {
                     "phase": "preflight",
                     "message": f"Checked submit preflight {index}/{total}: {alpha_id}",
+                    "current_alpha_id": alpha_id,
+                    "submitted": 0,
+                    "failed": len(blocked),
+                    "done": index,
+                    "total": total,
+                }
+            )
+    return blocked
+
+
+def _candidate_readiness_blocks(
+    alpha_ids: list[str],
+    by_id: dict[str, dict[str, Any]],
+    run_config: RunConfig,
+    *,
+    candidate_from_payload: CandidateFromPayload,
+    submit_readiness_hard_gate: SubmitReadinessHardGate,
+    progress_callback: ProgressCallback | None,
+) -> list[dict[str, Any]]:
+    blocked: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    unique_alpha_ids = [alpha_id for alpha_id in alpha_ids if not (alpha_id in seen or seen.add(alpha_id))]
+    total = len(unique_alpha_ids)
+    if progress_callback:
+        progress_callback(
+            {
+                "phase": "readiness",
+                "message": f"Checking live submit readiness for {total} alpha(s).",
+                "submitted": 0,
+                "failed": 0,
+                "total": total,
+                "percent": 0 if total else 100,
+            }
+        )
+    for index, alpha_id in enumerate(unique_alpha_ids, start=1):
+        candidate = by_id.get(alpha_id) or candidate_from_payload({"alpha_id": alpha_id})
+        gate = submit_readiness_hard_gate(candidate, run_config)
+        if not gate.get("ok"):
+            blocked.append(_candidate_preflight_block(alpha_id, candidate, gate))
+        if progress_callback:
+            progress_callback(
+                {
+                    "phase": "readiness",
+                    "message": f"Checked submit readiness {index}/{total}: {alpha_id}",
                     "current_alpha_id": alpha_id,
                     "submitted": 0,
                     "failed": len(blocked),

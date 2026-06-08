@@ -1,7 +1,7 @@
 """Reusable task state storage for long-running operations.
 
-The web console, future agent tools, and any CLI orchestration should share the
-same small contract for job lifecycle state. The store intentionally keeps the
+The web console and internal automation share the same small contract for job
+lifecycle state. The store intentionally keeps the
 runtime payload narrow: status, progress, result, cancellation flag, and error.
 It never persists request credentials.
 """
@@ -21,7 +21,11 @@ from brain_alpha_ops.redaction import redact_data
 
 
 ACTIVE_STATUSES = {"queued", "running", "stopping"}
+TERMINAL_STATUSES = {"completed", "completed_with_warnings", "failed", "stopped", "cancelled", "canceled"}
+KNOWN_STATUSES = ACTIVE_STATUSES | TERMINAL_STATUSES | {"idle"}
 DEFAULT_RECOVERY_ERROR = "Process restarted before this task completed."
+DEFAULT_WATCHDOG_TIMEOUT_SECONDS = 300.0
+DEFAULT_WATCHDOG_ERROR = "Web flow watchdog stopped this task after no clear progress update."
 JOB_PREVIEW_ROWS = 5
 COMPACT_LIST_KEYS = {"alphas", "cloud_alphas", "candidates", "backtests", "lifecycle_records"}
 DEFAULT_MAX_PERSISTENCE_LOAD_BYTES = 50 * 1024 * 1024
@@ -38,6 +42,7 @@ class JobStore:
         max_jobs: int = 200,
         recover_active_as: str = "failed",
         max_load_bytes: int = DEFAULT_MAX_PERSISTENCE_LOAD_BYTES,
+        watchdog_timeout_seconds: float = DEFAULT_WATCHDOG_TIMEOUT_SECONDS,
     ):
         self.lock = threading.Lock()
         self.jobs: dict[str, dict[str, Any]] = {}
@@ -46,6 +51,7 @@ class JobStore:
         self.max_jobs = max(1, int(max_jobs or 1))
         self.recover_active_as = recover_active_as
         self.max_load_bytes = max(1, int(max_load_bytes or 1))
+        self.watchdog_timeout_seconds = max(0.0, float(watchdog_timeout_seconds or 0.0))
         self.last_persist_error = ""
         self.persistence_load_skipped = False
         self._load()
@@ -79,21 +85,81 @@ class JobStore:
             self._persist_locked()
             return job_id
 
-    def update(self, job_id: str, **kwargs: Any) -> None:
+    def update(self, job_id: str, *, allow_terminal_overwrite: bool = False, **kwargs: Any) -> None:
         with self.lock:
             if job_id not in self.jobs:
                 return
             update = _job_safe(kwargs)
+            if _reject_watchdog_terminal_update(self.jobs[job_id], update, allow_terminal_overwrite):
+                return
             update.setdefault("updated_at", time.time())
             self.jobs[job_id].update(update)
             self._prune_locked()
             self._persist_locked()
+
+    def heartbeat(
+        self,
+        job_id: str,
+        *,
+        operation: str,
+        heartbeat_count: int,
+        source: str,
+        heartbeat_at: float | None = None,
+    ) -> bool:
+        """Record liveness text without extending the watchdog progress clock."""
+        with self.lock:
+            if job_id not in self.jobs:
+                return False
+            now = time.time() if heartbeat_at is None else float(heartbeat_at)
+            self._watchdog_locked(now, only_job_id=job_id)
+            row = self.jobs.get(job_id)
+            if not row:
+                return False
+            status = str(row.get("status") or "").strip().lower()
+            if status not in ACTIVE_STATUSES:
+                return False
+            progress = row.get("progress") if isinstance(row.get("progress"), dict) else {}
+            message = str(
+                progress.get("status_message")
+                or progress.get("message")
+                or "Async operation is still running."
+            )
+            next_progress = dict(progress)
+            next_progress.update({
+                "task_id": job_id,
+                "job_id": job_id,
+                "operation": operation,
+                "phase": str(progress.get("phase") or operation),
+                "status_code": "RUNNING",
+                "status_message": f"{message} Backend operation is still running.",
+                "message": f"{message} Backend operation is still running.",
+                "heartbeat": {
+                    "count": int(heartbeat_count),
+                    "source": source,
+                    "updated_at": now,
+                },
+            })
+            update: dict[str, Any] = {
+                "status": "stopping" if status == "stopping" else "running",
+                "progress": next_progress,
+            }
+            current_updated_at = row.get("updated_at")
+            if current_updated_at not in ("", None):
+                update["updated_at"] = current_updated_at
+            self.jobs[job_id].update(_job_safe(update))
+            self._prune_locked()
+            self._persist_locked()
+            return True
 
     def cancel(self, job_id: str) -> bool:
         with self.lock:
             if job_id not in self.jobs:
                 return False
             self.jobs[job_id]["cancel"] = True
+            if self.jobs[job_id].get("status") in TERMINAL_STATUSES:
+                self.jobs[job_id]["updated_at"] = time.time()
+                self._persist_locked()
+                return True
             self.jobs[job_id]["status"] = "stopping"
             self.jobs[job_id]["updated_at"] = time.time()
             self._persist_locked()
@@ -105,11 +171,13 @@ class JobStore:
 
     def get(self, job_id: str) -> dict[str, Any] | None:
         with self.lock:
+            self._watchdog_locked(time.time(), only_job_id=job_id)
             value = self.jobs.get(job_id)
             return deepcopy(value) if value else None
 
     def latest_active(self) -> tuple[str, dict[str, Any]] | None:
         with self.lock:
+            self._watchdog_locked(time.time())
             active = [
                 (job_id, job)
                 for job_id, job in self.jobs.items()
@@ -122,6 +190,7 @@ class JobStore:
 
     def latest_any(self) -> tuple[str, dict[str, Any]] | None:
         with self.lock:
+            self._watchdog_locked(time.time())
             if not self.jobs:
                 return None
             job_id, job = max(self.jobs.items(), key=lambda item: _updated_at(item[1]))
@@ -129,10 +198,21 @@ class JobStore:
 
     def all(self, *, limit: int | None = None) -> list[tuple[str, dict[str, Any]]]:
         with self.lock:
+            self._watchdog_locked(time.time())
             rows = sorted(self.jobs.items(), key=lambda item: _updated_at(item[1]), reverse=True)
             if limit is not None:
                 rows = rows[: max(0, int(limit))]
             return [(job_id, deepcopy(job)) for job_id, job in rows]
+
+    def watchdog_sweep(self, *, now: float | None = None) -> int:
+        """Fail active jobs that have stalled or entered an unknown state.
+
+        The Web UI polls job status as the user operates the console. Running
+        the sweep on reads turns ambiguous hangs into explicit, user-visible
+        failure states without using tests to tune Alpha expressions.
+        """
+        with self.lock:
+            return self._watchdog_locked(time.time() if now is None else float(now))
 
     def clear(self, *, persist: bool = False) -> None:
         with self.lock:
@@ -238,12 +318,80 @@ class JobStore:
         except OSError as exc:
             self.last_persist_error = str(exc)
 
+    def _watchdog_locked(self, now: float, *, only_job_id: str | None = None) -> int:
+        if self.watchdog_timeout_seconds <= 0:
+            return 0
+        changed = 0
+        for job_id, job in list(self.jobs.items()):
+            if only_job_id is not None and job_id != only_job_id:
+                continue
+            if _watchdog_should_stop(job, now, self.watchdog_timeout_seconds):
+                _mark_watchdog_failed(job, now)
+                changed += 1
+        if changed:
+            self._persist_locked()
+        return changed
+
 
 def _updated_at(job: dict[str, Any]) -> float:
     try:
         return float(job.get("updated_at", 0.0) or 0.0)
     except (TypeError, ValueError):
         return 0.0
+
+
+def _watchdog_should_stop(job: dict[str, Any], now: float, timeout_seconds: float) -> bool:
+    status = str(job.get("status") or "").strip().lower()
+    if status in TERMINAL_STATUSES:
+        return False
+    if status not in ACTIVE_STATUSES:
+        return True
+    updated_at = _updated_at(job)
+    return updated_at <= 0 or now - updated_at > timeout_seconds
+
+
+def _mark_watchdog_failed(job: dict[str, Any], now: float) -> None:
+    status = str(job.get("status") or "unknown").strip().lower() or "unknown"
+    message = (
+        "Web flow watchdog stopped this task because its status was unclear."
+        if status not in ACTIVE_STATUSES
+        else DEFAULT_WATCHDOG_ERROR
+    )
+    job["status"] = "failed"
+    job["cancel"] = True
+    job["error"] = message
+    job["updated_at"] = now
+    progress = dict(job.get("progress") or {})
+    progress.update({
+        "phase": "watchdog_failed",
+        "percent": 100,
+        "percent_complete": 100,
+        "message": message,
+        "status_message": message,
+        "watchdog": {
+            "triggered": True,
+            "previous_status": status,
+        },
+    })
+    job["progress"] = progress
+
+
+def _reject_watchdog_terminal_update(
+    current: dict[str, Any],
+    update: dict[str, Any],
+    allow_terminal_overwrite: bool,
+) -> bool:
+    if allow_terminal_overwrite or not _is_watchdog_terminal_failed(current):
+        return False
+    return True
+
+
+def _is_watchdog_terminal_failed(job: dict[str, Any]) -> bool:
+    if str(job.get("status") or "").strip().lower() != "failed":
+        return False
+    progress = job.get("progress") if isinstance(job.get("progress"), dict) else {}
+    watchdog = progress.get("watchdog") if isinstance(progress.get("watchdog"), dict) else {}
+    return progress.get("phase") == "watchdog_failed" or watchdog.get("triggered") is True
 
 
 def _json_safe(value: Any) -> Any:

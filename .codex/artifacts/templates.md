@@ -7,18 +7,21 @@ Use these minimal templates when a live state file is missing.
 ```markdown
 # Intent Anchor
 
-original_goal:
+objective:
 
 success_criteria:
 -
 
-hard_constraints:
+constraints:
 -
 
-unacceptable_outcomes:
+stop_conditions:
 -
 
-adjustable_range:
+validation_commands:
+-
+
+out_of_scope:
 -
 
 updated_at:

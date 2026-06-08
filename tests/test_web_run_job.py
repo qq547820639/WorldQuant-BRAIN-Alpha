@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import logging
+import threading
+import time
 from types import SimpleNamespace
 
+from brain_alpha_ops.tasks import JobStore
 from brain_alpha_ops.models import PipelineResult
 from brain_alpha_ops.web_run_job import run_guided_job_service, run_job_service
 
@@ -37,6 +40,18 @@ class _Result:
 
 def _config(*, run_forever=False):
     return SimpleNamespace(ops=SimpleNamespace(budget=SimpleNamespace(run_forever=run_forever)))
+
+
+def _wait_for_jobstore_heartbeat(store: JobStore, job_id: str, source: str) -> None:
+    deadline = time.time() + 1.0
+    while time.time() < deadline:
+        with store.lock:
+            row = store.jobs.get(job_id) or {}
+            progress = row.get("progress") if isinstance(row.get("progress"), dict) else {}
+            if progress.get("heartbeat", {}).get("source") == source:
+                return
+        time.sleep(0.01)
+    raise AssertionError(f"heartbeat from {source} was not recorded")
 
 
 def test_run_job_service_marks_completed_with_summary_stats():
@@ -115,6 +130,50 @@ def test_run_job_service_records_redacted_failure_context():
     assert row["error"] == "redacted failure"
     assert row["progress"]["error_context"]["error_code"] == "RUN_JOB_FAILED"
     assert row["progress"]["error_context"]["job_id"] == "job_1"
+
+
+def test_run_job_service_heartbeat_does_not_mask_watchdog_timeout(tmp_path):
+    store = JobStore(tmp_path / "jobs.json", watchdog_timeout_seconds=0.05)
+    job_id = store.create()
+    release_pipeline = threading.Event()
+
+    def run_pipeline(_config, *, progress_callback, stop_callback):
+        release_pipeline.wait(timeout=0.3)
+        assert stop_callback() is True
+        return _Result()
+
+    thread = threading.Thread(
+        target=run_job_service,
+        args=(job_id, {"env": "mock"}),
+        kwargs={
+            "job_store": store,
+            "run_config_from_payload": lambda payload: _config(),
+            "run_pipeline_from_config": run_pipeline,
+            "compute_run_stats": lambda data, config: {},
+            "safe_error_message": str,
+            "log": logging.getLogger("tests.web_run_job"),
+            "heartbeat_interval_seconds": 0.01,
+        },
+        daemon=True,
+    )
+    thread.start()
+    _wait_for_jobstore_heartbeat(store, job_id, "web_run_job")
+    time.sleep(0.06)
+
+    store.watchdog_sweep()
+    row = store.get(job_id)
+    assert row is not None
+    assert row["status"] == "failed"
+    assert row["progress"]["phase"] == "watchdog_failed"
+    assert row["progress"].get("heartbeat", {}).get("source") == "web_run_job"
+
+    release_pipeline.set()
+    thread.join(timeout=1.0)
+    row = store.get(job_id)
+    assert row is not None
+    assert row["status"] == "failed"
+    assert row["progress"]["phase"] == "watchdog_failed"
+    assert row.get("result") is None
 
 
 def test_run_guided_job_service_registers_phase_progress(monkeypatch):

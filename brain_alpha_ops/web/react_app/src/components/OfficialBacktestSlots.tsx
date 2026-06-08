@@ -45,10 +45,10 @@ export default function OfficialBacktestSlots({ notify }: Props) {
     <div className="min-w-0 space-y-4 animate-fade-in">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div className="min-w-0">
-          <h2 className="text-base font-semibold text-gray-100">官方回测槽位</h2>
-          <p className="text-xs text-muted">活跃 {activeCount}/{slotLimit}</p>
+          <h2 className="text-base font-semibold text-text-primary">官方回测槽位</h2>
+          <p className="text-xs text-text-tertiary">活跃 {activeCount}/{slotLimit}</p>
         </div>
-        <p className="text-xs text-muted" role="status" aria-live="polite">
+        <p className="text-xs text-text-tertiary" role="status" aria-live="polite">
           {api.data?.updated_at || api.data?.source || "本地快照"}
         </p>
       </div>
@@ -56,10 +56,10 @@ export default function OfficialBacktestSlots({ notify }: Props) {
       <BacktestQueueSummaryStrip summary={queueSummary} activeCount={activeCount} slotLimit={slotLimit} />
 
       {api.error && (
-        <div className="card border-danger/40 bg-danger/10" role="alert" aria-live="assertive">
+        <div className="rounded-md border border-[oklch(0.48_0.08_22/0.30)] bg-[oklch(0.48_0.06_22/0.08)] p-4" role="alert" aria-live="assertive">
           <div className="flex items-center justify-between gap-3">
-            <p className="text-sm text-danger">回测槽位加载失败: {api.error}</p>
-            <button type="button" onClick={load} className="btn-secondary text-sm">
+            <p className="text-sm text-negative">回测槽位加载失败: {api.error}</p>
+            <button type="button" onClick={load} className="btn btn-secondary text-sm">
               重试
             </button>
           </div>
@@ -68,11 +68,11 @@ export default function OfficialBacktestSlots({ notify }: Props) {
 
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
         {slots.map((slot) => (
-          <article key={slot.slot} className={`card min-w-0 border-l-4 ${slotTone(slot.status)}`}>
+          <article key={slot.slot} className={`rounded-md border border-border-subtle bg-[oklch(0.100_0.007_45)] p-4 min-w-0 border-l-4 ${slotTone(slot.status)}`}>
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <h3 className="text-sm font-semibold text-gray-100">官方回测槽 #{slot.slot}</h3>
-                <p className="mt-1 text-xs text-muted">{slot.message || slotMessage(slot.status)}</p>
+                <h3 className="text-sm font-semibold text-text-primary">官方回测槽 #{slot.slot}</h3>
+                <p className="mt-1 text-xs text-text-tertiary">{slot.message || slotMessage(slot.status)}</p>
               </div>
               <span
                 className={`badge max-w-[9rem] truncate text-xs ${slotBadge(slot.status)}`}
@@ -87,13 +87,13 @@ export default function OfficialBacktestSlots({ notify }: Props) {
               <SlotMetric label="仿真 ID" value={slot.simulation_id || "-"} mono />
               <SlotMetric label="官方 ID" value={slot.official_alpha_id || "-"} mono />
               <SlotMetric label="得分" value={slot.score == null ? "-" : Number(slot.score).toFixed(2)} />
-              <SlotMetric label="轮询次数" value={String(slot.poll_count ?? 0)} />
-              <SlotMetric label="下次轮询" value={formatSeconds(slot.next_poll_seconds)} />
+              <SlotMetric label="刷新次数" value={String(slot.poll_count ?? 0)} />
+              <SlotMetric label="预计下次更新" value={formatSeconds(slot.next_poll_seconds)} />
             </dl>
 
-            <div className="mt-4 h-2 overflow-hidden rounded-full bg-gray-800" aria-hidden="true">
+            <div className="mt-4 h-2 overflow-hidden rounded-full bg-[oklch(0.22_0.007_45)]" aria-hidden="true">
               <div
-                className="h-full rounded-full bg-brand-500"
+                className="h-full rounded-full bg-[oklch(0.65_0.14_80)]"
                 style={{ width: `${boundedPercent(slot.progress_percent)}%` }}
               />
             </div>
@@ -116,25 +116,25 @@ function BacktestQueueSummaryStrip({
   const openSlots = summary?.open_slot_count ?? Math.max(0, slotLimit - activeCount);
   const reviewBlockers = (summary?.top_blocking_reasons || [])
     .slice(0, 3)
-    .map((row) => `${row.reason} ${row.count}`)
+    .map((row) => `${reasonLabel(row.reason)} ${row.count}`)
     .join(" · ");
   const submitBlockers = (summary?.top_submit_blocking_reasons || [])
     .slice(0, 3)
-    .map((row) => `${row.reason} ${row.count}`)
+    .map((row) => `${reasonLabel(row.reason)} ${row.count}`)
     .join(" · ");
   return (
-    <div className="rounded-lg border border-gray-800 bg-gray-900/60 px-3 py-2">
+    <div className="rounded-md border border-border-subtle bg-[oklch(0.115_0.007_45)] px-3 py-2">
       <dl className="grid grid-cols-2 gap-3 text-xs sm:grid-cols-4">
-        <QueueMetric label="Open slots" value={`${openSlots}/${slotLimit}`} />
-        <QueueMetric label="Submit evidence" value={formatCount(summary?.submit_evidence_blocking_count)} />
-        <QueueMetric label="Live API" value={summary?.official_api_called ? "called" : "not called"} />
-        <QueueMetric label="Slot records" value={formatCount(summary?.official_slot_record_count)} />
+        <QueueMetric label="可用槽位" value={`${openSlots}/${slotLimit}`} />
+        <QueueMetric label="提交证据缺口" value={formatCount(summary?.submit_evidence_blocking_count)} />
+        <QueueMetric label="官方接口" value={summary?.official_api_called ? "已调用" : "未调用"} />
+        <QueueMetric label="槽位记录" value={formatCount(summary?.official_slot_record_count)} />
       </dl>
-      <p className="mt-2 truncate text-xs text-muted" title={reviewBlockers || "none"}>
-        Review blockers: {reviewBlockers || "none"}
+      <p className="mt-2 truncate text-xs text-text-tertiary" title={reviewBlockers || "暂无"}>
+        官方工作阻断: {reviewBlockers || "暂无"}
       </p>
-      <p className="mt-1 truncate text-xs text-muted" title={submitBlockers || "none"}>
-        Submit evidence: {submitBlockers || "none"}
+      <p className="mt-1 truncate text-xs text-text-tertiary" title={submitBlockers || "暂无"}>
+        提交证据阻断: {submitBlockers || "暂无"}
       </p>
     </div>
   );
@@ -143,8 +143,8 @@ function BacktestQueueSummaryStrip({
 function QueueMetric({ label, value }: { label: string; value: string }) {
   return (
     <div className="min-w-0">
-      <dt className="text-muted">{label}</dt>
-      <dd className="mt-0.5 truncate font-medium text-gray-100" title={value}>{value}</dd>
+      <dt className="text-text-tertiary">{label}</dt>
+      <dd className="mt-0.5 truncate font-medium text-text-primary" title={value}>{value}</dd>
     </div>
   );
 }
@@ -152,8 +152,8 @@ function QueueMetric({ label, value }: { label: string; value: string }) {
 function SlotMetric({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
   return (
     <div className="flex min-w-0 items-center justify-between gap-3">
-      <dt className="shrink-0 text-muted">{label}</dt>
-      <dd className={`min-w-0 truncate text-right text-gray-300 ${mono ? "font-mono" : ""}`} title={value}>
+      <dt className="shrink-0 text-text-tertiary">{label}</dt>
+      <dd className={`min-w-0 truncate text-right text-text-secondary ${mono ? "font-mono-value" : ""}`} title={value}>
         {value}
       </dd>
     </div>
@@ -180,18 +180,18 @@ function isActiveSlot(status: unknown) {
 
 function slotTone(status: unknown) {
   const text = String(status || "").toUpperCase();
-  if (text === "EMPTY") return "border-gray-700";
-  if (text.includes("FAILED") || text.includes("ERROR")) return "border-danger";
-  if (text.includes("COMPLETE")) return "border-success";
-  if (text.includes("DEFERRED") || text.includes("WAIT")) return "border-warning";
-  return "border-blue-400";
+  if (text === "EMPTY") return "border-border-subtle";
+  if (text.includes("FAILED") || text.includes("ERROR")) return "border-[oklch(0.48_0.08_22/0.30)]";
+  if (text.includes("COMPLETE")) return "border-border";
+  if (text.includes("DEFERRED") || text.includes("WAIT")) return "border-[oklch(0.65_0.06_85/0.25)]";
+  return "border-[oklch(0.58_0.06_245/0.20)]";
 }
 
 function slotBadge(status: unknown) {
   const text = String(status || "").toUpperCase();
   if (text === "EMPTY") return "badge-neutral";
-  if (text.includes("FAILED") || text.includes("ERROR")) return "badge-danger";
-  if (text.includes("COMPLETE")) return "badge-success";
+  if (text.includes("FAILED") || text.includes("ERROR")) return "badge-negative";
+  if (text.includes("COMPLETE")) return "badge-positive";
   return "badge-warning";
 }
 
@@ -233,9 +233,22 @@ function formatCount(value: unknown) {
   return String(Math.max(0, Math.trunc(number)));
 }
 
+function reasonLabel(reason: string) {
+  const labels: Record<string, string> = {
+    high_cloud_similarity: "云端相似度过高",
+    local_backtest_failed: "本地回测未通过",
+    local_candidate_invalid: "本地候选未通过",
+    local_quality_failed: "本地质量未通过",
+    missing_official_alpha_id: "缺少官方 Alpha ID",
+    missing_official_metrics: "缺少官方仿真指标",
+    score_below_official_simulation_threshold: "未达到官方仿真分数门槛",
+  };
+  return labels[reason] || reason;
+}
+
 function nextActionLabel(value: unknown) {
   const text = String(value || "");
-  if (text === "trusted_environment_official_simulation_required") return "official review";
+  if (text === "trusted_environment_official_simulation_required") return "官方复核";
   if (text === "wait_for_open_backtest_slot") return "等待槽位";
   if (text === "generate_candidates") return "生成候选";
   if (text === "improve_or_regenerate_candidates") return "改进候选";

@@ -968,6 +968,7 @@ class LocalBacktestEngine:
             plus a 'pass_local' boolean based on BRAIN thresholds.
         """
         data = data or self.get_data(cache_key)
+        from brain_alpha_ops.redaction import redact_error_message
 
         try:
             # Step 1: Evaluate expression
@@ -1000,7 +1001,7 @@ class LocalBacktestEngine:
             return {
                 "ok": False,
                 "expression": expression,
-                "error": str(exc),
+                "error": redact_error_message(exc),
                 "error_type": type(exc).__name__,
                 "pass_local": False,
             }
@@ -1013,7 +1014,7 @@ class LocalBacktestEngine:
             return {
                 "ok": False,
                 "expression": expression,
-                "error": str(exc),
+                "error": redact_error_message(exc),
                 "error_type": type(exc).__name__,
                 "pass_local": False,
             }

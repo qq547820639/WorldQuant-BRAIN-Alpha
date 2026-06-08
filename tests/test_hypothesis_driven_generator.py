@@ -1067,6 +1067,24 @@ def test_bare_fallback_rotates_fields_and_templates_without_duplicates():
     assert "rank(ts_delta(close, 10))" not in expressions
 
 
+def test_bare_fallback_blocks_when_official_field_context_is_empty(caplog):
+    gen = HypothesisDrivenGenerator(
+        loader=None,
+        mapper=None,
+        theme_engine=None,
+        selector=None,
+        library=None,
+        ratio_str="0/0/100",
+    )
+    gen.update_context([], [{"name": "rank"}, {"name": "ts_delta"}])
+
+    with caplog.at_level(logging.WARNING, logger="brain_alpha_ops.research.hypothesis_driven_generator"):
+        candidates = gen.generate(3, "pv1")
+
+    assert candidates == []
+    assert "bare fallback blocked because official field context is empty" in caplog.text
+
+
 def test_bare_fallback_deduplicates_single_field_batch():
     gen = HypothesisDrivenGenerator(
         loader=None,
@@ -1208,6 +1226,33 @@ def test_generator_private_extractors_use_ast_profile():
 
     assert gen._extract_fields(expression) == ["eps_fy1_3m_rev", "sales_fy1_rev"]
     assert gen._extract_operators(expression) == ["rank", "ts_delta", "rank", "ts_mean"]
+
+
+def test_generator_private_extractors_normalize_legacy_operator_aliases():
+    gen = HypothesisDrivenGenerator(
+        loader=None,
+        mapper=None,
+        theme_engine=None,
+        selector=None,
+        library=None,
+    )
+    gen.update_context(
+        [{"name": "eps_fy1_3m_rev"}, {"name": "sales_fy1_rev"}],
+        [
+            {"name": "rank"},
+            {"name": "ts_std_dev"},
+            {"name": "ts_arg_max"},
+            {"name": "ts_covariance"},
+        ],
+    )
+    expression = "rank(ts_std(eps_fy1_3m_rev, 20)) + ts_argmax(sales_fy1_rev, 5) + ts_cov(eps_fy1_3m_rev, sales_fy1_rev, 10)"
+
+    operators = gen._extract_operators(expression)
+
+    assert operators == ["rank", "ts_std_dev", "ts_arg_max", "ts_covariance"]
+    assert "ts_std" not in operators
+    assert "ts_argmax" not in operators
+    assert "ts_cov" not in operators
 
 
 def test_generator_private_extract_fields_falls_back_without_known_field_set():

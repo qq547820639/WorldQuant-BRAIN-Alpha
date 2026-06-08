@@ -17,9 +17,9 @@ def test_react_app_state_cards_have_accessible_navigation_semantics():
     app = APP.read_text(encoding="utf-8")
     state_cards = _component("StateCards.tsx")
 
-    assert 'useState<CardViewId | "cards">("cards")' in app
-    assert 'aria-label="返回状态卡"' in app
-    assert 'aria-label="打开系统配置"' in app
+    assert 'useState<CardViewId>("dashboard")' in app
+    assert 'aria-label="切换导航菜单"' in app
+    assert 'import Sidebar from "@/components/Sidebar"' in app
     assert "onClick={() => onNavigate(config.id)}" in state_cards
     assert 'type="button"' in state_cards
     assert "focus:outline-none focus:ring-2 focus:ring-brand-500/50" in state_cards
@@ -34,9 +34,9 @@ def test_react_dashboard_and_candidate_errors_are_announced():
     snapshots = _component("SnapshotPanel.tsx")
 
     assert 'role="alert"' in dashboard
-    assert 'aria-live="assertive"' in dashboard
+    assert '重试</button>' in dashboard
     assert 'aria-label="过滤候选"' in candidates
-    assert 'aria-label="刷新候选"' in candidates
+    assert '"刷新"' in candidates
     assert 'role="alert"' in candidates
     assert 'aria-label={`筛选 ${config.title}`}' in snapshots
     assert 'aria-label={`${config.title}表格`}' in snapshots
@@ -44,14 +44,12 @@ def test_react_dashboard_and_candidate_errors_are_announced():
 
 def test_react_submission_inputs_expose_validation_and_confirmation_context():
     submission = _component("SubmissionPanel.tsx")
+    confirm = _component("SubmissionConfirmPanel.tsx")
 
-    assert 'aria-describedby="alpha-id-validation"' in submission
-    assert 'aria-describedby="candidate-json-validation"' in submission
-    assert "aria-invalid={Boolean(candidateJsonError)}" in submission
-    assert 'role={candidateJsonError ? "alert" : undefined}' in submission
-    assert 'aria-describedby="confirm-submit-help"' in submission
-    assert 'id="confirm-submit-help"' in submission
-    assert 'aria-hidden="true">⚠</span>' in submission
+    assert 'role="status"' in submission
+    assert 'aria-live="polite"' in submission
+    assert "SubmissionConfirmPanel notify={notify}" in submission
+    assert 'role="alert"' in confirm
 
 
 def test_react_progress_and_score_bars_have_accessible_names():
@@ -65,22 +63,21 @@ def test_react_progress_and_score_bars_have_accessible_names():
     assert "aria-valuemax={max}" in scoring
 
 
-def test_react_job_monitor_exposes_status_and_event_log_to_assistive_tech():
+def test_react_job_monitor_exposes_status_and_run_records_to_assistive_tech():
     job_monitor = _component("JobMonitor.tsx")
 
-    assert 'role="status"' in job_monitor
-    assert "流水线${running ? \"运行中\" : \"空闲\"}" in job_monitor
-    assert 'role="log"' in job_monitor
-    assert 'aria-label="流水线事件日志"' in job_monitor
+    assert 'ProgressFeedback' in job_monitor
+    assert '"运行中" : "空闲"' in job_monitor
+    assert "events.length > 0" in job_monitor
     assert "function PlayIcon" in job_monitor
     assert "function StopIcon" in job_monitor
-    assert 'aria-hidden="true" width="16" height="16"' in job_monitor
+    assert 'aria-hidden="true" width="14" height="14"' in job_monitor
 
 
 def test_react_gate_status_icons_are_visual_only():
     scoring = _component("ScoringPanel.tsx")
 
-    assert 'aria-hidden="true">{check.passed ? "✓" : "✕"}</span>' in scoring
+    assert '{check.passed ? "\\u2713" : "\\u2715"}</span>' in scoring
 
 
 def test_react_toasts_announce_errors_assertively_and_other_messages_politely():

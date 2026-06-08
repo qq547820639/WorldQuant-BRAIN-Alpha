@@ -120,6 +120,9 @@ def _complete_official_metrics(**overrides):
         "self_correlation": 0.1,
         "prod_correlation": 0.2,
         "weight_concentration": 0.03,
+        "sub_universe_sharpe": 1.2,
+        "alphaSize": 1000,
+        "subUniverseSize": 1000,
     }
     metrics.update(overrides)
     return metrics
@@ -138,17 +141,17 @@ def test_web_html_serves_current_react_shell():
 
     app_tsx = _react_source("App.tsx")
     state_cards_tsx = _react_source("components", "StateCards.tsx")
-    job_monitor_tsx = _react_source("components", "JobMonitor.tsx")
     for text in (
         "BRAIN Alpha Ops",
-        "生产验证工作台",
+        "本地非提交页面",
+        "官方操作",
         "候选管理",
         "回测监控",
         "质量门禁",
-        "提交确认",
+        "阻断复核",
         "系统配置",
         "云端快照",
-        "返回状态卡",
+        "切换导航菜单",
     ):
         assert text in app_tsx or text in state_cards_tsx
 
@@ -183,6 +186,7 @@ def test_web_settings_select_options_match_canonical_contract():
 
 def test_submit_preflight_errors_are_backend_owned_and_react_readable():
     hook_js = _react_source("hooks", "useApi.ts")
+    csrf_utils_ts = _react_source("utils", "csrf.ts")
     submission_tsx = _react_source("components", "SubmissionConfirmPanel.tsx")
     quality_tsx = _react_source("components", "QualityCheckPanel.tsx")
     safety_py = (Path(__file__).resolve().parents[1] / "brain_alpha_ops" / "web_submission_safety.py").read_text(encoding="utf-8")
@@ -203,10 +207,10 @@ def test_submit_preflight_errors_are_backend_owned_and_react_readable():
     assert "/api/submit_readiness" in submission_tsx
     assert "/api/backtest_slots" in quality_tsx
     assert "json.error || json.error_code || \"Request failed\"" in hook_js
-    assert "提交确认数据加载失败" in submission_tsx
+    assert "提交前阻断复核数据加载失败" in submission_tsx
     assert "达标检查数据加载失败" in quality_tsx
-    assert "X-Brain-Alpha-CSRF" in hook_js
-    assert "brain-alpha-csrf" in hook_js
+    assert "X-Brain-Alpha-CSRF" in csrf_utils_ts
+    assert "brain-alpha-csrf" in csrf_utils_ts
 
 
 def test_web_react_dist_shell_has_build_assets():
@@ -226,8 +230,9 @@ def test_web_react_sources_are_current_frontend_contract():
     candidate_tsx = _react_source("components", "CandidateTable.tsx")
     snapshot_tsx = _react_source("components", "SnapshotPanel.tsx")
 
-    assert "StateCards" in app_tsx
-    assert "switchTab" not in app_tsx
+    assert "PhaseShell" in app_tsx
+    assert "usePhaseState" in app_tsx
+    assert "MobileTabBar" in app_tsx
     assert "/api/candidates?limit=" in candidate_tsx
     assert "/api/check_results" in candidate_tsx
     assert "/api/generate_candidates" in candidate_tsx
@@ -313,7 +318,7 @@ def test_react_candidate_table_keeps_filter_sort_and_mobile_safe_table_contract(
         "const PAGE_SIZE = 20",
         'aria-label="过滤候选"',
         "sanitizeTextInput",
-        "max-w-full overflow-auto",
+        'overflow: "auto"',
         "candidateText(c.expression)",
         "candidateText(c.family)",
         "candidateIdentity(c)",
@@ -336,16 +341,16 @@ def test_react_state_cards_keep_core_flow_visible_and_actionable():
     job_monitor_tsx = _react_source("components", "JobMonitor.tsx")
 
     for contract in (
-        'useState<CardViewId | "cards">("cards")',
-        'aria-label="返回状态卡"',
-        "StateCards onNavigate={handleNavigate}",
-        "登录、运行、证明可用",
-        "输入 BRAIN 账户，测试连接，启动强制非提交的生产验证",
-        "BRAIN 账户连接",
+        'useState<CardViewId>("dashboard")',
+        'aria-label="切换导航菜单"',
+        "onNavigate",
+        "点击状态卡进入对应功能模块",
+        "测试连接",
+        "凭证与连接",
         "非提交生产验证",
-        "填写 BRAIN 凭证",
-        "未连接 BRAIN",
-        "打开系统配置",
+        "填写凭证",
+        "未连接",
+        "系统配置",
         "/api/candidates?limit=1000",
         "/api/backtest_slots",
         "/api/config",
@@ -370,9 +375,9 @@ def test_react_state_cards_keep_core_flow_visible_and_actionable():
     ):
         assert view_id in state_cards_tsx
 
-    assert "import ConfigPanel" in app_tsx
+    assert "ConfigPanel" in app_tsx
     assert 'case "config":' in app_tsx
-    assert "detailContent = <ConfigPanel notify={notify} credentials={credentials} onCredentialsChange={setCredentials} />" in app_tsx
+    assert "<ConfigPanel notify={notify} credentials={credentials} onCredentialsChange={setCredentials} />" in app_tsx
 
 
 def test_react_quality_submit_and_backtest_panels_cover_conflict_guards():
@@ -384,24 +389,27 @@ def test_react_quality_submit_and_backtest_panels_cover_conflict_guards():
         "/api/backtest_slots",
         "POLL_INTERVAL_MS = 5000",
         "BacktestQueueSummaryStrip",
-        "Review blockers",
-        "Submit evidence",
+        "官方工作阻断",
+        "提交证据阻断",
         "official_api_called",
         "等待官方容量",
     ):
         assert contract in backtest_tsx
 
     for contract in (
-        "/api/candidates?limit=1000",
         "/api/backtest_slots",
         "/api/submit_readiness",
         "达标检查",
         "本地通过",
         "官方仿真",
-        "可提交",
-        "Thresholds:",
-        "Blocking:",
-        "Family blockers:",
+        "阻断复核候选",
+        "官方门槛:",
+        "官方工作阻断:",
+        "提交证据阻断:",
+        "候选族阻断:",
+        "下一步:",
+        "reasonLabel",
+        "nextActionText",
     ):
         assert contract in quality_tsx
 
@@ -409,7 +417,7 @@ def test_react_quality_submit_and_backtest_panels_cover_conflict_guards():
         "/api/candidates?limit=1000",
         "/api/check_results",
         "/api/submit_readiness",
-        "提交前确认",
+        "提交前阻断复核",
         "ready_to_submit",
         "production_gaps",
         "required_next_steps",
@@ -631,12 +639,13 @@ def test_public_config_schema_exposes_required_panel_contract():
     )
     assert "assistantGuidanceScoreMinOutcomeCount" in control_paths
     assert "strategyPluginSpecs" in control_paths
-    assert schema["operation_layout"]["primary_console"] == [
-        "toggle-run",
-        "sync-cloud",
-        "check-batch",
-        "submit-selected",
+    assert schema["operation_layout"]["primary_actions"] == [
+        "run-non-submit-proof",
+        "refresh-official-context",
+        "review-quality-gates",
+        "review-submit-readiness",
     ]
+    assert "primary_console" not in schema["operation_layout"]
 
 
 def test_web_routes_define_session_policy_and_known_paths():
@@ -1446,34 +1455,38 @@ def test_observability_submission_preflight_includes_official_call_guard(monkeyp
     config = RunConfig(environment="production")
     config.ops.storage_dir = str(storage)
     registry = WebJobRegistry.create(storage)
+    original_web_attrs = _snapshot_web_attrs("JOB_REGISTRY", *_WEB_JOB_EXPORTS)
     monkeypatch.setattr(web, "JOB_REGISTRY", registry)
     for name, value in registry.legacy_exports().items():
-        monkeypatch.setattr(web, name, value, raising=False)
-    repo = ResearchRepository(str(storage))
-    repo.save_lifecycle_record(
-        "run_1",
-        {
-            "alpha_id": "dup_candidate",
-            "stage": "observability_duplicate_blocked",
-            "status": "observability_duplicate_blocked",
-            "note": "official_validation",
-            "family": "Momentum",
-            "score": 95,
-            "expression": "rank(ts_delta(close, 20))",
-            "gate": {
-                "status": "OBSERVABILITY_DUPLICATE_EXPRESSION_BLOCKED",
-                "failed_reasons": ["observability duplicate expression history blocked official call before official_validation"],
+        setattr(web, name, value)
+    try:
+        repo = ResearchRepository(str(storage))
+        repo.save_lifecycle_record(
+            "run_1",
+            {
+                "alpha_id": "dup_candidate",
+                "stage": "observability_duplicate_blocked",
+                "status": "observability_duplicate_blocked",
+                "note": "official_validation",
+                "family": "Momentum",
+                "score": 95,
+                "expression": "rank(ts_delta(close, 20))",
+                "gate": {
+                    "status": "OBSERVABILITY_DUPLICATE_EXPRESSION_BLOCKED",
+                    "failed_reasons": ["observability duplicate expression history blocked official call before official_validation"],
+                },
             },
-        },
-    )
-    monkeypatch.setattr(web, "load_run_config", lambda: config)
+        )
+        monkeypatch.setattr(web, "load_run_config", lambda: config)
 
-    advisory = web.observability_submission_preflight(str(storage), limit=100, top_n=5)
+        advisory = web.observability_submission_preflight(str(storage), limit=100, top_n=5)
 
-    assert advisory["ok"] is True
-    assert advisory["official_call_guard"]["blocked_count"] == 1
-    assert advisory["official_call_guard"]["validation_blocked_count"] == 1
-    assert advisory["official_call_guard"]["recent_blocks"][0]["alpha_id"] == "dup_candidate"
+        assert advisory["ok"] is True
+        assert advisory["official_call_guard"]["blocked_count"] == 1
+        assert advisory["official_call_guard"]["validation_blocked_count"] == 1
+        assert advisory["official_call_guard"]["recent_blocks"][0]["alpha_id"] == "dup_candidate"
+    finally:
+        _restore_web_attrs(original_web_attrs)
 
 
 def test_observability_submission_preflight_failure_requires_confirmation(monkeypatch, tmp_path):
@@ -1598,6 +1611,11 @@ def test_submit_candidate_requires_observability_confirmation(monkeypatch, tmp_p
     monkeypatch.setattr(web, "cloud_alpha_snapshot", lambda limit=2000: {"alphas": [], "summary": {"is_stale": False}})
     monkeypatch.setattr(web, "api_from_run_config", lambda run_config: FakeApi())
     monkeypatch.setattr(web, "observability_submission_preflight", lambda storage_dir: advisory)
+    monkeypatch.setattr(
+        web,
+        "live_submit_readiness_hard_gate",
+        lambda candidate, run_config, official_id: {"ok": True},
+    )
 
     blocked = web.submit_candidate({"candidate": candidate, "confirm_submit": True})
     confirmed = web.submit_candidate({"candidate": candidate, "confirm_submit": True, "confirm_observability_risk": True})
@@ -1649,6 +1667,11 @@ def test_submit_candidate_requires_confirmation_when_observability_preflight_fai
     monkeypatch.setattr(web, "cloud_alpha_snapshot", lambda limit=2000: {"alphas": [], "summary": {"is_stale": False}})
     monkeypatch.setattr(web, "api_from_run_config", lambda run_config: FakeApi())
     monkeypatch.setattr(web, "observability_submission_preflight", lambda storage_dir: advisory)
+    monkeypatch.setattr(
+        web,
+        "live_submit_readiness_hard_gate",
+        lambda candidate, run_config, official_id: {"ok": True},
+    )
 
     blocked = web.submit_candidate({"candidate": candidate, "confirm_submit": True})
     confirmed = web.submit_candidate({"candidate": candidate, "confirm_submit": True, "confirm_observability_risk": True})
@@ -1778,62 +1801,66 @@ def test_research_observability_snapshot_summarizes_expression_backtest_and_erro
     config = RunConfig(environment="production")
     config.ops.storage_dir = str(storage)
     registry = WebJobRegistry.create(storage)
+    original_web_attrs = _snapshot_web_attrs("JOB_REGISTRY", *_WEB_JOB_EXPORTS)
     monkeypatch.setattr(web, "JOB_REGISTRY", registry)
     for name, value in registry.legacy_exports().items():
-        monkeypatch.setattr(web, name, value, raising=False)
-    repo = ResearchRepository(str(storage))
-    repo.save_candidate(
-        "run_1",
-        Candidate(
-            alpha_id="a1",
-            expression="rank(ts_delta(close, 20))",
-            family="Momentum",
-            hypothesis="momentum",
-            data_fields=["close"],
-            operators=["rank", "ts_delta"],
-            scorecard={"total_score": 88},
-            lifecycle_status="submission_ready",
-        ),
-    )
-    repo.save_backtest_record(
-        "run_1",
-        {
-            "action": "simulation_result",
-            "alpha_id": "a1",
-            "simulation_id": "sim_1",
-            "status": "simulation_failed",
-            "lifecycle_status": "simulation_failed",
-            "family": "Momentum",
-            "score": 88,
-            "expression": " rank ( ts_delta ( close , 20 ) ) ",
-            "note": "rate limit retry pending",
-        },
-    )
-    repo.save_check_record(
-        {
-            "alpha_id": "a1",
-            "expression": "rank(ts_delta(close, 20))",
-            "error": "Too many requests",
-        }
-    )
-    monkeypatch.setattr(web, "load_run_config", lambda: config)
+        setattr(web, name, value)
+    try:
+        repo = ResearchRepository(str(storage))
+        repo.save_candidate(
+            "run_1",
+            Candidate(
+                alpha_id="a1",
+                expression="rank(ts_delta(close, 20))",
+                family="Momentum",
+                hypothesis="momentum",
+                data_fields=["close"],
+                operators=["rank", "ts_delta"],
+                scorecard={"total_score": 88},
+                lifecycle_status="submission_ready",
+            ),
+        )
+        repo.save_backtest_record(
+            "run_1",
+            {
+                "action": "simulation_result",
+                "alpha_id": "a1",
+                "simulation_id": "sim_1",
+                "status": "simulation_failed",
+                "lifecycle_status": "simulation_failed",
+                "family": "Momentum",
+                "score": 88,
+                "expression": " rank ( ts_delta ( close , 20 ) ) ",
+                "note": "rate limit retry pending",
+            },
+        )
+        repo.save_check_record(
+            {
+                "alpha_id": "a1",
+                "expression": "rank(ts_delta(close, 20))",
+                "error": "Too many requests",
+            }
+        )
+        monkeypatch.setattr(web, "load_run_config", lambda: config)
 
-    snapshot = research_observability_snapshot(limit=100, top_n=5, include_cloud=False)
+        snapshot = research_observability_snapshot(limit=100, top_n=5, include_cloud=False)
 
-    assert snapshot["ok"] is True
-    assert snapshot["schema_version"] == "research_observability_snapshot.v1"
-    assert snapshot["expression_index"]["total_expression_records"] == 3
-    assert snapshot["expression_index"]["duplicate_expression_count"] == 1
-    assert snapshot["backtests"]["failed_count"] == 1
-    assert snapshot["backtests"]["retryable_count"] == 1
-    assert snapshot["errors"]["category_counts"]["rate_limit"] == 2
-    assert snapshot["sqlite_cache"]["exists"] is True
-    assert snapshot["sqlite_cache"]["error"] == ""
-    assert snapshot["jsonl"]["backtests.jsonl"]["parsed_count"] == 1
-    assert snapshot["health"]["risk_level"] in {"medium", "high"}
-    assert "duplicate_expression_history" in snapshot["health"]["health_flags"]
-    assert "retryable_official_errors_present" in snapshot["health"]["warning_flags"]
-    assert snapshot["recommendations"]
+        assert snapshot["ok"] is True
+        assert snapshot["schema_version"] == "research_observability_snapshot.v1"
+        assert snapshot["expression_index"]["total_expression_records"] == 3
+        assert snapshot["expression_index"]["duplicate_expression_count"] == 1
+        assert snapshot["backtests"]["failed_count"] == 1
+        assert snapshot["backtests"]["retryable_count"] == 1
+        assert snapshot["errors"]["category_counts"]["rate_limit"] == 2
+        assert snapshot["sqlite_cache"]["exists"] is True
+        assert snapshot["sqlite_cache"]["error"] == ""
+        assert snapshot["jsonl"]["backtests.jsonl"]["parsed_count"] == 1
+        assert snapshot["health"]["risk_level"] in {"medium", "high"}
+        assert "duplicate_expression_history" in snapshot["health"]["health_flags"]
+        assert "retryable_official_errors_present" in snapshot["health"]["warning_flags"]
+        assert snapshot["recommendations"]
+    finally:
+        _restore_web_attrs(original_web_attrs)
 
 
 def test_assistant_context_snapshot_uses_web_runtime_sources(monkeypatch, tmp_path):
@@ -2248,6 +2275,7 @@ def test_assistant_cross_review_payload_accepts_consistent_responses():
 def test_save_assistant_guidance_payload_persists_usable_guidance(monkeypatch, tmp_path):
     config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path)
+    config.ops.settings.dataset = "pv1"
     monkeypatch.setattr(web, "load_run_config", lambda *args, **kwargs: config)
 
     payload = save_assistant_guidance_payload(
@@ -2276,6 +2304,7 @@ def test_save_assistant_guidance_payload_persists_usable_guidance(monkeypatch, t
 def test_save_assistant_guidance_payload_skips_low_confidence(monkeypatch, tmp_path):
     config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path)
+    config.ops.settings.dataset = "pv1"
     monkeypatch.setattr(web, "load_run_config", lambda *args, **kwargs: config)
 
     payload = save_assistant_guidance_payload(
@@ -2300,6 +2329,7 @@ def test_save_assistant_guidance_payload_skips_low_confidence(monkeypatch, tmp_p
 def test_generate_candidates_payload_applies_assistant_guidance(monkeypatch, tmp_path):
     config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path)
+    config.ops.settings.dataset = "pv1"
     monkeypatch.setattr(web, "load_run_config", lambda *args, **kwargs: config)
     captured = {}
 
@@ -2343,6 +2373,7 @@ def test_generate_candidates_payload_applies_assistant_guidance(monkeypatch, tmp
 def test_generate_candidates_payload_attaches_guidance_outcome_metadata(monkeypatch, tmp_path):
     config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path)
+    config.ops.settings.dataset = "pv1"
     monkeypatch.setattr(web, "load_run_config", lambda *args, **kwargs: config)
     monkeypatch.setattr(
         "brain_alpha_ops.research.generator.CandidateGenerator.set_experience_guidance",
@@ -2450,3 +2481,23 @@ def test_read_official_context_json_logs_invalid_file(monkeypatch, tmp_path, cap
 
     assert isinstance(rows, list)
     assert "failed to read official context file" in caplog.text
+
+
+def test_web_watchdog_sweep_scans_all_job_stores(tmp_path):
+    from brain_alpha_ops import web_runtime_bindings
+
+    fake_web = SimpleNamespace(
+        JOBS=JobStore(tmp_path / "jobs.json", job_prefix="job", watchdog_timeout_seconds=5),
+        SYNC_JOBS=JobStore(tmp_path / "sync.json", job_prefix="sync", watchdog_timeout_seconds=5),
+        CHECK_JOBS=JobStore(tmp_path / "check.json", job_prefix="check", watchdog_timeout_seconds=5),
+        ASYNC_JOBS=JobStore(tmp_path / "async.json", job_prefix="task", watchdog_timeout_seconds=5),
+    )
+    for store in (fake_web.JOBS, fake_web.SYNC_JOBS, fake_web.CHECK_JOBS, fake_web.ASYNC_JOBS):
+        job_id = store.create()
+        store.update(job_id, status="running", updated_at=1.0)
+
+    assert web_runtime_bindings._watchdog_sweep_once(fake_web) == 4
+    assert fake_web.JOBS.latest_active() is None
+    assert fake_web.SYNC_JOBS.latest_active() is None
+    assert fake_web.CHECK_JOBS.latest_active() is None
+    assert fake_web.ASYNC_JOBS.latest_active() is None

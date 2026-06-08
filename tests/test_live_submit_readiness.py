@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 
+from brain_alpha_ops.submission_readiness import submit_readiness_hard_gate
 from scripts.check_live_submit_readiness import check_live_submit_readiness, main
 
 
@@ -16,6 +17,9 @@ def _official_metrics(**overrides):
         "self_correlation": 0.2,
         "prod_correlation": 0.2,
         "weight_concentration": 0.05,
+        "sub_universe_sharpe": 1.4,
+        "subUniverseSize": 1000,
+        "alphaSize": 1000,
     }
     metrics.update(overrides)
     return metrics
@@ -138,6 +142,60 @@ def test_live_submit_readiness_accepts_low_risk_official_pass(tmp_path):
     assert result["eligible_candidates"][0]["official_release_gate"]["status"] == "PASS"
 
 
+def test_submit_readiness_hard_gate_accepts_same_official_id_and_expression():
+    readiness = {
+        "ok": True,
+        "schema_version": "live_submit_readiness.v1",
+        "ready_to_submit": True,
+        "eligible_count": 1,
+        "candidate_count": 1,
+        "eligible_candidates": [
+            {
+                "alpha_id": "alpha_ready",
+                "official_alpha_id": "official_ready",
+                "expression": "rank(close)",
+                "eligible": True,
+                "blocking_reasons": [],
+            }
+        ],
+    }
+
+    payload = submit_readiness_hard_gate(
+        {"alpha_id": "alpha_ready", "official_alpha_id": "official_ready", "expression": "rank(close)"},
+        readiness,
+    )
+
+    assert payload["ok"] is True
+    assert payload["matched_readiness_candidate"]["official_alpha_id"] == "official_ready"
+
+
+def test_submit_readiness_hard_gate_blocks_global_ready_candidate_mismatch():
+    readiness = {
+        "ok": True,
+        "schema_version": "live_submit_readiness.v1",
+        "ready_to_submit": True,
+        "eligible_count": 1,
+        "candidate_count": 1,
+        "eligible_candidates": [
+            {
+                "alpha_id": "alpha_other",
+                "official_alpha_id": "official_ready",
+                "expression": "rank(volume)",
+                "eligible": True,
+                "blocking_reasons": [],
+            }
+        ],
+    }
+
+    payload = submit_readiness_hard_gate(
+        {"alpha_id": "alpha_ready", "official_alpha_id": "official_ready", "expression": "rank(close)"},
+        readiness,
+    )
+
+    assert payload["ok"] is False
+    assert payload["error_code"] == "SUBMIT_READINESS_CANDIDATE_MISMATCH"
+
+
 def test_live_submit_readiness_requires_official_metrics_above_config_thresholds(tmp_path):
     jobs = _jobs_file(
         tmp_path,
@@ -188,6 +246,63 @@ def test_live_submit_readiness_requires_complete_official_release_metrics(tmp_pa
     assert "missing_official_metric_fields" in result["best_candidate"]["blocking_reasons"]
     assert "official_sharpe_below_threshold" in result["best_candidate"]["blocking_reasons"]
     assert "sharpe" in result["best_candidate"]["missing_official_metric_fields"]
+
+
+def test_live_submit_readiness_requires_official_sub_universe_metric(tmp_path):
+    jobs = _jobs_file(
+        tmp_path,
+        [
+            {
+                "alpha_id": "alpha_missing_sub_universe",
+                "official_alpha_id": "official_missing_sub_universe",
+                "lifecycle_status": "submission_ready",
+                "gate": {"submission_ready": True},
+                "official_metrics": _official_metrics(
+                    official_alpha_id="official_missing_sub_universe",
+                    sub_universe_sharpe=None,
+                ),
+                "scorecard": {"total_score": 91.2, "decision_band": "submit_candidate"},
+                "cloud_correlation_risk": {"level": "low", "max_similarity": 0.12},
+            }
+        ],
+    )
+
+    result = check_live_submit_readiness(jobs)
+
+    assert result["ready_to_submit"] is False
+    assert result["eligible_count"] == 0
+    assert "missing_official_metric_fields" in result["best_candidate"]["blocking_reasons"]
+    assert "sub_universe_sharpe/subUniverseSharpe" in result["best_candidate"]["missing_official_metric_fields"]
+
+
+def test_live_submit_readiness_blocks_low_sub_universe_sharpe(tmp_path):
+    jobs = _jobs_file(
+        tmp_path,
+        [
+            {
+                "alpha_id": "alpha_low_sub_universe",
+                "official_alpha_id": "official_low_sub_universe",
+                "lifecycle_status": "submission_ready",
+                "gate": {"submission_ready": True},
+                "official_metrics": _official_metrics(
+                    official_alpha_id="official_low_sub_universe",
+                    sharpe=1.6,
+                    sub_universe_sharpe=0.6,
+                    subUniverseSize=1000,
+                    alphaSize=1000,
+                ),
+                "scorecard": {"total_score": 91.2, "decision_band": "submit_candidate"},
+                "cloud_correlation_risk": {"level": "low", "max_similarity": 0.12},
+            }
+        ],
+    )
+
+    result = check_live_submit_readiness(jobs)
+
+    assert result["ready_to_submit"] is False
+    assert result["eligible_count"] == 0
+    assert result["best_candidate"]["official_release_gate"]["status"] == "FAIL"
+    assert result["best_candidate"]["blocking_reasons"] == ["official_sub_universe_sharpe_below_threshold"]
 
 
 def test_live_submit_readiness_audits_all_jobs_for_hidden_eligible_candidates(tmp_path):

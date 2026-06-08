@@ -250,12 +250,13 @@ def _auto_calibration_status(storage_dir: str, *, trigger: bool = False) -> dict
             status["triggered"] = False
         return status
     except Exception as exc:
+        from brain_alpha_ops.redaction import redact_error_message
         logger.warning("scoring auto-calibration status unavailable", exc_info=True)
         return {
             "available": False,
             "trigger_requested": bool(trigger),
             "triggered": False,
-            "error": str(exc),
+            "error": redact_error_message(exc),
         }
 
 
@@ -284,5 +285,6 @@ def handle_checkpoint_status(query: dict[str, Any]) -> dict[str, Any]:
             "resume_available": latest is not None,
         }
     except Exception as exc:
+        from brain_alpha_ops.redaction import redact_error_message
         logger.warning("checkpoint status unavailable", exc_info=True)
-        return {"ok": False, "error": str(exc), "resume_available": False}
+        return {"ok": False, "error": redact_error_message(exc), "resume_available": False}

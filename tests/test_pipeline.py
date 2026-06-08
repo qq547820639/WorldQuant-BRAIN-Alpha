@@ -360,8 +360,12 @@ def test_pipeline_auto_submit_blocks_when_cross_review_rejects(monkeypatch):
                 "fitness": 1.6,
                 "turnover": 0.2,
                 "correlation": 0.1,
+                "self_correlation": 0.1,
+                "prod_correlation": 0.1,
                 "weight_concentration": 0.05,
                 "sub_universe_sharpe": 1.7,
+                "alphaSize": 1000,
+                "subUniverseSize": 1000,
                 "pass_fail": "PASS",
             },
             gate={"submission_ready": True},
@@ -464,6 +468,7 @@ def test_pipeline_auto_submit_reports_exact_missing_official_metric_field(monkey
                 "correlation": 0.1,
                 "self_correlation": 0.1,
                 "prod_correlation": 0.1,
+                "sub_universe_sharpe": 1.5,
                 "pass_fail": "PASS",
             },
             gate={"submission_ready": True},
@@ -488,6 +493,140 @@ def test_pipeline_auto_submit_reports_exact_missing_official_metric_field(monkey
         assert api.submissions == []
         assert metric_check["passed"] is False
         assert metric_check["detail"] == "missing_official_metric_fields:weight_concentration"
+
+
+def test_pipeline_auto_submit_blocks_official_release_gate_failure_before_cross_review(monkeypatch):
+    with tempfile.TemporaryDirectory() as tmp:
+        config = OpsConfig(
+            budget=ResearchBudget(require_cloud_sync=False),
+            storage_dir=tmp,
+        )
+
+        class RecordingAPI(ProductionBrainAPIStub):
+            def __init__(self):
+                super().__init__()
+                self.submissions = []
+
+            def submit_alpha(self, alpha_id, expression, settings):
+                self.submissions.append((alpha_id, expression, settings))
+                return super().submit_alpha(alpha_id, expression, settings)
+
+        api = RecordingAPI()
+        pipeline = AlphaResearchPipeline(config=config, api=api)
+        pipeline.cloud_sync = {"status": "loaded", "stale": False, "warning": ""}
+        pipeline.cloud_alphas = [{"id": "existing", "status": "UNSUBMITTED", "expression": "rank(volume)"}]
+        candidate = Candidate(
+            alpha_id="alpha_low_release_gate",
+            expression="rank(close)",
+            family="test",
+            hypothesis="official release gate failure must block auto submit",
+            data_fields=["close"],
+            operators=["rank"],
+            official_alpha_id="prod_alpha_9012",
+            official_metrics={
+                "sharpe": 1.6,
+                "fitness": 1.5,
+                "turnover": 0.2,
+                "correlation": 0.1,
+                "self_correlation": 0.1,
+                "prod_correlation": 0.1,
+                "weight_concentration": 0.05,
+                "sub_universe_sharpe": 0.6,
+                "subUniverseSize": 1000,
+                "alphaSize": 1000,
+                "pass_fail": "PASS",
+            },
+            gate={"submission_ready": True},
+            scorecard={"total_score": 93, "decision_band": "submit_candidate"},
+        )
+        cross_review_called = {"value": False}
+
+        def cross_review(_candidate):
+            cross_review_called["value"] = True
+            return {"allowed": True, "failed_reasons": []}
+
+        monkeypatch.setattr(pipeline, "_pre_submit_cross_review", cross_review)
+
+        submitted = pipeline._try_auto_submit(candidate, 0)
+
+        release_check = next(
+            check for check in candidate.submission["safety"]["checks"]
+            if check["name"] == "official_release_gate"
+        )
+        assert submitted == 0
+        assert cross_review_called["value"] is False
+        assert api.submissions == []
+        assert release_check["passed"] is False
+        assert release_check["detail"] == "official_release_gate_failed:sub_universe_sharpe"
+        assert candidate.submission["safety"]["official_release_gate"]["status"] == "FAIL"
+
+
+def test_pipeline_auto_submit_blocks_when_live_readiness_not_ready(monkeypatch):
+    with tempfile.TemporaryDirectory() as tmp:
+        config = OpsConfig(
+            budget=ResearchBudget(require_cloud_sync=False),
+            storage_dir=tmp,
+        )
+
+        class RecordingAPI(ProductionBrainAPIStub):
+            def __init__(self):
+                super().__init__()
+                self.submissions = []
+
+            def submit_alpha(self, alpha_id, expression, settings):
+                self.submissions.append((alpha_id, expression, settings))
+                return super().submit_alpha(alpha_id, expression, settings)
+
+        api = RecordingAPI()
+        pipeline = AlphaResearchPipeline(config=config, api=api)
+        pipeline.cloud_sync = {"status": "loaded", "stale": False, "warning": ""}
+        pipeline.cloud_alphas = [{"id": "existing", "status": "UNSUBMITTED", "expression": "rank(volume)"}]
+        candidate = Candidate(
+            alpha_id="alpha_live_readiness_blocked",
+            expression="rank(close)",
+            family="test",
+            hypothesis="live readiness must block auto submit",
+            data_fields=["close"],
+            operators=["rank"],
+            official_alpha_id="prod_alpha_7777",
+            official_metrics={
+                "sharpe": 2.0,
+                "fitness": 1.5,
+                "turnover": 0.2,
+                "correlation": 0.1,
+                "self_correlation": 0.1,
+                "prod_correlation": 0.1,
+                "weight_concentration": 0.05,
+                "sub_universe_sharpe": 1.5,
+                "subUniverseSize": 1000,
+                "alphaSize": 1000,
+                "pass_fail": "PASS",
+            },
+            gate={"submission_ready": True},
+            scorecard={"total_score": 93, "decision_band": "submit_candidate"},
+        )
+
+        monkeypatch.setattr(
+            pipeline,
+            "_pre_submit_cross_review",
+            lambda _candidate: {"allowed": True, "failed_reasons": []},
+        )
+        monkeypatch.setattr(
+            "brain_alpha_ops.research.pipeline_submission_gate.live_submit_readiness_hard_gate",
+            lambda candidate, config, official_id: {
+                "ok": False,
+                "error_code": "SUBMIT_READINESS_NOT_READY",
+                "error": "not ready",
+            },
+        )
+
+        submitted = pipeline._try_auto_submit(candidate, 0)
+
+        assert submitted == 0
+        assert api.submissions == []
+        assert candidate.gate["status"] == "LIVE_SUBMIT_READINESS_BLOCKED"
+        assert candidate.lifecycle_status == "auto_submit_readiness_blocked"
+        assert candidate.submission["live_submit_readiness"]["error_code"] == "SUBMIT_READINESS_NOT_READY"
 
 
 class ConcurrencyLimitedAPI(ProductionBrainAPIStub):

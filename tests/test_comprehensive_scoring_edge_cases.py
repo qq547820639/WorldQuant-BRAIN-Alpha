@@ -528,11 +528,99 @@ class TestOfficialGateAlignment:
         assert decision.status == "FAIL"
         assert decision.pass_fail is False
 
+    def test_release_gate_blocks_low_sub_universe_sharpe(self, strong_official_metrics, default_thresholds):
+        """Release gate should enforce BRAIN LOW_SUB_UNIVERSE_SHARPE."""
+        metrics = {
+            **strong_official_metrics,
+            "sharpe": 1.6,
+            "sub_universe_sharpe": 0.6,
+            "subUniverseSize": 1000,
+            "alphaSize": 1000,
+        }
+
+        decision = evaluate_release_score(metrics, default_thresholds)
+        attribution = next(item for item in decision.attributions if item["name"] == "sub_universe_sharpe")
+
+        assert decision.status == "FAIL"
+        assert attribution["passed"] is False
+        assert attribution["actual"] == 0.6
+        assert attribution["expected"] == 1.2
+
+    def test_release_gate_reads_camel_case_sub_universe_metric(self, strong_official_metrics, default_thresholds):
+        """Official API camelCase sub-universe metrics should not be dropped."""
+        metrics = {
+            **strong_official_metrics,
+            "sub_universe_sharpe": None,
+            "subUniverseSharpe": 1.4,
+        }
+
+        decision = evaluate_release_score(metrics, default_thresholds)
+        attribution = next(item for item in decision.attributions if item["name"] == "sub_universe_sharpe")
+
+        assert decision.status == "PASS"
+        assert attribution["passed"] is True
+        assert attribution["actual"] == 1.4
+
     def test_release_gate_empty_metrics(self, default_thresholds):
         """Release gate with empty metrics should fail gracefully."""
         decision = evaluate_release_score({}, default_thresholds)
         assert hasattr(decision, "status")
         assert decision.pass_fail is False
+
+    def test_release_gate_honors_optional_official_metrics_policy(self):
+        """When official metrics are explicitly optional, missing metric attributions stay informational."""
+        policy = ThresholdPolicy(
+            min_sharpe=1.25,
+            min_fitness=1.0,
+            delay=1,
+            min_sharpe_source="min_sharpe",
+            min_fitness_source="min_fitness",
+            min_turnover=0.01,
+            max_turnover=0.70,
+            max_drawdown=0.20,
+            max_self_correlation=0.70,
+            max_prod_correlation=0.70,
+            max_weight_concentration=0.10,
+            sub_universe_sharpe_min_ratio=0.75,
+            require_official_pass=True,
+            require_official_metrics=False,
+        )
+
+        decision = evaluate_release_score({"pass_fail": "PASS"}, policy)
+
+        assert decision.status == "PASS"
+        assert decision.pass_fail is True
+        assert all(item["passed"] for item in decision.attributions)
+        assert {
+            item["name"]
+            for item in decision.attributions
+            if item["severity"] == "INFO"
+        } >= {
+            "sharpe",
+            "fitness",
+            "turnover_floor",
+            "turnover_cap",
+            "self_correlation_cap",
+            "prod_correlation_cap",
+            "weight_concentration_cap",
+            "sub_universe_sharpe",
+        }
+
+    def test_release_gate_rejects_non_finite_official_metrics(self, strong_official_metrics, default_thresholds):
+        """NaN/Infinity official values must not bypass hard gates."""
+        metrics = {
+            **strong_official_metrics,
+            "sharpe": float("nan"),
+            "fitness": float("inf"),
+        }
+
+        decision = evaluate_release_score(metrics, default_thresholds)
+        attributions = {item["name"]: item for item in decision.attributions}
+
+        assert decision.status == "FAIL"
+        assert decision.pass_fail is False
+        assert attributions["sharpe"]["actual"] is None
+        assert attributions["fitness"]["actual"] is None
 
     def test_gate_config_soft_gates_dont_block(self, strong_official_metrics):
         """Soft gate failures should not cause overall failure."""

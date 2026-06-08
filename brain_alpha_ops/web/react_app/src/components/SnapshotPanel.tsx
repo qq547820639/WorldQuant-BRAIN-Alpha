@@ -59,10 +59,10 @@ const SNAPSHOT_VIEWS: Record<SnapshotView, SnapshotConfig> = {
     metrics: cloudMetrics,
   },
   checkpoint_status: {
-    title: "断点历史",
-    subtitle: "断点续跑、运行历史与收敛趋势",
+    title: "续跑记录",
+    subtitle: "上次进度、运行历史与收敛趋势",
     endpoint: "/api/checkpoint_status",
-    empty: "暂无断点或运行历史",
+    empty: "暂无可续跑记录或运行历史",
     rows: checkpointStatusRows,
     metrics: checkpointStatusMetrics,
   },
@@ -158,10 +158,10 @@ export default function SnapshotPanel({ notify, viewMode, onNavigate }: Props) {
     <div className="min-w-0 space-y-4 animate-fade-in">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
-          <h2 className="text-base font-semibold text-gray-100">{config.title}</h2>
-          <p className="text-xs text-muted">{config.subtitle}</p>
+          <h2 className="text-base font-semibold text-text-primary">{config.title}</h2>
+          <p className="text-xs text-text-tertiary">{config.subtitle}</p>
         </div>
-        <button type="button" onClick={load} className="btn-secondary text-sm" disabled={api.loading}>
+        <button type="button" onClick={load} className="btn btn-secondary btn-sm" disabled={api.loading}>
           刷新
         </button>
       </div>
@@ -176,19 +176,22 @@ export default function SnapshotPanel({ notify, viewMode, onNavigate }: Props) {
       />
 
       {viewMode === "checkpoint_status" && (
-        <div className="rounded-xl border border-brand-500/25 bg-brand-500/10 p-4">
+        <div
+          className="rounded-lg p-4"
+          style={{ border: '1px solid', borderColor: 'oklch(0.65 0.14 80 / 0.25)', backgroundColor: 'oklch(0.65 0.14 80 / 0.10)' }}
+        >
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="min-w-0">
-              <p className="text-sm font-medium text-brand-200">
-                {truthy(payload.resume_available) ? "检测到可续跑断点" : "暂无可续跑断点"}
+              <p className="text-sm font-medium text-accent">
+                {truthy(payload.resume_available) ? "检测到可继续的上次进度" : "暂无可继续的上次进度"}
               </p>
-              <p className="mt-1 text-xs text-gray-300">
+              <p className="mt-1 text-xs text-text-secondary">
                 {truthy(payload.resume_available)
                   ? "先回到候选管理确认候选状态，再进入质量门禁复核是否满足提交前检查。"
-                  : "新的生产搜索会在候选管理中创建断点与历史记录。"}
+                  : "新的生产搜索会在候选管理中创建续跑记录与历史记录。"}
               </p>
               {comparisonSummary && (
-                <p className="mt-2 text-xs text-brand-100">
+                <p className="mt-2 text-xs text-accent">
                   {comparisonSummary}
                 </p>
               )}
@@ -196,7 +199,7 @@ export default function SnapshotPanel({ notify, viewMode, onNavigate }: Props) {
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
-                className="btn-secondary min-h-11 text-sm"
+                className="btn btn-secondary btn-sm"
                 onClick={() => onNavigate?.("candidates")}
                 disabled={!onNavigate}
               >
@@ -204,7 +207,7 @@ export default function SnapshotPanel({ notify, viewMode, onNavigate }: Props) {
               </button>
               <button
                 type="button"
-                className="btn-ghost min-h-11 text-sm"
+                className="btn btn-ghost btn-sm"
                 onClick={() => onNavigate?.("quality_check")}
                 disabled={!onNavigate}
               >
@@ -216,10 +219,15 @@ export default function SnapshotPanel({ notify, viewMode, onNavigate }: Props) {
       )}
 
       {api.error && (
-        <div className="card border-danger/40 bg-danger/10" role="alert" aria-live="assertive">
+        <div
+          className="panel"
+          role="alert"
+          aria-live="assertive"
+          style={{ borderColor: 'oklch(0.48 0.08 22 / 0.30)', backgroundColor: 'oklch(0.48 0.06 22 / 0.08)' }}
+        >
           <div className="flex items-center justify-between gap-3">
-            <p className="text-danger text-sm">加载 {config.title} 失败: {api.error}</p>
-            <button type="button" onClick={load} className="btn-secondary text-sm" disabled={api.loading}>
+            <p className="text-negative text-sm">加载 {config.title} 失败: {api.error}</p>
+            <button type="button" onClick={load} className="btn btn-secondary btn-sm" disabled={api.loading}>
               重试
             </button>
           </div>
@@ -228,9 +236,9 @@ export default function SnapshotPanel({ notify, viewMode, onNavigate }: Props) {
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {metrics.map((metric) => (
-          <div key={metric.label} className="card min-w-0 p-3">
-            <p className="text-xs text-muted">{metric.label}</p>
-            <p className="mt-1 truncate text-lg font-semibold text-gray-100">{metric.value}</p>
+          <div key={metric.label} className="kpi-card">
+            <p className="kpi-card-label">{metric.label}</p>
+            <p className="kpi-card-value">{metric.value}</p>
           </div>
         ))}
       </div>
@@ -243,17 +251,30 @@ export default function SnapshotPanel({ notify, viewMode, onNavigate }: Props) {
           value={filter}
           maxLength={MAX_FILTER_LENGTH}
           onChange={(event) => setFilter(sanitizeTextInput(event.target.value, MAX_FILTER_LENGTH))}
-          className="w-full min-w-0 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 placeholder-gray-500 focus:outline-none focus:border-brand-500 sm:flex-1"
+          className="w-full min-w-0 rounded-md px-3 py-2 text-sm sm:flex-1"
+          style={{
+            backgroundColor: 'oklch(0.115 0.007 45)',
+            border: '1px solid',
+            borderColor: 'oklch(0.28 0.008 45)',
+            color: 'oklch(0.92 0.003 45)',
+          }}
         />
-        <p className="text-xs text-muted" role="status" aria-live="polite">
+        <p className="text-xs text-text-tertiary" role="status" aria-live="polite">
           {filteredRows.length} / {rows.length} 行
         </p>
       </div>
 
-      <div className="card min-w-0 overflow-hidden p-0">
+      <div className="panel overflow-hidden p-0">
         <div className="space-y-3 p-3 md:hidden" aria-label={`${config.title}移动列表`}>
           {filteredRows.length === 0 ? (
-            <div className="rounded-lg border border-gray-800/60 bg-gray-900/50 px-4 py-6 text-center text-sm text-muted">
+            <div
+              className="rounded-md px-4 py-6 text-center text-sm text-text-tertiary"
+              style={{
+                border: '1px solid',
+                borderColor: 'oklch(0.22 0.007 45 / 0.60)',
+                backgroundColor: 'oklch(0.100 0.007 45 / 0.50)',
+              }}
+            >
               {config.empty}
             </div>
           ) : (
@@ -262,29 +283,38 @@ export default function SnapshotPanel({ notify, viewMode, onNavigate }: Props) {
         </div>
 
         <div className="hidden max-w-full overflow-auto md:block">
-          <table className="min-w-[820px] w-full text-sm" aria-label={`${config.title}表格`}>
+          <table className="data-table min-w-[820px] w-full text-sm" aria-label={`${config.title}表格`}>
             <thead>
-              <tr className="border-b border-gray-800 text-left text-xs text-muted uppercase tracking-wider">
-                <th scope="col" className="p-3">类型</th>
-                <th scope="col" className="p-3">名称</th>
-                <th scope="col" className="p-3">状态</th>
-                <th scope="col" className="p-3">指标</th>
-                <th scope="col" className="p-3">详情</th>
-                <th scope="col" className="p-3">时间</th>
+              <tr
+                className="text-left text-xs uppercase tracking-wider"
+                style={{ borderBottom: '1px solid', borderColor: 'oklch(0.28 0.008 45)' }}
+              >
+                <th scope="col" className="p-3 text-text-tertiary">类型</th>
+                <th scope="col" className="p-3 text-text-tertiary">名称</th>
+                <th scope="col" className="p-3 text-text-tertiary">状态</th>
+                <th scope="col" className="p-3 text-text-tertiary">指标</th>
+                <th scope="col" className="p-3 text-text-tertiary">详情</th>
+                <th scope="col" className="p-3 text-text-tertiary">时间</th>
               </tr>
             </thead>
             <tbody>
               {filteredRows.length === 0 ? (
-                <tr><td colSpan={6} className="p-6 text-center text-muted">{config.empty}</td></tr>
+                <tr><td colSpan={6} className="p-6 text-center text-text-tertiary">{config.empty}</td></tr>
               ) : (
                 filteredRows.map((row, index) => (
-                  <tr key={`${row.kind}_${row.id}_${index}`} className="border-b border-gray-800/50 hover:bg-gray-800/30 transition-colors">
-                    <td className="p-3 text-xs text-muted">{row.kind}</td>
-                    <td className="p-3 font-mono text-xs text-brand-400">{row.title || row.id || "-"}</td>
+                  <tr
+                    key={`${row.kind}_${row.id}_${index}`}
+                    className="transition-colors"
+                    style={{ borderBottom: '1px solid', borderColor: 'oklch(0.22 0.007 45 / 0.50)' }}
+                    onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'oklch(0.115 0.007 45 / 0.30)'; }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = ''; }}
+                  >
+                    <td className="p-3 text-xs text-text-tertiary">{displayKind(row.kind)}</td>
+                    <td className="p-3 font-mono-value text-xs text-accent">{row.title || row.id || "-"}</td>
                     <td className="p-3"><span className={`badge text-xs ${statusBadge(row.status)}`}>{row.status || "-"}</span></td>
-                    <td className="p-3 font-mono text-xs">{row.metric || "-"}</td>
-                    <td className="p-3 text-xs text-gray-300 max-w-md truncate" title={row.detail}>{row.detail || "-"}</td>
-                    <td className="p-3 font-mono text-xs text-muted">{row.timestamp || "-"}</td>
+                    <td className="p-3 font-mono-value text-xs">{row.metric || "-"}</td>
+                    <td className="p-3 text-xs text-text-secondary max-w-md truncate" title={row.detail}>{row.detail || "-"}</td>
+                    <td className="p-3 font-mono-value text-xs text-text-tertiary">{row.timestamp || "-"}</td>
                   </tr>
                 ))
               )}
@@ -307,26 +337,33 @@ function defaultMetrics(payload: SnapshotPayload, rows: SnapshotRow[]) {
 
 function SnapshotMobileCard({ row }: { row: SnapshotRow }) {
   return (
-    <article className="rounded-lg border border-gray-800/70 bg-gray-900/70 p-4 text-sm">
+    <article
+      className="rounded-md p-4 text-sm"
+      style={{
+        border: '1px solid',
+        borderColor: 'oklch(0.28 0.008 45 / 0.70)',
+        backgroundColor: 'oklch(0.100 0.007 45 / 0.70)',
+      }}
+    >
       <div className="flex min-w-0 items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-xs uppercase tracking-wide text-muted">{row.kind || "snapshot"}</p>
-          <p className="mt-1 break-words font-mono text-xs text-brand-400">{row.title || row.id || "-"}</p>
+          <p className="text-xs uppercase tracking-wide text-text-tertiary">{displayKind(row.kind || "snapshot")}</p>
+          <p className="mt-1 break-words font-mono-value text-xs text-accent">{row.title || row.id || "-"}</p>
         </div>
         <span className={`badge shrink-0 text-xs ${statusBadge(row.status)}`}>{row.status || "-"}</span>
       </div>
       <dl className="mt-4 grid gap-3 text-xs">
         <div>
-          <dt className="text-muted">指标</dt>
-          <dd className="mt-1 break-words font-mono text-gray-100">{row.metric || "-"}</dd>
+          <dt className="text-text-tertiary">指标</dt>
+          <dd className="mt-1 break-words font-mono-value text-text-primary">{row.metric || "-"}</dd>
         </div>
         <div>
-          <dt className="text-muted">详情</dt>
-          <dd className="mt-1 break-words text-gray-300">{row.detail || "-"}</dd>
+          <dt className="text-text-tertiary">详情</dt>
+          <dd className="mt-1 break-words text-text-secondary">{row.detail || "-"}</dd>
         </div>
         <div>
-          <dt className="text-muted">时间</dt>
-          <dd className="mt-1 break-words font-mono text-muted">{row.timestamp || "-"}</dd>
+          <dt className="text-text-tertiary">时间</dt>
+          <dd className="mt-1 break-words font-mono-value text-text-tertiary">{row.timestamp || "-"}</dd>
         </div>
       </dl>
     </article>
@@ -346,7 +383,7 @@ function cloudMetrics(payload: SnapshotPayload, rows: SnapshotRow[]) {
 function checkpointStatusMetrics(payload: SnapshotPayload, _rows: SnapshotRow[]) {
   const analytics = record(payload.history_analytics);
   return [
-    { label: "断点数量", value: text(payload.checkpoint_count ?? "0") },
+    { label: "续跑记录", value: text(payload.checkpoint_count ?? "0") },
     { label: "历史记录", value: text(payload.history_count ?? "0") },
     { label: "可续跑", value: truthy(payload.resume_available) ? "是" : "否" },
     { label: "趋势", value: text(analytics.trend_status || analytics.status || "-") },
@@ -358,7 +395,7 @@ function checkpointComparisonSummary(payload: SnapshotPayload) {
   const deltas = record(latestComparison.deltas);
   const keys = Object.keys(deltas);
   if (!keys.length) return "";
-  return `comparison 对比 ${keys.length} 项: ${keys.slice(0, 3).join(", ")}`;
+  return `对比 ${keys.length} 项: ${keys.slice(0, 3).join(", ")}`;
 }
 
 function researchMemoryMetrics(payload: SnapshotPayload, rows: SnapshotRow[]) {
@@ -463,7 +500,7 @@ function checkpointStatusRows(payload: SnapshotPayload) {
       title: text(latest.run_id || latest.checkpoint_id || "latest_checkpoint"),
       status: truthy(payload.resume_available) ? "resume_available" : "recorded",
       metric: text(latest.phase_completed || latest.stage || latest.cycle_number || ""),
-      detail: text(latest.summary || latest.message || latest.error || payload.storage_dir),
+      detail: text(latest.summary || latest.message || latest.error || "记录已保存"),
       timestamp: text(latest.saved_at || latest.timestamp || latest.updated_at),
     });
   }
@@ -748,7 +785,18 @@ function rowId(row: SnapshotPayload, fallback: string) {
 }
 
 function rowText(row: SnapshotRow) {
-  return [row.id, row.kind, row.title, row.status, row.metric, row.detail, row.timestamp].join(" ").toLowerCase();
+  return [row.id, displayKind(row.kind), row.title, row.status, row.metric, row.detail, row.timestamp].join(" ").toLowerCase();
+}
+
+function displayKind(kind: string) {
+  const labels: Record<string, string> = {
+    checkpoint: "续跑记录",
+    history: "历史记录",
+    comparison: "对比",
+    analytics: "趋势",
+    lifecycle: "生命周期",
+  };
+  return labels[kind] || kind;
 }
 
 function sanitizeTextInput(value: string, maxLength: number) {
@@ -757,10 +805,10 @@ function sanitizeTextInput(value: string, maxLength: number) {
 
 function statusBadge(status: string) {
   const normalized = status.toLowerCase();
-  if (["ready", "pass", "passed", "true", "submitted", "production"].some((item) => normalized.includes(item))) return "badge-success";
-  if (["fail", "false", "missing", "blocked", "error", "rejected"].some((item) => normalized.includes(item))) return "badge-danger";
-  if (["warn", "stale", "caution", "unknown"].some((item) => normalized.includes(item))) return "badge-warning";
-  return "badge-neutral";
+  if (["ready", "pass", "passed", "true", "submitted", "production"].some((item) => normalized.includes(item))) return "badge badge-positive";
+  if (["fail", "false", "missing", "blocked", "error", "rejected"].some((item) => normalized.includes(item))) return "badge badge-negative";
+  if (["warn", "stale", "caution", "unknown"].some((item) => normalized.includes(item))) return "badge badge-warning";
+  return "badge badge-neutral";
 }
 
 function metricText(label: string, value: unknown) {

@@ -91,7 +91,8 @@ def ensure_hypothesis_library_files(directory: str | Path) -> dict[str, object]:
             shutil.copy2(source, target)
             copied.append(filename)
         except OSError as exc:
-            failed.append({"filename": filename, "error": str(exc)})
+            from brain_alpha_ops.redaction import redact_error_message
+            failed.append({"filename": filename, "error": redact_error_message(exc)})
 
     if copied:
         logger.info(

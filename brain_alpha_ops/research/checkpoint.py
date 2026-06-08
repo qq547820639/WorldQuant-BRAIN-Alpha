@@ -165,6 +165,17 @@ class CheckpointManager:
         index_path = self.directory / self.INDEX_FILE
         if not index_path.exists():
             index_path.write_text("[]", encoding="utf-8")
+            return
+        # Validate existing index; reset if corrupted
+        try:
+            import json
+            data = json.loads(index_path.read_text(encoding="utf-8"))
+            if not isinstance(data, list):
+                logger.warning("CheckpointManager: index is not a list, resetting")
+                index_path.write_text("[]", encoding="utf-8")
+        except (OSError, json.JSONDecodeError) as exc:
+            logger.warning("CheckpointManager: corrupted index, resetting: %s", redact_error_message(exc))
+            index_path.write_text("[]", encoding="utf-8")
 
     def _load_index(self) -> list[dict[str, Any]]:
         index_path = self.directory / self.INDEX_FILE

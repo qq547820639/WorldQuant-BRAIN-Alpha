@@ -42,6 +42,14 @@ interface CardConfig {
 
 const CARD_CONFIGS: CardConfig[] = [
   {
+    id: "official_operations",
+    title: "官方操作",
+    description: "按钮驱动的官方上下文、合规与阻断复核",
+    icon: "00",
+    color: "from-emerald-500 to-slate-700",
+    action: "打开操作",
+  },
+  {
     id: "dashboard",
     title: "运行总览",
     description: "流水线状态、进度与运行快照",
@@ -83,24 +91,16 @@ const CARD_CONFIGS: CardConfig[] = [
   },
   {
     id: "submission_confirm",
-    title: "提交确认",
+    title: "阻断复核",
     description: "提交前阻断原因与候选审计",
     icon: "06",
     color: "from-warning to-amber-700",
-    action: "查看确认",
-  },
-  {
-    id: "submission",
-    title: "手动提交",
-    description: "人工确认后的检查与提交操作",
-    icon: "07",
-    color: "from-orange-500 to-rose-700",
-    action: "进入提交",
+    action: "查看阻断",
   },
   {
     id: "checkpoint_status",
-    title: "断点历史",
-    description: "断点续跑与运行历史回溯",
+    title: "续跑记录",
+    description: "上次进度与运行历史回溯",
     icon: "08",
     color: "from-teal-500 to-emerald-700",
     action: "查看历史",
@@ -212,6 +212,8 @@ export default function StateCards({ onNavigate, notify }: Props) {
   // 获取指标值
   const getMetricValue = (id: CardViewId): string => {
     switch (id) {
+      case "official_operations":
+        return "Web";
       case "candidates":
         return String(metrics.candidates.total);
       case "dashboard":
@@ -238,6 +240,8 @@ export default function StateCards({ onNavigate, notify }: Props) {
   // 获取指标标签
   const getMetricLabel = (id: CardViewId): string => {
     switch (id) {
+      case "official_operations":
+        return "用户入口";
       case "candidates":
         return metrics.candidates.label;
       case "dashboard":
@@ -354,7 +358,7 @@ export default function StateCards({ onNavigate, notify }: Props) {
         <div className="flex items-center gap-3">
           <span className="h-2 w-2 rounded-full bg-brand-600" aria-hidden="true" />
           <p className="text-sm text-slate-600">
-            点击状态卡进入对应功能模块，完成从候选生成到提交的全流程管理
+            点击状态卡进入对应功能模块，完成从候选生成到提交前阻断复核的可视化管理；真实提交保持关闭
           </p>
         </div>
       </div>

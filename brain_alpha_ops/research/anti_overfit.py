@@ -88,7 +88,7 @@ def _number_series(value: Any) -> list[float]:
 def _synthetic_ic_series(expression: str, metrics: dict[str, Any]) -> list[float]:
     base = _float(metrics.get("rank_ic"), _float(metrics.get("ic"), 0.03))
     sharpe = _float(metrics.get("sharpe"), 0.0)
-    seed = int(hashlib.sha256(expression.encode("utf-8", errors="ignore")).hexdigest()[:12], 16)
+    seed = int(hashlib.sha256(expression.encode("utf-8", errors="surrogateescape")).hexdigest()[:12], 16)
     rng = random.Random(seed)
     center = max(-0.15, min(0.15, base + 0.01 * math.tanh(sharpe)))
     return [center + rng.uniform(-0.025, 0.025) for _ in range(60)]
@@ -127,7 +127,7 @@ def _placebo_test(expression: str, values: list[float]) -> dict[str, Any]:
     if len(values) < 20:
         return _test("placebo", False, {"reason": "insufficient_samples", "sample_size": len(values)})
     observed = abs(mean(values))
-    seed = int(hashlib.sha256(("placebo:" + expression).encode("utf-8", errors="ignore")).hexdigest()[:12], 16)
+    seed = int(hashlib.sha256(("placebo:" + expression).encode("utf-8", errors="surrogateescape")).hexdigest()[:12], 16)
     rng = random.Random(seed)
     placebo_means = []
     for _ in range(100):

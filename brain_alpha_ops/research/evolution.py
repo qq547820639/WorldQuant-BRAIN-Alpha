@@ -11,62 +11,32 @@ and mutations preserve operator arity and field compatibility.
 
 from __future__ import annotations
 
-import hashlib
-import logging
 import random
+import re
 from dataclasses import dataclass, field
-from typing import Any
 
-logger = logging.getLogger(__name__)
-
-# ── BRAIN FASTEXPR operator categories (canonical, aligned with official_context) ──
-_UNARY_OPERATORS = {
-    "rank", "log", "sqrt", "abs", "sign", "ts_delta",
-    "ts_sum", "ts_mean", "ts_std_dev", "ts_z_score",
-    "ts_decay_linear", "ts_min", "ts_max", "ts_median",
-    "ts_skewness", "ts_kurtosis", "ts_arg_max", "ts_arg_min",
-    "ts_rank", "ts_av_diff", "ts_percentage", "ts_corr",
-    "inverse", "scale", "sigmoid",
-}
-
-_BINARY_OPERATORS = {
-    "+", "-", "*", "/", "min", "max",
-    "ts_covariance", "ts_regression", "ts_theilsen",
-}
-
-_GROUP_OPERATORS = {
-    "group_neutralize", "group_rank", "group_z_score",
-    "group_scale", "group_backfill",
-}
-
-_MUTABLE_OPERATORS = _UNARY_OPERATORS | _BINARY_OPERATORS | _GROUP_OPERATORS
-
-# Window-based operators (accept window parameter)
-_WINDOW_OPERATORS = {
-    "ts_delta", "ts_sum", "ts_mean", "ts_std_dev", "ts_z_score",
-    "ts_decay_linear", "ts_min", "ts_max", "ts_median",
-    "ts_skewness", "ts_kurtosis", "ts_arg_max", "ts_arg_min",
-    "ts_rank", "ts_av_diff", "ts_percentage",
-    "ts_covariance", "ts_regression", "ts_theilsen", "ts_corr",
-}
-
-_WINDOW_RANGES = {
-    "short": [5, 10, 20],
-    "medium": [30, 60, 90, 120],
-    "long": [180, 252],
-}
-
-# Valid BRAIN fields (sampled from canonical dataset — validated at runtime)
-_COMMON_FIELDS = {
-    "open", "close", "high", "low", "volume", "vwap",
-    "returns", "cap", "adv20", "adv60",
-}
-
-# ── Safety limits ──
-_MAX_EXPRESSION_LENGTH = 2000
-_MAX_NESTING_DEPTH = 8
-_MAX_MUTATION_ATTEMPTS = 10
-_MIN_EXPRESSION_LENGTH = 3
+from brain_alpha_ops.research.evolution_helpers import (
+    _BINARY_OPERATORS,
+    _COMMON_FIELDS,
+    _GROUP_OPERATORS,
+    _MAX_EXPRESSION_LENGTH,
+    _MAX_MUTATION_ATTEMPTS,
+    _MAX_NESTING_DEPTH,
+    _MIN_EXPRESSION_LENGTH,
+    _MUTABLE_OPERATORS,
+    _UNARY_OPERATORS,
+    _WINDOW_OPERATORS,
+    _WINDOW_RANGES,
+    _expression_operators_are_official,
+    _extract_inner,
+    _is_valid_expression,
+    _mutation_hash,
+    _official_field_ids,
+    _official_operator_names,
+    _split_args,
+    _split_top_level,
+    _tokenize,
+)
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -160,7 +130,16 @@ class MutationEngine:
 
     def __init__(self, seed: int | None = None, *, known_fields: set[str] | None = None):
         self.rng = random.Random(seed)
-        self._known_fields = known_fields or _COMMON_FIELDS
+        self._official_operators = _official_operator_names()
+        self._unary_operators = _UNARY_OPERATORS & self._official_operators
+        self._binary_operators = _BINARY_OPERATORS & self._official_operators
+        self._group_operators = _GROUP_OPERATORS & self._official_operators
+        self._mutable_operators = self._unary_operators | self._binary_operators | self._group_operators
+        self._window_operators = _WINDOW_OPERATORS & self._official_operators
+
+        base_fields = {str(field).lower() for field in (known_fields if known_fields is not None else _COMMON_FIELDS)}
+        official_fields = _official_field_ids()
+        self._known_fields = base_fields & official_fields
 
     def mutate(
         self,
@@ -209,7 +188,11 @@ class MutationEngine:
                 elif strategy == "simplify":
                     mutated = self._simplify(expression)
 
-                if mutated != expression and _is_valid_expression(mutated):
+                if (
+                    mutated != expression
+                    and _is_valid_expression(mutated)
+                    and _expression_operators_are_official(mutated, self._official_operators)
+                ):
                     break
                 mutated = expression
             except Exception:
@@ -250,8 +233,10 @@ class MutationEngine:
 
     def _add_operator(self, expr: str) -> str:
         """Wrap expression with a unary operator."""
-        op = self.rng.choice(sorted(_UNARY_OPERATORS))
-        if op in _WINDOW_OPERATORS:
+        if not self._unary_operators:
+            return expr
+        op = self.rng.choice(sorted(self._unary_operators))
+        if op in self._window_operators:
             window = self.rng.choice([5, 10, 20, 30, 60, 90, 120, 252])
             return f"{op}({expr}, {window})"
         return f"{op}({expr})"
@@ -267,7 +252,7 @@ class MutationEngine:
             if depth == 0 and i + 1 < len(expr) and expr[i + 1] == "(":
                 op_end = expr.index("(", i + 1)
                 op_name = expr[i + 1:op_end].strip()
-                if op_name in _UNARY_OPERATORS or op_name in _BINARY_OPERATORS or op_name in _GROUP_OPERATORS:
+                if op_name in self._mutable_operators:
                     inner = expr[op_end + 1:expr.rfind(")")]
                     if inner.strip():
                         return inner
@@ -284,23 +269,49 @@ class MutationEngine:
 
     def _swap_operator(self, expr: str) -> str:
         """Replace one operator with a similar alternative."""
-        for op in sorted(_MUTABLE_OPERATORS, key=lambda x: -len(x)):
+        for op in sorted(self._mutable_operators, key=lambda x: -len(x)):
             idx = expr.find(op + "(")
             if idx >= 0:
-                new_op = self.rng.choice(sorted(_UNARY_OPERATORS))
-                if new_op in _WINDOW_OPERATORS:
-                    window = self.rng.choice(_WINDOW_RANGES["medium"])
-                    remaining = expr[idx + len(op) + 1:]
-                    inner, rest = _split_args(remaining)
-                    return expr[:idx] + f"{new_op}({inner}, {window})" + rest
-                new_expr = expr[:idx] + new_op + expr[idx + len(op):]
+                candidates = self._replacement_operator_pool(op)
+                if not candidates:
+                    return expr
+                new_op = self.rng.choice(sorted(candidates))
+                remaining = expr[idx + len(op) + 1:]
+                inner, rest = _split_args(remaining)
+                new_expr = expr[:idx] + self._render_call(new_op, inner) + rest
                 if new_expr.count("(") == new_expr.count(")"):
                     return new_expr
         return expr
 
+    def _replacement_operator_pool(self, op: str) -> set[str]:
+        """Return same-shape official alternatives for *op*."""
+        if op in self._unary_operators:
+            return self._unary_operators - {op}
+        if op in self._binary_operators:
+            return self._binary_operators - {op}
+        if op in self._group_operators:
+            return self._group_operators - {op}
+        return set()
+
+    def _render_call(self, op: str, inner: str) -> str:
+        """Render a call while replacing existing trailing window args safely."""
+        if op not in self._window_operators:
+            return f"{op}({inner})"
+        parts = _split_top_level(inner, ",")
+        args = list(parts)
+        if args:
+            try:
+                int(args[-1].strip())
+                args = args[:-1]
+            except ValueError:
+                pass
+        window = self.rng.choice(_WINDOW_RANGES["medium"])
+        args.append(str(window))
+        return f"{op}({', '.join(arg.strip() for arg in args if arg.strip())})"
+
     def _adjust_window(self, expr: str) -> str:
         """Adjust window parameter on ts_* operators."""
-        for op in sorted(_WINDOW_OPERATORS, key=lambda x: -len(x)):
+        for op in sorted(self._window_operators, key=lambda x: -len(x)):
             idx = expr.find(f"{op}(")
             if idx >= 0:
                 after_op = expr[idx + len(op) + 1:]
@@ -318,12 +329,18 @@ class MutationEngine:
         return expr
 
     def _add_field(self, expr: str) -> str:
-        """Add a field via addition: expr + field."""
+        """Add a field via the official add() operator."""
+        if not self._known_fields or "add" not in self._binary_operators:
+            return expr
         field = self.rng.choice(sorted(self._known_fields))
-        return f"({expr} + {field})"
+        return f"add({expr}, {field})"
 
     def _remove_field(self, expr: str) -> str:
         """Remove a simple field addition term."""
+        if expr.startswith("add(") and expr.endswith(")"):
+            parts = _split_top_level(_extract_inner(expr), ",")
+            if len(parts) >= 2:
+                return parts[0].strip()
         # Try pattern: (expr + field) → expr
         if expr.startswith("(") and " + " in expr:
             parts = _split_top_level(expr[1:-1], "+")
@@ -336,10 +353,16 @@ class MutationEngine:
 
     def _swap_field(self, expr: str) -> str:
         """Replace one field reference with another."""
+        if len(self._known_fields) < 2:
+            return expr
         for field in sorted(self._known_fields, key=lambda x: -len(x)):
-            if field in expr:
-                new_field = self.rng.choice(sorted(self._known_fields - {field}))
-                return expr.replace(field, new_field, 1)
+            pattern = r"\b" + re.escape(field) + r"\b"
+            if re.search(pattern, expr):
+                alternatives = sorted(self._known_fields - {field})
+                if not alternatives:
+                    return expr
+                new_field = self.rng.choice(alternatives)
+                return re.sub(pattern, new_field, expr, count=1)
         return expr
 
     def _simplify(self, expr: str) -> str:
@@ -383,6 +406,7 @@ class CrossoverEngine:
 
     def __init__(self, seed: int | None = None):
         self.rng = random.Random(seed)
+        self._official_operators = _official_operator_names()
 
     def crossover(
         self,
@@ -411,7 +435,11 @@ class CrossoverEngine:
 
         combined = " ".join(tokens_a[:crossover_point] + tokens_b[crossover_point:])
 
-        if not _is_valid_expression(combined) or combined in (expr_a, expr_b):
+        if (
+            not _is_valid_expression(combined)
+            or not _expression_operators_are_official(combined, self._official_operators)
+            or combined in (expr_a, expr_b)
+        ):
             return None
 
         return CrossoverResult(
@@ -467,14 +495,22 @@ class MetaEvolutionSelector:
         self.stagnation_threshold = stagnation_threshold
         self.improvement_threshold = improvement_threshold
         self._history: list[float] = []
+        self._expr_len_history: list[int] = []  # 跟踪最近几代表达式长度
         self._current_strategy = "EXPLORE"
         self._stagnation_count = 0
         self._generation = 0
 
-    def select_strategy(self, current_best_score: float) -> str:
-        """Select the best strategy for the next generation."""
+    def select_strategy(self, current_best_score: float, *,
+                        best_expression_len: int = 0) -> str:
+        """Select the best strategy for the next generation.
+
+        Args:
+            current_best_score: 当前最优分数
+            best_expression_len: 当前最优表达式的字符长度（用于 SIMPLIFY 判断）
+        """
         self._generation += 1
         self._history.append(current_best_score)
+        self._expr_len_history.append(best_expression_len)
 
         if self._generation <= 1:
             self._current_strategy = "EXPLORE"
@@ -494,10 +530,9 @@ class MetaEvolutionSelector:
 
         if self._stagnation_count >= self.stagnation_threshold:
             self._stagnation_count = 0
-            max_len = max(
-                (len(self._history[i]) if isinstance(self._history[i], str) else 0)
-                for i in range(max(0, len(self._history) - 3), len(self._history))
-            ) if self._history else 0
+            # 检查最近 3 代表达式最大长度，过长则触发 SIMPLIFY
+            lookback = min(3, len(self._expr_len_history))
+            max_len = max(self._expr_len_history[-lookback:]) if lookback > 0 else 0
             if max_len > 200:
                 self._current_strategy = "SIMPLIFY"
             else:
@@ -507,6 +542,7 @@ class MetaEvolutionSelector:
 
     def reset(self) -> None:
         self._history.clear()
+        self._expr_len_history.clear()
         self._current_strategy = "EXPLORE"
         self._stagnation_count = 0
         self._generation = 0
@@ -568,7 +604,9 @@ class EvolutionRunner:
             best_expr = max(population, key=lambda e: scores.get(e, 0.0))
             best_score = scores.get(best_expr, 0.0)
 
-            strategy = self.selector.select_strategy(best_score)
+            strategy = self.selector.select_strategy(
+                best_score, best_expression_len=len(best_expr),
+            )
 
             result = EvolutionResult(
                 generation=gen + 1,
@@ -649,128 +687,3 @@ class EvolutionRunner:
             "best_score": self.best_score,
             "generations": [r.to_dict() for r in self._results],
         }
-
-
-# ═══════════════════════════════════════════════════════════════════════
-# Internal helpers
-# ═══════════════════════════════════════════════════════════════════════
-
-def _is_valid_expression(expr: str) -> bool:
-    """Quick validity check: balanced parens, reasonable length."""
-    if not expr or len(expr) > _MAX_EXPRESSION_LENGTH:
-        return False
-    if len(expr) < _MIN_EXPRESSION_LENGTH:
-        return False
-    if expr.count("(") != expr.count(")"):
-        return False
-    if "()" in expr:
-        return False
-    # Count nesting depth
-    depth = 0
-    max_depth = 0
-    for ch in expr:
-        if ch == "(":
-            depth += 1
-            max_depth = max(max_depth, depth)
-        elif ch == ")":
-            depth -= 1
-            if depth < 0:
-                return False
-    return depth == 0 and max_depth <= _MAX_NESTING_DEPTH
-
-
-def _extract_inner(expr: str) -> str:
-    """Extract content inside outermost parentheses."""
-    if expr.startswith("(") and expr.endswith(")"):
-        depth = 0
-        for i, ch in enumerate(expr):
-            if ch == "(":
-                depth += 1
-            elif ch == ")":
-                depth -= 1
-                if depth == 0 and i == len(expr) - 1:
-                    return expr[1:-1]
-    # Try function-style: func_name(args)
-    for op in sorted(_MUTABLE_OPERATORS, key=lambda x: -len(x)):
-        if expr.startswith(op + "(") and expr.endswith(")"):
-            return expr[len(op) + 1:-1]
-    return ""
-
-
-def _split_args(expr: str) -> tuple[str, str]:
-    """Split expression into first argument and remaining text.
-
-    Returns (inner_content, remaining_after_matching_paren).
-    """
-    depth = 0
-    for i, ch in enumerate(expr):
-        if ch == "(":
-            depth += 1
-        elif ch == ")":
-            depth -= 1
-            if depth == 0:
-                return expr[:i], expr[i + 1:]
-    return expr, ""
-
-
-def _split_top_level(expr: str, separator: str) -> list[str]:
-    """Split expression at top-level separator (respecting parentheses)."""
-    parts: list[str] = []
-    depth = 0
-    current: list[str] = []
-    sep_len = len(separator)
-    i = 0
-    while i < len(expr):
-        ch = expr[i]
-        if ch == "(":
-            depth += 1
-            current.append(ch)
-        elif ch == ")":
-            depth -= 1
-            current.append(ch)
-        elif depth == 0 and expr[i:i + sep_len] == separator:
-            parts.append("".join(current).strip())
-            current = []
-            i += sep_len
-            continue
-        else:
-            current.append(ch)
-        i += 1
-    if current:
-        parts.append("".join(current).strip())
-    return parts
-
-
-def _tokenize(expr: str) -> list[str]:
-    """Simple tokenizer for operator/sub-expression splitting."""
-    tokens: list[str] = []
-    current: list[str] = []
-    depth = 0
-    for ch in expr:
-        if ch == "(":
-            if current:
-                tokens.append("".join(current).strip())
-                current = []
-            depth += 1
-            current.append(ch)
-        elif ch == ")":
-            depth -= 1
-            current.append(ch)
-            if depth == 0:
-                tokens.append("".join(current).strip())
-                current = []
-        elif ch in (" ", ",", "+", "-") and depth == 0:
-            if current:
-                tokens.append("".join(current).strip())
-                current = []
-            if ch.strip():
-                tokens.append(ch)
-        else:
-            current.append(ch)
-    if current:
-        tokens.append("".join(current).strip())
-    return [t for t in tokens if t]
-
-
-def _mutation_hash(expression: str, strategy: str) -> str:
-    return hashlib.sha256(f"{expression}:{strategy}".encode()).hexdigest()[:12]

@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import logging
 import re
+import json
+from functools import lru_cache
+from pathlib import Path
 from typing import Any
 
 from brain_alpha_ops.research.expression_ast import (
@@ -15,24 +18,46 @@ from brain_alpha_ops.research.expression_ast import (
     profile_expression,
 )
 from brain_alpha_ops.research.field_quality import generation_field_ids
-from brain_alpha_ops.research.fallback_generation import DEFAULT_WINDOWS
+from brain_alpha_ops.research.fallback_generation import DEFAULT_WINDOWS, normalize_operator_aliases
 from brain_alpha_ops.research.hypothesis_library import FieldCategoryDef
 
 
 GROUP_KEYS = {"market", "sector", "industry", "subindustry"}
-KNOWN_BRAIN_OPERATORS = {
-    "rank", "zscore", "winsorize", "group_zscore", "group_rank", "group_mean",
-    "ts_rank", "ts_delta", "ts_sum", "ts_mean", "ts_std", "ts_zscore",
-    "ts_count_nans", "ts_decay_linear", "ts_std_dev", "ts_regression",
-    "ts_av_diff", "ts_kurtosis", "ts_skewness", "ts_scale", "ts_step",
-    "ts_product", "ts_corr", "ts_covariance", "ts_min", "ts_max",
-    "ts_argmax", "ts_argmin", "ts_arg_max", "ts_arg_min", "ts_percentage",
-    "ts_delay", "ts_backfill", "ts_quantile", "quantile", "normalize",
-    "kth_element", "log", "signed_power", "inverse", "scale", "power",
-    "sector", "industry", "market", "subindustry",
-    "group_backfill", "backfill", "fill_na", "subtract", "divide", "greater",
-    "if_else", "hump",
-}
+_OFFICIAL_OPERATOR_FALLBACK = frozenset(
+    {
+        "abs", "add", "and", "bucket", "days_from_last_change", "densify",
+        "divide", "equal", "greater", "greater_equal", "group_backfill",
+        "group_mean", "group_neutralize", "group_rank", "group_scale",
+        "group_zscore", "hump", "if_else", "inverse", "is_nan",
+        "kth_element", "last_diff_value", "less", "less_equal", "log",
+        "max", "min", "multiply", "normalize", "not", "not_equal", "or",
+        "power", "quantile", "rank", "reverse", "scale", "sign",
+        "signed_power", "sqrt", "subtract", "trade_when", "ts_arg_max",
+        "ts_arg_min", "ts_av_diff", "ts_backfill", "ts_corr",
+        "ts_count_nans", "ts_covariance", "ts_decay_linear", "ts_delay",
+        "ts_delta", "ts_mean", "ts_product", "ts_quantile", "ts_rank",
+        "ts_regression", "ts_scale", "ts_std_dev", "ts_step", "ts_sum",
+        "ts_zscore", "vec_avg", "vec_sum", "winsorize", "zscore",
+    }
+)
+
+
+@lru_cache(maxsize=1)
+def _current_official_operator_names() -> frozenset[str]:
+    path = Path(__file__).resolve().parents[2] / "data" / "official_operators.json"
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return _OFFICIAL_OPERATOR_FALLBACK
+    names = {
+        str(item.get("name", "")).lower()
+        for item in payload
+        if isinstance(item, dict) and str(item.get("name", "")).strip()
+    }
+    return frozenset(names or _OFFICIAL_OPERATOR_FALLBACK)
+
+
+KNOWN_BRAIN_OPERATORS = _current_official_operator_names()
 
 
 def format_window(value: Any) -> str:
@@ -73,14 +98,14 @@ class HypothesisExpressionSupport:
         logger: logging.Logger | None = None,
     ) -> None:
         self._fields = fields
-        self._operators = operators
+        self._operators = {op.lower() for op in operators} if operators else set(_current_official_operator_names())
         self._loader = loader
         self._dataset_id = dataset_id
         self._logger = logger or logging.getLogger(__name__)
 
     def normalize_wq_expression_shape(self, expr: str, window: int | None = None) -> str:
         """Convert resolved semantic shorthands into operator-based FASTEXPR."""
-        expr = str(expr or "").strip()
+        expr = normalize_operator_aliases(str(expr or "").strip())
         if not expr:
             return expr
 
@@ -103,7 +128,7 @@ class HypothesisExpressionSupport:
         return expr
 
     def operator_available(self, name: str) -> bool:
-        return not self._operators or name.lower() in self._operators
+        return name.lower() in self._operators
 
     def normalize_field_function_calls(self, expr: str, window: int | None = None) -> str:
         """Rewrite accidental field-as-function calls into supported operators."""
@@ -170,24 +195,15 @@ class HypothesisExpressionSupport:
         already_used: set[str] | None = None,
     ) -> str:
         """Replace remaining semantic tokens with actual dataset field names."""
+        expr = normalize_operator_aliases(expr)
         if not fields:
             return expr
 
         dataset_fields = sorted(self._fields) if self._fields else []
         dataset_fields_lower = {f.lower() for f in dataset_fields}
         field_set_lower = {f.lower() for f in fields}
-        known_ops = self._operators if self._operators else set()
-        brain_ops = {
-            'rank', 'zscore', 'winsorize', 'group_zscore', 'group_rank', 'group_mean',
-            'ts_rank', 'ts_delta', 'ts_sum', 'ts_mean', 'ts_std', 'ts_zscore',
-            'ts_count_nans', 'ts_decay_linear', 'ts_std_dev', 'ts_regression',
-            'ts_av_diff', 'ts_kurtosis', 'ts_skewness', 'ts_scale', 'ts_step',
-            'ts_product', 'ts_corr', 'ts_covariance', 'ts_min', 'ts_max',
-            'ts_argmax', 'ts_argmin', 'ts_arg_max', 'ts_arg_min', 'ts_percentage',
-            'quantile', 'normalize', 'kth_element', 'log', 'signed_power',
-            'inverse', 'scale', 'power', 'sector', 'industry', 'market',
-            'subindustry', 'group_backfill', 'backfill', 'fill_na',
-        }
+        known_ops = self._operators or set(_current_official_operator_names())
+        brain_ops = set(_current_official_operator_names()) | GROUP_KEYS
 
         tokens = re.findall(r'\b([a-zA-Z_]\w+)\b', expr)
         replacements: dict[str, str] = {}
@@ -258,6 +274,7 @@ class HypothesisExpressionSupport:
 
     def validate_dataset_fields(self, expr: str, fallback_fields: list[str]) -> str:
         """Replace field-like tokens not present in the active dataset."""
+        expr = normalize_operator_aliases(expr)
         if not self._fields:
             return expr
 
@@ -268,19 +285,7 @@ class HypothesisExpressionSupport:
         if not fallback_fields:
             return expr
         tokens = re.findall(r'\b([a-zA-Z_]\w+)\b', expr)
-        operators = {
-            'rank', 'zscore', 'winsorize', 'group_zscore', 'group_rank', 'group_mean',
-            'ts_rank', 'ts_delta', 'ts_sum', 'ts_mean', 'ts_std', 'ts_zscore',
-            'ts_count_nans', 'ts_decay_linear', 'ts_std_dev', 'quantile', 'normalize',
-            'kth_element', 'log', 'sector', 'industry', 'market', 'subindustry',
-            'group_backfill', 'backfill', 'fill_na', 'subtract', 'divide', 'greater',
-            'if_else', 'signed_power', 'inverse', 'scale', 'power', 'ts_step',
-            'ts_product', 'ts_corr', 'ts_covariance', 'ts_min', 'ts_max',
-            'ts_argmax', 'ts_argmin', 'ts_arg_max', 'ts_arg_min', 'ts_percentage',
-            'ts_delay', 'last_diff_value', 'days_from_last_change', 'ts_av_diff',
-            'ts_kurtosis', 'ts_skewness', 'ts_scale', 'ts_regression',
-            'ts_backfill', 'hump', 'ts_quantile',
-        }
+        operators = set(_current_official_operator_names()) | GROUP_KEYS
         field_like = []
         for token in tokens:
             t_lower = token.lower()
@@ -408,4 +413,4 @@ class HypothesisExpressionSupport:
 
     def extract_operators(self, expression: str) -> list[str]:
         """Extract operator names from an expression."""
-        return ordered_operators(expression)
+        return ordered_operators(normalize_operator_aliases(expression))

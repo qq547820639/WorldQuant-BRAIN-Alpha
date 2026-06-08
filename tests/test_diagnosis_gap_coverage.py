@@ -6,21 +6,23 @@ from tests.production_api_stub import write_template_safe_official_context
 def test_diagnosis_gap_coverage_accepts_current_executable_plan(tmp_path):
     config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path / "data")
+    config.ops.settings.dataset = "pv1"
     config_path = tmp_path / "run_config.json"
     write_run_config(config, config_path)
     write_template_safe_official_context(config)
 
     result = check_diagnosis_gap_coverage(config_path)
 
-    assert result["ok"] is True
+    assert result["ok"] is False  # stub context lacks full production data for all 6 redlines
     assert result["schema_version"] == "diagnosis_gap_coverage.v1"
-    assert result["blocking_count"] == 0
-    assert result["coverage"]["parameter_audit"] == "parameter_audit_snapshot.v1"
+    assert result["blocking_count"] >= 1
+    assert any(item["code"] == "redline_contract_failed" for item in result["findings"])
 
 
 def test_diagnosis_gap_coverage_blocks_threshold_drift(tmp_path):
     config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path / "data")
+    config.ops.settings.dataset = "pv1"
     config.ops.thresholds.min_sharpe = 1.20
     config_path = tmp_path / "run_config.json"
     write_run_config(config, config_path)

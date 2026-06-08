@@ -1,7 +1,7 @@
 """User experience (UX) package for BRAIN Alpha Ops.
 
 Provides user-friendly error translation, status code localization,
-and workflow guidance components for the web console and CLI.
+and workflow guidance components for the web console.
 """
 
 from __future__ import annotations

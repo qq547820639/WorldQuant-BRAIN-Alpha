@@ -122,6 +122,7 @@ WEB_CONTEXT_ALLOWED_NAMES = frozenset({
     "load_check_results",
     "load_run_config",
     "logger",
+    "live_submit_readiness_hard_gate",
     "normalize_host",
     "observability_submission_preflight",
     "official_alpha_id",

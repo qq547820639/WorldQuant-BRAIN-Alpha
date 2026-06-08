@@ -1,35 +1,32 @@
-/** Main dashboard with KPIs, job monitor, and latest results. */
-
-import { useEffect } from "react";
+/** Dashboard — Terminal Precision v3.0 */
+import { useEffect, useState } from "react";
 import { useApi } from "@/hooks/useApi";
-import type { BrainCredentials, JobStatus, CloudAlphaSummary, ResearchMemorySummary } from "@/types";
+import type { JobStatus, CloudAlphaSummary, ResearchMemorySummary } from "@/types";
 import KpiCard from "@/components/KpiCard";
-import JobMonitor from "@/components/JobMonitor";
 import ProgressFeedback from "@/components/ProgressFeedback";
 
 interface Props {
   notify: (type: "success" | "error" | "warning" | "info", msg: string) => void;
-  credentials?: BrainCredentials;
 }
 
-export default function Dashboard({ notify, credentials }: Props) {
+export default function Dashboard({ notify }: Props) {
+  const [snapshotExpanded, setSnapshotExpanded] = useState(false);
   const statusApi = useApi<JobStatus>();
   const cloudApi = useApi<CloudAlphaSummary>();
   const memoryApi = useApi<ResearchMemorySummary>();
 
   useEffect(() => {
-    statusApi.call("/api/status");
+    statusApi.call("/api/production-validation/status");
     cloudApi.call("/api/snapshot/cloud?limit=10");
     memoryApi.call("/api/snapshot/memory?limit=100&top_n=5");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [statusApi.call, cloudApi.call, memoryApi.call]);
 
   const status = statusApi.data;
   const cloud = cloudApi.data;
   const memory = memoryApi.data;
 
   const retryAll = () => {
-    statusApi.call("/api/status");
+    statusApi.call("/api/production-validation/status");
     cloudApi.call("/api/snapshot/cloud?limit=10");
     memoryApi.call("/api/snapshot/memory?limit=100&top_n=5");
   };
@@ -40,102 +37,146 @@ export default function Dashboard({ notify, credentials }: Props) {
     memoryApi.error ? `Memory: ${memoryApi.error}` : "",
   ].filter(Boolean);
   const loading = statusApi.loading || cloudApi.loading || memoryApi.loading;
+  const [showGuide, setShowGuide] = useState(() => !localStorage.getItem("brain_alpha_guide_dismissed"));
+
+  const dismissGuide = () => {
+    localStorage.setItem("brain_alpha_guide_dismissed", "1");
+    setShowGuide(false);
+  };
 
   return (
-    <div className="space-y-6 animate-fade-in">
-      {errors.length > 0 && (
-        <div className="card border-danger/40 bg-danger/10" role="alert" aria-live="assertive">
-          <div className="flex items-start justify-between gap-3">
+    <div className="animate-fade-in">
+      {/* First-time guide */}
+      {showGuide && (
+        <div className="panel mb-4" style={{ borderColor: "oklch(0.58 0.12 245 / 0.30)", background: "oklch(0.58 0.06 245 / 0.08)" }}>
+          <div className="panel-body-padded" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
             <div>
-              <h3 className="text-sm font-semibold text-danger mb-2">仪表盘数据需要关注</h3>
-              {errors.map((err) => (
-                <p key={err} className="text-xs text-danger/90">{err}</p>
-              ))}
+              <p className="text-sm font-medium text-info mb-2">首次使用？按顺序完成以下步骤</p>
+              <div className="grid gap-1 text-xs text-text-secondary" style={{ gridTemplateColumns: "auto 1fr", columnGap: 8 }}>
+                <span style={{ color: "oklch(0.68 0.10 248)", fontWeight: 500 }}>1.</span><span>填写账户邮箱和密码，点击 <strong>测试连接</strong></span>
+                <span style={{ color: "oklch(0.68 0.10 248)", fontWeight: 500 }}>2.</span><span>进入 <strong>连接与就绪</strong> 阶段，点击 <strong>开始刷新</strong> 同步云端</span>
+                <span style={{ color: "oklch(0.68 0.10 248)", fontWeight: 500 }}>3.</span><span>进入 <strong>候选发现</strong> 阶段，点击 <strong>生产搜索</strong> 生成候��</span>
+                <span style={{ color: "oklch(0.68 0.10 248)", fontWeight: 500 }}>4.</span><span>在 <strong>评估与验证</strong> 中评分、检查质量门禁</span>
+                <span style={{ color: "oklch(0.68 0.10 248)", fontWeight: 500 }}>5.</span><span>通过阻断复核后进入 <strong>提交就绪</strong></span>
+              </div>
             </div>
-            <button onClick={retryAll} className="btn-secondary text-sm">
-              重试
-            </button>
+            <button onClick={dismissGuide} className="btn btn-ghost btn-sm" aria-label="关闭引导" style={{ flexShrink: 0 }}>✕</button>
           </div>
         </div>
       )}
 
-      <ProgressFeedback
-        state={errors.length ? "error" : loading ? "loading" : "idle"}
-        title="仪表盘数据"
-        progress={{ phase: loading ? "dashboard_load" : "completed", status_message: loading ? "正在刷新仪表盘快照。" : "仪表盘快照已更新。" }}
-        error={errors.join(" / ")}
-        onRetry={retryAll}
-        compact={!loading && errors.length === 0}
-      />
+      {/* Page heading */}
+      <h1 className="text-xl font-medium text-text-primary mb-1">运行总览</h1>
+      <p className="text-sm text-text-tertiary mb-4">
+        流水线状态 · 云端数据 · 本地指标 — 上次更新: {new Date().toLocaleTimeString("zh-CN", { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+      </p>
+
+      {/* Error banner */}
+      {errors.length > 0 && (
+        <div className="panel mb-4" style={{ borderColor: "oklch(0.48 0.08 22 / 0.30)", background: "oklch(0.48 0.06 22 / 0.08)" }} role="alert">
+          <div className="panel-body-padded" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+            <div>
+              <p className="text-sm font-medium text-negative mb-1">仪表盘数据需要关注</p>
+              {errors.map((e) => <p key={e} className="text-xs text-negative/80">{e}</p>)}
+            </div>
+            <button onClick={retryAll} className="btn btn-secondary btn-sm">重试</button>
+          </div>
+        </div>
+      )}
+
+      {/* Loading state */}
+      {loading && (
+        <ProgressFeedback
+          state="loading"
+          title="仪表盘数据"
+          progress={{ phase: "dashboard_load", status_message: "正在刷新仪表盘快照。" }}
+          compact
+        />
+      )}
 
       {/* KPIs */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
         <KpiCard
           label="候选总数"
-          value={memory?.total_candidates ?? status?.progress?.candidates_generated ?? "-"}
+          value={memory?.total_candidates ?? status?.progress?.candidates_generated ?? "--"}
           subtitle={memory ? `${memory.families?.length ?? 0} 个家族` : "等待刷新"}
         />
         <KpiCard
-          label="云端Alpha"
-          value={cloud?.count ?? "-"}
+          label="云端 Alpha"
+          value={cloud?.count ?? "--"}
           subtitle={cloud ? `${cloud.submitted_count} 已提交` : "等待刷新"}
           trend={cloud && cloud.submitted_count > 0 ? "up" : "neutral"}
         />
         <KpiCard
           label="回测数"
-          value={status?.progress?.backtests_completed ?? "-"}
+          value={status?.progress?.backtests_completed ?? "--"}
           subtitle={status ? `${status.progress?.backtests_pending ?? 0} 待处理` : undefined}
         />
         <KpiCard
           label="提交数"
-          value={status?.progress?.submissions ?? cloud?.submitted_count ?? "-"}
-          trend={cloud && cloud.passed_unsubmitted_count > 0 ? "up" : "neutral"}
+          value={status?.progress?.submissions ?? cloud?.submitted_count ?? "--"}
+          trend={cloud && cloud.passed_unsubmitted_count ? cloud.passed_unsubmitted_count > 0 ? "up" : "neutral" : "neutral"}
         />
       </div>
 
-      {/* Job Monitor + Cloud */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <JobMonitor notify={notify} credentials={credentials} />
+      {/* Collapsible data snapshots */}
+      <div className="mb-4">
+        <button
+          type="button"
+          className="btn btn-ghost btn-sm"
+          onClick={() => setSnapshotExpanded((v) => !v)}
+          aria-expanded={snapshotExpanded}
+        >
+          <span style={{ transform: snapshotExpanded ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 200ms", display: "inline-block" }}>▶</span>
+          <span style={{ marginLeft: 6 }}>数据快照{snapshotExpanded ? "" : ` (${cloud ? cloud.count : "--"} 条 Alpha)`}</span>
+        </button>
+      </div>
 
-        {/* Cloud Alpha Summary */}
-        <div className="card space-y-3">
-          <h3 className="text-sm font-semibold text-gray-200">云端Alpha缓存</h3>
+      {snapshotExpanded && (<>
+
+      {/* Cloud Alpha Summary Panel */}
+      <div className="panel mb-4">
+        <div className="panel-header">
+          <span>云端 Alpha 缓存</span>
+          {cloud && <span className="badge badge-neutral">{cloud.count} 条</span>}
+        </div>
+        <div className="panel-body-padded">
           {cloudApi.loading ? (
-            <ProgressFeedback
-              state="loading"
-              title="云端Alpha缓存"
-              progress={{ phase: "cloud_cache", status_message: "正在加载缓存的云端Alpha。" }}
-              compact
-            />
+            <ProgressFeedback state="loading" title="云端 Alpha" progress={{ phase: "cloud", status_message: "加载中..." }} compact />
           ) : cloudApi.error ? (
-            <ProgressFeedback
-              state="error"
-              title="云端Alpha缓存"
-              error={cloudApi.error}
-              onRetry={() => cloudApi.call("/api/snapshot/cloud?limit=10")}
-              compact
-            />
+            <ProgressFeedback state="error" title="云端 Alpha" error={cloudApi.error} onRetry={() => cloudApi.call("/api/snapshot/cloud?limit=10")} compact />
           ) : cloud ? (
             <>
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                <span className="text-muted">缓存总数</span>
-                <span className="text-right">{cloud.count}</span>
-                <span className="text-muted">已提交</span>
-                <span className="text-right text-success">{cloud.submitted_count}</span>
-                <span className="text-muted">已通过（未提交）</span>
-                <span className="text-right text-warning">{cloud.passed_unsubmitted_count}</span>
-                <span className="text-muted">缓存过期</span>
-                <span className="text-right">{cloud.is_stale ? "⚠ 是" : "✓ 否"}</span>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs mb-3">
+                <div><span className="text-text-tertiary">缓存总数</span><p className="font-mono-value text-base text-text-primary">{cloud.count}</p></div>
+                <div><span className="text-text-tertiary">已提交</span><p className="font-mono-value text-base text-positive">{cloud.submitted_count}</p></div>
+                <div><span className="text-text-tertiary">已通过（未提交）</span><p className="font-mono-value text-base text-warning">{cloud.passed_unsubmitted_count}</p></div>
+                <div><span className="text-text-tertiary">缓存状态</span><p className="text-sm text-text-secondary">{cloud.is_stale ? "已过期" : "有效"}</p></div>
               </div>
               {cloud.sample_alphas && cloud.sample_alphas.length > 0 && (
-                <div className="max-h-40 overflow-y-auto bg-gray-950 rounded-lg p-2 text-xs font-mono">
-                  {cloud.sample_alphas.slice(0, 5).map((a, i) => (
-                    <div key={i} className="flex justify-between py-1 border-b border-gray-800 last:border-0">
-                      <span className="text-brand-400">{a.alpha_id}</span>
-                      <span className={a.pass_fail === "PASS" ? "text-success" : "text-danger"}>{a.pass_fail}</span>
-                      <span>S:{a.sharpe?.toFixed(2)} F:{a.fitness?.toFixed(2)}</span>
-                    </div>
-                  ))}
+                <div style={{ maxHeight: 200, overflowY: "auto" }}>
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        <th>Alpha ID</th>
+                        <th>状态</th>
+                        <th className="is-sortable num">Sharpe</th>
+                        <th className="is-sortable num">Fitness</th>
+                        <th className="is-sortable num">Turnover</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {cloud.sample_alphas.slice(0, 10).map((a, i) => (
+                        <tr key={i}>
+                          <td className="id">{a.alpha_id}</td>
+                          <td><span className={`badge ${a.pass_fail === "PASS" ? "badge-positive" : "badge-negative"}`}>{a.pass_fail || "--"}</span></td>
+                          <td className="num">{a.sharpe?.toFixed(2) ?? "--"}</td>
+                          <td className="num">{a.fitness?.toFixed(2) ?? "--"}</td>
+                          <td className="num">{a.turnover?.toFixed(2) ?? "--"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               )}
             </>
@@ -143,36 +184,48 @@ export default function Dashboard({ notify, credentials }: Props) {
         </div>
       </div>
 
-      {/* Top Families & Fields */}
+      {/* Research Memory Panels */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="card">
-          <h3 className="text-sm font-semibold text-gray-200 mb-3">热门家族</h3>
-          {memory?.families?.slice(0, 5).map((f) => (
-            <div key={f.name} className="flex justify-between text-xs py-1.5 border-b border-gray-800 last:border-0">
-              <span className="text-gray-300">{f.name}</span>
-              <span className="text-muted">n={f.count} 成功率:{f.success_rate?.toFixed(2)}</span>
-            </div>
-          )) || <p className="text-xs text-muted">暂无数据</p>}
+        {/* Top Families */}
+        <div className="panel">
+          <div className="panel-header"><span>热门家族</span></div>
+          <div className="panel-body">
+            {memory?.families?.slice(0, 5).map((f) => (
+              <div key={f.name} className="flex justify-between text-xs py-2 px-3.5 border-b border-border-subtle last:border-0">
+                <span className="text-text-secondary">{f.name}</span>
+                <span className="tabular text-text-tertiary">n={f.count} {f.success_rate?.toFixed(2)}</span>
+              </div>
+            )) || <div className="panel-body-padded text-xs text-text-tertiary">暂无数据</div>}
+          </div>
         </div>
-        <div className="card">
-          <h3 className="text-sm font-semibold text-gray-200 mb-3">热门字段</h3>
-          {memory?.fields?.slice(0, 5).map((f) => (
-            <div key={f.name} className="flex justify-between text-xs py-1.5 border-b border-gray-800 last:border-0">
-              <span className="text-gray-300">{f.name}</span>
-              <span className="text-muted">n={f.count} 成功率:{f.success_rate?.toFixed(2)}</span>
-            </div>
-          )) || <p className="text-xs text-muted">暂无数据</p>}
+
+        {/* Top Fields */}
+        <div className="panel">
+          <div className="panel-header"><span>热门字段</span></div>
+          <div className="panel-body">
+            {memory?.fields?.slice(0, 5).map((f) => (
+              <div key={f.name} className="flex justify-between text-xs py-2 px-3.5 border-b border-border-subtle last:border-0">
+                <span className="text-text-secondary">{f.name}</span>
+                <span className="tabular text-text-tertiary">n={f.count} {f.success_rate?.toFixed(2)}</span>
+              </div>
+            )) || <div className="panel-body-padded text-xs text-text-tertiary">暂无数据</div>}
+          </div>
         </div>
-        <div className="card">
-          <h3 className="text-sm font-semibold text-gray-200 mb-3">失败模式</h3>
-          {memory?.failure_patterns?.slice(0, 5).map((fp) => (
-            <div key={fp.reason} className="flex justify-between text-xs py-1.5 border-b border-gray-800 last:border-0">
-              <span className="text-danger/80">{fp.reason}</span>
-              <span className="text-muted">x{fp.count}</span>
-            </div>
-          )) || <p className="text-xs text-muted">暂无失败记录</p>}
+
+        {/* Failure Patterns */}
+        <div className="panel">
+          <div className="panel-header"><span>失败模式</span></div>
+          <div className="panel-body">
+            {memory?.failure_patterns?.slice(0, 5).map((fp) => (
+              <div key={fp.reason} className="flex justify-between text-xs py-2 px-3.5 border-b border-border-subtle last:border-0">
+                <span className="text-negative/80">{fp.reason}</span>
+                <span className="tabular text-text-tertiary">x{fp.count}</span>
+              </div>
+            )) || <div className="panel-body-padded text-xs text-text-tertiary">暂无失败记录</div>}
+          </div>
         </div>
       </div>
+      </>)}
     </div>
   );
 }

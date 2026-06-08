@@ -1,0 +1,38 @@
+# BRAIN Alpha Ops — Pre-commit Quality Hooks
+#
+# Install: pip install pre-commit && pre-commit install
+# Run manually: pre-commit run --all-files
+
+repos:
+  - repo: local
+    hooks:
+      - id: python-compile
+        name: Python compile check
+        entry: python -m compileall -q brain_alpha_ops scripts tests
+        language: system
+        types: [python]
+        pass_filenames: false
+
+      - id: log-redaction
+        name: Log redaction audit
+        entry: python scripts/check_log_redaction.py --root brain_alpha_ops
+        language: system
+        types: [python]
+        pass_filenames: false
+        verbose: true
+
+      - id: module-size
+        name: Module size audit
+        entry: python scripts/check_module_size.py --root .
+        language: system
+        types: [python]
+        pass_filenames: false
+        verbose: true
+
+      - id: secret-scan
+        name: Secret scan
+        entry: python scripts/scan_sensitive_artifacts.py --root . --fail-on-findings
+        language: system
+        types: [python]
+        pass_filenames: false
+        stages: [pre-push]

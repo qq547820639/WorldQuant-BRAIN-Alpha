@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+import re
 import subprocess
 import sys
 import time
@@ -93,10 +94,10 @@ def main(argv: list[str] | None = None) -> int:
                     print(f"[MONITOR] Running... {line_count} lines, last: {line.rstrip()[:100]}")
                     last_report = now
 
-                if "DONE" in line or "run_completed" in line.lower():
+                if re.search(r'\bDONE\b', line) or "run_completed" in line.lower():
                     print("[MONITOR] PIPELINE COMPLETED!")
                     break
-                if "FAILED" in line or "error" in line.lower():
+                if re.search(r'\bFAILED\b', line) or re.search(r'\b(?<!no_)error\b', line.lower()):
                     print(f"[MONITOR] ALERT: {line.rstrip()[:150]}")
         except KeyboardInterrupt:
             print("[MONITOR] Interrupted. Terminating...")

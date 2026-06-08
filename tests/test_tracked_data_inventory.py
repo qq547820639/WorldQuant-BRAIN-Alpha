@@ -15,6 +15,8 @@ def test_tracked_data_inventory_classifies_known_data_paths(monkeypatch, tmp_pat
             "data/official_fields.meta.json",
             "data/prd_alpha_ops_v3.md",
             "data/qa_ui_refactor_report.md",
+            "data/audit/review_2026-06-05_example.json",
+            "data/audit/ui_2026-06-05/desktop-state-cards.png",
         ]
     )
 
@@ -31,7 +33,7 @@ def test_tracked_data_inventory_classifies_known_data_paths(monkeypatch, tmp_pat
     result = check_tracked_data_inventory.inventory_tracked_data(tmp_path)
 
     assert result["ok"] is True
-    assert result["tracked_count"] == 7
+    assert result["tracked_count"] == 9
     assert result["categories"]["runtime_generated"] == [
         "data/checkpoints/run.checkpoint.json",
         "data/jobs_production.json",
@@ -42,6 +44,8 @@ def test_tracked_data_inventory_classifies_known_data_paths(monkeypatch, tmp_pat
         "data/official_fields.meta.json",
     ]
     assert result["categories"]["review_artifact"] == [
+        "data/audit/review_2026-06-05_example.json",
+        "data/audit/ui_2026-06-05/desktop-state-cards.png",
         "data/prd_alpha_ops_v3.md",
         "data/qa_ui_refactor_report.md",
     ]

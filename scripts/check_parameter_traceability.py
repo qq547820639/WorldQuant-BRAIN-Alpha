@@ -468,6 +468,85 @@ def validate_generator_templates_no_custom_extensions(
     return issues
 
 
+_OPERATOR_ALIASES = {
+    "+": "add", "-": "subtract", "*": "multiply", "/": "divide",
+    "group_z_score": "group_zscore", "ts_std": "ts_std_dev", "ts_z_score": "ts_zscore",
+}
+
+
+def validate_generation_mutation_no_custom_extensions(
+    official_fields: list[str],
+    official_operators: list[str],
+) -> dict[str, Any]:
+    issues: list[dict[str, Any]] = []
+    coverage_paths: list[dict[str, Any]] = []
+
+    template_issues = validate_generator_templates_no_custom_extensions(official_fields, official_operators)
+    issues.extend(template_issues)
+    coverage_paths.append(_coverage_path("generator_fallback_templates", "brain_alpha_ops.research.generator.CandidateGenerator._generate_fallback", "blocking", "render fallback templates with official sample fields and validate rendered fields/operators", template_issues))
+
+    try:
+        from brain_alpha_ops.research import evolution
+        evolution_fields = sorted(str(item).lower() for item in evolution._COMMON_FIELDS)
+        evolution_ops = sorted(str(item).lower() for item in (evolution._UNARY_OPERATORS | evolution._BINARY_OPERATORS | evolution._GROUP_OPERATORS | evolution._WINDOW_OPERATORS))
+        evolution_issues, evolution_details = _surface_warnings(
+            "evolution_mutation", evolution_fields, evolution_ops, official_fields, official_operators
+        )
+    except Exception as exc:
+        evolution_issues = [{"severity": "ERROR", "check": "generation_surface_import_failed", "details": f"Failed to inspect evolution mutation surface: {exc}", "fix": "Fix the evolution import and rerun traceability."}]
+        evolution_details = {}
+    issues.extend(evolution_issues)
+    coverage_paths.append(_coverage_path("evolution_mutation_engine", "brain_alpha_ops.research.evolution.MutationEngine", "warning", "inspect mutation field/operator constants against official context names or FASTEXPR aliases", evolution_issues, evolution_details))
+
+    try:
+        from brain_alpha_ops.research.generator import OFFICIAL_OPERATOR_SUBSTITUTE_FAMILIES
+        legacy_ops = sorted({str(operator).lower() for operators in OFFICIAL_OPERATOR_SUBSTITUTE_FAMILIES.values() for operator in operators})
+        legacy_issues, legacy_details = _surface_warnings("legacy_mutation", [], legacy_ops, official_fields, official_operators)
+        legacy_details["operator_source"] = "OFFICIAL_OPERATOR_SUBSTITUTE_FAMILIES"
+        legacy_details["field_source"] = "caller-provided field_pool; no new fields when field_pool is absent"
+    except Exception as exc:
+        legacy_issues = [{"severity": "ERROR", "check": "generation_surface_import_failed", "details": f"Failed to inspect legacy operator substitution surface: {exc}", "fix": "Fix the generator import and rerun traceability."}]
+        legacy_details = {}
+    issues.extend(legacy_issues)
+    coverage_paths.append(_coverage_path("legacy_mutate_expression", "brain_alpha_ops.research.generator.mutate_expression", "warning", "inspect legacy mutation operator family constants against official context names or FASTEXPR aliases", legacy_issues, legacy_details))
+
+    return {
+        "coverage_scope": ["generator_fallback_templates", "evolution_mutation_engine", "legacy_mutate_expression"],
+        "coverage_statement": (
+            "no_custom_extension covers generator/evolution/legacy mutation key paths; "
+            "fallback templates are the blocking rendered-expression check, while evolution and legacy mutation paths "
+            "are explicitly tracked as source-constant coverage so fallback-only evidence is not reported as full coverage."
+        ),
+        "coverage_paths": coverage_paths,
+        "issues": issues,
+    }
+
+
+def _surface_warnings(check: str, fields: list[str], operators: list[str], official_fields: list[str], official_operators: list[str]) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    official_field_set = {str(item).lower() for item in official_fields if str(item).strip()}
+    official_operator_set = {str(item).lower() for item in official_operators if str(item).strip()}
+    missing_fields = [field for field in fields if field not in official_field_set]
+    missing_operators = [op for op in operators if _OPERATOR_ALIASES.get(op, op) not in official_operator_set]
+    issues = []
+    if missing_fields:
+        issues.append({"severity": "WARNING", "check": f"{check}_field_source_unverified", "details": "Unverified field constants: " + ", ".join(missing_fields), "fix": "Refresh official_fields.json or supply official runtime fields."})
+    if missing_operators:
+        issues.append({"severity": "WARNING", "check": f"{check}_operator_source_unverified", "details": "Unverified operator constants: " + ", ".join(missing_operators), "fix": "Align operator constants with official_operators.json or document an official FASTEXPR alias."})
+    return issues, {
+        "field_constants_checked": len(fields),
+        "operator_literals_checked": len(operators),
+        "unverified_fields": missing_fields,
+        "unverified_operators": missing_operators,
+    }
+
+
+def _coverage_path(path: str, source: str, enforcement: str, method: str, issues: list[dict[str, Any]], details: dict[str, Any] | None = None) -> dict[str, Any]:
+    result = {"path": path, "source": source, "checked": True, "enforcement": enforcement, "method": method, "issues_found": len(issues), "passed": not any(issue["severity"] == "ERROR" for issue in issues)}
+    if details:
+        result["details"] = details
+    return result
+
+
 def check_official_element_coverage(
     official_fields: list[str],
     official_operators: list[str],
@@ -581,16 +660,32 @@ def run_parameter_audit(
         }
 
     # 6. Field/operator no-custom-extension check
-    extension_issues = validate_generator_templates_no_custom_extensions(
+    extension_result = validate_generation_mutation_no_custom_extensions(
         official_field_names,
         official_operator_names,
     )
+    extension_issues = extension_result["issues"]
     all_issues.extend(extension_issues)
+    blocking_extension_issues = [issue for issue in extension_issues if issue["severity"] == "ERROR"]
+    warning_extension_issues = [issue for issue in extension_issues if issue["severity"] == "WARNING"]
     audit_results["no_custom_extension_check"] = {
         "checked": len(official_field_names) + len(official_operator_names),
-        "template_checks": len(extension_issues),
+        "surfaces_checked": len(extension_result["coverage_paths"]),
+        "surface_coverage": extension_result["coverage_paths"],
+        "coverage_scope": extension_result["coverage_scope"],
+        "coverage_paths": extension_result["coverage_paths"],
+        "coverage_statement": extension_result["coverage_statement"],
+        "template_checks": next(
+            (
+                item["issues_found"]
+                for item in extension_result["coverage_paths"]
+                if item["path"] == "generator_fallback_templates"
+            ),
+            0,
+        ),
         "issues_found": len(extension_issues),
-        "passed": not any(i["severity"] == "ERROR" for i in extension_issues),
+        "warnings_found": len(warning_extension_issues),
+        "passed": not blocking_extension_issues,
     }
 
     # 7. Official context lineage check.  This is enforced only when a config is

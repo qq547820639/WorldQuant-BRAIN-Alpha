@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from heapq import heappush, heappushpop
 from typing import Any
 
 from brain_alpha_ops.models import Candidate
@@ -45,7 +46,11 @@ def cloud_correlation_risk(
     candidate_norm = normalize(candidate.expression)
     candidate_tokens = set(candidate_norm.split()) if candidate_norm else set()
     best = {"score": 0.0, "id": "", "status": ""}
-    top_matches: list[tuple[float, dict[str, object]]] = []
+    # Maintain top-25 matches with a min-heap for O(n log 25) complexity.
+    # The heap stores (score, tiebreak, row) tuples where tiebreak ensures
+    # stable ordering when scores are equal.
+    top_heap: list[tuple[float, int, dict[str, object]]] = []
+    _tiebreak = 0
     for row in similarity_rows:
         row_id = str(row.get("id") or "")
         if official_id and row_id == official_id:
@@ -56,11 +61,13 @@ def cloud_correlation_risk(
         if score > best["score"]:
             best = {"score": round(score, 4), "id": row_id, "status": str(row.get("status", ""))}
         if score > 0.0:
-            top_matches.append((score, row))
-            if len(top_matches) > 25:
-                top_matches.sort(key=lambda item: item[0], reverse=True)
-                del top_matches[25:]
-    for token_score, row in sorted(top_matches, key=lambda item: item[0], reverse=True):
+            _tiebreak += 1
+            if len(top_heap) < 25:
+                heappush(top_heap, (score, _tiebreak, row))
+            else:
+                heappushpop(top_heap, (score, _tiebreak, row))
+    top_matches = [(s, r) for s, _, r in sorted(top_heap, key=lambda x: (-x[0], x[1]))]
+    for token_score, row in top_matches:
         ast_score = expression_similarity(candidate.expression, str(row.get("expression") or ""))
         score = round(max(token_score, ast_score), 4)
         if score > best["score"]:

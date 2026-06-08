@@ -4,14 +4,10 @@ GuidedPipeline — wraps AlphaResearchPipeline with:
   1. Step-by-step process guidance with progress indicators
   2. Real-time status feedback via callback mechanism
   3. Actionable error messages with fix suggestions
-  4. Structured result presentation (JSON + human-readable)
+  4. Structured result presentation for the Web console
   5. Checkpoint/resume mechanism for long-running pipelines
   6. Historical run browser and replay capability
 
-Usage:
-    from brain_alpha_ops.ux.guided_pipeline import GuidedPipeline
-    gp = GuidedPipeline(run_config)
-    gp.run_guided()
 """
 
 from __future__ import annotations
@@ -27,7 +23,6 @@ from brain_alpha_ops.models import PipelineEvent, PipelineResult
 from brain_alpha_ops.redaction import redact_error_message
 from brain_alpha_ops.runner import run_pipeline_from_config
 from brain_alpha_ops.ux import guided_display, guided_storage
-from brain_alpha_ops.ux.guided_cli import main as _guided_cli_main
 from brain_alpha_ops.ux.guided_formatting import format_candidate_summary, format_error_for_user, format_pipeline_progress
 from brain_alpha_ops.ux.guided_models import CheckpointData, PipelinePhase, RunRecord
 
@@ -45,7 +40,7 @@ def classify_error(error: Exception) -> dict[str, str]:
         return {
             "type": info.error_code or type(error).__name__,
             "message": redact_error_message(error, max_length=200),
-            "fix": info.fix_hint or "未知错误。请检查日志文件 data/*.log 获取详细信息。",
+            "fix": info.fix_hint or "未知错误。请在页面事件记录中查看提示，或让维护者查看诊断信息。",
             "retry": "yes" if info.retryable else ("maybe" if info.retryable is None else "no"),
         }
     except Exception:
@@ -53,7 +48,7 @@ def classify_error(error: Exception) -> dict[str, str]:
         return {
             "type": type(error).__name__,
             "message": redact_error_message(error, max_length=200),
-            "fix": "未知错误。请检查日志文件 data/*.log 获取详细信息。",
+            "fix": "未知错误。请在页面事件记录中查看提示，或让维护者查看诊断信息。",
             "retry": "maybe",
         }
 
@@ -65,26 +60,19 @@ def classify_error(error: Exception) -> dict[str, str]:
 class GuidedPipeline:
     """Guided UX pipeline wrapper around the standard pipeline.
 
-    Usage:
-        gp = GuidedPipeline(run_config)
-        gp.run_guided()  # interactive run
-
-        # Or inspect history.
-        gp.list_history()
-        gp.show_run("run_20260517_001")
     """
 
     PHASES = [
-        ("init", "环境初始化与连接验证"),
-        ("context", "BRAIN 平台上下文加载 (字段/算子/数据集)"),
-        ("redline", "技术红线合规验证"),
-        ("generation", "Alpha 候选生成"),
-        ("validation", "本地质量评估与排序"),
-        ("simulation", "BRAIN 官方回测仿真"),
-        ("scoring", "多维评分与归因分析"),
-        ("gating", "Pass/Fail 门禁评估"),
-        ("submission", "提交决策与自动提交"),
-        ("finalize", "结果汇总与持久化"),
+        ("init", "准备连接"),
+        ("context", "刷新官方资料"),
+        ("redline", "合规预检"),
+        ("generation", "生成候选"),
+        ("validation", "复核本地质量"),
+        ("simulation", "运行官方验证"),
+        ("scoring", "评分归因"),
+        ("gating", "质量门禁"),
+        ("submission", "提交安全复核"),
+        ("finalize", "完成并保存记录"),
     ]
 
     def __init__(self, run_config: RunConfig, *, stop_callback: Callable[[], bool] | None = None):
@@ -159,7 +147,7 @@ class GuidedPipeline:
         return result
 
     def run(self) -> PipelineResult:
-        """Backward-compatible alias used by CLI and older docs."""
+        """Backward-compatible alias for legacy internal automation."""
         return self.run_guided()
 
     def resume(self, run_id: str | None = None) -> PipelineResult:
@@ -194,8 +182,8 @@ class GuidedPipeline:
 
         if env == "production" and not has_auth:
             raise RuntimeError(
-                "生产环境需要 BRAIN 凭据。请设置 BRAIN_USERNAME/BRAIN_PASSWORD "
-                "或 BRAIN_TOKEN 环境变量。详见 README.md。"
+                "生产环境需要 BRAIN 凭据。请在 Web 控制台填写并测试 BRAIN 账户，"
+                "或请维护者检查托管凭证。"
             )
 
         if env == "production":
@@ -218,7 +206,7 @@ class GuidedPipeline:
             ops_count = len(_DEFAULTS_CACHE.get("operators", []))
 
             if fields_count == 0:
-                phase.fail("BRAIN 上下文为空 — 请运行 fetch_official_context.py 拉取数据")
+                phase.fail("BRAIN 上下文为空 — 请在 Web 控制台刷新官方能力集")
                 self._notify("context", "failed", {"error": "empty_context"})
                 return result
 
@@ -453,15 +441,3 @@ class GuidedPipeline:
     def print_summary(self, result: PipelineResult | None = None) -> None:
         """Print structured result summary."""
         guided_display.print_summary(self.phases, result or self._last_result)
-
-
-# ═══════════════════════════════════════════════════════════════════════
-# CLI Entry Point
-# ═══════════════════════════════════════════════════════════════════════
-
-def main() -> int:
-    return _guided_cli_main(pipeline_cls=GuidedPipeline, phase_cls=PipelinePhase)
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())

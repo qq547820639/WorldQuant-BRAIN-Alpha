@@ -273,6 +273,7 @@ class TestThresholdAlignment:
             storage = os.path.join(tmp, "data")
             os.makedirs(storage, exist_ok=True)
             config.ops.storage_dir = storage
+            config.ops.settings.dataset = "pv1"
             config.ops.official_api.cache_dir = os.path.join(storage, "api_cache")
             os.makedirs(config.ops.official_api.cache_dir, exist_ok=True)
             config.ops.budget.hypothesis_library_dir = os.path.join(tmp, "hypotheses")
@@ -620,7 +621,8 @@ class TestCanonicalCompleteness:
     def test_canonical_metric_names_complete(self):
         required = {
             "sharpe", "fitness", "turnover", "returns", "drawdown",
-            "correlation", "weight_concentration", "sub_universe_sharpe",
-            "margin", "subUniverseSize", "alphaSize",
+            "correlation", "self_correlation", "prod_correlation",
+            "weight_concentration", "sub_universe_sharpe", "margin",
+            "subUniverseSize", "alphaSize",
         }
         assert CANONICAL_METRIC_NAMES == required

@@ -27,20 +27,26 @@ jobs:
           python -m pip install -r requirements.lock
           python -m pip install -e ".[test]" --no-deps --no-build-isolation
 
-      - name: 1/6 - Python compile check
+      - name: 1/8 - Python compile check
         run: python -m compileall -q brain_alpha_ops scripts tests
 
-      - name: 2/6 - Config validation
-        run: python -m brain_alpha_ops.cli validate-config --config config/run_config.json
+      - name: 2/8 - Config validation
+        run: python -c "from brain_alpha_ops.config import load_run_config; cfg=load_run_config('config/run_config.json'); print({'ok': True, 'environment': cfg.environment})"
 
-      - name: 3/6 - Dependency policy
+      - name: 3/8 - Dependency policy
         run: python scripts/check_dependency_policy.py --pyproject pyproject.toml --json
 
-      - name: 4/6 - Frontend inline sync
+      - name: 4/8 - Frontend inline sync
         run: python brain_alpha_ops/web/build_inline.py --check --json
 
-      - name: 5/6 - Secret scan
+      - name: 5/8 - Secret scan
         run: python scripts/scan_sensitive_artifacts.py --root . --json --fail-on-findings --include-all --include-git-history
 
-      - name: 6/6 - Tests
+      - name: 6/8 - Log redaction audit
+        run: python scripts/check_log_redaction.py --root brain_alpha_ops --json
+
+      - name: 7/8 - Module size audit
+        run: python scripts/check_module_size.py --root . --json
+
+      - name: 8/8 - Tests
         run: python -m pytest tests/ --cov=brain_alpha_ops --cov-report=term --cov-fail-under=80 -v --tb=short

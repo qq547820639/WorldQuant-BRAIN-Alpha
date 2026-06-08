@@ -7,7 +7,8 @@ import logging
 from brain_alpha_ops.config import RunConfig
 from brain_alpha_ops.models import Candidate
 from brain_alpha_ops.redaction import redact_error_message
-from brain_alpha_ops.submission_readiness import missing_official_metric_fields
+from brain_alpha_ops.scoring.release_score_gate import evaluate_release_score
+from brain_alpha_ops.submission_readiness import live_submit_readiness_hard_gate, missing_official_metric_fields
 
 from .assistant import build_assistant_request_pack
 from .context import build_assistant_context_pack
@@ -78,6 +79,20 @@ class PipelineSubmissionMixin:
             candidate.gate = _blocked_gate("CROSS_REVIEW_BLOCKED", failed_reasons)
             candidate.lifecycle_status = "auto_submit_cross_review_blocked"
             self._event("auto_submit_cross_review_blocked", "; ".join(failed_reasons), candidate.alpha_id, level="WARN")
+            return 0
+        readiness_gate = live_submit_readiness_hard_gate(
+            candidate.to_dict(),
+            RunConfig(ops=self.config),
+            candidate.official_alpha_id,
+        )
+        candidate.submission["live_submit_readiness"] = readiness_gate
+        if not readiness_gate.get("ok"):
+            failed_reasons = [
+                str(readiness_gate.get("error_code") or "SUBMIT_READINESS_NOT_READY")
+            ]
+            candidate.gate = _blocked_gate("LIVE_SUBMIT_READINESS_BLOCKED", failed_reasons)
+            candidate.lifecycle_status = "auto_submit_readiness_blocked"
+            self._event("auto_submit_readiness_blocked", "; ".join(failed_reasons), candidate.alpha_id, level="WARN")
             return 0
         submission = self.api.submit_alpha(
             candidate.official_alpha_id,
@@ -181,6 +196,22 @@ class PipelineSubmissionMixin:
                 if missing_metric_fields
                 else "complete official metrics",
             )
+            if not missing_metric_fields:
+                release_gate = evaluate_release_score(metrics, self.config.thresholds, settings=self.config.settings).to_dict()
+                release_gate_passed = release_gate.get("status") != "FAIL"
+                failed_gate_names = [
+                    str(row.get("name") or "official_release_gate")
+                    for row in release_gate.get("attributions") or []
+                    if isinstance(row, dict) and row.get("passed") is False and row.get("severity") == "ERROR"
+                ]
+                add(
+                    "official_release_gate",
+                    release_gate_passed,
+                    "official release gate pass"
+                    if release_gate_passed
+                    else "official_release_gate_failed:" + ",".join(failed_gate_names),
+                )
+                safety["official_release_gate"] = release_gate
 
         if self.config.budget.require_cloud_sync:
             cloud_status = str(self.cloud_sync.get("status", "")).lower()

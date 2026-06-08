@@ -43,7 +43,8 @@ Snapshot = Callable[..., dict[str, Any]]
 
 
 def _default_web_error(exc: Exception, error_code: str) -> dict[str, Any]:
-    return {"ok": False, "error_code": error_code, "error": str(exc)}
+    from brain_alpha_ops.redaction import redact_error_message
+    return {"ok": False, "error_code": error_code, "error": redact_error_message(exc)}
 
 
 def _bounded_float(value: Any, minimum: float, maximum: float) -> float:

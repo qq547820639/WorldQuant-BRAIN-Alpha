@@ -112,6 +112,8 @@ def normalize_metrics(payload: Any) -> dict:
         "drawdown": abs(_ratio(_first_value(metrics_root, ["drawdown", "maxDrawdown", "MaxDrawdown"]))),
         "margin": _num_or_none(_first_value(metrics_root, ["margin", "Margin"], None)),
         "sub_universe_sharpe": _num(_first_value(metrics_root, ["subUniverseSharpe", "sub_universe_sharpe"])),
+        "subUniverseSize": _num_or_none(_first_value(metrics_root, ["subUniverseSize", "sub_universe_size", "subSize"], None)),
+        "alphaSize": _num_or_none(_first_value(metrics_root, ["alphaSize", "alpha_size"], None)),
         "correlation": abs(_ratio(correlation_value)) if correlation_value is not None else None,
         "self_correlation": abs(_ratio(self_correlation_value)) if self_correlation_value is not None else None,
         "prod_correlation": abs(_ratio(prod_correlation_value)) if prod_correlation_value is not None else None,

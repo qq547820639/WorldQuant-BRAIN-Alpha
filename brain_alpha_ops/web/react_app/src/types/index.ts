@@ -12,7 +12,7 @@ export interface ApiResponse<T = unknown> {
 export interface JobStatus {
   job_id: string;
   task_id?: string;
-  status: "idle" | "queued" | "running" | "stopping" | "stopped" | "completed" | "failed" | "cancelled" | "missing";
+  status: "idle" | "queued" | "running" | "stopping" | "stopped" | "completed" | "completed_with_warnings" | "failed" | "cancelled" | "missing";
   phase?: string;
   cycle?: number;
   max_cycles?: number;
@@ -356,7 +356,7 @@ export interface ScoringConfig {
 // ── SSE Event Types ───────────────────────────────────────────────────────
 
 export interface SSEEvent {
-  type?: "progress" | "candidate" | "backtest" | "submission" | "error" | "complete";
+  type?: "progress" | "candidate" | "backtest" | "submission" | "error" | "complete" | "heartbeat";
   ok?: boolean;
   job_id?: string;
   task_id?: string;
@@ -584,11 +584,47 @@ export interface BrainCredentials {
   token: string;
 }
 
+// ── Phase Navigation Types (UI Design System v3.0) ─────────────────────
+
+export type PhaseId = "connect" | "discover" | "evaluate" | "ready";
+export type PhaseStatus = "locked" | "pending" | "active" | "complete" | "blocked";
+
+export interface PhaseGroup {
+  id: PhaseId;
+  label: string;
+  status: PhaseStatus;
+  items: PhaseNavItem[];
+  expanded: boolean;
+  unlockCondition: string;
+}
+
+export interface PhaseNavItem {
+  id: CardViewId;
+  label: string;
+  icon: string;
+  badge?: string | number;
+  badgeTone?: "neutral" | "positive" | "warning" | "info";
+}
+
+export interface PhaseState {
+  currentPhase: PhaseId;
+  phases: Record<PhaseId, PhaseGroup>;
+  overallProgress: number; // 0-4 steps completed
+}
+
+export interface StepGuideItem {
+  id: string;
+  label: string;
+  status: "complete" | "active" | "pending";
+  phase: PhaseId;
+}
+
 /**
  * Card-based navigation view identifier.
  * A subset of TabId used by the StateCards detail view routing.
  */
 export type CardViewId =
+  | "official_operations"
   | "dashboard"
   | "candidates"
   | "official_backtests"

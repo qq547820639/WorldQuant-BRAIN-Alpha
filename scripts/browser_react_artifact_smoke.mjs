@@ -224,7 +224,56 @@ function mockApiPayload(rawUrl, method) {
     });
   }
   if (method === "GET" && pathname === "/api/submit_readiness") {
-    return ok({ ok: true, eligible_count: 1, blocked_count: 1 });
+    return ok({
+      ok: true,
+      ready_to_submit: false,
+      eligible_count: 0,
+      blocked_count: 2,
+      summary_counts: { submission_ready: 0, submitted_this_run: 0, auto_submitted: 0 },
+      top_blocking_reasons: [{ reason: "missing_official_metrics", count: 2 }],
+      required_next_steps: ["complete official simulation metrics before any submit review"],
+    });
+  }
+  if (method === "GET" && pathname === "/api/check_results") {
+    return ok({
+      ok: true,
+      count: 2,
+      items: [
+        { alpha_id: "ALPHA_RT_001", status: "PASS", passed: true, summary: "official checks passed" },
+        { alpha_id: "ALPHA_RT_002", status: "BLOCKED", passed: false, summary: "official metrics missing" },
+      ],
+    });
+  }
+  if (method === "POST" && pathname === "/api/sync_alphas") {
+    return ok({ ok: true, job_id: "sync_smoke", task_id: "sync_smoke", status_url: "/api/sync_status?job_id=sync_smoke" });
+  }
+  if (method === "GET" && pathname === "/api/sync_status") {
+    return ok({ ok: false, error_code: "STATUS_UNCLEAR", error: "mocked unclear sync status" });
+  }
+  if (method === "POST" && pathname === "/api/sync_cancel") {
+    return ok({ ok: true, job_id: "sync_smoke", status: "stopped" });
+  }
+  if (method === "POST" && pathname === "/api/generate_candidates") {
+    return ok({ ok: true, job_id: "gen_smoke", task_id: "gen_smoke" });
+  }
+  if (method === "POST" && pathname === "/api/scoring/evaluate") {
+    return ok({ ok: true, job_id: "score_smoke", task_id: "score_smoke" });
+  }
+  if (method === "POST" && pathname === "/api/scoring/attribution") {
+    return ok({
+      ok: true,
+      attribution: { name: "total", score: 82, weight: 1, children: [{ name: "official_metrics", score: 50, weight: 0.6 }] },
+      hard_gates: [{ gate_name: "official", passed: true, check_items: [{ name: "sharpe", passed: true, actual: 1.42, target: 1.25, direction: ">=" }] }],
+      soft_gates: [],
+      top_failures: [],
+      improvement_hints: ["keep official metrics current"],
+    });
+  }
+  if (method === "POST" && pathname === "/api/production-validation/stop") {
+    return ok({ ok: true, status: "stopping" });
+  }
+  if (method === "POST" && (pathname === "/api/submit" || pathname === "/api/submit_batch")) {
+    return { status: 410, json: { ok: false, error_code: "WEB_ONLY_SUBMIT_REQUIRED" } };
   }
   if (method === "GET" && pathname === "/api/checkpoint_status") {
     return ok({
@@ -336,7 +385,7 @@ function mockApiPayload(rawUrl, method) {
     return {
       status: 200,
       contentType: "text/event-stream; charset=utf-8",
-      body: "data: {\"type\":\"complete\",\"ok\":true}\n\n",
+      body: "event: complete\ndata: {\"type\":\"complete\",\"ok\":true}\n\n",
     };
   }
   return null;
@@ -405,7 +454,7 @@ function metricsExpression() {
     const resources = performance.getEntriesByType("resource")
       .map((entry) => ({ name: entry.name, transferSize: entry.transferSize || 0 }))
       .filter((entry) => /\\/assets\\//.test(entry.name));
-    const cardTitles = ["候选管理", "回测监控", "质量门禁", "提交管理", "断点历史", "系统配置", "云端快照"];
+    const cardTitles = ["官方操作", "运行总览", "候选管理", "回测监控", "科学评分", "质量门禁", "阻断复核", "续跑记录", "系统配置", "云端快照"];
     return {
       title: document.title,
       readyState: document.readyState,
@@ -414,7 +463,7 @@ function metricsExpression() {
       rootChildCount: root ? root.childElementCount : 0,
       rootTextLength: root ? root.innerText.length : 0,
       hasHeading: /BRAIN Alpha Ops/.test(text),
-      hasLocalSession: /本地会话/.test(text),
+      hasLocalSession: /本地非提交页面|本地研究页面/.test(text),
       hasSettingsShortcut: Boolean(document.querySelector('button[aria-label="打开系统配置"]')),
       visibleCardTitles: cardTitles.filter((title) => text.includes(title)),
       misleadingOnlineLabel: /在线/.test(text),
@@ -472,23 +521,27 @@ function interactionExpression() {
       element.dispatchEvent(new Event("change", { bubbles: true }));
     };
 
-    await waitUntil(() => /生产流程/.test(text()) && /系统配置/.test(text()) && /云端快照/.test(text()), 160);
-    const cardTitles = ["候选管理", "回测监控", "质量门禁", "提交管理", "断点历史", "系统配置", "云端快照"];
+    await waitUntil(() => /本地 Web 页面/.test(text()) && /系统配置/.test(text()) && /云端快照/.test(text()) && /官方操作/.test(text()), 160);
+    const cardTitles = ["官方操作", "运行总览", "候选管理", "回测监控", "科学评分", "质量门禁", "阻断复核", "续跑记录", "系统配置", "云端快照"];
     const report = {
       home: {
-        hasLocalSession: /本地会话/.test(text()),
+        hasLocalSession: /本地非提交页面|本地研究页面/.test(text()),
         hasTopSettings: Boolean(buttonByAria("打开系统配置")),
         cardTitlesVisible: cardTitles.filter((title) => text().includes(title)),
+        hasOfficialOperations: /官方操作/.test(text()),
+        hasNoManualSubmitCard: !/手动提交/.test(text()),
         hasConfigCardAction: Boolean(buttonByText("系统设置")),
+        hasCandidateCardAction: Boolean(buttonByText("管理候选")),
         hasCheckpointCardAction: Boolean(buttonByText("查看历史")),
         hasCloudCardAction: Boolean(buttonByText("查看快照")),
+        hasOfficialOperationsAction: Boolean(buttonByText("打开操作")),
         noMisleadingOnline: !/在线/.test(text()),
         sample: text().slice(0, 300),
       },
     };
 
     buttonByAria("打开系统配置")?.click();
-    await waitUntil(() => /配置管理/.test(text()) && /BRAIN 设置/.test(text()) && /预算控制/.test(text()), 160);
+    await waitUntil(() => /系统配置/.test(text()) && /BRAIN 设置/.test(text()) && /预算控制/.test(text()), 160);
     const connectionButton = buttonByText("测试 BRAIN 连接");
     const connectionEnabled = Boolean(connectionButton && !connectionButton.disabled);
     if (connectionEnabled) connectionButton.click();
@@ -501,7 +554,7 @@ function interactionExpression() {
     if (saveEnabledBeforeClick) saveButton.click();
     await waitUntil(() => /配置已保存/.test(text()) || Boolean(saveButton?.disabled), 80);
     report.configTopShortcut = {
-      reached: /配置管理/.test(text()),
+      reached: /系统配置/.test(text()),
       hasBrainSettings: /BRAIN 设置/.test(text()),
       hasBudget: /预算控制/.test(text()),
       hasQualityThresholds: /质量阈值/.test(text()),
@@ -509,15 +562,15 @@ function interactionExpression() {
       hasConnectionSection: /BRAIN 连接/.test(text()),
       connectionClicked: connectionEnabled,
       connectionOk: /连接正常/.test(text()),
-      hasLocalSessionBadge: /本地会话/.test(text()),
+      hasLocalSessionBadge: /本页凭证已填写|未连接 BRAIN/.test(text()),
       hasDatasetInput: Boolean(datasetInput),
       saveClicked: saveEnabledBeforeClick,
       saveToastShown: /配置已保存/.test(text()),
     };
 
     buttonByAria("返回状态卡")?.click();
-    await waitUntil(() => /生产流程/.test(text()) && /查看快照/.test(text()), 120);
-    report.returnedAfterConfig = /生产流程/.test(text());
+    await waitUntil(() => /本地 Web 页面/.test(text()) && /查看快照/.test(text()), 120);
+    report.returnedAfterConfig = /本地 Web 页面/.test(text());
 
     buttonByText("查看快照")?.click();
     await waitUntil(() => /云端数据/.test(text()) && /ALPHA_CLOUD_1/.test(text()), 160);
@@ -534,24 +587,92 @@ function interactionExpression() {
       filterWorked: /ALPHA_CLOUD_2/.test(text()) && !/ALPHA_CLOUD_1/.test(text()),
     };
 
-    buttonByAria("返回状态卡")?.click();
-    await waitUntil(() => /生产流程/.test(text()) && /查看历史/.test(text()), 120);
-    buttonByText("查看历史")?.click();
-    await waitUntil(() => /断点历史/.test(text()) && /run_resume/.test(text()), 160);
+	    buttonByAria("返回状态卡")?.click();
+	    await waitUntil(() => /本地 Web 页面/.test(text()) && /查看历史/.test(text()), 120);
+
+	    buttonByText("打开操作")?.click();
+	    await waitUntil(() => /官方同步与阻断复核/.test(text()) && /开始刷新/.test(text()), 160);
+	    buttonByText("读取复核")?.click();
+	    await waitUntil(() => /当前仍未达到提交前阻断复核通过标准|阻断复核仍未通过/.test(text()), 120);
+	    buttonByText("查看结果")?.click();
+	    await waitUntil(() => /质量检查结果已加载|2 条记录/.test(text()), 120);
+	    buttonByText("开始刷新")?.click();
+	    await waitUntil(() => /连续读取刷新状态失败|已自动停止/.test(text()), 360);
+	    report.officialOperations = {
+	      reached: /官方同步与阻断复核/.test(text()),
+	      hasButtonDrivenCopy: /按钮驱动/.test(text()) && /非提交/.test(text()),
+	      readinessBlocked: /当前仍未达到提交前阻断复核通过标准|阻断复核仍未通过/.test(text()),
+	      checkResultsLoaded: /质量检查结果已加载|2 条记录/.test(text()),
+	      autoInterrupted: /连续读取刷新状态失败|已自动停止/.test(text()),
+	      hidesCommands: !/(python |npm |shell|命令行)/i.test(text()),
+	    };
+
+	    buttonByAria("返回状态卡")?.click();
+	    await waitUntil(() => /本地 Web 页面/.test(text()) && /管理候选/.test(text()), 120);
+
+	    const installFailingEventSource = () => {
+	      const NativeEventSource = window.EventSource;
+	      const nativeSetTimeout = window.setTimeout.bind(window);
+	      const nativeClearTimeout = window.clearTimeout.bind(window);
+	      window.setTimeout = (handler, timeout, ...args) => nativeSetTimeout(handler, timeout === 3000 ? 1 : timeout, ...args);
+	      class FailingEventSource {
+	        static instances = [];
+	        constructor(url) {
+	          this.url = url;
+	          this.readyState = 0;
+	          FailingEventSource.instances.push(this);
+	          nativeSetTimeout(() => {
+	            this.readyState = 2;
+	            if (typeof this.onerror === "function") this.onerror(new Event("error"));
+	          }, 1);
+	        }
+	        addEventListener(_name, _handler) {}
+	        removeEventListener(_name, _handler) {}
+	        close() { this.readyState = 2; }
+	      }
+	      window.EventSource = FailingEventSource;
+	      return () => {
+	        window.EventSource = NativeEventSource;
+	        window.setTimeout = nativeSetTimeout;
+	        window.clearTimeout = nativeClearTimeout;
+	      };
+	    };
+	    const restoreEventSource = installFailingEventSource();
+	    buttonByText("管理候选")?.click();
+	    await waitUntil(() => /候选管理/.test(text()) && /生成候选/.test(text()) && /ALPHA_RT_001/.test(text()), 160);
+	    buttonByText("生成候选")?.click();
+	    await waitUntil(() => /候选生成进度暂时不可确认|系统已安全停止本次生成/.test(text()), 260);
+	    const scoreButton = buttonByAria("评分 ALPHA_RT_001") || buttonByText("评分");
+	    scoreButton?.click();
+	    await waitUntil(() => /评分与验证/.test(text()) && /评分进度暂时不可确认|系统已安全停止/.test(text()), 320);
+	    restoreEventSource();
+	    report.alphaFlow = {
+	      candidatesReached: /候选管理/.test(text()) || /评分与验证/.test(text()),
+	      candidateRowsVisible: /ALPHA_RT_001/.test(text()),
+	      generateClicked: true,
+	      generationAutoStopped: /候选生成进度暂时不可确认|系统已安全停止本次生成/.test(text()),
+	      scoreReached: /评分与验证/.test(text()),
+	      scoreAutoStopped: /评分进度暂时不可确认|系统已安全停止/.test(text()),
+	    };
+
+	    buttonByAria("返回状态卡")?.click();
+	    await waitUntil(() => /本地 Web 页面/.test(text()) && /查看历史/.test(text()), 120);
+	    buttonByText("查看历史")?.click();
+    await waitUntil(() => /续跑记录/.test(text()) && /run_resume/.test(text()), 160);
     report.checkpoint = {
-      reached: /断点历史/.test(text()),
-      hasMetrics: /断点数量/.test(text()) && /历史记录/.test(text()) && /可续跑/.test(text()),
-      hasTable: Boolean(document.querySelector('table[aria-label="断点历史表格"]')),
+      reached: /续跑记录/.test(text()),
+      hasMetrics: /续跑记录/.test(text()) && /历史记录/.test(text()) && /可续跑/.test(text()),
+      hasTable: Boolean(document.querySelector('table[aria-label="续跑记录表格"]')),
       hasResumeRun: /run_resume/.test(text()),
-      hasComparison: /comparison/.test(text()),
+      hasComparison: /对比/.test(text()),
     };
 
     buttonByAria("返回状态卡")?.click();
-    await waitUntil(() => /生产流程/.test(text()) && /系统设置/.test(text()), 120);
+    await waitUntil(() => /本地 Web 页面/.test(text()) && /系统设置/.test(text()), 120);
     buttonByText("系统设置")?.click();
-    await waitUntil(() => /配置管理/.test(text()) && /BRAIN 设置/.test(text()), 120);
+    await waitUntil(() => /系统配置/.test(text()) && /BRAIN 设置/.test(text()), 120);
     report.configCard = {
-      reached: /配置管理/.test(text()),
+      reached: /系统配置/.test(text()),
       activeTitle: /系统配置/.test(text()),
       hasBrainSettings: /BRAIN 设置/.test(text()),
     };
@@ -569,7 +690,7 @@ function validateMetrics(metrics, session) {
   if (!metrics.hasHeading) failures.push("missing app heading");
   if (!metrics.hasLocalSession) failures.push("local session badge is not visible");
   if (!metrics.hasSettingsShortcut) failures.push("top-level settings shortcut is missing");
-  if ((metrics.visibleCardTitles || []).length !== 7) failures.push("state-card navigation did not render all seven cards");
+  if ((metrics.visibleCardTitles || []).length !== 10) failures.push("state-card navigation did not render all ten cards");
   if (metrics.misleadingOnlineLabel) failures.push("page still shows the misleading online label");
   if (!metrics.meta.csrf || !metrics.meta.stream) failures.push("missing CSRF or stream meta token placeholder");
   if (metrics.resources.length < 2) failures.push("expected JS and CSS assets to load");
@@ -585,9 +706,10 @@ function validateMetrics(metrics, session) {
 function validateInteractions(interactions, session) {
   const failures = [];
   const requested = (method, pathname) => session.mockRequests.some((request) => request.method === method && request.path === pathname);
+  const requestCount = (method, pathname) => session.mockRequests.filter((request) => request.method === method && request.path === pathname).length;
   const home = interactions.home || {};
   if (!home.hasLocalSession || !home.hasTopSettings) failures.push("home shell does not expose local session and settings shortcut");
-  if ((home.cardTitlesVisible || []).length !== 7) failures.push("home state-card set is incomplete");
+  if ((home.cardTitlesVisible || []).length !== 10) failures.push("home state-card set is incomplete");
   if (!home.hasConfigCardAction || !home.hasCheckpointCardAction || !home.hasCloudCardAction) {
     failures.push("config/checkpoint/cloud card actions are not discoverable");
   }
@@ -612,6 +734,31 @@ function validateInteractions(interactions, session) {
   }
   if (!cloud.hasFilter || !cloud.filterWorked) failures.push("cloud snapshot filter did not narrow mocked rows");
 
+  const officialOperations = interactions.officialOperations || {};
+  if (!officialOperations.reached || !officialOperations.hasButtonDrivenCopy) {
+    failures.push("official operations card did not expose the button-driven Web flow");
+  }
+  if (!officialOperations.readinessBlocked || !officialOperations.checkResultsLoaded) {
+    failures.push("official operations did not show readiness blockers and check results");
+  }
+  if (!officialOperations.autoInterrupted) {
+    failures.push("official operations did not auto-interrupt unclear refresh state");
+  }
+  if (!officialOperations.hidesCommands) {
+    failures.push("official operations still exposes command-line wording");
+  }
+
+  const alphaFlow = interactions.alphaFlow || {};
+  if (!alphaFlow.candidatesReached || !alphaFlow.candidateRowsVisible || !alphaFlow.generateClicked) {
+    failures.push("candidate generation flow was not exercised through the Web UI");
+  }
+  if (!alphaFlow.generationAutoStopped) {
+    failures.push("candidate generation did not request backend cancellation after ambiguous SSE state");
+  }
+  if (!alphaFlow.scoreReached || !alphaFlow.scoreAutoStopped) {
+    failures.push("scoring flow did not request backend cancellation after ambiguous SSE state");
+  }
+
   const checkpoint = interactions.checkpoint || {};
   if (!checkpoint.reached || !checkpoint.hasMetrics || !checkpoint.hasTable || !checkpoint.hasResumeRun || !checkpoint.hasComparison) {
     failures.push("checkpoint history card did not render mocked resume and history data");
@@ -620,8 +767,14 @@ function validateInteractions(interactions, session) {
   const configCard = interactions.configCard || {};
   if (!configCard.reached || !configCard.hasBrainSettings) failures.push("state-card config entry did not open config");
 
-  for (const endpoint of ["/api/candidates", "/api/backtest_slots", "/api/submit_readiness", "/api/checkpoint_status", "/api/config", "/api/config_schema", "/api/snapshot/cloud"]) {
+  for (const endpoint of ["/api/candidates", "/api/backtest_slots", "/api/submit_readiness", "/api/checkpoint_status", "/api/config", "/api/config_schema", "/api/snapshot/cloud", "/api/check_results", "/api/sync_status"]) {
     if (!requested("GET", endpoint)) failures.push(`expected mocked GET ${endpoint}`);
+  }
+  for (const endpoint of ["/api/test_connection", "/api/config", "/api/sync_alphas", "/api/sync_cancel", "/api/generate_candidates", "/api/scoring/evaluate", "/api/scoring/attribution", "/api/production-validation/stop"]) {
+    if (!requested("POST", endpoint)) failures.push(`expected mocked POST ${endpoint}`);
+  }
+  for (const endpoint of ["/api/submit", "/api/submit_batch"]) {
+    if (requestCount("POST", endpoint) !== 0) failures.push(`unexpected submit endpoint request ${endpoint}`);
   }
   return failures;
 }

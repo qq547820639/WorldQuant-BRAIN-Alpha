@@ -480,6 +480,7 @@ def submit_candidate(web, payload: dict) -> dict:
         observability_submission_preflight=web.observability_submission_preflight,
         payload_truthy=web.payload_truthy,
         api_from_run_config=web.api_from_run_config,
+        submit_readiness_hard_gate=web.live_submit_readiness_hard_gate,
     )
 
 
@@ -502,6 +503,7 @@ def submit_batch(web, payload: dict) -> dict:
         web_error=web._web_error,
         payload_truthy=web.payload_truthy,
         submission_preflight_advisory=web.submission_preflight_advisory,
+        submit_readiness_hard_gate=web.live_submit_readiness_hard_gate,
     )
 
 

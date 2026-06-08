@@ -140,7 +140,12 @@ def public_config_schema() -> dict[str, Any]:
             {"id": "strategyPluginSpecs", "payload_path": "strategyPluginSpecs", "required": False},
         ],
         "operation_layout": {
-            "primary_console": ["toggle-run", "sync-cloud", "check-batch", "submit-selected"],
-            "mutually_exclusive_operations": ["production", "sync", "check", "submit"],
+            "primary_actions": [
+                "run-non-submit-proof",
+                "refresh-official-context",
+                "review-quality-gates",
+                "review-submit-readiness",
+            ],
+            "mutually_exclusive_operations": ["production", "official_refresh", "quality_review", "submit_review"],
         },
     }

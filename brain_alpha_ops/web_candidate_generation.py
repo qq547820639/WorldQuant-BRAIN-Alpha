@@ -57,7 +57,14 @@ def generate_candidates_payload(
     run_config = run_config_from_payload(payload)
     dataset_id = str(payload.get("dataset_id") or run_config.ops.settings.dataset or "").strip()
     if not dataset_id:
-        dataset_id = resolve_default_dataset_id(run_config.ops.storage_dir)
+        try:
+            dataset_id = resolve_default_dataset_id(run_config.ops.storage_dir)
+        except Exception as exc:
+            return user_error_payload(
+                exc,
+                error_code="GENERATE_CANDIDATES_DATASET_ERROR",
+                phase="web_generate_candidates",
+            )
         run_config.ops.settings.dataset = dataset_id
     args = {
         "count": bounded_query_int(payload.get("count", payload.get("candidates", 10)), 1, _MAX_CANDIDATES),

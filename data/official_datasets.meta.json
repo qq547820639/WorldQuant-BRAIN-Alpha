@@ -6,10 +6,10 @@
     "id_or_name_count": 17,
     "id_or_name_coverage": 1.0
   },
-  "expires_at": "2026-06-11T13:44:40.951955+00:00",
+  "expires_at": "2026-06-14T15:19:07.486066+00:00",
   "filename": "official_datasets.json",
   "record_count": 17,
-  "saved_at": "2026-06-02T13:44:40.964248+00:00",
+  "saved_at": "2026-06-07T15:19:07.486066+00:00",
   "schema_version": "official_context_cache_metadata.v1",
   "sha256": "4461e17f70e3d027ff200dd94e5c235820e604a976738b71b0cdcc57adbdbb0c",
   "source": "official_api",

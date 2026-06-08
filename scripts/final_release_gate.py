@@ -99,7 +99,7 @@ def run_final_release_gate(
     _check_official_api_alignment(raw_config, findings)
     _check_refresh_status(root, raw_config, findings, official_context=official_context)
 
-    manifest_hash = _build_manifest_hash(root, config_file)
+    manifest_hash = _build_manifest_hash(root, config_file, findings)
     redlines = _redline_summary(findings)
     passed = not findings
     return GateReport(
@@ -542,6 +542,7 @@ def _redline_summary(findings: list[Finding]) -> dict[str, bool]:
                 "CUSTOM_FIELD_OPERATOR_RISK",
                 "CONFIG_NOT_LOADABLE",
                 "ENVIRONMENT_NOT_PRODUCTION",
+                "MANIFEST_FILE_MISSING",
             }
             for code in codes
         ),
@@ -549,7 +550,9 @@ def _redline_summary(findings: list[Finding]) -> dict[str, bool]:
     }
 
 
-def _build_manifest_hash(repo_root: Path, config_path: Path) -> str:
+def _build_manifest_hash(
+    repo_root: Path, config_path: Path, findings: list[Finding] | None = None
+) -> str:
     tracked = [
         config_path,
         repo_root / "pyproject.toml",
@@ -557,12 +560,21 @@ def _build_manifest_hash(repo_root: Path, config_path: Path) -> str:
         repo_root / "brain_alpha_ops" / "brain_api" / "official.py",
         repo_root / "brain_alpha_ops" / "research" / "pipeline.py",
         repo_root / "brain_alpha_ops" / "scoring" / "release_score_gate.py",
-        repo_root / "brain_alpha_ops" / "web.py",
+        repo_root / "brain_alpha_ops" / "web" / "__init__.py",
         repo_root / "scripts" / "final_release_gate.py",
     ]
     digest = hashlib.sha256()
     for path in tracked:
         if not path.exists():
+            if findings is not None:
+                findings.append(
+                    Finding(
+                        "P1",
+                        "MANIFEST_FILE_MISSING",
+                        f"Release manifest file is missing: {path}",
+                        str(path),
+                    )
+                )
             continue
         try:
             path_label = path.relative_to(repo_root).as_posix()

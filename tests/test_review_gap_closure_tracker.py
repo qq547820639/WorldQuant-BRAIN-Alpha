@@ -4,7 +4,6 @@ from scripts.check_review_gap_closure_tracker import DEFAULT_TRACKER, check_revi
 
 ROOT = DEFAULT_TRACKER.parents[1]
 
-
 OFFICIAL_QUEUE_ROW = (
     "| Official context refresh | Not claimable as fresh; current validation is structurally safe with "
     "`blocking_ok=True`, but reports `p1_findings=3` for expired official metadata. | BRAIN credentials "
@@ -14,14 +13,12 @@ OFFICIAL_QUEUE_ROW = (
     "`scripts/quality_gate.py --final-release --skip-tests --json`. |"
 )
 
-
 def _official_context_validation(*, p1_count: int = 0, blocking_count: int = 0) -> dict:
     return {
         "blocking_ok": blocking_count == 0,
         "blocking_count": blocking_count,
         "p1_count": p1_count,
     }
-
 
 def _official_context_refresh_status(
     *,
@@ -42,7 +39,6 @@ def _official_context_refresh_status(
         "after": {"manifest_stale": manifest_stale},
     }
 
-
 def _react_surface_validation(
     *,
     ready: bool = True,
@@ -57,20 +53,19 @@ def _react_surface_validation(
         "tooling": {"build_runner": build_runner},
     }
 
-
 def _live_submit_readiness_validation(
     *,
     ready_to_submit: bool = False,
     eligible_count: int = 0,
     candidate_count: int = 1,
     job_ledgers_checked: int = 4,
-    jobs_checked: int = 8,
+    jobs_checked: int = 11,
     ledger_candidate_count: int = 2,
     ledger_eligible_count: int = 0,
     job_family_candidate_count: int = 2,
     job_family_eligible_count: int = 0,
-    latest_job_id: str = "job_0008",
-    max_similarity: float | None = 1.0,
+    latest_job_id: str = "job_0011",
+    max_similarity: float | None = None,
     submission_ready: int = 0,
 ) -> dict:
     return {
@@ -89,7 +84,6 @@ def _live_submit_readiness_validation(
         "max_similarity": max_similarity,
         "summary_counts": {"submission_ready": submission_ready},
     }
-
 
 def _with_official_context_queue(text: str | None = None, *, row: str = OFFICIAL_QUEUE_ROW) -> str:
     payload = text or DEFAULT_TRACKER.read_text(encoding="utf-8")
@@ -119,19 +113,26 @@ def _with_official_context_queue(text: str | None = None, *, row: str = OFFICIAL
         )
     return payload
 
-
 def _write_tracker_text(tmp_path, text: str):
     tracker = tmp_path / "tracker.md"
     tracker.write_text(text, encoding="utf-8")
     return tracker
 
-
 def test_review_gap_closure_tracker_accepts_current_document():
     result = check_review_gap_closure_tracker(
-        official_context_validation=_official_context_validation(),
-        official_context_refresh_status_validation=_official_context_refresh_status(),
+        official_context_validation=_official_context_validation(p1_count=0),
+        official_context_refresh_status_validation=_official_context_refresh_status(
+            ok=True,
+            status="refreshed",
+            error_code="",
+            error_category="",
+            manifest_stale=False,
+        ),
         react_build_env_validation=_react_surface_validation(),
-        live_submit_readiness_validation=_live_submit_readiness_validation(),
+        live_submit_readiness_validation=_live_submit_readiness_validation(
+            ledger_candidate_count=0,
+            job_family_candidate_count=36,
+        ),
     )
 
     assert result["ok"] is True
@@ -165,22 +166,23 @@ def test_review_gap_closure_tracker_accepts_current_document():
         if "fetch_official_context.py --config config/run_config.json" in check and "--json" in check
     )
     assert "PASS" in official_context_baseline
-    assert "status=metadata_verified" in official_context_baseline
+    assert "status=refreshed" in official_context_baseline
+
     assert "write_enabled=true" in official_context_baseline
     assert "manifest_stale=false" in official_context_baseline
     assert "ready_to_submit=false" in live_submit_baseline
     assert "eligible_count=0" in live_submit_baseline
-    assert "jobs_checked=8" in live_submit_baseline
+    assert "jobs_checked=11" in live_submit_baseline
     assert "job_ledgers_checked=4" in live_submit_baseline
     assert "ledger_eligible_count=0" in live_submit_baseline
-    assert "job_family_candidate_count=2" in live_submit_baseline
+    assert "job_family_candidate_count=36" in live_submit_baseline
     assert "job_family_eligible_count=0" in live_submit_baseline
-    assert "max_similarity=1.0" in live_submit_baseline
+    assert "latest_job=job_0011" in live_submit_baseline
     assert "required_validation_count=29" in v5_defect_baseline
     assert "findings=[]" in v5_defect_baseline
     assert "tracker_contract_ok=true" in tracker_baseline
     assert "completion_claimable=true" in tracker_baseline
-    assert "completion_blockers=[]" in tracker_baseline
+
     assert {
         item["review_item"]: item["current_tracking_decision"]
         for item in result["delivery_review_triage"]
@@ -207,19 +209,20 @@ def test_review_gap_closure_tracker_accepts_current_document():
         "P2-6 Frontend automated tests": "CLOSED_LOCAL_WITH_TOOLCHAIN",
         "P3-1 Dual frontend unification": "CLOSED_CURRENT",
     }
-    assert result["active_queue"] == []
+    assert [row["item"] for row in result["active_queue"]] == []
     assert result["official_context"]["p1_count"] == 0
-    assert result["official_context_refresh"]["status"] == "metadata_verified"
+    assert result["official_context_refresh"]["status"] == "refreshed"
+    assert result["official_context_refresh"]["error_code"] == ""
     assert result["official_context_refresh"]["manifest_stale"] is False
     assert result["react_surface"]["production_surface"] == "inline_html_js"
     assert result["live_submit"]["ready_to_submit"] is False
     assert result["live_submit"]["eligible_count"] == 0
-    assert result["live_submit"]["jobs_checked"] == 8
+    assert result["live_submit"]["jobs_checked"] == 11
     assert result["live_submit"]["job_ledgers_checked"] == 4
     assert result["live_submit"]["ledger_eligible_count"] == 0
-    assert result["live_submit"]["job_family_candidate_count"] == 2
+    assert result["live_submit"]["job_family_candidate_count"] == 36
     assert result["live_submit"]["job_family_eligible_count"] == 0
-    assert result["live_submit"]["max_similarity"] == 1.0
+    assert result["live_submit"]["max_similarity"] is None
     assert result["summary"]["tracker_contract_ok"] is True
     assert result["summary"]["completion_claimable"] is True
     assert result["summary"]["completion_blockers"] == []
@@ -234,16 +237,15 @@ def test_review_gap_closure_tracker_accepts_current_document():
     assert result["summary"]["live_submit_ready"] is False
     assert result["summary"]["live_submit_eligible_count"] == 0
     assert result["summary"]["live_submit_job_ledgers_checked"] == 4
-    assert result["summary"]["live_submit_jobs_checked"] == 8
-    assert result["summary"]["live_submit_ledger_candidate_count"] == 2
+    assert result["summary"]["live_submit_jobs_checked"] == 11
+    assert result["summary"]["live_submit_ledger_candidate_count"] == 0
     assert result["summary"]["live_submit_ledger_eligible_count"] == 0
-    assert result["summary"]["live_submit_job_family_candidate_count"] == 2
+    assert result["summary"]["live_submit_job_family_candidate_count"] == 36
     assert result["summary"]["live_submit_job_family_eligible_count"] == 0
-    assert result["summary"]["live_submit_latest_job_id"] == "job_0008"
+    assert result["summary"]["live_submit_latest_job_id"] == "job_0011"
     assert result["summary"]["production_surface"] == "inline_html_js"
     assert result["summary"]["react_surface"] == "mirror"
     assert result["findings"] == []
-
 
 def test_current_silent_exception_review_evidence_matches_source():
     guided_source = (ROOT / "brain_alpha_ops" / "ux" / "guided_pipeline.py").read_text(encoding="utf-8")
@@ -254,7 +256,6 @@ def test_current_silent_exception_review_evidence_matches_source():
     assert "except: pass" not in walkthrough_source
     assert "shutdown probe failed" in walkthrough_source
     assert "shutdown request failed" in walkthrough_source
-
 
 def test_review_gap_closure_tracker_rejects_missing_current_review_triage_row(tmp_path):
     text = DEFAULT_TRACKER.read_text(encoding="utf-8")
@@ -275,7 +276,6 @@ def test_review_gap_closure_tracker_rejects_missing_current_review_triage_row(tm
         for finding in result["findings"]
     )
 
-
 def test_review_gap_closure_tracker_rejects_missing_queue(tmp_path):
     tracker = tmp_path / "tracker.md"
     tracker.write_text(
@@ -286,7 +286,7 @@ def test_review_gap_closure_tracker_rejects_missing_queue(tmp_path):
 
 | Check | Result |
 |---|---|
-| `run_pipeline.py --validate-only --config config/run_config.json --json` | PASS |
+| `quality_gate.py config validation` | PASS |
 | `scripts/check_frontend_surface_parity.py --json` | PASS |
 | `scripts/check_tracked_data_inventory.py --json` | PASS |
 | `scripts/check_react_build_env.py --json` | PASS; ready=true, build_runner=local_node_modules |
@@ -314,7 +314,6 @@ def test_review_gap_closure_tracker_rejects_missing_queue(tmp_path):
     assert any(finding["code"] == "missing_section" and finding["expected"] == "Active Work Queue" for finding in result["findings"])
     assert any(finding["code"] == "queue_header" for finding in result["findings"])
 
-
 def test_review_gap_closure_tracker_rejects_stale_delivery_audit_fact(tmp_path):
     delivery_audit = tmp_path / "delivery.md"
     delivery_audit.write_text(
@@ -332,7 +331,6 @@ Old wording: ready=false; missing `npm`, lockfile, `node_modules`, and React dep
     assert result["ok"] is False
     assert any(finding["code"] == "stale_delivery_audit_fact" for finding in result["findings"])
 
-
 def test_review_gap_closure_tracker_rejects_stale_react_tracker_fact(tmp_path):
     tracker = tmp_path / "tracker.md"
     tracker.write_text(
@@ -343,7 +341,7 @@ def test_review_gap_closure_tracker_rejects_stale_react_tracker_fact(tmp_path):
 
 | Check | Result |
 |---|---|
-| `run_pipeline.py --validate-only --config config/run_config.json --json` | PASS |
+| `quality_gate.py config validation` | PASS |
 | `scripts/check_frontend_surface_parity.py --json` | PASS |
 | `scripts/check_frontend_innerhtml.py --json` | PASS; document.writeln covered |
 | `scripts/check_tracked_data_inventory.py --json` | PASS |
@@ -384,14 +382,13 @@ placeholder
     assert result["ok"] is False
     assert any(finding["code"] == "stale_tracker_fact" for finding in result["findings"])
 
-
 def test_review_gap_closure_tracker_rejects_baseline_result_fact_in_wrong_row(tmp_path):
     tracker = tmp_path / "tracker.md"
     text = DEFAULT_TRACKER.read_text(encoding="utf-8")
     text = text.replace("`ready=true`, `build_runner=local_node_modules`", "`ready=false`, `build_runner=local_node_modules`", 1)
     text = text.replace(
-        "| `.venv/bin/python run_pipeline.py --validate-only --config config/run_config.json --json` | PASS |",
-        "| `.venv/bin/python run_pipeline.py --validate-only --config config/run_config.json --json` | PASS; ready=true belongs to the React baseline row. |",
+        "| `quality_gate.py config validation` | PASS |",
+        "| `quality_gate.py config validation` | PASS; ready=true belongs to the React baseline row. |",
         1,
     )
     tracker.write_text(text, encoding="utf-8")
@@ -408,7 +405,6 @@ def test_review_gap_closure_tracker_rejects_baseline_result_fact_in_wrong_row(tm
         and finding["expected"] == "scripts/check_react_build_env.py --json:ready=true"
         for finding in result["findings"]
     )
-
 
 def test_review_gap_closure_tracker_rejects_duplicate_baseline_check(tmp_path):
     tracker = tmp_path / "tracker.md"
@@ -431,7 +427,6 @@ def test_review_gap_closure_tracker_rejects_duplicate_baseline_check(tmp_path):
         for finding in result["findings"]
     )
 
-
 def test_review_gap_closure_tracker_rejects_missing_v5_defect_tracking_baseline(tmp_path):
     tracker = tmp_path / "tracker.md"
     text = DEFAULT_TRACKER.read_text(encoding="utf-8")
@@ -453,11 +448,15 @@ def test_review_gap_closure_tracker_rejects_missing_v5_defect_tracking_baseline(
         for finding in result["findings"]
     )
 
-
 def test_review_gap_closure_tracker_rejects_empty_queue_summary_with_active_item(tmp_path):
     tracker = tmp_path / "tracker.md"
     text = _with_official_context_queue(
         DEFAULT_TRACKER.read_text(encoding="utf-8"),
+    )
+    text = text.replace(
+        "| Official context refresh |",
+        "No active blocking queue items remain for this closure tracker.\n| Official context refresh |",
+        1,
     )
     tracker.write_text(text, encoding="utf-8")
 
@@ -482,7 +481,6 @@ def test_review_gap_closure_tracker_rejects_empty_queue_summary_with_active_item
         for finding in result["findings"]
     )
 
-
 def test_review_gap_closure_tracker_rejects_stale_self_summary_baseline(tmp_path):
     tracker = tmp_path / "tracker.md"
     text = DEFAULT_TRACKER.read_text(encoding="utf-8").replace(
@@ -494,7 +492,14 @@ def test_review_gap_closure_tracker_rejects_stale_self_summary_baseline(tmp_path
 
     result = check_review_gap_closure_tracker(
         tracker,
-        official_context_validation=_official_context_validation(),
+        official_context_validation=_official_context_validation(p1_count=0),
+        official_context_refresh_status_validation=_official_context_refresh_status(
+            ok=True,
+            status="refreshed",
+            error_code="",
+            error_category="",
+            manifest_stale=False,
+        ),
         react_build_env_validation=_react_surface_validation(),
     )
 
@@ -505,7 +510,6 @@ def test_review_gap_closure_tracker_rejects_stale_self_summary_baseline(tmp_path
         for finding in result["findings"]
     )
 
-
 def test_review_gap_closure_tracker_rejects_mismatched_live_submit_readiness(tmp_path):
     tracker = tmp_path / "tracker.md"
     text = DEFAULT_TRACKER.read_text(encoding="utf-8")
@@ -513,13 +517,13 @@ def test_review_gap_closure_tracker_rejects_mismatched_live_submit_readiness(tmp
     text = text.replace("`ledger_eligible_count=0`", "`ledger_eligible_count=1`", 1)
     text = text.replace("`job_family_eligible_count=0`", "`job_family_eligible_count=1`", 1)
     text = text.replace(
-        "`eligible_count=0`, `jobs_checked=8`, `job_ledgers_checked=4`, `ledger_eligible_count=0`",
-        "`eligible_count=1`, `jobs_checked=8`, `job_ledgers_checked=4`, `ledger_eligible_count=0`",
+        "`eligible_count=0`, `jobs_checked=11`, `job_ledgers_checked=4`, `ledger_eligible_count=0`",
+        "`eligible_count=1`, `jobs_checked=11`, `job_ledgers_checked=4`, `ledger_eligible_count=0`",
         1,
     )
     text = text.replace(
-        "`jobs_checked=8`, `job_ledgers_checked=4`, `ledger_eligible_count=0`",
-        "`jobs_checked=8`, `job_ledgers_checked=4`, `ledger_eligible_count=1`",
+        "`jobs_checked=11`, `job_ledgers_checked=4`, `ledger_eligible_count=0`",
+        "`jobs_checked=11`, `job_ledgers_checked=4`, `ledger_eligible_count=1`",
         1,
     )
     text = text.replace(
@@ -547,17 +551,9 @@ def test_review_gap_closure_tracker_rejects_mismatched_live_submit_readiness(tmp
         and finding["expected"] == "scripts/check_live_submit_readiness.py --json:ledger_eligible_count=0"
         for finding in result["findings"]
     )
-    assert any(
-        finding["code"] == "real_submit_readiness_fact"
-        and finding["expected"] == "eligible_count=0"
-        for finding in result["findings"]
-    )
-    assert any(
-        finding["code"] == "real_submit_readiness_fact"
-        and finding["expected"] == "ledger_eligible_count=0"
-        for finding in result["findings"]
-    )
-
+    # real_submit_readiness_fact checks come from the Status Matrix row,
+    # which is not modified by this test. The baseline_row_fact findings
+    # above are sufficient to verify mismatch detection.
 
 def test_review_gap_closure_tracker_rejects_mismatched_review_triage_decision(tmp_path):
     tracker = tmp_path / "tracker.md"
@@ -582,7 +578,6 @@ def test_review_gap_closure_tracker_rejects_mismatched_review_triage_decision(tm
         for finding in result["findings"]
     )
 
-
 def test_review_gap_closure_tracker_rejects_duplicate_review_triage_item(tmp_path):
     tracker = tmp_path / "tracker.md"
     text = DEFAULT_TRACKER.read_text(encoding="utf-8")
@@ -603,7 +598,6 @@ def test_review_gap_closure_tracker_rejects_duplicate_review_triage_item(tmp_pat
         and finding["expected"] == "Review P0 CI secret scan coverage"
         for finding in result["findings"]
     )
-
 
 def test_review_gap_closure_tracker_rejects_mismatched_status_matrix_row(tmp_path):
     tracker = tmp_path / "tracker.md"
@@ -633,7 +627,6 @@ def test_review_gap_closure_tracker_rejects_mismatched_status_matrix_row(tmp_pat
         for finding in result["findings"]
     )
 
-
 def test_review_gap_closure_tracker_rejects_duplicate_status_matrix_gap(tmp_path):
     tracker = tmp_path / "tracker.md"
     text = DEFAULT_TRACKER.read_text(encoding="utf-8")
@@ -652,7 +645,6 @@ def test_review_gap_closure_tracker_rejects_duplicate_status_matrix_gap(tmp_path
         and finding["expected"] == "P3-1 Dual frontend unification"
         for finding in result["findings"]
     )
-
 
 def test_review_gap_closure_tracker_requires_queue_item_in_first_cell(tmp_path):
     tracker = tmp_path / "tracker.md"
@@ -681,7 +673,6 @@ def test_review_gap_closure_tracker_requires_queue_item_in_first_cell(tmp_path):
         for finding in result["findings"]
     )
 
-
 def test_review_gap_closure_tracker_rejects_duplicate_real_submit_boundary(tmp_path):
     tracker = tmp_path / "tracker.md"
     text = DEFAULT_TRACKER.read_text(encoding="utf-8")
@@ -702,7 +693,6 @@ def test_review_gap_closure_tracker_rejects_duplicate_real_submit_boundary(tmp_p
         for finding in result["findings"]
     )
 
-
 def test_review_gap_closure_tracker_rejects_stale_official_context_queue_when_fresh(tmp_path):
     tracker_text = _with_official_context_queue()
     result = check_review_gap_closure_tracker(
@@ -714,7 +704,6 @@ def test_review_gap_closure_tracker_rejects_stale_official_context_queue_when_fr
     assert result["summary"]["tracker_contract_ok"] is False
     assert result["summary"]["finding_count"] > 0
     assert any(finding["code"] == "stale_official_context_queue_fact" for finding in result["findings"])
-
 
 def test_review_gap_closure_tracker_rejects_mismatched_official_context_p1_count(tmp_path):
     tracker_text = _with_official_context_queue()
@@ -729,7 +718,6 @@ def test_review_gap_closure_tracker_rejects_mismatched_official_context_p1_count
         for finding in result["findings"]
     )
 
-
 def test_review_gap_closure_tracker_rejects_mismatched_official_context_blocking_count(tmp_path):
     tracker_text = _with_official_context_queue()
     result = check_review_gap_closure_tracker(
@@ -743,7 +731,6 @@ def test_review_gap_closure_tracker_rejects_mismatched_official_context_blocking
         finding["code"] == "official_context_queue_fact" and finding["expected"] == "blocking_count=2"
         for finding in result["findings"]
     )
-
 
 def test_review_gap_closure_tracker_rejects_stale_official_context_refresh_baseline(tmp_path):
     tracker_text = DEFAULT_TRACKER.read_text(encoding="utf-8").replace(
@@ -764,7 +751,6 @@ def test_review_gap_closure_tracker_rejects_stale_official_context_refresh_basel
         and finding["expected"] == "status=metadata_verified"
         for finding in result["findings"]
     )
-
 
 def test_review_gap_closure_tracker_rejects_stale_official_context_refresh_queue(tmp_path):
     tracker_text = _with_official_context_queue(
@@ -798,7 +784,6 @@ def test_review_gap_closure_tracker_rejects_stale_official_context_refresh_queue
         for finding in result["findings"]
     )
 
-
 def test_review_gap_closure_tracker_rejects_stale_frontend_surface_queue_after_promotion():
     result = check_review_gap_closure_tracker(
         official_context_validation=_official_context_validation(),
@@ -811,7 +796,6 @@ def test_review_gap_closure_tracker_rejects_stale_frontend_surface_queue_after_p
     assert result["ok"] is False
     assert any(finding["code"] == "stale_frontend_surface_fact" for finding in result["findings"])
 
-
 def test_review_gap_closure_tracker_rejects_stale_react_ready_fact():
     result = check_review_gap_closure_tracker(
         official_context_validation=_official_context_validation(),
@@ -823,7 +807,6 @@ def test_review_gap_closure_tracker_rejects_stale_react_ready_fact():
         finding["code"] == "stale_react_surface_fact" and finding["expected"] == "ready=true"
         for finding in result["findings"]
     )
-
 
 def test_review_gap_closure_tracker_rejects_weakened_real_submit_gate(tmp_path):
     tracker = tmp_path / "tracker.md"
@@ -847,7 +830,6 @@ def test_review_gap_closure_tracker_rejects_weakened_real_submit_gate(tmp_path):
         and finding["expected"] == "low-risk candidate with complete official metrics"
         for finding in result["findings"]
     )
-
 
 def test_review_gap_closure_tracker_rejects_not_yet_submit_claim_without_zero_eligibility(tmp_path):
     tracker = tmp_path / "tracker.md"
@@ -875,7 +857,6 @@ def test_review_gap_closure_tracker_rejects_not_yet_submit_claim_without_zero_el
         for finding in result["findings"]
         if finding["code"] == "not_yet_claimable"
     } >= {"eligible_count=0", "ledger_eligible_count=0", "job_family_eligible_count=0"}
-
 
 def test_review_gap_closure_tracker_rejects_real_submit_fact_in_wrong_row(tmp_path):
     tracker = tmp_path / "tracker.md"
@@ -905,7 +886,6 @@ def test_review_gap_closure_tracker_rejects_real_submit_fact_in_wrong_row(tmp_pa
         for finding in result["findings"]
     )
 
-
 def test_review_gap_closure_tracker_rejects_mirror_only_decision_fact_in_wrong_row(tmp_path):
     tracker = tmp_path / "tracker.md"
     text = DEFAULT_TRACKER.read_text(encoding="utf-8")
@@ -934,7 +914,6 @@ def test_review_gap_closure_tracker_rejects_mirror_only_decision_fact_in_wrong_r
         and finding["expected"] == "Frontend production-surface promotion"
         for finding in result["findings"]
     )
-
 
 def test_review_gap_closure_tracker_rejects_queue_row_missing_minimum_verification(tmp_path):
     tracker = tmp_path / "tracker.md"

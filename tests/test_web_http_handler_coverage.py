@@ -208,7 +208,12 @@ def test_sse_stream_timeout_and_broken_pipe_are_safe(monkeypatch):
     monkeypatch.setattr("brain_alpha_ops.web_http_handler.time.monotonic", lambda: next(times))
     handler, _calls, _session = _handler(row={"status": "running", "progress": {}})
     handler._handle_sse_stream("job_id=job_1")
-    assert b"sse stream timeout" in handler.wfile.getvalue()
+    payload = handler.wfile.getvalue()
+    assert b'"ok": true' in payload
+    assert b'"type": "stream_timeout"' in payload
+    assert b'"retryable": true' in payload
+    assert b'"transport": "sse"' in payload
+    assert b'"type": "error"' not in payload
 
     monkeypatch.setattr("brain_alpha_ops.web_http_handler.time.monotonic", lambda: 0.0)
 
@@ -229,5 +234,6 @@ def test_sse_status_helpers():
     assert _is_terminal_status("canceled") is True
     assert _is_terminal_status("running") is False
     assert _sse_event_type("failed") == "error"
+    assert _sse_event_type("stream_timeout") == "stream_timeout"
     assert _sse_event_type("completed_with_warnings") == "complete"
     assert _sse_event_type("queued") == "progress"

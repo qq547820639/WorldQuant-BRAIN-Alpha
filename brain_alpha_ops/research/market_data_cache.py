@@ -16,6 +16,7 @@ import json
 from typing import Any
 
 from brain_alpha_ops.jsonl import read_jsonl_records
+from brain_alpha_ops.redaction import redact_error_message
 
 
 DEFAULT_MARKET_CACHE_FILENAME = "market_data_cache.json"
@@ -98,7 +99,7 @@ class MarketDataCache:
                 "symbols": {},
                 "symbol_stats": [],
                 "error_code": "CACHE_READ_FAILED",
-                "error": str(exc),
+                "error": redact_error_message(exc),
             }
         if not isinstance(payload, dict):
             return {

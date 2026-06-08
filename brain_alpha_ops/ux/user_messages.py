@@ -1,6 +1,6 @@
 """User-facing error messages with improved readability and actionable guidance.
 
-Provides structured, human-readable error messages for both CLI and Web UI.
+Provides structured, human-readable error messages for the Web UI.
 Each error has:
 - A Chinese-readable title
 - An English technical detail
@@ -33,8 +33,8 @@ MESSAGE_CATALOG: dict[str, UserMessage] = {
     "AUTH_FAILED": UserMessage(
         title="认证失败",
         detail="BRAIN API authentication failed. Verify your username/password or token.",
-        suggestion="请检查环境变量 BRAIN_USERNAME / BRAIN_PASSWORD 或 BRAIN_TOKEN 是否正确设置。"
-                  "运行 'brain-alpha-ops init-config' 可查看配置示例。",
+        suggestion="请在 BRAIN 账户连接区重新填写凭证并点击测试连接。"
+                  "如仍失败，请让维护者检查托管凭证与网络状态。",
         severity="error",
         error_code="AUTH_FAILED",
     ),
@@ -51,7 +51,7 @@ MESSAGE_CATALOG: dict[str, UserMessage] = {
         title="表达式验证失败",
         detail="BRAIN API rejected the expression during pre-submit validation.",
         suggestion="请检查表达式的字段名和算子名是否均为 BRAIN 官方支持的拼写。"
-                  "查看 data/official_fields.json 和 data/official_operators.json。",
+                  "可先在官方操作入口刷新官方能力集，再回到候选管理重新验证。",
         severity="error",
         error_code="VALIDATION_FAILED",
     ),
@@ -72,7 +72,7 @@ MESSAGE_CATALOG: dict[str, UserMessage] = {
     "EXPRESSION_UNKNOWN_OPERATOR": UserMessage(
         title="未知算子",
         detail="Expression uses an operator not found in the BRAIN operator list.",
-        suggestion="请使用 BRAIN 平台支持的算子。运行 'brain-alpha-ops list-context --operators' 查看完整算子列表。",
+        suggestion="请使用 BRAIN 平台支持的算子，并在 Web 控制台刷新官方能力集后重试。",
         severity="error",
         error_code="EXPRESSION_UNKNOWN_OPERATOR",
     ),
@@ -161,16 +161,14 @@ MESSAGE_CATALOG: dict[str, UserMessage] = {
     "RATE_LIMITED": UserMessage(
         title="API 访问频率超限",
         detail="BRAIN API rate limit exceeded. Please wait before sending more requests.",
-        suggestion="请等待 1-2 分钟后重试。建议减少并发请求数，或在 run_config.json 中增加 "
-                  "min_request_interval_seconds 的值。",
+        suggestion="请等待 1-2 分钟后重试。若频繁出现，请在系统配置中降低并发或让维护者调整请求间隔。",
         severity="warning",
         error_code="RATE_LIMITED",
     ),
     "CONTEXT_REFRESH_FAILED": UserMessage(
         title="字段/算子上下文刷新失败",
         detail="Failed to refresh fields/operators context from BRAIN API.",
-        suggestion="将使用本地缓存数据。如需更新，请运行 'fetch_official_context.py' 或"
-                  "在 Web 控制台点击 '同步云端数据'。",
+        suggestion="将使用本地缓存数据。如需更新，请在 Web 控制台点击官方操作里的刷新官方能力集。",
         severity="warning",
         error_code="CONTEXT_REFRESH_FAILED",
     ),
@@ -178,24 +176,22 @@ MESSAGE_CATALOG: dict[str, UserMessage] = {
     # ── Configuration ──
     "CONFIG_VALIDATION_ERROR": UserMessage(
         title="配置验证失败",
-        detail="run_config.json contains invalid or unsupported values for BRAIN settings.",
-        suggestion="请检查 run_config.json 中的字段值是否符合 BRAIN 平台允许的范围。"
-                  "运行 'brain-alpha-ops validate-config' 获取详细错误。",
+        detail="The saved BRAIN settings contain invalid or unsupported values.",
+        suggestion="请在系统配置页检查字段值是否符合 BRAIN 平台允许范围，并保存后重新验证。",
         severity="error",
         error_code="CONFIG_VALIDATION_ERROR",
     ),
     "DATASET_NOT_FOUND": UserMessage(
         title="数据集未找到",
         detail="Specified dataset_id is not available in the current context.",
-        suggestion="运行 'brain-alpha-ops list-context --datasets' 查看可用数据集列表。"
-                  "确保已在 Web 控制台或 CLI 中同步了官方上下文。",
+        suggestion="请在 Web 控制台刷新官方能力集后，从系统配置中的官方数据集列表选择可用 Dataset。",
         severity="error",
         error_code="DATASET_NOT_FOUND",
     ),
     "UNKNOWN_TOOL": UserMessage(
         title="未知操作",
         detail="The requested operation is not recognized by the system.",
-        suggestion="请检查操作名称是否正确。可用操作请参阅 README.md 或 Web 控制台帮助。",
+        suggestion="请回到状态卡选择可见入口；如入口不可用，请刷新页面后重试。",
         severity="error",
         error_code="UNKNOWN_TOOL",
     ),
@@ -212,16 +208,14 @@ MESSAGE_CATALOG: dict[str, UserMessage] = {
     "GATE_CONFIG_DEVIATION": UserMessage(
         title="门禁配置存在偏差",
         detail="Configured gates deviate from BRAIN official check specifications.",
-        suggestion="请检查 run_config.json 中的 thresholds 值是否与 BRAIN 官方文档一致。"
-                  "运行 'python scripts/verify_canonical_compliance.py' 进行自动化验证。",
+        suggestion="请在系统配置页恢复官方门禁阈值，并在质量门禁页重新读取检查结果。",
         severity="error",
         error_code="GATE_CONFIG_DEVIATION",
     ),
     "API_DEVIATION_DETECTED": UserMessage(
         title="评分系统与官方 API 存在偏差",
         detail="Local scoring system output deviates from BRAIN official API results.",
-        suggestion="偏差可能由指标归一化差异引起。请检查 official_helpers.py 中的 normalize_metrics。"
-                  "重新运行 BRAIN API 仿真以获取最新官方指标。",
+        suggestion="请刷新官方能力集，并在可信环境重新运行官方仿真以获取最新官方指标。",
         severity="error",
         error_code="API_DEVIATION_DETECTED",
     ),
@@ -230,24 +224,21 @@ MESSAGE_CATALOG: dict[str, UserMessage] = {
     "CONTEXT_STALE": UserMessage(
         title="BRAIN 上下文数据过期",
         detail="Official fields/operators/datasets cache is stale and may not reflect current BRAIN platform state.",
-        suggestion="请运行 'python fetch_official_context.py' 刷新官方上下文，"
-                  "或在 Web 控制台点击 '同步云端数据' 使用最新数据。",
+        suggestion="请在 Web 控制台点击官方操作里的刷新官方能力集，使用最新数据。",
         severity="warning",
         error_code="CONTEXT_STALE",
     ),
     "OFFICIAL_FIELDS_EMPTY": UserMessage(
         title="官方字段列表为空",
-        detail="No official BRAIN fields are loaded — fetch_official_context.py may not have been run.",
-        suggestion="请先运行 fetch_official_context.py 拉取 BRAIN 平台字段列表，"
-                  "然后重新启动 Web 服务。",
+        detail="No official BRAIN fields are loaded.",
+        suggestion="请在 Web 控制台刷新官方能力集；如刷新失败，请维护者检查 BRAIN API 连接。",
         severity="error",
         error_code="OFFICIAL_FIELDS_EMPTY",
     ),
     "OFFICIAL_OPERATORS_EMPTY": UserMessage(
         title="官方算子列表为空",
         detail="No official BRAIN operators are loaded.",
-        suggestion="请先运行 fetch_official_context.py 拉取 BRAIN 平台算子列表，"
-                  "然后重新启动 Web 服务。",
+        suggestion="请在 Web 控制台刷新官方能力集；如刷新失败，请维护者检查 BRAIN API 连接。",
         severity="error",
         error_code="OFFICIAL_OPERATORS_EMPTY",
     ),
@@ -256,39 +247,37 @@ MESSAGE_CATALOG: dict[str, UserMessage] = {
     "THRESHOLD_DRIFT_DETECTED": UserMessage(
         title="阈值与 BRAIN 官方不一致",
         detail="Some scoring thresholds in the configuration differ from BRAIN canonical values.",
-        suggestion="运行 'python -m brain_alpha_ops.compliance.redline_verifier --json' 查看偏差详情。"
-                  "所有阈值必须严格对齐 BRAIN 官方文档值。",
+        suggestion="请在系统配置页恢复官方阈值，并重新打开质量门禁确认偏差已消除。",
         severity="error",
         error_code="THRESHOLD_DRIFT_DETECTED",
     ),
     "DATASET_NOT_IN_OFFICIAL_CONTEXT": UserMessage(
         title="数据集不在官方上下文中",
         detail="The specified dataset_id was not found in official BRAIN datasets.",
-        suggestion="检查 data/official_datasets.json 确认该数据集是否已从 BRAIN API 同步。"
-                  "确保 dataset_id 与官方 ID 完全一致。",
+        suggestion="请在官方操作入口刷新官方能力集，然后从系统配置里的官方数据集列表重新选择。",
         severity="error",
         error_code="DATASET_NOT_IN_OFFICIAL_CONTEXT",
     ),
 
     # ── Operational ──
     "JOBS_FULL": UserMessage(
-        title="任务队列已满",
+        title="验证流程队列已满",
         detail="Maximum concurrent active jobs reached. Wait for current jobs to complete.",
-        suggestion="请等待当前任务完成后再提交新任务。可在 '运行状态' 面板查看进行中的任务。",
+        suggestion="请等待当前验证流程完成后再启动新的验证。可在运行总览查看进行中的流程。",
         severity="warning",
         error_code="JOBS_FULL",
     ),
     "JOB_CANCELLED": UserMessage(
-        title="任务已取消",
+        title="验证流程已取消",
         detail="The job was cancelled by user request.",
-        suggestion="任务已被取消。你可以随时重新开始。",
+        suggestion="验证流程已被取消。你可以随时重新开始。",
         severity="info",
         error_code="JOB_CANCELLED",
     ),
     "PIPELINE_COMPLETE": UserMessage(
         title="流水线完成",
         detail="Research pipeline completed all cycles successfully.",
-        suggestion="查看结果面板获取生成的 Alpha 列表。可以筛选达标项进行提交。",
+        suggestion="请在候选管理查看生成的 Alpha 列表，并在提交前就绪复核中查看阻断原因。",
         severity="info",
         error_code="PIPELINE_COMPLETE",
     ),
@@ -307,7 +296,7 @@ def get_message(error_code: str, fallback_detail: str = "") -> UserMessage:
     return UserMessage(
         title="操作异常",
         detail=fallback_detail or f"Unexpected error: {error_code}",
-        suggestion="请查看日志获取更多信息，或联系开发人员。",
+        suggestion="请刷新当前页面后重试；如果问题持续，请让维护者查看诊断信息。",
         severity="error",
         error_code=error_code,
     )

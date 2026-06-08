@@ -2,6 +2,9 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import type { SSEEvent } from "@/types";
+import { streamToken } from "@/utils/csrf";
+
+type NamedSSEEvent = NonNullable<SSEEvent["type"]>;
 
 interface UseSSEOptions {
   onEvent?: (event: SSEEvent) => void;
@@ -19,8 +22,11 @@ export function useSSE(
     onEvent,
     onError,
     onExhausted,
-    reconnectIntervalMs = 3000,
-    maxReconnectAttempts = 10,
+    // BRAIN simulations can take 2+ minutes.  Use a longer reconnect
+    // window (30 attempts × 5s = 150s) so the hook survives transient
+    // disconnects without prematurely marking the stream as exhausted.
+    reconnectIntervalMs = 5000,
+    maxReconnectAttempts = 30,
   } = options;
 
   const [connected, setConnected] = useState(false);
@@ -30,6 +36,15 @@ export function useSSE(
   const eventSourceRef = useRef<EventSource | null>(null);
   const reconnectCountRef = useRef(0);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const terminalClosedRef = useRef(false);
+
+  // Use refs so callback identity changes don't trigger SSE reconnect cycles
+  const onEventRef = useRef(onEvent);
+  onEventRef.current = onEvent;
+  const onErrorRef = useRef(onError);
+  onErrorRef.current = onError;
+  const onExhaustedRef = useRef(onExhausted);
+  onExhaustedRef.current = onExhausted;
 
   const close = useCallback(() => {
     if (eventSourceRef.current) {
@@ -40,7 +55,7 @@ export function useSSE(
       clearTimeout(reconnectTimerRef.current);
       reconnectTimerRef.current = null;
     }
-	    setConnected(false);
+    setConnected(false);
   }, []);
 
   useEffect(() => {
@@ -51,6 +66,7 @@ export function useSSE(
 
     const streamUrl = url;
     reconnectCountRef.current = 0;
+    terminalClosedRef.current = false;
     setExhausted(false);
     setReconnectAttempts(0);
     connect();
@@ -69,19 +85,44 @@ export function useSSE(
 	          setReconnectAttempts(0);
 	        };
 
-        es.onmessage = (msg: MessageEvent) => {
+        const handleMessage = (msg: MessageEvent, fallbackType?: NamedSSEEvent) => {
           try {
-            const event: SSEEvent = JSON.parse(msg.data);
+            const parsed = JSON.parse(msg.data) as SSEEvent;
+            const event: SSEEvent = fallbackType && !parsed.type
+              ? { ...parsed, type: fallbackType }
+              : parsed;
             setLastEvent(event);
-            onEvent?.(event);
+            onEventRef.current?.(event);
+            if (event.type === "complete" || event.type === "error") {
+              terminalClosedRef.current = true;
+              setConnected(false);
+              if (eventSourceRef.current) {
+                eventSourceRef.current.close();
+                eventSourceRef.current = null;
+              }
+              if (reconnectTimerRef.current) {
+                clearTimeout(reconnectTimerRef.current);
+                reconnectTimerRef.current = null;
+              }
+            }
           } catch {
-            // Non-JSON SSE data — ignore
+            // Non-JSON SSE data — log and ignore for debugging
+            if (process.env.NODE_ENV === "development") {
+              console.debug("SSE: received non-JSON data:", msg.data.slice(0, 120));
+            }
           }
         };
 
+        es.onmessage = (msg: MessageEvent) => handleMessage(msg);
+        const namedEvents: NamedSSEEvent[] = ["progress", "complete", "error", "heartbeat"];
+        for (const eventName of namedEvents) {
+          es.addEventListener(eventName, (msg) => handleMessage(msg as MessageEvent, eventName));
+        }
+
         es.onerror = (err: Event) => {
+          if (terminalClosedRef.current) return;
           setConnected(false);
-          onError?.(err);
+          onErrorRef.current?.(err);
 
 	          if (reconnectCountRef.current < maxReconnectAttempts) {
 	            reconnectCountRef.current += 1;
@@ -89,7 +130,7 @@ export function useSSE(
 	            reconnectTimerRef.current = setTimeout(connect, reconnectIntervalMs);
 	          } else {
 	            setExhausted(true);
-	            onExhausted?.();
+	            onExhaustedRef.current?.();
 	          }
 	        };
 	      } catch {
@@ -99,14 +140,14 @@ export function useSSE(
 	          setReconnectAttempts(reconnectCountRef.current);
 	          reconnectTimerRef.current = setTimeout(connect, reconnectIntervalMs);
 	        } else {
-	          setExhausted(true);
-	          onExhausted?.();
-	        }
-	      }
-	    }
+          setExhausted(true);
+          onExhaustedRef.current?.();
+        }
+      }
+    }
 
-	    return close;
-	  }, [url, close, onEvent, onError, onExhausted, reconnectIntervalMs, maxReconnectAttempts]);
+    return close;
+  }, [url, close, reconnectIntervalMs, maxReconnectAttempts]);
 
 	  return { connected, exhausted, reconnectAttempts, lastEvent, close };
 }
@@ -116,12 +157,4 @@ function withStreamToken(url: string) {
   if (!token) return url;
   const separator = url.includes("?") ? "&" : "?";
   return `${url}${separator}stream_token=${encodeURIComponent(token)}`;
-}
-
-function streamToken() {
-  const meta = document.querySelector<HTMLMetaElement>('meta[name="brain-alpha-stream"]');
-  const fromMeta = meta?.content || "";
-  const fromWindow = String((window as unknown as { __BRAIN_ALPHA_OPS_STREAM_TOKEN__?: string }).__BRAIN_ALPHA_OPS_STREAM_TOKEN__ || "");
-  const token = fromMeta || fromWindow;
-  return token && !token.startsWith("__BRAIN_ALPHA_OPS") ? token : "";
 }

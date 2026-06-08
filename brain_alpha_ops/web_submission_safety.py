@@ -15,6 +15,7 @@ from brain_alpha_ops.research.expression_ast import expression_key
 from brain_alpha_ops.research.observability import build_research_observability_snapshot
 from brain_alpha_ops.research.repository import ResearchRepository
 from brain_alpha_ops.research.safety import SubmissionLedger
+from brain_alpha_ops.scoring.release_score_gate import evaluate_release_score
 from brain_alpha_ops.submission_readiness import missing_official_metric_fields
 from brain_alpha_ops.web_candidate_selection import official_alpha_id
 from brain_alpha_ops.web_candidate_selection import candidate_official_metrics
@@ -142,6 +143,20 @@ def submission_preflight_advisory(
             "Official metrics are incomplete for production submit.",
             action="Run official simulation/check and refresh submit readiness before submitting.",
             missing_fields=missing_fields,
+        )
+    release_gate = evaluate_release_score(metrics, run_config.ops.thresholds, settings=run_config.ops.settings).to_dict()
+    if release_gate.get("status") == "FAIL":
+        failed_attributions = [
+            row
+            for row in release_gate.get("attributions") or []
+            if isinstance(row, dict) and row.get("passed") is False and row.get("severity") == "ERROR"
+        ]
+        return submit_preflight_block(
+            "OFFICIAL_RELEASE_GATE_FAILED",
+            "Official release gate failed for production submit.",
+            action="Fix the Alpha and rerun official checks before submitting.",
+            release_gate=release_gate,
+            reasons=[str(row.get("name") or "official_release_gate_failed") for row in failed_attributions],
         )
     scorecard = candidate.get("scorecard") if isinstance(candidate.get("scorecard"), dict) else {}
     if str(scorecard.get("decision_band") or "") != "submit_candidate":

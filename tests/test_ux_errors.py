@@ -54,13 +54,15 @@ class TestTranslateError:
     def test_translate_auth_error(self):
         result = translate_error("authentication failed: invalid credentials")
         assert result["friendly"] == "BRAIN 平台认证失败"
-        assert "BRAIN_USERNAME" in result["suggested_action"]
+        assert "BRAIN 账户连接区" in result["suggested_action"]
+        assert "托管凭证" in result["suggested_action"]
         assert result["error_code"] == "AUTHENTICATION"
 
     def test_translate_rate_limit_error(self):
         result = translate_error("429 Too Many Requests - rate limit exceeded")
         assert result["friendly"] == "API 请求频率超限，请稍后重试"
-        assert "official_retry_pause_seconds" in result["suggested_action"]
+        assert "降低并发" in result["suggested_action"]
+        assert "请求间隔" in result["suggested_action"]
 
     def test_translate_correlation_error(self):
         result = translate_error("check failed: correlation too high with existing alpha")

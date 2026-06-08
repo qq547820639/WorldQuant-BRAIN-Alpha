@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import pytest
 
+import brain_alpha_ops.research.evolution as evolution_module
 from brain_alpha_ops.research.evolution import (
     MutationEngine,
     MutationResult,
@@ -21,6 +22,7 @@ from brain_alpha_ops.research.evolution import (
     _split_top_level,
     _tokenize,
     _COMMON_FIELDS,
+    _MUTABLE_OPERATORS,
     _MAX_EXPRESSION_LENGTH,
     _MAX_NESTING_DEPTH,
 )
@@ -161,7 +163,7 @@ class TestMutationEngine:
 
     def test_add_field(self):
         result = self.engine._add_field("close")
-        assert " + " in result or "+" in result
+        assert result == "close" or result.startswith("add(")
 
     def test_swap_field(self):
         result = self.engine._swap_field("close + volume")
@@ -180,11 +182,36 @@ class TestMutationEngine:
         r2 = engine2.mutate("rank(close)", strategy="add_operator")
         assert r1.expression == r2.expression
 
-    def test_custom_fields(self):
+    def test_custom_fields_are_not_used_for_production_mutation(self):
         engine = MutationEngine(seed=1, known_fields={"custom_f1", "custom_f2"})
         result = engine._swap_field("custom_f1")
-        # Should replace with the other custom field
-        assert result in ("custom_f2", "custom_f1")
+        assert result == "custom_f1"
+        assert engine._add_field("rank(close)") == "rank(close)"
+
+    def test_no_official_context_fails_closed(self, monkeypatch):
+        monkeypatch.setattr(evolution_module, "_official_field_ids", lambda: set())
+        monkeypatch.setattr(evolution_module, "_official_operator_names", lambda: set())
+
+        engine = MutationEngine(seed=1, known_fields={"custom_f1", "custom_f2"})
+
+        assert engine._add_field("close") == "close"
+        assert engine._add_operator("close") == "close"
+        assert engine.mutate("rank(close)", strategy="add_operator").expression == "rank(close)"
+
+    def test_mutable_operators_are_current_official_names(self):
+        forbidden = {
+            "ts_z_score",
+            "group_z_score",
+            "ts_median",
+            "ts_percentage",
+            "ts_theilsen",
+            "sigmoid",
+        }
+
+        assert forbidden.isdisjoint(_MUTABLE_OPERATORS)
+        assert "ts_zscore" in _MUTABLE_OPERATORS
+        assert "group_zscore" in _MUTABLE_OPERATORS
+        assert "adv60" not in _COMMON_FIELDS
 
 
 # ═══════════════════════ Crossover Engine Tests ═══════════════════════

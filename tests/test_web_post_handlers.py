@@ -57,7 +57,7 @@ def test_background_job_start_payload_handles_conflict_and_starts_job():
         "job_id": "job_1",
         "task_id": "job_1",
         "sse_url": "/sse?job_id=job_1",
-        "status_url": "/api/status?job_id=job_1",
+        "status_url": "/api/production-validation/status?job_id=job_1",
     }
     assert started == [("job_1", {"alpha": 2})]
 

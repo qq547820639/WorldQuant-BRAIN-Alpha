@@ -595,11 +595,16 @@ data: {"ok":true,"job_id":"...","status":"...","progress":{...},"error":""}
 
 ---
 
-### `POST /api/submit`
+### Historical `POST /api/submit` Backend Path
+
+> 2026-06-06 Web-only boundary: this backend path is not a user operation
+> surface. Operators must use the Web console's staged readiness review and
+> confirmation flow. Direct POST examples are retained only as historical
+> interface notes for maintainers and tests.
 
 | 属性 | 值 |
 |------|-----|
-| 用途 | 提交单条 Alpha 到 BRAIN |
+| 用途 | Web 分阶段确认后的后端提交路径，不作为直接操作入口 |
 | 鉴权 | Session 必需 |
 
 **请求 body**：
@@ -637,11 +642,15 @@ data: {"ok":true,"job_id":"...","status":"...","progress":{...},"error":""}
 
 ---
 
-### `POST /api/submit_batch`
+### Historical `POST /api/submit_batch` Backend Path
+
+> 2026-06-06 Web-only boundary: batch submission is not exposed as a raw user
+> endpoint. Operators review readiness in the browser before any staged
+> confirmation path can proceed.
 
 | 属性 | 值 |
 |------|-----|
-| 用途 | 批量提交 Alpha |
+| 用途 | Web 分阶段确认后的批量后端路径，不作为直接操作入口 |
 | 鉴权 | Session 必需 |
 
 **请求 body**（在 `/api/submit` 基础上增加）：

@@ -38,6 +38,7 @@ from brain_alpha_ops.scoring.attribution import (
 )
 from brain_alpha_ops.scoring.gates import GateConfig, GateResult, OFFICIAL_HARD_GATE_NAMES
 from brain_alpha_ops.scoring.history import ScoreHistoryDB
+_PersistedScoreHistoryDB = ScoreHistoryDB
 from brain_alpha_ops.scoring.release_score_gate import (
     evaluate_release_score,
 )
@@ -213,7 +214,7 @@ class OfficialScoringSystem:
       5. Historical score tracking for convergence analysis
     """
 
-    def __init__(self, ops_config: Optional[OpsConfig] = None, *, gate_config: "GateConfig | None" = None):
+    def __init__(self, ops_config: Optional[OpsConfig] = None, *, gate_config: "GateConfig | None" = None, persist_history: bool = True):
         self.ops_config = ops_config or OpsConfig()
         self.thresholds = self.ops_config.thresholds
         self.scoring = self.ops_config.scoring
@@ -221,6 +222,8 @@ class OfficialScoringSystem:
         if gate_config is not None:
             self.thresholds = gate_config.thresholds
         self._score_history: Dict[str, List[Dict[str, Any]]] = {}
+        # Optional persistent history for convergence tracking across restarts
+        self._persisted_history = _PersistedScoreHistoryDB() if persist_history else None
 
     # ── Core Evaluation ──
 
@@ -253,7 +256,7 @@ class OfficialScoringSystem:
             configured_gate.gate_name = "CONFIGURED_GATE"
             soft_gates.append(configured_gate)
         release_gate = (
-            evaluate_release_score(candidate.official_metrics, self.thresholds).to_dict()
+            evaluate_release_score(candidate.official_metrics, self.thresholds, settings=self._settings_for(candidate)).to_dict()
             if candidate.official_metrics
             else {}
         )
@@ -524,6 +527,12 @@ class OfficialScoringSystem:
         if len(history) > _MAX_SCORE_HISTORY_PER_ALPHA:
             del history[:-_MAX_SCORE_HISTORY_PER_ALPHA]
         self._trim_score_history()
+        # Persist to disk for convergence tracking across restarts
+        if self._persisted_history is not None:
+            try:
+                self._persisted_history.append(result)
+            except Exception:
+                logger.debug("failed to persist score history", exc_info=True)
 
     def _trim_score_history(self) -> None:
         total_entries = sum(len(history) for history in self._score_history.values())

@@ -3,11 +3,10 @@
 import { useState, useCallback, useRef } from "react";
 import type { Toast } from "@/types";
 
-let toastIdCounter = 0;
-
 export function useToast(maxToasts = 5) {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const timersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const counterRef = useRef(0);
 
   const addToast = useCallback(
     (
@@ -16,7 +15,7 @@ export function useToast(maxToasts = 5) {
       durationMs = 5000,
       action?: { label: string; onClick: () => void },
     ) => {
-      const id = `toast_${++toastIdCounter}_${Date.now()}`;
+      const id = `toast_${++counterRef.current}_${Date.now()}`;
       const toast: Toast = {
         id,
         type,

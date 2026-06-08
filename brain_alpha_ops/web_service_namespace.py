@@ -36,6 +36,7 @@ from brain_alpha_ops.research.observability import build_research_observability_
 from brain_alpha_ops.research.repository import ResearchRepository as _ResearchRepository
 from brain_alpha_ops.research.safety import SubmissionLedger as _SubmissionLedger
 from brain_alpha_ops.runner import api_from_run_config as _api_from_run_config, run_pipeline_from_config as _run_pipeline_from_config
+from brain_alpha_ops.submission_readiness import live_submit_readiness_hard_gate as _live_submit_readiness_hard_gate
 from brain_alpha_ops.tasks import JobStore as _DurableJobStore
 from brain_alpha_ops.web_check_availability import (
     check_candidate_availability as _check_candidate_availability,
@@ -59,7 +60,7 @@ from brain_alpha_ops.web_candidate_selection import (
 from brain_alpha_ops.web_candidate_check import check_candidate_payload as _check_candidate_payload
 from brain_alpha_ops.web_cloud_snapshot import cloud_alpha_summary as _cloud_alpha_summary_service
 from brain_alpha_ops.web_cloud_context_refresh import refresh_cloud_context_for_check_service as _refresh_cloud_context_for_check_service
-from brain_alpha_ops.web_sync_job import (
+from brain_alpha_ops.web.handlers.sync import (
     active_job_payload as _active_job_payload,
     health_payload as _health_payload,
     job_status_payload as _job_status_payload,
@@ -169,7 +170,7 @@ from brain_alpha_ops.web_submission_safety import (
     dedupe_cloud_alpha_rows as _dedupe_cloud_alpha_rows_service,
     extract_alpha_rows as _extract_alpha_rows_service,
 )
-from brain_alpha_ops.web_sync_job import (
+from brain_alpha_ops.web.handlers.sync import (
     cloud_alpha_id as _cloud_alpha_id_service,
     cloud_row_sort_key as _cloud_row_sort_key_service,
     run_sync_job_service as _run_sync_job_service,
@@ -322,6 +323,7 @@ def build_web_service_namespace():
         "_SESSION_COOKIE_NAME": _SESSION_COOKIE_NAME,
         "_submit_batch_payload": _submit_batch_payload,
         "_submit_candidate_payload": _submit_candidate_payload,
+        "live_submit_readiness_hard_gate": _live_submit_readiness_hard_gate,
         "_submission_preflight_block_service": _submission_preflight_block_service,
         "_submission_preflight_error_service": _submission_preflight_error_service,
         "_candidate_official_metrics_service": _candidate_official_metrics_service,

@@ -511,7 +511,7 @@ def _assess_candidate(
     missing_metric_fields = _missing_official_metric_fields(metrics) if metrics else []
     if metrics and missing_metric_fields:
         reasons.append("missing_official_metric_fields")
-    release_gate = evaluate_release_score(metrics, thresholds).to_dict() if metrics else {}
+    release_gate = evaluate_release_score(metrics, thresholds, settings=_candidate_settings(candidate)).to_dict() if metrics else {}
     for reason in _release_gate_blocking_reasons(release_gate):
         if reason not in reasons:
             reasons.append(reason)
@@ -539,6 +539,20 @@ def _assess_candidate(
         "eligible": eligible,
         "blocking_reasons": reasons,
     }
+
+
+def _candidate_settings(candidate: dict[str, Any]) -> dict[str, Any]:
+    settings = candidate.get("settings") if isinstance(candidate.get("settings"), dict) else {}
+    submission = candidate.get("submission") if isinstance(candidate.get("submission"), dict) else {}
+    submission_settings = submission.get("settings") if isinstance(submission.get("settings"), dict) else {}
+    metrics = candidate.get("official_metrics") if isinstance(candidate.get("official_metrics"), dict) else {}
+    if settings:
+        return settings
+    if submission_settings:
+        return submission_settings
+    if "delay" in metrics:
+        return {"delay": metrics.get("delay")}
+    return {}
 
 
 def _local_backtest_summary(local_backtest: dict[str, Any]) -> dict[str, Any]:
@@ -763,6 +777,7 @@ def _release_gate_reason(name: str) -> str:
         "self_correlation_cap": "official_self_correlation_above_threshold",
         "prod_correlation_cap": "official_prod_correlation_above_threshold",
         "weight_concentration_cap": "official_weight_concentration_above_threshold",
+        "sub_universe_sharpe": "official_sub_universe_sharpe_below_threshold",
     }.get(name, "")
 
 

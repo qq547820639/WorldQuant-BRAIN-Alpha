@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Canonical BRAIN platform contract values used across adapters and gates.
 
 This module is intentionally dependency-free so configuration validation,
@@ -68,6 +69,8 @@ CANONICAL_METRIC_NAMES = {
     "returns",
     "drawdown",
     "correlation",
+    "self_correlation",
+    "prod_correlation",
     "weight_concentration",
     "sub_universe_sharpe",
     "margin",

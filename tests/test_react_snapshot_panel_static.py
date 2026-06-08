@@ -38,7 +38,7 @@ def test_snapshot_panel_declares_all_data_views_and_endpoints():
     assert 'role="alert"' in source
     assert 'aria-live="assertive"' in source
     assert 'onNavigate?: (view: CardViewId) => void;' in source
-    assert '检测到可续跑断点' in source
+    assert '检测到可继续的上次进度' in source
     assert '进入候选管理' in source
     assert '查看质量门禁' in source
     assert 'function SnapshotMobileCard' in source

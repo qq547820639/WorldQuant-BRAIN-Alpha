@@ -20,7 +20,7 @@ def classify_error(error: Exception) -> Dict[str, str]:
         return {
             "type": info.error_code or type(error).__name__,
             "message": redact_error_message(error, max_length=200),
-            "fix": info.fix_hint or "未知错误。请检查日志文件 data/*.log 获取详细信息。",
+            "fix": info.fix_hint or "未知错误。请在页面事件记录中查看提示，或让维护者查看诊断信息。",
             "retry": "yes" if info.retryable else ("maybe" if info.retryable is None else "no"),
         }
     except Exception:
@@ -28,7 +28,7 @@ def classify_error(error: Exception) -> Dict[str, str]:
         return {
             "type": type(error).__name__,
             "message": redact_error_message(error, max_length=200),
-            "fix": "未知错误。请检查日志文件 data/*.log 获取详细信息。",
+            "fix": "未知错误。请在页面事件记录中查看提示，或让维护者查看诊断信息。",
             "retry": "maybe",
         }
 

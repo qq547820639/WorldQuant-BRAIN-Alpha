@@ -36,8 +36,7 @@ def test_agent_tool_manifest_exposes_safe_whitelist():
     assert "score_factor" in tools
     assert "run_backtest" in tools
     assert "run_batch_backtest" in tools
-    assert "submit_alpha" in tools
-    assert tools["submit_alpha"].destructive is True
+    assert "submit_alpha" not in tools
     assert tools["run_simulation"].live_api is True
     assert tools["run_simulation_batch"].live_api is True
     assert tools["run_parallel_backtest"].live_api is True
@@ -886,16 +885,56 @@ def test_agent_toolbox_blocks_live_api_when_duplicate_preflight_fails(monkeypatc
     assert called == {"validate": 0, "submit": 0}
 
 
-def test_agent_toolbox_requires_submit_double_confirmation(tmp_path):
-    toolbox = production_toolbox(storage_dir=tmp_path, allow_submit=False)
+def test_agent_toolbox_retires_non_web_submit_tool(tmp_path):
+    toolbox = production_toolbox(storage_dir=tmp_path, allow_submit=True)
 
     result = toolbox.call(
         "submit_alpha",
-        {"alpha_id": "prod_stub_alpha_0001", "expression": "rank(ts_delta(close, 20))"},
+        {
+            "alpha_id": "prod_stub_alpha_0001",
+            "expression": "rank(ts_delta(close, 20))",
+            "confirm_live_api": True,
+            "confirm_submit": True,
+        },
     )
 
     assert result["ok"] is False
-    assert result["error_code"] == "SUBMIT_NOT_ALLOWED"
+    assert result["error_code"] == "TOOL_NOT_FOUND"
+
+
+def test_retired_agent_submit_handler_never_calls_official_api(tmp_path):
+    calls = {"check": 0, "submit": 0}
+
+    class SubmitCountingAPI(ProductionBrainAPIStub):
+        def check_alpha(self, alpha_id):
+            calls["check"] += 1
+            return super().check_alpha(alpha_id)
+
+        def submit_alpha(self, alpha_id, expression, settings):
+            calls["submit"] += 1
+            return super().submit_alpha(alpha_id, expression, settings)
+
+    config = RunConfig(environment="production")
+    config.ops.storage_dir = str(tmp_path)
+    toolbox = BrainAlphaToolbox(
+        run_config=config,
+        api=SubmitCountingAPI(),
+        allow_live_api=True,
+        allow_submit=True,
+    )
+
+    result = toolbox._submit_alpha(
+        {
+            "alpha_id": "official_ready",
+            "expression": "rank(close)",
+            "confirm_live_api": True,
+            "confirm_submit": True,
+        },
+    )
+
+    assert result["ok"] is False
+    assert result["error_code"] == "WEB_ONLY_SUBMIT_REQUIRED"
+    assert calls == {"check": 0, "submit": 0}
 
 
 def test_agent_toolbox_reads_configured_job_status(tmp_path):

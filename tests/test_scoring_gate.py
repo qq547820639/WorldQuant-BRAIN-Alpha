@@ -9,6 +9,7 @@ from brain_alpha_ops.research.scoring import (
     submission_checklist,
 )
 from brain_alpha_ops.research.scoring_params import ScoringParams
+from brain_alpha_ops.scoring.release_score_gate import evaluate_release_score
 
 
 def _candidate(metrics):
@@ -112,6 +113,132 @@ def test_delay_zero_uses_official_delay_zero_thresholds():
     assert scorecard["empirical"]["delay"] == 0
     assert scorecard["empirical"]["hard_gate_failed"] is True
     assert any("sharpe >= 2.0" in reason for reason in scorecard["empirical"]["hard_gate_failures"])
+
+
+def test_release_score_gate_uses_delay_zero_thresholds_from_run_config():
+    metrics = {
+        "sharpe": 1.8,
+        "fitness": 1.2,
+        "turnover": 0.25,
+        "drawdown": 0.08,
+        "self_correlation": 0.3,
+        "prod_correlation": 0.3,
+        "weight_concentration": 0.08,
+        "sub_universe_sharpe": 1.4,
+        "subUniverseSize": 1000,
+        "alphaSize": 1000,
+        "margin": 5.0,
+        "pass_fail": "PASS",
+    }
+
+    decision = evaluate_release_score(
+        metrics,
+        QualityThresholds(),
+        settings={"delay": 0},
+    ).to_dict()
+
+    assert decision["status"] == "FAIL"
+    trace = decision["threshold_trace"]
+    assert trace["delay"] == 0
+    assert trace["sharpe_threshold_key"] == "min_sharpe_delay0"
+    assert trace["fitness_threshold_key"] == "min_fitness_delay0"
+
+    sharpe = next(item for item in decision["attributions"] if item["name"] == "sharpe")
+    fitness = next(item for item in decision["attributions"] if item["name"] == "fitness")
+    assert sharpe["expected"] == 2.0
+    assert fitness["expected"] == 1.3
+
+
+def test_release_score_gate_keeps_standard_thresholds_for_nonzero_delay():
+    metrics = {
+        "sharpe": 1.8,
+        "fitness": 1.2,
+        "turnover": 0.25,
+        "drawdown": 0.08,
+        "self_correlation": 0.3,
+        "prod_correlation": 0.3,
+        "weight_concentration": 0.08,
+        "sub_universe_sharpe": 1.4,
+        "subUniverseSize": 1000,
+        "alphaSize": 1000,
+        "margin": 5.0,
+        "pass_fail": "PASS",
+    }
+
+    decision = evaluate_release_score(
+        metrics,
+        QualityThresholds(),
+        settings={"delay": 1},
+    ).to_dict()
+
+    assert decision["status"] == "PASS"
+    trace = decision["threshold_trace"]
+    assert trace["delay"] == 1
+    assert trace["sharpe_threshold_key"] == "min_sharpe"
+    assert trace["fitness_threshold_key"] == "min_fitness"
+
+    sharpe = next(item for item in decision["attributions"] if item["name"] == "sharpe")
+    fitness = next(item for item in decision["attributions"] if item["name"] == "fitness")
+    assert sharpe["expected"] == 1.25
+    assert fitness["expected"] == 1.0
+
+
+def test_release_score_gate_traces_sub_universe_sharpe_formula_inputs():
+    metrics = {
+        "sharpe": 1.8,
+        "fitness": 1.2,
+        "turnover": 0.25,
+        "drawdown": 0.08,
+        "self_correlation": 0.3,
+        "prod_correlation": 0.3,
+        "weight_concentration": 0.08,
+        "subUniverseSharpe": 1.4,
+        "subUniverseSize": 250,
+        "alphaSize": 1000,
+        "margin": 5.0,
+        "pass_fail": "PASS",
+    }
+
+    decision = evaluate_release_score(metrics, QualityThresholds(), settings={"delay": 1}).to_dict()
+    trace = decision["threshold_trace"]
+    inputs = trace["sub_universe_sharpe_inputs"]
+
+    assert trace["sub_universe_sharpe_formula"] == (
+        "sub_universe_sharpe >= sub_universe_sharpe_min_ratio * sqrt(subUniverseSize / alphaSize) * sharpe"
+    )
+    assert trace["sub_universe_sharpe_min_ratio"] == 0.75
+    assert inputs == {
+        "sharpe": 1.8,
+        "subUniverseSharpe": 1.4,
+        "subUniverseSize": 250.0,
+        "alphaSize": 1000.0,
+        "size_factor": 0.5,
+        "expected": 0.675,
+    }
+
+
+def test_release_score_gate_blocks_missing_sub_universe_size_evidence():
+    metrics = {
+        "sharpe": 1.8,
+        "fitness": 1.2,
+        "turnover": 0.25,
+        "drawdown": 0.08,
+        "self_correlation": 0.3,
+        "prod_correlation": 0.3,
+        "weight_concentration": 0.08,
+        "sub_universe_sharpe": 1.4,
+        "margin": 5.0,
+        "pass_fail": "PASS",
+    }
+
+    decision = evaluate_release_score(metrics, QualityThresholds(), settings={"delay": 1}).to_dict()
+    sub_universe = next(item for item in decision["attributions"] if item["name"] == "sub_universe_sharpe")
+
+    assert decision["status"] == "FAIL"
+    assert sub_universe["passed"] is False
+    assert sub_universe["expected"] is None
+    assert "subUniverseSize" in sub_universe["reason"]
+    assert "alphaSize" in sub_universe["reason"]
 
 
 def test_scorecard_includes_attribution_tree_failures_and_hints():

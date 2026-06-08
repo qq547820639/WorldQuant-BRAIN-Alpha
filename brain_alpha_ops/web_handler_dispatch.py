@@ -44,6 +44,11 @@ MAX_RECORD_LOOKUP_LIMIT = 500
 DEFAULT_CLOUD_ALPHA_LIMIT = 500
 MAX_CLOUD_ALPHA_LIMIT = 2000
 
+# Terminal job statuses - jobs in these states should not be re-cancelled
+_TERMINAL_STATUSES = frozenset({
+    "completed", "completed_with_warnings", "failed", "stopped", "cancelled", "canceled",
+})
+
 RouteDispatcher = Callable[[Any, Any, WebHandlerDispatchContext], None]
 PayloadValidator = Callable[[Any], str]
 PayloadRouteDispatcher = Callable[[Any, Any, WebHandlerDispatchContext, dict[str, Any]], None]
@@ -69,6 +74,20 @@ def _dispatch_route(
         return
     route = ctx.route_for(method, parsed.path)
     if not route:
+        # P0-18 fix: fallback to legacy web.py dispatch for unmigrated routes
+        try:
+            from brain_alpha_ops.web import dispatch_post as _legacy_dispatch
+            body = handler._read_json() if method == "POST" else None
+            _legacy_dispatch(handler, parsed.path, body)
+            return
+        except ImportError:
+            logger.debug("Legacy dispatch not available for %s %s", method, redact_text(str(parsed.path)))
+        except Exception as _legacy_exc:
+            logger.error(
+                "Legacy dispatch fallback failed for %s %s: %s",
+                method, redact_text(str(parsed.path)), redact_text(str(_legacy_exc)),
+                exc_info=True,
+            )
         handler._json({"ok": False, "error_code": "NOT_FOUND", "error": "not found"}, status=404)
         return
     if route.requires_session and not handler._has_valid_session(parsed.query):
@@ -98,6 +117,9 @@ def _dispatch_route(
         return
     try:
         route_handler(handler, parsed, ctx)
+    except (BrokenPipeError, ConnectionResetError):
+        logger.info("web client disconnected before response completed: %s %s", method, redact_text(parsed.path))
+        return
     except Exception as exc:
         logger.error("web route dispatch failed: %s %s", method, redact_text(parsed.path), exc_info=True)
         handler._json(ctx.web_error(exc, f"{method}_ROUTE_ERROR"), status=500)
@@ -440,7 +462,7 @@ def _post_run(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext, payloa
         "auto_submit": False,
         "submitted": False,
         "sse_url": f"/sse?job_id={job_id}",
-        "status_url": f"/api/status?job_id={job_id}",
+        "status_url": f"/api/production-validation/status?job_id={job_id}",
     })
 
 
@@ -494,6 +516,29 @@ def _post_stop(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext, paylo
     handler._json(ctx.stop_job_payload(ctx.jobs, payload))
 
 
+# /api/cancel is an alias for /api/stop
+@_validated_post_route(validate_job_cancel_payload, "CANCEL_ERROR")
+def _post_cancel(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext, payload: dict[str, Any]) -> None:
+    job_id = str((payload or {}).get("job_id") or "")
+    # Search all stores to find the job and determine its type
+    for store, job_type in (
+        (ctx.jobs, "run"),
+        (ctx.sync_jobs, "sync"),
+        (ctx.check_jobs, "check"),
+        (ctx.async_jobs, "async"),
+    ):
+        row = store.get(job_id)
+        if row is not None:
+            status = str(row.get("status", ""))
+            if status in _TERMINAL_STATUSES:
+                handler._json({"ok": True, "status": status, "already_terminal": True})
+                return
+            result = ctx.stop_job_payload(store, payload)
+            handler._json({**result, "job_id": job_id, "task_id": job_id, "job_type": job_type, "status": "stopping"})
+            return
+    handler._json({"ok": False, "error_code": "JOB_NOT_FOUND", "error": "未找到可停止的任务。", "job_id": job_id}, status=404)
+
+
 @_validated_post_route(validate_sync_alphas_payload, "SYNC_ERROR")
 def _post_sync_alphas(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext, payload: dict[str, Any]) -> None:
     active = ctx.sync_jobs.latest_active()
@@ -509,8 +554,14 @@ def _post_sync_alphas(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext
 
 @_validated_post_route(validate_job_cancel_payload, "SYNC_CANCEL_ERROR")
 def _post_sync_cancel(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext, payload: dict[str, Any]) -> None:
-    result = ctx.stop_job_payload(ctx.sync_jobs, payload)
     job_id = str((payload or {}).get("job_id") or "")
+    row = ctx.sync_jobs.get(job_id)
+    if row is not None:
+        status = str(row.get("status", ""))
+        if status in _TERMINAL_STATUSES:
+            handler._json({"ok": True, "job_id": job_id, "status": status, "already_terminal": True})
+            return
+    result = ctx.stop_job_payload(ctx.sync_jobs, payload)
     if result.get("ok"):
         handler._json({**result, "job_id": job_id, "status": "stopping", "message": "云端同步停止请求已发送，后台会在当前官方接口返回后结束。"})
         return
@@ -545,18 +596,14 @@ def _post_check_batch(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext
 
 @_validated_post_route(validate_alpha_action_payload, "SUBMIT_ERROR")
 def _post_submit(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext, payload: dict[str, Any]) -> None:
-    _submit_with_lock(handler, ctx, ctx.submit_candidate, "SUBMIT_ERROR", payload=payload)
+    # Web flow unconditionally blocks real BRAIN submits as a safety gate
+    handler._json({"ok": False, "error_code": "REAL_SUBMIT_DISABLED_WEB_FLOW", "submitted": False}, status=403)
 
 
 @_validated_post_route(validate_submit_batch_payload, "SUBMIT_BATCH_ERROR")
 def _post_submit_batch(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext, payload: dict[str, Any]) -> None:
-    if _reject_auxiliary_conflict(handler, ctx, exclude="submit", allow_production=True):
-        return
-    if ctx.submit_lock.locked():
-        handler._json({"ok": False, "error_code": "CONFLICT_RUNNING", "error": "已有提交任务正在运行，请完成后再操作。"}, status=409)
-        return
-    response, status = ctx.background_job_start_payload(ctx.async_jobs, payload, ctx.start_submit_batch_job, conflict_error="active async job")
-    handler._json(response, status=status)
+    # Web flow unconditionally blocks real BRAIN batch submits as a safety gate
+    handler._json({"ok": False, "error_code": "REAL_SUBMIT_DISABLED_WEB_FLOW", "submitted": False}, status=403)
 
 
 @_validated_post_route(validate_assistant_text_payload, "ASSISTANT_RESPONSE_PARSE_ERROR", assistant_error_code="ASSISTANT_RESPONSE_PARSE_ERROR")
@@ -579,6 +626,18 @@ def _post_assistant_guidance(handler: Any, _parsed: Any, ctx: WebHandlerDispatch
     handler._json(ctx.save_assistant_guidance_post_payload(payload, ctx.save_assistant_guidance_payload))
 
 
+def _post_session(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext) -> None:
+    """Create a new web session and return a usable CSRF token."""
+    session_id, csrf_token = ctx.get_or_create_session(handler._session_id_from_cookie())
+    ttl = ctx.session_manager.ttl_seconds if hasattr(ctx, "session_manager") else 43200
+    handler._json({
+        "ok": True,
+        "session_id": session_id[:8],
+        "csrf_token": csrf_token,
+        "ttl_seconds": ttl,
+    }, extra_headers=[("Set-Cookie", ctx.session_cookie_header(session_id))])
+
+
 def _post_logout(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext) -> None:
     response, headers = ctx.session_end_payload(handler._session_id_from_cookie(), ctx.expire_session, ctx.expired_session_cookie_header)
     handler._json(response, extra_headers=headers)
@@ -599,6 +658,35 @@ def _post_scoring_evaluate(handler: Any, _parsed: Any, ctx: WebHandlerDispatchCo
 def _post_scoring_attribution(handler: Any, _parsed: Any, _ctx: WebHandlerDispatchContext, payload: dict[str, Any]) -> None:
     from brain_alpha_ops.web_redline_scoring import handle_scoring_attribution
     handler._json(handle_scoring_attribution(payload))
+
+
+def _get_candidates_simulate_eligible(handler: Any, _parsed: Any, _ctx: WebHandlerDispatchContext) -> None:
+    """Return eligible candidates for BRAIN simulation."""
+    from brain_alpha_ops.web_candidate_simulation import simulation_candidates_payload
+    from brain_alpha_ops.redaction import redact_error_message
+    try:
+        # Use parse_qs to get {key: [val]} then flatten single-element lists.
+        _parsed_qs = parse_qs(_parsed.query)
+        _flat = {k: (v[0] if isinstance(v, list) and len(v) == 1 else v) for k, v in _parsed_qs.items()}
+        handler._json(simulation_candidates_payload(_flat))
+    except Exception as exc:
+        logger.exception("simulation_candidates_payload failed")
+        handler._json({"ok": False, "error": redact_error_message(exc)}, status=500)
+
+
+def _get_phase_state(handler: Any, _parsed: Any, _ctx: WebHandlerDispatchContext) -> None:
+    """Return phase navigation state for the frontend PhaseShell component."""
+    from brain_alpha_ops.web.handlers.phase import phase_state_payload
+    try:
+        handler._json(phase_state_payload(
+            sync_jobs=_ctx.sync_jobs if hasattr(_ctx, "sync_jobs") else None,
+            candidate_repo=getattr(_ctx, "candidate_repo", None),
+            connection_tracker=getattr(_ctx, "connection_tracker", None),
+            readiness_service=getattr(_ctx, "readiness_service", None),
+        ))
+    except Exception:
+        logger.warning("phase_state_payload failed — returning safe default", exc_info=True)
+        handler._json({"ok": True, "current_phase": "connect", "connected": False, "context_fresh": False, "candidates_count": 0, "scored_count": 0, "readiness_passed": False})
 
 
 _GET_DISPATCH_HANDLERS: dict[str, RouteDispatcher] = {
@@ -635,7 +723,60 @@ _GET_DISPATCH_HANDLERS: dict[str, RouteDispatcher] = {
     "checkpoint_status": _get_checkpoint_status,
     "backtest_slots": _get_backtest_slots,
     "submit_readiness": _get_submit_readiness,
+    "candidates_simulate_eligible": _get_candidates_simulate_eligible,
+    "phase_state": _get_phase_state,
 }
+
+
+
+@_validated_post_route(validate_json_object_payload, "SIMULATE_ERROR")
+def _post_candidates_simulate(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext, payload: dict[str, Any]) -> None:
+    """Start BRAIN simulation for eligible candidates."""
+    from brain_alpha_ops.web_candidate_simulation import simulate_candidates_job, simulation_candidates_payload
+
+    import threading
+    from brain_alpha_ops.redaction import redact_error_message
+
+    # Preview mode: show eligible candidates without starting simulation
+    if payload.get("preview"):
+        try:
+            handler._json(simulation_candidates_payload(payload))
+        except Exception as exc:
+            logger.exception("simulation preview failed")
+            handler._json({"ok": False, "error": redact_error_message(exc)}, status=500)
+        return
+
+    store = ctx.async_jobs
+    # Prevent duplicate simulation jobs — search the proper JobStore
+    for jid, job in list(store.jobs.items()):
+        if job.get("status") == "running":
+            phase = (job.get("progress") or {}).get("phase", "")
+            if "simulat" in str(phase).lower():
+                handler._json({
+                    "ok": False,
+                    "error": "已有模拟任务在运行",
+                    "error_code": "CONFLICT_RUNNING",
+                    "job_id": jid,
+                }, status=409)
+                return
+
+    # Use store.create() which generates the job_id and returns it
+    job_id = store.create({"status": "starting",
+                           "progress": {"phase": "init", "percent_complete": 0}})
+
+    def run_sim() -> None:
+        from brain_alpha_ops.web_simulation_job import create_sim_job_store
+        simulate_candidates_job(job_id, payload, job_store=create_sim_job_store(store), log=logger)
+
+    threading.Thread(target=run_sim, daemon=True).start()
+    handler._json({
+        "ok": True,
+        "job_id": job_id,
+        "task_id": job_id,
+        "sse_url": f"/sse?job_id={job_id}",
+        "status_url": f"/api/status?job_id={job_id}",
+    })
+
 
 
 _POST_DISPATCH_HANDLERS: dict[str, RouteDispatcher] = {
@@ -643,6 +784,7 @@ _POST_DISPATCH_HANDLERS: dict[str, RouteDispatcher] = {
     "config": _post_config_save,
     "test_connection": _post_test_connection,
     "stop": _post_stop,
+    "cancel": _post_cancel,
     "sync_alphas": _post_sync_alphas,
     "sync_cancel": _post_sync_cancel,
     "check": _post_check,
@@ -656,8 +798,10 @@ _POST_DISPATCH_HANDLERS: dict[str, RouteDispatcher] = {
     "assistant_guidance": _post_assistant_guidance,
     "logout": _post_logout,
     "shutdown": _post_shutdown,
+    "session": _post_session,                                     # R-02: session creation endpoint
     "scoring_evaluate": _post_scoring_evaluate,
     "scoring_attribution": _post_scoring_attribution,
+    "candidates_simulate": _post_candidates_simulate,
 }
 
 

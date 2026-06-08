@@ -7,7 +7,6 @@ Zero hard-coded fields or templates.
 from __future__ import annotations
 
 import logging
-import random
 import re
 from typing import Any, TYPE_CHECKING
 
@@ -24,6 +23,17 @@ from brain_alpha_ops.research.fallback_generation import (
     high_turnover_generation_risk_reasons,
     is_high_turnover_generation_risk,
 )
+from brain_alpha_ops.research.generator_metadata import (
+    DEFAULT_WINDOWS,
+    DEFAULT_WINSOR_STD,
+    OFFICIAL_OPERATOR_SUBSTITUTE_FAMILIES,
+    _expression_operators_are_official,
+    _get_default_windows,
+    _get_default_winsor_stds,
+    _load_official_operator_names,
+    _load_operators_windows,
+)
+from brain_alpha_ops.research.generator_mutation import mutate_expression
 
 if TYPE_CHECKING:
     from brain_alpha_ops.data import OfficialDataLoader, FieldDatasetMapper
@@ -32,93 +42,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# Default window sizes — can be overridden per dataset frequency (P1-4 TODO).
-DEFAULT_WINDOWS = [3, 5, 8, 10, 12, 15, 20, 30, 40, 60, 90, 120, 180, 252]
-DEFAULT_WINSOR_STD = [3, 4, 5, 6]
 FORBIDDEN_PATTERN_SIMILARITY_THRESHOLD = 0.90
-
-
-def _get_default_windows() -> list[int]:
-    """Return a copy of the built-in fallback windows."""
-    return list(DEFAULT_WINDOWS)
-
-
-def _get_default_winsor_stds() -> list[int]:
-    """Return a copy of the built-in fallback winsorize std values."""
-    return list(DEFAULT_WINSOR_STD)
-
-
-def _load_operators_windows(loader: "OfficialDataLoader | None" = None) -> tuple[list[int], list[int]]:
-    """Derive generation knobs from official operator metadata when available."""
-    try:
-        if loader is None:
-            from brain_alpha_ops.data import OfficialDataLoader
-
-            loader = OfficialDataLoader.instance()
-        operators = loader.get_operators()
-    except Exception:
-        logger.warning("operator metadata unavailable; using default generation windows", exc_info=True)
-        return _get_default_windows(), _get_default_winsor_stds()
-
-    windows: set[int] = set()
-    winsor_stds: set[int] = set()
-    for op in operators or []:
-        name = _operator_attr(op, "name").lower()
-        category = _operator_attr(op, "category").lower()
-        definition = _operator_attr(op, "definition")
-        description = _operator_attr(op, "description")
-        text = f"{definition} {description}"
-        if name.startswith("ts_") or "time series" in category:
-            windows.update(_parameter_defaults(op, {"window", "lookback", "d"}))
-            if re.search(r"\b(d|lookback)\b", definition):
-                windows.update(_get_default_windows())
-        if name in {"winsorize", "group_backfill"} or "winsor" in text.lower():
-            winsor_stds.update(_parameter_defaults(op, {"std", "standard_deviation"}))
-            winsor_stds.update(
-                int(float(value))
-                for value in re.findall(r"\bstd\s*=\s*(\d+(?:\.\d+)?)", text, flags=re.IGNORECASE)
-            )
-
-    return (
-        sorted(w for w in windows if w > 0) or _get_default_windows(),
-        sorted(w for w in winsor_stds if w > 0) or _get_default_winsor_stds(),
-    )
-
-
-def _operator_attr(operator: object, name: str) -> str:
-    if isinstance(operator, dict):
-        value = operator.get(name, "")
-        if not value and isinstance(operator.get("raw"), dict):
-            value = operator["raw"].get(name, "")
-        return str(value or "")
-    return str(getattr(operator, name, "") or "")
-
-
-def _parameter_defaults(operator: object, names: set[str]) -> set[int]:
-    if not isinstance(operator, dict):
-        return set()
-    values: set[int] = set()
-    params = operator.get("parameters")
-    if not isinstance(params, list) and isinstance(operator.get("raw"), dict):
-        params = operator["raw"].get("parameters")
-    if not isinstance(params, list):
-        return values
-    for param in params:
-        if not isinstance(param, dict):
-            continue
-        param_name = str(param.get("name") or param.get("type") or "").lower()
-        if param_name not in names:
-            continue
-        for key in ("default", "value"):
-            value = param.get(key)
-            if isinstance(value, (int, float)) and value > 0:
-                values.add(int(value))
-        choices = param.get("choices") or param.get("values")
-        if isinstance(choices, list):
-            for value in choices:
-                if isinstance(value, (int, float)) and value > 0:
-                    values.add(int(value))
-    return values
 
 
 class CandidateGenerator:
@@ -155,6 +79,7 @@ class CandidateGenerator:
         self._selector = selector
         self._max_field_pool_size = max(10, int(max_field_pool_size))
         self._windows, self._winsor_stds = _load_operators_windows(loader)
+        self._official_operators = _load_official_operator_names(loader)
 
         # Lazy init fields/operators from loader
         self._fields: set[str] = set()
@@ -190,7 +115,8 @@ class CandidateGenerator:
         if fields:
             self._fields = {str(item.get("name", "")).lower() for item in fields if item.get("name")}
         if operators:
-            self._operators = {str(item.get("name", "")).lower() for item in operators if item.get("name")}
+            names = {str(item.get("name", "")).lower() for item in operators if item.get("name")}
+            self._operators = names & self._official_operators if self._official_operators else set()
 
     def set_dataset(self, dataset_id: str) -> None:
         """Set the active dataset for generation."""
@@ -312,7 +238,11 @@ class CandidateGenerator:
         """Bias generation toward structured KB rules and away from failures."""
         constraints = dict(constraints or {})
         preferred_fields = [str(item).lower() for item in constraints.get("preferred_fields") or [] if str(item)]
-        preferred_operators = [str(item).lower() for item in constraints.get("preferred_operators") or [] if str(item)]
+        preferred_operators = [
+            str(item).lower()
+            for item in constraints.get("preferred_operators") or []
+            if str(item) and str(item).lower() in self._official_operators
+        ]
         forbidden_patterns = [str(item).strip() for item in constraints.get("forbidden_patterns") or [] if str(item)]
         self._knowledge_constraints = {
             "preferred_fields": preferred_fields,
@@ -378,6 +308,8 @@ class CandidateGenerator:
             mutated = self._theme_engine.mutate_expression(  # type: ignore[union-attr]
                 tmpl.expression, dataset_id, seed=seed
             )
+            if not _expression_operators_are_official(mutated, self._official_operators):
+                continue
             if is_high_turnover_generation_risk(mutated):
                 continue
             if self._knowledge_constraints.get("forbidden_patterns") and self._expression_forbidden(mutated):
@@ -442,27 +374,27 @@ class CandidateGenerator:
         # official context is partial, so every field reference is supplied
         # from field_pool via f1/f2.
         templates = [
-            "rank(ts_delta({f1}, {w}) / ts_std_dev({f2}, {w}))",
+            "rank(divide(ts_delta({f1}, {w}), ts_std_dev({f2}, {w})))",
             "rank(ts_rank({f1}, {w}))",
             "rank(zscore({f1}))",
-            "rank(-{f1})",
+            "rank(reverse({f1}))",
             "rank(ts_mean({f1}, {w}))",
-            "rank(ts_delta({f1}, {w}) - ts_delta({f2}, {w}))",
-            "-1 * ts_rank({f1}, {w})",
-            "rank({f1}) * rank(ts_delta({f2}, {w}))",
+            "rank(subtract(ts_delta({f1}, {w}), ts_delta({f2}, {w})))",
+            "reverse(ts_rank({f1}, {w}))",
+            "multiply(rank({f1}), rank(ts_delta({f2}, {w})))",
             "rank(ts_corr({f1}, {f2}, {w}))",
             "ts_rank(ts_delta({f1}, {w}), {w})",
             "rank(ts_decay_linear(ts_delta({f1}, {w}), {w}))",
-            "rank(-ts_std_dev({f1}, {w}))",
-            "rank(ts_delta({f1}, {w}) / ts_std_dev({f1}, {w}))",
-            "rank(zscore({f1}) - zscore({f2}))",
+            "rank(reverse(ts_std_dev({f1}, {w})))",
+            "rank(divide(ts_delta({f1}, {w}), ts_std_dev({f1}, {w})))",
+            "rank(subtract(zscore({f1}), zscore({f2})))",
             "rank(divide({f1}, ts_mean({f1}, {w})))",
-            "rank(ts_mean({f1}, {w}) - ts_mean({f2}, {w}))",
+            "rank(subtract(ts_mean({f1}, {w}), ts_mean({f2}, {w})))",
             "rank(ts_covariance({f1}, {f2}, {w}))",
-            "rank(if_else(greater(ts_delta({f1}, {w}), 0), {f1}, -{f1}))",
+            "rank(if_else(greater(ts_delta({f1}, {w}), 0), {f1}, reverse({f1})))",
             "rank(winsorize(ts_delta({f1}, {w}), 3))",
-            "rank(ts_std_dev({f1}, {w}) / ts_std_dev({f2}, {w}))",
-            "rank(ts_mean({f1}, {w}) / ts_std_dev({f2}, {w}))",
+            "rank(divide(ts_std_dev({f1}, {w}), ts_std_dev({f2}, {w})))",
+            "rank(divide(ts_mean({f1}, {w}), ts_std_dev({f2}, {w})))",
             "rank(ts_sum(ts_delta({f1}, {w}), {w}))",
         ]
         families = ["momentum", "momentum", "quality", "value", "liquidity",
@@ -470,6 +402,19 @@ class CandidateGenerator:
                      "decay", "volatility", "momentum", "relative_value", "liquidity",
                      "relative_momentum", "co_movement", "conditional", "momentum", "volatility",
                      "hybrid", "momentum"]
+
+        template_pairs = [
+            (template, family)
+            for template, family in zip(templates, families)
+            if _expression_operators_are_official(template, self._official_operators)
+        ]
+        if not template_pairs:
+            logger.error(
+                "CandidateGenerator._generate_fallback: no fallback templates match official operator snapshot"
+            )
+            return []
+        templates = [template for template, _family in template_pairs]
+        families = [family for _template, family in template_pairs]
 
         attempt_limit = count * (16 if diversity_boost else 8)
         while len(candidates) < count and attempts < attempt_limit:
@@ -490,6 +435,8 @@ class CandidateGenerator:
             f2 = field_pool[field2_index] if "{f2}" in tmpl else f1
             w = windows[window_index]
             expr = tmpl.replace("{f1}", f1).replace("{f2}", f2).replace("{w}", str(w))
+            if not _expression_operators_are_official(expr, self._official_operators):
+                continue
             if is_high_turnover_generation_risk(expr):
                 continue
             if self._knowledge_constraints.get("forbidden_patterns") and self._expression_forbidden(expr):
@@ -577,8 +524,8 @@ def extract_fields(expression: str, known_fields: set[str] | None = None) -> lis
             loader = OfficialDataLoader.instance()
             known_fields = {f.id.lower() for f in loader.get_fields()}
         except Exception:
-            logger.warning("official field metadata unavailable; using parsed expression fields", exc_info=True)
-            return list(profile.fields)
+            logger.warning("official field metadata unavailable; field extraction fails closed", exc_info=True)
+            return []
     tokens = {token.lower() for token in profile.fields}
     return sorted(known_fields & tokens)
 
@@ -616,7 +563,8 @@ def local_quality(candidate: Candidate, min_score: float) -> dict:
     if not operators:
         score -= 20
         reasons.append("no_operator")
-    if depth > 5:
+    # BRAIN supports deeper nesting; 5 was too conservative.
+    if depth > 8:
         score -= 15
         reasons.append("expression_too_nested")
     if len(expression) > 220:
@@ -651,137 +599,6 @@ def local_quality(candidate: Candidate, min_score: float) -> dict:
         "operator_count": len(operators),
         "nesting_depth": depth,
     }
-
-
-# ------------------------------------------------------------------
-# Legacy backward-compat (deprecated, use CandidateGenerator + loader)
-# ------------------------------------------------------------------
-
-def mutate_expression(expression: str, index: int, mode: str = "default",
-                     experience_windows: list[int] | None = None,
-                     field_pool: list[str] | None = None) -> str:
-    """Produce a variant of *expression*.
-
-    Modes:
-      - "default": random window swap + optional winsorize/zscore wrap
-      - "field_swap": keep structure, only vary windows (for low-Sharpe candidates)
-      - "field_swap_semantic": replace fields with same-category alternatives (P0-2)
-      - "window_perturb": perturb windows by ±20% (P0-2)
-      - "structure_change": add winsorize/zscore wrap (for high-correlation candidates)
-      - "longer_window": replace windows with longer ones (for high-turnover candidates)
-      - "operator_substitute": replace operators with same-family alternatives (P0-2)
-
-    P2-2: When *experience_windows* is provided, blend 70% experience windows
-    with 30% default windows for exploration.
-    """
-    seed = index
-    default_windows = _get_default_windows()
-    # P2-2: Blend experience windows (70%) + exploration (30%)
-    if experience_windows:
-        exp = [w for w in experience_windows if w not in default_windows]
-        windows = exp + default_windows  # experience front-loaded for preference
-    else:
-        windows = default_windows
-    numbers = re.findall(r"\b\d+\b", expression)
-
-    if mode == "field_swap":
-        mutated = expression
-        for pos, number in enumerate(numbers):
-            replacement = windows[(index + pos * 7) % len(windows)]
-            mutated = re.sub(rf"\b{re.escape(number)}\b", str(replacement), mutated, count=1)
-        return mutated
-
-    if mode == "structure_change":
-        mutated = expression
-        if index % 2 == 0:
-            mutated = f"winsorize({mutated}, std=4)"
-        else:
-            mutated = f"zscore({mutated})"
-        return mutated
-
-    if mode == "longer_window":
-        long_windows = [60, 90, 120, 180, 252]
-        mutated = expression
-        for pos, number in enumerate(numbers):
-            replacement = long_windows[(index + pos) % len(long_windows)]
-            mutated = re.sub(rf"\b{re.escape(number)}\b", str(replacement), mutated, count=1)
-        return mutated
-
-    # P0-2: new directional mutation modes.
-
-    if mode == "window_perturb":
-        """Randomly perturb windows by +/-20%, clamped to [3, 252]."""
-        def _perturb(m: re.Match) -> str:
-            val = int(m.group(0))
-            if val < 2 or val > 1000:
-                return m.group(0)
-            delta = random.uniform(-0.2, 0.2) * val
-            new_val = int(val + delta)
-            return str(max(3, min(252, new_val)))
-        return re.sub(r"\b\d+\b", _perturb, expression)
-
-    if mode == "field_swap_semantic":
-        """Replace a field in the expression with another field from field_pool."""
-        if not field_pool or len(field_pool) < 2:
-            return expression
-        field_tokens = re.findall(r"\b([a-zA-Z_]\w*)\b", expression)
-        candidate_fields = [
-            t for t in field_tokens
-            if t in field_pool
-        ]
-        if not candidate_fields:
-            # Fallback: replace field-like keywords that appear in the expression.
-            candidate_fields = [
-                t for t in field_tokens
-                if len(t) > 1 and "_" in t and not t.isdigit()
-            ]
-        if not candidate_fields:
-            return expression
-        target = random.choice(candidate_fields)
-        alt_pool = [f for f in field_pool if f != target]
-        if not alt_pool:
-            return expression
-        replacement = random.choice(alt_pool)
-        return re.sub(r"\b" + re.escape(target) + r"\b", replacement, expression, count=1)
-
-    if mode == "operator_substitute":
-        """Replace an operator with a same-family alternative."""
-        # Operator families kept consistent with iterative_optimizer.
-        _families = {
-            "ranking": ["ts_rank", "rank", "group_rank"],
-            "standardization": ["zscore", "scale", "group_zscore"],
-            "moving_average": ["ts_mean", "ts_median", "ts_sum"],
-            "difference": ["ts_delta", "ts_av_diff"],
-            "volatility": ["ts_std", "ts_var"],
-            "correlation": ["ts_corr", "ts_covariance"],
-            "winsorization": ["winsorize", "truncation"],
-            "decay": ["ts_decay_linear", "ts_decay_exp"],
-        }
-        _alt = {}
-        for _family, _ops in _families.items():
-            for _op in _ops:
-                _alt[_op] = [o for o in _ops if o != _op]
-        # Find operators in the expression.
-        op_pattern = re.findall(r"\b([a-zA-Z_]\w*)\s*\(", expression)
-        for op in op_pattern:
-            if op in _alt and _alt[op]:
-                replacement = random.choice(_alt[op])
-                return re.sub(r"\b" + re.escape(op) + r"\b", replacement, expression, count=1)
-        return expression
-
-    # --- default mode (original logic) ---
-    w1 = windows[seed % len(windows)]
-    w2 = windows[(seed // len(windows) + index * 3 + 5) % len(windows)]
-    mutated = expression
-    for pos, number in enumerate(numbers):
-        replacement = windows[(index + pos * 3) % len(windows)]
-        mutated = re.sub(rf"\b{re.escape(number)}\b", str(replacement), mutated, count=1)
-    variant = index % 3
-    if variant == 1:
-        return f"winsorize({mutated}, std=4)"
-    if variant == 2:
-        return f"zscore({mutated})"
-    return mutated
 
 
 def update_known_fields(fields: list[dict]) -> None:

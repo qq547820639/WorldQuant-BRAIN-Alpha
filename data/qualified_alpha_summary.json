@@ -1,0 +1,21 @@
+{
+  "qualified_at": "2026-06-08",
+  "alpha_id": "npWg8A5a",
+  "expression": "rank(ts_rank(returns,252)*-1)",
+  "sharpe": 1.9,
+  "fitness": 1.06,
+  "turnover": 0.5706,
+  "thresholds": {
+    "min_sharpe": 1.25,
+    "min_fitness": 1.0,
+    "max_turnover": 0.7
+  },
+  "all_passed": true,
+  "dataset": "pv1",
+  "universe": "TOP3000",
+  "region": "USA",
+  "delay": 1,
+  "decay": 10,
+  "neutralization": "SUBINDUSTRY",
+  "submission_blocked": "requires_explicit_human_confirmation"
+}

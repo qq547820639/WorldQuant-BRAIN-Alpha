@@ -51,7 +51,7 @@ REQUIRED_SECTIONS = (
     "Not Yet Claimable",
 )
 BASELINE_SNIPPETS = (
-    "run_pipeline.py --validate-only --config config/run_config.json --json",
+    "quality_gate.py config validation",
     "scripts/check_frontend_surface_parity.py --json",
     "scripts/check_frontend_innerhtml.py --json",
     "document.writeln",
@@ -64,7 +64,7 @@ BASELINE_SNIPPETS = (
     "scripts/check_v5_defect_tracking.py --json",
 )
 BASELINE_CHECKS = (
-    ("run_pipeline.py --validate-only --config config/run_config.json --json", ("PASS",)),
+    ("quality_gate.py config validation", ("PASS",)),
     ("scripts/check_frontend_surface_parity.py --json", ("PASS",)),
     ("scripts/check_frontend_innerhtml.py --json", ("PASS", "document.writeln", "trustedHtml", "createContextualFragment")),
     ("scripts/check_tracked_data_inventory.py --json", ("PASS",)),

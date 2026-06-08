@@ -18,6 +18,7 @@ if str(ROOT) not in sys.path:
 DEFAULT_CONFIG = ROOT / "config" / "run_config.json"
 DEFAULT_HTML = ROOT / "brain_alpha_ops" / "web" / "react_app" / "dist" / "index.html"
 DEFAULT_SUBPROCESS_TIMEOUT_SECONDS = 300
+PYTEST_TIMEOUT_SECONDS = 900
 COVERAGE_PYTEST_ARGS = ["--cov=brain_alpha_ops", "--cov-report=term", "--cov-fail-under=80"]
 SUBPROCESS_ENV_ALLOWLIST = {
     "CI",
@@ -50,7 +51,6 @@ COMPILE_TARGETS = [
     "calibrate_weights.py",
     "fetch_official_context.py",
     "launch_web.py",
-    "run_pipeline.py",
     "test_api_format.py",
     "test_api_root.py",
     "test_auth.py",
@@ -250,7 +250,27 @@ def _timeout_text(value: str | bytes | None, default: str = "") -> str:
 
 
 def _validate_config(config_path: Path) -> tuple[bool, dict]:
-    return _run_python_module(["-m", "brain_alpha_ops.cli", "validate-config", "--config", str(config_path)])
+    started = time.perf_counter()
+    from brain_alpha_ops.config import ConfigValidationError, load_run_config
+
+    try:
+        run_config = load_run_config(config_path)
+    except ConfigValidationError as exc:
+        return False, {
+            "command": ["config_validation", str(config_path)],
+            "exit_code": 1,
+            "duration_seconds": round(time.perf_counter() - started, 3),
+            "error": str(exc),
+        }
+    return True, {
+        "command": ["config_validation", str(config_path)],
+        "exit_code": 0,
+        "duration_seconds": round(time.perf_counter() - started, 3),
+        "schema_version": "config_validation.v1",
+        "config": str(config_path),
+        "environment": run_config.environment,
+        "storage_dir": run_config.ops.storage_dir,
+    }
 
 
 def _compile_python() -> tuple[bool, dict]:
@@ -450,7 +470,7 @@ def _prod_defect_tracking() -> tuple[bool, dict]:
 
 def _pytest(pytest_args: list[str], *, coverage: bool = False) -> tuple[bool, dict]:
     coverage_args = COVERAGE_PYTEST_ARGS if coverage else []
-    return _run_python_module(["-m", "pytest", *coverage_args, *(pytest_args or [])])
+    return _run_python_module(["-m", "pytest", *coverage_args, *(pytest_args or [])], timeout_seconds=PYTEST_TIMEOUT_SECONDS)
 
 
 def _dependency_audit() -> tuple[bool, dict]:
@@ -482,10 +502,24 @@ def _mypy_check() -> tuple[bool, dict]:
 
 
 def _step(name: str, runner: StepRunner) -> dict:
+    _quality_gate_progress({"event": "step_start", "step": name})
     ok, detail = runner()
     detail.setdefault("duration_seconds", 0.0)
     detail.setdefault("exit_code", 0 if ok else 1)
+    _quality_gate_progress({
+        "event": "step_end",
+        "step": name,
+        "ok": ok,
+        "duration_seconds": detail.get("duration_seconds", 0.0),
+        "exit_code": detail.get("exit_code", 0 if ok else 1),
+    })
     return {"name": name, "ok": ok, **detail}
+
+
+def _quality_gate_progress(payload: dict) -> None:
+    if os.environ.get("BRAIN_QUALITY_GATE_PROGRESS") != "1":
+        return
+    print(json.dumps(payload, ensure_ascii=False), file=sys.stderr, flush=True)
 
 
 def run_quality_gate(
@@ -630,7 +664,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--mypy", action="store_true", help="Run mypy on the incremental static-analysis target set.")
     parser.add_argument("--skip-compile", action="store_true", help="Skip Python compileall syntax checks.")
     parser.add_argument("--skip-tests", action="store_true", help="Skip pytest for a fast preflight.")
-    parser.add_argument("--coverage", action="store_true", help="Run pytest with the configured 80% coverage threshold.")
+    parser.add_argument("--coverage", action="store_true", help="Run pytest with the configured 80%% coverage threshold.")
     parser.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
     parser.add_argument("pytest_args", nargs=argparse.REMAINDER, help="Optional pytest args after --.")
     args = parser.parse_args(argv)

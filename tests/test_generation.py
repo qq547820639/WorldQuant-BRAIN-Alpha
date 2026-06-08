@@ -1,7 +1,16 @@
 import logging
 
 from brain_alpha_ops.config import ResearchBudget
-from brain_alpha_ops.research.generator import CandidateGenerator, extract_fields, extract_operators, local_quality, nesting_depth
+from brain_alpha_ops.data import OfficialDataLoader
+from brain_alpha_ops.data.schemas import OfficialField
+from brain_alpha_ops.research.generator import (
+    CandidateGenerator,
+    extract_fields,
+    extract_operators,
+    local_quality,
+    mutate_expression,
+    nesting_depth,
+)
 from brain_alpha_ops.research.generator import _get_default_windows, _load_operators_windows
 from brain_alpha_ops.research.expression_ast import expression_key
 from brain_alpha_ops.research.fallback_generation import build_bare_fallback_spec
@@ -64,6 +73,31 @@ def test_default_windows_helper_returns_copy():
     assert 999 not in _get_default_windows()
 
 
+def test_generator_fallback_filters_templates_to_official_operator_subset():
+    class Loader:
+        def get_operators(self):
+            return [
+                {"name": "rank", "category": "Cross Sectional"},
+                {
+                    "name": "ts_mean",
+                    "category": "Time Series",
+                    "definition": "ts_mean(x, d)",
+                    "parameters": [{"name": "d", "default": 20}],
+                },
+            ]
+
+        def get_fields(self, dataset_id=None):
+            return [
+                OfficialField(id="close", coverage=1.0),
+                OfficialField(id="volume", coverage=0.9),
+            ]
+
+    candidates = CandidateGenerator(loader=Loader()).generate(3)
+
+    assert candidates
+    assert all(set(candidate.operators) <= {"rank", "ts_mean"} for candidate in candidates)
+
+
 def test_local_prefilter_rejects_bad_candidate():
     candidate = CandidateGenerator().generate(1)[0]
     candidate.expression = "rank(1)"
@@ -80,6 +114,16 @@ def test_ast_backed_field_operator_extraction_preserves_structure():
     assert extract_fields(expression, {"close", "volume", "returns"}) == ["close", "volume"]
     assert extract_operators(expression) == ["rank", "ts_delta", "rank", "ts_mean"]
     assert nesting_depth(expression) >= 2
+
+
+def test_extract_fields_fails_closed_without_official_context(monkeypatch):
+    monkeypatch.setattr(
+        OfficialDataLoader,
+        "instance",
+        staticmethod(lambda: (_ for _ in ()).throw(RuntimeError("no official context"))),
+    )
+
+    assert extract_fields("rank(custom_f1)") == []
 
 
 def test_validated_generator_diversity_uses_canonical_similarity():
@@ -175,3 +219,15 @@ def test_bare_fallback_spec_avoids_direct_returns_delta_when_returns_only():
 
     assert spec.expression != "rank(ts_delta(returns, 10))"
     assert "ts_delta(returns" not in spec.expression
+
+
+def test_legacy_operator_substitute_never_introduces_non_official_operators():
+    legacy = mutate_expression("rank(ts_std(close, 20))", 1, mode="operator_substitute")
+    official = mutate_expression("rank(ts_std_dev(close, 20))", 2, mode="operator_substitute")
+
+    assert "ts_var" not in legacy
+    assert "truncation" not in legacy
+    assert "ts_decay_exp" not in legacy
+    assert "ts_var" not in official
+    assert "truncation" not in official
+    assert "ts_decay_exp" not in official

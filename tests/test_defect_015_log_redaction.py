@@ -45,6 +45,7 @@ def test_hypothesis_generator_redacts_theme_engine_failures(caplog):
         selector=None,
         library=None,
     )
+    gen.update_context(["close"], ["rank", "ts_delta"])
 
     with caplog.at_level(logging.WARNING, logger="brain_alpha_ops.research.hypothesis_driven_generator"):
         candidate = gen._generate_random_exploration("pv1")

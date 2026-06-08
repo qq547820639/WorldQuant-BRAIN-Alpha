@@ -2,13 +2,14 @@
  * Candidate management table for the state-card UI.
  *
  * The table keeps the compact card-first workflow, but preserves the production
- * semantics users need before official validation or submit readiness checks.
+ * semantics users need before official validation or pre-submit blocker review checks.
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { requestJobCancel } from "@/api/jobCancel";
 import { useApi } from "@/hooks/useApi";
 import { useSSE } from "@/hooks/useSSE";
-import type { Candidate, SSEEvent, UnifiedProgress } from "@/types";
+import type { BrainCredentials, Candidate, SSEEvent, UnifiedProgress } from "@/types";
 import ProgressFeedback from "@/components/ProgressFeedback";
 
 const MIN_GENERATE_COUNT = 1;
@@ -52,17 +53,19 @@ interface Props {
   onScore?: (candidate: Candidate) => void;
   showProductionControls?: boolean;
   showRowActions?: boolean;
+  credentials?: BrainCredentials;
   viewMode?: CandidateQueueView;
 }
 
 export default function CandidateTable({
+  credentials,
   notify,
   onScore,
   showProductionControls = true,
   showRowActions = false,
   viewMode = "candidates",
 }: Props) {
-  const api = useApi<{ candidates: Candidate[] }>();
+  const api = useApi<{ candidates?: Candidate[]; items?: Candidate[]; returned_count?: number; total?: number; total_count?: number; limit?: number }>();
   const checkResultsApi = useApi<{ items?: CandidateCheckResult[] }>();
   const callApi = api.call;
   const callCheckResultsApi = checkResultsApi.call;
@@ -81,33 +84,30 @@ export default function CandidateTable({
   const [taskProgress, setTaskProgress] = useState<UnifiedProgress | null>(null);
   const [taskError, setTaskError] = useState<string | null>(null);
 
+  // BRAIN simulation state
+  const [simJobId, setSimJobId] = useState<string | null>(null);
+  const [simState, setSimState] = useState<"idle" | "loading" | "progress" | "success" | "error">("idle");
+  const [simProgress, setSimProgress] = useState<UnifiedProgress | null>(null);
+  const [simError, setSimError] = useState<string | null>(null);
+
   const loadCandidates = useCallback(async () => {
     const [result, checkResultsResult] = await Promise.all([
       callApi(`/api/candidates?limit=${CANDIDATE_FETCH_LIMIT}`),
       callCheckResultsApi<{ items?: CandidateCheckResult[] }>("/api/check_results"),
     ]);
     if (result?.ok) {
-      const data = result as unknown as {
-        candidates?: Candidate[];
-        items?: Candidate[];
-        returned_count?: number;
-        total?: number;
-        total_count?: number;
-        limit?: number;
-      };
-      const nextRows = data.candidates || data.items || [];
+      const nextRows = result.candidates || result.items || [];
       setCandidates((current) => nextRows.length || current.length === 0 ? nextRows : current);
       setCandidateMeta({
-        returned: Number(data.returned_count ?? nextRows.length),
-        total: Number(data.total ?? data.total_count ?? nextRows.length),
-        limit: Number(data.limit ?? CANDIDATE_FETCH_LIMIT),
+        returned: Number(result.returned_count ?? nextRows.length),
+        total: Number(result.total ?? result.total_count ?? nextRows.length),
+        limit: Number(result.limit ?? CANDIDATE_FETCH_LIMIT),
       });
     } else if (result?.error) {
       notify("error", result.error);
     }
     if (checkResultsResult?.ok) {
-      const data = checkResultsResult as unknown as { items?: CandidateCheckResult[] };
-      setCheckResults(indexCheckResults(data.items || []));
+      setCheckResults(indexCheckResults(checkResultsResult.items || []));
     } else if (checkResultsResult?.error) {
       notify("error", checkResultsResult.error);
     }
@@ -117,8 +117,7 @@ export default function CandidateTable({
     if (viewMode !== "submittable") return;
     const result = await callCheckResultsApi<{ items?: CandidateCheckResult[] }>("/api/check_results");
     if (result?.ok) {
-      const data = result as unknown as { items?: CandidateCheckResult[] };
-      setCheckResults(indexCheckResults(data.items || []));
+      setCheckResults(indexCheckResults(result.items || []));
     } else if (result?.error) {
       notify("error", result.error);
     }
@@ -159,12 +158,18 @@ export default function CandidateTable({
 
   const handleTaskStreamExhausted = useCallback(() => {
     if (!taskId) return;
-    const message = "实时进度流已断开，请刷新候选状态确认任务结果。";
+    const cancelledTaskId = taskId;
+    const message = "候选生成进度暂时不可确认，系统已安全停止本次生成。请刷新候选列表后再重试。";
+    setTaskState("error");
+    setTaskError(message);
+    setTaskId(null);
     setTaskProgress((current) => ({
       ...(current || {}),
       phase: current?.phase || "candidate_generation",
       status_message: message,
+      percent_complete: 100,
     }));
+    void requestJobCancel({ jobId: cancelledTaskId, reason: "sse_exhausted", message });
     notify("warning", message);
     void loadCandidates();
   }, [loadCandidates, notify, taskId]);
@@ -181,25 +186,92 @@ export default function CandidateTable({
 
     const result = await callApi<{ job_id: string; task_id?: string }>("/api/generate_candidates", {
       method: "POST",
-      body: JSON.stringify({ count: clampGenerateCount(generateCount) }),
+      body: JSON.stringify({ ...buildCredentialOverrides(), count: clampGenerateCount(generateCount) }),
     });
 
-    const nextTaskId = String(
-      (result as unknown as { task_id?: string; job_id?: string } | null)?.task_id ||
-      (result as unknown as { job_id?: string } | null)?.job_id ||
-      ""
-    );
+    const nextTaskId = String(result?.task_id || result?.job_id || "");
 
     if (result?.ok && nextTaskId) {
       setTaskId(nextTaskId);
       setTaskState("progress");
-      notify("info", `候选生成已启动: ${nextTaskId}`);
+      notify("info", "候选生成已启动，可在本页查看进度。");
     } else {
       setTaskState("error");
       setTaskError(result?.error || "启动候选生成失败");
       notify("error", result?.error || "启动候选生成失败");
     }
   }, [callApi, generateCount, notify]);
+
+  // BRAIN simulation handler
+  const startSimulation = useCallback(async () => {
+    setSimState("loading");
+    setSimError(null);
+    setSimProgress({ phase: "simulation_start", status_message: "正在提交BRAIN模拟请求。" });
+
+    const result = await callApi<{ job_id: string; task_id?: string }>("/api/candidates/simulate", {
+      method: "POST",
+      body: JSON.stringify(buildCredentialOverrides()),
+    });
+
+    const nextJobId = String(result?.task_id || result?.job_id || "");
+
+    if (result?.ok && nextJobId) {
+      setSimJobId(nextJobId);
+      setSimState("progress");
+      notify("info", "BRAIN模拟已启动，可在本页查看进度。");
+    } else {
+      setSimState("error");
+      setSimError(result?.error || "启动BRAIN模拟失败");
+      notify("error", result?.error || "启动BRAIN模拟失败");
+    }
+  }, [callApi, notify]);
+
+  // SSE stream for simulation progress
+  const handleSimEvent = useCallback((event: SSEEvent) => {
+    const progress = event.progress || event.data || {};
+    setSimProgress(progress as UnifiedProgress);
+
+    if (event.type === "error" || event.ok === false || event.status === "failed") {
+      setSimState("error");
+      setSimError(event.error || event.status_message || "BRAIN模拟失败");
+      notify("error", event.error || "BRAIN模拟失败");
+      setSimJobId(null);
+      return;
+    }
+
+    if (event.type === "complete" || event.status === "completed") {
+      setSimState("success");
+      const result = event.result as { completed?: number; failed?: number; results?: unknown[] } | undefined;
+      notify("success", `BRAIN模拟完成${result?.completed ? `: ${result.completed}个成功` : ""}`);
+      setSimJobId(null);
+      void loadCandidates();
+      return;
+    }
+
+    setSimState("progress");
+  }, [loadCandidates, notify]);
+
+
+  const buildCredentialOverrides = useCallback((): Record<string, string> => {
+    const overrides: Record<string, string> = {};
+    const username = credentials?.username.trim() || "";
+    const password = credentials?.password || "";
+    if (username) overrides.username = username;
+    if (password) overrides.password = password;
+    return overrides;
+  }, [credentials]);
+  const handleSimStreamExhausted = useCallback(() => {
+    if (!simJobId) return;
+    setSimState("error");
+    setSimError("模拟进度暂时不可确认，请刷新候选列表后查看结果。");
+    setSimJobId(null);
+    void loadCandidates();
+  }, [loadCandidates, simJobId]);
+
+  useSSE(simJobId ? `/sse?job_id=${encodeURIComponent(simJobId)}` : null, {
+    onEvent: handleSimEvent,
+    onExhausted: handleSimStreamExhausted,
+  });
 
   const queueCandidates = useMemo(
     () => candidates.filter((candidate) => candidateMatchesQueueView(candidate, viewMode, checkResults)),
@@ -289,44 +361,49 @@ export default function CandidateTable({
   }
 
   return (
-    <div className="min-w-0 space-y-4 animate-fade-in">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="min-w-0">
-          <h2 className="text-xl font-bold tracking-tight text-slate-950">{title}</h2>
-          <p className="mt-1 text-sm leading-6 text-slate-600" role="status" aria-live="polite">
-            显示 {sortedCandidates.length} / {queueCandidates.length} 个候选
-            {candidateMeta.total > 0 && ` · 已返回 ${candidateMeta.returned}/${candidateMeta.total}`}
-            {viewMode !== "candidates" && ` · ${queueViewLabel(viewMode)}`}
-            {filter && " · 已过滤"}
-          </p>
+    <div className="animate-fade-in">
+      <h1 className="text-xl font-medium text-text-primary mb-1">{title}</h1>
+      <p className="text-sm text-text-tertiary mb-4" role="status" aria-live="polite">
+        显示 {sortedCandidates.length} / {queueCandidates.length} 个候选
+        {candidateMeta.total > 0 && ` · 已返回 ${candidateMeta.returned}/${candidateMeta.total}`}
+        {viewMode !== "candidates" && ` · ${queueViewLabel(viewMode)}`}
+        {filter && " · 已过滤"}
+      </p>
+
+      {showProductionControls && (
+        <div className="flex flex-wrap items-center gap-3 mb-4">
+          <label className="flex items-center gap-2 text-sm font-medium text-text-secondary">
+            数量
+            <input
+              type="number"
+              min={MIN_GENERATE_COUNT}
+              max={MAX_GENERATE_COUNT}
+              value={generateCount}
+              onChange={(event) => handleGenerateCountChange(event.target.value)}
+              className="form-input w-20"
+            />
+          </label>
+          <button
+            type="button"
+            onClick={generateCandidates}
+            disabled={taskState === "loading" || taskState === "progress"}
+            className="btn btn-primary btn-sm"
+          >
+            {taskState === "loading" || taskState === "progress" ? "生成中..." : "生成候选"}
+          </button>
+          <button
+            type="button"
+            onClick={startSimulation}
+            disabled={simState === "loading" || simState === "progress"}
+            className="btn btn-secondary btn-sm"
+            title="提交符合分数阈值的候选到BRAIN平台进行官方回测模拟"
+          >
+            {simState === "loading" || simState === "progress" ? "模拟中..." : "提交BRAIN模拟"}
+          </button>
         </div>
+      )}
 
-        {showProductionControls && (
-          <div className="flex flex-wrap items-center gap-3">
-            <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
-              数量
-              <input
-                type="number"
-                min={MIN_GENERATE_COUNT}
-                max={MAX_GENERATE_COUNT}
-                value={generateCount}
-                onChange={(event) => handleGenerateCountChange(event.target.value)}
-                className="w-20 input text-sm"
-              />
-            </label>
-            <button
-              type="button"
-              onClick={generateCandidates}
-              disabled={taskState === "loading" || taskState === "progress"}
-              className="btn-primary"
-            >
-              {taskState === "loading" || taskState === "progress" ? "生成中..." : "生成候选"}
-            </button>
-          </div>
-        )}
-      </div>
-
-      <div className="grid grid-cols-2 gap-3 text-xs sm:grid-cols-5">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-4">
         <QualitySummaryItem label="达标" value={String(qualitySummary.ready)} />
         <QualitySummaryItem label="本地通过" value={String(qualitySummary.localValid)} />
         <QualitySummaryItem label="阻断" value={String(qualitySummary.blocked)} />
@@ -339,30 +416,39 @@ export default function CandidateTable({
           state={taskStream.exhausted && taskState === "progress" ? "error" : taskState}
           title="候选生成"
           progress={taskProgress}
-          error={taskError || (taskStream.exhausted && taskState === "progress" ? "实时进度流已断开，候选状态可能需要手动刷新。" : null)}
+          error={taskError || (taskStream.exhausted && taskState === "progress" ? "候选生成状态不明确，系统已安全停止本次生成。" : null)}
           onRetry={generateCandidates}
           compact={taskState === "success"}
         />
       )}
 
+      {showProductionControls && simState !== "idle" && (
+        <ProgressFeedback
+          state={simState}
+          title="BRAIN官方模拟"
+          progress={simProgress}
+          error={simError}
+          onRetry={startSimulation}
+          compact={simState === "success"}
+        />
+      )}
+
       {remoteTruncated && (
-        <div className="rounded-xl border border-warning/30 bg-warning/10 p-3 text-xs text-warning" role="status" aria-live="polite">
+        <div className="mb-4 px-3 py-2 text-xs rounded-md bg-warning-subtle text-warning" role="status" aria-live="polite">
           当前只加载了前 {candidateMeta.returned} 条候选，服务端报告总量为 {candidateMeta.total} 条；请使用过滤或刷新查看最新状态，避免把当前列表误认为全集。
         </div>
       )}
 
       {loadError && (
-        <div className="p-4 rounded-xl border border-danger/30 bg-danger/5" role="alert" aria-live="assertive">
-          <div className="flex items-center justify-between gap-3">
-            <p className="text-sm text-danger">加载候选失败: {loadError}</p>
-            <button type="button" onClick={loadCandidates} className="btn-secondary text-sm" aria-label="刷新候选">
-              重试
-            </button>
+        <div className="panel mb-4" style={{ borderColor: "oklch(0.48 0.08 22 / 0.30)", background: "oklch(0.48 0.06 22 / 0.08)" }} role="alert" aria-live="assertive">
+          <div className="panel-body-padded" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <p className="text-sm text-negative">加载候选失败: {loadError}</p>
+            <button type="button" onClick={loadCandidates} className="btn btn-secondary btn-sm">重试</button>
           </div>
         </div>
       )}
 
-      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+      <div className="flex flex-col sm:flex-row gap-3 mb-4">
         <input
           type="text"
           aria-label="过滤候选"
@@ -370,57 +456,55 @@ export default function CandidateTable({
           value={filter}
           maxLength={MAX_FILTER_LENGTH}
           onChange={(event) => handleFilterChange(event.target.value)}
-          className="w-full min-w-0 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-950 placeholder-slate-400 focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/30 sm:flex-1"
+          className="form-input flex-1"
         />
-        <button
-          type="button"
-          onClick={loadCandidates}
-          disabled={api.loading}
-          className="btn-secondary"
-          aria-label="刷新候选"
-        >
+        <button type="button" onClick={loadCandidates} disabled={api.loading} className="btn btn-secondary btn-sm">
           {api.loading ? "刷新中..." : "刷新"}
         </button>
       </div>
 
-      <div className="card min-w-0 overflow-hidden p-0">
-        <div className="space-y-3 p-3 md:hidden" aria-label="候选结果移动列表">
+      <div className="panel">
+        {/* Mobile card list */}
+        <div className="panel-body md:hidden">
           {paginatedCandidates.length === 0 ? (
-            <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm text-slate-500">
+            <div style={{ padding: "2rem", textAlign: "center", fontSize: 13, color: "oklch(0.52 0.006 45)" }}>
               {filter ? "没有匹配的候选" : "暂无候选记录"}
             </div>
           ) : (
-            paginatedCandidates.map((candidate, index) => (
-              <CandidateMobileCard
-                key={`${candidateIdentity(candidate)}_mobile_${index}`}
-                candidate={candidate}
-                checkResults={checkResults}
-                canShowRowActions={canShowRowActions}
-                onScore={onScore}
-              />
-            ))
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {paginatedCandidates.map((candidate, index) => (
+                <CandidateMobileCard
+                  key={`${candidateIdentity(candidate)}_mobile_${index}`}
+                  candidate={candidate}
+                  checkResults={checkResults}
+                  canShowRowActions={canShowRowActions}
+                  onScore={onScore}
+                />
+              ))}
+            </div>
           )}
         </div>
 
-        <div className="hidden max-w-full overflow-auto md:block">
-          <table className="min-w-[980px] w-full text-sm" aria-label="候选结果">
+        {/* Desktop table */}
+        <div className="md:block" style={{ maxWidth: "100%", overflow: "auto" }}>
+          <table className="data-table card-view" style={{ minWidth: 980 }} aria-label="候选结果">
             <thead>
-              <tr className="border-b border-slate-200 bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-600">
-                <th scope="col" className="w-[8rem] p-3 font-medium">ID</th>
-                <th scope="col" className="w-[20rem] p-3 font-medium">表达式</th>
+              <tr>
+                <th style={{ width: "8rem" }}>ID</th>
+                <th style={{ width: "20rem" }}>表达式</th>
                 <SortHeader column="score" label="评分" sortKey={sortKey} sortAsc={sortAsc} onSort={handleSort} />
                 <SortHeader column="status" label="状态" sortKey={sortKey} sortAsc={sortAsc} onSort={handleSort} />
-                <th scope="col" className="w-[7rem] p-3">质量</th>
-                <th scope="col" className="w-[16rem] p-3">阻断原因</th>
-                <th scope="col" className="w-[16rem] p-3">输出</th>
-                <th scope="col" className="w-[16rem] p-3">官方证据</th>
-                {canShowRowActions && <th scope="col" className="w-[6rem] p-3">操作</th>}
+                <th style={{ width: "7rem" }}>质量</th>
+                <th style={{ width: "14rem" }}>阻断原因</th>
+                <th style={{ width: "18rem" }}>输出</th>
+                <th style={{ width: "16rem" }}>官方证据</th>
+                {canShowRowActions && <th style={{ width: "6rem" }}>操作</th>}
               </tr>
             </thead>
             <tbody>
               {paginatedCandidates.length === 0 ? (
                 <tr>
-                  <td colSpan={canShowRowActions ? 9 : 8} className="px-4 py-8 text-center text-slate-500">
+                  <td colSpan={canShowRowActions ? 9 : 8} style={{ padding: "2rem", textAlign: "center", color: "oklch(0.52 0.006 45)" }}>
                     {filter ? "没有匹配的候选" : "暂无候选记录"}
                   </td>
                 </tr>
@@ -429,63 +513,37 @@ export default function CandidateTable({
                   const quality = candidateQualityBadge(candidate);
                   const evidence = officialEvidenceText(candidate, checkResults);
                   return (
-                    <tr
-                      key={`${candidateIdentity(candidate)}_${index}`}
-                      className="align-top border-b border-slate-100 transition-colors hover:bg-slate-50"
-                    >
-                      <td className="p-3">
-                        <span className="font-mono text-xs text-brand-700" title={candidateIds(candidate).join(" / ")}>
-                          {candidateIdentity(candidate).slice(0, 16) || "-"}
-                        </span>
-                      </td>
-                      <td className="p-3">
-                        <div className="whitespace-normal break-words font-mono text-xs leading-6 text-slate-900" title={candidateText(candidate.expression)}>
-                          {candidateText(candidate.expression) || "-"}
+                    <tr key={`${candidateIdentity(candidate)}_${index}`}>
+                      <td className="id">{candidateIdentity(candidate).slice(0, 16) || "--"}</td>
+                      <td>
+                        <div className="font-mono text-xs text-text-secondary break-words" title={candidateText(candidate.expression)}>
+                          {candidateText(candidate.expression) || "--"}
                         </div>
-                        <div className="mt-1 break-words text-xs text-slate-500" title={candidateText(candidate.family)}>
-                          {candidateText(candidate.family)}
-                        </div>
+                        <div className="text-2xs text-text-tertiary mt-1">{candidateText(candidate.family)}</div>
                       </td>
-                      <td className="p-3">
-                        <span className="font-mono font-semibold text-slate-950">
-                          {candidate.scorecard?.total_score?.toFixed(1) ?? "-"}
-                        </span>
+                      <td className="num" style={{ fontWeight: 500, color: "oklch(0.92 0.003 45)" }}>
+                        {candidate.scorecard?.total_score?.toFixed(1) ?? "--"}
                       </td>
-                      <td className="p-3">
+                      <td>
                         <span className={`badge ${statusBadgeClass(candidateStatus(candidate))}`}>
-                          {candidateStatus(candidate) || "-"}
+                          {candidateStatus(candidate) || "--"}
                         </span>
                       </td>
-                      <td className="p-3">
-                        <span className={`badge ${quality.tone}`} title={quality.title}>
-                          {quality.label}
-                        </span>
+                      <td><span className={`badge ${quality.tone}`} title={quality.title}>{quality.label}</span></td>
+                      <td className="text-xs text-text-secondary">{candidateBlockerText(candidate)}</td>
+                      <td className="text-xs">
+                        <div className="font-medium text-text-primary">{candidateOutputSummary(candidate)}</div>
+                        <div className="text-text-tertiary mt-1">{candidateOutputDetail(candidate)}</div>
                       </td>
-                      <td className="p-3 text-xs leading-6 text-slate-700">
-                        <div className="whitespace-normal break-words" title={candidateBlockerText(candidate)}>
-                          {candidateBlockerText(candidate)}
-                        </div>
-                      </td>
-                      <td className="p-3 text-xs leading-6 text-slate-700">
-                        <div className="font-medium text-slate-900">{candidateOutputSummary(candidate)}</div>
-                        <div className="mt-1 break-words text-slate-600" title={candidateOutputDetail(candidate)}>
-                          {candidateOutputDetail(candidate)}
-                        </div>
-                      </td>
-                      <td className="p-3 text-xs leading-6 text-slate-700">
-                        <div className="break-words" title={evidence}>{evidence}</div>
-                        <div className="mt-1 break-words text-slate-600" title={candidateText(candidate.simulation_id)}>
-                          {candidateText(candidate.simulation_id) || "simulation:-"}
-                        </div>
+                      <td className="text-xs">
+                        <div className="text-text-secondary">{evidence}</div>
+                        <div className="text-text-tertiary mt-1">{candidateText(candidate.simulation_id) || "simulation:--"}</div>
                       </td>
                       {canShowRowActions && (
-                        <td className="p-3">
-                          <button
-                            type="button"
-                            className="btn-ghost text-xs"
+                        <td>
+                          <button type="button" className="btn btn-ghost btn-sm"
                             aria-label={`评分 ${candidateIdentity(candidate)}`}
-                            onClick={() => onScore?.(candidate)}
-                          >
+                            onClick={() => onScore?.(candidate)}>
                             评分
                           </button>
                         </td>
@@ -498,31 +556,16 @@ export default function CandidateTable({
           </table>
         </div>
 
-        <div className="flex flex-col gap-3 border-t border-slate-200 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="text-sm text-slate-600" role="status" aria-live="polite">
+        {/* Pagination */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-t border-border-subtle px-3.5 py-3">
+          <div className="text-sm text-text-tertiary" role="status" aria-live="polite">
             显示 {visibleStart}-{visibleEnd}，共 {sortedCandidates.length} 条
           </div>
           {sortedCandidates.length > PAGE_SIZE && (
             <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
-                disabled={currentPage === 1}
-                className="btn-ghost text-sm disabled:opacity-50"
-              >
-                上一页
-              </button>
-              <span className="text-sm text-slate-600">
-                {currentPage} / {totalPages}
-              </span>
-              <button
-                type="button"
-                onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
-                disabled={currentPage === totalPages}
-                className="btn-ghost text-sm disabled:opacity-50"
-              >
-                下一页
-              </button>
+              <button type="button" onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} disabled={currentPage === 1} className="btn btn-ghost btn-sm">上一页</button>
+              <span className="text-sm text-text-secondary">{currentPage} / {totalPages}</span>
+              <button type="button" onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="btn btn-ghost btn-sm">下一页</button>
             </div>
           )}
         </div>
@@ -531,25 +574,16 @@ export default function CandidateTable({
   );
 }
 
-function SortHeader({
-  column,
-  label,
-  sortKey,
-  sortAsc,
-  onSort,
-}: {
-  column: SortKey;
-  label: string;
-  sortKey: SortKey;
-  sortAsc: boolean;
-  onSort: (column: SortKey) => void;
+function SortHeader({ column, label, sortKey, sortAsc, onSort }: {
+  column: SortKey; label: string; sortKey: SortKey; sortAsc: boolean; onSort: (column: SortKey) => void;
 }) {
   const active = sortKey === column;
   return (
-    <th scope="col" className="w-[7rem] p-3 font-medium" aria-sort={active ? (sortAsc ? "ascending" : "descending") : "none"}>
-      <button type="button" className="flex items-center gap-1 transition-colors hover:text-slate-950" onClick={() => onSort(column)}>
+    <th scope="col" className={active ? "is-sorted" : "is-sortable"} style={{ width: "7rem" }}
+      aria-sort={active ? (sortAsc ? "ascending" : "descending") : "none"}>
+      <button type="button" className="flex items-center gap-1" onClick={() => onSort(column)}>
         {label}
-        <span className="text-brand-700" aria-hidden="true">{active ? (sortAsc ? "↑" : "↓") : ""}</span>
+        <span className="text-accent" aria-hidden="true">{active ? (sortAsc ? "\u2191" : "\u2193") : ""}</span>
       </button>
     </th>
   );
@@ -557,77 +591,42 @@ function SortHeader({
 
 function QualitySummaryItem({ label, value }: { label: string; value: string }) {
   return (
-    <div className="card min-w-0 p-3">
-      <p className="text-muted">{label}</p>
-      <p className="mt-1 break-words font-semibold text-slate-950" title={value}>{value}</p>
+    <div className="kpi-card">
+      <p className="kpi-card-label">{label}</p>
+      <p className="font-mono-value text-base font-medium text-text-primary">{value}</p>
     </div>
   );
 }
 
-function CandidateMobileCard({
-  candidate,
-  checkResults,
-  canShowRowActions,
-  onScore,
-}: {
-  candidate: Candidate;
-  checkResults: Map<string, CandidateCheckResult>;
-  canShowRowActions: boolean;
-  onScore?: (candidate: Candidate) => void;
+function CandidateMobileCard({ candidate, checkResults, canShowRowActions, onScore }: {
+  candidate: Candidate; checkResults: Map<string, CandidateCheckResult>;
+  canShowRowActions: boolean; onScore?: (candidate: Candidate) => void;
 }) {
   const quality = candidateQualityBadge(candidate);
   const evidence = officialEvidenceText(candidate, checkResults);
   return (
-    <article className="rounded-lg border border-slate-200 bg-white p-4 text-sm shadow-sm">
-      <div className="flex min-w-0 items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="font-mono text-xs text-brand-700" title={candidateIds(candidate).join(" / ")}>
-            {candidateIdentity(candidate).slice(0, 24) || "-"}
-          </p>
-          <p className="mt-2 break-words font-mono text-xs leading-6 text-slate-900" title={candidateText(candidate.expression)}>
-            {candidateText(candidate.expression) || "-"}
-          </p>
+    <div className="panel" style={{ padding: "12px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+        <div>
+          <p className="text-xs font-mono text-info">{candidateIdentity(candidate).slice(0, 24) || "--"}</p>
+          <p className="text-xs font-mono text-text-secondary mt-2 break-words">{candidateText(candidate.expression) || "--"}</p>
         </div>
-        <span className={`badge shrink-0 ${quality.tone}`} title={quality.title}>
-          {quality.label}
-        </span>
+        <span className={`badge shrink-0 ${quality.tone}`}>{quality.label}</span>
       </div>
-
-      <dl className="mt-4 grid grid-cols-2 gap-3 text-xs">
-        <div>
-          <dt className="text-muted">评分</dt>
-          <dd className="mt-1 font-mono font-semibold text-slate-950">{candidate.scorecard?.total_score?.toFixed(1) ?? "-"}</dd>
-        </div>
-        <div>
-          <dt className="text-muted">状态</dt>
-          <dd className="mt-1"><span className={`badge ${statusBadgeClass(candidateStatus(candidate))}`}>{candidateStatus(candidate) || "-"}</span></dd>
-        </div>
-        <div className="col-span-2">
-          <dt className="text-muted">阻断原因</dt>
-          <dd className="mt-1 break-words leading-6 text-slate-700">{candidateBlockerText(candidate)}</dd>
-        </div>
-        <div className="col-span-2">
-          <dt className="text-muted">官方证据</dt>
-          <dd className="mt-1 break-words leading-6 text-slate-700">{evidence}</dd>
-        </div>
-        <div className="col-span-2">
-          <dt className="text-muted">输出</dt>
-          <dd className="mt-1 text-slate-900">{candidateOutputSummary(candidate)}</dd>
-          <dd className="mt-1 break-words text-muted">{candidateOutputDetail(candidate)}</dd>
-        </div>
-      </dl>
-
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 12, fontSize: "0.75rem" }}>
+        <div><span className="text-text-tertiary">评分</span><p className="font-mono-value text-text-primary">{candidate.scorecard?.total_score?.toFixed(1) ?? "--"}</p></div>
+        <div><span className="text-text-tertiary">状态</span><p className="mt-1"><span className={`badge ${statusBadgeClass(candidateStatus(candidate))}`}>{candidateStatus(candidate) || "--"}</span></p></div>
+        <div style={{ gridColumn: "span 2" }}><span className="text-text-tertiary">阻断原因</span><p className="text-text-secondary break-words">{candidateBlockerText(candidate)}</p></div>
+        <div style={{ gridColumn: "span 2" }}><span className="text-text-tertiary">官方证据</span><p className="text-text-secondary break-words">{evidence}</p></div>
+        <div style={{ gridColumn: "span 2" }}><span className="text-text-tertiary">输出</span><p className="text-text-primary">{candidateOutputSummary(candidate)}</p><p className="text-text-tertiary">{candidateOutputDetail(candidate)}</p></div>
+      </div>
       {canShowRowActions && (
-        <button
-          type="button"
-          className="btn-ghost mt-4 min-h-11 w-full text-sm"
-          aria-label={`评分 ${candidateIdentity(candidate)}`}
-          onClick={() => onScore?.(candidate)}
-        >
+        <button type="button" className="btn btn-ghost btn-sm" style={{ width: "100%", marginTop: 12 }}
+          aria-label={`评分 ${candidateIdentity(candidate)}`} onClick={() => onScore?.(candidate)}>
           评分
         </button>
       )}
-    </article>
+    </div>
   );
 }
 
@@ -682,7 +681,7 @@ function queueViewLabel(viewMode: CandidateQueueView) {
     running_backtest: "回测中",
     backtest_rework: "需返工",
     passed: "已达标",
-    submittable: "可提交预检",
+    submittable: "复核预检",
     submitted: "已提交",
     failed: "失败/阻断",
   };
@@ -731,13 +730,13 @@ function candidateQualitySearchText(candidate: Candidate) {
 function candidateQualityBadge(candidate: Candidate) {
   const diagnosis = candidate.quality_diagnosis || {};
   if (diagnosis.qualified || diagnosis.submission_ready) {
-    return { label: "达标", tone: "badge-success", title: "符合提交前质量门禁" };
+    return { label: "达标", tone: "badge-positive", title: "符合提交前质量复核条件" };
   }
   if (candidateLocalValid(candidate)) {
     return { label: "本地通过", tone: "badge-warning", title: "本地质量通过，仍需官方证据" };
   }
   if (candidateHasBlockingQuality(candidate)) {
-    return { label: "阻断", tone: "badge-danger", title: candidateBlockerText(candidate) };
+    return { label: "阻断", tone: "badge-negative", title: candidateBlockerText(candidate) };
   }
   return { label: "未验证", tone: "badge-neutral", title: "缺少质量诊断" };
 }
@@ -818,8 +817,8 @@ function summarizeCandidateQuality(candidates: Candidate[]) {
 
 function statusBadgeClass(status: string) {
   const normalized = status.toLowerCase();
-  if (normalized.includes("submitted") || normalized.includes("completed")) return "badge-success";
-  if (normalized.includes("failed") || normalized.includes("blocked") || normalized.includes("rejected")) return "badge-danger";
+  if (normalized.includes("submitted") || normalized.includes("completed")) return "badge-positive";
+  if (normalized.includes("failed") || normalized.includes("blocked") || normalized.includes("rejected")) return "badge-negative";
   if (normalized.includes("validat") || normalized.includes("simulat") || normalized.includes("running")) return "badge-warning";
   return "badge-neutral";
 }

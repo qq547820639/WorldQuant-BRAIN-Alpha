@@ -47,6 +47,7 @@ class _Loader:
             OfficialOperator(name="ts_mean", category="time_series"),
             OfficialOperator(name="ts_std_dev", category="time_series"),
             OfficialOperator(name="ts_corr", category="time_series"),
+            OfficialOperator(name="ts_covariance", category="time_series"),
             OfficialOperator(name="group_rank", category="group"),
             OfficialOperator(name="group_neutralize", category="group"),
             OfficialOperator(name="divide", category="arithmetic"),

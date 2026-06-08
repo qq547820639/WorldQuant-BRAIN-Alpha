@@ -18,6 +18,7 @@ from brain_alpha_ops.config import (
     runtime_project_root,
     write_run_config,
 )
+from brain_alpha_ops.dataset_defaults import resolve_default_dataset_id
 
 
 def test_load_run_config_merges_nested_values():
@@ -58,15 +59,14 @@ def test_load_run_config_merges_nested_values():
         assert config.ops.thresholds.min_sharpe == 1.25
 
 
-def test_update_dataclass_rejects_invalid_field_types(caplog):
-    with caplog.at_level(logging.WARNING, logger="brain_alpha_ops.config"):
-        with pytest.raises(ConfigValidationError, match="ops.budget.max_cycles"):
-            config_mod._update_dataclass(
-                RunConfig(),
-                {"ops": {"budget": {"max_cycles": "forever"}}},
-            )
+def test_update_dataclass_rejects_invalid_field_types():
+    from brain_alpha_ops.config_update import update_dataclass_from_mapping
 
-    assert "invalid config type for ops.budget.max_cycles" in caplog.text
+    with pytest.raises(ValueError, match="ops.budget.max_cycles"):
+        update_dataclass_from_mapping(
+            RunConfig(),
+            {"ops": {"budget": {"max_cycles": "forever"}}},
+        )
 
 
 def test_type_hint_resolution_fallback_is_diagnostic(monkeypatch, caplog):
@@ -123,7 +123,7 @@ def test_load_run_config_fills_empty_dataset_from_official_cache(tmp_path):
     assert config.ops.settings.dataset == "pv1"
     assert config.ops.budget.dataset_strategy == "rotate"
     assert config.ops.budget.require_cloud_sync is True
-    assert config.ops.budget.cloud_sync_max_elapsed_seconds == 0.0
+    assert config.ops.budget.cloud_sync_max_elapsed_seconds == 300.0
     assert config.ops.official_api.allow_stale_context_on_rate_limit is False
 
 
@@ -134,7 +134,7 @@ def test_validate_run_config_logs_when_default_dataset_resolution_fails(monkeypa
     def fail_resolve_default_dataset_id(*_args, **_kwargs):
         raise RuntimeError("dataset cache unavailable")
 
-    monkeypatch.setattr(config_mod, "resolve_default_dataset_id", fail_resolve_default_dataset_id)
+    monkeypatch.setattr("brain_alpha_ops.config._loader.resolve_default_dataset_id", fail_resolve_default_dataset_id)
 
     with caplog.at_level(logging.WARNING, logger="brain_alpha_ops.config"):
         with pytest.raises(ConfigValidationError, match="failed to resolve default dataset_id"):
@@ -147,7 +147,7 @@ def test_validate_run_config_logs_when_default_dataset_resolution_fails(monkeypa
 def test_validate_run_config_resolves_dataset_without_mutating_input(monkeypatch):
     config = RunConfig()
     config.ops.settings.dataset = ""
-    monkeypatch.setattr(config_mod, "resolve_default_dataset_id", lambda *_args, **_kwargs: "pv1")
+    monkeypatch.setattr("brain_alpha_ops.config._loader.resolve_default_dataset_id", lambda *_args, **_kwargs: "pv1")
 
     returned = config_mod.validate_run_config(config)
 
@@ -159,13 +159,22 @@ def test_validate_run_config_resolves_dataset_without_mutating_input(monkeypatch
 def test_validate_run_config_rejects_empty_default_dataset_resolution(monkeypatch):
     config = RunConfig()
     config.ops.settings.dataset = ""
-    monkeypatch.setattr(config_mod, "resolve_default_dataset_id", lambda *_args, **_kwargs: "")
+    monkeypatch.setattr("brain_alpha_ops.config._loader.resolve_default_dataset_id", lambda *_args, **_kwargs: "")
 
-    # Behavior changed: validate_run_config accepts empty dataset if budget is small
-    # and treat it as validation warning not error
-    result = config_mod.validate_run_config(config)
-    # The function no longer raises for empty dataset; it returns config with dataset=""
-    assert result is config or result is not None
+    with pytest.raises(ConfigValidationError, match="resolved default dataset_id is empty"):
+        config_mod.validate_run_config(config)
+
+
+def test_resolve_default_dataset_id_fails_closed_without_official_cache(tmp_path):
+    with pytest.raises(ValueError, match="official dataset cache is unavailable"):
+        resolve_default_dataset_id(tmp_path)
+
+
+def test_resolve_default_dataset_id_fails_closed_on_empty_official_cache(tmp_path):
+    (tmp_path / "official_datasets.json").write_text("[]", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="contains no dataset ids"):
+        resolve_default_dataset_id(tmp_path)
 
 
 def test_credentials_resolve_from_environment():
@@ -229,6 +238,12 @@ def test_load_run_config_resolves_runtime_data_under_app_root(monkeypatch):
         config_path.parent.mkdir()
         config_path.write_text(
             json.dumps({"ops": {"storage_dir": "data", "official_api": {"cache_dir": "data/api_cache"}}}),
+            encoding="utf-8",
+        )
+        data_dir = app_root / "data"
+        data_dir.mkdir()
+        (data_dir / "official_datasets.json").write_text(
+            json.dumps([{"id": "pv1", "name": "Price Volume Data for Equity"}]),
             encoding="utf-8",
         )
         monkeypatch.setenv("BRAIN_ALPHA_OPS_HOME", str(app_root))
@@ -424,12 +439,14 @@ def test_load_run_config_accepts_release_dataset_strategies():
 
 
 def test_config_and_web_settings_enums_use_canonical_contract():
-    assert config_mod._VALID_REGIONS == CANONICAL_SETTINGS["region"]
-    assert config_mod._VALID_UNIVERSES == CANONICAL_SETTINGS["universe"]
-    assert config_mod._VALID_DELAYS == CANONICAL_SETTINGS["delay"]
-    assert config_mod._VALID_NEUTRALIZATIONS == CANONICAL_SETTINGS["neutralization"]
-    assert config_mod._VALID_ALPHA_TYPES == CANONICAL_SETTINGS["type"]
-    assert config_mod._VALID_UNIT_HANDLING == CANONICAL_SETTINGS["unitHandling"]
+    from brain_alpha_ops import config_domain_validation as config_domain
+
+    assert config_domain._VALID_REGIONS == CANONICAL_SETTINGS["region"]
+    assert config_domain._VALID_UNIVERSES == CANONICAL_SETTINGS["universe"]
+    assert config_domain._VALID_DELAYS == CANONICAL_SETTINGS["delay"]
+    assert config_domain._VALID_NEUTRALIZATIONS == CANONICAL_SETTINGS["neutralization"]
+    assert config_domain._VALID_ALPHA_TYPES == CANONICAL_SETTINGS["type"]
+    assert config_domain._VALID_UNIT_HANDLING == CANONICAL_SETTINGS["unitHandling"]
 
     assert web_config_mod._VALID_REGIONS == CANONICAL_SETTINGS["region"]
     assert web_config_mod._VALID_UNIVERSES == CANONICAL_SETTINGS["universe"]

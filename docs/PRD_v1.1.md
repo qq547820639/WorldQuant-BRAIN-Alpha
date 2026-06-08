@@ -8,7 +8,7 @@
 | **产品简介** | 账户安全优先的 WorldQuant BRAIN Alpha 自动化研究操作平台 |
 | **目标版本** | v1.0 |
 | **作者** | Product Team |
-| **状态** | 已交付验收 🟢 |
+| **状态** | 已交付验收；当前版本按 Web 非提交就绪复核边界运行 |
 
 ---
 
@@ -16,7 +16,7 @@
 
 ### 1.1 产品愿景
 
-让量化研究员通过一个本地 Web 控制台，即可完成 WorldQuant BRAIN 平台上 Alpha 因子的**全生命周期管理**——从候选生成、质量评分、官方模拟回测到安全提交——全程无需离开浏览器，无需编码，无需担心误操作导致账户风险。
+让量化研究员通过一个本地 Web 控制台，即可完成 WorldQuant BRAIN 平台上 Alpha 因子的**提交前全生命周期管理**——从候选生成、质量评分、官方模拟回测到提交前就绪复核——全程无需离开浏览器，无需编码；真实提交保持关闭，只有在就绪证据为绿且人工明确确认后才能进入单独的不可逆操作。
 
 ### 1.2 目标用户群
 
@@ -31,12 +31,12 @@
 
 | 痛点 | 现状 | 产品解决方案 |
 |------|------|-------------|
-| **账户安全焦虑** | 手动调用 API 容易误提交不合规 Alpha，导致 BRAIN 账号被限 | 六条技术红线自动校验 + 提交前双重确认 + 完整的 SubmissionLedger 审计追溯 |
+| **账户安全焦虑** | 手动调用 API 容易误提交不合规 Alpha，导致 BRAIN 账号被限 | 六条技术红线自动校验 + 提交前就绪复核 + 真实提交默认关闭 |
 | **重复劳动** | 研究人员反复提交相似因子，浪费 API 配额 | 表达式指纹识别 + 去重预检 + 表达式相似度比对 |
 | **缺乏研究记忆** | 跨会话无法回溯哪些字段/算子/模式有效，重复试错 | 结构化三层知识库（规则/发现/失败）+ ResearchMemory 统计汇总 |
 | **API 配额昂贵** | 每次 BRAIN API 调用都消耗配额，本地无法预筛选 | 本地回测引擎预评估（20+ FASTEXPR 算子 + 11项指标），仅高分候选提交官方 API |
 | **LLM 幻觉风险** | AI 生成的因子可能重复、不合规或质量低 | 双 LLM 交叉审查 + 知识库证据检查 + 可观测性去重守卫 |
-| **信息碎片化** | 配置、候选、回测结果、云数据分散在多个系统 | 统一 Web 控制台：5个 Tab 面板覆盖研究→评分→提交→配置全链路 |
+| **信息碎片化** | 配置、候选、回测结果、云数据分散在多个系统 | 统一 Web 控制台覆盖研究→评分→提交前就绪复核→配置全链路 |
 
 ### 1.4 产品定位
 
@@ -51,7 +51,7 @@
 ```
 ┌──────────────────────────────────────────────────────┐
 │                   Web 控制台 (React 18)               │
-│  Dashboard │ Candidates │ Scoring │ Submit │ Config   │
+│  Dashboard │ Candidates │ Scoring │ Readiness │ Config │
 ├──────────────────────────────────────────────────────┤
 │                    API 服务层                          │
 │  GET/POST 路由 (33+17) │ SSE 实时流 │ CSRF/Token 认证  │
@@ -69,7 +69,7 @@
 
 #### 2.2.1 模块 A: 研究流水线 (Research Pipeline)
 
-**功能描述**: 自动化的六阶段 Alpha 研究流水线，从候选生成到安全提交。
+**功能描述**: 自动化的六阶段 Alpha 研究流水线，从候选生成到提交前就绪复核；真实提交不是普通 Web 流程的一部分。
 
 | 阶段 | 名称 | 功能 | 验收标准 |
 |------|------|------|---------|
@@ -77,14 +77,14 @@
 | Stage 2 | LocalScoring | 本地质量评分 + 三层评分卡（先验/实证/清单）预过滤 | 低于 min_local_quality_score 的候选被拒绝 |
 | Stage 3 | OfficialValidation | 通过 BRAIN API alpha check 验证候选 | 预算内（max_official_validations_per_cycle）提交验证 |
 | Stage 4 | Simulation | 提交 BRAIN 模拟回测并轮询结果 | 回测槽位管理 + 并发控制 + 断点续跑 |
-| Stage 5 | QualityGate | 质量门禁评估 + 决策带（提交/优化/研究/放弃） | 7项 BRAIN Alpha Check 全覆盖，含豁免规则 |
-| Stage 6 | Submission | 安全提交到 BRAIN + 分类账记录 | SubmissionLedger 记录每笔提交 + 每日/每运行次数限制 |
+| Stage 5 | QualityGate | 质量门禁评估 + 决策带（提交前复核/优化/研究/放弃） | 7项 BRAIN Alpha Check 全覆盖，含豁免规则 |
+| Stage 6 | ReadinessReview | 提交前就绪复核 + 阻断原因归因 | 只有 `ready_to_submit=true` 且人工确认后，才允许进入单独真实提交流程 |
 
 **用户流程**:
 1. 用户在 Dashboard 点击「Start Pipeline」
 2. 系统按配置的 max_cycles 循环执行 Stage 1-6
 3. 每个周期实时推送进度（SSE 流 + 周期轮询）
-4. 达标候选自动进入提交队列（需用户预先配置 auto_submit）
+4. 达标候选进入提交前就绪复核队列；不会自动执行真实提交
 5. 用户可在 Candidates Tab 查看所有候选的排序/筛选/状态
 
 #### 2.2.2 模块 B: 本地回测引擎 (Local Backtest Engine)
@@ -148,7 +148,7 @@
 | **Dashboard** | KPI 概览 + 流水线状态 + 云 Alpha 缓存 + Top 族系/字段/失败 | 启动/停止流水线；SSE 实时进度条 |
 | **Candidates** | 候选列表（可排序/筛选） | 按 Score/Sharpe/Fitness/TO/Status 排序；文本过滤 |
 | **Scoring** | 评分卡可视化 + 质量门禁检查 | 三层评分进度条；7 项 Alpha Check 通过/失败详情 |
-| **Submit** | 提交控制面板 | Alpha ID 验证 + Pre-Submit Check + 确认复选框 |
+| **Readiness** | 提交前就绪复核面板 | Alpha ID/官方指标/阻断原因复核；不执行真实提交 |
 | **Config** | 只读配置展示 | Brain Settings / Budget / Thresholds / Scoring |
 
 **UX 标准**:
@@ -171,7 +171,7 @@
 | 验证 | 1 | validate_expression（本地+API 验证） |
 | 评分 | 1 | score_candidate |
 | 模拟 | 2 | run_simulation / run_simulation_batch |
-| 提交 | 2 | check_alpha / submit_alpha（强制 confirm_submit） |
+| 提交前复核 | 2 | check_alpha / 维护者提交工具（普通 Web 默认隐藏，真实提交需额外审批） |
 | 研究 | 5 | query_research_memory / expression_index / observability / market_data_cache / vectorized |
 | 助手 | 4 | build_assistant_context / request / parse_response / guidance |
 | 风控 | 2 | run_anti_overfit / run_rolling_validation |
@@ -180,7 +180,7 @@
 
 **安全机制**:
 - confirm_live_api → 必须显式确认才允许调用 BRAIN API
-- confirm_submit → 必须双重确认才允许提交
+- 维护者真实提交保护字段 → 必须双重确认才允许触发，不属于普通 Web 操作
 - 表达式去重预检 → 重复表达式自动阻断
 - MAX_TOOL_CANDIDATES=100 → 单次生成上限
 
@@ -212,10 +212,10 @@
   → (Stage 3) BRAIN 官方验证 → 实时推送
   → (Stage 4) BRAIN 模拟回测 → 轮询结果
   → (Stage 5) 质量门禁 → 决策带
-  → (Stage 6) [可选] 自动提交 → SubmissionLedger 记录
+  → (Stage 6) 提交前就绪复核 → 阻断原因与下一步
   → [查看] Candidates Tab 查看排序后的候选
   → [分析] Scoring Tab 查看评分详情 + 门禁检查项
-  → [提交] Submit Tab 手动确认提交（如需手动作业）
+  → [复核] Readiness 入口查看是否达到提交标准；真实提交保持关闭
   → [优化] Config Tab 根据结果调整配置参数
 ```
 
@@ -255,7 +255,7 @@
 | **凭证保护** | 仅支持环境变量（BRAIN_USERNAME/PASSWORD/TOKEN），禁止命令行明文 |
 | **网络隔离** | 默认绑定 127.0.0.1，allow_remote=False |
 | **CSP** | Content-Security-Policy 头含 script-src/style-src/connect-src 限制；React 模式自动扩展 CDN 白名单 |
-| **提交安全** | confirm_submit 必选；SubmissionLedger 审计日志；max_auto_submissions_per_day/run 限制 |
+| **提交安全** | 普通 Web 只做提交前就绪复核；维护者真实提交需双重确认、SubmissionLedger 审计日志与次数限制 |
 | **输入验证** | 表达式深度限制（max_depth=6）+ 长度限制（500 字符）；JSON body 大小限制（2MB） |
 | **敏感信息脱敏** | redact_data() 统一脱敏 credential/password/token/cookie/path 字段 |
 
@@ -308,7 +308,7 @@
 | `candidate.validated` | Stage 3 验证完成 | alpha_id, official_alpha_id, validation_status | lifecycle.jsonl |
 | `backtest.submitted` | Stage 4 提交回测 | alpha_id, simulation_id, expression, settings | backtests.jsonl |
 | `backtest.completed` | Stage 4 回测完成 | alpha_id, sharpe, fitness, turnover, pass_fail | backtests.jsonl |
-| `submission.recorded` | Stage 6 提交 Alpha | alpha_id, official_alpha_id, mode(auto/manual), status | submissions.jsonl |
+| `submission.readiness_recorded` | Stage 6 记录就绪复核结果 | alpha_id, official_alpha_id, ready_to_submit, blockers | submissions.jsonl |
 | `api.rate_limit` | BRAIN API 返回 429 | endpoint, retry_after, attempt | 日志 |
 | `frontend.page_view` | 用户切换 Tab | tab_id, timestamp | 前端本地存储（可选） |
 | `frontend.action` | 用户操作（启动/停止/排序/筛选/提交） | action, target, timestamp | 前端本地存储（可选） |

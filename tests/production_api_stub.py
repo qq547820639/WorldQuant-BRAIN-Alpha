@@ -31,6 +31,9 @@ OPERATORS: list[str] = [_operator_name(operator) for operator in DEFAULT_OPERATO
 TEMPLATE_SAFE_FIELD_IDS = ("close", "volume", "returns", "sector")
 TEMPLATE_SAFE_OPERATOR_NAMES = (
     "rank",
+    "reverse",
+    "subtract",
+    "multiply",
     "ts_delta",
     "ts_std_dev",
     "ts_rank",

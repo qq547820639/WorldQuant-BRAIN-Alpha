@@ -134,12 +134,13 @@ class BatchBacktestCoordinator:
         try:
             risk = self.risk_evaluator(candidate)
         except Exception as exc:
+            from brain_alpha_ops.redaction import redact_error_message
             return {
                 "level": "high",
                 "max_similarity": None,
                 "matched_alpha_id": "",
                 "matched_status": "",
-                "error": str(exc),
+                "error": redact_error_message(exc),
             }
         return risk if isinstance(risk, dict) else {}
 

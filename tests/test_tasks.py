@@ -1,7 +1,8 @@
-import threading
 import json
+import threading
+import time
 
-from brain_alpha_ops.tasks import DEFAULT_RECOVERY_ERROR, JobStore, _compact_runtime_result
+from brain_alpha_ops.tasks import DEFAULT_RECOVERY_ERROR, DEFAULT_WATCHDOG_ERROR, JobStore, _compact_runtime_result
 
 
 def test_job_store_persists_completed_jobs(tmp_path):
@@ -39,6 +40,122 @@ def test_job_store_recovers_interrupted_active_jobs_as_failed(tmp_path):
     assert restored.latest_active() is None
 
 
+def test_job_store_watchdog_fails_stalled_active_job(tmp_path):
+    path = tmp_path / "jobs.json"
+    store = JobStore(path, watchdog_timeout_seconds=5)
+
+    job_id = store.create()
+    store.update(job_id, status="running", updated_at=10.0, progress={"phase": "official_simulation", "percent": 20})
+
+    job = store.jobs[job_id]
+    assert job is not None
+    assert job["status"] == "running"
+
+    swept = store.watchdog_sweep(now=16.1)
+    job = store.get(job_id)
+
+    assert swept == 1
+    assert job is not None
+    assert job["status"] == "failed"
+    assert job["cancel"] is True
+    assert job["error"] == DEFAULT_WATCHDOG_ERROR
+    assert job["progress"]["phase"] == "watchdog_failed"
+    assert job["progress"]["watchdog"]["triggered"] is True
+    assert store.is_cancelled(job_id) is True
+    assert store.latest_active() is None
+
+
+def test_job_store_watchdog_fails_unknown_status_without_waiting(tmp_path):
+    store = JobStore(tmp_path / "jobs.json", watchdog_timeout_seconds=300)
+
+    job_id = store.create()
+    store.update(job_id, status="mystery", progress={"phase": "unknown", "percent": 10})
+
+    job = store.get(job_id)
+
+    assert job is not None
+    assert job["status"] == "failed"
+    assert job["cancel"] is True
+    assert "status was unclear" in job["error"]
+    assert job["progress"]["watchdog"]["previous_status"] == "mystery"
+
+
+def test_job_store_rejects_late_worker_updates_after_watchdog_failed(tmp_path):
+    store = JobStore(tmp_path / "jobs.json", watchdog_timeout_seconds=5)
+
+    job_id = store.create()
+    store.update(job_id, status="running", updated_at=10.0, progress={"phase": "remote", "percent": 20})
+    assert store.watchdog_sweep(now=16.1) == 1
+
+    store.update(job_id, status="completed", result={"ok": True}, progress={"phase": "done", "percent": 100})
+    store.update(job_id, status="running", progress={"phase": "late_retry", "percent": 50})
+    job = store.get(job_id)
+
+    assert job is not None
+    assert job["status"] == "failed"
+    assert job["cancel"] is True
+    assert job["error"] == DEFAULT_WATCHDOG_ERROR
+    assert job["progress"]["phase"] == "watchdog_failed"
+    assert job.get("result") is None
+
+    store.update(job_id, status="completed", result={"ok": True}, allow_terminal_overwrite=True)
+
+    assert store.get(job_id)["status"] == "completed"
+
+
+def test_job_store_rejects_late_failed_update_after_watchdog_failed(tmp_path):
+    store = JobStore(tmp_path / "jobs.json", watchdog_timeout_seconds=5)
+
+    job_id = store.create()
+    store.update(job_id, status="running", updated_at=10.0, progress={"phase": "remote", "percent": 20})
+    assert store.watchdog_sweep(now=16.1) == 1
+
+    store.update(job_id, status="failed", error="late worker failure", progress={"phase": "failed", "percent": 100})
+    job = store.get(job_id)
+
+    assert job is not None
+    assert job["status"] == "failed"
+    assert job["error"] == DEFAULT_WATCHDOG_ERROR
+    assert job["progress"]["phase"] == "watchdog_failed"
+    assert job["progress"]["watchdog"]["triggered"] is True
+
+
+def test_job_store_heartbeat_preserves_real_progress_clock(tmp_path):
+    store = JobStore(tmp_path / "jobs.json", watchdog_timeout_seconds=5)
+    base = time.time()
+
+    job_id = store.create()
+    store.update(job_id, status="running", updated_at=base, progress={"phase": "remote", "percent": 20})
+    assert store.heartbeat(
+        job_id,
+        operation="sync_alphas",
+        heartbeat_count=1,
+        source="test",
+        heartbeat_at=base + 1,
+    ) is True
+
+    first = store.get(job_id)
+    assert first is not None
+    assert first["updated_at"] == base
+    assert first["progress"]["phase"] == "remote"
+    assert first["progress"]["heartbeat"]["updated_at"] == base + 1
+
+    store.update(job_id, status="running", updated_at=base + 2, progress={"phase": "official_progress", "percent": 60})
+    assert store.heartbeat(
+        job_id,
+        operation="sync_alphas",
+        heartbeat_count=2,
+        source="test",
+        heartbeat_at=base + 3,
+    ) is True
+
+    latest = store.get(job_id)
+    assert latest is not None
+    assert latest["updated_at"] == base + 2
+    assert latest["progress"]["phase"] == "official_progress"
+    assert latest["progress"]["heartbeat"]["count"] == 2
+
+
 def test_job_store_cancel_sets_stopping_and_persists(tmp_path):
     path = tmp_path / "jobs.json"
     store = JobStore(path)
@@ -51,6 +168,30 @@ def test_job_store_cancel_sets_stopping_and_persists(tmp_path):
 
     restored = JobStore(path, recover_active_as="")
     assert restored.get(job_id)["status"] == "stopping"
+
+
+def test_job_store_cancel_does_not_reopen_watchdog_terminal_job(tmp_path):
+    path = tmp_path / "jobs.json"
+    store = JobStore(path, watchdog_timeout_seconds=5)
+
+    job_id = store.create()
+    store.update(job_id, status="running", updated_at=10.0, progress={"phase": "official_context", "percent": 10})
+    assert store.watchdog_sweep(now=16.1) == 1
+
+    assert store.cancel(job_id) is True
+
+    job = store.get(job_id)
+    assert job is not None
+    assert job["status"] == "failed"
+    assert job["cancel"] is True
+    assert job["error"] == DEFAULT_WATCHDOG_ERROR
+    assert job["progress"]["phase"] == "watchdog_failed"
+
+    restored = JobStore(path, recover_active_as="")
+    restored_job = restored.get(job_id)
+    assert restored_job is not None
+    assert restored_job["status"] == "failed"
+    assert restored_job["progress"]["phase"] == "watchdog_failed"
 
 
 def test_job_store_clear_does_not_persist_by_default(tmp_path):

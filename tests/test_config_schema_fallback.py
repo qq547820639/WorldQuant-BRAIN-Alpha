@@ -56,6 +56,11 @@ def test_config_schema_fallback_enforces_required_roots_for_empty_config(monkeyp
 
 
 def test_config_schema_handles_schema_errors_and_file_read_errors(monkeypatch, tmp_path):
+    try:
+        import jsonschema  # noqa: F811 (re-import for attribute access)
+    except ImportError:
+        import pytest
+        pytest.skip("jsonschema not installed")
     class _BadValidator:
         def __init__(self, schema):
             raise config_schema.jsonschema.SchemaError("bad schema")

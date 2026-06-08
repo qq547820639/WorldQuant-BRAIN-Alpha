@@ -8,15 +8,15 @@
 ## 一、项目全局视角
 
 ### 1.1 项目定位
-BRAIN Alpha Ops 是一个面向 WorldQuant BRAIN 平台的本地 Alpha 研究工作台。它通过本地 Web 控制台（纯 Python 标准库 HTTP 服务器 + React 18 前端），帮助量化研究员在同一个页面内完成：账号连接、云端同步、候选生成、官方回测、达标检查、评分归因和安全提交。
+BRAIN Alpha Ops 是一个面向 WorldQuant BRAIN 平台的本地 Alpha 研究可视化控制台。它通过本地 Web 控制台帮助量化研究员在同一个页面内完成：账号连接、云端同步、候选生成、官方回测、达标检查、评分归因和提交前就绪复核；真实提交保持关闭。
 
 ### 1.2 核心安全原则
-- **默认不自动提交** — `auto_submit: false`
-- **提交前必须同步云端** — `require_cloud_sync: true`
-- **提交前必须通过达标检查** — `require_pre_submit_check_passed: true`
-- **每日提交上限** — `max_auto_submissions_per_day: 3`
+- **真实提交保持关闭** — `auto_submit: false`
+- **就绪复核前必须同步云端** — `require_cloud_sync: true`
+- **就绪复核前必须通过达标检查** — `require_pre_submit_check_passed: true`
+- **真实提交不作为本测试动作** — 不点击、模拟或期望任何 irreversible submit
 - **表达式相似度阻断** — `max_expression_similarity: 0.9`
-- **SubmissionLedger 审计追踪** — 所有提交记录写入 `data/submissions.jsonl`
+- **SubmissionLedger 审计追踪** — 仅用于维护者审计真实提交历史，本浏览器流程不写入真实提交
 
 ### 1.3 技术架构
 - **后端**: Python 标准库 `http.server.ThreadingHTTPServer`，端口 `8765`
@@ -44,7 +44,7 @@ BRAIN Alpha Ops 是一个面向 WorldQuant BRAIN 平台的本地 Alpha 研究工
 ┌─────────────────────────────────────────────────────────────┐
 │ Header: 🧠 BRAIN Alpha Ops  |  v0.3  |  ● api.worldquantbrain.com │
 ├─────────────────────────────────────────────────────────────┤
-│ Tab Bar: [📊 Dashboard] [🧬 Candidates] [📈 Scoring] [🚀 Submit] [⚙️ Config] │
+│ Tab Bar: [Dashboard] [Candidates] [Scoring] [提交前就绪复核] [Config] │
 ├─────────────────────────────────────────────────────────────┤
 │ Main Content Area (tabpanel)                                │
 │                                                             │
@@ -96,15 +96,14 @@ BRAIN Alpha Ops 是一个面向 WorldQuant BRAIN 平台的本地 Alpha 研究工
 | Official Metrics | `h3:has-text("Official Metrics")` | 官方指标面板 |
 | Quality Gate | `h3:has-text("Quality Gate")` | 质量门禁检查项 |
 
-#### 🚀 Submit Tab
+#### 提交前就绪复核
 | 元素 | 选择器 | 说明 |
 |------|--------|------|
 | 安全提醒 | `[role="alert"]:has-text("Account Safety")` | 黄色安全警告 |
 | Alpha ID 输入 | `#alpha-id-input` | 输入官方 Alpha ID |
-| Pre-Submit Check | `button:has-text("Pre-Submit Check")` | 提交前检查 |
-| Submit Alpha | `button:has-text("Submit Alpha")` | 提交按钮（红色） |
-| 确认复选框 | `input[aria-label="Confirm submission"]` | 提交确认勾选 |
-| 检查结果 | `[aria-label="Pre-submit check result"]` | 检查结果 JSON |
+| Readiness Check | `button:has-text("读取就绪")` 或等价按钮 | 读取提交前就绪证据 |
+| Blocker Summary | `[aria-label*="readiness"]` 或等价摘要区 | 展示阻断原因 |
+| 检查结果 | `[aria-label*="check"]` 或等价结果区 | 展示检查结果，不执行真实提交 |
 
 #### ⚙️ Config Tab
 | 元素 | 选择器 | 说明 |
@@ -113,7 +112,7 @@ BRAIN Alpha Ops 是一个面向 WorldQuant BRAIN 平台的本地 Alpha 研究工
 | Budget | `h3:has-text("Budget")` | 预算配置 |
 | Quality Thresholds | `h3:has-text("Quality Thresholds")` | 质量门槛 |
 | Scoring | `h3:has-text("Scoring")` | 评分权重 |
-| Environment | `h3:has-text("Environment")` | 环境与自动提交 |
+| Environment | `h3:has-text("Environment")` | 运行环境与非提交安全状态 |
 
 ### 2.3 通用交互元素
 | 元素 | 选择器 | 说明 |
@@ -132,7 +131,7 @@ BRAIN Alpha Ops 是一个面向 WorldQuant BRAIN 平台的本地 Alpha 研究工
 | 路径 | 功能 | 响应关键字段 |
 |------|------|-------------|
 | `/api/health` | 健康检查 | `{ok: true}` |
-| `/api/status` | 管线状态 | `{ok, status, cycle, max_cycles, phase, progress}` |
+| `/api/production-validation/status` | 非提交验证状态 | `{ok, status, phase, progress}` |
 | `/api/config` | 运行配置 | `{ok, settings, budget, thresholds, scoring, environment}` |
 | `/api/candidates` | 候选列表 | `{ok, candidates: [{alpha_id, expression, lifecycle_status, scorecard, official_metrics}]}` |
 | `/api/snapshot/cloud` | 云端快照 | `{ok, count, submitted_count, passed_unsubmitted_count, is_stale, sample_alphas}` |
@@ -146,13 +145,12 @@ BRAIN Alpha Ops 是一个面向 WorldQuant BRAIN 平台的本地 Alpha 研究工
 |------|------|--------|------|
 | `/api/test_connection` | 连接测试 | `{username, password, token}` | `{ok, connected, message}` |
 | `/api/sync_alphas` | 云端同步 | `{sync_range, ...}` | `{ok, job_id}` |
-| `/api/run` | 启动管线 | `{}` | `{ok, job_id}` |
-| `/api/stop` | 停止管线 | `{job_id}` | `{ok}` |
+| `/api/production-validation/start` | 启动非提交验证 | `{auto_submit: false}` | `{ok, job_id}` |
+| `/api/production-validation/stop` | 停止非提交验证 | `{job_id}` | `{ok}` |
 | `/api/generate_candidates` | 生成候选 | `{count, ...}` | `{ok, candidates}` |
 | `/api/check` | 提交前检查 | `{alpha_id}` | `{ok, checks, ...}` |
-| `/api/submit` | 提交 Alpha | `{alpha_id, confirm_submit: true}` | `{ok, submission}` |
 | `/api/check_batch` | 批量检查 | `{candidate_ids, ...}` | `{ok, job_id}` |
-| `/api/submit_batch` | 批量提交 | `{alpha_ids, confirm_submit: true}` | `{ok, results}` |
+| `/api/submit_readiness` | 提交就绪复核 | 无 | `{ok, ready_to_submit, blockers}` |
 
 ### 3.3 SSE 端点
 | 路径 | 功能 | 事件格式 |
@@ -208,7 +206,7 @@ playwright-cli close
 4. 执行 `playwright-cli eval "document.getElementById('root').style.display"` 验证为 `"block"`
 5. 执行 `playwright-cli snapshot` 获取页面元素引用
 6. 验证 Header 区域显示 "BRAIN Alpha Ops" 和 "v0.3"
-7. 验证 Tab 栏显示 5 个 Tab：Dashboard, Candidates, Scoring, Submit, Config
+7. 验证页面显示状态卡或导航入口：Dashboard, Candidates, Scoring, 提交前就绪复核, Config
 8. 验证 Dashboard Tab 默认激活（`aria-selected="true"`）
 9. 验证 KPI 卡片区域存在（4 个卡片）
 10. 截图保存
@@ -327,16 +325,14 @@ document.querySelector('[aria-selected="true"]')?.textContent // => "📊Dashboa
 6. 查找 "Quality Gate" 面板（检查项列表）
 7. 截图保存
 
-#### 4c. Scoring → Submit
-1. 点击 "Submit" Tab
-2. 验证安全提醒面板（黄色警告："Account Safety Reminder"）
-3. 验证 Alpha ID 输入框存在
-4. 验证 "Pre-Submit Check" 按钮存在
-5. 验证 "Submit Alpha" 按钮存在（红色危险样式）
-6. 验证确认复选框存在
+#### 4c. Scoring → 提交前就绪复核
+1. 打开提交前就绪复核入口
+2. 验证安全提醒说明真实提交保持关闭
+3. 验证页面显示就绪状态、阻断原因和检查结果入口
+4. 验证没有直接执行真实提交的按钮或自动化请求
 7. 截图保存
 
-#### 4d. Submit → Config
+#### 4d. 提交前就绪复核 → Config
 1. 点击 "Config" Tab
 2. 验证配置面板渲染
 3. 验证显示 5 个配置区域：Brain Settings, Budget, Quality Thresholds, Scoring, Environment
@@ -536,21 +532,18 @@ document.querySelector('[aria-selected="true"]')?.textContent // => "📊Dashboa
    ```
 2. 验证返回验证错误
 
-#### 8c. Submit Tab 表单验证
-1. 切换到 Submit Tab
-2. 不输入 Alpha ID，直接点击 "Pre-Submit Check"
-3. 验证输入框显示错误样式（红色边框 `.error`）
-4. 验证错误消息出现："Alpha ID is required"
-5. 验证 `aria-invalid="true"` 和 `aria-describedby` 正确设置
-6. 输入少于 3 个字符，触发 "Alpha ID is too short" 错误
-7. 输入有效 Alpha ID，验证错误清除
+#### 8c. 提交前就绪复核验证
+1. 打开提交前就绪复核入口
+2. 点击读取就绪或查看结果
+3. 验证页面展示 `ready_to_submit=false` 时的阻断说明
+4. 验证阻断说明可读、可操作，并指向继续补充官方指标或刷新官方上下文
+5. 验证整个过程中没有 `/api/submit` 或 `/api/submit_batch` 请求
 
-#### 8d. 提交确认验证
-1. 在 Submit Tab 输入有效 Alpha ID
-2. 不勾选确认复选框，直接点击 "Submit Alpha"
-3. 验证 Toast 通知出现："Please confirm submission by checking the box"
-4. 勾选确认复选框
-5. 验证 "Submit Alpha" 按钮可点击
+#### 8d. 真实提交关闭验证
+1. 保持在提交前就绪复核入口
+2. 验证真实提交按钮不可见或不可用
+3. 验证即使存在历史提交组件，也只用于维护者确认场景，不作为本测试动作
+4. 验证 Toast 或页面说明不会引导用户点击真实提交
 
 #### 8e. ErrorBanner 组件验证
 1. 如果页面有错误状态，验证 ErrorBanner 组件渲染：

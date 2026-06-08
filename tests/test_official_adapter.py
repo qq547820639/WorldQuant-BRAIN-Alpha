@@ -73,6 +73,26 @@ def test_normalize_metrics_keeps_prod_correlation_separate_from_generic_correlat
     assert metrics["prod_correlation"] == 0.27
 
 
+def test_normalize_metrics_preserves_sub_universe_size_fields():
+    metrics = normalize_metrics(
+        {
+            "is": {
+                "sharpe": 1.6,
+                "fitness": 1.2,
+                "turnover": 0.2,
+                "subUniverseSharpe": 1.0,
+                "subUniverseSize": 4000,
+                "alphaSize": 1000,
+            },
+            "checks": [{"name": "LOW_SUB_UNIVERSE_SHARPE", "result": "PASS"}],
+        }
+    )
+
+    assert metrics["sub_universe_sharpe"] == 1.0
+    assert metrics["subUniverseSize"] == 4000
+    assert metrics["alphaSize"] == 1000
+
+
 def test_normalize_metrics_preserves_self_correlation_check_status():
     metrics = normalize_metrics(
         {

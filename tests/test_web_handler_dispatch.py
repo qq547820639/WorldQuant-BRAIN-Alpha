@@ -24,6 +24,7 @@ class _Store:
         self.active = None
         self.rows = {"job_1": {"status": "running", "progress": {"phase": "run"}}}
         self.created = []
+        self.cancelled = []
 
     def latest_active(self):
         return self.active
@@ -46,6 +47,14 @@ class _Store:
         if isinstance(initial, dict):
             self.rows[job_id] = dict(initial)
         return job_id
+
+    def cancel(self, job_id):
+        if job_id not in self.rows:
+            return False
+        self.cancelled.append(job_id)
+        self.rows[job_id]["cancel"] = True
+        self.rows[job_id]["status"] = "stopping"
+        return True
 
 
 class _Lock:
@@ -170,12 +179,12 @@ def _ctx():
                 "job_id": "job_1",
                 "task_id": "job_1",
                 "sse_url": "/sse?job_id=job_1",
-                "status_url": "/api/status?job_id=job_1",
+                "status_url": "/api/production-validation/status?job_id=job_1",
             },
             200,
         ),
         start_run_job=lambda job_id, payload: started.append(("run", job_id, payload)),
-        stop_job_payload=lambda store, payload: {"ok": True, "stopped": payload.get("job_id", "")},
+        stop_job_payload=lambda store, payload: {"ok": store.cancel(payload.get("job_id", "")), "stopped": payload.get("job_id", "")},
         active_auxiliary_operation=lambda **kwargs: None,
         start_sync_job=lambda job_id, payload: started.append(("sync", job_id, payload)),
         check_candidate=lambda payload: {"ok": True, "checked": payload},
@@ -270,6 +279,27 @@ def test_dispatch_get_logs_handler_exceptions(monkeypatch, caplog):
 
     assert handler.json_calls[0][0]["error_code"] == "GET_ROUTE_ERROR"
     assert "web route dispatch failed" in caplog.text
+
+
+def test_dispatch_get_treats_client_disconnect_as_completed(monkeypatch, caplog):
+    ctx, _started, _lock = _ctx()
+
+    def disconnected(*_args, **_kwargs):
+        raise BrokenPipeError("client closed")
+
+    monkeypatch.setitem(_GET_DISPATCH_HANDLERS, "disconnected", disconnected)
+    ctx = dataclasses.replace(
+        ctx,
+        route_for=lambda _method, _path: SimpleNamespace(handler="disconnected", requires_session=False, category="api"),
+    )
+
+    handler = _Handler()
+    with caplog.at_level(logging.INFO, logger="brain_alpha_ops.web_handler_dispatch"):
+        dispatch_get(handler, urlparse("/api/candidates"), ctx)
+
+    assert handler.json_calls == []
+    assert "web client disconnected before response completed" in caplog.text
+    assert "web route dispatch failed" not in caplog.text
 
 
 def test_dispatch_post_logs_handler_exceptions(caplog):
@@ -370,8 +400,8 @@ def test_route_metadata_handlers_are_mapped():
 
 
 def test_dispatch_post_body_routes_reject_non_object_payloads_before_side_effects():
-    bodyless_routes = {"/api/logout", "/api/shutdown"}
-    assert {path for path, route in POST_ROUTES.items() if route.handler in {"logout", "shutdown"}} == bodyless_routes
+    bodyless_routes = {"/api/logout", "/api/shutdown", "/api/session"}
+    assert {path for path, route in POST_ROUTES.items() if route.handler in {"logout", "shutdown", "session"}} == bodyless_routes
 
     body_validated_routes = sorted(set(POST_ROUTES) - bodyless_routes)
     assert body_validated_routes
@@ -402,6 +432,21 @@ def test_dispatch_post_bodyless_routes_accept_empty_body_as_session_actions():
         assert payload["ok"] is True, path
         assert ("Set-Cookie", "expired-cookie") in headers, path
         assert started[0][0] == "expire", path
+
+
+def test_dispatch_post_session_returns_full_csrf_token_and_cookie():
+    ctx, _started, _lock = _ctx()
+    handler = _Handler(body=[], session=False)
+
+    dispatch_post(handler, urlparse("/api/session"), ctx)
+
+    payload, status, headers = handler.json_calls[0]
+    assert status == 200
+    assert payload["ok"] is True
+    assert payload["session_id"] == "session_1"[:8]
+    assert payload["csrf_token"] == "csrf_1"
+    assert payload["ttl_seconds"] == 43200
+    assert ("Set-Cookie", "cookie=session_1") in headers
 
 
 def test_dispatch_get_clamps_high_cost_history_limits():
@@ -457,7 +502,7 @@ def test_dispatch_get_blocks_origin_missing_route_and_session():
     assert bad_session.json_calls[0][0]["error_code"] == "SESSION_INVALID"
 
 
-def test_dispatch_post_starts_jobs_and_handles_submit_lock():
+def test_dispatch_post_starts_jobs_and_blocks_raw_submit_routes():
     ctx, started, submit_lock = _ctx()
 
     run = _Handler(body={"alpha": 1})
@@ -469,15 +514,17 @@ def test_dispatch_post_starts_jobs_and_handles_submit_lock():
         "auto_submit": False,
         "submitted": False,
         "sse_url": "/sse?job_id=job_1",
-        "status_url": "/api/status?job_id=job_1",
+        "status_url": "/api/production-validation/status?job_id=job_1",
     }
     assert started[0] == ("run", "job_1", {"alpha": 1, "autoSubmit": False, "auto_submit": False})
 
     submit = _Handler(body={"alpha_id": "a1"})
     dispatch_post(submit, urlparse("/api/submit"), ctx)
-    assert submit.json_calls[0][0]["submitted"] == {"alpha_id": "a1"}
-    assert submit_lock.acquired is True
-    assert submit_lock.released is True
+    assert submit.json_calls[0][1] == 403
+    assert submit.json_calls[0][0]["error_code"] == "REAL_SUBMIT_DISABLED_WEB_FLOW"
+    assert submit.json_calls[0][0]["submitted"] is False
+    assert submit_lock.acquired is False
+    assert submit_lock.released is False
 
     review = _Handler(body={"request_pack": {}, "primary_response": "{}"})
     dispatch_post(review, urlparse("/api/assistant_cross_review"), ctx)
@@ -512,8 +559,10 @@ def test_dispatch_post_starts_async_operation_jobs():
 
     submit_batch = _Handler(body={"alpha_ids": ["a1"]})
     dispatch_post(submit_batch, urlparse("/api/submit_batch"), ctx)
-    assert submit_batch.json_calls[0][0]["status_url"] == "/api/status?job_id=job_1"
-    assert started[-1] == ("submit_batch", "job_1", {"alpha_ids": ["a1"]})
+    assert submit_batch.json_calls[0][1] == 403
+    assert submit_batch.json_calls[0][0]["error_code"] == "REAL_SUBMIT_DISABLED_WEB_FLOW"
+    assert submit_batch.json_calls[0][0]["submitted"] is False
+    assert started[-1] == ("scoring_evaluate", "job_1", {"candidate": {"alpha_id": "a1"}})
 
 
 def test_dispatch_post_check_batch_validates_candidate_ids_before_starting_job():
@@ -605,6 +654,32 @@ def test_dispatch_post_validates_generic_json_object_payloads_before_handlers():
     assert started == []
 
 
+def test_dispatch_post_sync_alphas_preserves_session_credentials_for_worker():
+    ctx, started, _lock = _ctx()
+
+    sync = _Handler(body={
+        "syncRange": "3d",
+        "refreshOfficialContext": True,
+        "username": "tester@example.com",
+        "password": "dummy-password",
+        "token": "dummy-token",
+    })
+    dispatch_post(sync, urlparse("/api/sync_alphas"), ctx)
+
+    assert sync.json_calls[0][1] == 200
+    assert started == [(
+        "sync",
+        "job_1",
+        {
+            "syncRange": "3d",
+            "refreshOfficialContext": True,
+            "username": "tester@example.com",
+            "password": "dummy-password",
+            "token": "dummy-token",
+        },
+    )]
+
+
 def test_dispatch_post_validates_cancel_and_assistant_payload_shapes():
     ctx, started, _lock = _ctx()
 
@@ -618,6 +693,11 @@ def test_dispatch_post_validates_cancel_and_assistant_payload_shapes():
     dispatch_post(sync_cancel, urlparse("/api/sync_cancel"), ctx)
     assert sync_cancel.json_calls[0][1] == 400
     assert sync_cancel.json_calls[0][0]["error_code"] == "VALIDATION_ERROR"
+
+    cancel = _Handler(body={})
+    dispatch_post(cancel, urlparse("/api/cancel"), ctx)
+    assert cancel.json_calls[0][1] == 400
+    assert cancel.json_calls[0][0]["error_code"] == "VALIDATION_ERROR"
 
     parse = _Handler(body={"text": "   "})
     dispatch_post(parse, urlparse("/api/assistant_response/parse"), ctx)
@@ -725,6 +805,7 @@ def test_rate_limit_key_falls_back_to_client_address_without_session():
 
 def test_dispatch_post_can_cancel_sync_job():
     ctx, _started, _lock = _ctx()
+    ctx.sync_jobs.rows["sync_1"] = {"status": "running", "progress": {"phase": "cloud_sync"}}
 
     cancel = _Handler(body={"job_id": "sync_1"})
     dispatch_post(cancel, urlparse("/api/sync_cancel"), ctx)
@@ -735,6 +816,75 @@ def test_dispatch_post_can_cancel_sync_job():
     assert payload["job_id"] == "sync_1"
     assert payload["status"] == "stopping"
     assert "云端同步" in payload["message"]
+
+
+def test_dispatch_post_sync_cancel_does_not_reopen_terminal_job():
+    ctx, _started, _lock = _ctx()
+    ctx.sync_jobs.rows["sync_failed"] = {"status": "failed", "progress": {"phase": "watchdog_failed"}}
+
+    cancel = _Handler(body={"job_id": "sync_failed"})
+    dispatch_post(cancel, urlparse("/api/sync_cancel"), ctx)
+
+    payload, status, _headers = cancel.json_calls[0]
+    assert status == 200
+    assert payload["ok"] is True
+    assert payload["job_id"] == "sync_failed"
+    assert payload["status"] == "failed"
+    assert payload["already_terminal"] is True
+    assert ctx.sync_jobs.rows["sync_failed"]["status"] == "failed"
+    assert ctx.sync_jobs.cancelled == []
+
+
+def test_dispatch_post_can_cancel_job_from_any_web_store():
+    ctx, _started, _lock = _ctx()
+    ctx.jobs.rows["job_2"] = {"status": "running", "progress": {"phase": "run"}}
+    ctx.sync_jobs.rows["sync_1"] = {"status": "running", "progress": {"phase": "sync"}}
+    ctx.check_jobs.rows["check_1"] = {"status": "running", "progress": {"phase": "check"}}
+    ctx.async_jobs.rows["task_1"] = {"status": "running", "progress": {"phase": "async"}}
+
+    cases = [
+        ("job_2", "run", ctx.jobs),
+        ("sync_1", "sync", ctx.sync_jobs),
+        ("check_1", "check", ctx.check_jobs),
+        ("task_1", "async", ctx.async_jobs),
+    ]
+    for job_id, job_type, store in cases:
+        handler = _Handler(body={"job_id": job_id})
+        dispatch_post(handler, urlparse("/api/cancel"), ctx)
+
+        payload, status, _headers = handler.json_calls[0]
+        assert status == 200
+        assert payload["ok"] is True
+        assert payload["job_id"] == job_id
+        assert payload["task_id"] == job_id
+        assert payload["job_type"] == job_type
+        assert payload["status"] == "stopping"
+        assert store.rows[job_id]["cancel"] is True
+
+    missing = _Handler(body={"job_id": "missing_1"})
+    dispatch_post(missing, urlparse("/api/cancel"), ctx)
+
+    payload, status, _headers = missing.json_calls[0]
+    assert status == 404
+    assert payload["ok"] is False
+    assert payload["error_code"] == "JOB_NOT_FOUND"
+    assert payload["job_id"] == "missing_1"
+
+
+def test_dispatch_post_cancel_does_not_reopen_terminal_job():
+    ctx, _started, _lock = _ctx()
+    ctx.jobs.rows["job_failed"] = {"status": "failed", "progress": {"phase": "watchdog_failed"}}
+
+    handler = _Handler(body={"job_id": "job_failed"})
+    dispatch_post(handler, urlparse("/api/cancel"), ctx)
+
+    payload, status, _headers = handler.json_calls[0]
+    assert status == 200
+    assert payload["ok"] is True
+    assert payload["status"] == "failed"
+    assert payload["already_terminal"] is True
+    assert ctx.jobs.rows["job_failed"]["status"] == "failed"
+    assert ctx.jobs.cancelled == []
 
 
 def test_dispatch_post_run_validates_before_starting_job():
@@ -761,7 +911,7 @@ def test_dispatch_post_run_forces_non_submit_before_validation_and_queueing():
         validate_run_payload=lambda payload: validated_payloads.append(dict(payload)),
     )
 
-    run = _Handler(body={"autoSubmit": True, "auto_submit": True, "username": "tester@example.com", "password": "session-password"})
+    run = _Handler(body={"autoSubmit": True, "auto_submit": True, "username": "tester@example.com", "password": "dummy-password"})
     dispatch_post(run, urlparse("/api/run"), ctx)
 
     payload, status, _headers = run.json_calls[0]
@@ -787,8 +937,8 @@ def test_dispatch_post_run_stores_executes_non_submit_and_redacts_session_creden
         "autoSubmit": True,
         "auto_submit": True,
         "username": "tester@example.com",
-        "password": "session-password",
-        "token": "session-token",
+        "password": "dummy-password",
+        "token": "dummy-token",
     })
     dispatch_post(run, urlparse("/api/run"), ctx)
 
@@ -804,8 +954,8 @@ def test_dispatch_post_run_stores_executes_non_submit_and_redacts_session_creden
             "autoSubmit": False,
             "auto_submit": False,
             "username": "tester@example.com",
-            "password": "session-password",
-            "token": "session-token",
+            "password": "dummy-password",
+            "token": "dummy-token",
         },
     )]
 
@@ -827,7 +977,7 @@ def test_dispatch_post_run_stores_executes_non_submit_and_redacts_session_creden
     encoded_status = json.dumps(status_payload, ensure_ascii=False)
     encoded_store = json.dumps(stored, ensure_ascii=False)
     persisted = (tmp_path / "jobs.json").read_text(encoding="utf-8")
-    for secret in ("tester@example.com", "session-password", "session-token"):
+    for secret in ("tester@example.com", "dummy-password", "dummy-token"):
         assert secret not in encoded_status
         assert secret not in encoded_store
         assert secret not in persisted

@@ -43,6 +43,7 @@ _OFFICIAL_REVIEW_SUBMIT_ONLY_REASON_CODES = {
     "missing_official_metrics",
     "missing_official_metric_fields",
     "official_pass_fail_not_pass",
+    "expression_too_nested",
 }
 _OFFICIAL_REVIEW_SUBMIT_ONLY_CATEGORIES = {
     "official_evidence_missing",
@@ -72,6 +73,16 @@ def dispatch_get(handler: Any, path: str, query: dict) -> None:
         handler._send_json(_submit_readiness_payload())
         return
 
+    # Simulation eligibility preview
+    if path == "/api/candidates/simulate/eligible":
+        from brain_alpha_ops.web_candidate_simulation import simulation_candidates_payload
+        try:
+            handler._send_json(simulation_candidates_payload(dict(query)))
+        except Exception as exc:
+            from brain_alpha_ops.redaction import redact_error_message
+            handler._send_json({"ok": False, "error": redact_error_message(exc)}, status=500)
+        return
+
     # Latest result
     if path == "/api/latest_result":
         slots = _backtest_slots_payload()
@@ -87,6 +98,20 @@ def dispatch_get(handler: Any, path: str, query: dict) -> None:
     # Status
     if path == "/api/status":
         handler._send_json(_status_payload(query))
+        return
+
+    # Phase state (v4.0)
+    if path == "/api/phase_state":
+        from brain_alpha_ops.web.handlers.phase import phase_state_payload
+        try:
+            handler._send_json(phase_state_payload(
+                sync_jobs=getattr(handler, "SYNC_JOBS", None),
+                candidate_repo=getattr(handler, "_candidate_repo", None),
+                connection_tracker=getattr(handler, "_connection_tracker", None),
+                readiness_service=getattr(handler, "_readiness_service", None),
+            ))
+        except Exception:
+            handler._send_json({"ok": True, "current_phase": "connect", "connected": False, "context_fresh": False, "candidates_count": 0, "scored_count": 0, "readiness_passed": False})
         return
 
     # Config
@@ -159,6 +184,11 @@ def dispatch_post(handler: Any, path: str, body: str) -> None:
         _handle_candidate_check(handler, path, payload)
         return
 
+    # BRAIN simulation - submit candidates for official BRAIN API simulation
+    if path == "/api/candidates/simulate":
+        _handle_candidate_simulate(handler, payload)
+        return
+
     # Default: not found
     handler._send_json({"ok": False, "error": "not found"}, status=404)
 
@@ -166,47 +196,90 @@ def dispatch_post(handler: Any, path: str, body: str) -> None:
 # ═══════════════════════ Route Handlers ═══════════════════════════════
 def _handle_pipeline_start(handler: Any, payload: dict) -> None:
     """Handle pipeline start request."""
+    import os
+    import threading
     from brain_alpha_ops.web_jobs import job_update, new_job_id
+    from brain_alpha_ops.redaction import redact_error_message
 
     job_id = new_job_id("pipeline")
     job_update(job_id, status="starting", progress={"phase": "init", "percent_complete": 0})
 
     # Start pipeline in background thread
-    import threading
     def run_pipeline():
         try:
-            from brain_alpha_ops.pipeline import AlphaResearchPipeline
-            pipeline = AlphaResearchPipeline()
+            from brain_alpha_ops.config import load_run_config
+            from brain_alpha_ops.brain_api.official import OfficialBrainAPI
+            from brain_alpha_ops.research.pipeline import AlphaResearchPipeline
+
+            config = load_run_config(payload.get("config_path"))
+            ops = config.ops
+            cred = config.credentials
+            username = cred.username or os.environ.get(cred.username_env, "")
+            password = cred.password or os.environ.get(cred.password_env, "")
+            token = cred.token or os.environ.get(cred.token_env, "")
+            api = OfficialBrainAPI(
+                config=ops.official_api,
+                username=username,
+                password=password,
+                token=token,
+                disable_proxy=True,
+            )
+            pipeline = AlphaResearchPipeline(config=ops, api=api)
             job_update(job_id, status="running", progress={"phase": "running", "percent_complete": 10})
             pipeline.run()
             job_update(job_id, status="completed", progress={"phase": "done", "percent_complete": 100})
         except Exception as e:
             logger.exception("Pipeline failed")
-            job_update(job_id, status="failed", error=str(e))
+            job_update(job_id, status="failed", error=redact_error_message(e))
 
-    threading.Thread(target=run_pipeline, daemon=True).start()
+    threading.Thread(target=run_pipeline, daemon=False).start()
     handler._send_json({"ok": True, "job_id": job_id})
 
 
 def _handle_pipeline_stop(handler: Any, payload: dict) -> None:
-    """Handle pipeline stop request."""
-    handler._send_json({"ok": True, "message": "Pipeline stop requested"})
+    """Reject direct stop request — production stop must go through the job monitor.
+
+    The pipeline runs in a background thread managed by web_jobs. Stopping
+    it requires coordinated cancellation via the job registry, not a simple
+    thread termination. This endpoint returns a clear message guiding users
+    to the correct stop mechanism.
+    """
+    handler._send_json({
+        "ok": False,
+        "error_code": "STOP_VIA_JOB_MONITOR",
+        "error": "请通过页面上的任务监控面板停止流水线。直接停止请求已被拒绝以保护数据一致性。",
+        "message": "Pipeline stop must use job monitor — direct stop rejected to protect data consistency.",
+    }, status=409)
 
 
 def _handle_config_update(handler: Any, payload: dict) -> None:
-    """Handle config update request with validation."""
+    """Handle config update request with validation.
+
+    Only a whitelisted set of fields can be updated through the web UI.
+    Nested dataclass fields (credentials, ops) are validated in depth by
+    validate_run_config() after the update.
+    """
+    # Whitelist: only these top-level RunConfig fields are user-configurable.
+    _CONFIG_UPDATE_WHITELIST = frozenset({"auto_submit", "credentials", "ops"})
     try:
         from brain_alpha_ops.config import ConfigValidationError, validate_run_config, write_run_config
         config = load_run_config()
-        # Update config with payload
+        # Update config with payload — only whitelisted fields
+        rejected: list[str] = []
         for key, value in payload.items():
+            if key not in _CONFIG_UPDATE_WHITELIST:
+                rejected.append(key)
+                continue
             if hasattr(config, key):
                 setattr(config, key, value)
         # Validate before writing — rejects unsafe/out-of-range values
         validated = validate_run_config(config)
         write_run_config(validated)
         public = _public_config(validated.to_dict() if hasattr(validated, 'to_dict') else {"environment": "production"})
-        handler._send_json({"ok": True, "message": "Config validated and saved", "config": public})
+        response = {"ok": True, "message": "Config validated and saved", "config": public}
+        if rejected:
+            response["warnings"] = [f"字段 '{field}' 不支持通过 Web 修改，已忽略" for field in rejected]
+        handler._send_json(response)
     except ConfigValidationError as e:
         message = redact_error_message(e)
         logger.warning("Config update validation failed: %s", message)
@@ -217,25 +290,108 @@ def _handle_config_update(handler: Any, payload: dict) -> None:
 
 
 def _handle_candidate_submit(handler: Any, path: str, payload: dict) -> None:
-    """Handle candidate submission request."""
+    """Reject legacy dynamic candidate-submit requests.
+
+    The only supported submit surface is the Web staged readiness and
+    confirmation flow; this compatibility route must not imply success.
+    """
     # Extract candidate_id from path
     parts = path.split("/")
     if len(parts) >= 4:
         candidate_id = parts[3]
-        handler._send_json({"ok": True, "candidate_id": candidate_id, "message": "Submission requested"})
+        handler._send_json(
+            {
+                "ok": False,
+                "candidate_id": candidate_id,
+                "error_code": "WEB_ONLY_SUBMIT_REQUIRED",
+                "error": "Candidate submission must use the Web staged readiness and confirmation flow.",
+            },
+            status=410,
+        )
     else:
         handler._send_json({"ok": False, "error": "invalid path"}, status=400)
 
 
 def _handle_candidate_check(handler: Any, path: str, payload: dict) -> None:
-    """Handle candidate check request."""
-    # Extract candidate_id from path
+    """Reject legacy single-candidate check in favor of batch check.
+
+    Individual candidate checks are only meaningful with full context
+    (API connection, cloud alphas, submission ledger).  Use the batch
+    check endpoint (/api/check_batch) which orchestrates the complete
+    check pipeline.
+    """
     parts = path.split("/")
     if len(parts) >= 4:
         candidate_id = parts[3]
-        handler._send_json({"ok": True, "candidate_id": candidate_id, "message": "Check requested"})
+        handler._send_json(
+            {
+                "ok": False,
+                "candidate_id": candidate_id,
+                "error_code": "USE_BATCH_CHECK",
+                "error": "请使用批量检查端点 /api/check_batch 进行候选检查。",
+                "suggestion": "POST /api/check_batch with {\"expressions\": [\"<expression>\"]}",
+            },
+            status=410,
+        )
     else:
-        handler._send_json({"ok": False, "error": "invalid path"}, status=400)
+        handler._send_json({"ok": False, "error": "candidate_id is required in path", "error_code": "VALIDATION_ERROR"}, status=400)
+
+
+def _handle_candidate_simulate(handler: Any, payload: dict) -> None:
+    """Start BRAIN simulation for eligible candidates."""
+    from brain_alpha_ops.web_candidate_simulation import (
+        simulate_candidates_job,
+        simulation_candidates_payload,
+    )
+    from brain_alpha_ops.web_jobs import job_update, new_job_id, is_cancelled
+
+    # Preview mode: just show eligible candidates without starting simulation
+    if payload.get("preview"):
+        try:
+            result = simulation_candidates_payload(payload)
+            handler._send_json(result)
+        except Exception as exc:
+            from brain_alpha_ops.redaction import redact_error_message
+            handler._send_json({"ok": False, "error": redact_error_message(exc)}, status=500)
+        return
+
+    # Check for already running simulation job
+    from brain_alpha_ops.web_jobs import ASYNC_JOBS, ASYNC_JOBS_LOCK
+    with ASYNC_JOBS_LOCK:
+        for jid, job in ASYNC_JOBS.items():
+            if job.get("status") == "running":
+                phase = (job.get("progress") or {}).get("phase", "")
+                if "simulat" in str(phase).lower():
+                    handler._send_json({
+                        "ok": False,
+                        "error": "已有模拟任务在运行",
+                        "error_code": "CONFLICT_RUNNING",
+                        "job_id": jid,
+                    }, status=409)
+                    return
+
+    # Start simulation as background job
+    job_id = new_job_id("simulate")
+    job_update(job_id, status="starting", progress={"phase": "init", "percent_complete": 0})
+
+    import threading
+    def run_sim():
+        try:
+            from brain_alpha_ops.web_simulation_job import create_sim_job_store
+            simulate_candidates_job(job_id, payload, job_store=create_sim_job_store(), log=logger)
+        except Exception as e:
+            from brain_alpha_ops.redaction import redact_error_message
+            logger.exception("Simulation job %s failed", job_id)
+            job_update(job_id, status="failed", error=redact_error_message(e))
+
+    threading.Thread(target=run_sim, daemon=False).start()
+    handler._send_json({
+        "ok": True,
+        "job_id": job_id,
+        "task_id": job_id,
+        "sse_url": f"/sse?job_id={job_id}",
+        "status_url": f"/api/status?job_id={job_id}",
+    })
 
 
 # ═══════════════════════ Data Helpers ═════════════════════════════════
@@ -285,7 +441,17 @@ def _durable_production_job_store():
         from brain_alpha_ops.web_job_bindings import job_registry_view
 
         return job_registry_view().jobs
-    except Exception:
+    except (ImportError, AttributeError) as exc:
+        logger.warning(
+            "Durable production job store unavailable for status fallback: %s",
+            redact_error_message(exc),
+        )
+        return None
+    except Exception as exc:
+        logger.exception(
+            "Durable production job store failed unexpectedly: %s",
+            redact_error_message(exc),
+        )
         return None
 
 
@@ -676,6 +842,7 @@ def _build_route_map() -> dict[str, list[tuple[str, str]]]:
         "/": Route("root", requires_session=False, category="html"),
         "/api/health": Route("health", requires_session=False),
         "/api/status": Route("status"),
+        "/api/production-validation/status": Route("status"),
         "/api/config": Route("config"),
         "/api/config_schema": Route("config_schema"),
         "/api/active_job": Route("active_job"),
@@ -719,15 +886,21 @@ def _build_route_map() -> dict[str, list[tuple[str, str]]]:
         "/api/checkpoint_status": Route("checkpoint_status"),
         "/api/backtest_slots": Route("backtest_slots"),
         "/api/submit_readiness": Route("submit_readiness"),
+        "/api/candidates/simulate/eligible": Route("candidates_simulate_eligible"),
+        "/api/phase_state": Route("phase_state"),
     }
     post_routes = {
         "/api/run": Route("run"),
+        "/api/production-validation/start": Route("run"),
         "/api/config": Route("config"),
         "/api/config/update": Route("config"),
         "/api/test_connection": Route("test_connection"),
         "/api/connection_test": Route("test_connection"),
         "/api/stop": Route("stop"),
+        "/api/production-validation/stop": Route("stop"),
+        "/api/cancel": Route("cancel"),
         "/api/sync_alphas": Route("sync_alphas"),
+        "/api/sync-cloud-alphas": Route("sync_alphas"),          # R-02: legacy alias
         "/api/sync/sync_alphas": Route("sync_alphas"),
         "/api/sync_cancel": Route("sync_cancel"),
         "/api/check": Route("check"),
@@ -750,6 +923,8 @@ def _build_route_map() -> dict[str, list[tuple[str, str]]]:
         "/api/shutdown": Route("shutdown"),
         "/api/scoring/evaluate": Route("scoring_evaluate"),
         "/api/scoring/attribution": Route("scoring_attribution"),
+        "/api/candidates/simulate": Route("candidates_simulate"),
+        "/api/session": Route("session", requires_session=False),    # R-02: creates new session
     }
     return {"GET": get_routes, "POST": post_routes}
 

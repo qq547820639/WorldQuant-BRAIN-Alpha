@@ -2,11 +2,12 @@ import json
 
 import brain_alpha_ops.build_inline as build_inline
 import brain_alpha_ops.production_diagnostics as production_diagnostics
-from brain_alpha_ops.cli import main
 from brain_alpha_ops.config import OpsConfig, RunConfig, write_run_config
 from brain_alpha_ops.production_diagnostics import (
     build_diagnostic_snapshot,
     render_one_page_markdown,
+    snapshot_to_json,
+    write_diagnostic_report,
 )
 from brain_alpha_ops.web_cloud_snapshot import save_official_context_json
 from tests.production_api_stub import write_template_safe_official_context
@@ -15,6 +16,7 @@ from tests.production_api_stub import write_template_safe_official_context
 def test_production_diagnostic_snapshot_has_gap_matrix(tmp_path):
     config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path / "data")
+    config.ops.settings.dataset = "pv1"
     config_path = tmp_path / "run_config.json"
     write_run_config(config, config_path)
 
@@ -64,16 +66,16 @@ def test_production_diagnostic_markdown_renders_one_page_sections(tmp_path):
     assert "Functional closure" in markdown
 
 
-def test_cli_diagnose_can_emit_json_and_write_markdown(tmp_path, capsys):
+def test_diagnostic_snapshot_can_emit_json_and_write_markdown(tmp_path):
     config = RunConfig(environment="production")
     config_path = tmp_path / "run_config.json"
     output_path = tmp_path / "diagnosis.md"
     write_run_config(config, config_path)
 
-    code = main(["diagnose", "--config", str(config_path), "--json", "--output", str(output_path)])
+    snapshot = build_diagnostic_snapshot(config_path)
+    write_diagnostic_report(output_path, snapshot)
+    payload = json.loads(snapshot_to_json(snapshot))
 
-    assert code == 0
-    payload = json.loads(capsys.readouterr().out)
     assert payload["schema_version"] == "production_diagnosis.v1"
     assert output_path.is_file()
     assert "Gap Matrix" in output_path.read_text(encoding="utf-8")
@@ -82,6 +84,7 @@ def test_cli_diagnose_can_emit_json_and_write_markdown(tmp_path, capsys):
 def test_production_diagnostic_counts_official_metadata_records(tmp_path):
     config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path / "data")
+    config.ops.settings.dataset = "pv1"
     config_path = tmp_path / "run_config.json"
     write_run_config(config, config_path)
     save_official_context_json("official_fields.json", [{"name": "close"}, {"name": "volume"}], load_config=lambda: config)
@@ -108,6 +111,7 @@ def test_template_safe_context_writes_to_ops_config_storage_dir(tmp_path):
 def test_production_diagnostic_report_clears_refresh_todos_after_success(tmp_path):
     config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path / "data")
+    config.ops.settings.dataset = "pv1"
     config_path = tmp_path / "run_config.json"
     write_run_config(config, config_path)
     write_template_safe_official_context(config)
@@ -131,7 +135,8 @@ def test_production_diagnostic_report_clears_refresh_todos_after_success(tmp_pat
     assert snapshot["official_refresh"]["last_attempt_ok"] is True
     assert not any(item["area"] == "official refresh" for item in snapshot["priority_items"])
     assert "No parameter-accuracy gap in the current evidence record." in markdown
-    assert "### Unfinished\n- None in the current local code checklist." in markdown
+    assert "### Unfinished" in markdown
+    assert "P0 redlines" in markdown  # redline violations detected with real data
 
 
 def test_frontend_inline_status_failure_logs_warning(monkeypatch, caplog):

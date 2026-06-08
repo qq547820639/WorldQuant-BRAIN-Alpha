@@ -51,7 +51,7 @@ def background_job_start_payload(
         "job_id": job_id,
         "task_id": job_id,
         "sse_url": f"/sse?job_id={job_id}",
-        "status_url": f"/api/status?job_id={job_id}",
+        "status_url": f"/api/production-validation/status?job_id={job_id}",
     }, 200
 
 

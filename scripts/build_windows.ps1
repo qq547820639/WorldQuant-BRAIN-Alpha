@@ -59,9 +59,19 @@ if (-not (Test-Path $PromptSource)) {
 New-Item -ItemType Directory -Path $PromptTarget -Force | Out-Null
 Copy-Item -Path (Join-Path $PromptSource "*") -Destination $PromptTarget -Recurse -Force
 
+$ReactDistSource = Join-Path $Root "brain_alpha_ops\web\react_app\dist"
+$ReactDistTarget = Join-Path $Root "dist\brain_alpha_ops\web\react_app\dist"
+if (-not (Test-Path (Join-Path $ReactDistSource "index.html"))) {
+    Write-Error "Missing required React Web console artifact: $ReactDistSource\index.html"
+    exit 1
+}
+New-Item -ItemType Directory -Path $ReactDistTarget -Force | Out-Null
+Copy-Item -Path (Join-Path $ReactDistSource "*") -Destination $ReactDistTarget -Recurse -Force
+
 Write-Host ""
 Write-Host "Copied official context files to $DistData"
 Write-Host "Copied hypothesis library files to $HypothesisTarget"
 Write-Host "Copied assistant prompt template files to $PromptTarget"
+Write-Host "Copied React Web console files to $ReactDistTarget"
 Write-Host "Done: $Root\dist\BrainAlphaOps.exe"
-Write-Host "The executable starts the local service in a console and opens the browser UI automatically."
+Write-Host "The executable starts the local Web service and opens the browser UI automatically."

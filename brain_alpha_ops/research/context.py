@@ -352,9 +352,10 @@ def _compliance_context(config: RunConfig) -> dict[str, Any]:
         logging.getLogger(__name__).debug("ScoreHistoryDB not available.")
         scoring_health = {"available": False, "error": "module not found"}
     except Exception as exc:
+        from brain_alpha_ops.redaction import redact_error_message
         import logging
         logging.getLogger(__name__).warning("ScoreHistoryDB failed: %s", exc)
-        scoring_health = {"available": False, "error": str(exc)}
+        scoring_health = {"available": False, "error": redact_error_message(exc)}
 
     return {
         "redline": redline,
@@ -466,7 +467,8 @@ def _latest_result_from_storage(storage_dir: str) -> dict[str, Any]:
     try:
         data = json.loads(latest_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
-        return {"ok": False, "source": "run_history", "error": str(exc), "result": None, "progress": {}}
+        from brain_alpha_ops.redaction import redact_error_message
+        return {"ok": False, "source": "run_history", "error": redact_error_message(exc), "result": None, "progress": {}}
     summary = data.get("summary") if isinstance(data.get("summary"), dict) else {}
     return {
         "ok": True,

@@ -16,7 +16,10 @@ logger = logging.getLogger(__name__)
 
 
 # ═══════════════════════ SSE Configuration ════════════════════════════
-SSE_DEFAULT_TIMEOUT = 60.0  # seconds
+# BRAIN API simulations can take 2+ minutes; timeout must exceed worst-case
+# simulation duration plus polling overhead to avoid premature SSE stream
+# closure that causes the frontend to misread an in-progress job as stalled.
+SSE_DEFAULT_TIMEOUT = 300.0  # seconds (5 min)
 SSE_POLL_INTERVAL = 0.5  # seconds
 
 

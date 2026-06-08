@@ -10,7 +10,8 @@ REACT_SRC = ROOT / "brain_alpha_ops" / "web" / "react_app" / "src"
 REACT_DIST = ROOT / "brain_alpha_ops" / "web" / "react_app" / "dist"
 
 REACT_CONTRACT_COVERAGE = {
-    "App.tsx": "state-card router, shell chrome, and detail view selection",
+    "App.tsx": "app shell router, sidebar navigation, credential quick-start, and detail view selection",
+    "api/jobCancel.ts": "shared browser job cancellation helper pinned to production validation stop",
     "main.tsx": "React root bootstrap",
     "components/CandidateTable.tsx": "candidate generation, filters, queue views, and SSE completion",
     "components/ConfigPanel.tsx": "session credentials, config hydration, schema options, validation, import/export, and save",
@@ -18,18 +19,31 @@ REACT_CONTRACT_COVERAGE = {
     "components/JobMonitor.tsx": "production job start/stop/status and SSE progress",
     "components/KpiCard.tsx": "compact KPI presentation",
     "components/OfficialBacktestSlots.tsx": "official backtest slot polling and conflict guidance",
+    "components/OfficialOperationsPanel.tsx": "button-driven official context refresh, blocker review, and operation events",
     "components/ProgressFeedback.tsx": "accessible progress, spinner, ETA, retry, and indeterminate states",
     "components/QualityCheckPanel.tsx": "quality gate summary and readiness blockers",
     "components/ScoringPanel.tsx": "score evaluation, attribution, and result presentation",
+    "components/Sidebar.tsx": "persistent left sidebar navigation with badges (Terminal Precision v2.0)",
     "components/SnapshotPanel.tsx": "cloud/checkpoint/research/history snapshots",
-    "components/StateCards.tsx": "card-first navigation and startup status loading",
-    "components/SubmissionConfirmPanel.tsx": "read-only submit readiness confirmation",
-    "components/SubmissionPanel.tsx": "manual checks, guarded submit, batch jobs, and SSE status",
+    "components/StateCards.tsx": "card-first navigation and startup status loading (superseded by Sidebar)",
+    "components/SubmissionConfirmPanel.tsx": "read-only pre-submit blocker review",
+    "components/SubmissionPanel.tsx": "retired submit compatibility wrapper for read-only readiness review",
     "components/ToastContainer.tsx": "toast roles, actions, and dismissal",
+    "helpers/runPayload.ts": "prod validation run payload builder (Terminal Precision v2.0)",
     "hooks/useApi.ts": "CSRF, replay headers, same-origin credentials, and error mapping",
+    "hooks/useJobState.ts": "job state lifecycle management (Terminal Precision v2.0)",
     "hooks/useSSE.ts": "stream token, credentials, reconnect, and close semantics",
     "hooks/useToast.ts": "toast lifecycle state",
     "types/index.ts": "shared API, progress, candidate, and card view contracts",
+    "utils/csrf.ts": "CSRF token, stream token, and request-ID generation helpers",
+    "components/PhaseShell.tsx": "phase wrapper with header, step guide, and unlock condition (UI Design System v3.0)",
+    "components/StepGuide.tsx": "horizontal step progress bar with complete/active/pending states (v3.0)",
+    "components/MobileTabBar.tsx": "bottom tab navigation for mobile with 4 phase tabs (v3.0)",
+    "components/EmptyState.tsx": "centered empty state with icon, title, description, CTA, and hint (v3.0)",
+    "hooks/usePhaseState.ts": "phase navigation state management with phase determination and step computation (v3.0)",
+    "components/StatusFlowDiagram.tsx": "submission readiness flow visualization showing checklist to submit flow (v3.0)",
+    "__tests__/components_v3.test.tsx": "unit tests for PhaseShell, StepGuide, MobileTabBar, EmptyState components (v3.0)",
+    "__tests__/usePhaseState.test.ts": "unit tests for usePhaseState hook — phase transitions and step computation (v3.0)",
 }
 
 
@@ -62,9 +76,11 @@ def test_every_frontend_module_has_a_contract_test_entry():
 def test_frontend_runtime_modules_render_state_and_interaction_contracts():
     candidate = _source("components/CandidateTable.tsx")
     submission = _source("components/SubmissionPanel.tsx")
+    confirm = _source("components/SubmissionConfirmPanel.tsx")
     progress = _source("components/ProgressFeedback.tsx")
     use_api = _source("hooks/useApi.ts")
     use_sse = _source("hooks/useSSE.ts")
+    csrf_utils = _source("utils/csrf.ts")
 
     _assert_snippets(
         candidate,
@@ -83,29 +99,53 @@ def test_frontend_runtime_modules_render_state_and_interaction_contracts():
     _assert_snippets(
         submission,
         [
-            "validateAlphaId(alphaId)",
-            "validateCandidateJsonRows(rows)",
-            "validateBatchSubmitCandidates(submitCandidates)",
-            "hasFreshSingleCheck",
-            "hasFreshBatchCheck",
-            '"/api/check_batch"',
-            '"/api/submit_batch"',
-            'useSSE(batchCheckTaskId ? `/sse?job_id=${encodeURIComponent(batchCheckTaskId)}` : null',
-            'useSSE(submitTaskId ? `/sse?job_id=${encodeURIComponent(submitTaskId)}` : null',
-            'aria-describedby="confirm-submit-help"',
+            "Retired submit surface kept as a compatibility alias",
+            "SubmissionConfirmPanel notify={notify}",
+            "旧提交面板已退役",
+            "Web 页面不执行真实提交",
+            "任何真实提交需另走人工审批",
+            'role="status"',
         ],
     )
+    assert "/api/submit" not in submission
+    assert "/api/submit_batch" not in submission
+    assert 'callReadiness<SubmitReadinessResponse>("/api/submit_readiness")' in confirm
     _assert_snippets(
-        progress + use_api + use_sse,
+        progress + use_api + use_sse + csrf_utils,
         [
             'role="progressbar"',
             "normalizedPercent(progress)",
             'credentials: "same-origin"',
             'headers["X-Brain-Alpha-CSRF"] = csrf',
-            'headers["X-Brain-Alpha-Request-ID"] = createRequestId();',
+            '"X-Brain-Alpha-Request-ID"',
             "new EventSource(withStreamToken(streamUrl), { withCredentials: true })",
-            "onExhausted?.();",
+            "onExhaustedRef.current?.();",
             "stream_token=${encodeURIComponent(token)}",
+        ],
+    )
+
+
+def test_browser_react_smoke_requires_official_and_alpha_flow_assertions():
+    smoke = (ROOT / "scripts" / "browser_react_artifact_smoke.mjs").read_text(encoding="utf-8")
+
+    _assert_snippets(
+        smoke,
+        [
+            "const officialOperations = interactions.officialOperations || {};",
+            "official operations card did not expose the button-driven Web flow",
+            "official operations did not show readiness blockers and check results",
+            "official operations did not auto-interrupt unclear refresh state",
+            "official operations still exposes command-line wording",
+            "const alphaFlow = interactions.alphaFlow || {};",
+            "candidate generation flow was not exercised through the Web UI",
+            "candidate generation did not request backend cancellation after ambiguous SSE state",
+            "scoring flow did not request backend cancellation after ambiguous SSE state",
+            '"/api/sync_alphas"',
+            '"/api/sync_cancel"',
+            '"/api/generate_candidates"',
+            '"/api/scoring/evaluate"',
+            '"/api/scoring/attribution"',
+            '"/api/production-validation/stop"',
         ],
     )
 
@@ -119,19 +159,18 @@ def test_app_ux_orchestrator_has_tested_navigation_empty_and_busy_contracts():
     _assert_snippets(
         app + state_cards + job_monitor,
         [
-            'useState<CardViewId | "cards">("cards")',
-            "StateCards onNavigate={handleNavigate} notify={notify}",
+            'useState<CardViewId>("dashboard")',
+            "Sidebar",
             "setActiveView(view)",
-            'aria-label="返回状态卡"',
-            'aria-label="打开系统配置"',
-            "登录、运行、证明可用",
-            "输入 BRAIN 账户，测试连接，启动强制非提交的生产验证",
-            "BRAIN 账户连接",
+            'aria-label="切换导航菜单"',
+            'import Sidebar from "@/components/Sidebar"',
+            "BRAIN Alpha Ops",
+            "凭证与连接",
+            "未填写页面凭证",
             "非提交生产验证",
-            "填写 BRAIN 凭证",
             "页面凭证为空",
-            'key="scoring_candidate_picker"',
-            "selectedCandidate ? (",
+            'key="scoring_picker"',
+            "selectedCandidate",
             "grid w-full max-w-full grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5",
             "onClick={() => onNavigate(config.id)}",
             'role="alert"',
@@ -141,13 +180,13 @@ def test_app_ux_orchestrator_has_tested_navigation_empty_and_busy_contracts():
         ],
     )
     for view_id in (
+        "official_operations",
         "dashboard",
         "candidates",
         "official_backtests",
         "scoring",
         "quality_check",
         "submission_confirm",
-        "submission",
         "checkpoint_status",
         "config",
         "cloud",
@@ -183,27 +222,25 @@ def test_ux_styles_cover_interaction_feedback_and_responsive_layout():
             ".btn-primary",
             ".btn-secondary",
             ".btn-danger",
-            ".card",
-            ".reader-panel",
-            ".workflow-panel",
-            ".workflow-steps",
-            ".progress-feedback",
-            ".progress-spinner",
+            ".panel",
+            ".spinner",
             "@keyframes progress-indeterminate",
             "@keyframes fade-in",
-            ".line-clamp-2",
+            ".app-shell",
+            ".app-main",
+            ".toast-container",
         ],
     )
     _assert_snippets(
         css + app + candidate + config + toast,
         [
-            "min-h-[100dvh] w-full min-w-0 overflow-x-hidden flex flex-col",
-            "px-4 py-4 sm:px-6 lg:px-8",
-            "flex-1 w-full min-w-0 overflow-auto p-4 sm:p-6 lg:p-8",
-            "flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center",
+            "app-shell",
+            "app-main",
+            "flex flex-wrap items-center gap-3",
+            "flex flex-col sm:flex-row gap-3",
             "form-input",
-            "max-w-full overflow-auto",
-            "fixed left-4 right-4 top-4",
-            "sm:bottom-4 sm:left-auto sm:top-auto sm:max-w-sm",
+            "data-table",
+            "toast-container",
+            "flex-1 min-w-0 break-words text-sm",
         ],
     )

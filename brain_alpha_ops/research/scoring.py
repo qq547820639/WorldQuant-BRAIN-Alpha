@@ -415,7 +415,11 @@ def empirical_score(metrics: dict, thresholds: QualityThresholds, settings: dict
         thresholds.sub_universe_sharpe_min_ratio * size_factor * max(sharpe, 0.01), 4
     ) if sharpe > 0 else 0.0
     # Margin (BRAIN advisor target): prefer API-provided margin in bps.
-    # P2-3: API margin preferred; fall back to local estimate only when API absent
+    # P2-3: API margin preferred; fall back to local estimate only when API absent.
+    # NOTE: The fallback formula is a rough approximation. BRAIN margin is in basis
+    # points (bps). The exact conversion depends on the units of returns/turnover as
+    # returned by the BRAIN API (typically decimals). This fallback may undercount
+    # and is only used when the API does not provide a margin value directly.
     margin = _num(metrics.get("margin", None))
     margin_source = "BRAIN_API"
     if margin is None or margin == 0.0:

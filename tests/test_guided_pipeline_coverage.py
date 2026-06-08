@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import sys
 from types import SimpleNamespace
 
 import pytest
@@ -87,7 +86,7 @@ def test_guided_data_structures_and_error_fallback(monkeypatch, caplog):
     assert info == {
         "type": "ValueError",
         "message": "bad value",
-        "fix": "未知错误。请检查日志文件 data/*.log 获取详细信息。",
+        "fix": "未知错误。请在页面事件记录中查看提示，或让维护者查看诊断信息。",
         "retry": "maybe",
     }
     assert "guided pipeline error classification fallback failed" in caplog.text
@@ -260,71 +259,5 @@ def test_guided_pipeline_print_and_format_helpers(capsys, tmp_path):
     assert "修复建议" in error_text
 
 
-def test_guided_pipeline_cli_modes(monkeypatch, capsys, tmp_path):
-    class FakeGuidedPipeline:
-        def __init__(self, run_config):
-            self.phases = {"fake": PipelinePhase(name="fake", description="Fake")}
-
-        def list_history(self):
-            return [{"run_id": "run_1", "status": "completed", "candidates": 2, "submissions": 1}]
-
-        def show_run(self, run_id):
-            return {"run_id": run_id} if run_id == "run_1" else None
-
-        def list_checkpoints(self):
-            return [{"run_id": "run_1", "phase": "finalize", "candidates": 2, "timestamp": "2026-05-30T00:00:00"}]
-
-        def on_progress(self, callback):
-            self._callback = callback
-            return self
-
-        def run_guided(self):
-            self._callback("fake", "running", {})
-            self._callback("fake", "completed", {})
-            return _result("run_cli")
-
-        def print_summary(self, result):
-            print(f"summary:{result.run_id}")
-
-    import brain_alpha_ops.config as config_mod
-
-    monkeypatch.setattr(config_mod, "load_run_config", lambda _path=None: _config(tmp_path))
-    monkeypatch.setattr(guided_pipeline, "GuidedPipeline", FakeGuidedPipeline)
-
-    for argv, expected_code in (
-        (["guided-pipeline", "--history"], 0),
-        (["guided-pipeline", "--show", "run_1"], 0),
-        (["guided-pipeline", "--show", "missing"], 1),
-        (["guided-pipeline", "--checkpoints"], 0),
-        (["guided-pipeline"], 0),
-    ):
-        monkeypatch.setattr(sys, "argv", argv)
-        assert guided_pipeline.main() == expected_code
-
-    output = capsys.readouterr().out
-    assert "Run History" in output
-    assert '"run_id": "run_1"' in output
-    assert "not found" in output
-    assert "Checkpoints" in output
-    assert "summary:run_cli" in output
-
-
-def test_guided_pipeline_cli_failure(monkeypatch, capsys, tmp_path):
-    class FailingGuidedPipeline:
-        def __init__(self, run_config):
-            self.phases = {"fake": PipelinePhase(name="fake", description="Fake")}
-
-        def on_progress(self, callback):
-            return self
-
-        def run_guided(self):
-            raise RuntimeError("cannot continue")
-
-    import brain_alpha_ops.config as config_mod
-
-    monkeypatch.setattr(config_mod, "load_run_config", lambda _path=None: _config(tmp_path))
-    monkeypatch.setattr(guided_pipeline, "GuidedPipeline", FailingGuidedPipeline)
-    monkeypatch.setattr(sys, "argv", ["guided-pipeline"])
-
-    assert guided_pipeline.main() == 1
-    assert "cannot continue" in capsys.readouterr().out
+def test_guided_pipeline_has_no_cli_adapter():
+    assert not hasattr(guided_pipeline, "main")
