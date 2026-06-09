@@ -220,16 +220,17 @@ export default function App() {
   }, [candidatesApi.call, slotsApi.call, cloudApi.call]);
 
   useEffect(() => {
-    const errors = [
-      candidatesApi.error && `候选: ${candidatesApi.error}`,
-      slotsApi.error && `回测: ${slotsApi.error}`,
-      cloudApi.error && `云端: ${cloudApi.error}`,
-    ].filter(Boolean);
-    if (errors.length) notify("warning", `状态快照不完整: ${errors.join("；")}`);
+    // Independently notify about each API error so the user knows which feature is affected
+    if (candidatesApi.error) notify("warning", `候选数据加载失败: ${candidatesApi.error}`);
+    if (slotsApi.error) notify("warning", `回测槽位加载失败: ${slotsApi.error}`);
+    if (cloudApi.error) notify("warning", `云端快照加载失败: ${cloudApi.error}`);
   }, [candidatesApi.error, slotsApi.error, cloudApi.error, notify]);
 
-  // Track actual connection test result
-  const [connectionTested, setConnectionTested] = useState(false);
+  // Track actual connection test result — persist in sessionStorage so page
+  // refresh doesn't force the user to re-test the connection.
+  const [connectionTested, setConnectionTested] = useState(() => {
+    try { return sessionStorage.getItem("brain_alpha_connection_tested") === "1"; } catch { return false; }
+  });
   const [connectionError, setConnectionError] = useState<string | null>(null);
 
   // Phase state from backend (poll every 10s)
@@ -320,7 +321,14 @@ export default function App() {
   const detailContent = useMemo(() => {
     switch (activeView) {
     case "dashboard":
-      return <Dashboard notify={notify} />;
+      return <Dashboard notify={notify} connected={connected} contextFresh={contextFresh} onNavigateToSync={() => setActiveView("official_operations")}>
+        {!connected && <CredentialQuickStart credentials={credentials} onCredentialsChange={setCredentials} notify={notify} onConnectionTested={(ok, err) => { setConnectionTested(true); setConnectionError(err); if (ok) { try { sessionStorage.setItem("brain_alpha_connection_tested", "1"); } catch { /* ignore */ } } }} />}
+        {connected && contextFresh && (
+          <div className="animate-fade-in">
+            <JobMonitor notify={notify} credentials={credentials} jobState={jobState} />
+          </div>
+        )}
+      </Dashboard>;
     case "official_operations":
       return <OfficialOperationsPanel notify={notify} credentials={credentials} />;
     case "candidates":
@@ -333,7 +341,7 @@ export default function App() {
     case "scoring":
       return selectedCandidate
         ? <ScoringPanel notify={notify} candidate={selectedCandidate} />
-        : <CandidateTable key="scoring_picker" notify={notify} showRowActions onScore={openScoring} credentials={credentials} />;
+        : <ScoringPlaceholder onPickCandidate={() => setActiveView("candidates")} />;
     case "quality_check":
       return <QualityCheckPanel notify={notify} />;
     case "submission_confirm":
@@ -354,7 +362,7 @@ export default function App() {
         </div>
       );
   }
-  }, [activeView, selectedCandidate, credentials, notify, openScoring, handleNavigate]);
+  }, [activeView, selectedCandidate, credentials, notify, openScoring, handleNavigate, connected, contextFresh, jobState]);
 
   const viewLabel = VIEW_LABELS[activeView] || activeView;
   const currentPhaseObj = phaseState.phases[currentPhase];
@@ -429,14 +437,6 @@ export default function App() {
         </a>
         <div id="app-main-start" />
 
-        {/* CredentialQuickStart + JobMonitor on dashboard */}
-        {activeView === "dashboard" && (
-          <>
-            <CredentialQuickStart credentials={credentials} onCredentialsChange={setCredentials} notify={notify} onConnectionTested={(ok, err) => { setConnectionTested(true); setConnectionError(err); }} />
-            <JobMonitor notify={notify} credentials={credentials} jobState={jobState} />
-          </>
-        )}
-
         {/* PhaseShell wrapper (v3.0) */}
         {currentPhaseObj && (
           <PhaseShell
@@ -492,6 +492,32 @@ export default function App() {
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
+
+function ScoringPlaceholder({ onPickCandidate }: { onPickCandidate: () => void }) {
+  return (
+    <div className="animate-fade-in" style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "60vh", gap: 16 }}>
+      <div style={{
+        width: 64, height: 64, borderRadius: "50%",
+        background: "oklch(0.58 0.10 248 / 0.12)",
+        display: "flex", alignItems: "center", justifyContent: "center",
+      }}>
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="oklch(0.62 0.10 250)" strokeWidth="2" strokeLinecap="round">
+          <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/>
+          <rect x="9" y="3" width="6" height="4" rx="1"/>
+          <path d="M9 12h6"/><path d="M9 16h4"/>
+        </svg>
+      </div>
+      <h2 className="text-lg font-semibold text-text-primary">尚未选择候选</h2>
+      <p className="text-sm text-text-secondary max-w-xs text-center" style={{ lineHeight: 1.6 }}>
+        科学评分需要先选择一个候选 Alpha。
+        <br />请在候选管理中选择要评分的 Alpha。
+      </p>
+      <button type="button" className="btn btn-primary" onClick={onPickCandidate}>
+        前往候选管理
+      </button>
+    </div>
+  );
+}
 
 function formatBacktestBadge(data?: { slot_limit?: number; slots?: Array<{ slot: number; status?: string }> } | null): string | undefined {
   if (!data) return undefined;

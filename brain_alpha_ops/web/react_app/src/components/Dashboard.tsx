@@ -1,5 +1,5 @@
-/** Dashboard — Terminal Precision v3.0 */
-import { useEffect, useState } from "react";
+/** Dashboard — Progressive flow with step-based guidance v3.1 */
+import { useEffect, useState, type ReactNode } from "react";
 import { useApi } from "@/hooks/useApi";
 import type { JobStatus, CloudAlphaSummary, ResearchMemorySummary } from "@/types";
 import KpiCard from "@/components/KpiCard";
@@ -7,9 +7,17 @@ import ProgressFeedback from "@/components/ProgressFeedback";
 
 interface Props {
   notify: (type: "success" | "error" | "warning" | "info", msg: string) => void;
+  /** Whether the user has successfully tested BRAIN connection */
+  connected: boolean;
+  /** Whether the official context has been refreshed (cloud sync done) */
+  contextFresh: boolean;
+  /** Navigate to the sync/official operations page */
+  onNavigateToSync: () => void;
+  /** Step 1: CredentialQuickStart (always rendered when not connected) */
+  children?: ReactNode;
 }
 
-export default function Dashboard({ notify }: Props) {
+export default function Dashboard({ notify, connected, contextFresh, onNavigateToSync, children }: Props) {
   const [snapshotExpanded, setSnapshotExpanded] = useState(false);
   const statusApi = useApi<JobStatus>();
   const cloudApi = useApi<CloudAlphaSummary>();
@@ -44,20 +52,32 @@ export default function Dashboard({ notify }: Props) {
     setShowGuide(false);
   };
 
+  // ── Determine current step ──────────────────────────────────────────────
+  const currentStep = !connected ? 1 : !contextFresh ? 2 : 3;
+  const stepLabel = currentStep === 1 ? "连接 BRAIN"
+    : currentStep === 2 ? "同步云端"
+    : "开始验证";
+
   return (
     <div className="animate-fade-in">
+      {/* ═══ Progressive Flow Indicator ═══ */}
+      <StepProgressBar currentStep={currentStep} />
+
       {/* First-time guide */}
       {showGuide && (
         <div className="panel mb-4" style={{ borderColor: "oklch(0.58 0.12 245 / 0.30)", background: "oklch(0.58 0.06 245 / 0.08)" }}>
           <div className="panel-body-padded" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
             <div>
               <p className="text-sm font-medium text-info mb-2">首次使用？按顺序完成以下步骤</p>
-              <div className="grid gap-1 text-xs text-text-secondary" style={{ gridTemplateColumns: "auto 1fr", columnGap: 8 }}>
-                <span style={{ color: "oklch(0.68 0.10 248)", fontWeight: 500 }}>1.</span><span>填写账户邮箱和密码，点击 <strong>测试连接</strong></span>
-                <span style={{ color: "oklch(0.68 0.10 248)", fontWeight: 500 }}>2.</span><span>进入 <strong>连接与就绪</strong> 阶段，点击 <strong>开始刷新</strong> 同步云端</span>
-                <span style={{ color: "oklch(0.68 0.10 248)", fontWeight: 500 }}>3.</span><span>进入 <strong>候选发现</strong> 阶段，点击 <strong>生产搜索</strong> 生成候��</span>
-                <span style={{ color: "oklch(0.68 0.10 248)", fontWeight: 500 }}>4.</span><span>在 <strong>评估与验证</strong> 中评分、检查质量门禁</span>
-                <span style={{ color: "oklch(0.68 0.10 248)", fontWeight: 500 }}>5.</span><span>通过阻断复核后进入 <strong>提交就绪</strong></span>
+              <div className="grid gap-1 text-xs text-text-secondary" style={{ gridTemplateColumns: "auto 1fr", columnGap: 8, alignItems: "baseline" }}>
+                <span style={{ color: currentStep === 1 ? "oklch(0.68 0.10 248)" : "oklch(0.48 0.04 160)", fontWeight: 500, textAlign: "right" }}>1.</span>
+                <span>填写账户邮箱和密码，点击 <strong>测试连接</strong>{currentStep > 1 ? " ✓" : ""}</span>
+                <span style={{ color: currentStep === 2 ? "oklch(0.68 0.10 248)" : currentStep > 2 ? "oklch(0.48 0.04 160)" : "oklch(0.38 0.006 45)", fontWeight: 500, textAlign: "right" }}>2.</span>
+                <span>点击下方 <strong>开始云端同步</strong>，系统会拉取云端 Alpha 并刷新上下文{currentStep > 2 ? " ✓" : ""}</span>
+                <span style={{ color: currentStep === 3 ? "oklch(0.68 0.10 248)" : "oklch(0.38 0.006 45)", fontWeight: 500, textAlign: "right" }}>3.</span>
+                <span>同步完成后，在下方点击 <strong>运行非提交验证</strong> 开始生产搜索</span>
+                <span style={{ color: currentStep > 3 ? "oklch(0.48 0.04 160)" : currentStep >= 3 ? "oklch(0.68 0.10 248)" : "oklch(0.38 0.006 45)", fontWeight: 500, textAlign: "right" }}>4.</span>
+                <span>在侧边栏「候选发现」「评估与验证」「提交就绪」中继续后续流程</span>
               </div>
             </div>
             <button onClick={dismissGuide} className="btn btn-ghost btn-sm" aria-label="关闭引导" style={{ flexShrink: 0 }}>✕</button>
@@ -65,167 +85,298 @@ export default function Dashboard({ notify }: Props) {
         </div>
       )}
 
-      {/* Page heading */}
-      <h1 className="text-xl font-medium text-text-primary mb-1">运行总览</h1>
-      <p className="text-sm text-text-tertiary mb-4">
-        流水线状态 · 云端数据 · 本地指标 — 上次更新: {new Date().toLocaleTimeString("zh-CN", { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" })}
-      </p>
-
-      {/* Error banner */}
-      {errors.length > 0 && (
-        <div className="panel mb-4" style={{ borderColor: "oklch(0.48 0.08 22 / 0.30)", background: "oklch(0.48 0.06 22 / 0.08)" }} role="alert">
-          <div className="panel-body-padded" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-            <div>
-              <p className="text-sm font-medium text-negative mb-1">仪表盘数据需要关注</p>
-              {errors.map((e) => <p key={e} className="text-xs text-negative/80">{e}</p>)}
-            </div>
-            <button onClick={retryAll} className="btn btn-secondary btn-sm">重试</button>
-          </div>
+      {/* ═══ Page heading ═══ */}
+      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", flexWrap: "wrap", gap: 8, marginBottom: 4 }}>
+        <div>
+          <h1 className="text-xl font-medium text-text-primary mb-1">运行总览</h1>
+          <p className="text-sm text-text-tertiary">
+            当前阶段：<span className="text-accent font-medium">{stepLabel}</span>
+            {" · "}上次更新: {new Date().toLocaleTimeString("zh-CN", { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+          </p>
         </div>
-      )}
-
-      {/* Loading state */}
-      {loading && (
-        <ProgressFeedback
-          state="loading"
-          title="仪表盘数据"
-          progress={{ phase: "dashboard_load", status_message: "正在刷新仪表盘快照。" }}
-          compact
-        />
-      )}
-
-      {/* KPIs */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
-        <KpiCard
-          label="候选总数"
-          value={memory?.total_candidates ?? status?.progress?.candidates_generated ?? "--"}
-          subtitle={memory ? `${memory.families?.length ?? 0} 个家族` : "等待刷新"}
-        />
-        <KpiCard
-          label="云端 Alpha"
-          value={cloud?.count ?? "--"}
-          subtitle={cloud ? `${cloud.submitted_count} 已提交` : "等待刷新"}
-          trend={cloud && cloud.submitted_count > 0 ? "up" : "neutral"}
-        />
-        <KpiCard
-          label="回测数"
-          value={status?.progress?.backtests_completed ?? "--"}
-          subtitle={status ? `${status.progress?.backtests_pending ?? 0} 待处理` : undefined}
-        />
-        <KpiCard
-          label="提交数"
-          value={status?.progress?.submissions ?? cloud?.submitted_count ?? "--"}
-          trend={cloud && cloud.passed_unsubmitted_count ? cloud.passed_unsubmitted_count > 0 ? "up" : "neutral" : "neutral"}
-        />
       </div>
 
-      {/* Collapsible data snapshots */}
-      <div className="mb-4">
-        <button
-          type="button"
-          className="btn btn-ghost btn-sm"
-          onClick={() => setSnapshotExpanded((v) => !v)}
-          aria-expanded={snapshotExpanded}
-        >
-          <span style={{ transform: snapshotExpanded ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 200ms", display: "inline-block" }}>▶</span>
-          <span style={{ marginLeft: 6 }}>数据快照{snapshotExpanded ? "" : ` (${cloud ? cloud.count : "--"} 条 Alpha)`}</span>
-        </button>
-      </div>
+      {/* ═══ Step 1: Credential + Connection Test ═══ */}
+      {!connected && (
+        <div className="mb-6">{children}</div>
+      )}
 
-      {snapshotExpanded && (<>
+      {/* ═══ Step 2: Sync Cloud CTA ═══ */}
+      {connected && !contextFresh && (
+        <SyncCloudCTA onNavigateToSync={onNavigateToSync} />
+      )}
 
-      {/* Cloud Alpha Summary Panel */}
-      <div className="panel mb-4">
-        <div className="panel-header">
-          <span>云端 Alpha 缓存</span>
-          {cloud && <span className="badge badge-neutral">{cloud.count} 条</span>}
-        </div>
-        <div className="panel-body-padded">
-          {cloudApi.loading ? (
-            <ProgressFeedback state="loading" title="云端 Alpha" progress={{ phase: "cloud", status_message: "加载中..." }} compact />
-          ) : cloudApi.error ? (
-            <ProgressFeedback state="error" title="云端 Alpha" error={cloudApi.error} onRetry={() => cloudApi.call("/api/snapshot/cloud?limit=10")} compact />
-          ) : cloud ? (
-            <>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs mb-3">
-                <div><span className="text-text-tertiary">缓存总数</span><p className="font-mono-value text-base text-text-primary">{cloud.count}</p></div>
-                <div><span className="text-text-tertiary">已提交</span><p className="font-mono-value text-base text-positive">{cloud.submitted_count}</p></div>
-                <div><span className="text-text-tertiary">已通过（未提交）</span><p className="font-mono-value text-base text-warning">{cloud.passed_unsubmitted_count}</p></div>
-                <div><span className="text-text-tertiary">缓存状态</span><p className="text-sm text-text-secondary">{cloud.is_stale ? "已过期" : "有效"}</p></div>
-              </div>
-              {cloud.sample_alphas && cloud.sample_alphas.length > 0 && (
-                <div style={{ maxHeight: 200, overflowY: "auto" }}>
-                  <table className="data-table">
-                    <thead>
-                      <tr>
-                        <th>Alpha ID</th>
-                        <th>状态</th>
-                        <th className="is-sortable num">Sharpe</th>
-                        <th className="is-sortable num">Fitness</th>
-                        <th className="is-sortable num">Turnover</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {cloud.sample_alphas.slice(0, 10).map((a, i) => (
-                        <tr key={i}>
-                          <td className="id">{a.alpha_id}</td>
-                          <td><span className={`badge ${a.pass_fail === "PASS" ? "badge-positive" : "badge-negative"}`}>{a.pass_fail || "--"}</span></td>
-                          <td className="num">{a.sharpe?.toFixed(2) ?? "--"}</td>
-                          <td className="num">{a.fitness?.toFixed(2) ?? "--"}</td>
-                          <td className="num">{a.turnover?.toFixed(2) ?? "--"}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+      {/* ═══ Step 3: Production Validation (children: JobMonitor) ═══ */}
+      {connected && contextFresh && (
+        <>
+          {children}
+
+          {/* Error banner */}
+          {errors.length > 0 && (
+            <div className="panel mb-4" style={{ borderColor: "oklch(0.48 0.08 22 / 0.30)", background: "oklch(0.48 0.06 22 / 0.08)" }} role="alert">
+              <div className="panel-body-padded" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                <div>
+                  <p className="text-sm font-medium text-negative mb-1">仪表盘数据需要关注</p>
+                  {errors.map((e) => <p key={e} className="text-xs text-negative/80">{e}</p>)}
                 </div>
-              )}
-            </>
-          ) : null}
+                <button onClick={retryAll} className="btn btn-secondary btn-sm">重试</button>
+              </div>
+            </div>
+          )}
+
+          {/* Loading state */}
+          {loading && (
+            <ProgressFeedback
+              state="loading"
+              title="仪表盘数据"
+              progress={{ phase: "dashboard_load", status_message: "正在刷新仪表盘快照。" }}
+              compact
+            />
+          )}
+
+          {/* KPIs */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+            <KpiCard
+              label="候选总数"
+              value={memory?.total_candidates ?? status?.progress?.candidates_generated ?? "--"}
+              subtitle={memory ? `${memory.families?.length ?? 0} 个家族` : "等待刷新"}
+            />
+            <KpiCard
+              label="云端 Alpha"
+              value={cloud?.count ?? "--"}
+              subtitle={cloud ? `${cloud.submitted_count} 已提交` : "等待刷新"}
+              trend={cloud && cloud.submitted_count > 0 ? "up" : "neutral"}
+            />
+            <KpiCard
+              label="回测数"
+              value={status?.progress?.backtests_completed ?? "--"}
+              subtitle={status ? `${status.progress?.backtests_pending ?? 0} 待处理` : undefined}
+            />
+            <KpiCard
+              label="提交数"
+              value={status?.progress?.submissions ?? cloud?.submitted_count ?? "--"}
+              trend={cloud && cloud.passed_unsubmitted_count ? cloud.passed_unsubmitted_count > 0 ? "up" : "neutral" : "neutral"}
+            />
+          </div>
+
+          {/* Collapsible data snapshots */}
+          <div className="mb-4">
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              onClick={() => setSnapshotExpanded((v) => !v)}
+              aria-expanded={snapshotExpanded}
+            >
+              <span style={{ transform: snapshotExpanded ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 200ms", display: "inline-block" }}>▶</span>
+              <span style={{ marginLeft: 6 }}>数据快照{snapshotExpanded ? "" : ` (${cloud ? cloud.count : "--"} 条 Alpha)`}</span>
+            </button>
+          </div>
+
+          {snapshotExpanded && (<>
+
+          {/* Cloud Alpha Summary Panel */}
+          <div className="panel mb-4">
+            <div className="panel-header">
+              <span>云端 Alpha 缓存</span>
+              {cloud && <span className="badge badge-neutral">{cloud.count} 条</span>}
+            </div>
+            <div className="panel-body-padded">
+              {cloudApi.loading ? (
+                <ProgressFeedback state="loading" title="云端 Alpha" progress={{ phase: "cloud", status_message: "加载中..." }} compact />
+              ) : cloudApi.error ? (
+                <ProgressFeedback state="error" title="云端 Alpha" error={cloudApi.error} onRetry={() => cloudApi.call("/api/snapshot/cloud?limit=10")} compact />
+              ) : cloud ? (
+                <>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs mb-3">
+                    <div><span className="text-text-tertiary">缓存总数</span><p className="font-mono-value text-base text-text-primary">{cloud.count}</p></div>
+                    <div><span className="text-text-tertiary">已提交</span><p className="font-mono-value text-base text-positive">{cloud.submitted_count}</p></div>
+                    <div><span className="text-text-tertiary">已通过（未提交）</span><p className="font-mono-value text-base text-warning">{cloud.passed_unsubmitted_count}</p></div>
+                    <div><span className="text-text-tertiary">缓存状态</span><p className="text-sm text-text-secondary">{cloud.is_stale ? "已过期" : "有效"}</p></div>
+                  </div>
+                  {cloud.sample_alphas && cloud.sample_alphas.length > 0 && (
+                    <div style={{ maxHeight: 200, overflowY: "auto" }}>
+                      <table className="data-table">
+                        <thead>
+                          <tr>
+                            <th>Alpha ID</th>
+                            <th>状态</th>
+                            <th className="is-sortable num">Sharpe</th>
+                            <th className="is-sortable num">Fitness</th>
+                            <th className="is-sortable num">Turnover</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {cloud.sample_alphas.slice(0, 10).map((a, i) => (
+                            <tr key={i}>
+                              <td className="id">{a.alpha_id}</td>
+                              <td><span className={`badge ${a.pass_fail === "PASS" ? "badge-positive" : "badge-negative"}`}>{a.pass_fail || "--"}</span></td>
+                              <td className="num">{a.sharpe?.toFixed(2) ?? "--"}</td>
+                              <td className="num">{a.fitness?.toFixed(2) ?? "--"}</td>
+                              <td className="num">{a.turnover?.toFixed(2) ?? "--"}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </>
+              ) : null}
+            </div>
+          </div>
+
+          {/* Research Memory Panels */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            {/* Top Families */}
+            <div className="panel">
+              <div className="panel-header"><span>热门家族</span></div>
+              <div className="panel-body">
+                {memory?.families?.slice(0, 5).map((f) => (
+                  <div key={f.name} className="flex justify-between text-xs py-2 px-3.5 border-b border-border-subtle last:border-0">
+                    <span className="text-text-secondary">{f.name}</span>
+                    <span className="tabular text-text-tertiary">n={f.count} {f.success_rate?.toFixed(2)}</span>
+                  </div>
+                )) || <div className="panel-body-padded text-xs text-text-tertiary">暂无数据</div>}
+              </div>
+            </div>
+
+            {/* Top Fields */}
+            <div className="panel">
+              <div className="panel-header"><span>热门字段</span></div>
+              <div className="panel-body">
+                {memory?.fields?.slice(0, 5).map((f) => (
+                  <div key={f.name} className="flex justify-between text-xs py-2 px-3.5 border-b border-border-subtle last:border-0">
+                    <span className="text-text-secondary">{f.name}</span>
+                    <span className="tabular text-text-tertiary">n={f.count} {f.success_rate?.toFixed(2)}</span>
+                  </div>
+                )) || <div className="panel-body-padded text-xs text-text-tertiary">暂无数据</div>}
+              </div>
+            </div>
+
+            {/* Failure Patterns */}
+            <div className="panel">
+              <div className="panel-header"><span>失败模式</span></div>
+              <div className="panel-body">
+                {memory?.failure_patterns?.slice(0, 5).map((fp) => (
+                  <div key={fp.reason} className="flex justify-between text-xs py-2 px-3.5 border-b border-border-subtle last:border-0">
+                    <span className="text-negative/80">{fp.reason}</span>
+                    <span className="tabular text-text-tertiary">x{fp.count}</span>
+                  </div>
+                )) || <div className="panel-body-padded text-xs text-text-tertiary">暂无失败记录</div>}
+              </div>
+            </div>
+          </div>
+          </>)}
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── Step Progress Bar ─────────────────────────────────────────────────────
+
+function StepProgressBar({ currentStep }: { currentStep: number }) {
+  const steps = [
+    { num: 1, label: "连接 BRAIN", desc: "填写凭证并测试连接" },
+    { num: 2, label: "同步云端", desc: "拉取云端 Alpha 与官方上下文" },
+    { num: 3, label: "开始验证", desc: "运行非提交生产验证流水线" },
+  ];
+
+  return (
+    <div className="panel mb-4" style={{ borderColor: "oklch(0.35 0.02 240 / 0.20)" }}>
+      <div className="panel-body-padded" style={{ padding: "10px 14px", overflow: "hidden" }}>
+        <div style={{ display: "flex", alignItems: "center", width: "100%" }}>
+          {steps.map((step, i) => {
+            const isComplete = currentStep > step.num;
+            const isActive = currentStep === step.num;
+            const isPending = currentStep < step.num;
+            return (
+              <div key={step.num} style={{ display: "flex", alignItems: "center", flex: i < steps.length - 1 ? 1 : "0 0 auto", minWidth: 0 }}>
+                {/* Step circle */}
+                <div style={{
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  width: 28, height: 28, borderRadius: "50%", flexShrink: 0,
+                  backgroundColor: isComplete ? "oklch(0.48 0.10 160)"
+                    : isActive ? "oklch(0.58 0.12 245)"
+                    : "oklch(0.22 0.007 45)",
+                  color: isPending ? "oklch(0.50 0.006 45)" : "#fff",
+                  fontWeight: 600, fontSize: 12, transition: "background-color 0.3s",
+                }}>
+                  {isComplete ? "✓" : step.num}
+                </div>
+                {/* Step label — full text on md+, abbreviated on sm, hidden on xs */}
+                <div style={{ marginLeft: 6, minWidth: 0, overflow: "hidden" }}>
+                  <p className={`text-xs font-medium truncate hidden sm:block ${isPending ? "text-text-tertiary" : "text-text-primary"}`}
+                    style={{ lineHeight: 1.3 }}>
+                    {step.label}
+                  </p>
+                  <p className="text-xs text-text-tertiary hidden md:block truncate" style={{ lineHeight: 1.2 }}>
+                    {step.desc}
+                  </p>
+                  <p className={`sm:hidden text-[10px] font-medium truncate ${isPending ? "text-text-tertiary" : "text-text-primary"}`}
+                    style={{ lineHeight: 1.2 }} aria-hidden="true">
+                    {step.label.replace(" ", "")}
+                  </p>
+                </div>
+                {/* Connector line */}
+                {i < steps.length - 1 && (
+                  <div style={{
+                    flex: 1, height: 2, minWidth: 8, maxWidth: 60, margin: "0 6px",
+                    backgroundColor: isComplete ? "oklch(0.48 0.10 160)" : "oklch(0.22 0.007 45)",
+                    transition: "background-color 0.3s",
+                  }} />
+                )}
+              </div>
+            );
+          })}
         </div>
       </div>
+    </div>
+  );
+}
 
-      {/* Research Memory Panels */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Top Families */}
-        <div className="panel">
-          <div className="panel-header"><span>热门家族</span></div>
-          <div className="panel-body">
-            {memory?.families?.slice(0, 5).map((f) => (
-              <div key={f.name} className="flex justify-between text-xs py-2 px-3.5 border-b border-border-subtle last:border-0">
-                <span className="text-text-secondary">{f.name}</span>
-                <span className="tabular text-text-tertiary">n={f.count} {f.success_rate?.toFixed(2)}</span>
-              </div>
-            )) || <div className="panel-body-padded text-xs text-text-tertiary">暂无数据</div>}
-          </div>
-        </div>
+// ── Sync Cloud CTA (shown when connected but not synced) ──────────────────
 
-        {/* Top Fields */}
-        <div className="panel">
-          <div className="panel-header"><span>热门字段</span></div>
-          <div className="panel-body">
-            {memory?.fields?.slice(0, 5).map((f) => (
-              <div key={f.name} className="flex justify-between text-xs py-2 px-3.5 border-b border-border-subtle last:border-0">
-                <span className="text-text-secondary">{f.name}</span>
-                <span className="tabular text-text-tertiary">n={f.count} {f.success_rate?.toFixed(2)}</span>
-              </div>
-            )) || <div className="panel-body-padded text-xs text-text-tertiary">暂无数据</div>}
+function SyncCloudCTA({ onNavigateToSync }: { onNavigateToSync: () => void }) {
+  return (
+    <div className="panel mb-6" style={{
+      borderColor: "oklch(0.65 0.14 80 / 0.40)",
+      background: "oklch(0.65 0.06 80 / 0.08)",
+    }}>
+      <div className="panel-body-padded" style={{ padding: "24px 20px" }}>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center", gap: 12 }}>
+          {/* Icon */}
+          <div style={{
+            width: 56, height: 56, borderRadius: "50%",
+            background: "oklch(0.65 0.14 80 / 0.15)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+          }}>
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="oklch(0.68 0.12 82)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
+            </svg>
           </div>
-        </div>
-
-        {/* Failure Patterns */}
-        <div className="panel">
-          <div className="panel-header"><span>失败模式</span></div>
-          <div className="panel-body">
-            {memory?.failure_patterns?.slice(0, 5).map((fp) => (
-              <div key={fp.reason} className="flex justify-between text-xs py-2 px-3.5 border-b border-border-subtle last:border-0">
-                <span className="text-negative/80">{fp.reason}</span>
-                <span className="tabular text-text-tertiary">x{fp.count}</span>
-              </div>
-            )) || <div className="panel-body-padded text-xs text-text-tertiary">暂无失败记录</div>}
+          <div>
+            <h2 className="text-lg font-semibold text-accent">连接成功！下一步：同步云端数据</h2>
+            <p className="text-sm text-text-secondary mt-1 max-w-md">
+              BRAIN 连接正常。现在需要从云端拉取你的 Alpha 列表和官方能力集（字段、算子、数据集），
+              以便后续生成和验证候选。
+            </p>
           </div>
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={onNavigateToSync}
+            style={{ padding: "10px 32px", fontSize: 15, fontWeight: 600 }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" style={{ marginRight: 8 }}>
+              <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
+            </svg>
+            开始云端同步
+          </button>
+          <p className="text-xs text-text-tertiary">
+            数据从 BRAIN 官方 API 实时拉取，不含虚假预填数字 · 同步过程中会显示实时进度和倒计时
+          </p>
         </div>
       </div>
-      </>)}
     </div>
   );
 }

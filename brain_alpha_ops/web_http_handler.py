@@ -107,7 +107,11 @@ def create_handler_class(
             return web_session.has_valid_request_session(
                 path=urlparse(self.path).path,
                 query_string=query_string,
-                csrf_header=str(self.headers.get("X-Brain-Alpha-CSRF", "")),
+                csrf_header=str(
+                    self.headers.get("X-Brain-Alpha-CSRF", "")
+                    or self.headers.get("X-CSRF-Token", "")
+                    or self.headers.get("X-CSRF", "")
+                ),
                 cookie_header=self.headers.get("Cookie", ""),
             )
 

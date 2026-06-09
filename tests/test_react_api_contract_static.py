@@ -235,15 +235,14 @@ def test_browser_react_smoke_fails_when_web_operator_and_alpha_flows_are_not_exe
 def test_readme_keeps_operator_path_in_official_operations_area():
     readme = README.read_text(encoding="utf-8")
 
-    assert "## Operator Quick Start" in readme
-    assert "browser-only Web console" in readme
-    assert "They do not run commands, pass flags, or inspect shell output" in readme
-    assert "### Official Operations" in readme
-    assert "does not expose direct submit buttons" in readme
-    assert "## Appendix: Maintainer Verification" in readme
-    assert "Operators use the Web console and its Official Operations entry instead of running verification commands" in readme
-    assert "official-operations area" not in readme
-    assert "Operators should stop" not in readme
+    assert "## 核心操作流程" in readme
+    assert "Web 控制台" in readme
+    assert "独立审批路径" in readme
+    assert "### 🔒 预提交审查" in readme
+    assert "不会" in readme and "直接执行提交" in readme
+    assert "## 开发与贡献" in readme
+    assert "独立审批路径执行前，所有阻断项已被识别和处理" in readme
+    assert "official-operations" not in readme
     assert "大多数量化研究者偏好 CLI" not in readme
     assert "CLI 已满足基本需求" not in readme
 

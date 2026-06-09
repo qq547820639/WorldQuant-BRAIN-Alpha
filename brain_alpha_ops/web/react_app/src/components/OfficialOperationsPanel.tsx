@@ -330,6 +330,23 @@ export default function OfficialOperationsPanel({ notify, credentials }: Props) 
           />
         </section>
 
+        {/* Real-time ETA & Rate row — only shown during active sync */}
+        {syncRunning && syncOverview.hasLiveMetrics && (
+          <section className="grid gap-3 md:grid-cols-2" aria-label="同步实时指标">
+            <OverviewCard
+              label="预计剩余时间"
+              value={syncOverview.etaValue}
+              detail={syncOverview.etaDetail}
+              tone="warning"
+            />
+            <OverviewCard
+              label="扫描速率"
+              value={syncOverview.rateValue}
+              detail={syncOverview.rateDetail}
+            />
+          </section>
+        )}
+
         <div className="grid gap-3 lg:grid-cols-3">
           <ActionPanel
             title="刷新官方能力集"
@@ -649,6 +666,16 @@ function requestDeadline() {
 
 function syncDataOverview(syncStatus: JobStatus | null, syncRunning: boolean) {
   const statusValue = syncRunning ? "同步中" : syncContextStatus(syncStatus);
+  const progress = syncStatus?.progress;
+  const scanned = firstPositiveNumber(
+    numberField(progress, "scanned"),
+    resultNumberField(syncStatus, "scanned"),
+    resultNumberField(syncStatus, "count"),
+  );
+  const reportedTotal = firstPositiveNumber(
+    numberField(progress, "total"),
+    resultNumberField(syncStatus, "total"),
+  );
   const statusDetail = syncStatus
     ? `${phaseLabel(syncStatus)}: ${operationStatusMessage(syncStatus)}`
     : "等待启动云端 Alpha 同步。";
@@ -658,6 +685,34 @@ function syncDataOverview(syncStatus: JobStatus | null, syncRunning: boolean) {
   else if (syncStatus?.status === "failed") statusTone = "warning";
   const updatedAt = syncStatusUpdatedAt(syncStatus);
   const total = syncDataTotal(syncStatus);
+
+  // ── Live ETA & rate metrics (only meaningful during active scanning) ──
+  const etaSeconds = firstPositiveNumber(
+    numberField(progress, "eta_seconds"),
+    resultNumberField(syncStatus, "eta_seconds"),
+  );
+  const ratePerSecond = firstPositiveFloat(
+    numberField(progress, "rate_per_second"),
+    parseFloat(String(syncStatus?.progress?.rate_per_second ?? "")),
+  );
+  const elapsedSeconds = firstPositiveNumber(
+    numberField(progress, "elapsed_seconds"),
+    numberField(syncStatus?.progress, "elapsed_seconds"),
+  );
+  const hasLiveMetrics = syncRunning && scanned > 0 && (etaSeconds > 0 || ratePerSecond > 0 || elapsedSeconds > 0);
+  const etaValue = etaSeconds > 0 ? formatDuration(etaSeconds) : elapsedSeconds > 0 ? "计算中..." : "-";
+  const etaDetail = etaSeconds > 0
+    ? (reportedTotal > 0
+      ? `预计 ${formatDuration(etaSeconds)} 后完成 ${formatCount(reportedTotal)} 条云端 Alpha 扫描。`
+      : `预计 ${formatDuration(etaSeconds)} 后完成当前扫描批次。`)
+    : elapsedSeconds > 0
+      ? `已用时 ${formatDuration(elapsedSeconds)}，正在计算剩余时间。`
+      : "等待扫描进度更新。";
+  const rateValue = ratePerSecond > 0 ? `${ratePerSecond.toFixed(1)} 条/秒` : scanned > 0 && elapsedSeconds > 0 ? `${(scanned / elapsedSeconds).toFixed(1)} 条/秒` : "-";
+  const rateDetail = scanned > 0 && elapsedSeconds > 0
+    ? `已扫描 ${formatCount(scanned)} 条，历时 ${formatDuration(elapsedSeconds)}。数据来自 BRAIN 官方 API 实时分页。`
+    : "速率数据来自 BRAIN 官方 API 实时分页反馈。";
+
   return {
     statusValue,
     statusDetail,
@@ -665,6 +720,11 @@ function syncDataOverview(syncStatus: JobStatus | null, syncRunning: boolean) {
     updatedAtValue: updatedAt ? formatClock(updatedAt) : "-",
     updatedAtDetail: updatedAt ? "来自本次同步进度。" : "暂无同步更新时间。",
     ...total,
+    hasLiveMetrics,
+    etaValue,
+    etaDetail,
+    rateValue,
+    rateDetail,
   };
 }
 
@@ -908,6 +968,20 @@ function syncStatusUpdatedAt(status: JobStatus | null) {
 
 function formatCount(value: number) {
   return Math.max(0, Math.trunc(value)).toLocaleString("zh-CN");
+}
+
+function formatDuration(totalSeconds: number): string {
+  if (!Number.isFinite(totalSeconds) || totalSeconds <= 0) return "0s";
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = Math.round(totalSeconds % 60);
+  if (hours > 0) return `${hours}h ${minutes}m ${seconds}s`;
+  if (minutes > 0) return `${minutes}m ${seconds}s`;
+  return `${seconds}s`;
+}
+
+function firstPositiveFloat(...values: number[]) {
+  return values.find((value) => Number.isFinite(value) && value > 0) || 0;
 }
 
 function checkResultCount(payload: CheckResultsResponse | null | { count?: number; items?: unknown; checks?: unknown }) {

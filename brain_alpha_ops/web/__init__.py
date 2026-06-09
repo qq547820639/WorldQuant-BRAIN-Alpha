@@ -158,6 +158,9 @@ def _run_generate_candidates_job(job_id: str, payload: dict) -> None:
         from brain_alpha_ops.redaction import redact_error_message
         from brain_alpha_ops.research.repository import ResearchRepository
         from brain_alpha_ops.web_candidate_generation import generate_candidates_payload
+        # Initialize official data loader so local_quality() can score expressions
+        from brain_alpha_ops.data import OfficialDataLoader
+        OfficialDataLoader.instance()
 
         run_config_loader = globals().get("load_run_config", _load_run_config)
         run_config = run_config_loader()
@@ -497,7 +500,7 @@ def _has_valid_local_origin(handler) -> bool:
         except Exception:
             logger.warning("Origin check failed with exception, denying request", exc_info=True)
             return False
-    return True  # Fallback: allow if handler has no origin checker
+    return False  # Deny-by-default: reject if handler has no origin checker (M-SEC-04)
 
 
 def _has_valid_api_session(handler) -> bool:
@@ -537,6 +540,16 @@ def dispatch_post(handler, path, body):
             status=403,
         )
         return
+
+    # ── Security: Replay protection (M-SEC-03) ───────────────────────
+    if path != "/api/session":
+        replay_validator = getattr(handler, "_validate_replay_request", None)
+        if callable(replay_validator):
+            replay_result = replay_validator()
+            if not replay_result.get("ok"):
+                status = 409 if replay_result.get("error_code") == "REPLAY_DETECTED" else 400
+                handler._send_json({"ok": False, **replay_result}, status=status)
+                return
 
     payload = {}
     if body:
@@ -590,10 +603,15 @@ class Handler(BaseHTTPRequestHandler):
         return _web_session.session_id_from_cookie(str(self.headers.get("Cookie", "")))
 
     def _has_valid_session(self, query_string=""):
+        csrf_header = str(
+            self.headers.get("X-Brain-Alpha-CSRF", "")
+            or self.headers.get("X-CSRF-Token", "")
+            or self.headers.get("X-CSRF", "")
+        )
         return _web_session.has_valid_request_session(
             path=urlparse(self.path).path,
             query_string=query_string,
-            csrf_header=str(self.headers.get("X-Brain-Alpha-CSRF", "")),
+            csrf_header=csrf_header,
             cookie_header=str(self.headers.get("Cookie", "")),
         )
 
@@ -673,6 +691,13 @@ def serve(port=None, open_browser=True, host=HOST, **kw):
     SERVER = _SafeThreadingHTTPServer((host, bind_port), Handler)
     threading.Thread(target=SERVER.serve_forever, daemon=True).start()
     display = "127.0.0.1" if host in ("0.0.0.0", "::") else host
+    # Start stall detection monitor for pipeline jobs
+    try:
+        from brain_alpha_ops.stall_monitor import ensure_global_monitor
+        ensure_global_monitor()
+    except Exception:
+        import logging
+        logging.getLogger(__name__).debug("StallMonitor not started", exc_info=True)
     return f"http://{display}:{bind_port}"
 
 def shutdown_server():

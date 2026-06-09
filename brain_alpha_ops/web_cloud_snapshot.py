@@ -47,7 +47,10 @@ def storage_jsonl_path(filename: str, *, load_config: LoadConfig = load_run_conf
 
 
 def read_storage_jsonl(filename: str, *, limit: int | None = 500, load_config: LoadConfig = load_run_config) -> list[dict[str, Any]]:
-    max_rows = FULL_CLOUD_ALPHA_MAX_ROWS if limit is None and filename == "cloud_alphas.jsonl" else 10_000
+    # When limit=None the caller explicitly wants ALL records — pass max_rows=None
+    # to read_jsonl_records to remove the safety cap. The caller (e.g. cloud
+    # alpha snapshot) is expected to have enough memory for the full dataset.
+    max_rows: int | None = None if limit is None else limit or 10_000
     return read_jsonl_records(storage_jsonl_path(filename, load_config=load_config), limit=limit, max_rows=max_rows)
 
 

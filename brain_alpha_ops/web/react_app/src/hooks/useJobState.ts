@@ -3,6 +3,10 @@
  *
  * Lifts job monitoring state out of JobMonitor so it persists across page navigation.
  * The TopBar can display a running minibar, and any page can check job progress.
+ *
+ * Persistence: jobId is saved to sessionStorage so that page refresh or accidental
+ * tab close can recover the running job when the page reopens (within the same
+ * browser session).
  */
 
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
@@ -20,12 +24,27 @@ export interface JobState {
   error: string | null;
   connected: boolean;
   events: string[];
+  recovering: boolean;
+  reconnectAttempts: number;
   startJob: (resume?: boolean) => Promise<void>;
   stopJob: () => Promise<void>;
 }
 
 const WATCHDOG_POLL_INTERVAL = 2000;
 const WATCHDOG_MAX_FAILURES = 3;
+const SESSION_KEY_JOB_ID = "brain_alpha_active_job_id";
+
+function saveJobId(id: string): void {
+  try { sessionStorage.setItem(SESSION_KEY_JOB_ID, id); } catch { /* quota exceeded */ }
+}
+
+function loadSavedJobId(): string | null {
+  try { return sessionStorage.getItem(SESSION_KEY_JOB_ID); } catch { return null; }
+}
+
+function clearSavedJobId(): void {
+  try { sessionStorage.removeItem(SESSION_KEY_JOB_ID); } catch { /* ignore */ }
+}
 
 export function useJobState(
   notify: (type: "success" | "error" | "warning" | "info", msg: string) => void,
@@ -37,6 +56,8 @@ export function useJobState(
   const [progressError, setProgressError] = useState<string | null>(null);
   const [events, setEvents] = useState<string[]>([]);
   const [pollFailures, setPollFailures] = useState(0);
+  const [recovering, setRecovering] = useState(false);
+  const [recoveryAttempted, setRecoveryAttempted] = useState(false);
   const autoCancelRequests = useRef<Set<string>>(new Set());
   const api = useApi();
 
@@ -47,7 +68,52 @@ export function useJobState(
     status_message: status?.status_message,
   }, [status]);
 
+  // ── Session recovery: on mount, check if there was a running job ──────
+  useEffect(() => {
+    if (recoveryAttempted) return;
+    setRecoveryAttempted(true);
+    const savedId = loadSavedJobId();
+    if (!savedId) return;
+
+    setRecovering(true);
+    setEvents((prev) => [...prev, "正在恢复上次的任务状态…"]);
+
+    void (async () => {
+      const result = await api.call<JobStatus>(
+        `/api/production-validation/status?job_id=${encodeURIComponent(savedId)}`,
+      );
+      if (!result || !result.status) {
+        // No response — job may have been cleaned up
+        clearSavedJobId();
+        setRecovering(false);
+        return;
+      }
+      if (isTerminalStatus(result.status)) {
+        // Already finished — show the final result
+        clearSavedJobId();
+        setStatus(result);
+        if (result.status === "failed") {
+          setProgressError(result.error || "任务在您离开期间失败。");
+          notify("error", "上次任务已失败。");
+        } else {
+          notify("info", "上次任务已完成。");
+        }
+        setRecovering(false);
+        return;
+      }
+      // Still running — reconnect
+      setJobId(savedId);
+      setRunning(true);
+      setStatus(result);
+      setPollFailures(0);
+      notify("info", "已恢复正在运行的任务。");
+      setRecovering(false);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const failMonitor = useCallback((message: string, phase = "watchdog_failed") => {
+    clearSavedJobId();
     setRunning(false);
     setProgressError(message);
     setStatus((prev) => prev ? {
@@ -68,8 +134,6 @@ export function useJobState(
     return result;
   }, [jobId, status?.job_id]);
 
-  // Stable deps: all setState functions are React-guaranteed stable;
-  // `notify` is wrapped in useCallback by the caller
   const handleSSEEvent = useCallback((event: SSEEvent) => {
     if (event.type === "progress") {
       setPollFailures(0);
@@ -83,11 +147,13 @@ export function useJobState(
         progress: event.progress || (event.data as JobStatus["progress"]),
       }));
     } else if (event.type === "complete") {
+      clearSavedJobId();
       setRunning(false); setPollFailures(0);
       notify("success", "验证流程已完成");
       setEvents((prev) => [...prev, "验证流程完成"]);
       setStatus((prev) => prev ? { ...prev, status: "completed", result: event.result, progress: event.progress || prev.progress } : prev);
     } else if (event.type === "error") {
+      clearSavedJobId();
       setRunning(false); setPollFailures(0);
       setProgressError(String(event.error || event.data?.error || "验证流程错误"));
       notify("error", String(event.error || event.data?.error || "验证流程错误"));
@@ -100,13 +166,14 @@ export function useJobState(
 
   const sseUrl = jobId ? `/sse?job_id=${encodeURIComponent(jobId)}` : null;
   const handleStreamExhausted = useCallback(() => {
+    clearSavedJobId();
     const message = "页面暂时收不到最新进度，系统已安全停止本次验证。";
     notify("warning", message);
     failMonitor(message);
     void cancelAmbiguousJob("sse_exhausted", message);
   }, [cancelAmbiguousJob, failMonitor, notify]);
 
-  const { connected } = useSSE(sseUrl, { onEvent: handleSSEEvent, onExhausted: handleStreamExhausted });
+  const { connected, reconnectAttempts } = useSSE(sseUrl, { onEvent: handleSSEEvent, onExhausted: handleStreamExhausted });
 
   const startJob = useCallback(async (resume = false) => {
     autoCancelRequests.current.clear(); setPollFailures(0); setProgressError(null);
@@ -120,11 +187,12 @@ export function useJobState(
     });
     const jid = String(result?.job_id || "");
     if (result?.ok && jid) {
-      setJobId(jid); setRunning(true); setPollFailures(0); setProgressError(null);
+      setJobId(jid); saveJobId(jid); setRunning(true); setPollFailures(0); setProgressError(null);
       setStatus({ job_id: jid, task_id: jid, status: "running", phase: "queued",
         progress: { phase: "queued", status_message: "非提交流水线已排队。", percent_complete: 0 } });
       notify("info", `${resume ? "非提交续跑" : "非提交验证"}已启动`);
     } else {
+      clearSavedJobId();
       setRunning(false); setPollFailures(0);
       const message = result?.error || (!result ? "网络错误，请检查连接后重试" : "启动验证流程失败");
       setProgressError(message);
@@ -138,6 +206,7 @@ export function useJobState(
     if (!jobId) return;
     const stoppedJobId = jobId;
     const result = await api.call("/api/production-validation/stop", { method: "POST", body: JSON.stringify({ job_id: stoppedJobId }) });
+    clearSavedJobId();
     setRunning(false); setJobId(null);
     setStatus((prev) => ({
       ...(prev || {}), job_id: stoppedJobId,
@@ -151,6 +220,7 @@ export function useJobState(
     setPollFailures((previous) => {
       const next = previous + 1;
       if (next >= WATCHDOG_MAX_FAILURES) {
+        clearSavedJobId();
         const failure = `状态连续刷新失败，系统已安全停止本次验证: ${message}`;
         failMonitor(failure);
         void cancelAmbiguousJob("status_failed", failure);
@@ -168,6 +238,7 @@ export function useJobState(
     const interval = setInterval(async () => {
       const result = await api.call<JobStatus>(`/api/production-validation/status?job_id=${encodeURIComponent(jobId)}`);
       if (result?.status && isTerminalStatus(result.status)) {
+        clearSavedJobId();
         setStatus(result); setRunning(false);
         if (result.status === "failed") {
           const msg = result.error || result.progress?.status_message || "验证流程失败。";
@@ -189,6 +260,7 @@ export function useJobState(
 
   return {
     jobId, running, status, progress, error: progressError, connected, events,
+    recovering, reconnectAttempts,
     startJob, stopJob,
   };
 }

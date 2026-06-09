@@ -28,6 +28,7 @@ interface ViewProps {
   events: string[];
   loading?: boolean;
   showCredentialWarning: boolean;
+  reconnectAttempts?: number;
   onStart: () => void;
   onResume: () => void;
   onStop: () => void;
@@ -38,7 +39,8 @@ interface ViewProps {
 /** Single view component — shared between controlled and standalone modes */
 function JobMonitorView({
   credentialSource, validationId, running, connected, progress, error, status, events,
-  loading, showCredentialWarning, onStart, onResume, onStop, onCredentialClick, onRetry,
+  loading, showCredentialWarning, reconnectAttempts = 0,
+  onStart, onResume, onStop, onCredentialClick, onRetry,
 }: ViewProps) {
   const summary = productionSummary(status);
   const hasEvidence = Boolean(status?.job_id || validationId);
@@ -48,7 +50,6 @@ function JobMonitorView({
       <div className="panel-header">
         <span>非提交生产验证</span>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span className="badge badge-info">Step 2</span>
           <span className="badge badge-neutral">非提交</span>
           <span className="badge badge-neutral">{credentialSource}</span>
           <span className={`status-dot ${connected ? "status-dot-active" : "status-dot-error"}`} />
@@ -58,6 +59,24 @@ function JobMonitorView({
         </div>
       </div>
       <div className="panel-body-padded">
+        {/* SSE disconnect warning banner */}
+        {running && !connected && (
+          <div className="mb-3" style={{
+            padding: "8px 12px", borderRadius: 6,
+            border: "1px solid", borderColor: "oklch(0.58 0.10 65 / 0.30)",
+            background: "oklch(0.58 0.06 65 / 0.10)",
+            display: "flex", alignItems: "center", gap: 8,
+            fontSize: 13, color: "oklch(0.68 0.12 65)",
+          }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" style={{ flexShrink: 0 }}>
+              <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+              <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+            </svg>
+            <span>
+              实时连接已断开{reconnectAttempts > 0 ? `（第 ${reconnectAttempts} 次重连中…）` : "，正在重连…"}后台任务继续运行。
+            </span>
+          </div>
+        )}
         <p className="text-sm text-text-secondary mb-4">
           生产配置下的非提交验证流程，系统会强制关闭自动提交并保留可回看的进度证据。
         </p>
@@ -153,6 +172,7 @@ export default function JobMonitor({ notify, credentials, onNeedCredentials, job
         onStop={external.stopJob}
         onCredentialClick={onNeedCredentials}
         onRetry={external.error ? () => external.startJob(false) : undefined}
+        reconnectAttempts={external.reconnectAttempts}
       />
     );
   }
@@ -226,7 +246,7 @@ export default function JobMonitor({ notify, credentials, onNeedCredentials, job
     void cancelAmbiguousJob("sse_exhausted", msg);
   }, [cancelAmbiguousJob, failMonitor, notify]);
 
-  const { connected } = useSSE(sseUrl, { onEvent: handleSSEEvent, onExhausted: handleStreamExhausted });
+  const { connected, reconnectAttempts } = useSSE(sseUrl, { onEvent: handleSSEEvent, onExhausted: handleStreamExhausted });
 
   const startJob = useCallback(async (resume = false) => {
     if (!hasCredentials(credentials)) notify("info", "未填写页面凭证，将使用维护者配置的托管凭证启动非提交验证。");
@@ -324,6 +344,7 @@ export default function JobMonitor({ notify, credentials, onNeedCredentials, job
       onStop={stopJob}
       onCredentialClick={onNeedCredentials}
       onRetry={progressError ? () => startJob(false) : undefined}
+      reconnectAttempts={reconnectAttempts}
     />
   );
 }

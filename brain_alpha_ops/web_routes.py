@@ -214,9 +214,12 @@ def _handle_pipeline_start(handler: Any, payload: dict) -> None:
             config = load_run_config(payload.get("config_path"))
             ops = config.ops
             cred = config.credentials
-            username = cred.username or os.environ.get(cred.username_env, "")
-            password = cred.password or os.environ.get(cred.password_env, "")
-            token = cred.token or os.environ.get(cred.token_env, "")
+            from brain_alpha_ops.secure_credentials import resolve_credentials
+            bundle = resolve_credentials(username=cred.username, password=cred.password, token=cred.token,
+                                         username_env=cred.username_env, password_env=cred.password_env, token_env=cred.token_env)
+            username = bundle.username
+            password = bundle.password
+            token = bundle.token
             api = OfficialBrainAPI(
                 config=ops.official_api,
                 username=username,

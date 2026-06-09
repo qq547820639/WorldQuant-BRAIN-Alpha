@@ -74,7 +74,19 @@ def _dispatch_route(
         return
     route = ctx.route_for(method, parsed.path)
     if not route:
-        # P0-18 fix: fallback to legacy web.py dispatch for unmigrated routes
+        # P0-18 fix: fallback to legacy web.py dispatch for unmigrated routes.
+        # Security (M-SEC-01): Validate session and replay for POST before fallback.
+        if method not in {"GET", "HEAD", "OPTIONS"}:
+            if not handler._has_valid_session(parsed.query):
+                handler._json({"ok": False, "error_code": "SESSION_INVALID", "error": "invalid local session"}, status=403)
+                return
+            replay_validator = getattr(handler, "_validate_replay_request", None)
+            if callable(replay_validator):
+                replay_result = replay_validator()
+                if not replay_result.get("ok"):
+                    status = 409 if replay_result.get("error_code") == "REPLAY_DETECTED" else 400
+                    handler._json({"ok": False, **replay_result}, status=status)
+                    return
         try:
             from brain_alpha_ops.web import dispatch_post as _legacy_dispatch
             body = handler._read_json() if method == "POST" else None
@@ -448,6 +460,8 @@ def _get_submit_readiness(handler: Any, _parsed: Any, _ctx: WebHandlerDispatchCo
 def _post_run(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext, payload: dict[str, Any]) -> None:
     safe_payload = _non_submit_run_payload(payload)
     ctx.validate_run_payload(safe_payload)
+    # M-SEC-02: latest_active() releases lock before _create_non_submit_run_job().
+    # Low risk for single-user local app; lock held per-operation by JobStore internally.
     active = ctx.jobs.latest_active()
     if active:
         active_job_id, _job = active
@@ -747,6 +761,8 @@ def _post_candidates_simulate(handler: Any, _parsed: Any, ctx: WebHandlerDispatc
         return
 
     store = ctx.async_jobs
+    # M-SEC-02: snapshot iteration over store.jobs is lockless; a concurrent create
+    # could win the race. Low risk for single-user local app.
     # Prevent duplicate simulation jobs — search the proper JobStore
     for jid, job in list(store.jobs.items()):
         if job.get("status") == "running":

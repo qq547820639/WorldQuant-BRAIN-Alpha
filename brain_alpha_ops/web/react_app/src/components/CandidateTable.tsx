@@ -467,9 +467,7 @@ export default function CandidateTable({
         {/* Mobile card list */}
         <div className="panel-body md:hidden">
           {paginatedCandidates.length === 0 ? (
-            <div style={{ padding: "2rem", textAlign: "center", fontSize: 13, color: "oklch(0.52 0.006 45)" }}>
-              {filter ? "没有匹配的候选" : "暂无候选记录"}
-            </div>
+            <EmptyState filter={!!filter} showProductionControls={showProductionControls} />
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {paginatedCandidates.map((candidate, index) => (
@@ -504,8 +502,8 @@ export default function CandidateTable({
             <tbody>
               {paginatedCandidates.length === 0 ? (
                 <tr>
-                  <td colSpan={canShowRowActions ? 9 : 8} style={{ padding: "2rem", textAlign: "center", color: "oklch(0.52 0.006 45)" }}>
-                    {filter ? "没有匹配的候选" : "暂无候选记录"}
+                  <td colSpan={canShowRowActions ? 9 : 8} style={{ padding: "1.5rem", textAlign: "center" }}>
+                    <EmptyState filter={!!filter} showProductionControls={showProductionControls} />
                   </td>
                 </tr>
               ) : (
@@ -835,4 +833,51 @@ function mostCommon(values: unknown[]) {
 
 function record(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+// ── Empty state with guidance ──────────────────────────────────────────────
+
+function EmptyState({ filter, showProductionControls }: { filter: boolean; showProductionControls: boolean }) {
+  if (filter) {
+    return (
+      <div style={{ padding: "2rem 0", color: "oklch(0.52 0.006 45)", fontSize: 13 }}>
+        <p>没有匹配的候选</p>
+        <p style={{ marginTop: 4, fontSize: 12 }}>
+          尝试调整筛选条件，或清除筛选查看全部候选。
+        </p>
+      </div>
+    );
+  }
+
+  if (showProductionControls) {
+    return (
+      <div style={{ padding: "1.5rem 0", display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
+        <div style={{
+          width: 48, height: 48, borderRadius: "50%",
+          background: "oklch(0.65 0.08 80 / 0.12)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+        }}>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="oklch(0.68 0.10 82)" strokeWidth="1.5" strokeLinecap="round">
+            <circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
+          </svg>
+        </div>
+        <div>
+          <p style={{ color: "oklch(0.65 0.003 45)", fontSize: 14, fontWeight: 500 }}>暂无候选记录</p>
+          <p style={{ color: "oklch(0.52 0.006 45)", fontSize: 12, marginTop: 4, lineHeight: 1.5, maxWidth: 320 }}>
+            候选 Alpha 通过顶部「生成候选」按钮的生产搜索产生。
+            切换到运行总览，完成连接和同步后启动非提交验证。
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ padding: "1.5rem 0", display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
+      <p style={{ color: "oklch(0.52 0.006 45)", fontSize: 13 }}>暂无候选记录</p>
+      <p style={{ color: "oklch(0.44 0.006 45)", fontSize: 12, lineHeight: 1.5, maxWidth: 280 }}>
+        请先运行非提交验证产生候选，或从候选管理页面选择一个候选进入评分。
+      </p>
+    </div>
+  );
 }

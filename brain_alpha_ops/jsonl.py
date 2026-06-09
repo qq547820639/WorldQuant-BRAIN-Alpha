@@ -35,19 +35,19 @@ def read_jsonl_tail(path: str | Path, *, limit: int = 500) -> list[dict[str, Any
     return read_jsonl_tail_with_stats(path, limit=limit).rows
 
 
-def read_jsonl_records(path: str | Path, *, limit: int | None = None, max_rows: int = 10_000) -> list[dict[str, Any]]:
+def read_jsonl_records(path: str | Path, *, limit: int | None = None, max_rows: int | None = 10_000) -> list[dict[str, Any]]:
     """Read JSONL records with an optional tail limit.
 
     ``limit=None`` streams the whole file up to ``max_rows`` (default 10,000)
-    to avoid unbounded memory usage on large files.  Use ``iter_jsonl_records``
-    for truly streaming access, or raise ``max_rows`` if you need more rows and
-    have sufficient memory.
+    to avoid unbounded memory usage on large files.  Pass ``max_rows=None`` to
+    remove the cap (caller must ensure sufficient memory).  Use
+    ``iter_jsonl_records`` for truly streaming access.
     """
     if limit is not None:
         return read_jsonl_tail(path, limit=limit)
     result: list[dict[str, Any]] = []
     for record in iter_jsonl_records(path):
-        if len(result) >= max_rows:
+        if max_rows is not None and len(result) >= max_rows:
             break
         result.append(record)
     return result

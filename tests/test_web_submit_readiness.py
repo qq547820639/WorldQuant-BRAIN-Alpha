@@ -99,6 +99,9 @@ def test_submit_readiness_dispatch_route_uses_compact_payload(monkeypatch):
     class Handler:
         payload = None
 
+        def _is_allowed_local_request(self):
+            return True  # test harness — local origin always allowed
+
         def _send_json(self, payload, status=200):
             self.payload = payload
             self.status = status
