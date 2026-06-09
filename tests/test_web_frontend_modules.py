@@ -169,7 +169,7 @@ def test_app_ux_orchestrator_has_tested_navigation_empty_and_busy_contracts():
             "未填写页面凭证",
             "非提交生产验证",
             "页面凭证为空",
-            'key="scoring_picker"',
+            'key="checkpoint_status"',
             "selectedCandidate",
             "grid w-full max-w-full grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5",
             "onClick={() => onNavigate(config.id)}",

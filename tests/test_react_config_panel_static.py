@@ -62,7 +62,7 @@ def test_config_panel_import_accepts_export_payload_and_public_config_shapes():
     assert "const source = asRecord(root.config) || root" in source
     assert "if (asRecord(source.ops))" in source
     assert 'return formFromConfig({' in source
-    assert 'environment: String(source.environment ?? "production")' in source
+    assert 'environment: String(source.environment || "production")' in source
     assert "autoSubmit: false" in source
     assert '<CheckboxField label="自动提交"' not in source
     assert 'value="关闭（Web 保存强制）"' in source

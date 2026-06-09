@@ -230,7 +230,7 @@ def test_all_card_views_are_typed_configured_and_routed_to_detail_components():
     assert "const VIEW_LABELS: Record<string, string> = {" in app
     assert "phase-group" in _component("Sidebar.tsx")  # v3.0 phase grouped nav
     assert "CandidateTable" in app
-    assert 'key="scoring_picker"' in app
+    assert 'key="checkpoint_status"' in app
     assert "selectedCandidate" in app
     assert "OfficialBacktestSlots" in app
     assert "QualityCheckPanel" in app
