@@ -37,7 +37,7 @@ jobs:
         run: python scripts/check_dependency_policy.py --pyproject pyproject.toml --json
 
       - name: 4/8 - Frontend inline sync
-        run: python brain_alpha_ops/web/build_inline.py --check --json
+        run: python brain_alpha_ops/build_inline.py --check --json
 
       - name: 5/8 - Secret scan
         run: python scripts/scan_sensitive_artifacts.py --root . --json --fail-on-findings --include-all --include-git-history
