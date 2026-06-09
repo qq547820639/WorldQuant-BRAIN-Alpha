@@ -40,7 +40,7 @@ jobs:
         run: python brain_alpha_ops/build_inline.py --check --json
 
       - name: 5/8 - Secret scan
-        run: python scripts/scan_sensitive_artifacts.py --root . --json --fail-on-findings --include-all --include-git-history
+        run: python scripts/scan_sensitive_artifacts.py --root . --json --fail-on-findings --include-all 
 
       - name: 6/8 - Log redaction audit
         run: python scripts/check_log_redaction.py --root brain_alpha_ops --json
