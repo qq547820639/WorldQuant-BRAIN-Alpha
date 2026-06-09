@@ -548,7 +548,7 @@ def dispatch_post(handler, path, body):
             replay_result = replay_validator()
             if not replay_result.get("ok"):
                 status = 409 if replay_result.get("error_code") == "REPLAY_DETECTED" else 400
-                handler._send_json({"ok": False, **replay_result}, status=status)
+                handler._send_json({"ok": False, **replay_result}, status=status) if hasattr(handler, "_send_json") else handler._json({"ok": False, **replay_result}, status=status)
                 return
 
     payload = {}
