@@ -31,7 +31,7 @@ jobs:
         run: python -m compileall -q brain_alpha_ops scripts tests
 
       - name: 2/8 - Config validation
-        run: python -c "from brain_alpha_ops.config import load_run_config; cfg=load_run_config('config/run_config.json'); print({'ok': True, 'environment': cfg.environment})"
+        run: "python -c \"from brain_alpha_ops.config import load_run_config; cfg=load_run_config('config/run_config.json'); print({'ok': True, 'environment': cfg.environment})\""
 
       - name: 3/8 - Dependency policy
         run: python scripts/check_dependency_policy.py --pyproject pyproject.toml --json
