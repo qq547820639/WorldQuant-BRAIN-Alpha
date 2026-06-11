@@ -80,6 +80,27 @@ def test_job_store_watchdog_fails_unknown_status_without_waiting(tmp_path):
     assert job["progress"]["watchdog"]["previous_status"] == "mystery"
 
 
+def test_job_store_treats_pending_and_starting_as_active_until_timeout(tmp_path):
+    store = JobStore(tmp_path / "jobs.json", watchdog_timeout_seconds=10)
+    base = time.time()
+
+    pending_id = store.create()
+    starting_id = store.create()
+    store.update(pending_id, status="pending", updated_at=base, progress={"phase": "pending", "percent": 0})
+    store.update(starting_id, status="starting", updated_at=base, progress={"phase": "simulation_starting", "percent": 0})
+
+    assert store.watchdog_sweep(now=base + 5) == 0
+    assert store.get(pending_id)["status"] == "pending"
+    assert store.get(starting_id)["status"] == "starting"
+    assert {job_id for job_id, _job in store.all()} >= {pending_id, starting_id}
+    assert store.latest_active() is not None
+
+    assert store.watchdog_sweep(now=base + 11) == 2
+    assert store.get(pending_id)["error"] == DEFAULT_WATCHDOG_ERROR
+    assert store.get(starting_id)["error"] == DEFAULT_WATCHDOG_ERROR
+    assert store.get(starting_id)["progress"]["watchdog"]["previous_status"] == "starting"
+
+
 def test_job_store_rejects_late_worker_updates_after_watchdog_failed(tmp_path):
     store = JobStore(tmp_path / "jobs.json", watchdog_timeout_seconds=5)
 

@@ -194,8 +194,18 @@ class TestSlotActive:
     def test_starting_is_active(self):
         assert _slot_active("STARTING") is True
 
+    def test_submitted_rate_limited_and_poll_error_are_active(self):
+        assert _slot_active("SUBMITTED") is True
+        assert _slot_active("RATE_LIMITED") is True
+        assert _slot_active("POLL_ERROR") is True
+
     def test_completed_not_active(self):
         assert _slot_active("completed") is False
+
+    def test_terminal_failures_not_active(self):
+        assert _slot_active("POLL_TIMEOUT") is False
+        assert _slot_active("STALL_DETECTED") is False
+        assert _slot_active("RESULT_FETCH_FAILED") is False
 
     def test_empty_not_active(self):
         assert _slot_active("empty") is False

@@ -7,7 +7,16 @@ from brain_alpha_ops.redaction import redact_error_message
 from brain_alpha_ops.web_check_availability import build_cloud_self_correlation_explanation
 
 
-AUTH_ERROR_MARKERS = ("authorization", "cookie", "token", "password")
+AUTH_ERROR_MARKERS = (
+    "authorization",
+    "cookie",
+    "token",
+    "password",
+    "credential",
+    "unauthorized",
+    "forbidden",
+    "incorrect authentication credentials",
+)
 
 
 def safe_error_message(exc: Exception) -> str:
@@ -15,7 +24,8 @@ def safe_error_message(exc: Exception) -> str:
     lowered = message.lower()
     if "production mode requires" in lowered:
         return "production mode requires BRAIN_USERNAME/BRAIN_PASSWORD or BRAIN_TOKEN"
-    if any(marker in lowered for marker in AUTH_ERROR_MARKERS):
+    status_code = getattr(exc, "status_code", None)
+    if status_code in (401, 403) or "http 401" in lowered or "http 403" in lowered or any(marker in lowered for marker in AUTH_ERROR_MARKERS):
         return "Authentication failed; check credentials or connection settings."
     return message
 

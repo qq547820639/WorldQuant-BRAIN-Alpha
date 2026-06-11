@@ -104,7 +104,7 @@
 | `retained_alpha_pool_size` | `int` | 10 | 候选池容量 |
 | `run_forever` | `bool` | false | 是否连续运行 |
 | `require_cloud_sync` | `bool` | true | 是否要求云端同步 |
-| `cloud_sync_range` | `string` | "3d" | 云端同步时间范围 |
+| `cloud_sync_range` | `string` | "all" | 云端同步时间范围；默认读取全部云端 Alpha |
 | `cycle_pause_seconds` | `float` | 2.0 | 轮次间暂停 |
 | `dataset_strategy` | `string` | "rotate" | 数据集选择策略 |
 | `generation_mode_ratio` | `string` | "70/20/10" | 生成模式比例 |
@@ -323,9 +323,14 @@ data: {"ok":true,"job_id":"...","status":"...","progress":{...},"error":""}
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | `ok` | `bool` | |
-| `results` | `array` | 检查结果列表 |
+| `items` | `array` | 检查结果列表 |
+| `count` | `number` | 本次返回的检查结果数量 |
+| `returned_count` | `number` | 本次返回的检查结果数量 |
+| `total_count` | `number` | 当前持久化检查结果总数 |
+| `total` | `number` | 当前持久化检查结果总数 |
+| `complete` | `bool` | 是否为完整证据；局部预览必须显式返回 `false` |
 
-**`results[*]` 结构**：
+**`items[*]` 结构**：
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
@@ -414,7 +419,7 @@ data: {"ok":true,"job_id":"...","status":"...","progress":{...},"error":""}
 | `password` | `string` | 否 | BRAIN 密码 |
 | `token` | `string` | 否 | Bearer Token |
 | `baseUrl` | `string` | 否 | API 地址 |
-| `syncRange` | `"3d"` \| `"7d"` \| `"all"` | 否 | |
+| `syncRange` | `"3d"` \| `"7d"` \| `"all"` | 否 | 默认 `all`；`3d`/`7d` 仅表示本次显式过滤 |
 | `continuousMode` | `bool` | 否 | **【修复】** 后端需消费此字段 |
 | `autoSubmit` | `bool` | 否 | 自动提交开关 |
 | `settings` | `object` | 是 | BRAIN simulation settings |
@@ -508,7 +513,7 @@ data: {"ok":true,"job_id":"...","status":"...","progress":{...},"error":""}
 | `environment` | `string` | 是 | |
 | `username` / `password` / `token` | 见 `/api/run` | |
 | `baseUrl` | `string` | 否 | |
-| `syncRange` | `"3d"` \| `"7d"` \| `"all"` | 是 | |
+| `syncRange` | `"3d"` \| `"7d"` \| `"all"` | 否 | 默认 `all`；`3d`/`7d` 仅表示本次显式过滤 |
 
 **成功响应**：
 
@@ -535,9 +540,9 @@ data: {"ok":true,"job_id":"...","status":"...","progress":{...},"error":""}
 | `alpha_id` | `string` | 是 | |
 | `candidate` | `object` | 是 | 候选对象（含 expression, official_alpha_id 等） |
 | `mode` | `"quick"` \| `"all"` | 是 | |
-| `syncRange` | `string` | 否 | |
+| `syncRange` | `"3d"` \| `"7d"` \| `"all"` | 否 | 默认 `all`；`3d`/`7d` 仅表示本次显式过滤 |
 
-**响应**（与 `GET /api/check_results` 中 `results[*]` 结构相同）：
+**响应**（与 `GET /api/check_results` 中 `items[*]` 结构相同）：
 
 ```json
 {

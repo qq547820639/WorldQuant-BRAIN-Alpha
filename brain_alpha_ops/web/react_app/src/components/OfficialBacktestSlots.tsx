@@ -4,6 +4,7 @@ import { useCallback, useEffect } from "react";
 import { useApi } from "@/hooks/useApi";
 import type { BacktestQueueSummary, BacktestSlot, BacktestSlotsResponse } from "@/types";
 import ProgressFeedback from "@/components/ProgressFeedback";
+import { backtestActiveCount, backtestSlotLimit } from "@/utils/backtestSlots";
 
 interface Props {
   notify: (type: "success" | "error" | "warning" | "info", msg: string) => void;
@@ -28,7 +29,7 @@ export default function OfficialBacktestSlots({ notify }: Props) {
 
   const slots = normalizeSlots(api.data);
   const slotLimit = backtestSlotLimit(api.data);
-  const activeCount = slots.filter((slot) => isActiveSlot(slot.status)).length;
+  const activeCount = backtestActiveCount(api.data);
   const queueSummary = api.data?.queue_summary;
 
   if (api.loading && !api.data) {
@@ -67,38 +68,49 @@ export default function OfficialBacktestSlots({ notify }: Props) {
       )}
 
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
-        {slots.map((slot) => (
-          <article key={slot.slot} className={`rounded-md border border-border-subtle bg-[oklch(0.100_0.007_45)] p-4 min-w-0 border-l-4 ${slotTone(slot.status)}`}>
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <h3 className="text-sm font-semibold text-text-primary">官方回测槽 #{slot.slot}</h3>
-                <p className="mt-1 text-xs text-text-tertiary">{slot.message || slotMessage(slot.status)}</p>
+        {slots.map((slot) => {
+          const board = slot.status_board;
+          return (
+            <article key={slot.slot} className={`rounded-md border border-border-subtle bg-[oklch(0.100_0.007_45)] p-4 min-w-0 border-l-4 ${slotTone(slot.status)}`}>
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <h3 className="text-sm font-semibold text-text-primary">官方回测槽 #{slot.slot}</h3>
+                  <p className="mt-1 text-xs text-text-tertiary">{slot.message || slotMessage(slot.status)}</p>
+                </div>
+                <span
+                  className={`badge max-w-[9rem] truncate text-xs ${slotBadge(slot.status)}`}
+                  title={String(slot.status || "EMPTY")}
+                >
+                  {slotStatusLabel(slot.status)}
+                </span>
               </div>
-              <span
-                className={`badge max-w-[9rem] truncate text-xs ${slotBadge(slot.status)}`}
-                title={String(slot.status || "EMPTY")}
-              >
-                {slotStatusLabel(slot.status)}
-              </span>
-            </div>
 
-            <dl className="mt-4 space-y-2 text-xs">
-              <SlotMetric label="Alpha ID" value={slot.alpha_id || "-"} mono />
-              <SlotMetric label="仿真 ID" value={slot.simulation_id || "-"} mono />
-              <SlotMetric label="官方 ID" value={slot.official_alpha_id || "-"} mono />
-              <SlotMetric label="得分" value={slot.score == null ? "-" : Number(slot.score).toFixed(2)} />
-              <SlotMetric label="刷新次数" value={String(slot.poll_count ?? 0)} />
-              <SlotMetric label="预计下次更新" value={formatSeconds(slot.next_poll_seconds)} />
-            </dl>
+              <dl className="mt-4 space-y-2 text-xs">
+                <SlotMetric label="任务序号" value={formatCount(board?.task_index ?? slot.slot)} />
+                <SlotMetric label="Alpha 标识" value={board?.alpha_id || slot.alpha_id || "-"} mono />
+                <SlotMetric label="仿真 ID" value={slot.simulation_id || "-"} mono />
+                <SlotMetric label="官方 ID" value={slot.official_alpha_id || "-"} mono />
+                <SlotMetric label="已提交任务" value={formatCount(board?.submitted_count)} />
+                <SlotMetric label="成功回测" value={formatCount(board?.completed_count)} />
+                <SlotMetric label="回测失败" value={formatCount(board?.failed_count)} />
+                <SlotMetric label="达标数" value={formatCount(board?.passed_count)} />
+                <SlotMetric label="不达标数" value={formatCount(board?.not_passed_count)} />
+                <SlotMetric label="达标率" value={formatRate(board?.pass_rate)} />
+                <SlotMetric label="得分" value={slot.score == null ? "-" : Number(slot.score).toFixed(2)} />
+                <SlotMetric label="刷新次数" value={String(slot.poll_count ?? 0)} />
+                <SlotMetric label="预计下次更新" value={formatSeconds(slot.next_poll_seconds)} />
+                <SlotMetric label="操作进度" value={`${boundedPercent(slot.progress_percent)}%`} />
+              </dl>
 
-            <div className="mt-4 h-2 overflow-hidden rounded-full bg-[oklch(0.22_0.007_45)]" aria-hidden="true">
-              <div
-                className="h-full rounded-full bg-[oklch(0.65_0.14_80)]"
-                style={{ width: `${boundedPercent(slot.progress_percent)}%` }}
-              />
-            </div>
-          </article>
-        ))}
+              <div className="mt-4 h-2 overflow-hidden rounded-full bg-[oklch(0.22_0.007_45)]" aria-hidden="true">
+                <div
+                  className="h-full rounded-full bg-[oklch(0.65_0.14_80)]"
+                  style={{ width: `${boundedPercent(slot.progress_percent)}%` }}
+                />
+              </div>
+            </article>
+          );
+        })}
       </div>
     </div>
   );
@@ -115,11 +127,9 @@ function BacktestQueueSummaryStrip({
 }) {
   const openSlots = summary?.open_slot_count ?? Math.max(0, slotLimit - activeCount);
   const reviewBlockers = (summary?.top_blocking_reasons || [])
-    .slice(0, 3)
     .map((row) => `${reasonLabel(row.reason)} ${row.count}`)
     .join(" · ");
   const submitBlockers = (summary?.top_submit_blocking_reasons || [])
-    .slice(0, 3)
     .map((row) => `${reasonLabel(row.reason)} ${row.count}`)
     .join(" · ");
   return (
@@ -130,10 +140,10 @@ function BacktestQueueSummaryStrip({
         <QueueMetric label="官方接口" value={summary?.official_api_called ? "已调用" : "未调用"} />
         <QueueMetric label="槽位记录" value={formatCount(summary?.official_slot_record_count)} />
       </dl>
-      <p className="mt-2 truncate text-xs text-text-tertiary" title={reviewBlockers || "暂无"}>
+      <p className="mt-2 break-words text-xs text-text-tertiary" title={reviewBlockers || "暂无"}>
         官方工作阻断: {reviewBlockers || "暂无"}
       </p>
-      <p className="mt-1 truncate text-xs text-text-tertiary" title={submitBlockers || "暂无"}>
+      <p className="mt-1 break-words text-xs text-text-tertiary" title={submitBlockers || "暂无"}>
         提交证据阻断: {submitBlockers || "暂无"}
       </p>
     </div>
@@ -166,18 +176,6 @@ function normalizeSlots(payload: BacktestSlotsResponse | null): BacktestSlot[] {
     .map((slot) => rows.find((row) => Number(row.slot) === slot) || { slot, status: "EMPTY" });
 }
 
-function backtestSlotLimit(payload: BacktestSlotsResponse | null) {
-  const fromPayload = Number(payload?.slot_limit);
-  const fromSummary = Number(payload?.queue_summary?.slot_limit);
-  const value = Number.isFinite(fromPayload) && fromPayload > 0 ? fromPayload : fromSummary;
-  return Math.max(3, Number.isFinite(value) && value > 0 ? Math.trunc(value) : 3);
-}
-
-function isActiveSlot(status: unknown) {
-  const text = String(status || "").toUpperCase();
-  return Boolean(text && !["", "EMPTY", "COMPLETED", "FAILED", "ERROR", "CAPACITY_WAIT"].includes(text));
-}
-
 function slotTone(status: unknown) {
   const text = String(status || "").toUpperCase();
   if (text === "EMPTY") return "border-border-subtle";
@@ -197,6 +195,12 @@ function slotBadge(status: unknown) {
 
 function slotStatusLabel(status: unknown) {
   const text = String(status || "EMPTY").toUpperCase();
+  if (text === "CAPACITY_WAIT") return "等待容量";
+  if (text === "POLL_TIMEOUT") return "轮询超时";
+  if (text === "STALL_DETECTED") return "进度停滞";
+  if (text === "RESULT_FETCH_FAILED") return "结果获取失败";
+  if (text === "RATE_LIMITED") return "限流等待";
+  if (text === "POLL_ERROR") return "轮询异常";
   if (text.includes("DEFERRED")) return "已延迟";
   if (text.includes("CONCURRENCY")) return "等待中";
   if (text.includes("RUNNING")) return "运行中";
@@ -209,6 +213,12 @@ function slotStatusLabel(status: unknown) {
 function slotMessage(status: unknown) {
   const text = String(status || "EMPTY").toUpperCase();
   if (text === "EMPTY") return "空闲";
+  if (text === "CAPACITY_WAIT") return "等待官方模拟容量";
+  if (text === "POLL_TIMEOUT") return "官方回测轮询超时";
+  if (text === "STALL_DETECTED") return "官方回测进度停滞";
+  if (text === "RESULT_FETCH_FAILED") return "官方结果获取失败";
+  if (text === "RATE_LIMITED") return "官方限流等待";
+  if (text === "POLL_ERROR") return "官方轮询异常";
   if (text.includes("DEFERRED")) return "等待官方容量";
   if (text.includes("RUNNING") || text.includes("SUBMITTED")) return "官方回测进行中";
   if (text.includes("COMPLETE")) return "官方回测完成";
@@ -231,6 +241,12 @@ function formatCount(value: unknown) {
   const number = Number(value ?? 0);
   if (!Number.isFinite(number)) return "0";
   return String(Math.max(0, Math.trunc(number)));
+}
+
+function formatRate(value: unknown) {
+  const number = Number(value ?? 0);
+  if (!Number.isFinite(number) || number <= 0) return "0.0%";
+  return `${(Math.max(0, Math.min(1, number)) * 100).toFixed(1)}%`;
 }
 
 function reasonLabel(reason: string) {

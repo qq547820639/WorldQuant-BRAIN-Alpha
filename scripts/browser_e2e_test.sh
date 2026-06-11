@@ -88,13 +88,14 @@ pass "连接测试完成"
 # ═══════════════════════════════════════════════════════════════════════════════
 log 3 "云端同步 — 验证云端数据快照接口"
 
-# 获取云端 Alpha 快照
-CLOUD=$(curl -sf "${BASE_URL}/api/snapshot/cloud?limit=5" 2>/dev/null || echo '{"ok":false}')
+# 获取完整云端 Alpha 快照；展示层自行决定预览多少行
+CLOUD=$(curl -sf "${BASE_URL}/api/snapshot/cloud" 2>/dev/null || echo '{"ok":false}')
 echo "$CLOUD" | python3 -c "
 import sys, json
 d = json.load(sys.stdin)
 if d.get('ok'):
-    count = d.get('count', 0)
+    summary = d.get('summary') or {}
+    count = d.get('count') or summary.get('count') or summary.get('total') or 0
     print(f'  云端缓存: {count} 条 Alpha')
 else:
     print(f'  云端快照: {d.get(\"error\", \"unknown\")}')

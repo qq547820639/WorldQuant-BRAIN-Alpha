@@ -7,6 +7,7 @@ import re
 
 from brain_alpha_ops.research.generator_metadata import (
     OFFICIAL_OPERATOR_SUBSTITUTE_FAMILIES,
+    expression_windows_within_constraints,
     _expression_operators_are_official,
     _get_default_windows,
     _load_official_operator_names,
@@ -25,7 +26,12 @@ def mutate_expression(
     official_operators = _load_official_operator_names()
 
     def _official_or_original(mutated: str) -> str:
-        return mutated if _expression_operators_are_official(mutated, official_operators) else expression
+        return (
+            mutated
+            if _expression_operators_are_official(mutated, official_operators)
+            and expression_windows_within_constraints(mutated)
+            else expression
+        )
 
     default_windows = _get_default_windows()
     if experience_windows:

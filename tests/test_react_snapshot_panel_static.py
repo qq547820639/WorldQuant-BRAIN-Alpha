@@ -21,7 +21,7 @@ def test_snapshot_panel_declares_all_data_views_and_endpoints():
     assert '| "sqlite_indexes"' in source
     assert '| "robustness"' in source
     for endpoint in (
-        '/api/snapshot/cloud?limit=100',
+        '/api/snapshot/cloud',
         '/api/checkpoint_status',
         '/api/lifecycle',
         '/api/research_memory?limit=5000&top_n=10',
@@ -35,6 +35,7 @@ def test_snapshot_panel_declares_all_data_views_and_endpoints():
     assert 'aria-label={`筛选 ${config.title}`}' in source
     assert 'aria-label={`${config.title}表格`}' in source
     assert 'aria-label={`${config.title}移动列表`}' in source
+    assert 'subtitle: "完整缓存的 Alpha 状态"' in source
     assert 'role="alert"' in source
     assert 'aria-live="assertive"' in source
     assert 'onNavigate?: (view: CardViewId) => void;' in source
@@ -42,8 +43,12 @@ def test_snapshot_panel_declares_all_data_views_and_endpoints():
     assert '进入候选管理' in source
     assert '查看质量门禁' in source
     assert 'function SnapshotMobileCard' in source
+    assert '"返回数量"' not in source
     assert 'rows: checkpointStatusRows' in source
     assert 'metrics: checkpointStatusMetrics' in source
     assert 'function checkpointStatusRows(payload: SnapshotPayload)' in source
     assert 'function comparisonRows(comparison: SnapshotPayload)' in source
     assert 'function analyticsRows(analytics: SnapshotPayload)' in source
+    assert '{ label: "缓存总数", value: text(summary.total ?? summary.count ?? summary.total_count ?? "-") }' in source
+    assert '{ label: "载入状态", value: cloudLoadStatus(summary) }' in source
+    assert 'return "完整载入";' in source

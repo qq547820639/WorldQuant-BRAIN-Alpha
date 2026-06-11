@@ -14,7 +14,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_ROOT = PROJECT_ROOT / "brain_alpha_ops" / "web"
 
 SILENT_CATCH_RE = re.compile(
-    r"catch\s*\([^)]*\)\s*\{\s*(?:(?:/\*.*?\*/)|(?://[^\n]*))*\s*\}",
+    r"catch\s*(?:\([^)]*\))?\s*\{\s*(?:(?:/\*.*?\*/)|(?://[^\n]*))*\s*\}",
     re.S,
 )
 
@@ -22,9 +22,18 @@ SILENT_CATCH_RE = re.compile(
 def check_frontend_silent_catches(root: str | Path = DEFAULT_ROOT) -> dict[str, Any]:
     root_path = Path(root)
     js_root = root_path / "js"
+    react_src = root_path / "react_app" / "src"
     candidates: list[Path] = []
     if js_root.exists():
         candidates.extend(sorted(js_root.rglob("*.js")))
+    if react_src.exists():
+        candidates.extend(
+            sorted(
+                path
+                for path in react_src.rglob("*")
+                if path.suffix.lower() in {".js", ".jsx", ".ts", ".tsx"}
+            )
+        )
     index_path = root_path / "index.html"
     if index_path.exists():
         candidates.append(index_path)

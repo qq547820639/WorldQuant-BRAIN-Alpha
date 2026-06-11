@@ -95,7 +95,7 @@ def run_final_release_gate(
     _check_exact_thresholds(raw_config, findings)
     _check_dataset_redline(root, raw_config, findings)
     _check_traceability_redline(raw_config, findings)
-    _check_official_context_redline(raw_config, findings)
+    _check_official_context_redline(raw_config, findings, official_context=official_context)
     _check_official_api_alignment(raw_config, findings)
     _check_refresh_status(root, raw_config, findings, official_context=official_context)
 
@@ -384,19 +384,24 @@ def _check_traceability_redline(cfg: dict[str, Any], findings: list[Finding]) ->
         )
 
 
-def _check_official_context_redline(cfg: dict[str, Any], findings: list[Finding]) -> None:
+def _check_official_context_redline(
+    cfg: dict[str, Any],
+    findings: list[Finding],
+    *,
+    official_context: dict[str, Any],
+) -> None:
     ops = cfg.get("ops") or {}
     budget = ops.get("budget") or {}
     api = ops.get("official_api") or {}
-    if budget.get("require_cloud_sync") is not True:
+    if budget.get("require_cloud_sync") is not True and not _official_context_cache_complete(official_context):
         findings.append(
             Finding(
                 "P0",
-                "CLOUD_SYNC_NOT_REQUIRED",
-                "Final release must require cloud synchronization.",
+                "CLOUD_SYNC_CACHE_MISSING",
+                "Final release requires either forced cloud sync or a complete official context cache.",
                 "config/run_config.json",
                 current=budget.get("require_cloud_sync"),
-                expected=True,
+                expected="require_cloud_sync=true or complete official context cache",
             )
         )
     if api.get("allow_stale_context_on_rate_limit") is not False:
@@ -410,6 +415,33 @@ def _check_official_context_redline(cfg: dict[str, Any], findings: list[Finding]
                 expected=False,
             )
         )
+
+
+def _official_context_cache_complete(official_context: dict[str, Any]) -> bool:
+    if official_context.get("blocking_ok") is not True:
+        return False
+    files = official_context.get("files")
+    if not isinstance(files, dict):
+        return False
+    required_files = ("official_fields.json", "official_operators.json", "official_datasets.json")
+    for name in required_files:
+        entry = files.get(name)
+        if not isinstance(entry, dict):
+            return False
+        metadata = entry.get("metadata")
+        if not isinstance(metadata, dict):
+            return False
+        if metadata.get("complete") is not True:
+            return False
+        if metadata.get("schema_ok") is not True:
+            return False
+        if metadata.get("sha256_matches") is not True:
+            return False
+        if metadata.get("record_count_matches") is not True:
+            return False
+        if int(metadata.get("record_count") or 0) <= 0:
+            return False
+    return True
 
 
 def _check_official_api_alignment(cfg: dict[str, Any], findings: list[Finding]) -> None:
@@ -533,7 +565,7 @@ def _redline_summary(findings: list[Finding]) -> dict[str, bool]:
             code in {"RUN_FOREVER_ENABLED", "MAX_CYCLES_NOT_BOUNDED"} for code in codes
         ),
         "full_factor_coverage": not any(
-            code.startswith("OFFICIAL_CONTEXT_") or code in {"CLOUD_SYNC_NOT_REQUIRED", "STALE_CONTEXT_ALLOWED"}
+            code.startswith("OFFICIAL_CONTEXT_") or code in {"CLOUD_SYNC_CACHE_MISSING", "STALE_CONTEXT_ALLOWED"}
             for code in codes
         ),
         "code_strong_alignment": not any(

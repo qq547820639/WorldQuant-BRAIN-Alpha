@@ -212,7 +212,7 @@ def attach_assistant_guidance(candidate: Candidate, guidance: dict) -> None:
     metadata = assistant_guidance_candidate_metadata(guidance)
     candidate.submission.update(metadata)
     candidate.submission.setdefault("assistant_guidance", {}).update(metadata)
-    candidate.extra_fields.setdefault("assistant_guidance_digest", digest)
+    candidate.extra_fields["assistant_guidance_digest"] = candidate.extra_fields.get("assistant_guidance_digest") or digest
     tags = list(candidate.source_tags or [])
     for tag in ("assistant_guided", f"assistant_guidance_{digest}" if digest else ""):
         if tag and tag not in tags:

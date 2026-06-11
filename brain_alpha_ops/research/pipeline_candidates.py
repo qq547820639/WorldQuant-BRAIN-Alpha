@@ -12,6 +12,7 @@ from .batch_backtest_coordinator import (
 )
 from .candidate_pool import is_active_backtest_candidate, pending_simulation_targets
 from .generator import extract_fields, extract_operators, local_quality
+from .field_quality import non_signal_generation_fields
 from .knowledge_base import KnowledgeEntry
 from .local_backtest_gate import apply_local_backtest_gate
 from .pipeline_cloud import (
@@ -58,6 +59,7 @@ class PipelineCandidatePoolMixin:
         for index, candidate in enumerate(generated, start=1):
             candidate.local_quality = local_quality(candidate, self.config.budget.min_local_quality_score)
             self._apply_local_backtest_prefilter(candidate)
+            self._apply_generation_field_prefilter(candidate)
             candidate.scorecard = build_scorecard(
                 candidate,
                 self.config.thresholds,
@@ -113,9 +115,25 @@ class PipelineCandidatePoolMixin:
             cache_key=candidate.dataset_id or self._active_dataset_id or "default",
             extract_fields=extract_fields,
             extract_operators=extract_operators,
+            reject_unsupported=True,
         )
         if outcome.get("result") is not None:
             self._record_local_backtest_knowledge(candidate, outcome["result"])
+
+    def _apply_generation_field_prefilter(self, candidate: Candidate) -> None:
+        non_signal_fields = non_signal_generation_fields(candidate)
+        if not non_signal_fields:
+            return
+        local = dict(candidate.local_quality or {})
+        reasons = list(local.get("reasons") or [])
+        reason = "non_signal_generation_fields=" + ",".join(non_signal_fields[:8])
+        if reason not in reasons:
+            reasons.append(reason)
+        local["passed"] = False
+        local["reasons"] = reasons
+        local["score"] = max(0.0, round(float(local.get("score", 0.0) or 0.0) - 8.0, 2))
+        local["non_signal_generation_fields"] = non_signal_fields
+        candidate.local_quality = local
 
     def _record_local_backtest_knowledge(self, candidate: Candidate, result: dict) -> None:
         try:
@@ -186,6 +204,7 @@ class PipelineCandidatePoolMixin:
             attempts += 1
             if not generated:
                 break
+            self._attach_active_assistant_guidance(generated)
             self.produced_count += len(generated)
             for candidate in generated:
                 self._record_lifecycle(candidate, "generated", "候选池补位生成")

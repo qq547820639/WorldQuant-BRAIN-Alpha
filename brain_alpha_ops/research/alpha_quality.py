@@ -468,6 +468,20 @@ def _add_local_quality_reasons(candidate: Candidate, reasons: list[dict[str, Any
             for reason in local_backtest.get("reasons", [])
             if str(reason)
         ]
+        if local_backtest.get("advisory") is True:
+            reason = _reason(
+                "local_backtest_advisory_failed",
+                "local_quality_advisory",
+                "warning",
+                "Exploratory local backtest did not meet synthetic thresholds",
+                field="local_quality.local_backtest.pass_local",
+                value=False,
+                expected="official BRAIN simulation remains the source of truth",
+            )
+            if failed_reasons:
+                reason["details"] = failed_reasons[:5]
+            reasons.append(reason)
+            return
         reason = _reason(
             "local_backtest_failed",
             "local_quality_failed",

@@ -23,6 +23,7 @@ export interface JobStatus {
   result?: unknown;
   error?: string;
   progress?: JobProgress;
+  official_context_cache?: OfficialContextCache;
 }
 
 export interface JobProgress {
@@ -36,6 +37,7 @@ export interface JobProgress {
   percent?: number;
   percent_complete?: number;
   eta_seconds?: number;
+  eta_deadline_at_ms?: number;
   elapsed_seconds?: number;
   candidates_generated?: number;
   candidates_passed?: number;
@@ -53,24 +55,61 @@ export interface JobProgress {
   [key: string]: unknown;
 }
 
+export interface OfficialContextCache {
+  ok?: boolean;
+  fields_count?: number;
+  operators_count?: number;
+  datasets_count?: number;
+  error?: string;
+  manifest?: {
+    complete?: boolean;
+    is_stale?: boolean;
+    missing_files?: string[];
+    stale_files?: string[];
+    record_counts?: Record<string, number>;
+  };
+}
+
 export type ProgressLifecycle = "idle" | "loading" | "progress" | "success" | "error";
 
 export interface UnifiedProgress {
   task_id?: string;
   job_id?: string;
+  operation?: string;
   phase?: string;
   phase_label?: string;
+  status_code?: string;
   status?: string;
   status_message?: string;
   message?: string;
   percent?: number | null;
   percent_complete?: number | null;
   eta_seconds?: number | null;
+  eta_deadline_at_ms?: number | null;
   done?: number;
   checked?: number;
   submitted?: number;
   scanned?: number;
   total?: number;
+  api_reported_total?: number;
+  filter_window_count?: number;
+  remaining_items?: number;
+  has_more?: boolean;
+  pagination_complete?: boolean;
+  pagination_target?: string;
+  stop_reason?: string;
+  page_number?: number;
+  pages_fetched?: number;
+  expected_pages?: number;
+  page_size?: number;
+  page_limit?: number;
+  offset?: number;
+  next_offset?: number;
+  new_unique_items?: number;
+  unique_items?: number;
+  confirming_total_boundary?: boolean;
+  indeterminate?: boolean | null;
+  open_ended?: boolean | null;
   error?: string;
 }
 
@@ -193,6 +232,7 @@ export interface OfficialMetrics {
 export interface QualityGate {
   passed: boolean;
   status: string;
+  submission_ready?: boolean;
   failed_reasons?: string[];
   failed_checks?: GateCheck[];
 }
@@ -301,6 +341,15 @@ export interface FailureItem {
 export interface RunConfig {
   environment: string;
   auto_submit: boolean;
+  credentials?: {
+    username?: string;
+    password?: string;
+    token?: string;
+    username_env?: string;
+    password_env?: string;
+    token_env?: string;
+    managed_credentials_available?: boolean;
+  };
   settings?: BrainSettings;
   budget?: BudgetConfig;
   thresholds?: ThresholdConfig;
@@ -402,6 +451,7 @@ export interface BacktestSlot {
   hypothesis?: string;
   official_metrics?: OfficialMetrics;
   gate?: QualityGate;
+  status_board?: BacktestStatusBoard;
 }
 
 export interface BacktestSlotsResponse {
@@ -412,6 +462,17 @@ export interface BacktestSlotsResponse {
   slots: BacktestSlot[];
   updated_at?: string;
   queue_summary?: BacktestQueueSummary;
+}
+
+export interface BacktestStatusBoard {
+  task_index?: number;
+  alpha_id?: string;
+  submitted_count?: number;
+  completed_count?: number;
+  failed_count?: number;
+  passed_count?: number;
+  not_passed_count?: number;
+  pass_rate?: number;
 }
 
 export interface BacktestQueueSummary {

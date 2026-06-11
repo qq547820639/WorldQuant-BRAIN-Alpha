@@ -45,7 +45,7 @@
 | 编号 | 描述 | 原严重性 | 当前状态 |
 |------|------|----------|----------|
 | NEW-001 | CLI `--base-url` SSRF | P1 | **✅ CLOSED** — `cli_handlers.py:409-419` 已添加 `_ALLOWED_BASE_URLS` 白名单校验 |
-| NEW-002 | `list_user_alphas()` 分页无上限 | P1 | **❌ 未修复** — 仍使用 `while True` 无限循环 |
+| NEW-002 | `list_user_alphas()` 完整分页边界 | P1 | **TRACKED_DEFERRED** — 不添加固定分页上限；保留完整同步并依赖重复页、无新增唯一项、显式取消和 offset recovery 保护 |
 | NEW-003 | `setSafeHtml` 无 HTML 转义 | P2 | **✅ CLOSED** — 现已调用 `escapeHtml()`，且新增 `setRawHtml` 明确语义 |
 | NEW-004 | `_update_dataclass` 无类型校验 | P2 | **❌ 未修复** — 配置注入仍无校验 |
 | NEW-005 | 标准库延迟导入 | P3 | **❌ 未修复** — hashlib/logging/time 仍在函数体内导入 |
@@ -311,25 +311,17 @@
 
 ### Phase 1: P1 立即修复（预计 2 小时）
 
-#### Step 1.1: 修复 list_user_alphas 无限分页（NEW-002）
+#### Step 1.1: 保留 list_user_alphas 完整分页并加强非截断保护（NEW-002）
 
-**文件**: `brain_alpha_ops/brain_api/official.py`
+**文件**: `brain_alpha_ops/brain_api/pagination_limits.py`、`brain_alpha_ops/brain_api/pagination.py`
 
 ```python
-# 添加常量（文件顶部附近）:
-_MAX_USER_ALPHAS_PAGES = 500
-
-# 替换 while True 为有界循环:
-for _page in range(1, _MAX_USER_ALPHAS_PAGES + 1):
-    # ... existing pagination logic ...
-else:
-    logger.warning(
-        "user_alphas pagination reached max pages limit (%d)", 
-        _MAX_USER_ALPHAS_PAGES
-    )
+MAX_USER_ALPHAS_PAGES = None
+# 用户 Alpha 云端清单同步不使用固定页数、固定条数或耗时截断；
+# 只允许自然结束、重复页保护、显式取消、offset recovery 或真实 API/认证错误停止。
 ```
 
-**验证**: `python -m pytest tests/ -v -k "list_user"`
+**验证**: `python -m pytest tests/test_official_adapter.py tests/test_web_sync_job.py tests/test_pipeline.py -v -k "list_user or cloud_sync"`
 
 ---
 

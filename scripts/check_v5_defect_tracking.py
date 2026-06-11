@@ -45,9 +45,9 @@ REQUIRED_VALIDATION_SNIPPETS = {
         "stalled_unique_pages",
         "tests/test_official_adapter.py::test_list_user_alphas_can_be_cancelled_by_progress_callback_without_page_cap",
         "tests/test_web_sync_job.py::test_run_sync_job_service_returns_false_to_cancel_alpha_scan",
-        "tests/test_web_sync_job.py::test_run_sync_job_service_stops_alpha_scan_on_elapsed_limit",
+        "tests/test_web_sync_job.py::test_run_sync_job_service_ignores_elapsed_limit_and_scans_all_pages",
         "tests/test_pipeline.py::test_pipeline_cloud_sync_cancel_does_not_merge_partial_rows",
-        "tests/test_pipeline.py::test_pipeline_cloud_sync_elapsed_limit_does_not_merge_partial_rows",
+        "tests/test_pipeline.py::test_pipeline_cloud_sync_ignores_elapsed_limit_and_merges_all_rows",
     ),
     "V5-012": (
         "tests/test_dynamic_research_components.py::test_template_registry_field_type_matching_is_dataset_specific",

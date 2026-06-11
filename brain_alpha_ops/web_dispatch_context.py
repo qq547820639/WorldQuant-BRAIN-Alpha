@@ -53,6 +53,8 @@ WEB_CONTEXT_ALLOWED_NAMES = frozenset({
     "_generate_candidates_payload",
     "_get_or_create_session",
     "_has_valid_admin_token",
+    "_mark_brain_connection_verified",
+    "_payload_with_brain_session_credentials",
     "_latest_run_history_path",
     "_lifecycle_from_job_service",
     "_load_check_results_service",
@@ -75,6 +77,7 @@ WEB_CONTEXT_ALLOWED_NAMES = frozenset({
     "_save_official_context_json_service",
     "_serve_service",
     "_session_cookie_header",
+    "_session_status",
     "_shutdown_server_service",
     "_smoke_test_server_service",
     "_snapshot_facade",
@@ -83,6 +86,7 @@ WEB_CONTEXT_ALLOWED_NAMES = frozenset({
     "_storage_jsonl_path",
     "_storage_jsonl_path_service",
     "_stream_token_for_session",
+    "_clear_brain_connection_verified",
     "_submission_preflight_advisory",
     "_submission_preflight_error_message",
     "_submit_background_job",
@@ -232,6 +236,10 @@ class WebDispatchSessionContext:
     get_or_create_session: Callable[[str], tuple[str, str]]
     stream_token_for_session: Callable[[str], str]
     session_cookie_header: Callable[[str], str]
+    session_status: Callable[[str], dict[str, Any]]
+    mark_brain_connection_verified: Callable[[str, dict[str, Any], dict[str, Any]], dict[str, Any]]
+    clear_brain_connection_verified: Callable[[str], dict[str, Any]]
+    payload_with_brain_session_credentials: Callable[[str, dict[str, Any]], dict[str, Any]]
     render_html: Callable[[str, str], str]
     session_end_payload: Callable[..., tuple[dict[str, Any], list[tuple[str, str]]]]
     expire_session: Callable[[str], None]
@@ -274,6 +282,7 @@ class WebDispatchResearchContext:
     latest_result_snapshot: Callable[[], dict[str, Any]]
     lifecycle_from_job: Callable[[dict[str, Any]], list[dict[str, Any]]]
     cloud_alpha_snapshot: Callable[..., dict[str, Any]]
+    official_context_file_counts: Callable[[], dict[str, Any]]
     research_memory_snapshot: Callable[..., dict[str, Any]]
     research_knowledge_snapshot: Callable[..., dict[str, Any]]
     research_observability_snapshot: Callable[..., dict[str, Any]]

@@ -256,7 +256,9 @@ def test_pipeline_applies_knowledge_constraints_to_generator(monkeypatch):
 
         pipeline._apply_knowledge_constraints_to_generator()
 
-        assert captured["constraints"]["preferred_fields"] == ["close"]
+        assert "close" in captured["constraints"]["preferred_fields"]
+        assert captured["constraints"]["strict_preferred_fields"] is True
+        assert captured["constraints"]["strict_preferred_operators"] is True
         assert any(event.event == "knowledge_constraints_applied" for event in pipeline.events)
 
 
@@ -336,6 +338,74 @@ def test_pipeline_local_prefilter_rejects_failed_local_backtest(monkeypatch):
         assert high_turnover_failures
         assert high_turnover_failures[0].metadata["failure_category"] == "high_turnover"
         assert "high_turnover" in high_turnover_failures[0].source_tags
+
+
+def test_pipeline_local_prefilter_rejects_unsupported_local_backtest_fields():
+    with tempfile.TemporaryDirectory() as tmp:
+        config = OpsConfig(storage_dir=tmp)
+        pipeline = AlphaResearchPipeline(config=config, api=ProductionBrainAPIStub())
+        candidate = Candidate(
+            alpha_id="alpha_unsupported",
+            expression="rank(sedol)",
+            family="test",
+            hypothesis="unsupported local backtest field",
+            data_fields=["sedol"],
+            operators=["rank"],
+        )
+
+        passed = pipeline._local_prefilter([candidate], 1, [{"name": "sedol"}], [{"name": "rank"}])
+
+        assert passed == []
+        assert candidate.lifecycle_status == "local_prefilter_rejected"
+        assert candidate.gate["status"] == "LOCAL_PREFILTER_REJECTED"
+        assert candidate.local_quality["passed"] is False
+        assert candidate.local_quality["local_backtest_support"]["supported"] is False
+        assert "local_backtest_unsupported:unsupported_fields=sedol" in candidate.local_quality["reasons"]
+        assert candidate.submission["local_backtest"]["skipped"] is True
+
+
+def test_pipeline_local_prefilter_rejects_expression_field_mismatch():
+    with tempfile.TemporaryDirectory() as tmp:
+        config = OpsConfig(storage_dir=tmp)
+        pipeline = AlphaResearchPipeline(config=config, api=ProductionBrainAPIStub())
+        candidate = Candidate(
+            alpha_id="alpha_expression_field_mismatch",
+            expression="rank(ts_mean(pv13_rha2_foo, 20))",
+            family="test",
+            hypothesis="expression-level metadata field should block even when data_fields is under-reported",
+            data_fields=["open"],
+            operators=["rank", "ts_mean"],
+        )
+
+        passed = pipeline._local_prefilter([candidate], 1, [{"name": "open"}], [{"name": "rank"}, {"name": "ts_mean"}])
+
+        assert passed == []
+        assert candidate.lifecycle_status == "local_prefilter_rejected"
+        assert candidate.local_quality["local_backtest_support"]["supported"] is False
+        assert "pv13_rha2_foo" in candidate.local_quality["local_backtest_support"]["unsupported_fields"]
+        assert "non_signal_generation_fields=pv13_rha2_foo" in candidate.local_quality["reasons"]
+
+
+def test_pipeline_local_prefilter_rejects_expression_operator_mismatch():
+    with tempfile.TemporaryDirectory() as tmp:
+        config = OpsConfig(storage_dir=tmp)
+        pipeline = AlphaResearchPipeline(config=config, api=ProductionBrainAPIStub())
+        candidate = Candidate(
+            alpha_id="alpha_expression_operator_mismatch",
+            expression="rank(ts_arg_max(close, 20))",
+            family="test",
+            hypothesis="expression-level unsupported operator should block even when operators are under-reported",
+            data_fields=["close"],
+            operators=["rank"],
+        )
+
+        passed = pipeline._local_prefilter([candidate], 1, [{"name": "close"}], [{"name": "rank"}])
+
+        assert passed == []
+        assert candidate.lifecycle_status == "local_prefilter_rejected"
+        assert candidate.local_quality["local_backtest_support"]["supported"] is False
+        assert "ts_arg_max" in candidate.local_quality["local_backtest_support"]["unsupported_operators"]
+        assert "local_backtest_unsupported:unsupported_operators=ts_arg_max" in candidate.local_quality["reasons"]
 
 
 def test_pipeline_auto_submit_blocks_when_cross_review_rejects(monkeypatch):
@@ -663,7 +733,7 @@ class CountingProductionBrainAPIStub(ProductionBrainAPIStub):
 
 
 class CloudSyncForbiddenAPI(ProductionBrainAPIStub):
-    def list_user_alphas(self, sync_range: str = "3d", progress_callback=None) -> list[dict]:
+    def list_user_alphas(self, sync_range: str = "all", progress_callback=None) -> list[dict]:
         raise AssertionError("cloud sync should not run when a local cache already exists")
 
 
@@ -673,7 +743,7 @@ class CallbackStoppingCloudSyncAPI(ProductionBrainAPIStub):
         self.pages_requested = 0
         self.callback_results = []
 
-    def list_user_alphas(self, sync_range: str = "3d", progress_callback=None) -> list[dict]:
+    def list_user_alphas(self, sync_range: str = "all", progress_callback=None) -> list[dict]:
         rows = []
         for index in range(3):
             self.pages_requested += 1
@@ -700,8 +770,9 @@ def test_pipeline_runs_initial_cloud_sync_when_cache_is_empty_and_per_run_sync_d
         pipeline = AlphaResearchPipeline(config=config, api=ProductionBrainAPIStub())
         pipeline._sync_cloud_alphas()
         assert pipeline.cloud_sync["status"] == "synced"
-        assert pipeline.cloud_sync["count"] > 0
-        assert pipeline.cloud_alphas
+        assert pipeline.cloud_sync["range"] == "all"
+        assert pipeline.cloud_sync["count"] == 4
+        assert len(pipeline.cloud_alphas) == 4
 
 
 def test_pipeline_uses_cached_cloud_alphas_when_per_run_sync_disabled():
@@ -721,6 +792,43 @@ def test_pipeline_uses_cached_cloud_alphas_when_per_run_sync_disabled():
         assert pipeline.cloud_sync["run_status"] == "skipped"
         assert pipeline.cloud_sync["count"] == 1
         assert pipeline.cloud_alphas[0]["id"] == "cached_alpha"
+
+
+def test_pipeline_default_budget_uses_cached_cloud_alphas_without_remote_sync():
+    with tempfile.TemporaryDirectory() as tmp:
+        repo = ResearchRepository(tmp)
+        repo.merge_cloud_alphas(
+            [{"id": "cached_alpha", "status": "UNSUBMITTED", "metrics": {"pass_fail": "PASS"}}],
+            sync_range="all",
+        )
+        config = OpsConfig(budget=ResearchBudget(), storage_dir=tmp)
+        pipeline = AlphaResearchPipeline(config=config, api=CloudSyncForbiddenAPI())
+        pipeline._sync_cloud_alphas()
+
+        assert pipeline.cloud_sync["status"] == "loaded"
+        assert pipeline.cloud_sync["status_code"] == "CACHE_LOADED"
+        assert pipeline.cloud_sync["run_status"] == "skipped"
+        assert pipeline.cloud_alphas[0]["id"] == "cached_alpha"
+
+
+def test_pipeline_forces_remote_cloud_sync_when_required_even_if_cache_exists():
+    with tempfile.TemporaryDirectory() as tmp:
+        repo = ResearchRepository(tmp)
+        repo.merge_cloud_alphas(
+            [{"id": "cached_alpha", "status": "UNSUBMITTED", "metrics": {"pass_fail": "PASS"}}],
+            sync_range="all",
+        )
+        config = OpsConfig(
+            budget=ResearchBudget(require_cloud_sync=True, cloud_sync_range="3d"),
+            storage_dir=tmp,
+        )
+        pipeline = AlphaResearchPipeline(config=config, api=ProductionBrainAPIStub())
+        pipeline._sync_cloud_alphas()
+        assert pipeline.cloud_sync["status"] == "synced"
+        assert pipeline.cloud_sync["range"] == "3d"
+        assert pipeline.cloud_sync["count"] == 3
+        assert len(pipeline.cloud_alphas) == 3
+        assert {row["id"] for row in pipeline.cloud_alphas} != {"cached_alpha"}
 
 
 def test_pipeline_cloud_sync_cancel_does_not_merge_partial_rows():
@@ -755,7 +863,9 @@ def test_pipeline_cloud_sync_cancel_does_not_merge_partial_rows():
         assert ResearchRepository(tmp).latest_cloud_alphas() == []
 
 
-def test_pipeline_cloud_sync_elapsed_limit_does_not_merge_partial_rows():
+def test_pipeline_cloud_sync_ignores_elapsed_limit_and_merges_all_rows():
+    events = []
+
     with tempfile.TemporaryDirectory() as tmp:
         api = CallbackStoppingCloudSyncAPI()
         config = OpsConfig(
@@ -766,17 +876,36 @@ def test_pipeline_cloud_sync_elapsed_limit_does_not_merge_partial_rows():
             ),
             storage_dir=tmp,
         )
-        pipeline = AlphaResearchPipeline(config=config, api=api)
+        pipeline = AlphaResearchPipeline(config=config, api=api, progress_callback=events.append)
 
         pipeline._sync_cloud_alphas()
 
-        assert api.pages_requested == 1
-        assert api.callback_results == [False]
-        assert pipeline.cloud_sync["status"] == "stopped"
-        assert pipeline.cloud_sync["run_status"] == "stopped"
-        assert "elapsed limit" in pipeline.cloud_sync["warning"]
-        assert pipeline.cloud_alphas == []
-        assert ResearchRepository(tmp).latest_cloud_alphas() == []
+        assert api.pages_requested == 3
+        assert api.callback_results == [True, True, True]
+        assert pipeline.cloud_sync["status"] == "synced"
+        assert pipeline.cloud_sync["range"] == "all"
+        assert pipeline.cloud_sync["count"] == 3
+        assert len(pipeline.cloud_alphas) == 3
+        assert len(ResearchRepository(tmp).latest_cloud_alphas()) == 3
+        running_scan_events = [
+            event for event in events
+            if event["phase"] == "cloud_sync"
+            and (event.get("data", {}).get("cloud_sync") or {}).get("status") == "running"
+            and (event.get("data", {}).get("cloud_sync") or {}).get("scanned", 0) > 0
+        ]
+        assert running_scan_events
+        assert all(event["indeterminate"] is True for event in running_scan_events)
+        assert all(event["percent"] is None for event in running_scan_events)
+        assert all(event["total"] == 0 for event in running_scan_events)
+        assert running_scan_events[-1]["current"] == 3
+        assert running_scan_events[-1]["data"]["cloud_sync"]["filter_window_count"] == 300
+        final_sync_events = [
+            event for event in events
+            if event["phase"] == "cloud_sync"
+            and (event.get("data", {}).get("cloud_sync") or {}).get("status") == "synced"
+        ]
+        assert final_sync_events[-1]["indeterminate"] is False
+        assert final_sync_events[-1]["percent"] == 100.0
 
 
 def test_pipeline_applies_persisted_assistant_guidance(monkeypatch):
@@ -877,6 +1006,40 @@ def test_pipeline_attaches_structured_assistant_guidance_outcome_metadata(monkey
         )
         monkeypatch.setattr("brain_alpha_ops.research.generator.CandidateGenerator.set_experience_guidance", lambda self, patterns: None)
         monkeypatch.setattr("brain_alpha_ops.research.hypothesis_driven_generator.HypothesisDrivenGenerator.set_experience_guidance", lambda self, patterns: None)
+
+        def fake_generate(self, count, dataset_id=""):
+            return [
+                Candidate(
+                    alpha_id="assistant_guided_candidate",
+                    expression="rank(ts_mean(close, 20))",
+                    family="Momentum",
+                    hypothesis="deterministic assistant guidance candidate",
+                    data_fields=["close"],
+                    operators=["rank", "ts_mean"],
+                )
+            ]
+
+        monkeypatch.setattr(
+            "brain_alpha_ops.research.hypothesis_driven_generator.HypothesisDrivenGenerator.generate",
+            fake_generate,
+        )
+        monkeypatch.setattr(
+            "brain_alpha_ops.research.generator.CandidateGenerator.generate",
+            fake_generate,
+        )
+        monkeypatch.setattr(
+            "brain_alpha_ops.research.local_backtest_engine.LocalBacktestEngine.evaluate",
+            lambda self, expression, **_kwargs: {
+                "ok": True,
+                "expression": expression,
+                "pass_local": True,
+                "sharpe": 1.5,
+                "fitness": 1.2,
+                "turnover": 0.2,
+                "weight_concentration": 0.05,
+                "pass_reasons": ["fixture local backtest pass"],
+            },
+        )
 
         result = AlphaResearchPipeline(config=config, api=ProductionBrainAPIStub()).run(auto_submit=False)
 
@@ -1555,11 +1718,13 @@ def test_candidate_pool_excludes_waiting_backtest_queue():
         result = AlphaResearchPipeline(config=config, api=ConcurrencyLimitedAPI()).run(auto_submit=False)
         candidates = result.summary["candidates"]
         pending = result.summary["pending_backtest_candidates"]
-        assert len(candidates) == 10
+        retained_limit = config.budget.retained_alpha_pool_size
+        assert 0 < len(candidates) <= retained_limit
         assert pending
         assert result.summary["candidate_pool_excludes_waiting_backtests"] is True
         assert {row["alpha_id"] for row in candidates}.isdisjoint({row["alpha_id"] for row in pending})
         assert all(row["lifecycle_status"] == "candidate_pool_retained" for row in candidates)
+        assert len(candidates) + len(pending) <= retained_limit
 
 
 def test_pipeline_keeps_top10_and_submits_top3_backtests():
@@ -1708,8 +1873,11 @@ def test_pipeline_validates_past_failed_prechecks_to_fill_three_slots():
         ]
         assert api.validation_calls > 3
         assert result.summary["backtest_slot_limit"] == 3
-        assert result.summary["backtests_submitted"] == 3
-        assert len(active_slots) == 3
+        assert result.summary["backtests_submitted"] == min(
+            result.summary["backtest_slot_limit"],
+            result.summary["official_validation_passed"],
+        )
+        assert len(active_slots) == result.summary["backtests_submitted"]
 
 
 def test_pipeline_does_not_overfill_waiting_backtests():

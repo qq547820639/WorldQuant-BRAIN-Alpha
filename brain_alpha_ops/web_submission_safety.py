@@ -85,11 +85,10 @@ def submission_preflight_error_message(
     cloud_snapshot = cloud_alpha_snapshot()
     cloud_rows = cloud_snapshot.get("alphas") or []
     cloud_summary = cloud_snapshot.get("summary") or {}
-    if run_config.ops.budget.require_cloud_sync:
-        if not cloud_rows:
-            return "提交前请先同步云端数据。"
-        if cloud_summary.get("is_stale"):
-            return "云端数据已超过 24 小时未刷新，请先同步云端数据。"
+    if not cloud_rows:
+        return "提交前请先同步云端数据。"
+    if cloud_summary.get("is_stale"):
+        return "云端数据已超过 24 小时未刷新，请先同步云端数据。"
 
     cloud_status = cloud_status_for(candidate, cloud_rows)
     if str(cloud_status.get("status", "")).upper() in {"ACTIVE", "SUBMITTED", "PRODUCTION", "CONDUCTED"}:
@@ -207,21 +206,20 @@ def submission_preflight_advisory(
     cloud_snapshot = cloud_alpha_snapshot()
     cloud_rows = cloud_snapshot.get("alphas") or []
     cloud_summary = cloud_snapshot.get("summary") or {}
-    if run_config.ops.budget.require_cloud_sync:
-        if not cloud_rows:
-            return submit_preflight_block(
-                "SUBMIT_CLOUD_SYNC_REQUIRED",
-                "Cloud data must be synced before submission.",
-                category="conflict",
-                action="Run cloud sync before submitting.",
-            )
-        if cloud_summary.get("is_stale"):
-            return submit_preflight_block(
-                "SUBMIT_CLOUD_SYNC_STALE",
-                "Cloud data is stale; refresh cloud sync before submission.",
-                category="conflict",
-                action="Refresh cloud sync before submitting.",
-            )
+    if not cloud_rows:
+        return submit_preflight_block(
+            "SUBMIT_CLOUD_SYNC_REQUIRED",
+            "Cloud data must be synced before submission.",
+            category="conflict",
+            action="Run cloud sync before submitting.",
+        )
+    if cloud_summary.get("is_stale"):
+        return submit_preflight_block(
+            "SUBMIT_CLOUD_SYNC_STALE",
+            "Cloud data is stale; refresh cloud sync before submission.",
+            category="conflict",
+            action="Refresh cloud sync before submitting.",
+        )
 
     cloud_status = cloud_status_for(candidate, cloud_rows)
     if str(cloud_status.get("status", "")).upper() in {"ACTIVE", "SUBMITTED", "PRODUCTION", "CONDUCTED"}:

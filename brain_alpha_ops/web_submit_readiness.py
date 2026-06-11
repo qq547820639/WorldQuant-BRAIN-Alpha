@@ -61,7 +61,7 @@ def compact_submit_readiness_payload(result: dict[str, Any]) -> dict[str, Any]:
             {"code": str(row.get("code") or ""), "message": str(row.get("message") or "")}
             for row in result.get("findings", [])
             if isinstance(row, dict)
-        ][:10],
+        ],
         "best_candidate": {
             "alpha_id": str(best_candidate.get("alpha_id") or ""),
             "official_alpha_id": str(best_candidate.get("official_alpha_id") or ""),
@@ -73,7 +73,7 @@ def compact_submit_readiness_payload(result: dict[str, Any]) -> dict[str, Any]:
             "risk_level": str(best_candidate.get("risk_level") or ""),
             "blocking_reasons": [
                 str(reason) for reason in best_candidate.get("blocking_reasons", []) if str(reason)
-            ][:10],
+            ],
         },
         "required_next_steps": submit_readiness_next_steps(result),
     }
@@ -81,7 +81,7 @@ def compact_submit_readiness_payload(result: dict[str, Any]) -> dict[str, Any]:
     return payload
 
 
-def counter_rows(counter: object, *, limit: int = 6) -> list[dict[str, int]]:
+def counter_rows(counter: object) -> list[dict[str, int]]:
     if not isinstance(counter, dict):
         return []
     rows: list[tuple[str, int]] = []
@@ -93,7 +93,7 @@ def counter_rows(counter: object, *, limit: int = 6) -> list[dict[str, int]]:
         rows.append((str(key), count))
     return [
         {"reason": reason, "count": count}
-        for reason, count in sorted(rows, key=lambda item: (-item[1], item[0]))[:limit]
+        for reason, count in sorted(rows, key=lambda item: (-item[1], item[0]))
     ]
 
 

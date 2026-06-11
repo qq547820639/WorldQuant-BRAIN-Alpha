@@ -377,14 +377,17 @@ def print_calibration_report(
         print(f"\n  【Scorecard 三层权重校准】")
         print(f"  样本数: {scorecard_result.get('sample_size', 0)} | "
               f"与 Sharpe 相关系数: {scorecard_result.get('correlation_with_sharpe', 'N/A')}")
-        print(f"\n  {'层':<16} {'原权重':>8} {'优化权重':>10}")
-        print(f"  {'-'*34}")
-        for key in ["prior", "empirical", "checklist"]:
-            orig = scorecard_result["original_weights"].get(key, 0)
-            opt = scorecard_result.get("optimized_weights", {}).get(key, 0)
-            delta = "+" if opt > orig else ""
-            print(f"  {key:<16} {orig:>8.2f} {delta}{opt:>9.2f}")
-        print(f"\n  {scorecard_result.get('summary', '')}")
+        if "original_weights" not in scorecard_result:
+            print(f"  {scorecard_result.get('error', '校准结果不完整，暂不能生成权重表。')}")
+        else:
+            print(f"\n  {'层':<16} {'原权重':>8} {'优化权重':>10}")
+            print(f"  {'-'*34}")
+            for key in ["prior", "empirical", "checklist"]:
+                orig = scorecard_result["original_weights"].get(key, 0)
+                opt = scorecard_result.get("optimized_weights", {}).get(key, 0)
+                delta = "+" if opt > orig else ""
+                print(f"  {key:<16} {orig:>8.2f} {delta}{opt:>9.2f}")
+            print(f"\n  {scorecard_result.get('summary', '')}")
 
     # ── 使用建议 ──
     print(f"\n  【使用建议】")

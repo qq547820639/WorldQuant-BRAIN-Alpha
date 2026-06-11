@@ -93,6 +93,7 @@ class PipelineRuntimeState:
     _context_field_names: set[str] = field(default_factory=set)
     _context_operator_names: set[str] = field(default_factory=set)
     _dataset_field_names_cache: dict[str, set[str]] = field(default_factory=dict)
+    _active_assistant_guidance: dict[str, Any] | None = None
 
     check_registry: Any | None = None
     convergence: Any | None = None

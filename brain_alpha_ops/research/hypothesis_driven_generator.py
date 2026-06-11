@@ -30,6 +30,7 @@ from brain_alpha_ops.research.expression_ast import (
     expression_fingerprint,
     expression_key,
     expression_similarity,
+    profile_expression,
 )
 from brain_alpha_ops.research.hypothesis_expression_support import HypothesisExpressionSupport
 from brain_alpha_ops.research.field_quality import generation_field_ids
@@ -40,6 +41,7 @@ from brain_alpha_ops.research.fallback_generation import (
     is_generated_duplicate,
     normalize_operator_aliases,
 )
+from brain_alpha_ops.research.generator_metadata import expression_windows_within_constraints
 from brain_alpha_ops.research.hypothesis_library import (
     Hypothesis,
     ExpressionFamily,
@@ -329,8 +331,6 @@ class FieldSelector:
             return set()
         try:
             fields = set(generation_field_ids(loader.get_fields(dataset_id)))
-            if not fields:
-                fields = {field.id.lower() for field in loader.get_fields(dataset_id)}
             self._dataset_field_cache[dataset_id] = fields
             return fields
         except Exception:
@@ -588,6 +588,8 @@ class HypothesisDrivenGenerator:
             "preferred_fields": [],
             "preferred_operators": [],
             "forbidden_patterns": [],
+            "strict_preferred_fields": False,
+            "strict_preferred_operators": False,
         }
 
     # ── Public API (CandidateGenerator-compatible) ──────────────────
@@ -595,10 +597,7 @@ class HypothesisDrivenGenerator:
     def update_context(self, fields: list[Any], operators: list[Any]) -> None:
         """Update known fields/operators."""
         if fields:
-            if isinstance(fields[0], dict):
-                self._fields = {str(item.get("name", "")).lower() for item in fields if item.get("name")}
-            else:
-                self._fields = {str(f).lower() for f in fields}
+            self._fields = set(generation_field_ids(fields))
         if operators:
             if isinstance(operators[0], dict):
                 self._operators = {str(item.get("name", "")).lower() for item in operators if item.get("name")}
@@ -610,7 +609,7 @@ class HypothesisDrivenGenerator:
         self._dataset_id = dataset_id
         if self._mapper:
             mapper_fields = self._mapper.fields_for(dataset_id)
-            self._fields = set(mapper_fields)
+            self._fields = set(generation_field_ids(mapper_fields))
         if self._loader:
             try:
                 eligible_fields = generation_field_ids(self._loader.get_fields(dataset_id))
@@ -672,18 +671,36 @@ class HypothesisDrivenGenerator:
     def set_knowledge_constraints(self, constraints: dict[str, Any] | None) -> None:
         """Bias generation using structured knowledge-base constraints."""
         constraints = dict(constraints or {})
-        preferred_fields = [str(item).lower() for item in constraints.get("preferred_fields") or [] if str(item)]
+        requested_fields = [str(item).lower() for item in constraints.get("preferred_fields") or [] if str(item)]
+        preferred_fields = self._official_preferred_fields(requested_fields)
         preferred_operators = [str(item).lower() for item in constraints.get("preferred_operators") or [] if str(item)]
         forbidden_patterns = [str(item).strip() for item in constraints.get("forbidden_patterns") or [] if str(item)]
+        strict_preferred_fields = bool(constraints.get("strict_preferred_fields"))
+        strict_preferred_operators = bool(constraints.get("strict_preferred_operators"))
         self._knowledge_constraints = {
             "preferred_fields": preferred_fields,
             "preferred_operators": preferred_operators,
             "forbidden_patterns": forbidden_patterns,
+            "strict_preferred_fields": strict_preferred_fields,
+            "strict_preferred_operators": strict_preferred_operators,
         }
         if preferred_fields:
             self._fields.update(preferred_fields)
         if preferred_operators:
             self._operators.update(preferred_operators)
+
+    def _official_preferred_fields(self, fields: list[str]) -> list[str]:
+        if not fields:
+            return []
+        official_fields = {str(field).lower() for field in self._fields if str(field)}
+        if not official_fields and self._loader:
+            try:
+                loaded_fields = self._loader.get_fields(self._dataset_id)
+                official_fields = {str(field).lower() for field in generation_field_ids(loaded_fields)}
+            except Exception:
+                logger.warning("official preferred-field filtering failed closed", exc_info=True)
+                official_fields = set()
+        return [field for field in fields if field in official_fields]
 
     def _expression_support(self) -> HypothesisExpressionSupport:
         return HypothesisExpressionSupport(
@@ -717,20 +734,7 @@ class HypothesisDrivenGenerator:
                     candidate = self._generate_random_exploration(ds)
 
                 if candidate is not None:
-                    if is_high_turnover_generation_risk(candidate.expression):
-                        candidate.lifecycle_status = "generation_risk_skipped"
-                        continue
-                    if is_generated_duplicate(candidate.expression, seen_keys, seen_expressions):
-                        candidate.lifecycle_status = "duplicate_expression_skipped"
-                        continue
-                    key = expression_key(candidate.expression)
-                    if self._observability_diversity_boost:
-                        if key in seen_keys or self._is_observability_avoided(candidate.expression):
-                            continue
-                        self._mark_observability_candidate(candidate)
-                    seen_keys.add(key)
-                    seen_expressions.append(candidate.expression)
-                    candidates.append(candidate)
+                    self._try_accept_candidate(candidate, candidates, seen_keys, seen_expressions)
             except Exception as exc:
                 logger.warning(
                     "HypothesisDrivenGenerator: %s mode failed for candidate %d: %s",
@@ -740,20 +744,7 @@ class HypothesisDrivenGenerator:
                 try:
                     fallback = self._generate_random_exploration(ds)
                     if fallback is not None:
-                        if is_high_turnover_generation_risk(fallback.expression):
-                            fallback.lifecycle_status = "generation_risk_skipped"
-                            continue
-                        if is_generated_duplicate(fallback.expression, seen_keys, seen_expressions):
-                            fallback.lifecycle_status = "duplicate_expression_skipped"
-                            continue
-                        key = expression_key(fallback.expression)
-                        if self._observability_diversity_boost:
-                            if key in seen_keys or self._is_observability_avoided(fallback.expression):
-                                continue
-                            self._mark_observability_candidate(fallback)
-                        seen_keys.add(key)
-                        seen_expressions.append(fallback.expression)
-                        candidates.append(fallback)
+                        self._try_accept_candidate(fallback, candidates, seen_keys, seen_expressions)
                 except Exception:
                     logger.warning("random exploration fallback generation failed", exc_info=True)
                     continue
@@ -770,6 +761,32 @@ class HypothesisDrivenGenerator:
         )
 
         return candidates
+
+    def _try_accept_candidate(
+        self,
+        candidate: Candidate,
+        candidates: list[Candidate],
+        seen_keys: set[str],
+        seen_expressions: list[str],
+    ) -> bool:
+        if not self._expression_satisfies_strict_preferred_constraints(candidate.expression):
+            candidate.lifecycle_status = "strict_preferred_constraints_skipped"
+            return False
+        if is_high_turnover_generation_risk(candidate.expression):
+            candidate.lifecycle_status = "generation_risk_skipped"
+            return False
+        if is_generated_duplicate(candidate.expression, seen_keys, seen_expressions):
+            candidate.lifecycle_status = "duplicate_expression_skipped"
+            return False
+        key = expression_key(candidate.expression)
+        if self._observability_diversity_boost:
+            if key in seen_keys or self._is_observability_avoided(candidate.expression):
+                return False
+            self._mark_observability_candidate(candidate)
+        seen_keys.add(key)
+        seen_expressions.append(candidate.expression)
+        candidates.append(candidate)
+        return True
 
     # ── Generation Modes ────────────────────────────────────────────
 
@@ -824,6 +841,8 @@ class HypothesisDrivenGenerator:
             expr_family, selected_fields, window,
             field_categories=hypothesis.field_categories,
         )
+        if not expression_windows_within_constraints(expression):
+            return self._generate_random_exploration(dataset_id)
 
         # Determine which field category was used
         field_category_used = ""
@@ -886,6 +905,8 @@ class HypothesisDrivenGenerator:
                 tmpl.expression, ds, seed=random.randint(0, 1000)
             )
             mutated = self._normalize_generated_expression(mutated)
+            if not expression_windows_within_constraints(mutated):
+                return self._generate_random_exploration(dataset_id)
 
             meta = GenerationMeta(
                 mode="experience_feedback",
@@ -936,6 +957,8 @@ class HypothesisDrivenGenerator:
                 tmpl.expression, ds, seed=random.randint(0, 10000)
             )
             mutated = self._normalize_generated_expression(mutated)
+            if not expression_windows_within_constraints(mutated):
+                return self._generate_bare_fallback(dataset_id)
 
             meta = GenerationMeta(
                 mode="random_exploration",
@@ -983,6 +1006,12 @@ class HypothesisDrivenGenerator:
             )
             return None
         operators = {str(item).lower() for item in self._operators if str(item)}
+        if self._knowledge_constraints.get("strict_preferred_operators"):
+            operators &= {
+                str(item).lower()
+                for item in self._knowledge_constraints.get("preferred_operators") or []
+                if str(item)
+            }
         windows = self._experience_windows or DEFAULT_WINDOWS
         attempt_limit = max(1, len(fields) * len(windows))
         for _ in range(attempt_limit):
@@ -994,6 +1023,8 @@ class HypothesisDrivenGenerator:
             )
             self._fallback_cursor = spec.next_cursor
             expression = normalize_operator_aliases(spec.expression)
+            if not expression_windows_within_constraints(expression):
+                continue
             if self._expression_forbidden(expression):
                 continue
 
@@ -1023,7 +1054,7 @@ class HypothesisDrivenGenerator:
         return None
 
     def _normalize_generated_expression(self, expression: str) -> str:
-        fallback_fields = sorted(self._fields)
+        fallback_fields = self._prioritize_knowledge_fields(sorted(self._fields))
         normalized = normalize_operator_aliases(expression)
         if fallback_fields:
             normalized = self._sanitize_expression(normalized, fallback_fields)
@@ -1073,11 +1104,47 @@ class HypothesisDrivenGenerator:
                 logger.debug("failed to compare forbidden expression pattern", exc_info=True)
         return False
 
+    def _expression_satisfies_strict_preferred_constraints(self, expression: str) -> bool:
+        if not (
+            self._knowledge_constraints.get("strict_preferred_fields")
+            or self._knowledge_constraints.get("strict_preferred_operators")
+        ):
+            return True
+        profile = profile_expression(expression)
+        if not profile.parsed:
+            return False
+        if self._knowledge_constraints.get("strict_preferred_fields"):
+            allowed_fields = {
+                str(field).lower()
+                for field in self._knowledge_constraints.get("preferred_fields") or []
+                if str(field)
+            }
+            if not allowed_fields:
+                return False
+            expression_fields = {str(field).lower() for field in profile.fields if str(field)}
+            expression_fields -= {"market", "sector", "industry", "subindustry"}
+            if not expression_fields or not expression_fields <= allowed_fields:
+                return False
+        if self._knowledge_constraints.get("strict_preferred_operators"):
+            allowed_operators = {
+                str(operator).lower()
+                for operator in self._knowledge_constraints.get("preferred_operators") or []
+                if str(operator)
+            }
+            if not allowed_operators:
+                return False
+            expression_operators = {str(operator).lower() for operator in profile.operators if str(operator)}
+            if expression_operators - allowed_operators:
+                return False
+        return True
+
     def _prioritize_knowledge_fields(self, fields: list[str]) -> list[str]:
         preferred = set(self._knowledge_constraints.get("preferred_fields") or [])
         if not preferred:
             return list(fields)
         front = [field for field in fields if field.lower() in preferred]
+        if self._knowledge_constraints.get("strict_preferred_fields"):
+            return front
         rest = [field for field in fields if field.lower() not in preferred]
         return front + rest
 

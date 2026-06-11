@@ -1,6 +1,6 @@
 /** Scoring visualization — Terminal Precision v2.0 */
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { requestJobCancel } from "@/api/jobCancel";
+import { isCancelConfirmed, requestJobCancel } from "@/api/jobCancel";
 import { useApi } from "@/hooks/useApi";
 import { useSSE } from "@/hooks/useSSE";
 import ProgressFeedback from "@/components/ProgressFeedback";
@@ -18,6 +18,13 @@ interface Props {
 export default function ScoringPanel({ notify, candidate }: Props) {
   const scoreApi = useApi<{ job_id?: string; task_id?: string }>();
   const attributionApi = useApi<ScoringAttributionResponse>();
+  const callScoreApi = scoreApi.call;
+  const scoreApiError = scoreApi.error;
+  const callAttributionApi = attributionApi.call;
+  const resetAttributionApi = attributionApi.reset;
+  const attributionData = attributionApi.data;
+  const attributionLoading = attributionApi.loading;
+  const attributionError = attributionApi.error;
   const [scoring, setScoring] = useState<ScoringResult | null>(null);
   const [scoreTaskId, setScoreTaskId] = useState<string | null>(null);
   const [scoreState, setScoreState] = useState<"idle" | "loading" | "progress" | "success" | "error">("idle");
@@ -46,11 +53,23 @@ export default function ScoringPanel({ notify, candidate }: Props) {
   const handleScoreStreamExhausted = useCallback(() => {
     if (!scoreTaskId) return;
     const cancelledTaskId = scoreTaskId;
-    const message = "评分进度暂时不可确认，系统已安全停止。请稍后重试评分。";
+    const message = "评分进度暂时不可确认，正在请求后台自动中断；取消确认前请稍后重试评分。";
     setScoreState("error"); setScoreError(message);
     setScoreProgress((c) => ({ ...(c || {}), phase: c?.phase || "scoring", status_message: message, percent_complete: 100 }));
     setScoreTaskId(null);
-    void requestJobCancel({ jobId: cancelledTaskId, reason: "sse_exhausted", message });
+    void requestJobCancel({ jobId: cancelledTaskId, reason: "sse_exhausted", message }).then((result) => {
+      const finalMessage = isCancelConfirmed(result)
+        ? "评分进度暂时不可确认，已确认后台停止。请稍后重试评分。"
+        : "评分进度暂时不可确认，已请求后台自动中断，但取消未确认。请刷新状态或稍后重试。";
+      setScoreError(finalMessage);
+      setScoreProgress((current) => ({
+        ...(current || {}),
+        phase: current?.phase || "scoring",
+        status_message: finalMessage,
+        percent_complete: 100,
+      }));
+      notify(isCancelConfirmed(result) ? "warning" : "error", finalMessage);
+    });
     notify("warning", message);
   }, [notify, scoreTaskId]);
 
@@ -60,30 +79,30 @@ export default function ScoringPanel({ notify, candidate }: Props) {
 
   const loadScore = useCallback(async () => {
     if (!candidate) return;
-    setScoring(null); attributionApi.reset(); setScoreState("loading"); setScoreError(null);
+    setScoring(null); resetAttributionApi(); setScoreState("loading"); setScoreError(null);
     setScoreProgress({ phase: "scoring", status_message: `正在为 ${candidate.alpha_id || "候选"} 启动评分。` });
     const payload = candidate.alpha_id ? { alpha_id: candidate.alpha_id, candidate } : { candidate };
     const [scoreResult, attributionResult] = await Promise.all([
-      scoreApi.call("/api/scoring/evaluate", { method: "POST", body: JSON.stringify(payload) }),
-      attributionApi.call("/api/scoring/attribution", { method: "POST", body: JSON.stringify(payload) }),
+      callScoreApi("/api/scoring/evaluate", { method: "POST", body: JSON.stringify(payload) }),
+      callAttributionApi("/api/scoring/attribution", { method: "POST", body: JSON.stringify(payload) }),
     ]);
     const nextTaskId = String(scoreResult?.task_id || scoreResult?.job_id || "");
     if (scoreResult?.ok && nextTaskId) { setScoreTaskId(nextTaskId); setScoreState("progress"); }
     else if (scoreResult?.error) { setScoreState("error"); setScoreError(scoreResult.error); notify("error", scoreResult.error); }
     if (attributionResult && !attributionResult.ok && attributionResult.error) notify("error", attributionResult.error);
-  }, [attributionApi, scoreApi, candidate, notify]);
+  }, [callAttributionApi, callScoreApi, candidate, notify, resetAttributionApi]);
 
   useEffect(() => { if (candidate) loadScore(); }, [candidate?.alpha_id, loadScore]);
 
-  const attribution = scoring?.attribution_tree || attributionApi.data?.attribution || null;
-  const hardGates = nonEmpty(scoring?.hard_gates) || nonEmpty(attributionApi.data?.hard_gates) || [];
-  const softGates = nonEmpty(scoring?.soft_gates) || nonEmpty(attributionApi.data?.soft_gates) || [];
-  const failures = nonEmpty(scoring?.top_failures) || nonEmpty(attributionApi.data?.top_failures) || [];
-  const hints = nonEmpty(scoring?.improvement_hints) || nonEmpty(attributionApi.data?.improvement_hints) || [];
+  const attribution = scoring?.attribution_tree || attributionData?.attribution || null;
+  const hardGates = nonEmpty(scoring?.hard_gates) || nonEmpty(attributionData?.hard_gates) || [];
+  const softGates = nonEmpty(scoring?.soft_gates) || nonEmpty(attributionData?.soft_gates) || [];
+  const failures = nonEmpty(scoring?.top_failures) || nonEmpty(attributionData?.top_failures) || [];
+  const hints = nonEmpty(scoring?.improvement_hints) || nonEmpty(attributionData?.improvement_hints) || [];
   const m = candidate?.official_metrics;
   const selfCorrelation = metricWithStatus(m?.self_correlation, m?.self_correlation_status, m?.correlation);
-  const loading = scoreState === "loading" || scoreState === "progress" || attributionApi.loading;
-  const error = scoreError || scoreApi.error || attributionApi.error;
+  const loading = scoreState === "loading" || scoreState === "progress" || attributionLoading;
+  const error = scoreError || scoreApiError || attributionError;
   const lifecycleStatus = String(candidate?.lifecycle_status || "--");
   const layerScores = useMemo(() => {
     const prior = Number(scoring?.prior?.score ?? candidate?.scorecard?.prior_score ?? 0);

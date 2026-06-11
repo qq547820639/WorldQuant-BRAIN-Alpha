@@ -25,7 +25,7 @@ class OfficialAuthProfileMixin:
         ]:
             try:
                 method, path, headers, body = build_request()
-                data, _headers = self._request(method, path, headers=headers, body=body)
+                data, _headers = self._request(method, path, headers=headers, body=body, allow_auth_retry=False)
                 token = _first_value(data, ["token", "access_token"], "")
                 if token:
                     self.token = str(token)
@@ -54,6 +54,7 @@ class OfficialAuthProfileMixin:
         except BrainAPIError as exc:
             return {
                 "error": f"Failed to fetch user profile: {exc}",
+                "status_code": exc.status_code,
                 "tier": "unknown",
                 "level": None,
                 "points": None,

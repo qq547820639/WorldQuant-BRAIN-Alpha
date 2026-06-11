@@ -236,7 +236,7 @@
 /* ── Progress ── */
 @layer components {
   .progress-bar {
-    @apply w-full h-[3px] bg-surface-3 rounded-full overflow-hidden;
+    @apply w-full h-1.5 bg-surface-3 rounded-full overflow-hidden;
   }
   .progress-bar-fill { @apply h-full bg-accent rounded-full; }
   .progress-bar-fill.positive { @apply bg-positive; }

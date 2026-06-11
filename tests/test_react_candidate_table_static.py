@@ -19,10 +19,12 @@ def _source() -> str:
     return CANDIDATE_TABLE.read_text(encoding="utf-8")
 
 
-def test_candidate_table_uses_bounded_pagination_window():
+def test_candidate_table_fetches_all_candidates_and_uses_local_pagination_window():
     source = _source()
 
-    assert "const CANDIDATE_FETCH_LIMIT = 1000;" in source
+    assert 'callApi("/api/candidates")' in source
+    assert "CANDIDATE_FETCH_LIMIT" not in source
+    assert "?limit=1000" not in source
     assert "const PAGE_SIZE = 20;" in source
     assert "const totalPages = Math.max(1, Math.ceil(sortedCandidates.length / PAGE_SIZE));" in source
     assert "return sortedCandidates.slice(startIndex, startIndex + PAGE_SIZE);" in source
@@ -32,6 +34,7 @@ def test_candidate_table_uses_bounded_pagination_window():
     assert "showMoreCandidates" not in source
     assert "Show more" not in source
     assert "显示 {visibleStart}-{visibleEnd}，共 {sortedCandidates.length} 条" in source
+    assert "当前接口返回 {candidateMeta.returned} 条候选" in source
 
 
 def test_candidate_table_exposes_paginated_table_accessibility_metadata():
@@ -39,13 +42,13 @@ def test_candidate_table_exposes_paginated_table_accessibility_metadata():
 
     assert 'aria-label="候选结果"' in source
     assert "function CandidateMobileCard" in source
-    assert 'className="md:block"' in source
+    assert 'className="hidden md:block"' in source
     assert 'maxWidth: "100%"' in source
     assert 'role="alert"' in source
     assert 'role="status"' in source
     assert 'aria-live="polite"' in source
     assert 'aria-live="assertive"' in source
-    assert "colSpan={canShowRowActions ? 9 : 8}" in source
+    assert "colSpan={hasActions ? 9 : 8}" in source
 
 
 def test_candidate_table_bounds_generation_count_and_sanitizes_filter_input():
@@ -113,7 +116,7 @@ def test_candidate_table_exposes_alpha_quality_diagnostics_and_output_config():
     assert '<QualitySummaryItem label="阻断" value={String(qualitySummary.blocked)} />' in source
     assert '<QualitySummaryItem label="输出模式" value={qualitySummary.outputMode} />' in source
     assert '<QualitySummaryItem label="Dataset" value={qualitySummary.dataset} />' in source
-    assert "colSpan={canShowRowActions ? 9 : 8}" in source
+    assert "colSpan={hasActions ? 9 : 8}" in source
 
 
 def test_candidate_table_exposes_queue_view_filters_for_inline_parity():
@@ -132,7 +135,9 @@ def test_candidate_table_exposes_queue_view_filters_for_inline_parity():
     assert 'if (viewMode === "pending_backtest") return status === "pending_backtest";' in source
     assert 'if (viewMode === "running_backtest") return status === "running_backtest" || status === "running";' in source
     assert 'if (viewMode === "backtest_rework") return status === "backtest_rework" || status === "failed_backtest" || status === "rejected";' in source
-    assert 'if (viewMode === "passed") return status === "submission_ready"' in source
+    assert 'if (viewMode === "passed") return candidateSubmissionReady(candidate);' in source
+    assert "candidate.gate?.passed === true" not in source
+    assert "candidates.filter(candidateSubmissionReady).length" in source
     assert 'if (viewMode === "submittable") return status !== "submitted"' in source
     assert 'if (viewMode === "submitted") return status === "submitted" || stage === "submitted";' in source
     assert 'return status === "failed" || status === "rejected" || status === "blocked";' in source
@@ -145,3 +150,24 @@ def test_candidate_table_loads_fresh_check_results_for_submittable_queue():
     assert 'callCheckResultsApi<{ items?: CandidateCheckResult[] }>("/api/check_results")' in source
     assert "setCheckResults(indexCheckResults(result.items || []));" in source
     assert "result?.is_stale !== true && Boolean(result?.submittable ?? result?.passed ?? candidate.quality_diagnosis?.submission_ready)" in source
+
+
+def test_candidate_table_forwards_token_credentials_without_stale_callbacks():
+    source = _source()
+
+    assert 'const token = credentials?.token.trim() || "";' in source
+    assert "if (token) overrides.token = token;" in source
+    assert "body: JSON.stringify({ ...buildCredentialOverrides(), count: clampGenerateCount(generateCount) })" in source
+    assert "const payload: Record<string, unknown> = { ...buildCredentialOverrides() };" in source
+    assert "payload.candidate_ids = [alphaId];" in source
+    assert "payload.max_simulations = 1;" in source
+    assert "body: JSON.stringify(payload)" in source
+    assert "运行官方模拟" in source
+    assert "真实 Alpha submit" in source
+    assert "单个模拟" in source
+    assert 'callSingleCheckApi<CandidateCheckResult>("/api/check"' in source
+    assert "candidate," in source
+    assert "单个检查" in source
+    assert '"/api/submit"' not in source
+    assert "}, [callApi, buildCredentialOverrides, generateCount, notify]);" in source
+    assert "}, [callApi, buildCredentialOverrides, notify]);" in source

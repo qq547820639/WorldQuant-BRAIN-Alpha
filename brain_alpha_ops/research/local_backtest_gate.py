@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
+from brain_alpha_ops.research.expression_ast import profile_expression
+
 
 def append_unique(values: list[Any], value: Any) -> None:
     if value not in values:
@@ -25,14 +27,19 @@ def local_backtest_support(
     extract_fields: Callable[[str], list[Any] | set[Any] | tuple[Any, ...]],
     extract_operators: Callable[[str], list[Any] | set[Any] | tuple[Any, ...]],
 ) -> dict[str, Any]:
+    profile = profile_expression(candidate.expression)
+    declared_fields = getattr(candidate, "data_fields", None) or []
+    parsed_fields = extract_fields(candidate.expression)
     fields = {
         str(field).lower()
-        for field in (getattr(candidate, "data_fields", None) or extract_fields(candidate.expression))
+        for field in [*declared_fields, *parsed_fields, *profile.fields]
         if str(field)
     }
+    declared_operators = getattr(candidate, "operators", None) or []
+    parsed_operators = extract_operators(candidate.expression)
     operators = {
         str(operator).lower()
-        for operator in (getattr(candidate, "operators", None) or extract_operators(candidate.expression))
+        for operator in [*declared_operators, *parsed_operators, *profile.operators]
         if str(operator)
     }
     supported_fields = getattr(engine, "supported_fields", set())
@@ -62,6 +69,8 @@ def apply_local_backtest_gate(
     extract_fields: Callable[[str], list[Any] | set[Any] | tuple[Any, ...]],
     extract_operators: Callable[[str], list[Any] | set[Any] | tuple[Any, ...]],
     score_penalty: float = 8.0,
+    reject_unsupported: bool = False,
+    reject_failed_metrics: bool = True,
 ) -> dict[str, Any]:
     """Attach local backtest evidence and fail-close on rejected results."""
 
@@ -75,6 +84,13 @@ def apply_local_backtest_gate(
         warnings = list(local.get("warnings") or [])
         append_unique(warnings, "local_backtest_skipped:" + "; ".join(support["reasons"]))
         local["warnings"] = warnings
+        if reject_unsupported:
+            reasons = list(local.get("reasons") or [])
+            for reason in support["reasons"]:
+                append_unique(reasons, "local_backtest_unsupported:" + reason)
+            local["passed"] = False
+            local["reasons"] = reasons
+            local["score"] = max(0.0, round(float(local.get("score", 0.0) or 0.0) - score_penalty, 2))
         submission["local_backtest"] = {
             "ok": False,
             "skipped": True,
@@ -87,10 +103,15 @@ def apply_local_backtest_gate(
     result = dict(engine.evaluate(candidate.expression, cache_key=cache_key or "default"))
     outcome["result"] = result
     outcome["evaluated"] = True
+    advisory = not reject_failed_metrics
+    result["advisory"] = advisory
+    result["blocking"] = not advisory
     submission["local_backtest"] = result
     local["local_backtest"] = {
         "ok": bool(result.get("ok")),
         "pass_local": bool(result.get("pass_local")),
+        "advisory": advisory,
+        "blocking": not advisory,
         "sharpe": result.get("sharpe"),
         "fitness": result.get("fitness"),
         "turnover": result.get("turnover"),
@@ -112,15 +133,17 @@ def apply_local_backtest_gate(
             for reason in list(result.get("pass_reasons") or [])
             if "(FAIL)" in str(reason)
         ] or ["local backtest thresholds were not met"]
-        reasons = list(local.get("reasons") or [])
         warnings = list(local.get("warnings") or [])
         for reason in failed_reasons:
-            append_unique(reasons, "local_backtest_failed:" + reason)
-            append_unique(warnings, "local_backtest:" + reason)
-        local["passed"] = False
-        local["reasons"] = reasons
+            append_unique(warnings, ("local_backtest_advisory:" if advisory else "local_backtest:") + reason)
         local["warnings"] = warnings
-        local["score"] = max(0.0, round(float(local.get("score", 0.0) or 0.0) - score_penalty, 2))
+        if reject_failed_metrics:
+            reasons = list(local.get("reasons") or [])
+            for reason in failed_reasons:
+                append_unique(reasons, "local_backtest_failed:" + reason)
+            local["passed"] = False
+            local["reasons"] = reasons
+            local["score"] = max(0.0, round(float(local.get("score", 0.0) or 0.0) - score_penalty, 2))
 
     candidate.local_quality = local
     candidate.submission = submission

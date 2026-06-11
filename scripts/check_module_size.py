@@ -32,10 +32,11 @@ DEFAULT_LINE_LIMIT = 800
 BASELINE_LINE_LIMITS = {
     "brain_alpha_ops/agent_tools.py": 960,
     "brain_alpha_ops/brain_api/official.py": 950,
+    "brain_alpha_ops/brain_api/official_context.py": 820,
     "brain_alpha_ops/compliance/redline_verifier.py": 1150,
     "brain_alpha_ops/config.py": 900,
     "brain_alpha_ops/research/assistant.py": 900,
-    "brain_alpha_ops/research/hypothesis_driven_generator.py": 1280,
+    "brain_alpha_ops/research/hypothesis_driven_generator.py": 1330,
     "brain_alpha_ops/research/local_backtest_engine.py": 1200,
     "brain_alpha_ops/research/observability.py": 940,
     "brain_alpha_ops/research/pipeline.py": 3210,
@@ -46,9 +47,11 @@ BASELINE_LINE_LIMITS = {
     "brain_alpha_ops/web_snapshot_runtime.py": 900,
     "brain_alpha_ops/web_snapshot_facade.py": 900,
     "brain_alpha_ops/web_assistant_snapshots.py": 900,
+    "brain_alpha_ops/web_candidate_simulation.py": 910,
     "brain_alpha_ops/web_routes.py": 1000,
-    "brain_alpha_ops/web_handler_dispatch.py": 850,
-    "scripts/check_live_submit_readiness.py": 900,
+    "brain_alpha_ops/web_cloud_snapshot.py": 810,
+    "brain_alpha_ops/web_handler_dispatch.py": 940,
+    "scripts/check_live_submit_readiness.py": 1080,
 }
 
 

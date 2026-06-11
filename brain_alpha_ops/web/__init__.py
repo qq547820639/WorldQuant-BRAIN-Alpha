@@ -104,13 +104,14 @@ def _safe_int(value: object) -> int:
 # ── Real backend handlers ─────────────────────────────────────────────────
 def _real_sync(payload):
     try:
+        from brain_alpha_ops.brain_api.user_alpha_sync import list_user_alphas_for_sync, sync_range_from_payload
         from brain_alpha_ops.config import load_run_config
         from brain_alpha_ops.runner import api_from_run_config
         config = load_run_config()
         api = api_from_run_config(config)
-        days = int(str(payload.get("range", "7")).replace("d", ""))
-        alphas = api.fetch_user_alphas(days=days)
-        return {"ok": True, "synced": len(alphas)}
+        sync_range = sync_range_from_payload(payload)
+        alphas = list_user_alphas_for_sync(api, sync_range)
+        return {"ok": True, "synced": len(alphas), "range": sync_range}
     except Exception as e:
         from brain_alpha_ops.redaction import redact_error_message
         logger.exception("real_sync failed")
@@ -215,9 +216,16 @@ def _run_generate_candidates_job(job_id: str, payload: dict) -> None:
 def _persist_generated_candidates(job_id: str, run_config, result: dict, candidate_type, repository_type) -> dict:
     repo = repository_type(run_config.ops.storage_dir)
     persisted = 0
+    skipped_invalid = 0
+    skipped_reasons: dict[str, int] = {}
     errors: list[str] = []
     for row in result.get("candidates") or []:
         if not isinstance(row, dict):
+            continue
+        if not _generated_candidate_persistable(row):
+            skipped_invalid += 1
+            for reason in _generated_candidate_skip_reasons(row):
+                skipped_reasons[reason] = skipped_reasons.get(reason, 0) + 1
             continue
         try:
             repo.save_candidate(job_id, candidate_type.from_dict(row))
@@ -233,22 +241,44 @@ def _persist_generated_candidates(job_id: str, run_config, result: dict, candida
         "schema_version": "candidate-persistence-v1",
         "target": "candidates.jsonl",
         "persisted_count": persisted,
+        "skipped_invalid_count": skipped_invalid,
+        "skipped_invalid_reasons": skipped_reasons,
         "error_count": len(errors),
         "errors": errors[:3],
     }
 
 
+def _generated_candidate_persistable(row: dict) -> bool:
+    diagnosis = row.get("quality_diagnosis") if isinstance(row.get("quality_diagnosis"), dict) else {}
+    if diagnosis.get("local_candidate_valid") is False:
+        return False
+    local_quality = row.get("local_quality") if isinstance(row.get("local_quality"), dict) else {}
+    if local_quality.get("passed") is False:
+        return False
+    return True
+
+
+def _generated_candidate_skip_reasons(row: dict) -> list[str]:
+    diagnosis = row.get("quality_diagnosis") if isinstance(row.get("quality_diagnosis"), dict) else {}
+    reasons: list[str] = []
+    for reason in diagnosis.get("blocking_reasons") or []:
+        text = str(reason or "").strip()
+        if text:
+            reasons.append(text)
+    local_quality = row.get("local_quality") if isinstance(row.get("local_quality"), dict) else {}
+    for reason in local_quality.get("reasons") or []:
+        text = str(reason or "").strip()
+        if text:
+            reasons.append(text.split(":", 1)[0])
+    return sorted(set(reasons)) or ["local_candidate_invalid"]
+
+
 def _generation_status_message(result: dict) -> str:
     if not result.get("ok"):
         return str(result.get("error") or "Candidate generation failed.")
-    summary = result.get("summary") if isinstance(result.get("summary"), dict) else {}
-    quality = summary.get("quality_summary") if isinstance(summary.get("quality_summary"), dict) else {}
-    return (
-        f"Generated {int(result.get('count') or 0)} local candidates; "
-        f"{int(quality.get('qualified_count') or 0)} submission-ready, "
-        f"{int(quality.get('local_valid_count') or 0)} locally valid, "
-        f"{int(quality.get('invalid_count') or 0)} blocked."
-    )
+    from brain_alpha_ops.web_candidate_generation_summary import candidate_generation_status_message
+
+    return candidate_generation_status_message(result)
 
 def _real_check(payload):
     try:
@@ -317,6 +347,17 @@ def _real_connection(payload):
         api = api_from_run_config(config)
         auth_result = api.authenticate()
         profile = api.get_user_profile() if hasattr(api, "get_user_profile") else {}
+        if isinstance(profile, dict) and profile.get("error"):
+            from brain_alpha_ops.brain_api.base import BrainAPIError
+            try:
+                status_code = int(profile.get("status_code") or 0)
+            except (TypeError, ValueError):
+                status_code = 0
+            raise BrainAPIError(
+                str(profile.get("error") or "BRAIN profile check failed"),
+                status_code=status_code or None,
+                payload=profile,
+            )
         auth_mode = ""
         if isinstance(auth_result, dict):
             auth_mode = str(auth_result.get("auth") or "")
@@ -587,12 +628,6 @@ def dispatch_post(handler, path, body):
 
 
 # ═══════════════════════ Handler ═══════════════════════════════
-# NOTE: This Handler class is a LEGACY SKELETON — it is never used at runtime.
-# The real Handler is dynamically created by web_http_handler.create_handler_class()
-# and injected via _install_facade_bindings() at module load time (line ~780).
-# This skeleton is kept for backward compatibility of module-level attribute access
-# (web_runtime_facade.py references web.Handler after facade installation).
-# DO NOT add new methods here — add them to web_http_handler.py instead.
 class Handler(BaseHTTPRequestHandler):
     _MAX_BODY_BYTES = _WebDefaults.MAX_BODY_BYTES
 
@@ -656,22 +691,8 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("X-Frame-Options", "DENY")
         self.send_header("Referrer-Policy", "no-referrer")
 
-# LEGACY SKELETON — This Handler class is never used at runtime.
-# The real Handler is dynamically created by web_http_handler.create_handler_class()
-# and injected via _install_facade_bindings() at module load time.
-# This skeleton exists for backward compatibility of module-level attribute access
-# (web_runtime_facade.py references web.Handler after facade installation).
-# DO NOT add new methods here — add them to web_http_handler.py instead.
-# The _json_default helper below is used by dispatch methods in this module.
-
 def _json_default(obj):
-    """Safe JSON default: handles datetime/date/Decimal, warns on unknowns.
-
-    Used by json.dumps() default parameter.  The real HTTP response methods
-    (_send_json, _send_html, _cors, etc.) live in web_http_handler.py's
-    create_handler_class().  This module's Handler class (above) is a LEGACY
-    SKELETON — the runtime Handler is dynamically constructed at startup.
-    """
+    """Safe JSON default for module-level dispatch helpers."""
     from datetime import datetime, date
     from decimal import Decimal
     if isinstance(obj, (datetime, date)):

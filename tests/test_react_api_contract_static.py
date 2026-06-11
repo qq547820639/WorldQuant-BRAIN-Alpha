@@ -13,6 +13,7 @@ REACT_DIST = ROOT / "brain_alpha_ops" / "web" / "react_app" / "dist"
 README = ROOT / "README.md"
 SYSTEM_EVALUATION_DOC = ROOT / "docs" / "COMPREHENSIVE_SYSTEM_EVALUATION_20260514.md"
 SMOKE_SCRIPT = ROOT / "scripts" / "browser_react_artifact_smoke.mjs"
+QA_E2E_WALKTHROUGH = ROOT / "tests" / "qa_e2e_new_user_walkthrough.py"
 
 
 def _source(path: str) -> str:
@@ -21,6 +22,14 @@ def _source(path: str) -> str:
 
 def _react_source_files() -> list[Path]:
     return sorted(path for path in REACT_SRC.rglob("*") if path.suffix in {".ts", ".tsx"})
+
+
+def _dist_text() -> str:
+    return "\n".join(
+        path.read_text(encoding="utf-8", errors="ignore")
+        for path in REACT_DIST.rglob("*")
+        if path.suffix in {".html", ".js", ".css"}
+    )
 
 
 def _normalize_route(url: str) -> str:
@@ -45,25 +54,52 @@ def test_react_dashboard_contract_uses_snapshot_aliases_backed_by_get_routes():
     source = _source("components/Dashboard.tsx")
 
     assert 'statusApi.call("/api/production-validation/status")' in source
-    assert 'cloudApi.call("/api/snapshot/cloud?limit=10")' in source
+    assert 'cloudApi.call("/api/snapshot/cloud")' in source
     assert 'memoryApi.call("/api/snapshot/memory?limit=100&top_n=5")' in source
     assert route_for("GET", "/api/production-validation/status") is not None
     assert route_for("GET", "/api/snapshot/cloud").handler == "cloud_alphas"
     assert route_for("GET", "/api/snapshot/memory").handler == "research_memory"
 
 
+def test_react_app_cloud_badge_reads_complete_snapshot_summary():
+    source = _source("App.tsx")
+
+    assert "cloudBadgeTotal(cloudApi.data)" in source
+    assert "summary.count ?? summary.total ?? summary.total_count" in source
+    assert "summary.returned_count" not in source
+
+
+def test_browser_walkthrough_verifies_complete_cloud_snapshot_without_limit():
+    source = QA_E2E_WALKTHROUGH.read_text(encoding="utf-8")
+    cloud_paths = ('"/api/' + 'cloud_alphas"', '"/api/' + 'snapshot/cloud"')
+
+    assert '"/api/snapshot/cloud"' in source
+    for path in cloud_paths:
+        assert f'{path}, params={{"limit"' not in source
+        assert f'{path}?limit=' not in source
+
+
 def test_react_candidate_and_scoring_contracts_match_backend_routes():
+    app = _source("App.tsx")
+    state_cards = _source("components/StateCards.tsx")
     candidates = _source("components/CandidateTable.tsx")
     scoring = _source("components/ScoringPanel.tsx")
 
-    assert "callApi(`/api/candidates?limit=${CANDIDATE_FETCH_LIMIT}`)" in candidates
+    assert 'candidatesApi.call("/api/candidates?summary=true")' in app
+    assert 'candidatesApi.call("/api/candidates?summary=true")' in state_cards
+    assert 'callApi("/api/candidates")' in candidates
+    assert "CANDIDATE_FETCH_LIMIT" not in candidates
+    assert "result?.candidates_preview ||" not in candidates
+    assert "result.partial" in candidates
     assert 'callCheckResultsApi<{ items?: CandidateCheckResult[] }>("/api/check_results")' in candidates
+    assert 'callSingleCheckApi<CandidateCheckResult>("/api/check"' in candidates
     assert 'callApi<{ job_id: string; task_id?: string }>("/api/generate_candidates"' in candidates
+    assert 'callApi<{ job_id: string; task_id?: string }>("/api/candidates/simulate"' in candidates
     assert "useSSE(taskId ? `/sse?job_id=${encodeURIComponent(taskId)}`" in candidates
-    assert 'scoreApi.call("/api/scoring/evaluate"' in scoring
-    assert 'attributionApi.call("/api/scoring/attribution"' in scoring
+    assert 'callScoreApi("/api/scoring/evaluate"' in scoring
+    assert 'callAttributionApi("/api/scoring/attribution"' in scoring
     assert "useSSE(scoreTaskId ? `/sse?job_id=${encodeURIComponent(scoreTaskId)}`" in scoring
-    assert "nonEmpty(scoring?.hard_gates) || nonEmpty(attributionApi.data?.hard_gates)" in scoring
+    assert "nonEmpty(scoring?.hard_gates) || nonEmpty(attributionData?.hard_gates)" in scoring
     assert "页面会自动完成官方评分、归因分析和门禁复核" not in scoring
     assert "归因分析" in scoring
     assert "官方门禁检查" in scoring
@@ -71,10 +107,105 @@ def test_react_candidate_and_scoring_contracts_match_backend_routes():
 
     assert route_for("GET", "/api/candidates") is not None
     assert route_for("GET", "/api/check_results") is not None
+    assert route_for("POST", "/api/check") is not None
     assert route_for("POST", "/api/generate_candidates") is not None
+    assert route_for("POST", "/api/candidates/simulate") is not None
     assert route_for("GET", "/sse") is not None
     assert route_for("POST", "/api/scoring/evaluate") is not None
     assert route_for("POST", "/api/scoring/attribution") is not None
+
+
+def test_react_status_summaries_do_not_cap_reason_lists():
+    official_ops = _source("components/OfficialOperationsPanel.tsx")
+    confirm = _source("components/SubmissionConfirmPanel.tsx")
+    quality = _source("components/QualityCheckPanel.tsx")
+    slots = _source("components/OfficialBacktestSlots.tsx")
+
+    for source in (official_ops, confirm, quality, slots):
+        assert ".slice(0, 3)" not in source
+        assert ".slice(0, 4)" not in source
+        assert "前 ${shown}" not in source
+        assert "前 " not in source
+    assert "countTitle(" in official_ops
+    assert "countLabel(" in confirm
+    assert "truncate text-xs text-text-tertiary" not in slots
+
+
+def test_official_sync_copy_does_not_call_filter_window_count_a_total():
+    banned_terms = (
+        "官方总量",
+        "接口总量",
+        "动态总量",
+        "等待总量",
+        "全局总量",
+        "固定总量",
+        "云端真实总量",
+        "官方报告总量",
+        "真实总量",
+        "云端库存",
+        "真实库存",
+        "10000 上限",
+        "10,000 上限",
+        "固定 10000",
+        "固定 10,000",
+        "true cloud Alpha inventory",
+        "API total",
+        "data total",
+        "scan totals",
+    )
+    required_clarifying_terms = (
+        "接口分页参考数",
+        "不是云端 Alpha 总量",
+        "分页边界判断",
+    )
+    checked_files = [
+        REACT_SRC / "App.tsx",
+        REACT_SRC / "components" / "Dashboard.tsx",
+        REACT_SRC / "components" / "OfficialOperationsPanel.tsx",
+        REACT_SRC / "components" / "ProgressFeedback.tsx",
+        REACT_SRC / "components" / "SnapshotPanel.tsx",
+        REACT_SRC / "components" / "StateCards.tsx",
+        REACT_SRC / "hooks" / "useApi.ts",
+        REACT_SRC / "types" / "index.ts",
+        REACT_SRC.parent / "dist" / "index.html",
+        ROOT / "brain_alpha_ops" / "web_progress.py",
+        ROOT / "brain_alpha_ops" / "web_sync_job.py",
+        ROOT / "brain_alpha_ops" / "web_sync_payload.py",
+        ROOT / "brain_alpha_ops" / "web_handler_dispatch.py",
+        ROOT / "brain_alpha_ops" / "web_cloud_snapshot.py",
+        ROOT / "brain_alpha_ops" / "research" / "pipeline_context_sync.py",
+        ROOT / "brain_alpha_ops" / "web" / "handlers" / "sync.py",
+        ROOT / "tests" / "test_web_handler_dispatch.py",
+        ROOT / "brain_alpha_ops" / "web" / "react_app" / "tests" / "components.test.tsx",
+        ROOT / "brain_alpha_ops" / "web" / "react_app" / "tests" / "ui-components.test.tsx",
+        README,
+    ]
+
+    for path in checked_files:
+        source = path.read_text(encoding="utf-8")
+        for term in banned_terms:
+            assert term not in source, f"{path.relative_to(ROOT)} must not describe API filter-window count as {term}"
+    dist_source = _dist_text()
+    for term in banned_terms:
+        assert term not in dist_source, f"react dist assets must not describe API filter-window count as {term}"
+    official_ops = (REACT_SRC / "components" / "OfficialOperationsPanel.tsx").read_text(encoding="utf-8")
+    for term in required_clarifying_terms:
+        assert term in official_ops, f"OfficialOperationsPanel should clarify API filter-window count with {term}"
+
+
+def test_official_sync_scan_window_count_is_not_unified_total():
+    source = _source("components/OfficialOperationsPanel.tsx")
+
+    assert 'total: stage.kind === "scan" || terminalFailure || stage.total <= 0 ? undefined : stage.total' in source
+    assert 'api_reported_total: numberField(syncStatus?.progress, "api_reported_total") || undefined' in source
+
+
+def test_phase_shell_keeps_blocked_content_interactive_for_recovery_controls():
+    phase_shell = _source("components/PhaseShell.tsx")
+
+    assert 'className="phase-shell-body"' in phase_shell
+    assert "pointerEvents" not in phase_shell
+    assert 'filter: "grayscale(0.3)"' in phase_shell
 
 
 def test_react_submission_config_and_job_contracts_match_backend_routes():
@@ -93,6 +224,8 @@ def test_react_submission_config_and_job_contracts_match_backend_routes():
         assert f'"{endpoint}"' in config
         assert route_for("GET", endpoint) is not None
     assert 'connectionApi.call("/api/test_connection"' in config
+    assert '<PasswordField\n          label="Token"' in config
+    assert 'autoComplete="off"\n          maxLength={512}' in config
     assert route_for("POST", "/api/config") is not None
     assert route_for("POST", "/api/test_connection") is not None
     assert 'lazy(() => import("@/components/ConfigPanel"))' in app
@@ -124,24 +257,21 @@ def test_react_submission_config_and_job_contracts_match_backend_routes():
     assert route_for("GET", "/api/production-validation/status") is not None
 
 
-def test_react_cancel_helper_stays_on_production_validation_stop_route():
+def test_react_cancel_helper_uses_cross_store_cancel_route():
     source_text = "\n".join(path.read_text(encoding="utf-8") for path in _react_source_files())
     cancel = _source("api/jobCancel.ts")
 
-    assert '"/api/production-validation/stop"' in cancel
+    assert '"/api/cancel"' in cancel
+    assert '"/api/production-validation/stop"' not in cancel
     assert '"/api/stop"' not in source_text
-    assert '"/api/cancel"' not in source_text
+    assert route_for("POST", "/api/cancel") is not None
 
 
 def test_default_react_app_and_dist_do_not_expose_raw_submit_surface():
     app = _source("App.tsx")
     state_cards = _source("components/StateCards.tsx")
     source_text = "\n".join(path.read_text(encoding="utf-8") for path in _react_source_files())
-    dist_text = "\n".join(
-        path.read_text(encoding="utf-8", errors="ignore")
-        for path in REACT_DIST.rglob("*")
-        if path.suffix in {".html", ".js", ".css"}
-    )
+    dist_text = _dist_text()
     raw_submit_pattern = re.compile(r"/api/(?:submit|submit_batch)(?:$|[?#'\"`])")
 
     assert "import SubmissionPanel" not in app
@@ -154,6 +284,34 @@ def test_default_react_app_and_dist_do_not_expose_raw_submit_surface():
     assert "手动提交" not in dist_text
 
 
+def test_react_dist_preserves_browser_safe_credentials_and_sync_recovery_contracts():
+    dist_text = _dist_text()
+
+    assert 'autoComplete:"username"' not in dist_text
+    assert 'autocomplete:"username"' not in dist_text
+    assert 'autoComplete:"current-password"' not in dist_text
+    assert 'autocomplete:"current-password"' not in dist_text
+    assert "brain_alpha_active_sync_job_id" in dist_text
+    assert "/api/sync_status?compact=1" in dist_text
+    assert "/api/sync_status?job_id=" in dist_text
+    assert "Request failed" in dist_text
+    assert "HTTP ${" in dist_text
+    assert "ok:!1" in dist_text
+    assert "/api/sync_alphas" in dist_text
+    assert "已有官方上下文刷新正在运行，已接管当前任务状态。" in dist_text
+    assert "已接管正在运行的官方上下文刷新" in dist_text
+
+
+def test_react_html_shell_uses_local_resources_only_for_credential_flow():
+    html_text = REACT_INDEX.read_text(encoding="utf-8")
+    dist_html = (REACT_DIST / "index.html").read_text(encoding="utf-8")
+
+    for page in (html_text, dist_html):
+        assert "fonts.googleapis.com" not in page
+        assert "fonts.gstatic.com" not in page
+        assert 'rel="preconnect"' not in page
+
+
 def test_react_official_operations_is_web_operator_console_not_cli_surface():
     app = _source("App.tsx")
     state_cards = _source("components/StateCards.tsx")
@@ -164,7 +322,9 @@ def test_react_official_operations_is_web_operator_console_not_cli_surface():
     assert '"visual_terminal"' not in types
     assert 'official_operations: "官方操作"' in app
     assert 'case "official_operations":' in app
-    assert "OfficialOperationsPanel notify={notify} credentials={credentials}" in app
+    assert "<OfficialOperationsPanel" in app
+    assert "notify={notify}" in app
+    assert "credentials={credentials}" in app
     assert "VisualTerminalPanel" not in app
     assert "visual_terminal" not in app
     assert 'title: "官方操作"' in state_cards
@@ -220,7 +380,7 @@ def test_browser_react_smoke_fails_when_web_operator_and_alpha_flows_are_not_exe
         "/api/generate_candidates",
         "/api/scoring/evaluate",
         "/api/scoring/attribution",
-        "/api/production-validation/stop",
+        "/api/cancel",
     ):
         assert f'"{endpoint}"' in smoke
     assert 'requested("POST", endpoint)' in smoke

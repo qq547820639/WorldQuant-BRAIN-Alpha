@@ -788,6 +788,20 @@ def test_final_release_gate_passes_with_release_config(tmp_path):
     assert report.redlines["full_factor_coverage"] is True
 
 
+def test_final_release_gate_blocks_cache_first_without_official_context_cache(tmp_path):
+    config = json.loads((Path(__file__).resolve().parents[1] / "config" / "run_config.json").read_text(encoding="utf-8"))
+    config["ops"]["storage_dir"] = str(tmp_path / "data")
+    config["ops"]["budget"]["require_cloud_sync"] = False
+    config_path = tmp_path / "run_config.json"
+    config_path.write_text(json.dumps(config), encoding="utf-8")
+
+    report = run_final_release_gate(config_path=config_path)
+
+    assert report.passed is False
+    assert report.redlines["full_factor_coverage"] is False
+    assert any(finding.code == "CLOUD_SYNC_CACHE_MISSING" for finding in report.findings)
+
+
 def test_final_release_gate_accepts_fresh_official_metadata_when_status_failed(tmp_path):
     config = json.loads((Path(__file__).resolve().parents[1] / "config" / "run_config.json").read_text(encoding="utf-8"))
     config["ops"]["storage_dir"] = str(tmp_path / "data")

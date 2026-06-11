@@ -47,7 +47,7 @@ def test_candidate_toolbar_wraps_and_keeps_filter_input_shrinkable():
     assert "flex-1" in source
     assert 'className="panel"' in source
     assert 'aria-label="候选结果"' in source
-    assert 'className="md:block"' in source
+    assert 'className="hidden md:block"' in source
     assert "minWidth: 980" in source
     assert "break-words" in source
 

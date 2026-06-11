@@ -340,8 +340,8 @@ PHASE_GUIDANCE: dict[str, dict[str, str]] = {
     },
     "sync": {
         "title": "云端数据同步",
-        "description": "从 BRAIN 平台同步已提交的 Alpha 列表。首次运行建议使用 7d 范围。",
-        "action": "选择同步范围后点击「开始同步」。进度会通过进度条和事件日志展示。",
+        "description": "从 BRAIN 平台完整同步已提交的 Alpha 列表；3d/7d 只作为本次显式过滤选项。",
+        "action": "点击「开始同步」。未显式选择短范围时，系统会同步云端全部可用 Alpha，进度会通过进度条和事件日志展示。",
     },
     "generate": {
         "title": "候选 Alpha 生成",

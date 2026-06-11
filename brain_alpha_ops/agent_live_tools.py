@@ -8,12 +8,13 @@ from typing import Any
 
 from brain_alpha_ops.agent_research_tools import run_parallel_backtest_from_args
 from brain_alpha_ops.agent_tool_errors import tool_error
+from brain_alpha_ops.brain_api.user_alpha_sync import USER_ALPHA_SYNC_RANGES, list_user_alphas_for_sync, normalize_user_alpha_sync_range
 from brain_alpha_ops.research.repository import ResearchRepository
 from brain_alpha_ops.runner import api_from_run_config
 from brain_alpha_ops.shared_bounds import bounded_float, bounded_int, expression_batch_argument, required_text
 
 
-MAX_SYNC_RANGE = {"1d", "3d", "7d", "all"}
+MAX_SYNC_RANGE = USER_ALPHA_SYNC_RANGES
 MAX_BATCH_SIMULATIONS = 10
 MAX_BATCH_SIMULATION_WORKERS = 3
 
@@ -218,12 +219,10 @@ class AgentLiveToolsMixin:
         blocked = self._live_api_blocked(args, tool="sync_cloud_alphas")
         if blocked:
             return blocked
-        sync_range = str(args.get("sync_range", self.run_config.ops.budget.cloud_sync_range) or "3d")
-        if sync_range not in MAX_SYNC_RANGE:
-            sync_range = "3d"
+        sync_range = normalize_user_alpha_sync_range(args.get("sync_range"))
         api = self._api()
         api.authenticate()
-        rows = api.list_user_alphas(sync_range)
+        rows = list_user_alphas_for_sync(api, sync_range)
         merge_stats = ResearchRepository(self.run_config.ops.storage_dir).merge_cloud_alphas(
             rows,
             sync_range=sync_range,

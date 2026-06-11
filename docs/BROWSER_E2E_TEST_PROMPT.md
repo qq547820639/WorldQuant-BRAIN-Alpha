@@ -272,8 +272,8 @@ document.querySelector('[aria-selected="true"]')?.textContent // => "📊Dashboa
 **操作序列**:
 
 #### 3a. 云端快照接口验证
-1. 执行 `curl -s http://127.0.0.1:8765/api/snapshot/cloud?limit=10` 获取云端快照
-2. 验证响应包含 `count`, `submitted_count`, `passed_unsubmitted_count`, `is_stale` 字段
+1. 执行 `curl -s http://127.0.0.1:8765/api/snapshot/cloud` 获取完整云端快照
+2. 验证响应的 `summary` 包含 `count`, `submitted_count`, `passed_unsubmitted_count`, `is_stale` 字段
 3. 记录当前缓存状态（是否过期）
 
 #### 3b. 研究记忆接口验证

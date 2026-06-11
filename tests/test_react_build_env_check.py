@@ -1,6 +1,7 @@
 import json
 import os
 
+import scripts.check_react_build_env as react_build_env_module
 from scripts.check_react_build_env import check_react_build_env, main
 
 
@@ -112,6 +113,75 @@ def test_react_build_env_requires_local_build_tool_entrypoints(tmp_path, monkeyp
     assert result["ok"] is False
     assert result["ready"] is False
     assert any(finding["code"] == "missing_react_build_tools" for finding in result["findings"])
+
+
+def test_react_build_env_uses_bundled_node_for_project_app_when_path_missing(tmp_path, monkeypatch):
+    project_root = tmp_path / "project"
+    app_dir = project_root / "brain_alpha_ops" / "web" / "react_app"
+    _write_package_json(app_dir)
+    (app_dir / "package-lock.json").write_text("{}\n", encoding="utf-8")
+    for package in ["react", "react-dom", "typescript", "vite"]:
+        (app_dir / "node_modules" / package).mkdir(parents=True)
+    (app_dir / "node_modules" / "@vitejs" / "plugin-react").mkdir(parents=True)
+    _write_local_build_tools(app_dir)
+    dist = app_dir / "dist"
+    dist.mkdir()
+    (dist / "index.html").write_text(
+        '<div id="root"></div>'
+        '<meta name="brain-alpha-csrf" content="__BRAIN_ALPHA_OPS_CSRF_TOKEN__">'
+        '<meta name="brain-alpha-stream" content="__BRAIN_ALPHA_OPS_STREAM_TOKEN__">'
+        '<script type="module" src="/assets/index.js"></script>',
+        encoding="utf-8",
+    )
+    bundled_node = tmp_path / "Codex.app" / "Contents" / "Resources" / "cua_node" / "bin" / "node"
+    bundled_node.parent.mkdir(parents=True)
+    bundled_node.write_text("#!/bin/sh\n", encoding="utf-8")
+    bundled_node.chmod(0o755)
+    monkeypatch.setattr(react_build_env_module, "PROJECT_ROOT", project_root)
+    monkeypatch.setattr(react_build_env_module, "BUNDLED_NODE_CANDIDATES", (bundled_node,))
+    monkeypatch.setattr("scripts.check_react_build_env.shutil.which", lambda _name: "")
+
+    result = check_react_build_env(app_dir, strict=True)
+
+    assert result["ok"] is True
+    assert result["ready"] is True
+    assert result["tooling"]["node"] == str(bundled_node)
+    assert result["tooling"]["local_build_tools"]["typescript"].startswith(str(bundled_node))
+    assert not any(finding["code"] == "missing_node" for finding in result["findings"])
+
+
+def test_react_build_env_does_not_use_bundled_node_outside_project(tmp_path, monkeypatch):
+    project_root = tmp_path / "project"
+    app_dir = tmp_path / "external" / "react_app"
+    _write_package_json(app_dir)
+    (app_dir / "package-lock.json").write_text("{}\n", encoding="utf-8")
+    for package in ["react", "react-dom", "typescript", "vite"]:
+        (app_dir / "node_modules" / package).mkdir(parents=True)
+    (app_dir / "node_modules" / "@vitejs" / "plugin-react").mkdir(parents=True)
+    _write_local_build_tools(app_dir)
+    dist = app_dir / "dist"
+    dist.mkdir()
+    (dist / "index.html").write_text(
+        '<div id="root"></div>'
+        '<meta name="brain-alpha-csrf" content="__BRAIN_ALPHA_OPS_CSRF_TOKEN__">'
+        '<meta name="brain-alpha-stream" content="__BRAIN_ALPHA_OPS_STREAM_TOKEN__">'
+        '<script type="module" src="/assets/index.js"></script>',
+        encoding="utf-8",
+    )
+    bundled_node = tmp_path / "Codex.app" / "Contents" / "Resources" / "cua_node" / "bin" / "node"
+    bundled_node.parent.mkdir(parents=True)
+    bundled_node.write_text("#!/bin/sh\n", encoding="utf-8")
+    bundled_node.chmod(0o755)
+    monkeypatch.setattr(react_build_env_module, "PROJECT_ROOT", project_root)
+    monkeypatch.setattr(react_build_env_module, "BUNDLED_NODE_CANDIDATES", (bundled_node,))
+    monkeypatch.setattr("scripts.check_react_build_env.shutil.which", lambda _name: "")
+
+    result = check_react_build_env(app_dir, strict=True)
+
+    assert result["ok"] is False
+    assert result["ready"] is False
+    assert result["tooling"]["node"] == ""
+    assert any(finding["code"] == "missing_node" for finding in result["findings"])
 
 
 def test_react_build_env_runs_build_when_prerequisites_are_ready(tmp_path, monkeypatch):

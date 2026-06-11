@@ -1,0 +1,14 @@
+{
+  "official_simulation": {
+    "scope": "account",
+    "endpoint": "official_simulation",
+    "active": false,
+    "lifecycle_status": "simulation_deferred_concurrency_limit",
+    "reason": "HTTP 429: {'detail': 'CONCURRENT_SIMULATION_LIMIT_EXCEEDED'}",
+    "recorded_at": 1781092595.694907,
+    "deferred_until": 1781092655.694907,
+    "retry_after_seconds": 60.0,
+    "cleared_at": 1781092661.611777,
+    "remaining_seconds": 0.0
+  }
+}

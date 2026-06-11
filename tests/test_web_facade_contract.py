@@ -59,6 +59,20 @@ def test_web_context_allowed_names_keep_job_controls_explicit():
     assert "sys" not in WEB_CONTEXT_ALLOWED_NAMES
 
 
+def test_storage_path_service_is_available_to_runtime_facade():
+    namespace = build_web_service_namespace()
+
+    assert "_storage_jsonl_path_service" in namespace
+    assert web._runtime_facade.storage_jsonl_path(web, "user_profile.json").name == "user_profile.json"
+
+
+def test_persist_official_context_service_is_available_to_runtime_facade():
+    namespace = build_web_service_namespace()
+
+    assert "_persist_official_context_service" in namespace
+    assert callable(namespace["_persist_official_context_service"])
+
+
 def test_web_job_controls_are_dynamic_compatibility_exports():
     assert {
         "JOBS",

@@ -332,6 +332,168 @@ describe("ProgressFeedback", () => {
       expect(bar).not.toHaveClass("indeterminate");
       expect(bar).toHaveAttribute("aria-valuenow", "42");
     });
+
+    it("shows dynamic scan pagination as open-ended when the window reference is not completion", () => {
+      render(
+        <ProgressFeedback
+          state="progress"
+          title="Cloud sync"
+          progress={buildProgress({
+            operation: "sync_alphas",
+            phase: "scan",
+            phase_label: "扫描云端",
+            status_code: "SCAN",
+            status_message: "已拉取 10,800 / 10,800 条云端 Alpha；第 108 / 108 页；本页 100 条，分页参数 100 条/页，下一 offset 10,800。",
+            percent_complete: 100,
+            eta_seconds: 49,
+            scanned: 10800,
+            total: 10800,
+            api_reported_total: 10000,
+            pages_fetched: 108,
+            expected_pages: 108,
+            page_size: 100,
+            page_limit: 100,
+            next_offset: 10800,
+          })}
+        />,
+      );
+
+      const bar = screen.getByRole("progressbar");
+      expect(bar).toHaveClass("indeterminate");
+      expect(bar).not.toHaveAttribute("aria-valuenow");
+      expect(screen.queryByText("100%")).not.toBeInTheDocument();
+      expect(screen.queryByText("99%")).not.toBeInTheDocument();
+      expect(screen.getByText("运行中")).toBeInTheDocument();
+      expect(screen.queryByText(/预计剩余/)).not.toBeInTheDocument();
+      expect(screen.getByText("已拉取 10,800 条云端 Alpha；接口分页参考数 10,000 条，不是云端 Alpha 总量，会继续按分页自动确认边界。")).toBeInTheDocument();
+      expect(screen.queryByText(/10,800 \/ 10,800 条云端 Alpha/)).not.toBeInTheDocument();
+      expect(screen.getByText("已拉取 10,800 条；当前第 108 页 · 本页 100 条 · 100 条/页 · 下一请求确认分页边界")).toBeInTheDocument();
+      expect(screen.queryByText(/第 108\s*\/\s*108 页/)).not.toBeInTheDocument();
+    });
+
+    it("treats explicit open-ended scan progress as dynamic even when phase is generic", () => {
+      render(
+        <ProgressFeedback
+          state="progress"
+          title="Cloud sync"
+          progress={buildProgress({
+            phase: "running",
+            phase_label: "扫描云端",
+            status_message: "Scanning cloud alphas: 4000 / 10000",
+            percent_complete: 40,
+            scanned: 4000,
+            total: 4700,
+            filter_window_count: 10000,
+            pages_fetched: 40,
+            expected_pages: 100,
+            page_size: 100,
+            page_limit: 100,
+            next_offset: 4000,
+            open_ended: true,
+            indeterminate: true,
+          })}
+        />,
+      );
+
+      const bar = screen.getByRole("progressbar");
+      expect(bar).toHaveClass("indeterminate");
+      expect(bar).not.toHaveAttribute("aria-valuenow");
+      expect(screen.queryByText("40%")).not.toBeInTheDocument();
+      expect(screen.getByText("运行中")).toBeInTheDocument();
+      expect(screen.queryByText(/4,000 \/ 10,000/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/第 40\s*\/\s*100 页/)).not.toBeInTheDocument();
+      expect(screen.getByText("已拉取 4,000 条云端 Alpha；接口分页参考数 10,000 条，不是云端 Alpha 总量，会继续按分页自动确认边界。")).toBeInTheDocument();
+    });
+
+    it("keeps legacy scan counts indeterminate until an explicit window reference arrives", () => {
+      render(
+        <ProgressFeedback
+          state="progress"
+          title="Cloud sync"
+          progress={buildProgress({
+            operation: "sync_alphas",
+            phase: "scan",
+            phase_label: "扫描云端",
+            status_code: "SCAN",
+            status_message: "Scanning cloud alphas: 8900 / 10000",
+            scanned: 8900,
+            total: 10000,
+            eta_seconds: 49,
+          })}
+        />,
+      );
+
+      const bar = screen.getByRole("progressbar");
+      expect(bar).toHaveClass("indeterminate");
+      expect(bar).not.toHaveAttribute("aria-valuenow");
+      expect(screen.queryByText("89%")).not.toBeInTheDocument();
+      expect(screen.queryByText(/预计剩余/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/8,900 \/ 10,000/)).not.toBeInTheDocument();
+      expect(screen.queryByText("Scanning cloud alphas: 8900 / 10000")).not.toBeInTheDocument();
+      expect(screen.getByText("已拉取 8,900 条云端 Alpha；接口分页参考数仍在确认，会按分页返回继续读取。")).toBeInTheDocument();
+      expect(screen.getByText("已拉取 8,900 条")).toBeInTheDocument();
+    });
+
+    it("does not render a failed 100 percent sentinel as completed progress", () => {
+      render(
+        <ProgressFeedback
+          state="error"
+          title="Pipeline"
+          error="Web flow watchdog stopped this task after no clear progress update."
+          progress={buildProgress({
+            phase: "watchdog_failed",
+            status: "failed",
+            percent_complete: 100,
+          })}
+        />,
+      );
+
+      expect(screen.getByText("失败")).toBeInTheDocument();
+      expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
+      expect(screen.queryByText("100%")).not.toBeInTheDocument();
+    });
+
+    it("renders interrupted partial progress with a negative track", () => {
+      render(
+        <ProgressFeedback
+          state="error"
+          title="Submission"
+          error="Rate limited"
+          progress={buildProgress({
+            phase: "failed",
+            status: "failed",
+            percent_complete: 45,
+            checked: 5,
+            total: 11,
+          })}
+        />,
+      );
+
+      const bar = screen.getByRole("progressbar");
+      expect(bar).toHaveAttribute("aria-valuenow", "45");
+      expect(screen.getByText("中断")).toBeInTheDocument();
+      expect(screen.getByText("45%")).toBeInTheDocument();
+      expect(bar.querySelector(".progress-bar-fill")).toHaveClass("negative");
+    });
+
+    it("uses backend ETA deadline when present", async () => {
+      vi.setSystemTime(new Date("2026-06-04T00:00:00Z"));
+      render(
+        <ProgressFeedback
+          state="progress"
+          title="Deadline"
+          progress={buildProgress({
+            eta_seconds: 99,
+            eta_deadline_at_ms: Date.parse("2026-06-04T00:00:05Z"),
+          })}
+        />,
+      );
+      expect(screen.getByText("预计剩余 00:05")).toBeInTheDocument();
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(2000);
+      });
+      expect(screen.getByText("预计剩余 00:03")).toBeInTheDocument();
+    });
   });
 
   describe("title and message display", () => {

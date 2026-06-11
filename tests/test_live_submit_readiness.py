@@ -46,6 +46,15 @@ def _jobs_file(tmp_path, candidates, *, summary=None):
     return path
 
 
+def _candidate_ledger_file(tmp_path, candidates):
+    path = tmp_path / "candidates.jsonl"
+    path.write_text(
+        "".join(json.dumps(candidate) + "\n" for candidate in candidates),
+        encoding="utf-8",
+    )
+    return path
+
+
 def test_live_submit_readiness_reports_current_blockers(tmp_path):
     jobs = _jobs_file(
         tmp_path,
@@ -73,6 +82,9 @@ def test_live_submit_readiness_reports_current_blockers(tmp_path):
     assert result["ledger_candidate_count"] == 1
     assert result["ledger_eligible_count"] == 0
     assert result["ledger_ready_to_submit"] is False
+    assert result["candidate_ledger_candidate_count"] == 0
+    assert result["candidate_ledger_eligible_count"] == 0
+    assert result["candidate_ledger_ready_to_submit"] is False
     assert result["job_family_jobs_checked"] == 2
     assert result["job_family_candidate_count"] == 1
     assert result["job_family_eligible_count"] == 0
@@ -104,6 +116,271 @@ def test_live_submit_readiness_reports_current_blockers(tmp_path):
         "high_cloud_similarity",
     ]
     assert result["findings"][0]["code"] == "no_submit_ready_candidate"
+
+
+def test_live_submit_readiness_best_candidate_skips_unsupported_field_dead_end(tmp_path):
+    jobs = _jobs_file(
+        tmp_path,
+        [
+            {
+                "alpha_id": "alpha_unsupported_high_score",
+                "expression": "rank(ts_delta(pv13_rha2_min20_3000_513_sector, 20))",
+                "lifecycle_status": "simulation_failed",
+                "scorecard": {"total_score": 95.0, "decision_band": "optimize_before_submit"},
+                "submission": {
+                    "local_backtest": {
+                        "reasons": ["unsupported_fields=pv13_rha2_min20_3000_513_sector"],
+                    },
+                },
+                "official_metrics": {},
+                "cloud_correlation_risk": {"level": "low", "max_similarity": 0.4},
+            },
+            {
+                "alpha_id": "alpha_actionable_lower_score",
+                "expression": "rank(ts_mean(close, 20))",
+                "lifecycle_status": "generated",
+                "scorecard": {"total_score": 70.0, "decision_band": "optimize_before_submit"},
+                "submission": {
+                    "local_backtest": {
+                        "pass_local": True,
+                        "reasons": ["local prefilter passed"],
+                    },
+                },
+                "official_metrics": {},
+                "cloud_correlation_risk": {"level": "low", "max_similarity": 0.4},
+            },
+            {
+                "alpha_id": "alpha_unsupported_operator",
+                "expression": "reverse(ts_rank(adv20, 120))",
+                "lifecycle_status": "generated",
+                "scorecard": {"total_score": 90.0, "decision_band": "research_only"},
+                "submission": {
+                    "local_backtest": {
+                        "reasons": ["unsupported_operators=reverse"],
+                    },
+                },
+                "official_metrics": {},
+                "cloud_correlation_risk": {"level": "low", "max_similarity": 0.4},
+            },
+        ],
+    )
+
+    result = check_live_submit_readiness(jobs)
+
+    assert result["ready_to_submit"] is False
+    assert result["best_candidate"]["alpha_id"] == "alpha_actionable_lower_score"
+    unsupported = next(
+        item for item in result["job_audits"][-1]["candidates"]
+        if item["alpha_id"] == "alpha_unsupported_high_score"
+    )
+    assert "unsupported_local_backtest_fields" in unsupported["blocking_reasons"]
+    unsupported_operator = next(
+        item for item in result["job_audits"][-1]["candidates"]
+        if item["alpha_id"] == "alpha_unsupported_operator"
+    )
+    assert "unsupported_local_backtest_operators" in unsupported_operator["blocking_reasons"]
+    assert result["latest_blocking_reason_counts"]["unsupported_local_backtest_fields"] == 1
+    assert result["latest_blocking_reason_counts"]["unsupported_local_backtest_operators"] == 1
+
+
+def test_live_submit_readiness_audits_candidate_ledger_but_blocks_partial_official_evidence(tmp_path):
+    jobs = _jobs_file(tmp_path, [])
+    candidate_ledger = _candidate_ledger_file(
+        tmp_path,
+        [
+            {
+                "alpha_id": "alpha_partial_web",
+                "official_alpha_id": "official_partial_web",
+                "expression": "rank(ts_rank(returns,252)*-1)",
+                "lifecycle_status": "official_simulated",
+                "gate": {},
+                "scorecard": {"total_score": 80.0, "decision_band": "hard_gate_blocked"},
+                "official_metrics": _official_metrics(
+                    official_alpha_id="official_partial_web",
+                    self_correlation=None,
+                    prod_correlation=None,
+                    sub_universe_sharpe=1.43,
+                    brain_pending_names=["SELF_CORRELATION"],
+                ),
+                "cloud_correlation_risk": {},
+            }
+        ],
+    )
+
+    result = check_live_submit_readiness(jobs, candidate_ledger_path=candidate_ledger)
+
+    assert result["ready_to_submit"] is False
+    assert result["eligible_count"] == 0
+    assert result["candidate_count"] == 0
+    assert result["candidate_ledger_candidate_count"] == 1
+    assert result["candidate_ledger_eligible_count"] == 0
+    assert result["candidate_ledger_ready_to_submit"] is False
+    assert result["candidate_ledger_audit"]["exists"] is True
+    assert result["job_family_candidate_count"] == 1
+    assert result["job_family_eligible_count"] == 0
+    assert result["best_candidate"] == {}
+    best = result["candidate_ledger_audit"]["best_candidate"]
+    assert best["alpha_id"] == "alpha_partial_web"
+    assert "not_submission_ready" in best["blocking_reasons"]
+    assert "decision_band_not_submit_candidate" in best["blocking_reasons"]
+    assert "missing_official_metric_fields" in best["blocking_reasons"]
+    assert "official_self_correlation_pending" in best["blocking_reasons"]
+    assert "missing_cloud_similarity" in best["blocking_reasons"]
+    assert best["pending_official_checks"] == ["SELF_CORRELATION"]
+    assert "self_correlation" in best["missing_official_metric_fields"]
+    assert "prod_correlation" in best["missing_official_metric_fields"]
+
+
+def test_live_submit_readiness_fails_closed_on_invalid_candidate_ledger_jsonl(tmp_path):
+    jobs = _jobs_file(
+        tmp_path,
+        [
+            {
+                "alpha_id": "alpha_ready",
+                "official_alpha_id": "official_ready",
+                "lifecycle_status": "submission_ready",
+                "gate": {"submission_ready": True},
+                "official_metrics": _official_metrics(),
+                "scorecard": {"total_score": 91.2, "decision_band": "submit_candidate"},
+                "cloud_correlation_risk": {"level": "low", "max_similarity": 0.12},
+            }
+        ],
+    )
+    candidate_ledger = tmp_path / "candidates.jsonl"
+    candidate_ledger.write_text("{broken\n", encoding="utf-8")
+
+    result = check_live_submit_readiness(jobs, candidate_ledger_path=candidate_ledger)
+
+    assert result["ok"] is False
+    assert result["ready_to_submit"] is False
+    assert result["human_confirmation_required"] is False
+    assert result["eligible_count"] == 1
+    assert result["candidate_ledger_candidate_count"] == 0
+    assert result["candidate_ledger_ready_to_submit"] is False
+    assert result["findings"][0]["code"] == "candidate_ledger_error"
+    assert "not valid JSONL" in result["findings"][0]["message"]
+
+
+def test_live_submit_readiness_merges_duplicate_candidate_evidence_fail_closed(tmp_path):
+    jobs = _jobs_file(
+        tmp_path,
+        [
+            {
+                "alpha_id": "alpha_duplicate",
+                "official_alpha_id": "official_duplicate",
+                "expression": "rank(close)",
+                "lifecycle_status": "official_simulated",
+                "gate": {},
+                "official_metrics": _official_metrics(
+                    official_alpha_id="official_duplicate",
+                    self_correlation=None,
+                    prod_correlation=None,
+                ),
+                "scorecard": {"total_score": 91.2, "decision_band": "hard_gate_blocked"},
+                "cloud_correlation_risk": {"level": "low", "max_similarity": 0.12},
+            }
+        ],
+    )
+    candidate_ledger = _candidate_ledger_file(
+        tmp_path,
+        [
+            {
+                "alpha_id": "alpha_duplicate",
+                "official_alpha_id": "official_duplicate",
+                "expression": "rank(close)",
+                "lifecycle_status": "submission_ready",
+                "gate": {"submission_ready": True},
+                "scorecard": {"total_score": 92.0, "decision_band": "submit_candidate"},
+                "official_metrics": _official_metrics(official_alpha_id="official_duplicate"),
+                "cloud_correlation_risk": {"level": "low", "max_similarity": 0.12},
+            }
+        ],
+    )
+
+    result = check_live_submit_readiness(jobs, candidate_ledger_path=candidate_ledger)
+
+    assert result["ready_to_submit"] is False
+    assert result["eligible_count"] == 0
+    assert result["candidate_count"] == 1
+    assert result["job_family_candidate_count"] == 1
+    assert result["candidate_ledger_eligible_count"] == 1
+    assert "duplicate_candidate_conflicting_evidence" in result["best_candidate"]["blocking_reasons"]
+    assert "missing_official_metric_fields" in result["best_candidate"]["blocking_reasons"]
+    assert result["best_candidate"]["candidate_sources"] == ["job_ledger", "candidate_ledger"]
+
+
+def test_live_submit_readiness_audits_complete_candidate_ledger_without_promoting_to_current_readiness(tmp_path):
+    jobs = _jobs_file(tmp_path, [])
+    candidate_ledger = _candidate_ledger_file(
+        tmp_path,
+        [
+            {
+                "alpha_id": "alpha_ready_web",
+                "official_alpha_id": "official_ready_web",
+                "expression": "rank(close)",
+                "lifecycle_status": "submission_ready",
+                "gate": {"submission_ready": True},
+                "scorecard": {"total_score": 92.0, "decision_band": "submit_candidate"},
+                "official_metrics": _official_metrics(official_alpha_id="official_ready_web"),
+                "cloud_correlation_risk": {"level": "low", "max_similarity": 0.12},
+            }
+        ],
+    )
+
+    result = check_live_submit_readiness(jobs, candidate_ledger_path=candidate_ledger)
+
+    assert result["ready_to_submit"] is False
+    assert result["human_confirmation_required"] is False
+    assert result["eligible_count"] == 0
+    assert result["candidate_count"] == 0
+    assert result["candidate_ledger_candidate_count"] == 1
+    assert result["candidate_ledger_eligible_count"] == 1
+    assert result["candidate_ledger_ready_to_submit"] is True
+    assert result["job_family_eligible_count"] == 1
+    assert result["eligible_candidates"] == []
+    assert result["candidate_ledger_eligible_candidates"][0]["official_release_gate"]["status"] == "PASS"
+
+
+def test_live_submit_readiness_promotes_candidate_ledger_evidence_only_for_latest_candidate(tmp_path):
+    jobs = _jobs_file(
+        tmp_path,
+        [
+            {
+                "alpha_id": "alpha_ready_web",
+                "official_alpha_id": "",
+                "expression": "rank(close)",
+                "lifecycle_status": "official_simulated",
+                "gate": {},
+                "scorecard": {"total_score": 80.0, "decision_band": "hard_gate_blocked"},
+                "official_metrics": {},
+                "cloud_correlation_risk": {},
+            }
+        ],
+    )
+    candidate_ledger = _candidate_ledger_file(
+        tmp_path,
+        [
+            {
+                "alpha_id": "alpha_ready_web",
+                "official_alpha_id": "official_ready_web",
+                "expression": "rank(close)",
+                "lifecycle_status": "submission_ready",
+                "gate": {"submission_ready": True},
+                "scorecard": {"total_score": 92.0, "decision_band": "submit_candidate"},
+                "official_metrics": _official_metrics(official_alpha_id="official_ready_web"),
+                "cloud_correlation_risk": {"level": "low", "max_similarity": 0.12},
+            }
+        ],
+    )
+
+    result = check_live_submit_readiness(jobs, candidate_ledger_path=candidate_ledger)
+
+    assert result["ready_to_submit"] is False
+    assert result["eligible_count"] == 0
+    assert result["candidate_count"] == 1
+    assert "duplicate_candidate_conflicting_evidence" in result["best_candidate"]["blocking_reasons"]
+    assert result["best_candidate"]["candidate_sources"] == ["job_ledger", "candidate_ledger"]
+    assert any(finding["code"] == "no_submit_ready_candidate" for finding in result["findings"])
 
 
 def test_live_submit_readiness_accepts_low_risk_official_pass(tmp_path):
@@ -733,6 +1010,33 @@ def test_live_submit_readiness_blocks_failed_local_backtest(tmp_path):
     assert result["eligible_count"] == 0
     assert result["best_candidate"]["local_backtest_passed"] is False
     assert result["best_candidate"]["blocking_reasons"] == ["local_backtest_failed"]
+
+
+def test_live_submit_readiness_allows_advisory_generation_local_backtest(tmp_path):
+    jobs = _jobs_file(
+        tmp_path,
+        [
+            {
+                "alpha_id": "alpha_local_advisory",
+                "official_alpha_id": "official_local_advisory",
+                "lifecycle_status": "submission_ready",
+                "gate": {"submission_ready": True},
+                "official_metrics": _official_metrics(official_alpha_id="official_local_advisory"),
+                "scorecard": {"total_score": 91.2, "decision_band": "submit_candidate"},
+                "cloud_correlation_risk": {"level": "low", "max_similarity": 0.12},
+                "submission": {"local_backtest": {"pass_local": False, "advisory": True}},
+            }
+        ],
+        summary={"submission_ready": 1, "official_validation_passed": 1, "submitted_this_run": 0},
+    )
+
+    result = check_live_submit_readiness(jobs)
+
+    assert result["ready_to_submit"] is True
+    assert result["eligible_count"] == 1
+    assert result["eligible_candidates"][0]["local_backtest_passed"] is False
+    assert result["eligible_candidates"][0]["local_backtest"]["advisory"] is True
+    assert result["eligible_candidates"][0]["blocking_reasons"] == []
 
 
 def test_live_submit_readiness_blocks_high_turnover_generation_risk(tmp_path):

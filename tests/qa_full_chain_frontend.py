@@ -181,7 +181,7 @@ var config = {
     settings: { region: 'USA', universe: 'TOP3000', delay: 1, neutralization: 'SUBINDUSTRY',
                 instrumentType: 'EQUITY', type: 'REGULAR', decay: 10, truncation: 0.05,
                 pasteurization: 'ON', nanHandling: 'ON', unitHandling: 'VERIFY' },
-    budget: { cloud_sync_range: '3d', use_assistant_guidance: true, strategy_plugins_enabled: false },
+    budget: { cloud_sync_range: 'all', use_assistant_guidance: true, strategy_plugins_enabled: false },
     scoring: { assistant_guidance_score_adjustment_enabled: true },
   },
 };

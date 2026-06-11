@@ -95,7 +95,7 @@ Impact:
 As the expression index grows, a single miss can become an expensive CPU and memory operation. Repeated misses from the UI can cause local latency spikes and make the console feel hung.
 
 Recommendations:
-- Add a hard scan cap, for example `max_scan_rows`, independent of `top_n`.
+- Avoid silent hard scan caps; use streaming/indexed lookup and return `partial=true` only when the caller explicitly requests a bounded preview.
 - Prefilter candidates using indexed fields such as operators, fields, family, fingerprint prefixes, or a lightweight token table.
 - Consider an FTS/minhash/trigram auxiliary index for approximate lookup.
 - Return partial results with a `truncated=true` signal when the cap is hit.

@@ -230,6 +230,69 @@ def check_official_context_refresh_baseline(
             )
 
 
+def check_official_context_baseline_facts(
+    rows: list[dict[str, str]],
+    official_context: dict[str, Any],
+    findings: list[dict[str, str]],
+) -> None:
+    if not official_context.get("available"):
+        return
+    fetch_rows = [
+        row
+        for row in rows
+        if "fetch_official_context.py --config config/run_config.json" in row["check"]
+        and "--json" in row["check"]
+    ]
+    check_rows = [
+        row
+        for row in rows
+        if "scripts/check_official_context.py --config config/run_config.json" in row["check"]
+        and "--json" in row["check"]
+    ]
+    _check_baseline_row_values(
+        fetch_rows,
+        "official_context_refresh_baseline_fact",
+        [
+            ("fields", official_context.get("fields")),
+            ("operators", official_context.get("operators")),
+            ("datasets", official_context.get("datasets")),
+        ],
+        findings,
+        "official context refresh baseline row does not match current official context counts",
+    )
+    _check_baseline_row_values(
+        check_rows,
+        "official_context_baseline_fact",
+        [
+            ("validation_ok", str(bool(official_context.get("validation_ok"))).lower()),
+            ("blocking_ok", str(bool(official_context.get("blocking_ok"))).lower()),
+            ("blocking_count", official_context.get("blocking_count")),
+            ("p1_count", official_context.get("p1_count")),
+            ("dataset_field_count_sum", official_context.get("dataset_field_count_sum")),
+        ],
+        findings,
+        "official context baseline row does not match current official context validation",
+    )
+
+
+def _check_baseline_row_values(
+    rows: list[dict[str, str]],
+    code: str,
+    expected_values: list[tuple[str, Any]],
+    findings: list[dict[str, str]],
+    message: str,
+) -> None:
+    if not rows:
+        return
+    result = rows[0]["result"]
+    for key, value in expected_values:
+        if value is None:
+            continue
+        expected = f"{key}={value}"
+        if not has_fact(result, expected):
+            findings.append(finding(code, expected, message))
+
+
 def check_official_context_refresh_queue(
     queue: str,
     refresh_status: dict[str, Any],
@@ -269,11 +332,18 @@ def official_context_status(
 ) -> dict[str, Any]:
     try:
         payload = validation if validation is not None else _load_official_context_validation(config_path)
+        files = payload.get("files") if isinstance(payload.get("files"), dict) else {}
+        lineage = payload.get("lineage") if isinstance(payload.get("lineage"), dict) else {}
         return {
             "available": True,
+            "validation_ok": bool(payload.get("validation_ok", payload.get("ok", False))),
             "blocking_ok": bool(payload.get("blocking_ok")),
             "blocking_count": int(payload.get("blocking_count") or 0),
             "p1_count": int(payload.get("p1_count") or 0),
+            "fields": _record_count(files, "official_fields.json"),
+            "operators": _record_count(files, "official_operators.json"),
+            "datasets": _record_count(files, "official_datasets.json"),
+            "dataset_field_count_sum": _optional_int(lineage.get("dataset_field_count_sum")),
         }
     except Exception as exc:
         findings.append(
@@ -284,6 +354,22 @@ def official_context_status(
             )
         )
         return {"available": False, "blocking_ok": False, "blocking_count": 0, "p1_count": 0}
+
+
+def _record_count(files: dict[str, Any], name: str) -> int | None:
+    item = files.get(name) if isinstance(files, dict) else None
+    if not isinstance(item, dict):
+        return None
+    return _optional_int(item.get("record_count"))
+
+
+def _optional_int(value: Any) -> int | None:
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def check_official_context_queue(
@@ -323,7 +409,7 @@ def check_official_context_queue(
         findings.append(finding("stale_official_context_queue_fact", OFFICIAL_CONTEXT_QUEUE_ITEM, "tracker still reports official-context refresh work after current validation is fresh"))
     reject_any(
         not_yet,
-        ("Official context freshness is not claimable", "expired official metadata"),
+        ("Official context freshness is not claimable", "expired official metadata", "p1_findings="),
         "stale_official_context_queue_fact",
         findings,
         "tracker still reports official-context freshness work after current validation has no findings",

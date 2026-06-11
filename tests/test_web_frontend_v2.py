@@ -304,8 +304,9 @@ def test_app_submit_selected_candidates_handles_missing_async_job_result():
         candidates,
         [
             "const result = event.result as { candidates?: Candidate[]; candidates_preview?: Candidate[]; count?: number } | undefined;",
-            "const rows = result?.candidates || result?.candidates_preview || [];",
+            "const rows = result?.candidates || [];",
             "if (rows.length) setCandidates(rows);",
+            "result.partial",
             "result?.task_id || result?.job_id || \"\"",
             'setTaskError(result?.error || "启动候选生成失败");',
             'useSSE(taskId ? `/sse?job_id=${encodeURIComponent(taskId)}` : null',
@@ -331,11 +332,11 @@ def test_loading_feedback_runstartup_launches_all_tasks_concurrently():
     assert loader_body, "StateCards startup loader missing"
     body = loader_body.group("body")
     expected_calls = [
-        'void candidatesApi.call("/api/candidates?limit=1000");',
+        'void candidatesApi.call("/api/candidates?summary=true");',
         'void slotsApi.call("/api/backtest_slots");',
         'void configApi.call("/api/config");',
         'void checkpointApi.call("/api/checkpoint_status");',
-        'void cloudApi.call("/api/snapshot/cloud?limit=10");',
+        'void cloudApi.call("/api/snapshot/cloud");',
     ]
     for call in expected_calls:
         assert call in body
@@ -381,8 +382,8 @@ def test_spinner_component():
             'role="progressbar"',
             'aria-label={`${title}: ${label}`}',
             "aria-valuenow={isDeterminate ? roundedPercent : undefined}",
-            "normalizedPercent(progress)",
-            "fmtDuration(remaining)",
+            "normalizedPercent(progress, state)",
+            "fmtDuration(estimatedEta)",
             "onRetry",
         ],
     )

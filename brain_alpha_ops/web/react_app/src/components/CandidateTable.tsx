@@ -6,7 +6,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { requestJobCancel } from "@/api/jobCancel";
+import { isCancelConfirmed, requestJobCancel } from "@/api/jobCancel";
 import { useApi } from "@/hooks/useApi";
 import { useSSE } from "@/hooks/useSSE";
 import type { BrainCredentials, Candidate, SSEEvent, UnifiedProgress } from "@/types";
@@ -15,7 +15,6 @@ import ProgressFeedback from "@/components/ProgressFeedback";
 const MIN_GENERATE_COUNT = 1;
 const MAX_GENERATE_COUNT = 100;
 const MAX_FILTER_LENGTH = 200;
-const CANDIDATE_FETCH_LIMIT = 1000;
 const PAGE_SIZE = 20;
 
 type SortKey = "score" | "status" | "created";
@@ -45,7 +44,12 @@ type CandidateCheckResult = {
 type CandidateListMeta = {
   returned: number;
   total: number;
-  limit: number;
+};
+
+type SimulationResultSummary = {
+  completed: number;
+  failed: number;
+  total: number;
 };
 
 interface Props {
@@ -65,12 +69,14 @@ export default function CandidateTable({
   showRowActions = false,
   viewMode = "candidates",
 }: Props) {
-  const api = useApi<{ candidates?: Candidate[]; items?: Candidate[]; returned_count?: number; total?: number; total_count?: number; limit?: number }>();
+  const api = useApi<{ candidates?: Candidate[]; items?: Candidate[]; returned_count?: number; total?: number; total_count?: number; partial?: boolean; warning?: string }>();
   const checkResultsApi = useApi<{ items?: CandidateCheckResult[] }>();
+  const singleCheckApi = useApi<CandidateCheckResult>();
   const callApi = api.call;
   const callCheckResultsApi = checkResultsApi.call;
+  const callSingleCheckApi = singleCheckApi.call;
   const [candidates, setCandidates] = useState<Candidate[]>([]);
-  const [candidateMeta, setCandidateMeta] = useState<CandidateListMeta>({ returned: 0, total: 0, limit: CANDIDATE_FETCH_LIMIT });
+  const [candidateMeta, setCandidateMeta] = useState<CandidateListMeta>({ returned: 0, total: 0 });
   const [checkResults, setCheckResults] = useState<Map<string, CandidateCheckResult>>(new Map());
 
   const [filter, setFilter] = useState("");
@@ -90,19 +96,28 @@ export default function CandidateTable({
   const [simProgress, setSimProgress] = useState<UnifiedProgress | null>(null);
   const [simError, setSimError] = useState<string | null>(null);
 
+  const [checkingAlphaId, setCheckingAlphaId] = useState<string | null>(null);
+  const [checkState, setCheckState] = useState<"idle" | "loading" | "success" | "error">("idle");
+  const [checkProgress, setCheckProgress] = useState<UnifiedProgress | null>(null);
+  const [checkError, setCheckError] = useState<string | null>(null);
+
   const loadCandidates = useCallback(async () => {
     const [result, checkResultsResult] = await Promise.all([
-      callApi(`/api/candidates?limit=${CANDIDATE_FETCH_LIMIT}`),
+      callApi("/api/candidates"),
       callCheckResultsApi<{ items?: CandidateCheckResult[] }>("/api/check_results"),
     ]);
     if (result?.ok) {
       const nextRows = result.candidates || result.items || [];
-      setCandidates((current) => nextRows.length || current.length === 0 ? nextRows : current);
+      setCandidates((current) => (
+        result.partial && nextRows.length === 0 && current.length > 0 ? current : nextRows
+      ));
       setCandidateMeta({
         returned: Number(result.returned_count ?? nextRows.length),
         total: Number(result.total ?? result.total_count ?? nextRows.length),
-        limit: Number(result.limit ?? CANDIDATE_FETCH_LIMIT),
       });
+      if (result.partial) {
+        notify("warning", result.warning || "候选账本暂不可用，当前仅为预览数据。");
+      }
     } else if (result?.error) {
       notify("error", result.error);
     }
@@ -134,21 +149,33 @@ export default function CandidateTable({
   const handleTaskEvent = useCallback((event: SSEEvent) => {
     const progress = event.progress || event.data || {};
     setTaskProgress(progress as UnifiedProgress);
+    const status = eventStatus(event, progress);
 
-    if (event.type === "error" || event.ok === false || event.status === "failed") {
+    if (event.type === "error" || event.ok === false || status === "failed") {
       setTaskState("error");
       setTaskError(event.error || event.status_message || "候选生成失败");
       notify("error", event.error || "候选生成失败");
       return;
     }
 
+    if (isStoppedStatus(status)) {
+      const message = event.status_message || event.error || "候选生成已停止，结果未确认完成。";
+      setTaskState("error");
+      setTaskError(message);
+      notify("warning", message);
+      setTaskId(null);
+      void loadCandidates();
+      return;
+    }
+
     if (event.type === "complete") {
       setTaskState("success");
       const result = event.result as { candidates?: Candidate[]; candidates_preview?: Candidate[]; count?: number } | undefined;
-      const rows = result?.candidates || result?.candidates_preview || [];
+      const rows = result?.candidates || [];
       if (rows.length) setCandidates(rows);
       void loadCandidates();
-      notify("success", `候选生成完成${result?.count ? `: ${result.count}` : ""}`);
+      const message = `候选生成完成${result?.count ? `: ${result.count}` : ""}`;
+      notify(status === "completed_with_warnings" ? "warning" : "success", message);
       setTaskId(null);
       return;
     }
@@ -159,7 +186,7 @@ export default function CandidateTable({
   const handleTaskStreamExhausted = useCallback(() => {
     if (!taskId) return;
     const cancelledTaskId = taskId;
-    const message = "候选生成进度暂时不可确认，系统已安全停止本次生成。请刷新候选列表后再重试。";
+    const message = "候选生成进度暂时不可确认，正在请求后台自动中断；取消确认前请刷新状态后再重试。";
     setTaskState("error");
     setTaskError(message);
     setTaskId(null);
@@ -169,7 +196,19 @@ export default function CandidateTable({
       status_message: message,
       percent_complete: 100,
     }));
-    void requestJobCancel({ jobId: cancelledTaskId, reason: "sse_exhausted", message });
+    void requestJobCancel({ jobId: cancelledTaskId, reason: "sse_exhausted", message }).then((result) => {
+      const finalMessage = isCancelConfirmed(result)
+        ? "候选生成进度暂时不可确认，已确认后台停止本次生成。请刷新候选列表后再重试。"
+        : "候选生成进度暂时不可确认，已请求后台自动中断，但取消未确认。请刷新状态或稍后重试。";
+      setTaskError(finalMessage);
+      setTaskProgress((current) => ({
+        ...(current || {}),
+        phase: current?.phase || "candidate_generation",
+        status_message: finalMessage,
+        percent_complete: 100,
+      }));
+      notify(isCancelConfirmed(result) ? "warning" : "error", finalMessage);
+    });
     notify("warning", message);
     void loadCandidates();
   }, [loadCandidates, notify, taskId]);
@@ -178,6 +217,17 @@ export default function CandidateTable({
     onEvent: handleTaskEvent,
     onExhausted: handleTaskStreamExhausted,
   });
+
+  const buildCredentialOverrides = useCallback((): Record<string, string> => {
+    const overrides: Record<string, string> = {};
+    const username = credentials?.username.trim() || "";
+    const password = credentials?.password || "";
+    const token = credentials?.token.trim() || "";
+    if (username) overrides.username = username;
+    if (password) overrides.password = password;
+    if (token) overrides.token = token;
+    return overrides;
+  }, [credentials]);
 
   const generateCandidates = useCallback(async () => {
     setTaskState("loading");
@@ -200,17 +250,26 @@ export default function CandidateTable({
       setTaskError(result?.error || "启动候选生成失败");
       notify("error", result?.error || "启动候选生成失败");
     }
-  }, [callApi, generateCount, notify]);
+  }, [callApi, buildCredentialOverrides, generateCount, notify]);
 
   // BRAIN simulation handler
-  const startSimulation = useCallback(async () => {
+  const startSimulation = useCallback(async (candidate?: Candidate) => {
     setSimState("loading");
     setSimError(null);
-    setSimProgress({ phase: "simulation_start", status_message: "正在提交BRAIN模拟请求。" });
+    const alphaId = candidate ? candidateIdentity(candidate) : "";
+    setSimProgress({
+      phase: "simulation_start",
+      status_message: alphaId ? `正在启动单个候选 ${alphaId} 的官方模拟请求。` : "正在启动官方模拟请求。",
+    });
+    const payload: Record<string, unknown> = { ...buildCredentialOverrides() };
+    if (alphaId) {
+      payload.candidate_ids = [alphaId];
+      payload.max_simulations = 1;
+    }
 
     const result = await callApi<{ job_id: string; task_id?: string }>("/api/candidates/simulate", {
       method: "POST",
-      body: JSON.stringify(buildCredentialOverrides()),
+      body: JSON.stringify(payload),
     });
 
     const nextJobId = String(result?.task_id || result?.job_id || "");
@@ -218,20 +277,69 @@ export default function CandidateTable({
     if (result?.ok && nextJobId) {
       setSimJobId(nextJobId);
       setSimState("progress");
-      notify("info", "BRAIN模拟已启动，可在本页查看进度。");
+      notify("info", alphaId ? `单个候选 ${alphaId} 的官方模拟已启动。` : "官方模拟已启动，可在本页查看进度。");
     } else {
       setSimState("error");
-      setSimError(result?.error || "启动BRAIN模拟失败");
-      notify("error", result?.error || "启动BRAIN模拟失败");
+      setSimError(result?.error || "启动官方模拟失败");
+      notify("error", result?.error || "启动官方模拟失败");
     }
-  }, [callApi, notify]);
+  }, [callApi, buildCredentialOverrides, notify]);
+
+  const startSingleCheck = useCallback(async (candidate: Candidate) => {
+    const alphaId = candidateIdentity(candidate);
+    if (!alphaId) {
+      notify("warning", "候选缺少 Alpha ID，无法执行单个检查。");
+      return;
+    }
+    setCheckingAlphaId(alphaId);
+    setCheckState("loading");
+    setCheckError(null);
+    setCheckProgress({
+      phase: "single_candidate_check",
+      status_message: `正在检查候选 ${alphaId} 的提交前阻断证据。`,
+    });
+
+    const result = await callSingleCheckApi<CandidateCheckResult>("/api/check", {
+      method: "POST",
+      body: JSON.stringify({
+        ...buildCredentialOverrides(),
+        mode: "quick",
+        syncRange: "all",
+        candidate,
+      }),
+    });
+
+    if (result?.ok) {
+      setCheckState("success");
+      setCheckProgress({
+        phase: "single_candidate_check",
+        status_message: result.submittable ? `候选 ${alphaId} 已通过检查。` : `候选 ${alphaId} 检查完成，仍需处理阻断。`,
+        percent_complete: 100,
+      });
+      setCheckResults((current) => indexCheckResults([...(current.values()), result]));
+      notify(result.submittable ? "success" : "warning", result.submittable ? `候选 ${alphaId} 检查通过。` : `候选 ${alphaId} 检查完成，仍未提交就绪。`);
+      await loadCandidates();
+    } else {
+      const message = result?.error || "单个检查失败";
+      setCheckState("error");
+      setCheckError(message);
+      setCheckProgress({
+        phase: "single_candidate_check",
+        status_message: message,
+        percent_complete: 100,
+      });
+      notify("error", message);
+    }
+    setCheckingAlphaId(null);
+  }, [buildCredentialOverrides, callSingleCheckApi, loadCandidates, notify]);
 
   // SSE stream for simulation progress
   const handleSimEvent = useCallback((event: SSEEvent) => {
     const progress = event.progress || event.data || {};
     setSimProgress(progress as UnifiedProgress);
+    const status = eventStatus(event, progress);
 
-    if (event.type === "error" || event.ok === false || event.status === "failed") {
+    if (event.type === "error" || event.ok === false || status === "failed") {
       setSimState("error");
       setSimError(event.error || event.status_message || "BRAIN模拟失败");
       notify("error", event.error || "BRAIN模拟失败");
@@ -239,10 +347,27 @@ export default function CandidateTable({
       return;
     }
 
-    if (event.type === "complete" || event.status === "completed") {
-      setSimState("success");
-      const result = event.result as { completed?: number; failed?: number; results?: unknown[] } | undefined;
-      notify("success", `BRAIN模拟完成${result?.completed ? `: ${result.completed}个成功` : ""}`);
+    if (isStoppedStatus(status)) {
+      const message = event.status_message || event.error || "BRAIN模拟已停止，结果未确认完成。";
+      setSimState("error");
+      setSimError(message);
+      notify("warning", message);
+      setSimJobId(null);
+      void loadCandidates();
+      return;
+    }
+
+    if (event.type === "complete" || status === "completed" || status === "completed_with_warnings") {
+      const result = simulationResultSummary(event);
+      const message = simulationCompletionMessage(result);
+      if (result.failed > 0 && result.completed <= 0) {
+        setSimState("error");
+        setSimError(message);
+        notify("error", message);
+      } else {
+        setSimState("success");
+        notify(result.failed > 0 || status === "completed_with_warnings" ? "warning" : "success", message);
+      }
       setSimJobId(null);
       void loadCandidates();
       return;
@@ -252,18 +377,18 @@ export default function CandidateTable({
   }, [loadCandidates, notify]);
 
 
-  const buildCredentialOverrides = useCallback((): Record<string, string> => {
-    const overrides: Record<string, string> = {};
-    const username = credentials?.username.trim() || "";
-    const password = credentials?.password || "";
-    if (username) overrides.username = username;
-    if (password) overrides.password = password;
-    return overrides;
-  }, [credentials]);
   const handleSimStreamExhausted = useCallback(() => {
     if (!simJobId) return;
+    const message = "BRAIN模拟进度通道已耗尽，正在请求后台自动中断；若官方请求已发出，将等待当前请求返回后更新状态。";
+    void requestJobCancel({ jobId: simJobId, reason: "sse_exhausted", message }).then((result) => {
+      const finalMessage = isCancelConfirmed(result)
+        ? "BRAIN模拟进度通道已耗尽，已确认后台停止该模拟任务。"
+        : "BRAIN模拟进度通道已耗尽，已请求后台自动中断，但取消未确认；若官方请求已发出，请等待当前请求返回。";
+      setSimError(finalMessage);
+      notify(isCancelConfirmed(result) ? "warning" : "error", finalMessage);
+    });
     setSimState("error");
-    setSimError("模拟进度暂时不可确认，请刷新候选列表后查看结果。");
+    setSimError(message);
     setSimJobId(null);
     void loadCandidates();
   }, [loadCandidates, simJobId]);
@@ -349,6 +474,8 @@ export default function CandidateTable({
   const visibleEnd = Math.min(currentPage * PAGE_SIZE, sortedCandidates.length);
   const title = viewMode === "candidates" ? "候选管理" : `${queueViewLabel(viewMode)}候选`;
   const remoteTruncated = candidateMeta.total > candidateMeta.returned;
+  const hasActions = canShowRowActions || showProductionControls;
+  const checkBusy = checkState === "loading";
 
   if (loading) {
     return (
@@ -393,12 +520,12 @@ export default function CandidateTable({
           </button>
           <button
             type="button"
-            onClick={startSimulation}
+            onClick={() => startSimulation()}
             disabled={simState === "loading" || simState === "progress"}
             className="btn btn-secondary btn-sm"
-            title="提交符合分数阈值的候选到BRAIN平台进行官方回测模拟"
+            title="只调用官方模拟/回测，不执行真实 Alpha submit"
           >
-            {simState === "loading" || simState === "progress" ? "模拟中..." : "提交BRAIN模拟"}
+            {simState === "loading" || simState === "progress" ? "模拟中..." : "运行官方模拟"}
           </button>
         </div>
       )}
@@ -416,7 +543,7 @@ export default function CandidateTable({
           state={taskStream.exhausted && taskState === "progress" ? "error" : taskState}
           title="候选生成"
           progress={taskProgress}
-          error={taskError || (taskStream.exhausted && taskState === "progress" ? "候选生成状态不明确，系统已安全停止本次生成。" : null)}
+          error={taskError || (taskStream.exhausted && taskState === "progress" ? "候选生成状态不明确，取消未确认。" : null)}
           onRetry={generateCandidates}
           compact={taskState === "success"}
         />
@@ -428,14 +555,24 @@ export default function CandidateTable({
           title="BRAIN官方模拟"
           progress={simProgress}
           error={simError}
-          onRetry={startSimulation}
+          onRetry={() => startSimulation()}
           compact={simState === "success"}
+        />
+      )}
+
+      {showProductionControls && checkState !== "idle" && (
+        <ProgressFeedback
+          state={checkState}
+          title="官方检查"
+          progress={checkProgress}
+          error={checkError}
+          compact={checkState === "success"}
         />
       )}
 
       {remoteTruncated && (
         <div className="mb-4 px-3 py-2 text-xs rounded-md bg-warning-subtle text-warning" role="status" aria-live="polite">
-          当前只加载了前 {candidateMeta.returned} 条候选，服务端报告总量为 {candidateMeta.total} 条；请使用过滤或刷新查看最新状态，避免把当前列表误认为全集。
+          当前接口返回 {candidateMeta.returned} 条候选，服务端报告总量为 {candidateMeta.total} 条；请刷新或切换到完整候选源，避免把当前列表误认为全集。
         </div>
       )}
 
@@ -476,7 +613,14 @@ export default function CandidateTable({
                   candidate={candidate}
                   checkResults={checkResults}
                   canShowRowActions={canShowRowActions}
+                  canSimulate={showProductionControls}
+                  canCheck={showProductionControls}
+                  simulationBusy={simState === "loading" || simState === "progress"}
+                  checkingAlphaId={checkingAlphaId}
+                  checkBusy={checkBusy}
                   onScore={onScore}
+                  onSimulate={startSimulation}
+                  onCheck={startSingleCheck}
                 />
               ))}
             </div>
@@ -484,7 +628,7 @@ export default function CandidateTable({
         </div>
 
         {/* Desktop table */}
-        <div className="md:block" style={{ maxWidth: "100%", overflow: "auto" }}>
+        <div className="hidden md:block" style={{ maxWidth: "100%", overflow: "auto" }}>
           <table className="data-table card-view" style={{ minWidth: 980 }} aria-label="候选结果">
             <thead>
               <tr>
@@ -496,13 +640,13 @@ export default function CandidateTable({
                 <th style={{ width: "14rem" }}>阻断原因</th>
                 <th style={{ width: "18rem" }}>输出</th>
                 <th style={{ width: "16rem" }}>官方证据</th>
-                {canShowRowActions && <th style={{ width: "6rem" }}>操作</th>}
+                {hasActions && <th style={{ width: "10rem" }}>操作</th>}
               </tr>
             </thead>
             <tbody>
               {paginatedCandidates.length === 0 ? (
                 <tr>
-                  <td colSpan={canShowRowActions ? 9 : 8} style={{ padding: "1.5rem", textAlign: "center" }}>
+                  <td colSpan={hasActions ? 9 : 8} style={{ padding: "1.5rem", textAlign: "center" }}>
                     <EmptyState filter={!!filter} showProductionControls={showProductionControls} />
                   </td>
                 </tr>
@@ -537,13 +681,39 @@ export default function CandidateTable({
                         <div className="text-text-secondary">{evidence}</div>
                         <div className="text-text-tertiary mt-1">{candidateText(candidate.simulation_id) || "simulation:--"}</div>
                       </td>
-                      {canShowRowActions && (
+                      {hasActions && (
                         <td>
-                          <button type="button" className="btn btn-ghost btn-sm"
-                            aria-label={`评分 ${candidateIdentity(candidate)}`}
-                            onClick={() => onScore?.(candidate)}>
-                            评分
-                          </button>
+                          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                            {canShowRowActions && (
+                              <button type="button" className="btn btn-ghost btn-sm"
+                                aria-label={`评分 ${candidateIdentity(candidate)}`}
+                                onClick={() => onScore?.(candidate)}>
+                                评分
+                              </button>
+                            )}
+                            {showProductionControls && (
+                              <button
+                                type="button"
+                                className="btn btn-secondary btn-sm"
+                                aria-label={`单个检查 ${candidateIdentity(candidate)}`}
+                                disabled={checkBusy}
+                                onClick={() => startSingleCheck(candidate)}
+                              >
+                                {checkingAlphaId === candidateIdentity(candidate) ? "检查中..." : "单个检查"}
+                              </button>
+                            )}
+                            {showProductionControls && (
+                              <button
+                                type="button"
+                                className="btn btn-secondary btn-sm"
+                                aria-label={`单个模拟 ${candidateIdentity(candidate)}`}
+                                disabled={simState === "loading" || simState === "progress"}
+                                onClick={() => startSimulation(candidate)}
+                              >
+                                单个模拟
+                              </button>
+                            )}
+                          </div>
                         </td>
                       )}
                     </tr>
@@ -596,12 +766,35 @@ function QualitySummaryItem({ label, value }: { label: string; value: string }) 
   );
 }
 
-function CandidateMobileCard({ candidate, checkResults, canShowRowActions, onScore }: {
-  candidate: Candidate; checkResults: Map<string, CandidateCheckResult>;
-  canShowRowActions: boolean; onScore?: (candidate: Candidate) => void;
+function CandidateMobileCard({
+  candidate,
+  checkResults,
+  canShowRowActions,
+  canSimulate,
+  canCheck,
+  simulationBusy,
+  checkingAlphaId,
+  checkBusy,
+  onScore,
+  onSimulate,
+  onCheck,
+}: {
+  candidate: Candidate;
+  checkResults: Map<string, CandidateCheckResult>;
+  canShowRowActions: boolean;
+  canSimulate: boolean;
+  canCheck: boolean;
+  simulationBusy: boolean;
+  checkingAlphaId: string | null;
+  checkBusy: boolean;
+  onScore?: (candidate: Candidate) => void;
+  onSimulate?: (candidate: Candidate) => void;
+  onCheck?: (candidate: Candidate) => void;
 }) {
   const quality = candidateQualityBadge(candidate);
   const evidence = officialEvidenceText(candidate, checkResults);
+  const identity = candidateIdentity(candidate);
+  const hasActions = canShowRowActions || canSimulate || canCheck;
   return (
     <div className="panel" style={{ padding: "12px" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
@@ -618,11 +811,39 @@ function CandidateMobileCard({ candidate, checkResults, canShowRowActions, onSco
         <div style={{ gridColumn: "span 2" }}><span className="text-text-tertiary">官方证据</span><p className="text-text-secondary break-words">{evidence}</p></div>
         <div style={{ gridColumn: "span 2" }}><span className="text-text-tertiary">输出</span><p className="text-text-primary">{candidateOutputSummary(candidate)}</p><p className="text-text-tertiary">{candidateOutputDetail(candidate)}</p></div>
       </div>
-      {canShowRowActions && (
-        <button type="button" className="btn btn-ghost btn-sm" style={{ width: "100%", marginTop: 12 }}
-          aria-label={`评分 ${candidateIdentity(candidate)}`} onClick={() => onScore?.(candidate)}>
-          评分
-        </button>
+      {hasActions && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 12 }}>
+          {canShowRowActions && (
+            <button type="button" className="btn btn-ghost btn-sm" style={{ width: "100%" }}
+              aria-label={`评分 ${candidateIdentity(candidate)}`} onClick={() => onScore?.(candidate)}>
+              评分
+            </button>
+          )}
+          {canCheck && (
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              style={{ width: "100%" }}
+              aria-label={`单个检查 ${identity}`}
+              disabled={checkBusy}
+              onClick={() => onCheck?.(candidate)}
+            >
+              {checkingAlphaId === identity ? "检查中..." : "单个检查"}
+            </button>
+          )}
+          {canSimulate && (
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              style={{ width: "100%" }}
+              aria-label={`单个模拟 ${identity}`}
+              disabled={simulationBusy}
+              onClick={() => onSimulate?.(candidate)}
+            >
+              单个模拟
+            </button>
+          )}
+        </div>
       )}
     </div>
   );
@@ -636,6 +857,35 @@ function clampGenerateCount(value: string | number) {
 
 function sanitizeTextInput(value: string, maxLength: number) {
   return value.replace(/[\x00-\x1F\x7F]/g, "").slice(0, maxLength);
+}
+
+function eventStatus(event: SSEEvent, progress: Record<string, unknown>) {
+  return String(event.status || progress.status || progress.phase || "").trim().toLowerCase();
+}
+
+function isStoppedStatus(status: string) {
+  return status === "stopped" || status === "cancelled" || status === "canceled";
+}
+
+function simulationResultSummary(event: SSEEvent): SimulationResultSummary {
+  const result = record(event.result);
+  const progress = record(event.progress);
+  const data = record(progress.data);
+  return {
+    completed: numericResultField(result.completed ?? data.completed),
+    failed: numericResultField(result.failed ?? data.failed),
+    total: numericResultField(result.total ?? data.total),
+  };
+}
+
+function numericResultField(value: unknown) {
+  const number = Number(value);
+  return Number.isFinite(number) ? Math.max(0, Math.trunc(number)) : 0;
+}
+
+function simulationCompletionMessage(result: SimulationResultSummary) {
+  const total = result.total > 0 ? `，共 ${result.total} 个` : "";
+  return `BRAIN模拟完成: ${result.completed} 成功, ${result.failed} 失败${total}`;
 }
 
 function indexCheckResults(rows: CandidateCheckResult[]) {
@@ -666,7 +916,7 @@ function candidateMatchesQueueView(
   if (viewMode === "pending_backtest") return status === "pending_backtest";
   if (viewMode === "running_backtest") return status === "running_backtest" || status === "running";
   if (viewMode === "backtest_rework") return status === "backtest_rework" || status === "failed_backtest" || status === "rejected";
-  if (viewMode === "passed") return status === "submission_ready" || candidate.quality_diagnosis?.submission_ready === true || candidate.gate?.passed === true;
+  if (viewMode === "passed") return candidateSubmissionReady(candidate);
   if (viewMode === "submittable") return status !== "submitted" && result?.is_stale !== true && Boolean(result?.submittable ?? result?.passed ?? candidate.quality_diagnosis?.submission_ready);
   if (viewMode === "submitted") return status === "submitted" || stage === "submitted";
   return status === "failed" || status === "rejected" || status === "blocked";
@@ -727,8 +977,11 @@ function candidateQualitySearchText(candidate: Candidate) {
 
 function candidateQualityBadge(candidate: Candidate) {
   const diagnosis = candidate.quality_diagnosis || {};
-  if (diagnosis.qualified || diagnosis.submission_ready) {
+  if (candidateSubmissionReady(candidate)) {
     return { label: "达标", tone: "badge-positive", title: "符合提交前质量复核条件" };
+  }
+  if (diagnosis.qualified) {
+    return { label: "待确认", tone: "badge-warning", title: "质量达标，但仍有提交前阻断需要处理" };
   }
   if (candidateLocalValid(candidate)) {
     return { label: "本地通过", tone: "badge-warning", title: "本地质量通过，仍需官方证据" };
@@ -799,7 +1052,7 @@ function officialEvidenceText(candidate: Candidate, checkResults: Map<string, Ca
 }
 
 function summarizeCandidateQuality(candidates: Candidate[]) {
-  const ready = candidates.filter((candidate) => candidate.quality_diagnosis?.submission_ready || candidate.gate?.passed).length;
+  const ready = candidates.filter(candidateSubmissionReady).length;
   const localValid = candidates.filter(candidateLocalValid).length;
   const blocked = candidates.filter(candidateHasBlockingQuality).length;
   const outputModes = candidates.map(candidateOutputSummary).filter((value) => value && value !== "-");
@@ -811,6 +1064,15 @@ function summarizeCandidateQuality(candidates: Candidate[]) {
     outputMode: mostCommon(outputModes) || "-",
     dataset: mostCommon(datasets) || "-",
   };
+}
+
+function candidateSubmissionReady(candidate: Candidate) {
+  const status = candidateStatus(candidate);
+  return Boolean(
+    status === "submission_ready" ||
+    candidate.quality_diagnosis?.submission_ready === true ||
+    candidate.gate?.submission_ready === true
+  );
 }
 
 function statusBadgeClass(status: string) {

@@ -5,7 +5,7 @@
  */
 
 import { useState, useCallback, useRef, useEffect, lazy, Suspense, useMemo } from "react";
-import type { BrainCredentials, Candidate, CardViewId, PhaseId } from "@/types";
+import type { BacktestSlotsResponse, BrainCredentials, Candidate, CardViewId, PhaseId } from "@/types";
 import { useApi } from "@/hooks/useApi";
 import { useToast } from "@/hooks/useToast";
 import { useJobState } from "@/hooks/useJobState";
@@ -17,6 +17,8 @@ import JobMonitor from "@/components/JobMonitor";
 import CandidateTable from "@/components/CandidateTable";
 import PhaseShell from "@/components/PhaseShell";
 import MobileTabBar from "@/components/MobileTabBar";
+import { reportIgnoredError } from "@/utils/reportIgnoredError";
+import { backtestActiveCount, backtestSlotLimit } from "@/utils/backtestSlots";
 
 // Lazy-loaded: non-critical pages loaded on demand
 const OfficialOperationsPanel = lazy(() => import("@/components/OfficialOperationsPanel"));
@@ -74,11 +76,13 @@ interface SidebarBadges {
 
 function CredentialQuickStart({
   credentials,
+  managedCredentialsAvailable,
   onCredentialsChange,
   notify,
   onConnectionTested,
 }: {
   credentials: BrainCredentials;
+  managedCredentialsAvailable: boolean;
   onCredentialsChange: (c: BrainCredentials) => void;
   notify: (type: "success" | "error" | "warning" | "info", msg: string) => void;
   onConnectionTested?: (success: boolean, error: string | null) => void;
@@ -87,7 +91,9 @@ function CredentialQuickStart({
   const usernameInputRef = useRef<HTMLInputElement | null>(null);
   const hasSession = Boolean(credentials.username || credentials.password || credentials.token);
   const credentialMode = credentials.token.trim()
-    ? "Token" : credentials.username.trim() || credentials.password ? "账号密码" : "托管凭证";
+    ? "Token" : credentials.username.trim() || credentials.password
+      ? "账号密码"
+      : managedCredentialsAvailable ? "托管凭证" : "未填写";
 
   const updateCredential = <K extends keyof BrainCredentials>(key: K, value: BrainCredentials[K]) => {
     onCredentialsChange({ ...credentials, [key]: value });
@@ -107,6 +113,11 @@ function CredentialQuickStart({
       payload.password = password;
     }
     if (!Object.keys(payload).length) {
+      if (!managedCredentialsAvailable) {
+        notify("warning", "当前服务没有可用托管凭证，请在页面临时填写账户密码或 Token。");
+        usernameInputRef.current?.focus();
+        return;
+      }
       notify("info", "未填写页面凭证，将使用维护者配置的托管凭证测试 BRAIN 连接");
     }
     const result = await connectionApi.call("/api/test_connection", { method: "POST", body: JSON.stringify(payload) });
@@ -138,7 +149,7 @@ function CredentialQuickStart({
               className="form-input"
               type="email"
               inputMode="email"
-              autoComplete="username"
+              autoComplete="off"
               value={credentials.username}
               onChange={(e) => updateCredential("username", e.target.value.trim())}
               placeholder="email@example.com"
@@ -150,7 +161,7 @@ function CredentialQuickStart({
             <input
               className="form-input"
               type="password"
-              autoComplete="current-password"
+              autoComplete="new-password"
               value={credentials.password}
               onChange={(e) => updateCredential("password", e.target.value)}
               placeholder="BRAIN 密码"
@@ -180,7 +191,8 @@ function CredentialQuickStart({
           <span className="text-xs text-text-tertiary" role="status">
             {connectionApi.error ? `连接失败: ${connectionApi.error}` :
              connectionApi.data?.ok ? `连接正常: ${connectionApi.data.environment || "production"}` :
-             hasSession ? "凭证已填写，尚未测试" : "也可留空，使用托管凭证"}
+             hasSession ? "凭证已填写，尚未测试" :
+             managedCredentialsAvailable ? "也可留空，使用托管凭证" : "请临时填写页面凭证"}
           </span>
           <button type="button" className="btn btn-primary" onClick={testConnection} disabled={connectionApi.loading}>
             {connectionApi.loading ? "测试中..." : "测试连接"}
@@ -210,28 +222,28 @@ export default function App() {
   const jobState = useJobState(notify, credentials);
 
   const candidatesApi = useApi<{ candidates?: Candidate[]; total?: number }>();
-  const slotsApi = useApi<{ slot_limit?: number; slots?: Array<{ slot: number; status?: string }> }>();
-  const cloudApi = useApi<{ count?: number; total?: number }>();
+  const slotsApi = useApi<BacktestSlotsResponse>();
+  const cloudApi = useApi<{ count?: number; total?: number; summary?: Record<string, unknown> }>();
+  const configApi = useApi<{ config?: { credentials?: { managed_credentials_available?: boolean } } }>();
 
   useEffect(() => {
-    void candidatesApi.call("/api/candidates?limit=1000");
+    void candidatesApi.call("/api/candidates?summary=true");
     void slotsApi.call("/api/backtest_slots");
-    void cloudApi.call("/api/snapshot/cloud?limit=5");
-  }, [candidatesApi.call, slotsApi.call, cloudApi.call]);
+    void cloudApi.call("/api/snapshot/cloud");
+    void configApi.call("/api/config");
+  }, [candidatesApi.call, slotsApi.call, cloudApi.call, configApi.call]);
 
   useEffect(() => {
     // Independently notify about each API error so the user knows which feature is affected
     if (candidatesApi.error) notify("warning", `候选数据加载失败: ${candidatesApi.error}`);
     if (slotsApi.error) notify("warning", `回测槽位加载失败: ${slotsApi.error}`);
     if (cloudApi.error) notify("warning", `云端快照加载失败: ${cloudApi.error}`);
-  }, [candidatesApi.error, slotsApi.error, cloudApi.error, notify]);
+    if (configApi.error) notify("warning", `配置状态加载失败: ${configApi.error}`);
+  }, [candidatesApi.error, slotsApi.error, cloudApi.error, configApi.error, notify]);
 
-  // Track actual connection test result — persist in sessionStorage so page
-  // refresh doesn't force the user to re-test the connection.
-  const [connectionTested, setConnectionTested] = useState(() => {
-    try { return sessionStorage.getItem("brain_alpha_connection_tested") === "1"; } catch { return false; }
-  });
+  const [connectionOverride, setConnectionOverride] = useState<boolean | null>(null);
   const [connectionError, setConnectionError] = useState<string | null>(null);
+  const [officialOpsAutoStart, setOfficialOpsAutoStart] = useState(false);
 
   // Phase state from backend (poll every 10s)
   const phaseApi = useApi<{
@@ -251,11 +263,15 @@ export default function App() {
 
   // Phase state computation
   const phaseData = phaseApi.data;
-  const connected = connectionTested && !connectionError;
+  const phaseConnected = Boolean(phaseData?.connected);
+  const connected = Boolean(connectionOverride ?? phaseConnected) && !connectionError;
   const contextFresh = phaseData?.context_fresh ?? false;
   const candidatesCount = phaseData?.candidates_count ?? candidatesApi.data?.total ?? 0;
   const scoredCount = phaseData?.scored_count ?? 0;
   const readinessPassed = phaseData?.readiness_passed ?? false;
+  const managedCredentialsAvailable = Boolean(
+    configApi.data?.config?.credentials?.managed_credentials_available,
+  );
 
   const { phaseState, steps, currentPhase } = usePhaseState({
     connected,
@@ -295,12 +311,47 @@ export default function App() {
   const sidebarBadges: SidebarBadges = {
     candidates: candidatesApi.data?.total ?? candidatesApi.data?.candidates?.length,
     official_backtests: formatBacktestBadge(slotsApi.data),
-    cloud: formatCloudBadge(cloudApi.data?.count ?? cloudApi.data?.total),
+    cloud: formatCloudBadge(cloudBadgeTotal(cloudApi.data)),
   };
 
   const handleNavigate = useCallback((view: CardViewId) => {
     setActiveView(view);
   }, []);
+
+  const handleConnectionTested = useCallback((ok: boolean, err: string | null) => {
+    setConnectionOverride(ok);
+    setConnectionError(err);
+    try {
+      sessionStorage.removeItem("brain_alpha_connection_tested");
+    } catch (storageErr) {
+      reportIgnoredError("legacy connection sessionStorage cleanup failed", storageErr);
+    }
+    void phaseApi.call("/api/phase_state");
+  }, [phaseApi.call]);
+
+  const handleDashboardSyncStart = useCallback(() => {
+    setOfficialOpsAutoStart(true);
+    setActiveView("official_operations");
+  }, []);
+
+  const handleDashboardSyncOpen = useCallback(() => {
+    setOfficialOpsAutoStart(false);
+    setActiveView("official_operations");
+  }, []);
+
+  const handleOfficialSyncCompleted = useCallback(() => {
+    void phaseApi.call("/api/phase_state");
+    void cloudApi.call("/api/snapshot/cloud");
+  }, [cloudApi.call, phaseApi.call]);
+
+  const handleOfficialReconnectRequested = useCallback(() => {
+    setActiveView("dashboard");
+  }, []);
+
+  useEffect(() => {
+    if (connectionOverride === true && phaseConnected) setConnectionOverride(null);
+    if (connectionOverride === false && !phaseConnected) setConnectionOverride(null);
+  }, [connectionOverride, phaseConnected]);
 
   const handleMobileNavigate = useCallback((target: PhaseId | "tools") => {
     if (target === "tools") {
@@ -321,8 +372,8 @@ export default function App() {
   const detailContent = useMemo(() => {
     switch (activeView) {
     case "dashboard":
-      return <Dashboard notify={notify} connected={connected} contextFresh={contextFresh} onNavigateToSync={() => setActiveView("official_operations")}>
-        {!connected && <CredentialQuickStart credentials={credentials} onCredentialsChange={setCredentials} notify={notify} onConnectionTested={(ok, err) => { setConnectionTested(true); setConnectionError(err); if (ok) { try { sessionStorage.setItem("brain_alpha_connection_tested", "1"); } catch { /* ignore */ } } }} />}
+      return <Dashboard notify={notify} connected={connected} contextFresh={contextFresh} onNavigateToSync={handleDashboardSyncStart} onOpenSync={handleDashboardSyncOpen}>
+        {!connected && <CredentialQuickStart credentials={credentials} managedCredentialsAvailable={managedCredentialsAvailable} onCredentialsChange={setCredentials} notify={notify} onConnectionTested={handleConnectionTested} />}
         {connected && contextFresh && (
           <div className="animate-fade-in">
             <JobMonitor notify={notify} credentials={credentials} jobState={jobState} />
@@ -330,7 +381,18 @@ export default function App() {
         )}
       </Dashboard>;
     case "official_operations":
-      return <OfficialOperationsPanel notify={notify} credentials={credentials} />;
+      return (
+        <OfficialOperationsPanel
+          notify={notify}
+          credentials={credentials}
+          autoStart={officialOpsAutoStart}
+          connectionReady={connected || managedCredentialsAvailable}
+          onAutoStartConsumed={() => setOfficialOpsAutoStart(false)}
+          onSyncCompleted={handleOfficialSyncCompleted}
+          onReconnectRequested={handleOfficialReconnectRequested}
+          onNavigateToCandidates={() => setActiveView("candidates")}
+        />
+      );
     case "candidates":
       return (
         <CandidateTable key="candidates" notify={notify} showProductionControls showRowActions
@@ -350,7 +412,7 @@ export default function App() {
     case "checkpoint_status":
       return <SnapshotPanel key="checkpoint_status" notify={notify} viewMode="checkpoint_status" onNavigate={handleNavigate} />;
     case "config":
-      return <ConfigPanel notify={notify} credentials={credentials} onCredentialsChange={setCredentials} />;
+      return <ConfigPanel notify={notify} credentials={credentials} onCredentialsChange={setCredentials} onConnectionTested={handleConnectionTested} />;
     case "cloud":
       return <SnapshotPanel key="cloud" notify={notify} viewMode="cloud" onNavigate={handleNavigate} />;
     default:
@@ -362,7 +424,23 @@ export default function App() {
         </div>
       );
   }
-  }, [activeView, selectedCandidate, credentials, notify, openScoring, handleNavigate, connected, contextFresh, jobState]);
+  }, [
+    activeView,
+    selectedCandidate,
+    credentials,
+    notify,
+    openScoring,
+    handleNavigate,
+    handleConnectionTested,
+    connected,
+    contextFresh,
+    jobState,
+    managedCredentialsAvailable,
+    officialOpsAutoStart,
+    handleDashboardSyncStart,
+    handleDashboardSyncOpen,
+    handleOfficialSyncCompleted,
+  ]);
 
   const viewLabel = VIEW_LABELS[activeView] || activeView;
   const currentPhaseObj = phaseState.phases[currentPhase];
@@ -519,17 +597,27 @@ function ScoringPlaceholder({ onPickCandidate }: { onPickCandidate: () => void }
   );
 }
 
-function formatBacktestBadge(data?: { slot_limit?: number; slots?: Array<{ slot: number; status?: string }> } | null): string | undefined {
+function formatBacktestBadge(data?: BacktestSlotsResponse | null): string | undefined {
   if (!data) return undefined;
-  const slots = data.slots || [];
-  const limit = data.slot_limit || 8;
-  const active = slots.filter((s) => s.status && !["EMPTY", "COMPLETED", "FAILED", "ERROR"].includes(s.status)).length;
+  const limit = backtestSlotLimit(data, 0);
+  if (limit <= 0) return undefined;
+  const active = backtestActiveCount(data);
   return `${active}/${limit}`;
 }
 
 function formatCloudBadge(total?: number): string | undefined {
   if (total == null) return undefined;
   return total >= 1000 ? `${(total / 1000).toFixed(1)}k` : String(total);
+}
+
+function cloudBadgeTotal(payload?: { count?: number; total?: number; summary?: Record<string, unknown> } | null): number | undefined {
+  const summary = payload?.summary || {};
+  return numericBadgeValue(payload?.count ?? payload?.total ?? summary.count ?? summary.total ?? summary.total_count);
+}
+
+function numericBadgeValue(value: unknown): number | undefined {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : undefined;
 }
 
 function fmtEta(seconds: number): string {

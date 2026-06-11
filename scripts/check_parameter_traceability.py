@@ -157,8 +157,11 @@ OFFICIAL_GATE_THRESHOLDS: dict[str, dict[str, Any]] = {
 _API_ATTR_TO_CANONICAL = {
     "authentication_path": "authentication",
     "simulations_path": "simulations",
+    "data_categories_path": "data_categories",
     "data_sets_path": "data_sets",
+    "data_set_path_template": "data_set_detail",
     "data_fields_path": "data_fields",
+    "data_field_path_template": "data_field_detail",
     "operators_path": "operators",
     "user_alphas_path": "user_alphas",
     "alpha_correlations_path": "alpha_correlations",

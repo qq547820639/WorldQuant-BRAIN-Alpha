@@ -53,9 +53,9 @@ class ResearchBudget:
     adaptive_min_ready_rate: float = 0.05
     max_simulation_retries: int = 1
     enable_secondary_fusion: bool = True
-    require_cloud_sync: bool = True
-    cloud_sync_range: str = "3d"
-    cloud_sync_max_elapsed_seconds: float = 300.0
+    require_cloud_sync: bool = False
+    cloud_sync_range: str = "all"
+    cloud_sync_max_elapsed_seconds: float = 0.0
     resume_persisted_backtests: bool = True
     max_cycles: int = 10
     dataset_strategy: str = "rotate"  # all | rotate | random | specific
@@ -152,8 +152,12 @@ class OfficialAPIConfig:
     base_url: str = "https://api.worldquantbrain.com"
     authentication_path: str = "/authentication"
     simulations_path: str = "/simulations"
+    data_categories_path: str = "/data-categories"
     data_sets_path: str = "/data-sets"
+    data_set_path_template: str = "/data-sets/{dataset_id}"
     data_fields_path: str = "/data-fields"
+    data_field_path_template: str = "/data-fields/{field_id}"
+    data_fields_dataset_query_key: str = "dataset.id"
     operators_path: str = "/operators"
     alpha_path_template: str = "/alphas/{alpha_id}"
     user_alphas_path: str = "/users/self/alphas"

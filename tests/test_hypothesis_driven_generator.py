@@ -349,6 +349,101 @@ def test_generator_has_public_api():
     assert hasattr(gen, 'set_experience_guidance')
 
 
+def test_generator_set_dataset_filters_mapper_metadata_fields():
+    lib = _make_mock_library()
+    engine = _make_mock_theme_engine()
+    selector = _make_mock_selector()
+    mapper = MagicMock()
+    mapper.fields_for.return_value = [
+        "pv13_top",
+        "topsp200",
+        "pv13_top200",
+        "pv13_topsp",
+        "pv13_rha2_foo",
+        "pv13_rha2_min20_3000_513",
+        "pv13_isin",
+        "pv13_hierarchy_level",
+        "pv13_revere_parent",
+        "open",
+    ]
+
+    gen = HypothesisDrivenGenerator(
+        loader=None,
+        mapper=mapper,
+        theme_engine=engine,
+        selector=selector,
+        library=lib,
+        ratio_str="70/20/10",
+    )
+    gen.set_dataset("pv1")
+
+    assert gen._fields == {"open"}
+
+
+def test_generator_update_context_filters_metadata_fields():
+    gen = HypothesisDrivenGenerator(
+        loader=None,
+        mapper=None,
+        theme_engine=_make_mock_theme_engine(),
+        selector=_make_mock_selector(),
+        library=_make_mock_library(),
+        ratio_str="70/20/10",
+    )
+
+    gen.update_context(
+        [
+            "open",
+            "sedol",
+            "top",
+            "topsp",
+            "pv13_top",
+            "pv13_top200",
+            "pv13_topsp",
+            "pv13_rha2_foo",
+            "pv13_rha2_min20_3000_513",
+            "pv13_isin",
+            "pv13_hierarchy_level",
+            "pv13_revere_parent",
+        ],
+        ["rank"],
+    )
+
+    assert gen._fields == {"open"}
+
+
+def test_generator_preferred_fields_fail_closed_when_loader_pool_is_only_metadata():
+    class Loader:
+        def get_fields(self, dataset_id=None):
+            return [
+                "topsp200",
+                "pv13_top",
+                "pv13_top200",
+                "pv13_topsp",
+                "pv13_rha2_foo",
+                "pv13_rha2_min20_3000_513",
+                "pv13_hierarchy_level",
+                "pv13_revere_parent",
+            ]
+
+    gen = HypothesisDrivenGenerator(
+        loader=Loader(),
+        mapper=None,
+        theme_engine=_make_mock_theme_engine(),
+        selector=_make_mock_selector(),
+        library=_make_mock_library(),
+        ratio_str="70/20/10",
+    )
+    gen.set_dataset("pv1")
+
+    assert gen._official_preferred_fields([
+        "topsp200",
+        "pv13_top",
+        "pv13_rha2_foo",
+        "pv13_rha2_min20_3000_513",
+        "pv13_revere_parent",
+    ]) == []
+
+
 def test_generator_generates_candidates():
     """Verify generate() returns Candidate objects."""
     lib = _make_mock_library()
@@ -638,6 +733,43 @@ def test_dynamic_theme_generation_seeds_high_structure_templates(tmp_path):
     assert any(theme.category == "hybrid" for theme, _score in high_structure)
 
 
+def test_dynamic_theme_generation_skips_window_constraint_violations(tmp_path):
+    from brain_alpha_ops.data import OfficialDataLoader
+    from brain_alpha_ops.research.generator_metadata import expression_windows_within_constraints
+    from brain_alpha_ops.research.theme_engine import DynamicThemeEngine
+
+    field_names = ["alpha_value", "beta_growth", "quality_margin", "volatility_signal"]
+    (tmp_path / "official_fields.json").write_text(
+        json.dumps([{"name": name, "category": "analyst"} for name in field_names]),
+        encoding="utf-8",
+    )
+    (tmp_path / "official_datasets.json").write_text(
+        json.dumps([{"id": "analyst4", "name": "Analyst", "field_count": 4, "category": {"id": "analyst"}}]),
+        encoding="utf-8",
+    )
+    (tmp_path / "official_operators.json").write_text(
+        json.dumps(
+            [
+                {"name": "rank", "category": "Cross Sectional"},
+                {"name": "winsorize", "category": "Cross Sectional"},
+                {"name": "ts_delta", "category": "Time Series"},
+                {"name": "ts_std_dev", "category": "Time Series"},
+            ]
+        ),
+        encoding="utf-8",
+    )
+    loader = OfficialDataLoader()
+    loader.load_all(tmp_path)
+    engine = DynamicThemeEngine(loader)
+    engine.build_categories()
+    engine.windows = [180, 120]
+
+    themes = engine.generate("analyst4", n=4, seed=1)
+
+    assert themes
+    assert all(expression_windows_within_constraints(theme.expression) for theme in themes)
+
+
 def test_dynamic_theme_generation_excludes_metadata_fields(tmp_path):
     from brain_alpha_ops.data import OfficialDataLoader
     from brain_alpha_ops.research.theme_engine import DynamicThemeEngine
@@ -650,6 +782,18 @@ def test_dynamic_theme_generation_excludes_metadata_fields(tmp_path):
                 {"name": "anl4_vector_blob", "category": "analyst", "type": "VECTOR", "coverage": 1.0},
                 {"name": "sector", "category": "analyst", "coverage": 1.0},
                 {"name": "subindustry", "category": "analyst", "coverage": 1.0},
+                {"name": "topsp200", "category": "analyst", "coverage": 1.0},
+                {"name": "pv13_top", "category": "analyst", "coverage": 1.0},
+                {"name": "pv13_top200", "category": "analyst", "coverage": 1.0},
+                {"name": "pv13_topsp", "category": "analyst", "coverage": 1.0},
+                {"name": "pv13_topsp200", "category": "analyst", "coverage": 1.0},
+                {"name": "pv13_rha2_foo", "category": "analyst", "coverage": 1.0},
+                {"name": "pv13_rha2_min20_3000_513", "category": "analyst", "coverage": 1.0},
+                {"name": "pv13_rha2_min20_3000_513_sector", "category": "analyst", "coverage": 1.0},
+                {"name": "pv13_isin", "category": "analyst", "coverage": 1.0},
+                {"name": "pv13_hierarchy_level", "category": "analyst", "coverage": 1.0},
+                {"name": "pv13_revere_parent", "category": "analyst", "coverage": 1.0},
+                {"name": "pv13_sector", "category": "analyst", "coverage": 1.0},
                 {"name": "industry_relative_value_signal", "category": "analyst", "coverage": 0.9},
                 {"name": "actual_eps_value_quarterly", "category": "analyst", "coverage": 0.9},
                 {"name": "sales_estimate_stddev_quarterly", "category": "analyst", "coverage": 0.8},
@@ -694,6 +838,18 @@ def test_dynamic_theme_generation_excludes_metadata_fields(tmp_path):
     assert "anl4_vector_blob" not in slots
     assert "sector" not in slots
     assert "subindustry" not in slots
+    assert "topsp200" not in slots
+    assert "pv13_top" not in slots
+    assert "pv13_top200" not in slots
+    assert "pv13_topsp" not in slots
+    assert "pv13_topsp200" not in slots
+    assert "pv13_rha2_foo" not in slots
+    assert "pv13_rha2_min20_3000_513" not in slots
+    assert "pv13_rha2_min20_3000_513_sector" not in slots
+    assert "pv13_isin" not in slots
+    assert "pv13_hierarchy_level" not in slots
+    assert "pv13_revere_parent" not in slots
+    assert "pv13_sector" not in slots
 
 
 def test_theme_engine_mutation_preserves_digits_inside_field_names(tmp_path):
@@ -761,6 +917,38 @@ def test_theme_engine_mutation_preserves_keyword_argument_numbers(tmp_path):
     for seed in range(8):
         mutated = engine.mutate_expression(expression, "analyst4", seed=seed)
         assert "std=4" in mutated.replace(" ", "")
+
+
+def test_theme_engine_mutation_reverts_window_constraint_violation(tmp_path):
+    from brain_alpha_ops.data import OfficialDataLoader
+    from brain_alpha_ops.research.theme_engine import DynamicThemeEngine
+
+    (tmp_path / "official_fields.json").write_text(
+        json.dumps([{"name": "analyst_signal", "category": "analyst"}]),
+        encoding="utf-8",
+    )
+    (tmp_path / "official_datasets.json").write_text(
+        json.dumps([{"id": "analyst4", "name": "Analyst", "field_count": 1, "category": {"id": "analyst"}}]),
+        encoding="utf-8",
+    )
+    (tmp_path / "official_operators.json").write_text(
+        json.dumps(
+            [
+                {"name": "rank", "category": "Cross Sectional"},
+                {"name": "ts_delta", "category": "Time Series"},
+            ]
+        ),
+        encoding="utf-8",
+    )
+    loader = OfficialDataLoader()
+    loader.load_all(tmp_path)
+    engine = DynamicThemeEngine(loader)
+    engine.build_categories()
+    engine.windows = [180]
+
+    expression = "rank(ts_delta(analyst_signal, 20))"
+
+    assert engine.mutate_expression(expression, "analyst4", seed=1) == expression
 
 
 def test_theme_engine_fills_numbered_window_placeholders(tmp_path):
@@ -1158,6 +1346,115 @@ def test_hypothesis_generator_skips_generation_risk_candidates(monkeypatch):
 
     assert [candidate.alpha_id for candidate in candidates] == ["alpha_safe"]
     assert not any(is_high_turnover_generation_risk(candidate.expression) for candidate in candidates)
+
+
+def test_hypothesis_generator_filters_preferred_fields_to_official_context():
+    gen = HypothesisDrivenGenerator(
+        loader=None,
+        mapper=None,
+        theme_engine=None,
+        selector=None,
+        library=None,
+        ratio_str="0/0/100",
+    )
+    gen.update_context(
+        [{"name": "close"}, {"name": "volume"}],
+        [{"name": "rank"}],
+    )
+
+    gen.set_knowledge_constraints({
+        "preferred_fields": ["close", "custom_non_official"],
+        "preferred_operators": ["rank"],
+    })
+
+    assert gen._knowledge_constraints["preferred_fields"] == ["close"]
+    assert "custom_non_official" not in gen._fields
+
+
+def test_hypothesis_generator_strict_preferred_constraints_filter_all_modes(monkeypatch):
+    from brain_alpha_ops.models import Candidate
+
+    gen = HypothesisDrivenGenerator(
+        loader=None,
+        mapper=None,
+        theme_engine=None,
+        selector=None,
+        library=None,
+        ratio_str="0/0/100",
+    )
+    gen.update_context(
+        [{"name": "close"}, {"name": "volume"}],
+        [{"name": "rank"}, {"name": "ts_mean"}, {"name": "zscore"}],
+    )
+    gen.set_knowledge_constraints({
+        "preferred_fields": ["close"],
+        "preferred_operators": ["rank", "ts_mean"],
+        "strict_preferred_fields": True,
+        "strict_preferred_operators": True,
+    })
+    emitted = iter([
+        Candidate(
+            alpha_id="alpha_bad_field",
+            expression="rank(ts_mean(volume, 20))",
+            family="test",
+            hypothesis="strict field mismatch",
+            data_fields=["volume"],
+            operators=["rank", "ts_mean"],
+        ),
+        Candidate(
+            alpha_id="alpha_bad_operator",
+            expression="zscore(close)",
+            family="test",
+            hypothesis="strict operator mismatch",
+            data_fields=["close"],
+            operators=["zscore"],
+        ),
+        Candidate(
+            alpha_id="alpha_allowed",
+            expression="rank(ts_mean(close, 20))",
+            family="test",
+            hypothesis="strict constraints allowed",
+            data_fields=["close"],
+            operators=["rank", "ts_mean"],
+        ),
+    ])
+    monkeypatch.setattr(gen, "_generate_random_exploration", lambda _dataset_id: next(emitted, None))
+
+    candidates = gen.generate(1, "pv1")
+
+    assert gen._knowledge_constraints["strict_preferred_operators"] is True
+    assert [candidate.alpha_id for candidate in candidates] == ["alpha_allowed"]
+
+
+def test_hypothesis_generator_strict_constraints_fail_closed_for_empty_lists_and_parse_errors():
+    gen = HypothesisDrivenGenerator(
+        loader=None,
+        mapper=None,
+        theme_engine=None,
+        selector=None,
+        library=None,
+        ratio_str="0/0/100",
+    )
+    gen.update_context(
+        [{"name": "close"}],
+        [{"name": "rank"}],
+    )
+    gen.set_knowledge_constraints({
+        "strict_preferred_fields": True,
+        "strict_preferred_operators": True,
+    })
+
+    assert gen._expression_satisfies_strict_preferred_constraints("rank(close)") is False
+
+    gen.set_knowledge_constraints({
+        "preferred_fields": ["close"],
+        "preferred_operators": ["rank"],
+        "strict_preferred_fields": True,
+        "strict_preferred_operators": True,
+    })
+
+    assert gen._expression_satisfies_strict_preferred_constraints("rank(close") is False
+    assert gen._expression_satisfies_strict_preferred_constraints("rank(close)") is True
 
 
 def test_generator_knowledge_constraints_block_fallback_fingerprint_and_similarity():

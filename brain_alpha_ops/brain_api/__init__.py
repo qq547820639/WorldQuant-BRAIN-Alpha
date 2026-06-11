@@ -1,9 +1,12 @@
 """BRAIN API adapters."""
 
-__all__ = ["OfficialBrainAPI"]
+__all__ = ["BrainAPI", "BrainAPIError", "OfficialBrainAPI"]
 
 
 def __getattr__(name: str):
+    if name in {"BrainAPI", "BrainAPIError"}:
+        from .base import BrainAPI, BrainAPIError
+        return {"BrainAPI": BrainAPI, "BrainAPIError": BrainAPIError}[name]
     if name == "OfficialBrainAPI":
         try:
             from .official import OfficialBrainAPI

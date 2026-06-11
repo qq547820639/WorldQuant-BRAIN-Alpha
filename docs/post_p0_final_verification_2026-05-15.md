@@ -120,7 +120,7 @@ P0 修复后，所有 Critical（5 角度全 ❌）已清零。剩余按优先�
 
 | # | 问题 | 严重度 | 建议 |
 |---|------|--------|------|
-| 1 | `load_check_results` 读取全量 checks.jsonl，文件持续增长无上限 | 🟡 Medium | 加行数限制（如最近 1000 行）或按时间过滤 |
+| 1 | `load_check_results` 读取全量 checks.jsonl，文件持续增长无上限 | 🟡 Medium | 使用流式聚合或按 Alpha/job ID 查询完整证据；若只返回局部结果，必须显式标记 `complete=false` |
 | 2 | 提交失败面板与检查模块面板共用 `.module-actions` CSS 类，虽不会同时显示但样式可能互相影响 | 🟢 Low | 下次检查面板显示前调用 `clearSubmitFailurePanel()` |
 | 3 | `retryAllFailedSubmit` 串行重试，大量失败时用户需长时间等待 | 🟢 Low | 可接受（提交是低频操作） |
 | 4 | checks.jsonl 可能含有旧任务残留，`loadCheckResults` 不过滤 job_id | 🟡 Medium | 后续迭代可按 job_id 或时间窗过滤 |

@@ -397,8 +397,6 @@ class HypothesisExpressionSupport:
         if not fields and self._loader:
             try:
                 fields = set(generation_field_ids(self._loader.get_fields(self._dataset_id or None)))
-                if not fields:
-                    fields = {field.id.lower() for field in self._loader.get_fields(self._dataset_id or None)}
             except Exception:
                 self._logger.warning(
                     "generator field extraction metadata unavailable for dataset_id=%s",

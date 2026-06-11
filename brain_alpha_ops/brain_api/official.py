@@ -170,6 +170,7 @@ class OfficialBrainAPI:
         body: dict | None = None,
         query: dict | None = None,
         headers: dict | None = None,
+        allow_auth_retry: bool = True,
     ) -> tuple[Any, dict]:
         return self._request_client._request(
             method,
@@ -177,6 +178,7 @@ class OfficialBrainAPI:
             body=body,
             query=query,
             headers=headers,
+            allow_auth_retry=allow_auth_retry,
         )
 
     def list_fields(
@@ -204,12 +206,112 @@ class OfficialBrainAPI:
     def list_operators(self, query: str = "all", progress_callback=None) -> list[dict]:
         return self._context_data.list_operators(query, progress_callback=progress_callback)
 
+    def list_data_categories(self, progress_callback=None) -> list[dict]:
+        return self._context_data.list_data_categories(progress_callback=progress_callback)
+
+    def search_datasets_limited(
+        self,
+        query: str = "all",
+        region: str = "",
+        *,
+        limit: int = 50,
+        offset: int = 0,
+        **filters,
+    ) -> dict:
+        return self._context_data.search_datasets_limited(
+            query,
+            region,
+            **filters,
+            limit=limit,
+            offset=offset,
+        )
+
+    def search_datasets(
+        self,
+        query: str = "all",
+        region: str = "",
+        *,
+        limit: int = 50,
+        offset: int = 0,
+        progress_callback=None,
+        **filters,
+    ) -> list[dict]:
+        return self._context_data.search_datasets(
+            query,
+            region,
+            **filters,
+            limit=limit,
+            offset=offset,
+            progress_callback=progress_callback,
+        )
+
+    def search_fields_limited(
+        self,
+        query: str = "all",
+        region: str = "",
+        dataset: str = "",
+        *,
+        limit: int = 50,
+        offset: int = 0,
+        **filters,
+    ) -> dict:
+        return self._context_data.search_fields_limited(
+            query,
+            region,
+            dataset=dataset,
+            **filters,
+            limit=limit,
+            offset=offset,
+        )
+
+    def search_fields(
+        self,
+        query: str = "all",
+        region: str = "",
+        dataset: str = "",
+        *,
+        limit: int = 50,
+        offset: int = 0,
+        progress_callback=None,
+        **filters,
+    ) -> list[dict]:
+        return self._context_data.search_fields(
+            query,
+            region,
+            dataset=dataset,
+            **filters,
+            limit=limit,
+            offset=offset,
+            progress_callback=progress_callback,
+        )
+
+    def locate_dataset(self, dataset_id: str) -> dict:
+        return self._context_data.locate_dataset(dataset_id)
+
+    def locate_field(self, field_id: str) -> dict:
+        return self._context_data.locate_field(field_id)
+
+    def locate_alpha(self, alpha_id: str) -> dict:
+        return self._context_data.locate_alpha(alpha_id)
+
+    def filter_alphas_limited(self, **filters) -> dict:
+        return self._context_data.filter_alphas_limited(**filters)
+
+    def filter_alphas(self, progress_callback=None, **filters) -> list[dict]:
+        return self._context_data.filter_alphas(progress_callback=progress_callback, **filters)
+
     def list_user_alphas(
         self,
-        sync_range: str = "3d",
+        sync_range: str = "all",
         progress_callback=None,
+        *,
+        force_refresh: bool = False,
     ) -> list[dict]:
-        return self._context_data.list_user_alphas(sync_range, progress_callback=progress_callback)
+        return self._context_data.list_user_alphas(
+            sync_range,
+            progress_callback=progress_callback,
+            force_refresh=force_refresh,
+        )
 
     def submit_simulation(self, expression: str, settings: dict) -> str:
         return self._simulation_submission.submit_simulation(expression, settings)
@@ -220,11 +322,25 @@ class OfficialBrainAPI:
     def fetch_result(self, simulation_id: str) -> dict:
         return self._simulation_submission.fetch_result(simulation_id)
 
+    def concurrent_simulate(self, alphas, concurrency: int = 3, *, return_exceptions: bool = False) -> list:
+        return self._simulation_submission.concurrent_simulate(
+            alphas,
+            concurrency=concurrency,
+            return_exceptions=return_exceptions,
+        )
+
+    def concurrent_check(self, alpha_ids, concurrency: int = 3, *, return_exceptions: bool = False) -> list:
+        return self._simulation_submission.concurrent_check(
+            alpha_ids,
+            concurrency=concurrency,
+            return_exceptions=return_exceptions,
+        )
+
     def check_alpha(self, alpha_id: str) -> dict:
         return self._simulation_submission.check_alpha(alpha_id)
 
-    def submit_alpha(self, alpha_id: str, expression: str, settings: dict) -> dict:
-        return self._simulation_submission.submit_alpha(alpha_id, expression, settings)
+    def submit_alpha(self, alpha_id: str, expression: str, settings: dict, *, bodyless: bool = True) -> dict:
+        return self._simulation_submission.submit_alpha(alpha_id, expression, settings, bodyless=bodyless)
 
     def check_prod_correlation(
         self,

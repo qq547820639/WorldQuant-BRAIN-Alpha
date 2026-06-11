@@ -22,6 +22,7 @@ from .guidance import assistant_guidance_candidate_metadata, ensure_assistant_gu
 from .memory import ResearchMemory
 from .knowledge_base import KnowledgeEntry, StructuredKnowledgeBase
 from .local_backtest_engine import LocalBacktestEngine
+from .local_backtest_config import PREFILTER_BACKTEST_DATES, PREFILTER_BACKTEST_SYMBOLS
 from .llm_review import CrossReviewService
 from .assistant import build_assistant_request_pack
 from .context import build_assistant_context_pack
@@ -54,6 +55,7 @@ from .pipeline_snapshot import (
 from .pipeline_state import CycleState, PipelineRuntimeState, bind_runtime_state_properties, record_strategy_reward
 from .pipeline_helpers import (
     assistant_guidance_for_generator as _assistant_guidance_for_generator,
+    attach_assistant_guidance as _attach_assistant_guidance,
     blocked_gate as _blocked_gate,
     expr_key as _expr_key,
     rank_candidates,
@@ -147,7 +149,10 @@ class AlphaResearchPipeline(
             _local_data_dir_existed_at_start=Path(config.storage_dir).exists(),
             official_call_guard=OfficialCallGuard(),
             _knowledge_base=StructuredKnowledgeBase(config.storage_dir),
-            _local_backtest_engine=LocalBacktestEngine(),
+            _local_backtest_engine=LocalBacktestEngine(
+                n_dates=PREFILTER_BACKTEST_DATES,
+                n_symbols=PREFILTER_BACKTEST_SYMBOLS,
+            ),
             _cross_review_service=CrossReviewService(),
             backtest_slot_manager=backtest_slot_manager,
             backtest_slots=backtest_slot_manager.slots,
@@ -581,6 +586,7 @@ class AlphaResearchPipeline(
         return self._Phase.BREAK
 
     def _apply_assistant_guidance(self, cycle: int) -> dict | None:
+        self._active_assistant_guidance = None
         if not getattr(self.config.budget, "use_assistant_guidance", True):
             return None
         try:
@@ -595,6 +601,7 @@ class AlphaResearchPipeline(
             if not generator_guidance:
                 return None
             self.generator.set_experience_guidance(generator_guidance)
+            self._active_assistant_guidance = guidance
             self._event(
             "assistant_guidance_applied",
             f"Cycle {cycle}: Applied persisted assistant guidance "
@@ -619,6 +626,13 @@ class AlphaResearchPipeline(
             logger.warning("Assistant guidance unavailable in cycle %s: %s", cycle, redact_error_message(exc))
             logger.debug("Assistant guidance traceback in cycle %s", cycle, exc_info=True)
         return None
+
+    def _attach_active_assistant_guidance(self, candidates: list[Candidate]) -> None:
+        guidance = self._active_assistant_guidance
+        if not guidance:
+            return
+        for candidate in candidates:
+            _attach_assistant_guidance(candidate, guidance)
 
     def _cycle_simulate_and_submit(
         self,

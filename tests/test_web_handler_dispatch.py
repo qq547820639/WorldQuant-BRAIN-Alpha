@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 import dataclasses
 import json
 import logging
+import threading
 from types import SimpleNamespace
 from urllib.parse import urlparse
 
+from brain_alpha_ops.config import RunConfig
 from brain_alpha_ops.tasks import JobStore
 from brain_alpha_ops.web_handler_dispatch import (
     _GET_DISPATCH_HANDLERS,
@@ -15,14 +18,20 @@ from brain_alpha_ops.web_handler_dispatch import (
     dispatch_get,
     dispatch_post,
 )
+from brain_alpha_ops.web_get_handlers import active_job_payload
 from brain_alpha_ops.web_rate_limit import RateLimitPolicy, RequestRateLimiter
 from brain_alpha_ops.web_routes import GET_ROUTES, POST_ROUTES, route_for
+
+
+def _write_jsonl(path, rows):
+    path.write_text("\n".join(json.dumps(row) for row in rows) + "\n", encoding="utf-8")
 
 
 class _Store:
     def __init__(self):
         self.active = None
         self.rows = {"job_1": {"status": "running", "progress": {"phase": "run"}}}
+        self.jobs = self.rows
         self.created = []
         self.cancelled = []
 
@@ -116,6 +125,7 @@ def _ctx():
     async_jobs = _Store()
     started = []
     submit_lock = _Lock()
+    session_credentials: dict[str, dict[str, str]] = {}
 
     def job_status(store, job_id, enrich, error):
         row = store.get(job_id)
@@ -124,6 +134,49 @@ def _ctx():
         payload = {"ok": True, "job_id": job_id, **row}
         payload["progress"] = enrich(dict(payload["progress"]))
         return payload, 200
+
+    def mark_connection(session_id, result, payload):
+        if payload.get("username") and payload.get("password"):
+            session_credentials[str(session_id)] = {
+                "username": str(payload["username"]),
+                "password": str(payload["password"]),
+            }
+        elif payload.get("token"):
+            session_credentials[str(session_id)] = {"token": str(payload["token"])}
+        return {
+            "ok": True,
+            "authenticated": bool(session_id),
+            "connected": True,
+            "brain_connection_verified": True,
+            "credential_source": "page" if payload.get("username") or payload.get("password") or payload.get("token") else "managed",
+            "session_credentials_available": bool(session_credentials.get(str(session_id))),
+            "environment": result.get("environment", "production"),
+            "auth_mode": result.get("auth", ""),
+            "ttl_seconds": 43200,
+        }
+
+    def clear_connection(session_id):
+        session_credentials.pop(str(session_id), None)
+        return {
+            "ok": True,
+            "authenticated": bool(session_id),
+            "connected": False,
+            "brain_connection_verified": False,
+            "credential_source": "none",
+            "session_credentials_available": False,
+            "ttl_seconds": 43200,
+        }
+
+    def payload_with_session_credentials(session_id, payload):
+        merged = dict(payload or {})
+        if any(str(merged.get(key) or "").strip() for key in ("username", "password", "token")):
+            return merged
+        merged.update(session_credentials.get(str(session_id), {}))
+        return merged
+
+    def expire_session(session_id):
+        session_credentials.pop(str(session_id), None)
+        started.append(("expire", session_id, {}))
 
     ctx = WebHandlerDispatchContext(
         route_for=route_for,
@@ -136,9 +189,21 @@ def _ctx():
         get_or_create_session=lambda existing: ("session_1", "csrf_1"),
         stream_token_for_session=lambda session_id: "stream_1",
         session_cookie_header=lambda session_id: f"cookie={session_id}",
+        session_status=lambda session_id: {
+            "ok": True,
+            "authenticated": bool(session_id),
+            "connected": False,
+            "brain_connection_verified": False,
+            "credential_source": "none",
+            "session_credentials_available": bool(session_credentials.get(str(session_id))),
+            "ttl_seconds": 43200,
+        },
+        mark_brain_connection_verified=mark_connection,
+        clear_brain_connection_verified=clear_connection,
+        payload_with_brain_session_credentials=payload_with_session_credentials,
         render_html=lambda csrf, stream: f"html {csrf} {stream}",
         job_status_payload=job_status,
-        active_job_payload=lambda store, enrich: {"ok": True, "active": bool(store.latest_active())},
+        active_job_payload=active_job_payload,
         lifecycle_payload=lambda store, job_id, lifecycle: {"ok": True, "records": lifecycle(store.get(job_id) or {})},
         health_payload=lambda: {"ok": True, "status": "ready"},
         profile_payload=lambda loader: {"ok": True, "profile": loader()},
@@ -155,6 +220,20 @@ def _ctx():
         latest_result_snapshot=lambda: {"ok": True, "source": "latest"},
         lifecycle_from_job=lambda job: [{"stage": "x"}],
         cloud_alpha_snapshot=lambda **kwargs: {"alphas": [], "summary": {"limit": kwargs.get("limit")}},
+        official_context_file_counts=lambda: {
+            "fields_count": 12,
+            "operators_count": 7,
+            "datasets_count": 3,
+            "context_cache_manifest": {
+                "complete": True,
+                "is_stale": False,
+                "record_counts": {
+                    "official_fields.json": 12,
+                    "official_operators.json": 7,
+                    "official_datasets.json": 3,
+                },
+            },
+        },
         research_memory_snapshot=lambda **kwargs: {"ok": True, "memory": kwargs},
         research_knowledge_snapshot=lambda **kwargs: {"ok": True, "knowledge": kwargs},
         research_observability_snapshot=lambda **kwargs: {"ok": True, "observability": kwargs},
@@ -204,7 +283,7 @@ def _ctx():
         save_assistant_guidance_post_payload=lambda payload, handler: handler(payload),
         save_assistant_guidance_payload=lambda payload: {"ok": True, "saved": payload},
         session_end_payload=lambda session_id, expire, expired_header: (expire(session_id) or {"ok": True}, [("Set-Cookie", expired_header())]),
-        expire_session=lambda session_id: started.append(("expire", session_id, {})),
+        expire_session=expire_session,
         expired_session_cookie_header=lambda: "expired-cookie",
         start_shutdown=lambda: started.append(("shutdown", "", {})),
     )
@@ -231,12 +310,12 @@ def test_dispatch_get_handles_root_status_and_query_bounds():
     assert memory.json_calls[0][0]["memory"] == {"limit": 3, "top_n": 2}
 
     cloud = _Handler()
-    dispatch_get(cloud, urlparse("/api/cloud_alphas?limit=25"), ctx)
-    assert cloud.json_calls[0][0]["summary"]["limit"] == 25
+    dispatch_get(cloud, urlparse("/api/cloud_alphas"), ctx)
+    assert cloud.json_calls[0][0]["summary"]["limit"] is None
 
     cloud_alias = _Handler()
-    dispatch_get(cloud_alias, urlparse("/api/snapshot/cloud?limit=7"), ctx)
-    assert cloud_alias.json_calls[0][0]["summary"]["limit"] == 7
+    dispatch_get(cloud_alias, urlparse("/api/snapshot/cloud"), ctx)
+    assert cloud_alias.json_calls[0][0]["summary"]["limit"] is None
 
     memory_alias = _Handler()
     dispatch_get(memory_alias, urlparse("/api/snapshot/memory?limit=8&top_n=3"), ctx)
@@ -251,6 +330,36 @@ def test_dispatch_get_handles_root_status_and_query_bounds():
     dispatch_get(sync_status, urlparse("/api/sync_status?job_id=sync_1&compact=1"), ctx)
     assert "alphas" not in sync_status.json_calls[0][0]["result"]
     assert sync_status.json_calls[0][0]["result"]["alphas_count"] == 1
+    assert sync_status.json_calls[0][0]["official_context_cache"] == {
+        "ok": True,
+        "fields_count": 12,
+        "operators_count": 7,
+        "datasets_count": 3,
+        "manifest": {
+            "complete": True,
+            "is_stale": False,
+            "missing_files": [],
+            "stale_files": [],
+            "record_counts": {
+                "official_fields.json": 12,
+                "official_operators.json": 7,
+                "official_datasets.json": 3,
+            },
+        },
+    }
+
+    ctx.sync_jobs.active = ("sync_active", {
+        "status": "running",
+        "progress": {"phase": "cloud_sync", "scanned": 25},
+    })
+    active_sync_status = _Handler()
+    dispatch_get(active_sync_status, urlparse("/api/sync_status?compact=1"), ctx)
+    active_payload = active_sync_status.json_calls[0][0]
+    assert active_payload["ok"] is True
+    assert active_payload["job_id"] == "sync_active"
+    assert active_payload["task_id"] == "sync_active"
+    assert active_payload["status"] == "running"
+    assert active_payload["progress"]["enriched"] is True
 
     knowledge = _Handler()
     dispatch_get(knowledge, urlparse("/api/research_knowledge?limit=4&min_confidence=0.7"), ctx)
@@ -318,6 +427,94 @@ def test_dispatch_post_logs_handler_exceptions(caplog):
     assert "web post route failed" in caplog.text
 
 
+def test_dispatch_post_test_connection_returns_sanitized_session_status():
+    ctx, _started, _lock = _ctx()
+
+    success = _Handler(body={"username": "reader@example.test", "password": "secret"})
+    dispatch_post(success, urlparse("/api/test_connection"), ctx)
+    payload, status, _headers = success.json_calls[0]
+    assert status == 200
+    assert payload["ok"] is True
+    assert payload["session"]["connected"] is True
+    assert payload["session"]["brain_connection_verified"] is True
+    assert payload["session"]["credential_source"] == "page"
+    assert "password" not in json.dumps(payload)
+
+    failing_ctx = dataclasses.replace(
+        ctx,
+        test_connection=lambda _payload: {"ok": False, "error_code": "CONNECTION_FAILED", "error": "nope"},
+    )
+    failed = _Handler(body={"token": "secret-token"})
+    dispatch_post(failed, urlparse("/api/test_connection"), failing_ctx)
+    payload, status, _headers = failed.json_calls[0]
+    assert status == 200
+    assert payload["ok"] is False
+    assert payload["session"]["connected"] is False
+    assert payload["session"]["brain_connection_verified"] is False
+    assert "secret-token" not in json.dumps(payload)
+
+
+def test_dispatch_test_connection_state_feeds_phase_state_until_failure():
+    state = {
+        "ok": True,
+        "authenticated": True,
+        "connected": False,
+        "brain_connection_verified": False,
+        "credential_source": "none",
+        "ttl_seconds": 43200,
+    }
+
+    def mark(session_id, result, payload):
+        state.update({
+            "authenticated": bool(session_id),
+            "connected": True,
+            "brain_connection_verified": True,
+            "credential_source": "page" if payload.get("token") else "managed",
+            "environment": result.get("environment", "production"),
+            "auth_mode": result.get("auth", ""),
+        })
+        return dict(state)
+
+    def clear(session_id):
+        state.update({
+            "authenticated": bool(session_id),
+            "connected": False,
+            "brain_connection_verified": False,
+            "credential_source": "none",
+        })
+        return dict(state)
+
+    ctx, _started, _lock = _ctx()
+    ctx = dataclasses.replace(
+        ctx,
+        session_status=lambda _session_id: dict(state),
+        mark_brain_connection_verified=mark,
+        clear_brain_connection_verified=clear,
+        test_connection=lambda _payload: {"ok": True, "environment": "production", "auth": "token"},
+    )
+
+    success = _Handler(body={"token": "page-token"})
+    dispatch_post(success, urlparse("/api/test_connection"), ctx)
+    assert success.json_calls[0][0]["session"]["connected"] is True
+
+    phase = _Handler()
+    dispatch_get(phase, urlparse("/api/phase_state"), ctx)
+    assert phase.json_calls[0][0]["connected"] is True
+    assert phase.json_calls[0][0]["connection"]["credential_source"] == "page"
+
+    failing_ctx = dataclasses.replace(
+        ctx,
+        test_connection=lambda _payload: {"ok": False, "error_code": "CONNECTION_FAILED", "error": "nope"},
+    )
+    failed = _Handler(body={"token": "page-token"})
+    dispatch_post(failed, urlparse("/api/test_connection"), failing_ctx)
+    assert failed.json_calls[0][0]["session"]["connected"] is False
+
+    phase_after_failure = _Handler()
+    dispatch_get(phase_after_failure, urlparse("/api/phase_state"), failing_ctx)
+    assert phase_after_failure.json_calls[0][0]["connected"] is False
+
+
 def test_submit_with_lock_logs_exceptions(caplog):
     ctx, _started, _lock = _ctx()
     handler = _Handler(body={"alpha_id": "A1"})
@@ -334,7 +531,10 @@ def test_submit_with_lock_logs_exceptions(caplog):
     assert "web submit route failed" in caplog.text
 
 
-def test_dispatch_get_candidates_falls_back_to_latest_async_generation_result():
+def test_dispatch_get_candidates_falls_back_to_latest_async_generation_result(monkeypatch, tmp_path):
+    run_config = RunConfig(environment="production")
+    run_config.ops.storage_dir = str(tmp_path)
+    monkeypatch.setattr("brain_alpha_ops.web_routes.load_run_config", lambda: run_config)
     ctx, _started, _lock = _ctx()
     ctx.jobs.rows.clear()
     ctx.async_jobs.rows = {
@@ -346,12 +546,140 @@ def test_dispatch_get_candidates_falls_back_to_latest_async_generation_result():
     }
 
     handler = _Handler()
-    dispatch_get(handler, urlparse("/api/candidates?limit=100"), ctx)
+    dispatch_get(handler, urlparse("/api/candidates"), ctx)
 
     payload = handler.json_calls[0][0]
     assert payload["ok"] is True
     assert payload["count"] == 1
     assert payload["candidates"][0]["alpha_id"] == "alpha_real_1"
+
+
+def test_dispatch_get_candidates_async_fallback_scans_all_jobs(monkeypatch, tmp_path):
+    run_config = RunConfig(environment="production")
+    run_config.ops.storage_dir = str(tmp_path)
+    monkeypatch.setattr("brain_alpha_ops.web_routes.load_run_config", lambda: run_config)
+    ctx, _started, _lock = _ctx()
+    ctx.jobs.rows.clear()
+    ctx.async_jobs.rows = {
+        f"task_{index:04d}": {
+            "status": "completed",
+            "result": {"ok": True, "candidates": []},
+            "progress": {"phase": "completed"},
+        }
+        for index in range(30)
+    }
+    ctx.async_jobs.rows["task_0029"]["result"]["candidates"] = [
+        {"alpha_id": "alpha_after_25", "expression": "rank(close)"}
+    ]
+
+    handler = _Handler()
+    dispatch_get(handler, urlparse("/api/candidates"), ctx)
+
+    payload = handler.json_calls[0][0]
+    assert payload["ok"] is True
+    assert payload["count"] == 1
+    assert payload["candidates"][0]["alpha_id"] == "alpha_after_25"
+
+
+def test_dispatch_get_candidates_marks_async_preview_as_partial(monkeypatch, tmp_path):
+    run_config = RunConfig(environment="production")
+    run_config.ops.storage_dir = str(tmp_path)
+    monkeypatch.setattr("brain_alpha_ops.web_routes.load_run_config", lambda: run_config)
+    ctx, _started, _lock = _ctx()
+    ctx.jobs.rows.clear()
+    ctx.async_jobs.rows = {
+        "task_0001": {
+            "status": "completed",
+            "result": {
+                "ok": True,
+                "candidates_count": 12,
+                "candidates_preview": [{"alpha_id": "alpha_preview", "expression": "rank(close)"}],
+            },
+            "progress": {"phase": "completed"},
+        }
+    }
+
+    handler = _Handler()
+    dispatch_get(handler, urlparse("/api/candidates"), ctx)
+
+    payload = handler.json_calls[0][0]
+    assert payload["ok"] is True
+    assert payload["source"] == "latest_async_result_preview"
+    assert payload["partial"] is True
+    assert payload["returned_count"] == 1
+    assert payload["total"] == 12
+    assert payload["warning"]
+
+
+def test_dispatch_get_candidates_reads_full_candidate_ledger(monkeypatch, tmp_path):
+    run_config = RunConfig(environment="production")
+    run_config.ops.storage_dir = str(tmp_path)
+    monkeypatch.setattr("brain_alpha_ops.web_routes.load_run_config", lambda: run_config)
+    _write_jsonl(
+        tmp_path / "candidates.jsonl",
+        [{"alpha_id": f"alpha_{index}", "expression": f"rank(close_{index})"} for index in range(1001)],
+    )
+    ctx, _started, _lock = _ctx()
+    ctx.jobs.rows.clear()
+    ctx.async_jobs.rows = {
+        "task_0001": {
+            "status": "completed",
+            "result": {"ok": True, "candidates": [{"alpha_id": "latest_only", "expression": "rank(close)"}]},
+            "progress": {"phase": "completed"},
+        }
+    }
+
+    handler = _Handler()
+    dispatch_get(handler, urlparse("/api/candidates"), ctx)
+
+    payload = handler.json_calls[0][0]
+    assert payload["ok"] is True
+    assert payload["source"] == "candidates_jsonl"
+    assert payload["count"] == 1001
+    assert payload["returned_count"] == 1001
+    assert payload["total"] == 1001
+    assert payload["candidates"][0]["alpha_id"] == "alpha_0"
+    assert payload["candidates"][-1]["alpha_id"] == "alpha_1000"
+
+
+def test_dispatch_get_candidates_summary_streams_complete_counts_without_rows(monkeypatch, tmp_path):
+    run_config = RunConfig(environment="production")
+    run_config.ops.storage_dir = str(tmp_path)
+    monkeypatch.setattr("brain_alpha_ops.web_routes.load_run_config", lambda: run_config)
+    _write_jsonl(
+        tmp_path / "candidates.jsonl",
+        [
+            {"alpha_id": "alpha_ready", "lifecycle_status": "submission_ready"},
+            {"alpha_id": "alpha_gate_ready", "gate": {"submission_ready": True}},
+            {"alpha_id": "alpha_gate_passed_only", "gate": {"passed": True}},
+            {"alpha_id": "alpha_local_passed_only", "local_quality": {"passed": True}},
+            {"alpha_id": "alpha_string_false_diagnosis", "quality_diagnosis": {"submission_ready": "false"}},
+            {"alpha_id": "alpha_string_false_gate", "gate": {"submission_ready": "false"}},
+            {
+                "alpha_id": "alpha_qualified_only",
+                "quality_diagnosis": {
+                    "qualified": True,
+                    "submission_ready": False,
+                    "blocking_reasons": ["needs_human_confirmation"],
+                },
+            },
+            {"alpha_id": "alpha_blocked", "local_quality": {"passed": False, "reasons": ["blocked"]}},
+        ],
+    )
+    ctx, _started, _lock = _ctx()
+
+    handler = _Handler()
+    dispatch_get(handler, urlparse("/api/candidates?summary=true"), ctx)
+
+    payload = handler.json_calls[0][0]
+    assert payload["ok"] is True
+    assert payload["summary_only"] is True
+    assert payload["candidates"] == []
+    assert payload["items"] == []
+    assert payload["returned_count"] == 0
+    assert payload["total"] == 8
+    assert payload["ready_count"] == 2
+    assert payload["blocked_count"] == 2
 
 
 def test_dispatch_root_requires_admin_token_when_remote_admin_is_enabled():
@@ -445,8 +773,108 @@ def test_dispatch_post_session_returns_full_csrf_token_and_cookie():
     assert payload["ok"] is True
     assert payload["session_id"] == "session_1"[:8]
     assert payload["csrf_token"] == "csrf_1"
+    assert payload["stream_token"] == "stream_1"
     assert payload["ttl_seconds"] == 43200
+    assert payload["session"]["connected"] is False
     assert ("Set-Cookie", "cookie=session_1") in headers
+
+
+def test_dispatch_post_session_returns_existing_verified_connection_state():
+    ctx, _started, _lock = _ctx()
+    ctx = dataclasses.replace(
+        ctx,
+        session_status=lambda session_id: {
+            "ok": True,
+            "authenticated": bool(session_id),
+            "connected": True,
+            "brain_connection_verified": True,
+            "credential_source": "managed",
+            "environment": "production",
+            "auth_mode": "token",
+            "ttl_seconds": 43200,
+        },
+    )
+    handler = _Handler(body=[], session=False)
+
+    dispatch_post(handler, urlparse("/api/session"), ctx)
+
+    payload, status, headers = handler.json_calls[0]
+    assert status == 200
+    assert payload["csrf_token"] == "csrf_1"
+    assert payload["stream_token"] == "stream_1"
+    assert payload["connected"] is True
+    assert payload["brain_connection_verified"] is True
+    assert payload["session"]["credential_source"] == "managed"
+    assert ("Set-Cookie", "cookie=session_1") in headers
+
+
+def test_dispatch_post_session_requires_admin_token_when_remote_admin_is_enabled():
+    ctx, _started, _lock = _ctx()
+    ctx = dataclasses.replace(ctx, remote_admin_required=lambda: True)
+
+    missing = _Handler(body=[])
+    dispatch_post(missing, urlparse("/api/session"), ctx)
+    assert missing.json_calls[0][1] == 401
+    assert missing.json_calls[0][0]["error_code"] == "ADMIN_AUTH_REQUIRED"
+    assert missing.json_calls[0][2] == []
+
+    allowed = _Handler(body=[], headers={"Authorization": "Bearer admin-token"})
+    dispatch_post(allowed, urlparse("/api/session"), ctx)
+    payload, status, headers = allowed.json_calls[0]
+    assert status == 200
+    assert payload["ok"] is True
+    assert payload["csrf_token"] == "csrf_1"
+    assert ("Set-Cookie", "cookie=session_1") in headers
+
+
+def test_dispatch_post_blocks_legacy_pipeline_start_fallback(monkeypatch):
+    ctx, started, _lock = _ctx()
+    handler = _Handler(body={"config_path": "config/run_config.json"})
+    legacy_calls = []
+
+    def legacy_dispatch(*args):
+        legacy_calls.append(args)
+        raise AssertionError("legacy dispatch should not be called")
+
+    monkeypatch.setattr("brain_alpha_ops.web.dispatch_post", legacy_dispatch)
+
+    dispatch_post(handler, urlparse("/api/pipeline/start"), ctx)
+
+    payload, status, _headers = handler.json_calls[0]
+    assert status == 404
+    assert payload["error_code"] == "LEGACY_ROUTE_DISABLED"
+    assert legacy_calls == []
+    assert started == []
+
+
+def test_dispatch_post_unknown_legacy_fallback_is_rate_limited(monkeypatch):
+    ctx, _started, _lock = _ctx()
+    legacy_calls = []
+    ctx = dataclasses.replace(
+        ctx,
+        route_for=lambda _method, _path: None,
+        rate_limit_request=lambda _key, _method, _path: {
+            "ok": False,
+            "error_code": "RATE_LIMITED",
+            "error": "too many requests; retry later",
+            "retry_after": 9,
+        },
+    )
+
+    def legacy_dispatch(*args):
+        legacy_calls.append(args)
+        raise AssertionError("legacy dispatch should not be called while rate-limited")
+
+    monkeypatch.setattr("brain_alpha_ops.web.dispatch_post", legacy_dispatch)
+
+    handler = _Handler(body={"alpha": 1})
+    dispatch_post(handler, urlparse("/api/legacy-unmigrated"), ctx)
+
+    payload, status, headers = handler.json_calls[0]
+    assert status == 429
+    assert payload["error_code"] == "RATE_LIMITED"
+    assert ("Retry-After", "9") in headers
+    assert legacy_calls == []
 
 
 def test_dispatch_get_clamps_high_cost_history_limits():
@@ -565,6 +993,125 @@ def test_dispatch_post_starts_async_operation_jobs():
     assert started[-1] == ("scoring_evaluate", "job_1", {"candidate": {"alpha_id": "a1"}})
 
 
+def test_dispatch_post_candidates_simulate_starts_active_job_without_watchdog(monkeypatch, tmp_path):
+    ctx, _started, _lock = _ctx()
+    async_jobs = JobStore(tmp_path / "async_jobs.json", job_prefix="task")
+    ctx = dataclasses.replace(ctx, async_jobs=async_jobs)
+    monkeypatch.setattr(
+        "brain_alpha_ops.web_candidate_simulation.simulate_candidates_job",
+        lambda job_id, payload, *, job_store, log: None,
+    )
+
+    handler = _Handler(body={})
+    dispatch_post(handler, urlparse("/api/candidates/simulate"), ctx)
+
+    payload, status, _headers = handler.json_calls[0]
+    assert status == 200
+    job_id = payload["job_id"]
+    row = async_jobs.get(job_id)
+    assert row is not None
+    assert row["status"] == "running"
+    assert row["progress"]["phase"] == "simulation_starting"
+    assert row["progress"]["status_message"]
+    assert row["progress"]["percent_complete"] == 0
+
+
+def test_dispatch_post_candidates_simulate_blocks_auxiliary_conflict_before_starting_job(monkeypatch):
+    ctx, _started, _lock = _ctx()
+    ctx = dataclasses.replace(
+        ctx,
+        active_auxiliary_operation=lambda **kwargs: ("sync", "云端同步正在运行，请完成后再启动官方候选模拟。"),
+    )
+    monkeypatch.setattr(
+        "brain_alpha_ops.web_candidate_simulation.simulate_candidates_job",
+        lambda job_id, payload, *, job_store, log: (_ for _ in ()).throw(AssertionError("worker should not start")),
+    )
+
+    handler = _Handler(body={})
+    dispatch_post(handler, urlparse("/api/candidates/simulate"), ctx)
+
+    payload, status, _headers = handler.json_calls[0]
+    assert status == 409
+    assert payload["error_code"] == "CONFLICT_AUX_OP"
+    assert "云端同步" in payload["error"]
+    assert ctx.async_jobs.created == []
+
+
+def test_dispatch_post_candidates_simulate_blocks_active_async_non_simulation_job(monkeypatch, tmp_path):
+    ctx, _started, _lock = _ctx()
+    async_jobs = JobStore(tmp_path / "async_jobs.json", job_prefix="task")
+    existing = async_jobs.create({
+        "status": "running",
+        "progress": {"phase": "candidate_generation", "percent_complete": 15},
+    })
+    ctx = dataclasses.replace(ctx, async_jobs=async_jobs)
+    monkeypatch.setattr(
+        "brain_alpha_ops.web_candidate_simulation.simulate_candidates_job",
+        lambda job_id, payload, *, job_store, log: (_ for _ in ()).throw(AssertionError("worker should not start")),
+    )
+
+    handler = _Handler(body={})
+    dispatch_post(handler, urlparse("/api/candidates/simulate"), ctx)
+
+    payload, status, _headers = handler.json_calls[0]
+    assert status == 409
+    assert payload["error_code"] == "CONFLICT_RUNNING"
+    assert payload["job_id"] == existing
+    assert payload["phase"] == "candidate_generation"
+    assert len(async_jobs.jobs) == 1
+
+
+def test_dispatch_post_candidates_simulate_allows_only_one_concurrent_start(monkeypatch, tmp_path):
+    ctx, _started, _lock = _ctx()
+    async_jobs = JobStore(tmp_path / "async_jobs.json", job_prefix="task")
+    ctx = dataclasses.replace(ctx, async_jobs=async_jobs)
+    monkeypatch.setattr(
+        "brain_alpha_ops.web_candidate_simulation.simulate_candidates_job",
+        lambda job_id, payload, *, job_store, log: None,
+    )
+    barrier = threading.Barrier(2)
+
+    def start_request():
+        handler = _Handler(body={})
+        barrier.wait(timeout=5)
+        dispatch_post(handler, urlparse("/api/candidates/simulate"), ctx)
+        return handler.json_calls[0]
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        results = list(executor.map(lambda _index: start_request(), range(2)))
+
+    statuses = sorted(status for _payload, status, _headers in results)
+    assert statuses == [200, 409]
+    ok_payloads = [payload for payload, status, _headers in results if status == 200]
+    conflict_payloads = [payload for payload, status, _headers in results if status == 409]
+    assert ok_payloads[0]["job_id"] in async_jobs.jobs
+    assert conflict_payloads[0]["error_code"] == "CONFLICT_RUNNING"
+    assert len(async_jobs.jobs) == 1
+
+
+def test_dispatch_post_candidates_simulate_blocks_stopping_simulation_job(monkeypatch, tmp_path):
+    ctx, _started, _lock = _ctx()
+    async_jobs = JobStore(tmp_path / "async_jobs.json", job_prefix="task")
+    existing = async_jobs.create({
+        "status": "running",
+        "progress": {"phase": "simulation_polling", "percent_complete": 10},
+    })
+    async_jobs.cancel(existing)
+    ctx = dataclasses.replace(ctx, async_jobs=async_jobs)
+    monkeypatch.setattr(
+        "brain_alpha_ops.web_candidate_simulation.simulate_candidates_job",
+        lambda job_id, payload, *, job_store, log: (_ for _ in ()).throw(AssertionError("worker should not start")),
+    )
+
+    handler = _Handler(body={})
+    dispatch_post(handler, urlparse("/api/candidates/simulate"), ctx)
+
+    payload, status, _headers = handler.json_calls[0]
+    assert status == 409
+    assert payload["error_code"] == "CONFLICT_RUNNING"
+    assert payload["job_id"] == existing
+
+
 def test_dispatch_post_check_batch_validates_candidate_ids_before_starting_job():
     ctx, started, _lock = _ctx()
 
@@ -678,6 +1225,315 @@ def test_dispatch_post_sync_alphas_preserves_session_credentials_for_worker():
             "token": "dummy-token",
         },
     )]
+
+
+def test_dispatch_post_sync_alphas_conflict_returns_active_status_pointer():
+    ctx, started, _lock = _ctx()
+    ctx.sync_jobs.active = ("sync_active", {
+        "status": "running",
+        "progress": {"phase": "cloud_sync"},
+    })
+
+    sync = _Handler(body={"syncRange": "all", "refreshOfficialContext": True})
+    dispatch_post(sync, urlparse("/api/sync_alphas"), ctx)
+
+    payload, status, _headers = sync.json_calls[0]
+    assert status == 409
+    assert payload["ok"] is False
+    assert payload["job_id"] == "sync_active"
+    assert payload["task_id"] == "sync_active"
+    assert payload["status_url"] == "/api/sync_status?job_id=sync_active"
+    assert started == []
+
+
+def test_dispatch_post_sync_alphas_uses_server_session_credentials_when_body_omits_them():
+    ctx, started, _lock = _ctx()
+
+    connection = _Handler(body={
+        "username": "session-user@example.test",
+        "password": "session-password",
+    })
+    dispatch_post(connection, urlparse("/api/test_connection"), ctx)
+    connection_payload = connection.json_calls[0][0]
+    assert connection_payload["session"]["connected"] is True
+    assert connection_payload["session"]["session_credentials_available"] is True
+
+    sync = _Handler(body={"syncRange": "all", "refreshOfficialContext": True})
+    dispatch_post(sync, urlparse("/api/sync_alphas"), ctx)
+
+    response, status, _headers = sync.json_calls[0]
+    assert status == 200
+    assert response["ok"] is True
+    assert started == [(
+        "sync",
+        "job_1",
+        {
+            "syncRange": "all",
+            "refreshOfficialContext": True,
+            "username": "session-user@example.test",
+            "password": "session-password",
+        },
+    )]
+    encoded_response = json.dumps(response, ensure_ascii=False)
+    assert "session-user@example.test" not in encoded_response
+    assert "session-password" not in encoded_response
+
+
+def test_dispatch_post_test_connection_reuses_server_session_credentials_when_body_omits_them():
+    ctx, _started, _lock = _ctx()
+    seen_payloads = []
+
+    def test_connection(payload):
+        seen_payloads.append(dict(payload))
+        return {"ok": True, "environment": "production", "auth": "token"}
+
+    ctx = dataclasses.replace(ctx, test_connection=test_connection)
+
+    connection = _Handler(body={"token": "session-token"})
+    dispatch_post(connection, urlparse("/api/test_connection"), ctx)
+
+    retest = _Handler(body={})
+    dispatch_post(retest, urlparse("/api/test_connection"), ctx)
+
+    assert seen_payloads == [{"token": "session-token"}, {"token": "session-token"}]
+    payload, status, _headers = retest.json_calls[0]
+    assert status == 200
+    assert payload["ok"] is True
+    assert payload["session"]["connected"] is True
+    assert payload["session"]["session_credentials_available"] is True
+    assert "session-token" not in json.dumps(payload, ensure_ascii=False)
+
+
+def test_dispatch_post_mixed_connection_stores_basic_credentials_for_refresh_continuity():
+    ctx, started, _lock = _ctx()
+
+    connection = _Handler(body={
+        "username": "basic-user@example.test",
+        "password": "basic-password",
+        "token": "stale-token",
+    })
+    dispatch_post(connection, urlparse("/api/test_connection"), ctx)
+
+    sync = _Handler(body={"syncRange": "all"})
+    dispatch_post(sync, urlparse("/api/sync_alphas"), ctx)
+
+    assert sync.json_calls[0][1] == 200
+    assert started == [(
+        "sync",
+        "job_1",
+        {
+            "syncRange": "all",
+            "username": "basic-user@example.test",
+            "password": "basic-password",
+        },
+    )]
+    encoded = json.dumps({
+        "connection": connection.json_calls,
+        "sync_response": sync.json_calls,
+        "started": started,
+    }, ensure_ascii=False)
+    assert "stale-token" not in encoded
+    assert "basic-password" in encoded
+
+
+def test_dispatch_post_check_uses_server_session_credentials_when_body_omits_them():
+    ctx, _started, _lock = _ctx()
+    seen_payload = {}
+
+    def check_candidate(payload):
+        seen_payload.update(dict(payload))
+        return {"ok": True, "alpha_id": payload.get("alpha_id")}
+
+    ctx = dataclasses.replace(ctx, check_candidate=check_candidate)
+
+    connection = _Handler(body={"token": "session-token"})
+    dispatch_post(connection, urlparse("/api/test_connection"), ctx)
+
+    check = _Handler(body={"alpha_id": "alpha_1"})
+    dispatch_post(check, urlparse("/api/check"), ctx)
+
+    assert check.json_calls[0][1] == 200
+    assert seen_payload == {"alpha_id": "alpha_1", "token": "session-token"}
+    assert "session-token" not in json.dumps(check.json_calls[0][0], ensure_ascii=False)
+
+
+def test_dispatch_post_check_batch_uses_server_session_credentials_when_body_omits_them():
+    ctx, started, _lock = _ctx()
+
+    connection = _Handler(body={"username": "session-user@example.test", "password": "session-password"})
+    dispatch_post(connection, urlparse("/api/test_connection"), ctx)
+
+    batch = _Handler(body={"candidate_ids": ["alpha_1"], "mode": "quick"})
+    dispatch_post(batch, urlparse("/api/check_batch"), ctx)
+
+    assert batch.json_calls[0][1] == 200
+    assert started == [(
+        "check_batch",
+        "job_1",
+        {
+            "candidate_ids": ["alpha_1"],
+            "mode": "quick",
+            "username": "session-user@example.test",
+            "password": "session-password",
+        },
+    )]
+    assert "session-password" not in json.dumps(batch.json_calls[0][0], ensure_ascii=False)
+
+
+def test_dispatch_post_run_uses_server_session_credentials_without_persisting_them(tmp_path):
+    ctx, started, _lock = _ctx()
+    jobs = JobStore(tmp_path / "jobs.json", job_prefix="job")
+    ctx = dataclasses.replace(
+        ctx,
+        jobs=jobs,
+        start_run_job=lambda job_id, payload: started.append(("run", job_id, dict(payload))),
+    )
+
+    connection = _Handler(body={"token": "session-token"})
+    dispatch_post(connection, urlparse("/api/test_connection"), ctx)
+
+    run = _Handler(body={"autoSubmit": True, "auto_submit": True})
+    dispatch_post(run, urlparse("/api/run"), ctx)
+
+    response, status, _headers = run.json_calls[0]
+    job_id = response["job_id"]
+    assert status == 200
+    assert started == [("run", job_id, {"autoSubmit": False, "auto_submit": False, "token": "session-token"})]
+    stored = jobs.get(job_id)
+    persisted = (tmp_path / "jobs.json").read_text(encoding="utf-8")
+    assert stored is not None
+    assert "session-token" not in json.dumps(stored, ensure_ascii=False)
+    assert "session-token" not in persisted
+
+
+def test_dispatch_post_candidates_simulate_uses_session_credentials_without_persisting_them(monkeypatch, tmp_path):
+    ctx, _started, _lock = _ctx()
+    async_jobs = JobStore(tmp_path / "async_jobs.json", job_prefix="async")
+    ctx = dataclasses.replace(ctx, async_jobs=async_jobs)
+    captured = {}
+
+    class ImmediateThread:
+        def __init__(self, target, daemon=False):
+            self.target = target
+            self.daemon = daemon
+
+        def start(self):
+            self.target()
+
+    def fake_simulate(job_id, payload, *, job_store, log):
+        captured["job_id"] = job_id
+        captured["payload"] = dict(payload)
+        job_store.update(job_id, status="completed", result={"ok": True})
+
+    monkeypatch.setattr("threading.Thread", ImmediateThread)
+    monkeypatch.setattr("brain_alpha_ops.web_candidate_simulation.simulate_candidates_job", fake_simulate)
+
+    connection = _Handler(body={"token": "session-token"})
+    dispatch_post(connection, urlparse("/api/test_connection"), ctx)
+
+    simulate = _Handler(body={"candidates": [{"alpha_id": "alpha_1", "expression": "rank(close)"}]})
+    dispatch_post(simulate, urlparse("/api/candidates/simulate"), ctx)
+
+    response, status, _headers = simulate.json_calls[0]
+    assert status == 200
+    assert response["ok"] is True
+    assert captured["payload"] == {
+        "candidates": [{"alpha_id": "alpha_1", "expression": "rank(close)"}],
+        "token": "session-token",
+    }
+    assert captured["job_id"] == response["job_id"]
+    persisted = (tmp_path / "async_jobs.json").read_text(encoding="utf-8")
+    assert "session-token" not in json.dumps(response, ensure_ascii=False)
+    assert "session-token" not in persisted
+
+
+def test_dispatch_post_does_not_inject_session_credentials_into_local_or_blocked_routes(monkeypatch):
+    ctx, started, submit_lock = _ctx()
+    captured = {}
+
+    def save_config(payload):
+        captured["config"] = dict(payload)
+        return {"ok": True}
+
+    def preview(payload):
+        captured["preview"] = dict(payload)
+        return {"ok": True, "preview": True}
+
+    ctx = dataclasses.replace(ctx, save_run_config_payload=save_config)
+    monkeypatch.setattr("brain_alpha_ops.web_candidate_simulation.simulation_candidates_payload", preview)
+
+    connection = _Handler(body={"token": "session-token"})
+    dispatch_post(connection, urlparse("/api/test_connection"), ctx)
+
+    generate = _Handler(body={"count": 1})
+    dispatch_post(generate, urlparse("/api/generate_candidates"), ctx)
+
+    config = _Handler(body={"environment": "production"})
+    dispatch_post(config, urlparse("/api/config"), ctx)
+
+    scoring = _Handler(body={"alpha_id": "alpha_1"})
+    dispatch_post(scoring, urlparse("/api/scoring/evaluate"), ctx)
+
+    preview_call = _Handler(body={"preview": True, "candidates": [{"alpha_id": "alpha_1"}]})
+    dispatch_post(preview_call, urlparse("/api/candidates/simulate"), ctx)
+
+    submit = _Handler(body={"alpha_id": "alpha_1"})
+    dispatch_post(submit, urlparse("/api/submit"), ctx)
+
+    assert ("generate_candidates", "job_1", {"count": 1}) in started
+    assert ("scoring_evaluate", "job_1", {"alpha_id": "alpha_1"}) in started
+    assert captured["config"] == {"environment": "production"}
+    assert captured["preview"] == {"preview": True, "candidates": [{"alpha_id": "alpha_1"}]}
+    assert submit.json_calls[0][1] == 403
+    assert submit.json_calls[0][0]["error_code"] == "REAL_SUBMIT_DISABLED_WEB_FLOW"
+    assert submit_lock.acquired is False
+
+    encoded = json.dumps({
+        "started": started,
+        "captured": captured,
+        "submit": submit.json_calls,
+        "generate": generate.json_calls,
+        "config": config.json_calls,
+        "scoring": scoring.json_calls,
+        "preview": preview_call.json_calls,
+    }, ensure_ascii=False)
+    assert "session-token" not in encoded
+
+
+def test_failed_connection_clears_server_session_credentials():
+    ctx, started, _lock = _ctx()
+
+    connection = _Handler(body={"token": "session-token"})
+    dispatch_post(connection, urlparse("/api/test_connection"), ctx)
+
+    failing_ctx = dataclasses.replace(
+        ctx,
+        test_connection=lambda _payload: {"ok": False, "error_code": "CONNECTION_FAILED", "error": "nope"},
+    )
+    failed = _Handler(body={"token": "session-token"})
+    dispatch_post(failed, urlparse("/api/test_connection"), failing_ctx)
+    assert failed.json_calls[0][0]["session"]["session_credentials_available"] is False
+
+    sync = _Handler(body={"syncRange": "all"})
+    dispatch_post(sync, urlparse("/api/sync_alphas"), failing_ctx)
+    assert started == [("sync", "job_1", {"syncRange": "all"})]
+
+
+def test_dispatch_logout_clears_server_session_credentials():
+    ctx, started, _lock = _ctx()
+
+    connection = _Handler(body={"token": "session-token"})
+    dispatch_post(connection, urlparse("/api/test_connection"), ctx)
+
+    logout = _Handler(body=[])
+    dispatch_post(logout, urlparse("/api/logout"), ctx)
+
+    sync = _Handler(body={"syncRange": "all"})
+    dispatch_post(sync, urlparse("/api/sync_alphas"), ctx)
+
+    assert logout.json_calls[0][1] == 200
+    assert ("expire", "session_1", {}) in started
+    assert started[-1] == ("sync", "job_1", {"syncRange": "all"})
 
 
 def test_dispatch_post_validates_cancel_and_assistant_payload_shapes():

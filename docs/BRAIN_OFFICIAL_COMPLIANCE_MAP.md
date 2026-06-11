@@ -1,95 +1,107 @@
-# WorldQuant BRAIN 官方规则合规映射
+# WorldQuant BRAIN Official Compliance Map
 
-**检索日期**: 2026-06-04  
-**数据源**: WorldQuant BRAIN API 官方文档 + 社区研究 + DeepWiki  
-**目标**: 确保本地项目 `brain_alpha_ops` 所有策略代码与 BRAIN 官网最新规则绝对一致
+**Verified date**: 2026-06-09
+**Authoritative evidence**: local official-context cache metadata sourced from `official_api`, canonical compliance verifier, redline verifier, parameter traceability, and final release gate.
+**Scope**: map the current repository implementation to executable BRAIN compliance gates. This document is evidence-derived; community notes are not used as normative rules.
 
 ---
 
-## 一、API 端点验证
+## Current Gate Status
 
-| 端点路径 (官方) | 我们的配置 (config_models.py) | 状态 |
+| Gate | Current result | What it proves |
+|---|---:|---|
+| `brain_alpha_ops.compliance.redline_verifier --block --json` | PASS 79/79 | Six technical redlines are executable and currently non-blocking. |
+| `scripts/verify_canonical_compliance.py --config config/run_config.json --json` | PASS 6/6 | Thresholds, API paths, settings enums, scoring simulation, official context, and dataset IDs match canonical policy. |
+| `scripts/check_official_context.py --config config/run_config.json --strict-freshness --json` | PASS | Official fields/operators/datasets are complete, hash-matched, and fresh. |
+| `scripts/check_parameter_traceability.py --config config/run_config.json --json` | PASS | Production parameters are traceable to canonical sources. |
+| `scripts/final_release_gate.py --config config/run_config.json --json` | PASS | Release-level compliance checks are currently green. |
+| `scripts/check_live_submit_readiness.py --config config/run_config.json --json` | Not submit-ready | Submit is still blocked unless same-candidate readiness becomes true and the user explicitly confirms. |
+
+Latest official cache metadata:
+
+- fields: `7780`, source `official_api`, complete, not stale.
+- operators: `66`, source `official_api`, complete, not stale.
+- datasets: `17`, source `official_api`, complete, not stale.
+- saved at `2026-06-07T15:19:07Z`, expires at `2026-06-14T15:19:07Z`.
+
+---
+
+## API Endpoint Alignment
+
+| Endpoint | Config field | Current status |
 |---|---|---|
-| `/authentication` | `authentication_path: "/authentication"` | ✅ |
-| `/simulations` | `simulations_path: "/simulations"` | ✅ |
-| `/data-sets` | `data_sets_path: "/data-sets"` | ✅ |
-| `/data-fields` | `data_fields_path: "/data-fields"` | ✅ |
-| `/operators` | `operators_path: "/operators"` | ✅ |
-| `/users/self/alphas` | `user_alphas_path: "/users/self/alphas"` | ✅ |
-| `/alphas/correlations/check` | `alpha_correlations_path: "/alphas/correlations/check"` | ✅ |
-| `/users/self` | `user_profile_path: "/users/self"` | ✅ |
-| `/alphas/{alpha_id}/check` | `alpha_check_path_template: "/alphas/{alpha_id}/check"` | ✅ |
-| `/alphas/{alpha_id}/submit` | `alpha_submit_path_template: "/alphas/{alpha_id}/submit"` | ✅ |
+| `https://api.worldquantbrain.com` | `base_url` | PASS |
+| `/authentication` | `authentication_path` | PASS |
+| `/simulations` | `simulations_path` | PASS |
+| `/data-sets` | `data_sets_path` | PASS |
+| `/data-fields` | `data_fields_path` | PASS |
+| `/operators` | `operators_path` | PASS |
+| `/users/self/alphas` | `user_alphas_path` | PASS |
+| `/users/self` | `user_profile_path` | PASS |
+| `/alphas/{alpha_id}` | `alpha_path_template` | PASS |
+| `/alphas/{alpha_id}/check` | `alpha_check_path_template` | PASS |
+| `/alphas/{alpha_id}/submit` | `alpha_submit_path_template` | PASS |
+| `/alphas/correlations/check` | `alpha_correlations_path` | PASS |
 
 ---
 
-## 二、BrainSettings 参数合规性
+## Settings And Threshold Alignment
 
-### ⚠️ 需要修复的偏差
+Current configured production settings are canonical-compliant:
 
-| 参数 | 项目当前配置 | 官网约束 | 偏差 |
-|------|-------------|----------|------|
-| `region` | `allowed: ["USA","EUR","DEV","CHN","JPN","KOR","TWN","IND"]` | **仅 `USA` 和 `CHN`** | 🔴 6个无效选项 |
-| `universe` | `allowed: ["TOP3000","TOP2000","TOP1000","TOP500","SMID"]` | **`TOP3000` / `TOP1000` / `TOP500`** | 🔴 TOP2000, SMID 无效 |
-| `truncation` | `allowed: [0.01, 0.02, 0.05, 0.10]` | **0.01 - 0.10** | ✅ |
-| `delay` | `allowed: [1]` | **0 或 1** | ⚠️ 缺少 delay=0 选项 |
+- `instrumentType=EQUITY`
+- `region=USA`
+- `universe=TOP3000`
+- `delay=1`
+- `neutralization=SUBINDUSTRY`
+- `pasteurization=ON`
+- `unitHandling=VERIFY`
+- `nanHandling=ON`
+- `language=FASTEXPR`
+- `type=REGULAR`
 
-### ✅ 已合规的参数
+Current threshold verifier reports zero deviation for:
 
-| 参数 | 项目当前配置 | 官网约束 | 状态 |
-|---|---|---|---|
-| `instrumentType` | `"EQUITY"` | `EQUITY` only | ✅ |
-| `language` | `"FASTEXPR"` | `FASTEXPR` only | ✅ |
-| `pasteurization` | `"ON"/"OFF"` | `ON` or `OFF` | ✅ |
-| `unitHandling` | `"VERIFY"/"NONE"` | `VERIFY` or `OFF` | ⚠️ "NONE" vs "OFF" 需确认 |
-| `nanHandling` | `"ON"/"OFF"` | `ON` or `OFF` | ✅ |
-| `neutralization` | `"NONE"/"MARKET"/"SECTOR"/"INDUSTRY"/"SUBINDUSTRY"` | ✅ | ✅ |
-
----
-
-## 三、并发与速率限制
-
-| 约束 | 官网规则 | 项目当前 | 状态 |
-|---|---|---|---|
-| 普通用户并发模拟 | 最多 3 个 | `max_official_concurrent_simulations: 3` | ✅ |
-| Pre-consultant 并发 | 最多 5 个 | 可作为顾问配置调整 | ✅ |
-| Consultant 并发 | 最多 10 个 | 可作为顾问配置调整 | ✅ |
-| 每日提交限制 | 平台强制 (未公开) | `max_auto_submissions_per_day: 3` | ✅ 保守 |
-| 批次间等待 | 建议 60 秒 | `official_retry_pause_seconds: 6.0` | ⚠️ 可能偏短 |
+- `min_sharpe=1.25`
+- `min_sharpe_delay0=2.0`
+- `min_fitness=1.0`
+- `min_fitness_delay0=1.3`
+- `min_turnover=0.01`
+- `platform_max_turnover=0.70`
+- `max_self_correlation=0.70`
+- `max_prod_correlation=0.70`
+- `max_weight_concentration=0.10`
+- `sub_universe_sharpe_min_ratio=0.75`
 
 ---
 
-## 四、评估指标与阈值
+## Official Context And Dataset Coverage
 
-| 指标 | 官网/社区标准 | 项目阈值 | 状态 |
-|---|---|---|---|
-| Sharpe | >= 1.0 (社区: >= 1.5) | `min_sharpe: 1.25` | ✅ |
-| Fitness | > 50 有潜力 | `min_fitness: 1.0` | ✅ |
-| Turnover | <= 60% (社区) | `platform_max_turnover: 0.70` | ⚠️ 略宽松 |
-| Self Correlation | < 0.70 | `max_self_correlation: 0.70` | ✅ |
-| Weight Concentration | <= 10% | `max_weight_concentration: 0.10` | ✅ |
+The official context gate reports:
 
----
+- `official_fields.json`: 7780 identities, no duplicate or missing identities.
+- `official_operators.json`: 66 identities, no duplicate or missing identities.
+- `official_datasets.json`: 17 identities, no duplicate or missing identities.
+- Dataset lineage: dataset field count sum equals field count.
 
-## 五、安全合规
+Current dataset IDs accepted by the canonical verifier:
 
-| 规则 | 官网要求 | 项目实现 | 状态 |
-|---|---|---|---|
-| Token 仅内存存储 | ✅ | `credentials.resolve()` 从环境变量读取 | ✅ |
-| 不在日志中泄露凭据 | ✅ | Redaction 模块 + `redact_error_message()` | ✅ |
-| 凭据文件受限权限 | ✅ | `.env` 和 `config.json` 模式 | ✅ |
-| 自动重认证 | 401 触发 | BrainAPI `_request` 实现 | ✅ |
+`analyst4`, `fundamental2`, `fundamental6`, `model16`, `model51`, `model53`, `model77`, `news12`, `news18`, `option8`, `option9`, `pv1`, `pv13`, `sentiment1`, `socialmedia12`, `socialmedia8`, `univ1`.
 
 ---
 
-## 六、修复计划
+## Safety Boundary
 
-### 立即修复 (P0)
+This compliance map does not claim that an Alpha is ready to submit. The current stop rule remains:
 
-| 问题 | 文件 | 修复方案 |
-|------|------|----------|
-| `region` 允许值超标 | `config_models.py`, `scripts/check_parameter_traceability.py` | 限制为 `["USA", "CHN"]` |
-| `universe` 允许值超标 | `config_models.py`, `scripts/check_parameter_traceability.py` | 限制为 `["TOP3000", "TOP1000", "TOP500"]` |
-| `delay` 缺 0 选项 | `config_models.py`, `scripts/check_parameter_traceability.py` | 允许 `[0, 1]` |
-| `unitHandling` 值偏差 | `config_models.py`, `scripts/check_parameter_traceability.py` | 确认 "OFF" vs "NONE" |
-| `official_retry_pause` 偏短 | `config_models.py` | 增至 60 秒 |
+1. Run `scripts/check_live_submit_readiness.py --config config/run_config.json --json`.
+2. Require `ready_to_submit=true` for the same candidate that would be submitted.
+3. Require explicit human confirmation before any real BRAIN submit.
+
+As of this verification pass, local compliance is green but submit readiness is still blocked by missing eligible same-candidate evidence.
+
+---
+
+## Maintenance Rule
+
+Update this file only from current executable evidence. If any compliance gate starts reporting deviations, record the failing command, exact deviation, affected module, and remediation status here.

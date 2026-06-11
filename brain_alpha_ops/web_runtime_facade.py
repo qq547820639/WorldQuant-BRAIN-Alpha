@@ -8,6 +8,8 @@ import logging
 import os
 import sys
 
+from brain_alpha_ops.brain_api.base import BrainAPIError
+
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +35,10 @@ def handler_dispatch_context(web):
             get_or_create_session=web._get_or_create_session,
             stream_token_for_session=web._stream_token_for_session,
             session_cookie_header=web._session_cookie_header,
+            session_status=web._session_status,
+            mark_brain_connection_verified=web._mark_brain_connection_verified,
+            clear_brain_connection_verified=web._clear_brain_connection_verified,
+            payload_with_brain_session_credentials=web._payload_with_brain_session_credentials,
             render_html=web._render_html,
             session_end_payload=web.session_end_payload,
             expire_session=web._expire_session,
@@ -69,6 +75,7 @@ def handler_dispatch_context(web):
             latest_result_snapshot=web.latest_result_snapshot,
             lifecycle_from_job=web.lifecycle_from_job,
             cloud_alpha_snapshot=web.cloud_alpha_snapshot,
+            official_context_file_counts=web._official_context_file_counts,
             research_memory_snapshot=web.research_memory_snapshot,
             research_knowledge_snapshot=web.research_knowledge_snapshot,
             research_observability_snapshot=web.research_observability_snapshot,
@@ -122,7 +129,13 @@ def test_connection(web, payload: dict) -> dict:
         api = web.api_from_run_config(run_config)
         auth_result = api.authenticate()
         if str(run_config.environment).lower() == "production" and hasattr(api, "get_user_profile"):
-            api.get_user_profile()
+            profile = api.get_user_profile()
+            if isinstance(profile, dict) and profile.get("error"):
+                raise BrainAPIError(
+                    str(profile.get("error") or "BRAIN profile check failed"),
+                    status_code=_profile_status_code(profile),
+                    payload=profile,
+                )
         auth_mode = ""
         if isinstance(auth_result, dict):
             auth_mode = str(auth_result.get("auth") or auth_result.get("environment") or "")
@@ -130,6 +143,14 @@ def test_connection(web, payload: dict) -> dict:
     except Exception as exc:
         logger.error("web connection test failed")
         return web._web_error(exc, "CONNECTION_FAILED")
+
+
+def _profile_status_code(profile: dict) -> int | None:
+    try:
+        status_code = int(profile.get("status_code") or 0)
+    except (TypeError, ValueError):
+        return None
+    return status_code if status_code > 0 else None
 
 
 def run_job(web, job_id: str, payload: dict):
@@ -169,6 +190,35 @@ def lookup_sse_job(web, job_id: str) -> dict | None:
 
 
 def run_generate_candidates_job(web, job_id: str, payload: dict):
+    def worker(body: dict) -> dict:
+        result = web.generate_candidates_payload(body)
+        if not result.get("ok"):
+            return result
+        try:
+            from brain_alpha_ops.models import Candidate
+            from brain_alpha_ops.research.repository import ResearchRepository
+
+            run_config = web.run_config_from_payload(body)
+            persistence = web._persist_generated_candidates(
+                job_id,
+                run_config,
+                result,
+                Candidate,
+                ResearchRepository,
+            )
+        except Exception as exc:
+            persistence = {
+                "schema_version": "candidate-persistence-v1",
+                "target": "candidates.jsonl",
+                "persisted_count": 0,
+                "error_count": 1,
+                "errors": [web.safe_error_message(exc)],
+            }
+        summary = result.setdefault("summary", {})
+        if isinstance(summary, dict):
+            summary["persistence"] = persistence
+        return result
+
     return web.run_simple_async_job_service(
         job_id,
         payload,
@@ -176,7 +226,7 @@ def run_generate_candidates_job(web, job_id: str, payload: dict):
         operation="generate_candidates",
         start_phase="candidate_generation",
         start_message="Generating candidate alphas.",
-        worker=web.generate_candidates_payload,
+        worker=worker,
         safe_error_message=web.safe_error_message,
         error_payload=web.error_payload,
     )
@@ -199,7 +249,7 @@ def run_scoring_evaluate_job(web, job_id: str, payload: dict):
 
 
 def lifecycle_from_job(web, job: dict) -> list[dict]:
-    return web._lifecycle_from_job_service(job, read_storage_jsonl=web._read_storage_jsonl, limit=1000)
+    return web._lifecycle_from_job_service(job, read_storage_jsonl=web._read_storage_jsonl, limit=None)
 
 
 def cloud_alpha_snapshot(web, limit: int | None = None) -> dict:
@@ -489,7 +539,7 @@ def load_check_results(web) -> dict:
         read_storage_jsonl=web._read_storage_jsonl,
         safe_error_message=web.safe_error_message,
         log=web.logger,
-        limit=5000,
+        limit=None,
     )
 
 
@@ -565,7 +615,7 @@ def storage_jsonl_path(web, filename: str):
     return web._storage_jsonl_path_service(filename, load_config=web.load_run_config)
 
 
-def read_storage_jsonl(web, filename: str, *, limit: int = 500) -> list[dict]:
+def read_storage_jsonl(web, filename: str, *, limit: int | None = 500) -> list[dict]:
     return web._read_storage_jsonl_service(filename, limit=limit, load_config=web.load_run_config)
 
 
@@ -574,6 +624,8 @@ def read_storage_jsonl_stats(web, filename: str, *, limit: int = 500) -> dict:
 
 
 def public_run_config(web) -> dict:
+    from brain_alpha_ops.web_config import managed_credentials_available
+
     config = web.load_run_config().to_dict()
     credentials = config.get("credentials", {})
     config["credentials"] = {
@@ -583,6 +635,7 @@ def public_run_config(web) -> dict:
         "username_env": credentials.get("username_env", "BRAIN_USERNAME"),
         "password_env": credentials.get("password_env", "BRAIN_PASSWORD"),
         "token_env": credentials.get("token_env", "BRAIN_TOKEN"),
+        "managed_credentials_available": managed_credentials_available(credentials),
     }
     return config
 

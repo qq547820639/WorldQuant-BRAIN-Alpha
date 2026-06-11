@@ -15,7 +15,7 @@
 
 | 维度 | 评分 | 说明 |
 |------|------|------|
-| 安全性 | 6.5/10 | XSS 向量、凭据残留、无限分页、SSRF |
+| 安全性 | 6.5/10 | XSS 向量、凭据残留、完整分页停滞观测、SSRF |
 | 稳定性 | 7.0/10 | 较多静默异常吞噬、KeyError 风险 |
 | 性能 | 7.5/10 | N+1 查询、重复计算、无缓存 |
 | 可维护性 | 6.5/10 | God Object、硬编码、重复代码 |
@@ -35,7 +35,7 @@
 
 | ID | 当前状态 | 当前证据 | 下一步 |
 |----|----------|----------|--------|
-| V5-001 | TRACKED_DEFERRED | `list_user_alphas()` 已走统一 `_paginate_collection()`，但 `_MAX_USER_ALPHAS_PAGES=None` 是刻意保留完整云端同步；现有测试覆盖超过旧 10000 cap 和无默认页数截断。 | 不添加 500 页硬上限；如后续需要，增加停滞/耗时防护而不是截断完整分页。 |
+| V5-001 | TRACKED_DEFERRED | `list_user_alphas()` 已走统一 `_paginate_collection()`，且 `MAX_USER_ALPHAS_PAGES=None` 是刻意保留完整云端同步；现有测试覆盖超过旧 10000 cap 和无默认页数截断。 | 不添加固定页数截断；如后续需要，增加停滞观测和显式取消保护，而不是截断完整分页。 |
 | V5-002 | CLOSED_CURRENT | `setSafeHtml()` 当前会转义，`check_frontend_innerhtml.py` 已审计 25 个 `setRawHtml()` 调用并要求命中稳定白名单；新增未审查 raw HTML 调用、direct sink、误命名 raw alias 均会失败；`tests/test_frontend_innerhtml_guard.py` 已通过。 | 保持前端 raw HTML sink 守护绿色。 |
 | V5-003 | CLOSED_CURRENT | `write_run_config()` 写盘前调用 `run_config_dict_for_disk()` 清空 `credentials.username/password/token`。 | 保持 `tests/test_config.py` 相关凭据落盘测试绿色。 |
 | V5-004 | CLOSED_CURRENT | `web_runtime_facade.serve()` 和 `main()` 在 `allow_remote=True` 时强制 `secure_cookies=True`，cookie 已含 `HttpOnly; SameSite=Strict`。 | 保持远程模式 session 测试绿色。 |
@@ -51,7 +51,7 @@
 
 | ID | 优先级 | 类别 | 模块 | 简要描述 |
 |----|--------|------|------|----------|
-| V5-001 | P1 | 安全 | brain_api/pagination.py | `list_user_alphas()` 无限分页无上限 |
+| V5-001 | P1 | 安全 | brain_api/pagination.py | `list_user_alphas()` 完整分页需停滞观测与显式取消保护 |
 | V5-002 | P1 | 安全 | web/js (XSS) | `setRawHtml()` 无输入净化，XSS 直通 |
 | V5-003 | P1 | 安全 | config.py | `write_run_config` 凭据可持久化到磁盘 |
 | V5-004 | P1 | 安全 | web_security.py | `secure_cookies=False` + 远程模式 = 会话劫持 |
@@ -89,35 +89,18 @@
 
 ---
 
-### V5-001 | P1 | 安全 | 无限分页无上限
+### V5-001 | P1 | 安全 | 完整分页需停滞观测与显式取消保护
 
 **文件**: `brain_alpha_ops/brain_api/pagination.py`
-**根因**: `list_user_alphas()` 等分页函数使用 `while True` 循环，仅依赖 API 返回空结果来终止。攻击者或意外情况下（如 BRAIN API 行为变更、网络错误导致部分数据丢失后重复请求）可能进入无限循环。
+**根因**: 云端 Alpha 清单必须保持完整同步，不能用固定页数、固定条数或耗时阈值截断；风险应通过重复页签名、无新增唯一 Alpha 的停滞观测、官方 offset recovery、用户显式取消和真实 API/认证错误处理来控制。
 
-**影响**: 资源耗尽（CPU/内存）、API 配额消耗、服务拒绝。
+**影响**: 如果缺少观测和取消保护，异常分页行为可能造成资源耗尽、API 配额消耗或服务拒绝；如果加入固定截断，又会破坏“云端有多少就同步多少”的业务要求。
 
 **修复方案**:
-1. 添加全局分页上限常量 `MAX_PAGES = 500`
-2. 在 while 循环中累加页面计数
-3. 超出上限时发 warning 日志并 break
-4. 添加总请求超时时间（如 300s）
-
-**代码实现**:
-```python
-# pagination.py
-_MAX_PAGES = 500
-
-def paginate(..., max_pages: int = _MAX_PAGES):
-    pages_fetched = 0
-    while True:
-        pages_fetched += 1
-        if pages_fetched > max_pages:
-            logger.warning("pagination exceeded max_pages=%d", max_pages)
-            break
-        # ... existing logic ...
-        if not next_page:
-            break
-```
+1. 保持 `MAX_USER_ALPHAS_PAGES=None`，不添加固定页数或条数截断。
+2. 保留重复页签名检测，避免官方异常重复页面造成循环。
+3. 对无新增唯一 Alpha 的页面发出 warning/progress telemetry，但不停止分页。
+4. 只允许官方分页自然结束、用户显式取消、真实 API/认证错误或重复页异常保护停止同步。
 
 **优先级**: P1 · **预计工作量**: 1h
 
@@ -607,7 +590,7 @@ if not field_names:
 
 | 顺序 | ID | 任务 | 预计时间 |
 |------|-----|------|---------|
-| 1 | V5-001 | 添加分页最大页数上限 | 1h |
+| 1 | V5-001 | 保留完整分页，补强停滞观测与显式取消保护 | 1h |
 | 2 | V5-002 | XSS 防护：sanitizeHtml + setRawHtml 审计 | 3h |
 | 3 | V5-003 | write_run_config 凭据安全写入 | 1.5h |
 | 4 | V5-004 | secure_cookies 强制启用 | 0.5h |
@@ -661,7 +644,7 @@ if not field_names:
 
 每个修复完成后，需通过以下验证：
 
-1. **V5-001**: `pytest tests/ -k pagination` 通过，添加 max_pages 测试用例
+1. **V5-001**: `pytest tests/ -k pagination` 通过，覆盖无默认页数截断、超过旧 10000 条仍继续读取、显式取消停止以及停滞 warning-only 观测
 2. **V5-002**: 使用 OWASP XSS 测试向量验证所有 setRawHtml 调用点
 3. **V5-003**: 确认 run_config.json 不含凭据明文
 4. **V5-005/V5-006**: `pytest tests/ -k scoring` 通过，添加缺失键测试

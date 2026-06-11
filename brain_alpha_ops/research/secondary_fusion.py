@@ -160,6 +160,14 @@ class SecondaryFusionService:
         source_tags = list(candidate.source_tags or [])
         if "secondary_fusion" not in source_tags:
             source_tags.append("secondary_fusion")
+        submission = {
+            "parent_alpha_id": candidate.alpha_id,
+            "secondary_fusion_reason": note[:240],
+            "source_official_alpha_id": candidate.official_alpha_id,
+        }
+        for key, value in (candidate.submission or {}).items():
+            if str(key).startswith("assistant_guidance"):
+                submission.setdefault(key, value)
         return Candidate(
             alpha_id=new_id("alpha"),
             expression=expression,
@@ -170,10 +178,6 @@ class SecondaryFusionService:
             source_tags=source_tags,
             parent_id=candidate.alpha_id,
             mutation_type="secondary_fusion",
-            submission={
-                "parent_alpha_id": candidate.alpha_id,
-                "secondary_fusion_reason": note[:240],
-                "source_official_alpha_id": candidate.official_alpha_id,
-            },
+            submission=submission,
             lifecycle_status="secondary_fusion_pending",
         )

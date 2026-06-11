@@ -6,6 +6,7 @@ from dataclasses import dataclass
 import re
 
 from brain_alpha_ops.research.expression_ast import expression_key, expression_similarity
+from brain_alpha_ops.research.generator_metadata import expression_windows_within_constraints
 
 
 DEFAULT_WINDOWS = (3, 5, 8, 10, 12, 15, 20, 30, 40, 60, 90, 120, 180, 252)
@@ -76,7 +77,10 @@ def build_bare_fallback_spec(
         f2 = safe_fields[(field_index + 1) % field_count] if field_count > 1 else f1
         window_index = (position // max(1, template_count * field_count)) % len(safe_windows)
         expression = template.replace("{f1}", f1).replace("{f2}", f2).replace("{w}", str(safe_windows[window_index]))
-        if not is_high_turnover_generation_risk(expression):
+        if (
+            expression_windows_within_constraints(expression)
+            and not is_high_turnover_generation_risk(expression)
+        ):
             break
     data_fields = [f1] if f1 == f2 or "{f2}" not in template else [f1, f2]
     return BareFallbackSpec(

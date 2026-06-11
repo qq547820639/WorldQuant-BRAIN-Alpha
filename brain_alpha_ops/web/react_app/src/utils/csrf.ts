@@ -9,11 +9,19 @@ export function csrfToken(): string {
   return token && !token.startsWith("__BRAIN_ALPHA_OPS") ? token : "";
 }
 
+export function setCsrfToken(token: string): void {
+  setMetaToken("brain-alpha-csrf", token);
+}
+
 /** Read SSE stream token from <meta> tag injected by the server. */
 export function streamToken(): string {
   const meta = document.querySelector<HTMLMetaElement>('meta[name="brain-alpha-stream"]');
   const token = (meta?.content || "").trim();
   return token && !token.startsWith("__BRAIN_ALPHA_OPS") ? token : "";
+}
+
+export function setStreamToken(token: string): void {
+  setMetaToken("brain-alpha-stream", token);
 }
 
 /** Generate a unique request ID (crypto-based UUID if available). */
@@ -33,4 +41,16 @@ export function csrfHeaders(): Record<string, string> {
   const token = csrfToken();
   if (token) headers["X-Brain-Alpha-CSRF"] = token;
   return headers;
+}
+
+function setMetaToken(name: string, token: string): void {
+  const value = String(token || "").trim();
+  if (!value) return;
+  let meta = document.querySelector<HTMLMetaElement>(`meta[name="${name}"]`);
+  if (!meta) {
+    meta = document.createElement("meta");
+    meta.name = name;
+    document.head.appendChild(meta);
+  }
+  meta.content = value;
 }

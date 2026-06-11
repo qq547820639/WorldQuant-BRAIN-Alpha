@@ -343,7 +343,9 @@ def _result_message(result: Any, *, fallback: str) -> str:
         summary = result.get("summary")
         if isinstance(summary, dict):
             if "generated_count" in summary:
-                return f"Generated {summary.get('generated_count')} candidate(s)."
+                from brain_alpha_ops.web_candidate_generation_summary import candidate_generation_status_message
+
+                return candidate_generation_status_message(result)
             if "submitted" in summary:
                 return f"Submitted {summary.get('submitted')} alpha(s)."
     return fallback

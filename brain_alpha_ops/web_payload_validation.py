@@ -10,7 +10,7 @@ MAX_GENERATE_CANDIDATES = 100
 MAX_ALPHA_ID_LENGTH = 128
 MAX_BATCH_ALPHA_IDS = 100
 MAX_ASSISTANT_TEXT_LENGTH = 200_000
-ALLOWED_SYNC_RANGES = {"3d", "7d", "all"}
+ALLOWED_SYNC_RANGES = {"3d", "7d", "recent", "6months", "all"}
 ALPHA_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]*$")
 
 
@@ -192,7 +192,7 @@ def validate_sync_alphas_payload(payload: dict[str, Any] | None) -> str:
         return error
     sync_range = payload.get("syncRange") if payload.get("syncRange") not in ("", None) else payload.get("range")
     if sync_range not in ("", None) and str(sync_range) not in ALLOWED_SYNC_RANGES:
-        return "syncRange must be one of 3d, 7d, all"
+        return "syncRange must be one of 3d, 7d, recent, 6months, all"
     return ""
 
 

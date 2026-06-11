@@ -1,3 +1,5 @@
+from http.client import IncompleteRead
+
 from brain_alpha_ops.brain_api.base import BrainAPIError
 from brain_alpha_ops.errors import ValidationError, classify_error
 from brain_alpha_ops.observability import error_payload
@@ -111,3 +113,12 @@ def test_classify_error_marks_5xx_retryable_network():
     assert info.category == "network"
     assert info.retryable is True
     assert info.status_code == 503
+
+
+def test_classify_error_marks_incomplete_read_retryable_network():
+    info = classify_error(IncompleteRead(b"partial", 10), default_code="SYNC_JOB_FAILED")
+
+    assert info.error_code == "SYNC_JOB_FAILED"
+    assert info.category == "network"
+    assert info.retryable is True
+    assert info.error_type == "IncompleteRead"

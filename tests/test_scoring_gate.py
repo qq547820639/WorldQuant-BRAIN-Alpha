@@ -217,6 +217,36 @@ def test_release_score_gate_traces_sub_universe_sharpe_formula_inputs():
     }
 
 
+def test_release_score_gate_uses_low_sub_universe_check_value_for_persisted_default_zero():
+    metrics = {
+        "sharpe": 1.9,
+        "fitness": 1.06,
+        "turnover": 0.5706,
+        "drawdown": 0.0572,
+        "self_correlation": 0.2,
+        "prod_correlation": 0.2,
+        "weight_concentration": 0.0,
+        "sub_universe_sharpe": 0.0,
+        "subUniverseSize": 1000,
+        "alphaSize": 1000,
+        "margin": 5.0,
+        "pass_fail": "PASS",
+        "brain_checks": {
+            "LOW_SUB_UNIVERSE_SHARPE": {
+                "result": "PASS",
+                "limit": 0.82,
+                "value": 1.43,
+            }
+        },
+    }
+
+    decision = evaluate_release_score(metrics, QualityThresholds(), settings={"delay": 1}).to_dict()
+    inputs = decision["threshold_trace"]["sub_universe_sharpe_inputs"]
+
+    assert inputs["subUniverseSharpe"] == 1.43
+    assert next(item for item in decision["attributions"] if item["name"] == "sub_universe_sharpe")["actual"] == 1.43
+
+
 def test_release_score_gate_blocks_missing_sub_universe_size_evidence():
     metrics = {
         "sharpe": 1.8,

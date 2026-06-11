@@ -34,7 +34,7 @@ compileall: 全部通过
 | 编号 | 状态 | 验证证据 |
 |------|:----:|------|
 | R-01 Web dispatch 绕过安全层 | ✅ 已修复 | `web/__init__.py:505-529` 增加了 origin + session 双重校验 |
-| R-03 Replay cache 无限增长 | ✅ 已修复 | `web_security.py:22` 硬上限 `MAX_REPLAY_CACHE_SIZE = 10_000` |
+| R-03 Replay cache 无限增长 | ✅ 已修复 | `web_security.py:22` 使用 `MAX_REPLAY_CACHE_SIZE = 10_000` 做容量保护 |
 | M-01 test_fetch_official_context 导入失败 | 🔴 仍存在 | `DEFAULT_RUN_CONFIG_PATH` 仍未从 `config/__init__.py` 导出 |
 | M-02 Dead code in Handler | 💭 仍存在 | LEGACY SKELETON 注释明确但代码仍保留 |
 | M-03 do_OPTIONS CORS 策略宽松 | 🟡 仍存在 | `web_http_handler.py:73` 仍 fallback 到 `*` |

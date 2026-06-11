@@ -84,7 +84,7 @@ def test_validate_json_object_and_sync_alphas_payloads():
     assert validate_sync_alphas_payload({}) == ""
     assert validate_sync_alphas_payload({"syncRange": "3d"}) == ""
     assert validate_sync_alphas_payload({"range": "all"}) == ""
-    assert validate_sync_alphas_payload({"syncRange": "30d"}) == "syncRange must be one of 3d, 7d, all"
+    assert validate_sync_alphas_payload({"syncRange": "30d"}) == "syncRange must be one of 3d, 7d, recent, 6months, all"
 
 
 def test_validate_assistant_payloads_cover_size_aliases_and_cross_review():

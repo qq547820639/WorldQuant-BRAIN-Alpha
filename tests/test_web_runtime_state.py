@@ -95,17 +95,33 @@ def test_lifecycle_from_job_merges_dedupes_and_classifies_rows():
         }
     }
 
-    rows = lifecycle_from_job(job, read_storage_jsonl=lambda *_args, **_kwargs: stored)
+    calls = []
+    rows = lifecycle_from_job(job, read_storage_jsonl=lambda *args, **kwargs: calls.append((args, kwargs)) or stored)
 
     assert [row["alpha_id"] for row in rows] == ["a1", "a2", "a3"]
     assert [row["status_category"] for row in rows] == ["passed", "blocked", "submitted"]
+    assert calls[0][1]["limit"] is None
     assert status_category({"status": "REJECTED"}) == "failed"
+
+
+def test_lifecycle_from_job_reads_all_rows_by_default():
+    stored = [
+        {"run_id": "run_all", "alpha_id": f"a{i}", "stage": "simulation", "status": "PASSED"}
+        for i in range(1005)
+    ]
+
+    rows = lifecycle_from_job({}, read_storage_jsonl=lambda *_args, **_kwargs: stored)
+
+    assert len(rows) == 1005
+    assert rows[0]["alpha_id"] == "a0"
+    assert rows[-1]["alpha_id"] == "a1004"
 
 
 def test_load_check_results_filters_invalid_rows_and_marks_stale():
     now = datetime(2026, 5, 20, tzinfo=timezone.utc)
+    calls = []
     payload = load_check_results(
-        read_storage_jsonl=lambda *_args, **_kwargs: [
+        read_storage_jsonl=lambda *args, **kwargs: calls.append((args, kwargs)) or [
             {"alpha_id": "fresh", "checked_at": (now - timedelta(hours=1)).isoformat()},
             {"alpha_id": "old", "checked_at": (now - timedelta(days=2)).isoformat()},
             {"alpha_id": "bad", "checked_at": "not-a-date"},
@@ -115,6 +131,9 @@ def test_load_check_results_filters_invalid_rows_and_marks_stale():
     )
 
     assert payload["count"] == 3
+    assert payload["total"] == 3
+    assert payload["complete"] is True
+    assert calls[0][1]["limit"] is None
     assert [row["is_stale"] for row in payload["items"]] == [False, True, True]
 
 

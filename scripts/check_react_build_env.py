@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -26,6 +27,10 @@ LOCAL_BUILD_TOOLS = {
     "typescript": ("node_modules", "typescript", "bin", "tsc"),
     "vite": ("node_modules", "vite", "bin", "vite.js"),
 }
+BUNDLED_NODE_CANDIDATES = (
+    Path("/Volumes/Extra/Applications/Codex.app/Contents/Resources/cua_node/bin/node"),
+    Path("/Applications/Codex.app/Contents/Resources/cua_node/bin/node"),
+)
 
 Runner = Callable[[list[str], Path, float], tuple[int, str, str, float]]
 
@@ -41,7 +46,7 @@ def check_react_build_env(
     package_json = app_dir / "package.json"
     lockfiles = [name for name in LOCKFILES if (app_dir / name).is_file()]
     npm_path = shutil.which("npm")
-    node_path = shutil.which("node")
+    node_path = _find_node(app_dir)
     node_modules = app_dir / "node_modules"
     installed = _installed_packages(node_modules)
     local_build_tools = _local_build_tools(app_dir, node_path)
@@ -49,7 +54,12 @@ def check_react_build_env(
 
     findings: list[dict] = []
     _require(findings, package_json.is_file(), "missing_package_json", f"{package_json} does not exist")
-    _require(findings, bool(node_path), "missing_node", "node executable was not found on PATH")
+    _require(
+        findings,
+        bool(node_path),
+        "missing_node",
+        "node executable was not found on PATH or in the bundled Codex runtime",
+    )
     _require(findings, bool(lockfiles), "missing_lockfile", "React app has no package manager lockfile")
     _require(findings, node_modules.is_dir(), "missing_node_modules", "React app dependencies are not installed")
 
@@ -132,6 +142,24 @@ def _local_build_tools(app_dir: Path, node_path: str | None) -> dict[str, list[s
         tool_path = app_dir.joinpath(*parts)
         commands[name] = [node_executable, str(tool_path)] if tool_path.is_file() else None
     return commands
+
+
+def _find_node(app_dir: Path) -> str:
+    path_node = shutil.which("node")
+    if path_node:
+        return path_node
+    return _find_bundled_node(app_dir)
+
+
+def _find_bundled_node(app_dir: Path) -> str:
+    try:
+        app_dir.resolve().relative_to(PROJECT_ROOT)
+    except ValueError:
+        return ""
+    for candidate in BUNDLED_NODE_CANDIDATES:
+        if candidate.is_file() and os.access(candidate, os.X_OK):
+            return str(candidate)
+    return ""
 
 
 def _artifact_snapshot(app_dir: Path) -> dict:
@@ -282,7 +310,7 @@ def _recommendation(findings: list[dict]) -> str:
     if "missing_lockfile" in codes:
         actions.append("commit a package manager lockfile")
     if "missing_node" in codes:
-        actions.append("install Node.js with node available on PATH")
+        actions.append("install Node.js with node available on PATH or run inside the Codex bundled runtime")
     if "missing_node_modules" in codes or "missing_react_dependencies" in codes or "missing_react_build_tools" in codes:
         actions.append("install React app dependencies from the lockfile")
     if not actions:

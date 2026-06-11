@@ -15,6 +15,7 @@ from brain_alpha_ops.web_cloud_snapshot import (
     latest_cached_user_alphas,
     official_context_file_counts,
     read_storage_jsonl_stats,
+    refresh_cloud_context_for_check_service,
     save_official_context_json,
 )
 
@@ -142,6 +143,23 @@ def test_cached_user_alpha_paths_are_bounded_to_recent_files(tmp_path):
     assert all(path.name.startswith("user_alphas_") for path in paths)
 
 
+def test_cached_user_alpha_paths_defaults_to_all_cache_files(tmp_path):
+    storage = tmp_path / "storage"
+    cache = tmp_path / "cache"
+    storage.mkdir()
+    cache.mkdir()
+    load_config = _loader(storage, cache)
+    for index in range(5):
+        path = cache / f"user_alphas_{index}.json"
+        path.write_text("[]", encoding="utf-8")
+        path.touch()
+
+    paths = cached_user_alpha_paths(load_config=load_config)
+
+    assert len(paths) == 5
+    assert {path.name for path in paths} == {f"user_alphas_{index}.json" for index in range(5)}
+
+
 def test_cached_user_alpha_paths_warns_when_cache_dir_unreadable(monkeypatch, tmp_path, caplog):
     storage = tmp_path / "storage"
     cache = tmp_path / "cache"
@@ -239,6 +257,89 @@ def test_read_storage_jsonl_stats_uses_configured_storage(tmp_path):
 
     assert stats["parsed_count"] == 1
     assert stats["skipped_invalid_count"] == 1
+
+
+def test_refresh_cloud_context_progress_uses_reference_count_not_cloud_total():
+    class Store:
+        def __init__(self):
+            self.updates = []
+
+        def update(self, job_id, **kwargs):
+            self.updates.append((job_id, kwargs))
+
+    class API:
+        def list_user_alphas(self, _sync_range, *, force_refresh=False, progress_callback=None):
+            assert force_refresh is True
+            if progress_callback:
+                progress_callback({
+                    "scanned": 10_800,
+                    "total": 10_000,
+                    "api_reported_total": 10_000,
+                    "filter_window_count": 10_000,
+                    "page_size": 100,
+                    "page_limit": 100,
+                    "pages_fetched": 108,
+                    "expected_pages": 100,
+                    "next_offset": 10_800,
+                })
+            return [{"id": "alpha_live"}]
+
+        def list_fields(self, *_args):
+            return [{"id": "close", "dataset": {"id": "pv1"}}]
+
+        def list_operators(self, *_args):
+            return [{"name": "rank"}]
+
+        def list_datasets(self, *_args):
+            return [{"id": "pv1"}]
+
+    class Repo:
+        def __init__(self):
+            self.merged = []
+
+        def merge_cloud_alphas(self, rows, *, sync_range):
+            self.merged.append((rows, sync_range))
+
+    store = Store()
+    repo = Repo()
+
+    rows, error = refresh_cloud_context_for_check_service(
+        API(),
+        repo,
+        "all",
+        "job_cloud_reference",
+        3,
+        "quick",
+        region="USA",
+        refresh_remote=True,
+        store=store,
+        official_context_file_counts=lambda: {"fields_count": 1, "operators_count": 1, "datasets_count": 1},
+        datasets_from_fields=lambda fields: [{"id": "pv1", "field_count": len(fields)}],
+        persist_official_context=lambda *_args: None,
+        safe_error_message=str,
+    )
+
+    cloud_progress = next(
+        update["progress"]
+        for _job_id, update in store.updates
+        if update["progress"]["status_code"] == "CHECK_CLOUD_SYNC"
+    )
+    saved_progress = next(
+        update["progress"]
+        for _job_id, update in store.updates
+        if update["progress"]["status_code"] == "CHECK_CLOUD_SYNC_SAVED"
+    )
+    assert rows == [{"id": "alpha_live"}]
+    assert error == ""
+    assert "接口分页参考数 10000 条，不是云端 Alpha 总量" in cloud_progress["message"]
+    assert "接口窗口" not in cloud_progress["message"]
+    assert cloud_progress["cloud_scanned"] == 10_800
+    assert cloud_progress["cloud_api_reported_total"] == 10_000
+    assert cloud_progress["cloud_filter_window_count"] == 10_000
+    assert "cloud_total" not in cloud_progress
+    assert saved_progress["cloud_saved_count"] == 1
+    assert "本地已保存 1 条云端 Alpha" in saved_progress["message"]
+    assert "cloud_total" not in saved_progress
 
 
 def test_official_context_manifest_marks_missing_and_expired_files(tmp_path):

@@ -19,7 +19,7 @@ DEFAULT_SESSION_TTL_SECONDS = 12 * 60 * 60
 DEFAULT_SESSION_ABSOLUTE_MAX_SECONDS = 24 * 60 * 60
 REQUEST_REPLAY_TTL_SECONDS = 5 * 60
 MAX_REQUEST_ID_LENGTH = 128
-MAX_REPLAY_CACHE_SIZE = 10_000  # R-03: hard cap to prevent DoS memory exhaustion
+MAX_REPLAY_CACHE_SIZE = 10_000  # R-03: capacity guard to prevent DoS memory exhaustion
 
 
 def header_hostname(host_header: str) -> str:
@@ -163,6 +163,50 @@ class LocalSessionManager:
             return
         with self.lock:
             self.sessions.pop(session_id, None)
+
+    def session_info(self, session_id: str) -> dict[str, Any] | None:
+        if not session_id:
+            return None
+        self.prune()
+        with self.lock:
+            row = self.sessions.get(session_id)
+            if not row:
+                return None
+            current = time.time()
+            absolute_expires_at = float(row.get("absolute_expires_at", row.get("expires_at", 0.0)) or 0.0)
+            if absolute_expires_at <= current:
+                self.sessions.pop(session_id, None)
+                return None
+            row["last_accessed"] = current
+            row["expires_at"] = min(current + self.ttl_seconds, absolute_expires_at)
+            return {
+                "id": session_id,
+                "created_at": float(row.get("created_at", 0.0) or 0.0),
+                "last_accessed": float(row.get("last_accessed", 0.0) or 0.0),
+                "expires_at": float(row.get("expires_at", 0.0) or 0.0),
+                "absolute_expires_at": absolute_expires_at,
+                "metadata": dict(row.get("metadata") or {}),
+            }
+
+    def update_metadata(self, session_id: str, updates: dict[str, Any]) -> bool:
+        if not session_id:
+            return False
+        self.prune()
+        with self.lock:
+            row = self.sessions.get(session_id)
+            if not row:
+                return False
+            metadata = row.setdefault("metadata", {})
+            for key, value in dict(updates or {}).items():
+                if value is None:
+                    metadata.pop(str(key), None)
+                else:
+                    metadata[str(key)] = value
+            current = time.time()
+            absolute_expires_at = float(row.get("absolute_expires_at", row.get("expires_at", 0.0)) or 0.0)
+            row["last_accessed"] = current
+            row["expires_at"] = min(current + self.ttl_seconds, absolute_expires_at)
+            return True
 
     def validate_token(self, session_id: str, token: str, token_key: str) -> bool:
         if not session_id or not token:

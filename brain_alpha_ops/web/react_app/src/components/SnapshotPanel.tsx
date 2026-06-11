@@ -52,8 +52,8 @@ const MAX_FILTER_LENGTH = 200;
 const SNAPSHOT_VIEWS: Record<SnapshotView, SnapshotConfig> = {
   cloud: {
     title: "云端数据",
-    subtitle: "缓存的 Alpha 状态",
-    endpoint: "/api/snapshot/cloud?limit=100",
+    subtitle: "完整缓存的 Alpha 状态",
+    endpoint: "/api/snapshot/cloud",
     empty: "暂无云端 Alpha 记录",
     rows: cloudRows,
     metrics: cloudMetrics,
@@ -373,11 +373,21 @@ function SnapshotMobileCard({ row }: { row: SnapshotRow }) {
 function cloudMetrics(payload: SnapshotPayload, rows: SnapshotRow[]) {
   const summary = record(payload.summary);
   return [
-    { label: "返回数量", value: text(summary.returned_count ?? rows.length) },
+    { label: "缓存总数", value: text(summary.total ?? summary.count ?? summary.total_count ?? "-") },
+    { label: "载入状态", value: cloudLoadStatus(summary) },
     { label: "已提交", value: text(summary.submitted_count ?? "-") },
     { label: "已通过", value: text(summary.passed_unsubmitted_count ?? "-") },
-    { label: "过期", value: truthy(summary.is_stale) ? "是" : "否" },
   ];
+}
+
+function cloudLoadStatus(summary: Record<string, unknown>) {
+  const displayLimit = Number(summary.display_limit);
+  if (Number.isFinite(displayLimit) && displayLimit > 0) {
+    const returned = text(summary.returned_count ?? "-");
+    const total = text(summary.total ?? summary.count ?? summary.total_count ?? "-");
+    return `${returned} / ${total} 预览`;
+  }
+  return "完整载入";
 }
 
 function checkpointStatusMetrics(payload: SnapshotPayload, _rows: SnapshotRow[]) {

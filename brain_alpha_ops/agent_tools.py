@@ -193,6 +193,19 @@ class BrainAlphaToolbox(AgentLiveToolsMixin):
         count = bounded_int(args.get("count", 10), 1, MAX_TOOL_CANDIDATES)
         dataset_id = str(args.get("dataset_id", "") or "")
         generator = CandidateGenerator()
+        knowledge_constraints: dict[str, Any] = {}
+        preferred_fields = [str(item).lower() for item in (args.get("preferred_fields") or []) if str(item)]
+        preferred_operators = [str(item).lower() for item in (args.get("preferred_operators") or []) if str(item)]
+        if preferred_fields:
+            knowledge_constraints["preferred_fields"] = preferred_fields
+            if truthy(args.get("strict_preferred_fields", False)):
+                knowledge_constraints["strict_preferred_fields"] = True
+        if preferred_operators:
+            knowledge_constraints["preferred_operators"] = preferred_operators
+            if truthy(args.get("strict_preferred_operators", False)):
+                knowledge_constraints["strict_preferred_operators"] = True
+        if knowledge_constraints:
+            generator.set_knowledge_constraints(knowledge_constraints)
         memory_guidance: dict[str, Any] = {}
         use_memory = self.use_research_memory_guidance and truthy(args.get("use_research_memory", True))
         if use_memory:
@@ -331,7 +344,8 @@ class BrainAlphaToolbox(AgentLiveToolsMixin):
     def _build_market_data_cache(self, args: dict[str, Any]) -> dict[str, Any]:
         refresh = truthy(args.get("refresh", True))
         source_file = str(args.get("source_file", "") or "").strip()
-        limit = bounded_int(args.get("limit", 5000), 1, 50000)
+        raw_limit = args.get("limit")
+        limit = None if raw_limit in (None, "") else bounded_int(raw_limit, 1, 50000)
         return build_market_data_cache_tool(
             self.run_config.ops.storage_dir,
             refresh=refresh,

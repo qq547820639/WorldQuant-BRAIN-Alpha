@@ -44,7 +44,7 @@ _WINDOW_RANGES = {
 
 _COMMON_FIELDS = {
     "open", "close", "high", "low", "volume", "vwap",
-    "returns", "cap", "adv20",
+    "returns", "market_cap", "adv20",
 }
 
 _MAX_EXPRESSION_LENGTH = 2000

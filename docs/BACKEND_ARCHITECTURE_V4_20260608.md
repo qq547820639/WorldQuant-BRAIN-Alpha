@@ -452,7 +452,7 @@ def _count_scored(repo) -> int:
     """Count candidates with non-null scorecard."""
     try:
         return sum(
-            1 for c in repo.list_all(limit=1000)
+            1 for c in repo.iter_all()
             if c.scorecard and c.scorecard.get("total_score") is not None
         )
     except Exception:
@@ -480,7 +480,7 @@ def _count_scored(repo) -> int:
 | 端点 | 增强内容 |
 |------|----------|
 | `GET /api/sync_status` | + `elapsed_seconds`, `stalled` 字段 |
-| `POST /api/sync_alphas` | + `syncRange` 默认支持 `1d/3d/7d` |
+| `POST /api/sync_alphas` | + `syncRange` 默认 `all`，并支持用户主动选择 `3d/7d/all` |
 | `POST /api/sync_cancel` | + 取消确认消息更详细 |
 | `GET /api/status` | + `connection` 子对象 |
 
@@ -632,21 +632,21 @@ if ws_manager.handle_upgrade(self):
 
 问题:
   1. sync线程没有"取消"信号的优雅处理 — Thread cannot be interrupted
-  2. cloud_sync_max_elapsed_seconds = 0.0 (disabled) — 无默认超时
+  2. cloud_sync_max_elapsed_seconds = 0.0 (compat only) — 不作为同步停止条件
   3. 进度回调 on_page() 依赖 BRAIN API 的分页信息 — 无进度时前端就是 0%
   4. 没有超时后的降级路径 — 用户只能重试或无操作
 ```
 
 ### 8.2 修复方案
 
-#### Fix 1: 默认超时 + 分阶段超时
+#### Fix 1: 完整同步 + 分阶段进度
 
 ```python
 # config_models.py 中的 ResearchBudget 默认值
-cloud_sync_max_elapsed_seconds: float = 300.0  # 从 0.0 改为 300s（5分钟）
+cloud_sync_max_elapsed_seconds: float = 0.0  # 兼容字段；云端同步不会用耗时数值截断
 ```
 
-在 `web_sync_job.py` 的 `on_page` 回调中，已存在 `elapsed_limit_reached` 检查（line 197），只需确保默认值生效。
+在 `web_sync_job.py` 的 `on_page` 回调中，仅保留取消检查和官方分页自然结束判断；不按耗时数值截断同步。
 
 #### Fix 2: on_page 本地点滴进度
 
@@ -672,17 +672,12 @@ def on_page(progress: dict[str, Any]) -> bool:
 #### Fix 3: 同步降级路径
 
 ```python
-# 在 sync 超时时，提供降级选项
-if elapsed_limit_reached(elapsed_limit_seconds):
-    request_stop(
-        f"云端同步已达到耗时上限 {elapsed_limit_seconds:g}s。",
-        "云端同步达到耗时上限，可缩小同步范围或使用本地缓存继续。",
-    )
-    # Fallback: use cached context instead of failing
+# 同步不会用固定耗时数值截断；只有用户取消或官方/API错误才进入降级路径。
+if cancel_requested():
+    request_stop("云端同步已停止。", "云端同步已停止，可稍后继续。")
     context_fallback_available = _has_cached_context()
     if context_fallback_available:
-        # Don't raise SyncJobCancelled — complete with warnings
-        stats["context_status"] = "timeout_fallback"
+        stats["context_status"] = "cancelled_fallback"
 ```
 
 #### Fix 4: 添加 Atomic Stop
@@ -715,7 +710,7 @@ class JobStore:
 
 | 任务 | 文件 | 估计 |
 |------|------|------|
-| `cloud_sync_max_elapsed_seconds` 改为 300s | `config_models.py` | 1 行 |
+| `cloud_sync_max_elapsed_seconds` 保持 0s 兼容字段 | `config_models.py` | 1 行 |
 | JobStore 原子取消 | `tasks.py` | +20 行 |
 | on_page 本地进度计数 | `web_sync_job.py` | +10 行 |
 | 降级路径处理 | `web_sync_job.py` | +15 行 |

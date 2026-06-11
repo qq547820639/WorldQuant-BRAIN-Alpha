@@ -1,0 +1,127 @@
+"""Candidate GET route helpers for the local Web handler."""
+
+from __future__ import annotations
+
+import logging
+from typing import Any
+from urllib.parse import parse_qs
+
+from brain_alpha_ops.web_candidate_payloads import (
+    candidate_payload,
+    candidate_result_total,
+    candidate_summary_from_iter,
+    has_candidate_like_rows,
+)
+
+logger = logging.getLogger(__name__)
+
+
+def get_candidates(handler: Any, parsed: Any, ctx: Any) -> None:
+    query = parse_qs(parsed.query)
+    summary_only = ctx.payload_truthy((query.get("summary") or ["false"])[0])
+    job_id = (query.get("job_id") or [""])[0]
+    if summary_only and not job_id:
+        ledger_summary = candidate_ledger_summary()
+        if ledger_summary is not None:
+            handler._json(ledger_summary)
+            return
+
+    if job_id:
+        lifecycle = ctx.lifecycle_payload(ctx.jobs, job_id, ctx.lifecycle_from_job)
+        rows = lifecycle.get("records") if isinstance(lifecycle.get("records"), list) else []
+        if has_candidate_like_rows(rows):
+            handler._json(candidate_payload(rows, source="lifecycle", summary_only=summary_only))
+            return
+
+    ledger_rows, ledger_total, ledger_path = candidate_ledger_rows()
+    if ledger_rows:
+        handler._json(candidate_payload(
+            ledger_rows,
+            source="candidates_jsonl",
+            total=ledger_total,
+            path=ledger_path,
+            summary_only=summary_only,
+        ))
+        return
+
+    rows, meta = latest_async_candidates(ctx.async_jobs)
+    handler._json(candidate_payload(
+        rows,
+        source=str(meta.get("source") or "latest_async_result"),
+        total=meta.get("total"),
+        summary_only=summary_only,
+        partial=bool(meta.get("partial")),
+        warning=str(meta.get("warning") or ""),
+    ))
+
+
+def candidate_ledger_summary() -> dict[str, Any] | None:
+    try:
+        from brain_alpha_ops.jsonl import iter_jsonl_records
+        from brain_alpha_ops.web_routes import _storage_file
+
+        path = _storage_file("candidates.jsonl")
+        if not path.is_file():
+            return None
+        summary = candidate_summary_from_iter(iter_jsonl_records(path))
+        total_count = int(summary.get("candidate_count", 0) or 0)
+        return {
+            "ok": True,
+            "source": "candidates_jsonl",
+            "path": str(path),
+            "summary_only": True,
+            "candidates": [],
+            "items": [],
+            "count": 0,
+            "returned_count": 0,
+            "total_count": total_count,
+            "total": total_count,
+            **summary,
+        }
+    except Exception:
+        logger.warning("candidate ledger summary read failed; falling back to latest async result", exc_info=True)
+        return None
+
+
+def candidate_ledger_rows() -> tuple[list[dict[str, Any]], int, str]:
+    try:
+        from brain_alpha_ops.web_routes import _read_jsonl_records
+
+        return _read_jsonl_records("candidates.jsonl")
+    except Exception:
+        logger.warning("candidate ledger read failed; falling back to latest async result", exc_info=True)
+        return [], 0, ""
+
+
+def latest_async_candidates(async_jobs: Any) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    all_jobs = getattr(async_jobs, "all", None)
+    if callable(all_jobs):
+        try:
+            rows = all_jobs(limit=None)
+        except TypeError:
+            rows = all_jobs()
+    else:
+        rows = []
+    if not rows:
+        latest = getattr(async_jobs, "latest_any", None)
+        if callable(latest):
+            item = latest()
+            rows = [item] if item else []
+    for _job_id, job in rows:
+        result = job.get("result") if isinstance(job, dict) else {}
+        if not isinstance(result, dict):
+            continue
+        candidates = result.get("candidates")
+        if isinstance(candidates, list) and candidates:
+            return [row for row in candidates if isinstance(row, dict)], {"source": "latest_async_result"}
+        preview = result.get("candidates_preview")
+        if isinstance(preview, list) and preview:
+            preview_rows = [row for row in preview if isinstance(row, dict)]
+            total = candidate_result_total(result, len(preview_rows))
+            return preview_rows, {
+                "source": "latest_async_result_preview",
+                "total": total,
+                "partial": True,
+                "warning": "candidate ledger is unavailable; showing async preview only",
+            }
+    return [], {"source": "latest_async_result"}

@@ -13,11 +13,27 @@ OFFICIAL_QUEUE_ROW = (
     "`scripts/quality_gate.py --final-release --skip-tests --json`. |"
 )
 
-def _official_context_validation(*, p1_count: int = 0, blocking_count: int = 0) -> dict:
+def _official_context_validation(
+    *,
+    p1_count: int = 0,
+    blocking_count: int = 0,
+    fields: int = 8599,
+    operators: int = 67,
+    datasets: int = 20,
+    dataset_field_count_sum: int = 8599,
+) -> dict:
     return {
+        "ok": True,
+        "validation_ok": True,
         "blocking_ok": blocking_count == 0,
         "blocking_count": blocking_count,
         "p1_count": p1_count,
+        "files": {
+            "official_fields.json": {"record_count": fields},
+            "official_operators.json": {"record_count": operators},
+            "official_datasets.json": {"record_count": datasets},
+        },
+        "lineage": {"dataset_field_count_sum": dataset_field_count_sum},
     }
 
 def _official_context_refresh_status(
@@ -59,12 +75,12 @@ def _live_submit_readiness_validation(
     eligible_count: int = 0,
     candidate_count: int = 1,
     job_ledgers_checked: int = 4,
-    jobs_checked: int = 11,
+    jobs_checked: int = 9,
     ledger_candidate_count: int = 2,
     ledger_eligible_count: int = 0,
-    job_family_candidate_count: int = 2,
+    job_family_candidate_count: int = 258,
     job_family_eligible_count: int = 0,
-    latest_job_id: str = "job_0011",
+    latest_job_id: str = "job_0009",
     max_similarity: float | None = None,
     submission_ready: int = 0,
 ) -> dict:
@@ -129,10 +145,7 @@ def test_review_gap_closure_tracker_accepts_current_document():
             manifest_stale=False,
         ),
         react_build_env_validation=_react_surface_validation(),
-        live_submit_readiness_validation=_live_submit_readiness_validation(
-            ledger_candidate_count=0,
-            job_family_candidate_count=36,
-        ),
+        live_submit_readiness_validation=_live_submit_readiness_validation(),
     )
 
     assert result["ok"] is True
@@ -167,17 +180,31 @@ def test_review_gap_closure_tracker_accepts_current_document():
     )
     assert "PASS" in official_context_baseline
     assert "status=refreshed" in official_context_baseline
-
+    assert "fields=8599" in official_context_baseline
+    assert "operators=67" in official_context_baseline
+    assert "datasets=20" in official_context_baseline
     assert "write_enabled=true" in official_context_baseline
     assert "manifest_stale=false" in official_context_baseline
+    official_validation_baseline = next(
+        result
+        for check, result in baseline_by_check.items()
+        if "scripts/check_official_context.py --config config/run_config.json" in check
+    )
+    assert "validation_ok=true" in official_validation_baseline
+    assert "blocking_ok=true" in official_validation_baseline
+    assert "blocking_count=0" in official_validation_baseline
+    assert "p1_count=0" in official_validation_baseline
+    assert "dataset_field_count_sum=8599" in official_validation_baseline
     assert "ready_to_submit=false" in live_submit_baseline
     assert "eligible_count=0" in live_submit_baseline
-    assert "jobs_checked=11" in live_submit_baseline
+    assert "jobs_checked=9" in live_submit_baseline
     assert "job_ledgers_checked=4" in live_submit_baseline
+    assert "ledger_candidate_count=2" in live_submit_baseline
     assert "ledger_eligible_count=0" in live_submit_baseline
-    assert "job_family_candidate_count=36" in live_submit_baseline
+    assert "job_family_candidate_count=258" in live_submit_baseline
     assert "job_family_eligible_count=0" in live_submit_baseline
-    assert "latest_job=job_0011" in live_submit_baseline
+    assert "latest_job=job_0009" in live_submit_baseline
+    assert "max_similarity=null" in live_submit_baseline
     assert "required_validation_count=29" in v5_defect_baseline
     assert "findings=[]" in v5_defect_baseline
     assert "tracker_contract_ok=true" in tracker_baseline
@@ -217,10 +244,11 @@ def test_review_gap_closure_tracker_accepts_current_document():
     assert result["react_surface"]["production_surface"] == "inline_html_js"
     assert result["live_submit"]["ready_to_submit"] is False
     assert result["live_submit"]["eligible_count"] == 0
-    assert result["live_submit"]["jobs_checked"] == 11
+    assert result["live_submit"]["jobs_checked"] == 9
     assert result["live_submit"]["job_ledgers_checked"] == 4
+    assert result["live_submit"]["ledger_candidate_count"] == 2
     assert result["live_submit"]["ledger_eligible_count"] == 0
-    assert result["live_submit"]["job_family_candidate_count"] == 36
+    assert result["live_submit"]["job_family_candidate_count"] == 258
     assert result["live_submit"]["job_family_eligible_count"] == 0
     assert result["live_submit"]["max_similarity"] is None
     assert result["summary"]["tracker_contract_ok"] is True
@@ -237,12 +265,12 @@ def test_review_gap_closure_tracker_accepts_current_document():
     assert result["summary"]["live_submit_ready"] is False
     assert result["summary"]["live_submit_eligible_count"] == 0
     assert result["summary"]["live_submit_job_ledgers_checked"] == 4
-    assert result["summary"]["live_submit_jobs_checked"] == 11
-    assert result["summary"]["live_submit_ledger_candidate_count"] == 0
+    assert result["summary"]["live_submit_jobs_checked"] == 9
+    assert result["summary"]["live_submit_ledger_candidate_count"] == 2
     assert result["summary"]["live_submit_ledger_eligible_count"] == 0
-    assert result["summary"]["live_submit_job_family_candidate_count"] == 36
+    assert result["summary"]["live_submit_job_family_candidate_count"] == 258
     assert result["summary"]["live_submit_job_family_eligible_count"] == 0
-    assert result["summary"]["live_submit_latest_job_id"] == "job_0011"
+    assert result["summary"]["live_submit_latest_job_id"] == "job_0009"
     assert result["summary"]["production_surface"] == "inline_html_js"
     assert result["summary"]["react_surface"] == "mirror"
     assert result["findings"] == []
@@ -513,24 +541,26 @@ def test_review_gap_closure_tracker_rejects_stale_self_summary_baseline(tmp_path
 def test_review_gap_closure_tracker_rejects_mismatched_live_submit_readiness(tmp_path):
     tracker = tmp_path / "tracker.md"
     text = DEFAULT_TRACKER.read_text(encoding="utf-8")
-    text = text.replace("`eligible_count=0`", "`eligible_count=1`", 1)
-    text = text.replace("`ledger_eligible_count=0`", "`ledger_eligible_count=1`", 1)
-    text = text.replace("`job_family_eligible_count=0`", "`job_family_eligible_count=1`", 1)
-    text = text.replace(
-        "`eligible_count=0`, `jobs_checked=11`, `job_ledgers_checked=4`, `ledger_eligible_count=0`",
-        "`eligible_count=1`, `jobs_checked=11`, `job_ledgers_checked=4`, `ledger_eligible_count=0`",
-        1,
+    replacements = (
+        (
+            "`eligible_count=0`, `jobs_checked=9`, `job_ledgers_checked=4`, `ledger_candidate_count=2`, `ledger_eligible_count=0`",
+            "`eligible_count=1`, `jobs_checked=9`, `job_ledgers_checked=4`, `ledger_candidate_count=2`, `ledger_eligible_count=0`",
+        ),
+        (
+            "`jobs_checked=9`, `job_ledgers_checked=4`, `ledger_candidate_count=2`, `ledger_eligible_count=0`",
+            "`jobs_checked=9`, `job_ledgers_checked=4`, `ledger_candidate_count=2`, `ledger_eligible_count=1`",
+        ),
+        (
+            "`job_family_candidate_count=258`, `job_family_eligible_count=0`",
+            "`job_family_candidate_count=258`, `job_family_eligible_count=1`",
+        ),
+        ("`eligible_count=0`", "`eligible_count=1`"),
+        ("`ledger_eligible_count=0`", "`ledger_eligible_count=1`"),
+        ("`job_family_eligible_count=0`", "`job_family_eligible_count=1`"),
     )
-    text = text.replace(
-        "`jobs_checked=11`, `job_ledgers_checked=4`, `ledger_eligible_count=0`",
-        "`jobs_checked=11`, `job_ledgers_checked=4`, `ledger_eligible_count=1`",
-        1,
-    )
-    text = text.replace(
-        "`job_family_candidate_count=2`, `job_family_eligible_count=0`",
-        "`job_family_candidate_count=2`, `job_family_eligible_count=1`",
-        1,
-    )
+    for old, new in replacements:
+        assert old in text
+        text = text.replace(old, new, 1)
     tracker.write_text(text, encoding="utf-8")
 
     result = check_review_gap_closure_tracker(
@@ -705,6 +735,25 @@ def test_review_gap_closure_tracker_rejects_stale_official_context_queue_when_fr
     assert result["summary"]["finding_count"] > 0
     assert any(finding["code"] == "stale_official_context_queue_fact" for finding in result["findings"])
 
+def test_review_gap_closure_tracker_rejects_stale_official_context_not_yet_p1_text(tmp_path):
+    tracker_text = (
+        DEFAULT_TRACKER.read_text(encoding="utf-8").rstrip()
+        + "\n2. Official context freshness is not claimable until refresh returns `p1_findings=0`.\n"
+    )
+
+    result = check_review_gap_closure_tracker(
+        _write_tracker_text(tmp_path, tracker_text),
+        official_context_validation=_official_context_validation(p1_count=0),
+        react_build_env_validation=_react_surface_validation(),
+    )
+
+    assert result["ok"] is False
+    assert any(
+        finding["code"] == "stale_official_context_queue_fact"
+        and finding["expected"] == "p1_findings="
+        for finding in result["findings"]
+    )
+
 def test_review_gap_closure_tracker_rejects_mismatched_official_context_p1_count(tmp_path):
     tracker_text = _with_official_context_queue()
     result = check_review_gap_closure_tracker(
@@ -749,6 +798,43 @@ def test_review_gap_closure_tracker_rejects_stale_official_context_refresh_basel
     assert any(
         finding["code"] == "official_context_refresh_baseline_fact"
         and finding["expected"] == "status=metadata_verified"
+        for finding in result["findings"]
+    )
+
+def test_review_gap_closure_tracker_rejects_stale_official_context_counts(tmp_path):
+    tracker_text = DEFAULT_TRACKER.read_text(encoding="utf-8").replace("fields=8599", "fields=7780", 1)
+
+    result = check_review_gap_closure_tracker(
+        _write_tracker_text(tmp_path, tracker_text),
+        official_context_validation=_official_context_validation(),
+        official_context_refresh_status_validation=_official_context_refresh_status(),
+        react_build_env_validation=_react_surface_validation(),
+    )
+
+    assert result["ok"] is False
+    assert any(
+        finding["code"] == "official_context_refresh_baseline_fact"
+        and finding["expected"] == "fields=8599"
+        for finding in result["findings"]
+    )
+
+def test_review_gap_closure_tracker_rejects_stale_dataset_field_sum(tmp_path):
+    tracker_text = DEFAULT_TRACKER.read_text(encoding="utf-8").replace(
+        "dataset_field_count_sum=8599",
+        "dataset_field_count_sum=7780",
+        1,
+    )
+
+    result = check_review_gap_closure_tracker(
+        _write_tracker_text(tmp_path, tracker_text),
+        official_context_validation=_official_context_validation(),
+        react_build_env_validation=_react_surface_validation(),
+    )
+
+    assert result["ok"] is False
+    assert any(
+        finding["code"] == "official_context_baseline_fact"
+        and finding["expected"] == "dataset_field_count_sum=8599"
         for finding in result["findings"]
     )
 

@@ -612,7 +612,8 @@ class TestCanonicalCompleteness:
 
     def test_canonical_api_paths_have_all_endpoints(self):
         required = {
-            "authentication", "simulations", "data_sets", "data_fields",
+            "authentication", "simulations", "data_categories",
+            "data_sets", "data_set_detail", "data_fields", "data_field_detail",
             "operators", "user_alphas", "user_profile", "alpha_check",
             "alpha_submit", "alpha_detail", "alpha_correlations",
         }

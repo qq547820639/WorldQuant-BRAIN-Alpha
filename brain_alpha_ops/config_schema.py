@@ -196,6 +196,10 @@ RUN_CONFIG_SCHEMA: dict[str, Any] = {
                     "properties": {
                         "base_url": {"type": "string", "format": "uri",
                                      "minLength": 1},
+                        "data_fields_dataset_query_key": {
+                            "type": "string",
+                            "enum": ["dataset", "dataset.id"],
+                        },
                         "timeout_seconds": {"type": "integer", "minimum": 1},
                         "poll_attempts": {"type": "integer", "minimum": 1},
                         "poll_interval_seconds": {"type": "number", "minimum": 0.1},

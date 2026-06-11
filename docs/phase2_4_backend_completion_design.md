@@ -41,7 +41,7 @@ def check_candidate(payload: dict) -> dict:
         return {"ok": False, "error": "candidate not found", "error_code": "VALIDATION_ERROR"}
     
     mode = str(payload.get("mode", "quick"))
-    sync_range = str(payload.get("syncRange", "3d"))
+    sync_range = str(payload.get("syncRange", "all"))
     
     run_config = run_config_from_payload(payload)
     api = api_from_run_config(run_config)
@@ -158,7 +158,7 @@ return {
 
 ```python
 def load_check_results() -> dict:
-    rows = _read_storage_jsonl("checks.jsonl", limit=1000)
+    rows = _read_storage_jsonl("checks.jsonl", limit=None)
     for row in rows:
         checked_at = row.get("checked_at", "")
         if checked_at:
@@ -167,7 +167,7 @@ def load_check_results() -> dict:
                 row["is_stale"] = (datetime.now(timezone.utc) - dt) > timedelta(hours=24)
             except (ValueError, TypeError):
                 row["is_stale"] = True
-    return {"results": rows}
+    return {"results": rows, "complete": True}
 ```
 
 ---

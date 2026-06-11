@@ -1,7 +1,7 @@
 /** Generic fetch hook with loading/error state management. */
 
 import { useState, useCallback } from "react";
-import { csrfHeaders, csrfToken } from "@/utils/csrf";
+import { csrfHeaders, csrfToken, setCsrfToken, setStreamToken } from "@/utils/csrf";
 
 const DEFAULT_REQUEST_TIMEOUT_MS = 120000;
 
@@ -33,19 +33,62 @@ export function useApi<T = unknown>() {
         : null;
       try {
         const method = String(options?.method || "GET").toUpperCase();
-        const res = await fetch(url, {
+        const request = () => fetch(url, {
           ...options,
           credentials: "same-origin",
           headers: requestHeaders(options, method),
           signal: options?.signal ?? controller?.signal,
         });
+        let res = await request();
         if (!res.ok) {
+          const json = await safeJson<R & ApiMeta>(res);
+          if (json) {
+            refreshSessionTokens(json as Record<string, unknown>);
+            if (canRecoverSession(url, method, json)) {
+              const recovered = await bootstrapSession();
+              if (recovered) {
+                res = await request();
+                if (res.ok) {
+                  const retryJson = await res.json() as R & ApiMeta;
+                  refreshSessionTokens(retryJson as Record<string, unknown>);
+                  const retryOk = retryJson.ok !== false && !(
+                    retryJson.ok === undefined &&
+                    Boolean(retryJson.error || retryJson.error_code)
+                  );
+                  const normalizedRetry = { ...retryJson, ok: retryOk } as R & ApiMeta;
+                  if (!retryOk) {
+                    setState({ data: null, loading: false, error: retryJson.error || retryJson.error_code || "Request failed" });
+                    return normalizedRetry;
+                  }
+                  const retryRaw = retryJson as Record<string, unknown>;
+                  setState({ data: (retryRaw.data !== undefined ? retryRaw.data : retryJson) as T, loading: false, error: null });
+                  return normalizedRetry;
+                }
+                const retryError = await safeJson<R & ApiMeta>(res);
+                if (retryError) {
+                  refreshSessionTokens(retryError as Record<string, unknown>);
+                  const retryMsg = retryError.error || retryError.error_code || `HTTP ${res.status}: ${res.statusText}`;
+                  const normalizedRetryError = { ...retryError, ok: false } as R & ApiMeta;
+                  setState({ data: null, loading: false, error: retryMsg });
+                  return normalizedRetryError;
+                }
+              }
+            }
+            const msg = json.error || json.error_code || `HTTP ${res.status}: ${res.statusText}`;
+            const normalized = { ...json, ok: false } as R & ApiMeta;
+            setState({ data: null, loading: false, error: msg });
+            return normalized;
+          }
           const msg = `HTTP ${res.status}: ${res.statusText}`;
           setState({ data: null, loading: false, error: msg });
           return null;
         }
         const json = await res.json() as R & ApiMeta;
-        const ok = json.ok !== false && !json.error && !json.error_code;
+        refreshSessionTokens(json as Record<string, unknown>);
+        const ok = json.ok !== false && !(
+          json.ok === undefined &&
+          Boolean(json.error || json.error_code)
+        );
         const normalized = { ...json, ok } as R & ApiMeta;
         if (!ok) {
           setState({ data: null, loading: false, error: json.error || json.error_code || "Request failed" });
@@ -78,8 +121,46 @@ export function useApi<T = unknown>() {
   return { ...state, call, reset };
 }
 
+async function safeJson<R>(res: Response): Promise<R | null> {
+  try {
+    return await res.json() as R;
+  } catch {
+    return null;
+  }
+}
+
+function refreshSessionTokens(payload: Record<string, unknown>) {
+  const csrf = typeof payload.csrf_token === "string" ? payload.csrf_token : "";
+  const stream = typeof payload.stream_token === "string" ? payload.stream_token : "";
+  if (csrf) setCsrfToken(csrf);
+  if (stream) setStreamToken(stream);
+}
+
 function isAbortError(err: unknown) {
   return err instanceof DOMException && err.name === "AbortError";
+}
+
+function canRecoverSession(url: string, method: string, payload: ApiMeta) {
+  if (method !== "POST") return false;
+  if (url === "/api/session") return false;
+  const code = String(payload.error_code || payload.error || "");
+  return code === "SESSION_INVALID" || code === "invalid local session";
+}
+
+async function bootstrapSession() {
+  try {
+    const res = await fetch("/api/session", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+    });
+    const json = await safeJson<Record<string, unknown>>(res);
+    if (!res.ok || !json || json.ok === false) return false;
+    refreshSessionTokens(json);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function requestHeaders(options: RequestInit | undefined, method: string): HeadersInit {

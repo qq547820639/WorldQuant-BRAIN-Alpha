@@ -62,7 +62,7 @@ class StallMonitor:
 
     def __init__(
         self,
-        job_store_getter: Callable[[], dict[str, Any]],
+        job_store_getter: Callable[[], Any],
         *,
         config: StallMonitorConfig | None = None,
         on_stall: Callable[[str, JobStallSnapshot], None] | None = None,
@@ -124,7 +124,7 @@ class StallMonitor:
         now = time.time()
         with self._lock:
             active_ids = set()
-            for job_id, job in (jobs.items() if isinstance(jobs, dict) else []):
+            for job_id, job in _iter_job_rows(jobs):
                 status = str(job.get("status", "")).lower()
                 if status in TERMINAL_STATUSES:
                     self._snapshots.pop(job_id, None)
@@ -189,6 +189,32 @@ class StallMonitor:
                       job_id[:12], stall_count, self.config.max_retry_count)
         if self._on_interrupt:
             self._on_interrupt(job_id)
+
+
+def _iter_job_rows(jobs: Any):
+    """Yield ``(job_id, job)`` from dict stores and web_jobs.job_list rows."""
+    if isinstance(jobs, dict):
+        for fallback_id, job in jobs.items():
+            if not isinstance(job, dict):
+                continue
+            job_id = str(job.get("job_id") or job.get("task_id") or fallback_id)
+            if job_id:
+                yield job_id, job
+        return
+
+    if not isinstance(jobs, (list, tuple)):
+        return
+
+    for item in jobs:
+        if isinstance(item, dict):
+            job_id = str(item.get("job_id") or item.get("task_id") or item.get("id") or "")
+            if job_id:
+                yield job_id, item
+            continue
+        if isinstance(item, (list, tuple)) and len(item) == 2 and isinstance(item[1], dict):
+            job_id = str(item[1].get("job_id") or item[1].get("task_id") or item[0])
+            if job_id:
+                yield job_id, item[1]
 
 
 def create_stall_monitor_for_web_server(

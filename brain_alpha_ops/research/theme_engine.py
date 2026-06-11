@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from brain_alpha_ops.research.field_quality import filter_generation_fields
+from brain_alpha_ops.research.generator_metadata import expression_windows_within_constraints
 
 if TYPE_CHECKING:
     from brain_alpha_ops.data import OfficialDataLoader, OfficialField
@@ -472,7 +473,7 @@ class DynamicThemeEngine:
             random.seed(seed)
 
         raw_fields = self._loader.get_fields(dataset_id)
-        fields = filter_generation_fields(raw_fields) or raw_fields
+        fields = filter_generation_fields(raw_fields)
         if not fields:
             return []
 
@@ -549,6 +550,8 @@ class DynamicThemeEngine:
 
             # Fill placeholders
             expression = self._fill_placeholders(skeleton, available_cats, cat_fields)
+            if not expression_windows_within_constraints(expression):
+                continue
             field_slots = self._extract_field_slots(expression, fields)
 
             tmpl = ThemeTemplate(
@@ -601,7 +604,8 @@ class DynamicThemeEngine:
         elif variant == 2:
             mutated = f"zscore({mutated})"
 
-        return _normalize_operator_aliases(mutated)
+        normalized = _normalize_operator_aliases(mutated)
+        return normalized if expression_windows_within_constraints(normalized) else expression
 
     # ------------------------------------------------------------------
     # Helpers

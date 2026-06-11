@@ -1,3 +1,4 @@
+import json
 import logging
 
 from brain_alpha_ops.agent_research_tools import collect_job_rows, collect_job_rows_with_diagnostics
@@ -110,6 +111,30 @@ def test_market_data_cache_tool_and_alert_tool(tmp_path):
     assert cache_result["symbol_count"] == 0
     assert alert_result["ok"] is True
     assert alert_result["channel"] == "local"
+
+
+def test_market_data_cache_tool_defaults_to_complete_cloud_source(tmp_path):
+    toolbox = _toolbox(tmp_path)
+    rows = [
+        {"symbol": f"SYM{index}", "timestamp": "2026-05-25T00:00:00Z", "metrics": {"close": index + 1.0}}
+        for index in range(5001)
+    ]
+    (tmp_path / "cloud_alphas.jsonl").write_text(
+        "\n".join(json.dumps(row) for row in rows) + "\n",
+        encoding="utf-8",
+    )
+
+    cache_result = toolbox.call(
+        "build_market_data_cache",
+        {
+            "source_file": "cloud_alphas.jsonl",
+            "refresh": True,
+        },
+    )
+
+    assert cache_result["ok"] is True
+    assert cache_result["record_count"] == 5001
+    assert cache_result["symbol_count"] == 5001
 
 
 def test_parameter_search_tool_returns_structured_result(tmp_path):

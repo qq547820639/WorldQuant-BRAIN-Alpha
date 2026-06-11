@@ -32,7 +32,7 @@ def test_state_cards_defer_heavy_submit_readiness_to_confirm_panel():
     assert "const submitCount = readinessApi.data?.eligible_count ?? 0;" not in source
     assert "const slotLimit = backtestSlotLimit(slotsApi.data);" in source
     assert 'official_backtests: `${activeSlots}/${slotLimit}`,' in source
-    assert "Array.from({ length: backtestSlotLimit(payload) }" in source
+    assert "backtestActiveCount(slotsApi.data)" in source
     assert 'caption: "提交审计",' in source
     assert 'eligible: "打开",' in source
 
@@ -47,10 +47,12 @@ def test_submission_confirm_panel_exposes_readiness_summary():
     assert '<ReadinessMetric label="复核候选" value={formatCount(readiness?.eligible_count)} />' in source
     assert '<ReadinessMetric label="官方仿真" value={formatCount(summary.officially_simulated)} />' in source
     assert '<ReadinessMetric label="官方接口" value={readiness?.official_api_called ? "已调用" : "未调用"} />' in source
-    assert "当前阻断: {blockers || \"无\"}" in source
-    assert "候选族阻断: {familyBlockers || \"无\"}" in source
-    assert "生产缺口: {productionGaps || \"无\"}" in source
-    assert "下一步: {nextSteps || \"无\"}" in source
+    assert 'countLabel("当前阻断", allBlockers.length)' in source
+    assert 'countLabel("候选族阻断", allFamilyBlockers.length)' in source
+    assert 'countLabel("生产缺口", allProductionGaps.length)' in source
+    assert 'countLabel("下一步", allNextSteps.length)' in source
+    assert "previewLabel" not in source
+    assert ".slice(0, 4)" not in source
 
 
 def test_submission_confirm_mobile_cards_show_full_blockers_without_truncation():

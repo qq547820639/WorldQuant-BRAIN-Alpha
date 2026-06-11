@@ -20,6 +20,7 @@ from brain_alpha_ops.research.repository import ResearchRepository
 from brain_alpha_ops.research.safety import SubmissionLedger
 from brain_alpha_ops.tasks import JobStore
 from brain_alpha_ops.web import _load_html, anti_overfit_snapshot, assistant_context_snapshot, assistant_cross_review_payload, assistant_guidance_snapshot, assistant_request_snapshot, assistant_response_guidance_payload, assistant_response_parse_payload, cloud_alpha_snapshot, config_from_payload, generate_candidates_payload, passed_candidates_from_payload, public_run_config, research_memory_snapshot, research_observability_snapshot, rolling_validation_snapshot, save_assistant_guidance_payload, sqlite_expression_lookup_payload, sqlite_index_snapshot, sqlite_record_lookup_payload
+from brain_alpha_ops.web_config import config_from_payload as web_config_from_payload_service
 from brain_alpha_ops.web_config import save_run_config_payload as save_run_config_payload_service
 from brain_alpha_ops.web_job_registry import WebJobRegistry
 from brain_alpha_ops.web_rate_limit import RateLimitPolicy, RequestRateLimiter
@@ -233,11 +234,13 @@ def test_web_react_sources_are_current_frontend_contract():
     assert "PhaseShell" in app_tsx
     assert "usePhaseState" in app_tsx
     assert "MobileTabBar" in app_tsx
-    assert "/api/candidates?limit=" in candidate_tsx
+    assert 'candidatesApi.call("/api/candidates?summary=true")' in app_tsx
+    assert 'callApi("/api/candidates")' in candidate_tsx
+    assert "/api/candidates?limit=" not in candidate_tsx
     assert "/api/check_results" in candidate_tsx
     assert "/api/generate_candidates" in candidate_tsx
     assert "sanitizeTextInput" in candidate_tsx
-    assert "/api/snapshot/cloud?limit=100" in snapshot_tsx
+    assert 'endpoint: "/api/snapshot/cloud"' in snapshot_tsx
     assert "max-w-full overflow-auto" in snapshot_tsx
 
 
@@ -276,7 +279,7 @@ def test_react_snapshot_views_cover_readonly_research_surfaces():
     snapshot_tsx = _react_source("components", "SnapshotPanel.tsx")
 
     for endpoint in (
-        "/api/snapshot/cloud?limit=100",
+        "/api/snapshot/cloud",
         "/api/lifecycle",
         "/api/research_memory?limit=5000&top_n=10",
         "/api/research_knowledge?limit=100&min_confidence=0",
@@ -314,8 +317,8 @@ def test_react_candidate_table_keeps_filter_sort_and_mobile_safe_table_contract(
 
     for contract in (
         "const MAX_FILTER_LENGTH = 200",
-        "const CANDIDATE_FETCH_LIMIT = 1000",
         "const PAGE_SIZE = 20",
+        'callApi("/api/candidates")',
         'aria-label="过滤候选"',
         "sanitizeTextInput",
         'overflow: "auto"',
@@ -330,6 +333,8 @@ def test_react_candidate_table_keeps_filter_sort_and_mobile_safe_table_contract(
     ):
         assert contract in candidate_tsx
 
+    assert "CANDIDATE_FETCH_LIMIT" not in candidate_tsx
+    assert "?limit=1000" not in candidate_tsx
     assert 'onclick="' not in candidate_tsx.lower()
     assert 'onkeydown="' not in candidate_tsx.lower()
     assert 'role="button"' not in candidate_tsx
@@ -351,10 +356,10 @@ def test_react_state_cards_keep_core_flow_visible_and_actionable():
         "填写凭证",
         "未连接",
         "系统配置",
-        "/api/candidates?limit=1000",
+        "/api/candidates",
         "/api/backtest_slots",
         "/api/config",
-        "/api/snapshot/cloud?limit=10",
+        "/api/snapshot/cloud",
         "grid w-full max-w-full grid-cols-1",
         "2xl:grid-cols-5",
         "onClick={() => onNavigate(config.id)}",
@@ -377,7 +382,7 @@ def test_react_state_cards_keep_core_flow_visible_and_actionable():
 
     assert "ConfigPanel" in app_tsx
     assert 'case "config":' in app_tsx
-    assert "<ConfigPanel notify={notify} credentials={credentials} onCredentialsChange={setCredentials} />" in app_tsx
+    assert "<ConfigPanel notify={notify} credentials={credentials} onCredentialsChange={setCredentials} onConnectionTested={handleConnectionTested} />" in app_tsx
 
 
 def test_react_quality_submit_and_backtest_panels_cover_conflict_guards():
@@ -414,7 +419,7 @@ def test_react_quality_submit_and_backtest_panels_cover_conflict_guards():
         assert contract in quality_tsx
 
     for contract in (
-        "/api/candidates?limit=1000",
+        "/api/candidates",
         "/api/check_results",
         "/api/submit_readiness",
         "提交前阻断复核",
@@ -473,7 +478,6 @@ def test_web_config_from_payload():
             "officialRetryPauseSeconds": 2,
             "syncRange": "3d",
             "requireCloudSync": True,
-            "cloudSyncMaxElapsedSeconds": 30,
             "cycles": 10,
             "useAssistantGuidance": False,
             "assistantGuidanceMinConfidence": 0.85,
@@ -499,7 +503,7 @@ def test_web_config_from_payload():
     assert config.budget.official_retry_pause_seconds == 2
     assert config.budget.cloud_sync_range == "3d"
     assert config.budget.require_cloud_sync is True
-    assert config.budget.cloud_sync_max_elapsed_seconds == 30
+    assert config.budget.cloud_sync_max_elapsed_seconds == 0.0
     assert config.budget.max_cycles == 10
     assert config.budget.use_assistant_guidance is False
     assert config.budget.assistant_guidance_min_confidence == 0.85
@@ -521,6 +525,15 @@ def test_web_config_from_payload_accepts_alpha_type_alias():
     assert config.settings.unitHandling == "NONE"
 
 
+def test_web_config_from_payload_defaults_omitted_sync_range_to_all():
+    existing = RunConfig(environment="production")
+    existing.ops.budget.cloud_sync_range = "3d"
+
+    config = web_config_from_payload_service({}, loader=lambda: existing)
+
+    assert config.budget.cloud_sync_range == "all"
+
+
 def test_web_config_from_payload_rejects_invalid_numbers():
     with pytest.raises(ValueError, match="candidates must be an integer"):
         config_from_payload({"candidates": "many"})
@@ -530,9 +543,6 @@ def test_web_config_from_payload_rejects_invalid_numbers():
 
     with pytest.raises(ValueError, match="cyclePauseSeconds must be >= 0.0"):
         config_from_payload({"cyclePauseSeconds": -1})
-
-    with pytest.raises(ValueError, match="cloudSyncMaxElapsedSeconds must be >= 0.0"):
-        config_from_payload({"cloudSyncMaxElapsedSeconds": -1})
 
 
 def test_web_config_from_payload_rejects_non_production_environment():
@@ -1608,7 +1618,7 @@ def test_submit_candidate_requires_observability_confirmation(monkeypatch, tmp_p
             return {"status": "SUBMITTED", "alpha_id": alpha_id}
 
     monkeypatch.setattr(web, "run_config_from_payload", lambda payload: config)
-    monkeypatch.setattr(web, "cloud_alpha_snapshot", lambda limit=2000: {"alphas": [], "summary": {"is_stale": False}})
+    monkeypatch.setattr(web, "cloud_alpha_snapshot", lambda limit=2000: {"alphas": [{"id": "cloud_other", "status": "UNSUBMITTED"}], "summary": {"is_stale": False}})
     monkeypatch.setattr(web, "api_from_run_config", lambda run_config: FakeApi())
     monkeypatch.setattr(web, "observability_submission_preflight", lambda storage_dir: advisory)
     monkeypatch.setattr(
@@ -1664,7 +1674,7 @@ def test_submit_candidate_requires_confirmation_when_observability_preflight_fai
             return {"status": "SUBMITTED", "alpha_id": alpha_id}
 
     monkeypatch.setattr(web, "run_config_from_payload", lambda payload: config)
-    monkeypatch.setattr(web, "cloud_alpha_snapshot", lambda limit=2000: {"alphas": [], "summary": {"is_stale": False}})
+    monkeypatch.setattr(web, "cloud_alpha_snapshot", lambda limit=2000: {"alphas": [{"id": "cloud_other", "status": "UNSUBMITTED"}], "summary": {"is_stale": False}})
     monkeypatch.setattr(web, "api_from_run_config", lambda run_config: FakeApi())
     monkeypatch.setattr(web, "observability_submission_preflight", lambda storage_dir: advisory)
     monkeypatch.setattr(

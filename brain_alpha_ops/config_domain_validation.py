@@ -316,8 +316,11 @@ def validate_official_api(errors: list[str], api: OfficialAPIConfig) -> None:
     for field_name in (
         "authentication_path",
         "simulations_path",
+        "data_categories_path",
         "data_sets_path",
+        "data_set_path_template",
         "data_fields_path",
+        "data_field_path_template",
         "operators_path",
         "alpha_path_template",
         "user_alphas_path",
@@ -336,6 +339,9 @@ def validate_official_api(errors: list[str], api: OfficialAPIConfig) -> None:
     ):
         require_float_range(errors, f"ops.official_api.{field_name}", getattr(api, field_name), min_value=0.0)
     require_str(errors, "ops.official_api.cache_dir", api.cache_dir, allow_empty=False)
+    require_str(errors, "ops.official_api.data_fields_dataset_query_key", api.data_fields_dataset_query_key, allow_empty=False)
+    if str(api.data_fields_dataset_query_key) not in {"dataset", "dataset.id"}:
+        errors.append("ops.official_api.data_fields_dataset_query_key must be 'dataset' or 'dataset.id'")
     require_bool(
         errors,
         "ops.official_api.allow_stale_context_on_rate_limit",

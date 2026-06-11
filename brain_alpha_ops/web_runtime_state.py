@@ -66,7 +66,7 @@ def lifecycle_from_job(
     job: dict[str, Any],
     *,
     read_storage_jsonl: ReadStorageJsonl,
-    limit: int = 1000,
+    limit: int | None = None,
 ) -> list[dict[str, Any]]:
     result = job.get("result") or {}
     summary = result.get("summary") or {}
@@ -91,7 +91,9 @@ def lifecycle_from_job(
         seen.add(key)
         row["status_category"] = status_category(row)
         merged.append(row)
-    return merged[-limit:]
+    if limit is None:
+        return merged
+    return merged[-max(1, int(limit or 1)):]
 
 
 def maybe_archive_lifecycle(
@@ -158,7 +160,7 @@ def load_check_results(
     read_storage_jsonl: ReadStorageJsonl,
     safe_error_message: SafeErrorMessage = str,
     log: logging.Logger = logger,
-    limit: int = 5000,
+    limit: int | None = None,
     stale_after: timedelta = timedelta(hours=24),
     now: datetime | None = None,
 ) -> dict[str, Any]:
@@ -178,7 +180,14 @@ def load_check_results(
             else:
                 record["is_stale"] = True
             items.append(record)
-        return {"items": items, "count": len(items)}
+        return {
+            "items": items,
+            "count": len(items),
+            "returned_count": len(items),
+            "total_count": len(items),
+            "total": len(items),
+            "complete": True,
+        }
     except Exception as exc:
         message = safe_error_message(exc)
         log.warning("failed to load check results: %s", message, exc_info=True)

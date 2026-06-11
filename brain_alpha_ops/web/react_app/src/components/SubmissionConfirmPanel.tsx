@@ -42,7 +42,7 @@ export default function SubmissionConfirmPanel({ notify }: Props) {
 
   const load = useCallback(async () => {
     const [candidatesResult, checksResult, readinessResult] = await Promise.all([
-      callCandidates<{ candidates?: Candidate[]; items?: Candidate[] }>("/api/candidates?limit=1000"),
+      callCandidates<{ candidates?: Candidate[]; items?: Candidate[] }>("/api/candidates"),
       callChecks<{ items?: CheckResult[] }>("/api/check_results"),
       callReadiness<SubmitReadinessResponse>("/api/submit_readiness"),
     ]);
@@ -130,20 +130,21 @@ export default function SubmissionConfirmPanel({ notify }: Props) {
 
 function ReadinessSummary({ readiness }: { readiness: SubmitReadinessResponse | null }) {
   const summary = readiness?.summary_counts || {};
-  const blockers = (readiness?.top_blocking_reasons || [])
-    .slice(0, 4)
+  const allBlockers = readiness?.top_blocking_reasons || [];
+  const allFamilyBlockers = readiness?.top_family_blocking_reasons || [];
+  const allProductionGaps = readiness?.production_gaps || [];
+  const allNextSteps = readiness?.required_next_steps || [];
+  const blockers = allBlockers
     .map((row) => `${readinessReasonLabel(row.reason)} ${row.count}`)
     .join(" · ");
-  const familyBlockers = (readiness?.top_family_blocking_reasons || [])
-    .slice(0, 4)
+  const familyBlockers = allFamilyBlockers
     .map((row) => `${readinessReasonLabel(row.reason)} ${row.count}`)
     .join(" · ");
-  const productionGaps = (readiness?.production_gaps || [])
-    .slice(0, 4)
+  const productionGaps = allProductionGaps
     .map((row) => readinessReasonLabel(row.code || row.message || ""))
     .filter(Boolean)
     .join(" · ");
-  const nextSteps = (readiness?.required_next_steps || []).slice(0, 4).join(" · ");
+  const nextSteps = allNextSteps.join(" · ");
   const best = readiness?.best_candidate || {};
   return (
     <section className="rounded-md border border-border-subtle bg-[oklch(0.115_0.007_45)] px-3 py-3">
@@ -155,10 +156,10 @@ function ReadinessSummary({ readiness }: { readiness: SubmitReadinessResponse | 
         <ReadinessMetric label="最佳 Alpha" value={best.alpha_id || "-"} mono />
       </dl>
       <div className="mt-3 space-y-1 text-xs text-text-tertiary">
-        <p className="break-words" title={blockers || "无"}>当前阻断: {blockers || "无"}</p>
-        <p className="break-words" title={familyBlockers || "无"}>候选族阻断: {familyBlockers || "无"}</p>
-        <p className="break-words" title={productionGaps || "无"}>生产缺口: {productionGaps || "无"}</p>
-        <p className="break-words" title={nextSteps || "无"}>下一步: {nextSteps || "无"}</p>
+        <p className="break-words" title={blockers || "无"}>{countLabel("当前阻断", allBlockers.length)}: {blockers || "无"}</p>
+        <p className="break-words" title={familyBlockers || "无"}>{countLabel("候选族阻断", allFamilyBlockers.length)}: {familyBlockers || "无"}</p>
+        <p className="break-words" title={productionGaps || "无"}>{countLabel("生产缺口", allProductionGaps.length)}: {productionGaps || "无"}</p>
+        <p className="break-words" title={nextSteps || "无"}>{countLabel("下一步", allNextSteps.length)}: {nextSteps || "无"}</p>
       </div>
     </section>
   );
@@ -171,6 +172,10 @@ function ReadinessMetric({ label, value, tone = "text-text-primary", mono = fals
       <dd className={`mt-0.5 truncate font-medium ${tone} ${mono ? "font-mono-value" : ""}`} title={value}>{value}</dd>
     </div>
   );
+}
+
+function countLabel(label: string, total: number) {
+  return total > 0 ? `${label}（共 ${total}）` : label;
 }
 
 function ConfirmationTable({ title, empty, rows }: { title: string; empty: string; rows: ConfirmationRow[] }) {

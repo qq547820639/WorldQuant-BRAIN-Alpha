@@ -132,7 +132,7 @@
 | `docs/BACKEND_ARCHITECTURE_V4_20260608.md` | ✅ | 模块重组 + 契约 + Phase + WS + Sync |
 | `shared/contracts.py` | ✅ | 5 Protocol 接口 |
 | `web/handlers/phase.py` | ✅ | phase_state_payload + 9 字段 |
-| `config_models.py` 修复 | ✅ | 300s 默认超时 |
+| `config_models.py` 修复 | ✅ | 无默认同步超时 |
 
 **问题**：
 - `test_python_silent_broad_exceptions_guard` 失败 → **已修复**（`except Exception` → `except (AttributeError, TypeError, ValueError)`）

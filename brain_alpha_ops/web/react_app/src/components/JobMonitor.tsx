@@ -1,6 +1,6 @@
 /** Job monitor with SSE — Terminal Precision v2.0 */
 import { useState, useEffect, useCallback, useRef } from "react";
-import { requestJobCancel, type CancelReason } from "@/api/jobCancel";
+import { cancelResultEventMessage, requestJobCancel, type CancelReason } from "@/api/jobCancel";
 import { useSSE } from "@/hooks/useSSE";
 import { useApi } from "@/hooks/useApi";
 import { buildRunPayload, hasCredentials, isTerminalStatus, shortValidationId } from "@/helpers/runPayload";
@@ -204,7 +204,7 @@ export default function JobMonitor({ notify, credentials, onNeedCredentials, job
     if (autoCancelRequests.current.has(key)) return null;
     autoCancelRequests.current.add(key);
     const result = await requestJobCancel({ jobId: id, reason, message });
-    setEvents((prev) => [...prev.slice(-50), result?.ok === false ? "自动中断请求未确认" : "已安全停止状态不明确的流程。"]);
+    setEvents((prev) => [...prev.slice(-50), cancelResultEventMessage(result)]);
     return result;
   }, [jobId, status?.job_id]);
 
@@ -240,7 +240,7 @@ export default function JobMonitor({ notify, credentials, onNeedCredentials, job
 
   const sseUrl = jobId ? `/sse?job_id=${encodeURIComponent(jobId)}` : null;
   const handleStreamExhausted = useCallback(() => {
-    const msg = "页面暂时收不到最新进度，系统已安全停止本次验证。";
+    const msg = "页面暂时收不到最新进度，本次验证状态不明确，正在请求自动中断。";
     notify("warning", msg);
     failMonitor(msg);
     void cancelAmbiguousJob("sse_exhausted", msg);
@@ -288,7 +288,7 @@ export default function JobMonitor({ notify, credentials, onNeedCredentials, job
     setPollFailures((previous) => {
       const next = previous + 1;
       if (next >= 3) {
-        const failure = `状态连续刷新失败，系统已安全停止本次验证: ${message}`;
+        const failure = `状态连续刷新失败，本次验证状态不明确，正在请求自动中断: ${message}`;
         failMonitor(failure);
         void cancelAmbiguousJob("status_failed", failure);
         notify("error", failure);

@@ -5,6 +5,8 @@ import os
 from types import SimpleNamespace
 
 from brain_alpha_ops import web_runtime_facade as facade
+from brain_alpha_ops.web_config import public_run_config_dict
+from brain_alpha_ops.web_errors import web_error_payload
 from brain_alpha_ops.web_job_registry import resolve_web_job_registry
 
 
@@ -149,6 +151,33 @@ def test_runtime_facade_connection_success_and_failure(caplog):
     assert "web connection test failed" in caplog.text
 
 
+def test_runtime_facade_connection_fails_when_profile_returns_auth_error():
+    class API:
+        def authenticate(self):
+            return {"auth": "token"}
+
+        def get_user_profile(self):
+            return {
+                "error": "Failed to fetch user profile: HTTP 403: Forbidden",
+                "status_code": 403,
+            }
+
+    web = SimpleNamespace(
+        run_config_from_payload=lambda payload: SimpleNamespace(environment="production"),
+        api_from_run_config=lambda config: API(),
+        _web_error=web_error_payload,
+    )
+
+    payload = facade.test_connection(web, {})
+
+    assert payload["ok"] is False
+    assert payload["error_code"] == "CONNECTION_FAILED"
+    assert payload["error_category"] == "auth"
+    assert payload["status_code"] == 403
+    assert payload["retryable"] is False
+    assert payload["error"] == "Authentication failed; check credentials or connection settings."
+
+
 def test_runtime_facade_job_selection_lookup_and_simple_delegates():
     web = _WebDouble()
 
@@ -231,12 +260,71 @@ def test_runtime_facade_public_config_redacts_credentials_and_serve_sets_policy(
         "username_env": "USER_ENV",
         "password_env": "PASS_ENV",
         "token_env": "TOKEN_ENV",
+        "managed_credentials_available": True,
     }
 
     url = facade.serve(web, port=8765, allow_remote=True, secure_cookies=None)
     assert url == "http://127.0.0.1:8765"
     assert web.SERVER == "server"
     assert ("require_remote_admin_token", (), {}) in web.calls
+
+
+def test_public_run_config_reports_managed_credential_presence_without_values(monkeypatch):
+    for key in ("BRAIN_USERNAME", "BRAIN_PASSWORD", "BRAIN_TOKEN", "USER_ENV", "PASS_ENV", "TOKEN_ENV"):
+        monkeypatch.delenv(key, raising=False)
+
+    empty_config = SimpleNamespace(
+        to_dict=lambda: {
+            "credentials": {
+                "username_env": "USER_ENV",
+                "password_env": "PASS_ENV",
+                "token_env": "TOKEN_ENV",
+            }
+        }
+    )
+    redacted = public_run_config_dict(empty_config)["credentials"]
+    assert redacted == {
+        "username": "",
+        "password": "",
+        "token": "",
+        "username_env": "USER_ENV",
+        "password_env": "PASS_ENV",
+        "token_env": "TOKEN_ENV",
+        "managed_credentials_available": False,
+    }
+
+    value_config = SimpleNamespace(
+        to_dict=lambda: {
+            "credentials": {
+                "username": "stored@example.com",
+                "password": "stored-password",
+                "token": "",
+            }
+        }
+    )
+    redacted = public_run_config_dict(value_config)["credentials"]
+    assert redacted["managed_credentials_available"] is True
+    assert redacted["username"] == ""
+    assert redacted["password"] == ""
+    assert redacted["token"] == ""
+
+    env_config = SimpleNamespace(
+        to_dict=lambda: {
+            "credentials": {
+                "username_env": "USER_ENV",
+                "password_env": "PASS_ENV",
+                "token_env": "TOKEN_ENV",
+            }
+        }
+    )
+    monkeypatch.setenv("USER_ENV", "env@example.com")
+    monkeypatch.setenv("PASS_ENV", "env-password")
+    assert public_run_config_dict(env_config)["credentials"]["managed_credentials_available"] is True
+
+    monkeypatch.delenv("USER_ENV", raising=False)
+    monkeypatch.delenv("PASS_ENV", raising=False)
+    monkeypatch.setenv("TOKEN_ENV", "env-token")
+    assert public_run_config_dict(env_config)["credentials"]["managed_credentials_available"] is True
 
 
 def test_runtime_facade_submit_batch_job_locking_and_progress():
@@ -276,6 +364,50 @@ def test_runtime_facade_submit_batch_job_locking_and_progress():
     assert facade.run_submit_batch_job(web, "submit", {}) == {"ok": True}
     assert web.SUBMIT_LOCK.released is True
     assert web.progress_updates[0][1]["current_alpha_id"] == "a1"
+
+
+def test_runtime_facade_generate_job_persists_candidates_into_summary():
+    web = _WebDouble()
+    saved: list[tuple[str, str, dict]] = []
+    web.safe_error_message = lambda exc: str(exc)
+    web.error_payload = lambda exc: {"error": str(exc)}
+    web.run_config_from_payload = lambda body: SimpleNamespace(ops=SimpleNamespace(storage_dir="/tmp/data"))
+    web.generate_candidates_payload = lambda body: {
+        "ok": True,
+        "candidates": [
+            {
+                "alpha_id": "alpha_web_1",
+                "expression": "rank(close)",
+                "family": "momentum",
+                "hypothesis": "web generated candidate",
+            }
+        ],
+        "summary": {},
+    }
+
+    def persist(job_id, run_config, result, candidate_type, repository_type):
+        for row in result["candidates"]:
+            saved.append((job_id, run_config.ops.storage_dir, candidate_type.from_dict(row).to_dict()))
+        return {
+            "schema_version": "candidate-persistence-v1",
+            "target": "candidates.jsonl",
+            "persisted_count": len(saved),
+            "error_count": 0,
+            "errors": [],
+        }
+
+    def run_service(job_id, payload, *, worker, **kwargs):
+        return worker(payload)
+
+    web._persist_generated_candidates = persist
+    web.run_simple_async_job_service = run_service
+
+    result = facade.run_generate_candidates_job(web, "job_generate", {"count": 1})
+
+    assert saved[0][0] == "job_generate"
+    assert saved[0][1] == "/tmp/data"
+    assert saved[0][2]["alpha_id"] == "alpha_web_1"
+    assert result["summary"]["persistence"]["persisted_count"] == 1
 
 
 def test_runtime_facade_main_smoke_serve_and_keyboard_interrupt(capsys, monkeypatch):

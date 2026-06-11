@@ -32,8 +32,13 @@ def create_sim_job_store(store: Any | None = None) -> JobStoreLike:
                 store.update(jid, **kw)
 
             def is_cancelled(self, jid: str) -> bool:
+                checker = getattr(store, "is_cancelled", None)
+                if callable(checker) and checker(jid):
+                    return True
                 row = store.get(jid) or {}
-                return str(row.get("status", "")).lower() in ("cancelled", "stopped")
+                if bool(row.get("cancel")):
+                    return True
+                return str(row.get("status", "")).lower() in ("cancelled", "canceled", "stopped")
 
         return _StoreAdapter()
 

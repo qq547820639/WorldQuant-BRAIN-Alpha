@@ -18,6 +18,7 @@ import type {
   RunConfig,
 } from "@/types";
 import ProgressFeedback from "@/components/ProgressFeedback";
+import { backtestActiveCount, backtestSlotLimit } from "@/utils/backtestSlots";
 
 interface Props {
   onNavigate: (view: CardViewId) => void;
@@ -125,18 +126,18 @@ const CARD_CONFIGS: CardConfig[] = [
 
 export default function StateCards({ onNavigate, notify }: Props) {
   // API调用
-  const candidatesApi = useApi<{ candidates?: Candidate[]; items?: Candidate[]; total?: number }>();
+  const candidatesApi = useApi<{ candidates?: Candidate[]; items?: Candidate[]; total?: number; ready_count?: number }>();
   const slotsApi = useApi<BacktestSlotsResponse>();
   const configApi = useApi<{ config?: RunConfig }>();
   const checkpointApi = useApi<CheckpointStatusSummary>();
   const cloudApi = useApi<CloudAlphaSummary & { summary?: Record<string, unknown>; total?: number }>();
 
   const loadStateSnapshots = useCallback(() => {
-    void candidatesApi.call("/api/candidates?limit=1000");
+    void candidatesApi.call("/api/candidates?summary=true");
     void slotsApi.call("/api/backtest_slots");
     void configApi.call("/api/config");
     void checkpointApi.call("/api/checkpoint_status");
-    void cloudApi.call("/api/snapshot/cloud?limit=10");
+    void cloudApi.call("/api/snapshot/cloud");
   }, [candidatesApi.call, slotsApi.call, configApi.call, checkpointApi.call, cloudApi.call]);
 
   // 加载数据
@@ -163,10 +164,9 @@ export default function StateCards({ onNavigate, notify }: Props) {
   // 计算核心指标
   const candidates = candidatesApi.data?.candidates || candidatesApi.data?.items || [];
   const metrics = useMemo(() => {
-    const slots = normalizeSlots(slotsApi.data);
     const slotLimit = backtestSlotLimit(slotsApi.data);
-    const activeSlots = slots.filter((slot) => isActiveSlot(slot.status)).length;
-    const qualityCount = candidates.filter(isSubmissionReadyCandidate).length;
+    const activeSlots = backtestActiveCount(slotsApi.data);
+    const qualityCount = candidatesApi.data?.ready_count ?? candidates.filter(isSubmissionReadyCandidate).length;
     const cloudCount = cloudTotal(cloudApi.data);
 
     return {
@@ -197,7 +197,7 @@ export default function StateCards({ onNavigate, notify }: Props) {
         label: "云端缓存",
       },
     };
-  }, [candidates, candidatesApi.data?.total, configApi.data, checkpointApi.data, cloudApi.data, slotsApi.data]);
+  }, [candidates, candidatesApi.data?.ready_count, candidatesApi.data?.total, configApi.data, checkpointApi.data, cloudApi.data, slotsApi.data]);
 
   // 加载状态
   const loading = [
@@ -367,32 +367,18 @@ export default function StateCards({ onNavigate, notify }: Props) {
 }
 
 // 辅助函数
-function normalizeSlots(payload: BacktestSlotsResponse | null) {
-  const slots = Array.isArray(payload?.slots) ? payload.slots : [];
-  return Array.from({ length: backtestSlotLimit(payload) }, (_, index) => index + 1)
-    .map((slot) => slots.find((row) => Number(row.slot) === slot) || { slot, status: "EMPTY" });
-}
-
-function backtestSlotLimit(payload: BacktestSlotsResponse | null) {
-  const fromPayload = Number(payload?.slot_limit);
-  const fromSummary = Number(payload?.queue_summary?.slot_limit);
-  const value = Number.isFinite(fromPayload) && fromPayload > 0 ? fromPayload : fromSummary;
-  return Math.max(3, Number.isFinite(value) && value > 0 ? Math.trunc(value) : 3);
-}
-
-function isActiveSlot(status: unknown) {
-  const text = String(status || "").toUpperCase();
-  return Boolean(text && !["", "EMPTY", "COMPLETED", "FAILED", "ERROR", "CAPACITY_WAIT"].includes(text));
-}
-
 function isSubmissionReadyCandidate(candidate: Candidate) {
   const status = String(candidate.lifecycle_status || "").toLowerCase();
-  return status === "submission_ready" || Boolean((candidate.gate as { submission_ready?: unknown } | undefined)?.submission_ready);
+  return (
+    status === "submission_ready" ||
+    candidate.quality_diagnosis?.submission_ready === true ||
+    (candidate.gate as { submission_ready?: unknown } | undefined)?.submission_ready === true
+  );
 }
 
 function cloudTotal(payload: (CloudAlphaSummary & { summary?: Record<string, unknown>; total?: number }) | null) {
   const summary = payload?.summary || {};
-  const value = payload?.count ?? payload?.total ?? summary.total_count ?? summary.returned_count;
+  const value = payload?.count ?? payload?.total ?? summary.count ?? summary.total ?? summary.total_count;
   return value == null ? "-" : String(value);
 }
 

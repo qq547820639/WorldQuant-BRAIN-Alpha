@@ -269,7 +269,7 @@ function mockApiPayload(rawUrl, method) {
       improvement_hints: ["keep official metrics current"],
     });
   }
-  if (method === "POST" && pathname === "/api/production-validation/stop") {
+  if (method === "POST" && pathname === "/api/cancel") {
     return ok({ ok: true, status: "stopping" });
   }
   if (method === "POST" && (pathname === "/api/submit" || pathname === "/api/submit_batch")) {
@@ -770,7 +770,7 @@ function validateInteractions(interactions, session) {
   for (const endpoint of ["/api/candidates", "/api/backtest_slots", "/api/submit_readiness", "/api/checkpoint_status", "/api/config", "/api/config_schema", "/api/snapshot/cloud", "/api/check_results", "/api/sync_status"]) {
     if (!requested("GET", endpoint)) failures.push(`expected mocked GET ${endpoint}`);
   }
-  for (const endpoint of ["/api/test_connection", "/api/config", "/api/sync_alphas", "/api/sync_cancel", "/api/generate_candidates", "/api/scoring/evaluate", "/api/scoring/attribution", "/api/production-validation/stop"]) {
+  for (const endpoint of ["/api/test_connection", "/api/config", "/api/sync_alphas", "/api/sync_cancel", "/api/generate_candidates", "/api/scoring/evaluate", "/api/scoring/attribution", "/api/cancel"]) {
     if (!requested("POST", endpoint)) failures.push(`expected mocked POST ${endpoint}`);
   }
   for (const endpoint of ["/api/submit", "/api/submit_batch"]) {

@@ -1,3 +1,5 @@
+import json
+
 from brain_alpha_ops.config import RunConfig
 from brain_alpha_ops.web_check_batch_job import run_check_batch_job_service
 
@@ -73,6 +75,46 @@ def test_run_check_batch_job_service_updates_counts_and_persists(tmp_path):
     assert summary["blocked"] == 1
     assert [row["alpha_id"] for row in records] == ["a1", "a2", "a3"]
     assert records[0]["job_id"] == "source_1"
+
+
+def test_run_check_batch_job_service_writes_cloud_evidence_to_candidate_ledger(tmp_path):
+    run_config = RunConfig(environment="production")
+    run_config.ops.storage_dir = str(tmp_path)
+    store = Store()
+    candidates = [{"alpha_id": "a1", "expression": "rank(close)"}]
+    (tmp_path / "candidates.jsonl").write_text(json.dumps(candidates[0]) + "\n", encoding="utf-8")
+
+    run_check_batch_job_service(
+        "check_1",
+        {"job_id": "source_1"},
+        store=store,
+        passed_candidates_from_payload=lambda payload: candidates,
+        run_config_from_payload=lambda payload: run_config,
+        api_from_run_config=lambda config: Api(),
+        repository_factory=lambda storage_dir: Repo(storage_dir, []),
+        ledger_factory=Ledger,
+        refresh_cloud_context_for_check=lambda *args, **kwargs: ([{"id": "cloud_1"}], ""),
+        payload_truthy=bool,
+        check_candidate_availability=lambda candidate, *_args, **_kwargs: {
+            "ok": True,
+            "alpha_id": candidate["alpha_id"],
+            "status": "BLOCKED",
+            "passed": False,
+            "submittable": False,
+            "checked_at": "2026-06-10T00:00:00+00:00",
+            "cloud_correlation_risk": {"level": "high", "max_similarity": 0.96},
+            "cloud_status": {"id": "cloud_1", "status": "ACTIVE"},
+        },
+        observability_submission_preflight=lambda storage_dir: {"requires_confirmation": False},
+        safe_error_message=str,
+        error_payload=lambda exc, **kwargs: {"error": str(exc), **kwargs},
+    )
+
+    rows = [json.loads(line) for line in (tmp_path / "candidates.jsonl").read_text(encoding="utf-8").splitlines()]
+    assert store.updates[-1]["status"] == "completed"
+    assert rows[0]["cloud_correlation_risk"] == {"level": "high", "max_similarity": 0.96}
+    assert rows[0]["cloud_status"]["status"] == "ACTIVE"
+    assert rows[0]["last_check_status"] == "BLOCKED"
 
 
 def test_run_check_batch_job_service_marks_failed_on_exception(tmp_path):

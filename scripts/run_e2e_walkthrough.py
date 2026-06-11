@@ -137,7 +137,7 @@ def main():
         print("\n[4] Cloud Sync")
         r = safe_post(f"{BASE}/api/sync_alphas", headers, cookies, {
             "environment":"production", **credential_payload(),
-            "baseUrl":"https://api.worldquantbrain.com","syncRange":"3d",
+            "baseUrl":"https://api.worldquantbrain.com","syncRange":"all",
             "settings":{"region":"USA","universe":"TOP3000"}})
         d = r.json()
         jid = d.get("job_id","")

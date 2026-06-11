@@ -79,7 +79,10 @@ def create_handler_class(
                 origin = f"http://{host}" if "://" not in host else f"https://{host}"
             self.send_header("Access-Control-Allow-Origin", origin)
             self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-            self.send_header("Access-Control-Allow-Headers", "Content-Type, X-Brain-Alpha-CSRF")
+            self.send_header(
+                "Access-Control-Allow-Headers",
+                "Content-Type, X-Brain-Alpha-CSRF, X-Brain-Alpha-Request-ID, X-Brain-Alpha-Request-Timestamp",
+            )
             self.send_header("Access-Control-Allow-Credentials", "true")
             self._send_security_headers()
             self.end_headers()

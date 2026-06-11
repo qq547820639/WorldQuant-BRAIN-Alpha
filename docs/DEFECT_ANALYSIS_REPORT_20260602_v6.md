@@ -48,7 +48,7 @@
 
 | ID | 当前状态 | 当前证据 | 下一步 |
 |----|----------|----------|--------|
-| V5-001 | TRACKED_DEFERRED | `list_user_alphas()` 保留完整分页；`MAX_USER_ALPHAS_PAGES=None` 是用户确认的完整同步策略，当前依赖重复页签名、空页/短页、offset recovery、无新增唯一 alpha 页面的 `no_new_unique_items` progress warning，并记录 `new_unique_items` / `duplicate_unique_items` / `unique_items` / `stalled_unique_pages` 等可审计停滞信号；进度回调返回 `False` 的调用方取消保护仍是显式 opt-in；`web_sync_job` 和 `PipelineContextSyncMixin` 已把用户取消/stop_callback 接入该返回值，停止后不合并 partial rows；新增默认禁用的 `cloud_sync_max_elapsed_seconds=0.0`，仅显式配置正数时按耗时停止。 | 不添加硬分页上限；保留默认完整同步。 |
+| V5-001 | TRACKED_DEFERRED | `list_user_alphas()` 保留完整分页；`MAX_USER_ALPHAS_PAGES=None` 是用户确认的完整同步策略，当前依赖重复页签名、空页/短页、offset recovery、无新增唯一 alpha 页面的 `no_new_unique_items` progress warning，并记录 `new_unique_items` / `duplicate_unique_items` / `unique_items` / `stalled_unique_pages` 等可审计停滞信号；进度回调返回 `False` 的调用方取消保护仍是显式 opt-in；`web_sync_job` 和 `PipelineContextSyncMixin` 只把用户取消/stop_callback 接入该返回值，停止后不合并 partial rows；`cloud_sync_max_elapsed_seconds=0.0` 仅保留为兼容字段，不再作为 Web sync / pipeline 停止条件。 | 保留完整同步，不做固定截断。 |
 | V5-002 | CLOSED_CURRENT | `scripts/check_frontend_innerhtml.py` 已纳入质量门，当前 setRawHtml 调用均通过白名单审计。 | 保持质量门。 |
 | V5-003 | CLOSED_CURRENT | `run_config_dict_for_disk()` 会在写盘前清空 `username/password/token`。 | 保持配置写盘回归。 |
 | V5-004 | CLOSED_CURRENT | 远程模式强制安全 cookie，并设置 HttpOnly / SameSite=Strict。 | 保持 `tests/test_web_security.py` 覆盖。 |
@@ -64,7 +64,7 @@
 
 | ID | v5状态 | v6状态 | 实际证据 |
 |----|--------|--------|---------|
-| **V5-001** | TRACKED_DEFERRED | **TRACKED_DEFERRED** | `MAX_USER_ALPHAS_PAGES=None` 是刻意保留完整云端同步；本轮不添加硬分页截断，继续依赖重复页签名、空页/短页、offset recovery、`no_new_unique_items` progress warning、`stalled_unique_pages` 停滞观测、helper 级进度回调取消、Web sync / pipeline 调用点取消接线，以及默认禁用的耗时预算等非截断保护 |
+| **V5-001** | TRACKED_DEFERRED | **TRACKED_DEFERRED** | `MAX_USER_ALPHAS_PAGES=None` 是刻意保留完整云端同步；本轮不添加固定分页截断，继续依赖重复页签名、空页/短页、offset recovery、`no_new_unique_items` progress warning、`stalled_unique_pages` 停滞观测、helper 级进度回调取消、Web sync / pipeline 调用点取消接线等非截断保护 |
 | **V5-002** | CLOSED_CURRENT | **FIXED** | `check_frontend_innerhtml.py` 审计已入质量门，25个setRawHtml调用已白名单化 |
 | **V5-003** | CLOSED_CURRENT | **FIXED** | `write_run_config` 调用 `run_config_dict_for_disk()` 清空凭据 |
 | **V5-004** | CLOSED_CURRENT | **FIXED** | `web_security.py` `secure_cookies` 远程模式强制启用 + HttpOnly + SameSite=Strict |
@@ -184,12 +184,12 @@ items, total = _paginate_collection(
 5. 本轮新增调用方取消保护：`progress_callback` 显式返回 `False` 时，当前页计入结果后停止分页；默认回调返回 `None` 时仍保持完整分页。
 6. `web_sync_job.run_sync_job_service()` 已在扫描进度更新后检查 job 取消状态，取消时向分页 helper 返回 `False` 并走 `stopped` 结果。
 7. `PipelineContextSyncMixin._sync_cloud_alphas()` 已把 `stop_callback` 接入分页回调，停止后不合并 partial rows。
-8. `ResearchBudget.cloud_sync_max_elapsed_seconds` 默认为 `0.0`（禁用）；只有配置或 Web payload 显式提供正数时，Web sync / pipeline 才会按耗时停止并避免合并 partial rows。
-9. 后续如仍要加强保护，应优先增加可配置观测告警，而不是默认硬分页上限。
+8. `ResearchBudget.cloud_sync_max_elapsed_seconds` 默认为 `0.0`（兼容字段）；Web sync / pipeline 不会用耗时数值截断，云端 Alpha 同步保持完整分页。
+9. 后续如仍要加强保护，应优先增加可配置观测告警，而不是默认固定分页截断。
 
 **本轮决策**:
 ```python
-# 不添加 500 页硬上限；保持 MAX_USER_ALPHAS_PAGES=None。
+# 不添加固定页数截断；保持 MAX_USER_ALPHAS_PAGES=None。
 # 本轮增加无新增唯一 alpha 页面的 warning-only 观测，以及调用方显式取消路径。
 ```
 
@@ -513,7 +513,7 @@ def prepare_run_config_for_runtime(config: RunConfig) -> RunConfig:
 
 | 顺序 | ID | 任务 | 预计 |
 |------|-----|------|------|
-| 1 | V5-001 | 保留完整分页，不添加硬上限；已增加无新增唯一 alpha warning-only 观测，后续仅考虑耗时/取消类保护 | 跟踪保留 |
+| 1 | V5-001 | 保留完整分页，不添加固定截断；已增加无新增唯一 alpha warning-only 观测，后续仅考虑停滞观测/取消类保护 | 跟踪保留 |
 | 2 | V5-009a | 高影响静默异常改为错误传播/结构化警告（dataset解析、redline校验、同步dataset fallback、评分历史写入） | 已完成 |
 | 3 | V5-009b | 中低影响静默异常增强日志 + 监控集成（agent job row、类型提示 fallback、SQLite索引、外部行情诊断已完成） | 已完成 |
 | 4 | V6-NEW-003 | `_score_history` 内存泄漏修复 + 上限保护 | 已完成 |
@@ -561,7 +561,7 @@ def prepare_run_config_for_runtime(config: RunConfig) -> RunConfig:
 
 | 缺陷 | 当前验证证据 |
 |------|--------------|
-| V5-001 | `tests/test_official_adapter.py::test_list_user_alphas_warns_on_page_with_no_new_unique_items_without_stopping` (`new_unique_items` / `duplicate_unique_items` / `unique_items` / `stalled_unique_pages`); `tests/test_official_adapter.py::test_list_user_alphas_can_be_cancelled_by_progress_callback_without_page_cap`; `tests/test_web_sync_job.py::test_run_sync_job_service_returns_false_to_cancel_alpha_scan`; `tests/test_web_sync_job.py::test_run_sync_job_service_stops_alpha_scan_on_elapsed_limit`; `tests/test_pipeline.py::test_pipeline_cloud_sync_cancel_does_not_merge_partial_rows`; `tests/test_pipeline.py::test_pipeline_cloud_sync_elapsed_limit_does_not_merge_partial_rows` |
+| V5-001 | `tests/test_official_adapter.py::test_list_user_alphas_warns_on_page_with_no_new_unique_items_without_stopping` (`new_unique_items` / `duplicate_unique_items` / `unique_items` / `stalled_unique_pages`); `tests/test_official_adapter.py::test_list_user_alphas_can_be_cancelled_by_progress_callback_without_page_cap`; `tests/test_web_sync_job.py::test_run_sync_job_service_returns_false_to_cancel_alpha_scan`; `tests/test_web_sync_job.py::test_run_sync_job_service_ignores_elapsed_limit_and_scans_all_pages`; `tests/test_pipeline.py::test_pipeline_cloud_sync_cancel_does_not_merge_partial_rows`; `tests/test_pipeline.py::test_pipeline_cloud_sync_ignores_elapsed_limit_and_merges_all_rows` |
 | V5-012 | `tests/test_dynamic_research_components.py::test_template_registry_field_type_matching_is_dataset_specific` |
 | V5-013 | `tests/test_official_adapter.py::test_official_api_uses_composed_api_components` |
 | V5-014/V5-015 | `tests/test_official_adapter.py::test_list_fields_stops_at_max_pages_limit`; `tests/test_official_adapter.py::test_list_user_alphas_has_no_default_page_limit` |

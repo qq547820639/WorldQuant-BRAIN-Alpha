@@ -47,6 +47,8 @@ from brain_alpha_ops.web_check_availability import (
 from brain_alpha_ops.web_check_batch_job import run_check_batch_job_service as _run_check_batch_job_service
 from brain_alpha_ops.web_cloud_snapshot import (
     cloud_alpha_snapshot as _cloud_alpha_snapshot_service,
+    persist_official_context as _persist_official_context_service,
+    storage_jsonl_path as _storage_jsonl_path_service,
     read_storage_jsonl as _read_storage_jsonl_service,
     read_storage_jsonl_stats as _read_storage_jsonl_stats_service,
     read_official_context_json as _read_official_context_json_service,
@@ -100,12 +102,16 @@ from brain_alpha_ops.web_routes import route_for as _route_for
 from brain_alpha_ops.web_async_jobs import progress_update as _progress_update, run_simple_async_job_service as _run_simple_async_job_service
 from brain_alpha_ops.web_run_job import run_guided_job_service as _run_guided_job_service, run_job_service as _run_job_service
 from brain_alpha_ops.web_session import (
+    clear_brain_connection_verified as _clear_brain_connection_verified_service,
     create_session as _create_session_service,
     csrf_for_session as _csrf_for_session_service,
     expired_session_cookie_header as _expired_session_cookie_header_service,
     expire_session as _expire_session_service,
     header_hostname as _header_hostname_service,
     header_port as _header_port_service,
+    mark_brain_connection_verified as _mark_brain_connection_verified_service,
+    payload_with_brain_session_credentials as _payload_with_brain_session_credentials_service,
+    session_status as _session_status_service,
 )
 import brain_alpha_ops.web_session as _web_session
 from brain_alpha_ops.web_session import (
@@ -237,6 +243,8 @@ def build_web_service_namespace():
         "_cloud_status_for": _cloud_status_for,
         "_run_check_batch_job_service": _run_check_batch_job_service,
         "_cloud_alpha_snapshot_service": _cloud_alpha_snapshot_service,
+        "_persist_official_context_service": _persist_official_context_service,
+        "_storage_jsonl_path_service": _storage_jsonl_path_service,
         "_read_storage_jsonl_service": _read_storage_jsonl_service,
         "_read_storage_jsonl_stats_service": _read_storage_jsonl_stats_service,
         "_read_official_context_json_service": _read_official_context_json_service,
@@ -279,11 +287,15 @@ def build_web_service_namespace():
         "_run_job_service": _run_job_service,
         "_create_session_service": _create_session_service,
         "_web_session": _web_session,
+        "_clear_brain_connection_verified_service": _clear_brain_connection_verified_service,
         "_csrf_for_session_service": _csrf_for_session_service,
         "_expired_session_cookie_header_service": _expired_session_cookie_header_service,
         "_expire_session_service": _expire_session_service,
         "_header_hostname_service": _header_hostname_service,
         "_header_port_service": _header_port_service,
+        "_mark_brain_connection_verified_service": _mark_brain_connection_verified_service,
+        "_payload_with_brain_session_credentials_service": _payload_with_brain_session_credentials_service,
+        "_session_status_service": _session_status_service,
         "_get_or_create_session_service": _get_or_create_session_service,
         "_has_valid_admin_token_service": _has_valid_admin_token_service,
         "_normalize_host_service": _normalize_host_service,

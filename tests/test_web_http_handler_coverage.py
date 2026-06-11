@@ -95,6 +95,21 @@ def test_handler_dispatch_methods_and_session_delegates():
     assert any(item == ("header", "Content-Security-Policy", "default-src 'self'") for item in calls)
 
 
+def test_options_preflight_allows_replay_headers():
+    handler, calls, _session = _handler()
+
+    handler.do_OPTIONS()
+
+    allow_headers = [
+        item[2] for item in calls
+        if len(item) == 3 and item[0] == "header" and item[1] == "Access-Control-Allow-Headers"
+    ]
+    assert allow_headers
+    assert "X-Brain-Alpha-CSRF" in allow_headers[0]
+    assert "X-Brain-Alpha-Request-ID" in allow_headers[0]
+    assert "X-Brain-Alpha-Request-Timestamp" in allow_headers[0]
+
+
 def test_handler_read_json_size_and_decode_boundaries():
     handler, _calls, _session = _handler()
     handler.headers = {"Content-Length": "0"}

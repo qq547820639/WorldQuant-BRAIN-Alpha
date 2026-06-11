@@ -15,6 +15,7 @@ import random
 import re
 from dataclasses import dataclass, field
 
+from brain_alpha_ops.research.generator_metadata import expression_windows_within_constraints
 from brain_alpha_ops.research.evolution_helpers import (
     _BINARY_OPERATORS,
     _COMMON_FIELDS,
@@ -192,6 +193,7 @@ class MutationEngine:
                     mutated != expression
                     and _is_valid_expression(mutated)
                     and _expression_operators_are_official(mutated, self._official_operators)
+                    and expression_windows_within_constraints(mutated)
                 ):
                     break
                 mutated = expression

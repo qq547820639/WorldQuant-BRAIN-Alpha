@@ -8,12 +8,13 @@ import json
 import logging
 from pathlib import Path
 import time
-from typing import Any, Callable
+from typing import Any, Callable, Iterable
 
+from brain_alpha_ops.brain_api.user_alpha_sync import list_user_alphas_for_sync
 from brain_alpha_ops.brain_api.official_helpers import looks_non_production_alpha_id
 from brain_alpha_ops.config import load_run_config, runtime_project_root
 from brain_alpha_ops.data.cache_metadata import read_context_cache_metadata, write_context_cache_metadata
-from brain_alpha_ops.jsonl import read_jsonl_records, read_jsonl_tail, read_jsonl_tail_with_stats
+from brain_alpha_ops.jsonl import iter_jsonl_records, read_jsonl_records, read_jsonl_tail, read_jsonl_tail_with_stats
 from brain_alpha_ops.redaction import redact_error_message, redact_text
 
 
@@ -23,9 +24,7 @@ logger = logging.getLogger(__name__)
 from brain_alpha_ops.runtime_constants import CloudDefaults
 
 CLOUD_SYNC_STALE_SECONDS = CloudDefaults.CLOUD_SYNC_STALE_SECONDS
-MAX_CACHED_USER_ALPHA_FILES = CloudDefaults.MAX_CACHED_USER_ALPHA_FILES
 CONTEXT_CACHE_MANIFEST_SCHEMA = CloudDefaults.CONTEXT_CACHE_MANIFEST_SCHEMA
-FULL_CLOUD_ALPHA_MAX_ROWS = 100_000
 OFFICIAL_CONTEXT_FILES = (
     ("fields_count", "official_fields.json"),
     ("operators_count", "official_operators.json"),
@@ -67,7 +66,7 @@ def cloud_alpha_snapshot(
     stale_seconds: int = CLOUD_SYNC_STALE_SECONDS,
 ) -> dict[str, Any]:
     cache_path: Path | None = storage_jsonl_path("cloud_alphas.jsonl", load_config=load_config)
-    all_rows = dedupe_cloud_alpha_rows(read_storage_jsonl("cloud_alphas.jsonl", limit=None, load_config=load_config))
+    all_rows = dedupe_cloud_alpha_rows(iter_jsonl_records(cache_path))
     rows = _bounded_rows(all_rows, limit)
     source = "storage"
     if not all_rows:
@@ -97,7 +96,7 @@ def _bounded_rows(rows: list[dict[str, Any]], limit: int | None) -> list[dict[st
     return rows[: max(1, int(limit or 1))]
 
 
-def dedupe_cloud_alpha_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def dedupe_cloud_alpha_rows(rows: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
     latest: dict[str, dict[str, Any]] = {}
     no_id: list[dict[str, Any]] = []
     for row in rows:
@@ -119,7 +118,7 @@ def latest_cached_user_alphas(
     limit: int | None = None,
     *,
     load_config: LoadConfig = load_run_config,
-    max_files: int = MAX_CACHED_USER_ALPHA_FILES,
+    max_files: int | None = None,
 ) -> list[dict[str, Any]]:
     for path in cached_user_alpha_paths(load_config=load_config, max_files=max_files):
         try:
@@ -136,7 +135,7 @@ def latest_cached_user_alphas(
 def latest_cached_user_alpha_path(
     *,
     load_config: LoadConfig = load_run_config,
-    max_files: int = MAX_CACHED_USER_ALPHA_FILES,
+    max_files: int | None = None,
 ) -> Path | None:
     for path in cached_user_alpha_paths(load_config=load_config, max_files=max_files):
         try:
@@ -152,7 +151,7 @@ def latest_cached_user_alpha_path(
 def cached_user_alpha_paths(
     *,
     load_config: LoadConfig = load_run_config,
-    max_files: int = MAX_CACHED_USER_ALPHA_FILES,
+    max_files: int | None = None,
 ) -> list[Path]:
     config = load_config()
     cache_dir = Path(config.ops.official_api.cache_dir)
@@ -165,8 +164,10 @@ def cached_user_alpha_paths(
                 candidates.append((path.stat().st_mtime, path))
             except OSError:
                 continue
-        safe_max_files = max(1, int(max_files or MAX_CACHED_USER_ALPHA_FILES))
-        return [path for _mtime, path in sorted(candidates, reverse=True)[:safe_max_files]]
+        ordered = [path for _mtime, path in sorted(candidates, reverse=True)]
+        if max_files is None:
+            return ordered
+        return ordered[: max(1, int(max_files or 1))]
     except OSError:
         logger.warning("failed to list cached user alpha files from %s", redact_text(cache_dir, max_length=180))
         return []
@@ -553,6 +554,23 @@ PersistOfficialContext = Callable[[list[dict[str, Any]], list[dict[str, Any]], l
 SafeErrorMessage = Callable[[Exception], str]
 
 
+def _cloud_refresh_progress_message(progress: dict[str, Any]) -> str:
+    scanned = int(progress.get("scanned", 0) or 0)
+    reference = int(
+        progress.get("api_reported_total")
+        or progress.get("filter_window_count")
+        or 0
+    )
+    page = int(progress.get("pages_fetched") or progress.get("page_number") or 0)
+    reference_text = (
+        f"接口分页参考数 {reference} 条，不是云端 Alpha 总量"
+        if reference > 0
+        else "接口分页参考数仍在确认"
+    )
+    page_text = f"；当前第 {page} 页" if page else ""
+    return f"云端 Alpha 分页拉取中：已拉取 {scanned} 条；{reference_text}{page_text}。"
+
+
 def refresh_cloud_context_for_check_service(
     api: Any,
     repo: ResearchRepository,
@@ -592,7 +610,7 @@ def refresh_cloud_context_for_check_service(
                 "blocked": 0,
                 "failed": 0,
                 "cloud_scanned": len(rows),
-                "cloud_total": len(rows),
+                "cloud_saved_count": len(rows),
                 **counts,
                 "message": f"Using local cloud cache for checks: {len(rows)} rows.",
                 "items": [],
@@ -603,7 +621,8 @@ def refresh_cloud_context_for_check_service(
         return rows, ""
 
     try:
-        rows = api.list_user_alphas(
+        rows = list_user_alphas_for_sync(
+            api,
             sync_range,
             progress_callback=lambda progress: store.update(
                 job_id,
@@ -619,8 +638,18 @@ def refresh_cloud_context_for_check_service(
                     "blocked": 0,
                     "failed": 0,
                     "cloud_scanned": int(progress.get("scanned", 0) or 0),
-                    "cloud_total": int(progress.get("total", 0) or 0),
-                    "message": f"Refreshing cloud alphas: scanned {progress.get('scanned', 0)} / {progress.get('total') or 'unknown'}.",
+                    "cloud_api_reported_total": int(progress.get("api_reported_total", 0) or 0),
+                    "cloud_filter_window_count": int(
+                        progress.get("filter_window_count")
+                        or progress.get("api_reported_total")
+                        or 0
+                    ),
+                    "cloud_page_size": int(progress.get("page_size", 0) or 0),
+                    "cloud_page_limit": int(progress.get("page_limit", 0) or 0),
+                    "cloud_pages_fetched": int(progress.get("pages_fetched") or progress.get("page_number") or 0),
+                    "cloud_expected_pages": int(progress.get("expected_pages", 0) or 0),
+                    "cloud_next_offset": int(progress.get("next_offset", 0) or 0),
+                    "message": _cloud_refresh_progress_message(progress),
                     "items": [],
                 },
             ),
@@ -750,5 +779,28 @@ def refresh_cloud_context_for_check_service(
         context_errors.append(f"persist context failed: {message}")
 
     repo.merge_cloud_alphas(rows, sync_range=sync_range)
+    store.update(
+        job_id,
+        status="running",
+        progress={
+            "phase": "cloud_sync",
+            "status_code": "CHECK_CONTEXT_WARNING" if context_warnings else "CHECK_CLOUD_SYNC_SAVED",
+            "mode": mode,
+            "range": sync_range,
+            "total": total,
+            "checked": 0,
+            "submittable": 0,
+            "blocked": 0,
+            "failed": 0,
+            "cloud_saved_count": len(rows),
+            "context_warnings": context_warnings,
+            "message": (
+                f"{'; '.join(context_warnings)}；本地已保存 {len(rows)} 条云端 Alpha，继续执行提交前复核。"
+                if context_warnings
+                else f"本地已保存 {len(rows)} 条云端 Alpha，继续执行提交前复核。"
+            ),
+            "items": [],
+        },
+    )
     error_msg = "; ".join(context_errors)[:500] if context_errors else ""
     return rows, error_msg

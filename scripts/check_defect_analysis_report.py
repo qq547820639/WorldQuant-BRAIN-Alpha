@@ -36,15 +36,15 @@ REQUIRED_REPORT_BOUNDARIES = {
         "P0-3": {
             "status": "TRACKED_DEFERRED",
             "evidence": "no_new_unique_items",
-            "next_action": "不添加硬分页上限",
+            "next_action": "不添加固定分页截断",
             "report_text": (
                 "stalled_unique_pages",
                 "duplicate_unique_items",
                 "tests/test_official_adapter.py::test_list_user_alphas_can_be_cancelled_by_progress_callback_without_page_cap",
                 "tests/test_web_sync_job.py::test_run_sync_job_service_returns_false_to_cancel_alpha_scan",
-                "tests/test_web_sync_job.py::test_run_sync_job_service_stops_alpha_scan_on_elapsed_limit",
+                "tests/test_web_sync_job.py::test_run_sync_job_service_ignores_elapsed_limit_and_scans_all_pages",
                 "tests/test_pipeline.py::test_pipeline_cloud_sync_cancel_does_not_merge_partial_rows",
-                "tests/test_pipeline.py::test_pipeline_cloud_sync_elapsed_limit_does_not_merge_partial_rows",
+                "tests/test_pipeline.py::test_pipeline_cloud_sync_ignores_elapsed_limit_and_merges_all_rows",
             ),
         },
         "P2-6": {

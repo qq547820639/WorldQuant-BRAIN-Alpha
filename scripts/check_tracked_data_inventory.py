@@ -28,6 +28,7 @@ RUNTIME_GENERATED_PREFIXES = (
     "data/run_history/",
 )
 SNAPSHOT_PREFIXES = ("data/official_",)
+QUALIFICATION_SNAPSHOT_PATHS = {"data/qualified_alpha_summary.json"}
 REVIEW_ARTIFACT_PREFIXES = ("data/prd_", "data/qa_", "data/audit/")
 REFERENCE_EXCLUDED_PREFIXES = ("data/", "tests/")
 REFERENCE_EXCLUDED_PATHS = {
@@ -166,6 +167,8 @@ def _classify(path: str) -> str:
         return "runtime_generated"
     if normalized.startswith(SNAPSHOT_PREFIXES):
         return "official_snapshot"
+    if normalized in QUALIFICATION_SNAPSHOT_PATHS:
+        return "qualification_snapshot"
     if normalized.startswith(REVIEW_ARTIFACT_PREFIXES):
         return "review_artifact"
     return "unclassified"

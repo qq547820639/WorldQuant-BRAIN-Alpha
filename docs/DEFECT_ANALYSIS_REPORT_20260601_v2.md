@@ -53,17 +53,17 @@ v1 报告（2026-06-01）识别的 **16 项缺陷**已全部标记为 CLOSED_CUR
 
 ---
 
-### 🟡 NEW-002: `list_user_alphas()` 分页无最大页数限制
+### 🟡 NEW-002: `list_user_alphas()` 完整分页边界需非截断保护
 
 | 字段 | 值 |
 |------|-----|
 | **严重性** | **P1 严重** |
 | **位置** | `brain_alpha_ops/brain_api/official.py:476` |
-| **类型** | 可靠性 — 无限循环 |
-| **原因** | `list_fields()`（200 页上限）、`list_datasets()`（20 页上限）、`list_operators()`（20 页上限）均使用 `for _page in range(1, _MAX_*_PAGES + 1)` 有界循环。但 `list_user_alphas()` 使用 `while True`，**无硬上限**。虽有 `seen_page_signatures` 去重保护，但若 API 持续返回非重复且满页数据（50 条/页），可能无限循环，占用 CPU/内存/缓存。 |
+| **类型** | 可靠性 — 完整分页保护 |
+| **原因** | `list_fields()`、`list_datasets()`、`list_operators()` 是官方上下文缓存读取；`list_user_alphas()` 是用户云端 Alpha 清单，必须完整分页，不能用固定页数、固定条数或耗时阈值截断。风险应通过 `seen_page_signatures`、无新增唯一项观测、显式取消和真实 API/认证错误处理控制。 |
 | **影响** | 生产环境进程僵死、缓存膨胀、磁盘占满、API 调用费用失控 |
-| **修复方案** | 添加 `_MAX_USER_ALPHAS_PAGES = 500` 或类似上限，并在超限时记录 warning 后截断 |
-| **当前状态** | **未修复** |
+| **修复方案** | **已废弃固定上限方案**；保持 `MAX_USER_ALPHAS_PAGES=None`，通过重复页签名、无新增唯一项观测、显式取消、offset recovery 和真实 API/认证错误处理来保护完整同步 |
+| **当前状态** | **TRACKED_DEFERRED — 不添加固定分页截断** |
 
 ---
 
@@ -183,7 +183,7 @@ v1 报告（2026-06-01）识别的 **16 项缺陷**已全部标记为 CLOSED_CUR
 | 序号 | 缺陷 | 修复内容 | 工作量 | 风险 |
 |------|------|----------|--------|------|
 | 1 | NEW-001: CLI SSRF | 在 `cli.py:559` 添加 `_ALLOWED_BASE_URLS` 白名单校验 | 5 行 | 极低 |
-| 2 | NEW-002: list_user_alphas 无上限 | 添加 `_MAX_USER_ALPHAS_PAGES = 500` 并改为有界循环 | 10 行 | 极低 |
+| 2 | NEW-002: list_user_alphas 完整分页边界 | 保持 `MAX_USER_ALPHAS_PAGES=None`，补强重复页、无新增唯一项、显式取消和 offset recovery 证据 | 已跟踪 | 低 |
 
 ### 短期修复（P2 — 本周内）
 
@@ -235,34 +235,24 @@ if args.base_url is not None:
 
 ---
 
-#### Step 1.2: 修复 list_user_alphas 无上限（NEW-002）
+#### Step 1.2: 保留 list_user_alphas 完整分页并加强非截断保护（NEW-002）
 
-**文件**: `brain_alpha_ops/brain_api/official.py` 第 57 行附近 & 第 476 行
+**文件**: `brain_alpha_ops/brain_api/pagination_limits.py`、`brain_alpha_ops/brain_api/pagination.py`
 
-**第 57 行**: 添加常量
+**当前策略**: 用户 Alpha 云端清单必须完整同步，不添加固定页数、固定条数或耗时上限。
 ```python
-_MAX_USER_ALPHAS_PAGES = 500
+MAX_USER_ALPHAS_PAGES = None
 ```
 
-**第 476 行**: 将 `while True:` 改为有界循环
+**保护方式**:
 ```python
-# 替换:
-while True:
-
-# 为:
-for _page in range(1, _MAX_USER_ALPHAS_PAGES + 1):
+seen_page_signatures = set()
+unique_item_key = lambda row: str(row.get("id") or "").strip()
+# stop only on natural completion, repeated-page protection, explicit cancel,
+# offset recovery failure, or real API/auth errors.
 ```
 
-并在循环末尾（类似于 `list_fields`）添加上限截断日志：
-```python
-else:
-    logger.warning(
-        "user_alphas pagination reached max pages limit (%d), items=%d total=%d",
-        _MAX_USER_ALPHAS_PAGES, len(items), total,
-    )
-```
-
-**验证**: `python -m pytest tests/test_official_adapter.py -v -k "list_user"`
+**验证**: `python -m pytest tests/test_official_adapter.py tests/test_web_sync_job.py tests/test_pipeline.py -v -k "list_user or cloud_sync"`
 
 ---
 

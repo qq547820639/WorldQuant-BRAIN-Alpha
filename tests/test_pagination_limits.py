@@ -21,16 +21,16 @@ class TestPaginationLimits:
         """User alpha history must not be truncated by an arbitrary cap."""
         assert MAX_USER_ALPHAS_PAGES is None
 
-    def test_all_collections_have_limits(self):
-        """All collectible types must have a page limit."""
-        assert MAX_FIELDS_PAGES is not None and MAX_FIELDS_PAGES > 0
-        assert MAX_DATASETS_PAGES is not None and MAX_DATASETS_PAGES > 0
-        assert MAX_OPERATORS_PAGES is not None and MAX_OPERATORS_PAGES > 0
+    def test_official_context_collections_have_no_default_hard_page_limits(self):
+        """Official context sync must not be truncated by arbitrary page caps."""
+        assert MAX_FIELDS_PAGES is None
+        assert MAX_DATASETS_PAGES is None
+        assert MAX_OPERATORS_PAGES is None
 
-    def test_item_limits_set(self):
-        assert MAX_FIELDS_ITEMS > 0
-        assert MAX_DATASETS_ITEMS > 0
-        assert MAX_OPERATORS_ITEMS > 0
+    def test_official_context_collections_have_no_default_hard_item_limits(self):
+        assert MAX_FIELDS_ITEMS is None
+        assert MAX_DATASETS_ITEMS is None
+        assert MAX_OPERATORS_ITEMS is None
 
 
 class TestCoerceLimit:

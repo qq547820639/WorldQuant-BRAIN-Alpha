@@ -12,7 +12,26 @@ from dataclasses import dataclass
 from typing import Any, Callable
 from brain_alpha_ops.config import load_run_config, runtime_project_root
 from brain_alpha_ops.redaction import redact_error_message
-from brain_alpha_ops.research.fallback_generation import high_turnover_generation_risk_reasons
+from brain_alpha_ops.web_backtest_slots import (
+    backtest_queue_next_action as _backtest_queue_next_action,
+    backtest_slot_limit as _shared_backtest_slot_limit,
+    backtest_slots_payload as _shared_backtest_slots_payload,
+    candidate_high_cloud_similarity_blocked as _candidate_high_cloud_similarity_blocked,
+    candidate_local_backtest_failed as _candidate_local_backtest_failed,
+    candidate_local_valid as _candidate_local_valid,
+    candidate_official_review_blockers as _candidate_official_review_blockers,
+    candidate_score as _candidate_score,
+    candidate_submit_evidence_blockers as _candidate_submit_evidence_blockers,
+    is_submit_only_quality_reason as _is_submit_only_quality_reason,
+    official_simulation_score_threshold as _shared_official_simulation_score_threshold,
+    slot_active as _slot_active,
+    slot_has_official_work_record as _slot_has_official_work_record,
+    slot_payload as _slot_payload,
+)
+from brain_alpha_ops.web_candidate_payloads import (
+    candidate_summary as _candidate_rows_summary,
+    candidate_summary_from_iter as _candidate_rows_summary_from_iter,
+)
 from brain_alpha_ops.web_submit_readiness import submit_readiness_payload as _build_submit_readiness_payload
 
 logger = logging.getLogger(__name__)
@@ -27,32 +46,6 @@ class Route:
     handler: str
     requires_session: bool = True
     category: str = "api"
-
-
-# ═══════════════════════ Constants ══════════════════════════════════════
-_OFFICIAL_REVIEW_LOCAL_BLOCKING_CATEGORIES = {
-    "missing",
-    "format_error",
-    "numeric_out_of_bounds",
-    "local_quality_failed",
-}
-_OFFICIAL_REVIEW_SUBMIT_ONLY_REASON_CODES = {
-    "decision_band_not_submit_candidate",
-    "gate_not_submission_ready",
-    "missing_official_alpha_id",
-    "missing_official_metrics",
-    "missing_official_metric_fields",
-    "official_pass_fail_not_pass",
-    "expression_too_nested",
-}
-_OFFICIAL_REVIEW_SUBMIT_ONLY_CATEGORIES = {
-    "official_evidence_missing",
-    "quality_gate_failed",
-}
-_OFFICIAL_REVIEW_OFFICIAL_STATE_KEYS = {
-    "official_alpha_id": "official_alpha_id_already_present",
-    "simulation_id": "official_simulation_already_started",
-}
 
 
 # ═══════════════════════ GET Routes ═══════════════════════════════════
@@ -103,12 +96,15 @@ def dispatch_get(handler: Any, path: str, query: dict) -> None:
     # Phase state (v4.0)
     if path == "/api/phase_state":
         from brain_alpha_ops.web.handlers.phase import phase_state_payload
+        from brain_alpha_ops.web_cloud_snapshot import cloud_alpha_snapshot, official_context_file_counts
         try:
             handler._send_json(phase_state_payload(
                 sync_jobs=getattr(handler, "SYNC_JOBS", None),
                 candidate_repo=getattr(handler, "_candidate_repo", None),
                 connection_tracker=getattr(handler, "_connection_tracker", None),
                 readiness_service=getattr(handler, "_readiness_service", None),
+                cloud_alpha_snapshot=cloud_alpha_snapshot,
+                official_context_file_counts=official_context_file_counts,
             ))
         except Exception:
             handler._send_json({"ok": True, "current_phase": "connect", "connected": False, "context_fresh": False, "candidates_count": 0, "scored_count": 0, "readiness_passed": False})
@@ -128,12 +124,12 @@ def dispatch_get(handler: Any, path: str, query: dict) -> None:
 
     # Candidates
     if path == "/api/candidates":
-        handler._send_json(_jsonl_payload("candidates", "candidates.jsonl", query, items_key="candidates"))
+        handler._send_json(_jsonl_payload("candidates", "candidates.jsonl", query, items_key="candidates", full_scan=True))
         return
 
     # Check results
     if path == "/api/check_results":
-        handler._send_json(_jsonl_payload("check_results", "checks.jsonl", query, items_key="items"))
+        handler._send_json(_jsonl_payload("check_results", "checks.jsonl", query, items_key="items", full_scan=True))
         return
 
     # Cloud snapshot
@@ -362,7 +358,7 @@ def _handle_candidate_simulate(handler: Any, payload: dict) -> None:
     from brain_alpha_ops.web_jobs import ASYNC_JOBS, ASYNC_JOBS_LOCK
     with ASYNC_JOBS_LOCK:
         for jid, job in ASYNC_JOBS.items():
-            if job.get("status") == "running":
+            if str(job.get("status") or "").lower() in {"queued", "pending", "running", "starting", "stopping"}:
                 phase = (job.get("progress") or {}).get("phase", "")
                 if "simulat" in str(phase).lower():
                     handler._send_json({
@@ -373,9 +369,17 @@ def _handle_candidate_simulate(handler: Any, payload: dict) -> None:
                     }, status=409)
                     return
 
-    # Start simulation as background job
+    # Start simulation as background job. The durable JobStore-backed route uses
+    # the same active initial state; keep this legacy path consistent for SSE UI.
     job_id = new_job_id("simulate")
-    job_update(job_id, status="starting", progress={"phase": "init", "percent_complete": 0})
+    start_message = "正在启动官方 BRAIN 模拟任务。"
+    job_update(job_id, status="running", progress={
+        "phase": "simulation_starting",
+        "message": start_message,
+        "status_message": start_message,
+        "percent": 0,
+        "percent_complete": 0,
+    })
 
     import threading
     def run_sim():
@@ -501,332 +505,114 @@ def _read_jsonl_tail(name: str, *, limit: int) -> tuple[list[dict], int, str]:
     return list(rows), total, str(path)
 
 
-def _jsonl_payload(source: str, filename: str, query: dict, *, items_key: str) -> dict:
+def _read_jsonl_records(name: str) -> tuple[list[dict], int, str]:
+    """Read all JSONL records for aggregate derivation from existing events."""
+    from brain_alpha_ops.jsonl import iter_jsonl_records
+
+    path = _storage_file(name)
+    rows = list(iter_jsonl_records(path))
+    return rows, len(rows), str(path)
+
+
+def _jsonl_payload(source: str, filename: str, query: dict, *, items_key: str, full_scan: bool = False) -> dict:
     """Create JSONL payload response."""
-    rows, total, path = _read_jsonl_tail(filename, limit=_query_limit(query))
+    if _query_truthy(query, "summary"):
+        return _jsonl_summary_payload(source, filename, items_key=items_key)
+    rows, total, path = _read_jsonl_records(filename) if full_scan else _read_jsonl_tail(filename, limit=_query_limit(query))
+    summary = _candidate_rows_summary(rows, total=total) if filename == "candidates.jsonl" else {}
     return {
         "ok": True,
         "source": source,
         "path": path,
+        "summary_only": False,
         items_key: rows,
         "items": rows,
+        "count": len(rows),
+        "returned_count": len(rows),
+        "total_count": total,
         "total": total,
+        **summary,
     }
+
+
+def _jsonl_summary_payload(source: str, filename: str, *, items_key: str) -> dict:
+    if filename == "candidates.jsonl":
+        path = _storage_file(filename)
+        summary = _candidate_rows_summary_from_iter(_iter_jsonl_records(filename))
+        total = int(summary.get("candidate_count", 0) or 0)
+    else:
+        rows, total, path = _read_jsonl_records(filename)
+        summary = {}
+    return {
+        "ok": True,
+        "source": source,
+        "path": str(path),
+        "summary_only": True,
+        items_key: [],
+        "items": [],
+        "count": 0,
+        "returned_count": 0,
+        "total_count": total,
+        "total": total,
+        **summary,
+    }
+
+
+def _query_truthy(query: dict, key: str) -> bool:
+    values = query.get(key) if isinstance(query, dict) else []
+    value = values[0] if values else ""
+    return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _iter_jsonl_records(name: str):
+    from brain_alpha_ops.jsonl import iter_jsonl_records
+
+    return iter_jsonl_records(_storage_file(name))
 
 
 def _cloud_snapshot_payload(query: dict) -> dict:
     """Create cloud snapshot payload."""
-    rows, total, path = _read_jsonl_tail("cloud_alphas.jsonl", limit=_query_limit(query, default=100, maximum=1000))
-    submitted = sum(1 for row in rows if str(row.get("status") or "").upper() == "SUBMITTED")
-    passed = sum(1 for row in rows if str(row.get("pass_fail") or row.get("passFail") or "").upper() == "PASS")
-    failed = sum(1 for row in rows if str(row.get("pass_fail") or row.get("passFail") or "").upper() == "FAIL")
-    summary = {
-        "returned_count": len(rows),
-        "total_count": total,
-        "submitted_count": submitted,
-        "passed_unsubmitted_count": passed,
-        "failed_unsubmitted_count": failed,
-        "is_stale": False,
-    }
+    from brain_alpha_ops.web_cloud_snapshot import cloud_alpha_snapshot
+
+    limit = _query_positive_int(query, "limit")
+    snapshot = cloud_alpha_snapshot(limit=limit)
+    rows = list(snapshot.get("alphas") or [])
+    summary = dict(snapshot.get("summary") or {})
     return {
         "ok": True,
-        "source": "cloud_alphas_jsonl",
-        "path": path,
+        "source": summary.get("source", "cloud_alphas_jsonl"),
         "summary": summary,
-        "count": total,
-        "submitted_count": submitted,
-        "passed_unsubmitted_count": passed,
-        "failed_unsubmitted_count": failed,
-        "is_stale": False,
+        "count": summary.get("count", summary.get("total")),
+        "total": summary.get("total", summary.get("count")),
+        "submitted_count": summary.get("submitted_count", 0),
+        "passed_unsubmitted_count": summary.get("passed_unsubmitted_count", 0),
+        "failed_unsubmitted_count": summary.get("failed_unsubmitted_count", 0),
+        "is_stale": bool(summary.get("is_stale")),
         "alphas": rows,
         "sample_alphas": rows,
     }
 
 
-def _backtest_slot_limit() -> int:
-    """Get backtest slot limit from config."""
+def _query_positive_int(query: dict, key: str) -> int | None:
+    values = query.get(key) if isinstance(query, dict) else []
+    if not values:
+        return None
     try:
-        budget = load_run_config().ops.budget
-        return max(
-            3,
-            min(
-                max(1, int(budget.official_backtest_batch_size)),
-                max(1, int(budget.max_official_simulations_per_cycle)),
-                max(1, int(budget.max_official_concurrent_simulations)),
-            ),
-        )
-    except Exception:
-        return 3
+        return max(1, int(values[0]))
+    except (TypeError, ValueError):
+        return None
+
+
+def _backtest_slot_limit() -> int:
+    return _shared_backtest_slot_limit(load_run_config)
 
 
 def _backtest_slots_payload() -> dict:
-    """Create backtest slots payload."""
-    slot_limit = _backtest_slot_limit()
-    rows, _total, path = _read_jsonl_tail("backtests.jsonl", limit=1000)
-    latest_by_slot: dict[int, dict] = {}
-    for row in rows:
-        try:
-            slot = int(row.get("slot") or 0)
-        except (TypeError, ValueError):
-            continue
-        if 1 <= slot <= slot_limit:
-            latest_by_slot[slot] = row
-    slots = [_slot_payload(slot, latest_by_slot.get(slot)) for slot in range(1, slot_limit + 1)]
-    active_count = sum(1 for slot in slots if _slot_active(slot.get("status")))
-    return {
-        "ok": True,
-        "source": "backtests_jsonl",
-        "path": path,
-        "slot_limit": slot_limit,
-        "active_count": active_count,
-        "queue_summary": _backtest_queue_summary(slots, slot_limit=slot_limit, active_count=active_count),
-        "slots": slots,
-        "updated_at": max((str(row.get("timestamp") or "") for row in latest_by_slot.values()), default=""),
-    }
-
-
-def _slot_payload(slot: int, row: dict | None) -> dict:
-    """Create slot payload."""
-    if not row:
-        return {"slot": slot, "status": "empty", "alpha_id": "", "expression": ""}
-    return {
-        "slot": slot,
-        "status": row.get("status", "unknown"),
-        "alpha_id": row.get("alpha_id", ""),
-        "expression": row.get("expression", ""),
-        "sharpe": row.get("sharpe"),
-        "fitness": row.get("fitness"),
-        "turnover": row.get("turnover"),
-        "progress": row.get("progress"),
-        "error": row.get("error"),
-        "timestamp": row.get("timestamp"),
-    }
-
-
-def _slot_active(status: str | None) -> bool:
-    """Check if slot is active."""
-    return str(status or "").lower() in {"running", "pending", "starting"}
-
-
-def _backtest_queue_summary(slots: list[dict], *, slot_limit: int, active_count: int) -> dict:
-    """Create backtest queue summary."""
-    from collections import Counter
-
-    candidates, candidate_total, candidate_path = _read_jsonl_tail("candidates.jsonl", limit=1000)
-    min_score = _official_simulation_score_threshold()
-    reason_counts: Counter[str] = Counter()
-    local_valid_count = 0
-    above_score_count = 0
-    review_candidate_count = 0
-    submit_reason_counts: Counter[str] = Counter()
-    submit_evidence_blocking_count = 0
-    for candidate in candidates:
-        score = _candidate_score(candidate)
-        if _candidate_local_valid(candidate):
-            local_valid_count += 1
-        if score >= min_score:
-            above_score_count += 1
-        blockers = _candidate_official_review_blockers(candidate, min_score=min_score)
-        submit_blockers = _candidate_submit_evidence_blockers(candidate)
-        if submit_blockers:
-            submit_evidence_blocking_count += 1
-            submit_reason_counts.update(submit_blockers)
-        if blockers:
-            reason_counts.update(blockers)
-        else:
-            review_candidate_count += 1
-    open_slot_count = max(0, int(slot_limit or 0) - int(active_count or 0))
-    official_slot_record_count = sum(1 for slot in slots if _slot_has_official_work_record(slot))
-    return {
-        "schema_version": "backtest-slot-queue-summary-v1",
-        "source": "local_readonly_snapshot",
-        "official_api_called": False,
-        "official_slot_record_count": official_slot_record_count,
-        "candidate_path": candidate_path,
-        "candidate_count": candidate_total,
-        "returned_candidate_count": len(candidates),
-        "slot_limit": slot_limit,
-        "active_slot_count": active_count,
-        "open_slot_count": open_slot_count,
-        "empty_slot_count": sum(1 for slot in slots if str(slot.get("status") or "").upper() == "EMPTY"),
-        "local_valid_count": local_valid_count,
-        "above_simulation_score_count": above_score_count,
-        "review_candidate_count": review_candidate_count,
-        "blocked_candidate_count": max(0, len(candidates) - review_candidate_count),
-        "submit_evidence_blocking_count": submit_evidence_blocking_count,
-        "min_prior_score_for_official_simulation": min_score,
-        "top_blocking_reasons": [
-            {"reason": reason, "count": count}
-            for reason, count in sorted(reason_counts.items(), key=lambda item: (-item[1], item[0]))[:6]
-        ],
-        "top_submit_blocking_reasons": [
-            {"reason": reason, "count": count}
-            for reason, count in sorted(submit_reason_counts.items(), key=lambda item: (-item[1], item[0]))[:6]
-        ],
-        "next_action": _backtest_queue_next_action(
-            candidate_count=len(candidates),
-            review_candidate_count=review_candidate_count,
-            open_slot_count=open_slot_count,
-        ),
-    }
+    return _shared_backtest_slots_payload(_read_jsonl_records, load_config=load_run_config)
 
 
 def _official_simulation_score_threshold() -> float:
-    """Get official simulation score threshold (prior score, not Sharpe)."""
-    try:
-        return float(load_run_config().ops.budget.min_prior_score_for_official_simulation)
-    except Exception:
-        return 70.0
-
-
-def _slot_has_official_work_record(slot: dict) -> bool:
-    """Check if slot has official work record."""
-    if not isinstance(slot, dict):
-        return False
-    status = str(slot.get("status") or "").upper()
-    if status in {"", "EMPTY", "CAPACITY_WAIT"}:
-        return False
-    return bool(
-        str(slot.get("alpha_id") or "").strip()
-        or str(slot.get("simulation_id") or "").strip()
-        or str(slot.get("official_alpha_id") or "").strip()
-    )
-
-
-def _candidate_score(candidate: dict) -> float:
-    """Extract candidate score."""
-    scorecard = candidate.get("scorecard") if isinstance(candidate.get("scorecard"), dict) else {}
-    value = scorecard.get("total_score", candidate.get("score"))
-    try:
-        score = float(value)
-    except (TypeError, ValueError):
-        return 0.0
-    return score if score == score else 0.0
-
-
-def _candidate_local_valid(candidate: dict) -> bool:
-    """Check if candidate is locally valid."""
-    diagnosis = candidate.get("quality_diagnosis") if isinstance(candidate.get("quality_diagnosis"), dict) else {}
-    if isinstance(diagnosis.get("local_candidate_valid"), bool):
-        return bool(diagnosis.get("local_candidate_valid"))
-    local_quality = candidate.get("local_quality") if isinstance(candidate.get("local_quality"), dict) else {}
-    return local_quality.get("passed") is True
-
-
-def _candidate_official_review_blockers(candidate: dict, *, min_score: float) -> list[str]:
-    """Get blockers for official review."""
-    blockers: list[str] = []
-    diagnosis = candidate.get("quality_diagnosis") if isinstance(candidate.get("quality_diagnosis"), dict) else {}
-    if diagnosis:
-        blockers.extend(_quality_diagnosis_official_review_blockers(diagnosis))
-    else:
-        blockers.append("missing_quality_diagnosis")
-    if not _candidate_local_valid(candidate):
-        blockers.append("local_candidate_invalid")
-    if _candidate_score(candidate) < min_score:
-        blockers.append("score_below_official_simulation_threshold")
-    if _candidate_local_backtest_failed(candidate):
-        blockers.append("local_backtest_failed")
-    if high_turnover_generation_risk_reasons(str(candidate.get("expression") or "")):
-        blockers.append("high_turnover_generation_risk")
-    source_tags = candidate.get("source_tags") if isinstance(candidate.get("source_tags"), list) else []
-    if "generation_risk_blocked" in source_tags:
-        blockers.append("generation_risk_blocked")
-    if _candidate_high_cloud_similarity_blocked(candidate):
-        blockers.append("high_cloud_similarity")
-    for key, reason in _OFFICIAL_REVIEW_OFFICIAL_STATE_KEYS.items():
-        if str(candidate.get(key) or "").strip():
-            blockers.append(reason)
-    if isinstance(candidate.get("official_metrics"), dict) and candidate.get("official_metrics"):
-        blockers.append("official_simulation_already_completed")
-    return sorted(set(blockers))
-
-
-def _quality_diagnosis_official_review_blockers(diagnosis: dict) -> list[str]:
-    """Get blockers from quality diagnosis."""
-    blockers: list[str] = []
-    reason_rows = diagnosis.get("reasons") if isinstance(diagnosis.get("reasons"), list) else []
-    if reason_rows:
-        for row in reason_rows:
-            if not isinstance(row, dict) or row.get("severity") != "blocking":
-                continue
-            code = str(row.get("code") or "")
-            category = str(row.get("category") or "")
-            if not code or _is_submit_only_quality_reason(code, category):
-                continue
-            if category in _OFFICIAL_REVIEW_LOCAL_BLOCKING_CATEGORIES and not code.startswith("official_"):
-                blockers.append(code)
-        return blockers
-    for reason in diagnosis.get("blocking_reasons") or []:
-        code = str(reason or "")
-        if code and not _is_submit_only_quality_reason(code, "") and not code.startswith("official_"):
-            blockers.append(code)
-    return blockers
-
-
-def _candidate_submit_evidence_blockers(candidate: dict) -> list[str]:
-    """Get blockers for submission evidence."""
-    diagnosis = candidate.get("quality_diagnosis") if isinstance(candidate.get("quality_diagnosis"), dict) else {}
-    blockers: list[str] = []
-    if diagnosis:
-        reason_rows = diagnosis.get("reasons") if isinstance(diagnosis.get("reasons"), list) else []
-        if reason_rows:
-            for row in reason_rows:
-                if not isinstance(row, dict) or row.get("severity") != "blocking":
-                    continue
-                code = str(row.get("code") or "")
-                category = str(row.get("category") or "")
-                if code and _is_submit_only_quality_reason(code, category):
-                    blockers.append(code)
-        else:
-            for reason in diagnosis.get("blocking_reasons") or []:
-                code = str(reason or "")
-                if code and _is_submit_only_quality_reason(code, ""):
-                    blockers.append(code)
-    return sorted(set(blockers))
-
-
-def _is_submit_only_quality_reason(code: str, category: str) -> bool:
-    """Check if reason is submit-only quality reason."""
-    if code in _OFFICIAL_REVIEW_SUBMIT_ONLY_REASON_CODES:
-        return True
-    if category in _OFFICIAL_REVIEW_SUBMIT_ONLY_CATEGORIES:
-        return True
-    return False
-
-
-def _candidate_high_cloud_similarity_blocked(candidate: dict) -> bool:
-    """Check if candidate is blocked by high cloud similarity."""
-    status = str(candidate.get("lifecycle_status") or "").lower()
-    if "high_cloud_similarity" in status:
-        return True
-    risk = candidate.get("cloud_correlation_risk") if isinstance(candidate.get("cloud_correlation_risk"), dict) else {}
-    level = str(risk.get("level") or "").lower()
-    return level in {"high", "blocked"}
-
-
-def _candidate_local_backtest_failed(candidate: dict) -> bool:
-    """Check if local backtest failed."""
-    for container_key in ("local_quality", "submission", "extra_fields"):
-        container = candidate.get(container_key)
-        if not isinstance(container, dict):
-            continue
-        local_backtest = container.get("local_backtest")
-        if isinstance(local_backtest, dict) and local_backtest.get("pass_local") is False:
-            return True
-    local_backtest = candidate.get("local_backtest")
-    return isinstance(local_backtest, dict) and local_backtest.get("pass_local") is False
-
-
-def _backtest_queue_next_action(*, candidate_count: int, review_candidate_count: int, open_slot_count: int) -> str:
-    """Get next action for backtest queue."""
-    if candidate_count <= 0:
-        return "generate_candidates"
-    if review_candidate_count > 0 and open_slot_count > 0:
-        return "trusted_environment_official_simulation_required"
-    if review_candidate_count > 0:
-        return "wait_for_open_backtest_slot"
-    return "improve_or_regenerate_candidates"
+    return _shared_official_simulation_score_threshold(load_run_config)
 
 
 def _submit_readiness_payload() -> dict:
@@ -905,6 +691,7 @@ def _build_route_map() -> dict[str, list[tuple[str, str]]]:
         "/api/sync_alphas": Route("sync_alphas"),
         "/api/sync-cloud-alphas": Route("sync_alphas"),          # R-02: legacy alias
         "/api/sync/sync_alphas": Route("sync_alphas"),
+        "/api/sync_context_only": Route("sync_context_only"),
         "/api/sync_cancel": Route("sync_cancel"),
         "/api/check": Route("check"),
         "/api/candidate/check": Route("check"),

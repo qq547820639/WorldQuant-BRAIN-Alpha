@@ -97,8 +97,11 @@ def _check_api_paths(run_config: Any) -> dict[str, Any]:
     path_mapping = {
         "authentication": "authentication_path",
         "simulations": "simulations_path",
+        "data_categories": "data_categories_path",
         "data_sets": "data_sets_path",
+        "data_set_detail": "data_set_path_template",
         "data_fields": "data_fields_path",
+        "data_field_detail": "data_field_path_template",
         "operators": "operators_path",
         "user_alphas": "user_alphas_path",
         "user_profile": "user_profile_path",

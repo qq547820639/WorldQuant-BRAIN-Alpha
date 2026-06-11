@@ -57,3 +57,31 @@ def test_market_data_cache_refresh_from_json_path_and_nested_metrics(tmp_path):
     assert payload["source_files"][0]["record_count"] == 2
     assert payload["field_stats"][0]["coverage_ratio"] >= 0.5
     assert payload["time_range"]["start"] == "2026-05-25T00:00:00Z"
+
+
+def test_market_data_cache_refresh_from_jsonl_defaults_to_all_cloud_rows(tmp_path):
+    source = tmp_path / "cloud_alphas.jsonl"
+    rows = [
+        {"symbol": f"SYM{index}", "timestamp": "2026-05-25T00:00:00Z", "metrics": {"close": index + 1.0}}
+        for index in range(5001)
+    ]
+    source.write_text("\n".join(json.dumps(row) for row in rows) + "\n", encoding="utf-8")
+
+    payload = MarketDataCache(tmp_path).refresh_from_jsonl()
+
+    assert payload["record_count"] == 5001
+    assert payload["symbol_count"] == 5001
+
+
+def test_market_data_cache_refresh_from_path_defaults_to_all_json_records(tmp_path):
+    source = tmp_path / "market.json"
+    rows = [
+        {"symbol": f"SYM{index}", "timestamp": "2026-05-25T00:00:00Z", "metrics": {"close": index + 1.0}}
+        for index in range(5001)
+    ]
+    source.write_text(json.dumps({"records": rows}), encoding="utf-8")
+
+    payload = MarketDataCache(tmp_path).refresh_from_path(source)
+
+    assert payload["record_count"] == 5001
+    assert payload["source_files"][0]["record_count"] == 5001

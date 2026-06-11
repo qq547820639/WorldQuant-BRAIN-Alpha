@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Callable, Protocol
 
+from brain_alpha_ops.runtime_constants import CloudDefaults
 from brain_alpha_ops.web_progress import normalize_progress
 
 
@@ -57,11 +58,26 @@ def active_job_payload(store: JobStoreLike, enrich_progress: ProgressEnricher) -
 
 def lifecycle_payload(store: JobStoreLike, job_id: str, lifecycle_from_job: Callable[[dict], list[dict]]) -> dict:
     job = store.get(job_id) or {}
-    return {"ok": True, "records": lifecycle_from_job(job)}
+    records = lifecycle_from_job(job)
+    return {
+        "ok": True,
+        "records": records,
+        "items": records,
+        "count": len(records),
+        "returned_count": len(records),
+        "total_count": len(records),
+        "total": len(records),
+        "complete": True,
+        "display_limit": None,
+    }
 
 
 def health_payload() -> dict:
-    return {"ok": True, "status": "ready"}
+    return {
+        "ok": True,
+        "status": "ready",
+        "cloud_sync_stale_seconds": CloudDefaults.CLOUD_SYNC_STALE_SECONDS,
+    }
 
 
 def profile_payload(user_profile_snapshot: Callable[[], dict]) -> dict:

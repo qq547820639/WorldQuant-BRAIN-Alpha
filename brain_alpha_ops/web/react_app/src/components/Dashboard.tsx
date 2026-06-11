@@ -1,7 +1,7 @@
 /** Dashboard — Progressive flow with step-based guidance v3.1 */
 import { useEffect, useState, type ReactNode } from "react";
 import { useApi } from "@/hooks/useApi";
-import type { JobStatus, CloudAlphaSummary, ResearchMemorySummary } from "@/types";
+import type { JobStatus, CloudAlpha, CloudAlphaSummary, ResearchMemorySummary } from "@/types";
 import KpiCard from "@/components/KpiCard";
 import ProgressFeedback from "@/components/ProgressFeedback";
 
@@ -9,33 +9,37 @@ interface Props {
   notify: (type: "success" | "error" | "warning" | "info", msg: string) => void;
   /** Whether the user has successfully tested BRAIN connection */
   connected: boolean;
-  /** Whether the official context has been refreshed (cloud sync done) */
+  /** Whether local cloud Alpha and official context cache are available */
   contextFresh: boolean;
-  /** Navigate to the sync/official operations page */
+  /** Navigate to the sync/official operations page and start the first sync */
   onNavigateToSync: () => void;
+  /** Open the manual sync page without auto-starting a refresh */
+  onOpenSync?: () => void;
   /** Step 1: CredentialQuickStart (always rendered when not connected) */
   children?: ReactNode;
 }
 
-export default function Dashboard({ notify, connected, contextFresh, onNavigateToSync, children }: Props) {
+export default function Dashboard({ notify, connected, contextFresh, onNavigateToSync, onOpenSync, children }: Props) {
   const [snapshotExpanded, setSnapshotExpanded] = useState(false);
   const statusApi = useApi<JobStatus>();
-  const cloudApi = useApi<CloudAlphaSummary>();
+  const cloudApi = useApi<CloudSnapshotPayload>();
   const memoryApi = useApi<ResearchMemorySummary>();
 
   useEffect(() => {
     statusApi.call("/api/production-validation/status");
-    cloudApi.call("/api/snapshot/cloud?limit=10");
+    cloudApi.call("/api/snapshot/cloud");
     memoryApi.call("/api/snapshot/memory?limit=100&top_n=5");
   }, [statusApi.call, cloudApi.call, memoryApi.call]);
 
   const status = statusApi.data;
   const cloud = cloudApi.data;
   const memory = memoryApi.data;
+  const cloudSummary = cloudSnapshotSummary(cloud);
+  const cloudPreviewRows = cloudSnapshotPreviewRows(cloud);
 
   const retryAll = () => {
     statusApi.call("/api/production-validation/status");
-    cloudApi.call("/api/snapshot/cloud?limit=10");
+    cloudApi.call("/api/snapshot/cloud");
     memoryApi.call("/api/snapshot/memory?limit=100&top_n=5");
   };
 
@@ -55,8 +59,9 @@ export default function Dashboard({ notify, connected, contextFresh, onNavigateT
   // ── Determine current step ──────────────────────────────────────────────
   const currentStep = !connected ? 1 : !contextFresh ? 2 : 3;
   const stepLabel = currentStep === 1 ? "连接 BRAIN"
-    : currentStep === 2 ? "同步云端"
+    : currentStep === 2 ? "准备本地缓存"
     : "开始验证";
+  const openManualSync = onOpenSync || onNavigateToSync;
 
   return (
     <div className="animate-fade-in">
@@ -73,7 +78,7 @@ export default function Dashboard({ notify, connected, contextFresh, onNavigateT
                 <span style={{ color: currentStep === 1 ? "oklch(0.68 0.10 248)" : "oklch(0.48 0.04 160)", fontWeight: 500, textAlign: "right" }}>1.</span>
                 <span>填写账户邮箱和密码，点击 <strong>测试连接</strong>{currentStep > 1 ? " ✓" : ""}</span>
                 <span style={{ color: currentStep === 2 ? "oklch(0.68 0.10 248)" : currentStep > 2 ? "oklch(0.48 0.04 160)" : "oklch(0.38 0.006 45)", fontWeight: 500, textAlign: "right" }}>2.</span>
-                <span>点击下方 <strong>开始云端同步</strong>，系统会拉取云端 Alpha 并刷新上下文{currentStep > 2 ? " ✓" : ""}</span>
+                <span>本地无缓存时点击 <strong>开始首次同步</strong>；已有缓存会直接使用，可稍后手动刷新{currentStep > 2 ? " ✓" : ""}</span>
                 <span style={{ color: currentStep === 3 ? "oklch(0.68 0.10 248)" : "oklch(0.38 0.006 45)", fontWeight: 500, textAlign: "right" }}>3.</span>
                 <span>同步完成后，在下方点击 <strong>运行非提交验证</strong> 开始生产搜索</span>
                 <span style={{ color: currentStep > 3 ? "oklch(0.48 0.04 160)" : currentStep >= 3 ? "oklch(0.68 0.10 248)" : "oklch(0.38 0.006 45)", fontWeight: 500, textAlign: "right" }}>4.</span>
@@ -94,6 +99,11 @@ export default function Dashboard({ notify, connected, contextFresh, onNavigateT
             {" · "}上次更新: {new Date().toLocaleTimeString("zh-CN", { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" })}
           </p>
         </div>
+        {connected && contextFresh && (
+          <button type="button" className="btn btn-secondary btn-sm" onClick={openManualSync}>
+            手动同步
+          </button>
+        )}
       </div>
 
       {/* ═══ Step 1: Credential + Connection Test ═══ */}
@@ -143,9 +153,9 @@ export default function Dashboard({ notify, connected, contextFresh, onNavigateT
             />
             <KpiCard
               label="云端 Alpha"
-              value={cloud?.count ?? "--"}
-              subtitle={cloud ? `${cloud.submitted_count} 已提交` : "等待刷新"}
-              trend={cloud && cloud.submitted_count > 0 ? "up" : "neutral"}
+              value={cloudSummary.count ?? "--"}
+              subtitle={cloud ? `${cloudSummary.submitted_count ?? 0} 已提交 · ${formatSyncAge(cloudSummary.age_seconds, cloudSummary.loaded_at)}` : "等待刷新"}
+              trend={cloud && (cloudSummary.submitted_count ?? 0) > 0 ? "up" : "neutral"}
             />
             <KpiCard
               label="回测数"
@@ -154,8 +164,8 @@ export default function Dashboard({ notify, connected, contextFresh, onNavigateT
             />
             <KpiCard
               label="提交数"
-              value={status?.progress?.submissions ?? cloud?.submitted_count ?? "--"}
-              trend={cloud && cloud.passed_unsubmitted_count ? cloud.passed_unsubmitted_count > 0 ? "up" : "neutral" : "neutral"}
+              value={status?.progress?.submissions ?? cloudSummary.submitted_count ?? "--"}
+              trend={cloud && cloudSummary.passed_unsubmitted_count ? cloudSummary.passed_unsubmitted_count > 0 ? "up" : "neutral" : "neutral"}
             />
           </div>
 
@@ -168,7 +178,7 @@ export default function Dashboard({ notify, connected, contextFresh, onNavigateT
               aria-expanded={snapshotExpanded}
             >
               <span style={{ transform: snapshotExpanded ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 200ms", display: "inline-block" }}>▶</span>
-              <span style={{ marginLeft: 6 }}>数据快照{snapshotExpanded ? "" : ` (${cloud ? cloud.count : "--"} 条 Alpha)`}</span>
+              <span style={{ marginLeft: 6 }}>数据快照{snapshotExpanded ? "" : ` (${cloudSummary.count ?? "--"} 条 Alpha)`}</span>
             </button>
           </div>
 
@@ -178,23 +188,34 @@ export default function Dashboard({ notify, connected, contextFresh, onNavigateT
           <div className="panel mb-4">
             <div className="panel-header">
               <span>云端 Alpha 缓存</span>
-              {cloud && <span className="badge badge-neutral">{cloud.count} 条</span>}
+              {cloud && <span className="badge badge-neutral">{cloudSummary.count ?? "--"} 条</span>}
             </div>
             <div className="panel-body-padded">
               {cloudApi.loading ? (
                 <ProgressFeedback state="loading" title="云端 Alpha" progress={{ phase: "cloud", status_message: "加载中..." }} compact />
               ) : cloudApi.error ? (
-                <ProgressFeedback state="error" title="云端 Alpha" error={cloudApi.error} onRetry={() => cloudApi.call("/api/snapshot/cloud?limit=10")} compact />
+                <ProgressFeedback state="error" title="云端 Alpha" error={cloudApi.error} onRetry={() => cloudApi.call("/api/snapshot/cloud")} compact />
               ) : cloud ? (
                 <>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs mb-3">
-                    <div><span className="text-text-tertiary">缓存总数</span><p className="font-mono-value text-base text-text-primary">{cloud.count}</p></div>
-                    <div><span className="text-text-tertiary">已提交</span><p className="font-mono-value text-base text-positive">{cloud.submitted_count}</p></div>
-                    <div><span className="text-text-tertiary">已通过（未提交）</span><p className="font-mono-value text-base text-warning">{cloud.passed_unsubmitted_count}</p></div>
-                    <div><span className="text-text-tertiary">缓存状态</span><p className="text-sm text-text-secondary">{cloud.is_stale ? "已过期" : "有效"}</p></div>
+                    <div><span className="text-text-tertiary">缓存总数</span><p className="font-mono-value text-base text-text-primary">{cloudSummary.count ?? 0}</p></div>
+                    <div><span className="text-text-tertiary">已提交</span><p className="font-mono-value text-base text-positive">{cloudSummary.submitted_count ?? 0}</p></div>
+                    <div><span className="text-text-tertiary">已通过（未提交）</span><p className="font-mono-value text-base text-warning">{cloudSummary.passed_unsubmitted_count ?? 0}</p></div>
+                    <div>
+                      <span className="text-text-tertiary">缓存状态</span>
+                      <p className={`text-sm ${cloudSummary.is_stale ? "font-medium text-warning" : "text-text-secondary"}`}>
+                        {cloudSummary.is_stale ? "已过期" : "有效"}
+                      </p>
+                      {cloudSummary.is_stale && (
+                        <button type="button" className="mt-1 text-xs text-accent underline" onClick={openManualSync}>
+                          去手动同步
+                        </button>
+                      )}
+                    </div>
                   </div>
-                  {cloud.sample_alphas && cloud.sample_alphas.length > 0 && (
+                  {cloudPreviewRows.length > 0 && (
                     <div style={{ maxHeight: 200, overflowY: "auto" }}>
+                      <p className="mb-2 text-xs text-text-tertiary">下方仅为页面预览；同步缓存总数以上方统计为准。</p>
                       <table className="data-table">
                         <thead>
                           <tr>
@@ -206,13 +227,13 @@ export default function Dashboard({ notify, connected, contextFresh, onNavigateT
                           </tr>
                         </thead>
                         <tbody>
-                          {cloud.sample_alphas.slice(0, 10).map((a, i) => (
+                          {cloudPreviewRows.slice(0, 10).map((a, i) => (
                             <tr key={i}>
-                              <td className="id">{a.alpha_id}</td>
-                              <td><span className={`badge ${a.pass_fail === "PASS" ? "badge-positive" : "badge-negative"}`}>{a.pass_fail || "--"}</span></td>
-                              <td className="num">{a.sharpe?.toFixed(2) ?? "--"}</td>
-                              <td className="num">{a.fitness?.toFixed(2) ?? "--"}</td>
-                              <td className="num">{a.turnover?.toFixed(2) ?? "--"}</td>
+                              <td className="id">{cloudAlphaId(a)}</td>
+                              <td><span className={`badge ${cloudAlphaPassFail(a) === "PASS" ? "badge-positive" : "badge-negative"}`}>{cloudAlphaPassFail(a) || "--"}</span></td>
+                              <td className="num">{formatMetric(cloudAlphaMetric(a, "sharpe"))}</td>
+                              <td className="num">{formatMetric(cloudAlphaMetric(a, "fitness"))}</td>
+                              <td className="num">{formatMetric(cloudAlphaMetric(a, "turnover"))}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -272,12 +293,86 @@ export default function Dashboard({ notify, connected, contextFresh, onNavigateT
   );
 }
 
+type CloudSnapshotPayload = Partial<CloudAlphaSummary> & Record<string, unknown> & {
+  alphas?: Array<CloudAlpha | Record<string, unknown>>;
+  summary?: Partial<CloudAlphaSummary> & Record<string, unknown>;
+};
+
+function cloudSnapshotSummary(cloud: CloudSnapshotPayload | null) {
+  const summary = cloud?.summary || {};
+  return {
+    count: numberOrUndefined(summary.count ?? summary.total ?? summary.total_count),
+    submitted_count: numberOrUndefined(cloud?.submitted_count ?? summary.submitted_count),
+    passed_unsubmitted_count: numberOrUndefined(cloud?.passed_unsubmitted_count ?? summary.passed_unsubmitted_count),
+    is_stale: Boolean(cloud?.is_stale ?? summary.is_stale),
+    loaded_at: stringOrUndefined(cloud?.loaded_at ?? summary.loaded_at),
+    age_seconds: numberOrUndefined(cloud?.age_seconds ?? summary.age_seconds),
+  };
+}
+
+function cloudSnapshotPreviewRows(cloud: CloudSnapshotPayload | null): Array<CloudAlpha | Record<string, unknown>> {
+  const rows = cloud?.sample_alphas || cloud?.alphas || [];
+  return Array.isArray(rows) ? rows : [];
+}
+
+function cloudAlphaId(row: CloudAlpha | Record<string, unknown>) {
+  const data = row as Record<string, unknown>;
+  return String(data.alpha_id || data.id || "-");
+}
+
+function cloudAlphaPassFail(row: CloudAlpha | Record<string, unknown>) {
+  const data = row as Record<string, unknown>;
+  const metrics = (data.metrics && typeof data.metrics === "object" ? data.metrics : {}) as Record<string, unknown>;
+  return String(data.pass_fail || metrics.pass_fail || "");
+}
+
+function cloudAlphaMetric(row: CloudAlpha | Record<string, unknown>, key: string) {
+  const data = row as Record<string, unknown>;
+  const metrics = (data.metrics && typeof data.metrics === "object" ? data.metrics : {}) as Record<string, unknown>;
+  return numberOrUndefined(data[key] ?? metrics[key]);
+}
+
+function formatMetric(value: number | undefined) {
+  return value == null ? "--" : value.toFixed(2);
+}
+
+function numberOrUndefined(value: unknown) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : undefined;
+}
+
+function stringOrUndefined(value: unknown) {
+  const text = typeof value === "string" ? value.trim() : "";
+  return text || undefined;
+}
+
+function formatSyncAge(ageSeconds?: number, loadedAt?: string) {
+  if (typeof ageSeconds === "number" && Number.isFinite(ageSeconds) && ageSeconds >= 0) {
+    if (ageSeconds < 60) return "刚刚同步";
+    if (ageSeconds < 3600) return `${Math.floor(ageSeconds / 60)} 分钟前`;
+    if (ageSeconds < 86400) return `${Math.floor(ageSeconds / 3600)} 小时前`;
+    return `${Math.floor(ageSeconds / 86400)} 天前`;
+  }
+  if (loadedAt) {
+    const timestamp = Date.parse(loadedAt);
+    if (Number.isFinite(timestamp)) {
+      return new Date(timestamp).toLocaleString("zh-CN", {
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+    }
+  }
+  return "未同步";
+}
+
 // ── Step Progress Bar ─────────────────────────────────────────────────────
 
 function StepProgressBar({ currentStep }: { currentStep: number }) {
   const steps = [
     { num: 1, label: "连接 BRAIN", desc: "填写凭证并测试连接" },
-    { num: 2, label: "同步云端", desc: "拉取云端 Alpha 与官方上下文" },
+    { num: 2, label: "本地缓存", desc: "首次同步后默认使用本地缓存" },
     { num: 3, label: "开始验证", desc: "运行非提交生产验证流水线" },
   ];
 
@@ -355,10 +450,9 @@ function SyncCloudCTA({ onNavigateToSync }: { onNavigateToSync: () => void }) {
             </svg>
           </div>
           <div>
-            <h2 className="text-lg font-semibold text-accent">连接成功！下一步：同步云端数据</h2>
+            <h2 className="text-lg font-semibold text-accent">连接成功！未检测到本地缓存</h2>
             <p className="text-sm text-text-secondary mt-1 max-w-md">
-              BRAIN 连接正常。现在需要从云端拉取你的 Alpha 列表和官方能力集（字段、算子、数据集），
-              以便后续生成和验证候选。
+              BRAIN 连接正常。首次使用需要拉取云端 Alpha 列表和官方能力集；同步完成后，后续登录会默认直接读取本地缓存。
             </p>
           </div>
           <button
@@ -370,10 +464,10 @@ function SyncCloudCTA({ onNavigateToSync }: { onNavigateToSync: () => void }) {
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" style={{ marginRight: 8 }}>
               <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
             </svg>
-            开始云端同步
+            开始首次同步
           </button>
           <p className="text-xs text-text-tertiary">
-            数据从 BRAIN 官方 API 实时拉取，不含虚假预填数字 · 同步过程中会显示实时进度和倒计时
+            后续刷新改为手动触发 · 同步过程中会显示实时进度和已等待时间
           </p>
         </div>
       </div>

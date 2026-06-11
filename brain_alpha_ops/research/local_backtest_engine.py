@@ -211,10 +211,12 @@ class LocalExpressionEvaluator:
       - ts_corr(x, y, w)   : rolling correlation
       - +, -, *, /          : arithmetic operators
       - neg(x)             : negation
+      - reverse(x)         : negation alias used by FASTEXPR
       - abs(x)             : absolute value
       - log(x)             : natural log (clip to positive)
       - sign(x)            : sign function
       - power(x, a)        : raise to power a
+      - multiply(x, y)     : elementwise multiplication
       - group_rank(x, s)   : rank within sector (s = sector field, currently ignored)
     """
 
@@ -454,7 +456,7 @@ class LocalExpressionEvaluator:
         elif func == "abs" and args:
             return [[abs(v) for v in row] for row in args[0]]
 
-        elif func == "neg" and args:
+        elif func in {"neg", "reverse"} and args:
             return [[-v for v in row] for row in args[0]]
 
         elif func == "log" and args:
@@ -500,6 +502,9 @@ class LocalExpressionEvaluator:
 
         elif func == "divide" and len(args) >= 2:
             return self._apply_binary("/", args[0], args[1])
+
+        elif func == "multiply" and len(args) >= 2:
+            return self._apply_binary("*", args[0], args[1])
 
         elif func == "subtract" and len(args) >= 2:
             return self._apply_binary("-", args[0], args[1])
@@ -914,9 +919,11 @@ class LocalBacktestEngine:
             "normalize",
             "abs",
             "neg",
+            "reverse",
             "log",
             "sign",
             "power",
+            "multiply",
             "divide",
             "subtract",
             "greater",
@@ -1005,6 +1012,8 @@ class LocalBacktestEngine:
                 "error_type": type(exc).__name__,
                 "pass_local": False,
             }
+        except (KeyboardInterrupt, SystemExit, TimeoutError):
+            raise
         except Exception as exc:
             logger.error(
                 "unexpected error evaluating expression: %s; error=%s",

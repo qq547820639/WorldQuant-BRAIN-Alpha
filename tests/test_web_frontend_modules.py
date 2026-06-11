@@ -11,7 +11,7 @@ REACT_DIST = ROOT / "brain_alpha_ops" / "web" / "react_app" / "dist"
 
 REACT_CONTRACT_COVERAGE = {
     "App.tsx": "app shell router, sidebar navigation, credential quick-start, and detail view selection",
-    "api/jobCancel.ts": "shared browser job cancellation helper pinned to production validation stop",
+    "api/jobCancel.ts": "shared browser job cancellation helper using cross-store job cancel",
     "main.tsx": "React root bootstrap",
     "components/CandidateTable.tsx": "candidate generation, filters, queue views, and SSE completion",
     "components/ConfigPanel.tsx": "session credentials, config hydration, schema options, validation, import/export, and save",
@@ -35,7 +35,9 @@ REACT_CONTRACT_COVERAGE = {
     "hooks/useSSE.ts": "stream token, credentials, reconnect, and close semantics",
     "hooks/useToast.ts": "toast lifecycle state",
     "types/index.ts": "shared API, progress, candidate, and card view contracts",
+    "utils/backtestSlots.ts": "official backtest slot status and count helpers",
     "utils/csrf.ts": "CSRF token, stream token, and request-ID generation helpers",
+    "utils/reportIgnoredError.ts": "development-only diagnostics for intentionally ignored browser errors",
     "components/PhaseShell.tsx": "phase wrapper with header, step guide, and unlock condition (UI Design System v3.0)",
     "components/StepGuide.tsx": "horizontal step progress bar with complete/active/pending states (v3.0)",
     "components/MobileTabBar.tsx": "bottom tab navigation for mobile with 4 phase tabs (v3.0)",
@@ -88,7 +90,8 @@ def test_frontend_runtime_modules_render_state_and_interaction_contracts():
             "const PAGE_SIZE = 20;",
             "candidateMatchesQueueView(candidate, viewMode, checkResults)",
             "sanitizeTextInput(value, MAX_FILTER_LENGTH)",
-            "const rows = result?.candidates || result?.candidates_preview || [];",
+            "const rows = result?.candidates || [];",
+            "result.partial",
             'useSSE(taskId ? `/sse?job_id=${encodeURIComponent(taskId)}` : null',
             'aria-label="过滤候选"',
             'aria-label="候选结果"',
@@ -114,7 +117,7 @@ def test_frontend_runtime_modules_render_state_and_interaction_contracts():
         progress + use_api + use_sse + csrf_utils,
         [
             'role="progressbar"',
-            "normalizedPercent(progress)",
+            "normalizedPercent(progress, state)",
             'credentials: "same-origin"',
             'headers["X-Brain-Alpha-CSRF"] = csrf',
             '"X-Brain-Alpha-Request-ID"',
@@ -145,7 +148,7 @@ def test_browser_react_smoke_requires_official_and_alpha_flow_assertions():
             '"/api/generate_candidates"',
             '"/api/scoring/evaluate"',
             '"/api/scoring/attribution"',
-            '"/api/production-validation/stop"',
+            '"/api/cancel"',
         ],
     )
 

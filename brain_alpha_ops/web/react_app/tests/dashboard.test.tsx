@@ -16,7 +16,7 @@ describe("Dashboard", () => {
     const fetchMock = vi.fn(() => new Promise<Response>(() => {}));
     vi.stubGlobal("fetch", fetchMock);
 
-    render(<Dashboard notify={vi.fn()} />);
+    render(<Dashboard notify={vi.fn()} connected contextFresh onNavigateToSync={vi.fn()} />);
 
     // Loading: title visible, data shows placeholder "--"
     expect(screen.getByText("运行总览")).toBeInTheDocument();
@@ -29,13 +29,25 @@ describe("Dashboard", () => {
     const fetchMock = vi.fn(async (url: RequestInfo | URL) => {
       const path = String(url);
       if (path === "/api/production-validation/status") return jsonResponse({ ok: true, job_id: "job_1", status: "running", progress: { candidates_generated: 50, backtests_completed: 3, backtests_pending: 2 } });
-      if (path.startsWith("/api/snapshot/cloud")) return jsonResponse({ ok: true, count: 25549, submitted_count: 3847, passed_unsubmitted_count: 2156, is_stale: false, sample_alphas: [] });
+      if (path.startsWith("/api/snapshot/cloud")) {
+        return jsonResponse({
+          ok: true,
+          summary: {
+            count: 25549,
+            total: 25549,
+            submitted_count: 3847,
+            passed_unsubmitted_count: 2156,
+            is_stale: false,
+          },
+          sample_alphas: [],
+        });
+      }
       if (path.startsWith("/api/snapshot/memory")) return jsonResponse({ ok: true, total_candidates: 1247, families: [{ name: "momentum", count: 320, success_rate: 0.72, avg_score: 75, avg_sharpe: 1.5 }], fields: [], failure_patterns: [] });
       throw new Error(`Unexpected: ${path}`);
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    render(<Dashboard notify={vi.fn()} />);
+    render(<Dashboard notify={vi.fn()} connected contextFresh onNavigateToSync={vi.fn()} />);
 
     expect(await screen.findByText("1247")).toBeInTheDocument();
     // Cloud count appears in both KPI card and panel header
@@ -46,17 +58,81 @@ describe("Dashboard", () => {
     const fetchMock = vi.fn(async (url: RequestInfo | URL) => {
       const path = String(url);
       if (path === "/api/production-validation/status") return jsonResponse({ ok: false, error: "Service unavailable" }, 503);
-      if (path.startsWith("/api/snapshot/cloud")) return jsonResponse({ ok: true, count: 0, submitted_count: 0, passed_unsubmitted_count: 0, is_stale: true, sample_alphas: [] });
+      if (path.startsWith("/api/snapshot/cloud")) {
+        return jsonResponse({
+          ok: true,
+          summary: {
+            count: 0,
+            total: 0,
+            submitted_count: 0,
+            passed_unsubmitted_count: 0,
+            is_stale: true,
+          },
+          sample_alphas: [],
+        });
+      }
       if (path.startsWith("/api/snapshot/memory")) return jsonResponse({ ok: true, total_candidates: 0, families: [], fields: [], failure_patterns: [] });
       throw new Error(`Unexpected: ${path}`);
     });
     vi.stubGlobal("fetch", fetchMock);
 
     const notify = vi.fn();
-    render(<Dashboard notify={notify} />);
+    render(<Dashboard notify={notify} connected contextFresh onNavigateToSync={vi.fn()} />);
 
     const retryBtn = await screen.findByText("重试");
     expect(retryBtn).toBeInTheDocument();
     fireEvent.click(retryBtn);
+  });
+
+  it("describes cloud sync as elapsed progress rather than a countdown", async () => {
+    const fetchMock = vi.fn(async (url: RequestInfo | URL) => {
+      const path = String(url);
+      if (path === "/api/production-validation/status") return jsonResponse({ ok: true, status: "idle" });
+      if (path.startsWith("/api/snapshot/cloud")) return jsonResponse({ ok: true, summary: { count: 0, total: 0 }, sample_alphas: [] });
+      if (path.startsWith("/api/snapshot/memory")) return jsonResponse({ ok: true, total_candidates: 0, families: [], fields: [], failure_patterns: [] });
+      throw new Error(`Unexpected: ${path}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<Dashboard notify={vi.fn()} connected contextFresh={false} onNavigateToSync={vi.fn()} />);
+
+    expect(screen.getByText(/未检测到本地缓存/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /开始首次同步/ })).toBeInTheDocument();
+    expect(screen.getByText(/后续刷新改为手动触发/)).toBeInTheDocument();
+    expect(screen.queryByText(/倒计时/)).not.toBeInTheDocument();
+  });
+
+  it("shows a manual sync entry when local cache is available", async () => {
+    const fetchMock = vi.fn(async (url: RequestInfo | URL) => {
+      const path = String(url);
+      if (path === "/api/production-validation/status") return jsonResponse({ ok: true, status: "idle" });
+      if (path.startsWith("/api/snapshot/cloud")) {
+        return jsonResponse({
+          ok: true,
+          summary: {
+            count: 40852,
+            total: 40852,
+            submitted_count: 1,
+            passed_unsubmitted_count: 2,
+            is_stale: true,
+          },
+          sample_alphas: [],
+        });
+      }
+      if (path.startsWith("/api/snapshot/memory")) return jsonResponse({ ok: true, total_candidates: 0, families: [], fields: [], failure_patterns: [] });
+      throw new Error(`Unexpected: ${path}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const autoStartSync = vi.fn();
+    const openManualSync = vi.fn();
+
+    render(<Dashboard notify={vi.fn()} connected contextFresh onNavigateToSync={autoStartSync} onOpenSync={openManualSync} />);
+
+    const manualButton = await screen.findByText("手动同步");
+    fireEvent.click(manualButton);
+
+    expect(openManualSync).toHaveBeenCalledTimes(1);
+    expect(autoStartSync).not.toHaveBeenCalled();
+    expect((await screen.findAllByText("40852")).length).toBeGreaterThan(0);
   });
 });

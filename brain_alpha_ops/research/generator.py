@@ -18,7 +18,7 @@ from brain_alpha_ops.research.expression_ast import (
     ordered_operators,
     profile_expression,
 )
-from brain_alpha_ops.research.field_quality import filter_generation_fields
+from brain_alpha_ops.research.field_quality import filter_generation_fields, generation_field_ids
 from brain_alpha_ops.research.fallback_generation import (
     high_turnover_generation_risk_reasons,
     is_high_turnover_generation_risk,
@@ -27,6 +27,7 @@ from brain_alpha_ops.research.generator_metadata import (
     DEFAULT_WINDOWS,
     DEFAULT_WINSOR_STD,
     OFFICIAL_OPERATOR_SUBSTITUTE_FAMILIES,
+    expression_windows_within_constraints,
     _expression_operators_are_official,
     _get_default_windows,
     _get_default_winsor_stds,
@@ -97,6 +98,8 @@ class CandidateGenerator:
             "preferred_fields": [],
             "preferred_operators": [],
             "forbidden_patterns": [],
+            "strict_preferred_fields": False,
+            "strict_preferred_operators": False,
         }
 
     @property
@@ -113,7 +116,7 @@ class CandidateGenerator:
     def update_context(self, fields: list[dict], operators: list[dict]) -> None:
         """Update known fields/operators (backward-compat, now sourced from loader)."""
         if fields:
-            self._fields = {str(item.get("name", "")).lower() for item in fields if item.get("name")}
+            self._fields = set(generation_field_ids(fields))
         if operators:
             names = {str(item.get("name", "")).lower() for item in operators if item.get("name")}
             self._operators = names & self._official_operators if self._official_operators else set()
@@ -122,7 +125,7 @@ class CandidateGenerator:
         """Set the active dataset for generation."""
         self._dataset_id = dataset_id
         if self._mapper:
-            self._fields = set(self._mapper.fields_for(dataset_id))
+            self._fields = set(generation_field_ids(self._mapper.fields_for(dataset_id)))
 
     # ------------------------------------------------------------------
     # Field pool — official data only
@@ -143,7 +146,9 @@ class CandidateGenerator:
                 # Treat empty string as None (all datasets)
                 ds_id: str | None = dataset_id if dataset_id else None
                 raw_fields = self._loader.get_fields(ds_id)
-                ds_fields = filter_generation_fields(raw_fields) or raw_fields
+                ds_fields = filter_generation_fields(raw_fields)
+                if raw_fields and not ds_fields:
+                    return []
                 if ds_fields:
                     # Score fields by coverage, pick top N
                     # P1-5: Dynamic field pool — larger pools for datasets with more fields
@@ -171,13 +176,13 @@ class CandidateGenerator:
             from brain_alpha_ops.brain_api.context_defaults import get_default_fields
             default_fields = get_default_fields()
             if default_fields:
-                return [str(f.get("name", "")) for f in default_fields if f.get("name")]
+                return generation_field_ids(default_fields)
         except Exception:
             logger.warning("context default fields unavailable; using in-memory field fallback", exc_info=True)
 
         # Priority 3: self._fields (set by update_context with official API data)
         if self._fields:
-            return sorted(self._fields)
+            return sorted(generation_field_ids(self._fields))
 
         return []
 
@@ -237,22 +242,39 @@ class CandidateGenerator:
     def set_knowledge_constraints(self, constraints: dict[str, Any] | None) -> None:
         """Bias generation toward structured KB rules and away from failures."""
         constraints = dict(constraints or {})
-        preferred_fields = [str(item).lower() for item in constraints.get("preferred_fields") or [] if str(item)]
+        requested_fields = [str(item).lower() for item in constraints.get("preferred_fields") or [] if str(item)]
+        preferred_fields = self._official_preferred_fields(requested_fields)
         preferred_operators = [
             str(item).lower()
             for item in constraints.get("preferred_operators") or []
             if str(item) and str(item).lower() in self._official_operators
         ]
         forbidden_patterns = [str(item).strip() for item in constraints.get("forbidden_patterns") or [] if str(item)]
+        strict_preferred_fields = bool(constraints.get("strict_preferred_fields"))
+        strict_preferred_operators = bool(constraints.get("strict_preferred_operators"))
         self._knowledge_constraints = {
             "preferred_fields": preferred_fields,
             "preferred_operators": preferred_operators,
             "forbidden_patterns": forbidden_patterns,
+            "strict_preferred_fields": strict_preferred_fields,
+            "strict_preferred_operators": strict_preferred_operators,
         }
         if preferred_fields:
             self._fields.update(preferred_fields)
         if preferred_operators:
             self._operators.update(preferred_operators)
+
+    def _official_preferred_fields(self, fields: list[str]) -> list[str]:
+        if not fields:
+            return []
+        official_fields = {str(field).lower() for field in self._fields if str(field)}
+        if not official_fields:
+            official_fields = {
+                str(field).lower()
+                for field in self._build_official_field_pool(self._dataset_id)
+                if str(field)
+            }
+        return [field for field in fields if field in official_fields]
 
     # ------------------------------------------------------------------
     # Generate
@@ -310,6 +332,8 @@ class CandidateGenerator:
             )
             if not _expression_operators_are_official(mutated, self._official_operators):
                 continue
+            if not self._expression_satisfies_strict_preferred_constraints(mutated):
+                continue
             if is_high_turnover_generation_risk(mutated):
                 continue
             if self._knowledge_constraints.get("forbidden_patterns") and self._expression_forbidden(mutated):
@@ -330,6 +354,26 @@ class CandidateGenerator:
             )
         self._cursor += max(1, len(themes))
         return candidates
+
+    def _expression_satisfies_strict_preferred_constraints(self, expression: str) -> bool:
+        """Apply strict KB constraints to generated expressions after mutation."""
+        if self._knowledge_constraints.get("strict_preferred_fields"):
+            allowed_fields = {str(field).lower() for field in self._knowledge_constraints.get("preferred_fields") or []}
+            expression_fields = {str(field).lower() for field in profile_expression(expression).fields}
+            groups = {"market", "sector", "industry", "subindustry"}
+            expression_fields -= groups
+            if not expression_fields or not expression_fields <= allowed_fields:
+                return False
+        if self._knowledge_constraints.get("strict_preferred_operators"):
+            allowed_operators = {
+                str(operator).lower()
+                for operator in self._knowledge_constraints.get("preferred_operators") or []
+            }
+            if not allowed_operators:
+                return False
+            if {operator.lower() for operator in ordered_operators(expression)} - allowed_operators:
+                return False
+        return True
 
     def _generate_fallback(self, count: int, dataset_id: str = "") -> list[Candidate]:
         """Fallback generation — uses real official fields from OfficialDataLoader.
@@ -364,10 +408,26 @@ class CandidateGenerator:
             exp_in_pool = [f for f in self._experience_fields if f in field_pool]
             other_fields = [f for f in field_pool if f not in self._experience_fields]
             field_pool = exp_in_pool + other_fields
+        frontloaded_preferred_fields: list[str] = []
         if self._knowledge_constraints.get("preferred_fields"):
-            preferred_fields = [f for f in field_pool if f.lower() in set(self._knowledge_constraints["preferred_fields"])]
-            remainder = [f for f in field_pool if f.lower() not in set(self._knowledge_constraints["preferred_fields"])]
-            field_pool = preferred_fields + remainder
+            preferred_lower = {str(f).lower() for f in self._knowledge_constraints["preferred_fields"]}
+            field_by_lower = {str(f).lower(): f for f in field_pool if str(f)}
+            official_preferred = [
+                field_by_lower.get(field) or field
+                for field in self._knowledge_constraints["preferred_fields"]
+                if str(field).lower() in preferred_lower
+                and (str(field).lower() in field_by_lower or str(field).lower() in self._fields)
+            ]
+            preferred_fields = []
+            seen_preferred: set[str] = set()
+            for field in official_preferred:
+                key = str(field).lower()
+                if key and key not in seen_preferred:
+                    preferred_fields.append(str(field))
+                    seen_preferred.add(key)
+            frontloaded_preferred_fields = list(preferred_fields)
+            remainder = [f for f in field_pool if str(f).lower() not in seen_preferred]
+            field_pool = preferred_fields if self._knowledge_constraints.get("strict_preferred_fields") else preferred_fields + remainder
 
         # Template skeletons must never name fields directly.  Even common
         # BRAIN fields such as returns/sector are unavailable when the local
@@ -403,10 +463,15 @@ class CandidateGenerator:
                      "relative_momentum", "co_movement", "conditional", "momentum", "volatility",
                      "hybrid", "momentum"]
 
+        strict_operators = set(self._knowledge_constraints.get("preferred_operators") or [])
         template_pairs = [
             (template, family)
             for template, family in zip(templates, families)
             if _expression_operators_are_official(template, self._official_operators)
+            and (
+                not self._knowledge_constraints.get("strict_preferred_operators")
+                or {operator.lower() for operator in ordered_operators(template)} <= strict_operators
+            )
         ]
         if not template_pairs:
             logger.error(
@@ -431,11 +496,15 @@ class CandidateGenerator:
                 field2_index = (base + 3) % len(field_pool)
                 window_index = base % len(windows)
             tmpl = templates[idx]
+            if frontloaded_preferred_fields and len(candidates) < len(frontloaded_preferred_fields):
+                field_index = (attempts - 1) % len(frontloaded_preferred_fields)
             f1 = field_pool[field_index]
             f2 = field_pool[field2_index] if "{f2}" in tmpl else f1
             w = windows[window_index]
             expr = tmpl.replace("{f1}", f1).replace("{f2}", f2).replace("{w}", str(w))
             if not _expression_operators_are_official(expr, self._official_operators):
+                continue
+            if not expression_windows_within_constraints(expr):
                 continue
             if is_high_turnover_generation_risk(expr):
                 continue
@@ -549,8 +618,9 @@ def local_quality(candidate: Candidate, min_score: float) -> dict:
     expression = candidate.expression
     score = 55.0
     reasons = []
-    fields = candidate.data_fields or extract_fields(expression)
-    operators = candidate.operators or extract_operators(expression)
+    profile = profile_expression(expression)
+    fields = sorted({*list(candidate.data_fields or []), *extract_fields(expression), *profile.fields})
+    operators = list(dict.fromkeys([*list(candidate.operators or []), *extract_operators(expression), *profile.operators]))
     depth = nesting_depth(expression)
     generation_risks = high_turnover_generation_risk_reasons(expression)
 

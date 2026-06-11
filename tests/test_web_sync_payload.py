@@ -8,11 +8,13 @@ class Api:
     def __init__(self, fail_context=False, fail_datasets=False):
         self.fail_context = fail_context
         self.fail_datasets = fail_datasets
+        self.sync_ranges = []
 
     def authenticate(self):
         return {"ok": True}
 
     def list_user_alphas(self, sync_range):
+        self.sync_ranges.append(sync_range)
         return [{"id": "a1"}, {"id": "a2"}]
 
     def list_fields(self, *_args):
@@ -73,11 +75,12 @@ def test_sync_cloud_alphas_payload_prefers_official_datasets(tmp_path):
     run_config = RunConfig(environment="production")
     run_config.ops.storage_dir = str(tmp_path)
     persisted = []
+    api = ApiWithDatasets()
 
     payload = sync_cloud_alphas_payload(
         {},
         run_config_from_payload=lambda body: run_config,
-        api_from_run_config=lambda config: ApiWithDatasets(),
+        api_from_run_config=lambda config: api,
         repository_factory=Repo,
         datasets_from_fields=lambda fields: [{"id": "derived"}],
         persist_official_context=lambda fields, operators, datasets: persisted.append((fields, operators, datasets)),
@@ -85,8 +88,31 @@ def test_sync_cloud_alphas_payload_prefers_official_datasets(tmp_path):
         default_operators=[],
     )
 
+    assert api.sync_ranges == ["all"]
+    assert payload["range"] == "all"
     assert payload["datasets_count"] == 1
     assert persisted[0][2] == [{"id": "official_ds", "name": "Official Dataset", "field_count": 9}]
+
+
+def test_sync_cloud_alphas_payload_uses_all_when_request_omits_range_even_if_config_is_short(tmp_path):
+    run_config = RunConfig(environment="production")
+    run_config.ops.storage_dir = str(tmp_path)
+    run_config.ops.budget.cloud_sync_range = "3d"
+    api = Api()
+
+    payload = sync_cloud_alphas_payload(
+        {},
+        run_config_from_payload=lambda body: run_config,
+        api_from_run_config=lambda config: api,
+        repository_factory=Repo,
+        datasets_from_fields=lambda fields: [],
+        persist_official_context=lambda fields, operators, datasets: None,
+        default_fields=[],
+        default_operators=[],
+    )
+
+    assert api.sync_ranges == ["all"]
+    assert payload["range"] == "all"
 
 
 def test_sync_cloud_alphas_payload_uses_context_fallback(tmp_path):

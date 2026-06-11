@@ -6,6 +6,7 @@ from brain_alpha_ops.web_get_handlers import (
     presets_payload,
     profile_payload,
 )
+from brain_alpha_ops.runtime_constants import CloudDefaults
 
 
 class Store:
@@ -50,6 +51,15 @@ def test_active_lifecycle_profile_presets_and_health_payloads():
     assert active["job_id"] == "job_active"
     assert active["progress"]["enriched"] is True
     assert lifecycle["records"] == [{"stage": "x"}]
-    assert health_payload() == {"ok": True, "status": "ready"}
+    assert lifecycle["items"] == [{"stage": "x"}]
+    assert lifecycle["returned_count"] == 1
+    assert lifecycle["total_count"] == 1
+    assert lifecycle["complete"] is True
+    assert lifecycle["display_limit"] is None
+    assert health_payload() == {
+        "ok": True,
+        "status": "ready",
+        "cloud_sync_stale_seconds": CloudDefaults.CLOUD_SYNC_STALE_SECONDS,
+    }
     assert profile_payload(lambda: {"tier": "mock"})["profile"]["tier"] == "mock"
     assert presets_payload(lambda: {"default": {}})["presets"] == {"default": {}}

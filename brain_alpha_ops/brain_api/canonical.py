@@ -27,8 +27,11 @@ CANONICAL_RELEASE_REQUIREMENTS = {
 CANONICAL_API_PATHS = {
     "authentication": "/authentication",
     "simulations": "/simulations",
+    "data_categories": "/data-categories",
     "data_sets": "/data-sets",
+    "data_set_detail": "/data-sets/{dataset_id}",
     "data_fields": "/data-fields",
+    "data_field_detail": "/data-fields/{field_id}",
     "operators": "/operators",
     "user_alphas": "/users/self/alphas",
     "user_profile": "/users/self",

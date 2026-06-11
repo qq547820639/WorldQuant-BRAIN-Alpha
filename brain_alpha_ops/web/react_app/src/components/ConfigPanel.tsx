@@ -9,6 +9,7 @@ interface Props {
   notify: (type: "success" | "error" | "warning" | "info", msg: string) => void;
   credentials: BrainCredentials;
   onCredentialsChange: (credentials: BrainCredentials) => void;
+  onConnectionTested?: (success: boolean, error: string | null) => void;
 }
 
 interface ConfigResponse {
@@ -85,7 +86,7 @@ const DEFAULT_ALPHA_TYPE_OPTIONS = ["REGULAR", "POWER_POOL", "ATOM", "PYRAMID"];
 
 type SelectOption = string | { value: string; label: string };
 
-export default function ConfigPanel({ notify, credentials, onCredentialsChange }: Props) {
+export default function ConfigPanel({ notify, credentials, onCredentialsChange, onConnectionTested }: Props) {
   const configApi = useApi<ConfigResponse>();
   const schemaApi = useApi<ConfigSchemaResponse>();
   const saveApi = useApi<ConfigResponse>();
@@ -186,10 +187,13 @@ export default function ConfigPanel({ notify, credentials, onCredentialsChange }
       body: JSON.stringify(payloadFromForm(form, credentials)),
     });
     if (!result?.ok) {
-      notify("error", result?.error || "BRAIN 连接测试失败");
+      const err = result?.error || result?.error_code || "BRAIN 连接测试失败";
+      notify("error", err);
+      onConnectionTested?.(false, err);
       return;
     }
     notify("success", "BRAIN 连接测试通过");
+    onConnectionTested?.(true, null);
   };
 
   if (configApi.loading && !config) {
@@ -280,7 +284,7 @@ export default function ConfigPanel({ notify, credentials, onCredentialsChange }
         <TextField
           label="账户邮箱"
           value={credentials.username}
-          autoComplete="username"
+          autoComplete="off"
           inputMode="email"
           maxLength={160}
           onChange={(value) => updateCredential("username", value.trim())}
@@ -288,9 +292,10 @@ export default function ConfigPanel({ notify, credentials, onCredentialsChange }
         <PasswordField
           label="密码"
           value={credentials.password}
+          autoComplete="new-password"
           onChange={(value) => updateCredential("password", value)}
         />
-        <TextField
+        <PasswordField
           label="Token"
           value={credentials.token}
           autoComplete="off"
@@ -353,7 +358,12 @@ export default function ConfigPanel({ notify, credentials, onCredentialsChange }
         <NumberField label="最大轮次" value={form.cycles} min={1} max={10000} step={1} onChange={(value) => update("cycles", value)} />
         <NumberField label="候选池大小" value={form.poolSize} min={1} max={5000} step={1} onChange={(value) => update("poolSize", value)} />
         <NumberField label="回测批处理大小" value={form.backtestBatchSize} min={1} max={100} step={1} onChange={(value) => update("backtestBatchSize", value)} />
-        <CheckboxField label="需要云端同步" checked={form.requireCloudSync} onChange={(value) => update("requireCloudSync", value)} />
+        <div>
+          <CheckboxField label="每次运行前强制云端同步" checked={form.requireCloudSync} onChange={(value) => update("requireCloudSync", value)} />
+          <p className="mt-1 text-xs leading-5 text-text-tertiary">
+            默认关闭：首次无缓存时自动同步，之后直接使用本地缓存；开启后，每次生产运行前都会重新拉取云端 Alpha 与官方能力集。
+          </p>
+        </div>
       </ConfigSection>
 
       <ConfigSection title="质量阈值" description="提交前门禁，低于阈值的候选只能进入研究或优化状态。">
@@ -694,10 +704,14 @@ function TextField({
 function PasswordField({
   label,
   value,
+  maxLength,
+  autoComplete = "new-password",
   onChange,
 }: {
   label: string;
   value: string;
+  maxLength?: number;
+  autoComplete?: string;
   onChange: (value: string) => void;
 }) {
   return (
@@ -706,7 +720,8 @@ function PasswordField({
       <input
         type="password"
         value={value}
-        autoComplete="current-password"
+        maxLength={maxLength}
+        autoComplete={autoComplete}
         onChange={(event) => onChange(event.currentTarget.value)}
         className={inputClass}
       />

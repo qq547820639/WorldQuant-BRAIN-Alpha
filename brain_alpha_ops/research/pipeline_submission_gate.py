@@ -213,23 +213,22 @@ class PipelineSubmissionMixin:
                 )
                 safety["official_release_gate"] = release_gate
 
-        if self.config.budget.require_cloud_sync:
-            cloud_status = str(self.cloud_sync.get("status", "")).lower()
-            add(
-                "cloud_sync_completed",
-                cloud_status in {"synced", "loaded"},
-                self.cloud_sync.get("warning") or f"cloud sync status={cloud_status or 'unknown'}",
-            )
-            add(
-                "cloud_sync_has_rows",
-                bool(self.cloud_alphas),
-                f"{len(self.cloud_alphas)} cloud alphas loaded",
-            )
-            add(
-                "cloud_sync_not_stale",
-                not bool(self.cloud_sync.get("stale")),
-                "cloud alpha cache is stale" if self.cloud_sync.get("stale") else "cloud alpha sync is fresh",
-            )
+        cloud_status = str(self.cloud_sync.get("status", "")).lower()
+        add(
+            "cloud_sync_completed",
+            cloud_status in {"synced", "loaded"},
+            self.cloud_sync.get("warning") or f"cloud sync status={cloud_status or 'unknown'}",
+        )
+        add(
+            "cloud_sync_has_rows",
+            bool(self.cloud_alphas),
+            f"{len(self.cloud_alphas)} cloud alphas loaded",
+        )
+        add(
+            "cloud_sync_not_stale",
+            not bool(self.cloud_sync.get("stale")),
+            "cloud alpha cache is stale" if self.cloud_sync.get("stale") else "cloud alpha sync is fresh",
+        )
 
         cloud_alpha_status = self._cloud_status_for_candidate(candidate)
         already_submitted = str(cloud_alpha_status.get("status", "")).upper() in SUBMITTED_CLOUD_STATUSES

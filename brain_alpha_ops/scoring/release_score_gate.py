@@ -42,7 +42,12 @@ class OfficialSnapshot:
             self_correlation=_num(raw.get("self_correlation")),
             prod_correlation=_num(raw.get("prod_correlation")),
             weight_concentration=_num(raw.get("weight_concentration")),
-            sub_universe_sharpe=_metric(raw, "sub_universe_sharpe", "subUniverseSharpe"),
+            sub_universe_sharpe=_metric_with_check_fallback(
+                raw,
+                "LOW_SUB_UNIVERSE_SHARPE",
+                "sub_universe_sharpe",
+                "subUniverseSharpe",
+            ),
             sub_universe_size=_metric(raw, "subUniverseSize", "sub_universe_size", "sub_size"),
             alpha_size=_metric(raw, "alphaSize", "alpha_size"),
             pass_fail=_text(raw.get("pass_fail")),
@@ -346,6 +351,24 @@ def _metric(metrics: Mapping[str, Any], *keys: str) -> float | None:
         if value is not None:
             return value
     return None
+
+
+def _metric_with_check_fallback(metrics: Mapping[str, Any], check_name: str, *keys: str) -> float | None:
+    value = _metric(metrics, *keys)
+    check_value = _brain_check_value(metrics, check_name)
+    if check_value is not None and (value is None or (value == 0.0 and check_value != 0.0)):
+        return check_value
+    return value
+
+
+def _brain_check_value(metrics: Mapping[str, Any], check_name: str) -> float | None:
+    checks = metrics.get("brain_checks")
+    if not isinstance(checks, Mapping):
+        return None
+    check = checks.get(check_name)
+    if not isinstance(check, Mapping):
+        return None
+    return _num(check.get("value"))
 
 
 def _num(value: Any) -> float | None:

@@ -3,16 +3,16 @@
 from __future__ import annotations
 
 
-MAX_FIELDS_PAGES = 200
-MAX_DATASETS_PAGES = 20
-MAX_OPERATORS_PAGES = 20
-# User alpha inventory must stay complete by default. Safety is enforced by
-# repeated-page detection, unique-item stall telemetry, explicit cancellation,
-# and BRAIN offset recovery instead of an arbitrary page ceiling.
+MAX_FIELDS_PAGES = None
+MAX_DATASETS_PAGES = None
+MAX_OPERATORS_PAGES = None
+# Cloud and official capability inventories must stay complete by default.
+# Safety is enforced by repeated-page detection, empty/short-page stops,
+# explicit cancellation, and BRAIN offset recovery instead of arbitrary caps.
 MAX_USER_ALPHAS_PAGES = None
-MAX_FIELDS_ITEMS = 20_000
-MAX_DATASETS_ITEMS = 2_000
-MAX_OPERATORS_ITEMS = 2_000
+MAX_FIELDS_ITEMS = None
+MAX_DATASETS_ITEMS = None
+MAX_OPERATORS_ITEMS = None
 
 
 def coerce_limit(value: int | str | None, *, safety_default: int | None = None) -> int | None:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import os
 
 from typing import Any, Callable
 
@@ -13,6 +14,7 @@ from brain_alpha_ops.brain_api.canonical import (
     SUPPORTED_REGIONS,
     SUPPORTED_UNIVERSES,
 )
+from brain_alpha_ops.brain_api.user_alpha_sync import sync_range_from_payload
 from brain_alpha_ops.config import (
     BrainSettings,
     OpsConfig,
@@ -65,8 +67,20 @@ def public_run_config_dict(config: RunConfig) -> dict[str, Any]:
         "username_env": credentials.get("username_env", "BRAIN_USERNAME"),
         "password_env": credentials.get("password_env", "BRAIN_PASSWORD"),
         "token_env": credentials.get("token_env", "BRAIN_TOKEN"),
+        "managed_credentials_available": managed_credentials_available(credentials),
     }
     return data
+
+
+def managed_credentials_available(credentials: dict[str, Any]) -> bool:
+    """Return only whether runtime credentials exist, never their values."""
+    token_env = str(credentials.get("token_env") or "BRAIN_TOKEN")
+    username_env = str(credentials.get("username_env") or "BRAIN_USERNAME")
+    password_env = str(credentials.get("password_env") or "BRAIN_PASSWORD")
+    token = str(credentials.get("token") or os.getenv(token_env, ""))
+    username = str(credentials.get("username") or os.getenv(username_env, ""))
+    password = str(credentials.get("password") or os.getenv(password_env, ""))
+    return bool(token) or bool(username and password)
 
 
 def save_run_config_payload(
@@ -301,13 +315,8 @@ def run_config_from_payload(payload: dict, *, loader: RunConfigLoader = load_run
             current_budget.enable_secondary_fusion,
         ),
         require_cloud_sync=payload_bool(payload, "requireCloudSync", current_budget.require_cloud_sync),
-        cloud_sync_range=str(payload.get("syncRange", current_budget.cloud_sync_range)),
-        cloud_sync_max_elapsed_seconds=payload_float(
-            payload,
-            "cloudSyncMaxElapsedSeconds",
-            current_budget.cloud_sync_max_elapsed_seconds,
-            lower=0.0,
-        ),
+        cloud_sync_range=sync_range_from_payload(payload),
+        cloud_sync_max_elapsed_seconds=0.0,
         max_cycles=payload_int(
             payload,
             "cycles" if "cycles" in payload else "max_cycles",

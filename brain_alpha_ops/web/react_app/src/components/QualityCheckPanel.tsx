@@ -173,7 +173,6 @@ function buildQualitySummary(
 
 function reasonText(rows: { reason: string; count: number }[] | undefined) {
   return (rows || [])
-    .slice(0, 4)
     .map((row) => `${reasonLabel(row.reason)} ${row.count}`)
     .join(" · ");
 }

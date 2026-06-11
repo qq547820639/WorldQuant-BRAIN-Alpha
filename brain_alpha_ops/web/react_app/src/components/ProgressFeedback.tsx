@@ -19,12 +19,14 @@ export default function ProgressFeedback({
   idleText = "就绪", successText = "完成",
   retryLabel = "重试", compact = false, onRetry,
 }: Props) {
-  const [remaining, setRemaining] = useState(() => Number(progress?.eta_seconds || 0));
+  const [remaining, setRemaining] = useState(() => etaSecondsFromProgress(progress));
   const [elapsed, setElapsed] = useState(0);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
   const startedAtRef = useRef(Date.now());
 
-  useEffect(() => { setRemaining(Number(progress?.eta_seconds || 0)); }, [progress?.eta_seconds, progress?.task_id, progress?.job_id]);
+  useEffect(() => {
+    setRemaining(etaSecondsFromProgress(progress));
+  }, [progress?.eta_deadline_at_ms, progress?.eta_seconds, progress?.task_id, progress?.job_id]);
 
   useEffect(() => {
     if (state === "idle") { startedAtRef.current = Date.now(); return; }
@@ -37,9 +39,12 @@ export default function ProgressFeedback({
   useEffect(() => {
     if (state !== "loading" && state !== "progress") return;
     if (!remaining || remaining <= 0) return;
-    const timer = setInterval(() => setRemaining((v) => Math.max(0, v - 1)), 1000);
+    const timer = setInterval(() => {
+      const deadlineRemaining = etaSecondsFromProgress(progress, { deadlineOnly: true });
+      setRemaining((v) => deadlineRemaining > 0 ? deadlineRemaining : Math.max(0, v - 1));
+    }, 1000);
     return () => clearInterval(timer);
-  }, [remaining, state]);
+  }, [progress?.eta_deadline_at_ms, remaining, state]);
 
   // Elapsed timer
   useEffect(() => {
@@ -50,23 +55,30 @@ export default function ProgressFeedback({
     return () => clearInterval(timer);
   }, [state]);
 
-  const percent = useMemo(() => normalizedPercent(progress), [progress]);
+  const rawPercent = useMemo(() => normalizedPercent(progress, state), [progress, state]);
+  const percent = state === "success" && rawPercent == null ? 100 : rawPercent;
   const roundedPercent = percent == null ? 0 : Math.round(percent);
   const isBusy = state === "loading" || state === "progress";
-  const isDeterminate = isBusy && percent != null;
+  const showProgressBar = isBusy || state === "success" || (state === "error" && percent != null);
+  const isDeterminate = showProgressBar && percent != null;
   const label = progress?.phase_label || progress?.phase || title;
   const message = progress?.status_message || progress?.message || statusText(state, idleText, successText);
-  const eta = remaining > 0 ? fmtDuration(remaining) : "";
+  const openEndedCloudScan = isOpenEndedCloudScan(progress);
+  const displayMessage = openEndedCloudScan ? openEndedScanStatusMessage(progress, message) : message;
+  const cloudScanWithApiTotal = isCloudScanWithApiTotal(progress);
+  const estimatedEta = estimatedEtaSeconds(progress, elapsed, remaining);
+  const eta = estimatedEta > 0 ? fmtDuration(estimatedEta) : "";
 
-  // Stall detection: >10s elapsed with no progress (0% and scanning)
-  const isStalled = isBusy && !isDeterminate && elapsed > 10;
-  const scanCount = progress?.scanned != null ? `${progress.scanned} / ${progress.total || "—"}` : null;
+  const isStalled = isBusy && !isDeterminate && !openEndedCloudScan && elapsed > 10;
+  const scanCount = scanCountText(progress, openEndedCloudScan);
 
   if (state === "idle" && compact) return null;
 
   const errorBorder = state === "error" ? { borderColor: "oklch(0.48 0.08 22 / 0.30)", background: "oklch(0.48 0.06 22 / 0.08)" } : {};
   const successBorder = state === "success" ? { borderColor: "oklch(0.52 0.06 155 / 0.30)", background: "oklch(0.52 0.06 155 / 0.08)" } : {};
   const stallBorder = isStalled ? { borderColor: "oklch(0.65 0.08 85 / 0.30)", background: "oklch(0.65 0.06 85 / 0.06)" } : {};
+  const badge = progressStatusBadge(state, progress, percent);
+  const fillClass = progressFillClass(state, progress, isStalled);
 
   return (
     <div
@@ -83,8 +95,9 @@ export default function ProgressFeedback({
             <p className="text-sm text-text-tertiary mt-1">{label}</p>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+            <span className={`badge ${badge.className}`}>{badge.label}</span>
             {isBusy && percent == null && <span className="spinner" />}
-            {isBusy && percent != null && (
+            {showProgressBar && percent != null && state !== "success" && (
               <span className="text-sm tabular text-accent font-medium">{roundedPercent}%</span>
             )}
             {state === "success" && (
@@ -94,7 +107,7 @@ export default function ProgressFeedback({
         </div>
 
         {/* Progress bar */}
-        {isBusy && (
+        {showProgressBar && (
           <div className={`progress-bar ${isDeterminate ? "" : "indeterminate"}`}
             role="progressbar"
             aria-label={`${title}: ${label}`}
@@ -102,7 +115,7 @@ export default function ProgressFeedback({
             aria-valuenow={isDeterminate ? roundedPercent : undefined}
             style={{ marginBottom: 12 }}
           >
-            <div className={`progress-bar-fill${isStalled ? " warning" : ""}`} style={isDeterminate ? { width: `${percent}%` } : undefined} />
+            <div className={`progress-bar-fill ${fillClass}`} style={isDeterminate ? { width: `${percent}%` } : undefined} />
           </div>
         )}
 
@@ -110,10 +123,10 @@ export default function ProgressFeedback({
         <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
           <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 12, fontSize: "0.8125rem", lineHeight: 1.6, color: "oklch(0.72 0.005 45)" }}>
             <span className="min-w-0 break-words">
-              {state === "error" ? (error || progress?.error || "操作失败。") : message}
+              {state === "error" ? (error || progress?.error || "操作失败。") : displayMessage}
             </span>
             <span style={{ display: "flex", gap: 12 }}>
-              {scanCount && <span style={{ color: "oklch(0.52 0.006 45)" }}>{scanCount} 条</span>}
+              {scanCount && <span style={{ color: "oklch(0.52 0.006 45)" }}>{scanCount}</span>}
               {elapsed > 0 && <span className="tabular" style={{ color: "oklch(0.52 0.006 45)" }}>已耗时 {fmtDuration(elapsed)}</span>}
               {eta && <span className="tabular" style={{ color: "oklch(0.52 0.006 45)" }}>预计剩余 {eta}</span>}
             </span>
@@ -129,7 +142,7 @@ export default function ProgressFeedback({
         {/* Meta info */}
         <div style={{ display: "flex", flexWrap: "wrap", gap: "8px 16px", marginTop: 8, fontSize: "0.75rem", color: "oklch(0.52 0.006 45)" }}>
           {lastUpdatedAt && <span>最后更新 {fmtClock(lastUpdatedAt)}</span>}
-          {state === "error" && <span>{interruptionText(error || progress?.error || message, progress?.phase)}</span>}
+          {state === "error" && <span>{interruptionText(error || progress?.error || displayMessage, progress?.phase)}</span>}
         </div>
 
         {/* Recovery actions */}
@@ -147,7 +160,45 @@ export default function ProgressFeedback({
   );
 }
 
-function normalizedPercent(progress?: UnifiedProgress | null): number | null {
+function progressStatusBadge(state: ProgressLifecycle, progress?: UnifiedProgress | null, percent?: number | null) {
+  const status = String(progress?.status || "").toLowerCase();
+  const phase = String(progress?.phase || "").toLowerCase();
+  const text = `${status} ${phase}`;
+  if (state === "error" || /failed|error|watchdog/.test(text)) {
+    return { label: percent != null ? "中断" : "失败", className: "badge-negative" };
+  }
+  if (/stopped|cancelled|canceled/.test(text)) {
+    return { label: "已停止", className: "badge-warning" };
+  }
+  if (state === "success" || /completed|success|done/.test(text)) {
+    return { label: "已完成", className: "badge-positive" };
+  }
+  if (state === "loading" || state === "progress") {
+    if (isOpenEndedCloudScan(progress) && percent == null) {
+      return { label: "运行中", className: "badge-info" };
+    }
+    if (((progress?.open_ended === true || progress?.indeterminate === true) && percent == null) || percent == null) {
+      return { label: "等待中", className: "badge-warning" };
+    }
+    return { label: "运行中", className: "badge-info" };
+  }
+  return { label: "就绪", className: "badge-neutral" };
+}
+
+function progressFillClass(state: ProgressLifecycle, progress?: UnifiedProgress | null, stalled = false) {
+  if (state === "success") return "positive";
+  if (state === "error" || isInterruptedProgress(state, progress)) return "negative";
+  if (stalled || progress?.open_ended === true || progress?.indeterminate === true) return "warning";
+  return "";
+}
+
+function normalizedPercent(progress?: UnifiedProgress | null, state: ProgressLifecycle = "progress"): number | null {
+  if (isOpenEndedCloudScan(progress)) {
+    return null;
+  }
+  if (isCloudScanWithApiTotal(progress)) {
+    return null;
+  }
   const raw = progress?.percent_complete ?? progress?.percent;
   const value = Number(raw);
   if (!Number.isFinite(value)) {
@@ -156,7 +207,127 @@ function normalizedPercent(progress?: UnifiedProgress | null): number | null {
     if (Number.isFinite(done) && Number.isFinite(total) && total > 0) return Math.max(0, Math.min(100, (done / total) * 100));
     return null;
   }
+  if (isInterruptedProgress(state, progress) && value >= 100 && !hasCompletedProgress(progress)) {
+    const ratio = ratioPercent(progress);
+    return ratio != null && ratio < 100 ? ratio : null;
+  }
   return Math.max(0, Math.min(100, value));
+}
+
+function ratioPercent(progress?: UnifiedProgress | null) {
+  const done = Number(progress?.done ?? progress?.checked ?? progress?.submitted ?? progress?.scanned);
+  const total = Number(progress?.total);
+  if (Number.isFinite(done) && Number.isFinite(total) && total > 0) {
+    return Math.max(0, Math.min(100, (done / total) * 100));
+  }
+  return null;
+}
+
+function isInterruptedProgress(state: ProgressLifecycle, progress?: UnifiedProgress | null) {
+  if (state === "error") return true;
+  const status = String(progress?.status || "").toLowerCase();
+  const phase = String(progress?.phase || "").toLowerCase();
+  return /failed|error|stopped|cancelled|canceled|watchdog/.test(`${status} ${phase}`);
+}
+
+function hasCompletedProgress(progress?: UnifiedProgress | null) {
+  const status = String(progress?.status || "").toLowerCase();
+  const phase = String(progress?.phase || "").toLowerCase();
+  return /completed|success|done/.test(`${status} ${phase}`);
+}
+
+function isCloudScanWithApiTotal(progress?: UnifiedProgress | null) {
+  const phase = String(progress?.phase || "").toLowerCase();
+  const statusCode = String(progress?.status_code || "").toUpperCase();
+  const operation = String(progress?.operation || "").toLowerCase();
+  const total = scanWindowTotal(progress);
+  return total > 0
+    && phase === "scan"
+    && (!statusCode || statusCode === "SCAN")
+    && (!operation || operation === "sync_alphas" || operation === "cloud_sync");
+}
+
+function isOpenEndedCloudScan(progress?: UnifiedProgress | null) {
+  if (progress?.open_ended === true || progress?.indeterminate === true) {
+    return true;
+  }
+  const phase = String(progress?.phase || "").toLowerCase();
+  const statusCode = String(progress?.status_code || "").toUpperCase();
+  const operation = String(progress?.operation || "").toLowerCase();
+  const scanOperation = phase === "scan"
+    && (!statusCode || statusCode === "SCAN")
+    && (!operation || operation === "sync_alphas" || operation === "cloud_sync");
+  if (!scanOperation || hasCompletedProgress(progress)) return false;
+  return true;
+}
+
+function scanCountText(progress?: UnifiedProgress | null, openEndedCloudScan = false) {
+  if (progress?.scanned == null) return null;
+  const scanned = Number(progress.scanned);
+  if (!Number.isFinite(scanned)) return null;
+  if (openEndedCloudScan) {
+    return `已拉取 ${fmtCount(scanned)} 条${scanPageText(progress)}`;
+  }
+  const total = Number(progress.total);
+  const totalText = Number.isFinite(total) && total > 0 ? fmtCount(total) : "—";
+  return `已拉取 ${fmtCount(scanned)} / ${totalText} 条${scanPageText(progress)}`;
+}
+
+function openEndedScanStatusMessage(progress?: UnifiedProgress | null, fallback = "") {
+  const scanned = positiveNumber(progress?.scanned);
+  const total = positiveNumber(progress?.api_reported_total ?? progress?.filter_window_count);
+  if (scanned <= 0) return fallback || "正在扫描云端 Alpha；等待官方接口返回第一页和接口分页参考数；首次全量同步可能需要 3-5 分钟，近 3/7 天范围通常更快。";
+  if (total > 0) {
+    return `已拉取 ${fmtCount(scanned)} 条云端 Alpha；接口分页参考数 ${fmtCount(total)} 条，不是云端 Alpha 总量，会继续按分页自动确认边界。`;
+  }
+  return `已拉取 ${fmtCount(scanned)} 条云端 Alpha；接口分页参考数仍在确认，会按分页返回继续读取。`;
+}
+
+function scanPageText(progress?: UnifiedProgress | null) {
+  const page = positiveNumber(progress?.pages_fetched ?? progress?.page_number);
+  const pageSize = positiveNumber(progress?.page_size);
+  const pageLimit = positiveNumber(progress?.page_limit);
+  const nextOffset = positiveNumber(progress?.next_offset);
+  const chunks: string[] = [];
+  if (page) chunks.push(`当前第 ${fmtCount(page)} 页`);
+  if (pageSize) chunks.push(`本页 ${fmtCount(pageSize)} 条`);
+  if (pageLimit) chunks.push(`${fmtCount(pageLimit)} 条/页`);
+  if (nextOffset) chunks.push(scanNextOffsetText(progress, nextOffset));
+  if (progress?.confirming_total_boundary) chunks.push("确认下一页");
+  return chunks.length ? `；${chunks.join(" · ")}` : "";
+}
+
+function scanNextOffsetText(progress: UnifiedProgress | null | undefined, nextOffset: number) {
+  const filterWindowCount = scanWindowTotal(progress);
+  if (filterWindowCount > 0 && nextOffset >= filterWindowCount) {
+    return "下一请求确认分页边界";
+  }
+  return "下一轮继续拉取";
+}
+
+function etaSecondsFromProgress(progress?: UnifiedProgress | null, options?: { deadlineOnly?: boolean }) {
+  const deadline = Number(progress?.eta_deadline_at_ms);
+  if (Number.isFinite(deadline) && deadline > 0) {
+    return Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
+  }
+  if (options?.deadlineOnly) return 0;
+  const seconds = Number(progress?.eta_seconds || 0);
+  return Number.isFinite(seconds) && seconds > 0 ? seconds : 0;
+}
+
+function estimatedEtaSeconds(progress: UnifiedProgress | null | undefined, elapsed: number, fallback: number) {
+  const scanned = positiveNumber(progress?.scanned);
+  const cloudScan = isOpenEndedCloudScan(progress) || isCloudScanWithApiTotal(progress);
+  if (cloudScan) return 0;
+  const total = positiveNumber(progress?.total);
+  if (scanned > 0 && total > scanned && elapsed > 0) {
+    return Math.ceil((total - scanned) / (scanned / elapsed));
+  }
+  return fallback > 0 ? fallback : 0;
+}
+
+function scanWindowTotal(progress?: UnifiedProgress | null) {
+  return positiveNumber(progress?.api_reported_total ?? progress?.filter_window_count);
 }
 
 function statusText(state: ProgressLifecycle, idle: string, ok: string) {
@@ -190,4 +361,13 @@ function fmtClock(d: Date) {
 function fmtDuration(s: number) {
   const safe = Math.max(0, Math.round(s));
   return `${String(Math.floor(safe / 60)).padStart(2, "0")}:${String(safe % 60).padStart(2, "0")}`;
+}
+
+function fmtCount(value: number) {
+  return Math.max(0, Math.trunc(value)).toLocaleString("zh-CN");
+}
+
+function positiveNumber(value: unknown) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) && numeric > 0 ? numeric : 0;
 }

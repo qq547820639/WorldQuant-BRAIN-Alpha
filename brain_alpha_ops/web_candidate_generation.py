@@ -14,13 +14,15 @@ from brain_alpha_ops.research.alpha_quality import (
     diagnose_alpha_candidate,
     summarize_quality_diagnostics,
 )
-from brain_alpha_ops.research.generator import extract_fields, extract_operators, local_quality
 from brain_alpha_ops.research.fallback_generation import high_turnover_generation_risk_reasons
+from brain_alpha_ops.research.field_quality import non_signal_generation_fields
+from brain_alpha_ops.research.generator import extract_fields, extract_operators, local_quality
 from brain_alpha_ops.research.guidance import (
     assistant_guidance_candidate_metadata,
     ensure_assistant_guidance_digest,
 )
 from brain_alpha_ops.research.local_backtest_engine import LocalBacktestEngine
+from brain_alpha_ops.research.local_backtest_config import PREFILTER_BACKTEST_DATES, PREFILTER_BACKTEST_SYMBOLS
 from brain_alpha_ops.research.local_backtest_gate import apply_local_backtest_gate, blocked_local_gate
 from brain_alpha_ops.research.repository import ResearchRepository
 from brain_alpha_ops.research.scoring import build_scorecard
@@ -30,6 +32,9 @@ from brain_alpha_ops.web_config import (
     bounded_query_int,
     payload_truthy,
 )
+
+
+_REJECTED_CANDIDATE_PREVIEW_LIMIT = 20
 
 
 class ToolboxLike(Protocol):
@@ -66,6 +71,20 @@ def generate_candidates_payload(
                 phase="web_generate_candidates",
             )
         run_config.ops.settings.dataset = dataset_id
+    local_backtest_engine = LocalBacktestEngine(
+        n_dates=PREFILTER_BACKTEST_DATES,
+        n_symbols=PREFILTER_BACKTEST_SYMBOLS,
+    )
+    preferred_fields = [
+        str(field).lower()
+        for field in sorted(getattr(local_backtest_engine, "supported_fields", set()) or [])
+        if str(field)
+    ]
+    preferred_operators = [
+        str(operator).lower()
+        for operator in sorted(getattr(local_backtest_engine, "supported_operators", set()) or [])
+        if str(operator)
+    ]
     args = {
         "count": bounded_query_int(payload.get("count", payload.get("candidates", 10)), 1, _MAX_CANDIDATES),
         "dataset_id": dataset_id,
@@ -74,6 +93,12 @@ def generate_candidates_payload(
         "min_success_rate": bounded_query_float(payload.get("min_success_rate", 0.0), 0.0, 1.0),
         "assistant_min_confidence": bounded_query_float(payload.get("assistant_min_confidence", 0.0), 0.0, 1.0),
     }
+    if preferred_fields:
+        args["preferred_fields"] = preferred_fields
+        args["strict_preferred_fields"] = True
+    if preferred_operators:
+        args["preferred_operators"] = preferred_operators
+        args["strict_preferred_operators"] = True
     for key in ("assistant_response", "assistant_raw_output", "assistant_guidance"):
         if key in payload:
             args[key] = payload[key]
@@ -100,7 +125,8 @@ def generate_candidates_payload(
         generation_args=args,
     )
     candidates: list[dict[str, Any]] = []
-    local_backtest_engine = LocalBacktestEngine()
+    processed_candidates: list[dict[str, Any]] = []
+    rejected_candidates: list[dict[str, Any]] = []
     raw_assistant_guidance = result.get("assistant_guidance")
     assistant_guidance = raw_assistant_guidance if isinstance(raw_assistant_guidance, dict) else {}
     assistant_guidance_applied = bool(assistant_guidance.get("applied"))
@@ -118,7 +144,21 @@ def generate_candidates_payload(
             cache_key=candidate.dataset_id or run_config.ops.settings.dataset or "default",
             extract_fields=extract_fields,
             extract_operators=extract_operators,
+            reject_unsupported=True,
+            reject_failed_metrics=True,
         )
+        non_signal_fields = non_signal_generation_fields(candidate)
+        if non_signal_fields:
+            local = dict(candidate.local_quality or {})
+            reasons = list(local.get("reasons") or [])
+            reason = "non_signal_generation_fields=" + ",".join(non_signal_fields[:8])
+            if reason not in reasons:
+                reasons.append(reason)
+            local["passed"] = False
+            local["reasons"] = reasons
+            local["score"] = max(0.0, round(float(local.get("score", 0.0) or 0.0) - 8.0, 2))
+            local["non_signal_generation_fields"] = non_signal_fields
+            candidate.local_quality = local
         candidate.scorecard = build_scorecard(candidate, run_config.ops.thresholds, run_config.ops.scoring)
         candidate.alpha_output_config = alpha_output_config
         generation_risks = high_turnover_generation_risk_reasons(candidate.expression)
@@ -145,11 +185,20 @@ def generate_candidates_payload(
             run_config=run_config,
             output_config=alpha_output_config,
         )
-        candidates.append(candidate.to_dict())
+        candidate_payload = candidate.to_dict()
+        processed_candidates.append(candidate_payload)
+        if _candidate_rejected_by_local_gate(candidate_payload):
+            rejected_candidates.append(candidate_payload)
+        else:
+            candidates.append(candidate_payload)
 
-    quality_summary = summarize_quality_diagnostics(candidates)
+    quality_summary = summarize_quality_diagnostics(processed_candidates)
+    rejected_reasons = _rejected_reason_counts(rejected_candidates)
     summary = {
-        "generated_count": len(candidates),
+        "generated_count": len(processed_candidates),
+        "returned_count": len(candidates),
+        "rejected_count": len(rejected_candidates),
+        "rejected_reasons": rejected_reasons,
         "source": "local_candidate_generator",
         "assistant_guidance": assistant_guidance or result.get("assistant_guidance"),
         "local_only": True,
@@ -169,10 +218,52 @@ def generate_candidates_payload(
         "ok": True,
         "count": len(candidates),
         "candidates": candidates,
+        "rejected_candidates_preview": rejected_candidates[:_REJECTED_CANDIDATE_PREVIEW_LIMIT],
         "summary": summary,
         "assistant_guidance": assistant_guidance or result.get("assistant_guidance"),
     }
 
+
+def _candidate_rejected_by_local_gate(candidate: dict[str, Any]) -> bool:
+    diagnosis = candidate.get("quality_diagnosis") if isinstance(candidate.get("quality_diagnosis"), dict) else {}
+    if diagnosis.get("local_candidate_valid") is False:
+        return True
+    local_quality = candidate.get("local_quality") if isinstance(candidate.get("local_quality"), dict) else {}
+    if local_quality.get("passed") is False:
+        return True
+    support = local_quality.get("local_backtest_support") if isinstance(local_quality.get("local_backtest_support"), dict) else {}
+    if support.get("supported") is False:
+        return True
+    local_backtest = local_quality.get("local_backtest") if isinstance(local_quality.get("local_backtest"), dict) else {}
+    if local_backtest.get("pass_local") is False:
+        return True
+    return False
+
+
+def _rejected_reason_counts(candidates: list[dict[str, Any]]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for candidate in candidates:
+        for reason in _candidate_rejection_reasons(candidate):
+            counts[reason] = counts.get(reason, 0) + 1
+    return counts
+
+
+def _candidate_rejection_reasons(candidate: dict[str, Any]) -> list[str]:
+    diagnosis = candidate.get("quality_diagnosis") if isinstance(candidate.get("quality_diagnosis"), dict) else {}
+    reasons = [
+        str(reason or "").strip()
+        for reason in diagnosis.get("blocking_reasons") or []
+        if str(reason or "").strip()
+    ]
+    local_quality = candidate.get("local_quality") if isinstance(candidate.get("local_quality"), dict) else {}
+    for reason in local_quality.get("reasons") or []:
+        text = str(reason or "").strip()
+        if text:
+            reasons.append(text.split(":", 1)[0])
+    local_backtest = local_quality.get("local_backtest") if isinstance(local_quality.get("local_backtest"), dict) else {}
+    if local_backtest.get("pass_local") is False:
+        reasons.append("local_backtest_failed")
+    return sorted(set(reasons)) or ["local_candidate_invalid"]
 """Single candidate check orchestration for the local web console."""
 
 import logging
@@ -182,6 +273,7 @@ from brain_alpha_ops.config import RunConfig
 from brain_alpha_ops.redaction import redact_error_message, redact_text
 from brain_alpha_ops.research.repository import ResearchRepository
 from brain_alpha_ops.research.safety import SubmissionLedger
+from brain_alpha_ops.web_candidate_check_evidence import persist_candidate_check_evidence
 
 
 logger = logging.getLogger(__name__)
@@ -219,7 +311,7 @@ def check_candidate_payload(
         return {"ok": False, "error_code": "VALIDATION_ERROR", "error": "candidate not found"}
 
     mode = str(payload.get("mode", "quick"))
-    sync_range = str(payload.get("syncRange", "3d"))
+    sync_range = str(payload.get("syncRange", "all"))
     run_config = run_config_from_payload(payload)
     api = api_from_run_config(run_config)
     repo = repository_factory(run_config.ops.storage_dir)
@@ -259,6 +351,7 @@ def check_candidate_payload(
             redact_text(result.get("alpha_id", "?"), max_length=64),
             redact_error_message(exc),
         )
+    persist_candidate_check_evidence(run_config.ops.storage_dir, candidate, result)
 
     return result
 

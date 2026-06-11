@@ -20,7 +20,7 @@ from typing import Any
 from brain_alpha_ops.redaction import redact_data
 
 
-ACTIVE_STATUSES = {"queued", "running", "stopping"}
+ACTIVE_STATUSES = {"queued", "pending", "starting", "running", "stopping"}
 TERMINAL_STATUSES = {"completed", "completed_with_warnings", "failed", "stopped", "cancelled", "canceled"}
 KNOWN_STATUSES = ACTIVE_STATUSES | TERMINAL_STATUSES | {"idle"}
 DEFAULT_RECOVERY_ERROR = "Process restarted before this task completed."
@@ -58,32 +58,55 @@ class JobStore:
 
     def create(self, initial: dict[str, Any] | None = None) -> str:
         with self.lock:
-            job_id = self._next_id_locked()
-            now = time.time()
-            row: dict[str, Any] = {
-                "status": "queued",
-                "result": None,
-                "error": "",
-                "cancel": False,
-                "created_at": now,
-                "updated_at": now,
-                "progress": {
-                    "phase": "queued",
-                    "current": 0,
-                    "total": 1,
-                    "percent": 0,
-                    "message": "Task queued.",
-                    "alpha_id": "",
-                },
-            }
-            if initial:
-                row.update(_job_safe(initial))
-                row.setdefault("created_at", now)
-                row["updated_at"] = now
-            self.jobs[job_id] = row
-            self._prune_locked()
-            self._persist_locked()
-            return job_id
+            return self._create_locked(initial)
+
+    def create_if_no_active(
+        self,
+        initial: dict[str, Any] | None = None,
+        *,
+        active_statuses: set[str] | None = None,
+    ) -> tuple[str, tuple[str, dict[str, Any]] | None]:
+        """Atomically reserve a job slot unless an active job already exists."""
+        statuses = active_statuses or ACTIVE_STATUSES
+        with self.lock:
+            self._watchdog_locked(time.time())
+            active = [
+                (job_id, job)
+                for job_id, job in self.jobs.items()
+                if job.get("status") in statuses
+            ]
+            if active:
+                job_id, job = max(active, key=lambda item: _updated_at(item[1]))
+                return "", (job_id, deepcopy(job))
+            return self._create_locked(initial), None
+
+    def _create_locked(self, initial: dict[str, Any] | None = None) -> str:
+        job_id = self._next_id_locked()
+        now = time.time()
+        row: dict[str, Any] = {
+            "status": "queued",
+            "result": None,
+            "error": "",
+            "cancel": False,
+            "created_at": now,
+            "updated_at": now,
+            "progress": {
+                "phase": "queued",
+                "current": 0,
+                "total": 1,
+                "percent": 0,
+                "message": "Task queued.",
+                "alpha_id": "",
+            },
+        }
+        if initial:
+            row.update(_job_safe(initial))
+            row.setdefault("created_at", now)
+            row["updated_at"] = now
+        self.jobs[job_id] = row
+        self._prune_locked()
+        self._persist_locked()
+        return job_id
 
     def update(self, job_id: str, *, allow_terminal_overwrite: bool = False, **kwargs: Any) -> None:
         with self.lock:

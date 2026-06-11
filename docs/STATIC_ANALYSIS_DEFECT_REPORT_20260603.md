@@ -29,7 +29,7 @@
 |----|----------|----------|--------|
 | P0-1 | FIXED | `build_official_url()` 校验 `base_url` 与绝对目标 URL 的官方/测试 host，并拒绝非 ASCII hostname；`test_request_rejects_untrusted_configured_base_url`、`test_build_official_url_rejects_non_ascii_hostname` 覆盖 | 保持 URL allowlist 回归 |
 | P0-2 | FIXED | `list_official_datasets_or_derive()` 对 API 失败会发出 warning callback；fallback 为空或失败时抛 `BrainAPIError`；`tests/test_official_context_datasets.py` 覆盖 | 保持 dataset fallback 状态暴露 |
-| P0-3 | TRACKED_DEFERRED | `MAX_USER_ALPHAS_PAGES=None` 是完整云端同步策略；保留重复页签名、空页/短页、offset recovery、无新增唯一 alpha 页面的 `no_new_unique_items` progress warning，并在 progress payload 记录 `new_unique_items` / `duplicate_unique_items` / `unique_items` / `stalled_unique_pages`；进度回调返回 `False` 的调用方取消保护仍是显式 opt-in；Web sync 和 pipeline 调用点已接入用户取消/stop_callback 和默认禁用的耗时预算，停止后避免合并 partial rows | 不添加硬分页上限；保留默认完整同步 |
+| P0-3 | TRACKED_DEFERRED | `MAX_USER_ALPHAS_PAGES=None` 是完整云端同步策略；保留重复页签名、空页/短页、offset recovery、无新增唯一 alpha 页面的 `no_new_unique_items` progress warning，并在 progress payload 记录 `new_unique_items` / `duplicate_unique_items` / `unique_items` / `stalled_unique_pages`；进度回调返回 `False` 的调用方取消保护仍是显式 opt-in；Web sync 和 pipeline 调用点已接入用户取消/stop_callback，停止后避免合并 partial rows | 不添加固定分页截断；保留默认完整同步 |
 | P0-4 | FIXED | `submit_simulation()` 将同源 `Location` 规范化为 path/query；`test_submit_simulation_normalizes_same_origin_location_header_to_path` 覆盖 | 保持提交 URL 规范化回归 |
 | P1-1 | FIXED | `_throttle()` 在全局锁内预留请求时间戳；`test_throttle_uses_shared_timestamp_across_instances` 覆盖 | 保持跨实例节流回归 |
 | P1-2 | FIXED | `FieldDatasetMapper.build()` 使用本地 dict 构建后原子替换，读路径加锁并兼容轻量 loader；`tests/test_field_dataset_mapper.py` 覆盖 | 可追加并发压力测试 |
@@ -244,7 +244,7 @@ while True:
         break
 ```
 
-`list_user_alphas` 调用时传入 `stop_when_total_reached=False`，且 `MAX_USER_ALPHAS_PAGES = None`。这是当前确认的完整云端同步策略：不能用任意硬分页上限截断用户 alpha，否则会重新引入数据不完整风险。
+`list_user_alphas` 调用时传入 `stop_when_total_reached=False`，且 `MAX_USER_ALPHAS_PAGES = None`。这是当前确认的完整云端同步策略：不能用任意固定分页截断用户 alpha，否则会重新引入数据不完整风险。
 
 **当前处理与跟踪逻辑**:
 
@@ -267,14 +267,14 @@ unique_item_key=lambda row: str(row.get("id") or "").strip()
 5. `progress_callback` 可通过显式返回 `False` 取消继续分页；默认返回 `None` 的观察型回调不改变完整同步行为。
 6. `web_sync_job.run_sync_job_service()` 的扫描进度回调会在更新 UI/job 状态后检查用户取消，取消时向分页 helper 返回 `False`，最终进入 `stopped` 结果。
 7. `PipelineContextSyncMixin._sync_cloud_alphas()` 会在 `stop_callback` 触发时向分页 helper 返回 `False`，并且不会把 partial rows 合并进本地仓库。
-8. `ResearchBudget.cloud_sync_max_elapsed_seconds` 默认为 `0.0`（禁用）；只有配置或 Web payload 显式提供正数时，Web sync / pipeline 才会按耗时停止并避免合并 partial rows。
+8. `ResearchBudget.cloud_sync_max_elapsed_seconds` 保持 `0.0` 兼容字段；Web sync / pipeline 不再把耗时数值作为停止条件，云端 Alpha 同步只能因用户取消、官方分页自然结束或官方/API错误停止。
 9. `list_user_alphas` 覆盖已验证无默认页数上限、可拉过旧 10000 条边界、不会因 BRAIN 返回的 `total` 偏小而提前终止，并覆盖无新增唯一 alpha 页面的 warning-only 场景。
 
 **后续可选增强**:
 
 如果需要继续收敛该风险，应优先做可配置的观测告警或由调用方显式取消。默认行为仍不应添加硬页数上限。
 
-**验证证据**: `tests/test_official_adapter.py::test_list_user_alphas_warns_on_page_with_no_new_unique_items_without_stopping` 覆盖无新增唯一 alpha 的 warning-only 观测，并断言 `new_unique_items` / `duplicate_unique_items` / `unique_items` / `stalled_unique_pages` progress 字段；`tests/test_official_adapter.py::test_list_user_alphas_can_be_cancelled_by_progress_callback_without_page_cap` 覆盖 helper 级调用方取消保护不依赖硬分页上限；`tests/test_web_sync_job.py::test_run_sync_job_service_returns_false_to_cancel_alpha_scan` 覆盖 Web sync 用户取消接线；`tests/test_web_sync_job.py::test_run_sync_job_service_stops_alpha_scan_on_elapsed_limit` 覆盖 Web sync 显式耗时预算；`tests/test_pipeline.py::test_pipeline_cloud_sync_cancel_does_not_merge_partial_rows` 覆盖 pipeline 停止后不合并 partial rows；`tests/test_pipeline.py::test_pipeline_cloud_sync_elapsed_limit_does_not_merge_partial_rows` 覆盖 pipeline 显式耗时预算。
+**验证证据**: `tests/test_official_adapter.py::test_list_user_alphas_warns_on_page_with_no_new_unique_items_without_stopping` 覆盖无新增唯一 alpha 的 warning-only 观测，并断言 `new_unique_items` / `duplicate_unique_items` / `unique_items` / `stalled_unique_pages` progress 字段；`tests/test_official_adapter.py::test_list_user_alphas_can_be_cancelled_by_progress_callback_without_page_cap` 覆盖 helper 级调用方取消保护不依赖固定分页截断；`tests/test_web_sync_job.py::test_run_sync_job_service_returns_false_to_cancel_alpha_scan` 覆盖 Web sync 用户取消接线；`tests/test_web_sync_job.py::test_run_sync_job_service_ignores_elapsed_limit_and_scans_all_pages` 覆盖 Web sync 不因耗时数值截断分页；`tests/test_pipeline.py::test_pipeline_cloud_sync_cancel_does_not_merge_partial_rows` 覆盖 pipeline 停止后不合并 partial rows；`tests/test_pipeline.py::test_pipeline_cloud_sync_ignores_elapsed_limit_and_merges_all_rows` 覆盖 pipeline 不因耗时数值截断分页。
 
 **预期效果**: 保留完整同步能力，避免任意截断造成 alpha 缺失；剩余“服务端持续返回新满页且调用方不取消”的极端风险作为 `TRACKED_DEFERRED` 跟踪，不在本轮改为硬停止。
 
@@ -943,7 +943,7 @@ Codex 沙箱仍无法完成真实本地端口绑定，但沙箱外本地复跑�
 |------|---------|------|----------|
 | 1 | P0-1 | SSRF 漏洞 — base_url 白名单 | 2h |
 | 2 | P0-2 | 静默异常吞没 — 数据集 fallback 传播错误 | 1.5h |
-| 3 | P0-3 | 完整分页边界 — 保留无硬上限，已增加无新增唯一 alpha warning-only 观测、helper 级调用方取消保护、Web sync / pipeline 取消接线，以及默认禁用的显式耗时预算 | 跟踪保留 |
+| 3 | P0-3 | 完整分页边界 — 保留无固定截断，已增加无新增唯一 alpha warning-only 观测、helper 级调用方取消保护、Web sync / pipeline 取消接线 | 跟踪保留 |
 | 4 | P0-4 | submit_simulation URL 标准化 | 0.5h |
 
 **执行原则**: 按依赖关系排序。P0-1 必须先修复（安全漏洞），其余无依赖，可并行。

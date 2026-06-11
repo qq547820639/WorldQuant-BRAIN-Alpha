@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import json
+import math
 import urllib.parse
 from typing import Any
 
@@ -22,11 +23,18 @@ RESERVED_OFFLINE_TEST_HOST_SUFFIXES = (".test", ".invalid")
 
 
 def looks_partial_context_cache(kind: str, items: list[dict], total: int, page_limit: int) -> bool:
+    limit = _positive_int(page_limit)
+    full_page_boundary = (
+        kind in {"fields", "datasets", "operators"}
+        and limit > 0
+        and len(items) > 0
+        and len(items) % limit == 0
+    )
     if total and len(items) >= total:
-        return False
+        return full_page_boundary
     if total and len(items) < total:
         return True
-    return kind in {"fields", "datasets", "operators"} and len(items) == int(page_limit)
+    return full_page_boundary
 
 
 def build_simulation_payload(expression: str, settings: dict | BrainSettings) -> dict:
@@ -102,6 +110,15 @@ def normalize_metrics(payload: Any) -> dict:
         ["prodCorrelation", "prod_correlation"],
         None,
     ))
+    sub_universe_sharpe_value = _num_or_none(_first_value(
+        metrics_root,
+        ["subUniverseSharpe", "sub_universe_sharpe"],
+        None,
+    ))
+    if sub_universe_sharpe_value is None:
+        low_sub_universe_check = brain_checks.get("LOW_SUB_UNIVERSE_SHARPE") if isinstance(brain_checks, dict) else None
+        if isinstance(low_sub_universe_check, dict):
+            sub_universe_sharpe_value = _num_or_none(low_sub_universe_check.get("value"))
 
     metrics = {
         "sharpe": is_sharpe,
@@ -111,7 +128,7 @@ def normalize_metrics(payload: Any) -> dict:
         "returns": _num_or_none(_first_value(metrics_root, ["returns", "Returns", "return"], None)),
         "drawdown": abs(_ratio(_first_value(metrics_root, ["drawdown", "maxDrawdown", "MaxDrawdown"]))),
         "margin": _num_or_none(_first_value(metrics_root, ["margin", "Margin"], None)),
-        "sub_universe_sharpe": _num(_first_value(metrics_root, ["subUniverseSharpe", "sub_universe_sharpe"])),
+        "sub_universe_sharpe": sub_universe_sharpe_value,
         "subUniverseSize": _num_or_none(_first_value(metrics_root, ["subUniverseSize", "sub_universe_size", "subSize"], None)),
         "alphaSize": _num_or_none(_first_value(metrics_root, ["alphaSize", "alpha_size"], None)),
         "correlation": abs(_ratio(correlation_value)) if correlation_value is not None else None,
@@ -314,16 +331,34 @@ def _find_all(data: Any, key: str) -> list:
 
 
 def normal_field(item: dict) -> dict:
+    field_id = _first_value(item, ["id", "fieldId", "field", "name"], "")
+    field_name = _first_value(item, ["name", "field", "id", "fieldId"], "")
+    dataset = _first_value(item, ["dataset", "dataSet", "data_set"], "")
+    dataset_id = ""
+    if isinstance(dataset, dict):
+        dataset_id = _first_value(dataset, ["id", "code", "datasetId", "name"], "")
+        dataset_value: Any = scrub(dataset)
+    else:
+        dataset_id = dataset
+        dataset_value = str(dataset or "")
     cat = item.get("category")
     if isinstance(cat, dict):
         cat = cat.get("id", str(cat))
     elif not isinstance(cat, str):
         cat = ""
     return {
-        "name": str(_first_value(item, ["name", "id", "field", "fieldId"], "")),
+        "id": str(field_id or field_name or ""),
+        "name": str(field_name or field_id or ""),
+        "description": _first_value(item, ["description", "definition", "help", "doc"], ""),
+        "dataset": dataset_value,
+        "dataset_id": str(dataset_id or ""),
+        "type": _first_value(item, ["type", "dataType", "fieldType"], ""),
+        "userCount": _first_value(item, ["userCount", "user_count"], None),
+        "alphaCount": _first_value(item, ["alphaCount", "alpha_count"], None),
         "category": cat,
         "delay": _first_value(item, ["delay"], None),
         "coverage": _num(_first_value(item, ["coverage"], 0.0)),
+        "raw": scrub(item),
     }
 
 
@@ -359,6 +394,15 @@ def normal_dataset(item: dict) -> dict:
         "region": _first_value(item, ["region"], ""),
         "delay": _first_value(item, ["delay"], None),
         "universe": _first_value(item, ["universe"], ""),
+        "raw": scrub(item),
+    }
+
+
+def normal_data_category(item: dict) -> dict:
+    category_id = _first_value(item, ["id", "code", "category", "name"], "")
+    return {
+        "id": str(category_id or ""),
+        "name": str(_first_value(item, ["name", "title", "description"], category_id or "")),
         "raw": scrub(item),
     }
 
@@ -415,6 +459,24 @@ def user_alpha_offset_recovery(
 ) -> dict[str, Any] | None:
     if not is_user_alpha_offset_limit(exc):
         return None
+    return user_alpha_cursor_recovery(
+        rows,
+        page_params,
+        sync_range=sync_range,
+        total=total,
+        warning="offset_limit_narrowed_by_date",
+    )
+
+
+def user_alpha_cursor_recovery(
+    rows: list[dict[str, Any]],
+    page_params: dict[str, Any],
+    *,
+    sync_range: str,
+    total: int,
+    warning: str,
+    **progress_extra: Any,
+) -> dict[str, Any] | None:
     cursor = oldest_alpha_created_at(rows)
     if not cursor or page_params.get("dateCreated<") == cursor:
         return None
@@ -430,15 +492,41 @@ def user_alpha_offset_recovery(
             page_size=0,
             offset=0,
             cursor_before=cursor,
-            warning="offset_limit_narrowed_by_date",
+            warning=warning,
+            **progress_extra,
         ),
     }
 
 
 def user_alpha_progress(sync_range: str, rows: list, total: int, **extra: Any) -> dict[str, Any]:
-    payload: dict[str, Any] = {"range": sync_range, "scanned": len(rows), "total": total}
+    page_size = _positive_int(extra.get("page_size"))
+    page_limit = _positive_int(extra.get("page_limit")) or page_size
+    offset = _positive_int(extra.get("offset"))
+    expected_pages = int(math.ceil(total / page_limit)) if total > 0 and page_limit > 0 else 0
+    payload: dict[str, Any] = {
+        "range": sync_range,
+        "scanned": len(rows),
+        "total": total,
+        "pagination_target": "api_filter_window" if total > 0 else "page_exhaustion",
+    }
+    if page_size > 0:
+        payload["page_size"] = page_size
+    if page_limit > 0:
+        payload["page_limit"] = page_limit
+        payload["next_offset"] = offset + page_limit
+        payload["pages_fetched"] = int(offset / page_limit) + 1
+    if expected_pages > 0:
+        payload["expected_pages"] = expected_pages
     payload.update(extra)
     return payload
+
+
+def _positive_int(value: Any) -> int:
+    try:
+        numeric = int(value or 0)
+    except (TypeError, ValueError):
+        return 0
+    return max(0, numeric)
 
 
 def _num(value: Any) -> float:
@@ -461,15 +549,14 @@ def _num_or_none(value: Any):
 def _ratio(value: Any) -> float:
     """Convert a metric value to a decimal ratio.
 
-    BRAIN API can return metrics as either percentages (e.g. 75.0 → 0.75) or
-    decimals (e.g. 0.75).  The old heuristic of dividing everything > 1.0 by
-    100 produced incorrect results for metrics like turnover whose raw value
-    naturally exceeds 1.0 (e.g. 2.5 → 0.025 instead of 2.5).
+    BRAIN API can return metrics as either percentages (e.g. 75.0 -> 0.75) or
+    decimals (e.g. 0.75). Values below 2.0 are preserved so ordinary ratios like
+    turnover=1.5 are not converted to 0.015.
 
-    We now only divide by 100 when the value is unambiguously in percentage
-    range (>= 2.0), which catches real percentage values like 75% without
-    harming ratios that naturally live between 0 and 2.  Metrics that *do*
-    naturally exceed 2.0 (e.g. turnover, correlation) pass through unchanged.
+    Values >= 2.0 are treated as percentage-scale. This follows the existing
+    project contract and keeps high-turnover official metrics conservative:
+    turnover=3.5 is normalized to 0.035 instead of being treated as a passing
+    350% decimal ratio.
     """
     numeric = _num(value)
     # Only treat values >= 2.0 as percentage-scale; values in [0, 2) are

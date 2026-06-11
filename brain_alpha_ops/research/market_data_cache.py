@@ -115,13 +115,13 @@ class MarketDataCache:
             }
         return payload
 
-    def refresh_from_jsonl(self, source_file: str = "cloud_alphas.jsonl", *, limit: int = 5000) -> dict[str, Any]:
+    def refresh_from_jsonl(self, source_file: str = "cloud_alphas.jsonl", *, limit: int | None = None) -> dict[str, Any]:
         path = self.storage_dir / source_file
-        rows = read_jsonl_records(path, limit=limit) if path.is_file() else []
+        rows = read_jsonl_records(path, limit=limit, max_rows=None) if path.is_file() else []
         records = [self._record_from_json_row(row) for row in rows if isinstance(row, dict)]
         return self.refresh_from_records(records, source=source_file)
 
-    def refresh_from_path(self, path: str | Path, *, source: str | None = None, limit: int = 5000) -> dict[str, Any]:
+    def refresh_from_path(self, path: str | Path, *, source: str | None = None, limit: int | None = None) -> dict[str, Any]:
         source_path = Path(path)
         rows = _read_records_from_path(source_path, limit=limit)
         records = [self._record_from_json_row(row) for row in rows if isinstance(row, dict)]
@@ -135,7 +135,7 @@ class MarketDataCache:
         ]
         return payload
 
-    def refresh_from_paths(self, paths: list[str | Path], *, limit_per_source: int = 5000) -> dict[str, Any]:
+    def refresh_from_paths(self, paths: list[str | Path], *, limit_per_source: int | None = None) -> dict[str, Any]:
         records: list[dict[str, Any]] = []
         source_files: list[dict[str, Any]] = []
         for item in paths:
@@ -151,7 +151,7 @@ class MarketDataCache:
             records.extend(self._record_from_json_row(row) for row in rows if isinstance(row, dict))
         payload = self.refresh_from_records(records, source=";".join(path.name for path in map(Path, paths) if str(path).strip()) or "multi_source")
         payload["source_files"] = source_files
-        payload["limit_per_source"] = max(1, int(limit_per_source or 1))
+        payload["limit_per_source"] = None if limit_per_source is None else max(1, int(limit_per_source or 1))
         return payload
 
     def summary(self) -> dict[str, Any]:
@@ -286,17 +286,20 @@ def _float(value: Any) -> float:
         return 0.0
 
 
-def _read_records_from_path(path: Path, *, limit: int) -> list[dict[str, Any]]:
+def _read_records_from_path(path: Path, *, limit: int | None) -> list[dict[str, Any]]:
     if not path.is_file():
         return []
-    safe_limit = max(1, int(limit or 1))
     if path.suffix.lower() == ".jsonl":
-        return read_jsonl_records(path, limit=safe_limit)
+        return read_jsonl_records(path, limit=limit, max_rows=None)
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return []
-    return _records_from_json_payload(payload)[-safe_limit:]
+    records = _records_from_json_payload(payload)
+    if limit is None:
+        return records
+    safe_limit = max(1, int(limit or 1))
+    return records[-safe_limit:]
 
 
 def _records_from_json_payload(payload: Any) -> list[dict[str, Any]]:

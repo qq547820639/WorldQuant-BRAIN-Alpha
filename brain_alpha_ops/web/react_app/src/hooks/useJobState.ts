@@ -10,11 +10,12 @@
  */
 
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
-import { requestJobCancel, type CancelReason } from "@/api/jobCancel";
+import { cancelResultEventMessage, requestJobCancel, type CancelReason } from "@/api/jobCancel";
 import { useSSE } from "@/hooks/useSSE";
 import { useApi } from "@/hooks/useApi";
 import { buildRunPayload, hasCredentials, isTerminalStatus } from "@/helpers/runPayload";
 import type { BrainCredentials, JobStatus, SSEEvent, UnifiedProgress } from "@/types";
+import { reportIgnoredError } from "@/utils/reportIgnoredError";
 
 export interface JobState {
   jobId: string | null;
@@ -35,15 +36,28 @@ const WATCHDOG_MAX_FAILURES = 3;
 const SESSION_KEY_JOB_ID = "brain_alpha_active_job_id";
 
 function saveJobId(id: string): void {
-  try { sessionStorage.setItem(SESSION_KEY_JOB_ID, id); } catch { /* quota exceeded */ }
+  try {
+    sessionStorage.setItem(SESSION_KEY_JOB_ID, id);
+  } catch (err) {
+    reportIgnoredError("job state sessionStorage save failed", err);
+  }
 }
 
 function loadSavedJobId(): string | null {
-  try { return sessionStorage.getItem(SESSION_KEY_JOB_ID); } catch { return null; }
+  try {
+    return sessionStorage.getItem(SESSION_KEY_JOB_ID);
+  } catch (err) {
+    reportIgnoredError("job state sessionStorage load failed", err);
+    return null;
+  }
 }
 
 function clearSavedJobId(): void {
-  try { sessionStorage.removeItem(SESSION_KEY_JOB_ID); } catch { /* ignore */ }
+  try {
+    sessionStorage.removeItem(SESSION_KEY_JOB_ID);
+  } catch (err) {
+    reportIgnoredError("job state sessionStorage clear failed", err);
+  }
 }
 
 export function useJobState(
@@ -130,7 +144,7 @@ export function useJobState(
     if (autoCancelRequests.current.has(key)) return null;
     autoCancelRequests.current.add(key);
     const result = await requestJobCancel({ jobId: id, reason, message });
-    setEvents((prev) => [...prev.slice(-50), result?.ok === false ? "自动中断请求未确认" : "已安全停止状态不明确的流程。"]);
+    setEvents((prev) => [...prev.slice(-50), cancelResultEventMessage(result)]);
     return result;
   }, [jobId, status?.job_id]);
 
@@ -167,7 +181,7 @@ export function useJobState(
   const sseUrl = jobId ? `/sse?job_id=${encodeURIComponent(jobId)}` : null;
   const handleStreamExhausted = useCallback(() => {
     clearSavedJobId();
-    const message = "页面暂时收不到最新进度，系统已安全停止本次验证。";
+    const message = "页面暂时收不到最新进度，本次验证状态不明确，正在请求自动中断。";
     notify("warning", message);
     failMonitor(message);
     void cancelAmbiguousJob("sse_exhausted", message);
@@ -221,7 +235,7 @@ export function useJobState(
       const next = previous + 1;
       if (next >= WATCHDOG_MAX_FAILURES) {
         clearSavedJobId();
-        const failure = `状态连续刷新失败，系统已安全停止本次验证: ${message}`;
+        const failure = `状态连续刷新失败，本次验证状态不明确，正在请求自动中断: ${message}`;
         failMonitor(failure);
         void cancelAmbiguousJob("status_failed", failure);
         notify("error", failure);

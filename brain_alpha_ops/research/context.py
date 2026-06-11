@@ -484,7 +484,7 @@ def _latest_result_from_storage(storage_dir: str) -> dict[str, Any]:
 
 
 def _cloud_snapshot_from_storage(storage_dir: str, *, top_n: int) -> dict[str, Any]:
-    rows = _read_jsonl(Path(storage_dir) / "cloud_alphas.jsonl", limit=max(top_n, 1000))
+    rows = _read_jsonl(Path(storage_dir) / "cloud_alphas.jsonl", limit=None)
     latest_by_id: dict[str, dict[str, Any]] = {}
     anonymous: list[dict[str, Any]] = []
     for row in rows:
@@ -505,7 +505,11 @@ def _cloud_snapshot_from_storage(storage_dir: str, *, top_n: int) -> dict[str, A
     return {"alphas": deduped[:top_n], "summary": summary}
 
 
-def _read_jsonl(path: Path, *, limit: int) -> list[dict[str, Any]]:
+def _read_jsonl(path: Path, *, limit: int | None) -> list[dict[str, Any]]:
+    if limit is None:
+        from brain_alpha_ops.jsonl import read_jsonl_records
+
+        return read_jsonl_records(path, limit=None, max_rows=None)
     return read_jsonl_tail(path, limit=limit)
 
 

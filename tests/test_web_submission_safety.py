@@ -53,6 +53,23 @@ def test_submission_preflight_advisory_reports_cloud_stale(tmp_path):
     assert payload["error_code"] == "SUBMIT_CLOUD_SYNC_STALE"
 
 
+def test_submission_preflight_advisory_requires_cloud_cache_even_when_per_run_sync_disabled(tmp_path):
+    run_config = RunConfig(environment="production")
+    run_config.ops.storage_dir = str(tmp_path)
+    run_config.ops.budget.require_cloud_sync = False
+
+    payload = submission_preflight_advisory(
+        _candidate(),
+        run_config,
+        ledger_factory=lambda storage_dir: Ledger(storage_dir),
+        cloud_alpha_snapshot=lambda limit=2000: {"alphas": [], "summary": {"is_stale": False}},
+        cloud_status_for=lambda candidate, rows: {"status": ""},
+    )
+
+    assert payload["ok"] is False
+    assert payload["error_code"] == "SUBMIT_CLOUD_SYNC_REQUIRED"
+
+
 def test_submission_preflight_advisory_reports_duplicate_expression(tmp_path):
     run_config = RunConfig(environment="production")
     run_config.ops.storage_dir = str(tmp_path)

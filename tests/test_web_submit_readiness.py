@@ -84,6 +84,37 @@ def test_submit_readiness_payload_compacts_local_gate_result(monkeypatch):
     assert "job_audits" not in payload
 
 
+def test_submit_readiness_payload_keeps_all_reasons_findings_and_best_candidate_blockers(monkeypatch):
+    monkeypatch.setattr(
+        web,
+        "_run_live_submit_readiness_check",
+        lambda: {
+            "ok": True,
+            "ready_to_submit": False,
+            "candidate_count": 12,
+            "eligible_count": 0,
+            "latest_blocking_reason_counts": {f"reason_{index}": index for index in range(1, 9)},
+            "job_family_blocking_reason_counts": {f"family_reason_{index}": index for index in range(1, 9)},
+            "findings": [
+                {"code": f"finding_{index}", "message": f"finding message {index}"}
+                for index in range(12)
+            ],
+            "best_candidate": {
+                "alpha_id": "alpha_1",
+                "blocking_reasons": [f"best_reason_{index}" for index in range(12)],
+            },
+        },
+    )
+
+    payload = web._submit_readiness_payload()
+
+    assert len(payload["top_blocking_reasons"]) == 8
+    assert len(payload["top_family_blocking_reasons"]) == 8
+    assert len(payload["findings"]) == 12
+    assert len(payload["best_candidate"]["blocking_reasons"]) == 12
+    assert payload["top_blocking_reasons"][0] == {"reason": "reason_8", "count": 8}
+
+
 def test_submit_readiness_dispatch_route_uses_compact_payload(monkeypatch):
     monkeypatch.setattr(
         web,

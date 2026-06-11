@@ -66,7 +66,7 @@ def build_market_data_cache_tool(
     *,
     refresh: bool,
     source_file: str,
-    limit: int,
+    limit: int | None,
 ) -> dict[str, Any]:
     cache = build_market_data_cache(storage_dir)
     if refresh:
@@ -75,7 +75,7 @@ def build_market_data_cache_tool(
             if source_path.is_absolute():
                 return cache.refresh_from_path(source_path, source=source_path.name, limit=limit)
             return cache.refresh_from_jsonl(source_file, limit=limit)
-        rows = ResearchRepository(storage_dir).latest_backtest_records(limit=limit)
+        rows = ResearchRepository(storage_dir).latest_backtest_records(limit=limit if limit is not None else 5000)
         if rows:
             return cache.refresh_from_records(rows, source="backtests.jsonl")
     return cache.summary()

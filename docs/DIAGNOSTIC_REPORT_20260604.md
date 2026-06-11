@@ -29,7 +29,7 @@
 
 | 检查项 | 状态 | 发现 | 优先级 |
 |--------|------|------|--------|
-| 云端Alpha同步 | ✅ PASS | `/api/sync_alphas` → SSE，支持7d/30d/90d范围 | — |
+| 云端Alpha同步 | ✅ PASS | `/api/sync_alphas` → SSE，默认完整同步全部云端 Alpha；`3d`/`7d` 仅限本次显式过滤 | — |
 | 候选Alpha生成 | ✅ PASS | CandidateGenerator + HypothesisDrivenGenerator 6组件 | — |
 | 表达式验证 | ✅ PASS | OfficialExpressionValidator，已知字段/算子校验 | — |
 | 官方模拟 | ⚠️ GAP | `_ratio()` 对 turnover 的百分比/小数判定有边界风险 | P1 |
@@ -75,7 +75,7 @@
 | 官方数据加载 | ✅ PASS | OfficialDataLoader 单例 7780 fields + 66 operators + 17 datasets |
 | 数据刷新机制 | ⚠️ PASS | 每50轮/24h刷新，失败时有告警（P1-4已修复） |
 | 数据缓存 | ✅ PASS | JSONL 持久化 + SQLite 索引 |
-| 云数据同步 | ✅ PASS | cloud_sync_range 3d/7d/30d/90d |
+| 云数据同步 | ✅ PASS | cloud_sync_range 默认 all，用户可主动选择 3d/7d |
 | 事件日志 | ✅ PASS | events.jsonl + lifecycle.jsonl + candidates.jsonl |
 | 检查结果持久化 | ⚠️ GAP | checks.jsonl 写入后前端刷新丢失（P2-3已修复为静态测试通过） |
 | 接口契约 | ✅ PASS | 22路由完整入参/出参 + error_code 枚举 |
@@ -138,7 +138,7 @@
 |----|------|------|---------|
 | L-01 | Pipeline 类过重 2500+ 行 | `brain_alpha_ops/research/pipeline.py` | 已通过 Mixin 拆分，继续细化 |
 | L-02 | package 版本不一致 (pyproject.toml 0.1.0 vs __init__.py 0.3.0) | 多个文件 | 统一为 0.3.0 |
-| L-03 | API pagination 缺硬上限 | `brain_alpha_ops/brain_api/pagination.py` | 增加 max_pages/max_items |
+| L-03 | 云端 Alpha 完整分页需停滞观测 | `brain_alpha_ops/brain_api/pagination.py` | 保留完整分页，增加重复页/无新增唯一项观测与显式取消 |
 | L-04 | 缺少 LLM 集成模块 (6 prompt templates) | 缺失 | 作为独立扩展包 |
 | L-05 | Chart.js CDN 依赖 | inline console | 内联或提供离线 fallback |
 

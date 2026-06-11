@@ -41,7 +41,7 @@ def _make_ops_config(**overrides) -> OpsConfig:
     config.settings.unitHandling = "VERIFY"
     config.settings.language = "FASTEXPR"
     config.budget.max_candidates = 5
-    config.budget.cloud_sync_range = "3d"
+    config.budget.cloud_sync_range = "all"
     config.budget.use_assistant_guidance = False
     config.budget.strategy_plugins_enabled = False
     for k, v in overrides.items():
@@ -58,7 +58,7 @@ def _make_minimal_run_config(tmp_path: Path, **overrides) -> RunConfig:
     config.ops.storage_dir = str(tmp_path)
     config.ops.budget.max_candidates = 5
     config.ops.budget.max_backtest_slots = 3
-    config.ops.budget.cloud_sync_range = "3d"
+    config.ops.budget.cloud_sync_range = "all"
     config.ops.budget.use_assistant_guidance = False
     config.ops.budget.strategy_plugins_enabled = False
     config.ops.official_api.base_url = "https://api.worldquantbrain.com"
@@ -414,7 +414,7 @@ class TestCloudSyncChain:
         from brain_alpha_ops.web import cloud_alpha_snapshot
 
         try:
-            result = cloud_alpha_snapshot(limit=100)
+            result = cloud_alpha_snapshot()
         except TypeError:
             result = cloud_alpha_snapshot()
         # Response may be {'alphas': [...], ...} or {'ok': True, 'alphas': [...]}

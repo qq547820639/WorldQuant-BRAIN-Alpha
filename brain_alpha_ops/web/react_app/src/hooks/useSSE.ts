@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import type { SSEEvent } from "@/types";
 import { streamToken } from "@/utils/csrf";
+import { reportIgnoredError } from "@/utils/reportIgnoredError";
 
 type NamedSSEEvent = NonNullable<SSEEvent["type"]>;
 
@@ -105,8 +106,9 @@ export function useSSE(
                 reconnectTimerRef.current = null;
               }
             }
-          } catch {
+          } catch (err) {
             // Non-JSON SSE data — log and ignore for debugging
+            reportIgnoredError("SSE non-JSON message ignored", err);
             if (process.env.NODE_ENV === "development") {
               console.debug("SSE: received non-JSON data:", msg.data.slice(0, 120));
             }
@@ -124,22 +126,25 @@ export function useSSE(
           setConnected(false);
           onErrorRef.current?.(err);
 
-	          if (reconnectCountRef.current < maxReconnectAttempts) {
-	            reconnectCountRef.current += 1;
-	            setReconnectAttempts(reconnectCountRef.current);
-	            reconnectTimerRef.current = setTimeout(connect, reconnectIntervalMs);
-	          } else {
-	            setExhausted(true);
-	            onExhaustedRef.current?.();
-	          }
+          if (reconnectCountRef.current < maxReconnectAttempts) {
+            reconnectCountRef.current += 1;
+            setReconnectAttempts(reconnectCountRef.current);
+            scheduleReconnect(connect, reconnectIntervalMs);
+          } else {
+            clearReconnectTimer();
+            setExhausted(true);
+            onExhaustedRef.current?.();
+          }
 	        };
-	      } catch {
-	        // EventSource constructor failed — retry
-	        if (reconnectCountRef.current < maxReconnectAttempts) {
+		      } catch (err) {
+		        // EventSource constructor failed — retry
+		        reportIgnoredError("SSE EventSource connection failed", err);
+		        if (reconnectCountRef.current < maxReconnectAttempts) {
 	          reconnectCountRef.current += 1;
 	          setReconnectAttempts(reconnectCountRef.current);
-	          reconnectTimerRef.current = setTimeout(connect, reconnectIntervalMs);
+	          scheduleReconnect(connect, reconnectIntervalMs);
 	        } else {
+          clearReconnectTimer();
           setExhausted(true);
           onExhaustedRef.current?.();
         }
@@ -150,6 +155,18 @@ export function useSSE(
   }, [url, close, reconnectIntervalMs, maxReconnectAttempts]);
 
 	  return { connected, exhausted, reconnectAttempts, lastEvent, close };
+
+  function clearReconnectTimer() {
+    if (reconnectTimerRef.current) {
+      clearTimeout(reconnectTimerRef.current);
+      reconnectTimerRef.current = null;
+    }
+  }
+
+  function scheduleReconnect(connectFn: () => void, delayMs: number) {
+    clearReconnectTimer();
+    reconnectTimerRef.current = setTimeout(connectFn, delayMs);
+  }
 }
 
 function withStreamToken(url: string) {

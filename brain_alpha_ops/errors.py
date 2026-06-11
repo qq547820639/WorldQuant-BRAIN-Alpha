@@ -157,7 +157,20 @@ def classify_error(exc: Exception | object, *, default_code: str = "UNHANDLED_ER
         return ErrorInfo(default_code, "validation", message, error_type, False, _safe_status(status_code), _safe_float(retry_after))
     if _safe_status(status_code) in {408, 500, 502, 503, 504}:
         return ErrorInfo(default_code, "network", message, error_type, True, _safe_status(status_code), _safe_float(retry_after))
-    if any(token in text for token in ("timed out", "timeout", "connection", "network", "temporarily unavailable")):
+    if any(token in text for token in (
+        "timed out",
+        "timeout",
+        "connection",
+        "network",
+        "temporarily unavailable",
+        "incompleteread",
+        "incomplete read",
+        "remote end closed",
+        "connection reset",
+        "connection aborted",
+        "broken pipe",
+        "response ended prematurely",
+    )):
         return ErrorInfo(default_code, "network", message, error_type, True, _safe_status(status_code), _safe_float(retry_after))
     if isinstance(exc, OSError):
         return ErrorInfo(default_code, "storage", message, error_type, False, _safe_status(status_code), _safe_float(retry_after))

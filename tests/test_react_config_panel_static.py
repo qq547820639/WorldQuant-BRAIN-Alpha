@@ -26,6 +26,8 @@ def test_config_panel_exposes_session_only_brain_connection_credentials():
     assert 'label="密码"' in source
     assert 'label="Token"' in source
     assert 'type="password"' in source
+    assert 'autoComplete="new-password"' in source
+    assert 'autoComplete="current-password"' not in source
     assert 'connectionApi.call("/api/test_connection"' in source
     assert "测试 BRAIN 连接" in source
     assert "BRAIN 连接测试通过" in source

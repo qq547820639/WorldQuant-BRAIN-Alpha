@@ -135,8 +135,11 @@ class TestAPIPathAlignment:
         path_mapping = {
             "authentication": config.authentication_path,
             "simulations": config.simulations_path,
+            "data_categories": config.data_categories_path,
             "data_sets": config.data_sets_path,
+            "data_set_detail": config.data_set_path_template,
             "data_fields": config.data_fields_path,
+            "data_field_detail": config.data_field_path_template,
             "operators": config.operators_path,
             "user_alphas": config.user_alphas_path,
             "user_profile": config.user_profile_path,
@@ -168,8 +171,11 @@ class TestAPIPathAlignment:
             attr_map = {
                 "authentication": "authentication_path",
                 "simulations": "simulations_path",
+                "data_categories": "data_categories_path",
                 "data_sets": "data_sets_path",
+                "data_set_detail": "data_set_path_template",
                 "data_fields": "data_fields_path",
+                "data_field_detail": "data_field_path_template",
                 "operators": "operators_path",
                 "user_alphas": "user_alphas_path",
                 "user_profile": "user_profile_path",

@@ -17,6 +17,7 @@ from scripts.check_review_gap_closure_tracker_helpers import (  # noqa: E402
     OFFICIAL_CONTEXT_QUEUE_ITEM,
     finding as _finding,
     check_official_context_queue as _check_official_context_queue,
+    check_official_context_baseline_facts as _check_official_context_baseline_facts,
     check_official_context_refresh_baseline as _check_official_context_refresh_baseline,
     check_official_context_refresh_queue as _check_official_context_refresh_queue,
     check_real_submit_queue as _check_real_submit_queue,
@@ -69,7 +70,7 @@ BASELINE_CHECKS = (
     ("scripts/check_frontend_innerhtml.py --json", ("PASS", "document.writeln", "trustedHtml", "createContextualFragment")),
     ("scripts/check_tracked_data_inventory.py --json", ("PASS",)),
     (
-        "scripts/check_diagnostic_report.py --config config/run_config.json --report docs/DIAGNOSTIC_REPORT_20260528.md --json",
+        "scripts/check_diagnostic_report.py --config config/run_config.json --report docs/ALPHA_PRODUCTION_DIAGNOSIS_20260522.md --json",
         ("PASS",),
     ),
     ("scripts/check_react_build_env.py --json", ("PASS", "ready=true", "build_runner=local_node_modules")),
@@ -209,6 +210,7 @@ def check_review_gap_closure_tracker(
         validation=official_context_validation,
         findings=findings,
     )
+    _check_official_context_baseline_facts(current_run_baseline, official_context, findings)
     react_surface = _react_surface_status(validation=react_build_env_validation, findings=findings)
     live_submit = _live_submit_readiness_status(
         jobs_path=jobs_path,

@@ -378,7 +378,7 @@ def test_stage_4_cloud_sync(session: UserSession):
         "environment": "production",
         **_credential_payload(),
         "baseUrl": "https://api.worldquantbrain.com",
-        "syncRange": "3d",
+        "syncRange": "all",
         "settings": {"region": "USA", "universe": "TOP3000"},
     }
 
@@ -406,10 +406,11 @@ def test_stage_4_cloud_sync(session: UserSession):
             else:
                 print(f"    [WARN]  Sync still running (may continue in background)")
 
-            # Verify cloud alphas updated
-            cloud_resp = _safe_get(session, "/api/cloud_alphas", params={"limit": 5})
+            # Verify cloud alphas updated from the complete snapshot, not a capped preview.
+            cloud_resp = _safe_get(session, "/api/snapshot/cloud")
             cloud_data = _try_json(cloud_resp)
-            cloud_count = len(cloud_data.get("alphas", []))
+            summary = cloud_data.get("summary") if isinstance(cloud_data.get("summary"), dict) else {}
+            cloud_count = int(summary.get("count") or summary.get("total") or len(cloud_data.get("alphas", [])))
             session.record_metric("synced_cloud_count", cloud_count)
             print(f"    [INFO]  Cloud alphas available: {cloud_count}")
         else:

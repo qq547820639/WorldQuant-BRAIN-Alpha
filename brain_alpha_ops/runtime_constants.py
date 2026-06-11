@@ -86,9 +86,6 @@ class CloudDefaults:
     CLOUD_SYNC_STALE_SECONDS: int = 24 * 60 * 60
     """Staleness threshold for cloud sync cache (24 hours)."""
 
-    MAX_CACHED_USER_ALPHA_FILES: int = 50
-    """Maximum number of cached user alpha JSON files to retain."""
-
     CONTEXT_CACHE_MANIFEST_SCHEMA: str = "official_context_cache_manifest.v1"
     """Schema version string for the context cache manifest."""
 

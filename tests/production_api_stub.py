@@ -149,7 +149,7 @@ class ProductionBrainAPIStub:
             progress_callback({"scanned": len(items), "total": len(items)})
         return items
 
-    def list_user_alphas(self, sync_range: str = "3d", progress_callback=None) -> list[dict[str, Any]]:
+    def list_user_alphas(self, sync_range: str = "all", progress_callback=None) -> list[dict[str, Any]]:
         now = datetime.now(timezone.utc)
         rows: list[dict[str, Any]] = []
         expressions = [

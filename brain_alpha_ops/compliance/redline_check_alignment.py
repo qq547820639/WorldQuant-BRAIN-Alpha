@@ -53,8 +53,11 @@ def _verify_redline_6_code_alignment(
         path_map = {
             "authentication": api_config.authentication_path,
             "simulations": api_config.simulations_path,
+            "data_categories": api_config.data_categories_path,
             "data_sets": api_config.data_sets_path,
+            "data_set_detail": api_config.data_set_path_template,
             "data_fields": api_config.data_fields_path,
+            "data_field_detail": api_config.data_field_path_template,
             "operators": api_config.operators_path,
             "user_alphas": api_config.user_alphas_path,
             "user_profile": api_config.user_profile_path,

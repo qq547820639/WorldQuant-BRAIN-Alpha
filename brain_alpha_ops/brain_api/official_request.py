@@ -7,6 +7,7 @@ import logging
 import time
 from typing import Any
 import urllib.error
+import urllib.parse
 import urllib.request
 
 from brain_alpha_ops.redaction import redact_error_message
@@ -34,14 +35,23 @@ class OfficialRequestMixin:
         body: dict | None = None,
         query: dict | None = None,
         headers: dict | None = None,
+        allow_auth_retry: bool = True,
     ) -> tuple[Any, dict]:
         url = build_official_url(self.config.base_url, path_or_url, query)
         payload = None if body is None else json.dumps(body).encode("utf-8")
         attempts = max(1, int(self.config.rate_limit_retry_attempts) + 1)
+        auth_refresh_available = (
+            allow_auth_retry
+            and bool(self.username and self.password)
+            and not _is_authentication_request(path_or_url, self.config.authentication_path)
+        )
         if self.token and (self._has_session_cookie() or (self.username and self.password)):
+            attempts = max(attempts, 2)
+        if auth_refresh_available:
             attempts = max(attempts, 2)
         last_error: BrainAPIError | None = None
         token_before_auth_fallback: str | None = None
+        auth_refresh_attempted = False
         for attempt in range(attempts):
             request_headers = {"Content-Type": "application/json", "Accept": "application/json"}
             auth_mode = "none"
@@ -86,6 +96,27 @@ class OfficialRequestMixin:
                     if self._has_session_cookie():
                         self._prefer_cookie_auth = True
                     continue
+                if (
+                    exc.code in {401, 403}
+                    and auth_refresh_available
+                    and not auth_refresh_attempted
+                    and attempt < attempts - 1
+                ):
+                    auth_refresh_attempted = True
+                    try:
+                        self.authenticate()
+                    except BrainAPIError:
+                        logger.debug(
+                            "API auth refresh failed: method=%s path=%s auth_mode=%s",
+                            method,
+                            path_or_url,
+                            auth_mode,
+                            exc_info=True,
+                        )
+                    else:
+                        if self._has_session_cookie():
+                            self._prefer_cookie_auth = True
+                        continue
                 logger.debug(
                     "API auth context: method=%s path=%s auth_mode=%s "
                     "has_cookie=%s has_user_pass=%s",
@@ -122,3 +153,8 @@ class OfficialRequestMixin:
                 retry_after=getattr(last_error, "retry_after", None),
             ) from last_error
         raise BrainAPIError("request failed after retries")
+
+
+def _is_authentication_request(path_or_url: str, authentication_path: str) -> bool:
+    path = urllib.parse.urlparse(str(path_or_url or "")).path if str(path_or_url or "").startswith(("http://", "https://")) else str(path_or_url or "")
+    return "/" + path.lstrip("/") == "/" + str(authentication_path or "").lstrip("/")

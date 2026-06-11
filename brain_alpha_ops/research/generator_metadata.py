@@ -7,6 +7,7 @@ import re
 from typing import TYPE_CHECKING
 
 from brain_alpha_ops.research.expression_ast import ordered_operators
+from brain_alpha_ops.research.validated_generator import OPERATOR_SIGNATURES, WINDOW_CONSTRAINTS
 
 if TYPE_CHECKING:
     from brain_alpha_ops.data import OfficialDataLoader
@@ -35,6 +36,92 @@ def _get_default_windows() -> list[int]:
 def _get_default_winsor_stds() -> list[int]:
     """Return a copy of the built-in fallback winsorize std values."""
     return list(DEFAULT_WINSOR_STD)
+
+
+def expression_windows_within_constraints(expression: str) -> bool:
+    """Return whether all known window arguments satisfy local gate constraints."""
+
+    return not generation_window_constraint_violations(expression)
+
+
+def generation_window_constraint_violations(expression: str) -> list[dict[str, int | str]]:
+    """Return operator-specific window violations for generated expressions.
+
+    The generator may still use long windows where the operator allows them
+    (for example ``ts_rank`` or ``ts_mean``).  This guard only rejects windows
+    that the current quality gate would later mark as out of bounds for the
+    concrete operator receiving the argument.
+    """
+
+    text = str(expression or "")
+    violations: list[dict[str, int | str]] = []
+    for match in re.finditer(r"\b([A-Za-z_]\w*)\s*\(", text):
+        op = _window_constraint_operator_name(match.group(1))
+        signature = OPERATOR_SIGNATURES.get(op)
+        if not signature:
+            continue
+        args = _extract_call_args(text, match.end() - 1)
+        if args is None:
+            violations.append({"operator": op, "window": "unmatched", "min": 0, "max": 0})
+            continue
+        parts = _split_top_level_args(args)
+        for index, param_type in enumerate(signature.get("params") or []):
+            if param_type != "d":
+                continue
+            if index >= len(parts):
+                violations.append({"operator": op, "window": "missing", "min": 0, "max": 0})
+                continue
+            raw_window = parts[index].strip()
+            if not re.fullmatch(r"\d+", raw_window):
+                violations.append({"operator": op, "window": raw_window, "min": 0, "max": 0})
+                continue
+            window = int(raw_window)
+            bounds = WINDOW_CONSTRAINTS.get(op, {})
+            minimum = int(bounds.get("min", 1))
+            maximum = int(bounds.get("max", 252))
+            if window < minimum or window > maximum:
+                violations.append({"operator": op, "window": window, "min": minimum, "max": maximum})
+    return violations
+
+
+def _window_constraint_operator_name(name: str) -> str:
+    aliases = {
+        "ts_covariance": "ts_cov",
+    }
+    return aliases.get(str(name or "").lower(), str(name or "").lower())
+
+
+def _extract_call_args(expression: str, open_paren_index: int) -> str | None:
+    depth = 0
+    for index in range(open_paren_index, len(expression)):
+        char = expression[index]
+        if char == "(":
+            depth += 1
+        elif char == ")":
+            depth -= 1
+            if depth == 0:
+                return expression[open_paren_index + 1:index]
+            if depth < 0:
+                return None
+    return None
+
+
+def _split_top_level_args(args: str) -> list[str]:
+    parts: list[str] = []
+    depth = 0
+    start = 0
+    for index, char in enumerate(args):
+        if char == "(":
+            depth += 1
+        elif char == ")":
+            depth = max(0, depth - 1)
+        elif char == "," and depth == 0:
+            parts.append(args[start:index].strip())
+            start = index + 1
+    tail = args[start:].strip()
+    if tail or args:
+        parts.append(tail)
+    return parts
 
 
 def _load_operators_windows(loader: "OfficialDataLoader | None" = None) -> tuple[list[int], list[int]]:

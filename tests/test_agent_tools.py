@@ -67,6 +67,36 @@ def test_agent_toolbox_lists_context_and_generates_candidates(tmp_path):
     assert generated["candidates"][0]["expression"]
 
 
+def test_agent_toolbox_generate_candidates_accepts_preferred_fields(tmp_path, monkeypatch):
+    toolbox = production_toolbox(storage_dir=tmp_path)
+    captured = {}
+
+    def fake_set_knowledge_constraints(self, constraints):
+        captured["constraints"] = constraints
+
+    monkeypatch.setattr(
+        "brain_alpha_ops.research.generator.CandidateGenerator.set_knowledge_constraints",
+        fake_set_knowledge_constraints,
+    )
+
+    generated = toolbox.call(
+        "generate_candidates",
+        {
+            "count": 1,
+            "preferred_fields": ["close", "not_a_field"],
+            "preferred_operators": ["rank"],
+            "strict_preferred_fields": True,
+            "strict_preferred_operators": True,
+        },
+    )
+
+    assert generated["ok"] is True
+    assert captured["constraints"]["preferred_fields"] == ["close", "not_a_field"]
+    assert captured["constraints"]["preferred_operators"] == ["rank"]
+    assert captured["constraints"]["strict_preferred_fields"] is True
+    assert captured["constraints"]["strict_preferred_operators"] is True
+
+
 def test_agent_toolbox_list_context_warns_when_loader_falls_back(tmp_path, monkeypatch, caplog):
     def fail_instance(cls):
         raise RuntimeError("official context unavailable")

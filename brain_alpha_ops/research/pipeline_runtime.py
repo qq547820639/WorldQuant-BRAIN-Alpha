@@ -346,12 +346,19 @@ class PipelineRuntimeMixin:
         alpha_id: str = "",
         data: dict | None = None,
     ):
-        total = max(1, int(total or 1))
-        current = max(0, min(int(current or 0), total))
-        percent = round(current / total * 100, 1)
-        if self.config.budget.run_forever and phase not in {"completed", "stopped", "failed"}:
-            percent = min(percent, 99.0)
-        payload_data = {**self.last_runtime_data, **dict(data or {})}
+        current_data = dict(data or {})
+        indeterminate = bool(current_data.pop("progress_indeterminate", False))
+        payload_data = {**self.last_runtime_data, **current_data}
+        if indeterminate:
+            total = 0
+            current = max(0, int(current or 0))
+            percent = None
+        else:
+            total = max(1, int(total or 1))
+            current = max(0, min(int(current or 0), total))
+            percent = round(current / total * 100, 1)
+            if self.config.budget.run_forever and phase not in {"completed", "stopped", "failed"}:
+                percent = min(percent, 99.0)
         if payload_data:
             self.last_runtime_data = dict(payload_data)
         if "backtests" in payload_data:
@@ -367,6 +374,7 @@ class PipelineRuntimeMixin:
             "alpha_id": alpha_id,
             "run_id": self.run_id,
             "continuous": self.config.budget.run_forever,
+            "indeterminate": indeterminate,
             "data": payload_data,
         }
         if self.progress_callback:

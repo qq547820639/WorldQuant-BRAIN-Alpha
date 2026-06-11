@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-import time
-
 from brain_alpha_ops.brain_api.base import BrainAPIError
+from brain_alpha_ops.brain_api.user_alpha_sync import list_user_alphas_for_sync, normalize_user_alpha_sync_range
 from brain_alpha_ops.redaction import redact_error_message
 
 from .pipeline_official_context import OfficialContextLoadService, configured_official_context_files_exist
@@ -12,9 +11,11 @@ from .pipeline_official_context import OfficialContextLoadService, configured_of
 
 class PipelineContextSyncMixin:
     def _sync_cloud_alphas(self):
-        sync_range = self.config.budget.cloud_sync_range
+        sync_range = normalize_user_alpha_sync_range(
+            self.config.budget.cloud_sync_range if self.config.budget.require_cloud_sync else "all"
+        )
         cached_rows = self.repository.latest_cloud_alphas()
-        if self._local_data_dir_existed_at_start and cached_rows:
+        if self._local_data_dir_existed_at_start and cached_rows and not self.config.budget.require_cloud_sync:
             if cached_rows:
                 self.cloud_alphas = cached_rows
                 self._refresh_cloud_similarity_index()
@@ -74,9 +75,6 @@ class PipelineContextSyncMixin:
             data={"cloud_sync": {"status": "running", "status_code": "RUNNING", "range": sync_range, "scanned": 0, "added": 0, "skipped": 0, "failed": 0}},
         )
         sync_meta = {"cached": False, "stale": False, "warning": "", "cancelled": False}
-        elapsed_limit_seconds = float(getattr(self.config.budget, "cloud_sync_max_elapsed_seconds", 0.0) or 0.0)
-        sync_started_at = time.monotonic()
-
         def on_cloud_progress(progress: dict) -> bool:
             if self._should_stop():
                 sync_meta["cancelled"] = True
@@ -85,19 +83,35 @@ class PipelineContextSyncMixin:
             sync_meta["cached"] = sync_meta["cached"] or bool(progress.get("cached"))
             sync_meta["stale"] = sync_meta["stale"] or bool(progress.get("stale"))
             sync_meta["warning"] = str(progress.get("warning") or sync_meta["warning"] or "")
+            scanned = int(progress.get("scanned", 0))
+            reference_total = int(progress.get("api_reported_total") or progress.get("filter_window_count") or progress.get("total") or 0)
+            page = int(progress.get("pages_fetched") or progress.get("page_number") or 0)
+            expected_pages = int(progress.get("expected_pages") or 0)
+            page_text = f"；当前第 {page} 页" if page else ""
+            reference_text = (
+                f"接口分页参考数 {reference_total} 条，不是云端 Alpha 总量"
+                if reference_total > 0
+                else "接口分页参考数仍在确认"
+            )
             self._progress(
                 "cloud_sync",
-                int(progress.get("scanned", 0)) if int(progress.get("total", 0) or 0) else 0,
-                max(1, int(progress.get("total", 0) or 1)),
-                f"云端 Alpha 扫描中：{progress.get('scanned', 0)} / {progress.get('total') or '总量确认中'}。",
+                scanned,
+                0,
+                f"云端 Alpha 分页拉取中：已拉取 {scanned} 条；{reference_text}{page_text}。",
                 data={
+                    "progress_indeterminate": True,
                     "cloud_sync": {
                         "status": "running",
                         "status_code": "RUNNING",
                         "range": sync_range,
-                        "scanned": int(progress.get("scanned", 0)),
-                        "total": int(progress.get("total", 0) or 0),
+                        "scanned": scanned,
+                        "api_reported_total": reference_total,
+                        "filter_window_count": reference_total,
                         "page_size": int(progress.get("page_size", 0) or 0),
+                        "page_limit": int(progress.get("page_limit", 0) or 0),
+                        "pages_fetched": page,
+                        "expected_pages": expected_pages,
+                        "next_offset": int(progress.get("next_offset", 0) or 0),
                         "offset": int(progress.get("offset", 0) or 0),
                         "added": 0,
                         "skipped": 0,
@@ -112,14 +126,10 @@ class PipelineContextSyncMixin:
                 sync_meta["cancelled"] = True
                 sync_meta["warning"] = "Cloud alpha sync stopped before merge."
                 return False
-            if elapsed_limit_seconds > 0 and (time.monotonic() - sync_started_at) >= elapsed_limit_seconds:
-                sync_meta["cancelled"] = True
-                sync_meta["warning"] = f"Cloud alpha sync reached elapsed limit {elapsed_limit_seconds:g}s before merge."
-                return False
             return True
 
         try:
-            rows = self.api.list_user_alphas(sync_range, progress_callback=on_cloud_progress)
+            rows = list_user_alphas_for_sync(self.api, sync_range, progress_callback=on_cloud_progress)
         except BrainAPIError as exc:
             self.cloud_alphas = []
             self._refresh_cloud_similarity_index()
@@ -219,11 +229,41 @@ class PipelineContextSyncMixin:
             return
         try:
             constraints = self._knowledge_base.get_generation_constraints()
+            supported_fields = {
+                str(field).lower()
+                for field in getattr(self._local_backtest_engine, "supported_fields", set())
+                if str(field)
+            }
+            active_fields = {
+                str(field).lower()
+                for field in getattr(self.generator, "_fields", set())
+                if str(field)
+            }
+            local_preferred_fields = sorted(supported_fields & active_fields) or sorted(supported_fields)
+            active_operators = {
+                str(operator).lower()
+                for operator in getattr(self.generator, "_operators", set())
+                if str(operator)
+            }
+            supported_operators = {
+                str(operator).lower()
+                for operator in getattr(self._local_backtest_engine, "supported_operators", set())
+                if str(operator)
+            }
+            local_preferred_operators = sorted(supported_operators & active_operators) or sorted(supported_operators)
+            if local_preferred_fields:
+                constraints["preferred_fields"] = local_preferred_fields
+                constraints["strict_preferred_fields"] = True
+            if local_preferred_operators:
+                constraints["preferred_operators"] = local_preferred_operators
+                constraints["strict_preferred_operators"] = True
             self.generator.set_knowledge_constraints(constraints)
             self.context_summary["knowledge_constraints"] = {
                 "preferred_fields_count": len(constraints.get("preferred_fields") or []),
                 "preferred_operators_count": len(constraints.get("preferred_operators") or []),
                 "forbidden_patterns_count": len(constraints.get("forbidden_patterns") or []),
+                "strict_preferred_fields": bool(constraints.get("strict_preferred_fields")),
+                "strict_preferred_operators": bool(constraints.get("strict_preferred_operators")),
                 "applied": True,
             }
             self._event(

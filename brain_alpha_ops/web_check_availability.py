@@ -484,6 +484,7 @@ from typing import Any, Callable, Protocol
 from brain_alpha_ops.config import RunConfig
 from brain_alpha_ops.research.repository import ResearchRepository
 from brain_alpha_ops.research.safety import SubmissionLedger
+from brain_alpha_ops.web_candidate_check_evidence import persist_candidate_check_evidence
 
 
 logger = logging.getLogger(__name__)
@@ -545,7 +546,7 @@ def run_check_batch_job_service(
     error_payload: ErrorPayload,
 ) -> None:
     mode = str(payload.get("mode", "quick"))
-    sync_range = str(payload.get("syncRange", "3d"))
+    sync_range = str(payload.get("syncRange", "all"))
     candidates = passed_candidates_from_payload(payload)
     total = len(candidates)
     checked = 0
@@ -646,6 +647,7 @@ def run_check_batch_job_service(
                     if isinstance(check, dict) and check.get("passed") is False:
                         blocker_counts[str(check.get("name") or "unknown")] += 1
             repo.save_check_record({"job_id": str(payload.get("job_id", "")), **result})
+            persist_candidate_check_evidence(run_config.ops.storage_dir, candidate, result)
             store.update(
                 job_id,
                 status="running",

@@ -30,7 +30,7 @@ ASYNC_JOBS_LOCK = threading.RLock()
 
 # Job lifecycle constants
 _ASYNC_JOB_MAX_AGE_SECONDS = 3600  # 1 hour TTL for completed/failed jobs
-_ASYNC_JOB_MAX_COUNT = 200  # hard cap on total jobs in memory
+_ASYNC_JOB_MAX_COUNT = 200  # capacity guard for total jobs in memory
 _ASYNC_JOB_TERMINAL_STATUSES = frozenset({
     "completed", "completed_with_warnings", "failed", "stopped", "cancelled", "canceled",
 })

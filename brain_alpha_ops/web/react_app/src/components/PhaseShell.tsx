@@ -69,7 +69,7 @@ export default memo(function PhaseShell({
 
       <StepGuide steps={steps} />
 
-      <div className="phase-shell-body" style={isBlocked ? { opacity: 0.45, pointerEvents: "none", filter: "grayscale(0.3)" } : undefined}>
+      <div className="phase-shell-body" style={isBlocked ? { opacity: 0.45, filter: "grayscale(0.3)" } : undefined}>
         {children}
       </div>
     </div>

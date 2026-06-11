@@ -32,7 +32,7 @@ export function usePhaseState(input: PhaseInput) {
       label: "连接与就绪",
       status: currentPhase === "connect" ? "active" : "complete",
       expanded: currentPhase === "connect",
-      unlockCondition: "连接 BRAIN 账户并完成云端同步后解锁下一步",
+      unlockCondition: "连接 BRAIN 账户并具备本地缓存后解锁；后续同步可手动触发",
       items: [
         { id: "official_operations" as CardViewId, label: "云端同步", icon: "00" },
         { id: "config" as CardViewId, label: "系统配置", icon: "10" },

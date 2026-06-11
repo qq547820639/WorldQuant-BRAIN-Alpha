@@ -26,7 +26,8 @@ def test_quality_check_panel_reads_all_gate_snapshots():
     candidates = _source(SRC / "components" / "CandidateTable.tsx")
 
     assert '"/api/candidates?limit=1000"' not in source
-    assert 'callApi(`/api/candidates?limit=${CANDIDATE_FETCH_LIMIT}`)' in candidates
+    assert 'callApi("/api/candidates")' in candidates
+    assert "CANDIDATE_FETCH_LIMIT" not in candidates
     assert 'callSlots<BacktestSlotsResponse>("/api/backtest_slots")' in source
     assert 'callReadiness<SubmitReadinessResponse>("/api/submit_readiness")' in source
     assert '<CandidateTable' in source

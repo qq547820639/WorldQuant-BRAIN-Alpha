@@ -122,8 +122,9 @@ def test_load_run_config_fills_empty_dataset_from_official_cache(tmp_path):
 
     assert config.ops.settings.dataset == "pv1"
     assert config.ops.budget.dataset_strategy == "rotate"
-    assert config.ops.budget.require_cloud_sync is True
-    assert config.ops.budget.cloud_sync_max_elapsed_seconds == 300.0
+    assert config.ops.budget.require_cloud_sync is False
+    assert config.ops.budget.cloud_sync_range == "all"
+    assert config.ops.budget.cloud_sync_max_elapsed_seconds == 0.0
     assert config.ops.official_api.allow_stale_context_on_rate_limit is False
 
 
@@ -418,7 +419,6 @@ def test_load_run_config_accepts_release_dataset_strategies():
                         "budget": {
                             "dataset_strategy": "fixed",
                             "require_cloud_sync": True,
-                            "cloud_sync_max_elapsed_seconds": 45,
                             "run_forever": False,
                         },
                         "official_api": {"allow_stale_context_on_rate_limit": False},
@@ -433,7 +433,7 @@ def test_load_run_config_accepts_release_dataset_strategies():
         assert config.ops.settings.dataset == "pv1"
         assert config.ops.budget.dataset_strategy == "fixed"
         assert config.ops.budget.require_cloud_sync is True
-        assert config.ops.budget.cloud_sync_max_elapsed_seconds == 45
+        assert config.ops.budget.cloud_sync_max_elapsed_seconds == 0.0
         assert config.ops.budget.run_forever is False
         assert config.ops.official_api.allow_stale_context_on_rate_limit is False
 
@@ -459,9 +459,13 @@ def test_official_api_paths_use_canonical_contract():
     config = RunConfig().ops.official_api
     assert config.authentication_path == CANONICAL_API_PATHS["authentication"]
     assert config.simulations_path == CANONICAL_API_PATHS["simulations"]
+    assert config.data_categories_path == CANONICAL_API_PATHS["data_categories"]
     assert config.data_sets_path == CANONICAL_API_PATHS["data_sets"]
+    assert config.data_set_path_template == CANONICAL_API_PATHS["data_set_detail"]
     assert config.data_fields_path == CANONICAL_API_PATHS["data_fields"]
+    assert config.data_field_path_template == CANONICAL_API_PATHS["data_field_detail"]
     assert config.operators_path == CANONICAL_API_PATHS["operators"]
+    assert config.data_fields_dataset_query_key == "dataset.id"
 
 
 def _restore_env(name, value):

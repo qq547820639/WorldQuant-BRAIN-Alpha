@@ -58,6 +58,49 @@ def test_run_simple_async_job_service_records_success_progress_and_result():
     assert row["progress"]["status_message"] == "Task completed."
 
 
+def test_run_simple_async_job_service_reports_candidate_generation_gate_summary():
+    store = _Store()
+
+    run_simple_async_job_service(
+        "job_1",
+        {},
+        store=store,
+        operation="generate_candidates",
+        start_phase="candidate_generation",
+        start_message="Generating.",
+        worker=lambda _payload: {
+            "ok": True,
+            "count": 0,
+            "candidates": [],
+            "summary": {
+                "generated_count": 5,
+                "returned_count": 0,
+                "rejected_count": 5,
+                "rejected_reasons": {
+                    "local_backtest_unsupported": 3,
+                    "local_backtest_failed": 2,
+                },
+                "quality_summary": {
+                    "qualified_count": 0,
+                    "local_valid_count": 0,
+                    "invalid_count": 5,
+                },
+                "persistence": {
+                    "persisted_count": 0,
+                },
+            },
+        },
+        safe_error_message=str,
+        error_payload=lambda exc, **kwargs: {"error": str(exc), **kwargs},
+    )
+
+    message = store.rows["job_1"]["progress"]["status_message"]
+    assert "生成 5 个本地候选" in message
+    assert "0 个通过本地门禁" in message
+    assert "本地回测不支持 3" in message
+    assert "已保存 0 个可推进候选" in message
+
+
 def test_run_simple_async_job_service_records_failed_payload():
     store = _Store()
 

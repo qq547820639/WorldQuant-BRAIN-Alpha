@@ -6,6 +6,7 @@ from brain_alpha_ops.agent_tools import BrainAlphaToolbox
 from tests.production_api_stub import ProductionBrainAPIStub
 from brain_alpha_ops.config import RunConfig
 from brain_alpha_ops.models import Candidate
+from brain_alpha_ops.research.context import _cloud_snapshot_from_storage
 from brain_alpha_ops.research.memory import ResearchMemory
 from brain_alpha_ops.research.repository import ResearchRepository
 
@@ -171,6 +172,19 @@ def test_repository_latest_cloud_alphas_warns_on_corrupt_json_line(tmp_path, cap
 
     assert [row["id"] for row in rows] == ["cloud_1"]
     assert "corrupt cloud alpha JSON line skipped" in caplog.text
+
+
+def test_cloud_context_snapshot_counts_all_synced_cloud_rows(tmp_path):
+    rows = [
+        {"id": f"cloud_{index}", "status": "UNSUBMITTED", "metrics": {"pass_fail": "PASS"}}
+        for index in range(1001)
+    ]
+    _write_jsonl(tmp_path / "cloud_alphas.jsonl", rows)
+
+    snapshot = _cloud_snapshot_from_storage(str(tmp_path), top_n=3)
+
+    assert snapshot["summary"]["count"] == 1001
+    assert len(snapshot["alphas"]) == 3
 
 
 def test_research_memory_writes_summary_file(tmp_path):

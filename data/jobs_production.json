@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated_at": 1780976147.607651,
+  "updated_at": 1781139818.8708532,
   "jobs": {
     "job_0001": {
       "status": "failed",
@@ -8126,6 +8126,58 @@
           },
           "checkpoint_available": true
         }
+      }
+    },
+    "job_0009": {
+      "status": "failed",
+      "result": {
+        "summary": {
+          "submitted_this_run": 0,
+          "auto_submitted": 0
+        }
+      },
+      "error": "Process restarted before this task completed.",
+      "cancel": false,
+      "created_at": 1781136665.433099,
+      "updated_at": 1781137733.2381709,
+      "progress": {
+        "phase": "failed",
+        "current": 18200,
+        "total": 0,
+        "percent": 100,
+        "message": "Process restarted before this task completed.",
+        "alpha_id": "",
+        "run_id": "run_42dd244b39",
+        "continuous": false,
+        "indeterminate": true,
+        "data": {
+          "cloud_sync": {
+            "status": "running",
+            "status_code": "RUNNING",
+            "range": "all",
+            "scanned": 18200,
+            "api_reported_total": 10000,
+            "filter_window_count": 10000,
+            "page_size": 100,
+            "page_limit": 100,
+            "pages_fetched": 82,
+            "expected_pages": 182,
+            "next_offset": 8200,
+            "offset": 8100,
+            "added": 0,
+            "skipped": 0,
+            "failed": 0,
+            "cached": false,
+            "stale": false,
+            "warning": ""
+          }
+        }
+      },
+      "operation": "production_run",
+      "safe_mode": {
+        "autoSubmit": false,
+        "auto_submit": false,
+        "submit_endpoint_required": true
       }
     }
   }
