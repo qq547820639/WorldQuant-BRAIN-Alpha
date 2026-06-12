@@ -23,7 +23,9 @@ from brain_alpha_ops.web_html import (
     resolve_react_asset as _resolve_react_asset,
 )
 from brain_alpha_ops.web_legacy_exports import build_legacy_imported_exports as _build_legacy_imported_exports
+from brain_alpha_ops.web_compat_facade import install_compat_facades as _install_compat_facades, _load_html, get_snapshot_export_names as _get_snapshot_export_names
 from brain_alpha_ops import web_runtime_facade as _web_runtime_facade
+from brain_alpha_ops.web_cli import serve as _serve_server, shutdown_server as _shutdown_server, main as _main_cli, smoke_test_server as _smoke_test_server
 from brain_alpha_ops.web_server_lifecycle import (
     SafeThreadingHTTPServer as _SafeThreadingHTTPServer,
     find_free_port as _find_free_port,
@@ -57,17 +59,23 @@ SERVER_STOP = threading.Event()
 def dispatch_get(handler, path, query):
     # ── Security: All API GET routes require valid origin ──────────
     if path.startswith("/api/") and not _has_valid_local_origin(handler):
-        handler._send_json(
-            {"ok": False, "error_code": "ORIGIN_FORBIDDEN",
-             "error": "forbidden local request origin"},
-            status=403,
-        )
+        payload = {"ok": False, "error_code": "ORIGIN_FORBIDDEN", "error": "forbidden local request origin"}
+        if hasattr(handler, "_send_json"):
+            handler._send_json(payload, status=403)
+        else:
+            handler._json(payload, status=403)
         return
     if path == "/api/backtest_slots":
-        handler._send_json(_backtest_slots_payload())
+        if hasattr(handler, "_send_json"):
+            handler._send_json(_backtest_slots_payload())
+        else:
+            handler._json(_backtest_slots_payload())
         return
     if path == "/api/submit_readiness":
-        handler._send_json(_submit_readiness_payload())
+        if hasattr(handler, "_send_json"):
+            handler._send_json(_submit_readiness_payload())
+        else:
+            handler._json(_submit_readiness_payload())
         return
     _routes_dispatch_get(handler, path, query)
 
@@ -228,6 +236,18 @@ def _persist_generated_candidates(job_id: str, run_config, result: dict, candida
                 skipped_reasons[reason] = skipped_reasons.get(reason, 0) + 1
             continue
         try:
+            from brain_alpha_ops.web_candidate_audit import attach_scientific_audit
+
+            if "scientific_audit" not in row and not (
+                isinstance(row.get("extra_fields"), dict)
+                and isinstance(row.get("extra_fields", {}).get("scientific_audit"), dict)
+            ):
+                row = attach_scientific_audit(
+                    row,
+                    operation="candidate_generation",
+                    source="candidate_persistence",
+                    feedback_sources=["local_quality", "scorecard", "quality_gate"],
+                )
             repo.save_candidate(job_id, candidate_type.from_dict(row))
             persisted += 1
         except Exception as exc:
@@ -446,35 +466,10 @@ def _production_job_store():
     return getattr(registry, "jobs", None) if registry is not None else None
 
 def _real_check_batch(payload):
-    """Batch expression validation against local and official context."""
-    expressions = payload.get("expressions") or []
-    if isinstance(expressions, str):
-        expressions = [expressions]
-    if not isinstance(expressions, list):
-        return {"ok": False, "error": "expressions must be a list of strings"}
-    results = []
-    for expr in expressions:
-        if not isinstance(expr, str) or not expr.strip():
-            results.append({"expression": str(expr), "valid": False, "reason": "empty or invalid expression"})
-            continue
-        try:
-            from brain_alpha_ops.research.expression_ast import expression_key
-            key = expression_key(expr.strip())
-            results.append({
-                "expression": expr.strip(),
-                "valid": True,
-                "expression_key": key,
-                "status": "LOCAL_VALIDATION_PASSED",
-            })
-        except Exception as e:
-            results.append({"expression": str(expr), "valid": False, "reason": str(e)})
-    return {
-        "ok": True,
-        "checked": len(results),
-        "valid_count": sum(1 for r in results if r.get("valid")),
-        "invalid_count": sum(1 for r in results if not r.get("valid")),
-        "results": results,
-    }
+    """Batch expression validation delegating to web_check_batch_context."""
+    from brain_alpha_ops.web_check_batch_context import check_batch_official_context_payload
+
+    return check_batch_official_context_payload(payload, load_run_config=_load_run_config)
 
 def _real_submit_batch(payload):
     """Batch submit with safety gates — real submission requires pre-flight checks."""
@@ -549,7 +544,7 @@ def _has_valid_api_session(handler) -> bool:
     checker = getattr(handler, "_has_valid_session", None)
     if callable(checker):
         try:
-            return bool(checker())
+            return bool(checker(""))
         except Exception:
             logger.warning("Session check failed with exception, denying request", exc_info=True)
             return False
@@ -565,21 +560,21 @@ def dispatch_post(handler, path, body):
     """
     # ── Security: Origin validation ──────────────────────────────────
     if not _has_valid_local_origin(handler):
-        handler._send_json(
-            {"ok": False, "error_code": "ORIGIN_FORBIDDEN",
-             "error": "forbidden local request origin"},
-            status=403,
-        )
+        payload = {"ok": False, "error_code": "ORIGIN_FORBIDDEN", "error": "forbidden local request origin"}
+        if hasattr(handler, "_send_json"):
+            handler._send_json(payload, status=403)
+        else:
+            handler._json(payload, status=403)
         return
 
     # ── Security: Session validation ─────────────────────────────────
     # /api/session is the only route that doesn't require a pre-existing session
     if path != "/api/session" and not _has_valid_api_session(handler):
-        handler._send_json(
-            {"ok": False, "error_code": "SESSION_INVALID",
-             "error": "invalid local session"},
-            status=403,
-        )
+        payload = {"ok": False, "error_code": "SESSION_INVALID", "error": "invalid local session"}
+        if hasattr(handler, "_send_json"):
+            handler._send_json(payload, status=403)
+        else:
+            handler._json(payload, status=403)
         return
 
     # ── Security: Replay protection (M-SEC-03) ───────────────────────
@@ -620,7 +615,10 @@ def dispatch_post(handler, path, body):
 
     fn = _real_routes.get(path)
     if fn:
-        handler._send_json(fn(payload))
+        if hasattr(handler, "_send_json"):
+            handler._send_json(fn(payload))
+        else:
+            handler._json(fn(payload))
         return
 
     # Delegate to web_routes for pipeline/config/candidate routes
@@ -691,6 +689,33 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("X-Frame-Options", "DENY")
         self.send_header("Referrer-Policy", "no-referrer")
 
+    def _send_html(self, html, *, extra_headers=None):
+        """Send HTML response with security headers."""
+        body = html.encode("utf-8") if isinstance(html, str) else html
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self._send_security_headers()
+        if extra_headers:
+            for name, value in extra_headers:
+                self.send_header(name, value)
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _send_json(self, payload, status=200, *, extra_headers=None):
+        """Send JSON response with security headers."""
+        import json as _json_module
+        body = _json_module.dumps(payload, ensure_ascii=False, default=str).encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self._send_security_headers()
+        if extra_headers:
+            for name, value in extra_headers:
+                self.send_header(name, value)
+        self.end_headers()
+        self.wfile.write(body)
+
 def _json_default(obj):
     """Safe JSON default for module-level dispatch helpers."""
     from datetime import datetime, date
@@ -708,29 +733,23 @@ def _json_default(obj):
 # ═══════════════════════ Server ═══════════════════════════════
 def serve(port=None, open_browser=True, host=HOST, **kw):
     global SERVER
-    bind_port = port or _find_free_port(DEFAULT_PORT, host=host)
-    SERVER = _SafeThreadingHTTPServer((host, bind_port), Handler)
-    threading.Thread(target=SERVER.serve_forever, daemon=True).start()
-    display = "127.0.0.1" if host in ("0.0.0.0", "::") else host
-    # Start stall detection monitor for pipeline jobs
-    try:
-        from brain_alpha_ops.stall_monitor import ensure_global_monitor
-        ensure_global_monitor()
-    except Exception:
-        import logging
-        logging.getLogger(__name__).debug("StallMonitor not started", exc_info=True)
-    return f"http://{display}:{bind_port}"
+    url = _serve_server(
+        port=port, open_browser=open_browser, host=host,
+        default_port=DEFAULT_PORT, handler_class=Handler,
+        _SafeThreadingHTTPServer=_SafeThreadingHTTPServer,
+        _find_free_port=_find_free_port,
+        **kw,
+    )
+    SERVER = _serve_server._SERVER if hasattr(_serve_server, '_SERVER') else None  # type: ignore[attr-defined]
+    return url
 
 def shutdown_server():
-    global SERVER, SERVER_STOP
-    SERVER_STOP.set()
-    if SERVER:
-        SERVER.shutdown()
-        SERVER.server_close()
-        SERVER = None
+    global SERVER
+    _shutdown_server(server=SERVER, server_stop=SERVER_STOP)
+    SERVER = None
 
 def smoke_test_server(port=None):
-    return {"ok": True, "port": port or DEFAULT_PORT}
+    return _smoke_test_server(port=port if port is not None else DEFAULT_PORT)
 
 def config_from_payload(payload):
     return _load_run_config()
@@ -742,41 +761,8 @@ def load_run_config_provider():
 # The following functions provide backward-compatible signatures for test
 # modules that were written against the original web.py monolithic interface.
 # These functions use lazy imports to avoid circular dependency issues.
-
-def _load_html():
-    """Backward-compatible loader: returns the inline HTML bundle."""
-    from brain_alpha_ops.web_html import load_html as _load
-    return _load()
-
-def _compat_facade(func_name):
-    """Return a lazy wrapper that delegates to binding modules."""
-    def wrapper(*args, **kwargs):
-        from brain_alpha_ops import web_session_bindings as _snap
-        from brain_alpha_ops import web_candidate_bindings as _cand
-        from brain_alpha_ops import web_config_bindings as _cfg
-        from brain_alpha_ops import web_job_bindings as _job
-        for mod in (_snap, _cand, _cfg, _job):
-            fn = getattr(mod, func_name, None)
-            if fn is not None:
-                return fn(*args, **kwargs)
-        raise AttributeError(f"web compatibility: {func_name} not found in binding modules")
-    wrapper.__name__ = func_name
-    return wrapper
-
-# Create wrapper functions for all snapshot/candidate binding functions
-_snapshot_funcs = [
-    "anti_overfit_snapshot", "assistant_context_snapshot",
-    "assistant_cross_review_payload", "assistant_guidance_snapshot",
-    "assistant_request_snapshot", "assistant_response_guidance_payload",
-    "assistant_response_parse_payload", "cloud_alpha_snapshot",
-    "generate_candidates_payload", "passed_candidates_from_payload",
-    "public_run_config", "research_memory_snapshot",
-    "research_observability_snapshot", "rolling_validation_snapshot",
-    "save_assistant_guidance_payload", "sqlite_expression_lookup_payload",
-    "sqlite_index_snapshot", "sqlite_record_lookup_payload",
-]
-for _name in _snapshot_funcs:
-    locals()[_name] = _compat_facade(_name)
+# Backward-compatible facade wrappers installed from web_compat_facade
+_install_compat_facades(locals())
 
 
 def _install_facade_bindings() -> None:
@@ -816,25 +802,15 @@ def __getattr__(name: str):
     raise AttributeError(name)
 
 def main(argv=None):
-    import argparse
-    p = argparse.ArgumentParser(description="BRAIN Alpha Ops")
-    p.add_argument("--port", type=int, default=None)
-    p.add_argument("--host", default=HOST)
-    p.add_argument("--no-browser", action="store_true")
-    args = p.parse_args(argv)
-    url = serve(port=args.port, open_browser=not args.no_browser, host=args.host)
-    print(f"BRAIN Alpha Ops: {url}")
-    try:
-        while not SERVER_STOP.wait(30):  # P3-3: was 3600 (1hr)
-            pass
-    except KeyboardInterrupt:
-        shutdown_server()
-    return 0
+    return _main_cli(
+        argv=argv, serve_fn=serve, shutdown_fn=shutdown_server,
+        host=HOST, server_stop=SERVER_STOP,
+    )
 
 _install_facade_bindings()
 WEB_APPLICATION_CONTEXT = WebApplicationContext(sys.modules[__name__])
 
-_snapshot_exports = [n for n in _snapshot_funcs if n != "_load_html"]
+_snapshot_exports = _get_snapshot_export_names()
 __all__ = ["Handler", "main", "serve", "shutdown_server", "smoke_test_server",
            "dispatch_get", "dispatch_post", "find_free_port",
            "HOST", "DEFAULT_PORT", "SERVER", "SERVER_STOP", "SERVER_LOCK",

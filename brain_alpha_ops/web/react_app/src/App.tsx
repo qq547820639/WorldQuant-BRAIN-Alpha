@@ -5,11 +5,20 @@
  */
 
 import { useState, useCallback, useRef, useEffect, lazy, Suspense, useMemo } from "react";
-import type { BacktestSlotsResponse, BrainCredentials, Candidate, CardViewId, PhaseId } from "@/types";
+import type {
+  BacktestSlotsResponse,
+  BrainCredentials,
+  Candidate,
+  CardViewId,
+  CloudAlphaCache,
+  OfficialContextCache,
+  PhaseId,
+} from "@/types";
 import { useApi } from "@/hooks/useApi";
+import { apiErrorMessage, safeDisplayErrorMessage } from "@/helpers/errorExperience";
 import { useToast } from "@/hooks/useToast";
 import { useJobState } from "@/hooks/useJobState";
-import { usePhaseState } from "@/hooks/usePhaseState";
+import { usePhaseState, type PhaseApiStatus } from "@/hooks/usePhaseState";
 import ToastContainer from "@/components/ToastContainer";
 import Sidebar from "@/components/Sidebar";
 import Dashboard from "@/components/Dashboard";
@@ -51,12 +60,13 @@ const VIEW_LABELS: Record<string, string> = {
   submission_confirm: "阻断复核",
   submission: "阻断复核",
   checkpoint_status: "续跑记录",
+  robustness: "稳健性证据",
   config: "系统配置",
   cloud: "云端快照",
 };
 
 const PHASE_LABELS: Record<PhaseId, string> = {
-  connect: "连接与就绪",
+  connect: "准备与就绪",
   discover: "候选发现",
   evaluate: "评估与验证",
   ready: "提交就绪",
@@ -94,6 +104,7 @@ function CredentialQuickStart({
     ? "Token" : credentials.username.trim() || credentials.password
       ? "账号密码"
       : managedCredentialsAvailable ? "托管凭证" : "未填写";
+  const connectionErrorMessage = connectionApi.error ? safeDisplayErrorMessage(connectionApi.error) : null;
 
   const updateCredential = <K extends keyof BrainCredentials>(key: K, value: BrainCredentials[K]) => {
     onCredentialsChange({ ...credentials, [key]: value });
@@ -122,7 +133,7 @@ function CredentialQuickStart({
     }
     const result = await connectionApi.call("/api/test_connection", { method: "POST", body: JSON.stringify(payload) });
     if (!result?.ok) {
-      const err = result?.error || result?.error_code || "BRAIN 连接测试失败";
+      const err = safeDisplayErrorMessage(apiErrorMessage(result, "BRAIN 连接测试失败"));
       notify("error", err);
       onConnectionTested?.(false, err);
       return;
@@ -189,7 +200,7 @@ function CredentialQuickStart({
         </div>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 12 }}>
           <span className="text-xs text-text-tertiary" role="status">
-            {connectionApi.error ? `连接失败: ${connectionApi.error}` :
+            {connectionErrorMessage ? `连接失败: ${connectionErrorMessage}` :
              connectionApi.data?.ok ? `连接正常: ${connectionApi.data.environment || "production"}` :
              hasSession ? "凭证已填写，尚未测试" :
              managedCredentialsAvailable ? "也可留空，使用托管凭证" : "请临时填写页面凭证"}
@@ -198,6 +209,58 @@ function CredentialQuickStart({
             {connectionApi.loading ? "测试中..." : "测试连接"}
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function LocalCacheSessionCard({
+  notify,
+  onLoggedOut,
+}: {
+  notify: (type: "success" | "error" | "warning" | "info", msg: string) => void;
+  onLoggedOut: () => void;
+}) {
+  const logoutApi = useApi<{ ok: boolean; error?: string; error_code?: string }>();
+  const logoutErrorMessage = logoutApi.error ? safeDisplayErrorMessage(logoutApi.error) : null;
+
+  const logout = async () => {
+    const result = await logoutApi.call("/api/logout", { method: "POST" });
+    if (!result?.ok) {
+      notify("error", safeDisplayErrorMessage(apiErrorMessage(result, "退出本地会话失败")));
+      return;
+    }
+    onLoggedOut();
+    notify("success", "已退出本地会话并清空页面凭证");
+  };
+
+  return (
+    <div className="panel mb-4" style={{
+      borderColor: "oklch(0.58 0.10 65 / 0.30)",
+      background: "oklch(0.58 0.06 65 / 0.10)",
+    }}>
+      <div className="panel-header">
+        <span>本地缓存会话</span>
+        <span className="badge badge-positive">缓存可用</span>
+      </div>
+      <div className="panel-body-padded" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, flexWrap: "wrap" }}>
+        <div style={{ minWidth: 240, flex: "1 1 320px" }}>
+          <p className="text-sm font-medium text-warning mb-1">当前使用本地缓存，不需要重新登录</p>
+          <p className="text-xs text-text-secondary" style={{ lineHeight: 1.6 }}>
+            页面会继续读取本地 Alpha 快照和官方上下文缓存；退出只清空当前页面会话与临时凭证，不删除本地缓存。
+          </p>
+          {logoutErrorMessage && (
+            <p className="text-xs text-negative mt-2" role="alert">退出失败: {logoutErrorMessage}</p>
+          )}
+        </div>
+        <button
+          type="button"
+          className="btn btn-danger btn-sm"
+          onClick={logout}
+          disabled={logoutApi.loading}
+        >
+          {logoutApi.loading ? "退出中..." : "退出本地会话"}
+        </button>
       </div>
     </div>
   );
@@ -235,10 +298,10 @@ export default function App() {
 
   useEffect(() => {
     // Independently notify about each API error so the user knows which feature is affected
-    if (candidatesApi.error) notify("warning", `候选数据加载失败: ${candidatesApi.error}`);
-    if (slotsApi.error) notify("warning", `回测槽位加载失败: ${slotsApi.error}`);
-    if (cloudApi.error) notify("warning", `云端快照加载失败: ${cloudApi.error}`);
-    if (configApi.error) notify("warning", `配置状态加载失败: ${configApi.error}`);
+    if (candidatesApi.error) notify("warning", `候选数据加载失败: ${safeDisplayErrorMessage(candidatesApi.error)}`);
+    if (slotsApi.error) notify("warning", `回测槽位加载失败: ${safeDisplayErrorMessage(slotsApi.error)}`);
+    if (cloudApi.error) notify("warning", `云端快照加载失败: ${safeDisplayErrorMessage(cloudApi.error)}`);
+    if (configApi.error) notify("warning", `配置状态加载失败: ${safeDisplayErrorMessage(configApi.error)}`);
   }, [candidatesApi.error, slotsApi.error, cloudApi.error, configApi.error, notify]);
 
   const [connectionOverride, setConnectionOverride] = useState<boolean | null>(null);
@@ -247,9 +310,11 @@ export default function App() {
 
   // Phase state from backend (poll every 10s)
   const phaseApi = useApi<{
-    current_phase: string; connected: boolean; context_fresh: boolean;
+    current_phase: string; operation_mode?: "cache_only" | "connected" | "needs_setup"; connected: boolean; context_fresh: boolean;
     candidates_count: number; scored_count: number; readiness_passed: boolean;
     sync: { in_progress: boolean; scanned: number; total: number; elapsed_seconds: number; stalled: boolean };
+    official_context_cache?: OfficialContextCache;
+    cloud_alpha_cache?: CloudAlphaCache;
     readiness: { eligible_count: number; ready: boolean };
   }>();
 
@@ -263,6 +328,7 @@ export default function App() {
 
   // Phase state computation
   const phaseData = phaseApi.data;
+  const phaseApiStatus: PhaseApiStatus = phaseData ? "ready" : phaseApi.error ? "error" : "loading";
   const phaseConnected = Boolean(phaseData?.connected);
   const connected = Boolean(connectionOverride ?? phaseConnected) && !connectionError;
   const contextFresh = phaseData?.context_fresh ?? false;
@@ -280,6 +346,7 @@ export default function App() {
     scoredCount,
     readinessPassed,
     activeView,
+    phaseStatus: phaseApiStatus,
   });
 
   // Auto-expand current phase
@@ -348,6 +415,18 @@ export default function App() {
     setActiveView("dashboard");
   }, []);
 
+  const handleCandidatePoolUpdated = useCallback(() => {
+    void candidatesApi.call("/api/candidates?summary=true");
+    void phaseApi.call("/api/phase_state");
+  }, [candidatesApi.call, phaseApi.call]);
+
+  const handleLocalSessionLoggedOut = useCallback(() => {
+    setCredentials({ username: "", password: "", token: "" });
+    setConnectionOverride(false);
+    setConnectionError(null);
+    void phaseApi.call("/api/phase_state");
+  }, [phaseApi.call]);
+
   useEffect(() => {
     if (connectionOverride === true && phaseConnected) setConnectionOverride(null);
     if (connectionOverride === false && !phaseConnected) setConnectionOverride(null);
@@ -372,8 +451,9 @@ export default function App() {
   const detailContent = useMemo(() => {
     switch (activeView) {
     case "dashboard":
-      return <Dashboard notify={notify} connected={connected} contextFresh={contextFresh} onNavigateToSync={handleDashboardSyncStart} onOpenSync={handleDashboardSyncOpen}>
-        {!connected && <CredentialQuickStart credentials={credentials} managedCredentialsAvailable={managedCredentialsAvailable} onCredentialsChange={setCredentials} notify={notify} onConnectionTested={handleConnectionTested} />}
+      return <Dashboard notify={notify} connected={connected} contextFresh={contextFresh} phaseStatus={phaseApiStatus} onNavigateToSync={handleDashboardSyncStart} onOpenSync={handleDashboardSyncOpen}>
+        {!connected && contextFresh && <LocalCacheSessionCard notify={notify} onLoggedOut={handleLocalSessionLoggedOut} />}
+        {!connected && !contextFresh && <CredentialQuickStart credentials={credentials} managedCredentialsAvailable={managedCredentialsAvailable} onCredentialsChange={setCredentials} notify={notify} onConnectionTested={handleConnectionTested} />}
         {connected && contextFresh && (
           <div className="animate-fade-in">
             <JobMonitor notify={notify} credentials={credentials} jobState={jobState} />
@@ -387,6 +467,8 @@ export default function App() {
           credentials={credentials}
           autoStart={officialOpsAutoStart}
           connectionReady={connected || managedCredentialsAvailable}
+          officialContextCache={phaseData?.official_context_cache}
+          cloudAlphaCache={phaseData?.cloud_alpha_cache}
           onAutoStartConsumed={() => setOfficialOpsAutoStart(false)}
           onSyncCompleted={handleOfficialSyncCompleted}
           onReconnectRequested={handleOfficialReconnectRequested}
@@ -396,7 +478,7 @@ export default function App() {
     case "candidates":
       return (
         <CandidateTable key="candidates" notify={notify} showProductionControls showRowActions
-          onScore={openScoring} credentials={credentials} />
+          onScore={openScoring} credentials={credentials} onCandidatePoolUpdated={handleCandidatePoolUpdated} />
       );
     case "official_backtests":
       return <OfficialBacktestSlots notify={notify} />;
@@ -411,8 +493,21 @@ export default function App() {
       return <SubmissionConfirmPanel notify={notify} />;
     case "checkpoint_status":
       return <SnapshotPanel key="checkpoint_status" notify={notify} viewMode="checkpoint_status" onNavigate={handleNavigate} />;
+    case "robustness":
+      return <SnapshotPanel key="robustness" notify={notify} viewMode="robustness" onNavigate={handleNavigate} />;
     case "config":
-      return <ConfigPanel notify={notify} credentials={credentials} onCredentialsChange={setCredentials} onConnectionTested={handleConnectionTested} />;
+      return (
+        <ConfigPanel
+          notify={notify}
+          credentials={credentials}
+          onCredentialsChange={setCredentials}
+          onConnectionTested={handleConnectionTested}
+          connected={connected}
+          contextFresh={contextFresh}
+          managedCredentialsAvailable={managedCredentialsAvailable}
+          onLoggedOut={handleLocalSessionLoggedOut}
+        />
+      );
     case "cloud":
       return <SnapshotPanel key="cloud" notify={notify} viewMode="cloud" onNavigate={handleNavigate} />;
     default:
@@ -434,18 +529,35 @@ export default function App() {
     handleConnectionTested,
     connected,
     contextFresh,
+    phaseApiStatus,
     jobState,
     managedCredentialsAvailable,
     officialOpsAutoStart,
     handleDashboardSyncStart,
     handleDashboardSyncOpen,
     handleOfficialSyncCompleted,
+    handleOfficialReconnectRequested,
+    handleCandidatePoolUpdated,
+    handleLocalSessionLoggedOut,
   ]);
 
   const viewLabel = VIEW_LABELS[activeView] || activeView;
   const currentPhaseObj = phaseState.phases[currentPhase];
-  const connectionStatus = connected ? "已连接" : "未连接";
-  const connectionTone = connected ? "connected" : "disconnected";
+  const topbarStatus = topbarConnectionStatus({ connected, contextFresh, phaseStatus: phaseApiStatus });
+  const phaseShellStatusLabel = phaseApiStatus === "loading"
+    ? "读取中"
+    : phaseApiStatus === "error"
+      ? "读取失败"
+      : currentPhaseObj?.status === "complete" ? "已完成"
+      : currentPhaseObj?.status === "active" ? "进行中"
+      : currentPhaseObj?.status === "blocked" ? "已阻断"
+      : "待解锁";
+  const phaseShellStatusTone = phaseApiStatus === "loading" || phaseApiStatus === "error"
+    ? "active"
+    : currentPhaseObj?.status === "complete" ? "complete"
+    : currentPhaseObj?.status === "blocked" ? "blocked"
+    : currentPhaseObj?.status === "active" ? "active"
+    : "pending";
 
   return (
     <div className="app-shell">
@@ -464,9 +576,9 @@ export default function App() {
             </svg>
           </button>
           {/* Connection state */}
-          <span className={`topbar-connection ${connectionTone}`}>
-            <span className={`status-dot ${connected ? "status-dot-active" : "status-dot-error"}`} />
-            {connectionStatus}
+          <span className={`topbar-connection ${topbarStatus.tone}`} title={topbarStatus.title}>
+            <span className={`status-dot ${topbarStatus.dotClass}`} />
+            {topbarStatus.label}
           </span>
           <span style={{ color: "oklch(0.38 0.006 45)", fontSize: 12 }}>·</span>
           {/* Phase indicator */}
@@ -477,7 +589,7 @@ export default function App() {
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           {jobState.running && (
             <span className="badge badge-warning" style={{ fontFamily: "var(--font-mono)", fontSize: 10, cursor: "pointer" }}
-              title={`${jobState.progress?.status_message || ""} · ${jobState.progress?.percent_complete != null ? Math.round(jobState.progress.percent_complete) + "%" : ""}`}
+              title={`${safeDisplayErrorMessage(jobState.progress?.status_message, "任务状态待确认")} · ${jobState.progress?.percent_complete != null ? Math.round(jobState.progress.percent_complete) + "%" : ""}`}
               onClick={() => setActiveView("dashboard")}
             >
               {jobState.progress?.percent_complete != null ? `${Math.round(jobState.progress.percent_complete)}%` : "..."} {(jobState.progress?.eta_seconds || 0) > 0 ? fmtEta(jobState.progress!.eta_seconds!) : ""}
@@ -520,13 +632,8 @@ export default function App() {
           <PhaseShell
             phaseId={currentPhase}
             phaseLabel={currentPhaseObj.label}
-            statusLabel={
-              currentPhaseObj.status === "complete" ? "已完成"
-              : currentPhaseObj.status === "active" ? "进行中"
-              : currentPhaseObj.status === "blocked" ? "已阻断"
-              : "待解锁"
-            }
-            statusTone={currentPhaseObj.status === "complete" ? "complete" : currentPhaseObj.status === "blocked" ? "blocked" : currentPhaseObj.status === "active" ? "active" : "pending"}
+            statusLabel={phaseShellStatusLabel}
+            statusTone={phaseShellStatusTone}
             unlockCondition={currentPhaseObj.unlockCondition}
             steps={steps}
           >
@@ -618,6 +725,55 @@ function cloudBadgeTotal(payload?: { count?: number; total?: number; summary?: R
 function numericBadgeValue(value: unknown): number | undefined {
   const number = Number(value);
   return Number.isFinite(number) ? number : undefined;
+}
+
+function topbarConnectionStatus({ connected, contextFresh, phaseStatus = "ready" }: { connected: boolean; contextFresh: boolean; phaseStatus?: PhaseApiStatus }) {
+  if (phaseStatus === "loading") {
+    return {
+      label: "状态读取中",
+      tone: "loading",
+      dotClass: "status-dot-pending",
+      title: "正在读取本地 session 与缓存状态；读取完成前不判定为未连接。",
+    };
+  }
+  if (phaseStatus === "error") {
+    return {
+      label: "状态读取失败",
+      tone: "read-error",
+      dotClass: "status-dot-warning",
+      title: "暂时无法确认 BRAIN 账户连接和本地缓存状态。",
+    };
+  }
+  if (connected && contextFresh) {
+    return {
+      label: "已连接 · 本地缓存可用",
+      tone: "connected",
+      dotClass: "status-dot-active",
+      title: "BRAIN 账户已连接，本地缓存也可用。",
+    };
+  }
+  if (connected) {
+    return {
+      label: "已连接 · 待同步",
+      tone: "connected",
+      dotClass: "status-dot-warning",
+      title: "BRAIN 账户已连接，但还没有完整本地缓存。",
+    };
+  }
+  if (contextFresh) {
+    return {
+      label: "缓存模式 · 本地缓存可用",
+      tone: "cache-ready",
+      dotClass: "status-dot-warning",
+      title: "BRAIN 账户未连接；本地缓存可用于非提交候选流程，官方同步、回测和提交前复核仍需连接。",
+    };
+  }
+  return {
+    label: "账户未连接",
+    tone: "disconnected",
+    dotClass: "status-dot-error",
+    title: "BRAIN 账户未连接，且未检测到完整本地缓存。",
+  };
 }
 
 function fmtEta(seconds: number): string {

@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from brain_alpha_ops.errors import classify_error
-from brain_alpha_ops.redaction import redact_error_message
+from brain_alpha_ops.redaction import redact_data, redact_error_message
 from brain_alpha_ops.research.contracts import correlation_id as build_correlation_id
 
 
@@ -34,7 +34,10 @@ def user_error_payload(
             phase=context.get("phase", error_code),
         )
     )
-    for key, value in context.items():
-        if value not in ("", None):
-            payload[key] = value
+    safe_context = redact_data(
+        {key: value for key, value in context.items() if value not in ("", None)},
+        key_fragments=("account_id", "user_id"),
+    )
+    for key, value in safe_context.items():
+        payload[key] = value
     return payload

@@ -1,6 +1,8 @@
 /** Read-only quality-gate summary before pre-submit blocker review. */
 
 import { useCallback, useEffect, useMemo } from "react";
+import { apiErrorMessage } from "@/helpers/errorExperience";
+import { readinessNextActionLabel, readinessReasonLabel } from "@/helpers/readinessLabels";
 import { useApi } from "@/hooks/useApi";
 import type { BacktestSlotsResponse, SubmitReadinessResponse } from "@/types";
 import CandidateTable from "@/components/CandidateTable";
@@ -21,8 +23,8 @@ export default function QualityCheckPanel({ notify }: Props) {
       callSlots<BacktestSlotsResponse>("/api/backtest_slots"),
       callReadiness<SubmitReadinessResponse>("/api/submit_readiness"),
     ]);
-    if (slotsResult?.error) notify("error", slotsResult.error);
-    if (readinessResult?.error) notify("error", readinessResult.error);
+    if (slotsResult?.error) notify("error", apiErrorMessage(slotsResult, "回测槽位加载失败"));
+    if (readinessResult?.error) notify("error", apiErrorMessage(readinessResult, "提交阻断复核加载失败"));
   }, [callSlots, callReadiness, notify]);
 
   useEffect(() => { void load(); }, [load]);
@@ -173,26 +175,8 @@ function buildQualitySummary(
 
 function reasonText(rows: { reason: string; count: number }[] | undefined) {
   return (rows || [])
-    .map((row) => `${reasonLabel(row.reason)} ${row.count}`)
+    .map((row) => `${readinessReasonLabel(row.reason)} ${row.count}`)
     .join(" · ");
-}
-
-function reasonLabel(reason: string) {
-  const labels: Record<string, string> = {
-    decision_band_not_submit_candidate: "评分决策仍非提交候选",
-    expression_high_turnover_generation_risk: "表达式存在高换手风险",
-    generation_risk_blocked: "生成风险已阻断",
-    high_cloud_similarity: "云端相似度过高",
-    high_turnover_generation_risk: "生成表达式存在高换手风险",
-    local_backtest_failed: "本地回测未通过",
-    local_candidate_invalid: "本地候选未通过",
-    local_quality_failed: "本地质量未通过",
-    missing_official_alpha_id: "缺少官方 Alpha ID",
-    missing_official_metrics: "缺少官方仿真指标",
-    missing_quality_diagnosis: "缺少质量诊断",
-    score_below_official_simulation_threshold: "未达到官方仿真分数门槛",
-  };
-  return labels[reason] || reason;
 }
 
 function nextActionText(action: unknown) {
@@ -203,7 +187,8 @@ function nextActionText(action: unknown) {
     wait_for_open_backtest_slot: "等待官方回测槽位释放",
   };
   const key = String(action || "");
-  return labels[key] || key || "等待候选和门禁数据";
+  if (!key) return "等待候选和门禁数据";
+  return labels[key] || readinessNextActionLabel(key, "等待候选和门禁数据");
 }
 
 function thresholdText(thresholds: Record<string, unknown>) {

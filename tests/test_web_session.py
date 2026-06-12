@@ -70,6 +70,30 @@ def test_brain_connection_status_is_server_side_and_sanitized():
         web_session.SESSION_MANAGER.sessions.clear()
 
 
+def test_web_session_wrapper_redacts_returned_metadata_and_user_id():
+    session = web_session.WebSession()
+
+    result = session.create_session(
+        user_id="operator@example.test",
+        metadata={
+            "safe": "ok",
+            "username": "operator@example.test",
+            "csrfToken": "csrf-secret-123",
+            "headers": {"X-Brain-Alpha-Admin-Token": "admin-secret-123"},
+        },
+    )
+    encoded = json.dumps(result, ensure_ascii=False)
+
+    assert result["metadata"]["safe"] == "ok"
+    assert result["metadata"]["username"] == "<redacted>"
+    assert result["metadata"]["csrfToken"] == "<redacted>"
+    assert result["metadata"]["headers"]["X-Brain-Alpha-Admin-Token"] == "<redacted>"
+    assert result["user_id"] == "<redacted>"
+    assert "operator@example.test" not in encoded
+    assert "csrf-secret-123" not in encoded
+    assert "admin-secret-123" not in encoded
+
+
 def test_mixed_page_credentials_store_complete_basic_pair_before_token():
     web_session.SESSION_MANAGER.sessions.clear()
     session_id, _csrf_token = web_session.create_session()

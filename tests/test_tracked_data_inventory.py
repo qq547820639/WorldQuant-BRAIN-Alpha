@@ -9,6 +9,7 @@ def test_tracked_data_inventory_classifies_known_data_paths(monkeypatch, tmp_pat
     stdout = "\n".join(
         [
             "data/jobs_production.json",
+            "data/simulation_cooldown.json",
             "data/run_history/run_123.json",
             "data/checkpoints/run.checkpoint.json",
             "data/official_fields.json",
@@ -34,11 +35,12 @@ def test_tracked_data_inventory_classifies_known_data_paths(monkeypatch, tmp_pat
     result = check_tracked_data_inventory.inventory_tracked_data(tmp_path)
 
     assert result["ok"] is True
-    assert result["tracked_count"] == 10
+    assert result["tracked_count"] == 11
     assert result["categories"]["runtime_generated"] == [
         "data/checkpoints/run.checkpoint.json",
         "data/jobs_production.json",
         "data/run_history/run_123.json",
+        "data/simulation_cooldown.json",
     ]
     assert result["categories"]["official_snapshot"] == [
         "data/official_fields.json",

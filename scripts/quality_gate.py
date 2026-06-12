@@ -9,12 +9,15 @@ from pathlib import Path
 import subprocess
 import sys
 import time
-from typing import Callable
+from typing import Any, Callable
 
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
+
+from scripts.af006_quality_submatrix import build_quality_gate_af006_submatrix
+
 DEFAULT_CONFIG = ROOT / "config" / "run_config.json"
 DEFAULT_HTML = ROOT / "brain_alpha_ops" / "web" / "react_app" / "dist" / "index.html"
 DEFAULT_SUBPROCESS_TIMEOUT_SECONDS = 300
@@ -66,8 +69,12 @@ STATIC_ANALYSIS_TARGETS = [
     "brain_alpha_ops/web_assistant_snapshots.py",
     "brain_alpha_ops/web_check_batch_job.py",
     "brain_alpha_ops/web_check_availability.py",
+    "brain_alpha_ops/web_candidate_audit.py",
     "brain_alpha_ops/web_candidate_check.py",
+    "brain_alpha_ops/web_candidate_decisions.py",
     "brain_alpha_ops/web_candidate_generation.py",
+    "brain_alpha_ops/web_candidate_optimization.py",
+    "brain_alpha_ops/web_candidate_payloads.py",
     "brain_alpha_ops/web_candidate_selection.py",
     "brain_alpha_ops/web_cloud_snapshot.py",
     "brain_alpha_ops/web_cloud_context_refresh.py",
@@ -124,6 +131,7 @@ STATIC_ANALYSIS_TARGETS = [
     "scripts/check_prod_defect_tracking.py",
     "scripts/check_text_encoding.py",
     "scripts/check_tracked_data_inventory.py",
+    "scripts/check_candidate_scientific_audit.py",
     "scripts/quality_gate.py",
     "tests/test_frontend_surface_parity.py",
     "tests/test_quality_gate.py",
@@ -132,6 +140,7 @@ STATIC_ANALYSIS_TARGETS = [
     "tests/test_v5_defect_tracking.py",
     "tests/test_prod_defect_tracking.py",
     "tests/test_tracked_data_inventory.py",
+    "tests/test_candidate_scientific_audit_check.py",
     "tests/test_strategy_plugins.py",
     "tests/test_production_context.py",
     "tests/test_official_context_validation.py",
@@ -145,7 +154,10 @@ STATIC_ANALYSIS_TARGETS = [
     "tests/test_web_check_batch_job.py",
     "tests/test_web_check_availability.py",
     "tests/test_web_candidate_check.py",
+    "tests/test_web_candidate_scientific_audit.py",
     "tests/test_web_candidate_generation.py",
+    "tests/test_web_candidate_optimization.py",
+    "tests/test_web_candidate_payloads.py",
     "tests/test_web_candidate_selection.py",
     "tests/test_web_cloud_snapshot.py",
     "tests/test_web_cloud_context_refresh.py",
@@ -379,6 +391,10 @@ def _tracked_data_inventory(
     return _run_python_module(args)
 
 
+def _candidate_scientific_audit() -> tuple[bool, dict]:
+    return _run_python_module(["scripts/check_candidate_scientific_audit.py", "--json"])
+
+
 def _module_size_audit() -> tuple[bool, dict]:
     return _run_python_module(["scripts/check_module_size.py", "--root", str(ROOT), "--json"])
 
@@ -398,6 +414,23 @@ def _brain_contract_validation(config_path: Path, *, strict: bool = False) -> tu
     args = ["scripts/check_brain_contract.py", "--config", str(config_path), "--json"]
     if strict:
         args.append("--strict-freshness")
+    return _run_python_module(args)
+
+
+def _canonical_compliance(config_path: Path) -> tuple[bool, dict]:
+    return _run_python_module(
+        ["scripts/verify_canonical_compliance.py", "--config", str(config_path), "--json", "--strict"]
+    )
+
+
+def _parameter_traceability(config_path: Path) -> tuple[bool, dict]:
+    return _run_python_module(["scripts/check_parameter_traceability.py", "--config", str(config_path), "--json"])
+
+
+def _live_submit_readiness(config_path: Path, *, require_ready: bool = False) -> tuple[bool, dict]:
+    args = ["scripts/check_live_submit_readiness.py", "--config", str(config_path), "--json"]
+    if require_ready:
+        args.append("--require-ready")
     return _run_python_module(args)
 
 
@@ -550,6 +583,7 @@ def run_quality_gate(
     fail_on_unresolved_tracked_data_boundary: bool = False,
     fail_on_stale_tracked_data_boundary: bool = False,
     final_release: bool = False,
+    require_live_submit_ready: bool = False,
 ) -> dict:
     steps = []
     if not skip_compile:
@@ -562,6 +596,11 @@ def run_quality_gate(
         _step("diagnosis_gap_coverage", lambda: _diagnosis_gap_coverage(config_path, strict=strict_official_context)),
     ])
     if final_release:
+        steps.extend([
+            _step("canonical_compliance", lambda: _canonical_compliance(config_path)),
+            _step("parameter_traceability", lambda: _parameter_traceability(config_path)),
+            _step("live_submit_readiness", lambda: _live_submit_readiness(config_path, require_ready=require_live_submit_ready)),
+        ])
         steps.append(_step("final_release_gate", lambda: _final_release_gate(config_path)))
     steps.extend([
         _step("frontend_inline_sync", _frontend_inline_sync),
@@ -594,6 +633,7 @@ def run_quality_gate(
                 fail_on_stale_boundary=fail_on_stale_tracked_data_boundary,
             ),
         ),
+        _step("candidate_scientific_audit", _candidate_scientific_audit),
         _step("official_context_validation", lambda: _official_context_validation(config_path, strict=strict_official_context)),
         _step("module_size_audit", _module_size_audit),
         _step("secret_scan", lambda: _secret_scan(include_all_secrets, include_git_history_secrets)),
@@ -614,11 +654,13 @@ def run_quality_gate(
         steps.append(_step("mypy", _mypy_check))
     if not skip_tests:
         steps.append(_step("pytest", lambda: _pytest(pytest_args or [], coverage=coverage or final_release)))
+    af006_submatrix = build_quality_gate_af006_submatrix(steps)
     return {
         "ok": all(step["ok"] for step in steps),
         "schema_version": "quality_gate.v1",
         "root": str(ROOT),
         "steps": steps,
+        "af006_non_submit_verification_submatrix": af006_submatrix,
     }
 
 
@@ -665,6 +707,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--skip-compile", action="store_true", help="Skip Python compileall syntax checks.")
     parser.add_argument("--skip-tests", action="store_true", help="Skip pytest for a fast preflight.")
     parser.add_argument("--coverage", action="store_true", help="Run pytest with the configured 80%% coverage threshold.")
+    parser.add_argument(
+        "--require-live-submit-ready",
+        action="store_true",
+        help="When --final-release is used, fail unless check_live_submit_readiness.py reports an eligible candidate.",
+    )
     parser.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
     parser.add_argument("pytest_args", nargs=argparse.REMAINDER, help="Optional pytest args after --.")
     args = parser.parse_args(argv)
@@ -693,6 +740,7 @@ def main(argv: list[str] | None = None) -> int:
         fail_on_unresolved_tracked_data_boundary=args.fail_on_unresolved_tracked_data_boundary,
         fail_on_stale_tracked_data_boundary=args.fail_on_stale_tracked_data_boundary,
         final_release=args.final_release,
+        require_live_submit_ready=args.require_live_submit_ready,
         ruff=args.ruff,
         mypy=args.mypy,
         skip_compile=args.skip_compile,

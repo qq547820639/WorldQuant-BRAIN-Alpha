@@ -70,14 +70,34 @@ def create_handler_class(
 
         def do_OPTIONS(self):
             self.send_response(204)
-            # R-02 fix: Use explicit origin validation instead of wildcard fallback.
-            # When Origin is missing (same-origin or non-browser client), derive from Host
-            # so we never respond with Access-Control-Allow-Origin: *.
             origin = self.headers.get("Origin", "")
             if not origin:
                 host = self.headers.get("Host", "127.0.0.1")
                 origin = f"http://{host}" if "://" not in host else f"https://{host}"
             self.send_header("Access-Control-Allow-Origin", origin)
+
+        def _send_html(self, html, *, extra_headers=None):
+            body = html.encode("utf-8") if isinstance(html, str) else html
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            if extra_headers:
+                for name, value in extra_headers:
+                    self.send_header(name, value)
+            self.end_headers()
+            self.wfile.write(body)
+
+        def _send_json(self, payload, status=200, *, extra_headers=None):
+            import json as _json_module
+            body = _json_module.dumps(payload, ensure_ascii=False, default=str).encode("utf-8")
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            if extra_headers:
+                for name, value in extra_headers:
+                    self.send_header(name, value)
+            self.end_headers()
+            self.wfile.write(body)
             self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
             self.send_header(
                 "Access-Control-Allow-Headers",

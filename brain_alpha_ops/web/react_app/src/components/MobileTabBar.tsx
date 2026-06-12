@@ -33,7 +33,7 @@ function ToolsIcon() {
 }
 
 const TABS: Array<{ id: PhaseId | "tools"; label: string; Icon: React.FC }> = [
-  { id: "connect",   label: "连接", Icon: ConnectIcon },
+  { id: "connect",   label: "准备", Icon: ConnectIcon },
   { id: "discover",  label: "候选", Icon: DiscoverIcon },
   { id: "evaluate",  label: "评估", Icon: EvaluateIcon },
   { id: "tools",     label: "工具", Icon: ToolsIcon },

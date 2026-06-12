@@ -17,6 +17,7 @@ from brain_alpha_ops.research.repository import ResearchRepository
 from brain_alpha_ops.research.scoring import build_scorecard, evaluate_quality_gate
 from brain_alpha_ops.scoring.release_score_gate import evaluate_release_score
 from brain_alpha_ops.submission_readiness import missing_official_metric_fields
+from brain_alpha_ops.web_candidate_audit import scientific_audit_policy_reasons
 
 DEFERRED_SIMULATION_STATUSES = frozenset({
     "simulation_deferred_concurrency_limit",
@@ -440,6 +441,8 @@ def eligible_for_simulation(candidate: dict[str, Any], min_score: float, *, now:
     if _has_explicit_unsupported_local_backtest(candidate, local_quality):
         return False
     if _has_non_signal_candidate_fields(candidate):
+        return False
+    if scientific_audit_policy_reasons(candidate):
         return False
     return True
 

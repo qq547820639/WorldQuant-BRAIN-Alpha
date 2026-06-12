@@ -117,3 +117,9 @@ def test_check_candidate_payload_writes_cloud_evidence_to_candidate_ledger(tmp_p
     assert rows[0]["last_check_status"] == "BLOCKED"
     assert rows[0]["last_check_passed"] is False
     assert "submission_ready" not in rows[0].get("gate", {})
+    audit = rows[0]["scientific_audit"]
+    assert audit["schema_version"] == "candidate-scientific-audit-v1"
+    assert audit["operation"] == "pre_submit_availability_check"
+    assert audit["events"][-1]["operation"] == "pre_submit_availability_check"
+    assert audit["events"][-1]["official_api_called"] is False
+    assert audit["safety_boundary"]["submit_allowed"] is False

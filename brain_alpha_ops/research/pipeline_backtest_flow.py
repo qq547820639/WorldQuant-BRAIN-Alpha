@@ -231,6 +231,7 @@ class PipelineBacktestMixin:
             candidate.submission["anti_overfit_report"] = anti_report
             candidate.submission["rolling_validation_report"] = rolling_report
             policy = RobustnessPolicy().apply(candidate, anti_report, rolling_report)
+            self._record_robustness_feedback(candidate, cycle=cycle, policy=policy)
             if policy.get("action") != "allow":
                 self._event(
                     "robustness_checks_caution",

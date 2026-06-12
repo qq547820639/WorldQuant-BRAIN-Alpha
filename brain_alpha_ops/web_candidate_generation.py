@@ -26,12 +26,16 @@ from brain_alpha_ops.research.local_backtest_config import PREFILTER_BACKTEST_DA
 from brain_alpha_ops.research.local_backtest_gate import apply_local_backtest_gate, blocked_local_gate
 from brain_alpha_ops.research.repository import ResearchRepository
 from brain_alpha_ops.research.scoring import build_scorecard
+from brain_alpha_ops.web_candidate_audit import attach_scientific_audit, scientific_audit_summary
+from brain_alpha_ops.web_candidate_decisions import annotate_candidate_decision
 from brain_alpha_ops.web_config import (
     _MAX_CANDIDATES,
+    _MAX_POOL_SIZE,
     bounded_query_float,
     bounded_query_int,
     payload_truthy,
 )
+from brain_alpha_ops.web_payload_validation import MAX_GENERATE_CANDIDATES
 
 
 _REJECTED_CANDIDATE_PREVIEW_LIMIT = 20
@@ -49,6 +53,47 @@ RepositoryFactory = Callable[[str], ResearchRepository]
 
 def _default_toolbox_factory(run_config: RunConfig) -> ToolboxLike:
     return BrainAlphaToolbox(run_config=run_config, allow_live_api=False, allow_submit=False)
+
+
+def candidate_pool_automation_plan(
+    payload: dict[str, Any],
+    *,
+    target_pool_size: int,
+    existing_pool_size: int,
+    pool_deficit: int,
+    requested_count: int,
+) -> dict[str, Any]:
+    mode = str(payload.get("automation_mode") or payload.get("automationMode") or "").strip()
+    maintain_pool = mode == "maintain_candidate_pool"
+    auto_simulate = False
+    auto_check = False
+    return {
+        "mode": mode or "generate_candidates",
+        "maintain_candidate_pool": maintain_pool,
+        "auto_simulate_after_generation": auto_simulate,
+        "auto_check_after_simulation": auto_check,
+        "target_pool_size": target_pool_size,
+        "existing_pool_size": existing_pool_size,
+        "pool_deficit": pool_deficit,
+        "requested_generation_count": requested_count,
+        "next_steps": [],
+        "producer_can_continue_while_validator_runs": True,
+        "submit_allowed": False,
+    }
+
+
+def _candidate_pool_maintenance_requested(payload: dict[str, Any]) -> bool:
+    mode = str(payload.get("automation_mode") or payload.get("automationMode") or "").strip()
+    return mode == "maintain_candidate_pool"
+
+
+def _requested_generation_count(payload: dict[str, Any], *, pool_deficit: int) -> int:
+    count_source = payload.get("count", payload.get("candidates"))
+    if count_source is not None:
+        return bounded_query_int(count_source, 1, _MAX_CANDIDATES)
+    if _candidate_pool_maintenance_requested(payload):
+        return bounded_query_int(max(1, pool_deficit), 1, MAX_GENERATE_CANDIDATES)
+    return 10
 
 
 def generate_candidates_payload(
@@ -85,8 +130,20 @@ def generate_candidates_payload(
         for operator in sorted(getattr(local_backtest_engine, "supported_operators", set()) or [])
         if str(operator)
     ]
+    target_pool_size = bounded_query_int(
+        payload.get("target_pool_size", payload.get("targetPoolSize", run_config.ops.budget.retained_alpha_pool_size)),
+        1,
+        _MAX_POOL_SIZE,
+    )
+    existing_pool_size = bounded_query_int(
+        payload.get("existing_pool_size", payload.get("existingPoolSize", 0)),
+        0,
+        _MAX_POOL_SIZE,
+    )
+    pool_deficit = max(0, target_pool_size - existing_pool_size)
+    requested_count = _requested_generation_count(payload, pool_deficit=pool_deficit)
     args = {
-        "count": bounded_query_int(payload.get("count", payload.get("candidates", 10)), 1, _MAX_CANDIDATES),
+        "count": requested_count,
         "dataset_id": dataset_id,
         "use_research_memory": payload_truthy(payload.get("use_research_memory", True)),
         "top_n": bounded_query_int(payload.get("top_n", 10), 1, 50),
@@ -166,7 +223,7 @@ def generate_candidates_payload(
             candidate.lifecycle_status = "local_prefilter_rejected"
             candidate.gate = blocked_local_gate(list(candidate.local_quality.get("reasons") or []))
         else:
-            candidate.lifecycle_status = "assistant_generated" if assistant_guidance_applied else "generated"
+            candidate.lifecycle_status = "candidate_pool_retained"
         tags = list(candidate.source_tags or [])
         tag_values = ["local_only"]
         if assistant_guidance_applied:
@@ -185,7 +242,31 @@ def generate_candidates_payload(
             run_config=run_config,
             output_config=alpha_output_config,
         )
-        candidate_payload = candidate.to_dict()
+        candidate_payload = annotate_candidate_decision(
+            candidate.to_dict(),
+            min_official_score=run_config.ops.budget.min_prior_score_for_official_simulation,
+            update_lifecycle=True,
+        )
+        feedback_sources = [
+            "local_quality",
+            "local_backtest_prefilter",
+            "scorecard",
+            "quality_gate",
+        ]
+        if assistant_guidance_applied:
+            feedback_sources.append("assistant_guidance")
+        candidate_payload = attach_scientific_audit(
+            candidate_payload,
+            operation="candidate_generation",
+            source="local_candidate_generator",
+            feedback_sources=feedback_sources,
+            decision=candidate_payload.get("production_decision")
+            if isinstance(candidate_payload.get("production_decision"), dict)
+            else None,
+        )
+        candidate.lifecycle_status = candidate_payload.get("lifecycle_status", candidate.lifecycle_status)
+        candidate.quality_diagnosis = candidate_payload.get("quality_diagnosis", candidate.quality_diagnosis)
+        candidate.extra_fields = candidate_payload.get("extra_fields", candidate.extra_fields)
         processed_candidates.append(candidate_payload)
         if _candidate_rejected_by_local_gate(candidate_payload):
             rejected_candidates.append(candidate_payload)
@@ -208,6 +289,21 @@ def generate_candidates_payload(
         "qualified_count": quality_summary.get("qualified_count", 0),
         "invalid_count": quality_summary.get("invalid_count", 0),
         "local_valid_count": quality_summary.get("local_valid_count", 0),
+        "generation_mode": "candidate_pool_refill",
+        "target_pool_size": target_pool_size,
+        "existing_pool_size": existing_pool_size,
+        "pool_deficit": pool_deficit,
+        "main_pool_count": min(target_pool_size, existing_pool_size + len(candidates)),
+        "remaining_deficit": max(0, target_pool_size - existing_pool_size - len(candidates)),
+        "requested_generation_count": requested_count,
+        "automation": candidate_pool_automation_plan(
+            payload,
+            target_pool_size=target_pool_size,
+            existing_pool_size=existing_pool_size,
+            pool_deficit=pool_deficit,
+            requested_count=requested_count,
+        ),
+        "scientific_audit": scientific_audit_summary(processed_candidates),
     }
     if assistant_guidance_applied and assistant_guidance:
         repository_factory(run_config.ops.storage_dir).save_assistant_guidance(

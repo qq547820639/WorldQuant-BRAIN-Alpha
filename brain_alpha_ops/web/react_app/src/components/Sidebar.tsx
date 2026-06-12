@@ -35,6 +35,7 @@ const TOOLS_ITEMS: Array<{ id: CardViewId; label: string; icon: string; statsKey
   { id: "dashboard",          label: "运行总览", icon: "01" },
   { id: "cloud",              label: "云端快照", icon: "09", statsKey: "cloud" },
   { id: "checkpoint_status",  label: "续跑记录", icon: "08", statsKey: "checkpoint_status" },
+  { id: "robustness",         label: "稳健性证据", icon: "07" },
   { id: "config",             label: "系统配置", icon: "10" },
 ];
 

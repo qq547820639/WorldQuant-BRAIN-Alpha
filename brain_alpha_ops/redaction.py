@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from typing import Any
+from typing import Any, TypedDict
 
 
 SENSITIVE_KEYS = {
@@ -13,6 +13,7 @@ SENSITIVE_KEYS = {
     "authorization",
     "cookie",
     "csrf",
+    "csrf_token",
     "education",
     "email",
     "employer",
@@ -27,13 +28,81 @@ SENSITIVE_KEYS = {
     "passwd",
     "password",
     "phone",
+    "refresh_token",
     "secret",
     "session",
+    "session_id",
+    "session_key",
+    "session_token",
     "set-cookie",
     "telephone",
     "token",
     "username",
 }
+NON_SECRET_KEY_SUFFIXES = (
+    "available",
+    "availability",
+    "enabled",
+    "present",
+    "source",
+    "status",
+    "type",
+)
+REDACTED_SECRET_PLACEHOLDER = "REDACTED_SECRET_PLACEHOLDER"
+REDACTION_FIXTURE_EMAIL = "analyst" + "@example.test"
+
+
+class RedactionFixture(TypedDict):
+    label: str
+    key: str
+    raw_text: str
+    scan_type: str
+
+
+SHARED_REDACTION_FIXTURE_CORPUS: tuple[RedactionFixture, ...] = (
+    {
+        "label": "token",
+        "key": "token",
+        "raw_text": "token=" + REDACTED_SECRET_PLACEHOLDER + "_TOKEN",
+        "scan_type": "secret_key",
+    },
+    {
+        "label": "api_key",
+        "key": "apiKey",
+        "raw_text": "apiKey=" + REDACTED_SECRET_PLACEHOLDER + "_API_KEY",
+        "scan_type": "secret_key",
+    },
+    {
+        "label": "password",
+        "key": "password",
+        "raw_text": "password=" + REDACTED_SECRET_PLACEHOLDER + "_PASSWORD",
+        "scan_type": "secret_key",
+    },
+    {
+        "label": "csrf",
+        "key": "csrfToken",
+        "raw_text": "csrfToken=" + REDACTED_SECRET_PLACEHOLDER + "_CSRF",
+        "scan_type": "secret_key",
+    },
+    {
+        "label": "auth_header",
+        "key": "Authorization",
+        "raw_text": "Authorization: Bearer " + REDACTED_SECRET_PLACEHOLDER + "_AUTH",
+        "scan_type": "auth_header",
+    },
+    {
+        "label": "email",
+        "key": "email",
+        "raw_text": "email=" + REDACTION_FIXTURE_EMAIL,
+        "scan_type": "auth_header",
+    },
+    {
+        "label": "session",
+        "key": "sessionId",
+        "raw_text": "sessionId=" + REDACTED_SECRET_PLACEHOLDER + "_SESSION",
+        "scan_type": "secret_key",
+    },
+)
 
 
 def _key_regex_fragment(key: str) -> str:
@@ -195,9 +264,22 @@ def _redact_value_for_key(
 
 
 def _is_sensitive_key(normalized_key: str, fragments: tuple[str, ...]) -> bool:
-    if normalized_key in {_normalize_key(key) for key in SENSITIVE_KEYS}:
+    if _is_non_secret_metadata_key(normalized_key):
+        return False
+    sensitive_keys = {_normalize_key(key) for key in SENSITIVE_KEYS}
+    if normalized_key in sensitive_keys:
         return True
     parts = {part for part in normalized_key.split("_") if part}
+    if "token" in parts and any(part for part in parts if part not in {"x", "brain", "alpha", "token"}):
+        return True
+    if "csrf" in parts:
+        return True
+    if "cookie" in parts:
+        return True
+    if "authorization" in parts:
+        return True
+    if "session" in parts and parts.intersection({"id", "key", "token"}):
+        return True
     return any(
         fragment
         and (
@@ -211,7 +293,13 @@ def _is_sensitive_key(normalized_key: str, fragments: tuple[str, ...]) -> bool:
 
 
 def _normalize_key(value: str) -> str:
-    return value.strip().lower().replace("-", "_")
+    value = value.strip()
+    value = re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", value)
+    return re.sub(r"[^A-Za-z0-9]+", "_", value).strip("_").lower()
+
+
+def _is_non_secret_metadata_key(normalized_key: str) -> bool:
+    return any(normalized_key.endswith(f"_{suffix}") for suffix in NON_SECRET_KEY_SUFFIXES)
 
 
 def redact_error_message(exc: Exception | object, *, max_length: int = 240) -> str:

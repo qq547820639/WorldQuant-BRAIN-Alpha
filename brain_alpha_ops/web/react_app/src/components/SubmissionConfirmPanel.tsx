@@ -1,6 +1,8 @@
 /** Read-only pre-submit confirmation surface. */
 
 import { useCallback, useEffect, useMemo } from "react";
+import { apiErrorMessage } from "@/helpers/errorExperience";
+import { readinessNextActionLabel, readinessProductionGapLabel, readinessReasonLabel } from "@/helpers/readinessLabels";
 import { useApi } from "@/hooks/useApi";
 import type { Candidate, SubmitReadinessResponse } from "@/types";
 import ProgressFeedback from "@/components/ProgressFeedback";
@@ -46,9 +48,9 @@ export default function SubmissionConfirmPanel({ notify }: Props) {
       callChecks<{ items?: CheckResult[] }>("/api/check_results"),
       callReadiness<SubmitReadinessResponse>("/api/submit_readiness"),
     ]);
-    if (candidatesResult?.error) notify("error", candidatesResult.error);
-    if (checksResult?.error) notify("error", checksResult.error);
-    if (readinessResult?.error) notify("error", readinessResult.error);
+    if (candidatesResult?.error) notify("error", apiErrorMessage(candidatesResult, "候选数据加载失败"));
+    if (checksResult?.error) notify("error", apiErrorMessage(checksResult, "检查结果加载失败"));
+    if (readinessResult?.error) notify("error", apiErrorMessage(readinessResult, "提交阻断复核加载失败"));
   }, [callCandidates, callChecks, callReadiness, notify]);
 
   useEffect(() => { void load(); }, [load]);
@@ -141,10 +143,13 @@ function ReadinessSummary({ readiness }: { readiness: SubmitReadinessResponse | 
     .map((row) => `${readinessReasonLabel(row.reason)} ${row.count}`)
     .join(" · ");
   const productionGaps = allProductionGaps
-    .map((row) => readinessReasonLabel(row.code || row.message || ""))
+    .map((row) => readinessProductionGapLabel(row))
     .filter(Boolean)
     .join(" · ");
-  const nextSteps = allNextSteps.join(" · ");
+  const nextSteps = allNextSteps.map((step) => readinessNextActionLabel(step)).join(" · ");
+  const stopRule = readiness?.authoritative_stop_rule || readiness?.validation_command || readiness?.source || "check_live_submit_readiness.py";
+  const submitBoundary = readiness?.real_submit_performed ? "真实提交已发生" : "未执行真实提交";
+  const claimPolicy = readiness?.submit_ready_claim_allowed ? "可按验证结果继续人工复核" : "不可声明提交就绪";
   const best = readiness?.best_candidate || {};
   return (
     <section className="rounded-md border border-border-subtle bg-[oklch(0.115_0.007_45)] px-3 py-3">
@@ -154,8 +159,11 @@ function ReadinessSummary({ readiness }: { readiness: SubmitReadinessResponse | 
         <ReadinessMetric label="官方仿真" value={formatCount(summary.officially_simulated)} />
         <ReadinessMetric label="官方接口" value={readiness?.official_api_called ? "已调用" : "未调用"} />
         <ReadinessMetric label="最佳 Alpha" value={best.alpha_id || "-"} mono />
+        <ReadinessMetric label="真实提交" value={submitBoundary} tone={readiness?.real_submit_performed ? "text-negative" : "text-positive"} />
       </dl>
       <div className="mt-3 space-y-1 text-xs text-text-tertiary">
+        <p className="break-words" title={stopRule}>判定来源: {stopRule}</p>
+        <p className="break-words" title={claimPolicy}>提交就绪声明: {claimPolicy}</p>
         <p className="break-words" title={blockers || "无"}>{countLabel("当前阻断", allBlockers.length)}: {blockers || "无"}</p>
         <p className="break-words" title={familyBlockers || "无"}>{countLabel("候选族阻断", allFamilyBlockers.length)}: {familyBlockers || "无"}</p>
         <p className="break-words" title={productionGaps || "无"}>{countLabel("生产缺口", allProductionGaps.length)}: {productionGaps || "无"}</p>
@@ -252,30 +260,12 @@ function ConfirmationTable({ title, empty, rows }: { title: string; empty: strin
 }
 
 function readinessStatusLabel(status: string) {
-  if (status === "READY") return "可复核";
-  if (status === "BLOCKED") return "阻断";
-  if (status === "FAILED") return "失败";
-  if (status === "PENDING") return "待检查";
-  return status || "-";
-}
-
-function readinessReasonLabel(reason: string) {
-  const labels: Record<string, string> = {
-    candidate_family_missing_official_alpha_id: "候选族缺少官方 Alpha ID",
-    candidate_family_missing_official_metrics: "候选族缺少官方仿真指标",
-    candidate_family_not_submit_band: "候选族尚未进入复核带",
-    decision_band_not_submit_candidate: "评分决策仍非提交候选",
-    high_cloud_similarity: "云端相似度过高",
-    high_turnover_generation_risk: "生成表达式存在高换手风险",
-    local_backtest_failed: "本地回测未通过",
-    missing_cloud_similarity: "缺少云端相似度证据",
-    missing_official_alpha_id: "缺少官方 Alpha ID",
-    missing_official_metrics: "缺少官方仿真指标",
-    no_submit_ready_candidate: "没有提交前复核候选",
-    not_submission_ready: "尚未达到阻断复核通过标准",
-    official_validation_without_simulation: "有官方验证但缺少官方仿真指标",
-  };
-  return labels[reason] || reason || "-";
+  const normalized = String(status || "").toUpperCase();
+  if (normalized === "READY") return "可复核";
+  if (normalized === "BLOCKED") return "阻断";
+  if (normalized === "FAILED") return "失败";
+  if (normalized === "PENDING") return "待检查";
+  return normalized ? "状态待确认" : "-";
 }
 
 function buildRows(candidates: Candidate[], checks: CheckResult[]) {
@@ -294,7 +284,7 @@ function buildRows(candidates: Candidate[], checks: CheckResult[]) {
       expression: candidate?.expression || "",
       status: ready ? "READY" : String(check.status || "BLOCKED").toUpperCase(),
       score: check.score == null ? "-" : Number(check.score).toFixed(2),
-      reasons: (check.failed_reasons || []).join("; "),
+      reasons: (check.failed_reasons || []).map((reason) => readinessReasonLabel(reason)).join("; "),
       checkedAt: String(check.checked_at || ""),
     };
   });

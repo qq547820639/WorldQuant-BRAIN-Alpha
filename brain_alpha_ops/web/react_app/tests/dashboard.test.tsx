@@ -84,6 +84,29 @@ describe("Dashboard", () => {
     fireEvent.click(retryBtn);
   });
 
+  it("does not surface raw backend text in dashboard error banners", async () => {
+    const fetchMock = vi.fn(async (url: RequestInfo | URL) => {
+      const path = String(url);
+      if (path === "/api/production-validation/status") {
+        return jsonResponse({ ok: false, error: "raw backend status password=secret" }, 500);
+      }
+      if (path.startsWith("/api/snapshot/cloud")) {
+        return jsonResponse({ ok: false, error_code: "RAW_BACKEND_CLOUD_ERROR", error: "Traceback csrf_token=secret" }, 500);
+      }
+      if (path.startsWith("/api/snapshot/memory")) {
+        return jsonResponse({ ok: true, total_candidates: 0, families: [], fields: [], failure_patterns: [] });
+      }
+      throw new Error(`Unexpected: ${path}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<Dashboard notify={vi.fn()} connected contextFresh onNavigateToSync={vi.fn()} />);
+
+    await screen.findByText("仪表盘数据需要关注");
+    expect(screen.getAllByText(/请求失败|状态读取失败|BRAIN 官方接口暂时不可用/).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/raw backend|Traceback|password=secret|csrf_token=secret|RAW_BACKEND/i)).not.toBeInTheDocument();
+  });
+
   it("describes cloud sync as elapsed progress rather than a countdown", async () => {
     const fetchMock = vi.fn(async (url: RequestInfo | URL) => {
       const path = String(url);
@@ -134,5 +157,37 @@ describe("Dashboard", () => {
     expect(openManualSync).toHaveBeenCalledTimes(1);
     expect(autoStartSync).not.toHaveBeenCalled();
     expect((await screen.findAllByText("40852")).length).toBeGreaterThan(0);
+  });
+
+  it("shows cached dashboard data in cache mode before account connection", async () => {
+    const fetchMock = vi.fn(async (url: RequestInfo | URL) => {
+      const path = String(url);
+      if (path === "/api/production-validation/status") return jsonResponse({ ok: true, status: "idle" });
+      if (path.startsWith("/api/snapshot/cloud")) {
+        return jsonResponse({
+          ok: true,
+          summary: {
+            count: 40852,
+            total: 40852,
+            submitted_count: 33,
+            passed_unsubmitted_count: 532,
+            is_stale: false,
+          },
+          sample_alphas: [],
+        });
+      }
+      if (path.startsWith("/api/snapshot/memory")) return jsonResponse({ ok: true, total_candidates: 7, families: [], fields: [], failure_patterns: [] });
+      throw new Error(`Unexpected: ${path}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(<Dashboard notify={vi.fn()} connected={false} contextFresh onNavigateToSync={vi.fn()} />);
+
+    expect(await screen.findByText("本地缓存可用，当前为缓存模式")).toBeInTheDocument();
+    expect(screen.getAllByText("账户/缓存").length).toBeGreaterThan(0);
+    expect(screen.getByText("检测到本地缓存，可先以缓存模式继续")).toBeInTheDocument();
+    expect(screen.getByText(/手动同步、官方回测和提交前复核需要先测试 BRAIN 连接/)).toBeInTheDocument();
+    expect((await screen.findAllByText("40852")).length).toBeGreaterThan(0);
+    expect(screen.queryByRole("button", { name: "手动同步" })).not.toBeInTheDocument();
   });
 });

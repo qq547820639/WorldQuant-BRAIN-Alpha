@@ -6,7 +6,27 @@ export interface ApiResponse<T = unknown> {
   ok: boolean;
   error_code?: string;
   error?: string;
+  user_error?: ApiUserError;
+  user_error_kind?: string;
+  user_message?: string;
+  next_action?: string;
+  recoverable?: boolean;
+  retryable?: boolean;
   data?: T;
+}
+
+export interface ApiUserError {
+  kind?: string;
+  title?: string;
+  message?: string;
+  impact?: string;
+  suggested_action?: string;
+  action_label?: string;
+  next_action?: string;
+  severity?: string;
+  recoverable?: boolean;
+  retryable?: boolean;
+  detail?: string;
 }
 
 export interface JobStatus {
@@ -22,8 +42,40 @@ export interface JobStatus {
   status_message?: string;
   result?: unknown;
   error?: string;
+  user_error?: ApiUserError;
+  user_error_kind?: string;
+  user_message?: string;
+  status_kind?: "active" | "success" | "warning" | "failed" | "interrupted" | "missing" | "idle" | "unknown";
+  state_label?: string;
+  terminal?: boolean;
+  active?: boolean;
+  interrupted?: boolean;
+  recoverable?: boolean;
+  retryable?: boolean;
+  next_action?: string;
   progress?: JobProgress;
   official_context_cache?: OfficialContextCache;
+  sync_history?: SyncHistoryItem[];
+  sync_history_error?: string;
+}
+
+export interface SyncHistoryItem {
+  job_id: string;
+  task_id?: string;
+  status: string;
+  phase?: string;
+  status_message?: string;
+  updated_at?: number;
+  updated_at_ms?: number;
+  context_only?: boolean;
+  scanned?: number;
+  total?: number;
+  api_reported_total?: number;
+  filter_window_count?: number;
+  added?: number;
+  updated?: number;
+  skipped?: number;
+  failed?: number;
 }
 
 export interface JobProgress {
@@ -66,8 +118,19 @@ export interface OfficialContextCache {
     is_stale?: boolean;
     missing_files?: string[];
     stale_files?: string[];
+    invalid_files?: string[];
     record_counts?: Record<string, number>;
   };
+}
+
+export interface CloudAlphaCache {
+  ok?: boolean;
+  count?: number;
+  total?: number;
+  source?: string;
+  is_stale?: boolean;
+  loaded_at?: string;
+  age_seconds?: number;
 }
 
 export type ProgressLifecycle = "idle" | "loading" | "progress" | "success" | "error";
@@ -79,9 +142,20 @@ export interface UnifiedProgress {
   phase?: string;
   phase_label?: string;
   status_code?: string;
+  status_kind?: string;
   status?: string;
+  terminal?: boolean;
+  active?: boolean;
+  interrupted?: boolean;
+  recoverable?: boolean;
+  retryable?: boolean;
   status_message?: string;
   message?: string;
+  error_code?: string;
+  user_error?: ApiUserError;
+  user_error_kind?: string;
+  user_message?: string;
+  next_action?: string;
   percent?: number | null;
   percent_complete?: number | null;
   eta_seconds?: number | null;
@@ -130,14 +204,226 @@ export interface Candidate {
   data_fields?: string[];
   operators?: string[];
   source_tags?: string[];
+  parent_id?: string;
+  mutation_type?: string;
   dataset_id?: string;
   local_quality?: LocalQuality;
   alpha_output_config?: AlphaOutputConfig;
   quality_diagnosis?: QualityDiagnosis;
+  production_decision?: CandidateProductionDecision;
+  decision_action?: string;
+  decision_reason?: string;
+  extra_fields?: CandidateExtraFields;
+  scientific_audit?: CandidateScientificAudit;
+  official_context_proof?: Record<string, unknown>;
+  expression_delta?: Record<string, unknown>;
+  optimization_explanation?: CandidateOptimizationExplanation;
   submission?: Record<string, unknown>;
   validation?: Record<string, unknown>;
   created_at?: string;
   updated_at?: string;
+}
+
+export interface AlphaLifecycleRecord {
+  schema_version?: string;
+  timestamp?: string;
+  run_id?: string;
+  alpha_id?: string;
+  official_alpha_id?: string;
+  simulation_id?: string;
+  stage?: string;
+  status?: string;
+  status_category?: string;
+  expression?: string;
+  expression_digest?: string;
+  note?: string;
+  correlation_id?: string;
+  source?: string;
+  decision_action?: string;
+  decision_band?: string;
+  lifecycle_status?: string;
+  family?: string;
+  dataset_id?: string;
+  score?: number;
+}
+
+export interface AlphaLifecycleTrace {
+  trace_key?: string;
+  alpha_id?: string;
+  official_alpha_id?: string;
+  simulation_id?: string;
+  expression_digest?: string;
+  latest_stage?: string;
+  latest_status?: string;
+  status_category?: string;
+  event_count?: number;
+  first_event_at?: string;
+  latest_event_at?: string;
+  stages?: string[];
+  blocked?: boolean;
+  failed?: boolean;
+  passed?: boolean;
+  submitted?: boolean;
+  last_note?: string;
+  next_action?: string;
+}
+
+export interface AlphaLifecycleHistoryResponse {
+  ok: boolean;
+  schema_version?: string;
+  source?: string;
+  official_api_called?: boolean;
+  submit_allowed?: boolean;
+  filters?: Record<string, unknown>;
+  records?: AlphaLifecycleRecord[];
+  items?: AlphaLifecycleRecord[];
+  count?: number;
+  returned_count?: number;
+  total_count?: number;
+  total?: number;
+  complete?: boolean;
+  display_limit?: number;
+  summary?: {
+    record_count?: number;
+    alpha_count?: number;
+    latest_event_at?: string;
+    by_stage?: Record<string, number>;
+    by_status_category?: Record<string, number>;
+    blocked_count?: number;
+    failed_count?: number;
+    passed_count?: number;
+    submitted_count?: number;
+    replay_ready?: boolean;
+  };
+  alpha_traces?: AlphaLifecycleTrace[];
+}
+
+export interface CandidateExtraFields {
+  production_decision?: CandidateProductionDecision;
+  scientific_audit?: CandidateScientificAudit;
+  official_context_proof?: Record<string, unknown>;
+  expression_delta?: Record<string, unknown>;
+  optimization_explanation?: CandidateOptimizationExplanation;
+  [key: string]: unknown;
+}
+
+export interface CandidateOptimizationExplanation {
+  schema_version?: string;
+  source?: string;
+  local_only?: boolean;
+  official_api_called?: boolean;
+  submit_allowed?: boolean;
+  parent?: {
+    alpha_id?: string;
+    decision_action?: string;
+    failed_dimensions?: string[];
+    blocking_reasons?: string[];
+    score?: number | null;
+  };
+  mutation?: {
+    mode?: string;
+    reason?: string;
+    parent_failure?: string;
+    rank_input_index?: number | null;
+    search_score?: number | null;
+    optimizer_trace?: {
+      schema_version?: string;
+      failed_dimension?: string;
+      selected_strategy?: string;
+      strategy_order?: string[];
+      strategy_index?: number | null;
+      suggested_modes?: string[];
+      official_api_called?: boolean;
+      submit_allowed?: boolean;
+    };
+  };
+  expression_change?: {
+    schema_version?: string;
+    changed?: boolean;
+    fields_added?: string[];
+    fields_removed?: string[];
+    operators_added?: string[];
+    operators_removed?: string[];
+    windows_added?: number[];
+    windows_removed?: number[];
+  };
+  official_context?: {
+    schema_version?: string;
+    source?: string;
+    passed?: boolean;
+    official_api_called?: boolean;
+    reasons?: string[];
+    missing_fields?: string[];
+    missing_operators?: string[];
+    dataset_mismatches?: string[];
+    dataset_id?: string;
+    checked_fields?: string[];
+  };
+  decision?: {
+    action?: string;
+    next_state?: string;
+    blocking?: boolean;
+    decision_band?: string;
+    score?: number | null;
+  };
+  next_action?: string;
+}
+
+export interface CandidateScientificAudit {
+  schema_version?: string;
+  operation?: string;
+  source?: string;
+  explainability?: {
+    official_context_proof?: Record<string, unknown>;
+    expression_delta?: Record<string, unknown>;
+    optimization_explanation?: CandidateOptimizationExplanation;
+  };
+  evidence?: Record<string, unknown>;
+  anti_overfit?: Record<string, unknown>;
+  safety_boundary?: Record<string, unknown>;
+  events?: Array<Record<string, unknown>>;
+  [key: string]: unknown;
+}
+
+export interface CandidateProductionDecision {
+  schema_version?: string;
+  action?: string;
+  next_state?: string;
+  reason?: string;
+  blocking?: boolean;
+  score?: number;
+  decision_band?: string;
+  reason_codes?: string[];
+  source?: string;
+  official_api_called?: boolean;
+  submit_allowed?: boolean;
+  decision_evidence?: CandidateDecisionEvidence;
+}
+
+export interface CandidateDecisionEvidence {
+  schema_version?: string;
+  source?: string;
+  local_only?: boolean;
+  official_api_called?: boolean;
+  submit_allowed?: boolean;
+  hard_blocking_reasons?: string[];
+  scientific_audit_policy_reasons?: string[];
+  lifecycle_risk?: {
+    schema_version?: string;
+    source?: string;
+    local_only?: boolean;
+    official_api_called?: boolean;
+    submit_allowed?: boolean;
+    matched_event_count?: number;
+    matched_by?: string;
+    latest_stage?: string;
+    latest_status?: string;
+    latest_status_category?: string;
+    latest_event_at?: string;
+    action_hint?: string;
+    blocking?: boolean;
+    reason_code?: string;
+  };
 }
 
 export interface LocalQuality {
@@ -405,11 +691,22 @@ export interface ScoringConfig {
 // ── SSE Event Types ───────────────────────────────────────────────────────
 
 export interface SSEEvent {
-  type?: "progress" | "candidate" | "backtest" | "submission" | "error" | "complete" | "heartbeat";
+  type?: "progress" | "candidate" | "backtest" | "submission" | "error" | "complete" | "heartbeat" | "stream_timeout";
   ok?: boolean;
   job_id?: string;
   task_id?: string;
   status?: string;
+  status_kind?: JobStatus["status_kind"];
+  state_label?: string;
+  terminal?: boolean;
+  active?: boolean;
+  interrupted?: boolean;
+  recoverable?: boolean;
+  retryable?: boolean;
+  user_error?: ApiUserError;
+  user_error_kind?: string;
+  user_message?: string;
+  next_action?: string;
   phase?: string;
   percent_complete?: number | null;
   eta_seconds?: number;
@@ -527,8 +824,13 @@ export interface SubmitReadinessResponse {
   ok: boolean;
   schema_version?: string;
   source?: string;
+  authoritative_stop_rule?: string;
+  validation_command?: string;
   official_api_called?: boolean;
+  non_submit_flow?: boolean;
+  real_submit_performed?: boolean;
   ready_to_submit?: boolean;
+  submit_ready_claim_allowed?: boolean;
   ledger_ready_to_submit?: boolean;
   job_family_ready_to_submit?: boolean;
   candidate_count?: number;
@@ -695,4 +997,5 @@ export type CardViewId =
   | "submission"
   | "config"
   | "checkpoint_status"
-  | "cloud";
+  | "cloud"
+  | "robustness";

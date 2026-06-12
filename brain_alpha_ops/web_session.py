@@ -7,6 +7,7 @@ import os
 import time
 from typing import Any
 
+from brain_alpha_ops.redaction import redact_data
 from brain_alpha_ops.web_security import (
     DEFAULT_SESSION_TTL_SECONDS,
     LOCAL_HOSTS,
@@ -114,14 +115,16 @@ class WebSession:
 
     @staticmethod
     def _row_from_existing(session_id: str, row: dict[str, Any]) -> dict[str, Any]:
+        safe_metadata = redact_data(dict(row.get("metadata") or {}), key_fragments=("account_id", "user_id"))
+        safe_user_id = redact_data({"user_id": row.get("user_id", "")}, key_fragments=("user_id",)).get("user_id")
         return {
             "id": session_id,
             "csrf_token": str(row.get("csrf", "")),
             "created_at": float(row.get("created_at", 0.0) or 0.0),
             "expires_at": float(row.get("expires_at", 0.0) or 0.0),
             "last_accessed": float(row.get("last_accessed", row.get("created_at", 0.0)) or 0.0),
-            "metadata": dict(row.get("metadata") or {}),
-            **({"user_id": row["user_id"]} if "user_id" in row else {}),
+            "metadata": safe_metadata,
+            **({"user_id": safe_user_id} if "user_id" in row else {}),
         }
 
 

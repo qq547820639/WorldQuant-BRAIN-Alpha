@@ -72,6 +72,55 @@ def iter_jsonl_records(path: str | Path) -> Iterator[dict[str, Any]]:
         return
 
 
+def iter_jsonl_records_reverse(path: str | Path, *, chunk_size: int = 1024 * 1024) -> Iterator[dict[str, Any]]:
+    """Stream JSONL dict records from the end of a file without a row cap."""
+    target = Path(path)
+    if not target.is_file():
+        return
+    try:
+        with target.open("rb") as handle:
+            handle.seek(0, 2)
+            position = handle.tell()
+            buffer = b""
+            while position > 0:
+                read_size = min(max(1, int(chunk_size or 1)), position)
+                position -= read_size
+                handle.seek(position)
+                buffer = handle.read(read_size) + buffer
+                lines = buffer.splitlines()
+                if position > 0:
+                    if not lines:
+                        continue
+                    buffer = lines[0]
+                    complete_lines = lines[1:]
+                else:
+                    buffer = b""
+                    complete_lines = lines
+                for raw_line in reversed(complete_lines):
+                    line = raw_line.decode("utf-8", errors="replace").strip()
+                    if not line:
+                        continue
+                    try:
+                        item = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    if isinstance(item, dict):
+                        yield item
+    except OSError:
+        return
+
+
+def find_jsonl_record_reverse(
+    path: str | Path,
+    *,
+    predicate: Callable[[dict[str, Any]], bool],
+) -> dict[str, Any] | None:
+    for item in iter_jsonl_records_reverse(path):
+        if predicate(item):
+            return item
+    return None
+
+
 def count_jsonl_records(
     path: str | Path,
     *,

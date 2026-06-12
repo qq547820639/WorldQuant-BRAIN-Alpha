@@ -1,6 +1,8 @@
 /** Read-only data and research snapshot views. */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { apiErrorMessage, knownApiErrorMessage } from "@/helpers/errorExperience";
+import { readinessReasonLabel } from "@/helpers/readinessLabels";
 import { useApi } from "@/hooks/useApi";
 import ProgressFeedback from "@/components/ProgressFeedback";
 import type { CardViewId } from "@/types";
@@ -49,6 +51,43 @@ interface SnapshotConfig {
 type SnapshotPayload = Record<string, unknown>;
 
 const MAX_FILTER_LENGTH = 200;
+const RAW_SNAPSHOT_TEXT_PATTERN = /(?:raw\s+backend|raw_backend|RAW_BACKEND|SESSION_INVALID|session_invalid|invalid local session|unknown sync job|unknown job|csrf[_-]?token|session[_-]?id|access[_-]?token|refresh[_-]?token|password|passwd|pwd|set[_-]?cookie|cookie|authorization|client[_-]?secret|api[_-]?key)/i;
+const LOCAL_SNAPSHOT_PATH_PATTERN = /(?:\/Users\/|\/Volumes\/|\/private\/tmp\/|\/tmp\/|[A-Za-z]:\\|run_history\.json|Traceback|File\s+")/i;
+const SNAPSHOT_STATUS_LABELS: Record<string, string> = {
+  active: "活跃",
+  analytics: "趋势",
+  blocked: "已阻断",
+  cancelled: "已取消",
+  canceled: "已取消",
+  completed: "已完成",
+  complete: "已完成",
+  delta: "变化",
+  done: "已完成",
+  error: "错误",
+  fail: "失败",
+  failed: "失败",
+  false: "未通过",
+  missing: "缺失",
+  pass: "通过",
+  passed: "通过",
+  pending: "等待中",
+  production: "生产中",
+  queued: "排队中",
+  ready: "就绪",
+  recorded: "已记录",
+  rejected: "已拒绝",
+  resume_available: "可续跑",
+  review: "复核中",
+  running: "运行中",
+  stale: "需刷新",
+  stopped: "已停止",
+  submitted: "已提交",
+  success: "成功",
+  true: "通过",
+  unknown: "状态待确认",
+  warn: "警告",
+  warning: "警告",
+};
 const SNAPSHOT_VIEWS: Record<SnapshotView, SnapshotConfig> = {
   cloud: {
     title: "云端数据",
@@ -130,13 +169,13 @@ export default function SnapshotPanel({ notify, viewMode, onNavigate }: Props) {
 
   const load = useCallback(async () => {
     const result = await callApi<SnapshotPayload>(config.endpoint);
-    if (result?.error) notify("error", result.error);
+    if (result?.error) notify("error", apiErrorMessage(result, `${config.title}加载失败`));
   }, [callApi, config.endpoint, notify]);
 
   useEffect(() => { void load(); }, [load]);
 
   const payload = api.data || {};
-  const rows = useMemo(() => config.rows(payload), [config, payload]);
+  const rows = useMemo(() => config.rows(payload).map(normalizeSnapshotRow), [config, payload]);
   const metrics = useMemo(() => config.metrics?.(payload, rows) || defaultMetrics(payload, rows), [config, payload, rows]);
   const normalizedFilter = filter.trim().toLowerCase();
   const filteredRows = normalizedFilter
@@ -335,6 +374,43 @@ function defaultMetrics(payload: SnapshotPayload, rows: SnapshotRow[]) {
   ];
 }
 
+function normalizeSnapshotRow(row: SnapshotRow): SnapshotRow {
+  return {
+    ...row,
+    title: safeSnapshotDisplayText(row.title || row.id, "记录待确认"),
+    status: snapshotStatusLabel(row.status),
+    metric: safeSnapshotDisplayText(row.metric, "指标待确认"),
+    detail: safeSnapshotDetail(row.detail),
+    timestamp: safeSnapshotDisplayText(row.timestamp, "时间待确认"),
+  };
+}
+
+function snapshotStatusLabel(value: unknown) {
+  const raw = text(value).trim();
+  if (!raw) return "";
+  const known = knownApiErrorMessage(raw);
+  if (known) return known;
+  if (RAW_SNAPSHOT_TEXT_PATTERN.test(raw)) return "状态待确认";
+  const normalized = raw.toLowerCase();
+  return SNAPSHOT_STATUS_LABELS[normalized] || "状态待确认";
+}
+
+function safeSnapshotDetail(value: unknown) {
+  const raw = text(value).trim();
+  if (!raw) return "";
+  const known = knownApiErrorMessage(raw);
+  if (known) return known;
+  if (RAW_SNAPSHOT_TEXT_PATTERN.test(raw) || LOCAL_SNAPSHOT_PATH_PATTERN.test(raw)) return "详情待确认";
+  return raw;
+}
+
+function safeSnapshotDisplayText(value: unknown, fallback: string) {
+  const raw = text(value).trim();
+  if (!raw) return "";
+  if (knownApiErrorMessage(raw) || RAW_SNAPSHOT_TEXT_PATTERN.test(raw) || LOCAL_SNAPSHOT_PATH_PATTERN.test(raw)) return fallback;
+  return raw;
+}
+
 function SnapshotMobileCard({ row }: { row: SnapshotRow }) {
   return (
     <article
@@ -396,14 +472,16 @@ function checkpointStatusMetrics(payload: SnapshotPayload, _rows: SnapshotRow[])
     { label: "续跑记录", value: text(payload.checkpoint_count ?? "0") },
     { label: "历史记录", value: text(payload.history_count ?? "0") },
     { label: "可续跑", value: truthy(payload.resume_available) ? "是" : "否" },
-    { label: "趋势", value: text(analytics.trend_status || analytics.status || "-") },
+    { label: "趋势", value: safeSnapshotDisplayText(analytics.trend_status || analytics.status || "-", "趋势待确认") || "-" },
   ];
 }
 
 function checkpointComparisonSummary(payload: SnapshotPayload) {
   const latestComparison = record(payload.latest_comparison);
   const deltas = record(latestComparison.deltas);
-  const keys = Object.keys(deltas);
+  const keys = Object.keys(deltas)
+    .map((key) => safeSnapshotDisplayText(key, "对比项待确认"))
+    .filter(Boolean);
   if (!keys.length) return "";
   return `对比 ${keys.length} 项: ${keys.slice(0, 3).join(", ")}`;
 }
@@ -449,15 +527,25 @@ function sqliteIndexMetrics(payload: SnapshotPayload, rows: SnapshotRow[]) {
   ];
 }
 
-function robustnessMetrics(_payload: SnapshotPayload, rows: SnapshotRow[]) {
+function robustnessMetrics(payload: SnapshotPayload, rows: SnapshotRow[]) {
   const antiRows = rows.filter((row) => row.kind === "anti_overfit");
   const rollingRows = rows.filter((row) => row.kind === "rolling_validation");
-  return [
+  const metrics = [
     { label: "行数", value: String(rows.length) },
     { label: "防过拟合", value: String(antiRows.length) },
     { label: "滚动验证", value: String(rollingRows.length) },
-    { label: "警告", value: String(rows.filter((row) => row.status && row.status !== "pass" && row.status !== "passed").length) },
+    { label: "警告", value: String(rows.filter((row) => row.status && !isSnapshotPassStatus(row.status)).length) },
   ];
+  const audit = replayAuditPayload(payload);
+  if (Object.keys(audit).length) {
+    metrics.push(
+      { label: "回放候选", value: ratioText(audit.recovered_candidate_count, audit.total_candidate_count) },
+      { label: "生命周期命中", value: ratioText(audit.lifecycle_rows_used_count, audit.lifecycle_row_count) },
+      { label: "科学审计", value: ratioText(audit.candidates_with_scientific_audit, audit.recovered_candidate_count) },
+      { label: "非提交边界", value: replayBoundaryOk(audit) ? "已锁定" : "需复核" },
+    );
+  }
+  return metrics;
 }
 
 function cloudRows(payload: SnapshotPayload) {
@@ -563,7 +651,7 @@ function comparisonRows(comparison: SnapshotPayload) {
   return Object.entries(deltas).map(([key, value]) => ({
     id: `comparison_${key}`,
     kind: "comparison",
-    title: key,
+    title: safeSnapshotDisplayText(key, "对比项待确认"),
     status: "delta",
     metric: text(value),
     detail: text(comparison.summary || comparison.baseline_run_id || comparison.current_run_id),
@@ -675,7 +763,7 @@ function sqliteIndexRows(payload: SnapshotPayload) {
 }
 
 function robustnessRows(payload: SnapshotPayload) {
-  return latestCandidateRows(payload).flatMap((candidate, index) => {
+  const candidateRows = latestCandidateRows(payload).flatMap((candidate, index) => {
     const row = record(candidate);
     const anti = candidateReport(row, "anti_overfit_report");
     const rolling = candidateReport(row, "rolling_validation_report");
@@ -705,6 +793,55 @@ function robustnessRows(payload: SnapshotPayload) {
     }
     return rows;
   });
+  return [...replayAuditRows(payload), ...candidateRows];
+}
+
+function replayAuditRows(payload: SnapshotPayload): SnapshotRow[] {
+  const audit = replayAuditPayload(payload);
+  if (!Object.keys(audit).length) return [];
+  const productionCounts = replayCountSummary(audit.production_decision_counts, "决策:0");
+  const blockerCounts = replayCountSummary(audit.readiness_blocker_counts, "阻断:0", "readiness");
+  const executionGaps = replayCountSummary(audit.execution_gap_counts, "缺口:0");
+  const queueCounts = replayCountSummary(audit.workflow_queue_counts, "队列:0");
+  const stopRule = replayStopRule(audit.stop_rule);
+  return [
+    {
+      id: "replay_audit_recovery",
+      kind: "replay_audit",
+      title: "本地回放审计",
+      status: replayBoundaryOk(audit) ? "ready" : "warning",
+      metric: compactJoin([
+        `候选:${ratioText(audit.recovered_candidate_count, audit.total_candidate_count)}`,
+        `生命周期:${ratioText(audit.lifecycle_rows_used_count, audit.lifecycle_row_count)}`,
+      ]),
+      detail: compactJoin([stopRule, "本地只读", "未调用官方接口", "不允许提交"]),
+      timestamp: "",
+    },
+    {
+      id: "replay_audit_decisions",
+      kind: "replay_decision",
+      title: "生产决策证据",
+      status: Number(audit.candidates_with_production_decision ?? 0) > 0 ? "ready" : "missing",
+      metric: productionCounts,
+      detail: compactJoin([blockerCounts, executionGaps]),
+      timestamp: "",
+    },
+    {
+      id: "replay_audit_scientific",
+      kind: "replay_scientific",
+      title: "科学审计证据",
+      status: replayScientificBoundaryOk(audit) ? (Number(audit.candidates_missing_scientific_audit ?? 0) > 0 ? "warning" : "ready") : "blocked",
+      metric: compactJoin([
+        `审计:${ratioText(audit.candidates_with_scientific_audit, audit.recovered_candidate_count)}`,
+        `缺口:${countText(audit.candidates_missing_scientific_audit)}`,
+      ]),
+      detail: compactJoin([
+        truthy(audit.workflow_plan_available) ? `工作流:${queueCounts}` : "工作流:未恢复",
+        truthy(audit.scientific_audit_summary_available) ? "科学审计摘要可用" : "科学审计摘要缺失",
+      ]),
+      timestamp: "",
+    },
+  ];
 }
 
 function namedRows(kind: string, rows: unknown[], titleKey: string) {
@@ -795,7 +932,15 @@ function rowId(row: SnapshotPayload, fallback: string) {
 }
 
 function rowText(row: SnapshotRow) {
-  return [row.id, displayKind(row.kind), row.title, row.status, row.metric, row.detail, row.timestamp].join(" ").toLowerCase();
+  return [
+    safeSnapshotDisplayText(row.id, ""),
+    displayKind(row.kind),
+    row.title,
+    row.status,
+    row.metric,
+    row.detail,
+    row.timestamp,
+  ].join(" ").toLowerCase();
 }
 
 function displayKind(kind: string) {
@@ -805,8 +950,11 @@ function displayKind(kind: string) {
     comparison: "对比",
     analytics: "趋势",
     lifecycle: "生命周期",
+    replay_audit: "回放审计",
+    replay_decision: "决策审计",
+    replay_scientific: "科学审计",
   };
-  return labels[kind] || kind;
+  return labels[kind] || safeSnapshotDisplayText(kind, "类型待确认") || "类型待确认";
 }
 
 function sanitizeTextInput(value: string, maxLength: number) {
@@ -815,10 +963,14 @@ function sanitizeTextInput(value: string, maxLength: number) {
 
 function statusBadge(status: string) {
   const normalized = status.toLowerCase();
-  if (["ready", "pass", "passed", "true", "submitted", "production"].some((item) => normalized.includes(item))) return "badge badge-positive";
-  if (["fail", "false", "missing", "blocked", "error", "rejected"].some((item) => normalized.includes(item))) return "badge badge-negative";
-  if (["warn", "stale", "caution", "unknown"].some((item) => normalized.includes(item))) return "badge badge-warning";
+  if (["ready", "pass", "passed", "true", "submitted", "production", "就绪", "通过", "已提交", "生产中", "成功", "已完成", "活跃", "可续跑"].some((item) => normalized.includes(item))) return "badge badge-positive";
+  if (["fail", "false", "missing", "blocked", "error", "rejected", "失败", "未通过", "缺失", "阻断", "错误", "已拒绝"].some((item) => normalized.includes(item))) return "badge badge-negative";
+  if (["warn", "stale", "caution", "unknown", "警告", "需刷新", "需注意", "状态待确认"].some((item) => normalized.includes(item))) return "badge badge-warning";
   return "badge badge-neutral";
+}
+
+function isSnapshotPassStatus(status: string) {
+  return ["pass", "passed", "ready", "true", "通过", "成功", "已完成", "就绪"].includes(status.trim().toLowerCase());
 }
 
 function metricText(label: string, value: unknown) {
@@ -827,6 +979,51 @@ function metricText(label: string, value: unknown) {
   const parsed = Number(value);
   if (Number.isFinite(parsed) && String(value).trim() !== "") return `${label}:${Number.isInteger(parsed) ? parsed : parsed.toFixed(3)}`;
   return `${label}:${text(value)}`;
+}
+
+function ratioText(numerator: unknown, denominator: unknown) {
+  return `${countText(numerator)}/${countText(denominator)}`;
+}
+
+function countText(value: unknown) {
+  if (value === undefined || value === null || value === "") return "0";
+  const parsed = Number(value);
+  if (Number.isFinite(parsed)) return String(Number.isInteger(parsed) ? parsed : Number(parsed.toFixed(3)));
+  return safeSnapshotDisplayText(value, "0") || "0";
+}
+
+function replayAuditPayload(payload: SnapshotPayload) {
+  return record(record(payload.result).replay_audit);
+}
+
+function replayBoundaryOk(audit: SnapshotPayload) {
+  return truthy(audit.submit_boundary_intact) &&
+    !truthy(audit.submit_allowed) &&
+    !truthy(audit.real_submit_performed);
+}
+
+function replayScientificBoundaryOk(audit: SnapshotPayload) {
+  return truthy(audit.scientific_submit_boundary_intact);
+}
+
+function replayStopRule(value: unknown) {
+  const raw = text(value);
+  if (/check_live_submit_readiness\.py/.test(raw) && !RAW_SNAPSHOT_TEXT_PATTERN.test(raw)) {
+    return "停机规则:check_live_submit_readiness.py";
+  }
+  return "停机规则待确认";
+}
+
+function replayCountSummary(value: unknown, fallback: string, labelMode: "safe" | "readiness" = "safe") {
+  const entries = Object.entries(record(value))
+    .map(([key, count]) => {
+      const label = labelMode === "readiness"
+        ? readinessReasonLabel(safeSnapshotDisplayText(key, ""), "阻断原因待确认")
+        : safeSnapshotDisplayText(key, "项待确认");
+      return label ? `${label}:${countText(count)}` : "";
+    })
+    .filter(Boolean);
+  return entries.length ? entries.slice(0, 4).join(" ") : fallback;
 }
 
 function compactJoin(values: string[]) {

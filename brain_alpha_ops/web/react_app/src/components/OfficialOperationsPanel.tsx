@@ -1,8 +1,12 @@
 /** Button-driven official operations panel for browser-only user workflows. */
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { apiErrorMessage, knownApiErrorMessage, isSessionInvalidPayload } from "@/helpers/errorExperience";
+import type { ApiErrorExperiencePayload } from "@/helpers/errorExperience";
+import { readinessNextActionLabel, readinessProductionGapLabel, readinessReasonLabel } from "@/helpers/readinessLabels";
+import { classifyJobState, jobStatusMessage } from "@/helpers/runPayload";
 import { useApi } from "@/hooks/useApi";
-import type { BrainCredentials, JobStatus, SubmitReadinessResponse, UnifiedProgress } from "@/types";
+import type { BrainCredentials, CloudAlphaCache, JobStatus, OfficialContextCache, SubmitReadinessResponse, SyncHistoryItem, UnifiedProgress } from "@/types";
 import ProgressFeedback from "@/components/ProgressFeedback";
 import { reportIgnoredError } from "@/utils/reportIgnoredError";
 
@@ -11,6 +15,8 @@ interface Props {
   credentials?: BrainCredentials;
   autoStart?: boolean;
   connectionReady?: boolean;
+  officialContextCache?: OfficialContextCache;
+  cloudAlphaCache?: CloudAlphaCache;
   onAutoStartConsumed?: () => void;
   onSyncCompleted?: () => void;
   onReconnectRequested?: () => void;
@@ -79,6 +85,8 @@ export default function OfficialOperationsPanel({
   credentials,
   autoStart = false,
   connectionReady = true,
+  officialContextCache,
+  cloudAlphaCache,
   onAutoStartConsumed,
   onSyncCompleted,
   onReconnectRequested,
@@ -93,6 +101,8 @@ export default function OfficialOperationsPanel({
   const [stoppingSinceMs, setStoppingSinceMs] = useState(0);
   const [stoppingNowMs, setStoppingNowMs] = useState(0);
   const syncPollInFlightRef = useRef(false);
+  const activeSyncJobIdRef = useRef("");
+  const syncPollGenerationRef = useRef(0);
   const syncPollFailureCountRef = useRef(0);
   const syncProgressMonitorRef = useRef<SyncProgressMonitorState>({
     jobId: "",
@@ -123,6 +133,13 @@ export default function OfficialOperationsPanel({
   const callSyncCancel = syncCancelApi.call;
   const callReadiness = readinessApi.call;
   const callCheckResults = checkResultsApi.call;
+
+  const updateSyncJobId = useCallback((jobId: string) => {
+    activeSyncJobIdRef.current = jobId;
+    syncPollGenerationRef.current += 1;
+    syncPollInFlightRef.current = false;
+    setSyncJobId(jobId);
+  }, []);
 
   const appendLog = useCallback((tone: OperationLogEntry["tone"], message: string) => {
     setLogs((previous) => [...previous.slice(-(MAX_LOG_ROWS - 1)), { time: formatClock(), tone, message }]);
@@ -177,12 +194,12 @@ export default function OfficialOperationsPanel({
 
   const applySyncRecoveryFailure = useCallback((jobId: string, result: JobStatus | null) => {
     const message = operationFailureMessage(
-      result?.error || (result as { error_code?: string } | null)?.error_code,
+      result,
       "本地会话已失效，无法读取正在运行的官方同步状态。请前往运行总览重新测试连接后恢复监控。",
     );
     setMode("context_refresh");
     setContextOnlyMode(false);
-    setSyncJobId(jobId);
+    updateSyncJobId(jobId);
     setSyncRunning(false);
     setSyncStatus({
       job_id: jobId,
@@ -202,7 +219,7 @@ export default function OfficialOperationsPanel({
     appendLog("warning", message);
     notify("warning", message);
     return true;
-  }, [appendLog, notify]);
+  }, [appendLog, notify, updateSyncJobId]);
 
   const applyRecoveredSyncStatus = useCallback((result: JobStatus) => {
     const jobId = String(result?.job_id || result?.task_id || "");
@@ -210,7 +227,7 @@ export default function OfficialOperationsPanel({
     const terminal = isTerminalSyncStatus(result);
     setMode("context_refresh");
     setContextOnlyMode(Boolean(result?.progress?.context_only || (result?.result as Record<string, unknown> | undefined)?.context_only));
-    setSyncJobId(jobId);
+    updateSyncJobId(jobId);
     setSyncStatus(result);
     setSyncRunning(!terminal);
     syncPollFailureCountRef.current = 0;
@@ -224,7 +241,7 @@ export default function OfficialOperationsPanel({
       notify("info", "已恢复正在运行的官方上下文刷新");
     }
     return true;
-  }, [appendLog, notify, resetSyncProgressMonitor]);
+  }, [appendLog, notify, resetSyncProgressMonitor, updateSyncJobId]);
 
   useEffect(() => {
     if (syncRecoveryAttemptedRef.current) return;
@@ -252,6 +269,9 @@ export default function OfficialOperationsPanel({
       }
       if (current?.ok && applyRecoveredSyncStatus(current)) return;
       if (storedTerminalStatus) applyRecoveredSyncStatus(storedTerminalStatus);
+      else if (current?.ok) {
+        setSyncStatus((previous) => previous || current);
+      }
     })();
     return () => {
       active = false;
@@ -265,7 +285,7 @@ export default function OfficialOperationsPanel({
     try {
       const result = await callReadiness<SubmitReadinessResponse>("/api/submit_readiness", { signal: deadline.signal });
       if (!result?.ok) {
-        const message = operationFailureMessage(result?.error || result?.error_code, "提交前阻断复核证据读取失败。请重试；若连续失败，请重新打开页面或联系维护者。");
+        const message = operationFailureMessage(result, "提交前阻断复核证据读取失败。请重试；若连续失败，请重新打开页面或联系维护者。");
         appendLog("error", message);
         notify("error", message);
         return;
@@ -285,7 +305,7 @@ export default function OfficialOperationsPanel({
     try {
       const result = await callCheckResults<CheckResultsResponse>("/api/check_results", { signal: deadline.signal });
       if (!result?.ok) {
-        const message = operationFailureMessage(result?.error || result?.error_code, "质量检查结果读取失败。请重试；若连续失败，请重新打开页面或联系维护者。");
+        const message = operationFailureMessage(result, "质量检查结果读取失败。请重试；若连续失败，请重新打开页面或联系维护者。");
         appendLog("error", message);
         notify("error", message);
         return;
@@ -306,6 +326,8 @@ export default function OfficialOperationsPanel({
       notify("warning", message);
       return;
     }
+    updateSyncJobId("");
+    clearStoredSyncJobId();
     setMode("context_refresh");
     setSyncRunning(true);
     setStoppingSinceMs(0);
@@ -339,12 +361,12 @@ export default function OfficialOperationsPanel({
     const jobId = String(result?.job_id || result?.task_id || "");
     if (!result?.ok && jobId) {
       const message = operationFailureMessage(
-        result?.error || result?.error_code,
+        result,
         "已有官方上下文刷新正在运行，已接管当前任务状态。",
       );
       saveStoredSyncJobId(jobId);
       resetSyncStart();
-      setSyncJobId(jobId);
+      updateSyncJobId(jobId);
       setSyncRunning(true);
       syncPollFailureCountRef.current = 0;
       setSyncStatus({
@@ -366,7 +388,7 @@ export default function OfficialOperationsPanel({
       return;
     }
     if (!result?.ok || !jobId) {
-      const message = operationFailureMessage(result?.error || result?.error_code, "官方上下文刷新启动失败。请重试；若连续失败，请重新打开页面或联系维护者。");
+      const message = operationFailureMessage(result, "官方上下文刷新启动失败。请重试；若连续失败，请重新打开页面或联系维护者。");
       setSyncRunning(false);
       setSyncStatus((previous) => ({
         ...(previous || { job_id: "", status: "failed" }),
@@ -385,7 +407,7 @@ export default function OfficialOperationsPanel({
 	      notify("error", message);
 	      return;
 	    }
-    setSyncJobId(jobId);
+    updateSyncJobId(jobId);
     saveStoredSyncJobId(jobId);
     setSyncStatus({
       job_id: jobId,
@@ -404,7 +426,7 @@ export default function OfficialOperationsPanel({
 	    });
 	    appendLog("success", `刷新流程已启动: ${shortOperationId(jobId)}`);
 	    notify("info", contextOnly ? "官方上下文局部重试已启动" : "官方上下文刷新已启动");
-  }, [appendLog, callSyncStart, connectionReady, credentials, notify, resetSyncProgressMonitor, resetSyncStart, syncRange]);
+  }, [appendLog, callSyncStart, connectionReady, credentials, notify, resetSyncProgressMonitor, resetSyncStart, syncRange, updateSyncJobId]);
 
   const startContextOnlyRefresh = useCallback(() => {
     void startOfficialContextRefresh({ contextOnly: true });
@@ -443,7 +465,7 @@ export default function OfficialOperationsPanel({
       body: JSON.stringify({ job_id: syncJobId }),
     });
     if (!result?.ok) {
-      const cancelMessage = operationFailureMessage(result?.error || result?.error_code, "停止请求暂未确认。请稍后重新读取状态。");
+      const cancelMessage = operationFailureMessage(result, "停止请求暂未确认。请稍后重新读取状态。");
       appendLog("error", cancelMessage);
       notify("error", cancelMessage);
       return;
@@ -457,11 +479,16 @@ export default function OfficialOperationsPanel({
   const pollSyncStatus = useCallback(async () => {
     if (!syncJobId) return;
     if (syncPollInFlightRef.current) return;
+    const requestedJobId = syncJobId;
+    const pollGeneration = syncPollGenerationRef.current;
     syncPollInFlightRef.current = true;
     try {
-      const result = await callSyncStatus<JobStatus>(`/api/sync_status?job_id=${encodeURIComponent(syncJobId)}&compact=1`);
+      const result = await callSyncStatus<JobStatus>(`/api/sync_status?job_id=${encodeURIComponent(requestedJobId)}&compact=1`);
+      if (activeSyncJobIdRef.current !== requestedJobId || syncPollGenerationRef.current !== pollGeneration) {
+        return;
+      }
       if (!result?.ok) {
-        const message = operationFailureMessage(result?.error || result?.error_code, "刷新状态读取失败。");
+        const message = operationFailureMessage(result, "刷新状态读取失败。");
         const failures = syncPollFailureCountRef.current + 1;
         syncPollFailureCountRef.current = failures;
         appendLog("warning", `刷新状态读取失败 (${failures}/${SYNC_STATUS_FAILURE_LIMIT}): ${message}`);
@@ -480,31 +507,33 @@ export default function OfficialOperationsPanel({
         await interruptOfficialContextRefresh(stall.message);
         return;
       }
-      const statusText = String(result?.status || "");
-	      if (["completed", "completed_with_warnings"].includes(statusText)) {
+      const resultState = classifyJobState(result);
+	      if (resultState.successful) {
 	        clearStoredSyncJobId();
 	        setSyncRunning(false);
 	        setStoppingSinceMs(0);
 	        syncPollFailureCountRef.current = 0;
 	        resetSyncProgressMonitor();
-	        appendLog(statusText === "completed" ? "success" : "warning", operationStatusMessage(result));
-	        notify(statusText === "completed" ? "success" : "warning", "官方上下文刷新完成");
+	        appendLog(resultState.warning ? "warning" : "success", operationStatusMessage(result));
+	        notify(resultState.warning ? "warning" : "success", "官方上下文刷新完成");
 	        onSyncCompleted?.();
-      } else if (["failed", "cancelled", "canceled", "stopped"].includes(statusText)) {
+      } else if (resultState.failed || resultState.interrupted || resultState.missing) {
 	        clearStoredSyncJobId();
 	        setSyncRunning(false);
 	        setStoppingSinceMs(0);
 	        syncPollFailureCountRef.current = 0;
 	        resetSyncProgressMonitor();
-	        appendLog(statusText === "failed" ? "error" : "warning", operationStatusMessage(result));
-	        notify(statusText === "failed" ? "error" : "warning", operationStatusMessage(result));
-	      } else if (statusText === "stopping") {
+	        appendLog(resultState.failed || resultState.missing ? "error" : "warning", operationStatusMessage(result));
+	        notify(resultState.failed || resultState.missing ? "error" : "warning", operationStatusMessage(result));
+	      } else if (resultState.status === "stopping") {
 	        const since = numberField(result.progress, "stopping_since_ms") || stoppingSinceMs || Date.now();
 	        setStoppingSinceMs(since);
 	      }
-	    } finally {
-	      syncPollInFlightRef.current = false;
-	    }
+		    } finally {
+		      if (syncPollGenerationRef.current === pollGeneration) {
+		        syncPollInFlightRef.current = false;
+		      }
+		    }
 	  }, [appendLog, callSyncStatus, inspectSyncProgressMonitor, interruptOfficialContextRefresh, notify, onSyncCompleted, resetSyncProgressMonitor, stoppingSinceMs, syncJobId]);
 
   useEffect(() => {
@@ -543,7 +572,7 @@ export default function OfficialOperationsPanel({
 	      body: JSON.stringify({ job_id: syncJobId }),
 	    });
     if (!result?.ok) {
-      const message = operationFailureMessage(result?.error || result?.error_code, "停止请求失败。请稍后重试。");
+      const message = operationFailureMessage(result, "停止请求失败。请稍后重试。");
       appendLog("error", message);
       notify("error", message);
       return;
@@ -633,10 +662,16 @@ export default function OfficialOperationsPanel({
     allBestCandidateReasons.length,
   );
 	  const summaryCounts = readiness?.summary_counts || {};
-	  const syncOverview = syncDataOverview(syncStatus, syncRunning);
-	  const officialContextSummary = officialContextSummaryMessage(syncStatus);
+		  const displaySyncStatus = syncStatusForDisplay(syncStatus, officialContextCache);
+		  const syncOverview = syncDataOverview(displaySyncStatus, syncRunning, cloudAlphaCache);
+      const syncHistory = displaySyncStatus?.sync_history || [];
+      const syncHistoryError = displaySyncStatus?.sync_history_error || "";
+      const syncHistoryErrorTitle = syncHistoryError ? syncHistoryReadErrorTitle(syncHistoryError) : "";
+			  const officialContextSummary = officialContextSummaryMessage(displaySyncStatus);
 	  const canRetryContext = canRetryContextOnly(syncStatus);
-  const syncNeedsRetry = ["failed", "stopped", "cancelled", "canceled"].includes(String(syncStatus?.status || ""));
+  const syncState = classifyJobState(syncStatus);
+  const displaySyncState = classifyJobState(displaySyncStatus);
+  const syncNeedsRetry = syncState.failed || syncState.interrupted || syncState.missing;
   const refreshPanelTitle = contextOnlyMode ? "仅刷新官方能力集" : "刷新官方能力集";
   const refreshPanelDescription = contextOnlyMode
     ? "仅刷新官方字段、算子与 Dataset 上下文，不拉取云端 Alpha 快照。"
@@ -661,7 +696,7 @@ export default function OfficialOperationsPanel({
             </p>
           </div>
           <div className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-4 lg:min-w-[420px]">
-            <OperationMetric label="官方上下文" value={syncContextStatus(syncStatus)} tone={syncRunning ? "warning" : syncStatus?.status === "completed" ? "success" : "neutral"} />
+            <OperationMetric label="官方上下文" value={syncContextStatus(displaySyncStatus)} tone={syncRunning ? "warning" : contextCacheComplete(displaySyncStatus?.official_context_cache) || displaySyncState.successful ? "success" : "neutral"} />
             <OperationMetric label="复核候选" value={String(readiness?.eligible_count ?? "-")} tone={readiness?.ready_to_submit ? "success" : "warning"} />
             <OperationMetric label="检查记录" value={String(checkRows.length || "-")} />
             <OperationMetric label="真实提交" value="关闭" tone="success" />
@@ -709,7 +744,7 @@ export default function OfficialOperationsPanel({
 	          <ActionPanel
 	            title={refreshPanelTitle}
 	            description={refreshPanelDescription}
-            status={syncStatus?.status === "stopping" ? "停止中" : syncRunning ? "运行中" : syncStatus ? syncContextStatus(syncStatus) : "待启动"}
+            status={syncStatus?.status === "stopping" ? "停止中" : syncRunning ? "运行中" : displaySyncStatus ? syncContextStatus(displaySyncStatus) : "待启动"}
 	            primaryLabel={syncRunning ? "刷新中..." : syncNeedsRetry ? "重新刷新" : "开始刷新"}
 	            disabled={syncRunning || syncStartApi.loading}
 	            onPrimary={() => void startOfficialContextRefresh()}
@@ -755,13 +790,13 @@ export default function OfficialOperationsPanel({
           />
 	        </div>
 
-	        {(syncJobId || syncStatus?.official_context_cache) && (
+	        {(syncJobId || displaySyncStatus?.official_context_cache) && (
 	          <section className="rounded-md border border-border-subtle bg-[oklch(0.115_0.007_45)] p-3" aria-label="官方上下文快速摘要">
 	            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 	              <dl className="grid min-w-0 flex-1 grid-cols-3 gap-3 text-sm">
-	                <SummaryMetric label="字段" value={contextSummaryField(syncStatus, "fields_count")} />
-	                <SummaryMetric label="算子" value={contextSummaryField(syncStatus, "operators_count")} />
-	                <SummaryMetric label="数据集" value={contextSummaryField(syncStatus, "datasets_count")} />
+	                <SummaryMetric label="字段" value={contextSummaryField(displaySyncStatus, "fields_count")} />
+	                <SummaryMetric label="算子" value={contextSummaryField(displaySyncStatus, "operators_count")} />
+	                <SummaryMetric label="数据集" value={contextSummaryField(displaySyncStatus, "datasets_count")} />
 	              </dl>
 	              {canRetryContext && (
 	                <button type="button" className="btn btn-secondary text-sm" onClick={startContextOnlyRefresh} disabled={syncRunning || syncStartApi.loading}>
@@ -769,12 +804,33 @@ export default function OfficialOperationsPanel({
 	                </button>
 	              )}
 	            </div>
-		            <p className="mt-2 text-sm leading-6 text-text-secondary">{officialContextInlineSummary(syncStatus)}</p>
-	          </section>
-	        )}
+		            <p className="mt-2 text-sm leading-6 text-text-secondary">{officialContextInlineSummary(displaySyncStatus)}</p>
+		          </section>
+		        )}
 
-	        {syncStatus?.status === "stopping" && (
-	          <div className="rounded-md border border-[oklch(0.65_0.06_85/0.25)] bg-warning-subtle p-3 text-sm leading-6 text-warning">
+        {(syncHistory.length > 0 || syncHistoryError) && (
+          <section className="rounded-md border border-border-subtle bg-[oklch(0.100_0.007_45)] p-4" aria-label="最近官方同步">
+            <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <h3 className="text-sm font-semibold text-text-primary">最近官方同步</h3>
+                <p className="mt-1 text-sm leading-6 text-text-secondary">
+                  最近任务只展示状态摘要和增量，不展示请求载荷或凭证。
+                </p>
+              </div>
+              {syncHistoryError && (
+                <span className="badge badge-warning text-xs" title={syncHistoryErrorTitle}>历史读取受限</span>
+              )}
+            </div>
+            {syncHistory.length > 0 ? (
+              <SyncHistoryList rows={syncHistory} />
+            ) : (
+              <p className="mt-3 text-sm text-text-tertiary">暂无可展示的官方同步历史。</p>
+            )}
+          </section>
+        )}
+
+		        {syncStatus?.status === "stopping" && (
+		          <div className="rounded-md border border-[oklch(0.65_0.06_85/0.25)] bg-warning-subtle p-3 text-sm leading-6 text-warning">
 	            停止请求已发送，等待当前官方接口返回后结束。已等待 {formatDuration(stoppingElapsedSeconds)}；通常在 15 秒内生效，超过 60 秒会自动重试一次。
 	          </div>
 	        )}
@@ -846,12 +902,12 @@ export default function OfficialOperationsPanel({
                 <p className="font-semibold text-text-primary">补齐官方证据</p>
                 {needsOfficialEvidenceAction && (
                   <p className="mt-1">
-                    前往「候选管理」，点击「运行官方模拟」或候选行「单个模拟」，补齐 official_alpha_id 与 official_metrics。完成后回到这里点击「读取复核」。
+                    前往「候选管理」，优先点击「自动推进候选池」；仅当官方证据缺失时，使用「运行官方验证队列」或候选行「单行补模拟」补齐 official_alpha_id 与 official_metrics。完成后回到这里点击「读取复核」。
                   </p>
                 )}
                 {needsSubmitBandAction && (
                   <p className="mt-1">
-                    当前候选尚未进入 submit_candidate 复核带；先在候选管理继续筛选/评分，进入复核带后再运行官方模拟。
+                    当前候选尚未进入 submit_candidate 复核带；先让候选管理自动维护主池并继续筛选/评分，进入复核带后由自动流程补齐官方模拟证据。
                   </p>
                 )}
                 {onNavigateToCandidates && (
@@ -873,7 +929,7 @@ export default function OfficialOperationsPanel({
 	          </dl>
 	          <div className="mt-3 space-y-2 text-sm leading-6 text-text-secondary">
 	            <BlockerList title={countTitle("生产缺口", allProductionGaps.length)} rows={allProductionGaps.map(findingText)} empty="先读取阻断复核证据" />
-	            <BlockerList title={countTitle("最佳候选阻断", allBestCandidateReasons.length)} rows={allBestCandidateReasons.map(readinessReasonLabel)} empty="暂无最佳候选阻断" />
+		            <BlockerList title={countTitle("最佳候选阻断", allBestCandidateReasons.length)} rows={allBestCandidateReasons.map((reason) => readinessReasonLabel(reason))} empty="暂无最佳候选阻断" />
 	          </div>
 	          <div className="mt-3 rounded-md border border-border-subtle bg-[oklch(0.115_0.007_45)] p-3 text-sm leading-6 text-text-secondary">
 	            <p className="text-xs font-semibold uppercase tracking-wide text-text-tertiary">最佳候选证据</p>
@@ -891,9 +947,9 @@ export default function OfficialOperationsPanel({
 	        <section className="rounded-md border border-border-subtle bg-[oklch(0.100_0.007_45)] p-4">
 	          <h3 className="text-sm font-semibold text-text-primary">官方上下文摘要</h3>
 	          <dl className="mt-3 grid grid-cols-3 gap-3 text-sm">
-	            <SummaryMetric label="字段" value={contextSummaryField(syncStatus, "fields_count")} />
-	            <SummaryMetric label="算子" value={contextSummaryField(syncStatus, "operators_count")} />
-	            <SummaryMetric label="数据集" value={contextSummaryField(syncStatus, "datasets_count")} />
+	            <SummaryMetric label="字段" value={contextSummaryField(displaySyncStatus, "fields_count")} />
+	            <SummaryMetric label="算子" value={contextSummaryField(displaySyncStatus, "operators_count")} />
+	            <SummaryMetric label="数据集" value={contextSummaryField(displaySyncStatus, "datasets_count")} />
 	          </dl>
 	          <p className="mt-3 text-sm leading-6 text-text-secondary">
 	            {officialContextSummary}
@@ -1007,6 +1063,31 @@ function BlockerList({ title, rows, empty }: { title: string; rows: string[]; em
   );
 }
 
+function SyncHistoryList({ rows }: { rows: SyncHistoryItem[] }) {
+  return (
+    <ul className="mt-3 divide-y divide-border-subtle rounded-md border border-border-subtle bg-[oklch(0.115_0.007_45)]" aria-label="最近官方同步列表">
+      {rows.slice(0, 5).map((row) => (
+        <li key={row.job_id} className="grid gap-3 p-3 sm:grid-cols-[minmax(0,1fr)_auto]">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className={`status-dot ${syncHistoryDotTone(row.status)}`} aria-hidden="true" />
+              <span className="text-sm font-semibold text-text-primary">{syncHistoryStatusLabel(row.status)}</span>
+              <span className="badge badge-neutral text-xs">{row.context_only ? "仅上下文" : "云端同步"}</span>
+              <span className="font-mono-value text-xs text-text-tertiary" title={row.job_id}>{shortOperationId(row.job_id)}</span>
+            </div>
+            <p className="mt-1 break-words text-sm leading-6 text-text-secondary">
+              {syncHistoryMessage(row)}
+            </p>
+          </div>
+          <time className="text-xs text-text-tertiary sm:text-right" dateTime={syncHistoryDate(row)?.toISOString()}>
+            {syncHistoryDate(row) ? formatClock(syncHistoryDate(row) as Date) : "-"}
+          </time>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 function countTitle(label: string, total: number) {
   return total > 0 ? `${label}（共 ${total}）` : label;
 }
@@ -1051,79 +1132,97 @@ function readinessActionSignals(
   ].map((item) => String(item || "").trim()).filter(Boolean);
 }
 
-function findingText(row: { code?: string; message?: string }) {
-  const code = readinessReasonLabel(row.code || "");
-  const message = readableBackendText(row.message || "");
-  if (message && message !== code) return `${code}: ${message}`;
-  return code;
+function syncHistoryStatusLabel(status: string) {
+  const value = String(status || "").toLowerCase();
+  const labels: Record<string, string> = {
+    completed: "已完成",
+    completed_with_warnings: "带警告",
+    failed: "失败",
+    running: "进行中",
+    queued: "已排队",
+    stopping: "停止中",
+    stopped: "已停止",
+    cancelled: "已取消",
+    canceled: "已取消",
+    idle: "待启动",
+  };
+  return labels[value] || "状态待确认";
 }
 
-function readinessReasonLabel(reason: string) {
-  const labels: Record<string, string> = {
-    candidate_family_missing_official_alpha_id: "候选族缺少官方 Alpha ID",
-    candidate_family_missing_official_metrics: "候选族缺少官方仿真指标",
-    candidate_family_not_submit_band: "候选族尚未进入复核带",
-    decision_band_not_submit_candidate: "评分决策仍非提交候选",
-    optimize: "需要继续优化",
-    research_only: "仅限研究",
-    submit_candidate: "提交前复核候选",
-    high_cloud_similarity: "云端相似度过高",
-    high_turnover_generation_risk: "生成表达式存在高换手风险",
-    local_backtest_failed: "本地回测未通过",
-    missing_cloud_similarity: "缺少云端相似度证据",
-    missing_official_alpha_id: "缺少官方 Alpha ID",
-    missing_official_metrics: "缺少官方仿真指标",
-    no_submit_ready_candidate: "没有提交前复核候选",
-    not_submission_ready: "尚未达到阻断复核通过标准",
-    official_validation_without_simulation: "有官方验证但缺少官方仿真指标",
-  };
-  return labels[reason] || reason || "-";
+function syncHistoryDotTone(status: string) {
+  const state = classifyJobState({ status });
+  if (state.successful && !state.warning) return "status-dot-active";
+  if (state.warning || state.active) return "status-dot-warning";
+  if (state.failed || state.interrupted || state.missing) return "status-dot-error";
+  return "status-dot-idle";
+}
+
+function syncHistoryMessage(row: SyncHistoryItem) {
+  const explicit = readableBackendText(row.status_message || "");
+  const scanned = firstPositiveNumber(row.scanned);
+  const total = firstPositiveNumber(row.api_reported_total, row.filter_window_count, row.total);
+  const deltas = [
+    row.added && row.added > 0 ? `新增 ${formatCount(row.added)}` : "",
+    row.updated && row.updated > 0 ? `更新 ${formatCount(row.updated)}` : "",
+    row.skipped && row.skipped > 0 ? `跳过 ${formatCount(row.skipped)}` : "",
+    row.failed && row.failed > 0 ? `失败 ${formatCount(row.failed)}` : "",
+  ].filter(Boolean);
+  const scanText = scanned > 0 && total > 0
+    ? `已拉取 ${formatCount(scanned)} 条；分页参考数 ${formatCount(total)} 条`
+    : scanned > 0
+      ? `已拉取 ${formatCount(scanned)} 条`
+      : "";
+  const parts = [scanText, deltas.length ? deltas.join("，") : ""].filter(Boolean);
+  if (explicit && parts.length) return `${explicit}；${parts.join("；")}。`;
+  if (explicit) return explicit;
+  if (parts.length) return `${parts.join("；")}。`;
+  return row.phase ? `阶段: ${phaseLabel({ job_id: row.job_id, status: "idle", phase: row.phase })}` : "暂无同步摘要。";
+}
+
+function syncHistoryReadErrorTitle(raw: unknown) {
+  return readableBackendText(raw) || "同步历史读取受限，无法展示原始错误详情。";
+}
+
+function syncHistoryDate(row: SyncHistoryItem) {
+  const ms = firstPositiveNumber(row.updated_at_ms, row.updated_at ? row.updated_at * 1000 : 0);
+  return ms > 0 ? new Date(ms) : null;
+}
+
+function findingText(row: { code?: string; message?: string }) {
+  return readinessProductionGapLabel(row);
 }
 
 function riskLevelLabel(level: string) {
+  const normalized = String(level || "").toLowerCase();
   const labels: Record<string, string> = {
     high: "高",
     medium: "中",
     low: "低",
   };
-  return labels[level] || level || "-";
+  return labels[normalized] || (normalized ? "风险待确认" : "-");
 }
 
 function actionStepLabel(step: string) {
-  const labels: Record<string, string> = {
-    "review final submission intent before any real submit": "真实提交前先人工复核最终提交意图",
-    "resolve local blockers before submit review": "先修复本地阻断，再进入提交复核",
-    "run official simulation/check in a trusted environment": "在可信环境运行官方仿真/检查",
-  };
-  return labels[step] || readableBackendText(step) || step;
+  return readinessNextActionLabel(step);
 }
 
 function operationFailureMessage(raw: unknown, fallback: string) {
+  if (raw && typeof raw === "object") {
+    const payload = raw as Parameters<typeof jobStatusMessage>[0];
+    const message = apiErrorMessage(payload as ApiErrorExperiencePayload, "");
+    if (message) return readableBackendText(message) || message;
+    const state = classifyJobState(payload);
+    if (state.interrupted) return "官方上下文刷新已停止，结果未确认完成。";
+    if (state.failed || state.missing) return fallback;
+  }
   const message = readableBackendText(raw);
-  return message || fallback;
+  return (message && knownApiErrorMessage(raw)) ? message : fallback;
 }
 
 function readableBackendText(raw: unknown) {
   const value = String(raw || "").trim();
-  if (value === "official context timeout" || value === "OFFICIAL_CONTEXT_REFRESH_TIMEOUT") {
-    return "官方上下文刷新超时，请稍后重试。";
-  }
-  const httpMatch = value.match(/^HTTP[_\s-]?(\d{3})\b/i);
-  if (httpMatch) {
-    const status = httpMatch[1];
-    if (status === "429") return "BRAIN 官方接口请求过于频繁，请稍后重试。";
-    if (status === "401" || status === "403") return "BRAIN 连接已失效，请重新测试连接后继续。";
-    if (status === "408") return "BRAIN 官方接口响应超时，请稍后重试。";
-    if (status === "500" || status === "502" || status === "503" || status === "504") {
-      return `BRAIN 官方接口暂时不可用（HTTP ${status}），请稍后重试。`;
-    }
-  }
-  if (/network error|urlopen error|connection reset|connection aborted|remote end closed/i.test(value)) {
-    return "网络连接异常，无法读取 BRAIN 官方接口。请检查网络后重试。";
-  }
-  if (/timed out|timeout/i.test(value)) {
-    return "请求超时，BRAIN 官方接口仍未返回。请稍后重试或缩小同步范围。";
-  }
+  const sharedMessage = knownApiErrorMessage(value);
+  if (sharedMessage) return sharedMessage;
   const fieldRefreshMatch = value.match(/^Updating official fields cache:\s*(.+)$/);
   if (fieldRefreshMatch) return `正在刷新官方字段缓存: ${fieldRefreshMatch[1]}`;
   const operatorRefreshMatch = value.match(/^Updating official operators cache:\s*(.+)$/);
@@ -1139,7 +1238,23 @@ function readableBackendText(raw: unknown) {
     "invalid local session": "本地会话已失效，无法读取正在运行的官方同步状态。请前往运行总览重新测试连接后恢复监控。",
     OFFICIAL_CONTEXT_REFRESH_TIMEOUT: "官方上下文刷新超时，请稍后重试。",
   };
-  return labels[value] || value;
+  if (labels[value]) return labels[value];
+  if (isAllowedOfficialStatusText(value)) return value;
+  return null;
+}
+
+function isAllowedOfficialStatusText(value: string) {
+  if (!value) return false;
+  return [
+    /^官方上下文已刷新/,
+    /^官方上下文刷新/,
+    /^官方上下文刷新已停止/,
+    /^正在刷新官方字段缓存/,
+    /^正在刷新官方算子缓存/,
+    /^云端同步完成/,
+    /^连续读取刷新状态失败/,
+    /^用户已停止本次官方上下文刷新/,
+  ].some((pattern) => pattern.test(value));
 }
 
 function formatOptionalNumber(value: unknown) {
@@ -1164,18 +1279,46 @@ function requestDeadline() {
   };
 }
 
-function syncDataOverview(syncStatus: JobStatus | null, syncRunning: boolean) {
+function syncStatusForDisplay(status: JobStatus | null, officialContextCache?: OfficialContextCache): JobStatus | null {
+  const cache = status?.official_context_cache || officialContextCache;
+  if (status) {
+    return cache && status.official_context_cache !== cache
+      ? { ...status, official_context_cache: cache }
+      : status;
+  }
+  if (!cache) return null;
+  return {
+    job_id: "",
+    task_id: "",
+    status: "idle",
+    phase: "local_cache",
+    progress: {
+      phase: "local_cache",
+      status_code: contextCacheComplete(cache) ? "LOCAL_CACHE" : "LOCAL_CACHE_INVALID",
+      status_message: contextCacheComplete(cache)
+        ? "本地官方上下文缓存已加载。"
+        : "本地官方上下文缓存完整性未通过，需要手动刷新。",
+    },
+    official_context_cache: cache,
+  };
+}
+
+function syncDataOverview(syncStatus: JobStatus | null, syncRunning: boolean, cloudAlphaCache?: CloudAlphaCache) {
+  const localCacheReady = !syncRunning && cloudAlphaCacheReady(cloudAlphaCache) && contextCacheComplete(syncStatus?.official_context_cache);
   const statusValue = syncRunning ? "同步中" : syncContextStatus(syncStatus);
   const stage = syncStageMetric(syncStatus);
-  const statusDetail = syncStatus
+  const statusDetail = localCacheReady
+    ? "本地云端 Alpha 快照与官方能力集缓存已通过完整性校验；需要最新数据时可手动刷新。"
+    : syncStatus
     ? `${phaseLabel(syncStatus)}: ${operationStatusMessage(syncStatus)}`
     : "等待启动云端 Alpha 同步。";
   let statusTone: OverviewTone = "neutral";
   if (syncRunning) statusTone = "warning";
-  else if (syncStatus?.status === "completed" || syncStatus?.status === "completed_with_warnings") statusTone = "success";
-  else if (syncStatus?.status === "failed" || syncStatus?.status === "missing") statusTone = "warning";
-  const updatedAt = syncStatusUpdatedAt(syncStatus);
-  const total = syncDataTotal(syncStatus);
+  else if (localCacheReady) statusTone = "success";
+  else if (isSuccessfulSyncStatus(syncStatus)) statusTone = "success";
+  else if (classifyJobState(syncStatus).failed || classifyJobState(syncStatus).missing) statusTone = "warning";
+  const updatedAt = syncStatusUpdatedAt(syncStatus) || cloudAlphaCacheUpdatedAt(cloudAlphaCache);
+  const total = syncDataTotal(syncStatus, cloudAlphaCache);
 
   const hasLiveMetrics = syncRunning && (stage.current > 0 || stage.elapsedSeconds > 0);
   const scanIndeterminate = syncRunning && stage.kind === "scan";
@@ -1206,7 +1349,7 @@ function syncDataOverview(syncStatus: JobStatus | null, syncRunning: boolean) {
     statusDetail,
     statusTone,
     updatedAtValue: updatedAt ? formatClock(updatedAt) : "-",
-    updatedAtDetail: updatedAt ? "来自本次同步进度。" : "暂无同步更新时间。",
+    updatedAtDetail: updatedAt ? (localCacheReady ? "来自本地云端 Alpha 快照。" : "来自本次同步进度。") : "暂无同步更新时间。",
     ...total,
     hasLiveMetrics,
     etaLabel: stage.kind === "scan" ? "分页进度" : "阶段估算",
@@ -1218,7 +1361,7 @@ function syncDataOverview(syncStatus: JobStatus | null, syncRunning: boolean) {
   };
 }
 
-function syncDataTotal(syncStatus: JobStatus | null) {
+function syncDataTotal(syncStatus: JobStatus | null, cloudAlphaCache?: CloudAlphaCache) {
   const terminal = isTerminalSyncStatus(syncStatus);
   const successful = isSuccessfulSyncStatus(syncStatus);
   const scanned = firstPositiveNumber(
@@ -1248,6 +1391,13 @@ function syncDataTotal(syncStatus: JobStatus | null) {
     };
   }
   if (scanned > 0) {
+    if (terminal && !successful) {
+      return {
+        totalValue: `已拉取 ${formatCount(scanned)}`,
+        totalDetail: "本次未完成；结果未确认完成，官方分页参考值不作为完成判断。",
+        totalTone: "warning" as const,
+      };
+    }
     return {
       totalValue: `已拉取 ${formatCount(scanned)}`,
       totalDetail: terminal
@@ -1260,11 +1410,37 @@ function syncDataTotal(syncStatus: JobStatus | null) {
       totalTone: "warning" as const,
     };
   }
+  if (terminal && !successful) {
+    return {
+      totalValue: "-",
+      totalDetail: "本次未完成；结果未确认完成，官方分页参考值不作为完成判断。",
+      totalTone: "warning" as const,
+    };
+  }
   if (reportedTotal > 0) {
     return {
       totalValue: `分页参考数 ${formatCount(reportedTotal)}`,
       totalDetail: "接口分页参考数；尚未完成实际同步确认，不是云端 Alpha 总量。",
       totalTone: "neutral" as const,
+    };
+  }
+  if (cloudAlphaCacheReady(cloudAlphaCache)) {
+    const count = firstPositiveNumber(cloudAlphaCache?.count, cloudAlphaCache?.total);
+    if (count <= 0) {
+      return {
+        totalValue: "本地快照可用",
+        totalDetail: cloudAlphaCache?.is_stale
+          ? "本地云端 Alpha 快照可用但已过期；精确数量请刷新云端快照。"
+          : "本地云端 Alpha 快照已确认可用；精确数量由云端快照页加载。",
+        totalTone: (cloudAlphaCache?.is_stale ? "warning" : "success") as OverviewTone,
+      };
+    }
+    return {
+      totalValue: `本地保存 ${formatCount(count)}`,
+      totalDetail: cloudAlphaCache?.is_stale
+        ? "本地云端 Alpha 快照可用但已过期；需要最新数据时点击开始刷新。"
+        : "来自本地云端 Alpha 快照；后续登录默认直接使用该缓存。",
+      totalTone: (cloudAlphaCache?.is_stale ? "warning" : "success") as OverviewTone,
     };
   }
   return {
@@ -1287,6 +1463,7 @@ function operationProgress(
     const terminalFailure = terminal && !successful;
     const scanStillRunning = stage.kind === "scan" && !terminal;
     const hasStageTotal = stage.total > 0;
+    const syncProgress = syncStatus?.progress;
     const stagePercent = terminalFailure
       ? null
       : stage.total > 0
@@ -1296,8 +1473,20 @@ function operationProgress(
         : null;
     return {
       operation: scanStillRunning ? "sync_alphas" : undefined,
-      status_code: scanStillRunning ? "SCAN" : undefined,
+      status_code: scanStillRunning ? "SCAN" : stringField(syncProgress, "status_code"),
       status: syncStatus?.status,
+      status_kind: syncStatus?.status_kind || stringField(syncProgress, "status_kind"),
+      terminal: syncStatus?.terminal ?? booleanField(syncProgress, "terminal"),
+      active: syncStatus?.active ?? booleanField(syncProgress, "active"),
+      interrupted: syncStatus?.interrupted ?? booleanField(syncProgress, "interrupted"),
+      recoverable: syncStatus?.recoverable ?? booleanField(syncProgress, "recoverable"),
+      retryable: syncStatus?.retryable ?? booleanField(syncProgress, "retryable"),
+      error: syncStatus?.error || stringField(syncProgress, "error"),
+      error_code: stringField(syncProgress, "error_code"),
+      user_error: syncStatus?.user_error || userErrorField(syncProgress),
+      user_error_kind: syncStatus?.user_error_kind || stringField(syncProgress, "user_error_kind"),
+      user_message: syncStatus?.user_message || stringField(syncProgress, "user_message"),
+      next_action: syncStatus?.next_action || stringField(syncProgress, "next_action"),
       phase: scanStillRunning ? "scan" : syncStatus?.phase || syncStatus?.progress?.phase || "context_refresh",
       phase_label: phaseLabel(syncStatus),
       status_message: operationStatusMessage(syncStatus),
@@ -1367,9 +1556,8 @@ function progressState(
 ) {
   if (error) return "error";
   if (syncRunning || readinessLoading || checksLoading) return "progress";
-  if (mode === "context_refresh" && syncStatus?.status === "failed") return "error";
-  if (mode === "context_refresh" && (syncStatus?.status === "missing" || syncStatus?.phase === "session_invalid")) return "error";
-  if (mode === "context_refresh" && ["stopped", "cancelled", "canceled"].includes(String(syncStatus?.status || ""))) return "error";
+  const syncState = classifyJobState(syncStatus);
+  if (mode === "context_refresh" && (syncState.failed || syncState.missing || syncState.interrupted)) return "error";
   if (mode !== "idle") return "success";
   return "idle";
 }
@@ -1380,10 +1568,14 @@ function currentModeError(
   errors: { syncStart: string | null; syncStatus: string | null; readiness: string | null; checks: string | null },
 ) {
   if (mode === "context_refresh") {
-    const stopped = ["stopped", "cancelled", "canceled"].includes(String(syncStatus?.status || ""));
+    const syncState = classifyJobState(syncStatus);
+    const stopped = syncState.interrupted;
     const recoverableMessage = stopped
       ? (syncStatus?.progress?.status_message || syncStatus?.status_message || "官方上下文刷新已停止，可重新刷新。")
       : "";
+    if (syncStatus && (syncState.failed || syncState.missing || syncState.interrupted)) {
+      return operationFailureMessage(syncStatus, "") || operationFailureMessage(errors.syncStart || errors.syncStatus || recoverableMessage, "");
+    }
     return operationFailureMessage(
       syncStatus?.error || errors.syncStart || errors.syncStatus || recoverableMessage,
       "",
@@ -1398,13 +1590,24 @@ function operationStatusMessage(status: JobStatus | null) {
   if (!status) return "尚未启动。";
   const scanMessage = runningScanStatusMessage(status);
   if (scanMessage) return scanMessage;
+  const state = classifyJobState(status);
+  const apiMessage = apiErrorMessage(status, "");
+  if (apiMessage) return readableBackendText(apiMessage) || apiMessage;
+  if (state.interrupted) return "官方上下文刷新已停止，结果未确认完成。";
+  if (state.failed || state.missing) return "官方上下文刷新失败，请稍后重试或重新启动流程。";
+  const sharedMessage = jobStatusMessage(status, "");
+  const readableSharedMessage = readableBackendText(sharedMessage);
+  if (readableSharedMessage) return readableSharedMessage;
   const message = (
     status.progress?.status_message ||
     status.status_message ||
     status.error ||
 	    `当前状态: ${status.status || "未知"}`
   );
-  return readableBackendText(message) || message;
+  const readableMessage = readableBackendText(message);
+  if (readableMessage) return readableMessage;
+  if (state.active || status.status === "running") return "官方上下文刷新正在运行，等待下一次状态更新。";
+  return "官方上下文状态暂不明确，请刷新状态或重新启动流程。";
 }
 
 function normalizedProgressPercent(status: JobStatus | null) {
@@ -1426,11 +1629,11 @@ function boundedProgressPercent(value: number, terminal: boolean) {
 }
 
 function isTerminalSyncStatus(status: JobStatus | null) {
-  return ["completed", "completed_with_warnings", "failed", "stopped", "cancelled", "canceled"].includes(String(status?.status || ""));
+  return classifyJobState(status).terminal;
 }
 
 function isSuccessfulSyncStatus(status: JobStatus | null) {
-  return ["completed", "completed_with_warnings"].includes(String(status?.status || ""));
+  return classifyJobState(status).successful;
 }
 
 function isRunningScanStatus(status: JobStatus | null) {
@@ -1648,33 +1851,41 @@ function phaseLabel(status: JobStatus | null) {
     CONTEXT_OPERATORS: "刷新算子",
     CONTEXT_DATASETS: "刷新数据集",
     CONTEXT_FAILED: "上下文失败",
+    CONTEXT_REFRESH: "刷新上下文",
+    REFRESH_CONTEXT: "刷新上下文",
+    LOCAL_CACHE: "本地缓存",
+    LOCAL_CACHE_INVALID: "缓存需刷新",
     SESSION_INVALID: "需要重新连接",
-    session_invalid: "需要重新连接",
     COMPLETED: "完成",
     COMPLETED_WITH_WARNINGS: "带警告完成",
     QUEUED: "已排队",
+    RUNNING: "运行中",
     STOPPED: "已停止",
     FAILED: "失败",
   };
-  return labels[normalizedCode] || code;
+  return labels[normalizedCode] || "当前阶段";
 }
 
 function syncContextStatus(status: JobStatus | null) {
   const text = String(status?.status || "");
+  if (text === "idle" && status?.official_context_cache) {
+    return contextCacheComplete(status.official_context_cache) ? "本地缓存" : "需刷新";
+  }
   if (!text) return "待启动";
-  if (text === "completed_with_warnings") return "带警告";
-  if (text === "completed") return "已刷新";
+  if (text === "idle") return "待启动";
+  const state = classifyJobState(status);
+  if (state.warning) return "带警告";
+  if (state.successful) return "已刷新";
   if (text === "running" || text === "queued") return "进行中";
-  if (text === "failed") return "失败";
-  if (text === "missing" || status?.phase === "session_invalid") return "监控受阻";
-  if (text === "stopped" || text === "cancelled") return "已停止";
-  return text;
+  if (state.failed) return "失败";
+  if (state.missing) return "监控受阻";
+  if (state.interrupted) return "已停止";
+  return "状态待确认";
 }
 
 function isSessionInvalidResult(result: ({ ok?: boolean; error_code?: string; error?: string } & Partial<JobStatus>) | null) {
   if (!result || result.ok !== false) return false;
-  return String(result.error_code || result.error || "") === "SESSION_INVALID"
-    || String(result.error || "") === "invalid local session";
+  return isSessionInvalidPayload(result);
 }
 
 function fieldFromProgress(status: JobStatus | null, field: string) {
@@ -1683,42 +1894,52 @@ function fieldFromProgress(status: JobStatus | null, field: string) {
   const result = status?.result as Record<string, unknown> | undefined;
   const fromResult = Number(result?.[field]);
   if (Number.isFinite(fromResult) && fromResult > 0) return String(fromResult);
-  const fromCache = contextCacheNumber(status, field);
+  const fromCache = contextCacheNumber(status?.official_context_cache, field);
   return fromCache > 0 ? String(fromCache) : "-";
 }
 
 function contextSummaryField(status: JobStatus | null, field: string) {
-  const fromCache = contextCacheNumber(status, field);
-  if (fromCache > 0) return String(fromCache);
-  const code = syncStageCode(status);
-  if (code === "CONTEXT_FIELDS" || code === "CONTEXT_OPERATORS" || code === "CONTEXT_DATASETS" || code === "CONTEXT_FAILED") {
-    return fieldFromProgress(status, field);
-  }
-  return "-";
+  const value = contextSummaryNumber(status, field);
+  return value > 0 ? String(value) : "-";
 }
 
 function officialContextSummaryMessage(status: JobStatus | null) {
   const cache = status?.official_context_cache;
   const cacheCounts = {
-    fields: contextCacheNumber(status, "fields_count"),
-    operators: contextCacheNumber(status, "operators_count"),
-    datasets: contextCacheNumber(status, "datasets_count"),
+    fields: contextCacheNumber(cache, "fields_count"),
+    operators: contextCacheNumber(cache, "operators_count"),
+    datasets: contextCacheNumber(cache, "datasets_count"),
+  };
+  const displayCounts = {
+    fields: contextSummaryNumber(status, "fields_count"),
+    operators: contextSummaryNumber(status, "operators_count"),
+    datasets: contextSummaryNumber(status, "datasets_count"),
   };
   const hasCache = cacheCounts.fields > 0 || cacheCounts.operators > 0 || cacheCounts.datasets > 0;
+  const hasDisplayCounts = displayCounts.fields > 0 || displayCounts.operators > 0 || displayCounts.datasets > 0;
   const cacheError = typeof cache?.error === "string" ? cache.error.trim() : "";
+  const cacheComplete = contextCacheComplete(cache);
   const statusMessage = status
     ? operationStatusMessage(status)
     : "尚未启动官方上下文刷新。";
   if (cacheError && !hasCache) {
-    return `${statusMessage} 本地官方上下文缓存摘要读取失败: ${cacheError}`;
+    return `${statusMessage} 本地官方上下文缓存摘要读取失败，请点击开始刷新或稍后重试。`;
   }
-  if (!hasCache) return statusMessage;
+  if (cache && !cacheComplete && !hasDisplayCounts) {
+    const invalid = cache.manifest?.invalid_files?.length
+      ? `异常文件: ${cache.manifest.invalid_files.join("、")}`
+      : "缓存文件数量或校验和不一致";
+    return `${statusMessage} 本地官方上下文缓存完整性未通过，已停止加载展示；请点击开始刷新。${invalid}。`;
+  }
+  if (!hasCache && !hasDisplayCounts) return statusMessage;
   const stale = Boolean(cache?.manifest?.is_stale);
-  const complete = cache?.manifest?.complete !== false;
-  const cacheLabel = stale || !complete ? "本地缓存存在但需要刷新" : "本地缓存可用";
-  const cacheText = `${cacheLabel}: 字段 ${formatCount(cacheCounts.fields)}，算子 ${formatCount(cacheCounts.operators)}，数据集 ${formatCount(cacheCounts.datasets)}`;
+  const cacheLabel = stale ? "本地缓存存在但需要刷新" : "本地缓存可用";
+  const countSourceLabel = cacheComplete ? cacheLabel : "本次刷新结果";
+  const counts = cacheComplete ? cacheCounts : displayCounts;
+  const cacheText = `${countSourceLabel}: 字段 ${formatCount(counts.fields)}，算子 ${formatCount(counts.operators)}，数据集 ${formatCount(counts.datasets)}`;
   const statusText = String(status?.status || "");
-  if (["failed", "stopped", "cancelled", "canceled"].includes(statusText)) {
+  const state = classifyJobState(status);
+  if (state.failed || state.interrupted) {
     return `最近刷新未完成: ${statusMessage}；${cacheText}。`;
   }
   if (!status || statusText === "idle") return `${statusMessage} ${cacheText}。`;
@@ -1730,6 +1951,9 @@ function officialContextInlineSummary(status: JobStatus | null) {
   const operators = contextSummaryField(status, "operators_count");
   const datasets = contextSummaryField(status, "datasets_count");
   const contextError = String(status?.progress?.context_error || resultStringField(status, "context_error") || "").trim();
+  if (fields === "-" && operators === "-" && datasets === "-") {
+    return "暂无通过完整性校验的官方上下文缓存统计，等待同步状态返回或手动刷新。";
+  }
   if (contextError) {
     return `上下文刷新未完成，可仅重试上下文；当前缓存：字段 ${fields}，算子 ${operators}，数据集 ${datasets}。`;
   }
@@ -1747,8 +1971,62 @@ function canRetryContextOnly(status: JobStatus | null) {
   return Boolean(contextError || contextStatus === "failed");
 }
 
-function contextCacheNumber(status: JobStatus | null, field: string) {
-  return numberField(status?.official_context_cache as Record<string, unknown> | undefined, field);
+function contextSummaryNumber(status: JobStatus | null, field: string) {
+  return firstPositiveNumber(
+    contextCacheNumber(status?.official_context_cache, field),
+    numberField(status?.progress, field),
+    resultNumberField(status, field),
+  );
+}
+
+function contextCacheNumber(cache: OfficialContextCache | undefined, field: string) {
+  if (!contextCacheComplete(cache)) return 0;
+  return firstPositiveNumber(
+    numberField(cache as Record<string, unknown> | undefined, field),
+    contextCacheManifestRecordCount(cache, field),
+  );
+}
+
+function contextCacheComplete(cache: OfficialContextCache | undefined) {
+  if (!cache?.ok) return false;
+  const manifest = cache.manifest;
+  if (manifest) {
+    if (manifest.complete !== true) return false;
+    if ((manifest.missing_files || []).length > 0) return false;
+    if ((manifest.invalid_files || []).length > 0) return false;
+  }
+  return firstPositiveNumber(
+    numberField(cache as Record<string, unknown>, "fields_count"),
+    contextCacheManifestRecordCount(cache, "fields_count"),
+  ) > 0
+    && firstPositiveNumber(
+      numberField(cache as Record<string, unknown>, "operators_count"),
+      contextCacheManifestRecordCount(cache, "operators_count"),
+    ) > 0
+    && firstPositiveNumber(
+      numberField(cache as Record<string, unknown>, "datasets_count"),
+      contextCacheManifestRecordCount(cache, "datasets_count"),
+    ) > 0;
+}
+
+function contextCacheManifestRecordCount(cache: OfficialContextCache | undefined, field: string) {
+  const filename = {
+    fields_count: "official_fields.json",
+    operators_count: "official_operators.json",
+    datasets_count: "official_datasets.json",
+  }[field];
+  return filename ? numberField(cache?.manifest?.record_counts, filename) : 0;
+}
+
+function cloudAlphaCacheReady(cache: CloudAlphaCache | undefined) {
+  if (!cache?.ok) return false;
+  const count = firstPositiveNumber(cache.count, cache.total);
+  return count > 0 || (cache.count == null && cache.total == null);
+}
+
+function cloudAlphaCacheUpdatedAt(cache: CloudAlphaCache | undefined) {
+  const loadedAt = Date.parse(String(cache?.loaded_at || ""));
+  return Number.isFinite(loadedAt) ? new Date(loadedAt) : null;
 }
 
 function resultNumberField(status: JobStatus | null, field: string) {
@@ -1764,13 +2042,29 @@ function resultStringField(status: JobStatus | null, field: string) {
   return String((result as Record<string, unknown>)[field] || "");
 }
 
-function firstPositiveNumber(...values: number[]) {
-  return values.find((value) => Number.isFinite(value) && value > 0) || 0;
+function firstPositiveNumber(...values: Array<number | null | undefined>) {
+  const value = values.find((item) => Number.isFinite(item) && Number(item) > 0);
+  return Number.isFinite(value) ? Number(value) : 0;
 }
 
 function numberField(source: Record<string, unknown> | undefined, field: string) {
   const value = Number(source?.[field]);
   return Number.isFinite(value) ? value : 0;
+}
+
+function stringField(source: Record<string, unknown> | undefined, field: string) {
+  const value = source?.[field];
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function booleanField(source: Record<string, unknown> | undefined, field: string) {
+  const value = source?.[field];
+  return typeof value === "boolean" ? value : undefined;
+}
+
+function userErrorField(source: Record<string, unknown> | undefined) {
+  const value = source?.user_error;
+  return value && typeof value === "object" ? value as UnifiedProgress["user_error"] : undefined;
 }
 
 function syncStatusUpdatedAt(status: JobStatus | null) {

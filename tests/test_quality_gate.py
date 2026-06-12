@@ -20,6 +20,38 @@ def _config_path(tmp_path: Path) -> Path:
     return config_path
 
 
+def _complete_af_tracker(tmp_path: Path) -> Path:
+    tracker = tmp_path / "implementation-tracker.md"
+    rows = [
+        "# Implementation Tracker",
+        "",
+        "tracked_items:",
+    ]
+    for index in range(6, 26):
+        rows.append(f"- AF-{index:03d} | Module {index} | Release module {index} | done | verified")
+    tracker.write_text("\n".join(rows) + "\n", encoding="utf-8")
+    return tracker
+
+
+def _release_config_with_official_context(tmp_path: Path) -> Path:
+    config = json.loads((Path(__file__).resolve().parents[1] / "config" / "run_config.json").read_text(encoding="utf-8"))
+    config["ops"]["storage_dir"] = str(tmp_path / "data")
+    config_path = tmp_path / "run_config.json"
+    config_path.write_text(json.dumps(config), encoding="utf-8")
+    fixture_config = SimpleNamespace(
+        ops=SimpleNamespace(
+            storage_dir=config["ops"]["storage_dir"],
+            official_api=SimpleNamespace(context_cache_ttl_seconds=3600),
+        )
+    )
+    write_template_safe_official_context(fixture_config)
+    (tmp_path / "data" / "official_context_refresh_status.json").write_text(
+        json.dumps({"schema_version": "official_context_refresh.v1", "ok": True, "status": "refreshed"}),
+        encoding="utf-8",
+    )
+    return config_path
+
+
 def test_quality_gate_subprocess_env_filters_sensitive_values(monkeypatch):
     monkeypatch.setenv("PATH", "/usr/bin")
     monkeypatch.setenv("PYTHONPATH", "/tmp/custom-pythonpath")
@@ -89,6 +121,7 @@ def test_quality_gate_runs_core_steps_and_skips_pytest(monkeypatch, tmp_path):
         "react_build_env",
         "text_encoding_scan",
         "tracked_data_inventory",
+        "candidate_scientific_audit",
         "official_context_validation",
         "module_size_audit",
         "secret_scan",
@@ -145,6 +178,7 @@ def test_quality_gate_includes_pytest_args_and_propagates_failure(monkeypatch, t
         "react_build_env",
         "text_encoding_scan",
         "tracked_data_inventory",
+        "candidate_scientific_audit",
         "official_context_validation",
         "module_size_audit",
         "secret_scan",
@@ -199,7 +233,7 @@ def test_quality_gate_can_skip_compile(monkeypatch, tmp_path):
     )
 
     assert result["ok"] is True
-    assert [step["name"] for step in result["steps"]] == ["config", "dependency_policy", "redline_verification", "brain_contract_validation", "diagnosis_gap_coverage", "frontend_inline_sync", "frontend_syntax", "frontend_innerhtml_guard", "frontend_silent_catch_guard", "python_silent_broad_exception_guard", "web_console_contract", "frontend_surface_parity", "react_build_env", "text_encoding_scan", "tracked_data_inventory", "official_context_validation", "module_size_audit", "secret_scan", "cache_metadata_audit", "diagnostic_report_sync", "review_gap_closure_tracker", "static_defect_analysis_report", "v5_defect_tracking", "prod_defect_tracking"]
+    assert [step["name"] for step in result["steps"]] == ["config", "dependency_policy", "redline_verification", "brain_contract_validation", "diagnosis_gap_coverage", "frontend_inline_sync", "frontend_syntax", "frontend_innerhtml_guard", "frontend_silent_catch_guard", "python_silent_broad_exception_guard", "web_console_contract", "frontend_surface_parity", "react_build_env", "text_encoding_scan", "tracked_data_inventory", "candidate_scientific_audit", "official_context_validation", "module_size_audit", "secret_scan", "cache_metadata_audit", "diagnostic_report_sync", "review_gap_closure_tracker", "static_defect_analysis_report", "v5_defect_tracking", "prod_defect_tracking"]
     assert not any("compileall" in call for call in calls)
 
 
@@ -237,6 +271,7 @@ def test_quality_gate_can_include_dependency_audit(monkeypatch, tmp_path):
         "react_build_env",
         "text_encoding_scan",
         "tracked_data_inventory",
+        "candidate_scientific_audit",
         "official_context_validation",
         "module_size_audit",
         "secret_scan",
@@ -550,6 +585,99 @@ def test_quality_gate_final_release_enforces_coverage(monkeypatch, tmp_path):
     assert kwargs_seen[pytest_index]["timeout_seconds"] == quality_gate.PYTEST_TIMEOUT_SECONDS
 
 
+def test_quality_gate_final_release_includes_brain_compliance_stop_rules(monkeypatch, tmp_path):
+    calls = []
+
+    def fake_run(args, **_kwargs):
+        calls.append(args)
+        return True, {"command": args, "exit_code": 0, "duration_seconds": 0.01, "stdout": "", "stderr": ""}
+
+    monkeypatch.setattr(quality_gate, "_run_python_module", fake_run)
+    config_path = _config_path(tmp_path)
+
+    result = quality_gate.run_quality_gate(
+        config_path=config_path,
+        html_path=tmp_path / "index.html",
+        final_release=True,
+        skip_tests=True,
+    )
+
+    assert result["ok"] is True
+    step_names = [step["name"] for step in result["steps"]]
+    assert step_names.index("canonical_compliance") < step_names.index("parameter_traceability")
+    assert step_names.index("parameter_traceability") < step_names.index("live_submit_readiness")
+    assert step_names.index("live_submit_readiness") < step_names.index("final_release_gate")
+    assert [
+        "scripts/verify_canonical_compliance.py",
+        "--config",
+        str(config_path),
+        "--json",
+        "--strict",
+    ] in calls
+    assert ["scripts/check_parameter_traceability.py", "--config", str(config_path), "--json"] in calls
+    assert ["scripts/check_live_submit_readiness.py", "--config", str(config_path), "--json"] in calls
+    assert ["scripts/final_release_gate.py", "--config", str(config_path), "--json"] in calls
+
+
+def test_quality_gate_reports_af006_non_submit_verification_submatrix(monkeypatch, tmp_path):
+    def fake_run(args, **_kwargs):
+        return True, {"command": args, "exit_code": 0, "duration_seconds": 0.01, "stdout": "", "stderr": ""}
+
+    monkeypatch.setattr(quality_gate, "_run_python_module", fake_run)
+    config_path = _config_path(tmp_path)
+
+    result = quality_gate.run_quality_gate(
+        config_path=config_path,
+        html_path=tmp_path / "index.html",
+        final_release=True,
+        react_preview_smoke=True,
+        skip_tests=True,
+    )
+
+    submatrix = result["af006_non_submit_verification_submatrix"]
+    axis_by_id = {axis["id"]: axis for axis in submatrix["axes"]}
+    assert submatrix["schema_version"] == "af006_non_submit_verification_submatrix.v1"
+    assert submatrix["task_id"] == "AF006-CI-E2E-SUBMATRIX-V2"
+    assert submatrix["mode"] == "local-only/non-submit"
+    assert submatrix["submit_ready_source"] == "scripts/check_live_submit_readiness.py --config config/run_config.json --json"
+    assert submatrix["submit_ready_claim_allowed"] is False
+    assert submatrix["real_brain_submit_executed"] is False
+    assert submatrix["ok"] is True
+    assert set(axis_by_id) == {"ci", "e2e", "mobile", "security"}
+    assert "live_submit_readiness" in axis_by_id["ci"]["present_optional_steps"]
+    assert "react_preview_smoke" in axis_by_id["e2e"]["present_optional_steps"]
+    assert "frontend_surface_parity" in axis_by_id["mobile"]["present_required_steps"]
+    assert "secret_scan" in axis_by_id["security"]["present_required_steps"]
+
+
+def test_quality_gate_final_release_can_require_live_submit_ready(monkeypatch, tmp_path):
+    calls = []
+
+    def fake_run(args, **_kwargs):
+        calls.append(args)
+        return True, {"command": args, "exit_code": 0, "duration_seconds": 0.01, "stdout": "", "stderr": ""}
+
+    monkeypatch.setattr(quality_gate, "_run_python_module", fake_run)
+    config_path = _config_path(tmp_path)
+
+    result = quality_gate.run_quality_gate(
+        config_path=config_path,
+        html_path=tmp_path / "index.html",
+        final_release=True,
+        require_live_submit_ready=True,
+        skip_tests=True,
+    )
+
+    assert result["ok"] is True
+    assert [
+        "scripts/check_live_submit_readiness.py",
+        "--config",
+        str(config_path),
+        "--json",
+        "--require-ready",
+    ] in calls
+
+
 def test_quality_gate_can_enable_coverage_without_final_release(monkeypatch, tmp_path):
     calls = []
     kwargs_seen = []
@@ -780,12 +908,16 @@ def test_final_release_gate_passes_with_release_config(tmp_path):
         encoding="utf-8",
     )
 
-    report = run_final_release_gate(config_path=config_path)
+    report = run_final_release_gate(
+        config_path=config_path,
+        implementation_tracker_path=_complete_af_tracker(tmp_path),
+    )
 
     assert report.passed is True
     assert report.redlines["code_strong_alignment"] is True
     assert report.redlines["dataset_id_fully_available"] is True
     assert report.redlines["full_factor_coverage"] is True
+    assert report.redlines["capability_registry_aligned"] is True
 
 
 def test_final_release_gate_blocks_cache_first_without_official_context_cache(tmp_path):
@@ -819,10 +951,181 @@ def test_final_release_gate_accepts_fresh_official_metadata_when_status_failed(t
         encoding="utf-8",
     )
 
-    report = run_final_release_gate(config_path=config_path)
+    report = run_final_release_gate(
+        config_path=config_path,
+        implementation_tracker_path=_complete_af_tracker(tmp_path),
+    )
 
     assert report.passed is True
     assert not any(finding.code == "OFFICIAL_REFRESH_NOT_VERIFIED" for finding in report.findings)
+
+
+def test_final_release_gate_blocks_incomplete_af_tracker(tmp_path):
+    config = json.loads((Path(__file__).resolve().parents[1] / "config" / "run_config.json").read_text(encoding="utf-8"))
+    config["ops"]["storage_dir"] = str(tmp_path / "data")
+    config_path = tmp_path / "run_config.json"
+    config_path.write_text(json.dumps(config), encoding="utf-8")
+    fixture_config = SimpleNamespace(
+        ops=SimpleNamespace(
+            storage_dir=config["ops"]["storage_dir"],
+            official_api=SimpleNamespace(context_cache_ttl_seconds=3600),
+        )
+    )
+    write_template_safe_official_context(fixture_config)
+    (tmp_path / "data" / "official_context_refresh_status.json").write_text(
+        json.dumps({"schema_version": "official_context_refresh.v1", "ok": True, "status": "refreshed"}),
+        encoding="utf-8",
+    )
+    tracker = tmp_path / "implementation-tracker.md"
+    tracker.write_text(
+        "\n".join(
+            [
+                "# Implementation Tracker",
+                "",
+                "tracked_items:",
+                "- AF-006 | Module 6 | Testing | in_progress | still open",
+                "- AF-007 | Module 7 | Context | done | verified",
+                "- AF-008 | Module 8 | Agents | done | verified",
+                "- AF-009 | Module 9 | Config | done | verified",
+                "- AF-010 | Module 10 | Scoring | done | verified",
+                "- AF-010 | Module 10 duplicate | Scoring | done | duplicate",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    report = run_final_release_gate(
+        config_path=config_path,
+        implementation_tracker_path=tracker,
+    )
+
+    codes = {finding.code for finding in report.findings}
+    assert report.passed is False
+    assert report.redlines["implementation_tracker_complete"] is False
+    assert "IMPLEMENTATION_TRACKER_AF_NOT_DONE" in codes
+    assert "IMPLEMENTATION_TRACKER_AF_MISSING" in codes
+    assert "IMPLEMENTATION_TRACKER_AF_DUPLICATE" in codes
+    assert report.implementation_tracker["completion_claimable"] is False
+    assert "AF-006" in report.implementation_tracker["non_done_statuses"]
+    assert "AF-021" in report.implementation_tracker["missing_ids"]
+
+
+def test_final_release_gate_reports_af_gate_matrix_without_claiming_completion(tmp_path):
+    config_path = _release_config_with_official_context(tmp_path)
+    tracker = tmp_path / "implementation-tracker.md"
+    statuses = {
+        **{index: "in_progress" for index in (6, 7, 8, 15, 16, 17, 18, 19, 20, 21, 23, 24)},
+        **{index: "done" for index in range(9, 15)},
+        22: "planned",
+        25: "blocked",
+    }
+    rows = [
+        "# Implementation Tracker",
+        "",
+        "tracked_items:",
+    ]
+    for index in range(6, 26):
+        status = statuses[index]
+        rows.append(f"- AF-{index:03d} | Module {index} | Release module {index} | {status} | evidence")
+    rows.extend(["", "gap_map:", "- AF-023 is the next recommended slice: report-only artifact guidance"])
+    tracker.write_text("\n".join(rows) + "\n", encoding="utf-8")
+
+    report = run_final_release_gate(
+        config_path=config_path,
+        implementation_tracker_path=tracker,
+    )
+
+    summary = report.implementation_tracker["readiness_summary"]
+    matrix_by_id = {row["id"]: row for row in report.implementation_tracker["gate_matrix"]}
+    assert report.passed is False
+    assert report.redlines["implementation_tracker_complete"] is False
+    assert summary["completion_ratio"] == "6/20"
+    assert summary["done_count"] == 6
+    assert summary["remaining_count"] == 14
+    assert summary["status_counts"] == {"blocked": 1, "done": 6, "in_progress": 12, "planned": 1}
+    assert summary["blocked_ids"] == ["AF-025"]
+    assert summary["next_actionable_ids"][0] == "AF-006"
+    assert "AF-025" not in summary["next_actionable_ids"]
+    assert summary["completion_claimable"] is False
+    assert report.implementation_tracker["parse_errors"] == []
+    assert matrix_by_id["AF-006"]["release_blocking"] is True
+    assert matrix_by_id["AF-006"]["reason"] == "in_progress"
+    assert matrix_by_id["AF-009"]["release_blocking"] is False
+    assert matrix_by_id["AF-009"]["reason"] == "ready"
+    assert matrix_by_id["AF-025"]["release_blocking"] is True
+    assert matrix_by_id["AF-025"]["reason"] == "blocked"
+
+
+def test_final_release_gate_reports_af006_non_submit_verification_submatrix(tmp_path):
+    config_path = _release_config_with_official_context(tmp_path)
+
+    report = run_final_release_gate(
+        config_path=config_path,
+        implementation_tracker_path=_complete_af_tracker(tmp_path),
+    )
+
+    submatrix = report.implementation_tracker["af006_non_submit_verification_submatrix"]
+    axis_by_id = {axis["id"]: axis for axis in submatrix["axes"]}
+    assert submatrix["schema_version"] == "af006_non_submit_verification_submatrix.v1"
+    assert submatrix["task_id"] == "AF006-CI-E2E-SUBMATRIX-V2"
+    assert submatrix["tracker_status"] == "done"
+    assert submatrix["mode"] == "local-only/non-submit"
+    assert submatrix["submit_ready_source"] == "scripts/check_live_submit_readiness.py --config config/run_config.json --json"
+    assert submatrix["submit_ready_claim_allowed"] is False
+    assert submatrix["real_brain_submit_executed"] is False
+    assert set(axis_by_id) == {"ci", "e2e", "mobile", "security"}
+    assert "live_submit_readiness" in axis_by_id["ci"]["release_gate_signals"]
+    assert "react_preview_smoke" in axis_by_id["e2e"]["quality_gate_signals"]
+    assert "brain_alpha_ops/web/react_app/src/components/MobileTabBar.tsx" in axis_by_id["mobile"]["source_files"]
+    assert "secret_scan" in axis_by_id["security"]["quality_gate_signals"]
+
+
+def test_final_release_gate_blocks_malformed_af_tracker_rows(tmp_path):
+    config = json.loads((Path(__file__).resolve().parents[1] / "config" / "run_config.json").read_text(encoding="utf-8"))
+    config["ops"]["storage_dir"] = str(tmp_path / "data")
+    config_path = tmp_path / "run_config.json"
+    config_path.write_text(json.dumps(config), encoding="utf-8")
+    fixture_config = SimpleNamespace(
+        ops=SimpleNamespace(
+            storage_dir=config["ops"]["storage_dir"],
+            official_api=SimpleNamespace(context_cache_ttl_seconds=3600),
+        )
+    )
+    write_template_safe_official_context(fixture_config)
+    (tmp_path / "data" / "official_context_refresh_status.json").write_text(
+        json.dumps({"schema_version": "official_context_refresh.v1", "ok": True, "status": "refreshed"}),
+        encoding="utf-8",
+    )
+    tracker = tmp_path / "implementation-tracker.md"
+    rows = [
+        "# Implementation Tracker",
+        "",
+        "tracked_items:",
+    ]
+    for index in range(6, 26):
+        if index == 6:
+            rows.append("- AF-006 | Module 6 | Testing | done")
+        elif index == 7:
+            rows.append("- AF-007 |  | Context | done | verified")
+        else:
+            rows.append(f"- AF-{index:03d} | Module {index} | Release module {index} | done | verified")
+    tracker.write_text("\n".join(rows) + "\n", encoding="utf-8")
+
+    report = run_final_release_gate(
+        config_path=config_path,
+        implementation_tracker_path=tracker,
+    )
+
+    codes = {finding.code for finding in report.findings}
+    assert report.passed is False
+    assert report.redlines["implementation_tracker_complete"] is False
+    assert "IMPLEMENTATION_TRACKER_PARSE_ERROR" in codes
+    assert "IMPLEMENTATION_TRACKER_AF_MISSING" in codes
+    assert report.implementation_tracker["completion_claimable"] is False
+    assert "AF-006" in report.implementation_tracker["missing_ids"]
+    assert "AF-007" in report.implementation_tracker["missing_ids"]
+    assert report.implementation_tracker["parse_errors"]
 
 
 def test_final_release_gate_blocks_failed_status_when_official_metadata_is_stale(tmp_path):

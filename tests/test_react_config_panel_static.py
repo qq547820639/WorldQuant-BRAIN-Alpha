@@ -20,8 +20,11 @@ def test_config_panel_exposes_import_export_controls():
 def test_config_panel_exposes_session_only_brain_connection_credentials():
     source = CONFIG_PANEL.read_text(encoding="utf-8")
 
-    assert 'title="BRAIN 连接"' in source
-    assert 'description="这些字段只保留在当前页面，用于本次连接测试和验证。"' in source
+    assert "const cacheOnlyMode = contextFresh && !connected;" in source
+    assert "const showCredentialEditor = !cacheOnlyMode || temporaryConnectionOpen;" in source
+    assert 'title={cacheOnlyMode ? "临时连接官方服务" : "BRAIN 连接"}' in source
+    assert "这些字段只保留在当前页面，用于本次连接测试和验证。" in source
+    assert "这些字段仅用于本次同步、官方回测或提交前复核；折叠后不会保存到配置文件。" in source
     assert 'label="账户邮箱"' in source
     assert 'label="密码"' in source
     assert 'label="Token"' in source

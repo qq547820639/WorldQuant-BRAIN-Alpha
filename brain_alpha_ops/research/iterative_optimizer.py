@@ -181,15 +181,19 @@ class IterativeOptimizer:
         failed_dims = diagnosis.get("failed_dimensions", [])
         suggested_mutations = diagnosis.get("suggested_mutations", [])
 
-        # Prefer modes from suggested_mutations when they do not conflict.
-        suggested_modes = {m["mutation_mode"] for m in suggested_mutations}
+        # Trace suggested modes without changing the existing strategy order.
+        suggested_modes = [
+            str(m.get("mutation_mode") or "")
+            for m in suggested_mutations
+            if isinstance(m, dict) and str(m.get("mutation_mode") or "").strip()
+        ]
 
         for dim in failed_dims:
             if len(results) >= max_mutations:
                 break
 
             strategies = self._FAILURE_TO_STRATEGY.get(dim, ["field_swap", "structure_refine"])
-            for strategy in strategies:
+            for strategy_index, strategy in enumerate(strategies):
                 if len(results) >= max_mutations:
                     break
                 if strategy in attempted_modes:
@@ -197,6 +201,19 @@ class IterativeOptimizer:
 
                 mut = self._apply_strategy(strategy, expression, fields, dataset_id, dim)
                 if mut and mut.expression != expression:
+                    mut.metadata = {
+                        **dict(mut.metadata or {}),
+                        "optimizer_trace": {
+                            "schema_version": "optimizer-trace-v1",
+                            "failed_dimension": str(dim),
+                            "selected_strategy": str(strategy),
+                            "strategy_order": [str(item) for item in strategies],
+                            "strategy_index": strategy_index,
+                            "suggested_modes": suggested_modes,
+                            "official_api_called": False,
+                            "submit_allowed": False,
+                        },
+                    }
                     results.append(mut)
                     attempted_modes.add(strategy)
 
@@ -204,6 +221,19 @@ class IterativeOptimizer:
         if not results and "structure_refine" not in attempted_modes:
             mut = self._apply_strategy("structure_refine", expression, fields, dataset_id, "general")
             if mut and mut.expression != expression:
+                mut.metadata = {
+                    **dict(mut.metadata or {}),
+                    "optimizer_trace": {
+                        "schema_version": "optimizer-trace-v1",
+                        "failed_dimension": "general",
+                        "selected_strategy": "structure_refine",
+                        "strategy_order": ["structure_refine"],
+                        "strategy_index": 0,
+                        "suggested_modes": suggested_modes,
+                        "official_api_called": False,
+                        "submit_allowed": False,
+                    },
+                }
                 results.append(mut)
 
         return results

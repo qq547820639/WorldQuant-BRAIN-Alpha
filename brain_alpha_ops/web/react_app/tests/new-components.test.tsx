@@ -39,7 +39,7 @@ describe("Sidebar", () => {
   it("renders all navigation sections", () => {
     render(<Sidebar activeView="dashboard" onNavigate={onNavigate} phases={phaseGroups()} />);
     expect(screen.getByText("Alpha Ops")).toBeInTheDocument();
-    expect(screen.getByText("连接与就绪")).toBeInTheDocument();
+    expect(screen.getByText("准备与就绪")).toBeInTheDocument();
     expect(screen.getByText("候选发现")).toBeInTheDocument();
     expect(screen.getByText("评估与验证")).toBeInTheDocument();
     expect(screen.getByText("提交就绪")).toBeInTheDocument();
@@ -86,7 +86,7 @@ function phaseGroups(badges: { candidates?: number; official_backtests?: string 
   return [
     {
       id: "connect",
-      label: "连接与就绪",
+      label: "准备与就绪",
       status: "complete",
       expanded: true,
       unlockCondition: "连接 BRAIN 账户并具备本地缓存后解锁；后续同步可手动触发",

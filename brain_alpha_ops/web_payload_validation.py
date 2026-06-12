@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import re
 from typing import Any
 
@@ -10,6 +11,7 @@ MAX_GENERATE_CANDIDATES = 100
 MAX_ALPHA_ID_LENGTH = 128
 MAX_BATCH_ALPHA_IDS = 100
 MAX_ASSISTANT_TEXT_LENGTH = 200_000
+MAX_SIMULATION_TIMEOUT_SECONDS = 3600
 ALLOWED_SYNC_RANGES = {"3d", "7d", "recent", "6months", "all"}
 ALPHA_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]*$")
 
@@ -33,6 +35,24 @@ def validate_generate_candidates_payload(payload: dict[str, Any] | None) -> str:
             return f"{field} must be an integer between 1 and {MAX_GENERATE_CANDIDATES}"
         if count < 1 or count > MAX_GENERATE_CANDIDATES:
             return f"{field} must be between 1 and {MAX_GENERATE_CANDIDATES}"
+    mode = str(payload.get("automation_mode") or payload.get("automationMode") or "").strip()
+    if mode == "maintain_candidate_pool":
+        for field, lower in (
+            ("target_pool_size", 1),
+            ("targetPoolSize", 1),
+            ("existing_pool_size", 0),
+            ("existingPoolSize", 0),
+            ("pool_deficit", 0),
+            ("poolDeficit", 0),
+        ):
+            if field not in payload or payload.get(field) in ("", None):
+                continue
+            try:
+                value = int(payload[field])
+            except (TypeError, ValueError):
+                return f"{field} must be an integer between {lower} and {MAX_GENERATE_CANDIDATES}"
+            if value < lower or value > MAX_GENERATE_CANDIDATES:
+                return f"{field} must be between {lower} and {MAX_GENERATE_CANDIDATES}"
     return ""
 
 
@@ -79,6 +99,54 @@ def validate_check_batch_payload(payload: dict[str, Any] | None) -> str:
     return ""
 
 
+def validate_simulation_payload(payload: dict[str, Any] | None) -> str:
+    error = validate_json_object_payload(payload)
+    if error:
+        return error
+    error = _validate_candidate_id_list(payload.get("candidate_ids"), "candidate_ids", required=False)
+    if error:
+        return error
+    workflow_plan = payload.get("workflow_plan")
+    if workflow_plan is not None:
+        if not isinstance(workflow_plan, dict):
+            return "workflow_plan must be an object when provided"
+        validator = workflow_plan.get("validator")
+        if validator is not None:
+            if not isinstance(validator, dict):
+                return "workflow_plan.validator must be an object when provided"
+            for field in ("next_candidate_ids", "candidate_ids"):
+                error = _validate_candidate_id_list(
+                    validator.get(field),
+                    f"workflow_plan.validator.{field}",
+                    required=False,
+                )
+                if error:
+                    return error
+    error = _validate_numeric_field(payload, "min_score", minimum=0.0, maximum=100.0, integer=False)
+    if error:
+        return error
+    error = _validate_numeric_field(
+        payload,
+        "max_simulations",
+        minimum=0,
+        maximum=MAX_BATCH_ALPHA_IDS,
+        integer=True,
+    )
+    if error:
+        return error
+    for field in ("poll_timeout", "stall_timeout"):
+        error = _validate_numeric_field(
+            payload,
+            field,
+            minimum=0.0,
+            maximum=float(MAX_SIMULATION_TIMEOUT_SECONDS),
+            integer=False,
+        )
+        if error:
+            return error
+    return ""
+
+
 def validate_candidate_rows(value: Any, field: str) -> str:
     if value is None:
         return ""
@@ -95,6 +163,49 @@ def validate_candidate_rows(value: Any, field: str) -> str:
             error = validate_alpha_id_value(row.get(key), f"{field}[].{key}")
             if error:
                 return error
+    return ""
+
+
+def _validate_candidate_id_list(value: Any, field: str, *, required: bool) -> str:
+    if value is None:
+        return f"{field} must be a list of Alpha IDs" if required else ""
+    if not isinstance(value, list):
+        return f"{field} must be a list of Alpha IDs"
+    if len(value) > MAX_BATCH_ALPHA_IDS:
+        return f"{field} must contain at most {MAX_BATCH_ALPHA_IDS} items"
+    for item in value:
+        error = validate_alpha_id_value(item, f"{field}[]")
+        if error:
+            return error
+    return ""
+
+
+def _validate_numeric_field(
+    payload: dict[str, Any],
+    field: str,
+    *,
+    minimum: int | float,
+    maximum: int | float,
+    integer: bool,
+) -> str:
+    if field not in payload or payload.get(field) in ("", None):
+        return ""
+    value = payload.get(field)
+    if isinstance(value, bool):
+        expected = "integer" if integer else "number"
+        return f"{field} must be a finite {expected} between {minimum:g} and {maximum:g}"
+    expected = "integer" if integer else "number"
+    try:
+        numeric_float = float(value)
+    except (TypeError, ValueError):
+        return f"{field} must be a finite {expected} between {minimum:g} and {maximum:g}"
+    if not math.isfinite(numeric_float):
+        return f"{field} must be a finite {expected} between {minimum:g} and {maximum:g}"
+    if integer and not numeric_float.is_integer():
+        return f"{field} must be a finite integer between {minimum:g} and {maximum:g}"
+    numeric = int(numeric_float) if integer else numeric_float
+    if numeric < minimum or numeric > maximum:
+        return f"{field} must be a finite {expected} between {minimum:g} and {maximum:g}"
     return ""
 
 

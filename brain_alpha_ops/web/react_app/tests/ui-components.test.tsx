@@ -264,6 +264,56 @@ describe("ProgressFeedback", () => {
       expect(onRetry).toHaveBeenCalledTimes(1);
     });
 
+    it("prefers structured backend progress error copy over raw error text", () => {
+      render(
+        <ProgressFeedback
+          state="error"
+          title="Submission"
+          error="raw caller failure"
+          progress={{
+            phase: "scoring",
+            error: "raw backend failure",
+            user_error: { message: "评分任务状态已失效，请重新读取后重试。" },
+          }}
+        />,
+      );
+      expect(screen.getByText("评分任务状态已失效，请重新读取后重试。")).toBeInTheDocument();
+      expect(screen.queryByText("raw caller failure")).not.toBeInTheDocument();
+      expect(screen.queryByText("raw backend failure")).not.toBeInTheDocument();
+    });
+
+    it("hides unknown raw progress error text when no structured copy is available", () => {
+      render(
+        <ProgressFeedback
+          state="error"
+          title="Submission"
+          progress={{
+            phase: "scoring",
+            error: "Traceback: private backend stack",
+          }}
+        />,
+      );
+      expect(screen.getByText("操作失败。")).toBeInTheDocument();
+      expect(screen.queryByText(/Traceback/)).not.toBeInTheDocument();
+    });
+
+    it("hides unknown raw progress errors even when an unmapped error code is present", () => {
+      render(
+        <ProgressFeedback
+          state="error"
+          title="Submission"
+          progress={{
+            phase: "scoring",
+            error_code: "UNMAPPED_BACKEND_ERROR",
+            error: "Traceback: private backend stack",
+          }}
+        />,
+      );
+      expect(screen.getByText("操作失败。")).toBeInTheDocument();
+      expect(screen.queryByText(/UNMAPPED_BACKEND_ERROR/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/Traceback/)).not.toBeInTheDocument();
+    });
+
     it("hides retry button when onRetry is not provided", () => {
       render(
         <ProgressFeedback
@@ -476,6 +526,28 @@ describe("ProgressFeedback", () => {
       expect(bar.querySelector(".progress-bar-fill")).toHaveClass("negative");
     });
 
+    it("uses shared interrupted classification for stopped backend progress", () => {
+      render(
+        <ProgressFeedback
+          state="error"
+          title="Scoring"
+          error="评分进度暂时不可确认。"
+          progress={buildProgress({
+            status: "stopped",
+            status_kind: "interrupted",
+            interrupted: true,
+            terminal: true,
+            percent_complete: 100,
+          })}
+        />,
+      );
+
+      expect(screen.getByText("已停止")).toBeInTheDocument();
+      expect(screen.queryByText("失败")).not.toBeInTheDocument();
+      expect(screen.queryByText("100%")).not.toBeInTheDocument();
+      expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
+    });
+
     it("uses backend ETA deadline when present", async () => {
       vi.setSystemTime(new Date("2026-06-04T00:00:00Z"));
       render(
@@ -520,15 +592,41 @@ describe("ProgressFeedback", () => {
       expect(screen.getByText("数据验证")).toBeInTheDocument();
     });
 
-    it("falls back to phase when phase_label is absent", () => {
+    it("uses stable copy for unknown phase when phase_label is absent", () => {
       render(
         <ProgressFeedback
           state="progress"
           title="Processing"
-          progress={buildProgress({ phase_label: undefined, phase: "validation" })}
+          progress={buildProgress({ phase_label: undefined, phase: "RAW_BACKEND_PHASE" })}
         />,
       );
-      expect(screen.getByText("validation")).toBeInTheDocument();
+      expect(screen.getByText("当前阶段")).toBeInTheDocument();
+      expect(screen.queryByText("RAW_BACKEND_PHASE")).not.toBeInTheDocument();
+      expect(screen.queryByLabelText(/RAW_BACKEND_PHASE/)).not.toBeInTheDocument();
+    });
+
+    it("maps backend-only phase codes to safe progress labels", () => {
+      render(
+        <ProgressFeedback
+          state="error"
+          title="Pipeline"
+          error="验证流程已停止，结果未确认完成。"
+          progress={buildProgress({
+            phase_label: undefined,
+            phase: "session_invalid",
+            percent_complete: 100,
+            status_kind: "interrupted",
+            interrupted: true,
+            terminal: true,
+          })}
+        />,
+      );
+
+      expect(screen.getByText("本地会话需重新确认")).toBeInTheDocument();
+      expect(screen.getByText("监控受阻")).toBeInTheDocument();
+      expect(screen.queryByText("100%")).not.toBeInTheDocument();
+      expect(screen.queryByText("session_invalid")).not.toBeInTheDocument();
+      expect(screen.queryByLabelText(/session_invalid/)).not.toBeInTheDocument();
     });
 
     it("shows idle text in idle state", () => {
@@ -547,7 +645,7 @@ describe("ProgressFeedback", () => {
       expect(screen.getByText("操作成功")).toBeInTheDocument();
     });
 
-    it("shows status_message when available in busy state", () => {
+    it("shows safe product status messages when available in busy state", () => {
       render(
         <ProgressFeedback
           state="progress"
@@ -556,6 +654,19 @@ describe("ProgressFeedback", () => {
         />,
       );
       expect(screen.getByText("正在处理文件")).toBeInTheDocument();
+    });
+
+    it("hides unknown raw status messages in busy state", () => {
+      render(
+        <ProgressFeedback
+          state="progress"
+          title="Processing"
+          progress={buildProgress({ status_message: "Traceback: private backend worker detail" })}
+        />,
+      );
+
+      expect(screen.getByText("处理中...")).toBeInTheDocument();
+      expect(screen.queryByText(/Traceback: private backend worker detail/)).not.toBeInTheDocument();
     });
   });
 

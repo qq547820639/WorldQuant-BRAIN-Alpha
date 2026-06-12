@@ -4,6 +4,7 @@ import { useApi } from "@/hooks/useApi";
 import type { JobStatus, CloudAlpha, CloudAlphaSummary, ResearchMemorySummary } from "@/types";
 import KpiCard from "@/components/KpiCard";
 import ProgressFeedback from "@/components/ProgressFeedback";
+import { safeDisplayErrorMessage } from "@/helpers/errorExperience";
 
 interface Props {
   notify: (type: "success" | "error" | "warning" | "info", msg: string) => void;
@@ -11,6 +12,8 @@ interface Props {
   connected: boolean;
   /** Whether local cloud Alpha and official context cache are available */
   contextFresh: boolean;
+  /** Whether backend phase/cache status has been read at least once */
+  phaseStatus?: "loading" | "error" | "ready";
   /** Navigate to the sync/official operations page and start the first sync */
   onNavigateToSync: () => void;
   /** Open the manual sync page without auto-starting a refresh */
@@ -19,7 +22,7 @@ interface Props {
   children?: ReactNode;
 }
 
-export default function Dashboard({ notify, connected, contextFresh, onNavigateToSync, onOpenSync, children }: Props) {
+export default function Dashboard({ notify, connected, contextFresh, phaseStatus = "ready", onNavigateToSync, onOpenSync, children }: Props) {
   const [snapshotExpanded, setSnapshotExpanded] = useState(false);
   const statusApi = useApi<JobStatus>();
   const cloudApi = useApi<CloudSnapshotPayload>();
@@ -44,9 +47,9 @@ export default function Dashboard({ notify, connected, contextFresh, onNavigateT
   };
 
   const errors = [
-    statusApi.error ? `Status: ${statusApi.error}` : "",
-    cloudApi.error ? `Cloud: ${cloudApi.error}` : "",
-    memoryApi.error ? `Memory: ${memoryApi.error}` : "",
+    statusApi.error ? `Status: ${safeDisplayErrorMessage(statusApi.error)}` : "",
+    cloudApi.error ? `Cloud: ${safeDisplayErrorMessage(cloudApi.error)}` : "",
+    memoryApi.error ? `Memory: ${safeDisplayErrorMessage(memoryApi.error)}` : "",
   ].filter(Boolean);
   const loading = statusApi.loading || cloudApi.loading || memoryApi.loading;
   const [showGuide, setShowGuide] = useState(() => !localStorage.getItem("brain_alpha_guide_dismissed"));
@@ -57,10 +60,14 @@ export default function Dashboard({ notify, connected, contextFresh, onNavigateT
   };
 
   // ── Determine current step ──────────────────────────────────────────────
-  const currentStep = !connected ? 1 : !contextFresh ? 2 : 3;
-  const stepLabel = currentStep === 1 ? "连接 BRAIN"
+  const phasePending = phaseStatus === "loading";
+  const phaseFailed = phaseStatus === "error";
+  const currentStep = phasePending || phaseFailed ? 1 : !contextFresh ? (!connected ? 1 : 2) : 3;
+  const stepLabel = phasePending ? "读取本地状态"
+    : phaseFailed ? "状态读取失败"
+    : currentStep === 1 ? "连接 BRAIN"
     : currentStep === 2 ? "准备本地缓存"
-    : "开始验证";
+    : connected ? "开始验证" : "缓存模式";
   const openManualSync = onOpenSync || onNavigateToSync;
 
   return (
@@ -76,7 +83,15 @@ export default function Dashboard({ notify, connected, contextFresh, onNavigateT
               <p className="text-sm font-medium text-info mb-2">首次使用？按顺序完成以下步骤</p>
               <div className="grid gap-1 text-xs text-text-secondary" style={{ gridTemplateColumns: "auto 1fr", columnGap: 8, alignItems: "baseline" }}>
                 <span style={{ color: currentStep === 1 ? "oklch(0.68 0.10 248)" : "oklch(0.48 0.04 160)", fontWeight: 500, textAlign: "right" }}>1.</span>
-                <span>填写账户邮箱和密码，点击 <strong>测试连接</strong>{currentStep > 1 ? " ✓" : ""}</span>
+                <span>
+                  {phasePending
+                    ? "正在读取本地缓存和账户状态"
+                    : phaseFailed
+                      ? "状态读取失败，请刷新页面或重新打开本地控制台"
+                      : contextFresh && !connected
+                    ? "检测到本地缓存，可先以缓存模式继续"
+                    : <>填写账户邮箱和密码，点击 <strong>测试连接</strong>{connected ? " ✓" : ""}</>}
+                </span>
                 <span style={{ color: currentStep === 2 ? "oklch(0.68 0.10 248)" : currentStep > 2 ? "oklch(0.48 0.04 160)" : "oklch(0.38 0.006 45)", fontWeight: 500, textAlign: "right" }}>2.</span>
                 <span>本地无缓存时点击 <strong>开始首次同步</strong>；已有缓存会直接使用，可稍后手动刷新{currentStep > 2 ? " ✓" : ""}</span>
                 <span style={{ color: currentStep === 3 ? "oklch(0.68 0.10 248)" : "oklch(0.38 0.006 45)", fontWeight: 500, textAlign: "right" }}>3.</span>
@@ -106,8 +121,12 @@ export default function Dashboard({ notify, connected, contextFresh, onNavigateT
         )}
       </div>
 
+      {(phasePending || phaseFailed) && (
+        <PhaseStatusNotice failed={phaseFailed} />
+      )}
+
       {/* ═══ Step 1: Credential + Connection Test ═══ */}
-      {!connected && (
+      {!connected && !contextFresh && !phasePending && !phaseFailed && (
         <div className="mb-6">{children}</div>
       )}
 
@@ -116,10 +135,11 @@ export default function Dashboard({ notify, connected, contextFresh, onNavigateT
         <SyncCloudCTA onNavigateToSync={onNavigateToSync} />
       )}
 
-      {/* ═══ Step 3: Production Validation (children: JobMonitor) ═══ */}
-      {connected && contextFresh && (
+      {/* ═══ Step 3: Production inputs ready (children: JobMonitor when connected) ═══ */}
+      {contextFresh && (
         <>
-          {children}
+          {connected && children}
+          {!connected && (children || <CacheModeNotice />)}
 
           {/* Error banner */}
           {errors.length > 0 && (
@@ -194,7 +214,7 @@ export default function Dashboard({ notify, connected, contextFresh, onNavigateT
               {cloudApi.loading ? (
                 <ProgressFeedback state="loading" title="云端 Alpha" progress={{ phase: "cloud", status_message: "加载中..." }} compact />
               ) : cloudApi.error ? (
-                <ProgressFeedback state="error" title="云端 Alpha" error={cloudApi.error} onRetry={() => cloudApi.call("/api/snapshot/cloud")} compact />
+                <ProgressFeedback state="error" title="云端 Alpha" error={safeDisplayErrorMessage(cloudApi.error)} onRetry={() => cloudApi.call("/api/snapshot/cloud")} compact />
               ) : cloud ? (
                 <>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs mb-3">
@@ -371,7 +391,7 @@ function formatSyncAge(ageSeconds?: number, loadedAt?: string) {
 
 function StepProgressBar({ currentStep }: { currentStep: number }) {
   const steps = [
-    { num: 1, label: "连接 BRAIN", desc: "填写凭证并测试连接" },
+    { num: 1, label: "账户/缓存", desc: "测试连接或使用已有本地缓存" },
     { num: 2, label: "本地缓存", desc: "首次同步后默认使用本地缓存" },
     { num: 3, label: "开始验证", desc: "运行非提交生产验证流水线" },
   ];
@@ -470,6 +490,44 @@ function SyncCloudCTA({ onNavigateToSync }: { onNavigateToSync: () => void }) {
             后续刷新改为手动触发 · 同步过程中会显示实时进度和已等待时间
           </p>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function CacheModeNotice() {
+  return (
+    <div className="panel mb-4" style={{
+      borderColor: "oklch(0.58 0.10 65 / 0.30)",
+      background: "oklch(0.58 0.06 65 / 0.10)",
+    }}>
+      <div className="panel-body-padded" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
+        <div>
+          <p className="text-sm font-medium text-warning mb-1">本地缓存可用，当前为缓存模式</p>
+          <p className="text-xs text-text-secondary" style={{ lineHeight: 1.6 }}>
+            可继续查看本地快照和候选信息；手动同步、官方回测和提交前复核需要先测试 BRAIN 连接。
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PhaseStatusNotice({ failed }: { failed: boolean }) {
+  return (
+    <div className="panel mb-6" style={{
+      borderColor: failed ? "oklch(0.48 0.08 22 / 0.30)" : "oklch(0.58 0.12 245 / 0.30)",
+      background: failed ? "oklch(0.48 0.06 22 / 0.08)" : "oklch(0.58 0.06 245 / 0.08)",
+    }}>
+      <div className="panel-body-padded">
+        <p className={`text-sm font-medium mb-1 ${failed ? "text-negative" : "text-info"}`}>
+          {failed ? "状态读取失败" : "正在读取本地状态"}
+        </p>
+        <p className="text-xs text-text-secondary" style={{ lineHeight: 1.6 }}>
+          {failed
+            ? "暂时无法确认账户连接和本地缓存状态；请刷新页面或重新打开本地控制台。"
+            : "正在确认本地 session、云端 Alpha 缓存和官方上下文缓存；读取完成前不会判定为未连接。"}
+        </p>
       </div>
     </div>
   );

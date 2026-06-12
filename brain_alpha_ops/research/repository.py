@@ -56,7 +56,11 @@ class ResearchRepository:
         os.makedirs(storage_dir, exist_ok=True)
 
     def save_candidate(self, run_id: str, candidate: Candidate):
-        self._append("candidates.jsonl", _with_expression_summary({"run_id": run_id, **candidate.to_dict()}))
+        record = {"run_id": run_id, **candidate.to_dict()}
+        extra_fields = record.get("extra_fields") if isinstance(record.get("extra_fields"), dict) else {}
+        if isinstance(extra_fields.get("scientific_audit"), dict):
+            record.setdefault("scientific_audit", extra_fields["scientific_audit"])
+        self._append("candidates.jsonl", _with_expression_summary(record))
 
     def save_event(self, run_id: str, event: PipelineEvent):
         self._append("events.jsonl", {"run_id": run_id, **event.to_dict()})

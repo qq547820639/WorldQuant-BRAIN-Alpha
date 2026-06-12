@@ -7,6 +7,7 @@ from typing import Any, Callable
 
 from brain_alpha_ops.models import utc_now
 from brain_alpha_ops.redaction import redact_error_message, redact_text
+from brain_alpha_ops.web_candidate_audit import append_scientific_audit_event
 from brain_alpha_ops.web_candidate_simulation_state import save_candidate_update
 
 
@@ -24,6 +25,7 @@ CHECK_EVIDENCE_FIELDS = [
     "last_check_passed",
     "last_check_submittable",
     "last_check_at",
+    "scientific_audit",
 ]
 
 
@@ -83,4 +85,27 @@ def candidate_check_evidence_update(candidate: dict[str, Any], result: dict[str,
     update["last_check_passed"] = latest_check["passed"]
     update["last_check_submittable"] = latest_check["submittable"]
     update["last_check_at"] = checked_at
+    audited = append_scientific_audit_event(
+        {**candidate, **update},
+        operation="pre_submit_availability_check",
+        source="web_check_availability",
+        feedback_sources=["pre_submit_availability_check", "cloud_similarity", "context_health"],
+        official_api_called=_official_pre_submit_check_was_called(result),
+        details={
+            "status": latest_check["status"],
+            "passed": latest_check["passed"],
+            "submittable": latest_check["submittable"],
+            "official_check_called": _official_pre_submit_check_was_called(result),
+        },
+    )
+    update["scientific_audit"] = audited["scientific_audit"]
     return update
+
+
+def _official_pre_submit_check_was_called(result: dict[str, Any]) -> bool:
+    for check in result.get("checks") or []:
+        if not isinstance(check, dict) or check.get("name") != "official_pre_submit_check":
+            continue
+        detail = str(check.get("detail") or "")
+        return not detail.startswith("Skipped")
+    return False

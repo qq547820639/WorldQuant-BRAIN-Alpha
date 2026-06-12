@@ -93,8 +93,10 @@ def test_react_candidate_and_scoring_contracts_match_backend_routes():
     assert "result.partial" in candidates
     assert 'callCheckResultsApi<{ items?: CandidateCheckResult[] }>("/api/check_results")' in candidates
     assert 'callSingleCheckApi<CandidateCheckResult>("/api/check"' in candidates
-    assert 'callApi<{ job_id: string; task_id?: string }>("/api/generate_candidates"' in candidates
+    assert "type AsyncJobStart = { ok?: boolean; job_id?: string; task_id?: string; error?: string }" in candidates
+    assert 'callApi<AsyncJobStart>("/api/generate_candidates"' in candidates
     assert 'callApi<{ job_id: string; task_id?: string }>("/api/candidates/simulate"' in candidates
+    assert 'callBatchCheckApi<AsyncJobStart>("/api/check_batch"' in candidates
     assert "useSSE(taskId ? `/sse?job_id=${encodeURIComponent(taskId)}`" in candidates
     assert 'callScoreApi("/api/scoring/evaluate"' in scoring
     assert 'callAttributionApi("/api/scoring/attribution"' in scoring
@@ -110,6 +112,7 @@ def test_react_candidate_and_scoring_contracts_match_backend_routes():
     assert route_for("POST", "/api/check") is not None
     assert route_for("POST", "/api/generate_candidates") is not None
     assert route_for("POST", "/api/candidates/simulate") is not None
+    assert route_for("POST", "/api/check_batch") is not None
     assert route_for("GET", "/sse") is not None
     assert route_for("POST", "/api/scoring/evaluate") is not None
     assert route_for("POST", "/api/scoring/attribution") is not None
@@ -224,8 +227,9 @@ def test_react_submission_config_and_job_contracts_match_backend_routes():
         assert f'"{endpoint}"' in config
         assert route_for("GET", endpoint) is not None
     assert 'connectionApi.call("/api/test_connection"' in config
-    assert '<PasswordField\n          label="Token"' in config
-    assert 'autoComplete="off"\n          maxLength={512}' in config
+    assert 'label="Token"' in config
+    assert 'autoComplete="off"' in config
+    assert "maxLength={512}" in config
     assert route_for("POST", "/api/config") is not None
     assert route_for("POST", "/api/test_connection") is not None
     assert 'lazy(() => import("@/components/ConfigPanel"))' in app
@@ -239,7 +243,8 @@ def test_react_submission_config_and_job_contracts_match_backend_routes():
     assert "credentials={credentials}" in app
     assert "onCredentialsChange={setCredentials}" in app
     assert 'api.call<{ job_id: string }>("/api/run"' in monitor
-    assert 'api.call("/api/production-validation/stop", { method: "POST"' in monitor
+    assert 'api.call<{ ok?: boolean; error?: string; error_code?: string }>("/api/production-validation/stop"' in monitor
+    assert "body: JSON.stringify({ job_id: stoppedJobId })" in monitor
     assert "const sseUrl = jobId ? `/sse?job_id=${encodeURIComponent(jobId)}` : null;" in monitor
     assert "body: JSON.stringify(buildRunPayload(resume, credentials))" in monitor
     assert "autoSubmit: false" not in monitor
@@ -361,35 +366,341 @@ def test_react_official_operations_is_web_operator_console_not_cli_surface():
     assert "终端进度" not in operations
 
 
-def test_browser_react_smoke_fails_when_web_operator_and_alpha_flows_are_not_exercised():
+def test_react_components_do_not_display_raw_api_error_fields_directly():
+    offenders: list[str] = []
+    banned_patterns = (
+        re.compile(r"notify\([^;\n]*(?:result|Result)\??\.error\b"),
+        re.compile(r"set[A-Za-z]+Error\([^;\n]*(?:result|Result)\??\.error\b"),
+        re.compile(r"(?:result|Result)\??\.error\s*\|\|"),
+        re.compile(r"(?:result|Result)\??\.error_code\s*\|\|"),
+        re.compile(r"`[^`]*\$\{(?:connectionApi|logoutApi)\.error\}[^`]*`"),
+        re.compile(r">\s*\{(?:connectionApi|logoutApi)\.error\}\s*<"),
+    )
+    checked_files = [
+        REACT_SRC / "App.tsx",
+        *(REACT_SRC / "components").glob("*.tsx"),
+    ]
+
+    for path in checked_files:
+        source = path.read_text(encoding="utf-8")
+        for pattern in banned_patterns:
+            for match in pattern.finditer(source):
+                offenders.append(f"{path.relative_to(ROOT)}:{match.group(0)}")
+
+    assert not offenders, "raw API errors must pass through apiErrorMessage/jobStatusMessage: " + "; ".join(offenders)
+
+    for relative in (
+        "App.tsx",
+        "components/CandidateTable.tsx",
+        "components/ConfigPanel.tsx",
+        "components/OfficialBacktestSlots.tsx",
+        "components/QualityCheckPanel.tsx",
+        "components/ScoringPanel.tsx",
+        "components/SnapshotPanel.tsx",
+        "components/SubmissionConfirmPanel.tsx",
+    ):
+        assert "apiErrorMessage(" in _source(relative), f"{relative} should use shared API error copy"
+
+    for relative in (
+        "App.tsx",
+        "components/ConfigPanel.tsx",
+        "components/Dashboard.tsx",
+        "components/StateCards.tsx",
+    ):
+        assert "safeDisplayErrorMessage(" in _source(relative), f"{relative} shell display errors should fail closed"
+
+
+def test_react_api_error_helpers_keep_af018_metadata_contract():
+    error_experience = _source("helpers/errorExperience.ts")
+    use_api = _source("hooks/useApi.ts")
+
+    for snippet in (
+        "user_error?:",
+        "user_error_kind?: string;",
+        "user_message?: string;",
+        "next_action?: string;",
+        "recoverable?: boolean;",
+        "retryable?: boolean;",
+    ):
+        assert snippet in error_experience
+        assert snippet in use_api
+
+    assert "payload?.user_message" in error_experience
+    assert "return fallback;" in error_experience
+    assert "networkErrorMessage(err)" in use_api
+
+
+def test_browser_react_smoke_fails_when_non_submit_state_experience_is_not_exercised():
     smoke = SMOKE_SCRIPT.read_text(encoding="utf-8")
 
+    assert "report.productionValidation = {" in smoke
+    assert "home shell does not expose local non-submit validation state" in smoke
+    assert "home shell does not expose non-submit proof metrics" in smoke
+    assert "production validation monitor did not render non-submit proof surface" in smoke
+    assert "production validation interrupted state did not show safe user-facing copy" in smoke
+    assert "production validation interrupted state did not return controls to retry-safe state" in smoke
+    assert "production validation run request did not preserve non-submit/no-credential payload" in smoke
+    assert "report.submissionConfirm = {" in smoke
+    assert "submission confirm panel did not render final non-submit blocker review" in smoke
+    assert "submission confirm panel did not show scientific-audit blockers" in smoke
+    assert "submission confirm panel exposed raw readiness/check/status text" in smoke
+    assert "submission confirm panel attempted a submit endpoint" in smoke
+    assert "report.candidateOperations = {" in smoke
+    assert "candidate operations panel did not render target-pool recovery controls" in smoke
+    assert "candidate operations auto-advance control was not clickable" in smoke
+    assert "candidate operations official validation queue did not run visible mocked simulation" in smoke
+    assert "candidate operations official validation queue did not continue into quality gate check" in smoke
+    assert "simulate_queue_zero_smoke" in smoke
+    assert "negativeOfficialSimulationFailed" in smoke
+    assert "candidate operations zero-success official validation queue did not fail closed before quality gate check" in smoke
+    assert "candidate operations zero-success official validation queue called check_batch before a successful simulation" in smoke
+    assert "candidate operations did not navigate from a candidate row into scoring" in smoke
+    assert "candidate operations auto-advance request did not preserve local non-submit/no-credential payload" in smoke
+    assert "candidate operations official validation simulation request did not preserve safe Top3 no-credential payload" in smoke
+    assert "candidate operations batch quality check request did not preserve safe simulated-candidate no-credential payload" in smoke
+    assert "report.scoringPanel = {" in smoke
+    assert "scoring panel did not render clicked-candidate scoring attribution and gate evidence" in smoke
+    assert "score_failed_smoke" in smoke
+    assert "raw backend scoring failure password=secret" in smoke
+    assert "raw backend family password=secret" in smoke
+    assert "REPORT_RAW_BACKEND_TEXT_PATTERN" in smoke
+    assert "RAW_BACKEND_SCORE_STATUS" in smoke
+    assert "评分失败，请重新评估候选后再继续。" in smoke
+    assert "failureRefreshClicked" in smoke
+    assert "failureUserCopy" in smoke
+    assert "failureRetryVisible" in smoke
+    assert "failureNotComplete" in smoke
+    assert "failureRawBackendHidden" in smoke
+    assert "recoveredAfterRetry" in smoke
+    assert "scoringFailureRetryInteractionExpression" in smoke
+    assert "validateScoringFailureRetryInteractions" in smoke
+    assert "scoring_failure_retry" in smoke
+    assert "scoring failure retry slice did not navigate from candidate row into scoring" in smoke
+    assert "scoring failure retry slice did not render initial clicked-candidate scoring success" in smoke
+    assert "scoring failure retry slice did not stay retry-safe and non-complete after refresh failure" in smoke
+    assert "scoring failure retry slice did not recover after retry success" in smoke
+    assert "scoring failure retry slice exposed raw backend/session text" in smoke
+    assert "scoring failure retry slice did not exercise initial success, refresh failure, and retry success" in smoke
+    assert "scoring failure retry request ${endpoint} did not preserve no-credential candidate payload" in smoke
+    assert "scoring failure retry slice attempted a submit endpoint" in smoke
+    assert "scoring failure retry slice request carried credential-like fields" in smoke
+    assert "scoring panel failure state did not stay retry-safe and non-complete" in smoke
+    assert "scoring panel retry did not recover after a failed scoring event" in smoke
+    assert "scoring panel failure state exposed raw backend/session text" in smoke
+    assert "scoring request ${endpoint} did not preserve no-credential candidate payload" in smoke
+    assert "clickedScoreAlphaId" in smoke
+    assert "clickedAlphaId: clickedScoreAlphaId" in smoke
+    assert "body.alpha_id !== scoringPanel.clickedAlphaId" in smoke
+    assert "body.candidate.alpha_id !== scoringPanel.clickedAlphaId" in smoke
+    assert "report.backtestSlots = {" in smoke
+    assert "official backtest slots panel did not render slot capacity summary" in smoke
+    assert "official backtest slots panel did not render running, empty, and completed slot states" in smoke
+    assert "report.qualityCheck = {" in smoke
+    assert "quality check panel did not render local and official evidence summary" in smoke
+    assert "quality check panel did not show non-submit blocker evidence and next action" in smoke
+    assert "raw backend action password=secret" in smoke
+    assert "等待候选和门禁数据" in smoke
+    assert "report.configPanel = {" in smoke
+    assert "config panel did not render safe cache/session configuration copy" in smoke
+    assert "config panel connection test ran during browser smoke" in smoke
+    assert "report.snapshotPanel = {" in smoke
+    assert "snapshot panel did not render checkpoint evidence rows" in smoke
+    assert "snapshot panel exposed raw checkpoint status, visible fields, or backend detail text" in smoke
+    assert "report.robustnessReplay = {" in smoke
+    assert "replayAuditInteractionExpression" in smoke
+    assert "validateReplayAuditInteractions" in smoke
+    assert 'argValue("--slice", "full")' in smoke
+    assert "VALID_SLICES" in smoke
+    assert "--slice must be one of: ${VALID_SLICES.join" in smoke
+    assert 'slice === "replay_audit"' in smoke
+    assert 'slice === "scoring_failure_retry"' in smoke
+    assert "30000" in smoke
+    assert "45000" in smoke
+    assert "runSmokeStep(" in smoke
+    assert "diagnosticMessage(" in smoke
+    assert "last_mock_endpoint=" in smoke
+    assert "viewport=${viewport}" in smoke
+    assert "step=${step}" in smoke
+    assert "elapsed_ms=${elapsedMs}" in smoke
+    assert "robustness replay audit slice did not navigate to the robustness evidence panel" in smoke
+    assert "robustness replay audit panel did not render local latest_result replay metrics" in smoke
+    assert "robustness replay audit panel did not expose stop-rule, non-submit, and scientific-audit evidence" in smoke
+    assert "robustness replay audit panel exposed local path or raw backend text" in smoke
+    assert "/api/latest_result" in smoke
+    assert "expected mocked GET /api/latest_result" in smoke
+    assert "unexpected browser-smoke mutating request ${request.method} ${request.path}" in smoke
+    assert "replay_audit" in smoke
+    assert "本地回放审计" in smoke
+    assert "非提交边界" in smoke
+    assert "停机规则:check_live_submit_readiness\\.py" in smoke
+    assert "raw backend-only checkpoint failure" in smoke
+    assert "raw backend title password=secret" in smoke
+    assert "raw backend metric api_key=secret" in smoke
+    assert "raw backend metric csrf_token=secret" in smoke
+    assert "raw backend delta password=secret" in smoke
+    assert "RAW_BACKEND_RISK password=secret" in smoke
+    assert "RAW_BACKEND_CHECK_STATUS" in smoke
+    assert "详情待确认" in smoke
+    assert "记录待确认" in smoke
+    assert "指标待确认" in smoke
+    assert "时间待确认" in smoke
+    assert "趋势待确认" in smoke
+    assert "对比项待确认" in smoke
+    assert "raw backend-only submission gap" in smoke
+    assert "raw backend-only submit action" in smoke
+    assert "raw backend-only check reason" in smoke
+    assert "状态待确认" in smoke
+    assert "提交前阻断复核" in smoke
+    assert "report.lifecycleReplay = {" in smoke
+    assert "lifecycle replay panel did not render local read-only non-submit state" in smoke
+    assert "lifecycle replay panel did not expose replay summary metrics" in smoke
+    assert "lifecycle replay recovered trace did not prioritize latest passed state" in smoke
+    assert "lifecycle replay blocked trace did not show review next action" in smoke
+    assert "lifecycle replay panel exposed secret-like labels or values" in smoke
+    assert 'document.querySelector(\'section[aria-label="生命周期回放"]\')' in smoke
     assert "report.officialOperations = {" in smoke
-    assert "report.alphaFlow = {" in smoke
-    assert "const officialOperations = interactions.officialOperations || {};" in smoke
-    assert "official operations card did not expose the button-driven Web flow" in smoke
-    assert "official operations did not auto-interrupt unclear refresh state" in smoke
-    assert "const alphaFlow = interactions.alphaFlow || {};" in smoke
-    assert "candidate generation flow was not exercised through the Web UI" in smoke
-    assert "candidate generation did not request backend cancellation after ambiguous SSE state" in smoke
-    assert "scoring flow did not request backend cancellation after ambiguous SSE state" in smoke
+    assert 'document.querySelector(\'section[aria-label="官方同步数据总览"]\')' in smoke
+    assert 'Array.from(document.querySelectorAll("h2"))' in smoke
+    assert 'officialHeading?.closest(".animate-fade-in")' in smoke
+    assert "officialPanel?.innerText || \"\"" in smoke
+    assert "official operations panel did not render the non-submit sync entry and overview" in smoke
+    assert "official operations session-invalid recovery state did not show safe reconnect guidance" in smoke
+    assert "official operations open-ended sync scan did not stay indeterminate and non-complete" in smoke
+    assert "official operations stopped/cancelled sync state did not stay retry-safe and non-complete" in smoke
+    assert "official operations intermediate state-error snapshots overflow horizontally" in smoke
+    assert "official operations sync warning state did not expose safe partial-success guidance" in smoke
+    assert "official operations readiness review did not stay visibly blocked and non-submit" in smoke
+    assert "official operations readiness review did not show scientific-audit blockers" in smoke
+    assert "official operations check-results review did not load visible quality evidence" in smoke
+    assert "official operations panel exposed raw backend/session or secret-like text" in smoke
+    assert "official operations sync request did not preserve safe local visual-smoke payload" in smoke
+    assert "official operations sync cancel request did not preserve safe local visual-smoke payload" in smoke
+    assert "sync_open_ended_scan" in smoke
+    assert "sync_cancelled_terminal" in smoke
+    assert "scientificAuditBlocked" in smoke
+    assert "missing_scientific_audit" in smoke
+    assert "scientific_audit_submit_boundary_breached" in smoke
+    assert "latest_candidate_scientific_audit_test_feedback_used" in smoke
+    assert "incomplete_scientific_audit" in smoke
+    assert "缺少科学审计证据" in smoke
+    assert "科学审计提交边界异常" in smoke
+    assert "最新候选科学审计含测试反馈" in smoke
+    assert "科学审计证据不完整" in smoke
+    assert "后台确认状态为已停止" in smoke
+    assert "后台确认状态为已取消" in smoke
+    assert "reconnectClicked && reconnectNavigated" in smoke
+    assert "stateOverflowFree" in smoke
+    assert "!/width:\\s*100%/i.test(scanProgressFillStyle)" in smoke
+    assert 'document.querySelector(\'[role="progressbar"][aria-label*="扫描云端"]\')' in smoke
+    assert "completed_with_warnings" in smoke
+    assert "COMPLETED_WITH_WARNINGS" in smoke
+    assert 'context_status: "failed"' in smoke
+    assert 'userFacingOperation !== "official_operations_context_refresh"' in smoke
+    assert "REPORT_FORBIDDEN_TEXT_PATTERN" in smoke
+    assert "SENSITIVE_KEY_PATTERN" in smoke
+    assert "isSensitiveKey(" in smoke
+    assert "user[_-]?name" in smoke
+    assert "|user|" not in smoke
+    assert "searchHasCredentialFields(" in smoke
+    assert "hasCredentialSearch: searchHasCredentialFields(url.search)" in smoke
+    assert 'userFacingOperation !== "official_operations_context_refresh"' in smoke
+    assert "redactText(" in smoke
+    assert "redactUrl(" in smoke
+    assert "redactReportValue(result)" in smoke
+    assert "assertReportRedacted(serializedResult)" in smoke
+    assert "SECRET_TEXT_PATTERN" in smoke
+    assert "forbiddenLifecycleSecretsVisible" in smoke
+    assert 'textSample: "<omitted>"' in smoke
+    assert 'sample: "<omitted>"' in smoke
+    assert "password|passwd|pwd|hunter2" in smoke
+    assert "client[_-]?secret" in smoke
+    assert "api[_-]?key" in smoke
+    assert "set[_-]?cookie" in smoke
+    assert "hasCredentialFields: requestHasCredentialFields(request.postData || \"\")" in smoke
+    assert "Boolean(request.hasCredentialSearch)" in smoke
+    assert "Boolean(request.hasCredentialFields)" in smoke
+    assert "redactRequestBody(request.postData || \"\")" in smoke
+    assert "redactSearchParams(url.search)" in smoke
+    assert "csrfPresent: Boolean" in smoke
+    assert "streamPresent: Boolean" in smoke
+    assert "metrics.meta.csrfPresent" in smoke
+    assert "UNMOCKED_BROWSER_SMOKE_API" in smoke
+    assert "NON_LOCAL_BROWSER_SMOKE_REQUEST_BLOCKED" in smoke
+    assert "LOOPBACK_HOSTS" in smoke
+    assert "requireLoopbackHttpUrl(rawUrl, \"--url\")" in smoke
+    assert 'requireLoopbackHttpUrl(argValue("--devtools-url"' in smoke
+    assert "isLocalBrowserUrl(rawUrl)" in smoke
+    assert "browser attempted to load a non-local resource" in smoke
+    assert 'urlPattern: "*", requestStage: "Request"' in smoke
+    assert '"Fetch.continueRequest"' in smoke
+    assert "networkRequests: [...session.networkRequests]" in smoke
+    assert "blockedNonLocalRequests: [...session.blockedNonLocalRequests]" in smoke
+    assert "production validation interrupted state overflows horizontally" in smoke
+    assert "/session_invalid/i" in smoke or "session_invalid|invalid local session/i" in smoke
 
     for endpoint in (
+        "/api/phase_state",
+        "/api/production-validation/status",
+        "/api/candidates",
+        "/api/alpha_lifecycle",
+        "/api/backtest_slots",
+        "/api/config",
+        "/api/checkpoint_status",
+        "/api/snapshot/cloud",
+        "/api/snapshot/memory",
+        "/api/sync_status",
+        "/api/submit_readiness",
+        "/api/check_results",
+        "/api/run",
         "/api/sync_alphas",
         "/api/sync_cancel",
         "/api/generate_candidates",
         "/api/scoring/evaluate",
         "/api/scoring/attribution",
-        "/api/cancel",
     ):
         assert f'"{endpoint}"' in smoke
+    assert 'pathname === "/api/alpha_lifecycle"' in smoke
+    assert "/(?:\\?|&)limit=250(?:&|$)/.test(request.search)" in smoke
     assert 'requested("POST", endpoint)' in smoke
     assert "`expected mocked POST ${endpoint}`" in smoke
+    assert 'body.refreshOfficialContext !== true' in smoke
+    assert 'body.automation_mode !== "maintain_candidate_pool"' in smoke
+    assert 'body.auto_simulate_after_generation !== false' in smoke
+    assert 'body.auto_check_after_simulation !== false' in smoke
+    assert "body.candidate" in smoke
+    assert 'match(/ALPHA_[A-Z0-9_]+/)' in smoke
+    assert "body.alpha_id !== scoringPanel.clickedAlphaId" in smoke
+    assert 'Boolean(request.hasCredentialFields)' in smoke
+    assert 'Boolean(request.hasCredentialSearch)' in smoke
+    assert "MUTATING_METHODS" in smoke
+    assert "ALLOWED_MUTATING_REQUESTS" in smoke
+    assert '"POST /api/run"' in smoke
+    assert '"POST /api/sync_alphas"' in smoke
+    assert '"POST /api/sync_cancel"' in smoke
+    assert '"POST /api/generate_candidates"' in smoke
+    assert '"POST /api/candidates/simulate"' in smoke
+    assert '"POST /api/check_batch"' in smoke
+    assert "checkBatchBeforeSimulationSuccessCount" in smoke
+    assert "candidate operations mock server observed check_batch before official simulation success" in smoke
+    assert '"POST /api/scoring/evaluate"' in smoke
+    assert '"POST /api/scoring/attribution"' in smoke
+    assert "isAllowedMutatingRequest(request.method, request.path)" in smoke
+    assert "unexpected browser-smoke mutating request" in smoke
     assert 'requestCount("POST", endpoint) !== 0' in smoke
-    assert "`unexpected submit endpoint request ${endpoint}`" in smoke
+    assert "`unexpected browser-smoke API request ${endpoint}`" in smoke
+    assert "`unmocked browser-smoke API request ${request.method} ${request.path}`" in smoke
 
     assert 'pathname === "/api/submit" || pathname === "/api/submit_batch"' in smoke
     assert "WEB_ONLY_SUBMIT_REQUIRED" in smoke
+    for endpoint in (
+        "/api/candidate/submit",
+        "/api/check",
+        "/api/sync_context_only",
+        "/api/test_connection",
+        "/api/config",
+        "/api/candidates/optimize",
+    ):
+        assert f'"{endpoint}"' in smoke
 
 
 def test_readme_keeps_operator_path_in_official_operations_area():
@@ -437,17 +748,43 @@ def test_react_snapshot_panel_contracts_match_backend_routes():
     ):
         assert f'"{endpoint}' in snapshot
         assert route_for("GET", endpoint) is not None
+    assert "normalizeSnapshotRow" in snapshot
+    assert "snapshotStatusLabel" in snapshot
+    assert "safeSnapshotDetail" in snapshot
+    assert "safeSnapshotDisplayText" in snapshot
+    assert "状态待确认" in snapshot
+    assert "详情待确认" in snapshot
+    assert "记录待确认" in snapshot
+    assert "指标待确认" in snapshot
+    assert "时间待确认" in snapshot
+    assert "趋势待确认" in snapshot
+    assert "对比项待确认" in snapshot
+    assert "类型待确认" in snapshot
+    assert "RAW_SNAPSHOT_TEXT_PATTERN" in snapshot
+    assert "replay_audit" in snapshot
+    assert "回放审计" in snapshot
+    assert "本地回放审计" in snapshot
+    assert "check_live_submit_readiness.py" in snapshot
+    assert "非提交边界" in snapshot
+    assert "replayStopRule" in snapshot
 
 
 def test_react_state_cards_include_checkpoint_history_entry():
     app = _source("App.tsx")
+    sidebar = _source("components/Sidebar.tsx")
     state_cards = _source("components/StateCards.tsx")
     types = _source("types/index.ts")
 
     assert '"checkpoint_status"' in types
     assert 'checkpoint_status: "续跑记录"' in app
+    assert '"robustness"' in types
+    assert 'robustness: "稳健性证据"' in app
     assert 'case "checkpoint_status":' in app
     assert 'viewMode="checkpoint_status"' in app
+    assert 'case "robustness":' in app
+    assert 'viewMode="robustness"' in app
+    assert 'id: "robustness"' in sidebar
+    assert 'label: "稳健性证据"' in sidebar
     assert 'checkpointApi.call("/api/checkpoint_status")' in state_cards
     assert 'title: "续跑记录"' in state_cards
     assert 'description: "上次进度与运行历史回溯"' in state_cards
@@ -465,13 +802,15 @@ def test_react_fetch_helpers_keep_session_csrf_replay_and_sse_credentials():
     assert 'headers["Content-Type"] = "application/json";' in use_api
     assert "DEFAULT_REQUEST_TIMEOUT_MS = 120000" in use_api
     assert 'signal: options?.signal ?? controller?.signal' in use_api
-    assert '"请求超时，请稍后重试。"' in use_api
+    error_experience = _source("helpers/errorExperience.ts")
+    assert '"网络请求未在预期时间内返回，请刷新状态或稍后重试。"' in error_experience
+    assert "networkErrorMessage(err)" in use_api
     assert "new EventSource(withStreamToken(streamUrl), { withCredentials: true })" in use_sse
     assert "onExhaustedRef.current?.();" in use_sse
     assert "return { connected, exhausted, reconnectAttempts, lastEvent, close };" in use_sse
     assert 'meta[name="brain-alpha-stream"]' in csrf_utils
     assert "stream_token=${encodeURIComponent(token)}" in use_sse
-    assert 'const namedEvents: NamedSSEEvent[] = ["progress", "complete", "error", "heartbeat"];' in use_sse
+    assert 'const namedEvents: NamedSSEEvent[] = ["progress", "complete", "error", "heartbeat", "stream_timeout"];' in use_sse
     assert "es.addEventListener(eventName" in use_sse
 
 

@@ -43,6 +43,9 @@ def candidate_generation_status_message(result: dict[str, Any]) -> str:
     qualified = _positive_int(quality.get("qualified_count"))
     local_valid = _positive_int(quality.get("local_valid_count"))
     persisted = _positive_int(persistence.get("persisted_count")) if persistence else None
+    target_pool_size = _nonnegative_int(summary.get("target_pool_size"))
+    existing_pool_size = _nonnegative_int(summary.get("existing_pool_size"))
+    pool_deficit = _nonnegative_int(summary.get("pool_deficit"))
     reason_counts = (
         summary.get("rejected_reasons")
         if isinstance(summary.get("rejected_reasons"), dict)
@@ -54,13 +57,18 @@ def candidate_generation_status_message(result: dict[str, Any]) -> str:
     )
     reason_detail = _reason_detail(reason_counts)
     saved_part = f"已保存 {persisted} 个可推进候选" if persisted is not None else f"{returned} 个进入主候选列表"
+    pool_part = (
+        f"目标池 {target_pool_size}；当前可推进 {existing_pool_size}；补位缺口 {pool_deficit}。"
+        if target_pool_size is not None
+        else ""
+    )
     if generated > 0 and returned <= 0:
         return (
-            f"生成 {generated} 个本地候选；0 个通过本地门禁，{rejected} 个已阻断"
+            f"{pool_part}生成 {generated} 个本地候选；0 个通过本地门禁，{rejected} 个已阻断"
             f"{reason_detail}；{saved_part}。"
         )
     return (
-        f"生成 {generated} 个本地候选；{returned} 个通过本地门禁，"
+        f"{pool_part}生成 {generated} 个本地候选；{returned} 个通过本地门禁，"
         f"{local_valid} 个本地有效，{qualified} 个达到提交证据带，"
         f"{rejected} 个已阻断{reason_detail}；{saved_part}。"
     )
@@ -85,3 +93,13 @@ def _positive_int(*values: Any) -> int:
         if parsed > 0:
             return parsed
     return 0
+
+
+def _nonnegative_int(value: Any) -> int | None:
+    if value is None:
+        return None
+    try:
+        parsed = int(float(value))
+    except (TypeError, ValueError):
+        return None
+    return max(0, parsed)

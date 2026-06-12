@@ -1,5 +1,7 @@
 /** Unified progress and loading feedback — Terminal Precision design */
 import { useEffect, useMemo, useState, useRef } from "react";
+import { apiErrorMessage } from "@/helpers/errorExperience";
+import { classifyProgressState, type JobStateClassification } from "@/helpers/runPayload";
 import type { ProgressLifecycle, UnifiedProgress } from "@/types";
 
 interface Props {
@@ -55,16 +57,19 @@ export default function ProgressFeedback({
     return () => clearInterval(timer);
   }, [state]);
 
-  const rawPercent = useMemo(() => normalizedPercent(progress, state), [progress, state]);
+  const progressState = useMemo(() => classifyProgressState(state, progress), [progress, state]);
+  const rawPercent = useMemo(() => normalizedPercent(progress, progressState), [progress, progressState]);
   const percent = state === "success" && rawPercent == null ? 100 : rawPercent;
   const roundedPercent = percent == null ? 0 : Math.round(percent);
   const isBusy = state === "loading" || state === "progress";
   const showProgressBar = isBusy || state === "success" || (state === "error" && percent != null);
   const isDeterminate = showProgressBar && percent != null;
-  const label = progress?.phase_label || progress?.phase || title;
-  const message = progress?.status_message || progress?.message || statusText(state, idleText, successText);
+  const label = displayProgressPhase(progress, title);
+  const message = safeProgressMessage(progress, state, idleText, successText);
   const openEndedCloudScan = isOpenEndedCloudScan(progress);
   const displayMessage = openEndedCloudScan ? openEndedScanStatusMessage(progress, message) : message;
+  const structuredError = useMemo(() => progressUserFacingError(progress), [progress]);
+  const displayError = structuredError || error || "操作失败。";
   const cloudScanWithApiTotal = isCloudScanWithApiTotal(progress);
   const estimatedEta = estimatedEtaSeconds(progress, elapsed, remaining);
   const eta = estimatedEta > 0 ? fmtDuration(estimatedEta) : "";
@@ -77,8 +82,8 @@ export default function ProgressFeedback({
   const errorBorder = state === "error" ? { borderColor: "oklch(0.48 0.08 22 / 0.30)", background: "oklch(0.48 0.06 22 / 0.08)" } : {};
   const successBorder = state === "success" ? { borderColor: "oklch(0.52 0.06 155 / 0.30)", background: "oklch(0.52 0.06 155 / 0.08)" } : {};
   const stallBorder = isStalled ? { borderColor: "oklch(0.65 0.08 85 / 0.30)", background: "oklch(0.65 0.06 85 / 0.06)" } : {};
-  const badge = progressStatusBadge(state, progress, percent);
-  const fillClass = progressFillClass(state, progress, isStalled);
+  const badge = progressStatusBadge(state, progress, progressState, percent);
+  const fillClass = progressFillClass(state, progress, progressState, isStalled);
 
   return (
     <div
@@ -123,7 +128,7 @@ export default function ProgressFeedback({
         <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
           <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 12, fontSize: "0.8125rem", lineHeight: 1.6, color: "oklch(0.72 0.005 45)" }}>
             <span className="min-w-0 break-words">
-              {state === "error" ? (error || progress?.error || "操作失败。") : displayMessage}
+              {state === "error" ? displayError : displayMessage}
             </span>
             <span style={{ display: "flex", gap: 12 }}>
               {scanCount && <span style={{ color: "oklch(0.52 0.006 45)" }}>{scanCount}</span>}
@@ -142,7 +147,7 @@ export default function ProgressFeedback({
         {/* Meta info */}
         <div style={{ display: "flex", flexWrap: "wrap", gap: "8px 16px", marginTop: 8, fontSize: "0.75rem", color: "oklch(0.52 0.006 45)" }}>
           {lastUpdatedAt && <span>最后更新 {fmtClock(lastUpdatedAt)}</span>}
-          {state === "error" && <span>{interruptionText(error || progress?.error || displayMessage, progress?.phase)}</span>}
+          {state === "error" && <span>{interruptionText(displayError || displayMessage, progress?.phase)}</span>}
         </div>
 
         {/* Recovery actions */}
@@ -160,18 +165,29 @@ export default function ProgressFeedback({
   );
 }
 
-function progressStatusBadge(state: ProgressLifecycle, progress?: UnifiedProgress | null, percent?: number | null) {
-  const status = String(progress?.status || "").toLowerCase();
-  const phase = String(progress?.phase || "").toLowerCase();
-  const text = `${status} ${phase}`;
-  if (state === "error" || /failed|error|watchdog/.test(text)) {
-    return { label: percent != null ? "中断" : "失败", className: "badge-negative" };
+function progressStatusBadge(
+  state: ProgressLifecycle,
+  progress: UnifiedProgress | null | undefined,
+  classification: JobStateClassification,
+  percent?: number | null,
+) {
+  if (classification.missing) {
+    return { label: "监控受阻", className: "badge-warning" };
   }
-  if (/stopped|cancelled|canceled/.test(text)) {
+  if (classification.interrupted) {
     return { label: "已停止", className: "badge-warning" };
   }
-  if (state === "success" || /completed|success|done/.test(text)) {
+  if (classification.failed) {
+    return { label: percent != null ? "中断" : "失败", className: "badge-negative" };
+  }
+  if (classification.warning) {
+    return { label: "带警告", className: "badge-warning" };
+  }
+  if (classification.successful) {
     return { label: "已完成", className: "badge-positive" };
+  }
+  if (state === "error") {
+    return { label: percent != null ? "中断" : "失败", className: "badge-negative" };
   }
   if (state === "loading" || state === "progress") {
     if (isOpenEndedCloudScan(progress) && percent == null) {
@@ -185,14 +201,20 @@ function progressStatusBadge(state: ProgressLifecycle, progress?: UnifiedProgres
   return { label: "就绪", className: "badge-neutral" };
 }
 
-function progressFillClass(state: ProgressLifecycle, progress?: UnifiedProgress | null, stalled = false) {
-  if (state === "success") return "positive";
-  if (state === "error" || isInterruptedProgress(state, progress)) return "negative";
+function progressFillClass(
+  state: ProgressLifecycle,
+  progress: UnifiedProgress | null | undefined,
+  classification: JobStateClassification,
+  stalled = false,
+) {
+  if (classification.warning) return "warning";
+  if (classification.successful) return "positive";
+  if (classification.failed || classification.interrupted || classification.missing || state === "error") return "negative";
   if (stalled || progress?.open_ended === true || progress?.indeterminate === true) return "warning";
   return "";
 }
 
-function normalizedPercent(progress?: UnifiedProgress | null, state: ProgressLifecycle = "progress"): number | null {
+function normalizedPercent(progress?: UnifiedProgress | null, classification?: JobStateClassification): number | null {
   if (isOpenEndedCloudScan(progress)) {
     return null;
   }
@@ -207,7 +229,7 @@ function normalizedPercent(progress?: UnifiedProgress | null, state: ProgressLif
     if (Number.isFinite(done) && Number.isFinite(total) && total > 0) return Math.max(0, Math.min(100, (done / total) * 100));
     return null;
   }
-  if (isInterruptedProgress(state, progress) && value >= 100 && !hasCompletedProgress(progress)) {
+  if ((classification?.failed || classification?.interrupted || classification?.missing) && value >= 100 && !hasCompletedProgress(progress)) {
     const ratio = ratioPercent(progress);
     return ratio != null && ratio < 100 ? ratio : null;
   }
@@ -223,17 +245,56 @@ function ratioPercent(progress?: UnifiedProgress | null) {
   return null;
 }
 
-function isInterruptedProgress(state: ProgressLifecycle, progress?: UnifiedProgress | null) {
-  if (state === "error") return true;
-  const status = String(progress?.status || "").toLowerCase();
-  const phase = String(progress?.phase || "").toLowerCase();
-  return /failed|error|stopped|cancelled|canceled|watchdog/.test(`${status} ${phase}`);
+function progressUserFacingError(progress?: UnifiedProgress | null) {
+  const explicit = textField(progress?.user_error?.message) || textField(progress?.user_message);
+  if (explicit) return explicit;
+  const shared = apiErrorMessage(progress || null, "");
+  if (!shared) return "";
+  const rawError = textField(progress?.error);
+  const rawCode = textField(progress?.error_code || progress?.status_code || progress?.user_error_kind);
+  if (rawError && shared === rawError && !rawCode) return "";
+  return shared;
+}
+
+function safeProgressMessage(
+  progress: UnifiedProgress | null | undefined,
+  state: ProgressLifecycle,
+  idleText: string,
+  successText: string,
+) {
+  if (state === "idle" || state === "error") {
+    return statusText(state, idleText, successText);
+  }
+  const structured = textField(progress?.user_error?.message) || textField(progress?.user_message);
+  if (structured) return structured;
+  const safe = readableProgressStatusText(progress?.status_message || progress?.message);
+  return safe || statusText(state, idleText, successText);
+}
+
+function readableProgressStatusText(raw: unknown) {
+  const value = textField(raw);
+  if (!value) return "";
+  const labels: Record<string, string> = {
+    "Official context refreshed.": "官方上下文已刷新。",
+    "Status recovered.": "状态已恢复。",
+  };
+  if (labels[value]) return labels[value];
+  if (looksLikeBackendDiagnostic(value)) return "";
+  return /[\u3400-\u9fff]/.test(value) ? value : "";
+}
+
+function looksLikeBackendDiagnostic(value: string) {
+  return /traceback|exception|stack|private|invalid local session|unknown job|unknown sync job/i.test(value)
+    || /\b[A-Z][A-Z0-9_]{2,}\b/.test(value)
+    || /[{}[\]<>]/.test(value);
+}
+
+function textField(value: unknown) {
+  return typeof value === "string" ? value.trim() : "";
 }
 
 function hasCompletedProgress(progress?: UnifiedProgress | null) {
-  const status = String(progress?.status || "").toLowerCase();
-  const phase = String(progress?.phase || "").toLowerCase();
-  return /completed|success|done/.test(`${status} ${phase}`);
+  return classifyProgressState("progress", progress).successful;
 }
 
 function isCloudScanWithApiTotal(progress?: UnifiedProgress | null) {
@@ -337,6 +398,14 @@ function statusText(state: ProgressLifecycle, idle: string, ok: string) {
   return "处理中...";
 }
 
+function displayProgressPhase(progress: UnifiedProgress | null | undefined, fallback: string) {
+  const explicit = String(progress?.phase_label || "").trim();
+  if (explicit) return explicit;
+  const phase = String(progress?.phase || "").trim();
+  if (!phase) return fallback;
+  return humanPhase(phase) || "当前阶段";
+}
+
 function interruptionText(msg: string, phase?: string) {
   const text = String(msg || "");
   const p = humanPhase(phase);
@@ -347,6 +416,7 @@ function interruptionText(msg: string, phase?: string) {
 
 function humanPhase(phase?: string) {
   const labels: Record<string, string> = {
+    session_invalid: "本地会话需重新确认",
     watchdog_failed: "长时间没有明确进度",
     candidate_generation: "候选生成", scoring: "评分",
     checking: "提交前检查", submitting: "提交请求", failed: "流程失败",

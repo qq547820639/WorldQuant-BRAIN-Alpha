@@ -46,6 +46,7 @@ from brain_alpha_ops.web_check_availability import (
 )
 from brain_alpha_ops.web_check_batch_job import run_check_batch_job_service as _run_check_batch_job_service
 from brain_alpha_ops.web_cloud_snapshot import (
+    cloud_alpha_cache_probe as _cloud_alpha_cache_probe_service,
     cloud_alpha_snapshot as _cloud_alpha_snapshot_service,
     persist_official_context as _persist_official_context_service,
     storage_jsonl_path as _storage_jsonl_path_service,
@@ -70,7 +71,7 @@ from brain_alpha_ops.web.handlers.sync import (
     presets_payload as _presets_payload,
     profile_payload as _profile_payload,
 )
-from brain_alpha_ops.web_assistant_snapshots import (
+from brain_alpha_ops.web_post_handlers import (
     assistant_response_guidance_post_payload as _assistant_response_guidance_post_payload,
     assistant_response_parse_post_payload as _assistant_response_parse_post_payload,
 )
@@ -243,6 +244,7 @@ def build_web_service_namespace():
         "_cloud_status_for": _cloud_status_for,
         "_run_check_batch_job_service": _run_check_batch_job_service,
         "_cloud_alpha_snapshot_service": _cloud_alpha_snapshot_service,
+        "_cloud_alpha_cache_probe_service": _cloud_alpha_cache_probe_service,
         "_persist_official_context_service": _persist_official_context_service,
         "_storage_jsonl_path_service": _storage_jsonl_path_service,
         "_read_storage_jsonl_service": _read_storage_jsonl_service,

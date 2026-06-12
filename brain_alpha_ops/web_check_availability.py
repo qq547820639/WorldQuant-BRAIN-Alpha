@@ -528,6 +528,56 @@ def _timing_payload(started_at: float, *, done: int = 0, total: int = 0) -> dict
     return payload
 
 
+def _store_is_cancelled(store: JobStoreLike, job_id: str) -> bool:
+    checker = getattr(store, "is_cancelled", None)
+    if not callable(checker):
+        return False
+    try:
+        return bool(checker(job_id))
+    except Exception:
+        return False
+
+
+def _update_check_batch_cancelled(
+    store: JobStoreLike,
+    job_id: str,
+    *,
+    mode: str,
+    sync_range: str,
+    total: int,
+    checked: int,
+    submittable: int,
+    blocked: int,
+    failed: int,
+    started_at: float,
+    results: list[dict[str, Any]],
+) -> None:
+    store.update(
+        job_id,
+        status="stopped",
+        progress={
+            "task_id": job_id,
+            "job_id": job_id,
+            "operation": "check_batch",
+            "phase": "stopped",
+            "status_code": "CHECK_STOPPED",
+            "mode": mode,
+            "range": sync_range,
+            "total": total,
+            "percent": 100,
+            "percent_complete": 100,
+            "checked": checked,
+            "submittable": submittable,
+            "blocked": blocked,
+            "failed": failed,
+            "status_message": "批量质量检查已停止，未继续调用官方上下文或候选检查。",
+            "message": "批量质量检查已停止，未继续调用官方上下文或候选检查。",
+            **_timing_payload(started_at, done=checked, total=total),
+            "items": results,
+        },
+    )
+
+
 def run_check_batch_job_service(
     job_id: str,
     payload: dict[str, Any],
@@ -583,10 +633,55 @@ def run_check_batch_job_service(
                 "items": [],
             },
         )
+        if _store_is_cancelled(store, job_id):
+            _update_check_batch_cancelled(
+                store,
+                job_id,
+                mode=mode,
+                sync_range=sync_range,
+                total=total,
+                checked=checked,
+                submittable=submittable,
+                blocked=blocked,
+                failed=failed,
+                started_at=started_at,
+                results=results,
+            )
+            return
         run_config = run_config_from_payload(payload)
+        if _store_is_cancelled(store, job_id):
+            _update_check_batch_cancelled(
+                store,
+                job_id,
+                mode=mode,
+                sync_range=sync_range,
+                total=total,
+                checked=checked,
+                submittable=submittable,
+                blocked=blocked,
+                failed=failed,
+                started_at=started_at,
+                results=results,
+            )
+            return
         api = api_from_run_config(run_config)
         repo = repository_factory(run_config.ops.storage_dir)
         api.authenticate()
+        if _store_is_cancelled(store, job_id):
+            _update_check_batch_cancelled(
+                store,
+                job_id,
+                mode=mode,
+                sync_range=sync_range,
+                total=total,
+                checked=checked,
+                submittable=submittable,
+                blocked=blocked,
+                failed=failed,
+                started_at=started_at,
+                results=results,
+            )
+            return
         cloud_alphas, cloud_error = refresh_cloud_context_for_check(
             api,
             repo,
@@ -601,6 +696,21 @@ def run_check_batch_job_service(
         observability_preflight = observability_submission_preflight(run_config.ops.storage_dir)
 
         for index, candidate in enumerate(candidates, start=1):
+            if _store_is_cancelled(store, job_id):
+                _update_check_batch_cancelled(
+                    store,
+                    job_id,
+                    mode=mode,
+                    sync_range=sync_range,
+                    total=total,
+                    checked=checked,
+                    submittable=submittable,
+                    blocked=blocked,
+                    failed=failed,
+                    started_at=started_at,
+                    results=results,
+                )
+                return
             store.update(
                 job_id,
                 status="running",
@@ -626,6 +736,21 @@ def run_check_batch_job_service(
                     "items": results,
                 },
             )
+            if _store_is_cancelled(store, job_id):
+                _update_check_batch_cancelled(
+                    store,
+                    job_id,
+                    mode=mode,
+                    sync_range=sync_range,
+                    total=total,
+                    checked=checked,
+                    submittable=submittable,
+                    blocked=blocked,
+                    failed=failed,
+                    started_at=started_at,
+                    results=results,
+                )
+                return
             result = check_candidate_availability(
                 candidate,
                 mode,
@@ -674,6 +799,22 @@ def run_check_batch_job_service(
                     "items": results,
                 },
             )
+
+        if _store_is_cancelled(store, job_id):
+            _update_check_batch_cancelled(
+                store,
+                job_id,
+                mode=mode,
+                sync_range=sync_range,
+                total=total,
+                checked=checked,
+                submittable=submittable,
+                blocked=blocked,
+                failed=failed,
+                started_at=started_at,
+                results=results,
+            )
+            return
 
         summary = {
             "mode": mode,

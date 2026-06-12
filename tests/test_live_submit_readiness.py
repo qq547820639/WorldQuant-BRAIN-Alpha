@@ -25,6 +25,37 @@ def _official_metrics(**overrides):
     return metrics
 
 
+def _safe_scientific_audit(**overrides):
+    audit = {
+        "schema_version": "candidate-scientific-audit-v1",
+        "anti_overfit": {
+            "test_script_outcomes_used": False,
+            "test_feedback_allowed": False,
+        },
+        "evidence": {
+            "feedback_sources": ["scorecard", "official_simulation_result"],
+        },
+        "safety_boundary": {
+            "local_only": True,
+            "official_api_called": False,
+            "submit_allowed": False,
+            "real_submit_performed": False,
+        },
+        "events": [
+            {
+                "operation": "official_simulation_writeback",
+                "official_api_called": True,
+            }
+        ],
+    }
+    for key, value in overrides.items():
+        if isinstance(value, dict) and isinstance(audit.get(key), dict):
+            audit[key] = {**audit[key], **value}
+        else:
+            audit[key] = value
+    return audit
+
+
 def _jobs_file(tmp_path, candidates, *, summary=None):
     path = tmp_path / "jobs_production.json"
     path.write_text(
@@ -243,6 +274,7 @@ def test_live_submit_readiness_fails_closed_on_invalid_candidate_ledger_jsonl(tm
                 "official_metrics": _official_metrics(),
                 "scorecard": {"total_score": 91.2, "decision_band": "submit_candidate"},
                 "cloud_correlation_risk": {"level": "low", "max_similarity": 0.12},
+                "scientific_audit": _safe_scientific_audit(),
             }
         ],
     )
@@ -293,6 +325,7 @@ def test_live_submit_readiness_merges_duplicate_candidate_evidence_fail_closed(t
                 "scorecard": {"total_score": 92.0, "decision_band": "submit_candidate"},
                 "official_metrics": _official_metrics(official_alpha_id="official_duplicate"),
                 "cloud_correlation_risk": {"level": "low", "max_similarity": 0.12},
+                "scientific_audit": _safe_scientific_audit(),
             }
         ],
     )
@@ -323,6 +356,7 @@ def test_live_submit_readiness_audits_complete_candidate_ledger_without_promotin
                 "scorecard": {"total_score": 92.0, "decision_band": "submit_candidate"},
                 "official_metrics": _official_metrics(official_alpha_id="official_ready_web"),
                 "cloud_correlation_risk": {"level": "low", "max_similarity": 0.12},
+                "scientific_audit": _safe_scientific_audit(),
             }
         ],
     )
@@ -369,6 +403,7 @@ def test_live_submit_readiness_promotes_candidate_ledger_evidence_only_for_lates
                 "scorecard": {"total_score": 92.0, "decision_band": "submit_candidate"},
                 "official_metrics": _official_metrics(official_alpha_id="official_ready_web"),
                 "cloud_correlation_risk": {"level": "low", "max_similarity": 0.12},
+                "scientific_audit": _safe_scientific_audit(),
             }
         ],
     )
@@ -383,6 +418,61 @@ def test_live_submit_readiness_promotes_candidate_ledger_evidence_only_for_lates
     assert any(finding["code"] == "no_submit_ready_candidate" for finding in result["findings"])
 
 
+def test_live_submit_readiness_reports_gap_when_candidate_ledger_lifecycle_blocks_ready_job(tmp_path):
+    jobs = _jobs_file(
+        tmp_path,
+        [
+            {
+                "alpha_id": "alpha_ready_with_lifecycle_shadow",
+                "official_alpha_id": "official_ready_with_lifecycle_shadow",
+                "expression": "rank(close)",
+                "lifecycle_status": "submission_ready",
+                "gate": {"submission_ready": True},
+                "scorecard": {"total_score": 92.0, "decision_band": "submit_candidate"},
+                "official_metrics": _official_metrics(official_alpha_id="official_ready_with_lifecycle_shadow"),
+                "cloud_correlation_risk": {"level": "low", "max_similarity": 0.12},
+                "scientific_audit": _safe_scientific_audit(),
+            }
+        ],
+        summary={"submission_ready": 1, "official_validation_passed": 1, "officially_simulated": 1},
+    )
+    candidate_ledger = _candidate_ledger_file(
+        tmp_path,
+        [
+            {
+                "alpha_id": "alpha_ready_with_lifecycle_shadow",
+                "official_alpha_id": "official_ready_with_lifecycle_shadow",
+                "expression": "rank(close)",
+                "lifecycle_status": "submission_ready",
+                "gate": {"submission_ready": True},
+                "scorecard": {"total_score": 92.0, "decision_band": "submit_candidate"},
+                "official_metrics": _official_metrics(official_alpha_id="official_ready_with_lifecycle_shadow"),
+                "cloud_correlation_risk": {"level": "low", "max_similarity": 0.12},
+                "scientific_audit": _safe_scientific_audit(),
+                "lifecycle_risk": {
+                    "schema_version": "candidate-lifecycle-risk-v1",
+                    "reason_code": "lifecycle_history_blocked",
+                    "action_hint": "archive",
+                    "blocking": True,
+                    "official_api_called": False,
+                    "submit_allowed": False,
+                },
+            }
+        ],
+    )
+
+    result = check_live_submit_readiness(jobs, candidate_ledger_path=candidate_ledger)
+
+    assert result["ledger_ready_to_submit"] is True
+    assert result["candidate_ledger_ready_to_submit"] is False
+    assert result["ready_to_submit"] is False
+    assert result["eligible_count"] == 0
+    assert result["latest_blocking_reason_counts"]["lifecycle_history_blocked"] == 1
+    gap_codes = {gap["code"] for gap in result["production_gap_summary"]["gaps"]}
+    assert "latest_candidate_lifecycle_history_blocked" in gap_codes
+    assert result["production_gap_summary"]["gap_count"] >= 1
+
+
 def test_live_submit_readiness_accepts_low_risk_official_pass(tmp_path):
     jobs = _jobs_file(
         tmp_path,
@@ -395,6 +485,7 @@ def test_live_submit_readiness_accepts_low_risk_official_pass(tmp_path):
                 "official_metrics": _official_metrics(),
                 "scorecard": {"total_score": 91.2, "decision_band": "submit_candidate"},
                 "cloud_correlation_risk": {"level": "low", "max_similarity": 0.12},
+                "scientific_audit": _safe_scientific_audit(),
             }
         ],
         summary={"submission_ready": 1, "official_validation_passed": 1, "submitted_this_run": 0},
@@ -417,6 +508,397 @@ def test_live_submit_readiness_accepts_low_risk_official_pass(tmp_path):
     assert result["findings"] == []
     assert result["threshold_summary"]["min_sharpe"] == 1.25
     assert result["eligible_candidates"][0]["official_release_gate"]["status"] == "PASS"
+
+
+def test_live_submit_readiness_accepts_safe_scientific_audit_submit_boundary_event(tmp_path):
+    audit = _safe_scientific_audit(
+        events=[
+            {
+                "operation": "official_simulation_writeback",
+                "official_api_called": True,
+                "submit_allowed": False,
+                "real_submit_performed": False,
+                "details": {
+                    "submit_allowed": False,
+                    "real_submit_performed": False,
+                },
+            }
+        ],
+    )
+    jobs = _jobs_file(
+        tmp_path,
+        [
+            {
+                "alpha_id": "alpha_safe_event_boundary",
+                "official_alpha_id": "official_safe_event_boundary",
+                "lifecycle_status": "submission_ready",
+                "gate": {"submission_ready": True},
+                "official_metrics": _official_metrics(official_alpha_id="official_safe_event_boundary"),
+                "scorecard": {"total_score": 91.2, "decision_band": "submit_candidate"},
+                "cloud_correlation_risk": {"level": "low", "max_similarity": 0.12},
+                "scientific_audit": audit,
+            }
+        ],
+        summary={"submission_ready": 1, "official_validation_passed": 1, "officially_simulated": 1},
+    )
+
+    result = check_live_submit_readiness(jobs)
+
+    assert result["ready_to_submit"] is True
+    assert result["eligible_count"] == 1
+    assert result["eligible_candidates"][0]["scientific_readiness_reasons"] == []
+    assert result["eligible_candidates"][0]["blocking_reasons"] == []
+
+
+def test_live_submit_readiness_blocks_missing_scientific_audit_for_otherwise_ready_candidate(tmp_path):
+    jobs = _jobs_file(
+        tmp_path,
+        [
+            {
+                "alpha_id": "alpha_missing_audit",
+                "official_alpha_id": "official_missing_audit",
+                "lifecycle_status": "submission_ready",
+                "gate": {"submission_ready": True},
+                "official_metrics": _official_metrics(official_alpha_id="official_missing_audit"),
+                "scorecard": {"total_score": 91.2, "decision_band": "submit_candidate"},
+                "cloud_correlation_risk": {"level": "low", "max_similarity": 0.12},
+            }
+        ],
+        summary={"submission_ready": 1, "official_validation_passed": 1, "officially_simulated": 1},
+    )
+
+    result = check_live_submit_readiness(jobs)
+
+    assert result["ready_to_submit"] is False
+    assert result["eligible_count"] == 0
+    assert result["best_candidate"]["scientific_readiness_reasons"] == ["missing_scientific_audit"]
+    assert result["best_candidate"]["blocking_reasons"] == ["missing_scientific_audit"]
+    assert result["latest_blocking_reason_counts"]["missing_scientific_audit"] == 1
+    gap_codes = {gap["code"] for gap in result["production_gap_summary"]["gaps"]}
+    assert "latest_candidate_missing_scientific_audit" in gap_codes
+    assert "candidate_family_missing_scientific_audit" in gap_codes
+
+
+def test_live_submit_readiness_blocks_invalid_scientific_audit_schema(tmp_path):
+    jobs = _jobs_file(
+        tmp_path,
+        [
+            {
+                "alpha_id": "alpha_invalid_audit",
+                "official_alpha_id": "official_invalid_audit",
+                "lifecycle_status": "submission_ready",
+                "gate": {"submission_ready": True},
+                "official_metrics": _official_metrics(official_alpha_id="official_invalid_audit"),
+                "scorecard": {"total_score": 91.2, "decision_band": "submit_candidate"},
+                "cloud_correlation_risk": {"level": "low", "max_similarity": 0.12},
+                "extra_fields": {
+                    "scientific_audit": _safe_scientific_audit(schema_version="old-scientific-audit"),
+                },
+            }
+        ],
+    )
+
+    result = check_live_submit_readiness(jobs)
+
+    assert result["ready_to_submit"] is False
+    assert result["best_candidate"]["scientific_readiness_reasons"] == ["invalid_scientific_audit_schema"]
+    assert result["best_candidate"]["blocking_reasons"] == ["invalid_scientific_audit_schema"]
+
+
+def test_live_submit_readiness_blocks_incomplete_scientific_audit(tmp_path):
+    jobs = _jobs_file(
+        tmp_path,
+        [
+            {
+                "alpha_id": "alpha_incomplete_audit",
+                "official_alpha_id": "official_incomplete_audit",
+                "lifecycle_status": "submission_ready",
+                "gate": {"submission_ready": True},
+                "official_metrics": _official_metrics(official_alpha_id="official_incomplete_audit"),
+                "scorecard": {"total_score": 91.2, "decision_band": "submit_candidate"},
+                "cloud_correlation_risk": {"level": "low", "max_similarity": 0.12},
+                "scientific_audit": {
+                    "schema_version": "candidate-scientific-audit-v1",
+                    "anti_overfit": {"test_script_outcomes_used": False},
+                },
+            }
+        ],
+    )
+
+    result = check_live_submit_readiness(jobs)
+
+    assert result["ready_to_submit"] is False
+    assert result["best_candidate"]["scientific_readiness_reasons"] == ["incomplete_scientific_audit"]
+    assert result["best_candidate"]["blocking_reasons"] == ["incomplete_scientific_audit"]
+
+
+def test_live_submit_readiness_blocks_unsafe_scientific_audit_feedback(tmp_path):
+    jobs = _jobs_file(
+        tmp_path,
+        [
+            {
+                "alpha_id": "alpha_test_feedback",
+                "official_alpha_id": "official_test_feedback",
+                "lifecycle_status": "submission_ready",
+                "gate": {"submission_ready": True},
+                "official_metrics": _official_metrics(official_alpha_id="official_test_feedback"),
+                "scorecard": {"total_score": 91.2, "decision_band": "submit_candidate"},
+                "cloud_correlation_risk": {"level": "low", "max_similarity": 0.12},
+                "scientific_audit": _safe_scientific_audit(
+                    anti_overfit={"test_script_outcomes_used": True, "test_feedback_allowed": False},
+                    evidence={"feedback_sources": ["scorecard", "pytest"]},
+                ),
+            }
+        ],
+    )
+
+    result = check_live_submit_readiness(jobs)
+
+    assert result["ready_to_submit"] is False
+    assert result["best_candidate"]["scientific_readiness_reasons"] == ["scientific_audit_test_feedback_used"]
+    assert result["best_candidate"]["blocking_reasons"] == ["scientific_audit_test_feedback_used"]
+    gap_codes = {gap["code"] for gap in result["production_gap_summary"]["gaps"]}
+    assert "latest_candidate_scientific_audit_test_feedback_used" in gap_codes
+
+
+def test_live_submit_readiness_blocks_nested_unsafe_audit_even_with_safe_top_level_audit(tmp_path):
+    jobs = _jobs_file(
+        tmp_path,
+        [
+            {
+                "alpha_id": "alpha_conflicting_feedback",
+                "official_alpha_id": "official_conflicting_feedback",
+                "lifecycle_status": "submission_ready",
+                "gate": {"submission_ready": True},
+                "official_metrics": _official_metrics(official_alpha_id="official_conflicting_feedback"),
+                "scorecard": {"total_score": 91.2, "decision_band": "submit_candidate"},
+                "cloud_correlation_risk": {"level": "low", "max_similarity": 0.12},
+                "scientific_audit": _safe_scientific_audit(),
+                "extra_fields": {
+                    "scientific_audit": _safe_scientific_audit(
+                        anti_overfit={
+                            "test_script_outcomes_used": False,
+                            "test_feedback_allowed": False,
+                        },
+                        evidence={"feedback_sources": ["scorecard", "pytest_result"]},
+                    ),
+                },
+            }
+        ],
+    )
+
+    result = check_live_submit_readiness(jobs)
+
+    assert result["ready_to_submit"] is False
+    assert result["best_candidate"]["scientific_readiness_reasons"] == ["scientific_audit_test_feedback_used"]
+    assert result["best_candidate"]["blocking_reasons"] == ["scientific_audit_test_feedback_used"]
+    gap_codes = {gap["code"] for gap in result["production_gap_summary"]["gaps"]}
+    assert "latest_candidate_scientific_audit_test_feedback_used" in gap_codes
+
+
+def test_live_submit_readiness_blocks_scientific_audit_submit_boundary_breach(tmp_path):
+    jobs = _jobs_file(
+        tmp_path,
+        [
+            {
+                "alpha_id": "alpha_submit_boundary",
+                "official_alpha_id": "official_submit_boundary",
+                "lifecycle_status": "submission_ready",
+                "gate": {"submission_ready": True},
+                "official_metrics": _official_metrics(official_alpha_id="official_submit_boundary"),
+                "scorecard": {"total_score": 91.2, "decision_band": "submit_candidate"},
+                "cloud_correlation_risk": {"level": "low", "max_similarity": 0.12},
+                "scientific_audit": _safe_scientific_audit(
+                    safety_boundary={"submit_allowed": True},
+                ),
+            }
+        ],
+    )
+
+    result = check_live_submit_readiness(jobs)
+
+    assert result["ready_to_submit"] is False
+    assert result["best_candidate"]["scientific_readiness_reasons"] == [
+        "scientific_audit_submit_boundary_breached"
+    ]
+    assert result["best_candidate"]["blocking_reasons"] == [
+        "scientific_audit_submit_boundary_breached"
+    ]
+    gap_codes = {gap["code"] for gap in result["production_gap_summary"]["gaps"]}
+    assert "latest_candidate_scientific_audit_submit_boundary_breached" in gap_codes
+
+
+def test_live_submit_readiness_blocks_scientific_audit_event_submit_boundary_breach(tmp_path):
+    audit = _safe_scientific_audit(
+        events=[
+            {
+                "operation": "pre_submit_availability_check",
+                "official_api_called": False,
+                "submit_allowed": True,
+                "real_submit_performed": False,
+                "details": {
+                    "submit_allowed": False,
+                    "real_submit_performed": True,
+                },
+            }
+        ],
+    )
+    jobs = _jobs_file(
+        tmp_path,
+        [
+            {
+                "alpha_id": "alpha_event_submit_boundary",
+                "official_alpha_id": "official_event_submit_boundary",
+                "lifecycle_status": "submission_ready",
+                "gate": {"submission_ready": True},
+                "official_metrics": _official_metrics(official_alpha_id="official_event_submit_boundary"),
+                "scorecard": {"total_score": 91.2, "decision_band": "submit_candidate"},
+                "cloud_correlation_risk": {"level": "low", "max_similarity": 0.12},
+                "scientific_audit": audit,
+            }
+        ],
+        summary={"submission_ready": 1, "official_validation_passed": 1, "officially_simulated": 1},
+    )
+
+    result = check_live_submit_readiness(jobs)
+
+    assert result["ready_to_submit"] is False
+    assert result["human_confirmation_required"] is False
+    assert result["eligible_count"] == 0
+    assert result["best_candidate"]["scientific_readiness_reasons"] == [
+        "scientific_audit_submit_boundary_breached"
+    ]
+    assert result["best_candidate"]["blocking_reasons"] == [
+        "scientific_audit_submit_boundary_breached"
+    ]
+    assert result["latest_blocking_reason_counts"]["scientific_audit_submit_boundary_breached"] == 1
+    gap_codes = {gap["code"] for gap in result["production_gap_summary"]["gaps"]}
+    assert "latest_candidate_scientific_audit_submit_boundary_breached" in gap_codes
+
+
+def test_live_submit_readiness_blocks_nested_submit_boundary_even_with_safe_top_level_audit(tmp_path):
+    jobs = _jobs_file(
+        tmp_path,
+        [
+            {
+                "alpha_id": "alpha_conflicting_submit_boundary",
+                "official_alpha_id": "official_conflicting_submit_boundary",
+                "lifecycle_status": "submission_ready",
+                "gate": {"submission_ready": True},
+                "official_metrics": _official_metrics(official_alpha_id="official_conflicting_submit_boundary"),
+                "scorecard": {"total_score": 91.2, "decision_band": "submit_candidate"},
+                "cloud_correlation_risk": {"level": "low", "max_similarity": 0.12},
+                "scientific_audit": _safe_scientific_audit(),
+                "extra_fields": {
+                    "scientific_audit": _safe_scientific_audit(
+                        safety_boundary={"submit_allowed": True, "real_submit_performed": True},
+                    ),
+                },
+            }
+        ],
+    )
+
+    result = check_live_submit_readiness(jobs)
+
+    assert result["ready_to_submit"] is False
+    assert result["best_candidate"]["scientific_readiness_reasons"] == [
+        "scientific_audit_submit_boundary_breached"
+    ]
+    assert result["best_candidate"]["blocking_reasons"] == [
+        "scientific_audit_submit_boundary_breached"
+    ]
+    gap_codes = {gap["code"] for gap in result["production_gap_summary"]["gaps"]}
+    assert "latest_candidate_scientific_audit_submit_boundary_breached" in gap_codes
+
+
+def test_live_submit_readiness_blocks_lifecycle_history_archive_risk(tmp_path):
+    jobs = _jobs_file(
+        tmp_path,
+        [
+            {
+                "alpha_id": "alpha_history_blocked",
+                "official_alpha_id": "official_history_blocked",
+                "expression": "rank(close)",
+                "lifecycle_status": "submission_ready",
+                "gate": {"submission_ready": True},
+                "official_metrics": _official_metrics(official_alpha_id="official_history_blocked"),
+                "scorecard": {"total_score": 91.2, "decision_band": "submit_candidate"},
+                "cloud_correlation_risk": {"level": "low", "max_similarity": 0.12},
+                "lifecycle_risk": {
+                    "schema_version": "candidate-lifecycle-risk-v1",
+                    "reason_code": "lifecycle_history_blocked",
+                    "action_hint": "archive",
+                    "blocking": True,
+                    "official_api_called": False,
+                    "submit_allowed": False,
+                },
+            }
+        ],
+        summary={"submission_ready": 1, "official_validation_passed": 1, "officially_simulated": 1},
+    )
+
+    result = check_live_submit_readiness(jobs)
+
+    assert result["ready_to_submit"] is False
+    assert result["eligible_count"] == 0
+    assert result["ledger_ready_to_submit"] is False
+    assert result["job_family_ready_to_submit"] is False
+    assert "lifecycle_history_blocked" in result["best_candidate"]["blocking_reasons"]
+    assert result["best_candidate"]["lifecycle_readiness_reasons"] == ["lifecycle_history_blocked"]
+    assert result["latest_blocking_reason_counts"]["lifecycle_history_blocked"] == 1
+    gap_codes = {gap["code"] for gap in result["production_gap_summary"]["gaps"]}
+    assert "latest_candidate_lifecycle_history_blocked" in gap_codes
+    assert result["findings"][0]["code"] == "no_submit_ready_candidate"
+
+
+def test_live_submit_readiness_blocks_nested_production_decision_lifecycle_risk(tmp_path):
+    jobs = _jobs_file(
+        tmp_path,
+        [
+            {
+                "alpha_id": "alpha_nested_history_blocked",
+                "official_alpha_id": "official_nested_history_blocked",
+                "expression": "rank(open)",
+                "lifecycle_status": "submission_ready",
+                "gate": {"submission_ready": True},
+                "official_metrics": _official_metrics(official_alpha_id="official_nested_history_blocked"),
+                "scorecard": {"total_score": 91.2, "decision_band": "submit_candidate"},
+                "cloud_correlation_risk": {"level": "low", "max_similarity": 0.12},
+                "production_decision": {
+                    "action": "archive",
+                    "blocking": True,
+                    "reason_codes": ["lifecycle_history_failed"],
+                    "decision_evidence": {
+                        "lifecycle_risk": {
+                            "schema_version": "candidate-lifecycle-risk-v1",
+                            "reason_code": "lifecycle_history_failed",
+                            "action_hint": "optimize",
+                            "blocking": False,
+                            "official_api_called": False,
+                            "submit_allowed": False,
+                        }
+                    },
+                    "official_api_called": False,
+                    "submit_allowed": False,
+                },
+            }
+        ],
+    )
+
+    result = check_live_submit_readiness(jobs)
+
+    assert result["ready_to_submit"] is False
+    assert result["eligible_count"] == 0
+    assert result["best_candidate"]["blocking_reasons"] == [
+        "lifecycle_history_failed",
+        "production_decision_lifecycle_blocked",
+    ]
+    assert result["best_candidate"]["lifecycle_readiness_reasons"] == [
+        "lifecycle_history_failed",
+        "production_decision_lifecycle_blocked",
+    ]
+    assert result["latest_blocking_reason_counts"]["lifecycle_history_failed"] == 1
+    assert result["latest_blocking_reason_counts"]["production_decision_lifecycle_blocked"] == 1
 
 
 def test_submit_readiness_hard_gate_accepts_same_official_id_and_expression():
@@ -602,6 +1084,7 @@ def test_live_submit_readiness_audits_all_jobs_for_hidden_eligible_candidates(tm
                                         "scorecard": {"total_score": 91.0, "decision_band": "submit_candidate"},
                                         "official_metrics": _official_metrics(official_alpha_id="official_ready_old"),
                                         "cloud_correlation_risk": {"level": "low", "max_similarity": 0.2},
+                                        "scientific_audit": _safe_scientific_audit(),
                                     }
                                 ]
                             }
@@ -670,6 +1153,7 @@ def test_live_submit_readiness_audits_related_job_ledgers(tmp_path):
                                     "scorecard": {"total_score": 91.0, "decision_band": "submit_candidate"},
                                     "official_metrics": _official_metrics(official_alpha_id="official_ready_related"),
                                     "cloud_correlation_risk": {"level": "low", "max_similarity": 0.1},
+                                    "scientific_audit": _safe_scientific_audit(),
                                 }
                             ]
                         },
@@ -786,6 +1270,7 @@ def test_live_submit_readiness_uses_submission_evidence_outside_compacted_previe
                                     "scorecard": {"total_score": 91.0, "decision_band": "submit_candidate"},
                                     "official_metrics": _official_metrics(official_alpha_id="official_ready_hidden"),
                                     "cloud_correlation_risk": {"level": "low", "max_similarity": 0.1},
+                                    "scientific_audit": _safe_scientific_audit(),
                                 }
                             ],
                         },
@@ -1025,6 +1510,7 @@ def test_live_submit_readiness_allows_advisory_generation_local_backtest(tmp_pat
                 "scorecard": {"total_score": 91.2, "decision_band": "submit_candidate"},
                 "cloud_correlation_risk": {"level": "low", "max_similarity": 0.12},
                 "submission": {"local_backtest": {"pass_local": False, "advisory": True}},
+                "scientific_audit": _safe_scientific_audit(),
             }
         ],
         summary={"submission_ready": 1, "official_validation_passed": 1, "submitted_this_run": 0},

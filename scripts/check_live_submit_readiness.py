@@ -8,12 +8,11 @@ from pathlib import Path
 from typing import Any
 
 from brain_alpha_ops.config import ConfigValidationError, QualityThresholds, load_run_config
-from brain_alpha_ops.brain_api.official_helpers import looks_non_production_alpha_id
-from brain_alpha_ops.research.fallback_generation import high_turnover_generation_risk_reasons
-from brain_alpha_ops.scoring.release_score_gate import evaluate_release_score
-from brain_alpha_ops.submission_readiness import (
-    REQUIRED_OFFICIAL_METRIC_FIELDS,
-    missing_official_metric_fields,
+from brain_alpha_ops.live_submit_readiness_assessment import (
+    assess_candidate as _assess_candidate,
+    best_candidate as _best_candidate,
+    float_or_none as _float_or_none,
+    scientific_audit_gap_messages as _scientific_audit_gap_messages,
 )
 
 
@@ -24,6 +23,7 @@ DEFAULT_JOB_LEDGER_GLOB = "jobs_*.json"
 DEFAULT_CANDIDATE_LEDGER = ROOT / "data" / "candidates.jsonl"
 SCHEMA_VERSION = "live_submit_readiness.v1"
 DEFAULT_SIMILARITY_THRESHOLD = 0.90
+
 
 def check_live_submit_readiness(
     jobs_path: str | Path = DEFAULT_JOBS,
@@ -127,6 +127,7 @@ def check_live_submit_readiness(
         finding.get("code") in {"jobs_ledger_error", "readiness_config_error", "candidate_ledger_error"}
         for finding in findings
     )
+    ready_to_submit = bool(eligible) and evidence_ok
     return {
         "ok": evidence_ok,
         "schema_version": SCHEMA_VERSION,
@@ -142,8 +143,8 @@ def check_live_submit_readiness(
         "ledger_candidate_count": int(primary_audit.get("ledger_candidate_count") or 0),
         "ledger_eligible_count": len(ledger_eligible),
         "ledger_ready_to_submit": bool(ledger_eligible),
-        "ready_to_submit": bool(eligible) and evidence_ok,
-        "human_confirmation_required": bool(eligible) and evidence_ok,
+        "ready_to_submit": ready_to_submit,
+        "human_confirmation_required": ready_to_submit,
         "candidate_ledger_candidate_count": int(candidate_ledger_audit.get("candidate_count") or 0),
         "candidate_ledger_eligible_count": int(candidate_ledger_audit.get("eligible_count") or 0),
         "candidate_ledger_ready_to_submit": bool(candidate_ledger_audit.get("ready_to_submit")),
@@ -169,6 +170,7 @@ def check_live_submit_readiness(
             primary_chain_summary=primary_chain_summary,
             family_chain_summary=family_chain_summary,
             candidate_evidence_incomplete=primary_candidate_evidence_incomplete,
+            current_ready_to_submit=ready_to_submit,
         ),
         "best_candidate": best,
         "job_family_best_candidate": _best_candidate(family_candidates),
@@ -594,6 +596,10 @@ def _merge_assessed_candidate_evidence(current: dict[str, Any], incoming: dict[s
         incoming.get("missing_official_metric_fields"),
     )
     pending_checks = _merged_string_list(current.get("pending_official_checks"), incoming.get("pending_official_checks"))
+    scientific_reasons = _merged_string_list(
+        current.get("scientific_readiness_reasons"),
+        incoming.get("scientific_readiness_reasons"),
+    )
     candidate_sources = _merged_string_list(
         current.get("candidate_sources") or current.get("candidate_source"),
         incoming.get("candidate_sources") or incoming.get("candidate_source"),
@@ -601,6 +607,7 @@ def _merge_assessed_candidate_evidence(current: dict[str, Any], incoming: dict[s
     merged["blocking_reasons"] = blocking_reasons
     merged["missing_official_metric_fields"] = missing_fields
     merged["pending_official_checks"] = pending_checks
+    merged["scientific_readiness_reasons"] = scientific_reasons
     merged["candidate_sources"] = candidate_sources
     merged["eligible"] = bool(current.get("eligible") and incoming.get("eligible") and not blocking_reasons)
     return merged
@@ -639,161 +646,6 @@ def _candidate_key(candidate: dict[str, Any]) -> str:
         or candidate.get("expression")
         or id(candidate)
     )
-
-
-def _assess_candidate(
-    candidate: dict[str, Any],
-    *,
-    thresholds: QualityThresholds,
-    similarity_threshold: float,
-) -> dict[str, Any]:
-    metrics = candidate.get("official_metrics") if isinstance(candidate.get("official_metrics"), dict) else {}
-    if not metrics and isinstance(candidate.get("metrics"), dict):
-        metrics = candidate["metrics"]
-    risk = candidate.get("cloud_correlation_risk") if isinstance(candidate.get("cloud_correlation_risk"), dict) else {}
-    submission = candidate.get("submission") if isinstance(candidate.get("submission"), dict) else {}
-    local_backtest = (
-        submission.get("local_backtest")
-        if isinstance(submission.get("local_backtest"), dict)
-        else {}
-    )
-    local_backtest_passed = local_backtest.get("pass_local") if local_backtest else None
-    max_similarity = _float_or_none(risk.get("max_similarity"))
-    official_id = str(candidate.get("official_alpha_id") or metrics.get("official_alpha_id") or "")
-    pass_fail = str(metrics.get("pass_fail") or "").strip().upper()
-    pending_check_names = _string_list(metrics.get("brain_pending_names") or [])
-    decision_band = str(
-        (candidate.get("scorecard") or {}).get("decision_band")
-        or candidate.get("decision_band")
-        or ""
-    )
-    expression = str(candidate.get("expression") or "")
-    submission_ready = bool((candidate.get("gate") or {}).get("submission_ready")) or candidate.get(
-        "lifecycle_status"
-    ) == "submission_ready"
-    generation_risks = high_turnover_generation_risk_reasons(expression)
-    local_backtest_summary = _local_backtest_summary(local_backtest)
-    reasons: list[str] = []
-    if not submission_ready:
-        reasons.append("not_submission_ready")
-    if generation_risks:
-        reasons.append("high_turnover_generation_risk")
-    if decision_band != "submit_candidate":
-        reasons.append("decision_band_not_submit_candidate")
-    if local_backtest_passed is False and local_backtest.get("advisory") is not True:
-        reasons.append("local_backtest_failed")
-    for unsupported_reason in _unsupported_local_backtest_reasons(local_backtest_summary):
-        reasons.append(unsupported_reason)
-    if not official_id:
-        reasons.append("missing_official_alpha_id")
-    elif looks_non_production_alpha_id(official_id):
-        reasons.append("non_production_official_alpha_id")
-    if not metrics or not pass_fail:
-        reasons.append("missing_official_metrics")
-    elif pass_fail != "PASS":
-        reasons.append("official_pass_fail_not_pass")
-    missing_metric_fields = _missing_official_metric_fields(metrics) if metrics else []
-    if metrics and missing_metric_fields:
-        reasons.append("missing_official_metric_fields")
-    if any(name.upper() == "SELF_CORRELATION" for name in pending_check_names):
-        reasons.append("official_self_correlation_pending")
-    elif pending_check_names:
-        reasons.append("official_checks_pending")
-    release_gate = evaluate_release_score(metrics, thresholds, settings=_candidate_settings(candidate)).to_dict() if metrics else {}
-    for reason in _release_gate_blocking_reasons(release_gate):
-        if reason not in reasons:
-            reasons.append(reason)
-    if max_similarity is None:
-        reasons.append("missing_cloud_similarity")
-    elif max_similarity >= similarity_threshold or str(risk.get("level") or "").lower() == "high":
-        reasons.append("high_cloud_similarity")
-    eligible = not reasons
-    return {
-        "alpha_id": str(candidate.get("alpha_id") or ""),
-        "official_alpha_id": official_id,
-        "expression": expression,
-        "generation_risk_reasons": generation_risks,
-        "lifecycle_status": str(candidate.get("lifecycle_status") or ""),
-        "pass_fail": pass_fail,
-        "score": _float_or_none((candidate.get("scorecard") or {}).get("total_score") or candidate.get("score")),
-        "decision_band": decision_band,
-        "local_backtest_passed": local_backtest_passed if isinstance(local_backtest_passed, bool) else None,
-        "local_backtest": local_backtest_summary,
-        "max_similarity": max_similarity,
-        "risk_level": str(risk.get("level") or ""),
-        "missing_official_metric_fields": missing_metric_fields,
-        "pending_official_checks": pending_check_names,
-        "official_release_gate": release_gate,
-        "eligible": eligible,
-        "blocking_reasons": reasons,
-    }
-
-
-def _candidate_settings(candidate: dict[str, Any]) -> dict[str, Any]:
-    settings = candidate.get("settings") if isinstance(candidate.get("settings"), dict) else {}
-    submission = candidate.get("submission") if isinstance(candidate.get("submission"), dict) else {}
-    submission_settings = submission.get("settings") if isinstance(submission.get("settings"), dict) else {}
-    metrics = candidate.get("official_metrics") if isinstance(candidate.get("official_metrics"), dict) else {}
-    if settings:
-        return settings
-    if submission_settings:
-        return submission_settings
-    if "delay" in metrics:
-        return {"delay": metrics.get("delay")}
-    return {}
-
-
-def _local_backtest_summary(local_backtest: dict[str, Any]) -> dict[str, Any]:
-    if not isinstance(local_backtest, dict) or not local_backtest:
-        return {}
-
-    reasons = _string_list(local_backtest.get("pass_reasons") or local_backtest.get("reasons"))
-    failing_reasons = [
-        reason for reason in reasons
-        if "FAIL" in reason.upper() or "ERROR" in reason.upper() or "REJECT" in reason.upper()
-    ]
-    return {
-        "pass_local": local_backtest.get("pass_local") if isinstance(local_backtest.get("pass_local"), bool) else None,
-        "advisory": local_backtest.get("advisory") if isinstance(local_backtest.get("advisory"), bool) else None,
-        "sharpe": _float_or_none(local_backtest.get("sharpe")),
-        "fitness": _float_or_none(local_backtest.get("fitness")),
-        "turnover": _float_or_none(local_backtest.get("turnover")),
-        "weight_concentration": _float_or_none(local_backtest.get("weight_concentration")),
-        "failing_reasons": failing_reasons[:8],
-        "reasons": reasons[:8],
-    }
-
-
-def _unsupported_local_backtest_reasons(local_backtest: dict[str, Any]) -> list[str]:
-    reasons = _string_list(local_backtest.get("reasons"))
-    reasons.extend(_string_list(local_backtest.get("failing_reasons")))
-    blockers: list[str] = []
-    if any("unsupported_fields=" in reason for reason in reasons):
-        blockers.append("unsupported_local_backtest_fields")
-    if any("unsupported_operators=" in reason for reason in reasons):
-        blockers.append("unsupported_local_backtest_operators")
-    return blockers
-
-
-def _has_unsupported_local_backtest(candidate: dict[str, Any]) -> bool:
-    reasons = {str(reason) for reason in candidate.get("blocking_reasons") or [] if str(reason)}
-    return bool(reasons & {"unsupported_local_backtest_fields", "unsupported_local_backtest_operators"})
-
-
-def _has_hard_local_backtest_block(candidate: dict[str, Any]) -> bool:
-    reasons = {str(reason) for reason in candidate.get("blocking_reasons") or [] if str(reason)}
-    return "local_backtest_failed" in reasons
-
-
-def _string_list(value: Any) -> list[str]:
-    if not isinstance(value, list):
-        return []
-    result: list[str] = []
-    for item in value:
-        text = str(item).strip()
-        if text:
-            result.append(text)
-    return result
 
 
 def _blocking_reason_counts(candidates: list[dict[str, Any]]) -> dict[str, int]:
@@ -869,6 +721,7 @@ def _production_gap_summary(
     primary_chain_summary: dict[str, Any],
     family_chain_summary: dict[str, Any],
     candidate_evidence_incomplete: bool = False,
+    current_ready_to_submit: bool | None = None,
 ) -> dict[str, Any]:
     gaps: list[dict[str, str]] = []
 
@@ -876,7 +729,7 @@ def _production_gap_summary(
         if not any(item["code"] == code for item in gaps):
             gaps.append({"code": code, "message": message})
 
-    if primary_audit.get("ready_to_submit"):
+    if primary_audit.get("ready_to_submit") and current_ready_to_submit is not False:
         return {
             "gap_count": 0,
             "gaps": [],
@@ -906,12 +759,30 @@ def _production_gap_summary(
         add("latest_candidate_generation_risk", "latest candidate has a known high-turnover generation pattern")
     if latest_blocking_reason_counts.get("local_backtest_failed"):
         add("latest_candidate_local_backtest_failed", "latest candidate failed local backtest constraints")
+    if latest_blocking_reason_counts.get("lifecycle_history_blocked"):
+        add("latest_candidate_lifecycle_history_blocked", "latest candidate has local lifecycle history that requires archive before submit")
+    if latest_blocking_reason_counts.get("lifecycle_history_failed"):
+        add("latest_candidate_lifecycle_history_failed", "latest candidate has local lifecycle history that requires rework before submit")
+    if latest_blocking_reason_counts.get("production_decision_lifecycle_blocked"):
+        add("latest_candidate_lifecycle_decision_blocked", "latest candidate production decision contains lifecycle-history blocking evidence")
+    if latest_blocking_reason_counts.get("production_decision_blocked"):
+        add("latest_candidate_production_decision_blocked", "latest candidate production decision is blocked")
+    for reason, message in _scientific_audit_gap_messages().items():
+        if latest_blocking_reason_counts.get(reason):
+            add(f"latest_candidate_{reason}", f"latest candidate {message}")
     if latest_blocking_reason_counts.get("high_cloud_similarity"):
         add("latest_candidate_high_cloud_similarity", "latest candidate is too similar to an existing cloud alpha")
     if family_blocking_reason_counts.get("missing_official_alpha_id"):
         add("candidate_family_missing_official_alpha_id", "candidate family lacks official alpha identifiers")
     if family_blocking_reason_counts.get("missing_official_metrics"):
         add("candidate_family_missing_official_metrics", "candidate family lacks official simulation metrics")
+    if family_blocking_reason_counts.get("lifecycle_history_blocked"):
+        add("candidate_family_lifecycle_history_blocked", "candidate family contains local lifecycle history that requires archive before submit")
+    if family_blocking_reason_counts.get("lifecycle_history_failed"):
+        add("candidate_family_lifecycle_history_failed", "candidate family contains local lifecycle history that requires rework before submit")
+    for reason, message in _scientific_audit_gap_messages().items():
+        if family_blocking_reason_counts.get(reason):
+            add(f"candidate_family_{reason}", f"candidate family {message}")
     if family_blocking_reason_counts.get("missing_cloud_similarity"):
         add("candidate_family_missing_cloud_similarity", "candidate family has candidates without cloud similarity evidence")
     if family_blocking_reason_counts.get("decision_band_not_submit_candidate"):
@@ -926,27 +797,6 @@ def _production_gap_summary(
         "job_family_chain_summary": dict(family_chain_summary),
         "ledger_ready_to_submit": bool(primary_audit.get("ledger_ready_to_submit")),
     }
-
-
-def _best_candidate(candidates: list[dict[str, Any]]) -> dict[str, Any]:
-    if not candidates:
-        return {}
-    return sorted(candidates, key=_best_candidate_rank, reverse=True)[0]
-
-
-def _best_candidate_rank(candidate: dict[str, Any]) -> tuple[int, int, int, int, int, int, int, float]:
-    reasons = {str(reason) for reason in candidate.get("blocking_reasons") or [] if str(reason)}
-    score = _float_or_none(candidate.get("score")) or 0.0
-    return (
-        1 if candidate.get("eligible") is True else 0,
-        1 if candidate.get("decision_band") == "submit_candidate" else 0,
-        0 if _has_unsupported_local_backtest(candidate) else 1,
-        0 if _has_hard_local_backtest_block(candidate) else 1,
-        0 if "high_turnover_generation_risk" in reasons else 1,
-        0 if "high_cloud_similarity" in reasons else 1,
-        -len(reasons),
-        score,
-    )
 
 
 def _load_thresholds(config_path: str | Path) -> tuple[QualityThresholds, dict[str, str] | None]:
@@ -970,47 +820,6 @@ def _threshold_summary(thresholds: QualityThresholds) -> dict[str, Any]:
         "require_official_pass": thresholds.require_official_pass,
         "require_official_metrics": thresholds.require_official_metrics,
     }
-
-
-def _missing_official_metric_fields(metrics: dict[str, Any]) -> list[str]:
-    return missing_official_metric_fields(metrics)
-
-
-def _has_metric_value(metrics: dict[str, Any], key: str) -> bool:
-    value = metrics.get(key)
-    return value is not None and value != ""
-
-
-def _release_gate_blocking_reasons(release_gate: dict[str, Any]) -> list[str]:
-    reasons: list[str] = []
-    for item in release_gate.get("attributions") or []:
-        if not isinstance(item, dict):
-            continue
-        if item.get("passed") or item.get("severity") != "ERROR":
-            continue
-        reason = _release_gate_reason(str(item.get("name") or ""))
-        if reason and reason not in reasons:
-            reasons.append(reason)
-    return reasons
-
-
-def _release_gate_reason(name: str) -> str:
-    return {
-        "sharpe": "official_sharpe_below_threshold",
-        "fitness": "official_fitness_below_threshold",
-        "turnover_cap": "official_turnover_above_threshold",
-        "self_correlation_cap": "official_self_correlation_above_threshold",
-        "prod_correlation_cap": "official_prod_correlation_above_threshold",
-        "weight_concentration_cap": "official_weight_concentration_above_threshold",
-        "sub_universe_sharpe": "official_sub_universe_sharpe_below_threshold",
-    }.get(name, "")
-
-
-def _float_or_none(value: Any) -> float | None:
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return None
 
 
 def _int(value: Any) -> int:

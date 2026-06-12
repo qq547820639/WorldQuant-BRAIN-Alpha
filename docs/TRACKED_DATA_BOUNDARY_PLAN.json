@@ -7,6 +7,11 @@
       "status": "keep",
       "category": "runtime_generated",
       "note": "Keep for now: directly referenced by e2e_report.py and delivery evidence docs; remove only after those references are retired or rewritten."
+    },
+    "data/simulation_cooldown.json": {
+      "status": "keep",
+      "category": "runtime_generated",
+      "note": "Keep for now: account-level official simulation cooldown state is part of local recovery/audit evidence and must not be silently discarded."
     }
   }
 }

@@ -5,6 +5,9 @@ from __future__ import annotations
 import logging
 import re
 
+from brain_alpha_ops.research.expression_engine import ExpressionEngine
+from brain_alpha_ops.research.expression_official_context import GROUP_CONTEXT_FIELDS
+
 
 logger = logging.getLogger("brain_alpha_ops.brain_api.official")
 
@@ -85,16 +88,25 @@ class OfficialExpressionValidator:
 
         if known_ops:
             used_ops = re.findall(r"\b([a-zA-Z_]\w*)\s*\(", expression)
-            for op in used_ops:
-                if op not in known_ops and op.lower() not in known_ops:
-                    errors.append(f"Unknown operator: {op}")
             if len(set(used_ops)) > 8:
                 warnings.append(f"High operator count: {len(set(used_ops))} unique operators (BRAIN recommends <= 8)")
 
-        if known_flds:
-            tokens = re.findall(r"\b([a-zA-Z_]\w+)\b", expression)
-            field_tokens = [token for token in tokens if token.lower() in known_flds]
-            if not field_tokens:
+        if known_ops or known_flds:
+            report = ExpressionEngine(
+                allowed_fields={field for field in known_flds if field not in GROUP_CONTEXT_FIELDS},
+                allowed_operators=known_ops,
+            ).validate(expression)
+            for issue in report.issues:
+                if issue.severity != "ERROR":
+                    continue
+                values = issue.detail.get("values") if isinstance(issue.detail, dict) else None
+                if issue.code == "unknown_fields" and values:
+                    errors.append("Unknown fields: " + ", ".join(str(value) for value in values))
+                elif issue.code == "unknown_operators" and values:
+                    errors.append("Unknown operators: " + ", ".join(str(value) for value in values))
+                elif issue.code == "parse_error":
+                    errors.append("Parse error: " + issue.message)
+            if known_flds and not [field for field in report.profile.fields if field not in GROUP_CONTEXT_FIELDS]:
                 errors.append("No known BRAIN data fields found in expression")
 
         if errors:

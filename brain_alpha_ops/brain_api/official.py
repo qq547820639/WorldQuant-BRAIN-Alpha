@@ -226,6 +226,21 @@ class OfficialBrainAPI:
             offset=offset,
         )
 
+    def discover_datasets_limited(
+        self,
+        query: str = "all",
+        region: str = "",
+        *,
+        options: dict[str, Any] | None = None,
+        **filters,
+    ) -> dict:
+        return self._context_data.discover_datasets_limited(
+            query,
+            region,
+            options=options,
+            **filters,
+        )
+
     def search_datasets(
         self,
         query: str = "all",
@@ -245,6 +260,23 @@ class OfficialBrainAPI:
             progress_callback=progress_callback,
         )
 
+    def discover_datasets(
+        self,
+        query: str = "all",
+        region: str = "",
+        *,
+        options: dict[str, Any] | None = None,
+        progress_callback=None,
+        **filters,
+    ) -> list[dict]:
+        return self._context_data.discover_datasets(
+            query,
+            region,
+            options=options,
+            progress_callback=progress_callback,
+            **filters,
+        )
+
     def search_fields_limited(
         self,
         query: str = "all",
@@ -262,6 +294,25 @@ class OfficialBrainAPI:
             **filters,
             limit=limit,
             offset=offset,
+        )
+
+    def discover_fields_limited(
+        self,
+        query: str = "all",
+        region: str = "",
+        dataset: str = "",
+        *,
+        dataset_id: str = "",
+        options: dict[str, Any] | None = None,
+        **filters,
+    ) -> dict:
+        return self._context_data.discover_fields_limited(
+            query,
+            region,
+            dataset=dataset,
+            dataset_id=dataset_id,
+            options=options,
+            **filters,
         )
 
     def search_fields(
@@ -285,6 +336,27 @@ class OfficialBrainAPI:
             progress_callback=progress_callback,
         )
 
+    def discover_fields(
+        self,
+        query: str = "all",
+        region: str = "",
+        dataset: str = "",
+        *,
+        dataset_id: str = "",
+        options: dict[str, Any] | None = None,
+        progress_callback=None,
+        **filters,
+    ) -> list[dict]:
+        return self._context_data.discover_fields(
+            query,
+            region,
+            dataset=dataset,
+            dataset_id=dataset_id,
+            options=options,
+            progress_callback=progress_callback,
+            **filters,
+        )
+
     def locate_dataset(self, dataset_id: str) -> dict:
         return self._context_data.locate_dataset(dataset_id)
 
@@ -294,11 +366,36 @@ class OfficialBrainAPI:
     def locate_alpha(self, alpha_id: str) -> dict:
         return self._context_data.locate_alpha(alpha_id)
 
+    def get_dataset(self, dataset_id: str = "", *, id: str = "") -> dict:
+        return self._context_data.get_dataset(dataset_id, id=id)
+
+    def get_field(self, field_id: str = "", *, id: str = "") -> dict:
+        return self._context_data.get_field(field_id, id=id)
+
+    def get_alpha(self, alpha_id: str = "", *, id: str = "") -> dict:
+        return self._context_data.get_alpha(alpha_id, id=id)
+
     def filter_alphas_limited(self, **filters) -> dict:
         return self._context_data.filter_alphas_limited(**filters)
 
+    def query_alphas_limited(self, *, options: dict[str, Any] | None = None, **filters) -> dict:
+        return self._context_data.query_alphas_limited(options=options, **filters)
+
     def filter_alphas(self, progress_callback=None, **filters) -> list[dict]:
         return self._context_data.filter_alphas(progress_callback=progress_callback, **filters)
+
+    def query_alphas(
+        self,
+        progress_callback=None,
+        *,
+        options: dict[str, Any] | None = None,
+        **filters,
+    ) -> list[dict]:
+        return self._context_data.query_alphas(
+            progress_callback=progress_callback,
+            options=options,
+            **filters,
+        )
 
     def list_user_alphas(
         self,

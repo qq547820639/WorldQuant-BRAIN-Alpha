@@ -16,8 +16,13 @@ def test_submit_readiness_contract_is_typed_for_react():
     types = _source(TYPES)
 
     assert "export interface SubmitReadinessResponse" in types
+    assert "authoritative_stop_rule?: string;" in types
+    assert "validation_command?: string;" in types
     assert "official_api_called?: boolean;" in types
+    assert "non_submit_flow?: boolean;" in types
+    assert "real_submit_performed?: boolean;" in types
     assert "ready_to_submit?: boolean;" in types
+    assert "submit_ready_claim_allowed?: boolean;" in types
     assert "job_family_candidate_count?: number;" in types
     assert "top_blocking_reasons?: ReadinessReasonCount[];" in types
     assert "production_gaps?: SubmitReadinessFinding[];" in types
@@ -47,6 +52,11 @@ def test_submission_confirm_panel_exposes_readiness_summary():
     assert '<ReadinessMetric label="复核候选" value={formatCount(readiness?.eligible_count)} />' in source
     assert '<ReadinessMetric label="官方仿真" value={formatCount(summary.officially_simulated)} />' in source
     assert '<ReadinessMetric label="官方接口" value={readiness?.official_api_called ? "已调用" : "未调用"} />' in source
+    assert '<ReadinessMetric label="真实提交" value={submitBoundary}' in source
+    assert "const stopRule = readiness?.authoritative_stop_rule || readiness?.validation_command || readiness?.source" in source
+    assert 'const claimPolicy = readiness?.submit_ready_claim_allowed ? "可按验证结果继续人工复核" : "不可声明提交就绪";' in source
+    assert "判定来源: {stopRule}" in source
+    assert "提交就绪声明: {claimPolicy}" in source
     assert 'countLabel("当前阻断", allBlockers.length)' in source
     assert 'countLabel("候选族阻断", allFamilyBlockers.length)' in source
     assert 'countLabel("生产缺口", allProductionGaps.length)' in source

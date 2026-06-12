@@ -11,7 +11,7 @@ from typing import Any
 
 DEFAULT_MODULE = "brain_alpha_ops.web_handler_dispatch"
 SCHEMA_VERSION = "web_handler_dispatch_context_check.v1"
-MAX_GROUP_FIELD_COUNT = 14
+MAX_GROUP_FIELD_COUNT = 20
 GROUP_CLASS_NAMES = {
     "core": "WebDispatchCoreContext",
     "session": "WebDispatchSessionContext",

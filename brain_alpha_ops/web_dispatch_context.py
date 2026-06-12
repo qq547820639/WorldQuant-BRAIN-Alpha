@@ -40,6 +40,7 @@ WEB_CONTEXT_ALLOWED_NAMES = frozenset({
     "_candidate_from_payload",
     "_check_candidate_availability",
     "_cloud_alpha_snapshot_service",
+    "_cloud_alpha_cache_probe_service",
     "_cloud_similarity_risk",
     "_cloud_status_for",
     "_compute_run_stats",
@@ -95,6 +96,7 @@ WEB_CONTEXT_ALLOWED_NAMES = frozenset({
     "active_auxiliary_operation",
     "active_job_payload",
     "anti_overfit_snapshot",
+    "alpha_lifecycle_history",
     "api_from_run_config",
     "assistant_context_snapshot",
     "assistant_cross_review_payload",
@@ -111,6 +113,7 @@ WEB_CONTEXT_ALLOWED_NAMES = frozenset({
     "check_candidate_availability",
     "check_candidate_payload",
     "cloud_alpha_snapshot",
+    "cloud_alpha_cache_probe",
     "cloud_status_for",
     "config_from_payload",
     "configure_session_policy",
@@ -215,7 +218,7 @@ class WebApplicationContext:
 
 """Context objects shared by web route dispatchers."""
 
-from dataclasses import dataclass, replace
+from dataclasses import MISSING, dataclass, replace
 from typing import Any, Callable
 
 
@@ -281,6 +284,7 @@ class WebDispatchConfigContext:
 class WebDispatchResearchContext:
     latest_result_snapshot: Callable[[], dict[str, Any]]
     lifecycle_from_job: Callable[[dict[str, Any]], list[dict[str, Any]]]
+    alpha_lifecycle_history: Callable[..., dict[str, Any]]
     cloud_alpha_snapshot: Callable[..., dict[str, Any]]
     official_context_file_counts: Callable[[], dict[str, Any]]
     research_memory_snapshot: Callable[..., dict[str, Any]]
@@ -292,6 +296,8 @@ class WebDispatchResearchContext:
     sqlite_record_lookup_payload: Callable[..., dict[str, Any]]
     load_check_results: Callable[[], dict[str, Any]]
     user_profile_snapshot: Callable[[], dict[str, Any]]
+    cloud_alpha_cache_probe: Callable[..., dict[str, Any]] | None = None
+    candidate_summary_probe: Callable[[], dict[str, Any] | None] | None = None
 
 
 @dataclass(frozen=True)
@@ -407,8 +413,10 @@ class WebHandlerDispatchContext:
 def _build_context_group(group_class: type, values: dict[str, Any]) -> Any:
     fields = group_class.__dataclass_fields__
     payload = {}
-    for name in fields:
+    for name, field in fields.items():
         if name not in values:
+            if field.default is not MISSING or field.default_factory is not MISSING:
+                continue
             raise TypeError(f"missing WebHandlerDispatchContext field: {name}")
         payload[name] = values.pop(name)
     return group_class(**payload)

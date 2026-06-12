@@ -31,10 +31,16 @@ from brain_alpha_ops.web_payload_validation import (
     validate_generate_candidates_payload,
     validate_job_cancel_payload,
     validate_json_object_payload,
+    validate_simulation_payload,
     validate_submit_batch_payload,
     validate_sync_alphas_payload,
 )
 from brain_alpha_ops.web_post_handlers import stop_job_payload
+from brain_alpha_ops.web_state_contract import enrich_error_payload, enrich_job_response
+from brain_alpha_ops.web_sync_status_payload import (
+    with_official_context_cache as _with_official_context_cache,
+    with_sync_history as _with_sync_history,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -44,6 +50,8 @@ MAX_HISTORY_LIMIT = 10000
 DEFAULT_LEDGER_LIMIT = 100
 MAX_LEDGER_LIMIT = 5000
 MAX_RECORD_LOOKUP_LIMIT = 500
+DEFAULT_ALPHA_LIFECYCLE_LIMIT = 250
+MAX_ALPHA_LIFECYCLE_LIMIT = 2000
 _TERMINAL_STATUSES = frozenset({
     "completed", "completed_with_warnings", "failed", "stopped", "cancelled", "canceled",
 })
@@ -51,6 +59,14 @@ _LEGACY_FALLBACK_DISABLED_POST_PATHS = frozenset({"/api/pipeline/start"})
 RouteDispatcher = Callable[[Any, Any, WebHandlerDispatchContext], None]
 PayloadValidator = Callable[[Any], str]
 PayloadRouteDispatcher = Callable[[Any, Any, WebHandlerDispatchContext, dict[str, Any]], None]
+
+
+def _error_response(payload: dict[str, Any], *, fallback_kind: str | None = None) -> dict[str, Any]:
+    return enrich_error_payload(payload, fallback_kind=fallback_kind)
+
+
+def _job_response(payload: dict[str, Any], *, job_type: str | None = None) -> dict[str, Any]:
+    return enrich_job_response(payload, job_type=job_type)
 
 
 def dispatch_get(handler: Any, parsed: Any, ctx: WebHandlerDispatchContext) -> None:
@@ -69,23 +85,23 @@ def _dispatch_route(
     handlers: dict[str, RouteDispatcher],
 ) -> None:
     if not handler._is_allowed_local_request():
-        handler._json({"ok": False, "error_code": "ORIGIN_FORBIDDEN", "error": "forbidden local request origin"}, status=403)
+        handler._json(_error_response({"ok": False, "error_code": "ORIGIN_FORBIDDEN", "error": "forbidden local request origin"}), status=403)
         return
     route = ctx.route_for(method, parsed.path)
     if not route:
         if method == "POST" and parsed.path in _LEGACY_FALLBACK_DISABLED_POST_PATHS:
-            handler._json({"ok": False, "error_code": "LEGACY_ROUTE_DISABLED", "error": "legacy pipeline route is disabled; use /api/run"}, status=404)
+            handler._json(_error_response({"ok": False, "error_code": "LEGACY_ROUTE_DISABLED", "error": "legacy pipeline route is disabled; use /api/run"}), status=404)
             return
         if method not in {"GET", "HEAD", "OPTIONS"}:
             if not handler._has_valid_session(parsed.query):
-                handler._json({"ok": False, "error_code": "SESSION_INVALID", "error": "invalid local session"}, status=403)
+                handler._json(_error_response({"ok": False, "error_code": "SESSION_INVALID", "error": "invalid local session"}), status=403)
                 return
             replay_validator = getattr(handler, "_validate_replay_request", None)
             if callable(replay_validator):
                 replay_result = replay_validator()
                 if not replay_result.get("ok"):
                     status = 409 if replay_result.get("error_code") == "REPLAY_DETECTED" else 400
-                    handler._json({"ok": False, **replay_result}, status=status)
+                    handler._json(_error_response({"ok": False, **replay_result}), status=status)
                     return
             if not _apply_rate_limit(handler, ctx, method, parsed.path):
                 return
@@ -102,10 +118,10 @@ def _dispatch_route(
                 method, redact_text(str(parsed.path)), redact_text(str(_legacy_exc)),
                 exc_info=True,
             )
-        handler._json({"ok": False, "error_code": "NOT_FOUND", "error": "not found"}, status=404)
+        handler._json(_error_response({"ok": False, "error_code": "NOT_FOUND", "error": "not found"}), status=404)
         return
     if route.requires_session and not handler._has_valid_session(parsed.query):
-        handler._json({"ok": False, "error_code": "SESSION_INVALID", "error": "invalid local session"}, status=403)
+        handler._json(_error_response({"ok": False, "error_code": "SESSION_INVALID", "error": "invalid local session"}), status=403)
         return
     if method not in {"GET", "HEAD", "OPTIONS"} and route.requires_session:
         replay_validator = getattr(handler, "_validate_replay_request", None)
@@ -113,13 +129,13 @@ def _dispatch_route(
             replay_result = replay_validator()
             if not replay_result.get("ok"):
                 status = 409 if replay_result.get("error_code") == "REPLAY_DETECTED" else 400
-                handler._json({"ok": False, **replay_result}, status=status)
+                handler._json(_error_response({"ok": False, **replay_result}), status=status)
                 return
     if getattr(route, "category", "api") == "api" and not _apply_rate_limit(handler, ctx, method, parsed.path):
         return
     route_handler = handlers.get(str(route.handler))
     if route_handler is None:
-        handler._json({"ok": False, "error_code": "NOT_FOUND", "error": "not found"}, status=404)
+        handler._json(_error_response({"ok": False, "error_code": "NOT_FOUND", "error": "not found"}), status=404)
         return
     try:
         route_handler(handler, parsed, ctx)
@@ -128,7 +144,7 @@ def _dispatch_route(
         return
     except Exception as exc:
         logger.error("web route dispatch failed: %s %s", method, redact_text(parsed.path), exc_info=True)
-        handler._json(ctx.web_error(exc, f"{method}_ROUTE_ERROR"), status=500)
+        handler._json(_error_response(ctx.web_error(exc, f"{method}_ROUTE_ERROR")), status=500)
 
 
 def _rate_limit_key(handler: Any) -> str:
@@ -153,13 +169,17 @@ def _apply_rate_limit(handler: Any, ctx: WebHandlerDispatchContext, method: str,
         retry_after = str(int(float(retry_value)))
     except (TypeError, ValueError):
         retry_after = "1"
-    handler._json({"ok": False, **rate_result}, status=429, extra_headers=[("Retry-After", retry_after)])
+    handler._json(
+        _error_response({"ok": False, **rate_result}, fallback_kind="web_rate_limited"),
+        status=429,
+        extra_headers=[("Retry-After", retry_after)],
+    )
     return False
 
 
 def _reject_invalid_payload(handler: Any, error: str) -> bool:
     if error:
-        handler._json({"ok": False, "error_code": "VALIDATION_ERROR", "error": error}, status=400)
+        handler._json(_error_response({"ok": False, "error_code": "VALIDATION_ERROR", "error": error}), status=400)
     return bool(error)
 
 
@@ -186,10 +206,10 @@ def _validated_post_route(
                 route_handler(handler, parsed, ctx, payload)
             except AssistantResponseParseError as exc:
                 logger.error("web post route failed: %s", redact_text(parsed.path), exc_info=True)
-                handler._json(ctx.web_error(exc, assistant_error_code or error_code), status=400)
+                handler._json(_error_response(ctx.web_error(exc, assistant_error_code or error_code)), status=400)
             except Exception as exc:
                 logger.error("web post route failed: %s", redact_text(parsed.path), exc_info=True)
-                handler._json(ctx.web_error(exc, error_code), status=400)
+                handler._json(_error_response(ctx.web_error(exc, error_code)), status=400)
 
         return _wrapper
 
@@ -201,7 +221,7 @@ def _reject_auxiliary_conflict(handler: Any, ctx: WebHandlerDispatchContext, **k
     if not conflict:
         return False
     _kind, message = conflict
-    handler._json({"ok": False, "error_code": "CONFLICT_AUX_OP", "error": message}, status=409)
+    handler._json(_error_response({"ok": False, "error_code": "CONFLICT_AUX_OP", "error": message}, fallback_kind="queue_blocked"), status=409)
     return True
 
 
@@ -211,7 +231,7 @@ def _with_session_credentials(handler: Any, ctx: WebHandlerDispatchContext, payl
 
 def _get_root(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext) -> None:
     if ctx.remote_admin_required() and not ctx.has_valid_admin_token(getattr(handler, "headers", {})):
-        handler._json({"ok": False, "error_code": "ADMIN_AUTH_REQUIRED", "error": "remote web access requires admin authentication"}, status=401)
+        handler._json(_error_response({"ok": False, "error_code": "ADMIN_AUTH_REQUIRED", "error": "remote web access requires admin authentication"}), status=401)
         return
     session_id, csrf_token = ctx.get_or_create_session(handler._session_id_from_cookie())
     stream_token = ctx.stream_token_for_session(session_id)
@@ -221,23 +241,36 @@ def _get_root(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext) -> Non
 def _get_status(handler: Any, parsed: Any, ctx: WebHandlerDispatchContext) -> None:
     job_id = (parse_qs(parsed.query).get("job_id") or [""])[0]
     if not job_id:
-        handler._json(ctx.active_job_payload(ctx.jobs, ctx.enrich_progress))
+        handler._json(_active_job_from_any_store(ctx))
         return
     payload, status = _job_status_from_any_store(ctx, job_id)
     handler._json(payload, status=status)
 
 
+def _active_job_from_any_store(ctx: WebHandlerDispatchContext) -> dict[str, Any]:
+    for store, job_type in (
+        (ctx.jobs, "run"),
+        (ctx.sync_jobs, "sync"),
+        (ctx.check_jobs, "check"),
+        (ctx.async_jobs, "async"),
+    ):
+        payload = ctx.active_job_payload(store, ctx.enrich_progress)
+        if payload.get("job_id"):
+            return _job_response({**payload, "job_type": job_type}, job_type=job_type)
+    return _job_response(ctx.active_job_payload(ctx.jobs, ctx.enrich_progress))
+
+
 def _job_status_from_any_store(ctx: WebHandlerDispatchContext, job_id: str) -> tuple[dict[str, Any], int]:
-    for store, error in (
-        (ctx.jobs, "unknown job"),
-        (ctx.sync_jobs, "unknown sync job"),
-        (ctx.check_jobs, "unknown check job"),
-        (ctx.async_jobs, "unknown async job"),
+    for store, job_type, error in (
+        (ctx.jobs, "run", "unknown job"),
+        (ctx.sync_jobs, "sync", "unknown sync job"),
+        (ctx.check_jobs, "check", "unknown check job"),
+        (ctx.async_jobs, "async", "unknown async job"),
     ):
         payload, status = ctx.job_status_payload(store, job_id, ctx.enrich_progress, error=error)
         if status == 200:
-            return payload, status
-    return {"ok": False, "error_code": "JOB_NOT_FOUND", "error": "unknown job"}, 404
+            return _job_response({**payload, "job_type": job_type}, job_type=job_type), status
+    return _error_response({"ok": False, "error_code": "JOB_NOT_FOUND", "error": "unknown job"}, fallback_kind="job_not_found"), 404
 
 
 def _get_config(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext) -> None:
@@ -248,8 +281,19 @@ def _get_config_schema(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContex
     handler._json({"ok": True, "schema": ctx.public_config_schema()})
 
 
+def _get_capabilities(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext) -> None:
+    from brain_alpha_ops.web_capability_registry import build_capability_registry
+
+    handler._json(
+        build_capability_registry(
+            public_config_schema=ctx.public_config_schema,
+            official_context_file_counts=ctx.official_context_file_counts,
+        )
+    )
+
+
 def _get_active_job(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext) -> None:
-    handler._json(ctx.active_job_payload(ctx.jobs, ctx.enrich_progress))
+    handler._json(_active_job_from_any_store(ctx))
 
 
 def _get_latest_result(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext) -> None:
@@ -267,6 +311,25 @@ def _get_stream(handler: Any, parsed: Any, _ctx: WebHandlerDispatchContext) -> N
 def _get_lifecycle(handler: Any, parsed: Any, ctx: WebHandlerDispatchContext) -> None:
     job_id = (parse_qs(parsed.query).get("job_id") or [""])[0]
     handler._json(ctx.lifecycle_payload(ctx.jobs, job_id, ctx.lifecycle_from_job))
+
+
+def _get_alpha_lifecycle(handler: Any, parsed: Any, ctx: WebHandlerDispatchContext) -> None:
+    query = parse_qs(parsed.query)
+    limit = ctx.bounded_query_int(
+        (query.get("limit") or [str(DEFAULT_ALPHA_LIFECYCLE_LIMIT)])[0],
+        1,
+        MAX_ALPHA_LIFECYCLE_LIMIT,
+    )
+    handler._json(
+        ctx.alpha_lifecycle_history(
+            alpha_id=(query.get("alpha_id") or [""])[0],
+            query=(query.get("query") or [""])[0],
+            stage=(query.get("stage") or [""])[0],
+            status=(query.get("status") or [""])[0],
+            status_category_filter=(query.get("status_category") or [""])[0],
+            limit=limit,
+        )
+    )
 
 
 def _get_cloud_alphas(handler: Any, parsed: Any, ctx: WebHandlerDispatchContext) -> None:
@@ -381,39 +444,25 @@ def _get_sync_status(handler: Any, parsed: Any, ctx: WebHandlerDispatchContext) 
         payload, status = ctx.job_status_payload(ctx.sync_jobs, job_id, ctx.enrich_progress, error="unknown sync job")
     else:
         payload, status = ctx.active_job_payload(ctx.sync_jobs, ctx.enrich_progress), 200
+    if payload.get("ok") is False or status >= 400:
+        payload = _error_response({**payload, "error_code": payload.get("error_code") or "JOB_NOT_FOUND"}, fallback_kind="job_not_found")
+    else:
+        payload = _job_response({**payload, "job_type": "sync"}, job_type="sync")
     payload = _with_official_context_cache(payload, ctx)
+    history_limit = ctx.bounded_query_int((query.get("history_limit") or ["5"])[0], 0, 20)
+    payload = _with_sync_history(payload, ctx, limit=history_limit)
     if ctx.payload_truthy((query.get("compact") or ["false"])[0]):
         payload = _compact_job_result(payload)
     handler._json(payload, status=status)
 
 
-def _with_official_context_cache(payload: dict[str, Any], ctx: WebHandlerDispatchContext) -> dict[str, Any]:
-    try:
-        counts = ctx.official_context_file_counts()
-    except Exception as exc:
-        logger.warning("failed to read official context cache summary for sync status", exc_info=True)
-        return {**payload, "official_context_cache": {"ok": False, "error": redact_text(str(exc))}}
-    cache = {
-        "ok": True,
-        "fields_count": int(counts.get("fields_count", 0) or 0),
-        "operators_count": int(counts.get("operators_count", 0) or 0),
-        "datasets_count": int(counts.get("datasets_count", 0) or 0),
-    }
-    manifest = counts.get("context_cache_manifest")
-    if isinstance(manifest, dict):
-        cache["manifest"] = {
-            "complete": bool(manifest.get("complete")),
-            "is_stale": bool(manifest.get("is_stale")),
-            "missing_files": list(manifest.get("missing_files") or []),
-            "stale_files": list(manifest.get("stale_files") or manifest.get("expired_files") or []),
-            "record_counts": dict(manifest.get("record_counts") or {}),
-        }
-    return {**payload, "official_context_cache": cache}
-
-
 def _get_check_status(handler: Any, parsed: Any, ctx: WebHandlerDispatchContext) -> None:
     job_id = (parse_qs(parsed.query).get("job_id") or [""])[0]
     payload, status = ctx.job_status_payload(ctx.check_jobs, job_id, ctx.enrich_progress, error="unknown check job")
+    if payload.get("ok") is False or status >= 400:
+        payload = _error_response({**payload, "error_code": payload.get("error_code") or "JOB_NOT_FOUND"}, fallback_kind="job_not_found")
+    else:
+        payload = _job_response({**payload, "job_type": "check"}, job_type="check")
     handler._json(payload, status=status)
 
 
@@ -465,7 +514,13 @@ def _post_run(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext, payloa
     active = ctx.jobs.latest_active()
     if active:
         active_job_id, _job = active
-        handler._json({"ok": False, "error_code": "CONFLICT_RUNNING", "error": "已有生产任务正在运行，请先停止当前任务。", "job_id": active_job_id}, status=409)
+        handler._json(
+            _error_response(
+                {"ok": False, "error_code": "CONFLICT_RUNNING", "error": "已有生产任务正在运行，请先停止当前任务。", "job_id": active_job_id},
+                fallback_kind="queue_blocked",
+            ),
+            status=409,
+        )
         return
     job_id = _create_non_submit_run_job(ctx.jobs)
     ctx.start_run_job(job_id, safe_payload)
@@ -524,7 +579,10 @@ def _post_test_connection(handler: Any, _parsed: Any, ctx: WebHandlerDispatchCon
         session = ctx.mark_brain_connection_verified(session_id, result, payload)
     else:
         session = ctx.clear_brain_connection_verified(session_id)
-    handler._json({**(result if isinstance(result, dict) else {"ok": False}), "session": session})
+    response = result if isinstance(result, dict) else {"ok": False, "error_code": "CONNECTION_ERROR", "error": "connection test failed"}
+    if not response.get("ok"):
+        response = _error_response(response)
+    handler._json({**response, "session": session})
 
 
 @_validated_post_route(validate_json_object_payload, "CONFIG_SAVE_ERROR")
@@ -534,7 +592,12 @@ def _post_config_save(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext
 
 @_validated_post_route(validate_job_cancel_payload, "STOP_ERROR")
 def _post_stop(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext, payload: dict[str, Any]) -> None:
-    handler._json(ctx.stop_job_payload(ctx.jobs, payload))
+    job_id = str((payload or {}).get("job_id") or "")
+    response = ctx.stop_job_payload(ctx.jobs, payload)
+    if response.get("ok"):
+        handler._json(_job_response({**response, "job_id": job_id, "task_id": job_id, "job_type": "run", "status": "stopping"}, job_type="run"))
+    else:
+        handler._json(_error_response({**response, "job_id": job_id, "error_code": response.get("error_code") or "JOB_NOT_FOUND"}, fallback_kind="job_not_found"), status=404)
 
 
 # /api/cancel is an alias for /api/stop
@@ -552,12 +615,12 @@ def _post_cancel(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext, pay
         if row is not None:
             status = str(row.get("status", ""))
             if status in _TERMINAL_STATUSES:
-                handler._json({"ok": True, "status": status, "already_terminal": True})
+                handler._json(_job_response({"ok": True, "job_id": job_id, "task_id": job_id, "job_type": job_type, "status": status, "already_terminal": True}, job_type=job_type))
                 return
             result = ctx.stop_job_payload(store, payload)
-            handler._json({**result, "job_id": job_id, "task_id": job_id, "job_type": job_type, "status": "stopping"})
+            handler._json(_job_response({**result, "job_id": job_id, "task_id": job_id, "job_type": job_type, "status": "stopping"}, job_type=job_type))
             return
-    handler._json({"ok": False, "error_code": "JOB_NOT_FOUND", "error": "未找到可停止的任务。", "job_id": job_id}, status=404)
+    handler._json(_error_response({"ok": False, "error_code": "JOB_NOT_FOUND", "error": "未找到可停止的任务。", "job_id": job_id}, fallback_kind="job_not_found"), status=404)
 
 
 @_validated_post_route(validate_sync_alphas_payload, "SYNC_ERROR")
@@ -569,13 +632,20 @@ def _start_sync_job(handler: Any, ctx: WebHandlerDispatchContext, payload: dict[
     active = ctx.sync_jobs.latest_active()
     if active:
         active_job_id, _job = active
-        handler._json({
-            "ok": False,
-            "error": "已有云端同步任务正在运行。",
-            "job_id": active_job_id,
-            "task_id": active_job_id,
-            "status_url": f"/api/sync_status?job_id={active_job_id}",
-        }, status=409)
+        handler._json(
+            _error_response(
+                {
+                    "ok": False,
+                    "error_code": "CONFLICT_RUNNING",
+                    "error": "已有云端同步任务正在运行。",
+                    "job_id": active_job_id,
+                    "task_id": active_job_id,
+                    "status_url": f"/api/sync_status?job_id={active_job_id}",
+                },
+                fallback_kind="queue_blocked",
+            ),
+            status=409,
+        )
         return
     if _reject_auxiliary_conflict(handler, ctx, exclude="sync"):
         return
@@ -584,6 +654,8 @@ def _start_sync_job(handler: Any, ctx: WebHandlerDispatchContext, payload: dict[
     job_id = str(response.get("job_id") or response.get("task_id") or "")
     if job_id:
         response = {**response, "status_url": f"/api/sync_status?job_id={job_id}"}
+    if response.get("ok") is False or status >= 400:
+        response = _error_response({**response, "error_code": response.get("error_code") or "CONFLICT_RUNNING"}, fallback_kind="queue_blocked")
     handler._json(response, status=status)
 
 
@@ -605,7 +677,7 @@ def _post_sync_cancel(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext
     if row is not None:
         status = str(row.get("status", ""))
         if status in _TERMINAL_STATUSES:
-            handler._json({"ok": True, "job_id": job_id, "status": status, "already_terminal": True})
+            handler._json(_job_response({"ok": True, "job_id": job_id, "task_id": job_id, "job_type": "sync", "status": status, "already_terminal": True}, job_type="sync"))
             return
     result = ctx.stop_job_payload(ctx.sync_jobs, payload)
     if result.get("ok"):
@@ -625,9 +697,9 @@ def _post_sync_cancel(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext
         updater = getattr(ctx.sync_jobs, "update", None)
         if callable(updater):
             updater(job_id, status="stopping", progress=progress)
-        handler._json({**result, "job_id": job_id, "status": "stopping", "message": stopping_message, "stopping_since_ms": stopping_since_ms})
+        handler._json(_job_response({**result, "job_id": job_id, "task_id": job_id, "job_type": "sync", "status": "stopping", "message": stopping_message, "stopping_since_ms": stopping_since_ms}, job_type="sync"))
         return
-    handler._json({**result, "job_id": job_id, "error_code": "SYNC_JOB_NOT_FOUND", "error": "未找到可停止的云端同步任务。"}, status=404)
+    handler._json(_error_response({**result, "job_id": job_id, "error_code": "SYNC_JOB_NOT_FOUND", "error": "未找到可停止的云端同步任务。"}, fallback_kind="job_not_found"), status=404)
 
 
 @_validated_post_route(validate_alpha_action_payload, "CHECK_ERROR")
@@ -641,6 +713,23 @@ def _post_check(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext, payl
 @_validated_post_route(validate_generate_candidates_payload, "GENERATE_CANDIDATES_ERROR", assistant_error_code="ASSISTANT_RESPONSE_PARSE_ERROR")
 def _post_generate_candidates(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext, payload: dict[str, Any]) -> None:
     response, status = ctx.background_job_start_payload(ctx.async_jobs, payload, ctx.start_generate_candidates_job, conflict_error="active async job")
+    if response.get("ok") is False or status >= 400:
+        response = _error_response({**response, "error_code": response.get("error_code") or "CONFLICT_RUNNING"}, fallback_kind="queue_blocked")
+    handler._json(response, status=status)
+
+
+@_validated_post_route(validate_json_object_payload, "OPTIMIZE_CANDIDATES_ERROR")
+def _post_optimize_candidates(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext, payload: dict[str, Any]) -> None:
+    if _reject_auxiliary_conflict(handler, ctx):
+        return
+    response, status = ctx.background_job_start_payload(
+        ctx.async_jobs,
+        payload,
+        lambda job_id, body: _start_optimize_candidates_job(ctx, job_id, body),
+        conflict_error="active async job",
+    )
+    if response.get("ok") is False or status >= 400:
+        response = _error_response({**response, "error_code": response.get("error_code") or "CONFLICT_RUNNING"}, fallback_kind="queue_blocked")
     handler._json(response, status=status)
 
 
@@ -649,25 +738,33 @@ def _post_check_batch(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext
     active = ctx.check_jobs.latest_active()
     if active:
         active_job_id, _job = active
-        handler._json({"ok": False, "error": "已有批量检查任务正在运行。", "job_id": active_job_id}, status=409)
+        handler._json(
+            _error_response(
+                {"ok": False, "error_code": "CONFLICT_RUNNING", "error": "已有批量检查任务正在运行。", "job_id": active_job_id},
+                fallback_kind="queue_blocked",
+            ),
+            status=409,
+        )
         return
     if _reject_auxiliary_conflict(handler, ctx, exclude="check", allow_production=True):
         return
     payload = _with_session_credentials(handler, ctx, payload)
     response, status = ctx.background_job_start_payload(ctx.check_jobs, payload, ctx.start_check_batch_job, conflict_error="active batch check job")
+    if response.get("ok") is False or status >= 400:
+        response = _error_response({**response, "error_code": response.get("error_code") or "CONFLICT_RUNNING"}, fallback_kind="queue_blocked")
     handler._json(response, status=status)
 
 
 @_validated_post_route(validate_alpha_action_payload, "SUBMIT_ERROR")
 def _post_submit(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext, payload: dict[str, Any]) -> None:
     # Web flow unconditionally blocks real BRAIN submits as a safety gate
-    handler._json({"ok": False, "error_code": "REAL_SUBMIT_DISABLED_WEB_FLOW", "submitted": False}, status=403)
+    handler._json(_error_response({"ok": False, "error_code": "REAL_SUBMIT_DISABLED_WEB_FLOW", "error": "Web flow blocks real submit without explicit readiness review.", "submitted": False}), status=403)
 
 
 @_validated_post_route(validate_submit_batch_payload, "SUBMIT_BATCH_ERROR")
 def _post_submit_batch(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext, payload: dict[str, Any]) -> None:
     # Web flow unconditionally blocks real BRAIN batch submits as a safety gate
-    handler._json({"ok": False, "error_code": "REAL_SUBMIT_DISABLED_WEB_FLOW", "submitted": False}, status=403)
+    handler._json(_error_response({"ok": False, "error_code": "REAL_SUBMIT_DISABLED_WEB_FLOW", "error": "Web flow blocks real submit without explicit readiness review.", "submitted": False}), status=403)
 
 
 @_validated_post_route(validate_assistant_text_payload, "ASSISTANT_RESPONSE_PARSE_ERROR", assistant_error_code="ASSISTANT_RESPONSE_PARSE_ERROR")
@@ -693,7 +790,7 @@ def _post_assistant_guidance(handler: Any, _parsed: Any, ctx: WebHandlerDispatch
 def _post_session(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext) -> None:
     """Create a new web session and return a usable CSRF token."""
     if ctx.remote_admin_required() and not ctx.has_valid_admin_token(getattr(handler, "headers", {})):
-        handler._json({"ok": False, "error_code": "ADMIN_AUTH_REQUIRED", "error": "remote web access requires admin authentication"}, status=401)
+        handler._json(_error_response({"ok": False, "error_code": "ADMIN_AUTH_REQUIRED", "error": "remote web access requires admin authentication"}), status=401)
         return
     session_id, csrf_token = ctx.get_or_create_session(handler._session_id_from_cookie())
     stream_token = ctx.stream_token_for_session(session_id)
@@ -724,6 +821,8 @@ def _post_shutdown(handler: Any, parsed: Any, ctx: WebHandlerDispatchContext) ->
 @_validated_post_route(validate_alpha_action_payload, "SCORING_ERROR")
 def _post_scoring_evaluate(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext, payload: dict[str, Any]) -> None:
     response, status = ctx.background_job_start_payload(ctx.async_jobs, payload, ctx.start_scoring_evaluate_job, conflict_error="active async job")
+    if response.get("ok") is False or status >= 400:
+        response = _error_response({**response, "error_code": response.get("error_code") or "CONFLICT_RUNNING"}, fallback_kind="queue_blocked")
     handler._json(response, status=status)
 
 
@@ -744,12 +843,14 @@ def _get_candidates_simulate_eligible(handler: Any, _parsed: Any, _ctx: WebHandl
         handler._json(simulation_candidates_payload(_flat))
     except Exception as exc:
         logger.exception("simulation_candidates_payload failed")
-        handler._json({"ok": False, "error": redact_error_message(exc)}, status=500)
+        handler._json(_error_response({"ok": False, "error_code": "SIMULATION_PREVIEW_ERROR", "error": redact_error_message(exc)}), status=500)
 
 
 def _get_phase_state(handler: Any, _parsed: Any, _ctx: WebHandlerDispatchContext) -> None:
     """Return phase navigation state for the frontend PhaseShell component."""
     from brain_alpha_ops.web.handlers.phase import phase_state_payload
+    from brain_alpha_ops.web_handler_candidate_routes import candidate_ledger_summary
+    candidate_summary_probe = getattr(_ctx, "candidate_summary_probe", None) or candidate_ledger_summary
     try:
         handler._json(phase_state_payload(
             sync_jobs=_ctx.sync_jobs if hasattr(_ctx, "sync_jobs") else None,
@@ -758,11 +859,13 @@ def _get_phase_state(handler: Any, _parsed: Any, _ctx: WebHandlerDispatchContext
             readiness_service=getattr(_ctx, "readiness_service", None),
             session_status=_ctx.session_status(handler._session_id_from_cookie()),
             cloud_alpha_snapshot=getattr(_ctx, "cloud_alpha_snapshot", None),
+            cloud_alpha_cache_probe=getattr(_ctx, "cloud_alpha_cache_probe", None),
             official_context_file_counts=getattr(_ctx, "official_context_file_counts", None),
+            candidate_summary_probe=candidate_summary_probe,
         ))
     except Exception:
         logger.warning("phase_state_payload failed — returning safe default", exc_info=True)
-        handler._json({"ok": True, "current_phase": "connect", "connected": False, "context_fresh": False, "candidates_count": 0, "scored_count": 0, "readiness_passed": False})
+        handler._json({"ok": True, "current_phase": "connect", "operation_mode": "needs_setup", "connected": False, "context_fresh": False, "candidates_count": 0, "scored_count": 0, "readiness_passed": False})
 
 
 _GET_DISPATCH_HANDLERS: dict[str, RouteDispatcher] = {
@@ -770,11 +873,13 @@ _GET_DISPATCH_HANDLERS: dict[str, RouteDispatcher] = {
     "status": _get_status,
     "config": _get_config,
     "config_schema": _get_config_schema,
+    "capabilities": _get_capabilities,
     "active_job": _get_active_job,
     "latest_result": _get_latest_result,
     "health": _get_health,
     "stream": _get_stream,
     "lifecycle": _get_lifecycle,
+    "alpha_lifecycle": _get_alpha_lifecycle,
     "candidates": _get_candidates,
     "cloud_alphas": _get_cloud_alphas,
     "research_memory": _get_research_memory,
@@ -803,7 +908,7 @@ _GET_DISPATCH_HANDLERS: dict[str, RouteDispatcher] = {
     "phase_state": _get_phase_state,
 }
 
-@_validated_post_route(validate_json_object_payload, "SIMULATE_ERROR")
+@_validated_post_route(validate_simulation_payload, "SIMULATE_ERROR")
 def _post_candidates_simulate(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext, payload: dict[str, Any]) -> None:
     """Start BRAIN simulation for eligible candidates."""
     from brain_alpha_ops.web_candidate_simulation import simulate_candidates_job, simulation_candidates_payload
@@ -816,7 +921,7 @@ def _post_candidates_simulate(handler: Any, _parsed: Any, ctx: WebHandlerDispatc
             handler._json(simulation_candidates_payload(payload))
         except Exception as exc:
             logger.exception("simulation preview failed")
-            handler._json({"ok": False, "error": redact_error_message(exc)}, status=500)
+            handler._json(_error_response({"ok": False, "error_code": "SIMULATION_PREVIEW_ERROR", "error": redact_error_message(exc)}), status=500)
         return
 
     if _reject_auxiliary_conflict(handler, ctx):
@@ -845,13 +950,19 @@ def _post_candidates_simulate(handler: Any, _parsed: Any, ctx: WebHandlerDispatc
     if active_async:
         active_job_id, active_job = active_async
         phase = (active_job.get("progress") or {}).get("phase") or active_job.get("phase") or "async"
-        handler._json({
-            "ok": False,
-            "error": "已有后台任务正在运行，请完成或停止后再启动官方候选模拟。",
-            "error_code": "CONFLICT_RUNNING",
-            "job_id": active_job_id,
-            "phase": phase,
-        }, status=409)
+        handler._json(
+            _error_response(
+                {
+                    "ok": False,
+                    "error": "已有后台任务正在运行，请完成或停止后再启动官方候选模拟。",
+                    "error_code": "CONFLICT_RUNNING",
+                    "job_id": active_job_id,
+                    "phase": phase,
+                },
+                fallback_kind="queue_blocked",
+            ),
+            status=409,
+        )
         return
 
     if not job_id:
@@ -859,12 +970,19 @@ def _post_candidates_simulate(handler: Any, _parsed: Any, ctx: WebHandlerDispatc
             if str(job.get("status") or "").lower() in {"queued", "running", "stopping"}:
                 phase = (job.get("progress") or {}).get("phase", "")
                 if "simulat" in str(phase).lower():
-                    handler._json({
-                        "ok": False,
-                        "error": "已有模拟任务在运行",
-                        "error_code": "CONFLICT_RUNNING",
-                        "job_id": jid,
-                    }, status=409)
+                    handler._json(
+                        _error_response(
+                            {
+                                "ok": False,
+                                "error": "已有模拟任务在运行",
+                                "error_code": "CONFLICT_RUNNING",
+                                "job_id": jid,
+                                "phase": phase,
+                            },
+                            fallback_kind="queue_blocked",
+                        ),
+                        status=409,
+                    )
                     return
 
     if not job_id:
@@ -883,6 +1001,42 @@ def _post_candidates_simulate(handler: Any, _parsed: Any, ctx: WebHandlerDispatc
         "status_url": f"/api/status?job_id={job_id}",
     })
 
+
+def _start_optimize_candidates_job(ctx: WebHandlerDispatchContext, job_id: str, payload: dict[str, Any]) -> None:
+    import threading
+
+    def worker(body: dict[str, Any]) -> dict[str, Any]:
+        from brain_alpha_ops.web_candidate_optimization import (
+            optimize_candidates_payload,
+            persist_optimized_candidates,
+        )
+
+        result = optimize_candidates_payload(body, run_config_from_payload=ctx.run_config_from_payload)
+        if not result.get("ok"):
+            return result
+        run_config = ctx.run_config_from_payload(body)
+        persistence = persist_optimized_candidates(job_id, run_config, result)
+        summary = result.setdefault("summary", {})
+        if isinstance(summary, dict):
+            summary["persistence"] = persistence
+        return result
+
+    def run() -> None:
+        ctx.run_simple_async_job_service(
+            job_id,
+            payload,
+            store=ctx.async_jobs,
+            operation="candidate_optimization",
+            start_phase="candidate_optimization",
+            start_message="正在进行本地候选优化，不会调用官方模拟或提交接口。",
+            worker=worker,
+            safe_error_message=ctx.safe_error_message,
+            error_payload=ctx.error_payload,
+        )
+
+    threading.Thread(target=run, daemon=True).start()
+
+
 _POST_DISPATCH_HANDLERS: dict[str, RouteDispatcher] = {
     "run": _post_run,
     "config": _post_config_save,
@@ -894,6 +1048,7 @@ _POST_DISPATCH_HANDLERS: dict[str, RouteDispatcher] = {
     "sync_cancel": _post_sync_cancel,
     "check": _post_check,
     "generate_candidates": _post_generate_candidates,
+    "optimize_candidates": _post_optimize_candidates,
     "check_batch": _post_check_batch,
     "submit": _post_submit,
     "submit_batch": _post_submit_batch,
@@ -921,13 +1076,19 @@ def _submit_with_lock(
     if _reject_auxiliary_conflict(handler, ctx, exclude="submit", allow_production=True):
         return
     if not ctx.submit_lock.acquire(blocking=False):
-        handler._json({"ok": False, "error": "已有提交任务正在运行，请完成后再操作。"}, status=409)
+        handler._json(
+            _error_response(
+                {"ok": False, "error_code": "CONFLICT_RUNNING", "error": "已有提交任务正在运行，请完成后再操作。"},
+                fallback_kind="queue_blocked",
+            ),
+            status=409,
+        )
         return
     try:
         payload = handler._read_json() if payload is None else payload
         handler._json(submitter(payload))
     except Exception as exc:
         logger.error("web submit route failed: %s", error_code, exc_info=True)
-        handler._json(ctx.web_error(exc, error_code), status=400)
+        handler._json(_error_response(ctx.web_error(exc, error_code)), status=400)
     finally:
         ctx.submit_lock.release()

@@ -27,6 +27,9 @@ RUNTIME_GENERATED_PREFIXES = (
     "data/jobs_",
     "data/run_history/",
 )
+RUNTIME_GENERATED_PATHS = {
+    "data/simulation_cooldown.json",
+}
 SNAPSHOT_PREFIXES = ("data/official_",)
 QUALIFICATION_SNAPSHOT_PATHS = {"data/qualified_alpha_summary.json"}
 REVIEW_ARTIFACT_PREFIXES = ("data/prd_", "data/qa_", "data/audit/")
@@ -163,6 +166,8 @@ def _changed_tracked_data_files(root: Path) -> list[str]:
 
 def _classify(path: str) -> str:
     normalized = path.replace("\\", "/")
+    if normalized in RUNTIME_GENERATED_PATHS:
+        return "runtime_generated"
     if normalized.startswith(RUNTIME_GENERATED_PREFIXES):
         return "runtime_generated"
     if normalized.startswith(SNAPSHOT_PREFIXES):

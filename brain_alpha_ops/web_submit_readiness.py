@@ -9,6 +9,7 @@ from brain_alpha_ops.redaction import redact_error_message
 
 
 ReadinessCheck = Callable[[], dict[str, Any]]
+AUTHORITATIVE_STOP_RULE = "scripts/check_live_submit_readiness.py --config config/run_config.json --json"
 
 
 def run_live_submit_readiness_check() -> dict[str, Any]:
@@ -34,11 +35,19 @@ def compact_submit_readiness_payload(result: dict[str, Any]) -> dict[str, Any]:
     production_gap_summary = (
         result.get("production_gap_summary") if isinstance(result.get("production_gap_summary"), dict) else {}
     )
+    # fail-closed: missing ok → False; only explicit True counts
+    ok = result.get("ok") is True
+    ready_to_submit = ok and bool(result.get("ready_to_submit"))
     payload = {
-        "ok": bool(result.get("ok", True)),
+        "ok": ok,
         "source": "check_live_submit_readiness.py",
+        "authoritative_stop_rule": AUTHORITATIVE_STOP_RULE,
+        "validation_command": AUTHORITATIVE_STOP_RULE,
         "official_api_called": False,
-        "ready_to_submit": bool(result.get("ready_to_submit")),
+        "non_submit_flow": True,
+        "real_submit_performed": False,
+        "ready_to_submit": ready_to_submit,
+        "submit_ready_claim_allowed": ready_to_submit,
         "ledger_ready_to_submit": bool(result.get("ledger_ready_to_submit")),
         "job_family_ready_to_submit": bool(result.get("job_family_ready_to_submit")),
         "candidate_count": safe_int(result.get("candidate_count")),

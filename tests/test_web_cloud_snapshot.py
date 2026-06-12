@@ -10,6 +10,7 @@ from types import SimpleNamespace
 from brain_alpha_ops.runtime_constants import CloudDefaults
 from brain_alpha_ops.web_cloud_snapshot import (
     cached_user_alpha_paths,
+    cloud_alpha_cache_probe,
     cloud_alpha_snapshot,
     datasets_from_fields,
     latest_cached_user_alphas,
@@ -85,6 +86,49 @@ def test_cloud_alpha_snapshot_falls_back_to_latest_api_cache(tmp_path):
     assert snapshot["summary"]["source"] == "api_cache"
     assert snapshot["summary"]["passed_unsubmitted_count"] == 1
     assert snapshot["alphas"][0]["id"] == "cloud_1"
+
+
+def test_cloud_alpha_cache_probe_reads_storage_without_full_count(tmp_path):
+    storage = tmp_path / "storage"
+    cache = tmp_path / "cache"
+    storage.mkdir()
+    cache.mkdir()
+    load_config = _loader(storage, cache)
+    rows = [{"id": "prod_alpha", "status": "ACTIVE"}]
+    rows.extend({"id": f"mock_{index}", "status": "UNSUBMITTED"} for index in range(700))
+    (storage / "cloud_alphas.jsonl").write_text(
+        "\n".join(json.dumps(row) for row in rows) + "\n",
+        encoding="utf-8",
+    )
+
+    probe = cloud_alpha_cache_probe(load_config=load_config, stale_seconds=999999)
+
+    assert probe["ok"] is True
+    assert probe["source"] == "storage"
+    assert "count" not in probe
+    assert "total" not in probe
+    assert probe["loaded_at"]
+    assert probe["is_stale"] is False
+
+
+def test_cloud_alpha_cache_probe_falls_back_to_api_cache_when_storage_has_no_production_rows(tmp_path):
+    storage = tmp_path / "storage"
+    cache = tmp_path / "cache"
+    storage.mkdir()
+    cache.mkdir()
+    load_config = _loader(storage, cache)
+    (storage / "cloud_alphas.jsonl").write_text('{"id":"mock_1"}\n', encoding="utf-8")
+    (cache / "user_alphas_recent.json").write_text(
+        json.dumps({"results": [{"id": "cloud_1", "status": "UNSUBMITTED"}]}),
+        encoding="utf-8",
+    )
+
+    probe = cloud_alpha_cache_probe(load_config=load_config, stale_seconds=999999)
+
+    assert probe["ok"] is True
+    assert probe["source"] == "api_cache"
+    assert probe["count"] == 1
+    assert probe["total"] == 1
 
 
 def test_cloud_alpha_snapshot_default_reads_full_cloud_cache(tmp_path):
@@ -367,3 +411,31 @@ def test_official_context_manifest_marks_missing_and_expired_files(tmp_path):
     assert manifest["record_counts"]["official_fields.json"] == 1
     assert counts["context_cache_metadata"]["official_fields.json"]["is_expired"] is True
     assert counts["context_cache_metadata"]["official_fields.json"]["expires_in_seconds"] <= 0
+
+
+def test_official_context_manifest_rejects_metadata_that_no_longer_matches_file(tmp_path):
+    storage = tmp_path / "storage"
+    cache = tmp_path / "cache"
+    storage.mkdir()
+    cache.mkdir()
+    load_config = _loader(storage, cache)
+    save_official_context_json("official_fields.json", [{"id": "close"}], load_config=load_config, runtime_root=lambda: tmp_path)
+    save_official_context_json("official_operators.json", [{"name": "rank"}], load_config=load_config, runtime_root=lambda: tmp_path)
+    save_official_context_json("official_datasets.json", [{"id": "fundamental6"}], load_config=load_config, runtime_root=lambda: tmp_path)
+    (storage / "official_fields.json").write_text(
+        json.dumps([{"id": "close"}, {"id": "volume"}]),
+        encoding="utf-8",
+    )
+
+    counts = official_context_file_counts(load_config=load_config, runtime_root=lambda: tmp_path)
+
+    manifest = counts["context_cache_manifest"]
+    field_meta = counts["context_cache_metadata"]["official_fields.json"]
+    assert counts["fields_count"] == 2
+    assert field_meta["metadata_record_count"] == 1
+    assert field_meta["record_count"] == 2
+    assert field_meta["integrity_ok"] is False
+    assert set(field_meta["integrity_errors"]) == {"record_count_mismatch", "sha256_mismatch"}
+    assert manifest["complete"] is False
+    assert manifest["is_stale"] is True
+    assert manifest["invalid_files"] == ["official_fields.json"]

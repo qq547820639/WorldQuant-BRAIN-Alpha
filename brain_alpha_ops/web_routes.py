@@ -29,9 +29,13 @@ from brain_alpha_ops.web_backtest_slots import (
     slot_payload as _slot_payload,
 )
 from brain_alpha_ops.web_candidate_payloads import (
+    annotate_candidate_rows as _annotate_candidate_rows,
+    candidate_main_pool as _candidate_main_pool,
+    candidate_pool_summary as _candidate_pool_summary,
     candidate_summary as _candidate_rows_summary,
     candidate_summary_from_iter as _candidate_rows_summary_from_iter,
 )
+from brain_alpha_ops.web_candidate_workflow import candidate_workflow_plan as _candidate_workflow_plan
 from brain_alpha_ops.web_submit_readiness import submit_readiness_payload as _build_submit_readiness_payload
 
 logger = logging.getLogger(__name__)
@@ -96,7 +100,8 @@ def dispatch_get(handler: Any, path: str, query: dict) -> None:
     # Phase state (v4.0)
     if path == "/api/phase_state":
         from brain_alpha_ops.web.handlers.phase import phase_state_payload
-        from brain_alpha_ops.web_cloud_snapshot import cloud_alpha_snapshot, official_context_file_counts
+        from brain_alpha_ops.web_handler_candidate_routes import candidate_ledger_summary
+        from brain_alpha_ops.web_cloud_snapshot import cloud_alpha_cache_probe, cloud_alpha_snapshot, official_context_file_counts
         try:
             handler._send_json(phase_state_payload(
                 sync_jobs=getattr(handler, "SYNC_JOBS", None),
@@ -104,7 +109,9 @@ def dispatch_get(handler: Any, path: str, query: dict) -> None:
                 connection_tracker=getattr(handler, "_connection_tracker", None),
                 readiness_service=getattr(handler, "_readiness_service", None),
                 cloud_alpha_snapshot=cloud_alpha_snapshot,
+                cloud_alpha_cache_probe=cloud_alpha_cache_probe,
                 official_context_file_counts=official_context_file_counts,
+                candidate_summary_probe=candidate_ledger_summary,
             ))
         except Exception:
             handler._send_json({"ok": True, "current_phase": "connect", "connected": False, "context_fresh": False, "candidates_count": 0, "scored_count": 0, "readiness_passed": False})
@@ -122,6 +129,20 @@ def dispatch_get(handler: Any, path: str, query: dict) -> None:
         handler._send_json({"ok": True, "schema": {"type": "object"}})
         return
 
+    # Capability registry
+    if path == "/api/capabilities":
+        from brain_alpha_ops.web_capability_registry import build_capability_registry
+        from brain_alpha_ops.web_cloud_snapshot import official_context_file_counts
+        from brain_alpha_ops.web_config_schema import public_config_schema
+
+        handler._send_json(
+            build_capability_registry(
+                public_config_schema=public_config_schema,
+                official_context_file_counts=official_context_file_counts,
+            )
+        )
+        return
+
     # Candidates
     if path == "/api/candidates":
         handler._send_json(_jsonl_payload("candidates", "candidates.jsonl", query, items_key="candidates", full_scan=True))
@@ -130,6 +151,25 @@ def dispatch_get(handler: Any, path: str, query: dict) -> None:
     # Check results
     if path == "/api/check_results":
         handler._send_json(_jsonl_payload("check_results", "checks.jsonl", query, items_key="items", full_scan=True))
+        return
+
+    # Local Alpha lifecycle replay
+    if path in ("/api/alpha_lifecycle", "/api/lifecycle/history"):
+        from brain_alpha_ops.web_alpha_lifecycle import alpha_lifecycle_history_payload
+        from brain_alpha_ops.web_cloud_snapshot import read_storage_jsonl
+
+        def _read_lifecycle_jsonl(filename: str, *, limit: int | None = None):
+            return read_storage_jsonl(filename, limit=limit, load_config=load_run_config)
+
+        handler._send_json(alpha_lifecycle_history_payload(
+            read_storage_jsonl=_read_lifecycle_jsonl,
+            alpha_id=_query_text(query, "alpha_id"),
+            query=_query_text(query, "query"),
+            stage=_query_text(query, "stage"),
+            status=_query_text(query, "status"),
+            status_category_filter=_query_text(query, "status_category"),
+            limit=_query_limit(query, default=250, maximum=2000),
+        ))
         return
 
     # Cloud snapshot
@@ -475,6 +515,11 @@ def _query_limit(query: dict, *, default: int = 1000, maximum: int = 5000) -> in
     return max(1, min(maximum, value))
 
 
+def _query_text(query: dict, key: str) -> str:
+    values = query.get(key) if isinstance(query, dict) else []
+    return str(values[0] if values else "")
+
+
 def _storage_file(name: str) -> Path:
     """Get storage file path."""
     try:
@@ -519,7 +564,25 @@ def _jsonl_payload(source: str, filename: str, query: dict, *, items_key: str, f
     if _query_truthy(query, "summary"):
         return _jsonl_summary_payload(source, filename, items_key=items_key)
     rows, total, path = _read_jsonl_records(filename) if full_scan else _read_jsonl_tail(filename, limit=_query_limit(query))
+    if filename == "candidates.jsonl":
+        rows = _annotate_candidate_rows(rows, lifecycle_rows=_candidate_lifecycle_rows())
     summary = _candidate_rows_summary(rows, total=total) if filename == "candidates.jsonl" else {}
+    pool_payload = (
+        {
+            "main_pool_candidates": _candidate_main_pool(rows, target_size=_candidate_target_pool_size()),
+            "pool_summary": _candidate_pool_summary(rows, target_size=_candidate_target_pool_size()),
+        }
+        if filename == "candidates.jsonl"
+        else {}
+    )
+    if filename == "candidates.jsonl":
+        workflow_plan = _candidate_workflow_plan(
+            rows,
+            target_size=_candidate_target_pool_size(),
+            main_pool=pool_payload["main_pool_candidates"],
+        )
+        pool_payload["workflow_plan"] = workflow_plan
+        pool_payload["candidate_workflow"] = workflow_plan
     return {
         "ok": True,
         "source": source,
@@ -531,6 +594,7 @@ def _jsonl_payload(source: str, filename: str, query: dict, *, items_key: str, f
         "returned_count": len(rows),
         "total_count": total,
         "total": total,
+        **pool_payload,
         **summary,
     }
 
@@ -538,11 +602,24 @@ def _jsonl_payload(source: str, filename: str, query: dict, *, items_key: str, f
 def _jsonl_summary_payload(source: str, filename: str, *, items_key: str) -> dict:
     if filename == "candidates.jsonl":
         path = _storage_file(filename)
-        summary = _candidate_rows_summary_from_iter(_iter_jsonl_records(filename))
+        rows = _annotate_candidate_rows(list(_iter_jsonl_records(filename)), lifecycle_rows=_candidate_lifecycle_rows())
+        summary = _candidate_rows_summary_from_iter(rows)
+        pool_payload = {
+            "main_pool_candidates": [],
+            "pool_summary": _candidate_pool_summary(rows, target_size=_candidate_target_pool_size()),
+        }
+        workflow_plan = _candidate_workflow_plan(
+            rows,
+            target_size=_candidate_target_pool_size(),
+            main_pool=[],
+        )
+        pool_payload["workflow_plan"] = workflow_plan
+        pool_payload["candidate_workflow"] = workflow_plan
         total = int(summary.get("candidate_count", 0) or 0)
     else:
         rows, total, path = _read_jsonl_records(filename)
         summary = {}
+        pool_payload = {}
     return {
         "ok": True,
         "source": source,
@@ -554,8 +631,25 @@ def _jsonl_summary_payload(source: str, filename: str, *, items_key: str) -> dic
         "returned_count": 0,
         "total_count": total,
         "total": total,
+        **pool_payload,
         **summary,
     }
+
+
+def _candidate_target_pool_size() -> int:
+    try:
+        return max(1, int(load_run_config().ops.budget.retained_alpha_pool_size or 10))
+    except Exception:
+        return 10
+
+
+def _candidate_lifecycle_rows() -> list[dict[str, Any]]:
+    try:
+        rows, _total, _path = _read_jsonl_records("lifecycle.jsonl")
+        return rows
+    except Exception:
+        logger.warning("candidate lifecycle history read failed; continuing without historical risk", exc_info=True)
+        return []
 
 
 def _query_truthy(query: dict, key: str) -> bool:
@@ -634,11 +728,14 @@ def _build_route_map() -> dict[str, list[tuple[str, str]]]:
         "/api/production-validation/status": Route("status"),
         "/api/config": Route("config"),
         "/api/config_schema": Route("config_schema"),
+        "/api/capabilities": Route("capabilities"),
         "/api/active_job": Route("active_job"),
         "/api/latest_result": Route("latest_result"),
         "/api/stream": Route("stream"),
         "/sse": Route("stream"),
         "/api/lifecycle": Route("lifecycle"),
+        "/api/alpha_lifecycle": Route("alpha_lifecycle"),
+        "/api/lifecycle/history": Route("alpha_lifecycle"),
         "/api/candidates": Route("candidates"),
         "/api/candidate/list": Route("candidates"),
         "/api/cloud_alphas": Route("cloud_alphas"),
@@ -697,6 +794,8 @@ def _build_route_map() -> dict[str, list[tuple[str, str]]]:
         "/api/candidate/check": Route("check"),
         "/api/generate_candidates": Route("generate_candidates"),
         "/api/generate": Route("generate_candidates"),
+        "/api/candidates/optimize": Route("optimize_candidates"),
+        "/api/candidate/optimize": Route("optimize_candidates"),
         "/api/check_batch": Route("check_batch"),
         "/api/submit": Route("submit"),
         "/api/candidate/submit": Route("submit"),

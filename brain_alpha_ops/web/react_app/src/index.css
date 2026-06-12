@@ -134,8 +134,8 @@
   .btn-ghost { @apply bg-transparent text-text-secondary border-transparent; }
   .btn-ghost:hover:not(:disabled) { @apply bg-surface-hover text-text-primary; }
 
-  .btn-danger { @apply bg-negative-subtle text-negative border border-negative/30; }
-  .btn-danger:hover:not(:disabled) { @apply bg-negative-subtle/50; }
+  .btn-danger { @apply bg-negative-subtle text-negative border; border-color: oklch(0.48 0.12 22 / 0.30); }
+  .btn-danger:hover:not(:disabled) { background-color: oklch(0.48 0.06 22 / 0.24); }
 
   .btn-sm { @apply px-2.5 py-[3px] text-xs; min-height: 26px; }
 }

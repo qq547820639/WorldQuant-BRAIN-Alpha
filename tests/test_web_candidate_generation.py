@@ -149,6 +149,116 @@ def test_generate_candidates_payload_delegates_to_toolbox_and_scores_candidates(
     assert saves[0]["source"] == "web_generate_candidates"
 
 
+def test_generate_candidates_payload_uses_pool_deficit_as_refill_budget(monkeypatch, tmp_path):
+    run_config = RunConfig(environment="production")
+    run_config.ops.storage_dir = str(tmp_path)
+    run_config.ops.settings.dataset = "pv1"
+    monkeypatch.setattr(web_candidate_generation, "LocalBacktestEngine", FakePassingLocalBacktestEngine)
+    calls = []
+    toolbox_result = {
+        "ok": True,
+        "candidates": [
+            {
+                "alpha_id": "alpha_refill_1",
+                "expression": "rank(close)",
+                "family": "demo",
+                "hypothesis": "refill candidate 1",
+                "data_fields": ["close"],
+                "operators": ["rank"],
+            },
+            {
+                "alpha_id": "alpha_refill_2",
+                "expression": "rank(returns)",
+                "family": "demo",
+                "hypothesis": "refill candidate 2",
+                "data_fields": ["returns"],
+                "operators": ["rank"],
+            },
+        ],
+    }
+
+    payload = generate_candidates_payload(
+        {
+            "automation_mode": "maintain_candidate_pool",
+            "auto_simulate_after_generation": True,
+            "auto_check_after_simulation": True,
+            "target_pool_size": 10,
+            "existing_pool_size": 8,
+        },
+        run_config_from_payload=lambda body: run_config,
+        toolbox_factory=lambda config: FakeToolbox(toolbox_result, calls),
+        repository_factory=lambda storage_dir: FakeRepository(storage_dir, []),
+    )
+
+    assert payload["ok"] is True
+    assert calls[0][1]["count"] == 2
+    assert payload["summary"]["target_pool_size"] == 10
+    assert payload["summary"]["existing_pool_size"] == 8
+    assert payload["summary"]["pool_deficit"] == 2
+    assert payload["summary"]["main_pool_count"] == 10
+    assert payload["summary"]["remaining_deficit"] == 0
+    assert payload["summary"]["automation"] == {
+        "mode": "maintain_candidate_pool",
+        "maintain_candidate_pool": True,
+        "auto_simulate_after_generation": False,
+        "auto_check_after_simulation": False,
+        "target_pool_size": 10,
+        "existing_pool_size": 8,
+        "pool_deficit": 2,
+        "requested_generation_count": 2,
+        "next_steps": [],
+        "producer_can_continue_while_validator_runs": True,
+        "submit_allowed": False,
+    }
+
+
+def test_generate_candidates_payload_does_not_use_pool_size_without_maintain_mode(monkeypatch, tmp_path):
+    run_config = RunConfig(environment="production")
+    run_config.ops.storage_dir = str(tmp_path)
+    run_config.ops.settings.dataset = "pv1"
+    monkeypatch.setattr(web_candidate_generation, "LocalBacktestEngine", FakePassingLocalBacktestEngine)
+    calls = []
+
+    payload = generate_candidates_payload(
+        {"target_pool_size": 75, "existing_pool_size": 0},
+        run_config_from_payload=lambda body: run_config,
+        toolbox_factory=lambda config: FakeToolbox({"ok": True, "candidates": []}, calls),
+        repository_factory=lambda storage_dir: FakeRepository(storage_dir, []),
+    )
+
+    assert payload["ok"] is True
+    assert calls[0][1]["count"] == 10
+    assert payload["summary"]["requested_generation_count"] == 10
+    assert payload["summary"]["target_pool_size"] == 75
+    assert payload["summary"]["pool_deficit"] == 75
+    assert payload["summary"]["automation"]["maintain_candidate_pool"] is False
+
+
+def test_generate_candidates_payload_caps_pool_maintenance_refill_budget(monkeypatch, tmp_path):
+    run_config = RunConfig(environment="production")
+    run_config.ops.storage_dir = str(tmp_path)
+    run_config.ops.settings.dataset = "pv1"
+    monkeypatch.setattr(web_candidate_generation, "LocalBacktestEngine", FakePassingLocalBacktestEngine)
+    calls = []
+
+    payload = generate_candidates_payload(
+        {
+            "automation_mode": "maintain_candidate_pool",
+            "target_pool_size": 5000,
+            "existing_pool_size": 0,
+        },
+        run_config_from_payload=lambda body: run_config,
+        toolbox_factory=lambda config: FakeToolbox({"ok": True, "candidates": []}, calls),
+        repository_factory=lambda storage_dir: FakeRepository(storage_dir, []),
+    )
+
+    assert payload["ok"] is True
+    assert calls[0][1]["count"] == 100
+    assert payload["summary"]["requested_generation_count"] == 100
+    assert payload["summary"]["target_pool_size"] == 5000
+    assert payload["summary"]["automation"]["maintain_candidate_pool"] is True
+
+
 def test_generate_candidates_payload_attaches_local_backtest_evidence(monkeypatch, tmp_path):
     run_config = RunConfig(environment="production")
     run_config.ops.storage_dir = str(tmp_path)
@@ -577,6 +687,9 @@ def test_web_generate_route_creates_tracked_quality_job(monkeypatch, tmp_path):
     saved = json.loads((tmp_path / "candidates.jsonl").read_text(encoding="utf-8").splitlines()[0])
     assert saved["alpha_id"] == "alpha_tracked"
     assert saved["quality_diagnosis"]["status"] == "local_only_needs_official_evidence"
+    assert saved["scientific_audit"]["schema_version"] == "candidate-scientific-audit-v1"
+    assert saved["scientific_audit"]["safety_boundary"]["official_api_called"] is False
+    assert saved["scientific_audit"]["safety_boundary"]["submit_allowed"] is False
 
 
 def test_persist_generated_candidates_skips_explicit_local_invalid_rows(tmp_path):
@@ -622,6 +735,8 @@ def test_persist_generated_candidates_skips_explicit_local_invalid_rows(tmp_path
     assert result["skipped_invalid_reasons"]["local_quality_failed"] == 1
     rows = [json.loads(line) for line in (tmp_path / "candidates.jsonl").read_text(encoding="utf-8").splitlines()]
     assert [row["alpha_id"] for row in rows] == ["alpha_valid"]
+    assert rows[0]["scientific_audit"]["operation"] == "candidate_generation"
+    assert rows[0]["scientific_audit"]["anti_overfit"]["test_script_outcomes_used"] is False
 
 
 def test_web_local_check_and_submit_routes_do_not_claim_official_actions():

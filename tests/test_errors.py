@@ -1,6 +1,7 @@
 from http.client import IncompleteRead
 
 from brain_alpha_ops.brain_api.base import BrainAPIError
+from brain_alpha_ops.error_payloads import user_error_payload
 from brain_alpha_ops.errors import ValidationError, classify_error
 from brain_alpha_ops.observability import error_payload
 from brain_alpha_ops.redaction import redact_data, redact_text
@@ -80,6 +81,35 @@ def test_error_payload_redacts_freeform_secret_fragments():
     assert "secret-token-123" not in payload["error"]
     assert "<redacted>" in payload["error"]
     assert payload["redacted_message"] == payload["error"]
+
+
+def test_user_error_payload_redacts_sensitive_context_values():
+    payload = user_error_payload(
+        RuntimeError("auth failed for operator@example.test token=secret-token-123"),
+        error_code="RUN_JOB_FAILED",
+        alpha_id="alpha_safe",
+        username="operator@example.test",
+        password="plain-password",
+        headers={
+            "Authorization": "Bearer live-token-123",
+            "X-Brain-Alpha-Admin-Token": "admin-secret-123",
+        },
+        session={"sessionId": "session-secret-123"},
+    )
+    encoded = str(payload)
+
+    assert payload["alpha_id"] == "alpha_safe"
+    assert payload["username"] == "<redacted>"
+    assert payload["password"] == "<redacted>"
+    assert payload["headers"]["Authorization"] == "<redacted>"
+    assert payload["headers"]["X-Brain-Alpha-Admin-Token"] == "<redacted>"
+    assert payload["session"] == "<redacted>"
+    assert "operator@example.test" not in encoded
+    assert "plain-password" not in encoded
+    assert "secret-token-123" not in encoded
+    assert "live-token-123" not in encoded
+    assert "admin-secret-123" not in encoded
+    assert "session-secret-123" not in encoded
 
 
 def test_redaction_redacts_user_profile_contact_fields():

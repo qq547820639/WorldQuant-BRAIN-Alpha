@@ -931,6 +931,105 @@ def test_dataset_search_does_not_inherit_data_fields_dataset_key():
     assert "dataset" not in query
 
 
+def test_discovery_compat_facade_maps_wqb_options_to_existing_search_params():
+    calls = []
+
+    class Response:
+        headers = {"Content-Type": "application/json"}
+
+        def __init__(self, payload):
+            self.payload = payload
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self):
+            return json.dumps(self.payload).encode()
+
+    def fake_open(req, timeout):
+        calls.append(req.full_url)
+        if req.full_url.startswith("https://example.test/data-fields?"):
+            return Response({"count": 1, "results": [{"id": "close", "dataset": {"id": "pv1"}}]})
+        return Response({"count": 1, "results": [{"id": "pv1", "fieldCount": 100}]})
+
+    with tempfile.TemporaryDirectory() as tmp:
+        api = OfficialBrainAPI(
+            OfficialAPIConfig(
+                base_url="https://example.test",
+                cache_dir=tmp,
+                data_fields_dataset_query_key="dataset.id",
+                min_request_interval_seconds=0,
+            ),
+            token="token",
+        )
+        api._open = fake_open
+
+        fields = api.discover_fields_limited(
+            "close",
+            options={"instrumentType": "EQUITY", "region": "USA", "universe": "TOP3000", "delay": 1},
+            dataset_id="pv1",
+            type="MATRIX",
+            coverage="[0.8, inf)",
+            limit=25,
+        )
+        datasets = api.discover_datasets_limited(
+            "price",
+            options={"instrument_type": "EQUITY", "region": "USA", "universe": "TOP1000", "delay": 0},
+            category="fundamental",
+            limit=10,
+        )
+
+    field_query = _query_params(calls[0])
+    dataset_query = _query_params(calls[1])
+    assert fields["items"][0]["id"] == "close"
+    assert field_query["instrumentType"] == ["EQUITY"]
+    assert field_query["region"] == ["USA"]
+    assert field_query["universe"] == ["TOP3000"]
+    assert field_query["delay"] == ["1"]
+    assert field_query["dataset.id"] == ["pv1"]
+    assert field_query["type"] == ["MATRIX"]
+    assert field_query["coverage>="] == ["0.8"]
+    assert field_query["limit"] == ["25"]
+    assert datasets["items"][0]["id"] == "pv1"
+    assert dataset_query["instrumentType"] == ["EQUITY"]
+    assert dataset_query["region"] == ["USA"]
+    assert dataset_query["universe"] == ["TOP1000"]
+    assert dataset_query["delay"] == ["0"]
+    assert dataset_query["category"] == ["fundamental"]
+    assert dataset_query["limit"] == ["10"]
+
+
+def test_discovery_compat_facade_rejects_conflicting_or_unknown_options():
+    api = OfficialBrainAPI(
+        OfficialAPIConfig(base_url="https://example.test", min_request_interval_seconds=0),
+        token="token",
+    )
+
+    try:
+        api.discover_fields_limited("close", region="USA", options={"region": "EUR"})
+    except BrainAPIError as exc:
+        assert "conflicting region" in str(exc)
+    else:
+        raise AssertionError("expected conflicting discovery option to fail closed")
+
+    try:
+        api.discover_datasets_limited("price", options={"dataset_id": "pv1"})
+    except BrainAPIError as exc:
+        assert "dataset option is only supported for field discovery" in str(exc)
+    else:
+        raise AssertionError("expected dataset-scoped dataset discovery to fail closed")
+
+    try:
+        api.discover_fields_limited("close", options={"language": "FASTEXPR"})
+    except BrainAPIError as exc:
+        assert "unsupported options key" in str(exc)
+    else:
+        raise AssertionError("expected unsupported discovery option to fail closed")
+
+
 def test_locate_methods_use_official_detail_paths():
     calls = []
     payloads = {
@@ -965,6 +1064,43 @@ def test_locate_methods_use_official_detail_paths():
     assert dataset["id"] == "pv1"
     assert field["dataset_id"] == "pv1"
     assert alpha["id"] == "prodAlpha123"
+    assert alpha["expression"] == "rank(close)"
+
+
+def test_locate_compat_aliases_use_existing_normalized_detail_contracts():
+    calls = []
+    payloads = {
+        "/data-sets/pv1": {"id": "pv1", "name": "Price Volume", "fieldCount": 100},
+        "/data-fields/close": {"id": "close", "dataset": {"id": "pv1"}, "type": "MATRIX"},
+        "/alphas/prodAlpha123": {
+            "id": "prodAlpha123",
+            "regular": "rank(close)",
+            "settings": {"region": "USA"},
+        },
+    }
+
+    def fake_request(method, path, **_kwargs):
+        calls.append((method, path))
+        return payloads[path], {}
+
+    api = OfficialBrainAPI(
+        OfficialAPIConfig(base_url="https://example.test", min_request_interval_seconds=0),
+        token="token",
+    )
+    api._request = fake_request
+
+    dataset = api.get_dataset(id="pv1")
+    field = api.get_field(id="close")
+    alpha = api.get_alpha(id="prodAlpha123")
+
+    assert calls == [
+        ("GET", "/data-sets/pv1"),
+        ("GET", "/data-fields/close"),
+        ("GET", "/alphas/prodAlpha123"),
+    ]
+    assert dataset["id"] == "pv1"
+    assert dataset["field_count"] == 100
+    assert field["dataset_id"] == "pv1"
     assert alpha["expression"] == "rank(close)"
 
 
@@ -1105,6 +1241,63 @@ def test_filter_alphas_limited_uses_wqb_filter_query_keys():
     assert query["order"] == ["-dateCreated"]
     assert query["limit"] == ["100"]
     assert query["offset"] == ["0"]
+
+
+def test_filter_compat_facade_maps_wqb_options_to_existing_alpha_filter_params():
+    captured = {}
+
+    class Response:
+        headers = {"Content-Type": "application/json"}
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def read(self):
+            return b'{"count": 1, "results": [{"id": "prodAlpha123", "regular": "rank(close)"}]}'
+
+    def fake_open(req, timeout):
+        captured["url"] = req.full_url
+        return Response()
+
+    api = OfficialBrainAPI(
+        OfficialAPIConfig(base_url="https://example.test", min_request_interval_seconds=0),
+        token="token",
+    )
+    api._open = fake_open
+
+    result = api.query_alphas_limited(
+        options={"instrumentType": "EQUITY", "region": "USA", "universe": "TOP3000", "delay": 1},
+        type="REGULAR",
+        sharpe="[1.25, inf)",
+        limit=100,
+    )
+
+    query = _query_params(captured["url"])
+    assert result["items"][0]["id"] == "prodAlpha123"
+    assert query["settings.instrumentType"] == ["EQUITY"]
+    assert query["settings.region"] == ["USA"]
+    assert query["settings.universe"] == ["TOP3000"]
+    assert query["settings.delay"] == ["1"]
+    assert query["type"] == ["REGULAR"]
+    assert query["is.sharpe>="] == ["1.25"]
+    assert query["limit"] == ["100"]
+
+
+def test_filter_compat_facade_rejects_conflicting_options():
+    api = OfficialBrainAPI(
+        OfficialAPIConfig(base_url="https://example.test", min_request_interval_seconds=0),
+        token="token",
+    )
+
+    try:
+        api.query_alphas_limited(region="USA", options={"region": "EUR"})
+    except BrainAPIError as exc:
+        assert "conflicting region" in str(exc)
+    else:
+        raise AssertionError("expected conflicting filter option to fail closed")
 
 
 def test_filter_alphas_limited_enforces_wqb_page_window():

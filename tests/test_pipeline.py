@@ -1797,6 +1797,44 @@ def test_pipeline_persists_backtest_state_records():
         assert {row["schema_version"] for row in [rows[0]["expression_profile"]]} == {"expression-profile.v1"}
 
 
+def test_pipeline_persists_robustness_scientific_audit_records():
+    with tempfile.TemporaryDirectory() as tmp:
+        config = OpsConfig(
+            budget=ResearchBudget(
+                max_candidates_per_cycle=12,
+                max_official_validations_per_cycle=10,
+                max_official_simulations_per_cycle=3,
+                retained_alpha_pool_size=10,
+                official_backtest_batch_size=3,
+                max_cycles=1,
+            ),
+            storage_dir=tmp,
+        )
+
+        AlphaResearchPipeline(config=config, api=ProductionBrainAPIStub()).run(auto_submit=False)
+        backtest_rows = [
+            json.loads(line)
+            for line in (Path(tmp) / "backtests.jsonl").read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+        lifecycle_rows = [
+            json.loads(line)
+            for line in (Path(tmp) / "lifecycle.jsonl").read_text(encoding="utf-8").splitlines()
+            if line.strip()
+        ]
+
+        robustness_backtests = [row for row in backtest_rows if row.get("action") == "robustness_feedback"]
+        robustness_lifecycle = [row for row in lifecycle_rows if row.get("stage") == "robustness_feedback"]
+        assert robustness_backtests
+        assert robustness_lifecycle
+        audit = robustness_backtests[0]["scientific_audit"]
+        assert audit["schema_version"] == "candidate-scientific-audit-v1"
+        assert audit["events"][-1]["operation"] == "robustness_feedback"
+        assert "anti_overfit_report" in audit["evidence"]["feedback_sources"]
+        assert "rolling_validation_report" in audit["evidence"]["feedback_sources"]
+        assert audit["safety_boundary"]["submit_allowed"] is False
+
+
 class SlowCompletingAPI(ProductionBrainAPIStub):
     def __init__(self):
         super().__init__()

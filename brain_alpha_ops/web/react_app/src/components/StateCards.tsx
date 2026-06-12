@@ -18,6 +18,7 @@ import type {
   RunConfig,
 } from "@/types";
 import ProgressFeedback from "@/components/ProgressFeedback";
+import { safeDisplayErrorMessage } from "@/helpers/errorExperience";
 import { backtestActiveCount, backtestSlotLimit } from "@/utils/backtestSlots";
 
 interface Props {
@@ -388,8 +389,5 @@ function labeledError(label: string, error: string | null) {
 }
 
 function userFacingError(error: string) {
-  const text = String(error || "").trim();
-  if (!text) return "请求失败";
-  if (/failed to fetch|network error|load failed/i.test(text)) return "本地服务暂不可达，请重试或检查服务状态";
-  return text.length > 140 ? `${text.slice(0, 140)}...` : text;
+  return safeDisplayErrorMessage(error, "状态读取失败，请重试或检查服务状态。");
 }

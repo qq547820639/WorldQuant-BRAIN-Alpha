@@ -74,6 +74,7 @@ def handler_dispatch_context(web):
         research=web.WebDispatchResearchContext(
             latest_result_snapshot=web.latest_result_snapshot,
             lifecycle_from_job=web.lifecycle_from_job,
+            alpha_lifecycle_history=web.alpha_lifecycle_history,
             cloud_alpha_snapshot=web.cloud_alpha_snapshot,
             official_context_file_counts=web._official_context_file_counts,
             research_memory_snapshot=web.research_memory_snapshot,
@@ -85,6 +86,7 @@ def handler_dispatch_context(web):
             sqlite_record_lookup_payload=web.sqlite_record_lookup_payload,
             load_check_results=web.load_check_results,
             user_profile_snapshot=web._user_profile_snapshot,
+            cloud_alpha_cache_probe=web.cloud_alpha_cache_probe,
         ),
         assistant=web.WebDispatchAssistantContext(
             assistant_context_snapshot=web.assistant_context_snapshot,
@@ -252,12 +254,25 @@ def lifecycle_from_job(web, job: dict) -> list[dict]:
     return web._lifecycle_from_job_service(job, read_storage_jsonl=web._read_storage_jsonl, limit=None)
 
 
+def alpha_lifecycle_history(web, **kwargs) -> dict:
+    from brain_alpha_ops.web_alpha_lifecycle import alpha_lifecycle_history_payload
+
+    return alpha_lifecycle_history_payload(read_storage_jsonl=web._read_storage_jsonl, **kwargs)
+
+
 def cloud_alpha_snapshot(web, limit: int | None = None) -> dict:
     return web._cloud_alpha_snapshot_service(
         limit=limit,
         load_config=web.load_run_config,
         runtime_root=web.runtime_project_root,
         safe_error_message=web.safe_error_message,
+        stale_seconds=web.CLOUD_SYNC_STALE_SECONDS,
+    )
+
+
+def cloud_alpha_cache_probe(web) -> dict:
+    return web._cloud_alpha_cache_probe_service(
+        load_config=web.load_run_config,
         stale_seconds=web.CLOUD_SYNC_STALE_SECONDS,
     )
 

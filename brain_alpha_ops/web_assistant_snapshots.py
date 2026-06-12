@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections import Counter
+from hashlib import sha256
 import json
 import logging
 from pathlib import Path
@@ -27,6 +29,12 @@ from brain_alpha_ops.research.knowledge_base import ResearchKnowledgeBase
 from brain_alpha_ops.research.memory import ResearchMemory
 from brain_alpha_ops.research.observability import build_research_observability_snapshot
 from brain_alpha_ops.research.repository import ResearchRepository
+from brain_alpha_ops.web_candidate_payloads import (
+    DEFAULT_MAIN_POOL_SIZE,
+    candidate_payload,
+    candidate_result_total,
+    has_candidate_like_rows,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -454,6 +462,8 @@ def latest_result_snapshot(
     job_store: Any,
     latest_run_history_path: Callable[[], Path | None],
     enrich_progress: Callable[[dict[str, Any]], dict[str, Any]],
+    read_storage_jsonl: ReadStorageJsonl | None = None,
+    target_pool_size: int | None = None,
     web_error: WebError = _default_web_error,
 ) -> dict[str, Any]:
     latest = job_store.latest_any()
@@ -471,11 +481,14 @@ def latest_result_snapshot(
     except Exception as exc:
         return {**web_error(exc, "RUN_HISTORY_ERROR"), "source": "run_history", "result": None, "progress": {}}
 
-    summary = data.get("summary") or {}
-    result = {
-        "summary": summary,
-        "candidates": summary.get("candidates") or data.get("candidates") or [],
-    }
+    summary = data.get("summary") if isinstance(data.get("summary"), dict) else {}
+    result = _run_history_result_payload(
+        data,
+        summary,
+        path=path,
+        read_storage_jsonl=read_storage_jsonl,
+        target_pool_size=target_pool_size,
+    )
     progress = {
         "phase": data.get("status") or "completed",
         "phase_label": "最近结果",
@@ -491,6 +504,235 @@ def latest_result_snapshot(
         "result": result,
         "progress": progress,
     }
+
+
+def _run_history_result_payload(
+    data: dict[str, Any],
+    summary: dict[str, Any],
+    *,
+    path: Path,
+    read_storage_jsonl: ReadStorageJsonl | None,
+    target_pool_size: int | None,
+) -> dict[str, Any]:
+    candidates = _run_history_candidate_rows(data, summary)
+    total = _run_history_candidate_total(data, summary, fallback=len(candidates))
+    if not has_candidate_like_rows(candidates):
+        return {
+            "summary": summary,
+            "candidates": candidates,
+            "replay_audit": _run_history_replay_audit(
+                payload={"candidates": []},
+                payload_rows=[],
+                lifecycle_rows=[],
+                raw_candidate_count=len(candidates),
+                total_candidate_count=total,
+                path=path,
+            ),
+        }
+
+    payload_rows = _run_history_candidate_payload_rows(candidates)
+    lifecycle_rows = _run_history_lifecycle_rows(read_storage_jsonl)
+    payload = candidate_payload(
+        payload_rows,
+        source="run_history",
+        total=total,
+        path=str(path),
+        lifecycle_rows=lifecycle_rows,
+        target_pool_size=target_pool_size or DEFAULT_MAIN_POOL_SIZE,
+    )
+    return {
+        "summary": summary,
+        **payload,
+        "replay_audit": _run_history_replay_audit(
+            payload=payload,
+            payload_rows=payload_rows,
+            lifecycle_rows=lifecycle_rows,
+            raw_candidate_count=len(candidates),
+            total_candidate_count=total,
+            path=path,
+        ),
+    }
+
+
+def _run_history_candidate_rows(data: dict[str, Any], summary: dict[str, Any]) -> list[Any]:
+    for container in (
+        summary,
+        data.get("result") if isinstance(data.get("result"), dict) else {},
+        data.get("data") if isinstance(data.get("data"), dict) else {},
+        data,
+    ):
+        rows = container.get("candidates") if isinstance(container, dict) else None
+        if isinstance(rows, list) and rows:
+            return rows
+    return []
+
+
+def _run_history_candidate_payload_rows(rows: list[Any]) -> list[dict[str, Any]]:
+    payload_rows: list[dict[str, Any]] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        candidate = row.get("candidate") if isinstance(row.get("candidate"), dict) else row
+        payload_rows.append(dict(candidate))
+    return payload_rows
+
+
+def _run_history_candidate_total(data: dict[str, Any], summary: dict[str, Any], *, fallback: int) -> int:
+    for container in (summary, data):
+        for key in ("total_candidates", "produced_count"):
+            try:
+                number = int(container.get(key))
+            except (TypeError, ValueError):
+                continue
+            if number >= 0:
+                return max(number, fallback)
+    return candidate_result_total({**data, **summary}, fallback)
+
+
+def _run_history_lifecycle_rows(read_storage_jsonl: ReadStorageJsonl | None) -> list[dict[str, Any]]:
+    if read_storage_jsonl is None:
+        return []
+    try:
+        rows = read_storage_jsonl("lifecycle.jsonl", limit=None)
+    except Exception:
+        logger.warning("run history lifecycle rows unavailable; continuing without historical risk", exc_info=True)
+        return []
+    return [row for row in rows if isinstance(row, dict)]
+
+
+def _run_history_replay_audit(
+    *,
+    payload: dict[str, Any],
+    payload_rows: list[dict[str, Any]],
+    lifecycle_rows: list[dict[str, Any]],
+    raw_candidate_count: int,
+    total_candidate_count: int,
+    path: Path,
+) -> dict[str, Any]:
+    candidates = [row for row in payload.get("candidates") or [] if isinstance(row, dict)]
+    pool_summary = payload.get("pool_summary") if isinstance(payload.get("pool_summary"), dict) else {}
+    scientific = payload.get("scientific_audit") if isinstance(payload.get("scientific_audit"), dict) else {}
+    workflow = payload.get("workflow_plan") if isinstance(payload.get("workflow_plan"), dict) else {}
+    readiness = workflow.get("readiness_evidence") if isinstance(workflow.get("readiness_evidence"), dict) else {}
+    production_counts = pool_summary.get("decision_action_counts")
+    if not isinstance(production_counts, dict):
+        production_counts = _run_history_decision_action_counts(candidates)
+    blocker_counts = readiness.get("blocker_counts")
+    if not isinstance(blocker_counts, dict):
+        blocker_counts = _run_history_reason_counts(candidates)
+    return {
+        "schema_version": "run-history-replay-audit-v1",
+        "source": "run_history",
+        "path": str(path),
+        "local_only": True,
+        "official_api_called": False,
+        "submit_allowed": False,
+        "real_submit_performed": False,
+        "raw_candidate_row_count": int(raw_candidate_count),
+        "payload_candidate_row_count": len(payload_rows),
+        "recovered_candidate_count": len(candidates),
+        "total_candidate_count": int(total_candidate_count),
+        "lifecycle_row_count": len(lifecycle_rows),
+        "lifecycle_rows_used_count": _run_history_matching_lifecycle_count(candidates, lifecycle_rows),
+        "candidates_with_production_decision": sum(
+            1 for row in candidates if isinstance(row.get("production_decision"), dict)
+        ),
+        "production_decision_counts": dict(sorted(production_counts.items())),
+        "scientific_audit_summary_available": bool(scientific),
+        "candidates_with_scientific_audit": int(scientific.get("audited_count") or 0),
+        "candidates_missing_scientific_audit": int(scientific.get("missing_audit_count") or 0),
+        "scientific_submit_boundary_intact": (
+            int(scientific.get("submit_allowed_count") or 0) == 0
+            and int(scientific.get("real_submit_performed_count") or 0) == 0
+        ),
+        "workflow_plan_available": bool(workflow),
+        "workflow_queue_counts": _run_history_workflow_queue_counts(workflow),
+        "readiness_blocker_counts": dict(sorted(blocker_counts.items())),
+        "execution_gap_counts": dict(sorted((readiness.get("execution_gap_counts") or {}).items()))
+        if isinstance(readiness.get("execution_gap_counts"), dict)
+        else {},
+        "stop_rule": readiness.get("authoritative_stop_rule") or "scripts/check_live_submit_readiness.py",
+        "submit_boundary_intact": (
+            workflow.get("submit_allowed") is not True
+            and int(scientific.get("submit_allowed_count") or 0) == 0
+            and int(scientific.get("real_submit_performed_count") or 0) == 0
+        ),
+    }
+
+
+def _run_history_workflow_queue_counts(workflow: dict[str, Any]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for name in ("producer", "validator", "rework", "review", "archive"):
+        queue = workflow.get(name) if isinstance(workflow.get(name), dict) else {}
+        value = queue.get("candidate_count")
+        if value is None and name == "producer":
+            value = queue.get("deficit")
+        try:
+            counts[name] = max(0, int(value or 0))
+        except (TypeError, ValueError):
+            counts[name] = 0
+    return counts
+
+
+def _run_history_reason_counts(candidates: list[dict[str, Any]]) -> dict[str, int]:
+    counts: Counter[str] = Counter()
+    for row in candidates:
+        decision = row.get("production_decision") if isinstance(row.get("production_decision"), dict) else {}
+        for reason in decision.get("reason_codes") or []:
+            text = str(reason or "").strip()
+            if text:
+                counts[text] += 1
+    return dict(sorted(counts.items()))
+
+
+def _run_history_decision_action_counts(candidates: list[dict[str, Any]]) -> dict[str, int]:
+    counts: Counter[str] = Counter()
+    for row in candidates:
+        decision = row.get("production_decision") if isinstance(row.get("production_decision"), dict) else {}
+        action = str(decision.get("action") or "").strip()
+        if action:
+            counts[action] += 1
+    return dict(sorted(counts.items()))
+
+
+def _run_history_matching_lifecycle_count(
+    candidates: list[dict[str, Any]],
+    lifecycle_rows: list[dict[str, Any]],
+) -> int:
+    keys: set[str] = set()
+    for row in candidates:
+        keys.update(_run_history_candidate_keys(row))
+    if not keys:
+        return 0
+    matched = 0
+    for row in lifecycle_rows:
+        if any(key in keys for key in _run_history_candidate_keys(row)):
+            matched += 1
+    return matched
+
+
+def _run_history_candidate_keys(row: dict[str, Any]) -> set[str]:
+    keys = {
+        str(row.get(field) or "").strip()
+        for field in ("alpha_id", "candidate_id", "official_alpha_id", "simulation_id")
+        if str(row.get(field) or "").strip()
+    }
+    expression = _run_history_expression_key(row.get("expression"))
+    if expression:
+        keys.add(f"expression:{expression}")
+        keys.add(_run_history_expression_digest(expression))
+    digest = str(row.get("expression_digest") or "").strip()
+    if digest:
+        keys.add(digest)
+    return keys
+
+
+def _run_history_expression_key(value: Any) -> str:
+    return " ".join(str(value or "").strip().lower().split())
+
+
+def _run_history_expression_digest(expression: str) -> str:
+    return "expr_" + sha256(expression.encode("utf-8")).hexdigest()[:12] if expression else ""
 
 
 def latest_run_history_path(*, load_config: LoadConfig = load_run_config) -> Path | None:
@@ -536,354 +778,3 @@ def user_profile_snapshot(
         or {"tier": "loading", "level": None, "points": None}
     )
     return profile
-
-"""Public snapshot function facade for the local web module."""
-
-from dataclasses import dataclass
-from pathlib import Path
-from typing import Any, Callable
-
-
-@dataclass(frozen=True)
-class WebSnapshotFacade:
-    runtime_factory: Callable[[], Any]
-    latest_result_snapshot_func: Callable[[], dict] | None = None
-    latest_run_history_path_func: Callable[[], Path | None] | None = None
-    assistant_context_snapshot_func: Callable[..., dict] | None = None
-    assistant_guidance_snapshot_func: Callable[..., dict] | None = None
-
-    def _runtime(self) -> Any:
-        return self.runtime_factory()
-
-    def durable_job_rows(self, *, limit: int) -> list[dict]:
-        return self._runtime().durable_job_rows(limit=limit)
-
-    def research_memory_snapshot(self, *, limit: int = 5000, top_n: int = 10) -> dict:
-        return self._runtime().research_memory_snapshot(limit=limit, top_n=top_n)
-
-    def research_knowledge_snapshot(self, *, limit: int = 100, min_confidence: float = 0.0) -> dict:
-        return self._runtime().research_knowledge_snapshot(limit=limit, min_confidence=min_confidence)
-
-    def research_observability_snapshot(self, *, limit: int = 5000, top_n: int = 10, include_cloud: bool = True) -> dict:
-        return self._runtime().research_observability_snapshot(limit=limit, top_n=top_n, include_cloud=include_cloud)
-
-    def prompt_run_ledger_snapshot(self, *, limit: int = 100) -> dict:
-        return self._runtime().prompt_run_ledger_snapshot(limit=limit)
-
-    def assistant_guidance_snapshot(self, *, limit: int = 100, min_confidence: float | None = None) -> dict:
-        return self._runtime().assistant_guidance_snapshot(limit=limit, min_confidence=min_confidence)
-
-    def assistant_guidance_history(
-        self,
-        rows: list[dict],
-        *,
-        min_confidence: float,
-        scoring_policy: dict | None = None,
-        outcomes_by_guidance: dict[str, dict] | None = None,
-    ) -> list[dict]:
-        return self._runtime().assistant_guidance_history(
-            rows,
-            min_confidence=min_confidence,
-            scoring_policy=scoring_policy,
-            outcomes_by_guidance=outcomes_by_guidance,
-        )
-
-    def assistant_context_snapshot(
-        self,
-        *,
-        limit: int = 5000,
-        top_n: int = 10,
-        include_prompt: bool = True,
-        include_sensitive: bool = False,
-    ) -> dict:
-        return self._runtime().assistant_context_snapshot(
-            limit=limit,
-            top_n=top_n,
-            include_prompt=include_prompt,
-            include_sensitive=include_sensitive,
-            latest_result_snapshot=self._latest_result_snapshot,
-        )
-
-    def assistant_request_snapshot(
-        self,
-        *,
-        limit: int = 5000,
-        top_n: int = 10,
-        include_prompt: bool = True,
-        include_offline_draft: bool = True,
-        include_sensitive: bool = False,
-    ) -> dict:
-        return self._runtime().assistant_request_snapshot(
-            limit=limit,
-            top_n=top_n,
-            include_prompt=include_prompt,
-            include_offline_draft=include_offline_draft,
-            include_sensitive=include_sensitive,
-            assistant_context_snapshot=self._assistant_context_snapshot,
-        )
-
-    def assistant_response_parse_payload(self, payload: dict) -> dict:
-        return self._runtime().assistant_response_parse_payload(payload)
-
-    def assistant_response_guidance_payload(self, payload: dict) -> dict:
-        return self._runtime().assistant_response_guidance_payload(payload)
-
-    def anti_overfit_snapshot(self, candidate_id: str = "") -> dict:
-        return self._runtime().anti_overfit_snapshot(candidate_id, self._latest_result_snapshot)
-
-    def rolling_validation_snapshot(self, candidate_id: str = "", windows: int = 4) -> dict:
-        return self._runtime().rolling_validation_snapshot(candidate_id, windows, self._latest_result_snapshot)
-
-    def assistant_cross_review_payload(self, payload: dict) -> dict:
-        return self._runtime().assistant_cross_review_payload(payload)
-
-    def save_assistant_guidance_payload(self, payload: dict) -> dict:
-        return self._runtime().save_assistant_guidance_payload(payload, self._assistant_guidance_snapshot)
-
-    def latest_result_snapshot(self) -> dict:
-        return self._runtime().latest_result_snapshot(self._latest_run_history_path)
-
-    def latest_run_history_path(self) -> Path | None:
-        return self._runtime().latest_run_history_path()
-
-    def user_profile_snapshot(self) -> dict:
-        return self._runtime().user_profile_snapshot()
-
-    def _latest_result_snapshot(self) -> dict:
-        if self.latest_result_snapshot_func is not None:
-            return self.latest_result_snapshot_func()
-        return self.latest_result_snapshot()
-
-    def _latest_run_history_path(self) -> Path | None:
-        if self.latest_run_history_path_func is not None:
-            return self.latest_run_history_path_func()
-        return self.latest_run_history_path()
-
-    def _assistant_context_snapshot(self, **kwargs) -> dict:
-        if self.assistant_context_snapshot_func is not None:
-            return self.assistant_context_snapshot_func(**kwargs)
-        return self.assistant_context_snapshot(**kwargs)
-
-    def _assistant_guidance_snapshot(self, **kwargs) -> dict:
-        if self.assistant_guidance_snapshot_func is not None:
-            return self.assistant_guidance_snapshot_func(**kwargs)
-        return self.assistant_guidance_snapshot(**kwargs)
-
-"""Runtime dependency facade for Web snapshot services."""
-
-from dataclasses import dataclass
-from pathlib import Path
-from typing import Any, Callable
-
-from brain_alpha_ops.research.observability import build_research_observability_snapshot
-from brain_alpha_ops.research.repository import ResearchRepository
-from brain_alpha_ops.web_post_handlers import (
-    assistant_response_guidance_post_payload,
-    assistant_response_parse_post_payload,
-)
-from brain_alpha_ops.web_snapshots import (
-    assistant_context_snapshot as assistant_context_snapshot_service,
-    assistant_guidance_history as assistant_guidance_history_service,
-    assistant_guidance_snapshot as assistant_guidance_snapshot_service,
-    assistant_request_snapshot as assistant_request_snapshot_service,
-    assistant_response_guidance_payload as assistant_response_guidance_payload_service,
-    assistant_response_parse_payload as assistant_response_parse_payload_service,
-    durable_job_rows as durable_job_rows_service,
-    latest_result_snapshot as latest_result_snapshot_service,
-    latest_run_history_path as latest_run_history_path_service,
-    prompt_run_ledger_snapshot as prompt_run_ledger_snapshot_service,
-    research_knowledge_snapshot as research_knowledge_snapshot_service,
-    research_memory_snapshot as research_memory_snapshot_service,
-    research_observability_snapshot as research_observability_snapshot_service,
-    save_assistant_guidance_payload as save_assistant_guidance_payload_service,
-    user_profile_snapshot as user_profile_snapshot_service,
-)
-from brain_alpha_ops.web_review import (
-    anti_overfit_snapshot as anti_overfit_snapshot_service,
-    assistant_cross_review_payload as assistant_cross_review_payload_service,
-    rolling_validation_snapshot as rolling_validation_snapshot_service,
-)
-
-
-@dataclass
-class WebSnapshotRuntime:
-    load_config: Callable[[], Any]
-    web_error: Callable[[Exception, str], dict]
-    bounded_query_float: Callable[..., float]
-    payload_truthy: Callable[[Any], bool]
-    read_storage_jsonl: Callable[..., list[dict]]
-    run_config_from_payload: Callable[[dict], Any]
-    cloud_alpha_snapshot: Callable[..., dict]
-    storage_jsonl_path: Callable[[str], Path]
-    safe_error_message: Callable[[Exception], str]
-    job_store: Any
-    sync_job_store: Any
-    check_job_store: Any
-    enrich_progress: Callable[[dict], dict]
-    repository_factory: Callable[..., Any] = ResearchRepository
-    observability_builder: Callable[..., dict] = build_research_observability_snapshot
-
-    def durable_job_rows(self, *, limit: int) -> list[dict]:
-        return durable_job_rows_service(
-            stores=[
-                ("production_job", self.job_store),
-                ("sync_job", self.sync_job_store),
-                ("check_job", self.check_job_store),
-            ],
-            limit=limit,
-        )
-
-    def research_memory_snapshot(self, *, limit: int = 5000, top_n: int = 10) -> dict:
-        return research_memory_snapshot_service(
-            limit=limit,
-            top_n=top_n,
-            load_config=self.load_config,
-            web_error=self.web_error,
-        )
-
-    def research_knowledge_snapshot(self, *, limit: int = 100, min_confidence: float = 0.0) -> dict:
-        return research_knowledge_snapshot_service(
-            limit=limit,
-            min_confidence=min_confidence,
-            load_config=self.load_config,
-            web_error=self.web_error,
-        )
-
-    def research_observability_snapshot(self, *, limit: int = 5000, top_n: int = 10, include_cloud: bool = True) -> dict:
-        return research_observability_snapshot_service(
-            limit=limit,
-            top_n=top_n,
-            include_cloud=include_cloud,
-            load_config=self.load_config,
-            durable_job_rows=self.durable_job_rows,
-            observability_builder=self.observability_builder,
-            web_error=self.web_error,
-        )
-
-    def prompt_run_ledger_snapshot(self, *, limit: int = 100) -> dict:
-        return prompt_run_ledger_snapshot_service(
-            limit=limit,
-            load_config=self.load_config,
-            web_error=self.web_error,
-        )
-
-    def assistant_guidance_snapshot(self, *, limit: int = 100, min_confidence: float | None = None) -> dict:
-        return assistant_guidance_snapshot_service(
-            limit=limit,
-            min_confidence=min_confidence,
-            load_config=self.load_config,
-            bounded_query_float=self.bounded_query_float,
-            payload_truthy=self.payload_truthy,
-            read_storage_jsonl=self.read_storage_jsonl,
-            web_error=self.web_error,
-        )
-
-    def assistant_guidance_history(
-        self,
-        rows: list[dict],
-        *,
-        min_confidence: float,
-        scoring_policy: dict | None = None,
-        outcomes_by_guidance: dict[str, dict] | None = None,
-    ) -> list[dict]:
-        return assistant_guidance_history_service(
-            rows,
-            min_confidence=min_confidence,
-            scoring_policy=scoring_policy,
-            outcomes_by_guidance=outcomes_by_guidance,
-            bounded_query_float=self.bounded_query_float,
-            payload_truthy=self.payload_truthy,
-        )
-
-    def assistant_context_snapshot(
-        self,
-        *,
-        limit: int = 5000,
-        top_n: int = 10,
-        include_prompt: bool = True,
-        include_sensitive: bool = False,
-        latest_result_snapshot: Callable[[], dict],
-    ) -> dict:
-        return assistant_context_snapshot_service(
-            limit=limit,
-            top_n=top_n,
-            include_prompt=include_prompt,
-            include_sensitive=include_sensitive,
-            load_config=self.load_config,
-            latest_result_snapshot=latest_result_snapshot,
-            cloud_alpha_snapshot=self.cloud_alpha_snapshot,
-            web_error=self.web_error,
-        )
-
-    def assistant_request_snapshot(
-        self,
-        *,
-        limit: int = 5000,
-        top_n: int = 10,
-        include_prompt: bool = True,
-        include_offline_draft: bool = True,
-        include_sensitive: bool = False,
-        assistant_context_snapshot: Callable[..., dict],
-    ) -> dict:
-        return assistant_request_snapshot_service(
-            limit=limit,
-            top_n=top_n,
-            include_prompt=include_prompt,
-            include_offline_draft=include_offline_draft,
-            include_sensitive=include_sensitive,
-            assistant_context_snapshot=assistant_context_snapshot,
-            web_error=self.web_error,
-        )
-
-    def assistant_response_parse_payload(self, payload: dict) -> dict:
-        return assistant_response_parse_payload_service(payload)
-
-    def assistant_response_guidance_payload(self, payload: dict) -> dict:
-        return assistant_response_guidance_payload_service(payload, bounded_query_float=self.bounded_query_float)
-
-    def anti_overfit_snapshot(self, candidate_id: str, latest_result_snapshot: Callable[[], dict]) -> dict:
-        return anti_overfit_snapshot_service(
-            candidate_id=candidate_id,
-            latest_result_snapshot=latest_result_snapshot,
-        )
-
-    def rolling_validation_snapshot(self, candidate_id: str, windows: int, latest_result_snapshot: Callable[[], dict]) -> dict:
-        return rolling_validation_snapshot_service(
-            candidate_id=candidate_id,
-            windows=windows,
-            latest_result_snapshot=latest_result_snapshot,
-        )
-
-    def assistant_cross_review_payload(self, payload: dict) -> dict:
-        return assistant_cross_review_payload_service(
-            payload,
-            bounded_query_float=self.bounded_query_float,
-        )
-
-    def save_assistant_guidance_payload(self, payload: dict, assistant_guidance_snapshot: Callable[..., dict]) -> dict:
-        return save_assistant_guidance_payload_service(
-            payload,
-            run_config_from_payload=self.run_config_from_payload,
-            bounded_query_float=self.bounded_query_float,
-            payload_truthy=self.payload_truthy,
-            assistant_guidance_snapshot=assistant_guidance_snapshot,
-            repository_factory=self.repository_factory,
-        )
-
-    def latest_result_snapshot(self, latest_run_history_path: Callable[[], Path | None]) -> dict:
-        return latest_result_snapshot_service(
-            job_store=self.job_store,
-            latest_run_history_path=latest_run_history_path,
-            enrich_progress=self.enrich_progress,
-            web_error=self.web_error,
-        )
-
-    def latest_run_history_path(self) -> Path | None:
-        return latest_run_history_path_service(load_config=self.load_config)
-
-    def user_profile_snapshot(self) -> dict:
-        return user_profile_snapshot_service(
-            job_store=self.job_store,
-            storage_jsonl_path=self.storage_jsonl_path,
-            safe_error_message=self.safe_error_message,
-        )

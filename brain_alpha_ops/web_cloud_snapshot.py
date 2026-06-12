@@ -14,7 +14,13 @@ from brain_alpha_ops.brain_api.user_alpha_sync import list_user_alphas_for_sync
 from brain_alpha_ops.brain_api.official_helpers import looks_non_production_alpha_id
 from brain_alpha_ops.config import load_run_config, runtime_project_root
 from brain_alpha_ops.data.cache_metadata import read_context_cache_metadata, write_context_cache_metadata
-from brain_alpha_ops.jsonl import iter_jsonl_records, read_jsonl_records, read_jsonl_tail, read_jsonl_tail_with_stats
+from brain_alpha_ops.jsonl import (
+    find_jsonl_record_reverse,
+    iter_jsonl_records,
+    read_jsonl_records,
+    read_jsonl_tail,
+    read_jsonl_tail_with_stats,
+)
 from brain_alpha_ops.redaction import redact_error_message, redact_text
 
 
@@ -90,6 +96,45 @@ def cloud_alpha_snapshot(
     return {"alphas": rows, "summary": summary}
 
 
+def cloud_alpha_cache_probe(
+    *,
+    load_config: LoadConfig = load_run_config,
+    stale_seconds: int = CLOUD_SYNC_STALE_SECONDS,
+) -> dict[str, Any]:
+    """Return a lightweight cloud Alpha cache readiness summary.
+
+    This intentionally avoids the full snapshot path, which parses, dedupes,
+    sorts, and summarizes the entire JSONL file. Phase readiness only needs to
+    know whether a usable production Alpha cache exists; exact counts remain
+    owned by ``cloud_alpha_snapshot``.
+    """
+    cache_path = storage_jsonl_path("cloud_alphas.jsonl", load_config=load_config)
+    row = find_jsonl_record_reverse(cache_path, predicate=is_production_cloud_alpha_row)
+    if row is not None:
+        loaded_at, age_seconds = path_modified_at(cache_path)
+        return {
+            "ok": True,
+            "source": "storage",
+            "loaded_at": loaded_at,
+            "age_seconds": int(age_seconds or 0),
+            "is_stale": bool(age_seconds is not None and age_seconds > stale_seconds),
+        }
+
+    api_cache_path = latest_cached_user_alpha_path(load_config=load_config)
+    api_rows = dedupe_cloud_alpha_rows(latest_cached_user_alphas(limit=None, load_config=load_config))
+    api_count = len(api_rows)
+    loaded_at, age_seconds = path_modified_at(api_cache_path if api_count else None)
+    return {
+        "ok": api_count > 0,
+        "count": api_count,
+        "total": api_count,
+        "source": "api_cache" if api_count else "empty",
+        "loaded_at": loaded_at,
+        "age_seconds": int(age_seconds or 0),
+        "is_stale": bool(age_seconds is not None and age_seconds > stale_seconds),
+    }
+
+
 def _bounded_rows(rows: list[dict[str, Any]], limit: int | None) -> list[dict[str, Any]]:
     if limit is None:
         return rows
@@ -112,6 +157,11 @@ def dedupe_cloud_alpha_rows(rows: Iterable[dict[str, Any]]) -> list[dict[str, An
     deduped = list(latest.values()) + no_id
     deduped.sort(key=cloud_row_sort_key, reverse=True)
     return deduped
+
+
+def is_production_cloud_alpha_row(row: dict[str, Any]) -> bool:
+    alpha_id = cloud_alpha_id(row)
+    return bool(alpha_id and not looks_non_production_alpha_id(alpha_id))
 
 
 def latest_cached_user_alphas(
@@ -218,7 +268,7 @@ def official_context_file_counts(
             safe_error_message=safe_error_message,
         )
         if meta:
-            metadata[filename] = enrich_context_cache_metadata(meta)
+            metadata[filename] = enrich_context_cache_metadata(meta, rows=rows)
     if metadata:
         counts["context_cache_metadata"] = metadata
         counts["context_cache_manifest"] = context_cache_manifest(
@@ -228,7 +278,12 @@ def official_context_file_counts(
     return counts
 
 
-def enrich_context_cache_metadata(metadata: dict[str, Any], *, now: datetime | None = None) -> dict[str, Any]:
+def enrich_context_cache_metadata(
+    metadata: dict[str, Any],
+    *,
+    rows: list[dict[str, Any]] | None = None,
+    now: datetime | None = None,
+) -> dict[str, Any]:
     enriched = dict(metadata)
     current = now or datetime.now(timezone.utc)
     saved_at = parse_cache_timestamp(enriched.get("saved_at"))
@@ -240,7 +295,45 @@ def enrich_context_cache_metadata(metadata: dict[str, Any], *, now: datetime | N
     enriched["expires_in_seconds"] = expires_in_seconds
     enriched["is_expired"] = is_expired
     enriched["is_stale"] = is_expired
+    if rows is not None:
+        actual_count = len(rows)
+        declared_count = _metadata_int(enriched.get("record_count"))
+        declared_sha = str(enriched.get("sha256") or "").strip()
+        actual_sha = context_items_hash(rows) if actual_count else ""
+        record_count_matches = declared_count == actual_count
+        sha256_matches = bool(declared_sha) and declared_sha == actual_sha
+        integrity_errors: list[str] = []
+        if actual_count <= 0:
+            integrity_errors.append("empty_context_file")
+        if not record_count_matches:
+            integrity_errors.append("record_count_mismatch")
+        if not sha256_matches:
+            integrity_errors.append("sha256_mismatch")
+        if not bool(enriched.get("complete")):
+            integrity_errors.append("metadata_incomplete")
+        enriched["metadata_record_count"] = declared_count
+        enriched["record_count"] = actual_count
+        enriched["actual_sha256"] = actual_sha
+        enriched["record_count_matches"] = record_count_matches
+        enriched["sha256_matches"] = sha256_matches
+        enriched["integrity_ok"] = not integrity_errors
+        enriched["integrity_errors"] = integrity_errors
+        # A cache is complete only when the metadata still describes the file
+        # currently on disk. TTL staleness is reported separately as is_stale.
+        enriched["complete"] = not integrity_errors
     return enriched
+
+
+def context_items_hash(items: list[dict[str, Any]]) -> str:
+    payload = json.dumps(items, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str)
+    return sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _metadata_int(value: Any) -> int:
+    try:
+        return int(value or 0)
+    except (TypeError, ValueError):
+        return 0
 
 
 def context_cache_manifest(
@@ -255,6 +348,11 @@ def context_cache_manifest(
         filename
         for filename, meta in metadata.items()
         if bool(meta.get("is_stale") or meta.get("is_expired"))
+    ]
+    invalid_files = [
+        filename
+        for filename in expected_files
+        if filename in metadata and not bool(metadata.get(filename, {}).get("complete"))
     ]
     record_counts = {
         filename: int(meta.get("record_count", 0) or 0)
@@ -283,10 +381,11 @@ def context_cache_manifest(
         "missing_files": missing_files,
         "stale_files": stale_files,
         "expired_files": stale_files,
+        "invalid_files": invalid_files,
         "record_counts": record_counts,
         "record_count_total": sum(record_counts.values()),
-        "complete": not missing_files and all(bool(metadata.get(filename, {}).get("complete")) for filename in expected_files),
-        "is_stale": bool(missing_files or stale_files),
+        "complete": not missing_files and not invalid_files,
+        "is_stale": bool(missing_files or stale_files or invalid_files),
         "sha256": digest,
     }
 

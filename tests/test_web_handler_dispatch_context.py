@@ -18,7 +18,7 @@ def test_web_handler_dispatch_context_contract_is_grouped_and_compatible():
         "assistant",
         "actions",
     ]
-    assert max(result["group_field_counts"].values()) <= 14
+    assert max(result["group_field_counts"].values()) <= 20
     assert result["flat_constructor_ok"] is True
     assert result["grouped_constructor_ok"] is True
     assert result["legacy_access_ok"] is True

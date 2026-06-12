@@ -23,6 +23,11 @@ from typing import Any, Callable
 from brain_alpha_ops.brain_api.base import BrainAPIError
 from brain_alpha_ops.config import load_run_config
 from brain_alpha_ops.redaction import redact_error_message, redact_text
+from brain_alpha_ops.web_candidate_audit import append_scientific_audit_event
+from brain_alpha_ops.web_candidate_simulation_failures import (
+    append_official_simulation_audit as _append_official_simulation_audit,
+    simulation_failure_evidence as _simulation_failure_evidence,
+)
 from brain_alpha_ops.web_candidate_simulation_runtime import (
     _create_api,
     _progress_percent,
@@ -32,6 +37,11 @@ from brain_alpha_ops.web_candidate_simulation_runtime import (
     _simulation_retry_pause_seconds,
     _update_simulation_progress,
     _web_backtest_refresh_interval,
+)
+from brain_alpha_ops.web_candidate_simulation_selection import (
+    candidate_matches_requested_ids as _candidate_matches_requested_ids,
+    requested_candidate_ids_from_payload as _requested_candidate_ids_from_payload,
+    simulation_candidates_payload as _simulation_candidates_payload,
 )
 from brain_alpha_ops.web_candidate_simulation_state import (
     COOLDOWN_UPDATE_FIELDS,
@@ -58,16 +68,6 @@ logger = logging.getLogger(__name__)
 _DEFAULT_STALL_TIMEOUT_SECONDS = 180.0
 # Minimum prior score to be eligible for simulation
 _DEFAULT_MIN_SCORE = 60.0
-_SIMULATION_FAILURE_KEYS = (
-    "error",
-    "detail",
-    "message",
-    "reason",
-    "failureReason",
-    "failure_reason",
-    "status",
-    "state",
-)
 
 
 def simulate_candidates_job(
@@ -83,8 +83,8 @@ def simulate_candidates_job(
     to official BRAIN metrics. It:
       1. Loads candidates from candidates.jsonl
       2. Filters to eligible candidates (score >= threshold, no existing metrics)
-      3. Submits each to BRAIN API for simulation (one at a time)
-      4. Polls for results with stall detection
+      3. Fills up to the configured official simulation slots
+      4. Polls submitted slots round-robin with stall detection
       5. Updates candidates with official_metrics and re-scores
       6. Writes results back to candidates.jsonl
     """
@@ -96,10 +96,12 @@ def simulate_candidates_job(
         # Resolve parameters
         min_score = float(payload.get("min_score", budget.min_prior_score_for_official_simulation))
         max_simulations = int(payload.get("max_simulations", budget.max_official_simulations_per_cycle))
+        max_concurrent = int(getattr(budget, "max_official_concurrent_simulations", 3) or 3)
+        slot_limit = max(0, min(max_simulations, max_concurrent))
         poll_timeout = _simulation_poll_timeout(config, payload)
         stall_timeout = float(payload.get("stall_timeout", _DEFAULT_STALL_TIMEOUT_SECONDS))
         poll_interval = _web_backtest_refresh_interval(payload)
-        candidate_ids = payload.get("candidate_ids")  # Optional: specific IDs to simulate
+        candidate_ids = _requested_candidate_ids_from_payload(payload)
 
         # Load and filter candidates
         candidates = _load_candidates(storage_dir)
@@ -132,8 +134,13 @@ def simulate_candidates_job(
                 c for c in candidates
                 if _candidate_matches_requested_ids(c, requested_ids) and _eligible_for_simulation(c, min_score)
             ]
+            targets = sorted(targets, key=_candidate_score, reverse=True)
         else:
-            targets = [c for c in candidates if _eligible_for_simulation(c, min_score)]
+            targets = sorted(
+                (c for c in candidates if _eligible_for_simulation(c, min_score)),
+                key=_candidate_score,
+                reverse=True,
+            )
 
         if not targets:
             job_store.update(job_id, status="completed", progress={
@@ -144,8 +151,40 @@ def simulate_candidates_job(
             })
             return
 
+        if job_store.is_cancelled(job_id):
+            job_store.update(job_id, status="stopped", progress={
+                "phase": "stopped",
+                "message": "官方模拟任务已在远程 API 初始化前停止。",
+                "status_message": "官方模拟任务已在远程 API 初始化前停止。",
+                "percent": 100,
+                "percent_complete": 100,
+                "data": {"total_candidates": len(candidates), "eligible": len(targets)},
+            })
+            return
+
         default_dataset = _default_simulation_dataset(config)
-        targets = _dedupe_simulation_targets(targets, default_dataset=default_dataset)[:max_simulations]
+        deduped_targets = _dedupe_simulation_targets(targets, default_dataset=default_dataset)
+        eligible_count = len(deduped_targets)
+        targets = deduped_targets[:slot_limit]
+        if not targets:
+            job_store.update(job_id, status="completed", progress={
+                "phase": "no_simulation_slots",
+                "message": "当前没有可用的官方模拟槽位。",
+                "percent": 100,
+                "data": {"total_candidates": len(candidates), "eligible": eligible_count, "slot_limit": slot_limit},
+            })
+            return
+
+        if job_store.is_cancelled(job_id):
+            job_store.update(job_id, status="stopped", progress={
+                "phase": "stopped",
+                "message": "官方模拟任务已在远程 API 初始化前停止。",
+                "status_message": "官方模拟任务已在远程 API 初始化前停止。",
+                "percent": 100,
+                "percent_complete": 100,
+                "data": {"total_candidates": len(candidates), "eligible": eligible_count, "slot_limit": slot_limit},
+            })
+            return
 
         # Create BRAIN API client with session credentials from payload
         try:
@@ -185,8 +224,27 @@ def simulate_candidates_job(
             "data": {"total": total, "completed": 0, "failed": 0},
         })
 
+        update_fields = [
+            "simulation_id",
+            "lifecycle_status",
+            "official_alpha_id",
+            "official_metrics",
+            "simulation_error",
+            "last_status",
+            "scorecard",
+            "gate",
+            "cloud_correlation_risk",
+            "scientific_audit",
+            "extra_fields",
+            *COOLDOWN_UPDATE_FIELDS,
+        ]
+        cooldown_audit_update_fields = [*COOLDOWN_UPDATE_FIELDS, "scientific_audit"]
+        terminal_audit_update_fields = [field for field in update_fields if field != "extra_fields"]
+
+        active_slots: list[dict[str, Any]] = []
+        stop_new_submissions = False
+
         for i, candidate in enumerate(targets):
-            # Check for cancellation
             if job_store.is_cancelled(job_id):
                 log.info("Simulation job %s cancelled", job_id)
                 break
@@ -210,10 +268,6 @@ def simulate_candidates_job(
                 },
             })
 
-            # Submit simulation. Official capacity errors are retried on the
-            # Web heartbeat cadence, but the submit phase must still be bounded:
-            # otherwise account-level capacity can leave the browser in an
-            # unclear "running" state indefinitely.
             sim_id = ""
             submit_started = time.monotonic()
             submit_attempts = 0
@@ -300,7 +354,16 @@ def simulate_candidates_job(
                                 last_status="CONCURRENT_SIMULATION_LIMIT_EXCEEDED",
                                 submit_attempts=submit_attempts,
                             )
-                            _save_candidate_update(storage_dir, candidate, COOLDOWN_UPDATE_FIELDS)
+                            candidate = _append_official_simulation_audit(
+                                candidate,
+                                source="web_official_simulation_capacity_timeout",
+                                status="CONCURRENT_SIMULATION_LIMIT_EXCEEDED",
+                                error=error_text,
+                                retry_after_seconds=retry_seconds,
+                                submit_attempts=submit_attempts,
+                            )
+                            _save_candidate_update(storage_dir, candidate, cooldown_audit_update_fields)
+                            stop_new_submissions = True
                             break
                         capacity_message = (
                             f"官方模拟并发槽位已满，候选 {i+1}/{total} 已等待 {wait_elapsed:.1f} 秒；"
@@ -341,7 +404,34 @@ def simulate_candidates_job(
                             last_status="CONCURRENT_SIMULATION_LIMIT_EXCEEDED",
                             submit_attempts=submit_attempts,
                         )
-                        _save_candidate_update(storage_dir, candidate, COOLDOWN_UPDATE_FIELDS)
+                        candidate = _append_official_simulation_audit(
+                            candidate,
+                            source="web_official_simulation_capacity_wait",
+                            status="CONCURRENT_SIMULATION_LIMIT_EXCEEDED",
+                            error=error_text,
+                            retry_after_seconds=retry_seconds,
+                            submit_attempts=submit_attempts,
+                        )
+                        _save_candidate_update(storage_dir, candidate, cooldown_audit_update_fields)
+                        if active_slots:
+                            failed += 1
+                            results.append({
+                                "alpha_id": alpha_id,
+                                "status": "deferred_concurrency_limit",
+                                "error": error_text,
+                                "retry_after_seconds": retry_seconds,
+                            })
+                            candidate = _append_official_simulation_audit(
+                                candidate,
+                                source="web_official_simulation_capacity_deferred",
+                                status="CONCURRENT_SIMULATION_LIMIT_EXCEEDED",
+                                error=error_text,
+                                retry_after_seconds=retry_seconds,
+                                submit_attempts=submit_attempts,
+                            )
+                            _save_candidate_update(storage_dir, candidate, cooldown_audit_update_fields)
+                            stop_new_submissions = True
+                            break
                         time.sleep(poll_interval)
                         continue
                     if exc.status_code == 429:
@@ -366,7 +456,16 @@ def simulate_candidates_job(
                             "error": error_text,
                             "retry_after_seconds": retry_seconds,
                         })
-                        _save_candidate_update(storage_dir, candidate, COOLDOWN_UPDATE_FIELDS)
+                        candidate = _append_official_simulation_audit(
+                            candidate,
+                            source="web_official_simulation_rate_limit",
+                            status="RATE_LIMITED",
+                            error=error_text,
+                            retry_after_seconds=retry_seconds,
+                            submit_attempts=submit_attempts,
+                        )
+                        _save_candidate_update(storage_dir, candidate, cooldown_audit_update_fields)
+                        stop_new_submissions = True
                         break
                     candidate["lifecycle_status"] = "simulation_submit_failed"
                     _clear_candidate_simulation_cooldown(candidate)
@@ -376,11 +475,27 @@ def simulate_candidates_job(
                         "status": "submit_failed",
                         "error": error_text,
                     })
-                    _save_candidate_update(storage_dir, candidate, COOLDOWN_UPDATE_FIELDS)
+                    candidate = _append_official_simulation_audit(
+                        candidate,
+                        source="web_official_simulation_submit_failed",
+                        status="SUBMIT_FAILED",
+                        error=error_text,
+                        submit_attempts=submit_attempts,
+                    )
+                    _save_candidate_update(storage_dir, candidate, terminal_audit_update_fields)
                     break
 
                 candidate["simulation_id"] = sim_id
                 candidate["lifecycle_status"] = "simulation_submitted"
+                candidate = append_scientific_audit_event(
+                    candidate,
+                    operation="official_simulation_writeback",
+                    source="web_official_simulation_submit",
+                    feedback_sources=["official_simulation_status"],
+                    official_api_called=True,
+                    details={"status": "SUBMITTED", "simulation_id": sim_id},
+                )
+                slot_candidate = candidate
                 _clear_candidate_simulation_cooldown(candidate)
                 _clear_account_simulation_cooldown(storage_dir)
                 last_activity = time.monotonic()
@@ -413,19 +528,44 @@ def simulate_candidates_job(
                     "message": f"候选 {i+1}/{total} 已提交官方模拟，正在等待 BRAIN 返回状态，已等待 0.0 秒。",
                     "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime()),
                 })
+                _save_candidate_update(storage_dir, candidate, update_fields)
+                active_slots.append({
+                    "slot_index": i,
+                    "candidate": slot_candidate,
+                    "alpha_id": alpha_id,
+                    "expression": expression,
+                    "simulation_id": sim_id,
+                    "poll_start": time.monotonic(),
+                    "poll_attempt": 0,
+                    "submit_attempts": submit_attempts,
+                })
                 break
 
+            if job_store.is_cancelled(job_id) or stop_new_submissions:
+                break
+
+        while active_slots:
             if job_store.is_cancelled(job_id):
                 break
-            if not sim_id:
-                break
+            time.sleep(poll_interval)
 
-            # Poll for result
-            poll_start = time.monotonic()
-            poll_attempt = 0
-            while True:
+            for slot in list(active_slots):
                 if job_store.is_cancelled(job_id):
                     break
+
+                i = int(slot["slot_index"])
+                candidate = slot["candidate"]
+                alpha_id = str(slot["alpha_id"])
+                expression = str(slot["expression"])
+                sim_id = str(slot["simulation_id"])
+                poll_start = float(slot["poll_start"])
+                submit_attempts = int(slot.get("submit_attempts") or 0)
+                poll_attempt = int(slot.get("poll_attempt") or 0)
+
+                next_poll_at = float(slot.get("next_poll_at") or 0.0)
+                now = time.monotonic()
+                if next_poll_at and now < next_poll_at:
+                    continue
 
                 elapsed = time.monotonic() - poll_start
                 stall_elapsed = time.monotonic() - last_activity
@@ -453,7 +593,16 @@ def simulate_candidates_job(
                         "message": f"官方模拟轮询超时，已等待 {elapsed:.1f} 秒。",
                         "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime()),
                     })
-                    break
+                    candidate = _append_official_simulation_audit(
+                        candidate,
+                        source="web_official_simulation_poll_timeout",
+                        status="POLL_TIMEOUT",
+                        simulation_id=sim_id,
+                        poll_count=poll_attempt,
+                    )
+                    _save_candidate_update(storage_dir, candidate, terminal_audit_update_fields)
+                    active_slots.remove(slot)
+                    continue
 
                 if stall_elapsed > stall_timeout:
                     candidate["lifecycle_status"] = "simulation_stall_detected"
@@ -478,9 +627,19 @@ def simulate_candidates_job(
                         "message": f"官方模拟轮询停滞，已等待 {elapsed:.1f} 秒。",
                         "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime()),
                     })
-                    break
+                    candidate = _append_official_simulation_audit(
+                        candidate,
+                        source="web_official_simulation_stall_detected",
+                        status="STALL_DETECTED",
+                        simulation_id=sim_id,
+                        poll_count=poll_attempt,
+                    )
+                    _save_candidate_update(storage_dir, candidate, terminal_audit_update_fields)
+                    active_slots.remove(slot)
+                    continue
 
                 poll_attempt += 1
+                slot["poll_attempt"] = poll_attempt
                 polling_message = (
                     f"正在等待官方模拟结果 {i+1}/{total}，已轮询 {poll_attempt} 次，"
                     f"已等待 {elapsed:.1f} 秒。"
@@ -502,7 +661,6 @@ def simulate_candidates_job(
                     last_status="RUNNING",
                     submit_attempts=submit_attempts,
                 )
-                time.sleep(poll_interval)
 
                 try:
                     status = api.poll_simulation(sim_id)
@@ -546,7 +704,7 @@ def simulate_candidates_job(
                             "message": rate_message,
                             "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime()),
                         })
-                        time.sleep(rate_wait)
+                        slot["next_poll_at"] = time.monotonic() + rate_wait
                         continue
                     log.warning("Poll error for %s: %s", redact_text(alpha_id), redact_error_message(exc))
                     error_elapsed = time.monotonic() - poll_start
@@ -586,6 +744,7 @@ def simulate_candidates_job(
                     continue
 
                 last_activity = time.monotonic()
+                slot.pop("next_poll_at", None)
                 status_elapsed = time.monotonic() - poll_start
                 status_message = f"官方模拟状态 {status}，继续等待结果 {i+1}/{total}，已等待 {status_elapsed:.1f} 秒。"
                 _update_simulation_progress(
@@ -613,6 +772,18 @@ def simulate_candidates_job(
                         candidate["official_alpha_id"] = result.get("alpha_id", "") or result.get("metrics", {}).get("official_alpha_id", "")
                         candidate["official_metrics"] = result.get("metrics", {})
                         candidate["lifecycle_status"] = "official_simulated"
+                        candidate = append_scientific_audit_event(
+                            candidate,
+                            operation="official_simulation_writeback",
+                            source="web_official_simulation_result",
+                            feedback_sources=["official_simulation_result", "scorecard"],
+                            official_api_called=True,
+                            details={
+                                "status": "COMPLETED",
+                                "simulation_id": sim_id,
+                                "official_alpha_id": candidate.get("official_alpha_id", ""),
+                            },
+                        )
                         _clear_candidate_simulation_cooldown(candidate)
                         last_activity = time.monotonic()
 
@@ -623,6 +794,15 @@ def simulate_candidates_job(
                             candidate.update(rescored)
                         except Exception as score_exc:
                             log.warning("Re-scoring failed for %s: %s", redact_text(alpha_id), redact_error_message(score_exc))
+                        else:
+                            candidate = append_scientific_audit_event(
+                                candidate,
+                                operation="official_simulation_writeback",
+                                source="web_official_rescore",
+                                feedback_sources=["official_metrics", "scorecard", "quality_gate"],
+                                official_api_called=False,
+                                details={"status": "RESCORED", "simulation_id": sim_id},
+                            )
 
                         completed += 1
                         results.append({
@@ -649,9 +829,19 @@ def simulate_candidates_job(
                             "message": f"官方模拟完成，已等待 {status_elapsed:.1f} 秒。",
                             "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime()),
                         })
+                        _save_candidate_update(storage_dir, candidate, update_fields)
+                        active_slots.remove(slot)
                     except BrainAPIError as exc:
                         error_text = redact_error_message(exc)
                         candidate["lifecycle_status"] = "simulation_result_failed"
+                        candidate = append_scientific_audit_event(
+                            candidate,
+                            operation="official_simulation_writeback",
+                            source="web_official_simulation_result",
+                            feedback_sources=["official_simulation_result"],
+                            official_api_called=True,
+                            details={"status": "RESULT_FETCH_FAILED", "simulation_id": sim_id, "error": error_text},
+                        )
                         _clear_candidate_simulation_cooldown(candidate)
                         failed += 1
                         results.append({
@@ -675,7 +865,9 @@ def simulate_candidates_job(
                             "message": f"官方模拟结果获取失败，已等待 {status_elapsed:.1f} 秒。",
                             "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime()),
                         })
-                    break
+                        _save_candidate_update(storage_dir, candidate, update_fields)
+                        active_slots.remove(slot)
+                    continue
 
                 elif status == "FAILED":
                     failure_evidence = _simulation_failure_evidence(api, sim_id)
@@ -689,6 +881,14 @@ def simulate_candidates_job(
                         "last_simulation_error": failure_error,
                         "simulation_failure_evidence": failure_evidence,
                     }
+                    candidate = append_scientific_audit_event(
+                        candidate,
+                        operation="official_simulation_writeback",
+                        source="web_official_simulation_failure",
+                        feedback_sources=["official_simulation_status", "official_simulation_result"],
+                        official_api_called=True,
+                        details={"status": "FAILED", "simulation_id": sim_id, "error": failure_error},
+                    )
                     _clear_candidate_simulation_cooldown(candidate)
                     failed += 1
                     results.append({
@@ -716,7 +916,9 @@ def simulate_candidates_job(
                         "message": f"官方模拟失败，已等待 {status_elapsed:.1f} 秒：{failure_error}",
                         "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime()),
                     })
-                    break
+                    _save_candidate_update(storage_dir, candidate, update_fields)
+                    active_slots.remove(slot)
+                    continue
 
                 # Still running, update progress
                 candidate["lifecycle_status"] = "simulation_running"
@@ -734,21 +936,7 @@ def simulate_candidates_job(
                     "message": status_message,
                     "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime()),
                 })
-
-            # Save candidates after each simulation attempt
-            _save_candidate_update(storage_dir, candidate, [
-                "simulation_id",
-                "lifecycle_status",
-                "official_alpha_id",
-                "official_metrics",
-                "simulation_error",
-                "last_status",
-                "scorecard",
-                "gate",
-                "cloud_correlation_risk",
-                "extra_fields",
-                *COOLDOWN_UPDATE_FIELDS,
-            ])
+                _save_candidate_update(storage_dir, candidate, update_fields)
 
         # Final status mirrors the official outcome counts so the UI never
         # treats a fully failed official batch as a successful completion.
@@ -792,112 +980,17 @@ def simulate_candidates_job(
         })
 
 
-def _simulation_failure_evidence(api: Any, simulation_id: str) -> dict[str, Any]:
-    """Fetch a compact, redacted failure summary for an official FAILED simulation."""
-    try:
-        payload = api.fetch_result(simulation_id)
-    except Exception as exc:
-        return {
-            "simulation_id": simulation_id,
-            "error": redact_error_message(exc),
-            "source": "fetch_result_exception",
-        }
-    summary = _simulation_failure_summary(payload)
-    return {
-        "simulation_id": simulation_id,
-        "error": summary or "official simulation returned FAILED",
-        "source": "fetch_result",
-    }
-
-
-def _candidate_matches_requested_ids(candidate: dict[str, Any], requested_ids: set[str]) -> bool:
-    if not requested_ids:
-        return False
-    for key in ("alpha_id", "official_alpha_id", "simulation_id"):
-        value = str(candidate.get(key) or "").strip()
-        if value and value in requested_ids:
-            return True
-    return False
-
-
-def _simulation_failure_summary(payload: Any) -> str:
-    if not isinstance(payload, dict):
-        return ""
-    candidates: list[Any] = [payload]
-    raw = payload.get("raw")
-    if isinstance(raw, dict):
-        candidates.append(raw)
-    metrics = payload.get("metrics")
-    if isinstance(metrics, dict):
-        candidates.append(metrics)
-    for item in candidates:
-        text = _first_failure_text(item)
-        if text:
-            return text
-    return ""
-
-
-def _first_failure_text(payload: Any) -> str:
-    if not isinstance(payload, dict):
-        return ""
-    for key in _SIMULATION_FAILURE_KEYS:
-        value = payload.get(key)
-        if isinstance(value, (str, int, float, bool)) and str(value).strip():
-            return redact_text(str(value).strip())[:240]
-        if isinstance(value, dict):
-            nested = _first_failure_text(value)
-            if nested:
-                return nested
-    for key in ("errors", "checks", "failures"):
-        values = payload.get(key)
-        if isinstance(values, list):
-            for row in values:
-                nested = _first_failure_text(row)
-                if nested:
-                    return nested
-    return ""
-
-
 def simulation_candidates_payload(payload: dict[str, Any]) -> dict[str, Any]:
     """Validate and prepare simulation request payload."""
     config = load_run_config()
     candidates = _load_candidates(config.ops.storage_dir)
-    min_score = float(payload.get("min_score", config.ops.budget.min_prior_score_for_official_simulation))
-
-    account_cooldown = _active_account_simulation_cooldown(config.ops.storage_dir)
-    if account_cooldown:
-        return {
-            "ok": True,
-            "eligible_count": 0,
-            "total_candidates": len(candidates),
-            "min_score": min_score,
-            "account_cooldown": account_cooldown,
-            "eligible_alphas": [],
-        }
-
-    candidate_ids = payload.get("candidate_ids")
-    if candidate_ids:
-        requested_ids = {str(candidate_id).strip() for candidate_id in candidate_ids if str(candidate_id).strip()}
-        targets = [
-            c for c in candidates
-            if _candidate_matches_requested_ids(c, requested_ids) and _eligible_for_simulation(c, min_score)
-        ]
-    else:
-        targets = [c for c in candidates if _eligible_for_simulation(c, min_score)]
-
-    targets = _dedupe_simulation_targets(targets, default_dataset=_default_simulation_dataset(config))
-
-    return {
-        "ok": True,
-        "eligible_count": len(targets),
-        "total_candidates": len(candidates),
-        "min_score": min_score,
-        "eligible_alphas": [
-            {
-                "alpha_id": c.get("alpha_id", ""),
-                "score": _candidate_score(c),
-                "expression": (c.get("expression", "") or "")[:80],
-            }
-            for c in targets[:20]
-        ],
-    }
+    return _simulation_candidates_payload(
+        payload,
+        config=config,
+        candidates=candidates,
+        account_cooldown=_active_account_simulation_cooldown(config.ops.storage_dir),
+        eligible_for_simulation=_eligible_for_simulation,
+        candidate_score=_candidate_score,
+        dedupe_simulation_targets=_dedupe_simulation_targets,
+        default_dataset=_default_simulation_dataset(config),
+    )

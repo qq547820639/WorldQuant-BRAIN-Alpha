@@ -4,12 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from brain_alpha_ops.brain_api.canonical import CANONICAL_SETTINGS
 from brain_alpha_ops.data import OfficialDataLoader
-
-
-def _sorted_values(values: set[Any]) -> list[Any]:
-    return sorted(values)
+from brain_alpha_ops.web_capability_registry import capability_settings_options
 
 
 def _dataset_options() -> list[dict[str, Any]]:
@@ -54,10 +50,8 @@ def _dataset_label(dataset_id: str, name: str, field_count: int) -> str:
 def public_config_schema() -> dict[str, Any]:
     """Return the auditable UI-to-backend contract for production config."""
 
-    settings_options = {key: _sorted_values(values) for key, values in CANONICAL_SETTINGS.items()}
     dataset_options = _dataset_options()
-    if dataset_options:
-        settings_options["dataset"] = [str(row["id"]) for row in dataset_options]
+    settings_options = capability_settings_options(dataset_options)
     return {
         "schema_version": "web_config_schema.v1",
         "environment": {

@@ -93,18 +93,15 @@ export function useSSE(
               ? { ...parsed, type: fallbackType }
               : parsed;
             setLastEvent(event);
+            if (event.type === "stream_timeout") {
+              setExhausted(true);
+              closeTerminalStream();
+              onExhaustedRef.current?.();
+              return;
+            }
             onEventRef.current?.(event);
             if (event.type === "complete" || event.type === "error") {
-              terminalClosedRef.current = true;
-              setConnected(false);
-              if (eventSourceRef.current) {
-                eventSourceRef.current.close();
-                eventSourceRef.current = null;
-              }
-              if (reconnectTimerRef.current) {
-                clearTimeout(reconnectTimerRef.current);
-                reconnectTimerRef.current = null;
-              }
+              closeTerminalStream();
             }
           } catch (err) {
             // Non-JSON SSE data — log and ignore for debugging
@@ -116,7 +113,7 @@ export function useSSE(
         };
 
         es.onmessage = (msg: MessageEvent) => handleMessage(msg);
-        const namedEvents: NamedSSEEvent[] = ["progress", "complete", "error", "heartbeat"];
+        const namedEvents: NamedSSEEvent[] = ["progress", "complete", "error", "heartbeat", "stream_timeout"];
         for (const eventName of namedEvents) {
           es.addEventListener(eventName, (msg) => handleMessage(msg as MessageEvent, eventName));
         }
@@ -166,6 +163,16 @@ export function useSSE(
   function scheduleReconnect(connectFn: () => void, delayMs: number) {
     clearReconnectTimer();
     reconnectTimerRef.current = setTimeout(connectFn, delayMs);
+  }
+
+  function closeTerminalStream() {
+    terminalClosedRef.current = true;
+    setConnected(false);
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close();
+      eventSourceRef.current = null;
+    }
+    clearReconnectTimer();
   }
 }
 

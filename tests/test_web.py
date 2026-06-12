@@ -24,7 +24,7 @@ from brain_alpha_ops.web_config import config_from_payload as web_config_from_pa
 from brain_alpha_ops.web_config import save_run_config_payload as save_run_config_payload_service
 from brain_alpha_ops.web_job_registry import WebJobRegistry
 from brain_alpha_ops.web_rate_limit import RateLimitPolicy, RequestRateLimiter
-from brain_alpha_ops.web_routes import GET_ROUTES, POST_ROUTES, route_for
+from brain_alpha_ops.web_routes import GET_ROUTES, POST_ROUTES, dispatch_get as legacy_dispatch_get, route_for
 from scripts.check_frontend_syntax import check_scripts
 
 
@@ -165,6 +165,7 @@ def test_web_html_serves_current_react_shell():
         "/api/sqlite_record_lookup",
         "/api/anti_overfit",
         "/api/rolling_validation",
+        "/api/capabilities",
     ):
         assert path in GET_ROUTES
 
@@ -207,7 +208,7 @@ def test_submit_preflight_errors_are_backend_owned_and_react_readable():
 
     assert "/api/submit_readiness" in submission_tsx
     assert "/api/backtest_slots" in quality_tsx
-    assert "json.error || json.error_code || \"Request failed\"" in hook_js
+    assert "apiErrorMessage" in hook_js
     assert "提交前阻断复核数据加载失败" in submission_tsx
     assert "达标检查数据加载失败" in quality_tsx
     assert "X-Brain-Alpha-CSRF" in csrf_utils_ts
@@ -382,7 +383,14 @@ def test_react_state_cards_keep_core_flow_visible_and_actionable():
 
     assert "ConfigPanel" in app_tsx
     assert 'case "config":' in app_tsx
-    assert "<ConfigPanel notify={notify} credentials={credentials} onCredentialsChange={setCredentials} onConnectionTested={handleConnectionTested} />" in app_tsx
+    for config_contract in (
+        "onConnectionTested={handleConnectionTested}",
+        "connected={connected}",
+        "contextFresh={contextFresh}",
+        "managedCredentialsAvailable={managedCredentialsAvailable}",
+        "onLoggedOut={handleLocalSessionLoggedOut}",
+    ):
+        assert config_contract in app_tsx
 
 
 def test_react_quality_submit_and_backtest_panels_cover_conflict_guards():
@@ -413,8 +421,6 @@ def test_react_quality_submit_and_backtest_panels_cover_conflict_guards():
         "提交证据阻断:",
         "候选族阻断:",
         "下一步:",
-        "reasonLabel",
-        "nextActionText",
     ):
         assert contract in quality_tsx
 
@@ -677,6 +683,43 @@ def test_web_routes_define_session_policy_and_known_paths():
     assert "/api/rolling_validation" in GET_ROUTES
     assert "/api/assistant_cross_review" in POST_ROUTES
     assert "/api/submit_batch" in POST_ROUTES
+
+
+def test_legacy_web_routes_dispatches_alpha_lifecycle_history(monkeypatch, tmp_path):
+    storage_dir = tmp_path / "storage"
+    storage_dir.mkdir()
+    (storage_dir / "lifecycle.jsonl").write_text(
+        json.dumps({
+            "timestamp": "2026-06-12T02:00:00Z",
+            "alpha_id": "alpha_legacy",
+            "stage": "generated",
+            "status": "READY",
+            "expression": "rank(close)",
+        }) + "\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        "brain_alpha_ops.web_routes.load_run_config",
+        lambda: SimpleNamespace(ops=SimpleNamespace(storage_dir=str(storage_dir))),
+    )
+
+    class Handler:
+        def __init__(self):
+            self.payload = None
+            self.status = None
+
+        def _send_json(self, payload, status=200):
+            self.payload = payload
+            self.status = status
+
+    handler = Handler()
+    legacy_dispatch_get(handler, "/api/lifecycle/history", {"alpha_id": ["alpha_legacy"], "limit": ["1"]})
+
+    assert handler.status == 200
+    assert handler.payload["ok"] is True
+    assert handler.payload["official_api_called"] is False
+    assert handler.payload["submit_allowed"] is False
+    assert handler.payload["records"][0]["alpha_id"] == "alpha_legacy"
 
 
 def test_official_context_save_writes_cache_metadata(monkeypatch, tmp_path):

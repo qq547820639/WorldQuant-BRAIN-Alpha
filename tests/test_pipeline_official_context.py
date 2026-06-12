@@ -97,6 +97,35 @@ def test_context_validation_reasons_cover_fields_operators_and_dataset():
     assert mapper.calls == 1
 
 
+def test_context_validation_reasons_use_expression_symbols_when_metadata_is_under_reported():
+    state = refresh_context_validation_cache(
+        [{"id": "close", "name": "close"}],
+        [{"name": "rank"}],
+    )
+    mapper = _Mapper()
+    candidate = Candidate(
+        alpha_id="a1",
+        expression="rank(ts_fake(volume, 20))",
+        family="test",
+        hypothesis="expression validation",
+        data_fields=["close"],
+        operators=["rank"],
+    )
+
+    reasons = official_context_reasons(
+        candidate,
+        available_fields=state.field_names,
+        available_operators=state.operator_names,
+        active_dataset_id="pv1",
+        mapper=mapper,
+        dataset_field_names_cache=state.dataset_field_names_cache,
+    )
+
+    assert any("fields unavailable" in reason and "volume" in reason for reason in reasons)
+    assert any("operators unavailable" in reason and "ts_fake" in reason for reason in reasons)
+    assert any("field 'volume' not in active dataset 'pv1'" in reason for reason in reasons)
+
+
 def test_active_dataset_field_names_logs_mapper_failure(caplog):
     class FailingMapper:
         def fields_for(self, dataset_id):

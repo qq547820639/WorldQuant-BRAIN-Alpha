@@ -10,6 +10,8 @@ from typing import Any, Callable
 from brain_alpha_ops.brain_api.base import BrainAPIError
 from brain_alpha_ops.brain_api.context_defaults import DEFAULT_FIELDS, DEFAULT_OPERATORS
 from brain_alpha_ops.models import Candidate
+from brain_alpha_ops.research.expression_ast import profile_expression
+from brain_alpha_ops.research.expression_official_context import GROUP_CONTEXT_FIELDS
 
 from .iterative_optimizer import IterativeOptimizer
 from .pipeline_helpers import merge_context_defaults
@@ -99,18 +101,31 @@ def official_context_reasons(
     dataset_field_names_cache: dict[str, set[str]],
 ) -> list[str]:
     reasons: list[str] = []
+    profile = profile_expression(candidate.expression)
+    expression_fields = [
+        str(field).lower()
+        for field in profile.fields
+        if str(field).strip() and str(field).lower() not in GROUP_CONTEXT_FIELDS
+    ]
+    expression_operators = [str(operator).lower() for operator in profile.operators if str(operator).strip()]
+    candidate_fields = [str(field).lower() for field in candidate.data_fields if str(field).strip()]
+    candidate_operators = [str(operator).lower() for operator in candidate.operators if str(operator).strip()]
+    fields_to_check = sorted(dict.fromkeys([*candidate_fields, *expression_fields]))
+    operators_to_check = sorted(dict.fromkeys([*candidate_operators, *expression_operators]))
+    if not profile.parsed:
+        reasons.append("expression parse failed before official context validation: " + (profile.parse_error or "unknown parse error"))
     if available_fields:
-        missing_fields = sorted(field for field in candidate.data_fields if field.lower() not in available_fields)
+        missing_fields = sorted(field for field in fields_to_check if field not in available_fields)
         if missing_fields:
             reasons.append("fields unavailable in current official context: " + ", ".join(missing_fields))
     if available_operators:
-        missing_operators = sorted(operator for operator in candidate.operators if operator.lower() not in available_operators)
+        missing_operators = sorted(operator for operator in operators_to_check if operator not in available_operators)
         if missing_operators:
             reasons.append("operators unavailable in current official context: " + ", ".join(missing_operators))
     if active_dataset_id and mapper:
         dataset_fields = active_dataset_field_names(active_dataset_id, mapper, dataset_field_names_cache)
-        for field in candidate.data_fields:
-            if field.lower() not in dataset_fields and field.lower() not in GENERAL_DATASET_FIELDS:
+        for field in fields_to_check:
+            if field not in dataset_fields and field not in GENERAL_DATASET_FIELDS:
                 reasons.append(
                     f"field '{field}' not in active dataset '{active_dataset_id}'. "
                     "Expression may use fields from wrong dataset."

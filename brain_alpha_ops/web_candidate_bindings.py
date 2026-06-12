@@ -300,6 +300,10 @@ def lifecycle_from_job(job):
     return _runtime_facade().lifecycle_from_job(_app_context(), job)
 
 
+def alpha_lifecycle_history(**kwargs):
+    return _runtime_facade().alpha_lifecycle_history(_app_context(), **kwargs)
+
+
 def maybe_archive_lifecycle():
     return _runtime_facade().maybe_archive_lifecycle(_app_context())
 
@@ -364,6 +368,10 @@ def _runtime_facade():
 
 def cloud_alpha_snapshot(limit=None):
     return _runtime_facade().cloud_alpha_snapshot(_app_context(), limit=limit)
+
+
+def cloud_alpha_cache_probe():
+    return _runtime_facade().cloud_alpha_cache_probe(_app_context())
 
 
 def snapshot_runtime():

@@ -303,12 +303,14 @@ def test_app_submit_selected_candidates_handles_missing_async_job_result():
     _assert_snippets(
         candidates,
         [
-            "const result = event.result as { candidates?: Candidate[]; candidates_preview?: Candidate[]; count?: number } | undefined;",
+            "const result = event.result as {",
+            "candidates?: Candidate[];",
+            "candidates_preview?: Candidate[];",
             "const rows = result?.candidates || [];",
             "if (rows.length) setCandidates(rows);",
             "result.partial",
             "result?.task_id || result?.job_id || \"\"",
-            'setTaskError(result?.error || "启动候选生成失败");',
+            'setTaskError(result?.error || "启动候选池自动推进失败");',
             'useSSE(taskId ? `/sse?job_id=${encodeURIComponent(taskId)}` : null',
         ],
     )
@@ -364,6 +366,10 @@ def test_app_apply_preset_reads_presets_from_app_state():
             'onClick={() => initialForm && setForm({ ...initialForm })}',
             "validateForm(form, schema)",
             "optionValues(options,",
+            "const cacheOnlyMode = contextFresh && !connected;",
+            "临时连接官方服务",
+            "退出本地会话",
+            'onLoggedOut?.();',
         ],
     )
 
@@ -409,6 +415,9 @@ def test_submission_confirmation_panel_stays_read_only_and_local_boundary_aware(
         [
             "readiness?.ready_to_submit",
             "readiness?.official_api_called ?",
+            "readiness?.authoritative_stop_rule",
+            "readiness?.submit_ready_claim_allowed",
+            "readiness?.real_submit_performed",
             "readiness?.production_gaps",
             "readiness?.required_next_steps",
             "top_family_blocking_reasons",

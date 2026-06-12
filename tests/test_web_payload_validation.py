@@ -7,6 +7,7 @@ from brain_alpha_ops.web_payload_validation import (
     MAX_ASSISTANT_TEXT_LENGTH,
     MAX_BATCH_ALPHA_IDS,
     MAX_GENERATE_CANDIDATES,
+    MAX_SIMULATION_TIMEOUT_SECONDS,
     validate_alpha_action_payload,
     validate_alpha_id_value,
     validate_assistant_cross_review_payload,
@@ -16,6 +17,7 @@ from brain_alpha_ops.web_payload_validation import (
     validate_generate_candidates_payload,
     validate_json_object_payload,
     validate_job_cancel_payload,
+    validate_simulation_payload,
     validate_submit_batch_payload,
     validate_sync_alphas_payload,
 )
@@ -64,6 +66,44 @@ def test_validate_submit_batch_payload_rejects_bad_shapes_and_accepts_optional_c
 )
 def test_validate_check_batch_payload(payload, expected):
     error = validate_check_batch_payload(payload)
+    assert error.startswith(expected) if expected else error == ""
+
+
+@pytest.mark.parametrize(
+    ("payload", "expected"),
+    [
+        (None, "request body must be a JSON object"),
+        ({"candidate_ids": "a"}, "candidate_ids must be a list of Alpha IDs"),
+        ({"candidate_ids": ["bad id"]}, "candidate_ids[] may only contain letters"),
+        ({"workflow_plan": []}, "workflow_plan must be an object"),
+        ({"workflow_plan": {"validator": []}}, "workflow_plan.validator must be an object"),
+        (
+            {"workflow_plan": {"validator": {"next_candidate_ids": ["bad id"]}}},
+            "workflow_plan.validator.next_candidate_ids[] may only",
+        ),
+        ({"min_score": -0.1}, "min_score must be a finite number between 0 and 100"),
+        ({"min_score": 101}, "min_score must be a finite number between 0 and 100"),
+        ({"min_score": "nan"}, "min_score must be a finite number between 0 and 100"),
+        ({"max_simulations": -1}, f"max_simulations must be a finite integer between 0 and {MAX_BATCH_ALPHA_IDS}"),
+        ({"max_simulations": 1.5}, f"max_simulations must be a finite integer between 0 and {MAX_BATCH_ALPHA_IDS}"),
+        ({"max_simulations": MAX_BATCH_ALPHA_IDS + 1}, f"max_simulations must be a finite integer between 0 and {MAX_BATCH_ALPHA_IDS}"),
+        ({"poll_timeout": -1}, f"poll_timeout must be a finite number between 0 and {MAX_SIMULATION_TIMEOUT_SECONDS}"),
+        ({"stall_timeout": MAX_SIMULATION_TIMEOUT_SECONDS + 1}, f"stall_timeout must be a finite number between 0 and {MAX_SIMULATION_TIMEOUT_SECONDS}"),
+        (
+            {
+                "candidate_ids": ["alpha_1"],
+                "workflow_plan": {"validator": {"next_candidate_ids": ["alpha_2"]}},
+                "min_score": 60,
+                "max_simulations": 3,
+                "poll_timeout": 0,
+                "stall_timeout": 30,
+            },
+            "",
+        ),
+    ],
+)
+def test_validate_simulation_payload_rejects_extreme_numeric_values(payload, expected):
+    error = validate_simulation_payload(payload)
     assert error.startswith(expected) if expected else error == ""
 
 

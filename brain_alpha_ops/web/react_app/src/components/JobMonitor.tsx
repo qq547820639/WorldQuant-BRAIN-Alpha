@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { cancelResultEventMessage, requestJobCancel, type CancelReason } from "@/api/jobCancel";
 import { useSSE } from "@/hooks/useSSE";
 import { useApi } from "@/hooks/useApi";
-import { buildRunPayload, hasCredentials, isTerminalStatus, shortValidationId } from "@/helpers/runPayload";
+import { buildRunPayload, classifyJobState, hasCredentials, jobStatusMessage, resolveJobEventState, shortValidationId } from "@/helpers/runPayload";
 import type { BrainCredentials, JobStatus, SSEEvent, UnifiedProgress } from "@/types";
 import type { JobState } from "@/hooks/useJobState";
 import ProgressFeedback from "@/components/ProgressFeedback";
@@ -14,6 +14,8 @@ interface Props {
   onNeedCredentials?: () => void;
   jobState?: JobState;
 }
+
+const TRANSIENT_STATUS_REFRESH_PREFIX = "状态刷新失败:";
 
 // ── Shared view props ───────────────────────────────────────────────────────
 
@@ -52,7 +54,7 @@ function JobMonitorView({
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <span className="badge badge-neutral">非提交</span>
           <span className="badge badge-neutral">{credentialSource}</span>
-          <span className={`status-dot ${connected ? "status-dot-active" : "status-dot-error"}`} />
+          <span className={`status-dot ${connected ? "status-dot-active" : running ? "status-dot-error" : ""}`} />
           <span className={`badge ${running ? "badge-positive" : "badge-neutral"}`}>
             {running ? "运行中" : "空闲"}
           </span>
@@ -187,6 +189,12 @@ export default function JobMonitor({ notify, credentials, onNeedCredentials, job
   const autoCancelRequests = useRef<Set<string>>(new Set());
   const api = useApi();
 
+  const clearTransientProgressError = useCallback(() => {
+    setProgressError((current) => (
+      current?.startsWith(TRANSIENT_STATUS_REFRESH_PREFIX) ? null : current
+    ));
+  }, []);
+
   const failMonitor = useCallback((message: string, phase = "watchdog_failed") => {
     setRunning(false);
     setProgressError(message);
@@ -209,8 +217,47 @@ export default function JobMonitor({ notify, credentials, onNeedCredentials, job
   }, [jobId, status?.job_id]);
 
   const handleSSEEvent = useCallback((event: SSEEvent) => {
-    if (event.type === "progress") {
+    const eventOutcome = resolveJobEventState(event, event.progress || event.data, {
+      failed: "验证流程错误",
+      interrupted: "验证流程已停止，结果未确认完成。",
+      success: "验证流程已完成",
+    });
+    if (eventOutcome.terminal) {
+      setRunning(false); setPollFailures(0); setJobId(null);
+      const eventFailed = eventOutcome.kind === "failed";
+      const eventInterrupted = eventOutcome.kind === "interrupted";
+      const nextStatus: JobStatus["status"] = eventOutcome.nextStatus;
+      if (eventFailed || eventInterrupted) {
+        const message = eventOutcome.message;
+        setProgressError(message);
+        notify(eventOutcome.notifyType, message);
+        setEvents((prev) => [...prev, eventInterrupted ? message : `错误: ${message}`]);
+      } else {
+        setProgressError(null);
+        notify(eventOutcome.notifyType, eventOutcome.message);
+        setEvents((prev) => [...prev, eventOutcome.message]);
+      }
+      setStatus((prev) => prev ? {
+        ...prev,
+        job_id: event.job_id || event.task_id || prev.job_id,
+        task_id: event.task_id || event.job_id || prev.task_id,
+        status: nextStatus,
+        phase: event.phase || event.progress?.phase || prev.phase,
+        result: event.result,
+        error: eventFailed || eventInterrupted ? eventOutcome.message : prev.error,
+        progress: event.progress || prev.progress,
+      } : {
+        job_id: event.job_id || event.task_id || "",
+        task_id: event.task_id || event.job_id,
+        status: nextStatus,
+        phase: event.phase || event.progress?.phase,
+        result: event.result,
+        error: eventFailed || eventInterrupted ? eventOutcome.message : undefined,
+        progress: event.progress || (event.data as JobStatus["progress"]),
+      });
+    } else if (event.type === "progress") {
       setPollFailures(0);
+      clearTransientProgressError();
       setStatus((prev) => ({
         ...(prev || { job_id: event.job_id || event.task_id || "", status: "running" }),
         job_id: event.job_id || event.task_id || prev?.job_id || "",
@@ -220,23 +267,13 @@ export default function JobMonitor({ notify, credentials, onNeedCredentials, job
         status_message: event.status_message,
         progress: event.progress || (event.data as JobStatus["progress"]),
       }));
-    } else if (event.type === "complete") {
-      setRunning(false); setPollFailures(0);
-      notify("success", "验证流程已完成");
-      setEvents((prev) => [...prev, "验证流程完成"]);
-      setStatus((prev) => prev ? { ...prev, status: "completed", result: event.result, progress: event.progress || prev.progress } : prev);
-    } else if (event.type === "error") {
-      setRunning(false); setPollFailures(0);
-      setProgressError(String(event.error || event.data?.error || "验证流程错误"));
-      notify("error", String(event.error || event.data?.error || "验证流程错误"));
-      setEvents((prev) => [...prev, `错误: ${event.error || event.data?.error || "验证流程错误"}`]);
     } else if (event.type === "candidate") {
       setEvents((prev) => [...prev.slice(-50), `候选 ${(event.data as Record<string, unknown>)?.alpha_id || "?"} 得分 ${(event.data as Record<string, unknown>)?.score || 0}`]);
     } else if (event.type === "submission") {
       notify("warning", `检测到真实提交安全事件: ${(event.data as Record<string, unknown>)?.alpha_id || "未知"}`);
       setEvents((prev) => [...prev.slice(-50), `真实提交安全事件 ${(event.data as Record<string, unknown>)?.alpha_id || "?"}`]);
     }
-  }, [notify]);
+  }, [clearTransientProgressError, notify]);
 
   const sseUrl = jobId ? `/sse?job_id=${encodeURIComponent(jobId)}` : null;
   const handleStreamExhausted = useCallback(() => {
@@ -260,7 +297,7 @@ export default function JobMonitor({ notify, credentials, onNeedCredentials, job
       notify("info", `${resume ? "非提交续跑" : "非提交验证"}已启动`);
     } else {
       setRunning(false); setPollFailures(0);
-      const message = result?.error || (!result ? "网络错误，请检查连接后重试" : "启动验证流程失败");
+      const message = result ? jobStatusMessage(result, "启动验证流程失败") : "网络错误，请检查连接后重试";
       setProgressError(message);
       setStatus((prev) => prev ? { ...prev, status: "failed", error: message, progress: { ...(prev.progress || {}), phase: "failed", status_message: message, percent_complete: 100 } } : prev);
       notify("error", message);
@@ -271,17 +308,33 @@ export default function JobMonitor({ notify, credentials, onNeedCredentials, job
   const stopJob = useCallback(async () => {
     if (!jobId) return;
     const stoppedJobId = jobId;
-    const result = await api.call("/api/production-validation/stop", { method: "POST", body: JSON.stringify({ job_id: stoppedJobId }) });
+    const result = await api.call<{ ok?: boolean; error?: string; error_code?: string }>("/api/production-validation/stop", { method: "POST", body: JSON.stringify({ job_id: stoppedJobId }) });
+    if (!result || result.ok === false) {
+      const message = result ? jobStatusMessage(result, "停止请求失败，后台状态仍未确认。") : "停止请求失败，后台状态仍未确认。";
+      setProgressError(message);
+      setStatus((prev) => ({
+        ...(prev || {}), job_id: stoppedJobId,
+        status: "running",
+        progress: {
+          ...(prev?.progress || {}),
+          phase: prev?.progress?.phase || prev?.phase || "running",
+          status_message: message,
+          percent_complete: prev?.progress?.percent_complete,
+        },
+      }));
+      setEvents((prev) => [...prev.slice(-50), `停止失败: ${message}`]);
+      notify("error", message);
+      return;
+    }
     setRunning(false);
-    const message = result?.ok === false ? (result.error || "停止请求失败") : "停止请求已发送";
     setStatus((prev) => ({
       ...(prev || {}), job_id: stoppedJobId,
-      status: result?.ok === false ? "failed" : "stopped",
+      status: "stopped",
       progress: { ...(prev?.progress || {}), phase: "stopped", status_message: "验证流程已停止", percent_complete: prev?.progress?.percent_complete },
     }));
-    setProgressError(result?.ok === false ? message : null);
-    setEvents((prev) => [...prev.slice(-50), result?.ok === false ? `停止失败: ${message}` : "停止请求已发送"]);
-    notify(result?.ok === false ? "error" : "info", result?.ok === false ? message : "验证流程已停止");
+    setProgressError(null);
+    setEvents((prev) => [...prev.slice(-50), "停止请求已发送"]);
+    notify("info", "验证流程已停止");
   }, [api, jobId, notify]);
 
   const recordStatusRefreshFailure = useCallback((message: string) => {
@@ -304,25 +357,29 @@ export default function JobMonitor({ notify, credentials, onNeedCredentials, job
     if (!running || !jobId) return;
     const interval = setInterval(async () => {
       const result = await api.call<JobStatus>(`/api/production-validation/status?job_id=${encodeURIComponent(jobId)}`);
-      if (result?.status && isTerminalStatus(result.status)) {
+      const resultState = classifyJobState(result);
+      if (result?.status && resultState.terminal) {
         setStatus(result); setPollFailures(0); setRunning(false);
-        if (result.status === "failed") {
-          const msg = result.error || result.progress?.status_message || "验证流程失败。";
+        if (resultState.failed || resultState.missing || resultState.interrupted) {
+          const msg = jobStatusMessage(result, resultState.interrupted ? "验证流程已停止，结果未确认完成。" : "验证流程失败。");
           setProgressError(msg); setEvents((prev) => [...prev.slice(-50), `验证流程失败: ${msg}`]);
           if (result.phase === "watchdog_failed" || result.progress?.phase === "watchdog_failed") void cancelAmbiguousJob("watchdog_failed", msg, result.job_id || jobId);
-          notify("error", msg);
+          notify(resultState.interrupted ? "warning" : "error", msg);
+        } else {
+          setProgressError(null);
         }
         setJobId(null);
       } else if (result?.ok) {
+        clearTransientProgressError();
         setStatus(result); setPollFailures(0);
       } else if (result) {
-        recordStatusRefreshFailure(result.error || result.error_code || "状态刷新失败");
+        recordStatusRefreshFailure(jobStatusMessage(result, "状态刷新失败"));
       } else {
         recordStatusRefreshFailure("状态刷新失败或网络中断");
       }
     }, 2000);
     return () => clearInterval(interval);
-  }, [running, jobId, api, cancelAmbiguousJob, failMonitor, notify, recordStatusRefreshFailure]);
+  }, [running, jobId, api, cancelAmbiguousJob, clearTransientProgressError, failMonitor, notify, recordStatusRefreshFailure]);
 
   const cycleProgress = status?.cycle && status?.max_cycles ? Math.round((status.cycle / status.max_cycles) * 100) : 0;
   const progress = status?.progress || { phase: status?.phase, percent_complete: status?.percent_complete ?? cycleProgress, eta_seconds: status?.eta_seconds, status_message: status?.status_message };

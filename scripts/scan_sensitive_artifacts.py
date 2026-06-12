@@ -56,9 +56,24 @@ KNOWN_SECRET_HASHES = {
     "known_brain_password_sha256": "01ea3c54ef81c1a74977131ffa3e418ed82d050e88e81bcb1331f860eaa28197",
 }
 
+SECRET_KEY_NAME_PATTERN = (
+    r"[A-Z0-9_-]*"
+    r"(?:"
+    r"access[-_]?token|"
+    r"refresh[-_]?token|"
+    r"id[-_]?token|"
+    r"api[-_]?key|"
+    r"csrf(?:[-_]?token)?|"
+    r"password|"
+    r"passwd|"
+    r"secret|"
+    r"session[-_]?(?:id|key|token)|"
+    r"token"
+    r")"
+)
 SECRET_KEY_PATTERN = (
     r"(?i)(?:"
-    r"['\"]?\b([A-Z0-9_]*_?(?:access_token|api[_-]?key|csrf|password|secret|session[_-]?(?:id|key|token)|token))\b['\"]?"
+    rf"['\"]?\b({SECRET_KEY_NAME_PATTERN})\b['\"]?"
     r"|['\"]session['\"]"
     r")\s*[:=]\s*['\"]?[^'\",\s;]{8,}"
 )
@@ -130,26 +145,28 @@ def scan_file(path: Path, root: Path, max_bytes: int) -> list[dict]:
     findings: list[dict] = []
     findings.extend(_scan_known_secret_hashes(text, str(path.relative_to(root))))
     for line_number, line in enumerate(text.splitlines(), start=1):
+        line_has_finding = False
         for name, pattern in FINDING_PATTERNS.items():
-            match = pattern.search(line)
-            if not match:
-                continue
-            if _match_is_placeholder_fixture(line, path, root):
-                continue
-            if name == "secret_key" and not _secret_key_match_is_actionable(match, line, path):
-                continue
-            if name == "cookie" and not _cookie_match_is_actionable(line):
-                continue
-            display_path = str(path.relative_to(root))
-            snippet = redact_text(line.strip(), max_length=220)
-            findings.append({
-                "type": name,
-                "path": display_path,
-                "line": line_number,
-                "snippet": snippet,
-                "message": f"{display_path}:{line_number}: {snippet}",
-            })
-            break
+            for match in pattern.finditer(line):
+                if _match_is_placeholder_fixture(match, path, root):
+                    continue
+                if name == "secret_key" and not _secret_key_match_is_actionable(match, line, path):
+                    continue
+                if name == "cookie" and not _cookie_match_is_actionable(line):
+                    continue
+                display_path = str(path.relative_to(root))
+                snippet = redact_text(line.strip(), max_length=220)
+                findings.append({
+                    "type": name,
+                    "path": display_path,
+                    "line": line_number,
+                    "snippet": snippet,
+                    "message": f"{display_path}:{line_number}: {snippet}",
+                })
+                line_has_finding = True
+                break
+            if line_has_finding:
+                break
     return findings
 
 
@@ -207,14 +224,14 @@ def _candidate_secret_tokens(line: str) -> set[str]:
     return tokens
 
 
-def _match_is_placeholder_fixture(line: str, path: Path, root: Path) -> bool:
+def _match_is_placeholder_fixture(match: re.Match, path: Path, root: Path) -> bool:
     try:
         relative_parts = path.relative_to(root).parts
     except ValueError:
         relative_parts = path.parts
     if not relative_parts or relative_parts[0] not in {"tests", "docs"}:
         return False
-    lowered = line.lower()
+    lowered = str(match.group(0) or "").lower()
     return any(
         marker in lowered
         for marker in (
@@ -259,8 +276,19 @@ def _match_is_placeholder_fixture(line: str, path: Path, root: Path) -> bool:
             "bad-token",
             "stub-token",
             "secret456",
+            "secret-123",
+            "secret-456",
             "secret-api-key",
             "secret-session-id",
+            "access-secret",
+            "admin-secret",
+            "auth-secret",
+            "csrf-header-secret",
+            "csrf-secret",
+            "id-secret",
+            "refresh-secret",
+            "session-secret",
+            "super-secret",
             "not-allowlisted",
             "index damaged token",
             "provider down token",

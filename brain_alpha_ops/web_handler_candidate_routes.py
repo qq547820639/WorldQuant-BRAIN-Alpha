@@ -30,7 +30,12 @@ def get_candidates(handler: Any, parsed: Any, ctx: Any) -> None:
         lifecycle = ctx.lifecycle_payload(ctx.jobs, job_id, ctx.lifecycle_from_job)
         rows = lifecycle.get("records") if isinstance(lifecycle.get("records"), list) else []
         if has_candidate_like_rows(rows):
-            handler._json(candidate_payload(rows, source="lifecycle", summary_only=summary_only))
+            handler._json(candidate_payload(
+                rows,
+                source="lifecycle",
+                summary_only=summary_only,
+                lifecycle_rows=candidate_lifecycle_rows(),
+            ))
             return
 
     ledger_rows, ledger_total, ledger_path = candidate_ledger_rows()
@@ -41,6 +46,8 @@ def get_candidates(handler: Any, parsed: Any, ctx: Any) -> None:
             total=ledger_total,
             path=ledger_path,
             summary_only=summary_only,
+            target_pool_size=candidate_target_pool_size(),
+            lifecycle_rows=candidate_lifecycle_rows(),
         ))
         return
 
@@ -52,6 +59,8 @@ def get_candidates(handler: Any, parsed: Any, ctx: Any) -> None:
         summary_only=summary_only,
         partial=bool(meta.get("partial")),
         warning=str(meta.get("warning") or ""),
+        target_pool_size=candidate_target_pool_size(),
+        lifecycle_rows=candidate_lifecycle_rows(),
     ))
 
 
@@ -63,21 +72,16 @@ def candidate_ledger_summary() -> dict[str, Any] | None:
         path = _storage_file("candidates.jsonl")
         if not path.is_file():
             return None
-        summary = candidate_summary_from_iter(iter_jsonl_records(path))
-        total_count = int(summary.get("candidate_count", 0) or 0)
-        return {
-            "ok": True,
-            "source": "candidates_jsonl",
-            "path": str(path),
-            "summary_only": True,
-            "candidates": [],
-            "items": [],
-            "count": 0,
-            "returned_count": 0,
-            "total_count": total_count,
-            "total": total_count,
-            **summary,
-        }
+        rows = list(iter_jsonl_records(path))
+        return candidate_payload(
+            rows,
+            source="candidates_jsonl",
+            total=len(rows),
+            path=str(path),
+            summary_only=True,
+            target_pool_size=candidate_target_pool_size(),
+            lifecycle_rows=candidate_lifecycle_rows(),
+        )
     except Exception:
         logger.warning("candidate ledger summary read failed; falling back to latest async result", exc_info=True)
         return None
@@ -91,6 +95,26 @@ def candidate_ledger_rows() -> tuple[list[dict[str, Any]], int, str]:
     except Exception:
         logger.warning("candidate ledger read failed; falling back to latest async result", exc_info=True)
         return [], 0, ""
+
+
+def candidate_lifecycle_rows() -> list[dict[str, Any]]:
+    try:
+        from brain_alpha_ops.web_routes import _read_jsonl_records
+
+        rows, _total, _path = _read_jsonl_records("lifecycle.jsonl")
+        return rows
+    except Exception:
+        logger.warning("candidate lifecycle history read failed; continuing without historical risk", exc_info=True)
+        return []
+
+
+def candidate_target_pool_size() -> int:
+    try:
+        from brain_alpha_ops.config import load_run_config
+
+        return max(1, int(load_run_config().ops.budget.retained_alpha_pool_size or 10))
+    except Exception:
+        return 10
 
 
 def latest_async_candidates(async_jobs: Any) -> tuple[list[dict[str, Any]], dict[str, Any]]:

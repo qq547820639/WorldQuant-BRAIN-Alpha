@@ -1,4 +1,5 @@
 import logging
+from pathlib import Path
 
 from brain_alpha_ops.config import RunConfig
 from brain_alpha_ops.web_sync_payload import sync_cloud_alphas_payload
@@ -42,6 +43,20 @@ class Repo:
 
     def merge_cloud_alphas(self, rows, sync_range):
         return {"added": len(rows), "updated": 1, "skipped": 0, "failed": 0}
+
+
+def test_sync_modules_keep_single_job_and_payload_owners():
+    sync_job_source = Path("brain_alpha_ops/web_sync_job.py").read_text(encoding="utf-8")
+    sync_payload_source = Path("brain_alpha_ops/web_sync_payload.py").read_text(encoding="utf-8")
+    handler_source = Path("brain_alpha_ops/web/handlers/sync.py").read_text(encoding="utf-8")
+
+    assert sync_job_source.count("def run_sync_job_service(") == 1
+    assert "def sync_cloud_alphas_payload(" not in sync_job_source
+    assert sync_payload_source.count("def sync_cloud_alphas_payload(") == 1
+    assert "def run_sync_job_service(" not in sync_payload_source
+    assert "from brain_alpha_ops.web_sync_job import" in handler_source
+    assert "from brain_alpha_ops.web_sync_payload import sync_cloud_alphas_payload" in handler_source
+    assert "def " not in handler_source
 
 
 def test_sync_cloud_alphas_payload_merges_and_persists_context(tmp_path):

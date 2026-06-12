@@ -4,8 +4,10 @@ from __future__ import annotations
 
 from typing import Callable, Protocol
 
+from brain_alpha_ops.redaction import redact_data
 from brain_alpha_ops.runtime_constants import CloudDefaults
 from brain_alpha_ops.web_progress import normalize_progress
+from brain_alpha_ops.web_state_contract import enrich_error_payload, enrich_job_response
 
 
 class JobStoreLike(Protocol):
@@ -31,7 +33,7 @@ def _job_payload(job_id: str, job: dict, enrich_progress: ProgressEnricher) -> d
     payload["percent_complete"] = progress.get("percent_complete")
     payload["eta_seconds"] = progress.get("eta_seconds", 0)
     payload["status_message"] = progress.get("status_message", "")
-    return payload
+    return enrich_job_response(redact_data(payload, key_fragments=("account_id", "user_id")))
 
 
 def job_status_payload(
@@ -44,21 +46,21 @@ def job_status_payload(
 ) -> tuple[dict, int]:
     job = store.get(job_id)
     if not job:
-        return {"ok": False, "error_code": error_code, "error": error}, 404
+        return enrich_error_payload({"ok": False, "error_code": error_code, "error": error}), 404
     return {"ok": True, **_job_payload(job_id, job, enrich_progress)}, 200
 
 
 def active_job_payload(store: JobStoreLike, enrich_progress: ProgressEnricher) -> dict:
     active = store.latest_active()
     if not active:
-        return {"ok": True, "job_id": "", "status": "idle"}
+        return enrich_job_response({"ok": True, "job_id": "", "status": "idle"})
     job_id, job = active
     return {"ok": True, **_job_payload(job_id, job, enrich_progress)}
 
 
 def lifecycle_payload(store: JobStoreLike, job_id: str, lifecycle_from_job: Callable[[dict], list[dict]]) -> dict:
     job = store.get(job_id) or {}
-    records = lifecycle_from_job(job)
+    records = redact_data(lifecycle_from_job(job), key_fragments=("account_id", "user_id"))
     return {
         "ok": True,
         "records": records,
@@ -81,7 +83,7 @@ def health_payload() -> dict:
 
 
 def profile_payload(user_profile_snapshot: Callable[[], dict]) -> dict:
-    return {"ok": True, "profile": user_profile_snapshot()}
+    return {"ok": True, "profile": redact_data(user_profile_snapshot(), key_fragments=("account_id", "user_id"))}
 
 
 def presets_payload(load_presets: Callable[[], dict]) -> dict:

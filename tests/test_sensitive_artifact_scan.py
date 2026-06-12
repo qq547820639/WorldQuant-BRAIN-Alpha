@@ -1,7 +1,21 @@
 import json
 import os
 
+from brain_alpha_ops.redaction import REDACTION_FIXTURE_EMAIL, SHARED_REDACTION_FIXTURE_CORPUS
 from scripts.scan_sensitive_artifacts import scan_artifacts, scan_git_history, main
+
+
+def _scanner_bait_value(label: str) -> str:
+    return "synthetic-" + label.replace("_", "-") + "-bait-" + "12345"
+
+
+def _scanner_text_for_fixture(fixture: dict[str, str]) -> tuple[str, str]:
+    value = _scanner_bait_value(fixture["label"])
+    if fixture["label"] == "auth_header":
+        return f'{fixture["key"]}: Bearer {value}', value
+    if fixture["label"] == "email":
+        return f'{fixture["raw_text"]} Authorization: Bearer {value}', value
+    return f'{fixture["key"]}={value}', value
 
 
 def test_scan_artifacts_reports_redacted_findings_in_default_locations(tmp_path):
@@ -66,6 +80,62 @@ def test_scan_artifacts_does_not_flag_plain_session_descriptions(tmp_path):
     assert len(result["findings"]) == 1
     assert result["findings"][0]["path"] == f"data{os.sep}auth.json"
     assert result["findings"][0]["type"] == "secret_key"
+
+
+def test_scan_artifacts_detects_camel_case_browser_secret_fields(tmp_path):
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+    (data_dir / "browser-report.jsonl").write_text(
+        "\n".join(
+            [
+                '{"csrfToken":"csrf-secret-value-12345"}',
+                '{"sessionId":"session-secret-value-12345"}',
+                '{"accessToken":"access-secret-value-12345"}',
+                '{"refreshToken":"refresh-secret-value-12345"}',
+                '{"idToken":"id-secret-value-12345"}',
+                '{"X-Brain-Alpha-Admin-Token":"admin-secret-value-12345"}',
+                '{"session_credentials_available":true}',
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    result = scan_artifacts(tmp_path)
+
+    assert result["ok"] is False
+    assert len(result["findings"]) == 6
+    assert {finding["type"] for finding in result["findings"]} == {"secret_key"}
+    encoded = json.dumps(result, ensure_ascii=False)
+    assert "csrf-secret-value" not in encoded
+    assert "session-secret-value" not in encoded
+    assert "access-secret-value" not in encoded
+    assert "refresh-secret-value" not in encoded
+    assert "id-secret-value" not in encoded
+    assert "admin-secret-value" not in encoded
+    assert "session_credentials_available" not in encoded
+
+
+def test_scan_artifacts_rejects_shared_redaction_fixture_corpus(tmp_path):
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+    expected: dict[str, tuple[dict[str, str], str]] = {}
+    for fixture in SHARED_REDACTION_FIXTURE_CORPUS:
+        text, bait_value = _scanner_text_for_fixture(fixture)
+        path = data_dir / f"{fixture['label']}.jsonl"
+        path.write_text(text + "\n", encoding="utf-8")
+        expected[f"data{os.sep}{path.name}"] = (fixture, bait_value)
+
+    result = scan_artifacts(tmp_path)
+
+    assert result["ok"] is False
+    findings_by_path = {finding["path"]: finding for finding in result["findings"]}
+    assert set(findings_by_path) == set(expected)
+    for path, (fixture, bait_value) in expected.items():
+        finding = findings_by_path[path]
+        assert finding["type"] == fixture["scan_type"], fixture["label"]
+        assert bait_value not in finding["snippet"], fixture["label"]
+        assert REDACTION_FIXTURE_EMAIL not in finding["snippet"], fixture["label"]
+        assert "<redacted>" in finding["snippet"], fixture["label"]
 
 
 def test_scan_artifacts_include_all_skips_tooling_and_code_references(tmp_path):
@@ -145,6 +215,31 @@ def test_scan_artifacts_include_all_skips_explicit_placeholder_test_credentials(
 
     assert result["ok"] is True
     assert result["findings"] == []
+
+
+def test_scan_artifacts_placeholder_skip_is_match_scoped(tmp_path):
+    tests_dir = tmp_path / "tests"
+    tests_dir.mkdir()
+    dummy_value = "realish-" + "private-token-12345"
+    tests_dir.joinpath("test_mixed_fixture.py").write_text(
+        f"token='{dummy_value}'  # fixture marker secret-token-123\n",
+        encoding="utf-8",
+    )
+    tests_dir.joinpath("test_mixed_fixture_reversed.py").write_text(
+        f"token='secret-token-123'  # later token='{dummy_value}'\n",
+        encoding="utf-8",
+    )
+
+    result = scan_artifacts(tmp_path, include_all=True)
+
+    assert result["ok"] is False
+    assert len(result["findings"]) == 2
+    assert {finding["path"] for finding in result["findings"]} == {
+        f"tests{os.sep}test_mixed_fixture.py",
+        f"tests{os.sep}test_mixed_fixture_reversed.py",
+    }
+    assert {finding["type"] for finding in result["findings"]} == {"secret_key"}
+    assert "realish-private-token" not in json.dumps(result, ensure_ascii=False)
 
 
 def test_scan_artifacts_include_all_scans_shell_scripts(tmp_path):

@@ -1,6 +1,8 @@
 /** Read-only rendering for the three independent official backtest slots. */
 
 import { useCallback, useEffect } from "react";
+import { apiErrorMessage } from "@/helpers/errorExperience";
+import { readinessReasonLabel } from "@/helpers/readinessLabels";
 import { useApi } from "@/hooks/useApi";
 import type { BacktestQueueSummary, BacktestSlot, BacktestSlotsResponse } from "@/types";
 import ProgressFeedback from "@/components/ProgressFeedback";
@@ -18,7 +20,7 @@ export default function OfficialBacktestSlots({ notify }: Props) {
 
   const load = useCallback(async () => {
     const result = await callApi<BacktestSlotsResponse>("/api/backtest_slots");
-    if (result?.error) notify("error", result.error);
+    if (result?.error) notify("error", apiErrorMessage(result, "回测槽位加载失败"));
   }, [callApi, notify]);
 
   useEffect(() => {
@@ -127,10 +129,10 @@ function BacktestQueueSummaryStrip({
 }) {
   const openSlots = summary?.open_slot_count ?? Math.max(0, slotLimit - activeCount);
   const reviewBlockers = (summary?.top_blocking_reasons || [])
-    .map((row) => `${reasonLabel(row.reason)} ${row.count}`)
+    .map((row) => `${readinessReasonLabel(row.reason)} ${row.count}`)
     .join(" · ");
   const submitBlockers = (summary?.top_submit_blocking_reasons || [])
-    .map((row) => `${reasonLabel(row.reason)} ${row.count}`)
+    .map((row) => `${readinessReasonLabel(row.reason)} ${row.count}`)
     .join(" · ");
   return (
     <div className="rounded-md border border-border-subtle bg-[oklch(0.115_0.007_45)] px-3 py-2">
@@ -247,19 +249,6 @@ function formatRate(value: unknown) {
   const number = Number(value ?? 0);
   if (!Number.isFinite(number) || number <= 0) return "0.0%";
   return `${(Math.max(0, Math.min(1, number)) * 100).toFixed(1)}%`;
-}
-
-function reasonLabel(reason: string) {
-  const labels: Record<string, string> = {
-    high_cloud_similarity: "云端相似度过高",
-    local_backtest_failed: "本地回测未通过",
-    local_candidate_invalid: "本地候选未通过",
-    local_quality_failed: "本地质量未通过",
-    missing_official_alpha_id: "缺少官方 Alpha ID",
-    missing_official_metrics: "缺少官方仿真指标",
-    score_below_official_simulation_threshold: "未达到官方仿真分数门槛",
-  };
-  return labels[reason] || reason;
 }
 
 function nextActionLabel(value: unknown) {

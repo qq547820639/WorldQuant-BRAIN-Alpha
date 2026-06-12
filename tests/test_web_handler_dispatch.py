@@ -219,6 +219,7 @@ def _ctx():
         rate_limit_request=lambda _key, _method, _path: {"ok": True},
         latest_result_snapshot=lambda: {"ok": True, "source": "latest"},
         lifecycle_from_job=lambda job: [{"stage": "x"}],
+        alpha_lifecycle_history=lambda **kwargs: {"ok": True, "alpha_lifecycle": kwargs},
         cloud_alpha_snapshot=lambda **kwargs: {"alphas": [], "summary": {"limit": kwargs.get("limit")}},
         official_context_file_counts=lambda: {
             "fields_count": 12,
@@ -248,6 +249,7 @@ def _ctx():
         rolling_validation_snapshot=lambda **kwargs: {"ok": True, "rolling": kwargs},
         load_check_results=lambda: {"items": [], "count": 0},
         user_profile_snapshot=lambda: {"tier": "mock"},
+        candidate_summary_probe=lambda: None,
         load_presets=lambda: {"default": {}},
         connection_test_post_payload=lambda payload, handler: handler(payload),
         test_connection=lambda payload: {"ok": True, "dry_run": payload.get("dry_run")},
@@ -305,6 +307,11 @@ def test_dispatch_get_handles_root_status_and_query_bounds():
     dispatch_get(config_schema, urlparse("/api/config_schema"), ctx)
     assert config_schema.json_calls[0][0]["schema"]["schema_version"] == "test_schema"
 
+    capabilities = _Handler()
+    dispatch_get(capabilities, urlparse("/api/capabilities"), ctx)
+    assert capabilities.json_calls[0][0]["schema_version"] == "brain_capability_registry.v1"
+    assert capabilities.json_calls[0][0]["official_api_called"] is False
+
     memory = _Handler()
     dispatch_get(memory, urlparse("/api/research_memory?limit=3&top_n=2"), ctx)
     assert memory.json_calls[0][0]["memory"] == {"limit": 3, "top_n": 2}
@@ -317,9 +324,98 @@ def test_dispatch_get_handles_root_status_and_query_bounds():
     dispatch_get(cloud_alias, urlparse("/api/snapshot/cloud"), ctx)
     assert cloud_alias.json_calls[0][0]["summary"]["limit"] is None
 
+    alpha_lifecycle = _Handler()
+    dispatch_get(alpha_lifecycle, urlparse("/api/alpha_lifecycle?alpha_id=a1&query=official&stage=simulation&status=FAILED&status_category=failed&limit=2"), ctx)
+    assert alpha_lifecycle.json_calls[0][0]["alpha_lifecycle"] == {
+        "alpha_id": "a1",
+        "query": "official",
+        "stage": "simulation",
+        "status": "FAILED",
+        "status_category_filter": "failed",
+        "limit": 2,
+    }
+
+    lifecycle_history_alias = _Handler()
+    dispatch_get(lifecycle_history_alias, urlparse("/api/lifecycle/history?alpha_id=a2&limit=999999"), ctx)
+    assert lifecycle_history_alias.json_calls[0][0]["alpha_lifecycle"] == {
+        "alpha_id": "a2",
+        "query": "",
+        "stage": "",
+        "status": "",
+        "status_category_filter": "",
+        "limit": 2000,
+    }
+
+
+def test_dispatch_get_status_without_job_id_recovers_active_async_job():
+    ctx, _started, _lock = _ctx()
+    ctx.async_jobs.active = ("task_async_1", {"status": "running", "progress": {"phase": "candidate_generation"}})
+
+    status = _Handler()
+    dispatch_get(status, urlparse("/api/status"), ctx)
+
+    payload = status.json_calls[0][0]
+    assert payload["ok"] is True
+    assert payload["job_id"] == "task_async_1"
+    assert payload["task_id"] == "task_async_1"
+    assert payload["job_type"] == "async"
+    assert payload["progress"]["phase"] == "candidate_generation"
+    assert payload["status_kind"] == "active"
+    assert payload["terminal"] is False
+    assert payload["recoverable"] is True
+    assert payload["next_action"] == "monitor_or_cancel"
+
+
+def test_dispatch_get_active_job_recovers_active_check_job():
+    ctx, _started, _lock = _ctx()
+    ctx.check_jobs.active = ("check_active_1", {"status": "running", "progress": {"phase": "checking"}})
+
+    status = _Handler()
+    dispatch_get(status, urlparse("/api/active_job"), ctx)
+
+    payload = status.json_calls[0][0]
+    assert payload["ok"] is True
+    assert payload["job_id"] == "check_active_1"
+    assert payload["job_type"] == "check"
+    assert payload["progress"]["phase"] == "checking"
+    assert payload["status_kind"] == "active"
+    assert payload["terminal"] is False
+
+
+def test_dispatch_get_missing_exact_job_returns_actionable_not_found():
+    ctx, _started, _lock = _ctx()
+
+    status = _Handler()
+    dispatch_get(status, urlparse("/api/status?job_id=unknown_task"), ctx)
+
+    payload, http_status, _headers = status.json_calls[0]
+    assert http_status == 404
+    assert payload["ok"] is False
+    assert payload["error_code"] == "JOB_NOT_FOUND"
+    assert payload["user_error_kind"] == "job_not_found"
+    assert payload["user_error"]["suggested_action"]
+    assert payload["next_action"] == "restart_flow"
+
+
+def test_dispatch_get_sse_blocks_invalid_session_before_stream_delegation():
+    ctx, _started, _lock = _ctx()
+
+    stream = _Handler(session=False)
+    dispatch_get(stream, urlparse("/sse?job_id=job_1"), ctx)
+
+    assert stream.stream_queries == []
+    assert stream.json_calls[0][0]["error_code"] == "SESSION_INVALID"
+    assert stream.json_calls[0][0]["user_error_kind"] == "session_expired"
+    assert stream.json_calls[0][1] == 403
+
     memory_alias = _Handler()
     dispatch_get(memory_alias, urlparse("/api/snapshot/memory?limit=8&top_n=3"), ctx)
     assert memory_alias.json_calls[0][0]["memory"] == {"limit": 8, "top_n": 3}
+
+    idle_sync_status = _Handler()
+    dispatch_get(idle_sync_status, urlparse("/api/sync_status?compact=1"), ctx)
+    assert idle_sync_status.json_calls[0][0]["status"] == "idle"
+    assert idle_sync_status.json_calls[0][0]["official_context_cache"]["fields_count"] == 12
 
     ctx.sync_jobs.rows["sync_1"] = {
         "status": "completed",
@@ -340,6 +436,7 @@ def test_dispatch_get_handles_root_status_and_query_bounds():
             "is_stale": False,
             "missing_files": [],
             "stale_files": [],
+            "invalid_files": [],
             "record_counts": {
                 "official_fields.json": 12,
                 "official_operators.json": 7,
@@ -368,6 +465,63 @@ def test_dispatch_get_handles_root_status_and_query_bounds():
     prompt_runs = _Handler()
     dispatch_get(prompt_runs, urlparse("/api/prompt_runs?limit=6"), ctx)
     assert prompt_runs.json_calls[0][0]["prompt_runs"] == {"limit": 6}
+
+
+def test_sync_status_includes_redacted_recent_sync_history():
+    ctx, _started, _lock = _ctx()
+    ctx.sync_jobs.rows.clear()
+    ctx.sync_jobs.rows["sync_done"] = {
+        "status": "completed",
+        "updated_at": 1_717_777_777.0,
+        "progress": {
+            "phase": "completed",
+            "status_message": "云端同步完成",
+            "scanned": 10,
+            "api_reported_total": 12,
+        },
+        "result": {"updated": 2, "skipped": 7, "failed": 0},
+        "payload": {"username": "secret@example.com", "password": "super-secret"},
+    }
+    ctx.sync_jobs.rows["sync_context"] = {
+        "status": "completed_with_warnings",
+        "updated_at": 1_717_777_700.0,
+        "progress": {"phase": "context", "context_only": True, "status_message": "Official context refreshed."},
+        "result": {"context_only": True, "fields_count": 12},
+        "payload": {"token": "secret-token"},
+    }
+
+    handler = _Handler()
+    dispatch_get(handler, urlparse("/api/sync_status?compact=1&history_limit=2"), ctx)
+    payload = handler.json_calls[0][0]
+
+    assert payload["ok"] is True
+    history = payload["sync_history"]
+    assert len(history) == 2
+    assert history[0] == {
+        "job_id": "sync_done",
+        "task_id": "sync_done",
+        "status": "completed",
+        "phase": "completed",
+        "status_message": "云端同步完成",
+        "updated_at": 1_717_777_777.0,
+        "updated_at_ms": 1_717_777_777_000,
+        "context_only": False,
+        "scanned": 10,
+        "total": 0,
+        "api_reported_total": 12,
+        "filter_window_count": 0,
+        "added": 0,
+        "updated": 2,
+        "skipped": 7,
+        "failed": 0,
+    }
+    assert history[1]["job_id"] == "sync_context"
+    assert history[1]["context_only"] is True
+    encoded = json.dumps(payload, ensure_ascii=False)
+    assert "payload" not in encoded
+    assert "secret@example.com" not in encoded
+    assert "super-secret" not in encoded
+    assert "secret-token" not in encoded
 
 
 def test_dispatch_get_logs_handler_exceptions(monkeypatch, caplog):
@@ -515,6 +669,89 @@ def test_dispatch_test_connection_state_feeds_phase_state_until_failure():
     assert phase_after_failure.json_calls[0][0]["connected"] is False
 
 
+def test_dispatch_phase_state_uses_local_cache_when_account_is_disconnected():
+    ctx, _started, _lock = _ctx()
+    ctx = dataclasses.replace(
+        ctx,
+        session_status=lambda session_id: {
+            "ok": True,
+            "authenticated": bool(session_id),
+            "connected": False,
+            "brain_connection_verified": False,
+            "credential_source": "none",
+            "session_credentials_available": False,
+            "ttl_seconds": 43200,
+        },
+        cloud_alpha_snapshot=lambda **_kwargs: {
+            "alphas": [{"id": "prod_alpha"}],
+            "summary": {
+                "count": 40852,
+                "total": 40853,
+                "source": "cloud_snapshot",
+                "is_stale": False,
+                "loaded_at": "2026-06-11T01:00:00Z",
+                "age_seconds": 60,
+            },
+        },
+        official_context_file_counts=lambda: {
+            "fields_count": 8599,
+            "operators_count": 67,
+            "datasets_count": 20,
+            "context_cache_manifest": {
+                "complete": True,
+                "is_stale": False,
+                "record_counts": {
+                    "official_fields.json": 8599,
+                    "official_operators.json": 67,
+                    "official_datasets.json": 20,
+                },
+            },
+        },
+    )
+
+    phase = _Handler()
+    dispatch_get(phase, urlparse("/api/phase_state"), ctx)
+    payload = phase.json_calls[0][0]
+
+    assert payload["connected"] is False
+    assert payload["context_fresh"] is True
+    assert payload["context_fresh_source"] == "local_cache"
+    assert payload["operation_mode"] == "cache_only"
+    assert payload["current_phase"] == "discover"
+    assert payload["cloud_alpha_cache"]["ok"] is True
+    assert payload["cloud_alpha_cache"]["count"] == 40852
+    assert payload["official_context_cache"]["ok"] is True
+    assert payload["official_context_cache"]["fields_count"] == 8599
+
+
+def test_dispatch_phase_state_uses_injected_candidate_pool_summary():
+    ctx, _started, _lock = _ctx()
+    ctx = dataclasses.replace(
+        ctx,
+        candidate_summary_probe=lambda: {
+            "ok": True,
+            "source": "candidates_jsonl",
+            "pool_summary": {
+                "main_pool_count": 1,
+                "promotable_count": 1,
+                "blocked_or_archived_count": 69,
+            },
+        },
+        cloud_alpha_snapshot=lambda **_kwargs: {
+            "alphas": [{"id": "prod_alpha"}],
+            "summary": {"count": 40852, "is_stale": False},
+        },
+    )
+
+    phase = _Handler()
+    dispatch_get(phase, urlparse("/api/phase_state"), ctx)
+    payload = phase.json_calls[0][0]
+
+    assert payload["candidates_count"] == 1
+    assert payload["candidate_count_source"] == "candidates_jsonl"
+    assert payload["current_phase"] == "evaluate"
+
+
 def test_submit_with_lock_logs_exceptions(caplog):
     ctx, _started, _lock = _ctx()
     handler = _Handler(body={"alpha_id": "A1"})
@@ -642,6 +879,61 @@ def test_dispatch_get_candidates_reads_full_candidate_ledger(monkeypatch, tmp_pa
     assert payload["candidates"][-1]["alpha_id"] == "alpha_1000"
 
 
+def test_dispatch_get_candidates_applies_local_lifecycle_risk_to_decisions(monkeypatch, tmp_path):
+    run_config = RunConfig(environment="production")
+    run_config.ops.storage_dir = str(tmp_path)
+    monkeypatch.setattr("brain_alpha_ops.web_routes.load_run_config", lambda: run_config)
+    _write_jsonl(
+        tmp_path / "candidates.jsonl",
+        [
+            {
+                "alpha_id": "alpha_risky",
+                "expression": "rank(close)",
+                "lifecycle_status": "candidate_pool_retained",
+                "scorecard": {"total_score": 92, "decision_band": "submit_candidate"},
+                "quality_diagnosis": {
+                    "local_candidate_valid": True,
+                    "submission_ready": False,
+                    "blocking_reasons": ["missing_official_metrics"],
+                    "reasons": [
+                        {
+                            "code": "missing_official_metrics",
+                            "category": "official_evidence_missing",
+                            "severity": "blocking",
+                        }
+                    ],
+                },
+                "local_quality": {"passed": True},
+            }
+        ],
+    )
+    _write_jsonl(
+        tmp_path / "lifecycle.jsonl",
+        [
+            {
+                "alpha_id": "alpha_risky",
+                "stage": "official_validation",
+                "status": "FAILED",
+                "timestamp": "2026-06-12T01:00:00Z",
+            }
+        ],
+    )
+    ctx, _started, _lock = _ctx()
+
+    handler = _Handler()
+    dispatch_get(handler, urlparse("/api/candidates"), ctx)
+
+    payload = handler.json_calls[0][0]
+    candidate = payload["candidates"][0]
+    decision = candidate["production_decision"]
+    assert payload["ok"] is True
+    assert decision["action"] == "optimize"
+    assert "lifecycle_history_failed" in decision["reason_codes"]
+    assert payload["main_pool_candidates"] == []
+    assert payload["workflow_plan"]["validator"]["candidate_ids"] == []
+    assert payload["workflow_plan"]["rework"]["candidate_ids"] == ["alpha_risky"]
+
+
 def test_dispatch_get_candidates_summary_streams_complete_counts_without_rows(monkeypatch, tmp_path):
     run_config = RunConfig(environment="production")
     run_config.ops.storage_dir = str(tmp_path)
@@ -679,7 +971,7 @@ def test_dispatch_get_candidates_summary_streams_complete_counts_without_rows(mo
     assert payload["returned_count"] == 0
     assert payload["total"] == 8
     assert payload["ready_count"] == 2
-    assert payload["blocked_count"] == 2
+    assert payload["blocked_count"] == 1
 
 
 def test_dispatch_root_requires_admin_token_when_remote_admin_is_enabled():
@@ -873,6 +1165,8 @@ def test_dispatch_post_unknown_legacy_fallback_is_rate_limited(monkeypatch):
     payload, status, headers = handler.json_calls[0]
     assert status == 429
     assert payload["error_code"] == "RATE_LIMITED"
+    assert payload["user_error_kind"] == "web_rate_limited"
+    assert payload["user_message"] == "本地 Web 操作请求过于频繁，请稍后再试。"
     assert ("Retry-After", "9") in headers
     assert legacy_calls == []
 
@@ -972,13 +1266,25 @@ def test_dispatch_post_saves_config_payload():
     assert payload["path"] == "config/run_config.json"
 
 
-def test_dispatch_post_starts_async_operation_jobs():
+def test_dispatch_post_starts_async_operation_jobs(monkeypatch):
     ctx, started, _lock = _ctx()
+    optimized = []
 
     generate = _Handler(body={"count": 3})
     dispatch_post(generate, urlparse("/api/generate_candidates"), ctx)
     assert generate.json_calls[0][0]["task_id"] == "job_1"
     assert started[-1] == ("generate_candidates", "job_1", {"count": 3})
+
+    monkeypatch.setattr(
+        "brain_alpha_ops.web_handler_dispatch._start_optimize_candidates_job",
+        lambda opt_ctx, job_id, payload: optimized.append((opt_ctx, job_id, payload)),
+    )
+    optimize = _Handler(body={"candidates": [{"alpha_id": "a1"}], "max_mutations": 3})
+    dispatch_post(optimize, urlparse("/api/candidates/optimize"), ctx)
+    assert optimize.json_calls[0][0]["task_id"] == "job_1"
+    assert optimize.json_calls[0][0]["sse_url"] == "/sse?job_id=job_1"
+    assert optimize.json_calls[0][0]["status_url"] == "/api/production-validation/status?job_id=job_1"
+    assert optimized == [(ctx, "job_1", {"candidates": [{"alpha_id": "a1"}], "max_mutations": 3})]
 
     scoring = _Handler(body={"candidate": {"alpha_id": "a1"}})
     dispatch_post(scoring, urlparse("/api/scoring/evaluate"), ctx)
@@ -1033,6 +1339,8 @@ def test_dispatch_post_candidates_simulate_blocks_auxiliary_conflict_before_star
     payload, status, _headers = handler.json_calls[0]
     assert status == 409
     assert payload["error_code"] == "CONFLICT_AUX_OP"
+    assert payload["user_error_kind"] == "queue_blocked"
+    assert payload["next_action"] == "review_active_job"
     assert "云端同步" in payload["error"]
     assert ctx.async_jobs.created == []
 
@@ -1056,6 +1364,8 @@ def test_dispatch_post_candidates_simulate_blocks_active_async_non_simulation_jo
     payload, status, _headers = handler.json_calls[0]
     assert status == 409
     assert payload["error_code"] == "CONFLICT_RUNNING"
+    assert payload["user_error_kind"] == "queue_blocked"
+    assert payload["next_action"] == "review_active_job"
     assert payload["job_id"] == existing
     assert payload["phase"] == "candidate_generation"
     assert len(async_jobs.jobs) == 1
@@ -1086,6 +1396,7 @@ def test_dispatch_post_candidates_simulate_allows_only_one_concurrent_start(monk
     conflict_payloads = [payload for payload, status, _headers in results if status == 409]
     assert ok_payloads[0]["job_id"] in async_jobs.jobs
     assert conflict_payloads[0]["error_code"] == "CONFLICT_RUNNING"
+    assert conflict_payloads[0]["user_error_kind"] == "queue_blocked"
     assert len(async_jobs.jobs) == 1
 
 
@@ -1109,7 +1420,33 @@ def test_dispatch_post_candidates_simulate_blocks_stopping_simulation_job(monkey
     payload, status, _headers = handler.json_calls[0]
     assert status == 409
     assert payload["error_code"] == "CONFLICT_RUNNING"
+    assert payload["user_error_kind"] == "queue_blocked"
     assert payload["job_id"] == existing
+
+
+def test_dispatch_post_candidates_simulate_validates_candidate_ids_before_starting_job(monkeypatch):
+    ctx, _started, _lock = _ctx()
+    monkeypatch.setattr(
+        "brain_alpha_ops.web_candidate_simulation.simulate_candidates_job",
+        lambda job_id, payload, *, job_store, log: (_ for _ in ()).throw(AssertionError("worker should not start")),
+    )
+
+    simulate = _Handler(body={"candidate_ids": "not-a-list"})
+    dispatch_post(simulate, urlparse("/api/candidates/simulate"), ctx)
+
+    payload, status, _headers = simulate.json_calls[0]
+    assert status == 400
+    assert payload["error_code"] == "VALIDATION_ERROR"
+    assert "candidate_ids" in payload["error"]
+    assert ctx.async_jobs.created == []
+
+    extreme = _Handler(body={"candidate_ids": ["alpha_1"], "poll_timeout": -1})
+    dispatch_post(extreme, urlparse("/api/candidates/simulate"), ctx)
+    payload, status, _headers = extreme.json_calls[0]
+    assert status == 400
+    assert payload["error_code"] == "VALIDATION_ERROR"
+    assert "poll_timeout" in payload["error"]
+    assert ctx.async_jobs.created == []
 
 
 def test_dispatch_post_check_batch_validates_candidate_ids_before_starting_job():
@@ -1461,12 +1798,19 @@ def test_dispatch_post_does_not_inject_session_credentials_into_local_or_blocked
 
     ctx = dataclasses.replace(ctx, save_run_config_payload=save_config)
     monkeypatch.setattr("brain_alpha_ops.web_candidate_simulation.simulation_candidates_payload", preview)
+    monkeypatch.setattr(
+        "brain_alpha_ops.web_handler_dispatch._start_optimize_candidates_job",
+        lambda _ctx, _job_id, payload: captured.update({"optimize": dict(payload)}),
+    )
 
     connection = _Handler(body={"token": "session-token"})
     dispatch_post(connection, urlparse("/api/test_connection"), ctx)
 
     generate = _Handler(body={"count": 1})
     dispatch_post(generate, urlparse("/api/generate_candidates"), ctx)
+
+    optimize = _Handler(body={"candidates": [{"alpha_id": "alpha_1"}]})
+    dispatch_post(optimize, urlparse("/api/candidates/optimize"), ctx)
 
     config = _Handler(body={"environment": "production"})
     dispatch_post(config, urlparse("/api/config"), ctx)
@@ -1482,6 +1826,8 @@ def test_dispatch_post_does_not_inject_session_credentials_into_local_or_blocked
 
     assert ("generate_candidates", "job_1", {"count": 1}) in started
     assert ("scoring_evaluate", "job_1", {"alpha_id": "alpha_1"}) in started
+    assert optimize.json_calls[0][0]["task_id"] == "job_1"
+    assert captured["optimize"] == {"candidates": [{"alpha_id": "alpha_1"}]}
     assert captured["config"] == {"environment": "production"}
     assert captured["preview"] == {"preview": True, "candidates": [{"alpha_id": "alpha_1"}]}
     assert submit.json_calls[0][1] == 403
@@ -1617,6 +1963,8 @@ def test_dispatch_blocks_api_requests_when_rate_limited():
     payload, status, headers = run.json_calls[0]
     assert status == 429
     assert payload["error_code"] == "RATE_LIMITED"
+    assert payload["user_error_kind"] == "web_rate_limited"
+    assert payload["next_action"] == "wait_and_retry"
     assert ("Retry-After", "7") in headers
     assert started == []
 
@@ -1641,6 +1989,7 @@ def test_dispatch_rate_limiter_throttles_repeated_writes_and_recovers_after_wind
     payload, status, headers = second.json_calls[0]
     assert status == 429
     assert payload["error_code"] == "RATE_LIMITED"
+    assert payload["user_error_kind"] == "web_rate_limited"
     assert ("Retry-After", "9") in headers
     assert len(started) == 1
 
@@ -1715,6 +2064,9 @@ def test_dispatch_post_can_cancel_job_from_any_web_store():
         assert payload["task_id"] == job_id
         assert payload["job_type"] == job_type
         assert payload["status"] == "stopping"
+        assert payload["status_kind"] == "active"
+        assert payload["terminal"] is False
+        assert payload["next_action"] == "monitor_or_cancel"
         assert store.rows[job_id]["cancel"] is True
 
     missing = _Handler(body={"job_id": "missing_1"})
@@ -1724,6 +2076,7 @@ def test_dispatch_post_can_cancel_job_from_any_web_store():
     assert status == 404
     assert payload["ok"] is False
     assert payload["error_code"] == "JOB_NOT_FOUND"
+    assert payload["user_error_kind"] == "job_not_found"
     assert payload["job_id"] == "missing_1"
 
 
@@ -1737,7 +2090,13 @@ def test_dispatch_post_cancel_does_not_reopen_terminal_job():
     payload, status, _headers = handler.json_calls[0]
     assert status == 200
     assert payload["ok"] is True
+    assert payload["job_id"] == "job_failed"
+    assert payload["task_id"] == "job_failed"
+    assert payload["job_type"] == "run"
     assert payload["status"] == "failed"
+    assert payload["status_kind"] == "failed"
+    assert payload["terminal"] is True
+    assert payload["user_error_kind"] == "job_failed"
     assert payload["already_terminal"] is True
     assert ctx.jobs.rows["job_failed"]["status"] == "failed"
     assert ctx.jobs.cancelled == []

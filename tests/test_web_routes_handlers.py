@@ -88,8 +88,13 @@ def test_web_routes_submit_readiness_uses_shared_compact_contract(monkeypatch):
     payload = _submit_readiness_payload()
 
     assert payload["source"] == "check_live_submit_readiness.py"
+    assert payload["authoritative_stop_rule"] == "scripts/check_live_submit_readiness.py --config config/run_config.json --json"
+    assert payload["validation_command"] == "scripts/check_live_submit_readiness.py --config config/run_config.json --json"
     assert payload["official_api_called"] is False
+    assert payload["non_submit_flow"] is True
+    assert payload["real_submit_performed"] is False
     assert payload["ready_to_submit"] is False
+    assert payload["submit_ready_claim_allowed"] is False
     assert payload["ready"] is False
     assert payload["candidate_count"] == 2
     assert payload["eligible_count"] == 0

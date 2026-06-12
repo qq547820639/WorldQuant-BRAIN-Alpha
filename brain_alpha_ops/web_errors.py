@@ -5,6 +5,7 @@ from __future__ import annotations
 from brain_alpha_ops.error_payloads import user_error_payload
 from brain_alpha_ops.redaction import redact_error_message
 from brain_alpha_ops.web_check_availability import build_cloud_self_correlation_explanation
+from brain_alpha_ops.web_state_contract import enrich_error_payload
 
 
 AUTH_ERROR_MARKERS = (
@@ -33,7 +34,7 @@ def safe_error_message(exc: Exception) -> str:
 def safe_error_payload(exc: Exception, *, error_code: str = "UNHANDLED_ERROR") -> dict:
     payload = user_error_payload(exc, error_code=error_code)
     payload["error"] = safe_error_message(exc)
-    return payload
+    return enrich_error_payload(payload)
 
 
 def web_error_payload(exc: Exception, error_code: str) -> dict:

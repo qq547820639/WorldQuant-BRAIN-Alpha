@@ -20,9 +20,12 @@ _OFFICIAL_REVIEW_LOCAL_BLOCKING_CATEGORIES = {
 _OFFICIAL_REVIEW_SUBMIT_ONLY_REASON_CODES = {
     "decision_band_not_submit_candidate",
     "gate_not_submission_ready",
+    "human_confirmation_required",
+    "manual_confirmation_required",
     "missing_official_alpha_id",
     "missing_official_metrics",
     "missing_official_metric_fields",
+    "needs_human_confirmation",
     "official_pass_fail_not_pass",
     "expression_too_nested",
 }

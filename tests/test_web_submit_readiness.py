@@ -67,8 +67,13 @@ def test_submit_readiness_payload_compacts_local_gate_result(monkeypatch):
 
     assert payload["ok"] is True
     assert payload["source"] == "check_live_submit_readiness.py"
+    assert payload["authoritative_stop_rule"] == "scripts/check_live_submit_readiness.py --config config/run_config.json --json"
+    assert payload["validation_command"] == "scripts/check_live_submit_readiness.py --config config/run_config.json --json"
     assert payload["official_api_called"] is False
+    assert payload["non_submit_flow"] is True
+    assert payload["real_submit_performed"] is False
     assert payload["ready_to_submit"] is False
+    assert payload["submit_ready_claim_allowed"] is False
     assert payload["candidate_count"] == 2
     assert payload["job_family_candidate_count"] == 5
     assert payload["eligible_count"] == 0
@@ -82,6 +87,28 @@ def test_submit_readiness_payload_compacts_local_gate_result(monkeypatch):
     }
     assert "run official simulation/check in a trusted environment" in payload["required_next_steps"]
     assert "job_audits" not in payload
+
+
+def test_submit_readiness_payload_fails_closed_before_submit_ready_claim(monkeypatch):
+    monkeypatch.setattr(
+        web,
+        "_run_live_submit_readiness_check",
+        lambda: {
+            "ok": False,
+            "ready_to_submit": True,
+            "eligible_count": 1,
+            "findings": [{"code": "readiness_config_error", "message": "config broken"}],
+        },
+    )
+
+    payload = web._submit_readiness_payload()
+
+    assert payload["ok"] is False
+    assert payload["ready_to_submit"] is False
+    assert payload["submit_ready_claim_allowed"] is False
+    assert payload["official_api_called"] is False
+    assert payload["real_submit_performed"] is False
+    assert payload["authoritative_stop_rule"] == "scripts/check_live_submit_readiness.py --config config/run_config.json --json"
 
 
 def test_submit_readiness_payload_keeps_all_reasons_findings_and_best_candidate_blockers(monkeypatch):
@@ -142,4 +169,34 @@ def test_submit_readiness_dispatch_route_uses_compact_payload(monkeypatch):
 
     assert handler.status == 200
     assert handler.payload["ready_to_submit"] is True
+    assert handler.payload["submit_ready_claim_allowed"] is True
     assert handler.payload["eligible_count"] == 1
+
+
+def test_submit_readiness_payload_fails_closed_when_ok_is_missing(monkeypatch):
+    """AF-021: missing ok must not default to True (fail-open bug)."""
+    monkeypatch.setattr(
+        web,
+        "_run_live_submit_readiness_check",
+        lambda: {"ready_to_submit": True, "eligible_count": 3, "findings": []},
+    )
+    payload = web._submit_readiness_payload()
+    assert payload["ok"] is False
+    assert payload["ready_to_submit"] is False
+    assert payload["submit_ready_claim_allowed"] is False
+    assert payload["real_submit_performed"] is False
+
+
+def test_submit_readiness_payload_fails_closed_when_ok_false_and_ready_true(monkeypatch):
+    """AF-021: ok=false must block even when ready_to_submit=true."""
+    monkeypatch.setattr(
+        web,
+        "_run_live_submit_readiness_check",
+        lambda: {"ok": False, "ready_to_submit": True, "eligible_count": 1},
+    )
+    payload = web._submit_readiness_payload()
+    assert payload["ok"] is False
+    assert payload["ready_to_submit"] is False
+    assert payload["submit_ready_claim_allowed"] is False
+    assert payload["eligible_count"] == 1
+    assert payload["real_submit_performed"] is False

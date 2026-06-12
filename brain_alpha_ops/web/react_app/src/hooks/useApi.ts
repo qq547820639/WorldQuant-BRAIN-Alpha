@@ -1,12 +1,38 @@
 /** Generic fetch hook with loading/error state management. */
 
 import { useState, useCallback } from "react";
+import { apiErrorMessage, isSessionInvalidPayload, networkErrorMessage } from "@/helpers/errorExperience";
 import { csrfHeaders, csrfToken, setCsrfToken, setStreamToken } from "@/utils/csrf";
 
 const DEFAULT_REQUEST_TIMEOUT_MS = 120000;
 
 /** Minimal API response envelope shared by all endpoints. */
-export type ApiMeta = { ok: boolean; error?: string; error_code?: string };
+export type ApiMeta = {
+  ok: boolean;
+  error?: string;
+  error_code?: string;
+  user_error?: {
+    kind?: string;
+    title?: string;
+    message?: string;
+    impact?: string;
+    suggested_action?: string;
+    action_label?: string;
+    next_action?: string;
+    severity?: string;
+    recoverable?: boolean;
+    retryable?: boolean;
+    detail?: string;
+  };
+  user_error_kind?: string;
+  user_message?: string;
+  next_action?: string;
+  recoverable?: boolean;
+  retryable?: boolean;
+  status_kind?: string;
+  terminal?: boolean;
+  interrupted?: boolean;
+};
 
 interface UseApiState<T> {
   data: T | null;
@@ -57,7 +83,7 @@ export function useApi<T = unknown>() {
                   );
                   const normalizedRetry = { ...retryJson, ok: retryOk } as R & ApiMeta;
                   if (!retryOk) {
-                    setState({ data: null, loading: false, error: retryJson.error || retryJson.error_code || "Request failed" });
+                    setState({ data: null, loading: false, error: apiErrorMessage(retryJson) });
                     return normalizedRetry;
                   }
                   const retryRaw = retryJson as Record<string, unknown>;
@@ -67,14 +93,14 @@ export function useApi<T = unknown>() {
                 const retryError = await safeJson<R & ApiMeta>(res);
                 if (retryError) {
                   refreshSessionTokens(retryError as Record<string, unknown>);
-                  const retryMsg = retryError.error || retryError.error_code || `HTTP ${res.status}: ${res.statusText}`;
+                  const retryMsg = apiErrorMessage(retryError, `HTTP ${res.status}: ${res.statusText}`);
                   const normalizedRetryError = { ...retryError, ok: false } as R & ApiMeta;
                   setState({ data: null, loading: false, error: retryMsg });
                   return normalizedRetryError;
                 }
               }
             }
-            const msg = json.error || json.error_code || `HTTP ${res.status}: ${res.statusText}`;
+            const msg = apiErrorMessage(json, `HTTP ${res.status}: ${res.statusText}`);
             const normalized = { ...json, ok: false } as R & ApiMeta;
             setState({ data: null, loading: false, error: msg });
             return normalized;
@@ -91,7 +117,7 @@ export function useApi<T = unknown>() {
         );
         const normalized = { ...json, ok } as R & ApiMeta;
         if (!ok) {
-          setState({ data: null, loading: false, error: json.error || json.error_code || "Request failed" });
+          setState({ data: null, loading: false, error: apiErrorMessage(json) });
           return normalized;
         }
         // SAFETY: json is structurally R & ApiMeta; the backend returns flat JSON.
@@ -100,9 +126,7 @@ export function useApi<T = unknown>() {
         setState({ data: (raw.data !== undefined ? raw.data : json) as T, loading: false, error: null });
         return normalized;
       } catch (err) {
-        const msg = isAbortError(err)
-          ? "请求超时，请稍后重试。"
-          : err instanceof Error ? err.message : "Network error";
+        const msg = networkErrorMessage(err);
         setState({ data: null, loading: false, error: msg });
         return null;
       } finally {
@@ -136,15 +160,10 @@ function refreshSessionTokens(payload: Record<string, unknown>) {
   if (stream) setStreamToken(stream);
 }
 
-function isAbortError(err: unknown) {
-  return err instanceof DOMException && err.name === "AbortError";
-}
-
 function canRecoverSession(url: string, method: string, payload: ApiMeta) {
-  if (method !== "POST") return false;
   if (url === "/api/session") return false;
-  const code = String(payload.error_code || payload.error || "");
-  return code === "SESSION_INVALID" || code === "invalid local session";
+  if (!["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"].includes(method)) return false;
+  return isSessionInvalidPayload(payload);
 }
 
 async function bootstrapSession() {

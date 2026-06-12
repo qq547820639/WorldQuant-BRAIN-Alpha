@@ -1,6 +1,7 @@
 /** Editable configuration panel for the next research run. */
 
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent, type ReactNode } from "react";
+import { apiErrorMessage, safeDisplayErrorMessage, type ApiErrorExperiencePayload } from "@/helpers/errorExperience";
 import { useApi } from "@/hooks/useApi";
 import type { BrainCredentials, BrainSettings, BudgetConfig, RunConfig, ThresholdConfig } from "@/types";
 import ProgressFeedback from "@/components/ProgressFeedback";
@@ -10,6 +11,10 @@ interface Props {
   credentials: BrainCredentials;
   onCredentialsChange: (credentials: BrainCredentials) => void;
   onConnectionTested?: (success: boolean, error: string | null) => void;
+  connected?: boolean;
+  contextFresh?: boolean;
+  managedCredentialsAvailable?: boolean;
+  onLoggedOut?: () => void;
 }
 
 interface ConfigResponse {
@@ -35,7 +40,7 @@ interface ConfigSchemaResponse {
   schema?: ConfigSchema;
 }
 
-interface ConnectionTestResponse {
+interface ConnectionTestResponse extends ApiErrorExperiencePayload {
   ok: boolean;
   environment?: string;
   auth?: string;
@@ -86,13 +91,24 @@ const DEFAULT_ALPHA_TYPE_OPTIONS = ["REGULAR", "POWER_POOL", "ATOM", "PYRAMID"];
 
 type SelectOption = string | { value: string; label: string };
 
-export default function ConfigPanel({ notify, credentials, onCredentialsChange, onConnectionTested }: Props) {
+export default function ConfigPanel({
+  notify,
+  credentials,
+  onCredentialsChange,
+  onConnectionTested,
+  connected = false,
+  contextFresh = false,
+  managedCredentialsAvailable = false,
+  onLoggedOut,
+}: Props) {
   const configApi = useApi<ConfigResponse>();
   const schemaApi = useApi<ConfigSchemaResponse>();
   const saveApi = useApi<ConfigResponse>();
   const connectionApi = useApi<ConnectionTestResponse>();
+  const logoutApi = useApi<{ ok: boolean; error?: string; error_code?: string }>();
   const [form, setForm] = useState<ConfigForm | null>(null);
   const [initialForm, setInitialForm] = useState<ConfigForm | null>(null);
+  const [temporaryConnectionOpen, setTemporaryConnectionOpen] = useState(false);
   const importInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -140,7 +156,7 @@ export default function ConfigPanel({ notify, credentials, onCredentialsChange, 
       body: JSON.stringify(payloadFromForm(form)),
     });
     if (!result?.ok) {
-      notify("error", result?.error || "保存配置失败");
+      notify("error", apiErrorMessage(result, "保存配置失败"));
       return;
     }
     notify("success", "配置已保存");
@@ -187,13 +203,25 @@ export default function ConfigPanel({ notify, credentials, onCredentialsChange, 
       body: JSON.stringify(payloadFromForm(form, credentials)),
     });
     if (!result?.ok) {
-      const err = result?.error || result?.error_code || "BRAIN 连接测试失败";
+      const err = safeDisplayErrorMessage(apiErrorMessage(result, "BRAIN 连接测试失败"));
       notify("error", err);
       onConnectionTested?.(false, err);
       return;
     }
     notify("success", "BRAIN 连接测试通过");
     onConnectionTested?.(true, null);
+  };
+
+  const logoutLocalSession = async () => {
+    const result = await logoutApi.call("/api/logout", { method: "POST" });
+    if (!result?.ok) {
+      notify("error", safeDisplayErrorMessage(apiErrorMessage(result, "退出本地会话失败")));
+      return;
+    }
+    onCredentialsChange({ username: "", password: "", token: "" });
+    setTemporaryConnectionOpen(false);
+    onLoggedOut?.();
+    notify("success", "已退出本地会话并清空页面凭证");
   };
 
   if (configApi.loading && !config) {
@@ -209,7 +237,7 @@ export default function ConfigPanel({ notify, credentials, onCredentialsChange, 
   if (configApi.error && !config) {
     return (
       <div className="panel">
-        <p className="text-negative text-sm">加载配置失败: {configApi.error}</p>
+        <p className="text-negative text-sm">加载配置失败: {safeDisplayErrorMessage(configApi.error)}</p>
         <button type="button" onClick={reload} className="btn btn-secondary btn-sm">重试</button>
       </div>
     );
@@ -221,6 +249,17 @@ export default function ConfigPanel({ notify, credentials, onCredentialsChange, 
   const datasetChoices = datasetSelectOptions(schema, form.dataset);
   const scoring = config?.ops?.scoring ?? config?.scoring;
   const hasSessionCredentials = Boolean(credentials.username || credentials.password || credentials.token);
+  const cacheOnlyMode = contextFresh && !connected;
+  const showCredentialEditor = !cacheOnlyMode || temporaryConnectionOpen;
+  const connectionStatusText = connectionApi.error
+    ? `连接失败: ${safeDisplayErrorMessage(connectionApi.error)}`
+    : connectionApi.data?.ok
+      ? `连接正常: ${connectionApi.data.environment || form.environment}`
+      : hasSessionCredentials
+        ? "凭证已填写，尚未测试"
+        : managedCredentialsAvailable
+          ? "未填写则使用维护者配置的托管凭证"
+          : "请临时填写页面凭证";
 
   return (
     <form onSubmit={save} className="w-full max-w-5xl min-w-0 space-y-5 animate-fade-in">
@@ -228,7 +267,9 @@ export default function ConfigPanel({ notify, credentials, onCredentialsChange, 
         <div className="min-w-0 max-w-2xl">
           <h2 className="text-xl font-semibold text-text-primary">连接与生产参数</h2>
           <p className="mt-2 text-sm leading-6 text-text-secondary">
-            先填写 BRAIN 会话凭证并测试连接，再调整本次运行参数。保存配置不会保存账号、密码或 token。
+            {cacheOnlyMode
+              ? "当前使用本地缓存。需要官方同步、官方回测或提交前复核时，再临时连接官方服务。"
+              : "调整本次运行参数；需要官方同步、官方回测或提交前复核时，临时填写 BRAIN 会话凭证并测试连接。保存配置不会保存账号、密码或 token。"}
           </p>
         </div>
         <div className="flex w-full flex-wrap justify-end gap-2 sm:w-auto">
@@ -275,53 +316,62 @@ export default function ConfigPanel({ notify, credentials, onCredentialsChange, 
       </div>
 
       {validationError !== null && <p role="alert" className="text-xs text-negative">{validationError}</p>}
-      {saveApi.error && <p role="alert" className="text-xs text-negative">{saveApi.error}</p>}
+      {saveApi.error && <p role="alert" className="text-xs text-negative">{safeDisplayErrorMessage(saveApi.error)}</p>}
 
-      <ConfigSection
-        title="BRAIN 连接"
-        description="这些字段只保留在当前页面，用于本次连接测试和验证。"
-      >
-        <TextField
-          label="账户邮箱"
-          value={credentials.username}
-          autoComplete="off"
-          inputMode="email"
-          maxLength={160}
-          onChange={(value) => updateCredential("username", value.trim())}
+      {cacheOnlyMode && (
+        <LocalCacheConnectionSection
+          temporaryConnectionOpen={temporaryConnectionOpen}
+          logoutLoading={logoutApi.loading}
+          logoutError={logoutApi.error ? safeDisplayErrorMessage(logoutApi.error) : null}
+          onOpenTemporaryConnection={() => setTemporaryConnectionOpen(true)}
+          onCloseTemporaryConnection={() => setTemporaryConnectionOpen(false)}
+          onLogout={logoutLocalSession}
         />
-        <PasswordField
-          label="密码"
-          value={credentials.password}
-          autoComplete="new-password"
-          onChange={(value) => updateCredential("password", value)}
-        />
-        <PasswordField
-          label="Token"
-          value={credentials.token}
-          autoComplete="off"
-          maxLength={512}
-          onChange={(value) => updateCredential("token", value.trim())}
-        />
-        <div className="flex flex-col gap-2 sm:items-start">
-          <button
-            type="button"
-            onClick={testConnection}
-            className="btn btn-secondary btn-sm"
-            disabled={connectionApi.loading || validationError !== null}
-          >
-            {connectionApi.loading ? "测试中..." : "测试 BRAIN 连接"}
-          </button>
-          <p className={`text-xs ${connectionApi.error ? "text-negative" : connectionApi.data?.ok ? "text-positive" : "text-text-tertiary"}`} role="status" aria-live="polite">
-            {connectionApi.error
-              ? `连接失败: ${connectionApi.error}`
-              : connectionApi.data?.ok
-                ? `连接正常: ${connectionApi.data.environment || form.environment}`
-                : hasSessionCredentials
-                  ? "凭证已填写，尚未测试"
-                  : "未填写则使用维护者配置的托管凭证"}
-          </p>
-        </div>
-      </ConfigSection>
+      )}
+
+      {showCredentialEditor && (
+        <ConfigSection
+          title={cacheOnlyMode ? "临时连接官方服务" : "BRAIN 连接"}
+          description={cacheOnlyMode
+            ? "这些字段仅用于本次同步、官方回测或提交前复核；折叠后不会保存到配置文件。"
+            : "这些字段只保留在当前页面，用于本次连接测试和验证。"}
+        >
+          <TextField
+            label="账户邮箱"
+            value={credentials.username}
+            autoComplete="off"
+            inputMode="email"
+            maxLength={160}
+            onChange={(value) => updateCredential("username", value.trim())}
+          />
+          <PasswordField
+            label="密码"
+            value={credentials.password}
+            autoComplete="new-password"
+            onChange={(value) => updateCredential("password", value)}
+          />
+          <PasswordField
+            label="Token"
+            value={credentials.token}
+            autoComplete="off"
+            maxLength={512}
+            onChange={(value) => updateCredential("token", value.trim())}
+          />
+          <div className="flex flex-col gap-2 sm:items-start">
+            <button
+              type="button"
+              onClick={testConnection}
+              className="btn btn-secondary btn-sm"
+              disabled={connectionApi.loading || validationError !== null}
+            >
+              {connectionApi.loading ? "测试中..." : "测试 BRAIN 连接"}
+            </button>
+            <p className={`text-xs ${connectionApi.error ? "text-negative" : connectionApi.data?.ok ? "text-positive" : "text-text-tertiary"}`} role="status" aria-live="polite">
+              {connectionStatusText}
+            </p>
+          </div>
+        </ConfigSection>
+      )}
 
       <ConfigSection title="BRAIN 设置" description="字段和选项来自后端公开的官方能力集校验，不在前端自定义扩展。">
         <SelectField label="资产类型" value={form.instrumentType} options={optionValues(options, "instrumentType", form.instrumentType, DEFAULT_INSTRUMENT_TYPE_OPTIONS)} onChange={(value) => update("instrumentType", value)} />
@@ -386,6 +436,58 @@ export default function ConfigPanel({ notify, credentials, onCredentialsChange, 
         <ConfigValue label="自动提交" value="关闭（Web 保存强制）" />
       </ConfigSection>
     </form>
+  );
+}
+
+function LocalCacheConnectionSection({
+  temporaryConnectionOpen,
+  logoutLoading,
+  logoutError,
+  onOpenTemporaryConnection,
+  onCloseTemporaryConnection,
+  onLogout,
+}: {
+  temporaryConnectionOpen: boolean;
+  logoutLoading: boolean;
+  logoutError: string | null;
+  onOpenTemporaryConnection: () => void;
+  onCloseTemporaryConnection: () => void;
+  onLogout: () => void;
+}) {
+  return (
+    <section className="panel min-w-0" aria-labelledby="local-cache-session-title">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0 max-w-2xl">
+          <h3 id="local-cache-session-title" className="text-lg font-semibold text-text-primary">
+            当前使用本地缓存
+          </h3>
+          <p className="mt-2 text-sm leading-6 text-text-secondary">
+            本地 Alpha 快照和官方能力集缓存已可用于非提交候选流程；无需重新登录。官方同步、官方回测和提交前复核需要你主动临时连接官方服务。
+          </p>
+          {logoutError && (
+            <p role="alert" className="mt-2 text-xs text-negative">退出失败: {logoutError}</p>
+          )}
+        </div>
+        <div className="flex w-full flex-wrap justify-end gap-2 sm:w-auto">
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            aria-expanded={temporaryConnectionOpen}
+            onClick={temporaryConnectionOpen ? onCloseTemporaryConnection : onOpenTemporaryConnection}
+          >
+            {temporaryConnectionOpen ? "收起临时连接" : "临时连接官方服务"}
+          </button>
+          <button
+            type="button"
+            className="btn btn-danger btn-sm"
+            onClick={onLogout}
+            disabled={logoutLoading}
+          >
+            {logoutLoading ? "退出中..." : "退出本地会话"}
+          </button>
+        </div>
+      </div>
+    </section>
   );
 }
 

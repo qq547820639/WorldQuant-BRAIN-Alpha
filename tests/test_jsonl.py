@@ -1,6 +1,13 @@
 import json
 
-from brain_alpha_ops.jsonl import count_jsonl_records, read_jsonl_records, read_jsonl_tail, read_jsonl_tail_with_stats, tail_text_lines
+from brain_alpha_ops.jsonl import (
+    count_jsonl_records,
+    find_jsonl_record_reverse,
+    read_jsonl_records,
+    read_jsonl_tail,
+    read_jsonl_tail_with_stats,
+    tail_text_lines,
+)
 
 
 def test_read_jsonl_tail_reads_only_requested_trailing_records(tmp_path):
@@ -60,3 +67,28 @@ def test_count_jsonl_records_applies_predicate(tmp_path):
     count = count_jsonl_records(path, predicate=lambda row: row.get("status") == "PASS")
 
     assert count == 2
+
+
+def test_find_jsonl_record_reverse_skips_bad_lines_and_missing_trailing_newline(tmp_path):
+    path = tmp_path / "history.jsonl"
+    path.write_text(
+        '{"id":"old"}\n\nnot-json\n[1,2]\n{"id":"target","status":"ACTIVE"}',
+        encoding="utf-8",
+    )
+
+    row = find_jsonl_record_reverse(path, predicate=lambda item: item.get("status") == "ACTIVE")
+
+    assert row == {"id": "target", "status": "ACTIVE"}
+
+
+def test_find_jsonl_record_reverse_has_no_tail_row_cap(tmp_path):
+    path = tmp_path / "history.jsonl"
+    trailing = "\n".join(json.dumps({"id": f"ignored_{index}", "status": "MOCK"}) for index in range(700))
+    path.write_text(
+        json.dumps({"id": "target", "status": "ACTIVE"}) + "\n" + trailing + "\n",
+        encoding="utf-8",
+    )
+
+    row = find_jsonl_record_reverse(path, predicate=lambda item: item.get("status") == "ACTIVE")
+
+    assert row == {"id": "target", "status": "ACTIVE"}

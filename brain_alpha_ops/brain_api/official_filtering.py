@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 import math
 from typing import Any
@@ -12,6 +13,18 @@ from .base import BrainAPIError
 _OPENING = {"[": True, "(": False}
 _CLOSING = {"]": True, ")": False}
 _INFINITE_VALUES = {"", "inf", "+inf", "infinity", "+infinity", "-inf", "-infinity", "none", "null", "*"}
+_WQB_OPTION_ALIASES = {
+    "instrumentType": "instrument_type",
+    "instrument_type": "instrument_type",
+    "region": "region",
+    "delay": "delay",
+    "universe": "universe",
+    "dataset": "dataset",
+    "datasetId": "dataset",
+    "dataset_id": "dataset",
+    "dataSetId": "dataset",
+    "data_set_id": "dataset",
+}
 
 
 @dataclass(frozen=True)
@@ -72,6 +85,54 @@ def build_filter_params(field_name: str, value: Any) -> dict[str, Any]:
     return {field_name: value}
 
 
+def normalize_wqb_options(
+    options: Mapping[str, Any] | None,
+    *,
+    allowed: set[str] | frozenset[str] | None = None,
+    label: str = "options",
+) -> dict[str, Any]:
+    """Normalize WQB-style option keys without silently accepting unknowns."""
+    if options is None:
+        return {}
+    if not isinstance(options, Mapping):
+        raise BrainAPIError(f"{label} must be a mapping")
+    allowed_keys = set(allowed) if allowed is not None else None
+    normalized: dict[str, Any] = {}
+    for raw_key, value in options.items():
+        key = str(raw_key or "").strip()
+        canonical = _WQB_OPTION_ALIASES.get(key)
+        if not canonical:
+            raise BrainAPIError(f"unsupported {label} key: {raw_key}")
+        if allowed_keys is not None and canonical not in allowed_keys:
+            raise BrainAPIError(f"unsupported {label} key for this surface: {raw_key}")
+        if _is_blank(value):
+            continue
+        existing = normalized.get(canonical)
+        if existing is not None and str(existing) != str(value):
+            raise BrainAPIError(f"conflicting {label} values for {canonical}")
+        normalized[canonical] = value
+    return normalized
+
+
+def resolve_compat_value(name: str, explicit: Any, options: Mapping[str, Any], *, label: str = "options") -> Any:
+    """Resolve explicit keyword arguments against normalized WQB options."""
+    option_value = options.get(name)
+    if _is_blank(explicit):
+        return option_value
+    if option_value is not None and str(option_value) != str(explicit):
+        raise BrainAPIError(f"conflicting {name} between explicit argument and {label}")
+    return explicit
+
+
+def resolve_compat_alias(name: str, primary: Any, alias: Any, *, alias_name: str) -> Any:
+    """Resolve two same-meaning parameters and fail closed on conflicts."""
+    if _is_blank(alias):
+        return primary
+    if not _is_blank(primary) and str(primary) != str(alias):
+        raise BrainAPIError(f"conflicting {name} and {alias_name}")
+    return alias
+
+
 def clamp_query_limit(limit: int, *, maximum: int, label: str) -> int:
     try:
         value = int(limit)
@@ -117,3 +178,7 @@ def _has_endpoint(value: Any) -> bool:
     if isinstance(value, str) and value.strip().lower() in _INFINITE_VALUES:
         return False
     return True
+
+
+def _is_blank(value: Any) -> bool:
+    return value is None or (isinstance(value, str) and not value.strip())

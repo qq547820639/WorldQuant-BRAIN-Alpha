@@ -88,6 +88,93 @@ def test_phase_state_payload_reports_stalled_evaluate_phase():
     assert payload["connection"]["last_tested_at"] == "2026-06-09T10:00:00+00:00"
 
 
+def test_phase_state_uses_candidate_main_pool_summary_before_empty_repo_count():
+    payload = phase_state_payload(
+        sync_jobs=_SyncJobs(rows=[("sync_0", {"status": "completed"})]),
+        candidate_repo=_CandidateRepo(count_value=0, scored_value=0),
+        connection_tracker=_Connection(connected=False, status="disconnected", page=False),
+        readiness_service=_Readiness({"ready_to_submit": False, "eligible_count": 0}),
+        candidate_summary_probe=lambda: {
+            "ok": True,
+            "source": "candidates_jsonl",
+            "total": 70,
+            "candidate_count": 70,
+            "pool_summary": {
+                "main_pool_count": 1,
+                "promotable_count": 1,
+                "blocked_or_archived_count": 69,
+            },
+        },
+    )
+
+    assert payload["candidates_count"] == 1
+    assert payload["candidate_count_source"] == "candidates_jsonl"
+    assert payload["current_phase"] == "evaluate"
+
+
+def test_phase_state_does_not_unlock_evaluation_from_blocked_history_only():
+    payload = phase_state_payload(
+        sync_jobs=_SyncJobs(rows=[("sync_0", {"status": "completed"})]),
+        candidate_repo=_CandidateRepo(count_value=0, scored_value=0),
+        connection_tracker=_Connection(),
+        readiness_service=_Readiness({"ready_to_submit": False, "eligible_count": 0}),
+        candidate_summary_probe=lambda: {
+            "ok": True,
+            "source": "candidates_jsonl",
+            "total": 70,
+            "candidate_count": 70,
+            "pool_summary": {
+                "main_pool_count": 0,
+                "promotable_count": 0,
+                "blocked_or_archived_count": 70,
+            },
+        },
+    )
+
+    assert payload["candidates_count"] == 0
+    assert payload["current_phase"] == "discover"
+
+
+def test_phase_state_uses_main_pool_candidates_when_pool_summary_is_missing():
+    payload = phase_state_payload(
+        sync_jobs=_SyncJobs(rows=[("sync_0", {"status": "completed"})]),
+        candidate_repo=_CandidateRepo(count_value=0, scored_value=0),
+        connection_tracker=_Connection(),
+        readiness_service=_Readiness({"ready_to_submit": False, "eligible_count": 0}),
+        candidate_summary_probe=lambda: {
+            "ok": True,
+            "source": "candidates_jsonl",
+            "total": 1,
+            "candidate_count": 1,
+            "main_pool_candidates": [{"alpha_id": "alpha_retained"}],
+        },
+    )
+
+    assert payload["candidates_count"] == 1
+    assert payload["current_phase"] == "evaluate"
+
+
+def test_phase_state_ready_takes_precedence_over_empty_main_pool_count():
+    payload = phase_state_payload(
+        sync_jobs=_SyncJobs(rows=[("sync_0", {"status": "completed"})]),
+        candidate_repo=_CandidateRepo(count_value=0, scored_value=0),
+        connection_tracker=_Connection(),
+        readiness_service=_Readiness({"ready_to_submit": True, "eligible_count": 1}),
+        candidate_summary_probe=lambda: {
+            "ok": True,
+            "source": "candidates_jsonl",
+            "pool_summary": {
+                "main_pool_count": 0,
+                "promotable_count": 0,
+            },
+        },
+    )
+
+    assert payload["candidates_count"] == 0
+    assert payload["current_phase"] == "ready"
+    assert payload["readiness"]["eligible_count"] == 1
+
+
 def test_phase_state_payload_uses_server_session_connection_status():
     payload = phase_state_payload(
         sync_jobs=_SyncJobs(rows=[("sync_0", {"status": "completed"})]),
@@ -127,7 +214,8 @@ def test_phase_state_authenticated_disconnected_session_overrides_tracker():
     )
 
     assert payload["connected"] is False
-    assert payload["current_phase"] == "connect"
+    assert payload["context_fresh"] is True
+    assert payload["current_phase"] == "evaluate"
     assert payload["connection"]["status"] == "disconnected"
     assert payload["connection"]["credential_source"] == "none"
 
@@ -158,6 +246,9 @@ def test_phase_state_uses_fresh_local_snapshot_when_sync_job_history_is_unavaila
     assert payload["context_fresh"] is True
     assert payload["context_fresh_source"] == "local_cache"
     assert payload["current_phase"] == "evaluate"
+    assert payload["official_context_cache"]["fields_count"] == 8599
+    assert payload["official_context_cache"]["manifest"]["complete"] is True
+    assert payload["cloud_alpha_cache"]["count"] == 40852
 
 
 def test_phase_state_accepts_stale_local_snapshot_for_cache_first_login():
@@ -183,6 +274,111 @@ def test_phase_state_accepts_stale_local_snapshot_for_cache_first_login():
     assert payload["current_phase"] == "evaluate"
 
 
+def test_phase_state_local_cache_unlocks_workflow_without_account_connection():
+    payload = phase_state_payload(
+        sync_jobs=_SyncJobs(rows=[]),
+        candidate_repo=_CandidateRepo(count_value=0),
+        connection_tracker=_Connection(connected=False, status="disconnected", page=False),
+        readiness_service=_Readiness({"ready_to_submit": False, "eligible_count": 0}),
+        cloud_alpha_snapshot=lambda limit=1: {
+            "alphas": [{"id": "prod_alpha"}],
+            "summary": {"count": 40852, "is_stale": False},
+        },
+        official_context_file_counts=lambda: {
+            "fields_count": 8599,
+            "operators_count": 67,
+            "datasets_count": 20,
+            "context_cache_manifest": {"complete": True, "is_stale": False},
+        },
+    )
+
+    assert payload["connected"] is False
+    assert payload["context_fresh"] is True
+    assert payload["context_fresh_source"] == "local_cache"
+    assert payload["current_phase"] == "discover"
+    assert payload["operation_mode"] == "cache_only"
+
+
+def test_phase_state_prefers_lightweight_cloud_cache_probe():
+    calls = {"probe": 0, "snapshot": 0, "counts": 0}
+
+    def probe():
+        calls["probe"] += 1
+        return {
+            "ok": True,
+            "source": "storage",
+            "is_stale": False,
+            "loaded_at": "2026-06-11T01:00:00Z",
+            "age_seconds": 60,
+        }
+
+    def snapshot(**_kwargs):
+        calls["snapshot"] += 1
+        raise AssertionError("phase state should not call the full cloud snapshot when a probe is available")
+
+    def counts():
+        calls["counts"] += 1
+        return {
+            "fields_count": 8599,
+            "operators_count": 67,
+            "datasets_count": 20,
+            "context_cache_manifest": {"complete": True, "is_stale": False},
+        }
+
+    payload = phase_state_payload(
+        sync_jobs=_SyncJobs(rows=[]),
+        candidate_repo=_CandidateRepo(count_value=0),
+        connection_tracker=_Connection(connected=False, status="disconnected", page=False),
+        readiness_service=_Readiness({"ready_to_submit": False, "eligible_count": 0}),
+        cloud_alpha_snapshot=snapshot,
+        cloud_alpha_cache_probe=probe,
+        official_context_file_counts=counts,
+    )
+
+    assert payload["context_fresh"] is True
+    assert payload["context_fresh_source"] == "local_cache"
+    assert payload["operation_mode"] == "cache_only"
+    assert payload["current_phase"] == "discover"
+    assert payload["cloud_alpha_cache"]["ok"] is True
+    assert payload["cloud_alpha_cache"]["source"] == "storage"
+    assert "count" not in payload["cloud_alpha_cache"]
+    assert calls == {"probe": 1, "snapshot": 0, "counts": 1}
+
+
+def test_phase_state_rejects_completed_sync_history_when_local_cache_is_incomplete():
+    payload = phase_state_payload(
+        sync_jobs=_SyncJobs(rows=[("sync_0", {"status": "completed"})]),
+        candidate_repo=_CandidateRepo(count_value=4, scored_value=1),
+        connection_tracker=_Connection(),
+        readiness_service=_Readiness({"ready_to_submit": False, "eligible_count": 0}),
+        cloud_alpha_snapshot=lambda limit=1: {
+            "alphas": [{"id": "prod_alpha"}],
+            "summary": {"count": 40852, "is_stale": False},
+        },
+        official_context_file_counts=lambda: {
+            "fields_count": 8599,
+            "operators_count": 67,
+            "datasets_count": 20,
+            "context_cache_manifest": {
+                "complete": False,
+                "is_stale": True,
+                "invalid_files": ["official_fields.json"],
+                "record_counts": {
+                    "official_fields.json": 8599,
+                    "official_operators.json": 67,
+                    "official_datasets.json": 20,
+                },
+            },
+        },
+    )
+
+    assert payload["context_fresh"] is False
+    assert payload["context_fresh_source"] == ""
+    assert payload["current_phase"] == "connect"
+    assert payload["official_context_cache"]["manifest"]["complete"] is False
+    assert payload["official_context_cache"]["manifest"]["invalid_files"] == ["official_fields.json"]
+
+
 def test_phase_state_payload_phase_selection_and_safe_defaults():
     disconnected = phase_state_payload(
         sync_jobs=_SyncJobs(rows=[("sync_0", {"status": "completed"})]),
@@ -190,7 +386,9 @@ def test_phase_state_payload_phase_selection_and_safe_defaults():
         connection_tracker=_Connection(connected=False, status="disconnected", page=False),
         readiness_service=_Readiness({"ready_to_submit": True, "eligible_count": 2}),
     )
-    assert disconnected["current_phase"] == "connect"
+    assert disconnected["current_phase"] == "ready"
+    assert disconnected["connected"] is False
+    assert disconnected["operation_mode"] == "cache_only"
     assert disconnected["connection"]["credential_source"] == "managed"
 
     discover = phase_state_payload(
@@ -217,6 +415,7 @@ def test_phase_state_payload_phase_selection_and_safe_defaults():
         readiness_service=_Readiness(fail=True),
     )
     assert fallback["current_phase"] == "connect"
+    assert fallback["operation_mode"] == "needs_setup"
     assert fallback["candidates_count"] == 0
     assert fallback["scored_count"] == 0
     assert fallback["sync"]["in_progress"] is False
