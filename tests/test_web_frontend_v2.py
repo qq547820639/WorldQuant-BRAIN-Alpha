@@ -388,7 +388,7 @@ def test_spinner_component():
             'role="progressbar"',
             'aria-label={`${title}: ${label}`}',
             "aria-valuenow={isDeterminate ? roundedPercent : undefined}",
-            "normalizedPercent(progress, state)",
+            "normalizedPercent(progress, progressState)",
             "fmtDuration(estimatedEta)",
             "onRetry",
         ],
