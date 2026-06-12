@@ -75,6 +75,10 @@ def create_handler_class(
                 host = self.headers.get("Host", "127.0.0.1")
                 origin = f"http://{host}" if "://" not in host else f"https://{host}"
             self.send_header("Access-Control-Allow-Origin", origin)
+            self.send_header(
+                "Access-Control-Allow-Headers",
+                "Content-Type, X-Brain-Alpha-CSRF, X-Brain-Alpha-Request-ID, X-Brain-Alpha-Request-Timestamp",
+            )
 
         def _send_html(self, html, *, extra_headers=None):
             body = html.encode("utf-8") if isinstance(html, str) else html

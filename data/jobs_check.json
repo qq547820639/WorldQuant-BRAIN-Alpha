@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "updated_at": 1781278856.654958,
+  "jobs": {
+    "job_0001": {
+      "status": "failed",
+      "result": null,
+      "error": "production mode requires BRAIN_USERNAME/BRAIN_PASSWORD or BRAIN_TOKEN",
+      "cancel": false,
+      "created_at": 1779932373.2872388,
+      "updated_at": 1779932374.086166,
+      "progress": {
+        "phase": "failed",
+        "status_code": "CHECK_FAILED",
+        "mode": "quick",
+        "range": "3d",
+        "total": 0,
+        "checked": 0,
+        "submittable": 0,
+        "blocked": 0,
+        "failed": 1,
+        "message": "production mode requires BRAIN_USERNAME/BRAIN_PASSWORD or BRAIN_TOKEN",
+        "items": [],
+        "error_context": {
+          "schema_version": "observability.v1",
+          "correlation_id": "corr_a84d356e52abdf5e",
+          "job_id": "job_0001",
+          "phase": "check_batch_job",
+          "error_code": "CHECK_BATCH_JOB_FAILED",
+          "error_category": "internal",
+          "error_type": "BrainAPIError",
+          "error": "production mode requires BRAIN_USERNAME/BRAIN_PASSWORD or BRAIN_TOKEN",
+          "redacted_message": "production mode requires BRAIN_USERNAME/BRAIN_PASSWORD or BRAIN_TOKEN",
+          "retryable": false
+        }
+      }
+    }
+  }
+}

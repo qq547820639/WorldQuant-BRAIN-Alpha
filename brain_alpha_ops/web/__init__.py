@@ -469,7 +469,9 @@ def _real_check_batch(payload):
     """Batch expression validation delegating to web_check_batch_context."""
     from brain_alpha_ops.web_check_batch_context import check_batch_official_context_payload
 
-    return check_batch_official_context_payload(payload, load_run_config=_load_run_config)
+    # Resolve through globals so tests can monkeypatch web.load_run_config.
+    loader = globals().get("load_run_config", _load_run_config)
+    return check_batch_official_context_payload(payload, load_run_config=loader)
 
 def _real_submit_batch(payload):
     """Batch submit with safety gates — real submission requires pre-flight checks."""

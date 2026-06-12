@@ -400,11 +400,10 @@ export default function CandidateTable({
       setTaskState("progress");
       notify("info", "候选池自动推进已启动，会按目标池容量补充、预筛并继续非提交验证。");
     } else {
-      const message = apiErrorMessage(result, "启动候选池自动推进失败");
       setTaskState("error");
       updateAutoPipelineStage("idle");
-      setTaskError(message);
-      notify("error", message);
+      setTaskError(result?.error || "启动候选池自动推进失败");
+      notify("error", apiErrorMessage(result, "启动候选池自动推进失败"));
     }
   }, [callApi, notify, poolEligibleCandidates.length, retainedPoolCandidates.length, targetPoolSize, updateAutoPipelineStage]);
 
