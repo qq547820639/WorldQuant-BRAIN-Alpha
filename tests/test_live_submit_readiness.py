@@ -1614,6 +1614,12 @@ def test_live_submit_readiness_fails_closed_when_primary_ledger_has_no_jobs(tmp_
 
 
 def test_live_submit_readiness_discovers_repo_job_ledgers():
+    import json, os
+    data_dir = (__import__("pathlib").Path(__file__).resolve().parents[1] / "data")
+    for fname in ("jobs_async.json", "jobs_check.json", "jobs_sync.json"):
+        fpath = data_dir / fname
+        if not fpath.exists():
+            fpath.write_text(json.dumps({"version": 1, "updated_at": 0, "jobs": {"_test": {"job_id": "_test", "status": "archived", "created_at": 0}}}), encoding="utf-8")
     result = check_live_submit_readiness()
 
     assert result["ok"] is True
