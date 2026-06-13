@@ -8,7 +8,6 @@ Four-layer verification inspired by QuantGPT architecture:
 
 All tests produce a 0-1 stability score and detailed diagnostics.
 """
-
 from __future__ import annotations
 
 import logging
@@ -23,7 +22,6 @@ _IC_STABILITY_WINDOW_MIN = 20   # minimum samples for IC calculation
 _REGIME_MIN_SAMPLES = 30        # minimum samples per regime
 _PLACEBO_TRIALS = 50            # random permutation trials
 _DEFAULT_HALF_LIFE_WINDOW = 60  # default half-life estimation window
-
 
 @dataclass
 class AntiOverfitResult:
@@ -95,7 +93,6 @@ class AntiOverfitResult:
             },
         }
 
-
 def compute_ic_stability(
     factor_values: list[float],
     forward_returns: list[float],
@@ -149,7 +146,6 @@ def compute_ic_stability(
         "monthly_means": monthly_means,
         "passed": passed,
     }
-
 
 def compute_regime_stress(
     factor_values: list[float],
@@ -220,7 +216,6 @@ def compute_regime_stress(
         "passed": passed,
     }
 
-
 def compute_placebo_test(
     factor_values: list[float],
     returns: list[float],
@@ -264,7 +259,6 @@ def compute_placebo_test(
         "placebo_score": placebo_score,
         "passed": passed,
     }
-
 
 def estimate_half_life(
     factor_values: list[float],
@@ -322,7 +316,6 @@ def estimate_half_life(
         "decay_ics": decay_ics,
         "passed": passed,
     }
-
 
 def run_anti_overfit_suite(
     factor_values: list[float],
@@ -432,7 +425,6 @@ def run_anti_overfit_suite(
 
     return result
 
-
 # ═══════════════════════════════════════════════════════════════════════
 # Internal helpers
 # ═══════════════════════════════════════════════════════════════════════
@@ -445,7 +437,6 @@ def _rank_ic(x: list[float], y: list[float]) -> list[float]:
     """
     return [_spearman_r(x, y)] if x and y else [0.0]
 
-
 def _spearman_r(x: list[float], y: list[float]) -> float:
     """Compute Spearman rank correlation between two arrays."""
     n = min(len(x), len(y))
@@ -455,7 +446,6 @@ def _spearman_r(x: list[float], y: list[float]) -> float:
     x_ranks = _rank_transform(x[:n])
     y_ranks = _rank_transform(y[:n])
     return _pearson_r(x_ranks, y_ranks)
-
 
 def _rank_transform(values: list[float]) -> list[float]:
     """Replace values with their ranks (1-based, average for ties)."""
@@ -473,7 +463,6 @@ def _rank_transform(values: list[float]) -> list[float]:
         i = j + 1
     return ranks
 
-
 def _pearson_r(x: list[float], y: list[float]) -> float:
     """Compute Pearson correlation coefficient."""
     n = min(len(x), len(y))
@@ -488,12 +477,10 @@ def _pearson_r(x: list[float], y: list[float]) -> float:
     cov = sum((xi - mx) * (yi - my) for xi, yi in zip(x[:n], y[:n])) / n
     return max(-1.0, min(1.0, cov / (sx * sy)))
 
-
 def _safe_mean(values: list[float]) -> float:
     if not values:
         return 0.0
     return sum(values) / len(values)
-
 
 def _safe_std(values: list[float], mean_val: float | None = None) -> float:
     n = len(values)
@@ -502,7 +489,6 @@ def _safe_std(values: list[float], mean_val: float | None = None) -> float:
     m = mean_val if mean_val is not None else _safe_mean(values)
     variance = sum((v - m) ** 2 for v in values) / (n - 1)
     return math.sqrt(max(0.0, variance))
-
 
 def _sharpe(returns: list[float], risk_free: float = 0.0) -> float:
     """Annualized Sharpe ratio from daily returns."""
@@ -514,7 +500,6 @@ def _sharpe(returns: list[float], risk_free: float = 0.0) -> float:
     if std_ret < 1e-15:
         return 0.0
     return (mean_ret / std_ret) * math.sqrt(252)
-
 
 def _auto_classify_regimes(returns: list[float]) -> list[str]:
     """Auto-classify returns into bull/bear/sideways regimes by percentile.

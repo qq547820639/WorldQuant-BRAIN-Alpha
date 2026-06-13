@@ -4,7 +4,6 @@ This module is intentionally local-evidence only. It does not call BRAIN APIs
 or infer submit eligibility beyond the official metrics and audit payloads that
 are already persisted in the local ledgers.
 """
-
 from __future__ import annotations
 
 from typing import Any
@@ -34,7 +33,6 @@ FORBIDDEN_SCIENTIFIC_AUDIT_FEEDBACK_SOURCE_TOKENS = (
     "browser-smoke",
     "vitest",
 )
-
 
 def assess_candidate(
     candidate: dict[str, Any],
@@ -133,7 +131,6 @@ def assess_candidate(
         "blocking_reasons": reasons,
     }
 
-
 def lifecycle_readiness_blocking_reasons(candidate: dict[str, Any]) -> list[str]:
     """Return local lifecycle-history blockers for the final submit stop rule."""
 
@@ -157,7 +154,6 @@ def lifecycle_readiness_blocking_reasons(candidate: dict[str, Any]) -> list[str]
             elif blocking:
                 reasons.append("production_decision_blocked")
     return sorted(set(reasons))
-
 
 def scientific_audit_readiness_blocking_reasons(
     candidate: dict[str, Any],
@@ -215,22 +211,18 @@ def scientific_audit_readiness_blocking_reasons(
             reasons = _append_unique(reasons, "official_context_proof_failed")
     return reasons
 
-
 def best_candidate(candidates: list[dict[str, Any]]) -> dict[str, Any]:
     if not candidates:
         return {}
     return sorted(candidates, key=_best_candidate_rank, reverse=True)[0]
 
-
 def has_unsupported_local_backtest(candidate: dict[str, Any]) -> bool:
     reasons = {str(reason) for reason in candidate.get("blocking_reasons") or [] if str(reason)}
     return bool(reasons & {"unsupported_local_backtest_fields", "unsupported_local_backtest_operators"})
 
-
 def has_hard_local_backtest_block(candidate: dict[str, Any]) -> bool:
     reasons = {str(reason) for reason in candidate.get("blocking_reasons") or [] if str(reason)}
     return "local_backtest_failed" in reasons
-
 
 def scientific_audit_gap_messages() -> dict[str, str]:
     return {
@@ -242,7 +234,6 @@ def scientific_audit_gap_messages() -> dict[str, str]:
         "official_context_proof_failed": "scientific audit official-context proof failed",
     }
 
-
 def _scientific_audits(candidate: dict[str, Any]) -> list[dict[str, Any]]:
     audits: list[dict[str, Any]] = []
     direct = candidate.get("scientific_audit")
@@ -253,7 +244,6 @@ def _scientific_audits(candidate: dict[str, Any]) -> list[dict[str, Any]]:
     if isinstance(nested, dict):
         audits.append(nested)
     return audits
-
 
 def _candidate_settings(candidate: dict[str, Any]) -> dict[str, Any]:
     settings = candidate.get("settings") if isinstance(candidate.get("settings"), dict) else {}
@@ -267,7 +257,6 @@ def _candidate_settings(candidate: dict[str, Any]) -> dict[str, Any]:
     if "delay" in metrics:
         return {"delay": metrics.get("delay")}
     return {}
-
 
 def _local_backtest_summary(local_backtest: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(local_backtest, dict) or not local_backtest:
@@ -289,7 +278,6 @@ def _local_backtest_summary(local_backtest: dict[str, Any]) -> dict[str, Any]:
         "reasons": reasons[:8],
     }
 
-
 def _unsupported_local_backtest_reasons(local_backtest: dict[str, Any]) -> list[str]:
     reasons = _string_list(local_backtest.get("reasons"))
     reasons.extend(_string_list(local_backtest.get("failing_reasons")))
@@ -299,7 +287,6 @@ def _unsupported_local_backtest_reasons(local_backtest: dict[str, Any]) -> list[
     if any("unsupported_operators=" in reason for reason in reasons):
         blockers.append("unsupported_local_backtest_operators")
     return blockers
-
 
 def _release_gate_blocking_reasons(release_gate: dict[str, Any]) -> list[str]:
     reasons: list[str] = []
@@ -313,7 +300,6 @@ def _release_gate_blocking_reasons(release_gate: dict[str, Any]) -> list[str]:
             reasons.append(reason)
     return reasons
 
-
 def _release_gate_reason(name: str) -> str:
     return {
         "sharpe": "official_sharpe_below_threshold",
@@ -324,7 +310,6 @@ def _release_gate_reason(name: str) -> str:
         "weight_concentration_cap": "official_weight_concentration_above_threshold",
         "sub_universe_sharpe": "official_sub_universe_sharpe_below_threshold",
     }.get(name, "")
-
 
 def _best_candidate_rank(candidate: dict[str, Any]) -> tuple[int, int, int, int, int, int, int, float]:
     reasons = {str(reason) for reason in candidate.get("blocking_reasons") or [] if str(reason)}
@@ -340,7 +325,6 @@ def _best_candidate_rank(candidate: dict[str, Any]) -> tuple[int, int, int, int,
         score,
     )
 
-
 def _string_list(value: Any) -> list[str]:
     if not isinstance(value, list):
         return []
@@ -351,13 +335,11 @@ def _string_list(value: Any) -> list[str]:
             result.append(text)
     return result
 
-
 def _append_unique(items: list[str], value: str) -> list[str]:
     text = str(value).strip()
     if text and text not in items:
         items.append(text)
     return items
-
 
 def float_or_none(value: Any) -> float | None:
     try:

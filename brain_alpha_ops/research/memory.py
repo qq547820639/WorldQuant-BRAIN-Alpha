@@ -5,7 +5,6 @@ operators worked, which hypotheses failed, and how alpha variants relate to
 their parents.  It reads existing JSONL stores and does not change the primary
 pipeline write path.
 """
-
 from __future__ import annotations
 
 from collections import Counter, defaultdict
@@ -17,7 +16,6 @@ from typing import Any, Iterable
 from brain_alpha_ops.jsonl import read_jsonl_tail
 from brain_alpha_ops.research.expression_index import ExpressionHistoryIndex
 from brain_alpha_ops.research.guidance import ensure_assistant_guidance_digest
-
 
 class ResearchMemory:
     def __init__(self, storage_dir: str | Path = "data"):
@@ -272,7 +270,6 @@ class ResearchMemory:
     def _load_jsonl(self, filename: str, *, limit: int) -> list[dict[str, Any]]:
         return read_jsonl_tail(self.storage_dir / filename, limit=limit)
 
-
 def _stat_bucket() -> dict[str, Any]:
     return {
         "count": 0,
@@ -283,7 +280,6 @@ def _stat_bucket() -> dict[str, Any]:
         "pass_fail": Counter(),
     }
 
-
 def _update_bucket(bucket: dict[str, Any], score: float, metrics: dict[str, Any], passed: bool) -> None:
     bucket["count"] += 1
     bucket["success_count"] += 1 if passed else 0
@@ -292,7 +288,6 @@ def _update_bucket(bucket: dict[str, Any], score: float, metrics: dict[str, Any]
     bucket["fitness_sum"] += _num(metrics.get("fitness"))
     if metrics.get("pass_fail"):
         bucket["pass_fail"][str(metrics.get("pass_fail"))] += 1
-
 
 def _rank_buckets(buckets: dict[str, dict[str, Any]], top_n: int) -> list[dict[str, Any]]:
     rows = []
@@ -311,13 +306,11 @@ def _rank_buckets(buckets: dict[str, dict[str, Any]], top_n: int) -> list[dict[s
     rows.sort(key=lambda item: (item["success_rate"], item["avg_score"], item["count"]), reverse=True)
     return rows[:top_n]
 
-
 def _rank_guidance_buckets(buckets: dict[str, dict[str, Any]], top_n: int) -> list[dict[str, Any]]:
     rows = _rank_buckets(buckets, top_n)
     for row in rows:
         row["guidance_digest"] = row.pop("name", "")
     return rows
-
 
 def _finalize_stat_bucket(bucket: dict[str, Any]) -> dict[str, Any]:
     count = int(bucket.get("count") or 0)
@@ -333,7 +326,6 @@ def _finalize_stat_bucket(bucket: dict[str, Any]) -> dict[str, Any]:
         "avg_sharpe": round(sharpe_total / count, 4) if count else 0.0,
         "avg_fitness": round(fitness_total / count, 4) if count else 0.0,
     }
-
 
 def _recommendations(
     field_stats: dict[str, dict[str, Any]],
@@ -351,7 +343,6 @@ def _recommendations(
         reason, _count = failure_patterns.most_common(1)[0]
         recommendations.append(f"Prioritize fixes for the most common failure pattern: {reason}")
     return recommendations
-
 
 def _top_windows(records: list[dict[str, Any]], features: list[dict[str, Any]], top_n: int) -> list[int]:
     counter: Counter[int] = Counter()
@@ -371,7 +362,6 @@ def _top_windows(records: list[dict[str, Any]], features: list[dict[str, Any]], 
             if parsed:
                 counter[parsed] += 1
     return [window for window, _count in counter.most_common(top_n)]
-
 
 def _top_field_combinations(
     records: list[dict[str, Any]],
@@ -400,7 +390,6 @@ def _top_field_combinations(
         })
     return rows
 
-
 def _parse_window(value: Any) -> int | None:
     try:
         parsed = int(value)
@@ -410,7 +399,6 @@ def _parse_window(value: Any) -> int | None:
         return parsed
     return None
 
-
 def _metrics_for(candidate: dict[str, Any], feature: dict[str, Any]) -> dict[str, Any]:
     metrics = dict(candidate.get("official_metrics") or {})
     for key in ("sharpe", "fitness", "turnover", "returns", "drawdown", "correlation", "margin", "pass_fail", "failure_reason"):
@@ -418,18 +406,15 @@ def _metrics_for(candidate: dict[str, Any], feature: dict[str, Any]) -> dict[str
             metrics[key] = feature[key]
     return metrics
 
-
 def _score_for(row: dict[str, Any]) -> float:
     scorecard = row.get("scorecard") if isinstance(row.get("scorecard"), dict) else {}
     return _num(scorecard.get("total_score", row.get("score", 0.0)))
-
 
 def _is_success(row: dict[str, Any], metrics: dict[str, Any]) -> bool:
     gate = row.get("gate") if isinstance(row.get("gate"), dict) else {}
     status = str(row.get("lifecycle_status") or gate.get("status") or "").lower()
     pass_fail = str(metrics.get("pass_fail") or "").upper()
     return bool(gate.get("submission_ready")) or status in {"submission_ready", "submitted"} or pass_fail == "PASS"
-
 
 def _failure_reasons(row: dict[str, Any]) -> Iterable[str]:
     gate = row.get("gate") if isinstance(row.get("gate"), dict) else {}
@@ -450,7 +435,6 @@ def _failure_reasons(row: dict[str, Any]) -> Iterable[str]:
         if value:
             yield _clean_reason(value)
 
-
 def _candidate_guidance_digest(row: dict[str, Any]) -> str:
     submission = row.get("submission") if isinstance(row.get("submission"), dict) else {}
     for key in ("assistant_guidance_digest", "guidance_digest"):
@@ -462,7 +446,6 @@ def _candidate_guidance_digest(row: dict[str, Any]) -> str:
         if text.startswith("assistant_guidance_"):
             return text.removeprefix("assistant_guidance_")
     return ""
-
 
 def _guidance_outcome_status(row: dict[str, Any]) -> str:
     if not row:
@@ -476,7 +459,6 @@ def _guidance_outcome_status(row: dict[str, Any]) -> str:
         return "strong"
     return "neutral"
 
-
 def _is_weak_guidance_outcome(row: dict[str, Any]) -> bool:
     count = int(_num(row.get("count")))
     if count < 2:
@@ -484,7 +466,6 @@ def _is_weak_guidance_outcome(row: dict[str, Any]) -> bool:
     success_rate = _num(row.get("success_rate"))
     avg_score = _num(row.get("avg_score"))
     return success_rate <= 0.25 or avg_score <= 50
-
 
 def _as_list(value: Any) -> list[Any]:
     if value is None:
@@ -497,14 +478,12 @@ def _as_list(value: Any) -> list[Any]:
         return sorted(value)
     return [value]
 
-
 def _truthy(value: Any) -> bool:
     if isinstance(value, bool):
         return value
     if isinstance(value, str):
         return value.strip().lower() not in {"0", "false", "no", "off"}
     return bool(value)
-
 
 def _has_generator_bias(guidance: dict[str, Any]) -> bool:
     return bool(
@@ -514,15 +493,12 @@ def _has_generator_bias(guidance: dict[str, Any]) -> bool:
         or guidance.get("field_combinations")
     )
 
-
 def _clamp(value: float, lower: float, upper: float) -> float:
     return min(max(value, lower), upper)
-
 
 def _clean_reason(value: Any) -> str:
     text = " ".join(str(value or "").split())
     return text[:180] if text else "unknown"
-
 
 def _num(value: Any) -> float:
     try:

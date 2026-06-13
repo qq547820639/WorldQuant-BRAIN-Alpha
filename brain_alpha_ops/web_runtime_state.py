@@ -111,7 +111,18 @@ def maybe_archive_lifecycle(
         return last_archive_check
     try:
         repo = repository_factory(load_config().ops.storage_dir)
-        repo.maybe_archive("lifecycle.jsonl", max_size_mb=50)
+        # P1-9 (2026-06-13): archive policy extended to cover the journal
+        # set declared in ``JournalArchiveDefaults.ARCHIVE_FILES`` instead
+        # of lifecycle.jsonl alone.  Files below the policy size threshold
+        # are no-ops; the throttle guards against per-call I/O.
+        from brain_alpha_ops.runtime_constants import JournalArchiveDefaults
+
+        for filename in JournalArchiveDefaults.ARCHIVE_FILES:
+            repo.maybe_archive(
+                filename,
+                max_size_mb=JournalArchiveDefaults.MAX_SIZE_MB,
+                max_age_days=JournalArchiveDefaults.MAX_AGE_DAYS,
+            )
     except Exception as exc:
         log.warning("lifecycle archive check failed: %s", safe_error_message(exc), exc_info=True)
     return current

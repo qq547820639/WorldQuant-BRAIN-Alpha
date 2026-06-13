@@ -119,19 +119,7 @@ class OfficialExpressionValidator:
         }
 
 
-class OfficialExpressionValidationMixin:
-    def validate_expression(
-        self,
-        expression: str,
-        settings: dict,
-        known_operators: set | None = None,
-        known_fields: set | None = None,
-    ) -> dict:
-        """Compatibility wrapper for callers that still compose the old mixin."""
-        validator = getattr(self, "_expression_validator", None) or OfficialExpressionValidator()
-        return validator.validate_expression(
-            expression,
-            settings,
-            known_operators=known_operators,
-            known_fields=known_fields,
-        )
+# P2-3: ``OfficialExpressionValidationMixin`` (an old wrapper class) was
+# removed.  Use ``OfficialExpressionValidator.validate_expression`` directly
+# (wired up via ``OfficialBrainAPI._expression_validator``) or call
+# ``OfficialBrainAPI.validate_expression`` for the same behaviour.

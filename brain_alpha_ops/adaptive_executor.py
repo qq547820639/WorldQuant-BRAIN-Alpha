@@ -9,7 +9,6 @@ Provides:
 - AdaptiveExecutor: auto-selects pool type per task.
 - CachedAPIRateLimiter: TTL-based cache for API responses with retry.
 """
-
 from __future__ import annotations
 
 from concurrent.futures import (
@@ -31,14 +30,12 @@ from brain_alpha_ops.tasks import JobStore
 
 logger = logging.getLogger(__name__)
 
-
 # ── Task type classification ──
 
 class TaskCategory:
     IO_BOUND = "io"
     CPU_BOUND = "cpu"
     DEFAULT = "default"
-
 
 def _classify_task(fn: Callable[..., Any]) -> str:
     """Heuristic classification of task function based on module name.
@@ -64,7 +61,6 @@ def _classify_task(fn: Callable[..., Any]) -> str:
     if tokens & io_keywords:
         return TaskCategory.IO_BOUND
     return TaskCategory.DEFAULT
-
 
 # ── Adaptive Executor ──
 
@@ -152,7 +148,6 @@ class AdaptiveExecutor:
                 self._cpu_pool = ProcessPoolExecutor(max_workers=self._cpu_workers)
             return self._cpu_pool
 
-
 # ── API Cache with TTL + Retry ──
 
 @dataclass
@@ -164,7 +159,6 @@ class CacheEntry:
     @property
     def expired(self) -> bool:
         return (time.monotonic() - self.created_at) > self.ttl_seconds
-
 
 class CachedAPIRateLimiter:
     """TTL cache for BRAIN API responses with retry backoff.
@@ -296,7 +290,6 @@ class CachedAPIRateLimiter:
             )[: len(self._cache) - self.max_size]
             for key, _ in oldest:
                 self._cache.pop(key, None)
-
 
 # ── Convenience: run job through adaptive executor ──
 

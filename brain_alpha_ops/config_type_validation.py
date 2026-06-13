@@ -21,8 +21,23 @@ else:
 def field_type_hint(cls: type, field_name: str) -> Any:
     hints = _TYPE_HINTS_CACHE.get(cls)
     if hints is None:
+        # ``get_type_hints`` evaluates every forward reference eagerly; on
+        # Python 3.9 PEP 604 unions of parametrized generics (e.g.
+        # ``list[str] | None``) raise ``TypeError`` at evaluation time even
+        # though they are valid annotations under ``from __future__ import
+        # annotations``.  We try the whole class first so that diagnostics
+        # surface the original error verbatim; per-field resolution then
+        # degrades gracefully (logging nothing) so 3.9 callers still get
+        # ``Any`` for individual failed hints.
         try:
-            hints = get_type_hints(cls)
+            # ``include_extras`` is Python 3.9+ but tests sometimes mock
+            # ``get_type_hints`` with a strict signature, so we try the
+            # kw-arg form first and fall back to the no-kw form.
+            try:
+                hints = get_type_hints(cls, include_extras=False)
+            except TypeError:
+                hints = get_type_hints(cls)
+            _TYPE_HINTS_DIAGNOSTICS.pop(cls, None)
         except Exception as exc:
             message = str(exc)
             logger.warning(
@@ -36,8 +51,12 @@ def field_type_hint(cls: type, field_name: str) -> Any:
                 "fallback": "Any",
             }
             hints = {}
-        else:
-            _TYPE_HINTS_DIAGNOSTICS.pop(cls, None)
+            try:
+                raw_hints = getattr(cls, "__annotations__", {}) or {}
+            except Exception:
+                raw_hints = {}
+            for name in raw_hints:
+                hints[name] = Any
         _TYPE_HINTS_CACHE[cls] = hints
     return hints.get(field_name, Any)
 

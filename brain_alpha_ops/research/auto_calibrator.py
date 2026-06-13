@@ -15,7 +15,6 @@ Usage::
             report = calibrator.calibrate()
         # report["calibrated"] == True means calibration succeeded.
 """
-
 from __future__ import annotations
 
 import os
@@ -25,7 +24,6 @@ from typing import Any
 
 from brain_alpha_ops.jsonl import count_jsonl_records, read_jsonl_records
 from brain_alpha_ops.research.scoring_params import DimensionParam, ScoringParams
-
 
 # ═══════════════════════════════════════════════════════════════════════
 # Auto-calibrator
@@ -221,22 +219,40 @@ class AutoCalibrator:
         }
 
     def apply(self, scoring_config: Any) -> Any:
-        """Apply calibration results to ScoringConfig.
+        """Apply calibration results to a ScoringConfig.
 
-        Uses default parameters when no calibration result is available.
+        P3-18 (2026-06-13): rewritten to return a *new* ScoringConfig
+        instance (via ``dataclasses.replace``) instead of mutating the
+        passed-in object. The previous implementation directly assigned
+        to ``scoring_config.prior_weights_override`` etc., which would
+        raise ``FrozenInstanceError`` if ScoringConfig were ever made
+        ``frozen=True`` and which silently violated the dataclass's
+        intent that ScoringConfig is an immutable policy object.
+
+        Callers that used to do ``config.scoring = auto_calibrator.apply(config.scoring)``
+        keep working because we now return the new instance. Callers that
+        did ``auto_calibrator.apply(config.scoring)`` *without* rebinding
+        should be updated to::
+
+            config.scoring = auto_calibrator.apply(config.scoring)
 
         Args:
-            scoring_config: ScoringConfig instance
+            scoring_config: ScoringConfig instance (unchanged)
 
         Returns:
-            Mutated scoring_config instance
+            A new ScoringConfig with calibrated layer weights and the
+            prior-weights override applied.
         """
+        import dataclasses
+
         params = self._params or ScoringParams.defaults()
-        scoring_config.prior_weights_override = params.get_weights_override()
-        scoring_config.prior_layer_weight = params.layer_weights.get("prior", 0.30)
-        scoring_config.empirical_layer_weight = params.layer_weights.get("empirical", 0.45)
-        scoring_config.checklist_layer_weight = params.layer_weights.get("checklist", 0.25)
-        return scoring_config
+        return dataclasses.replace(
+            scoring_config,
+            prior_weights_override=params.get_weights_override(),
+            prior_layer_weight=params.layer_weights.get("prior", 0.30),
+            empirical_layer_weight=params.layer_weights.get("empirical", 0.45),
+            checklist_layer_weight=params.layer_weights.get("checklist", 0.25),
+        )
 
     @property
     def params(self) -> ScoringParams:

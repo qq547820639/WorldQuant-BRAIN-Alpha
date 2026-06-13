@@ -9,7 +9,6 @@ ensure zero-deviation alignment with the BRAIN platform specification.
 
 Schema version: config-schema.v2
 """
-
 from __future__ import annotations
 
 import json
@@ -219,7 +218,6 @@ RUN_CONFIG_SCHEMA: dict[str, Any] = {
     "additionalProperties": True,
 }
 
-
 def validate_config_with_jsonschema(
     config_data: dict[str, Any],
     *,
@@ -260,7 +258,6 @@ def validate_config_with_jsonschema(
     except jsonschema.SchemaError as exc:
         errors.append(f"schema error: {exc}")
     return errors
-
 
 def _validate_config_without_jsonschema(
     config_data: dict[str, Any],
@@ -338,7 +335,6 @@ def _validate_config_without_jsonschema(
 
     return errors
 
-
 def _partial_schema(schema: dict[str, Any]) -> dict[str, Any]:
     """Return a copy of ``schema`` that validates explicit override fields only."""
     cloned = dict(schema)
@@ -350,7 +346,6 @@ def _partial_schema(schema: dict[str, Any]) -> dict[str, Any]:
             for key, value in properties.items()
         }
     return cloned
-
 
 def validate_config_file(path: str | Path) -> tuple[bool, list[str]]:
     """Convenience: load a config file and validate with jsonschema.

@@ -5,7 +5,6 @@ with the local official context cache and never refreshes or calls BRAIN APIs.
 When cache evidence is missing or internally inconsistent, callers get a
 ``needs_human_confirmation`` status instead of inferred platform rules.
 """
-
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -14,7 +13,6 @@ from typing import Any
 from brain_alpha_ops.brain_api.canonical import CANONICAL_API_PATHS, CANONICAL_SETTINGS
 from brain_alpha_ops.config_models import BrainSettings
 from brain_alpha_ops.web_cloud_snapshot import official_context_file_counts as _official_context_file_counts
-
 
 REGISTRY_SCHEMA_VERSION = "brain_capability_registry.v1"
 _CONTEXT_FILES = {
@@ -28,7 +26,6 @@ _CONTEXT_COUNT_KEYS = {
     "datasets": "datasets_count",
 }
 
-
 def capability_settings_options(dataset_options: list[dict[str, Any]] | None = None) -> dict[str, list[Any]]:
     """Return Web-config enum options from the canonical settings contract."""
 
@@ -41,7 +38,6 @@ def capability_settings_options(dataset_options: list[dict[str, Any]] | None = N
     if dataset_ids:
         options["dataset"] = sorted(dict.fromkeys(dataset_ids))
     return options
-
 
 def build_capability_registry(
     *,
@@ -88,7 +84,6 @@ def build_capability_registry(
         "blocking_count": len(blocking),
     }
 
-
 def check_capability_registry(
     *,
     public_config_schema: Callable[[], dict[str, Any]] | None = None,
@@ -114,7 +109,6 @@ def check_capability_registry(
             "official_context": registry["official_context"],
         },
     }
-
 
 def _parameter_specs() -> dict[str, dict[str, Any]]:
     defaults = BrainSettings()
@@ -162,13 +156,11 @@ def _parameter_specs() -> dict[str, dict[str, Any]]:
     )
     return specs
 
-
 def _api_path_specs() -> dict[str, dict[str, str]]:
     return {
         key: {"path": path, "source": f"canonical.CANONICAL_API_PATHS.{key}"}
         for key, path in sorted(CANONICAL_API_PATHS.items())
     }
-
 
 def _official_context_summary(counts: dict[str, Any]) -> dict[str, Any]:
     manifest = counts.get("context_cache_manifest") if isinstance(counts.get("context_cache_manifest"), dict) else {}
@@ -192,7 +184,6 @@ def _official_context_summary(counts: dict[str, Any]) -> dict[str, Any]:
         "stale_files": list(manifest.get("stale_files") or manifest.get("expired_files") or []),
         "record_counts": dict(manifest.get("record_counts") or {}),
     }
-
 
 def _registry_findings(
     schema: dict[str, Any],
@@ -277,7 +268,6 @@ def _registry_findings(
             )
     return findings
 
-
 def _safe_call(func: Callable[[], dict[str, Any]] | None) -> tuple[dict[str, Any], str]:
     if func is None:
         return {}, ""
@@ -286,7 +276,6 @@ def _safe_call(func: Callable[[], dict[str, Any]] | None) -> tuple[dict[str, Any
     except Exception as exc:  # pragma: no cover - defensive route guard
         return {}, str(exc)
     return value if isinstance(value, dict) else {}, ""
-
 
 def _finding(code: str, severity: str, message: str, capability: str, evidence: Any = None) -> dict[str, Any]:
     result = {
@@ -299,16 +288,13 @@ def _finding(code: str, severity: str, message: str, capability: str, evidence: 
         result["evidence"] = evidence
     return result
 
-
 def _sorted_values(values: Any) -> list[Any]:
     return sorted(list(values), key=lambda item: str(item))
-
 
 def _normalized_values(values: Any) -> list[str]:
     if not isinstance(values, (list, tuple, set, frozenset)):
         return []
     return sorted(str(value) for value in values)
-
 
 def _safe_int(value: Any) -> int:
     try:

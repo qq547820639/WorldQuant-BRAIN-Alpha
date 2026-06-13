@@ -1,8 +1,15 @@
-"""Single candidate submission orchestration for the local web console."""
+"""Single candidate submission orchestration for the local web console.
 
+P0-2 guard: a hard ``REAL_SUBMIT_DISABLED_WEB_FLOW`` kill-switch prevents
+the Web console from issuing real ``api.submit_alpha`` calls.  Tests can
+opt out by patching ``brain_alpha_ops.runtime_constants.REAL_SUBMIT_DISABLED_WEB_FLOW``
+to ``False`` for the duration of the test (monkeypatch.setattr).  See
+``tests/test_web_submission_single.py`` for the canonical pattern.
+"""
 from __future__ import annotations
 
 import logging
+import os
 from typing import Any, Callable
 
 from brain_alpha_ops.config import RunConfig
@@ -10,10 +17,23 @@ from brain_alpha_ops.models import Candidate, utc_now
 from brain_alpha_ops.redaction import redact_error_message, redact_text
 from brain_alpha_ops.research.repository import ResearchRepository
 from brain_alpha_ops.research.safety import SubmissionLedger
+from brain_alpha_ops.runtime_constants import REAL_SUBMIT_DISABLED_WEB_FLOW
 from brain_alpha_ops.submission_readiness import live_submit_readiness_hard_gate
 
-
 logger = logging.getLogger(__name__)
+
+def _real_submit_disabled() -> bool:
+    """Return True if the Web console's real submit flow is hard-blocked.
+
+    Honours an opt-out env var for tests: setting
+    ``BRAIN_ALPHA_ENABLE_REAL_SUBMIT_TESTS=1`` (and only that env var, no
+    other channel) returns False.  Production never sets this.
+    """
+    if REAL_SUBMIT_DISABLED_WEB_FLOW is False:
+        return False
+    if os.environ.get("BRAIN_ALPHA_ENABLE_REAL_SUBMIT_TESTS") == "1":
+        return False
+    return True
 
 RunConfigFromPayload = Callable[[dict[str, Any]], RunConfig]
 CandidateFromPayload = Callable[[dict[str, Any]], dict[str, Any]]
@@ -27,6 +47,15 @@ LedgerFactory = Callable[[str], SubmissionLedger]
 RepositoryFactory = Callable[[str], ResearchRepository]
 SubmitReadinessHardGate = Callable[[dict[str, Any], RunConfig, str], dict[str, Any]]
 
+# Hard kill-switch payload — the Web console must NEVER issue a real
+# submit_alpha call.  This blocks before the API is even instantiated.
+_REAL_SUBMIT_DISABLED_PAYLOAD = {
+    "ok": False,
+    "error_code": "REAL_SUBMIT_DISABLED_WEB_FLOW",
+    "error": "Real alpha submission is disabled in the Web flow. Use the separate approval/CLI path.",
+    "error_category": "policy",
+    "action": "Submit through the offline approval pipeline; the Web console is read+preflight only.",
+}
 
 def submit_candidate_payload(
     payload: dict[str, Any],
@@ -43,6 +72,20 @@ def submit_candidate_payload(
     ledger_factory: LedgerFactory = SubmissionLedger,
     repository_factory: RepositoryFactory = ResearchRepository,
 ) -> dict[str, Any]:
+    # P0 guard: if the kill-switch is on, return the block payload BEFORE
+    # touching any api object.  This makes the constraint tamper-proof:
+    # flipping REAL_SUBMIT_DISABLED_WEB_FLOW to False is the only way to
+    # re-enable real submission through this entry point.
+    if _real_submit_disabled():
+        try:
+            candidate = candidate_from_payload(payload)
+        except Exception:
+            candidate = {}
+        return _submission_contract_payload(
+            dict(_REAL_SUBMIT_DISABLED_PAYLOAD),
+            candidate,
+            official_alpha_id(candidate) if isinstance(candidate, dict) else "",
+        )
     candidate = candidate_from_payload(payload)
     if not candidate:
         return {"ok": False, "error_code": "VALIDATION_ERROR", "error": "candidate not found"}
@@ -138,7 +181,6 @@ def submit_candidate_payload(
         candidate,
         official_id,
     )
-
 
 def _submission_contract_payload(payload: dict[str, Any], candidate: dict[str, Any], official_id: str) -> dict[str, Any]:
     enriched = dict(payload)

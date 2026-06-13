@@ -19,7 +19,6 @@ Usage
     df = provider.fetch_daily("000001", start="2023-01-01", end="2024-12-31")
     # Uses baostock → Parquet cache → structured DataFrame
 """
-
 from __future__ import annotations
 
 import json
@@ -56,7 +55,6 @@ except ImportError:
 _BAOSTOCK_AVAILABLE = False
 _AKSHARE_AVAILABLE = False
 
-
 # ═══════════════════════════════════════════════════════════════════════════
 # Core data structures
 # ═══════════════════════════════════════════════════════════════════════════
@@ -75,7 +73,6 @@ class DailyBar:
     turnover_rate: float = 0.0 # Turnover rate (%)
     adj_factor: float = 1.0    # Adjustment factor
 
-
 @dataclass
 class StockInfo:
     """Basic stock metadata."""
@@ -85,7 +82,6 @@ class StockInfo:
     list_date: str = ""
     market_cap: float = 0.0
     is_st: bool = False  # Special Treatment flag
-
 
 @dataclass
 class IndexConstituents:
@@ -97,7 +93,6 @@ class IndexConstituents:
     status: str = "ok"
     source: str = "akshare"
     error: str = ""
-
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Parquet / CSV cache layer
@@ -166,7 +161,6 @@ class CacheStore:
                 f.unlink()
                 count += 1
         return count
-
 
 # ═══════════════════════════════════════════════════════════════════════════
 # BaoStock adapter
@@ -304,7 +298,6 @@ class BaoStockAdapter:
             })
         return stocks
 
-
 # ═══════════════════════════════════════════════════════════════════════════
 # AKShare adapter (supplementary)
 # ═══════════════════════════════════════════════════════════════════════════
@@ -416,7 +409,6 @@ class AKShareAdapter:
         except Exception as exc:
             logger.warning("akshare industry classification failed: %s", redact_error_message(exc))
             return {}
-
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Unified A-Share data provider
@@ -737,7 +729,6 @@ class AShareDataProvider:
             **payload,
         })
 
-
 # ═══════════════════════════════════════════════════════════════════════════
 # Helpers
 # ═══════════════════════════════════════════════════════════════════════════
@@ -753,13 +744,11 @@ def _baostock_code(symbol: str) -> str:
         return f"bj.{code}"
     return f"sh.{code}"
 
-
 def _safe_float(value: str, default: float = 0.0) -> float:
     try:
         return float(value.strip() or "0")
     except (AttributeError, TypeError, ValueError):
         return default
-
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Quick smoke-test
@@ -770,7 +759,6 @@ def _smoke_test() -> None:
     provider = AShareDataProvider()
     print("AShareDataProvider available:", provider.available)
     print("Cache stats:", json.dumps(provider.cache_stats(), indent=2, ensure_ascii=False))
-
 
 if __name__ == "__main__":
     _smoke_test()

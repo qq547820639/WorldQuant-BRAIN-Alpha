@@ -96,7 +96,9 @@ def submission_preflight_error_message(
     return ""
 
 
-submission_preflight_error = submission_preflight_error_message
+# P3-1: removed the legacy alias ``submission_preflight_error`` (now only
+# the canonical ``submission_preflight_error_message`` is exported).  All
+# in-tree callers were updated to the canonical name.
 
 
 def submission_preflight_advisory(

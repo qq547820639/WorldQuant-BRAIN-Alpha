@@ -5,7 +5,17 @@ from __future__ import annotations
 from inspect import Parameter, signature
 from typing import Any, Callable
 
-USER_ALPHA_SYNC_RANGES = frozenset({"3d", "7d", "recent", "6months", "all"})
+from brain_alpha_ops.runtime_constants import ContextRefreshDefaults
+
+# P0-3 fix (2026-06-13): was a local duplicate of the canonical set in
+# ``runtime_constants.ContextRefreshDefaults.ALLOWED_SYNC_RANGES``. The 5-element
+# subset here intentionally omits ``1d`` because the BRAIN ``/users/self/alphas``
+# endpoint does not accept a 1-day window. We re-export the canonical set
+# under a domain-specific name to preserve the existing import surface and
+# to keep the 1d guard at one location.
+USER_ALPHA_SYNC_RANGES: frozenset[str] = frozenset(
+    ContextRefreshDefaults.ALLOWED_SYNC_RANGES - {"1d"}
+)
 
 
 def list_user_alphas_for_sync(

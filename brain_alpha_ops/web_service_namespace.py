@@ -170,7 +170,7 @@ from brain_alpha_ops.web_submission_batch import submit_batch_payload as _submit
 from brain_alpha_ops.web_submission_single import submit_candidate_payload as _submit_candidate_payload
 from brain_alpha_ops.web_submission_safety import (
     submission_preflight_block as _submission_preflight_block_service,
-    submission_preflight_error as _submission_preflight_error_service,
+    submission_preflight_error_message as _submission_preflight_error_service,
 )
 from brain_alpha_ops.web_submission_safety import (
     candidate_official_metrics as _candidate_official_metrics_service,

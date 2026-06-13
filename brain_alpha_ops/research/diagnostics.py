@@ -15,14 +15,12 @@ Usage::
         for mut in diag["suggested_mutations"]:
             print(f"  -> {mut}")
 """
-
 from __future__ import annotations
 
 from typing import Any, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from brain_alpha_ops.models import Candidate
-
 
 def _num(value: Any) -> float:
     """Safely convert to float."""
@@ -33,24 +31,14 @@ def _num(value: Any) -> float:
     except (TypeError, ValueError):
         return 0.0
 
+# P0-4 fix (2026-06-13): the four ``_ratio()`` definitions across
+# research/{scoring,experience,safety,diagnostics}.py are now unified in
+# ``research._ratio``. The local wrapper preserves the historical function
+# name and signature.
+from brain_alpha_ops.research._ratio import normalize_brain_ratio  # noqa: F401
 
 def _ratio(value: Any) -> float:
-    """Normalize ratio values from BRAIN API responses.
-
-    BRAIN may return metrics as percentages (e.g. 70 meaning 70%) or as
-    decimals (e.g. 0.70).  Only divide by 100 when the value is unambiguously
-    in percentage range (abs >= 2.0), which catches real percentage values
-    like 75% without harming ratios that naturally live between 1.0 and 2.0.
-    Metrics that naturally exceed 2.0 (e.g. turnover, correlation) pass
-    through unchanged.
-
-    Aligned with safety.py:_ratio() and official_helpers.py:_ratio().
-    """
-    numeric = _num(value)
-    if abs(numeric) >= 2.0:
-        return numeric / 100.0
-    return numeric
-
+    return normalize_brain_ratio(value, bounded=False)
 
 def diagnose(
     candidate: "Candidate",
@@ -242,7 +230,6 @@ def diagnose(
             diagnosis["summary"] += f" Gate failures: {'; '.join(str(f) for f in gate_failures[:3])}"
 
     return diagnosis
-
 
 def get_mutation_mode(diagnosis: dict[str, Any], fallback: str = "default") -> str:
     """Extract the most suitable mutation mode from a diagnosis result.

@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import http.client
 from typing import Any, Callable
-import urllib.error
 
 from brain_alpha_ops.redaction import redact_error_message
 
@@ -38,17 +36,14 @@ from .official_query_params import (
     alpha_filter_params,
     apply_market_discovery_filters,
 )
-
-
-_USER_ALPHA_TRANSIENT_RETRY_STATUSES = frozenset({408, 500, 502, 503, 504})
-_USER_ALPHA_TRANSIENT_PAGE_RETRY_EXCEPTIONS = (
-    http.client.IncompleteRead,
-    http.client.RemoteDisconnected,
-    TimeoutError,
-    urllib.error.URLError,
+from .user_alpha_transient import (
+    USER_ALPHA_TRANSIENT_PAGE_RETRY_ATTEMPTS as _USER_ALPHA_TRANSIENT_PAGE_RETRY_ATTEMPTS,
+    USER_ALPHA_TRANSIENT_PAGE_RETRY_EXCEPTIONS as _USER_ALPHA_TRANSIENT_PAGE_RETRY_EXCEPTIONS,
+    USER_ALPHA_TRANSIENT_PAGE_RETRY_SECONDS as _USER_ALPHA_TRANSIENT_PAGE_RETRY_SECONDS,
+    USER_ALPHA_TRANSIENT_RETRY_STATUSES as _USER_ALPHA_TRANSIENT_RETRY_STATUSES,
 )
-_USER_ALPHA_TRANSIENT_PAGE_RETRY_ATTEMPTS = 3
-_USER_ALPHA_TRANSIENT_PAGE_RETRY_SECONDS = 5.0
+
+
 _DISCOVERY_OPTION_KEYS = frozenset({"instrument_type", "region", "universe", "delay", "dataset"})
 _ALPHA_FILTER_OPTION_KEYS = frozenset({"instrument_type", "region", "universe", "delay"})
 

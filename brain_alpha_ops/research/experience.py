@@ -19,7 +19,6 @@ Usage::
     print(patterns["top_operators"])
     print(patterns["preferred_windows"])
 """
-
 from __future__ import annotations
 
 import json
@@ -34,9 +33,7 @@ from brain_alpha_ops.jsonl import read_jsonl_records
 if TYPE_CHECKING:
     from brain_alpha_ops.models import Candidate
 
-
 DEFAULT_HISTORY_LIMIT = 5000
-
 
 def _num(value: Any) -> float:
     try:
@@ -46,24 +43,19 @@ def _num(value: Any) -> float:
     except (TypeError, ValueError):
         return 0.0
 
+# P0-4 fix (2026-06-13): all four _ratio() variants across
+# research/{scoring,experience,safety,diagnostics}.py now share a single
+# implementation in ``research._ratio``. The local definition below is kept
+# for backward-compat with the previous module-level symbol.
+from ._ratio import normalize_brain_ratio  # noqa: F401
 
 def _ratio(value: Any) -> float:
-    """Normalize ratio values from BRAIN API responses.
+    """Backwards-compatible wrapper for the canonical BRAIN ratio normalizer.
 
-    BRAIN may return metrics as percentages (e.g. 70 meaning 70%) or as
-    decimals (e.g. 0.70).  Only divide by 100 when the value is unambiguously
-    in percentage range (abs >= 2.0), which catches real percentage values
-    like 75% without harming ratios that naturally live between 1.0 and 2.0.
-    Metrics that naturally exceed 2.0 (e.g. turnover, correlation) pass
-    through unchanged.
-
-    Aligned with safety.py:_ratio() and official_helpers.py:_ratio().
+    See :func:`brain_alpha_ops.research._ratio.normalize_brain_ratio` for the
+    full rule (percentage-scale when ``abs(value) >= 2.0``).
     """
-    numeric = _num(value)
-    if abs(numeric) >= 2.0:
-        return numeric / 100.0
-    return numeric
-
+    return normalize_brain_ratio(value, bounded=False)
 
 # Record
 
@@ -126,7 +118,6 @@ def record_alpha_result(
     # P1: AB comparison — if the candidate has a parent Alpha, compare results.
     if candidate.parent_id:
         _record_ab_comparison(candidate, storage_dir)
-
 
 # Query
 
@@ -230,10 +221,8 @@ def get_winning_patterns(
         ),
     }
 
-
 def _load_records(path: str, *, limit: int | None = DEFAULT_HISTORY_LIMIT) -> list[dict[str, Any]]:
     return read_jsonl_records(path, limit=limit)
-
 
 def _empty_patterns(reason: str) -> dict[str, Any]:
     return {
@@ -248,7 +237,6 @@ def _empty_patterns(reason: str) -> dict[str, Any]:
         "source": "BRAIN_official_simulation_results",
         "summary": reason,
     }
-
 
 # ═══════════════════════════════════════════════════════════════════════
 # P1: AB comparison — causal-effect evaluation of mutations
@@ -332,7 +320,6 @@ def _record_ab_comparison(
     with open(ab_path, "a", encoding="utf-8") as f:
         f.write(json.dumps(comparison, ensure_ascii=False) + "\n")
 
-
 def get_mutation_effectiveness(
     storage_dir: str = "data",
     min_samples: int = 3,
@@ -407,7 +394,6 @@ def get_mutation_effectiveness(
             f"{max(by_type.items(), key=lambda x: x[1].get('avg_sharpe_delta', 0))[0] if by_type else 'N/A'}."
         ),
     }
-
 
 # ── Hypothesis Weight Feedback ──────────────────────────────────────
 

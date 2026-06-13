@@ -741,26 +741,10 @@ def _num(value) -> float:
         return 0.0
 
 
-def _ratio(value, *, bounded: bool = False) -> float:
-    """Normalize ratio values from BRAIN API responses.
-
-    BRAIN may return metrics as percentages (e.g. 70 meaning 70%) or as
-    decimals (e.g. 0.70).  The old heuristic of abs > 1.0 -> /100 produces
-    incorrect results for metrics like turnover whose raw value naturally
-    exceeds 1.0 (e.g. 2.5 -> 0.025 instead of 2.5).
-
-    By default, only values in a clearly percentage-style range (abs >= 100)
-    are divided by 100.  For naturally bounded metrics such as drawdown,
-    correlation, and concentration, values with abs > 1 are also interpreted
-    as percentages because the decimal metric cannot legitimately exceed 1.
-    """
-    numeric = _num(value)
-    if numeric == 0.0:
-        return 0.0
-    abs_numeric = abs(numeric)
-    if abs_numeric >= 100.0 or (bounded and abs_numeric > 1.0):
-        return numeric / 100.0
-    return numeric
+# P0-4 fix (2026-06-13): re-export the canonical ``_ratio`` so existing
+# callers in this module (e.g. empirical_score) keep working unchanged.
+# See ``research._ratio.normalize_brain_ratio`` for the unified rule.
+from ._ratio import _ratio, normalize_brain_ratio  # noqa: F401
 # ═══════════════════════════════════════════════════════════════════════
 # P2: score confidence estimation from point estimate to interval estimate.
 # ═══════════════════════════════════════════════════════════════════════

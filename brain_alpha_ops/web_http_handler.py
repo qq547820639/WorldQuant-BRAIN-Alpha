@@ -70,10 +70,17 @@ def create_handler_class(
 
         def do_OPTIONS(self):
             self.send_response(204)
+            # F-05 fix: CORS origin 校验 — 仅 echo 已配置 allowlist 中的 origin
             origin = self.headers.get("Origin", "")
+            if origin and not _is_origin_allowed(origin):
+                # 拒绝跨域预检: 不发 Access-Control-Allow-Origin, 浏览器会拦截
+                self.send_header("Vary", "Origin")
+                self.end_headers()
+                return
             if not origin:
                 host = self.headers.get("Host", "127.0.0.1")
                 origin = f"http://{host}" if "://" not in host else f"https://{host}"
+            self.send_header("Vary", "Origin")
             self.send_header("Access-Control-Allow-Origin", origin)
             self.send_header(
                 "Access-Control-Allow-Headers",
@@ -97,19 +104,22 @@ def create_handler_class(
             self.send_response(status)
             self.send_header("Content-Type", "application/json; charset=utf-8")
             self.send_header("Content-Length", str(len(body)))
-            if extra_headers:
-                for name, value in extra_headers:
-                    self.send_header(name, value)
-            self.end_headers()
-            self.wfile.write(body)
+            # CORS headers MUST be set before end_headers() — Python's
+            # BaseHTTPRequestHandler does not allow send_header/end_headers
+            # after the first body write.  These are also re-emitted on the
+            # CORS preflight OPTIONS handler below.
             self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
             self.send_header(
                 "Access-Control-Allow-Headers",
                 "Content-Type, X-Brain-Alpha-CSRF, X-Brain-Alpha-Request-ID, X-Brain-Alpha-Request-Timestamp",
             )
             self.send_header("Access-Control-Allow-Credentials", "true")
+            if extra_headers:
+                for name, value in extra_headers:
+                    self.send_header(name, value)
             self._send_security_headers()
             self.end_headers()
+            self.wfile.write(body)
 
         def log_message(self, _format, *args):
             return
@@ -277,6 +287,43 @@ def create_handler_class(
             )
 
     return Handler
+
+
+# F-05: CORS origin 白名单 — 防止反射未授权 origin
+def _is_origin_allowed(origin: str) -> bool:
+    """Check whether the given CORS origin is in the configured allowlist.
+
+    Default allowlist covers localhost variants.  When ``web.allow_remote=true``,
+    remote origins must be explicitly listed via ``BRAIN_ALPHA_OPS_CORS_ALLOWED_ORIGINS``
+    (comma-separated), e.g. ``https://brain-alpha-ops.example.com``.
+    """
+    if not origin:
+        return False
+    from urllib.parse import urlparse
+    parsed = urlparse(origin)
+    host = (parsed.hostname or "").lower()
+    if not host:
+        return False
+    # Always allow loopback variants for local development
+    if host in ("127.0.0.1", "localhost", "::1", "0.0.0.0"):
+        return True
+    # Check explicit allowlist from env
+    import os
+    raw = os.environ.get("BRAIN_ALPHA_OPS_CORS_ALLOWED_ORIGINS", "")
+    if not raw:
+        return False
+    allowed = {entry.strip().lower() for entry in raw.split(",") if entry.strip()}
+    if host in allowed:
+        return True
+    # Match full origin (e.g. "https://brain-alpha-ops.example.com")
+    for entry in allowed:
+        if entry.startswith("http://") or entry.startswith("https://"):
+            try:
+                if (urlparse(entry).hostname or "").lower() == host:
+                    return True
+            except ValueError:
+                continue
+    return False
 
 
 def _is_terminal_status(status: str) -> bool:

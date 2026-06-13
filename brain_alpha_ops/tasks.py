@@ -1,11 +1,21 @@
-"""Reusable task state storage for long-running operations.
+"""Reusable task state storage for long-running operations (pipeline jobs).
+
+**Purpose**: Persist pipeline background jobs (production, sync, check,
+async) with thread-safe state, watchdog, and atomic JSON persistence.
+
+**Relationship to web_jobs.py**: This module tracks *pipeline* background
+jobs; ``brain_alpha_ops.web_jobs`` tracks *Web UI* user operations.  They
+serve different lifecycles and should NOT be unified (P1-7 clarification).
+See ``web_jobs.get_web_job_store()`` for the Protocol-based bridge that
+allows background services to use web_jobs without a full JobStore.
+
+
 
 The web console and internal automation share the same small contract for job
 lifecycle state. The store intentionally keeps the
 runtime payload narrow: status, progress, result, cancellation flag, and error.
 It never persists request credentials.
 """
-
 from __future__ import annotations
 
 from copy import deepcopy
@@ -17,19 +27,21 @@ import threading
 import time
 from typing import Any
 
+from brain_alpha_ops.core_state import (
+    JOB_ACTIVE_STATUSES as ACTIVE_STATUSES,
+    JOB_KNOWN_STATUSES as KNOWN_STATUSES,
+    JOB_TERMINAL_STATUSES as TERMINAL_STATUSES,
+    is_active_job_status,
+    is_terminal_job_status,
+)
 from brain_alpha_ops.redaction import redact_data
 
-
-ACTIVE_STATUSES = {"queued", "pending", "starting", "running", "stopping"}
-TERMINAL_STATUSES = {"completed", "completed_with_warnings", "failed", "stopped", "cancelled", "canceled"}
-KNOWN_STATUSES = ACTIVE_STATUSES | TERMINAL_STATUSES | {"idle"}
 DEFAULT_RECOVERY_ERROR = "Process restarted before this task completed."
 DEFAULT_WATCHDOG_TIMEOUT_SECONDS = 300.0
 DEFAULT_WATCHDOG_ERROR = "Web flow watchdog stopped this task after no clear progress update."
 JOB_PREVIEW_ROWS = 5
 COMPACT_LIST_KEYS = {"alphas", "cloud_alphas", "candidates", "backtests", "lifecycle_records"}
 DEFAULT_MAX_PERSISTENCE_LOAD_BYTES = 50 * 1024 * 1024
-
 
 class JobStore:
     """Thread-safe job state store with optional JSON persistence."""
@@ -355,13 +367,11 @@ class JobStore:
             self._persist_locked()
         return changed
 
-
 def _updated_at(job: dict[str, Any]) -> float:
     try:
         return float(job.get("updated_at", 0.0) or 0.0)
     except (TypeError, ValueError):
         return 0.0
-
 
 def _watchdog_should_stop(job: dict[str, Any], now: float, timeout_seconds: float) -> bool:
     status = str(job.get("status") or "").strip().lower()
@@ -371,7 +381,6 @@ def _watchdog_should_stop(job: dict[str, Any], now: float, timeout_seconds: floa
         return True
     updated_at = _updated_at(job)
     return updated_at <= 0 or now - updated_at > timeout_seconds
-
 
 def _mark_watchdog_failed(job: dict[str, Any], now: float) -> None:
     status = str(job.get("status") or "unknown").strip().lower() or "unknown"
@@ -398,7 +407,6 @@ def _mark_watchdog_failed(job: dict[str, Any], now: float) -> None:
     })
     job["progress"] = progress
 
-
 def _reject_watchdog_terminal_update(
     current: dict[str, Any],
     update: dict[str, Any],
@@ -408,7 +416,6 @@ def _reject_watchdog_terminal_update(
         return False
     return True
 
-
 def _is_watchdog_terminal_failed(job: dict[str, Any]) -> bool:
     if str(job.get("status") or "").strip().lower() != "failed":
         return False
@@ -416,10 +423,8 @@ def _is_watchdog_terminal_failed(job: dict[str, Any]) -> bool:
     watchdog = progress.get("watchdog") if isinstance(progress.get("watchdog"), dict) else {}
     return progress.get("phase") == "watchdog_failed" or watchdog.get("triggered") is True
 
-
 def _json_safe(value: Any) -> Any:
     return json.loads(json.dumps(value, ensure_ascii=False, default=str))
-
 
 def _compact_runtime_result(value: Any, *, preview_rows: int = JOB_PREVIEW_ROWS) -> Any:
     if isinstance(value, dict):
@@ -443,12 +448,10 @@ def _compact_runtime_result(value: Any, *, preview_rows: int = JOB_PREVIEW_ROWS)
         return [_compact_runtime_result(item, preview_rows=preview_rows) for item in value]
     return value
 
-
 def _should_compact_named_list(key: str, item: Any) -> bool:
     if not isinstance(item, list):
         return False
     return key in COMPACT_LIST_KEYS or key.endswith("candidates")
-
 
 def _submission_evidence_rows(items: list[Any], *, preview_rows: int) -> list[Any]:
     evidence: list[Any] = []
@@ -468,7 +471,6 @@ def _submission_evidence_rows(items: list[Any], *, preview_rows: int) -> list[An
         seen.add(key)
         evidence.append(compact)
     return evidence
-
 
 def _candidate_submission_audit_evidence(candidate: dict[str, Any], *, preview_rows: int) -> dict[str, Any]:
     evidence: dict[str, Any] = {}
@@ -544,7 +546,6 @@ def _candidate_submission_audit_evidence(candidate: dict[str, Any], *, preview_r
         }
     return _compact_runtime_result(evidence, preview_rows=preview_rows)
 
-
 def _submission_evidence_key(candidate: Any) -> str:
     if not isinstance(candidate, dict):
         return str(id(candidate))
@@ -555,7 +556,6 @@ def _submission_evidence_key(candidate: Any) -> str:
         or candidate.get("expression")
         or id(candidate)
     )
-
 
 def _job_safe(value: Any) -> Any:
     safe = _json_safe(value)

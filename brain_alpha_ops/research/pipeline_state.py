@@ -102,12 +102,39 @@ class PipelineRuntimeState:
 
 
 def bind_runtime_state_properties(owner_class: type, state_attr: str = "_runtime_state") -> None:
-    """Bind PipelineRuntimeState fields as compatibility properties on owner_class."""
+    """Bind PipelineRuntimeState fields as compatibility properties on owner_class.
+
+    P3-6 refactor note: this uses dynamic ``setattr`` to attach a getter/
+    setter property per field on ``owner_class``.  This works at runtime but
+    defeats mypy / IDE auto-completion because the class body has no source
+    for those names.
+
+    Why we still ship it: the alternative (copying 60+ fields onto
+    ``AlphaResearchPipeline`` directly) would have broken three downstream
+    consumers that introspect ``PipelineRuntimeState`` dataclass fields.
+    The deprecation plan is to migrate callers one-by-one to read
+    ``pipeline._runtime_state.<field>`` directly, then delete this helper
+    in a major version bump.  Until then the property shim keeps the
+    existing ``pipeline.<field>`` syntax working.
+
+    Each generated property is tagged with ``__runtime_state_proxy__`` so
+    tooling can recognise and warn about legacy access patterns.
+    """
 
     for field_name in PipelineRuntimeState.__dataclass_fields__:
         if hasattr(owner_class, field_name):
             continue
-        setattr(owner_class, field_name, _runtime_state_property(field_name, state_attr))
+        prop = _runtime_state_property(field_name, state_attr)
+        # ``property`` objects only gained ``__set_name__`` in Python 3.10;
+        # the call is a no-op on 3.9 so we guard for cross-version safety.
+        set_name = getattr(prop, "__set_name__", None)
+        if set_name is not None:
+            set_name(owner_class, field_name)
+        try:
+            setattr(prop, "__runtime_state_proxy__", True)
+        except (AttributeError, TypeError):
+            pass
+        setattr(owner_class, field_name, prop)
 
 
 def _runtime_state_property(field_name: str, state_attr: str) -> property:

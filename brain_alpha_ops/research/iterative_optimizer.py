@@ -38,6 +38,11 @@ from brain_alpha_ops.data.loader import OfficialDataLoader
 from brain_alpha_ops.data.field_dataset_mapper import FieldDatasetMapper
 from brain_alpha_ops.models import Candidate
 from brain_alpha_ops.research.fallback_generation import normalize_operator_aliases
+from brain_alpha_ops.research.failure_strategy_ranking import (
+    DEFAULT_FAILURE_TO_STRATEGY as _RANKING_FALLBACK,
+    get_strategy_for_failure as _ranking_strategies_for,
+    load_failure_strategy_ranking as _load_failure_strategy_ranking,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -140,6 +145,12 @@ class IterativeOptimizer:
         self._mapper = mapper
         self._official_operators = _operator_names_from_loader(self._loader) or set(_current_official_operator_names())
         self._family_alternatives = self._build_family_alternatives()
+        # P2-15 (2026-06-13): strategy order is now learned from
+        # ``ab_tests.jsonl`` rather than hard-coded. The legacy
+        # ``_FAILURE_TO_STRATEGY`` class attribute is kept for backward
+        # compatibility (and is what tests that do not seed AB data fall
+        # back to); ``strategy_ranking`` is the data-driven overlay.
+        self.strategy_ranking: dict[str, list[str]] = _load_failure_strategy_ranking()
 
     def _build_family_alternatives(self) -> dict[str, list[str]]:
         """Return same-family alternatives restricted to official operators."""
@@ -192,7 +203,14 @@ class IterativeOptimizer:
             if len(results) >= max_mutations:
                 break
 
-            strategies = self._FAILURE_TO_STRATEGY.get(dim, ["field_swap", "structure_refine"])
+            # P2-15 (2026-06-13): prefer the data-driven ranking when the
+            # optimizer instance has been told about new AB rows. The
+            # hard-coded ``_FAILURE_TO_STRATEGY`` table is still the
+            # baseline and is consulted when the learned ranking lacks
+            # evidence for this dimension.
+            learned = _ranking_strategies_for(dim, self.strategy_ranking)
+            default = self._FAILURE_TO_STRATEGY.get(dim, ["field_swap", "structure_refine"])
+            strategies = learned or list(default)
             for strategy_index, strategy in enumerate(strategies):
                 if len(results) >= max_mutations:
                     break

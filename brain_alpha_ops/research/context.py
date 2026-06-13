@@ -5,7 +5,6 @@ state.  It deliberately stays read-only: it combines run configuration, latest
 local results, cloud alpha cache summaries, and research memory guidance into a
 payload that an assistant can consume before proposing or generating alphas.
 """
-
 from __future__ import annotations
 
 from dataclasses import asdict, is_dataclass
@@ -26,7 +25,6 @@ from brain_alpha_ops.research.robustness_context import (
     latest_candidate_rows,
 )
 
-
 ASSISTANT_CONTEXT_SENSITIVE_KEY_FRAGMENTS = (
     "authorization",
     "cache_dir",
@@ -38,7 +36,6 @@ ASSISTANT_CONTEXT_SENSITIVE_KEY_FRAGMENTS = (
     "storage_dir",
     "token",
 )
-
 
 def build_assistant_context_pack(
     run_config: RunConfig | None = None,
@@ -99,7 +96,6 @@ def build_assistant_context_pack(
         pack["prompt"] = render_context_prompt(pack)
     return pack
 
-
 def _redact_assistant_context_pack(pack: dict[str, Any]) -> dict[str, Any]:
     redacted_keys: set[str] = set()
     redacted = redact_data(
@@ -113,7 +109,6 @@ def _redact_assistant_context_pack(pack: dict[str, Any]) -> dict[str, Any]:
     redacted_keys.add("storage_dir")
     redacted["sensitive_fields_redacted"] = sorted(redacted_keys)
     return redacted
-
 
 def render_context_prompt(pack: dict[str, Any]) -> str:
     """Render a concise text prompt from a structured context pack."""
@@ -180,7 +175,6 @@ def render_context_prompt(pack: dict[str, Any]) -> str:
     lines.extend(f"- {item}" for item in actions[:8])
     return "\n".join(lines).strip() + "\n"
 
-
 def _run_config_context(config: RunConfig) -> dict[str, Any]:
     ops = config.ops
     return {
@@ -192,7 +186,6 @@ def _run_config_context(config: RunConfig) -> dict[str, Any]:
         "submission_policy": _dataclass_dict(ops.submission_policy),
         "source_tag_policy": ops.source_tag_policy,
     }
-
 
 def _latest_result_context(snapshot: dict[str, Any] | None) -> dict[str, Any]:
     snapshot = snapshot or {}
@@ -224,7 +217,6 @@ def _latest_result_context(snapshot: dict[str, Any] | None) -> dict[str, Any]:
         "backtest_records": [_backtest_record_brief(row) for row in backtest_records[:10]],
     }
 
-
 def _cloud_context(snapshot: dict[str, Any] | None, *, top_n: int) -> dict[str, Any]:
     snapshot = snapshot or {}
     summary = snapshot.get("summary") if isinstance(snapshot.get("summary"), dict) else {}
@@ -240,7 +232,6 @@ def _cloud_context(snapshot: dict[str, Any] | None, *, top_n: int) -> dict[str, 
         "is_stale": bool(summary.get("is_stale") or summary.get("stale")),
         "sample_alphas": [_cloud_alpha_brief(row) for row in rows[:top_n]],
     }
-
 
 def _memory_context(summary: dict[str, Any], guidance: dict[str, Any], *, top_n: int) -> dict[str, Any]:
     expression_index = summary.get("expression_index") if isinstance(summary.get("expression_index"), dict) else {}
@@ -262,7 +253,6 @@ def _memory_context(summary: dict[str, Any], guidance: dict[str, Any], *, top_n:
         "guidance": guidance,
     }
 
-
 def _expression_index_context(value: Any, *, top_n: int) -> dict[str, Any]:
     index = value if isinstance(value, dict) else {}
     return {
@@ -279,7 +269,6 @@ def _expression_index_context(value: Any, *, top_n: int) -> dict[str, Any]:
         "windows": list(index.get("windows") or [])[:top_n],
     }
 
-
 def _generation_focus(guidance: dict[str, Any], summary: dict[str, Any], *, top_n: int) -> dict[str, Any]:
     expression_index = summary.get("expression_index") if isinstance(summary.get("expression_index"), dict) else {}
     return {
@@ -294,7 +283,6 @@ def _generation_focus(guidance: dict[str, Any], summary: dict[str, Any], *, top_
         "duplicate_expressions": list(expression_index.get("duplicates") or [])[:top_n],
         "recommendations": list(guidance.get("recommendations") or summary.get("recommendations") or []),
     }
-
 
 def _risk_controls(config: RunConfig, cloud_snapshot: dict[str, Any] | None) -> dict[str, Any]:
     cloud_snapshot = cloud_snapshot or {}
@@ -315,7 +303,6 @@ def _risk_controls(config: RunConfig, cloud_snapshot: dict[str, Any] | None) -> 
             "max_self_correlation": config.ops.thresholds.max_self_correlation,
         },
     }
-
 
 def _compliance_context(config: RunConfig) -> dict[str, Any]:
     """Build lightweight redline + scoring health snapshot.
@@ -363,7 +350,6 @@ def _compliance_context(config: RunConfig) -> dict[str, Any]:
         "thresholds_synced": True,
     }
 
-
 def _next_actions(
     summary: dict[str, Any],
     guidance: dict[str, Any],
@@ -408,7 +394,6 @@ def _next_actions(
     if not actions:
         actions.append("Run a local production cycle to populate research memory before asking for high-confidence recommendations.")
     return _unique_text_items(actions)
-
 
 def _prompt_diagnostics(pack: dict[str, Any], *, top_n: int) -> dict[str, Any]:
     latest = pack.get("latest_result") if isinstance(pack.get("latest_result"), dict) else {}
@@ -459,7 +444,6 @@ def _prompt_diagnostics(pack: dict[str, Any], *, top_n: int) -> dict[str, Any]:
         "evidence_digest": sha256(compact_text.encode("utf-8")).hexdigest()[:12],
     }
 
-
 def _latest_result_from_storage(storage_dir: str) -> dict[str, Any]:
     latest_path = Path(storage_dir) / "run_history" / "latest.json"
     if not latest_path.is_file():
@@ -482,7 +466,6 @@ def _latest_result_from_storage(storage_dir: str) -> dict[str, Any]:
         "progress": {"phase": data.get("status") or "completed", "data": summary},
     }
 
-
 def _cloud_snapshot_from_storage(storage_dir: str, *, top_n: int) -> dict[str, Any]:
     rows = _read_jsonl(Path(storage_dir) / "cloud_alphas.jsonl", limit=None)
     latest_by_id: dict[str, dict[str, Any]] = {}
@@ -504,14 +487,12 @@ def _cloud_snapshot_from_storage(storage_dir: str, *, top_n: int) -> dict[str, A
     }
     return {"alphas": deduped[:top_n], "summary": summary}
 
-
 def _read_jsonl(path: Path, *, limit: int | None) -> list[dict[str, Any]]:
     if limit is None:
         from brain_alpha_ops.jsonl import read_jsonl_records
 
         return read_jsonl_records(path, limit=None, max_rows=None)
     return read_jsonl_tail(path, limit=limit)
-
 
 def _candidate_brief(row: dict[str, Any]) -> dict[str, Any]:
     metrics = _first_dict(row.get("official_metrics"), row.get("metrics"))
@@ -534,7 +515,6 @@ def _candidate_brief(row: dict[str, Any]) -> dict[str, Any]:
         },
     }
 
-
 def _backtest_brief(row: dict[str, Any]) -> dict[str, Any]:
     return {
         "slot": row.get("slot", ""),
@@ -544,7 +524,6 @@ def _backtest_brief(row: dict[str, Any]) -> dict[str, Any]:
         "message": row.get("message", ""),
         "next_poll_seconds": row.get("next_poll_seconds"),
     }
-
 
 def _backtest_record_brief(row: dict[str, Any]) -> dict[str, Any]:
     return {
@@ -560,7 +539,6 @@ def _backtest_record_brief(row: dict[str, Any]) -> dict[str, Any]:
         "note": row.get("note", ""),
     }
 
-
 def _cloud_alpha_brief(row: dict[str, Any]) -> dict[str, Any]:
     metrics = _first_dict(row.get("metrics"), row.get("is"))
     return {
@@ -573,7 +551,6 @@ def _cloud_alpha_brief(row: dict[str, Any]) -> dict[str, Any]:
         "turnover": metrics.get("turnover", row.get("turnover")),
     }
 
-
 def _expression_from_row(row: dict[str, Any]) -> str:
     expression = row.get("expression")
     if isinstance(expression, dict):
@@ -583,11 +560,9 @@ def _expression_from_row(row: dict[str, Any]) -> str:
     regular = row.get("regular") if isinstance(row.get("regular"), dict) else {}
     return str(regular.get("code") or "")
 
-
 def _cloud_pass_fail(row: dict[str, Any]) -> str:
     metrics = row.get("metrics") if isinstance(row.get("metrics"), dict) else {}
     return str(metrics.get("pass_fail") or row.get("pass_fail") or "").upper()
-
 
 def _join_candidate_briefs(rows: list[dict[str, Any]]) -> str:
     if not rows:
@@ -597,18 +572,15 @@ def _join_candidate_briefs(rows: list[dict[str, Any]]) -> str:
         parts.append(f"{row.get('alpha_id') or '-'} score={row.get('score', '-')} {row.get('family') or ''}".strip())
     return "; ".join(parts)
 
-
 def _join_field_combinations(rows: list[dict[str, Any]]) -> str:
     if not rows:
         return "-"
     return "; ".join("+".join(row.get("fields") or []) for row in rows[:5])
 
-
 def _join_failures(rows: list[dict[str, Any]]) -> str:
     if not rows:
         return "-"
     return "; ".join(f"{row.get('reason', '-') } x{row.get('count', 0)}" for row in rows[:5])
-
 
 def _join_stat_bucket(row: dict[str, Any]) -> str:
     count = _int_value(row.get("count"))
@@ -618,7 +590,6 @@ def _join_stat_bucket(row: dict[str, Any]) -> str:
         f"count={count} success={_float_value(row.get('success_rate'))} "
         f"avg_score={_float_value(row.get('avg_score'))}"
     )
-
 
 def _join_guidance_outcomes(rows: list[dict[str, Any]]) -> str:
     if not rows:
@@ -631,7 +602,6 @@ def _join_guidance_outcomes(rows: list[dict[str, Any]]) -> str:
         )
     return "; ".join(parts)
 
-
 def _join_duplicate_expressions(rows: list[dict[str, Any]]) -> str:
     if not rows:
         return "-"
@@ -641,11 +611,9 @@ def _join_duplicate_expressions(rows: list[dict[str, Any]]) -> str:
         parts.append(f"{row.get('count', 0)}x {expression or row.get('expression_fingerprint', '-')}")
     return "; ".join(parts)
 
-
 def _join_text_items(rows: list[Any]) -> str:
     items = [str(item).strip() for item in rows[:5] if str(item).strip()]
     return "; ".join(items) if items else "-"
-
 
 def _unique_text_items(rows: list[Any]) -> list[str]:
     unique: list[str] = []
@@ -660,7 +628,6 @@ def _unique_text_items(rows: list[Any]) -> list[str]:
         seen.add(key)
         unique.append(text)
     return unique
-
 
 def _guidance_outcomes(summary: dict[str, Any], *, top_n: int) -> list[dict[str, Any]]:
     rows = summary.get("assistant_guidance_outcomes") if isinstance(summary, dict) else []
@@ -686,7 +653,6 @@ def _guidance_outcomes(summary: dict[str, Any], *, top_n: int) -> list[dict[str,
         })
     return outcomes[:top_n]
 
-
 def _strong_guidance_outcome(outcomes: list[dict[str, Any]]) -> dict[str, Any]:
     for row in outcomes:
         if _int_value(row.get("count")) <= 0:
@@ -694,7 +660,6 @@ def _strong_guidance_outcome(outcomes: list[dict[str, Any]]) -> dict[str, Any]:
         if _float_value(row.get("success_rate")) >= 0.5 or _float_value(row.get("avg_score")) >= 70:
             return row
     return {}
-
 
 def _weak_guidance_outcome(outcomes: list[dict[str, Any]]) -> dict[str, Any]:
     for row in outcomes:
@@ -707,13 +672,11 @@ def _weak_guidance_outcome(outcomes: list[dict[str, Any]]) -> dict[str, Any]:
             return row
     return {}
 
-
 def _int_value(value: Any) -> int:
     try:
         return int(float(value))
     except (TypeError, ValueError):
         return 0
-
 
 def _float_value(value: Any) -> float:
     try:
@@ -722,20 +685,17 @@ def _float_value(value: Any) -> float:
         return 0.0
     return round(number, 4)
 
-
 def _first_dict(*values: Any) -> dict[str, Any]:
     for value in values:
         if isinstance(value, dict):
             return value
     return {}
 
-
 def _first_list(*values: Any) -> list[dict[str, Any]]:
     for value in values:
         if isinstance(value, list):
             return [row for row in value if isinstance(row, dict)]
     return []
-
 
 def _dataclass_dict(value: Any) -> dict[str, Any]:
     if is_dataclass(value):

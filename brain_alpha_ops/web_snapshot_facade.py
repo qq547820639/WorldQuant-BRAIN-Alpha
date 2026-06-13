@@ -1,5 +1,7 @@
 """Public snapshot function facade for the local web module."""
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
@@ -8,10 +10,10 @@ from typing import Any, Callable
 @dataclass(frozen=True)
 class WebSnapshotFacade:
     runtime_factory: Callable[[], Any]
-    latest_result_snapshot_func: Callable[[], dict] | None = None
-    latest_run_history_path_func: Callable[[], Path | None] | None = None
-    assistant_context_snapshot_func: Callable[..., dict] | None = None
-    assistant_guidance_snapshot_func: Callable[..., dict] | None = None
+    latest_result_snapshot_func: "Callable[[], dict] | None" = None
+    latest_run_history_path_func: "Callable[[], Path | None] | None" = None
+    assistant_context_snapshot_func: "Callable[..., dict] | None" = None
+    assistant_guidance_snapshot_func: "Callable[..., dict] | None" = None
 
     def _runtime(self) -> Any:
         return self.runtime_factory()

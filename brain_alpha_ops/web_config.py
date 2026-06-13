@@ -356,6 +356,9 @@ def run_config_from_payload(payload: dict, *, loader: RunConfigLoader = load_run
     )
     threshold_payload = payload.get("thresholds") if isinstance(payload.get("thresholds"), dict) else {}
     current_thresholds = run_config.ops.thresholds
+    # P3-18 (2026-06-13): QualityThresholds is frozen, so accumulate field
+    # updates via ``dataclasses.replace`` instead of ``setattr`` mutation.
+    new_thresholds_kwargs: dict[str, Any] = {}
     for top_key, nested_key, attr, upper in (
         ("minSharpe", "min_sharpe", "min_sharpe", None),
         ("minFitness", "min_fitness", "min_fitness", None),
@@ -367,48 +370,62 @@ def run_config_from_payload(payload: dict, *, loader: RunConfigLoader = load_run
         source = payload if top_key in payload else threshold_payload
         source_key = top_key if top_key in payload else nested_key
         if source_key in source:
-            setattr(
-                current_thresholds,
-                attr,
-                payload_float(
-                    source,
-                    source_key,
-                    getattr(current_thresholds, attr),
-                    lower=0.0,
-                    upper=upper,
-                    label=f"thresholds.{attr}",
-                ),
+            new_thresholds_kwargs[attr] = payload_float(
+                source,
+                source_key,
+                getattr(current_thresholds, attr),
+                lower=0.0,
+                upper=upper,
+                label=f"thresholds.{attr}",
             )
+    if new_thresholds_kwargs:
+        import dataclasses
+        run_config.ops.thresholds = dataclasses.replace(
+            current_thresholds, **new_thresholds_kwargs
+        )
+    # P3-18 (2026-06-13): ScoringConfig is also frozen; rebuild it via
+    # ``dataclasses.replace`` rather than mutating in place.
     current_scoring = run_config.ops.scoring
-    current_scoring.assistant_guidance_score_adjustment_enabled = payload_bool(
-        payload,
-        "assistantGuidanceScoreAdjustment",
-        current_scoring.assistant_guidance_score_adjustment_enabled,
-    )
-    current_scoring.assistant_guidance_score_min_confidence = bounded_query_float(
-        payload.get("assistantGuidanceScoreMinConfidence", current_scoring.assistant_guidance_score_min_confidence),
-        0.0,
-        1.0,
-    )
-    current_scoring.assistant_guidance_score_min_outcome_count = max(
-        0,
-        payload_int(
+    new_scoring_kwargs: dict[str, Any] = {}
+    if "assistantGuidanceScoreAdjustment" in payload:
+        new_scoring_kwargs["assistant_guidance_score_adjustment_enabled"] = payload_bool(
             payload,
-            "assistantGuidanceScoreMinOutcomeCount",
-            current_scoring.assistant_guidance_score_min_outcome_count,
-            lower=0,
-        ),
-    )
-    current_scoring.assistant_guidance_score_bonus_cap = bounded_query_float(
-        payload.get("assistantGuidanceScoreBonusCap", current_scoring.assistant_guidance_score_bonus_cap),
-        0.0,
-        10.0,
-    )
-    current_scoring.assistant_guidance_score_penalty_cap = bounded_query_float(
-        payload.get("assistantGuidanceScorePenaltyCap", current_scoring.assistant_guidance_score_penalty_cap),
-        0.0,
-        10.0,
-    )
+            "assistantGuidanceScoreAdjustment",
+            current_scoring.assistant_guidance_score_adjustment_enabled,
+        )
+    if "assistantGuidanceScoreMinConfidence" in payload:
+        new_scoring_kwargs["assistant_guidance_score_min_confidence"] = bounded_query_float(
+            payload.get("assistantGuidanceScoreMinConfidence", current_scoring.assistant_guidance_score_min_confidence),
+            0.0,
+            1.0,
+        )
+    if "assistantGuidanceScoreMinOutcomeCount" in payload:
+        new_scoring_kwargs["assistant_guidance_score_min_outcome_count"] = max(
+            0,
+            payload_int(
+                payload,
+                "assistantGuidanceScoreMinOutcomeCount",
+                current_scoring.assistant_guidance_score_min_outcome_count,
+                lower=0,
+            ),
+        )
+    if "assistantGuidanceScoreBonusCap" in payload:
+        new_scoring_kwargs["assistant_guidance_score_bonus_cap"] = bounded_query_float(
+            payload.get("assistantGuidanceScoreBonusCap", current_scoring.assistant_guidance_score_bonus_cap),
+            0.0,
+            10.0,
+        )
+    if "assistantGuidanceScorePenaltyCap" in payload:
+        new_scoring_kwargs["assistant_guidance_score_penalty_cap"] = bounded_query_float(
+            payload.get("assistantGuidanceScorePenaltyCap", current_scoring.assistant_guidance_score_penalty_cap),
+            0.0,
+            10.0,
+        )
+    if new_scoring_kwargs:
+        import dataclasses
+        run_config.ops.scoring = dataclasses.replace(
+            current_scoring, **new_scoring_kwargs
+        )
     raw_base_url = payload.get("baseUrl") or payload.get("base_url")
     if raw_base_url:
         base_url = str(raw_base_url).rstrip("/")

@@ -1,3 +1,4 @@
+from __future__ import annotations
 from brain_alpha_ops.models import Candidate
 from brain_alpha_ops.research import expression_index as expression_index_module
 from brain_alpha_ops.research.observability import (

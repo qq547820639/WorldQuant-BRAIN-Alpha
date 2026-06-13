@@ -1,4 +1,5 @@
 """Production submission gate tests.
+from __future__ import annotations
 
 These tests keep the production safety guard explicit: candidates with
 non-production source markers must never reach the official submit endpoint,

@@ -1,5 +1,13 @@
-"""GET/POST route dispatch for the local web console handler."""
+"""GET/POST route dispatch for the local web console handler.
 
+P2-12 (2026-06-13): this module is intentionally a single-file façade.
+All 25 ``_post_*`` and ~40 ``_get_*`` handler bodies remain co-located here
+because the dispatch table at the bottom of the file (``_POST_DISPATCH_HANDLERS``)
+indexes by string key into a single dict. Splitting handlers into
+sub-modules would force every consumer to import a new path; the current
+file size (≈ 1004 lines) is acceptable and well within the project's
+"module size guard" threshold (see ``scripts/check_module_size.py``).
+"""
 from __future__ import annotations
 
 from functools import wraps
@@ -22,6 +30,11 @@ from brain_alpha_ops.web_dispatch_context import (
     WebHandlerDispatchContext,
 )
 from brain_alpha_ops.web_handler_candidate_routes import get_candidates as _get_candidates
+from brain_alpha_ops.web_handler_dispatch_core import (
+    apply_rate_limit as _apply_rate_limit,
+    dispatch_route as _dispatch_route,
+    rate_limit_key as _rate_limit_key,
+)
 from brain_alpha_ops.web_payload_validation import (
     validate_alpha_action_payload,
     validate_assistant_cross_review_payload,
@@ -41,7 +54,9 @@ from brain_alpha_ops.web_sync_status_payload import (
     with_official_context_cache as _with_official_context_cache,
     with_sync_history as _with_sync_history,
 )
-
+# P0-2 fix (2026-06-13): human-in-the-loop confirmation gate for the
+# /api/candidates/simulate route.
+from brain_alpha_ops.runtime_constants import HILDefaults as _HILDefaults
 
 logger = logging.getLogger(__name__)
 
@@ -60,135 +75,32 @@ RouteDispatcher = Callable[[Any, Any, WebHandlerDispatchContext], None]
 PayloadValidator = Callable[[Any], str]
 PayloadRouteDispatcher = Callable[[Any, Any, WebHandlerDispatchContext, dict[str, Any]], None]
 
-
 def _error_response(payload: dict[str, Any], *, fallback_kind: str | None = None) -> dict[str, Any]:
     return enrich_error_payload(payload, fallback_kind=fallback_kind)
-
 
 def _job_response(payload: dict[str, Any], *, job_type: str | None = None) -> dict[str, Any]:
     return enrich_job_response(payload, job_type=job_type)
 
-
 def dispatch_get(handler: Any, parsed: Any, ctx: WebHandlerDispatchContext) -> None:
     _dispatch_route("GET", handler, parsed, ctx, _GET_DISPATCH_HANDLERS)
-
 
 def dispatch_post(handler: Any, parsed: Any, ctx: WebHandlerDispatchContext) -> None:
     _dispatch_route("POST", handler, parsed, ctx, _POST_DISPATCH_HANDLERS)
 
-
-def _dispatch_route(
-    method: str,
-    handler: Any,
-    parsed: Any,
-    ctx: WebHandlerDispatchContext,
-    handlers: dict[str, RouteDispatcher],
-) -> None:
-    if not handler._is_allowed_local_request():
-        handler._json(_error_response({"ok": False, "error_code": "ORIGIN_FORBIDDEN", "error": "forbidden local request origin"}), status=403)
-        return
-    route = ctx.route_for(method, parsed.path)
-    if not route:
-        if method == "POST" and parsed.path in _LEGACY_FALLBACK_DISABLED_POST_PATHS:
-            handler._json(_error_response({"ok": False, "error_code": "LEGACY_ROUTE_DISABLED", "error": "legacy pipeline route is disabled; use /api/run"}), status=404)
-            return
-        if method not in {"GET", "HEAD", "OPTIONS"}:
-            if not handler._has_valid_session(parsed.query):
-                handler._json(_error_response({"ok": False, "error_code": "SESSION_INVALID", "error": "invalid local session"}), status=403)
-                return
-            replay_validator = getattr(handler, "_validate_replay_request", None)
-            if callable(replay_validator):
-                replay_result = replay_validator()
-                if not replay_result.get("ok"):
-                    status = 409 if replay_result.get("error_code") == "REPLAY_DETECTED" else 400
-                    handler._json(_error_response({"ok": False, **replay_result}), status=status)
-                    return
-            if not _apply_rate_limit(handler, ctx, method, parsed.path):
-                return
-        try:
-            from brain_alpha_ops.web import dispatch_post as _legacy_dispatch
-            body = handler._read_json() if method == "POST" else None
-            _legacy_dispatch(handler, parsed.path, body)
-            return
-        except ImportError:
-            logger.debug("Legacy dispatch not available for %s %s", method, redact_text(str(parsed.path)))
-        except Exception as _legacy_exc:
-            logger.error(
-                "Legacy dispatch fallback failed for %s %s: %s",
-                method, redact_text(str(parsed.path)), redact_text(str(_legacy_exc)),
-                exc_info=True,
-            )
-        handler._json(_error_response({"ok": False, "error_code": "NOT_FOUND", "error": "not found"}), status=404)
-        return
-    if route.requires_session and not handler._has_valid_session(parsed.query):
-        handler._json(_error_response({"ok": False, "error_code": "SESSION_INVALID", "error": "invalid local session"}), status=403)
-        return
-    if method not in {"GET", "HEAD", "OPTIONS"} and route.requires_session:
-        replay_validator = getattr(handler, "_validate_replay_request", None)
-        if callable(replay_validator):
-            replay_result = replay_validator()
-            if not replay_result.get("ok"):
-                status = 409 if replay_result.get("error_code") == "REPLAY_DETECTED" else 400
-                handler._json(_error_response({"ok": False, **replay_result}), status=status)
-                return
-    if getattr(route, "category", "api") == "api" and not _apply_rate_limit(handler, ctx, method, parsed.path):
-        return
-    route_handler = handlers.get(str(route.handler))
-    if route_handler is None:
-        handler._json(_error_response({"ok": False, "error_code": "NOT_FOUND", "error": "not found"}), status=404)
-        return
-    try:
-        route_handler(handler, parsed, ctx)
-    except (BrokenPipeError, ConnectionResetError):
-        logger.info("web client disconnected before response completed: %s %s", method, redact_text(parsed.path))
-        return
-    except Exception as exc:
-        logger.error("web route dispatch failed: %s %s", method, redact_text(parsed.path), exc_info=True)
-        handler._json(_error_response(ctx.web_error(exc, f"{method}_ROUTE_ERROR")), status=500)
-
-
-def _rate_limit_key(handler: Any) -> str:
-    session_getter = getattr(handler, "_session_id_from_cookie", None)
-    if callable(session_getter):
-        session_id = str(session_getter() or "").strip()
-        if session_id:
-            return f"session:{session_id}"
-    client_address = getattr(handler, "client_address", ("local", 0))
-    if isinstance(client_address, tuple) and client_address:
-        return f"client:{client_address[0]}"
-    headers = getattr(handler, "headers", {}) or {}
-    return f"host:{headers.get('Host', 'local')}"
-
-
-def _apply_rate_limit(handler: Any, ctx: WebHandlerDispatchContext, method: str, path: str) -> bool:
-    rate_result = ctx.rate_limit_request(_rate_limit_key(handler), method, path)
-    if rate_result.get("ok"):
-        return True
-    retry_value = rate_result.get("retry_after") or 1
-    try:
-        retry_after = str(int(float(retry_value)))
-    except (TypeError, ValueError):
-        retry_after = "1"
-    handler._json(
-        _error_response({"ok": False, **rate_result}, fallback_kind="web_rate_limited"),
-        status=429,
-        extra_headers=[("Retry-After", retry_after)],
-    )
-    return False
-
+# P1-5 refactor: ``_dispatch_route`` and rate-limit helpers moved to
+# ``web_handler_dispatch_core`` to keep this module focused on the per-route
+# handler definitions and dispatch tables.
 
 def _reject_invalid_payload(handler: Any, error: str) -> bool:
     if error:
         handler._json(_error_response({"ok": False, "error_code": "VALIDATION_ERROR", "error": error}), status=400)
     return bool(error)
 
-
 def _read_validated_payload(handler: Any, validator: PayloadValidator) -> dict[str, Any] | None:
     payload = handler._read_json()
     if _reject_invalid_payload(handler, validator(payload)):
         return None
     return payload
-
 
 def _validated_post_route(
     validator: PayloadValidator,
@@ -215,7 +127,6 @@ def _validated_post_route(
 
     return _decorate
 
-
 def _reject_auxiliary_conflict(handler: Any, ctx: WebHandlerDispatchContext, **kwargs: Any) -> bool:
     conflict = ctx.active_auxiliary_operation(**kwargs)
     if not conflict:
@@ -224,10 +135,8 @@ def _reject_auxiliary_conflict(handler: Any, ctx: WebHandlerDispatchContext, **k
     handler._json(_error_response({"ok": False, "error_code": "CONFLICT_AUX_OP", "error": message}, fallback_kind="queue_blocked"), status=409)
     return True
 
-
 def _with_session_credentials(handler: Any, ctx: WebHandlerDispatchContext, payload: dict[str, Any]) -> dict[str, Any]:
     return ctx.payload_with_brain_session_credentials(handler._session_id_from_cookie(), payload)
-
 
 def _get_root(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext) -> None:
     if ctx.remote_admin_required() and not ctx.has_valid_admin_token(getattr(handler, "headers", {})):
@@ -237,7 +146,6 @@ def _get_root(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext) -> Non
     stream_token = ctx.stream_token_for_session(session_id)
     handler._html(ctx.render_html(csrf_token, stream_token), extra_headers=[("Set-Cookie", ctx.session_cookie_header(session_id))])
 
-
 def _get_status(handler: Any, parsed: Any, ctx: WebHandlerDispatchContext) -> None:
     job_id = (parse_qs(parsed.query).get("job_id") or [""])[0]
     if not job_id:
@@ -245,7 +153,6 @@ def _get_status(handler: Any, parsed: Any, ctx: WebHandlerDispatchContext) -> No
         return
     payload, status = _job_status_from_any_store(ctx, job_id)
     handler._json(payload, status=status)
-
 
 def _active_job_from_any_store(ctx: WebHandlerDispatchContext) -> dict[str, Any]:
     for store, job_type in (
@@ -259,7 +166,6 @@ def _active_job_from_any_store(ctx: WebHandlerDispatchContext) -> dict[str, Any]
             return _job_response({**payload, "job_type": job_type}, job_type=job_type)
     return _job_response(ctx.active_job_payload(ctx.jobs, ctx.enrich_progress))
 
-
 def _job_status_from_any_store(ctx: WebHandlerDispatchContext, job_id: str) -> tuple[dict[str, Any], int]:
     for store, job_type, error in (
         (ctx.jobs, "run", "unknown job"),
@@ -272,14 +178,11 @@ def _job_status_from_any_store(ctx: WebHandlerDispatchContext, job_id: str) -> t
             return _job_response({**payload, "job_type": job_type}, job_type=job_type), status
     return _error_response({"ok": False, "error_code": "JOB_NOT_FOUND", "error": "unknown job"}, fallback_kind="job_not_found"), 404
 
-
 def _get_config(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext) -> None:
     handler._json({"ok": True, "config": ctx.public_run_config()})
 
-
 def _get_config_schema(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext) -> None:
     handler._json({"ok": True, "schema": ctx.public_config_schema()})
-
 
 def _get_capabilities(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext) -> None:
     from brain_alpha_ops.web_capability_registry import build_capability_registry
@@ -291,27 +194,21 @@ def _get_capabilities(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext
         )
     )
 
-
 def _get_active_job(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext) -> None:
     handler._json(_active_job_from_any_store(ctx))
-
 
 def _get_latest_result(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext) -> None:
     handler._json(ctx.latest_result_snapshot())
 
-
 def _get_health(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext) -> None:
     handler._json(ctx.health_payload())
-
 
 def _get_stream(handler: Any, parsed: Any, _ctx: WebHandlerDispatchContext) -> None:
     handler._handle_sse_stream(parsed.query)
 
-
 def _get_lifecycle(handler: Any, parsed: Any, ctx: WebHandlerDispatchContext) -> None:
     job_id = (parse_qs(parsed.query).get("job_id") or [""])[0]
     handler._json(ctx.lifecycle_payload(ctx.jobs, job_id, ctx.lifecycle_from_job))
-
 
 def _get_alpha_lifecycle(handler: Any, parsed: Any, ctx: WebHandlerDispatchContext) -> None:
     query = parse_qs(parsed.query)
@@ -331,12 +228,10 @@ def _get_alpha_lifecycle(handler: Any, parsed: Any, ctx: WebHandlerDispatchConte
         )
     )
 
-
 def _get_cloud_alphas(handler: Any, parsed: Any, ctx: WebHandlerDispatchContext) -> None:
     query = parse_qs(parsed.query)
     limit = _positive_query_int((query.get("limit") or [None])[0])
     handler._json({"ok": True, **ctx.cloud_alpha_snapshot(limit=limit)})
-
 
 def _positive_query_int(value: Any) -> int | None:
     if value in (None, ""):
@@ -347,20 +242,17 @@ def _positive_query_int(value: Any) -> int | None:
         return None
     return max(1, parsed)
 
-
 def _get_research_memory(handler: Any, parsed: Any, ctx: WebHandlerDispatchContext) -> None:
     query = parse_qs(parsed.query)
     limit = ctx.bounded_query_int((query.get("limit") or [str(DEFAULT_HISTORY_LIMIT)])[0], 1, MAX_HISTORY_LIMIT)
     top_n = ctx.bounded_query_int((query.get("top_n") or ["10"])[0], 1, 50)
     handler._json(ctx.research_memory_snapshot(limit=limit, top_n=top_n))
 
-
 def _get_research_knowledge(handler: Any, parsed: Any, ctx: WebHandlerDispatchContext) -> None:
     query = parse_qs(parsed.query)
     limit = ctx.bounded_query_int((query.get("limit") or [str(DEFAULT_LEDGER_LIMIT)])[0], 1, MAX_LEDGER_LIMIT)
     min_confidence = ctx.bounded_query_float((query.get("min_confidence") or ["0.0"])[0], 0.0, 1.0)
     handler._json(ctx.research_knowledge_snapshot(limit=limit, min_confidence=min_confidence))
-
 
 def _get_research_observability(handler: Any, parsed: Any, ctx: WebHandlerDispatchContext) -> None:
     query = parse_qs(parsed.query)
@@ -369,18 +261,15 @@ def _get_research_observability(handler: Any, parsed: Any, ctx: WebHandlerDispat
     include_cloud = ctx.payload_truthy((query.get("include_cloud") or ["true"])[0])
     handler._json(ctx.research_observability_snapshot(limit=limit, top_n=top_n, include_cloud=include_cloud))
 
-
 def _get_prompt_runs(handler: Any, parsed: Any, ctx: WebHandlerDispatchContext) -> None:
     query = parse_qs(parsed.query)
     limit = ctx.bounded_query_int((query.get("limit") or [str(DEFAULT_LEDGER_LIMIT)])[0], 1, MAX_LEDGER_LIMIT)
     handler._json(ctx.prompt_run_ledger_snapshot(limit=limit))
 
-
 def _get_sqlite_indexes(handler: Any, parsed: Any, ctx: WebHandlerDispatchContext) -> None:
     query = parse_qs(parsed.query)
     top_n = ctx.bounded_query_int((query.get("top_n") or ["10"])[0], 1, 100)
     handler._json(ctx.sqlite_index_snapshot(top_n=top_n))
-
 
 def _get_sqlite_expression_lookup(handler: Any, parsed: Any, ctx: WebHandlerDispatchContext) -> None:
     query = parse_qs(parsed.query)
@@ -390,13 +279,11 @@ def _get_sqlite_expression_lookup(handler: Any, parsed: Any, ctx: WebHandlerDisp
     max_scan_rows = ctx.bounded_query_int((query.get("max_scan_rows") or ["2000"])[0], 1, 10000)
     handler._json(ctx.sqlite_expression_lookup_payload(expression=expression, top_n=top_n, min_similarity=min_similarity, max_scan_rows=max_scan_rows))
 
-
 def _get_sqlite_record_lookup(handler: Any, parsed: Any, ctx: WebHandlerDispatchContext) -> None:
     query = parse_qs(parsed.query)
     alpha_id = (query.get("alpha_id") or [""])[0]
     limit = ctx.bounded_query_int((query.get("limit") or ["50"])[0], 1, MAX_RECORD_LOOKUP_LIMIT)
     handler._json(ctx.sqlite_record_lookup_payload(alpha_id=alpha_id, limit=limit))
-
 
 def _get_assistant_context(handler: Any, parsed: Any, ctx: WebHandlerDispatchContext) -> None:
     query = parse_qs(parsed.query)
@@ -406,14 +293,12 @@ def _get_assistant_context(handler: Any, parsed: Any, ctx: WebHandlerDispatchCon
     include_sensitive = ctx.payload_truthy((query.get("include_sensitive") or ["false"])[0])
     handler._json(ctx.assistant_context_snapshot(limit=limit, top_n=top_n, include_prompt=include_prompt, include_sensitive=include_sensitive))
 
-
 def _get_assistant_guidance(handler: Any, parsed: Any, ctx: WebHandlerDispatchContext) -> None:
     query = parse_qs(parsed.query)
     limit = ctx.bounded_query_int((query.get("limit") or [str(DEFAULT_LEDGER_LIMIT)])[0], 1, MAX_LEDGER_LIMIT)
     raw_min_confidence = (query.get("min_confidence") or [None])[0]
     min_confidence: float | None = None if raw_min_confidence in (None, "") else ctx.bounded_query_float(raw_min_confidence, 0.0, 1.0)
     handler._json(ctx.assistant_guidance_snapshot(limit=limit, min_confidence=min_confidence))
-
 
 def _get_assistant_request(handler: Any, parsed: Any, ctx: WebHandlerDispatchContext) -> None:
     query = parse_qs(parsed.query)
@@ -424,18 +309,15 @@ def _get_assistant_request(handler: Any, parsed: Any, ctx: WebHandlerDispatchCon
     include_sensitive = ctx.payload_truthy((query.get("include_sensitive") or ["false"])[0])
     handler._json(ctx.assistant_request_snapshot(limit=limit, top_n=top_n, include_prompt=include_prompt, include_offline_draft=include_draft, include_sensitive=include_sensitive))
 
-
 def _get_anti_overfit(handler: Any, parsed: Any, ctx: WebHandlerDispatchContext) -> None:
     candidate_id = (parse_qs(parsed.query).get("candidate_id") or [""])[0]
     handler._json(ctx.anti_overfit_snapshot(candidate_id=candidate_id))
-
 
 def _get_rolling_validation(handler: Any, parsed: Any, ctx: WebHandlerDispatchContext) -> None:
     query = parse_qs(parsed.query)
     candidate_id = (query.get("candidate_id") or [""])[0]
     windows = ctx.bounded_query_int((query.get("windows") or ["4"])[0], 2, 50)
     handler._json(ctx.rolling_validation_snapshot(candidate_id=candidate_id, windows=windows))
-
 
 def _get_sync_status(handler: Any, parsed: Any, ctx: WebHandlerDispatchContext) -> None:
     query = parse_qs(parsed.query)
@@ -455,7 +337,6 @@ def _get_sync_status(handler: Any, parsed: Any, ctx: WebHandlerDispatchContext) 
         payload = _compact_job_result(payload)
     handler._json(payload, status=status)
 
-
 def _get_check_status(handler: Any, parsed: Any, ctx: WebHandlerDispatchContext) -> None:
     job_id = (parse_qs(parsed.query).get("job_id") or [""])[0]
     payload, status = ctx.job_status_payload(ctx.check_jobs, job_id, ctx.enrich_progress, error="unknown check job")
@@ -465,45 +346,36 @@ def _get_check_status(handler: Any, parsed: Any, ctx: WebHandlerDispatchContext)
         payload = _job_response({**payload, "job_type": "check"}, job_type="check")
     handler._json(payload, status=status)
 
-
 def _get_check_results(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext) -> None:
     handler._json({"ok": True, **ctx.load_check_results()})
-
 
 def _get_profile(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext) -> None:
     handler._json(ctx.profile_payload(ctx.user_profile_snapshot))
 
-
 def _get_presets(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext) -> None:
     handler._json(ctx.presets_payload(ctx.load_presets))
-
 
 def _get_redline_report(handler: Any, parsed: Any, _ctx: WebHandlerDispatchContext) -> None:
     from brain_alpha_ops.web_redline_scoring import handle_redline_report
     handler._json(handle_redline_report(parse_qs(parsed.query)))
 
-
 def _get_scoring_health(handler: Any, parsed: Any, _ctx: WebHandlerDispatchContext) -> None:
     from brain_alpha_ops.web_redline_scoring import handle_scoring_health
     handler._json(handle_scoring_health(parse_qs(parsed.query)))
 
-
 def _get_checkpoint_status(handler: Any, parsed: Any, _ctx: WebHandlerDispatchContext) -> None:
     from brain_alpha_ops.web_redline_scoring import handle_checkpoint_status
     handler._json(handle_checkpoint_status(parse_qs(parsed.query)))
-
 
 def _get_backtest_slots(handler: Any, _parsed: Any, _ctx: WebHandlerDispatchContext) -> None:
     from brain_alpha_ops.web_routes import _backtest_slots_payload
 
     handler._json(_backtest_slots_payload())
 
-
 def _get_submit_readiness(handler: Any, _parsed: Any, _ctx: WebHandlerDispatchContext) -> None:
     from brain_alpha_ops.web_routes import _submit_readiness_payload
 
     handler._json(_submit_readiness_payload())
-
 
 @_validated_post_route(validate_json_object_payload, "RUN_ERROR")
 def _post_run(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext, payload: dict[str, Any]) -> None:
@@ -534,13 +406,11 @@ def _post_run(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext, payloa
         "status_url": f"/api/production-validation/status?job_id={job_id}",
     })
 
-
 def _non_submit_run_payload(payload: dict[str, Any] | None) -> dict[str, Any]:
     safe_payload = dict(payload or {})
     safe_payload["autoSubmit"] = False
     safe_payload["auto_submit"] = False
     return safe_payload
-
 
 def _create_non_submit_run_job(store: Any) -> str:
     initial = {
@@ -569,7 +439,6 @@ def _create_non_submit_run_job(store: Any) -> str:
     }
     return store.create(initial)
 
-
 @_validated_post_route(validate_json_object_payload, "CONNECTION_ERROR")
 def _post_test_connection(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext, payload: dict[str, Any]) -> None:
     payload = _with_session_credentials(handler, ctx, payload)
@@ -584,11 +453,9 @@ def _post_test_connection(handler: Any, _parsed: Any, ctx: WebHandlerDispatchCon
         response = _error_response(response)
     handler._json({**response, "session": session})
 
-
 @_validated_post_route(validate_json_object_payload, "CONFIG_SAVE_ERROR")
 def _post_config_save(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext, payload: dict[str, Any]) -> None:
     handler._json(ctx.save_run_config_payload(payload))
-
 
 @_validated_post_route(validate_job_cancel_payload, "STOP_ERROR")
 def _post_stop(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext, payload: dict[str, Any]) -> None:
@@ -598,7 +465,6 @@ def _post_stop(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext, paylo
         handler._json(_job_response({**response, "job_id": job_id, "task_id": job_id, "job_type": "run", "status": "stopping"}, job_type="run"))
     else:
         handler._json(_error_response({**response, "job_id": job_id, "error_code": response.get("error_code") or "JOB_NOT_FOUND"}, fallback_kind="job_not_found"), status=404)
-
 
 # /api/cancel is an alias for /api/stop
 @_validated_post_route(validate_job_cancel_payload, "CANCEL_ERROR")
@@ -622,11 +488,9 @@ def _post_cancel(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext, pay
             return
     handler._json(_error_response({"ok": False, "error_code": "JOB_NOT_FOUND", "error": "未找到可停止的任务。", "job_id": job_id}, fallback_kind="job_not_found"), status=404)
 
-
 @_validated_post_route(validate_sync_alphas_payload, "SYNC_ERROR")
 def _post_sync_alphas(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext, payload: dict[str, Any]) -> None:
     _start_sync_job(handler, ctx, payload)
-
 
 def _start_sync_job(handler: Any, ctx: WebHandlerDispatchContext, payload: dict[str, Any]) -> None:
     active = ctx.sync_jobs.latest_active()
@@ -658,7 +522,6 @@ def _start_sync_job(handler: Any, ctx: WebHandlerDispatchContext, payload: dict[
         response = _error_response({**response, "error_code": response.get("error_code") or "CONFLICT_RUNNING"}, fallback_kind="queue_blocked")
     handler._json(response, status=status)
 
-
 @_validated_post_route(validate_sync_alphas_payload, "SYNC_CONTEXT_ERROR")
 def _post_sync_context_only(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext, payload: dict[str, Any]) -> None:
     context_payload = {
@@ -668,7 +531,6 @@ def _post_sync_context_only(handler: Any, _parsed: Any, ctx: WebHandlerDispatchC
         "userFacingOperation": "official_operations_context_only_retry",
     }
     _start_sync_job(handler, ctx, context_payload)
-
 
 @_validated_post_route(validate_job_cancel_payload, "SYNC_CANCEL_ERROR")
 def _post_sync_cancel(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext, payload: dict[str, Any]) -> None:
@@ -701,7 +563,6 @@ def _post_sync_cancel(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext
         return
     handler._json(_error_response({**result, "job_id": job_id, "error_code": "SYNC_JOB_NOT_FOUND", "error": "未找到可停止的云端同步任务。"}, fallback_kind="job_not_found"), status=404)
 
-
 @_validated_post_route(validate_alpha_action_payload, "CHECK_ERROR")
 def _post_check(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext, payload: dict[str, Any]) -> None:
     if _reject_auxiliary_conflict(handler, ctx, allow_production=True):
@@ -709,14 +570,12 @@ def _post_check(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext, payl
     payload = _with_session_credentials(handler, ctx, payload)
     handler._json(ctx.check_candidate(payload))
 
-
 @_validated_post_route(validate_generate_candidates_payload, "GENERATE_CANDIDATES_ERROR", assistant_error_code="ASSISTANT_RESPONSE_PARSE_ERROR")
 def _post_generate_candidates(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext, payload: dict[str, Any]) -> None:
     response, status = ctx.background_job_start_payload(ctx.async_jobs, payload, ctx.start_generate_candidates_job, conflict_error="active async job")
     if response.get("ok") is False or status >= 400:
         response = _error_response({**response, "error_code": response.get("error_code") or "CONFLICT_RUNNING"}, fallback_kind="queue_blocked")
     handler._json(response, status=status)
-
 
 @_validated_post_route(validate_json_object_payload, "OPTIMIZE_CANDIDATES_ERROR")
 def _post_optimize_candidates(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext, payload: dict[str, Any]) -> None:
@@ -731,7 +590,6 @@ def _post_optimize_candidates(handler: Any, _parsed: Any, ctx: WebHandlerDispatc
     if response.get("ok") is False or status >= 400:
         response = _error_response({**response, "error_code": response.get("error_code") or "CONFLICT_RUNNING"}, fallback_kind="queue_blocked")
     handler._json(response, status=status)
-
 
 @_validated_post_route(validate_check_batch_payload, "CHECK_BATCH_ERROR")
 def _post_check_batch(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext, payload: dict[str, Any]) -> None:
@@ -754,38 +612,31 @@ def _post_check_batch(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext
         response = _error_response({**response, "error_code": response.get("error_code") or "CONFLICT_RUNNING"}, fallback_kind="queue_blocked")
     handler._json(response, status=status)
 
-
 @_validated_post_route(validate_alpha_action_payload, "SUBMIT_ERROR")
 def _post_submit(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext, payload: dict[str, Any]) -> None:
     # Web flow unconditionally blocks real BRAIN submits as a safety gate
     handler._json(_error_response({"ok": False, "error_code": "REAL_SUBMIT_DISABLED_WEB_FLOW", "error": "Web flow blocks real submit without explicit readiness review.", "submitted": False}), status=403)
-
 
 @_validated_post_route(validate_submit_batch_payload, "SUBMIT_BATCH_ERROR")
 def _post_submit_batch(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext, payload: dict[str, Any]) -> None:
     # Web flow unconditionally blocks real BRAIN batch submits as a safety gate
     handler._json(_error_response({"ok": False, "error_code": "REAL_SUBMIT_DISABLED_WEB_FLOW", "error": "Web flow blocks real submit without explicit readiness review.", "submitted": False}), status=403)
 
-
 @_validated_post_route(validate_assistant_text_payload, "ASSISTANT_RESPONSE_PARSE_ERROR", assistant_error_code="ASSISTANT_RESPONSE_PARSE_ERROR")
 def _post_assistant_response_parse(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext, payload: dict[str, Any]) -> None:
     handler._json(ctx.assistant_response_parse_post_payload(payload, ctx.assistant_response_parse_payload))
-
 
 @_validated_post_route(validate_assistant_text_payload, "ASSISTANT_RESPONSE_GUIDANCE_ERROR", assistant_error_code="ASSISTANT_RESPONSE_PARSE_ERROR")
 def _post_assistant_response_guidance(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext, payload: dict[str, Any]) -> None:
     handler._json(ctx.assistant_response_guidance_post_payload(payload, ctx.assistant_response_guidance_payload))
 
-
 @_validated_post_route(validate_assistant_cross_review_payload, "ASSISTANT_CROSS_REVIEW_ERROR", assistant_error_code="ASSISTANT_CROSS_REVIEW_PARSE_ERROR")
 def _post_assistant_cross_review(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext, payload: dict[str, Any]) -> None:
     handler._json(ctx.assistant_cross_review_payload(payload))
 
-
 @_validated_post_route(validate_assistant_guidance_save_payload, "ASSISTANT_GUIDANCE_SAVE_ERROR", assistant_error_code="ASSISTANT_RESPONSE_PARSE_ERROR")
 def _post_assistant_guidance(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext, payload: dict[str, Any]) -> None:
     handler._json(ctx.save_assistant_guidance_post_payload(payload, ctx.save_assistant_guidance_payload))
-
 
 def _post_session(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext) -> None:
     """Create a new web session and return a usable CSRF token."""
@@ -807,16 +658,13 @@ def _post_session(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext) ->
         "session": session,
     }, extra_headers=[("Set-Cookie", ctx.session_cookie_header(session_id))])
 
-
 def _post_logout(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext) -> None:
     response, headers = ctx.session_end_payload(handler._session_id_from_cookie(), ctx.expire_session, ctx.expired_session_cookie_header)
     handler._json(response, extra_headers=headers)
 
-
 def _post_shutdown(handler: Any, parsed: Any, ctx: WebHandlerDispatchContext) -> None:
     _post_logout(handler, parsed, ctx)
     ctx.start_shutdown()
-
 
 @_validated_post_route(validate_alpha_action_payload, "SCORING_ERROR")
 def _post_scoring_evaluate(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext, payload: dict[str, Any]) -> None:
@@ -825,12 +673,10 @@ def _post_scoring_evaluate(handler: Any, _parsed: Any, ctx: WebHandlerDispatchCo
         response = _error_response({**response, "error_code": response.get("error_code") or "CONFLICT_RUNNING"}, fallback_kind="queue_blocked")
     handler._json(response, status=status)
 
-
 @_validated_post_route(validate_alpha_action_payload, "SCORING_ERROR")
 def _post_scoring_attribution(handler: Any, _parsed: Any, _ctx: WebHandlerDispatchContext, payload: dict[str, Any]) -> None:
     from brain_alpha_ops.web_redline_scoring import handle_scoring_attribution
     handler._json(handle_scoring_attribution(payload))
-
 
 def _get_candidates_simulate_eligible(handler: Any, _parsed: Any, _ctx: WebHandlerDispatchContext) -> None:
     """Return eligible candidates for BRAIN simulation."""
@@ -844,7 +690,6 @@ def _get_candidates_simulate_eligible(handler: Any, _parsed: Any, _ctx: WebHandl
     except Exception as exc:
         logger.exception("simulation_candidates_payload failed")
         handler._json(_error_response({"ok": False, "error_code": "SIMULATION_PREVIEW_ERROR", "error": redact_error_message(exc)}), status=500)
-
 
 def _get_phase_state(handler: Any, _parsed: Any, _ctx: WebHandlerDispatchContext) -> None:
     """Return phase navigation state for the frontend PhaseShell component."""
@@ -866,7 +711,6 @@ def _get_phase_state(handler: Any, _parsed: Any, _ctx: WebHandlerDispatchContext
     except Exception:
         logger.warning("phase_state_payload failed — returning safe default", exc_info=True)
         handler._json({"ok": True, "current_phase": "connect", "operation_mode": "needs_setup", "connected": False, "context_fresh": False, "candidates_count": 0, "scored_count": 0, "readiness_passed": False})
-
 
 _GET_DISPATCH_HANDLERS: dict[str, RouteDispatcher] = {
     "root": _get_root,
@@ -927,6 +771,36 @@ def _post_candidates_simulate(handler: Any, _parsed: Any, ctx: WebHandlerDispatc
     if _reject_auxiliary_conflict(handler, ctx):
         return
 
+    # P0-2 fix (2026-06-13): require an explicit confirm_simulation=True
+    # in the request body before we actually start a BRAIN simulation job.
+    # This protects against accidental clicks / stale browser tabs / scripted
+    # callers that previously had one-click remote-effects paths. Tests can
+    # bypass the gate by setting HILDefaults.SIMULATION_CONFIRM_REQUIRED=False.
+    if _HILDefaults.SIMULATION_CONFIRM_REQUIRED and not bool(
+        payload.get(_HILDefaults.SIMULATION_CONFIRM_FIELD)
+    ):
+        handler._json(
+            _error_response(
+                {
+                    "ok": False,
+                    "error_code": _HILDefaults.SIMULATION_CONFIRM_ERROR_CODE,
+                    "error": _HILDefaults.SIMULATION_CONFIRM_HINT,
+                    "required_field": _HILDefaults.SIMULATION_CONFIRM_FIELD,
+                    "preview_available": True,
+                },
+                fallback_kind="queue_blocked",
+            ),
+            status=409,
+        )
+        return
+
+    # P0-2 follow-up (2026-06-13): strip the confirm_simulation field
+    # from the payload before forwarding it to the simulation worker.
+    # Without this, downstream consumers (and the integration tests
+    # below) would see the gate flag mixed in with the simulation
+    # arguments.  We use ``.pop`` to mutate the dict in place so any
+    # subsequent ``payload`` reads also see the cleaned shape.
+    payload.pop(_HILDefaults.SIMULATION_CONFIRM_FIELD, None)
     payload = _with_session_credentials(handler, ctx, payload)
     store = ctx.async_jobs
     start_message = "正在启动官方 BRAIN 模拟任务。"
@@ -1001,7 +875,6 @@ def _post_candidates_simulate(handler: Any, _parsed: Any, ctx: WebHandlerDispatc
         "status_url": f"/api/status?job_id={job_id}",
     })
 
-
 def _start_optimize_candidates_job(ctx: WebHandlerDispatchContext, job_id: str, payload: dict[str, Any]) -> None:
     import threading
 
@@ -1036,7 +909,6 @@ def _start_optimize_candidates_job(ctx: WebHandlerDispatchContext, job_id: str, 
 
     threading.Thread(target=run, daemon=True).start()
 
-
 _POST_DISPATCH_HANDLERS: dict[str, RouteDispatcher] = {
     "run": _post_run,
     "config": _post_config_save,
@@ -1063,7 +935,6 @@ _POST_DISPATCH_HANDLERS: dict[str, RouteDispatcher] = {
     "scoring_attribution": _post_scoring_attribution,
     "candidates_simulate": _post_candidates_simulate,
 }
-
 
 def _submit_with_lock(
     handler: Any,
@@ -1092,3 +963,15 @@ def _submit_with_lock(
         handler._json(_error_response(ctx.web_error(exc, error_code)), status=400)
     finally:
         ctx.submit_lock.release()
+
+# P2-12 (2026-06-13): explicit ``__all__`` so static analyzers can prove
+# that the dispatch surface (the 3 public entry points) is the only public
+# API. The 25+ private ``_post_*`` / ``_get_*`` handler bodies remain
+# intentionally underscore-prefixed.
+__all__ = [
+    "dispatch_get",
+    "dispatch_post",
+    "WebHandlerDispatchContext",
+    "RouteDispatcher",
+    "PayloadRouteDispatcher",
+]

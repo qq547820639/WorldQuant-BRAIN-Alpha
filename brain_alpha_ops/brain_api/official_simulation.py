@@ -200,6 +200,19 @@ class OfficialSimulationSubmissionMixin:
             }
 
     def submit_alpha(self, alpha_id: str, expression: str, settings: dict, *, bodyless: bool = True) -> dict:
+        # F-02 + F-03 invariant guard: 防止 web/__init__.py 之外直接调官方提交
+        # Tests opt out via env BRAIN_ALPHA_FORCE_REAL_SUBMIT=1; production web
+        # console never reaches this path because the higher-level gate returns
+        # REAL_SUBMIT_DISABLED_WEB_FLOW first.
+        import os
+        from ..runtime_constants import REAL_SUBMIT_DISABLED_WEB_FLOW
+        force_real_submit = os.environ.get("BRAIN_ALPHA_FORCE_REAL_SUBMIT") == "1"
+        if REAL_SUBMIT_DISABLED_WEB_FLOW and not force_real_submit:
+            raise BrainAPIError(
+                "REAL_SUBMIT_DISABLED_WEB_FLOW: official submit_alpha() is blocked at the API layer. "
+                "Use the web console's pre-submit review + independent approval path. "
+                "Tests can bypass via env BRAIN_ALPHA_FORCE_REAL_SUBMIT=1."
+            )
         if not alpha_id or not str(alpha_id).strip():
             raise BrainAPIError("cannot submit alpha without a valid alpha_id")
         if bodyless is not True:

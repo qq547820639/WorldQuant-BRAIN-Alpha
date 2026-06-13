@@ -130,6 +130,11 @@ def submission_preflight_error(candidate, run_config):
     return _runtime_facade().submission_preflight_error(_app_context(), candidate, run_config)
 
 
+# P3-1: alias kept for backwards-compatibility with callers that imported
+# the longer ``submission_preflight_error_message`` name from this module.
+submission_preflight_error_message = submission_preflight_error
+
+
 def submission_preflight_advisory(candidate, run_config):
     return _runtime_facade().submission_preflight_advisory(_app_context(), candidate, run_config)
 

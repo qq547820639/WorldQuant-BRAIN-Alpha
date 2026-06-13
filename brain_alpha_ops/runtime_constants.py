@@ -13,6 +13,7 @@ Import conventions
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Final
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -100,6 +101,76 @@ class CloudDefaults:
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Official context refresh defaults
+# ═══════════════════════════════════════════════════════════════════════════
+
+class ContextRefreshDefaults:
+    """Defaults for refreshing data/official_*.json from BRAIN API.
+
+    P0-1 fix (2026-06-13): 120s timeout was empirically too short; raised to
+    300s and added max_retries with progressive backoff. Previous failure
+    mode: ``official_context_refresh_status.json`` showed ``status=failed``
+    with the message ``refresh exceeded 120s timeout`` whenever the BRAIN
+    upstream needed more than 2 minutes to stream the full field catalog.
+    """
+
+    DEFAULT_TIMEOUT_SECONDS: float = 300.0
+    """Overall refresh deadline in seconds. Matches ``fetch_official_context.py`` CLI default."""
+
+    DEFAULT_MAX_RETRIES: int = 3
+    """Number of retry attempts on transient failures (network 5xx, timeout)."""
+
+    DEFAULT_RETRY_BASE_SECONDS: float = 1.0
+    """Base backoff between retries; actual wait = base * attempt_index."""
+
+    DEFAULT_STALE_HOURS: float = 24.0
+    """Hours after which the cached official context is considered stale."""
+
+    DEFAULT_CHUNK_SIZE: int = 500
+    """Field/dataset rows per API page when chunked refresh is enabled."""
+
+    # Single source of truth for sync range (P0-3 fix 2026-06-13)
+    # Three legacy duplicates (AgentLimits, user_alpha_sync, web_payload_validation)
+    # were unified to this set.
+    ALLOWED_SYNC_RANGES: frozenset[str] = frozenset({"1d", "3d", "7d", "recent", "6months", "all"})
+    """Canonical set of accepted sync ranges. Web + agent + sync layers must use this."""
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Web human-in-the-loop confirmation gates (P0-2 fix 2026-06-13)
+# ═══════════════════════════════════════════════════════════════════════════
+
+class HILDefaults:
+    """Defaults for human-in-the-loop confirmation gates on side-effecting
+    web routes.
+
+    These gates protect users from accidentally triggering BRAIN-side work
+    (which costs API quota and may take hours to complete) by requiring an
+    explicit ``confirm_*=True`` field in the request body. The check applies
+    to routes that touch external services or that have a high financial /
+    account risk if mis-triggered.
+    """
+
+    SIMULATION_CONFIRM_REQUIRED: bool = True
+    """If True, ``/api/candidates/simulate`` requires
+    ``confirm_simulation=True`` to actually start a job; otherwise it
+    returns a 409 with the confirmation gate error code so the frontend
+    can present a confirm dialog."""
+
+    SIMULATION_CONFIRM_FIELD: str = "confirm_simulation"
+    """Request body field checked for explicit user confirmation."""
+
+    SIMULATION_CONFIRM_ERROR_CODE: str = "SIMULATION_CONFIRMATION_REQUIRED"
+    """Error code returned when the confirmation field is missing/false."""
+
+    SIMULATION_CONFIRM_HINT: str = (
+        "请在前端确认弹窗中勾选 '我确认要发起官方 BRAIN 模拟' 后重试；"
+        "BRAIN 模拟会消耗配额、可能耗时数小时。"
+    )
+    """Chinese-language hint surfaced to the user when the gate trips."""
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # Agent tool limits (agent_tools.py)
 # ═══════════════════════════════════════════════════════════════════════════
 
@@ -109,7 +180,13 @@ class AgentLimits:
     MAX_TOOL_CANDIDATES: int = 100
     """Maximum candidates a single generate_candidates call can produce."""
 
-    MAX_SYNC_RANGE: set[str] = {"1d", "3d", "7d", "all"}
+    # P0-3 fix (2026-06-13): agent tools may advertise any value the canonical
+    # ALLOWED_SYNC_RANGES exposes. The old literal was missing ``recent`` and
+    # ``6months`` and is no longer authoritative. ContextRefreshDefaults is
+    # defined above in this module so the reference resolves at class body
+    # evaluation time.
+    # ``6months`` and is no longer authoritative.
+    MAX_SYNC_RANGE: frozenset[str] = ContextRefreshDefaults.ALLOWED_SYNC_RANGES
     """Allowed values for sync_range parameter."""
 
     MAX_BATCH_SIMULATIONS: int = 10
@@ -123,6 +200,7 @@ class AgentLimits:
     POLL_INTERVAL_MIN: float = 0.5
     POLL_INTERVAL_MAX: float = 30.0
     POLL_INTERVAL_DEFAULT: float = 2.0
+    """Allowed values for sync_range parameter."""
 
     EXPRESSION_INDEX_LIMIT_MAX: int = 50000
     MEMORY_LIMIT_MAX: int = 50000
@@ -173,6 +251,43 @@ class RepositoryDefaults:
 
 
 # ═══════════════════════════════════════════════════════════════════════════
+# JSONL archive policy (web_runtime_state.maybe_archive_lifecycle)
+# ═══════════════════════════════════════════════════════════════════════════
+
+class JournalArchiveDefaults:
+    """Defaults for the JSONL journal archive policy (P1-9 fix 2026-06-13).
+
+    Files larger than ``MAX_SIZE_MB`` are renamed to a timestamped archive
+    under ``<storage>/archive/`` and the current file is recreated empty on
+    the next append. Archives older than ``MAX_AGE_DAYS`` are removed.
+    The throttle interval (``ARCHIVE_CHECK_INTERVAL``) is in ``WebDefaults``
+    so the 1-hour cadence can be tuned independently from the policy below.
+    """
+
+    MAX_SIZE_MB: int = 50
+    """Per-file size threshold (in MB) above which the JSONL gets archived."""
+
+    MAX_AGE_DAYS: int = 30
+    """Archive files older than this many days are deleted on cleanup."""
+
+    # Phase 3 (P1-9): archive policy now covers the full set of journal
+    # files that can grow unbounded. lifecycle.jsonl was the only one
+    # archived before; candidates/checks/backtests/submissions join it.
+    # alpha_features.jsonl / cloud_alphas.jsonl are intentionally excluded
+    # because alpha_features is read by indexes that assume continuity and
+    # cloud_alphas is the system of record for sync state (regenerated on
+    # next sync rather than rotated).
+    ARCHIVE_FILES: tuple[str, ...] = (
+        "lifecycle.jsonl",
+        "candidates.jsonl",
+        "checks.jsonl",
+        "backtests.jsonl",
+        "submissions.jsonl",
+    )
+    """Filenames covered by the archive policy. Subset of ``REPOSITORY_JSONL_FILES``."""
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 # Scoring / pipeline defaults
 # ═══════════════════════════════════════════════════════════════════════════
 
@@ -203,3 +318,29 @@ class PipelineDefaults:
     DEFAULT_CYCLE_PAUSE_SECONDS: float = 2.0
     DEFAULT_MAX_CYCLES: int = 10
     CONVERGENCE_STALL_CYCLES: int = 5
+
+
+# NOTE: ``ContextRefreshDefaults`` and ``HILDefaults`` are intentionally
+# defined earlier in this module (before ``AgentLimits``) because
+# ``AgentLimits.MAX_SYNC_RANGE`` now references
+# ``ContextRefreshDefaults.ALLOWED_SYNC_RANGES`` directly. This is a P0-3
+# fix from 2026-06-13; keep the class definitions ordered accordingly.
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Hard kill-switches (MUST stay True unless the consultant relaxes the policy)
+# ═══════════════════════════════════════════════════════════════════════════
+
+# Web console must NEVER call api.submit_alpha for real.  Production submits
+# require a separate approval path.  This constant is imported by every
+# web_submission_*.py entry point and by the in-tree `REAL_SUBMIT_DISABLED_WEB_FLOW`
+# blocker.  Tests can override via env BRAIN_ALPHA_FORCE_REAL_SUBMIT=1 only when
+# the runtime_constants.allow_real_submit_override is True (consultant-gated).
+REAL_SUBMIT_DISABLED_WEB_FLOW: Final[bool] = True
+"""Hard kill-switch: when True, the Web console's submit endpoints always return
+``REAL_SUBMIT_DISABLED_WEB_FLOW`` and never invoke ``api.submit_alpha``.
+
+F-02 fix: ``Final[bool]`` annotation signals to type checkers this is a hard
+constant.  The runtime guard in ``brain_api/official_simulation.py`` also
+enforces it at the API layer so direct imports cannot bypass it.
+"""

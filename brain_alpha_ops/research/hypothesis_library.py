@@ -17,7 +17,6 @@ Usage::
                            expr_fam_weights={"revision_diff": 1.3},
                            window_weights={3: 1.2})
 """
-
 from __future__ import annotations
 
 import logging
@@ -52,7 +51,6 @@ PACKAGED_HYPOTHESIS_LIBRARY_FILES = (
     "value_reversal.yaml",
 )
 
-
 def ensure_hypothesis_library_files(directory: str | Path) -> dict[str, object]:
     """Repair missing packaged hypothesis YAML files from PyInstaller data."""
     target_root = Path(directory)
@@ -69,10 +67,14 @@ def ensure_hypothesis_library_files(directory: str | Path) -> dict[str, object]:
     present = result["present"]
     missing = result["missing"]
     failed = result["failed"]
-    assert isinstance(copied, list)
-    assert isinstance(present, list)
-    assert isinstance(missing, list)
-    assert isinstance(failed, list)
+    if not isinstance(copied, list):
+        raise TypeError(f"expected result['copied'] to be a list, got {type(copied).__name__}")
+    if not isinstance(present, list):
+        raise TypeError(f"expected result['present'] to be a list, got {type(present).__name__}")
+    if not isinstance(missing, list):
+        raise TypeError(f"expected result['missing'] to be a list, got {type(missing).__name__}")
+    if not isinstance(failed, list):
+        raise TypeError(f"expected result['failed'] to be a list, got {type(failed).__name__}")
 
     for filename in PACKAGED_HYPOTHESIS_LIBRARY_FILES:
         target = target_root / filename
@@ -108,7 +110,6 @@ def ensure_hypothesis_library_files(directory: str | Path) -> dict[str, object]:
         )
     return result
 
-
 def _bundled_hypothesis_root() -> Path | None:
     meipass = getattr(sys, "_MEIPASS", None)
     if not meipass:
@@ -116,19 +117,16 @@ def _bundled_hypothesis_root() -> Path | None:
     root = Path(str(meipass)) / DEFAULT_HYPOTHESIS_LIBRARY_RELATIVE_DIR
     return root if root.is_dir() else None
 
-
 def _yaml_file_is_usable(path: Path) -> bool:
     try:
         return path.is_file() and path.stat().st_size > 0
     except OSError:
         return False
 
-
 def _safe_load_yaml(text: str) -> dict[str, Any]:
     if yaml is not None:
         return yaml.safe_load(text) or {}
     return _minimal_yaml_load(text)
-
 
 def _minimal_yaml_load(text: str) -> dict[str, Any]:
     """Parse the limited YAML subset used by packaged hypothesis files.
@@ -281,7 +279,6 @@ def _minimal_yaml_load(text: str) -> dict[str, Any]:
     result = parse_block(0)
     return result if isinstance(result, dict) else {}
 
-
 # ═══════════════════════════════════════════════════════════════════════
 # Data Models
 # ═══════════════════════════════════════════════════════════════════════
@@ -309,7 +306,6 @@ class Rationale:
             result["behavioral_bias"] = self.behavioral_bias
         return result
 
-
 @dataclass
 class FieldCategoryDef:
     """Semantic field category — not a concrete field name, but a grouping label."""
@@ -336,7 +332,6 @@ class FieldCategoryDef:
         if self.examples:
             result["examples"] = self.examples
         return result
-
 
 @dataclass
 class ExpressionFamily:
@@ -385,7 +380,6 @@ class ExpressionFamily:
             all_win = [3, 6, 12]  # sensible defaults
         return sorted(set(all_win))
 
-
 @dataclass
 class FailureMode:
     """Expected failure mode with mitigation guidance."""
@@ -408,7 +402,6 @@ class FailureMode:
         if self.mitigation:
             result["mitigation"] = self.mitigation
         return result
-
 
 @dataclass
 class AdaptationConfig:
@@ -436,7 +429,6 @@ class AdaptationConfig:
         if self.unsuitable_regions:
             result["unsuitable_regions"] = self.unsuitable_regions
         return result
-
 
 @dataclass
 class ExperienceWeights:
@@ -472,7 +464,6 @@ class ExperienceWeights:
 
     def _ensure_window_key(self, w: int) -> str:
         return str(w)
-
 
 @dataclass
 class Hypothesis:
@@ -523,7 +514,6 @@ class Hypothesis:
             "adaptation": self.adaptation.to_dict(),
             "experience_weights": self.experience_weights.to_dict(),
         }
-
 
 @dataclass
 class GenerationMeta:
@@ -576,7 +566,6 @@ class GenerationMeta:
         """Serialize to JSON string for storage in Candidate.template_source."""
         import json
         return json.dumps(self.to_dict(), ensure_ascii=False)
-
 
 # ═══════════════════════════════════════════════════════════════════════
 # HypothesisLibrary
@@ -678,10 +667,26 @@ class HypothesisLibrary:
         field_cat_weights: dict[str, float] | None = None,
         expr_fam_weights: dict[str, float] | None = None,
         window_weights: dict[str, float] | None = None,
+        *,
+        sample_count: int | None = None,
     ) -> None:
-        """Update experience weights using EMA smoothing::
+        """Update experience weights using adaptive EMA smoothing::
 
-            new = 0.8 * old + 0.2 * update
+            new = (1 - alpha) * old + alpha * update
+
+        P2-16 (2026-06-13): ``alpha`` is no longer a fixed 0.2; it shrinks
+        with the cumulative sample count so the EMA becomes a slow learner
+        once the model has seen enough data::
+
+            alpha = base_alpha / (1 + decay * sample_count)
+
+        With ``base_alpha=0.2`` and ``decay=0.01`` the schedule is:
+        - sample 1     → alpha ≈ 0.20   (responsive early)
+        - sample 50    → alpha ≈ 0.10   (slowing down)
+        - sample 200+  → alpha ≈ 0.05   (slow learner)
+
+        The base value matches the previous fixed alpha so callers that
+        don't pass ``sample_count`` see no behavior change.
 
         Parameters
         ----------
@@ -694,20 +699,30 @@ class HypothesisLibrary:
         window_weights:
             Mapping of window (as int key) → winner ratio (0.0–1.0).
             Keys are automatically converted to str for internal storage.
+        sample_count:
+            Number of historical samples available for this hypothesis.
+            When provided, the EMA alpha shrinks as above. When omitted
+            the legacy fixed 0.2 alpha is used.
         """
         hyp = self._hypotheses.get(hypothesis_id)
         if hyp is None:
             logger.warning("HypothesisLibrary.update_weights: hypothesis '%s' not found.", hypothesis_id)
             return
 
-        alpha = 0.2  # EMA smoothing factor
+        if sample_count is None:
+            alpha = 0.2  # legacy fixed factor (P2-16 fallback)
+        else:
+            base_alpha = 0.2
+            decay = 0.01
+            alpha = max(0.05, min(0.5, base_alpha / (1.0 + decay * max(0, sample_count))))
+        retain = 1.0 - alpha  # weight retained from the previous estimate
 
         # Update field category weights
         if field_cat_weights:
             for fc in hyp.field_categories:
                 update = field_cat_weights.get(fc.category)
                 if update is not None:
-                    fc.weight = 0.8 * fc.weight + 0.2 * max(0.0, min(1.0, float(update)))
+                    fc.weight = retain * fc.weight + alpha * max(0.0, min(1.0, float(update)))
                     hyp.experience_weights.field_category_weights[fc.category] = fc.weight
 
         # Update expression family weights
@@ -715,7 +730,7 @@ class HypothesisLibrary:
             for ef in hyp.expression_families:
                 update = expr_fam_weights.get(ef.id)
                 if update is not None:
-                    ef.weight = 0.8 * ef.weight + 0.2 * max(0.0, min(1.0, float(update)))
+                    ef.weight = retain * ef.weight + alpha * max(0.0, min(1.0, float(update)))
                     hyp.experience_weights.expression_family_weights[ef.id] = ef.weight
 
         # Update window weights
@@ -730,13 +745,13 @@ class HypothesisLibrary:
                     if update is not None:
                         key = str(w)
                         old = hyp.experience_weights.window_weights.get(key, 1.0)
-                        new_val = 0.8 * old + 0.2 * max(0.0, min(1.0, float(update)))
+                        new_val = retain * old + alpha * max(0.0, min(1.0, float(update)))
                         hyp.experience_weights.window_weights[key] = new_val
 
         # Update overall weight as average of expression family weights
         if hyp.expression_families:
             avg_weight = sum(ef.weight for ef in hyp.expression_families) / len(hyp.expression_families)
-            hyp.experience_weights.overall = 0.8 * hyp.experience_weights.overall + 0.2 * avg_weight
+            hyp.experience_weights.overall = retain * hyp.experience_weights.overall + alpha * avg_weight
 
         self._validate_weights()
 

@@ -23,7 +23,7 @@ from brain_alpha_ops.web_candidate_bindings import (  # noqa: F401
     cloud_status_for as _cloud_status_for,
     cloud_similarity_risk as _cloud_similarity_risk,
     check_candidate as _check_candidate,
-    submission_preflight_error as _submission_preflight_error,
+    submission_preflight_error_message as _submission_preflight_error,
     submission_preflight_advisory as _submission_preflight_advisory,
     observability_submission_preflight as _observability_submission_preflight,
     record_submit_blocked as _record_submit_blocked,

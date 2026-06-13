@@ -4,13 +4,11 @@ This module eliminates the duplicate _bounded_int / _bounded_float / _truthy /
 _candidate_argument / _expression_batch_argument definitions that previously
 existed in both agent_tools.py and agent_research_tools.py.
 """
-
 from __future__ import annotations
 
 from typing import Any
 
 from brain_alpha_ops.research.expression_ast import expression_key
-
 
 def bounded_int(value: Any, lower: int, upper: int, *, default: int | None = None) -> int:
     """Clamp an integer value into [lower, upper].
@@ -30,7 +28,6 @@ def bounded_int(value: Any, lower: int, upper: int, *, default: int | None = Non
         parsed = default if default is not None else lower
     return min(max(parsed, lower), upper)
 
-
 def bounded_float(value: Any, lower: float, upper: float, *, default: float | None = None) -> float:
     """Clamp a float value into [lower, upper].
 
@@ -49,7 +46,6 @@ def bounded_float(value: Any, lower: float, upper: float, *, default: float | No
         parsed = default if default is not None else lower
     return min(max(parsed, lower), upper)
 
-
 def truthy(value: Any) -> bool:
     """Interpret a value as a boolean, accepting common string representations.
 
@@ -63,14 +59,12 @@ def truthy(value: Any) -> bool:
         return False
     return bool(value)
 
-
 def required_text(args: dict[str, Any], key: str) -> str:
     """Extract a non-empty string argument, raising ValueError on missing/empty."""
     value = str(args.get(key, "") or "").strip()
     if not value:
         raise ValueError(f"missing required argument: {key}")
     return value
-
 
 def candidate_argument(args: dict[str, Any]) -> dict[str, Any]:
     """Build a candidate dict from tool arguments.
@@ -92,7 +86,6 @@ def candidate_argument(args: dict[str, Any]) -> dict[str, Any]:
         "submission": dict(args.get("submission") or {}),
     }
 
-
 def expression_batch_argument(args: dict[str, Any]) -> list[str]:
     """Extract a deduplicated list of expressions from tool arguments."""
     raw = args.get("expressions")
@@ -112,7 +105,6 @@ def expression_batch_argument(args: dict[str, Any]) -> list[str]:
         seen.add(marker)
         expressions.append(expression)
     return expressions
-
 
 def list_text(value: Any) -> list[str]:
     """Extract a deduplicated list of case-insensitive unique strings."""

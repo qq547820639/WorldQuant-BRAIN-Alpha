@@ -24,9 +24,9 @@ _log = logging.getLogger(__name__)
 
 from brain_alpha_ops.config import runtime_project_root
 from brain_alpha_ops.redaction import redact_error_message
+from brain_alpha_ops.runtime_constants import ContextRefreshDefaults
 
 from .schemas import DatasetRef, OfficialDataset, OfficialField, OfficialOperator
-
 
 REQUIRED_OFFICIAL_CONTEXT_FILES = (
     "official_fields.json",
@@ -40,7 +40,6 @@ SUPPLEMENTAL_OFFICIAL_CONTEXT_FILES = (
     "official_context_refresh_status.json",
 )
 PACKAGED_OFFICIAL_CONTEXT_FILES = REQUIRED_OFFICIAL_CONTEXT_FILES + SUPPLEMENTAL_OFFICIAL_CONTEXT_FILES
-
 
 def ensure_official_context_files(data_dir: str | Path = "data") -> dict[str, object]:
     """Copy bundled official context files into the persistent runtime data dir.
@@ -63,10 +62,14 @@ def ensure_official_context_files(data_dir: str | Path = "data") -> dict[str, ob
     present = result["present"]
     missing = result["missing"]
     failed = result["failed"]
-    assert isinstance(copied, list)
-    assert isinstance(present, list)
-    assert isinstance(missing, list)
-    assert isinstance(failed, list)
+    if not isinstance(copied, list):
+        raise TypeError(f"expected result['copied'] to be a list, got {type(copied).__name__}")
+    if not isinstance(present, list):
+        raise TypeError(f"expected result['present'] to be a list, got {type(present).__name__}")
+    if not isinstance(missing, list):
+        raise TypeError(f"expected result['missing'] to be a list, got {type(missing).__name__}")
+    if not isinstance(failed, list):
+        raise TypeError(f"expected result['failed'] to be a list, got {type(failed).__name__}")
 
     for filename in PACKAGED_OFFICIAL_CONTEXT_FILES:
         target = target_root / filename
@@ -104,12 +107,10 @@ def ensure_official_context_files(data_dir: str | Path = "data") -> dict[str, ob
         )
     return result
 
-
 def _resolve_data_root(data_dir: str | Path) -> Path:
     data_path = Path(data_dir)
     root = data_path if data_path.is_absolute() else runtime_project_root() / data_path
     return root.resolve()
-
 
 def _bundled_data_root() -> Path | None:
     meipass = getattr(sys, "_MEIPASS", None)
@@ -117,7 +118,6 @@ def _bundled_data_root() -> Path | None:
         return None
     root = Path(str(meipass)) / "data"
     return root if root.is_dir() else None
-
 
 def _file_is_usable(path: Path, *, required: bool) -> bool:
     if not path.is_file():
@@ -134,7 +134,6 @@ def _file_is_usable(path: Path, *, required: bool) -> bool:
     except (OSError, json.JSONDecodeError):
         return False
     return isinstance(payload, list) and bool(payload)
-
 
 class OfficialDataLoader:
     """Singleton that loads official_fields/operators/datasets JSON files on first use."""
@@ -283,15 +282,29 @@ class OfficialDataLoader:
     # ------------------------------------------------------------------
     # P2-5: Context refresh
     # ------------------------------------------------------------------
-    def refresh(self, data_dir: str | Path = "data", max_retries: int = 2) -> dict:
+    def refresh(
+        self,
+        data_dir: str | Path = "data",
+        max_retries: int | None = None,
+        retry_base_seconds: float | None = None,
+    ) -> dict:
         """Reload official JSON files and return diff stats.
 
         Preserves existing data on failure. Retries up to *max_retries*
-        times with 1s backoff between attempts for transient file I/O issues.
+        times with *retry_base_seconds* backoff between attempts for transient
+        file I/O issues.
 
         Call periodically (e.g. every 24h) to pick up new fields/operators
         added to the BRAIN platform.
+
+        P0-1 fix (2026-06-13): defaults now sourced from
+        :class:`ContextRefreshDefaults` (300s timeout-equivalent retries) so
+        that web refresh paths stop failing with the previous 120s ceiling.
         """
+        if max_retries is None:
+            max_retries = ContextRefreshDefaults.DEFAULT_MAX_RETRIES
+        if retry_base_seconds is None:
+            retry_base_seconds = ContextRefreshDefaults.DEFAULT_RETRY_BASE_SECONDS
         old_fields = self.field_count
         old_operators = self.operator_count
         old_datasets = self.dataset_count
@@ -300,7 +313,7 @@ class OfficialDataLoader:
             try:
                 fresh = OfficialDataLoader()
                 fresh.load_all(data_dir)
-                
+
                 # Verify loaded content is non-trivial
                 if not fresh._fields and not fresh._operators and not fresh._datasets:
                     raise RuntimeError("refresh produced empty data sets")
@@ -339,7 +352,7 @@ class OfficialDataLoader:
                         "OfficialDataLoader.refresh() attempt %d/%d failed: %s. Retrying...",
                         attempt, max_retries, last_error[:120]
                     )
-                    time.sleep(1.0 * attempt)  # progressive backoff
+                    time.sleep(retry_base_seconds * attempt)  # progressive backoff
 
         # All retries exhausted — existing data was never mutated.
         _log.error(
@@ -356,6 +369,39 @@ class OfficialDataLoader:
             "operators_delta": 0,
             "datasets_delta": 0,
         }
+
+    def is_stale(
+        self,
+        status_path: str | Path = "data/official_context_refresh_status.json",
+        stale_hours: float | None = None,
+    ) -> bool:
+        """True when the cached context has not been refreshed within
+        ``stale_hours`` (default 24h from :class:`ContextRefreshDefaults`).
+
+        P0-1 fix (2026-06-13): this helper lets callers surface a clear
+        "context is stale" warning instead of silently using old data.
+        """
+        if stale_hours is None:
+            stale_hours = ContextRefreshDefaults.DEFAULT_STALE_HOURS
+        from datetime import datetime, timezone
+        path = Path(status_path)
+        if not path.is_file():
+            return True
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return True
+        generated_at = payload.get("generated_at")
+        if not isinstance(generated_at, str) or not generated_at:
+            return True
+        try:
+            ts = datetime.fromisoformat(generated_at)
+        except ValueError:
+            return True
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=timezone.utc)
+        age = datetime.now(timezone.utc) - ts
+        return age.total_seconds() > stale_hours * 3600
 
     # ------------------------------------------------------------------
     # Counts

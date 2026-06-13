@@ -67,9 +67,15 @@ class ResearchBudget:
     assistant_guidance_min_confidence: float = 0.6
 
 
-@dataclass
+@dataclass(frozen=True)
 class ScoringConfig:
-    """Configurable scoring weights that accept calibrate_weights.py output."""
+    """Configurable scoring weights that accept calibrate_weights.py output.
+
+    P3-18 (2026-06-13): ``frozen=True`` so the field assignments attempted
+    by ``AutoCalibrator.apply`` (pre-Phase 3) raise ``FrozenInstanceError``
+    immediately rather than silently mutating the live config. Calibration
+    must now go through ``dataclasses.replace`` (see ``auto_calibrator.apply``).
+    """
 
     prior_layer_weight: float = 0.30
     empirical_layer_weight: float = 0.45

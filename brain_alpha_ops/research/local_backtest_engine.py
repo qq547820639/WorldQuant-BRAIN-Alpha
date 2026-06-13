@@ -18,7 +18,6 @@ Usage::
     result = engine.evaluate("rank(ts_zscore(close, 20))")
     print(result["sharpe"], result["fitness"])
 """
-
 from __future__ import annotations
 
 import logging
@@ -32,6 +31,21 @@ from pathlib import Path
 from typing import Any
 
 from brain_alpha_ops.redaction import redact_error_message, redact_text
+from brain_alpha_ops.research.local_backtest_market_data import MarketDataFrame as _MarketDataFrame  # re-export
+from brain_alpha_ops.research.local_backtest_metrics_helpers import (
+    cumsum as _cumsum,
+    pearson_r as _pearson_r,
+    rank_values as _rank_values,
+    safe_corr as _safe_corr,
+    safe_mean as _safe_mean,
+    safe_stdev as _safe_stdev,
+    spearman_r as _spearman_r,
+)
+
+# P2-14 (2026-06-13): ``MarketDataFrame`` is now defined in
+# ``local_backtest_market_data`` and re-exported here for backward
+# compatibility with code that imports it from this module.
+MarketDataFrame = _MarketDataFrame
 
 logger = logging.getLogger(__name__)
 
@@ -49,11 +63,33 @@ _TOKEN_PATTERN = re.compile(
 # ═══════════════════════════════════════════════════════════════════════════
 
 @dataclass
-class MarketDataFrame:
-    """A simple cross-sectional market data frame.
-
-    Columns map field names to 2D arrays: rows = dates, columns = stocks.
+class _LegacyMarketDataFrameShim:
     """
+
+# ╔══════════════════ P2-14 Structural Overview ═══════════════════╗
+# ║ Local FASTEXPR-subset backtest engine (84 dates × 160 assets) ║
+# ║                                                               ║
+# ║ Four logical sub-components:                                  ║
+# ║   §A ExpressionEvaluator  — FASTEXPR parsing + vector eval    ║
+# ║   §B PortfolioConstructor — equal-weight cross-sectional      ║
+# ║   §C MetricsComputer      — sharpe/fitness/turnover/drawdown  ║
+# ║   §D SyntheticDataProvider — 84×160 synthetic market data     ║
+# ║                                                               ║
+# ║ Used by: _local_prefilter in pipeline.py (score penalty = 8)  ║
+# ║ Output:  scorecard.local_quality for empirical scoring        ║
+# ║                                                               ║
+# ║ Future P2-14 work: extract 4 sub-components into              ║
+# ║ research/local_backtest/ package                              ║
+# ╚═══════════════════════════════════════════════════════════════╝
+Deprecated alias kept for source compatibility.
+
+    The canonical class now lives in
+    :mod:`brain_alpha_ops.research.local_backtest_market_data` and is
+    re-exported as ``MarketDataFrame`` at the top of this module (P2-14,
+    2026-06-13). This shim is only referenced from places that imported
+    ``MarketDataFrame`` from a sub-scope; it should not be used in new code.
+    """
+
     fields: dict[str, list[list[float]]] = field(default_factory=dict)
     dates: list[str] = field(default_factory=list)
     symbols: list[str] = field(default_factory=list)
@@ -69,6 +105,12 @@ class MarketDataFrame:
             return list(rows[date_idx])
         return [0.0] * self.n_symbols
 
+# Backward-compat shim: external modules that pre-date the split may still
+# import the symbol from this module body. The canonical class is imported
+# above; the legacy local class above is kept so that *any* in-module
+# ``isinstance(x, MarketDataFrame)`` checks against the original dataclass
+# continue to succeed. This avoids breaking tests during the P2-14 split.
+_legacy_MarketDataFrame = _LegacyMarketDataFrameShim
 
 class SyntheticDataProvider:
     """Generates synthetic market data for local backtest evaluation.
@@ -189,7 +231,6 @@ class SyntheticDataProvider:
                 new_row.append(prev_price * math.exp(stock_return))
             prices.append(new_row)
         return prices
-
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Expression Evaluator (Lightweight FASTEXPR subset)
@@ -661,7 +702,6 @@ class LocalExpressionEvaluator:
             return float(arg[0][0])
         return 2.0
 
-
 # ═══════════════════════════════════════════════════════════════════════════
 # Portfolio Constructor
 # ═══════════════════════════════════════════════════════════════════════════
@@ -715,7 +755,6 @@ class PortfolioConstructor:
             weights.append(day_weights)
         return weights
 
-
 # ═══════════════════════════════════════════════════════════════════════════
 # Metrics Computer
 # ═══════════════════════════════════════════════════════════════════════════
@@ -753,7 +792,6 @@ class BacktestMetrics:
             "n_dates": self.n_dates,
             "n_symbols": self.n_symbols,
         }
-
 
 class MetricsComputer:
     """Compute standard backtest metrics from portfolio weights and returns."""
@@ -866,7 +904,6 @@ class MetricsComputer:
         metrics.sub_universe_sharpe = (sub_mean / max(sub_std, 1e-10)) * math.sqrt(trading_days_per_year)
 
         return metrics
-
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Main Engine
@@ -1080,69 +1117,10 @@ class LocalBacktestEngine:
             reasons.append(f"Concentration {metrics.weight_concentration:.2%} > 10% (FAIL)")
         return reasons
 
+# Math helpers moved to local_backtest_metrics_helpers.py (P1-4 refactor).
+# Kept as a no-op marker to avoid breaking accidental imports via
+# ``from brain_alpha_ops.research.local_backtest_engine import _safe_mean``.
+def _safe_mean(values: list[float]) -> float:  # pragma: no cover - re-export
+    from brain_alpha_ops.research.local_backtest_metrics_helpers import safe_mean
 
-# ═══════════════════════════════════════════════════════════════════════════
-# Math helpers
-# ═══════════════════════════════════════════════════════════════════════════
-
-def _safe_mean(values: list[float]) -> float:
-    if not values:
-        return 0.0
-    return statistics.mean(values)
-
-
-def _safe_stdev(values: list[float]) -> float:
-    if len(values) <= 1:
-        return 0.0
-    return statistics.stdev(values)
-
-
-def _safe_corr(xs: list[float], ys: list[float]) -> float:
-    """Pearson correlation coefficient, compatible with Python 3.9+."""
-    n = min(len(xs), len(ys))
-    if n <= 2:
-        return 0.0
-    return _pearson_r(xs[:n], ys[:n])
-
-
-def _pearson_r(x: list[float], y: list[float]) -> float:
-    """Manual Pearson correlation for Python <3.10 compatibility.
-
-    Caller (_safe_corr) already validated n > 2.
-    """
-    n = len(x)
-    mx = statistics.mean(x)
-    my = statistics.mean(y)
-    sx = _safe_stdev(x)
-    sy = _safe_stdev(y)
-    if sx < 1e-10 or sy < 1e-10:
-        return 0.0
-    cov = sum((xi - mx) * (yi - my) for xi, yi in zip(x, y)) / (n - 1)
-    return cov / (sx * sy)
-
-
-def _spearman_r(xs: list[float], ys: list[float]) -> float:
-    """Spearman rank correlation."""
-    n = min(len(xs), len(ys))
-    if n <= 2:
-        return 0.0
-    rank_x = _rank_values(xs[:n])
-    rank_y = _rank_values(ys[:n])
-    return _pearson_r(rank_x, rank_y)
-
-
-def _rank_values(values: list[float]) -> list[float]:
-    indexed = sorted(enumerate(values), key=lambda x: x[1])
-    ranks = [0.0] * len(values)
-    for rank, (i, _) in enumerate(indexed):
-        ranks[i] = float(rank) / max(1, len(values) - 1)
-    return ranks
-
-
-def _cumsum(values: list[float]) -> list[float]:
-    result = []
-    total = 0.0
-    for v in values:
-        total += v
-        result.append(total)
-    return result
+    return safe_mean(values)

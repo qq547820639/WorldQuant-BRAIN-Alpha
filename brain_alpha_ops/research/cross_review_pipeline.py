@@ -26,7 +26,6 @@ Architecture
          ├── Pre-submission review
          └── Audit trail recording
 """
-
 from __future__ import annotations
 
 import json
@@ -45,7 +44,6 @@ logger = logging.getLogger(__name__)
 
 REVIEW_PIPELINE_SCHEMA = "dual_llm_review_pipeline.v2"
 
-
 # ═══════════════════════════════════════════════════════════════════════════
 # Protocols & Adapters
 # ═══════════════════════════════════════════════════════════════════════════
@@ -61,7 +59,6 @@ class ReviewableCandidate(Protocol):
     def family(self) -> str: ...
     @property
     def hypothesis(self) -> str: ...
-
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Knowledge Evidence Checker
@@ -79,7 +76,6 @@ class EvidenceCheckResult:
     matched_failure_title: str = ""
     evidence_score: float = 0.0       # 0.0–1.0: how well evidence supports claim
     risk_level: str = "low"           # low | medium | high
-
 
 class KnowledgeEvidenceChecker:
     """Checks primary LLM claims against the structured knowledge base.
@@ -149,7 +145,6 @@ class KnowledgeEvidenceChecker:
 
         return results
 
-
 # ═══════════════════════════════════════════════════════════════════════════
 # Review Decision Engine
 # ═══════════════════════════════════════════════════════════════════════════
@@ -179,7 +174,6 @@ class ReviewDecision:
     reviewer_digest: str = ""
 
     generated_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
-
 
 class ReviewDecisionEngine:
     """Aggregate primary, reviewer, and evidence checks into a single decision.
@@ -267,7 +261,6 @@ class ReviewDecisionEngine:
         decision.confidence_score = (primary_confidence + reviewer_confidence + evidence_support) / 3
         decision.recommendations.append("Accepted with warnings; monitor closely in subsequent cycles.")
         return decision
-
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Cross-Review Pipeline (orchestrator)
@@ -476,7 +469,6 @@ class CrossReviewPipeline:
         except OSError as exc:
             logger.warning("failed to write review audit trail: %s", redact_error_message(exc, max_length=160))
 
-
 # ═══════════════════════════════════════════════════════════════════════════
 # Helpers
 # ═══════════════════════════════════════════════════════════════════════════
@@ -488,7 +480,6 @@ def _ensure_dict_response(response: str | dict[str, Any]) -> dict[str, Any]:
         return json.loads(str(response))
     except json.JSONDecodeError:
         return {"summary": str(response)[:500], "confidence": 0.3, "risk_flags": ["unparseable_response"]}
-
 
 def _extract_claims(primary: dict[str, Any]) -> list[dict[str, Any]]:
     """Extract structured claims from a parsed primary response."""
@@ -514,7 +505,6 @@ def _extract_claims(primary: dict[str, Any]) -> list[dict[str, Any]]:
         for action in actions:
             claims.append({"type": "action_recommendation", "text": str(action), "confidence": primary.get("confidence", 0.5)})
     return claims
-
 
 def _dedup(items: list[str]) -> list[str]:
     seen: set[str] = set()

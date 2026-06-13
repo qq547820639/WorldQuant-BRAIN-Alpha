@@ -9,14 +9,18 @@ QuantGPT's rules/findings/failures design.  Each layer has a distinct lifecycle:
 
 Knowledge is persisted as individual structured files under each directory,
 making it human-readable, git-diffable, and easily auditable.
-"""
 
+P3-2: per-instance ``threading.RLock`` guards every write method
+(``save`` / ``delete`` / ``touch`` / ``extract_from_memory``).  Reads
+remain lock-free so the assistant UI and pipeline reads are unaffected.
+"""
 from __future__ import annotations
 
 import json
 import logging
 import os
 import re
+import threading
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from hashlib import sha256
@@ -81,7 +85,6 @@ _DEFAULT_CATEGORY_BY_KIND = {
     "failures": "low_signal",
 }
 
-
 @dataclass
 class KnowledgeRecord:
     """Backward-compatible research knowledge record facade.
@@ -104,7 +107,6 @@ class KnowledgeRecord:
     created_at: str = ""
     updated_at: str = ""
     metadata: dict[str, Any] = field(default_factory=dict)
-
 
 @dataclass
 class KnowledgeEntry:
@@ -154,7 +156,6 @@ class KnowledgeEntry:
     def to_dict(self) -> dict[str, Any]:
         return {k: v for k, v in asdict(self).items() if k != "entry_id"} | {"entry_id": self.entry_id}
 
-
 def _compute_entry_id(entry: KnowledgeEntry) -> str:
     payload = json.dumps({
         "layer": entry.layer,
@@ -164,13 +165,11 @@ def _compute_entry_id(entry: KnowledgeEntry) -> str:
     }, ensure_ascii=False, sort_keys=True)
     return sha256(payload.encode("utf-8")).hexdigest()[:16]
 
-
 def _bounded_confidence(value: Any) -> float:
     try:
         return max(0.0, min(1.0, float(value)))
     except (TypeError, ValueError):
         return 0.0
-
 
 def _stringify_evidence(value: Any) -> str:
     if isinstance(value, str):
@@ -180,7 +179,6 @@ def _stringify_evidence(value: Any) -> str:
     except Exception:
         logger.warning("knowledge_base: failed to serialize evidence value; using string fallback", exc_info=True)
         return str(value)
-
 
 def _knowledge_record_from_input(record: KnowledgeRecord | dict[str, Any]) -> KnowledgeRecord:
     if isinstance(record, KnowledgeRecord):
@@ -210,7 +208,6 @@ def _knowledge_record_from_input(record: KnowledgeRecord | dict[str, Any]) -> Kn
         metadata=dict(metadata),
     )
 
-
 class StructuredKnowledgeBase:
     """Three-layer structured knowledge base with persistence and querying.
 
@@ -235,6 +232,10 @@ class StructuredKnowledgeBase:
     def __init__(self, storage_dir: str | Path = "data"):
         self.storage_dir = Path(storage_dir)
         self._base = self.storage_dir / "knowledge"
+        # P3-2: per-instance write lock.  Two concurrent writers (e.g. the
+        # pipeline and the assistant thread) used to race on path creation
+        # and JSON file overwrite.  Reads remain lock-free.
+        self._write_lock = threading.RLock()
         self._ensure_directories()
 
     def _ensure_directories(self) -> None:
@@ -252,17 +253,18 @@ class StructuredKnowledgeBase:
 
     def save(self, entry: KnowledgeEntry) -> str:
         """Persist a knowledge entry. Returns the entry_id."""
-        entry.updated_at = datetime.now(timezone.utc).isoformat()
-        if not entry.entry_id:
-            entry.entry_id = _compute_entry_id(entry)
-        self._ensure_directories()
-        path = self._path_for(entry)
-        path.write_text(
-            json.dumps(entry.to_dict(), ensure_ascii=False, indent=2, default=str) + "\n",
-            encoding="utf-8",
-        )
-        logger.info("knowledge_base: saved %s entry %s (%s/%s)", entry.layer, entry.entry_id, entry.layer, entry.category)
-        return entry.entry_id
+        with self._write_lock:
+            entry.updated_at = datetime.now(timezone.utc).isoformat()
+            if not entry.entry_id:
+                entry.entry_id = _compute_entry_id(entry)
+            self._ensure_directories()
+            path = self._path_for(entry)
+            path.write_text(
+                json.dumps(entry.to_dict(), ensure_ascii=False, indent=2, default=str) + "\n",
+                encoding="utf-8",
+            )
+            logger.info("knowledge_base: saved %s entry %s (%s/%s)", entry.layer, entry.entry_id, entry.layer, entry.category)
+            return entry.entry_id
 
     def load(self, entry_id: str) -> KnowledgeEntry | None:
         """Load a single knowledge entry by ID."""
@@ -310,28 +312,30 @@ class StructuredKnowledgeBase:
 
     def delete(self, entry_id: str) -> bool:
         """Delete a knowledge entry by ID. Returns True if deleted."""
-        for layer_name in ("rules", "findings", "failures"):
-            layer_dir = self._base / layer_name
-            if not layer_dir.is_dir():
-                continue
-            for category_dir in layer_dir.iterdir():
-                if not category_dir.is_dir():
+        with self._write_lock:
+            for layer_name in ("rules", "findings", "failures"):
+                layer_dir = self._base / layer_name
+                if not layer_dir.is_dir():
                     continue
-                path = category_dir / f"{entry_id}.json"
-                if path.is_file():
-                    path.unlink()
-                    logger.info("knowledge_base: deleted entry %s", entry_id)
-                    return True
-        return False
+                for category_dir in layer_dir.iterdir():
+                    if not category_dir.is_dir():
+                        continue
+                    path = category_dir / f"{entry_id}.json"
+                    if path.is_file():
+                        path.unlink()
+                        logger.info("knowledge_base: deleted entry %s", entry_id)
+                        return True
+            return False
 
     def touch(self, entry_id: str) -> bool:
         """Increment hit_count and update updated_at for an existing entry."""
-        entry = self.load(entry_id)
-        if entry is None:
-            return False
-        entry.hit_count += 1
-        self.save(entry)
-        return True
+        with self._write_lock:
+            entry = self.load(entry_id)
+            if entry is None:
+                return False
+            entry.hit_count += 1
+            self.save(entry)
+            return True
 
     # ── Intelligent knowledge extraction from research records ───────────
 
@@ -342,6 +346,14 @@ class StructuredKnowledgeBase:
         """
         counts = {"rules": 0, "findings": 0, "failures": 0}
 
+        # Hold the write lock for the whole batch — prevents two extractors
+        # from interleaving their saves (P3-2).
+        with self._write_lock:
+            return self._extract_from_memory_locked(memory_summary, counts)
+
+    def _extract_from_memory_locked(
+        self, memory_summary: dict[str, Any], counts: dict[str, int]
+    ) -> dict[str, int]:
         # ── Extract rules from high-confidence successful patterns ──
         for family_entry in (memory_summary.get("families") or [])[:10]:
             if family_entry.get("success_rate", 0) >= 0.6 and family_entry.get("count", 0) >= 3:
@@ -495,7 +507,6 @@ class StructuredKnowledgeBase:
             )
             return None
 
-
 class ResearchKnowledgeBase:
     """Compatibility wrapper for the web-facing research knowledge API."""
 
@@ -596,7 +607,6 @@ class ResearchKnowledgeBase:
             "metadata": dict(entry.metadata or {}),
         }
 
-
 def integrate_knowledge_base_with_memory(
     storage_dir: str | Path,
     memory_summary: dict[str, Any] | None = None,
@@ -611,7 +621,6 @@ def integrate_knowledge_base_with_memory(
         memory = ResearchMemory(storage_dir)
         memory_summary = memory.summary()
     return kb.extract_from_memory(memory_summary)
-
 
 def _classify_failure_category(reason: str) -> str:
     """Map a failure reason string to a failure category."""

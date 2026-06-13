@@ -166,7 +166,9 @@ def test_maybe_archive_lifecycle_throttles_and_returns_updated_timestamp(tmp_pat
         def __init__(self, storage_dir):
             self.storage_dir = storage_dir
 
-        def maybe_archive(self, filename, *, max_size_mb):
+        def maybe_archive(self, filename, *, max_size_mb, max_age_days=30):
+            # P1-9 (2026-06-13): journal archive policy extended beyond
+            # lifecycle.jsonl; callers may now pass max_age_days.
             calls.append((self.storage_dir, filename, max_size_mb))
 
     config = type("Config", (), {"ops": type("Ops", (), {"storage_dir": str(tmp_path)})()})()
@@ -188,4 +190,14 @@ def test_maybe_archive_lifecycle_throttles_and_returns_updated_timestamp(tmp_pat
 
     assert unchanged == 100.0
     assert updated == 4000.0
-    assert calls == [(str(tmp_path), "lifecycle.jsonl", 50)]
+    expected = [
+        (str(tmp_path), filename, 50)
+        for filename in (
+            "lifecycle.jsonl",
+            "candidates.jsonl",
+            "checks.jsonl",
+            "backtests.jsonl",
+            "submissions.jsonl",
+        )
+    ]
+    assert calls == expected

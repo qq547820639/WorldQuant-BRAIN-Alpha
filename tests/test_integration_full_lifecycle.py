@@ -1,4 +1,5 @@
 """Integration and regression tests for the full alpha production lifecycle.
+from __future__ import annotations
 
 Tests cover:
   - Dataset ID tracing through generation→scoring→submission

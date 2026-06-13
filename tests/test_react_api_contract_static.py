@@ -706,12 +706,17 @@ def test_browser_react_smoke_fails_when_non_submit_state_experience_is_not_exerc
 def test_readme_keeps_operator_path_in_official_operations_area():
     readme = README.read_text(encoding="utf-8")
 
-    assert "## 核心操作流程" in readme
+    # 允许 emoji 前缀 (例如 "## 🔄 核心操作流程", "## 👥 开发与贡献")
+    assert re.search(r"^##\s+\S*\s*核心操作流程", readme, re.MULTILINE) is not None, (
+        "README must contain a '## 核心操作流程' section heading"
+    )
+    assert re.search(r"^##\s+\S*\s*开发与贡献", readme, re.MULTILINE) is not None, (
+        "README must contain a '## 开发与贡献' section heading"
+    )
     assert "Web 控制台" in readme
     assert "独立审批路径" in readme
     assert "### 🔒 预提交审查" in readme
     assert "不会" in readme and "直接执行提交" in readme
-    assert "## 开发与贡献" in readme
     assert "独立审批路径执行前，所有阻断项已被识别和处理" in readme
     assert "official-operations" not in readme
     assert "大多数量化研究者偏好 CLI" not in readme

@@ -9,7 +9,6 @@ Key concepts:
 - Resume logic uses the latest valid checkpoint
 - Compatible with both guided and automated pipeline modes
 """
-
 from __future__ import annotations
 
 import json
@@ -25,7 +24,6 @@ from brain_alpha_ops.models import Candidate, PipelineEvent
 from brain_alpha_ops.redaction import redact_error_message, redact_text
 
 logger = logging.getLogger(__name__)
-
 
 @dataclass
 class Checkpoint:
@@ -48,7 +46,6 @@ class Checkpoint:
                  "candidates", "events", "metadata", "stats"}
         filtered = {k: v for k, v in data.items() if k in known}
         return cls(**filtered)
-
 
 class CheckpointManager:
     """Manage pipeline checkpoints with atomic writes and recovery.
@@ -258,7 +255,6 @@ class CheckpointManager:
                     pass
         remaining = entries[len(entries) - self.MAX_CHECKPOINTS:]
         self._save_index(remaining)
-
 
 class PipelineRecovery:
     """High-level pipeline recovery orchestration.

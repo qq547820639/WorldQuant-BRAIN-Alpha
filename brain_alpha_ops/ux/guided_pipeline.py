@@ -9,7 +9,6 @@ GuidedPipeline — wraps AlphaResearchPipeline with:
   6. Historical run browser and replay capability
 
 """
-
 from __future__ import annotations
 
 import logging
@@ -27,7 +26,6 @@ from brain_alpha_ops.ux.guided_formatting import format_candidate_summary, forma
 from brain_alpha_ops.ux.guided_models import CheckpointData, PipelinePhase, RunRecord
 
 logger = logging.getLogger(__name__)
-
 
 # ═══════════════════════════════════════════════════════════════════════
 # Error Classification & Actionable Messages
@@ -51,7 +49,6 @@ def classify_error(error: Exception) -> dict[str, str]:
             "fix": "未知错误。请在页面事件记录中查看提示，或让维护者查看诊断信息。",
             "retry": "maybe",
         }
-
 
 # ═══════════════════════════════════════════════════════════════════════
 # Guided Pipeline

@@ -5,7 +5,6 @@ Provides zero-deviation BRAIN API response simulation that:
 - Compares all canonical metrics between configured and official values
 - Produces detailed deviation reports for every mismatched field
 """
-
 from __future__ import annotations
 
 import math
@@ -17,7 +16,6 @@ from brain_alpha_ops.models import Candidate
 # Tolerable floating-point epsilon for deviation detection
 _ZERO_DEVIATION_EPSILON = 1e-9
 _METRIC_VALUE_EPSILON = 0.001
-
 
 def simulate_brain_api_output(
     candidate: Candidate,
@@ -176,7 +174,6 @@ def simulate_brain_api_output(
 
     return simulated, deviation, deviations
 
-
 def _compare_canonical_metrics(
     metrics: dict[str, Any],
     simulated: dict[str, Any],
@@ -258,7 +255,6 @@ def _compare_canonical_metrics(
 
     return deviations
 
-
 def _float_or_none(value: Any) -> float | None:
     """Safely convert to float, returning None for non-numeric values."""
     if value is None or isinstance(value, bool):
@@ -271,7 +267,6 @@ def _float_or_none(value: Any) -> float | None:
     except (TypeError, ValueError):
         return None
 
-
 # Public API for simple PASS/FAIL deviation check
 def is_zero_deviation(
     candidate: Candidate,
@@ -281,7 +276,6 @@ def is_zero_deviation(
     """Quick check: is there any deviation between official and simulated API output?"""
     _simulated, deviation, _details = simulate_brain_api_output(candidate, scorecard, thresholds)
     return deviation == 0.0
-
 
 # Public API: canonical threshold compliance
 def check_threshold_compliance(thresholds: Any) -> tuple[bool, list[str]]:

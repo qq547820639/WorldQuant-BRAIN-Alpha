@@ -1,4 +1,5 @@
 from brain_alpha_ops.config import RunConfig
+from brain_alpha_ops import web_submission_single as wss
 from brain_alpha_ops.web_submission_single import submit_candidate_payload
 
 
@@ -49,7 +50,10 @@ def _readiness_ok(candidate, run_config, official_id):
     return {"ok": True}
 
 
-def test_submit_candidate_payload_submits_and_records(tmp_path):
+def test_submit_candidate_payload_submits_and_records(tmp_path, monkeypatch):
+    # P0-2: opt out of the real-submit kill-switch for the duration of this
+    # test (it explicitly exercises the submit path).
+    monkeypatch.setattr(wss, "_real_submit_disabled", lambda: False)
     run_config = RunConfig(environment="production")
     run_config.ops.storage_dir = str(tmp_path)
     api_calls = []
@@ -84,7 +88,10 @@ def test_submit_candidate_payload_submits_and_records(tmp_path):
     assert lifecycle_records[0]["row"]["stage"] == "submitted"
 
 
-def test_submit_candidate_payload_requires_explicit_submit_confirmation(tmp_path):
+def test_submit_candidate_payload_requires_explicit_submit_confirmation(tmp_path, monkeypatch):
+    # P0-2: bypass the real-submit kill-switch so the test exercises the
+    # downstream preflight logic (SUBMIT_CONFIRMATION_REQUIRED).
+    monkeypatch.setattr(wss, "_real_submit_disabled", lambda: False)
     run_config = RunConfig(environment="production")
     run_config.ops.storage_dir = str(tmp_path)
     api_calls = []
@@ -109,7 +116,9 @@ def test_submit_candidate_payload_requires_explicit_submit_confirmation(tmp_path
     assert api_calls == []
 
 
-def test_submit_candidate_payload_records_preflight_block(tmp_path):
+def test_submit_candidate_payload_records_preflight_block(tmp_path, monkeypatch):
+    # P0-2: bypass the real-submit kill-switch.
+    monkeypatch.setattr(wss, "_real_submit_disabled", lambda: False)
     run_config = RunConfig(environment="production")
     run_config.ops.storage_dir = str(tmp_path)
     blocked = []
@@ -134,7 +143,9 @@ def test_submit_candidate_payload_records_preflight_block(tmp_path):
     assert blocked == ["blocked"]
 
 
-def test_submit_candidate_payload_blocks_when_live_readiness_not_ready(tmp_path):
+def test_submit_candidate_payload_blocks_when_live_readiness_not_ready(tmp_path, monkeypatch):
+    # P0-2: bypass the real-submit kill-switch.
+    monkeypatch.setattr(wss, "_real_submit_disabled", lambda: False)
     run_config = RunConfig(environment="production")
     run_config.ops.storage_dir = str(tmp_path)
     api_calls = []

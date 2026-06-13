@@ -5,7 +5,6 @@ symbol-level series and compact lookup statistics. It is not a full market
 warehouse, but it gives the local stack a reusable data-access layer for
 screening, search, and observability.
 """
-
 from __future__ import annotations
 
 from collections import Counter, defaultdict
@@ -18,10 +17,8 @@ from typing import Any
 from brain_alpha_ops.jsonl import read_jsonl_records
 from brain_alpha_ops.redaction import redact_error_message
 
-
 DEFAULT_MARKET_CACHE_FILENAME = "market_data_cache.json"
 DEFAULT_MARKET_CACHE_SOURCE = "local_market_cache"
-
 
 @dataclass
 class MarketDataRecord:
@@ -37,7 +34,6 @@ class MarketDataRecord:
             "values": dict(self.values),
             "source": self.source,
         }
-
 
 class MarketDataCache:
     """Best-effort market-data cache backed by JSON or JSONL files."""
@@ -270,21 +266,17 @@ class MarketDataCache:
             **values,
         }
 
-
 def build_market_data_cache(storage_dir: str | Path = "data") -> MarketDataCache:
     return MarketDataCache(storage_dir)
 
-
 def _text(value: Any) -> str:
     return str(value or "").strip()
-
 
 def _float(value: Any) -> float:
     try:
         return float(value)
     except (TypeError, ValueError):
         return 0.0
-
 
 def _read_records_from_path(path: Path, *, limit: int | None) -> list[dict[str, Any]]:
     if not path.is_file():
@@ -300,7 +292,6 @@ def _read_records_from_path(path: Path, *, limit: int | None) -> list[dict[str, 
         return records
     safe_limit = max(1, int(limit or 1))
     return records[-safe_limit:]
-
 
 def _records_from_json_payload(payload: Any) -> list[dict[str, Any]]:
     if isinstance(payload, list):
@@ -337,7 +328,6 @@ def _records_from_json_payload(payload: Any) -> list[dict[str, Any]]:
     if _text(payload.get("symbol") or payload.get("id") or payload.get("alpha_id") or payload.get("official_alpha_id")):
         return [dict(payload)]
     return []
-
 
 def _numeric_values(row: dict[str, Any]) -> dict[str, float]:
     ignored = {

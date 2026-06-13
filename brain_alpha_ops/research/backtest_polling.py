@@ -12,7 +12,7 @@ from brain_alpha_ops.redaction import redact_error_message
 from .candidate_pool import blocked_gate
 
 
-HaltCallback = Callable[[str, float | None], None]
+HaltCallback = Callable[[str, "float | None"], None]
 EventCallback = Callable[..., None]
 
 

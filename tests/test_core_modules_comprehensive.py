@@ -199,11 +199,19 @@ class TestConfigValidation:
         assert resolved["password"] == ""
 
     def test_scoring_weights_validation(self):
-        """Weight validation should catch invalid sums."""
+        """Weight validation should catch invalid sums.
+
+        P3-18 (2026-06-13): ScoringConfig is now ``frozen=True``; tests
+        must use ``dataclasses.replace`` to build a zero-weight config.
+        """
+        import dataclasses
         config = RunConfig()
-        config.ops.scoring.prior_layer_weight = 0.0
-        config.ops.scoring.empirical_layer_weight = 0.0
-        config.ops.scoring.checklist_layer_weight = 0.0
+        config.ops.scoring = dataclasses.replace(
+            config.ops.scoring,
+            prior_layer_weight=0.0,
+            empirical_layer_weight=0.0,
+            checklist_layer_weight=0.0,
+        )
         with pytest.raises(ConfigValidationError):
             validate_run_config(config)
 

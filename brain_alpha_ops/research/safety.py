@@ -15,6 +15,9 @@ from brain_alpha_ops.redaction import redact_error_message, redact_text
 from brain_alpha_ops.research.contracts import correlation_id
 from brain_alpha_ops.research.expression_ast import expression_key, expression_profile_summary, expression_similarity, lexical_normalize
 
+# P0-4 fix (2026-06-13): see ``research._ratio`` for the unified rule.
+from brain_alpha_ops.research._ratio import normalize_brain_ratio  # noqa: F401
+
 
 logger = logging.getLogger(__name__)
 
@@ -197,27 +200,9 @@ def non_production_source_reasons(candidate: Candidate | dict[str, object]) -> l
     return reasons
 
 
+# P0-4 fix (2026-06-13): use the unified BRAIN ratio normalizer.
 def _ratio(value) -> float:
-    """Normalize ratio values from BRAIN API responses.
-
-    BRAIN may return metrics as percentages (e.g. 70 meaning 70%) or as
-    decimals (e.g. 0.70).  The old heuristic of abs > 1.0 -> /100 produces
-    incorrect results for metrics like turnover whose raw value naturally
-    exceeds 1.0 (e.g. 2.5 -> 0.025 instead of 2.5).
-
-    We now only divide by 100 when the value is unambiguously in percentage
-    range (>= 2.0), which catches real percentage values like 75% without
-    harming ratios that naturally live between 1.0 and 2.0.  Metrics that
-    naturally exceed 2.0 (e.g. turnover, correlation) pass through unchanged.
-    """
-    try:
-        numeric = float(value or 0.0)
-    except (TypeError, ValueError):
-        numeric = 0.0
-    # Only treat abs(value) >= 2.0 as percentage-scale
-    if abs(numeric) >= 2.0:
-        return numeric / 100.0
-    return numeric
+    return normalize_brain_ratio(value, bounded=False)
 
 def _time(record: dict) -> datetime:
     try:

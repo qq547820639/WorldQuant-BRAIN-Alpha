@@ -1,7 +1,9 @@
 """Local web console for BRAIN Alpha Ops.
 
 Serves the React frontend and provides API endpoints for the complete
-alpha research business loop.
+alpha research business loop.  See ``web_handler_dispatch.py`` (routes),
+``web_handler_dispatch_core.py`` (dispatch loop), and
+``web_facade_bindings.py`` (import-time facade surface) for the split.
 """
 
 from __future__ import annotations
@@ -140,7 +142,7 @@ def _real_generate(payload):
         },
         result=None,
     )
-    thread = threading.Thread(target=_run_generate_candidates_job, args=(job_id, dict(payload or {})), daemon=False)
+    thread = threading.Thread(target=_run_generate_candidates_job, args=(job_id, dict(payload or {})), daemon=True)
     thread.start()
     return {
         "ok": True,
@@ -433,7 +435,7 @@ def _real_run(payload):
         if callable(starter):
             starter(run_job, job_id, safe_payload)
         else:
-            threading.Thread(target=run_job, args=(job_id, safe_payload), daemon=False).start()
+            threading.Thread(target=run_job, args=(job_id, safe_payload), daemon=True).start()
         return {
             "ok": True,
             "job_id": job_id,
@@ -685,11 +687,14 @@ class Handler(BaseHTTPRequestHandler):
     def _json(self, payload, status=200, *, extra_headers=None):
         self._send_json(payload, status=status, extra_headers=extra_headers)
     
-    def _send_security_headers(self):
-        """Add standard security headers to response."""
+    def _send_security_headers(self, html=None):
+        """Add standard security headers to response (P1-2: includes CSP)."""
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("X-Frame-Options", "DENY")
         self.send_header("Referrer-Policy", "no-referrer")
+        # Lazy import: web_csp uses re + hashlib only, safe to import here.
+        from brain_alpha_ops.web_csp import content_security_policy_for_html as _csp_for_html
+        self.send_header("Content-Security-Policy", _csp_for_html(html or ""))
 
     def _send_html(self, html, *, extra_headers=None):
         """Send HTML response with security headers."""
@@ -697,7 +702,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Content-Type", "text/html; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
-        self._send_security_headers()
+        self._send_security_headers(html=html)
         if extra_headers:
             for name, value in extra_headers:
                 self.send_header(name, value)
@@ -734,21 +739,23 @@ def _json_default(obj):
 
 # ═══════════════════════ Server ═══════════════════════════════
 def serve(port=None, open_browser=True, host=HOST, **kw):
-    global SERVER
-    url = _serve_server(
-        port=port, open_browser=open_browser, host=host,
-        default_port=DEFAULT_PORT, handler_class=Handler,
-        _SafeThreadingHTTPServer=_SafeThreadingHTTPServer,
-        _find_free_port=_find_free_port,
-        **kw,
-    )
-    SERVER = _serve_server._SERVER if hasattr(_serve_server, '_SERVER') else None  # type: ignore[attr-defined]
+    with SERVER_LOCK:
+        global SERVER
+        url = _serve_server(
+            port=port, open_browser=open_browser, host=host,
+            default_port=DEFAULT_PORT, handler_class=Handler,
+            _SafeThreadingHTTPServer=_SafeThreadingHTTPServer,
+            _find_free_port=_find_free_port,
+            **kw,
+        )
+        SERVER = _serve_server._SERVER if hasattr(_serve_server, '_SERVER') else None  # type: ignore[attr-defined]
     return url
 
 def shutdown_server():
-    global SERVER
-    _shutdown_server(server=SERVER, server_stop=SERVER_STOP)
-    SERVER = None
+    with SERVER_LOCK:
+        global SERVER
+        _shutdown_server(server=SERVER, server_stop=SERVER_STOP)
+        SERVER = None
 
 def smoke_test_server(port=None):
     return _smoke_test_server(port=port if port is not None else DEFAULT_PORT)
@@ -768,6 +775,28 @@ _install_compat_facades(locals())
 
 
 def _install_facade_bindings() -> None:
+    """Install three distinct facade surfaces into this module's globals.
+
+    Three surfaces coexist on purpose (P1-6 doc — do NOT consolidate):
+
+    1. ``web_service_namespace.build_web_service_namespace`` (legacy
+       import-time facade): provides backwards-compatible top-level symbols
+       for tests and external scripts that historically did
+       ``from brain_alpha_ops.web import X``.
+
+    2. ``web_runtime_facade``: lazy runtime facade used by
+       ``web_service_namespace`` for ``compute_run_stats`` and
+       ``status_category``; not intended to be the production dispatch path.
+
+    3. ``web_facade_bindings.build_web_facade_bindings``: extended facade
+       used by the factory ``Handler`` defined in ``web_http_handler.py``
+       for the (latent) alt-dispatch path.  Production dispatch is still
+       the in-line ``Handler`` defined in this module (the factory is
+       reserved for future enablement).
+
+    See ``web_handler_dispatch.py`` for the route table and
+    ``web_handler_dispatch_core.py`` for the dispatch loop.
+    """
     namespace = _build_web_service_namespace()
     globals().update(namespace)
     globals()["_runtime_facade"] = _web_runtime_facade

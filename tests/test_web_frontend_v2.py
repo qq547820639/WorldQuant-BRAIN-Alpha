@@ -1,4 +1,5 @@
 """React web-console contract tests for the retired inline frontend surface.
+from __future__ import annotations
 
 The legacy inline ``brain_alpha_ops/web/js`` modules were removed when the
 React state-card console became the served frontend.  This file keeps the old
@@ -310,7 +311,7 @@ def test_app_submit_selected_candidates_handles_missing_async_job_result():
             "if (rows.length) setCandidates(rows);",
             "result.partial",
             "result?.task_id || result?.job_id || \"\"",
-            'setTaskError(result?.error || "启动候选池自动推进失败");',
+            'setTaskError(apiErrorMessage(result, "启动候选池自动推进失败"));',
             'useSSE(taskId ? `/sse?job_id=${encodeURIComponent(taskId)}` : null',
         ],
     )

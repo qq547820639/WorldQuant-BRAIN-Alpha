@@ -1,3 +1,4 @@
+from __future__ import annotations
 import io
 from http.client import IncompleteRead, RemoteDisconnected
 import http.cookiejar
@@ -26,7 +27,7 @@ from brain_alpha_ops.brain_api.official import OfficialBrainAPI, build_simulatio
 from brain_alpha_ops.brain_api.official_helpers import build_official_url, normal_field
 from brain_alpha_ops.brain_api.official_request import OfficialRequestMixin
 from brain_alpha_ops.brain_api.official_simulation import OfficialSimulationSubmissionMixin
-from brain_alpha_ops.brain_api.official_validation import OfficialExpressionValidationMixin
+from brain_alpha_ops.brain_api.official_validation import OfficialExpressionValidator
 from brain_alpha_ops.config import BrainSettings, OfficialAPIConfig
 
 
@@ -272,7 +273,6 @@ def test_official_api_uses_composed_api_components():
         OfficialContextDataMixin,
         OfficialRequestMixin,
         OfficialSimulationSubmissionMixin,
-        OfficialExpressionValidationMixin,
     }
     assert not direct_mixins.intersection(OfficialBrainAPI.__mro__)
 
@@ -281,7 +281,9 @@ def test_official_api_uses_composed_api_components():
     assert api._context_data is not None
     assert api._request_client is not None
     assert api._simulation_submission is not None
-    assert api._expression_validator is not None
+    # P2-3: OfficialExpressionValidator is the new home for the validation
+    # logic; verify it is wired via the composition pattern, not mixed in.
+    assert isinstance(api._expression_validator, OfficialExpressionValidator)
 
     result = api.validate_expression(
         "rank(close)",
@@ -3435,12 +3437,24 @@ def test_submit_simulation_normalizes_same_origin_location_header_to_path():
 
 
 def test_throttle_uses_shared_timestamp_across_instances(monkeypatch):
+    """Two instances share the same ``OfficialBrainAPI`` config.
+
+    P2-2 refactor: removed the cross-instance ``_GLOBAL_LAST_REQUEST_AT``
+    module-level timestamp.  Each instance now maintains its own
+    ``_last_request_at``; the test below verifies the per-instance
+    behaviour still works correctly.
+    """
     import brain_alpha_ops.brain_api.official as official
 
     sleeps = []
-    ticks = iter([100.1, 103.0, 103.0, 106.0])
+    # Round 1: no prior calls, _last_request_at=0 → wait 0, no sleep.
+    # tick 1: first call "now"  → last=0 → wait=0, no sleep; reserves at 100.0
+    # tick 2: second call on second instance, last=0 → wait=0, reserves at 100.5
+    # Round 2:
+    # tick 3: 101.0 → first's last is 100.0, elapsed=1.0, wait=2.0, sleep 2.0; reserves 103.0
+    # tick 4: 101.5 → second's last is 100.5, elapsed=1.0, wait=2.0, sleep 2.0
+    ticks = iter([100.0, 100.5, 101.0, 101.5])
 
-    monkeypatch.setattr(official, "_GLOBAL_LAST_REQUEST_AT", 100.0)
     monkeypatch.setattr(official.time, "monotonic", lambda: next(ticks))
     monkeypatch.setattr(official.time, "sleep", lambda seconds: sleeps.append(seconds))
 
@@ -3448,13 +3462,15 @@ def test_throttle_uses_shared_timestamp_across_instances(monkeypatch):
     first = OfficialBrainAPI(config, token="token")
     second = OfficialBrainAPI(config, token="token")
 
+    # Round 1: no prior calls on either instance.
+    first._throttle()
+    second._throttle()
+    # Round 2: each instance's own last_request_at is from round 1.
     first._throttle()
     second._throttle()
 
+    # Two sleeps, each 2.0s (3.0 - 1.0 = 2.0)
     assert len(sleeps) == 2
-    assert round(sleeps[0], 6) == 2.9
-    assert sleeps[1] == 3.0
-    assert official._GLOBAL_LAST_REQUEST_AT == 106.0
-    assert first._last_request_at == 103.0
-    assert second._last_request_at == 106.0
+    assert round(sleeps[0], 6) == 2.0
+    assert round(sleeps[1], 6) == 2.0
     assert first._request_lock.__class__.__name__ == "RLock"

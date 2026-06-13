@@ -5,6 +5,11 @@ Implements a 3-mode generation strategy:
   - experience_feedback (20% default): biased ThemeEngine using winning patterns
   - random_exploration (10% default): pure fallback to DynamicThemeEngine
 
+This module is a façade. The 6 component classes are co-located here for
+historical reasons (P2-13, 2026-06-13 — split out from a larger monolith);
+the next refactor will move each component to a dedicated module without
+changing the public import surface.
+
 Usage::
 
     from brain_alpha_ops.research.hypothesis_library import HypothesisLibrary
@@ -14,7 +19,6 @@ Usage::
     gen = HypothesisDrivenGenerator(loader, mapper, theme_engine, selector, library)
     candidates = gen.generate(20, dataset_id="analyst4")
 """
-
 from __future__ import annotations
 
 import json
@@ -42,6 +46,13 @@ from brain_alpha_ops.research.fallback_generation import (
     normalize_operator_aliases,
 )
 from brain_alpha_ops.research.generator_metadata import expression_windows_within_constraints
+from brain_alpha_ops.research.hypothesis_generator_helpers import (
+    add_semantic_token as _add_semantic_token,
+    pick_unused as _pick_unused,
+    safe_float as _safe_float,
+    semantic_field_tokens as _semantic_field_tokens,
+    split_semantic_tokens as _split_semantic_tokens,
+)
 from brain_alpha_ops.research.hypothesis_library import (
     Hypothesis,
     ExpressionFamily,
@@ -59,13 +70,35 @@ logger = logging.getLogger(__name__)
 
 _FORBIDDEN_PATTERN_SIMILARITY_THRESHOLD = 0.90
 
-
 # ═══════════════════════════════════════════════════════════════════════
 # Component 1: GenerationModeRouter
 # ═══════════════════════════════════════════════════════════════════════
 
 class GenerationModeRouter:
-    """Routes generation requests to one of three modes based on configured ratios.
+    """
+
+# ╔══════════════════ P2-13 Structural Overview ═══════════════════╗
+# ║ This module implements a 3-mode generation router (70/20/10). ║
+# ║                                                               ║
+# ║ Six core dataclass components:                                ║
+# ║   §A GenerationModeRouter   — weighted random.choices        ║
+# ║   §B HypothesisSelector     — experience_weighted sampling    ║
+# ║   §C ExpressionFamilySelector — family + window selection     ║
+# ║   §D FieldSelector          — dataset → semantic → token      ║
+# ║   §E ContextAdapter         — region/universe/delay prefs     ║
+# ║   §F HypothesisDrivenGenerator — generate(n, dataset_id)      ║
+# ║                                                               ║
+# ║ Three generation modes:                                       ║
+# ║   hypothesis_driven (70%)  — 6-step pipeline                  ║
+# ║   experience_feedback (20%) — winning pattern bias            ║
+# ║   random_exploration (10%) — pure DynamicThemeEngine           ║
+# ║                                                               ║
+# ║ Degradation chain: any step failure → random → bare fallback  ║
+# ║                                                               ║
+# ║ Future P2-13 work: extract 6 dataclasses into separate        ║
+# ║ modules under research/generation/                            ║
+# ╚═══════════════════════════════════════════════════════════════╝
+Routes generation requests to one of three modes based on configured ratios.
 
     Uses weighted random sampling. Internal counters track actual proportions.
     The ratio converges to the target over many calls (law of large numbers).
@@ -134,7 +167,6 @@ class GenerationModeRouter:
             "random_exploration": self._random_count / total,
         }
 
-
 # ═══════════════════════════════════════════════════════════════════════
 # Component 2: HypothesisSelector
 # ═══════════════════════════════════════════════════════════════════════
@@ -185,7 +217,6 @@ class HypothesisSelector:
         """Set the number of recently-used hypotheses to exclude."""
         self._max_recency = max(1, max_recency)
 
-
 # ═══════════════════════════════════════════════════════════════════════
 # Component 3: ExpressionFamilySelector
 # ═══════════════════════════════════════════════════════════════════════
@@ -229,7 +260,6 @@ class ExpressionFamilySelector:
         else:
             chosen = random.choice(windows)
         return chosen
-
 
 # ═══════════════════════════════════════════════════════════════════════
 # Component 4: FieldSelector
@@ -372,77 +402,6 @@ class FieldSelector:
         scored.sort(key=lambda item: (-item[0], item[1]))
         return [field for _score, field in scored[:limit]]
 
-
-_SEMANTIC_TOKEN_ALIASES: dict[str, tuple[str, ...]] = {
-    "accruals": ("accrual",),
-    "analyst": ("anl4",),
-    "beta": ("beta",),
-    "cash": ("cash", "cfo", "cff", "cfi"),
-    "consensus": ("consensus", "mean", "median"),
-    "coverage": ("numest", "number", "num"),
-    "dispersion": ("dispersion", "std", "stddev", "high", "low"),
-    "dividend": ("div", "dividend"),
-    "earnings": ("eps", "earnings", "income", "netincome", "net_income"),
-    "estimate": ("estimate", "est", "mean", "median"),
-    "float": ("float", "shares"),
-    "growth": ("growth", "sales", "revenue"),
-    "margin": ("margin", "gross", "operating"),
-    "price": ("price", "value"),
-    "profitability": ("profit", "income", "roe", "roa"),
-    "rating": ("rating", "rec"),
-    "recommendation": ("rec", "rating"),
-    "revenue": ("sales", "revenue"),
-    "revision": ("revision", "revisions", "previosestimate", "previous", "preest", "chg", "change"),
-    "sales": ("sales", "revenue"),
-    "surprise": ("surprise", "actual"),
-    "target": ("target", "tp"),
-}
-
-_SEMANTIC_STOP_TOKENS = {
-    "and",
-    "change",
-    "count",
-    "history",
-    "historical",
-    "long",
-    "ratio",
-    "short",
-    "term",
-    "the",
-    "to",
-}
-
-
-def _semantic_field_tokens(category_name: str, examples: list[str]) -> dict[str, float]:
-    tokens: dict[str, float] = {}
-    for token in _split_semantic_tokens(category_name):
-        _add_semantic_token(tokens, token, 2.0)
-        for alias in _SEMANTIC_TOKEN_ALIASES.get(token, ()):
-            _add_semantic_token(tokens, alias, 2.5)
-    for example in examples:
-        for token in _split_semantic_tokens(example):
-            _add_semantic_token(tokens, token, 3.0)
-            for alias in _SEMANTIC_TOKEN_ALIASES.get(token, ()):
-                _add_semantic_token(tokens, alias, 3.0)
-    return tokens
-
-
-def _split_semantic_tokens(value: str) -> list[str]:
-    raw_tokens = re.split(r"[^a-zA-Z0-9]+", str(value or "").lower())
-    return [
-        token
-        for token in raw_tokens
-        if len(token) >= 3 and token not in _SEMANTIC_STOP_TOKENS
-    ]
-
-
-def _add_semantic_token(tokens: dict[str, float], token: str, weight: float) -> None:
-    token = str(token or "").lower().strip()
-    if len(token) < 3 or token in _SEMANTIC_STOP_TOKENS:
-        return
-    tokens[token] = max(tokens.get(token, 0.0), weight)
-
-
 # ═══════════════════════════════════════════════════════════════════════
 # Component 5: ContextAdapter
 # ═══════════════════════════════════════════════════════════════════════
@@ -506,33 +465,9 @@ class ContextAdapter:
 
         return {"region": region, "universe": universe, "delay": delay}
 
-
-def _pick_unused(fields: list[str], index: int, used: set[str]) -> str:
-    """Pick fields[index] if available and unused; otherwise pick the first unused field.
-
-    BUG-10: prevents the same field being assigned to multiple placeholders
-    (e.g. {f1} and {f2} both resolving to the same field), which would produce
-    redundant expressions.
-    """
-    default = fields[index] if index < len(fields) else (fields[0] if fields else "returns")
-    if default not in used:
-        return default
-    for f in fields:
-        if f not in used:
-            return f
-    return default  # all used — duplicate is unavoidable
-
-
 # ═══════════════════════════════════════════════════════════════════════
 # Component 6: HypothesisDrivenGenerator (main)
 # ═══════════════════════════════════════════════════════════════════════
-
-def _safe_float(value: Any) -> float:
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return 0.0
-
 
 class HypothesisDrivenGenerator:
     """Generates Alpha candidates using hypothesis-driven strategies.
@@ -1323,3 +1258,16 @@ class HypothesisDrivenGenerator:
         if isinstance(meta, dict):
             meta["observability_diversified"] = True
             candidate.template_source = json.dumps(meta, ensure_ascii=False)
+
+# P2-13 (2026-06-13): explicit ``__all__`` so static analyzers can prove
+# that HypothesisDrivenGenerator, GenerationModeRouter, HypothesisSelector,
+# ExpressionFamilySelector, FieldSelector, and ContextAdapter are part of
+# the public surface. The previous file relied on class visibility only.
+__all__ = [
+    "HypothesisDrivenGenerator",
+    "GenerationModeRouter",
+    "HypothesisSelector",
+    "ExpressionFamilySelector",
+    "FieldSelector",
+    "ContextAdapter",
+]

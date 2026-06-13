@@ -16,7 +16,7 @@ from .candidate_pool import blocked_gate
 
 SettingsProvider = Callable[[], dict]
 PollIntervalProvider = Callable[[], float]
-HaltCallback = Callable[[str, float | None], None]
+HaltCallback = Callable[[str, "float | None"], None]
 EventCallback = Callable[..., None]
 
 

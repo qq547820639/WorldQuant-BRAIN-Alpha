@@ -1,5 +1,14 @@
-"""Batch coordination helpers for official backtest slots."""
+"""Batch coordination helpers for official backtest slots.
 
+P2-5 doc: this module is **planning**, not execution.  ``BatchBacktestCoordinator``
+ranks/selects N candidates and emits a ``BacktestBatchPlan`` with a
+``max_workers`` hint.  Actual concurrent submission is performed by
+``brain_alpha_ops.research.parallel_backtest``, which is the only place
+where ``ThreadPoolExecutor`` is used to drive BRAIN backtest slots.
+
+Keep the split: planning stays synchronous and deterministic; execution
+needs the executor.  Do not move ThreadPoolExecutor into this module.
+"""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -9,13 +18,11 @@ from brain_alpha_ops.models import Candidate
 
 from .pipeline_helpers import blocked_gate
 
-
 BATCH_BACKTEST_PLAN_SCHEMA_VERSION = "batch_backtest_plan.v1"
 HIGH_CLOUD_SIMILARITY_REJECTED = "HIGH_CLOUD_SIMILARITY_REJECTED"
 
 CandidateRanker = Callable[[list[Candidate]], list[Candidate]]
 CandidateRiskEvaluator = Callable[[Candidate], dict[str, Any]]
-
 
 @dataclass(frozen=True)
 class BacktestBatchPlan:
@@ -45,7 +52,6 @@ class BacktestBatchPlan:
             ],
             "skipped": list(self.skipped),
         }
-
 
 class BatchBacktestCoordinator:
     """Select and explain a batch of candidates for official backtest slots."""
@@ -144,7 +150,6 @@ class BatchBacktestCoordinator:
             }
         return risk if isinstance(risk, dict) else {}
 
-
 def _skip(candidate: Candidate, reason: str, score: float, *, extra: dict[str, Any] | None = None) -> dict[str, Any]:
     row = {
         "alpha_id": candidate.alpha_id,
@@ -155,7 +160,6 @@ def _skip(candidate: Candidate, reason: str, score: float, *, extra: dict[str, A
     if extra:
         row.update(extra)
     return row
-
 
 def _reject_high_cloud_similarity_candidate(candidate: Candidate, details: dict[str, Any]) -> None:
     candidate.lifecycle_status = "high_cloud_similarity_rejected"
@@ -179,7 +183,6 @@ def _reject_high_cloud_similarity_candidate(candidate: Candidate, details: dict[
     candidate.submission["cloud_similarity_preflight"] = preflight
     candidate.extra_fields["cloud_similarity_preflight"] = preflight
 
-
 def _cloud_similarity_details(risk: dict[str, Any], threshold: float | None) -> dict[str, Any]:
     return {
         "risk_level": str(risk.get("level") or ""),
@@ -189,7 +192,6 @@ def _cloud_similarity_details(risk: dict[str, Any], threshold: float | None) -> 
         "similarity_threshold": threshold,
     }
 
-
 def _is_high_cloud_similarity(risk: dict[str, Any], threshold: float | None) -> bool:
     if not risk:
         return False
@@ -198,7 +200,6 @@ def _is_high_cloud_similarity(risk: dict[str, Any], threshold: float | None) -> 
     if level == "high":
         return True
     return threshold is not None and max_similarity is not None and max_similarity >= threshold
-
 
 def _float_or_none(value: Any) -> float | None:
     try:

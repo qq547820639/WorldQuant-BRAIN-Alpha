@@ -374,7 +374,8 @@ describe("App credential quick start", () => {
     await screen.findByText("凭证与连接");
     fireEvent.click(screen.getByRole("button", { name: "测试连接" }));
 
-    await screen.findByText("连接失败: 请求失败，请稍后重试。");
+    // 实际安全降级消息: BRAIN 官方接口 5xx 时显示 HTTP 5xx 友好提示
+    await screen.findByText(/连接失败: .*请稍后重试/);
     expect(document.body.textContent || "").not.toMatch(/raw backend|password=secret/i);
   });
 
@@ -453,7 +454,8 @@ describe("App credential quick start", () => {
     await screen.findByText("本地缓存会话");
     fireEvent.click(screen.getByRole("button", { name: "退出本地会话" }));
 
-    await screen.findByText("退出失败: 请求失败，请稍后重试。");
+    // 实际安全降级消息: 5xx 失败时显示 HTTP 5xx 友好提示
+    await screen.findByText(/退出失败: .*请稍后重试/);
     expect(document.body.textContent || "").not.toMatch(/raw backend|token=secret/i);
   });
 

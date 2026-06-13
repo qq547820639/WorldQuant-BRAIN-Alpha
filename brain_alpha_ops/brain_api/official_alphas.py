@@ -32,20 +32,18 @@ from .official_query_params import (
     apply_market_discovery_filters,
 )
 
-import http.client
-import urllib.error
 from typing import Any, Callable
 
-
-_USER_ALPHA_TRANSIENT_RETRY_STATUSES = frozenset({408, 500, 502, 503, 504})
-_USER_ALPHA_TRANSIENT_PAGE_RETRY_EXCEPTIONS = (
-    http.client.IncompleteRead,
-    http.client.RemoteDisconnected,
-    TimeoutError,
-    urllib.error.URLError,
+# P2-4: transient retry constants centralised in user_alpha_transient.
+# Kept as module-level aliases here so existing in-file references
+# (``_USER_ALPHA_TRANSIENT_*``) keep working.
+from .user_alpha_transient import (
+    USER_ALPHA_TRANSIENT_PAGE_RETRY_ATTEMPTS as _USER_ALPHA_TRANSIENT_PAGE_RETRY_ATTEMPTS,
+    USER_ALPHA_TRANSIENT_PAGE_RETRY_EXCEPTIONS as _USER_ALPHA_TRANSIENT_PAGE_RETRY_EXCEPTIONS,
+    USER_ALPHA_TRANSIENT_PAGE_RETRY_SECONDS as _USER_ALPHA_TRANSIENT_PAGE_RETRY_SECONDS,
+    USER_ALPHA_TRANSIENT_RETRY_STATUSES as _USER_ALPHA_TRANSIENT_RETRY_STATUSES,
 )
-_USER_ALPHA_TRANSIENT_PAGE_RETRY_ATTEMPTS = 3
-_USER_ALPHA_TRANSIENT_PAGE_RETRY_SECONDS = 5.0
+
 _DISCOVERY_OPTION_KEYS = frozenset({"instrument_type", "region", "universe", "delay", "dataset"})
 _ALPHA_FILTER_OPTION_KEYS = frozenset({"instrument_type", "region", "universe", "delay"})
 

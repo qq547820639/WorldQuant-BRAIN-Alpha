@@ -15,7 +15,8 @@
 ![BRAIN API](https://img.shields.io/badge/BRAIN%20API-production-16A34A?style=flat-square)
 ![License MIT](https://img.shields.io/badge/License-MIT-111827?style=flat-square)
 ![Version](https://img.shields.io/badge/Version-0.3.0-6366F1?style=flat-square)
-![Tests](https://img.shields.io/badge/Tests-29%2F29%20passing-22c55e?style=flat-square)
+![Tests](https://img.shields.io/badge/Tests-205%2B%20test%20files-22c55e?style=flat-square)
+![Official%20Fields](https://img.shields.io/badge/Official%20Fields-8599-0EA5E9?style=flat-square)
 
 </div>
 

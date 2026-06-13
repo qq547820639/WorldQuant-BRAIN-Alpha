@@ -2,11 +2,6 @@
 # Install with: python -m pip install -r requirements.lock
 
 PyYAML==6.0.2
-requests==2.32.4
-certifi==2025.4.26
-charset-normalizer==3.4.2
-idna==3.10
-urllib3==2.4.0
 jsonschema==4.25.1
 attrs==25.3.0
 jsonschema-specifications==2025.4.1

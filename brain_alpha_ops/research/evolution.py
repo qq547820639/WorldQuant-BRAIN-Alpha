@@ -8,7 +8,6 @@ Inspired by QuantGPT's evolutionary search architecture:
 All operations are BRAIN-safe: only WorldQuant FASTEXPR operators are used,
 and mutations preserve operator arity and field compatibility.
 """
-
 from __future__ import annotations
 
 import random
@@ -39,7 +38,6 @@ from brain_alpha_ops.research.evolution_helpers import (
     _tokenize,
 )
 
-
 # ═══════════════════════════════════════════════════════════════════════
 # Data Structures
 # ═══════════════════════════════════════════════════════════════════════
@@ -64,7 +62,6 @@ class MutationResult:
             "mutation_id": self.mutation_id,
         }
 
-
 @dataclass
 class CrossoverResult:
     """Result of crossover between two parent expressions."""
@@ -82,7 +79,6 @@ class CrossoverResult:
             "crossover_point": self.crossover_point,
             "generation": self.generation,
         }
-
 
 @dataclass
 class EvolutionResult:
@@ -106,7 +102,6 @@ class EvolutionResult:
             "mutations": [m.to_dict() for m in self.mutations],
             "crossovers": [c.to_dict() for c in self.crossovers],
         }
-
 
 # ═══════════════════════════════════════════════════════════════════════
 # Mutation Engine — 8 directed mutation strategies
@@ -398,7 +393,6 @@ class MutationEngine:
         probs = [weights[s] / sum(weights.values()) for s in strategies]
         return self.rng.choices(strategies, weights=probs, k=min(count, len(strategies)))
 
-
 # ═══════════════════════════════════════════════════════════════════════
 # Crossover Engine
 # ═══════════════════════════════════════════════════════════════════════
@@ -476,7 +470,6 @@ class CrossoverEngine:
                 results.append(result)
         return results
 
-
 # ═══════════════════════════════════════════════════════════════════════
 # Meta-Evolution Selector
 # ═══════════════════════════════════════════════════════════════════════
@@ -548,7 +541,6 @@ class MetaEvolutionSelector:
         self._current_strategy = "EXPLORE"
         self._stagnation_count = 0
         self._generation = 0
-
 
 # ═══════════════════════════════════════════════════════════════════════
 # Evolution Runner

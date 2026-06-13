@@ -17,7 +17,6 @@ Usage::
     if guard.is_converged(new_expression, pool_expressions):
         # Force mutation to a different skeleton
 """
-
 from __future__ import annotations
 
 import json
@@ -29,7 +28,6 @@ from pathlib import Path
 from typing import Any
 
 from brain_alpha_ops.research.fallback_generation import normalize_operator_aliases
-
 
 _OFFICIAL_OPERATOR_FALLBACK = frozenset(
     {
@@ -49,7 +47,6 @@ _OFFICIAL_OPERATOR_FALLBACK = frozenset(
     }
 )
 
-
 @lru_cache(maxsize=1)
 def _current_official_operator_names() -> frozenset[str]:
     path = Path(__file__).resolve().parents[2] / "data" / "official_operators.json"
@@ -63,7 +60,6 @@ def _current_official_operator_names() -> frozenset[str]:
         if isinstance(item, dict) and str(item.get("name", "")).strip()
     }
     return frozenset(names or _OFFICIAL_OPERATOR_FALLBACK)
-
 
 @dataclass
 class DiversityReport:
@@ -91,7 +87,6 @@ class DiversityReport:
             "recommended_action": self.recommended_action,
             "details": self.details,
         }
-
 
 class ExpressionDiversityGuard:
     """Guard against expression skeleton convergence in alpha generation.

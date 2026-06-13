@@ -5,7 +5,6 @@ polls active jobs and triggers automatic interruption when a job shows no
 progress beyond a configurable timeout. Designed for the goal constraint:
 "一旦检测到流程卡顿、挂起或出现状态不明确的情况，必须立即自动中断"
 """
-
 from __future__ import annotations
 
 import logging
@@ -29,7 +28,6 @@ TERMINAL_STATUSES = frozenset({
     "stopped", "cancelled", "canceled",
 })
 
-
 @dataclass
 class JobStallSnapshot:
     """Snapshot of a job's progress at a point in time."""
@@ -40,7 +38,6 @@ class JobStallSnapshot:
     status_message: str
     observed_at: float
 
-
 @dataclass
 class StallMonitorConfig:
     """Configuration for the stall detection monitor."""
@@ -48,7 +45,6 @@ class StallMonitorConfig:
     poll_interval_seconds: float = DEFAULT_POLL_INTERVAL_SECONDS
     auto_interrupt: bool = True
     max_retry_count: int = 3  # Max auto-interrupt retries before escalation
-
 
 class StallMonitor:
     """Monitors pipeline jobs for stalls and triggers auto-interruption.
@@ -190,7 +186,6 @@ class StallMonitor:
         if self._on_interrupt:
             self._on_interrupt(job_id)
 
-
 def _iter_job_rows(jobs: Any):
     """Yield ``(job_id, job)`` from dict stores and web_jobs.job_list rows."""
     if isinstance(jobs, dict):
@@ -215,7 +210,6 @@ def _iter_job_rows(jobs: Any):
             job_id = str(item[1].get("job_id") or item[1].get("task_id") or item[0])
             if job_id:
                 yield job_id, item[1]
-
 
 def create_stall_monitor_for_web_server(
     stall_timeout: float = DEFAULT_STALL_TIMEOUT_SECONDS,
@@ -255,11 +249,9 @@ def create_stall_monitor_for_web_server(
         on_interrupt=on_interrupt,
     )
 
-
 # Module-level singleton for easy integration
 _GLOBAL_MONITOR: StallMonitor | None = None
 _MONITOR_LOCK = threading.Lock()
-
 
 def ensure_global_monitor(
     stall_timeout: float = DEFAULT_STALL_TIMEOUT_SECONDS,
@@ -275,7 +267,6 @@ def ensure_global_monitor(
             )
             _GLOBAL_MONITOR.start()
         return _GLOBAL_MONITOR
-
 
 def stop_global_monitor() -> None:
     """Stop the global stall monitor if running."""

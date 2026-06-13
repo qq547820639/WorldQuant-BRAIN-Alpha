@@ -38,11 +38,19 @@ def test_auto_calibrator_reports_insufficient_samples_and_apply_defaults(tmp_pat
     assert report["status"] == "insufficient_samples"
     assert report["deficit"] == calibrator.MIN_CALIBRATION_SAMPLES - 3
 
-    scoring_config = SimpleNamespace()
+    # P3-18 (2026-06-13): ``apply()`` now returns a *new* ScoringConfig
+    # via ``dataclasses.replace`` instead of mutating the input. Test
+    # the new contract — a dataclass instance is required and the
+    # return is a different object.
+    from brain_alpha_ops.config_models import ScoringConfig
+    scoring_config = ScoringConfig()
     applied = calibrator.apply(scoring_config)
-    assert applied is scoring_config
-    assert scoring_config.prior_layer_weight == ScoringParams.defaults().layer_weights["prior"]
-    assert scoring_config.prior_weights_override
+    assert applied is not scoring_config
+    assert isinstance(applied, ScoringConfig)
+    assert applied.prior_layer_weight == ScoringParams.defaults().layer_weights["prior"]
+    assert applied.prior_weights_override
+    # Original instance must remain unchanged.
+    assert scoring_config.prior_layer_weight == 0.30
 
 
 def test_auto_calibrator_calibrates_and_persists_with_stubbed_weight_reports(tmp_path):

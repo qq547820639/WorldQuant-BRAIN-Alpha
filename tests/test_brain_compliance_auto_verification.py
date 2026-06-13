@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """BRAIN compliance auto-verification test suite.
 
 Covers:
@@ -12,8 +14,6 @@ Covers:
 Run:
     python -m pytest tests/test_brain_compliance_auto_verification.py -v
 """
-
-from __future__ import annotations
 
 import json
 import sys
@@ -34,7 +34,6 @@ from brain_alpha_ops.brain_api.canonical import (
     CANONICAL_METRIC_NAMES,
 )
 
-
 # ═══════════════════════════════════════════════════════════════════════
 # Helpers
 # ═══════════════════════════════════════════════════════════════════════
@@ -43,28 +42,23 @@ def _load_json(path: Path) -> dict | list:
     with open(path, "r") as f:
         return json.load(f)
 
-
 def _project_path(*parts: str) -> Path:
     return _project_root.joinpath(*parts)
-
 
 def _load_official_field_names() -> set[str]:
     fields_json = _project_path("data", "official_fields.json")
     records = _load_json(fields_json)
     return {r["name"] for r in records if isinstance(r, dict) and "name" in r}
 
-
 def _load_official_operator_names() -> set[str]:
     ops_json = _project_path("data", "official_operators.json")
     records = _load_json(ops_json)
     return {r["name"] for r in records if isinstance(r, dict) and "name" in r}
 
-
 def _load_official_dataset_ids() -> set[str]:
     ds_json = _project_path("data", "official_datasets.json")
     records = _load_json(ds_json)
     return {r["id"] for r in records if isinstance(r, dict) and "id" in r}
-
 
 def _collect_expression_fields_from_source() -> set[str]:
     """Scan research/ source files for field names used in expressions.
@@ -96,7 +90,6 @@ def _collect_expression_fields_from_source() -> set[str]:
 
     return found
 
-
 def _collect_operators_from_source() -> set[str]:
     """Scan for operator names used in code."""
     found: set[str] = set()
@@ -125,7 +118,6 @@ def _collect_operators_from_source() -> set[str]:
             })
 
     return found
-
 
 # ═══════════════════════════════════════════════════════════════════════
 # 1. CANONICAL_THRESHOLDS vs config/run_config.json
@@ -166,7 +158,6 @@ class TestCanonicalThresholdsAlignment:
         assert isinstance(CANONICAL_SETTINGS, dict)
         assert len(CANONICAL_SETTINGS) > 0
 
-
 # ═══════════════════════════════════════════════════════════════════════
 # 2. Fields in code vs data/official_fields.meta.json
 # ═══════════════════════════════════════════════════════════════════════
@@ -198,7 +189,6 @@ class TestFieldCompliance:
         assert meta.get("complete") is True, "official_fields.meta.json completeness=false"
         assert meta.get("record_count", 0) > 0
 
-
 # ═══════════════════════════════════════════════════════════════════════
 # 3. Operators in code vs data/official_operators.meta.json
 # ═══════════════════════════════════════════════════════════════════════
@@ -228,7 +218,6 @@ class TestOperatorCompliance:
         meta = _load_json(meta_path)
         assert meta.get("complete") is True, "official_operators.meta.json completeness=false"
 
-
 # ═══════════════════════════════════════════════════════════════════════
 # 4. No custom/non-official fields in hardcoded defaults
 # ═══════════════════════════════════════════════════════════════════════
@@ -255,7 +244,6 @@ class TestNoCustomFields:
         neut = cfg.get("ops", {}).get("settings", {}).get("neutralization", "")
         assert len(neut) > 0
 
-
 # ═══════════════════════════════════════════════════════════════════════
 # 5. Dataset ID availability
 # ═══════════════════════════════════════════════════════════════════════
@@ -272,7 +260,6 @@ class TestDatasetCompliance:
         assert meta_path.is_file(), "official_datasets.meta.json not found"
         meta = _load_json(meta_path)
         assert meta.get("complete") is True, "official_datasets.meta.json completeness=false"
-
 
 # ═══════════════════════════════════════════════════════════════════════
 # 6. Parameter traceability from config to API call shape
@@ -301,7 +288,6 @@ class TestParameterTraceability:
         for name in sorted(CANONICAL_METRIC_NAMES) if isinstance(CANONICAL_METRIC_NAMES, (set, frozenset)) else CANONICAL_METRIC_NAMES:
             if isinstance(name, str):
                 assert len(name) > 0
-
 
 # ═══════════════════════════════════════════════════════════════════════
 # 7. Structured JSON report

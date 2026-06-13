@@ -1,4 +1,5 @@
 """Runtime dependency facade for Web snapshot services."""
+from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
@@ -33,7 +34,6 @@ from brain_alpha_ops.web_review import (
     assistant_cross_review_payload as assistant_cross_review_payload_service,
     rolling_validation_snapshot as rolling_validation_snapshot_service,
 )
-
 
 @dataclass
 class WebSnapshotRuntime:

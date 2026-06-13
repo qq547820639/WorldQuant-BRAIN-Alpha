@@ -6,6 +6,7 @@ import hashlib
 import logging
 import json
 import math
+import random
 import urllib.parse
 from typing import Any
 
@@ -202,10 +203,20 @@ def retryable_status(status_code: int | None) -> bool:
 
 
 def retry_delay(headers, attempt: int, base_seconds: float) -> float:
+    """Compute the back-off delay before retrying a request.
+
+    P2-2 refactor: previously ``base * (attempt + 1)`` (linear); now
+    ``base * 2^attempt * (0.5 + random()/2)`` (exponential with jitter) so
+    concurrent retries don't synchronise.  The ``Retry-After`` header still
+    wins when present.
+    """
     retry_after_value = retry_after(headers)
     if retry_after_value is not None:
         return retry_after_value
-    return max(0.0, float(base_seconds)) * (attempt + 1)
+    base = max(0.0, float(base_seconds))
+    # 0.5..1.0 jitter; 2^attempt exponential envelope.
+    jitter = 0.5 + random.random() / 2.0
+    return base * (2 ** max(0, int(attempt))) * jitter
 
 
 def parse_response(raw: str) -> Any:

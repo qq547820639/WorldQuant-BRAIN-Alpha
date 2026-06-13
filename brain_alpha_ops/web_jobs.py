@@ -1,10 +1,24 @@
-"""Async job management for the BRAIN Alpha Ops web console.
+"""Web-UI async job tracking for the BRAIN Alpha Ops web console.
 
-Extracted from web.py to separate job management from server infrastructure.
+**Purpose**: Track user-visible operations (sync, generate, check, simulate)
+initiated through the Web console.  Each operation runs as an async job with
+progress, status, result, and error reporting.
 
-Persistence: jobs are stored in-memory (ASYNC_JOBS) with optional JSONL backup
-for cross-restart recovery. When a storage directory is configured, every job update
-is also appended to a JSONL file so running/failed jobs survive service restarts.
+**Relationship to tasks.JobStore**: This module tracks *Web UI* operations;
+``brain_alpha_ops.tasks.JobStore`` tracks *pipeline* background jobs (production,
+sync, check).  They serve different lifecycles and should NOT be unified
+(P1-7 clarification).  The ``JobStoreLike`` Protocol in ``web_sync_job.py``
+and ``web_get_handlers.py`` provides a shared interface for callers that need
+to work with either store.
+
+**Persistence**: Jobs are stored in-memory (``ASYNC_JOBS``) with optional
+JSONL backup for cross-restart recovery.  When a storage directory is
+configured, every job update is also appended to a JSONL file so
+running/failed jobs survive service restarts.
+
+P1-7: Architected as a separate Web-UI job tracker (not pipeline
+JobStore).  Added ``get_web_job_store()`` factory and ``_WebJobStoreAdapter``
+for Protocol-based compatibility with background services.
 """
 
 from __future__ import annotations
@@ -25,7 +39,7 @@ logger = logging.getLogger(__name__)
 
 
 # ═══════════════════════ Job Storage ══════════════════════════════════
-ASYNC_JOBS: dict[str, dict] = {}
+ASYNC_JOBS: dict[str, dict] = {}  # Web-UI job tracking (NOT pipeline jobs)
 ASYNC_JOBS_LOCK = threading.RLock()
 
 # Job lifecycle constants
@@ -39,6 +53,36 @@ _ASYNC_JOB_TERMINAL_STATUSES = frozenset({
 _JOBS_JSONL_DIR: str = ""
 _JOBS_JSONL_FILENAME = "web_jobs.jsonl"
 _JOBS_JSONL_PATH: Path | None = None
+
+# ── JobStore-like bridge (P1-7) ──
+# The Protocol classes JobStoreLike in web_sync_job.py and web_get_handlers.py
+# allow callers to work with either web_jobs or tasks.JobStore.  This adapter
+# wraps ASYNC_JOBS behind the JobStoreLike Protocol so background services
+# can use web_jobs without a full tasks.JobStore rewrite.
+
+class _WebJobStoreAdapter:
+    """Thin adapter exposing ASYNC_JOBS through a JobStoreLike interface."""
+
+    def is_cancelled(self, job_id: str) -> bool:
+        return is_cancelled(job_id)
+
+    def update(self, job_id: str, **fields) -> None:
+        job_update(job_id, **fields)
+
+    def get(self, job_id: str) -> dict | None:
+        return job_get(job_id)
+
+
+_WEB_JOB_STORE_ADAPTER = None
+
+
+def get_web_job_store():
+    """Return a JobStoreLike adapter backed by ASYNC_JOBS."""
+    global _WEB_JOB_STORE_ADAPTER
+    if _WEB_JOB_STORE_ADAPTER is None:
+        _WEB_JOB_STORE_ADAPTER = _WebJobStoreAdapter()
+    return _WEB_JOB_STORE_ADAPTER
+
 
 
 # ═══════════════════════ Job ID Generation ════════════════════════════
@@ -235,7 +279,6 @@ def _prune_async_jobs() -> None:
         updated_at = str(row.get("updated_at", ""))
         if status in _ASYNC_JOB_TERMINAL_STATUSES:
             try:
-                from datetime import datetime
                 ts = datetime.fromisoformat(updated_at.replace("Z", "+00:00")).timestamp()
             except (ValueError, AttributeError):
                 ts = 0.0

@@ -1,8 +1,13 @@
 """Tests for _ratio normalization consistency across all modules.
 
 Verifies that all _ratio() implementations across the codebase use the
-same normalization heuristic (abs >= 2.0 → divide by 100), ensuring
-consistent behavior for turnover, correlation, and other metrics.
+same normalization heuristic (abs >= 100 → divide by 100, or bounded=True
+for 1.0 < abs < 100), ensuring consistent behavior for turnover,
+correlation, and other metrics. P3-19 (2026-06-13) corrects the
+original Phase-2 rule of abs >= 2.0 — that rule compressed natural
+turnover values like 75 → 0.75 even when the API returned a true
+percentage-style value (e.g. drawdown=75%). The unified rule now
+matches the pre-Phase-2 ``scoring._ratio`` semantics.
 """
 
 from __future__ import annotations
@@ -14,17 +19,21 @@ class TestRatioConsistency:
     """Verify _ratio consistency across all implementations."""
 
     def test_experience_ratio_percentage_normalization(self):
-        """experience.py:_ratio should normalize percentage-scale values."""
+        """experience.py:_ratio should normalize percentage-scale values.
+
+        P3-19 (2026-06-13): unified rule is now ``abs >= 100``. Pass-through
+        for free-range decimals in ``[0, 100)``.
+        """
         from brain_alpha_ops.research.experience import _ratio
 
-        # Percentage values (abs >= 2.0) should be divided by 100
-        assert _ratio(75.0) == 0.75  # 75% → 0.75
+        # Percentage values (abs >= 100) should be divided by 100
         assert _ratio(150.0) == 1.50  # 150% → 1.50
-        assert _ratio(-50.0) == -0.50  # -50% → -0.50
+        assert _ratio(-150.0) == -1.50  # -150% → -1.50
 
-        # Decimal values (abs < 2.0) should pass through unchanged
+        # Free-range decimals (abs < 100) pass through unchanged
+        assert _ratio(75.0) == 75.0  # not a percentage in this rule
         assert _ratio(0.75) == 0.75
-        assert _ratio(1.5) == 1.50  # turnover can be 1.5 naturally
+        assert _ratio(1.5) == 1.5  # turnover can be 1.5 naturally
         assert _ratio(0.01) == 0.01
         assert _ratio(0.0) == 0.0
 
@@ -37,28 +46,34 @@ class TestRatioConsistency:
         assert _ratio("abc") == 0.0
 
     def test_diagnostics_ratio_percentage_normalization(self):
-        """diagnostics.py:_ratio should normalize percentage-scale values."""
+        """diagnostics.py:_ratio should normalize percentage-scale values.
+
+        P3-19 (2026-06-13): unified rule is now ``abs >= 100``.
+        """
         from brain_alpha_ops.research.diagnostics import _ratio
 
-        # Percentage values
-        assert _ratio(75.0) == 0.75
+        # Percentage values (abs >= 100) should be divided by 100
         assert _ratio(150.0) == 1.50
 
-        # Decimal values pass through
+        # Free-range decimals pass through
+        assert _ratio(75.0) == 75.0
         assert _ratio(0.75) == 0.75
-        assert _ratio(1.5) == 1.50
+        assert _ratio(1.5) == 1.5
 
     def test_safety_ratio_percentage_normalization(self):
-        """safety.py:_ratio should normalize percentage-scale values."""
+        """safety.py:_ratio should normalize percentage-scale values.
+
+        P3-19 (2026-06-13): unified rule is now ``abs >= 100``.
+        """
         from brain_alpha_ops.research.safety import _ratio
 
-        # Percentage values
-        assert _ratio(75.0) == 0.75
+        # Percentage values (abs >= 100) should be divided by 100
         assert _ratio(150.0) == 1.50
 
-        # Decimal values pass through
+        # Free-range decimals pass through
+        assert _ratio(75.0) == 75.0
         assert _ratio(0.75) == 0.75
-        assert _ratio(1.5) == 1.50
+        assert _ratio(1.5) == 1.5
 
     def test_scoring_ratio_bounded_mode(self):
         """scoring.py:_ratio with bounded=True should handle mid-range values."""
@@ -119,17 +134,22 @@ class TestRatioConsistency:
         assert off_ratio(1.5) == 1.5
 
     def test_turnover_boundary_values(self):
-        """Test the boundary cases where normalization is ambiguous."""
+        """Test the boundary cases where normalization is ambiguous.
+
+        P3-19 (2026-06-13): boundary moved from ``abs >= 2.0`` to
+        ``abs >= 100``. Natural turnover values (typically 0.1 – 5.0)
+        are now preserved.
+        """
         from brain_alpha_ops.research.experience import _ratio
 
-        # Exactly at boundary: 2.0
-        assert _ratio(2.0) == 0.02  # divided (abs >= 2.0)
+        # Turnover boundary: free-range
+        assert _ratio(2.0) == 2.0  # preserved (abs < 100)
+        assert _ratio(1.999) == 1.999  # preserved
+        assert _ratio(-2.0) == -2.0  # preserved
 
-        # Just below boundary: 1.999
-        assert _ratio(1.999) == 1.999  # not divided (abs < 2.0)
-
-        # Exactly at boundary: -2.0
-        assert _ratio(-2.0) == -0.02  # divided (abs >= 2.0)
+        # 100 is the unified percentage threshold
+        assert _ratio(100.0) == 1.0  # divided (abs >= 100)
+        assert _ratio(99.0) == 99.0  # preserved (abs < 100)
 
     def test_edge_case_zero(self):
         """Zero should pass through unchanged."""

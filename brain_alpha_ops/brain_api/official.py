@@ -38,8 +38,10 @@ from .official_validation import OfficialExpressionValidator
 
 logger = logging.getLogger(__name__)
 
-_GLOBAL_LAST_REQUEST_AT = 0.0  # shared timestamp for cross-instance rate awareness
-_GLOBAL_TIMESTAMP_LOCK = threading.RLock()
+# P2-2: removed the cross-instance _GLOBAL_LAST_REQUEST_AT / _GLOBAL_TIMESTAMP_LOCK
+# pair.  Per-instance ``self._last_request_at`` is sufficient now that retry_delay
+# uses exponential back-off with jitter; cross-process rate coordination is the
+# BRAIN server's responsibility, not ours.
 _standard_pagination_progress = _shared_standard_pagination_progress
 
 
@@ -466,22 +468,15 @@ class OfficialBrainAPI:
         }
 
     def _throttle(self):
-        global _GLOBAL_LAST_REQUEST_AT
         interval = max(0.0, float(self.config.min_request_interval_seconds))
         if interval <= 0:
             return
-        # P1-1: Use a single global lock to prevent TOCTOU race.
-        # Pre-reserve the next slot inside the lock, then sleep outside.
-        wait_time = 0.0
-        with _GLOBAL_TIMESTAMP_LOCK:
+        with self._request_lock:
             now = time.monotonic()
-            last_request_at = max(self._last_request_at, _GLOBAL_LAST_REQUEST_AT)
-            elapsed = now - last_request_at
-            if elapsed < interval:
-                wait_time = interval - elapsed
+            elapsed = now - self._last_request_at
+            wait_time = max(0.0, interval - elapsed)
             # Pre-reserve the slot so concurrent threads see the updated time.
-            _GLOBAL_LAST_REQUEST_AT = now + wait_time
-            self._last_request_at = _GLOBAL_LAST_REQUEST_AT
+            self._last_request_at = now + wait_time
         if wait_time > 0:
             time.sleep(wait_time)
 

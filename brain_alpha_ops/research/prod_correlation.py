@@ -15,7 +15,6 @@ BRAIN /alphas/correlations/check endpoint, providing:
   - Local fallback when API is unavailable (with explicit marking)
   - Structured result with both numeric and boolean pass/fail semantics
 """
-
 from __future__ import annotations
 
 import logging
@@ -28,7 +27,6 @@ if TYPE_CHECKING:
     from brain_alpha_ops.brain_api import BrainAPI
 
 logger = logging.getLogger(__name__)
-
 
 @dataclass
 class ProdCorrelationResult:
@@ -59,7 +57,6 @@ class ProdCorrelationResult:
             "alpha_ids": self.alpha_ids,
             "error": self.error,
         }
-
 
 class ProdCorrelationService:
     """Official prod_correlation checker using BRAIN /alphas/correlations/check.
@@ -160,7 +157,8 @@ class ProdCorrelationService:
         The endpoint accepts an expression and optional settings, returning
         a list of matching alpha IDs and their correlation values.
         """
-        assert self._api is not None, "API instance required"
+        if self._api is None:
+            raise RuntimeError("API instance required")
 
         payload: dict[str, Any] = {
             "expression": expression,

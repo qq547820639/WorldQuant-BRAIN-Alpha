@@ -120,3 +120,31 @@
 | quality_profitability | quality | 经济护城河+应计质量 | 4 |
 | microstructure_order_flow | hybrid | 订单流信息不对称 | 5 |
 | analyst_behavior_bias | cross_sectional | 分析师羊群效应+过度自信 | 5 |
+
+
+## 2026-06-13 Phase 3 总结
+
+### P0-4 regression 关键教训
+- Phase 2 把 _ratio 阈值从 `abs >= 100` (scoring 原值) 降级到 `abs >= 2.0` (experience/safety/diagnostics)
+- 导致 turnover=2.5 被错误压缩为 0.025
+- Phase 3 修正回 `abs >= 100.0` (preserve turnover), `bounded=True` 仍支持 1.0<abs<100 /100
+
+### P3-18 关键模式
+- 加 frozen=True 后必须找所有 setattr/mutate 调用并改为 dataclasses.replace
+- web_config.run_config_from_payload 是最重灾区 (QualityThresholds + ScoringConfig)
+- tests 也需要改用 dataclasses.replace (test_web.py, test_core_modules_comprehensive.py)
+
+### P1-10 大规模添加 future import
+- 用 ast 扫描源码找 PEP 604 union 用法
+- 在 docstring/shebang 之后, 其它 import 之前插入
+- 必须清理重复 (docstring 描述中如果含 "from __future__" 字符串会触发误判)
+
+### 3.9 + PEP 604 + frozen + get_type_hints 陷阱
+- get_type_hints 在 3.9 + frozen + 含 PEP 604 union 的注解会立即求值失败
+- 修复: 字段级别 try/except, 失败时回退到 Any
+- 必须保留 diagnostics 记录 (测试期望)
+
+### 关键测试 fix
+- _Handler 默认不该 inject confirm_simulation (会污染其它端点)
+- 应在 simulate 测试中显式 body={"confirm_simulation": True}
+- 5 个 simulate 测试 + 1 个 start_request 内部

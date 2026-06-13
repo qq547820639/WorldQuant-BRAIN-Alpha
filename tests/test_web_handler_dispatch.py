@@ -84,6 +84,12 @@ class _Lock:
 
 class _Handler:
     def __init__(self, *, body=None, allowed=True, session=True, headers=None, replay=None):
+        # Note: P0-2 introduced a human-in-the-loop ``confirm_simulation``
+        # gate on ``/api/candidates/simulate``.  Tests that exercise that
+        # path add ``"confirm_simulation": True`` to their body explicitly.
+        # Tests for other endpoints (``/run``, ``/check``, ``/test_connection``
+        # etc.) must NOT see this field leaked into the captured payload,
+        # so the helper does not default the field.
         self.body = {} if body is None else body
         self.allowed = allowed
         self.session = session
@@ -557,7 +563,8 @@ def test_dispatch_get_treats_client_disconnect_as_completed(monkeypatch, caplog)
     )
 
     handler = _Handler()
-    with caplog.at_level(logging.INFO, logger="brain_alpha_ops.web_handler_dispatch"):
+    # P1-5: the dispatch loop was moved to web_handler_dispatch_core.
+    with caplog.at_level(logging.INFO, logger="brain_alpha_ops.web_handler_dispatch_core"):
         dispatch_get(handler, urlparse("/api/candidates"), ctx)
 
     assert handler.json_calls == []
@@ -1308,7 +1315,7 @@ def test_dispatch_post_candidates_simulate_starts_active_job_without_watchdog(mo
         lambda job_id, payload, *, job_store, log: None,
     )
 
-    handler = _Handler(body={})
+    handler = _Handler(body={"confirm_simulation": True})
     dispatch_post(handler, urlparse("/api/candidates/simulate"), ctx)
 
     payload, status, _headers = handler.json_calls[0]
@@ -1333,7 +1340,7 @@ def test_dispatch_post_candidates_simulate_blocks_auxiliary_conflict_before_star
         lambda job_id, payload, *, job_store, log: (_ for _ in ()).throw(AssertionError("worker should not start")),
     )
 
-    handler = _Handler(body={})
+    handler = _Handler(body={"confirm_simulation": True})
     dispatch_post(handler, urlparse("/api/candidates/simulate"), ctx)
 
     payload, status, _headers = handler.json_calls[0]
@@ -1358,7 +1365,7 @@ def test_dispatch_post_candidates_simulate_blocks_active_async_non_simulation_jo
         lambda job_id, payload, *, job_store, log: (_ for _ in ()).throw(AssertionError("worker should not start")),
     )
 
-    handler = _Handler(body={})
+    handler = _Handler(body={"confirm_simulation": True})
     dispatch_post(handler, urlparse("/api/candidates/simulate"), ctx)
 
     payload, status, _headers = handler.json_calls[0]
@@ -1382,7 +1389,7 @@ def test_dispatch_post_candidates_simulate_allows_only_one_concurrent_start(monk
     barrier = threading.Barrier(2)
 
     def start_request():
-        handler = _Handler(body={})
+        handler = _Handler(body={"confirm_simulation": True})
         barrier.wait(timeout=5)
         dispatch_post(handler, urlparse("/api/candidates/simulate"), ctx)
         return handler.json_calls[0]
@@ -1414,7 +1421,7 @@ def test_dispatch_post_candidates_simulate_blocks_stopping_simulation_job(monkey
         lambda job_id, payload, *, job_store, log: (_ for _ in ()).throw(AssertionError("worker should not start")),
     )
 
-    handler = _Handler(body={})
+    handler = _Handler(body={"confirm_simulation": True})
     dispatch_post(handler, urlparse("/api/candidates/simulate"), ctx)
 
     payload, status, _headers = handler.json_calls[0]
@@ -1768,7 +1775,7 @@ def test_dispatch_post_candidates_simulate_uses_session_credentials_without_pers
     connection = _Handler(body={"token": "session-token"})
     dispatch_post(connection, urlparse("/api/test_connection"), ctx)
 
-    simulate = _Handler(body={"candidates": [{"alpha_id": "alpha_1", "expression": "rank(close)"}]})
+    simulate = _Handler(body={"candidates": [{"alpha_id": "alpha_1", "expression": "rank(close)"}], "confirm_simulation": True})
     dispatch_post(simulate, urlparse("/api/candidates/simulate"), ctx)
 
     response, status, _headers = simulate.json_calls[0]

@@ -6,7 +6,6 @@ calls BRAIN APIs.  Callers can use the resulting payload to show exactly which
 parsed fields/operators were checked against the official cache before a
 candidate is retained, optimized, or sent to any official-validation queue.
 """
-
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -16,11 +15,9 @@ from brain_alpha_ops.data import FieldDatasetMapper, OfficialDataLoader
 from brain_alpha_ops.data.official_context_validation import validate_official_context
 from brain_alpha_ops.research.expression_ast import ExpressionProfile, profile_expression
 
-
 EXPRESSION_OFFICIAL_CONTEXT_PROOF_SCHEMA = "expression-official-context-proof.v1"
 EXPRESSION_DELTA_SCHEMA = "expression-delta.v1"
 GROUP_CONTEXT_FIELDS = frozenset({"market", "sector", "industry", "subindustry", "country", "exchange"})
-
 
 @dataclass(frozen=True)
 class OfficialCapabilitySets:
@@ -29,7 +26,6 @@ class OfficialCapabilitySets:
     dataset_field_names: frozenset[str]
     dataset_id: str
     cache_summary: dict[str, Any]
-
 
 def expression_official_context_proof(
     expression: str,
@@ -122,7 +118,6 @@ def expression_official_context_proof(
         "official_context": cache,
     }
 
-
 def official_capability_sets(
     *,
     dataset_id: str = "",
@@ -156,7 +151,6 @@ def official_capability_sets(
         cache_summary=cache,
     )
 
-
 def expression_delta(
     child_expression: str,
     parent_expression: str = "",
@@ -166,7 +160,6 @@ def expression_delta(
     child = profile_expression(child_expression)
     parent = profile_expression(parent_expression) if str(parent_expression or "").strip() else None
     return expression_delta_from_profiles(child, parent)
-
 
 def expression_delta_from_profiles(
     child: ExpressionProfile,
@@ -199,7 +192,6 @@ def expression_delta_from_profiles(
             or child_windows != parent_windows
         ),
     }
-
 
 def _cache_summary(*, data_dir: str | None) -> dict[str, Any]:
     validation = validate_official_context(data_dir=data_dir, require_metadata=True, require_official_source=True)
@@ -244,7 +236,6 @@ def _cache_summary(*, data_dir: str | None) -> dict[str, Any]:
         },
     }
 
-
 def _profile_block(profile: ExpressionProfile | None) -> dict[str, Any]:
     if profile is None:
         return {
@@ -262,10 +253,8 @@ def _profile_block(profile: ExpressionProfile | None) -> dict[str, Any]:
         "windows": list(profile.windows),
     }
 
-
 def _normalized_list(values: tuple[str, ...] | list[str] | set[str]) -> list[str]:
     return sorted(dict.fromkeys(str(value).strip().lower() for value in values if str(value).strip()))
-
 
 def _safe_int(value: Any) -> int:
     try:

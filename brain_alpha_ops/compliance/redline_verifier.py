@@ -16,7 +16,6 @@ Usage:
     python -m brain_alpha_ops.compliance.redline_verifier --json
     python -m brain_alpha_ops.compliance.redline_verifier --block
 """
-
 from __future__ import annotations
 
 import json
@@ -41,7 +40,6 @@ from brain_alpha_ops.compliance.redline_models import (
     RedLineBlockedError,
     RedLineViolation,
 )
-
 
 class RedLineVerifier:
     """Six red-line compliance verification engine.
@@ -81,7 +79,6 @@ class RedLineVerifier:
         """Quick pass/fail — returns True only if ALL six red lines pass."""
         return cls().verify_all().overall == "PASS"
 
-
 def main() -> int:
     import argparse
 
@@ -120,7 +117,6 @@ def main() -> int:
             print(str(e))
         exit_code = 2
     return exit_code
-
 
 if __name__ == "__main__":
     raise SystemExit(main())

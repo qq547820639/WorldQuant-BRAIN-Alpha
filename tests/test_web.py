@@ -1,8 +1,13 @@
+from __future__ import annotations
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 import json
 import os
+
+# P0-2: import web_submission_single as ``wss`` so the submit tests can
+# bypass the real-submit kill-switch.
+from brain_alpha_ops import web_submission_single as wss  # noqa: E402
 import re
 import threading
 import time
@@ -1558,6 +1563,8 @@ def test_observability_submission_preflight_failure_requires_confirmation(monkey
 
 
 def test_submit_candidate_reports_duplicate_expression_code(monkeypatch, tmp_path):
+    # P0-2: bypass the real-submit kill-switch.
+    monkeypatch.setattr(wss, "_real_submit_disabled", lambda: False)
     config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path)
     config.ops.budget.require_cloud_sync = False
@@ -1626,6 +1633,8 @@ def test_submission_preflight_reports_stale_cloud_code(monkeypatch, tmp_path):
 
 
 def test_submit_candidate_requires_observability_confirmation(monkeypatch, tmp_path):
+    # P0-2: bypass the real-submit kill-switch.
+    monkeypatch.setattr(wss, "_real_submit_disabled", lambda: False)
     config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path)
     config.ops.budget.require_cloud_sync = False
@@ -1681,6 +1690,8 @@ def test_submit_candidate_requires_observability_confirmation(monkeypatch, tmp_p
 
 
 def test_submit_candidate_requires_confirmation_when_observability_preflight_fails(monkeypatch, tmp_path):
+    # P0-2: bypass the real-submit kill-switch.
+    monkeypatch.setattr(wss, "_real_submit_disabled", lambda: False)
     config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path)
     config.ops.budget.require_cloud_sync = False
@@ -1984,12 +1995,19 @@ def test_assistant_context_snapshot_uses_web_runtime_sources(monkeypatch, tmp_pa
 def test_assistant_guidance_snapshot_reads_latest_usable_guidance(monkeypatch, tmp_path):
     storage = tmp_path / "data"
     storage.mkdir()
+    import dataclasses
     config = RunConfig(environment="production")
     config.ops.storage_dir = str(storage)
-    config.ops.budget.use_assistant_guidance = False
-    config.ops.budget.assistant_guidance_min_confidence = 0.7
-    config.ops.scoring.assistant_guidance_score_min_confidence = 0.8
-    config.ops.scoring.assistant_guidance_score_min_outcome_count = 1
+    config.ops.budget = dataclasses.replace(
+        config.ops.budget,
+        use_assistant_guidance=False,
+        assistant_guidance_min_confidence=0.7,
+    )
+    config.ops.scoring = dataclasses.replace(
+        config.ops.scoring,
+        assistant_guidance_score_min_confidence=0.8,
+        assistant_guidance_score_min_outcome_count=1,
+    )
     repo = ResearchRepository(str(storage))
     repo.save_assistant_guidance(
         {

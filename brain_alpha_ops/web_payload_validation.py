@@ -6,23 +6,30 @@ import math
 import re
 from typing import Any
 
+from brain_alpha_ops.runtime_constants import ContextRefreshDefaults
+
 
 MAX_GENERATE_CANDIDATES = 100
 MAX_ALPHA_ID_LENGTH = 128
 MAX_BATCH_ALPHA_IDS = 100
 MAX_ASSISTANT_TEXT_LENGTH = 200_000
 MAX_SIMULATION_TIMEOUT_SECONDS = 3600
-ALLOWED_SYNC_RANGES = {"3d", "7d", "recent", "6months", "all"}
+# P0-3 fix (2026-06-13): the Web payload layer must accept every value the
+# canonical ``ALLOWED_SYNC_RANGES`` allows. The previous literal here (without
+# ``1d``) silently dropped 1d-window requests from the agent tool path.
+ALLOWED_SYNC_RANGES: frozenset[str] = ContextRefreshDefaults.ALLOWED_SYNC_RANGES
 ALPHA_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]*$")
 
 
 def validate_json_object_payload(payload: dict[str, Any] | None) -> str:
+    """Verify the request body is a JSON object. Returns "" on success or a user-facing error message."""
     if not isinstance(payload, dict):
         return "request body must be a JSON object"
     return ""
 
 
 def validate_generate_candidates_payload(payload: dict[str, Any] | None) -> str:
+    """Validate /api/candidates/generate payload: ensures count/candidates are well-formed numerics."""
     error = validate_json_object_payload(payload)
     if error:
         return error
@@ -57,6 +64,7 @@ def validate_generate_candidates_payload(payload: dict[str, Any] | None) -> str:
 
 
 def validate_submit_batch_payload(payload: dict[str, Any] | None) -> str:
+    """Validate /api/candidates/submit_batch payload: enforces alpha_ids list, candidate rows, and bounds."""
     error = validate_json_object_payload(payload)
     if error:
         return error
@@ -76,6 +84,7 @@ def validate_submit_batch_payload(payload: dict[str, Any] | None) -> str:
 
 
 def validate_check_batch_payload(payload: dict[str, Any] | None) -> str:
+    """Validate /api/check_batch payload: candidate_ids list, optional fields, batch size limits."""
     if payload is None:
         return ""
     error = validate_json_object_payload(payload)
@@ -100,6 +109,7 @@ def validate_check_batch_payload(payload: dict[str, Any] | None) -> str:
 
 
 def validate_simulation_payload(payload: dict[str, Any] | None) -> str:
+    """Validate /api/candidates/simulate payload: candidate_ids, workflow_plan, timeouts, and bounds."""
     error = validate_json_object_payload(payload)
     if error:
         return error
@@ -148,6 +158,7 @@ def validate_simulation_payload(payload: dict[str, Any] | None) -> str:
 
 
 def validate_candidate_rows(value: Any, field: str) -> str:
+    """Validate a list of candidate-row dicts; returns "" on success or a user-facing error message."""
     if value is None:
         return ""
     if not isinstance(value, list):
@@ -167,6 +178,7 @@ def validate_candidate_rows(value: Any, field: str) -> str:
 
 
 def _validate_candidate_id_list(value: Any, field: str, *, required: bool) -> str:
+    """Validate a list of candidate/alpha IDs against the alpha-id pattern and length limits."""
     if value is None:
         return f"{field} must be a list of Alpha IDs" if required else ""
     if not isinstance(value, list):
@@ -188,6 +200,7 @@ def _validate_numeric_field(
     maximum: int | float,
     integer: bool,
 ) -> str:
+    """Validate an optional numeric field with bounds; treats empty/None as absent."""
     if field not in payload or payload.get(field) in ("", None):
         return ""
     value = payload.get(field)
@@ -210,6 +223,7 @@ def _validate_numeric_field(
 
 
 def validate_job_cancel_payload(payload: dict[str, Any] | None, *, field: str = "job_id") -> str:
+    """Validate /api/{job}/cancel payloads: ensures job_id is a well-formed non-empty string."""
     error = validate_json_object_payload(payload)
     if error:
         return error
@@ -224,6 +238,7 @@ def validate_job_cancel_payload(payload: dict[str, Any] | None, *, field: str = 
 
 
 def validate_assistant_text_payload(payload: dict[str, Any] | None) -> str:
+    """Validate /api/assistant/parse payload: ensures raw_output or text is a non-empty bounded string."""
     error = validate_json_object_payload(payload)
     if error:
         return error
@@ -236,6 +251,7 @@ def validate_assistant_text_payload(payload: dict[str, Any] | None) -> str:
 
 
 def validate_assistant_guidance_save_payload(payload: dict[str, Any] | None) -> str:
+    """Validate /api/assistant/guidance save payload: accepts either assistant_guidance object or raw text."""
     error = validate_json_object_payload(payload)
     if error:
         return error
@@ -261,6 +277,7 @@ def validate_assistant_guidance_save_payload(payload: dict[str, Any] | None) -> 
 
 
 def validate_assistant_cross_review_payload(payload: dict[str, Any] | None) -> str:
+    """Validate /api/assistant/cross_review payload: requires request_pack object and primary_response."""
     error = validate_json_object_payload(payload)
     if error:
         return error
@@ -273,6 +290,7 @@ def validate_assistant_cross_review_payload(payload: dict[str, Any] | None) -> s
 
 
 def validate_alpha_action_payload(payload: dict[str, Any] | None) -> str:
+    """Validate alpha-action payloads: accepts top-level alpha_id/official_alpha_id/simulation_id or a candidate object."""
     error = validate_json_object_payload(payload)
     if error:
         return error
@@ -298,6 +316,7 @@ def validate_alpha_action_payload(payload: dict[str, Any] | None) -> str:
 
 
 def validate_sync_alphas_payload(payload: dict[str, Any] | None) -> str:
+    """Validate /api/sync_alphas payload: optional syncRange against the allowed ranges enum."""
     error = validate_json_object_payload(payload)
     if error:
         return error
@@ -308,6 +327,7 @@ def validate_sync_alphas_payload(payload: dict[str, Any] | None) -> str:
 
 
 def validate_alpha_id_value(value: Any, field: str) -> str:
+    """Validate a single alpha/candidate/simulation ID against the canonical pattern and length."""
     if not isinstance(value, str):
         return f"{field} must be a string Alpha ID"
     text = value.strip()

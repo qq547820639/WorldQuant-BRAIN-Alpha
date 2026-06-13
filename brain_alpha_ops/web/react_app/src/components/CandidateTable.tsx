@@ -402,7 +402,7 @@ export default function CandidateTable({
     } else {
       setTaskState("error");
       updateAutoPipelineStage("idle");
-      setTaskError(result?.error || "启动候选池自动推进失败");
+      setTaskError(apiErrorMessage(result, "启动候选池自动推进失败"));
       notify("error", apiErrorMessage(result, "启动候选池自动推进失败"));
     }
   }, [callApi, notify, poolEligibleCandidates.length, retainedPoolCandidates.length, targetPoolSize, updateAutoPipelineStage]);

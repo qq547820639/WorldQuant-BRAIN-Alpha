@@ -5,11 +5,9 @@ forced diversification when the pool becomes structurally concentrated.
 
 Integration point: added as a mixin to AlphaResearchPipeline in pipeline.py.
 """
-
 from __future__ import annotations
 
 from typing import Any
-
 
 class PipelineDiversityMixin:
     """Mixin that adds expression diversity monitoring to the pipeline.

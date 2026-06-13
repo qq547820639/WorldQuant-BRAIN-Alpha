@@ -12,7 +12,6 @@ Usage:
     result = oss.evaluate(candidate)
     print(result.attribution_report())
 """
-
 from __future__ import annotations
 
 import hashlib
@@ -50,11 +49,9 @@ logger = logging.getLogger(__name__)
 _MAX_SCORE_HISTORY_PER_ALPHA = 100
 _MAX_SCORE_HISTORY_TOTAL_ENTRIES = 10_000
 
-
 def _gate_item_value(row: dict, key: str, default: str = "-") -> str:
     value = row.get(key, default)
     return str(value if value not in (None, "") else default)
-
 
 def _format_gate_failure(row: dict) -> str:
     return (
@@ -63,7 +60,6 @@ def _format_gate_failure(row: dict) -> str:
         f"{_gate_item_value(row, 'direction')} "
         f"{row.get('target', '-')})"
     )
-
 
 # ═══════════════════════════════════════════════════════════════════════
 # Data Structures
@@ -197,7 +193,6 @@ class ScoringResult:
             lines.append(f"{indent}  ↳ {node.explanation}")
         for child in node.children:
             ScoringResult._render_tree(lines, child, depth + 1)
-
 
 # ═══════════════════════════════════════════════════════════════════════
 # Official Scoring System

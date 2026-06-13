@@ -1,3 +1,4 @@
+from __future__ import annotations
 from types import SimpleNamespace
 
 from brain_alpha_ops.research.dataset_selection import DatasetSelectionService

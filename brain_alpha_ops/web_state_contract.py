@@ -4,7 +4,6 @@ The Web console has several independently polled workflows.  This module keeps
 their browser-facing status and recovery hints consistent without changing the
 existing raw job/error fields that older callers already consume.
 """
-
 from __future__ import annotations
 
 from typing import Any, Mapping
@@ -12,13 +11,11 @@ from typing import Any, Mapping
 from brain_alpha_ops.redaction import redact_error_message
 from brain_alpha_ops.tasks import ACTIVE_STATUSES, DEFAULT_RECOVERY_ERROR, DEFAULT_WATCHDOG_ERROR, TERMINAL_STATUSES
 
-
 _CANCELLED_STATUSES = {"stopped", "cancelled", "canceled"}
 _SUCCESS_STATUSES = {"completed"}
 _WARNING_STATUSES = {"completed_with_warnings"}
 _FAILED_STATUSES = {"failed"}
 _MISSING_STATUSES = {"missing"}
-
 
 _ERROR_DEFINITIONS: dict[str, dict[str, Any]] = {
     "session_expired": {
@@ -199,7 +196,6 @@ _ERROR_DEFINITIONS: dict[str, dict[str, Any]] = {
     },
 }
 
-
 _STATUS_LABELS = {
     "active": "进行中",
     "success": "已完成",
@@ -210,7 +206,6 @@ _STATUS_LABELS = {
     "idle": "空闲",
     "unknown": "状态不明确",
 }
-
 
 def enrich_error_payload(payload: Mapping[str, Any], *, fallback_kind: str | None = None) -> dict[str, Any]:
     """Return an error payload with AF-018 user-action metadata attached."""
@@ -229,7 +224,6 @@ def enrich_error_payload(payload: Mapping[str, Any], *, fallback_kind: str | Non
     enriched["recoverable"] = user_error["recoverable"]
     enriched["retryable"] = bool(enriched.get("retryable", user_error["retryable"]))
     return enriched
-
 
 def enrich_job_response(payload: Mapping[str, Any], *, job_type: str | None = None) -> dict[str, Any]:
     """Attach stable status classification to a job/status response."""
@@ -254,7 +248,6 @@ def enrich_job_response(payload: Mapping[str, Any], *, job_type: str | None = No
     elif enriched.get("ok") is False or enriched.get("error") or enriched.get("error_code"):
         enriched = enrich_error_payload(enriched)
     return enriched
-
 
 def classify_job_status(
     *,
@@ -322,7 +315,6 @@ def classify_job_status(
         user_error_kind="unknown_state",
     )
 
-
 def classify_user_error_kind(payload: Mapping[str, Any]) -> str:
     code = str(payload.get("error_code") or payload.get("status_code") or "")
     status_code = _int_value(payload.get("status_code"))
@@ -359,7 +351,6 @@ def classify_user_error_kind(payload: Mapping[str, Any]) -> str:
         return "job_not_found"
     return "general_error"
 
-
 def build_user_error(kind: str, *, raw_error: str = "", payload: Mapping[str, Any] | None = None) -> dict[str, Any]:
     definition = _ERROR_DEFINITIONS.get(kind) or _ERROR_DEFINITIONS["general_error"]
     safe_error = redact_error_message(raw_error, max_length=500)
@@ -385,7 +376,6 @@ def build_user_error(kind: str, *, raw_error: str = "", payload: Mapping[str, An
         result["detail"] = safe_error
     return result
 
-
 def _state(
     status_kind: str,
     *,
@@ -408,13 +398,11 @@ def _state(
         **({"user_error_kind": user_error_kind} if user_error_kind else {}),
     }
 
-
 def _normalize_status(value: str) -> str:
     normalized = str(value or "").strip().lower()
     if normalized == "canceled":
         return "cancelled"
     return normalized
-
 
 def _looks_interrupted(text: str) -> bool:
     markers = (
@@ -433,11 +421,9 @@ def _looks_interrupted(text: str) -> bool:
     )
     return any(marker in text for marker in markers)
 
-
 def _specific_failed_job_kind(text: str) -> str:
     kind = classify_user_error_kind({"error": text})
     return "job_failed" if kind in {"general_error", "job_failed"} else kind
-
 
 def _int_value(value: Any) -> int | None:
     try:

@@ -4,7 +4,6 @@ The legacy inline HTML builder has been retired.  This module keeps the older
 ``brain_alpha_ops.build_inline`` command surface available, but the command now
 verifies that the React ``dist`` shell and its hashed assets are present.
 """
-
 from __future__ import annotations
 
 import argparse
@@ -14,12 +13,10 @@ from pathlib import Path
 import shutil
 from typing import Any
 
-
 ROOT = Path(__file__).resolve().parents[1]
 REACT_DIST = ROOT / "brain_alpha_ops" / "web" / "react_app" / "dist"
 REACT_INDEX = REACT_DIST / "index.html"
 ASSET_REF_RE = re.compile(r"""(?:src|href)=["'](/assets/[^"']+)["']""")
-
 
 def build(output_path: str | Path | None = None) -> dict[str, Any]:
     """Copy the current React index shell when an explicit output is requested."""
@@ -34,7 +31,6 @@ def build(output_path: str | Path | None = None) -> dict[str, Any]:
         result["output_path"] = str(target)
     return result
 
-
 def build_inline(template: str) -> tuple[str, dict[str, Any]]:
     """Return *template* unchanged; inline markers are no longer supported."""
     stats = {
@@ -45,7 +41,6 @@ def build_inline(template: str) -> tuple[str, dict[str, Any]]:
         "deprecated": True,
     }
     return template.lstrip("\ufeff"), stats
-
 
 def check(output_path: str | Path | None = None) -> dict[str, Any]:
     """Validate that the React dist index references existing local assets."""
@@ -79,11 +74,9 @@ def check(output_path: str | Path | None = None) -> dict[str, Any]:
         "error": "" if ok else "React dist index.html references missing assets.",
     }
 
-
 def _asset_path(ref: str, *, index_path: Path) -> Path:
     relative = ref.lstrip("/")
     return index_path.parent / relative
-
 
 def _error(path: Path, message: str) -> dict[str, Any]:
     return {
@@ -97,7 +90,6 @@ def _error(path: Path, message: str) -> dict[str, Any]:
         "missing": [],
         "error": message,
     }
-
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Validate React web console build artifacts.")
@@ -116,9 +108,7 @@ def main(argv: list[str] | None = None) -> int:
             print(result["error"])
     return 0 if result.get("ok") else 1
 
-
 __all__ = ["build", "build_inline", "check", "main"]
-
 
 if __name__ == "__main__":
     raise SystemExit(main())
