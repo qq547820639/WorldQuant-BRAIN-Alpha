@@ -37,10 +37,6 @@ Thumbs.db
 
 # ---- Data & Logs (large / sensitive / runtime-generated) ----
 data/*.jsonl
-data/jobs_sync.json
-data/jobs_production.json
-data/jobs_check.json
-data/jobs_async.json
 data/api_cache/
 data/_codex_bench*/
 data/e2e_screenshots/

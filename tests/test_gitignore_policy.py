@@ -10,10 +10,6 @@ def test_runtime_generated_data_paths_are_ignored():
     for pattern in (
         "data/*.jsonl",
         "data/*.sqlite",
-        "data/jobs_production.json",
-        "data/jobs_sync.json",
-        "data/jobs_check.json",
-        "data/jobs_async.json",
         "data/run_history/",
         "data/knowledge/",
         "data/api_cache/",
@@ -30,10 +26,6 @@ def test_runtime_generated_data_examples_are_git_ignored():
     examples = [
         "data/example.jsonl",
         "data/example.sqlite",
-        "data/jobs_production.json",
-        "data/jobs_sync.json",
-        "data/jobs_check.json",
-        "data/jobs_async.json",
         "data/run_history/run_example.json",
         "data/knowledge/failures/example.json",
         "data/api_cache/example.json",
