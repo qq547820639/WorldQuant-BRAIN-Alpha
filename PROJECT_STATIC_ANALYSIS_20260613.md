@@ -766,7 +766,7 @@ fallback: web_routes.py (web/__init__.py 内 dispatch) ← 兜底
 ### 6.7 安全设计
 - `web_session.py`:`SESSION_MANAGER = LocalSessionManager()` + BRAIN 凭证 vault
 - `validate_token` 用 `secrets.compare_digest`
-- Cookie: `name=val; Path=/; Max-Age=ttl; HttpOnly; SameSite=Strict[; Secure]`
+- Cookie format: `name=val; Path=/; Max-Age=ttl; HttpOnly; SameSite=Strict[; Secure]`
 - `web_security.py`:5 个常量(`LOCAL_HOSTS` / `SESSION_COOKIE_NAME` / `DEFAULT_SESSION_TTL_SECONDS=12h` / `REQUEST_REPLAY_TTL_SECONDS=5min` / `MAX_REPLAY_CACHE_SIZE=10000`)
 - Replay 防护:session row 上 `request_replay` 子 dict(cap=10000)
 - `web_csp.py`:SHA-256 hash 注入到 `script-src` / `style-src`
