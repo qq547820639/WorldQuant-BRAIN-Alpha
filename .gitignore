@@ -121,7 +121,12 @@ BrainAlphaOps.spec
 
 # ---- Development artifacts (experiments, docs, IDE) ----
 experiments/
-docs/
+# docs/ — exclude everything except CI-critical tracker docs
+!/docs/REVIEW_GAP_CLOSURE_20260530.md
+!/docs/DELIVERY_COMPLETION_AUDIT_20260528.md
 !.github/
 .codex/
 
+docs/*
+!docs/REVIEW_GAP_CLOSURE_20260530.md
+!docs/DELIVERY_COMPLETION_AUDIT_20260528.md
