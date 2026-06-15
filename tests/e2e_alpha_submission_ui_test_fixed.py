@@ -4,7 +4,7 @@ BRAIN Alpha Ops - Alpha提交完整流程UI测试（使用项目.venv环境）
 测试约束：
 1. 仅通过UI交互（点击、输入、选择）完成所有操作
 2. 禁止使用API、命令行、数据库等非界面方式
-3. 使用提供的凭据登录：547820639@qq.com / 使用BRAIN_PASSWORD环境变量
+3. 使用提供的凭据登录：<BRAIN_EMAIL> / 使用BRAIN_PASSWORD环境变量
 
 执行方式：
     source .venv/bin/activate

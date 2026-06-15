@@ -170,7 +170,7 @@ def submit_alpha_direct(
 def main() -> int:
     parser = argparse.ArgumentParser(description="Submit an alpha directly to BRAIN API.")
     parser.add_argument("--username", default="")
-    parser.add_argument("--password", default="Ph360098.")
+    parser.add_argument("--password", default="")
     parser.add_argument("--expression", default="-returns")
     parser.add_argument("--settings", default=None, help="JSON settings override")
     parser.add_argument("--dry-run", action="store_true", help="Only authenticate")

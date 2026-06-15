@@ -10,7 +10,7 @@ E2E UI Interaction Test - Alpha Submission Complete Workflow
 5. 仅通过UI交互，不使用任何API调用
 
 测试账户：
-  邮箱：547820639@qq.com
+  邮箱：<BRAIN_EMAIL>
   密码：使用BRAIN_PASSWORD环境变量
 """
 
@@ -101,7 +101,7 @@ def test_complete_alpha_submission_workflow():
         print("\n📍 步骤 3: 输入BRAIN账户凭据")
         
         # 查找邮箱输入框
-        print("   操作: 在邮箱输入框中输入 547820639@qq.com")
+        print("   操作: 在邮箱输入框中输入 <BRAIN_EMAIL>")
         email_input = page.locator("input[type='email'], input[placeholder*='email'], input[placeholder*='邮箱']").first
         
         if email_input.count() > 0:
