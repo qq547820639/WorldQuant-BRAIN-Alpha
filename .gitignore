@@ -104,3 +104,17 @@ htmlcov/
 .coverage
 experiments/scratch/
 brain_alpha_ops/_web_legacy.py
+
+# ---- Development artifacts (not for production) ----
+.workbuddy/
+REVIEW_*.md
+PROJECT_PHASE*.md
+PROJECT_STATIC_ANALYSIS*.md
+_write_memory.py
+tests/e2e_*.py
+tests/fix_sync_watchdog.py
+tests/test_pipeline_minimal_smoke.py
+scripts/submit_alpha_direct.py
+scripts/check_test_mock_alias.py
+brain_alpha_ops/research/hypotheses/
+BrainAlphaOps.spec
