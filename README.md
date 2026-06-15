@@ -1,184 +1,437 @@
 # BRAIN Alpha Ops
 
-**Account-safety-first** WorldQuant BRAIN alpha research operations toolkit.
+> **你的 WorldQuant BRAIN 智能研究助手 — 7×24 小时帮你"找 alpha",但绝不替你按"提交"按钮。**
 
-A local-first web console for end-to-end BRAIN alpha lifecycle management:
-connect → sync cloud alphas → generate candidates → score & validate → pre-submit review → monitor progress.
-
-All operations are observable, traceable, and auditable.
-
-![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square)
-![License MIT](https://img.shields.io/badge/License-MIT-111827?style=flat-square)
-![Version](https://img.shields.io/badge/Version-0.3.0-6366F1?style=flat-square)
+[配图:主界面首屏截图 — 左上角是项目名"Alpha 工作台",中间显示一个绿色"运行中"的小卡片,底部有一个"开始新一轮"按钮。整张图给人"自动化但可控"的感觉。]
 
 ---
 
-## Quick Start
+## 📖 目录
 
-### Prerequisites
+1. [这是什么?](#1-这是什么)
+2. [它能帮你做什么?](#2-它能帮你做什么)
+3. [5 分钟快速上手](#3-5-分钟快速上手)
+4. [界面导览 — 五大模块详解](#4-界面导览--五大模块详解)
+5. [实战示例:从 0 到 1 跑出一批 alpha](#5-实战示例从-0-到-1-跑出一批-alpha)
+6. [常见问题 FAQ](#6-常见问题-faq)
+7. [遇到问题怎么办?](#7-遇到问题怎么办)
+8. [贡献指南](#8-贡献指南)
+9. [附录:术语小词典](#9-附录术语小词典)
 
-- Python 3.10+
-- WorldQuant BRAIN account
-- Modern browser (Chrome / Edge / Safari / Firefox)
+---
 
-### Install & Launch
+## 1. 这是什么?
+
+**一句话解释:** BRAIN Alpha Ops 是一个跑在你**自己电脑**上的"alpha 挖矿工厂"。它会 7×24 小时帮你在 WorldQuant BRAIN 平台上自动生成、测试、打分、筛选量化策略,最后**把候选清单**交到你手上,让你拍板。
+
+**它**不是**:**
+- ❌ 不是云端 SaaS(你的数据、你的电脑、你说了算)
+- ❌ 不会自动提交 alpha 到 BRAIN 平台(**最后一步必须你点头**)
+- ❌ 不是黑盒 AI — 你能看每一步在干什么、为什么这么打分
+
+**它**是**:**
+- ✅ 一个**本地优先**的研究工作台(浏览器打开 `http://127.0.0.1:8765` 即可使用)
+- ✅ 一个**透明**的助手(每条 alpha 的"前世今生"都有日志)
+- ✅ 一个**安全**的工具(凭证不会落盘,提交有"双人确认"机制)
+
+[配图:架构示意图 — 三个圆圈代表"你 / 工具 / BRAIN 平台",中间用双向箭头连接,工具上下还有"假设库"、"评分系统"、"风险检查"三个小图标。强调"工具是桥梁,不是黑盒"。]
+
+---
+
+## 2. 它能帮你做什么?
+
+想象你雇了一个**超级耐心的研究实习生**,他可以:
+
+| 他会做的事 | 每天能处理多少 | 你需要做什么 |
+|----------|--------------|------------|
+| 阅读 BRAIN 平台最新的 8,599 个数据字段 | 一次启动就全读完 | 启动一次,后面不用管 |
+| 从 11 类投资想法中生成候选策略 | 几十到几百条 | 设置你想跑的主题 |
+| 用合成数据先做"快速体检" | 全量 | 不用管,自动 |
+| 调 BRAIN 官方 API 做真实回测 | 每批 3-10 个(平台限流) | 不用管,自动 |
+| 按 25 项规则给每个策略打分 | 全量 | 不用管,自动 |
+| 发现"看起来不错"的策略,多角度分析 | 不限 | **你最后过目决定要不要投** |
+| **直接帮你按"提交"** | — | **❌ 永远不做这一步** |
+
+**核心承诺:任何 alpha 进入"提交"环节前,都会停在"待你确认"状态。**
+
+[配图:流程图 — 6 个圆角矩形从左到右排列(假设 → 生成 → 本地预筛 → 官方回测 → 评分 → 待你确认),前 5 个用绿色"自动"标签,最后一个用红色"需人工"标签。流程图底部写:"最后一步永远留给你"。]
+
+---
+
+## 3. 5 分钟快速上手
+
+### 3.1 你需要准备什么
+
+| 准备项 | 说明 | 是不是必须? |
+|------|------|-----------|
+| 一台电脑(Mac / Windows / Linux 都可以) | 跑起来需要 Python 3.10 或更高 | ✅ 必须 |
+| WorldQuant BRAIN 账号 | 没有的话去 [brain.worldquant.com](https://brain.worldquant.com) 注册 | ✅ 必须 |
+| 浏览器(Chrome / Edge / Safari) | 控制台是网页形式 | ✅ 必须 |
+| 至少 10GB 硬盘空间 | 第一次启动要缓存 8,599 个字段 | ⚠️ 强烈建议 |
+| Node.js(可选) | 想用"高级前端"才需要 | ❌ 可选 |
+
+### 3.2 三步装好
+
+打开**终端**(Mac)或**命令提示符**(Windows),依次输入:
 
 ```bash
+# 第 1 步:下载代码
+git clone https://github.com/qq547820639/WorldQuant-BRAIN-Alpha.git
 cd WorldQuant-BRAIN-Alpha
+
+# 第 2 步:安装依赖(只需一次,约 2-5 分钟)
 python3 -m venv .venv
-source .venv/bin/activate
+source .venv/bin/activate   # Windows 用户用: .venv\Scripts\activate
 python3 -m pip install -e .
+
+# 第 3 步:启动!
 python3 launch_web.py
 ```
 
-The web console opens at `http://127.0.0.1:8765`. Enter your BRAIN credentials in the connection panel.
+[配图:终端窗口截图 — 上面显示 `python3 launch_web.py` 之后跑出几行绿色日志,最后一行是 `Open http://127.0.0.1:8765 in your browser`。用红色箭头标注最后一行。]
 
-### Credentials
+启动成功后,你的浏览器会自动打开控制台。
 
-Three options, in order of security preference:
+### 3.3 第一次连接 BRAIN
 
-| Method | Setting | Security |
-|--------|---------|----------|
-| Browser input | Web console connection panel | ⭐⭐⭐ Best |
-| Environment variables | `BRAIN_USERNAME` / `BRAIN_PASSWORD` | ⭐⭐ Good |
-| Config file | `config/run_config.json` credentials field | ⭐ Dev only |
+[配图:登录对话框截图 — 弹出一个小窗口,中间三个输入框分别是"用户名 / 密码 / Token",下面一个蓝色"连接"按钮。背景是控制台主界面(灰色半透明遮罩)。]
 
-Credentials are never written to disk, logs, or screenshots.
+1. 在弹出的对话框里输入 BRAIN **用户名**和**密码**
+2. 如果你用的是 **Token 登录**(更安全),把 Token 贴到第三个框
+3. 点击"连接"
 
----
+> 💡 **小贴士**:你的密码**不会**保存在电脑上。下次启动会让你重新输入。
 
-## Architecture
+[配图:连接成功后的状态 — 右上角"状态"指示灯从灰色变成绿色,旁边文字"已连接 · 上次同步:刚刚"。]
 
-The system runs as a local HTTP server (Python standard library) with an inline web console. No external web dependencies.
-
-```
-Browser (localhost:8765)  ←→  Local HTTP Server  ←→  BRAIN API (api.worldquantbrain.com)
-                                        ↕
-                                  Local Storage (data/)
-```
-
-### Key Modules
-
-| Module | Purpose |
-|--------|---------|
-| `brain_alpha_ops/web/` | HTTP server, routing, session management, SSE progress |
-| `brain_alpha_ops/brain_api/` | BRAIN official API adapter (auth, pagination, simulation, validation) |
-| `brain_alpha_ops/research/` | Alpha generation, scoring, optimization, backtesting, pipeline orchestration |
-| `brain_alpha_ops/compliance/` | Redline checks, dataset verification, traceability |
-| `brain_alpha_ops/scoring/` | Multi-dimensional scoring, anti-overfit, release gates |
-| `brain_alpha_ops/config/` | Runtime configuration loader and validation |
-
-### Quality Gate
-
-CI/CD runs on every push to `main` via GitHub Actions:
-
-1. Python compile check
-2. Config validation
-3. Dependency policy check
-4. Frontend inline sync check
-5. Secret artifact scan
-6. Log redaction audit
-7. Module size audit
-8. Full test suite (2600+ tests)
+第一次连接会**自动下载**所有 8,599 个字段和 20 个数据集的元信息,约 30 秒 - 2 分钟(取决于网速)。下载完成后,你的工具就"认识"了 BRAIN 平台的所有食材,可以开始做菜了。
 
 ---
 
-## Configuration
+## 4. 界面导览 — 五大模块详解
 
-Main config: `config/run_config.json`
+控制台主界面左侧是**导航栏**,点击就能切换 5 个模块。下面分别介绍。
+
+[配图:控制台主界面整体截图 — 左侧是 5 个图标的导航栏(从上到下:仪表盘 / 假设库 / 生成器 / 评分台 / 提交室),中间是当前模块内容,顶部有一个搜索框 + 状态指示灯。]
+
+### 📊 模块 1:仪表盘(首页)
+
+**干什么的?** 一眼看到"今天跑了多少、有多少候选、哪些值得看"。
+
+[配图:仪表盘截图 — 上半部分是 3 个大数字卡片(总候选 247 / 待审核 12 / 优秀 3),下半部分是"最近 24 小时活动"时间线,可以看到不同时间点的小圆点。]
+
+**你会看到什么:**
+- 三个数字大卡片:**总候选数 / 待你审核 / 优秀(高分)**
+- 时间线:过去 24 小时跑了多少轮
+- 热门主题:今天系统重点在研究哪类策略
+
+**你能做什么:**
+- 一键"开始新一轮"(右下角绿色按钮)
+- 点击时间线上的小圆点,跳到那一轮的详情
+- 按"优秀"排序,看哪些值得优先看
+
+### 💡 模块 2:假设库
+
+**干什么的?** 这里的"假设"就是"投资想法",比如"低波动股票长期跑赢"、"分析师上调评级后股票会涨"。
+
+工具内置了 **11 类经典投资想法**:
+
+| 想法名称 | 一句话解释 | 适合场景 |
+|--------|---------|--------|
+| 价值反转(Value Reversal) | 跌多了会反弹 | 中长期持仓 |
+| 盈利上修(Earnings Revision) | 分析师上调预测 → 股票涨 | 中短期 |
+| 卖空情绪(Sentiment Short) | 大家都看空 → 反而要涨 | 逆向投资 |
+| 流动性溢价(Liquidity Premium) | 容易被买卖的股票有溢价 | 容量敏感场景 |
+| 低波动(Low Volatility) | 涨得慢的反而长期跑赢 | 防御型组合 |
+| 质量盈利(Quality Profitability) | 赚钱能力强的公司更稳 | 长期持有 |
+| 微结构(Microstructure) | 从订单流里找信号 | 高频/日内 |
+| 分析师行为(Analyst Behavior) | 跟踪分析师的预测变化 | 事件驱动 |
+| 跨资产溢出(Cross-Asset Spillover) | 债券/商品/外汇影响股票 | 宏观对冲 |
+| 事件驱动(Event Driven) | 财报、并购、分红等事件 | 事件套利 |
+| 宏观敏感(Macro Sensitivity) | 对利率、通胀敏感 | 宏观择时 |
+
+[配图:假设库截图 — 11 个卡片网格排列,每个卡片是大色块 + 假设名 + 一句话解释。鼠标悬停某个卡片时高亮,点击展开详细信息。]
+
+**你可以:**
+- ✅ 直接用默认假设(覆盖了大部分主流策略)
+- ✅ 关闭/启用某个假设(比如你只想研究"低波动",其他全部关掉)
+- ✅ 上传自己的假设(高级用户,YAML 格式)
+
+### 🧪 模块 3:生成器(Generator)
+
+**干什么的?** 这是工具的"主战场"——它会按照你选的主题,**自动生成**几百上千条候选 alpha 表达式。
+
+[配图:生成器运行中截图 — 顶部是"当前主题:质量盈利 + 价值反转",中间是一行行滚动的日志(每行像聊天记录一样),右侧有一个实时增长的数字"已生成: 47 / 目标: 200"。底部有一个黄色"暂停"按钮。]
+
+**你会看到:**
+- 实时日志(像聊天记录一样滚)
+- 进度条 / 数字
+- 当前跑的主题和参数
+
+**示例:** 假设你选了"质量盈利",工具可能会生成这样的表达式:
 
 ```text
-config/run_config.json
-├── environment        → "production" | "simulation"
-├── credentials        → username / password (leave empty, use env vars)
-├── web                → host, port, session TTL
-├── ops                → market settings, scoring, thresholds, submission policy
-│   ├── settings       → instrumentType, region, universe, delay, dataset
-│   ├── thresholds     → min_sharpe, min_fitness, max_self_correlation
-│   └── submission_policy → max_auto_submissions, max_similarity
-└── official_api       → BRAIN API endpoints and polling parameters
+rank(roe / total_assets)        ← 用"ROE / 总资产"做横截面排序
+ts_mean(rank(sales_growth), 60)  ← 过去 60 天"营收增速排名"的平均值
 ```
+
+这些表达式会先在**本地合成数据**上做"快速体检",明显不靠谱的会被过滤掉(比如用了不存在的字段)。
+
+### 📈 模块 4:评分台(Scoring)
+
+**干什么的?** 通过本地预筛的表达式,会送到这里做"实战考核"——**真正调 BRAIN 平台 API** 跑回测。
+
+[配图:评分台截图 — 表格形式,每一行是一条 alpha,列分别是:表达式 / Sharpe / 换手率 / 自相关 / 综合分 / 状态。最后一列是"✅ 通过 / ⚠️ 警告 / ❌ 失败"的彩色标签。]
+
+**评分维度(三大类共 25 项):**
+
+| 类别 | 数量 | 例子 |
+|-----|------|------|
+| 🔴 硬错误(必须为 0) | 8 | Sharpe 太低、换手率超限、用了未授权字段 |
+| 🟡 软警告(扣分) | 10 | 数据覆盖率低、表达太长、子宇宙表现差 |
+| 🟢 信息项(参考) | 7 | 行业暴露、风格暴露、相关性 |
+
+工具会**严格**用 BRAIN 平台的硬规则,不会自己发明评判标准 — 这一点是设计原则(我们叫"零硬编码")。
+
+[配图:某条 alpha 的详情卡 — 上面是表达式和综合分 78.5,下面是 5 个雷达图(收益 / 风险 / 换手 / 稳定性 / 容量),最下面有"通过的原因"和"扣分的原因"两个清单。]
+
+**示例:** 假设有一条 alpha 打分 78.5,系统会告诉你:
+- ✅ 通过原因:Sharpe 1.8 在合理区间、字段都合法
+- ⚠️ 扣分原因:换手率 28% 偏高、子宇宙稳定性一般
+
+### ✋ 模块 5:提交室(Submission)
+
+**这是最关键的一个模块** — 工具**永远不会**自动提交 alpha 到 BRAIN 平台。所有"看起来不错"的策略都会**先在这里排队**,等**你亲自点头**。
+
+[配图:提交室截图 — 上半部分是"待你确认"列表(每条 alpha 卡片可以展开看详情),最显眼的不是"全部提交"按钮,而是三个按钮:"查看详情 / 模拟提交 / 真提交"。"真提交"按钮默认是灰色的,需要二次确认才能点。]
+
+**你能做的:**
+- 🔍 **查看详情**:看到 alpha 的全部指标、图表、回测曲线
+- 🧪 **模拟提交**:不真提交,只看看如果提交会怎样(给 BRAIN 平台造成 0 压力)
+- ✅ **真提交**:二次确认 + 输密码 + 输入"我确认",才会真提交
+
+> 🛡️ **安全设计**:即使你不小心点了"真提交",系统还会弹一个**输入框让你再敲一次"我确认"**(不是点按钮,是**敲字**),防止手抖误操作。
 
 ---
 
-## Project Structure
+## 5. 实战示例:从 0 到 1 跑出一批 alpha
 
-```text
-WorldQuant-BRAIN-Alpha/
-├── brain_alpha_ops/       # Core source code
-│   ├── web/               # Web console (frontend + backend)
-│   ├── brain_api/         # BRAIN official API adapter
-│   ├── research/          # Research engine
-│   ├── compliance/        # Compliance checks
-│   ├── scoring/           # Scoring system
-│   ├── config/            # Config loader
-│   └── data/              # Data adapters
-├── config/                # Runtime configuration
-├── data/                  # Runtime data (cache, history, job ledgers)
-├── tests/                 # Test suite (2600+ tests)
-├── scripts/               # Quality gate and maintenance scripts
-├── launch_web.py          # Web server entry point
-├── build_prod.py          # PyInstaller production build
-├── fetch_official_context.py  # BRAIN context refresh entry point
-├── pyproject.toml         # Project metadata
-└── requirements.lock      # Locked dependencies
-```
+**场景:** 你想跑"质量盈利 + 价值反转"两类策略,跑 200 条,从中选 5 条提交。
+
+### 第 1 步:选主题
+
+进入**假设库**,勾选"质量盈利"和"价值反转",其他都关掉。
+
+[配图:假设库中两个卡片亮起(右上角有绿色对勾),其余灰色。]
+
+### 第 2 步:设置参数
+
+进入**生成器**:
+- 目标候选数:**200**
+- 每次跑几个:3 个(默认,不要乱改)
+- 主题:质量盈利(70%) + 价值反转(30%)
+
+[配图:参数设置面板 — 三个滑块(数量 / 速率 / 主题配比),右边实时显示"预计耗时:约 35 分钟"。]
+
+### 第 3 步:启动 + 等待
+
+点"开始"。你可以:
+- ✅ 一直盯着看(实时日志有意思)
+- ✅ 关掉浏览器去做别的事(后台还在跑)
+- ✅ 关电脑(**不行** — 电脑要开着)
+
+> 💡 工具支持**断点续跑**:如果你中途关了浏览器,下次打开会自动从上次断点继续。
+
+[配图:后台运行的提示 — 控制台顶部状态条显示"运行中 · 已用 12 分钟 · 还剩约 23 分钟",右上角有一个小铃铛图标,有新结果时会闪。]
+
+### 第 4 步:看结果
+
+回到**评分台**,按"综合分"从高到低排序。
+
+假设前 10 名长这样:
+
+| # | 表达式 | Sharpe | 换手率 | 综合分 | 状态 |
+|---|--------|--------|-------|--------|------|
+| 1 | `rank(roe / assets)` | 1.92 | 18% | 82.3 | ✅ |
+| 2 | `ts_mean(rank(sales_growth), 60)` | 1.74 | 22% | 79.1 | ✅ |
+| 3 | ... | ... | ... | ... | ... |
+| 10 | `rank(volume / mkt_cap)` | 0.95 | 67% | 41.2 | ❌ 换手率超限 |
+
+### 第 5 步:挑 5 条去提交室
+
+把前 5 条"✅ 通过"的拖到(或者勾选 + 点击)"提交室"。
+
+[配图:评分台 5 行被勾选,顶部出现一个"移入提交室(5)"的黄色按钮。]
+
+### 第 6 步:逐条人工审核
+
+进入**提交室**,对每条 alpha:
+1. 点"查看详情"看完整指标
+2. 点"模拟提交"看 BRAIN 平台会有什么反应
+3. **真要提交**才点"真提交" + 二次确认
 
 ---
 
-## Development
+## 6. 常见问题 FAQ
 
-### Install dev dependencies
+### Q1:工具会自动帮我提交吗?
+
+**A:绝对不会。** 这是工具的**核心安全承诺**。任何 alpha 进入提交环节前,都会停在"待你确认"状态,而且"真提交"按钮要敲字确认才能触发。
+
+### Q2:我不在电脑前,工具能自己跑吗?
+
+**A:** 生成、预筛、回测、打分**都能跑**。但提交环节**永远需要你在**。所以建议白天挂机跑,晚上回家看结果。
+
+### Q3:我的 BRAIN 账号密码安全吗?
+
+**A:** 密码只存在你电脑的**内存**里,不会写到任何文件、日志、截图。重启工具后需要重新输入。详见 [SECURITY.md](docs/SECURITY.md)(如果存在)。
+
+### Q4:工具会消耗我的 BRAIN 平台额度吗?
+
+**A:会。** 每次"官方回测"都会调一次 BRAIN API,平台有每日/每小时限额。工具内置了**速率限制保护**,不会无脑狂调,你可以放心。
+
+[配图:配额管理面板 — 一个小卡片显示"今日已用: 12 / 100 次",旁边是绿色进度条。]
+
+### Q5:能跑出"稳赚不赔"的 alpha 吗?
+
+**A:不能,世上没有这种东西。** 工具能做的是:**大幅扩大你尝试的策略数量**,从中找到"在当前市场环境下相对靠谱"的组合。任何策略都需要你**理解它为什么有效**,而不是无脑跟。
+
+### Q6:我自己写了一个想法,怎么加进去?
+
+**A:** 在假设库里点"导入自定义假设",上传一个 YAML 文件(模板在 `brain_alpha_ops/research/hypotheses/_schema.yaml`)。新手建议先用内置的 11 类,熟悉后再自定义。
+
+### Q7:工具有"暗黑模式"吗?
+
+**A:** 控制台右上角有**主题切换按钮**(浅色 / 深色 / 跟随系统),会记住你的选择。
+
+### Q8:支持 Windows 吗?
+
+**A:** 支持。Python 是跨平台的,只是部分命令在 Windows 终端里写法不同(README 里都标了)。
+
+### Q9:能多台电脑一起跑吗?
+
+**A:** 不建议。每台电脑**独立**跑自己的候选池,合并结果需要手工操作。多机协作是高级用法,目前不在工具支持范围。
+
+### Q10:工具是免费的吗?
+
+**A:** 工具本身是 **MIT 开源免费**。但使用 BRAIN 平台本身需要你有 WorldQuant 账户(平台规则由 WorldQuant 决定)。
+
+---
+
+## 7. 遇到问题怎么办?
+
+按"先易后难"顺序:
+
+| 现象 | 怎么排查 |
+|-----|---------|
+| 启动报错"找不到模块" | 重新跑 `python3 -m pip install -e .` |
+| 浏览器打开是空白 | 检查终端是否有报错;看防火墙是否挡住 8765 端口 |
+| 连接 BRAIN 失败 | 先在 [brain.worldquant.com](https://brain.worldquant.com) 用同一账号登录,确认账号正常 |
+| 跑得很慢 | 检查网络(调 BRAIN API 受网速影响);考虑减少"目标候选数" |
+| 看到奇怪的中文乱码 | 终端编码设成 UTF-8(`export LANG=en_US.UTF-8`) |
+| 提交按钮怎么都点不动 | 这是**设计**!真提交需要你**敲字确认**,不是点按钮 |
+
+如果以上都不行:
+1. 看 `data/logs/` 下的最新日志文件
+2. 把**前 50 行**日志和**复现步骤**发到 [GitHub Issues](https://github.com/qq547820639/WorldQuant-BRAIN-Alpha/issues)
+3. **不要**把密码 / Token 贴到 Issue 里!
+
+[配图:一个"如何开 Issue"的示意图 — 标题写"🐛 Bug:xxx",正文分四段:复现步骤 / 期望结果 / 实际结果 / 日志片段(用代码块包裹)。]
+
+---
+
+## 8. 贡献指南
+
+我们欢迎各种形式的贡献,不只是写代码。
+
+### 你能贡献什么?
+
+| 类型 | 怎么开始 | 难度 |
+|------|--------|------|
+| 🐛 报 Bug | [开 Issue](https://github.com/qq547820639/WorldQuant-BRAIN-Alpha/issues/new) | ⭐ |
+| 💡 提想法 | [开 Discussion](https://github.com/qq547820639/WorldQuant-BRAIN-Alpha/discussions) | ⭐ |
+| 📖 改文档 | 改 `.md` 文件 → 提 PR | ⭐⭐ |
+| 🧪 写测试 | 改 `tests/` → 提 PR | ⭐⭐⭐ |
+| 🎯 加假设 | 加 `hypotheses/*.yaml` → 提 PR | ⭐⭐ |
+| 💻 改代码 | 改 `brain_alpha_ops/` → 提 PR | ⭐⭐⭐⭐ |
+| 🎨 改 UI | 改 `web/` 或 React 组件 → 提 PR | ⭐⭐⭐ |
+
+### 第一次提 PR 流程
 
 ```bash
-python3 -m pip install -e ".[test,dev]"
-```
+# 1. Fork 仓库(在 GitHub 网页上点 Fork 按钮)
 
-### Run tests
+# 2. 克隆你自己的 Fork
+git clone https://github.com/<你的用户名>/WorldQuant-BRAIN-Alpha.git
+cd WorldQuant-BRAIN-Alpha
+git checkout -b my-feature        # 建一个分支
 
-```bash
+# 3. 改代码 / 改文档
+# ...
+
+# 4. 跑测试,确保没破坏现有功能
 python3 -m pytest tests/ -v
-python3 -m pytest tests/ --cov=brain_alpha_ops --cov-report=html
+
+# 5. 提交 + 推送
+git add .
+git commit -m "Add: 我做了什么"
+git push origin my-feature
+
+# 6. 在 GitHub 上点 "Compare & pull request"
 ```
 
-### React frontend (optional)
+[配图:GitHub PR 页面截图 — 左边是改动文件列表,右边是 diff,顶部有一个绿色"Create pull request"按钮。]
 
-```bash
-cd brain_alpha_ops/web/react_app
-npm run dev
-```
+### 行为准则
 
-Then launch with React frontend:
+- ✅ 友善、耐心、就事论事
+- ❌ 不攻击人、不发无关广告
+- ❌ 不提交任何包含真实 BRAIN 凭证的代码
 
-```bash
-BRAIN_ALPHA_OPS_WEB_FRONTEND=react python3 launch_web.py
-```
+### 开发相关
 
-### Code quality
-
-- Lint: `ruff check brain_alpha_ops/`
-- Type check: `mypy brain_alpha_ops/`
-- Coverage minimum: 75% (enforced by CI)
+如果你是开发者,看这里:
+- 项目结构:`brain_alpha_ops/{web,brain_api,research,scoring,compliance,data,config}/`
+- 运行测试:`python3 -m pytest tests/ -v`
+- 代码风格:`ruff check brain_alpha_ops/`
+- 架构细节:见 [REVIEW_20260615.md](REVIEW_20260615.md)(独立审计报告)
 
 ---
 
-## Security
+## 9. 附录:术语小词典
 
-- Credentials stay in memory only — never persisted to disk, logs, or screenshots
-- Web server binds to `127.0.0.1` by default (localhost only)
-- CSRF protection, session management, and replay attack prevention built in
-- Secret artifact scan runs on every CI push
+> 写给完全没接触过量化研究的朋友
+
+| 术语 | 通俗解释 |
+|------|---------|
+| **Alpha (α)** | 一个"能赚钱的策略",通常用一个数学公式表达(比如"买低波动股票") |
+| **Sharpe Ratio** | 衡量"每承担一单位风险,能赚多少"的指标。**越高越好**,> 1.5 通常算优秀 |
+| **换手率 (Turnover)** | 衡量"策略多频繁换股票"。比如 30% 换手率 = 每月换掉 30% 的持仓 |
+| **回测 (Backtest)** | 用历史数据模拟"如果当时跑这个策略,会赚多少" |
+| **Universe (股票池)** | 策略"在哪些股票里挑",比如"全美 3000 只大盘股" |
+| **Dataset (数据集)** | BRAIN 平台提供的数据"原材料",比如价格、财务、新闻舆情等 |
+| **字段 (Field)** | 数据集里的"列",比如"市盈率"、"成交量"、"分析师评级" |
+| **HIL (Human-in-the-Loop)** | "人在回路"——最后一步必须有人参与,机器不擅自决定 |
+| **PROD_CORRELATION** | 检查你的新策略和 BRAIN 平台已有的"生产中策略"有多像,太像会失败 |
+| **MCP** | Model Context Protocol,一个让 AI 助手能调用外部工具的标准 |
+| **Mixin** | 一种代码组织方式,把"能力"拆成小块,组合起来用(不影响使用) |
 
 ---
 
-## License
+## 🎉 准备好了吗?
 
-MIT License — see [LICENSE](LICENSE).
+回到 [§3 快速上手](#3-5-分钟快速上手) 开始你的第一轮研究吧。
+
+如果跑出了**有意思的结果**,欢迎在 [Discussions](https://github.com/qq547820639/WorldQuant-BRAIN-Alpha/discussions) 分享 — **不要**分享你的 BRAIN 凭证!
+
+如果遇到**任何问题**,先看 [§7 遇到问题怎么办](#7-遇到问题怎么办),大概率有答案。
 
 ---
 
-## Links
+**Happy alpha hunting! 🚀**
 
-- [WorldQuant BRAIN](https://brainai.worldquant.com/)
-- [GitHub Repository](https://github.com/qq547820639/WorldQuant-BRAIN-Alpha)
-- [CI / Quality Gate](https://github.com/qq547820639/WorldQuant-BRAIN-Alpha/actions)
+[配图:一张表情包风格的"祝你挖到金矿"图 — 一个戴安全帽的卡通人物在金矿前竖大拇指,旁边写着"祝你跑出好 alpha!"。色调温暖,作为全文的收尾。]
+
+---
+
+<sub>MIT License · 本工具不是 WorldQuant 官方产品,使用前请阅读 BRAIN 平台服务条款。</sub>
