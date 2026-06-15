@@ -991,7 +991,8 @@ export default function CandidateTable({
     setFilter(sanitizeTextInput(value, MAX_FILTER_LENGTH));
   };
 
-  const loading = api.loading && candidates.length === 0;
+  // C28 P3: show loading whenever api is loading (not just on initial empty state)
+  const loading = api.loading;
   const loadError = api.error;
   const visibleStart = sortedCandidates.length === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1;
   const visibleEnd = Math.min(currentPage * PAGE_SIZE, sortedCandidates.length);

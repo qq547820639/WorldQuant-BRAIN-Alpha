@@ -95,7 +95,8 @@ export function knownApiErrorMessage(value: unknown): string | null {
       return `BRAIN 官方接口暂时不可用（HTTP ${status}），请稍后重试。`;
     }
   }
-  if (/network\s*error|urlopen error|connection reset|connection aborted|remote end closed/i.test(text)) {
+  // P2-2 [C8]: removed "connection aborted" — user-initiated AbortController.abort() is not a network fault
+  if (/network\s*error|urlopen error|connection reset|remote end closed/i.test(text)) {
     return "网络连接异常，无法读取 BRAIN 官方接口。请检查网络后重试。";
   }
   if (SESSION_INVALID_VALUES.has(normalized)) {
@@ -141,7 +142,8 @@ function unsafeBackendText(text: string): boolean {
   if (/(?:raw\s+backend|raw_backend|traceback|stack trace|session_invalid|invalid local session)/i.test(text)) {
     return true;
   }
-  if (/(?:password|passwd|pwd|token|csrf(?:[-_\s]?token)?|cookie|set[-_\s]?cookie|authorization|api[-_\s]?key|client[-_\s]?secret|access[-_\s]?token|refresh[-_\s]?token|id[-_\s]?token|session(?:[-_\s]?(?:id|key|token))?)\s*[:=]/i.test(text)) {
+  // P2-3 [C9]: require 8+ chars of value after colon/equal to avoid false-flagging short messages
+  if (/(?:password|passwd|pwd|token|csrf(?:[-_\s]?token)?|cookie|set[-_\s]?cookie|authorization|api[-_\s]?key|client[-_\s]?secret|access[-_\s]?token|refresh[-_\s]?token|id[-_\s]?token|session(?:[-_\s]?(?:id|key|token))?)\s*[:=]\s*[A-Za-z0-9._~+\/=-]{8,}/i.test(text)) {
     return true;
   }
   if (/^[A-Z][A-Z0-9_]{8,}(?:\b|$)/.test(text)) {

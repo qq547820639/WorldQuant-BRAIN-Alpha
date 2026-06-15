@@ -89,7 +89,13 @@ def run_simple_async_job_service(
         if _store_is_cancelled(store, job_id):
             _mark_stopped(store, job_id, started_at, operation=operation, phase="stopped", message="Task stopped after cancellation request.")
             return
-        ok = not isinstance(result, dict) or result.get("ok", True) is not False
+        # P3-1 [C19]: explicit ok computation — "not-a-dict OR ok-not-explicitly-False"
+        if not isinstance(result, dict):
+            ok = True
+        elif result.get("ok") is False:
+            ok = False
+        else:
+            ok = True
         status = "completed" if ok else "failed"
         message = _result_message(result, fallback="Task completed." if ok else "Task failed.")
         store.update(

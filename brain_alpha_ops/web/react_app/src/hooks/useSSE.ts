@@ -112,6 +112,9 @@ export function useSSE(
           }
         };
 
+        // P2-8 [C7]: onmessage fires only for unnamed events. addEventListener
+        // below handles named events.  Do NOT add "message" to namedEvents
+        // — that would double-fire every unnamed message.
         es.onmessage = (msg: MessageEvent) => handleMessage(msg);
         const namedEvents: NamedSSEEvent[] = ["progress", "complete", "error", "heartbeat", "stream_timeout"];
         for (const eventName of namedEvents) {
@@ -119,7 +122,16 @@ export function useSSE(
         }
 
         es.onerror = (err: Event) => {
+          // C25 P2: EventSource.onerror fires on normal close too.
+          // Do NOT reconnect if the stream was closed by the server.
           if (terminalClosedRef.current) return;
+          if (es.readyState === EventSource.CLOSED) {
+            // Server-initiated close — don't fake-reconnect
+            setConnected(false);
+            setExhausted(true);
+            onExhaustedRef.current?.();
+            return;
+          }
           setConnected(false);
           onErrorRef.current?.(err);
 
@@ -149,7 +161,11 @@ export function useSSE(
     }
 
     return close;
-  }, [url, close, reconnectIntervalMs, maxReconnectAttempts]);
+  // P2-20 fix: close is a stable useCallback identity — including it
+  // in the deps array risks unnecessary re-connection cycles if close
+  // is ever modified to have dependencies.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [url, reconnectIntervalMs, maxReconnectAttempts]);
 
 	  return { connected, exhausted, reconnectAttempts, lastEvent, close };
 

@@ -5,6 +5,9 @@ Zero hard-coded fields or templates.
 """
 
 from __future__ import annotations
+import logging
+import time
+
 
 import logging
 import re
@@ -145,7 +148,7 @@ class CandidateGenerator:
             try:
                 # Treat empty string as None (all datasets)
                 ds_id: str | None = dataset_id if dataset_id else None
-                raw_fields = self._loader.get_fields(ds_id)
+                raw_fields = self._loader.get_fields(ds_id if ds_id else None)
                 ds_fields = filter_generation_fields(raw_fields)
                 if raw_fields and not ds_fields:
                     return []
@@ -395,8 +398,7 @@ class CandidateGenerator:
         # Build field pool — ONLY from official data sources, never hardcoded
         field_pool = self._build_official_field_pool(dataset_id or self._dataset_id)
         if not field_pool:
-            import logging
-            logging.error(
+            logger.error(
                 "CandidateGenerator._generate_fallback: No official fields available. "
                 "Run pipeline with valid credentials to populate data/official_fields.json "
                 "and data/official_operators.json."
@@ -482,7 +484,21 @@ class CandidateGenerator:
         families = [family for _template, family in template_pairs]
 
         attempt_limit = count * (16 if diversity_boost else 8)
+        max_generation_seconds = int(
+            getattr(self, '_max_generation_seconds', 0) or 120
+        )
+        _gen_start = time.time()
+        logger.info(
+            'CandidateGenerator._generate_fallback: count=%d, attempt_limit=%d, max_seconds=%d, field_pool=%d',
+            count, attempt_limit, max_generation_seconds, len(field_pool),
+        )
         while len(candidates) < count and attempts < attempt_limit:
+            if max_generation_seconds > 0 and (time.time() - _gen_start) > max_generation_seconds:
+                logger.warning(
+                    'CandidateGenerator._generate_fallback: TIMEOUT after %d generations (%.1fs)',
+                    len(candidates), time.time() - _gen_start,
+                )
+                break
             attempts += 1
             if diversity_boost:
                 idx = (attempts * 5 + self._cursor) % len(templates)
@@ -527,6 +543,11 @@ class CandidateGenerator:
                     template_source=f"fallback:{families[idx]}" + (":observability" if diversity_boost else ""),
                 )
             )
+        _el = time.time() - _gen_start
+        logger.info(
+            'CandidateGenerator._generate_fallback: done — %d candidates, %d attempts, %.1fs',
+            len(candidates), attempts, _el,
+        )
         self._cursor += max(1, attempts)
         return candidates
 

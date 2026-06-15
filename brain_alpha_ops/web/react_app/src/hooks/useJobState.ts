@@ -13,7 +13,7 @@ import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { cancelResultEventMessage, requestJobCancel, type CancelReason } from "@/api/jobCancel";
 import { useSSE } from "@/hooks/useSSE";
 import { useApi } from "@/hooks/useApi";
-import { buildRunPayload, classifyJobState, jobStatusMessage, resolveJobEventState } from "@/helpers/runPayload";
+import { buildRunPayload, classifyJobState, jobStatusMessage, resolveJobEventState, hasCredentials } from "@/helpers/runPayload";
 import type { BrainCredentials, JobStatus, SSEEvent, UnifiedProgress } from "@/types";
 import { reportIgnoredError } from "@/utils/reportIgnoredError";
 
@@ -32,9 +32,14 @@ export interface JobState {
 }
 
 const WATCHDOG_POLL_INTERVAL = 2000;
-const WATCHDOG_MAX_FAILURES = 3;
+// P0-1 fix: raised from 3 to 12 (~24s tolerance at 2s polls) to prevent
+// premature job cancellation during long BRAIN backtest/simulation runs.
+const WATCHDOG_MAX_FAILURES = 12;
 const SESSION_KEY_JOB_ID = "brain_alpha_active_job_id";
 const TRANSIENT_STATUS_REFRESH_PREFIX = "状态刷新失败:";
+// P2-21 fix: recovery timeout so a stalled status call during session
+// recovery does not leave the user stuck forever.
+const RECOVERY_TIMEOUT_MS = 15000;
 
 function saveJobId(id: string): void {
   try {
@@ -93,8 +98,18 @@ export function useJobState(
   useEffect(() => {
     if (recoveryAttempted) return;
     setRecoveryAttempted(true);
+    let recoveryTimedOut = false;
+    const recoveryTimer = window.setTimeout(() => {
+      recoveryTimedOut = true;
+      clearSavedJobId();
+      setRecovering(false);
+      setEvents((prev) => [...prev, "恢复超时，已清除挂起的任务会话。"]);
+    }, RECOVERY_TIMEOUT_MS);
     const savedId = loadSavedJobId();
-    if (!savedId) return;
+    if (!savedId) {
+      window.clearTimeout(recoveryTimer);
+      return;
+    }
 
     setRecovering(true);
     setEvents((prev) => [...prev, "正在恢复上次的任务状态…"]);
@@ -103,9 +118,14 @@ export function useJobState(
       const result = await api.call<JobStatus>(
         `/api/production-validation/status?job_id=${encodeURIComponent(savedId)}`,
       );
+      if (recoveryTimedOut) {
+        window.clearTimeout(recoveryTimer);
+        return;
+      }
       if (!result || !result.status) {
         // No response — job may have been cleaned up
         clearSavedJobId();
+        window.clearTimeout(recoveryTimer);
         setRecovering(false);
         return;
       }
@@ -121,14 +141,17 @@ export function useJobState(
         } else {
           notify("info", "上次任务已完成。");
         }
+        window.clearTimeout(recoveryTimer);
         setRecovering(false);
         return;
       }
       // Still running — reconnect
+      window.clearTimeout(recoveryTimer);
       setJobId(savedId);
       setRunning(true);
       setStatus(result);
       setPollFailures(0);
+      window.clearTimeout(recoveryTimer);
       notify("info", "已恢复正在运行的任务。");
       setRecovering(false);
     })();
@@ -172,8 +195,9 @@ export function useJobState(
       if (eventFailed || eventInterrupted) {
         const message = eventOutcome.message;
         setProgressError(message);
-        notify(eventOutcome.notifyType, message);
+        // P1-5 [C12]: Log to events only; toast is for high-level summary
         setEvents((prev) => [...prev, eventInterrupted ? message : `错误: ${message}`]);
+        notify("info", eventInterrupted ? "流程已中断，详见事件日志" : "发生错误，详见事件日志");
       } else {
         setProgressError(null);
         notify(eventOutcome.notifyType, eventOutcome.message);
@@ -228,6 +252,16 @@ export function useJobState(
   const { connected, reconnectAttempts } = useSSE(sseUrl, { onEvent: handleSSEEvent, onExhausted: handleStreamExhausted });
 
   const startJob = useCallback(async (resume = false) => {
+    // P2-23 fix: validate credentials before sending the request so the
+    // user gets a clear, actionable error instead of a generic message.
+    if (!hasCredentials(credentials)) {
+      const msg = "请先在左侧「连接与生产参数」面板填写 BRAIN 账户邮箱和密码，或粘贴 API Token，然后点击「测试连接」。";
+      setProgressError(msg);
+      setStatus((prev) => prev ? { ...prev, status: "failed", error: msg, progress: { ...(prev.progress || {}), phase: "failed", status_message: msg, percent_complete: 100 } } : prev);
+      setRunning(false);
+      notify("warning", msg);
+      return;
+    }
     autoCancelRequests.current.clear(); setPollFailures(0); setProgressError(null);
     setStatus({
       job_id: "", task_id: "", status: "running", phase: "queued",

@@ -13,6 +13,22 @@ import urllib.request
 from brain_alpha_ops.redaction import redact_error_message
 
 from .base import BrainAPIError
+
+def _http_error_code(status: int, parsed: dict | None, auth_mode: str) -> str:
+    """Map HTTP status + context to a user-facing error code (C20/C30)."""
+    if status in (401, 403):
+        detail = str(parsed.get("detail", "") if isinstance(parsed, dict) else "").lower()
+        if "expired" in detail or "expir" in detail:
+            return "AUTH_TOKEN_EXPIRED"
+        if auth_mode == "bearer":
+            return "AUTH_BEARER_INVALID"
+        return "AUTH_INVALID"
+    if status == 429:
+        return "RATE_LIMITED"
+    if status >= 500:
+        return "BRAIN_SERVER_ERROR"
+    return f"HTTP_{status}"
+
 from .official_helpers import (
     build_official_url,
     parse_response as _parse,
@@ -90,6 +106,7 @@ class OfficialRequestMixin:
                 ):
                     time.sleep(_retry_delay(exc.headers, attempt, self.config.rate_limit_backoff_seconds))
                     continue
+                # C30 P0: 401 bearer token may be expired — differentiate from hard auth failure
                 if exc.code == 401 and auth_mode == "bearer" and attempt < attempts - 1:
                     token_before_auth_fallback = self.token
                     self.token = ""
@@ -126,11 +143,14 @@ class OfficialRequestMixin:
                     self._has_session_cookie(),
                     bool(self.username and self.password),
                 )
+                # C20 P0: derive error_code from HTTP status for frontend display
+                _error_code = _http_error_code(exc.code, parsed, auth_mode)
                 last_error = BrainAPIError(
                     f"HTTP {exc.code}: {_scrub(parsed)}",
                     status_code=exc.code,
                     payload=_scrub(parsed),
                     retry_after=_retry_after(exc.headers),
+                    error_code=_error_code,
                 )
                 if token_before_auth_fallback is not None and not self.token:
                     self.token = token_before_auth_fallback

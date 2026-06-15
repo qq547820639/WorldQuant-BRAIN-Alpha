@@ -10,6 +10,10 @@ from .official_helpers import _first_value, scrub as _scrub
 
 class OfficialAuthProfileMixin:
     def authenticate(self) -> dict:
+        # P0-3 fix: reset cookie-auth preference on each authenticate so a
+        # transient 401 Bearer fallback in a previous request doesn't
+        # permanently lock us out of token-based auth.
+        self._prefer_cookie_auth = False
         if self.token and not (self.username and self.password):
             return {"status": "ok", "auth": "token"}
         if not self.username or not self.password:
@@ -46,8 +50,14 @@ class OfficialAuthProfileMixin:
 
     def get_user_profile(self) -> dict:
         """Fetch current user profile from BRAIN /users/self endpoint."""
+        # P3-30 fix: expire cached profile after 1 hour so tier/level changes
+        # are picked up without requiring a full restart.
+        import time as _time
+        _PROFILE_CACHE_TTL_SECONDS = 3600
         if hasattr(self, "_cached_profile") and self._cached_profile:
-            return self._cached_profile
+            _cached_at = self._cached_profile.get("_cached_at", 0)
+            if _time.time() - float(_cached_at) < _PROFILE_CACHE_TTL_SECONDS:
+                return self._cached_profile
 
         try:
             data, _headers = self._request("GET", self.config.user_profile_path)
@@ -90,6 +100,8 @@ class OfficialAuthProfileMixin:
             "username": str(_first_value(data, ["username", "email", "userEmail", "login"], self.username)),
             "raw": scrubbed,
         }
+        import time as _time
+        profile["_cached_at"] = _time.time()
         self._cached_profile = profile
         return profile
 

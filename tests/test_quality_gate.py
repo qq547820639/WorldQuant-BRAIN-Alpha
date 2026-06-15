@@ -149,7 +149,10 @@ def test_quality_gate_runs_core_steps_and_skips_pytest(monkeypatch, tmp_path):
 def test_quality_gate_includes_pytest_args_and_propagates_failure(monkeypatch, tmp_path):
     def fake_run(args, **_kwargs):
         ok = not any(str(arg).endswith("scan_sensitive_artifacts.py") for arg in args)
-        return ok, {"command": args, "exit_code": 0 if ok else 1, "duration_seconds": 0.01, "stdout": "", "stderr": ""}
+        detail = {"command": args, "exit_code": 0 if ok else 1, "duration_seconds": 0.01, "stdout": "", "stderr": ""}
+        if not ok:
+            detail["actionable_ok"] = False
+        return ok, detail
 
     monkeypatch.setattr(quality_gate, "_run_python_module", fake_run)
 

@@ -69,9 +69,21 @@ def handle_request(request: dict[str, Any], toolbox: BrainAlphaToolbox) -> dict[
 def serve_stdio(toolbox: BrainAlphaToolbox, stdin: TextIO | None = None, stdout: TextIO | None = None) -> None:
     input_stream = stdin or sys.stdin
     output_stream = stdout or sys.stdout
+    # P2-26 fix: limit stdin line size to prevent memory exhaustion
+    # from a malicious or buggy MCP client sending oversized payloads.
+    _MAX_LINE_BYTES = 10 * 1024 * 1024  # 10 MB
     for line in input_stream:
         line = line.strip()
         if not line:
+            continue
+        if len(line) > _MAX_LINE_BYTES:
+            import logging as _mcp_log
+            _mcp_log.getLogger(__name__).warning(
+                "MCP stdin line too large (%d bytes), rejecting", len(line)
+            )
+            _resp = _error(None, -32700, "request too large")
+            output_stream.write(json.dumps(_resp, ensure_ascii=False, default=str) + "\n")
+            output_stream.flush()
             continue
         try:
             request = json.loads(line)

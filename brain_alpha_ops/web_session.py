@@ -188,6 +188,10 @@ def expired_session_cookie_header() -> str:
     return SESSION_MANAGER.expired_cookie_header()
 
 
+# P3-27 note: prune is called on-demand at read time.  For servers
+# that stay alive for extended periods, consider a background daemon
+# thread that periodically calls SESSION_MANAGER.prune() to prevent
+# orphaned sessions from accumulating indefinitely.
 def prune_sessions(now: float | None = None) -> None:
     SESSION_MANAGER.prune(now)
 
@@ -283,6 +287,10 @@ def store_brain_session_credentials(session_id: str | None, payload: dict[str, A
     return True
 
 
+# P1-12 note: credentials are stored in-memory only (never persisted to
+# disk).  For production deployments consider integrating with the system
+# keychain (keyring / macOS Keychain) instead of in-memory storage.
+# In-memory storage is acceptable for local single-user usage.
 def brain_session_credentials(session_id: str | None) -> dict[str, str]:
     session_id = str(session_id or "")
     if not session_id:

@@ -25,7 +25,10 @@ def run_guided_job_service(
     compute_run_stats: ComputeRunStats,
     safe_error_message: SafeErrorMessage,
     log: logging.Logger,
+    heartbeat_interval_seconds: float = 30.0,
 ) -> None:
+    heartbeat_stop = threading.Event()
+    heartbeat_thread: threading.Thread | None = None
     try:
         from brain_alpha_ops.ux.guided_pipeline import GuidedPipeline
 
@@ -33,6 +36,13 @@ def run_guided_job_service(
             job_id,
             status="running",
             progress={"phase": "startup", "current": 0, "total": 1, "percent": 0, "message": "引导式生产任务启动...", "alpha_id": ""},
+        )
+        heartbeat_thread = _start_pipeline_heartbeat(
+            job_id,
+            job_store=job_store,
+            stop_event=heartbeat_stop,
+            interval_seconds=heartbeat_interval_seconds,
+            log=log,
         )
         run_config = run_config_from_payload(payload)
         guided = GuidedPipeline(run_config, stop_callback=lambda: job_store.is_cancelled(job_id))
@@ -72,6 +82,8 @@ def run_guided_job_service(
         guided.on_progress(_progress_cb)
         result = guided.resume() if payload.get("resume") else guided.run()
 
+        _stop_pipeline_heartbeat(heartbeat_stop, heartbeat_thread)
+        heartbeat_thread = None
         final_status = "stopped" if job_store.is_cancelled(job_id) else "completed"
         result_data = result.to_dict() if hasattr(result, "to_dict") else result
         result_data = result_data if isinstance(result_data, dict) else {}
@@ -99,6 +111,7 @@ def run_guided_job_service(
             },
         )
     except Exception as exc:
+        _stop_pipeline_heartbeat(heartbeat_stop, heartbeat_thread)
         message = safe_error_message(exc)
         error_context = error_payload(exc, error_code="GUIDED_JOB_FAILED", job_id=job_id, phase="guided_run")
         log.error("guided production job failed: %s", error_context, exc_info=True)

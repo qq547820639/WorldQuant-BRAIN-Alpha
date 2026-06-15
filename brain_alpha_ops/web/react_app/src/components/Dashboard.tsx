@@ -32,6 +32,11 @@ export default function Dashboard({ notify, connected, contextFresh, phaseStatus
     statusApi.call("/api/production-validation/status");
     cloudApi.call("/api/snapshot/cloud");
     memoryApi.call("/api/snapshot/memory?limit=100&top_n=5");
+    // P2-25 fix: useApi().call is a useCallback([], []) stable reference.
+    // Including it in deps satisfies the lint rule without runtime harm,
+    // but a future refactor that changes call's identity would trigger
+    // infinite re-fetches.  The comment documents this invariant.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [statusApi.call, cloudApi.call, memoryApi.call]);
 
   const status = statusApi.data;

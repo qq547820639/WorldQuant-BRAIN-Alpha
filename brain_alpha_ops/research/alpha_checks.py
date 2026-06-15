@@ -129,7 +129,7 @@ class AlphaCheckRegistry:
 
         # --- Turnover (platform and quality layers) ---
         self.register(AlphaCheck("turnover_platform", _check_turnover_platform, "ERROR"))
-        self.register(AlphaCheck("turnover_quality", _check_turnover_quality, "WARNING"))
+        self.register(AlphaCheck("turnover_quality", _check_turnover_quality, "ERROR"))
 
         # --- Correlation checks ---
         self.register(AlphaCheck("self_correlation", _check_self_correlation, "ERROR"))
@@ -402,12 +402,33 @@ def _check_sub_universe_sharpe(sim: dict[str, Any]) -> CheckResult:
     ratio = float(getattr(thresholds, "sub_universe_sharpe_min_ratio", 0.75))
     threshold = ratio * size_factor * max(sharpe, 0.01)
     passed = sub_sharpe >= threshold
+    exception_applied = False
+
+    # BRAIN exception: LOW_SUB_UNIVERSE_SHARPE — when sub-universe is very small
+    # (< 10% of alpha size), the check is downgraded from ERROR to WARNING
+    # because the sub_universe is too small to produce reliable sub-sharpe metrics.
+    # The BRAIN platform may still accept the alpha with this warning.
+    low_sub_exception = not passed and sub_size > 0 and alpha_size > 0 and (sub_size / alpha_size) < 0.1
+    if low_sub_exception:
+        passed = True
+        exception_applied = True
+
+    expected_str = f">= {threshold:.4f} ({ratio}×√({sub_size:.0f}/{alpha_size:.0f})×sharpe)"
+    if exception_applied:
+        expected_str += " OR LOW_SUB_UNIVERSE_SHARPE exception (sub_size < 10% alpha_size)"
+    msg = f"SubUniverseSharpe={sub_sharpe:.4f}"
+    if exception_applied:
+        msg += f" (LOW_SUB_UNIVERSE_SHARPE exception: sub_size={sub_size:.0f} < 0.1 × alpha_size={alpha_size:.0f})"
+    elif not passed:
+        msg += f" (below {threshold:.4f})"
+
     return CheckResult(
         check_name="sub_universe_sharpe",
         passed=passed,
         actual=sub_sharpe,
-        expected=f">= {threshold:.4f} ({ratio}×√({sub_size:.0f}/{alpha_size:.0f})×sharpe)",
-        message=f"SubUniverseSharpe={sub_sharpe:.4f}" + ("" if passed else f" (below {threshold:.4f})"),
+        expected=expected_str,
+        message=msg,
+        exception_applied=exception_applied,
     )
 
 

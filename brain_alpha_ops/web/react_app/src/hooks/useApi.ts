@@ -4,7 +4,9 @@ import { useState, useCallback } from "react";
 import { apiErrorMessage, isSessionInvalidPayload, networkErrorMessage } from "@/helpers/errorExperience";
 import { csrfHeaders, csrfToken, setCsrfToken, setStreamToken } from "@/utils/csrf";
 
-const DEFAULT_REQUEST_TIMEOUT_MS = 120000;
+// P2-22 fix: raised from 120s to 600s (10 min) because BRAIN
+// sync/simulate operations routinely take several minutes.
+const DEFAULT_REQUEST_TIMEOUT_MS = 600000;
 
 /** Minimal API response envelope shared by all endpoints. */
 export type ApiMeta = {
@@ -53,9 +55,9 @@ export function useApi<T = unknown>() {
   const call = useCallback(
     async <R = T>(url: string, options?: RequestInit): Promise<(R & ApiMeta) | null> => {
       setState((prev) => ({ ...prev, loading: true, error: null }));
-      const controller = options?.signal ? null : new AbortController();
-      const timeout = controller
-        ? window.setTimeout(() => controller.abort(), DEFAULT_REQUEST_TIMEOUT_MS)
+      let controller: AbortController | null = options?.signal ? null : new AbortController();
+      let timeout: number | null = controller
+        ? window.setTimeout(() => controller!.abort(), DEFAULT_REQUEST_TIMEOUT_MS)
         : null;
       try {
         const method = String(options?.method || "GET").toUpperCase();
@@ -73,6 +75,14 @@ export function useApi<T = unknown>() {
             if (canRecoverSession(url, method, json)) {
               const recovered = await bootstrapSession();
               if (recovered) {
+                // P0-3 [C6]: reset controller before retry to avoid deadlock.
+                // The original controller's timeout fired during session
+                // recovery; a new one lets the retry run its full timeout.
+                if (controller && !options?.signal) {
+                  controller = new AbortController();
+                  if (timeout) window.clearTimeout(timeout);
+                  timeout = window.setTimeout(() => controller!.abort(), DEFAULT_REQUEST_TIMEOUT_MS);
+                }
                 res = await request();
                 if (res.ok) {
                   const retryJson = await res.json() as R & ApiMeta;

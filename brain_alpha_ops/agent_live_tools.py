@@ -86,17 +86,34 @@ class AgentLiveToolsMixin:
                     api = self._batch_api_for_item()
                     future = executor.submit(self._run_single_batch_simulation, index, expression, shared_args, api)
                     future_map[future] = index
-                for future in as_completed(future_map):
-                    index = future_map[future]
-                    try:
-                        results[index] = future.result(timeout=600)
-                    except Exception as exc:
-                        results[index] = tool_error(
-                            exc,
-                            "SIMULATION_BATCH_ITEM_ERROR",
-                            tool="run_simulation_batch",
-                            index=index,
-                        )
+                # Use as_completed(timeout=...) as a batch-level stall detector:
+                # individual simulations can run indefinitely, but if NO future
+                # completes within the window the whole batch is considered stuck.
+                _batch_stall_seconds = 1800  # 30 min without any simulation completing
+                try:
+                    for future in as_completed(future_map, timeout=_batch_stall_seconds):
+                        index = future_map[future]
+                        try:
+                            results[index] = future.result()  # no per-future timeout
+                        except Exception as exc:
+                            results[index] = tool_error(
+                                exc,
+                                "SIMULATION_BATCH_ITEM_ERROR",
+                                tool="run_simulation_batch",
+                                index=index,
+                            )
+                except TimeoutError:
+                    # Batch stalled: no future completed within the window.
+                    # Cancel remaining futures and report as stalled.
+                    for future, index in list(future_map.items()):
+                        if results[index] is None:
+                            future.cancel()
+                            results[index] = tool_error(
+                                TimeoutError(f"simulation batch stalled: no progress for {_batch_stall_seconds}s"),
+                                "SIMULATION_BATCH_STALLED",
+                                tool="run_simulation_batch",
+                                index=index,
+                            )
         item_results = [result for result in results if isinstance(result, dict)]
         submitted_count = sum(1 for result in item_results if result.get("simulation_id"))
         completed_count = sum(1 for result in item_results if str(result.get("status", "")).upper() == "COMPLETED")

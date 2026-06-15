@@ -12,6 +12,8 @@ GuidedPipeline — wraps AlphaResearchPipeline with:
 from __future__ import annotations
 
 import logging
+import threading
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable
@@ -262,20 +264,50 @@ class GuidedPipeline:
         return result
 
     def _phase_core_pipeline(self, result: PipelineResult) -> PipelineResult:
-        """Wrap core pipeline with progress callbacks."""
+        """Wrap core pipeline with progress callbacks (Phase 4)."""
+        _t0 = time.time()
+        PHASE4_TIMEOUT_SECONDS = int(
+            getattr(self.run_config.ops.budget, "phase4_timeout_seconds", 0) or 300
+        )
+        logger.info(
+            "core_pipeline phase 4 start — timeout=%ds",
+            PHASE4_TIMEOUT_SECONDS,
+        )
+        logger.info("core_pipeline phase 4 start — budget keys: %s",
+                    sorted(k for k in dir(self.run_config.ops.budget) if not k.startswith("_")))
         for phase_id in ["generation", "validation", "simulation", "scoring", "gating", "submission"]:
             phase = self.phases[phase_id]
             phase.start()
             self._notify(phase_id, "running", {})
 
+        class _Phase4Timeout(Exception):
+            pass
+
+        # Threading-based timeout — reliable in multi-threaded contexts
+        _timeout_result: list = []
+        _timeout_done = threading.Event()
+
+        def _run_within_timeout():
+            try:
+                logger.info("core_pipeline init done — calling run_pipeline_from_config")
+                pipeline_result = run_pipeline_from_config(
+                    self.run_config,
+                    progress_callback=progress_callback,
+                    stop_callback=stop_callback,
+                )
+                _timeout_result.append(pipeline_result)
+            except Exception as exc:
+                _timeout_result.append(exc)
+            finally:
+                _timeout_done.set()
+
         try:
-            def progress_callback(event: PipelineEvent | dict) -> None:
+            def progress_callback(event) -> None:
                 if isinstance(event, dict):
                     phase = self._phase_id_from_core_progress(str(event.get("phase") or ""))
                     status = str(event.get("status") or "progress")
                     self._notify(phase, status, dict(event))
-                    return
-                if hasattr(event, 'event') and hasattr(event, 'level'):
+                elif hasattr(event, "event") and hasattr(event, "level"):
                     phase_map = {
                         "generation": "generation",
                         "validation": "validation",
@@ -298,38 +330,68 @@ class GuidedPipeline:
             def stop_callback() -> bool:
                 return self._should_stop()
 
-            pipeline_result = run_pipeline_from_config(
-                self.run_config,
-                progress_callback=progress_callback,
-                stop_callback=stop_callback,
-            )
+            thread = threading.Thread(target=_run_within_timeout, daemon=True)
+            thread.start()
+            thread.join(timeout=PHASE4_TIMEOUT_SECONDS)
+
+            if not _timeout_done.is_set():
+                elapsed = time.time() - _t0
+                logger.error(
+                    "core_pipeline phase 4 TIMEOUT after %.1fs (limit=%ds) — thread still running",
+                    elapsed, PHASE4_TIMEOUT_SECONDS,
+                )
+                raise _Phase4Timeout(
+                    f"phase 4 timeout after {elapsed:.1f}s (limit={PHASE4_TIMEOUT_SECONDS}s)"
+                )
+
+            if not _timeout_result:
+                raise RuntimeError("core_pipeline phase 4 returned no result")
+
+            raw = _timeout_result[0]
+            if isinstance(raw, Exception):
+                raise raw
+            pipeline_result = raw
 
             # Update phases with results
             summary = pipeline_result.summary
             self.phases["generation"].complete(
-                f"生成 {summary.get('total_candidates', 0)} 个候选"
+                f"生成 {summary.get("total_candidates", 0)} 个候选"
             )
             self.phases["simulation"].complete(
-                f"官方仿真 {summary.get('officially_simulated', 0)} 个"
+                f"官方仿真 {summary.get("officially_simulated", 0)} 个"
             )
             self.phases["validation"].complete(
-                f"官方预验证 {summary.get('official_validation_passed', 0)}/"
-                f"{summary.get('official_validation_attempted', 0)} 通过"
+                f"官方预验证 {summary.get("official_validation_passed", 0)}/"
+                f"{summary.get("official_validation_attempted", 0)} 通过"
             )
             self.phases["submission"].complete(
-                f"提交 {summary.get('auto_submitted', 0)} 个"
+                f"提交 {summary.get("auto_submitted", 0)} 个"
             )
             self.phases["scoring"].complete(
-                f"评分分布: {summary.get('score_distribution', {})}"
+                f"评分分布: {summary.get("score_distribution", {})}"
             )
             gate_summary = summary.get("gate_summary") or {}
             ready = summary.get("submission_ready", 0)
             self.phases["gating"].complete(
                 f"门禁可提交 {ready} 个; 分布 {gate_summary}"
             )
+
+            elapsed = time.time() - _t0
+            logger.info(
+                "core_pipeline phase 4 completed in %.1fs — %d candidates, %d simulated, %d submitted",
+                elapsed,
+                summary.get("total_candidates", 0),
+                summary.get("officially_simulated", 0),
+                summary.get("auto_submitted", 0),
+            )
             return pipeline_result
+
         except Exception:
-            logger.warning("guided pipeline core pipeline phase failed", exc_info=True)
+            elapsed = time.time() - _t0
+            logger.warning(
+                "guided pipeline core pipeline phase failed after %.1fs",
+                elapsed, exc_info=True,
+            )
             for pid in ["generation", "validation", "simulation", "scoring", "gating", "submission"]:
                 if self.phases[pid].status == "running":
                     self.phases[pid].fail("核心流水线异常终止")

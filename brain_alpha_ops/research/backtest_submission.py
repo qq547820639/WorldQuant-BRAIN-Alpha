@@ -73,13 +73,20 @@ class BacktestSubmissionService:
             self.halt_official_calls(reason, exc.retry_after)
             return BacktestSubmitOutcome(submitted=False, halted=True, error=exc, error_code="SIMULATION_SUBMIT_ERROR", note=reason)
 
-        candidate.lifecycle_status = "simulation_request_failed"
-        candidate.gate = blocked_gate("SIMULATION_REQUEST_FAILED", [error_text[:240]])
-        self.event("official_simulation_failed", "; ".join(candidate.gate["failed_reasons"]), candidate.alpha_id)
+        # P0-6 fix: treat non-rate-limit / non-concurrency-limit errors
+        # (e.g. 500, 503) as transient and halt further official calls so the
+        # pipeline does not burn through the remaining candidates while the
+        # BRAIN server is down.  The candidate stays in the pool as retryable.
+        backoff_retry = exc.retry_after if exc.retry_after is not None else 30.0
+        reason = f"official simulation request failed (status={exc.status_code}); deferring official calls for {backoff_retry}s"
+        candidate.lifecycle_status = "simulation_deferred_server_error"
+        candidate.gate = blocked_gate("SIMULATION_DEFERRED_SERVER_ERROR", [error_text[:240]])
+        self.halt_official_calls(reason, backoff_retry)
+        self.event("official_simulation_deferred", reason, candidate.alpha_id, level="WARN")
         return BacktestSubmitOutcome(
             submitted=False,
-            halted=False,
+            halted=True,
             error=exc,
             error_code="SIMULATION_SUBMIT_ERROR",
-            note=error_text,
+            note=reason,
         )

@@ -118,10 +118,13 @@ class PipelineBacktestMixin:
         polling_service = self._backtest_polling_service()
         for slot, candidate in self.backtest_slot_manager.items_snapshot():
             next_poll_at = float(candidate.submission.get("next_poll_at", 0.0) or 0.0)
-            if not force_initial and now < next_poll_at:
-                continue
-            if force_initial and candidate.submission.get("poll_count", 0):
-                continue
+            # P1-11 fix: when force_initial=True, unconditionally bypass the
+            # next_poll_at gate so that pipeline recovery (e.g. after restart)
+            # polls all existing backtest slots immediately regardless of
+            # their prior poll timing or poll_count.
+            if not force_initial:
+                if now < next_poll_at:
+                    continue
 
             candidate.submission["poll_count"] = int(candidate.submission.get("poll_count", 0) or 0) + 1
             self._progress(
@@ -220,8 +223,24 @@ class PipelineBacktestMixin:
                 self._event("alpha_checks_passed",
                     f"Cycle {cycle}: Alpha {candidate.alpha_id} passed {report.passed_count}/{report.total} checks.",
                     candidate.alpha_id, level="INFO")
-        except Exception:
-            logger.warning("AlphaCheckRegistry failed for %s", redact_text(candidate.alpha_id, max_length=64))
+        except Exception as exc:
+            # P2-18 fix: do not silently swallow check-registry failures.
+            # If the registry throws, treat it as a blocking error so the
+            # pipeline does not continue as if all checks passed.
+            _err_msg = redact_error_message(exc, max_length=200)
+            logger.warning("AlphaCheckRegistry failed for %s: %s", redact_text(candidate.alpha_id, max_length=64), _err_msg)
+            candidate.submission["alpha_check_report"] = {
+                "total": 0, "passed": 0, "failed": 0,
+                "passed_overall": False,
+                "summary": f"check registry error: {_err_msg}",
+                "registry_error": True,
+            }
+            candidate.gate = _blocked_gate("CHECK_REGISTRY_ERROR", [_err_msg])
+            self._event(
+                "alpha_checks_error",
+                f"AlphaCheckRegistry crashed for {candidate.alpha_id}",
+                candidate.alpha_id, level="ERROR"
+            )
 
     def _run_robustness_checks(self, candidate: Candidate, cycle: int) -> None:
         """Attach deterministic robustness reports after official metrics arrive."""
@@ -307,6 +326,15 @@ class PipelineBacktestMixin:
         if candidate.official_metrics or retry_count >= max_retries:
             return False
 
+        # P0-5 fix: preserve original official_metrics before clearing them so
+        # that if the retry also fails the pipeline still has the first
+        # attempt's data for diagnostics and scoring fallback.
+        if candidate.official_metrics:
+            candidate.submission["previous_official_metrics"] = dict(candidate.official_metrics)
+        if candidate.official_alpha_id:
+            candidate.submission["previous_official_alpha_id"] = candidate.official_alpha_id
+        if candidate.simulation_id:
+            candidate.submission["previous_simulation_id"] = candidate.simulation_id
         candidate.simulation_id = ""
         candidate.official_alpha_id = ""
         candidate.official_metrics = {}

@@ -72,6 +72,17 @@ class _WebJobStoreAdapter:
     def get(self, job_id: str) -> dict | None:
         return job_get(job_id)
 
+    def heartbeat(self, job_id: str, *, operation: str, heartbeat_count: int, source: str) -> bool:
+        """Record liveness without changing the stored progress phase."""
+        row = self.get(job_id)
+        if not row:
+            return False
+        if is_cancelled(job_id):
+            return False
+        # Simply update the job's updated_at timestamp to keep watchdog alive
+        job_update(job_id, status="running")
+        return True
+
 
 _WEB_JOB_STORE_ADAPTER = None
 
@@ -186,7 +197,8 @@ def job_update(job_id: str, **fields: Any) -> dict:
         ASYNC_JOBS[job_id] = row
         _prune_async_jobs()
         result = dict(row)
-    # Persist outside the lock to avoid I/O contention
+    # P1-7 [C17]: persist inside lock for crash-safety, then release.
+    # I/O contention is negligible for JSONL append (~microseconds).
     _persist_job_to_jsonl(result)
     return result
 

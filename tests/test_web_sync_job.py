@@ -685,9 +685,9 @@ def test_run_sync_job_service_honors_cancel_before_remote_calls(tmp_path):
         error_payload=lambda exc, **kwargs: {"error": str(exc), **kwargs},
     )
 
-    assert store.updates[-1]["status"] == "stopped"
+    assert store.updates[-1]["status"] == "cancelled"  # P0-2 unified
     assert store.updates[-1]["progress"]["status_code"] == "STOPPED"
-    assert store.updates[-1]["result"]["status"] == "stopped"
+    assert store.updates[-1]["result"]["status"] == "cancelled"  # P0-2 unified
 
 
 def test_run_sync_job_service_returns_false_to_cancel_alpha_scan(tmp_path):
@@ -713,7 +713,7 @@ def test_run_sync_job_service_returns_false_to_cancel_alpha_scan(tmp_path):
 
     assert api.pages_requested == 1
     assert api.callback_results == [False]
-    assert store.updates[-1]["status"] == "stopped"
+    assert store.updates[-1]["status"] == "cancelled"  # P0-2 unified
     assert store.updates[-1]["progress"]["status_code"] == "STOPPED"
 
 

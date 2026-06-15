@@ -114,7 +114,7 @@ class ContextRefreshDefaults:
     upstream needed more than 2 minutes to stream the full field catalog.
     """
 
-    DEFAULT_TIMEOUT_SECONDS: float = 300.0
+    DEFAULT_STALL_SECONDS: float = 300.0  # stall-detection window (not total timeout)
     """Overall refresh deadline in seconds. Matches ``fetch_official_context.py`` CLI default."""
 
     DEFAULT_MAX_RETRIES: int = 3

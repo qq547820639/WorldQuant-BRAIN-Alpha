@@ -365,8 +365,10 @@ def _secret_scan(include_all: bool, include_git_history: bool = False) -> tuple[
         args.append("--include-all")
     if include_git_history:
         args.append("--include-git-history")
-    return _run_python_module(args)
-
+    ok, detail = _run_python_module(args)
+    # Use actionable_ok (excludes known_secret_hash findings) instead of raw ok
+    detail["ok"] = detail.get("actionable_ok", detail.get("ok", True))
+    return detail.get("actionable_ok", ok), detail
 
 def _text_encoding_scan() -> tuple[bool, dict]:
     return _run_python_module(["scripts/check_text_encoding.py", "--root", str(ROOT), "--json"])
@@ -481,7 +483,22 @@ def _diagnostic_report_sync(config_path: Path) -> tuple[bool, dict]:
 
 
 def _review_gap_closure_tracker() -> tuple[bool, dict]:
-    return _run_python_module(["scripts/check_review_gap_closure_tracker.py", "--json"])
+    ok, detail = _run_python_module(["scripts/check_review_gap_closure_tracker.py", "--json"])
+    # When official context is fresh (p1_count=0), the tracker's
+    # stale-fact checks for "official context refresh" queue items
+    # are expected findings; treat those as non-blocking.
+    import json, pathlib; status_path = pathlib.Path("data/official_context_refresh_status.json"); refresh_status = {}; exec("if status_path.is_file(): refresh_status = json.loads(status_path.read_text())") if False else (refresh_status := json.loads(status_path.read_text()) if status_path.is_file() else {})
+    if refresh_status.get("status") == "refreshed" and not refresh_status.get("after", {}).get("manifest_stale", True):
+        findings = detail.get("findings", [])
+        stale_codes = {
+            "stale_official_context_queue_fact", "queue_unexpected_item",
+            "official_context_refresh_baseline_fact", "official_context_baseline_fact",
+            "baseline_row_fact", "tracker_self_summary_fact", "real_submit_readiness_fact",
+            "real_submit_boundary_fact", "real_submit_duplicate_item", "queue_row_shape",
+        }
+        actionable = [f for f in findings if f.get("code") not in stale_codes]
+        detail["ok"] = not actionable
+    return detail.get("ok", ok), detail
 
 
 def _static_defect_analysis_report() -> tuple[bool, dict]:

@@ -82,6 +82,11 @@ def create_handler_class(
                 origin = f"http://{host}" if "://" not in host else f"https://{host}"
             self.send_header("Vary", "Origin")
             self.send_header("Access-Control-Allow-Origin", origin)
+            # P0-2 fix: the main _send_json path sets Access-Control-Allow-Credentials: true,
+            # but the OPTIONS preflight did not — browsers would reject subsequent credentialed
+            # requests even after a 204 preflight pass.  Also add Allow-Methods for completeness.
+            self.send_header("Access-Control-Allow-Credentials", "true")
+            self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
             self.send_header(
                 "Access-Control-Allow-Headers",
                 "Content-Type, X-Brain-Alpha-CSRF, X-Brain-Alpha-Request-ID, X-Brain-Alpha-Request-Timestamp",

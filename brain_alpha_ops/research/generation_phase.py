@@ -21,7 +21,7 @@ class GenerationPhaseService:
     dataset_id: str = ""
     attach_assistant_guidance: AssistantGuidanceApplier | None = None
     max_expression_similarity: float = 0.9
-    max_generation_attempts: int = 1
+    max_generation_attempts: int = 3  # retry up to 3 times (was 1)
 
     def generate(self, *, assistant_guidance: dict[str, Any] | None = None) -> list[Candidate]:
         candidates: list[Candidate] = []

@@ -258,12 +258,40 @@ class AlphaResearchPipeline(
             max_cycles=self.config.budget.max_cycles,
             should_stop=self._should_stop,
         )
+        _pipeline_start_time = time.time()
+        BUILTIN_MAX_CYCLE_RUNTIME = int(
+            getattr(self.config.budget, 'max_cycle_runtime_seconds', 0) or 600
+        )
+        BUILTIN_PIPELINE_MAX_RUNTIME = int(
+            getattr(self.config.budget, 'max_pipeline_runtime_seconds', 0) or 3600
+        )
+        logger.info(
+            'pipeline entering main loop — max_cycle=%s, cycle_timeout=%ds, pipeline_timeout=%ds',
+            self.config.budget.max_cycles, BUILTIN_MAX_CYCLE_RUNTIME, BUILTIN_PIPELINE_MAX_RUNTIME,
+        )
         while True:
+            _cycle_t0 = time.time()
+
+            # Per-cycle timeout enforcement
+            _pipeline_elapsed = time.time() - _pipeline_start_time
+            if _pipeline_elapsed > BUILTIN_PIPELINE_MAX_RUNTIME:
+                logger.warning(
+                    'pipeline MAX RUNTIME exceeded: %.1fs > %ds limit',
+                    _pipeline_elapsed, BUILTIN_PIPELINE_MAX_RUNTIME,
+                )
+                self._event('pipeline_timeout',
+                    f'Pipeline max runtime {BUILTIN_PIPELINE_MAX_RUNTIME}s exceeded after {_pipeline_elapsed:.0f}s.',
+                    level='WARN')
+                break
+
             cycle_decision = cycle_orchestrator.next_cycle()
             if not cycle_decision.should_run:
+                logger.info('pipeline cycle stop: %s', cycle_decision.reason)
                 break
             cycle = cycle_decision.cycle
             self.cycles_since_strategy_switch += 1
+            logger.info('pipeline cycle %d start — elapsed=%.1fs, timeout=%ds',
+                        cycle, _pipeline_elapsed, BUILTIN_MAX_CYCLE_RUNTIME)
 
             # ── Phase 1: Dataset selection (P1 refactor) ──
             ds_phase = self._cycle_select_dataset(cycle)
@@ -579,6 +607,15 @@ class AlphaResearchPipeline(
         result = self._dataset_selection_service().select()
         if result.dataset_id:
             self._active_dataset_id = result.dataset_id
+            # Item 7: Log warning when dataset changes (universe switch)
+            if self._active_dataset_id and self._active_dataset_id != getattr(self, "_last_dataset_id", ""):
+                if hasattr(self, "_last_dataset_id") and self._last_dataset_id:
+                    logger.info(
+                        "universe switch detected: %s -> %s (same expressions across universes "
+                        "will be re-evaluated; verify this is intentional)",
+                        self._last_dataset_id, self._active_dataset_id,
+                    )
+                self._last_dataset_id = self._active_dataset_id
         if result.should_continue:
             return self._Phase.CONTINUE
         if result.should_skip:

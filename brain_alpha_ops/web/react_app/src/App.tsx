@@ -24,6 +24,7 @@ import Sidebar from "@/components/Sidebar";
 import Dashboard from "@/components/Dashboard";
 import JobMonitor from "@/components/JobMonitor";
 import CandidateTable from "@/components/CandidateTable";
+import ErrorBoundary from "@/components/ErrorBoundary";
 import PhaseShell from "@/components/PhaseShell";
 import MobileTabBar from "@/components/MobileTabBar";
 import { reportIgnoredError } from "@/utils/reportIgnoredError";
@@ -477,8 +478,10 @@ export default function App() {
       );
     case "candidates":
       return (
-        <CandidateTable key="candidates" notify={notify} showProductionControls showRowActions
-          onScore={openScoring} credentials={credentials} onCandidatePoolUpdated={handleCandidatePoolUpdated} />
+        <ErrorBoundary key="candidates">
+          <CandidateTable notify={notify} showProductionControls showRowActions
+            onScore={openScoring} credentials={credentials} onCandidatePoolUpdated={handleCandidatePoolUpdated} />
+        </ErrorBoundary>
       );
     case "official_backtests":
       return <OfficialBacktestSlots notify={notify} />;

@@ -105,6 +105,7 @@ def test_generator_fallback_filters_templates_to_official_operator_subset():
                 OfficialField(id="volume", coverage=0.9),
             ]
 
+        list_fields = get_fields
     candidates = CandidateGenerator(loader=Loader()).generate(3)
 
     assert candidates
@@ -127,6 +128,7 @@ def test_candidate_generator_skips_window_constraint_violations():
                 OfficialField(id="volume", coverage=0.9),
             ]
 
+        list_fields = get_fields
     generator = CandidateGenerator(loader=Loader())
     generator._windows = [180, 120]
 
@@ -192,6 +194,7 @@ def test_candidate_generator_official_pool_excludes_identifier_and_universe_meta
                 OfficialField(id="pv13_alpha_signal", coverage=0.7),
             ]
 
+        list_fields = get_fields
     pool = CandidateGenerator(loader=Loader())._build_official_field_pool("pv1")
 
     assert pool == ["open", "pv13_alpha_signal"]
@@ -206,6 +209,7 @@ def test_candidate_generator_does_not_fallback_when_official_pool_is_only_metada
                 OfficialField(id="topsp200", coverage=1.0),
                 OfficialField(id="pv13_revere_parent", coverage=1.0),
             ]
+        list_fields = get_fields
 
     assert CandidateGenerator(loader=Loader())._build_official_field_pool("pv1") == []
 

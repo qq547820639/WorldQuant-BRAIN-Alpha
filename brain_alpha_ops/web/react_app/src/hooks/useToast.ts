@@ -25,9 +25,17 @@ export function useToast(maxToasts = 5) {
         on_action: action?.onClick,
       };
 
+      // P3-28 fix: keep at least 2 error-type toasts even when the
+      // total count exceeds maxToasts, so the user never misses the
+      // root-cause error among a flood of warnings.
       setToasts((prev) => {
         const next = [...prev, toast];
-        return next.length > maxToasts ? next.slice(-maxToasts) : next;
+        if (next.length <= maxToasts) return next;
+        const errors = next.filter((t) => t.type === "error");
+        const others = next.filter((t) => t.type !== "error");
+        const keepErrors = errors.slice(-Math.min(errors.length, 2));
+        const keepOthers = others.slice(-(maxToasts - keepErrors.length));
+        return [...keepOthers, ...keepErrors];
       });
 
       if (durationMs > 0) {

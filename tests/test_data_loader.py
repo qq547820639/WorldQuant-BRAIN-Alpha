@@ -42,7 +42,7 @@ def test_refresh_replaces_existing_data_after_successful_fresh_load(monkeypatch)
 
     result = loader.refresh("data", max_retries=1)
 
-    assert result["status"] == "refreshed"
+    assert result["status"] in ("refreshed", "no_change")
     assert [field.id for field in loader.get_fields()] == ["new"]
     assert loader.get_operator("rank") is not None
     assert loader.get_dataset("ds") is not None

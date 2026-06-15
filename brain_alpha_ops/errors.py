@@ -143,38 +143,49 @@ def classify_error(exc: Exception | object, *, default_code: str = "UNHANDLED_ER
         # category (e.g. "auth", "validation").  Without a status code or known
         # error type we trust the caller's classification.
         return ErrorInfo(default_code, explicit_category, message, error_type, _retryable_for_code(default_code), _safe_status(status_code), _safe_float(retry_after))
-    # Fall through to fine-grained text-based classification when we have more
-    # signal (status code, known exception type, or recognised keyword).
-    if _safe_status(status_code) == 429 or "rate limit" in text or "too many requests" in text:
-        return ErrorInfo(default_code, "rate_limit", message, error_type, True, _safe_status(status_code), _safe_float(retry_after))
-    if _safe_status(status_code) in {401, 403} or "auth" in text or "credential" in text or "unauthorized" in text or "forbidden" in text:
-        return ErrorInfo(default_code, "auth", message, error_type, False, _safe_status(status_code), _safe_float(retry_after))
-    if _safe_status(status_code) == 404 or "not found" in text or "unknown simulation id" in text:
-        return ErrorInfo(default_code, "not_found", message, error_type, False, _safe_status(status_code), _safe_float(retry_after))
-    if _safe_status(status_code) == 400 or "validation" in text or "invalid" in text or "missing" in text:
-        return ErrorInfo(default_code, "validation", message, error_type, False, _safe_status(status_code), _safe_float(retry_after))
+
+    # P2-17 fix: prioritise status_code and known exception types over
+    # text-based matching.  Text matching is inherently fragile (e.g.
+    # "the field auth_token is missing" would previously match the
+    # "auth" keyword and be misclassified).
+    sc = _safe_status(status_code)
+
+    # 1. Status-code-based classification (highest signal)
+    if sc == 429:
+        return ErrorInfo(default_code, "rate_limit", message, error_type, True, sc, _safe_float(retry_after))
+    if sc in {401, 403}:
+        return ErrorInfo(default_code, "auth", message, error_type, False, sc, _safe_float(retry_after))
+    if sc == 404:
+        return ErrorInfo(default_code, "not_found", message, error_type, False, sc, _safe_float(retry_after))
+    if sc == 400:
+        return ErrorInfo(default_code, "validation", message, error_type, False, sc, _safe_float(retry_after))
+    if sc in {408, 500, 502, 503, 504}:
+        return ErrorInfo(default_code, "network", message, error_type, True, sc, _safe_float(retry_after))
+
+    # 2. Exception-type-based classification (medium signal)
     if isinstance(exc, (ValueError, json.JSONDecodeError)):
-        return ErrorInfo(default_code, "validation", message, error_type, False, _safe_status(status_code), _safe_float(retry_after))
-    if _safe_status(status_code) in {408, 500, 502, 503, 504}:
-        return ErrorInfo(default_code, "network", message, error_type, True, _safe_status(status_code), _safe_float(retry_after))
-    if any(token in text for token in (
-        "timed out",
-        "timeout",
-        "connection",
-        "network",
-        "temporarily unavailable",
-        "incompleteread",
-        "incomplete read",
-        "remote end closed",
-        "connection reset",
-        "connection aborted",
-        "broken pipe",
-        "response ended prematurely",
-    )):
-        return ErrorInfo(default_code, "network", message, error_type, True, _safe_status(status_code), _safe_float(retry_after))
+        return ErrorInfo(default_code, "validation", message, error_type, False, sc, _safe_float(retry_after))
     if isinstance(exc, OSError):
-        return ErrorInfo(default_code, "storage", message, error_type, False, _safe_status(status_code), _safe_float(retry_after))
-    return ErrorInfo(default_code, "internal", message, error_type, False, _safe_status(status_code), _safe_float(retry_after))
+        return ErrorInfo(default_code, "storage", message, error_type, False, sc, _safe_float(retry_after))
+
+    # 3. Text-based classification (low signal, fallback only)
+    if "rate limit" in text or "too many requests" in text:
+        return ErrorInfo(default_code, "rate_limit", message, error_type, True, sc, _safe_float(retry_after))
+    if "unauthorized" in text or "forbidden" in text or "credential" in text:
+        return ErrorInfo(default_code, "auth", message, error_type, False, sc, _safe_float(retry_after))
+    if "not found" in text or "unknown simulation id" in text:
+        return ErrorInfo(default_code, "not_found", message, error_type, False, sc, _safe_float(retry_after))
+    if "validation" in text or "invalid" in text or "missing" in text:
+        return ErrorInfo(default_code, "validation", message, error_type, False, sc, _safe_float(retry_after))
+    if any(token in text for token in (
+        "timed out", "timeout", "connection", "network",
+        "temporarily unavailable", "incompleteread", "incomplete read",
+        "remote end closed", "connection reset", "connection aborted",
+        "broken pipe", "response ended prematurely",
+    )):
+        return ErrorInfo(default_code, "network", message, error_type, True, sc, _safe_float(retry_after))
+
+    return ErrorInfo(default_code, "internal", message, error_type, False, sc, _safe_float(retry_after))
 
 
 def _category_for_code(code: str) -> str:

@@ -377,7 +377,7 @@ class FieldSelector:
         *,
         examples: list[str],
         dataset_fields: set[str],
-        limit: int = 60,
+        limit: int = 200,  # wider field pool (was 60)
     ) -> list[str]:
         """Map hypothesis semantic categories to real official dataset fields.
 

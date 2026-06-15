@@ -1,7 +1,7 @@
 {
   "schema_version": "official_context_refresh.v1",
-  "generated_at": "2026-06-12T14:37:57.899249+00:00",
-  "started_at": "2026-06-12T14:35:57.892247+00:00",
+  "generated_at": "2026-06-13T18:27:22.382997+00:00",
+  "started_at": "2026-06-13T18:27:20.646396+00:00",
   "environment": "production",
   "storage_dir": "/Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/data",
   "base_url": "https://api.worldquantbrain.com",
@@ -12,26 +12,55 @@
   "proxy_mode": "direct",
   "timeout_seconds": 120.0,
   "status_path": "/Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/data/official_context_refresh_status.json",
-  "ok": false,
-  "status": "failed",
-  "error_code": "OFFICIAL_CONTEXT_REFRESH_FAILED",
-  "error_category": "internal",
-  "retryable": false,
-  "retry_after_seconds": null,
-  "next_retry_at": "",
-  "error": "network error: <urlopen error official context refresh exceeded 120s timeout>",
+  "ok": true,
+  "status": "refreshed",
+  "auth": {
+    "status": "ok",
+    "auth": "session_cookie"
+  },
+  "counts": {
+    "fields": 8599,
+    "operators": 67,
+    "datasets": 20
+  },
   "before": {
     "fields": 8599,
     "operators": 67,
     "datasets": 20,
     "manifest_complete": true,
-    "manifest_stale": true
+    "manifest_stale": false
   },
   "after": {
     "fields": 8599,
     "operators": 67,
     "datasets": 20,
     "manifest_complete": true,
-    "manifest_stale": true
+    "manifest_stale": false
+  },
+  "progress": {
+    "fields": {
+      "events": 1,
+      "scanned": 8599,
+      "total": 8599,
+      "cached": true,
+      "truncated": false,
+      "warning": ""
+    },
+    "operators": {
+      "events": 1,
+      "scanned": 67,
+      "total": 67,
+      "cached": true,
+      "truncated": false,
+      "warning": ""
+    },
+    "datasets": {
+      "events": 0,
+      "scanned": 0,
+      "total": 0,
+      "cached": false,
+      "truncated": false,
+      "warning": ""
+    }
   }
 }

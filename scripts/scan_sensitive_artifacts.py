@@ -363,6 +363,7 @@ def scan_artifacts(root: Path, *, include_all: bool = False, max_bytes: int = 5_
     for path in files:
         findings.extend(scan_file(path, root, max(1, max_bytes)))
     return {
+        "actionable_ok": not any(f for f in findings if f.get("type") not in ("known_secret_hash", "known_secret_hash_git_history")),
         "ok": not findings,
         "schema_version": "sensitive_artifact_scan.v1",
         "root": str(root),
@@ -419,6 +420,7 @@ def scan_git_history(root: Path, *, max_bytes: int = 5_000_000) -> dict:
         text = show_result.stdout
         findings.extend(_scan_known_secret_hashes(text, rel_path, git_object=object_id))
     return {
+        "actionable_ok": not any(f for f in findings if f.get("type") not in ("known_secret_hash", "known_secret_hash_git_history")),
         "ok": not findings,
         "schema_version": "git_history_sensitive_scan.v1",
         "root": str(root),

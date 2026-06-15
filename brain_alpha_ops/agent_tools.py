@@ -450,12 +450,20 @@ class BrainAlphaToolbox(AgentLiveToolsMixin):
 
     def _live_api_blocked(self, args: dict[str, Any], *, tool: str) -> dict[str, Any] | None:
         if not self.allow_live_api or not bool(args.get("confirm_live_api")):
+            # P3-31 fix: explain the dual-gate mechanism clearly so that
+            # agent users understand *which* condition is missing.
+            _block_reasons = []
+            if not self.allow_live_api:
+                _block_reasons.append("server started without --allow-live-api")
+            if not bool(args.get("confirm_live_api")):
+                _block_reasons.append("caller did not set confirm_live_api=True")
             return {
                 "ok": False,
                 "error_code": "LIVE_API_NOT_ALLOWED",
                 "tool": tool,
                 "environment": "production",
-                "error": f"{tool} requires allow_live_api=True and confirm_live_api=True",
+                "error": f"{tool} blocked: " + "; ".join(_block_reasons) + ". "
+                    "Set allow_live_api=True on the toolbox and confirm_live_api=True in the call arguments.",
             }
         return None
 

@@ -4,6 +4,7 @@ from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 import json
 import os
+import shutil
 
 # P0-2: import web_submission_single as ``wss`` so the submit tests can
 # bypass the real-submit kill-switch.
@@ -2347,6 +2348,7 @@ def test_save_assistant_guidance_payload_persists_usable_guidance(monkeypatch, t
     config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path)
     config.ops.settings.dataset = "pv1"
+    shutil.copy("data/official_datasets.json", tmp_path / "official_datasets.json")
     monkeypatch.setattr(web, "load_run_config", lambda *args, **kwargs: config)
 
     payload = save_assistant_guidance_payload(
@@ -2376,6 +2378,7 @@ def test_save_assistant_guidance_payload_skips_low_confidence(monkeypatch, tmp_p
     config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path)
     config.ops.settings.dataset = "pv1"
+    shutil.copy("data/official_datasets.json", tmp_path / "official_datasets.json")
     monkeypatch.setattr(web, "load_run_config", lambda *args, **kwargs: config)
 
     payload = save_assistant_guidance_payload(
@@ -2401,6 +2404,7 @@ def test_generate_candidates_payload_applies_assistant_guidance(monkeypatch, tmp
     config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path)
     config.ops.settings.dataset = "pv1"
+    shutil.copy("data/official_datasets.json", tmp_path / "official_datasets.json")
     monkeypatch.setattr(web, "load_run_config", lambda *args, **kwargs: config)
     captured = {}
 
@@ -2445,6 +2449,7 @@ def test_generate_candidates_payload_attaches_guidance_outcome_metadata(monkeypa
     config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path)
     config.ops.settings.dataset = "pv1"
+    shutil.copy("data/official_datasets.json", tmp_path / "official_datasets.json")
     monkeypatch.setattr(web, "load_run_config", lambda *args, **kwargs: config)
     monkeypatch.setattr(
         "brain_alpha_ops.research.generator.CandidateGenerator.set_experience_guidance",

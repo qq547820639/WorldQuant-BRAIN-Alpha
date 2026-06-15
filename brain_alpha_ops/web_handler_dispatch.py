@@ -843,7 +843,11 @@ def _post_candidates_simulate(handler: Any, _parsed: Any, ctx: WebHandlerDispatc
         for jid, job in list(store.jobs.items()):
             if str(job.get("status") or "").lower() in {"queued", "running", "stopping"}:
                 phase = (job.get("progress") or {}).get("phase", "")
-                if "simulat" in str(phase).lower():
+                operation = str(job.get("operation") or "").lower()
+                # P2-24 fix: use the explicit operation field instead of
+                # substring-matching on the phase string ("simulat") which
+                # would miss abbreviated / renamed phases.
+                if "simulat" in operation or "simulat" in str(phase).lower():
                     handler._json(
                         _error_response(
                             {

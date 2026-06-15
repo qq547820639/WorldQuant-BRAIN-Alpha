@@ -483,7 +483,7 @@ def empirical_score(metrics: dict, thresholds: QualityThresholds, settings: dict
             "This may indicate formula mismatch or API version differences.",
             fitness, calculate_fitness(sharpe, returns, turnover, raw_turnover=turnover_raw), fitness_diff
         )
-    score = _bounded_score(sum(row.get("points", 0) for row in items if bool(row.get("passed", False))))
+    score = _bounded_score(sum(row.get("points", 0) for row in items if bool(row.get("passed", False)) and not row.get("is_hard_gate")))
 
     # P1-2: Separate hard gate failures from soft indicator scores
     hard_gate_failures = [

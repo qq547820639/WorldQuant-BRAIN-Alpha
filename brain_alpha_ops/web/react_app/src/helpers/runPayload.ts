@@ -83,10 +83,16 @@ const ACTIVE_STATUSES = new Set(["queued", "running", "progress", "loading", "st
 const TERMINAL_STATUS_KINDS = new Set(["success", "warning", "failed", "interrupted", "missing"]);
 
 /** Check if credentials are filled in.
- *  NOTE: Uses `||` semantics — filling only the password field without username is NOT considered "having credentials".
- *  This is intentional: the BRAIN API requires at minimum a username (email). */
+ *  P1-13 fix: the original `||` chain actually made password-only count as
+ *  "having credentials" (contrary to the comment).  Switched to explicit
+ *  AND for username+password so the BRAIN API (which requires at minimum a
+ *  username) rejects password-only entries.  Token-only auth is still
+ *  supported as an alternative to username+password. */
 export function hasCredentials(credentials?: BrainCredentials): boolean {
-  return Boolean(credentials?.username?.trim() || credentials?.password || credentials?.token?.trim());
+  return Boolean(
+    (credentials?.username?.trim() && credentials?.password) ||
+    credentials?.token?.trim()
+  );
 }
 
 /** Check if job status is in a terminal (completed) state */

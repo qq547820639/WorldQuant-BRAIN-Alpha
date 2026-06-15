@@ -107,7 +107,13 @@ def dispatch_route(
                 status=404,
             )
             return
-        if method not in {"GET", "HEAD", "OPTIONS"}:
+        # P0-4 fix: extend session validation to unknown GET API routes
+        # as well.  Previously only POST fell through to the session check;
+        # an unregistered GET /api/* path could reach the legacy dispatch
+        # without any session validation.
+        if method not in {"GET", "HEAD", "OPTIONS"} or (
+            method in {"GET", "HEAD"} and parsed.path.startswith("/api/")
+        ):
             if not handler._has_valid_session(parsed.query):
                 handler._json(
                     error_response_fn({"ok": False, "error_code": "SESSION_INVALID", "error": "invalid local session"}),

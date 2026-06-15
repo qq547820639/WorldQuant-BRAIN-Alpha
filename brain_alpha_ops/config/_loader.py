@@ -44,6 +44,32 @@ from brain_alpha_ops.config_models import (
     SubmissionPolicy,
     WebConfig,
 )
+
+
+def _is_dataset_id_in_official_cache(dataset_id: str, storage_dir: str) -> bool:
+    """Check whether *dataset_id* appears in the local official_datasets.json cache.
+
+    Returns True when the ID is found in the cache, meaning it is a recognized
+    BRAIN dataset short name (e.g. "pv1", "analyst4").  Returns False when the
+    cache cannot be read or the ID is not present.
+    """
+    datasets_path = Path(storage_dir) / "official_datasets.json"
+    if not datasets_path.is_file():
+        # First-time setup: cache not yet downloaded; allow the ID.
+        # We cannot reject an ID we haven't had a chance to validate against.
+        return True
+    try:
+        with open(datasets_path, encoding="utf-8") as fh:
+            datasets = json.load(fh)
+    except (json.JSONDecodeError, OSError):
+        return False
+    if not isinstance(datasets, list):
+        return False
+    for ds in datasets:
+        if isinstance(ds, dict) and ds.get("id") == dataset_id:
+            return True
+    return False
+
 from brain_alpha_ops.dataset_defaults import resolve_default_dataset_id
 
 
@@ -133,7 +159,7 @@ def load_ops_config(path: str | Path | None = None) -> OpsConfig:
 
 
 def write_run_config(config: RunConfig, path: str | Path | None = None) -> Path:
-    validate_run_config(config)
+    validate_run_config(config, skip_cache_check=True)
     config_path = Path(path) if path else default_run_config_path()
     config_path.parent.mkdir(parents=True, exist_ok=True)
     # Sanitize credentials before persisting — never write secrets to disk
@@ -149,7 +175,7 @@ def write_run_config(config: RunConfig, path: str | Path | None = None) -> Path:
     return config_path
 
 
-def validate_run_config(config: RunConfig) -> RunConfig:
+def validate_run_config(config: RunConfig, *, skip_cache_check: bool = False) -> RunConfig:
     """Validate the supported run configuration surface.
 
     The loader intentionally ignores unknown JSON keys for forward
@@ -179,6 +205,22 @@ def validate_run_config(config: RunConfig) -> RunConfig:
     # Only mutate settings if resolution succeeded; pure validation otherwise.
     if resolved:
         config.ops.settings.dataset = resolved
+        # Validate that the dataset_id is a known BRAIN dataset short name
+        # (e.g. "pv1", "analyst4"), a UUID, or the special value "all".
+        # Unknown IDs cause all BRAIN API calls to fail silently; catching
+        # them here gives the user a clear error message.
+        import re
+        _UUID_RE = re.compile(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$')
+        cache_ok = _is_dataset_id_in_official_cache(resolved, config.ops.storage_dir) if not skip_cache_check else True
+        if (
+            resolved.lower() not in ("all", "")
+            and not _UUID_RE.match(resolved)
+            and not cache_ok
+        ):
+            errors.append(
+                f"dataset_id '{resolved}' is not a recognized BRAIN dataset ID; "
+                "check run_config.json → ops.settings.dataset"
+            )
     _validate_ops(errors, config.ops)
     if errors:
         raise ConfigValidationError("Invalid run configuration: " + "; ".join(errors))

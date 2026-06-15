@@ -1,11 +1,25 @@
 {
   "version": 1,
-  "updated_at": 1781351091.900598,
+  "updated_at": 1781500714.996129,
   "jobs": {
     "_stub": {
       "job_id": "_stub",
-      "status": "archived",
-      "created_at": 0
+      "status": "failed",
+      "created_at": 0,
+      "cancel": true,
+      "error": "Web flow watchdog stopped this task because its status was unclear.",
+      "updated_at": 1781378748.0347798,
+      "progress": {
+        "phase": "watchdog_failed",
+        "percent": 100,
+        "percent_complete": 100,
+        "message": "Web flow watchdog stopped this task because its status was unclear.",
+        "status_message": "Web flow watchdog stopped this task because its status was unclear.",
+        "watchdog": {
+          "triggered": true,
+          "previous_status": "archived"
+        }
+      }
     }
   }
 }

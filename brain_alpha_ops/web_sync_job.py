@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import threading
 import time
 from typing import Any, Callable, Protocol
 
@@ -214,6 +215,42 @@ def run_sync_job_service(
         "status_message": "云端同步已停止，可调整范围后重试。",
     }
 
+    # ---- watchdog heartbeat daemon ----
+    heartbeat_stop = threading.Event()
+    heartbeat_count = [0]
+    _HB_INTERVAL = 120.0  # 2 minutes, well under 5-min watchdog
+
+    def _heartbeat_loop() -> None:
+        while not heartbeat_stop.wait(_HB_INTERVAL):
+            heartbeat_count[0] += 1
+            try:
+                store.update(
+                    job_id,
+                    status="running",
+                    progress={
+                        "task_id": job_id,
+                        "job_id": job_id,
+                        "operation": "sync_alphas",
+                        "phase": "heartbeat",
+                        "status_code": "HEARTBEAT",
+                        "status_message": f"Sync still active ({heartbeat_count[0]} heartbeats).",
+                        "message": f"Sync still active ({heartbeat_count[0]} heartbeats).",
+                        "heartbeat": {
+                            "count": heartbeat_count[0],
+                            "source": "watchdog_keepalive",
+                            "elapsed": round(time.time() - started_at, 1),
+                        },
+                        **stats,
+                        **_timing_payload(started_at, done=int(stats.get("scanned", 0) or 0)),
+                    },
+                )
+            except (OSError, ValueError, TypeError):
+                pass
+
+    heartbeat_thread = threading.Thread(target=_heartbeat_loop, daemon=True, name=f"sync-hb-{job_id}")
+    heartbeat_thread.start()
+    # ---- end watchdog heartbeat daemon ----
+
     def cancel_requested() -> bool:
         checker = getattr(store, "is_cancelled", None)
         return bool(callable(checker) and checker(job_id))
@@ -236,10 +273,10 @@ def run_sync_job_service(
     def mark_cancelled() -> None:
         store.update(
             job_id,
-            status="stopped",
+            status="cancelled",  # P0-2 unified (was "stopped"),
             result={
                 "ok": False,
-                "status": "stopped",
+                "status": "cancelled",
                 "range": sync_range,
                 **stats,
                 **_timing_payload(started_at, done=int(stats.get("scanned", 0) or 0)),
@@ -570,8 +607,10 @@ def run_sync_job_service(
             },
         )
     except SyncJobCancelled:
+        heartbeat_stop.set()
         mark_cancelled()
     except Exception as exc:
+        heartbeat_stop.set()
         message = safe_error_message(exc)
         error_context = error_payload(exc, error_code="SYNC_JOB_FAILED", job_id=job_id, phase="sync_job")
         logger.error("sync job failed: %s", error_context, exc_info=True)

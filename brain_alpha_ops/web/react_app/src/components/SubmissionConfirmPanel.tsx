@@ -72,7 +72,8 @@ export default function SubmissionConfirmPanel({ notify }: Props) {
 
   // Flow stages for StatusFlowDiagram
   const flowStages = useMemo(() => {
-    const checked = checks.filter((c) => c.passed || c.submittable).length;
+      // P2-5 [C15]: deduplicate checks that are both passed AND submittable
+  const checked = new Set(checks.filter((c) => c.passed || c.submittable).map(c => c.alpha_id || c.official_alpha_id || c.simulation_id || JSON.stringify(c))).size;
     const ready = readyCount;
     return [
       { label: "批量检查", count: checked, status: checked > 0 ? "complete" as const : "active" as const },

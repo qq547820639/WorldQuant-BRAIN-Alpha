@@ -101,7 +101,7 @@ def test_backtest_submission_service_records_request_failure_event():
     outcome = service.submit_slot(1, candidate)
 
     assert outcome.submitted is False
-    assert outcome.halted is False
-    assert candidate.lifecycle_status == "simulation_request_failed"
-    assert candidate.gate["status"] == "SIMULATION_REQUEST_FAILED"
-    assert events and events[0][0][0] == "official_simulation_failed"
+    assert outcome.halted is True  # 5xx now treated as halting transient
+    assert candidate.lifecycle_status == "simulation_deferred_server_error"
+    assert candidate.gate["status"] == "SIMULATION_DEFERRED_SERVER_ERROR"
+    assert events and events[0][0][0] == "official_simulation_deferred"

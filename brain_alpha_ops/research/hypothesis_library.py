@@ -588,6 +588,7 @@ class HypothesisLibrary:
         self._hypotheses: dict[str, Hypothesis] = {}
         self._by_category: dict[str, list[Hypothesis]] = {}
         self._file_paths: dict[str, Path] = {}
+        self._hypothesis_weights: dict[str, float] = {}
 
     # ── Loading ──────────────────────────────────────────────────────
 
@@ -777,6 +778,22 @@ class HypothesisLibrary:
             )
             return None
         return hyp
+
+    def adjust_weight(self, hypothesis_name: str, factor: float) -> float:
+        """Adjust hypothesis weight by *factor* (multiplicative).
+
+        Called by the pipeline after prefilter evaluation:
+        - factor < 1.0: penalize (e.g. 0.5 for prod_correlation failure)
+        - factor > 1.0: reward   (e.g. 1.1 for a diverse candidate)
+
+        Returns the new weight (clamped to [0.1, 5.0]).
+        """
+        old = self._hypothesis_weights.get(hypothesis_name, 1.0)
+        new = max(0.1, min(5.0, old * factor))
+        if abs(new - old) > 0.001:
+            self._hypothesis_weights[hypothesis_name] = new
+            self._validate_weights()
+        return new
 
     def _validate_weights(self) -> None:
         """Ensure all experience weights are non-negative."""

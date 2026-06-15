@@ -3,7 +3,11 @@
 from __future__ import annotations
 
 from brain_alpha_ops.models import Candidate
+import logging
+
 from brain_alpha_ops.redaction import redact_error_message
+
+logger = logging.getLogger(__name__)
 
 from .batch_backtest_coordinator import (
     _cloud_similarity_details,
@@ -60,12 +64,36 @@ class PipelineCandidatePoolMixin:
             candidate.local_quality = local_quality(candidate, self.config.budget.min_local_quality_score)
             self._apply_local_backtest_prefilter(candidate)
             self._apply_generation_field_prefilter(candidate)
-            candidate.scorecard = build_scorecard(
-                candidate,
-                self.config.thresholds,
-                self.config.scoring,
-                params=self.auto_calibrator.params,
-            )
+            # P1-15 fix: wrap build_scorecard in try/except so a single
+            # scoring failure does not crash the entire prefilter loop.
+            try:
+                candidate.scorecard = build_scorecard(
+                    candidate,
+                    self.config.thresholds,
+                    self.config.scoring,
+                    params=self.auto_calibrator.params,
+                )
+            except Exception as _score_exc:
+                _score_msg = redact_error_message(_score_exc, max_length=200)
+                logger.warning("build_scorecard failed: %s", _score_msg)
+                candidate.scorecard = {"total_score": 0.0, "error": _score_msg}
+                candidate.lifecycle_status = "local_prefilter_rejected"
+                candidate.gate = _blocked_gate("SCORING_ERROR", [_score_msg])
+                self._event("scoring_failed", _score_msg, candidate.alpha_id, level="WARN")
+                continue
+            # Item 7: Detect cross-universe expression reuse
+            _expr_key = getattr(candidate, "expression", "") or ""
+            _cur_ds = getattr(self, "_active_dataset_id", "")
+            if _expr_key and _cur_ds and hasattr(self, "_expression_universe_map"):
+                _prev_ds = self._expression_universe_map.get(_expr_key)
+                if _prev_ds and _prev_ds != _cur_ds:
+                    logger.warning(
+                        "cross-universe expression detected: %s was previously computed in dataset '%s', "
+                        "now in '%s' — same expression across universes may inflate prod_correlation",
+                        _expr_key[:80], _prev_ds, _cur_ds,
+                    )
+                elif not _prev_ds:
+                    self._expression_universe_map[_expr_key] = _cur_ds
             candidate.submission["cycle"] = cycle
             context_reasons = self._official_context_reasons(candidate, fields, operators)
             if context_reasons:
@@ -85,6 +113,12 @@ class PipelineCandidatePoolMixin:
                 candidate.lifecycle_status = "local_prefilter_rejected"
                 candidate.gate = _blocked_gate("LOCAL_PREFILTER_REJECTED", candidate.local_quality["reasons"])
                 self._event("local_prefilter_rejected", "; ".join(candidate.local_quality["reasons"]), candidate.alpha_id)
+                # P1-7: Feed prod_correlation failures back to hypothesis weights
+                _reasons = " ".join(candidate.local_quality.get("reasons", []))
+                if "prod_correlation" in _reasons and hasattr(self, "_generator") and hasattr(self._generator, "_library"):
+                    _hyp = getattr(candidate, "hypothesis", "") or ""
+                    if _hyp:
+                        self._generator._library.adjust_weight(_hyp, 0.5)
             self._record_lifecycle(candidate, "local_scored", "; ".join(candidate.local_quality.get("reasons", [])))
             visible_candidates = rank_candidates(passed)
             self._progress(

@@ -8,7 +8,7 @@ def test_pyinstaller_spec_bundles_all_official_context_release_files():
     spec_text = Path("BrainAlphaOps.spec").read_text(encoding="utf-8")
 
     for filename in PACKAGED_OFFICIAL_CONTEXT_FILES:
-        assert f"data\\/{filename}" in spec_text
+        assert f"('data/{filename}', 'data')" in spec_text
 
 
 def test_windows_build_copies_official_context_files_to_dist_data():

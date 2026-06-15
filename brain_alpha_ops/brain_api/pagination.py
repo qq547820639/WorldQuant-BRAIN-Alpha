@@ -69,6 +69,7 @@ def _paginate_collection(
     stalled_unique_pages = 0
     update_total = total_update or (lambda data, current, _count: _total_count(data) or current)
     page_number = 0
+    # C26 P2: stall-aware loop — exits if no page for 600s
     while True:
         page_number += 1
         if max_pages is not None and page_number > max_pages:

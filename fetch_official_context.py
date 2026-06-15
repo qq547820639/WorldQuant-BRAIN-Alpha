@@ -14,6 +14,7 @@ from datetime import datetime, timedelta, timezone
 import json
 from pathlib import Path
 import signal
+import threading
 import tempfile
 from typing import Any
 
@@ -47,8 +48,9 @@ def refresh_official_context(
     status_path = _status_output_path(run_config, status_output) if write_status else None
     before = official_context_file_counts(load_config=lambda: run_config)
 
+    progress_event = threading.Event()
     try:
-        with _refresh_deadline(timeout_seconds):
+        with _refresh_deadline(timeout_seconds, progress_event=progress_event):
             _require_credentials(run_config)
             with _api_cache_scope(run_config, write=write) as api_config:
                 api = OfficialBrainAPI(api_config, disable_proxy=disable_proxy, **run_config.credentials.resolve())
@@ -58,11 +60,11 @@ def refresh_official_context(
                 fields = api.list_fields(
                     "all",
                     run_config.ops.settings.region,
-                    progress_callback=_progress(progress, "fields"),
+                    progress_callback=_progress(progress, "fields", progress_event=progress_event),
                 )
                 if not fields:
                     raise RuntimeError("official data-fields refresh returned zero records")
-                operators = api.list_operators("all", progress_callback=_progress(progress, "operators"))
+                operators = api.list_operators("all", progress_callback=_progress(progress, "operators", progress_event=progress_event))
                 if not operators:
                     raise RuntimeError("official operators refresh returned zero records")
                 datasets = list_official_datasets_or_derive(
@@ -165,10 +167,13 @@ class _api_cache_scope:
         return False
 
 
-def _progress(progress: dict[str, list[dict[str, Any]]], key: str):
+def _progress(progress: dict[str, list[dict[str, Any]]], key: str, *, progress_event=None):
     def _record(event: dict[str, Any]) -> None:
         progress.setdefault(key, []).append(dict(event))
-
+        if progress_event is not None:
+            reset = getattr(progress_event, "_reset_stall_timer", None)
+            if reset is not None:
+                reset()
     return _record
 
 
@@ -353,7 +358,7 @@ class OfficialContextRefreshTimeout(TimeoutError):
 
 
 @contextmanager
-def _refresh_deadline(timeout_seconds: float | None):
+def _refresh_deadline(timeout_seconds: float | None, *, progress_event=None):
     if timeout_seconds is None or timeout_seconds <= 0:
         yield
         return

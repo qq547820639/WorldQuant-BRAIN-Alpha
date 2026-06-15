@@ -805,7 +805,7 @@ def test_react_fetch_helpers_keep_session_csrf_replay_and_sse_credentials():
     assert '"X-Brain-Alpha-Request-ID"' in csrf_utils
     assert '"X-Brain-Alpha-Request-Timestamp"' in csrf_utils
     assert 'headers["Content-Type"] = "application/json";' in use_api
-    assert "DEFAULT_REQUEST_TIMEOUT_MS = 120000" in use_api
+    assert "DEFAULT_REQUEST_TIMEOUT_MS = 600000" in use_api
     assert 'signal: options?.signal ?? controller?.signal' in use_api
     error_experience = _source("helpers/errorExperience.ts")
     assert '"网络请求未在预期时间内返回，请刷新状态或稍后重试。"' in error_experience

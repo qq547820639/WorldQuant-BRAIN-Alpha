@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from typing import Any, Callable
 from brain_alpha_ops.config import load_run_config, runtime_project_root
 from brain_alpha_ops.redaction import redact_error_message
+from brain_alpha_ops.web_session import session_status as _web_session_status
 from brain_alpha_ops.web_backtest_slots import (
     backtest_queue_next_action as _backtest_queue_next_action,
     backtest_slot_limit as _shared_backtest_slot_limit,
@@ -57,7 +58,7 @@ def dispatch_get(handler: Any, path: str, query: dict) -> None:
     """Dispatch GET requests to appropriate handlers."""
     # Health and session endpoints
     if path in ("/api/health", "/api/refresh_session"):
-        handler._send_json({"ok": True})
+        handler._send_json(health_payload())
         return
 
     # Backtest slots
@@ -108,6 +109,7 @@ def dispatch_get(handler: Any, path: str, query: dict) -> None:
                 candidate_repo=getattr(handler, "_candidate_repo", None),
                 connection_tracker=getattr(handler, "_connection_tracker", None),
                 readiness_service=getattr(handler, "_readiness_service", None),
+                session_status=_web_session_status(getattr(handler, '_session_id_from_cookie', lambda: '')()),
                 cloud_alpha_snapshot=cloud_alpha_snapshot,
                 cloud_alpha_cache_probe=cloud_alpha_cache_probe,
                 official_context_file_counts=official_context_file_counts,
@@ -271,7 +273,7 @@ def _handle_pipeline_start(handler: Any, payload: dict) -> None:
             logger.exception("Pipeline failed")
             job_update(job_id, status="failed", error=redact_error_message(e))
 
-    threading.Thread(target=run_pipeline, daemon=False).start()
+    threading.Thread(target=run_pipeline, daemon=True).start()
     handler._send_json({"ok": True, "job_id": job_id})
 
 

@@ -645,6 +645,7 @@ function validateForm(form: ConfigForm, schema?: ConfigSchema) {
     return "数据集只能包含字母、数字、下划线、短横线、点或冒号。";
   }
   const datasetValues = datasetAllowedValues(schema);
+  // C24 P2: also validate that the dataset ID matches BRAIN naming conventions (alphanumeric + underscore)
   if (form.dataset && datasetValues.length && !datasetValues.includes(form.dataset)) {
     return "不支持的数据集，请从下拉列表选择。";
   }

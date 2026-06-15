@@ -219,6 +219,10 @@ class OfficialDataLoader:
                 if f.dataset is None and str(f.category or "").lower() == category
             ]
 
+    # Future-proof alias: any code that writes loader.list_fields(...)
+    # hits the same method as loader.get_fields(...).
+    list_fields = get_fields
+
     def get_field_by_name(self, name: str) -> Optional[OfficialField]:
         """Return the first field whose id equals *name* (case-insensitive)."""
         with self._data_lock:
@@ -298,8 +302,9 @@ class OfficialDataLoader:
         added to the BRAIN platform.
 
         P0-1 fix (2026-06-13): defaults now sourced from
-        :class:`ContextRefreshDefaults` (300s timeout-equivalent retries) so
-        that web refresh paths stop failing with the previous 120s ceiling.
+        :class:`ContextRefreshDefaults` (stall-detection window, not
+        total timeout).  Retries use progressive backoff.  The old 120s
+        wall-clock SIGALRM no longer kills slow-but-progressing fetches.
         """
         if max_retries is None:
             max_retries = ContextRefreshDefaults.DEFAULT_MAX_RETRIES
@@ -334,11 +339,18 @@ class OfficialDataLoader:
                     self._loaded_root = fresh._loaded_root
 
                 # Success — return diff
+                _f_delta = self.field_count - old_fields
+                _o_delta = self.operator_count - old_operators
+                _d_delta = self.dataset_count - old_datasets
+                # P3-29 fix: distinguish "no change" from "refreshed" so
+                # callers can tell whether the reload actually picked up new
+                # data or was a silent no-op.
+                _status = "no_change" if (_f_delta == 0 and _o_delta == 0 and _d_delta == 0) else "refreshed"
                 return {
-                    "status": "refreshed",
-                    "fields_delta": self.field_count - old_fields,
-                    "operators_delta": self.operator_count - old_operators,
-                    "datasets_delta": self.dataset_count - old_datasets,
+                    "status": _status,
+                    "fields_delta": _f_delta,
+                    "operators_delta": _o_delta,
+                    "datasets_delta": _d_delta,
                     "current": {
                         "fields": self.field_count,
                         "operators": self.operator_count,

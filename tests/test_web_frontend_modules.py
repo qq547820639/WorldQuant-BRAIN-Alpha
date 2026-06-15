@@ -16,6 +16,7 @@ REACT_CONTRACT_COVERAGE = {
     "components/CandidateTable.tsx": "candidate generation, filters, queue views, and SSE completion",
     "components/ConfigPanel.tsx": "session credentials, config hydration, schema options, validation, import/export, and save",
     "components/Dashboard.tsx": "dashboard snapshots and landing metrics",
+    "components/ErrorBoundary.tsx": "error boundary wrapper with fallback UI and retry recovery",
     "components/JobMonitor.tsx": "production job start/stop/status and SSE progress",
     "components/KpiCard.tsx": "compact KPI presentation",
     "components/OfficialBacktestSlots.tsx": "official backtest slot polling and conflict guidance",
