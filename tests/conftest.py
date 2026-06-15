@@ -14,3 +14,13 @@ import os
 # Production web console never reaches submit_alpha() because the higher-level
 # gate returns REAL_SUBMIT_DISABLED_WEB_FLOW first.
 os.environ.setdefault("BRAIN_ALPHA_FORCE_REAL_SUBMIT", "1")
+
+
+def pytest_ignore_collect(collection_path, path, config):
+    """Skip e2e tests when playwright is not installed (CI does not have browser deps)."""
+    if "e2e_" in str(collection_path):
+        try:
+            import playwright  # noqa: F401
+        except ImportError:
+            return True
+    return None
