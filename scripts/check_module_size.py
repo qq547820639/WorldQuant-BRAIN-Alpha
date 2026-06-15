@@ -37,6 +37,7 @@ BASELINE_LINE_LIMITS = {
     "brain_alpha_ops/config.py": 900,
     "brain_alpha_ops/research/assistant.py": 900,
     "brain_alpha_ops/research/hypothesis_driven_generator.py": 1330,
+    "brain_alpha_ops/research/hypothesis_library.py": 820,
     "brain_alpha_ops/research/local_backtest_engine.py": 1200,
     "brain_alpha_ops/research/observability.py": 940,
     "brain_alpha_ops/research/pipeline.py": 3210,

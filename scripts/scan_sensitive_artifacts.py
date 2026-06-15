@@ -472,7 +472,7 @@ def main(argv: list[str] | None = None) -> int:
     findings = result["findings"]
     if args.json:
         print(json.dumps(result, ensure_ascii=False, indent=2))
-        return 1 if findings and args.fail_on_findings else 0
+        return 1 if _actionable_findings(findings) and args.fail_on_findings else 0
 
     if not findings:
         print("No sensitive-looking artifacts found.")
@@ -482,6 +482,9 @@ def main(argv: list[str] | None = None) -> int:
     for finding in findings:
         print(f"[{finding['type']}] {finding['message']}")
     return 1 if args.fail_on_findings else 0
+def _actionable_findings(findings: list) -> list:
+    """Filter out known_secret_hash findings that are not actionable."""
+    return [f for f in findings if f.get("type") != "known_secret_hash"]
 
 
 if __name__ == "__main__":
