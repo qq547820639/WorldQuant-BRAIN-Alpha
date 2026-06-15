@@ -118,3 +118,10 @@ scripts/submit_alpha_direct.py
 scripts/check_test_mock_alias.py
 brain_alpha_ops/research/hypotheses/
 BrainAlphaOps.spec
+
+# ---- Development artifacts (experiments, docs, IDE) ----
+experiments/
+docs/
+!.github/
+.codex/
+
