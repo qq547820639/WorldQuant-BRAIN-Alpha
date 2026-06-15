@@ -29,8 +29,8 @@ from brain_alpha_ops.config import OfficialAPIConfig, load_run_config
 
 
 def submit_alpha_direct(
-    username: str = "547820639@qq.com",
-    password: str = "Ph360098.",
+    username: str = "",
+    password: str = "",
     expression: str = "-returns",
     settings: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
