@@ -12,7 +12,7 @@ import time
 import os
 
 # 测试配置
-TEST_EMAIL = "547820639@qq.com"
+TEST_EMAIL = os.environ.get("BRAIN_USERNAME", "")
 TEST_PASSWORD = os.environ.get("BRAIN_PASSWORD", "")
 BASE_URL = "http://127.0.0.1:8765"
 OUTPUT_DIR = "/Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/output"

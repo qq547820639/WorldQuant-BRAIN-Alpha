@@ -7,7 +7,7 @@ sync已完成 -> 直接运行非提交验证生产Alpha
 from playwright.sync_api import sync_playwright
 import time, os, json
 
-EMAIL = "547820639@qq.com"
+EMAIL = os.environ.get("BRAIN_USERNAME", "")
 PASSWORD = os.environ.get("BRAIN_PASSWORD", "")
 URL = "http://127.0.0.1:8765"
 OUT = "/Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/output/final_delivery"

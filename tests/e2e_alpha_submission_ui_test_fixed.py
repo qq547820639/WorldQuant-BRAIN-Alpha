@@ -17,7 +17,7 @@ import os
 import sys
 
 # 测试配置
-TEST_EMAIL = "547820639@qq.com"
+TEST_EMAIL = os.environ.get("BRAIN_USERNAME", "")
 TEST_PASSWORD = os.environ.get("BRAIN_PASSWORD", "")
 BASE_URL = "http://127.0.0.1:8765"
 SLOW_MO = 1000  # 每个操作延迟1秒，便于观察

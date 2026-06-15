@@ -13,7 +13,7 @@ import time
 import os
 import re
 
-EMAIL = "547820639@qq.com"
+EMAIL = os.environ.get("BRAIN_USERNAME", "")
 PASSWORD = os.environ.get("BRAIN_PASSWORD", "")
 URL = "http://127.0.0.1:8765"
 OUTPUT = "/Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/output/ultimate_debug"

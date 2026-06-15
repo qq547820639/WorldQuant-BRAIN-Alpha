@@ -8,7 +8,7 @@ BRAIN Alpha Ops - 完整Alpha提交流程验收测试（无截图版）
 from playwright.sync_api import sync_playwright
 import time
 
-EMAIL = "547820639@qq.com"
+EMAIL = os.environ.get("BRAIN_USERNAME", "")
 PASSWORD = os.environ.get("BRAIN_PASSWORD", "")
 URL = "http://127.0.0.1:8765"
 

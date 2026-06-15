@@ -105,7 +105,7 @@ def test_complete_alpha_submission_workflow():
         email_input = page.locator("input[type='email'], input[placeholder*='email'], input[placeholder*='邮箱']").first
         
         if email_input.count() > 0:
-            email_input.fill("547820639@qq.com")
+            email_input.fill(os.environ.get("BRAIN_USERNAME", ""))
             print("   ✅ 邮箱输入成功")
         else:
             # 尝试通过label查找
@@ -113,7 +113,7 @@ def test_complete_alpha_submission_workflow():
             # 查找所有input
             all_inputs = page.locator("input").all()
             if len(all_inputs) >= 2:
-                all_inputs[0].fill("547820639@qq.com")
+                all_inputs[0].fill(os.environ.get("BRAIN_USERNAME", ""))
                 print("   ✅ 通过索引0输入邮箱")
         
         time.sleep(1)
