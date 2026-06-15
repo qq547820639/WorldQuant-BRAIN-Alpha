@@ -130,3 +130,19 @@ experiments/
 docs/*
 !docs/REVIEW_GAP_CLOSURE_20260530.md
 !docs/DELIVERY_COMPLETION_AUDIT_20260528.md
+
+# ---- Development artifacts (final batch) ----
+.codebuddy/
+.superdesign/
+.vite/
+screenshots/
+tools/
+_launch_monitor.py
+_status.py
+overview.md
+responsiveness_check.py
+validate_data.py
+.importlinter
+.pre-commit-config.yaml
+PROJECT_EVALUATION_REPORT.md
+REVIEW.md
