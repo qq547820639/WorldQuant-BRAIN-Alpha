@@ -79,4 +79,4 @@ exclude_lines = [
     "if __name__ == .__main__.:",
     "@abstractmethod",
 ]
-fail_under = 75
+fail_under = 80
