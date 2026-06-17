@@ -1,7 +1,10 @@
+from http.client import IncompleteRead
+
 from brain_alpha_ops.brain_api.base import BrainAPIError
+from brain_alpha_ops.error_payloads import user_error_payload
 from brain_alpha_ops.errors import ValidationError, classify_error
 from brain_alpha_ops.observability import error_payload
-from brain_alpha_ops.redaction import redact_text
+from brain_alpha_ops.redaction import redact_data, redact_text
 
 
 def test_classify_error_marks_rate_limit_retryable():
@@ -49,6 +52,29 @@ def test_redaction_catches_freeform_secret_fragments():
     assert "<redacted>" in text
 
 
+def test_redaction_catches_email_addresses_next_to_secrets():
+    text = redact_text("auth failed for researcher@example.com with token=SECRET456")
+
+    assert "researcher@example.com" not in text
+    assert "SECRET456" not in text
+    assert "***@***" in text
+    assert "token=<redacted>" in text
+
+
+def test_redaction_key_value_pattern_tracks_sensitive_keys():
+    text = redact_text(
+        "api_key=live-key username=researcher@example.com email='researcher@example.com' passwd: secret"
+    )
+
+    assert "live-key" not in text
+    assert "researcher@example.com" not in text
+    assert "secret" not in text
+    assert "api_key=<redacted>" in text
+    assert "username=<redacted>" in text
+    assert "email=<redacted>" in text
+    assert "passwd: <redacted>" in text
+
+
 def test_error_payload_redacts_freeform_secret_fragments():
     payload = error_payload(RuntimeError("secret-token-123 failed"), error_code="RUN_JOB_FAILED")
 
@@ -57,9 +83,72 @@ def test_error_payload_redacts_freeform_secret_fragments():
     assert payload["redacted_message"] == payload["error"]
 
 
+def test_user_error_payload_redacts_sensitive_context_values():
+    payload = user_error_payload(
+        RuntimeError("auth failed for operator@example.test token=secret-token-123"),
+        error_code="RUN_JOB_FAILED",
+        alpha_id="alpha_safe",
+        username="operator@example.test",
+        password="plain-password",
+        headers={
+            "Authorization": "Bearer live-token-123",
+            "X-Brain-Alpha-Admin-Token": "admin-secret-123",
+        },
+        session={"sessionId": "session-secret-123"},
+    )
+    encoded = str(payload)
+
+    assert payload["alpha_id"] == "alpha_safe"
+    assert payload["username"] == "<redacted>"
+    assert payload["password"] == "<redacted>"
+    assert payload["headers"]["Authorization"] == "<redacted>"
+    assert payload["headers"]["X-Brain-Alpha-Admin-Token"] == "<redacted>"
+    assert payload["session"] == "<redacted>"
+    assert "operator@example.test" not in encoded
+    assert "plain-password" not in encoded
+    assert "secret-token-123" not in encoded
+    assert "live-token-123" not in encoded
+    assert "admin-secret-123" not in encoded
+    assert "session-secret-123" not in encoded
+
+
+def test_redaction_redacts_user_profile_contact_fields():
+    payload = redact_data({
+        "username": "researcher@example.com",
+        "raw": {
+            "email": "researcher@example.com",
+            "telephone": "+1234567890",
+            "firstName": "Research",
+            "fullName": "Research User",
+            "address": {"country": "CN"},
+            "employment": {"employer": "Example Capital"},
+        },
+    })
+    encoded = str(payload)
+
+    assert "researcher@example.com" not in encoded
+    assert "+1234567890" not in encoded
+    assert "Research User" not in encoded
+    assert payload["username"] == "<redacted>"
+    assert payload["raw"]["email"] == "<redacted>"
+    assert payload["raw"]["telephone"] == "<redacted>"
+    assert payload["raw"]["firstName"] == "<redacted>"
+    assert payload["raw"]["fullName"] == "<redacted>"
+    assert payload["raw"]["employment"] == "<redacted>"
+
+
 def test_classify_error_marks_5xx_retryable_network():
     info = classify_error(BrainAPIError("HTTP 503", status_code=503), default_code="OFFICIAL_CALL_FAILED")
 
     assert info.category == "network"
     assert info.retryable is True
     assert info.status_code == 503
+
+
+def test_classify_error_marks_incomplete_read_retryable_network():
+    info = classify_error(IncompleteRead(b"partial", 10), default_code="SYNC_JOB_FAILED")
+
+    assert info.error_code == "SYNC_JOB_FAILED"
+    assert info.category == "network"
+    assert info.retryable is True
+    assert info.error_type == "IncompleteRead"

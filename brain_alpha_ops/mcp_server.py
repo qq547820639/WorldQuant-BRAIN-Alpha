@@ -13,7 +13,7 @@ from typing import Any, TextIO
 
 from brain_alpha_ops.agent_tools import BrainAlphaToolbox
 from brain_alpha_ops.config import load_run_config
-from brain_alpha_ops.web import CHECK_JOBS, JOBS, SYNC_JOBS
+from brain_alpha_ops.tasks import JobStore
 
 
 JSONRPC_VERSION = "2.0"
@@ -69,9 +69,21 @@ def handle_request(request: dict[str, Any], toolbox: BrainAlphaToolbox) -> dict[
 def serve_stdio(toolbox: BrainAlphaToolbox, stdin: TextIO | None = None, stdout: TextIO | None = None) -> None:
     input_stream = stdin or sys.stdin
     output_stream = stdout or sys.stdout
+    # P2-26 fix: limit stdin line size to prevent memory exhaustion
+    # from a malicious or buggy MCP client sending oversized payloads.
+    _MAX_LINE_BYTES = 10 * 1024 * 1024  # 10 MB
     for line in input_stream:
         line = line.strip()
         if not line:
+            continue
+        if len(line) > _MAX_LINE_BYTES:
+            import logging as _mcp_log
+            _mcp_log.getLogger(__name__).warning(
+                "MCP stdin line too large (%d bytes), rejecting", len(line)
+            )
+            _resp = _error(None, -32700, "request too large")
+            output_stream.write(json.dumps(_resp, ensure_ascii=False, default=str) + "\n")
+            output_stream.flush()
             continue
         try:
             request = json.loads(line)
@@ -86,16 +98,17 @@ def serve_stdio(toolbox: BrainAlphaToolbox, stdin: TextIO | None = None, stdout:
         output_stream.flush()
 
 
-def build_toolbox(config_path: str = "", *, allow_live_api: bool = False, allow_submit: bool = False) -> BrainAlphaToolbox:
+def build_toolbox(config_path: str = "", *, allow_live_api: bool = False) -> BrainAlphaToolbox:
     run_config = load_run_config(config_path or None)
+    # Create fresh JobStore instances — the old web.py globals have been
+    # refactored into per-module WebJobRegistry / JobStore patterns.
     return BrainAlphaToolbox(
         run_config=run_config,
         allow_live_api=allow_live_api,
-        allow_submit=allow_submit,
         job_stores={
-            "production": JOBS,
-            "sync": SYNC_JOBS,
-            "check": CHECK_JOBS,
+            "production": JobStore(job_prefix="prod"),
+            "sync": JobStore(job_prefix="sync"),
+            "check": JobStore(job_prefix="check"),
         },
     )
 
@@ -104,14 +117,12 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Run the Brain Alpha Ops MCP-style stdio adapter.")
     parser.add_argument("--config", default="")
     parser.add_argument("--allow-live-api", action="store_true")
-    parser.add_argument("--allow-submit", action="store_true")
     args = parser.parse_args(argv)
 
     serve_stdio(
         build_toolbox(
             args.config,
             allow_live_api=args.allow_live_api,
-            allow_submit=args.allow_submit,
         )
     )
     return 0

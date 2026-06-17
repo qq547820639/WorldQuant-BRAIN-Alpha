@@ -1,3 +1,5 @@
+import logging
+
 from brain_alpha_ops.research.parallel_backtest import ParallelBacktestExecutor, ParallelBacktestPlanner
 
 
@@ -65,6 +67,54 @@ def test_parallel_backtest_executor_emits_progress_callback_and_terminal_failed_
     assert result["failed_count"] == 1
     assert result["failure_counts"]["SIMULATION_FAILED"] == 1
     assert [event["event"] for event in events] == ["planned", "job_started", "job_finished", "completed"]
+
+
+def test_parallel_backtest_executor_warns_when_progress_callback_fails(caplog):
+    events = []
+
+    def runner(_job):
+        return {"ok": True, "simulation_id": "sim_1", "status": "COMPLETED"}
+
+    def broken_progress_callback(payload):
+        events.append(payload)
+        raise RuntimeError("callback failed")
+
+    with caplog.at_level(logging.WARNING, logger="brain_alpha_ops.research.parallel_backtest"):
+        result = ParallelBacktestExecutor().execute(
+            ["rank(close)"],
+            markets=["USA"],
+            max_workers=1,
+            max_batches=1,
+            per_account_limit=5,
+            runner=runner,
+            progress_callback=broken_progress_callback,
+        )
+
+    assert result["ok"] is True
+    assert result["completed_count"] == 1
+    assert events
+    assert "parallel backtest progress callback failed; continuing execution" in caplog.text
+
+
+def test_parallel_backtest_executor_warns_when_runner_raises(caplog):
+    def runner(_job):
+        raise RuntimeError("runner unavailable")
+
+    with caplog.at_level(logging.WARNING, logger="brain_alpha_ops.research.parallel_backtest"):
+        result = ParallelBacktestExecutor().execute(
+            ["rank(close)"],
+            markets=["USA"],
+            max_workers=1,
+            max_batches=1,
+            per_account_limit=5,
+            runner=runner,
+        )
+
+    assert result["ok"] is False
+    assert result["failed_count"] == 1
+    assert result["results"][0]["error_code"] == "PARALLEL_BACKTEST_JOB_ERROR"
+    assert "parallel backtest job failed: job_index=0 market=USA" in caplog.text
+    assert "runner unavailable" in caplog.text
 
 
 def test_parallel_backtest_planner_reports_empty_plan_safely():

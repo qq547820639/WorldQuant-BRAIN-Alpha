@@ -1,6 +1,5 @@
 from brain_alpha_ops.web_candidate_selection import (
     candidate_from_payload,
-    official_alpha_id,
     passed_candidates_from_payload,
 )
 
@@ -48,12 +47,11 @@ def test_passed_candidates_from_payload_filters_deduplicates_and_job_fallback():
                         {"alpha_id": "a3", "metrics": {"pass_fail": "FAIL"}},
                     ],
                 },
-                "progress": {"data": {}},
+                "progress": {"data": {"passed_candidates": [{"alpha_id": "a4", "lifecycle_status": "submission_ready"}]}},
             }
         }
     )
 
     rows = passed_candidates_from_payload({"job_id": "job_1"}, store)
 
-    assert [row["alpha_id"] for row in rows] == ["a1", "a2"]
-    assert official_alpha_id(rows[1]) == "off_2"
+    assert [row["alpha_id"] for row in rows] == ["a1", "a4"]

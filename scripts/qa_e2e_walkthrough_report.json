@@ -1,0 +1,34 @@
+{
+  "stages": {
+    "startup": "PASS",
+    "session": "PASS",
+    "config": "PASS",
+    "connection": "SKIP",
+    "research": "PASS",
+    "api_surface": "12/12 OK",
+    "shutdown": "PASS"
+  },
+  "metrics": {
+    "GET:config": 0.01,
+    "GET:presets": 0.0,
+    "GET:latest_result": 0.01,
+    "GET:research_memory": 0.75,
+    "GET:lifecycle": 0.06,
+    "GET:check_results": 0.0,
+    "GET:status": 0.0,
+    "GET:health": 0.07,
+    "GET:profile": 0.0,
+    "GET:research_knowledge": 0.32,
+    "GET:research_observabili": 0.78,
+    "GET:prompt_runs": 0.0,
+    "GET:cloud_alphas": 1.56,
+    "GET:assistant_context": 3.27,
+    "GET:assistant_guidance": 1.16,
+    "GET:assistant_request": 2.88,
+    "GET:report": 0.0,
+    "GET:sqlite_indexes": 7.97,
+    "POST:shutdown": 0.0
+  },
+  "errors": [],
+  "warnings": []
+}

@@ -7,15 +7,26 @@ arbitrary Python code.
 
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor, as_completed
-import time
+import logging
 from typing import Any, Callable, Mapping
 
+from brain_alpha_ops.agent_live_tools import (
+    MAX_BATCH_SIMULATION_WORKERS,
+    MAX_BATCH_SIMULATIONS,
+    MAX_SYNC_RANGE,
+    AgentLiveToolsMixin,
+)
+from brain_alpha_ops.agent_tool_errors import tool_error
 from brain_alpha_ops.agent_tool_registry import resolve_tool_name, tool_definitions
-from brain_alpha_ops.brain_api import MockBrainAPI
 from brain_alpha_ops.config import RunConfig, load_run_config
-from brain_alpha_ops.error_payloads import user_error_payload
 from brain_alpha_ops.models import Candidate
+from brain_alpha_ops.shared_bounds import (
+    bounded_float,
+    bounded_int,
+    candidate_argument,
+    required_text,
+    truthy,
+)
 from brain_alpha_ops.agent_guidance_tools import (
     assistant_guidance_for_generator,
     assistant_guidance_summary,
@@ -30,7 +41,7 @@ from brain_alpha_ops.agent_research_tools import (
     build_assistant_context_tool,
     build_assistant_request_tool,
     build_vectorized_market_data_from_args,
-    collect_job_rows,
+    collect_job_rows_with_diagnostics,
     cross_review_assistant_response_tool,
     orchestrate_parameter_search_from_args,
     plan_parallel_backtest_from_args,
@@ -38,7 +49,6 @@ from brain_alpha_ops.agent_research_tools import (
     query_research_observability_snapshot,
     route_alert_from_args,
     run_anti_overfit_tool,
-    run_parallel_backtest_from_args,
     run_rolling_validation_tool,
     search_parameters_tool,
     send_alert_tool,
@@ -55,7 +65,6 @@ from brain_alpha_ops.research.generator import CandidateGenerator, extract_field
 from brain_alpha_ops.research.guidance import ensure_assistant_guidance_digest
 from brain_alpha_ops.research.memory import ResearchMemory
 from brain_alpha_ops.research.observability import actionable_duplicate_expression_records
-from brain_alpha_ops.research.repository import ResearchRepository
 from brain_alpha_ops.research.scoring import build_scorecard
 from brain_alpha_ops.research.validated_generator import validate_expression as local_validate_expression
 from brain_alpha_ops.runner import api_from_run_config
@@ -63,12 +72,11 @@ from brain_alpha_ops.tasks import JobStore
 
 
 MAX_TOOL_CANDIDATES = 100
-MAX_SYNC_RANGE = {"1d", "3d", "7d", "all"}
-MAX_BATCH_SIMULATIONS = 10
-MAX_BATCH_SIMULATION_WORKERS = 3
+
+logger = logging.getLogger(__name__)
 
 
-class BrainAlphaToolbox:
+class BrainAlphaToolbox(AgentLiveToolsMixin):
     """A safe callable surface for LLM/agent integration."""
 
     def __init__(
@@ -95,7 +103,6 @@ class BrainAlphaToolbox:
             "run_simulation": self._run_simulation,
             "run_simulation_batch": self._run_simulation_batch,
             "check_alpha": self._check_alpha,
-            "submit_alpha": self._submit_alpha,
             "sync_cloud_alphas": self._sync_cloud_alphas,
             "get_job_status": self._get_job_status,
             "query_research_memory": self._query_research_memory,
@@ -138,7 +145,7 @@ class BrainAlphaToolbox:
 
     def _list_context(self, args: dict[str, Any]) -> dict[str, Any]:
         query = str(args.get("query", "all") or "all")
-        limit = _bounded_int(args.get("limit", 20), 1, 200)
+        limit = bounded_int(args.get("limit", 20), 1, 200)
         fields: list[dict[str, Any]]
         operators: list[dict[str, Any]]
         datasets: list[dict[str, Any]]
@@ -151,6 +158,7 @@ class BrainAlphaToolbox:
             operators = [_operator_to_dict(operator) for operator in loader.get_operators()]
             datasets = [_dataset_to_dict(dataset) for dataset in loader.get_datasets()]
         except Exception:
+            logger.warning("official context loader unavailable; using default agent context", exc_info=True)
             from brain_alpha_ops.brain_api.context_defaults import DEFAULT_FIELDS, DEFAULT_OPERATORS
 
             source = "context_defaults"
@@ -182,11 +190,24 @@ class BrainAlphaToolbox:
         }
 
     def _generate_candidates(self, args: dict[str, Any]) -> dict[str, Any]:
-        count = _bounded_int(args.get("count", 10), 1, MAX_TOOL_CANDIDATES)
+        count = bounded_int(args.get("count", 10), 1, MAX_TOOL_CANDIDATES)
         dataset_id = str(args.get("dataset_id", "") or "")
         generator = CandidateGenerator()
+        knowledge_constraints: dict[str, Any] = {}
+        preferred_fields = [str(item).lower() for item in (args.get("preferred_fields") or []) if str(item)]
+        preferred_operators = [str(item).lower() for item in (args.get("preferred_operators") or []) if str(item)]
+        if preferred_fields:
+            knowledge_constraints["preferred_fields"] = preferred_fields
+            if truthy(args.get("strict_preferred_fields", False)):
+                knowledge_constraints["strict_preferred_fields"] = True
+        if preferred_operators:
+            knowledge_constraints["preferred_operators"] = preferred_operators
+            if truthy(args.get("strict_preferred_operators", False)):
+                knowledge_constraints["strict_preferred_operators"] = True
+        if knowledge_constraints:
+            generator.set_knowledge_constraints(knowledge_constraints)
         memory_guidance: dict[str, Any] = {}
-        use_memory = self.use_research_memory_guidance and _truthy(args.get("use_research_memory", True))
+        use_memory = self.use_research_memory_guidance and truthy(args.get("use_research_memory", True))
         if use_memory:
             memory_guidance = self._research_memory_guidance(args)
             if memory_guidance:
@@ -229,7 +250,7 @@ class BrainAlphaToolbox:
         return payload
 
     def _validate_expression(self, args: dict[str, Any]) -> dict[str, Any]:
-        expression = _required_text(args, "expression")
+        expression = required_text(args, "expression")
         result = {
             "ok": True,
             "expression": expression,
@@ -251,7 +272,7 @@ class BrainAlphaToolbox:
         return result
 
     def _score_candidate(self, args: dict[str, Any]) -> dict[str, Any]:
-        expression = _required_text(args, "expression")
+        expression = required_text(args, "expression")
         candidate = Candidate(
             alpha_id=str(args.get("alpha_id", "agent_candidate") or "agent_candidate"),
             expression=expression,
@@ -262,245 +283,8 @@ class BrainAlphaToolbox:
             official_metrics=dict(args.get("official_metrics") or {}),
         )
         scorecard = build_scorecard(candidate, self.run_config.ops.thresholds, self.run_config.ops.scoring)
+        candidate.scorecard = scorecard
         return {"ok": True, "candidate": candidate.to_dict(), "scorecard": scorecard}
-
-    def _run_simulation(self, args: dict[str, Any]) -> dict[str, Any]:
-        return self._run_simulation_with_api(args, self._api())
-
-    def _run_simulation_batch(self, args: dict[str, Any]) -> dict[str, Any]:
-        blocked = self._live_api_blocked(args, tool="run_simulation_batch")
-        if blocked:
-            return blocked
-        expressions = _expression_batch_argument(args)
-        max_batch_size = _bounded_int(args.get("max_batch_size", MAX_BATCH_SIMULATIONS), 1, MAX_BATCH_SIMULATIONS)
-        selected = expressions[:max_batch_size]
-        skipped = [
-            {
-                "index": index,
-                "expression": expression,
-                "reason": "batch_size_limit",
-            }
-            for index, expression in enumerate(expressions[max_batch_size:], start=max_batch_size)
-        ]
-        if not selected:
-            return {
-                "ok": False,
-                "schema_version": "agent_simulation_batch_result.v1",
-                "error_code": "EMPTY_SIMULATION_BATCH",
-                "error": "run_simulation_batch requires at least one expression",
-                "requested_count": 0,
-                "submitted_count": 0,
-                "completed_count": 0,
-                "failed_count": 0,
-                "skipped_count": len(skipped),
-                "results": [],
-                "skipped": skipped,
-            }
-
-        requested_max_workers = _bounded_int(args.get("max_workers", 1), 1, MAX_BATCH_SIMULATION_WORKERS)
-        shared_args = dict(args)
-        shared_args.pop("expressions", None)
-        shared_args.pop("max_batch_size", None)
-        shared_args.pop("max_workers", None)
-
-        results: list[dict[str, Any] | None] = [None] * len(selected)
-        if self.api is not None:
-            effective_workers = 1
-        elif str(self.run_config.environment).lower() == "mock":
-            effective_workers = min(requested_max_workers, len(selected))
-        else:
-            effective_workers = min(requested_max_workers, len(selected))
-
-        if effective_workers == 1 or len(selected) == 1:
-            api = self._batch_api_for_item()
-            for index, expression in enumerate(selected):
-                try:
-                    results[index] = self._run_single_batch_simulation(index, expression, shared_args, api=api)
-                except Exception as exc:
-                    results[index] = _tool_error(
-                        exc,
-                        "SIMULATION_BATCH_ITEM_ERROR",
-                        tool="run_simulation_batch",
-                        index=index,
-                    )
-        else:
-            with ThreadPoolExecutor(max_workers=effective_workers) as executor:
-                future_map = {}
-                for index, expression in enumerate(selected):
-                    api = self._batch_api_for_item()
-                    future = executor.submit(self._run_single_batch_simulation, index, expression, shared_args, api)
-                    future_map[future] = index
-                for future in as_completed(future_map):
-                    index = future_map[future]
-                    try:
-                        results[index] = future.result(timeout=600)
-                    except Exception as exc:
-                        results[index] = _tool_error(
-                            exc,
-                            "SIMULATION_BATCH_ITEM_ERROR",
-                            tool="run_simulation_batch",
-                            index=index,
-                        )
-        item_results = [result for result in results if isinstance(result, dict)]
-        submitted_count = sum(1 for result in item_results if result.get("simulation_id"))
-        completed_count = sum(1 for result in item_results if str(result.get("status", "")).upper() == "COMPLETED")
-        failed_count = sum(1 for result in item_results if not bool(result.get("ok")))
-        return {
-            "ok": failed_count == 0 and submitted_count == len(selected),
-            "schema_version": "agent_simulation_batch_result.v1",
-            "requested_count": len(expressions),
-            "selected_count": len(selected),
-            "submitted_count": submitted_count,
-            "completed_count": completed_count,
-            "failed_count": failed_count,
-            "skipped_count": len(skipped),
-            "requested_max_workers": requested_max_workers,
-            "max_workers": effective_workers,
-            "rate_limit": {
-                "max_batch_size": max_batch_size,
-                "max_workers": effective_workers,
-                "bounded": True,
-            },
-            "account_safety": {
-                "live_api_confirmation_required_outside_mock": True,
-                "duplicate_preflight_required": True,
-                "validate_before_submit": True,
-            },
-            "results": item_results,
-            "skipped": skipped,
-        }
-
-    def _run_single_batch_simulation(
-        self,
-        index: int,
-        expression: str,
-        shared_args: dict[str, Any],
-        api: Any | None = None,
-    ) -> dict[str, Any]:
-        item_args = dict(shared_args)
-        item_args["expression"] = expression
-        result = self._run_simulation_with_api(item_args, api or self._api())
-        result["index"] = index
-        result.setdefault("expression", expression)
-        return result
-
-    def _run_simulation_with_api(self, args: dict[str, Any], api: Any) -> dict[str, Any]:
-        return self._run_simulation_with_api_and_settings(args, api)
-
-    def _run_simulation_with_api_and_settings(
-        self,
-        args: dict[str, Any],
-        api: Any,
-        *,
-        settings_overrides: dict[str, Any] | None = None,
-    ) -> dict[str, Any]:
-        blocked = self._live_api_blocked(args, tool="run_simulation")
-        if blocked:
-            return blocked
-        expression = _required_text(args, "expression")
-        blocked = self._duplicate_live_expression_block(expression, tool="run_simulation")
-        if blocked:
-            return blocked
-        settings = self._simulation_settings(settings_overrides)
-        api.authenticate()
-        validation = api.validate_expression(
-            expression,
-            settings,
-        )
-        if str(validation.get("status", "")).upper() not in {"PASS", "PASSED", "OK"}:
-            return {"ok": False, "error_code": "VALIDATION_FAILED", "validation": validation}
-        simulation_id = api.submit_simulation(
-            expression,
-            settings,
-        )
-        max_polls = _bounded_int(args.get("max_polls", 5), 1, 20)
-        poll_interval = float(args.get("poll_interval_seconds", 2.0))
-        poll_interval = _bounded_float(poll_interval, 0.5, 30.0, default=2.0)
-        status = ""
-        for _ in range(max_polls):
-            status = str(api.poll_simulation(simulation_id))
-            if status.upper() in {"COMPLETED", "FAILED", "ERROR"}:
-                break
-            time.sleep(poll_interval)
-        payload = {"ok": True, "simulation_id": simulation_id, "status": status, "settings": settings}
-        if status.upper() == "COMPLETED":
-            payload["result"] = api.fetch_result(simulation_id)
-        elif status.upper() in {"FAILED", "ERROR"}:
-            payload["ok"] = False
-            payload["error_code"] = "SIMULATION_FAILED"
-            payload["error"] = f"simulation finished with status {status.upper()}"
-        return payload
-
-    def _batch_api_for_item(self):
-        if self.api is not None:
-            return self.api
-        if str(self.run_config.environment).lower() == "mock":
-            if not hasattr(self, "_batch_mock_api"):
-                self._batch_mock_api = MockBrainAPI()
-            return self._batch_mock_api
-        return api_from_run_config(self.run_config)
-
-    def _simulation_settings(self, overrides: dict[str, Any] | None = None) -> dict[str, Any]:
-        settings = dict(self.run_config.ops.settings.to_platform_dict()["settings"])
-        for key, value in dict(overrides or {}).items():
-            if value is not None and str(value).strip():
-                settings[str(key)] = value
-        return settings
-
-    def _check_alpha(self, args: dict[str, Any]) -> dict[str, Any]:
-        blocked = self._live_api_blocked(args, tool="check_alpha")
-        if blocked:
-            return blocked
-        alpha_id = _required_text(args, "alpha_id")
-        api = self._api()
-        api.authenticate()
-        return {"ok": True, "alpha_id": alpha_id, "check": api.check_alpha(alpha_id)}
-
-    def _submit_alpha(self, args: dict[str, Any]) -> dict[str, Any]:
-        if not self.allow_submit or not bool(args.get("confirm_submit")):
-            return {
-                "ok": False,
-                "error_code": "SUBMIT_NOT_ALLOWED",
-                "error": "submit_alpha requires allow_submit=True and confirm_submit=True",
-            }
-        blocked = self._live_api_blocked(args, tool="submit_alpha")
-        if blocked:
-            return blocked
-        alpha_id = _required_text(args, "alpha_id")
-        expression = _required_text(args, "expression")
-        api = self._api()
-        api.authenticate()
-        check = api.check_alpha(alpha_id)
-        if str(check.get("status", "")).upper() not in {"PASS", "PASSED"}:
-            return {"ok": False, "error_code": "PRE_SUBMIT_CHECK_FAILED", "check": check}
-        result = api.submit_alpha(
-            alpha_id,
-            expression,
-            self.run_config.ops.settings.to_platform_dict()["settings"],
-        )
-        return {"ok": True, "alpha_id": alpha_id, "submission": result, "pre_submit_check": check}
-
-    def _sync_cloud_alphas(self, args: dict[str, Any]) -> dict[str, Any]:
-        blocked = self._live_api_blocked(args, tool="sync_cloud_alphas")
-        if blocked:
-            return blocked
-        sync_range = str(args.get("sync_range", self.run_config.ops.budget.cloud_sync_range) or "3d")
-        if sync_range not in MAX_SYNC_RANGE:
-            sync_range = "3d"
-        api = self._api()
-        api.authenticate()
-        rows = api.list_user_alphas(sync_range)
-        merge_stats = ResearchRepository(self.run_config.ops.storage_dir).merge_cloud_alphas(
-            rows,
-            sync_range=sync_range,
-        )
-        return {
-            "ok": True,
-            "range": sync_range,
-            "count": len(rows),
-            "merge": merge_stats,
-            "alphas": rows[: _bounded_int(args.get("limit", 20), 1, 200)],
-        }
 
     def _get_job_status(self, args: dict[str, Any]) -> dict[str, Any]:
         kind = str(args.get("kind", "production") or "production")
@@ -518,8 +302,8 @@ class BrainAlphaToolbox:
         return {"ok": True, "job_id": latest_id, **job}
 
     def _query_research_memory(self, args: dict[str, Any]) -> dict[str, Any]:
-        limit = _bounded_int(args.get("limit", 5000), 1, 50000)
-        top_n = _bounded_int(args.get("top_n", 10), 1, 50)
+        limit = bounded_int(args.get("limit", 5000), 1, 50000)
+        top_n = bounded_int(args.get("top_n", 10), 1, 50)
         persist = bool(args.get("persist"))
         memory = ResearchMemory(self.run_config.ops.storage_dir)
         summary = memory.summary(limit=limit, top_n=top_n)
@@ -528,9 +312,9 @@ class BrainAlphaToolbox:
         return summary
 
     def _query_expression_index(self, args: dict[str, Any]) -> dict[str, Any]:
-        limit = _bounded_int(args.get("limit", 5000), 1, 50000)
-        top_n = _bounded_int(args.get("top_n", 10), 1, 50)
-        include_cloud = _truthy(args.get("include_cloud", True))
+        limit = bounded_int(args.get("limit", 5000), 1, 50000)
+        top_n = bounded_int(args.get("top_n", 10), 1, 50)
+        include_cloud = truthy(args.get("include_cloud", True))
         index = ExpressionHistoryIndex(self.run_config.ops.storage_dir)
         expression = str(args.get("expression") or "").strip()
         if expression:
@@ -539,26 +323,29 @@ class BrainAlphaToolbox:
                 limit=limit,
                 top_n=top_n,
                 include_cloud=include_cloud,
-                min_similarity=_bounded_float(args.get("min_similarity", 0.75), 0.0, 1.0),
+                min_similarity=bounded_float(args.get("min_similarity", 0.75), 0.0, 1.0),
             )
         return index.summary(limit=limit, top_n=top_n, include_cloud=include_cloud)
 
     def _query_research_observability(self, args: dict[str, Any]) -> dict[str, Any]:
-        limit = _bounded_int(args.get("limit", 5000), 1, 50000)
-        top_n = _bounded_int(args.get("top_n", 10), 1, 50)
-        include_cloud = _truthy(args.get("include_cloud", True))
+        limit = bounded_int(args.get("limit", 5000), 1, 50000)
+        top_n = bounded_int(args.get("top_n", 10), 1, 50)
+        include_cloud = truthy(args.get("include_cloud", True))
+        job_payload = collect_job_rows_with_diagnostics(self.job_stores, limit=min(limit, 1000))
         return query_research_observability_snapshot(
             self.run_config.ops.storage_dir,
             limit=limit,
             top_n=top_n,
             include_cloud=include_cloud,
-            job_rows=collect_job_rows(self.job_stores, limit=min(limit, 1000)),
+            job_rows=job_payload["rows"],
+            job_diagnostics=job_payload["diagnostics"],
         )
 
     def _build_market_data_cache(self, args: dict[str, Any]) -> dict[str, Any]:
-        refresh = _truthy(args.get("refresh", True))
+        refresh = truthy(args.get("refresh", True))
         source_file = str(args.get("source_file", "") or "").strip()
-        limit = _bounded_int(args.get("limit", 5000), 1, 50000)
+        raw_limit = args.get("limit")
+        limit = None if raw_limit in (None, "") else bounded_int(raw_limit, 1, 50000)
         return build_market_data_cache_tool(
             self.run_config.ops.storage_dir,
             refresh=refresh,
@@ -570,8 +357,8 @@ class BrainAlphaToolbox:
         return build_vectorized_market_data_from_args(self.run_config.ops.storage_dir, args)
 
     def _search_parameters(self, args: dict[str, Any]) -> dict[str, Any]:
-        candidate = Candidate.from_dict(_candidate_argument(args))
-        max_mutations = _bounded_int(args.get("max_mutations", 4), 1, 12)
+        candidate = Candidate.from_dict(candidate_argument(args))
+        max_mutations = bounded_int(args.get("max_mutations", 4), 1, 12)
         return search_parameters_tool(candidate, max_mutations=max_mutations)
 
     def _orchestrate_parameter_search(self, args: dict[str, Any]) -> dict[str, Any]:
@@ -580,34 +367,9 @@ class BrainAlphaToolbox:
     def _plan_parallel_backtest(self, args: dict[str, Any]) -> dict[str, Any]:
         return plan_parallel_backtest_from_args(args)
 
-    def _run_parallel_backtest(self, args: dict[str, Any]) -> dict[str, Any]:
-        blocked = self._live_api_blocked(args, tool="run_parallel_backtest")
-        if blocked:
-            return blocked
-
-        def runner(job: dict[str, Any]) -> dict[str, Any]:
-            item_args = dict(args)
-            item_args["expression"] = str(job.get("expression") or "")
-            for key in ("expressions", "markets", "max_workers", "max_batches", "per_account_limit"):
-                item_args.pop(key, None)
-            settings_overrides = job.get("settings_overrides") if isinstance(job.get("settings_overrides"), dict) else {}
-            result = self._run_simulation_with_api_and_settings(
-                item_args,
-                self._batch_api_for_item(),
-                settings_overrides=settings_overrides,
-            )
-            result.setdefault("market", job.get("market", ""))
-            return result
-
-        return run_parallel_backtest_from_args(
-            args,
-            runner=runner,
-            default_market=self.run_config.ops.settings.region,
-        )
-
     def _send_alert(self, args: dict[str, Any]) -> dict[str, Any]:
-        title = _required_text(args, "title")
-        message = _required_text(args, "message")
+        title = required_text(args, "title")
+        message = required_text(args, "message")
         severity = str(args.get("severity", "info") or "info").strip() or "info"
         channel = str(args.get("channel", "local") or "local").strip() or "local"
         webhook_url = str(args.get("webhook_url", "") or "").strip()
@@ -647,7 +409,7 @@ class BrainAlphaToolbox:
         return cross_review_assistant_response_tool(args)
 
     def _assistant_generation_guidance(self, args: dict[str, Any]) -> dict[str, Any] | None:
-        min_confidence = _bounded_float(args.get("assistant_min_confidence", 0.0), 0.0, 1.0)
+        min_confidence = bounded_float(args.get("assistant_min_confidence", 0.0), 0.0, 1.0)
         supplied_guidance = args.get("assistant_guidance")
         if isinstance(supplied_guidance, dict):
             guidance = dict(supplied_guidance)
@@ -659,8 +421,8 @@ class BrainAlphaToolbox:
             confidence = guidance.get("confidence")
             confidence_ok = True
             if confidence is not None:
-                confidence_ok = _bounded_float(confidence, 0.0, 1.0) >= min_confidence
-            guidance["usable"] = _truthy(guidance.get("usable", True)) and confidence_ok
+                confidence_ok = bounded_float(confidence, 0.0, 1.0) >= min_confidence
+            guidance["usable"] = truthy(guidance.get("usable", True)) and confidence_ok
             return guidance
 
         raw_output = args.get("assistant_response") or args.get("assistant_raw_output")
@@ -671,39 +433,41 @@ class BrainAlphaToolbox:
 
     def _research_memory_guidance(self, args: dict[str, Any] | None = None) -> dict[str, Any]:
         args = dict(args or {})
-        limit = _bounded_int(args.get("limit", 5000), 1, 50000)
-        top_n = _bounded_int(args.get("top_n", 10), 1, 50)
+        limit = bounded_int(args.get("limit", 5000), 1, 50000)
+        top_n = bounded_int(args.get("top_n", 10), 1, 50)
         min_success_rate = float(args.get("min_success_rate", 0.0) or 0.0)
         memory = ResearchMemory(self.run_config.ops.storage_dir)
         try:
             return memory.generation_guidance(limit=limit, top_n=top_n, min_success_rate=min_success_rate)
         except Exception:
+            logger.warning("research memory guidance unavailable; using empty guidance", exc_info=True)
             return {}
 
     def _api(self):
         if self.api is not None:
             return self.api
-        if str(self.run_config.environment).lower() == "mock":
-            return MockBrainAPI()
         return api_from_run_config(self.run_config)
 
     def _live_api_blocked(self, args: dict[str, Any], *, tool: str) -> dict[str, Any] | None:
-        environment = str(self.run_config.environment).lower()
-        if environment == "mock":
-            return None
         if not self.allow_live_api or not bool(args.get("confirm_live_api")):
+            # P3-31 fix: explain the dual-gate mechanism clearly so that
+            # agent users understand *which* condition is missing.
+            _block_reasons = []
+            if not self.allow_live_api:
+                _block_reasons.append("server started without --allow-live-api")
+            if not bool(args.get("confirm_live_api")):
+                _block_reasons.append("caller did not set confirm_live_api=True")
             return {
                 "ok": False,
                 "error_code": "LIVE_API_NOT_ALLOWED",
                 "tool": tool,
-                "environment": environment,
-                "error": f"{tool} requires allow_live_api=True and confirm_live_api=True outside mock mode",
+                "environment": "production",
+                "error": f"{tool} blocked: " + "; ".join(_block_reasons) + ". "
+                    "Set allow_live_api=True on the toolbox and confirm_live_api=True in the call arguments.",
             }
         return None
 
     def _duplicate_live_expression_block(self, expression: str, *, tool: str) -> dict[str, Any] | None:
-        if str(self.run_config.environment).lower() == "mock":
-            return None
         if not str(expression or "").strip():
             return None
         try:
@@ -737,73 +501,7 @@ class BrainAlphaToolbox:
         }
 
 def _tool_error(exc: Exception, error_code: str, **context: Any) -> dict[str, Any]:
-    return user_error_payload(exc, error_code=error_code, **context)
-
-
-def _bounded_int(value: Any, lower: int, upper: int) -> int:
-    try:
-        parsed = int(value)
-    except (TypeError, ValueError):
-        parsed = lower
-    return min(max(parsed, lower), upper)
-
-
-def _bounded_float(value: Any, lower: float, upper: float) -> float:
-    try:
-        parsed = float(value)
-    except (TypeError, ValueError):
-        parsed = lower
-    return min(max(parsed, lower), upper)
-
-
-def _truthy(value: Any) -> bool:
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, str):
-        return value.strip().lower() not in {"0", "false", "no", "off"}
-    return bool(value)
-
-
-def _required_text(args: dict[str, Any], key: str) -> str:
-    value = str(args.get(key, "") or "").strip()
-    if not value:
-        raise ValueError(f"missing required argument: {key}")
-    return value
-
-
-def _candidate_argument(args: dict[str, Any]) -> dict[str, Any]:
-    candidate = args.get("candidate")
-    if isinstance(candidate, dict):
-        return candidate
-    expression = _required_text(args, "expression")
-    return {
-        "alpha_id": str(args.get("alpha_id", "agent_candidate") or "agent_candidate"),
-        "expression": expression,
-        "family": str(args.get("family", "Agent") or "Agent"),
-        "hypothesis": str(args.get("hypothesis", "Agent supplied expression") or "Agent supplied expression"),
-        "official_metrics": dict(args.get("official_metrics") or {}),
-        "submission": dict(args.get("submission") or {}),
-    }
-
-
-def _expression_batch_argument(args: dict[str, Any]) -> list[str]:
-    raw = args.get("expressions")
-    if raw is None:
-        single = str(args.get("expression", "") or "").strip()
-        return [single] if single else []
-    values = raw if isinstance(raw, list) else [raw]
-    expressions: list[str] = []
-    seen: set[str] = set()
-    for item in values:
-        expression = str(item or "").strip()
-        if not expression:
-            continue
-        marker = expression_key(expression)
-        if marker in seen:
-            continue
-        seen.add(marker)
-        expressions.append(expression)
-    return expressions
+    return tool_error(exc, error_code=error_code, **context)
 
 
 def _field_to_dict(field: Any) -> dict[str, Any]:

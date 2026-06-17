@@ -1,0 +1,66 @@
+hypothesis:
+  id: "event_driven"
+  name: "Event-Driven"
+  category: "hybrid"
+  version: "1.0.0"
+
+  rationale:
+    theory: >
+      Corporate events (earnings announcements, M&A, share buybacks, dividend changes,
+      index rebalancing) create predictable price dislocations. Post-earnings-announcement
+      drift (PEAD) persists for 2-8 weeks after earnings surprises. Merger arbitrage
+      spreads compress toward deal completion. Index inclusion/exclusion triggers
+      temporary demand shifts from passive funds.
+    academic_refs:
+      - "Ball & Brown (1968) — An Empirical Evaluation of Accounting Income Numbers"
+      - "Bernard & Thomas (1989) — Post-Earnings-Announcement Drift: Delayed Price Response or Risk Premium?"
+      - "Frazzini (2006) — The Disposition Effect and Underreaction to News"
+    behavioral_bias: "underreaction"
+
+  field_categories:
+    - category: "earnings_surprise"
+      priority: P0
+      examples: ["sue", "earnings_surprise_pct", "revision_ratio"]
+    - category: "corporate_events"
+      priority: P0
+      examples: ["earnings_date", "dividend_announcement_date"]
+    - category: "analyst_revision"
+      priority: P1
+      examples: ["analyst_upgrade", "analyst_downgrade", "eps_revision"]
+    - category: "price_momentum"
+      priority: P1
+      examples: ["ret_1m", "ret_3m"]
+    - category: "volume_anomaly"
+      priority: P2
+      examples: ["volume_spike", "turnover_ratio", "relative_volume"]
+
+  expression_families:
+    - id: "post_earnings_drift"
+      structure: "rank(ts_delta({earnings_surprise}, 1) * ts_rank({price_momentum}, {WINDOW}))"
+      description: "盈利超预期后价格继续漂移 — PEAD信号的截面排序"
+      windows: [4, 8, 12]
+
+    - id: "analyst_consensus"
+      structure: "rank(group_rank(ts_delta({revision_ratio}, {WINDOW}), {GROUP}))"
+      description: "分析师共同上调 — 行业内跨公司共识度排序"
+      windows: [1, 4, 12]
+
+    - id: "event_anomaly_reversal"
+      structure: "rank(-1 * ts_delta({volume_spike}, 1)) + rank(ts_delta({price_momentum}, {WINDOW}))"
+      description: "事件驱动的过度反应后反转 — 成交异常后的均值回归"
+      windows: [1, 2, 4]
+
+    - id: "earnings_sentiment_composite"
+      structure: "rank({sue_field} * ts_mean({analyst_revision}, {WINDOW}))"
+      description: "盈利惊喜+分析师修正复合信号"
+      windows: [4, 12]
+
+  expected_failure_modes:
+    - gate: "SELF_CORRELATION"
+      reason: "PEAD 信号自相关高（持续性漂移），PnL 累积自相关"
+      mitigation: "增加decay参数或使用更短窗口"
+
+  adaptation:
+    preferred_regions: ["USA", "DEV", "DEV_EX_US"]
+    preferred_universes: ["TOP3000"]
+    preferred_delays: [1]

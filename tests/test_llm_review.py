@@ -1,4 +1,5 @@
 import json
+import logging
 
 import pytest
 
@@ -88,6 +89,23 @@ def test_fallback_llm_provider_reports_all_failures_without_key_material():
         provider.complete({"messages": []})
 
 
+def test_fallback_llm_provider_logs_redacted_failures(caplog):
+    class FailingProvider:
+        name = "failing"
+
+        def complete(self, request):
+            raise RuntimeError("provider down token=secret")
+
+    provider = FallbackLLMProvider([FailingProvider()])
+
+    with caplog.at_level(logging.WARNING, logger="brain_alpha_ops.research.llm_review"):
+        with pytest.raises(RuntimeError, match="all LLM providers failed"):
+            provider.complete({"messages": []})
+
+    assert "fallback LLM provider failed; trying next provider: provider=failing" in caplog.text
+    assert "secret" not in caplog.text
+
+
 def test_llm_provider_router_uses_task_route():
     provider = LLMProviderRouter(
         [
@@ -125,6 +143,26 @@ def test_llm_provider_router_falls_back_and_records_redacted_health():
     assert health["primary"]["error_count"] == 1
     assert health["backup"]["ok_count"] == 1
     assert "secret-123" not in health["primary"]["last_error"]
+
+
+def test_llm_provider_router_logs_redacted_failures(caplog):
+    class FailingProvider:
+        name = "primary"
+
+        def complete(self, request):
+            raise RuntimeError("provider down token=secret-456")
+
+    provider = LLMProviderRouter(
+        [FailingProvider(), StaticLLMProvider(_response(), name="backup")],
+        task_routes={"cross_review": ["primary", "backup"]},
+    )
+
+    with caplog.at_level(logging.WARNING, logger="brain_alpha_ops.research.llm_review"):
+        output = provider.complete({"task": "cross_review", "messages": []})
+
+    assert json.loads(output)["confidence"] == 0.8
+    assert "routed LLM provider failed; trying next provider: provider=primary task=cross_review" in caplog.text
+    assert "secret-456" not in caplog.text
 
 
 def test_prompt_run_ledger_records_digests_without_response_text(tmp_path):

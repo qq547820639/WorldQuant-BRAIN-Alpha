@@ -4,27 +4,27 @@ This module turns the read-only assistant context pack into a provider-neutral
 LLM request envelope. It also provides a deterministic offline draft so the
 project remains useful when no external model client is configured.
 """
-
 from __future__ import annotations
 
 from hashlib import sha256
 import json
+import logging
 import math
-import re
 from typing import Any
 
 from brain_alpha_ops.models import utc_now
+from brain_alpha_ops.research.assistant_json import AssistantResponseParseError, extract_json_payload as _extract_json_payload
 from brain_alpha_ops.research.context import render_context_prompt
 from brain_alpha_ops.research.guidance import assistant_guidance_digest
 from brain_alpha_ops.research.prompt_templates import load_system_prompt
 from brain_alpha_ops.research.robustness_context import assistant_robustness_signals, robustness_evidence, robustness_gate_adjustment
-
 
 ASSISTANT_REQUEST_SCHEMA_VERSION = "assistant_request_pack.v1"
 ASSISTANT_RESPONSE_SCHEMA_VERSION = "assistant_response.v1"
 ASSISTANT_GUIDANCE_SCHEMA_VERSION = "assistant_generation_guidance.v1"
 DEFAULT_MAX_PROMPT_TOKENS = 6000
 INTERNAL_CONTEXT_METADATA_KEYS = {"sensitive_fields_redacted"}
+logger = logging.getLogger(__name__)
 
 ASSISTANT_RESPONSE_SCHEMA: dict[str, Any] = {
     "schema_version": ASSISTANT_RESPONSE_SCHEMA_VERSION,
@@ -60,11 +60,6 @@ ASSISTANT_RESPONSE_SCHEMA: dict[str, Any] = {
     },
     "additionalProperties": True,
 }
-
-
-class AssistantResponseParseError(ValueError):
-    """Raised when an assistant response cannot be parsed as useful JSON."""
-
 
 def build_assistant_request_pack(
     context_pack: dict[str, Any],
@@ -136,7 +131,6 @@ def build_assistant_request_pack(
         payload["offline_draft"] = build_offline_assistant_response(original_context)
     return payload
 
-
 def _strip_internal_context_metadata(value: Any) -> Any:
     if isinstance(value, dict):
         return {
@@ -164,7 +158,6 @@ def render_assistant_request_prompt(context_pack: dict[str, Any]) -> str:
         schema_text,
     ]
     return "\n".join(lines).strip() + "\n"
-
 
 def build_offline_assistant_response(context_pack: dict[str, Any]) -> dict[str, Any]:
     """Build a deterministic assistant-style draft from local context only."""
@@ -403,14 +396,12 @@ def build_offline_assistant_response(context_pack: dict[str, Any]) -> dict[str, 
         },
     }
 
-
 def parse_assistant_response(raw_output: str) -> dict[str, Any]:
     """Extract and normalize a JSON assistant response."""
     payload = _extract_json_payload(raw_output)
     if not isinstance(payload, dict):
         raise AssistantResponseParseError("assistant response must be a JSON object")
     return _normalize_assistant_response(payload)
-
 
 def assistant_response_to_generation_guidance(
     assistant_response: dict[str, Any],
@@ -478,7 +469,6 @@ def assistant_response_to_generation_guidance(
     payload["guidance_digest"] = assistant_guidance_digest(payload)
     return payload
 
-
 def _normalize_assistant_response(payload: dict[str, Any]) -> dict[str, Any]:
     summary = str(payload.get("summary") or payload.get("answer") or payload.get("analysis") or "").strip()
     if not summary:
@@ -510,7 +500,6 @@ def _normalize_assistant_response(payload: dict[str, Any]) -> dict[str, Any]:
         "confidence": _normalize_confidence(payload.get("confidence", payload.get("confidence_score"))),
         "evidence": _as_dict(payload.get("evidence")),
     }
-
 
 def _assistant_prompt_diagnostics(context: dict[str, Any], prompt: str) -> dict[str, Any]:
     context_diagnostics = _as_dict(context.get("prompt_diagnostics"))
@@ -553,7 +542,6 @@ def _assistant_prompt_diagnostics(context: dict[str, Any], prompt: str) -> dict[
         )[:12],
     }
 
-
 def _budgeted_context(context: dict[str, Any], *, max_prompt_tokens: int) -> dict[str, Any]:
     safe_max = max(1200, int(max_prompt_tokens or DEFAULT_MAX_PROMPT_TOKENS))
     prompt = render_assistant_request_prompt(context)
@@ -593,7 +581,6 @@ def _budgeted_context(context: dict[str, Any], *, max_prompt_tokens: int) -> dic
     }
     return compact
 
-
 def _compact_context_lists(value: Any, *, list_limit: int) -> Any:
     if isinstance(value, list):
         return [_compact_context_lists(item, list_limit=list_limit) for item in value[:list_limit]]
@@ -601,37 +588,8 @@ def _compact_context_lists(value: Any, *, list_limit: int) -> Any:
         return {key: _compact_context_lists(item, list_limit=list_limit) for key, item in value.items()}
     return value
 
-
 def _estimated_tokens(text: str) -> int:
     return max(1, len(str(text or "")) // 4)
-
-
-def _extract_json_payload(raw_output: str) -> Any:
-    raw = str(raw_output or "").strip()
-    if not raw:
-        raise AssistantResponseParseError("assistant response is empty")
-    if raw.startswith(("{", "[")):
-        try:
-            return json.loads(raw)
-        except json.JSONDecodeError:
-            pass
-
-    fenced = re.search(r"```(?:json)?\s*\n?(.*?)\n?```", raw, re.DOTALL | re.IGNORECASE)
-    if fenced:
-        try:
-            return json.loads(fenced.group(1).strip())
-        except json.JSONDecodeError:
-            pass
-
-    for pattern in (r"(\{.*\})", r"(\[.*\])"):
-        match = re.search(pattern, raw, re.DOTALL)
-        if match:
-            try:
-                return json.loads(match.group(1))
-            except json.JSONDecodeError:
-                continue
-    raise AssistantResponseParseError(f"cannot extract valid JSON from assistant response: {raw[:200]}")
-
 
 def _offline_summary(
     fields: list[str],
@@ -672,7 +630,6 @@ def _offline_summary(
         parts.append(f"{pending_backtests} candidates are waiting for backtest results.")
     return " ".join(parts)
 
-
 def _offline_confidence(
     memory_samples: int,
     fields: list[str],
@@ -701,7 +658,6 @@ def _offline_confidence(
         score -= 0.05
     return round(_clamp(score, 0.05, 0.95), 2)
 
-
 def _normalize_adjustments(value: Any) -> list[dict[str, Any]]:
     if not isinstance(value, list):
         return []
@@ -718,7 +674,6 @@ def _normalize_adjustments(value: Any) -> list[dict[str, Any]]:
         rows.append({"target": target, "value": item_value, "rationale": rationale})
     return rows
 
-
 def _unique_strings(value: Any) -> list[str]:
     rows = _string_items(value)
     seen: set[str] = set()
@@ -731,7 +686,6 @@ def _unique_strings(value: Any) -> list[str]:
         unique.append(item)
     return unique
 
-
 def _string_items(value: Any) -> list[str]:
     if value is None:
         return []
@@ -742,7 +696,6 @@ def _string_items(value: Any) -> list[str]:
     else:
         values = [value]
     return [str(item).strip() for item in values if str(item).strip()]
-
 
 def _number_items(value: Any) -> list[int | float]:
     items = value if isinstance(value, list) else []
@@ -757,7 +710,6 @@ def _number_items(value: Any) -> list[int | float]:
         rows.append(int(number) if number.is_integer() else number)
     return rows
 
-
 def _unique_numbers(value: Any) -> list[int | float]:
     rows = _number_items(value) if not isinstance(value, list) else [item for item in value if isinstance(item, (int, float))]
     unique: list[int | float] = []
@@ -770,7 +722,6 @@ def _unique_numbers(value: Any) -> list[int | float]:
         unique.append(int(marker) if marker.is_integer() else marker)
     return unique
 
-
 def _normalize_confidence(value: Any) -> float:
     try:
         number = float(value)
@@ -782,10 +733,8 @@ def _normalize_confidence(value: Any) -> float:
         number = number / 100.0
     return round(_clamp(number, 0.0, 1.0), 2)
 
-
 def _as_dict(value: Any) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
-
 
 def _guidance_outcomes(value: Any) -> list[dict[str, Any]]:
     if not isinstance(value, list):
@@ -807,7 +756,6 @@ def _guidance_outcomes(value: Any) -> list[dict[str, Any]]:
         })
     return rows
 
-
 def _strong_guidance_outcome(outcomes: list[dict[str, Any]]) -> dict[str, Any]:
     for row in outcomes:
         if _guidance_count(row) <= 0:
@@ -815,7 +763,6 @@ def _strong_guidance_outcome(outcomes: list[dict[str, Any]]) -> dict[str, Any]:
         if _guidance_success_rate(row) >= 0.5 or _float_value(row.get("avg_score")) >= 70:
             return row
     return {}
-
 
 def _weak_guidance_outcome(outcomes: list[dict[str, Any]]) -> dict[str, Any]:
     for row in outcomes:
@@ -827,7 +774,6 @@ def _weak_guidance_outcome(outcomes: list[dict[str, Any]]) -> dict[str, Any]:
         if (count >= 2 and success_rate <= 0.25) or (success_rate == 0.0 and avg_score <= 50):
             return row
     return {}
-
 
 def _duplicate_expressions(value: Any) -> list[dict[str, Any]]:
     if not isinstance(value, list):
@@ -845,31 +791,25 @@ def _duplicate_expressions(value: Any) -> list[dict[str, Any]]:
             rows.append(row)
     return rows
 
-
 def _recent_backtest_records(value: Any) -> list[dict[str, Any]]:
     if not isinstance(value, list):
         return []
     return [_as_dict(item) for item in value[-10:] if _as_dict(item)]
 
-
 def _guidance_digest(row: dict[str, Any] | None) -> str:
     return str((row or {}).get("guidance_digest") or "")
-
 
 def _guidance_count(row: dict[str, Any] | None) -> int:
     return _int_value((row or {}).get("count"))
 
-
 def _guidance_success_rate(row: dict[str, Any] | None) -> float:
     return _float_value((row or {}).get("success_rate"))
-
 
 def _int_value(value: Any) -> int:
     try:
         return int(float(value))
     except (TypeError, ValueError):
         return 0
-
 
 def _float_value(value: Any) -> float:
     try:
@@ -880,14 +820,11 @@ def _float_value(value: Any) -> float:
         return 0.0
     return round(number, 4)
 
-
 def _clamp(value: float, lower: float, upper: float) -> float:
     return min(max(value, lower), upper)
 
-
 def _digest_text(value: str) -> str:
     return sha256(value.encode("utf-8")).hexdigest()
-
 
 def _digest_json(value: Any) -> str:
     encoded = json.dumps(value, ensure_ascii=False, sort_keys=True, default=str)

@@ -17,7 +17,7 @@ def _candidate(alpha_id: str, expression: str, score: float = 80.0, *, official:
         scorecard={"total_score": score},
     )
     if official:
-        build_scorecard(candidate, OpsConfig().thresholds)
+        candidate.scorecard = build_scorecard(candidate, OpsConfig().thresholds)
     return candidate
 
 

@@ -1,17 +1,21 @@
+import logging
+
 from brain_alpha_ops.agent_tool_registry import resolve_tool_name, tool_aliases, tool_definitions
 from brain_alpha_ops.agent_tools import BrainAlphaToolbox
-from brain_alpha_ops.brain_api import MockBrainAPI
+from tests.production_api_stub import ProductionBrainAPIStub
 from brain_alpha_ops.config import RunConfig
+from brain_alpha_ops.data import OfficialDataLoader
 from brain_alpha_ops.models import Candidate
 from brain_alpha_ops.research.expression_ast import expression_key
 from brain_alpha_ops.research.repository import ResearchRepository
 from brain_alpha_ops.tasks import JobStore
 
 
-def mock_toolbox(**kwargs):
-    config = RunConfig(environment="mock")
+def production_toolbox(**kwargs):
+    config = RunConfig(environment="production")
     config.ops.storage_dir = str(kwargs.pop("storage_dir", "."))
-    return BrainAlphaToolbox(run_config=config, api=MockBrainAPI(), **kwargs)
+    kwargs.setdefault("allow_live_api", True)
+    return BrainAlphaToolbox(run_config=config, api=ProductionBrainAPIStub(), **kwargs)
 
 
 def test_agent_tool_manifest_exposes_safe_whitelist():
@@ -32,8 +36,7 @@ def test_agent_tool_manifest_exposes_safe_whitelist():
     assert "score_factor" in tools
     assert "run_backtest" in tools
     assert "run_batch_backtest" in tools
-    assert "submit_alpha" in tools
-    assert tools["submit_alpha"].destructive is True
+    assert "submit_alpha" not in tools
     assert tools["run_simulation"].live_api is True
     assert tools["run_simulation_batch"].live_api is True
     assert tools["run_parallel_backtest"].live_api is True
@@ -51,7 +54,7 @@ def test_agent_tool_manifest_exposes_safe_whitelist():
 
 
 def test_agent_toolbox_lists_context_and_generates_candidates(tmp_path):
-    toolbox = mock_toolbox(storage_dir=tmp_path)
+    toolbox = production_toolbox(storage_dir=tmp_path)
 
     context = toolbox.call("list_context", {"limit": 5})
     generated = toolbox.call("generate_candidates", {"count": 3})
@@ -64,20 +67,67 @@ def test_agent_toolbox_lists_context_and_generates_candidates(tmp_path):
     assert generated["candidates"][0]["expression"]
 
 
+def test_agent_toolbox_generate_candidates_accepts_preferred_fields(tmp_path, monkeypatch):
+    toolbox = production_toolbox(storage_dir=tmp_path)
+    captured = {}
+
+    def fake_set_knowledge_constraints(self, constraints):
+        captured["constraints"] = constraints
+
+    monkeypatch.setattr(
+        "brain_alpha_ops.research.generator.CandidateGenerator.set_knowledge_constraints",
+        fake_set_knowledge_constraints,
+    )
+
+    generated = toolbox.call(
+        "generate_candidates",
+        {
+            "count": 1,
+            "preferred_fields": ["close", "not_a_field"],
+            "preferred_operators": ["rank"],
+            "strict_preferred_fields": True,
+            "strict_preferred_operators": True,
+        },
+    )
+
+    assert generated["ok"] is True
+    assert captured["constraints"]["preferred_fields"] == ["close", "not_a_field"]
+    assert captured["constraints"]["preferred_operators"] == ["rank"]
+    assert captured["constraints"]["strict_preferred_fields"] is True
+    assert captured["constraints"]["strict_preferred_operators"] is True
+
+
+def test_agent_toolbox_list_context_warns_when_loader_falls_back(tmp_path, monkeypatch, caplog):
+    def fail_instance(cls):
+        raise RuntimeError("official context unavailable")
+
+    monkeypatch.setattr(OfficialDataLoader, "instance", classmethod(fail_instance))
+    toolbox = production_toolbox(storage_dir=tmp_path)
+
+    with caplog.at_level(logging.WARNING, logger="brain_alpha_ops.agent_tools"):
+        context = toolbox.call("list_context", {"limit": 5})
+
+    assert context["ok"] is True
+    assert context["source"] == "context_defaults"
+    assert context["fields_count"] > 0
+    assert context["operators_count"] > 0
+    assert "official context loader unavailable; using default agent context" in caplog.text
+
+
 def test_agent_toolbox_unknown_tool_returns_structured_error(tmp_path):
-    toolbox = mock_toolbox(storage_dir=tmp_path)
+    toolbox = production_toolbox(storage_dir=tmp_path)
 
     result = toolbox.call("missing_tool")
 
     assert result["ok"] is False
     assert result["error_code"] == "TOOL_NOT_FOUND"
-    assert result["error_category"] == "not_found"
+    assert result["error_category"] == "validation"
     assert result["retryable"] is False
     assert result["error_type"] == "ValueError"
 
 
 def test_agent_toolbox_handler_errors_are_classified_and_redacted(tmp_path):
-    toolbox = mock_toolbox(storage_dir=tmp_path)
+    toolbox = production_toolbox(storage_dir=tmp_path)
 
     result = toolbox.call("score_candidate", {})
 
@@ -104,7 +154,7 @@ def test_agent_toolbox_generate_candidates_uses_research_memory_guidance(tmp_pat
             lifecycle_status="submission_ready",
         ),
     )
-    toolbox = mock_toolbox(storage_dir=tmp_path)
+    toolbox = production_toolbox(storage_dir=tmp_path)
 
     captured = {}
 
@@ -119,8 +169,22 @@ def test_agent_toolbox_generate_candidates_uses_research_memory_guidance(tmp_pat
     assert "preferred_windows" in captured["patterns"]
 
 
+def test_agent_toolbox_research_memory_guidance_warns_on_failure(tmp_path, monkeypatch, caplog):
+    def fail_generation_guidance(self, **_kwargs):
+        raise RuntimeError("research memory unavailable")
+
+    monkeypatch.setattr("brain_alpha_ops.agent_tools.ResearchMemory.generation_guidance", fail_generation_guidance)
+    toolbox = production_toolbox(storage_dir=tmp_path)
+
+    with caplog.at_level(logging.WARNING, logger="brain_alpha_ops.agent_tools"):
+        guidance = toolbox._research_memory_guidance({"limit": 5})
+
+    assert guidance == {}
+    assert "research memory guidance unavailable; using empty guidance" in caplog.text
+
+
 def test_agent_toolbox_generate_candidates_uses_assistant_response_guidance(tmp_path, monkeypatch):
-    toolbox = mock_toolbox(storage_dir=tmp_path)
+    toolbox = production_toolbox(storage_dir=tmp_path)
     raw_output = (
         '{"summary":"Prefer stable close momentum.",'
         '"recommended_next_actions":["generate candidates"],'
@@ -162,7 +226,7 @@ def test_agent_toolbox_generate_candidates_uses_assistant_response_guidance(tmp_
 
 
 def test_agent_toolbox_generate_candidates_skips_low_confidence_assistant_guidance(tmp_path, monkeypatch):
-    toolbox = mock_toolbox(storage_dir=tmp_path)
+    toolbox = production_toolbox(storage_dir=tmp_path)
     raw_output = (
         '{"summary":"Weak hint.",'
         '"recommended_next_actions":[],'
@@ -195,7 +259,7 @@ def test_agent_toolbox_generate_candidates_skips_low_confidence_assistant_guidan
 
 
 def test_agent_toolbox_generate_candidates_accepts_structured_assistant_guidance(tmp_path, monkeypatch):
-    toolbox = mock_toolbox(storage_dir=tmp_path)
+    toolbox = production_toolbox(storage_dir=tmp_path)
     captured = {}
 
     def fake_set_experience_guidance(self, patterns):
@@ -260,7 +324,7 @@ def test_agent_toolbox_builds_assistant_context_pack(tmp_path):
             lifecycle_status="submission_ready",
         ),
     )
-    toolbox = mock_toolbox(storage_dir=tmp_path)
+    toolbox = production_toolbox(storage_dir=tmp_path)
 
     result = toolbox.call("build_assistant_context", {"top_n": 3, "include_prompt": True})
 
@@ -288,7 +352,7 @@ def test_agent_toolbox_builds_assistant_request_pack(tmp_path):
             operators=["rank", "ts_delta"],
         ),
     )
-    toolbox = mock_toolbox(storage_dir=tmp_path)
+    toolbox = production_toolbox(storage_dir=tmp_path)
 
     result = toolbox.call("build_assistant_request", {"top_n": 3})
 
@@ -311,7 +375,7 @@ def test_agent_toolbox_queries_expression_index(tmp_path):
             operators=["rank", "ts_delta"],
         ),
     )
-    toolbox = mock_toolbox(storage_dir=tmp_path)
+    toolbox = production_toolbox(storage_dir=tmp_path)
 
     summary = toolbox.call("query_expression_index", {"top_n": 3})
     lookup = toolbox.call("query_expression_index", {"expression": " Rank ( TS_Delta ( Close , 20 ) ) "})
@@ -365,7 +429,7 @@ def test_agent_toolbox_queries_research_observability(tmp_path):
     store = JobStore()
     job_id = store.create()
     store.update(job_id, status="failed", error="Too many requests", progress={"error_context": {"error_category": "rate_limit", "error_code": "RUN_JOB_FAILED", "retryable": True}})
-    toolbox = mock_toolbox(storage_dir=tmp_path, job_stores={"production": store})
+    toolbox = production_toolbox(storage_dir=tmp_path, job_stores={"production": store})
 
     result = toolbox.call("query_research_observability", {"top_n": 3, "include_cloud": False})
 
@@ -381,7 +445,7 @@ def test_agent_toolbox_queries_research_observability(tmp_path):
 
 
 def test_agent_toolbox_parses_assistant_response(tmp_path):
-    toolbox = mock_toolbox(storage_dir=tmp_path)
+    toolbox = production_toolbox(storage_dir=tmp_path)
     raw_output = (
         '{"summary":"Use memory-guided momentum ideas.",'
         '"recommended_next_actions":["generate candidates"],'
@@ -398,7 +462,7 @@ def test_agent_toolbox_parses_assistant_response(tmp_path):
 
 
 def test_agent_toolbox_converts_assistant_response_to_guidance(tmp_path):
-    toolbox = mock_toolbox(storage_dir=tmp_path)
+    toolbox = production_toolbox(storage_dir=tmp_path)
     raw_output = (
         '{"summary":"Use close momentum.",'
         '"recommended_next_actions":["refresh cloud cache"],'
@@ -422,7 +486,7 @@ def test_agent_toolbox_converts_assistant_response_to_guidance(tmp_path):
 
 
 def test_agent_toolbox_parse_error_is_structured(tmp_path):
-    toolbox = mock_toolbox(storage_dir=tmp_path)
+    toolbox = production_toolbox(storage_dir=tmp_path)
 
     result = toolbox.call("parse_assistant_response", {"raw_output": "not json"})
 
@@ -433,7 +497,7 @@ def test_agent_toolbox_parse_error_is_structured(tmp_path):
 
 
 def test_agent_toolbox_runs_anti_overfit_and_rolling_validation(tmp_path):
-    toolbox = mock_toolbox(storage_dir=tmp_path)
+    toolbox = production_toolbox(storage_dir=tmp_path)
     candidate = {
         "alpha_id": "a1",
         "expression": "rank(ts_delta(close, 20))",
@@ -454,7 +518,7 @@ def test_agent_toolbox_runs_anti_overfit_and_rolling_validation(tmp_path):
 
 
 def test_agent_toolbox_cross_reviews_assistant_response(tmp_path):
-    toolbox = mock_toolbox(storage_dir=tmp_path)
+    toolbox = production_toolbox(storage_dir=tmp_path)
     response = (
         '{"summary":"Keep cloud cache fresh.",'
         '"recommended_next_actions":["refresh cloud cache"],'
@@ -477,7 +541,7 @@ def test_agent_toolbox_cross_reviews_assistant_response(tmp_path):
 
 
 def test_agent_toolbox_validates_and_scores_expression(tmp_path):
-    toolbox = mock_toolbox(storage_dir=tmp_path)
+    toolbox = production_toolbox(storage_dir=tmp_path)
     expression = "rank(ts_delta(close, 20))"
 
     validation = toolbox.call("validate_expression", {"expression": expression})
@@ -491,11 +555,11 @@ def test_agent_toolbox_validates_and_scores_expression(tmp_path):
 
 
 def test_agent_toolbox_quantgpt_style_aliases_follow_score_then_backtest_chain(tmp_path):
-    toolbox = mock_toolbox(storage_dir=tmp_path)
+    toolbox = production_toolbox(storage_dir=tmp_path)
     expression = "rank(ts_delta(close, 20))"
 
     score = toolbox.call("score_factor", {"expression": expression, "family": "Momentum"})
-    backtest = toolbox.call("run_backtest", {"expression": expression})
+    backtest = toolbox.call("run_backtest", {"expression": expression, "confirm_live_api": True})
 
     assert score["ok"] is True
     assert score["tool_alias"] == "score_factor"
@@ -504,21 +568,33 @@ def test_agent_toolbox_quantgpt_style_aliases_follow_score_then_backtest_chain(t
     assert backtest["ok"] is True
     assert backtest["tool_alias"] == "run_backtest"
     assert backtest["canonical_tool"] == "run_simulation"
-    assert backtest["simulation_id"].startswith("mock_sim_")
+    assert backtest["simulation_id"].startswith("prod_stub_sim_")
 
 
-def test_agent_toolbox_runs_mock_simulation_without_live_confirmation(tmp_path):
-    toolbox = mock_toolbox(storage_dir=tmp_path)
+def test_agent_toolbox_runs_production_stub_simulation_without_live_confirmation(tmp_path):
+    toolbox = production_toolbox(storage_dir=tmp_path)
 
     result = toolbox.call("run_simulation", {"expression": "rank(ts_delta(close, 20))"})
 
+    assert result["ok"] is False
+    assert result["error_code"] == "LIVE_API_NOT_ALLOWED"
+
+
+def test_agent_toolbox_runs_production_stub_simulation_with_confirmation(tmp_path):
+    toolbox = production_toolbox(storage_dir=tmp_path)
+
+    result = toolbox.call(
+        "run_simulation",
+        {"expression": "rank(ts_delta(close, 20))", "confirm_live_api": True},
+    )
+
     assert result["ok"] is True
-    assert result["simulation_id"].startswith("mock_sim_")
-    assert result["result"]["alpha_id"].startswith("mock_alpha_")
+    assert result["simulation_id"].startswith("prod_stub_sim_")
+    assert result["result"]["alpha_id"].startswith("prod_stub_alpha_")
 
 
-def test_agent_toolbox_runs_bounded_mock_simulation_batch(tmp_path):
-    toolbox = mock_toolbox(storage_dir=tmp_path)
+def test_agent_toolbox_runs_bounded_production_stub_simulation_batch(tmp_path):
+    toolbox = production_toolbox(storage_dir=tmp_path)
 
     result = toolbox.call(
         "run_batch_backtest",
@@ -531,6 +607,7 @@ def test_agent_toolbox_runs_bounded_mock_simulation_batch(tmp_path):
             ],
             "max_batch_size": 2,
             "max_workers": 2,
+            "confirm_live_api": True,
         },
     )
 
@@ -545,11 +622,11 @@ def test_agent_toolbox_runs_bounded_mock_simulation_batch(tmp_path):
     assert result["skipped_count"] == 1
     assert result["skipped"][0]["reason"] == "batch_size_limit"
     assert [item["index"] for item in result["results"]] == [0, 1]
-    assert all(item["simulation_id"].startswith("mock_sim_") for item in result["results"])
+    assert all(item["simulation_id"].startswith("prod_stub_sim_") for item in result["results"])
 
 
 def test_agent_toolbox_batch_simulation_reports_item_failures(tmp_path):
-    toolbox = mock_toolbox(storage_dir=tmp_path)
+    toolbox = production_toolbox(storage_dir=tmp_path)
 
     result = toolbox.call(
         "run_simulation_batch",
@@ -559,6 +636,7 @@ def test_agent_toolbox_batch_simulation_reports_item_failures(tmp_path):
                 "rank(ts_delta(close, 20)",
             ],
             "max_workers": 2,
+            "confirm_live_api": True,
         },
     )
 
@@ -571,17 +649,17 @@ def test_agent_toolbox_batch_simulation_reports_item_failures(tmp_path):
 
 
 def test_agent_toolbox_batch_simulation_counts_terminal_failed_status(tmp_path):
-    class FailedSimulationAPI(MockBrainAPI):
+    class FailedSimulationAPI(ProductionBrainAPIStub):
         def poll_simulation(self, simulation_id):
             return "FAILED"
 
-    config = RunConfig(environment="mock")
+    config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path)
     toolbox = BrainAlphaToolbox(run_config=config, api=FailedSimulationAPI(), allow_live_api=True)
 
     result = toolbox.call(
         "run_simulation_batch",
-        {"expressions": ["rank(ts_delta(close, 20))"]},
+        {"expressions": ["rank(ts_delta(close, 20))"], "confirm_live_api": True},
     )
 
     assert result["ok"] is False
@@ -593,8 +671,8 @@ def test_agent_toolbox_batch_simulation_counts_terminal_failed_status(tmp_path):
     assert result["results"][0]["status"] == "FAILED"
 
 
-def test_agent_toolbox_runs_bounded_mock_parallel_backtest(tmp_path):
-    toolbox = mock_toolbox(storage_dir=tmp_path)
+def test_agent_toolbox_runs_bounded_production_stub_parallel_backtest(tmp_path):
+    toolbox = production_toolbox(storage_dir=tmp_path)
 
     result = toolbox.call(
         "run_parallel_backtest",
@@ -604,6 +682,7 @@ def test_agent_toolbox_runs_bounded_mock_parallel_backtest(tmp_path):
             "max_workers": 2,
             "max_batches": 1,
             "per_account_limit": 3,
+            "confirm_live_api": True,
         },
     )
 
@@ -621,7 +700,7 @@ def test_agent_toolbox_runs_bounded_mock_parallel_backtest(tmp_path):
 def test_agent_toolbox_blocks_production_simulation_batch_without_confirmation(tmp_path):
     config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path)
-    toolbox = BrainAlphaToolbox(run_config=config, api=MockBrainAPI(), allow_live_api=False)
+    toolbox = BrainAlphaToolbox(run_config=config, api=ProductionBrainAPIStub(), allow_live_api=False)
 
     result = toolbox.call(
         "run_simulation_batch",
@@ -636,7 +715,7 @@ def test_agent_toolbox_blocks_production_simulation_batch_without_confirmation(t
 def test_agent_toolbox_blocks_production_parallel_backtest_without_confirmation(tmp_path):
     config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path)
-    toolbox = BrainAlphaToolbox(run_config=config, api=MockBrainAPI(), allow_live_api=False)
+    toolbox = BrainAlphaToolbox(run_config=config, api=ProductionBrainAPIStub(), allow_live_api=False)
 
     result = toolbox.call(
         "run_parallel_backtest",
@@ -651,7 +730,7 @@ def test_agent_toolbox_blocks_production_parallel_backtest_without_confirmation(
 def test_agent_toolbox_blocks_production_live_api_without_confirmation(tmp_path):
     config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path)
-    toolbox = BrainAlphaToolbox(run_config=config, api=MockBrainAPI(), allow_live_api=False)
+    toolbox = BrainAlphaToolbox(run_config=config, api=ProductionBrainAPIStub(), allow_live_api=False)
 
     result = toolbox.call("sync_cloud_alphas", {"sync_range": "3d"})
 
@@ -675,7 +754,7 @@ def test_agent_toolbox_blocks_duplicate_expression_before_live_validation(tmp_pa
     config.ops.storage_dir = str(tmp_path)
     called = {"validate": 0}
 
-    class FailIfCalledAPI(MockBrainAPI):
+    class FailIfCalledAPI(ProductionBrainAPIStub):
         def validate_expression(self, expression, settings):
             called["validate"] += 1
             return super().validate_expression(expression, settings)
@@ -718,7 +797,7 @@ def test_agent_toolbox_blocks_duplicate_expression_before_live_simulation(tmp_pa
     config.ops.storage_dir = str(tmp_path)
     called = {"submit": 0}
 
-    class FailIfCalledAPI(MockBrainAPI):
+    class FailIfCalledAPI(ProductionBrainAPIStub):
         def submit_simulation(self, expression, settings):
             called["submit"] += 1
             return super().submit_simulation(expression, settings)
@@ -760,7 +839,7 @@ def test_agent_toolbox_batch_blocks_duplicate_expression_items_before_live_simul
     config.ops.storage_dir = str(tmp_path)
     called = {"submit": 0}
 
-    class CountSubmitAPI(MockBrainAPI):
+    class CountSubmitAPI(ProductionBrainAPIStub):
         def submit_simulation(self, expression, settings):
             called["submit"] += 1
             return super().submit_simulation(expression, settings)
@@ -798,7 +877,7 @@ def test_agent_toolbox_blocks_live_api_when_duplicate_preflight_fails(monkeypatc
     config.ops.storage_dir = str(tmp_path)
     called = {"validate": 0, "submit": 0}
 
-    class FailIfCalledAPI(MockBrainAPI):
+    class FailIfCalledAPI(ProductionBrainAPIStub):
         def validate_expression(self, expression, settings):
             called["validate"] += 1
             return super().validate_expression(expression, settings)
@@ -836,23 +915,63 @@ def test_agent_toolbox_blocks_live_api_when_duplicate_preflight_fails(monkeypatc
     assert called == {"validate": 0, "submit": 0}
 
 
-def test_agent_toolbox_requires_submit_double_confirmation(tmp_path):
-    toolbox = mock_toolbox(storage_dir=tmp_path, allow_submit=False)
+def test_agent_toolbox_retires_non_web_submit_tool(tmp_path):
+    toolbox = production_toolbox(storage_dir=tmp_path, allow_submit=True)
 
     result = toolbox.call(
         "submit_alpha",
-        {"alpha_id": "mock_alpha_0001", "expression": "rank(ts_delta(close, 20))"},
+        {
+            "alpha_id": "prod_stub_alpha_0001",
+            "expression": "rank(ts_delta(close, 20))",
+            "confirm_live_api": True,
+            "confirm_submit": True,
+        },
     )
 
     assert result["ok"] is False
-    assert result["error_code"] == "SUBMIT_NOT_ALLOWED"
+    assert result["error_code"] == "TOOL_NOT_FOUND"
+
+
+def test_retired_agent_submit_handler_never_calls_official_api(tmp_path):
+    calls = {"check": 0, "submit": 0}
+
+    class SubmitCountingAPI(ProductionBrainAPIStub):
+        def check_alpha(self, alpha_id):
+            calls["check"] += 1
+            return super().check_alpha(alpha_id)
+
+        def submit_alpha(self, alpha_id, expression, settings):
+            calls["submit"] += 1
+            return super().submit_alpha(alpha_id, expression, settings)
+
+    config = RunConfig(environment="production")
+    config.ops.storage_dir = str(tmp_path)
+    toolbox = BrainAlphaToolbox(
+        run_config=config,
+        api=SubmitCountingAPI(),
+        allow_live_api=True,
+        allow_submit=True,
+    )
+
+    result = toolbox._submit_alpha(
+        {
+            "alpha_id": "official_ready",
+            "expression": "rank(close)",
+            "confirm_live_api": True,
+            "confirm_submit": True,
+        },
+    )
+
+    assert result["ok"] is False
+    assert result["error_code"] == "WEB_ONLY_SUBMIT_REQUIRED"
+    assert calls == {"check": 0, "submit": 0}
 
 
 def test_agent_toolbox_reads_configured_job_status(tmp_path):
     store = JobStore(tmp_path / "jobs.json")
     job_id = store.create()
     store.update(job_id, status="running", progress={"phase": "simulation", "percent": 50})
-    toolbox = mock_toolbox(storage_dir=tmp_path, job_stores={"production": store})
+    toolbox = production_toolbox(storage_dir=tmp_path, job_stores={"production": store})
 
     result = toolbox.call("get_job_status", {"kind": "production", "job_id": job_id})
 

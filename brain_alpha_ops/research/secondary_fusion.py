@@ -8,7 +8,7 @@ from typing import Callable
 
 from brain_alpha_ops.config import OpsConfig
 from brain_alpha_ops.models import Candidate, new_id
-from brain_alpha_ops.redaction import redact_error_message
+from brain_alpha_ops.redaction import redact_error_message, redact_text
 
 from .expression_ast import expression_key
 from .generator import extract_fields, extract_operators, local_quality, mutate_expression
@@ -64,7 +64,12 @@ class SecondaryFusionService:
                 continue
             child = self._build_child(candidate, expression, note)
             child.local_quality = local_quality(child, self.config.budget.min_local_quality_score)
-            build_scorecard(child, self.config.thresholds, self.config.scoring, params=self.scoring_params)
+            child.scorecard = build_scorecard(
+                child,
+                self.config.thresholds,
+                self.config.scoring,
+                params=self.scoring_params,
+            )
             if (
                 not child.local_quality.get("passed")
                 or child.scorecard.get("total_score", 0.0) < self.config.budget.min_prior_score_for_official_validation
@@ -105,14 +110,14 @@ class SecondaryFusionService:
             message = redact_error_message(exc)
             logger.warning(
                 "diagnostics unavailable for secondary fusion candidate %s: %s",
-                candidate.alpha_id,
+                redact_text(candidate.alpha_id, max_length=64),
                 message,
                 exc_info=True,
             )
             self.event(
                 "secondary_fusion_diagnostics_unavailable",
                 f"Falling back to simple mutation heuristics: {message}",
-                candidate.alpha_id,
+                redact_text(candidate.alpha_id, max_length=64),
                 level="WARN",
             )
             diagnostic = {}
@@ -155,6 +160,14 @@ class SecondaryFusionService:
         source_tags = list(candidate.source_tags or [])
         if "secondary_fusion" not in source_tags:
             source_tags.append("secondary_fusion")
+        submission = {
+            "parent_alpha_id": candidate.alpha_id,
+            "secondary_fusion_reason": note[:240],
+            "source_official_alpha_id": candidate.official_alpha_id,
+        }
+        for key, value in (candidate.submission or {}).items():
+            if str(key).startswith("assistant_guidance"):
+                submission.setdefault(key, value)
         return Candidate(
             alpha_id=new_id("alpha"),
             expression=expression,
@@ -165,10 +178,6 @@ class SecondaryFusionService:
             source_tags=source_tags,
             parent_id=candidate.alpha_id,
             mutation_type="secondary_fusion",
-            submission={
-                "parent_alpha_id": candidate.alpha_id,
-                "secondary_fusion_reason": note[:240],
-                "source_official_alpha_id": candidate.official_alpha_id,
-            },
+            submission=submission,
             lifecycle_status="secondary_fusion_pending",
         )

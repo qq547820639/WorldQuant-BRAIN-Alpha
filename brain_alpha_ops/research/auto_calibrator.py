@@ -1,57 +1,56 @@
-"""自动校准器 — 从官方回测记录中学习，最小化 prior 与 empirical 之间的误差。
+"""Auto-calibrator that learns from official backtest records.
 
-读取 data/alpha_features.jsonl 中的 PASS 记录，对每个评分维度进行 grid search
-优化参数，并调用 calibrate_weights.py 中的算法校准维度权重和层权重。
+It reads PASS records from data/alpha_features.jsonl, grid-searches parameters
+for each scoring dimension, then uses calibrate_weights.py algorithms to
+calibrate dimension weights and layer weights.
 
-触发条件：积累 >= 20 个新 official_verified 样本后自动校准。
+Trigger condition: enough new official_verified samples have accumulated.
 
 Usage::
 
     from brain_alpha_ops.research.auto_calibrator import AutoCalibrator
 
-    calibrator = AutoCalibrator(storage_dir="data")
-    if calibrator.needs_calibration():
-        report = calibrator.calibrate()
-        # report["calibrated"] == True 表示校准成功
+        calibrator = AutoCalibrator(storage_dir="data")
+        if calibrator.needs_calibration():
+            report = calibrator.calibrate()
+        # report["calibrated"] == True means calibration succeeded.
 """
-
 from __future__ import annotations
 
 import os
 import random
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 from brain_alpha_ops.jsonl import count_jsonl_records, read_jsonl_records
 from brain_alpha_ops.research.scoring_params import DimensionParam, ScoringParams
 
-
 # ═══════════════════════════════════════════════════════════════════════
-# 自动校准器
+# Auto-calibrator
 # ═══════════════════════════════════════════════════════════════════════
 
 class AutoCalibrator:
-    """自动校准评分参数，最小化 prior 与 empirical 之间的误差。
+    """Automatically calibrate scoring parameters to reduce prior-vs-empirical error.
 
-    职责：
-    1. 从 alpha_features.jsonl 读取官方回测记录
-    2. 检测是否有足够新样本触发校准
-    3. 对每个维度的可调参数做 grid search 优化
-    4. 调用维度和层权重校准算法
-    5. 持久化校准结果到 scoring_calibration.json
+    Responsibilities:
+    1. Read official backtest records from alpha_features.jsonl.
+    2. Detect whether enough new samples are available.
+    3. Grid-search tunable parameters for each dimension.
+    4. Run dimension-weight and layer-weight calibration.
+    5. Persist calibration results to scoring_calibration.json.
 
-    P1-6: 校准样本量门禁
-    - MIN_CALIBRATION_SAMPLES = 30（需 ≥ 30 条 BRAIN 官方 PASS 记录）
-    - 不足时返回 calibrated=False + 详细诊断信息
-    - pipeline 中产生 "校准推迟" 事件，不阻断主流程
+    P1-6: calibration sample-size gate
+    - MIN_CALIBRATION_SAMPLES = 30, requiring at least 30 official BRAIN PASS records.
+    - Insufficient samples return calibrated=False plus diagnostic details.
+    - The pipeline emits a "calibration deferred" event without blocking the main flow.
     """
 
-    # P1-6: 校准触发阈值 — 提高到 30 确保统计可靠性
+    # P1-6: calibration trigger raised to 30 for statistical reliability.
     MIN_CALIBRATION_SAMPLES: int = 30
     CALIBRATION_HISTORY_LIMIT: int = 1000
 
-    # 每个维度的 grid search 步长配置
-    GRID_SEARCH_CONFIG: Dict[str, Dict[str, List[float]]] = {
+    # Grid-search step configuration per dimension.
+    GRID_SEARCH_CONFIG: dict[str, dict[str, list[float]]] = {
         "structure": {
             "penalty_per_unit": [6.0, 7.0, 8.0, 9.0, 10.0],
             "penalty_threshold": [3.0, 4.0, 5.0],
@@ -91,33 +90,33 @@ class AutoCalibrator:
 
     def __init__(self, storage_dir: str = "data"):
         self._storage_dir = storage_dir
-        self._params: Optional[ScoringParams] = None
+        self._params: ScoringParams | None = None
         self._last_calibrated_count: int = 0
         self._load_existing()
 
-    # ── 公开 API ──
+    # Public API
 
     def needs_calibration(self) -> bool:
-        """检查是否有足够新样本触发校准。
+        """Check whether enough new samples are available for calibration.
 
-        条件：alpha_features.jsonl 中 PASS 记录数 >= MIN_CALIBRATION_SAMPLES，
-        且自上次校准后新增 >= MIN_CALIBRATION_SAMPLES 个 PASS 记录。
+        Conditions: PASS records in alpha_features.jsonl >= MIN_CALIBRATION_SAMPLES
+        and new PASS records since the last calibration >= MIN_CALIBRATION_SAMPLES.
         """
         passing_count = self._count_passing_records()
         new_since_last = passing_count - self._last_calibrated_count
         return passing_count >= self.MIN_CALIBRATION_SAMPLES and new_since_last >= self.MIN_CALIBRATION_SAMPLES
 
-    def calibrate(self) -> Dict[str, Any]:
-        """执行完整校准流程。
+    def calibrate(self) -> dict[str, Any]:
+        """Execute the full calibration flow.
 
-        1. 加载 baseline（默认参数）
-        2. 加载 PASS 记录
-        3. 对每个维度做 grid search 优化参数
-        4. 调用维度权重校准
-        5. 调用层权重校准
-        6. 持久化结果
+        1. Load the baseline defaults.
+        2. Load PASS records.
+        3. Grid-search optimized parameters for each dimension.
+        4. Calibrate dimension weights.
+        5. Calibrate layer weights.
+        6. Persist results.
 
-        返回校准报告 dict。
+        Returns a calibration report dict.
         """
         baseline = ScoringParams.defaults()
         total_pass_records = self._count_passing_records()
@@ -140,7 +139,7 @@ class AutoCalibrator:
                 ),
             }
 
-        # 对每个可校准维度做 grid search
+        # Grid-search each calibratable dimension.
         optimized_dims = {}
         dim_reports = {}
         for dim_name, grid_config in self.GRID_SEARCH_CONFIG.items():
@@ -159,31 +158,31 @@ class AutoCalibrator:
                 ),
             }
 
-        # 复制未优化维度
+        # Copy dimensions that were not optimized.
         for dim_name, dim in baseline.dimensions.items():
             if dim_name not in optimized_dims:
                 optimized_dims[dim_name] = dim
 
-        # 校准维度权重
+        # Calibrate dimension weights.
         dim_weight_report = self._calibrate_dimension_weights(records)
 
-        # 校准层权重
+        # Calibrate layer weights.
         layer_weight_report = self._calibrate_layer_weights(records)
 
-        # 构建最终参数
+        # Build final parameters.
         params = ScoringParams(
             dimensions=optimized_dims,
             layer_weights=layer_weight_report.get("optimized_weights", baseline.layer_weights),
             calibrated_at=datetime.now(timezone.utc).isoformat(),
         )
 
-        # 更新维度权重
+        # Update dimension weights.
         if "optimized_weights" in dim_weight_report:
             for dim_name, weight in dim_weight_report["optimized_weights"].items():
                 if dim_name in params.dimensions:
                     params.dimensions[dim_name].weight = weight
 
-        # 计算整体质量
+        # Compute overall quality.
         overall_mae = self._compute_overall_mae(params, records)
         baseline_mae = self._compute_overall_mae(baseline, records)
         params.calibration_quality = {
@@ -196,7 +195,7 @@ class AutoCalibrator:
             "improvement_pct": round((baseline_mae - overall_mae) / max(baseline_mae, 0.01) * 100, 1),
         }
 
-        # 持久化
+        # Persist calibration output.
         params.save(self._storage_dir)
         self._params = params
         self._last_calibrated_count = total_pass_records
@@ -220,38 +219,56 @@ class AutoCalibrator:
         }
 
     def apply(self, scoring_config: Any) -> Any:
-        """将校准结果应用到 ScoringConfig。
+        """Apply calibration results to a ScoringConfig.
 
-        如果暂无校准结果，使用默认参数。
+        P3-18 (2026-06-13): rewritten to return a *new* ScoringConfig
+        instance (via ``dataclasses.replace``) instead of mutating the
+        passed-in object. The previous implementation directly assigned
+        to ``scoring_config.prior_weights_override`` etc., which would
+        raise ``FrozenInstanceError`` if ScoringConfig were ever made
+        ``frozen=True`` and which silently violated the dataclass's
+        intent that ScoringConfig is an immutable policy object.
+
+        Callers that used to do ``config.scoring = auto_calibrator.apply(config.scoring)``
+        keep working because we now return the new instance. Callers that
+        did ``auto_calibrator.apply(config.scoring)`` *without* rebinding
+        should be updated to::
+
+            config.scoring = auto_calibrator.apply(config.scoring)
 
         Args:
-            scoring_config: ScoringConfig 实例
+            scoring_config: ScoringConfig instance (unchanged)
 
         Returns:
-            修改后的 scoring_config（原地修改）
+            A new ScoringConfig with calibrated layer weights and the
+            prior-weights override applied.
         """
+        import dataclasses
+
         params = self._params or ScoringParams.defaults()
-        scoring_config.prior_weights_override = params.get_weights_override()
-        scoring_config.prior_layer_weight = params.layer_weights.get("prior", 0.30)
-        scoring_config.empirical_layer_weight = params.layer_weights.get("empirical", 0.45)
-        scoring_config.checklist_layer_weight = params.layer_weights.get("checklist", 0.25)
-        return scoring_config
+        return dataclasses.replace(
+            scoring_config,
+            prior_weights_override=params.get_weights_override(),
+            prior_layer_weight=params.layer_weights.get("prior", 0.30),
+            empirical_layer_weight=params.layer_weights.get("empirical", 0.45),
+            checklist_layer_weight=params.layer_weights.get("checklist", 0.25),
+        )
 
     @property
     def params(self) -> ScoringParams:
-        """获取当前校准参数。未校准时返回默认值。"""
+        """Return current calibration parameters, defaulting when uncalibrated."""
         return self._params or ScoringParams.defaults()
 
-    # ── 内部方法 ──
+    # Internal helpers
 
     def _load_existing(self) -> None:
-        """加载已有校准文件。"""
+        """Load an existing calibration file."""
         self._params = ScoringParams.load(self._storage_dir)
         if self._params:
             quality = self._params.calibration_quality
             self._last_calibrated_count = int(quality.get("total_pass_records") or quality.get("sample_size") or 0)
 
-    def _load_passing_records(self, *, limit: int | None = CALIBRATION_HISTORY_LIMIT) -> List[Dict[str, Any]]:
+    def _load_passing_records(self, *, limit: int | None = CALIBRATION_HISTORY_LIMIT) -> list[dict[str, Any]]:
         """Load recent PASS records used as the calibration sample."""
         filepath = os.path.join(self._storage_dir, "alpha_features.jsonl")
         if not os.path.exists(filepath):
@@ -270,9 +287,9 @@ class AutoCalibrator:
         return count_jsonl_records(filepath, predicate=lambda record: record.get("pass_fail") == "PASS")
 
     def _compute_prior_for_record(
-        self, record: Dict[str, Any], dim: DimensionParam, dim_name: str
+        self, record: dict[str, Any], dim: DimensionParam, dim_name: str
     ) -> float:
-        """对单条记录计算某个维度的参数化先验分数。"""
+        """Compute a parameterized prior score for one dimension in one record."""
         fields = set(record.get("field_set", []))
         operators = list(record.get("operator_set", []))
         expression = record.get("expression", "")
@@ -340,10 +357,10 @@ class AutoCalibrator:
                 return dim.concept_scores.get(detected, dim.concept_scores.get(max(dim.concept_scores.keys(), default=68), 68))
             return 68 if detected == 1 else (78 if detected == 2 else (85 if detected == 3 else 92))
 
-        return 50.0  # 未知维度默认分数
+        return 50.0  # Default score for unknown dimensions.
 
-    def _compute_full_prior(self, params: ScoringParams, record: Dict[str, Any]) -> float:
-        """计算完整 prior_score（加权 8 维）。"""
+    def _compute_full_prior(self, params: ScoringParams, record: dict[str, Any]) -> float:
+        """Compute the full prior_score as a weighted 8-dimension score."""
         total = 0.0
         total_weight = 0.0
         for dim_name, dim in params.dimensions.items():
@@ -356,9 +373,9 @@ class AutoCalibrator:
 
     def _compute_mae(
         self, dim_name: str, dim: DimensionParam,
-        records: List[Dict[str, Any]]
+        records: list[dict[str, Any]]
     ) -> float:
-        """计算单个维度 prior 与 empirical 之间的 MAE。"""
+        """Compute MAE between one dimension's prior score and empirical score."""
         errors = []
         for record in records:
             prior = self._compute_prior_for_record(record, dim, dim_name)
@@ -368,9 +385,9 @@ class AutoCalibrator:
         return sum(errors) / max(len(errors), 1)
 
     def _compute_overall_mae(
-        self, params: ScoringParams, records: List[Dict[str, Any]]
+        self, params: ScoringParams, records: list[dict[str, Any]]
     ) -> float:
-        """计算整体 prior_score 与 empirical 之间的 MAE。"""
+        """Compute MAE between full prior_score and empirical score."""
         errors = []
         for record in records:
             prior = self._compute_full_prior(params, record)
@@ -382,28 +399,23 @@ class AutoCalibrator:
         self,
         dim_name: str,
         base_dim: DimensionParam,
-        grid_config: Dict[str, List[float]],
-        records: List[Dict[str, Any]],
-    ) -> Tuple[DimensionParam, float]:
-        """对单个维度的可调参数做 grid search。
+        grid_config: dict[str, list[float]],
+        records: list[dict[str, Any]],
+    ) -> tuple[DimensionParam, float]:
+        """Grid-search tunable parameters for one dimension.
 
         Returns:
-            (最优 DimensionParam, 最优 MAE)
+            (best DimensionParam, best MAE)
         """
         best_dim = base_dim
         best_mae = self._compute_mae(dim_name, base_dim, records)
 
-        # 生成所有参数组合
+        # Generate all parameter combinations.
         param_names = list(grid_config.keys())
         combinations = self._generate_grid_combinations(grid_config)
 
         for combo in combinations:
-            test_dim = DimensionParam(
-                name=dim_name,
-                weight=base_dim.weight,
-                enabled=base_dim.enabled,
-                **{k: base_dim.__dict__.get(k, 0) for k in base_dim.__dict__},
-            )
+            test_dim = DimensionParam(**{**base_dim.__dict__, "name": dim_name})
             for i, name in enumerate(param_names):
                 setattr(test_dim, name, combo[i])
 
@@ -416,9 +428,9 @@ class AutoCalibrator:
 
     @staticmethod
     def _generate_grid_combinations(
-        grid_config: Dict[str, List[float]]
-    ) -> List[Tuple[float, ...]]:
-        """生成 grid search 参数组合（笛卡尔积）。"""
+        grid_config: dict[str, list[float]]
+    ) -> list[tuple[float, ...]]:
+        """Generate grid-search parameter combinations as a Cartesian product."""
         keys = list(grid_config.keys())
         if not keys:
             return [()]
@@ -432,12 +444,12 @@ class AutoCalibrator:
             result = new_result
         return result
 
-    # ── 权重校准 ──
+    # Weight calibration
 
-    def _calibrate_dimension_weights(self, records: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """使用 Pearson 相关法校准 8 维权重。
+    def _calibrate_dimension_weights(self, records: list[dict[str, Any]]) -> dict[str, Any]:
+        """Calibrate 8-dimension weights with Pearson correlation.
 
-        数据格式兼容 calibrate_weights.py:calibrate_prior_weights()。
+        Data format is compatible with calibrate_weights.py:calibrate_prior_weights().
         """
         import sys
         import os
@@ -451,10 +463,10 @@ class AutoCalibrator:
                 "error": "calibrate_weights module not importable",
             }
 
-    def _calibrate_layer_weights(self, records: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """使用 grid search 法校准三层权重。
+    def _calibrate_layer_weights(self, records: list[dict[str, Any]]) -> dict[str, Any]:
+        """Calibrate three-layer weights with grid search.
 
-        数据格式兼容 calibrate_weights.py:calibrate_scorecard_weights()。
+        Data format is compatible with calibrate_weights.py:calibrate_scorecard_weights().
         """
         import sys
         import os

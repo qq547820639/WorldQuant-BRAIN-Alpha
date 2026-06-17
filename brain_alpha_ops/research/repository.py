@@ -12,7 +12,7 @@ from typing import Any
 
 from brain_alpha_ops.jsonl import read_jsonl_tail
 from brain_alpha_ops.models import Candidate, PipelineEvent, utc_now
-from brain_alpha_ops.redaction import redact_data
+from brain_alpha_ops.redaction import redact_data, redact_error_message, redact_text
 from brain_alpha_ops.research.contracts import (
     assistant_guidance_record,
     backtest_record,
@@ -38,11 +38,13 @@ _RECORD_INDEXED_FILES = {
     "cloud_alphas.jsonl",
     "backtests.jsonl",
 }
+_SQLITE_INDEX_DIAGNOSTICS_FILE = "sqlite_index_diagnostics.jsonl"
 _REPOSITORY_JSONL_FILES = _EXPRESSION_INDEXED_FILES | _RECORD_INDEXED_FILES | {
     "ab_tests.jsonl",
     "assistant_guidance.jsonl",
     "events.jsonl",
     "families.jsonl",
+    _SQLITE_INDEX_DIAGNOSTICS_FILE,
     "strategy_lifecycle.jsonl",
 }
 _REPOSITORY_LOCK_NAMES = _REPOSITORY_JSONL_FILES | {"run_history"}
@@ -54,7 +56,11 @@ class ResearchRepository:
         os.makedirs(storage_dir, exist_ok=True)
 
     def save_candidate(self, run_id: str, candidate: Candidate):
-        self._append("candidates.jsonl", _with_expression_summary({"run_id": run_id, **candidate.to_dict()}))
+        record = {"run_id": run_id, **candidate.to_dict()}
+        extra_fields = record.get("extra_fields") if isinstance(record.get("extra_fields"), dict) else {}
+        if isinstance(extra_fields.get("scientific_audit"), dict):
+            record.setdefault("scientific_audit", extra_fields["scientific_audit"])
+        self._append("candidates.jsonl", _with_expression_summary(record))
 
     def save_event(self, run_id: str, event: PipelineEvent):
         self._append("events.jsonl", {"run_id": run_id, **event.to_dict()})
@@ -188,10 +194,16 @@ class ResearchRepository:
             return latest
         try:
             with path.open("r", encoding="utf-8") as f:
-                for line in f:
+                for line_number, line in enumerate(f, start=1):
                     try:
                         record = json.loads(line)
-                    except json.JSONDecodeError:
+                    except json.JSONDecodeError as exc:
+                        logger.warning(
+                            "corrupt cloud alpha JSON line skipped: %s:%d: %s",
+                            redact_text(str(path), max_length=180),
+                            line_number,
+                            redact_error_message(exc),
+                        )
                         continue
                     alpha_id = _cloud_alpha_id(record)
                     if alpha_id:
@@ -309,11 +321,16 @@ class ResearchRepository:
 
             ExpressionSqliteIndex(self.storage_dir).append_record(record, source_file=filename)
         except Exception as exc:
-            logger.debug(
+            message = redact_error_message(exc)
+            logger.warning(
                 "failed to update incremental expression sqlite cache for %s: %s",
-                filename,
-                exc,
-                exc_info=True,
+                redact_text(filename, max_length=120),
+                message,
+            )
+            self._record_sqlite_cache_diagnostic(
+                component="expression_sqlite_index",
+                source_file=filename,
+                error=message,
             )
 
     def _update_record_sqlite_cache(self, filename: str, record: dict[str, Any]) -> None:
@@ -324,11 +341,46 @@ class ResearchRepository:
 
             RecordSqliteIndex(self.storage_dir).append_record(record, source_file=filename)
         except Exception as exc:
-            logger.debug(
+            message = redact_error_message(exc)
+            logger.warning(
                 "failed to update incremental record sqlite cache for %s: %s",
-                filename,
-                exc,
-                exc_info=True,
+                redact_text(filename, max_length=120),
+                message,
+            )
+            self._record_sqlite_cache_diagnostic(
+                component="record_sqlite_index",
+                source_file=filename,
+                error=message,
+            )
+
+    def _record_sqlite_cache_diagnostic(self, *, component: str, source_file: str, error: str) -> None:
+        record = _repository_safe(
+            {
+                "timestamp": utc_now(),
+                "source": "sqlite_index",
+                "component": component,
+                "source_file": source_file,
+                "status": "index_update_failed",
+                "error": error,
+                "error_context": {
+                    "error_code": "SQLITE_INDEX_UPDATE_FAILED",
+                    "error": error,
+                    "component": component,
+                    "source_file": source_file,
+                },
+                "action": "Rebuild the SQLite research indexes or continue with bounded JSONL lookups.",
+            }
+        )
+        try:
+            with self._file_lock(_SQLITE_INDEX_DIAGNOSTICS_FILE):
+                path = self._safe_storage_path(_SQLITE_INDEX_DIAGNOSTICS_FILE)
+                with path.open("a", encoding="utf-8") as f:
+                    f.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")
+        except Exception as exc:
+            logger.warning(
+                "failed to persist sqlite index diagnostic for %s: %s",
+                redact_text(source_file, max_length=120),
+                redact_error_message(exc),
             )
 
 

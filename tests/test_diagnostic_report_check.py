@@ -4,8 +4,9 @@ from scripts.check_diagnostic_report import check_diagnostic_report
 
 
 def test_diagnostic_report_check_accepts_current_snapshot(tmp_path):
-    config = RunConfig(environment="mock")
+    config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path / "data")
+    config.ops.settings.dataset = "pv1"
     config_path = tmp_path / "run_config.json"
     report_path = tmp_path / "diagnosis.md"
     write_run_config(config, config_path)
@@ -19,8 +20,9 @@ def test_diagnostic_report_check_accepts_current_snapshot(tmp_path):
 
 
 def test_diagnostic_report_check_rejects_stale_counts(tmp_path):
-    config = RunConfig(environment="mock")
+    config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path / "data")
+    config.ops.settings.dataset = "pv1"
     config_path = tmp_path / "run_config.json"
     report_path = tmp_path / "diagnosis.md"
     write_run_config(config, config_path)

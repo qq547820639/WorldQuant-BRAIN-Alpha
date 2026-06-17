@@ -1,24 +1,24 @@
-"""经验学习系统 — 从官方回测结果中提炼高分 Alpha 的共同模式。
+"""Experience learning system for extracting winning Alpha patterns.
 
-自动记录每次官方回测的特征（字段集、算子集、窗口值等），
-提炼高分 Alpha 的共享模式，指导后续生成。
+The module records each official backtest's features (field sets, operator
+sets, window values, and related metrics), then extracts shared winning
+patterns to guide future generation.
 
-Data source: 所有特征来源于 BRAIN 官方 API 返回的实际指标。
+Data source: all features come from actual metrics returned by the BRAIN API.
 
 Usage::
 
     from brain_alpha_ops.research.experience import record_alpha_result, get_winning_patterns
 
-    # 每次拿到官方回测结果后记录
+    # Record after each official backtest result.
     record_alpha_result(candidate, storage_dir="data")
 
-    # 提炼高分模式
+    # Extract winning patterns.
     patterns = get_winning_patterns("data", min_sharpe=2.0)
     print(patterns["field_combinations"])
     print(patterns["top_operators"])
     print(patterns["preferred_windows"])
 """
-
 from __future__ import annotations
 
 import json
@@ -26,16 +26,14 @@ import os
 import re
 from collections import Counter
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Tuple, TYPE_CHECKING
+from typing import Any, TYPE_CHECKING
 
 from brain_alpha_ops.jsonl import read_jsonl_records
 
 if TYPE_CHECKING:
     from brain_alpha_ops.models import Candidate
 
-
 DEFAULT_HISTORY_LIMIT = 5000
-
 
 def _num(value: Any) -> float:
     try:
@@ -45,39 +43,47 @@ def _num(value: Any) -> float:
     except (TypeError, ValueError):
         return 0.0
 
+# P0-4 fix (2026-06-13): all four _ratio() variants across
+# research/{scoring,experience,safety,diagnostics}.py now share a single
+# implementation in ``research._ratio``. The local definition below is kept
+# for backward-compat with the previous module-level symbol.
+from ._ratio import normalize_brain_ratio  # noqa: F401
 
 def _ratio(value: Any) -> float:
-    numeric = _num(value)
-    return numeric / 100.0 if abs(numeric) > 1.0 else numeric
+    """Backwards-compatible wrapper for the canonical BRAIN ratio normalizer.
 
+    See :func:`brain_alpha_ops.research._ratio.normalize_brain_ratio` for the
+    full rule (percentage-scale when ``abs(value) >= 2.0``).
+    """
+    return normalize_brain_ratio(value, bounded=False)
 
-# ── Record ──
+# Record
 
 def record_alpha_result(
     candidate: "Candidate",
     storage_dir: str = "data",
 ) -> None:
-    """记录 Alpha 官方回测结果的特征到经验数据库。
+    """Record Alpha official backtest features in the experience database.
 
-    写入 data/alpha_features.jsonl，每行一个 JSON 记录。
+    Writes to data/alpha_features.jsonl, one JSON record per line.
 
-    特征来源均为 BRAIN 官方 API 返回的实际数据：
-      - field_set: 表达式使用的字段（来自 OfficialDataLoader 校验）
-      - operator_set: 表达式使用的算子（来自 BRAIN /operators API）
-      - window_values: 表达式中的数值参数
-      - 各指标: sharpe/fitness/turnover/correlation/margin（来自模拟结果）
+    Feature data all comes from actual BRAIN API results:
+      - field_set: fields used in the expression (validated by OfficialDataLoader)
+      - operator_set: operators used in the expression (from the BRAIN /operators API)
+      - window_values: numeric parameters in the expression
+      - metrics: sharpe/fitness/turnover/correlation/margin (from simulation results)
 
-    P1 AB 对照：当 candidate 有 parent_id 时，自动查找父 Alpha 的官方结果
-    并记录对比数据到 ab_tests.jsonl。
+    P1 AB comparison: when candidate has parent_id, automatically look up the
+    parent Alpha's official result and record a comparison in ab_tests.jsonl.
     """
     metrics = candidate.official_metrics or {}
     if not metrics:
         return
 
-    # Extract windows from expression
+    # Extract windows from the expression.
     window_values = [int(v) for v in re.findall(r"\b(\d+)\b", candidate.expression) if 3 <= int(v) <= 252]
 
-    features: Dict[str, Any] = {
+    features: dict[str, Any] = {
         "alpha_id": candidate.alpha_id,
         "official_alpha_id": candidate.official_alpha_id or "",
         "expression": candidate.expression,
@@ -85,7 +91,7 @@ def record_alpha_result(
         "field_set": sorted(candidate.data_fields or []),
         "operator_set": sorted(candidate.operators or []),
         "window_values": sorted(window_values),
-        # Official metrics (sourced from BRAIN API normalize_metrics)
+        # Official metrics (sourced from BRAIN API normalize_metrics).
         "sharpe": _num(metrics.get("sharpe")),
         "fitness": _num(metrics.get("fitness")),
         "turnover": _ratio(metrics.get("turnover")),
@@ -99,7 +105,7 @@ def record_alpha_result(
         "source": "BRAIN_official_simulation_result",
     }
 
-    # P1: 记录 parent 信息用于 AB 对照
+    # P1: record parent information for AB comparison.
     if candidate.parent_id:
         features["parent_id"] = candidate.parent_id
         features["mutation_type"] = candidate.mutation_type or "unknown"
@@ -109,12 +115,11 @@ def record_alpha_result(
     with open(path, "a", encoding="utf-8") as f:
         f.write(json.dumps(features, ensure_ascii=False) + "\n")
 
-    # ── P1: AB 对照 — 如果候选 Alpha 有父 Alpha，对比效果 ──
+    # P1: AB comparison — if the candidate has a parent Alpha, compare results.
     if candidate.parent_id:
         _record_ab_comparison(candidate, storage_dir)
 
-
-# ── Query ──
+# Query
 
 def get_winning_patterns(
     storage_dir: str = "data",
@@ -122,16 +127,16 @@ def get_winning_patterns(
     min_fitness: float = 0.5,
     min_sample: int = 3,
     history_limit: int = DEFAULT_HISTORY_LIMIT,
-) -> Dict[str, Any]:
-    """提炼高分 Alpha 的共同特征模式。
+) -> dict[str, Any]:
+    """Extract common feature patterns from winning Alphas.
 
-    参数:
-        storage_dir: 数据目录
-        min_sharpe: 最低 Sharpe 阈值（筛选"高分"Alpha）
-        min_fitness: 最低 Fitness 阈值
-        min_sample: 最少样本数（样本不足时返回空模式）
+    Args:
+        storage_dir: data directory
+        min_sharpe: minimum Sharpe threshold used to filter winning Alphas
+        min_fitness: minimum Fitness threshold
+        min_sample: minimum sample count; returns an empty result when too small
 
-    返回:
+    Returns:
         {
             "sample_size": int,
             "total_records": int,
@@ -152,7 +157,7 @@ def get_winning_patterns(
 
     total = len(records)
 
-    # Filter: "winning" alphas
+    # Filter winning alphas.
     winners = [
         r for r in records
         if r.get("pass_fail") == "PASS"
@@ -165,30 +170,30 @@ def get_winning_patterns(
             f"Only {len(winners)} winning alpha(s) with Sharpe >= {min_sharpe}, need {min_sample}+."
         )
 
-    # ── Field combinations ──
+    # Field combinations.
     field_combos = Counter(
         tuple(sorted(r.get("field_set", [])))
         for r in winners
         if len(r.get("field_set", [])) >= 2
     ).most_common(5)
 
-    # ── Top operators ──
+    # Top operators.
     operator_counter = Counter(
         op for r in winners for op in r.get("operator_set", [])
     )
     top_operators = [op for op, _ in operator_counter.most_common(10)]
 
-    # ── Preferred windows ──
+    # Preferred windows.
     window_counter = Counter(
         w for r in winners for w in r.get("window_values", [])
     )
     preferred_windows = [w for w, _ in window_counter.most_common(5)]
 
-    # ── Top families ──
+    # Top families.
     family_counter = Counter(r.get("family", "unknown") for r in winners)
     top_categories = [cat for cat, _ in family_counter.most_common(5)]
 
-    # ── Avg metrics for winners ──
+    # Average metrics for winners.
     avg_sharpe = sum(r.get("sharpe", 0) for r in winners) / len(winners)
     avg_fitness = sum(r.get("fitness", 0) for r in winners) / len(winners)
 
@@ -216,12 +221,10 @@ def get_winning_patterns(
         ),
     }
 
-
-def _load_records(path: str, *, limit: int | None = DEFAULT_HISTORY_LIMIT) -> List[Dict[str, Any]]:
+def _load_records(path: str, *, limit: int | None = DEFAULT_HISTORY_LIMIT) -> list[dict[str, Any]]:
     return read_jsonl_records(path, limit=limit)
 
-
-def _empty_patterns(reason: str) -> Dict[str, Any]:
+def _empty_patterns(reason: str) -> dict[str, Any]:
     return {
         "sample_size": 0,
         "total_records": 0,
@@ -235,26 +238,25 @@ def _empty_patterns(reason: str) -> Dict[str, Any]:
         "summary": reason,
     }
 
-
 # ═══════════════════════════════════════════════════════════════════════
-# P1: AB 对照 — 变异的因果效果评估
+# P1: AB comparison — causal-effect evaluation of mutations
 # ═══════════════════════════════════════════════════════════════════════
 
 def _record_ab_comparison(
     mutant: "Candidate",
     storage_dir: str = "data",
 ) -> None:
-    """对比变异前后的 Alpha 官方模拟结果，记录到 ab_tests.jsonl。
+    """Compare an Alpha's results before and after mutation and record them in ab_tests.jsonl.
 
-    在 alpha_features.jsonl 中查找 parent_id 对应的父 Alpha 结果。
-    如果找到，写入对比记录。
+    Look up the parent Alpha result in alpha_features.jsonl.
+    If found, write a comparison record.
     """
     parent_id = mutant.parent_id
     if not parent_id:
         return
     mutation_type = mutant.mutation_type or "unknown"
 
-    # 查找父 Alpha 的结果
+    # Look up the parent Alpha result.
     features_path = os.path.join(storage_dir, "alpha_features.jsonl")
     if not os.path.exists(features_path):
         return
@@ -267,9 +269,9 @@ def _record_ab_comparison(
             break
 
     if not parent_record:
-        return  # 父 Alpha 尚未有官方结果
+        return  # The parent Alpha does not have an official result yet.
 
-    # 对比指标
+    # Compare metrics.
     mutant_metrics = mutant.official_metrics or {}
     mutation_display = (
         (mutant.expression[:80] + "…")
@@ -318,17 +320,17 @@ def _record_ab_comparison(
     with open(ab_path, "a", encoding="utf-8") as f:
         f.write(json.dumps(comparison, ensure_ascii=False) + "\n")
 
-
 def get_mutation_effectiveness(
     storage_dir: str = "data",
     min_samples: int = 3,
     history_limit: int = DEFAULT_HISTORY_LIMIT,
-) -> Dict[str, Any]:
-    """统计各 mutation_type 的改进效果。
+) -> dict[str, Any]:
+    """Summarize improvement results by mutation_type.
 
-    从 ab_tests.jsonl 中汇总每种变异模式的平均 Sharpe 提升、成功率等。
+    Aggregates average Sharpe improvement, success rate, and related deltas
+    from ab_tests.jsonl.
 
-    返回:
+    Returns:
         {
             "total_comparisons": int,
             "by_mutation_type": {...},
@@ -343,7 +345,7 @@ def get_mutation_effectiveness(
     if not records:
         return {"total_comparisons": 0, "by_mutation_type": {}, "summary": "AB test database empty."}
 
-    by_type: Dict[str, Dict[str, Any]] = {}
+    by_type: dict[str, dict[str, Any]] = {}
     for r in records:
         mtype = r.get("mutation_type", "unknown")
         if mtype not in by_type:
@@ -393,7 +395,6 @@ def get_mutation_effectiveness(
         ),
     }
 
-
 # ── Hypothesis Weight Feedback ──────────────────────────────────────
 
 def update_hypothesis_weights(
@@ -402,7 +403,7 @@ def update_hypothesis_weights(
     min_sample: int = 3,
     storage_dir: str = "data",
     history_limit: int = DEFAULT_HISTORY_LIMIT,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Update hypothesis experience weights based on winning alpha patterns.
 
     Reads alpha_features.jsonl to identify winner alphas, then computes
@@ -469,7 +470,7 @@ def update_hypothesis_weights(
 
     # For each hypothesis in the library, compute winner ratios
     all_hypothesis_ids = library.get_ids() if hasattr(library, 'get_ids') else []
-    updated_ids: List[str] = []
+    updated_ids: list[str] = []
 
     for hyp_id in all_hypothesis_ids:
         hyp = library.get_by_id(hyp_id) if hasattr(library, 'get_by_id') else None
@@ -477,7 +478,7 @@ def update_hypothesis_weights(
             continue
 
         # Compute field category winner ratios
-        field_cat_weights: Dict[str, float] = {}
+        field_cat_weights: dict[str, float] = {}
         for fc in hyp.field_categories:
             # Count winners that used fields matching this category
             # Look in record field_set for category examples or partial matches
@@ -495,7 +496,7 @@ def update_hypothesis_weights(
             field_cat_weights[fc.category] = ratio
 
         # Compute expression family winner ratios
-        expr_fam_weights: Dict[str, float] = {}
+        expr_fam_weights: dict[str, float] = {}
         for ef in hyp.expression_families:
             # Look for structure keywords in winning expressions
             structure_keywords = set(re.findall(r'\b\w+\b', ef.structure.lower()))
@@ -514,8 +515,8 @@ def update_hypothesis_weights(
             expr_fam_weights[ef.id] = ratio
 
         # Compute window winner ratios
-        window_weights: Dict[str, float] = {}
-        window_counter: Dict[int, int] = {}
+        window_weights: dict[str, float] = {}
+        window_counter: dict[int, int] = {}
         for r in winners:
             for w_str in r.get("window_values", []):
                 try:

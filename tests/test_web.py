@@ -1,9 +1,18 @@
+from __future__ import annotations
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 import json
 import os
+import shutil
+
+# P0-2: import web_submission_single as ``wss`` so the submit tests can
+# bypass the real-submit kill-switch.
+from brain_alpha_ops import web_submission_single as wss  # noqa: E402
 import re
+import threading
+import time
+import urllib.error
 import urllib.request
 
 import pytest
@@ -17,166 +26,141 @@ from brain_alpha_ops.research.repository import ResearchRepository
 from brain_alpha_ops.research.safety import SubmissionLedger
 from brain_alpha_ops.tasks import JobStore
 from brain_alpha_ops.web import _load_html, anti_overfit_snapshot, assistant_context_snapshot, assistant_cross_review_payload, assistant_guidance_snapshot, assistant_request_snapshot, assistant_response_guidance_payload, assistant_response_parse_payload, cloud_alpha_snapshot, config_from_payload, generate_candidates_payload, passed_candidates_from_payload, public_run_config, research_memory_snapshot, research_observability_snapshot, rolling_validation_snapshot, save_assistant_guidance_payload, sqlite_expression_lookup_payload, sqlite_index_snapshot, sqlite_record_lookup_payload
-from brain_alpha_ops.web_routes import GET_ROUTES, POST_ROUTES, route_for
+from brain_alpha_ops.web_config import config_from_payload as web_config_from_payload_service
+from brain_alpha_ops.web_config import save_run_config_payload as save_run_config_payload_service
+from brain_alpha_ops.web_job_registry import WebJobRegistry
+from brain_alpha_ops.web_rate_limit import RateLimitPolicy, RequestRateLimiter
+from brain_alpha_ops.web_routes import GET_ROUTES, POST_ROUTES, dispatch_get as legacy_dispatch_get, route_for
 from scripts.check_frontend_syntax import check_scripts
-from tests.test_web_frontend_v2 import _build_test_script, _run_node_script
 
 
-APP_TEST_MODULES = [
-    "js/utils.js",
-    "js/api-client.js",
-    "js/state.js",
-    "js/components/toast.js",
-    "js/components/spinner.js",
-    "js/components/modal.js",
-    "js/components/progress.js",
-    "js/components/table.js",
-    "js/views/detail.js",
-    "js/views/production.js",
-    "js/views/charts.js",
-    "js/views/monitor.js",
-    "js/view-model.js",
-    "js/view-registry.js",
-    "js/view-renderers.js",
-    "js/result-state.js",
-    "js/result-table.js",
-    "js/form-controls.js",
-    "js/cloud-sync.js",
-    "js/app.js",
-]
+_MISSING_WEB_ATTR = object()
+_WEB_JOB_EXPORTS = (
+    "JOBS",
+    "SYNC_JOBS",
+    "CHECK_JOBS",
+    "ASYNC_JOBS",
+    "SUBMIT_LOCK",
+    "RATE_LIMITER",
+    "TASK_EXECUTOR",
+)
 
 
-def _run_app_contract(test_code: str) -> str:
-    return _run_node_script(_build_test_script(APP_TEST_MODULES, test_code))
+def _snapshot_web_attrs(*names: str) -> dict[str, object]:
+    return {name: web.__dict__.get(name, _MISSING_WEB_ATTR) for name in names}
 
 
-def _select_options(html: str, select_id: str) -> set[str]:
-    match = re.search(rf'<select[^>]*id="{re.escape(select_id)}"[^>]*>(.*?)</select>', html, re.DOTALL)
-    assert match, f"select not found: {select_id}"
-    values: set[str] = set()
-    for option in re.finditer(r'<option(?:\s+value="([^"]*)")?[^>]*>(.*?)</option>', match.group(1), re.DOTALL):
-        value = option.group(1) if option.group(1) is not None else re.sub(r"<[^>]+>", "", option.group(2)).strip()
-        values.add(value)
-    return values
+def _restore_web_attrs(snapshot: dict[str, object]) -> None:
+    for name, value in snapshot.items():
+        if value is _MISSING_WEB_ATTR:
+            web.__dict__.pop(name, None)
+        else:
+            setattr(web, name, value)
 
 
-def test_web_html_contains_chinese_console():
-    HTML = _load_html()
+def _free_port_or_skip(start: int, host: str = "127.0.0.1") -> int:
+    try:
+        return web.find_free_port(start=start, host=host)
+    except (OSError, RuntimeError, PermissionError) as exc:
+        pytest.skip(f"local web server ports unavailable in this environment: {exc}")
 
+
+def _live_session_credentials(url: str) -> tuple[str, str]:
+    root_response = urllib.request.urlopen(url, timeout=5)
+    cookie = str(root_response.headers.get("Set-Cookie", "")).split(";", 1)[0]
+    html = root_response.read().decode("utf-8")
+    csrf_match = re.search(r'<meta name="brain-alpha-csrf" content="([^"]+)"', html)
+    if not csrf_match:
+        csrf_match = re.search(r"var CSRF_TOKEN = '([^']+)'", html)
+    assert csrf_match
+    assert csrf_match.group(1) != "__BRAIN_ALPHA_OPS_CSRF_TOKEN__"
+    return cookie, csrf_match.group(1)
+
+
+def _live_react_session_credentials(url: str) -> tuple[str, str, str]:
+    root_response = urllib.request.urlopen(url, timeout=5)
+    cookie = str(root_response.headers.get("Set-Cookie", "")).split(";", 1)[0]
+    html = root_response.read().decode("utf-8")
+    csrf_match = re.search(r'<meta name="brain-alpha-csrf" content="([^"]+)"', html)
+    stream_match = re.search(r'<meta name="brain-alpha-stream" content="([^"]+)"', html)
+    assert csrf_match
+    assert stream_match
+    assert csrf_match.group(1) != "__BRAIN_ALPHA_OPS_CSRF_TOKEN__"
+    assert stream_match.group(1) != "__BRAIN_ALPHA_OPS_STREAM_TOKEN__"
+    return cookie, csrf_match.group(1), html
+
+
+def _live_json_post(
+    url: str,
+    path: str,
+    payload: dict,
+    *,
+    cookie: str,
+    csrf_token: str,
+    request_id: str,
+):
+    request = urllib.request.Request(
+        f"{url.rstrip('/')}{path}",
+        data=json.dumps(payload).encode("utf-8"),
+        headers={
+            "Content-Type": "application/json",
+            "Cookie": cookie,
+            "X-Brain-Alpha-CSRF": csrf_token,
+            "X-Brain-Alpha-Request-ID": request_id,
+            "X-Brain-Alpha-Request-Timestamp": str(int(time.time() * 1000)),
+        },
+        method="POST",
+    )
+    return urllib.request.urlopen(request, timeout=5)
+
+
+def _react_source(*parts: str) -> str:
+    return (Path(__file__).resolve().parents[1] / "brain_alpha_ops" / "web" / "react_app" / "src" / Path(*parts)).read_text(encoding="utf-8")
+
+
+def _complete_official_metrics(**overrides):
+    metrics = {
+        "pass_fail": "PASS",
+        "sharpe": 1.5,
+        "fitness": 1.1,
+        "turnover": 0.2,
+        "self_correlation": 0.1,
+        "prod_correlation": 0.2,
+        "weight_concentration": 0.03,
+        "sub_universe_sharpe": 1.2,
+        "alphaSize": 1000,
+        "subUniverseSize": 1000,
+    }
+    metrics.update(overrides)
+    return metrics
+
+
+def test_web_html_serves_current_react_shell():
+    html = _load_html()
+
+    assert "<title>BRAIN Alpha Ops</title>" in html
+    assert '<div id="root"></div>' in html
+    assert '<meta name="brain-alpha-csrf"' in html
+    assert '<meta name="brain-alpha-stream"' in html
+    assert 'type="module"' in html
+    assert "/assets/" in html
+    assert "OfficialBrainAPI" not in html
+
+    app_tsx = _react_source("App.tsx")
+    state_cards_tsx = _react_source("components", "StateCards.tsx")
     for text in (
         "BRAIN Alpha Ops",
-        "策略 & 插件",
-        "开始生产搜索",
-        "生产流程",
-        "数据审计",
-        "研究工具",
-        "达标",
-        "可提交",
-        "不达标",
-        "排序分",
-        "提交勾选",
-        "预计剩余",
-        "任务操作台",
-        "Instrument Type",
-        "Truncation",
-        "助手 JSON",
+        "本地非提交页面",
+        "官方操作",
+        "候选管理",
+        "回测监控",
+        "质量门禁",
+        "阻断复核",
+        "系统配置",
+        "云端快照",
+        "切换导航菜单",
     ):
-        assert text in HTML
-
-    for element_id in (
-        "backtestPanel",
-        "insightPanel",
-        "viewTabs",
-        "syncButton",
-        "checkMode",
-        "checkButton",
-        "detailModal",
-        "checkProgressFill",
-        "cloudSyncMeta",
-        "monitorCloudMeta",
-        "cloudStatsPanel",
-        "checkProgressMeta",
-        "autoSubmitToggle",
-        "controlButton",
-        "sideSyncButton",
-        "sideCheckButton",
-        "sideSubmitButton",
-        "slotPolicyText",
-        "assistantGenerateInputs",
-        "assistantUseDraftButton",
-        "assistantSaveDraftButton",
-        "assistantUseLatestButton",
-        "assistantPreviewGuidanceButton",
-        "assistantSaveGuidanceButton",
-    ):
-        assert element_id in HTML
-
-    for symbol in (
-        "renderViewTabs",
-        "getEmptyDescription",
-        "switchView",
-        "renderStrategyPolicy",
-        "renderOpsMonitor",
-        "buildResearchRows",
-        "monitor-stats-grid",
-        "cloud_alphas",
-        "buildCloudRows",
-        "buildSubmittableRows",
-        "cloudSyncStatus",
-        "checkResults",
-        "renderRiskExplanation",
-        "CHECK_STALE_MS",
-        "payload.guided = true",
-        "resumeProductionFromCheckpoint",
-        "pollJob",
-        "slot-card",
-        "phaseName",
-        "official_validation",
-        "simulation_submit",
-        "currentResearchKnowledge",
-        "buildPromptRunRows",
-        "buildSqliteRows",
-        "buildRobustnessRows",
-        "currentRobustnessSnapshot",
-        "viewCandidateDetail",
-        "viewCheckDetail",
-        "renderFieldTableHTML",
-        "research_observability",
-        "submission_risk",
-        "strategyPluginsEnabled",
-        "strategyPluginSpecs",
-        "assistantGuidanceScoreMinConfidence",
-        "assistantGuidanceScoreMinOutcomeCount",
-    ):
-        assert symbol in HTML
-
-    assert "switchTab" not in HTML
-    assert 'class="tabs"' not in HTML
-    assert 'data-tab="' not in HTML
-    assert "cloud_sync" in HTML
-    assert '<option value="quick" selected>快速</option>' in HTML
-    assert '<option value="all">全部</option>' in HTML
-    assert "自动提交可提交" not in HTML
-    assert "check_batch" in HTML
-    assert "submit_batch" in HTML
-    assert "状态码" not in HTML
-    assert "下次刷新" not in HTML
-    assert "runButton" not in HTML
-    assert "复制当前最佳 Alpha" not in HTML
-    assert "快速检查选中" not in HTML
-    assert "运行、同步和三槽回测监控已固定在右侧顶部" not in HTML
-
-    for path in (
-        "/api/config",
-        "/api/active_job",
-        "/api/cloud_alphas",
-        "/api/research_memory",
-        "/api/check_batch",
-        "/api/submit",
-        "/api/submit_batch",
-        "/api/sync_alphas",
-    ):
-        assert path in HTML
+        assert text in app_tsx or text in state_cards_tsx
 
     for path in (
         "/api/research_knowledge",
@@ -187,39 +171,36 @@ def test_web_html_contains_chinese_console():
         "/api/sqlite_record_lookup",
         "/api/anti_overfit",
         "/api/rolling_validation",
+        "/api/capabilities",
     ):
         assert path in GET_ROUTES
 
-    assert "loadCloudSnapshot" in HTML
-    assert "loadSnapshot" in HTML
-    assert "/api/cloud_alphas?limit=500" in HTML
-    assert "/api/sync_status?compact=1&job_id=" in HTML
-    assert "pollSyncJob" in HTML
-    assert "loadResearchMemory" in HTML
-    assert "OfficialBrainAPI" not in HTML
-    assert "useAssistantGuidance" in HTML
-
 
 def test_web_settings_select_options_match_canonical_contract():
-    html = _load_html()
+    schema = web.public_config_schema()
+    options = schema["settings_options"]
 
-    assert _select_options(html, "region") == CANONICAL_SETTINGS["region"]
-    assert _select_options(html, "universe") == CANONICAL_SETTINGS["universe"]
-    assert {int(value) for value in _select_options(html, "delay")} == CANONICAL_SETTINGS["delay"]
-    assert _select_options(html, "neutralization") == CANONICAL_SETTINGS["neutralization"]
-    assert _select_options(html, "instrumentType") == CANONICAL_SETTINGS["instrumentType"]
-    assert _select_options(html, "alphaType") == CANONICAL_SETTINGS["type"]
-    assert _select_options(html, "pasteurization") == CANONICAL_SETTINGS["pasteurization"]
-    assert _select_options(html, "unitHandling") == CANONICAL_SETTINGS["unitHandling"]
-    assert _select_options(html, "nanHandling") == CANONICAL_SETTINGS["nanHandling"]
-    assert _select_options(html, "language") == CANONICAL_SETTINGS["language"]
+    assert set(options["region"]) == CANONICAL_SETTINGS["region"]
+    assert set(options["universe"]) == CANONICAL_SETTINGS["universe"]
+    assert {int(value) for value in options["delay"]} == CANONICAL_SETTINGS["delay"]
+    assert set(options["neutralization"]) == CANONICAL_SETTINGS["neutralization"]
+    assert set(options["instrumentType"]) == CANONICAL_SETTINGS["instrumentType"]
+    assert set(options["type"]) == CANONICAL_SETTINGS["type"]
+    assert set(options["pasteurization"]) == CANONICAL_SETTINGS["pasteurization"]
+    assert set(options["unitHandling"]) == CANONICAL_SETTINGS["unitHandling"]
+    assert set(options["nanHandling"]) == CANONICAL_SETTINGS["nanHandling"]
+    assert set(options["language"]) == CANONICAL_SETTINGS["language"]
 
 
-def test_api_client_maps_submit_preflight_error_codes():
-    js = Path("brain_alpha_ops/web/js/api-client.js").read_text(encoding="utf-8")
-    html = _load_html()
+def test_submit_preflight_errors_are_backend_owned_and_react_readable():
+    hook_js = _react_source("hooks", "useApi.ts")
+    csrf_utils_ts = _react_source("utils", "csrf.ts")
+    submission_tsx = _react_source("components", "SubmissionConfirmPanel.tsx")
+    quality_tsx = _react_source("components", "QualityCheckPanel.tsx")
+    safety_py = (Path(__file__).resolve().parents[1] / "brain_alpha_ops" / "web_submission_safety.py").read_text(encoding="utf-8")
+    submission_batch_py = (Path(__file__).resolve().parents[1] / "brain_alpha_ops" / "web_submission_single.py").read_text(encoding="utf-8")
+
     for code in (
-        "SUBMIT_NON_PRODUCTION_CANDIDATE",
         "SUBMIT_NOT_READY",
         "SUBMIT_FAILED_CANDIDATE",
         "SUBMIT_DUPLICATE_OFFICIAL_ID",
@@ -228,68 +209,64 @@ def test_api_client_maps_submit_preflight_error_codes():
         "SUBMIT_CLOUD_SYNC_STALE",
         "SUBMIT_CLOUD_ALREADY_SUBMITTED",
         "SUBMIT_OBSERVABILITY_CONFIRMATION_REQUIRED",
-        "SUBMIT_BATCH_ERROR",
     ):
-        assert code in js
-        assert code in html
-    assert "assistantGenerateInputs" in html
-    assert "currentResult.cloud_alphas" in html
-    assert "research_memory" in html
-    assert "云端已提交" in html
-    assert "云端相似度过高" in html
-    assert '<option value="production" selected>' in html
-    assert '<option value="3d" selected>近 3 天</option>' in html
+        assert code in safety_py or code in submission_batch_py
+
+    assert "/api/submit_readiness" in submission_tsx
+    assert "/api/backtest_slots" in quality_tsx
+    assert "apiErrorMessage" in hook_js
+    assert "提交前阻断复核数据加载失败" in submission_tsx
+    assert "达标检查数据加载失败" in quality_tsx
+    assert "X-Brain-Alpha-CSRF" in csrf_utils_ts
+    assert "brain-alpha-csrf" in csrf_utils_ts
 
 
-def test_web_inline_scripts_pass_syntax_check():
-    result = check_scripts(Path(__file__).resolve().parents[1] / "brain_alpha_ops" / "web" / "index.html")
-
-    assert result["ok"] is True
-    assert result["checked"] >= 1
-    assert result["failures"] == []
-
-
-def test_web_inline_html_matches_modular_js_sources():
-    import importlib.util
-
-    build_path = Path(__file__).resolve().parents[1] / "brain_alpha_ops" / "web" / "build_inline.py"
-    spec = importlib.util.spec_from_file_location("web_build_inline", build_path)
-    build_inline = importlib.util.module_from_spec(spec)
-    assert spec and spec.loader
-    spec.loader.exec_module(build_inline)
-
-    result = build_inline.check(Path(__file__).resolve().parents[1] / "brain_alpha_ops" / "web" / "index.html")
-
-    assert result["ok"] is True
-    assert result["replaced"] >= 13
-    assert "js/app.js" in result["sources"]
-
-
-def test_web_static_html_uses_delegated_handlers_without_inline_events():
+def test_web_react_dist_shell_has_build_assets():
     root = Path(__file__).resolve().parents[1]
-    template = (root / "brain_alpha_ops" / "web" / "index_template.html").read_text(encoding="utf-8")
-    generated = (root / "brain_alpha_ops" / "web" / "index.html").read_text(encoding="utf-8")
+    dist = root / "brain_alpha_ops" / "web" / "react_app" / "dist"
+    html = (dist / "index.html").read_text(encoding="utf-8")
 
-    for html in (template, generated):
-        assert "onclick=" not in html
-        assert "onchange=" not in html
-        assert "oninput=" not in html
-        assert "onkeydown=" not in html
-        assert 'data-action="toggle-run"' in html
-        assert 'data-action="sync-cloud"' in html
-        assert 'data-change-action="toggle-environment"' in html
-        assert 'value="mock"' not in html
-        assert "本地模拟环境" not in html
+    assert '<div id="root"></div>' in html
+    assert 'type="module"' in html
+    assert "/assets/" in html
+    assert any(path.suffix == ".js" for path in (dist / "assets").iterdir())
+    assert any(path.suffix == ".css" for path in (dist / "assets").iterdir())
+
+
+def test_web_react_sources_are_current_frontend_contract():
+    app_tsx = _react_source("App.tsx")
+    candidate_tsx = _react_source("components", "CandidateTable.tsx")
+    snapshot_tsx = _react_source("components", "SnapshotPanel.tsx")
+
+    assert "PhaseShell" in app_tsx
+    assert "usePhaseState" in app_tsx
+    assert "MobileTabBar" in app_tsx
+    assert 'candidatesApi.call("/api/candidates?summary=true")' in app_tsx
+    assert 'callApi("/api/candidates")' in candidate_tsx
+    assert "/api/candidates?limit=" not in candidate_tsx
+    assert "/api/check_results" in candidate_tsx
+    assert "/api/generate_candidates" in candidate_tsx
+    assert "sanitizeTextInput" in candidate_tsx
+    assert 'endpoint: "/api/snapshot/cloud"' in snapshot_tsx
+    assert "max-w-full overflow-auto" in snapshot_tsx
+
+
+def test_web_react_shell_has_no_inline_event_handlers():
+    html = _load_html()
+
+    assert "onclick=" not in html
+    assert "onchange=" not in html
+    assert "oninput=" not in html
+    assert "onkeydown=" not in html
+    assert 'value="mock"' not in html
+    assert "本地模拟环境" not in html
 
 
 def test_web_static_html_has_no_inline_style_attributes():
-    root = Path(__file__).resolve().parents[1]
-    template = (root / "brain_alpha_ops" / "web" / "index_template.html").read_text(encoding="utf-8")
-    generated = (root / "brain_alpha_ops" / "web" / "index.html").read_text(encoding="utf-8")
+    html = _load_html()
 
-    for html in (template, generated):
-        assert " style=" not in html
-        assert "style-src 'self' 'unsafe-inline'" not in web.content_security_policy_for_html(html)
+    assert " style=" not in html
+    assert "style-src 'self' 'unsafe-inline'" not in web.content_security_policy_for_html(html)
 
 
 def test_web_csp_hashes_inline_scripts_without_unsafe_inline():
@@ -305,296 +282,184 @@ def test_web_csp_hashes_inline_scripts_without_unsafe_inline():
     assert csp.count("'sha256-") == 3
 
 
-def test_research_observability_rows_render_and_cache_items():
-    test_code = """
-window.AppState.setBatch({
-  "activeView": "research_observability",
-  "currentResult.research_observability": {
-    items: [{ id: "OBS001", stage: "<script>stage</script>", status: "passed", message: "<b>unsafe</b>" }]
-  },
-});
+def test_react_snapshot_views_cover_readonly_research_surfaces():
+    snapshot_tsx = _react_source("components", "SnapshotPanel.tsx")
 
-window.renderCurrentView();
+    for endpoint in (
+        "/api/snapshot/cloud",
+        "/api/lifecycle",
+        "/api/research_memory?limit=5000&top_n=10",
+        "/api/research_knowledge?limit=100&min_confidence=0",
+        "/api/research_observability?limit=5000&top_n=10&include_cloud=true",
+        "/api/prompt_runs?limit=100",
+        "/api/sqlite_indexes?top_n=10",
+        "/api/latest_result",
+    ):
+        assert endpoint in snapshot_tsx
 
-var html = document.getElementById("candidateRows").innerHTML;
-assertContains(html, "OBS001", "research row id rendered");
-assertNotContains(html, "<script>stage</script>", "raw stage not injected");
-assertNotContains(html, "<b>unsafe</b>", "raw message not injected");
-var cached = window.AppState.getCached("research_observability", "OBS001");
-assertEqual(cached.raw.message, "<b>unsafe</b>", "research row keeps raw detail data in cache");
-"""
+    for helper in (
+        "cloudRows",
+        "lifecycleRows",
+        "researchMemoryRows",
+        "researchKnowledgeRows",
+        "researchObservabilityRows",
+        "promptRunRows",
+        "sqliteIndexRows",
+        "robustnessRows",
+    ):
+        assert f"rows: {helper}" in snapshot_tsx or f"function {helper}" in snapshot_tsx
 
-    _run_app_contract(test_code)
-
-
-def test_additional_stats_panels_render_through_current_view_contract():
-    test_code = """
-window.AppState.setBatch({
-  "currentResult.research_knowledge": { items: [{ id: "KN001", stage: "learn", message: "<tag>knowledge</tag>" }] },
-  "currentResult.prompt_runs": { runs: [{ run_id: "PR001", stage: "prompt", message: "<tag>prompt</tag>" }] },
-  "currentResult.sqlite_indexes": { expressions: { count: 2 } },
-  "currentResult.robustness_snapshot": { candidates: [{ alpha_id: "ROB001", family: "<tag>family</tag>", submission_risk: "<tag>risk</tag>" }] },
-  "currentResult.lifecycle_records": [{ alpha_id: "LIFE001", stage: "<tag>stage</tag>", status: "completed", message: "<tag>message</tag>" }],
-});
-
-window.switchView("research_knowledge");
-assertContains(document.getElementById("candidateRows").innerHTML, "KN001", "knowledge row rendered");
-assertEqual(window.AppState.getCached("research_knowledge", "KN001").raw.message, "<tag>knowledge</tag>", "knowledge detail data cached");
-
-window.switchView("prompt_runs");
-assertContains(document.getElementById("candidateRows").innerHTML, "PR001", "prompt run rendered");
-assertEqual(window.AppState.getCached("prompt_run", "PR001").raw.message, "<tag>prompt</tag>", "prompt run detail data cached");
-
-window.switchView("sqlite_indexes");
-assertContains(document.getElementById("candidateRows").innerHTML, "expressions", "sqlite index row rendered");
-
-window.switchView("lifecycle");
-var lifecycleHtml = document.getElementById("candidateRows").innerHTML;
-assertContains(lifecycleHtml, "LIFE001", "lifecycle row rendered");
-assertNotContains(lifecycleHtml, "<tag>stage</tag>", "raw lifecycle stage not injected");
-assertNotContains(lifecycleHtml, "<tag>message</tag>", "raw lifecycle message not injected");
-
-window.switchView("robustness");
-var robustnessHtml = document.getElementById("candidateRows").innerHTML;
-assertContains(robustnessHtml, "ROB001", "robustness row rendered");
-assertContains(robustnessHtml, "&lt;tag&gt;family&lt;/tag&gt;", "robustness family escaped");
-assertContains(robustnessHtml, "&lt;tag&gt;risk&lt;/tag&gt;", "robustness risk escaped");
-"""
-
-    _run_app_contract(test_code)
-
-
-def test_sqlite_index_rows_reuse_cached_lookup_state():
-    test_code = """
-window.AppState.setBatch({
-  "activeView": "sqlite_indexes",
-  "currentResult.sqlite_indexes": {
-    expression_index: { count: 7, status: "<b>ready</b>" },
-  },
-});
-
-window.renderCurrentView();
-
-var html = document.getElementById("candidateRows").innerHTML;
-assertContains(html, "expression_index", "sqlite index key rendered");
-assertContains(html, "查看详情", "row action rendered");
-var cached = window.AppState.getCached("sqlite_index", "expression_index");
-assertEqual(cached.raw.key, "expression_index", "sqlite row cached by key");
-"""
-
-    _run_app_contract(test_code)
+    assert "const MAX_FILTER_LENGTH = 200" in snapshot_tsx
+    assert "sanitizeTextInput" in snapshot_tsx
+    assert "max-w-full overflow-auto" in snapshot_tsx
+    assert "function text(value: unknown)" in snapshot_tsx
     assert "/api/sqlite_expression_lookup" in GET_ROUTES
     assert "/api/sqlite_record_lookup" in GET_ROUTES
-
-
-def test_robustness_results_render_and_cache_candidate_rows():
-    test_code = """
-window.AppState.setBatch({
-  "activeView": "robustness",
-  "currentResult.robustness_snapshot": {
-    candidates: [{ alpha_id: "ROB002", family: "Momentum", scorecard: { total_score: 91 }, gate: { submission_ready: true } }]
-  },
-});
-
-window.renderCurrentView();
-
-var html = document.getElementById("candidateRows").innerHTML;
-assertContains(html, "ROB002", "robustness alpha rendered");
-assertContains(html, "Momentum", "robustness family rendered");
-var cached = window.AppState.getCached("robustness", "ROB002");
-assertEqual(cached.raw.alpha_id, "ROB002", "robustness row cached by alpha id");
-"""
-
-    _run_app_contract(test_code)
     assert "/api/anti_overfit" in GET_ROUTES
     assert "/api/rolling_validation" in GET_ROUTES
 
 
-def test_stats_cards_sanitize_dynamic_class_and_action_handlers():
-    test_code = """
-window.AppState.setBatch({
-  "activeView": "passed",
-  "currentResult.candidates": [
-    { alpha_id: "BTN001", lifecycle_status: "submission_ready", family: "<b>unsafe</b>", scorecard: { total_score: 88 }, gate: { submission_ready: true } }
-  ],
-});
+def test_react_candidate_table_keeps_filter_sort_and_mobile_safe_table_contract():
+    candidate_tsx = _react_source("components", "CandidateTable.tsx")
 
-window.renderCurrentView();
+    for contract in (
+        "const MAX_FILTER_LENGTH = 200",
+        "const PAGE_SIZE = 20",
+        'callApi("/api/candidates")',
+        'aria-label="过滤候选"',
+        "sanitizeTextInput",
+        'overflow: "auto"',
+        "candidateText(c.expression)",
+        "candidateText(c.family)",
+        "candidateIdentity(c)",
+        'column="score"',
+        "没有匹配的候选",
+        "暂无候选记录",
+        "上一页",
+        "下一页",
+    ):
+        assert contract in candidate_tsx
 
-var html = document.getElementById("candidateRows").innerHTML;
-assertContains(html, 'data-action="open-row"', "open row action rendered as data-action");
-assertContains(html, 'data-action="toggle-select"', "select action rendered as data-action");
-assertContains(html, "&lt;b&gt;unsafe&lt;/b&gt;", "family is escaped in row html");
-assertNotContains(html, "onclick=", "row actions avoid inline click handlers");
-assertNotContains(html, "onkeydown=", "row actions avoid inline key handlers");
-"""
-
-    _run_app_contract(test_code)
-
-
-def test_charts_handle_empty_and_large_datasets():
-    charts_js = (Path(__file__).resolve().parents[1] / "brain_alpha_ops" / "web" / "js" / "views" / "charts.js").read_text(encoding="utf-8")
-    template = (Path(__file__).resolve().parents[1] / "brain_alpha_ops" / "web" / "index_template.html").read_text(encoding="utf-8")
-
-    assert "MAX_CHART_POINTS = 300" in charts_js
-    assert "function renderEmptyNativeChart" in charts_js
-    assert "function renderNativeCharts" in charts_js
-    assert "function drawLineChart" in charts_js
-    assert "function drawBarChart" in charts_js
-    assert "function drawPieChart" in charts_js
-    assert "function sampleRows" in charts_js
-    assert "function candidateRows" in charts_js
-    assert "function renderCharts(options)" in charts_js
-    assert "Array.isArray(options.candidates)" in charts_js
-    assert "sampleRows(candidateRows(candidates)" in charts_js
-    assert "已启用本地 canvas 简版图表" in charts_js
-    assert "cdn.jsdelivr.net" not in template
-    assert "api.fontshare.com" not in template
-    assert "code.iconify.design" not in template
-    assert "sharpes = [0]" not in charts_js
+    assert "CANDIDATE_FETCH_LIMIT" not in candidate_tsx
+    assert "?limit=1000" not in candidate_tsx
+    assert 'onclick="' not in candidate_tsx.lower()
+    assert 'onkeydown="' not in candidate_tsx.lower()
+    assert 'role="button"' not in candidate_tsx
 
 
-def test_result_display_mode_uses_filtered_rows_without_blank_table_shell():
-    test_code = """
-window.AppState.setBatch({
-  "activeView": "candidates",
-  "currentResult.candidates": [
-    { alpha_id: "KEEP001", family: "Momentum", lifecycle_status: "candidate", scorecard: { total_score: 80 } },
-    { alpha_id: "DROP001", family: "Reversal", lifecycle_status: "candidate", scorecard: { total_score: 70 } },
-  ],
-});
-document.getElementById("tableSearch").value = "KEEP";
+def test_react_state_cards_keep_core_flow_visible_and_actionable():
+    app_tsx = _react_source("App.tsx")
+    state_cards_tsx = _react_source("components", "StateCards.tsx")
+    job_monitor_tsx = _react_source("components", "JobMonitor.tsx")
 
-window.renderCurrentView();
+    for contract in (
+        'useState<CardViewId>("dashboard")',
+        'aria-label="切换导航菜单"',
+        "onNavigate",
+        "点击状态卡进入对应功能模块",
+        "非提交生产验证",
+        "填写凭证",
+        "未连接",
+        "系统配置",
+        "/api/candidates",
+        "/api/backtest_slots",
+        "/api/config",
+        "/api/snapshot/cloud",
+        "grid w-full max-w-full grid-cols-1",
+        "2xl:grid-cols-5",
+        "onClick={() => onNavigate(config.id)}",
+        'caption: "提交审计"',
+        "handleConnectionTested",
+        "CredentialQuickStart",
+    ):
+        assert contract in app_tsx or contract in state_cards_tsx or contract in job_monitor_tsx
 
-var rowsHtml = document.getElementById("candidateRows").innerHTML;
-assertContains(rowsHtml, "KEEP001", "matching row rendered");
-assertNotContains(rowsHtml, "DROP001", "non-matching row filtered out");
-assertEqual(document.getElementById("candidateTable").classList.contains("hidden"), false, "table visible with filtered data");
-assertEqual(document.getElementById("mobileCardList").classList.contains("hidden"), true, "desktop mobile shell hidden");
-assertEqual(window.AppState.getCached("candidate", "KEEP001").raw.alpha_id, "KEEP001", "render caches visible row");
+    assert "/api/submit_readiness" not in state_cards_tsx
 
-document.getElementById("tableSearch").value = "none";
-window.renderCurrentView();
-assertEqual(document.getElementById("candidateTable").classList.contains("hidden"), true, "table hidden when filter removes all rows");
-assertEqual(document.getElementById("tableEmptyState").classList.contains("hidden"), false, "empty state shown after filter removes all rows");
-"""
+    for view_id in (
+        'id: "candidates"',
+        'id: "official_backtests"',
+        'id: "quality_check"',
+        'id: "submission_confirm"',
+        'id: "checkpoint_status"',
+        'id: "config"',
+        'id: "cloud"',
+    ):
+        assert view_id in state_cards_tsx
 
-    _run_app_contract(test_code)
-
-
-def test_filter_chips_and_display_toggle_are_keyboard_accessible():
-    test_code = """
-window.AppState.set("activeView", "candidates");
-window.renderAll();
-
-var tabs = document.getElementById("viewTabs").innerHTML;
-assertContains(tabs, "<button", "tabs render as buttons");
-assertContains(tabs, 'data-action="switch-view"', "tabs use delegated switch action");
-assertContains(tabs, 'aria-pressed="true"', "active tab exposes pressed state");
-
-window.setResultDisplayMode("charts");
-assertEqual(document.getElementById("chartsPanel").classList.contains("visible"), true, "charts panel visible");
-assertEqual(document.getElementById("chartModeBtn").getAttribute("aria-pressed"), "true", "chart toggle pressed");
-assertEqual(document.getElementById("tableModeBtn").getAttribute("aria-pressed"), "false", "table toggle not pressed");
-
-window.setResultDisplayMode("table");
-assertEqual(document.getElementById("tableModeBtn").getAttribute("aria-pressed"), "true", "table toggle pressed");
-assertEqual(document.getElementById("chartModeBtn").getAttribute("aria-pressed"), "false", "chart toggle not pressed");
-"""
-
-    _run_app_contract(test_code)
-
-
-def test_operation_guard_blocks_conflicting_frontend_actions():
-    test_code = """
-window.AppState.set("syncInFlight", true);
-
-window.renderBusyControls();
-
-assertContains(window.operationBlockReason("production"), "云端同步", "production blocked during sync");
-assertContains(window.operationBlockReason("check"), "云端同步", "check blocked during sync");
-assertEqual(document.getElementById("controlButton").disabled, true, "production button disabled");
-assertEqual(document.getElementById("operationGuard").classList.contains("hidden"), false, "guard visible");
-assertContains(document.getElementById("operationGuard").textContent, "云端同步", "guard explains sync lock");
-
-window.AppState.set("syncInFlight", false);
-window.AppState.set("batchCheckJobId", "check_1");
-assertContains(window.operationBlockReason("submit"), "达标检查", "submit blocked during batch check");
-
-window.AppState.set("batchCheckJobId", "");
-window.AppState.set("submitInFlight", true);
-assertContains(window.operationBlockReason("sync"), "提交", "sync blocked during submit");
-"""
-
-    _run_app_contract(test_code)
+    assert "ConfigPanel" in app_tsx
+    assert 'case "config":' in app_tsx
+    for config_contract in (
+        "onConnectionTested={handleConnectionTested}",
+        "connected={connected}",
+        "contextFresh={contextFresh}",
+        "managedCredentialsAvailable={managedCredentialsAvailable}",
+        "onLoggedOut={handleLocalSessionLoggedOut}",
+    ):
+        assert config_contract in app_tsx
 
 
-def test_ux_refactor_keeps_core_flow_visible_and_empty_states_actionable():
-    test_code = """
-window.AppState.setBatch({
-  "activeView": "candidates",
-  "currentResult.candidates": [],
-});
+def test_react_quality_submit_and_backtest_panels_cover_conflict_guards():
+    backtest_tsx = _react_source("components", "OfficialBacktestSlots.tsx")
+    quality_tsx = _react_source("components", "QualityCheckPanel.tsx")
+    submission_tsx = _react_source("components", "SubmissionConfirmPanel.tsx")
 
-window.renderAll();
+    for contract in (
+        "/api/backtest_slots",
+        "POLL_INTERVAL_MS = 5000",
+        "BacktestQueueSummaryStrip",
+        "官方工作阻断",
+        "提交证据阻断",
+        "official_api_called",
+        "等待官方容量",
+    ):
+        assert contract in backtest_tsx
 
-assertContains(document.getElementById("viewTabs").innerHTML, "view-tab-group", "view tabs grouped");
-assertContains(document.getElementById("viewTabs").innerHTML, "tab-marker", "tab marker visible");
-assertEqual(document.getElementById("tableEmptyState").classList.contains("hidden"), false, "empty state visible");
-assertContains(document.getElementById("tableEmptyDescription").textContent, "启动生产搜索", "empty state actionable copy");
-assertContains(document.getElementById("panelHint").textContent, "按排序分", "panel hint follows active view");
-"""
+    for contract in (
+        "/api/backtest_slots",
+        "/api/submit_readiness",
+        "达标检查",
+        "本地通过",
+        "官方仿真",
+        "阻断复核候选",
+        "官方门槛:",
+        "官方工作阻断:",
+        "提交证据阻断:",
+        "候选族阻断:",
+        "下一步:",
+    ):
+        assert contract in quality_tsx
 
-    _run_app_contract(test_code)
-
-
-def test_mobile_cards_use_explicit_controls_instead_of_nested_button_role():
-    test_code = """
-window.innerWidth = 480;
-window.AppState.setBatch({
-  "activeView": "passed",
-  "currentResult.candidates": [
-    { alpha_id: "MOB001", lifecycle_status: "submission_ready", scorecard: { total_score: 86 }, gate: { submission_ready: true } },
-  ],
-});
-
-window.renderCurrentView();
-
-var html = document.getElementById("mobileCardList").innerHTML;
-assertContains(html, "mobile-card", "mobile card rendered");
-assertContains(html, 'data-action="open-row"', "mobile card has explicit open control");
-assertContains(html, 'data-action="toggle-select"', "mobile card has explicit select control");
-assertNotContains(html, 'role="button"', "mobile card container avoids nested button role");
-assertNotContains(html, 'tabindex="0"', "mobile card container avoids redundant tabindex");
-"""
-
-    _run_app_contract(test_code)
+    for contract in (
+        "/api/candidates",
+        "/api/check_results",
+        "/api/submit_readiness",
+        "提交前阻断复核",
+        "ready_to_submit",
+        "production_gaps",
+        "required_next_steps",
+        "预检查通过",
+        "阻断与待处理",
+        "READY",
+    ):
+        assert contract in submission_tsx
 
 
-def test_view_model_helpers_are_modular_and_inlined():
-    root = Path(__file__).resolve().parents[1]
-    view_model_js = (root / "brain_alpha_ops" / "web" / "js" / "view-model.js").read_text(encoding="utf-8")
-    view_registry_js = (root / "brain_alpha_ops" / "web" / "js" / "view-registry.js").read_text(encoding="utf-8")
-    view_renderers_js = (root / "brain_alpha_ops" / "web" / "js" / "view-renderers.js").read_text(encoding="utf-8")
-    app_js = (root / "brain_alpha_ops" / "web" / "js" / "app.js").read_text(encoding="utf-8")
-    html = _load_html()
+def test_react_sources_avoid_legacy_inline_globals_and_external_assets():
+    root = Path(__file__).resolve().parents[1] / "brain_alpha_ops" / "web" / "react_app" / "src"
+    source = "\n".join(path.read_text(encoding="utf-8") for path in root.rglob("*.tsx"))
 
-    assert "window.ViewModel" in view_model_js
-    assert "uniqueBacktestSlots" in view_model_js
-    assert "window.ViewRegistry" in view_registry_js
-    assert "VIEW_GROUPS" in view_registry_js
-    assert "window.ViewRenderers" in view_renderers_js
-    assert "function getRowsForView" in view_renderers_js
-    assert "function getColumnsForView" in view_renderers_js
-    assert "var VM = window.ViewModel" in app_js
-    assert "var Registry = window.ViewRegistry" in app_js
-    assert "var ViewRenderers = window.ViewRenderers" in app_js
-    assert "function uniqueBacktestSlots" not in app_js
-    assert "function buildCandidateRows" not in app_js
-    assert "// brain_alpha_ops/web/js/view-model.js" in html
-    assert "// brain_alpha_ops/web/js/view-registry.js" in html
-    assert "// brain_alpha_ops/web/js/view-renderers.js" in html
+    for legacy_marker in (
+        "window.AppState",
+        "switchTab",
+        "data-tab=",
+        "onclick=",
+        "onkeydown=",
+        "cdn.jsdelivr.net",
+        "api.fontshare.com",
+        "code.iconify.design",
+    ):
+        assert legacy_marker not in source
 
 
 def test_web_inline_script_syntax_check_reports_failures(tmp_path):
@@ -650,6 +515,7 @@ def test_web_config_from_payload():
     assert config.budget.official_retry_pause_seconds == 2
     assert config.budget.cloud_sync_range == "3d"
     assert config.budget.require_cloud_sync is True
+    assert config.budget.cloud_sync_max_elapsed_seconds == 0.0
     assert config.budget.max_cycles == 10
     assert config.budget.use_assistant_guidance is False
     assert config.budget.assistant_guidance_min_confidence == 0.85
@@ -671,6 +537,15 @@ def test_web_config_from_payload_accepts_alpha_type_alias():
     assert config.settings.unitHandling == "NONE"
 
 
+def test_web_config_from_payload_defaults_omitted_sync_range_to_all():
+    existing = RunConfig(environment="production")
+    existing.ops.budget.cloud_sync_range = "3d"
+
+    config = web_config_from_payload_service({}, loader=lambda: existing)
+
+    assert config.budget.cloud_sync_range == "all"
+
+
 def test_web_config_from_payload_rejects_invalid_numbers():
     with pytest.raises(ValueError, match="candidates must be an integer"):
         config_from_payload({"candidates": "many"})
@@ -682,7 +557,7 @@ def test_web_config_from_payload_rejects_invalid_numbers():
         config_from_payload({"cyclePauseSeconds": -1})
 
 
-def test_web_config_from_payload_rejects_user_facing_mock_environment():
+def test_web_config_from_payload_rejects_non_production_environment():
     with pytest.raises(ValueError, match="only supports production"):
         config_from_payload({"environment": "mock"})
 
@@ -713,6 +588,61 @@ def test_public_config_redacts_credentials():
     assert config["credentials"]["token"] == ""
 
 
+def test_save_run_config_payload_persists_editable_config_surface(tmp_path):
+    base = RunConfig(environment="production")
+    base.ops.settings.dataset = "pv1"
+    saved = []
+
+    def writer(config):
+        saved.append(config)
+        return tmp_path / "run_config.json"
+
+    payload = {
+        "environment": "production",
+        "autoSubmit": True,
+        "auto_submit": True,
+        "username": "researcher@example.com",
+        "password": "plain-password",
+        "token": "plain-token",
+        "settings": {
+            "region": "USA",
+            "universe": "TOP3000",
+            "delay": 1,
+            "decay": 12,
+            "neutralization": "INDUSTRY",
+            "dataset": "pv1",
+        },
+        "candidates": 33,
+        "cycles": 7,
+        "poolSize": 21,
+        "backtestBatchSize": 4,
+        "requireCloudSync": False,
+        "minSharpe": 1.5,
+        "minFitness": 1.1,
+        "minTurnover": 0.02,
+        "platformMaxTurnover": 0.6,
+        "maxSelfCorrelation": 0.65,
+        "maxWeightConcentration": 0.08,
+    }
+
+    result = save_run_config_payload_service(payload, loader=lambda: base, writer=writer)
+
+    assert result["ok"] is True
+    assert result["config"]["credentials"]["username"] == ""
+    assert result["config"]["credentials"]["password"] == ""
+    assert result["config"]["credentials"]["token"] == ""
+    assert saved[0].credentials.username == ""
+    assert saved[0].credentials.password == ""
+    assert saved[0].credentials.token == ""
+    assert result["config"]["auto_submit"] is False
+    assert saved[0].auto_submit is False
+    assert saved[0].ops.settings.decay == 12
+    assert saved[0].ops.budget.max_candidates_per_cycle == 33
+    assert saved[0].ops.budget.require_cloud_sync is False
+    assert saved[0].ops.thresholds.min_sharpe == 1.5
+    assert saved[0].ops.thresholds.platform_max_turnover == 0.6
+
+
 def test_public_config_schema_exposes_required_panel_contract():
     schema = web.public_config_schema()
     control_paths = {item["payload_path"] for item in schema["controls"]}
@@ -722,22 +652,32 @@ def test_public_config_schema_exposes_required_panel_contract():
     assert "type" in schema["required_settings_fields"]
     assert "settings.type" in control_paths
     assert "settings.alphaType" not in control_paths
+    assert "settings.dataset" in control_paths
     assert schema["settings_options"]["unitHandling"] == ["NONE", "RAW", "VERIFY"]
+    assert "pv1" in schema["settings_options"]["dataset"]
+    assert any(
+        item["id"] == "pv1" and item["label"].startswith("pv1 -")
+        for item in schema["dataset_options"]
+    )
     assert "assistantGuidanceScoreMinOutcomeCount" in control_paths
     assert "strategyPluginSpecs" in control_paths
-    assert schema["operation_layout"]["primary_console"] == [
-        "toggle-run",
-        "sync-cloud",
-        "check-batch",
-        "submit-selected",
+    assert schema["operation_layout"]["primary_actions"] == [
+        "run-non-submit-proof",
+        "refresh-official-context",
+        "review-quality-gates",
+        "review-submit-readiness",
     ]
+    assert "primary_console" not in schema["operation_layout"]
 
 
 def test_web_routes_define_session_policy_and_known_paths():
     assert route_for("GET", "/api/health").requires_session is False
     assert route_for("GET", "/").category == "html"
     assert route_for("POST", "/api/run").requires_session is True
+    assert route_for("POST", "/api/config").handler == "config"
     assert route_for("GET", "/api/config_schema").handler == "config_schema"
+    assert route_for("GET", "/api/snapshot/cloud").handler == "cloud_alphas"
+    assert route_for("GET", "/api/snapshot/memory").handler == "research_memory"
     assert route_for("GET", "/missing") is None
     assert "/api/assistant_request" in GET_ROUTES
     assert "/api/research_knowledge" in GET_ROUTES
@@ -751,8 +691,45 @@ def test_web_routes_define_session_policy_and_known_paths():
     assert "/api/submit_batch" in POST_ROUTES
 
 
+def test_legacy_web_routes_dispatches_alpha_lifecycle_history(monkeypatch, tmp_path):
+    storage_dir = tmp_path / "storage"
+    storage_dir.mkdir()
+    (storage_dir / "lifecycle.jsonl").write_text(
+        json.dumps({
+            "timestamp": "2026-06-12T02:00:00Z",
+            "alpha_id": "alpha_legacy",
+            "stage": "generated",
+            "status": "READY",
+            "expression": "rank(close)",
+        }) + "\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        "brain_alpha_ops.web_routes.load_run_config",
+        lambda: SimpleNamespace(ops=SimpleNamespace(storage_dir=str(storage_dir))),
+    )
+
+    class Handler:
+        def __init__(self):
+            self.payload = None
+            self.status = None
+
+        def _send_json(self, payload, status=200):
+            self.payload = payload
+            self.status = status
+
+    handler = Handler()
+    legacy_dispatch_get(handler, "/api/lifecycle/history", {"alpha_id": ["alpha_legacy"], "limit": ["1"]})
+
+    assert handler.status == 200
+    assert handler.payload["ok"] is True
+    assert handler.payload["official_api_called"] is False
+    assert handler.payload["submit_allowed"] is False
+    assert handler.payload["records"][0]["alpha_id"] == "alpha_legacy"
+
+
 def test_official_context_save_writes_cache_metadata(monkeypatch, tmp_path):
-    config = RunConfig(environment="mock")
+    config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path)
     config.ops.official_api.context_cache_ttl_seconds = 123
     monkeypatch.setattr(web, "load_run_config", lambda *args, **kwargs: config)
@@ -785,23 +762,103 @@ def test_web_uses_durable_job_stores():
     assert web.JOBS.persistence_path.name == "jobs_production.json"
     assert web.SYNC_JOBS.persistence_path.name == "jobs_sync.json"
     assert web.CHECK_JOBS.persistence_path.name == "jobs_check.json"
+    assert web.job_registry() is web.JOB_REGISTRY
+    assert web.JOB_REGISTRY.jobs is web.JOBS
+    assert web.JOB_REGISTRY.sync_jobs is web.SYNC_JOBS
+    assert web.JOB_REGISTRY.check_jobs is web.CHECK_JOBS
+    assert web.JOB_REGISTRY.async_jobs is web.ASYNC_JOBS
+    assert web.JOB_REGISTRY.submit_lock is web.SUBMIT_LOCK
+    assert web.JOB_REGISTRY.rate_limiter is web.RATE_LIMITER
+    assert web.JOB_REGISTRY.task_executor is web.TASK_EXECUTOR
+
+
+def test_web_job_registry_creates_durable_stores_under_project_root(tmp_path):
+    registry = WebJobRegistry.create(tmp_path, max_workers=1)
+    exports = registry.legacy_exports()
+
+    assert registry.jobs.persistence_path == tmp_path / "data" / "jobs_production.json"
+    assert registry.sync_jobs.persistence_path == tmp_path / "data" / "jobs_sync.json"
+    assert registry.check_jobs.persistence_path == tmp_path / "data" / "jobs_check.json"
+    assert registry.async_jobs.persistence_path == tmp_path / "data" / "jobs_async.json"
+    assert registry.sync_jobs.job_prefix == "sync"
+    assert registry.check_jobs.job_prefix == "check"
+    assert registry.async_jobs.job_prefix == "task"
+    assert exports["JOBS"] is registry.jobs
+    assert exports["SUBMIT_LOCK"] is registry.submit_lock
+    assert exports["TASK_EXECUTOR"] is registry.task_executor
+
+
+def test_web_job_registry_view_tracks_legacy_alias_overrides():
+    class Limiter:
+        def check(self, **kwargs):
+            return {"ok": True, **kwargs}
+
+    class Executor:
+        def __init__(self):
+            self.calls = []
+
+        def submit(self, target, *args):
+            self.calls.append((target, args))
+
+    original_web_attrs = _snapshot_web_attrs(*_WEB_JOB_EXPORTS)
+    override_jobs = JobStore()
+    override_sync_jobs = JobStore()
+    override_check_jobs = JobStore()
+    override_lock = threading.Lock()
+    override_limiter = Limiter()
+    override_executor = Executor()
+
+    web.JOBS = override_jobs
+    web.SYNC_JOBS = override_sync_jobs
+    web.CHECK_JOBS = override_check_jobs
+    web.SUBMIT_LOCK = override_lock
+    web.RATE_LIMITER = override_limiter
+    web.TASK_EXECUTOR = override_executor
+    try:
+        registry = web._job_registry_view()
+        assert registry.jobs is override_jobs
+        assert registry.sync_jobs is override_sync_jobs
+        assert registry.check_jobs is override_check_jobs
+        assert registry.submit_lock is override_lock
+        assert registry.rate_limiter is override_limiter
+        assert registry.task_executor is override_executor
+
+        override_lock.acquire()
+        try:
+            conflict = web.active_auxiliary_operation()
+        finally:
+            override_lock.release()
+        assert conflict[0] == "submit"
+
+        assert web.rate_limit_request("session", "POST", "/api/config") == {
+            "ok": True,
+            "key": "session",
+            "method": "POST",
+            "path": "/api/config",
+        }
+
+        target = object()
+        web._submit_background_job(target, "payload")
+        assert override_executor.calls == [(target, ("payload",))]
+    finally:
+        _restore_web_attrs(original_web_attrs)
 
 
 def test_run_job_failure_records_error_context(monkeypatch, tmp_path):
-    original_jobs = web.JOBS
+    original_web_attrs = _snapshot_web_attrs("JOBS")
     web.JOBS = JobStore(tmp_path / "jobs.json")
     job_id = web.JOBS.create()
 
     def boom(_run_config, **_kwargs):
         raise RuntimeError("secret-token-123 failed")
 
-    monkeypatch.setattr(web, "run_config_from_payload", lambda payload: RunConfig(environment="mock"))
+    monkeypatch.setattr(web, "run_config_from_payload", lambda payload: RunConfig(environment="production"))
     monkeypatch.setattr(web, "run_pipeline_from_config", boom)
     try:
         web.run_job(job_id, {})
         job = web.JOBS.get(job_id)
     finally:
-        web.JOBS = original_jobs
+        _restore_web_attrs(original_web_attrs)
 
     assert job["status"] == "failed"
     assert "secret-token-123" not in job["error"]
@@ -843,7 +900,7 @@ def test_web_error_payload_preserves_endpoint_code_and_classification():
 
 @pytest.mark.skipif(os.getenv("CI") == "true", reason="skipping live server test in CI environment")
 def test_web_smoke_test_server_exercises_session_lifecycle():
-    port = web.find_free_port(start=8876)
+    port = _free_port_or_skip(start=8876)
 
     result = web.smoke_test_server(port=port)
 
@@ -874,9 +931,409 @@ def test_stream_uses_separate_session_token():
         web._expire_session(session_id)
 
 
+def test_sse_handler_accepts_stream_token_query_for_session_auth():
+    session_id, _csrf_token = web._create_session()
+    try:
+        stream_token = web._stream_token_for_session(session_id)
+
+        class _Probe(web.Handler):
+            def __init__(self, path):
+                self.path = path
+                self.headers = {"Cookie": web._session_cookie_header(session_id)}
+                self.json_calls = []
+
+            def _json(self, payload, status=200, *, extra_headers=None):
+                self.json_calls.append((payload, status, extra_headers or []))
+
+        for path in ("/api/stream", "/sse"):
+            handler = _Probe(path)
+            handler._handle_sse_stream(f"stream_token={stream_token}")
+
+            assert handler.json_calls
+            payload, status, _headers = handler.json_calls[0]
+            assert status == 400
+            assert payload["error_code"] == "VALIDATION_ERROR"
+            assert payload["error"] == "missing job_id"
+    finally:
+        web._expire_session(session_id)
+
+
+@pytest.mark.skipif(os.getenv("CI") == "true", reason="skipping live server test in CI environment")
+def test_live_sse_alias_accepts_rendered_stream_token():
+    port = _free_port_or_skip(start=8986)
+    url = web.serve(port=port, open_browser=False)
+    try:
+        root_response = urllib.request.urlopen(url, timeout=5)
+        cookie = root_response.headers.get("Set-Cookie", "")
+        html = root_response.read().decode("utf-8")
+        stream_match = re.search(r'<meta name="brain-alpha-stream" content="([^"]+)"', html)
+        if not stream_match:
+            stream_match = re.search(r"var STREAM_TOKEN = '([^']+)'", html)
+        assert stream_match
+        assert stream_match.group(1) != "__BRAIN_ALPHA_OPS_STREAM_TOKEN__"
+
+        request = urllib.request.Request(
+            f"{url.rstrip('/')}/sse?job_id=missing_job&stream_token={stream_match.group(1)}",
+            headers={"Cookie": cookie},
+        )
+        with urllib.request.urlopen(request, timeout=5) as sse_response:
+            event_line = sse_response.readline().decode("utf-8")
+
+            assert sse_response.status == 200
+            assert sse_response.headers.get("Content-Type") == "text/event-stream"
+            assert '"job_id": "missing_job"' in event_line
+            assert '"error": "job not found"' in event_line
+    finally:
+        web.shutdown_server()
+
+
+@pytest.mark.skipif(os.getenv("CI") == "true", reason="skipping live server test in CI environment")
+def test_live_react_preview_serves_dist_assets_and_keeps_inline_default(monkeypatch):
+    port = _free_port_or_skip(start=9046)
+    monkeypatch.setenv("BRAIN_ALPHA_OPS_WEB_FRONTEND", "react")
+    web.web_html.reset_html_cache()
+    url = web.serve(port=port, open_browser=False)
+    try:
+        cookie, csrf_token, html = _live_react_session_credentials(url)
+        asset_paths = re.findall(r'/(assets/[^"\']+)', html)
+
+        assert '<div id="root"></div>' in html
+        assert "var CSRF_TOKEN" not in html
+        assert asset_paths
+        assert any(path.endswith(".js") for path in asset_paths)
+        assert any(path.endswith(".css") for path in asset_paths)
+
+        for asset_path in asset_paths:
+            asset_response = urllib.request.urlopen(f"{url.rstrip('/')}/{asset_path}", timeout=5)
+            asset_body = asset_response.read(128)
+            assert asset_response.status == 200
+            assert asset_body
+            assert asset_response.headers.get("Cache-Control") == "no-store"
+            assert asset_response.headers.get("X-Content-Type-Options") == "nosniff"
+
+        config_request = urllib.request.Request(
+            f"{url.rstrip('/')}/api/config",
+            headers={
+                "Cookie": cookie,
+                "X-Brain-Alpha-CSRF": csrf_token,
+            },
+        )
+        config_response = urllib.request.urlopen(config_request, timeout=5)
+        config_body = json.loads(config_response.read().decode("utf-8"))
+        assert config_response.status == 200
+        assert config_body["ok"] is True
+        assert config_body["config"]["environment"]
+    finally:
+        web.shutdown_server()
+        web.web_html.reset_html_cache()
+
+    default_port = _free_port_or_skip(start=9056)
+    monkeypatch.delenv("BRAIN_ALPHA_OPS_WEB_FRONTEND", raising=False)
+    web.web_html.reset_html_cache()
+    default_url = web.serve(port=default_port, open_browser=False)
+    try:
+        default_response = urllib.request.urlopen(default_url, timeout=5)
+        default_html = default_response.read().decode("utf-8")
+        assert default_response.status == 200
+        assert 'lang="zh-CN"' in default_html
+        assert 'name="brain-alpha-csrf"' in default_html
+        assert '<div id="root"></div>' in default_html
+    finally:
+        web.shutdown_server()
+        web.web_html.reset_html_cache()
+
+
+@pytest.mark.skipif(os.getenv("CI") == "true", reason="skipping live server test in CI environment")
+def test_live_run_post_requires_rendered_session_csrf_and_replay_headers():
+    port = _free_port_or_skip(start=9086)
+    url = web.serve(port=port, open_browser=False)
+    try:
+        root_response = urllib.request.urlopen(url, timeout=5)
+        html = root_response.read().decode("utf-8")
+
+        assert root_response.headers.get("Set-Cookie", "")
+        assert "brain-alpha-csrf" in html or "CSRF_TOKEN" in html
+
+        request = urllib.request.Request(
+            f"{url.rstrip('/')}/api/run",
+            data=json.dumps({"autoSubmit": True, "auto_submit": True}).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with pytest.raises(urllib.error.HTTPError) as exc_info:
+            urllib.request.urlopen(request, timeout=5)
+
+        body = json.loads(exc_info.value.read().decode("utf-8"))
+        assert exc_info.value.code == 403
+        assert body["error_code"] == "SESSION_INVALID"
+    finally:
+        web.shutdown_server()
+
+
+@pytest.mark.skipif(os.getenv("CI") == "true", reason="skipping live server test in CI environment")
+def test_live_config_save_accepts_rendered_session_csrf_and_replay_headers():
+    port = _free_port_or_skip(start=8996)
+    saved_payloads = []
+    original_save = web.save_run_config_payload
+    web.save_run_config_payload = lambda payload: (
+        saved_payloads.append(payload)
+        or {"ok": True, "path": "config/run_config.json", "config": {"environment": payload.get("environment")}}
+    )
+    url = web.serve(port=port, open_browser=False)
+    try:
+        root_response = urllib.request.urlopen(url, timeout=5)
+        cookie = str(root_response.headers.get("Set-Cookie", "")).split(";", 1)[0]
+        html = root_response.read().decode("utf-8")
+        csrf_match = re.search(r'<meta name="brain-alpha-csrf" content="([^"]+)"', html)
+        assert csrf_match
+        assert csrf_match.group(1) != "__BRAIN_ALPHA_OPS_CSRF_TOKEN__"
+
+        payload = {"environment": "production", "settings": {"region": "USA"}}
+        request = urllib.request.Request(
+            f"{url.rstrip('/')}/api/config",
+            data=json.dumps(payload).encode("utf-8"),
+            headers={
+                "Content-Type": "application/json",
+                "Cookie": cookie,
+                "X-Brain-Alpha-CSRF": csrf_match.group(1),
+                "X-Brain-Alpha-Request-ID": f"config_save_{int(time.time() * 1000)}",
+                "X-Brain-Alpha-Request-Timestamp": str(int(time.time() * 1000)),
+            },
+            method="POST",
+        )
+        response = urllib.request.urlopen(request, timeout=5)
+        body = json.loads(response.read().decode("utf-8"))
+
+        assert response.status == 200
+        assert body["ok"] is True
+        assert body["config"]["environment"] == "production"
+        assert saved_payloads == [payload]
+    finally:
+        web.save_run_config_payload = original_save
+        web.shutdown_server()
+
+
+@pytest.mark.skipif(os.getenv("CI") == "true", reason="skipping live server test in CI environment")
+def test_live_generate_candidates_accepts_count_and_rejects_out_of_range_value():
+    port = _free_port_or_skip(start=9006)
+    submitted_jobs = []
+    original_web_attrs = _snapshot_web_attrs("ASYNC_JOBS")
+    original_submit = web._submit_background_job
+    web.ASYNC_JOBS = JobStore()
+    web._submit_background_job = lambda target, *args: submitted_jobs.append((target, *args))
+    url = web.serve(port=port, open_browser=False)
+    try:
+        root_response = urllib.request.urlopen(url, timeout=5)
+        cookie = str(root_response.headers.get("Set-Cookie", "")).split(";", 1)[0]
+        html = root_response.read().decode("utf-8")
+        csrf_match = re.search(r'<meta name="brain-alpha-csrf" content="([^"]+)"', html)
+        assert csrf_match
+
+        def post_count(count: int, request_id: str):
+            request = urllib.request.Request(
+                f"{url.rstrip('/')}/api/generate_candidates",
+                data=json.dumps({"count": count}).encode("utf-8"),
+                headers={
+                    "Content-Type": "application/json",
+                    "Cookie": cookie,
+                    "X-Brain-Alpha-CSRF": csrf_match.group(1),
+                    "X-Brain-Alpha-Request-ID": request_id,
+                    "X-Brain-Alpha-Request-Timestamp": str(int(time.time() * 1000)),
+                },
+                method="POST",
+            )
+            return urllib.request.urlopen(request, timeout=5)
+
+        response = post_count(7, f"generate_valid_{int(time.time() * 1000)}")
+        body = json.loads(response.read().decode("utf-8"))
+        assert response.status == 200
+        assert body["ok"] is True
+        assert body["task_id"]
+        assert len(submitted_jobs) == 1
+        assert submitted_jobs[0][2] == {"count": 7}
+
+        with pytest.raises(urllib.error.HTTPError) as exc_info:
+            post_count(101, f"generate_invalid_{int(time.time() * 1000)}")
+        error_body = json.loads(exc_info.value.read().decode("utf-8"))
+        assert exc_info.value.code == 400
+        assert error_body["error_code"] == "VALIDATION_ERROR"
+        assert "between 1 and 100" in error_body["error"]
+        assert len(submitted_jobs) == 1
+    finally:
+        _restore_web_attrs(original_web_attrs)
+        web._submit_background_job = original_submit
+        web.shutdown_server()
+
+
+@pytest.mark.skipif(os.getenv("CI") == "true", reason="skipping live server test in CI environment")
+def test_live_api_rate_limiter_throttles_same_session_writes_and_recovers_after_window():
+    port = _free_port_or_skip(start=9016)
+    saved_payloads = []
+    now = [100.0]
+    limiter = RequestRateLimiter(RateLimitPolicy(window_seconds=10, read_requests=99, write_requests=1, submit_requests=1))
+    original_save = web.save_run_config_payload
+    original_rate_limit_request = web.rate_limit_request
+    web.save_run_config_payload = lambda payload: (
+        saved_payloads.append(payload)
+        or {"ok": True, "path": "config/run_config.json", "config": {"environment": payload.get("environment")}}
+    )
+    web.rate_limit_request = lambda key, method, path: limiter.check(key=key, method=method, path=path, now=now[0])
+    url = web.serve(port=port, open_browser=False)
+    try:
+        cookie, csrf_token = _live_session_credentials(url)
+
+        response = _live_json_post(
+            url,
+            "/api/config",
+            {"environment": "production"},
+            cookie=cookie,
+            csrf_token=csrf_token,
+            request_id=f"rate_first_{time.time_ns()}",
+        )
+        body = json.loads(response.read().decode("utf-8"))
+        assert response.status == 200
+        assert body["ok"] is True
+        assert len(saved_payloads) == 1
+
+        now[0] = 101.0
+        with pytest.raises(urllib.error.HTTPError) as exc_info:
+            _live_json_post(
+                url,
+                "/api/config",
+                {"environment": "staging"},
+                cookie=cookie,
+                csrf_token=csrf_token,
+                request_id=f"rate_second_{time.time_ns()}",
+            )
+        error_body = json.loads(exc_info.value.read().decode("utf-8"))
+        assert exc_info.value.code == 429
+        assert exc_info.value.headers.get("Retry-After") == "9"
+        assert error_body["error_code"] == "RATE_LIMITED"
+        assert len(saved_payloads) == 1
+
+        now[0] = 111.0
+        recovered = _live_json_post(
+            url,
+            "/api/config",
+            {"environment": "research"},
+            cookie=cookie,
+            csrf_token=csrf_token,
+            request_id=f"rate_recovered_{time.time_ns()}",
+        )
+        recovered_body = json.loads(recovered.read().decode("utf-8"))
+        assert recovered.status == 200
+        assert recovered_body["ok"] is True
+        assert saved_payloads == [{"environment": "production"}, {"environment": "research"}]
+    finally:
+        web.save_run_config_payload = original_save
+        web.rate_limit_request = original_rate_limit_request
+        web.shutdown_server()
+
+
+@pytest.mark.skipif(os.getenv("CI") == "true", reason="skipping live server test in CI environment")
+def test_live_check_batch_rejects_malformed_candidates_before_starting_background_job():
+    port = _free_port_or_skip(start=9026)
+    submitted_jobs = []
+    original_web_attrs = _snapshot_web_attrs("CHECK_JOBS", "SYNC_JOBS", "SUBMIT_LOCK")
+    original_submit = web._submit_background_job
+    web.CHECK_JOBS = JobStore()
+    web.SYNC_JOBS = JobStore()
+    web.SUBMIT_LOCK = threading.Lock()
+    web._submit_background_job = lambda target, *args: submitted_jobs.append((target, *args))
+    url = web.serve(port=port, open_browser=False)
+    try:
+        cookie, csrf_token = _live_session_credentials(url)
+
+        with pytest.raises(urllib.error.HTTPError) as exc_info:
+            _live_json_post(
+                url,
+                "/api/check_batch",
+                {"check_candidates": {}},
+                cookie=cookie,
+                csrf_token=csrf_token,
+                request_id=f"check_batch_invalid_{time.time_ns()}",
+            )
+        error_body = json.loads(exc_info.value.read().decode("utf-8"))
+        assert exc_info.value.code == 400
+        assert error_body["error_code"] == "VALIDATION_ERROR"
+        assert "check_candidates" in error_body["error"]
+        assert submitted_jobs == []
+        assert web.CHECK_JOBS.latest_active() is None
+
+        response = _live_json_post(
+            url,
+            "/api/check_batch",
+            {"check_candidates": [{"alpha_id": "alpha_live_1"}]},
+            cookie=cookie,
+            csrf_token=csrf_token,
+            request_id=f"check_batch_valid_{time.time_ns()}",
+        )
+        body = json.loads(response.read().decode("utf-8"))
+        assert response.status == 200
+        assert body["ok"] is True
+        assert body["job_id"]
+        assert len(submitted_jobs) == 1
+        assert submitted_jobs[0][2] == {"check_candidates": [{"alpha_id": "alpha_live_1"}]}
+    finally:
+        _restore_web_attrs(original_web_attrs)
+        web._submit_background_job = original_submit
+        web.shutdown_server()
+
+
+@pytest.mark.skipif(os.getenv("CI") == "true", reason="skipping live server test in CI environment")
+def test_live_alpha_id_validation_rejects_check_submit_and_batch_before_side_effects():
+    port = _free_port_or_skip(start=9036)
+    checked_payloads = []
+    submitted_payloads = []
+    background_jobs = []
+    original_check_candidate = web.check_candidate
+    original_submit_candidate = web.submit_candidate
+    original_web_attrs = _snapshot_web_attrs("ASYNC_JOBS", "SUBMIT_LOCK")
+    original_submit_background = web._submit_background_job
+    web.check_candidate = lambda payload: checked_payloads.append(payload) or {"ok": True}
+    web.submit_candidate = lambda payload: submitted_payloads.append(payload) or {"ok": True}
+    web.ASYNC_JOBS = JobStore()
+    web._submit_background_job = lambda target, *args: background_jobs.append((target, *args))
+    web.SUBMIT_LOCK = threading.Lock()
+    url = web.serve(port=port, open_browser=False)
+    try:
+        cookie, csrf_token = _live_session_credentials(url)
+
+        for path, payload, expected_fragment in (
+            ("/api/check", {"alpha_id": "bad id!"}, "alpha_id"),
+            ("/api/submit", {"alpha_id": "bad id!"}, "alpha_id"),
+            ("/api/submit_batch", {"alpha_ids": ["good_1", "bad id!"]}, "alpha_ids[]"),
+        ):
+            with pytest.raises(urllib.error.HTTPError) as exc_info:
+                _live_json_post(
+                    url,
+                    path,
+                    payload,
+                    cookie=cookie,
+                    csrf_token=csrf_token,
+                    request_id=f"invalid_alpha_{path.rsplit('/', 1)[-1]}_{time.time_ns()}",
+                )
+            error_body = json.loads(exc_info.value.read().decode("utf-8"))
+            assert exc_info.value.code == 400
+            assert error_body["error_code"] == "VALIDATION_ERROR"
+            assert expected_fragment in error_body["error"]
+
+        assert checked_payloads == []
+        assert submitted_payloads == []
+        assert background_jobs == []
+        assert web.SUBMIT_LOCK.locked() is False
+        assert web.ASYNC_JOBS.latest_active() is None
+    finally:
+        web.check_candidate = original_check_candidate
+        web.submit_candidate = original_submit_candidate
+        _restore_web_attrs(original_web_attrs)
+        web._submit_background_job = original_submit_background
+        web.shutdown_server()
+
+
 @pytest.mark.skipif(os.getenv("CI") == "true", reason="skipping live server test in CI environment")
 def test_web_responses_include_security_headers():
-    port = web.find_free_port(start=8976)
+    port = _free_port_or_skip(start=8976)
     url = web.serve(port=port, open_browser=False)
     try:
         root_response = urllib.request.urlopen(url, timeout=5)
@@ -895,14 +1352,14 @@ def test_web_responses_include_security_headers():
 
 
 def test_remote_bind_requires_explicit_allow_remote():
-    port = web.find_free_port(start=9076, host="127.0.0.1")
+    port = _free_port_or_skip(start=9076, host="127.0.0.1")
 
     with pytest.raises(ValueError, match="allow_remote"):
         web.serve(port=port, host="0.0.0.0", open_browser=False)
 
 
 def test_remote_bind_requires_admin_token_env(monkeypatch):
-    config = RunConfig(environment="mock")
+    config = RunConfig(environment="production")
     config.web.admin_token_env = "BRAIN_ALPHA_OPS_TEST_ADMIN_TOKEN"
     monkeypatch.setattr(web, "load_run_config", lambda *args, **kwargs: config)
     monkeypatch.delenv("BRAIN_ALPHA_OPS_TEST_ADMIN_TOKEN", raising=False)
@@ -1015,7 +1472,8 @@ def test_check_candidate_availability_includes_observability_preflight(tmp_path)
         family="Momentum",
         hypothesis="observable submit",
         official_alpha_id="official_1",
-        official_metrics={"pass_fail": "PASS"},
+        official_metrics=_complete_official_metrics(),
+        scorecard={"total_score": 91, "decision_band": "submit_candidate"},
         gate={"submission_ready": True, "failed_reasons": []},
         lifecycle_status="submission_ready",
     ).to_dict()
@@ -1053,33 +1511,41 @@ def test_check_candidate_availability_includes_observability_preflight(tmp_path)
 def test_observability_submission_preflight_includes_official_call_guard(monkeypatch, tmp_path):
     storage = tmp_path / "data"
     storage.mkdir()
-    config = RunConfig(environment="mock")
+    config = RunConfig(environment="production")
     config.ops.storage_dir = str(storage)
-    repo = ResearchRepository(str(storage))
-    repo.save_lifecycle_record(
-        "run_1",
-        {
-            "alpha_id": "dup_candidate",
-            "stage": "observability_duplicate_blocked",
-            "status": "observability_duplicate_blocked",
-            "note": "official_validation",
-            "family": "Momentum",
-            "score": 95,
-            "expression": "rank(ts_delta(close, 20))",
-            "gate": {
-                "status": "OBSERVABILITY_DUPLICATE_EXPRESSION_BLOCKED",
-                "failed_reasons": ["observability duplicate expression history blocked official call before official_validation"],
+    registry = WebJobRegistry.create(storage)
+    original_web_attrs = _snapshot_web_attrs("JOB_REGISTRY", *_WEB_JOB_EXPORTS)
+    monkeypatch.setattr(web, "JOB_REGISTRY", registry)
+    for name, value in registry.legacy_exports().items():
+        setattr(web, name, value)
+    try:
+        repo = ResearchRepository(str(storage))
+        repo.save_lifecycle_record(
+            "run_1",
+            {
+                "alpha_id": "dup_candidate",
+                "stage": "observability_duplicate_blocked",
+                "status": "observability_duplicate_blocked",
+                "note": "official_validation",
+                "family": "Momentum",
+                "score": 95,
+                "expression": "rank(ts_delta(close, 20))",
+                "gate": {
+                    "status": "OBSERVABILITY_DUPLICATE_EXPRESSION_BLOCKED",
+                    "failed_reasons": ["observability duplicate expression history blocked official call before official_validation"],
+                },
             },
-        },
-    )
-    monkeypatch.setattr(web, "load_run_config", lambda: config)
+        )
+        monkeypatch.setattr(web, "load_run_config", lambda: config)
 
-    advisory = web.observability_submission_preflight(str(storage), limit=100, top_n=5)
+        advisory = web.observability_submission_preflight(str(storage), limit=100, top_n=5)
 
-    assert advisory["ok"] is True
-    assert advisory["official_call_guard"]["blocked_count"] == 1
-    assert advisory["official_call_guard"]["validation_blocked_count"] == 1
-    assert advisory["official_call_guard"]["recent_blocks"][0]["alpha_id"] == "dup_candidate"
+        assert advisory["ok"] is True
+        assert advisory["official_call_guard"]["blocked_count"] == 1
+        assert advisory["official_call_guard"]["validation_blocked_count"] == 1
+        assert advisory["official_call_guard"]["recent_blocks"][0]["alpha_id"] == "dup_candidate"
+    finally:
+        _restore_web_attrs(original_web_attrs)
 
 
 def test_observability_submission_preflight_failure_requires_confirmation(monkeypatch, tmp_path):
@@ -1098,7 +1564,9 @@ def test_observability_submission_preflight_failure_requires_confirmation(monkey
 
 
 def test_submit_candidate_reports_duplicate_expression_code(monkeypatch, tmp_path):
-    config = RunConfig(environment="mock")
+    # P0-2: bypass the real-submit kill-switch.
+    monkeypatch.setattr(wss, "_real_submit_disabled", lambda: False)
+    config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path)
     config.ops.budget.require_cloud_sync = False
     expression = "rank(ts_delta(close, 20))"
@@ -1108,7 +1576,8 @@ def test_submit_candidate_reports_duplicate_expression_code(monkeypatch, tmp_pat
         family="Momentum",
         hypothesis="already submitted",
         official_alpha_id="official_old",
-        official_metrics={"pass_fail": "PASS"},
+        official_metrics=_complete_official_metrics(),
+        scorecard={"total_score": 91, "decision_band": "submit_candidate"},
         gate={"submission_ready": True},
         lifecycle_status="submission_ready",
     )
@@ -1119,14 +1588,15 @@ def test_submit_candidate_reports_duplicate_expression_code(monkeypatch, tmp_pat
         family="Momentum",
         hypothesis="duplicate expression",
         official_alpha_id="official_new",
-        official_metrics={"pass_fail": "PASS"},
+        official_metrics=_complete_official_metrics(),
+        scorecard={"total_score": 91, "decision_band": "submit_candidate"},
         gate={"submission_ready": True, "failed_reasons": []},
         lifecycle_status="submission_ready",
     ).to_dict()
 
     monkeypatch.setattr(web, "run_config_from_payload", lambda payload: config)
 
-    result = web.submit_candidate({"candidate": candidate})
+    result = web.submit_candidate({"candidate": candidate, "confirm_submit": True})
 
     assert result["ok"] is False
     assert result["error_code"] == "SUBMIT_DUPLICATE_EXPRESSION"
@@ -1135,7 +1605,7 @@ def test_submit_candidate_reports_duplicate_expression_code(monkeypatch, tmp_pat
 
 
 def test_submission_preflight_reports_stale_cloud_code(monkeypatch, tmp_path):
-    config = RunConfig(environment="mock")
+    config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path)
     config.ops.budget.require_cloud_sync = True
     candidate = Candidate(
@@ -1144,7 +1614,8 @@ def test_submission_preflight_reports_stale_cloud_code(monkeypatch, tmp_path):
         family="Momentum",
         hypothesis="stale cloud",
         official_alpha_id="official_1",
-        official_metrics={"pass_fail": "PASS"},
+        official_metrics=_complete_official_metrics(),
+        scorecard={"total_score": 91, "decision_band": "submit_candidate"},
         gate={"submission_ready": True, "failed_reasons": []},
         lifecycle_status="submission_ready",
     ).to_dict()
@@ -1163,7 +1634,9 @@ def test_submission_preflight_reports_stale_cloud_code(monkeypatch, tmp_path):
 
 
 def test_submit_candidate_requires_observability_confirmation(monkeypatch, tmp_path):
-    config = RunConfig(environment="mock")
+    # P0-2: bypass the real-submit kill-switch.
+    monkeypatch.setattr(wss, "_real_submit_disabled", lambda: False)
+    config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path)
     config.ops.budget.require_cloud_sync = False
     candidate = Candidate(
@@ -1172,7 +1645,8 @@ def test_submit_candidate_requires_observability_confirmation(monkeypatch, tmp_p
         family="Momentum",
         hypothesis="blocked observability",
         official_alpha_id="official_1",
-        official_metrics={"pass_fail": "PASS"},
+        official_metrics=_complete_official_metrics(),
+        scorecard={"total_score": 91, "decision_band": "submit_candidate"},
         gate={"submission_ready": True, "failed_reasons": []},
         lifecycle_status="submission_ready",
     ).to_dict()
@@ -1197,12 +1671,17 @@ def test_submit_candidate_requires_observability_confirmation(monkeypatch, tmp_p
             return {"status": "SUBMITTED", "alpha_id": alpha_id}
 
     monkeypatch.setattr(web, "run_config_from_payload", lambda payload: config)
-    monkeypatch.setattr(web, "cloud_alpha_snapshot", lambda limit=2000: {"alphas": [], "summary": {"is_stale": False}})
+    monkeypatch.setattr(web, "cloud_alpha_snapshot", lambda limit=2000: {"alphas": [{"id": "cloud_other", "status": "UNSUBMITTED"}], "summary": {"is_stale": False}})
     monkeypatch.setattr(web, "api_from_run_config", lambda run_config: FakeApi())
     monkeypatch.setattr(web, "observability_submission_preflight", lambda storage_dir: advisory)
+    monkeypatch.setattr(
+        web,
+        "live_submit_readiness_hard_gate",
+        lambda candidate, run_config, official_id: {"ok": True},
+    )
 
-    blocked = web.submit_candidate({"candidate": candidate})
-    confirmed = web.submit_candidate({"candidate": candidate, "confirm_observability_risk": True})
+    blocked = web.submit_candidate({"candidate": candidate, "confirm_submit": True})
+    confirmed = web.submit_candidate({"candidate": candidate, "confirm_submit": True, "confirm_observability_risk": True})
 
     assert blocked["ok"] is False
     assert blocked["error_code"] == "SUBMIT_OBSERVABILITY_CONFIRMATION_REQUIRED"
@@ -1212,7 +1691,9 @@ def test_submit_candidate_requires_observability_confirmation(monkeypatch, tmp_p
 
 
 def test_submit_candidate_requires_confirmation_when_observability_preflight_fails(monkeypatch, tmp_path):
-    config = RunConfig(environment="mock")
+    # P0-2: bypass the real-submit kill-switch.
+    monkeypatch.setattr(wss, "_real_submit_disabled", lambda: False)
+    config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path)
     config.ops.budget.require_cloud_sync = False
     candidate = Candidate(
@@ -1221,7 +1702,8 @@ def test_submit_candidate_requires_confirmation_when_observability_preflight_fai
         family="Momentum",
         hypothesis="preflight unavailable",
         official_alpha_id="official_1",
-        official_metrics={"pass_fail": "PASS"},
+        official_metrics=_complete_official_metrics(),
+        scorecard={"total_score": 91, "decision_band": "submit_candidate"},
         gate={"submission_ready": True, "failed_reasons": []},
         lifecycle_status="submission_ready",
     ).to_dict()
@@ -1247,12 +1729,17 @@ def test_submit_candidate_requires_confirmation_when_observability_preflight_fai
             return {"status": "SUBMITTED", "alpha_id": alpha_id}
 
     monkeypatch.setattr(web, "run_config_from_payload", lambda payload: config)
-    monkeypatch.setattr(web, "cloud_alpha_snapshot", lambda limit=2000: {"alphas": [], "summary": {"is_stale": False}})
+    monkeypatch.setattr(web, "cloud_alpha_snapshot", lambda limit=2000: {"alphas": [{"id": "cloud_other", "status": "UNSUBMITTED"}], "summary": {"is_stale": False}})
     monkeypatch.setattr(web, "api_from_run_config", lambda run_config: FakeApi())
     monkeypatch.setattr(web, "observability_submission_preflight", lambda storage_dir: advisory)
+    monkeypatch.setattr(
+        web,
+        "live_submit_readiness_hard_gate",
+        lambda candidate, run_config, official_id: {"ok": True},
+    )
 
-    blocked = web.submit_candidate({"candidate": candidate})
-    confirmed = web.submit_candidate({"candidate": candidate, "confirm_observability_risk": True})
+    blocked = web.submit_candidate({"candidate": candidate, "confirm_submit": True})
+    confirmed = web.submit_candidate({"candidate": candidate, "confirm_submit": True, "confirm_observability_risk": True})
 
     assert blocked["ok"] is False
     assert blocked["error_code"] == "SUBMIT_OBSERVABILITY_CONFIRMATION_REQUIRED"
@@ -1262,7 +1749,7 @@ def test_submit_candidate_requires_confirmation_when_observability_preflight_fai
 
 
 def test_submit_batch_requires_observability_confirmation(monkeypatch, tmp_path):
-    config = RunConfig(environment="mock")
+    config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path)
     candidate = Candidate(
         alpha_id="a1",
@@ -1270,7 +1757,8 @@ def test_submit_batch_requires_observability_confirmation(monkeypatch, tmp_path)
         family="Momentum",
         hypothesis="batch blocked observability",
         official_alpha_id="official_1",
-        official_metrics={"pass_fail": "PASS"},
+        official_metrics=_complete_official_metrics(),
+        scorecard={"total_score": 91, "decision_band": "submit_candidate"},
         gate={"submission_ready": True, "failed_reasons": []},
         lifecycle_status="submission_ready",
     ).to_dict()
@@ -1288,7 +1776,7 @@ def test_submit_batch_requires_observability_confirmation(monkeypatch, tmp_path)
     monkeypatch.setattr(web, "run_config_from_payload", lambda payload: config)
     monkeypatch.setattr(web, "observability_submission_preflight", lambda storage_dir: advisory)
 
-    result = web.submit_batch({"alpha_ids": ["a1"], "submit_candidates": [candidate]})
+    result = web.submit_batch({"alpha_ids": ["a1"], "submit_candidates": [candidate], "confirm_submit": True})
 
     assert result["ok"] is False
     assert result["error_code"] == "SUBMIT_OBSERVABILITY_CONFIRMATION_REQUIRED"
@@ -1296,7 +1784,7 @@ def test_submit_batch_requires_observability_confirmation(monkeypatch, tmp_path)
 
 
 def test_submit_batch_requires_confirmation_when_observability_preflight_fails(monkeypatch, tmp_path):
-    config = RunConfig(environment="mock")
+    config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path)
     candidate = Candidate(
         alpha_id="a1",
@@ -1304,7 +1792,8 @@ def test_submit_batch_requires_confirmation_when_observability_preflight_fails(m
         family="Momentum",
         hypothesis="batch preflight unavailable",
         official_alpha_id="official_1",
-        official_metrics={"pass_fail": "PASS"},
+        official_metrics=_complete_official_metrics(),
+        scorecard={"total_score": 91, "decision_band": "submit_candidate"},
         gate={"submission_ready": True, "failed_reasons": []},
         lifecycle_status="submission_ready",
     ).to_dict()
@@ -1323,7 +1812,7 @@ def test_submit_batch_requires_confirmation_when_observability_preflight_fails(m
     monkeypatch.setattr(web, "run_config_from_payload", lambda payload: config)
     monkeypatch.setattr(web, "observability_submission_preflight", lambda storage_dir: advisory)
 
-    result = web.submit_batch({"alpha_ids": ["a1"], "submit_candidates": [candidate]})
+    result = web.submit_batch({"alpha_ids": ["a1"], "submit_candidates": [candidate], "confirm_submit": True})
 
     assert result["ok"] is False
     assert result["error_code"] == "SUBMIT_OBSERVABILITY_CONFIRMATION_REQUIRED"
@@ -1374,67 +1863,75 @@ def test_research_memory_snapshot_reads_local_records():
 def test_research_observability_snapshot_summarizes_expression_backtest_and_errors(monkeypatch, tmp_path):
     storage = tmp_path / "data"
     storage.mkdir()
-    config = RunConfig(environment="mock")
+    config = RunConfig(environment="production")
     config.ops.storage_dir = str(storage)
-    repo = ResearchRepository(str(storage))
-    repo.save_candidate(
-        "run_1",
-        Candidate(
-            alpha_id="a1",
-            expression="rank(ts_delta(close, 20))",
-            family="Momentum",
-            hypothesis="momentum",
-            data_fields=["close"],
-            operators=["rank", "ts_delta"],
-            scorecard={"total_score": 88},
-            lifecycle_status="submission_ready",
-        ),
-    )
-    repo.save_backtest_record(
-        "run_1",
-        {
-            "action": "simulation_result",
-            "alpha_id": "a1",
-            "simulation_id": "sim_1",
-            "status": "simulation_failed",
-            "lifecycle_status": "simulation_failed",
-            "family": "Momentum",
-            "score": 88,
-            "expression": " rank ( ts_delta ( close , 20 ) ) ",
-            "note": "rate limit retry pending",
-        },
-    )
-    repo.save_check_record(
-        {
-            "alpha_id": "a1",
-            "expression": "rank(ts_delta(close, 20))",
-            "error": "Too many requests",
-        }
-    )
-    monkeypatch.setattr(web, "load_run_config", lambda: config)
+    registry = WebJobRegistry.create(storage)
+    original_web_attrs = _snapshot_web_attrs("JOB_REGISTRY", *_WEB_JOB_EXPORTS)
+    monkeypatch.setattr(web, "JOB_REGISTRY", registry)
+    for name, value in registry.legacy_exports().items():
+        setattr(web, name, value)
+    try:
+        repo = ResearchRepository(str(storage))
+        repo.save_candidate(
+            "run_1",
+            Candidate(
+                alpha_id="a1",
+                expression="rank(ts_delta(close, 20))",
+                family="Momentum",
+                hypothesis="momentum",
+                data_fields=["close"],
+                operators=["rank", "ts_delta"],
+                scorecard={"total_score": 88},
+                lifecycle_status="submission_ready",
+            ),
+        )
+        repo.save_backtest_record(
+            "run_1",
+            {
+                "action": "simulation_result",
+                "alpha_id": "a1",
+                "simulation_id": "sim_1",
+                "status": "simulation_failed",
+                "lifecycle_status": "simulation_failed",
+                "family": "Momentum",
+                "score": 88,
+                "expression": " rank ( ts_delta ( close , 20 ) ) ",
+                "note": "rate limit retry pending",
+            },
+        )
+        repo.save_check_record(
+            {
+                "alpha_id": "a1",
+                "expression": "rank(ts_delta(close, 20))",
+                "error": "Too many requests",
+            }
+        )
+        monkeypatch.setattr(web, "load_run_config", lambda: config)
 
-    snapshot = research_observability_snapshot(limit=100, top_n=5, include_cloud=False)
+        snapshot = research_observability_snapshot(limit=100, top_n=5, include_cloud=False)
 
-    assert snapshot["ok"] is True
-    assert snapshot["schema_version"] == "research_observability_snapshot.v1"
-    assert snapshot["expression_index"]["total_expression_records"] == 3
-    assert snapshot["expression_index"]["duplicate_expression_count"] == 1
-    assert snapshot["backtests"]["failed_count"] == 1
-    assert snapshot["backtests"]["retryable_count"] == 1
-    assert snapshot["errors"]["category_counts"]["rate_limit"] == 2
-    assert snapshot["sqlite_cache"]["exists"] is True
-    assert snapshot["sqlite_cache"]["error"] == ""
-    assert snapshot["jsonl"]["backtests.jsonl"]["parsed_count"] == 1
-    assert snapshot["health"]["risk_level"] in {"medium", "high"}
-    assert "duplicate_expression_history" in snapshot["health"]["health_flags"]
-    assert "retryable_official_errors_present" in snapshot["health"]["warning_flags"]
-    assert snapshot["recommendations"]
+        assert snapshot["ok"] is True
+        assert snapshot["schema_version"] == "research_observability_snapshot.v1"
+        assert snapshot["expression_index"]["total_expression_records"] == 3
+        assert snapshot["expression_index"]["duplicate_expression_count"] == 1
+        assert snapshot["backtests"]["failed_count"] == 1
+        assert snapshot["backtests"]["retryable_count"] == 1
+        assert snapshot["errors"]["category_counts"]["rate_limit"] == 2
+        assert snapshot["sqlite_cache"]["exists"] is True
+        assert snapshot["sqlite_cache"]["error"] == ""
+        assert snapshot["jsonl"]["backtests.jsonl"]["parsed_count"] == 1
+        assert snapshot["health"]["risk_level"] in {"medium", "high"}
+        assert "duplicate_expression_history" in snapshot["health"]["health_flags"]
+        assert "retryable_official_errors_present" in snapshot["health"]["warning_flags"]
+        assert snapshot["recommendations"]
+    finally:
+        _restore_web_attrs(original_web_attrs)
 
 
 def test_assistant_context_snapshot_uses_web_runtime_sources(monkeypatch, tmp_path):
     storage = tmp_path / "data"
     storage.mkdir()
-    config = RunConfig(environment="mock")
+    config = RunConfig(environment="production")
     config.ops.storage_dir = str(storage)
     ResearchRepository(str(storage)).save_candidate(
         "run_1",
@@ -1499,12 +1996,19 @@ def test_assistant_context_snapshot_uses_web_runtime_sources(monkeypatch, tmp_pa
 def test_assistant_guidance_snapshot_reads_latest_usable_guidance(monkeypatch, tmp_path):
     storage = tmp_path / "data"
     storage.mkdir()
-    config = RunConfig(environment="mock")
+    import dataclasses
+    config = RunConfig(environment="production")
     config.ops.storage_dir = str(storage)
-    config.ops.budget.use_assistant_guidance = False
-    config.ops.budget.assistant_guidance_min_confidence = 0.7
-    config.ops.scoring.assistant_guidance_score_min_confidence = 0.8
-    config.ops.scoring.assistant_guidance_score_min_outcome_count = 1
+    config.ops.budget = dataclasses.replace(
+        config.ops.budget,
+        use_assistant_guidance=False,
+        assistant_guidance_min_confidence=0.7,
+    )
+    config.ops.scoring = dataclasses.replace(
+        config.ops.scoring,
+        assistant_guidance_score_min_confidence=0.8,
+        assistant_guidance_score_min_outcome_count=1,
+    )
     repo = ResearchRepository(str(storage))
     repo.save_assistant_guidance(
         {
@@ -1580,7 +2084,7 @@ def test_assistant_guidance_snapshot_reads_latest_usable_guidance(monkeypatch, t
 def test_assistant_guidance_snapshot_marks_weak_historical_outcomes(monkeypatch, tmp_path):
     storage = tmp_path / "data"
     storage.mkdir()
-    config = RunConfig(environment="mock")
+    config = RunConfig(environment="production")
     config.ops.storage_dir = str(storage)
     repo = ResearchRepository(str(storage))
     repo.save_assistant_guidance(
@@ -1639,7 +2143,7 @@ def test_assistant_guidance_snapshot_marks_weak_historical_outcomes(monkeypatch,
 def test_assistant_guidance_snapshot_history_filters_confidence_flag(monkeypatch, tmp_path):
     storage = tmp_path / "data"
     storage.mkdir()
-    config = RunConfig(environment="mock")
+    config = RunConfig(environment="production")
     config.ops.storage_dir = str(storage)
     repo = ResearchRepository(str(storage))
     repo.save_assistant_guidance(
@@ -1682,7 +2186,7 @@ def test_assistant_guidance_snapshot_history_filters_confidence_flag(monkeypatch
 def test_assistant_request_snapshot_returns_llm_envelope(monkeypatch, tmp_path):
     storage = tmp_path / "data"
     storage.mkdir()
-    config = RunConfig(environment="mock")
+    config = RunConfig(environment="production")
     config.ops.storage_dir = str(storage)
     ResearchRepository(str(storage)).save_candidate(
         "run_1",
@@ -1841,8 +2345,10 @@ def test_assistant_cross_review_payload_accepts_consistent_responses():
 
 
 def test_save_assistant_guidance_payload_persists_usable_guidance(monkeypatch, tmp_path):
-    config = RunConfig(environment="mock")
+    config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path)
+    config.ops.settings.dataset = "pv1"
+    shutil.copy("data/official_datasets.json", tmp_path / "official_datasets.json")
     monkeypatch.setattr(web, "load_run_config", lambda *args, **kwargs: config)
 
     payload = save_assistant_guidance_payload(
@@ -1869,8 +2375,10 @@ def test_save_assistant_guidance_payload_persists_usable_guidance(monkeypatch, t
 
 
 def test_save_assistant_guidance_payload_skips_low_confidence(monkeypatch, tmp_path):
-    config = RunConfig(environment="mock")
+    config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path)
+    config.ops.settings.dataset = "pv1"
+    shutil.copy("data/official_datasets.json", tmp_path / "official_datasets.json")
     monkeypatch.setattr(web, "load_run_config", lambda *args, **kwargs: config)
 
     payload = save_assistant_guidance_payload(
@@ -1893,8 +2401,10 @@ def test_save_assistant_guidance_payload_skips_low_confidence(monkeypatch, tmp_p
 
 
 def test_generate_candidates_payload_applies_assistant_guidance(monkeypatch, tmp_path):
-    config = RunConfig(environment="mock")
+    config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path)
+    config.ops.settings.dataset = "pv1"
+    shutil.copy("data/official_datasets.json", tmp_path / "official_datasets.json")
     monkeypatch.setattr(web, "load_run_config", lambda *args, **kwargs: config)
     captured = {}
 
@@ -1936,8 +2446,10 @@ def test_generate_candidates_payload_applies_assistant_guidance(monkeypatch, tmp
 
 
 def test_generate_candidates_payload_attaches_guidance_outcome_metadata(monkeypatch, tmp_path):
-    config = RunConfig(environment="mock")
+    config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path)
+    config.ops.settings.dataset = "pv1"
+    shutil.copy("data/official_datasets.json", tmp_path / "official_datasets.json")
     monkeypatch.setattr(web, "load_run_config", lambda *args, **kwargs: config)
     monkeypatch.setattr(
         "brain_alpha_ops.research.generator.CandidateGenerator.set_experience_guidance",
@@ -2021,7 +2533,7 @@ def test_load_check_results_reports_recovery_warning(monkeypatch, caplog):
 
 
 def test_web_storage_jsonl_stats_reports_invalid_lines(monkeypatch, tmp_path):
-    config = RunConfig(environment="mock")
+    config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path)
     (tmp_path / "checks.jsonl").write_text('{"ok":true}\nnot-json\n', encoding="utf-8")
     monkeypatch.setattr(web, "load_run_config", lambda *args, **kwargs: config)
@@ -2034,7 +2546,7 @@ def test_web_storage_jsonl_stats_reports_invalid_lines(monkeypatch, tmp_path):
 
 
 def test_read_official_context_json_logs_invalid_file(monkeypatch, tmp_path, caplog):
-    config = RunConfig(environment="mock")
+    config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path)
     (tmp_path / "official_fields.json").write_text("{bad-json", encoding="utf-8")
     monkeypatch.setattr(web, "load_run_config", lambda *args, **kwargs: config)
@@ -2045,3 +2557,23 @@ def test_read_official_context_json_logs_invalid_file(monkeypatch, tmp_path, cap
 
     assert isinstance(rows, list)
     assert "failed to read official context file" in caplog.text
+
+
+def test_web_watchdog_sweep_scans_all_job_stores(tmp_path):
+    from brain_alpha_ops import web_runtime_bindings
+
+    fake_web = SimpleNamespace(
+        JOBS=JobStore(tmp_path / "jobs.json", job_prefix="job", watchdog_timeout_seconds=5),
+        SYNC_JOBS=JobStore(tmp_path / "sync.json", job_prefix="sync", watchdog_timeout_seconds=5),
+        CHECK_JOBS=JobStore(tmp_path / "check.json", job_prefix="check", watchdog_timeout_seconds=5),
+        ASYNC_JOBS=JobStore(tmp_path / "async.json", job_prefix="task", watchdog_timeout_seconds=5),
+    )
+    for store in (fake_web.JOBS, fake_web.SYNC_JOBS, fake_web.CHECK_JOBS, fake_web.ASYNC_JOBS):
+        job_id = store.create()
+        store.update(job_id, status="running", updated_at=1.0)
+
+    assert web_runtime_bindings._watchdog_sweep_once(fake_web) == 4
+    assert fake_web.JOBS.latest_active() is None
+    assert fake_web.SYNC_JOBS.latest_active() is None
+    assert fake_web.CHECK_JOBS.latest_active() is None
+    assert fake_web.ASYNC_JOBS.latest_active() is None

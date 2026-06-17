@@ -107,6 +107,21 @@ class DatasetSelectionService:
             return result
 
         if self.allow_datasetless:
+            configured_dataset = str(getattr(self.settings, "dataset", "") or "").strip()
+            if configured_dataset:
+                self._apply(configured_dataset)
+                result = DatasetSelectionResult(
+                    action="continue",
+                    dataset_id=configured_dataset,
+                    reason=(
+                        "DatasetSelector unavailable; using configured dataset with loaded "
+                        "field/operator context."
+                    ),
+                    event="dataset_fallback_configured",
+                    level="WARN",
+                )
+                self._emit(result)
+                return result
             result = DatasetSelectionResult(
                 action="continue",
                 reason="DatasetSelector unavailable; using loaded field/operator context without a dataset filter.",

@@ -1,22 +1,23 @@
-"""可参数化的先验评分系统 — 评分维度参数定义、持久化与校准接口。
+"""Parameterized prior scoring system with persistence and calibration hooks.
 
-将 scoring.py prior_score() 的 8 维硬编码公式重构为可调参数驱动的评分函数。
-每维参数通过 JSON 持久化到 data/scoring_calibration.json，支持 AutoCalibrator 自动校准。
+This module moves the 8 hard-coded prior_score dimensions in scoring.py behind
+tunable parameters. Parameters are persisted as JSON in
+data/scoring_calibration.json and can be calibrated by AutoCalibrator.
 
 Usage::
 
     from brain_alpha_ops.research.scoring_params import ScoringParams
 
-    # 默认参数（与当前硬编码行为一致）
+    # Defaults matching the current hard-coded behavior.
     params = ScoringParams.defaults()
 
-    # 从校准文件加载
+    # Load from the calibration file.
     params = ScoringParams.load("data")
 
-    # 持久化
+    # Persist the parameters.
     params.save("data")
 
-    # 应用到 prior_score
+    # Apply to prior_score.
     from brain_alpha_ops.research.scoring import prior_score
     result = prior_score(candidate, params=params)
 """
@@ -26,84 +27,85 @@ from __future__ import annotations
 import json
 import os
 from dataclasses import dataclass, field, asdict
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 
 # ═══════════════════════════════════════════════════════════════════════
-# 数据模型
+# Data model
 # ═══════════════════════════════════════════════════════════════════════
 
 @dataclass
 class DimensionParam:
-    """单个评分维度的可调参数。
+    """Tunable parameters for one scoring dimension.
 
-    不同类型的维度使用参数的不同子集：
-    - 线性惩罚型（structure, field_operator_support）: base_score, penalty_per_unit, penalty_threshold, floor, cap
-    - 阈值型（horizon_turnover_proxy）: threshold_low, threshold_high, score_in_range, score_out_range, score_no_data
-    - 分类型（diversity, data_compliance, explainability, risk_control_proxy）: high_value_set, high_score, low_score
-    - 关键词型（economic_logic）: concept_scores 字典
+    Different dimension types use different parameter subsets:
+    - linear penalty (structure, field_operator_support): base_score, penalty_per_unit, penalty_threshold, floor, cap
+    - threshold (horizon_turnover_proxy): threshold_low, threshold_high, score_in_range, score_out_range, score_no_data
+    - categorical (diversity, data_compliance, explainability, risk_control_proxy): high_value_set, high_score, low_score
+    - keyword-based (economic_logic): concept_scores dictionary
     """
-    name: str                                    # 维度名，如 "structure"
-    enabled: bool = True                         # 是否启用此维度
-    weight: float = 0.12                         # 在 prior_score 中的权重
+    name: str                                    # Dimension name, such as "structure".
+    enabled: bool = True                         # Whether this dimension is enabled.
+    weight: float = 0.12                         # Weight inside prior_score.
 
-    # ── 通用 ──
-    floor: float = 0.0                           # 分数下限
-    cap: float = 100.0                           # 分数上限
+    # Common parameters.
+    floor: float = 0.0                           # Score floor.
+    cap: float = 100.0                           # Score cap.
 
-    # ── 线性惩罚型参数 ──
-    base_score: float = 90.0                     # 基础分
-    penalty_per_unit: float = 8.0                # 每超一单位的扣分
-    penalty_threshold: float = 4.0               # 惩罚起点（超过此值开始扣分）
-    bonus_per_unit: float = 0.0                  # 单位加分（field_operator_support 等正向维度）
-    bonus_base: float = 0.0                      # 加分基础值
+    # Linear-penalty parameters.
+    base_score: float = 90.0                     # Base score.
+    penalty_per_unit: float = 8.0                # Penalty for each unit above threshold.
+    penalty_threshold: float = 4.0               # Penalty starts above this threshold.
+    bonus_per_unit: float = 0.0                  # Per-unit bonus for positive dimensions.
+    bonus_base: float = 0.0                      # Bonus base value.
 
-    # ── 阈值型参数 ──
-    threshold_low: float = 0.0                   # 窗口下界
-    threshold_high: float = 0.0                  # 窗口上界
-    score_in_range: float = 82.0                 # 窗口在范围内得分
-    score_out_range: float = 68.0                # 窗口在范围外得分
-    score_no_data: float = 50.0                  # 无数据得分
+    # Threshold parameters.
+    threshold_low: float = 0.0                   # Lower window bound.
+    threshold_high: float = 0.0                  # Upper window bound.
+    score_in_range: float = 82.0                 # Score when inside range.
+    score_out_range: float = 68.0                # Score when outside range.
+    score_no_data: float = 50.0                  # Score when data is unavailable.
 
-    # ── 分类型参数 ──
-    high_value_set: Optional[List[str]] = None   # 高分值集合
-    high_score: float = 80.0                     # 匹配高分值时的得分
-    low_score: float = 60.0                      # 不匹配时的得分
+    # Categorical parameters.
+    high_value_set: list[str] | None = None   # High-value set.
+    high_score: float = 80.0                     # Score on high-value match.
+    low_score: float = 60.0                      # Score when not matched.
 
-    # ── 多条件型 (risk_control_proxy) ──
-    tier_3_score: float = 84.0                   # 三个条件都满足
-    tier_2_score: float = 66.0                   # 两个条件满足
-    tier_1_score: float = 48.0                   # 一个或零个条件
+    # Multi-condition parameters for risk_control_proxy.
+    tier_3_score: float = 84.0                   # Three conditions met.
+    tier_2_score: float = 66.0                   # Two conditions met.
+    tier_1_score: float = 48.0                   # One or zero conditions met.
 
-    # ── 关键词型 (economic_logic) ──
-    concept_scores: Optional[Dict[int, int]] = None  # {concept_count: score}
-    fallback_length_threshold: int = 60           # 兜底 hypothesis 长度阈值
-    fallback_length_score: int = 52               # 兜底长度满足时的得分
-    fallback_insufficient_score: int = 40         # 兜底不满足时的得分
+    # Keyword-based parameters for economic_logic.
+    concept_scores: dict[int, int] | None = None  # {concept_count: score}
+    fallback_length_threshold: int = 60           # Fallback hypothesis length threshold.
+    fallback_length_score: int = 52               # Score when fallback length is sufficient.
+    fallback_insufficient_score: int = 40         # Score when fallback length is insufficient.
 
 
 @dataclass
 class ScoringParams:
-    """完整的可校准评分参数集。
+    """Complete calibratable scoring parameter set.
 
-    包含 8 个维度的 DimensionParam + 三层权重 + 元数据。
+    Includes DimensionParam values for 8 dimensions plus layer weights and
+    metadata.
     """
     schema_version: str = "scoring_calibration-v1.0"
-    dimensions: Dict[str, DimensionParam] = field(default_factory=dict)
-    layer_weights: Dict[str, float] = field(default_factory=lambda: {
+    dimensions: dict[str, DimensionParam] = field(default_factory=dict)
+    layer_weights: dict[str, float] = field(default_factory=lambda: {
         "prior": 0.30, "empirical": 0.45, "checklist": 0.25
     })
-    calibration_quality: Dict[str, float] = field(default_factory=lambda: {
+    calibration_quality: dict[str, float] = field(default_factory=lambda: {
         "r_squared": 0.0, "mean_abs_error": 0.0, "sample_size": 0
     })
     calibrated_at: str = ""
 
     @classmethod
     def defaults(cls) -> "ScoringParams":
-        """返回与当前硬编码先验评分 100% 一致的默认参数。"""
+        """Return defaults matching the current hard-coded prior scoring behavior."""
         dims = {}
 
-        # ── 1. economic_logic：关键词概念检测 ──
+        # 1. economic_logic: keyword-concept detection.
         dims["economic_logic"] = DimensionParam(
             name="economic_logic",
             weight=0.18,
@@ -114,8 +116,8 @@ class ScoringParams:
             fallback_insufficient_score=40,
         )
 
-        # ── 2. structure：算子数量线性惩罚 ──
-        # 原公式: max(25, 90 - max(0, len(operators) - 4) * 8)
+        # 2. structure: linear penalty for operator count.
+        # Original formula: max(25, 90 - max(0, len(operators) - 4) * 8)
         dims["structure"] = DimensionParam(
             name="structure",
             weight=0.14,
@@ -125,19 +127,19 @@ class ScoringParams:
             penalty_threshold=4.0,
         )
 
-        # ── 3. field_operator_support：字段和算子加分配置 ──
-        # 原公式: min(92, 42 + len(fields) * 8 + len(set(operators)) * 4)
+        # 3. field_operator_support: field and operator bonus configuration.
+        # Original formula: min(92, 42 + len(fields) * 8 + len(set(operators)) * 4)
         dims["field_operator_support"] = DimensionParam(
             name="field_operator_support",
             weight=0.16,
             floor=42.0, cap=92.0,
             base_score=42.0,
-            bonus_per_unit=8.0,  # 字段加分
-            # 算子加分在评分时单独处理（4分/算子）
+            bonus_per_unit=8.0,  # Field bonus.
+            # Operator bonus is handled separately during scoring (4 points/operator).
         )
 
-        # ── 4. data_compliance：二值化 ──
-        # 原公式: 82 if fields else 35
+        # 4. data_compliance: binary score.
+        # Original formula: 82 if fields else 35
         dims["data_compliance"] = DimensionParam(
             name="data_compliance",
             weight=0.12,
@@ -145,8 +147,8 @@ class ScoringParams:
             low_score=35.0,
         )
 
-        # ── 5. horizon_turnover_proxy：窗口阈值 ──
-        # 原公式: 82 if 5 <= median_window <= 90 else 68 if median_window else 50
+        # 5. horizon_turnover_proxy: window threshold.
+        # Original formula: 82 if 5 <= median_window <= 90 else 68 if median_window else 50
         dims["horizon_turnover_proxy"] = DimensionParam(
             name="horizon_turnover_proxy",
             weight=0.14,
@@ -157,8 +159,8 @@ class ScoringParams:
             score_no_data=50.0,
         )
 
-        # ── 6. risk_control_proxy：三条件分层 ──
-        # 原公式: 84 if has_cs and has_ts and has_rc else 66 if has_cs and has_ts else 48
+        # 6. risk_control_proxy: three-condition tiering.
+        # Original formula: 84 if has_cs and has_ts and has_rc else 66 if has_cs and has_ts else 48
         dims["risk_control_proxy"] = DimensionParam(
             name="risk_control_proxy",
             weight=0.14,
@@ -167,8 +169,8 @@ class ScoringParams:
             tier_1_score=48.0,
         )
 
-        # ── 7. diversity：分类匹配 ──
-        # 原公式: 80 if family in {"Liquidity", "Volatility", "Hybrid"} else 65
+        # 7. diversity: category match.
+        # Original formula: 80 if family in {"Liquidity", "Volatility", "Hybrid"} else 65
         dims["diversity"] = DimensionParam(
             name="diversity",
             weight=0.07,
@@ -177,8 +179,8 @@ class ScoringParams:
             low_score=65.0,
         )
 
-        # ── 8. explainability：表达式长度 ──
-        # 原公式: 85 if len(expression) < 140 else 60
+        # 8. explainability: expression length.
+        # Original formula: 85 if len(expression) < 140 else 60
         dims["explainability"] = DimensionParam(
             name="explainability",
             weight=0.05,
@@ -189,10 +191,10 @@ class ScoringParams:
 
         return cls(dimensions=dims)
 
-    # ── 持久化 ──
+    # Persistence
 
     def save(self, storage_dir: str = "data") -> str:
-        """持久化到 data/scoring_calibration.json。"""
+        """Persist to data/scoring_calibration.json."""
         os.makedirs(storage_dir, exist_ok=True)
         filepath = os.path.join(storage_dir, "scoring_calibration.json")
         data = {
@@ -209,8 +211,8 @@ class ScoringParams:
         return filepath
 
     @classmethod
-    def load(cls, storage_dir: str = "data") -> Optional["ScoringParams"]:
-        """从 data/scoring_calibration.json 加载参数。文件不存在返回 None。"""
+    def load(cls, storage_dir: str = "data") -> "ScoringParams | None":
+        """Load parameters from data/scoring_calibration.json, or None if absent."""
         filepath = os.path.join(storage_dir, "scoring_calibration.json")
         if not os.path.exists(filepath):
             return None
@@ -223,7 +225,7 @@ class ScoringParams:
         dims = {}
         for name, d in data.get("dimensions", {}).items():
             dims[name] = _dimension_from_dict(d)
-            dims[name].name = name  # 确保 name 与 key 一致
+            dims[name].name = name  # Keep name aligned with the dict key.
 
         return cls(
             schema_version=data.get("schema_version", "scoring_calibration-v1.0"),
@@ -233,31 +235,31 @@ class ScoringParams:
             calibrated_at=data.get("calibrated_at", ""),
         )
 
-    def get_weights_override(self) -> Dict[str, float]:
-        """提取维度权重字典，可直接作为 prior_score 的 weights_override。"""
+    def get_weights_override(self) -> dict[str, float]:
+        """Return dimension weights suitable for prior_score weights_override."""
         return {name: d.weight for name, d in self.dimensions.items() if d.enabled}
 
-    def get_layer_weights(self) -> Dict[str, float]:
-        """提取三层权重字典。"""
+    def get_layer_weights(self) -> dict[str, float]:
+        """Return the three-layer weight mapping."""
         return dict(self.layer_weights)
 
-    def get_dimension(self, name: str) -> Optional[DimensionParam]:
-        """获取单个维度参数。"""
+    def get_dimension(self, name: str) -> DimensionParam | None:
+        """Return parameters for one dimension."""
         return self.dimensions.get(name)
 
 
-# ── 序列化辅助 ──
+# Serialization helpers
 
-def _dimension_to_dict(d: DimensionParam) -> Dict[str, Any]:
-    """将 DimensionParam 转换为可 JSON 序列化的 dict。"""
+def _dimension_to_dict(d: DimensionParam) -> dict[str, Any]:
+    """Convert DimensionParam to a JSON-serializable dict."""
     result = asdict(d)
-    # 清理不需要持久化的字段
+    # Remove fields that should not be persisted.
     result.pop("name", None)
     return result
 
 
-def _dimension_from_dict(d: Dict[str, Any]) -> DimensionParam:
-    """从 dict 恢复 DimensionParam。处理可能缺失的字段用默认值。"""
+def _dimension_from_dict(d: dict[str, Any]) -> DimensionParam:
+    """Restore DimensionParam from a dict, filling missing fields with defaults."""
     return DimensionParam(
         name=d.get("name", ""),
         enabled=d.get("enabled", True),

@@ -95,10 +95,10 @@ class StrategySwitchService:
             next_profile=next_profile,
             retained=next_index == current_index,
             settings={
-                "region": str(next_profile["region"]),
-                "universe": str(next_profile["universe"]),
-                "delay": int(next_profile["delay"]),
-                "neutralization": str(next_profile["neutralization"]),
+                "region": str(next_profile.get("region", "")),
+                "universe": str(next_profile.get("universe", "")),
+                "delay": int(next_profile.get("delay", 0)),
+                "neutralization": str(next_profile.get("neutralization", "")),
             },
         )
 

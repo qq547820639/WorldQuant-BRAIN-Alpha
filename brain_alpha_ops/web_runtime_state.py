@@ -45,17 +45,14 @@ def compute_run_stats(data: dict[str, Any], run_config: Any) -> dict[str, Any]:
     candidates = data.get("candidates", [])
     backtests = data.get("backtests", [])
     summary = data.get("summary", {})
-
     active_statuses = {"ACTIVE", "RUNNING", "SUBMITTED", "POLLING", "SIMULATION_RUNNING", "SIMULATION_SUBMITTED"}
     active_backtests = sum(1 for row in backtests if str(row.get("status", "")).upper() in active_statuses)
-
     passed_candidates = [
         row
         for row in candidates
         if row.get("lifecycle_status") == "submission_ready"
         or (row.get("gate") or {}).get("submission_ready")
     ]
-
     return {
         "produced_count": int(summary.get("produced_count", len(candidates))),
         "passed_count": len(passed_candidates),
@@ -69,7 +66,7 @@ def lifecycle_from_job(
     job: dict[str, Any],
     *,
     read_storage_jsonl: ReadStorageJsonl,
-    limit: int = 1000,
+    limit: int | None = None,
 ) -> list[dict[str, Any]]:
     result = job.get("result") or {}
     summary = result.get("summary") or {}
@@ -94,7 +91,9 @@ def lifecycle_from_job(
         seen.add(key)
         row["status_category"] = status_category(row)
         merged.append(row)
-    return merged[-limit:]
+    if limit is None:
+        return merged
+    return merged[-max(1, int(limit or 1)):]
 
 
 def maybe_archive_lifecycle(
@@ -112,7 +111,18 @@ def maybe_archive_lifecycle(
         return last_archive_check
     try:
         repo = repository_factory(load_config().ops.storage_dir)
-        repo.maybe_archive("lifecycle.jsonl", max_size_mb=50)
+        # P1-9 (2026-06-13): archive policy extended to cover the journal
+        # set declared in ``JournalArchiveDefaults.ARCHIVE_FILES`` instead
+        # of lifecycle.jsonl alone.  Files below the policy size threshold
+        # are no-ops; the throttle guards against per-call I/O.
+        from brain_alpha_ops.runtime_constants import JournalArchiveDefaults
+
+        for filename in JournalArchiveDefaults.ARCHIVE_FILES:
+            repo.maybe_archive(
+                filename,
+                max_size_mb=JournalArchiveDefaults.MAX_SIZE_MB,
+                max_age_days=JournalArchiveDefaults.MAX_AGE_DAYS,
+            )
     except Exception as exc:
         log.warning("lifecycle archive check failed: %s", safe_error_message(exc), exc_info=True)
     return current
@@ -161,7 +171,7 @@ def load_check_results(
     read_storage_jsonl: ReadStorageJsonl,
     safe_error_message: SafeErrorMessage = str,
     log: logging.Logger = logger,
-    limit: int = 5000,
+    limit: int | None = None,
     stale_after: timedelta = timedelta(hours=24),
     now: datetime | None = None,
 ) -> dict[str, Any]:
@@ -181,7 +191,14 @@ def load_check_results(
             else:
                 record["is_stale"] = True
             items.append(record)
-        return {"items": items, "count": len(items)}
+        return {
+            "items": items,
+            "count": len(items),
+            "returned_count": len(items),
+            "total_count": len(items),
+            "total": len(items),
+            "complete": True,
+        }
     except Exception as exc:
         message = safe_error_message(exc)
         log.warning("failed to load check results: %s", message, exc_info=True)

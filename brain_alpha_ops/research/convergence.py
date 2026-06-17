@@ -1,17 +1,18 @@
-"""Alpha 收敛追踪器 — 衡量生产→迭代→收敛闭环质量。
+"""Alpha convergence tracker for the production-iteration-convergence loop.
 
-追踪维度:
-  1. 每轮生产的 Alpha 质量趋势 (Sharpe/Fitness 均值)
-  2. 迭代前后的改进率 (secondary fusion 效果)
-  3. 经验反馈有效性 (experience guidance 是否提升了产出)
-  4. 收敛状态判定 (质量是否在持续提升)
+Tracked dimensions:
+  1. Alpha quality trend per production cycle (average Sharpe/Fitness)
+  2. Improvement before and after iteration (secondary fusion effect)
+  3. Experience feedback effectiveness (whether guidance improves output)
+  4. Convergence status (whether quality keeps improving)
 
-当连续 N 轮无质量改善时，建议切换 strategy profile。
+When quality fails to improve for N consecutive cycles, the tracker recommends
+switching strategy profile.
 
-P1 增强:
-  - Bootstrap 置信区间：用重采样估计 avg_sharpe 的 90% CI
-  - Spearman 秩相关趋势检验：替代简单的前后半均值比较
-  - 统计显著性 stall 判定：stall = 连续 N 轮 avg_sharpe 无显著改善
+P1 enhancements:
+  - Bootstrap confidence intervals estimate avg_sharpe 90% CI.
+  - Spearman rank-correlation trend checks replace simple split-window means.
+  - Statistical stall detection flags N cycles without significant avg_sharpe improvement.
 
 Usage::
 
@@ -23,14 +24,47 @@ Usage::
     if status["stalled"]:
         print(f"Convergence stalled: {status['recommendation']}")
 """
-
 from __future__ import annotations
 
 import random
+import math
 from collections import deque
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any
 
+# ── P2-17: BCa bootstrap helpers (2026-06-13) ─────────────────────────
+def _inv_norm_cdf(p: float) -> float:
+    """Inverse of the standard normal CDF (Abramowitz & Stegun 26.2.23).
+
+    Accurate to ~1e-7 for p in (0, 1).
+    """
+    if p <= 0.0:
+        return -4.0
+    if p >= 1.0:
+        return 4.0
+    # rational approximation for lower tail
+    t = math.sqrt(-2.0 * math.log(min(p, 1.0 - p)))
+    c0, c1, c2 = 2.515517, 0.802853, 0.010328
+    d1, d2, d3 = 1.432788, 0.189269, 0.001308
+    z = t - (c0 + c1 * t + c2 * t * t) / (1.0 + d1 * t + d2 * t * t + d3 * t * t * t)
+    return z if p >= 0.5 else -z
+
+def _bca_alpha(z0: float, a: float, alpha: float) -> float:
+    """Compute a single BCa adjusted percentile.
+
+    The formula is::
+        alpha' = Phi(z0 + (z0 + z_alpha) / (1 - a * (z0 + z_alpha)))
+    where ``Phi`` is the standard normal CDF and ``z_alpha`` is its inverse.
+    """
+    z_alpha = _inv_norm_cdf(alpha)
+    denom = 1.0 - a * (z0 + z_alpha)
+    if abs(denom) < 1e-9:
+        denom = 1e-9 if denom >= 0 else -1e-9
+    return _normal_cdf(z0 + (z0 + z_alpha) / denom)
+
+def _normal_cdf(z: float) -> float:
+    """Standard normal CDF via the Abramowitz & Stegun 7.1.26 approximation."""
+    return 0.5 * (1.0 + math.erf(z / math.sqrt(2.0)))
 
 @dataclass
 class CycleRecord:
@@ -48,10 +82,9 @@ class CycleRecord:
     fusion_created: int = 0
     fusion_improvement_rate: float = 0.0
     # P1: bootstrap-compatible raw data
-    raw_sharpes: List[float] = field(default_factory=list)
-    raw_fitnesses: List[float] = field(default_factory=list)
-    raw_turnovers: List[float] = field(default_factory=list)
-
+    raw_sharpes: list[float] = field(default_factory=list)
+    raw_fitnesses: list[float] = field(default_factory=list)
+    raw_turnovers: list[float] = field(default_factory=list)
 
 @dataclass
 class ConvergenceStatus:
@@ -66,13 +99,12 @@ class ConvergenceStatus:
     stalled: bool = False
     stall_cycles: int = 0
     recommendation: str = ""
-    cycle_history: List[Dict[str, Any]] = field(default_factory=list)
-    # P1: 统计字段
-    sharpe_ci_low: Optional[float] = None     # bootstrap 90% CI lower bound
-    sharpe_ci_high: Optional[float] = None    # bootstrap 90% CI upper bound
+    cycle_history: list[dict[str, Any]] = field(default_factory=list)
+    # P1: statistical fields
+    sharpe_ci_low: float | None = None     # bootstrap 90% CI lower bound
+    sharpe_ci_high: float | None = None    # bootstrap 90% CI upper bound
     trend_confidence: float = 0.0             # Spearman ρ or trend strength
-    stall_is_significant: bool = False        # 统计显著性确认的停滞
-
+    stall_is_significant: bool = False        # statistically significant stall
 
 class ConvergenceTracker:
     """Tracks production quality convergence across cycles.
@@ -92,7 +124,7 @@ class ConvergenceTracker:
         self._stall_threshold = max(3, int(stall_threshold))
         self._bootstrap_samples = max(100, int(bootstrap_samples))
         self._records: deque[CycleRecord] = deque(maxlen=self._window_size)
-        self._all_records: List[CycleRecord] = []
+        self._all_records: list[CycleRecord] = []
         self._stall_counter: int = 0
         self._best_sharpe: float = 0.0
         # P1: track smoothed trend for significance
@@ -104,8 +136,8 @@ class ConvergenceTracker:
     def record_cycle(
         self,
         cycle: int,
-        candidates: Optional[List[Any]] = None,
-        accepted: Optional[List[Any]] = None,
+        candidates: list[Any] | None = None,
+        accepted: list[Any] | None = None,
         *,
         produced: int = 0,
         passed_local: int = 0,
@@ -159,7 +191,7 @@ class ConvergenceTracker:
         self._records.append(rec)
         self._all_records.append(rec)
 
-        # ── P1: Stall detection with bootstrap CI comparison ──
+        # P1: stall detection with bootstrap CI comparison.
         # Compute bootstrap CI for current window if enough data
         if len(self._records) >= 3 and rec.raw_sharpes:
             current_ci = self._bootstrap_ci(rec.raw_sharpes)
@@ -177,9 +209,11 @@ class ConvergenceTracker:
                 self._prev_window_ci = current_ci
             else:
                 # CIs overlap — no significant change
-                self._stall_counter += 1
                 if rec.max_sharpe > self._best_sharpe:
                     self._best_sharpe = rec.max_sharpe
+                    self._stall_counter = 0
+                else:
+                    self._stall_counter += 1
                 self._prev_window_ci = current_ci
         else:
             # Fallback: best_sharpe-based (backward compat, low-sample)
@@ -278,7 +312,7 @@ class ConvergenceTracker:
         self._stall_counter = 0
         self._best_sharpe = 0.0
 
-    def summary(self) -> Dict[str, Any]:
+    def summary(self) -> dict[str, Any]:
         """Return a compact summary dict for pipeline reports."""
         s = self.status()
         return {
@@ -292,7 +326,7 @@ class ConvergenceTracker:
             "stalled": s.stalled,
             "stall_cycles": s.stall_cycles,
             "recommendation": s.recommendation,
-            # P1: 统计字段
+            # P1: statistical fields.
             "sharpe_ci_90": [s.sharpe_ci_low or 0.0, s.sharpe_ci_high or 0.0],
             "trend_confidence": s.trend_confidence,
             "stall_is_significant": s.stall_is_significant,
@@ -302,7 +336,7 @@ class ConvergenceTracker:
     # Internal
     # ------------------------------------------------------------------
     @staticmethod
-    def _record_to_dict(rec: CycleRecord) -> Dict[str, Any]:
+    def _record_to_dict(rec: CycleRecord) -> dict[str, Any]:
         return {
             "cycle": rec.cycle,
             "produced": rec.produced,
@@ -317,38 +351,97 @@ class ConvergenceTracker:
 
     # ── P1: Bootstrap CI ────────────────────────────────────────────
 
-    def _bootstrap_ci(self, values: List[float]) -> tuple[float, float]:
-        """Compute 90% bootstrap confidence interval for the mean.
+    def _bootstrap_ci(
+        self,
+        values: list[float],
+        *,
+        ci_level: float = 0.90,
+        use_bca: bool = True,
+    ) -> tuple[float, float]:
+        """Compute a confidence interval for the mean using bias-corrected
+        and accelerated (BCa) bootstrap.
 
-        Uses simple percentile bootstrap with replacement.
-        Returns (ci_low, ci_high).
+        P2-17 (2026-06-13): replaces the previous naive percentile
+        bootstrap, which systematically narrows the CI when n is small
+        (because resampling from itself cannot add information).
+        BCa corrects for both the bias of the bootstrap distribution
+        (when the original statistic is not centered on the parameter)
+        and for the skewness of the bootstrap distribution (the
+        acceleration term).
+
+        Falls back to a t-distribution interval when ``n < 3`` since
+        BCa needs at least a handful of distinct samples to be
+        meaningful, and falls back to percentile bootstrap when
+        ``use_bca=False`` (for A/B test reproducibility).
+
+        Returns ``(ci_low, ci_high)``.
         """
         if not values:
             return (0.0, 0.0)
 
         n = len(values)
         if n < 3:
-            # Not enough data for bootstrap — use simple ±2*SE approximation
+            # Use a simple t-style interval; not enough data for BCa.
             mean = sum(values) / n
             variance = sum((x - mean) ** 2 for x in values) / max(n - 1, 1)
             se = (variance / n) ** 0.5 if variance > 0 else 0.01
-            return (max(0.0, mean - 1.645 * se), mean + 1.645 * se)
+            z = 1.645  # 90% two-sided
+            return (max(0.0, mean - z * se), mean + z * se)
 
-        # Percentile bootstrap
-        means = []
-        for _ in range(min(self._bootstrap_samples, max(100, n * 10))):
+        # ── Step 1: generate B bootstrap sample means ──
+        means: list[float] = []
+        n_draws = min(self._bootstrap_samples, max(100, n * 10))
+        for _ in range(n_draws):
             sample = [random.choice(values) for _ in range(n)]
-            sample_mean = sum(sample) / n
-            means.append(sample_mean)
-
+            means.append(sum(sample) / n)
         means.sort()
-        low_idx = int(len(means) * 0.05)   # 5th percentile → 90% CI
-        high_idx = int(len(means) * 0.95)  # 95th percentile
+
+        if not use_bca:
+            # Naive percentile bootstrap (kept for reproducibility).
+            low_idx = max(0, int(len(means) * (1 - ci_level) / 2))
+            high_idx = min(len(means) - 1, int(len(means) * (1 + ci_level) / 2))
+            return (max(0.0, means[low_idx]), means[high_idx])
+
+        # ── Step 2: bias correction (z0) ──
+        observed_mean = sum(values) / n
+        # proportion of bootstrap means strictly less than observed
+        less = sum(1 for m in means if m < observed_mean)
+        # avoid log(0) with a tiny floor
+        p = max((less + 0.5) / (n_draws + 1.0), 1e-7)
+        p = min(p, 1 - 1e-7)
+        # inverse normal CDF approximation (Abramowitz & Stegun 26.2.23)
+        z0 = _inv_norm_cdf(p)
+
+        # ── Step 3: acceleration (a) via jackknife ──
+        # jackknife means = leave-one-out means
+        if n < 5:
+            # Jackknife too unstable; fall back to percentile.
+            low_idx = max(0, int(len(means) * (1 - ci_level) / 2))
+            high_idx = min(len(means) - 1, int(len(means) * (1 + ci_level) / 2))
+            return (max(0.0, means[low_idx]), means[high_idx])
+        total = sum(values)
+        jack_means = [(total - v) / (n - 1) for v in values]
+        j_mean = sum(jack_means) / n
+        diffs = [(j_mean - jm) for jm in jack_means]
+        sum_cubes = sum(d ** 3 for d in diffs)
+        sum_squares = sum(d ** 2 for d in diffs) or 1e-12
+        a = sum_cubes / (6.0 * (sum_squares ** 1.5))
+
+        # ── Step 4: BCa adjusted percentiles ──
+        alpha_tail = (1.0 - ci_level) / 2.0
+        alpha1 = alpha_tail
+        alpha2 = 1.0 - alpha_tail
+        a1 = _bca_alpha(z0, a, alpha1)
+        a2 = _bca_alpha(z0, a, alpha2)
+        a1 = max(0.0, min(1.0, a1))
+        a2 = max(0.0, min(1.0, a2))
+        low_idx = int(a1 * (len(means) - 1))
+        high_idx = int(a2 * (len(means) - 1))
         return (max(0.0, means[low_idx]), means[high_idx])
 
     # ── P1: Spearman rank trend ─────────────────────────────────────
 
-    def _spearman_trend(self, records: List[CycleRecord]) -> tuple[float, Optional[bool]]:
+    def _spearman_trend(self, records: list[CycleRecord]) -> tuple[float, bool | None]:
         """Spearman rank correlation between cycle number and avg_sharpe.
 
         Returns (rho, trend_direction) where:
@@ -363,7 +456,7 @@ class ConvergenceTracker:
             return (0.0, None)
 
         # Rank cycles and sharpes
-        def rank_values(vals: List[float]) -> List[float]:
+        def rank_values(vals: list[float]) -> list[float]:
             sorted_vals = sorted((v, i) for i, v in enumerate(vals))
             ranks = [0.0] * len(vals)
             i = 0

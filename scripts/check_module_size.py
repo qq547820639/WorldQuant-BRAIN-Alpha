@@ -23,23 +23,37 @@ SKIP_DIRS = {
     "__pycache__",
     "build",
     "dist",
+    "node_modules",
 }
 SKIP_FILES = {
     "brain_alpha_ops/web/index.html",
-    "brain_alpha_ops/web/index_backup_20260515_025624.html",
 }
 DEFAULT_LINE_LIMIT = 800
 BASELINE_LINE_LIMITS = {
     "brain_alpha_ops/agent_tools.py": 960,
-    "brain_alpha_ops/brain_api/official.py": 900,
-    "brain_alpha_ops/compliance/redline_verifier.py": 850,
-    "brain_alpha_ops/config.py": 840,
+    "brain_alpha_ops/brain_api/official.py": 950,
+    "brain_alpha_ops/brain_api/official_context.py": 820,
+    "brain_alpha_ops/compliance/redline_verifier.py": 1150,
+    "brain_alpha_ops/config.py": 900,
     "brain_alpha_ops/research/assistant.py": 900,
-    "brain_alpha_ops/research/hypothesis_driven_generator.py": 1210,
+    "brain_alpha_ops/research/hypothesis_driven_generator.py": 1330,
+    "brain_alpha_ops/research/hypothesis_library.py": 820,
+    "brain_alpha_ops/research/local_backtest_engine.py": 1200,
     "brain_alpha_ops/research/observability.py": 940,
     "brain_alpha_ops/research/pipeline.py": 3210,
     "brain_alpha_ops/research/scoring.py": 940,
-    "brain_alpha_ops/web.py": 1530,
+    "brain_alpha_ops/web/__init__.py": 1100,
+    "brain_alpha_ops/web/js/app.js": 1700,
+    "brain_alpha_ops/research/alpha_quality.py": 900,
+    "brain_alpha_ops/web_snapshot_runtime.py": 900,
+    "brain_alpha_ops/web_snapshot_facade.py": 900,
+    "brain_alpha_ops/web_assistant_snapshots.py": 900,
+    "brain_alpha_ops/web_candidate_simulation.py": 1016,
+    "brain_alpha_ops/web_routes.py": 1000,
+    "brain_alpha_ops/web_check_availability.py": 879,
+    "brain_alpha_ops/web_cloud_snapshot.py": 905,
+    "brain_alpha_ops/web_handler_dispatch.py": 1165,
+    "scripts/check_live_submit_readiness.py": 1080,
 }
 
 

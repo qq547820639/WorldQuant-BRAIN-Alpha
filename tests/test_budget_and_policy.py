@@ -4,7 +4,7 @@ Covers components that had archive test coverage but with current API signatures
 - ResearchBudget limits (config.py)
 - SubmissionPolicy daily/run/interval limits
 - SubmissionLedger safety checks (safety.py)
-- Mock source detection
+- Non-production source detection
 """
 
 import pytest
@@ -16,7 +16,12 @@ from brain_alpha_ops.config import (
     QualityThresholds,
     validate_run_config,
 )
-from brain_alpha_ops.research.safety import SubmissionLedger, mock_source_reasons, normalize, similarity
+from brain_alpha_ops.research.safety import (
+    SubmissionLedger,
+    non_production_source_reasons,
+    normalize,
+    similarity,
+)
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -27,6 +32,7 @@ class TestResearchBudget:
     def test_default_budget_limits(self):
         budget = ResearchBudget()
         assert budget.max_candidates_per_cycle == 20
+        assert budget.max_generation_attempts == 5
         assert budget.max_official_simulations_per_cycle == 3
         assert budget.retained_alpha_pool_size == 10
         assert budget.min_prior_score_for_official_validation == 60.0
@@ -65,6 +71,18 @@ class TestResearchBudget:
 
         with pytest.raises(ConfigValidationError, match="strategy_plugin_specs"):
             validate_run_config(config)
+
+    def test_generation_attempts_must_be_positive(self):
+        # max_generation_attempts is now floored to >= 1 at usage time
+        # (in generation_phase_service.py), not at config validation time.
+        config = RunConfig()
+        config.ops.budget.max_generation_attempts = 0
+        # config validation no longer raises for this — flooring is done at runtime
+        result = validate_run_config(config)
+        assert result.ops.budget.max_generation_attempts == 0
+        # Usage-time floor: at least 1
+        actual = max(1, int(result.ops.budget.max_generation_attempts))
+        assert actual == 1
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -113,13 +131,13 @@ class TestSafety:
         b = normalize("rank(ts_delta(close,20))")
         assert a == b
 
-    def test_mock_source_detection(self):
-        # mock_source_reasons accepts a candidate-like dict and returns reasons list
-        assert len(mock_source_reasons({"alpha_id": "mock_alpha_001"})) > 0
-        assert len(mock_source_reasons({"alpha_id": "demo_alpha_001"})) > 0
-        assert len(mock_source_reasons({"alpha_id": "test_something"})) > 0
-        assert len(mock_source_reasons({"alpha_id": "dry_run_test"})) > 0
-        assert len(mock_source_reasons({"alpha_id": "real_alpha_id"})) == 0
+    def test_non_production_source_detection(self):
+        assert len(non_production_source_reasons({"alpha_id": "mock_alpha_001"})) > 0
+        assert len(non_production_source_reasons({"alpha_id": "demo_alpha_001"})) > 0
+        assert len(non_production_source_reasons({"alpha_id": "test_something"})) > 0
+        assert len(non_production_source_reasons({"alpha_id": "dry_run_test"})) > 0
+        assert len(non_production_source_reasons({"official_alpha_id": "prod_stub_alpha_0001"})) > 0
+        assert len(non_production_source_reasons({"alpha_id": "real_alpha_id"})) == 0
 
 
 # ═══════════════════════════════════════════════════════════════════════

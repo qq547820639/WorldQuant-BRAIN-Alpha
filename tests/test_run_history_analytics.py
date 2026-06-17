@@ -37,11 +37,19 @@ def _write_run(path, run_id, *, best_score, candidates, ready, submitted, comple
 
 
 def test_run_history_analytics_compares_latest_with_previous(tmp_path):
+    import os
+    import time
+
     history_dir = tmp_path / "run_history"
     history_dir.mkdir()
     older = history_dir / "run_old.json"
     newer = history_dir / "run_new.json"
     _write_run(older, "run_old", best_score=71.5, candidates=4, ready=1, submitted=0, completed_at="2026-05-22T00:01:00+00:00")
+
+    # Ensure different mtimes by touching the newer file after a small delay
+    # Windows mtime resolution is ~10ms, so sleep 20ms to guarantee different mtime
+    time.sleep(0.02)
+
     _write_run(newer, "run_new", best_score=82.0, candidates=6, ready=3, submitted=1, completed_at="2026-05-22T00:02:00+00:00")
 
     analytics = RunHistoryAnalytics(str(tmp_path)).analytics(limit=10)

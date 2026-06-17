@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 from concurrent.futures import Future, ProcessPoolExecutor, ThreadPoolExecutor, TimeoutError
-from dataclasses import dataclass
 import logging
 import os
 import time
 from typing import Any, Callable
 
+from brain_alpha_ops.job_types import JobExecutionResult
 from brain_alpha_ops.redaction import redact_error_message
 from brain_alpha_ops.tasks import JobStore
 
@@ -28,7 +28,7 @@ class TaskExecutor:
 
 class ThreadTaskExecutor(TaskExecutor):
     def __init__(self, max_workers: int | None = None):
-        self.pool = ThreadPoolExecutor(max_workers=max_workers or int(os.environ.get("BRAIN_ALPHA_THREAD_WORKERS", "4")))
+        self.pool = ThreadPoolExecutor(max_workers=max(1, min(max_workers or int(os.environ.get("BRAIN_ALPHA_THREAD_WORKERS", "4")), 32)))  # S-07: bounds guard [1,32]
 
     def submit(self, fn: Callable[..., Any], *args: Any, **kwargs: Any) -> Future:
         return self.pool.submit(fn, *args, **kwargs)
@@ -46,15 +46,6 @@ class ProcessTaskExecutor(TaskExecutor):
 
     def shutdown(self) -> None:
         self.pool.shutdown(wait=False, cancel_futures=True)
-
-
-@dataclass
-class JobExecutionResult:
-    job_id: str
-    status: str
-    result: Any = None
-    error: str = ""
-    duration_seconds: float = 0.0
 
 
 def run_job(
@@ -77,7 +68,7 @@ def run_job(
     future = executor.submit(fn, *args, **kwargs)
     try:
         result = future.result(timeout=timeout)
-    except TimeoutError:
+    except TimeoutError:  # S-02: explicit to avoid catching business TimeoutError
         # Only catch the executor-level TimeoutError — business logic
         # TimeoutErrors (builtin) do NOT inherit from concurrent.futures
         # .TimeoutError and will NOT be caught here.

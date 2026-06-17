@@ -7,7 +7,7 @@ min_margin_bps) with real BRAIN platform checks.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable
 
 
 @dataclass
@@ -29,7 +29,7 @@ class CheckReport:
     total: int = 0
     passed_count: int = 0
     failed_count: int = 0
-    results: List[CheckResult] = field(default_factory=list)
+    results: list[CheckResult] = field(default_factory=list)
     summary: str = ""
 
 
@@ -39,14 +39,14 @@ class AlphaCheck:
     def __init__(
         self,
         name: str,
-        check_fn: Callable[[Dict[str, Any]], CheckResult],
+        check_fn: Callable[[dict[str, Any]], CheckResult],
         severity: str = "ERROR",
     ) -> None:
         self.name = name
         self._check_fn = check_fn
         self.severity = severity
 
-    def run(self, sim_result: Dict[str, Any]) -> CheckResult:
+    def run(self, sim_result: dict[str, Any]) -> CheckResult:
         result = self._check_fn(sim_result)
         result.severity = self.severity
         return result
@@ -65,7 +65,7 @@ class AlphaCheckRegistry:
     """
 
     def __init__(self) -> None:
-        self._checks: Dict[str, AlphaCheck] = {}
+        self._checks: dict[str, AlphaCheck] = {}
 
     # ------------------------------------------------------------------
     # Registration
@@ -73,13 +73,13 @@ class AlphaCheckRegistry:
     def register(self, check: AlphaCheck) -> None:
         self._checks[check.name] = check
 
-    def get(self, name: str) -> Optional[AlphaCheck]:
+    def get(self, name: str) -> AlphaCheck | None:
         return self._checks.get(name)
 
-    def get_all(self) -> List[AlphaCheck]:
+    def get_all(self) -> list[AlphaCheck]:
         return list(self._checks.values())
 
-    def get_by_severity(self, severity: str) -> List[AlphaCheck]:
+    def get_by_severity(self, severity: str) -> list[AlphaCheck]:
         return [c for c in self._checks.values() if c.severity == severity]
 
     # ------------------------------------------------------------------
@@ -87,8 +87,8 @@ class AlphaCheckRegistry:
     # ------------------------------------------------------------------
     def evaluate(
         self,
-        sim_result: Dict[str, Any],
-        checks: Optional[List[str]] = None,
+        sim_result: dict[str, Any],
+        checks: list[str] | None = None,
     ) -> CheckReport:
         """Run specified checks (all by default) against *sim_result*."""
         if checks is None:
@@ -127,9 +127,9 @@ class AlphaCheckRegistry:
         self.register(AlphaCheck("returns_positive", _check_returns_positive, "WARNING"))
         self.register(AlphaCheck("drawdown_limit", _check_drawdown_limit, "WARNING"))
 
-        # --- Turnover (两层) ---
+        # --- Turnover (platform and quality layers) ---
         self.register(AlphaCheck("turnover_platform", _check_turnover_platform, "ERROR"))
-        self.register(AlphaCheck("turnover_quality", _check_turnover_quality, "WARNING"))
+        self.register(AlphaCheck("turnover_quality", _check_turnover_quality, "ERROR"))
 
         # --- Correlation checks ---
         self.register(AlphaCheck("self_correlation", _check_self_correlation, "ERROR"))
@@ -144,7 +144,7 @@ class AlphaCheckRegistry:
         # --- Risk ---
         self.register(AlphaCheck("marginal_contribution", _check_marginal_contribution, "WARNING"))
 
-        # --- Margin (BRAIN 顾问标准, not a platform hard check) ---
+        # --- Margin (BRAIN advisor target, not a platform hard check) ---
         self.register(AlphaCheck("margin_minimum", _check_margin_minimum, "WARNING"))
 
         # --- IC checks ---
@@ -195,7 +195,7 @@ class AlphaCheckRegistry:
 # Individual check implementations
 # ======================================================================
 
-def _metric(sim: Dict[str, Any], *keys: str, default: Any = 0.0) -> float:
+def _metric(sim: dict[str, Any], *keys: str, default: Any = 0.0) -> float:
     """Extract a numeric metric from sim result, trying multiple keys."""
     for key in keys:
         val = sim.get(key)
@@ -207,7 +207,7 @@ def _metric(sim: Dict[str, Any], *keys: str, default: Any = 0.0) -> float:
     return float(default)
 
 
-def _check_sharpe_positive(sim: Dict[str, Any]) -> CheckResult:
+def _check_sharpe_positive(sim: dict[str, Any]) -> CheckResult:
     val = _metric(sim, "sharpe", "Sharpe")
     thresholds = sim.get("_thresholds", None)
     settings = sim.get("settings", {}) or {}
@@ -227,7 +227,7 @@ def _check_sharpe_positive(sim: Dict[str, Any]) -> CheckResult:
     )
 
 
-def _check_fitness_minimum(sim: Dict[str, Any]) -> CheckResult:
+def _check_fitness_minimum(sim: dict[str, Any]) -> CheckResult:
     val = _metric(sim, "fitness", "Fitness")
     thresholds = sim.get("_thresholds", None)
     settings = sim.get("settings", {}) or {}
@@ -247,7 +247,7 @@ def _check_fitness_minimum(sim: Dict[str, Any]) -> CheckResult:
     )
 
 
-def _check_returns_positive(sim: Dict[str, Any]) -> CheckResult:
+def _check_returns_positive(sim: dict[str, Any]) -> CheckResult:
     """Qualitative check — BRAIN does not hard-check returns."""
     val = _metric(sim, "returns", "Returns", "return")
     passed = val > 0
@@ -260,7 +260,7 @@ def _check_returns_positive(sim: Dict[str, Any]) -> CheckResult:
     )
 
 
-def _check_drawdown_limit(sim: Dict[str, Any]) -> CheckResult:
+def _check_drawdown_limit(sim: dict[str, Any]) -> CheckResult:
     """BRAIN: drawdown is NOT a hard platform check — qualitative guidance (WARNING).
 
     Uses max_drawdown from QualityThresholds (default 0.25).
@@ -278,11 +278,12 @@ def _check_drawdown_limit(sim: Dict[str, Any]) -> CheckResult:
     )
 
 
-def _check_turnover_platform(sim: Dict[str, Any]) -> CheckResult:
-    """BRAIN 平台硬门槛: Turnover 1% – 70% (LOW_TURNOVER / HIGH_TURNOVER).
+def _check_turnover_platform(sim: dict[str, Any]) -> CheckResult:
+    """BRAIN platform hard gate: turnover 1%-70% (LOW_TURNOVER / HIGH_TURNOVER).
 
     Source: BRAIN API Alpha Check — LOW_TURNOVER if < 1%, HIGH_TURNOVER if > 70%.
-    这是"能不能过 BRAIN 检查"的最低合规线，ERROR 级别。
+    This is the minimum compliance line for passing BRAIN checks and has ERROR
+    severity.
     """
     val = _metric(sim, "turnover", "Turnover")
     thresholds = sim.get("_thresholds", None)
@@ -293,19 +294,22 @@ def _check_turnover_platform(sim: Dict[str, Any]) -> CheckResult:
         check_name="turnover_platform",
         passed=passed,
         actual=val,
-        expected=f"{min_t:.2f} – {max_t:.2f} (BRAIN 平台硬门槛)",
+        expected=f"{min_t:.2f} – {max_t:.2f} (BRAIN platform hard gate)",
         message=f"Turnover={val:.3f}" + ("" if passed else f" (out of {min_t:.2f}–{max_t:.2f}) — BRAIN platform hard gate"),
     )
 
 
-def _check_turnover_quality(sim: Dict[str, Any]) -> CheckResult:
-    """顾问质量目标: Turnover < 30% (优选提交标准).
+def _check_turnover_quality(sim: dict[str, Any]) -> CheckResult:
+    """Advisor quality target: turnover < 30% for preferred submission.
 
-    30%–70% 的 alpha 不会被硬砍，但应优先尝试优化（提高 decay、加 smoothing、
-    延长 lookback、降低触发频率）。最终优先提交 < 30% 的 alpha，
-    除非 30%–70% 的 alpha 在 Sharpe/Fitness/Drawdown/相关性方面明显优秀。
+    Alphas in the 30%-70% band are not hard-rejected, but should usually be
+    optimized first by increasing decay, adding smoothing, extending lookback,
+    or reducing trigger frequency. Prefer submitting alphas below 30% unless a
+    30%-70% alpha is clearly stronger on Sharpe, Fitness, Drawdown, or
+    correlation.
 
-    Source: BRAIN 顾问标准 — 稳健 alpha 换手率建议上限，WARNING 级别。
+    Source: BRAIN advisor target — recommended turnover ceiling for robust
+    alphas, WARNING severity.
     """
     val = _metric(sim, "turnover", "Turnover")
     thresholds = sim.get("_thresholds", None)
@@ -315,13 +319,13 @@ def _check_turnover_quality(sim: Dict[str, Any]) -> CheckResult:
         check_name="turnover_quality",
         passed=passed,
         actual=val,
-        expected=f"<= {target:.2f} (优先提交)",
+        expected=f"<= {target:.2f} (preferred submission)",
         message=f"Turnover={val:.3f}" + ("" if passed else
-            f" (>{target:.2f}) — 建议优化: 提高decay/加smoothing/延长lookback/trade_when"),
+            f" (>{target:.2f}) — optimize with higher decay, smoothing, longer lookback, or trade_when"),
     )
 
 
-def _check_self_correlation(sim: Dict[str, Any]) -> CheckResult:
+def _check_self_correlation(sim: dict[str, Any]) -> CheckResult:
     """BRAIN: SELF_CORRELATION if >= 0.70 (PnL correlation with previously submitted alphas).
 
     Exception rule (BRAIN official): if new_alpha.Sharpe >= correlated_alpha.Sharpe × 1.10,
@@ -331,7 +335,7 @@ def _check_self_correlation(sim: Dict[str, Any]) -> CheckResult:
     passed = val < 0.70
     exception_applied = False
 
-    # ── BRAIN exception: Sharpe advantage ──
+    # BRAIN exception: Sharpe advantage.
     if not passed:
         sharpe = _metric(sim, "sharpe", "Sharpe", default=0.0)
         related_sharpe = _metric(sim, "relatedAlphaSharpe", "related_alpha_sharpe", default=0.0)
@@ -356,7 +360,7 @@ def _check_self_correlation(sim: Dict[str, Any]) -> CheckResult:
     )
 
 
-def _check_prod_correlation(sim: Dict[str, Any]) -> CheckResult:
+def _check_prod_correlation(sim: dict[str, Any]) -> CheckResult:
     val = abs(_metric(sim, "prodCorrelation", "prod_correlation", default=0.0))
     passed = val < 0.70  # BRAIN: SELF_CORRELATION applies to prod correlation too
     return CheckResult(
@@ -368,7 +372,7 @@ def _check_prod_correlation(sim: Dict[str, Any]) -> CheckResult:
     )
 
 
-def _check_weight_concentration(sim: Dict[str, Any]) -> CheckResult:
+def _check_weight_concentration(sim: dict[str, Any]) -> CheckResult:
     val = _metric(sim, "weightConcentration", "weight_concentration", "concentration", default=0.0)
     passed = val <= 0.10  # BRAIN: CONCENTRATED_WEIGHT if single stock > 10%
     return CheckResult(
@@ -380,7 +384,7 @@ def _check_weight_concentration(sim: Dict[str, Any]) -> CheckResult:
     )
 
 
-def _check_sub_universe_sharpe(sim: Dict[str, Any]) -> CheckResult:
+def _check_sub_universe_sharpe(sim: dict[str, Any]) -> CheckResult:
     """BRAIN: LOW_SUB_UNIVERSE_SHARPE — sub_sharpe >= 0.75 × √(sub_size/alpha_size) × alpha_sharpe.
 
     Official formula: threshold = 0.75 × √(sub_size / alpha_size) × alpha_sharpe.
@@ -398,16 +402,37 @@ def _check_sub_universe_sharpe(sim: Dict[str, Any]) -> CheckResult:
     ratio = float(getattr(thresholds, "sub_universe_sharpe_min_ratio", 0.75))
     threshold = ratio * size_factor * max(sharpe, 0.01)
     passed = sub_sharpe >= threshold
+    exception_applied = False
+
+    # BRAIN exception: LOW_SUB_UNIVERSE_SHARPE — when sub-universe is very small
+    # (< 10% of alpha size), the check is downgraded from ERROR to WARNING
+    # because the sub_universe is too small to produce reliable sub-sharpe metrics.
+    # The BRAIN platform may still accept the alpha with this warning.
+    low_sub_exception = not passed and sub_size > 0 and alpha_size > 0 and (sub_size / alpha_size) < 0.1
+    if low_sub_exception:
+        passed = True
+        exception_applied = True
+
+    expected_str = f">= {threshold:.4f} ({ratio}×√({sub_size:.0f}/{alpha_size:.0f})×sharpe)"
+    if exception_applied:
+        expected_str += " OR LOW_SUB_UNIVERSE_SHARPE exception (sub_size < 10% alpha_size)"
+    msg = f"SubUniverseSharpe={sub_sharpe:.4f}"
+    if exception_applied:
+        msg += f" (LOW_SUB_UNIVERSE_SHARPE exception: sub_size={sub_size:.0f} < 0.1 × alpha_size={alpha_size:.0f})"
+    elif not passed:
+        msg += f" (below {threshold:.4f})"
+
     return CheckResult(
         check_name="sub_universe_sharpe",
         passed=passed,
         actual=sub_sharpe,
-        expected=f">= {threshold:.4f} ({ratio}×√({sub_size:.0f}/{alpha_size:.0f})×sharpe)",
-        message=f"SubUniverseSharpe={sub_sharpe:.4f}" + ("" if passed else f" (below {threshold:.4f})"),
+        expected=expected_str,
+        message=msg,
+        exception_applied=exception_applied,
     )
 
 
-def _check_marginal_contribution(sim: Dict[str, Any]) -> CheckResult:
+def _check_marginal_contribution(sim: dict[str, Any]) -> CheckResult:
     """BRAIN: marginal contribution — not a named platform check; general risk."""
     val = _metric(sim, "marginalContribution", "marginal_contribution", default=0.0)
     passed = val > 0
@@ -420,13 +445,13 @@ def _check_marginal_contribution(sim: Dict[str, Any]) -> CheckResult:
     )
 
 
-def _check_margin_minimum(sim: Dict[str, Any]) -> CheckResult:
-    """BRAIN 顾问标准: margin >= min_margin_bps (default 4.0 bps).
+def _check_margin_minimum(sim: dict[str, Any]) -> CheckResult:
+    """BRAIN advisor target: margin >= min_margin_bps (default 4.0 bps).
 
     Prefer API-returned margin field. Fall back to local estimation (returns/turnover/100)
     only when API does not provide the margin value.
     """
-    # P2-3 / P0-4 fix: 检查 API 是否实际提供了 margin 字段（而非默认值 0.0）
+    # P2-3 / P0-4 fix: check whether the API supplied margin instead of default 0.0.
     api_margin = sim.get("margin") or sim.get("Margin")
     has_api_margin = api_margin is not None and (
         isinstance(api_margin, (int, float)) and abs(float(api_margin)) > 0.001
@@ -453,7 +478,7 @@ def _check_margin_minimum(sim: Dict[str, Any]) -> CheckResult:
     )
 
 
-def _check_ic_mean(sim: Dict[str, Any]) -> CheckResult:
+def _check_ic_mean(sim: dict[str, Any]) -> CheckResult:
     """BRAIN: IC Mean signal quality — |IC| >= 0.02 typical threshold."""
     val = _metric(sim, "icMean", "ic_mean", "IC", default=0.0)
     passed = abs(val) >= 0.02
@@ -466,7 +491,7 @@ def _check_ic_mean(sim: Dict[str, Any]) -> CheckResult:
     )
 
 
-def _check_ic_ir(sim: Dict[str, Any]) -> CheckResult:
+def _check_ic_ir(sim: dict[str, Any]) -> CheckResult:
     """BRAIN: IC Information Ratio — IR >= 0.3 typical threshold."""
     val = _metric(sim, "icIR", "ic_ir", "IC_IR", default=0.0)
     passed = val >= 0.3
@@ -479,7 +504,7 @@ def _check_ic_ir(sim: Dict[str, Any]) -> CheckResult:
     )
 
 
-def _check_rank_ic(sim: Dict[str, Any]) -> CheckResult:
+def _check_rank_ic(sim: dict[str, Any]) -> CheckResult:
     val = _metric(sim, "rankIC", "rank_ic", "RankIC", default=0.0)
     passed = abs(val) >= 0.02
     return CheckResult(
@@ -491,7 +516,7 @@ def _check_rank_ic(sim: Dict[str, Any]) -> CheckResult:
     )
 
 
-def _check_turnover_stability(sim: Dict[str, Any]) -> CheckResult:
+def _check_turnover_stability(sim: dict[str, Any]) -> CheckResult:
     val = _metric(sim, "turnoverStability", "turnover_stability", default=0.5)
     passed = val >= 0.3
     return CheckResult(
@@ -503,7 +528,7 @@ def _check_turnover_stability(sim: Dict[str, Any]) -> CheckResult:
     )
 
 
-def _check_drawdown_stability(sim: Dict[str, Any]) -> CheckResult:
+def _check_drawdown_stability(sim: dict[str, Any]) -> CheckResult:
     val = _metric(sim, "drawdownStability", "drawdown_stability", default=0.5)
     passed = val >= 0.3
     return CheckResult(
@@ -515,7 +540,7 @@ def _check_drawdown_stability(sim: Dict[str, Any]) -> CheckResult:
     )
 
 
-def _check_coverage_minimum(sim: Dict[str, Any]) -> CheckResult:
+def _check_coverage_minimum(sim: dict[str, Any]) -> CheckResult:
     val = _metric(sim, "coverage", "Coverage", default=1.0)
     passed = val >= 0.5
     return CheckResult(
@@ -527,7 +552,7 @@ def _check_coverage_minimum(sim: Dict[str, Any]) -> CheckResult:
     )
 
 
-def _check_expression_valid(sim: Dict[str, Any]) -> CheckResult:
+def _check_expression_valid(sim: dict[str, Any]) -> CheckResult:
     errors = sim.get("errors", []) or []
     passed = len(errors) == 0
     return CheckResult(
@@ -539,7 +564,7 @@ def _check_expression_valid(sim: Dict[str, Any]) -> CheckResult:
     )
 
 
-def _check_neutralization(sim: Dict[str, Any]) -> CheckResult:
+def _check_neutralization(sim: dict[str, Any]) -> CheckResult:
     settings = sim.get("settings", {}) or {}
     neut = settings.get("neutralization", "NONE")
     passed = neut != "NONE"
@@ -552,7 +577,7 @@ def _check_neutralization(sim: Dict[str, Any]) -> CheckResult:
     )
 
 
-def _check_pasteurization(sim: Dict[str, Any]) -> CheckResult:
+def _check_pasteurization(sim: dict[str, Any]) -> CheckResult:
     settings = sim.get("settings", {}) or {}
     past = settings.get("pasteurization", "OFF")
     passed = past == "ON"
@@ -565,7 +590,7 @@ def _check_pasteurization(sim: Dict[str, Any]) -> CheckResult:
     )
 
 
-def _check_delay_consistent(sim: Dict[str, Any]) -> CheckResult:
+def _check_delay_consistent(sim: dict[str, Any]) -> CheckResult:
     settings = sim.get("settings", {}) or {}
     delay = int(settings.get("delay", 1))
     passed = delay >= 1
@@ -578,7 +603,7 @@ def _check_delay_consistent(sim: Dict[str, Any]) -> CheckResult:
     )
 
 
-def _check_nan_handling(sim: Dict[str, Any]) -> CheckResult:
+def _check_nan_handling(sim: dict[str, Any]) -> CheckResult:
     settings = sim.get("settings", {}) or {}
     nan_val = settings.get("nanHandling", "OFF")
     passed = nan_val == "ON"
@@ -595,7 +620,7 @@ def _check_nan_handling(sim: Dict[str, Any]) -> CheckResult:
 # P1-5: Type-specific checks (POWER_POOL, ATOM, PYRAMID)
 # ======================================================================
 
-def _check_powerpool_sharpe(sim: Dict[str, Any]) -> CheckResult:
+def _check_powerpool_sharpe(sim: dict[str, Any]) -> CheckResult:
     """Power Pool: Sharpe >= 1.0 (lower threshold than REGULAR)."""
     val = _metric(sim, "sharpe", "Sharpe")
     passed = val >= 1.0
@@ -605,7 +630,7 @@ def _check_powerpool_sharpe(sim: Dict[str, Any]) -> CheckResult:
     )
 
 
-def _check_powerpool_operators(sim: Dict[str, Any]) -> CheckResult:
+def _check_powerpool_operators(sim: dict[str, Any]) -> CheckResult:
     """Power Pool: unique operators <= 8."""
     operators = sim.get("operators", []) or []
     unique = len(set(operators))
@@ -616,7 +641,7 @@ def _check_powerpool_operators(sim: Dict[str, Any]) -> CheckResult:
     )
 
 
-def _check_powerpool_fields(sim: Dict[str, Any]) -> CheckResult:
+def _check_powerpool_fields(sim: dict[str, Any]) -> CheckResult:
     """Power Pool: unique data fields <= 3 (grouping fields excluded)."""
     fields = sim.get("data_fields", sim.get("fields", [])) or []
     # Exclude grouping fields: sector, industry, subindustry, market
@@ -629,7 +654,7 @@ def _check_powerpool_fields(sim: Dict[str, Any]) -> CheckResult:
     )
 
 
-def _check_powerpool_self_corr(sim: Dict[str, Any]) -> CheckResult:
+def _check_powerpool_self_corr(sim: dict[str, Any]) -> CheckResult:
     """Power Pool: self-correlation <= 0.5 (stricter than REGULAR's 0.7)."""
     val = abs(_metric(sim, "selfCorrelation", "self_correlation", "correlation", default=0.0))
     passed = val <= 0.5
@@ -639,7 +664,7 @@ def _check_powerpool_self_corr(sim: Dict[str, Any]) -> CheckResult:
     )
 
 
-def _check_powerpool_region_delay(sim: Dict[str, Any]) -> CheckResult:
+def _check_powerpool_region_delay(sim: dict[str, Any]) -> CheckResult:
     """Power Pool: only USA, Delay-1."""
     settings = sim.get("settings", {}) or {}
     region = str(settings.get("region", "")).upper()
@@ -653,7 +678,7 @@ def _check_powerpool_region_delay(sim: Dict[str, Any]) -> CheckResult:
     )
 
 
-def _check_atom_single_dataset(sim: Dict[str, Any]) -> CheckResult:
+def _check_atom_single_dataset(sim: dict[str, Any]) -> CheckResult:
     """ATOM: all fields must come from a single dataset."""
     field_datasets = sim.get("field_datasets", sim.get("datasets", [])) or []
     unique_ds = set(str(d) for d in field_datasets if d)
@@ -666,7 +691,7 @@ def _check_atom_single_dataset(sim: Dict[str, Any]) -> CheckResult:
     )
 
 
-def _check_pyramid_count(sim: Dict[str, Any]) -> CheckResult:
+def _check_pyramid_count(sim: dict[str, Any]) -> CheckResult:
     """Pyramid: max 2 pyramids per user (advisory WARNING)."""
     count = int(sim.get("pyramid_count", sim.get("existing_pyramids", 0)) or 0)
     passed = count < 2
@@ -681,7 +706,7 @@ def _check_pyramid_count(sim: Dict[str, Any]) -> CheckResult:
 # P1-3: IS/OOS robustness check
 # ======================================================================
 
-def _check_is_oos_robustness(sim: Dict[str, Any]) -> CheckResult:
+def _check_is_oos_robustness(sim: dict[str, Any]) -> CheckResult:
     """IS/OOS robustness: SubUniverseSharpe / Sharpe >= 0.5.
 
     BRAIN does not natively separate IS/OOS Sharpe in standard API responses.
@@ -711,7 +736,7 @@ def _check_is_oos_robustness(sim: Dict[str, Any]) -> CheckResult:
 # P2-1: Expression complexity check
 # ======================================================================
 
-def _check_expression_complexity(sim: Dict[str, Any]) -> CheckResult:
+def _check_expression_complexity(sim: dict[str, Any]) -> CheckResult:
     """Expression complexity: nesting depth + operator count + expression length.
 
     BRAIN does not impose expression complexity limits, but complex expressions

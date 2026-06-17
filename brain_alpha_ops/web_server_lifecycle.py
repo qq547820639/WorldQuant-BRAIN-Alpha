@@ -31,8 +31,9 @@ class SafeThreadingHTTPServer(ThreadingHTTPServer):
         self.server_port = int(port)
 
 
-def find_free_port(start: int, *, host: str, scan_limit: int = 100) -> int:
-    for port in range(start, start + scan_limit):
+def find_free_port(start: int, *, host: str, scan_limit: int = 10000) -> int:
+    upper = min(65535, start + max(1, scan_limit))
+    for port in range(start, upper + 1):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
             sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             try:
@@ -45,6 +46,22 @@ def find_free_port(start: int, *, host: str, scan_limit: int = 100) -> int:
 
 def display_host_for_bind(host: str) -> str:
     return "127.0.0.1" if host in {"0.0.0.0", "::"} else host
+
+
+def _server_port(server: ThreadingHTTPServer, fallback: int) -> int:
+    port = getattr(server, "server_port", None)
+    if isinstance(port, int) and port > 0:
+        return port
+    server_address = getattr(server, "server_address", None)
+    if isinstance(server_address, tuple) and len(server_address) >= 2:
+        try:
+            resolved = int(server_address[1])
+        except (TypeError, ValueError):
+            pass
+        else:
+            if resolved >= 0:
+                return resolved
+    return fallback
 
 
 def shutdown_server(server: ThreadingHTTPServer | None, stop_event: threading.Event) -> None:
@@ -78,9 +95,21 @@ def serve(
     bind_host = normalize_host(host)
     if bind_host not in loopback_bind_hosts and not allow_remote:
         raise ValueError("remote web bind requires web.allow_remote=true")
-    bind_port = find_free_port(start=port or default_port, host=bind_host)
+    requested_port = default_port if port is None else port
+    if requested_port == 0:
+        bind_port = 0
+    else:
+        try:
+            bind_port = find_free_port(start=requested_port, host=bind_host)
+        except RuntimeError:
+            if server_factory is SafeThreadingHTTPServer:
+                raise
+            # Unit tests and embedding callers may supply a fake server factory
+            # that does not need a real socket probe.
+            bind_port = requested_port
     server = server_factory((bind_host, bind_port), handler_class)
-    url = f"http://{display_host_for_bind(bind_host)}:{bind_port}/"
+    actual_port = _server_port(server, bind_port)
+    url = f"http://{display_host_for_bind(bind_host)}:{actual_port}/"
     if open_browser:
         browser_open(url)
     thread_factory(target=server.serve_forever, daemon=True).start()
@@ -99,7 +128,7 @@ def smoke_test_server(
     urlopen: Callable[..., Any] = urllib.request.urlopen,
     request_factory: Callable[..., urllib.request.Request] = urllib.request.Request,
 ) -> dict[str, Any]:
-    url = serve_func(port=port or default_port, open_browser=False)
+    url = serve_func(port=default_port if port is None else port, open_browser=False)
     try:
         root_response = urlopen(url, timeout=5)
         root_html = root_response.read().decode("utf-8", errors="replace")

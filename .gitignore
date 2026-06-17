@@ -38,10 +38,18 @@ Thumbs.db
 # ---- Data & Logs (large / sensitive / runtime-generated) ----
 data/*.jsonl
 data/api_cache/
-data/jobs_sync.json
-data/jobs_production.json
+data/_codex_bench*/
+data/e2e_screenshots/
+data/run_history/
+data/knowledge/
 data/*.sqlite
 data/checkpoints/
+data/audit/
+data/jobs_*.json
+data/official_context_refresh_status.json
+data/qualified_alpha_summary.json
+data/simulation_cooldown.json
+
 data/*.log
 *.log
 *.err.log
@@ -53,8 +61,14 @@ data/*.log
 *.cache
 
 # ---- Build artifacts ----
+node_modules/
 build/
 dist/
+!brain_alpha_ops/web/react_app/dist/
+!brain_alpha_ops/web/react_app/dist/index.html
+brain_alpha_ops/web/react_app/*.tsbuildinfo
+brain_alpha_ops/web/react_app/vite.config.js
+brain_alpha_ops/web/react_app/vite.config.d.ts
 
 # ---- Archive ----
 _archive_before_rebuild_*/
@@ -83,12 +97,65 @@ Desktop.ini
 $RECYCLE.BIN/
 .codex_tmp_quantgpt.zip
 
+# ---- Executables (large binaries) ----
+*.exe
+
 # ---- Project-specific runtime data (local-only) ----
 .codebuddy/
 
 # ---- Test output artifacts ----
+.playwright-cli/
 test_results.txt
 _run_new_tests.py
 _coverage/
 htmlcov/
 .coverage
+experiments/scratch/
+brain_alpha_ops/_web_legacy.py
+
+# ---- Development artifacts (not for production) ----
+.workbuddy/
+REVIEW_*.md
+PROJECT_PHASE*.md
+PROJECT_STATIC_ANALYSIS*.md
+_write_memory.py
+tests/e2e_*.py
+tests/fix_sync_watchdog.py
+tests/test_pipeline_minimal_smoke.py
+scripts/submit_alpha_direct.py
+scripts/check_test_mock_alias.py
+
+# ---- Development artifacts (experiments, docs, IDE) ----
+experiments/
+# docs/ — exclude everything except CI-critical tracker docs
+!/docs/REVIEW_GAP_CLOSURE_20260530.md
+!/docs/DELIVERY_COMPLETION_AUDIT_20260528.md
+!.github/
+.codex/
+
+docs/*
+!docs/REVIEW_GAP_CLOSURE_20260530.md
+!docs/DELIVERY_COMPLETION_AUDIT_20260528.md
+!docs/DEFECT_ANALYSIS_REPORT_20260602.md
+!docs/DEFECT_ANALYSIS_REPORT_20260602_v6.md
+!docs/COMPREHENSIVE_SYSTEM_EVALUATION_20260514.md
+
+# ---- Development artifacts (final batch) ----
+.codebuddy/
+.superdesign/
+.vite/
+screenshots/
+tools/
+_status.py
+overview.md
+responsiveness_check.py
+validate_data.py
+.importlinter
+.pre-commit-config.yaml
+PROJECT_EVALUATION_REPORT.md
+REVIEW.md
+!docs/DEFECT_ANALYSIS_REPORT_20260601.md
+!docs/STATIC_ANALYSIS_DEFECT_REPORT_20260603.md
+!docs/CODE_REVIEW_20260521.md
+!docs/ALPHA_PRODUCTION_DIAGNOSIS_20260522.md
+!docs/TRACKED_DATA_BOUNDARY_PLAN.json

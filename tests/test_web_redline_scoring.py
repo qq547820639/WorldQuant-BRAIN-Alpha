@@ -1,11 +1,14 @@
+import logging
+
 from brain_alpha_ops.config import RunConfig
 from brain_alpha_ops.models import Candidate
 from brain_alpha_ops.research.repository import ResearchRepository
+from brain_alpha_ops.research import auto_calibrator as auto_calibrator_mod
 from brain_alpha_ops import web_redline_scoring
 
 
 def test_scoring_attribution_resolves_candidate_from_alpha_id(monkeypatch, tmp_path):
-    config = RunConfig(environment="mock")
+    config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path)
     repo = ResearchRepository(str(tmp_path))
     repo.save_candidate(
@@ -45,7 +48,7 @@ def test_scoring_attribution_resolves_candidate_from_alpha_id(monkeypatch, tmp_p
 
 
 def test_scoring_attribution_reports_missing_candidate(monkeypatch, tmp_path):
-    config = RunConfig(environment="mock")
+    config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path)
     monkeypatch.setattr(web_redline_scoring, "load_run_config", lambda: config)
 
@@ -55,8 +58,74 @@ def test_scoring_attribution_reports_missing_candidate(monkeypatch, tmp_path):
     assert payload["error_code"] == "SCORING_CANDIDATE_NOT_FOUND"
 
 
+def test_scoring_evaluate_logs_score_history_append_failure(monkeypatch, tmp_path, caplog):
+    config = RunConfig(environment="production")
+    config.ops.storage_dir = str(tmp_path)
+    candidate = Candidate(
+        alpha_id="alpha_history_warning",
+        expression="rank(close)",
+        family="Momentum",
+        hypothesis="Recent price strength can persist after ranking.",
+        data_fields=["close"],
+        operators=["rank"],
+        official_metrics={
+            "pass_fail": "PASS",
+            "sharpe": 1.6,
+            "fitness": 1.2,
+            "turnover": 0.2,
+            "returns": 0.05,
+            "drawdown": 0.04,
+            "correlation": 0.2,
+            "weight_concentration": 0.04,
+            "sub_universe_sharpe": 1.3,
+            "subUniverseSize": 1000,
+            "alphaSize": 1000,
+            "margin": 5.0,
+        },
+    )
+
+    class FailingScoreHistoryDB:
+        def __init__(self, _storage_dir):
+            pass
+
+        def append(self, _result):
+            raise OSError("history store unavailable")
+
+    monkeypatch.setattr(web_redline_scoring, "load_run_config", lambda: config)
+    monkeypatch.setattr(web_redline_scoring, "ScoreHistoryDB", FailingScoreHistoryDB)
+    caplog.set_level("WARNING", logger=web_redline_scoring.__name__)
+
+    payload = web_redline_scoring.handle_scoring_evaluate({"candidate": candidate.to_dict()})
+
+    assert payload["alpha_id"] == "alpha_history_warning"
+    assert payload["score_history_status"] == "failed"
+    assert payload["score_history_error"] == "history store unavailable"
+    assert "score history append failed for alpha_id=alpha_history_warning" in caplog.text
+    assert "history store unavailable" in caplog.text
+
+
+def test_scoring_health_warns_when_auto_calibration_status_fails(monkeypatch, tmp_path, caplog):
+    config = RunConfig(environment="production")
+    config.ops.storage_dir = str(tmp_path)
+
+    class FailingAutoCalibrator:
+        def __init__(self, _storage_dir):
+            raise OSError("calibrator unavailable")
+
+    monkeypatch.setattr(auto_calibrator_mod, "AutoCalibrator", FailingAutoCalibrator)
+    monkeypatch.setattr(web_redline_scoring, "load_run_config", lambda: config)
+
+    with caplog.at_level(logging.WARNING, logger="brain_alpha_ops.web_redline_scoring"):
+        payload = web_redline_scoring.handle_scoring_health({})
+
+    assert payload["auto_calibration"]["available"] is False
+    assert payload["auto_calibration"]["trigger_requested"] is False
+    assert "scoring auto-calibration status unavailable" in caplog.text
+    assert "calibrator unavailable" in caplog.text
+
+
 def test_scoring_health_reports_auto_calibration_status(monkeypatch, tmp_path):
-    config = RunConfig(environment="mock")
+    config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path)
     (tmp_path / "alpha_features.jsonl").write_text(
         "\n".join(
@@ -78,8 +147,23 @@ def test_scoring_health_reports_auto_calibration_status(monkeypatch, tmp_path):
     assert payload["auto_calibration"]["triggered"] is False
 
 
+def test_checkpoint_status_warns_when_config_load_fails(monkeypatch, caplog):
+    def fail_load_run_config():
+        raise RuntimeError("config unavailable")
+
+    monkeypatch.setattr(web_redline_scoring, "load_run_config", fail_load_run_config)
+
+    with caplog.at_level(logging.WARNING, logger="brain_alpha_ops.web_redline_scoring"):
+        payload = web_redline_scoring.handle_checkpoint_status({})
+
+    assert payload["ok"] is False
+    assert payload["resume_available"] is False
+    assert "checkpoint status unavailable" in caplog.text
+    assert "config unavailable" in caplog.text
+
+
 def test_checkpoint_status_uses_configured_storage_for_resume_and_history(monkeypatch, tmp_path):
-    config = RunConfig(environment="mock")
+    config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path)
     checkpoint_dir = tmp_path / "checkpoints"
     checkpoint_dir.mkdir()

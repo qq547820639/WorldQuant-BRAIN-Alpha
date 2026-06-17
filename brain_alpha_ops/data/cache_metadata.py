@@ -68,6 +68,7 @@ def read_context_cache_metadata(target_path: Path) -> dict[str, Any]:
     return data if isinstance(data, dict) else {}
 
 
+# S-10: DUPLICATE of official_context_validation.py:_items_hash — consolidate into shared util
 def _items_hash(items: list[dict[str, Any]]) -> str:
     payload = json.dumps(items, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str)
     return sha256(payload.encode("utf-8")).hexdigest()

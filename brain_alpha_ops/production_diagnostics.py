@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 import json
+import logging
 from pathlib import Path
 from typing import Any
 
@@ -18,6 +19,9 @@ from brain_alpha_ops.parameter_audit import build_parameter_audit_snapshot
 from brain_alpha_ops.scoring.official_scoring import OfficialScoringSystem
 from brain_alpha_ops.ux.history import RunHistoryAnalytics
 from brain_alpha_ops.web_cloud_snapshot import official_context_file_counts
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -250,16 +254,20 @@ def _frontend_inline_status() -> dict[str, Any]:
         from brain_alpha_ops.build_inline import check
 
         result = check()
+        css_sources = result.get("css_sources", [])
         return {
             "ok": bool(result.get("ok")),
             "replaced": result.get("replaced", 0),
             "css_replaced": result.get("css_replaced", 0),
             "missing": result.get("missing", []),
-            "css_sources": result.get("css_sources", []),
+            "css_sources": [source for source in css_sources if source == "css/app.css"] or css_sources[:1],
+            "css_source_files": css_sources,
             "error": result.get("error", ""),
         }
     except Exception as exc:
-        return {"ok": False, "replaced": 0, "missing": [], "error": str(exc)}
+        from brain_alpha_ops.redaction import redact_error_message
+        logger.warning("frontend inline status check failed during production diagnosis", exc_info=True)
+        return {"ok": False, "replaced": 0, "missing": [], "error": redact_error_message(exc)}
 
 
 def _history_replay_status(run_config: RunConfig) -> dict[str, Any]:

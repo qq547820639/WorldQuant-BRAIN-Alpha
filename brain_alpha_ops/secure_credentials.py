@@ -12,8 +12,11 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 from dataclasses import dataclass, field
 from typing import Any
+
+from brain_alpha_ops.redaction import redact_data, redact_text
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +30,9 @@ CREDENTIAL_KEY_PATTERNS = frozenset({
     "authorization", "cookie", "csrf", "session",
     "credential", "credentials",
 })
+_PRINTF_PLACEHOLDER_RE = re.compile(
+    r"%(?:\([^)]+\))?[-+#0 ]*(?:\d+|\*)?(?:\.(?:\d+|\*))?[hlL]?[diouxXeEfFgGcrsa%]"
+)
 
 
 class CredentialRedactionFilter(logging.Filter):
@@ -37,6 +43,7 @@ class CredentialRedactionFilter(logging.Filter):
     """
 
     def filter(self, record: logging.LogRecord) -> bool:
+        msg_text = record.msg if isinstance(record.msg, str) else ""
         if record.args and isinstance(record.args, dict):
             sanitized = {}
             for key, value in record.args.items():
@@ -44,24 +51,57 @@ class CredentialRedactionFilter(logging.Filter):
                 if any(pattern in key_lower for pattern in CREDENTIAL_KEY_PATTERNS):
                     sanitized[key] = "<REDACTED>"
                 else:
-                    sanitized[key] = value
+                    sanitized[key] = _redact_logging_arg(value)
             record.args = sanitized
-        if isinstance(record.msg, str):
-            for pattern in CREDENTIAL_KEY_PATTERNS:
-                if pattern in record.msg.lower():
-                    # Replace explicit credential mentions
-                    record.msg = record.msg.replace(
-                        f"{pattern}=", f"{pattern}=<REDACTED>"
-                    )
-                    record.msg = record.msg.replace(
-                        f"{pattern}: ", f"{pattern}: <REDACTED> "
-                    )
+        elif record.args and isinstance(record.args, tuple):
+            sensitive_positions = _sensitive_positional_arg_indexes(msg_text, len(record.args))
+            record.args = tuple(
+                _redact_logging_arg(value, sensitive=index in sensitive_positions)
+                for index, value in enumerate(record.args)
+            )
+        if isinstance(record.msg, str) and not record.args:
+            record.msg = redact_text(record.msg).replace("<redacted>", "<REDACTED>")
         return True
 
 
 # ═══════════════════════════════════════════════════════════════════════
 # Credential provider
 # ═══════════════════════════════════════════════════════════════════════
+
+def _redact_logging_arg(value: Any, *, sensitive: bool = False) -> Any:
+    if sensitive:
+        return "<REDACTED>"
+    if isinstance(value, str):
+        return redact_text(value)
+    return redact_data(value)
+
+
+def _sensitive_positional_arg_indexes(message: str, arg_count: int) -> set[int]:
+    if not message or arg_count <= 0:
+        return set()
+    sensitive_indexes: set[int] = set()
+    arg_index = 0
+    segment_start = 0
+    for match in _PRINTF_PLACEHOLDER_RE.finditer(message):
+        placeholder = match.group(0)
+        if placeholder == "%%" or placeholder.startswith("%("):
+            continue
+        if arg_index >= arg_count:
+            break
+        if _placeholder_has_sensitive_context(message, segment_start, match.start()):
+            sensitive_indexes.add(arg_index)
+        arg_index += 1
+        segment_start = match.end()
+    return sensitive_indexes
+
+
+def _placeholder_has_sensitive_context(message: str, segment_start: int, placeholder_start: int) -> bool:
+    window = message[max(segment_start, placeholder_start - 64):placeholder_start].lower().replace("-", "_")
+    for pattern in CREDENTIAL_KEY_PATTERNS:
+        normalized = pattern.replace("-", "_")
+        if re.search(rf"\b{re.escape(normalized)}\b", window):
+            return True
+    return False
 
 @dataclass
 class ResolutionTrace:
@@ -73,13 +113,16 @@ class ResolutionTrace:
     masked: str           # masked representation
 
 
-@dataclass
+@dataclass(repr=False)
 class CredentialBundle:
     """Resolved credential bundle with audit trace."""
     username: str = ""
     password: str = ""
     token: str = ""
     trace: list[ResolutionTrace] = field(default_factory=list)
+
+    def __repr__(self) -> str:
+        return f"CredentialBundle({self.masked()!r})"
 
     @property
     def has_credentials(self) -> bool:

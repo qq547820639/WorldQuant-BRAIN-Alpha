@@ -1,4 +1,9 @@
-"""Run-history analytics for guided production replay and comparison."""
+"""Run-history analytics for guided production replay and comparison.
+
+History files can grow very large (hundreds of MB) during production runs.
+All read paths include a file-size guard so the analytics engine never blocks
+on multi-second JSON parses.
+"""
 
 from __future__ import annotations
 
@@ -6,6 +11,10 @@ import json
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+
+
+# Skip history files larger than this to avoid blocking on multi-second parses.
+_MAX_HISTORY_FILE_BYTES = 10 * 1024 * 1024  # 10 MiB
 
 
 class RunHistoryAnalytics:
@@ -23,11 +32,17 @@ class RunHistoryAnalytics:
                 records.append(self.summarize(payload, path=path))
         return records
 
-    def load_run(self, run_id: str) -> dict[str, Any] | None:
+    def load_run(self, run_id: str, *, max_bytes: int = _MAX_HISTORY_FILE_BYTES) -> dict[str, Any] | None:
         path = self.history_dir / f"{run_id}.json"
         if not path.exists() and run_id == "latest":
             path = self.history_dir / "latest.json"
         if not path.exists():
+            return None
+        # Guard: skip files that are too large to parse quickly.
+        try:
+            if path.stat().st_size > max_bytes:
+                return None
+        except OSError:
             return None
         try:
             payload = json.loads(path.read_text(encoding="utf-8"))
@@ -209,19 +224,22 @@ def _parameter_audit_summary(value: Any) -> dict[str, Any]:
     }
 
 
-def _history_file_sort_key(path: Path) -> tuple[str, float, str]:
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        payload = {}
-    completed = str(
-        payload.get("completed_at")
-        or payload.get("timestamp")
-        or payload.get("started_at")
-        or ""
-    )
+# Maximum file size (bytes) to read for JSON-based sort key extraction.
+# Files larger than this use mtime-only sorting to avoid multi-second stalls
+# on 100MB+ history snapshots.
+_MAX_SORT_READ_BYTES = 2 * 1024 * 1024  # 2 MiB
+
+
+def _history_file_sort_key(path: Path) -> tuple[float, str]:
+    """Sort history files by modification time (descending).
+
+    Uses filesystem mtime as the primary key so that even 400 MB+ run-history
+    snapshots are sorted without reading their contents.  The previous
+    implementation called ``json.loads()`` on every file which caused the
+    production diagnostics test to hang indefinitely on large data directories.
+    """
     try:
         modified = path.stat().st_mtime
     except OSError:
         modified = 0.0
-    return completed, modified, path.name
+    return modified, path.name

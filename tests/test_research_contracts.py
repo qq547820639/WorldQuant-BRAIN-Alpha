@@ -1,7 +1,12 @@
+import logging
+import sys
+import types
+
 from brain_alpha_ops.research.contracts import (
     backtest_record,
     recoverable_backtest_candidates,
 )
+from brain_alpha_ops.models import PipelineEvent
 from brain_alpha_ops.research.repository import ResearchRepository
 
 
@@ -88,3 +93,87 @@ def test_repository_allows_known_jsonl_files(tmp_path):
 
     assert (tmp_path / "events.jsonl").is_file()
     assert (tmp_path / "events.jsonl.lock").exists() is False
+
+
+def test_repository_redacts_user_profile_event_payloads(tmp_path):
+    repo = ResearchRepository(str(tmp_path))
+
+    repo.save_event(
+        "run_1",
+        PipelineEvent(
+            event="runtime_progress",
+            message="profile loaded",
+            data={
+                "user_profile": {
+                    "username": "researcher@example.com",
+                    "raw": {
+                        "email": "researcher@example.com",
+                        "telephone": "+1234567890",
+                        "firstName": "Research",
+                        "fullName": "Research User",
+                        "employment": {"employer": "Example Capital"},
+                    },
+                }
+            },
+        ),
+    )
+
+    persisted = (tmp_path / "events.jsonl").read_text(encoding="utf-8")
+
+    assert "researcher@example.com" not in persisted
+    assert "+1234567890" not in persisted
+    assert "Research User" not in persisted
+    assert "Example Capital" not in persisted
+    assert "<redacted>" in persisted
+
+
+def test_repository_warns_when_expression_sqlite_cache_update_fails(tmp_path, monkeypatch, caplog):
+    class BrokenExpressionSqliteIndex:
+        def __init__(self, storage_dir):
+            self.storage_dir = storage_dir
+
+        def append_record(self, record, *, source_file):
+            raise RuntimeError("expression sqlite unavailable")
+
+    monkeypatch.setitem(
+        sys.modules,
+        "brain_alpha_ops.research.expression_sqlite_index",
+        types.SimpleNamespace(ExpressionSqliteIndex=BrokenExpressionSqliteIndex),
+    )
+    repo = ResearchRepository(str(tmp_path))
+
+    with caplog.at_level(logging.WARNING, logger="brain_alpha_ops.research.repository"):
+        repo._append("candidates.jsonl", {"alpha_id": "a1", "expression": "rank(close)"})
+
+    assert (tmp_path / "candidates.jsonl").read_text(encoding="utf-8").strip()
+    assert "failed to update incremental expression sqlite cache for candidates.jsonl" in caplog.text
+
+
+def test_repository_warns_when_record_sqlite_cache_update_fails(tmp_path, monkeypatch, caplog):
+    class BrokenRecordSqliteIndex:
+        def __init__(self, storage_dir):
+            self.storage_dir = storage_dir
+
+        def append_record(self, record, *, source_file):
+            raise RuntimeError("record sqlite unavailable")
+
+    monkeypatch.setitem(
+        sys.modules,
+        "brain_alpha_ops.research.record_sqlite_index",
+        types.SimpleNamespace(RecordSqliteIndex=BrokenRecordSqliteIndex),
+    )
+    repo = ResearchRepository(str(tmp_path))
+
+    with caplog.at_level(logging.WARNING, logger="brain_alpha_ops.research.repository"):
+        repo.save_backtest_record(
+            "run_1",
+            {
+                "action": "submitted",
+                "alpha_id": "a1",
+                "simulation_id": "sim_1",
+                "expression": "rank(close)",
+            },
+        )
+
+    assert (tmp_path / "backtests.jsonl").read_text(encoding="utf-8").strip()
+    assert "failed to update incremental record sqlite cache for backtests.jsonl" in caplog.text

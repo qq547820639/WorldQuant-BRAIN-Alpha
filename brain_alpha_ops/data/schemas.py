@@ -43,3 +43,4 @@ class OfficialDataset:
     id: str
     name: str
     field_count: int = 0
+    category: str = ""

@@ -41,6 +41,16 @@ def test_profile_extracts_structural_features():
     assert profile.fingerprint
 
 
+def test_profile_supports_function_keyword_arguments():
+    profile = profile_expression("winsorize(rank(close), std=5)")
+
+    assert profile.parsed is True
+    assert profile.canonical == "winsorize(rank(close),std=5)"
+    assert profile.operators == ("winsorize", "rank")
+    assert profile.fields == ("close",)
+    assert profile.windows == (5,)
+
+
 def test_expression_profile_summary_is_jsonl_ready():
     summary = expression_profile_summary(" Rank ( TS_Delta ( Close , 20 ) ) ")
     assert summary["expression_canonical"] == "rank(ts_delta(close,20))"

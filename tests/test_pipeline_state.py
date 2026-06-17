@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from brain_alpha_ops.models import Candidate
 from brain_alpha_ops.research.pipeline_state import (
     CycleState,

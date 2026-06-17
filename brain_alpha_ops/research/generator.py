@@ -5,104 +5,46 @@ Zero hard-coded fields or templates.
 """
 
 from __future__ import annotations
+import logging
+import time
 
-import random
 import re
-from typing import Optional, TYPE_CHECKING
+from typing import Any, TYPE_CHECKING
 
 from brain_alpha_ops.models import Candidate, new_id
-from brain_alpha_ops.research.expression_ast import expression_fingerprint, expression_key, ordered_operators, profile_expression
+from brain_alpha_ops.research.expression_ast import (
+    expression_fingerprint,
+    expression_key,
+    expression_similarity,
+    ordered_operators,
+    profile_expression,
+)
+from brain_alpha_ops.research.field_quality import filter_generation_fields, generation_field_ids
+from brain_alpha_ops.research.fallback_generation import (
+    high_turnover_generation_risk_reasons,
+    is_high_turnover_generation_risk,
+)
+from brain_alpha_ops.research.generator_metadata import (
+    DEFAULT_WINDOWS,
+    DEFAULT_WINSOR_STD,
+    OFFICIAL_OPERATOR_SUBSTITUTE_FAMILIES,
+    expression_windows_within_constraints,
+    _expression_operators_are_official,
+    _get_default_windows,
+    _get_default_winsor_stds,
+    _load_official_operator_names,
+    _load_operators_windows,
+)
+from brain_alpha_ops.research.generator_mutation import mutate_expression
 
 if TYPE_CHECKING:
     from brain_alpha_ops.data import OfficialDataLoader, FieldDatasetMapper
     from .theme_engine import DynamicThemeEngine
     from .dataset_selector import DatasetSelector
 
-# Default window sizes — can be overridden per dataset frequency (P1-4 TODO).
-DEFAULT_WINDOWS = [3, 5, 8, 10, 12, 15, 20, 30, 40, 60, 90, 120, 180, 252]
-DEFAULT_WINSOR_STD = [3, 4, 5, 6]
+logger = logging.getLogger(__name__)
 
-
-def _get_default_windows() -> list[int]:
-    """Return a copy of the built-in fallback windows."""
-    return list(DEFAULT_WINDOWS)
-
-
-def _get_default_winsor_stds() -> list[int]:
-    """Return a copy of the built-in fallback winsorize std values."""
-    return list(DEFAULT_WINSOR_STD)
-
-
-def _load_operators_windows(loader: "Optional[OfficialDataLoader]" = None) -> tuple[list[int], list[int]]:
-    """Derive generation knobs from official operator metadata when available."""
-    try:
-        if loader is None:
-            from brain_alpha_ops.data import OfficialDataLoader
-
-            loader = OfficialDataLoader.instance()
-        operators = loader.get_operators()
-    except Exception:
-        return _get_default_windows(), _get_default_winsor_stds()
-
-    windows: set[int] = set()
-    winsor_stds: set[int] = set()
-    for op in operators or []:
-        name = _operator_attr(op, "name").lower()
-        category = _operator_attr(op, "category").lower()
-        definition = _operator_attr(op, "definition")
-        description = _operator_attr(op, "description")
-        text = f"{definition} {description}"
-        if name.startswith("ts_") or "time series" in category:
-            windows.update(_parameter_defaults(op, {"window", "lookback", "d"}))
-            if re.search(r"\b(d|lookback)\b", definition):
-                windows.update(_get_default_windows())
-        if name in {"winsorize", "group_backfill"} or "winsor" in text.lower():
-            winsor_stds.update(_parameter_defaults(op, {"std", "standard_deviation"}))
-            winsor_stds.update(
-                int(float(value))
-                for value in re.findall(r"\bstd\s*=\s*(\d+(?:\.\d+)?)", text, flags=re.IGNORECASE)
-            )
-
-    return (
-        sorted(w for w in windows if w > 0) or _get_default_windows(),
-        sorted(w for w in winsor_stds if w > 0) or _get_default_winsor_stds(),
-    )
-
-
-def _operator_attr(operator: object, name: str) -> str:
-    if isinstance(operator, dict):
-        value = operator.get(name, "")
-        if not value and isinstance(operator.get("raw"), dict):
-            value = operator["raw"].get(name, "")
-        return str(value or "")
-    return str(getattr(operator, name, "") or "")
-
-
-def _parameter_defaults(operator: object, names: set[str]) -> set[int]:
-    if not isinstance(operator, dict):
-        return set()
-    values: set[int] = set()
-    params = operator.get("parameters")
-    if not isinstance(params, list) and isinstance(operator.get("raw"), dict):
-        params = operator["raw"].get("parameters")
-    if not isinstance(params, list):
-        return values
-    for param in params:
-        if not isinstance(param, dict):
-            continue
-        param_name = str(param.get("name") or param.get("type") or "").lower()
-        if param_name not in names:
-            continue
-        for key in ("default", "value"):
-            value = param.get(key)
-            if isinstance(value, (int, float)) and value > 0:
-                values.add(int(value))
-        choices = param.get("choices") or param.get("values")
-        if isinstance(choices, list):
-            for value in choices:
-                if isinstance(value, (int, float)) and value > 0:
-                    values.add(int(value))
-    return values
+FORBIDDEN_PATTERN_SIMILARITY_THRESHOLD = 0.90
 
 
 class CandidateGenerator:
@@ -125,10 +67,10 @@ class CandidateGenerator:
 
     def __init__(
         self,
-        loader: "Optional[OfficialDataLoader]" = None,
-        mapper: "Optional[FieldDatasetMapper]" = None,
-        theme_engine: "Optional[DynamicThemeEngine]" = None,
-        selector: "Optional[DatasetSelector]" = None,
+        loader: "OfficialDataLoader | None" = None,
+        mapper: "FieldDatasetMapper | None" = None,
+        theme_engine: "DynamicThemeEngine | None" = None,
+        selector: "DatasetSelector | None" = None,
         *,
         max_field_pool_size: int = 50,
     ) -> None:
@@ -139,6 +81,7 @@ class CandidateGenerator:
         self._selector = selector
         self._max_field_pool_size = max(10, int(max_field_pool_size))
         self._windows, self._winsor_stds = _load_operators_windows(loader)
+        self._official_operators = _load_official_operator_names(loader)
 
         # Lazy init fields/operators from loader
         self._fields: set[str] = set()
@@ -152,6 +95,13 @@ class CandidateGenerator:
         self._observability_diversity_boost = False
         self._observability_avoid_keys: set[str] = set()
         self._observability_guidance: dict = {}
+        self._knowledge_constraints: dict[str, Any] = {
+            "preferred_fields": [],
+            "preferred_operators": [],
+            "forbidden_patterns": [],
+            "strict_preferred_fields": False,
+            "strict_preferred_operators": False,
+        }
 
     @property
     def windows(self) -> list[int]:
@@ -167,15 +117,16 @@ class CandidateGenerator:
     def update_context(self, fields: list[dict], operators: list[dict]) -> None:
         """Update known fields/operators (backward-compat, now sourced from loader)."""
         if fields:
-            self._fields = {str(item.get("name", "")).lower() for item in fields if item.get("name")}
+            self._fields = set(generation_field_ids(fields))
         if operators:
-            self._operators = {str(item.get("name", "")).lower() for item in operators if item.get("name")}
+            names = {str(item.get("name", "")).lower() for item in operators if item.get("name")}
+            self._operators = names & self._official_operators if self._official_operators else set()
 
     def set_dataset(self, dataset_id: str) -> None:
         """Set the active dataset for generation."""
         self._dataset_id = dataset_id
         if self._mapper:
-            self._fields = set(self._mapper.fields_for(dataset_id))
+            self._fields = set(generation_field_ids(self._mapper.fields_for(dataset_id)))
 
     # ------------------------------------------------------------------
     # Field pool — official data only
@@ -194,8 +145,11 @@ class CandidateGenerator:
         if self._loader:
             try:
                 # Treat empty string as None (all datasets)
-                ds_id: Optional[str] = dataset_id if dataset_id else None
-                ds_fields = self._loader.get_fields(ds_id)
+                ds_id: str | None = dataset_id if dataset_id else None
+                raw_fields = self._loader.get_fields(ds_id if ds_id else None)
+                ds_fields = filter_generation_fields(raw_fields)
+                if raw_fields and not ds_fields:
+                    return []
                 if ds_fields:
                     # Score fields by coverage, pick top N
                     # P1-5: Dynamic field pool — larger pools for datasets with more fields
@@ -223,13 +177,13 @@ class CandidateGenerator:
             from brain_alpha_ops.brain_api.context_defaults import get_default_fields
             default_fields = get_default_fields()
             if default_fields:
-                return [str(f.get("name", "")) for f in default_fields if f.get("name")]
+                return generation_field_ids(default_fields)
         except Exception:
-            pass
+            logger.warning("context default fields unavailable; using in-memory field fallback", exc_info=True)
 
         # Priority 3: self._fields (set by update_context with official API data)
         if self._fields:
-            return sorted(self._fields)
+            return sorted(generation_field_ids(self._fields))
 
         return []
 
@@ -286,9 +240,60 @@ class CandidateGenerator:
             "diversity_boost": self._observability_diversity_boost,
         }
 
+    def set_knowledge_constraints(self, constraints: dict[str, Any] | None) -> None:
+        """Bias generation toward structured KB rules and away from failures."""
+        constraints = dict(constraints or {})
+        requested_fields = [str(item).lower() for item in constraints.get("preferred_fields") or [] if str(item)]
+        preferred_fields = self._official_preferred_fields(requested_fields)
+        preferred_operators = [
+            str(item).lower()
+            for item in constraints.get("preferred_operators") or []
+            if str(item) and str(item).lower() in self._official_operators
+        ]
+        forbidden_patterns = [str(item).strip() for item in constraints.get("forbidden_patterns") or [] if str(item)]
+        strict_preferred_fields = bool(constraints.get("strict_preferred_fields"))
+        strict_preferred_operators = bool(constraints.get("strict_preferred_operators"))
+        self._knowledge_constraints = {
+            "preferred_fields": preferred_fields,
+            "preferred_operators": preferred_operators,
+            "forbidden_patterns": forbidden_patterns,
+            "strict_preferred_fields": strict_preferred_fields,
+            "strict_preferred_operators": strict_preferred_operators,
+        }
+        if preferred_fields:
+            self._fields.update(preferred_fields)
+        if preferred_operators:
+            self._operators.update(preferred_operators)
+
+    def _official_preferred_fields(self, fields: list[str]) -> list[str]:
+        if not fields:
+            return []
+        official_fields = {str(field).lower() for field in self._fields if str(field)}
+        if not official_fields:
+            official_fields = {
+                str(field).lower()
+                for field in self._build_official_field_pool(self._dataset_id)
+                if str(field)
+            }
+        return [field for field in fields if field in official_fields]
+
     # ------------------------------------------------------------------
     # Generate
     # ------------------------------------------------------------------
+
+    # B-05: Public API for hypothesis weight adjustment from experience feedback
+    def adjust_hypothesis_weight(self, hypothesis: str, factor: float) -> None:
+        """Public method to adjust hypothesis weight from experience feedback.
+
+        Previously accessed via cross-class private attribute
+        (self._generator._library.adjust_weight). This public method
+        provides a clean API that callers can use without knowing
+        internal library details.
+        """
+        library = getattr(self, "_library", None)
+        if library is not None and hasattr(library, "adjust_weight"):
+            library.adjust_weight(hypothesis, factor)
+
     def generate(self, count: int, dataset_id: str = "") -> list[Candidate]:
         """Generate *count* alpha candidates for *dataset_id*."""
         ds = dataset_id or self._dataset_id
@@ -298,19 +303,19 @@ class CandidateGenerator:
             return self._generate_dynamic(count, ds)
 
         # Fallback: use existing fields-based generation
-        return self._generate_fallback(count)
+        return self._generate_fallback(count, ds)
 
     def _generate_dynamic(self, count: int, dataset_id: str) -> list[Candidate]:
         """Use DynamicThemeEngine to produce varied candidates."""
-        import logging
         exp_guided = False
         # P2-2: Apply experience guidance — prefer proven operators/windows
         if self._experience_operators:
-            self._theme_engine._windows = list(  # type: ignore[union-attr]
+            self._theme_engine.windows = list(
                 self._experience_windows if self._experience_windows
-                else self._theme_engine._windows  # type: ignore[union-attr]
+                else self._theme_engine.windows
             )
             exp_guided = True
+        # ═══ S-04 Phase C: Candidate generation from templates ═══
         themes = self._theme_engine.generate(dataset_id, n=count)  # type: ignore[union-attr]
         # P2-2: Extra generation using experience-proven operators
         if self._experience_operators and len(themes) < count:
@@ -340,6 +345,14 @@ class CandidateGenerator:
             mutated = self._theme_engine.mutate_expression(  # type: ignore[union-attr]
                 tmpl.expression, dataset_id, seed=seed
             )
+            if not _expression_operators_are_official(mutated, self._official_operators):
+                continue
+            if not self._expression_satisfies_strict_preferred_constraints(mutated):
+                continue
+            if is_high_turnover_generation_risk(mutated):
+                continue
+            if self._knowledge_constraints.get("forbidden_patterns") and self._expression_forbidden(mutated):
+                continue
             if any(c.expression == mutated for c in candidates) or self._is_observability_avoided(mutated):
                 continue
             candidates.append(
@@ -357,6 +370,27 @@ class CandidateGenerator:
         self._cursor += max(1, len(themes))
         return candidates
 
+    def _expression_satisfies_strict_preferred_constraints(self, expression: str) -> bool:
+        """Apply strict KB constraints to generated expressions after mutation."""
+        if self._knowledge_constraints.get("strict_preferred_fields"):
+            allowed_fields = {str(field).lower() for field in self._knowledge_constraints.get("preferred_fields") or []}
+            expression_fields = {str(field).lower() for field in profile_expression(expression).fields}
+            groups = {"market", "sector", "industry", "subindustry"}
+            expression_fields -= groups
+            if not expression_fields or not expression_fields <= allowed_fields:
+                return False
+        if self._knowledge_constraints.get("strict_preferred_operators"):
+            allowed_operators = {
+                str(operator).lower()
+                for operator in self._knowledge_constraints.get("preferred_operators") or []
+            }
+            if not allowed_operators:
+                return False
+            if {operator.lower() for operator in ordered_operators(expression)} - allowed_operators:
+                return False
+        return True
+
+    # TODO R3 S-05: hardcoded templates contradict "零硬编码" docstring; extract to config
     def _generate_fallback(self, count: int, dataset_id: str = "") -> list[Candidate]:
         """Fallback generation — uses real official fields from OfficialDataLoader.
         
@@ -366,6 +400,7 @@ class CandidateGenerator:
         candidates: list[Candidate] = []
         attempts = 0
         diversity_boost = self._observability_diversity_boost
+        # ═══ S-04 Phase A: Field pool building ═══
         # P2-2: Blend experienced windows with defaults (70% experience, 30% exploration)
         if self._experience_windows:
             windows = self._experience_windows + [w for w in self._windows if w not in self._experience_windows]
@@ -374,11 +409,11 @@ class CandidateGenerator:
 
         ds_label = dataset_id or self._dataset_id or "default"
 
+        # ═══ S-04 Phase B: Theme generation ═══
         # Build field pool — ONLY from official data sources, never hardcoded
         field_pool = self._build_official_field_pool(dataset_id or self._dataset_id)
         if not field_pool:
-            import logging
-            logging.error(
+            logger.error(
                 "CandidateGenerator._generate_fallback: No official fields available. "
                 "Run pipeline with valid credentials to populate data/official_fields.json "
                 "and data/official_operators.json."
@@ -390,42 +425,95 @@ class CandidateGenerator:
             exp_in_pool = [f for f in self._experience_fields if f in field_pool]
             other_fields = [f for f in field_pool if f not in self._experience_fields]
             field_pool = exp_in_pool + other_fields
+        frontloaded_preferred_fields: list[str] = []
+        if self._knowledge_constraints.get("preferred_fields"):
+            preferred_lower = {str(f).lower() for f in self._knowledge_constraints["preferred_fields"]}
+            field_by_lower = {str(f).lower(): f for f in field_pool if str(f)}
+            official_preferred = [
+                field_by_lower.get(field) or field
+                for field in self._knowledge_constraints["preferred_fields"]
+                if str(field).lower() in preferred_lower
+                and (str(field).lower() in field_by_lower or str(field).lower() in self._fields)
+            ]
+            preferred_fields = []
+            seen_preferred: set[str] = set()
+            for field in official_preferred:
+                key = str(field).lower()
+                if key and key not in seen_preferred:
+                    preferred_fields.append(str(field))
+                    seen_preferred.add(key)
+            frontloaded_preferred_fields = list(preferred_fields)
+            remainder = [f for f in field_pool if str(f).lower() not in seen_preferred]
+            field_pool = preferred_fields if self._knowledge_constraints.get("strict_preferred_fields") else preferred_fields + remainder
 
-        # Diverse template skeletons — P1-7: expanded from 10 to 22
+        # Template skeletons must never name fields directly.  Even common
+        # BRAIN fields such as returns/sector are unavailable when the local
+        # official context is partial, so every field reference is supplied
+        # from field_pool via f1/f2.
         templates = [
-            "rank(ts_delta({f1}, {w}) / ts_std_dev(returns, {w}))",
+            "rank(divide(ts_delta({f1}, {w}), ts_std_dev({f2}, {w})))",
             "rank(ts_rank({f1}, {w}))",
             "rank(zscore({f1}))",
-            "rank(-{f1})",
+            "rank(reverse({f1}))",
             "rank(ts_mean({f1}, {w}))",
-            "group_rank({f1}, sector)",
-            "-1 * ts_rank({f1}, {w})",
-            "rank({f1}) * rank(ts_delta({f2}, {w}))",
-            "rank(ts_corr({f1}, returns, {w}))",
-            "ts_rank(ts_delta({f1}, {w}), {w})",
-            # P1-7 additions
-            "rank(ts_decay_linear(ts_delta({f1}, {w}), {w}))",
-            "rank(-ts_std_dev({f1}, {w}))",
-            "rank(ts_delta({f1}, {w}) / ts_std_dev({f1}, {w}))",
-            "group_neutralize(zscore({f1}), sector)",
-            "rank(divide({f1}, ts_mean({f1}, {w})))",
-            "rank(ts_mean({f1}, {w}) - ts_mean({f1}, {w}))",
+            "rank(subtract(ts_delta({f1}, {w}), ts_delta({f2}, {w})))",
+            "reverse(ts_rank({f1}, {w}))",
+            "multiply(rank({f1}), rank(ts_delta({f2}, {w})))",
             "rank(ts_corr({f1}, {f2}, {w}))",
-            "rank(if_else(greater(ts_delta({f1}, {w}), 0), {f1}, -{f1}))",
+            "ts_rank(ts_delta({f1}, {w}), {w})",
+            "rank(ts_decay_linear(ts_delta({f1}, {w}), {w}))",
+            "rank(reverse(ts_std_dev({f1}, {w})))",
+            "rank(divide(ts_delta({f1}, {w}), ts_std_dev({f1}, {w})))",
+            "rank(subtract(zscore({f1}), zscore({f2})))",
+            "rank(divide({f1}, ts_mean({f1}, {w})))",
+            "rank(subtract(ts_mean({f1}, {w}), ts_mean({f2}, {w})))",
+            "rank(ts_covariance({f1}, {f2}, {w}))",
+            "rank(if_else(greater(ts_delta({f1}, {w}), 0), {f1}, reverse({f1})))",
             "rank(winsorize(ts_delta({f1}, {w}), 3))",
-            "rank(ts_std_dev({f1}, {w}) / ts_std_dev({f1}, {w}))",
-            "rank(ts_mean({f1}, {w}) / ts_std_dev({f2}, {w}))",
+            "rank(divide(ts_std_dev({f1}, {w}), ts_std_dev({f2}, {w})))",
+            "rank(divide(ts_mean({f1}, {w}), ts_std_dev({f2}, {w})))",
             "rank(ts_sum(ts_delta({f1}, {w}), {w}))",
         ]
         families = ["momentum", "momentum", "quality", "value", "liquidity",
-                     "cross_sectional", "reversal", "hybrid", "liquidity", "momentum",
-                     # P1-7 additions
-                     "decay", "volatility", "momentum", "cross_sectional", "liquidity",
-                     "momentum", "hybrid", "conditional", "momentum", "volatility",
+                     "relative_momentum", "reversal", "hybrid", "co_movement", "momentum",
+                     "decay", "volatility", "momentum", "relative_value", "liquidity",
+                     "relative_momentum", "co_movement", "conditional", "momentum", "volatility",
                      "hybrid", "momentum"]
 
+        strict_operators = set(self._knowledge_constraints.get("preferred_operators") or [])
+        template_pairs = [
+            (template, family)
+            for template, family in zip(templates, families)
+            if _expression_operators_are_official(template, self._official_operators)
+            and (
+                not self._knowledge_constraints.get("strict_preferred_operators")
+                or {operator.lower() for operator in ordered_operators(template)} <= strict_operators
+            )
+        ]
+        if not template_pairs:
+            logger.error(
+                "CandidateGenerator._generate_fallback: no fallback templates match official operator snapshot"
+            )
+            return []
+        templates = [template for template, _family in template_pairs]
+        families = [family for _template, family in template_pairs]
+
         attempt_limit = count * (16 if diversity_boost else 8)
+        max_generation_seconds = int(
+            getattr(self, '_max_generation_seconds', 0) or 120
+        )
+        _gen_start = time.time()
+        logger.info(
+            'CandidateGenerator._generate_fallback: count=%d, attempt_limit=%d, max_seconds=%d, field_pool=%d',
+            count, attempt_limit, max_generation_seconds, len(field_pool),
+        )
         while len(candidates) < count and attempts < attempt_limit:
+            if max_generation_seconds > 0 and (time.time() - _gen_start) > max_generation_seconds:
+                logger.warning(
+                    'CandidateGenerator._generate_fallback: TIMEOUT after %d generations (%.1fs)',
+                    len(candidates), time.time() - _gen_start,
+                )
+                break
             attempts += 1
             if diversity_boost:
                 idx = (attempts * 5 + self._cursor) % len(templates)
@@ -433,15 +521,26 @@ class CandidateGenerator:
                 field2_index = (attempts * 11 + 3 + self._cursor) % len(field_pool)
                 window_index = (attempts * 3 + self._cursor) % len(windows)
             else:
-                idx = attempts % len(templates)
-                field_index = attempts % len(field_pool)
-                field2_index = (attempts + 3) % len(field_pool)
-                window_index = attempts % len(windows)
+                base = attempts - 1
+                idx = base % len(templates)
+                field_index = base % len(field_pool)
+                field2_index = (base + 3) % len(field_pool)
+                window_index = base % len(windows)
             tmpl = templates[idx]
+            if frontloaded_preferred_fields and len(candidates) < len(frontloaded_preferred_fields):
+                field_index = (attempts - 1) % len(frontloaded_preferred_fields)
             f1 = field_pool[field_index]
             f2 = field_pool[field2_index] if "{f2}" in tmpl else f1
             w = windows[window_index]
             expr = tmpl.replace("{f1}", f1).replace("{f2}", f2).replace("{w}", str(w))
+            if not _expression_operators_are_official(expr, self._official_operators):
+                continue
+            if not expression_windows_within_constraints(expr):
+                continue
+            if is_high_turnover_generation_risk(expr):
+                continue
+            if self._knowledge_constraints.get("forbidden_patterns") and self._expression_forbidden(expr):
+                continue
 
             if any(c.expression == expr for c in candidates) or self._is_observability_avoided(expr):
                 continue
@@ -459,6 +558,11 @@ class CandidateGenerator:
                     template_source=f"fallback:{families[idx]}" + (":observability" if diversity_boost else ""),
                 )
             )
+        _el = time.time() - _gen_start
+        logger.info(
+            'CandidateGenerator._generate_fallback: done — %d candidates, %d attempts, %.1fs',
+            len(candidates), attempts, _el,
+        )
         self._cursor += max(1, attempts)
         return candidates
 
@@ -472,12 +576,51 @@ class CandidateGenerator:
         }
         return bool(markers & self._observability_avoid_keys)
 
+    def _expression_forbidden(self, expression: str) -> bool:
+        expression_text = str(expression or "").strip()
+        if not expression_text:
+            return False
+        expression_lower = expression_text.lower()
+        if is_high_turnover_generation_risk(expression_text):
+            return True
+        try:
+            current_key = expression_key(expression_text)
+            current_fingerprint = expression_fingerprint(expression_text)
+        except Exception:
+            current_key = ""
+            current_fingerprint = ""
+        for pattern in self._knowledge_constraints.get("forbidden_patterns") or []:
+            pattern_text = str(pattern or "").strip()
+            if not pattern_text:
+                continue
+            needle = pattern_text.lower()
+            if needle and needle in expression_lower:
+                return True
+            if pattern_text in {expression_text, current_key, current_fingerprint}:
+                return True
+            try:
+                pattern_key = expression_key(pattern_text)
+                pattern_fingerprint = expression_fingerprint(pattern_text)
+            except Exception:
+                pattern_key = ""
+                pattern_fingerprint = ""
+            if current_key and pattern_key and current_key == pattern_key:
+                return True
+            if current_fingerprint and pattern_fingerprint and current_fingerprint == pattern_fingerprint:
+                return True
+            try:
+                if expression_similarity(expression_text, pattern_text) >= FORBIDDEN_PATTERN_SIMILARITY_THRESHOLD:
+                    return True
+            except Exception:
+                logger.debug("failed to compare forbidden expression pattern", exc_info=True)
+        return False
+
 
 # ------------------------------------------------------------------
 # Field / operator extraction
 # ------------------------------------------------------------------
 
-def extract_fields(expression: str, known_fields: Optional[set[str]] = None) -> list[str]:
+def extract_fields(expression: str, known_fields: set[str] | None = None) -> list[str]:
     """Extract field names from *expression* that match *known_fields*."""
     profile = profile_expression(expression)
     if known_fields is None:
@@ -486,7 +629,8 @@ def extract_fields(expression: str, known_fields: Optional[set[str]] = None) -> 
             loader = OfficialDataLoader.instance()
             known_fields = {f.id.lower() for f in loader.get_fields()}
         except Exception:
-            return list(profile.fields)
+            logger.warning("official field metadata unavailable; field extraction fails closed", exc_info=True)
+            return []
     tokens = {token.lower() for token in profile.fields}
     return sorted(known_fields & tokens)
 
@@ -510,9 +654,11 @@ def local_quality(candidate: Candidate, min_score: float) -> dict:
     expression = candidate.expression
     score = 55.0
     reasons = []
-    fields = candidate.data_fields or extract_fields(expression)
-    operators = candidate.operators or extract_operators(expression)
+    profile = profile_expression(expression)
+    fields = sorted({*list(candidate.data_fields or []), *extract_fields(expression), *profile.fields})
+    operators = list(dict.fromkeys([*list(candidate.operators or []), *extract_operators(expression), *profile.operators]))
     depth = nesting_depth(expression)
+    generation_risks = high_turnover_generation_risk_reasons(expression)
 
     if not fields:
         score -= 30
@@ -523,7 +669,8 @@ def local_quality(candidate: Candidate, min_score: float) -> dict:
     if not operators:
         score -= 20
         reasons.append("no_operator")
-    if depth > 5:
+    # BRAIN supports deeper nesting; 5 was too conservative.
+    if depth > 8:
         score -= 15
         reasons.append("expression_too_nested")
     if len(expression) > 220:
@@ -542,9 +689,12 @@ def local_quality(candidate: Candidate, min_score: float) -> dict:
         score += 8
     if "adv20" in expression or "vwap" in expression:
         score += 4
+    if generation_risks:
+        score -= 35
+        reasons.extend("high_turnover_generation_risk:" + reason for reason in generation_risks)
 
     score = max(0.0, min(100.0, round(score, 2)))
-    passed = score >= min_score * 10
+    passed = score >= min_score * 10 and not generation_risks
     return {
         "schema_version": "local-quality-v2",
         "score": score,
@@ -555,137 +705,6 @@ def local_quality(candidate: Candidate, min_score: float) -> dict:
         "operator_count": len(operators),
         "nesting_depth": depth,
     }
-
-
-# ------------------------------------------------------------------
-# Legacy backward-compat (deprecated, use CandidateGenerator + loader)
-# ------------------------------------------------------------------
-
-def mutate_expression(expression: str, index: int, mode: str = "default",
-                     experience_windows: list[int] | None = None,
-                     field_pool: list[str] | None = None) -> str:
-    """Produce a variant of *expression*.
-
-    Modes:
-      - "default": random window swap + optional winsorize/zscore wrap
-      - "field_swap": keep structure, only vary windows (for low-Sharpe candidates)
-      - "field_swap_semantic": replace fields with same-category alternatives (P0-2)
-      - "window_perturb": perturb windows by ±20% (P0-2)
-      - "structure_change": add winsorize/zscore wrap (for high-correlation candidates)
-      - "longer_window": replace windows with longer ones (for high-turnover candidates)
-      - "operator_substitute": replace operators with same-family alternatives (P0-2)
-
-    P2-2: When *experience_windows* is provided, blend 70% experience windows
-    with 30% default windows for exploration.
-    """
-    seed = index
-    default_windows = _get_default_windows()
-    # P2-2: Blend experience windows (70%) + exploration (30%)
-    if experience_windows:
-        exp = [w for w in experience_windows if w not in default_windows]
-        windows = exp + default_windows  # experience front-loaded for preference
-    else:
-        windows = default_windows
-    numbers = re.findall(r"\b\d+\b", expression)
-
-    if mode == "field_swap":
-        mutated = expression
-        for pos, number in enumerate(numbers):
-            replacement = windows[(index + pos * 7) % len(windows)]
-            mutated = re.sub(rf"\b{re.escape(number)}\b", str(replacement), mutated, count=1)
-        return mutated
-
-    if mode == "structure_change":
-        mutated = expression
-        if index % 2 == 0:
-            mutated = f"winsorize({mutated}, std=4)"
-        else:
-            mutated = f"zscore({mutated})"
-        return mutated
-
-    if mode == "longer_window":
-        long_windows = [60, 90, 120, 180, 252]
-        mutated = expression
-        for pos, number in enumerate(numbers):
-            replacement = long_windows[(index + pos) % len(long_windows)]
-            mutated = re.sub(rf"\b{re.escape(number)}\b", str(replacement), mutated, count=1)
-        return mutated
-
-    # ── P0-2: New directional mutation modes ──
-
-    if mode == "window_perturb":
-        """窗口 ±20% 随机扰动（限制在 [3, 252] 范围内）。"""
-        def _perturb(m: re.Match) -> str:
-            val = int(m.group(0))
-            if val < 2 or val > 1000:
-                return m.group(0)
-            delta = random.uniform(-0.2, 0.2) * val
-            new_val = int(val + delta)
-            return str(max(3, min(252, new_val)))
-        return re.sub(r"\b\d+\b", _perturb, expression)
-
-    if mode == "field_swap_semantic":
-        """语义级字段替换：替换表达式中的字段为 field_pool 中的其他字段。"""
-        if not field_pool or len(field_pool) < 2:
-            return expression
-        field_tokens = re.findall(r"\b([a-zA-Z_]\w*)\b", expression)
-        candidate_fields = [
-            t for t in field_tokens
-            if t in field_pool
-        ]
-        if not candidate_fields:
-            # fallback: 替换 fields 中出现的关键词
-            candidate_fields = [
-                t for t in field_tokens
-                if len(t) > 1 and "_" in t and not t.isdigit()
-            ]
-        if not candidate_fields:
-            return expression
-        target = random.choice(candidate_fields)
-        alt_pool = [f for f in field_pool if f != target]
-        if not alt_pool:
-            return expression
-        replacement = random.choice(alt_pool)
-        return re.sub(r"\b" + re.escape(target) + r"\b", replacement, expression, count=1)
-
-    if mode == "operator_substitute":
-        """同族算子替换：从算子功能分组中选择替代算子。"""
-        # 同族算子分组（与 iterative_optimizer 保持一致）
-        _families = {
-            "ranking": ["ts_rank", "rank", "group_rank"],
-            "standardization": ["zscore", "scale", "group_zscore"],
-            "moving_average": ["ts_mean", "ts_median", "ts_sum"],
-            "difference": ["ts_delta", "ts_av_diff"],
-            "volatility": ["ts_std", "ts_var"],
-            "correlation": ["ts_corr", "ts_covariance"],
-            "winsorization": ["winsorize", "truncation"],
-            "decay": ["ts_decay_linear", "ts_decay_exp"],
-        }
-        _alt = {}
-        for _family, _ops in _families.items():
-            for _op in _ops:
-                _alt[_op] = [o for o in _ops if o != _op]
-        # 找表达式中的算子
-        op_pattern = re.findall(r"\b([a-zA-Z_]\w*)\s*\(", expression)
-        for op in op_pattern:
-            if op in _alt and _alt[op]:
-                replacement = random.choice(_alt[op])
-                return re.sub(r"\b" + re.escape(op) + r"\b", replacement, expression, count=1)
-        return expression
-
-    # --- default mode (original logic) ---
-    w1 = windows[seed % len(windows)]
-    w2 = windows[(seed // len(windows) + index * 3 + 5) % len(windows)]
-    mutated = expression
-    for pos, number in enumerate(numbers):
-        replacement = windows[(index + pos * 3) % len(windows)]
-        mutated = re.sub(rf"\b{re.escape(number)}\b", str(replacement), mutated, count=1)
-    variant = index % 3
-    if variant == 1:
-        return f"winsorize({mutated}, std=4)"
-    if variant == 2:
-        return f"zscore({mutated})"
-    return mutated
 
 
 def update_known_fields(fields: list[dict]) -> None:

@@ -3,7 +3,7 @@
 Covers: research/scoring, compliance/redline_verifier, brain_api/official,
         config validation, error handling, model boundaries.
 
-Uses MockBrainAPI for all tests — no real API calls needed.
+Uses the production test stub for all tests — no real API calls needed.
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ import pytest
 _project_root = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(_project_root))
 
-from brain_alpha_ops.brain_api import MockBrainAPI
+from tests.production_api_stub import ProductionBrainAPIStub
 from brain_alpha_ops.brain_api.base import BrainAPIError
 from brain_alpha_ops.config import (
     BrainSettings,
@@ -68,37 +68,37 @@ from brain_alpha_ops.compliance.redline_verifier import (
 
 
 # ═══════════════════════════════════════════
-# Section 1: Mock Brain API Tests
+# Section 1: Production Stub API Tests
 # ═══════════════════════════════════════════
 
-class TestMockBrainAPI:
-    """Verify MockBrainAPI provides deterministic, safe test behavior."""
+class TestProductionBrainAPIStub:
+    """Verify the production stub provides deterministic, safe test behavior."""
 
-    def test_mock_authenticate_always_succeeds(self):
-        api = MockBrainAPI()
+    def test_authenticate_always_succeeds(self):
+        api = ProductionBrainAPIStub()
         result = api.authenticate()
         assert result["status"] == "ok"
 
-    def test_mock_validate_expression(self):
-        api = MockBrainAPI()
+    def test_validate_expression(self):
+        api = ProductionBrainAPIStub()
         result = api.validate_expression("rank(close)", {})
         assert result["status"] == "PASS"
 
-    def test_mock_validate_empty_expression(self):
-        api = MockBrainAPI()
+    def test_validate_empty_expression(self):
+        api = ProductionBrainAPIStub()
         result = api.validate_expression("", {})
-        assert result["status"] in {"PASS", "FAIL", "FAILED"}  # mock passes empty too
+        assert result["status"] in {"PASS", "FAIL", "FAILED"}
 
-    def test_mock_simulation_roundtrip(self):
-        api = MockBrainAPI()
+    def test_simulation_roundtrip(self):
+        api = ProductionBrainAPIStub()
         api.authenticate()
         sim_id = api.submit_simulation("rank(close)", {})
         assert sim_id
         status = api.poll_simulation(sim_id)
         assert status in {"RUNNING", "COMPLETED", "FAILED"}
 
-    def test_mock_check_alpha(self):
-        api = MockBrainAPI()
+    def test_check_alpha(self):
+        api = ProductionBrainAPIStub()
         api.authenticate()
         sim_id = api.submit_simulation("rank(close)", {})
         # Poll until completed
@@ -111,19 +111,17 @@ class TestMockBrainAPI:
         check = api.check_alpha(result["alpha_id"])
         assert "status" in check
 
-    def test_mock_user_alphas_list(self):
-        api = MockBrainAPI()
+    def test_user_alphas_list(self):
+        api = ProductionBrainAPIStub()
         api.authenticate()
         rows = api.list_user_alphas("3d")
         assert isinstance(rows, list)
 
-    def test_mock_raise_on_non_production_submit(self):
-        api = MockBrainAPI()
+    def test_rejects_non_production_submit(self):
+        api = ProductionBrainAPIStub()
         api.authenticate()
-        # Mock API doesn't raise for mock IDs — it just passes them through
-        # This test verifies the mock behaves deterministically
-        result = api.submit_alpha("mock_abc123", "rank(close)", {})
-        assert isinstance(result, dict)
+        with pytest.raises(BrainAPIError, match="non-production"):
+            api.submit_alpha("mock_abc123", "rank(close)", {})
 
 
 # ═══════════════════════════════════════════
@@ -201,11 +199,19 @@ class TestConfigValidation:
         assert resolved["password"] == ""
 
     def test_scoring_weights_validation(self):
-        """Weight validation should catch invalid sums."""
+        """Weight validation should catch invalid sums.
+
+        P3-18 (2026-06-13): ScoringConfig is now ``frozen=True``; tests
+        must use ``dataclasses.replace`` to build a zero-weight config.
+        """
+        import dataclasses
         config = RunConfig()
-        config.ops.scoring.prior_layer_weight = 0.0
-        config.ops.scoring.empirical_layer_weight = 0.0
-        config.ops.scoring.checklist_layer_weight = 0.0
+        config.ops.scoring = dataclasses.replace(
+            config.ops.scoring,
+            prior_layer_weight=0.0,
+            empirical_layer_weight=0.0,
+            checklist_layer_weight=0.0,
+        )
         with pytest.raises(ConfigValidationError):
             validate_run_config(config)
 
@@ -216,13 +222,12 @@ class TestConfigValidation:
         with pytest.raises(ConfigValidationError):
             validate_run_config(config)
 
-    def test_official_api_config_mock_allows_http(self):
+    def test_official_api_config_production_rejects_http(self):
         config = RunConfig()
-        config.environment = "mock"
+        config.environment = "production"
         config.ops.official_api.base_url = "http://localhost:8080"
-        # mock env should not require https
-        result = validate_run_config(config)
-        assert result.ops.official_api.base_url == "http://localhost:8080"
+        with pytest.raises(ConfigValidationError):
+            validate_run_config(config)
 
 
 # ═══════════════════════════════════════════
@@ -626,15 +631,15 @@ class TestModels:
 
 
 # ═══════════════════════════════════════════
-# Section 7: Integration Tests (Mock + Scoring)
+# Section 7: Integration Tests (Production Stub + Scoring)
 # ═══════════════════════════════════════════
 
-class TestScoringIntegrationMock:
-    """End-to-end: Mock API → simulation → scoring → gate."""
+class TestScoringIntegrationProductionStub:
+    """End-to-end: production stub → simulation → scoring → gate."""
 
     def test_full_simulation_to_scorecard(self):
-        """Run a mock simulation and feed results into scoring."""
-        api = MockBrainAPI()
+        """Run a stub simulation and feed results into scoring."""
+        api = ProductionBrainAPIStub()
         api.authenticate()
         sim_id = api.submit_simulation("ts_delta(close, 10)", {})
         # Poll until complete
@@ -661,8 +666,8 @@ class TestScoringIntegrationMock:
         assert "decision_band" in scorecard
 
     def test_gate_on_mock_results(self):
-        """Quality gate evaluation on mock simulation results."""
-        api = MockBrainAPI()
+        """Quality gate evaluation on stub simulation results."""
+        api = ProductionBrainAPIStub()
         api.authenticate()
         sim_id = api.submit_simulation("group_rank(winsorize(close, 0.01), subindustry)", {})
         for _ in range(100):

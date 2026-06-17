@@ -1,7 +1,9 @@
-"""Research memory and assistant snapshot services for the local web API."""
+"""Assistant, snapshot facade, and runtime snapshots."""
 
 from __future__ import annotations
 
+from collections import Counter
+from hashlib import sha256
 import json
 import logging
 from pathlib import Path
@@ -22,10 +24,17 @@ from brain_alpha_ops.research.guidance import (
     assistant_guidance_scoring_policy,
     ensure_assistant_guidance_digest,
 )
+from brain_alpha_ops.redaction import redact_error_message, redact_text
 from brain_alpha_ops.research.knowledge_base import ResearchKnowledgeBase
 from brain_alpha_ops.research.memory import ResearchMemory
 from brain_alpha_ops.research.observability import build_research_observability_snapshot
 from brain_alpha_ops.research.repository import ResearchRepository
+from brain_alpha_ops.web_candidate_payloads import (
+    DEFAULT_MAIN_POOL_SIZE,
+    candidate_payload,
+    candidate_result_total,
+    has_candidate_like_rows,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -42,7 +51,8 @@ Snapshot = Callable[..., dict[str, Any]]
 
 
 def _default_web_error(exc: Exception, error_code: str) -> dict[str, Any]:
-    return {"ok": False, "error_code": error_code, "error": str(exc)}
+    from brain_alpha_ops.redaction import redact_error_message
+    return {"ok": False, "error_code": error_code, "error": redact_error_message(exc)}
 
 
 def _bounded_float(value: Any, minimum: float, maximum: float) -> float:
@@ -160,6 +170,7 @@ def durable_job_rows(*, stores: list[tuple[str, Any]], limit: int) -> list[dict[
             for job_id, job in all_jobs(limit=limit):
                 rows.append({"source": source, "job_id": job_id, **job})
         except Exception:
+            logger.warning("durable job rows unavailable for source=%s", source, exc_info=True)
             continue
     return rows[-limit:]
 
@@ -451,6 +462,8 @@ def latest_result_snapshot(
     job_store: Any,
     latest_run_history_path: Callable[[], Path | None],
     enrich_progress: Callable[[dict[str, Any]], dict[str, Any]],
+    read_storage_jsonl: ReadStorageJsonl | None = None,
+    target_pool_size: int | None = None,
     web_error: WebError = _default_web_error,
 ) -> dict[str, Any]:
     latest = job_store.latest_any()
@@ -468,11 +481,14 @@ def latest_result_snapshot(
     except Exception as exc:
         return {**web_error(exc, "RUN_HISTORY_ERROR"), "source": "run_history", "result": None, "progress": {}}
 
-    summary = data.get("summary") or {}
-    result = {
-        "summary": summary,
-        "candidates": summary.get("candidates") or data.get("candidates") or [],
-    }
+    summary = data.get("summary") if isinstance(data.get("summary"), dict) else {}
+    result = _run_history_result_payload(
+        data,
+        summary,
+        path=path,
+        read_storage_jsonl=read_storage_jsonl,
+        target_pool_size=target_pool_size,
+    )
     progress = {
         "phase": data.get("status") or "completed",
         "phase_label": "最近结果",
@@ -490,11 +506,241 @@ def latest_result_snapshot(
     }
 
 
+def _run_history_result_payload(
+    data: dict[str, Any],
+    summary: dict[str, Any],
+    *,
+    path: Path,
+    read_storage_jsonl: ReadStorageJsonl | None,
+    target_pool_size: int | None,
+) -> dict[str, Any]:
+    candidates = _run_history_candidate_rows(data, summary)
+    total = _run_history_candidate_total(data, summary, fallback=len(candidates))
+    if not has_candidate_like_rows(candidates):
+        return {
+            "summary": summary,
+            "candidates": candidates,
+            "replay_audit": _run_history_replay_audit(
+                payload={"candidates": []},
+                payload_rows=[],
+                lifecycle_rows=[],
+                raw_candidate_count=len(candidates),
+                total_candidate_count=total,
+                path=path,
+            ),
+        }
+
+    payload_rows = _run_history_candidate_payload_rows(candidates)
+    lifecycle_rows = _run_history_lifecycle_rows(read_storage_jsonl)
+    payload = candidate_payload(
+        payload_rows,
+        source="run_history",
+        total=total,
+        path=str(path),
+        lifecycle_rows=lifecycle_rows,
+        target_pool_size=target_pool_size or DEFAULT_MAIN_POOL_SIZE,
+    )
+    return {
+        "summary": summary,
+        **payload,
+        "replay_audit": _run_history_replay_audit(
+            payload=payload,
+            payload_rows=payload_rows,
+            lifecycle_rows=lifecycle_rows,
+            raw_candidate_count=len(candidates),
+            total_candidate_count=total,
+            path=path,
+        ),
+    }
+
+
+def _run_history_candidate_rows(data: dict[str, Any], summary: dict[str, Any]) -> list[Any]:
+    for container in (
+        summary,
+        data.get("result") if isinstance(data.get("result"), dict) else {},
+        data.get("data") if isinstance(data.get("data"), dict) else {},
+        data,
+    ):
+        rows = container.get("candidates") if isinstance(container, dict) else None
+        if isinstance(rows, list) and rows:
+            return rows
+    return []
+
+
+def _run_history_candidate_payload_rows(rows: list[Any]) -> list[dict[str, Any]]:
+    payload_rows: list[dict[str, Any]] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        candidate = row.get("candidate") if isinstance(row.get("candidate"), dict) else row
+        payload_rows.append(dict(candidate))
+    return payload_rows
+
+
+def _run_history_candidate_total(data: dict[str, Any], summary: dict[str, Any], *, fallback: int) -> int:
+    for container in (summary, data):
+        for key in ("total_candidates", "produced_count"):
+            try:
+                number = int(container.get(key))
+            except (TypeError, ValueError):
+                continue
+            if number >= 0:
+                return max(number, fallback)
+    return candidate_result_total({**data, **summary}, fallback)
+
+
+def _run_history_lifecycle_rows(read_storage_jsonl: ReadStorageJsonl | None) -> list[dict[str, Any]]:
+    if read_storage_jsonl is None:
+        return []
+    try:
+        rows = read_storage_jsonl("lifecycle.jsonl", limit=None)
+    except Exception:
+        logger.warning("run history lifecycle rows unavailable; continuing without historical risk", exc_info=True)
+        return []
+    return [row for row in rows if isinstance(row, dict)]
+
+
+def _run_history_replay_audit(
+    *,
+    payload: dict[str, Any],
+    payload_rows: list[dict[str, Any]],
+    lifecycle_rows: list[dict[str, Any]],
+    raw_candidate_count: int,
+    total_candidate_count: int,
+    path: Path,
+) -> dict[str, Any]:
+    candidates = [row for row in payload.get("candidates") or [] if isinstance(row, dict)]
+    pool_summary = payload.get("pool_summary") if isinstance(payload.get("pool_summary"), dict) else {}
+    scientific = payload.get("scientific_audit") if isinstance(payload.get("scientific_audit"), dict) else {}
+    workflow = payload.get("workflow_plan") if isinstance(payload.get("workflow_plan"), dict) else {}
+    readiness = workflow.get("readiness_evidence") if isinstance(workflow.get("readiness_evidence"), dict) else {}
+    production_counts = pool_summary.get("decision_action_counts")
+    if not isinstance(production_counts, dict):
+        production_counts = _run_history_decision_action_counts(candidates)
+    blocker_counts = readiness.get("blocker_counts")
+    if not isinstance(blocker_counts, dict):
+        blocker_counts = _run_history_reason_counts(candidates)
+    return {
+        "schema_version": "run-history-replay-audit-v1",
+        "source": "run_history",
+        "path": str(path),
+        "local_only": True,
+        "official_api_called": False,
+        "submit_allowed": False,
+        "real_submit_performed": False,
+        "raw_candidate_row_count": int(raw_candidate_count),
+        "payload_candidate_row_count": len(payload_rows),
+        "recovered_candidate_count": len(candidates),
+        "total_candidate_count": int(total_candidate_count),
+        "lifecycle_row_count": len(lifecycle_rows),
+        "lifecycle_rows_used_count": _run_history_matching_lifecycle_count(candidates, lifecycle_rows),
+        "candidates_with_production_decision": sum(
+            1 for row in candidates if isinstance(row.get("production_decision"), dict)
+        ),
+        "production_decision_counts": dict(sorted(production_counts.items())),
+        "scientific_audit_summary_available": bool(scientific),
+        "candidates_with_scientific_audit": int(scientific.get("audited_count") or 0),
+        "candidates_missing_scientific_audit": int(scientific.get("missing_audit_count") or 0),
+        "scientific_submit_boundary_intact": (
+            int(scientific.get("submit_allowed_count") or 0) == 0
+            and int(scientific.get("real_submit_performed_count") or 0) == 0
+        ),
+        "workflow_plan_available": bool(workflow),
+        "workflow_queue_counts": _run_history_workflow_queue_counts(workflow),
+        "readiness_blocker_counts": dict(sorted(blocker_counts.items())),
+        "execution_gap_counts": dict(sorted((readiness.get("execution_gap_counts") or {}).items()))
+        if isinstance(readiness.get("execution_gap_counts"), dict)
+        else {},
+        "stop_rule": readiness.get("authoritative_stop_rule") or "scripts/check_live_submit_readiness.py",
+        "submit_boundary_intact": (
+            workflow.get("submit_allowed") is not True
+            and int(scientific.get("submit_allowed_count") or 0) == 0
+            and int(scientific.get("real_submit_performed_count") or 0) == 0
+        ),
+    }
+
+
+def _run_history_workflow_queue_counts(workflow: dict[str, Any]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for name in ("producer", "validator", "rework", "review", "archive"):
+        queue = workflow.get(name) if isinstance(workflow.get(name), dict) else {}
+        value = queue.get("candidate_count")
+        if value is None and name == "producer":
+            value = queue.get("deficit")
+        try:
+            counts[name] = max(0, int(value or 0))
+        except (TypeError, ValueError):
+            counts[name] = 0
+    return counts
+
+
+def _run_history_reason_counts(candidates: list[dict[str, Any]]) -> dict[str, int]:
+    counts: Counter[str] = Counter()
+    for row in candidates:
+        decision = row.get("production_decision") if isinstance(row.get("production_decision"), dict) else {}
+        for reason in decision.get("reason_codes") or []:
+            text = str(reason or "").strip()
+            if text:
+                counts[text] += 1
+    return dict(sorted(counts.items()))
+
+
+def _run_history_decision_action_counts(candidates: list[dict[str, Any]]) -> dict[str, int]:
+    counts: Counter[str] = Counter()
+    for row in candidates:
+        decision = row.get("production_decision") if isinstance(row.get("production_decision"), dict) else {}
+        action = str(decision.get("action") or "").strip()
+        if action:
+            counts[action] += 1
+    return dict(sorted(counts.items()))
+
+
+def _run_history_matching_lifecycle_count(
+    candidates: list[dict[str, Any]],
+    lifecycle_rows: list[dict[str, Any]],
+) -> int:
+    keys: set[str] = set()
+    for row in candidates:
+        keys.update(_run_history_candidate_keys(row))
+    if not keys:
+        return 0
+    matched = 0
+    for row in lifecycle_rows:
+        if any(key in keys for key in _run_history_candidate_keys(row)):
+            matched += 1
+    return matched
+
+
+def _run_history_candidate_keys(row: dict[str, Any]) -> set[str]:
+    keys = {
+        str(row.get(field) or "").strip()
+        for field in ("alpha_id", "candidate_id", "official_alpha_id", "simulation_id")
+        if str(row.get(field) or "").strip()
+    }
+    expression = _run_history_expression_key(row.get("expression"))
+    if expression:
+        keys.add(f"expression:{expression}")
+        keys.add(_run_history_expression_digest(expression))
+    digest = str(row.get("expression_digest") or "").strip()
+    if digest:
+        keys.add(digest)
+    return keys
+
+
+def _run_history_expression_key(value: Any) -> str:
+    return " ".join(str(value or "").strip().lower().split())
+
+
+def _run_history_expression_digest(expression: str) -> str:
+    return "expr_" + sha256(expression.encode("utf-8")).hexdigest()[:12] if expression else ""
+
+
 def latest_run_history_path(*, load_config: LoadConfig = load_run_config) -> Path | None:
     history_dir = Path(load_config().ops.storage_dir) / "run_history"
     try:
         files = [path for path in history_dir.glob("*.json") if path.is_file()]
     except Exception:
+        logger.warning("failed to list run history files from %s", history_dir, exc_info=True)
         return None
     if not files:
         return None
@@ -505,7 +751,7 @@ def user_profile_snapshot(
     *,
     job_store: Any,
     storage_jsonl_path: StoragePath,
-    safe_error_message: SafeErrorMessage = str,
+    safe_error_message: SafeErrorMessage = redact_error_message,
 ) -> dict[str, Any]:
     active = job_store.latest_active()
     if not active:
@@ -514,7 +760,11 @@ def user_profile_snapshot(
             try:
                 return json.loads(profile_path.read_text(encoding="utf-8"))
             except Exception as exc:
-                logger.warning("failed to read user profile from %s: %s", profile_path, safe_error_message(exc), exc_info=True)
+                logger.warning(
+                    "failed to read user profile from %s: %s",
+                    redact_text(profile_path, max_length=180),
+                    safe_error_message(exc),
+                )
         return {"tier": "offline", "level": None, "points": None, "username": ""}
 
     _job_id, job = active

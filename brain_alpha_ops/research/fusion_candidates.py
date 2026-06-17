@@ -59,7 +59,7 @@ class FusionCandidateService:
 
                 child = self._build_child(first, second, mode, expression, cycle)
                 child.local_quality = local_quality(child, self.config.budget.min_local_quality_score)
-                build_scorecard(child, self.config.thresholds, params=self.scoring_params)
+                child.scorecard = build_scorecard(child, self.config.thresholds, params=self.scoring_params)
                 if (
                     not child.local_quality.get("passed")
                     or child.scorecard.get("total_score", 0.0) < self.config.budget.min_prior_score_for_official_validation

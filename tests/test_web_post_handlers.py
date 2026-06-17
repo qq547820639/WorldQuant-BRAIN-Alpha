@@ -52,7 +52,13 @@ def test_background_job_start_payload_handles_conflict_and_starts_job():
     assert conflict["error_code"] == "CONFLICT_RUNNING"
     assert conflict["job_id"] == "job_active"
     assert status == 200
-    assert payload == {"ok": True, "job_id": "job_1"}
+    assert payload == {
+        "ok": True,
+        "job_id": "job_1",
+        "task_id": "job_1",
+        "sse_url": "/sse?job_id=job_1",
+        "status_url": "/api/production-validation/status?job_id=job_1",
+    }
     assert started == [("job_1", {"alpha": 2})]
 
 

@@ -1,5 +1,4 @@
 """Runtime dependency facade for Web snapshot services."""
-
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -8,7 +7,12 @@ from typing import Any, Callable
 
 from brain_alpha_ops.research.observability import build_research_observability_snapshot
 from brain_alpha_ops.research.repository import ResearchRepository
-from brain_alpha_ops.web_assistant_snapshots import (
+from brain_alpha_ops.web_candidate_payloads import DEFAULT_MAIN_POOL_SIZE
+from brain_alpha_ops.web_post_handlers import (
+    assistant_response_guidance_post_payload,
+    assistant_response_parse_post_payload,
+)
+from brain_alpha_ops.web_snapshots import (
     assistant_context_snapshot as assistant_context_snapshot_service,
     assistant_guidance_history as assistant_guidance_history_service,
     assistant_guidance_snapshot as assistant_guidance_snapshot_service,
@@ -25,12 +29,11 @@ from brain_alpha_ops.web_assistant_snapshots import (
     save_assistant_guidance_payload as save_assistant_guidance_payload_service,
     user_profile_snapshot as user_profile_snapshot_service,
 )
-from brain_alpha_ops.web_review_api import (
+from brain_alpha_ops.web_review import (
     anti_overfit_snapshot as anti_overfit_snapshot_service,
     assistant_cross_review_payload as assistant_cross_review_payload_service,
     rolling_validation_snapshot as rolling_validation_snapshot_service,
 )
-
 
 @dataclass
 class WebSnapshotRuntime:
@@ -202,6 +205,8 @@ class WebSnapshotRuntime:
             job_store=self.job_store,
             latest_run_history_path=latest_run_history_path,
             enrich_progress=self.enrich_progress,
+            read_storage_jsonl=self.read_storage_jsonl,
+            target_pool_size=self._candidate_target_pool_size(),
             web_error=self.web_error,
         )
 
@@ -214,3 +219,15 @@ class WebSnapshotRuntime:
             storage_jsonl_path=self.storage_jsonl_path,
             safe_error_message=self.safe_error_message,
         )
+
+    def _candidate_target_pool_size(self) -> int:
+        try:
+            config = self.load_config()
+            configured_size = getattr(
+                config.ops.budget,
+                "retained_alpha_pool_size",
+                DEFAULT_MAIN_POOL_SIZE,
+            )
+            return max(1, int(configured_size or DEFAULT_MAIN_POOL_SIZE))
+        except Exception:
+            return DEFAULT_MAIN_POOL_SIZE

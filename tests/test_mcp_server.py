@@ -2,15 +2,15 @@ import json
 from io import StringIO
 
 from brain_alpha_ops.agent_tools import BrainAlphaToolbox
-from brain_alpha_ops.brain_api import MockBrainAPI
+from tests.production_api_stub import ProductionBrainAPIStub
 from brain_alpha_ops.config import RunConfig
 from brain_alpha_ops.mcp_server import handle_request, serve_stdio
 
 
 def toolbox(tmp_path):
-    config = RunConfig(environment="mock")
+    config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path)
-    return BrainAlphaToolbox(run_config=config, api=MockBrainAPI())
+    return BrainAlphaToolbox(run_config=config, api=ProductionBrainAPIStub())
 
 
 def test_mcp_initialize_and_tool_list(tmp_path):
@@ -26,7 +26,7 @@ def test_mcp_initialize_and_tool_list(tmp_path):
     assert "run_backtest" in names
     assert "run_batch_backtest" in names
     assert "run_parallel_backtest" in names
-    assert "submit_alpha" in names
+    assert "submit_alpha" not in names
     listed = {tool["name"]: tool for tool in tools["result"]["tools"]}
     assert listed["score_factor"]["annotations"]["aliasFor"] == "score_candidate"
     assert listed["score_factor"]["annotations"]["chainStage"] == "screen"

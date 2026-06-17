@@ -1,4 +1,4 @@
-"""Assistant review and robustness endpoints for the local web API."""
+"""Anti-overfit and cross-review API."""
 
 from __future__ import annotations
 

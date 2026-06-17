@@ -1,3 +1,5 @@
+import json
+
 from brain_alpha_ops.config import RunConfig
 from brain_alpha_ops.web_check_batch_job import run_check_batch_job_service
 
@@ -5,9 +7,23 @@ from brain_alpha_ops.web_check_batch_job import run_check_batch_job_service
 class Store:
     def __init__(self):
         self.updates = []
+        self.cancelled = False
 
     def update(self, job_id, **kwargs):
         self.updates.append({"job_id": job_id, **kwargs})
+
+    def is_cancelled(self, _job_id):
+        return self.cancelled
+
+
+class CancelAfterFirstCheckStore(Store):
+    def __init__(self):
+        super().__init__()
+        self._checks = 0
+
+    def is_cancelled(self, _job_id):
+        self._checks += 1
+        return self._checks > 5
 
 
 class Api:
@@ -35,7 +51,7 @@ class Ledger:
 
 
 def test_run_check_batch_job_service_updates_counts_and_persists(tmp_path):
-    run_config = RunConfig(environment="mock")
+    run_config = RunConfig(environment="production")
     run_config.ops.storage_dir = str(tmp_path)
     store = Store()
     records = []
@@ -75,8 +91,48 @@ def test_run_check_batch_job_service_updates_counts_and_persists(tmp_path):
     assert records[0]["job_id"] == "source_1"
 
 
+def test_run_check_batch_job_service_writes_cloud_evidence_to_candidate_ledger(tmp_path):
+    run_config = RunConfig(environment="production")
+    run_config.ops.storage_dir = str(tmp_path)
+    store = Store()
+    candidates = [{"alpha_id": "a1", "expression": "rank(close)"}]
+    (tmp_path / "candidates.jsonl").write_text(json.dumps(candidates[0]) + "\n", encoding="utf-8")
+
+    run_check_batch_job_service(
+        "check_1",
+        {"job_id": "source_1"},
+        store=store,
+        passed_candidates_from_payload=lambda payload: candidates,
+        run_config_from_payload=lambda payload: run_config,
+        api_from_run_config=lambda config: Api(),
+        repository_factory=lambda storage_dir: Repo(storage_dir, []),
+        ledger_factory=Ledger,
+        refresh_cloud_context_for_check=lambda *args, **kwargs: ([{"id": "cloud_1"}], ""),
+        payload_truthy=bool,
+        check_candidate_availability=lambda candidate, *_args, **_kwargs: {
+            "ok": True,
+            "alpha_id": candidate["alpha_id"],
+            "status": "BLOCKED",
+            "passed": False,
+            "submittable": False,
+            "checked_at": "2026-06-10T00:00:00+00:00",
+            "cloud_correlation_risk": {"level": "high", "max_similarity": 0.96},
+            "cloud_status": {"id": "cloud_1", "status": "ACTIVE"},
+        },
+        observability_submission_preflight=lambda storage_dir: {"requires_confirmation": False},
+        safe_error_message=str,
+        error_payload=lambda exc, **kwargs: {"error": str(exc), **kwargs},
+    )
+
+    rows = [json.loads(line) for line in (tmp_path / "candidates.jsonl").read_text(encoding="utf-8").splitlines()]
+    assert store.updates[-1]["status"] == "completed"
+    assert rows[0]["cloud_correlation_risk"] == {"level": "high", "max_similarity": 0.96}
+    assert rows[0]["cloud_status"]["status"] == "ACTIVE"
+    assert rows[0]["last_check_status"] == "BLOCKED"
+
+
 def test_run_check_batch_job_service_marks_failed_on_exception(tmp_path):
-    run_config = RunConfig(environment="mock")
+    run_config = RunConfig(environment="production")
     run_config.ops.storage_dir = str(tmp_path)
     store = Store()
 
@@ -100,3 +156,70 @@ def test_run_check_batch_job_service_marks_failed_on_exception(tmp_path):
     assert store.updates[-1]["status"] == "failed"
     assert store.updates[-1]["error"] == "auth failed"
     assert store.updates[-1]["progress"]["error_context"]["error_code"] == "CHECK_BATCH_JOB_FAILED"
+
+
+def test_check_batch_cancel_before_remote_calls_skips_auth(tmp_path):
+    run_config = RunConfig(environment="production")
+    run_config.ops.storage_dir = str(tmp_path)
+    store = Store()
+    store.cancelled = True
+    calls = []
+
+    def fail_api_from_config(_config):
+        raise AssertionError("cancelled check batch must not initialize BRAIN API")
+
+    run_check_batch_job_service(
+        "check_cancel_pre_auth",
+        {},
+        store=store,
+        passed_candidates_from_payload=lambda payload: [{"alpha_id": "a1"}],
+        run_config_from_payload=lambda payload: run_config,
+        api_from_run_config=fail_api_from_config,
+        repository_factory=lambda storage_dir: Repo(storage_dir, []),
+        ledger_factory=Ledger,
+        refresh_cloud_context_for_check=lambda *args, **kwargs: calls.append("refresh") or ([], ""),
+        payload_truthy=bool,
+        check_candidate_availability=lambda *args, **kwargs: calls.append("check") or {"ok": True},
+        observability_submission_preflight=lambda storage_dir: {},
+        safe_error_message=str,
+        error_payload=lambda exc, **kwargs: {"error": str(exc), **kwargs},
+    )
+
+    assert store.updates[-1]["status"] == "stopped"
+    assert store.updates[-1]["progress"]["phase"] == "stopped"
+    assert calls == []
+
+
+def test_check_batch_cancel_mid_loop_stops_before_next_candidate(tmp_path):
+    run_config = RunConfig(environment="production")
+    run_config.ops.storage_dir = str(tmp_path)
+    store = CancelAfterFirstCheckStore()
+    records = []
+    checked = []
+    candidates = [{"alpha_id": "a1"}, {"alpha_id": "a2"}]
+
+    def check_candidate(candidate, *_args, **_kwargs):
+        checked.append(candidate["alpha_id"])
+        return {"ok": True, "alpha_id": candidate["alpha_id"], "submittable": False, "passed": False}
+
+    run_check_batch_job_service(
+        "check_cancel_mid_loop",
+        {},
+        store=store,
+        passed_candidates_from_payload=lambda payload: candidates,
+        run_config_from_payload=lambda payload: run_config,
+        api_from_run_config=lambda config: Api(),
+        repository_factory=lambda storage_dir: Repo(storage_dir, records),
+        ledger_factory=Ledger,
+        refresh_cloud_context_for_check=lambda *args, **kwargs: ([], ""),
+        payload_truthy=bool,
+        check_candidate_availability=check_candidate,
+        observability_submission_preflight=lambda storage_dir: {},
+        safe_error_message=str,
+        error_payload=lambda exc, **kwargs: {"error": str(exc), **kwargs},
+    )
+
+    assert checked == ["a1"]
+    assert [row["alpha_id"] for row in records] == ["a1"]
+    assert store.updates[-1]["status"] == "stopped"
+    assert store.updates[-1]["progress"]["checked"] == 1

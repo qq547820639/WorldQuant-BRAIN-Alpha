@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import logging
 from pathlib import Path
 from typing import Any, Callable
 
 from brain_alpha_ops.brain_api.base import BrainAPIError
 from brain_alpha_ops.brain_api.context_defaults import DEFAULT_FIELDS, DEFAULT_OPERATORS
 from brain_alpha_ops.models import Candidate
+from brain_alpha_ops.research.expression_ast import profile_expression
+from brain_alpha_ops.research.expression_official_context import GROUP_CONTEXT_FIELDS
 
 from .iterative_optimizer import IterativeOptimizer
 from .pipeline_helpers import merge_context_defaults
@@ -19,6 +22,8 @@ EventCallback = Callable[..., None]
 HaltCallback = Callable[[str], None]
 
 GENERAL_DATASET_FIELDS = {"returns", "sector", "industry", "subindustry", "market"}
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -80,6 +85,7 @@ def active_dataset_field_names(dataset_id: str, mapper: Any, cache: dict[str, se
     try:
         fields = {str(field).lower() for field in mapper.fields_for(dataset)}
     except Exception:
+        logger.warning("active dataset field lookup unavailable for dataset_id=%s", dataset, exc_info=True)
         fields = set()
     cache[dataset] = fields
     return fields
@@ -95,18 +101,31 @@ def official_context_reasons(
     dataset_field_names_cache: dict[str, set[str]],
 ) -> list[str]:
     reasons: list[str] = []
+    profile = profile_expression(candidate.expression)
+    expression_fields = [
+        str(field).lower()
+        for field in profile.fields
+        if str(field).strip() and str(field).lower() not in GROUP_CONTEXT_FIELDS
+    ]
+    expression_operators = [str(operator).lower() for operator in profile.operators if str(operator).strip()]
+    candidate_fields = [str(field).lower() for field in candidate.data_fields if str(field).strip()]
+    candidate_operators = [str(operator).lower() for operator in candidate.operators if str(operator).strip()]
+    fields_to_check = sorted(dict.fromkeys([*candidate_fields, *expression_fields]))
+    operators_to_check = sorted(dict.fromkeys([*candidate_operators, *expression_operators]))
+    if not profile.parsed:
+        reasons.append("expression parse failed before official context validation: " + (profile.parse_error or "unknown parse error"))
     if available_fields:
-        missing_fields = sorted(field for field in candidate.data_fields if field.lower() not in available_fields)
+        missing_fields = sorted(field for field in fields_to_check if field not in available_fields)
         if missing_fields:
             reasons.append("fields unavailable in current official context: " + ", ".join(missing_fields))
     if available_operators:
-        missing_operators = sorted(operator for operator in candidate.operators if operator.lower() not in available_operators)
+        missing_operators = sorted(operator for operator in operators_to_check if operator not in available_operators)
         if missing_operators:
             reasons.append("operators unavailable in current official context: " + ", ".join(missing_operators))
     if active_dataset_id and mapper:
         dataset_fields = active_dataset_field_names(active_dataset_id, mapper, dataset_field_names_cache)
-        for field in candidate.data_fields:
-            if field.lower() not in dataset_fields and field.lower() not in GENERAL_DATASET_FIELDS:
+        for field in fields_to_check:
+            if field not in dataset_fields and field not in GENERAL_DATASET_FIELDS:
                 reasons.append(
                     f"field '{field}' not in active dataset '{active_dataset_id}'. "
                     "Expression may use fields from wrong dataset."
@@ -140,6 +159,10 @@ class OfficialContextLoadService:
             return self._load_from_json()
         except Exception as exc:
             context_warning = f"Official JSON load failed ({exc}), falling back to API..."
+            logger.warning(
+                "official context JSON load failed; falling back to API",
+                exc_info=True,
+            )
         return self._load_from_api(context_warning)
 
     def _load_from_json(self) -> OfficialContextLoadResult:
@@ -274,6 +297,7 @@ class OfficialContextLoadService:
                 f"Active dataset: {active_dataset_id or '(none)'}",
             )
         except Exception as exc:
+            logger.warning("advanced official context components unavailable; using base generator context", exc_info=True)
             self.event(
                 "advanced_components_fallback",
                 f"Could not wire advanced components: {exc}. "
@@ -379,14 +403,18 @@ class OfficialContextLoadService:
                 )
             else:
                 raise
+        used_default_fields = False
+        used_default_operators = False
         if not fields:
             fields = list(DEFAULT_FIELDS)
+            used_default_fields = True
             context_warning = (
                 (context_warning + " " if context_warning else "")
                 + "Using locally cached official field context; successful login refreshes the official field cache."
             )
         if not operators:
             operators = list(DEFAULT_OPERATORS)
+            used_default_operators = True
             context_warning = (
                 (context_warning + " " if context_warning else "")
                 + "Using locally cached official operator context; successful login refreshes the official operator cache."
@@ -397,17 +425,35 @@ class OfficialContextLoadService:
         from brain_alpha_ops.research.generator import update_known_fields
 
         update_known_fields(fields)
+        active_dataset_id = _active_dataset_from_context(self.config.settings, fields)
+        if active_dataset_id and hasattr(self.generator, "set_dataset"):
+            self.generator.set_dataset(active_dataset_id)
+        degraded = used_default_fields or used_default_operators or not fields or not operators
         context_summary = {
             "fields_count": len(fields),
             "operators_count": len(operators),
             "source": "official_api_or_cache",
             "warning": context_warning,
+            "active_dataset_id": active_dataset_id,
+            "degraded": degraded,
+            "degraded_reason": _context_degraded_reason(
+                fields_count=len(fields),
+                operators_count=len(operators),
+                used_default_fields=used_default_fields,
+                used_default_operators=used_default_operators,
+            ),
             "operator_usage_note": (
                 "Available operators are validated through the official /operators API or local official cache; "
                 "the live BRAIN documentation remains authoritative."
             ),
         }
-        self.event("context_loaded", f"Loaded {len(fields)} fields and {len(operators)} operators.")
+        self.event(
+            "context_degraded" if degraded else "context_loaded",
+            f"Loaded {len(fields)} fields and {len(operators)} operators."
+            if not degraded else
+            f"Official context degraded: {len(fields)} fields and {len(operators)} operators available.",
+            level="WARN" if degraded else "INFO",
+        )
         self.progress(
             "context",
             3,
@@ -416,8 +462,8 @@ class OfficialContextLoadService:
             data={
                 "official_context": context_summary,
                 "context_load": {
-                    "status": "synced",
-                    "status_code": "CONTEXT_READY",
+                    "status": "degraded" if degraded else "synced",
+                    "status_code": "CONTEXT_DEGRADED" if degraded else "CONTEXT_READY",
                     "current": 3,
                     "total": 3,
                     "fields_count": len(fields),
@@ -430,4 +476,35 @@ class OfficialContextLoadService:
             operators=operators,
             context_summary=context_summary,
             generator=self.generator,
+            active_dataset_id=active_dataset_id,
         )
+
+
+def _active_dataset_from_context(settings: Any, fields: list[dict]) -> str:
+    configured_dataset = str(getattr(settings, "dataset", "") or "").strip()
+    if configured_dataset:
+        return configured_dataset
+    for field in fields:
+        dataset_id = str(field.get("dataset") or field.get("dataset_id") or "").strip()
+        if dataset_id:
+            return dataset_id
+    return ""
+
+
+def _context_degraded_reason(
+    *,
+    fields_count: int,
+    operators_count: int,
+    used_default_fields: bool,
+    used_default_operators: bool,
+) -> str:
+    reasons: list[str] = []
+    if fields_count == 0:
+        reasons.append("no official fields available")
+    elif used_default_fields:
+        reasons.append("fields loaded from local official cache")
+    if operators_count == 0:
+        reasons.append("no official operators available")
+    elif used_default_operators:
+        reasons.append("operators loaded from local official cache")
+    return "; ".join(reasons)

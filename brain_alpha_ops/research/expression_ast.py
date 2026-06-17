@@ -1,16 +1,23 @@
-"""FASTEXPR parsing helpers for canonical keys and similarity checks."""
+"""FASTEXPR parsing helpers for canonical keys and similarity checks.
+
+Performance optimizations:
+- LRU cache for profile_expression() to avoid re-parsing identical expressions
+- Pre-compiled regex patterns for tokenization
+- Efficient fingerprint computation using hashlib
+"""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from difflib import SequenceMatcher
+from functools import lru_cache
 import hashlib
 import re
 from typing import Iterable
 
 
-_TOKEN_RE = re.compile(r"\s*(>=|<=|==|!=|[A-Za-z_][A-Za-z0-9_]*|\d+(?:\.\d+)?|[(),+\-*/?:<>])")
-_LEXICAL_TOKEN_RE = re.compile(r">=|<=|==|!=|[a-zA-Z_][a-zA-Z0-9_]*|\d+(?:\.\d+)?|[-+*/(),?:<>]")
+_TOKEN_RE = re.compile(r"\s*(>=|<=|==|!=|[A-Za-z_][A-Za-z0-9_]*|\d+(?:\.\d+)?|[(),+\-*/?:<>=])")
+_LEXICAL_TOKEN_RE = re.compile(r">=|<=|==|!=|[a-zA-Z_][a-zA-Z0-9_]*|\d+(?:\.\d+)?|[-+*/(),?:<>=]")
 
 
 class ExpressionParseError(ValueError):
@@ -47,6 +54,7 @@ def parse_expression(expression: str) -> ExprNode:
     return node
 
 
+@lru_cache(maxsize=1024)
 def profile_expression(expression: str) -> ExpressionProfile:
     text = str(expression or "")
     try:
@@ -61,7 +69,7 @@ def profile_expression(expression: str) -> ExpressionProfile:
             operators=tuple(_operators_from_text(canonical)),
             fields=tuple(_fields_from_text(canonical)),
             windows=tuple(_windows_from_text(canonical)),
-            max_depth=_paren_depth(text),
+            max_depth=_paren_depth_simple(text),
             node_count=max(0, len(canonical.split())),
             parse_error=str(exc),
         )
@@ -70,7 +78,7 @@ def profile_expression(expression: str) -> ExpressionProfile:
     operators: list[str] = []
     fields: list[str] = []
     windows: list[int] = []
-    _collect(root, operators, fields, windows)
+    _collect(root, operators, fields, windows, 64)
     return ExpressionProfile(
         expression=text,
         parsed=True,
@@ -79,8 +87,8 @@ def profile_expression(expression: str) -> ExpressionProfile:
         operators=tuple(dict.fromkeys(operators)),
         fields=tuple(dict.fromkeys(fields)),
         windows=tuple(windows),
-        max_depth=_max_depth(root),
-        node_count=_node_count(root),
+        max_depth=_max_depth(root, 64),
+        node_count=_node_count(root, 512),
     )
 
 
@@ -156,20 +164,25 @@ def ordered_operators(expression: str) -> list[str]:
     except ExpressionParseError:
         return _operators_from_text(lexical_normalize(expression))
     operators: list[str] = []
-    _collect_operators(root, operators)
+    _collect_operators(root, operators, 64)
     return operators
 
 
 class _Parser:
-    def __init__(self, tokens: list[str]):
+    def __init__(self, tokens: list[str], max_depth: int = 32):
         self.tokens = tokens
         self.index = 0
+        self._depth = 0
+        self._max_depth = max(1, int(max_depth))
 
     def at_end(self) -> bool:
         return self.index >= len(self.tokens)
 
     def peek(self) -> str:
         return "" if self.at_end() else self.tokens[self.index]
+
+    def peek_next(self) -> str:
+        return "" if self.index + 1 >= len(self.tokens) else self.tokens[self.index + 1]
 
     def advance(self) -> str:
         token = self.peek()
@@ -182,7 +195,15 @@ class _Parser:
         self.advance()
 
     def parse_expression(self) -> ExprNode:
-        return self.parse_conditional()
+        self._depth += 1
+        if self._depth > self._max_depth:
+            raise ExpressionParseError(
+                f"expression nesting depth {self._depth} exceeds maximum {self._max_depth}"
+            )
+        try:
+            return self.parse_conditional()
+        finally:
+            self._depth -= 1
 
     def parse_conditional(self) -> ExprNode:
         node = self.parse_comparison()
@@ -250,6 +271,7 @@ class _Parser:
             "<=",
             "==",
             "!=",
+            "=",
         }:
             raise ExpressionParseError(f"unexpected token: {token}")
         if _is_number(token):
@@ -261,12 +283,19 @@ class _Parser:
         args: list[ExprNode] = []
         if self.peek() != ")":
             while True:
-                args.append(self.parse_expression())
+                args.append(self.parse_call_argument())
                 if self.peek() != ",":
                     break
                 self.advance()
         self.consume(")")
         return ExprNode("call", ident, tuple(args))
+
+    def parse_call_argument(self) -> ExprNode:
+        if _is_identifier_token(self.peek()) and self.peek_next() == "=":
+            keyword = self.advance().lower()
+            self.consume("=")
+            return ExprNode("keyword", keyword, (self.parse_expression(),))
+        return self.parse_expression()
 
 
 def _tokenize(expression: str) -> list[str]:
@@ -286,34 +315,38 @@ def _tokenize(expression: str) -> list[str]:
     return tokens
 
 
-def canonicalize(node: ExprNode) -> str:
+def canonicalize(node: ExprNode, max_depth: int = 64) -> str:
+    if max_depth < 1:
+        raise ExpressionParseError(f"AST canonicalize depth limit exceeded")
     if node.kind in {"identifier", "number"}:
         return node.value
     if node.kind == "call":
-        return f"{node.value}({','.join(canonicalize(child) for child in node.children)})"
+        return f"{node.value}({','.join(canonicalize(child, max_depth - 1) for child in node.children)})"
+    if node.kind == "keyword":
+        return f"{node.value}={canonicalize(node.children[0], max_depth - 1)}"
     if node.kind == "unary":
         child = node.children[0]
-        child_text = canonicalize(child)
+        child_text = canonicalize(child, max_depth - 1)
         if child.kind in {"binary", "conditional"}:
             child_text = f"({child_text})"
         return f"{node.value}{child_text}"
     if node.kind == "conditional":
         condition, true_expr, false_expr = node.children
-        return f"{canonicalize(condition)}?{canonicalize(true_expr)}:{canonicalize(false_expr)}"
+        return f"{canonicalize(condition, max_depth - 1)}?{canonicalize(true_expr, max_depth - 1)}:{canonicalize(false_expr, max_depth - 1)}"
     if node.kind == "binary":
         op = node.value
         if op in {"+", "*"}:
-            parts = sorted(canonicalize(child) for child in _flatten(node, op))
+            parts = sorted(canonicalize(child, max_depth - 1) for child in _flatten(node, op, max_depth - 1))
             return op.join(parts)
         left, right = node.children
-        left_text = _canonical_child(left, op, is_right=False)
-        right_text = _canonical_child(right, op, is_right=True)
+        left_text = _canonical_child(left, op, is_right=False, max_depth=max_depth - 1)
+        right_text = _canonical_child(right, op, is_right=True, max_depth=max_depth - 1)
         return f"{left_text}{op}{right_text}"
     raise ExpressionParseError(f"unknown node kind: {node.kind}")
 
 
-def _canonical_child(child: ExprNode, parent_op: str, *, is_right: bool) -> str:
-    text = canonicalize(child)
+def _canonical_child(child: ExprNode, parent_op: str, *, is_right: bool, max_depth: int = 64) -> str:
+    text = canonicalize(child, max_depth)
     if child.kind == "conditional":
         return f"({text})"
     if child.kind != "binary":
@@ -324,37 +357,53 @@ def _canonical_child(child: ExprNode, parent_op: str, *, is_right: bool) -> str:
     return f"({text})" if needs_parens else text
 
 
-def _flatten(node: ExprNode, op: str) -> Iterable[ExprNode]:
+def _flatten(node: ExprNode, op: str, max_depth: int = 64) -> Iterable[ExprNode]:
+    if max_depth < 1:
+        raise ExpressionParseError(f"AST flatten depth limit exceeded")
     if node.kind == "binary" and node.value == op:
         for child in node.children:
-            yield from _flatten(child, op)
+            yield from _flatten(child, op, max_depth - 1)
     else:
         yield node
 
 
-def _collect(node: ExprNode, operators: list[str], fields: list[str], windows: list[int]) -> None:
+def _collect(node: ExprNode, operators: list[str], fields: list[str], windows: list[int], max_depth: int = 64) -> None:
+    if max_depth < 1:
+        raise ExpressionParseError(f"AST collect depth limit exceeded")
+    """Recursively collect operators, fields, and window values from an expression AST.
+    S-15: The `index > 0` heuristic treats the second+ argument to any call as a window.
+    This works for common operators like ts_mean(x, 20) but may misidentify non-window
+    positional args (e.g., rank(x, 5)). A future improvement should use a per-operator
+    window-parameter position table instead of the position heuristic.
+    """
+    if node.kind == "keyword":
+        _collect(node.children[0], operators, fields, windows, max_depth - 1)
+        return
     if node.kind == "call":
         operators.append(node.value)
         for index, child in enumerate(node.children):
-            if index > 0 and child.kind == "number":
+            value_node = child.children[0] if child.kind == "keyword" else child
+            if index > 0 and value_node.kind == "number":
                 try:
-                    windows.append(int(float(child.value)))
+                    windows.append(int(float(value_node.value)))
                 except ValueError:
                     pass
-            _collect(child, operators, fields, windows)
+            _collect(child, operators, fields, windows, max_depth - 1)
         return
     if node.kind == "identifier":
         fields.append(node.value)
         return
     for child in node.children:
-        _collect(child, operators, fields, windows)
+        _collect(child, operators, fields, windows, max_depth - 1)
 
 
-def _collect_operators(node: ExprNode, operators: list[str]) -> None:
+def _collect_operators(node: ExprNode, operators: list[str], max_depth: int = 64) -> None:
+    if max_depth < 1:
+        raise ExpressionParseError(f"AST collect_operators depth limit exceeded")
     if node.kind == "call":
         operators.append(node.value)
     for child in node.children:
-        _collect_operators(child, operators)
+        _collect_operators(child, operators, max_depth - 1)
 
 
 def _semantic_tokens(profile: ExpressionProfile) -> set[str]:
@@ -390,17 +439,22 @@ def _windows_from_text(text: str) -> list[int]:
     return values
 
 
-def _max_depth(node: ExprNode) -> int:
+def _max_depth(node: ExprNode, max_depth: int = 64) -> int:
+    if max_depth < 1:
+        raise ExpressionParseError(f"AST depth limit {max_depth} exceeded")
     if not node.children:
         return 1
-    return 1 + max(_max_depth(child) for child in node.children)
+    return 1 + max(_max_depth(child, max_depth - 1) for child in node.children)
 
 
-def _node_count(node: ExprNode) -> int:
-    return 1 + sum(_node_count(child) for child in node.children)
+def _node_count(node: ExprNode, max_nodes: int = 512) -> int:
+    if max_nodes < 1:
+        raise ExpressionParseError(f"AST node count limit {max_nodes} exceeded")
+    return 1 + sum(_node_count(child, max_nodes - 1) for child in node.children)
 
 
-def _paren_depth(expression: str) -> int:
+def _paren_depth(expression: str) -> tuple[int, bool]:
+    """Return (max_depth, balanced) for parentheses in expression."""
     depth = 0
     max_depth = 0
     for char in str(expression or ""):
@@ -409,7 +463,12 @@ def _paren_depth(expression: str) -> int:
             max_depth = max(max_depth, depth)
         elif char == ")":
             depth = max(0, depth - 1)
-    return max_depth
+    return max_depth, depth == 0
+
+
+def _paren_depth_simple(expression: str) -> int:
+    """Lexical fallback: max parenthesis nesting depth without balanced check."""
+    return _paren_depth(expression)[0]
 
 
 def _jaccard(left: set[str], right: set[str]) -> float:
@@ -419,6 +478,10 @@ def _jaccard(left: set[str], right: set[str]) -> float:
 
 def _is_number(token: str) -> bool:
     return bool(re.fullmatch(r"\d+(?:\.\d+)?", token))
+
+
+def _is_identifier_token(token: str) -> bool:
+    return bool(re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", token or ""))
 
 
 def _normalize_number(token: str) -> str:

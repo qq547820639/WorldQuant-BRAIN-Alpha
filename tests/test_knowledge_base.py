@@ -1,3 +1,5 @@
+import logging
+
 import pytest
 
 from brain_alpha_ops.research.knowledge_base import KnowledgeRecord, ResearchKnowledgeBase
@@ -42,3 +44,23 @@ def test_research_knowledge_base_rejects_unknown_kind(tmp_path):
 
     with pytest.raises(ValueError, match="unsupported knowledge kind"):
         kb.add({"kind": "notes", "title": "bad", "body": "bad"})
+
+
+def test_research_knowledge_base_warns_on_unserializable_evidence(tmp_path, caplog):
+    kb = ResearchKnowledgeBase(tmp_path)
+    circular_evidence = {}
+    circular_evidence["self"] = circular_evidence
+
+    with caplog.at_level(logging.WARNING, logger="brain_alpha_ops.research.knowledge_base"):
+        kb.add(
+            KnowledgeRecord(
+                kind="findings",
+                title="Fallback evidence serialization",
+                body="keep saving even when evidence is not JSON serializable",
+                evidence=[circular_evidence],
+            )
+        )
+
+    rows = kb.latest("findings")
+    assert rows[0]["evidence"] == ["{'self': {...}}"]
+    assert "failed to serialize evidence value" in caplog.text

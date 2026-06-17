@@ -1,5 +1,8 @@
+import logging
+
 from brain_alpha_ops.config import OpsConfig, ResearchBudget
 from brain_alpha_ops.models import Candidate
+from brain_alpha_ops.research import backtest_finalization
 from brain_alpha_ops.research.alpha_checks import AlphaCheckRegistry
 from brain_alpha_ops.research.backtest_finalization import BacktestFinalizationService
 from brain_alpha_ops.research.scoring import build_scorecard, evaluate_quality_gate
@@ -53,6 +56,11 @@ def _weak_metrics():
 
 def _expr_key(candidate: Candidate) -> str:
     return " ".join(candidate.expression.split()).lower()
+
+
+def test_backtest_finalization_type_alias_avoids_runtime_pep604_union():
+    assert " | None" not in repr(backtest_finalization.SecondaryFusion)
+    assert backtest_finalization.BacktestFinalizationService.__annotations__["scoring_params"] == "Optional[object]"
 
 
 class _Harness:
@@ -111,6 +119,25 @@ class _Harness:
             return False
         candidate.lifecycle_status = "official_standard_rejected"
         return True
+
+
+def test_backtest_finalization_logs_redacted_experience_record_failures(monkeypatch, caplog, tmp_path):
+    from brain_alpha_ops.research import experience
+
+    def fail_record(*args, **kwargs):
+        sensitive_value = "pw" + "-value-123"
+        raise RuntimeError("password" + "=" + sensitive_value + " backend unavailable")
+
+    monkeypatch.setattr(experience, "record_alpha_result", fail_record)
+    service = _Harness().service(OpsConfig(budget=ResearchBudget(require_cloud_sync=False), storage_dir=str(tmp_path)))
+    candidate = _candidate(_strong_metrics())
+
+    with caplog.at_level(logging.WARNING, logger="brain_alpha_ops.research.backtest_finalization"):
+        service._record_experience(candidate)
+
+    assert "ExperienceDB record failed for alpha_final: RuntimeError:" in caplog.text
+    assert "password=<redacted>" in caplog.text
+    assert "pw-value-123" not in caplog.text
 
 
 def test_backtest_finalization_accepts_submission_ready_candidate(tmp_path):

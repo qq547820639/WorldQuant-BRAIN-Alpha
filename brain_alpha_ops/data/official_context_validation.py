@@ -6,6 +6,7 @@ from collections import Counter
 from datetime import datetime, timezone
 from hashlib import sha256
 import json
+import logging
 from pathlib import Path
 from typing import Any
 
@@ -19,6 +20,8 @@ EXPECTED_CONTEXT_FILES = {
     "official_operators.json": ("operators", ("name",)),
     "official_datasets.json": ("datasets", ("id",)),
 }
+
+logger = logging.getLogger(__name__)
 
 
 def validate_official_context(
@@ -77,6 +80,11 @@ def _resolve_data_dir(*, config_path: str | Path | None, data_dir: str | Path | 
         try:
             target = Path(load_run_config(config_path).ops.storage_dir)
         except Exception:
+            logger.warning(
+                "failed to resolve official context data dir from config; using %s/data",
+                runtime_project_root(),
+                exc_info=True,
+            )
             target = runtime_project_root() / "data"
     if not target.is_absolute():
         target = runtime_project_root() / target
@@ -307,6 +315,7 @@ def _identifier(row: dict[str, Any], keys: tuple[str, ...]) -> str:
     return ""
 
 
+# S-10: DUPLICATE of cache_metadata.py:_items_hash — consolidate into shared util
 def _items_hash(items: list[dict[str, Any]]) -> str:
     payload = json.dumps(items, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str)
     return sha256(payload.encode("utf-8")).hexdigest()

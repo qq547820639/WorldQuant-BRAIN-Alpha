@@ -17,7 +17,6 @@ Usage::
                            expr_fam_weights={"revision_diff": 1.3},
                            window_weights={3: 1.2})
 """
-
 from __future__ import annotations
 
 import logging
@@ -28,9 +27,14 @@ import sys
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
-import yaml
+from brain_alpha_ops.redaction import redact_error_message, redact_text
+
+try:
+    import yaml
+except ImportError:  # pragma: no cover - exercised in minimal production envs
+    yaml = None  # type: ignore[assignment]
 
 logger = logging.getLogger(__name__)
 
@@ -38,15 +42,17 @@ DEFAULT_HYPOTHESIS_LIBRARY_RELATIVE_DIR = Path("brain_alpha_ops") / "research" /
 PACKAGED_HYPOTHESIS_LIBRARY_FILES = (
     "_schema.yaml",
     "analyst_behavior.yaml",
+    "cross_asset_spillover.yaml",
     "earnings_revision.yaml",
+    "event_driven.yaml",
     "liquidity_premium.yaml",
     "low_volatility.yaml",
+    "macro_sensitivity.yaml",
     "microstructure.yaml",
     "quality_profitability.yaml",
     "sentiment_short.yaml",
     "value_reversal.yaml",
 )
-
 
 def ensure_hypothesis_library_files(directory: str | Path) -> dict[str, object]:
     """Repair missing packaged hypothesis YAML files from PyInstaller data."""
@@ -64,10 +70,14 @@ def ensure_hypothesis_library_files(directory: str | Path) -> dict[str, object]:
     present = result["present"]
     missing = result["missing"]
     failed = result["failed"]
-    assert isinstance(copied, list)
-    assert isinstance(present, list)
-    assert isinstance(missing, list)
-    assert isinstance(failed, list)
+    if not isinstance(copied, list):
+        raise TypeError(f"expected result['copied'] to be a list, got {type(copied).__name__}")
+    if not isinstance(present, list):
+        raise TypeError(f"expected result['present'] to be a list, got {type(present).__name__}")
+    if not isinstance(missing, list):
+        raise TypeError(f"expected result['missing'] to be a list, got {type(missing).__name__}")
+    if not isinstance(failed, list):
+        raise TypeError(f"expected result['failed'] to be a list, got {type(failed).__name__}")
 
     for filename in PACKAGED_HYPOTHESIS_LIBRARY_FILES:
         target = target_root / filename
@@ -86,7 +96,8 @@ def ensure_hypothesis_library_files(directory: str | Path) -> dict[str, object]:
             shutil.copy2(source, target)
             copied.append(filename)
         except OSError as exc:
-            failed.append({"filename": filename, "error": str(exc)})
+            from brain_alpha_ops.redaction import redact_error_message
+            failed.append({"filename": filename, "error": redact_error_message(exc)})
 
     if copied:
         logger.info(
@@ -102,7 +113,6 @@ def ensure_hypothesis_library_files(directory: str | Path) -> dict[str, object]:
         )
     return result
 
-
 def _bundled_hypothesis_root() -> Path | None:
     meipass = getattr(sys, "_MEIPASS", None)
     if not meipass:
@@ -110,13 +120,167 @@ def _bundled_hypothesis_root() -> Path | None:
     root = Path(str(meipass)) / DEFAULT_HYPOTHESIS_LIBRARY_RELATIVE_DIR
     return root if root.is_dir() else None
 
-
 def _yaml_file_is_usable(path: Path) -> bool:
     try:
         return path.is_file() and path.stat().st_size > 0
     except OSError:
         return False
 
+def _safe_load_yaml(text: str) -> dict[str, Any]:
+    if yaml is not None:
+        return yaml.safe_load(text) or {}
+    return _minimal_yaml_load(text)
+
+def _minimal_yaml_load(text: str) -> dict[str, Any]:
+    """Parse the limited YAML subset used by packaged hypothesis files.
+
+    Supports mappings, lists, scalars, quoted strings, and folded literal
+    blocks introduced by ``>``.  It is intentionally narrow so production can
+    load the bundled hypotheses without a PyYAML dependency.
+    """
+
+    lines = text.splitlines()
+    index = 0
+
+    def current_line() -> str:
+        return lines[index] if index < len(lines) else ""
+
+    def indent_of(line: str) -> int:
+        return len(line) - len(line.lstrip(" "))
+
+    def strip_comment(line: str) -> str:
+        in_quote = None
+        out = []
+        for ch in line:
+            if ch in ("'", '"'):
+                in_quote = None if in_quote == ch else ch
+            if ch == "#" and in_quote is None:
+                break
+            out.append(ch)
+        return "".join(out).rstrip()
+
+    def parse_scalar(value: str) -> Any:
+        raw = value.strip()
+        if raw in {"", "null", "Null", "NULL", "~"}:
+            return None
+        if raw == "{}":
+            return {}
+        if raw in {"true", "True", "TRUE"}:
+            return True
+        if raw in {"false", "False", "FALSE"}:
+            return False
+        if raw.startswith(("'", '"')) and raw.endswith(("'", '"')) and len(raw) >= 2:
+            return raw[1:-1]
+        if raw.startswith("[") and raw.endswith("]"):
+            inner = raw[1:-1].strip()
+            if not inner:
+                return []
+            return [parse_scalar(part) for part in _split_inline_list(inner)]
+        try:
+            if "." in raw or "e" in raw.lower():
+                num = float(raw)
+                return int(num) if num.is_integer() else num
+            return int(raw)
+        except ValueError:
+            return raw
+
+    def parse_block(expected_indent: int) -> Any:
+        nonlocal index
+        mapping: dict[str, Any] = {}
+        sequence: list[Any] = []
+        is_sequence = False
+        while index < len(lines):
+            raw_line = strip_comment(current_line())
+            if not raw_line.strip():
+                index += 1
+                continue
+            indent = indent_of(raw_line)
+            if indent < expected_indent:
+                break
+            content = raw_line[indent:]
+            if content.startswith("- "):
+                is_sequence = True
+                value_part = content[2:].strip()
+                index += 1
+                if not value_part:
+                    sequence.append(parse_block(indent + 2))
+                elif ":" in value_part and not value_part.startswith(("'", '"')):
+                    key, _, rest = value_part.partition(":")
+                    item = {key.strip(): parse_scalar(rest.strip()) if rest.strip() else parse_block(indent + 4)}
+                    merge_nested_item(item, indent + 2)
+                    sequence.append(item)
+                else:
+                    sequence.append(parse_scalar(value_part))
+                continue
+            if is_sequence:
+                break
+            if ":" not in content:
+                index += 1
+                continue
+            key, _, rest = content.partition(":")
+            key = key.strip().strip('"')
+            rest = rest.strip()
+            index += 1
+            if rest == ">":
+                mapping[key] = parse_folded_block(indent + 2)
+            elif rest == "":
+                mapping[key] = parse_block(indent + 2)
+            else:
+                mapping[key] = parse_scalar(rest)
+        return sequence if is_sequence else mapping
+
+    def parse_folded_block(expected_indent: int) -> str:
+        nonlocal index
+        parts: list[str] = []
+        while index < len(lines):
+            line = current_line()
+            if not line.strip():
+                parts.append("")
+                index += 1
+                continue
+            indent = indent_of(line)
+            if indent < expected_indent:
+                break
+            parts.append(line[indent:])
+            index += 1
+        return " ".join(part.strip() for part in parts if part.strip())
+
+    def merge_nested_item(item: dict[str, Any], expected_indent: int) -> None:
+        nonlocal index
+        if index >= len(lines):
+            return
+        if not current_line().strip():
+            return
+        indent = indent_of(current_line())
+        if indent < expected_indent:
+            return
+        nested = parse_block(expected_indent)
+        if isinstance(nested, dict):
+            item.update(nested)
+
+    def _split_inline_list(inner: str) -> list[str]:
+        parts: list[str] = []
+        current = []
+        quote = None
+        depth = 0
+        for ch in inner:
+            if ch in ("'", '"'):
+                quote = None if quote == ch else ch
+            elif ch == "[" and quote is None:
+                depth += 1
+            elif ch == "]" and quote is None and depth > 0:
+                depth -= 1
+            elif ch == "," and quote is None and depth == 0:
+                parts.append("".join(current).strip())
+                current = []
+                continue
+            current.append(ch)
+        if current:
+            parts.append("".join(current).strip())
+        return parts
+
+    result = parse_block(0)
+    return result if isinstance(result, dict) else {}
 
 # ═══════════════════════════════════════════════════════════════════════
 # Data Models
@@ -126,36 +290,35 @@ def _yaml_file_is_usable(path: Path) -> bool:
 class Rationale:
     """Economics / behavioural finance theory underpinning a hypothesis."""
     theory: str
-    academic_refs: List[str] = field(default_factory=list)
+    academic_refs: list[str] = field(default_factory=list)
     behavioral_bias: str = ""
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "Rationale":
+    def from_dict(cls, data: dict[str, Any]) -> "Rationale":
         return cls(
             theory=data.get("theory", ""),
             academic_refs=[str(r) for r in data.get("academic_refs", [])],
             behavioral_bias=str(data.get("behavioral_bias", "")),
         )
 
-    def to_dict(self) -> Dict[str, Any]:
-        result: Dict[str, Any] = {"theory": self.theory}
+    def to_dict(self) -> dict[str, Any]:
+        result: dict[str, Any] = {"theory": self.theory}
         if self.academic_refs:
             result["academic_refs"] = self.academic_refs
         if self.behavioral_bias:
             result["behavioral_bias"] = self.behavioral_bias
         return result
 
-
 @dataclass
 class FieldCategoryDef:
     """Semantic field category — not a concrete field name, but a grouping label."""
     category: str
     priority: str = "P1"           # "P0" | "P1"
-    examples: List[str] = field(default_factory=list)
+    examples: list[str] = field(default_factory=list)
     weight: float = 1.0
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "FieldCategoryDef":
+    def from_dict(cls, data: dict[str, Any]) -> "FieldCategoryDef":
         return cls(
             category=str(data.get("category", "")),
             priority=str(data.get("priority", "P1")),
@@ -163,8 +326,8 @@ class FieldCategoryDef:
             weight=float(data.get("weight", 1.0)),
         )
 
-    def to_dict(self) -> Dict[str, Any]:
-        result: Dict[str, Any] = {
+    def to_dict(self) -> dict[str, Any]:
+        result: dict[str, Any] = {
             "category": self.category,
             "priority": self.priority,
             "weight": self.weight,
@@ -173,20 +336,19 @@ class FieldCategoryDef:
             result["examples"] = self.examples
         return result
 
-
 @dataclass
 class ExpressionFamily:
     """A structural variant of an expression within a hypothesis."""
     id: str
     structure: str
     description: str = ""
-    windows: List[int] = field(default_factory=list)
-    windows_short: List[int] = field(default_factory=list)
-    windows_long: List[int] = field(default_factory=list)
+    windows: list[int] = field(default_factory=list)
+    windows_short: list[int] = field(default_factory=list)
+    windows_long: list[int] = field(default_factory=list)
     weight: float = 1.0
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "ExpressionFamily":
+    def from_dict(cls, data: dict[str, Any]) -> "ExpressionFamily":
         return cls(
             id=str(data.get("id", "")),
             structure=str(data.get("structure", "")),
@@ -197,8 +359,8 @@ class ExpressionFamily:
             weight=float(data.get("weight", 1.0)),
         )
 
-    def to_dict(self) -> Dict[str, Any]:
-        result: Dict[str, Any] = {
+    def to_dict(self) -> dict[str, Any]:
+        result: dict[str, Any] = {
             "id": self.id,
             "structure": self.structure,
             "description": self.description,
@@ -212,15 +374,14 @@ class ExpressionFamily:
             result["windows_long"] = self.windows_long
         return result
 
-    def get_all_windows(self) -> List[int]:
+    def get_all_windows(self) -> list[int]:
         """Return all window sizes (regular + short + long, deduplicated)."""
-        all_win: List[int] = list(self.windows) if self.windows else []
+        all_win: list[int] = list(self.windows) if self.windows else []
         all_win.extend(self.windows_short)
         all_win.extend(self.windows_long)
         if not all_win:
             all_win = [3, 6, 12]  # sensible defaults
         return sorted(set(all_win))
-
 
 @dataclass
 class FailureMode:
@@ -230,32 +391,31 @@ class FailureMode:
     mitigation: str = ""
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "FailureMode":
+    def from_dict(cls, data: dict[str, Any]) -> "FailureMode":
         return cls(
             gate=str(data.get("gate", "")),
             reason=str(data.get("reason", "")),
             mitigation=str(data.get("mitigation", "")),
         )
 
-    def to_dict(self) -> Dict[str, Any]:
-        result: Dict[str, Any] = {"gate": self.gate}
+    def to_dict(self) -> dict[str, Any]:
+        result: dict[str, Any] = {"gate": self.gate}
         if self.reason:
             result["reason"] = self.reason
         if self.mitigation:
             result["mitigation"] = self.mitigation
         return result
 
-
 @dataclass
 class AdaptationConfig:
     """Context adaptation configuration for a hypothesis."""
-    preferred_regions: List[str] = field(default_factory=list)
-    preferred_universes: List[str] = field(default_factory=list)
-    preferred_delays: List[int] = field(default_factory=list)
-    unsuitable_regions: List[str] = field(default_factory=list)
+    preferred_regions: list[str] = field(default_factory=list)
+    preferred_universes: list[str] = field(default_factory=list)
+    preferred_delays: list[int] = field(default_factory=list)
+    unsuitable_regions: list[str] = field(default_factory=list)
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "AdaptationConfig":
+    def from_dict(cls, data: dict[str, Any]) -> "AdaptationConfig":
         return cls(
             preferred_regions=[str(r) for r in data.get("preferred_regions", [])],
             preferred_universes=[str(u) for u in data.get("preferred_universes", [])],
@@ -263,8 +423,8 @@ class AdaptationConfig:
             unsuitable_regions=[str(r) for r in data.get("unsuitable_regions", [])],
         )
 
-    def to_dict(self) -> Dict[str, Any]:
-        result: Dict[str, Any] = {
+    def to_dict(self) -> dict[str, Any]:
+        result: dict[str, Any] = {
             "preferred_regions": self.preferred_regions,
             "preferred_universes": self.preferred_universes,
             "preferred_delays": self.preferred_delays,
@@ -273,26 +433,31 @@ class AdaptationConfig:
             result["unsuitable_regions"] = self.unsuitable_regions
         return result
 
-
 @dataclass
 class ExperienceWeights:
     """Runtime-updated experience weights for adaptive selection."""
     overall: float = 1.0
-    field_category_weights: Dict[str, float] = field(default_factory=dict)
-    expression_family_weights: Dict[str, float] = field(default_factory=dict)
-    window_weights: Dict[str, float] = field(default_factory=dict)
+    field_category_weights: dict[str, float] = field(default_factory=dict)
+    expression_family_weights: dict[str, float] = field(default_factory=dict)
+    window_weights: dict[str, float] = field(default_factory=dict)
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "ExperienceWeights":
-        data = data or {}
+    def from_dict(cls, data: dict[str, Any]) -> "ExperienceWeights":
+        data = data if isinstance(data, dict) else {}
+
+        def weight_map(value: Any) -> dict[str, float]:
+            if not isinstance(value, dict):
+                return {}
+            return {str(k): float(v) for k, v in value.items()}
+
         return cls(
             overall=float(data.get("overall", 1.0)),
-            field_category_weights={str(k): float(v) for k, v in data.get("field_category_weights", {}).items()},
-            expression_family_weights={str(k): float(v) for k, v in data.get("expression_family_weights", {}).items()},
-            window_weights={str(k): float(v) for k, v in data.get("window_weights", {}).items()},
+            field_category_weights=weight_map(data.get("field_category_weights")),
+            expression_family_weights=weight_map(data.get("expression_family_weights")),
+            window_weights=weight_map(data.get("window_weights")),
         )
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "overall": self.overall,
             "field_category_weights": dict(self.field_category_weights),
@@ -303,7 +468,6 @@ class ExperienceWeights:
     def _ensure_window_key(self, w: int) -> str:
         return str(w)
 
-
 @dataclass
 class Hypothesis:
     """A complete market hypothesis definition."""
@@ -312,14 +476,14 @@ class Hypothesis:
     category: str = ""
     version: str = "1.0.0"
     rationale: Rationale = field(default_factory=Rationale)
-    field_categories: List[FieldCategoryDef] = field(default_factory=list)
-    expression_families: List[ExpressionFamily] = field(default_factory=list)
-    expected_failure_modes: List[FailureMode] = field(default_factory=list)
+    field_categories: list[FieldCategoryDef] = field(default_factory=list)
+    expression_families: list[ExpressionFamily] = field(default_factory=list)
+    expected_failure_modes: list[FailureMode] = field(default_factory=list)
     adaptation: AdaptationConfig = field(default_factory=AdaptationConfig)
     experience_weights: ExperienceWeights = field(default_factory=ExperienceWeights)
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "Hypothesis":
+    def from_dict(cls, data: dict[str, Any]) -> "Hypothesis":
         h_data = data.get("hypothesis", data)
         rationale = Rationale.from_dict(h_data.get("rationale", {}))
         field_cats = [FieldCategoryDef.from_dict(fc) for fc in h_data.get("field_categories", [])]
@@ -340,7 +504,7 @@ class Hypothesis:
             experience_weights=weights,
         )
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "id": self.id,
             "name": self.name,
@@ -354,7 +518,6 @@ class Hypothesis:
             "experience_weights": self.experience_weights.to_dict(),
         }
 
-
 @dataclass
 class GenerationMeta:
     """Traceability metadata attached to each generated Candidate."""
@@ -363,7 +526,7 @@ class GenerationMeta:
     hypothesis_name: str = ""
     expression_family_id: str = ""
     field_category: str = ""
-    selected_fields: List[str] = field(default_factory=list)
+    selected_fields: list[str] = field(default_factory=list)
     region: str = ""
     universe: str = ""
     delay: int = 0
@@ -374,7 +537,7 @@ class GenerationMeta:
             self.timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "GenerationMeta":
+    def from_dict(cls, data: dict[str, Any]) -> "GenerationMeta":
         return cls(
             mode=str(data.get("mode", "")),
             hypothesis_id=str(data.get("hypothesis_id", "")),
@@ -388,7 +551,7 @@ class GenerationMeta:
             timestamp=str(data.get("timestamp", "")),
         )
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "mode": self.mode,
             "hypothesis_id": self.hypothesis_id,
@@ -406,7 +569,6 @@ class GenerationMeta:
         """Serialize to JSON string for storage in Candidate.template_source."""
         import json
         return json.dumps(self.to_dict(), ensure_ascii=False)
-
 
 # ═══════════════════════════════════════════════════════════════════════
 # HypothesisLibrary
@@ -426,9 +588,10 @@ class HypothesisLibrary:
 
     def __init__(self, directory: str | Path) -> None:
         self._directory: Path = Path(directory)
-        self._hypotheses: Dict[str, Hypothesis] = {}
-        self._by_category: Dict[str, List[Hypothesis]] = {}
-        self._file_paths: Dict[str, Path] = {}
+        self._hypotheses: dict[str, Hypothesis] = {}
+        self._by_category: dict[str, list[Hypothesis]] = {}
+        self._file_paths: dict[str, Path] = {}
+        self._hypothesis_weights: dict[str, float] = {}
 
     # ── Loading ──────────────────────────────────────────────────────
 
@@ -460,7 +623,11 @@ class HypothesisLibrary:
                     cat = hypothesis.category.lower()
                     self._by_category.setdefault(cat, []).append(hypothesis)
             except Exception as exc:
-                logger.error("HypothesisLibrary: failed to load %s: %s", path, exc)
+                logger.error(
+                    "HypothesisLibrary: failed to load %s: %s",
+                    redact_text(path, max_length=180),
+                    redact_error_message(exc),
+                )
 
         self._validate_weights()
         logger.info(
@@ -475,19 +642,19 @@ class HypothesisLibrary:
 
     # ── Query ────────────────────────────────────────────────────────
 
-    def get_all(self) -> List[Hypothesis]:
+    def get_all(self) -> list[Hypothesis]:
         """Return all loaded hypotheses."""
         return list(self._hypotheses.values())
 
-    def get_by_id(self, hypothesis_id: str) -> Optional[Hypothesis]:
+    def get_by_id(self, hypothesis_id: str) -> Hypothesis | None:
         """Return a hypothesis by its unique ID, or None."""
         return self._hypotheses.get(hypothesis_id)
 
-    def get_by_category(self, category: str) -> List[Hypothesis]:
+    def get_by_category(self, category: str) -> list[Hypothesis]:
         """Return all hypotheses matching *category* (case-insensitive)."""
         return list(self._by_category.get(category.lower(), []))
 
-    def get_ids(self) -> List[str]:
+    def get_ids(self) -> list[str]:
         """Return all hypothesis IDs."""
         return list(self._hypotheses.keys())
 
@@ -501,13 +668,29 @@ class HypothesisLibrary:
     def update_weights(
         self,
         hypothesis_id: str,
-        field_cat_weights: Optional[Dict[str, float]] = None,
-        expr_fam_weights: Optional[Dict[str, float]] = None,
-        window_weights: Optional[Dict[str, float]] = None,
+        field_cat_weights: dict[str, float] | None = None,
+        expr_fam_weights: dict[str, float] | None = None,
+        window_weights: dict[str, float] | None = None,
+        *,
+        sample_count: int | None = None,
     ) -> None:
-        """Update experience weights using EMA smoothing::
+        """Update experience weights using adaptive EMA smoothing::
 
-            new = 0.8 * old + 0.2 * update
+            new = (1 - alpha) * old + alpha * update
+
+        P2-16 (2026-06-13): ``alpha`` is no longer a fixed 0.2; it shrinks
+        with the cumulative sample count so the EMA becomes a slow learner
+        once the model has seen enough data::
+
+            alpha = base_alpha / (1 + decay * sample_count)
+
+        With ``base_alpha=0.2`` and ``decay=0.01`` the schedule is:
+        - sample 1     → alpha ≈ 0.20   (responsive early)
+        - sample 50    → alpha ≈ 0.10   (slowing down)
+        - sample 200+  → alpha ≈ 0.05   (slow learner)
+
+        The base value matches the previous fixed alpha so callers that
+        don't pass ``sample_count`` see no behavior change.
 
         Parameters
         ----------
@@ -520,20 +703,30 @@ class HypothesisLibrary:
         window_weights:
             Mapping of window (as int key) → winner ratio (0.0–1.0).
             Keys are automatically converted to str for internal storage.
+        sample_count:
+            Number of historical samples available for this hypothesis.
+            When provided, the EMA alpha shrinks as above. When omitted
+            the legacy fixed 0.2 alpha is used.
         """
         hyp = self._hypotheses.get(hypothesis_id)
         if hyp is None:
             logger.warning("HypothesisLibrary.update_weights: hypothesis '%s' not found.", hypothesis_id)
             return
 
-        alpha = 0.2  # EMA smoothing factor
+        if sample_count is None:
+            alpha = 0.2  # legacy fixed factor (P2-16 fallback)
+        else:
+            base_alpha = 0.2
+            decay = 0.01
+            alpha = max(0.05, min(0.5, base_alpha / (1.0 + decay * max(0, sample_count))))
+        retain = 1.0 - alpha  # weight retained from the previous estimate
 
         # Update field category weights
         if field_cat_weights:
             for fc in hyp.field_categories:
                 update = field_cat_weights.get(fc.category)
                 if update is not None:
-                    fc.weight = 0.8 * fc.weight + 0.2 * max(0.0, min(1.0, float(update)))
+                    fc.weight = retain * fc.weight + alpha * max(0.0, min(1.0, float(update)))
                     hyp.experience_weights.field_category_weights[fc.category] = fc.weight
 
         # Update expression family weights
@@ -541,12 +734,12 @@ class HypothesisLibrary:
             for ef in hyp.expression_families:
                 update = expr_fam_weights.get(ef.id)
                 if update is not None:
-                    ef.weight = 0.8 * ef.weight + 0.2 * max(0.0, min(1.0, float(update)))
+                    ef.weight = retain * ef.weight + alpha * max(0.0, min(1.0, float(update)))
                     hyp.experience_weights.expression_family_weights[ef.id] = ef.weight
 
         # Update window weights
         if window_weights:
-            raw_windows: Dict[int, float] = {}
+            raw_windows: dict[int, float] = {}
             for k, v in window_weights.items():
                 w_val = int(k) if isinstance(k, str) else k
                 raw_windows[w_val] = max(0.0, min(1.0, float(v)))
@@ -556,32 +749,54 @@ class HypothesisLibrary:
                     if update is not None:
                         key = str(w)
                         old = hyp.experience_weights.window_weights.get(key, 1.0)
-                        new_val = 0.8 * old + 0.2 * max(0.0, min(1.0, float(update)))
+                        new_val = retain * old + alpha * max(0.0, min(1.0, float(update)))
                         hyp.experience_weights.window_weights[key] = new_val
 
         # Update overall weight as average of expression family weights
         if hyp.expression_families:
             avg_weight = sum(ef.weight for ef in hyp.expression_families) / len(hyp.expression_families)
-            hyp.experience_weights.overall = 0.8 * hyp.experience_weights.overall + 0.2 * avg_weight
+            hyp.experience_weights.overall = retain * hyp.experience_weights.overall + alpha * avg_weight
 
         self._validate_weights()
 
     # ── Internals ────────────────────────────────────────────────────
 
-    def _load_file(self, path: Path) -> Optional[Hypothesis]:
+    def _load_file(self, path: Path) -> Hypothesis | None:
         """Load a single hypothesis YAML file and return a Hypothesis object."""
         with open(path, "r", encoding="utf-8") as f:
-            raw: Dict[str, Any] = yaml.safe_load(f) or {}
+            raw: dict[str, Any] = _safe_load_yaml(f.read()) or {}
 
         if not isinstance(raw, dict) or "hypothesis" not in raw:
-            logger.warning("HypothesisLibrary._load_file: %s missing top-level 'hypothesis' key.", path)
+            logger.warning(
+                "HypothesisLibrary._load_file: %s missing top-level 'hypothesis' key.",
+                redact_text(path, max_length=180),
+            )
             return None
 
         hyp = Hypothesis.from_dict(raw)
         if not hyp.id:
-            logger.warning("HypothesisLibrary._load_file: %s has empty 'id'.", path)
+            logger.warning(
+                "HypothesisLibrary._load_file: %s has empty 'id'.",
+                redact_text(path, max_length=180),
+            )
             return None
         return hyp
+
+    def adjust_weight(self, hypothesis_name: str, factor: float) -> float:
+        """Adjust hypothesis weight by *factor* (multiplicative).
+
+        Called by the pipeline after prefilter evaluation:
+        - factor < 1.0: penalize (e.g. 0.5 for prod_correlation failure)
+        - factor > 1.0: reward   (e.g. 1.1 for a diverse candidate)
+
+        Returns the new weight (clamped to [0.1, 5.0]).
+        """
+        old = self._hypothesis_weights.get(hypothesis_name, 1.0)
+        new = max(0.1, min(5.0, old * factor))
+        if abs(new - old) > 0.001:
+            self._hypothesis_weights[hypothesis_name] = new
+            self._validate_weights()
+        return new
 
     def _validate_weights(self) -> None:
         """Ensure all experience weights are non-negative."""

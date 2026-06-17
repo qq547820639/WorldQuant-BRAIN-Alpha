@@ -5,6 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 
+import brain_alpha_ops.web_server_lifecycle as lifecycle
 from brain_alpha_ops.web_server_lifecycle import display_host_for_bind, serve, smoke_test_server
 
 
@@ -103,6 +104,44 @@ def test_serve_normalizes_host_checks_remote_policy_and_starts_thread():
         )
 
 
+def test_serve_preserves_explicit_zero_port_and_skips_free_port_probe(monkeypatch):
+    stop_event = _StopEvent()
+    configured = []
+
+    def fail_find_free_port(*_args, **_kwargs):
+        raise AssertionError("find_free_port should not be used for explicit port 0")
+
+    monkeypatch.setattr(lifecycle, "find_free_port", fail_find_free_port)
+
+    class _ZeroPortServer(_Server):
+        def __init__(self, address, handler_class):
+            super().__init__(address, handler_class)
+            self.server_address = (address[0], 43123)
+            self.server_port = 43123
+
+    url, server = serve(
+        port=0,
+        open_browser=False,
+        host="",
+        default_port=8765,
+        handler_class=object,
+        stop_event=stop_event,
+        configure_session_policy=lambda ttl, multiple, secure=None: configured.append((ttl, multiple, secure)),
+        normalize_host=lambda host: "127.0.0.1" if not host else host,
+        loopback_bind_hosts={"127.0.0.1"},
+        allow_remote=False,
+        server_factory=_ZeroPortServer,
+        browser_open=lambda url: None,
+        thread_factory=lambda **kwargs: _Thread(**kwargs),
+    )
+
+    assert url == "http://127.0.0.1:43123/"
+    assert server.address == ("127.0.0.1", 0)
+    assert server.served is True
+    assert stop_event.cleared is True
+    assert configured == [(None, None, None)]
+
+
 def test_display_host_for_bind_uses_loopback_for_wildcard():
     assert display_host_for_bind("0.0.0.0") == "127.0.0.1"
     assert display_host_for_bind("::") == "127.0.0.1"
@@ -149,6 +188,34 @@ def test_smoke_test_server_exercises_root_and_config_api():
     assert result == {"ok": True, "url": "http://127.0.0.1:7777/", "config_ok": True}
     assert shutdowns == [True]
     assert calls[1].headers["X-Brain-Alpha-CSRF"] == "csrf1"
+
+
+def test_smoke_test_server_preserves_explicit_zero_port():
+    calls = []
+
+    def fake_serve_func(**kwargs):
+        calls.append(kwargs)
+        return "http://127.0.0.1:43123/"
+
+    def fake_urlopen(target, timeout):
+        if isinstance(target, str):
+            return _Response(b"<html>BRAIN Alpha Ops</html>", {"Set-Cookie": "brain_alpha_ops_session=s1; Path=/"})
+        return _Response(json.dumps({"ok": True}).encode("utf-8"))
+
+    result = smoke_test_server(
+        port=0,
+        default_port=8765,
+        serve_func=fake_serve_func,
+        shutdown_func=lambda: None,
+        parse_cookies=lambda header: {"brain_alpha_ops_session": "s1"},
+        cookie_name="brain_alpha_ops_session",
+        csrf_for_session=lambda session_id: "csrf1",
+        urlopen=fake_urlopen,
+        request_factory=lambda url, headers: SimpleNamespace(url=url, headers=headers),
+    )
+
+    assert result["ok"] is True
+    assert calls == [{"port": 0, "open_browser": False}]
 
 
 def test_smoke_test_server_always_shutdowns_on_failure():

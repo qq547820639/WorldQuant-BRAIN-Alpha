@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import os
 
 from typing import Any, Callable
 
@@ -13,7 +14,16 @@ from brain_alpha_ops.brain_api.canonical import (
     SUPPORTED_REGIONS,
     SUPPORTED_UNIVERSES,
 )
-from brain_alpha_ops.config import BrainSettings, OpsConfig, ResearchBudget, RunConfig, load_run_config, validate_run_config
+from brain_alpha_ops.brain_api.user_alpha_sync import sync_range_from_payload
+from brain_alpha_ops.config import (
+    BrainSettings,
+    OpsConfig,
+    ResearchBudget,
+    RunConfig,
+    load_run_config,
+    validate_run_config,
+    write_run_config,
+)
 
 
 # Allowed base URLs for user-facing web payloads; production is the only
@@ -40,10 +50,58 @@ _VALID_TYPES = SUPPORTED_ALPHA_TYPES
 
 
 RunConfigLoader = Callable[[], RunConfig]
+RunConfigWriter = Callable[[RunConfig], object]
 
 
 def config_from_payload(payload: dict, *, loader: RunConfigLoader = load_run_config) -> OpsConfig:
     return run_config_from_payload(payload, loader=loader).ops
+
+
+def public_run_config_dict(config: RunConfig) -> dict[str, Any]:
+    data = config.to_dict()
+    credentials = data.get("credentials", {})
+    data["credentials"] = {
+        "username": "",
+        "password": "",
+        "token": "",
+        "username_env": credentials.get("username_env", "BRAIN_USERNAME"),
+        "password_env": credentials.get("password_env", "BRAIN_PASSWORD"),
+        "token_env": credentials.get("token_env", "BRAIN_TOKEN"),
+        "managed_credentials_available": managed_credentials_available(credentials),
+    }
+    return data
+
+
+def managed_credentials_available(credentials: dict[str, Any]) -> bool:
+    """Return only whether runtime credentials exist, never their values."""
+    token_env = str(credentials.get("token_env") or "BRAIN_TOKEN")
+    username_env = str(credentials.get("username_env") or "BRAIN_USERNAME")
+    password_env = str(credentials.get("password_env") or "BRAIN_PASSWORD")
+    token = str(credentials.get("token") or os.getenv(token_env, ""))
+    username = str(credentials.get("username") or os.getenv(username_env, ""))
+    password = str(credentials.get("password") or os.getenv(password_env, ""))
+    return bool(token) or bool(username and password)
+
+
+def save_run_config_payload(
+    payload: dict,
+    *,
+    loader: RunConfigLoader = load_run_config,
+    writer: RunConfigWriter = write_run_config,
+) -> dict[str, Any]:
+    if not isinstance(payload, dict):
+        raise ValueError("request body must be a JSON object")
+    run_config = run_config_from_payload(payload, loader=loader)
+    run_config.auto_submit = False
+    run_config.credentials.username = ""
+    run_config.credentials.password = ""
+    run_config.credentials.token = ""
+    saved_path = writer(run_config)
+    return {
+        "ok": True,
+        "config": public_run_config_dict(run_config),
+        "path": str(saved_path),
+    }
 
 
 def payload_truthy(value: object) -> bool:
@@ -63,7 +121,7 @@ def payload_web_environment(payload: dict) -> str | None:
         return None
     environment = str(payload.get("environment") or "production").strip().lower()
     if environment != "production":
-        raise ValueError("web console only supports production environment; mock mode is not available")
+        raise ValueError("web console only supports production environment")
     return "production"
 
 
@@ -121,6 +179,7 @@ def run_config_from_payload(payload: dict, *, loader: RunConfigLoader = load_run
         instrumentType=str(settings_data.get("instrumentType", current_settings.instrumentType)),
         region=str(settings_data.get("region", current_settings.region)),
         universe=str(settings_data.get("universe", current_settings.universe)),
+        dataset=str(settings_data.get("dataset", current_settings.dataset)),
         delay=payload_int(
             settings_data,
             "delay",
@@ -256,7 +315,8 @@ def run_config_from_payload(payload: dict, *, loader: RunConfigLoader = load_run
             current_budget.enable_secondary_fusion,
         ),
         require_cloud_sync=payload_bool(payload, "requireCloudSync", current_budget.require_cloud_sync),
-        cloud_sync_range=str(payload.get("syncRange", current_budget.cloud_sync_range)),
+        cloud_sync_range=sync_range_from_payload(payload),
+        cloud_sync_max_elapsed_seconds=0.0,
         max_cycles=payload_int(
             payload,
             "cycles" if "cycles" in payload else "max_cycles",
@@ -294,36 +354,78 @@ def run_config_from_payload(payload: dict, *, loader: RunConfigLoader = load_run
             current_budget.resume_persisted_backtests,
         ),
     )
+    threshold_payload = payload.get("thresholds") if isinstance(payload.get("thresholds"), dict) else {}
+    current_thresholds = run_config.ops.thresholds
+    # P3-18 (2026-06-13): QualityThresholds is frozen, so accumulate field
+    # updates via ``dataclasses.replace`` instead of ``setattr`` mutation.
+    new_thresholds_kwargs: dict[str, Any] = {}
+    for top_key, nested_key, attr, upper in (
+        ("minSharpe", "min_sharpe", "min_sharpe", None),
+        ("minFitness", "min_fitness", "min_fitness", None),
+        ("minTurnover", "min_turnover", "min_turnover", 1.0),
+        ("platformMaxTurnover", "platform_max_turnover", "platform_max_turnover", 1.0),
+        ("maxSelfCorrelation", "max_self_correlation", "max_self_correlation", 1.0),
+        ("maxWeightConcentration", "max_weight_concentration", "max_weight_concentration", 1.0),
+    ):
+        source = payload if top_key in payload else threshold_payload
+        source_key = top_key if top_key in payload else nested_key
+        if source_key in source:
+            new_thresholds_kwargs[attr] = payload_float(
+                source,
+                source_key,
+                getattr(current_thresholds, attr),
+                lower=0.0,
+                upper=upper,
+                label=f"thresholds.{attr}",
+            )
+    if new_thresholds_kwargs:
+        import dataclasses
+        run_config.ops.thresholds = dataclasses.replace(
+            current_thresholds, **new_thresholds_kwargs
+        )
+    # P3-18 (2026-06-13): ScoringConfig is also frozen; rebuild it via
+    # ``dataclasses.replace`` rather than mutating in place.
     current_scoring = run_config.ops.scoring
-    current_scoring.assistant_guidance_score_adjustment_enabled = payload_bool(
-        payload,
-        "assistantGuidanceScoreAdjustment",
-        current_scoring.assistant_guidance_score_adjustment_enabled,
-    )
-    current_scoring.assistant_guidance_score_min_confidence = bounded_query_float(
-        payload.get("assistantGuidanceScoreMinConfidence", current_scoring.assistant_guidance_score_min_confidence),
-        0.0,
-        1.0,
-    )
-    current_scoring.assistant_guidance_score_min_outcome_count = max(
-        0,
-        payload_int(
+    new_scoring_kwargs: dict[str, Any] = {}
+    if "assistantGuidanceScoreAdjustment" in payload:
+        new_scoring_kwargs["assistant_guidance_score_adjustment_enabled"] = payload_bool(
             payload,
-            "assistantGuidanceScoreMinOutcomeCount",
-            current_scoring.assistant_guidance_score_min_outcome_count,
-            lower=0,
-        ),
-    )
-    current_scoring.assistant_guidance_score_bonus_cap = bounded_query_float(
-        payload.get("assistantGuidanceScoreBonusCap", current_scoring.assistant_guidance_score_bonus_cap),
-        0.0,
-        10.0,
-    )
-    current_scoring.assistant_guidance_score_penalty_cap = bounded_query_float(
-        payload.get("assistantGuidanceScorePenaltyCap", current_scoring.assistant_guidance_score_penalty_cap),
-        0.0,
-        10.0,
-    )
+            "assistantGuidanceScoreAdjustment",
+            current_scoring.assistant_guidance_score_adjustment_enabled,
+        )
+    if "assistantGuidanceScoreMinConfidence" in payload:
+        new_scoring_kwargs["assistant_guidance_score_min_confidence"] = bounded_query_float(
+            payload.get("assistantGuidanceScoreMinConfidence", current_scoring.assistant_guidance_score_min_confidence),
+            0.0,
+            1.0,
+        )
+    if "assistantGuidanceScoreMinOutcomeCount" in payload:
+        new_scoring_kwargs["assistant_guidance_score_min_outcome_count"] = max(
+            0,
+            payload_int(
+                payload,
+                "assistantGuidanceScoreMinOutcomeCount",
+                current_scoring.assistant_guidance_score_min_outcome_count,
+                lower=0,
+            ),
+        )
+    if "assistantGuidanceScoreBonusCap" in payload:
+        new_scoring_kwargs["assistant_guidance_score_bonus_cap"] = bounded_query_float(
+            payload.get("assistantGuidanceScoreBonusCap", current_scoring.assistant_guidance_score_bonus_cap),
+            0.0,
+            10.0,
+        )
+    if "assistantGuidanceScorePenaltyCap" in payload:
+        new_scoring_kwargs["assistant_guidance_score_penalty_cap"] = bounded_query_float(
+            payload.get("assistantGuidanceScorePenaltyCap", current_scoring.assistant_guidance_score_penalty_cap),
+            0.0,
+            10.0,
+        )
+    if new_scoring_kwargs:
+        import dataclasses
+        run_config.ops.scoring = dataclasses.replace(
+            current_scoring, **new_scoring_kwargs
+        )
     raw_base_url = payload.get("baseUrl") or payload.get("base_url")
     if raw_base_url:
         base_url = str(raw_base_url).rstrip("/")

@@ -1,0 +1,378 @@
+"""Simulation and submission methods for the official BRAIN API adapter."""
+
+from __future__ import annotations
+
+import os
+import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import urllib.parse
+from typing import Any, Iterable
+
+from .base import BrainAPIError
+from .official_helpers import (
+    _first_value,
+    build_official_url,
+    build_simulation_payload,
+    items as _items,
+    looks_non_production_alpha_id as _looks_non_production_alpha_id,
+    merge_payloads as _merge,
+    normalize_metrics,
+    retry_after as _retry_after,
+    scrub as _scrub,
+)
+from .rate_limit_policy import OFFICIAL_RATE_LIMITS
+
+_CHECK_PASS_STATES = frozenset({"PASS", "PASSED", "SUCCESS", "SUCCEEDED", "OK"})
+_CHECK_FAIL_STATES = frozenset({"FAIL", "FAILED", "ERROR", "REJECTED"})
+_CHECK_PENDING_STATES = frozenset({"PENDING", "RUNNING", "IN_PROGRESS", "WAITING", "QUEUED"})
+_MAX_DEFAULT_CONCURRENT_OFFICIAL_JOBS = int(OFFICIAL_RATE_LIMITS["max_concurrent_simulations_regular"]["max"])
+
+
+class OfficialSimulationSubmissionMixin:
+    def submit_simulation(self, expression: str, settings: dict) -> str:
+        body = build_simulation_payload(expression, settings)
+        data, headers = self._request("POST", self.config.simulations_path, body=body)
+        location = headers.get("Location") or headers.get("location")
+        sim_id = location or _first_value(data, ["id", "simulation_id", "location"], "")
+        if not sim_id:
+            raise BrainAPIError(f"simulation submission did not return a location/id: {_scrub(data)}")
+        if str(sim_id).startswith(("http://", "https://")):
+            normalized = build_official_url(self.config.base_url, str(sim_id), None)
+            parsed = urllib.parse.urlparse(normalized)
+            sim_id = urllib.parse.urlunparse(("", "", parsed.path or "/", "", parsed.query, ""))
+        return str(sim_id)
+
+    def poll_simulation(self, simulation_id: str) -> str:
+        status, _retry_after_seconds = self._poll_simulation_once(simulation_id)
+        return status
+
+    def _poll_simulation_once(self, simulation_id: str) -> tuple[str, float | None]:
+        data, _headers = self._request("GET", simulation_id)
+        status = str(_first_value(data, ["status", "state"], "")).upper()
+        if status in {"COMPLETE", "COMPLETED", "DONE"} or _first_value(data, ["alpha", "alpha_id", "alphaId"], ""):
+            return "COMPLETED", _retry_after(_headers)
+        if status in {"FAILED", "ERROR"}:
+            return "FAILED", _retry_after(_headers)
+        return "RUNNING", _retry_after(_headers)
+
+    def fetch_result(self, simulation_id: str) -> dict:
+        data, _headers = self._request("GET", simulation_id)
+        alpha_id = _first_value(data, ["alpha", "alpha_id", "alphaId"], "")
+        if isinstance(alpha_id, dict):
+            alpha_id = _first_value(alpha_id, ["id", "alpha_id", "alphaId"], "")
+        alpha_payload = {}
+        if alpha_id:
+            try:
+                alpha_payload, _headers = self._request(
+                    "GET",
+                    self.config.alpha_path_template.format(alpha_id=alpha_id),
+                )
+            except BrainAPIError:
+                alpha_payload = {}
+        merged = _merge(data, alpha_payload)
+        metrics = normalize_metrics(merged)
+        if alpha_id:
+            metrics["official_alpha_id"] = str(alpha_id)
+        return {
+            "simulation_id": simulation_id,
+            "alpha_id": str(alpha_id or ""),
+            "metrics": metrics,
+            "raw": _scrub(merged),
+        }
+
+    def check_alpha(self, alpha_id: str) -> dict:
+        if not alpha_id:
+            raise BrainAPIError("cannot check an alpha without alpha_id")
+        path = self.config.alpha_check_path_template.format(alpha_id=alpha_id)
+        data, _headers = self._request("GET", path)
+        return _check_result_from_response(data)
+
+    def concurrent_simulate(
+        self,
+        alphas: Iterable[dict[str, Any] | tuple[str, dict[str, Any]]],
+        concurrency: int = _MAX_DEFAULT_CONCURRENT_OFFICIAL_JOBS,
+        *,
+        return_exceptions: bool = False,
+    ) -> list[dict[str, Any] | BaseException]:
+        rows = list(alphas or [])
+        if not rows:
+            return []
+        worker_count = _bounded_concurrency(concurrency)
+        results: list[dict[str, Any] | None] = [None] * len(rows)
+        with ThreadPoolExecutor(max_workers=worker_count) as executor:
+            futures = {
+                executor.submit(self._simulate_one_alpha_payload, index, row, return_exceptions=return_exceptions): index
+                for index, row in enumerate(rows)
+            }
+            for future in as_completed(futures):
+                index = futures[future]
+                try:
+                    results[index] = future.result()
+                except Exception as exc:  # pragma: no cover - defensive; worker already wraps expected failures
+                    results[index] = exc if return_exceptions else {
+                        "ok": False,
+                        "index": index,
+                        "status": "ERROR",
+                        "error": str(_scrub(str(exc))),
+                    }
+        return [row or {"ok": False, "index": index, "status": "ERROR", "error": "missing result"} for index, row in enumerate(results)]
+
+    def concurrent_check(
+        self,
+        alpha_ids: Iterable[str],
+        concurrency: int = _MAX_DEFAULT_CONCURRENT_OFFICIAL_JOBS,
+        *,
+        return_exceptions: bool = False,
+    ) -> list[dict[str, Any] | BaseException]:
+        ids = [str(alpha_id or "").strip() for alpha_id in (alpha_ids or [])]
+        if not ids:
+            return []
+        worker_count = _bounded_concurrency(concurrency)
+        results: list[dict[str, Any] | None] = [None] * len(ids)
+        with ThreadPoolExecutor(max_workers=worker_count) as executor:
+            futures = {
+                executor.submit(self._check_one_alpha_id, index, alpha_id, return_exceptions=return_exceptions): index
+                for index, alpha_id in enumerate(ids)
+            }
+            for future in as_completed(futures):
+                index = futures[future]
+                try:
+                    results[index] = future.result()
+                except Exception as exc:  # pragma: no cover - defensive; worker already wraps expected failures
+                    results[index] = exc if return_exceptions else {
+                        "ok": False,
+                        "index": index,
+                        "alpha_id": ids[index],
+                        "status": "ERROR",
+                        "complete": False,
+                        "error": str(_scrub(str(exc))),
+                    }
+        return [row or {"ok": False, "index": index, "alpha_id": ids[index], "status": "ERROR", "complete": False, "error": "missing result"} for index, row in enumerate(results)]
+
+    def _simulate_one_alpha_payload(
+        self,
+        index: int,
+        row: dict[str, Any] | tuple[str, dict[str, Any]],
+        *,
+        return_exceptions: bool = False,
+    ) -> dict[str, Any]:
+        try:
+            expression, settings = _simulation_input(row)
+            simulation_id = self.submit_simulation(expression, settings)
+            status = self.poll_until_complete(simulation_id)
+            result = self.fetch_result(simulation_id) if status == "COMPLETED" else {}
+            return {
+                "ok": status == "COMPLETED",
+                "index": index,
+                "status": status,
+                "simulation_id": simulation_id,
+                "expression": expression,
+                "result": result,
+            }
+        except Exception as exc:
+            if return_exceptions:
+                raise
+            return {
+                "ok": False,
+                "index": index,
+                "status": "ERROR",
+                "error": str(_scrub(str(exc))),
+            }
+
+    def _check_one_alpha_id(self, index: int, alpha_id: str, *, return_exceptions: bool = False) -> dict[str, Any]:
+        try:
+            check = self.check_alpha(alpha_id)
+            return {
+                "ok": check.get("status") == "PASSED" and check.get("complete") is True,
+                "index": index,
+                "alpha_id": alpha_id,
+                **check,
+            }
+        except Exception as exc:
+            if return_exceptions:
+                raise
+            return {
+                "ok": False,
+                "index": index,
+                "alpha_id": alpha_id,
+                "status": "ERROR",
+                "complete": False,
+                "error": str(_scrub(str(exc))),
+            }
+
+    def submit_alpha(self, alpha_id: str, expression: str, settings: dict, *, bodyless: bool = True) -> dict:
+        # F-02 + F-03 invariant guard: prevent direct official submission outside web/__init__.py
+        # Tests opt out via env BRAIN_ALPHA_FORCE_REAL_SUBMIT=1; production web
+        # console never reaches this path because the higher-level gate returns
+        # REAL_SUBMIT_DISABLED_WEB_FLOW first.
+        from ..runtime_constants import REAL_SUBMIT_DISABLED_WEB_FLOW
+        force_real_submit = os.environ.get("BRAIN_ALPHA_FORCE_REAL_SUBMIT") == "1"
+        if REAL_SUBMIT_DISABLED_WEB_FLOW and not force_real_submit:
+            raise BrainAPIError(
+                "REAL_SUBMIT_DISABLED_WEB_FLOW: official submit_alpha() is blocked at the API layer. "
+                "Use the web console's pre-submit review + independent approval path. "
+                "Tests can bypass via env BRAIN_ALPHA_FORCE_REAL_SUBMIT=1."
+            )
+        if not alpha_id or not str(alpha_id).strip():
+            raise BrainAPIError("cannot submit alpha without a valid alpha_id")
+        if bodyless is not True:
+            raise BrainAPIError("official alpha submit requests must be bodyless; expression/settings stay in the local ledger")
+        if _looks_non_production_alpha_id(alpha_id):
+            raise BrainAPIError(f"refusing to submit non-production alpha_id through OfficialBrainAPI: {alpha_id}")
+        check = self.check_alpha(alpha_id)
+        if check["status"] != "PASSED" or check.get("complete") is not True:
+            raise BrainAPIError(f"official pre-submit check failed: {check}")
+        path = self.config.alpha_submit_path_template.format(alpha_id=alpha_id)
+        data, _headers = self._request(
+            "POST",
+            path,
+            body=None,
+        )
+        submit_check = _check_result_from_response(data)
+        if submit_check["checks"] and submit_check["status"] != "PASSED":
+            raise BrainAPIError(f"official submit response check failed: {submit_check}")
+        response_status = str(_first_value(data, ["status", "state", "result"], "") or "").upper()
+        if response_status in _CHECK_FAIL_STATES or response_status in _CHECK_PENDING_STATES:
+            raise BrainAPIError(f"official submit response not final success: {_scrub(data)}")
+        return {
+            "status": response_status or "SUBMITTED",
+            "alpha_id": alpha_id,
+            "pre_submit_check": check,
+            "submit_check": submit_check if submit_check["checks"] else {},
+            "request_body_sent": not bodyless,
+            "raw": _scrub(data),
+        }
+
+    def check_prod_correlation(self, expression: str, settings: dict | None = None) -> dict:
+        body: dict[str, object] = {"expression": expression}
+        if settings:
+            body["settings"] = settings
+        try:
+            data, _headers = self._request(
+                "POST",
+                self.config.alpha_correlations_path,
+                body=body,
+            )
+            max_corr = _first_value(
+                data,
+                ["maxCorrelation", "max_correlation", "prodCorrelation", "prod_correlation"],
+                None,
+            )
+            related = data.get("relatedAlphas") or data.get("related_alphas") or data.get("alphas")
+            return {
+                "status": "ok",
+                "max_correlation": abs(float(max_corr)) if max_corr is not None else None,
+                "related_alphas": related if isinstance(related, list) else None,
+                "warning": None,
+            }
+        except BrainAPIError as exc:
+            return {
+                "status": "error",
+                "max_correlation": None,
+                "related_alphas": None,
+                "warning": f"PROD_CORRELATION API check unavailable: {exc}",
+            }
+
+    def poll_until_complete(self, simulation_id: str) -> str:
+        for _attempt in range(self.config.poll_attempts):
+            self._throttle()
+            status, retry_after_seconds = self._poll_simulation_once(simulation_id)
+            if status in {"COMPLETED", "FAILED"}:
+                return status
+            sleep_seconds = retry_after_seconds if retry_after_seconds is not None else self.config.poll_interval_seconds
+            time.sleep(max(0.0, float(sleep_seconds)))
+        return "TIMEOUT"
+
+
+def _normalized_check(item: Any, index: int) -> dict[str, Any]:
+    if isinstance(item, dict):
+        row = dict(_scrub(item))
+    else:
+        row = {"value": _scrub(item)}
+    name = str(_first_value(row, ["name", "check", "title"], "") or f"check_{index + 1}")
+    state = str(_first_value(row, ["result", "status"], "") or "").upper()
+    if state in _CHECK_PASS_STATES:
+        classification = "passed"
+    elif state in _CHECK_FAIL_STATES:
+        classification = "failed"
+    elif state in _CHECK_PENDING_STATES:
+        classification = "pending"
+    else:
+        classification = "unknown"
+    row["name"] = name
+    if state:
+        row["result"] = state
+    row["_classification"] = classification
+    return row
+
+
+def _check_result_from_response(data: Any) -> dict[str, Any]:
+    checks = [_normalized_check(item, index) for index, item in enumerate(_check_items(data))]
+    passed = [item for item in checks if item.get("_classification") == "passed"]
+    failed = [item for item in checks if item.get("_classification") == "failed"]
+    pending = [item for item in checks if item.get("_classification") == "pending"]
+    unknown = [item for item in checks if item.get("_classification") == "unknown"]
+    status = "UNKNOWN"
+    if failed:
+        status = "FAILED"
+    elif pending:
+        status = "PENDING"
+    elif unknown or not checks:
+        status = "UNKNOWN"
+    elif passed and len(passed) == len(checks):
+        status = "PASSED"
+    complete = bool(checks) and not pending and not unknown
+    clean_checks = [_without_internal_keys(item) for item in checks]
+    return {
+        "status": status,
+        "complete": complete,
+        "checks": clean_checks,
+        "failed_checks": [_without_internal_keys(item) for item in failed],
+        "pending_checks": [_without_internal_keys(item) for item in pending],
+        "passed_checks": [_without_internal_keys(item) for item in passed],
+        "unknown_checks": [_without_internal_keys(item) for item in unknown],
+        "raw": _scrub(data),
+    }
+
+
+def _check_items(data: Any) -> list:
+    rows = list(_items(data) or [])
+    if not isinstance(data, dict):
+        return rows
+    for container_key in ("is", "inSample", "in_sample", "os", "outSample", "out_sample"):
+        container = data.get(container_key)
+        if isinstance(container, dict):
+            checks = container.get("checks")
+            if isinstance(checks, list):
+                rows.extend(checks)
+    return rows
+
+
+def _without_internal_keys(item: dict[str, Any]) -> dict[str, Any]:
+    return {key: value for key, value in item.items() if not str(key).startswith("_")}
+
+
+def _bounded_concurrency(concurrency: int) -> int:
+    try:
+        value = int(concurrency)
+    except (TypeError, ValueError):
+        value = 1
+    return max(1, min(_MAX_DEFAULT_CONCURRENT_OFFICIAL_JOBS, value))
+
+
+def _simulation_input(row: dict[str, Any] | tuple[str, dict[str, Any]]) -> tuple[str, dict[str, Any]]:
+    if isinstance(row, tuple) and len(row) == 2:
+        expression, settings = row
+        return str(expression or "").strip(), dict(settings or {})
+    if not isinstance(row, dict):
+        raise BrainAPIError("concurrent_simulate items must be dicts or (expression, settings) tuples")
+    expression = str(
+        _first_value(row, ["expression", "regular", "code"], "")
+        or _first_value(row.get("alpha") if isinstance(row.get("alpha"), dict) else {}, ["expression", "regular"], "")
+    ).strip()
+    settings = row.get("settings")
+    if not isinstance(settings, dict):
+        settings = row.get("simulation_settings") if isinstance(row.get("simulation_settings"), dict) else {}
+    if not expression:
+        raise BrainAPIError("concurrent_simulate item missing expression/regular")
+    return expression, dict(settings)

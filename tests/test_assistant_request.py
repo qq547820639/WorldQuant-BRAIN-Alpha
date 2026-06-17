@@ -1,8 +1,12 @@
 import json
+import logging
+
+import pytest
 
 from brain_alpha_ops.config import RunConfig
 from brain_alpha_ops.models import Candidate
 from brain_alpha_ops.research.assistant import (
+    AssistantResponseParseError,
     assistant_response_to_generation_guidance,
     build_assistant_request_pack,
     parse_assistant_response,
@@ -13,7 +17,7 @@ from brain_alpha_ops.research.repository import ResearchRepository
 
 
 def test_assistant_request_pack_wraps_context_with_schema_and_draft(tmp_path):
-    config = RunConfig(environment="mock")
+    config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path)
     ResearchRepository(str(tmp_path)).save_candidate(
         "run_1",
@@ -121,6 +125,16 @@ def test_parse_assistant_response_extracts_fenced_json():
     assert parsed["risk_flags"] == ["cloud_cache_stale"]
     assert parsed["candidate_adjustments"][0]["target"] == "operators"
     assert parsed["confidence"] == 0.82
+
+
+def test_parse_assistant_response_warns_on_invalid_json_candidate(caplog):
+    raw = "```json\n{bad json\n```"
+
+    with caplog.at_level(logging.WARNING, logger="brain_alpha_ops.research.assistant"):
+        with pytest.raises(AssistantResponseParseError, match="last JSON error"):
+            parse_assistant_response(raw)
+
+    assert "invalid fenced assistant response JSON skipped" in caplog.text
 
 
 def test_assistant_response_to_generation_guidance_maps_adjustments_and_flags():

@@ -1,6 +1,7 @@
 """Backtest slot state management for official simulation polling."""
 
 from __future__ import annotations
+import threading
 
 from dataclasses import dataclass, field
 from typing import Callable, Iterable
@@ -25,6 +26,9 @@ class BacktestSlotManager:
     slots: dict[int, Candidate] = field(default_factory=dict)
     recovered_slot_count: int = 0
 
+    def __post_init__(self) -> None:
+        self._lock = threading.Lock()
+
     def active_count(self) -> int:
         return len(self.slots)
 
@@ -36,13 +40,16 @@ class BacktestSlotManager:
         slot_number = int(slot or 0)
         if slot_number <= 0:
             raise ValueError("backtest slot must be a positive integer")
-        self.slots[slot_number] = candidate
+        with self._lock:
+            self.slots[slot_number] = candidate
 
     def release(self, slot: int) -> Candidate | None:
-        return self.slots.pop(int(slot or 0), None)
+        with self._lock:
+            return self.slots.pop(int(slot or 0), None)
 
     def get(self, slot: int) -> Candidate | None:
-        return self.slots.get(int(slot or 0))
+        with self._lock:
+            return self.slots.get(int(slot or 0))
 
     def values(self) -> list[Candidate]:
         return list(self.slots.values())
@@ -78,7 +85,8 @@ class BacktestSlotManager:
             slot = int(candidate.submission.get("backtest_slot", 0) or 0)
             if slot <= 0 or slot > limit or slot in self.slots:
                 continue
-            self.slots[slot] = candidate
+            with self._lock:
+                self.slots[slot] = candidate
             added.append((slot, candidate))
         return added
 

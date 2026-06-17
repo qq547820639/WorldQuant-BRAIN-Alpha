@@ -183,17 +183,6 @@ def build_default_tool_registry() -> ToolRegistry:
     )
     registry.register(
         ToolDefinition(
-            "submit_alpha",
-            "Submit an official alpha after pre-submit check and explicit confirmation.",
-            _schema({"alpha_id": "string", "expression": "string", "confirm_live_api": "boolean", "confirm_submit": "boolean"}),
-            live_api=True,
-            destructive=True,
-            category="submission",
-            chain_stage="submit",
-        )
-    )
-    registry.register(
-        ToolDefinition(
             "sync_cloud_alphas",
             "Sync user cloud alphas into the local research repository.",
             _schema({"sync_range": "string", "limit": "integer", "confirm_live_api": "boolean"}),
@@ -397,7 +386,7 @@ def build_default_tool_registry() -> ToolRegistry:
     registry.register_alias(
         "run_backtest",
         "run_simulation",
-        description="QuantGPT-style alias for the configured BRAIN simulation/backtest workflow; requires live API confirmation outside mock mode.",
+        description="QuantGPT-style alias for the configured BRAIN simulation/backtest workflow; requires live API confirmation.",
         category="backtest",
         chain_stage="deep_validate",
     )

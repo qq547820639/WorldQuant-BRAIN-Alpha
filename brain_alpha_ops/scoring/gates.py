@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import logging
 from typing import Any, Callable
 
 from brain_alpha_ops.config import QualityThresholds
 from brain_alpha_ops.research.scoring import empirical_score
+
+logger = logging.getLogger(__name__)
 
 
 OFFICIAL_HARD_GATE_NAMES: set[str] = {
@@ -21,33 +24,37 @@ OFFICIAL_HARD_GATE_NAMES: set[str] = {
 }
 
 
-@dataclass
+@dataclass(frozen=True)
 class GateResult:
     """Pass/Fail gate result with full traceability."""
 
     gate_name: str
     passed: bool
-    check_items: list[dict[str, Any]] = field(default_factory=list)
+    check_items: list[dict[str, Any]] = field(default_factory=list)  # N-05: mutable in frozen; to_dict() converts to list
     failed_items: list[str] = field(default_factory=list)
     threshold_source: str = "BRAIN_Official"
     notes: list[str] = field(default_factory=list)
+    zero_deviation: bool = True
 
     def to_dict(self) -> dict:
+        """S-01: Convert tuple fields back to lists for backward compatibility."""
+
         return {
             "gate_name": self.gate_name,
             "passed": self.passed,
-            "check_items": self.check_items,
-            "failed_items": self.failed_items,
+            "check_items": list(self.check_items),
+            "failed_items": list(self.failed_items),
             "threshold_source": self.threshold_source,
-            "notes": self.notes,
+            "notes": list(self.notes),
+            "zero_deviation": self.zero_deviation,
         }
 
 
 class GateConfig:
     """Configurable Pass/Fail gate constrained to BRAIN official hard checks."""
 
-    def __init__(self, thresholds: QualityThresholds):
-        self.thresholds = thresholds
+    def __init__(self, thresholds: QualityThresholds | None = None):
+        self.thresholds = thresholds or QualityThresholds()
         self._gates: list[dict[str, Any]] = []
 
     @classmethod
@@ -79,6 +86,10 @@ class GateConfig:
         })
         return self
 
+    @property
+    def hard_gates(self) -> list[dict[str, Any]]:
+        return [gate for gate in self._gates if gate.get("type") == "HARD"]
+
     def evaluate(self, metrics: dict) -> GateResult:
         passed_all = True
         items: list[dict[str, Any]] = []
@@ -97,6 +108,7 @@ class GateConfig:
             check_items=items,
             failed_items=failed,
             threshold_source="BRAIN_Official",
+            zero_deviation=all(bool(item.get("zero_deviation", True)) for item in items),
         )
 
 
@@ -120,8 +132,9 @@ def _evaluate_gate(
 ) -> tuple[bool, dict[str, Any], str]:
     error = ""
     try:
-        configured_passed = bool(gate["check"](metrics, thresholds))
+        configured_passed = _call_gate_check(gate["check"], metrics, thresholds)
     except Exception as exc:
+        logger.warning("configured gate check failed: gate=%s", gate.get("name", ""), exc_info=True)
         configured_passed = False
         error = str(exc)
     official_row = official_rows.get(gate["name"]) if gate["type"] == "HARD" else None
@@ -147,6 +160,19 @@ def _evaluate_gate(
     if error:
         payload["error"] = error
     return passed, payload, _failure_reason(gate["name"], zero_deviation, error)
+
+
+def _call_gate_check(check_fn: Callable, metrics: dict, thresholds: QualityThresholds) -> bool:
+    """Try check_fn(metrics, thresholds), fall back to check_fn(metrics) if signature mismatch."""
+    try:
+        return bool(check_fn(metrics, thresholds))
+    except TypeError as exc:
+        # S-02: Only retry if the error is signature-related ("takes"/"positional"),
+        # not if check_fn itself has a bug. Any error in the second call propagates.
+        msg = str(exc).lower()
+        if "takes" in msg or "positional" in msg:
+            return bool(check_fn(metrics))
+        raise
 
 
 def _failure_reason(name: str, zero_deviation: bool, error: str) -> str:

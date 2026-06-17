@@ -1,14 +1,9 @@
-"""Web API endpoints for redline verification and scoring attribution.
-
-Exposes:
-  GET  /api/redline/report        -> ComplianceReport JSON
-  POST /api/scoring/evaluate      -> ScoringResult JSON
-  GET  /api/scoring/health        -> ScoreHistoryDB convergence stats
-"""
+"""Red-line scoring web integration."""
 
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 from typing import Any
 
@@ -16,10 +11,13 @@ from brain_alpha_ops.compliance.redline_verifier import RedLineVerifier
 from brain_alpha_ops.config import load_run_config
 from brain_alpha_ops.jsonl import read_jsonl_tail
 from brain_alpha_ops.models import Candidate
+from brain_alpha_ops.redaction import redact_error_message, redact_text
+from brain_alpha_ops.scoring.history import ScoreHistoryDB
 from brain_alpha_ops.scoring.official_scoring import (
     OfficialScoringSystem,
-    ScoreHistoryDB,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def _get_storage_dir() -> str:
@@ -46,13 +44,25 @@ def handle_scoring_evaluate(body: dict[str, Any]) -> dict[str, Any]:
     result = system.evaluate(candidate)
 
     # Persist to score history
+    score_history_status = "persisted"
+    score_history_error = ""
     try:
         db = ScoreHistoryDB(config.ops.storage_dir)
         db.append(result)
-    except Exception:
-        pass
+    except Exception as exc:
+        score_history_status = "failed"
+        score_history_error = redact_error_message(exc)
+        logger.warning(
+            "score history append failed for alpha_id=%s: %s",
+            redact_text(result.alpha_id, max_length=64),
+            score_history_error,
+        )
 
-    return result.to_dict()
+    payload = result.to_dict()
+    payload["score_history_status"] = score_history_status
+    if score_history_error:
+        payload["score_history_error"] = score_history_error
+    return payload
 
 
 def handle_scoring_health(query: dict[str, Any]) -> dict[str, Any]:
@@ -240,11 +250,13 @@ def _auto_calibration_status(storage_dir: str, *, trigger: bool = False) -> dict
             status["triggered"] = False
         return status
     except Exception as exc:
+        from brain_alpha_ops.redaction import redact_error_message
+        logger.warning("scoring auto-calibration status unavailable", exc_info=True)
         return {
             "available": False,
             "trigger_requested": bool(trigger),
             "triggered": False,
-            "error": str(exc),
+            "error": redact_error_message(exc),
         }
 
 
@@ -273,4 +285,6 @@ def handle_checkpoint_status(query: dict[str, Any]) -> dict[str, Any]:
             "resume_available": latest is not None,
         }
     except Exception as exc:
-        return {"ok": False, "error": str(exc), "resume_available": False}
+        from brain_alpha_ops.redaction import redact_error_message
+        logger.warning("checkpoint status unavailable", exc_info=True)
+        return {"ok": False, "error": redact_error_message(exc), "resume_available": False}

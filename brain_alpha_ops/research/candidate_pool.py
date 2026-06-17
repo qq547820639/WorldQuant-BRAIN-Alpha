@@ -7,6 +7,7 @@ from typing import Callable, Iterable
 
 from brain_alpha_ops.models import Candidate
 
+from .fallback_generation import high_turnover_generation_risk_reasons
 from .pipeline_helpers import blocked_gate, expr_key, is_hard_backtest_blocked, ranking_score
 
 
@@ -34,6 +35,38 @@ def pending_simulation_targets(pool: list[Candidate]) -> list[Candidate]:
         for candidate in pool
         if is_active_backtest_candidate(candidate)
     ]
+
+
+def candidate_official_work_blockers(candidate: Candidate) -> list[str]:
+    """Return local reasons that block any official validation or simulation work."""
+
+    blockers: list[str] = []
+    for reason in high_turnover_generation_risk_reasons(candidate.expression):
+        blockers.append(f"high_turnover_generation_risk:{reason}")
+
+    local_quality = candidate.local_quality if isinstance(candidate.local_quality, dict) else {}
+    if local_quality.get("passed") is False:
+        blockers.append("local_quality_failed")
+
+    for container in (local_quality, candidate.submission, candidate.extra_fields):
+        if not isinstance(container, dict):
+            continue
+        local_backtest = container.get("local_backtest")
+        if isinstance(local_backtest, dict) and local_backtest.get("pass_local") is False:
+            blockers.append("local_backtest_failed")
+
+    status = f"{candidate.lifecycle_status} {candidate.gate.get('status', '')}"
+    if str(candidate.gate.get("status") or "").upper() == "OFFICIAL_CONTEXT_WARNING":
+        warnings = candidate.gate.get("warnings") if isinstance(candidate.gate, dict) else []
+        for warning in warnings if isinstance(warnings, list) else []:
+            if str(warning).strip():
+                blockers.append(f"official_context_warning:{warning}")
+        if not blockers:
+            blockers.append("official_context_warning")
+    if is_hard_backtest_blocked(status):
+        blockers.append("hard_backtest_blocked_status")
+
+    return sorted(set(blockers))
 
 
 @dataclass
@@ -118,13 +151,17 @@ class CandidatePoolService:
         return pruned
 
     def validation_targets(self, pool: list[Candidate]) -> list[Candidate]:
-        threshold = self.min_prior_score_for_official_validation
+        threshold = max(
+            self.min_prior_score_for_official_validation,
+            self.min_prior_score_for_official_simulation,
+        )
         return [
             candidate
             for candidate in pool
             if not candidate.validation
             and not candidate.official_metrics
             and candidate.scorecard.get("total_score", 0.0) >= threshold
+            and not candidate_official_work_blockers(candidate)
         ]
 
     def backtest_targets(self, pool: list[Candidate], *, batch_size: int) -> list[Candidate]:
@@ -151,6 +188,7 @@ class CandidatePoolService:
             and not candidate.official_metrics
             and candidate.scorecard.get("total_score", 0.0) >= threshold
             and not is_hard_backtest_blocked(status)
+            and not candidate_official_work_blockers(candidate)
         )
 
     def candidate_pool_candidates(
@@ -167,6 +205,8 @@ class CandidatePoolService:
             if is_active_backtest_candidate(candidate) or self.is_pending_backtest_candidate(candidate):
                 continue
             if is_hard_backtest_blocked(status):
+                continue
+            if candidate_official_work_blockers(candidate):
                 continue
             available.append(candidate)
         return self.smart_ranker(available)

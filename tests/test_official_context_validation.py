@@ -1,7 +1,10 @@
 from datetime import datetime, timedelta, timezone
 import json
+import logging
+from pathlib import Path
 
 from brain_alpha_ops.data.official_context_validation import validate_official_context
+import brain_alpha_ops.data.official_context_validation as official_context_validation
 from brain_alpha_ops.web_cloud_snapshot import save_official_context_json
 
 
@@ -83,3 +86,28 @@ def test_official_context_validation_blocks_dataset_field_count_drift(tmp_path):
 
     assert result["blocking_ok"] is False
     assert any(item["code"] == "dataset_field_count_mismatch" for item in result["findings"])
+
+
+def test_official_context_validation_warns_when_config_resolution_falls_back(monkeypatch, caplog):
+    monkeypatch.setattr(
+        official_context_validation,
+        "load_run_config",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("config unavailable")),
+    )
+
+    with caplog.at_level(logging.WARNING):
+        result = validate_official_context(config_path="missing-config.json")
+
+    assert result["data_dir"].replace("\\", "/").endswith("/data")
+    assert "failed to resolve official context data dir from config" in caplog.text
+
+
+def test_repository_official_context_snapshot_is_not_truncated():
+    data_dir = Path(__file__).resolve().parents[1] / "data"
+    fields = json.loads((data_dir / "official_fields.json").read_text(encoding="utf-8"))
+    datasets = json.loads((data_dir / "official_datasets.json").read_text(encoding="utf-8"))
+
+    dataset_field_count_sum = sum(int(row.get("field_count") or 0) for row in datasets)
+
+    assert len(fields) > 1000
+    assert len(fields) == dataset_field_count_sum

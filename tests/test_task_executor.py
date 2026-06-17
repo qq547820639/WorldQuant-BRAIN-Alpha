@@ -31,6 +31,13 @@ def test_thread_task_executor_records_success(tmp_path):
     assert store.get(result.job_id)["progress"]["phase"] == "completed"
 
 
+def test_executor_modules_share_job_execution_result_type():
+    from brain_alpha_ops.adaptive_executor import JobExecutionResult as AdaptiveJobExecutionResult
+    from brain_alpha_ops.task_executor import JobExecutionResult as TaskJobExecutionResult
+
+    assert TaskJobExecutionResult is AdaptiveJobExecutionResult
+
+
 def test_thread_task_executor_records_failure(tmp_path):
     store = JobStore(tmp_path / "jobs.json")
     executor = ThreadTaskExecutor(max_workers=1)

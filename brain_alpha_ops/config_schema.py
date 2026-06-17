@@ -4,9 +4,11 @@ Provides a declarative schema that validates every field of the RunConfig
 structure before the pipeline or web console can start.  This layer
 complements the procedural validators in config.py.
 
-Schema version: config-schema.v1
-"""
+All enum values are sourced from brain_alpha_ops.brain_api.canonical to
+ensure zero-deviation alignment with the BRAIN platform specification.
 
+Schema version: config-schema.v2
+"""
 from __future__ import annotations
 
 import json
@@ -14,19 +16,39 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from brain_alpha_ops.brain_api.canonical import (
+    SUPPORTED_ALPHA_TYPES,
+    SUPPORTED_DELAYS,
+    SUPPORTED_INSTRUMENT_TYPES,
+    SUPPORTED_LANGUAGES,
+    SUPPORTED_NAN_HANDLING,
+    SUPPORTED_NEUTRALIZATIONS,
+    SUPPORTED_PASTEURIZATION,
+    SUPPORTED_REGIONS,
+    SUPPORTED_UNIT_HANDLING,
+    SUPPORTED_UNIVERSES,
+)
+
 try:
     import jsonschema
 except ImportError:
     jsonschema = None  # type: ignore[assignment]
 
+# ── Canonical enum lists for jsonschema (sorted for deterministic validation) ──
+_C_REGIONS = sorted(SUPPORTED_REGIONS)               # ["CHN", "EUR", "GLB", "USA"]
+_C_UNIVERSES = sorted(SUPPORTED_UNIVERSES)           # ["TOP1000", "TOP3000", "TOP500"]
+_C_DELAYS = sorted(SUPPORTED_DELAYS)                 # [0, 1]
+_C_NEUT = sorted(SUPPORTED_NEUTRALIZATIONS)          # ["INDUSTRY", "MARKET", "NONE", "SECTOR", "SUBINDUSTRY"]
+_C_UNIT = sorted(SUPPORTED_UNIT_HANDLING)            # ["NONE", "RAW", "VERIFY"]
+_C_ALPHA_TYPES = sorted(SUPPORTED_ALPHA_TYPES)       # ["ATOM", "POWER_POOL", "PYRAMID", "REGULAR"]
 
 RUN_CONFIG_SCHEMA: dict[str, Any] = {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "$id": "run-config-schema.v1",
+    "$id": "run-config-schema.v2",
     "type": "object",
     "required": ["environment", "auto_submit", "credentials", "web", "ops"],
     "properties": {
-        "environment": {"type": "string", "enum": ["mock", "production"]},
+        "environment": {"type": "string", "enum": ["production"]},
         "auto_submit": {"type": "boolean"},
         "credentials": {
             "type": "object",
@@ -67,29 +89,32 @@ RUN_CONFIG_SCHEMA: dict[str, Any] = {
                     "required": ["instrumentType", "region", "universe", "delay",
                                  "neutralization", "language"],
                     "properties": {
-                        "instrumentType": {"type": "string", "enum": ["EQUITY"]},
-                        "region": {"type": "string",
-                                   "enum": ["USA", "EUR", "ASI", "GLOBAL", "CHN",
-                                            "JPN", "TWN", "HKG"]},
-                        "universe": {"type": "string",
-                                     "enum": ["TOP500", "TOP1000", "TOP2000",
-                                              "TOP3000", "TOP5000"]},
+                        "instrumentType": {
+                            "type": "string",
+                            "enum": sorted(SUPPORTED_INSTRUMENT_TYPES),
+                        },
+                        "region": {"type": "string", "enum": _C_REGIONS},
+                        "universe": {"type": "string", "enum": _C_UNIVERSES},
                         "dataset": {"type": "string"},
-                        "delay": {"type": "integer", "enum": [0, 1, 2]},
+                        "delay": {"type": "integer", "enum": _C_DELAYS},
                         "decay": {"type": "integer", "minimum": 0},
-                        "neutralization": {"type": "string",
-                                           "enum": ["NONE", "MARKET", "SECTOR",
-                                                    "SUBINDUSTRY", "INDUSTRY"]},
+                        "neutralization": {"type": "string", "enum": _C_NEUT},
                         "truncation": {"type": "number", "minimum": 0.0, "maximum": 1.0},
-                        "pasteurization": {"type": "string", "enum": ["ON", "OFF"]},
-                        "unitHandling": {"type": "string",
-                                         "enum": ["VERIFY", "SCALE"]},
-                        "nanHandling": {"type": "string", "enum": ["ON", "OFF"]},
-                        "language": {"type": "string",
-                                     "enum": ["FASTEXPR"]},
+                        "pasteurization": {
+                            "type": "string",
+                            "enum": sorted(SUPPORTED_PASTEURIZATION),
+                        },
+                        "unitHandling": {"type": "string", "enum": _C_UNIT},
+                        "nanHandling": {
+                            "type": "string",
+                            "enum": sorted(SUPPORTED_NAN_HANDLING),
+                        },
+                        "language": {
+                            "type": "string",
+                            "enum": sorted(SUPPORTED_LANGUAGES),
+                        },
                         "visualization": {"type": "boolean"},
-                        "type": {"type": "string",
-                                 "enum": ["REGULAR", "SUPER", "FRONTIER"]},
+                        "type": {"type": "string", "enum": _C_ALPHA_TYPES},
                     },
                     "additionalProperties": False,
                 },
@@ -97,6 +122,7 @@ RUN_CONFIG_SCHEMA: dict[str, Any] = {
                     "type": "object",
                     "properties": {
                         "max_candidates_per_cycle": {"type": "integer", "minimum": 1},
+                        "max_generation_attempts": {"type": "integer", "minimum": 1},
                         "max_official_validations_per_cycle": {"type": "integer", "minimum": 0},
                         "max_official_simulations_per_cycle": {"type": "integer", "minimum": 0},
                         "max_official_concurrent_simulations": {"type": "integer", "minimum": 1},
@@ -113,6 +139,7 @@ RUN_CONFIG_SCHEMA: dict[str, Any] = {
                                              "enum": ["all", "rotate", "random",
                                                       "specific", "fixed", "locked"]},
                         "require_cloud_sync": {"type": "boolean"},
+                        "cloud_sync_max_elapsed_seconds": {"type": "number", "minimum": 0.0},
                         "use_assistant_guidance": {"type": "boolean"},
                         "assistant_guidance_min_confidence": {
                             "type": "number", "minimum": 0.0, "maximum": 1.0,
@@ -168,6 +195,10 @@ RUN_CONFIG_SCHEMA: dict[str, Any] = {
                     "properties": {
                         "base_url": {"type": "string", "format": "uri",
                                      "minLength": 1},
+                        "data_fields_dataset_query_key": {
+                            "type": "string",
+                            "enum": ["dataset", "dataset.id"],
+                        },
                         "timeout_seconds": {"type": "integer", "minimum": 1},
                         "poll_attempts": {"type": "integer", "minimum": 1},
                         "poll_interval_seconds": {"type": "number", "minimum": 0.1},
@@ -187,7 +218,6 @@ RUN_CONFIG_SCHEMA: dict[str, Any] = {
     "additionalProperties": True,
 }
 
-
 def validate_config_with_jsonschema(
     config_data: dict[str, Any],
     *,
@@ -196,8 +226,8 @@ def validate_config_with_jsonschema(
     """Validate a raw config dict against the RUN_CONFIG_SCHEMA.
 
     Returns a list of validation error messages.  Empty list = valid.
-    When jsonschema is not installed, returns an empty list with a
-    warning printed to stderr.
+    When jsonschema is not installed, a dependency-free fallback validates the
+    critical required, enum, type, and numeric-bound checks.
 
     Args:
         config_data: JSON-parsed config dictionary.
@@ -206,18 +236,22 @@ def validate_config_with_jsonschema(
     Returns:
         List of error message strings (empty = valid).
     """
+    if not isinstance(config_data, dict):
+        return _validate_config_without_jsonschema(config_data, schema or RUN_CONFIG_SCHEMA)
+
     if jsonschema is None:
         print(
-            "jsonschema: jsonschema not installed; skipping structural validation. "
-            "Install with: pip install jsonschema>=4.20",
+            "jsonschema: jsonschema not installed; using built-in limited validation. "
+            "Install with: pip install jsonschema>=4.20 for full structural validation.",
             file=sys.stderr,
         )
-        return []
+        return _validate_config_without_jsonschema(config_data, schema or RUN_CONFIG_SCHEMA)
 
     effective_schema = schema or RUN_CONFIG_SCHEMA
+    validation_schema = _partial_schema(effective_schema) if schema is None and config_data else effective_schema
     errors: list[str] = []
     try:
-        validator = jsonschema.Draft202012Validator(effective_schema)
+        validator = jsonschema.Draft202012Validator(validation_schema)
         for error in sorted(validator.iter_errors(config_data), key=lambda e: e.path):
             path = ".".join(str(p) for p in error.path) if error.path else "(root)"
             errors.append(f"{path}: {error.message}")
@@ -225,6 +259,93 @@ def validate_config_with_jsonschema(
         errors.append(f"schema error: {exc}")
     return errors
 
+def _validate_config_without_jsonschema(
+    config_data: dict[str, Any],
+    schema: dict[str, Any],
+) -> list[str]:
+    """Small dependency-free fallback for the schema subset used in tests.
+
+    The production path prefers ``jsonschema``.  This fallback keeps critical
+    type/enum/range checks active in minimal runtime environments.
+
+    ``run_config.json`` is allowed to be a partial override file because
+    ``load_run_config`` merges it into ``RunConfig()`` defaults before the
+    procedural validator runs.  The fallback therefore treats the default run
+    config schema as partial-friendly: an entirely empty object is still
+    reported as missing required roots, while non-empty partial documents only
+    validate fields that are explicitly present.
+    """
+    errors: list[str] = []
+    enforce_required = schema is not RUN_CONFIG_SCHEMA or not config_data
+
+    def path_label(path: tuple[str, ...]) -> str:
+        return ".".join(path) if path else "(root)"
+
+    def validate_node(value: Any, node_schema: dict[str, Any], path: tuple[str, ...]) -> None:
+        expected_type = node_schema.get("type")
+        if expected_type == "object":
+            if not isinstance(value, dict):
+                errors.append(f"{path_label(path)}: {value!r} is not an object")
+                return
+            if enforce_required:
+                for key in node_schema.get("required", []):
+                    if key not in value:
+                        errors.append(f"{path_label(path)}: missing required property '{key}'")
+            for key, child_schema in node_schema.get("properties", {}).items():
+                if key in value and isinstance(child_schema, dict):
+                    validate_node(value[key], child_schema, (*path, str(key)))
+            return
+
+        if expected_type == "string":
+            if not isinstance(value, str):
+                errors.append(f"{path_label(path)}: {value!r} is not a string")
+                return
+            min_length = node_schema.get("minLength")
+            if isinstance(min_length, int) and len(value) < min_length:
+                errors.append(
+                    f"{path_label(path)}: {value!r} is shorter than the minimum length of {min_length}"
+                )
+        elif expected_type == "boolean":
+            if not isinstance(value, bool):
+                errors.append(f"{path_label(path)}: {value!r} is not a boolean")
+                return
+        elif expected_type == "integer":
+            if isinstance(value, bool) or not isinstance(value, int):
+                errors.append(f"{path_label(path)}: {value!r} is not an integer")
+                return
+        elif expected_type == "number":
+            if isinstance(value, bool) or not isinstance(value, (int, float)):
+                errors.append(f"{path_label(path)}: {value!r} is not a number")
+                return
+
+        allowed_values = node_schema.get("enum")
+        if allowed_values is not None and value not in allowed_values:
+            errors.append(f"{path_label(path)}: {value!r} is not one of {allowed_values!r}")
+
+        if expected_type in {"integer", "number"}:
+            numeric = float(value)
+            minimum = node_schema.get("minimum")
+            maximum = node_schema.get("maximum")
+            if minimum is not None and numeric < float(minimum):
+                errors.append(f"{path_label(path)}: {value!r} is less than the minimum of {minimum}")
+            if maximum is not None and numeric > float(maximum):
+                errors.append(f"{path_label(path)}: {value!r} is greater than the maximum of {maximum}")
+
+    validate_node(config_data, schema, ())
+
+    return errors
+
+def _partial_schema(schema: dict[str, Any]) -> dict[str, Any]:
+    """Return a copy of ``schema`` that validates explicit override fields only."""
+    cloned = dict(schema)
+    cloned.pop("required", None)
+    properties = cloned.get("properties")
+    if isinstance(properties, dict):
+        cloned["properties"] = {
+            key: _partial_schema(value) if isinstance(value, dict) else value
+            for key, value in properties.items()
+        }
+    return cloned
 
 def validate_config_file(path: str | Path) -> tuple[bool, list[str]]:
     """Convenience: load a config file and validate with jsonschema.

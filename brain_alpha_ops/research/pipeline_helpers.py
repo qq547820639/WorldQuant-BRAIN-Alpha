@@ -8,6 +8,7 @@ from typing import Any
 from brain_alpha_ops.models import Candidate
 
 from .expression_ast import expression_key
+from .guidance import assistant_guidance_candidate_metadata, ensure_assistant_guidance_digest
 
 
 def rank_candidates(candidates: list[Candidate]) -> list[Candidate]:
@@ -203,6 +204,20 @@ def blocked_gate(status: str, reasons: list[str]) -> dict:
         "failed_reasons": list(reasons),
         "warnings": [],
     }
+
+
+def attach_assistant_guidance(candidate: Candidate, guidance: dict) -> None:
+    guidance = ensure_assistant_guidance_digest(guidance)
+    digest = str(guidance.get("guidance_digest") or "")
+    metadata = assistant_guidance_candidate_metadata(guidance)
+    candidate.submission.update(metadata)
+    candidate.submission.setdefault("assistant_guidance", {}).update(metadata)
+    candidate.extra_fields["assistant_guidance_digest"] = candidate.extra_fields.get("assistant_guidance_digest") or digest
+    tags = list(candidate.source_tags or [])
+    for tag in ("assistant_guided", f"assistant_guidance_{digest}" if digest else ""):
+        if tag and tag not in tags:
+            tags.append(tag)
+    candidate.source_tags = tags
 
 
 def slot_progress_percent(status: str) -> int:

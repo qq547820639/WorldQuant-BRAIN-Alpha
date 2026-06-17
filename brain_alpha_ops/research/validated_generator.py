@@ -3,9 +3,12 @@
 Replaces random field/operator assembly with signature-validated templates.
 Target: reduce BRAIN rejection rate from ~39% to ~10%.
 """
+from __future__ import annotations
+
 import re
 import random
-from typing import Any, Dict, List, Optional, Set, Tuple
+import threading
+from typing import Any
 
 from brain_alpha_ops.research.expression_ast import canonical_tokens, expression_similarity, profile_expression
 
@@ -14,7 +17,8 @@ from brain_alpha_ops.research.expression_ast import canonical_tokens, expression
 # P0: Operator signatures — authoritative from BRAIN official docs
 # ═══════════════════════════════════════════════════════════════════
 
-OPERATOR_SIGNATURES: Dict[str, Dict[str, Any]] = {
+# TODO R3 S-15: missing winsorize, truncate, group_rank etc; add or warn on unknown
+OPERATOR_SIGNATURES: dict[str, dict[str, Any]] = {
     # Cross-sectional
     "rank":    {"params": ["x"],   "category": "cross_sectional"},
     "zscore":  {"params": ["x"],   "category": "cross_sectional"},
@@ -40,7 +44,7 @@ OPERATOR_SIGNATURES: Dict[str, Dict[str, Any]] = {
 }
 
 # Window constraints per operator
-WINDOW_CONSTRAINTS: Dict[str, Dict[str, int]] = {
+WINDOW_CONSTRAINTS: dict[str, dict[str, int]] = {
     "ts_mean":         {"min": 2,  "max": 252},
     "ts_std_dev":          {"min": 5,  "max": 252},
     "ts_sum":          {"min": 2,  "max": 252},
@@ -54,26 +58,9 @@ WINDOW_CONSTRAINTS: Dict[str, Dict[str, int]] = {
 }
 
 # ═══════════════════════════════════════════════════════════════════
-# P0: Field whitelist — verified BRAIN fields from official_fields.json
+# P0: Field whitelist — loaded from official_fields.json
 # ═══════════════════════════════════════════════════════════════════
-# All fields verified against data/official_fields.json (7,642 total).
-# Every field name exists in BRAIN API — zero custom/fictional fields.
-
-SAFE_FIELDS: Set[str] = {
-    # ── Price & Volume (pv1, coverage 1.0) ──
-    "close", "open", "high", "low",
-    "volume", "returns",
-    "vwap", "adv20",
-    # ── Fundamental (fundamental6, coverage ≥ 0.5) ──
-    "assets", "revenue", "eps", "operating_income",
-    "enterprise_value",
-    # ── Analyst Estimates (analyst4, MATRIX type only) ──
-    "anl4_ebit_value", "anl4_ebitda_value",
-    # ── Cash Flow (analyst4) ──
-    "anl4_cfo_value", "anl4_cfi_value", "anl4_fcf_value",
-    # ── Revisions (analyst4) ──
-    "anl4_epsr_value", "anl4_epsr_mean",
-}
+SAFE_FIELDS: set[str] = set()
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -82,7 +69,7 @@ SAFE_FIELDS: Set[str] = {
 
 # Round 5: expanded from 10 to 55 templates with logical pairings + stratified windows + deep nesting
 
-TEMPLATES: Dict[str, List[Tuple[str, List[str]]]] = {
+TEMPLATES: dict[str, list[tuple[str, list[str]]]] = {
     "momentum": [
         ("rank(ts_delta({f1}, {d1}))",                                    ["f1", "d1"]),
         ("rank(ts_delta({f1}, {d1}) / ts_std_dev({f2}, {d2}))",           ["f1", "d1", "f2", "d2"]),
@@ -170,25 +157,25 @@ TEMPLATES: Dict[str, List[Tuple[str, List[str]]]] = {
         ("-rank(zscore({f1}) + zscore({f2}))",                               ["f1", "f2"]),
     ],
     "cross_sectional": [
-        ("group_rank(ts_delta({f1}, {d1}), sector)",                        ["f1", "d1"]),
-        ("group_neutralize(zscore({f1}), sector)",                          ["f1"]),
-        ("group_rank({f1}, subindustry)",                                    ["f1"]),
-        ("rank(zscore({f1}) - group_neutralize(zscore({f1}), sector))",    ["f1"]),
+        ("group_rank(ts_delta({f1}, {d1}), {f2})",                          ["f1", "d1", "f2"]),
+        ("group_neutralize(zscore({f1}), {f2})",                            ["f1", "f2"]),
+        ("group_rank({f1}, {f2})",                                          ["f1", "f2"]),
+        ("rank(zscore({f1}) - group_neutralize(zscore({f1}), {f2}))",      ["f1", "f2"]),
     ],
 }
 
-# Expanded field pools with logical groupings — verified BRAIN field IDs
-FIELD_POOLS: Dict[str, List[str]] = {
-    "price":       ["close", "open", "vwap", "high", "low"],
-    "volume":      ["volume", "adv20"],
-    "returns":     ["returns"],
-    "value":       ["enterprise_value"],
-    "momentum":    ["close", "vwap", "returns"],
-    "volatility":  ["close", "returns", "vwap"],
-    "fundamental": ["revenue", "eps", "operating_income", "assets"],
-    "analyst":     ["anl4_ebit_value", "anl4_ebitda_value"],
-    "cashflow":    ["anl4_cfo_value", "anl4_fcf_value"],
-    "quality":     ["anl4_epsr_value", "anl4_epsr_mean"],
+# Logical field pool names. Values are injected from official context at runtime.
+FIELD_POOLS: dict[str, list[str]] = {
+    "price": [],
+    "volume": [],
+    "returns": [],
+    "value": [],
+    "momentum": [],
+    "volatility": [],
+    "fundamental": [],
+    "analyst": [],
+    "cashflow": [],
+    "quality": [],
 }
 
 # Logical field pairings for 2-field templates: (pool_for_f1, pool_for_f2)
@@ -208,24 +195,24 @@ FIELD_PAIRINGS = [
 ]
 
 # Stratified window pools — short, medium, long
-WINDOW_POOL: List[int] = [1, 2, 3, 5, 7, 10, 15, 20, 30, 40, 60, 90, 120]
-SHORT_WINDOWS: List[int] = [1, 2, 3, 5, 7]
-MEDIUM_WINDOWS: List[int] = [10, 15, 20, 30]
-LONG_WINDOWS: List[int] = [40, 60, 90, 120]
+WINDOW_POOL: list[int] = [1, 2, 3, 5, 7, 10, 15, 20, 30, 40, 60, 90, 120]
+SHORT_WINDOWS: list[int] = [1, 2, 3, 5, 7]
+MEDIUM_WINDOWS: list[int] = [10, 15, 20, 30]
+LONG_WINDOWS: list[int] = [40, 60, 90, 120]
 
 
 # ═══════════════════════════════════════════════════════════════════
 # Core: validate_expression()
 # ═══════════════════════════════════════════════════════════════════
 
-def validate_expression(expression: str) -> Dict[str, Any]:
+def validate_expression(expression: str) -> dict[str, Any]:
     """Pre-validate expression before submission. Catches all 3 failure classes.
 
     Returns:
         {"valid": bool, "errors": [str], "warnings": [str]}
     """
-    errors: List[str] = []
-    warnings: List[str] = []
+    errors: list[str] = []
+    warnings: list[str] = []
 
     # ── 1. Field whitelist check ──
     tokens = set(re.findall(r'\b([a-zA-Z_]\w*)\b', expression))
@@ -233,9 +220,10 @@ def validate_expression(expression: str) -> Dict[str, Any]:
     reserved = {"if", "else", "and", "or", "not", "true", "false", "none"}
 
     candidate_fields = tokens - known_ops - reserved
+    safe_fields = get_active_safe_fields()
     unknown_fields = sorted(
         t for t in candidate_fields
-        if not t.isdigit() and t not in SAFE_FIELDS
+        if not t.isdigit() and t not in safe_fields
     )
     if unknown_fields:
         errors.append(f"Unknown fields: {', '.join(unknown_fields)}")
@@ -324,9 +312,9 @@ def _extract_bracketed(s: str, start: int) -> str | None:
     return None  # unmatched
 
 
-def _split_args(args_str: str) -> List[str]:
+def _split_args(args_str: str) -> list[str]:
     """Split function arguments respecting nested parentheses."""
-    args: List[str] = []
+    args: list[str] = []
     depth = 0
     current = ""
     for ch in args_str:
@@ -351,13 +339,13 @@ def _split_args(args_str: str) -> List[str]:
 # ═══════════════════════════════════════════════════════════════════
 
 def generate_validated_candidates(
-    themes: Optional[List[str]] = None,
+    themes: list[str] | None = None,
     count: int = 10,
     max_attempts: int = 50,
     *,
     diversity_threshold: float = 0.40,
     apply_prefilter: bool = True,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """Generate candidates that pass validation + diversity + quality pre-filter.
 
     Args:
@@ -373,8 +361,11 @@ def generate_validated_candidates(
     if themes is None:
         themes = list(TEMPLATES.keys())
 
-    candidates: List[Dict[str, Any]] = []
+    candidates: list[dict[str, Any]] = []
     attempts = 0
+    active_field_pools = get_active_field_pools()
+    if not active_field_pools:
+        return []
 
     while len(candidates) < count and attempts < max_attempts:
         attempts += 1
@@ -383,7 +374,7 @@ def generate_validated_candidates(
         theme_templates = TEMPLATES.get(theme, TEMPLATES["momentum"])
         template, slots = random.choice(theme_templates)
 
-        values: Dict[str, str] = {}
+        values: dict[str, str] = {}
         # Pick a logical field pairing for 2-field templates
         n_fields = len([s for s in slots if s.startswith("f")])
         pairing = random.choice(FIELD_PAIRINGS) if n_fields >= 2 else None
@@ -400,7 +391,9 @@ def generate_validated_candidates(
                     pool_names = ["price", "volume", "returns"]
 
                 pool_name = random.choice(pool_names)
-                field_pool = FIELD_POOLS.get(pool_name, FIELD_POOLS["price"])
+                field_pool = active_field_pools.get(pool_name) or next(iter(active_field_pools.values()), [])
+                if not field_pool:
+                    continue
                 values[slot] = random.choice(field_pool)
             elif slot.startswith("d"):
                 # P0-8: stratified window selection — short for delta, long for mean/std
@@ -436,9 +429,10 @@ def generate_validated_candidates(
 
 def _passes_diversity(
     new_expr: str,
-    existing: List[Dict[str, Any]],
+    existing: list[dict[str, Any]],
     threshold: float,
 ) -> bool:
+    # TODO R3 S-06: O(n²) pairwise comparison; consider MinHash pre-filter
     """Check that *new_expr* is sufficiently different from all existing candidates.
 
     Uses Jaccard similarity on operator+field token sets. Returns False if
@@ -467,7 +461,7 @@ def _passes_diversity(
     return True
 
 
-def _tokenize(expression: str) -> List[str]:
+def _tokenize(expression: str) -> list[str]:
     """Extract normalized tokens (operators + field references) from expression."""
     return sorted(canonical_tokens(expression))
 
@@ -479,37 +473,63 @@ def _tokenize(expression: str) -> List[str]:
 #   from brain_alpha_ops.research.validated_generator import set_active_safe_fields
 #   set_active_safe_fields(production_context["safe_fields"])
 
-_ACTIVE_SAFE_FIELDS: Set[str] | None = None  # None = use static SAFE_FIELDS
-_ACTIVE_FIELD_POOLS: Dict[str, List[str]] | None = None
+_ACTIVE_SAFE_FIELDS: set[str] | None = None
+_ACTIVE_FIELD_POOLS: dict[str, list[str]] | None = None
+_ACTIVE_STATE_LOCK = threading.Lock()
 
 
-def get_active_safe_fields() -> Set[str]:
+def get_active_safe_fields() -> set[str]:
     """Return the currently active safe-fields set."""
-    return _ACTIVE_SAFE_FIELDS if _ACTIVE_SAFE_FIELDS is not None else SAFE_FIELDS
+    with _ACTIVE_STATE_LOCK:
+        if _ACTIVE_SAFE_FIELDS is not None:
+            return set(_ACTIVE_SAFE_FIELDS)
+    try:
+        from brain_alpha_ops.data import OfficialDataLoader
+
+        return {
+            str(getattr(field, "id", "") or getattr(field, "name", "") or "").strip()
+            for field in OfficialDataLoader.instance().get_fields()
+            if str(getattr(field, "id", "") or getattr(field, "name", "") or "").strip()
+        }
+    except Exception:
+        return set()
 
 
-def set_active_safe_fields(field_ids: List[str], field_pools: Dict[str, List[str]] | None = None) -> None:
+def get_active_field_pools() -> dict[str, list[str]]:
+    """Return official field pools for generation without static field fallback."""
+    with _ACTIVE_STATE_LOCK:
+        if _ACTIVE_FIELD_POOLS is not None:
+            return {key: list(value) for key, value in _ACTIVE_FIELD_POOLS.items()}
+    fields = sorted(get_active_safe_fields())
+    if not fields:
+        return {}
+    return {pool_name: list(fields) for pool_name in FIELD_POOLS}
+
+
+def set_active_safe_fields(field_ids: list[str], field_pools: dict[str, list[str]] | None = None) -> None:
     """Inject live-verified fields from production context.
 
     Called by pipeline after authenticating and discovering available fields.
-    Falls back to static SAFE_FIELDS if never called.
+    If never called, local official_fields.json is used; unavailable context
+    returns an empty set so validation fails closed.
     """
     global _ACTIVE_SAFE_FIELDS, _ACTIVE_FIELD_POOLS
-    _ACTIVE_SAFE_FIELDS = set(field_ids)
-    if field_pools is not None:
-        _ACTIVE_FIELD_POOLS = dict(field_pools)
+    with _ACTIVE_STATE_LOCK:
+        _ACTIVE_SAFE_FIELDS = set(field_ids)
+        if field_pools is not None:
+            _ACTIVE_FIELD_POOLS = dict(field_pools)
 
 
 # ═══════════════════════════════════════════════════════════════════
 # Quality pre-filter — expression-level heuristics before BRAIN submission
 # ═══════════════════════════════════════════════════════════════════
 
-CROSS_SECTIONAL_OPS: Set[str] = {"rank", "zscore", "scale", "group_rank", "group_zscore", "group_neutralize"}
-KNOWN_TOXIC_OPS: Set[str] = {"ts_cov"}  # BRAIN rejects these regardless
-RETURN_TRANSFORM_OPS: Set[str] = {"ts_delta", "ts_rank", "ts_zscore", "ts_mean", "ts_decay_linear"}
+CROSS_SECTIONAL_OPS: set[str] = {"rank", "zscore", "scale", "group_rank", "group_zscore", "group_neutralize"}
+KNOWN_TOXIC_OPS: set[str] = {"ts_cov"}  # BRAIN rejects these regardless
+RETURN_TRANSFORM_OPS: set[str] = {"ts_delta", "ts_rank", "ts_zscore", "ts_mean", "ts_decay_linear"}
 
 
-def prefilter_quality(candidates: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def prefilter_quality(candidates: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Remove expressions unlikely to pass BRAIN quality gates.
 
     Heuristics (conservative — prefer false-negatives to wasted BRAIN slots):
@@ -521,7 +541,7 @@ def prefilter_quality(candidates: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
       6. Single returns field + short window → high turnover dilutes fitness
       7. Ultra-short window (<= 3) → guaranteed high turnover
     """
-    passed: List[Dict[str, Any]] = []
+    passed: list[dict[str, Any]] = []
     for c in candidates:
         expr = c.get("expression", "")
         profile = profile_expression(expr)

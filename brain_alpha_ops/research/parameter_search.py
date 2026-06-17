@@ -12,6 +12,8 @@ from typing import Any, Iterable
 
 from brain_alpha_ops.models import Candidate
 from brain_alpha_ops.research.diagnostics import diagnose
+from brain_alpha_ops.research.expression_ast import profile_expression
+from brain_alpha_ops.research.expression_official_context import GROUP_CONTEXT_FIELDS
 from brain_alpha_ops.research.iterative_optimizer import IterativeOptimizer
 
 
@@ -117,14 +119,31 @@ class ParameterSearchService:
             score = self._score_candidate(candidate, expression, diagnosis)
             mutated_candidate = Candidate.from_dict(candidate.to_dict())
             mutated_candidate.expression = expression
-            mutated_candidate.data_fields = list(getattr(mutation, "metadata", {}).get("data_fields") or candidate.data_fields)
-            mutated_candidate.operators = list(getattr(mutation, "metadata", {}).get("operators") or candidate.operators)
+            profile = profile_expression(expression)
+            mutated_candidate.data_fields = [
+                field for field in profile.fields if field not in GROUP_CONTEXT_FIELDS
+            ]
+            mutated_candidate.operators = list(profile.operators)
             mutated_candidate.parent_id = candidate.alpha_id
             mutated_candidate.mutation_type = getattr(mutation, "mode", "")
             mutated_candidate.scorecard = {
                 **dict(candidate.scorecard or {}),
                 "search_score": score,
             }
+            mutation_metadata = dict(getattr(mutation, "metadata", {}) or {})
+            mutation_metadata.setdefault(
+                "optimizer_trace",
+                {
+                    "schema_version": "optimizer-trace-v1",
+                    "failed_dimension": str(getattr(mutation, "parent_failure", "") or ""),
+                    "selected_strategy": str(getattr(mutation, "mode", "") or ""),
+                    "strategy_order": [str(getattr(mutation, "mode", "") or "")],
+                    "strategy_index": index,
+                    "suggested_modes": [],
+                    "official_api_called": False,
+                    "submit_allowed": False,
+                },
+            )
             results.append(
                 ParameterSearchResult(
                     candidate=mutated_candidate,
@@ -132,6 +151,7 @@ class ParameterSearchService:
                     diagnosis=diagnosis,
                     mutation_mode=getattr(mutation, "mode", ""),
                     metadata={
+                        **mutation_metadata,
                         "rank_input_index": index,
                         "lineage": {
                             "parent_alpha_id": candidate.alpha_id,
@@ -212,7 +232,18 @@ def _mutation(expression: str, mode: str, reason: str, parent_failure: str) -> A
             "mode": mode,
             "reason": reason,
             "parent_failure": parent_failure,
-            "metadata": {},
+            "metadata": {
+                "optimizer_trace": {
+                    "schema_version": "optimizer-trace-v1",
+                    "failed_dimension": str(parent_failure or "general"),
+                    "selected_strategy": str(mode or "fallback"),
+                    "strategy_order": [str(mode or "fallback")],
+                    "strategy_index": 0,
+                    "suggested_modes": [],
+                    "official_api_called": False,
+                    "submit_allowed": False,
+                },
+            },
         },
     )()
 

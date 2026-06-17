@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import logging
-from typing import Callable
+from typing import Callable, Optional
 
 from brain_alpha_ops.config import OpsConfig
 from brain_alpha_ops.models import Candidate
-from brain_alpha_ops.redaction import redact_error_message
+from brain_alpha_ops.redaction import redact_error_message, redact_text
 
 from .scoring import build_scorecard, evaluate_quality_gate
 
@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 RecordLifecycle = Callable[[Candidate, str, str], None]
 RememberAccepted = Callable[[list[Candidate], Candidate], None]
 RetrySimulation = Callable[[Candidate, dict[str, Candidate], str], bool]
-SecondaryFusion = Callable[[Candidate, dict[str, Candidate], set[str], str], Candidate | None]
+SecondaryFusion = Callable[[Candidate, dict[str, Candidate], set[str], str], Optional[Candidate]]
 ArchiveCandidates = Callable[[dict[str, int], list[Candidate], list[Candidate]], None]
 AutoSubmit = Callable[[Candidate, int], int]
 ShouldRemove = Callable[[Candidate], bool]
@@ -42,7 +42,7 @@ class BacktestFinalizationOutcome:
 class BacktestFinalizationService:
     config: OpsConfig
     check_registry: object
-    scoring_params: object | None
+    scoring_params: Optional[object]
     record_lifecycle: RecordLifecycle
     remember_accepted: RememberAccepted
     retry_simulation: RetrySimulation
@@ -113,7 +113,9 @@ class BacktestFinalizationService:
         settings = candidate.submission.get("settings") if isinstance(candidate.submission, dict) else None
         if not isinstance(settings, dict) or not settings:
             settings = self.config.settings.to_platform_dict()["settings"]
-        build_scorecard(
+            if candidate.dataset_id:
+                settings["dataset"] = candidate.dataset_id
+        candidate.scorecard = build_scorecard(
             candidate,
             self.config.thresholds,
             self.config.scoring,
@@ -132,7 +134,7 @@ class BacktestFinalizationService:
         try:
             sim_for_check: dict = {"_thresholds": self.config.thresholds, **candidate.official_metrics}
             if candidate.expression:
-                sim_for_check["settings"] = self.config.settings.__dict__
+                sim_for_check["settings"] = getattr(self.config.settings, "to_dict", lambda: {})() or vars(self.config.settings)
                 sim_for_check["expression"] = candidate.expression
                 sim_for_check["data_fields"] = getattr(candidate, "data_fields", [])
                 sim_for_check["operators"] = getattr(candidate, "operators", [])
@@ -173,5 +175,10 @@ class BacktestFinalizationService:
             from .experience import record_alpha_result
 
             record_alpha_result(candidate, self.config.storage_dir)
-        except Exception:
-            logger.warning("ExperienceDB record failed for %s", candidate.alpha_id, exc_info=True)
+        except Exception as exc:
+            logger.warning(
+                "ExperienceDB record failed for %s: %s: %s",
+                redact_text(candidate.alpha_id, max_length=64),
+                exc.__class__.__name__,
+                redact_error_message(exc),
+            )

@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 import logging
 import threading
+import time
 from pathlib import Path
 import shutil
 import sys
@@ -23,9 +24,9 @@ _log = logging.getLogger(__name__)
 
 from brain_alpha_ops.config import runtime_project_root
 from brain_alpha_ops.redaction import redact_error_message
+from brain_alpha_ops.runtime_constants import ContextRefreshDefaults
 
 from .schemas import DatasetRef, OfficialDataset, OfficialField, OfficialOperator
-
 
 REQUIRED_OFFICIAL_CONTEXT_FILES = (
     "official_fields.json",
@@ -39,7 +40,6 @@ SUPPLEMENTAL_OFFICIAL_CONTEXT_FILES = (
     "official_context_refresh_status.json",
 )
 PACKAGED_OFFICIAL_CONTEXT_FILES = REQUIRED_OFFICIAL_CONTEXT_FILES + SUPPLEMENTAL_OFFICIAL_CONTEXT_FILES
-
 
 def ensure_official_context_files(data_dir: str | Path = "data") -> dict[str, object]:
     """Copy bundled official context files into the persistent runtime data dir.
@@ -62,10 +62,14 @@ def ensure_official_context_files(data_dir: str | Path = "data") -> dict[str, ob
     present = result["present"]
     missing = result["missing"]
     failed = result["failed"]
-    assert isinstance(copied, list)
-    assert isinstance(present, list)
-    assert isinstance(missing, list)
-    assert isinstance(failed, list)
+    if not isinstance(copied, list):
+        raise TypeError(f"expected result['copied'] to be a list, got {type(copied).__name__}")
+    if not isinstance(present, list):
+        raise TypeError(f"expected result['present'] to be a list, got {type(present).__name__}")
+    if not isinstance(missing, list):
+        raise TypeError(f"expected result['missing'] to be a list, got {type(missing).__name__}")
+    if not isinstance(failed, list):
+        raise TypeError(f"expected result['failed'] to be a list, got {type(failed).__name__}")
 
     for filename in PACKAGED_OFFICIAL_CONTEXT_FILES:
         target = target_root / filename
@@ -103,12 +107,10 @@ def ensure_official_context_files(data_dir: str | Path = "data") -> dict[str, ob
         )
     return result
 
-
 def _resolve_data_root(data_dir: str | Path) -> Path:
     data_path = Path(data_dir)
     root = data_path if data_path.is_absolute() else runtime_project_root() / data_path
     return root.resolve()
-
 
 def _bundled_data_root() -> Path | None:
     meipass = getattr(sys, "_MEIPASS", None)
@@ -116,7 +118,6 @@ def _bundled_data_root() -> Path | None:
         return None
     root = Path(str(meipass)) / "data"
     return root if root.is_dir() else None
-
 
 def _file_is_usable(path: Path, *, required: bool) -> bool:
     if not path.is_file():
@@ -133,7 +134,6 @@ def _file_is_usable(path: Path, *, required: bool) -> bool:
     except (OSError, json.JSONDecodeError):
         return False
     return isinstance(payload, list) and bool(payload)
-
 
 class OfficialDataLoader:
     """Singleton that loads official_fields/operators/datasets JSON files on first use."""
@@ -175,6 +175,7 @@ class OfficialDataLoader:
         self._operators: Dict[str, OfficialOperator] = {}
         self._datasets: Dict[str, OfficialDataset] = {}
         self._loaded_root: Path | None = None
+        self._data_lock = threading.RLock()
 
     def load_all(self, data_dir: str | Path = "data") -> None:
         """Read all three official JSON files and build in-memory indexes."""
@@ -186,8 +187,7 @@ class OfficialDataLoader:
         self._load_datasets(root / "official_datasets.json")
         # Warn if all official JSON files failed to load — fallback will be used
         if not self._fields and not self._operators and not self._datasets:
-            import logging
-            logging.warning(
+            _log.warning(
                 "OfficialDataLoader: No official data JSON files loaded "
                 "(%s/*.json). Falling back to context_defaults built-in lists. "
                 "Run pipeline with valid credentials to refresh from BRAIN API.",
@@ -199,29 +199,54 @@ class OfficialDataLoader:
     # ------------------------------------------------------------------
     def get_fields(self, dataset_id: Optional[str] = None) -> List[OfficialField]:
         """Return all fields, optionally filtered by *dataset_id*."""
-        if dataset_id is None:
-            return list(self._fields.values())
-        return [
-            f
-            for f in self._fields.values()
-            if f.dataset is not None and f.dataset.id == dataset_id
-        ]
+        with self._data_lock:
+            if dataset_id is None:
+                return list(self._fields.values())
+            exact = [
+                f
+                for f in self._fields.values()
+                if f.dataset is not None and f.dataset.id == dataset_id
+            ]
+            if exact:
+                return exact
+            dataset = self._datasets.get(dataset_id)
+            category = str(getattr(dataset, "category", "") or "").lower() if dataset else ""
+            if not category:
+                return []
+            return [
+                f
+                for f in self._fields.values()
+                if f.dataset is None and str(f.category or "").lower() == category
+            ]
+
+    # Future-proof alias: any code that writes loader.list_fields(...)
+    # hits the same method as loader.get_fields(...).
+    list_fields = get_fields
 
     def get_field_by_name(self, name: str) -> Optional[OfficialField]:
         """Return the first field whose id equals *name* (case-insensitive)."""
-        results = self._fields_by_name.get(name.lower())
-        if results:
-            return results[0]
-        return None
+        with self._data_lock:
+            results = self._fields_by_name.get(name.lower())
+            if results:
+                return results[0]
+            return None
 
     def validate_field(self, name: str, dataset_id: Optional[str] = None) -> bool:
         """Check whether *name* is a known official field."""
-        entries = self._fields_by_name.get(name.lower(), [])
-        if not entries:
-            return False
-        if dataset_id is not None:
-            return any(f.dataset and f.dataset.id == dataset_id for f in entries)
-        return True
+        with self._data_lock:
+            entries = self._fields_by_name.get(name.lower(), [])
+            if not entries:
+                return False
+            if dataset_id is not None:
+                if any(f.dataset and f.dataset.id == dataset_id for f in entries):
+                    return True
+                dataset = self._datasets.get(dataset_id)
+                category = str(getattr(dataset, "category", "") or "").lower() if dataset else ""
+                return bool(category) and any(
+                    f.dataset is None and str(f.category or "").lower() == category
+                    for f in entries
+                )
+            return True
 
     def search_fields(self, keyword: str, dataset_id: Optional[str] = None) -> List[OfficialField]:
         """Case-insensitive substring search across field ids and descriptions."""
@@ -236,70 +261,96 @@ class OfficialDataLoader:
     # Operator queries
     # ------------------------------------------------------------------
     def get_operators(self) -> List[OfficialOperator]:
-        return list(self._operators.values())
+        with self._data_lock:
+            return list(self._operators.values())
 
     def get_operator(self, name: str) -> Optional[OfficialOperator]:
-        return self._operators.get(name.lower())
+        with self._data_lock:
+            return self._operators.get(name.lower())
 
     def validate_operator(self, name: str) -> bool:
-        return name.lower() in self._operators
+        with self._data_lock:
+            return name.lower() in self._operators
 
     # ------------------------------------------------------------------
     # Dataset queries
     # ------------------------------------------------------------------
     def get_datasets(self) -> List[OfficialDataset]:
-        return list(self._datasets.values())
+        with self._data_lock:
+            return list(self._datasets.values())
 
     def get_dataset(self, dataset_id: str) -> Optional[OfficialDataset]:
-        return self._datasets.get(dataset_id)
+        with self._data_lock:
+            return self._datasets.get(dataset_id)
 
     # ------------------------------------------------------------------
     # P2-5: Context refresh
     # ------------------------------------------------------------------
-    def refresh(self, data_dir: str | Path = "data", max_retries: int = 2) -> dict:
+    def refresh(
+        self,
+        data_dir: str | Path = "data",
+        max_retries: int | None = None,
+        retry_base_seconds: float | None = None,
+    ) -> dict:
         """Reload official JSON files and return diff stats.
 
         Preserves existing data on failure. Retries up to *max_retries*
-        times with 1s backoff between attempts for transient file I/O issues.
+        times with *retry_base_seconds* backoff between attempts for transient
+        file I/O issues.
 
         Call periodically (e.g. every 24h) to pick up new fields/operators
         added to the BRAIN platform.
+
+        P0-1 fix (2026-06-13): defaults now sourced from
+        :class:`ContextRefreshDefaults` (stall-detection window, not
+        total timeout).  Retries use progressive backoff.  The old 120s
+        wall-clock SIGALRM no longer kills slow-but-progressing fetches.
         """
+        if max_retries is None:
+            max_retries = ContextRefreshDefaults.DEFAULT_MAX_RETRIES
+        if retry_base_seconds is None:
+            retry_base_seconds = ContextRefreshDefaults.DEFAULT_RETRY_BASE_SECONDS
         old_fields = self.field_count
         old_operators = self.operator_count
         old_datasets = self.dataset_count
-        # Backup existing data in case reload fails
-        backup_fields = dict(self._fields)
-        backup_operators = dict(self._operators)
-        backup_datasets = dict(self._datasets)
-
         last_error = ""
         for attempt in range(1, max_retries + 1):
             try:
-                self._fields.clear()
-                self._fields_by_name.clear()
-                self._operators.clear()
-                self._datasets.clear()
-                self.load_all(data_dir)
-                
+                fresh = OfficialDataLoader()
+                fresh.load_all(data_dir)
+
                 # Verify loaded content is non-trivial
-                if not self._fields and not self._operators and not self._datasets:
+                if not fresh._fields and not fresh._operators and not fresh._datasets:
                     raise RuntimeError("refresh produced empty data sets")
                 # Verify each category loaded individually to detect partial
                 # failures masked by the combined emptiness check above.
-                if old_fields > 0 and not self._fields:
+                if old_fields > 0 and not fresh._fields:
                     raise RuntimeError("refresh dropped all fields")
-                if old_operators > 0 and not self._operators:
+                if old_operators > 0 and not fresh._operators:
                     raise RuntimeError("refresh dropped all operators")
-                if old_datasets > 0 and not self._datasets:
+                if old_datasets > 0 and not fresh._datasets:
                     raise RuntimeError("refresh dropped all datasets")
-                    
+
+                with self._data_lock:
+                    self._fields = dict(fresh._fields)
+                    self._fields_by_name = self._rebuild_name_index(self._fields)
+                    self._operators = dict(fresh._operators)
+                    self._datasets = dict(fresh._datasets)
+                    self._loaded_root = fresh._loaded_root
+
                 # Success — return diff
+                _f_delta = self.field_count - old_fields
+                _o_delta = self.operator_count - old_operators
+                _d_delta = self.dataset_count - old_datasets
+                # P3-29 fix: distinguish "no change" from "refreshed" so
+                # callers can tell whether the reload actually picked up new
+                # data or was a silent no-op.
+                _status = "no_change" if (_f_delta == 0 and _o_delta == 0 and _d_delta == 0) else "refreshed"
                 return {
-                    "status": "refreshed",
-                    "fields_delta": self.field_count - old_fields,
-                    "operators_delta": self.operator_count - old_operators,
-                    "datasets_delta": self.dataset_count - old_datasets,
+                    "status": _status,
+                    "fields_delta": _f_delta,
+                    "operators_delta": _o_delta,
+                    "datasets_delta": _d_delta,
                     "current": {
                         "fields": self.field_count,
                         "operators": self.operator_count,
@@ -309,26 +360,16 @@ class OfficialDataLoader:
             except Exception as exc:
                 last_error = redact_error_message(exc)
                 if attempt < max_retries:
-                    import time as _time
                     _log.warning(
                         "OfficialDataLoader.refresh() attempt %d/%d failed: %s. Retrying...",
                         attempt, max_retries, last_error[:120]
                     )
-                    _time.sleep(1.0 * attempt)  # progressive backoff
-                    # Restore backups for retry
-                    self._fields = dict(backup_fields)
-                    self._fields_by_name = self._rebuild_name_index(self._fields)
-                    self._operators = dict(backup_operators)
-                    self._datasets = dict(backup_datasets)
+                    time.sleep(retry_base_seconds * attempt)  # progressive backoff
 
-        # All retries exhausted — restore backup and report failure
-        self._fields = backup_fields
-        self._fields_by_name = self._rebuild_name_index(self._fields)
-        self._operators = backup_operators
-        self._datasets = backup_datasets
+        # All retries exhausted — existing data was never mutated.
         _log.error(
             "OfficialDataLoader.refresh() FAILED after %d attempt(s): %s. "
-            "Restored backup data (fields=%d, operators=%d, datasets=%d). "
+            "Preserved existing data (fields=%d, operators=%d, datasets=%d). "
             "Check that data/official_*.json files exist and are valid JSON.",
             max_retries, last_error[:200], old_fields, old_operators, old_datasets
         )
@@ -341,20 +382,56 @@ class OfficialDataLoader:
             "datasets_delta": 0,
         }
 
+    def is_stale(
+        self,
+        status_path: str | Path = "data/official_context_refresh_status.json",
+        stale_hours: float | None = None,
+    ) -> bool:
+        """True when the cached context has not been refreshed within
+        ``stale_hours`` (default 24h from :class:`ContextRefreshDefaults`).
+
+        P0-1 fix (2026-06-13): this helper lets callers surface a clear
+        "context is stale" warning instead of silently using old data.
+        """
+        if stale_hours is None:
+            stale_hours = ContextRefreshDefaults.DEFAULT_STALE_HOURS
+        from datetime import datetime, timezone
+        path = Path(status_path)
+        if not path.is_file():
+            return True
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return True
+        generated_at = payload.get("generated_at")
+        if not isinstance(generated_at, str) or not generated_at:
+            return True
+        try:
+            ts = datetime.fromisoformat(generated_at)
+        except ValueError:
+            return True
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=timezone.utc)
+        age = datetime.now(timezone.utc) - ts
+        return age.total_seconds() > stale_hours * 3600
+
     # ------------------------------------------------------------------
     # Counts
     # ------------------------------------------------------------------
     @property
     def field_count(self) -> int:
-        return len(self._fields)
+        with self._data_lock:
+            return len(self._fields)
 
     @property
     def operator_count(self) -> int:
-        return len(self._operators)
+        with self._data_lock:
+            return len(self._operators)
 
     @property
     def dataset_count(self) -> int:
-        return len(self._datasets)
+        with self._data_lock:
+            return len(self._datasets)
 
     # ==================================================================
     # Internal helpers
@@ -384,7 +461,7 @@ class OfficialDataLoader:
             cat_raw = item.get("category") if isinstance(item.get("category"), dict) else None
             field = OfficialField(
                 id=field_id,
-                description=str(item.get("description", "")),
+                description=str(item.get("description") or ""),
                 dataset=DatasetRef(id=str(ds_raw.get("id", "")), name=str(ds_raw.get("name", ""))) if ds_raw else None,
                 category=str(cat_raw.get("id", "") if cat_raw else item.get("category", "")),
                 region=str(item.get("region", "USA")),
@@ -421,9 +498,11 @@ class OfficialDataLoader:
         if not isinstance(raw, list):
             return
         for item in raw:
+            cat_raw = item.get("category") if isinstance(item.get("category"), dict) else None
             ds = OfficialDataset(
                 id=str(item.get("id", "")),
                 name=str(item.get("name", "")),
                 field_count=int(item.get("field_count", 0)),
+                category=str(cat_raw.get("id", "") if cat_raw else item.get("category", "")),
             )
             self._datasets[ds.id] = ds

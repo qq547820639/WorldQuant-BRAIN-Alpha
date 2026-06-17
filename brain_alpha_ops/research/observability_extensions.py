@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+from collections import Counter
 from pathlib import Path
 from typing import Any
 
+from brain_alpha_ops.redaction import redact_text
 from brain_alpha_ops.research.alerting import AlertDeliveryService
 from brain_alpha_ops.research.market_data_cache import MarketDataCache
 from brain_alpha_ops.research.market_data_vector import build_vectorized_market_data
@@ -40,6 +42,40 @@ def optional_vector_snapshot(root: str | Path, *, top_n: int) -> dict[str, Any]:
         "field_count": payload.get("field_count", 0),
         "row_count": payload.get("row_count", 0),
         "column_stats": list(payload.get("column_stats") or [])[:top_n],
+    }
+
+
+def sqlite_index_diagnostics(rows: list[dict[str, Any]], *, top_n: int) -> dict[str, Any]:
+    component_counts: Counter[str] = Counter()
+    source_file_counts: Counter[str] = Counter()
+    latest: list[dict[str, Any]] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        status = _text(row.get("status"))
+        if status and status != "index_update_failed":
+            continue
+        component = _text(row.get("component") or "sqlite_index")
+        source_file = _text(row.get("source_file") or "unknown")
+        component_counts[component] += 1
+        source_file_counts[source_file] += 1
+        latest.append(
+            {
+                "timestamp": _text(row.get("timestamp")),
+                "component": component,
+                "source_file": source_file,
+                "error": redact_text(row.get("error") or "", max_length=180),
+                "action": _text(row.get("action")),
+            }
+        )
+    failure_count = sum(component_counts.values())
+    return {
+        "ok": failure_count == 0,
+        "schema_version": "sqlite_index_diagnostics.v1",
+        "failure_count": failure_count,
+        "component_counts": dict(component_counts.most_common()),
+        "source_file_counts": dict(source_file_counts.most_common()),
+        "latest": latest[-top_n:][::-1],
     }
 
 
@@ -94,3 +130,7 @@ def _int_from_any(value: Any) -> int:
         return int(value)
     except (TypeError, ValueError):
         return 0
+
+
+def _text(value: Any) -> str:
+    return str(value or "").strip()

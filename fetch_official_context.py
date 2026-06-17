@@ -8,10 +8,13 @@ credentials, tokens, cookies, or raw authentication responses.
 from __future__ import annotations
 
 import argparse
+from contextlib import contextmanager
 from copy import deepcopy
 from datetime import datetime, timedelta, timezone
 import json
 from pathlib import Path
+import signal
+import threading
 import tempfile
 from typing import Any
 
@@ -36,6 +39,8 @@ def refresh_official_context(
     write: bool = True,
     status_output: str | Path | None = None,
     write_status: bool = True,
+    disable_proxy: bool = True,
+    timeout_seconds: float | None = None,
 ) -> dict[str, Any]:
     """Fetch official context and optionally persist it into configured storage."""
     run_config = load_run_config(config_path)
@@ -43,56 +48,88 @@ def refresh_official_context(
     status_path = _status_output_path(run_config, status_output) if write_status else None
     before = official_context_file_counts(load_config=lambda: run_config)
 
+    progress_event = threading.Event()
     try:
-        _require_credentials(run_config)
-        with _api_cache_scope(run_config, write=write) as api_config:
-            api = OfficialBrainAPI(api_config, **run_config.credentials.resolve())
-            api.set_market_scope(run_config.ops.settings)
-            auth = api.authenticate()
-            progress: dict[str, list[dict[str, Any]]] = {"fields": [], "operators": [], "datasets": []}
-            fields = api.list_fields("all", run_config.ops.settings.region, progress_callback=_progress(progress, "fields"))
-            if not fields:
-                raise RuntimeError("official data-fields refresh returned zero records")
-            operators = api.list_operators("all", progress_callback=_progress(progress, "operators"))
-            if not operators:
-                raise RuntimeError("official operators refresh returned zero records")
-            datasets = list_official_datasets_or_derive(
-                api,
-                fields,
-                region=run_config.ops.settings.region,
-                datasets_from_fields=lambda rows: datasets_from_fields(rows, load_config=lambda: run_config),
-            )
-            if not datasets:
-                raise RuntimeError("official data-sets refresh returned zero records")
-            if write:
-                persist_official_context(
-                    fields,
-                    operators,
-                    datasets,
-                    load_config=lambda: run_config,
+        with _refresh_deadline(timeout_seconds, progress_event=progress_event):
+            _require_credentials(run_config)
+            with _api_cache_scope(run_config, write=write) as api_config:
+                api = OfficialBrainAPI(api_config, disable_proxy=disable_proxy, **run_config.credentials.resolve())
+                api.set_market_scope(run_config.ops.settings)
+                auth = api.authenticate()
+                progress: dict[str, list[dict[str, Any]]] = {"fields": [], "operators": [], "datasets": []}
+                fields = api.list_fields(
+                    "all",
+                    run_config.ops.settings.region,
+                    progress_callback=_progress(progress, "fields", progress_event=progress_event),
                 )
-            after = official_context_file_counts(load_config=lambda: run_config)
-            result = _base_result(run_config, started_at, status_path, write=write)
-            result.update(
-                {
-                    "ok": True,
-                    "status": "refreshed" if write else "fetched_no_write",
-                    "auth": _safe_auth_summary(auth),
-                    "counts": {
-                        "fields": len(fields),
-                        "operators": len(operators),
-                        "datasets": len(datasets),
-                    },
-                    "before": _context_counts(before),
-                    "after": _context_counts(after),
-                    "progress": _compact_progress(progress),
-                }
-            )
-            _write_status_file(status_path, result)
-            return result
+                if not fields:
+                    raise RuntimeError("official data-fields refresh returned zero records")
+                operators = api.list_operators("all", progress_callback=_progress(progress, "operators", progress_event=progress_event))
+                if not operators:
+                    raise RuntimeError("official operators refresh returned zero records")
+                datasets = list_official_datasets_or_derive(
+                    api,
+                    fields,
+                    region=run_config.ops.settings.region,
+                    datasets_from_fields=lambda rows: datasets_from_fields(rows, load_config=lambda: run_config),
+                )
+                if not datasets:
+                    raise RuntimeError("official data-sets refresh returned zero records")
+                if write:
+                    persist_official_context(
+                        fields,
+                        operators,
+                        datasets,
+                        load_config=lambda: run_config,
+                    )
+                after = official_context_file_counts(load_config=lambda: run_config)
+                freshness_findings = _post_refresh_freshness_findings(after) if write else []
+                result = _base_result(
+                    run_config,
+                    started_at,
+                    status_path,
+                    write=write,
+                    disable_proxy=disable_proxy,
+                    timeout_seconds=timeout_seconds,
+                )
+                result.update(
+                    {
+                        "ok": not freshness_findings,
+                        "status": "refresh_incomplete"
+                        if freshness_findings
+                        else ("refreshed" if write else "fetched_no_write"),
+                        "auth": _safe_auth_summary(auth),
+                        "counts": {
+                            "fields": len(fields),
+                            "operators": len(operators),
+                            "datasets": len(datasets),
+                        },
+                        "before": _context_counts(before),
+                        "after": _context_counts(after),
+                        "progress": _compact_progress(progress),
+                    }
+                )
+                if freshness_findings:
+                    result.update(
+                        {
+                            "error_code": "OFFICIAL_CONTEXT_METADATA_STALE",
+                            "error_category": "freshness",
+                            "retryable": False,
+                            "freshness_findings": freshness_findings,
+                        }
+                    )
+                _write_status_file(status_path, result)
+                return result
     except Exception as exc:
         retry_after = _retry_after_seconds(exc)
-        result = _base_result(run_config, started_at, status_path, write=write)
+        result = _base_result(
+            run_config,
+            started_at,
+            status_path,
+            write=write,
+            disable_proxy=disable_proxy,
+            timeout_seconds=timeout_seconds,
+        )
         result.update(
             {
                 "ok": False,
@@ -130,14 +167,25 @@ class _api_cache_scope:
         return False
 
 
-def _progress(progress: dict[str, list[dict[str, Any]]], key: str):
+def _progress(progress: dict[str, list[dict[str, Any]]], key: str, *, progress_event=None):
     def _record(event: dict[str, Any]) -> None:
         progress.setdefault(key, []).append(dict(event))
-
+        if progress_event is not None:
+            reset = getattr(progress_event, "_reset_stall_timer", None)
+            if reset is not None:
+                reset()
     return _record
 
 
-def _base_result(run_config: RunConfig, started_at: str, status_path: Path | None, *, write: bool) -> dict[str, Any]:
+def _base_result(
+    run_config: RunConfig,
+    started_at: str,
+    status_path: Path | None,
+    *,
+    write: bool,
+    disable_proxy: bool,
+    timeout_seconds: float | None,
+) -> dict[str, Any]:
     return {
         "schema_version": SCHEMA_VERSION,
         "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -149,6 +197,8 @@ def _base_result(run_config: RunConfig, started_at: str, status_path: Path | Non
         "universe": run_config.ops.settings.universe,
         "delay": run_config.ops.settings.delay,
         "write_enabled": bool(write),
+        "proxy_mode": "direct" if disable_proxy else "system",
+        "timeout_seconds": timeout_seconds,
         "status_path": str(status_path or ""),
     }
 
@@ -162,6 +212,8 @@ def _require_credentials(run_config: RunConfig) -> None:
 
 
 def _error_code(exc: Exception, run_config: RunConfig) -> str:
+    if isinstance(exc, OfficialContextRefreshTimeout):
+        return "OFFICIAL_CONTEXT_REFRESH_TIMEOUT"
     if "environment variables are required" in str(exc):
         return "MISSING_CREDENTIALS"
     status_code = getattr(exc, "status_code", None)
@@ -174,6 +226,8 @@ def _error_code(exc: Exception, run_config: RunConfig) -> str:
 
 def _error_category(exc: Exception, run_config: RunConfig) -> str:
     code = _error_code(exc, run_config)
+    if code == "OFFICIAL_CONTEXT_REFRESH_TIMEOUT":
+        return "timeout"
     if code == "RATE_LIMITED":
         return "rate_limit"
     if code == "MISSING_CREDENTIALS":
@@ -184,6 +238,8 @@ def _error_category(exc: Exception, run_config: RunConfig) -> str:
 
 
 def _retryable(exc: Exception) -> bool:
+    if isinstance(exc, OfficialContextRefreshTimeout):
+        return True
     status_code = getattr(exc, "status_code", None)
     if status_code in {408, 429, 500, 502, 503, 504}:
         return True
@@ -191,6 +247,8 @@ def _retryable(exc: Exception) -> bool:
 
 
 def _retry_after_seconds(exc: Exception) -> float | None:
+    if isinstance(exc, OfficialContextRefreshTimeout):
+        return 15 * 60
     value = getattr(exc, "retry_after", None)
     try:
         parsed = float(value)
@@ -235,6 +293,43 @@ def _context_counts(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _post_refresh_freshness_findings(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    manifest = payload.get("context_cache_manifest") if isinstance(payload.get("context_cache_manifest"), dict) else {}
+    if not manifest:
+        return [
+            {
+                "code": "missing_context_cache_manifest",
+                "message": "official context refresh wrote files but did not produce cache metadata manifest",
+            }
+        ]
+
+    findings: list[dict[str, Any]] = []
+    if not manifest.get("complete"):
+        findings.append(
+            {
+                "code": "context_cache_manifest_incomplete",
+                "message": "official context cache manifest is incomplete after refresh",
+            }
+        )
+    for filename in manifest.get("missing_files") or []:
+        findings.append(
+            {
+                "code": "context_cache_file_missing",
+                "filename": str(filename),
+                "message": f"{filename} is missing after official context refresh",
+            }
+        )
+    for filename in manifest.get("stale_files") or manifest.get("expired_files") or []:
+        findings.append(
+            {
+                "code": "context_cache_metadata_stale",
+                "filename": str(filename),
+                "message": f"{filename} metadata is stale after official context refresh",
+            }
+        )
+    return findings
+
+
 def _compact_progress(progress: dict[str, list[dict[str, Any]]]) -> dict[str, Any]:
     compact: dict[str, Any] = {}
     for key, rows in progress.items():
@@ -258,6 +353,38 @@ def _safe_auth_summary(auth: Any) -> dict[str, Any]:
     }
 
 
+class OfficialContextRefreshTimeout(TimeoutError):
+    """Raised when the overall official-context refresh deadline is exceeded."""
+
+
+@contextmanager
+def _refresh_deadline(timeout_seconds: float | None, *, progress_event=None):
+    if timeout_seconds is None or timeout_seconds <= 0:
+        yield
+        return
+    if not hasattr(signal, "SIGALRM"):
+        yield
+        return
+
+    previous_handler = signal.getsignal(signal.SIGALRM)
+    previous_timer = signal.getitimer(signal.ITIMER_REAL)
+
+    def _handle_timeout(_signum, _frame):
+        raise OfficialContextRefreshTimeout(
+            f"official context refresh exceeded {timeout_seconds:g}s timeout"
+        )
+
+    signal.signal(signal.SIGALRM, _handle_timeout)
+    signal.setitimer(signal.ITIMER_REAL, timeout_seconds)
+    try:
+        yield
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        signal.signal(signal.SIGALRM, previous_handler)
+        if previous_timer[0] > 0:
+            signal.setitimer(signal.ITIMER_REAL, previous_timer[0], previous_timer[1])
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Refresh official WorldQuant BRAIN context files.")
     parser.add_argument("--config", default=str(DEFAULT_RUN_CONFIG_PATH), help="Run config path.")
@@ -265,6 +392,17 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--no-write", action="store_true", help="Fetch and compare without overwriting official context JSON files.")
     parser.add_argument("--status-output", default="", help="Optional non-sensitive refresh status JSON path.")
     parser.add_argument("--no-status-file", action="store_true", help="Do not write the refresh status JSON file.")
+    parser.add_argument(
+        "--use-proxy",
+        action="store_true",
+        help="Honor system proxy settings for environments that cannot reach BRAIN directly.",
+    )
+    parser.add_argument(
+        "--timeout-seconds",
+        type=float,
+        default=300.0,
+        help="Overall refresh deadline in seconds; use 0 to disable.",
+    )
     args = parser.parse_args(argv)
 
     result = refresh_official_context(
@@ -272,6 +410,8 @@ def main(argv: list[str] | None = None) -> int:
         write=not args.no_write,
         status_output=args.status_output or None,
         write_status=not args.no_status_file,
+        disable_proxy=not args.use_proxy,
+        timeout_seconds=args.timeout_seconds,
     )
     if args.json:
         print(json.dumps(result, ensure_ascii=False, indent=2, default=str))

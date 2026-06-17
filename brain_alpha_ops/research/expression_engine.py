@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Iterable
 
-from brain_alpha_ops.research.expression_ast import ExpressionProfile, profile_expression
+from brain_alpha_ops.research.expression_ast import ExpressionParseError, ExpressionProfile, profile_expression
 
 
 EXPRESSION_ENGINE_SCHEMA_VERSION = "expression-engine-report.v1"
@@ -93,7 +93,38 @@ class ExpressionEngine:
 
     def validate(self, expression: str, *, mode: str = "wq") -> ExpressionValidationReport:
         active_mode = str(mode or "wq").strip().lower()
-        profile = profile_expression(expression)
+        try:
+            profile = profile_expression(expression)
+        except ExpressionParseError as exc:
+            # Handle AST depth limit exceeded or other parse errors gracefully
+            from brain_alpha_ops.research.expression_ast import ExpressionProfile
+            empty_profile = ExpressionProfile(
+                expression=expression,
+                parsed=False,
+                canonical="",
+                fingerprint="",
+                operators=(),
+                fields=(),
+                windows=(),
+                max_depth=0,
+                node_count=0,
+                parse_error=str(exc),
+            )
+            return ExpressionValidationReport(
+                expression=expression,
+                mode=active_mode,
+                parsed=False,
+                valid=False,
+                blocked=True,
+                complexity_score=0.0,
+                semantic_tags=(),
+                profile=empty_profile,
+                issues=(ExpressionValidationIssue(
+                    code="parse_error",
+                    severity="ERROR",
+                    message=str(exc),
+                ),),
+            )
         issues: list[ExpressionValidationIssue] = []
 
         if not profile.parsed:

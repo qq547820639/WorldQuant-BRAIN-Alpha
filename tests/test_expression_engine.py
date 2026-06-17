@@ -18,6 +18,20 @@ def test_expression_engine_validates_official_field_and_operator_scope():
     assert report.to_dict()["schema_version"] == "expression-engine-report.v1"
 
 
+def test_expression_engine_accepts_keyword_arguments_without_treating_name_as_field():
+    engine = ExpressionEngine(
+        allowed_fields={"close"},
+        allowed_operators={"rank", "winsorize"},
+    )
+
+    report = engine.validate("winsorize(rank(close), std=5)")
+
+    assert report.valid is True
+    assert report.blocked is False
+    assert report.parsed is True
+    assert report.profile.fields == ("close",)
+
+
 def test_expression_engine_blocks_parse_and_unknown_symbols():
     engine = ExpressionEngine(
         allowed_fields={"close"},

@@ -1,13 +1,17 @@
+import json
+import logging
+
+from brain_alpha_ops.agent_research_tools import collect_job_rows, collect_job_rows_with_diagnostics
 from brain_alpha_ops.agent_tools import BrainAlphaToolbox
-from brain_alpha_ops.brain_api import MockBrainAPI
+from tests.production_api_stub import ProductionBrainAPIStub
 from brain_alpha_ops.config import RunConfig
 from brain_alpha_ops.models import Candidate
 
 
 def _toolbox(tmp_path):
-    config = RunConfig(environment="mock")
+    config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path)
-    return BrainAlphaToolbox(run_config=config, api=MockBrainAPI())
+    return BrainAlphaToolbox(run_config=config, api=ProductionBrainAPIStub())
 
 
 def test_new_tool_manifest_entries_exist():
@@ -22,6 +26,64 @@ def test_new_tool_manifest_entries_exist():
     assert "run_parallel_backtest" in names
     assert "send_alert" in names
     assert "route_alert" in names
+
+
+def test_collect_job_rows_warns_when_store_fails(caplog):
+    class BrokenStore:
+        def all(self, *, limit):
+            raise RuntimeError("job store unavailable")
+
+    class GoodStore:
+        def all(self, *, limit):
+            return [("job_1", {"status": "completed"})]
+
+    with caplog.at_level(logging.WARNING, logger="brain_alpha_ops.agent_research_tools"):
+        rows = collect_job_rows({"broken": BrokenStore(), "good": GoodStore()}, limit=10)
+
+    assert rows == [{"source": "good_job", "job_id": "job_1", "status": "completed"}]
+    assert "failed to collect broken job rows for agent research context" in caplog.text
+
+
+def test_collect_job_rows_with_diagnostics_reports_partial_failures(caplog):
+    class BrokenStore:
+        def all(self, *, limit):
+            raise RuntimeError("job store unavailable")
+
+    class GoodStore:
+        def all(self, *, limit):
+            return [("job_1", {"status": "completed"})]
+
+    with caplog.at_level(logging.WARNING, logger="brain_alpha_ops.agent_research_tools"):
+        payload = collect_job_rows_with_diagnostics({"broken": BrokenStore(), "good": GoodStore()}, limit=10)
+
+    assert payload["ok"] is False
+    assert payload["partial"] is True
+    assert payload["rows"] == [{"source": "good_job", "job_id": "job_1", "status": "completed"}]
+    assert payload["diagnostics"][0]["source"] == "broken_job"
+    assert payload["diagnostics"][0]["error_context"]["error_code"] == "JOB_ROWS_COLLECTION_FAILED"
+    assert "failed to collect broken job rows for agent research context" in caplog.text
+
+
+def test_query_research_observability_surfaces_job_collection_diagnostics(tmp_path):
+    class BrokenStore:
+        def all(self, *, limit):
+            raise RuntimeError("job store unavailable")
+
+    config = RunConfig(environment="production")
+    config.ops.storage_dir = str(tmp_path)
+    toolbox = BrainAlphaToolbox(
+        run_config=config,
+        api=ProductionBrainAPIStub(),
+        job_stores={"broken": BrokenStore()},
+    )
+
+    result = toolbox.call("query_research_observability", {"limit": 10, "top_n": 3, "include_cloud": False})
+
+    assert result["ok"] is True
+    assert result["job_diagnostics"][0]["source"] == "broken_job"
+    assert result["partial_errors"][0]["component"] == "job_rows"
+    assert result["errors"]["total"] >= 1
+    assert result["errors"]["code_counts"]["JOB_ROWS_COLLECTION_FAILED"] == 1
 
 
 def test_market_data_cache_tool_and_alert_tool(tmp_path):
@@ -49,6 +111,30 @@ def test_market_data_cache_tool_and_alert_tool(tmp_path):
     assert cache_result["symbol_count"] == 0
     assert alert_result["ok"] is True
     assert alert_result["channel"] == "local"
+
+
+def test_market_data_cache_tool_defaults_to_complete_cloud_source(tmp_path):
+    toolbox = _toolbox(tmp_path)
+    rows = [
+        {"symbol": f"SYM{index}", "timestamp": "2026-05-25T00:00:00Z", "metrics": {"close": index + 1.0}}
+        for index in range(5001)
+    ]
+    (tmp_path / "cloud_alphas.jsonl").write_text(
+        "\n".join(json.dumps(row) for row in rows) + "\n",
+        encoding="utf-8",
+    )
+
+    cache_result = toolbox.call(
+        "build_market_data_cache",
+        {
+            "source_file": "cloud_alphas.jsonl",
+            "refresh": True,
+        },
+    )
+
+    assert cache_result["ok"] is True
+    assert cache_result["record_count"] == 5001
+    assert cache_result["symbol_count"] == 5001
 
 
 def test_parameter_search_tool_returns_structured_result(tmp_path):

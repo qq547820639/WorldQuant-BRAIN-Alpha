@@ -1,6 +1,6 @@
-"""Alpha 质量诊断引擎 — 分析官方回测失败原因，指导针对性迭代。
+"""Alpha quality diagnostics engine for analyzing official backtest failures.
 
-所有阈值来源于 BRAIN 官方 Alpha Check 标准（Delay-1）：
+All thresholds come from the BRAIN official Alpha Check standard (Delay-1):
   LOW_SHARPE, LOW_FITNESS, LOW_TURNOVER, HIGH_TURNOVER,
   CONCENTRATED_WEIGHT, SELF_CORRELATION, LOW_SUB_UNIVERSE_SHARPE
 
@@ -11,18 +11,16 @@ Usage::
 
     diag = diagnose(candidate, QualityThresholds())
     if diag["primary_failure"]:
-        print(f"主要失败: {diag['primary_failure']}")
+        print(f"Primary failure: {diag['primary_failure']}")
         for mut in diag["suggested_mutations"]:
-            print(f"  → {mut}")
+            print(f"  -> {mut}")
 """
-
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, TYPE_CHECKING
+from typing import Any, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from brain_alpha_ops.models import Candidate
-
 
 def _num(value: Any) -> float:
     """Safely convert to float."""
@@ -33,20 +31,22 @@ def _num(value: Any) -> float:
     except (TypeError, ValueError):
         return 0.0
 
+# P0-4 fix (2026-06-13): the four ``_ratio()`` definitions across
+# research/{scoring,experience,safety,diagnostics}.py are now unified in
+# ``research._ratio``. The local wrapper preserves the historical function
+# name and signature.
+from brain_alpha_ops.research._ratio import normalize_brain_ratio  # noqa: F401
 
 def _ratio(value: Any) -> float:
-    """Normalize ratio — BRAIN returns percentages (e.g. 5.0 = 5%)."""
-    numeric = _num(value)
-    return numeric / 100.0 if abs(numeric) > 1.0 else numeric
-
+    return normalize_brain_ratio(value, bounded=False)
 
 def diagnose(
     candidate: "Candidate",
     thresholds: Any,  # QualityThresholds
-) -> Dict[str, Any]:
-    """分析 Alpha 官方回测结果，输出失败原因和针对性改进建议。
+) -> dict[str, Any]:
+    """Analyze an Alpha's official backtest result and return failure reasons.
 
-    返回:
+    Returns:
         {
             "alpha_id": str,
             "lifecycle_status": str,
@@ -61,7 +61,7 @@ def diagnose(
     metrics = candidate.official_metrics or {}
     gate = candidate.gate or {}
 
-    diagnosis: Dict[str, Any] = {
+    diagnosis: dict[str, Any] = {
         "alpha_id": candidate.alpha_id,
         "lifecycle_status": candidate.lifecycle_status,
         "primary_failure": None,
@@ -70,7 +70,7 @@ def diagnose(
         "summary": "",
     }
 
-    # Extract metrics (aligned with BRAIN official API normalize_metrics)
+    # Extract metrics (aligned with BRAIN official API normalize_metrics).
     sharpe = _num(metrics.get("sharpe"))
     fitness = _num(metrics.get("fitness"))
     turnover = _ratio(metrics.get("turnover"))
@@ -79,7 +79,7 @@ def diagnose(
     margin = _num(metrics.get("margin", 0.0))
     sub_universe_sharpe = _num(metrics.get("sub_universe_sharpe", 0.0))
 
-    # Thresholds from QualityThresholds (BRAIN official standards)
+    # Thresholds from QualityThresholds (BRAIN official standards).
     min_sharpe = getattr(thresholds, "min_sharpe", 1.25)
     min_fitness = getattr(thresholds, "min_fitness", 1.0)
     min_turnover = getattr(thresholds, "min_turnover", 0.01)
@@ -90,7 +90,7 @@ def diagnose(
     min_margin_bps = getattr(thresholds, "min_margin_bps", 4.0)
     sub_sharpe_ratio = getattr(thresholds, "sub_universe_sharpe_min_ratio", 0.75)
 
-    # ── Diagnose each dimension ──
+    # Diagnose each dimension.
 
     # Sharpe (BRAIN: LOW_SHARPE if < 1.25)
     if sharpe < min_sharpe:
@@ -118,7 +118,7 @@ def diagnose(
             ],
         })
 
-    # Turnover HIGH — 平台硬门槛 (BRAIN: HIGH_TURNOVER if > 70%)
+    # Turnover HIGH — platform hard gate (BRAIN: HIGH_TURNOVER if > 70%).
     if turnover > platform_max_turnover:
         diagnosis["failed_dimensions"].append("turnover_platform")
         diagnosis["suggested_mutations"].append({
@@ -130,23 +130,23 @@ def diagnose(
                 "add truncation to reduce extreme weights",
             ],
         })
-    # Turnover QUALITY — 顾问质量目标 (Turnover > 30%, 可优化)
+    # Turnover QUALITY — advisor target (turnover > 30% can still be optimized).
     elif turnover > target_max_turnover:
         diagnosis["failed_dimensions"].append("turnover_quality")
         diagnosis["suggested_mutations"].append({
             "dimension": "turnover",
             "mutation_mode": "longer_window",
             "suggestions": [
-                f"Turnover={turnover:.1%} > {target_max_turnover:.0%} 目标 — 尝试优化而非丢弃",
-                "提高 decay 参数增加信号持续性",
-                "添加 smoothing (ts_mean/ts_decay_linear) 降低噪声触发",
-                "延长 lookback window 降低换手频率",
-                "使用 trade_when 减少不必要的调仓",
-                "降低短周期信号权重（减少 ts_delta/ts_rank 的小窗口）",
+                f"Turnover={turnover:.1%} > {target_max_turnover:.0%} target — optimize instead of dropping",
+                "increase decay to improve signal persistence",
+                "add smoothing (ts_mean/ts_decay_linear) to reduce noisy triggers",
+                "extend the lookback window to reduce turnover",
+                "use trade_when to avoid unnecessary rebalancing",
+                "reduce short-horizon signal weight, especially small-window ts_delta/ts_rank",
             ],
         })
 
-    # Turnover LOW (BRAIN: LOW_TURNOVER if < 1%)
+    # Turnover LOW (BRAIN: LOW_TURNOVER if < 1%).
     if turnover < min_turnover:
         diagnosis["failed_dimensions"].append("turnover_low")
         diagnosis["suggested_mutations"].append({
@@ -159,7 +159,7 @@ def diagnose(
             ],
         })
 
-    # Correlation (BRAIN: SELF_CORRELATION if >= 0.70)
+    # Correlation (BRAIN: SELF_CORRELATION if >= 0.70).
     if correlation >= max_correlation:
         diagnosis["failed_dimensions"].append("correlation")
         diagnosis["suggested_mutations"].append({
@@ -172,7 +172,7 @@ def diagnose(
             ],
         })
 
-    # Concentration (BRAIN: CONCENTRATED_WEIGHT if > 10%)
+    # Concentration (BRAIN: CONCENTRATED_WEIGHT if > 10%).
     if concentration > max_concentration:
         diagnosis["failed_dimensions"].append("concentration")
         diagnosis["suggested_mutations"].append({
@@ -185,7 +185,7 @@ def diagnose(
             ],
         })
 
-    # Margin (BRAIN 顾问标准)
+    # Margin (BRAIN advisor target).
     if margin < min_margin_bps:
         diagnosis["failed_dimensions"].append("margin")
         diagnosis["suggested_mutations"].append({
@@ -198,7 +198,7 @@ def diagnose(
             ],
         })
 
-    # Sub-universe Sharpe (BRAIN: LOW_SUB_UNIVERSE_SHARPE)
+    # Sub-universe Sharpe (BRAIN: LOW_SUB_UNIVERSE_SHARPE).
     sub_threshold = sub_sharpe_ratio * max(sharpe, 0.01)
     if sub_universe_sharpe < sub_threshold:
         diagnosis["failed_dimensions"].append("sub_universe_sharpe")
@@ -212,7 +212,7 @@ def diagnose(
             ],
         })
 
-    # ── Determine primary failure ──
+    # Determine the primary failure.
     if diagnosis["failed_dimensions"]:
         diagnosis["primary_failure"] = diagnosis["failed_dimensions"][0]
         diagnosis["summary"] = (
@@ -222,7 +222,7 @@ def diagnose(
         )
     else:
         diagnosis["summary"] = f"Alpha {candidate.alpha_id}: all dimensions pass thresholds."
-        # Check gate-level failures
+        # Check gate-level failures.
         gate_failures = gate.get("failed_reasons", [])
         if gate_failures:
             diagnosis["failed_dimensions"].append("gate")
@@ -231,14 +231,13 @@ def diagnose(
 
     return diagnosis
 
-
-def get_mutation_mode(diagnosis: Dict[str, Any], fallback: str = "default") -> str:
-    """从诊断结果中提取最合适的变异模式。
+def get_mutation_mode(diagnosis: dict[str, Any], fallback: str = "default") -> str:
+    """Extract the most suitable mutation mode from a diagnosis result.
 
     Returns one of: "default", "field_swap", "structure_change", "longer_window"
     """
     mutations = diagnosis.get("suggested_mutations", [])
     if not mutations:
         return fallback
-    # Return the mode of the first (highest priority) mutation
+    # Return the mode of the first (highest-priority) mutation.
     return mutations[0].get("mutation_mode", fallback)

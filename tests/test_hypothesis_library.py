@@ -31,11 +31,11 @@ def _require_yaml_dir():
 # ── Loading Tests ───────────────────────────────────────────────────
 
 def test_library_loads_all_eight_hypotheses():
-    """T02 acceptance: load_all() loads 8 hypotheses."""
+    """T02 acceptance: load_all() loads 11 hypotheses."""
     _require_yaml_dir()
     lib = HypothesisLibrary(str(HYPOTHESES_DIR)).load_all()
-    assert lib.count == 8, f"Expected 8 hypotheses, got {lib.count}"
-    assert len(lib.get_all()) == 8
+    assert lib.count == 11, f"Expected 11 hypotheses, got {lib.count}"
+    assert len(lib.get_all()) == 11
 
 
 def test_library_repairs_packaged_hypotheses_from_meipass(monkeypatch, tmp_path):
@@ -87,7 +87,7 @@ def test_library_get_ids_returns_all():
     _require_yaml_dir()
     lib = HypothesisLibrary(str(HYPOTHESES_DIR)).load_all()
     ids = lib.get_ids()
-    assert len(ids) == 8
+    assert len(ids) == 11
     assert "earnings_revision_momentum" in ids
     assert "quality_profitability" in ids
     assert "value_reversal" in ids
@@ -96,6 +96,9 @@ def test_library_get_ids_returns_all():
     assert "sentiment_short_interest" in ids
     assert "analyst_behavior_bias" in ids
     assert "microstructure_order_flow" in ids
+    assert "cross_asset_spillover" in ids
+    assert "event_driven" in ids
+    assert "macro_sensitivity" in ids
 
 
 def test_library_skips_schema_file():

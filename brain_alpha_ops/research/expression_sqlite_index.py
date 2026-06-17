@@ -32,20 +32,24 @@ class ExpressionSqliteIndex:
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         rows = ExpressionHistoryIndex(self.storage_dir).records(limit=limit, include_cloud=include_cloud)
         with closing(self._connect()) as conn:
-            with conn:
-                _ensure_schema(conn)
-                conn.execute("DELETE FROM expression_records")
-                for row in rows:
-                    profile = row.get("expression_profile") if isinstance(row.get("expression_profile"), dict) else {}
-                    conn.execute(
-                        """
-                        INSERT INTO expression_records (
-                            source, source_file, record_index, alpha_id, official_alpha_id,
-                            simulation_id, stage, status, family, score, timestamp,
-                            expression, expression_canonical, expression_fingerprint,
-                            operators_json, fields_json, windows_json, profile_json
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        """,
+            _ensure_schema(conn)
+            conn.execute("DELETE FROM expression_records")
+            # P3-3: batch commits keep WAL from growing unbounded when the
+            # history has thousands of rows.  500 rows/commit balances commit
+            # overhead vs. memory.
+            batch_size = 500
+            for start in range(0, len(rows), batch_size):
+                batch = rows[start : start + batch_size]
+                conn.executemany(
+                    """
+                    INSERT INTO expression_records (
+                        source, source_file, record_index, alpha_id, official_alpha_id,
+                        simulation_id, stage, status, family, score, timestamp,
+                        expression, expression_canonical, expression_fingerprint,
+                        operators_json, fields_json, windows_json, profile_json
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
                         (
                             _text(row.get("source")),
                             _text(row.get("source_file")),
@@ -61,16 +65,37 @@ class ExpressionSqliteIndex:
                             _text(row.get("expression")),
                             _text(row.get("expression_canonical")),
                             _text(row.get("expression_fingerprint")),
-                            json.dumps(profile.get("operators") or [], ensure_ascii=False),
-                            json.dumps(profile.get("fields") or [], ensure_ascii=False),
-                            json.dumps(profile.get("windows") or [], ensure_ascii=False),
-                            json.dumps(profile, ensure_ascii=False, default=str),
-                        ),
-                    )
-                conn.execute(
-                    "REPLACE INTO index_meta (key, value) VALUES (?, ?)",
-                    ("last_refresh", json.dumps({"limit": limit, "include_cloud": include_cloud, "record_count": len(rows)})),
+                            json.dumps(
+                                (row.get("expression_profile") or {}).get("operators") or [],
+                                ensure_ascii=False,
+                            )
+                            if isinstance(row.get("expression_profile"), dict)
+                            else "[]",
+                            json.dumps(
+                                (row.get("expression_profile") or {}).get("fields") or [],
+                                ensure_ascii=False,
+                            )
+                            if isinstance(row.get("expression_profile"), dict)
+                            else "[]",
+                            json.dumps(
+                                (row.get("expression_profile") or {}).get("windows") or [],
+                                ensure_ascii=False,
+                            )
+                            if isinstance(row.get("expression_profile"), dict)
+                            else "[]",
+                            json.dumps(row.get("expression_profile") or {}, ensure_ascii=False, default=str)
+                            if isinstance(row.get("expression_profile"), dict)
+                            else "{}",
+                        )
+                        for row in batch
+                    ),
                 )
+                conn.commit()
+            conn.execute(
+                "REPLACE INTO index_meta (key, value) VALUES (?, ?)",
+                ("last_refresh", json.dumps({"limit": limit, "include_cloud": include_cloud, "record_count": len(rows)})),
+            )
+            conn.commit()
         return {
             "ok": True,
             "schema_version": SCHEMA_VERSION,
@@ -278,6 +303,10 @@ class ExpressionSqliteIndex:
 
 def _ensure_schema(conn: sqlite3.Connection) -> None:
     conn.execute("PRAGMA journal_mode=WAL")
+    # P3-3: 5-second busy timeout prevents ``database is locked`` errors
+    # when concurrent threads (web console + pipeline) hit the same DB.
+    conn.execute("PRAGMA busy_timeout=5000")
+    conn.execute("PRAGMA synchronous=NORMAL")  # WAL-safe, faster than FULL
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS expression_records (

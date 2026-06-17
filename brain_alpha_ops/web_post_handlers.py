@@ -40,12 +40,19 @@ def background_job_start_payload(
     if active:
         active_job_id, _job = active
         response: Payload = {"ok": False, "error": conflict_error, "job_id": active_job_id}
+        response["task_id"] = active_job_id
         if conflict_error_code:
             response["error_code"] = conflict_error_code
         return response, 409
     job_id = store.create()
     start_job(job_id, payload)
-    return {"ok": True, "job_id": job_id}, 200
+    return {
+        "ok": True,
+        "job_id": job_id,
+        "task_id": job_id,
+        "sse_url": f"/sse?job_id={job_id}",
+        "status_url": f"/api/production-validation/status?job_id={job_id}",
+    }, 200
 
 
 def connection_test_post_payload(payload: Payload, test_connection: Callable[[Payload], Payload]) -> Payload:

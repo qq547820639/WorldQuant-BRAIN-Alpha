@@ -27,6 +27,20 @@ def test_safe_error_payload_preserves_error_classification():
     assert payload["retry_after"] == 5
 
 
+def test_safe_error_payload_maps_plain_403_to_actionable_auth_message():
+    payload = safe_error_payload(
+        BrainAPIError("HTTP 403: Forbidden", status_code=403),
+        error_code="CONNECTION_FAILED",
+    )
+
+    assert payload["ok"] is False
+    assert payload["error_code"] == "CONNECTION_FAILED"
+    assert payload["error_category"] == "auth"
+    assert payload["retryable"] is False
+    assert payload["status_code"] == 403
+    assert payload["error"] == "Authentication failed; check credentials or connection settings."
+
+
 def test_web_error_payload_adds_cloud_self_correlation_guidance():
     payload = web_error_payload(ValueError("SUBMIT_CLOUD_SELF_CORRELATION_BLOCKED"), "SUBMIT_ERROR")
 

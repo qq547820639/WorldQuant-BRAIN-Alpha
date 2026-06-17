@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from hashlib import sha256
 import json
+import logging
 import os
 from pathlib import Path
 import time
@@ -19,6 +20,8 @@ from brain_alpha_ops.research.assistant import AssistantResponseParseError, pars
 
 CROSS_REVIEW_SCHEMA_VERSION = "assistant_cross_review.v1"
 PROMPT_RUN_LEDGER_SCHEMA_VERSION = "prompt_run_ledger.v1"
+
+logger = logging.getLogger(__name__)
 
 
 class LLMProvider(Protocol):
@@ -50,10 +53,17 @@ class FallbackLLMProvider:
     def complete(self, request: dict[str, Any]) -> str:
         errors: list[str] = []
         for provider in self.providers:
+            name = getattr(provider, "name", provider.__class__.__name__)
             try:
                 return provider.complete(request)
             except Exception as exc:
-                errors.append(f"{getattr(provider, 'name', provider.__class__.__name__)}: {str(exc)[:160]}")
+                message = redact_error_message(exc, max_length=160)
+                logger.warning(
+                    "fallback LLM provider failed; trying next provider: provider=%s error=%s",
+                    name,
+                    message,
+                )
+                errors.append(f"{name}: {message}")
         raise RuntimeError("all LLM providers failed: " + "; ".join(errors or ["no providers configured"]))
 
 
@@ -81,6 +91,12 @@ class LLMProviderRouter:
             except Exception as exc:
                 message = redact_error_message(exc, max_length=160)
                 self._record_health(name, ok=False, latency_seconds=time.perf_counter() - started, error=message)
+                logger.warning(
+                    "routed LLM provider failed; trying next provider: provider=%s task=%s error=%s",
+                    name,
+                    task,
+                    message,
+                )
                 errors.append(f"{name}: {message}")
         raise RuntimeError("all routed LLM providers failed: " + "; ".join(errors or ["no providers configured"]))
 

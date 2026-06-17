@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 QA E2E New-User Walkthrough Test — simulates a complete first-time user journey.
 
@@ -8,12 +10,12 @@ Covers: startup → health check → session creation → config loading →
 Captures UX metrics: response times, error messages, flow coherence, and
 interaction friction points for optimization reporting.
 """
-from __future__ import annotations
 
 import json
 import os
 import time
 import traceback
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -21,13 +23,21 @@ import pytest
 import requests
 
 from brain_alpha_ops import web
+from brain_alpha_ops.redaction import redact_text
+
+def _free_port_or_skip(start: int, host: str = "127.0.0.1") -> int:
+    try:
+        return web.find_free_port(start=start, host=host)
+    except (OSError, RuntimeError, PermissionError) as exc:
+        pytest.skip(f"local web server ports unavailable in this environment: {exc}")
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Test Configuration
 # ═══════════════════════════════════════════════════════════════════════════
 
-TEST_EMAIL = "547820639@qq.com"
-TEST_PASSWORD = "Ph360098."
+TEST_EMAIL = os.getenv("BRAIN_E2E_USERNAME") or os.getenv("BRAIN_USERNAME", "")
+TEST_PASSWORD = os.getenv("BRAIN_E2E_PASSWORD") or os.getenv("BRAIN_PASSWORD", "")
+TEST_TOKEN = os.getenv("BRAIN_E2E_TOKEN") or os.getenv("BRAIN_TOKEN", "")
 SERVER_PORT = 8866  # Use a non-default port for testing
 BASE_URL = f"http://127.0.0.1:{SERVER_PORT}"
 TEST_TIMEOUT = 60  # seconds for individual API calls
@@ -36,11 +46,15 @@ MAX_WAIT_FOR_PROGRESS = 120  # seconds to wait for production progress
 # Credential safety: redacted in logs
 _CREDENTIAL_MASK = lambda v: v[:3] + "***" if v and len(v) > 3 else "***"
 
+def _has_live_credentials() -> bool:
+    return bool(TEST_TOKEN or (TEST_EMAIL and TEST_PASSWORD))
+
+def _credential_payload() -> dict[str, str]:
+    return {"username": TEST_EMAIL, "password": TEST_PASSWORD, "token": TEST_TOKEN}
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Test Context — stores session state across steps
 # ═══════════════════════════════════════════════════════════════════════════
-
 
 class UserSession:
     """Stores the session state across the walkthrough."""
@@ -65,6 +79,8 @@ class UserSession:
         headers = {}
         if self.csrf_token:
             headers["X-Brain-Alpha-CSRF"] = self.csrf_token
+            headers["X-Brain-Alpha-Request-ID"] = str(uuid.uuid4())
+            headers["X-Brain-Alpha-Request-Timestamp"] = str(int(time.time() * 1000))
         return headers
 
     @property
@@ -90,11 +106,9 @@ class UserSession:
         except UnicodeEncodeError:
             print(f"\n  [*] {label}", flush=True)
 
-
 # ═══════════════════════════════════════════════════════════════════════════
 # Helper Utilities
 # ═══════════════════════════════════════════════════════════════════════════
-
 
 def _safe_post(s: UserSession, path: str, json_data: dict, timeout: int = TEST_TIMEOUT):
     """POST with error handling and timing."""
@@ -117,7 +131,6 @@ def _safe_post(s: UserSession, path: str, json_data: dict, timeout: int = TEST_T
         s.record_error("POST " + path, "连接失败", str(e))
         raise
 
-
 def _safe_get(s: UserSession, path: str, timeout: int = TEST_TIMEOUT, params: dict | None = None):
     """GET with error handling and timing."""
     start = time.time()
@@ -139,7 +152,6 @@ def _safe_get(s: UserSession, path: str, timeout: int = TEST_TIMEOUT, params: di
         s.record_error("GET " + path, "连接失败", str(e))
         raise
 
-
 def _try_json(resp) -> dict:
     """Safely parse JSON from response."""
     try:
@@ -147,17 +159,15 @@ def _try_json(resp) -> dict:
     except json.JSONDecodeError:
         return {"_raw": resp.text[:500], "_status": resp.status_code}
 
-
 # ═══════════════════════════════════════════════════════════════════════════
 # STAGE 0: Server Startup
 # ═══════════════════════════════════════════════════════════════════════════
-
 
 def test_stage_0_server_startup(session: UserSession):
     """Start the web server and verify it's reachable."""
     session.tag("[0]", "STAGE 0: 服务器启动")
 
-    port = web.find_free_port(start=SERVER_PORT)
+    port = _free_port_or_skip(start=SERVER_PORT)
     url = web.serve(port=port, open_browser=False)
     time.sleep(0.5)  # Let server thread bind and start
     session.base_url = url.rstrip("/")
@@ -174,11 +184,9 @@ def test_stage_0_server_startup(session: UserSession):
     print(f"    [OK] Server started at {session.base_url}")
     return True
 
-
 # ═══════════════════════════════════════════════════════════════════════════
 # STAGE 1: Session & HTML Bootstrap
 # ═══════════════════════════════════════════════════════════════════════════
-
 
 def test_stage_1_session_bootstrap(session: UserSession):
     """GET / → parse session cookie → extract CSRF token."""
@@ -234,11 +242,9 @@ def test_stage_1_session_bootstrap(session: UserSession):
     print(f"    [OK] Session established, CSRF token acquired")
     return True
 
-
 # ═══════════════════════════════════════════════════════════════════════════
 # STAGE 2: Config & Presets Loading
 # ═══════════════════════════════════════════════════════════════════════════
-
 
 def test_stage_2_config_and_presets(session: UserSession):
     """Load config and presets to populate the UI."""
@@ -282,23 +288,25 @@ def test_stage_2_config_and_presets(session: UserSession):
 
     return True
 
-
 # ═══════════════════════════════════════════════════════════════════════════
 # STAGE 3: Connection Test (Login)
 # ═══════════════════════════════════════════════════════════════════════════
-
 
 def test_stage_3_connection_test(session: UserSession):
     """Test connection to BRAIN API with user credentials."""
     session.tag("[3]", "STAGE 3: 连接测试 (登录)")
 
-    print(f"    Using credentials: {TEST_EMAIL} / {_CREDENTIAL_MASK(TEST_PASSWORD)}")
+    if not _has_live_credentials():
+        session.record_warning("CONNECTION", "Skipped — BRAIN credentials are not configured in environment variables")
+        session.record_metric("connection_status", "SKIPPED")
+        print("    [SKIP] Live credentials not configured; set BRAIN_USERNAME/BRAIN_PASSWORD or BRAIN_TOKEN")
+        return False
+
+    print(f"    Using runtime credentials: {_CREDENTIAL_MASK(TEST_EMAIL or TEST_TOKEN)}")
 
     payload = {
         "environment": "production",
-        "username": TEST_EMAIL,
-        "password": TEST_PASSWORD,
-        "token": "",
+        **_credential_payload(),
         "baseUrl": "https://api.worldquantbrain.com",
         "preset": "usa_standard",
         "settings": {
@@ -325,7 +333,7 @@ def test_stage_3_connection_test(session: UserSession):
         session.record_metric("connection_status", "SUCCESS")
         print(f"    [OK] Connection to BRAIN API successful")
     else:
-        error_msg = data.get("error", str(data))
+        error_msg = redact_text(data.get("error", str(data)), max_length=240)
         session.record_error("CONNECTION", f"Connection failed: {error_msg}")
         session.record_metric("connection_status", "FAILED")
         print(f"    [FAIL] Connection failed: {error_msg[:200]}")
@@ -335,11 +343,9 @@ def test_stage_3_connection_test(session: UserSession):
 
     return session.connected
 
-
 # ═══════════════════════════════════════════════════════════════════════════
 # STAGE 4: Cloud Sync
 # ═══════════════════════════════════════════════════════════════════════════
-
 
 def test_stage_4_cloud_sync(session: UserSession):
     """Sync cloud data to get existing alpha snapshots."""
@@ -352,10 +358,9 @@ def test_stage_4_cloud_sync(session: UserSession):
 
     payload = {
         "environment": "production",
-        "username": TEST_EMAIL,
-        "password": TEST_PASSWORD,
+        **_credential_payload(),
         "baseUrl": "https://api.worldquantbrain.com",
-        "syncRange": "3d",
+        "syncRange": "all",
         "settings": {"region": "USA", "universe": "TOP3000"},
     }
 
@@ -383,29 +388,29 @@ def test_stage_4_cloud_sync(session: UserSession):
             else:
                 print(f"    [WARN]  Sync still running (may continue in background)")
 
-            # Verify cloud alphas updated
-            cloud_resp = _safe_get(session, "/api/cloud_alphas", params={"limit": 5})
+            # Verify cloud alphas updated from the complete snapshot, not a capped preview.
+            cloud_resp = _safe_get(session, "/api/snapshot/cloud")
             cloud_data = _try_json(cloud_resp)
-            cloud_count = len(cloud_data.get("alphas", []))
+            summary = cloud_data.get("summary") if isinstance(cloud_data.get("summary"), dict) else {}
+            cloud_count = int(summary.get("count") or summary.get("total") or len(cloud_data.get("alphas", [])))
             session.record_metric("synced_cloud_count", cloud_count)
             print(f"    [INFO]  Cloud alphas available: {cloud_count}")
         else:
-            error = data.get("error", "Unknown error")
+            error = redact_text(data.get("error", "Unknown error"), max_length=240)
             session.record_error("SYNC", f"Sync failed: {error}")
             print(f"    [FAIL] Sync failed: {error[:150]}")
             return False
     except Exception as e:
-        session.record_error("SYNC", f"Sync exception: {e}")
-        print(f"    [FAIL] Sync error: {e}")
+        safe_error = redact_text(e, max_length=240)
+        session.record_error("SYNC", f"Sync exception: {safe_error}")
+        print(f"    [FAIL] Sync error: {safe_error}")
         return False
 
     return True
 
-
 # ═══════════════════════════════════════════════════════════════════════════
 # STAGE 5: Production Run
 # ═══════════════════════════════════════════════════════════════════════════
-
 
 def test_stage_5_production_run(session: UserSession):
     """Start a guided production search and monitor progress via SSE."""
@@ -418,8 +423,7 @@ def test_stage_5_production_run(session: UserSession):
 
     payload = {
         "environment": "production",
-        "username": TEST_EMAIL,
-        "password": TEST_PASSWORD,
+        **_credential_payload(),
         "baseUrl": "https://api.worldquantbrain.com",
         "preset": "usa_standard",
         "guided": True,
@@ -447,7 +451,7 @@ def test_stage_5_production_run(session: UserSession):
         data = _try_json(resp)
 
         if not data.get("ok"):
-            error = data.get("error", "Unknown")
+            error = redact_text(data.get("error", "Unknown"), max_length=240)
             session.record_error("PRODUCTION_START", f"Failed to start: {error}")
             print(f"    [FAIL] Run start failed: {error[:200]}")
             return False
@@ -494,7 +498,7 @@ def test_stage_5_production_run(session: UserSession):
                     break
 
             except Exception as e:
-                print(f"    [WARN]  Status poll error: {e}")
+                print(f"    [WARN]  Status poll error: {redact_text(e, max_length=180)}")
 
         if not progress_seen:
             session.record_warning("PRODUCTION", "No progress updates received")
@@ -507,17 +511,16 @@ def test_stage_5_production_run(session: UserSession):
         print(f"    [INFO]  Final candidate count: {len(candidates)}")
 
     except Exception as e:
-        session.record_error("PRODUCTION", f"Run error: {e}")
-        print(f"    [FAIL] Production error: {e}")
+        safe_error = redact_text(e, max_length=240)
+        session.record_error("PRODUCTION", f"Run error: {safe_error}")
+        print(f"    [FAIL] Production error: {safe_error}")
         return False
 
     return True
 
-
 # ═══════════════════════════════════════════════════════════════════════════
 # STAGE 6: Check & Submit Flow
 # ═══════════════════════════════════════════════════════════════════════════
-
 
 def test_stage_6_check_and_submit(session: UserSession):
     """Run pre-submission checks and submit passing alphas."""
@@ -546,8 +549,7 @@ def test_stage_6_check_and_submit(session: UserSession):
     # Run batch check
     check_payload = {
         "environment": "production",
-        "username": TEST_EMAIL,
-        "password": TEST_PASSWORD,
+        **_credential_payload(),
         "baseUrl": "https://api.worldquantbrain.com",
         "alpha_ids": alpha_ids,
         "settings": {"region": "USA", "universe": "TOP3000"},
@@ -570,8 +572,7 @@ def test_stage_6_check_and_submit(session: UserSession):
                 passed_ids = [aid for aid, r in results.items() if r.get("passed")]
                 submit_payload = {
                     "environment": "production",
-                    "username": TEST_EMAIL,
-                    "password": TEST_PASSWORD,
+                    **_credential_payload(),
                     "baseUrl": "https://api.worldquantbrain.com",
                     "alpha_ids": passed_ids,
                     "settings": {"region": "USA", "universe": "TOP3000"},
@@ -582,22 +583,21 @@ def test_stage_6_check_and_submit(session: UserSession):
                     session.record_metric("submitted_count", len(passed_ids))
                     print(f"    [OK] Submitted {len(passed_ids)} alphas")
             else:
-                print(f"    [INFO]  Auto-submit disabled for safety in test mode")
+                print(f"    [INFO]  Auto-submit disabled for safety during QA walkthrough")
         else:
-            error = check_data.get("error", "Unknown")
+            error = redact_text(check_data.get("error", "Unknown"), max_length=240)
             session.record_error("CHECK", f"Check failed: {error}")
             print(f"    [FAIL] Check failed: {error[:150]}")
     except Exception as e:
-        session.record_error("CHECK", f"Check error: {e}")
-        print(f"    [FAIL] Check error: {e}")
+        safe_error = redact_text(e, max_length=240)
+        session.record_error("CHECK", f"Check error: {safe_error}")
+        print(f"    [FAIL] Check error: {safe_error}")
 
     return True
-
 
 # ═══════════════════════════════════════════════════════════════════════════
 # STAGE 7: Research Data Verification
 # ═══════════════════════════════════════════════════════════════════════════
-
 
 def test_stage_7_research_data(session: UserSession):
     """Verify research data endpoints are functional."""
@@ -620,16 +620,15 @@ def test_stage_7_research_data(session: UserSession):
             print(f"    [OK] {label} ({path}): {resp.status_code}, {data_size} bytes")
             session.record_metric(f"research.{path.split('/')[-1]}_bytes", data_size)
         except Exception as e:
-            session.record_warning("RESEARCH", f"{label}: {e}")
-            print(f"    [WARN]  {label}: {e}")
+            safe_error = redact_text(e, max_length=180)
+            session.record_warning("RESEARCH", f"{label}: {safe_error}")
+            print(f"    [WARN]  {label}: {safe_error}")
 
     return True
-
 
 # ═══════════════════════════════════════════════════════════════════════════
 # STAGE 8: Clean Shutdown
 # ═══════════════════════════════════════════════════════════════════════════
-
 
 def test_stage_8_shutdown(session: UserSession):
     """Gracefully shutdown the server."""
@@ -652,11 +651,9 @@ def test_stage_8_shutdown(session: UserSession):
 
     return True
 
-
 # ═══════════════════════════════════════════════════════════════════════════
 # UX Optimization Report
 # ═══════════════════════════════════════════════════════════════════════════
-
 
 def generate_ux_report(session: UserSession):
     """Generate a structured UX optimization report based on walkthrough findings."""
@@ -808,11 +805,9 @@ def generate_ux_report(session: UserSession):
         "warning_details": session.warnings,
     }
 
-
 # ═══════════════════════════════════════════════════════════════════════════
 # Main Test Entry Point
 # ═══════════════════════════════════════════════════════════════════════════
-
 
 @pytest.mark.integration
 @pytest.mark.slow
@@ -826,7 +821,8 @@ def test_full_new_user_walkthrough():
 
     print("\n" + "╔" + "═" * 78 + "╗")
     print("║  BRAIN Alpha Ops — 新用户全链路走查测试                                ║")
-    print("║  Test Account: " + TEST_EMAIL + " " * (78 - 43 - len(TEST_EMAIL)) + "║")
+    account_label = "runtime env configured" if _has_live_credentials() else "not configured"
+    print("║  Test Account: " + account_label + " " * (78 - 43 - len(account_label)) + "║")
     print("╚" + "═" * 78 + "╝")
 
     session = UserSession()
@@ -875,8 +871,8 @@ def test_full_new_user_walkthrough():
             try:
                 web.shutdown_server()
                 time.sleep(0.5)
-            except Exception:
-                pass
+            except Exception as e:
+                session.record_warning("SHUTDOWN", redact_text(e, max_length=180))
 
         # Generate report
         report = generate_ux_report(session)
@@ -901,11 +897,9 @@ def test_full_new_user_walkthrough():
     # If we got this far with connection, all should have worked
     assert len(session.errors) < 5, f"Too many errors during walkthrough: {len(session.errors)}"
 
-
 # ═══════════════════════════════════════════════════════════════════════════
 # Quick smoke test (no credentials needed)
 # ═══════════════════════════════════════════════════════════════════════════
-
 
 @pytest.mark.integration
 def test_smoke_local_server():
@@ -917,7 +911,7 @@ def test_smoke_local_server():
     os.environ["BRAIN_ALPHA_OPS_HOME"] = project_root
 
     # Use built-in smoke test for reliable server lifecycle
-    port = web.find_free_port(start=8876)
+    port = _free_port_or_skip(start=8876)
     result = web.smoke_test_server(port=port)
     assert result.get("ok") is True, f"Smoke test failed: {result}"
     assert result.get("config_ok") is True

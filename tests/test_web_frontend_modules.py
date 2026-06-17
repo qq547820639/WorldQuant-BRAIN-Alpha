@@ -1,608 +1,527 @@
 from __future__ import annotations
 
 from pathlib import Path
-import re
-import subprocess
-import tempfile
 
-from scripts.check_frontend_syntax import _node_path
+import brain_alpha_ops.build_inline as build_inline
 
 
 ROOT = Path(__file__).resolve().parents[1]
-WEB_DIR = ROOT / "brain_alpha_ops" / "web"
-WEB_JS = ROOT / "brain_alpha_ops" / "web" / "js"
-WEB_CSS = ROOT / "brain_alpha_ops" / "web" / "css"
-TEMPLATE_PATH = WEB_DIR / "index_template.html"
+REACT_SRC = ROOT / "brain_alpha_ops" / "web" / "react_app" / "src"
+REACT_DIST = ROOT / "brain_alpha_ops" / "web" / "react_app" / "dist"
 
-MODULE_TEST_COVERAGE = {
-    "js/api-client.js": "api request, csrf header, and error mapping",
-    "js/app.js": "ux orchestration, workflow nav, busy guards, and app actions",
-    "js/components/modal.js": "confirm dialog visibility, focus, and resolution",
-    "js/components/progress.js": "progress bar clamp and status text rendering",
-    "js/components/spinner.js": "loading overlay visibility and message rendering",
-    "js/components/table.js": "table empty/data rendering, badges, score formatting",
-    "js/components/toast.js": "toast roles, escaping, and removal contract",
-    "js/state.js": "nested state set/merge, listeners, cache, check freshness",
-    "js/utils.js": "escaping, labels, risk/state navigation rendering",
-    "js/form-controls.js": "form value writes, config hydration, and payload assembly",
-    "js/strategy-panel.js": "strategy policy summary and plugin-control state",
-    "js/result-state.js": "result snapshot merging and cloud sync preservation",
-    "js/result-table.js": "main result table, mobile cards, and empty-state rendering",
-    "js/view-model.js": "identity, normalization, dedupe, runtime array selection",
-    "js/view-registry.js": "view ordering, labels, navigation groups, and empty-state hints",
-    "js/view-renderers.js": "result row sources, filters, and column renderer definitions",
-    "js/cloud-sync.js": "production cloud snapshot loading, sync polling, and state hydration",
-    "js/views/charts.js": "offline canvas fallback and empty dataset rendering",
-    "js/views/detail.js": "detail modal rendering, escaping, and check suggestions",
-    "js/views/monitor.js": "legacy monitor tiles and backtest slot rendering",
-    "js/views/production.js": "production guard and global action exports",
+REACT_CONTRACT_COVERAGE = {
+    "App.tsx": "app shell router, sidebar navigation, credential quick-start, and detail view selection",
+    "api/jobCancel.ts": "shared browser job cancellation helper using cross-store job cancel",
+    "main.tsx": "React root bootstrap",
+    "components/CandidateTable.tsx": "candidate generation, filters, queue views, and SSE completion",
+    "components/ConfigPanel.tsx": "session credentials, config hydration, schema options, validation, import/export, and save",
+    "components/Dashboard.tsx": "dashboard snapshots and landing metrics",
+    "components/ErrorBoundary.tsx": "error boundary wrapper with fallback UI and retry recovery",
+    "components/JobMonitor.tsx": "production job start/stop/status and SSE progress",
+    "components/KpiCard.tsx": "compact KPI presentation",
+    "components/OfficialBacktestSlots.tsx": "official backtest slot polling and conflict guidance",
+    "components/OfficialOperationsPanel.tsx": "button-driven official context refresh, blocker review, and operation events",
+    "components/ProgressFeedback.tsx": "accessible progress, spinner, ETA, retry, and indeterminate states",
+    "components/QualityCheckPanel.tsx": "quality gate summary and readiness blockers",
+    "components/ScoringPanel.tsx": "score evaluation, attribution, and result presentation",
+    "components/Sidebar.tsx": "persistent left sidebar navigation with badges (Terminal Precision v2.0)",
+    "components/SnapshotPanel.tsx": "cloud/checkpoint/research/history snapshots",
+    "components/StateCards.tsx": "card-first navigation and startup status loading (superseded by Sidebar)",
+    "components/SubmissionConfirmPanel.tsx": "read-only pre-submit blocker review",
+    "components/SubmissionPanel.tsx": "retired submit compatibility wrapper for read-only readiness review",
+    "components/ToastContainer.tsx": "toast roles, actions, and dismissal",
+    "helpers/errorExperience.ts": "backend user-error payload to user-facing message mapping",
+    "helpers/readinessLabels.ts": "official readiness and blocker reason labels shared across review panels",
+    "helpers/runPayload.ts": "prod validation run payload builder (Terminal Precision v2.0)",
+    "hooks/useApi.ts": "CSRF, replay headers, same-origin credentials, and error mapping",
+    "hooks/useJobState.ts": "job state lifecycle management (Terminal Precision v2.0)",
+    "hooks/useSSE.ts": "stream token, credentials, reconnect, and close semantics",
+    "hooks/useToast.ts": "toast lifecycle state",
+    "types/index.ts": "shared API, progress, candidate, and card view contracts",
+    "utils/backtestSlots.ts": "official backtest slot status and count helpers",
+    "utils/csrf.ts": "CSRF token, stream token, and request-ID generation helpers",
+    "utils/reportIgnoredError.ts": "development-only diagnostics for intentionally ignored browser errors",
+    "components/PhaseShell.tsx": "phase wrapper with header, step guide, and unlock condition (UI Design System v3.0)",
+    "components/StepGuide.tsx": "horizontal step progress bar with complete/active/pending states (v3.0)",
+    "components/MobileTabBar.tsx": "bottom tab navigation for mobile with 4 phase tabs (v3.0)",
+    "components/EmptyState.tsx": "centered empty state with icon, title, description, CTA, and hint (v3.0)",
+    "hooks/usePhaseState.ts": "phase navigation state management with phase determination and step computation (v3.0)",
+    "components/StatusFlowDiagram.tsx": "submission readiness flow visualization showing checklist to submit flow (v3.0)",
+    "__tests__/components_v3.test.tsx": "unit tests for PhaseShell, StepGuide, MobileTabBar, EmptyState components (v3.0)",
+    "__tests__/usePhaseState.test.ts": "unit tests for usePhaseState hook — phase transitions and step computation (v3.0)",
+    "components/Skeleton.tsx": "loading skeleton components for better UX (SkeletonText, SkeletonCard, SkeletonTable)",
+    "hooks/useKeyboardShortcuts.ts": "global keyboard shortcuts and KeyboardShortcutsHelp modal",
 }
 
 
-def _run_node_contract(script: str) -> str:
-    node = _node_path()
-    assert node, "bundled Node.js is required for frontend module contract tests"
-    with tempfile.TemporaryDirectory() as tmp:
-        script_path = Path(tmp) / "frontend_contract_test.js"
-        script_path.write_text(script, encoding="utf-8")
-        proc = subprocess.run(
-            [node, str(script_path), str(ROOT)],
-            cwd=str(ROOT),
-            text=True,
-            capture_output=True,
-            timeout=90,
-        )
-    assert proc.returncode == 0, proc.stdout + proc.stderr
-    return proc.stdout
+def _source(relative: str) -> str:
+    return (REACT_SRC / relative).read_text(encoding="utf-8")
+
+
+def _assert_snippets(source: str, snippets: list[str]) -> None:
+    for snippet in snippets:
+        assert snippet in source, f"Missing frontend contract: {snippet}"
 
 
 def test_every_frontend_module_has_a_contract_test_entry():
-    actual_modules = {
-        "js/" + path.relative_to(WEB_JS).as_posix()
-        for path in WEB_JS.rglob("*.js")
+    actual_sources = {
+        path.relative_to(REACT_SRC).as_posix()
+        for path in REACT_SRC.rglob("*")
+        if path.suffix in {".ts", ".tsx"}
     }
-    assert actual_modules == set(MODULE_TEST_COVERAGE)
 
-    inlined_sources = set(re.findall(r"<!--\s*inline:(js/.+?\.js)\s*-->", TEMPLATE_PATH.read_text(encoding="utf-8")))
-    assert inlined_sources.issubset(MODULE_TEST_COVERAGE)
-    assert "js/views/monitor.js" not in inlined_sources, "legacy monitor is tested but not shipped in the inline bundle"
+    assert actual_sources == set(REACT_CONTRACT_COVERAGE)
+
+    dist_check = build_inline.check()
+    assert dist_check["ok"] is True
+    assert dist_check["frontend"] == "react"
+    assert dist_check["asset_refs"]
+    for ref in dist_check["asset_refs"]:
+        assert (REACT_DIST / ref.removeprefix("/")).is_file()
 
 
 def test_frontend_runtime_modules_render_state_and_interaction_contracts():
-    script = r"""
-const fs = require("fs");
-const path = require("path");
-const vm = require("vm");
-const root = process.argv[2];
+    candidate = _source("components/CandidateTable.tsx")
+    official = _source("components/OfficialOperationsPanel.tsx")
+    submission = _source("components/SubmissionPanel.tsx")
+    confirm = _source("components/SubmissionConfirmPanel.tsx")
+    quality = _source("components/QualityCheckPanel.tsx")
+    slots = _source("components/OfficialBacktestSlots.tsx")
+    progress = _source("components/ProgressFeedback.tsx")
+    scoring = _source("components/ScoringPanel.tsx")
+    job_monitor = _source("components/JobMonitor.tsx")
+    use_job_state = _source("hooks/useJobState.ts")
+    run_payload = _source("helpers/runPayload.ts")
+    readiness_labels = _source("helpers/readinessLabels.ts")
+    use_api = _source("hooks/useApi.ts")
+    use_sse = _source("hooks/useSSE.ts")
+    csrf_utils = _source("utils/csrf.ts")
 
-function assert(condition, message) {
-  if (!condition) throw new Error(message);
-}
+    _assert_snippets(
+        candidate,
+        [
+            "const PAGE_SIZE = 20;",
+            "candidateMatchesQueueView(candidate, viewMode, checkResults)",
+            "sanitizeTextInput(value, MAX_FILTER_LENGTH)",
+            "const rows = result?.candidates || [];",
+            "result.partial",
+            'useSSE(taskId ? `/sse?job_id=${encodeURIComponent(taskId)}` : null',
+            'aria-label="过滤候选"',
+            'aria-label="候选结果"',
+            'scope="col"',
+            "没有匹配的候选",
+        ],
+    )
+    _assert_snippets(
+        submission,
+        [
+            "Retired submit surface kept as a compatibility alias",
+            "SubmissionConfirmPanel notify={notify}",
+            "旧提交面板已退役",
+            "Web 页面不执行真实提交",
+            "任何真实提交需另走人工审批",
+            'role="status"',
+        ],
+    )
+    assert "/api/submit" not in submission
+    assert "/api/submit_batch" not in submission
+    assert 'callReadiness<SubmitReadinessResponse>("/api/submit_readiness")' in confirm
+    _assert_snippets(
+        official,
+        [
+            'readinessProductionGapLabel',
+            "rows={allReadinessBlockers.map(reasonCountText)}",
+            "rows={allFamilyBlockers.map(reasonCountText)}",
+            "rows={allProductionGaps.map(findingText)}",
+            "rows={allBestCandidateReasons.map((reason) => readinessReasonLabel(reason))}",
+            "function reasonCountText(row",
+            "function findingText(row",
+        ],
+    )
+    _assert_snippets(
+        official + confirm + quality + slots + readiness_labels,
+        [
+            "readinessReasonLabel(",
+            "readinessProductionGapLabel(",
+            "存在未分类生产缺口",
+            'missing_scientific_audit: "缺少科学审计证据"',
+            'scientific_audit_submit_boundary_breached: "科学审计提交边界异常"',
+            'latest_candidate_scientific_audit_test_feedback_used: "最新候选科学审计含测试反馈"',
+            'incomplete_scientific_audit: "科学审计证据不完整"',
+        ],
+    )
+    _assert_snippets(
+        progress + use_api + use_sse + csrf_utils,
+        [
+            'role="progressbar"',
+            "normalizedPercent(progress, progressState)",
+            'credentials: "same-origin"',
+            'headers["X-Brain-Alpha-CSRF"] = csrf',
+            '"X-Brain-Alpha-Request-ID"',
+            "new EventSource(withStreamToken(streamUrl), { withCredentials: true })",
+            "onExhaustedRef.current?.();",
+            "stream_token=${encodeURIComponent(token)}",
+        ],
+    )
+    _assert_snippets(
+        run_payload + candidate + scoring + job_monitor + use_job_state,
+        [
+            "export function resolveJobEventState(",
+            'import { resolveJobEventState } from "@/helpers/runPayload";',
+            "resolveJobEventState(event, progress",
+            "resolveJobEventState(event, event.progress || event.data",
+        ],
+    )
 
-function createHarness() {
-  const elements = {};
-  const timers = [];
 
-  class ClassList {
-    constructor(el) {
-      this.el = el;
-      this.tokens = new Set();
-    }
-    _sync() { this.el.className = Array.from(this.tokens).join(" "); }
-    add() { Array.from(arguments).forEach(token => { if (token) this.tokens.add(String(token)); }); this._sync(); }
-    remove() { Array.from(arguments).forEach(token => this.tokens.delete(String(token))); this._sync(); }
-    contains(token) { return this.tokens.has(String(token)); }
-    toggle(token, force) {
-      const shouldAdd = force === undefined ? !this.contains(token) : Boolean(force);
-      if (shouldAdd) this.tokens.add(String(token));
-      else this.tokens.delete(String(token));
-      this._sync();
-      return shouldAdd;
-    }
-  }
+def test_browser_react_smoke_requires_non_submit_state_error_assertions():
+    smoke = (ROOT / "scripts" / "browser_react_artifact_smoke.mjs").read_text(encoding="utf-8")
 
-  class Element {
-    constructor(tagName) {
-      this.tagName = String(tagName || "div").toUpperCase();
-      this.children = [];
-      this.parentNode = null;
-      this.parentElement = null;
-      this.attributes = {};
-      this.dataset = {};
-      this.style = {};
-      this.className = "";
-      this.classList = new ClassList(this);
-      this.innerHTML = "";
-      this.textContent = "";
-      this.value = "";
-      this.disabled = false;
-      this.eventListeners = {};
-      this.clientWidth = 420;
-      this.clientHeight = 220;
-      this.drawOps = [];
-    }
-    setAttribute(name, value) {
-      value = String(value);
-      this.attributes[name] = value;
-      if (name === "id") {
-        this.id = value;
-        elements[value] = this;
-      }
-      if (name === "class") {
-        this.className = value;
-        this.classList.tokens = new Set(value.split(/\s+/).filter(Boolean));
-      }
-      if (name.indexOf("data-") === 0) {
-        const key = name.slice(5).replace(/-([a-z])/g, (_, ch) => ch.toUpperCase());
-        this.dataset[key] = value;
-      }
-    }
-    getAttribute(name) { return this.attributes[name] || ""; }
-    appendChild(child) {
-      child.parentNode = this;
-      child.parentElement = this;
-      this.children.push(child);
-      return child;
-    }
-    removeChild(child) {
-      this.children = this.children.filter(item => item !== child);
-      child.parentNode = null;
-      child.parentElement = null;
-      return child;
-    }
-    addEventListener(type, fn) {
-      if (!this.eventListeners[type]) this.eventListeners[type] = [];
-      this.eventListeners[type].push(fn);
-    }
-    removeEventListener(type, fn) {
-      this.eventListeners[type] = (this.eventListeners[type] || []).filter(item => item !== fn);
-    }
-    click() {
-      (this.eventListeners.click || []).slice().forEach(fn => fn({ target: this, preventDefault() {}, stopPropagation() {} }));
-    }
-    focus() { document.activeElement = this; }
-    querySelector(selector) {
-      if (selector[0] === "#") return elements[selector.slice(1)] || null;
-      if (selector[0] === ".") {
-        const wanted = selector.slice(1);
-        const stack = this.children.slice();
-        while (stack.length) {
-          const item = stack.shift();
-          if (item.classList.contains(wanted)) return item;
-          stack.push.apply(stack, item.children);
-        }
-      }
-      return null;
-    }
-    querySelectorAll(selector) {
-      if (selector === "[data-style-width]" || selector === "[data-style-left]") return [];
-      return this.children;
-    }
-    getBoundingClientRect() {
-      return { width: this.clientWidth || 360, height: this.clientHeight || 200, top: 0, left: 0 };
-    }
-    getContext(type) {
-      if (this.tagName !== "CANVAS" || type !== "2d") return null;
-      const canvas = this;
-      const ctx = {
-        setTransform() { canvas.drawOps.push("setTransform"); },
-        clearRect() { canvas.drawOps.push("clearRect"); },
-        fillRect() { canvas.drawOps.push("fillRect"); },
-        fillText(text) { canvas.drawOps.push("text:" + text); },
-        beginPath() { canvas.drawOps.push("beginPath"); },
-        moveTo() { canvas.drawOps.push("moveTo"); },
-        lineTo() { canvas.drawOps.push("lineTo"); },
-        stroke() { canvas.drawOps.push("stroke"); },
-        arc() { canvas.drawOps.push("arc"); },
-        closePath() { canvas.drawOps.push("closePath"); },
-        fill() { canvas.drawOps.push("fill"); },
-      };
-      return ctx;
-    }
-  }
-
-  const document = {
-    elements,
-    readyState: "loading",
-    activeElement: null,
-    documentElement: new Element("html"),
-    body: null,
-    createElement(tag) { return new Element(tag); },
-    getElementById(id) { return elements[id] || null; },
-    querySelector(selector) {
-      if (selector[0] === "#") return elements[selector.slice(1)] || null;
-      return this.body ? this.body.querySelector(selector) : null;
-    },
-    addEventListener() {},
-    contains(el) { return Boolean(el); },
-    register(id, tag) {
-      const el = new Element(tag || "div");
-      el.setAttribute("id", id);
-      return el;
-    },
-  };
-  document.body = new Element("body");
-  document.activeElement = document.body;
-
-  const context = {
-    console,
-    URL,
-    document,
-    setTimeout(fn) { timers.push(fn); if (typeof fn === "function") fn(); return timers.length; },
-    clearTimeout() {},
-    setInterval() { return 1; },
-    clearInterval() {},
-    localStorage: { getItem() { return null; }, setItem() {} },
-    location: { origin: "http://127.0.0.1:8765" },
-    matchMedia() { return { matches: false }; },
-    navigator: { clipboard: { writeText: async () => {} } },
-    getComputedStyle() { return { display: "block" }; },
-    confirm() { return true; },
-  };
-  context.window = context;
-  return { context: vm.createContext(context), document, Element };
-}
-
-function load(context, relPath) {
-  const source = fs.readFileSync(path.join(root, "brain_alpha_ops", "web", relPath), "utf8");
-  vm.runInContext(source, context, { filename: relPath });
-}
-
-(async function main() {
-  const { context, document, Element } = createHarness();
-  [
-    "toastContainer", "spinnerOverlay", "spinnerText", "confirmOverlay", "confirmText",
-    "confirmYes", "confirmNo", "progressFill", "progressMeta", "tableRows",
-    "detailModal", "detailCloseButton", "modalTitle", "detail", "opsMonitor",
-    "insight", "backtestPanel", "controlButton", "status", "checkpointSummary"
-  ].forEach(id => document.register(id, id === "confirmYes" || id === "confirmNo" || id === "detailCloseButton" || id === "controlButton" ? "button" : "div"));
-  const modalPanel = new Element("div");
-  modalPanel.classList.add("modal-panel");
-  document.getElementById("detailModal").appendChild(modalPanel);
-  document.getElementById("confirmOverlay").classList.add("hidden");
-  document.getElementById("spinnerOverlay").classList.add("hidden");
-
-  load(context, "js/utils.js");
-  load(context, "js/state.js");
-  load(context, "js/api-client.js");
-  load(context, "js/view-model.js");
-  load(context, "js/view-registry.js");
-  load(context, "js/view-renderers.js");
-  load(context, "js/result-state.js");
-  load(context, "js/result-table.js");
-  load(context, "js/form-controls.js");
-  load(context, "js/strategy-panel.js");
-  load(context, "js/components/toast.js");
-  load(context, "js/components/spinner.js");
-  load(context, "js/components/modal.js");
-  load(context, "js/components/progress.js");
-  load(context, "js/components/table.js");
-
-  assert(context.Utils.escapeHtml("<b>&") === "&lt;b&gt;&amp;", "utils escapeHtml must escape markup");
-  assert(context.Utils.phaseName("cloud_sync") === "云端数据同步", "utils phaseName must translate backend phases");
-  const riskHtml = context.Utils.renderRiskExplanation({ title: "<risk>", summary: "<bad>", severity: "blocking<script>", visual: { value: 0.91, threshold: 0.9 }, reasons: ["<x>"], recommended_actions: ["fix"] });
-  assert(riskHtml.includes("&lt;risk&gt;") && !riskHtml.includes("<script>"), "risk rendering must escape text and sanitize classes");
-
-  let apiRequest = null;
-  context.fetch = async function(url, options) {
-    apiRequest = { url, options };
-    return { json: async () => ({ ok: true, value: 42 }) };
-  };
-  const apiOk = await context.ApiClient.post("/api/demo?x=1", { alpha: "A1" });
-  assert(apiOk.value === 42, "api-client must return successful payload");
-  assert(apiRequest.url === "/api/demo?x=1", "api-client must preserve local api path");
-  assert(apiRequest.options.headers["X-Brain-Alpha-CSRF"], "api-client must send csrf header");
-  context.fetch = async function() { return { json: async () => ({ ok: false, error_code: "SUBMIT_BLOCKED", error: "raw" }) }; };
-  let rejected = false;
-  try { await context.ApiClient.get("/api/fail"); } catch (err) { rejected = err.code === "SUBMIT_BLOCKED" && err.message.includes("提交被安全门禁阻断"); }
-  assert(rejected, "api-client must map backend error codes to user-facing messages");
-
-  let notified = "";
-  context.AppState.onUpdate(path => { notified = path; });
-  context.AppState.set("currentResult.summary.produced_count", 7);
-  assert(context.AppState.get("currentResult.summary.produced_count") === 7 && notified === "currentResult.summary.produced_count", "state set/get/listener contract failed");
-  context.AppState.merge("currentResult.summary", { passed_count: 3 });
-  assert(context.AppState.get("currentResult.summary.passed_count") === 3, "state merge contract failed");
-  context.AppState.set("checkResults.A1", { passed: true, checked_at: new Date().toISOString(), checks: [{ name: "official_pre_submit_check", passed: true }] });
-  assert(context.AppState.isSubmittable({ alpha_id: "A1" }), "state submittable helper must honor fresh official checks");
-
-  assert(context.ViewModel.normalizedExpression(" rank( x ) ") === "rank( x )", "view-model normalization failed");
-  assert(context.ViewModel.uniqueCandidates([{ alpha_id: "A1" }, { alpha_id: "A1" }]).length === 1, "view-model candidate dedupe failed");
-  assert(context.ViewModel.chooseRuntimeArray([], [{ id: 1 }], [{ id: 2 }])[0].id === 1, "view-model runtime array choice failed");
-  const viewRows = context.ViewRenderers.getRowsForView("passed", { candidates: [{ alpha_id: "A1", lifecycle_status: "submission_ready", gate: { submission_ready: true } }] });
-  assert(viewRows.length === 1 && viewRows[0].kind === "passed", "view-renderers row source failed");
-  const resultBatch = context.ResultState.buildResultBatch({ summary: { cloud_sync: { status: "empty" } }, candidates: [{ alpha_id: "A1" }] }, { currentSummary: {}, currentCandidates: [], liveCloudSyncProgress: () => ({ status: "running", scanned: 3 }) });
-  assert(resultBatch["currentResult.summary"].cloud_sync.scanned === 3, "result-state must preserve active cloud progress over empty snapshots");
-  document.register("region", "select").value = "USA";
-  document.register("universe", "select").value = "TOP3000";
-  document.register("delay", "input").value = "1";
-  document.register("neutralization", "select").value = "SUBINDUSTRY";
-  document.register("instrumentType", "select").value = "EQUITY";
-  document.register("alphaType", "select").value = "PYRAMID";
-  document.register("decay", "input").value = "10";
-  document.register("truncation", "input").value = "0.05";
-  document.register("pasteurization", "select").value = "ON";
-  document.register("nanHandling", "select").value = "ON";
-  document.register("unitHandling", "select").value = "NONE";
-  document.register("language", "select").value = "FASTEXPR";
-  document.register("preset", "select").value = "atom_preset";
-  document.register("environment", "select").value = "production";
-  document.register("baseUrl", "input").value = "https://api.worldquantbrain.com";
-  document.register("syncRange", "select").value = "7d";
-  document.register("autoSubmitToggle", "input").type = "checkbox";
-  document.getElementById("autoSubmitToggle").checked = true;
-  document.register("useAssistantGuidance", "input").type = "checkbox";
-  document.getElementById("useAssistantGuidance").checked = true;
-  document.register("assistantGuidanceMinConfidence", "input").value = "0.7";
-  document.register("assistantGuidanceScoreAdjustment", "input").type = "checkbox";
-  document.getElementById("assistantGuidanceScoreAdjustment").checked = true;
-  document.register("assistantGuidanceScoreMinConfidence", "input").value = "0.75";
-  document.register("assistantGuidanceScoreMinOutcomeCount", "input").value = "2";
-  document.register("assistantGuidanceScoreBonusCap", "input").value = "2.5";
-  document.register("assistantGuidanceScorePenaltyCap", "input").value = "3.5";
-  document.register("strategyPluginsEnabled", "input").type = "checkbox";
-  document.getElementById("strategyPluginsEnabled").checked = true;
-  document.register("strategyPluginSpecs", "textarea").value = "brain_alpha_ops.examples.strategy_plugin:ConservativeMeanReversionPlugin";
-  const formPayload = context.FormControls.collectPayload();
-  assert(formPayload.settings.region === "USA", "form-controls must collect settings payload");
-  assert(formPayload.settings.type === "PYRAMID", "form-controls must send backend alpha type key");
-  assert(!Object.prototype.hasOwnProperty.call(formPayload.settings, "alphaType"), "form-controls must not emit stale alphaType key");
-  assert(formPayload.settings.unitHandling === "NONE", "form-controls must preserve canonical unit handling NONE");
-  assert(formPayload.autoSubmit === true, "form-controls must collect auto submit toggle");
-  assert(formPayload.syncRange === "7d", "form-controls must collect cloud sync range");
-  assert(formPayload.useAssistantGuidance === true, "form-controls must emit canonical guidance key");
-  assert(formPayload.assistantGuidanceMinConfidence === 0.7, "form-controls must collect guidance confidence");
-  assert(formPayload.assistantGuidanceScoreAdjustment === true, "form-controls must collect scoring adjustment flag");
-  assert(formPayload.assistantGuidanceScoreMinConfidence === 0.75, "form-controls must collect scoring confidence");
-  assert(formPayload.assistantGuidanceScoreMinOutcomeCount === 2, "form-controls must collect scoring sample floor");
-  assert(formPayload.assistantGuidanceScoreBonusCap === 2.5, "form-controls must collect scoring bonus cap");
-  assert(formPayload.assistantGuidanceScorePenaltyCap === 3.5, "form-controls must collect scoring penalty cap");
-  assert(formPayload.strategyPluginsEnabled === true, "form-controls must emit canonical plugin flag");
-  assert(formPayload.strategyPluginSpecs.indexOf("ConservativeMeanReversionPlugin") !== -1, "form-controls must collect plugin specs");
-  [
-    "use_assistant_guidance",
-    "assistant_guidance_min_confidence",
-    "assistant_guidance_score_adjustment",
-    "assistant_guidance_score_min_confidence",
-    "strategy_plugins_enabled",
-  ].forEach(key => assert(!Object.prototype.hasOwnProperty.call(formPayload, key), "form-controls must not emit stale snake_case key " + key));
-  assert(context.FormControls.applyPreset({ atom_preset: { settings: { type: "ATOM", unitHandling: "RAW" } } }), "preset application should accept backend type key");
-  assert(document.getElementById("alphaType").value === "ATOM", "preset type must update alphaType control");
-  assert(document.getElementById("unitHandling").value === "RAW", "preset unit handling must update control");
-  context.FormControls.applyConfig({
-    environment: "production",
-    auto_submit: false,
-    ops: {
-      official_api: { base_url: "https://api.worldquantbrain.com" },
-      settings: {
-        region: "EUR",
-        universe: "TOP1000",
-        delay: 0,
-        neutralization: "MARKET",
-        instrumentType: "EQUITY",
-        type: "REGULAR",
-        decay: 5,
-        truncation: 0.08,
-        pasteurization: "OFF",
-        nanHandling: "OFF",
-        unitHandling: "VERIFY",
-        language: "FASTEXPR",
-      },
-      budget: {
-        cloud_sync_range: "all",
-        use_assistant_guidance: false,
-        assistant_guidance_min_confidence: 0.8,
-        strategy_plugins_enabled: true,
-        strategy_plugin_specs: ["pkg:PluginA", "pkg:PluginB"],
-      },
-      scoring: {
-        assistant_guidance_score_adjustment_enabled: false,
-        assistant_guidance_score_min_confidence: 0.85,
-        assistant_guidance_score_min_outcome_count: 4,
-        assistant_guidance_score_bonus_cap: 1.5,
-        assistant_guidance_score_penalty_cap: 2.5,
-      },
-    },
-  });
-  assert(document.getElementById("region").value === "EUR", "applyConfig must hydrate settings.region");
-  assert(document.getElementById("alphaType").value === "REGULAR", "applyConfig must hydrate settings.type into alphaType");
-  assert(document.getElementById("syncRange").value === "all", "applyConfig must hydrate cloud sync range");
-  assert(document.getElementById("autoSubmitToggle").checked === false, "applyConfig must hydrate auto_submit");
-  assert(document.getElementById("useAssistantGuidance").checked === false, "applyConfig must hydrate guidance flag");
-  assert(document.getElementById("assistantGuidanceMinConfidence").value === "0.8", "applyConfig must hydrate guidance confidence");
-  assert(document.getElementById("assistantGuidanceScoreAdjustment").checked === false, "applyConfig must hydrate scoring adjustment flag");
-  assert(document.getElementById("assistantGuidanceScoreMinOutcomeCount").value === "4", "applyConfig must hydrate scoring sample floor");
-  assert(document.getElementById("strategyPluginsEnabled").checked === true, "applyConfig must hydrate plugin flag");
-  assert(document.getElementById("strategyPluginSpecs").value === "pkg:PluginA\npkg:PluginB", "applyConfig must hydrate plugin specs one per line");
-
-  const toast = context.Toast.toast("<unsafe>", "error", 0);
-  assert(toast.getAttribute("role") === "alert" && toast.innerHTML.includes("&lt;unsafe&gt;"), "toast must render safe alert markup");
-  context.Spinner.showSpinner("Working");
-  assert(!document.getElementById("spinnerOverlay").classList.contains("hidden") && document.getElementById("spinnerText").textContent === "Working", "spinner show contract failed");
-  context.Spinner.hideSpinner();
-  assert(document.getElementById("spinnerOverlay").classList.contains("hidden"), "spinner hide contract failed");
-
-  context.Progress.renderProgress("progress", { percent: 150, message: "Sync", scanned: 2, total: 4, added: 1, skipped: 3 });
-  assert(document.getElementById("progressFill").style.width === "100%", "progress must clamp fill width");
-  assert(context.Utils.renderSafeHtmlFragment('<img src=x onerror=alert(1)>', 'badge').includes("&lt;img"), "safe fragment helper must reject dangerous tags");
-  assert(context.Utils.renderSafeHtmlFragment(context.Utils.statusBadge("OK", "good"), "badge").includes("badge-success"), "safe fragment helper must allow whitelisted badges");
-  assert(document.getElementById("progressMeta").textContent.includes("2/4") && document.getElementById("progressMeta").textContent.includes("跳过 3"), "progress meta rendering failed");
-
-  const confirmed = context.Modal.confirmAction("Continue?", "Yes", "No");
-  assert(!document.getElementById("confirmOverlay").classList.contains("hidden"), "modal must show confirm overlay");
-  document.getElementById("confirmYes").click();
-  assert(await confirmed === true, "modal must resolve true from yes button");
-  assert(document.getElementById("confirmOverlay").classList.contains("hidden"), "modal must hide after resolution");
-
-  context.Table.render("tableRows", [{ accessor: "name" }, { accessor: row => row.raw.html, render: value => value, trustedHtml: true }], [{ kind: "candidate", id: "1", raw: { name: "<Alpha>", html: "<button>bad</button>" } }]);
-  assert(document.getElementById("tableRows").innerHTML.includes("&lt;Alpha&gt;") && document.getElementById("tableRows").innerHTML.includes("&lt;button&gt;bad&lt;/button&gt;"), "table must escape untrusted values");
-  context.Table.render("tableRows", [{ accessor: row => row.raw.status, render: value => context.Utils.statusBadge(value, "good"), htmlType: "badge" }], [{ kind: "candidate", id: "2", raw: { status: "OK" } }]);
-  assert(document.getElementById("tableRows").innerHTML.includes("badge-success"), "table must render whitelisted badge fragments");
-  context.Table.render("tableRows", [{ accessor: row => row.raw.html, render: value => value, htmlType: "badge" }], [{ kind: "candidate", id: "3", raw: { html: '<span class="badge badge-success" onclick="alert(1)">bad</span>' } }]);
-  assert(document.getElementById("tableRows").innerHTML.includes("&lt;span") && !document.getElementById("tableRows").innerHTML.includes('<span class="badge badge-success" onclick='), "table must reject malformed whitelisted fragments");
-  context.Table.render("tableRows", [{ accessor: "name" }], [], { emptyText: "No rows" });
-  assert(document.getElementById("tableRows").innerHTML.includes("No rows"), "table empty state rendering failed");
-
-  ["chartFallback", "scoreTrendChart", "sharpeDistChart", "gatePieChart", "turnoverChart"].forEach(id => {
-    const el = document.register(id, id.endsWith("Chart") ? "canvas" : "div");
-    if (el.tagName === "CANVAS") {
-      el.parentElement = { clientWidth: 360 };
-      el.clientWidth = 360;
-      el.clientHeight = 210;
-    }
-  });
-  context.AppScoring = {
-    candidateDisplayScore(candidate) { return (candidate.scorecard || {}).total_score || 0; },
-    extractOfficialMetrics(candidate) { return candidate.official_metrics || {}; },
-  };
-  load(context, "js/views/charts.js");
-  context.ChartView.renderCharts({ candidates: [{ alpha_id: "A1", scorecard: { total_score: 88, sharpe: 1.2, turnover: 0.18 }, gate: { submission_ready: true } }] });
-  assert(document.getElementById("chartFallback").textContent.includes("Chart.js 未加载"), "charts must expose offline fallback guidance");
-  assert(document.getElementById("chartFallback").textContent.includes("本地 canvas"), "charts must explain local canvas fallback");
-  assert(document.getElementById("scoreTrendChart").drawOps.length > 0, "charts should draw native fallback without Chart.js");
-  assert(document.getElementById("gatePieChart").drawOps.includes("arc"), "native fallback should render a gate pie chart");
-
-  load(context, "js/views/detail.js");
-  context.DetailView.viewCheckDetail({ alpha_id: "A1", passed: false, is_stale: false, checks: [{ name: "official_pre_submit_check", passed: false, suggestion: "Fix <bad>" }] });
-  assert(document.getElementById("detail").innerHTML.includes("Fix &lt;bad&gt;"), "detail check suggestions must be escaped");
-  assert(document.getElementById("detailModal").getAttribute("aria-hidden") === "false", "detail modal must become visible");
-
-  load(context, "js/views/monitor.js");
-  context.AppState.set("currentResult.candidates", [{ alpha_id: "A1", lifecycle_status: "submission_ready" }]);
-  context.AppState.set("currentResult.summary", { stats: { produced_count: 5, passed_count: 1 }, dataset_id: "D1" });
-  context.MonitorView.renderOpsMonitor();
-  assert(document.getElementById("opsMonitor").innerHTML.includes("stat-tile") && document.getElementById("opsMonitor").innerHTML.includes("D1"), "monitor must render stat tiles");
-  context.MonitorView.renderBacktests([{ status: "running", alpha_id: "A1", sharpe: 1.2, fitness: 0.7 }]);
-  assert(document.getElementById("backtestPanel").innerHTML.includes("slot-card") && document.getElementById("backtestPanel").innerHTML.includes("A1"), "monitor must render backtest slots");
-
-  context.Toast.toast = function(message, type) { context.lastToast = { message, type }; };
-  context.Toast.warning = function(message) { context.lastToast = { message, type: "warning" }; };
-  context.operationBlockReason = function(action) { return action === "production" ? "blocked by test" : ""; };
-  context.renderBusyControls = function() { context.busyRendered = true; };
-  context.collectPayload = function() { return {}; };
-  load(context, "js/views/production.js");
-  context.fetch = async function(url) {
-    if (url === "/api/checkpoint/status") {
-      return { json: async () => ({ ok: true, checkpoint_count: 1, history_count: 2, resume_available: true, latest: { run_id: "run_1", phase_completed: "redline" }, latest_history: { run_id: "run_1", status: "completed" }, latest_comparison: { deltas: { best_score: 10.5, submission_ready: 2 } } }) };
-    }
-    return { json: async () => ({ ok: true }) };
-  };
-  await context.loadCheckpointStatus();
-  assert(document.getElementById("checkpointSummary").textContent.includes("断点可续跑") && document.getElementById("checkpointSummary").textContent.includes("历史 2"), "production module must render checkpoint and history status");
-  assert(document.getElementById("checkpointSummary").textContent.includes("10.5"), "production module must render score delta");
-  await context.startProduction();
-  assert(context.lastToast.message === "blocked by test" && context.lastToast.type === "warning", "production module must honor operation guard before api calls");
-  assert(typeof context.toggleRun === "function" && typeof context.connectSSE === "function" && typeof context.disconnectSSE === "function" && typeof context.loadCheckpointStatus === "function", "production module exports must remain available");
-
-  console.log("frontend module contracts ok");
-})().catch(err => {
-  console.error(err && err.stack ? err.stack : String(err));
-  process.exit(1);
-});
-"""
-    assert "frontend module contracts ok" in _run_node_contract(script)
+    _assert_snippets(
+        smoke,
+        [
+            "report.productionValidation = {",
+            "home shell does not expose local non-submit validation state",
+            "home shell does not expose non-submit proof metrics",
+            "production validation monitor did not render non-submit proof surface",
+            "production validation interrupted state did not show safe user-facing copy",
+            "production validation interrupted state did not return controls to retry-safe state",
+            "production validation run request did not preserve non-submit/no-credential payload",
+            "report.submissionConfirm = {",
+            "submission confirm panel did not render final non-submit blocker review",
+            "submission confirm panel did not show scientific-audit blockers",
+            "submission confirm panel exposed raw readiness/check/status text",
+            "submission confirm panel attempted a submit endpoint",
+            "report.candidateOperations = {",
+            "candidate operations panel did not render target-pool recovery controls",
+            "candidate operations auto-advance control was not clickable",
+            "candidate operations official validation queue did not run visible mocked simulation",
+            "candidate operations official validation queue did not continue into quality gate check",
+            "simulate_queue_zero_smoke",
+            "negativeOfficialSimulationFailed",
+            "candidate operations zero-success official validation queue did not fail closed before quality gate check",
+            "candidate operations zero-success official validation queue called check_batch before a successful simulation",
+            "candidate operations did not navigate from a candidate row into scoring",
+            "candidate operations auto-advance request did not preserve local non-submit/no-credential payload",
+            "candidate operations official validation simulation request did not preserve safe Top3 no-credential payload",
+            "candidate operations batch quality check request did not preserve safe simulated-candidate no-credential payload",
+            "report.scoringPanel = {",
+            "scoring panel did not render clicked-candidate scoring attribution and gate evidence",
+            "score_failed_smoke",
+            "raw backend scoring failure password=secret",
+            "raw backend family password=secret",
+            "REPORT_RAW_BACKEND_TEXT_PATTERN",
+            "RAW_BACKEND_SCORE_STATUS",
+            "评分失败，请重新评估候选后再继续。",
+            "failureRefreshClicked",
+            "failureUserCopy",
+            "failureRetryVisible",
+            "failureNotComplete",
+            "failureRawBackendHidden",
+            "recoveredAfterRetry",
+            "scoringFailureRetryInteractionExpression",
+            "validateScoringFailureRetryInteractions",
+            "scoring_failure_retry",
+            "scoring failure retry slice did not navigate from candidate row into scoring",
+            "scoring failure retry slice did not render initial clicked-candidate scoring success",
+            "scoring failure retry slice did not stay retry-safe and non-complete after refresh failure",
+            "scoring failure retry slice did not recover after retry success",
+            "scoring failure retry slice exposed raw backend/session text",
+            "scoring failure retry slice did not exercise initial success, refresh failure, and retry success",
+            "scoring failure retry request ${endpoint} did not preserve no-credential candidate payload",
+            "scoring failure retry slice attempted a submit endpoint",
+            "scoring failure retry slice request carried credential-like fields",
+            "scoring panel failure state did not stay retry-safe and non-complete",
+            "scoring panel retry did not recover after a failed scoring event",
+            "scoring panel failure state exposed raw backend/session text",
+            "scoring request ${endpoint} did not preserve no-credential candidate payload",
+            "clickedScoreAlphaId",
+            "clickedAlphaId: clickedScoreAlphaId",
+            "body.alpha_id !== scoringPanel.clickedAlphaId",
+            "body.candidate.alpha_id !== scoringPanel.clickedAlphaId",
+            "report.backtestSlots = {",
+            "official backtest slots panel did not render slot capacity summary",
+            "official backtest slots panel did not render running, empty, and completed slot states",
+            "report.qualityCheck = {",
+            "quality check panel did not render local and official evidence summary",
+            "quality check panel did not show non-submit blocker evidence and next action",
+            "raw backend action password=secret",
+            "等待候选和门禁数据",
+            "report.configPanel = {",
+            "config panel did not render safe cache/session configuration copy",
+            "config panel connection test ran during browser smoke",
+            "report.snapshotPanel = {",
+            "snapshot panel did not render checkpoint evidence rows",
+            "snapshot panel exposed raw checkpoint status, visible fields, or backend detail text",
+            "report.robustnessReplay = {",
+            "replayAuditInteractionExpression",
+            "validateReplayAuditInteractions",
+            'argValue("--slice", "full")',
+            "VALID_SLICES",
+            "--slice must be one of: ${VALID_SLICES.join",
+            'slice === "replay_audit"',
+            'slice === "scoring_failure_retry"',
+            "30000",
+            "45000",
+            "runSmokeStep(",
+            "diagnosticMessage(",
+            "last_mock_endpoint=",
+            "viewport=${viewport}",
+            "step=${step}",
+            "elapsed_ms=${elapsedMs}",
+            "robustness replay audit slice did not navigate to the robustness evidence panel",
+            "robustness replay audit panel did not render local latest_result replay metrics",
+            "robustness replay audit panel did not expose stop-rule, non-submit, and scientific-audit evidence",
+            "robustness replay audit panel exposed local path or raw backend text",
+            "/api/latest_result",
+            "expected mocked GET /api/latest_result",
+            "unexpected browser-smoke mutating request ${request.method} ${request.path}",
+            "replay_audit",
+            "本地回放审计",
+            "非提交边界",
+            "停机规则:check_live_submit_readiness\\.py",
+            "RAW_BACKEND_CHECK_STATUS",
+            "raw backend-only checkpoint failure",
+            "raw backend title password=secret",
+            "raw backend metric api_key=secret",
+            "raw backend metric csrf_token=secret",
+            "raw backend delta password=secret",
+            "RAW_BACKEND_RISK password=secret",
+            "raw backend-only submission gap",
+            "raw backend-only submit action",
+            "raw backend-only check reason",
+            "状态待确认",
+            "详情待确认",
+            "记录待确认",
+            "指标待确认",
+            "时间待确认",
+            "趋势待确认",
+            "对比项待确认",
+            "提交前阻断复核",
+            "report.lifecycleReplay = {",
+            "lifecycle replay panel did not render local read-only non-submit state",
+            "lifecycle replay panel did not expose replay summary metrics",
+            "lifecycle replay recovered trace did not prioritize latest passed state",
+            "lifecycle replay blocked trace did not show review next action",
+            "lifecycle replay panel exposed secret-like labels or values",
+            'document.querySelector(\'section[aria-label="生命周期回放"]\')',
+            "report.officialOperations = {",
+            'document.querySelector(\'section[aria-label="官方同步数据总览"]\')',
+            'Array.from(document.querySelectorAll("h2"))',
+            'officialHeading?.closest(".animate-fade-in")',
+            "officialPanel?.innerText || \"\"",
+            "official operations panel did not render the non-submit sync entry and overview",
+            "official operations session-invalid recovery state did not show safe reconnect guidance",
+            "official operations open-ended sync scan did not stay indeterminate and non-complete",
+            "official operations stopped/cancelled sync state did not stay retry-safe and non-complete",
+            "official operations intermediate state-error snapshots overflow horizontally",
+            "official operations sync warning state did not expose safe partial-success guidance",
+            "official operations readiness review did not stay visibly blocked and non-submit",
+            "official operations readiness review did not show scientific-audit blockers",
+            "official operations check-results review did not load visible quality evidence",
+            "official operations panel exposed raw backend/session or secret-like text",
+            "official operations sync request did not preserve safe local visual-smoke payload",
+            "official operations sync cancel request did not preserve safe local visual-smoke payload",
+            "sync_open_ended_scan",
+            "sync_cancelled_terminal",
+            "scientificAuditBlocked",
+            "missing_scientific_audit",
+            "scientific_audit_submit_boundary_breached",
+            "latest_candidate_scientific_audit_test_feedback_used",
+            "incomplete_scientific_audit",
+            "缺少科学审计证据",
+            "科学审计提交边界异常",
+            "最新候选科学审计含测试反馈",
+            "科学审计证据不完整",
+            "后台确认状态为已停止",
+            "后台确认状态为已取消",
+            "reconnectClicked && reconnectNavigated",
+            "stateOverflowFree",
+            "!/width:\\s*100%/i.test(scanProgressFillStyle)",
+            'document.querySelector(\'[role="progressbar"][aria-label*="扫描云端"]\')',
+            "completed_with_warnings",
+            "COMPLETED_WITH_WARNINGS",
+            'context_status: "failed"',
+            'userFacingOperation !== "official_operations_context_refresh"',
+            "REPORT_FORBIDDEN_TEXT_PATTERN",
+            "SENSITIVE_KEY_PATTERN",
+            "user[_-]?name",
+            "isSensitiveKey(",
+            "searchHasCredentialFields(",
+            "hasCredentialSearch: searchHasCredentialFields(url.search)",
+            "redactText(",
+            "redactUrl(",
+            "redactReportValue(result)",
+            "assertReportRedacted(serializedResult)",
+            "SECRET_TEXT_PATTERN",
+            "forbiddenLifecycleSecretsVisible",
+            'textSample: "<omitted>"',
+            'sample: "<omitted>"',
+            "password|passwd|pwd|hunter2",
+            "client[_-]?secret",
+            "api[_-]?key",
+            "set[_-]?cookie",
+            "hasCredentialFields: requestHasCredentialFields(request.postData || \"\")",
+            "Boolean(request.hasCredentialSearch)",
+            'body.automation_mode !== "maintain_candidate_pool"',
+            'body.auto_simulate_after_generation !== false',
+            'body.auto_check_after_simulation !== false',
+            "body.candidate",
+            'match(/ALPHA_[A-Z0-9_]+/)',
+            "body.alpha_id !== scoringPanel.clickedAlphaId",
+            "Boolean(request.hasCredentialFields)",
+            "Boolean(request.hasCredentialSearch)",
+            "redactRequestBody(request.postData || \"\")",
+            "redactSearchParams(url.search)",
+            "csrfPresent: Boolean",
+            "streamPresent: Boolean",
+            "metrics.meta.csrfPresent",
+            "UNMOCKED_BROWSER_SMOKE_API",
+            "NON_LOCAL_BROWSER_SMOKE_REQUEST_BLOCKED",
+            "LOOPBACK_HOSTS",
+            'requireLoopbackHttpUrl(rawUrl, "--url")',
+            'requireLoopbackHttpUrl(argValue("--devtools-url"',
+            "isLocalBrowserUrl(rawUrl)",
+            "browser attempted to load a non-local resource",
+            'urlPattern: "*", requestStage: "Request"',
+            '"Fetch.continueRequest"',
+            "networkRequests: [...session.networkRequests]",
+            "blockedNonLocalRequests: [...session.blockedNonLocalRequests]",
+            "production validation interrupted state overflows horizontally",
+            "`unexpected browser-smoke API request ${endpoint}`",
+            "`unmocked browser-smoke API request ${request.method} ${request.path}`",
+            "MUTATING_METHODS",
+            "ALLOWED_MUTATING_REQUESTS",
+            '"POST /api/run"',
+            '"POST /api/sync_alphas"',
+            '"POST /api/sync_cancel"',
+            '"POST /api/generate_candidates"',
+            '"POST /api/candidates/simulate"',
+            '"POST /api/check_batch"',
+            "checkBatchBeforeSimulationSuccessCount",
+            "candidate operations mock server observed check_batch before official simulation success",
+            '"POST /api/scoring/evaluate"',
+            '"POST /api/scoring/attribution"',
+            "isAllowedMutatingRequest(request.method, request.path)",
+            "unexpected browser-smoke mutating request",
+            '"/api/phase_state"',
+            '"/api/production-validation/status"',
+            '"/api/candidates"',
+            '"/api/alpha_lifecycle"',
+            '"/api/backtest_slots"',
+            '"/api/config"',
+            '"/api/checkpoint_status"',
+            '"/api/snapshot/cloud"',
+            '"/api/snapshot/memory"',
+            '"/api/sync_status"',
+            '"/api/submit_readiness"',
+            '"/api/check_results"',
+            '"/api/run"',
+            '"/api/sync_alphas"',
+            '"/api/sync_cancel"',
+            '"/api/generate_candidates"',
+            '"/api/scoring/evaluate"',
+            '"/api/scoring/attribution"',
+            '"/api/candidates/simulate"',
+            '"/api/check"',
+            '"/api/sync_context_only"',
+            '"/api/test_connection"',
+            '"/api/candidates/optimize"',
+            "/(?:\\?|&)limit=250(?:&|$)/.test(request.search)",
+        ],
+    )
 
 
 def test_app_ux_orchestrator_has_tested_navigation_empty_and_busy_contracts():
-    app_js = (WEB_JS / "app.js").read_text(encoding="utf-8")
-    view_registry_js = (WEB_JS / "view-registry.js").read_text(encoding="utf-8")
-    view_renderers_js = (WEB_JS / "view-renderers.js").read_text(encoding="utf-8")
-    result_table_js = (WEB_JS / "result-table.js").read_text(encoding="utf-8")
-    strategy_panel_js = (WEB_JS / "strategy-panel.js").read_text(encoding="utf-8")
-    template = (ROOT / "brain_alpha_ops" / "web" / "index_template.html").read_text(encoding="utf-8")
+    app = _source("App.tsx")
+    state_cards = _source("components/StateCards.tsx")
+    job_monitor = _source("components/JobMonitor.tsx")
+    confirm = _source("components/SubmissionConfirmPanel.tsx")
 
-    for label in ["生产流程", "数据审计", "研究工具", "达标检查", "可提交"]:
-        assert label in (app_js + view_registry_js + view_renderers_js)
+    _assert_snippets(
+        app + state_cards + job_monitor,
+        [
+            'useState<CardViewId>("dashboard")',
+            "Sidebar",
+            "setActiveView(view)",
+            'aria-label="切换导航菜单"',
+            'import Sidebar from "@/components/Sidebar"',
+            "BRAIN Alpha Ops",
+            "未填写页面凭证",
+            "非提交生产验证",
+            "页面凭证为空",
+            'key="checkpoint_status"',
+            "selectedCandidate",
+            "grid w-full max-w-full grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5",
+            "onClick={() => onNavigate(config.id)}",
+            'role="alert"',
+            'aria-live="assertive"',
+            "ProgressFeedback",
+            'phase: "state_cards_load"',
+        ],
+    )
+    for view_id in (
+        "official_operations",
+        "dashboard",
+        "candidates",
+        "official_backtests",
+        "scoring",
+        "quality_check",
+        "submission_confirm",
+        "checkpoint_status",
+        "config",
+        "cloud",
+    ):
+        assert f'id: "{view_id}"' in state_cards
+        assert f'case "{view_id}":' in app
 
-    assert "function renderViewTabs()" in app_js
-    assert "function renderTaskRail()" in app_js
-    assert "VIEW_GROUPS" in view_registry_js
-    assert "view-tab-group" in app_js
-    assert "tab-marker" in app_js
-    assert "view-tab-row" in app_js
-    assert "workflow-rail" in template
-    assert "workflowStepProduce" in template
-    assert "workflowStepCheck" in template
-    assert "workflowStepSubmit" in template
-    assert "workflowStepCloud" in template
-    assert "workflowStatusText" in app_js
-    assert "workflowCandidateCount" in app_js
-    assert "aria-pressed=\"" in app_js
-    assert "renderViewTabs();" in app_js
-    assert "renderInsight" in app_js
-
-    assert "function getEmptyDescription(view)" in result_table_js
-    assert "function getEmptyActionsHtml(view)" in result_table_js
-    assert "tableEmptyState" in result_table_js
-    assert "tableEmptyDescription" in result_table_js
-    assert "tableEmptyActions" in result_table_js
-    assert "tableEmptyIcon" in result_table_js
-    assert "clear-search" in result_table_js
-    assert 'data-action="toggle-run"' in template
-    assert 'data-action="sync-cloud"' in template
-    assert 'data-action="check-batch"' in template
-    assert "function installStaticActionHandlers()" in app_js
-    assert "function getRowsForView" in view_renderers_js
-    assert "function getColumnsForView" in view_renderers_js
-    assert "function buildCandidateRows" in view_renderers_js
-
-    assert "window.operationBlockReason = function (action)" in app_js
-    assert "window.renderBusyControls = function ()" in app_js
-    assert "function syncStrategyPluginControls()" in app_js
-    assert "function syncPluginControls()" in strategy_panel_js
-    assert "function renderPolicy(config)" in strategy_panel_js
-    assert "setControlState('controlButton'" in app_js
-    assert "setControlState('syncButton'" in app_js
-    assert "setControlState('sideSyncButton'" in app_js
-    assert "setControlState('sideCheckButton'" in app_js
-    assert "sideTaskReason" in app_js
-    assert "operationGuard" in app_js
-
-    assert 'id="viewTabs"' in template
-    assert "action-card" in template
-    assert "task-console-actions" in template
-    assert 'id="sideSyncButton"' in template
-    assert 'id="sideCheckButton"' in template
-    assert 'id="sideSubmitButton"' in template
-    assert 'id="strategyPluginSpecsGroup"' in template
-    assert 'data-change-action="toggle-strategy-plugins"' in template
-    assert 'id="strategyPluginSpecsHelp"' in template
-    assert "status-bar" in template
-    assert "status-pill" in template
-    assert "panelHint" in template
+    _assert_snippets(
+        confirm,
+        [
+            'callReadiness<SubmitReadinessResponse>("/api/submit_readiness")',
+            "ready_to_submit",
+            "official_api_called",
+            "production_gaps",
+            "required_next_steps",
+            "暂无通过预提交检查的 Alpha",
+        ],
+    )
+    assert '"/api/submit"' not in confirm
 
 
 def test_ux_styles_cover_interaction_feedback_and_responsive_layout():
-    template = (ROOT / "brain_alpha_ops" / "web" / "index_template.html").read_text(encoding="utf-8")
-    css = (WEB_CSS / "app.css").read_text(encoding="utf-8")
+    css = _source("index.css")
+    app = _source("App.tsx")
+    candidate = _source("components/CandidateTable.tsx")
+    config = _source("components/ConfigPanel.tsx")
+    toast = _source("components/ToastContainer.tsx")
 
-    for selector in [
-        ".btn:focus-visible",
-        ".view-tab:hover",
-        ".view-tab.is-active",
-        ".insight-tile:hover",
-        ".filter-chip:focus-visible",
-        ".workflow-step:hover",
-        ".workflow-step.is-active",
-        ".workflow-actions",
-        ".task-console-actions",
-        ".task-console-reason",
-        ".status-pill",
-        ".data-table-wrap.is-empty",
-        ".empty-state",
-        ".empty-state-actions",
-        ".form-group.is-disabled",
-        ".policy-card.is-wide",
-        ".mobile-cards{display:none",
-    ]:
-        assert selector in css
-
-    assert '<!-- inline-css:css/app.css -->' in template
-    assert "@media(max-width:1200px)" in css
-    assert "overflow-x:visible;overflow-y:visible" in css
-    assert ".form-select{padding-right:34px;text-overflow:ellipsis}" in css
-    assert ".sidebar-body > .action-card" in css
-    assert ".app-content{order:1;min-height:auto}" in css
-    assert ".app-sidebar{order:2;position:static;max-height:none}" in css
-    assert "@media(max-width:640px)" in css
-    assert ".view-tab{min-width:128px;max-width:160px}" in css
+    _assert_snippets(
+        css,
+        [
+            ":focus-visible",
+            ".btn-primary",
+            ".btn-secondary",
+            ".btn-danger",
+            ".panel",
+            ".spinner",
+            "@keyframes progress-indeterminate",
+            "@keyframes fade-in",
+            ".app-shell",
+            ".app-main",
+            ".toast-container",
+        ],
+    )
+    _assert_snippets(
+        css + app + candidate + config + toast,
+        [
+            "app-shell",
+            "app-main",
+            "flex flex-wrap items-center gap-3",
+            "flex flex-col sm:flex-row gap-3",
+            "form-input",
+            "data-table",
+            "toast-container",
+            "flex-1 min-w-0 break-words text-sm",
+        ],
+    )

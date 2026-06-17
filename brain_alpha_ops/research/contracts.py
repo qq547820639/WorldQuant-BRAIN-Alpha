@@ -18,44 +18,15 @@ BACKTEST_RECORD_SCHEMA = "backtest_record.v1"
 ASSISTANT_GUIDANCE_RECORD_SCHEMA = "assistant_guidance_record.v1"
 STRATEGY_LIFECYCLE_RECORD_SCHEMA = "strategy_lifecycle_record.v1"
 
-ACTIVE_BACKTEST_ACTIONS = {
-    "submitted",
-    "polled",
-    "running",
-    "poll_deferred",
-    "result_deferred",
-}
-ACTIVE_BACKTEST_STATUSES = {
-    "SUBMITTED",
-    "RUNNING",
-    "PENDING",
-    "POLLING",
-    "SIMULATION_SUBMITTED",
-    "SIMULATION_RUNNING",
-    "SIMULATION_POLL_DEFERRED_RATE_LIMIT",
-    "SIMULATION_RESULT_DEFERRED_RATE_LIMIT",
-}
-TERMINAL_BACKTEST_ACTIONS = {
-    "completed",
-    "failed",
-    "submit_failed",
-    "poll_failed",
-    "result_failed",
-}
-TERMINAL_BACKTEST_STATUSES = {
-    "COMPLETED",
-    "FAILED",
-    "ERROR",
-    "CANCELLED",
-    "SIMULATION_FAILED",
-    "SIMULATION_POLL_FAILED",
-    "SIMULATION_REQUEST_FAILED",
-    "SIMULATION_RESULT_FAILED",
-    "SIMULATION_TIMEOUT",
-    "OFFICIAL_SIMULATED",
-    "OFFICIAL_STANDARD_REJECTED",
-    "SUBMISSION_READY",
-}
+# Re-export the canonical backtest status / action sets from the
+# project-wide core_state module (P2-1).  Existing imports of these
+# names from this module keep working unchanged.
+from brain_alpha_ops.core_state import (
+    BACKTEST_ACTIVE_ACTIONS as ACTIVE_BACKTEST_ACTIONS,
+    BACKTEST_ACTIVE_STATUSES as ACTIVE_BACKTEST_STATUSES,
+    BACKTEST_TERMINAL_ACTIONS as TERMINAL_BACKTEST_ACTIONS,
+    BACKTEST_TERMINAL_STATUSES as TERMINAL_BACKTEST_STATUSES,
+)
 
 
 class LifecycleRecord(TypedDict, total=False):

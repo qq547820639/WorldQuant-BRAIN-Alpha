@@ -31,6 +31,7 @@ from brain_alpha_ops.config import (
 )
 from brain_alpha_ops.models import Candidate
 from brain_alpha_ops.research.scoring import (
+    _ratio,
     build_scorecard,
     calculate_fitness,
     empirical_score,
@@ -102,6 +103,8 @@ def strong_official_metrics():
         "returns": 0.012,
         "drawdown": 0.08,
         "correlation": 0.35,
+        "self_correlation": 0.35,
+        "prod_correlation": 0.35,
         "weight_concentration": 0.045,
         "sub_universe_sharpe": 1.6,
         "subUniverseSize": 2000,
@@ -186,6 +189,17 @@ class TestNullMetricsHandling:
 
 class TestExtremeValues:
 
+    def test_ratio_normalizes_values_above_100_as_percentages(self):
+        """Ratio-like metrics above 100 should still normalize to decimals."""
+        assert _ratio(125) == pytest.approx(1.25)
+        assert _ratio("175") == pytest.approx(1.75)
+        assert _ratio(-150) == pytest.approx(-1.5)
+
+    def test_ratio_preserves_unbounded_turnover_values_but_normalizes_bounded_metrics(self):
+        """Turnover may naturally exceed 1, while bounded ratios above 1 are percentages."""
+        assert _ratio(2.5) == pytest.approx(2.5)
+        assert _ratio("1.5", bounded=True) == pytest.approx(0.015)
+
     def test_empirical_score_negative_sharpe(self, default_thresholds):
         """Negative sharpe should not cause crash; fitness crosscheck handles gracefully."""
         metrics = {
@@ -260,6 +274,84 @@ class TestExtremeValues:
         }
         result = empirical_score(metrics, default_thresholds)
         assert result["score"] >= 0
+
+    def test_empirical_score_normalizes_large_ratio_metrics(self, default_thresholds):
+        """Percentage-style values above 100 must be thresholded as decimals."""
+        metrics = {
+            "sharpe": 1.5,
+            "fitness": 1.2,
+            "turnover": 125,
+            "turnover_raw": 125,
+            "returns": 0.01,
+            "drawdown": 150,
+            "correlation": 125,
+            "prod_correlation": 175,
+            "weight_concentration": 125,
+            "sub_universe_sharpe": 1.3,
+            "margin": 4.0,
+        }
+
+        result = empirical_score(metrics, default_thresholds)
+        items = {row["name"]: row for row in result["items"]}
+
+        assert items["turnover_platform"]["actual"] == pytest.approx(1.25)
+        assert items["turnover_platform"]["passed"] is False
+        assert items["drawdown"]["actual"] == pytest.approx(1.5)
+        assert items["drawdown"]["passed"] is False
+        assert items["self_correlation"]["actual"] == pytest.approx(1.25)
+        assert items["self_correlation"]["passed"] is False
+        assert items["prod_correlation"]["actual"] == pytest.approx(1.75)
+        assert items["prod_correlation"]["passed"] is False
+        assert items["weight_concentration"]["actual"] == pytest.approx(1.25)
+        assert items["weight_concentration"]["passed"] is False
+        assert result["hard_gate_failed"] is True
+
+    def test_empirical_score_preserves_natural_high_turnover(self, default_thresholds):
+        """Natural turnover above 1 must stay high instead of being converted to a small percentage."""
+        metrics = {
+            "sharpe": 1.5,
+            "fitness": 1.2,
+            "turnover": 2.5,
+            "turnover_raw": 2.5,
+            "returns": 0.01,
+            "drawdown": 0.01,
+            "correlation": 0.1,
+            "prod_correlation": 0.1,
+            "weight_concentration": 0.05,
+            "sub_universe_sharpe": 1.3,
+            "margin": 4.0,
+        }
+
+        result = empirical_score(metrics, default_thresholds)
+        items = {row["name"]: row for row in result["items"]}
+
+        assert items["turnover_platform"]["actual"] == pytest.approx(2.5)
+        assert items["turnover_platform"]["passed"] is False
+        assert result["hard_gate_failed"] is True
+
+    def test_empirical_score_normalizes_bounded_percent_values_below_two(self, default_thresholds):
+        """Bounded ratio metrics such as drawdown/correlation can arrive as small percentages."""
+        metrics = {
+            "sharpe": 1.5,
+            "fitness": 1.2,
+            "turnover": 0.25,
+            "turnover_raw": 0.25,
+            "returns": 0.01,
+            "drawdown": 1.5,
+            "correlation": 1.5,
+            "prod_correlation": 1.5,
+            "weight_concentration": 1.5,
+            "sub_universe_sharpe": 1.3,
+            "margin": 4.0,
+        }
+
+        result = empirical_score(metrics, default_thresholds)
+        items = {row["name"]: row for row in result["items"]}
+
+        assert items["drawdown"]["actual"] == pytest.approx(0.015)
+        assert items["self_correlation"]["actual"] == pytest.approx(0.015)
+        assert items["prod_correlation"]["actual"] == pytest.approx(0.015)
+        assert items["weight_concentration"]["actual"] == pytest.approx(0.015)
 
     def test_empirical_score_nan_returns(self, default_thresholds):
         """NaN values in metrics should produce 0.0 via _num()."""
@@ -436,11 +528,99 @@ class TestOfficialGateAlignment:
         assert decision.status == "FAIL"
         assert decision.pass_fail is False
 
+    def test_release_gate_blocks_low_sub_universe_sharpe(self, strong_official_metrics, default_thresholds):
+        """Release gate should enforce BRAIN LOW_SUB_UNIVERSE_SHARPE."""
+        metrics = {
+            **strong_official_metrics,
+            "sharpe": 1.6,
+            "sub_universe_sharpe": 0.6,
+            "subUniverseSize": 1000,
+            "alphaSize": 1000,
+        }
+
+        decision = evaluate_release_score(metrics, default_thresholds)
+        attribution = next(item for item in decision.attributions if item["name"] == "sub_universe_sharpe")
+
+        assert decision.status == "FAIL"
+        assert attribution["passed"] is False
+        assert attribution["actual"] == 0.6
+        assert attribution["expected"] == 1.2
+
+    def test_release_gate_reads_camel_case_sub_universe_metric(self, strong_official_metrics, default_thresholds):
+        """Official API camelCase sub-universe metrics should not be dropped."""
+        metrics = {
+            **strong_official_metrics,
+            "sub_universe_sharpe": None,
+            "subUniverseSharpe": 1.4,
+        }
+
+        decision = evaluate_release_score(metrics, default_thresholds)
+        attribution = next(item for item in decision.attributions if item["name"] == "sub_universe_sharpe")
+
+        assert decision.status == "PASS"
+        assert attribution["passed"] is True
+        assert attribution["actual"] == 1.4
+
     def test_release_gate_empty_metrics(self, default_thresholds):
         """Release gate with empty metrics should fail gracefully."""
         decision = evaluate_release_score({}, default_thresholds)
         assert hasattr(decision, "status")
         assert decision.pass_fail is False
+
+    def test_release_gate_honors_optional_official_metrics_policy(self):
+        """When official metrics are explicitly optional, missing metric attributions stay informational."""
+        policy = ThresholdPolicy(
+            min_sharpe=1.25,
+            min_fitness=1.0,
+            delay=1,
+            min_sharpe_source="min_sharpe",
+            min_fitness_source="min_fitness",
+            min_turnover=0.01,
+            max_turnover=0.70,
+            max_drawdown=0.20,
+            max_self_correlation=0.70,
+            max_prod_correlation=0.70,
+            max_weight_concentration=0.10,
+            sub_universe_sharpe_min_ratio=0.75,
+            require_official_pass=True,
+            require_official_metrics=False,
+        )
+
+        decision = evaluate_release_score({"pass_fail": "PASS"}, policy)
+
+        assert decision.status == "PASS"
+        assert decision.pass_fail is True
+        assert all(item["passed"] for item in decision.attributions)
+        assert {
+            item["name"]
+            for item in decision.attributions
+            if item["severity"] == "INFO"
+        } >= {
+            "sharpe",
+            "fitness",
+            "turnover_floor",
+            "turnover_cap",
+            "self_correlation_cap",
+            "prod_correlation_cap",
+            "weight_concentration_cap",
+            "sub_universe_sharpe",
+        }
+
+    def test_release_gate_rejects_non_finite_official_metrics(self, strong_official_metrics, default_thresholds):
+        """NaN/Infinity official values must not bypass hard gates."""
+        metrics = {
+            **strong_official_metrics,
+            "sharpe": float("nan"),
+            "fitness": float("inf"),
+        }
+
+        decision = evaluate_release_score(metrics, default_thresholds)
+        attributions = {item["name"]: item for item in decision.attributions}
+
+        assert decision.status == "FAIL"
+        assert decision.pass_fail is False
+        assert attributions["sharpe"]["actual"] is None
+        assert attributions["fitness"]["actual"] is None
 
     def test_gate_config_soft_gates_dont_block(self, strong_official_metrics):
         """Soft gate failures should not cause overall failure."""
@@ -759,8 +939,11 @@ class TestApiSimulation:
         result = qos.evaluate(candidate)
         assert "simulated_api_output" in result.to_dict()
         assert result.simulated_api_output["meta"]["simulated"] is True
+        assert result.simulated_api_output["status"] == "UNKNOWN"
+        assert result.simulated_api_output["gate"]["submission_ready"] is False
+        assert result.simulated_api_output["meta"]["official_pass_fail_source"] == "missing_official_metrics"
 
-    def test_qos_score_trend_tracking(self, strong_official_metrics):
+    def test_qos_score_trend_tracking(self, strong_official_metrics, weak_official_metrics):
         """Score trend should work over multiple evaluations."""
         qos = OfficialScoringSystem()
         candidate = Candidate(
@@ -902,7 +1085,7 @@ class TestResilience:
         snap = OfficialSnapshot.from_metrics(partial)
         assert snap.sharpe == 1.5
         assert snap.fitness == 1.0
-        assert snap.turnover == 0.0  # default for missing
+        assert snap.turnover is None
 
 
 # ═══════════════════════════════════════════════════════════════════════

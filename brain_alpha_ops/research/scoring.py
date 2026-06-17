@@ -3,15 +3,35 @@
 from __future__ import annotations
 
 import re
+import math
 from typing import TYPE_CHECKING
 
 from brain_alpha_ops.config import QualityThresholds, ScoringConfig
 from brain_alpha_ops.models import Candidate
+from brain_alpha_ops.types import ScorecardDict
 from brain_alpha_ops.scoring.attribution import build_attribution_tree
+from brain_alpha_ops.scoring.shared_scores import (
+    DEFAULT_PRIOR_WEIGHTS,
+    default_prior_dimensions,
+    economic_logic_score,
+    normalize_family_label,
+)
 from brain_alpha_ops.research.scoring_explainability import scorecard_improvement_hints, scorecard_top_failures
 
 if TYPE_CHECKING:
     from brain_alpha_ops.research.scoring_params import ScoringParams
+
+
+_economic_logic_score = economic_logic_score
+
+
+def _format_empirical_failure(row: dict) -> str:
+    return (
+        f"{str(row.get('name', 'check'))} "
+        f"{str(row.get('direction', '-'))} "
+        f"{str(row.get('target', '-'))} "
+        f"(actual: {row.get('actual', '-')})"
+    )
 
 
 def build_scorecard(
@@ -20,7 +40,7 @@ def build_scorecard(
     scoring: ScoringConfig | None = None,
     params: "ScoringParams | None" = None,
     settings: dict | None = None,
-) -> dict:
+) -> ScorecardDict:
     prior = prior_score(candidate, weights_override=scoring.prior_weights_override if scoring else None, params=params)
     effective_settings = _scorecard_settings(candidate, settings)
     empirical = empirical_score(candidate.official_metrics, thresholds, settings=effective_settings)
@@ -30,7 +50,7 @@ def build_scorecard(
     local_rank_score = _bounded_score(base_local_rank_score + float(guidance_adjustment.get("adjustment", 0.0) or 0.0))
     official_verified = bool(candidate.official_metrics)
 
-    # ── 三层权重：从 ScoringConfig 读取，fallback 到原始 30/45/25 ──
+    # Three-layer weights from ScoringConfig, falling back to the original 30/45/25.
     lw = scoring.get_layer_weights() if scoring else {"prior": 0.30, "empirical": 0.45, "checklist": 0.25}
     if official_verified:
         total = _bounded_score(
@@ -71,7 +91,6 @@ def build_scorecard(
     scorecard["attribution_tree"] = build_attribution_tree(scorecard).to_dict()
     scorecard["top_failures"] = scorecard_top_failures(scorecard)
     scorecard["improvement_hints"] = scorecard_improvement_hints(scorecard)
-    candidate.scorecard = scorecard
     return scorecard
 
 
@@ -80,60 +99,56 @@ def prior_score(
     weights_override: dict | None = None,
     params: "ScoringParams | None" = None,
 ) -> dict:
-    """先验评分：8 个维度的加权综合。
+    """Prior score as a weighted combination of 8 dimensions.
 
     Args:
-        candidate: 候选 alpha
-        weights_override: 维度权重覆盖字典（向后兼容）
-        params: 可校准评分参数。None 时使用硬编码公式（向后兼容）；
-                非 None 时使用参数化公式，并优先使用 params 中的 weight。
+        candidate: candidate Alpha
+        weights_override: optional dimension weight overrides for backward compatibility
+        params: calibratable scoring parameters. None keeps the hard-coded
+                formulas for backward compatibility; otherwise parameterized
+                formulas are used and params weights take priority.
 
     Returns:
         {"score": float, "dimensions": dict, "weights": dict, "source": str}
     """
-    dims = {}
     expression = candidate.expression or ""
-    fields = set(candidate.data_fields or [])
-    operators = list(candidate.operators or [])
-    windows = [int(value) for value in re.findall(r"\b\d+\b", expression)]
-    has_cross_section = any(op in operators for op in ("rank", "zscore", "scale", "group_rank", "group_zscore"))
-    has_time_series = any(op.startswith("ts_") for op in operators)
-    has_risk_control = any(op in operators for op in ("winsorize", "zscore", "scale", "group_rank")) or "adv20" in fields
-    median_window = sorted(windows)[len(windows) // 2] if windows else 0
+    fields = {str(field).lower() for field in (candidate.data_fields or [])}
+    operators = [str(operator) for operator in (candidate.operators or [])]
 
-    # P0 优化：economic_logic 从二值化改为经济概念关键词分类打分
-    economic_result = _economic_logic_score(
+    # P0 improvement: economic_logic now uses keyword concept scoring, not binary scoring.
+    economic_result = economic_logic_score(
         candidate.hypothesis, expression, fields, operators
     )
-    dims["economic_logic"] = economic_result["score"]
-    dims["economic_concepts"] = economic_result["concepts_detected"]
 
-    # ── 各维度评分：优先使用参数化公式 ──
+    # Dimension scoring: prefer parameterized formulas.
     if params:
+        windows = [int(value) for value in re.findall(r"\b\d+\b", expression)]
+        has_cross_section = any(op in operators for op in ("rank", "zscore", "scale", "group_rank", "group_zscore"))
+        has_time_series = any(op.startswith("ts_") for op in operators)
+        has_risk_control = any(op in operators for op in ("winsorize", "zscore", "scale", "group_rank")) or "adv20" in fields
+        median_window = sorted(windows)[len(windows) // 2] if windows else 0
+        dims = {"economic_logic": economic_result["score"]}
         dims.update(_parameterized_dimensions(
             params, fields, operators, windows, median_window,
             has_cross_section, has_time_series, has_risk_control,
             candidate, expression, economic_result,
         ))
     else:
-        dims["structure"] = max(25, 90 - max(0, len(operators) - 4) * 8)
-        dims["field_operator_support"] = min(92, 42 + len(fields) * 8 + len(set(operators)) * 4)
-        dims["data_compliance"] = 82 if fields else 35
-        dims["horizon_turnover_proxy"] = 82 if 5 <= median_window <= 90 else 68 if median_window else 50
-        dims["risk_control_proxy"] = 84 if has_cross_section and has_time_series and has_risk_control else 66 if has_cross_section and has_time_series else 48
-        dims["diversity"] = 80 if candidate.family in {"Liquidity", "Volatility", "Hybrid"} else 65
-        dims["explainability"] = 85 if len(candidate.expression) < 140 else 60
+        dims = default_prior_dimensions(
+            expression=expression,
+            fields=fields,
+            operators=operators,
+            hypothesis=candidate.hypothesis,
+            family=candidate.family,
+            economic_result=economic_result,
+        )
+    dims["economic_concepts"] = economic_result["concepts_detected"]
 
-    # ── 权重：可通过 weights_override 注入校准值，params 提供第二来源 ──
+    # Weights: weights_override can inject calibration values; params is the second source.
     source_parts = ["经验"]
-    default_weights = {
-        "economic_logic": 0.18, "structure": 0.14,
-        "field_operator_support": 0.16, "data_compliance": 0.12,
-        "horizon_turnover_proxy": 0.14, "risk_control_proxy": 0.14,
-        "diversity": 0.07, "explainability": 0.05,
-    }
+    default_weights = DEFAULT_PRIOR_WEIGHTS
     if params and not weights_override:
-        # 从 params 提取校准后的权重
+        # Extract calibrated weights from params.
         calib_weights = params.get_weights_override()
         if calib_weights:
             weights = dict(default_weights, **calib_weights)
@@ -160,7 +175,7 @@ def _parameterized_dimensions(
     median_window: int, has_cs: bool, has_ts: bool, has_rc: bool,
     candidate: Candidate, expression: str, economic_result: dict,
 ) -> dict:
-    """使用 ScoringParams 参数化计算各维度分数。"""
+    """Compute dimension scores using ScoringParams."""
     dims = {}
     op_count = len(operators)
     unique_ops = len(set(operators))
@@ -182,7 +197,7 @@ def _parameterized_dimensions(
     if p and p.enabled:
         dims["data_compliance"] = p.high_score if fields else p.low_score
 
-    # horizon_turnover_proxy: 三档（窗口内 / 窗口外 / 无数据）
+    # horizon_turnover_proxy: three tiers (inside window / outside window / no data).
     p = params.get_dimension("horizon_turnover_proxy")
     if p and p.enabled:
         if not median_window:
@@ -192,7 +207,7 @@ def _parameterized_dimensions(
         else:
             dims["horizon_turnover_proxy"] = p.score_out_range
 
-    # risk_control_proxy: 三条件分层
+    # risk_control_proxy: three-condition tiering.
     p = params.get_dimension("risk_control_proxy")
     if p and p.enabled:
         conditions = sum([has_cs, has_ts, has_rc])
@@ -203,116 +218,21 @@ def _parameterized_dimensions(
         else:
             dims["risk_control_proxy"] = p.tier_1_score
 
-    # diversity: 分类匹配
+    # diversity: category match.
     p = params.get_dimension("diversity")
     if p and p.enabled:
-        high_set = set(p.high_value_set or [])
-        dims["diversity"] = p.high_score if candidate.family in high_set else p.low_score
+        high_set = {normalize_family_label(value) for value in (p.high_value_set or [])}
+        dims["diversity"] = p.high_score if normalize_family_label(candidate.family) in high_set else p.low_score
 
-    # explainability: 表达式长度阈值
+    # explainability: expression length threshold.
     p = params.get_dimension("explainability")
     if p and p.enabled:
         dims["explainability"] = p.score_in_range if len(expression) < p.threshold_high else p.score_out_range
 
-    # economic_logic is already computed via _economic_logic_score — keep as-is
+    # economic_logic is already computed via shared keyword scoring.
     # (its keyword-based detection is hard to parameterize meaningfully)
 
     return dims
-
-
-# ═══════════════════════════════════════════════════════════════════════
-# P0 优化：economic_logic 关键词概念检测
-# ═══════════════════════════════════════════════════════════════════════
-
-def _economic_logic_score(
-    hypothesis: str,
-    expression: str,
-    fields: set[str],
-    operators: list[str],
-) -> dict:
-    """基于经济概念关键词检测评估 Alpha 的经济逻辑质量。
-
-    替代原来的二值化判定（hypothesis 长度 >= 40 → 85 / 否则 45）。
-
-    返回: {"score": int, "concepts_detected": [str], "source": str}
-    """
-    text = f"{hypothesis} {expression} {' '.join(fields)} {' '.join(operators)}".lower()
-
-    # ── 经济概念词典 ──
-    concepts = {
-        "momentum": {
-            "keywords": ["momentum", "trend", "ts_delta", "ts_rank", "ts_mean",
-                         "moving_average", "breakout", "continuation"],
-            "base": 78,
-        },
-        "mean_reversion": {
-            "keywords": ["reversal", "mean_revert", "zscore", "ts_zscore",
-                         "overbought", "oversold", "-ts_", "bounce", "revert"],
-            "base": 78,
-        },
-        "value": {
-            "keywords": ["value", "cheap", "undervalue", "pe_ratio", "pb_ratio",
-                         "market_cap", "book", "dividend_yield", "earnings_yield"],
-            "base": 78,
-        },
-        "quality": {
-            "keywords": ["quality", "profit", "margin", "roe", "roa",
-                         "stable", "fundamental", "balance_sheet"],
-            "base": 78,
-        },
-        "volatility": {
-            "keywords": ["volatility", "vol", "ts_std", "std", "ivol",
-                         "beta", "risk", "variance", "uncertainty"],
-            "base": 78,
-        },
-        "liquidity": {
-            "keywords": ["liquidity", "volume", "turn", "adv", "vwap",
-                         "bid", "spread", "depth", "market_impact"],
-            "base": 78,
-        },
-        "growth": {
-            "keywords": ["growth", "earnings", "revenue", "sales_growth",
-                         "expansion", "accelerat"],
-            "base": 78,
-        },
-        "risk_management": {
-            "keywords": ["winsorize", "truncation", "neutralize", "group_neutralize",
-                         "hedge", "sector_neutral", "risk_adjust"],
-            "base": 82,
-        },
-        "cross_sectional": {
-            "keywords": ["cross_section", "rank", "group_rank", "sector",
-                         "industry", "subindustry", "relative", "peer"],
-            "base": 80,
-        },
-    }
-
-    detected = []
-    for concept_name, info in concepts.items():
-        if any(keyword in text for keyword in info["keywords"]):
-            detected.append(concept_name)
-
-    if not detected:
-        # hypothesis 内容不足但仍有长度兜底
-        if len(hypothesis) >= 60:
-            return {"score": 52, "concepts_detected": [], "source": "length_fallback"}
-        return {"score": 40, "concepts_detected": [], "source": "insufficient"}
-
-    concept_count = len(detected)
-    if concept_count >= 4:
-        score = 92
-    elif concept_count == 3:
-        score = 85
-    elif concept_count == 2:
-        score = 78
-    else:
-        score = 68
-
-    return {
-        "score": score,
-        "concepts_detected": detected,
-        "source": "keyword_concept_detection",
-    }
 
 
 def local_convergence_score(
@@ -326,7 +246,7 @@ def local_convergence_score(
     local_quality_score = float(candidate.local_quality.get("score", 0.0) or 0.0)
     if not candidate.local_quality:
         local_quality_score = prior["score"]
-    # ── 权重从 ScoringConfig 读取，fallback 到原始 0.65/0.35 ──
+    # Read weights from ScoringConfig, falling back to the original 0.65/0.35.
     lw = scoring.get_local_weights() if scoring else {"prior": 0.65, "quality": 0.35}
     return _bounded_score(lw["prior"] * prior["score"] + lw["quality"] * local_quality_score)
 
@@ -451,6 +371,73 @@ def assistant_guidance_score_adjustment(
     }
 
 
+def _compute_empirical_metrics(metrics: dict, settings: dict, thresholds: QualityThresholds) -> dict:
+    """Compute all raw metrics from BRAIN API simulation data.
+
+    Returns a dict with all computed values needed by empirical_score().
+    Extracted from the 139-line function body (S-01).
+    """
+    settings = settings or {}
+    delay = int(settings.get("delay", 1))
+    effective_min_sharpe = thresholds.min_sharpe_delay0 if delay == 0 else thresholds.min_sharpe
+    effective_min_fitness = thresholds.min_fitness_delay0 if delay == 0 else thresholds.min_fitness
+
+    regime = getattr(thresholds, "market_regime", "normal")
+    regime_adj = getattr(thresholds, "regime_adjustments", {}).get(regime, {})
+
+    sharpe = _num(metrics.get("sharpe"))
+    fitness = _num(metrics.get("fitness"))
+    turnover = _ratio(metrics.get("turnover"))
+    turnover_raw = _num(metrics.get("turnover_raw", metrics.get("turnover", 0)))
+    returns = _num(metrics.get("returns"))
+    drawdown = abs(_ratio(metrics.get("drawdown"), bounded=True))
+    self_correlation = abs(_ratio(metrics.get("correlation"), bounded=True))
+    prod_correlation = abs(_ratio(metrics.get("prod_correlation", 0.0), bounded=True))
+    concentration = _ratio(metrics.get("weight_concentration"), bounded=True)
+    sub_universe_sharpe = _num(metrics.get("sub_universe_sharpe", 0.0))
+    sub_size = _num(metrics.get("subUniverseSize", metrics.get("sub_universe_size", 1000)))
+    alpha_size = _num(metrics.get("alphaSize", metrics.get("alpha_size", 1000)))
+    if alpha_size <= 0:
+        alpha_size = 1
+    if sub_size <= 0:
+        sub_size = max(alpha_size, 1)
+    size_factor = math.sqrt(max(sub_size, 1) / max(alpha_size, 1))
+    sub_sharpe_threshold = round(
+        thresholds.sub_universe_sharpe_min_ratio * size_factor * max(sharpe, 0.01), 4
+    ) if sharpe > 0 else 0.0
+
+    margin = _num(metrics.get("margin", None))
+    margin_source = "BRAIN_API"
+    if margin is None or margin == 0.0:
+        margin = (returns / max(turnover, 0.001)) / 100.0
+        margin_source = "estimated"
+    margin_threshold = getattr(thresholds, "min_margin_bps", 4.0)
+
+    _turnover_quality_is_hard = getattr(thresholds, "enforce_target_turnover_as_hard_gate", False)
+
+    return {
+        "delay": delay,
+        "effective_min_sharpe": effective_min_sharpe,
+        "effective_min_fitness": effective_min_fitness,
+        "regime": regime,
+        "regime_adj": regime_adj,
+        "sharpe": sharpe,
+        "fitness": fitness,
+        "turnover": turnover,
+        "turnover_raw": turnover_raw,
+        "returns": returns,
+        "drawdown": drawdown,
+        "self_correlation": self_correlation,
+        "prod_correlation": prod_correlation,
+        "concentration": concentration,
+        "sub_universe_sharpe": sub_universe_sharpe,
+        "sub_sharpe_threshold": sub_sharpe_threshold,
+        "margin": margin,
+        "margin_source": margin_source,
+        "margin_threshold": margin_threshold,
+        "_turnover_quality_is_hard": _turnover_quality_is_hard,
+    }
+
 def empirical_score(metrics: dict, thresholds: QualityThresholds, settings: dict = None) -> dict:
     """Compute empirical score from BRAIN official simulation metrics.
 
@@ -463,50 +450,27 @@ def empirical_score(metrics: dict, thresholds: QualityThresholds, settings: dict
     if not metrics:
         return {"score": 0.0, "items": [], "status": "missing_official_metrics"}
 
-    settings = settings or {}
-    delay = int(settings.get("delay", 1))
-    # P1-4: Delay-aware threshold selection
-    effective_min_sharpe = thresholds.min_sharpe_delay0 if delay == 0 else thresholds.min_sharpe
-    effective_min_fitness = thresholds.min_fitness_delay0 if delay == 0 else thresholds.min_fitness
-
-    # Market regime metadata is retained for attribution, but official BRAIN
-    # hard gates must never be shifted by local regime factors.
-    regime = getattr(thresholds, "market_regime", "normal")
-    regime_adj = getattr(thresholds, "regime_adjustments", {}).get(regime, {})
-
-    sharpe = _num(metrics.get("sharpe"))
-    fitness = _num(metrics.get("fitness"))
-    turnover = _ratio(metrics.get("turnover"))
-    turnover_raw = _num(metrics.get("turnover_raw", metrics.get("turnover", 0)))
-    returns = _num(metrics.get("returns"))
-    drawdown = abs(_ratio(metrics.get("drawdown")))
-    self_correlation = abs(_ratio(metrics.get("correlation")))
-    prod_correlation = abs(_ratio(metrics.get("prod_correlation", 0.0)))
-    concentration = _ratio(metrics.get("weight_concentration"))
-    sub_universe_sharpe = _num(metrics.get("sub_universe_sharpe", 0.0))
-    # BRAIN: LOW_SUB_UNIVERSE_SHARPE — sub_sharpe < 0.75 × √(sub_size/alpha_size) × alpha_sharpe
-    import math
-    sub_size = _num(metrics.get("subUniverseSize", metrics.get("sub_universe_size", 1000)))
-    alpha_size = _num(metrics.get("alphaSize", metrics.get("alpha_size", 1000)))
-    if alpha_size <= 0:
-        alpha_size = 1
-    if sub_size <= 0:
-        sub_size = max(alpha_size, 1)
-    size_factor = math.sqrt(max(sub_size, 1) / max(alpha_size, 1))
-    sub_sharpe_threshold = round(
-        thresholds.sub_universe_sharpe_min_ratio * size_factor * max(sharpe, 0.01), 4
-    ) if sharpe > 0 else 0.0
-    # Margin (BRAIN 顾问标准): prefer API-provided margin in bps
-    # P2-3: API margin preferred; fall back to local estimate only when API absent
-    margin = _num(metrics.get("margin", None))
-    margin_source = "BRAIN_API"
-    if margin is None or margin == 0.0:
-        margin = (returns / max(turnover, 0.001)) / 100.0
-        margin_source = "estimated"
-    margin_threshold = getattr(thresholds, "min_margin_bps", 4.0)
-
-    # P1-1: 换手率阈值策略 — turnover_quality 可配置为硬门禁
-    _turnover_quality_is_hard = getattr(thresholds, "enforce_target_turnover_as_hard_gate", False)
+    raw = _compute_empirical_metrics(metrics, settings, thresholds)
+    delay = raw["delay"]
+    effective_min_sharpe = raw["effective_min_sharpe"]
+    effective_min_fitness = raw["effective_min_fitness"]
+    regime = raw["regime"]
+    regime_adj = raw["regime_adj"]
+    sharpe = raw["sharpe"]
+    fitness = raw["fitness"]
+    turnover = raw["turnover"]
+    turnover_raw = raw["turnover_raw"]
+    returns = raw["returns"]
+    drawdown = raw["drawdown"]
+    self_correlation = raw["self_correlation"]
+    prod_correlation = raw["prod_correlation"]
+    concentration = raw["concentration"]
+    sub_universe_sharpe = raw["sub_universe_sharpe"]
+    sub_sharpe_threshold = raw["sub_sharpe_threshold"]
+    margin = raw["margin"]
+    margin_source = raw["margin_source"]
+    margin_threshold = raw["margin_threshold"]
+    _turnover_quality_is_hard = raw["_turnover_quality_is_hard"]
 
     items = [
         # BRAIN: LOW_SHARPE if < 1.25 (Delay-1) / < 2.0 (Delay-0)
@@ -520,10 +484,10 @@ def empirical_score(metrics: dict, thresholds: QualityThresholds, settings: dict
              abs(fitness - calculate_fitness(sharpe, returns, turnover, raw_turnover=turnover_raw)) <= 0.05, 0),
         # BRAIN: LOW_TURNOVER if < 1% (0.01)
         item("turnover_min", turnover, ">=", thresholds.min_turnover, turnover >= thresholds.min_turnover, 8, is_hard_gate=True),
-        # BRAIN 平台硬门槛: HIGH_TURNOVER if > 70% (0.70) — 合规底线
+        # BRAIN platform hard gate: HIGH_TURNOVER if > 70% (0.70).
         item("turnover_platform", turnover, "<=", getattr(thresholds, "platform_max_turnover", 0.70),
              turnover <= getattr(thresholds, "platform_max_turnover", 0.70), 8, is_hard_gate=True),
-        # 顾问质量目标: Turnover < 30% — 可通过 enforce_target_turnover_as_hard_gate 升级为硬门禁
+        # Advisor quality target: turnover < 30%, optionally promoted to a hard gate.
         item("turnover_quality", turnover, "<=", getattr(thresholds, "target_max_turnover", 0.30),
              turnover <= getattr(thresholds, "target_max_turnover", 0.30), 6,
              is_hard_gate=_turnover_quality_is_hard),
@@ -545,12 +509,12 @@ def empirical_score(metrics: dict, thresholds: QualityThresholds, settings: dict
              round(sub_universe_sharpe / max(sharpe, 0.01), 4) if sharpe > 0 else 0.0,
              ">=", 0.5,
              (sub_universe_sharpe / max(sharpe, 0.01)) >= 0.5 if sharpe > 0 else False, 8),
-        # BRAIN 顾问标准: margin >= min_margin_bps (default 4.0 bps)
+        # BRAIN advisor target: margin >= min_margin_bps (default 4.0 bps).
         item("margin_bps", round(margin, 4), ">=", margin_threshold, margin >= margin_threshold, 10),
     ]
     # P2-3: Annotate margin source
     for row in items:
-        if row["name"] == "margin_bps":
+        if row.get("name") == "margin_bps":
             row["margin_source"] = margin_source
     # P1-3: Log WARNING when BRAIN API fitness differs significantly from local calculation
     fitness_diff = abs(fitness - calculate_fitness(sharpe, returns, turnover, raw_turnover=turnover_raw))
@@ -561,13 +525,13 @@ def empirical_score(metrics: dict, thresholds: QualityThresholds, settings: dict
             "This may indicate formula mismatch or API version differences.",
             fitness, calculate_fitness(sharpe, returns, turnover, raw_turnover=turnover_raw), fitness_diff
         )
-    score = _bounded_score(sum(row["points"] for row in items if row["passed"]))
+    score = _bounded_score(sum(row.get("points", 0) for row in items if bool(row.get("passed", False)) and not row.get("is_hard_gate")))
 
     # P1-2: Separate hard gate failures from soft indicator scores
     hard_gate_failures = [
-        f"{row['name']} {row['direction']} {row['target']} (actual: {row['actual']})"
+        _format_empirical_failure(row)
         for row in items
-        if not row["passed"] and row.get("is_hard_gate") and row.get("points", 0) > 0
+        if not bool(row.get("passed", False)) and row.get("is_hard_gate")
     ]
     hard_gate_failed = bool(hard_gate_failures)
 
@@ -597,10 +561,17 @@ def submission_checklist(candidate: Candidate, thresholds: QualityThresholds) ->
         check("economic_logic", len(candidate.hypothesis) >= 40 or not thresholds.require_economic_logic, 15, "One-sentence economic/behavioral thesis."),
         check("data_delay_conservative", True, 10, "Default settings use Delay 1 unless changed by user."),
         check("local_quality", candidate.local_quality.get("passed", False), 15, "Local prefilter quality."),
-        check("self_correlation_proxy", _ratio(metrics.get("correlation")) <= thresholds.max_self_correlation if metrics else False, 20, "Official/local correlation proxy."),
-        check("diversity", candidate.family not in {"Momentum"} or "adv20" in candidate.expression or "vwap" in candidate.expression, 10, "Avoid plain crowded templates."),
+        check("self_correlation_proxy", _ratio(metrics.get("correlation"), bounded=True) <= thresholds.max_self_correlation if metrics else False, 20, "Official/local correlation proxy."),
+        check(
+            "diversity",
+            normalize_family_label(candidate.family) != "momentum"
+            or "adv20" in candidate.expression
+            or "vwap" in candidate.expression,
+            10,
+            "Avoid plain crowded templates.",
+        ),
     ]
-    score = _bounded_score(sum(row["points"] for row in checks if row["passed"]))
+    score = _bounded_score(sum(row.get("points", 0) for row in checks if bool(row.get("passed", False))))
     return {"score": score, "items": checks}
 
 
@@ -610,7 +581,9 @@ def evaluate_quality_gate(
     *,
     settings: dict | None = None,
 ) -> dict:
-    scorecard = candidate.scorecard or build_scorecard(candidate, thresholds, settings=settings)
+    if not candidate.scorecard:
+        candidate.scorecard = build_scorecard(candidate, thresholds, settings=settings)
+    scorecard = candidate.scorecard
     empirical = scorecard["empirical"]
     failed = []
     warnings = []
@@ -622,11 +595,11 @@ def evaluate_quality_gate(
 
     # Collect all remaining failed items (soft indicators + submission checklist)
     for row in empirical.get("items", []):
-        if not row["passed"] and row.get("points", 1) > 0 and not row.get("is_hard_gate"):
-            failed.append(f"{row['name']} {row['direction']} {row['target']} (actual: {row['actual']})")
+        if not bool(row.get("passed", False)) and row.get("points", 1) > 0 and not row.get("is_hard_gate"):
+            failed.append(_format_empirical_failure(row))
     for row in scorecard["submission_checklist"]["items"]:
-        if not row["passed"]:
-            failed.append(row["name"] + ": " + row["meaning"])
+        if not bool(row.get("passed", False)):
+            failed.append(str(row.get("name", "check")) + ": " + str(row.get("meaning", "")))
     if not candidate.official_metrics:
         failed.append("official_metrics_present: missing official simulation result")
 
@@ -691,13 +664,12 @@ def calculate_fitness(sharpe: float, returns: float, turnover: float,
     """BRAIN 官方 Fitness 公式: Sharpe x sqrt(|Returns| / max(Turnover, 0.125)).
 
     IMPORTANT: BRAIN API 返回的 turnover 是原始十进制 (e.g. 1.2 = 120%)。
-    normalize_metrics() 中的 _ratio() 会对 abs>1.0 的值除以 100，
-    导致 fitness 公式使用了错误的 turnover 值。
+    _ratio() 会保留自然 turnover 值，仅对明确百分比尺度的值归一化；
+    fitness 公式仍优先使用 raw_turnover，避免任何展示归一化影响官方公式。
     
     使用 raw_turnover (未除以 100 的原始值) 来正确计算公式。
-    如果 raw_turnover 未提供，回退到 adjustd turnover。
+    如果 raw_turnover 未提供，回退到 adjusted turnover。
     """
-    import math
     used_turnover = raw_turnover if (raw_turnover is not None and raw_turnover > 0) else turnover
     denominator = max(used_turnover, 0.125)
     ratio = abs(returns) / denominator
@@ -721,7 +693,7 @@ def _check_self_correlation_with_exception(
     # Exception: Sharpe advantage
     sharpe = _num(metrics.get("sharpe", 0))
     related_sharpe = _num(metrics.get("related_alpha_sharpe", metrics.get("relatedAlphaSharpe", 0)))
-    if related_sharpe > 0 and sharpe >= related_sharpe * 1.10:
+    if related_sharpe > 0 and sharpe + 1e-12 >= related_sharpe * 1.10:
         return True
     return False
 
@@ -737,20 +709,20 @@ def _build_self_correlation_item(
     exception_applied and exception_note fields when the BRAIN Sharpe
     advantage exception is applied.
     """
-    passed = self_correlation <= thresholds.max_self_correlation
+    passed = self_correlation < thresholds.max_self_correlation
     exception_applied = False
     exception_note = ""
     if not passed:
         sharpe = _num(metrics.get("sharpe", 0))
         related_sharpe = _num(metrics.get("related_alpha_sharpe", metrics.get("relatedAlphaSharpe", 0)))
-        if related_sharpe > 0 and sharpe >= related_sharpe * 1.10:
+        if related_sharpe > 0 and sharpe + 1e-12 >= related_sharpe * 1.10:
             passed = True
             exception_applied = True
             exception_note = (
                 f"BRAIN exception: Sharpe {sharpe:.3f} >= "
                 f"related Sharpe {related_sharpe:.3f} × 1.10"
             )
-    result = item("self_correlation", self_correlation, "<=",
+    result = item("self_correlation", self_correlation, "<",
                   thresholds.max_self_correlation, passed, 14, is_hard_gate=True)
     result["exception_applied"] = exception_applied
     if exception_applied:
@@ -811,50 +783,13 @@ def _num(value) -> float:
         return 0.0
 
 
-def _ratio(value) -> float:
-    """Normalize ratio values from BRAIN API responses.
-
-    BRAIN may return metrics as percentages (e.g. 70 meaning 70%) or as
-    decimals (e.g. 0.70).  This function applies heuristics to normalize:
-      - abs > 1.0  → assumed percentage, divide by 100
-      - abs <= 1.0 → assumed decimal, pass through
-
-    P1-3: Added logging for ambiguous values and dedicated turnover handling.
-    """
-    numeric = _num(value)
-    if numeric == 0.0:
-        return 0.0
-
-    if abs(numeric) <= 1.0:
-        return numeric
-
-    # abs > 1.0 — could be percentage or genuinely large ratio
-    if abs(numeric) > 100.0:
-        # Values > 100 are almost certainly not percentages
-        import logging
-        logging.warning(
-            "_ratio: unusually large value %.4f — treating as raw (not percentage). "
-            "If BRAIN changed metric format, this may need adjustment.", numeric
-        )
-        return numeric
-
-    # Likely a percentage (e.g. 70 → 0.70)
-    import logging
-    logging.debug("_ratio: normalizing %.4f → %.4f (assumed percentage)", numeric, numeric / 100.0)
-    return numeric / 100.0
-
-
-def _turnover_ratio(value) -> float:
-    """Normalize turnover specifically, with BRAIN-aware heuristics.
-
-    BRAIN turnover: typically 0-100 range where > 1.0 means percentage.
-    Special case: a value like 2.5 could be 2.5% (correctly / 100 → 0.025).
-    """
-    return _ratio(value)
-
-
+# P0-4 fix (2026-06-13): re-export the canonical ``_ratio`` so existing
+# callers in this module (e.g. empirical_score) keep working unchanged.
+# See ``research._ratio.normalize_brain_ratio`` for the unified rule.
+from ._ratio import _ratio, normalize_brain_ratio  # noqa: F401
+from brain_alpha_ops.research._ratio import _ratio, normalize_brain_ratio  # S-13: moved from L788
 # ═══════════════════════════════════════════════════════════════════════
-# P2: 评分置信度估算 — 从点估计 → 区间估计
+# P2: score confidence estimation from point estimate to interval estimate.
 # ═══════════════════════════════════════════════════════════════════════
 
 def estimate_score_confidence(scorecard: dict) -> dict:
@@ -867,9 +802,9 @@ def estimate_score_confidence(scorecard: dict) -> dict:
             "confidence_level": "high" | "medium" | "low",
             "item_count": int,
             "passed_count": int,
-            "score_variance": float,        # item 得分方差
-            "score_dispersion": float,       # 离散系数 (std/mean)
-            "data_completeness": float,      # 0-1 之间
+            "score_variance": float,        # Item score variance.
+            "score_dispersion": float,       # Coefficient of variation (std/mean).
+            "data_completeness": float,      # Between 0 and 1.
             "interpretation": str,
         }
     """
@@ -885,7 +820,7 @@ def estimate_score_confidence(scorecard: dict) -> dict:
             "interpretation": "No empirical items — score based on prior only.",
         }
 
-    # 得分项的点值
+    # Point values for passed score items.
     scores = [row.get("points", 0) for row in items if row.get("passed")]
     n_items = len(scores)
     passed_count = len(scores)
@@ -901,14 +836,14 @@ def estimate_score_confidence(scorecard: dict) -> dict:
         std_dev = variance ** 0.5
         dispersion = std_dev / max(mean_score, 0.01)
 
-        if dispersion < 0.25 and data_completeness > 0.8:
+        if dispersion < 0.50 and data_completeness > 0.8:
             confidence_level = "high"
-        elif dispersion < 0.50:
+        elif dispersion < 0.75:
             confidence_level = "medium"
         else:
             confidence_level = "low"
 
-    # 解读
+    # Interpretation.
     if confidence_level == "high":
         interpretation = (
             f"Score estimate is robust: {passed_count}/{len(items)} items passed, "

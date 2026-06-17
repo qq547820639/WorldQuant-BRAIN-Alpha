@@ -1,3 +1,4 @@
+from __future__ import annotations
 from brain_alpha_ops.models import Candidate
 from brain_alpha_ops.research import expression_index as expression_index_module
 from brain_alpha_ops.research.observability import (
@@ -191,6 +192,41 @@ def test_research_observability_snapshot_degrades_when_expression_index_fails(mo
     assert "expression_index_unavailable" in snapshot["health"]["health_flags"]
     assert "expression_index_unavailable" in context["health_flags"]
     assert snapshot["recommendations"]
+
+
+def test_research_observability_surfaces_incremental_sqlite_index_failures(monkeypatch, tmp_path):
+    def fail_append_record(self, record, *, source_file):
+        raise RuntimeError("sqlite append unavailable")
+
+    monkeypatch.setattr(
+        "brain_alpha_ops.research.expression_sqlite_index.ExpressionSqliteIndex.append_record",
+        fail_append_record,
+    )
+    repo = ResearchRepository(str(tmp_path))
+    repo.save_candidate(
+        "run_1",
+        Candidate(
+            alpha_id="a1",
+            expression="rank(close)",
+            family="Momentum",
+            hypothesis="price rank",
+            data_fields=["close"],
+            operators=["rank"],
+        ),
+    )
+
+    snapshot = build_research_observability_snapshot(tmp_path, limit=100, top_n=5, include_cloud=False)
+    diagnostic = snapshot["sqlite_index_diagnostics"]
+
+    assert snapshot["expression_index"]["total_expression_records"] == 1
+    assert diagnostic["ok"] is False
+    assert diagnostic["failure_count"] == 1
+    assert diagnostic["component_counts"]["expression_sqlite_index"] == 1
+    assert diagnostic["source_file_counts"]["candidates.jsonl"] == 1
+    assert snapshot["errors"]["code_counts"]["SQLITE_INDEX_UPDATE_FAILED"] == 1
+    assert snapshot["partial_errors"][0]["component"] == "sqlite_index"
+    assert "sqlite_index_incremental_update_failed" in snapshot["health"]["warning_flags"]
+    assert "sqlite_index_incremental_update_failed" in snapshot["health"]["health_flags"]
 
 
 def test_research_observability_snapshot_reuses_jsonl_reads_for_expression_index(monkeypatch, tmp_path):

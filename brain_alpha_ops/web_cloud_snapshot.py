@@ -1,4 +1,4 @@
-"""Cloud alpha and local storage snapshot helpers for the web API."""
+"""Cloud alpha snapshot and context refresh."""
 
 from __future__ import annotations
 
@@ -8,18 +8,29 @@ import json
 import logging
 from pathlib import Path
 import time
-from typing import Any, Callable
+from typing import Any, Callable, Iterable
 
+from brain_alpha_ops.brain_api.user_alpha_sync import list_user_alphas_for_sync
+from brain_alpha_ops.brain_api.official_helpers import looks_non_production_alpha_id
 from brain_alpha_ops.config import load_run_config, runtime_project_root
 from brain_alpha_ops.data.cache_metadata import read_context_cache_metadata, write_context_cache_metadata
-from brain_alpha_ops.jsonl import read_jsonl_records, read_jsonl_tail, read_jsonl_tail_with_stats
+from brain_alpha_ops.jsonl import (
+    find_jsonl_record_reverse,
+    iter_jsonl_records,
+    read_jsonl_records,
+    read_jsonl_tail,
+    read_jsonl_tail_with_stats,
+)
+from brain_alpha_ops.redaction import redact_error_message, redact_text
 
 
 logger = logging.getLogger(__name__)
 
-CLOUD_SYNC_STALE_SECONDS = 24 * 60 * 60
-MAX_CACHED_USER_ALPHA_FILES = 50
-CONTEXT_CACHE_MANIFEST_SCHEMA = "official_context_cache_manifest.v1"
+# ── Centralized constants (source of truth: runtime_constants.py) ──
+from brain_alpha_ops.runtime_constants import CloudDefaults
+
+CLOUD_SYNC_STALE_SECONDS = CloudDefaults.CLOUD_SYNC_STALE_SECONDS
+CONTEXT_CACHE_MANIFEST_SCHEMA = CloudDefaults.CONTEXT_CACHE_MANIFEST_SCHEMA
 OFFICIAL_CONTEXT_FILES = (
     ("fields_count", "official_fields.json"),
     ("operators_count", "official_operators.json"),
@@ -32,7 +43,7 @@ SafeErrorMessage = Callable[[Exception], str]
 
 
 def _safe_error_message(exc: Exception) -> str:
-    return str(exc)
+    return redact_error_message(exc)
 
 
 def storage_jsonl_path(filename: str, *, load_config: LoadConfig = load_run_config) -> Path:
@@ -41,7 +52,11 @@ def storage_jsonl_path(filename: str, *, load_config: LoadConfig = load_run_conf
 
 
 def read_storage_jsonl(filename: str, *, limit: int | None = 500, load_config: LoadConfig = load_run_config) -> list[dict[str, Any]]:
-    return read_jsonl_records(storage_jsonl_path(filename, load_config=load_config), limit=limit)
+    # When limit=None the caller explicitly wants ALL records — pass max_rows=None
+    # to read_jsonl_records to remove the safety cap. The caller (e.g. cloud
+    # alpha snapshot) is expected to have enough memory for the full dataset.
+    max_rows: int | None = None if limit is None else limit or 10_000
+    return read_jsonl_records(storage_jsonl_path(filename, load_config=load_config), limit=limit, max_rows=max_rows)
 
 
 def read_storage_jsonl_stats(filename: str, *, limit: int = 500, load_config: LoadConfig = load_run_config) -> dict[str, Any]:
@@ -57,20 +72,23 @@ def cloud_alpha_snapshot(
     stale_seconds: int = CLOUD_SYNC_STALE_SECONDS,
 ) -> dict[str, Any]:
     cache_path: Path | None = storage_jsonl_path("cloud_alphas.jsonl", load_config=load_config)
-    rows = dedupe_cloud_alpha_rows(read_storage_jsonl("cloud_alphas.jsonl", limit=limit, load_config=load_config))
+    all_rows = dedupe_cloud_alpha_rows(iter_jsonl_records(cache_path))
+    rows = _bounded_rows(all_rows, limit)
     source = "storage"
-    if not rows:
+    if not all_rows:
         cache_path = latest_cached_user_alpha_path(load_config=load_config)
-        rows = dedupe_cloud_alpha_rows(latest_cached_user_alphas(limit=limit, load_config=load_config))
-        source = "api_cache" if rows else "empty"
-    rows = drop_mock_rows_if_real(rows)
+        all_rows = dedupe_cloud_alpha_rows(latest_cached_user_alphas(limit=None, load_config=load_config))
+        rows = _bounded_rows(all_rows, limit)
+        source = "api_cache" if all_rows else "empty"
     summary = cloud_alpha_summary(
-        rows,
+        all_rows,
         load_config=load_config,
         runtime_root=runtime_root,
         safe_error_message=safe_error_message,
     )
     summary["source"] = source
+    summary["returned_count"] = len(rows)
+    summary["display_limit"] = limit
     loaded_at, age_seconds = path_modified_at(cache_path if rows else None)
     summary["loaded_at"] = loaded_at
     summary["age_seconds"] = age_seconds
@@ -78,7 +96,52 @@ def cloud_alpha_snapshot(
     return {"alphas": rows, "summary": summary}
 
 
-def dedupe_cloud_alpha_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def cloud_alpha_cache_probe(
+    *,
+    load_config: LoadConfig = load_run_config,
+    stale_seconds: int = CLOUD_SYNC_STALE_SECONDS,
+) -> dict[str, Any]:
+    """Return a lightweight cloud Alpha cache readiness summary.
+
+    This intentionally avoids the full snapshot path, which parses, dedupes,
+    sorts, and summarizes the entire JSONL file. Phase readiness only needs to
+    know whether a usable production Alpha cache exists; exact counts remain
+    owned by ``cloud_alpha_snapshot``.
+    """
+    cache_path = storage_jsonl_path("cloud_alphas.jsonl", load_config=load_config)
+    row = find_jsonl_record_reverse(cache_path, predicate=is_production_cloud_alpha_row)
+    if row is not None:
+        loaded_at, age_seconds = path_modified_at(cache_path)
+        return {
+            "ok": True,
+            "source": "storage",
+            "loaded_at": loaded_at,
+            "age_seconds": int(age_seconds or 0),
+            "is_stale": bool(age_seconds is not None and age_seconds > stale_seconds),
+        }
+
+    api_cache_path = latest_cached_user_alpha_path(load_config=load_config)
+    api_rows = dedupe_cloud_alpha_rows(latest_cached_user_alphas(limit=None, load_config=load_config))
+    api_count = len(api_rows)
+    loaded_at, age_seconds = path_modified_at(api_cache_path if api_count else None)
+    return {
+        "ok": api_count > 0,
+        "count": api_count,
+        "total": api_count,
+        "source": "api_cache" if api_count else "empty",
+        "loaded_at": loaded_at,
+        "age_seconds": int(age_seconds or 0),
+        "is_stale": bool(age_seconds is not None and age_seconds > stale_seconds),
+    }
+
+
+def _bounded_rows(rows: list[dict[str, Any]], limit: int | None) -> list[dict[str, Any]]:
+    if limit is None:
+        return rows
+    return rows[: max(1, int(limit or 1))]
+
+
+def dedupe_cloud_alpha_rows(rows: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
     latest: dict[str, dict[str, Any]] = {}
     no_id: list[dict[str, Any]] = []
     for row in rows:
@@ -88,22 +151,30 @@ def dedupe_cloud_alpha_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         if not alpha_id:
             no_id.append(row)
             continue
+        if looks_non_production_alpha_id(alpha_id):
+            continue
         latest[alpha_id] = row
     deduped = list(latest.values()) + no_id
     deduped.sort(key=cloud_row_sort_key, reverse=True)
     return deduped
 
 
+def is_production_cloud_alpha_row(row: dict[str, Any]) -> bool:
+    alpha_id = cloud_alpha_id(row)
+    return bool(alpha_id and not looks_non_production_alpha_id(alpha_id))
+
+
 def latest_cached_user_alphas(
     limit: int | None = None,
     *,
     load_config: LoadConfig = load_run_config,
-    max_files: int = MAX_CACHED_USER_ALPHA_FILES,
+    max_files: int | None = None,
 ) -> list[dict[str, Any]]:
     for path in cached_user_alpha_paths(load_config=load_config, max_files=max_files):
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
+            logger.warning("failed to read cached user alpha file %s", redact_text(path, max_length=180))
             continue
         rows = extract_alpha_rows(data)
         if rows:
@@ -114,12 +185,13 @@ def latest_cached_user_alphas(
 def latest_cached_user_alpha_path(
     *,
     load_config: LoadConfig = load_run_config,
-    max_files: int = MAX_CACHED_USER_ALPHA_FILES,
+    max_files: int | None = None,
 ) -> Path | None:
     for path in cached_user_alpha_paths(load_config=load_config, max_files=max_files):
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
+            logger.warning("failed to read cached user alpha file %s", redact_text(path, max_length=180))
             continue
         if extract_alpha_rows(data):
             return path
@@ -129,7 +201,7 @@ def latest_cached_user_alpha_path(
 def cached_user_alpha_paths(
     *,
     load_config: LoadConfig = load_run_config,
-    max_files: int = MAX_CACHED_USER_ALPHA_FILES,
+    max_files: int | None = None,
 ) -> list[Path]:
     config = load_config()
     cache_dir = Path(config.ops.official_api.cache_dir)
@@ -142,9 +214,12 @@ def cached_user_alpha_paths(
                 candidates.append((path.stat().st_mtime, path))
             except OSError:
                 continue
-        safe_max_files = max(1, int(max_files or MAX_CACHED_USER_ALPHA_FILES))
-        return [path for _mtime, path in sorted(candidates, reverse=True)[:safe_max_files]]
+        ordered = [path for _mtime, path in sorted(candidates, reverse=True)]
+        if max_files is None:
+            return ordered
+        return ordered[: max(1, int(max_files or 1))]
     except OSError:
+        logger.warning("failed to list cached user alpha files from %s", redact_text(cache_dir, max_length=180))
         return []
 
 
@@ -193,7 +268,7 @@ def official_context_file_counts(
             safe_error_message=safe_error_message,
         )
         if meta:
-            metadata[filename] = enrich_context_cache_metadata(meta)
+            metadata[filename] = enrich_context_cache_metadata(meta, rows=rows)
     if metadata:
         counts["context_cache_metadata"] = metadata
         counts["context_cache_manifest"] = context_cache_manifest(
@@ -203,7 +278,12 @@ def official_context_file_counts(
     return counts
 
 
-def enrich_context_cache_metadata(metadata: dict[str, Any], *, now: datetime | None = None) -> dict[str, Any]:
+def enrich_context_cache_metadata(
+    metadata: dict[str, Any],
+    *,
+    rows: list[dict[str, Any]] | None = None,
+    now: datetime | None = None,
+) -> dict[str, Any]:
     enriched = dict(metadata)
     current = now or datetime.now(timezone.utc)
     saved_at = parse_cache_timestamp(enriched.get("saved_at"))
@@ -215,7 +295,45 @@ def enrich_context_cache_metadata(metadata: dict[str, Any], *, now: datetime | N
     enriched["expires_in_seconds"] = expires_in_seconds
     enriched["is_expired"] = is_expired
     enriched["is_stale"] = is_expired
+    if rows is not None:
+        actual_count = len(rows)
+        declared_count = _metadata_int(enriched.get("record_count"))
+        declared_sha = str(enriched.get("sha256") or "").strip()
+        actual_sha = context_items_hash(rows) if actual_count else ""
+        record_count_matches = declared_count == actual_count
+        sha256_matches = bool(declared_sha) and declared_sha == actual_sha
+        integrity_errors: list[str] = []
+        if actual_count <= 0:
+            integrity_errors.append("empty_context_file")
+        if not record_count_matches:
+            integrity_errors.append("record_count_mismatch")
+        if not sha256_matches:
+            integrity_errors.append("sha256_mismatch")
+        if not bool(enriched.get("complete")):
+            integrity_errors.append("metadata_incomplete")
+        enriched["metadata_record_count"] = declared_count
+        enriched["record_count"] = actual_count
+        enriched["actual_sha256"] = actual_sha
+        enriched["record_count_matches"] = record_count_matches
+        enriched["sha256_matches"] = sha256_matches
+        enriched["integrity_ok"] = not integrity_errors
+        enriched["integrity_errors"] = integrity_errors
+        # A cache is complete only when the metadata still describes the file
+        # currently on disk. TTL staleness is reported separately as is_stale.
+        enriched["complete"] = not integrity_errors
     return enriched
+
+
+def context_items_hash(items: list[dict[str, Any]]) -> str:
+    payload = json.dumps(items, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str)
+    return sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _metadata_int(value: Any) -> int:
+    try:
+        return int(value or 0)
+    except (TypeError, ValueError):
+        return 0
 
 
 def context_cache_manifest(
@@ -230,6 +348,11 @@ def context_cache_manifest(
         filename
         for filename, meta in metadata.items()
         if bool(meta.get("is_stale") or meta.get("is_expired"))
+    ]
+    invalid_files = [
+        filename
+        for filename in expected_files
+        if filename in metadata and not bool(metadata.get(filename, {}).get("complete"))
     ]
     record_counts = {
         filename: int(meta.get("record_count", 0) or 0)
@@ -258,10 +381,11 @@ def context_cache_manifest(
         "missing_files": missing_files,
         "stale_files": stale_files,
         "expired_files": stale_files,
+        "invalid_files": invalid_files,
         "record_counts": record_counts,
         "record_count_total": sum(record_counts.values()),
-        "complete": not missing_files and all(bool(metadata.get(filename, {}).get("complete")) for filename in expected_files),
-        "is_stale": bool(missing_files or stale_files),
+        "complete": not missing_files and not invalid_files,
+        "is_stale": bool(missing_files or stale_files or invalid_files),
         "sha256": digest,
     }
 
@@ -338,7 +462,11 @@ def read_official_context_json(
         except FileNotFoundError:
             continue
         except (OSError, json.JSONDecodeError) as exc:
-            logger.warning("failed to read official context file %s: %s", path, safe_error_message(exc))
+            logger.warning(
+                "failed to read official context file %s: %s",
+                redact_text(path, max_length=180),
+                safe_error_message(exc),
+            )
             continue
         if isinstance(rows, list):
             return [row for row in rows if isinstance(row, dict)]
@@ -387,11 +515,6 @@ def cloud_alpha_summary(
             safe_error_message=safe_error_message,
         ),
     }
-
-
-def drop_mock_rows_if_real(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    real = [row for row in rows if not cloud_alpha_id(row).startswith("mock_")]
-    return real or rows
 
 
 def cloud_alpha_id(row: dict[str, Any]) -> str:
@@ -473,7 +596,7 @@ def persist_official_context(
             data_dir = str(Path(load_config().ops.storage_dir))
         except Exception as exc:
             logger.warning("failed to resolve configured storage dir after official context persist: %s", safe_error_message(exc))
-            data_dir = "data"
+            data_dir = CloudDefaults.OFFICIAL_CONTEXT_DATA_DIR
         OfficialDataLoader.instance().refresh(data_dir)
 
 
@@ -484,13 +607,17 @@ def save_official_context_json(
     load_config: LoadConfig = load_run_config,
     runtime_root: RuntimeRoot = runtime_project_root,
 ) -> None:
-    ttl_seconds = 86400
+    ttl_seconds = CloudDefaults.CONTEXT_CACHE_TTL_SECONDS
     try:
         run_config = load_config()
         data_dir = Path(run_config.ops.storage_dir)
         ttl_seconds = int(run_config.ops.official_api.context_cache_ttl_seconds)
-    except Exception:
-        data_dir = runtime_root() / "data"
+    except Exception as exc:
+        logger.warning(
+            "failed to resolve configured storage dir while saving official context: %s; falling back to runtime root",
+            redact_error_message(exc),
+        )
+        data_dir = runtime_root() / CloudDefaults.OFFICIAL_CONTEXT_DATA_DIR
     data_dir.mkdir(parents=True, exist_ok=True)
     target = data_dir / filename
     tmp = data_dir / f".{filename}.tmp"
@@ -502,3 +629,277 @@ def save_official_context_json(
         source="official_api",
         ttl_seconds=ttl_seconds,
     )
+
+"""Cloud/context refresh service used by web candidate checks."""
+
+import logging
+from typing import Any, Callable, Protocol
+
+from brain_alpha_ops.official_context_datasets import list_official_datasets_or_derive
+from brain_alpha_ops.research.repository import ResearchRepository
+
+
+logger = logging.getLogger(__name__)
+
+
+class JobStoreLike(Protocol):
+    def update(self, job_id: str, **kwargs: Any) -> None:
+        ...
+
+
+OfficialContextCounts = Callable[[], dict[str, Any]]
+DatasetsFromFields = Callable[[list[dict[str, Any]]], list[dict[str, Any]]]
+PersistOfficialContext = Callable[[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]], None]
+SafeErrorMessage = Callable[[Exception], str]
+
+
+def _cloud_refresh_progress_message(progress: dict[str, Any]) -> str:
+    scanned = int(progress.get("scanned", 0) or 0)
+    reference = int(
+        progress.get("api_reported_total")
+        or progress.get("filter_window_count")
+        or 0
+    )
+    page = int(progress.get("pages_fetched") or progress.get("page_number") or 0)
+    reference_text = (
+        f"接口分页参考数 {reference} 条，不是云端 Alpha 总量"
+        if reference > 0
+        else "接口分页参考数仍在确认"
+    )
+    page_text = f"；当前第 {page} 页" if page else ""
+    return f"云端 Alpha 分页拉取中：已拉取 {scanned} 条；{reference_text}{page_text}。"
+
+
+def refresh_cloud_context_for_check_service(
+    api: Any,
+    repo: ResearchRepository,
+    sync_range: str,
+    job_id: str,
+    total: int,
+    mode: str,
+    region: str = "",
+    *,
+    refresh_remote: bool = False,
+    store: JobStoreLike,
+    official_context_file_counts: OfficialContextCounts,
+    datasets_from_fields: DatasetsFromFields,
+    persist_official_context: PersistOfficialContext,
+    safe_error_message: SafeErrorMessage,
+) -> tuple[list[dict[str, Any]], str]:
+    context_errors: list[str] = []
+    context_warnings: list[str] = []
+
+    def on_dataset_fallback(message: str, exc: Exception) -> None:
+        context_warnings.append(f"datasets refresh fallback: {message}: {safe_error_message(exc)}")
+
+    if not refresh_remote:
+        rows = repo.latest_cloud_alphas()
+        counts = official_context_file_counts()
+        store.update(
+            job_id,
+            status="running",
+            progress={
+                "phase": "cloud_sync",
+                "status_code": "CHECK_LOCAL_CACHE",
+                "mode": mode,
+                "range": sync_range,
+                "total": total,
+                "checked": 0,
+                "submittable": 0,
+                "blocked": 0,
+                "failed": 0,
+                "cloud_scanned": len(rows),
+                "cloud_saved_count": len(rows),
+                **counts,
+                "message": f"Using local cloud cache for checks: {len(rows)} rows.",
+                "items": [],
+            },
+        )
+        if not rows:
+            return [], "local cloud cache empty; run manual sync first"
+        return rows, ""
+
+    try:
+        rows = list_user_alphas_for_sync(
+            api,
+            sync_range,
+            progress_callback=lambda progress: store.update(
+                job_id,
+                status="running",
+                progress={
+                    "phase": "cloud_sync",
+                    "status_code": "CHECK_CLOUD_SYNC",
+                    "mode": mode,
+                    "range": sync_range,
+                    "total": total,
+                    "checked": 0,
+                    "submittable": 0,
+                    "blocked": 0,
+                    "failed": 0,
+                    "cloud_scanned": int(progress.get("scanned", 0) or 0),
+                    "cloud_api_reported_total": int(progress.get("api_reported_total", 0) or 0),
+                    "cloud_filter_window_count": int(
+                        progress.get("filter_window_count")
+                        or progress.get("api_reported_total")
+                        or 0
+                    ),
+                    "cloud_page_size": int(progress.get("page_size", 0) or 0),
+                    "cloud_page_limit": int(progress.get("page_limit", 0) or 0),
+                    "cloud_pages_fetched": int(progress.get("pages_fetched") or progress.get("page_number") or 0),
+                    "cloud_expected_pages": int(progress.get("expected_pages", 0) or 0),
+                    "cloud_next_offset": int(progress.get("next_offset", 0) or 0),
+                    "message": _cloud_refresh_progress_message(progress),
+                    "items": [],
+                },
+            ),
+        )
+    except Exception as exc:
+        message = safe_error_message(exc)
+        logger.warning(
+            "cloud alpha refresh failed for check job_id=%s range=%s: %s",
+            job_id,
+            sync_range,
+            message,
+            exc_info=True,
+        )
+        return [], message
+
+    fields: list[dict[str, Any]] = []
+    operators: list[dict[str, Any]] = []
+    fields_count = 0
+    operators_count = 0
+    try:
+        fields = api.list_fields("all", region)
+        fields_count = len(fields)
+        store.update(
+            job_id,
+            status="running",
+            progress={
+                "phase": "cloud_sync",
+                "status_code": "CHECK_CONTEXT_FIELDS",
+                "mode": mode,
+                "range": sync_range,
+                "total": total,
+                "checked": 0,
+                "submittable": 0,
+                "blocked": 0,
+                "failed": 0,
+                "message": f"Updated official fields cache: {fields_count} rows.",
+                "items": [],
+            },
+        )
+    except Exception as exc:
+        message = safe_error_message(exc)
+        logger.warning(
+            "official fields refresh failed for check job_id=%s range=%s: %s",
+            job_id,
+            sync_range,
+            message,
+            exc_info=True,
+        )
+        context_errors.append(f"fields refresh failed: {message}")
+
+    try:
+        operators = api.list_operators("all")
+        operators_count = len(operators)
+        store.update(
+            job_id,
+            status="running",
+            progress={
+                "phase": "cloud_sync",
+                "status_code": "CHECK_CONTEXT_OPERATORS",
+                "mode": mode,
+                "range": sync_range,
+                "total": total,
+                "checked": 0,
+                "submittable": 0,
+                "blocked": 0,
+                "failed": 0,
+                "message": f"Updated official operators cache: {operators_count} rows.",
+                "items": [],
+            },
+        )
+    except Exception as exc:
+        message = safe_error_message(exc)
+        logger.warning(
+            "official operators refresh failed for check job_id=%s range=%s: %s",
+            job_id,
+            sync_range,
+            message,
+            exc_info=True,
+        )
+        context_errors.append(f"operators refresh failed: {message}")
+
+    try:
+        datasets = (
+            list_official_datasets_or_derive(
+                api,
+                fields,
+                region=region,
+                datasets_from_fields=datasets_from_fields,
+                fallback_warning=on_dataset_fallback,
+            )
+            if fields_count > 0
+            else []
+        )
+        persist_official_context(
+            fields if fields_count > 0 else [],
+            operators if operators_count > 0 else [],
+            datasets,
+        )
+        if context_warnings:
+            store.update(
+                job_id,
+                status="running",
+                progress={
+                    "phase": "cloud_sync",
+                    "status_code": "CHECK_CONTEXT_WARNING",
+                    "mode": mode,
+                    "range": sync_range,
+                    "total": total,
+                    "checked": 0,
+                    "submittable": 0,
+                    "blocked": 0,
+                    "failed": 0,
+                    "context_warnings": context_warnings,
+                    "message": "; ".join(context_warnings),
+                    "items": [],
+                },
+            )
+    except Exception as exc:
+        message = safe_error_message(exc)
+        logger.warning(
+            "persist official context failed for check job_id=%s range=%s: %s",
+            job_id,
+            sync_range,
+            message,
+            exc_info=True,
+        )
+        context_errors.append(f"persist context failed: {message}")
+
+    repo.merge_cloud_alphas(rows, sync_range=sync_range)
+    store.update(
+        job_id,
+        status="running",
+        progress={
+            "phase": "cloud_sync",
+            "status_code": "CHECK_CONTEXT_WARNING" if context_warnings else "CHECK_CLOUD_SYNC_SAVED",
+            "mode": mode,
+            "range": sync_range,
+            "total": total,
+            "checked": 0,
+            "submittable": 0,
+            "blocked": 0,
+            "failed": 0,
+            "cloud_saved_count": len(rows),
+            "context_warnings": context_warnings,
+            "message": (
+                f"{'; '.join(context_warnings)}；本地已保存 {len(rows)} 条云端 Alpha，继续执行提交前复核。"
+                if context_warnings
+                else f"本地已保存 {len(rows)} 条云端 Alpha，继续执行提交前复核。"
+            ),
+            "items": [],
+        },
+    )
+    error_msg = "; ".join(context_errors)[:500] if context_errors else ""
+    return rows, error_msg

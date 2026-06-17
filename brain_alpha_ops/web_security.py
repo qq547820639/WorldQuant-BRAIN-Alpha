@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import logging
 import secrets
 import threading
 import time
@@ -12,8 +13,13 @@ from urllib.parse import parse_qs, urlparse
 
 LOCAL_HOSTS = {"127.0.0.1", "localhost", "::1"}
 LOOPBACK_BIND_HOSTS = {"127.0.0.1", "localhost", "::1"}
+logger = logging.getLogger(__name__)
 SESSION_COOKIE_NAME = "brain_alpha_ops_session"
 DEFAULT_SESSION_TTL_SECONDS = 12 * 60 * 60
+DEFAULT_SESSION_ABSOLUTE_MAX_SECONDS = 24 * 60 * 60
+REQUEST_REPLAY_TTL_SECONDS = 5 * 60
+MAX_REQUEST_ID_LENGTH = 128
+MAX_REPLAY_CACHE_SIZE = 10_000  # R-03: capacity guard to prevent DoS memory exhaustion
 
 
 def header_hostname(host_header: str) -> str:
@@ -91,6 +97,7 @@ def validate_admin_token(provided_token: str, expected_token: str) -> bool:
 class LocalSessionManager:
     cookie_name: str = SESSION_COOKIE_NAME
     ttl_seconds: int = DEFAULT_SESSION_TTL_SECONDS
+    absolute_max_seconds: int = DEFAULT_SESSION_ABSOLUTE_MAX_SECONDS
     allow_multiple_sessions: bool = True
     secure_cookies: bool = False
     sessions: dict[str, dict[str, Any]] = field(default_factory=dict)
@@ -125,7 +132,9 @@ class LocalSessionManager:
         current = time.time() if now is None else now
         with self.lock:
             for session_id, row in list(self.sessions.items()):
-                if float(row.get("expires_at", 0.0) or 0.0) <= current:
+                expires_at = float(row.get("expires_at", 0.0) or 0.0)
+                absolute_expires_at = float(row.get("absolute_expires_at", expires_at) or expires_at)
+                if expires_at <= current or absolute_expires_at <= current:
                     self.sessions.pop(session_id, None)
 
     def create(self) -> tuple[str, str]:
@@ -136,10 +145,16 @@ class LocalSessionManager:
         with self.lock:
             if not self.allow_multiple_sessions:
                 self.sessions.clear()
+            created_at = time.time()
+            absolute_expires_at = created_at + max(1, int(self.absolute_max_seconds))
             self.sessions[session_id] = {
                 "csrf": csrf_token,
                 "stream": stream_token,
-                "expires_at": time.time() + self.ttl_seconds,
+                "request_replay": {},
+                "created_at": created_at,
+                "last_accessed": created_at,
+                "expires_at": min(created_at + self.ttl_seconds, absolute_expires_at),
+                "absolute_expires_at": absolute_expires_at,
             }
         return session_id, csrf_token
 
@@ -149,6 +164,50 @@ class LocalSessionManager:
         with self.lock:
             self.sessions.pop(session_id, None)
 
+    def session_info(self, session_id: str) -> dict[str, Any] | None:
+        if not session_id:
+            return None
+        self.prune()
+        with self.lock:
+            row = self.sessions.get(session_id)
+            if not row:
+                return None
+            current = time.time()
+            absolute_expires_at = float(row.get("absolute_expires_at", row.get("expires_at", 0.0)) or 0.0)
+            if absolute_expires_at <= current:
+                self.sessions.pop(session_id, None)
+                return None
+            row["last_accessed"] = current
+            row["expires_at"] = min(current + self.ttl_seconds, absolute_expires_at)
+            return {
+                "id": session_id,
+                "created_at": float(row.get("created_at", 0.0) or 0.0),
+                "last_accessed": float(row.get("last_accessed", 0.0) or 0.0),
+                "expires_at": float(row.get("expires_at", 0.0) or 0.0),
+                "absolute_expires_at": absolute_expires_at,
+                "metadata": dict(row.get("metadata") or {}),
+            }
+
+    def update_metadata(self, session_id: str, updates: dict[str, Any]) -> bool:
+        if not session_id:
+            return False
+        self.prune()
+        with self.lock:
+            row = self.sessions.get(session_id)
+            if not row:
+                return False
+            metadata = row.setdefault("metadata", {})
+            for key, value in dict(updates or {}).items():
+                if value is None:
+                    metadata.pop(str(key), None)
+                else:
+                    metadata[str(key)] = value
+            current = time.time()
+            absolute_expires_at = float(row.get("absolute_expires_at", row.get("expires_at", 0.0)) or 0.0)
+            row["last_accessed"] = current
+            row["expires_at"] = min(current + self.ttl_seconds, absolute_expires_at)
+            return True
+
     def validate_token(self, session_id: str, token: str, token_key: str) -> bool:
         if not session_id or not token:
             return False
@@ -157,9 +216,15 @@ class LocalSessionManager:
             row = self.sessions.get(session_id)
             if not row:
                 return False
+            current = time.time()
+            absolute_expires_at = float(row.get("absolute_expires_at", row.get("expires_at", 0.0)) or 0.0)
+            if absolute_expires_at <= current:
+                self.sessions.pop(session_id, None)
+                return False
             if not secrets.compare_digest(str(row.get(token_key, "")), token):
                 return False
-            row["expires_at"] = time.time() + self.ttl_seconds
+            row["last_accessed"] = current
+            row["expires_at"] = min(current + self.ttl_seconds, absolute_expires_at)
             return True
 
     def validate_csrf(self, session_id: str, csrf_token: str) -> bool:
@@ -167,6 +232,62 @@ class LocalSessionManager:
 
     def validate_stream(self, session_id: str, stream_token: str) -> bool:
         return self.validate_token(session_id, stream_token, "stream")
+
+    def validate_replay(
+        self,
+        session_id: str,
+        request_id: str,
+        request_timestamp: str,
+        *,
+        now: float | None = None,
+        ttl_seconds: int = REQUEST_REPLAY_TTL_SECONDS,
+    ) -> dict[str, Any]:
+        current = time.time() if now is None else now
+        request_id = str(request_id or "").strip()
+        if not session_id:
+            return {"ok": False, "error_code": "SESSION_INVALID", "error": "invalid local session"}
+        if not request_id:
+            return {"ok": False, "error_code": "REPLAY_TOKEN_REQUIRED", "error": "missing request id"}
+        if len(request_id) > MAX_REQUEST_ID_LENGTH:
+            return {"ok": False, "error_code": "REPLAY_TOKEN_INVALID", "error": "request id is too long"}
+        if any(ch.isspace() for ch in request_id):
+            return {"ok": False, "error_code": "REPLAY_TOKEN_INVALID", "error": "request id must not contain whitespace"}
+        try:
+            timestamp = float(str(request_timestamp or "").strip())
+        except (TypeError, ValueError):
+            return {"ok": False, "error_code": "REPLAY_TIMESTAMP_INVALID", "error": "invalid request timestamp"}
+        if timestamp > 10_000_000_000:
+            timestamp = timestamp / 1000.0
+        if abs(current - timestamp) > ttl_seconds:
+            return {"ok": False, "error_code": "REPLAY_TIMESTAMP_STALE", "error": "stale request timestamp"}
+
+        self.prune(current)
+        with self.lock:
+            row = self.sessions.get(session_id)
+            if not row:
+                return {"ok": False, "error_code": "SESSION_INVALID", "error": "invalid local session"}
+            replay_cache = row.setdefault("request_replay", {})
+            for cached_id, expires_at in list(replay_cache.items()):
+                if float(expires_at or 0.0) <= current:
+                    replay_cache.pop(cached_id, None)
+            if request_id in replay_cache:
+                return {"ok": False, "error_code": "REPLAY_DETECTED", "error": "duplicate request id"}
+            # R-03: Hard cap on replay cache size to prevent DoS memory exhaustion
+            if len(replay_cache) >= MAX_REPLAY_CACHE_SIZE:
+                logger.warning(
+                    "Replay cache full for session %s (size=%d), rejecting request",
+                    session_id[:8], len(replay_cache),
+                )
+                return {
+                    "ok": False,
+                    "error_code": "REPLAY_CACHE_FULL",
+                    "error": "too many concurrent requests — please retry later",
+                }
+            replay_cache[request_id] = current + ttl_seconds
+            absolute_expires_at = float(row.get("absolute_expires_at", row.get("expires_at", 0.0)) or 0.0)
+            row["last_accessed"] = current
+            row["expires_at"] = min(current + self.ttl_seconds, absolute_expires_at)
+        return {"ok": True}
 
     def csrf_for_session(self, session_id: str) -> str:
         if not session_id:
@@ -176,7 +297,10 @@ class LocalSessionManager:
             row = self.sessions.get(session_id)
             if not row:
                 return ""
-            row["expires_at"] = time.time() + self.ttl_seconds
+            current = time.time()
+            absolute_expires_at = float(row.get("absolute_expires_at", row.get("expires_at", 0.0)) or 0.0)
+            row["last_accessed"] = current
+            row["expires_at"] = min(current + self.ttl_seconds, absolute_expires_at)
             return str(row.get("csrf", ""))
 
     def stream_token_for_session(self, session_id: str) -> str:
@@ -189,7 +313,10 @@ class LocalSessionManager:
                 return ""
             if not row.get("stream"):
                 row["stream"] = secrets.token_urlsafe(32)
-            row["expires_at"] = time.time() + self.ttl_seconds
+            current = time.time()
+            absolute_expires_at = float(row.get("absolute_expires_at", row.get("expires_at", 0.0)) or 0.0)
+            row["last_accessed"] = current
+            row["expires_at"] = min(current + self.ttl_seconds, absolute_expires_at)
             return str(row.get("stream", ""))
 
     def get_or_create(self, existing_session_id: str) -> tuple[str, str]:
@@ -212,7 +339,7 @@ class LocalSessionManager:
         session_id = self.session_id_from_cookie(cookie_header)
         if csrf_header:
             return self.validate_csrf(session_id, csrf_header)
-        if path == "/api/stream":
+        if path in {"/api/stream", "/sse"}:
             stream_token = (parse_qs(query_string).get("stream_token") or [""])[0]
             return self.validate_stream(session_id, stream_token)
         return False

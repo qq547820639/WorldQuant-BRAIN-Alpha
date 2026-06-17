@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import logging
 import random
-from typing import Dict, List, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from brain_alpha_ops.data import OfficialDataLoader, FieldDatasetMapper
+
+logger = logging.getLogger(__name__)
 
 
 class DatasetSelector:
@@ -24,11 +27,11 @@ class DatasetSelector:
     STRATEGIES = ("all", "rotate", "random", "specific", "fixed", "locked")
 
     def __init__(self) -> None:
-        self._datasets: List[str] = []
+        self._datasets: list[str] = []
         self._rotation_index: int = 0
-        self._category_index: Dict[str, List[str]] = {}
-        self._all_categories: List[str] = []
-        self._loader: Optional["OfficialDataLoader"] = None
+        self._category_index: dict[str, list[str]] = {}
+        self._all_categories: list[str] = []
+        self._loader: "OfficialDataLoader | None" = None
 
     # ------------------------------------------------------------------
     # Init
@@ -42,7 +45,7 @@ class DatasetSelector:
     # ------------------------------------------------------------------
     # Select
     # ------------------------------------------------------------------
-    def select(self, strategy: str = "all", **kwargs) -> List[str]:
+    def select(self, strategy: str = "all", **kwargs) -> list[str]:
         """Return dataset IDs per *strategy*.
 
         *strategy* values:
@@ -67,10 +70,10 @@ class DatasetSelector:
     # ------------------------------------------------------------------
     # Strategy implementations
     # ------------------------------------------------------------------
-    def _select_all(self) -> List[str]:
+    def _select_all(self) -> list[str]:
         return list(self._datasets)
 
-    def _select_rotate(self, advance: bool = True) -> List[str]:
+    def _select_rotate(self, advance: bool = True) -> list[str]:
         if not self._datasets:
             return []
         idx = self._rotation_index % len(self._datasets)
@@ -78,7 +81,7 @@ class DatasetSelector:
             self._rotation_index = (self._rotation_index + 1) % len(self._datasets)
         return [self._datasets[idx]]
 
-    def _select_random(self, n: int = 3, seed: Optional[int] = None) -> List[str]:
+    def _select_random(self, n: int = 3, seed: int | None = None) -> list[str]:
         if seed is not None:
             random.seed(seed)
         k = min(n, len(self._datasets))
@@ -92,7 +95,7 @@ class DatasetSelector:
         result = self._select_rotate(advance=advance)
         return result[0] if result else ""
 
-    def random_subset(self, n: int = 3, seed: Optional[int] = None) -> List[str]:
+    def random_subset(self, n: int = 3, seed: int | None = None) -> list[str]:
         """Return *n* random dataset IDs."""
         return self._select_random(n=n, seed=seed)
 
@@ -115,9 +118,9 @@ class DatasetSelector:
                 if cat and field_id:
                     self._category_index.setdefault(cat, []).append(field_id)
         except Exception:
-            pass
+            logger.warning("dataset selector category index unavailable", exc_info=True)
 
-    def get_fields_by_category(self, category: str, dataset_id: str = "") -> List[str]:
+    def get_fields_by_category(self, category: str, dataset_id: str = "") -> list[str]:
         """Resolve a semantic field category name to concrete field IDs.
 
         Matching rules (case-insensitive):
@@ -143,14 +146,14 @@ class DatasetSelector:
             return results
 
         # Rule 2: substring match — category appears in index key
-        results: List[str] = []
+        results: list[str] = []
         for idx_key, fields in self._category_index.items():
             if cat_lower in idx_key:
                 results.extend(fields)
 
         # Deduplicate while preserving order
         seen: set[str] = set()
-        deduped: List[str] = []
+        deduped: list[str] = []
         for f in results:
             if f not in seen:
                 seen.add(f)
@@ -160,7 +163,7 @@ class DatasetSelector:
             deduped = [field for field in deduped if field.lower() in dataset_fields]
         return deduped
 
-    def get_all_categories(self) -> List[str]:
+    def get_all_categories(self) -> list[str]:
         """Return all known category names from the index."""
         return sorted(self._category_index.keys())
 
@@ -168,7 +171,7 @@ class DatasetSelector:
     # Properties
     # ------------------------------------------------------------------
     @property
-    def available_datasets(self) -> List[str]:
+    def available_datasets(self) -> list[str]:
         return list(self._datasets)
 
     @property

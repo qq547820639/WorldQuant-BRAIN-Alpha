@@ -1,5 +1,5 @@
 from brain_alpha_ops.brain_api.base import BrainAPIError
-from brain_alpha_ops.brain_api.mock import MockBrainAPI
+from tests.production_api_stub import ProductionBrainAPIStub
 from brain_alpha_ops.models import Candidate
 from brain_alpha_ops.research.backtest_polling import BacktestPollingService
 
@@ -26,12 +26,12 @@ def _service(api, *, halted=None, events=None):
     )
 
 
-class RunningAPI(MockBrainAPI):
+class RunningAPI(ProductionBrainAPIStub):
     def poll_simulation(self, simulation_id: str) -> str:
         return "RUNNING"
 
 
-class CompletedAPI(MockBrainAPI):
+class CompletedAPI(ProductionBrainAPIStub):
     def poll_simulation(self, simulation_id: str) -> str:
         return "COMPLETED"
 
@@ -39,17 +39,17 @@ class CompletedAPI(MockBrainAPI):
         return {"alpha_id": "official_1", "metrics": {"sharpe": 1.7, "fitness": 1.2}}
 
 
-class FailedAPI(MockBrainAPI):
+class FailedAPI(ProductionBrainAPIStub):
     def poll_simulation(self, simulation_id: str) -> str:
         return "FAILED"
 
 
-class PollRateLimitedAPI(MockBrainAPI):
+class PollRateLimitedAPI(ProductionBrainAPIStub):
     def poll_simulation(self, simulation_id: str) -> str:
         raise BrainAPIError("HTTP 429 poll", status_code=429, retry_after=7)
 
 
-class PollFailingAPI(MockBrainAPI):
+class PollFailingAPI(ProductionBrainAPIStub):
     def poll_simulation(self, simulation_id: str) -> str:
         raise BrainAPIError("HTTP 500 poll failed", status_code=500)
 

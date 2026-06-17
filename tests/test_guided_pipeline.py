@@ -1,4 +1,5 @@
 import json
+import logging
 
 from brain_alpha_ops.config import RunConfig
 from brain_alpha_ops.models import PipelineResult
@@ -7,7 +8,7 @@ from brain_alpha_ops.ux.guided_pipeline import GuidedPipeline
 
 
 def test_guided_pipeline_completes_core_phases_and_uses_configured_storage(monkeypatch, tmp_path):
-    config = RunConfig(environment="mock")
+    config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path)
     pipeline = GuidedPipeline(config)
 
@@ -46,8 +47,26 @@ def test_guided_pipeline_completes_core_phases_and_uses_configured_storage(monke
     assert pipeline.list_history()[0]["parameter_audit"]["ok"] is True
 
 
+def test_guided_pipeline_logs_progress_callback_failures(caplog, tmp_path):
+    config = RunConfig(environment="production")
+    config.ops.storage_dir = str(tmp_path)
+    pipeline = GuidedPipeline(config)
+
+    def failing_callback(_phase, _status, _data):
+        raise RuntimeError("callback failed token=secret-progress-123")
+
+    pipeline.on_progress(failing_callback)
+
+    with caplog.at_level(logging.WARNING, logger="brain_alpha_ops.ux.guided_pipeline"):
+        pipeline._notify("init", "running", {})
+
+    assert "guided pipeline progress callback failed" in caplog.text
+    assert "callback failed" in caplog.text
+    assert "secret-progress-123" not in caplog.text
+
+
 def test_guided_pipeline_accepts_fixed_dataset_strategy(monkeypatch, tmp_path):
-    config = RunConfig(environment="mock")
+    config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path)
     config.ops.settings.dataset = "pv1"
     config.ops.budget.dataset_strategy = "fixed"
@@ -63,3 +82,33 @@ def test_guided_pipeline_accepts_fixed_dataset_strategy(monkeypatch, tmp_path):
     )
 
     assert result.run_id == "run_guided_test"
+
+
+def test_guided_pipeline_forwards_core_progress_dicts_and_stop_callback(monkeypatch, tmp_path):
+    config = RunConfig(environment="production")
+    config.ops.storage_dir = str(tmp_path)
+    stop_requested = {"value": True}
+    pipeline = GuidedPipeline(config, stop_callback=lambda: stop_requested["value"])
+    progress_events = []
+    pipeline.on_progress(lambda phase, status, data: progress_events.append((phase, status, data)))
+
+    def fake_run_pipeline(run_config, *, progress_callback, stop_callback):
+        assert stop_callback() is True
+        progress_callback({
+            "phase": "local_scoring",
+            "percent": 40,
+            "message": "scored one candidate",
+            "alpha_id": "a1",
+        })
+        return PipelineResult(run_id="run_guided_test", candidates=[], events=[], summary={})
+
+    monkeypatch.setattr(guided_pipeline, "run_pipeline_from_config", fake_run_pipeline)
+
+    pipeline._phase_core_pipeline(PipelineResult(run_id="run_guided_test", candidates=[], events=[], summary={}))
+
+    assert ("validation", "progress", {
+        "phase": "local_scoring",
+        "percent": 40,
+        "message": "scored one candidate",
+        "alpha_id": "a1",
+    }) in progress_events

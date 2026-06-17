@@ -12,7 +12,7 @@ from brain_alpha_ops.redaction import redact_error_message
 from .candidate_pool import blocked_gate
 
 
-HaltCallback = Callable[[str, float | None], None]
+HaltCallback = Callable[[str, "float | None"], None]
 EventCallback = Callable[..., None]
 
 
@@ -68,10 +68,39 @@ class BacktestPollingService:
             outcome.records.append(BacktestRecordIntent(action="failed", status=status))
             return outcome
 
-        candidate.lifecycle_status = "simulation_running"
-        candidate.submission["next_poll_at"] = now + interval
-        outcome.action = "running"
-        outcome.records.append(BacktestRecordIntent(action="running", status=status))
+        # P0-7 fix: explicitly recognise known BRAIN running/pending statuses.
+        # Any status NOT in this set is treated as unrecognised and deferred
+        # to prevent an infinite polling loop on a status the pipeline does
+        # not understand.
+        _KNOWN_RUNNING_STATUSES = frozenset({
+            "RUNNING", "PENDING", "QUEUED", "STARTING", "SUBMITTED",
+            "PROCESSING", "CALCULATING", "EVALUATING", "IN_PROGRESS",
+        })
+        if status.upper() in _KNOWN_RUNNING_STATUSES:
+            candidate.lifecycle_status = "simulation_running"
+            candidate.submission["next_poll_at"] = now + interval
+            outcome.action = "running"
+            outcome.records.append(BacktestRecordIntent(action="running", status=status))
+            return outcome
+        # Unrecognised status — log a warning and defer so the candidate is
+        # not stuck in an infinite loop.
+        import logging
+        _log = logging.getLogger(__name__)
+        _log.warning(
+            "BacktestPollingService.poll: unrecognised simulation status %r for %s; deferring",
+            status, candidate.alpha_id,
+        )
+        candidate.lifecycle_status = "simulation_poll_deferred_unknown"
+        candidate.submission["next_poll_at"] = now + max(interval * 2, 30.0)
+        outcome.action = "poll_deferred_unknown"
+        outcome.records.append(
+            BacktestRecordIntent(
+                action="poll_deferred_unknown",
+                status=status,
+                note=f"unrecognised simulation status: {status}",
+                phase="simulation_wait",
+            )
+        )
         return outcome
 
     def _handle_poll_error(

@@ -1,10 +1,13 @@
+from __future__ import annotations
 import json
+import logging
 from pathlib import Path
 
 from brain_alpha_ops.agent_tools import BrainAlphaToolbox
-from brain_alpha_ops.brain_api import MockBrainAPI
+from tests.production_api_stub import ProductionBrainAPIStub
 from brain_alpha_ops.config import RunConfig
 from brain_alpha_ops.models import Candidate
+from brain_alpha_ops.research.context import _cloud_snapshot_from_storage
 from brain_alpha_ops.research.memory import ResearchMemory
 from brain_alpha_ops.research.repository import ResearchRepository
 
@@ -120,7 +123,20 @@ def test_repository_redacts_sensitive_values_before_persisting(tmp_path):
     ])
     repo.save_run_history(
         "run_1",
-        {"credentials": {"password": "pw", "token": "secret-token-222"}, "error": "cookie=session-cookie-333"},
+        {
+            "summary": {
+                "user_profile": {
+                    "username": "researcher@example.com",
+                    "raw": {
+                        "username": "researcher@example.com",
+                        "email": "researcher@example.com",
+                        "telephone": "+1234567890",
+                    },
+                }
+            },
+            "credentials": {"password": "pw", "token": "secret-token-222"},
+            "error": "cookie=session-cookie-333",
+        },
     )
 
     persisted = "\n".join(
@@ -130,6 +146,7 @@ def test_repository_redacts_sensitive_values_before_persisting(tmp_path):
             tmp_path / "checks.jsonl",
             tmp_path / "cloud_alphas.jsonl",
             tmp_path / "run_history" / "latest.json",
+            tmp_path / "run_history" / "run_1.json",
         ]
     )
 
@@ -139,7 +156,36 @@ def test_repository_redacts_sensitive_values_before_persisting(tmp_path):
     assert "cloud-token-111" not in persisted
     assert "secret-token-222" not in persisted
     assert "session-cookie-333" not in persisted
+    assert "researcher@example.com" not in persisted
+    assert "+1234567890" not in persisted
     assert "<redacted>" in persisted
+
+
+def test_repository_latest_cloud_alphas_warns_on_corrupt_json_line(tmp_path, caplog):
+    (tmp_path / "cloud_alphas.jsonl").write_text(
+        '{"id": "cloud_1", "status": "UNSUBMITTED"}\n{bad json\n',
+        encoding="utf-8",
+    )
+    repo = ResearchRepository(str(tmp_path))
+
+    with caplog.at_level(logging.WARNING, logger="brain_alpha_ops.research.repository"):
+        rows = repo.latest_cloud_alphas()
+
+    assert [row["id"] for row in rows] == ["cloud_1"]
+    assert "corrupt cloud alpha JSON line skipped" in caplog.text
+
+
+def test_cloud_context_snapshot_counts_all_synced_cloud_rows(tmp_path):
+    rows = [
+        {"id": f"cloud_{index}", "status": "UNSUBMITTED", "metrics": {"pass_fail": "PASS"}}
+        for index in range(1001)
+    ]
+    _write_jsonl(tmp_path / "cloud_alphas.jsonl", rows)
+
+    snapshot = _cloud_snapshot_from_storage(str(tmp_path), top_n=3)
+
+    assert snapshot["summary"]["count"] == 1001
+    assert len(snapshot["alphas"]) == 3
 
 
 def test_research_memory_writes_summary_file(tmp_path):
@@ -313,9 +359,9 @@ def test_agent_toolbox_queries_research_memory(tmp_path):
             operators=["rank", "ts_delta"],
         ),
     )
-    config = RunConfig(environment="mock")
+    config = RunConfig(environment="production")
     config.ops.storage_dir = str(tmp_path)
-    toolbox = BrainAlphaToolbox(run_config=config, api=MockBrainAPI())
+    toolbox = BrainAlphaToolbox(run_config=config, api=ProductionBrainAPIStub())
 
     result = toolbox.call("query_research_memory", {"top_n": 3, "persist": True})
 

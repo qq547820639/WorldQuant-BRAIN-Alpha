@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Canonical BRAIN platform contract values used across adapters and gates.
 
 This module is intentionally dependency-free so configuration validation,
@@ -13,15 +14,24 @@ CANONICAL_THRESHOLDS = {
     "min_turnover": 0.01,
     "platform_max_turnover": 0.70,
     "max_self_correlation": 0.70,
+    "max_prod_correlation": 0.70,
     "max_weight_concentration": 0.10,
     "sub_universe_sharpe_min_ratio": 0.75,
+}
+
+CANONICAL_RELEASE_REQUIREMENTS = {
+    "require_official_pass": True,
+    "require_official_metrics": True,
 }
 
 CANONICAL_API_PATHS = {
     "authentication": "/authentication",
     "simulations": "/simulations",
+    "data_categories": "/data-categories",
     "data_sets": "/data-sets",
+    "data_set_detail": "/data-sets/{dataset_id}",
     "data_fields": "/data-fields",
+    "data_field_detail": "/data-fields/{field_id}",
     "operators": "/operators",
     "user_alphas": "/users/self/alphas",
     "user_profile": "/users/self",
@@ -62,6 +72,8 @@ CANONICAL_METRIC_NAMES = {
     "returns",
     "drawdown",
     "correlation",
+    "self_correlation",
+    "prod_correlation",
     "weight_concentration",
     "sub_universe_sharpe",
     "margin",
