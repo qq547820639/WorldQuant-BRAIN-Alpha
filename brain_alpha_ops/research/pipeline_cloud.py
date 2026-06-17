@@ -1,4 +1,4 @@
-﻿"""Cloud-alpha matching and ranking helpers for the research pipeline."""
+"""Cloud-alpha matching and ranking helpers for the research pipeline."""
 
 from __future__ import annotations
 

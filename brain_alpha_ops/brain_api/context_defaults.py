@@ -6,11 +6,13 @@ module-level names, but populated from the official JSON files at first access.
 
 from __future__ import annotations
 
+import threading
 from typing import List
 
 # Lazy-loaded caches — populated on first access
 _DEFAULTS_CACHE: dict = {"fields": [], "operators": []}
 _LOADED: bool = False
+_LOAD_LOCK = threading.Lock()
 
 
 def _ensure_loaded() -> None:
@@ -18,47 +20,51 @@ def _ensure_loaded() -> None:
     global _LOADED
     if _LOADED:
         return
-    _LOADED = True
-    try:
-        from brain_alpha_ops.data import OfficialDataLoader
+    with _LOAD_LOCK:
+        if _LOADED:
+            return
+        try:
+            from brain_alpha_ops.data import OfficialDataLoader
 
-        loader = OfficialDataLoader.instance()
+            loader = OfficialDataLoader.instance()
 
-        _DEFAULTS_CACHE["fields"] = [
-            {
-                "name": f.id,
-                "category": f.category,
-                "delay": f.delay,
-                "coverage": f.coverage,
-                "source": "official_fields.json",
-            }
-            for f in loader.get_fields()
-        ]
+            _DEFAULTS_CACHE["fields"] = [
+                {
+                    "name": f.id,
+                    "category": f.category,
+                    "delay": f.delay,
+                    "coverage": f.coverage,
+                    "source": "official_fields.json",
+                }
+                for f in loader.get_fields()
+            ]
 
-        _DEFAULTS_CACHE["operators"] = [
-            {
-                "name": op.name,
-                "category": op.category,
-                "definition": op.definition,
-                "description": op.description,
-                "source": "official_operators.json",
-            }
-            for op in loader.get_operators()
-        ]
-    except Exception:
-        # P0-1: No silent fallback to hardcoded lists.
-        # When OfficialDataLoader fails (missing / corrupt JSON, no network),
-        # return empty lists so the pipeline explicitly blocks rather than
-        # silently generating alphas from an incomplete 23-field subset.
-        import logging
-        logging.critical(
-            "context_defaults: OfficialDataLoader failed to load fields/operators "
-            "from data/official_*.json. Context is EMPTY — pipeline will not "
-            "generate alphas from incomplete data. Run pipeline with valid "
-            "credentials to populate official JSON files from BRAIN API."
-        )
-        _DEFAULTS_CACHE["fields"] = []
-        _DEFAULTS_CACHE["operators"] = []
+            _DEFAULTS_CACHE["operators"] = [
+                {
+                    "name": op.name,
+                    "category": op.category,
+                    "definition": op.definition,
+                    "description": op.description,
+                    "source": "official_operators.json",
+                }
+                for op in loader.get_operators()
+            ]
+            _LOADED = True
+        except Exception:
+            # P0-1: No silent fallback to hardcoded lists.
+            # When OfficialDataLoader fails (missing / corrupt JSON, no network),
+            # return empty lists so the pipeline explicitly blocks rather than
+            # silently generating alphas from an incomplete 23-field subset.
+            import logging
+            logging.critical(
+                "context_defaults: OfficialDataLoader failed to load fields/operators "
+                "from data/official_*.json. Context is EMPTY — pipeline will not "
+                "generate alphas from incomplete data. Run pipeline with valid "
+                "credentials to populate official JSON files from BRAIN API."
+            )
+            _DEFAULTS_CACHE["fields"] = []
+            _DEFAULTS_CACHE["operators"] = []
+            # 不设置_LOADED，允许下次重试
 
 
 def _lazy_list(key: str) -> List[dict]:

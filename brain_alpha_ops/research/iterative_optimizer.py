@@ -25,8 +25,8 @@ Usage::
 
 from __future__ import annotations
 
-import logging
 import json
+import logging
 import random
 import re
 from dataclasses import dataclass, field
@@ -34,15 +34,19 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-from brain_alpha_ops.data.loader import OfficialDataLoader
 from brain_alpha_ops.data.field_dataset_mapper import FieldDatasetMapper
+from brain_alpha_ops.data.loader import OfficialDataLoader
 from brain_alpha_ops.models import Candidate
-from brain_alpha_ops.research.fallback_generation import normalize_operator_aliases
 from brain_alpha_ops.research.failure_strategy_ranking import (
     DEFAULT_FAILURE_TO_STRATEGY as _RANKING_FALLBACK,
+)
+from brain_alpha_ops.research.failure_strategy_ranking import (
     get_strategy_for_failure as _ranking_strategies_for,
+)
+from brain_alpha_ops.research.failure_strategy_ranking import (
     load_failure_strategy_ranking as _load_failure_strategy_ranking,
 )
+from brain_alpha_ops.research.fallback_generation import normalize_operator_aliases
 
 logger = logging.getLogger(__name__)
 
@@ -140,9 +144,11 @@ class IterativeOptimizer:
         self,
         loader: OfficialDataLoader | None = None,
         mapper: FieldDatasetMapper | None = None,
+        rng: random.Random | None = None,
     ):
         self._loader = loader or OfficialDataLoader.instance()
         self._mapper = mapper
+        self._rng = rng or random.Random(42)
         self._official_operators = _operator_names_from_loader(self._loader) or set(_current_official_operator_names())
         self._family_alternatives = self._build_family_alternatives()
         # P2-15 (2026-06-13): strategy order is now learned from
@@ -210,6 +216,8 @@ class IterativeOptimizer:
             # evidence for this dimension.
             learned = _ranking_strategies_for(dim, self.strategy_ranking)
             default = self._FAILURE_TO_STRATEGY.get(dim, ["field_swap", "structure_refine"])
+            if not learned:
+                logger.debug("No AB data for dimension '%s', using hardcoded defaults: %s", dim, default)
             strategies = learned or list(default)
             for strategy_index, strategy in enumerate(strategies):
                 if len(results) >= max_mutations:
@@ -344,11 +352,11 @@ class IterativeOptimizer:
             alt_pool = fields
 
         # Replace one of the fields appearing in the expression.
-        target = random.choice(fields) if fields else ""
+        target = self._rng.choice(fields) if fields else ""
         if not target or target not in expression:
             return expression
 
-        replacement = random.choice([f for f in alt_pool if f != target])
+        replacement = self._rng.choice([f for f in alt_pool if f != target])
         return self._safe_replace_token(expression, target, replacement)
 
     def field_swap_semantic(self, expression: str, dataset_id: str = "") -> str:
@@ -369,11 +377,11 @@ class IterativeOptimizer:
         if not candidate_fields:
             return expression
 
-        target = random.choice(candidate_fields)
+        target = self._rng.choice(candidate_fields)
         if self._mapper and dataset_id:
             replacements = self._mapper.fields_for(dataset_id)
             if replacements:
-                replacement = random.choice([f for f in replacements if f != target])
+                replacement = self._rng.choice([f for f in replacements if f != target])
                 return self._safe_replace_token(expression, target, replacement)
 
         return expression
@@ -388,7 +396,7 @@ class IterativeOptimizer:
             val = int(m.group(0))
             if val < 2 or val > 1000:  # Non-window numbers such as coefficients.
                 return m.group(0)
-            delta = random.uniform(-factor, factor) * val
+            delta = self._rng.uniform(-factor, factor) * val
             new_val = int(val + delta)
             new_val = max(3, min(252, new_val))
             return str(new_val)
@@ -402,9 +410,9 @@ class IterativeOptimizer:
         (winsorize/zscore/scale); otherwise it removes the outermost wrapper if
         one exists.
         """
-        if random.random() < 0.5:
+        if self._rng.random() < 0.5:
             # Add a wrapper.
-            wrap = random.choice(_STRUCTURE_WRAPS)
+            wrap = self._rng.choice(_STRUCTURE_WRAPS)
             # Check whether the expression is already wrapped.
             stripped = expression.strip()
             for existing_wrap in _STRUCTURE_WRAPS:
@@ -445,7 +453,7 @@ class IterativeOptimizer:
             if op in known_ops and op in self._family_alternatives:
                 alternatives = self._family_alternatives[op]
                 if alternatives:
-                    replacement = random.choice(alternatives)
+                    replacement = self._rng.choice(alternatives)
                     # Safe replacement as a whole token, not a substring.
                     result = self._safe_replace_token(result, op, replacement)
                     substituted = True

@@ -1,17 +1,20 @@
-﻿"""Expression generator with pre-validation — eliminates 3 main failure classes.
+"""Expression generator with pre-validation — eliminates 3 main failure classes.
 
 Replaces random field/operator assembly with signature-validated templates.
 Target: reduce BRAIN rejection rate from ~39% to ~10%.
 """
 from __future__ import annotations
 
-import re
 import random
+import re
 import threading
 from typing import Any
 
-from brain_alpha_ops.research.expression_ast import canonical_tokens, expression_similarity, profile_expression
-
+from brain_alpha_ops.research.expression_ast import (
+    canonical_tokens,
+    expression_similarity,
+    profile_expression,
+)
 
 # ═══════════════════════════════════════════════════════════════════
 # P0: Operator signatures — authoritative from BRAIN official docs

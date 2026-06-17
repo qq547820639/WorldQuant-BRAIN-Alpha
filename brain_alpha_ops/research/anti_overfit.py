@@ -8,7 +8,6 @@ import random
 from statistics import mean, pstdev
 from typing import Any
 
-
 ANTI_OVERFIT_SCHEMA_VERSION = "anti_overfit_report.v1"
 
 
@@ -25,8 +24,23 @@ class AntiOverfitService:
             or data.get("ic_series")
             or data.get("rank_ic_series")
         )
-        if not ic_values:
-            ic_values = _synthetic_ic_series(expression, metrics)
+        has_real_ic = bool(ic_values)
+
+        if not has_real_ic:
+            report = {
+                "ok": True,
+                "schema_version": ANTI_OVERFIT_SCHEMA_VERSION,
+                "score": 0.0,
+                "recommendation": "insufficient_data",
+                "passed_count": 0,
+                "total_count": 0,
+                "tests": [],
+                "sample_size": 0,
+                "data_source": "none",
+                "reason": "No real IC series available; anti-overfit checks require real simulation IC data.",
+            }
+            _attach_submission_report(data, "anti_overfit_report", report)
+            return report
 
         tests = [
             _ic_stability_test(ic_values),
@@ -46,6 +60,7 @@ class AntiOverfitService:
             "total_count": len(tests),
             "tests": tests,
             "sample_size": len(ic_values),
+            "data_source": "real_ic_series",
         }
         _attach_submission_report(data, "anti_overfit_report", report)
         return report
@@ -83,15 +98,6 @@ def _number_series(value: Any) -> list[float]:
         if math.isfinite(number):
             result.append(number)
     return result
-
-
-def _synthetic_ic_series(expression: str, metrics: dict[str, Any]) -> list[float]:
-    base = _float(metrics.get("rank_ic"), _float(metrics.get("ic"), 0.03))
-    sharpe = _float(metrics.get("sharpe"), 0.0)
-    seed = int(hashlib.sha256(expression.encode("utf-8", errors="surrogateescape")).hexdigest()[:12], 16)
-    rng = random.Random(seed)
-    center = max(-0.15, min(0.15, base + 0.01 * math.tanh(sharpe)))
-    return [center + rng.uniform(-0.025, 0.025) for _ in range(60)]
 
 
 def _ic_stability_test(values: list[float]) -> dict[str, Any]:
@@ -152,14 +158,6 @@ def _half_life_test(values: list[float]) -> dict[str, Any]:
 
 def _test(name: str, passed: bool, details: dict[str, Any]) -> dict[str, Any]:
     return {"name": name, "passed": bool(passed), "details": details}
-
-
-def _float(value: Any, default: float) -> float:
-    try:
-        number = float(value)
-    except (TypeError, ValueError):
-        return default
-    return number if math.isfinite(number) else default
 
 
 def _sign(value: float) -> int:
