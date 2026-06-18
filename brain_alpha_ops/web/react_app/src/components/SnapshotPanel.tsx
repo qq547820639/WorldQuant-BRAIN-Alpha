@@ -2,6 +2,29 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { apiErrorMessage, knownApiErrorMessage } from "@/helpers/errorExperience";
+import {
+  MAX_FILTER_LENGTH,
+  RAW_SNAPSHOT_TEXT_PATTERN,
+  LOCAL_SNAPSHOT_PATH_PATTERN,
+  SNAPSHOT_STATUS_LABELS,
+  type SnapshotRow,
+  type SnapshotMetric,
+  text,
+  record,
+  array,
+  truthy,
+  safeSnapshotDisplayText,
+  snapshotStatusLabel,
+  safeSnapshotDetail,
+  statusBadge,
+  isSnapshotPassStatus,
+  metricText,
+  ratioText,
+  countText,
+  sanitizeTextInput,
+  formatOptionalNumber,
+  formatLocalBacktestStatus,
+} from "./utils";
 import { readinessReasonLabel } from "@/helpers/readinessLabels";
 import { useApi } from "@/hooks/useApi";
 import ProgressFeedback from "@/components/ProgressFeedback";
@@ -50,44 +73,10 @@ interface SnapshotConfig {
 
 type SnapshotPayload = Record<string, unknown>;
 
-const MAX_FILTER_LENGTH = 200;
-const RAW_SNAPSHOT_TEXT_PATTERN = /(?:raw\s+backend|raw_backend|RAW_BACKEND|SESSION_INVALID|session_invalid|invalid local session|unknown sync job|unknown job|csrf[_-]?token|session[_-]?id|access[_-]?token|refresh[_-]?token|password|passwd|pwd|set[_-]?cookie|cookie|authorization|client[_-]?secret|api[_-]?key)/i;
-const LOCAL_SNAPSHOT_PATH_PATTERN = /(?:\/Users\/|\/Volumes\/|\/private\/tmp\/|\/tmp\/|[A-Za-z]:\\|run_history\.json|Traceback|File\s+")/i;
-const SNAPSHOT_STATUS_LABELS: Record<string, string> = {
-  active: "活跃",
-  analytics: "趋势",
-  blocked: "已阻断",
-  cancelled: "已取消",
-  canceled: "已取消",
-  completed: "已完成",
-  complete: "已完成",
-  delta: "变化",
-  done: "已完成",
-  error: "错误",
-  fail: "失败",
-  failed: "失败",
-  false: "未通过",
-  missing: "缺失",
-  pass: "通过",
-  passed: "通过",
-  pending: "等待中",
-  production: "生产中",
-  queued: "排队中",
-  ready: "就绪",
-  recorded: "已记录",
-  rejected: "已拒绝",
-  resume_available: "可续跑",
-  review: "复核中",
-  running: "运行中",
-  stale: "需刷新",
-  stopped: "已停止",
-  submitted: "已提交",
-  success: "成功",
-  true: "通过",
-  unknown: "状态待确认",
-  warn: "警告",
-  warning: "警告",
-};
+
+
+
+
 const SNAPSHOT_VIEWS: Record<SnapshotView, SnapshotConfig> = {
   cloud: {
     title: "云端数据",
