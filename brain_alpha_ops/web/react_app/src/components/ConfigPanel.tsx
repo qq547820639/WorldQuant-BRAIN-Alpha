@@ -5,6 +5,48 @@ import { apiErrorMessage, safeDisplayErrorMessage, type ApiErrorExperiencePayloa
 import { useApi } from "@/hooks/useApi";
 import type { BrainCredentials, BrainSettings, BudgetConfig, RunConfig, ThresholdConfig } from "@/types";
 import ProgressFeedback from "@/components/ProgressFeedback";
+import {
+  MAX_CONFIG_TEXT_LENGTH,
+  CONFIG_TEXT_PATTERN,
+  DEFAULT_REGION_OPTIONS,
+  DEFAULT_UNIVERSE_OPTIONS,
+  DEFAULT_DELAY_OPTIONS,
+  DEFAULT_NEUTRALIZATION_OPTIONS,
+  DEFAULT_INSTRUMENT_TYPE_OPTIONS,
+  DEFAULT_PASTEURIZATION_OPTIONS,
+  DEFAULT_UNIT_HANDLING_OPTIONS,
+  DEFAULT_NAN_HANDLING_OPTIONS,
+  DEFAULT_LANGUAGE_OPTIONS,
+  DEFAULT_ALPHA_TYPE_OPTIONS,
+  type SelectOption,
+  type ConfigForm,
+  type ConfigSchema,
+  sanitizeConfigText,
+  normalizeSelectOptions,
+  datasetSelectOptions,
+  datasetAllowedValues,
+  datasetOptionLabel,
+  allowedOptionValues,
+  isAllowedOption,
+  isIntegerInRange,
+  parseNumber,
+  asRecord,
+  stringValue,
+  numberValue,
+  booleanValue,
+  payloadFromForm,
+  formFromConfig,
+  formFromImport,
+  validateForm,
+  credentialsPayload,
+  type ConfigSectionProps,
+  type TextFieldProps,
+  type PasswordFieldProps,
+  type NumberFieldProps,
+  type SelectFieldProps,
+  type CheckboxFieldProps,
+  type ConfigValueProps,
+} from "./utils";
 
 interface Props {
   notify: (type: "success" | "error" | "warning" | "info", msg: string) => void;
@@ -30,10 +72,6 @@ interface DatasetOption {
   label?: string;
 }
 
-interface ConfigSchema {
-  settings_options?: Record<string, Array<string | number>>;
-  dataset_options?: DatasetOption[];
-}
 
 interface ConfigSchemaResponse {
   ok: boolean;
@@ -48,48 +86,21 @@ interface ConnectionTestResponse extends ApiErrorExperiencePayload {
   error_code?: string;
 }
 
-interface ConfigForm {
-  environment: string;
-  autoSubmit: boolean;
-  instrumentType: string;
-  region: string;
-  universe: string;
-  delay: number;
-  decay: number;
-  neutralization: string;
-  dataset: string;
-  pasteurization: string;
-  unitHandling: string;
-  nanHandling: string;
-  language: string;
-  alphaType: string;
-  candidates: number;
-  cycles: number;
-  poolSize: number;
-  backtestBatchSize: number;
-  requireCloudSync: boolean;
-  minSharpe: number;
-  minFitness: number;
-  minTurnover: number;
-  platformMaxTurnover: number;
-  maxSelfCorrelation: number;
-  maxWeightConcentration: number;
-}
 
-const MAX_CONFIG_TEXT_LENGTH = 128;
-const CONFIG_TEXT_PATTERN = /^[A-Za-z0-9_.:-]*$/;
-const DEFAULT_REGION_OPTIONS = ["USA", "CHN", "EUR", "GLB"];
-const DEFAULT_UNIVERSE_OPTIONS = ["TOP3000", "TOP1000", "TOP500"];
-const DEFAULT_DELAY_OPTIONS = ["0", "1"];
-const DEFAULT_NEUTRALIZATION_OPTIONS = ["SUBINDUSTRY", "INDUSTRY", "SECTOR", "MARKET", "NONE"];
-const DEFAULT_INSTRUMENT_TYPE_OPTIONS = ["EQUITY"];
-const DEFAULT_PASTEURIZATION_OPTIONS = ["ON", "OFF"];
-const DEFAULT_UNIT_HANDLING_OPTIONS = ["VERIFY", "RAW", "NONE"];
-const DEFAULT_NAN_HANDLING_OPTIONS = ["ON", "OFF"];
-const DEFAULT_LANGUAGE_OPTIONS = ["FASTEXPR"];
-const DEFAULT_ALPHA_TYPE_OPTIONS = ["REGULAR", "POWER_POOL", "ATOM", "PYRAMID"];
 
-type SelectOption = string | { value: string; label: string };
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 export default function ConfigPanel({
   notify,
@@ -523,25 +534,7 @@ function formFromConfig(config: RunConfig): ConfigForm {
     maxWeightConcentration: Number(thresholds?.max_weight_concentration ?? 0.1),
   };
 }
-
-function payloadFromForm(form: ConfigForm, credentials?: BrainCredentials) {
-  const payload: Record<string, unknown> = {
-    environment: form.environment,
-    autoSubmit: false,
-    settings: {
-      instrumentType: form.instrumentType,
-      region: form.region,
-      universe: form.universe,
-      delay: form.delay,
-      decay: form.decay,
-      neutralization: form.neutralization,
-      dataset: form.dataset,
-      pasteurization: form.pasteurization,
-      unitHandling: form.unitHandling,
-      nanHandling: form.nanHandling,
-      language: form.language,
-      type: form.alphaType,
-    },
+,
     candidates: form.candidates,
     cycles: form.cycles,
     poolSize: form.poolSize,
@@ -612,11 +605,6 @@ function formFromImport(value: unknown, fallback: ConfigForm): ConfigForm {
   };
 }
 
-function validateForm(form: ConfigForm, schema?: ConfigSchema) {
-  const options = schema?.settings_options;
-  if (!form.instrumentType || !form.region || !form.universe || !form.neutralization || !form.alphaType) {
-    return "BRAIN 设置不完整。";
-  }
   if (!isAllowedOption(form.instrumentType, options, "instrumentType", DEFAULT_INSTRUMENT_TYPE_OPTIONS)) {
     return "不支持的资产类型。";
   }
@@ -704,64 +692,23 @@ function datasetSelectOptions(schema: ConfigSchema | undefined, current: string)
   return choices;
 }
 
-function datasetAllowedValues(schema: ConfigSchema | undefined) {
-  return datasetSelectOptions(schema, "").map((option) => typeof option === "string" ? option : option.value);
-}
-
-function datasetOptionLabel(row: DatasetOption, fallback: string) {
-  if (row.label) return row.label;
-  const name = row.name ? ` - ${row.name}` : "";
+` : "";
   const fieldCount = Number(row.field_count || 0);
   const count = Number.isFinite(fieldCount) && fieldCount > 0 ? `, ${fieldCount} fields` : "";
   return `${fallback}${name}${count}`;
 }
 
-function allowedOptionValues(
-  options: Record<string, Array<string | number>> | undefined,
-  key: string,
-  fallback: string[],
-) {
-  const values = options?.[key]?.map(String).filter(Boolean);
-  return values?.length ? values : fallback;
-}
 
-function isAllowedOption(
-  value: string,
-  options: Record<string, Array<string | number>> | undefined,
-  key: string,
-  fallback: string[],
-) {
-  return allowedOptionValues(options, key, fallback).includes(value);
-}
 
-function isIntegerInRange(value: number, min: number, max = Number.POSITIVE_INFINITY) {
-  return Number.isInteger(value) && value >= min && value <= max;
-}
 
-function parseNumber(value: string) {
-  return value.trim() ? Number(value) : Number.NaN;
-}
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
 }
 
-function stringValue(value: unknown, fallback: string) {
-  return typeof value === "string" ? value : fallback;
-}
 
-function numberValue(value: unknown, fallback: number) {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : fallback;
-}
 
-function booleanValue(value: unknown, fallback: boolean) {
-  return typeof value === "boolean" ? value : fallback;
-}
 
-function sanitizeConfigText(value: string) {
-  return value.replace(/[\x00-\x1F\x7F]/g, "").slice(0, MAX_CONFIG_TEXT_LENGTH);
-}
 
 function ConfigSection({ title, description, children }: { title: string; description?: string; children: ReactNode }) {
   return (
@@ -862,9 +809,7 @@ function NumberField({
     </label>
   );
 }
-
-function normalizeSelectOptions(options: SelectOption[]) {
-  return options.map((option) => typeof option === "string" ? { value: option, label: option } : option);
+ : option);
 }
 
 function SelectField({
