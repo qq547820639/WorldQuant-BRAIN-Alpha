@@ -761,6 +761,17 @@ _GET_DISPATCH_HANDLERS: dict[str, RouteDispatcher] = {
     "submit_readiness": _get_submit_readiness,
     "candidates_simulate_eligible": _get_candidates_simulate_eligible,
     "phase_state": _get_phase_state,
+    # Route aliases for backward compatibility
+    "snapshot_cloud": _get_cloud_alphas,
+    "snapshot_memory": _get_research_memory,
+    "snapshot_observability": _get_research_observability,
+    "snapshot_assistant_context": _get_assistant_context,
+    "snapshot_assistant_guidance": _get_assistant_guidance,
+    "snapshot_assistant_requests": _get_assistant_request,
+    "snapshot_anti_overfit": _get_anti_overfit,
+    "snapshot_rolling_validation": _get_rolling_validation,
+    "snapshot_sqlite_indexes": _get_sqlite_indexes,
+    "production_validation_status": _get_status,
 }
 
 @_validated_post_route(validate_simulation_payload, "SIMULATE_ERROR")
@@ -942,16 +953,13 @@ _POST_DISPATCH_HANDLERS: dict[str, RouteDispatcher] = {
     "check_batch": _post_check_batch,
     "submit": _post_submit,
     "submit_batch": _post_submit_batch,
-    "assistant_response_parse": _post_assistant_response_parse,
-    "assistant_response_guidance": _post_assistant_response_guidance,
-    "assistant_cross_review": _post_assistant_cross_review,
-    "assistant_guidance": _post_assistant_guidance,
-    "logout": _post_logout,
-    "shutdown": _post_shutdown,
-    "session": _post_session,
-    "scoring_evaluate": _post_scoring_evaluate,
-    "scoring_attribution": _post_scoring_attribution,
-    "candidates_simulate": _post_candidates_simulate,
+    # Route aliases for backward compatibility
+    "production_validation_stop": _post_stop,
+    "pipeline_start": _post_run,
+    "pipeline_stop": _post_stop,
+    "candidate_check": _post_check,
+    "candidate_optimize": _post_optimize_candidates,
+    "candidate_submit": _post_submit,
 }
 
 def _submit_with_lock(
