@@ -231,6 +231,12 @@ class AlphaResearchPipeline(
             self._context_sync_service = ContextSyncService(self)
         return self._context_sync_service._load_official_context()
 
+    def _apply_knowledge_constraints_to_generator(self):
+        """Delegate to ContextSyncService for backward compatibility."""
+        if not hasattr(self, "_context_sync_service"):
+            self._context_sync_service = ContextSyncService(self)
+        return self._context_sync_service._apply_knowledge_constraints_to_generator()
+
     def _try_auto_submit(self, candidate, submitted_this_run):
         """Delegate to SubmissionGateService for backward compatibility."""
         if not hasattr(self, "_submission_gate_service"):
