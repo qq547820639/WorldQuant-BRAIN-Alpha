@@ -112,7 +112,7 @@ from .pipeline_state import (
     bind_runtime_state_properties,
     record_strategy_reward,
 )
-from .pipeline_strategy import PipelineStrategyMixin
+from .strategy_service import StrategyService
 from .submission_gate_service import SubmissionGateService
 from .production_context import build_production_context, eligible_strategy_profiles
 from .repository import ResearchRepository
@@ -133,7 +133,6 @@ SUBMITTED_CLOUD_STATUSES = {"ACTIVE", "SUBMITTED", "PRODUCTION", "CONDUCTED"}
 class AlphaResearchPipeline(
     PipelineRuntimeMixin,
     PipelineServiceFactoryMixin,
-    PipelineStrategyMixin,
     PipelineCandidatePoolMixin,
     PipelineBacktestMixin,
     PipelineSnapshotMixin,
@@ -282,6 +281,30 @@ class AlphaResearchPipeline(
         if not hasattr(self, "_official_validation_service"):
             self._official_validation_service = OfficialValidationService_(self)
         return self._official_validation_service._block_observability_duplicate_before_official(candidate, phase=phase)
+
+    def _eligible_profiles(self):
+        """Delegate to StrategyService for backward compatibility."""
+        if not hasattr(self, "_strategy_service"):
+            self._strategy_service = StrategyService(self)
+        return self._strategy_service._eligible_profiles()
+
+    def _current_strategy_profile(self):
+        """Delegate to StrategyService for backward compatibility."""
+        if not hasattr(self, "_strategy_service"):
+            self._strategy_service = StrategyService(self)
+        return self._strategy_service._current_strategy_profile()
+
+    def _initial_strategy_profile_index(self):
+        """Delegate to StrategyService for backward compatibility."""
+        if not hasattr(self, "_strategy_service"):
+            self._strategy_service = StrategyService(self)
+        return self._strategy_service._initial_strategy_profile_index()
+
+    def _maybe_switch_strategy(self, cycle, fields, operators, pool_by_expression, accepted_candidates, archive_stats):
+        """Delegate to StrategyService for backward compatibility."""
+        if not hasattr(self, "_strategy_service"):
+            self._strategy_service = StrategyService(self)
+        return self._strategy_service._maybe_switch_strategy(cycle, fields, operators, pool_by_expression, accepted_candidates, archive_stats)
 
     # ── B-03: Extracted post-processing phase ──────────────────────────
     def _run_cycle_post_processing(
