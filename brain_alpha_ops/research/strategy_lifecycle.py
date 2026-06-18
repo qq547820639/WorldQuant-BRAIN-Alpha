@@ -8,7 +8,6 @@ from typing import Any, Callable, Protocol
 
 from brain_alpha_ops.models import utc_now
 
-
 STRATEGY_LIFECYCLE_SCHEMA = "strategy_lifecycle.v1"
 
 

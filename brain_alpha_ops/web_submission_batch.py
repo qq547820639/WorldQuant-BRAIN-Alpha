@@ -7,7 +7,6 @@ from typing import Any, Callable
 from brain_alpha_ops.config import RunConfig
 from brain_alpha_ops.submission_readiness import live_submit_readiness_hard_gate
 
-
 RunConfigFromPayload = Callable[[dict[str, Any]], RunConfig]
 ObservabilityPreflight = Callable[[str], dict[str, Any]]
 SubmitCandidate = Callable[[dict[str, Any]], dict[str, Any]]

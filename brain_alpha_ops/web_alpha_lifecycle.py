@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
+import re
 from collections import Counter, OrderedDict
 from hashlib import sha256
-import re
 from typing import Any, Callable
 
 from brain_alpha_ops.redaction import redact_data, redact_text
 from brain_alpha_ops.web_runtime_state import status_category
-
 
 SCHEMA_VERSION = "alpha_lifecycle_history.v1"
 DEFAULT_LIMIT = 250

@@ -12,7 +12,6 @@ from typing import Any, TypedDict
 
 from brain_alpha_ops.models import Candidate, utc_now
 
-
 LIFECYCLE_RECORD_SCHEMA = "lifecycle_record.v1"
 BACKTEST_RECORD_SCHEMA = "backtest_record.v1"
 ASSISTANT_GUIDANCE_RECORD_SCHEMA = "assistant_guidance_record.v1"
@@ -23,8 +22,14 @@ STRATEGY_LIFECYCLE_RECORD_SCHEMA = "strategy_lifecycle_record.v1"
 # names from this module keep working unchanged.
 from brain_alpha_ops.core_state import (
     BACKTEST_ACTIVE_ACTIONS as ACTIVE_BACKTEST_ACTIONS,
+)
+from brain_alpha_ops.core_state import (
     BACKTEST_ACTIVE_STATUSES as ACTIVE_BACKTEST_STATUSES,
+)
+from brain_alpha_ops.core_state import (
     BACKTEST_TERMINAL_ACTIONS as TERMINAL_BACKTEST_ACTIONS,
+)
+from brain_alpha_ops.core_state import (
     BACKTEST_TERMINAL_STATUSES as TERMINAL_BACKTEST_STATUSES,
 )
 

@@ -7,7 +7,7 @@ import random
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from brain_alpha_ops.data import OfficialDataLoader, FieldDatasetMapper
+    from brain_alpha_ops.data import FieldDatasetMapper, OfficialDataLoader
 
 logger = logging.getLogger(__name__)
 

@@ -2,30 +2,34 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 import logging
+from pathlib import Path
 from typing import Any, Callable
 
+from brain_alpha_ops.brain_api.official_helpers import looks_non_production_alpha_id
 from brain_alpha_ops.config import RunConfig
 from brain_alpha_ops.jsonl import read_jsonl_tail
 from brain_alpha_ops.models import utc_now
 from brain_alpha_ops.redaction import redact_error_message, redact_text
-from brain_alpha_ops.brain_api.official_helpers import looks_non_production_alpha_id
 from brain_alpha_ops.research.expression_ast import expression_key
 from brain_alpha_ops.research.observability import build_research_observability_snapshot
 from brain_alpha_ops.research.repository import ResearchRepository
 from brain_alpha_ops.research.safety import SubmissionLedger
 from brain_alpha_ops.scoring.release_score_gate import evaluate_release_score
 from brain_alpha_ops.submission_readiness import missing_official_metric_fields
-from brain_alpha_ops.web_candidate_selection import official_alpha_id
-from brain_alpha_ops.web_candidate_selection import candidate_official_metrics
+from brain_alpha_ops.web_candidates.selection import (
+    candidate_official_metrics,
+    official_alpha_id,
+)
 from brain_alpha_ops.web_check_availability import (
     build_cloud_self_correlation_explanation,
     build_context_health_explanation,
 )
-from brain_alpha_ops.web_cloud_snapshot import dedupe_cloud_alpha_rows, extract_alpha_rows
+from brain_alpha_ops.web_cloud_snapshot import (
+    dedupe_cloud_alpha_rows,
+    extract_alpha_rows,
+)
 from brain_alpha_ops.web_post_handlers import save_assistant_guidance_post_payload
-
 
 LedgerFactory = Callable[[str], SubmissionLedger]
 CloudAlphaSnapshot = Callable[..., dict[str, Any]]

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-
 MAX_FIELDS_PAGES = None
 MAX_DATASETS_PAGES = None
 MAX_OPERATORS_PAGES = None

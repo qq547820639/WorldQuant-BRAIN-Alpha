@@ -2,17 +2,19 @@
 
 from __future__ import annotations
 
+import json
+import logging
 from collections import Counter
 from datetime import datetime, timezone
 from hashlib import sha256
-import json
-import logging
 from pathlib import Path
 from typing import Any
 
 from brain_alpha_ops.config import load_run_config, runtime_project_root
-from brain_alpha_ops.data.cache_metadata import CONTEXT_CACHE_METADATA_SCHEMA, metadata_path_for
-
+from brain_alpha_ops.data.cache_metadata import (
+    CONTEXT_CACHE_METADATA_SCHEMA,
+    metadata_path_for,
+)
 
 OFFICIAL_CONTEXT_VALIDATION_SCHEMA = "official_context_validation.v1"
 EXPECTED_CONTEXT_FILES = {

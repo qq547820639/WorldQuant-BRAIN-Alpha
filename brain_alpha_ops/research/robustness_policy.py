@@ -7,7 +7,6 @@ from typing import Any
 
 from brain_alpha_ops.models import Candidate
 
-
 ROBUSTNESS_POLICY_SCHEMA_VERSION = "robustness_policy.v1"
 
 

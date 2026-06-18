@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from brain_alpha_ops.models import Candidate
 import logging
 
+from brain_alpha_ops.models import Candidate
 from brain_alpha_ops.redaction import redact_error_message
 
 logger = logging.getLogger(__name__)
@@ -15,8 +15,8 @@ from .batch_backtest_coordinator import (
     _reject_high_cloud_similarity_candidate,
 )
 from .candidate_pool import is_active_backtest_candidate, pending_simulation_targets
-from .generator import extract_fields, extract_operators, local_quality
 from .field_quality import non_signal_generation_fields
+from .generator import extract_fields, extract_operators, local_quality
 from .knowledge_base import KnowledgeEntry
 from .local_backtest_gate import apply_local_backtest_gate
 from .pipeline_cloud import (
@@ -27,8 +27,14 @@ from .pipeline_cloud import (
     smart_rank_candidates,
     smart_ranking_score,
 )
-from .pipeline_helpers import blocked_gate as _blocked_gate, expr_key as _expr_key, rank_candidates
-from .pipeline_official_context import active_dataset_field_names, official_context_reasons, refresh_context_validation_cache
+from .pipeline_helpers import blocked_gate as _blocked_gate
+from .pipeline_helpers import expr_key as _expr_key
+from .pipeline_helpers import rank_candidates
+from .pipeline_official_context import (
+    active_dataset_field_names,
+    official_context_reasons,
+    refresh_context_validation_cache,
+)
 from .scoring import build_scorecard
 
 

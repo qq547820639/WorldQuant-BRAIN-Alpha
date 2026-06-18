@@ -28,12 +28,12 @@ from pathlib import Path
 from typing import Any
 
 from brain_alpha_ops.jsonl import read_jsonl_tail
+from brain_alpha_ops.redaction import redact_error_message, redact_text
 from brain_alpha_ops.research.expression_ast import (
     expression_fingerprint,
     expression_key,
     expression_profile_summary,
 )
-from brain_alpha_ops.redaction import redact_error_message, redact_text
 
 logger = logging.getLogger(__name__)
 

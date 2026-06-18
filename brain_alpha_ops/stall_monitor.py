@@ -11,7 +11,7 @@ import logging
 import threading
 import time
 from dataclasses import dataclass, field
-from typing import Any, Callable
+from typing import Any, Callable, Iterator
 
 logger = logging.getLogger(__name__)
 
@@ -186,8 +186,16 @@ class StallMonitor:
         if self._on_interrupt:
             self._on_interrupt(job_id)
 
-def _iter_job_rows(jobs: Any):
-    """Yield ``(job_id, job)`` from dict stores and web_jobs.job_list rows."""
+def _iter_job_rows(jobs: Any) -> Iterator[tuple[str, dict[str, Any]]]:
+    """Yield ``(job_id, job_dict)`` from various job store formats.
+
+    Supported input formats:
+    - dict: ``{job_id: job_dict}`` or ``{fallback_id: job_dict}``
+    - list[dict]: ``[{"job_id": "...", ...}, ...]``
+    - list[tuple]: ``[("job_id", {"job_id": "...", ...}), ...]``
+
+    This handles the 3 different job store representations used across the codebase.
+    """
     if isinstance(jobs, dict):
         for fallback_id, job in jobs.items():
             if not isinstance(job, dict):

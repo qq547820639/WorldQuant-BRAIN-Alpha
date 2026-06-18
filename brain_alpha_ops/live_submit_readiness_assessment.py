@@ -10,14 +10,16 @@ from typing import Any
 
 from brain_alpha_ops.brain_api.official_helpers import looks_non_production_alpha_id
 from brain_alpha_ops.config import QualityThresholds
-from brain_alpha_ops.research.fallback_generation import high_turnover_generation_risk_reasons
+from brain_alpha_ops.research.fallback_generation import (
+    high_turnover_generation_risk_reasons,
+)
 from brain_alpha_ops.scoring.release_score_gate import evaluate_release_score
 from brain_alpha_ops.submission_readiness import missing_official_metric_fields
-from brain_alpha_ops.web_candidate_audit import (
+from brain_alpha_ops.web_candidates.audit import (
     SCIENTIFIC_AUDIT_SCHEMA_VERSION,
     scientific_audit_policy_reasons,
 )
-from brain_alpha_ops.web_candidate_lifecycle_risk import (
+from brain_alpha_ops.web_candidates.lifecycle_risk import (
     lifecycle_history_requires_rework,
     lifecycle_history_should_archive,
 )

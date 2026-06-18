@@ -7,11 +7,11 @@ screening, search, and observability.
 """
 from __future__ import annotations
 
+import json
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-import json
 from typing import Any
 
 from brain_alpha_ops.jsonl import read_jsonl_records

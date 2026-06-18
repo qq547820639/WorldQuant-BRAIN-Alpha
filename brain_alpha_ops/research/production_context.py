@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import Any
 
-
 ADAPTIVE_PROFILES = [
     {
         "name": "usa_standard",

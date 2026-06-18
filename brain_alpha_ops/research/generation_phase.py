@@ -6,8 +6,10 @@ from dataclasses import dataclass
 from typing import Any, Callable
 
 from brain_alpha_ops.models import Candidate
-from brain_alpha_ops.research.expression_ast import expression_key, expression_similarity
-
+from brain_alpha_ops.research.expression_ast import (
+    expression_key,
+    expression_similarity,
+)
 
 AssistantGuidanceApplier = Callable[[Candidate, dict[str, Any]], None]
 

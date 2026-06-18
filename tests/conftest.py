@@ -9,6 +9,13 @@ each test having to set the var itself.
 """
 
 import os
+import sys
+from pathlib import Path
+
+# Add tests/ directory to Python path so test files can import from each other
+tests_dir = str(Path(__file__).parent)
+if tests_dir not in sys.path:
+    sys.path.insert(0, tests_dir)
 
 # Test-only override for the F-02/F-03 invariant guard on submit_alpha().
 # Production web console never reaches submit_alpha() because the higher-level

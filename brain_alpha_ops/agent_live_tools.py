@@ -2,17 +2,25 @@
 
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor, as_completed
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
 from brain_alpha_ops.agent_research_tools import run_parallel_backtest_from_args
 from brain_alpha_ops.agent_tool_errors import tool_error
-from brain_alpha_ops.brain_api.user_alpha_sync import USER_ALPHA_SYNC_RANGES, list_user_alphas_for_sync, normalize_user_alpha_sync_range
+from brain_alpha_ops.brain_api.user_alpha_sync import (
+    USER_ALPHA_SYNC_RANGES,
+    list_user_alphas_for_sync,
+    normalize_user_alpha_sync_range,
+)
 from brain_alpha_ops.research.repository import ResearchRepository
 from brain_alpha_ops.runner import api_from_run_config
-from brain_alpha_ops.shared_bounds import bounded_float, bounded_int, expression_batch_argument, required_text
-
+from brain_alpha_ops.shared_bounds import (
+    bounded_float,
+    bounded_int,
+    expression_batch_argument,
+    required_text,
+)
 
 MAX_SYNC_RANGE = USER_ALPHA_SYNC_RANGES
 MAX_BATCH_SIMULATIONS = 10

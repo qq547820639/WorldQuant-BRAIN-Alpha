@@ -8,9 +8,12 @@ from brain_alpha_ops.brain_api.base import BrainAPIError
 from brain_alpha_ops.models import Candidate, PipelineEvent
 from brain_alpha_ops.observability import context_payload, error_payload
 from brain_alpha_ops.redaction import redact_error_message
-from brain_alpha_ops.web_candidate_audit import append_scientific_audit_event
+from brain_alpha_ops.web_candidates.audit import append_scientific_audit_event
 
-from .pipeline_observability import apply_observability_generation_guidance, refresh_observability_throttle
+from .pipeline_observability import (
+    apply_observability_generation_guidance,
+    refresh_observability_throttle,
+)
 from .strategy_plugins import StrategyPluginRegistry
 
 

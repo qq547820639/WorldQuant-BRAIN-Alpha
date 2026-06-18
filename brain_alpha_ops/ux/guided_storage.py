@@ -15,7 +15,6 @@ from brain_alpha_ops.redaction import redact_text
 from brain_alpha_ops.ux.guided_models import CheckpointData, PipelinePhase, RunRecord
 from brain_alpha_ops.ux.history import RunHistoryAnalytics
 
-
 logger = logging.getLogger("brain_alpha_ops.ux.guided_pipeline")
 
 

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import Any
 
-
 CLOUD_SELF_CORRELATION_THRESHOLD = 0.90
 CLOUD_SELF_CORRELATION_WARNING_THRESHOLD = 0.75
 
@@ -217,13 +216,15 @@ from brain_alpha_ops.redaction import redact_text
 from brain_alpha_ops.research.expression_ast import expression_key
 from brain_alpha_ops.research.safety import similarity
 from brain_alpha_ops.submission_readiness import missing_official_metric_fields
-from brain_alpha_ops.web_candidate_selection import is_passed_candidate_for_check, official_alpha_id
+from brain_alpha_ops.web_candidates.selection import (
+    is_passed_candidate_for_check,
+    official_alpha_id,
+)
 from brain_alpha_ops.web_check_availability import (
     build_cloud_self_correlation_explanation,
     build_context_health_explanation,
     build_state_navigation,
 )
-
 
 SafeErrorMessage = Callable[[Exception], str]
 ObservabilityPreflight = Callable[[str], dict[str, Any]]
@@ -476,16 +477,17 @@ def cloud_row_expression(row: dict[str, Any]) -> str:
 
 """Batch check background job service for the local web console."""
 
-from collections import Counter
 import logging
 import time
+from collections import Counter
 from typing import Any, Callable, Protocol
 
 from brain_alpha_ops.config import RunConfig
 from brain_alpha_ops.research.repository import ResearchRepository
 from brain_alpha_ops.research.safety import SubmissionLedger
-from brain_alpha_ops.web_candidate_check_evidence import persist_candidate_check_evidence
-
+from brain_alpha_ops.web_candidates.check_evidence import (
+    persist_candidate_check_evidence,
+)
 
 logger = logging.getLogger(__name__)
 

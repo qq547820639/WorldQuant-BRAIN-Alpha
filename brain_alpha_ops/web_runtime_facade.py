@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
-from contextlib import nullcontext
 import json
 import logging
 import os
 import sys
+from contextlib import nullcontext
 
 from brain_alpha_ops.brain_api.base import BrainAPIError
-
 
 logger = logging.getLogger(__name__)
 

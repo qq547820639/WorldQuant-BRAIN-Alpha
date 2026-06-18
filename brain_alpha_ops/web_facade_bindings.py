@@ -6,116 +6,284 @@ which in turn re-export from the consolidated web/bindings.py.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
 import threading
+from collections.abc import Mapping
 
-from brain_alpha_ops.web_candidate_bindings import (  # noqa: F401
+from brain_alpha_ops.web_candidates.bindings import (  # noqa: F401
     candidate_from_payload as _candidate_from_payload,
-    sync_cloud_alphas as _sync_cloud_alphas,
-    run_sync_job as _run_sync_job,
-    run_check_batch_job as _run_check_batch_job,
-    refresh_cloud_context_for_check as _refresh_cloud_context_for_check,
-    datasets_from_fields as _datasets_from_fields,
-    persist_official_context as _persist_official_context,
-    save_official_context_json as _save_official_context_json,
-    passed_candidates_from_payload as _passed_candidates_from_payload,
-    check_candidate_availability as _check_candidate_availability,
-    cloud_status_for as _cloud_status_for,
-    cloud_similarity_risk as _cloud_similarity_risk,
+)
+from brain_alpha_ops.web_candidates.bindings import (
     check_candidate as _check_candidate,
-    submission_preflight_error_message as _submission_preflight_error,
-    submission_preflight_advisory as _submission_preflight_advisory,
-    observability_submission_preflight as _observability_submission_preflight,
-    record_submit_blocked as _record_submit_blocked,
-    submit_candidate as _submit_candidate,
-    load_check_results as _load_check_results,
-    submit_batch as _submit_batch,
+)
+from brain_alpha_ops.web_candidates.bindings import (
+    check_candidate_availability as _check_candidate_availability,
+)
+from brain_alpha_ops.web_candidates.bindings import (
+    cloud_similarity_risk as _cloud_similarity_risk,
+)
+from brain_alpha_ops.web_candidates.bindings import (
+    cloud_status_for as _cloud_status_for,
+)
+from brain_alpha_ops.web_candidates.bindings import (
+    datasets_from_fields as _datasets_from_fields,
+)
+from brain_alpha_ops.web_candidates.bindings import (
     generate_candidates_payload as _generate_candidates_payload,
+)
+from brain_alpha_ops.web_candidates.bindings import (
+    load_check_results as _load_check_results,
+)
+from brain_alpha_ops.web_candidates.bindings import (
+    observability_submission_preflight as _observability_submission_preflight,
+)
+from brain_alpha_ops.web_candidates.bindings import (
+    passed_candidates_from_payload as _passed_candidates_from_payload,
+)
+from brain_alpha_ops.web_candidates.bindings import (
+    persist_official_context as _persist_official_context,
+)
+from brain_alpha_ops.web_candidates.bindings import (
+    record_submit_blocked as _record_submit_blocked,
+)
+from brain_alpha_ops.web_candidates.bindings import (
+    refresh_cloud_context_for_check as _refresh_cloud_context_for_check,
+)
+from brain_alpha_ops.web_candidates.bindings import (
+    run_check_batch_job as _run_check_batch_job,
+)
+from brain_alpha_ops.web_candidates.bindings import (
     run_generate_candidates_job as _run_generate_candidates_job,
+)
+from brain_alpha_ops.web_candidates.bindings import (
     run_scoring_evaluate_job as _run_scoring_evaluate_job,
+)
+from brain_alpha_ops.web_candidates.bindings import (
     run_submit_batch_job as _run_submit_batch_job,
 )
-from brain_alpha_ops.web_candidate_selection import (
+from brain_alpha_ops.web_candidates.bindings import (
+    run_sync_job as _run_sync_job,
+)
+from brain_alpha_ops.web_candidates.bindings import (
+    save_official_context_json as _save_official_context_json,
+)
+from brain_alpha_ops.web_candidates.bindings import (
+    submission_preflight_advisory as _submission_preflight_advisory,
+)
+from brain_alpha_ops.web_candidates.bindings import (
+    submission_preflight_error_message as _submission_preflight_error,
+)
+from brain_alpha_ops.web_candidates.bindings import (
+    submit_batch as _submit_batch,
+)
+from brain_alpha_ops.web_candidates.bindings import (
+    submit_candidate as _submit_candidate,
+)
+from brain_alpha_ops.web_candidates.bindings import (
+    sync_cloud_alphas as _sync_cloud_alphas,
+)
+from brain_alpha_ops.web_candidates.selection import (
     candidate_from_payload as _candidate_from_payload_service,
+)
+from brain_alpha_ops.web_candidates.selection import (
     passed_candidates_from_payload as _passed_candidates_from_payload_service,
 )
-from brain_alpha_ops.web_submission_safety import (
-    observability_submission_preflight as _observability_submission_preflight_service,
-    record_submit_blocked_event as _record_submit_blocked_event_service,
-    submission_preflight_advisory as _submission_preflight_advisory_service,
+from brain_alpha_ops.web_config_bindings import (
+    config_from_payload as _config_from_payload,
 )
 from brain_alpha_ops.web_config_bindings import (
     load_run_config_provider as _load_run_config_provider,
-    runtime_project_root_provider as _runtime_project_root_provider,
+)
+from brain_alpha_ops.web_config_bindings import (
     run_config_from_payload as _run_config_from_payload,
-    config_from_payload as _config_from_payload,
+)
+from brain_alpha_ops.web_config_bindings import (
+    runtime_project_root_provider as _runtime_project_root_provider,
+)
+from brain_alpha_ops.web_config_bindings import (
     save_run_config_payload as _save_run_config_payload,
 )
 from brain_alpha_ops.web_job_bindings import (
-    job_registry as _job_registry,
-    job_registry_view as _job_registry_view,
     active_auxiliary_operation as _active_auxiliary_operation,
+)
+from brain_alpha_ops.web_job_bindings import (
+    job_registry as _job_registry,
+)
+from brain_alpha_ops.web_job_bindings import (
+    job_registry_view as _job_registry_view,
+)
+from brain_alpha_ops.web_job_bindings import (
     rate_limit_request as _rate_limit_request,
+)
+from brain_alpha_ops.web_job_bindings import (
     submit_background_job as _submit_background_job,
 )
-from brain_alpha_ops.web_session_bindings import (
-    configure_session_policy as _configure_session_policy,
-    normalize_host as _normalize_host,
+from brain_alpha_ops.web_runtime_bindings import (
+    alpha_lifecycle_history as _alpha_lifecycle_history,
+)
+from brain_alpha_ops.web_runtime_bindings import (
+    compute_run_stats as _compute_run_stats,
+)
+from brain_alpha_ops.web_runtime_bindings import (
+    find_free_port as _find_free_port,
+)
+from brain_alpha_ops.web_runtime_bindings import (
+    handler_dispatch_context as _handler_dispatch_context,
+)
+from brain_alpha_ops.web_runtime_bindings import (
+    lifecycle_from_job as _lifecycle_from_job,
+)
+from brain_alpha_ops.web_runtime_bindings import (
+    lookup_sse_job as _lookup_sse_job,
+)
+from brain_alpha_ops.web_runtime_bindings import (
+    main as _main,
+)
+from brain_alpha_ops.web_runtime_bindings import (
+    maybe_archive_lifecycle as _maybe_archive_lifecycle,
+)
+from brain_alpha_ops.web_runtime_bindings import (
+    run_job as _run_job,
+)
+from brain_alpha_ops.web_runtime_bindings import (
+    serve as _serve,
+)
+from brain_alpha_ops.web_runtime_bindings import (
+    shutdown_server as _shutdown_server,
+)
+from brain_alpha_ops.web_runtime_bindings import (
+    smoke_test_server as _smoke_test_server,
 )
 from brain_alpha_ops.web_runtime_bindings import (
     test_connection as _test_connection,
-    handler_dispatch_context as _handler_dispatch_context,
-    lookup_sse_job as _lookup_sse_job,
-    lifecycle_from_job as _lifecycle_from_job,
-    alpha_lifecycle_history as _alpha_lifecycle_history,
-    maybe_archive_lifecycle as _maybe_archive_lifecycle,
-    find_free_port as _find_free_port,
-    shutdown_server as _shutdown_server,
-    serve as _serve,
-    smoke_test_server as _smoke_test_server,
-    main as _main,
-    run_job as _run_job,
-    compute_run_stats as _compute_run_stats,
+)
+from brain_alpha_ops.web_session_bindings import (
+    configure_session_policy as _configure_session_policy,
+)
+from brain_alpha_ops.web_session_bindings import (
+    normalize_host as _normalize_host,
+)
+from brain_alpha_ops.web_snapshot_bindings import (
+    anti_overfit_snapshot as _anti_overfit_snapshot,
+)
+from brain_alpha_ops.web_snapshot_bindings import (
+    assistant_context_snapshot as _assistant_context_snapshot,
+)
+from brain_alpha_ops.web_snapshot_bindings import (
+    assistant_cross_review_payload as _assistant_cross_review_payload,
+)
+from brain_alpha_ops.web_snapshot_bindings import (
+    assistant_guidance_history as _assistant_guidance_history,
+)
+from brain_alpha_ops.web_snapshot_bindings import (
+    assistant_guidance_snapshot as _assistant_guidance_snapshot,
+)
+from brain_alpha_ops.web_snapshot_bindings import (
+    assistant_request_snapshot as _assistant_request_snapshot,
+)
+from brain_alpha_ops.web_snapshot_bindings import (
+    assistant_response_guidance_payload as _assistant_response_guidance_payload,
+)
+from brain_alpha_ops.web_snapshot_bindings import (
+    assistant_response_parse_payload as _assistant_response_parse_payload,
+)
+from brain_alpha_ops.web_snapshot_bindings import (
+    cached_user_alpha_paths as _cached_user_alpha_paths,
 )
 from brain_alpha_ops.web_snapshot_bindings import (
     cloud_alpha_cache_probe as _cloud_alpha_cache_probe,
+)
+from brain_alpha_ops.web_snapshot_bindings import (
     cloud_alpha_snapshot as _cloud_alpha_snapshot,
-    snapshot_runtime as _snapshot_runtime,
-    snapshot_facade as _snapshot_facade,
-    research_memory_snapshot as _research_memory_snapshot,
-    research_knowledge_snapshot as _research_knowledge_snapshot,
-    research_observability_snapshot as _research_observability_snapshot,
-    prompt_run_ledger_snapshot as _prompt_run_ledger_snapshot,
-    sqlite_index_snapshot as _sqlite_index_snapshot,
-    sqlite_expression_lookup_payload as _sqlite_expression_lookup_payload,
-    sqlite_record_lookup_payload as _sqlite_record_lookup_payload,
-    durable_job_rows as _durable_job_rows,
-    assistant_guidance_snapshot as _assistant_guidance_snapshot,
-    assistant_guidance_history as _assistant_guidance_history,
-    assistant_context_snapshot as _assistant_context_snapshot,
-    assistant_request_snapshot as _assistant_request_snapshot,
-    assistant_response_parse_payload as _assistant_response_parse_payload,
-    assistant_response_guidance_payload as _assistant_response_guidance_payload,
-    anti_overfit_snapshot as _anti_overfit_snapshot,
-    rolling_validation_snapshot as _rolling_validation_snapshot,
-    assistant_cross_review_payload as _assistant_cross_review_payload,
-    save_assistant_guidance_payload as _save_assistant_guidance_payload,
-    latest_result_snapshot as _latest_result_snapshot,
-    latest_run_history_path as _latest_run_history_path,
-    user_profile_snapshot as _user_profile_snapshot,
-    load_presets as _load_presets,
-    match_preset_id as _match_preset_id,
-    latest_cached_user_alphas as _latest_cached_user_alphas,
-    latest_cached_user_alpha_path as _latest_cached_user_alpha_path,
-    cached_user_alpha_paths as _cached_user_alpha_paths,
-    official_context_file_counts as _official_context_file_counts,
-    read_official_context_metadata as _read_official_context_metadata,
-    read_official_context_json as _read_official_context_json,
+)
+from brain_alpha_ops.web_snapshot_bindings import (
     cloud_alpha_summary as _cloud_alpha_summary,
-    storage_jsonl_path as _storage_jsonl_path,
-    read_storage_jsonl as _read_storage_jsonl,
-    read_storage_jsonl_stats as _read_storage_jsonl_stats,
+)
+from brain_alpha_ops.web_snapshot_bindings import (
+    durable_job_rows as _durable_job_rows,
+)
+from brain_alpha_ops.web_snapshot_bindings import (
+    latest_cached_user_alpha_path as _latest_cached_user_alpha_path,
+)
+from brain_alpha_ops.web_snapshot_bindings import (
+    latest_cached_user_alphas as _latest_cached_user_alphas,
+)
+from brain_alpha_ops.web_snapshot_bindings import (
+    latest_result_snapshot as _latest_result_snapshot,
+)
+from brain_alpha_ops.web_snapshot_bindings import (
+    latest_run_history_path as _latest_run_history_path,
+)
+from brain_alpha_ops.web_snapshot_bindings import (
+    load_presets as _load_presets,
+)
+from brain_alpha_ops.web_snapshot_bindings import (
+    match_preset_id as _match_preset_id,
+)
+from brain_alpha_ops.web_snapshot_bindings import (
+    official_context_file_counts as _official_context_file_counts,
+)
+from brain_alpha_ops.web_snapshot_bindings import (
+    prompt_run_ledger_snapshot as _prompt_run_ledger_snapshot,
+)
+from brain_alpha_ops.web_snapshot_bindings import (
     public_run_config as _public_run_config,
+)
+from brain_alpha_ops.web_snapshot_bindings import (
+    read_official_context_json as _read_official_context_json,
+)
+from brain_alpha_ops.web_snapshot_bindings import (
+    read_official_context_metadata as _read_official_context_metadata,
+)
+from brain_alpha_ops.web_snapshot_bindings import (
+    read_storage_jsonl as _read_storage_jsonl,
+)
+from brain_alpha_ops.web_snapshot_bindings import (
+    read_storage_jsonl_stats as _read_storage_jsonl_stats,
+)
+from brain_alpha_ops.web_snapshot_bindings import (
+    research_knowledge_snapshot as _research_knowledge_snapshot,
+)
+from brain_alpha_ops.web_snapshot_bindings import (
+    research_memory_snapshot as _research_memory_snapshot,
+)
+from brain_alpha_ops.web_snapshot_bindings import (
+    research_observability_snapshot as _research_observability_snapshot,
+)
+from brain_alpha_ops.web_snapshot_bindings import (
+    rolling_validation_snapshot as _rolling_validation_snapshot,
+)
+from brain_alpha_ops.web_snapshot_bindings import (
+    save_assistant_guidance_payload as _save_assistant_guidance_payload,
+)
+from brain_alpha_ops.web_snapshot_bindings import (
+    snapshot_facade as _snapshot_facade,
+)
+from brain_alpha_ops.web_snapshot_bindings import (
+    snapshot_runtime as _snapshot_runtime,
+)
+from brain_alpha_ops.web_snapshot_bindings import (
+    sqlite_expression_lookup_payload as _sqlite_expression_lookup_payload,
+)
+from brain_alpha_ops.web_snapshot_bindings import (
+    sqlite_index_snapshot as _sqlite_index_snapshot,
+)
+from brain_alpha_ops.web_snapshot_bindings import (
+    sqlite_record_lookup_payload as _sqlite_record_lookup_payload,
+)
+from brain_alpha_ops.web_snapshot_bindings import (
+    storage_jsonl_path as _storage_jsonl_path,
+)
+from brain_alpha_ops.web_snapshot_bindings import (
+    user_profile_snapshot as _user_profile_snapshot,
+)
+from brain_alpha_ops.web_submission_safety import (
+    observability_submission_preflight as _observability_submission_preflight_service,
+)
+from brain_alpha_ops.web_submission_safety import (
+    record_submit_blocked_event as _record_submit_blocked_event_service,
+)
+from brain_alpha_ops.web_submission_safety import (
+    submission_preflight_advisory as _submission_preflight_advisory_service,
 )
 
 

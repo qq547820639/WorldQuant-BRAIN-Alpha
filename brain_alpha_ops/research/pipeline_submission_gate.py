@@ -8,7 +8,10 @@ from brain_alpha_ops.config import RunConfig
 from brain_alpha_ops.models import Candidate
 from brain_alpha_ops.redaction import redact_error_message
 from brain_alpha_ops.scoring.release_score_gate import evaluate_release_score
-from brain_alpha_ops.submission_readiness import live_submit_readiness_hard_gate, missing_official_metric_fields
+from brain_alpha_ops.submission_readiness import (
+    live_submit_readiness_hard_gate,
+    missing_official_metric_fields,
+)
 
 from .assistant import build_assistant_request_pack
 from .context import build_assistant_context_pack

@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import time
+from dataclasses import dataclass
 from typing import Callable
 
 from brain_alpha_ops.brain_api.base import BrainAPI, BrainAPIError
@@ -12,7 +12,6 @@ from brain_alpha_ops.redaction import redact_error_message
 
 from .backtest_slots import BacktestSlotManager
 from .candidate_pool import blocked_gate
-
 
 SettingsProvider = Callable[[], dict]
 PollIntervalProvider = Callable[[], float]

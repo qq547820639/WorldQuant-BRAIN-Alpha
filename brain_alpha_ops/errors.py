@@ -6,8 +6,8 @@ error classes that map directly to the error_code enum in the API contract.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import json
+from dataclasses import dataclass
 from typing import Any
 
 from brain_alpha_ops.redaction import redact_error_message

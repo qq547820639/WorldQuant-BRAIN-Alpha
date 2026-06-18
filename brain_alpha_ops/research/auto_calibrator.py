@@ -451,8 +451,8 @@ class AutoCalibrator:
 
         Data format is compatible with calibrate_weights.py:calibrate_prior_weights().
         """
-        import sys
         import os
+        import sys
         sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
         try:
             from calibrate_weights import calibrate_prior_weights as _calib_fn
@@ -468,8 +468,8 @@ class AutoCalibrator:
 
         Data format is compatible with calibrate_weights.py:calibrate_scorecard_weights().
         """
-        import sys
         import os
+        import sys
         sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
         try:
             from calibrate_weights import calibrate_scorecard_weights as _calib_fn

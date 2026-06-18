@@ -35,14 +35,28 @@ from pathlib import Path
 from typing import Any
 
 from brain_alpha_ops.redaction import redact_error_message, redact_text
-from brain_alpha_ops.research.local_backtest_market_data import MarketDataFrame as _MarketDataFrame  # re-export
+from brain_alpha_ops.research.local_backtest_market_data import (
+    MarketDataFrame as _MarketDataFrame,  # re-export
+)
 from brain_alpha_ops.research.local_backtest_metrics_helpers import (
     cumsum as _cumsum,
+)
+from brain_alpha_ops.research.local_backtest_metrics_helpers import (
     pearson_r as _pearson_r,
+)
+from brain_alpha_ops.research.local_backtest_metrics_helpers import (
     rank_values as _rank_values,
+)
+from brain_alpha_ops.research.local_backtest_metrics_helpers import (
     safe_corr as _safe_corr,
+)
+from brain_alpha_ops.research.local_backtest_metrics_helpers import (
     safe_mean as _safe_mean,
+)
+from brain_alpha_ops.research.local_backtest_metrics_helpers import (
     safe_stdev as _safe_stdev,
+)
+from brain_alpha_ops.research.local_backtest_metrics_helpers import (
     spearman_r as _spearman_r,
 )
 
@@ -65,56 +79,6 @@ _TOKEN_PATTERN = re.compile(
 # ═══════════════════════════════════════════════════════════════════════════
 # Synthetic Market Data Provider
 # ═══════════════════════════════════════════════════════════════════════════
-
-@dataclass
-class _LegacyMarketDataFrameShim:
-    """
-
-# ╔══════════════════ P2-14 Structural Overview ═══════════════════╗
-# ║ Local FASTEXPR-subset backtest engine (84 dates × 160 assets) ║
-# ║                                                               ║
-# ║ Four logical sub-components:                                  ║
-# ║   §A ExpressionEvaluator  — FASTEXPR parsing + vector eval    ║
-# ║   §B PortfolioConstructor — equal-weight cross-sectional      ║
-# ║   §C MetricsComputer      — sharpe/fitness/turnover/drawdown  ║
-# ║   §D SyntheticDataProvider — 84×160 synthetic market data     ║
-# ║                                                               ║
-# ║ Used by: _local_prefilter in pipeline.py (score penalty = 8)  ║
-# ║ Output:  scorecard.local_quality for empirical scoring        ║
-# ║                                                               ║
-# ║ Future P2-14 work: extract 4 sub-components into              ║
-# ║ research/local_backtest/ package                              ║
-# ╚═══════════════════════════════════════════════════════════════╝
-Deprecated alias kept for source compatibility.
-
-    The canonical class now lives in
-    :mod:`brain_alpha_ops.research.local_backtest_market_data` and is
-    re-exported as ``MarketDataFrame`` at the top of this module (P2-14,
-    2026-06-13). This shim is only referenced from places that imported
-    ``MarketDataFrame`` from a sub-scope; it should not be used in new code.
-    """
-
-    fields: dict[str, list[list[float]]] = field(default_factory=dict)
-    dates: list[str] = field(default_factory=list)
-    symbols: list[str] = field(default_factory=list)
-    n_dates: int = 0
-    n_symbols: int = 0
-
-    def get(self, field: str) -> list[list[float]]:
-        return self.fields.get(field, [])
-
-    def column(self, field: str, date_idx: int) -> list[float]:
-        rows = self.fields.get(field, [])
-        if date_idx < len(rows):
-            return list(rows[date_idx])
-        return [0.0] * self.n_symbols
-
-# Backward-compat shim: external modules that pre-date the split may still
-# import the symbol from this module body. The canonical class is imported
-# above; the legacy local class above is kept so that *any* in-module
-# ``isinstance(x, MarketDataFrame)`` checks against the original dataclass
-# continue to succeed. This avoids breaking tests during the P2-14 split.
-_legacy_MarketDataFrame = _LegacyMarketDataFrameShim
 
 class SyntheticDataProvider:
     """Generates synthetic market data for local prefilter evaluation (NOT real data).
@@ -997,6 +961,40 @@ class LocalBacktestEngine:
         self._cache[cache_key] = self.generate_data()
         return self._cache[cache_key]
 
+    def _extract_fields_from_expression(self, expression: str) -> set[str]:
+        """Extract field names from a FASTEXPR expression.
+
+        Identifies identifiers that are not function names or constants,
+        returning them as potential field references.
+        """
+        func_names = {
+            "rank", "zscore", "ts_zscore", "ts_mean", "ts_std_dev",
+            "ts_rank", "ts_decay_linear", "ts_delta", "ts_sum",
+            "ts_min", "ts_max", "ts_corr", "group_rank",
+            "group_neutralize", "winsorize", "normalize",
+            "abs", "neg", "reverse", "log", "sign", "power",
+            "multiply", "divide", "subtract", "greater", "if_else",
+        }
+        fields: set[str] = set()
+        for match in re.finditer(r'\b([a-zA-Z_][a-zA-Z0-9_]*)\b', expression):
+            token = match.group(1)
+            if token not in func_names:
+                fields.add(token)
+        return fields
+
+    def get_data_for_expression(self, expression: str, cache_key: str = "default") -> MarketDataFrame:
+        """Get or generate market data that includes all fields used in expression."""
+        base_fields = set(self.data_provider.STANDARD_FIELDS)
+        expr_fields = self._extract_fields_from_expression(expression)
+        extra_fields = expr_fields - base_fields
+        if not extra_fields:
+            return self.get_data(cache_key)
+        all_fields = sorted(base_fields | expr_fields)
+        data = self.generate_data(fields=all_fields)
+        if len(self._cache) < self._cache_maxsize:
+            self._cache[cache_key] = data
+        return data
+
     def evaluate(
         self,
         expression: str,
@@ -1015,7 +1013,7 @@ class LocalBacktestEngine:
             Dict with 'ok', 'sharpe', 'fitness', 'turnover', etc.,
             plus a 'pass_local' boolean based on BRAIN thresholds.
         """
-        data = data or self.get_data(cache_key)
+        data = data or self.get_data_for_expression(expression, cache_key)
         from brain_alpha_ops.redaction import redact_error_message
 
         try:

@@ -7,7 +7,6 @@ from typing import Any, Callable
 
 from brain_alpha_ops.brain_api.base import BrainAPIError
 
-
 DatasetsFromFields = Callable[[list[dict[str, Any]]], list[dict[str, Any]]]
 DatasetFallbackWarning = Callable[[str, Exception], None]
 

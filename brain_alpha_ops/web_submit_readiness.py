@@ -7,7 +7,6 @@ from typing import Any
 
 from brain_alpha_ops.redaction import redact_error_message
 
-
 ReadinessCheck = Callable[[], dict[str, Any]]
 AUTHORITATIVE_STOP_RULE = "scripts/check_live_submit_readiness.py --config config/run_config.json --json"
 

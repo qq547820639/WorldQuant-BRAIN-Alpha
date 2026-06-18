@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
+import sqlite3
+import time
 from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
-import sqlite3
-import time
 from typing import Any
 
 from brain_alpha_ops.jsonl import read_jsonl_tail_with_stats
@@ -17,8 +17,8 @@ from brain_alpha_ops.research.observability_errors import observability_error_ro
 from brain_alpha_ops.research.observability_extensions import (
     load_optional_observability_sources,
     optional_observability_context,
-    optional_vector_snapshot,
     optional_research_health_payload,
+    optional_vector_snapshot,
     sqlite_index_diagnostics,
 )
 

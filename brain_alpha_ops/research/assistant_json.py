@@ -9,7 +9,6 @@ from typing import Any
 
 from brain_alpha_ops.redaction import redact_error_message
 
-
 logger = logging.getLogger("brain_alpha_ops.research.assistant")
 
 

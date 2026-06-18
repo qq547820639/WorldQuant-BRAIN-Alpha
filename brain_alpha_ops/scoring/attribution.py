@@ -8,6 +8,7 @@ dim_explanation() — human-readable Chinese explanations for each dimension.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+
 # S-15: modern type hints (list[X], X | None) via from __future__ import annotations
 
 
@@ -191,7 +192,7 @@ def build_attribution_tree(scorecard: dict) -> AttributionNode:
         # B-03/R4 S-04: defensive .get()
         score=scorecard.get("total_score", 0),
         weight=1.0,
-        contribution=scorecard["total_score"],
+        contribution=scorecard.get("total_score", 0),
         children=[prior_node, empirical_node, checklist_node],
         explanation=f"Decision: {scorecard.get('decision_band', 'unknown')}",
         calibratable=True,

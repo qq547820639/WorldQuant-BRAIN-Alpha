@@ -7,33 +7,66 @@ from typing import Any, Callable
 
 from brain_alpha_ops.research.observability import build_research_observability_snapshot
 from brain_alpha_ops.research.repository import ResearchRepository
-from brain_alpha_ops.web_candidate_payloads import DEFAULT_MAIN_POOL_SIZE
+from brain_alpha_ops.web_candidates.payloads import DEFAULT_MAIN_POOL_SIZE
 from brain_alpha_ops.web_post_handlers import (
     assistant_response_guidance_post_payload,
     assistant_response_parse_post_payload,
 )
-from brain_alpha_ops.web_snapshots import (
-    assistant_context_snapshot as assistant_context_snapshot_service,
-    assistant_guidance_history as assistant_guidance_history_service,
-    assistant_guidance_snapshot as assistant_guidance_snapshot_service,
-    assistant_request_snapshot as assistant_request_snapshot_service,
-    assistant_response_guidance_payload as assistant_response_guidance_payload_service,
-    assistant_response_parse_payload as assistant_response_parse_payload_service,
-    durable_job_rows as durable_job_rows_service,
-    latest_result_snapshot as latest_result_snapshot_service,
-    latest_run_history_path as latest_run_history_path_service,
-    prompt_run_ledger_snapshot as prompt_run_ledger_snapshot_service,
-    research_knowledge_snapshot as research_knowledge_snapshot_service,
-    research_memory_snapshot as research_memory_snapshot_service,
-    research_observability_snapshot as research_observability_snapshot_service,
-    save_assistant_guidance_payload as save_assistant_guidance_payload_service,
-    user_profile_snapshot as user_profile_snapshot_service,
-)
 from brain_alpha_ops.web_review import (
     anti_overfit_snapshot as anti_overfit_snapshot_service,
+)
+from brain_alpha_ops.web_review import (
     assistant_cross_review_payload as assistant_cross_review_payload_service,
+)
+from brain_alpha_ops.web_review import (
     rolling_validation_snapshot as rolling_validation_snapshot_service,
 )
+from brain_alpha_ops.web_snapshots import (
+    assistant_context_snapshot as assistant_context_snapshot_service,
+)
+from brain_alpha_ops.web_snapshots import (
+    assistant_guidance_history as assistant_guidance_history_service,
+)
+from brain_alpha_ops.web_snapshots import (
+    assistant_guidance_snapshot as assistant_guidance_snapshot_service,
+)
+from brain_alpha_ops.web_snapshots import (
+    assistant_request_snapshot as assistant_request_snapshot_service,
+)
+from brain_alpha_ops.web_snapshots import (
+    assistant_response_guidance_payload as assistant_response_guidance_payload_service,
+)
+from brain_alpha_ops.web_snapshots import (
+    assistant_response_parse_payload as assistant_response_parse_payload_service,
+)
+from brain_alpha_ops.web_snapshots import (
+    durable_job_rows as durable_job_rows_service,
+)
+from brain_alpha_ops.web_snapshots import (
+    latest_result_snapshot as latest_result_snapshot_service,
+)
+from brain_alpha_ops.web_snapshots import (
+    latest_run_history_path as latest_run_history_path_service,
+)
+from brain_alpha_ops.web_snapshots import (
+    prompt_run_ledger_snapshot as prompt_run_ledger_snapshot_service,
+)
+from brain_alpha_ops.web_snapshots import (
+    research_knowledge_snapshot as research_knowledge_snapshot_service,
+)
+from brain_alpha_ops.web_snapshots import (
+    research_memory_snapshot as research_memory_snapshot_service,
+)
+from brain_alpha_ops.web_snapshots import (
+    research_observability_snapshot as research_observability_snapshot_service,
+)
+from brain_alpha_ops.web_snapshots import (
+    save_assistant_guidance_payload as save_assistant_guidance_payload_service,
+)
+from brain_alpha_ops.web_snapshots import (
+    user_profile_snapshot as user_profile_snapshot_service,
+)
+
 
 @dataclass
 class WebSnapshotRuntime:

@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import threading
-from typing import TYPE_CHECKING  # N-04: use builtins dict/list with from __future__ import annotations
+from typing import (
+    TYPE_CHECKING,  # N-04: use builtins dict/list with from __future__ import annotations
+)
 
 if TYPE_CHECKING:
     from .loader import OfficialDataLoader

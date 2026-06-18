@@ -15,7 +15,6 @@ from brain_alpha_ops.agent_tools import BrainAlphaToolbox
 from brain_alpha_ops.config import load_run_config
 from brain_alpha_ops.tasks import JobStore
 
-
 JSONRPC_VERSION = "2.0"
 
 

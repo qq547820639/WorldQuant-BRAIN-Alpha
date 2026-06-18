@@ -13,7 +13,6 @@ from brain_alpha_ops.redaction import redact_data
 from brain_alpha_ops.research.expression_ast import expression_key
 from brain_alpha_ops.research.sqlite_index_manifest import build_sqlite_index_manifest
 
-
 SCHEMA_VERSION = "record-sqlite-index.v1"
 SUPPORTED_SOURCES = {
     "cloud_alphas.jsonl": "cloud_alpha",

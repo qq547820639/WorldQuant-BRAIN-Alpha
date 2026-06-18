@@ -15,7 +15,6 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Final
 
-
 # ═══════════════════════════════════════════════════════════════════════════
 # Web console defaults (web.py)
 # ═══════════════════════════════════════════════════════════════════════════

@@ -2,22 +2,26 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict
-from datetime import datetime, timezone
 import json
 import logging
 import os
 import re
+from dataclasses import asdict
+from datetime import datetime, timezone
 
 from brain_alpha_ops.config import SubmissionPolicy
 from brain_alpha_ops.models import Candidate
 from brain_alpha_ops.redaction import redact_error_message, redact_text
-from brain_alpha_ops.research.contracts import correlation_id
-from brain_alpha_ops.research.expression_ast import expression_key, expression_profile_summary, expression_similarity, lexical_normalize
 
 # P0-4 fix (2026-06-13): see ``research._ratio`` for the unified rule.
 from brain_alpha_ops.research._ratio import normalize_brain_ratio  # noqa: F401
-
+from brain_alpha_ops.research.contracts import correlation_id
+from brain_alpha_ops.research.expression_ast import (
+    expression_key,
+    expression_profile_summary,
+    expression_similarity,
+    lexical_normalize,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -102,7 +106,9 @@ class SubmissionLedger:
         with open(self.path, "a", encoding="utf-8") as f:
             f.write(json.dumps(record, ensure_ascii=False) + "\n")
         try:
-            from brain_alpha_ops.research.expression_sqlite_index import ExpressionSqliteIndex
+            from brain_alpha_ops.research.expression_sqlite_index import (
+                ExpressionSqliteIndex,
+            )
 
             ExpressionSqliteIndex(os.path.dirname(self.path)).append_record(record, source_file="submissions.jsonl")
         except ImportError:

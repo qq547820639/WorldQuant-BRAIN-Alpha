@@ -6,18 +6,25 @@ project remains useful when no external model client is configured.
 """
 from __future__ import annotations
 
-from hashlib import sha256
 import json
 import logging
 import math
+from hashlib import sha256
 from typing import Any
 
 from brain_alpha_ops.models import utc_now
-from brain_alpha_ops.research.assistant_json import AssistantResponseParseError, extract_json_payload as _extract_json_payload
+from brain_alpha_ops.research.assistant_json import AssistantResponseParseError
+from brain_alpha_ops.research.assistant_json import (
+    extract_json_payload as _extract_json_payload,
+)
 from brain_alpha_ops.research.context import render_context_prompt
 from brain_alpha_ops.research.guidance import assistant_guidance_digest
 from brain_alpha_ops.research.prompt_templates import load_system_prompt
-from brain_alpha_ops.research.robustness_context import assistant_robustness_signals, robustness_evidence, robustness_gate_adjustment
+from brain_alpha_ops.research.robustness_context import (
+    assistant_robustness_signals,
+    robustness_evidence,
+    robustness_gate_adjustment,
+)
 
 ASSISTANT_REQUEST_SCHEMA_VERSION = "assistant_request_pack.v1"
 ASSISTANT_RESPONSE_SCHEMA_VERSION = "assistant_response.v1"

@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 import logging
 import secrets
 import threading
 import time
+from dataclasses import dataclass, field
 from typing import Any
 from urllib.parse import parse_qs, urlparse
-
 
 LOCAL_HOSTS = {"127.0.0.1", "localhost", "::1"}
 LOOPBACK_BIND_HOSTS = {"127.0.0.1", "localhost", "::1"}

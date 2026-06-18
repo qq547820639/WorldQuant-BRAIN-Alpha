@@ -5,7 +5,6 @@ from __future__ import annotations
 import logging
 from typing import Any, Union, get_args, get_origin, get_type_hints
 
-
 logger = logging.getLogger(__name__)
 _TYPE_HINTS_CACHE: dict[type, dict[str, Any]] = {}
 _TYPE_HINTS_DIAGNOSTICS: dict[type, dict[str, Any]] = {}

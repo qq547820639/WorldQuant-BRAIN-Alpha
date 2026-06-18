@@ -25,7 +25,6 @@ from typing import Any, Dict, List, Optional
 from brain_alpha_ops.brain_api.canonical import CANONICAL_THRESHOLDS
 from brain_alpha_ops.config import OpsConfig
 from brain_alpha_ops.models import Candidate
-
 from brain_alpha_ops.research.scoring import (
     build_scorecard,
     evaluate_quality_gate,
@@ -35,8 +34,13 @@ from brain_alpha_ops.scoring.attribution import (
     build_attribution_tree,
     dim_explanation,
 )
-from brain_alpha_ops.scoring.gates import GateConfig, GateResult, OFFICIAL_HARD_GATE_NAMES
+from brain_alpha_ops.scoring.gates import (
+    OFFICIAL_HARD_GATE_NAMES,
+    GateConfig,
+    GateResult,
+)
 from brain_alpha_ops.scoring.history import ScoreHistoryDB
+
 _PersistedScoreHistoryDB = ScoreHistoryDB
 from brain_alpha_ops.scoring.release_score_gate import (
     evaluate_release_score,

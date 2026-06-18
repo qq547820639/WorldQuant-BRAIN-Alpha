@@ -41,7 +41,6 @@ from brain_alpha_ops.config_validation_helpers import (
     validate_weight_group,
 )
 
-
 _VALID_ENVIRONMENT = "production"
 _VALID_REGIONS = SUPPORTED_REGIONS
 _VALID_UNIVERSES = SUPPORTED_UNIVERSES

@@ -6,7 +6,6 @@ import math
 from statistics import mean
 from typing import Any
 
-
 ROLLING_VALIDATION_SCHEMA_VERSION = "rolling_validation_report.v1"
 
 
@@ -78,13 +77,7 @@ def _metric_series(candidate: dict[str, Any], metrics: dict[str, Any]) -> list[f
         values = _numbers(metrics.get(key) or candidate.get(key))
         if values:
             return values
-    sharpe = _number(metrics.get("sharpe"))
-    fitness = _number(metrics.get("fitness"))
-    returns = _number(metrics.get("returns"))
-    base = fitness if fitness is not None else (sharpe if sharpe is not None else returns)
-    if base is None:
-        return []
-    return [base * factor for factor in (0.85, 0.95, 1.0, 0.9)]
+    return []
 
 
 def _numbers(value: Any) -> list[float]:

@@ -2,21 +2,23 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from hashlib import sha256
 import json
 import logging
 import os
-from pathlib import Path
 import time
 import urllib.error
 import urllib.request
+from dataclasses import dataclass
+from hashlib import sha256
+from pathlib import Path
 from typing import Any, Protocol
 
 from brain_alpha_ops.models import utc_now
 from brain_alpha_ops.redaction import redact_data, redact_error_message
-from brain_alpha_ops.research.assistant import AssistantResponseParseError, parse_assistant_response
-
+from brain_alpha_ops.research.assistant import (
+    AssistantResponseParseError,
+    parse_assistant_response,
+)
 
 CROSS_REVIEW_SCHEMA_VERSION = "assistant_cross_review.v1"
 PROMPT_RUN_LEDGER_SCHEMA_VERSION = "prompt_run_ledger.v1"

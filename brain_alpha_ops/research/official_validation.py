@@ -10,7 +10,6 @@ from brain_alpha_ops.models import Candidate
 
 from .candidate_pool import blocked_gate, candidate_official_work_blockers
 
-
 ProgressCallback = Callable[[str, int, int, str, str], None]
 EventCallback = Callable[..., None]
 LifecycleCallback = Callable[[Candidate, str, str], None]

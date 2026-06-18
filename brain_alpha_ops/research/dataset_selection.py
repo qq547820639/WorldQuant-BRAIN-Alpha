@@ -5,7 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Callable
 
-
 DATASET_SELECTION_SCHEMA_VERSION = "dataset_selection.v1"
 
 EventCallback = Callable[..., None]

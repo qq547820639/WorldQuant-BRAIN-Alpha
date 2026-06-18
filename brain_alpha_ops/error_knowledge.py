@@ -19,6 +19,8 @@ from brain_alpha_ops.errors import (
     SessionError,
     SubmitBlockedError,
     ValidationError,
+)
+from brain_alpha_ops.errors import (
     classify_error as _core_classify,
 )
 

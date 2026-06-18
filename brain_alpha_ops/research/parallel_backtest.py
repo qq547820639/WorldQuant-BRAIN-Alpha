@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
+import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from datetime import datetime, timezone
-import logging
 from typing import Any, Callable
-
 
 logger = logging.getLogger(__name__)
 

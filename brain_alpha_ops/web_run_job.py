@@ -9,7 +9,6 @@ from typing import Any, Callable
 
 from brain_alpha_ops.observability import error_payload
 
-
 RunConfigFromPayload = Callable[[dict[str, Any]], Any]
 RunPipeline = Callable[..., Any]
 ComputeRunStats = Callable[[dict[str, Any], Any], dict[str, Any]]

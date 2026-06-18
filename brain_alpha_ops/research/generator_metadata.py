@@ -7,7 +7,10 @@ import re
 from typing import TYPE_CHECKING
 
 from brain_alpha_ops.research.expression_ast import ordered_operators
-from brain_alpha_ops.research.validated_generator import OPERATOR_SIGNATURES, WINDOW_CONSTRAINTS
+from brain_alpha_ops.research.validated_generator import (
+    OPERATOR_SIGNATURES,
+    WINDOW_CONSTRAINTS,
+)
 
 if TYPE_CHECKING:
     from brain_alpha_ops.data import OfficialDataLoader

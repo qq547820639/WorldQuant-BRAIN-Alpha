@@ -7,10 +7,10 @@ import re
 
 from brain_alpha_ops.research.generator_metadata import (
     OFFICIAL_OPERATOR_SUBSTITUTE_FAMILIES,
-    expression_windows_within_constraints,
     _expression_operators_are_official,
     _get_default_windows,
     _load_official_operator_names,
+    expression_windows_within_constraints,
 )
 
 

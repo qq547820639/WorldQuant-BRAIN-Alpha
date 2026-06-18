@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from importlib import resources
 
-
 SYSTEM_PROMPT_TEMPLATE = "assistant_system_prompt.txt"
 FALLBACK_SYSTEM_PROMPT = (
     "You are a quantitative factor research agent for WorldQuant BRAIN FASTEXPR. "

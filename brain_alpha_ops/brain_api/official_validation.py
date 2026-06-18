@@ -8,7 +8,6 @@ import re
 from brain_alpha_ops.research.expression_engine import ExpressionEngine
 from brain_alpha_ops.research.expression_official_context import GROUP_CONTEXT_FIELDS
 
-
 logger = logging.getLogger("brain_alpha_ops.brain_api.official")
 
 

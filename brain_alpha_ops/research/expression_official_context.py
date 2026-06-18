@@ -13,7 +13,10 @@ from typing import Any
 
 from brain_alpha_ops.data import FieldDatasetMapper, OfficialDataLoader
 from brain_alpha_ops.data.official_context_validation import validate_official_context
-from brain_alpha_ops.research.expression_ast import ExpressionProfile, profile_expression
+from brain_alpha_ops.research.expression_ast import (
+    ExpressionProfile,
+    profile_expression,
+)
 
 EXPRESSION_OFFICIAL_CONTEXT_PROOF_SCHEMA = "expression-official-context-proof.v1"
 EXPRESSION_DELTA_SCHEMA = "expression-delta.v1"

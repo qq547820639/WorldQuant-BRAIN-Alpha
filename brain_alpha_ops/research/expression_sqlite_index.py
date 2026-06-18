@@ -2,16 +2,21 @@
 
 from __future__ import annotations
 
-from contextlib import closing
 import json
-from pathlib import Path
 import sqlite3
+from contextlib import closing
+from pathlib import Path
 from typing import Any
 
-from brain_alpha_ops.research.expression_ast import expression_profile_summary, expression_similarity
-from brain_alpha_ops.research.expression_index import DEFAULT_SOURCES, ExpressionHistoryIndex
+from brain_alpha_ops.research.expression_ast import (
+    expression_profile_summary,
+    expression_similarity,
+)
+from brain_alpha_ops.research.expression_index import (
+    DEFAULT_SOURCES,
+    ExpressionHistoryIndex,
+)
 from brain_alpha_ops.research.sqlite_index_manifest import build_sqlite_index_manifest
-
 
 SCHEMA_VERSION = "expression-sqlite-index.v1"
 DEFAULT_LOOKUP_SCAN_LIMIT = 2000

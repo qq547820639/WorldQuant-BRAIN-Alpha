@@ -26,7 +26,7 @@ import os
 import re
 from collections import Counter
 from datetime import datetime, timezone
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from brain_alpha_ops.jsonl import read_jsonl_records
 
@@ -48,6 +48,7 @@ def _num(value: Any) -> float:
 # implementation in ``research._ratio``. The local definition below is kept
 # for backward-compat with the previous module-level symbol.
 from ._ratio import normalize_brain_ratio  # noqa: F401
+
 
 def _ratio(value: Any) -> float:
     """Backwards-compatible wrapper for the canonical BRAIN ratio normalizer.

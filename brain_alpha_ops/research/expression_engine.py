@@ -10,8 +10,11 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Iterable
 
-from brain_alpha_ops.research.expression_ast import ExpressionParseError, ExpressionProfile, profile_expression
-
+from brain_alpha_ops.research.expression_ast import (
+    ExpressionParseError,
+    ExpressionProfile,
+    profile_expression,
+)
 
 EXPRESSION_ENGINE_SCHEMA_VERSION = "expression-engine-report.v1"
 DEFAULT_MAX_DEPTH = 12

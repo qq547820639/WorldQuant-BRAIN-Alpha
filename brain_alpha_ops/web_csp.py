@@ -6,7 +6,6 @@ import base64
 import hashlib
 import re
 
-
 SCRIPT_BLOCK_PATTERN = re.compile(r"<script(?:\s[^>]*)?>(.*?)</script>", re.IGNORECASE | re.DOTALL)
 STYLE_BLOCK_PATTERN = re.compile(r"<style(?:\s[^>]*)?>(.*?)</style>", re.IGNORECASE | re.DOTALL)
 

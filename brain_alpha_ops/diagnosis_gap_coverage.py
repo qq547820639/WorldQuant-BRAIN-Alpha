@@ -8,7 +8,6 @@ from typing import Any
 
 from brain_alpha_ops.web_check_availability import CHECK_LABELS
 
-
 SCHEMA_VERSION = "diagnosis_gap_coverage.v1"
 REQUIRED_DIMENSIONS = (
     "Functional closure",

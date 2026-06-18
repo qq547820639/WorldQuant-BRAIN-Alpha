@@ -4,14 +4,13 @@ from __future__ import annotations
 
 import ast
 import logging
-from pathlib import Path
 import re
 import textwrap
+from pathlib import Path
 from typing import Any
 
 from brain_alpha_ops.compliance.redline_models import ComplianceReport, RedLineViolation
 from brain_alpha_ops.redaction import redact_error_message, redact_text
-
 
 logger = logging.getLogger("brain_alpha_ops.compliance.redline_verifier")
 
@@ -137,8 +136,9 @@ def _verify_generator_templates_against_official_context(data_dir: Path) -> dict
 def _candidate_generator_fallback_templates() -> list[str]:
     """Extract fallback template strings from CandidateGenerator source."""
     try:
-        from brain_alpha_ops.research.generator import CandidateGenerator
         import inspect
+
+        from brain_alpha_ops.research.generator import CandidateGenerator
 
         source = textwrap.dedent(inspect.getsource(CandidateGenerator._generate_fallback))
         tree = ast.parse(source)

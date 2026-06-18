@@ -16,7 +16,6 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from brain_alpha_ops.scoring.shared_scores import default_prior_dimensions
 
-
 # ═══════════════════════════════════════════════════════════════════════
 # Data loading
 # ═══════════════════════════════════════════════════════════════════════

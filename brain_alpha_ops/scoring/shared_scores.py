@@ -5,7 +5,6 @@ from __future__ import annotations
 import re
 from typing import Any
 
-
 DEFAULT_PRIOR_WEIGHTS: dict[str, float] = {
     "economic_logic": 0.18,
     "structure": 0.14,

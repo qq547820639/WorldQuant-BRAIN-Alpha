@@ -167,8 +167,9 @@ def _verify_redline_6_code_alignment(
 
     # 6e. Verify metric field names in empirical_score
     try:
-        from brain_alpha_ops.research.scoring import empirical_score
         import inspect
+
+        from brain_alpha_ops.research.scoring import empirical_score
         source = inspect.getsource(empirical_score)
         for metric_name in CANONICAL_METRIC_NAMES:
             if metric_name in source:

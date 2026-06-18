@@ -8,8 +8,12 @@ from typing import Callable, Iterable
 from brain_alpha_ops.models import Candidate
 
 from .fallback_generation import high_turnover_generation_risk_reasons
-from .pipeline_helpers import blocked_gate, expr_key, is_hard_backtest_blocked, ranking_score
-
+from .pipeline_helpers import (
+    blocked_gate,
+    expr_key,
+    is_hard_backtest_blocked,
+    ranking_score,
+)
 
 CandidateRanker = Callable[[list[Candidate]], list[Candidate]]
 CandidatePredicate = Callable[[Candidate], bool]

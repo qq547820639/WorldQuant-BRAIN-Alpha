@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from typing import Any, Protocol, runtime_checkable
 
+
 def enforce_protocol(obj: Any, protocol: type) -> None:
     """Raise ``TypeError`` if ``obj`` does not satisfy ``protocol``.
 

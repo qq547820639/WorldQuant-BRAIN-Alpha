@@ -24,7 +24,11 @@ from brain_alpha_ops.models import PipelineEvent, PipelineResult
 from brain_alpha_ops.redaction import redact_error_message
 from brain_alpha_ops.runner import run_pipeline_from_config
 from brain_alpha_ops.ux import guided_display, guided_storage
-from brain_alpha_ops.ux.guided_formatting import format_candidate_summary, format_error_for_user, format_pipeline_progress
+from brain_alpha_ops.ux.guided_formatting import (
+    format_candidate_summary,
+    format_error_for_user,
+    format_pipeline_progress,
+)
 from brain_alpha_ops.ux.guided_models import CheckpointData, PipelinePhase, RunRecord
 
 logger = logging.getLogger(__name__)
@@ -199,7 +203,10 @@ class GuidedPipeline:
         self._notify("context", "running", {})
 
         try:
-            from brain_alpha_ops.brain_api.context_defaults import _ensure_loaded, _DEFAULTS_CACHE
+            from brain_alpha_ops.brain_api.context_defaults import (
+                _DEFAULTS_CACHE,
+                _ensure_loaded,
+            )
             _ensure_loaded()
             fields_count = len(_DEFAULTS_CACHE.get("fields", []))
             ops_count = len(_DEFAULTS_CACHE.get("operators", []))
@@ -355,20 +362,20 @@ class GuidedPipeline:
             # Update phases with results
             summary = pipeline_result.summary
             self.phases["generation"].complete(
-                f"生成 {summary.get("total_candidates", 0)} 个候选"
+                f"生成 {summary.get('total_candidates', 0)} 个候选"
             )
             self.phases["simulation"].complete(
-                f"官方仿真 {summary.get("officially_simulated", 0)} 个"
+                f"官方仿真 {summary.get('officially_simulated', 0)} 个"
             )
             self.phases["validation"].complete(
-                f"官方预验证 {summary.get("official_validation_passed", 0)}/"
-                f"{summary.get("official_validation_attempted", 0)} 通过"
+                f"官方预验证 {summary.get('official_validation_passed', 0)}/"
+                f"{summary.get('official_validation_attempted', 0)} 通过"
             )
             self.phases["submission"].complete(
-                f"提交 {summary.get("auto_submitted", 0)} 个"
+                f"提交 {summary.get('auto_submitted', 0)} 个"
             )
             self.phases["scoring"].complete(
-                f"评分分布: {summary.get("score_distribution", {})}"
+                f"评分分布: {summary.get('score_distribution', {})}"
             )
             gate_summary = summary.get("gate_summary") or {}
             ready = summary.get("submission_ready", 0)

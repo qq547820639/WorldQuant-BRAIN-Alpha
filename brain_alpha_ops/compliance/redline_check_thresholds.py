@@ -6,7 +6,10 @@ import json
 from typing import Any
 
 from brain_alpha_ops.brain_api.canonical import CANONICAL_THRESHOLDS
-from brain_alpha_ops.compliance.redline_helpers import _project_root, _verification_blocked
+from brain_alpha_ops.compliance.redline_helpers import (
+    _project_root,
+    _verification_blocked,
+)
 from brain_alpha_ops.compliance.redline_models import ComplianceReport, RedLineViolation
 
 
@@ -92,8 +95,9 @@ def _verify_redline_2_threshold_zero_deviation(
 
     # 2d. Verify official hard gates are not adjusted by local market-regime factors.
     try:
-        from brain_alpha_ops.research.scoring import empirical_score
         import inspect
+
+        from brain_alpha_ops.research.scoring import empirical_score
 
         source = inspect.getsource(empirical_score)
         forbidden = [

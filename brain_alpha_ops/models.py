@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
+import uuid
 from dataclasses import asdict, dataclass, field, fields
 from datetime import datetime, timezone
 from typing import Any
-import uuid
 
 
 def utc_now() -> str:  # N-05: returns ISO string, not datetime (consider renaming to utc_now_iso); prefer datetime before serialization

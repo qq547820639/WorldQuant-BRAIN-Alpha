@@ -18,7 +18,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from brain_alpha_ops.config import OpsConfig, BrainSettings, ResearchBudget, ScoringConfig, QualityThresholds
+from brain_alpha_ops.config import (
+    BrainSettings,
+    OpsConfig,
+    QualityThresholds,
+    ResearchBudget,
+    ScoringConfig,
+)
 
 
 @dataclass(frozen=True)

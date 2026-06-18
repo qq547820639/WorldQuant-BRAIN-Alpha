@@ -9,7 +9,6 @@ from brain_alpha_ops.error_knowledge import classify_ux_error as _unified_classi
 from brain_alpha_ops.models import Candidate, PipelineEvent
 from brain_alpha_ops.redaction import redact_error_message
 
-
 logger = logging.getLogger(__name__)
 
 

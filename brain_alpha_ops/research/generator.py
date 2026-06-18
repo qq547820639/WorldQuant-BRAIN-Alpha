@@ -5,11 +5,11 @@ Zero hard-coded fields or templates.
 """
 
 from __future__ import annotations
-import logging
-import time
 
+import logging
 import re
-from typing import Any, TYPE_CHECKING
+import time
+from typing import TYPE_CHECKING, Any
 
 from brain_alpha_ops.models import Candidate, new_id
 from brain_alpha_ops.research.expression_ast import (
@@ -19,28 +19,32 @@ from brain_alpha_ops.research.expression_ast import (
     ordered_operators,
     profile_expression,
 )
-from brain_alpha_ops.research.field_quality import filter_generation_fields, generation_field_ids
 from brain_alpha_ops.research.fallback_generation import (
     high_turnover_generation_risk_reasons,
     is_high_turnover_generation_risk,
+)
+from brain_alpha_ops.research.field_quality import (
+    filter_generation_fields,
+    generation_field_ids,
 )
 from brain_alpha_ops.research.generator_metadata import (
     DEFAULT_WINDOWS,
     DEFAULT_WINSOR_STD,
     OFFICIAL_OPERATOR_SUBSTITUTE_FAMILIES,
-    expression_windows_within_constraints,
     _expression_operators_are_official,
     _get_default_windows,
     _get_default_winsor_stds,
     _load_official_operator_names,
     _load_operators_windows,
+    expression_windows_within_constraints,
 )
 from brain_alpha_ops.research.generator_mutation import mutate_expression
 
 if TYPE_CHECKING:
-    from brain_alpha_ops.data import OfficialDataLoader, FieldDatasetMapper
-    from .theme_engine import DynamicThemeEngine
+    from brain_alpha_ops.data import FieldDatasetMapper, OfficialDataLoader
+
     from .dataset_selector import DatasetSelector
+    from .theme_engine import DynamicThemeEngine
 
 logger = logging.getLogger(__name__)
 

@@ -6,8 +6,8 @@ import hashlib
 import json
 import logging
 import os
-from pathlib import Path
 import time
+from pathlib import Path
 from typing import Any
 
 from brain_alpha_ops.jsonl import read_jsonl_tail
@@ -21,7 +21,6 @@ from brain_alpha_ops.research.contracts import (
 )
 from brain_alpha_ops.research.expression_ast import expression_profile_summary
 from brain_alpha_ops.research.guidance import ensure_assistant_guidance_digest
-
 
 logger = logging.getLogger(__name__)
 _LOCK_STALE_SECONDS = 120.0
@@ -317,7 +316,9 @@ class ResearchRepository:
         if filename not in _EXPRESSION_INDEXED_FILES:
             return
         try:
-            from brain_alpha_ops.research.expression_sqlite_index import ExpressionSqliteIndex
+            from brain_alpha_ops.research.expression_sqlite_index import (
+                ExpressionSqliteIndex,
+            )
 
             ExpressionSqliteIndex(self.storage_dir).append_record(record, source_file=filename)
         except Exception as exc:

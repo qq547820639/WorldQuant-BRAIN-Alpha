@@ -2,25 +2,27 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import re
-import json
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
 from brain_alpha_ops.research.expression_ast import (
-    ExprNode,
     ExpressionParseError,
+    ExprNode,
     canonicalize,
     ordered_operators,
     parse_expression,
     profile_expression,
 )
+from brain_alpha_ops.research.fallback_generation import (
+    DEFAULT_WINDOWS,
+    normalize_operator_aliases,
+)
 from brain_alpha_ops.research.field_quality import generation_field_ids
-from brain_alpha_ops.research.fallback_generation import DEFAULT_WINDOWS, normalize_operator_aliases
 from brain_alpha_ops.research.hypothesis_library import FieldCategoryDef
-
 
 GROUP_KEYS = {"market", "sector", "industry", "subindustry"}
 _OFFICIAL_OPERATOR_FALLBACK = frozenset(

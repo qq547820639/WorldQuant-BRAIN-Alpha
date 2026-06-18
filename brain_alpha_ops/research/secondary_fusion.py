@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import logging
+from dataclasses import dataclass
 from typing import Callable
 
 from brain_alpha_ops.config import OpsConfig
@@ -11,7 +11,12 @@ from brain_alpha_ops.models import Candidate, new_id
 from brain_alpha_ops.redaction import redact_error_message, redact_text
 
 from .expression_ast import expression_key
-from .generator import extract_fields, extract_operators, local_quality, mutate_expression
+from .generator import (
+    extract_fields,
+    extract_operators,
+    local_quality,
+    mutate_expression,
+)
 from .scoring import build_scorecard
 
 logger = logging.getLogger(__name__)

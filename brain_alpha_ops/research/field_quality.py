@@ -7,7 +7,6 @@ from typing import Iterable
 from brain_alpha_ops.models import Candidate
 from brain_alpha_ops.research.expression_ast import profile_expression
 
-
 _NON_SIGNAL_FIELD_TOKENS = {
     "currency",
     "flag",

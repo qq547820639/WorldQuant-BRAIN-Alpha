@@ -5,7 +5,8 @@ from __future__ import annotations
 import base64
 
 from .base import BrainAPIError
-from .official_helpers import _first_value, scrub as _scrub
+from .official_helpers import _first_value
+from .official_helpers import scrub as _scrub
 
 
 class OfficialAuthProfileMixin:

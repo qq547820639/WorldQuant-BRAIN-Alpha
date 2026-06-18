@@ -2,15 +2,16 @@
 
 from __future__ import annotations
 
-from collections import Counter
-from hashlib import sha256
 import json
 import logging
+from collections import Counter
+from hashlib import sha256
 from pathlib import Path
 from typing import Any, Callable
 
 from brain_alpha_ops.config import RunConfig, load_run_config
 from brain_alpha_ops.jsonl import read_jsonl_tail
+from brain_alpha_ops.redaction import redact_error_message, redact_text
 from brain_alpha_ops.research.assistant import (
     AssistantResponseParseError,
     assistant_response_to_generation_guidance,
@@ -24,18 +25,16 @@ from brain_alpha_ops.research.guidance import (
     assistant_guidance_scoring_policy,
     ensure_assistant_guidance_digest,
 )
-from brain_alpha_ops.redaction import redact_error_message, redact_text
 from brain_alpha_ops.research.knowledge_base import ResearchKnowledgeBase
 from brain_alpha_ops.research.memory import ResearchMemory
 from brain_alpha_ops.research.observability import build_research_observability_snapshot
 from brain_alpha_ops.research.repository import ResearchRepository
-from brain_alpha_ops.web_candidate_payloads import (
+from brain_alpha_ops.web_candidates.payloads import (
     DEFAULT_MAIN_POOL_SIZE,
     candidate_payload,
     candidate_result_total,
     has_candidate_like_rows,
 )
-
 
 logger = logging.getLogger(__name__)
 

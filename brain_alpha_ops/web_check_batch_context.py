@@ -7,7 +7,9 @@ from typing import Any
 
 from brain_alpha_ops.config import load_run_config as _load_run_config
 from brain_alpha_ops.research.expression_ast import expression_key
-from brain_alpha_ops.research.expression_official_context import expression_official_context_proof
+from brain_alpha_ops.research.expression_official_context import (
+    expression_official_context_proof,
+)
 
 
 def check_batch_official_context_payload(

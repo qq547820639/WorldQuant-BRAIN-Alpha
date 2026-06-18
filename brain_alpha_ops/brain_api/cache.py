@@ -6,14 +6,13 @@ import hashlib
 import json
 import logging
 import os
-from pathlib import Path
 import threading
 import time
+from pathlib import Path
 from typing import Any
 
 from brain_alpha_ops.config import OfficialAPIConfig
 from brain_alpha_ops.redaction import redact_error_message, redact_text
-
 
 logger = logging.getLogger("brain_alpha_ops.brain_api.official")
 

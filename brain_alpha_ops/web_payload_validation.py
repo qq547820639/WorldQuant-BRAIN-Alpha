@@ -8,7 +8,6 @@ from typing import Any
 
 from brain_alpha_ops.runtime_constants import ContextRefreshDefaults
 
-
 MAX_GENERATE_CANDIDATES = 100
 MAX_ALPHA_ID_LENGTH = 128
 MAX_BATCH_ALPHA_IDS = 100

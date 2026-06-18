@@ -5,7 +5,10 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from brain_alpha_ops.compliance.redline_helpers import _runtime_storage_dir, _verification_blocked
+from brain_alpha_ops.compliance.redline_helpers import (
+    _runtime_storage_dir,
+    _verification_blocked,
+)
 from brain_alpha_ops.compliance.redline_models import ComplianceReport, RedLineViolation
 
 
@@ -106,7 +109,9 @@ def _verify_redline_3_dataset_ids(
 
     # 3c. Verify official context dataset lineage
     try:
-        from brain_alpha_ops.data.official_context_validation import validate_official_context
+        from brain_alpha_ops.data.official_context_validation import (
+            validate_official_context,
+        )
         validation = validate_official_context(data_dir=data_dir)
         if validation.get("blocking_ok"):
             report.add_pass()

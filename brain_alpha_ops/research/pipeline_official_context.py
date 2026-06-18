@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import logging
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
@@ -15,7 +15,6 @@ from brain_alpha_ops.research.expression_official_context import GROUP_CONTEXT_F
 
 from .iterative_optimizer import IterativeOptimizer
 from .pipeline_helpers import merge_context_defaults
-
 
 ProgressCallback = Callable[..., None]
 EventCallback = Callable[..., None]
@@ -240,7 +239,9 @@ class OfficialContextLoadService:
         try:
             from brain_alpha_ops.data import FieldDatasetMapper
             from brain_alpha_ops.research.dataset_selector import DatasetSelector
-            from brain_alpha_ops.research.hypothesis_driven_generator import HypothesisDrivenGenerator
+            from brain_alpha_ops.research.hypothesis_driven_generator import (
+                HypothesisDrivenGenerator,
+            )
             from brain_alpha_ops.research.hypothesis_library import HypothesisLibrary
             from brain_alpha_ops.research.theme_engine import DynamicThemeEngine
 

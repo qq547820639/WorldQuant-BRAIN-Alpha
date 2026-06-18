@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 import time
+from dataclasses import dataclass, field
 
 from brain_alpha_ops.models import Candidate
 
 from .candidate_pool import blocked_gate
 from .expression_ast import expression_key
-
 
 GUARD_SCHEMA = "observability_official_call_guard.v1"
 

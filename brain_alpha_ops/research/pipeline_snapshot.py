@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 import time
+from dataclasses import dataclass, field
 from typing import Any, Callable
 
 from brain_alpha_ops.models import Candidate
@@ -13,7 +13,12 @@ from .alpha_quality import (
     diagnose_alpha_candidate,
     summarize_quality_diagnostics,
 )
-from .pipeline_helpers import compute_gate_summary, compute_score_distribution, slot_message, slot_progress_percent
+from .pipeline_helpers import (
+    compute_gate_summary,
+    compute_score_distribution,
+    slot_message,
+    slot_progress_percent,
+)
 from .pipeline_state import bandit_runtime_summary
 
 

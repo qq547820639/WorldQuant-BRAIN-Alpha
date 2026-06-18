@@ -24,7 +24,6 @@ from __future__ import annotations
 
 from brain_alpha_ops.models import Candidate
 
-
 # ═══════════════════════════════════════════════════════════════════════
 # B-06: Fusion expression validation
 # ═══════════════════════════════════════════════════════════════════════

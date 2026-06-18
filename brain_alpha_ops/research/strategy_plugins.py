@@ -2,15 +2,14 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 import importlib
 import logging
+from dataclasses import dataclass, field
 from typing import Any
 
 from brain_alpha_ops.redaction import redact_error_message, redact_text
 
 from .strategy_lifecycle import StrategyLifecyclePlugin
-
 
 REQUIRED_PLUGIN_METHODS = ("propose", "validate", "mutate", "retire")
 logger = logging.getLogger(__name__)

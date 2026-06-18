@@ -9,7 +9,9 @@ from brain_alpha_ops.models import Candidate
 from brain_alpha_ops.redaction import redact_error_message, redact_text
 
 from .anti_overfit import AntiOverfitService
-from .pipeline_helpers import blocked_gate as _blocked_gate, expr_key as _expr_key, rank_candidates
+from .pipeline_helpers import blocked_gate as _blocked_gate
+from .pipeline_helpers import expr_key as _expr_key
+from .pipeline_helpers import rank_candidates
 from .pipeline_state import CycleState
 from .robustness_policy import RobustnessPolicy
 from .rolling_validation import RollingValidationService

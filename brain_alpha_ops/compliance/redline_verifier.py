@@ -21,12 +21,24 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from brain_alpha_ops.compliance.redline_check_alignment import _verify_redline_6_code_alignment
-from brain_alpha_ops.compliance.redline_check_coverage import _verify_redline_5_factor_coverage
-from brain_alpha_ops.compliance.redline_check_datasets import _verify_redline_3_dataset_ids
-from brain_alpha_ops.compliance.redline_check_no_custom_extension import _verify_redline_1_no_custom_extension
-from brain_alpha_ops.compliance.redline_check_thresholds import _verify_redline_2_threshold_zero_deviation
-from brain_alpha_ops.compliance.redline_check_traceability import _verify_redline_4_parameter_traceability
+from brain_alpha_ops.compliance.redline_check_alignment import (
+    _verify_redline_6_code_alignment,
+)
+from brain_alpha_ops.compliance.redline_check_coverage import (
+    _verify_redline_5_factor_coverage,
+)
+from brain_alpha_ops.compliance.redline_check_datasets import (
+    _verify_redline_3_dataset_ids,
+)
+from brain_alpha_ops.compliance.redline_check_no_custom_extension import (
+    _verify_redline_1_no_custom_extension,
+)
+from brain_alpha_ops.compliance.redline_check_thresholds import (
+    _verify_redline_2_threshold_zero_deviation,
+)
+from brain_alpha_ops.compliance.redline_check_traceability import (
+    _verify_redline_4_parameter_traceability,
+)
 from brain_alpha_ops.compliance.redline_helpers import (
     _candidate_generator_fallback_templates,
     _project_root,
@@ -40,6 +52,7 @@ from brain_alpha_ops.compliance.redline_models import (
     RedLineBlockedError,
     RedLineViolation,
 )
+
 
 class RedLineVerifier:
     """Six red-line compliance verification engine.

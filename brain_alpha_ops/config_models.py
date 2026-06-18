@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field
 import os
+from dataclasses import asdict, dataclass, field
 from typing import Any
 
 
@@ -175,7 +175,7 @@ class OfficialAPIConfig:
     poll_attempts: int = 120
     poll_interval_seconds: float = 6.0
     min_request_interval_seconds: float = 3.0  # Per-request minimum; batch delay is separate
-    rate_limit_retry_attempts: int = 0
+    rate_limit_retry_attempts: int = 3
     rate_limit_backoff_seconds: float = 60.0  # Aligned with BRAIN community best practice
     cache_dir: str = "data/api_cache"
     context_cache_ttl_seconds: int = 86400

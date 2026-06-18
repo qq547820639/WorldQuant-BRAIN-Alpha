@@ -6,6 +6,8 @@ as a separate mixin class to keep official_context.py under the module-size limi
 
 from __future__ import annotations
 
+from typing import Any, Callable
+
 from . import pagination_limits
 from .base import BrainAPIError
 from .official_filtering import (
@@ -17,31 +19,53 @@ from .official_filtering import (
 )
 from .official_helpers import (
     dedupe_alpha_items as _dedupe_alpha_items,
+)
+from .official_helpers import (
     items as _items,
+)
+from .official_helpers import (
     normal_alpha as _normal_alpha,
+)
+from .official_helpers import (
     normal_dataset as _normal_dataset,
+)
+from .official_helpers import (
     normal_field as _normal_field,
+)
+from .official_helpers import (
     page_signature as _page_signature,
+)
+from .official_helpers import (
     total_count as _total_count,
+)
+from .official_helpers import (
     user_alpha_cursor_recovery as _user_alpha_cursor_recovery,
+)
+from .official_helpers import (
     user_alpha_offset_recovery as _user_alpha_offset_recovery,
+)
+from .official_helpers import (
     user_alpha_progress as _user_alpha_progress,
 )
-from .pagination import _paginate_collection
 from .official_query_params import (
     alpha_filter_params,
     apply_market_discovery_filters,
 )
-
-from typing import Any, Callable
+from .pagination import _paginate_collection
 
 # P2-4: transient retry constants centralised in user_alpha_transient.
 # Kept as module-level aliases here so existing in-file references
 # (``_USER_ALPHA_TRANSIENT_*``) keep working.
 from .user_alpha_transient import (
     USER_ALPHA_TRANSIENT_PAGE_RETRY_ATTEMPTS as _USER_ALPHA_TRANSIENT_PAGE_RETRY_ATTEMPTS,
+)
+from .user_alpha_transient import (
     USER_ALPHA_TRANSIENT_PAGE_RETRY_EXCEPTIONS as _USER_ALPHA_TRANSIENT_PAGE_RETRY_EXCEPTIONS,
+)
+from .user_alpha_transient import (
     USER_ALPHA_TRANSIENT_PAGE_RETRY_SECONDS as _USER_ALPHA_TRANSIENT_PAGE_RETRY_SECONDS,
+)
+from .user_alpha_transient import (
     USER_ALPHA_TRANSIENT_RETRY_STATUSES as _USER_ALPHA_TRANSIENT_RETRY_STATUSES,
 )
 

@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 """Canonical BRAIN platform contract values used across adapters and gates.
 
 This module is intentionally dependency-free so configuration validation,

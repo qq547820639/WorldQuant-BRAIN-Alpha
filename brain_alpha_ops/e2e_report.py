@@ -2,15 +2,14 @@
 
 from __future__ import annotations
 
-from collections import Counter
-from datetime import datetime, timezone
 import json
 import logging
+from collections import Counter
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from brain_alpha_ops.redaction import redact_data, redact_text
-
 
 logger = logging.getLogger(__name__)
 

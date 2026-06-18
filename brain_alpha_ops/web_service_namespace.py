@@ -73,16 +73,16 @@ from brain_alpha_ops.web_async_jobs import progress_update as _progress_update
 from brain_alpha_ops.web_async_jobs import (
     run_simple_async_job_service as _run_simple_async_job_service,
 )
-from brain_alpha_ops.web_candidate_check import (
+from brain_alpha_ops.web_candidates.check import (
     check_candidate_payload as _check_candidate_payload,
 )
-from brain_alpha_ops.web_candidate_generation import (
+from brain_alpha_ops.web_candidates.generation import (
     generate_candidates_payload as _generate_candidates_payload,
 )
-from brain_alpha_ops.web_candidate_selection import (
+from brain_alpha_ops.web_candidates.selection import (
     is_passed_candidate_for_check as _is_passed_candidate_for_check,
 )
-from brain_alpha_ops.web_candidate_selection import (
+from brain_alpha_ops.web_candidates.selection import (
     official_alpha_id as _official_alpha_id,
 )
 from brain_alpha_ops.web_check_availability import (

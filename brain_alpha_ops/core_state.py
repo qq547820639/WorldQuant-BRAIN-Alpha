@@ -15,7 +15,6 @@ the canonical sets from here.  New code MUST import from
 
 from __future__ import annotations
 
-
 # ── Job lifecycle (web console, async jobs) ────────────────────────────────
 
 JOB_ACTIVE_STATUSES: frozenset[str] = frozenset(

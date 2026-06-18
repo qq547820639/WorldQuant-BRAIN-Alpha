@@ -5,7 +5,8 @@ from __future__ import annotations
 from brain_alpha_ops.models import Candidate
 
 from .official_validation import OfficialValidationService
-from .pipeline_helpers import expr_key as _expr_key, rank_candidates
+from .pipeline_helpers import expr_key as _expr_key
+from .pipeline_helpers import rank_candidates
 
 
 class PipelineOfficialValidationMixin:

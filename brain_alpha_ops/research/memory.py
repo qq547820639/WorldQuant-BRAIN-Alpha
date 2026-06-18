@@ -7,15 +7,16 @@ pipeline write path.
 """
 from __future__ import annotations
 
-from collections import Counter, defaultdict
 import json
-from pathlib import Path
 import re
+from collections import Counter, defaultdict
+from pathlib import Path
 from typing import Any, Iterable
 
 from brain_alpha_ops.jsonl import read_jsonl_tail
 from brain_alpha_ops.research.expression_index import ExpressionHistoryIndex
 from brain_alpha_ops.research.guidance import ensure_assistant_guidance_digest
+
 
 class ResearchMemory:
     def __init__(self, storage_dir: str | Path = "data"):

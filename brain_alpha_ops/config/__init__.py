@@ -16,6 +16,17 @@ from brain_alpha_ops.config._loader import (
     validate_run_config,
     write_run_config,
 )
+
+# Re-export canonical enum validators for compliance verifier (RL-6)
+from brain_alpha_ops.config_domain_validation import (
+    _VALID_ALPHA_TYPES,
+    _VALID_DELAYS,
+    _VALID_NEUTRALIZATIONS,
+    _VALID_ON_OFF,
+    _VALID_REGIONS,
+    _VALID_UNIT_HANDLING,
+    _VALID_UNIVERSES,
+)
 from brain_alpha_ops.config_models import (
     BrainSettings,
     CredentialConfig,
@@ -31,16 +42,5 @@ from brain_alpha_ops.config_models import (
 from brain_alpha_ops.config_schema import (
     validate_config_file,
     validate_config_with_jsonschema,
-)
-
-# Re-export canonical enum validators for compliance verifier (RL-6)
-from brain_alpha_ops.config_domain_validation import (
-    _VALID_ALPHA_TYPES,
-    _VALID_DELAYS,
-    _VALID_NEUTRALIZATIONS,
-    _VALID_ON_OFF,
-    _VALID_REGIONS,
-    _VALID_UNIT_HANDLING,
-    _VALID_UNIVERSES,
 )
 

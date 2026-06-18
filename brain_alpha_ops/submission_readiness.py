@@ -8,7 +8,6 @@ from typing import Any
 from brain_alpha_ops.redaction import redact_error_message
 from brain_alpha_ops.research.expression_ast import expression_key
 
-
 REQUIRED_OFFICIAL_METRIC_FIELDS = (
     ("sharpe",),
     ("fitness",),

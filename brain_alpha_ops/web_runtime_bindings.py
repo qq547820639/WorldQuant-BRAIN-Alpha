@@ -5,7 +5,7 @@ from __future__ import annotations
 import threading
 
 from brain_alpha_ops.runtime_constants import WebDefaults as _WebDefaults
-from brain_alpha_ops.web_candidate_bindings import *  # noqa: F401,F403
+from brain_alpha_ops.web_candidates.bindings import *  # noqa: F401,F403
 
 
 def serve(

@@ -1256,6 +1256,9 @@ describe("CandidateTable", () => {
       if (path === "/api/check_results") {
         return jsonResponse({ ok: true, items: [] });
       }
+      if (path.startsWith("/api/alpha_lifecycle")) {
+        return jsonResponse({ ok: true, alpha_traces: [], summary: {} });
+      }
       if (path === "/api/generate_candidates" && options?.method === "POST") {
         return jsonResponse({ ok: true, job_id: "job_7" });
       }
@@ -1346,6 +1349,9 @@ describe("CandidateTable", () => {
         });
       }
       if (path === "/api/check_results") return jsonResponse({ ok: true, items: [] });
+      if (path.startsWith("/api/alpha_lifecycle")) {
+        return jsonResponse({ ok: true, alpha_traces: [], summary: {} });
+      }
       throw new Error(`Unexpected fetch: ${path}`);
     });
     vi.stubGlobal("fetch", fetchMock);
@@ -1496,6 +1502,9 @@ describe("CandidateTable", () => {
       }
       if (path === "/api/check_results") {
         return jsonResponse({ ok: true, items: [] });
+      }
+      if (path.startsWith("/api/alpha_lifecycle")) {
+        return jsonResponse({ ok: true, alpha_traces: [], summary: {} });
       }
       if (path === "/api/generate_candidates" && options?.method === "POST") {
         return jsonResponse({ ok: true, job_id: "job_generate_creds" });
@@ -1681,6 +1690,9 @@ describe("CandidateTable", () => {
         return jsonResponse({ ok: true, candidates: rows, main_pool_candidates: mainPool, total: rows.length });
       }
       if (path === "/api/check_results") return jsonResponse({ ok: true, items: [] });
+      if (path.startsWith("/api/alpha_lifecycle")) {
+        return jsonResponse({ ok: true, alpha_traces: [], summary: {} });
+      }
       if (path === "/api/generate_candidates" && options?.method === "POST") {
         return jsonResponse({ ok: true, job_id: "job_auto_generate" });
       }

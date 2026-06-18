@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
-import re
 import math
+import re
 from typing import TYPE_CHECKING
 
 from brain_alpha_ops.config import QualityThresholds, ScoringConfig
 from brain_alpha_ops.models import Candidate
-from brain_alpha_ops.types import ScorecardDict
+from brain_alpha_ops.research.scoring_explainability import (
+    scorecard_improvement_hints,
+    scorecard_top_failures,
+)
 from brain_alpha_ops.scoring.attribution import build_attribution_tree
 from brain_alpha_ops.scoring.shared_scores import (
     DEFAULT_PRIOR_WEIGHTS,
@@ -16,7 +19,7 @@ from brain_alpha_ops.scoring.shared_scores import (
     economic_logic_score,
     normalize_family_label,
 )
-from brain_alpha_ops.research.scoring_explainability import scorecard_improvement_hints, scorecard_top_failures
+from brain_alpha_ops.types import ScorecardDict
 
 if TYPE_CHECKING:
     from brain_alpha_ops.research.scoring_params import ScoringParams
@@ -783,11 +786,8 @@ def _num(value) -> float:
         return 0.0
 
 
-# P0-4 fix (2026-06-13): re-export the canonical ``_ratio`` so existing
-# callers in this module (e.g. empirical_score) keep working unchanged.
-# See ``research._ratio.normalize_brain_ratio`` for the unified rule.
-from ._ratio import _ratio, normalize_brain_ratio  # noqa: F401
-from brain_alpha_ops.research._ratio import _ratio, normalize_brain_ratio  # S-13: moved from L788
+from brain_alpha_ops.research._ratio import _ratio, normalize_brain_ratio  # noqa: F401
+
 # ═══════════════════════════════════════════════════════════════════════
 # P2: score confidence estimation from point estimate to interval estimate.
 # ═══════════════════════════════════════════════════════════════════════

@@ -40,6 +40,7 @@ from __future__ import annotations
 
 from typing import Any
 
+
 def _coerce_float(value: Any) -> float:
     """Best-effort float coercion that never raises."""
     try:

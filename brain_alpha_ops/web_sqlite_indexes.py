@@ -8,7 +8,6 @@ from brain_alpha_ops.config import RunConfig, load_run_config
 from brain_alpha_ops.research.expression_sqlite_index import ExpressionSqliteIndex
 from brain_alpha_ops.research.record_sqlite_index import RecordSqliteIndex
 
-
 LoadConfig = Callable[[], RunConfig]
 WebError = Callable[[Exception, str], dict[str, Any]]
 

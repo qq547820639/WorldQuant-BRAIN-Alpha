@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import os
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
 import urllib.parse
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Iterable
 
 from .base import BrainAPIError
@@ -13,11 +13,21 @@ from .official_helpers import (
     _first_value,
     build_official_url,
     build_simulation_payload,
-    items as _items,
-    looks_non_production_alpha_id as _looks_non_production_alpha_id,
-    merge_payloads as _merge,
     normalize_metrics,
+)
+from .official_helpers import (
+    items as _items,
+)
+from .official_helpers import (
+    looks_non_production_alpha_id as _looks_non_production_alpha_id,
+)
+from .official_helpers import (
+    merge_payloads as _merge,
+)
+from .official_helpers import (
     retry_after as _retry_after,
+)
+from .official_helpers import (
     scrub as _scrub,
 )
 from .rate_limit_policy import OFFICIAL_RATE_LIMITS

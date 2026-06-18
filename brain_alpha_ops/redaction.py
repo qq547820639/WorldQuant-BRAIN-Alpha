@@ -5,7 +5,6 @@ from __future__ import annotations
 import re
 from typing import Any, TypedDict
 
-
 SENSITIVE_KEYS = {
     "access_token",
     "address",

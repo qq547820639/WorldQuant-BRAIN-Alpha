@@ -26,7 +26,7 @@ import logging
 import random
 import re
 from datetime import datetime, timezone
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from brain_alpha_ops.models import Candidate, new_id
 from brain_alpha_ops.redaction import redact_error_message
@@ -36,35 +36,47 @@ from brain_alpha_ops.research.expression_ast import (
     expression_similarity,
     profile_expression,
 )
-from brain_alpha_ops.research.hypothesis_expression_support import HypothesisExpressionSupport
-from brain_alpha_ops.research.field_quality import generation_field_ids
 from brain_alpha_ops.research.fallback_generation import (
     DEFAULT_WINDOWS,
     build_bare_fallback_spec,
-    is_high_turnover_generation_risk,
     is_generated_duplicate,
+    is_high_turnover_generation_risk,
     normalize_operator_aliases,
 )
-from brain_alpha_ops.research.generator_metadata import expression_windows_within_constraints
+from brain_alpha_ops.research.field_quality import generation_field_ids
+from brain_alpha_ops.research.generator_metadata import (
+    expression_windows_within_constraints,
+)
+from brain_alpha_ops.research.hypothesis_expression_support import (
+    HypothesisExpressionSupport,
+)
 from brain_alpha_ops.research.hypothesis_generator_helpers import (
     add_semantic_token as _add_semantic_token,
+)
+from brain_alpha_ops.research.hypothesis_generator_helpers import (
     pick_unused as _pick_unused,
+)
+from brain_alpha_ops.research.hypothesis_generator_helpers import (
     safe_float as _safe_float,
+)
+from brain_alpha_ops.research.hypothesis_generator_helpers import (
     semantic_field_tokens as _semantic_field_tokens,
+)
+from brain_alpha_ops.research.hypothesis_generator_helpers import (
     split_semantic_tokens as _split_semantic_tokens,
 )
 from brain_alpha_ops.research.hypothesis_library import (
-    Hypothesis,
     ExpressionFamily,
     FieldCategoryDef,
     GenerationMeta,
+    Hypothesis,
     HypothesisLibrary,
 )
 
 if TYPE_CHECKING:
-    from brain_alpha_ops.data import OfficialDataLoader, FieldDatasetMapper
-    from brain_alpha_ops.research.theme_engine import DynamicThemeEngine
+    from brain_alpha_ops.data import FieldDatasetMapper, OfficialDataLoader
     from brain_alpha_ops.research.dataset_selector import DatasetSelector
+    from brain_alpha_ops.research.theme_engine import DynamicThemeEngine
 
 logger = logging.getLogger(__name__)
 

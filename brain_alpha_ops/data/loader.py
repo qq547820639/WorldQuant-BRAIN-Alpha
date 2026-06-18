@@ -13,11 +13,11 @@ from __future__ import annotations
 
 import json
 import logging
+import shutil
+import sys
 import threading
 import time
 from pathlib import Path
-import shutil
-import sys
 from typing import Dict, List, Optional
 
 _log = logging.getLogger(__name__)

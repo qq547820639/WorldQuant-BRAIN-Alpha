@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+import threading
 from dataclasses import dataclass
 from pathlib import Path
-import threading
 from typing import Any
 
 from brain_alpha_ops.task_executor import ThreadTaskExecutor

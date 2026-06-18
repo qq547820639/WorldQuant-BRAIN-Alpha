@@ -10,6 +10,7 @@ from typing import Any
 
 from brain_alpha_ops.research.expression_ast import expression_key
 
+
 def bounded_int(value: Any, lower: int, upper: int, *, default: int | None = None) -> int:
     """Clamp an integer value into [lower, upper].
 

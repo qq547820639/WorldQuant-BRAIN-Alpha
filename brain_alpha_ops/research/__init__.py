@@ -10,7 +10,6 @@ from __future__ import annotations
 import importlib
 from typing import Any
 
-
 _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
     "CandidateGenerator": ("brain_alpha_ops.research.generator", "CandidateGenerator"),
     "extract_fields": ("brain_alpha_ops.research.generator", "extract_fields"),

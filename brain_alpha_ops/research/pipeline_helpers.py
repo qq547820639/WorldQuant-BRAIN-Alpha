@@ -8,7 +8,10 @@ from typing import Any
 from brain_alpha_ops.models import Candidate
 
 from .expression_ast import expression_key
-from .guidance import assistant_guidance_candidate_metadata, ensure_assistant_guidance_digest
+from .guidance import (
+    assistant_guidance_candidate_metadata,
+    ensure_assistant_guidance_digest,
+)
 
 
 def rank_candidates(candidates: list[Candidate]) -> list[Candidate]:

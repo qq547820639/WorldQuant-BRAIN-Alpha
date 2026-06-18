@@ -8,7 +8,6 @@ from brain_alpha_ops.research.anti_overfit import AntiOverfitService
 from brain_alpha_ops.research.llm_review import cross_review_assistant_response
 from brain_alpha_ops.research.rolling_validation import RollingValidationService
 
-
 LatestSnapshot = Callable[[], dict[str, Any]]
 BoundedFloat = Callable[[Any, float, float], float]
 

@@ -10,7 +10,9 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from brain_alpha_ops.research.field_quality import filter_generation_fields
-from brain_alpha_ops.research.generator_metadata import expression_windows_within_constraints
+from brain_alpha_ops.research.generator_metadata import (
+    expression_windows_within_constraints,
+)
 
 if TYPE_CHECKING:
     from brain_alpha_ops.data import OfficialDataLoader, OfficialField

@@ -2,16 +2,20 @@
 
 from __future__ import annotations
 
-from concurrent.futures import Future, ProcessPoolExecutor, ThreadPoolExecutor, TimeoutError
 import logging
 import os
 import time
+from concurrent.futures import (
+    Future,
+    ProcessPoolExecutor,
+    ThreadPoolExecutor,
+    TimeoutError,
+)
 from typing import Any, Callable
 
 from brain_alpha_ops.job_types import JobExecutionResult
 from brain_alpha_ops.redaction import redact_error_message
 from brain_alpha_ops.tasks import JobStore
-
 
 logger = logging.getLogger(__name__)
 

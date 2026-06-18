@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 import dataclasses
-from dataclasses import fields, is_dataclass
 import logging
+from dataclasses import fields, is_dataclass
 from typing import Any
 
-from brain_alpha_ops.config_type_validation import field_type_hint, type_hint_name, value_matches_type_hint
+from brain_alpha_ops.config_type_validation import (
+    field_type_hint,
+    type_hint_name,
+    value_matches_type_hint,
+)
 
 
 def update_dataclass_from_mapping(

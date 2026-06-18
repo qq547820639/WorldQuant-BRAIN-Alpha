@@ -230,8 +230,8 @@ export default function JobMonitor({ notify, credentials, onNeedCredentials, job
       if (eventFailed || eventInterrupted) {
         const message = eventOutcome.message;
         setProgressError(message);
-        notify(eventOutcome.notifyType, message);
         setEvents((prev) => [...prev, eventInterrupted ? message : `错误: ${message}`]);
+        notify(eventOutcome.notifyType, message);
       } else {
         setProgressError(null);
         notify(eventOutcome.notifyType, eventOutcome.message);

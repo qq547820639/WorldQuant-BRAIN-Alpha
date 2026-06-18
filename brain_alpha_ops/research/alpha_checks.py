@@ -6,6 +6,7 @@ min_margin_bps) with real BRAIN platform checks.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
@@ -755,7 +756,6 @@ def _check_expression_complexity(sim: dict[str, Any]) -> CheckResult:
         elif char == ")":
             depth -= 1
     # Operator count
-    import re
     operators = re.findall(r"\b([a-zA-Z_]\w*)\s*\(", expression)
     op_count = len(set(operators))
     expr_len = len(expression)

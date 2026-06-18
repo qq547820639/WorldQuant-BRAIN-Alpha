@@ -37,8 +37,7 @@ from hashlib import sha256
 from pathlib import Path
 from typing import Any, Protocol
 
-from brain_alpha_ops.redaction import redact_data
-from brain_alpha_ops.redaction import redact_error_message
+from brain_alpha_ops.redaction import redact_data, redact_error_message
 
 logger = logging.getLogger(__name__)
 
@@ -333,7 +332,9 @@ class CrossReviewPipeline:
 
         # ── Run cross-review ──
         try:
-            from brain_alpha_ops.research.llm_review import cross_review_assistant_response
+            from brain_alpha_ops.research.llm_review import (
+                cross_review_assistant_response,
+            )
 
             review_result = cross_review_assistant_response(
                 request_pack=request_pack,

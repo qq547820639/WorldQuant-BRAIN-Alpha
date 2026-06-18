@@ -238,7 +238,7 @@ class TestTestCoverageMetrics:
 
     def test_coverage_report_generation(self):
         """Test coverage report generation."""
-        from brain_alpha_ops.test_coverage import generate_coverage_report
+        from test_coverage import generate_coverage_report
 
         report = generate_coverage_report()
         assert report.total_test_files > 0
@@ -247,7 +247,7 @@ class TestTestCoverageMetrics:
 
     def test_coverage_report_formatting(self):
         """Test coverage report formatting."""
-        from brain_alpha_ops.test_coverage import generate_coverage_report, format_coverage_report
+        from test_coverage import generate_coverage_report, format_coverage_report
 
         report = generate_coverage_report()
         formatted = format_coverage_report(report)
@@ -257,7 +257,7 @@ class TestTestCoverageMetrics:
 
     def test_test_file_analysis(self):
         """Test test file analysis."""
-        from brain_alpha_ops.test_coverage import analyze_test_file
+        from test_coverage import analyze_test_file
         from pathlib import Path
 
         # Analyze a known test file

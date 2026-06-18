@@ -14,33 +14,36 @@ from __future__ import annotations
 
 import http.cookiejar
 import logging
-from pathlib import Path
 import threading
 import time
 import urllib.request
+from pathlib import Path
 from typing import Any
 
 from brain_alpha_ops.config import BrainSettings, OfficialAPIConfig
 from brain_alpha_ops.secure_credentials import resolve_credentials
-from brain_alpha_ops.types import OfficialMetrics, BrainAPIResponse
+from brain_alpha_ops.types import BrainAPIResponse, OfficialMetrics
 
 from .base import BrainAPIError
-from .official_auth import OfficialAuthProfileMixin
 from .cache import cache_key as _cache_key
 from .cache import cache_path as _cache_path
 from .cache import read_cache as _read_cache
 from .cache import write_cache as _write_cache
+from .official_auth import OfficialAuthProfileMixin
 from .official_context import OfficialContextDataMixin
 from .official_helpers import (
     build_simulation_payload,
-    looks_non_production_alpha_id as _looks_non_production_alpha_id,
     normalize_metrics,
 )
-from .pagination import _standard_pagination_progress as _shared_standard_pagination_progress
+from .official_helpers import (
+    looks_non_production_alpha_id as _looks_non_production_alpha_id,
+)
 from .official_request import OfficialRequestMixin
 from .official_simulation import OfficialSimulationSubmissionMixin
 from .official_validation import OfficialExpressionValidator
-
+from .pagination import (
+    _standard_pagination_progress as _shared_standard_pagination_progress,
+)
 
 logger = logging.getLogger(__name__)
 

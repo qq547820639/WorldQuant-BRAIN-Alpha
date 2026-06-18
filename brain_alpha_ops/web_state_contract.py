@@ -9,7 +9,12 @@ from __future__ import annotations
 from typing import Any, Mapping
 
 from brain_alpha_ops.redaction import redact_error_message
-from brain_alpha_ops.tasks import ACTIVE_STATUSES, DEFAULT_RECOVERY_ERROR, DEFAULT_WATCHDOG_ERROR, TERMINAL_STATUSES
+from brain_alpha_ops.tasks import (
+    ACTIVE_STATUSES,
+    DEFAULT_RECOVERY_ERROR,
+    DEFAULT_WATCHDOG_ERROR,
+    TERMINAL_STATUSES,
+)
 
 _CANCELLED_STATUSES = {"stopped", "cancelled", "canceled"}
 _SUCCESS_STATUSES = {"completed"}

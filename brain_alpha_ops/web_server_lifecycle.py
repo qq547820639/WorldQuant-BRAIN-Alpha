@@ -2,15 +2,15 @@
 
 from __future__ import annotations
 
-from http.server import ThreadingHTTPServer
 import json
-import sys
 import socket
 import socketserver
+import sys
 import threading
-from typing import Any, Callable
 import urllib.request
 import webbrowser
+from http.server import ThreadingHTTPServer
+from typing import Any, Callable
 
 
 class SafeThreadingHTTPServer(ThreadingHTTPServer):

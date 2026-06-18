@@ -2,22 +2,23 @@
 
 from __future__ import annotations
 
-from collections import Counter
-from dataclasses import asdict
 import math
 import re
+from collections import Counter
+from dataclasses import asdict
 from typing import Any
 
 from brain_alpha_ops.config_models import OpsConfig, RunConfig
 from brain_alpha_ops.models import Candidate
-from brain_alpha_ops.research.fallback_generation import high_turnover_generation_risk_reasons
 from brain_alpha_ops.research.expression_ast import profile_expression
+from brain_alpha_ops.research.fallback_generation import (
+    high_turnover_generation_risk_reasons,
+)
 from brain_alpha_ops.research.validated_generator import (
     OPERATOR_SIGNATURES,
     WINDOW_CONSTRAINTS,
     get_active_safe_fields,
 )
-
 
 _REQUIRED_ALPHA_FIELDS = (
     "alpha_id",

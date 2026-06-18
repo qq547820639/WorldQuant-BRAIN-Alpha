@@ -17,7 +17,7 @@ Usage::
 """
 from __future__ import annotations
 
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from brain_alpha_ops.models import Candidate
@@ -36,6 +36,7 @@ def _num(value: Any) -> float:
 # ``research._ratio``. The local wrapper preserves the historical function
 # name and signature.
 from brain_alpha_ops.research._ratio import normalize_brain_ratio  # noqa: F401
+
 
 def _ratio(value: Any) -> float:
     return normalize_brain_ratio(value, bounded=False)

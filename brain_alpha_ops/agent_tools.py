@@ -10,23 +10,6 @@ from __future__ import annotations
 import logging
 from typing import Any, Callable, Mapping
 
-from brain_alpha_ops.agent_live_tools import (
-    MAX_BATCH_SIMULATION_WORKERS,
-    MAX_BATCH_SIMULATIONS,
-    MAX_SYNC_RANGE,
-    AgentLiveToolsMixin,
-)
-from brain_alpha_ops.agent_tool_errors import tool_error
-from brain_alpha_ops.agent_tool_registry import resolve_tool_name, tool_definitions
-from brain_alpha_ops.config import RunConfig, load_run_config
-from brain_alpha_ops.models import Candidate
-from brain_alpha_ops.shared_bounds import (
-    bounded_float,
-    bounded_int,
-    candidate_argument,
-    required_text,
-    truthy,
-)
 from brain_alpha_ops.agent_guidance_tools import (
     assistant_guidance_for_generator,
     assistant_guidance_summary,
@@ -35,17 +18,23 @@ from brain_alpha_ops.agent_guidance_tools import (
     has_generator_bias,
     merge_generation_guidance,
 )
+from brain_alpha_ops.agent_live_tools import (
+    MAX_BATCH_SIMULATION_WORKERS,
+    MAX_BATCH_SIMULATIONS,
+    MAX_SYNC_RANGE,
+    AgentLiveToolsMixin,
+)
 from brain_alpha_ops.agent_research_tools import (
     assistant_response_guidance_tool,
-    build_market_data_cache_tool,
     build_assistant_context_tool,
     build_assistant_request_tool,
+    build_market_data_cache_tool,
     build_vectorized_market_data_from_args,
     collect_job_rows_with_diagnostics,
     cross_review_assistant_response_tool,
     orchestrate_parameter_search_from_args,
-    plan_parallel_backtest_from_args,
     parse_assistant_response_tool,
+    plan_parallel_backtest_from_args,
     query_research_observability_snapshot,
     route_alert_from_args,
     run_anti_overfit_tool,
@@ -53,6 +42,10 @@ from brain_alpha_ops.agent_research_tools import (
     search_parameters_tool,
     send_alert_tool,
 )
+from brain_alpha_ops.agent_tool_errors import tool_error
+from brain_alpha_ops.agent_tool_registry import resolve_tool_name, tool_definitions
+from brain_alpha_ops.config import RunConfig, load_run_config
+from brain_alpha_ops.models import Candidate
 from brain_alpha_ops.redaction import redact_data, redact_error_message
 from brain_alpha_ops.research.assistant import (
     AssistantResponseParseError,
@@ -61,15 +54,29 @@ from brain_alpha_ops.research.assistant import (
 )
 from brain_alpha_ops.research.expression_ast import expression_key
 from brain_alpha_ops.research.expression_index import ExpressionHistoryIndex
-from brain_alpha_ops.research.generator import CandidateGenerator, extract_fields, extract_operators
+from brain_alpha_ops.research.generator import (
+    CandidateGenerator,
+    extract_fields,
+    extract_operators,
+)
 from brain_alpha_ops.research.guidance import ensure_assistant_guidance_digest
 from brain_alpha_ops.research.memory import ResearchMemory
-from brain_alpha_ops.research.observability import actionable_duplicate_expression_records
+from brain_alpha_ops.research.observability import (
+    actionable_duplicate_expression_records,
+)
 from brain_alpha_ops.research.scoring import build_scorecard
-from brain_alpha_ops.research.validated_generator import validate_expression as local_validate_expression
+from brain_alpha_ops.research.validated_generator import (
+    validate_expression as local_validate_expression,
+)
 from brain_alpha_ops.runner import api_from_run_config
+from brain_alpha_ops.shared_bounds import (
+    bounded_float,
+    bounded_int,
+    candidate_argument,
+    required_text,
+    truthy,
+)
 from brain_alpha_ops.tasks import JobStore
-
 
 MAX_TOOL_CANDIDATES = 100
 
@@ -159,7 +166,10 @@ class BrainAlphaToolbox(AgentLiveToolsMixin):
             datasets = [_dataset_to_dict(dataset) for dataset in loader.get_datasets()]
         except Exception:
             logger.warning("official context loader unavailable; using default agent context", exc_info=True)
-            from brain_alpha_ops.brain_api.context_defaults import DEFAULT_FIELDS, DEFAULT_OPERATORS
+            from brain_alpha_ops.brain_api.context_defaults import (
+                DEFAULT_FIELDS,
+                DEFAULT_OPERATORS,
+            )
 
             source = "context_defaults"
             fields = [dict(field) for field in DEFAULT_FIELDS]

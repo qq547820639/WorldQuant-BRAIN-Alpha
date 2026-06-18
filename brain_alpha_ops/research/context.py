@@ -7,9 +7,9 @@ payload that an assistant can consume before proposing or generating alphas.
 """
 from __future__ import annotations
 
+import json
 from dataclasses import asdict, is_dataclass
 from hashlib import sha256
-import json
 from pathlib import Path
 from typing import Any
 
@@ -18,7 +18,10 @@ from brain_alpha_ops.jsonl import read_jsonl_tail
 from brain_alpha_ops.models import utc_now
 from brain_alpha_ops.redaction import redact_data
 from brain_alpha_ops.research.memory import ResearchMemory
-from brain_alpha_ops.research.observability import build_research_observability_snapshot, observability_context
+from brain_alpha_ops.research.observability import (
+    build_research_observability_snapshot,
+    observability_context,
+)
 from brain_alpha_ops.research.robustness_context import (
     build_robustness_context,
     format_report_status,
@@ -339,8 +342,9 @@ def _compliance_context(config: RunConfig) -> dict[str, Any]:
         logging.getLogger(__name__).debug("ScoreHistoryDB not available.")
         scoring_health = {"available": False, "error": "module not found"}
     except Exception as exc:
-        from brain_alpha_ops.redaction import redact_error_message
         import logging
+
+        from brain_alpha_ops.redaction import redact_error_message
         logging.getLogger(__name__).warning("ScoreHistoryDB failed: %s", exc)
         scoring_health = {"available": False, "error": redact_error_message(exc)}
 

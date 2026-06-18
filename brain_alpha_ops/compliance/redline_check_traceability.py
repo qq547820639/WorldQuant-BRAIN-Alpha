@@ -5,7 +5,10 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from brain_alpha_ops.compliance.redline_helpers import _project_root, _verification_blocked
+from brain_alpha_ops.compliance.redline_helpers import (
+    _project_root,
+    _verification_blocked,
+)
 from brain_alpha_ops.compliance.redline_models import ComplianceReport, RedLineViolation
 
 
@@ -19,8 +22,9 @@ def _verify_redline_4_parameter_traceability(
 
     # 4a. Verify build_scorecard accepts ScoringParams and BRAIN settings trace.
     try:
-        from brain_alpha_ops.research.scoring import build_scorecard
         import inspect
+
+        from brain_alpha_ops.research.scoring import build_scorecard
         sig = inspect.signature(build_scorecard)
         if "params" in sig.parameters and "settings" in sig.parameters:
             report.add_pass()

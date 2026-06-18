@@ -12,7 +12,6 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-
 # Skip history files larger than this to avoid blocking on multi-second parses.
 _MAX_HISTORY_FILE_BYTES = 10 * 1024 * 1024  # 10 MiB
 

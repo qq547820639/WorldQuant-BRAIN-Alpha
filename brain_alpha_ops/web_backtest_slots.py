@@ -6,7 +6,9 @@ from collections import Counter
 from typing import Any, Callable
 
 from brain_alpha_ops.config import load_run_config
-from brain_alpha_ops.research.fallback_generation import high_turnover_generation_risk_reasons
+from brain_alpha_ops.research.fallback_generation import (
+    high_turnover_generation_risk_reasons,
+)
 
 ReadJsonlRecords = Callable[[str], tuple[list[dict], int, str]]
 LoadRunConfig = Callable[[], Any]

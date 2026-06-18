@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import Any, Callable, Protocol
 
-
 Payload = dict[str, Any]
 StatusPayload = tuple[Payload, int]
 HeaderList = list[tuple[str, str]]

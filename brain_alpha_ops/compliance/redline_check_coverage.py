@@ -23,8 +23,9 @@ def _verify_redline_5_factor_coverage(report: ComplianceReport) -> None:
     ]
 
     try:
-        from brain_alpha_ops.research.scoring import empirical_score
         import inspect
+
+        from brain_alpha_ops.research.scoring import empirical_score
         source = inspect.getsource(empirical_score)
         for check_id, check_name, tag in required_checks:
             if check_name in source and tag in source:
@@ -66,8 +67,9 @@ def _verify_redline_5_factor_coverage(report: ComplianceReport) -> None:
 
     # 5c. Verify self_correlation exception rule
     try:
-        from brain_alpha_ops.research.scoring import _build_self_correlation_item
         import inspect
+
+        from brain_alpha_ops.research.scoring import _build_self_correlation_item
         source = inspect.getsource(_build_self_correlation_item)
         if "exception_applied" in source and "1.10" in source:
             report.add_pass()

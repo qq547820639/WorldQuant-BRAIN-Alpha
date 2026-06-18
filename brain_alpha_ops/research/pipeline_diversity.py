@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from typing import Any
 
+
 class PipelineDiversityMixin:
     """Mixin that adds expression diversity monitoring to the pipeline.
 
@@ -27,7 +28,9 @@ class PipelineDiversityMixin:
         if self._diversity_guard is not None:
             return
         try:
-            from brain_alpha_ops.research.expression_diversity import ExpressionDiversityGuard
+            from brain_alpha_ops.research.expression_diversity import (
+                ExpressionDiversityGuard,
+            )
 
             self._diversity_guard = ExpressionDiversityGuard(
                 max_skeleton_concentration=0.30,

@@ -2,15 +2,17 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict, is_dataclass
-from datetime import datetime, timezone
 import hashlib
 import json
+from dataclasses import asdict, is_dataclass
+from datetime import datetime, timezone
 from typing import Any
 
-from brain_alpha_ops.brain_api.canonical import CANONICAL_API_PATHS, CANONICAL_THRESHOLDS
+from brain_alpha_ops.brain_api.canonical import (
+    CANONICAL_API_PATHS,
+    CANONICAL_THRESHOLDS,
+)
 from brain_alpha_ops.redaction import redact_data
-
 
 SCHEMA_VERSION = "parameter_audit_snapshot.v1"
 REQUIRED_TRACE_SECTIONS = (

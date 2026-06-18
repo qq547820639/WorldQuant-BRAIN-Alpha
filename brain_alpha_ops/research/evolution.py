@@ -14,7 +14,6 @@ import random
 import re
 from dataclasses import dataclass, field
 
-from brain_alpha_ops.research.generator_metadata import expression_windows_within_constraints
 from brain_alpha_ops.research.evolution_helpers import (
     _BINARY_OPERATORS,
     _COMMON_FIELDS,
@@ -36,6 +35,9 @@ from brain_alpha_ops.research.evolution_helpers import (
     _split_args,
     _split_top_level,
     _tokenize,
+)
+from brain_alpha_ops.research.generator_metadata import (
+    expression_windows_within_constraints,
 )
 
 # ═══════════════════════════════════════════════════════════════════════

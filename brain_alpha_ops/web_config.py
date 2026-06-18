@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import math
 import os
-
 from typing import Any, Callable
 
 from brain_alpha_ops.brain_api.canonical import (
@@ -24,7 +23,6 @@ from brain_alpha_ops.config import (
     validate_run_config,
     write_run_config,
 )
-
 
 # Allowed base URLs for user-facing web payloads; production is the only
 # runtime environment exposed by the web console.

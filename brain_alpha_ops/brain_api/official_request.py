@@ -5,14 +5,15 @@ from __future__ import annotations
 import json
 import logging
 import time
-from typing import Any
 import urllib.error
 import urllib.parse
 import urllib.request
+from typing import Any
 
 from brain_alpha_ops.redaction import redact_error_message
 
 from .base import BrainAPIError
+
 
 def _http_error_code(status: int, parsed: dict | None, auth_mode: str) -> str:
     """Map HTTP status + context to a user-facing error code (C20/C30)."""
@@ -31,13 +32,22 @@ def _http_error_code(status: int, parsed: dict | None, auth_mode: str) -> str:
 
 from .official_helpers import (
     build_official_url,
+)
+from .official_helpers import (
     parse_response as _parse,
+)
+from .official_helpers import (
     retry_after as _retry_after,
+)
+from .official_helpers import (
     retry_delay as _retry_delay,
+)
+from .official_helpers import (
     retryable_status as _retryable_status,
+)
+from .official_helpers import (
     scrub as _scrub,
 )
-
 
 logger = logging.getLogger("brain_alpha_ops.brain_api.official")
 

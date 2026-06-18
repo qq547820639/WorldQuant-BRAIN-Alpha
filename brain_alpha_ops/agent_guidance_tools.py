@@ -5,7 +5,10 @@ from __future__ import annotations
 from typing import Any
 
 from brain_alpha_ops.models import Candidate
-from brain_alpha_ops.research.guidance import assistant_guidance_candidate_metadata, ensure_assistant_guidance_digest
+from brain_alpha_ops.research.guidance import (
+    assistant_guidance_candidate_metadata,
+    ensure_assistant_guidance_digest,
+)
 
 
 def has_generator_bias(guidance: dict[str, Any] | None) -> bool:

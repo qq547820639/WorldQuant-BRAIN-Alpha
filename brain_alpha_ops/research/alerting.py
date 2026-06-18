@@ -7,16 +7,15 @@ stack to emit actionable alerts.
 
 from __future__ import annotations
 
+import json
+import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-import json
-import logging
 from typing import Any, Callable
 from urllib import error, request
 
 from brain_alpha_ops.redaction import redact_error_message, redact_text
-
 
 logger = logging.getLogger(__name__)
 

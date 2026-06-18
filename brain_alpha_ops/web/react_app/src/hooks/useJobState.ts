@@ -195,9 +195,8 @@ export function useJobState(
       if (eventFailed || eventInterrupted) {
         const message = eventOutcome.message;
         setProgressError(message);
-        // P1-5 [C12]: Log to events only; toast is for high-level summary
         setEvents((prev) => [...prev, eventInterrupted ? message : `错误: ${message}`]);
-        notify("info", eventInterrupted ? "流程已中断，详见事件日志" : "发生错误，详见事件日志");
+        notify(eventOutcome.notifyType, message);
       } else {
         setProgressError(null);
         notify(eventOutcome.notifyType, eventOutcome.message);

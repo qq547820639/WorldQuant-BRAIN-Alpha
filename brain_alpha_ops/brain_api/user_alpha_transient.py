@@ -10,7 +10,6 @@ from __future__ import annotations
 import http.client
 import urllib.error
 
-
 USER_ALPHA_TRANSIENT_RETRY_STATUSES: frozenset[int] = frozenset({408, 500, 502, 503, 504})
 USER_ALPHA_TRANSIENT_PAGE_RETRY_EXCEPTIONS = (
     http.client.IncompleteRead,

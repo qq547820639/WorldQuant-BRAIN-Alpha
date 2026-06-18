@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 import time
+from pathlib import Path
 from typing import Any, Iterable
 
 from brain_alpha_ops.jsonl import count_jsonl_records
-
 
 SQLITE_INDEX_MANIFEST_SCHEMA_VERSION = "sqlite_index_manifest.v1"
 

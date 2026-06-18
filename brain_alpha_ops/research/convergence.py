@@ -26,11 +26,12 @@ Usage::
 """
 from __future__ import annotations
 
-import random
 import math
+import random
 from collections import deque
 from dataclasses import dataclass, field
 from typing import Any
+
 
 # ── P2-17: BCa bootstrap helpers (2026-06-13) ─────────────────────────
 def _inv_norm_cdf(p: float) -> float:
@@ -119,10 +120,11 @@ class ConvergenceTracker:
     """
 
     def __init__(self, window_size: int = 10, stall_threshold: int = 5,
-                 bootstrap_samples: int = 1000) -> None:
+                 bootstrap_samples: int = 1000, rng: random.Random | None = None) -> None:
         self._window_size = max(5, int(window_size))
         self._stall_threshold = max(3, int(stall_threshold))
         self._bootstrap_samples = max(100, int(bootstrap_samples))
+        self._rng = rng if rng is not None else random.Random(42)
         self._records: deque[CycleRecord] = deque(maxlen=self._window_size)
         self._all_records: list[CycleRecord] = []
         self._stall_counter: int = 0
@@ -192,8 +194,10 @@ class ConvergenceTracker:
         self._all_records.append(rec)
 
         # P1: stall detection with bootstrap CI comparison.
-        # Compute bootstrap CI for current window if enough data
-        if len(self._records) >= 3 and rec.raw_sharpes:
+        # Compute bootstrap CI for current window if enough data.
+        # BCa requires n>=5 for stable jackknife acceleration; below that
+        # the method falls back to percentile bootstrap which is less reliable.
+        if len(self._records) >= 5 and rec.raw_sharpes:
             current_ci = self._bootstrap_ci(rec.raw_sharpes)
             prev_lo, prev_hi = self._prev_window_ci
             # An improvement is significant if current CI lower bound
@@ -392,7 +396,7 @@ class ConvergenceTracker:
         means: list[float] = []
         n_draws = min(self._bootstrap_samples, max(100, n * 10))
         for _ in range(n_draws):
-            sample = [random.choice(values) for _ in range(n)]
+            sample = [self._rng.choice(values) for _ in range(n)]
             means.append(sum(sample) / n)
         means.sort()
 

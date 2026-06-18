@@ -8,13 +8,12 @@ Performance optimizations:
 
 from __future__ import annotations
 
+import hashlib
+import re
 from dataclasses import dataclass
 from difflib import SequenceMatcher
 from functools import lru_cache
-import hashlib
-import re
 from typing import Iterable
-
 
 _TOKEN_RE = re.compile(r"\s*(>=|<=|==|!=|[A-Za-z_][A-Za-z0-9_]*|\d+(?:\.\d+)?|[(),+\-*/?:<>=])")
 _LEXICAL_TOKEN_RE = re.compile(r">=|<=|==|!=|[a-zA-Z_][a-zA-Z0-9_]*|\d+(?:\.\d+)?|[-+*/(),?:<>=]")

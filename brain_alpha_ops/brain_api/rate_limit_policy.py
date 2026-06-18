@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import Any
 
-
 OFFICIAL_RATE_LIMITS: dict[str, dict[str, Any]] = {
     "max_concurrent_simulations_regular": {
         "max": 3,

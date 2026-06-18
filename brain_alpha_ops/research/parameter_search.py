@@ -6,8 +6,8 @@ diagnostics and mutation logic. It is designed to be budgeted and easy to test.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 import re
+from dataclasses import dataclass, field
 from typing import Any, Iterable
 
 from brain_alpha_ops.models import Candidate

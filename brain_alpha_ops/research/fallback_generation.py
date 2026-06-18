@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import re
+from dataclasses import dataclass
 
-from brain_alpha_ops.research.expression_ast import expression_key, expression_similarity
-from brain_alpha_ops.research.generator_metadata import expression_windows_within_constraints
-
+from brain_alpha_ops.research.expression_ast import (
+    expression_key,
+    expression_similarity,
+)
+from brain_alpha_ops.research.generator_metadata import (
+    expression_windows_within_constraints,
+)
 
 DEFAULT_WINDOWS = (3, 5, 8, 10, 12, 15, 20, 30, 40, 60, 90, 120, 180, 252)
 DUPLICATE_SIMILARITY_THRESHOLD = 0.90

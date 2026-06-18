@@ -2,28 +2,29 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
 import os
 import time
+from datetime import datetime, timezone
 from typing import Any
 
 from brain_alpha_ops.redaction import redact_data
+from brain_alpha_ops.web_post_handlers import session_end_payload
 from brain_alpha_ops.web_security import (
     DEFAULT_SESSION_TTL_SECONDS,
     LOCAL_HOSTS,
-    LocalSessionManager,
     SESSION_COOKIE_NAME,
+    LocalSessionManager,
     admin_token_from_headers,
     header_hostname,
     header_port,
     is_allowed_local_request,
-    normalize_host as _normalize_host,
     parse_cookies,
     path_requires_session,
     validate_admin_token,
 )
-from brain_alpha_ops.web_post_handlers import session_end_payload
-
+from brain_alpha_ops.web_security import (
+    normalize_host as _normalize_host,
+)
 
 DEFAULT_ADMIN_TOKEN_ENV = "BRAIN_ALPHA_OPS_WEB_ADMIN_TOKEN"
 

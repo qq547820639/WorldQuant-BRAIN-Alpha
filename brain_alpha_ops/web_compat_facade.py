@@ -21,10 +21,10 @@ def _load_html():
 def _compat_facade(func_name: str):
     """Return a lazy wrapper that delegates to binding modules."""
     def wrapper(*args, **kwargs):
-        from brain_alpha_ops import web_session_bindings as _snap
         from brain_alpha_ops import web_candidate_bindings as _cand
         from brain_alpha_ops import web_config_bindings as _cfg
         from brain_alpha_ops import web_job_bindings as _job
+        from brain_alpha_ops import web_session_bindings as _snap
         for mod in (_snap, _cand, _cfg, _job):
             fn = getattr(mod, func_name, None)
             if fn is not None:

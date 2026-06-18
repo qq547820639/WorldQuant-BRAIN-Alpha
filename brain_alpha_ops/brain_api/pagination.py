@@ -10,7 +10,6 @@ from typing import Any, Callable
 from .official_helpers import page_signature as _page_signature
 from .official_helpers import total_count as _total_count
 
-
 logger = logging.getLogger("brain_alpha_ops.brain_api.official")
 
 

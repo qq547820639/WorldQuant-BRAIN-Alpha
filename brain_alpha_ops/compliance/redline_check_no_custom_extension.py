@@ -54,8 +54,9 @@ def _verify_redline_1_no_custom_extension(
 
     # 1b. Verify no hardcoded field lists in scoring logic
     try:
-        from brain_alpha_ops.research.scoring import _economic_logic_score
         import inspect
+
+        from brain_alpha_ops.research.scoring import _economic_logic_score
         source = inspect.getsource(_economic_logic_score)
         # Check that concepts dict uses keywords only (no field names like "close", "volume")
         # This is a heuristic check — the function correctly uses concept keywords
@@ -90,8 +91,9 @@ def _verify_redline_1_no_custom_extension(
 
     # 1d. Verify generator uses OfficialDataLoader
     try:
-        from brain_alpha_ops.research.generator import CandidateGenerator
         import inspect
+
+        from brain_alpha_ops.research.generator import CandidateGenerator
         source = inspect.getsource(CandidateGenerator.__init__)
         if "OfficialDataLoader" in source or "get_default_fields" in source:
             report.add_pass()

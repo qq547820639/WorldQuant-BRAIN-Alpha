@@ -9,6 +9,28 @@ from typing import Any, Mapping
 from brain_alpha_ops.config import RunConfig
 from brain_alpha_ops.error_payloads import user_error_payload
 from brain_alpha_ops.models import Candidate
+from brain_alpha_ops.redaction import redact_error_message
+from brain_alpha_ops.research.alerting import AlertDeliveryService, AlertRouter
+from brain_alpha_ops.research.anti_overfit import AntiOverfitService
+from brain_alpha_ops.research.assistant import (
+    AssistantResponseParseError,
+    assistant_response_to_generation_guidance,
+    build_assistant_request_pack,
+    parse_assistant_response,
+)
+from brain_alpha_ops.research.context import build_assistant_context_pack
+from brain_alpha_ops.research.llm_review import cross_review_assistant_response
+from brain_alpha_ops.research.market_data_cache import build_market_data_cache
+from brain_alpha_ops.research.market_data_vector import build_vectorized_market_data
+from brain_alpha_ops.research.observability import build_research_observability_snapshot
+from brain_alpha_ops.research.parallel_backtest import (
+    ParallelBacktestExecutor,
+    ParallelBacktestPlanner,
+)
+from brain_alpha_ops.research.parameter_search import ParameterSearchService
+from brain_alpha_ops.research.repository import ResearchRepository
+from brain_alpha_ops.research.rolling_validation import RollingValidationService
+from brain_alpha_ops.research.search_orchestrator import ParameterSearchOrchestrator
 from brain_alpha_ops.shared_bounds import (
     bounded_float,
     bounded_int,
@@ -18,26 +40,6 @@ from brain_alpha_ops.shared_bounds import (
     required_text,
     truthy,
 )
-from brain_alpha_ops.research.assistant import (
-    AssistantResponseParseError,
-    assistant_response_to_generation_guidance,
-    build_assistant_request_pack,
-    parse_assistant_response,
-)
-from brain_alpha_ops.research.alerting import AlertDeliveryService, AlertRouter
-from brain_alpha_ops.research.anti_overfit import AntiOverfitService
-from brain_alpha_ops.research.context import build_assistant_context_pack
-from brain_alpha_ops.research.llm_review import cross_review_assistant_response
-from brain_alpha_ops.research.market_data_cache import build_market_data_cache
-from brain_alpha_ops.research.market_data_vector import build_vectorized_market_data
-from brain_alpha_ops.research.observability import build_research_observability_snapshot
-from brain_alpha_ops.research.parallel_backtest import ParallelBacktestExecutor, ParallelBacktestPlanner
-from brain_alpha_ops.research.parameter_search import ParameterSearchService
-from brain_alpha_ops.research.repository import ResearchRepository
-from brain_alpha_ops.research.rolling_validation import RollingValidationService
-from brain_alpha_ops.research.search_orchestrator import ParameterSearchOrchestrator
-from brain_alpha_ops.redaction import redact_error_message
-
 
 logger = logging.getLogger(__name__)
 

@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
-from collections import Counter, defaultdict
 import logging
+from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any, Iterable
 
 from brain_alpha_ops.jsonl import read_jsonl_tail
-from brain_alpha_ops.research.expression_ast import expression_profile_summary, expression_similarity
+from brain_alpha_ops.research.expression_ast import (
+    expression_profile_summary,
+    expression_similarity,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -144,7 +147,9 @@ class ExpressionHistoryIndex:
         if not db_path.is_file():
             return {}
         try:
-            from brain_alpha_ops.research.expression_sqlite_index import ExpressionSqliteIndex
+            from brain_alpha_ops.research.expression_sqlite_index import (
+                ExpressionSqliteIndex,
+            )
 
             return ExpressionSqliteIndex(self.storage_dir).summary(top_n=top_n)
         except Exception:
@@ -156,7 +161,9 @@ class ExpressionHistoryIndex:
         if not db_path.is_file():
             return {}
         try:
-            from brain_alpha_ops.research.expression_sqlite_index import ExpressionSqliteIndex
+            from brain_alpha_ops.research.expression_sqlite_index import (
+                ExpressionSqliteIndex,
+            )
 
             return ExpressionSqliteIndex(self.storage_dir).lookup(
                 expression,

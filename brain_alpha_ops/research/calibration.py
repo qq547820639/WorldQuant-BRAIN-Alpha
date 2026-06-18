@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+
 def auto_calibrate_if_stalled(
     storage_dir: str = "data",
     **kwargs: object,
@@ -14,7 +15,9 @@ def auto_calibrate_if_stalled(
     a missing optional CLI dependency.
     """
     try:
-        from calibrate_weights import auto_calibrate_if_stalled as _real  # type: ignore[import-not-found]
+        from calibrate_weights import (
+            auto_calibrate_if_stalled as _real,  # type: ignore[import-not-found]
+        )
 
         return _real(storage_dir, **kwargs)
     except ImportError:

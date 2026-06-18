@@ -8,7 +8,6 @@ from brain_alpha_ops.errors import classify_error
 from brain_alpha_ops.redaction import redact_error_message
 from brain_alpha_ops.research.contracts import correlation_id as build_correlation_id
 
-
 OBSERVABILITY_SCHEMA_VERSION = "observability.v1"
 
 

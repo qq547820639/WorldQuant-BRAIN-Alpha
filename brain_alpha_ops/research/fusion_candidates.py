@@ -12,7 +12,6 @@ from . import fusion as alpha_fusion
 from .generator import extract_fields, extract_operators, local_quality
 from .scoring import build_scorecard
 
-
 RecordLifecycle = Callable[[Candidate, str, str], None]
 EventCallback = Callable[..., None]
 

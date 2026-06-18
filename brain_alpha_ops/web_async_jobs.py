@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
-import logging
 import inspect
+import logging
 import threading
 import time
 from typing import Any, Callable, Protocol
 
 from brain_alpha_ops.web_post_handlers import background_job_start_payload
-
 
 logger = logging.getLogger(__name__)
 
@@ -349,7 +348,9 @@ def _result_message(result: Any, *, fallback: str) -> str:
         summary = result.get("summary")
         if isinstance(summary, dict):
             if "generated_count" in summary:
-                from brain_alpha_ops.web_candidate_generation_summary import candidate_generation_status_message
+                from brain_alpha_ops.web_candidates.generation_summary import (
+                    candidate_generation_status_message,
+                )
 
                 return candidate_generation_status_message(result)
             if "submitted" in summary:

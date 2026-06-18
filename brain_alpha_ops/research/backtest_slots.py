@@ -1,15 +1,14 @@
 """Backtest slot state management for official simulation polling."""
 
 from __future__ import annotations
-import threading
 
+import threading
 from dataclasses import dataclass, field
 from typing import Callable, Iterable
 
 from brain_alpha_ops.models import Candidate
 
 from .contracts import recoverable_backtest_candidates
-
 
 ExpressionKey = Callable[[Candidate], str]
 
