@@ -59,7 +59,7 @@ from .official_call_guard import OfficialCallGuard
 from .official_validation import OfficialValidationService
 from .official_workflow import OfficialWorkflowService
 from .backtest_flow_service import BacktestFlowService
-from .pipeline_candidates import PipelineCandidatePoolMixin
+from .candidate_pool_service_ import CandidatePoolService_
 from .pipeline_cloud import (
     build_cloud_similarity_rows,
     cloud_correlation_risk,
@@ -133,7 +133,6 @@ SUBMITTED_CLOUD_STATUSES = {"ACTIVE", "SUBMITTED", "PRODUCTION", "CONDUCTED"}
 class AlphaResearchPipeline(
     PipelineRuntimeMixin,
     PipelineServiceFactoryMixin,
-    PipelineCandidatePoolMixin,
     PipelineSnapshotMixin,
 ):
     """End-to-end alpha research, simulation, scoring, and optional submission.
@@ -346,6 +345,146 @@ class AlphaResearchPipeline(
         if not hasattr(self, "_backtest_flow_service"):
             self._backtest_flow_service = BacktestFlowService(self)
         return self._backtest_flow_service._poll_interval_seconds()
+
+    def _local_prefilter(self, generated, cycle, fields, operators):
+        if not hasattr(self, "_candidate_pool_svc"):
+            self._candidate_pool_svc = CandidatePoolService_(self)
+        return self._candidate_pool_svc._local_prefilter(generated, cycle, fields, operators)
+
+    def _apply_local_backtest_prefilter(self, candidate):
+        if not hasattr(self, "_candidate_pool_svc"):
+            self._candidate_pool_svc = CandidatePoolService_(self)
+        return self._candidate_pool_svc._apply_local_backtest_prefilter(candidate)
+
+    def _apply_generation_field_prefilter(self, candidate):
+        if not hasattr(self, "_candidate_pool_svc"):
+            self._candidate_pool_svc = CandidatePoolService_(self)
+        return self._candidate_pool_svc._apply_generation_field_prefilter(candidate)
+
+    def _record_local_backtest_knowledge(self, candidate, result):
+        if not hasattr(self, "_candidate_pool_svc"):
+            self._candidate_pool_svc = CandidatePoolService_(self)
+        return self._candidate_pool_svc._record_local_backtest_knowledge(candidate, result)
+
+    def _top_up_candidate_pool(self, cycle, pool_by_expression, blocked_expressions, archive_stats, archive_samples, fields, operators, accepted_candidates):
+        if not hasattr(self, "_candidate_pool_svc"):
+            self._candidate_pool_svc = CandidatePoolService_(self)
+        return self._candidate_pool_svc._top_up_candidate_pool(cycle, pool_by_expression, blocked_expressions, archive_stats, archive_samples, fields, operators, accepted_candidates)
+
+    def _refresh_context_validation_cache(self, fields, operators):
+        if not hasattr(self, "_candidate_pool_svc"):
+            self._candidate_pool_svc = CandidatePoolService_(self)
+        return self._candidate_pool_svc._refresh_context_validation_cache(fields, operators)
+
+    def _active_dataset_field_names(self):
+        if not hasattr(self, "_candidate_pool_svc"):
+            self._candidate_pool_svc = CandidatePoolService_(self)
+        return self._candidate_pool_svc._active_dataset_field_names()
+
+    def _official_context_reasons(self, candidate, fields, operators):
+        if not hasattr(self, "_candidate_pool_svc"):
+            self._candidate_pool_svc = CandidatePoolService_(self)
+        return self._candidate_pool_svc._official_context_reasons(candidate, fields, operators)
+
+    def _merge_into_pool(self, pool_by_expression, candidates, blocked_expressions):
+        if not hasattr(self, "_candidate_pool_svc"):
+            self._candidate_pool_svc = CandidatePoolService_(self)
+        return self._candidate_pool_svc._merge_into_pool(pool_by_expression, candidates, blocked_expressions)
+
+    def _remove_below_local_standard(self, pool_by_expression):
+        if not hasattr(self, "_candidate_pool_svc"):
+            self._candidate_pool_svc = CandidatePoolService_(self)
+        return self._candidate_pool_svc._remove_below_local_standard(pool_by_expression)
+
+    def _prune_pool(self, pool_by_expression):
+        if not hasattr(self, "_candidate_pool_svc"):
+            self._candidate_pool_svc = CandidatePoolService_(self)
+        return self._candidate_pool_svc._prune_pool(pool_by_expression)
+
+    def _validation_targets(self, pool):
+        if not hasattr(self, "_candidate_pool_svc"):
+            self._candidate_pool_svc = CandidatePoolService_(self)
+        return self._candidate_pool_svc._validation_targets(pool)
+
+    def _validation_quota(self, pool):
+        if not hasattr(self, "_candidate_pool_svc"):
+            self._candidate_pool_svc = CandidatePoolService_(self)
+        return self._candidate_pool_svc._validation_quota(pool)
+
+    def _pending_backtest_plan(self, pool):
+        if not hasattr(self, "_candidate_pool_svc"):
+            self._candidate_pool_svc = CandidatePoolService_(self)
+        return self._candidate_pool_svc._pending_backtest_plan(pool)
+
+    def _preflight_pending_backtest_candidates(self, pool):
+        if not hasattr(self, "_candidate_pool_svc"):
+            self._candidate_pool_svc = CandidatePoolService_(self)
+        return self._candidate_pool_svc._preflight_pending_backtest_candidates(pool)
+
+    def _backtest_targets(self, pool):
+        if not hasattr(self, "_candidate_pool_svc"):
+            self._candidate_pool_svc = CandidatePoolService_(self)
+        return self._candidate_pool_svc._backtest_targets(pool)
+
+    def _pending_backtest_candidates(self, pool, threshold=None):
+        if not hasattr(self, "_candidate_pool_svc"):
+            self._candidate_pool_svc = CandidatePoolService_(self)
+        return self._candidate_pool_svc._pending_backtest_candidates(pool, threshold=threshold)
+
+    def _is_pending_backtest_candidate(self, candidate, threshold=None):
+        if not hasattr(self, "_candidate_pool_svc"):
+            self._candidate_pool_svc = CandidatePoolService_(self)
+        return self._candidate_pool_svc._is_pending_backtest_candidate(candidate, threshold)
+
+    def _is_active_backtest_candidate(self, candidate):
+        if not hasattr(self, "_candidate_pool_svc"):
+            self._candidate_pool_svc = CandidatePoolService_(self)
+        return self._candidate_pool_svc._is_active_backtest_candidate(candidate)
+
+    def _candidate_pool_candidates(self, pool):
+        if not hasattr(self, "_candidate_pool_svc"):
+            self._candidate_pool_svc = CandidatePoolService_(self)
+        return self._candidate_pool_svc._candidate_pool_candidates(pool)
+
+    def _pending_simulation_targets(self, pool):
+        if not hasattr(self, "_candidate_pool_svc"):
+            self._candidate_pool_svc = CandidatePoolService_(self)
+        return self._candidate_pool_svc._pending_simulation_targets(pool)
+
+    def _refresh_cloud_similarity_index(self):
+        if not hasattr(self, "_candidate_pool_svc"):
+            self._candidate_pool_svc = CandidatePoolService_(self)
+        return self._candidate_pool_svc._refresh_cloud_similarity_index()
+
+    def _cloud_correlation_risk(self, candidate):
+        if not hasattr(self, "_candidate_pool_svc"):
+            self._candidate_pool_svc = CandidatePoolService_(self)
+        return self._candidate_pool_svc._cloud_correlation_risk(candidate)
+
+    def _reject_high_cloud_similarity_before_official(self, candidate):
+        if not hasattr(self, "_candidate_pool_svc"):
+            self._candidate_pool_svc = CandidatePoolService_(self)
+        return self._candidate_pool_svc._reject_high_cloud_similarity_before_official(candidate)
+
+    def _cloud_status_for_candidate(self, candidate):
+        if not hasattr(self, "_candidate_pool_svc"):
+            self._candidate_pool_svc = CandidatePoolService_(self)
+        return self._candidate_pool_svc._cloud_status_for_candidate(candidate)
+
+    def _remember_accepted(self, accepted_candidates, candidate):
+        if not hasattr(self, "_candidate_pool_svc"):
+            self._candidate_pool_svc = CandidatePoolService_(self)
+        return self._candidate_pool_svc._remember_accepted(accepted_candidates, candidate)
+
+    def _smart_rank_candidates(self, candidates):
+        if not hasattr(self, "_candidate_pool_svc"):
+            self._candidate_pool_svc = CandidatePoolService_(self)
+        return self._candidate_pool_svc._smart_rank_candidates(candidates)
+
+    def _smart_ranking_score(self, candidate):
+        if not hasattr(self, "_candidate_pool_svc"):
+            self._candidate_pool_svc = CandidatePoolService_(self)
+        return self._candidate_pool_svc._smart_ranking_score(candidate)
 
     # ── B-03: Extracted post-processing phase ──────────────────────────
     def _run_cycle_post_processing(
