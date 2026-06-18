@@ -97,7 +97,7 @@ from .pipeline_official_context import (
     refresh_context_validation_cache,
 )
 from .official_validation_service import OfficialValidationService_
-from .pipeline_runtime import PipelineRuntimeMixin
+from .runtime_service import RuntimeService
 from .pipeline_services import PipelineServiceFactoryMixin
 from .pipeline_snapshot import (
     PipelineSnapshotBuilder,
@@ -131,7 +131,6 @@ SUBMITTED_CLOUD_STATUSES = {"ACTIVE", "SUBMITTED", "PRODUCTION", "CONDUCTED"}
 
 # TODO R3 S-11: 10+ Mixin inheritance; consider has-a composition
 class AlphaResearchPipeline(
-    PipelineRuntimeMixin,
     PipelineServiceFactoryMixin,
     PipelineSnapshotMixin,
 ):
@@ -485,6 +484,111 @@ class AlphaResearchPipeline(
         if not hasattr(self, "_candidate_pool_svc"):
             self._candidate_pool_svc = CandidatePoolService_(self)
         return self._candidate_pool_svc._smart_ranking_score(candidate)
+
+    def _record_lifecycle(self, candidate, stage, note=""):
+        if not hasattr(self, "_runtime_svc"):
+            self._runtime_svc = RuntimeService(self)
+        return self._runtime_svc._record_lifecycle(candidate, stage, note)
+
+    def _record_backtest(self, candidate, action, *, slot=0, status="", note="", error_context=None):
+        if not hasattr(self, "_runtime_svc"):
+            self._runtime_svc = RuntimeService(self)
+        return self._runtime_svc._record_backtest(candidate, action, slot=slot, status=status, note=note, error_context=error_context)
+
+    def _record_robustness_feedback(self, candidate, *, cycle, policy):
+        if not hasattr(self, "_runtime_svc"):
+            self._runtime_svc = RuntimeService(self)
+        return self._runtime_svc._record_robustness_feedback(candidate, cycle=cycle, policy=policy)
+
+    def _scientific_audit_feedback(self, candidate, *, stage):
+        if not hasattr(self, "_runtime_svc"):
+            self._runtime_svc = RuntimeService(self)
+        return self._runtime_svc._scientific_audit_feedback(candidate, stage=stage)
+
+    def _record_strategy_lifecycle(self, row):
+        if not hasattr(self, "_runtime_svc"):
+            self._runtime_svc = RuntimeService(self)
+        return self._runtime_svc._record_strategy_lifecycle(row)
+
+    def _load_strategy_plugins(self):
+        if not hasattr(self, "_runtime_svc"):
+            self._runtime_svc = RuntimeService(self)
+        return self._runtime_svc._load_strategy_plugins()
+
+    def _strategy_plugin_summary(self):
+        if not hasattr(self, "_runtime_svc"):
+            self._runtime_svc = RuntimeService(self)
+        return self._runtime_svc._strategy_plugin_summary()
+
+    def _notify_strategy_plugins(self, action, profile, *, cycle, reason="", **context):
+        if not hasattr(self, "_runtime_svc"):
+            self._runtime_svc = RuntimeService(self)
+        return self._runtime_svc._notify_strategy_plugins(action, profile, cycle=cycle, reason=reason, **context)
+
+    def _recover_persisted_backtest_slots(self):
+        if not hasattr(self, "_runtime_svc"):
+            self._runtime_svc = RuntimeService(self)
+        return self._runtime_svc._recover_persisted_backtest_slots()
+
+    def _official_error_context(self, exc, error_code, *, phase, candidate):
+        if not hasattr(self, "_runtime_svc"):
+            self._runtime_svc = RuntimeService(self)
+        return self._runtime_svc._official_error_context(exc, error_code, phase=phase, candidate=candidate)
+
+    def _defer_official_cycle(self, cycle, pool, accepted_candidates, archive_stats):
+        if not hasattr(self, "_runtime_svc"):
+            self._runtime_svc = RuntimeService(self)
+        return self._runtime_svc._defer_official_cycle(cycle, pool, accepted_candidates, archive_stats)
+
+    def _refresh_observability_throttle(self, cycle):
+        if not hasattr(self, "_runtime_svc"):
+            self._runtime_svc = RuntimeService(self)
+        return self._runtime_svc._refresh_observability_throttle(cycle)
+
+    def _apply_observability_generation_guidance(self, snapshot, context, cycle):
+        if not hasattr(self, "_runtime_svc"):
+            self._runtime_svc = RuntimeService(self)
+        return self._runtime_svc._apply_observability_generation_guidance(snapshot, context, cycle)
+
+    def _halt_official_calls(self, reason, retry_seconds=None):
+        if not hasattr(self, "_runtime_svc"):
+            self._runtime_svc = RuntimeService(self)
+        return self._runtime_svc._halt_official_calls(reason, retry_seconds)
+
+    def _maybe_resume_official_calls(self):
+        if not hasattr(self, "_runtime_svc"):
+            self._runtime_svc = RuntimeService(self)
+        return self._runtime_svc._maybe_resume_official_calls()
+
+    def _official_retry_remaining_seconds(self):
+        if not hasattr(self, "_runtime_svc"):
+            self._runtime_svc = RuntimeService(self)
+        return self._runtime_svc._official_retry_remaining_seconds()
+
+    def _archive(self, archive_stats, archive_samples, candidates):
+        if not hasattr(self, "_runtime_svc"):
+            self._runtime_svc = RuntimeService(self)
+        return self._runtime_svc._archive(archive_stats, archive_samples, candidates)
+
+    def _should_stop(self):
+        if not hasattr(self, "_runtime_svc"):
+            self._runtime_svc = RuntimeService(self)
+        return self._runtime_svc._should_stop()
+
+    def _sleep_with_stop(self, seconds):
+        if not hasattr(self, "_runtime_svc"):
+            self._runtime_svc = RuntimeService(self)
+        return self._runtime_svc._sleep_with_stop(seconds)
+
+    def _event(self, event, message, alpha_id="", data=None, level="INFO"):
+        if not hasattr(self, "_runtime_svc"):
+            self._runtime_svc = RuntimeService(self)
+        return self._runtime_svc._event(event, message, alpha_id=alpha_id, data=data, level=level)
+
+    def _progress(self, phase, current, total, message, alpha_id="", data=None):
+        if not hasattr(self, "_runtime_svc"):
+            self._runtime_svc = RuntimeService(self)
+        return self._runtime_svc._progress(phase, current, total, message, alpha_id=alpha_id, data=data)
 
     # ── B-03: Extracted post-processing phase ──────────────────────────
     def _run_cycle_post_processing(
