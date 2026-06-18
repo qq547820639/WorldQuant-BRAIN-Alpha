@@ -68,7 +68,7 @@ from .pipeline_cloud import (
     smart_rank_candidates,
     smart_ranking_score,
 )
-from .pipeline_context_sync import PipelineContextSyncMixin
+from .context_sync_service import ContextSyncService
 from .pipeline_helpers import (
     assistant_guidance_for_generator as _assistant_guidance_for_generator,
 )
@@ -132,7 +132,6 @@ SUBMITTED_CLOUD_STATUSES = {"ACTIVE", "SUBMITTED", "PRODUCTION", "CONDUCTED"}
 # TODO R3 S-11: 10+ Mixin inheritance; consider has-a composition
 class AlphaResearchPipeline(
     PipelineRuntimeMixin,
-    PipelineContextSyncMixin,
     PipelineServiceFactoryMixin,
     PipelineStrategyMixin,
     PipelineCandidatePoolMixin,
@@ -225,6 +224,18 @@ class AlphaResearchPipeline(
         if not hasattr(self, "_legacy_simulation_service"):
             self._legacy_simulation_service = LegacySimulationService(self)
         return self._legacy_simulation_service._should_remove_after_official_result(candidate)
+
+    def _sync_cloud_alphas(self):
+        """Delegate to ContextSyncService for backward compatibility."""
+        if not hasattr(self, "_context_sync_service"):
+            self._context_sync_service = ContextSyncService(self)
+        return self._context_sync_service._sync_cloud_alphas()
+
+    def _load_official_context(self):
+        """Delegate to ContextSyncService for backward compatibility."""
+        if not hasattr(self, "_context_sync_service"):
+            self._context_sync_service = ContextSyncService(self)
+        return self._context_sync_service._load_official_context()
 
     # ── B-03: Extracted post-processing phase ──────────────────────────
     def _run_cycle_post_processing(
