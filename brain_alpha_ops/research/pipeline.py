@@ -96,7 +96,7 @@ from .pipeline_official_context import (
     official_context_reasons,
     refresh_context_validation_cache,
 )
-from .pipeline_official_validation_flow import PipelineOfficialValidationMixin
+from .official_validation_service import OfficialValidationService_
 from .pipeline_runtime import PipelineRuntimeMixin
 from .pipeline_services import PipelineServiceFactoryMixin
 from .pipeline_snapshot import (
@@ -135,7 +135,6 @@ class AlphaResearchPipeline(
     PipelineServiceFactoryMixin,
     PipelineStrategyMixin,
     PipelineCandidatePoolMixin,
-    PipelineOfficialValidationMixin,
     PipelineBacktestMixin,
     PipelineSnapshotMixin,
 ):
@@ -247,6 +246,42 @@ class AlphaResearchPipeline(
         if not hasattr(self, "_submission_gate_service"):
             self._submission_gate_service = SubmissionGateService(self)
         return self._submission_gate_service._assess_auto_submission(candidate, submitted_this_run)
+
+    def _validate_for_open_backtest_slots(self, cycle, pool_by_expression, accepted_candidates, archive_stats, blocked_expressions):
+        """Delegate to OfficialValidationService_ for backward compatibility."""
+        if not hasattr(self, "_official_validation_service"):
+            self._official_validation_service = OfficialValidationService_(self)
+        return self._official_validation_service._validate_for_open_backtest_slots(cycle, pool_by_expression, accepted_candidates, archive_stats, blocked_expressions)
+
+    def _filter_observability_duplicate_targets(self, candidates, *, phase):
+        """Delegate to OfficialValidationService_ for backward compatibility."""
+        if not hasattr(self, "_official_validation_service"):
+            self._official_validation_service = OfficialValidationService_(self)
+        return self._official_validation_service._filter_observability_duplicate_targets(candidates, phase=phase)
+
+    def _archive_validation_failures(self, pool_by_expression, validation_targets, blocked_expressions):
+        """Delegate to OfficialValidationService_ for backward compatibility."""
+        if not hasattr(self, "_official_validation_service"):
+            self._official_validation_service = OfficialValidationService_(self)
+        return self._official_validation_service._archive_validation_failures(pool_by_expression, validation_targets, blocked_expressions)
+
+    def _observability_official_call_guard_snapshot(self):
+        """Delegate to OfficialValidationService_ for backward compatibility."""
+        if not hasattr(self, "_official_validation_service"):
+            self._official_validation_service = OfficialValidationService_(self)
+        return self._official_validation_service._observability_official_call_guard_snapshot()
+
+    def _record_observability_official_call_guard(self, candidate, *, phase, expression_canonical):
+        """Delegate to OfficialValidationService_ for backward compatibility."""
+        if not hasattr(self, "_official_validation_service"):
+            self._official_validation_service = OfficialValidationService_(self)
+        return self._official_validation_service._record_observability_official_call_guard(candidate, phase=phase, expression_canonical=expression_canonical)
+
+    def _block_observability_duplicate_before_official(self, candidate, *, phase):
+        """Delegate to OfficialValidationService_ for backward compatibility."""
+        if not hasattr(self, "_official_validation_service"):
+            self._official_validation_service = OfficialValidationService_(self)
+        return self._official_validation_service._block_observability_duplicate_before_official(candidate, phase=phase)
 
     # ── B-03: Extracted post-processing phase ──────────────────────────
     def _run_cycle_post_processing(
