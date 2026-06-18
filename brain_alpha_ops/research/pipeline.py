@@ -249,6 +249,12 @@ class AlphaResearchPipeline(
             self._official_validation_service = OfficialValidationService_(self)
         return self._official_validation_service._validate_for_open_backtest_slots(cycle, pool_by_expression, accepted_candidates, archive_stats, blocked_expressions)
 
+    def _validate(self, candidates):
+        """Delegate to OfficialValidationService_ for backward compatibility."""
+        if not hasattr(self, "_official_validation_service"):
+            self._official_validation_service = OfficialValidationService_(self)
+        return self._official_validation_service._validate(candidates)
+
     def _filter_observability_duplicate_targets(self, candidates, *, phase):
         """Delegate to OfficialValidationService_ for backward compatibility."""
         if not hasattr(self, "_official_validation_service"):
