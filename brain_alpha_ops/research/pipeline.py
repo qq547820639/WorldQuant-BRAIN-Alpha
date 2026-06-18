@@ -113,7 +113,7 @@ from .pipeline_state import (
     record_strategy_reward,
 )
 from .pipeline_strategy import PipelineStrategyMixin
-from .pipeline_submission_gate import PipelineSubmissionMixin
+from .submission_gate_service import SubmissionGateService
 from .production_context import build_production_context, eligible_strategy_profiles
 from .repository import ResearchRepository
 from .research_cycle_orchestrator import ResearchCycleOrchestrator
@@ -137,7 +137,6 @@ class AlphaResearchPipeline(
     PipelineCandidatePoolMixin,
     PipelineOfficialValidationMixin,
     PipelineBacktestMixin,
-    PipelineSubmissionMixin,
     PipelineSnapshotMixin,
 ):
     """End-to-end alpha research, simulation, scoring, and optional submission.
@@ -236,6 +235,18 @@ class AlphaResearchPipeline(
         if not hasattr(self, "_context_sync_service"):
             self._context_sync_service = ContextSyncService(self)
         return self._context_sync_service._load_official_context()
+
+    def _try_auto_submit(self, candidate, submitted_this_run):
+        """Delegate to SubmissionGateService for backward compatibility."""
+        if not hasattr(self, "_submission_gate_service"):
+            self._submission_gate_service = SubmissionGateService(self)
+        return self._submission_gate_service._try_auto_submit(candidate, submitted_this_run)
+
+    def _assess_auto_submission(self, candidate, submitted_this_run):
+        """Delegate to SubmissionGateService for backward compatibility."""
+        if not hasattr(self, "_submission_gate_service"):
+            self._submission_gate_service = SubmissionGateService(self)
+        return self._submission_gate_service._assess_auto_submission(candidate, submitted_this_run)
 
     # ── B-03: Extracted post-processing phase ──────────────────────────
     def _run_cycle_post_processing(
