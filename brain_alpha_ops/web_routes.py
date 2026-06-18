@@ -149,7 +149,7 @@ def dispatch_get(handler: Any, path: str, query: dict) -> None:
     # Phase state (v4.0)
     if path == "/api/phase_state":
         from brain_alpha_ops.web.handlers.phase import phase_state_payload
-        from brain_alpha_ops.web_cloud_snapshot import (
+        from brain_alpha_ops.web_cloud.snapshot import (
             cloud_alpha_cache_probe,
             cloud_alpha_snapshot,
             official_context_file_counts,
@@ -188,7 +188,7 @@ def dispatch_get(handler: Any, path: str, query: dict) -> None:
     # Capability registry
     if path == "/api/capabilities":
         from brain_alpha_ops.web_capability_registry import build_capability_registry
-        from brain_alpha_ops.web_cloud_snapshot import official_context_file_counts
+        from brain_alpha_ops.web_cloud.snapshot import official_context_file_counts
         from brain_alpha_ops.web_config_schema import public_config_schema
 
         handler._send_json(
@@ -212,7 +212,7 @@ def dispatch_get(handler: Any, path: str, query: dict) -> None:
     # Local Alpha lifecycle replay
     if path in ("/api/alpha_lifecycle", "/api/lifecycle/history"):
         from brain_alpha_ops.web_alpha_lifecycle import alpha_lifecycle_history_payload
-        from brain_alpha_ops.web_cloud_snapshot import read_storage_jsonl
+        from brain_alpha_ops.web_cloud.snapshot import read_storage_jsonl
 
         def _read_lifecycle_jsonl(filename: str, *, limit: int | None = None):
             return read_storage_jsonl(filename, limit=limit, load_config=load_run_config)
@@ -727,7 +727,7 @@ def _iter_jsonl_records(name: str):
 
 def _cloud_snapshot_payload(query: dict) -> dict:
     """Create cloud snapshot payload."""
-    from brain_alpha_ops.web_cloud_snapshot import cloud_alpha_snapshot
+    from brain_alpha_ops.web_cloud.snapshot import cloud_alpha_snapshot
 
     limit = _query_positive_int(query, "limit")
     snapshot = cloud_alpha_snapshot(limit=limit)
