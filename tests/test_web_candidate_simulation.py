@@ -13,8 +13,8 @@ import pytest
 
 from brain_alpha_ops.brain_api.base import BrainAPIError
 from brain_alpha_ops.config import QualityThresholds, ScoringConfig
-from brain_alpha_ops.web_candidate_simulation_state import candidate_update_row
-from brain_alpha_ops.web_candidate_simulation import (
+from brain_alpha_ops.web_candidates.simulation_state import candidate_update_row
+from brain_alpha_ops.web_candidates.simulation import (
     _active_account_simulation_cooldown,
     _candidate_score,
     _eligible_for_simulation,

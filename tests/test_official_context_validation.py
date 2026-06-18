@@ -5,7 +5,7 @@ from pathlib import Path
 
 from brain_alpha_ops.data.official_context_validation import validate_official_context
 import brain_alpha_ops.data.official_context_validation as official_context_validation
-from brain_alpha_ops.web_cloud_snapshot import save_official_context_json
+from brain_alpha_ops.web_cloud.snapshot import save_official_context_json
 
 
 class _Config:

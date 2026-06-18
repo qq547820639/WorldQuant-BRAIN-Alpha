@@ -5,9 +5,9 @@ from pathlib import Path
 
 from brain_alpha_ops.config import RunConfig
 from brain_alpha_ops.models import Candidate
-import brain_alpha_ops.web_candidate_optimization as web_candidate_optimization
-from brain_alpha_ops.web_candidate_optimization import optimize_candidates_payload, persist_optimized_candidates
-from brain_alpha_ops.web_cloud_snapshot import save_official_context_json
+import brain_alpha_ops.web_candidates.optimization as web_candidate_optimization
+from brain_alpha_ops.web_candidates.optimization import optimize_candidates_payload, persist_optimized_candidates
+from brain_alpha_ops.web_cloud.snapshot import save_official_context_json
 
 
 class FakePassingLocalBacktestEngine:

@@ -22,7 +22,7 @@ from brain_alpha_ops.brain_api.official import OfficialBrainAPI
 from brain_alpha_ops.config import DEFAULT_RUN_CONFIG_PATH, RunConfig, load_run_config
 from brain_alpha_ops.official_context_datasets import list_official_datasets_or_derive
 from brain_alpha_ops.redaction import redact_error_message
-from brain_alpha_ops.web_cloud_snapshot import (
+from brain_alpha_ops.web_cloud.snapshot import (
     datasets_from_fields,
     official_context_file_counts,
     persist_official_context,

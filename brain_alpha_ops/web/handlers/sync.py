@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from brain_alpha_ops.web_cloud_snapshot import (
+from brain_alpha_ops.web_cloud.snapshot import (
     cloud_alpha_id,
     cloud_row_sort_key,
     path_modified_at,

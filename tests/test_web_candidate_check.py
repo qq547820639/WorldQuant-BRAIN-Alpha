@@ -1,7 +1,7 @@
 import json
 
 from brain_alpha_ops.config import RunConfig
-from brain_alpha_ops.web_candidate_check import check_candidate_payload
+from brain_alpha_ops.web_candidates.check import check_candidate_payload
 
 
 class FakeApi:

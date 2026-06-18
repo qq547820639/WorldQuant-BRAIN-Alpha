@@ -1,4 +1,4 @@
-from brain_alpha_ops.web_candidate_selection import (
+from brain_alpha_ops.web_candidates.selection import (
     candidate_from_payload,
     passed_candidates_from_payload,
 )

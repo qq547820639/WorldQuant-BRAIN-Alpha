@@ -2,7 +2,7 @@ import logging
 from pathlib import Path
 
 from brain_alpha_ops.config import RunConfig
-from brain_alpha_ops.web_sync_payload import sync_cloud_alphas_payload
+from brain_alpha_ops.web_cloud.sync_payload import sync_cloud_alphas_payload
 
 
 class Api:
@@ -54,8 +54,8 @@ def test_sync_modules_keep_single_job_and_payload_owners():
     assert "def sync_cloud_alphas_payload(" not in sync_job_source
     assert sync_payload_source.count("def sync_cloud_alphas_payload(") == 1
     assert "def run_sync_job_service(" not in sync_payload_source
-    assert "from brain_alpha_ops.web_sync_job import" in handler_source
-    assert "from brain_alpha_ops.web_sync_payload import sync_cloud_alphas_payload" in handler_source
+    assert "from brain_alpha_ops.web_cloud.sync_job import" in handler_source
+    assert "from brain_alpha_ops.web_cloud.sync_payload import sync_cloud_alphas_payload" in handler_source
     assert "def " not in handler_source
 
 

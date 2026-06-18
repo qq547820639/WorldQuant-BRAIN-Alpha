@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from brain_alpha_ops.web_cloud_snapshot import save_official_context_json
+from brain_alpha_ops.web_cloud.snapshot import save_official_context_json
 from brain_alpha_ops.config import RunConfig
 from brain_alpha_ops.research.expression_official_context import (
     expression_delta,

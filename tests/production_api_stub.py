@@ -54,7 +54,7 @@ TEMPLATE_SAFE_OPERATOR_NAMES = (
 
 def write_template_safe_official_context(config: Any) -> None:
     """Write the smallest context that satisfies generator-template redlines."""
-    from brain_alpha_ops.web_cloud_snapshot import save_official_context_json
+    from brain_alpha_ops.web_cloud.snapshot import save_official_context_json
 
     run_config = config if hasattr(config, "ops") else SimpleNamespace(ops=config)
     load_config = lambda: run_config

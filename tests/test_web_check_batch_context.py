@@ -6,7 +6,7 @@ from types import SimpleNamespace
 from brain_alpha_ops.config import RunConfig
 from brain_alpha_ops import web
 from brain_alpha_ops.web_check_batch_context import check_batch_official_context_payload
-from brain_alpha_ops.web_cloud_snapshot import save_official_context_json
+from brain_alpha_ops.web_cloud.snapshot import save_official_context_json
 
 
 def _write_context(tmp_path: Path) -> RunConfig:

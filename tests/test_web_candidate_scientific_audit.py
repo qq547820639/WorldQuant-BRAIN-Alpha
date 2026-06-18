@@ -1,4 +1,4 @@
-from brain_alpha_ops.web_candidate_audit import (
+from brain_alpha_ops.web_candidates.audit import (
     append_scientific_audit_event,
     attach_scientific_audit,
     scientific_audit_policy_reasons,

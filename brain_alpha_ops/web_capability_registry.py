@@ -12,7 +12,7 @@ from typing import Any
 
 from brain_alpha_ops.brain_api.canonical import CANONICAL_API_PATHS, CANONICAL_SETTINGS
 from brain_alpha_ops.config_models import BrainSettings
-from brain_alpha_ops.web_cloud_snapshot import (
+from brain_alpha_ops.web_cloud.snapshot import (
     official_context_file_counts as _official_context_file_counts,
 )
 

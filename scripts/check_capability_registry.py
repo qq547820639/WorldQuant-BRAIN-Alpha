@@ -21,7 +21,7 @@ if str(ROOT) not in sys.path:
 
 def check_capability_registry() -> dict[str, Any]:
     from brain_alpha_ops.web_capability_registry import check_capability_registry as _check
-    from brain_alpha_ops.web_cloud_snapshot import official_context_file_counts
+    from brain_alpha_ops.web_cloud.snapshot import official_context_file_counts
     from brain_alpha_ops.web_config_schema import public_config_schema
 
     return _check(

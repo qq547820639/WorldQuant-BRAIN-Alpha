@@ -25,7 +25,7 @@ from brain_alpha_ops.web_check_availability import (
     build_cloud_self_correlation_explanation,
     build_context_health_explanation,
 )
-from brain_alpha_ops.web_cloud_snapshot import (
+from brain_alpha_ops.web_cloud.snapshot import (
     dedupe_cloud_alpha_rows,
     extract_alpha_rows,
 )

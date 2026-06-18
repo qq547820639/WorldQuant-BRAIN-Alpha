@@ -103,31 +103,31 @@ from brain_alpha_ops.web_check_batch_job import (
 from brain_alpha_ops.web_cloud_context_refresh import (
     refresh_cloud_context_for_check_service as _refresh_cloud_context_for_check_service,
 )
-from brain_alpha_ops.web_cloud_snapshot import (
+from brain_alpha_ops.web_cloud.snapshot import (
     cloud_alpha_cache_probe as _cloud_alpha_cache_probe_service,
 )
-from brain_alpha_ops.web_cloud_snapshot import (
+from brain_alpha_ops.web_cloud.snapshot import (
     cloud_alpha_snapshot as _cloud_alpha_snapshot_service,
 )
-from brain_alpha_ops.web_cloud_snapshot import (
+from brain_alpha_ops.web_cloud.snapshot import (
     cloud_alpha_summary as _cloud_alpha_summary_service,
 )
-from brain_alpha_ops.web_cloud_snapshot import (
+from brain_alpha_ops.web_cloud.snapshot import (
     persist_official_context as _persist_official_context_service,
 )
-from brain_alpha_ops.web_cloud_snapshot import (
+from brain_alpha_ops.web_cloud.snapshot import (
     read_official_context_json as _read_official_context_json_service,
 )
-from brain_alpha_ops.web_cloud_snapshot import (
+from brain_alpha_ops.web_cloud.snapshot import (
     read_official_context_metadata as _read_official_context_metadata_service,
 )
-from brain_alpha_ops.web_cloud_snapshot import (
+from brain_alpha_ops.web_cloud.snapshot import (
     read_storage_jsonl as _read_storage_jsonl_service,
 )
-from brain_alpha_ops.web_cloud_snapshot import (
+from brain_alpha_ops.web_cloud.snapshot import (
     read_storage_jsonl_stats as _read_storage_jsonl_stats_service,
 )
-from brain_alpha_ops.web_cloud_snapshot import (
+from brain_alpha_ops.web_cloud.snapshot import (
     storage_jsonl_path as _storage_jsonl_path_service,
 )
 from brain_alpha_ops.web_config import (

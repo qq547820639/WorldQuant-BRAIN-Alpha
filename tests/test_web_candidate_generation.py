@@ -5,8 +5,8 @@ from brain_alpha_ops.config import RunConfig
 from brain_alpha_ops.models import Candidate
 from brain_alpha_ops.research.repository import ResearchRepository
 import brain_alpha_ops.web as web
-import brain_alpha_ops.web_candidate_generation as web_candidate_generation
-from brain_alpha_ops.web_candidate_generation import generate_candidates_payload
+import brain_alpha_ops.web_candidates.generation as web_candidate_generation
+from brain_alpha_ops.web_candidates.generation import generate_candidates_payload
 
 
 class FakeToolbox:

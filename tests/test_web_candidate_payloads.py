@@ -1,6 +1,6 @@
-from brain_alpha_ops.web_candidate_decisions import candidate_production_decision
-from brain_alpha_ops.web_candidate_payloads import candidate_main_pool, candidate_payload, candidate_summary
-from brain_alpha_ops.web_candidate_workflow import candidate_workflow_plan
+from brain_alpha_ops.web_candidates.decisions import candidate_production_decision
+from brain_alpha_ops.web_candidates.payloads import candidate_main_pool, candidate_payload, candidate_summary
+from brain_alpha_ops.web_candidates.workflow import candidate_workflow_plan
 
 
 def _candidate(alpha_id: str, expression: str, score: float, *, blocked: bool = False) -> dict:

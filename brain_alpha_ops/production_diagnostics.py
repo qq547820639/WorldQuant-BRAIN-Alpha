@@ -18,7 +18,7 @@ from brain_alpha_ops.models import Candidate
 from brain_alpha_ops.parameter_audit import build_parameter_audit_snapshot
 from brain_alpha_ops.scoring.official_scoring import OfficialScoringSystem
 from brain_alpha_ops.ux.history import RunHistoryAnalytics
-from brain_alpha_ops.web_cloud_snapshot import official_context_file_counts
+from brain_alpha_ops.web_cloud.snapshot import official_context_file_counts
 
 logger = logging.getLogger(__name__)
 

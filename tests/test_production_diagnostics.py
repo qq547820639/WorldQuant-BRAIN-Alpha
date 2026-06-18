@@ -9,7 +9,7 @@ from brain_alpha_ops.production_diagnostics import (
     snapshot_to_json,
     write_diagnostic_report,
 )
-from brain_alpha_ops.web_cloud_snapshot import save_official_context_json
+from brain_alpha_ops.web_cloud.snapshot import save_official_context_json
 from tests.production_api_stub import write_template_safe_official_context
 
 

@@ -8,7 +8,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from brain_alpha_ops.runtime_constants import CloudDefaults
-from brain_alpha_ops.web_cloud_snapshot import (
+from brain_alpha_ops.web_cloud.snapshot import (
     cached_user_alpha_paths,
     cloud_alpha_cache_probe,
     cloud_alpha_snapshot,

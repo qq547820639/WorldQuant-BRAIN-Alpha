@@ -414,7 +414,7 @@ def _check_official_api_alignment(cfg: dict[str, Any], findings: list[Finding]) 
 def _check_capability_registry_redline(findings: list[Finding]) -> None:
     try:
         from brain_alpha_ops.web_capability_registry import check_capability_registry
-        from brain_alpha_ops.web_cloud_snapshot import official_context_file_counts
+        from brain_alpha_ops.web_cloud.snapshot import official_context_file_counts
         from brain_alpha_ops.web_config_schema import public_config_schema
 
         result = check_capability_registry(

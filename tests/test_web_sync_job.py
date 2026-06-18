@@ -2,7 +2,7 @@ import logging
 
 from brain_alpha_ops.config import RunConfig
 from brain_alpha_ops.web.handlers import sync as active_sync_handler
-from brain_alpha_ops.web_sync_job import _timing_payload, run_sync_job_service
+from brain_alpha_ops.web_cloud.sync_job import _timing_payload, run_sync_job_service
 
 
 class Store:
