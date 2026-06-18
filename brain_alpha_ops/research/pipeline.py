@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import enum
 import logging
-from pathlib import Path
 import time
+from pathlib import Path
 from typing import Callable
 
 logger = logging.getLogger(__name__)
@@ -17,60 +17,49 @@ from brain_alpha_ops.observability import context_payload, error_payload
 from brain_alpha_ops.parameter_audit import build_parameter_audit_snapshot
 from brain_alpha_ops.redaction import redact_error_message
 
-from .generator import CandidateGenerator, extract_fields, extract_operators, local_quality, mutate_expression
-from .guidance import assistant_guidance_candidate_metadata, ensure_assistant_guidance_digest
-from .memory import ResearchMemory
-from .knowledge_base import KnowledgeEntry, StructuredKnowledgeBase
-from .local_backtest_engine import LocalBacktestEngine
-from .local_backtest_config import PREFILTER_BACKTEST_DATES, PREFILTER_BACKTEST_SYMBOLS
-from .llm_review import CrossReviewService
-from .assistant import build_assistant_request_pack
-from .context import build_assistant_context_pack
-from .observability import build_research_observability_snapshot
-from .repository import ResearchRepository
-from .safety import SubmissionLedger
-from .scoring import build_scorecard, evaluate_quality_gate
 from .alpha_checks import AlphaCheckRegistry
 from .anti_overfit import AntiOverfitService
-from .convergence import ConvergenceTracker
+from .assistant import build_assistant_request_pack
+from .auto_calibrator import AutoCalibrator
 from .backtest_finalization import BacktestFinalizationService
 from .backtest_polling import BacktestPollingService
 from .backtest_slots import BacktestSlotManager
 from .backtest_submission import BacktestSubmissionService
 from .batch_backtest_coordinator import BatchBacktestCoordinator
-from .candidate_pool import CandidatePoolService, is_active_backtest_candidate, pending_simulation_targets
+from .candidate_pool import (
+    CandidatePoolService,
+    is_active_backtest_candidate,
+    pending_simulation_targets,
+)
+from .context import build_assistant_context_pack
+from .convergence import ConvergenceTracker
 from .dataset_selection import DatasetSelectionService
 from .experience_feedback import ExperienceFeedbackService
 from .fusion_candidates import FusionCandidateService
+from .generation_phase import GenerationPhaseService
+from .generator import (
+    CandidateGenerator,
+    extract_fields,
+    extract_operators,
+    local_quality,
+    mutate_expression,
+)
+from .guidance import (
+    assistant_guidance_candidate_metadata,
+    ensure_assistant_guidance_digest,
+)
+from .iterative_optimizer import IterativeOptimizer
+from .knowledge_base import KnowledgeEntry, StructuredKnowledgeBase
+from .llm_review import CrossReviewService
+from .local_backtest_config import PREFILTER_BACKTEST_DATES, PREFILTER_BACKTEST_SYMBOLS
+from .local_backtest_engine import LocalBacktestEngine
+from .memory import ResearchMemory
+from .observability import build_research_observability_snapshot
 from .official_call_guard import OfficialCallGuard
 from .official_validation import OfficialValidationService
 from .official_workflow import OfficialWorkflowService
-from .generation_phase import GenerationPhaseService
-from .pipeline_snapshot import (
-    PipelineSnapshotBuilder,
-    PipelineSnapshotServices,
-    PipelineSnapshotState,
-    backtest_slot_snapshot,
-)
-from .pipeline_state import CycleState, PipelineRuntimeState, bind_runtime_state_properties, record_strategy_reward
-from .pipeline_helpers import (
-    assistant_guidance_for_generator as _assistant_guidance_for_generator,
-    attach_assistant_guidance as _attach_assistant_guidance,
-    blocked_gate as _blocked_gate,
-    expr_key as _expr_key,
-    rank_candidates,
-)
-from .pipeline_official_context import (
-    OfficialContextLoadService,
-    active_dataset_field_names,
-    configured_official_context_files_exist,
-    official_context_reasons,
-    refresh_context_validation_cache,
-)
-from .pipeline_observability import (
-    apply_observability_generation_guidance,
-    refresh_observability_throttle,
-)
+from .pipeline_backtest_flow import PipelineBacktestMixin
+from .pipeline_candidates import PipelineCandidatePoolMixin
 from .pipeline_cloud import (
     build_cloud_similarity_rows,
     cloud_correlation_risk,
@@ -79,27 +68,63 @@ from .pipeline_cloud import (
     smart_rank_candidates,
     smart_ranking_score,
 )
-from .secondary_fusion import SecondaryFusionService
-from .strategy_plugins import StrategyPluginRegistry
-from .strategy_lifecycle import StrategyLifecycleTracker
-from .strategy_switch import StrategySwitchService
-from .auto_calibrator import AutoCalibrator
-from .iterative_optimizer import IterativeOptimizer
-from .production_context import build_production_context, eligible_strategy_profiles
-from .research_cycle_orchestrator import ResearchCycleOrchestrator
-from .rolling_validation import RollingValidationService
-from .robustness_policy import RobustnessPolicy
-
 from .pipeline_context_sync import PipelineContextSyncMixin
-from .pipeline_services import PipelineServiceFactoryMixin
-from .pipeline_strategy import PipelineStrategyMixin
-from .pipeline_candidates import PipelineCandidatePoolMixin
+from .pipeline_helpers import (
+    assistant_guidance_for_generator as _assistant_guidance_for_generator,
+)
+from .pipeline_helpers import (
+    attach_assistant_guidance as _attach_assistant_guidance,
+)
+from .pipeline_helpers import (
+    blocked_gate as _blocked_gate,
+)
+from .pipeline_helpers import (
+    expr_key as _expr_key,
+)
+from .pipeline_helpers import (
+    rank_candidates,
+)
+from .legacy_simulation_service import LegacySimulationService
+from .pipeline_observability import (
+    apply_observability_generation_guidance,
+    refresh_observability_throttle,
+)
+from .pipeline_official_context import (
+    OfficialContextLoadService,
+    active_dataset_field_names,
+    configured_official_context_files_exist,
+    official_context_reasons,
+    refresh_context_validation_cache,
+)
 from .pipeline_official_validation_flow import PipelineOfficialValidationMixin
-from .pipeline_backtest_flow import PipelineBacktestMixin
-from .pipeline_legacy_simulation import PipelineLegacySimulationMixin
-from .pipeline_submission_gate import PipelineSubmissionMixin
-from .pipeline_snapshots import PipelineSnapshotMixin
 from .pipeline_runtime import PipelineRuntimeMixin
+from .pipeline_services import PipelineServiceFactoryMixin
+from .pipeline_snapshot import (
+    PipelineSnapshotBuilder,
+    PipelineSnapshotServices,
+    PipelineSnapshotState,
+    backtest_slot_snapshot,
+)
+from .pipeline_snapshots import PipelineSnapshotMixin
+from .pipeline_state import (
+    CycleState,
+    PipelineRuntimeState,
+    bind_runtime_state_properties,
+    record_strategy_reward,
+)
+from .pipeline_strategy import PipelineStrategyMixin
+from .pipeline_submission_gate import PipelineSubmissionMixin
+from .production_context import build_production_context, eligible_strategy_profiles
+from .repository import ResearchRepository
+from .research_cycle_orchestrator import ResearchCycleOrchestrator
+from .robustness_policy import RobustnessPolicy
+from .rolling_validation import RollingValidationService
+from .safety import SubmissionLedger
+from .scoring import build_scorecard, evaluate_quality_gate
+from .secondary_fusion import SecondaryFusionService
+from .strategy_lifecycle import StrategyLifecycleTracker
+from .strategy_plugins import StrategyPluginRegistry
+from .strategy_switch import StrategySwitchService
 
 SUBMITTED_CLOUD_STATUSES = {"ACTIVE", "SUBMITTED", "PRODUCTION", "CONDUCTED"}
 
@@ -113,7 +138,6 @@ class AlphaResearchPipeline(
     PipelineCandidatePoolMixin,
     PipelineOfficialValidationMixin,
     PipelineBacktestMixin,
-    PipelineLegacySimulationMixin,
     PipelineSubmissionMixin,
     PipelineSnapshotMixin,
 ):
@@ -195,6 +219,12 @@ class AlphaResearchPipeline(
             from .pipeline_services_container import PipelineServices
             self._services_container = PipelineServices(self)
         return self._services_container
+
+    def _should_remove_after_official_result(self, candidate):
+        """Delegate to LegacySimulationService for backward compatibility."""
+        if not hasattr(self, "_legacy_simulation_service"):
+            self._legacy_simulation_service = LegacySimulationService(self)
+        return self._legacy_simulation_service._should_remove_after_official_result(candidate)
 
     # ── B-03: Extracted post-processing phase ──────────────────────────
     def _run_cycle_post_processing(
