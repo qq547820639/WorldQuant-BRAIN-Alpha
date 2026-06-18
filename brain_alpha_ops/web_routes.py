@@ -7,44 +7,83 @@ from __future__ import annotations
 
 import json
 import logging
-from pathlib import Path
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Callable
+
 from brain_alpha_ops.config import load_run_config, runtime_project_root
 from brain_alpha_ops.redaction import redact_error_message
 from brain_alpha_ops.types import (
-    WebRouteResponse,
-    CandidateListResponse,
     BacktestSlotResponse,
+    CandidateListResponse,
     ConfigResponse,
     SubmissionReadinessResponse,
+    WebRouteResponse,
 )
-from brain_alpha_ops.web_session import session_status as _web_session_status
 from brain_alpha_ops.web_backtest_slots import (
     backtest_queue_next_action as _backtest_queue_next_action,
+)
+from brain_alpha_ops.web_backtest_slots import (
     backtest_slot_limit as _shared_backtest_slot_limit,
+)
+from brain_alpha_ops.web_backtest_slots import (
     backtest_slots_payload as _shared_backtest_slots_payload,
+)
+from brain_alpha_ops.web_backtest_slots import (
     candidate_high_cloud_similarity_blocked as _candidate_high_cloud_similarity_blocked,
+)
+from brain_alpha_ops.web_backtest_slots import (
     candidate_local_backtest_failed as _candidate_local_backtest_failed,
+)
+from brain_alpha_ops.web_backtest_slots import (
     candidate_local_valid as _candidate_local_valid,
+)
+from brain_alpha_ops.web_backtest_slots import (
     candidate_official_review_blockers as _candidate_official_review_blockers,
+)
+from brain_alpha_ops.web_backtest_slots import (
     candidate_score as _candidate_score,
+)
+from brain_alpha_ops.web_backtest_slots import (
     candidate_submit_evidence_blockers as _candidate_submit_evidence_blockers,
+)
+from brain_alpha_ops.web_backtest_slots import (
     is_submit_only_quality_reason as _is_submit_only_quality_reason,
+)
+from brain_alpha_ops.web_backtest_slots import (
     official_simulation_score_threshold as _shared_official_simulation_score_threshold,
+)
+from brain_alpha_ops.web_backtest_slots import (
     slot_active as _slot_active,
+)
+from brain_alpha_ops.web_backtest_slots import (
     slot_has_official_work_record as _slot_has_official_work_record,
+)
+from brain_alpha_ops.web_backtest_slots import (
     slot_payload as _slot_payload,
 )
-from brain_alpha_ops.web_candidate_payloads import (
+from brain_alpha_ops.web_candidates.payloads import (
     annotate_candidate_rows as _annotate_candidate_rows,
+)
+from brain_alpha_ops.web_candidates.payloads import (
     candidate_main_pool as _candidate_main_pool,
+)
+from brain_alpha_ops.web_candidates.payloads import (
     candidate_pool_summary as _candidate_pool_summary,
+)
+from brain_alpha_ops.web_candidates.payloads import (
     candidate_summary as _candidate_rows_summary,
+)
+from brain_alpha_ops.web_candidates.payloads import (
     candidate_summary_from_iter as _candidate_rows_summary_from_iter,
 )
-from brain_alpha_ops.web_candidate_workflow import candidate_workflow_plan as _candidate_workflow_plan
-from brain_alpha_ops.web_submit_readiness import submit_readiness_payload as _build_submit_readiness_payload
+from brain_alpha_ops.web_candidates.workflow import (
+    candidate_workflow_plan as _candidate_workflow_plan,
+)
+from brain_alpha_ops.web_session import session_status as _web_session_status
+from brain_alpha_ops.web_submit_readiness import (
+    submit_readiness_payload as _build_submit_readiness_payload,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -80,7 +119,9 @@ def dispatch_get(handler: Any, path: str, query: dict) -> None:
 
     # Simulation eligibility preview
     if path == "/api/candidates/simulate/eligible":
-        from brain_alpha_ops.web_candidate_simulation import simulation_candidates_payload
+        from brain_alpha_ops.web_candidates.simulation import (
+            simulation_candidates_payload,
+        )
         try:
             handler._send_json(simulation_candidates_payload(dict(query)))
         except Exception as exc:
@@ -108,8 +149,14 @@ def dispatch_get(handler: Any, path: str, query: dict) -> None:
     # Phase state (v4.0)
     if path == "/api/phase_state":
         from brain_alpha_ops.web.handlers.phase import phase_state_payload
-        from brain_alpha_ops.web_handler_candidate_routes import candidate_ledger_summary
-        from brain_alpha_ops.web_cloud_snapshot import cloud_alpha_cache_probe, cloud_alpha_snapshot, official_context_file_counts
+        from brain_alpha_ops.web_cloud_snapshot import (
+            cloud_alpha_cache_probe,
+            cloud_alpha_snapshot,
+            official_context_file_counts,
+        )
+        from brain_alpha_ops.web_handler_candidate_routes import (
+            candidate_ledger_summary,
+        )
         try:
             handler._send_json(phase_state_payload(
                 sync_jobs=getattr(handler, "SYNC_JOBS", None),
@@ -243,8 +290,9 @@ def _handle_pipeline_start(handler: Any, payload: dict) -> None:
     """Handle pipeline start request."""
     import os
     import threading
-    from brain_alpha_ops.web_jobs import job_update, new_job_id
+
     from brain_alpha_ops.redaction import redact_error_message
+    from brain_alpha_ops.web_jobs import job_update, new_job_id
 
     job_id = new_job_id("pipeline")
     job_update(job_id, status="starting", progress={"phase": "init", "percent_complete": 0})
@@ -252,8 +300,8 @@ def _handle_pipeline_start(handler: Any, payload: dict) -> None:
     # Start pipeline in background thread
     def run_pipeline():
         try:
-            from brain_alpha_ops.config import load_run_config
             from brain_alpha_ops.brain_api.official import OfficialBrainAPI
+            from brain_alpha_ops.config import load_run_config
             from brain_alpha_ops.research.pipeline import AlphaResearchPipeline
 
             config = load_run_config(payload.get("config_path"))
@@ -310,7 +358,11 @@ def _handle_config_update(handler: Any, payload: dict) -> None:
     # Whitelist: only these top-level RunConfig fields are user-configurable.
     _CONFIG_UPDATE_WHITELIST = frozenset({"auto_submit", "credentials", "ops"})
     try:
-        from brain_alpha_ops.config import ConfigValidationError, validate_run_config, write_run_config
+        from brain_alpha_ops.config import (
+            ConfigValidationError,
+            validate_run_config,
+            write_run_config,
+        )
         config = load_run_config()
         # Update config with payload — only whitelisted fields
         rejected: list[str] = []
@@ -387,11 +439,11 @@ def _handle_candidate_check(handler: Any, path: str, payload: dict) -> None:
 
 def _handle_candidate_simulate(handler: Any, payload: dict) -> None:
     """Start BRAIN simulation for eligible candidates."""
-    from brain_alpha_ops.web_candidate_simulation import (
+    from brain_alpha_ops.web_candidates.simulation import (
         simulate_candidates_job,
         simulation_candidates_payload,
     )
-    from brain_alpha_ops.web_jobs import job_update, new_job_id, is_cancelled
+    from brain_alpha_ops.web_jobs import is_cancelled, job_update, new_job_id
 
     # Preview mode: just show eligible candidates without starting simulation
     if payload.get("preview"):
@@ -468,7 +520,7 @@ def _public_config(config: dict) -> dict:
 
 def _status_payload(query: dict) -> dict:
     """Get status payload for job status query."""
-    from brain_alpha_ops.web_jobs import job_get, ASYNC_JOBS, ASYNC_JOBS_LOCK
+    from brain_alpha_ops.web_jobs import ASYNC_JOBS, ASYNC_JOBS_LOCK, job_get
 
     job_id = ""
     if isinstance(query, dict):

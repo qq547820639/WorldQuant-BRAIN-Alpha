@@ -13,32 +13,58 @@ import logging
 import sys
 import threading
 from http.server import BaseHTTPRequestHandler
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import parse_qs, urlparse
 
-from brain_alpha_ops.config import load_run_config as _load_run_config
+from brain_alpha_ops import web_routes as _web_routes
+from brain_alpha_ops import web_runtime_facade as _web_runtime_facade
 from brain_alpha_ops import web_session as _web_session
+from brain_alpha_ops import web_submit_readiness as _web_submit_readiness
+from brain_alpha_ops.config import load_run_config as _load_run_config
 from brain_alpha_ops.runtime_constants import WebDefaults as _WebDefaults
-from brain_alpha_ops.web_application_context import WebApplicationContext as _WebApplicationContext
-from brain_alpha_ops.web_facade_bindings import build_web_facade_bindings as _build_web_facade_bindings
+from brain_alpha_ops.web_application_context import (
+    WebApplicationContext as _WebApplicationContext,
+)
+from brain_alpha_ops.web_cli import main as _main_cli
+from brain_alpha_ops.web_cli import serve as _serve_server
+from brain_alpha_ops.web_cli import shutdown_server as _shutdown_server
+from brain_alpha_ops.web_cli import smoke_test_server as _smoke_test_server
+from brain_alpha_ops.web_compat_facade import _load_html
+from brain_alpha_ops.web_compat_facade import (
+    get_snapshot_export_names as _get_snapshot_export_names,
+)
+from brain_alpha_ops.web_compat_facade import (
+    install_compat_facades as _install_compat_facades,
+)
+from brain_alpha_ops.web_facade_bindings import (
+    build_web_facade_bindings as _build_web_facade_bindings,
+)
 from brain_alpha_ops.web_html import (
     load_html as _load_html_asset,
+)
+from brain_alpha_ops.web_html import (
     resolve_react_asset as _resolve_react_asset,
 )
-from brain_alpha_ops.web_legacy_exports import build_legacy_imported_exports as _build_legacy_imported_exports
-from brain_alpha_ops.web_compat_facade import install_compat_facades as _install_compat_facades, _load_html, get_snapshot_export_names as _get_snapshot_export_names
-from brain_alpha_ops import web_runtime_facade as _web_runtime_facade
-from brain_alpha_ops.web_cli import serve as _serve_server, shutdown_server as _shutdown_server, main as _main_cli, smoke_test_server as _smoke_test_server
-from brain_alpha_ops.web_server_lifecycle import (
-    SafeThreadingHTTPServer as _SafeThreadingHTTPServer,
-    find_free_port as _find_free_port,
+from brain_alpha_ops.web_jobs import job_get as _job_get
+from brain_alpha_ops.web_jobs import job_update as _job_update
+from brain_alpha_ops.web_jobs import new_job_id as _new_job_id
+from brain_alpha_ops.web_legacy_exports import (
+    build_legacy_imported_exports as _build_legacy_imported_exports,
 )
-from brain_alpha_ops import web_routes as _web_routes
-from brain_alpha_ops import web_submit_readiness as _web_submit_readiness
 from brain_alpha_ops.web_routes import dispatch_get as _routes_dispatch_get
 from brain_alpha_ops.web_routes import dispatch_post as _routes_dispatch_post
-from brain_alpha_ops.web_jobs import job_get as _job_get, job_update as _job_update, new_job_id as _new_job_id
-from brain_alpha_ops.web_service_namespace import build_web_service_namespace as _build_web_service_namespace
-from brain_alpha_ops.web_session import csrf_for_session as _csrf_for_session, DEFAULT_SESSION_TTL_SECONDS as _DEFAULT_SESSION_TTL_SECONDS
+from brain_alpha_ops.web_server_lifecycle import (
+    SafeThreadingHTTPServer as _SafeThreadingHTTPServer,
+)
+from brain_alpha_ops.web_server_lifecycle import (
+    find_free_port as _find_free_port,
+)
+from brain_alpha_ops.web_service_namespace import (
+    build_web_service_namespace as _build_web_service_namespace,
+)
+from brain_alpha_ops.web_session import (
+    DEFAULT_SESSION_TTL_SECONDS as _DEFAULT_SESSION_TTL_SECONDS,
+)
+from brain_alpha_ops.web_session import csrf_for_session as _csrf_for_session
 from brain_alpha_ops.web_sse import handle_sse_request as _handle_sse_request
 
 logger = logging.getLogger(__name__)
@@ -114,7 +140,10 @@ def _safe_int(value: object) -> int:
 # ── Real backend handlers ─────────────────────────────────────────────────
 def _real_sync(payload):
     try:
-        from brain_alpha_ops.brain_api.user_alpha_sync import list_user_alphas_for_sync, sync_range_from_payload
+        from brain_alpha_ops.brain_api.user_alpha_sync import (
+            list_user_alphas_for_sync,
+            sync_range_from_payload,
+        )
         from brain_alpha_ops.config import load_run_config
         from brain_alpha_ops.runner import api_from_run_config
         config = load_run_config()
@@ -165,12 +194,12 @@ def _run_generate_candidates_job(job_id: str, payload: dict) -> None:
         },
     )
     try:
+        # Initialize official data loader so local_quality() can score expressions
+        from brain_alpha_ops.data import OfficialDataLoader
         from brain_alpha_ops.models import Candidate
         from brain_alpha_ops.redaction import redact_error_message
         from brain_alpha_ops.research.repository import ResearchRepository
-        from brain_alpha_ops.web_candidate_generation import generate_candidates_payload
-        # Initialize official data loader so local_quality() can score expressions
-        from brain_alpha_ops.data import OfficialDataLoader
+        from brain_alpha_ops.web_candidates.generation import generate_candidates_payload
         OfficialDataLoader.instance()
 
         run_config_loader = globals().get("load_run_config", _load_run_config)
@@ -238,7 +267,7 @@ def _persist_generated_candidates(job_id: str, run_config, result: dict, candida
                 skipped_reasons[reason] = skipped_reasons.get(reason, 0) + 1
             continue
         try:
-            from brain_alpha_ops.web_candidate_audit import attach_scientific_audit
+            from brain_alpha_ops.web_candidates.audit import attach_scientific_audit
 
             if "scientific_audit" not in row and not (
                 isinstance(row.get("extra_fields"), dict)
@@ -298,7 +327,9 @@ def _generated_candidate_skip_reasons(row: dict) -> list[str]:
 def _generation_status_message(result: dict) -> str:
     if not result.get("ok"):
         return str(result.get("error") or "Candidate generation failed.")
-    from brain_alpha_ops.web_candidate_generation_summary import candidate_generation_status_message
+    from brain_alpha_ops.web_candidates.generation_summary import (
+        candidate_generation_status_message,
+    )
 
     return candidate_generation_status_message(result)
 
@@ -324,8 +355,8 @@ def _real_check(payload):
 def _real_score(payload):
     try:
         from brain_alpha_ops.config import load_run_config
-        from brain_alpha_ops.research.scoring import build_scorecard
         from brain_alpha_ops.models import Candidate
+        from brain_alpha_ops.research.scoring import build_scorecard
         config = load_run_config()
         expr = payload.get("expression", "")
         candidate = Candidate(expression=expr, alpha_id='', family='', hypothesis='')
@@ -396,8 +427,8 @@ def _run_submit_alpha_job(job_id: str, payload: dict) -> None:
         return
     try:
         from brain_alpha_ops.config import load_run_config
-        from brain_alpha_ops.runner import api_from_run_config
         from brain_alpha_ops.redaction import redact_error_message
+        from brain_alpha_ops.runner import api_from_run_config
         config = load_run_config()
         api = api_from_run_config(config)
         _job_update(job_id, progress={
@@ -669,7 +700,9 @@ def _production_job_store():
 
 def _real_check_batch(payload):
     """Batch expression validation delegating to web_check_batch_context."""
-    from brain_alpha_ops.web_check_batch_context import check_batch_official_context_payload
+    from brain_alpha_ops.web_check_batch_context import (
+        check_batch_official_context_payload,
+    )
 
     # Resolve through globals so tests can monkeypatch web.load_run_config.
     loader = globals().get("load_run_config", _load_run_config)
@@ -897,7 +930,9 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("X-Frame-Options", "DENY")
         self.send_header("Referrer-Policy", "no-referrer")
         # Lazy import: web_csp uses re + hashlib only, safe to import here.
-        from brain_alpha_ops.web_csp import content_security_policy_for_html as _csp_for_html
+        from brain_alpha_ops.web_csp import (
+            content_security_policy_for_html as _csp_for_html,
+        )
         self.send_header("Content-Security-Policy", _csp_for_html(html or ""))
 
     def _send_html(self, html, *, extra_headers=None):
@@ -929,7 +964,7 @@ class Handler(BaseHTTPRequestHandler):
 
 def _json_default(obj):
     """Safe JSON default for module-level dispatch helpers."""
-    from datetime import datetime, date
+    from datetime import date, datetime
     from decimal import Decimal
     if isinstance(obj, (datetime, date)):
         return obj.isoformat()

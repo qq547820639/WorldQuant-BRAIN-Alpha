@@ -10,15 +10,21 @@ file size (≈ 1004 lines) is acceptable and well within the project's
 """
 from __future__ import annotations
 
-from functools import wraps
 import logging
 import time
+from functools import wraps
 from typing import Any, Callable
 from urllib.parse import parse_qs
 
-from brain_alpha_ops.research.assistant import AssistantResponseParseError
 from brain_alpha_ops.redaction import redact_text
-from brain_alpha_ops.web_candidate_payloads import compact_job_result as _compact_job_result
+from brain_alpha_ops.research.assistant import AssistantResponseParseError
+
+# P0-2 fix (2026-06-13): human-in-the-loop confirmation gate for the
+# /api/candidates/simulate route.
+from brain_alpha_ops.runtime_constants import HILDefaults as _HILDefaults
+from brain_alpha_ops.web_candidates.payloads import (
+    compact_job_result as _compact_job_result,
+)
 from brain_alpha_ops.web_dispatch_context import (
     WebDispatchActionContext,
     WebDispatchAssistantContext,
@@ -29,10 +35,16 @@ from brain_alpha_ops.web_dispatch_context import (
     WebDispatchSessionContext,
     WebHandlerDispatchContext,
 )
-from brain_alpha_ops.web_handler_candidate_routes import get_candidates as _get_candidates
+from brain_alpha_ops.web_handler_candidate_routes import (
+    get_candidates as _get_candidates,
+)
 from brain_alpha_ops.web_handler_dispatch_core import (
     apply_rate_limit as _apply_rate_limit,
+)
+from brain_alpha_ops.web_handler_dispatch_core import (
     dispatch_route as _dispatch_route,
+)
+from brain_alpha_ops.web_handler_dispatch_core import (
     rate_limit_key as _rate_limit_key,
 )
 from brain_alpha_ops.web_payload_validation import (
@@ -52,11 +64,10 @@ from brain_alpha_ops.web_post_handlers import stop_job_payload
 from brain_alpha_ops.web_state_contract import enrich_error_payload, enrich_job_response
 from brain_alpha_ops.web_sync_status_payload import (
     with_official_context_cache as _with_official_context_cache,
+)
+from brain_alpha_ops.web_sync_status_payload import (
     with_sync_history as _with_sync_history,
 )
-# P0-2 fix (2026-06-13): human-in-the-loop confirmation gate for the
-# /api/candidates/simulate route.
-from brain_alpha_ops.runtime_constants import HILDefaults as _HILDefaults
 
 logger = logging.getLogger(__name__)
 
@@ -680,8 +691,8 @@ def _post_scoring_attribution(handler: Any, _parsed: Any, _ctx: WebHandlerDispat
 
 def _get_candidates_simulate_eligible(handler: Any, _parsed: Any, _ctx: WebHandlerDispatchContext) -> None:
     """Return eligible candidates for BRAIN simulation."""
-    from brain_alpha_ops.web_candidate_simulation import simulation_candidates_payload
     from brain_alpha_ops.redaction import redact_error_message
+    from brain_alpha_ops.web_candidates.simulation import simulation_candidates_payload
     try:
         # Use parse_qs to get {key: [val]} then flatten single-element lists.
         _parsed_qs = parse_qs(_parsed.query)
@@ -755,10 +766,13 @@ _GET_DISPATCH_HANDLERS: dict[str, RouteDispatcher] = {
 @_validated_post_route(validate_simulation_payload, "SIMULATE_ERROR")
 def _post_candidates_simulate(handler: Any, _parsed: Any, ctx: WebHandlerDispatchContext, payload: dict[str, Any]) -> None:
     """Start BRAIN simulation for eligible candidates."""
-    from brain_alpha_ops.web_candidate_simulation import simulate_candidates_job, simulation_candidates_payload
-
     import threading
+
     from brain_alpha_ops.redaction import redact_error_message
+    from brain_alpha_ops.web_candidates.simulation import (
+        simulate_candidates_job,
+        simulation_candidates_payload,
+    )
 
     if payload.get("preview"):
         try:
@@ -883,7 +897,7 @@ def _start_optimize_candidates_job(ctx: WebHandlerDispatchContext, job_id: str, 
     import threading
 
     def worker(body: dict[str, Any]) -> dict[str, Any]:
-        from brain_alpha_ops.web_candidate_optimization import (
+        from brain_alpha_ops.web_candidates.optimization import (
             optimize_candidates_payload,
             persist_optimized_candidates,
         )
