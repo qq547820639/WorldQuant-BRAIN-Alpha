@@ -58,7 +58,7 @@ from .observability import build_research_observability_snapshot
 from .official_call_guard import OfficialCallGuard
 from .official_validation import OfficialValidationService
 from .official_workflow import OfficialWorkflowService
-from .pipeline_backtest_flow import PipelineBacktestMixin
+from .backtest_flow_service import BacktestFlowService
 from .pipeline_candidates import PipelineCandidatePoolMixin
 from .pipeline_cloud import (
     build_cloud_similarity_rows,
@@ -134,7 +134,6 @@ class AlphaResearchPipeline(
     PipelineRuntimeMixin,
     PipelineServiceFactoryMixin,
     PipelineCandidatePoolMixin,
-    PipelineBacktestMixin,
     PipelineSnapshotMixin,
 ):
     """End-to-end alpha research, simulation, scoring, and optional submission.
@@ -305,6 +304,48 @@ class AlphaResearchPipeline(
         if not hasattr(self, "_strategy_service"):
             self._strategy_service = StrategyService(self)
         return self._strategy_service._maybe_switch_strategy(cycle, fields, operators, pool_by_expression, accepted_candidates, archive_stats)
+
+    def _fill_backtest_slots(self, cycle, state):
+        """Delegate to BacktestFlowService for backward compatibility."""
+        if not hasattr(self, "_backtest_flow_service"):
+            self._backtest_flow_service = BacktestFlowService(self)
+        return self._backtest_flow_service._fill_backtest_slots(cycle, state)
+
+    def _poll_due_backtests(self, cycle, pool_by_expression, accepted_candidates, archive_stats, archive_samples, blocked_expressions, submitted_this_run, auto_submit, *, force_initial=False):
+        """Delegate to BacktestFlowService for backward compatibility."""
+        if not hasattr(self, "_backtest_flow_service"):
+            self._backtest_flow_service = BacktestFlowService(self)
+        return self._backtest_flow_service._poll_due_backtests(cycle, pool_by_expression, accepted_candidates, archive_stats, archive_samples, blocked_expressions, submitted_this_run, auto_submit, force_initial=force_initial)
+
+    def _try_fusion_top_candidates(self, pool_by_expression, blocked_expressions, cycle):
+        """Delegate to BacktestFlowService for backward compatibility."""
+        if not hasattr(self, "_backtest_flow_service"):
+            self._backtest_flow_service = BacktestFlowService(self)
+        return self._backtest_flow_service._try_fusion_top_candidates(pool_by_expression, blocked_expressions, cycle)
+
+    def _simulation_retry_count(self, candidate):
+        """Delegate to BacktestFlowService for backward compatibility."""
+        if not hasattr(self, "_backtest_flow_service"):
+            self._backtest_flow_service = BacktestFlowService(self)
+        return self._backtest_flow_service._simulation_retry_count(candidate)
+
+    def _retry_simulation_candidate(self, candidate, pool_by_expression, reason):
+        """Delegate to BacktestFlowService for backward compatibility."""
+        if not hasattr(self, "_backtest_flow_service"):
+            self._backtest_flow_service = BacktestFlowService(self)
+        return self._backtest_flow_service._retry_simulation_candidate(candidate, pool_by_expression, reason)
+
+    def _create_secondary_fusion_candidate(self, candidate, pool_by_expression, blocked_expressions, reason):
+        """Delegate to BacktestFlowService for backward compatibility."""
+        if not hasattr(self, "_backtest_flow_service"):
+            self._backtest_flow_service = BacktestFlowService(self)
+        return self._backtest_flow_service._create_secondary_fusion_candidate(candidate, pool_by_expression, blocked_expressions, reason)
+
+    def _poll_interval_seconds(self):
+        """Delegate to BacktestFlowService for backward compatibility."""
+        if not hasattr(self, "_backtest_flow_service"):
+            self._backtest_flow_service = BacktestFlowService(self)
+        return self._backtest_flow_service._poll_interval_seconds()
 
     # ── B-03: Extracted post-processing phase ──────────────────────────
     def _run_cycle_post_processing(
