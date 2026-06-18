@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import Any, Callable, Protocol
 
-from brain_alpha_ops.agent_tools import BrainAlphaToolbox
 from brain_alpha_ops.config import RunConfig, resolve_default_dataset_id
 from brain_alpha_ops.error_payloads import user_error_payload
 from brain_alpha_ops.errors import ValidationError
@@ -66,6 +65,7 @@ RepositoryFactory = Callable[[str], ResearchRepository]
 
 
 def _default_toolbox_factory(run_config: RunConfig) -> ToolboxLike:
+    from brain_alpha_ops.agent_tools import BrainAlphaToolbox
     return BrainAlphaToolbox(run_config=run_config, allow_live_api=False, allow_submit=False)
 
 

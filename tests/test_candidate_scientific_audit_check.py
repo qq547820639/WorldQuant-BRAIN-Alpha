@@ -17,7 +17,7 @@ def test_candidate_scientific_audit_check_accepts_current_tree():
 def test_candidate_scientific_audit_check_rejects_test_feedback_sources(tmp_path):
     root = tmp_path
     _write_required_tree(root)
-    generation = root / "brain_alpha_ops" / "web_candidate_generation.py"
+    generation = root / "brain_alpha_ops" / "web_candidates/generation.py"
     generation.write_text(
         generation.read_text(encoding="utf-8")
         + "\nattach_scientific_audit(row, operation=\"candidate_generation\", feedback_sources=[\"pytest\"])\n",
@@ -33,7 +33,7 @@ def test_candidate_scientific_audit_check_rejects_test_feedback_sources(tmp_path
 def test_candidate_scientific_audit_check_rejects_variable_test_feedback_sources(tmp_path):
     root = tmp_path
     _write_required_tree(root)
-    generation = root / "brain_alpha_ops" / "web_candidate_generation.py"
+    generation = root / "brain_alpha_ops" / "web_candidates/generation.py"
     generation.write_text(
         generation.read_text(encoding="utf-8")
         + "\n".join(
@@ -62,7 +62,7 @@ def test_candidate_scientific_audit_check_rejects_variable_test_feedback_sources
 def test_candidate_scientific_audit_check_rejects_module_constant_test_feedback_sources(tmp_path):
     root = tmp_path
     _write_required_tree(root)
-    generation = root / "brain_alpha_ops" / "web_candidate_generation.py"
+    generation = root / "brain_alpha_ops" / "web_candidates/generation.py"
     generation.write_text(
         generation.read_text(encoding="utf-8")
         + "\n".join(
@@ -91,7 +91,7 @@ def test_candidate_scientific_audit_check_rejects_module_constant_test_feedback_
 def test_candidate_scientific_audit_check_rejects_append_event_test_feedback_sources(tmp_path):
     root = tmp_path
     _write_required_tree(root)
-    simulation = root / "brain_alpha_ops" / "web_candidate_simulation.py"
+    simulation = root / "brain_alpha_ops" / "web_candidates/simulation.py"
     simulation.write_text(
         simulation.read_text(encoding="utf-8")
         + "\nappend_scientific_audit_event(row, operation=\"official_simulation_writeback\", feedback_sources=[\"vitest\"])\n",
@@ -107,7 +107,7 @@ def test_candidate_scientific_audit_check_rejects_append_event_test_feedback_sou
 def test_candidate_scientific_audit_check_scans_simulation_failure_helper(tmp_path):
     root = tmp_path
     _write_required_tree(root)
-    simulation_failures = root / "brain_alpha_ops" / "web_candidate_simulation_failures.py"
+    simulation_failures = root / "brain_alpha_ops" / "web_candidates/simulation_failures.py"
     simulation_failures.write_text(
         simulation_failures.read_text(encoding="utf-8")
         + "\nappend_scientific_audit_event(row, operation=\"official_simulation_writeback\", feedback_sources=[\"vitest\"])\n",
@@ -119,7 +119,7 @@ def test_candidate_scientific_audit_check_scans_simulation_failure_helper(tmp_pa
     assert result["ok"] is False
     assert any(
         finding["code"] == "test_feedback_source_in_production"
-        and finding["file"].endswith("web_candidate_simulation_failures.py")
+        and finding["file"].endswith("web_candidates/simulation_failures.py")
         for finding in result["findings"]
     )
 
@@ -127,7 +127,8 @@ def test_candidate_scientific_audit_check_scans_simulation_failure_helper(tmp_pa
 def _write_required_tree(root: Path) -> None:
     (root / "brain_alpha_ops").mkdir(parents=True)
     (root / "scripts").mkdir(parents=True)
-    (root / "brain_alpha_ops" / "web_candidate_audit.py").write_text(
+    (root / "brain_alpha_ops" / "web_candidates").mkdir(parents=True)
+    (root / "brain_alpha_ops" / "web_candidates" / "audit.py").write_text(
         "\n".join(
             [
                 "candidate-scientific-audit-v1",
@@ -148,15 +149,15 @@ def _write_required_tree(root: Path) -> None:
         ),
         encoding="utf-8",
     )
-    (root / "brain_alpha_ops" / "web_candidate_generation.py").write_text(
+    (root / "brain_alpha_ops" / "web_candidates" / "generation.py").write_text(
         'attach_scientific_audit(row, operation="candidate_generation")\nscientific_audit_summary(processed_candidates)\n',
         encoding="utf-8",
     )
-    (root / "brain_alpha_ops" / "web_candidate_optimization.py").write_text(
+    (root / "brain_alpha_ops" / "web_candidates" / "optimization.py").write_text(
         'expression_official_context_proof(row)\nexpression_delta(row)\noptimization_explanation(row)\noptimizer_trace(row)\nselected_strategy(row)\nfailed_dimension(row)\nattach_scientific_audit(row, operation="candidate_optimization", parent=parent.to_dict())\nscientific_audit_summary(processed_candidates)\n',
         encoding="utf-8",
     )
-    (root / "brain_alpha_ops" / "web_candidate_optimization_explainability.py").write_text(
+    (root / "brain_alpha_ops" / "web_candidates" / "optimization_explainability.py").write_text(
         "\n".join(
             [
                 "optimization_concentration_audit",
@@ -169,23 +170,23 @@ def _write_required_tree(root: Path) -> None:
         ),
         encoding="utf-8",
     )
-    (root / "brain_alpha_ops" / "web_candidate_decisions.py").write_text(
+    (root / "brain_alpha_ops" / "web_candidates" / "decisions.py").write_text(
         'attach_scientific_audit(row, operation="production_decision")\n',
         encoding="utf-8",
     )
-    (root / "brain_alpha_ops" / "web_candidate_payloads.py").write_text(
+    (root / "brain_alpha_ops" / "web_candidates" / "payloads.py").write_text(
         "scientific_audit_summary(annotated_rows)\n",
         encoding="utf-8",
     )
-    (root / "brain_alpha_ops" / "web_candidate_simulation.py").write_text(
+    (root / "brain_alpha_ops" / "web_candidates" / "simulation.py").write_text(
         'append_scientific_audit_event(row, operation="official_simulation_writeback")\n',
         encoding="utf-8",
     )
-    (root / "brain_alpha_ops" / "web_candidate_simulation_failures.py").write_text(
+    (root / "brain_alpha_ops" / "web_candidates" / "simulation_failures.py").write_text(
         'append_scientific_audit_event(row, operation="official_simulation_writeback")\n',
         encoding="utf-8",
     )
-    (root / "brain_alpha_ops" / "web_candidate_check_evidence.py").write_text(
+    (root / "brain_alpha_ops" / "web_candidates" / "check_evidence.py").write_text(
         'append_scientific_audit_event(row, operation="pre_submit_availability_check")\n',
         encoding="utf-8",
     )

@@ -15,14 +15,14 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-AUDIT_MODULE = ROOT / "brain_alpha_ops" / "web_candidate_audit.py"
-GENERATION_MODULE = ROOT / "brain_alpha_ops" / "web_candidate_generation.py"
-OPTIMIZATION_MODULE = ROOT / "brain_alpha_ops" / "web_candidate_optimization.py"
-OPTIMIZATION_EXPLAINABILITY_MODULE = ROOT / "brain_alpha_ops" / "web_candidate_optimization_explainability.py"
-DECISIONS_MODULE = ROOT / "brain_alpha_ops" / "web_candidate_decisions.py"
-PAYLOADS_MODULE = ROOT / "brain_alpha_ops" / "web_candidate_payloads.py"
-SIMULATION_MODULE = ROOT / "brain_alpha_ops" / "web_candidate_simulation.py"
-CHECK_EVIDENCE_MODULE = ROOT / "brain_alpha_ops" / "web_candidate_check_evidence.py"
+AUDIT_MODULE = ROOT / "brain_alpha_ops" / "web_candidates/audit.py"
+GENERATION_MODULE = ROOT / "brain_alpha_ops" / "web_candidates/generation.py"
+OPTIMIZATION_MODULE = ROOT / "brain_alpha_ops" / "web_candidates/optimization.py"
+OPTIMIZATION_EXPLAINABILITY_MODULE = ROOT / "brain_alpha_ops" / "web_candidates/optimization_explainability.py"
+DECISIONS_MODULE = ROOT / "brain_alpha_ops" / "web_candidates/decisions.py"
+PAYLOADS_MODULE = ROOT / "brain_alpha_ops" / "web_candidates/payloads.py"
+SIMULATION_MODULE = ROOT / "brain_alpha_ops" / "web_candidates/simulation.py"
+CHECK_EVIDENCE_MODULE = ROOT / "brain_alpha_ops" / "web_candidates/check_evidence.py"
 PIPELINE_RUNTIME_MODULE = ROOT / "brain_alpha_ops" / "research" / "pipeline_runtime.py"
 QUALITY_GATE = ROOT / "scripts" / "quality_gate.py"
 
@@ -41,17 +41,17 @@ FORBIDDEN_FEEDBACK_SOURCE_TOKENS = (
 def check_candidate_scientific_audit(root: str | Path = ROOT) -> dict[str, Any]:
     root_path = Path(root)
     files = {
-        "audit": root_path / "brain_alpha_ops" / "web_candidate_audit.py",
-        "generation": root_path / "brain_alpha_ops" / "web_candidate_generation.py",
-        "optimization": root_path / "brain_alpha_ops" / "web_candidate_optimization.py",
+        "audit": root_path / "brain_alpha_ops" / "web_candidates/audit.py",
+        "generation": root_path / "brain_alpha_ops" / "web_candidates/generation.py",
+        "optimization": root_path / "brain_alpha_ops" / "web_candidates/optimization.py",
         "optimization_explainability": root_path
         / "brain_alpha_ops"
-        / "web_candidate_optimization_explainability.py",
-        "decisions": root_path / "brain_alpha_ops" / "web_candidate_decisions.py",
-        "payloads": root_path / "brain_alpha_ops" / "web_candidate_payloads.py",
-        "simulation": root_path / "brain_alpha_ops" / "web_candidate_simulation.py",
-        "simulation_failures": root_path / "brain_alpha_ops" / "web_candidate_simulation_failures.py",
-        "check_evidence": root_path / "brain_alpha_ops" / "web_candidate_check_evidence.py",
+        / "web_candidates/optimization_explainability.py",
+        "decisions": root_path / "brain_alpha_ops" / "web_candidates/decisions.py",
+        "payloads": root_path / "brain_alpha_ops" / "web_candidates/payloads.py",
+        "simulation": root_path / "brain_alpha_ops" / "web_candidates/simulation.py",
+        "simulation_failures": root_path / "brain_alpha_ops" / "web_candidates/simulation_failures.py",
+        "check_evidence": root_path / "brain_alpha_ops" / "web_candidates/check_evidence.py",
         "pipeline_runtime": root_path / "brain_alpha_ops" / "research" / "pipeline_runtime.py",
         "quality_gate": root_path / "scripts" / "quality_gate.py",
     }
