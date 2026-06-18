@@ -9,6 +9,40 @@ import { useApi } from "@/hooks/useApi";
 import type { BrainCredentials, CloudAlphaCache, JobStatus, OfficialContextCache, SubmitReadinessResponse, SyncHistoryItem, UnifiedProgress } from "@/types";
 import ProgressFeedback from "@/components/ProgressFeedback";
 import { reportIgnoredError } from "@/utils/reportIgnoredError";
+import {
+  ActionPanel,
+  OperationLog,
+  OperationMetric,
+  OverviewCard,
+  type OperationLogEntry,
+  type OperationMode,
+  type SyncRange,
+  type SyncProgressMonitorState,
+  POLL_INTERVAL_MS,
+  SYNC_STATUS_FAILURE_LIMIT,
+  SYNC_PROGRESS_STALL_WARNING_MS,
+  SYNC_PROGRESS_STALL_STOP_MS,
+  STOP_RETRY_AFTER_MS,
+  MAX_LOG_ROWS,
+  ACTIVE_SYNC_JOB_ID_KEY,
+  formatClock,
+  formatDuration,
+  formatCount,
+  firstPositiveFloat,
+  shortOperationId,
+  credentialsPayload,
+  hasPageCredentials,
+  saveStoredSyncJobId,
+  loadStoredSyncJobId,
+  clearStoredSyncJobId,
+  syncProgressMonitorSignature,
+  isTerminalSyncStatus,
+  operationFailureMessage,
+  requestDeadline,
+  syncContextStatus,
+  contextCacheComplete,
+  checkResultCount,
+} from "./OfficialOperations";
 
 interface Props {
   notify: (type: "success" | "error" | "warning" | "info", msg: string) => void;
@@ -37,48 +71,23 @@ interface OperationLogEntry {
   message: string;
 }
 
-type OperationMode = "idle" | "context_refresh" | "readiness" | "checks";
-type OverviewTone = "success" | "warning" | "neutral";
-type SyncStageKind = "scan" | "fields" | "operators" | "datasets" | "other";
-type SyncRange = "3d" | "7d" | "recent" | "6months" | "all";
 
-interface SyncStageMetric {
-  kind: SyncStageKind;
-  label: string;
-  rateLabel: string;
-  unit: string;
-  rateUnit: string;
-  current: number;
-  total: number;
-  elapsedSeconds: number;
-  etaSeconds: number;
-  ratePerSecond: number;
-  pageNumber: number;
-  expectedPages: number;
-  pageSize: number;
-  pageLimit: number;
-  nextOffset: number;
-  newUniqueItems: number;
-  uniqueItems: number;
-  confirmingTotalBoundary: boolean;
-}
 
-interface SyncProgressMonitorState {
-  jobId: string;
-  signature: string;
-  sinceMs: number;
-  warned: boolean;
-  interrupting: boolean;
-}
 
-const POLL_INTERVAL_MS = 2000;
-const SYNC_STATUS_FAILURE_LIMIT = 3;
-const SYNC_PROGRESS_STALL_WARNING_MS = 30_000;
-const SYNC_PROGRESS_STALL_STOP_MS = 90_000;
-const OPERATION_REQUEST_TIMEOUT_MS = 10000;
-const STOP_RETRY_AFTER_MS = 60_000;
-const MAX_LOG_ROWS = 80;
-const ACTIVE_SYNC_JOB_ID_KEY = "brain_alpha_active_sync_job_id";
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 export default function OfficialOperationsPanel({
   notify,
@@ -1206,18 +1215,7 @@ function actionStepLabel(step: string) {
   return readinessNextActionLabel(step);
 }
 
-function operationFailureMessage(raw: unknown, fallback: string) {
-  if (raw && typeof raw === "object") {
-    const payload = raw as Parameters<typeof jobStatusMessage>[0];
-    const message = apiErrorMessage(payload as ApiErrorExperiencePayload, "");
-    if (message) return readableBackendText(message) || message;
-    const state = classifyJobState(payload);
-    if (state.interrupted) return "官方上下文刷新已停止，结果未确认完成。";
-    if (state.failed || state.missing) return fallback;
-  }
-  const message = readableBackendText(raw);
-  return (message && knownApiErrorMessage(raw)) ? message : fallback;
-}
+
 
 function readableBackendText(raw: unknown) {
   const value = String(raw || "").trim();
@@ -1270,14 +1268,7 @@ function formatLocalBacktestStatus(value: unknown, hasEvidence: boolean) {
   return "-";
 }
 
-function requestDeadline() {
-  const controller = new AbortController();
-  const timer = window.setTimeout(() => controller.abort(), OPERATION_REQUEST_TIMEOUT_MS);
-  return {
-    signal: controller.signal,
-    clear: () => window.clearTimeout(timer),
-  };
-}
+
 
 function syncStatusForDisplay(status: JobStatus | null, officialContextCache?: OfficialContextCache): JobStatus | null {
   const cache = status?.official_context_cache || officialContextCache;
@@ -1628,9 +1619,7 @@ function boundedProgressPercent(value: number, terminal: boolean) {
   return Math.max(0, Math.min(upperBound, value));
 }
 
-function isTerminalSyncStatus(status: JobStatus | null) {
-  return classifyJobState(status).terminal;
-}
+
 
 function isSuccessfulSyncStatus(status: JobStatus | null) {
   return classifyJobState(status).successful;
@@ -1640,20 +1629,7 @@ function isRunningScanStatus(status: JobStatus | null) {
   return !isTerminalSyncStatus(status) && syncStageCode(status) === "SCAN";
 }
 
-function syncProgressMonitorSignature(status: JobStatus | null) {
-  if (!isRunningScanStatus(status)) return "";
-  const progress = status?.progress;
-  const parts = [
-    syncStageCode(status),
-    numberField(progress, "scanned"),
-    numberField(progress, "pages_fetched") || numberField(progress, "page_number"),
-    numberField(progress, "next_offset"),
-    numberField(progress, "new_unique_items"),
-    numberField(progress, "unique_items"),
-    numberField(progress, "page_size"),
-  ];
-  return parts.join(":");
-}
+
 
 function runningScanStatusMessage(status: JobStatus | null) {
   if (!isRunningScanStatus(status)) return "";
@@ -1866,22 +1842,7 @@ function phaseLabel(status: JobStatus | null) {
   return labels[normalizedCode] || "当前阶段";
 }
 
-function syncContextStatus(status: JobStatus | null) {
-  const text = String(status?.status || "");
-  if (text === "idle" && status?.official_context_cache) {
-    return contextCacheComplete(status.official_context_cache) ? "本地缓存" : "需刷新";
-  }
-  if (!text) return "待启动";
-  if (text === "idle") return "待启动";
-  const state = classifyJobState(status);
-  if (state.warning) return "带警告";
-  if (state.successful) return "已刷新";
-  if (text === "running" || text === "queued") return "进行中";
-  if (state.failed) return "失败";
-  if (state.missing) return "监控受阻";
-  if (state.interrupted) return "已停止";
-  return "状态待确认";
-}
+
 
 function isSessionInvalidResult(result: ({ ok?: boolean; error_code?: string; error?: string } & Partial<JobStatus>) | null) {
   if (!result || result.ok !== false) return false;
@@ -1987,27 +1948,7 @@ function contextCacheNumber(cache: OfficialContextCache | undefined, field: stri
   );
 }
 
-function contextCacheComplete(cache: OfficialContextCache | undefined) {
-  if (!cache?.ok) return false;
-  const manifest = cache.manifest;
-  if (manifest) {
-    if (manifest.complete !== true) return false;
-    if ((manifest.missing_files || []).length > 0) return false;
-    if ((manifest.invalid_files || []).length > 0) return false;
-  }
-  return firstPositiveNumber(
-    numberField(cache as Record<string, unknown>, "fields_count"),
-    contextCacheManifestRecordCount(cache, "fields_count"),
-  ) > 0
-    && firstPositiveNumber(
-      numberField(cache as Record<string, unknown>, "operators_count"),
-      contextCacheManifestRecordCount(cache, "operators_count"),
-    ) > 0
-    && firstPositiveNumber(
-      numberField(cache as Record<string, unknown>, "datasets_count"),
-      contextCacheManifestRecordCount(cache, "datasets_count"),
-    ) > 0;
-}
+
 
 function contextCacheManifestRecordCount(cache: OfficialContextCache | undefined, field: string) {
   const filename = {
@@ -2077,101 +2018,17 @@ function syncStatusUpdatedAt(status: JobStatus | null) {
   return status ? new Date() : null;
 }
 
-function formatCount(value: number) {
-  return Math.max(0, Math.trunc(value)).toLocaleString("zh-CN");
-}
 
-function formatDuration(totalSeconds: number): string {
-  if (!Number.isFinite(totalSeconds) || totalSeconds <= 0) return "0s";
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = Math.round(totalSeconds % 60);
-  if (hours > 0) return `${hours}h ${minutes}m ${seconds}s`;
-  if (minutes > 0) return `${minutes}m ${seconds}s`;
-  return `${seconds}s`;
-}
 
-function firstPositiveFloat(...values: number[]) {
-  return values.find((value) => Number.isFinite(value) && value > 0) || 0;
-}
 
-function checkResultCount(payload: CheckResultsResponse | null | { count?: number; items?: unknown; checks?: unknown }) {
+
+
+
+) {
   if (!payload) return 0;
   const direct = Number(payload.count);
   if (Number.isFinite(direct) && direct >= 0) return direct;
   if (Array.isArray(payload.items)) return payload.items.length;
   if (Array.isArray(payload.checks)) return payload.checks.length;
   return 0;
-}
-
-function credentialsPayload(credentials?: BrainCredentials) {
-  const payload: Record<string, string> = {};
-  const username = credentials?.username.trim() || "";
-  const password = credentials?.password || "";
-  const token = credentials?.token.trim() || "";
-  if (username) payload.username = username;
-  if (password) payload.password = password;
-  if (token) payload.token = token;
-  return payload;
-}
-
-function hasPageCredentials(credentials?: BrainCredentials) {
-  return Boolean(
-    credentials?.username.trim() ||
-    credentials?.password ||
-    credentials?.token.trim()
-  );
-}
-
-function saveStoredSyncJobId(jobId: string): void {
-  const value = String(jobId || "").trim();
-  if (!value) return;
-  try {
-    sessionStorage.setItem(ACTIVE_SYNC_JOB_ID_KEY, value);
-  } catch (error) {
-    reportIgnoredError("official sync job id sessionStorage save failed", error);
-  }
-}
-
-function loadStoredSyncJobId(): string {
-  try {
-    return String(sessionStorage.getItem(ACTIVE_SYNC_JOB_ID_KEY) || "").trim();
-  } catch (error) {
-    reportIgnoredError("official sync job id sessionStorage load failed", error);
-    return "";
-  }
-}
-
-function clearStoredSyncJobId(): void {
-  try {
-    sessionStorage.removeItem(ACTIVE_SYNC_JOB_ID_KEY);
-  } catch (error) {
-    reportIgnoredError("official sync job id sessionStorage clear failed", error);
-  }
-}
-
-function logTone(tone: OperationLogEntry["tone"]) {
-  if (tone === "success") return "text-positive";
-  if (tone === "warning") return "text-warning";
-  if (tone === "error") return "text-negative";
-  return "text-text-secondary";
-}
-
-function logDotTone(tone: OperationLogEntry["tone"]) {
-  if (tone === "success") return "status-dot status-dot-active";
-  if (tone === "warning") return "status-dot status-dot-warning";
-  if (tone === "error") return "status-dot status-dot-error";
-  return "status-dot status-dot-idle";
-}
-
-function formatClock(date = new Date()) {
-  return [date.getHours(), date.getMinutes(), date.getSeconds()]
-    .map((value) => String(value).padStart(2, "0"))
-    .join(":");
-}
-
-function shortOperationId(value: string) {
-  const text = String(value || "").trim();
-  if (text.length <= 12) return text;
-  return `${text.slice(0, 6)}...${text.slice(-4)}`;
 }
