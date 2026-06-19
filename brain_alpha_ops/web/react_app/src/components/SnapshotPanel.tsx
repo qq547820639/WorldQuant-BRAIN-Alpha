@@ -24,7 +24,7 @@ import {
   sanitizeTextInput,
   formatOptionalNumber,
   formatLocalBacktestStatus,
-} from "./utils";
+} from "./SnapshotPanel/utils";
 import { readinessReasonLabel } from "@/helpers/readinessLabels";
 import { useApi } from "@/hooks/useApi";
 import ProgressFeedback from "@/components/ProgressFeedback";

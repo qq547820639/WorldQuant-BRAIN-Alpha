@@ -2017,18 +2017,3 @@ function syncStatusUpdatedAt(status: JobStatus | null) {
   if (Number.isFinite(startedAt)) return new Date(startedAt);
   return status ? new Date() : null;
 }
-
-
-
-
-
-
-
-) {
-  if (!payload) return 0;
-  const direct = Number(payload.count);
-  if (Number.isFinite(direct) && direct >= 0) return direct;
-  if (Array.isArray(payload.items)) return payload.items.length;
-  if (Array.isArray(payload.checks)) return payload.checks.length;
-  return 0;
-}

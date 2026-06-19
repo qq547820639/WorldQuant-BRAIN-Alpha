@@ -191,7 +191,7 @@ export default function SubmissionConfirmPanel({ notify, onNavigate }: Props) {
           if (next.has(id)) { next.delete(id); } else { next.add(id); }
           return next;
         });
-      }} allChecked={drilledAllChecked} onClose={() => setDrillOpen(false)} />
+      }} allChecked={drilledAllChecked} onClose={() => setDrillOpen(false)} />}
     </div>
   );
 }
