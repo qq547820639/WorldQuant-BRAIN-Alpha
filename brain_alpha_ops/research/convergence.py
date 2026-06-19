@@ -121,6 +121,18 @@ class ConvergenceTracker:
 
     def __init__(self, window_size: int = 10, stall_threshold: int = 5,
                  bootstrap_samples: int = 1000, rng: random.Random | None = None) -> None:
+        """Initialize convergence tracker.
+
+        Args:
+            window_size: Number of recent cycles retained for trend analysis.
+                Clamped to minimum 5 internally.
+            stall_threshold: Consecutive cycles without improvement before
+                signaling stall. Clamped to minimum 3 internally.
+            bootstrap_samples: Number of bootstrap resamples for BCa CI.
+                Clamped to minimum 100 internally.
+            rng: Optional seeded Random instance for reproducible bootstrap.
+                Defaults to Random(42) if None.
+        """
         self._window_size = max(5, int(window_size))
         self._stall_threshold = max(3, int(stall_threshold))
         self._bootstrap_samples = max(100, int(bootstrap_samples))
@@ -373,6 +385,9 @@ class ConvergenceTracker:
         and for the skewness of the bootstrap distribution (the
         acceleration term).
 
+        Returns ``(0.0, 0.0)`` when ``n < 5`` since BCa jackknife
+        acceleration becomes unstable with too few samples.
+
         Falls back to a t-distribution interval when ``n < 3`` since
         BCa needs at least a handful of distinct samples to be
         meaningful, and falls back to percentile bootstrap when
@@ -380,10 +395,9 @@ class ConvergenceTracker:
 
         Returns ``(ci_low, ci_high)``.
         """
-        if not values:
-            return (0.0, 0.0)
-
         n = len(values)
+        if n < 5:
+            return (0.0, 0.0)
         if n < 3:
             # Use a simple t-style interval; not enough data for BCa.
             mean = sum(values) / n

@@ -6,6 +6,29 @@ OfficialScoringSystem — wraps the existing scoring pipeline with:
   3. Multi-dimensional attribution architecture (explainable, calibratable, evolvable)
   4. Score history tracking for convergence analysis
 
+── Module responsibility boundary (A-05, documented 2026-06-18) ──
+
+  ``brain_alpha_ops.research.scoring``  (pure functions)
+    • ``build_scorecard()``, ``prior_score()``, ``empirical_score()``,
+      ``submission_checklist()``, ``evaluate_quality_gate()``,
+      ``decision_band()``, ``calculate_fitness()``, ``item()``, ``check()``
+    • Stateless by design — takes Candidate + thresholds, returns dict.
+    • No BRAIN API calls, no persistence, no history tracking.
+
+  ``brain_alpha_ops.scoring.official_scoring``  (orchestration layer)
+    • ``OfficialScoringSystem.evaluate()`` — 7-step pipeline:
+      scorecard → gate → hard/soft gate results → release gate →
+      attribution tree → API simulation → improvement hints → history
+    • Owns ``ScoringResult`` dataclass — the canonical output structure.
+    • Delegates pure computations to ``research.scoring``.
+    • Adds persistence, API output simulation, gate aggregation, and
+      confidence estimation on top of the pure scoring functions.
+
+  Rule: New scoring logic should be added as a pure function in
+  ``research.scoring``; orchestration/aggregation goes in this module.
+  Do NOT add BRAIN API calls or state to ``research.scoring``.
+  Do NOT add pure scoring computations directly to ``OfficialScoringSystem``.
+
 Usage:
     from brain_alpha_ops.scoring.official_scoring import OfficialScoringSystem
     oss = OfficialScoringSystem(ops_config)

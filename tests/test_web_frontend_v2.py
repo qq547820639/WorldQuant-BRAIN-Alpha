@@ -19,7 +19,8 @@ from pathlib import Path
 import pytest
 
 import brain_alpha_ops.build_inline as build_inline
-from brain_alpha_ops import web_html
+import brain_alpha_ops.web  # noqa: F401  install meta-path bridge for web_* modules
+import brain_alpha_ops.web_html as web_html
 from brain_alpha_ops.web_routes import GET_ROUTES, POST_ROUTES, route_for
 from scripts.check_frontend_syntax import _node_path
 

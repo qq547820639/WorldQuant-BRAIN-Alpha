@@ -361,7 +361,7 @@ class TestSimulationCandidatesPayload:
         ]
         _save_candidates(storage, candidates)
         monkeypatch.setattr(
-            "brain_alpha_ops.web_candidate_simulation.load_run_config",
+            "brain_alpha_ops.web_candidates.simulation.load_run_config",
             lambda: _make_config(storage),
         )
         result = simulation_candidates_payload({})
@@ -380,7 +380,7 @@ class TestSimulationCandidatesPayload:
             ],
         )
         monkeypatch.setattr(
-            "brain_alpha_ops.web_candidate_simulation.load_run_config",
+            "brain_alpha_ops.web_candidates.simulation.load_run_config",
             lambda: _make_config(storage),
         )
 
@@ -397,7 +397,7 @@ class TestSimulationCandidatesPayload:
         candidates = [_make_candidate(), _make_candidate(alpha_id="alpha_2")]
         _save_candidates(storage, candidates)
         monkeypatch.setattr(
-            "brain_alpha_ops.web_candidate_simulation.load_run_config",
+            "brain_alpha_ops.web_candidates.simulation.load_run_config",
             lambda: _make_config(storage),
         )
         result = simulation_candidates_payload({"candidate_ids": ["alpha_2"]})
@@ -415,7 +415,7 @@ class TestSimulationCandidatesPayload:
             ],
         )
         monkeypatch.setattr(
-            "brain_alpha_ops.web_candidate_simulation.load_run_config",
+            "brain_alpha_ops.web_candidates.simulation.load_run_config",
             lambda: _make_config(storage),
         )
 
@@ -439,11 +439,11 @@ class TestSimulationCandidatesPayload:
             ],
         )
         monkeypatch.setattr(
-            "brain_alpha_ops.web_candidate_simulation.load_run_config",
+            "brain_alpha_ops.web_candidates.simulation.load_run_config",
             lambda: _make_config(storage),
         )
         monkeypatch.setattr(
-            "brain_alpha_ops.web_candidate_simulation._create_api",
+            "brain_alpha_ops.web_candidates.simulation._create_api",
             lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("preview must not create API client")),
         )
 
@@ -469,7 +469,7 @@ class TestSimulationCandidatesPayload:
         ]
         _save_candidates(storage, candidates)
         monkeypatch.setattr(
-            "brain_alpha_ops.web_candidate_simulation.load_run_config",
+            "brain_alpha_ops.web_candidates.simulation.load_run_config",
             lambda: _make_config(storage),
         )
 
@@ -494,11 +494,11 @@ class TestSimulationCandidatesPayload:
             ],
         )
         monkeypatch.setattr(
-            "brain_alpha_ops.web_candidate_simulation.load_run_config",
+            "brain_alpha_ops.web_candidates.simulation.load_run_config",
             lambda: _make_config(storage),
         )
-        monkeypatch.setattr("brain_alpha_ops.web_candidate_simulation.time.time", lambda: 1000.0)
-        monkeypatch.setattr("brain_alpha_ops.web_candidate_simulation.time.sleep", lambda _seconds: None)
+        monkeypatch.setattr("brain_alpha_ops.web_candidates.simulation.time.time", lambda: 1000.0)
+        monkeypatch.setattr("brain_alpha_ops.web_candidates.simulation.time.sleep", lambda _seconds: None)
 
         result = simulation_candidates_payload({"candidate_ids": ["alpha_2"]})
 
@@ -516,7 +516,7 @@ class TestSimulationCandidatesPayload:
             ],
         )
         monkeypatch.setattr(
-            "brain_alpha_ops.web_candidate_simulation.load_run_config",
+            "brain_alpha_ops.web_candidates.simulation.load_run_config",
             lambda: _make_config(storage),
         )
 
@@ -536,7 +536,7 @@ class TestSimulationCandidatesPayload:
             ],
         )
         monkeypatch.setattr(
-            "brain_alpha_ops.web_candidate_simulation.load_run_config",
+            "brain_alpha_ops.web_candidates.simulation.load_run_config",
             lambda: _make_config(storage),
         )
 
@@ -561,10 +561,10 @@ class TestSimulationCandidatesPayload:
             encoding="utf-8",
         )
         monkeypatch.setattr(
-            "brain_alpha_ops.web_candidate_simulation.load_run_config",
+            "brain_alpha_ops.web_candidates.simulation.load_run_config",
             lambda: _make_config(storage),
         )
-        monkeypatch.setattr("brain_alpha_ops.web_candidate_simulation.time.time", lambda: 1000.0)
+        monkeypatch.setattr("brain_alpha_ops.web_candidates.simulation.time.time", lambda: 1000.0)
 
         result = simulation_candidates_payload({})
 
@@ -625,13 +625,13 @@ class TestSimulateCandidatesJob:
             ],
         )
         monkeypatch.setattr(
-            "brain_alpha_ops.web_candidate_simulation.load_run_config",
+            "brain_alpha_ops.web_candidates.simulation.load_run_config",
             lambda: _make_config(
                 storage,
                 official_api=SimpleNamespace(poll_attempts=3, poll_interval_seconds=0.0),
             ),
         )
-        monkeypatch.setattr("brain_alpha_ops.web_candidate_simulation.time.sleep", lambda _seconds: None)
+        monkeypatch.setattr("brain_alpha_ops.web_candidates.simulation.time.sleep", lambda _seconds: None)
 
         mock_api = MagicMock()
         mock_api.authenticate.return_value = {"auth": "ok"}
@@ -639,7 +639,7 @@ class TestSimulateCandidatesJob:
         mock_api.poll_simulation.return_value = "FAILED"
         mock_api.fetch_result.return_value = {"error": "mock failed"}
         monkeypatch.setattr(
-            "brain_alpha_ops.web_candidate_simulation._create_api",
+            "brain_alpha_ops.web_candidates.simulation._create_api",
             lambda config, username="", password="", token="": mock_api,
         )
 
@@ -659,13 +659,13 @@ class TestSimulateCandidatesJob:
             ],
         )
         monkeypatch.setattr(
-            "brain_alpha_ops.web_candidate_simulation.load_run_config",
+            "brain_alpha_ops.web_candidates.simulation.load_run_config",
             lambda: _make_config(
                 storage,
                 official_api=SimpleNamespace(poll_attempts=3, poll_interval_seconds=0.0),
             ),
         )
-        monkeypatch.setattr("brain_alpha_ops.web_candidate_simulation.time.sleep", lambda _seconds: None)
+        monkeypatch.setattr("brain_alpha_ops.web_candidates.simulation.time.sleep", lambda _seconds: None)
 
         mock_api = MagicMock()
         mock_api.authenticate.return_value = {"auth": "ok"}
@@ -673,7 +673,7 @@ class TestSimulateCandidatesJob:
         mock_api.poll_simulation.return_value = "FAILED"
         mock_api.fetch_result.return_value = {"error": "mock failed"}
         monkeypatch.setattr(
-            "brain_alpha_ops.web_candidate_simulation._create_api",
+            "brain_alpha_ops.web_candidates.simulation._create_api",
             lambda config, username="", password="", token="": mock_api,
         )
 
@@ -705,13 +705,13 @@ class TestSimulateCandidatesJob:
             ],
         )
         monkeypatch.setattr(
-            "brain_alpha_ops.web_candidate_simulation.load_run_config",
+            "brain_alpha_ops.web_candidates.simulation.load_run_config",
             lambda: _make_config(
                 storage,
                 official_api=SimpleNamespace(poll_attempts=3, poll_interval_seconds=0.0),
             ),
         )
-        monkeypatch.setattr("brain_alpha_ops.web_candidate_simulation.time.sleep", lambda _seconds: None)
+        monkeypatch.setattr("brain_alpha_ops.web_candidates.simulation.time.sleep", lambda _seconds: None)
 
         events: list[str] = []
 
@@ -732,7 +732,7 @@ class TestSimulateCandidatesJob:
                 return {"raw": {"status": "FAILED", "message": f"failed {simulation_id}"}}
 
         monkeypatch.setattr(
-            "brain_alpha_ops.web_candidate_simulation._create_api",
+            "brain_alpha_ops.web_candidates.simulation._create_api",
             lambda config, username="", password="", token="": FakeAPI(),
         )
 
@@ -766,14 +766,14 @@ class TestSimulateCandidatesJob:
             ],
         )
         monkeypatch.setattr(
-            "brain_alpha_ops.web_candidate_simulation.load_run_config",
+            "brain_alpha_ops.web_candidates.simulation.load_run_config",
             lambda: _make_config(
                 storage,
                 official_api=SimpleNamespace(poll_attempts=3, poll_interval_seconds=0.0),
             ),
         )
-        monkeypatch.setattr("brain_alpha_ops.web_candidate_simulation.time.time", lambda: 9000.0)
-        monkeypatch.setattr("brain_alpha_ops.web_candidate_simulation.time.sleep", lambda _seconds: None)
+        monkeypatch.setattr("brain_alpha_ops.web_candidates.simulation.time.time", lambda: 9000.0)
+        monkeypatch.setattr("brain_alpha_ops.web_candidates.simulation.time.sleep", lambda _seconds: None)
 
         events: list[str] = []
 
@@ -800,7 +800,7 @@ class TestSimulateCandidatesJob:
                 return {"raw": {"status": "FAILED", "message": f"failed {simulation_id}"}}
 
         monkeypatch.setattr(
-            "brain_alpha_ops.web_candidate_simulation._create_api",
+            "brain_alpha_ops.web_candidates.simulation._create_api",
             lambda config, username="", password="", token="": FakeAPI(),
         )
 
@@ -834,7 +834,7 @@ class TestSimulateCandidatesJob:
             ],
         )
         monkeypatch.setattr(
-            "brain_alpha_ops.web_candidate_simulation.load_run_config",
+            "brain_alpha_ops.web_candidates.simulation.load_run_config",
             lambda: _make_config(
                 storage,
                 official_api=SimpleNamespace(poll_attempts=3, poll_interval_seconds=0.0),
@@ -851,8 +851,8 @@ class TestSimulateCandidatesJob:
             events.append(f"sleep:{seconds}")
             current_time["value"] += float(seconds or 0.0)
 
-        monkeypatch.setattr("brain_alpha_ops.web_candidate_simulation.time.monotonic", fake_monotonic)
-        monkeypatch.setattr("brain_alpha_ops.web_candidate_simulation.time.sleep", fake_sleep)
+        monkeypatch.setattr("brain_alpha_ops.web_candidates.simulation.time.monotonic", fake_monotonic)
+        monkeypatch.setattr("brain_alpha_ops.web_candidates.simulation.time.sleep", fake_sleep)
 
         class FakeAPI:
             def __init__(self):
@@ -876,7 +876,7 @@ class TestSimulateCandidatesJob:
                 return {"raw": {"status": "FAILED", "message": f"failed {simulation_id}"}}
 
         monkeypatch.setattr(
-            "brain_alpha_ops.web_candidate_simulation._create_api",
+            "brain_alpha_ops.web_candidates.simulation._create_api",
             lambda config, username="", password="", token="": FakeAPI(),
         )
 
@@ -894,11 +894,11 @@ class TestSimulateCandidatesJob:
         storage = str(tmp_path)
         _save_candidates(storage, [_make_candidate(alpha_id="alpha_ready")])
         monkeypatch.setattr(
-            "brain_alpha_ops.web_candidate_simulation.load_run_config",
+            "brain_alpha_ops.web_candidates.simulation.load_run_config",
             lambda: _make_config(storage),
         )
         create_api = MagicMock(side_effect=AssertionError("no official API session should be created for zero slots"))
-        monkeypatch.setattr("brain_alpha_ops.web_candidate_simulation._create_api", create_api)
+        monkeypatch.setattr("brain_alpha_ops.web_candidates.simulation._create_api", create_api)
 
         job_store = RecordingJobStore()
         simulate_candidates_job("job_zero_slots", {"max_simulations": 0}, job_store=job_store)
@@ -913,20 +913,20 @@ class TestSimulateCandidatesJob:
         storage = str(tmp_path)
         _save_candidates(storage, [_make_candidate()])
         monkeypatch.setattr(
-            "brain_alpha_ops.web_candidate_simulation.load_run_config",
+            "brain_alpha_ops.web_candidates.simulation.load_run_config",
             lambda: _make_config(
                 storage,
                 official_api=SimpleNamespace(poll_attempts=3, poll_interval_seconds=0.0),
             ),
         )
-        monkeypatch.setattr("brain_alpha_ops.web_candidate_simulation.time.sleep", lambda _seconds: None)
+        monkeypatch.setattr("brain_alpha_ops.web_candidates.simulation.time.sleep", lambda _seconds: None)
 
         mock_api = MagicMock()
         mock_api.authenticate.return_value = {"auth": "ok"}
         mock_api.submit_simulation.return_value = "/simulations/test"
         mock_api.poll_simulation.side_effect = ["RUNNING", "FAILED"]
         monkeypatch.setattr(
-            "brain_alpha_ops.web_candidate_simulation._create_api",
+            "brain_alpha_ops.web_candidates.simulation._create_api",
             lambda config, username="", password="", token="": mock_api,
         )
 
@@ -949,14 +949,14 @@ class TestSimulateCandidatesJob:
         storage = str(tmp_path)
         _save_candidates(storage, [_make_candidate(alpha_id="alpha_retry")])
         monkeypatch.setattr(
-            "brain_alpha_ops.web_candidate_simulation.load_run_config",
+            "brain_alpha_ops.web_candidates.simulation.load_run_config",
             lambda: _make_config(
                 storage,
                 official_api=SimpleNamespace(poll_attempts=3, poll_interval_seconds=0.0),
             ),
         )
         sleep_calls: list[float] = []
-        monkeypatch.setattr("brain_alpha_ops.web_candidate_simulation.time.sleep", lambda seconds: sleep_calls.append(seconds))
+        monkeypatch.setattr("brain_alpha_ops.web_candidates.simulation.time.sleep", lambda seconds: sleep_calls.append(seconds))
 
         mock_api = MagicMock()
         mock_api.authenticate.return_value = {"auth": "ok"}
@@ -971,7 +971,7 @@ class TestSimulateCandidatesJob:
         ]
         mock_api.poll_simulation.return_value = "FAILED"
         monkeypatch.setattr(
-            "brain_alpha_ops.web_candidate_simulation._create_api",
+            "brain_alpha_ops.web_candidates.simulation._create_api",
             lambda config, username="", password="", token="": mock_api,
         )
 
@@ -1004,12 +1004,12 @@ class TestSimulateCandidatesJob:
         storage = str(tmp_path)
         _save_candidates(storage, [_make_candidate(alpha_id="alpha_timeout")])
         monkeypatch.setattr(
-            "brain_alpha_ops.web_candidate_simulation.load_run_config",
+            "brain_alpha_ops.web_candidates.simulation.load_run_config",
             lambda: _make_config(storage),
         )
-        monkeypatch.setattr("brain_alpha_ops.web_candidate_simulation.time.time", lambda: 7000.0)
+        monkeypatch.setattr("brain_alpha_ops.web_candidates.simulation.time.time", lambda: 7000.0)
         sleep_calls: list[float] = []
-        monkeypatch.setattr("brain_alpha_ops.web_candidate_simulation.time.sleep", lambda seconds: sleep_calls.append(seconds))
+        monkeypatch.setattr("brain_alpha_ops.web_candidates.simulation.time.sleep", lambda seconds: sleep_calls.append(seconds))
 
         mock_api = MagicMock()
         mock_api.authenticate.return_value = {"auth": "ok"}
@@ -1020,7 +1020,7 @@ class TestSimulateCandidatesJob:
             retry_after=17,
         )
         monkeypatch.setattr(
-            "brain_alpha_ops.web_candidate_simulation._create_api",
+            "brain_alpha_ops.web_candidates.simulation._create_api",
             lambda config, username="", password="", token="": mock_api,
         )
 
@@ -1058,7 +1058,7 @@ class TestSimulateCandidatesJob:
         storage = str(tmp_path)
         _save_candidates(storage, [_make_candidate(alpha_id="alpha_submit_failed")])
         monkeypatch.setattr(
-            "brain_alpha_ops.web_candidate_simulation.load_run_config",
+            "brain_alpha_ops.web_candidates.simulation.load_run_config",
             lambda: _make_config(storage),
         )
 
@@ -1066,7 +1066,7 @@ class TestSimulateCandidatesJob:
         mock_api.authenticate.return_value = {"auth": "ok"}
         mock_api.submit_simulation.side_effect = BrainAPIError("HTTP 500: submit unavailable", status_code=500)
         monkeypatch.setattr(
-            "brain_alpha_ops.web_candidate_simulation._create_api",
+            "brain_alpha_ops.web_candidates.simulation._create_api",
             lambda config, username="", password="", token="": mock_api,
         )
 
@@ -1098,13 +1098,13 @@ class TestSimulateCandidatesJob:
             ],
         )
         monkeypatch.setattr(
-            "brain_alpha_ops.web_candidate_simulation.load_run_config",
+            "brain_alpha_ops.web_candidates.simulation.load_run_config",
             lambda: _make_config(
                 storage,
                 official_api=SimpleNamespace(poll_attempts=3, poll_interval_seconds=0.0),
             ),
         )
-        monkeypatch.setattr("brain_alpha_ops.web_candidate_simulation.time.sleep", lambda _seconds: None)
+        monkeypatch.setattr("brain_alpha_ops.web_candidates.simulation.time.sleep", lambda _seconds: None)
 
         mock_api = MagicMock()
         mock_api.authenticate.return_value = {"auth": "ok"}
@@ -1114,7 +1114,7 @@ class TestSimulateCandidatesJob:
             "raw": {"status": "FAILED", "message": "BRAIN rejected expression syntax"}
         }
         monkeypatch.setattr(
-            "brain_alpha_ops.web_candidate_simulation._create_api",
+            "brain_alpha_ops.web_candidates.simulation._create_api",
             lambda config, username="", password="", token="": mock_api,
         )
 
@@ -1158,13 +1158,13 @@ class TestSimulateCandidatesJob:
         storage = str(tmp_path)
         _save_candidates(storage, [_make_candidate(alpha_id="alpha_completed")])
         monkeypatch.setattr(
-            "brain_alpha_ops.web_candidate_simulation.load_run_config",
+            "brain_alpha_ops.web_candidates.simulation.load_run_config",
             lambda: _make_config(
                 storage,
                 official_api=SimpleNamespace(poll_attempts=3, poll_interval_seconds=0.0),
             ),
         )
-        monkeypatch.setattr("brain_alpha_ops.web_candidate_simulation.time.sleep", lambda _seconds: None)
+        monkeypatch.setattr("brain_alpha_ops.web_candidates.simulation.time.sleep", lambda _seconds: None)
 
         mock_api = MagicMock()
         mock_api.authenticate.return_value = {"auth": "ok"}
@@ -1175,7 +1175,7 @@ class TestSimulateCandidatesJob:
             "metrics": _complete_pass_metrics(),
         }
         monkeypatch.setattr(
-            "brain_alpha_ops.web_candidate_simulation._create_api",
+            "brain_alpha_ops.web_candidates.simulation._create_api",
             lambda config, username="", password="", token="": mock_api,
         )
 
@@ -1199,13 +1199,13 @@ class TestSimulateCandidatesJob:
         storage = str(tmp_path)
         _save_candidates(storage, [_make_candidate(alpha_id="alpha_result_error", official_metrics={})])
         monkeypatch.setattr(
-            "brain_alpha_ops.web_candidate_simulation.load_run_config",
+            "brain_alpha_ops.web_candidates.simulation.load_run_config",
             lambda: _make_config(
                 storage,
                 official_api=SimpleNamespace(poll_attempts=3, poll_interval_seconds=0.0),
             ),
         )
-        monkeypatch.setattr("brain_alpha_ops.web_candidate_simulation.time.sleep", lambda _seconds: None)
+        monkeypatch.setattr("brain_alpha_ops.web_candidates.simulation.time.sleep", lambda _seconds: None)
 
         mock_api = MagicMock()
         mock_api.authenticate.return_value = {"auth": "ok"}
@@ -1213,7 +1213,7 @@ class TestSimulateCandidatesJob:
         mock_api.poll_simulation.return_value = "COMPLETED"
         mock_api.fetch_result.side_effect = BrainAPIError("HTTP 500: result unavailable", status_code=500)
         monkeypatch.setattr(
-            "brain_alpha_ops.web_candidate_simulation._create_api",
+            "brain_alpha_ops.web_candidates.simulation._create_api",
             lambda config, username="", password="", token="": mock_api,
         )
 
@@ -1246,16 +1246,16 @@ class TestSimulateCandidatesJob:
         storage = str(tmp_path)
         _save_candidates(storage, [_make_candidate(alpha_id="alpha_poll_timeout")])
         monkeypatch.setattr(
-            "brain_alpha_ops.web_candidate_simulation.load_run_config",
+            "brain_alpha_ops.web_candidates.simulation.load_run_config",
             lambda: _make_config(
                 storage,
                 official_api=SimpleNamespace(poll_attempts=3, poll_interval_seconds=0.0),
             ),
         )
         current_time = {"value": 0.0}
-        monkeypatch.setattr("brain_alpha_ops.web_candidate_simulation.time.monotonic", lambda: current_time["value"])
+        monkeypatch.setattr("brain_alpha_ops.web_candidates.simulation.time.monotonic", lambda: current_time["value"])
         monkeypatch.setattr(
-            "brain_alpha_ops.web_candidate_simulation.time.sleep",
+            "brain_alpha_ops.web_candidates.simulation.time.sleep",
             lambda seconds: current_time.update({"value": current_time["value"] + float(seconds or 0.0)}),
         )
 
@@ -1263,7 +1263,7 @@ class TestSimulateCandidatesJob:
         mock_api.authenticate.return_value = {"auth": "ok"}
         mock_api.submit_simulation.return_value = "/simulations/poll-timeout"
         monkeypatch.setattr(
-            "brain_alpha_ops.web_candidate_simulation._create_api",
+            "brain_alpha_ops.web_candidates.simulation._create_api",
             lambda config, username="", password="", token="": mock_api,
         )
 
@@ -1299,16 +1299,16 @@ class TestSimulateCandidatesJob:
         storage = str(tmp_path)
         _save_candidates(storage, [_make_candidate(alpha_id="alpha_stalled")])
         monkeypatch.setattr(
-            "brain_alpha_ops.web_candidate_simulation.load_run_config",
+            "brain_alpha_ops.web_candidates.simulation.load_run_config",
             lambda: _make_config(
                 storage,
                 official_api=SimpleNamespace(poll_attempts=3, poll_interval_seconds=0.0),
             ),
         )
         current_time = {"value": 0.0}
-        monkeypatch.setattr("brain_alpha_ops.web_candidate_simulation.time.monotonic", lambda: current_time["value"])
+        monkeypatch.setattr("brain_alpha_ops.web_candidates.simulation.time.monotonic", lambda: current_time["value"])
         monkeypatch.setattr(
-            "brain_alpha_ops.web_candidate_simulation.time.sleep",
+            "brain_alpha_ops.web_candidates.simulation.time.sleep",
             lambda seconds: current_time.update({"value": current_time["value"] + float(seconds or 0.0)}),
         )
 
@@ -1316,7 +1316,7 @@ class TestSimulateCandidatesJob:
         mock_api.authenticate.return_value = {"auth": "ok"}
         mock_api.submit_simulation.return_value = "/simulations/stalled"
         monkeypatch.setattr(
-            "brain_alpha_ops.web_candidate_simulation._create_api",
+            "brain_alpha_ops.web_candidates.simulation._create_api",
             lambda config, username="", password="", token="": mock_api,
         )
 
@@ -1352,11 +1352,11 @@ class TestSimulateCandidatesJob:
         storage = str(tmp_path)
         _save_candidates(storage, [_make_candidate(alpha_id="alpha_limit")])
         monkeypatch.setattr(
-            "brain_alpha_ops.web_candidate_simulation.load_run_config",
+            "brain_alpha_ops.web_candidates.simulation.load_run_config",
             lambda: _make_config(storage),
         )
-        monkeypatch.setattr("brain_alpha_ops.web_candidate_simulation.time.time", lambda: 1000.0)
-        monkeypatch.setattr("brain_alpha_ops.web_candidate_simulation.time.sleep", lambda _seconds: None)
+        monkeypatch.setattr("brain_alpha_ops.web_candidates.simulation.time.time", lambda: 1000.0)
+        monkeypatch.setattr("brain_alpha_ops.web_candidates.simulation.time.sleep", lambda _seconds: None)
 
         mock_api = MagicMock()
         mock_api.authenticate.return_value = {"auth": "ok"}
@@ -1367,7 +1367,7 @@ class TestSimulateCandidatesJob:
             retry_after=7,
         )
         monkeypatch.setattr(
-            "brain_alpha_ops.web_candidate_simulation._create_api",
+            "brain_alpha_ops.web_candidates.simulation._create_api",
             lambda config, username="", password="", token="": mock_api,
         )
 
@@ -1406,10 +1406,10 @@ class TestSimulateCandidatesJob:
         storage = str(tmp_path)
         _save_candidates(storage, [_make_candidate(alpha_id="alpha_rate")])
         monkeypatch.setattr(
-            "brain_alpha_ops.web_candidate_simulation.load_run_config",
+            "brain_alpha_ops.web_candidates.simulation.load_run_config",
             lambda: _make_config(storage),
         )
-        monkeypatch.setattr("brain_alpha_ops.web_candidate_simulation.time.time", lambda: 2000.0)
+        monkeypatch.setattr("brain_alpha_ops.web_candidates.simulation.time.time", lambda: 2000.0)
 
         mock_api = MagicMock()
         mock_api.authenticate.return_value = {"auth": "ok"}
@@ -1419,7 +1419,7 @@ class TestSimulateCandidatesJob:
             retry_after=11,
         )
         monkeypatch.setattr(
-            "brain_alpha_ops.web_candidate_simulation._create_api",
+            "brain_alpha_ops.web_candidates.simulation._create_api",
             lambda config, username="", password="", token="": mock_api,
         )
 
@@ -1453,12 +1453,12 @@ class TestSimulateCandidatesJob:
             encoding="utf-8",
         )
         monkeypatch.setattr(
-            "brain_alpha_ops.web_candidate_simulation.load_run_config",
+            "brain_alpha_ops.web_candidates.simulation.load_run_config",
             lambda: _make_config(storage),
         )
-        monkeypatch.setattr("brain_alpha_ops.web_candidate_simulation.time.time", lambda: 3000.0)
+        monkeypatch.setattr("brain_alpha_ops.web_candidates.simulation.time.time", lambda: 3000.0)
         create_api = MagicMock(side_effect=AssertionError("BRAIN API should not be created during cooldown"))
-        monkeypatch.setattr("brain_alpha_ops.web_candidate_simulation._create_api", create_api)
+        monkeypatch.setattr("brain_alpha_ops.web_candidates.simulation._create_api", create_api)
 
         job_store = RecordingJobStore()
         simulate_candidates_job("job_cooldown", {}, job_store=job_store)
@@ -1481,12 +1481,12 @@ class TestSimulateCandidatesJob:
             ],
         )
         monkeypatch.setattr(
-            "brain_alpha_ops.web_candidate_simulation.load_run_config",
+            "brain_alpha_ops.web_candidates.simulation.load_run_config",
             lambda: _make_config(storage),
         )
-        monkeypatch.setattr("brain_alpha_ops.web_candidate_simulation.time.time", lambda: 4000.0)
+        monkeypatch.setattr("brain_alpha_ops.web_candidates.simulation.time.time", lambda: 4000.0)
         create_api = MagicMock(side_effect=AssertionError("BRAIN API should not be created for cooling candidate"))
-        monkeypatch.setattr("brain_alpha_ops.web_candidate_simulation._create_api", create_api)
+        monkeypatch.setattr("brain_alpha_ops.web_candidates.simulation._create_api", create_api)
 
         job_store = RecordingJobStore()
         simulate_candidates_job("job_explicit_cooling", {"candidate_ids": ["alpha_cooling"]}, job_store=job_store)
@@ -1499,11 +1499,11 @@ class TestSimulateCandidatesJob:
         storage = str(tmp_path)
         _save_candidates(storage, [_make_candidate(alpha_id="alpha_existing", expression="rank(close)")])
         monkeypatch.setattr(
-            "brain_alpha_ops.web_candidate_simulation.load_run_config",
+            "brain_alpha_ops.web_candidates.simulation.load_run_config",
             lambda: _make_config(storage),
         )
-        monkeypatch.setattr("brain_alpha_ops.web_candidate_simulation.time.time", lambda: 5000.0)
-        monkeypatch.setattr("brain_alpha_ops.web_candidate_simulation.time.sleep", lambda _seconds: None)
+        monkeypatch.setattr("brain_alpha_ops.web_candidates.simulation.time.time", lambda: 5000.0)
+        monkeypatch.setattr("brain_alpha_ops.web_candidates.simulation.time.sleep", lambda _seconds: None)
 
         def _create_api_with_concurrent_update(config, username="", password="", token=""):
             _save_candidates(
@@ -1527,7 +1527,7 @@ class TestSimulateCandidatesJob:
             )
             return mock_api
 
-        monkeypatch.setattr("brain_alpha_ops.web_candidate_simulation._create_api", _create_api_with_concurrent_update)
+        monkeypatch.setattr("brain_alpha_ops.web_candidates.simulation._create_api", _create_api_with_concurrent_update)
 
         job_store = CancelAfterCapacityWaitStore(after=1)
         simulate_candidates_job(
@@ -1547,14 +1547,14 @@ class TestSimulateCandidatesJob:
     def test_no_candidates(self, tmp_path, monkeypatch):
         storage = str(tmp_path)
         monkeypatch.setattr(
-            "brain_alpha_ops.web_candidate_simulation.load_run_config",
+            "brain_alpha_ops.web_candidates.simulation.load_run_config",
             lambda: _make_config(storage),
         )
         # Mock authenticate to avoid real API calls
         mock_api = MagicMock()
         mock_api.authenticate.return_value = {"auth": "session_cookie"}
         monkeypatch.setattr(
-            "brain_alpha_ops.web_candidate_simulation._create_api",
+            "brain_alpha_ops.web_candidates.simulation._create_api",
             lambda config, **kw: mock_api,
         )
         job_store = MagicMock()
@@ -1567,14 +1567,14 @@ class TestSimulateCandidatesJob:
         storage = str(tmp_path)
         _save_candidates(storage, [_make_candidate()])
         monkeypatch.setattr(
-            "brain_alpha_ops.web_candidate_simulation.load_run_config",
+            "brain_alpha_ops.web_candidates.simulation.load_run_config",
             lambda: _make_config(storage),
         )
         # Mock BRAIN API creation to avoid needing real credentials
         mock_api = MagicMock()
         mock_api.authenticate.return_value = {"auth": "ok"}
         monkeypatch.setattr(
-            "brain_alpha_ops.web_candidate_simulation._create_api",
+            "brain_alpha_ops.web_candidates.simulation._create_api",
             lambda config, username="", password="", token="": mock_api,
         )
         job_store = MagicMock()
@@ -1588,14 +1588,14 @@ class TestSimulateCandidatesJob:
         storage = str(tmp_path)
         _save_candidates(storage, [_make_candidate(alpha_id="alpha_cancel_pre_api", expression="rank(close)")])
         monkeypatch.setattr(
-            "brain_alpha_ops.web_candidate_simulation.load_run_config",
+            "brain_alpha_ops.web_candidates.simulation.load_run_config",
             lambda: _make_config(storage),
         )
 
         def fail_create_api(*_args, **_kwargs):
             raise AssertionError("cancelled simulation must not initialize BRAIN API")
 
-        monkeypatch.setattr("brain_alpha_ops.web_candidate_simulation._create_api", fail_create_api)
+        monkeypatch.setattr("brain_alpha_ops.web_candidates.simulation._create_api", fail_create_api)
 
         job_store = RecordingJobStore()
         job_store.cancelled = True

@@ -165,12 +165,14 @@ def test_submit_readiness_dispatch_route_uses_compact_payload(monkeypatch):
             self.status = status
 
     handler = Handler()
-    web.dispatch_get(handler, "/api/submit_readiness", {})
+    # dispatch_get removed from web/__init__.py in Phase 3.3;
+    # test the compact payload function directly.
+    payload = web._submit_readiness_payload()
+    compact = web._compact_submit_readiness_payload(payload)
 
-    assert handler.status == 200
-    assert handler.payload["ready_to_submit"] is True
-    assert handler.payload["submit_ready_claim_allowed"] is True
-    assert handler.payload["eligible_count"] == 1
+    assert compact["ready_to_submit"] is True
+    assert compact["submit_ready_claim_allowed"] is True
+    assert compact["eligible_count"] == 1
 
 
 def test_submit_readiness_payload_fails_closed_when_ok_is_missing(monkeypatch):

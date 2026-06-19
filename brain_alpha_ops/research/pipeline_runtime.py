@@ -189,7 +189,7 @@ class PipelineRuntimeMixin:
         payload = {
             "cycle": int(cycle or 0),
             "reason": str(reason or ""),
-            "active_profile": self._current_strategy_profile(),
+            "active_profile": self.services.strategy._current_strategy_profile(),
             "active_profile_index": self.strategy_profile_index,
             "strategy_switch_count": self.strategy_switch_count,
             "official_results_since_strategy_switch": self.official_results_since_strategy_switch,

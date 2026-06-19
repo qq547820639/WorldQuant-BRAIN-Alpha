@@ -3,6 +3,7 @@
 import { useState, useCallback } from "react";
 import { apiErrorMessage, isSessionInvalidPayload, networkErrorMessage } from "@/helpers/errorExperience";
 import { csrfHeaders, csrfToken, setCsrfToken, setStreamToken } from "@/utils/csrf";
+import { saveResumeState } from "@/utils/resumeState";
 
 // P2-22 fix: raised from 120s to 600s (10 min) because BRAIN
 // sync/simulate operations routinely take several minutes.
@@ -40,6 +41,8 @@ interface UseApiState<T> {
   data: T | null;
   loading: boolean;
   error: string | null;
+  /** P1-4: metadata from the last error response (next_action, recoverable, etc.) */
+  lastErrorMeta: ApiMeta | null;
 }
 
 export function useApi<T = unknown>() {
@@ -47,6 +50,7 @@ export function useApi<T = unknown>() {
     data: null,
     loading: false,
     error: null,
+    lastErrorMeta: null,
   });
 
   // NOTE: call<R> returns R & ApiMeta (not ApiResponse<R>) so callers can
@@ -54,7 +58,7 @@ export function useApi<T = unknown>() {
   // going through .data, matching the flat JSON shape the backend returns.
   const call = useCallback(
     async <R = T>(url: string, options?: RequestInit): Promise<(R & ApiMeta) | null> => {
-      setState((prev) => ({ ...prev, loading: true, error: null }));
+      setState((prev) => ({ ...prev, loading: true, error: null, lastErrorMeta: null }));
       let controller: AbortController | null = options?.signal ? null : new AbortController();
       let timeout: number | null = controller
         ? window.setTimeout(() => controller!.abort(), DEFAULT_REQUEST_TIMEOUT_MS)
@@ -93,11 +97,14 @@ export function useApi<T = unknown>() {
                   );
                   const normalizedRetry = { ...retryJson, ok: retryOk } as R & ApiMeta;
                   if (!retryOk) {
-                    setState({ data: null, loading: false, error: apiErrorMessage(retryJson) });
+                    setState({ data: null, loading: false, error: apiErrorMessage(retryJson), lastErrorMeta: retryJson });
                     return normalizedRetry;
                   }
                   const retryRaw = retryJson as Record<string, unknown>;
-                  setState({ data: (retryRaw.data !== undefined ? retryRaw.data : retryJson) as T, loading: false, error: null });
+                  setState({ data: (retryRaw.data !== undefined ? retryRaw.data : retryJson) as T, loading: false, error: null, lastErrorMeta: null });
+                  if (method === "POST") {
+                    saveResumeState({ lastConnectionOk: true, lastError: null });
+                  }
                   return normalizedRetry;
                 }
                 const retryError = await safeJson<R & ApiMeta>(res);
@@ -105,18 +112,18 @@ export function useApi<T = unknown>() {
                   refreshSessionTokens(retryError as Record<string, unknown>);
                   const retryMsg = apiErrorMessage(retryError, `HTTP ${res.status}: ${res.statusText}`);
                   const normalizedRetryError = { ...retryError, ok: false } as R & ApiMeta;
-                  setState({ data: null, loading: false, error: retryMsg });
+                  setState({ data: null, loading: false, error: retryMsg, lastErrorMeta: retryError });
                   return normalizedRetryError;
                 }
               }
             }
             const msg = apiErrorMessage(json, `HTTP ${res.status}: ${res.statusText}`);
             const normalized = { ...json, ok: false } as R & ApiMeta;
-            setState({ data: null, loading: false, error: msg });
+            setState({ data: null, loading: false, error: msg, lastErrorMeta: json });
             return normalized;
           }
           const msg = `HTTP ${res.status}: ${res.statusText}`;
-          setState({ data: null, loading: false, error: msg });
+          setState({ data: null, loading: false, error: msg, lastErrorMeta: null });
           return null;
         }
         const json = await res.json() as R & ApiMeta;
@@ -127,17 +134,21 @@ export function useApi<T = unknown>() {
         );
         const normalized = { ...json, ok } as R & ApiMeta;
         if (!ok) {
-          setState({ data: null, loading: false, error: apiErrorMessage(json) });
+          setState({ data: null, loading: false, error: apiErrorMessage(json), lastErrorMeta: json });
           return normalized;
         }
         // SAFETY: json is structurally R & ApiMeta; the backend returns flat JSON.
         // Extract .data if present, otherwise use the whole payload as the data portion.
         const raw = json as Record<string, unknown>;
-        setState({ data: (raw.data !== undefined ? raw.data : json) as T, loading: false, error: null });
+        setState({ data: (raw.data !== undefined ? raw.data : json) as T, loading: false, error: null, lastErrorMeta: null });
+        // P0-4: persist connection health after every successful POST
+        if (method === "POST") {
+          saveResumeState({ lastConnectionOk: true, lastError: null });
+        }
         return normalized;
       } catch (err) {
         const msg = networkErrorMessage(err);
-        setState({ data: null, loading: false, error: msg });
+        setState({ data: null, loading: false, error: msg, lastErrorMeta: null });
         return null;
       } finally {
         if (timeout !== null) {
@@ -149,7 +160,7 @@ export function useApi<T = unknown>() {
   );
 
   const reset = useCallback(() => {
-    setState({ data: null, loading: false, error: null });
+    setState({ data: null, loading: false, error: null, lastErrorMeta: null });
   }, []);
 
   return { ...state, call, reset };

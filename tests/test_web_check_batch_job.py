@@ -1,7 +1,7 @@
 import json
 
 from brain_alpha_ops.config import RunConfig
-from brain_alpha_ops.web_check_batch_job import run_check_batch_job_service
+from brain_alpha_ops.web_check_availability import run_check_batch_job_service
 
 
 class Store:

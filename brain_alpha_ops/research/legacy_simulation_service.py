@@ -33,10 +33,10 @@ class LegacySimulationService:
         submitted: list[Candidate] = []
         total = len(candidates)
         if not candidates:
-            p._progress("official_simulation", 0, 1, "候选池中暂时没有满足回测门槛的 Alpha。")
+            p.services.runtime._progress("official_simulation", 0, 1, "候选池中暂时没有满足回测门槛的 Alpha。")
             return submitted
 
-        p._progress(
+        p.services.runtime._progress(
             "simulation_submit",
             0,
             total,
@@ -44,7 +44,7 @@ class LegacySimulationService:
             data={"backtests": p._backtest_snapshot(candidates)},
         )
         for index, candidate in enumerate(candidates, start=1):
-            p._progress("simulation_submit", index - 1, total, f"提交回测任务 {index}/{total}：{candidate.alpha_id}", candidate.alpha_id)
+            p.services.runtime._progress("simulation_submit", index - 1, total, f"提交回测任务 {index}/{total}：{candidate.alpha_id}", candidate.alpha_id)
             settings = p.config.settings.to_platform_dict()["settings"]
             candidate.submission["settings"] = dict(settings)
             try:
@@ -57,7 +57,7 @@ class LegacySimulationService:
             candidate.submission["backtest_batch_rank"] = index
             submitted.append(candidate)
             p.backtests_submitted += 1
-            p._progress(
+            p.services.runtime._progress(
                 "simulation_submit",
                 index,
                 total,
@@ -91,16 +91,16 @@ class LegacySimulationService:
             candidate.lifecycle_status = "simulation_request_failed"
             candidate.gate = _blocked_gate("SIMULATION_REQUEST_FAILED", [error_text])
             submitted.append(candidate)
-            p._event("official_simulation_failed", "; ".join(candidate.gate["failed_reasons"]), candidate.alpha_id)
+            p.services.runtime._event("official_simulation_failed", "; ".join(candidate.gate["failed_reasons"]), candidate.alpha_id)
             return
 
-        p._halt_official_calls(reason)
+        p.services.runtime._halt_official_calls(reason)
         for item in [candidate] + remaining:
             item.lifecycle_status = status.lower()
             item.gate = _blocked_gate(status, [reason])
             submitted.append(item)
-        p._event("official_simulation_halted", reason, candidate.alpha_id)
-        p._progress("official_deferred", 0, 1, reason, candidate.alpha_id, data={"backtests": p._backtest_snapshot(submitted)})
+        p.services.runtime._event("official_simulation_halted", reason, candidate.alpha_id)
+        p.services.runtime._progress("official_deferred", 0, 1, reason, candidate.alpha_id, data={"backtests": p._backtest_snapshot(submitted)})
 
     def _wait_for_simulation_batch(self, candidates: list[Candidate]):
         p = self._pipeline
@@ -116,10 +116,10 @@ class LegacySimulationService:
                     status = p.api.poll_simulation(sim_id)
                 except BrainAPIError as exc:
                     if exc.status_code == 429:
-                        p._halt_official_calls(f"official simulation polling rate limit reached; retry later: {redact_error_message(exc)}")
+                        p.services.runtime._halt_official_calls(f"official simulation polling rate limit reached; retry later: {redact_error_message(exc)}")
                         candidate.lifecycle_status = "simulation_poll_deferred_rate_limit"
                         candidate.gate = _blocked_gate("SIMULATION_POLL_DEFERRED_RATE_LIMIT", [p.official_halt_reason])
-                        p._event("official_simulation_poll_deferred", p.official_halt_reason, candidate.alpha_id, level="WARN")
+                        p.services.runtime._event("official_simulation_poll_deferred", p.official_halt_reason, candidate.alpha_id, level="WARN")
                         for _sid, _c in list(running.items()):
                             if _c.lifecycle_status not in ("simulation_poll_deferred_rate_limit", "simulation_result_deferred_rate_limit"):
                                 _c.lifecycle_status = "simulation_poll_deferred_rate_limit"
@@ -136,10 +136,10 @@ class LegacySimulationService:
                         result = p.api.fetch_result(sim_id)
                     except BrainAPIError as exc:
                         if exc.status_code == 429:
-                            p._halt_official_calls(f"official simulation result rate limit reached; retry later: {redact_error_message(exc)}")
+                            p.services.runtime._halt_official_calls(f"official simulation result rate limit reached; retry later: {redact_error_message(exc)}")
                             candidate.lifecycle_status = "simulation_result_deferred_rate_limit"
                             candidate.gate = _blocked_gate("SIMULATION_RESULT_DEFERRED_RATE_LIMIT", [p.official_halt_reason])
-                            p._event("official_simulation_result_deferred", p.official_halt_reason, candidate.alpha_id, level="WARN")
+                            p.services.runtime._event("official_simulation_result_deferred", p.official_halt_reason, candidate.alpha_id, level="WARN")
                             for _sid, _c in list(running.items()):
                                 if _c.lifecycle_status not in ("simulation_poll_deferred_rate_limit", "simulation_result_deferred_rate_limit"):
                                     _c.lifecycle_status = "simulation_result_deferred_rate_limit"
@@ -163,7 +163,7 @@ class LegacySimulationService:
                 else:
                     candidate.lifecycle_status = "simulation_running"
 
-            p._progress(
+            p.services.runtime._progress(
                 "simulation_wait",
                 completed_count,
                 len(candidates),
@@ -176,7 +176,7 @@ class LegacySimulationService:
             if not running:
                 return
             if attempt < attempts and interval:
-                if not p._sleep_with_stop(interval):
+                if not p.services.runtime._sleep_with_stop(interval):
                     return
 
         for candidate in running.values():

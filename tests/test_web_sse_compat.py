@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from unittest.mock import MagicMock
 
+import brain_alpha_ops.web  # noqa: F401  install meta-path bridge for web_* modules
 import pytest
 
 

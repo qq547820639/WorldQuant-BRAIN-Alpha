@@ -6,7 +6,6 @@ from hashlib import sha256
 from typing import Any
 
 from brain_alpha_ops.redaction import redact_text
-from brain_alpha_ops.web_runtime_state import status_category
 
 LIFECYCLE_RISK_SCHEMA_VERSION = "candidate-lifecycle-risk-v1"
 LIFECYCLE_RISK_REASON_CODES = {
@@ -169,6 +168,8 @@ def _expression_digest(value: str) -> str:
 
 
 def _category(row: dict[str, Any]) -> str:
+    from brain_alpha_ops.web_runtime_state import status_category
+
     value = _text(row.get("status_category")).lower()
     return value or status_category(row)
 

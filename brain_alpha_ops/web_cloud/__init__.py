@@ -4,6 +4,8 @@ Consolidates web_cloud_snapshot.py, web_cloud_context_refresh.py,
 web_sync_job.py, and web_sync_payload.py into a single package.
 """
 
+import brain_alpha_ops.web  # noqa: F401 — install sys.meta_path bridge
+
 from .snapshot import (
     cloud_alpha_snapshot,
     cloud_alpha_cache_probe,

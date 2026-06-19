@@ -48,5 +48,5 @@ jobs:
       - name: 7/8 - Module size audit
         run: python scripts/check_module_size.py --root . --json
 
-      - name: 8/8 - Tests
-        run: python -m pytest tests/ -v --tb=short
+      - name: 8/8 - Run tests with coverage
+        run: python -m pytest tests/ -v --tb=short --cov=brain_alpha_ops --cov-report=term

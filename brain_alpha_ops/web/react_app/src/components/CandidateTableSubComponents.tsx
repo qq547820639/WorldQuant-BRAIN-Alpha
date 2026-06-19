@@ -1,9 +1,8 @@
-/**
- * Sub-components for CandidateTable.
- * Extracted from CandidateTable.tsx for better code organization.
- */
+/** Sub-components for CandidateTable. */
 
+import { useCallback, useState } from "react";
 import type { AlphaLifecycleHistoryResponse, AlphaLifecycleTrace, Candidate } from "@/types";
+import { isStarred, toggleStar } from "@/utils/starredCandidates";
 import {
   candidateBlockerText,
   candidateIdentity,
@@ -176,11 +175,30 @@ export function CandidateMobileCard({
   const evidence = officialEvidenceText(candidate, checkResults);
   const identity = candidateIdentity(candidate);
   const hasActions = canShowRowActions || canSimulate || canCheck;
+  const [starred, setStarred] = useState(() => isStarred(identity));
+  const handleToggleStar = useCallback(() => {
+    const newState = toggleStar(identity);
+    setStarred(newState);
+  }, [identity]);
   return (
     <div className="panel" style={{ padding: "12px" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
         <div>
-          <p className="text-xs font-mono text-info">{candidateIdentity(candidate).slice(0, 24) || "--"}</p>
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <button
+              type="button"
+              onClick={handleToggleStar}
+              aria-label={starred ? "取消收藏" : "收藏"}
+              style={{
+                background: "none", border: "none", cursor: "pointer",
+                fontSize: 16, lineHeight: 1, padding: 0,
+                opacity: starred ? 1 : 0.3, transition: "opacity 0.15s",
+              }}
+            >
+              ⭐
+            </button>
+            <p className="text-xs font-mono text-info">{candidateIdentity(candidate).slice(0, 24) || "--"}</p>
+          </div>
           <p className="text-xs font-mono text-text-secondary mt-2 break-words">{candidateText(candidate.expression) || "--"}</p>
         </div>
         <span className={`badge shrink-0 ${quality.tone}`}>{quality.label}</span>

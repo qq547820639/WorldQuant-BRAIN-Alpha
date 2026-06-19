@@ -156,7 +156,7 @@ class PipelineSubmissionMixin:
                 "auto_submit": bool(getattr(self.config, "auto_submit", False)),
                 "require_cloud_sync": bool(self.config.budget.require_cloud_sync),
             },
-            "strategy_profile": self._current_strategy_profile(),
+            "strategy_profile": self.services.strategy._current_strategy_profile(),
             "convergence": self.convergence.summary() if hasattr(self, "convergence") else {},
         }
         return {

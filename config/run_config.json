@@ -121,7 +121,7 @@
       "poll_attempts": 120,
       "poll_interval_seconds": 6.0,
       "min_request_interval_seconds": 3.0,
-      "rate_limit_retry_attempts": 0,
+      "rate_limit_retry_attempts": 3,
       "rate_limit_backoff_seconds": 60.0,
       "cache_dir": "data/api_cache",
       "context_cache_ttl_seconds": 86400,

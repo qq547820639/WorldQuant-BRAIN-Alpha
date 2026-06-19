@@ -19,6 +19,7 @@ from brain_alpha_ops.scoring.shared_scores import (
     economic_logic_score,
     normalize_family_label,
 )
+from brain_alpha_ops.research._ratio import _ratio, normalize_brain_ratio
 from brain_alpha_ops.types import ScorecardDict
 
 if TYPE_CHECKING:
@@ -785,8 +786,6 @@ def _num(value) -> float:
     except (TypeError, ValueError):
         return 0.0
 
-
-from brain_alpha_ops.research._ratio import _ratio, normalize_brain_ratio  # noqa: F401
 
 # ═══════════════════════════════════════════════════════════════════════
 # P2: score confidence estimation from point estimate to interval estimate.

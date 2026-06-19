@@ -1,0 +1,78 @@
+# Fallback expression templates for CandidateGenerator._generate_fallback().
+#
+# These are SKELETON templates — every {f1}, {f2}, {w} placeholder is
+# filled at runtime from official data sources (OfficialDataLoader /
+# FieldDatasetMapper). No field names are ever hardcoded here.
+#
+# Schema version: 1.0.0
+# Purpose: Replace the 22 hardcoded template skeletons in generator.py
+#          (see TODO R3 S-05) with a configurable source, aligning with
+#          the project's "零硬编码" (zero-hardcode) principle.
+
+templates:
+  - expression: "rank(divide(ts_delta({f1}, {w}), ts_std_dev({f2}, {w})))"
+    family: momentum
+    description: "Normalized momentum cross-sectional"
+  - expression: "rank(ts_rank({f1}, {w}))"
+    family: momentum
+    description: "Time-series rank momentum"
+  - expression: "rank(zscore({f1}))"
+    family: quality
+    description: "Cross-sectional z-score (quality)"
+  - expression: "rank(reverse({f1}))"
+    family: value
+    description: "Value reversal"
+  - expression: "rank(ts_mean({f1}, {w}))"
+    family: liquidity
+    description: "Time-series mean (liquidity proxy)"
+  - expression: "rank(subtract(ts_delta({f1}, {w}), ts_delta({f2}, {w})))"
+    family: relative_momentum
+    description: "Relative momentum difference"
+  - expression: "reverse(ts_rank({f1}, {w}))"
+    family: reversal
+    description: "Time-series rank reversal"
+  - expression: "multiply(rank({f1}), rank(ts_delta({f2}, {w})))"
+    family: hybrid
+    description: "Hybrid rank-times-momentum"
+  - expression: "rank(ts_corr({f1}, {f2}, {w}))"
+    family: co_movement
+    description: "Time-series correlation"
+  - expression: "ts_rank(ts_delta({f1}, {w}), {w})"
+    family: momentum
+    description: "Time-series rank of delta"
+  - expression: "rank(ts_decay_linear(ts_delta({f1}, {w}), {w}))"
+    family: decay
+    description: "Decay-linear weighted delta"
+  - expression: "rank(reverse(ts_std_dev({f1}, {w})))"
+    family: volatility
+    description: "Reverse volatility (low-vol bet)"
+  - expression: "rank(divide(ts_delta({f1}, {w}), ts_std_dev({f1}, {w})))"
+    family: momentum
+    description: "Momentum-to-volatility ratio"
+  - expression: "rank(subtract(zscore({f1}), zscore({f2})))"
+    family: relative_value
+    description: "Relative cross-sectional value"
+  - expression: "rank(divide({f1}, ts_mean({f1}, {w})))"
+    family: liquidity
+    description: "Value-relative-to-mean"
+  - expression: "rank(subtract(ts_mean({f1}, {w}), ts_mean({f2}, {w})))"
+    family: relative_momentum
+    description: "Relative mean difference"
+  - expression: "rank(ts_covariance({f1}, {f2}, {w}))"
+    family: co_movement
+    description: "Time-series covariance"
+  - expression: "rank(if_else(greater(ts_delta({f1}, {w}), 0), {f1}, reverse({f1})))"
+    family: conditional
+    description: "Conditional direction switch"
+  - expression: "rank(winsorize(ts_delta({f1}, {w}), 3))"
+    family: momentum
+    description: "Winsorized momentum"
+  - expression: "rank(divide(ts_std_dev({f1}, {w}), ts_std_dev({f2}, {w})))"
+    family: volatility
+    description: "Relative volatility"
+  - expression: "rank(divide(ts_mean({f1}, {w}), ts_std_dev({f2}, {w})))"
+    family: hybrid
+    description: "Mean-to-volatility ratio"
+  - expression: "rank(ts_sum(ts_delta({f1}, {w}), {w}))"
+    family: momentum
+    description: "Cumulative delta sum"

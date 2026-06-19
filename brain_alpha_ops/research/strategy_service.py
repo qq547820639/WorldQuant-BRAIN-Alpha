@@ -86,7 +86,7 @@ class StrategyService:
             pool_size=len(pool_by_expression),
             trigger=trigger,
         )
-        p._notify_strategy_plugins(
+        p.services.runtime._notify_strategy_plugins(
             "validate",
             current_profile,
             cycle=cycle,
@@ -119,7 +119,7 @@ class StrategyService:
         p.strategy_profile_index = application.next_index
         if not application.retained:
             p.strategy_lifecycle.retire(old_profile, index=old_idx, cycle=cycle, reason=trigger)
-            p._notify_strategy_plugins("retire", old_profile, cycle=cycle, reason=trigger, profile_index=old_idx)
+            p.services.runtime._notify_strategy_plugins("retire", old_profile, cycle=cycle, reason=trigger, profile_index=old_idx)
             p.strategy_lifecycle.mutate(
                 old_profile,
                 profile,
@@ -128,7 +128,7 @@ class StrategyService:
                 cycle=cycle,
                 reason=trigger,
             )
-            p._notify_strategy_plugins(
+            p.services.runtime._notify_strategy_plugins(
                 "mutate",
                 profile,
                 cycle=cycle,
@@ -139,7 +139,7 @@ class StrategyService:
             )
         else:
             p.strategy_lifecycle.propose(profile, index=next_idx, cycle=cycle, reason=f"retained after {trigger}")
-            p._notify_strategy_plugins(
+            p.services.runtime._notify_strategy_plugins(
                 "propose",
                 profile,
                 cycle=cycle,
@@ -147,7 +147,7 @@ class StrategyService:
                 profile_index=next_idx,
             )
         bandit_note = str(decision.get("mode") or ("exploit" if p._bandit_rewards.get(next_idx) else "cold-start"))
-        p._event("bandit_selection",
+        p.services.runtime._event("bandit_selection",
             f"Bandit {bandit_note}: profile {profile['name']} (idx={next_idx}) "
             f"reward={mean_rewards.get(next_idx, 0):.3f} "
             f"count={p._bandit_counts.get(next_idx, 0)}",
@@ -169,13 +169,13 @@ class StrategyService:
             if candidate.alpha_id in retained_ids:
                 candidate.validation = {}
                 candidate.lifecycle_status = "candidate_pool_retained"
-        p._event(
+        p.services.runtime._event(
             "adaptive_strategy_switched",
             f"Switched to {profile['label']}: {profile['reason']}",
             data={"profile": profile, "cycle": cycle},
             level="WARN",
         )
-        p._progress(
+        p.services.runtime._progress(
             "strategy_switch",
             p.strategy_switch_count,
             max(1, len(eligible)),
@@ -188,4 +188,4 @@ class StrategyService:
                 {"strategy_profile": self._current_strategy_profile()},
             ),
         )
-        return p._load_official_context()
+        return p.services.context_sync._load_official_context()

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import enum
 import logging
+import random
 import time
 from pathlib import Path
 from typing import Callable
@@ -58,8 +59,6 @@ from .observability import build_research_observability_snapshot
 from .official_call_guard import OfficialCallGuard
 from .official_validation import OfficialValidationService
 from .official_workflow import OfficialWorkflowService
-from .backtest_flow_service import BacktestFlowService
-from .candidate_pool_service_ import CandidatePoolService_
 from .pipeline_cloud import (
     build_cloud_similarity_rows,
     cloud_correlation_risk,
@@ -68,7 +67,7 @@ from .pipeline_cloud import (
     smart_rank_candidates,
     smart_ranking_score,
 )
-from .context_sync_service import ContextSyncService
+
 from .pipeline_helpers import (
     assistant_guidance_for_generator as _assistant_guidance_for_generator,
 )
@@ -84,7 +83,7 @@ from .pipeline_helpers import (
 from .pipeline_helpers import (
     rank_candidates,
 )
-from .legacy_simulation_service import LegacySimulationService
+
 from .pipeline_observability import (
     apply_observability_generation_guidance,
     refresh_observability_throttle,
@@ -96,8 +95,7 @@ from .pipeline_official_context import (
     official_context_reasons,
     refresh_context_validation_cache,
 )
-from .official_validation_service import OfficialValidationService_
-from .runtime_service import RuntimeService
+
 from .pipeline_services import PipelineServiceFactoryMixin
 from .pipeline_snapshot import (
     PipelineSnapshotBuilder,
@@ -106,14 +104,16 @@ from .pipeline_snapshot import (
     backtest_slot_snapshot,
 )
 from .pipeline_snapshots import PipelineSnapshotMixin
+from .pipeline_candidates import PipelineCandidatePoolMixin
+from .pipeline_backtest_flow import PipelineBacktestMixin
+from .pipeline_context_sync import PipelineContextSyncMixin
+from .pipeline_submission_gate import PipelineSubmissionMixin
 from .pipeline_state import (
     CycleState,
     PipelineRuntimeState,
     bind_runtime_state_properties,
     record_strategy_reward,
 )
-from .strategy_service import StrategyService
-from .submission_gate_service import SubmissionGateService
 from .production_context import build_production_context, eligible_strategy_profiles
 from .repository import ResearchRepository
 from .research_cycle_orchestrator import ResearchCycleOrchestrator
@@ -129,10 +129,14 @@ from .strategy_switch import StrategySwitchService
 SUBMITTED_CLOUD_STATUSES = {"ACTIVE", "SUBMITTED", "PRODUCTION", "CONDUCTED"}
 
 
-# TODO R3 S-11: 10+ Mixin inheritance; consider has-a composition
+# NOTE: Mixin inheritance reduced from 10+ to 2 (PipelineServiceFactoryMixin, PipelineSnapshotMixin). Remaining services are accessed via self.services composition container. See pipeline_services_container.py.
 class AlphaResearchPipeline(
     PipelineServiceFactoryMixin,
     PipelineSnapshotMixin,
+    PipelineCandidatePoolMixin,
+    PipelineContextSyncMixin,
+    PipelineBacktestMixin,
+    PipelineSubmissionMixin,
 ):
     """End-to-end alpha research, simulation, scoring, and optional submission.
 
@@ -174,7 +178,7 @@ class AlphaResearchPipeline(
             _cross_review_service=CrossReviewService(),
             backtest_slot_manager=backtest_slot_manager,
             backtest_slots=backtest_slot_manager.slots,
-            strategy_lifecycle=StrategyLifecycleTracker(record_sink=self._record_strategy_lifecycle),
+            strategy_lifecycle=StrategyLifecycleTracker(record_sink=lambda row: self.services.runtime._record_strategy_lifecycle(row)),
             cloud_sync={
                 "status": "not_started",
                 "range": config.budget.cloud_sync_range,
@@ -182,23 +186,23 @@ class AlphaResearchPipeline(
                 "warning": "",
             },
             check_registry=AlphaCheckRegistry(),
-            convergence=ConvergenceTracker(window_size=10, stall_threshold=5),
+            convergence=ConvergenceTracker(window_size=10, stall_threshold=5, rng=random.Random(42)),
             auto_calibrator=AutoCalibrator(storage_dir=getattr(config, "storage_dir", "data")),
         )
-        self.strategy_profile_index = self._initial_strategy_profile_index()
+        # ── Composition-based service container ──
+        self._services_container = None
+        self.strategy_profile_index = self.services.strategy._initial_strategy_profile_index()
         # ── P1-2: AlphaCheckRegistry for BRAIN-standard quality checks ──
         self.check_registry.build_default_checks()
         # P1-5: Register type-specific checks (POWER_POOL / ATOM / PYRAMID)
         alpha_type = str(getattr(config.settings, 'type', 'REGULAR') or 'REGULAR').upper()
         if alpha_type != "REGULAR":
             self.check_registry.build_type_checks(alpha_type)
-            self._event("type_checks_registered",
+            self.services.runtime._event("type_checks_registered",
                 f"Alpha type '{alpha_type}': registered type-specific checks.",
                 level="INFO")
-        self.strategy_plugins = self._load_strategy_plugins()
+        self.strategy_plugins = self.services.runtime._load_strategy_plugins()
         # ── P0-2: Iterative optimizer (lazy-init with loader/mapper after context load) ──
-        # ── Composition-based service container (recommended for new code) ──
-        self._services_container = None
 
     @property
     def services(self):
@@ -212,395 +216,6 @@ class AlphaResearchPipeline(
             from .pipeline_services_container import PipelineServices
             self._services_container = PipelineServices(self)
         return self._services_container
-
-    def _should_remove_after_official_result(self, candidate):
-        """Delegate to LegacySimulationService for backward compatibility."""
-        if not hasattr(self, "_legacy_simulation_service"):
-            self._legacy_simulation_service = LegacySimulationService(self)
-        return self._legacy_simulation_service._should_remove_after_official_result(candidate)
-
-    def _sync_cloud_alphas(self):
-        """Delegate to ContextSyncService for backward compatibility."""
-        if not hasattr(self, "_context_sync_service"):
-            self._context_sync_service = ContextSyncService(self)
-        return self._context_sync_service._sync_cloud_alphas()
-
-    def _load_official_context(self):
-        """Delegate to ContextSyncService for backward compatibility."""
-        if not hasattr(self, "_context_sync_service"):
-            self._context_sync_service = ContextSyncService(self)
-        return self._context_sync_service._load_official_context()
-
-    def _apply_knowledge_constraints_to_generator(self):
-        """Delegate to ContextSyncService for backward compatibility."""
-        if not hasattr(self, "_context_sync_service"):
-            self._context_sync_service = ContextSyncService(self)
-        return self._context_sync_service._apply_knowledge_constraints_to_generator()
-
-    def _try_auto_submit(self, candidate, submitted_this_run):
-        """Delegate to SubmissionGateService for backward compatibility."""
-        if not hasattr(self, "_submission_gate_service"):
-            self._submission_gate_service = SubmissionGateService(self)
-        return self._submission_gate_service._try_auto_submit(candidate, submitted_this_run)
-
-    def _assess_auto_submission(self, candidate, submitted_this_run):
-        """Delegate to SubmissionGateService for backward compatibility."""
-        if not hasattr(self, "_submission_gate_service"):
-            self._submission_gate_service = SubmissionGateService(self)
-        return self._submission_gate_service._assess_auto_submission(candidate, submitted_this_run)
-
-    def _validate_for_open_backtest_slots(self, cycle, pool_by_expression, accepted_candidates, archive_stats, blocked_expressions):
-        """Delegate to OfficialValidationService_ for backward compatibility."""
-        if not hasattr(self, "_official_validation_service"):
-            self._official_validation_service = OfficialValidationService_(self)
-        return self._official_validation_service._validate_for_open_backtest_slots(cycle, pool_by_expression, accepted_candidates, archive_stats, blocked_expressions)
-
-    def _validate(self, candidates):
-        """Delegate to OfficialValidationService_ for backward compatibility."""
-        if not hasattr(self, "_official_validation_service"):
-            self._official_validation_service = OfficialValidationService_(self)
-        return self._official_validation_service._validate(candidates)
-
-    def _filter_observability_duplicate_targets(self, candidates, *, phase):
-        """Delegate to OfficialValidationService_ for backward compatibility."""
-        if not hasattr(self, "_official_validation_service"):
-            self._official_validation_service = OfficialValidationService_(self)
-        return self._official_validation_service._filter_observability_duplicate_targets(candidates, phase=phase)
-
-    def _archive_validation_failures(self, pool_by_expression, validation_targets, blocked_expressions):
-        """Delegate to OfficialValidationService_ for backward compatibility."""
-        if not hasattr(self, "_official_validation_service"):
-            self._official_validation_service = OfficialValidationService_(self)
-        return self._official_validation_service._archive_validation_failures(pool_by_expression, validation_targets, blocked_expressions)
-
-    def _observability_official_call_guard_snapshot(self):
-        """Delegate to OfficialValidationService_ for backward compatibility."""
-        if not hasattr(self, "_official_validation_service"):
-            self._official_validation_service = OfficialValidationService_(self)
-        return self._official_validation_service._observability_official_call_guard_snapshot()
-
-    def _record_observability_official_call_guard(self, candidate, *, phase, expression_canonical):
-        """Delegate to OfficialValidationService_ for backward compatibility."""
-        if not hasattr(self, "_official_validation_service"):
-            self._official_validation_service = OfficialValidationService_(self)
-        return self._official_validation_service._record_observability_official_call_guard(candidate, phase=phase, expression_canonical=expression_canonical)
-
-    def _block_observability_duplicate_before_official(self, candidate, *, phase):
-        """Delegate to OfficialValidationService_ for backward compatibility."""
-        if not hasattr(self, "_official_validation_service"):
-            self._official_validation_service = OfficialValidationService_(self)
-        return self._official_validation_service._block_observability_duplicate_before_official(candidate, phase=phase)
-
-    def _eligible_profiles(self):
-        """Delegate to StrategyService for backward compatibility."""
-        if not hasattr(self, "_strategy_service"):
-            self._strategy_service = StrategyService(self)
-        return self._strategy_service._eligible_profiles()
-
-    def _current_strategy_profile(self):
-        """Delegate to StrategyService for backward compatibility."""
-        if not hasattr(self, "_strategy_service"):
-            self._strategy_service = StrategyService(self)
-        return self._strategy_service._current_strategy_profile()
-
-    def _initial_strategy_profile_index(self):
-        """Delegate to StrategyService for backward compatibility."""
-        if not hasattr(self, "_strategy_service"):
-            self._strategy_service = StrategyService(self)
-        return self._strategy_service._initial_strategy_profile_index()
-
-    def _maybe_switch_strategy(self, cycle, fields, operators, pool_by_expression, accepted_candidates, archive_stats):
-        """Delegate to StrategyService for backward compatibility."""
-        if not hasattr(self, "_strategy_service"):
-            self._strategy_service = StrategyService(self)
-        return self._strategy_service._maybe_switch_strategy(cycle, fields, operators, pool_by_expression, accepted_candidates, archive_stats)
-
-    def _fill_backtest_slots(self, cycle, state):
-        """Delegate to BacktestFlowService for backward compatibility."""
-        if not hasattr(self, "_backtest_flow_service"):
-            self._backtest_flow_service = BacktestFlowService(self)
-        return self._backtest_flow_service._fill_backtest_slots(cycle, state)
-
-    def _poll_due_backtests(self, cycle, pool_by_expression, accepted_candidates, archive_stats, archive_samples, blocked_expressions, submitted_this_run, auto_submit, *, force_initial=False):
-        """Delegate to BacktestFlowService for backward compatibility."""
-        if not hasattr(self, "_backtest_flow_service"):
-            self._backtest_flow_service = BacktestFlowService(self)
-        return self._backtest_flow_service._poll_due_backtests(cycle, pool_by_expression, accepted_candidates, archive_stats, archive_samples, blocked_expressions, submitted_this_run, auto_submit, force_initial=force_initial)
-
-    def _try_fusion_top_candidates(self, pool_by_expression, blocked_expressions, cycle):
-        """Delegate to BacktestFlowService for backward compatibility."""
-        if not hasattr(self, "_backtest_flow_service"):
-            self._backtest_flow_service = BacktestFlowService(self)
-        return self._backtest_flow_service._try_fusion_top_candidates(pool_by_expression, blocked_expressions, cycle)
-
-    def _simulation_retry_count(self, candidate):
-        """Delegate to BacktestFlowService for backward compatibility."""
-        if not hasattr(self, "_backtest_flow_service"):
-            self._backtest_flow_service = BacktestFlowService(self)
-        return self._backtest_flow_service._simulation_retry_count(candidate)
-
-    def _retry_simulation_candidate(self, candidate, pool_by_expression, reason):
-        """Delegate to BacktestFlowService for backward compatibility."""
-        if not hasattr(self, "_backtest_flow_service"):
-            self._backtest_flow_service = BacktestFlowService(self)
-        return self._backtest_flow_service._retry_simulation_candidate(candidate, pool_by_expression, reason)
-
-    def _create_secondary_fusion_candidate(self, candidate, pool_by_expression, blocked_expressions, reason):
-        """Delegate to BacktestFlowService for backward compatibility."""
-        if not hasattr(self, "_backtest_flow_service"):
-            self._backtest_flow_service = BacktestFlowService(self)
-        return self._backtest_flow_service._create_secondary_fusion_candidate(candidate, pool_by_expression, blocked_expressions, reason)
-
-    def _poll_interval_seconds(self):
-        """Delegate to BacktestFlowService for backward compatibility."""
-        if not hasattr(self, "_backtest_flow_service"):
-            self._backtest_flow_service = BacktestFlowService(self)
-        return self._backtest_flow_service._poll_interval_seconds()
-
-    def _local_prefilter(self, generated, cycle, fields, operators):
-        if not hasattr(self, "_candidate_pool_svc"):
-            self._candidate_pool_svc = CandidatePoolService_(self)
-        return self._candidate_pool_svc._local_prefilter(generated, cycle, fields, operators)
-
-    def _apply_local_backtest_prefilter(self, candidate):
-        if not hasattr(self, "_candidate_pool_svc"):
-            self._candidate_pool_svc = CandidatePoolService_(self)
-        return self._candidate_pool_svc._apply_local_backtest_prefilter(candidate)
-
-    def _apply_generation_field_prefilter(self, candidate):
-        if not hasattr(self, "_candidate_pool_svc"):
-            self._candidate_pool_svc = CandidatePoolService_(self)
-        return self._candidate_pool_svc._apply_generation_field_prefilter(candidate)
-
-    def _record_local_backtest_knowledge(self, candidate, result):
-        if not hasattr(self, "_candidate_pool_svc"):
-            self._candidate_pool_svc = CandidatePoolService_(self)
-        return self._candidate_pool_svc._record_local_backtest_knowledge(candidate, result)
-
-    def _top_up_candidate_pool(self, cycle, pool_by_expression, blocked_expressions, archive_stats, archive_samples, fields, operators, accepted_candidates):
-        if not hasattr(self, "_candidate_pool_svc"):
-            self._candidate_pool_svc = CandidatePoolService_(self)
-        return self._candidate_pool_svc._top_up_candidate_pool(cycle, pool_by_expression, blocked_expressions, archive_stats, archive_samples, fields, operators, accepted_candidates)
-
-    def _refresh_context_validation_cache(self, fields, operators):
-        if not hasattr(self, "_candidate_pool_svc"):
-            self._candidate_pool_svc = CandidatePoolService_(self)
-        return self._candidate_pool_svc._refresh_context_validation_cache(fields, operators)
-
-    def _active_dataset_field_names(self):
-        if not hasattr(self, "_candidate_pool_svc"):
-            self._candidate_pool_svc = CandidatePoolService_(self)
-        return self._candidate_pool_svc._active_dataset_field_names()
-
-    def _official_context_reasons(self, candidate, fields, operators):
-        if not hasattr(self, "_candidate_pool_svc"):
-            self._candidate_pool_svc = CandidatePoolService_(self)
-        return self._candidate_pool_svc._official_context_reasons(candidate, fields, operators)
-
-    def _merge_into_pool(self, pool_by_expression, candidates, blocked_expressions):
-        if not hasattr(self, "_candidate_pool_svc"):
-            self._candidate_pool_svc = CandidatePoolService_(self)
-        return self._candidate_pool_svc._merge_into_pool(pool_by_expression, candidates, blocked_expressions)
-
-    def _remove_below_local_standard(self, pool_by_expression):
-        if not hasattr(self, "_candidate_pool_svc"):
-            self._candidate_pool_svc = CandidatePoolService_(self)
-        return self._candidate_pool_svc._remove_below_local_standard(pool_by_expression)
-
-    def _prune_pool(self, pool_by_expression):
-        if not hasattr(self, "_candidate_pool_svc"):
-            self._candidate_pool_svc = CandidatePoolService_(self)
-        return self._candidate_pool_svc._prune_pool(pool_by_expression)
-
-    def _validation_targets(self, pool):
-        if not hasattr(self, "_candidate_pool_svc"):
-            self._candidate_pool_svc = CandidatePoolService_(self)
-        return self._candidate_pool_svc._validation_targets(pool)
-
-    def _validation_quota(self, pool):
-        if not hasattr(self, "_candidate_pool_svc"):
-            self._candidate_pool_svc = CandidatePoolService_(self)
-        return self._candidate_pool_svc._validation_quota(pool)
-
-    def _pending_backtest_plan(self, pool):
-        if not hasattr(self, "_candidate_pool_svc"):
-            self._candidate_pool_svc = CandidatePoolService_(self)
-        return self._candidate_pool_svc._pending_backtest_plan(pool)
-
-    def _preflight_pending_backtest_candidates(self, pool):
-        if not hasattr(self, "_candidate_pool_svc"):
-            self._candidate_pool_svc = CandidatePoolService_(self)
-        return self._candidate_pool_svc._preflight_pending_backtest_candidates(pool)
-
-    def _backtest_targets(self, pool):
-        if not hasattr(self, "_candidate_pool_svc"):
-            self._candidate_pool_svc = CandidatePoolService_(self)
-        return self._candidate_pool_svc._backtest_targets(pool)
-
-    def _pending_backtest_candidates(self, pool, threshold=None):
-        if not hasattr(self, "_candidate_pool_svc"):
-            self._candidate_pool_svc = CandidatePoolService_(self)
-        return self._candidate_pool_svc._pending_backtest_candidates(pool, threshold=threshold)
-
-    def _is_pending_backtest_candidate(self, candidate, threshold=None):
-        if not hasattr(self, "_candidate_pool_svc"):
-            self._candidate_pool_svc = CandidatePoolService_(self)
-        return self._candidate_pool_svc._is_pending_backtest_candidate(candidate, threshold)
-
-    def _is_active_backtest_candidate(self, candidate):
-        if not hasattr(self, "_candidate_pool_svc"):
-            self._candidate_pool_svc = CandidatePoolService_(self)
-        return self._candidate_pool_svc._is_active_backtest_candidate(candidate)
-
-    def _candidate_pool_candidates(self, pool):
-        if not hasattr(self, "_candidate_pool_svc"):
-            self._candidate_pool_svc = CandidatePoolService_(self)
-        return self._candidate_pool_svc._candidate_pool_candidates(pool)
-
-    def _pending_simulation_targets(self, pool):
-        if not hasattr(self, "_candidate_pool_svc"):
-            self._candidate_pool_svc = CandidatePoolService_(self)
-        return self._candidate_pool_svc._pending_simulation_targets(pool)
-
-    def _refresh_cloud_similarity_index(self):
-        if not hasattr(self, "_candidate_pool_svc"):
-            self._candidate_pool_svc = CandidatePoolService_(self)
-        return self._candidate_pool_svc._refresh_cloud_similarity_index()
-
-    def _cloud_correlation_risk(self, candidate):
-        if not hasattr(self, "_candidate_pool_svc"):
-            self._candidate_pool_svc = CandidatePoolService_(self)
-        return self._candidate_pool_svc._cloud_correlation_risk(candidate)
-
-    def _reject_high_cloud_similarity_before_official(self, candidate):
-        if not hasattr(self, "_candidate_pool_svc"):
-            self._candidate_pool_svc = CandidatePoolService_(self)
-        return self._candidate_pool_svc._reject_high_cloud_similarity_before_official(candidate)
-
-    def _cloud_status_for_candidate(self, candidate):
-        if not hasattr(self, "_candidate_pool_svc"):
-            self._candidate_pool_svc = CandidatePoolService_(self)
-        return self._candidate_pool_svc._cloud_status_for_candidate(candidate)
-
-    def _remember_accepted(self, accepted_candidates, candidate):
-        if not hasattr(self, "_candidate_pool_svc"):
-            self._candidate_pool_svc = CandidatePoolService_(self)
-        return self._candidate_pool_svc._remember_accepted(accepted_candidates, candidate)
-
-    def _smart_rank_candidates(self, candidates):
-        if not hasattr(self, "_candidate_pool_svc"):
-            self._candidate_pool_svc = CandidatePoolService_(self)
-        return self._candidate_pool_svc._smart_rank_candidates(candidates)
-
-    def _smart_ranking_score(self, candidate):
-        if not hasattr(self, "_candidate_pool_svc"):
-            self._candidate_pool_svc = CandidatePoolService_(self)
-        return self._candidate_pool_svc._smart_ranking_score(candidate)
-
-    def _record_lifecycle(self, candidate, stage, note=""):
-        if not hasattr(self, "_runtime_svc"):
-            self._runtime_svc = RuntimeService(self)
-        return self._runtime_svc._record_lifecycle(candidate, stage, note)
-
-    def _record_backtest(self, candidate, action, *, slot=0, status="", note="", error_context=None):
-        if not hasattr(self, "_runtime_svc"):
-            self._runtime_svc = RuntimeService(self)
-        return self._runtime_svc._record_backtest(candidate, action, slot=slot, status=status, note=note, error_context=error_context)
-
-    def _record_robustness_feedback(self, candidate, *, cycle, policy):
-        if not hasattr(self, "_runtime_svc"):
-            self._runtime_svc = RuntimeService(self)
-        return self._runtime_svc._record_robustness_feedback(candidate, cycle=cycle, policy=policy)
-
-    def _scientific_audit_feedback(self, candidate, *, stage):
-        if not hasattr(self, "_runtime_svc"):
-            self._runtime_svc = RuntimeService(self)
-        return self._runtime_svc._scientific_audit_feedback(candidate, stage=stage)
-
-    def _record_strategy_lifecycle(self, row):
-        if not hasattr(self, "_runtime_svc"):
-            self._runtime_svc = RuntimeService(self)
-        return self._runtime_svc._record_strategy_lifecycle(row)
-
-    def _load_strategy_plugins(self):
-        if not hasattr(self, "_runtime_svc"):
-            self._runtime_svc = RuntimeService(self)
-        return self._runtime_svc._load_strategy_plugins()
-
-    def _strategy_plugin_summary(self):
-        if not hasattr(self, "_runtime_svc"):
-            self._runtime_svc = RuntimeService(self)
-        return self._runtime_svc._strategy_plugin_summary()
-
-    def _notify_strategy_plugins(self, action, profile, *, cycle, reason="", **context):
-        if not hasattr(self, "_runtime_svc"):
-            self._runtime_svc = RuntimeService(self)
-        return self._runtime_svc._notify_strategy_plugins(action, profile, cycle=cycle, reason=reason, **context)
-
-    def _recover_persisted_backtest_slots(self):
-        if not hasattr(self, "_runtime_svc"):
-            self._runtime_svc = RuntimeService(self)
-        return self._runtime_svc._recover_persisted_backtest_slots()
-
-    def _official_error_context(self, exc, error_code, *, phase, candidate):
-        if not hasattr(self, "_runtime_svc"):
-            self._runtime_svc = RuntimeService(self)
-        return self._runtime_svc._official_error_context(exc, error_code, phase=phase, candidate=candidate)
-
-    def _defer_official_cycle(self, cycle, pool, accepted_candidates, archive_stats):
-        if not hasattr(self, "_runtime_svc"):
-            self._runtime_svc = RuntimeService(self)
-        return self._runtime_svc._defer_official_cycle(cycle, pool, accepted_candidates, archive_stats)
-
-    def _refresh_observability_throttle(self, cycle):
-        if not hasattr(self, "_runtime_svc"):
-            self._runtime_svc = RuntimeService(self)
-        return self._runtime_svc._refresh_observability_throttle(cycle)
-
-    def _apply_observability_generation_guidance(self, snapshot, context, cycle):
-        if not hasattr(self, "_runtime_svc"):
-            self._runtime_svc = RuntimeService(self)
-        return self._runtime_svc._apply_observability_generation_guidance(snapshot, context, cycle)
-
-    def _halt_official_calls(self, reason, retry_seconds=None):
-        if not hasattr(self, "_runtime_svc"):
-            self._runtime_svc = RuntimeService(self)
-        return self._runtime_svc._halt_official_calls(reason, retry_seconds)
-
-    def _maybe_resume_official_calls(self):
-        if not hasattr(self, "_runtime_svc"):
-            self._runtime_svc = RuntimeService(self)
-        return self._runtime_svc._maybe_resume_official_calls()
-
-    def _official_retry_remaining_seconds(self):
-        if not hasattr(self, "_runtime_svc"):
-            self._runtime_svc = RuntimeService(self)
-        return self._runtime_svc._official_retry_remaining_seconds()
-
-    def _archive(self, archive_stats, archive_samples, candidates):
-        if not hasattr(self, "_runtime_svc"):
-            self._runtime_svc = RuntimeService(self)
-        return self._runtime_svc._archive(archive_stats, archive_samples, candidates)
-
-    def _should_stop(self):
-        if not hasattr(self, "_runtime_svc"):
-            self._runtime_svc = RuntimeService(self)
-        return self._runtime_svc._should_stop()
-
-    def _sleep_with_stop(self, seconds):
-        if not hasattr(self, "_runtime_svc"):
-            self._runtime_svc = RuntimeService(self)
-        return self._runtime_svc._sleep_with_stop(seconds)
-
-    def _event(self, event, message, alpha_id="", data=None, level="INFO"):
-        if not hasattr(self, "_runtime_svc"):
-            self._runtime_svc = RuntimeService(self)
-        return self._runtime_svc._event(event, message, alpha_id=alpha_id, data=data, level=level)
-
-    def _progress(self, phase, current, total, message, alpha_id="", data=None):
-        if not hasattr(self, "_runtime_svc"):
-            self._runtime_svc = RuntimeService(self)
-        return self._runtime_svc._progress(phase, current, total, message, alpha_id=alpha_id, data=data)
 
     # ── B-03: Extracted post-processing phase ──────────────────────────
     def _run_cycle_post_processing(
@@ -635,7 +250,7 @@ class AlphaResearchPipeline(
         idx = self.strategy_profile_index
         reward_snapshot = record_strategy_reward(idx, pool_values, self._bandit_rewards, self._bandit_counts)
         self.strategy_lifecycle.record_reward(
-            self._current_strategy_profile(),
+            self.services.strategy._current_strategy_profile(),
             index=idx,
             cycle=cycle,
             reward=reward_snapshot.reward,
@@ -645,7 +260,7 @@ class AlphaResearchPipeline(
         # ── P2-2: Output convergence report every 10 cycles ──
         if cycle > 0 and cycle % 10 == 0:
             conv = self.convergence.summary()
-            self._event(
+            self.services.runtime._event(
                 "convergence_report",
                 f"Cycle {cycle} convergence: {conv['sharpe_trend']}, "
                 f"avg Sharpe={conv['recent_avg_sharpe']:.3f}, "
@@ -653,7 +268,7 @@ class AlphaResearchPipeline(
                 data={"convergence": conv},
             )
             if conv["stalled"]:
-                self._event(
+                self.services.runtime._event(
                     "convergence_stalled",
                     conv["recommendation"],
                     level="WARN",
@@ -665,7 +280,7 @@ class AlphaResearchPipeline(
                 calib_report = self.auto_calibrator.calibrate()
                 if calib_report.get("calibrated"):
                     self.config.scoring = self.auto_calibrator.apply(self.config.scoring)
-                    self._event(
+                    self.services.runtime._event(
                         "scoring_calibrated",
                         calib_report.get("summary", "Scoring parameters calibrated."),
                         data=calib_report,
@@ -674,7 +289,7 @@ class AlphaResearchPipeline(
                 message = redact_error_message(exc)
                 logger.warning("Scoring auto-calibration failed in cycle %s: %s", cycle, message)
                 logger.debug("Scoring auto-calibration traceback in cycle %s", cycle, exc_info=True)
-                self._event(
+                self.services.runtime._event(
                     "scoring_calibration_failed",
                     f"Auto-calibration failed: {message}",
                     level="WARN",
@@ -688,10 +303,10 @@ class AlphaResearchPipeline(
             and self.convergence.summary().get("stall_cycles", 0) >= 3
         ):
             try:
-                self._try_fusion_top_candidates(pool_by_expression, blocked_expressions=None, cycle=cycle)
+                self.services.backtest_flow._try_fusion_top_candidates(pool_by_expression, blocked_expressions=None, cycle=cycle)
             except Exception as exc:
                 logger.warning("Secondary fusion attempt failed in cycle %s", cycle, exc_info=True)
-                self._event(
+                self.services.runtime._event(
                     "fusion_attempt_failed",
                     f"Fusion attempt during convergence stall failed: {exc}",
                     level="WARN",
@@ -701,63 +316,50 @@ class AlphaResearchPipeline(
 
 
     def run(self, *, auto_submit: bool = False) -> PipelineResult:
+        """Orchestrate the full alpha research pipeline.
+
+        Phases: auth → context load → production context → main loop → persist.
+        """
         run_id = new_id("run")
         self.run_id = run_id
         submitted_this_run = 0
         state = CycleState()
-        # Local aliases for backward-compat with existing code
-        archive_stats = state.archive_stats
-        archive_samples = state.archive_samples
-        accepted_candidates = state.accepted_candidates
-        pool_by_expression = state.pool_by_expression
-        blocked_expressions = state.blocked_expressions
 
-        self._event("run_started", "Research pipeline started.")
-        self._progress("startup", 0, 1, "准备认证并加载官方字段/算子上下文。")
+        self.services.runtime._event("run_started", "Research pipeline started.")
+        self.services.runtime._progress("startup", 0, 1, "准备认证并加载官方字段/算子上下文。")
         self.api.authenticate()
-        self._recover_persisted_backtest_slots()
+        self.services.runtime._recover_persisted_backtest_slots()
 
         # P1-8: Fetch user profile (tier, level, points) after authentication
         self.user_profile: dict = {}
         try:
             self.user_profile = self.api.get_user_profile()
-            self._event("user_profile_loaded",
+            self.services.runtime._event("user_profile_loaded",
                 f"User: {self.user_profile.get('tier', 'unknown')}, "
                 f"Level: {self.user_profile.get('level', 'N/A')}, "
-                f"Points: {self.user_profile.get('points', 'N/A')}",
-                level="INFO")
+                f"Points: {self.user_profile.get('points', 'N/A')}", level="INFO")
         except Exception as exc:
             message = redact_error_message(exc, max_length=100)
             self.user_profile = {"tier": "error", "error": message}
-            self._event("user_profile_failed",
+            self.services.runtime._event("user_profile_failed",
                 f"Could not fetch user profile: {message}", level="WARN")
 
-        self._sync_cloud_alphas()
-        fields, operators = self._load_official_context()
+        self.services.context_sync._sync_cloud_alphas()
+        fields, operators = self.services.context_sync._load_official_context()
 
-        # ── Build live-verified production context ──
+        # Build live-verified production context
         self.production_context: dict = build_production_context(
-            user_profile=self.user_profile,
-            official_fields=fields or [],
-            config=self.config,
-        )
-        self._event("production_context_ready",
+            user_profile=self.user_profile, official_fields=fields or [], config=self.config)
+        self.services.runtime._event("production_context_ready",
             f"Tier: {self.production_context.get('account_tier')}, "
             f"Profiles: {self.production_context.get('eligible_profiles_count')}, "
             f"Safe fields: {self.production_context.get('safe_field_count')} (excl. VECTOR)",
             level="INFO")
-        self.strategy_lifecycle.propose(
-            self._current_strategy_profile(),
-            index=self.strategy_profile_index,
-            cycle=0,
-            reason="initial adaptive strategy profile",
-        )
-        self._notify_strategy_plugins(
-            "propose",
-            self._current_strategy_profile(),
-            cycle=0,
-            reason="initial adaptive strategy profile",
-        )
+        profile = self.services.strategy._current_strategy_profile()
+        self.strategy_lifecycle.propose(profile, index=self.strategy_profile_index,
+            cycle=0, reason="initial adaptive strategy profile")
+        self.services.runtime._notify_strategy_plugins("propose", profile,
+            cycle=0, reason="initial adaptive strategy profile")
 
         # Inject live-verified fields into the generator module
         try:
@@ -767,40 +369,121 @@ class AlphaResearchPipeline(
             logger.warning("Failed to inject live safe-fields into generator", exc_info=True)
 
         if self.progress_callback and self.user_profile:
-            self._progress("startup", 0.5, 1,
+            self.services.runtime._progress("startup", 0.5, 1,
                 f"用户: {self.user_profile.get('tier', '-')} "
                 f"Lv.{self.user_profile.get('level', '-')} "
                 f"积分 {self.user_profile.get('points', '-')}",
                 data={"user_profile": self.user_profile})
 
+        # ── Enter main loop ──
         cycle_orchestrator = ResearchCycleOrchestrator(
             run_forever=self.config.budget.run_forever,
             max_cycles=self.config.budget.max_cycles,
-            should_stop=self._should_stop,
-        )
-        _pipeline_start_time = time.time()
-        BUILTIN_MAX_CYCLE_RUNTIME = int(
-            getattr(self.config.budget, 'max_cycle_runtime_seconds', 0) or 600
-        )
-        BUILTIN_PIPELINE_MAX_RUNTIME = int(
-            getattr(self.config.budget, 'max_pipeline_runtime_seconds', 0) or 3600
-        )
-        logger.info(
-            'pipeline entering main loop — max_cycle=%s, cycle_timeout=%ds, pipeline_timeout=%ds',
-            self.config.budget.max_cycles, BUILTIN_MAX_CYCLE_RUNTIME, BUILTIN_PIPELINE_MAX_RUNTIME,
-        )
+            should_stop=self.services.runtime._should_stop)
+        pipeline_start_time = time.time()
+        max_cycle_runtime = int(getattr(self.config.budget, 'max_cycle_runtime_seconds', 0) or 600)
+        max_pipeline_runtime = int(getattr(self.config.budget, 'max_pipeline_runtime_seconds', 0) or 3600)
+        logger.info('pipeline entering main loop — max_cycle=%s, cycle_timeout=%ds, pipeline_timeout=%ds',
+            self.config.budget.max_cycles, max_cycle_runtime, max_pipeline_runtime)
+
+        submitted_this_run, fields, operators, state = self._run_main_loop(
+            state=state, fields=fields, operators=operators, auto_submit=auto_submit,
+            cycle_orchestrator=cycle_orchestrator, pipeline_start_time=pipeline_start_time,
+            max_cycle_runtime=max_cycle_runtime, max_pipeline_runtime=max_pipeline_runtime,
+            submitted_this_run=submitted_this_run)
+
+        # ── Finalization ──
+        archive_stats = state.archive_stats
+        pool_by_expression = state.pool_by_expression
+        accepted_candidates = state.accepted_candidates
+
+        final_candidates = rank_candidates(accepted_candidates + list(pool_by_expression.values()))
+        summary = self._summary(final_candidates, submitted_this_run, pool_by_expression, archive_stats)
+        self.services.runtime._event("run_completed", "Research pipeline completed.", data=summary)
+        run_status = "stopped" if self.services.runtime._should_stop() else "completed"
+        if run_status == "stopped":
+            self.services.runtime._progress("stopped", 0, 1, "用户已停止连续生产队列。", data=summary)
+        else:
+            self.services.runtime._progress("completed", 1, 1, "生产、评价、排序和回测等待流程完成。", data=summary)
+        for candidate in final_candidates:
+            self.repository.save_candidate(run_id, candidate)
+            self.repository.save_family_record(candidate)
+        for event in self.events:
+            self.repository.save_event(run_id, event)
+        result = PipelineResult(run_id=run_id, candidates=final_candidates, events=self.events, summary=summary)
+        try:
+            self.repository.save_run_history(run_id, result.to_dict(), status=run_status,
+                parameter_audit=build_parameter_audit_snapshot(
+                    self.config, auto_submit=auto_submit, source="pipeline_run"))
+        except Exception as exc:
+            logger.warning("failed to persist run history for %s: %s", run_id, redact_error_message(exc))
+            logger.debug("run history persistence traceback for %s", run_id, exc_info=True)
+
+        # P1-2: Auto-record trend after pipeline run
+        try:
+            from brain_alpha_ops.web.api.trends import record_trend
+            record_trend(
+                candidates=len(final_candidates) if final_candidates else 0,
+                submissions=submitted_this_run,
+                completed_cycles=state.cycle if hasattr(state, 'cycle') else 0,
+            )
+        except (ValueError, TypeError, OSError):
+            pass
+
+        # Auto-calibration check (non-blocking)
+        try:
+            from .calibration import auto_calibrate_if_stalled
+            calib = auto_calibrate_if_stalled(self.config.storage_dir)
+            if calib.get("triggered") and calib.get("advice"):
+                reason = calib.get("reason")
+                advice = calib.get("advice")
+                logger.info("auto_calibration triggered: %s", reason)
+                self.services.runtime._event(
+                    "auto_calibration",
+                    f"Auto-calibration triggered: {reason}",
+                    data={"triggered": True, "reason": reason, "advice": advice},
+                )
+        except Exception as exc:
+            logger.warning("auto_calibration skipped: %s", redact_error_message(exc))
+            logger.debug("auto_calibration skipped traceback", exc_info=True)
+
+        return result
+
+    def _run_main_loop(
+        self,
+        *,
+        state: CycleState,
+        fields: list[dict],
+        operators: list[dict],
+        auto_submit: bool,
+        cycle_orchestrator: ResearchCycleOrchestrator,
+        pipeline_start_time: float,
+        max_cycle_runtime: int,
+        max_pipeline_runtime: int,
+        submitted_this_run: int,
+    ) -> tuple[int, list[dict], list[dict], CycleState]:
+        """Execute the main research loop.
+
+        Returns (submitted_this_run, fields, operators, state).
+        """
+        pool_by_expression = state.pool_by_expression
+        blocked_expressions = state.blocked_expressions
+        archive_stats = state.archive_stats
+        archive_samples = state.archive_samples
+        accepted_candidates = state.accepted_candidates
+
         while True:
             _cycle_t0 = time.time()
 
             # Per-cycle timeout enforcement
-            _pipeline_elapsed = time.time() - _pipeline_start_time
-            if _pipeline_elapsed > BUILTIN_PIPELINE_MAX_RUNTIME:
+            _pipeline_elapsed = time.time() - pipeline_start_time
+            if _pipeline_elapsed > max_pipeline_runtime:
                 logger.warning(
                     'pipeline MAX RUNTIME exceeded: %.1fs > %ds limit',
-                    _pipeline_elapsed, BUILTIN_PIPELINE_MAX_RUNTIME,
+                    _pipeline_elapsed, max_pipeline_runtime,
                 )
-                self._event('pipeline_timeout',
-                    f'Pipeline max runtime {BUILTIN_PIPELINE_MAX_RUNTIME}s exceeded after {_pipeline_elapsed:.0f}s.',
+                self.services.runtime._event('pipeline_timeout',
+                    f'Pipeline max runtime {max_pipeline_runtime}s exceeded after {_pipeline_elapsed:.0f}s.',
                     level='WARN')
                 break
 
@@ -811,7 +494,7 @@ class AlphaResearchPipeline(
             cycle = cycle_decision.cycle
             self.cycles_since_strategy_switch += 1
             logger.info('pipeline cycle %d start — elapsed=%.1fs, timeout=%ds',
-                        cycle, _pipeline_elapsed, BUILTIN_MAX_CYCLE_RUNTIME)
+                        cycle, _pipeline_elapsed, max_cycle_runtime)
 
             # ── Phase 1: Dataset selection (P1 refactor) ──
             ds_phase = self._cycle_select_dataset(cycle)
@@ -825,7 +508,7 @@ class AlphaResearchPipeline(
 
             assistant_guidance = self._apply_assistant_guidance(cycle)
             assistant_guidance_applied = bool(assistant_guidance)
-            self._refresh_observability_throttle(cycle)
+            self.services.runtime._refresh_observability_throttle(cycle)
 
             # ── P2-5: Periodic context refresh (every ~24h / 50 cycles) ──
             if self._loader and (cycle == 1 or (cycle % 50 == 0) or
@@ -837,22 +520,22 @@ class AlphaResearchPipeline(
                         f_delta = refresh_result.get("fields_delta", 0)
                         o_delta = refresh_result.get("operators_delta", 0)
                         if f_delta or o_delta:
-                            self._event("context_refreshed",
+                            self.services.runtime._event("context_refreshed",
                                 f"Cycle {cycle}: Context refreshed — fields {f_delta:+d}, "
                                 f"operators {o_delta:+d}")
                             # Update generator context with refreshed data
-                            fields, operators = self._load_official_context()
+                            fields, operators = self.services.context_sync._load_official_context()
                     elif refresh_result.get("status") == "refresh_failed":
                         # P1-4: Alert on context refresh failure
                         error_detail = refresh_result.get("error", "unknown")
-                        self._event("context_refresh_failed",
+                        self.services.runtime._event("context_refresh_failed",
                             f"Cycle {cycle}: Context refresh FAILED — {error_detail}",
                             level="ERROR")
                 except Exception as exc:
                     message = redact_error_message(exc)
                     logger.warning("Context refresh exception in cycle %s: %s", cycle, message)
                     logger.debug("Context refresh exception traceback in cycle %s", cycle, exc_info=True)
-                    self._event("context_refresh_error",
+                    self.services.runtime._event("context_refresh_error",
                         f"Cycle {cycle}: Context refresh exception — {message}",
                         level="ERROR")
             generated = self._generation_phase_service().generate(
@@ -860,9 +543,9 @@ class AlphaResearchPipeline(
             )
             self.produced_count += len(generated)
             for candidate in generated:
-                self._record_lifecycle(candidate, "generated", "本地生成")
-            self._event("candidates_generated", f"Cycle {cycle}: generated {len(generated)} candidates.")
-            self._progress(
+                self.services.runtime._record_lifecycle(candidate, "generated", "本地生成")
+            self.services.runtime._event("candidates_generated", f"Cycle {cycle}: generated {len(generated)} candidates.")
+            self.services.runtime._progress(
                 "production_loop",
                 0 if self.config.budget.run_forever else cycle - 1,
                 1 if self.config.budget.run_forever else self.config.budget.max_cycles,
@@ -870,8 +553,8 @@ class AlphaResearchPipeline(
                 data={"cycle": cycle, "produced_count": self.produced_count},
             )
 
-            locally_passed = self._local_prefilter(generated, cycle, fields, operators)
-            self._archive(
+            locally_passed = self.services.candidate_pool._local_prefilter(generated, cycle, fields, operators)
+            self.services.runtime._archive(
                 archive_stats,
                 archive_samples,
                 [
@@ -881,11 +564,11 @@ class AlphaResearchPipeline(
                 ],
             )
 
-            self._archive(archive_stats, archive_samples, self._merge_into_pool(pool_by_expression, locally_passed, blocked_expressions))
-            self._archive(archive_stats, archive_samples, self._remove_below_local_standard(pool_by_expression))
-            self._archive(archive_stats, archive_samples, self._prune_pool(pool_by_expression))
+            self.services.runtime._archive(archive_stats, archive_samples, self.services.candidate_pool._merge_into_pool(pool_by_expression, locally_passed, blocked_expressions))
+            self.services.runtime._archive(archive_stats, archive_samples, self.services.candidate_pool._remove_below_local_standard(pool_by_expression))
+            self.services.runtime._archive(archive_stats, archive_samples, self.services.candidate_pool._prune_pool(pool_by_expression))
             pool = rank_candidates(list(pool_by_expression.values()))
-            self._progress(
+            self.services.runtime._progress(
                 "candidate_pool",
                 len(pool),
                 self.config.budget.retained_alpha_pool_size,
@@ -893,40 +576,35 @@ class AlphaResearchPipeline(
                 data=self._runtime_data(cycle, pool, accepted_candidates, archive_stats),
             )
 
-            if self.official_calls_halted:
-                self._maybe_resume_official_calls()
-            self._refresh_observability_throttle(cycle)
-            if self.official_calls_halted:
-                if not self._defer_official_cycle(cycle, pool, accepted_candidates, archive_stats):
-                    break
-                continue
+            # ── P2-05: Single official_calls_halted gate moved into _cycle_simulate_and_submit ──
+            self.services.runtime._refresh_observability_throttle(cycle)
 
-            validation_targets = self._filter_observability_duplicate_targets(
-                self._validation_targets(pool),
+            validation_targets = self.services.official_validation._filter_observability_duplicate_targets(
+                self.services.candidate_pool._validation_targets(pool),
                 phase="official_validation",
             )
-            self._archive(
+            self.services.runtime._archive(
                 archive_stats,
                 archive_samples,
-                self._archive_validation_failures(pool_by_expression, pool, blocked_expressions),
+                self.services.official_validation._archive_validation_failures(pool_by_expression, pool, blocked_expressions),
             )
             pool = rank_candidates(list(pool_by_expression.values()))
-            validation_quota = self._validation_quota(pool)
-            self._validate(validation_targets[:validation_quota])
+            validation_quota = self.services.candidate_pool._validation_quota(pool)
+            self.services.official_validation._validate(validation_targets[:validation_quota])
             pool = rank_candidates(list(pool_by_expression.values()))
-            self._archive(
+            self.services.runtime._archive(
                 archive_stats,
                 archive_samples,
-                self._archive_validation_failures(pool_by_expression, pool, blocked_expressions),
+                self.services.official_validation._archive_validation_failures(pool_by_expression, pool, blocked_expressions),
             )
-            self._archive(
+            self.services.runtime._archive(
                 archive_stats,
                 archive_samples,
-                self._archive_validation_failures(pool_by_expression, validation_targets, blocked_expressions),
+                self.services.official_validation._archive_validation_failures(pool_by_expression, validation_targets, blocked_expressions),
             )
 
             pool = rank_candidates(list(pool_by_expression.values()))
-            self._top_up_candidate_pool(
+            self.services.candidate_pool._top_up_candidate_pool(
                 cycle,
                 pool_by_expression,
                 blocked_expressions,
@@ -937,20 +615,20 @@ class AlphaResearchPipeline(
                 accepted_candidates,
             )
             pool = rank_candidates(list(pool_by_expression.values()))
-            # ── Phase 3: Simulation + Backtest + Strategy (P1 refactor) ──
-            if self.official_calls_halted:
-                self._maybe_resume_official_calls()
-            if self.official_calls_halted:
-                if not self._defer_official_cycle(cycle, pool, accepted_candidates, archive_stats):
-                    break
-                continue
-            submitted_this_run = self._cycle_simulate_and_submit(
+
+            # ── Phase 3: Simulation + Backtest + Strategy (gate guard inside) ──
+            submitted_this_run, abort = self._cycle_simulate_and_submit(
                 cycle, pool_by_expression, blocked_expressions,
                 archive_stats, archive_samples, accepted_candidates,
                 submitted_this_run, auto_submit,
             )
+            if abort is True:
+                break
+            elif abort is False:
+                continue
+
             # Top-up pool after simulation
-            self._top_up_candidate_pool(
+            self.services.candidate_pool._top_up_candidate_pool(
                 cycle,
                 pool_by_expression,
                 blocked_expressions,
@@ -960,7 +638,7 @@ class AlphaResearchPipeline(
                 operators,
                 accepted_candidates,
             )
-            fields, operators = self._maybe_switch_strategy(
+            fields, operators = self.services.strategy._maybe_switch_strategy(
                 cycle,
                 fields,
                 operators,
@@ -969,7 +647,7 @@ class AlphaResearchPipeline(
                 archive_stats,
             )
 
-            self._event(
+            self.services.runtime._event(
                 "cycle_completed",
                 f"Cycle {cycle} completed with {len(pool_by_expression)} retained candidates.",
                 data={"cycle": cycle, "pool_size": len(pool_by_expression)},
@@ -981,7 +659,7 @@ class AlphaResearchPipeline(
                 accepted_candidates, archive_stats, submitted_this_run,
             )
 
-            self._progress(
+            self.services.runtime._progress(
                 "production_loop",
                 0 if self.config.budget.run_forever else cycle,
                 1 if self.config.budget.run_forever else self.config.budget.max_cycles,
@@ -993,56 +671,10 @@ class AlphaResearchPipeline(
                     archive_stats,
                 ),
             )
-            if self.config.budget.run_forever and not self._sleep_with_stop(self.config.budget.cycle_pause_seconds):
+            if self.config.budget.run_forever and not self.services.runtime._sleep_with_stop(self.config.budget.cycle_pause_seconds):
                 break
 
-        final_candidates = rank_candidates(accepted_candidates + list(pool_by_expression.values()))
-        summary = self._summary(final_candidates, submitted_this_run, pool_by_expression, archive_stats)
-        self._event("run_completed", "Research pipeline completed.", data=summary)
-        run_status = "stopped" if self._should_stop() else "completed"
-        if run_status == "stopped":
-            self._progress("stopped", 0, 1, "用户已停止连续生产队列。", data=summary)
-        else:
-            self._progress("completed", 1, 1, "生产、评价、排序和回测等待流程完成。", data=summary)
-        for candidate in final_candidates:
-            self.repository.save_candidate(run_id, candidate)
-            self.repository.save_family_record(candidate)
-        for event in self.events:
-            self.repository.save_event(run_id, event)
-        result = PipelineResult(run_id=run_id, candidates=final_candidates, events=self.events, summary=summary)
-        try:
-            self.repository.save_run_history(
-                run_id,
-                result.to_dict(),
-                status=run_status,
-                parameter_audit=build_parameter_audit_snapshot(
-                    self.config,
-                    auto_submit=auto_submit,
-                    source="pipeline_run",
-                ),
-            )
-        except Exception as exc:
-            logger.warning("failed to persist run history for %s: %s", run_id, redact_error_message(exc))
-            logger.debug("run history persistence traceback for %s", run_id, exc_info=True)
-
-        # Auto-calibration check (non-blocking)
-        try:
-            from .calibration import auto_calibrate_if_stalled
-            calib = auto_calibrate_if_stalled(self.config.storage_dir)
-            if calib.get("triggered") and calib.get("advice"):
-                reason = calib.get("reason")
-                advice = calib.get("advice")
-                logger.info("auto_calibration triggered: %s", reason)
-                self._event(
-                    "auto_calibration",
-                    f"Auto-calibration triggered: {reason}",
-                    data={"triggered": True, "reason": reason, "advice": advice},
-                )
-        except Exception as exc:
-            logger.warning("auto_calibration skipped: %s", redact_error_message(exc))
-            logger.debug("auto_calibration skipped traceback", exc_info=True)
-
-        return result
+        return submitted_this_run, fields, operators, state
 
     # ═══════════════════════════════════════════════════════════════════
     # P1 refactor: extracted phase methods from run()
@@ -1085,7 +717,7 @@ class AlphaResearchPipeline(
                 return None
             self.generator.set_experience_guidance(generator_guidance)
             self._active_assistant_guidance = guidance
-            self._event(
+            self.services.runtime._event(
             "assistant_guidance_applied",
             f"Cycle {cycle}: Applied persisted assistant guidance "
             f"(confidence={guidance.get('confidence', 0.0)}; "
@@ -1127,13 +759,25 @@ class AlphaResearchPipeline(
         accepted_candidates: list[Candidate],
         submitted_this_run: int,
         auto_submit: bool,
-    ) -> int:
+    ) -> tuple[int, bool | None]:
         """Execute the simulation+backtest+strategy phase for one cycle.
 
-        Returns updated submitted_this_run count.
+        Returns (submitted_this_run, abort) where:
+          abort=True  → caller should break
+          abort=False → caller should continue
+          abort=None  → normal flow, caller should proceed
         """
+        # ── Gate guard: consolidated official_calls_halted check (P2-05) ──
+        if self.official_calls_halted:
+            self.services.runtime._maybe_resume_official_calls()
+        if self.official_calls_halted:
+            pool = rank_candidates(list(pool_by_expression.values()))
+            if not self.services.runtime._defer_official_cycle(cycle, pool, accepted_candidates, archive_stats):
+                return submitted_this_run, True   # break
+            return submitted_this_run, False       # continue
+
         # Poll existing backtests
-        submitted_this_run = self._poll_due_backtests(
+        submitted_this_run = self.services.backtest_flow._poll_due_backtests(
             cycle, pool_by_expression, accepted_candidates,
             archive_stats, archive_samples, blocked_expressions,
             submitted_this_run, auto_submit,
@@ -1162,8 +806,8 @@ class AlphaResearchPipeline(
         if not self.official_calls_halted:
             official_workflow.fill_slots(cycle, cyc_state)
 
-        self._archive(archive_stats, archive_samples, self._prune_pool(pool_by_expression))
-        return submitted_this_run
+        self.services.runtime._archive(archive_stats, archive_samples, self.services.candidate_pool._prune_pool(pool_by_expression))
+        return submitted_this_run, None
 
     # ═══════════════════════════════════════════════════════════════════
     # Helper methods (original)

@@ -6,7 +6,6 @@ from collections import Counter
 from typing import Any
 
 from brain_alpha_ops.redaction import redact_text
-from brain_alpha_ops.web_backtest_slots import is_submit_only_quality_reason
 from brain_alpha_ops.web_candidates.audit import (
     attach_scientific_audit,
     scientific_audit_policy_reasons,
@@ -20,6 +19,14 @@ from brain_alpha_ops.web_candidates.lifecycle_risk import (
 
 DEFAULT_OFFICIAL_SIMULATION_SCORE = 70.0
 DECISION_SCHEMA_VERSION = "candidate-production-decision-v1"
+
+
+def _is_submit_only_quality_reason(code: str, category: str = "") -> bool:
+    """Lazy import wrapper avoiding circular import through web_backtest_slots."""
+    from brain_alpha_ops.web.misc.web_backtest_slots import is_submit_only_quality_reason as _fn
+
+    return _fn(code, category)
+
 
 _ARCHIVE_STATUS_TOKENS = (
     "local_prefilter_rejected",
@@ -304,11 +311,11 @@ def candidate_submit_only_reasons(row: dict[str, Any]) -> list[str]:
     return sorted({
         code
         for code, category in _blocking_pairs(row)
-        if is_submit_only_quality_reason(code, category)
+        if _is_submit_only_quality_reason(code, category)
     } | {
         reason
         for reason in _gate_failed_reasons(row)
-        if is_submit_only_quality_reason(reason, "")
+        if _is_submit_only_quality_reason(reason, "")
     })
 
 
@@ -321,10 +328,10 @@ def candidate_hard_blocking_reasons(row: dict[str, Any]) -> list[str]:
     if local_backtest.get("pass_local") is False:
         reasons.add("local_backtest_failed")
     for code, category in _blocking_pairs(row):
-        if not is_submit_only_quality_reason(code, category):
+        if not _is_submit_only_quality_reason(code, category):
             reasons.add(code)
     for reason in _gate_failed_reasons(row):
-        if not is_submit_only_quality_reason(reason, ""):
+        if not _is_submit_only_quality_reason(reason, ""):
             reasons.add(reason)
     return sorted(reason for reason in reasons if reason)
 

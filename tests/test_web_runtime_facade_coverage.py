@@ -4,7 +4,8 @@ import logging
 import os
 from types import SimpleNamespace
 
-from brain_alpha_ops import web_runtime_facade as facade
+import brain_alpha_ops.web  # noqa: F401  install meta-path bridge for web_* modules
+import brain_alpha_ops.web_runtime_facade as facade
 from brain_alpha_ops.web_config import public_run_config_dict
 from brain_alpha_ops.web_errors import web_error_payload
 from brain_alpha_ops.web_job_registry import resolve_web_job_registry

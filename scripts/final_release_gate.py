@@ -719,7 +719,7 @@ def _build_manifest_hash(
         "brain_alpha_ops/research/pipeline.py",
         "brain_alpha_ops/scoring/release_score_gate.py",
         "brain_alpha_ops/web/__init__.py",
-        "brain_alpha_ops/web_capability_registry.py",
+        "brain_alpha_ops/web/config/web_capability_registry.py",
         "scripts/check_capability_registry.py",
         "scripts/final_release_gate.py",
     ))]

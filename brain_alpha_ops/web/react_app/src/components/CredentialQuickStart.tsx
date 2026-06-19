@@ -3,8 +3,10 @@
  * Shown when the App is not connected and no context cache is available.
  */
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import type { BrainCredentials } from "@/types";
+import { getConnectionErrorGuide, type ConnectionErrorGuideEntry } from "@/helpers/connectionErrorGuide";
+import { useApi } from "@/hooks/useApi";
 
 interface Props {
   credentials: BrainCredentials | null;
@@ -24,27 +26,62 @@ export default function CredentialQuickStart({
   const [username, setUsername] = useState(credentials?.username || "");
   const [password, setPassword] = useState(credentials?.password || "");
   const [token, setToken] = useState(credentials?.token || "");
-  const [testResult, setTestResult] = useState<{ ok: boolean; environment?: string; error?: string } | null>(null);
+  const [testResult, setTestResult] = useState<{ ok: boolean; environment?: string; error?: string; error_code?: string } | null>(null);
   const [testing, setTesting] = useState(false);
+  const [managedTesting, setManagedTesting] = useState(false);
+
+  // P1-1: useApi hook for CSRF-protected API calls
+  const { call } = useApi<{ ok: boolean; environment?: string; error?: string; error_code?: string }>();
+
+  // P1-2: countdown timer for delayed retry actions
+  const [countdown, setCountdown] = useState(0);
+  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    if (countdown <= 0) {
+      if (countdownRef.current) {
+        clearInterval(countdownRef.current);
+        countdownRef.current = null;
+      }
+      return;
+    }
+    countdownRef.current = setInterval(() => {
+      setCountdown((c) => {
+        if (c <= 1) return 0;
+        return c - 1;
+      });
+    }, 1000);
+    return () => {
+      if (countdownRef.current) {
+        clearInterval(countdownRef.current);
+        countdownRef.current = null;
+      }
+    };
+  }, [countdown]);
+
+  // P1-2: resolve error guide from the last failed connection test
+  const errorGuide: ConnectionErrorGuideEntry | undefined = getConnectionErrorGuide(
+    testResult && !testResult.ok ? testResult.error_code : undefined,
+  );
 
   const handleTestConnection = useCallback(async () => {
     setTesting(true);
     setTestResult(null);
     try {
       onCredentialsChange({ username: username.trim(), password: password.trim(), token: token.trim() });
-      const res = await fetch("/api/test_connection", {
+      const json = await call("/api/test_connection", {
         method: "POST",
-        credentials: "same-origin",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username: username.trim(), password: password.trim(), token: token.trim() }),
       });
-      const json = await res.json();
-      if (json.ok) {
+      if (!json) {
+        setTestResult({ ok: false, error: "网络错误，请检查连接后重试" });
+        onConnectionTested(false, "网络错误");
+      } else if (json.ok) {
         setTestResult({ ok: true, environment: json.environment || "unknown" });
         onConnectionTested(true, null);
         notify("success", `连接正常: ${json.environment || "unknown"}`);
       } else {
-        setTestResult({ ok: false, error: json.error || "连接失败" });
+        setTestResult({ ok: false, error: json.error || "连接失败", error_code: json.error_code || undefined });
         onConnectionTested(false, json.error || "连接失败");
       }
     } catch (err) {
@@ -53,7 +90,45 @@ export default function CredentialQuickStart({
     } finally {
       setTesting(false);
     }
-  }, [username, password, token, onCredentialsChange, onConnectionTested, notify]);
+  }, [username, password, token, onCredentialsChange, onConnectionTested, notify, call]);
+
+  // P1-1: managed credentials one-click test — sends no credentials body
+  const handleManagedTestConnection = useCallback(async () => {
+    setManagedTesting(true);
+    setTestResult(null);
+    try {
+      const json = await call("/api/test_connection", { method: "POST" });
+      if (!json) {
+        setTestResult({ ok: false, error: "网络错误，请检查连接后重试" });
+        onConnectionTested(false, "网络错误");
+      } else if (json.ok) {
+        setTestResult({ ok: true, environment: json.environment || "unknown" });
+        onConnectionTested(true, null);
+        notify("success", `托管凭证连接正常: ${json.environment || "unknown"}`);
+      } else {
+        setTestResult({ ok: false, error: json.error || "托管凭证连接失败", error_code: json.error_code || undefined });
+        onConnectionTested(false, json.error || "托管凭证连接失败");
+      }
+    } catch (err) {
+      setTestResult({ ok: false, error: String(err) });
+      onConnectionTested(false, String(err));
+    } finally {
+      setManagedTesting(false);
+    }
+  }, [onConnectionTested, notify, call]);
+
+  // P1-2: retry with countdown for delayed-recovery error codes
+  const handleGuidedRetry = useCallback(() => {
+    if (!errorGuide) return;
+    if (errorGuide.waitSeconds && errorGuide.waitSeconds > 0) {
+      setCountdown(errorGuide.waitSeconds);
+      const timer = setTimeout(() => {
+        handleTestConnection();
+      }, errorGuide.waitSeconds * 1000);
+      return () => clearTimeout(timer);
+    }
+    handleTestConnection();
+  }, [errorGuide, handleTestConnection]);
 
   return (
     <div className="panel" style={{ padding: "1.5rem" }}>
@@ -95,22 +170,85 @@ export default function CredentialQuickStart({
             placeholder="Bearer token (可选)"
           />
         </label>
-        <button
-          type="button"
-          className="btn btn-primary btn-sm"
-          disabled={testing || !username.trim() || !password.trim()}
-          onClick={handleTestConnection}
-        >
-          {testing ? "测试中..." : "测试连接"}
-        </button>
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          <button
+            type="button"
+            className="btn btn-primary btn-sm"
+            disabled={testing || !username.trim() || !password.trim()}
+            onClick={handleTestConnection}
+          >
+            {testing ? "测试中..." : "测试连接"}
+          </button>
+          {/* P1-1: managed credentials one-click button */}
+          {managedCredentialsAvailable && (
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              disabled={managedTesting}
+              onClick={handleManagedTestConnection}
+            >
+              {managedTesting ? "托管测试中..." : "使用托管凭证"}
+            </button>
+          )}
+        </div>
         {testResult && (
           <p className={`text-sm ${testResult.ok ? "text-positive" : "text-negative"}`}>
             {testResult.ok ? `连接正常: ${testResult.environment}` : `连接失败: ${testResult.error}`}
           </p>
         )}
+        {/* P1-2: connection error recovery guide */}
+        {errorGuide && (
+          <div style={{
+            padding: "10px 12px", borderRadius: 6,
+            background: "oklch(0.48 0.06 22 / 0.08)",
+            border: "1px solid oklch(0.48 0.08 22 / 0.25)",
+            display: "flex", flexDirection: "column", gap: 8,
+          }}>
+            <p className="text-sm text-negative font-medium">{errorGuide.message}</p>
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              disabled={countdown > 0}
+              onClick={handleGuidedRetry}
+              style={{ alignSelf: "flex-start" }}
+            >
+              {countdown > 0 ? `${errorGuide.actionLabel} (${countdown}s)` : errorGuide.actionLabel}
+            </button>
+          </div>
+        )}
         {managedCredentialsAvailable && !testResult && (
           <p className="text-text-tertiary text-xs">检测到托管凭证，正在自动配置...</p>
         )}
+
+        {/* P0-2: registration guidance for users without a BRAIN account */}
+        <div style={{
+          display: "flex", alignItems: "flex-start", gap: 8,
+          padding: "10px 12px", borderRadius: 6,
+          background: "oklch(0.58 0.04 245 / 0.08)",
+          border: "1px solid oklch(0.58 0.10 245 / 0.20)",
+        }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="oklch(0.58 0.12 245)" strokeWidth="2" strokeLinecap="round" style={{ flexShrink: 0, marginTop: 1 }}>
+            <circle cx="12" cy="12" r="10"/>
+            <line x1="12" y1="16" x2="12" y2="12"/>
+            <line x1="12" y1="8" x2="12.01" y2="8"/>
+          </svg>
+          <p className="text-xs" style={{ color: "oklch(0.58 0.08 245)", lineHeight: 1.5 }}>
+            还没有 BRAIN 账户？前往{" "}
+            <a
+              href="https://platform.worldquantbrain.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ fontWeight: 600, textDecoration: "underline", textUnderlineOffset: 2 }}
+            >
+              WorldQuant BRAIN 平台注册
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" style={{ display: "inline", marginLeft: 2, verticalAlign: "baseline" }}>
+                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                <polyline points="15 3 21 3 21 9"/>
+                <line x1="10" y1="14" x2="21" y2="3"/>
+              </svg>
+            </a>
+          </p>
+        </div>
       </div>
     </div>
   );

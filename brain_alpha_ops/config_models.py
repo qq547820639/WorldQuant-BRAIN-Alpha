@@ -213,6 +213,14 @@ class CredentialConfig:
             "token": self.token or os.getenv(self.token_env, ""),
         }
 
+    def to_safe_dict(self) -> dict[str, Any]:
+        """Serialize without credential values (keeps env-var names only)."""
+        return {
+            "username_env": self.username_env,
+            "password_env": self.password_env,
+            "token_env": self.token_env,
+        }
+
 
 @dataclass
 class WebConfig:

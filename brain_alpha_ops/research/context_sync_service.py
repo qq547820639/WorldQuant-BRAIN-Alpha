@@ -42,7 +42,7 @@ class ContextSyncService:
         if p._local_data_dir_existed_at_start and cached_rows and not p.config.budget.require_cloud_sync:
             if cached_rows:
                 p.cloud_alphas = cached_rows
-                p._refresh_cloud_similarity_index()
+                p.services.candidate_pool._refresh_cloud_similarity_index()
                 p.cloud_sync = {
                     "status": "loaded",
                     "status_code": "CACHE_LOADED",
@@ -59,10 +59,10 @@ class ContextSyncService:
                     "warning": "",
                     "run_status": "skipped",
                 }
-                p._event("cloud_sync_skipped_cache_loaded", f"Loaded {len(cached_rows)} cached cloud alphas from local data; per-run sync is manual.")
+                p.services.runtime._event("cloud_sync_skipped_cache_loaded", f"Loaded {len(cached_rows)} cached cloud alphas from local data; per-run sync is manual.")
             else:
                 p.cloud_alphas = []
-                p._refresh_cloud_similarity_index()
+                p.services.candidate_pool._refresh_cloud_similarity_index()
                 p.cloud_sync = {
                     "status": "skipped",
                     "status_code": "CACHE_EMPTY_MANUAL_SYNC",
@@ -79,8 +79,8 @@ class ContextSyncService:
                     "warning": "Local data directory exists; cloud sync is manual for this run.",
                     "run_status": "skipped",
                 }
-                p._event("cloud_sync_skipped_manual", "Local data directory exists; skipped automatic cloud alpha sync.")
-            p._progress(
+                p.services.runtime._event("cloud_sync_skipped_manual", "Local data directory exists; skipped automatic cloud alpha sync.")
+            p.services.runtime._progress(
                 "cloud_sync",
                 1,
                 1,
@@ -90,8 +90,8 @@ class ContextSyncService:
             return
 
         if not p.config.budget.require_cloud_sync:
-            p._event("cloud_sync_initial_required", "No local cloud alpha cache found; running first-login sync.")
-        p._progress(
+            p.services.runtime._event("cloud_sync_initial_required", "No local cloud alpha cache found; running first-login sync.")
+        p.services.runtime._progress(
             "cloud_sync",
             0,
             1,
@@ -101,7 +101,7 @@ class ContextSyncService:
         sync_meta = {"cached": False, "stale": False, "warning": "", "cancelled": False}
 
         def on_cloud_progress(progress: dict) -> bool:
-            if p._should_stop():
+            if p.services.runtime._should_stop():
                 sync_meta["cancelled"] = True
                 sync_meta["warning"] = "Cloud alpha sync stopped before merge."
                 return False
@@ -118,7 +118,7 @@ class ContextSyncService:
                 if reference_total > 0
                 else "接口分页参考数仍在确认"
             )
-            p._progress(
+            p.services.runtime._progress(
                 "cloud_sync",
                 scanned,
                 0,
@@ -147,7 +147,7 @@ class ContextSyncService:
                     }
                 },
             )
-            if p._should_stop():
+            if p.services.runtime._should_stop():
                 sync_meta["cancelled"] = True
                 sync_meta["warning"] = "Cloud alpha sync stopped before merge."
                 return False
@@ -157,7 +157,7 @@ class ContextSyncService:
             rows = list_user_alphas_for_sync(p.api, sync_range, progress_callback=on_cloud_progress)
         except BrainAPIError as exc:
             p.cloud_alphas = []
-            p._refresh_cloud_similarity_index()
+            p.services.candidate_pool._refresh_cloud_similarity_index()
             p.cloud_sync = {
                 "status": "failed",
                 "status_code": f"HTTP_{exc.status_code}" if exc.status_code else "FAILED",
@@ -169,11 +169,11 @@ class ContextSyncService:
                 "failed": 1,
                 "warning": redact_error_message(exc),
             }
-            p._event("cloud_sync_failed", p.cloud_sync["warning"], level="WARN")
+            p.services.runtime._event("cloud_sync_failed", p.cloud_sync["warning"], level="WARN")
         else:
-            if sync_meta["cancelled"] or p._should_stop():
+            if sync_meta["cancelled"] or p.services.runtime._should_stop():
                 p.cloud_alphas = []
-                p._refresh_cloud_similarity_index()
+                p.services.candidate_pool._refresh_cloud_similarity_index()
                 p.cloud_sync = {
                     "status": "stopped",
                     "status_code": "STOPPED",
@@ -190,8 +190,8 @@ class ContextSyncService:
                     "warning": str(sync_meta["warning"] or "Cloud alpha sync stopped before merge."),
                     "run_status": "stopped",
                 }
-                p._event("cloud_sync_stopped", p.cloud_sync["warning"], level="WARN")
-                p._progress(
+                p.services.runtime._event("cloud_sync_stopped", p.cloud_sync["warning"], level="WARN")
+                p.services.runtime._progress(
                     "cloud_sync",
                     1,
                     1,
@@ -200,7 +200,7 @@ class ContextSyncService:
                 )
                 return
             p.cloud_alphas = rows
-            p._refresh_cloud_similarity_index()
+            p.services.candidate_pool._refresh_cloud_similarity_index()
             merge_stats = p.repository.merge_cloud_alphas(rows, sync_range=sync_range)
             p.cloud_sync = {
                 "status": "synced",
@@ -217,8 +217,8 @@ class ContextSyncService:
                 "stale": bool(sync_meta["stale"]),
                 "warning": str(sync_meta["warning"]),
             }
-            p._event("cloud_alphas_synced", f"Synced {len(rows)} cloud alphas for range {sync_range}.")
-        p._progress(
+            p.services.runtime._event("cloud_alphas_synced", f"Synced {len(rows)} cloud alphas for range {sync_range}.")
+        p.services.runtime._progress(
             "cloud_sync",
             1,
             1,
@@ -233,9 +233,9 @@ class ContextSyncService:
             api=p.api,
             generator=p.generator,
             local_data_dir_existed_at_start=p._local_data_dir_existed_at_start,
-            progress=p._progress,
-            event=p._event,
-            halt_official_calls=p._halt_official_calls,
+            progress=p.services.runtime._progress,
+            event=p.services.runtime._event,
+            halt_official_calls=p.services.runtime._halt_official_calls,
         ).load()
         p.generator = result.generator
         p._loader = result.loader
@@ -246,7 +246,7 @@ class ContextSyncService:
         p.optimizer = result.optimizer
         p._active_dataset_id = result.active_dataset_id
         p.context_summary = result.context_summary
-        p._refresh_context_validation_cache(result.fields, result.operators)
+        p.services.candidate_pool._refresh_context_validation_cache(result.fields, result.operators)
         self._apply_knowledge_constraints_to_generator()
         return result.fields, result.operators
 
@@ -293,7 +293,7 @@ class ContextSyncService:
                 "strict_preferred_operators": bool(constraints.get("strict_preferred_operators")),
                 "applied": True,
             }
-            p._event(
+            p.services.runtime._event(
                 "knowledge_constraints_applied",
                 "Applied structured knowledge constraints to candidate generator.",
                 data=p.context_summary["knowledge_constraints"],
@@ -303,7 +303,7 @@ class ContextSyncService:
                 "applied": False,
                 "error": redact_error_message(exc, max_length=180),
             }
-            p._event(
+            p.services.runtime._event(
                 "knowledge_constraints_failed",
                 "Failed to apply structured knowledge constraints to candidate generator.",
                 level="WARN",

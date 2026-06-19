@@ -37,7 +37,7 @@ class OfficialValidationService_:
     ) -> list[Candidate]:
         p = self._pipeline
         pool = rank_candidates(list(pool_by_expression.values()))
-        validation_targets = p._validation_targets(pool)
+        validation_targets = p.services.candidate_pool._validation_targets(pool)
         max_attempts = max(0, int(p.config.budget.max_official_validations_per_cycle))
         if max_attempts <= 0 or not validation_targets:
             return pool
@@ -47,20 +47,20 @@ class OfficialValidationService_:
         for candidate in validation_targets:
             pool
             active_count = p.backtest_slot_manager.active_count()
-            p._preflight_pending_backtest_candidates(pool)
-            p._archive(
+            p.services.candidate_pool._preflight_pending_backtest_candidates(pool)
+            p.services.runtime._archive(
                 archive_stats,
                 [],
                 self._archive_validation_failures(pool_by_expression, pool, blocked_expressions),
             )
             pool
-            pending_count = len(p._pending_backtest_candidates(pool))
+            pending_count = len(p.services.candidate_pool._pending_backtest_candidates(pool))
             if active_count + pending_count >= active_limit:
                 break
             if attempted >= max_attempts or p.official_calls_halted:
                 break
             if self._block_observability_duplicate_before_official(candidate, phase="official_validation"):
-                p._archive(
+                p.services.runtime._archive(
                     archive_stats,
                     [],
                     self._archive_validation_failures(pool_by_expression, [candidate], blocked_expressions),
@@ -69,7 +69,7 @@ class OfficialValidationService_:
 
             self._validate([candidate])
             attempted += 1
-            p._archive(
+            p.services.runtime._archive(
                 archive_stats,
                 [],
                 self._archive_validation_failures(pool_by_expression, [candidate], blocked_expressions),
@@ -91,10 +91,10 @@ class OfficialValidationService_:
         outcome = OfficialValidationService(
             api=p.api,
             settings_payload=p.config.settings.to_platform_dict()["settings"],
-            progress=p._progress,
-            event=p._event,
-            record_lifecycle=p._record_lifecycle,
-            halt_official_calls=p._halt_official_calls,
+            progress=p.services.runtime._progress,
+            event=p.services.runtime._event,
+            record_lifecycle=p.services.runtime._record_lifecycle,
+            halt_official_calls=p.services.runtime._halt_official_calls,
         ).validate(candidates)
         p.official_validation_attempted_count += outcome.attempted
         p.official_validation_passed_count += outcome.passed
@@ -153,8 +153,8 @@ class OfficialValidationService_:
         if isinstance(p.observability_throttle, dict):
             p.observability_throttle["official_call_guard"] = block["guard"]
         if not block.get("already_recorded"):
-            p._record_lifecycle(candidate, "observability_duplicate_blocked", phase)
-            p._event(
+            p.services.runtime._record_lifecycle(candidate, "observability_duplicate_blocked", phase)
+            p.services.runtime._event(
                 "observability_duplicate_official_call_blocked",
                 block["reason"],
                 candidate.alpha_id,

@@ -8,9 +8,10 @@ interface Props {
     msg: string,
     action?: { label: string; onClick: () => void },
   ) => void;
+  onNavigate?: (view: string) => void;
 }
 
-export default function SubmissionPanel({ notify }: Props) {
+export default function SubmissionPanel({ notify, onNavigate }: Props) {
   return (
     <div className="w-full max-w-3xl min-w-0 space-y-6 animate-fade-in">
       <div
@@ -20,7 +21,7 @@ export default function SubmissionPanel({ notify }: Props) {
       >
         旧提交面板已退役。Web 页面不执行真实提交；任何真实提交需另走人工审批。
       </div>
-      <SubmissionConfirmPanel notify={notify} />
+      <SubmissionConfirmPanel notify={notify} onNavigate={onNavigate} />
     </div>
   );
 }

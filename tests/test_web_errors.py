@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import brain_alpha_ops.web  # noqa: F401  install meta-path bridge for web_* modules
 from brain_alpha_ops.brain_api.official import BrainAPIError
 from brain_alpha_ops.web_errors import safe_error_message, safe_error_payload, web_error_payload
 

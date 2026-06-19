@@ -258,7 +258,7 @@ def test_pipeline_applies_knowledge_constraints_to_generator(monkeypatch):
 
         monkeypatch.setattr(pipeline.generator, "set_knowledge_constraints", fake_set_knowledge_constraints)
 
-        pipeline._apply_knowledge_constraints_to_generator()
+        pipeline.services.context_sync._apply_knowledge_constraints_to_generator()
 
         assert "close" in captured["constraints"]["preferred_fields"]
         assert captured["constraints"]["strict_preferred_fields"] is True
@@ -294,7 +294,7 @@ def test_pipeline_local_prefilter_attaches_local_backtest_result(monkeypatch):
             },
         )
 
-        passed = pipeline._local_prefilter([candidate], 1, [{"name": "close"}], [{"name": "rank"}])
+        passed = pipeline.services.candidate_pool._local_prefilter([candidate], 1, [{"name": "close"}], [{"name": "rank"}])
 
         assert passed == [candidate]
         assert candidate.submission["local_backtest"]["pass_local"] is True
@@ -330,7 +330,7 @@ def test_pipeline_local_prefilter_rejects_failed_local_backtest(monkeypatch):
             },
         )
 
-        passed = pipeline._local_prefilter([candidate], 1, [{"name": "close"}], [{"name": "rank"}])
+        passed = pipeline.services.candidate_pool._local_prefilter([candidate], 1, [{"name": "close"}], [{"name": "rank"}])
 
         assert passed == []
         assert candidate.lifecycle_status == "local_prefilter_rejected"
@@ -357,7 +357,7 @@ def test_pipeline_local_prefilter_rejects_unsupported_local_backtest_fields():
             operators=["rank"],
         )
 
-        passed = pipeline._local_prefilter([candidate], 1, [{"name": "sedol"}], [{"name": "rank"}])
+        passed = pipeline.services.candidate_pool._local_prefilter([candidate], 1, [{"name": "sedol"}], [{"name": "rank"}])
 
         assert passed == []
         assert candidate.lifecycle_status == "local_prefilter_rejected"
@@ -381,7 +381,7 @@ def test_pipeline_local_prefilter_rejects_expression_field_mismatch():
             operators=["rank", "ts_mean"],
         )
 
-        passed = pipeline._local_prefilter([candidate], 1, [{"name": "open"}], [{"name": "rank"}, {"name": "ts_mean"}])
+        passed = pipeline.services.candidate_pool._local_prefilter([candidate], 1, [{"name": "open"}], [{"name": "rank"}, {"name": "ts_mean"}])
 
         assert passed == []
         assert candidate.lifecycle_status == "local_prefilter_rejected"
@@ -403,7 +403,7 @@ def test_pipeline_local_prefilter_rejects_expression_operator_mismatch():
             operators=["rank"],
         )
 
-        passed = pipeline._local_prefilter([candidate], 1, [{"name": "close"}], [{"name": "rank"}])
+        passed = pipeline.services.candidate_pool._local_prefilter([candidate], 1, [{"name": "close"}], [{"name": "rank"}])
 
         assert passed == []
         assert candidate.lifecycle_status == "local_prefilter_rejected"
@@ -451,7 +451,7 @@ def test_pipeline_auto_submit_blocks_when_cross_review_rejects(monkeypatch):
             lambda candidate: {"allowed": False, "failed_reasons": ["manual_review_required"]},
         )
 
-        submitted = pipeline._try_auto_submit(candidate, 0)
+        submitted = pipeline.services.submission_gate._try_auto_submit(candidate, 0)
 
         assert submitted == 0
         assert candidate.gate["status"] == "CROSS_REVIEW_BLOCKED"
@@ -497,7 +497,7 @@ def test_pipeline_auto_submit_blocks_incomplete_official_metric_fields(monkeypat
 
         monkeypatch.setattr(pipeline, "_pre_submit_cross_review", cross_review)
 
-        submitted = pipeline._try_auto_submit(candidate, 0)
+        submitted = pipeline.services.submission_gate._try_auto_submit(candidate, 0)
 
         assert submitted == 0
         assert cross_review_called["value"] is False
@@ -556,7 +556,7 @@ def test_pipeline_auto_submit_reports_exact_missing_official_metric_field(monkey
 
         monkeypatch.setattr(pipeline, "_pre_submit_cross_review", cross_review)
 
-        submitted = pipeline._try_auto_submit(candidate, 0)
+        submitted = pipeline.services.submission_gate._try_auto_submit(candidate, 0)
 
         metric_check = next(
             check for check in candidate.submission["safety"]["checks"]
@@ -621,7 +621,7 @@ def test_pipeline_auto_submit_blocks_official_release_gate_failure_before_cross_
 
         monkeypatch.setattr(pipeline, "_pre_submit_cross_review", cross_review)
 
-        submitted = pipeline._try_auto_submit(candidate, 0)
+        submitted = pipeline.services.submission_gate._try_auto_submit(candidate, 0)
 
         release_check = next(
             check for check in candidate.submission["safety"]["checks"]
@@ -694,7 +694,7 @@ def test_pipeline_auto_submit_blocks_when_live_readiness_not_ready(monkeypatch):
             },
         )
 
-        submitted = pipeline._try_auto_submit(candidate, 0)
+        submitted = pipeline.services.submission_gate._try_auto_submit(candidate, 0)
 
         assert submitted == 0
         assert api.submissions == []
@@ -772,7 +772,7 @@ def test_pipeline_runs_initial_cloud_sync_when_cache_is_empty_and_per_run_sync_d
             storage_dir=tmp,
         )
         pipeline = AlphaResearchPipeline(config=config, api=ProductionBrainAPIStub())
-        pipeline._sync_cloud_alphas()
+        pipeline.services.context_sync._sync_cloud_alphas()
         assert pipeline.cloud_sync["status"] == "synced"
         assert pipeline.cloud_sync["range"] == "all"
         assert pipeline.cloud_sync["count"] == 4
@@ -791,7 +791,7 @@ def test_pipeline_uses_cached_cloud_alphas_when_per_run_sync_disabled():
             storage_dir=tmp,
         )
         pipeline = AlphaResearchPipeline(config=config, api=CloudSyncForbiddenAPI())
-        pipeline._sync_cloud_alphas()
+        pipeline.services.context_sync._sync_cloud_alphas()
         assert pipeline.cloud_sync["status"] == "loaded"
         assert pipeline.cloud_sync["run_status"] == "skipped"
         assert pipeline.cloud_sync["count"] == 1
@@ -807,7 +807,7 @@ def test_pipeline_default_budget_uses_cached_cloud_alphas_without_remote_sync():
         )
         config = OpsConfig(budget=ResearchBudget(), storage_dir=tmp)
         pipeline = AlphaResearchPipeline(config=config, api=CloudSyncForbiddenAPI())
-        pipeline._sync_cloud_alphas()
+        pipeline.services.context_sync._sync_cloud_alphas()
 
         assert pipeline.cloud_sync["status"] == "loaded"
         assert pipeline.cloud_sync["status_code"] == "CACHE_LOADED"
@@ -827,7 +827,7 @@ def test_pipeline_forces_remote_cloud_sync_when_required_even_if_cache_exists():
             storage_dir=tmp,
         )
         pipeline = AlphaResearchPipeline(config=config, api=ProductionBrainAPIStub())
-        pipeline._sync_cloud_alphas()
+        pipeline.services.context_sync._sync_cloud_alphas()
         assert pipeline.cloud_sync["status"] == "synced"
         assert pipeline.cloud_sync["range"] == "3d"
         assert pipeline.cloud_sync["count"] == 3
@@ -857,7 +857,7 @@ def test_pipeline_cloud_sync_cancel_does_not_merge_partial_rows():
             stop_callback=lambda: stop_requested["value"],
         )
 
-        pipeline._sync_cloud_alphas()
+        pipeline.services.context_sync._sync_cloud_alphas()
 
         assert api.pages_requested == 1
         assert api.callback_results == [False]
@@ -882,7 +882,7 @@ def test_pipeline_cloud_sync_ignores_elapsed_limit_and_merges_all_rows():
         )
         pipeline = AlphaResearchPipeline(config=config, api=api, progress_callback=events.append)
 
-        pipeline._sync_cloud_alphas()
+        pipeline.services.context_sync._sync_cloud_alphas()
 
         assert api.pages_requested == 3
         assert api.callback_results == [True, True, True]
@@ -1448,16 +1448,16 @@ def test_pipeline_backtest_targets_fill_slot_after_high_similarity_skip():
                 "expression": crowded.expression,
             }
         ]
-        pipeline._refresh_cloud_similarity_index()
+        pipeline.services.candidate_pool._refresh_cloud_similarity_index()
 
-        targets = pipeline._backtest_targets([crowded, safe])
+        targets = pipeline.services.candidate_pool._backtest_targets([crowded, safe])
 
         assert [candidate.alpha_id for candidate in targets] == ["safe_candidate"]
         assert crowded.lifecycle_status == "high_cloud_similarity_rejected"
         assert crowded.gate["status"] == "HIGH_CLOUD_SIMILARITY_REJECTED"
         assert crowded.gate["submission_ready"] is False
         assert crowded.submission["cloud_similarity_preflight"]["matched_alpha_id"] == "cloud_1"
-        pending = pipeline._pending_backtest_candidates([crowded, safe])
+        pending = pipeline.services.candidate_pool._pending_backtest_candidates([crowded, safe])
         assert [candidate.alpha_id for candidate in pending] == ["safe_candidate"]
         plan = pipeline.last_runtime_data["backtest_batch_plan"]
         assert plan["selected"][0]["alpha_id"] == "safe_candidate"
@@ -1501,15 +1501,15 @@ def test_pipeline_validation_quota_ignores_high_similarity_pending_candidate():
                 "expression": crowded.expression,
             }
         ]
-        pipeline._refresh_cloud_similarity_index()
+        pipeline.services.candidate_pool._refresh_cloud_similarity_index()
 
-        quota = pipeline._validation_quota([crowded, safe])
+        quota = pipeline.services.candidate_pool._validation_quota([crowded, safe])
 
         assert quota == 1
         assert crowded.lifecycle_status == "high_cloud_similarity_rejected"
         assert crowded.gate["status"] == "HIGH_CLOUD_SIMILARITY_REJECTED"
-        assert pipeline._validation_targets([crowded, safe]) == [safe]
-        assert pipeline._pending_backtest_candidates([crowded, safe]) == []
+        assert pipeline.services.candidate_pool._validation_targets([crowded, safe]) == [safe]
+        assert pipeline.services.candidate_pool._pending_backtest_candidates([crowded, safe]) == []
 
 
 def test_pipeline_validate_slots_archives_high_similarity_pending_candidate():
@@ -1550,12 +1550,12 @@ def test_pipeline_validate_slots_archives_high_similarity_pending_candidate():
                 "expression": crowded.expression,
             }
         ]
-        pipeline._refresh_cloud_similarity_index()
+        pipeline.services.candidate_pool._refresh_cloud_similarity_index()
         pool_by_expression = {expr_key(candidate): candidate for candidate in (crowded, safe)}
         archive_stats: dict[str, int] = {}
         blocked_expressions: set[str] = set()
 
-        pipeline._validate_for_open_backtest_slots(
+        pipeline.services.official_validation._validate_for_open_backtest_slots(
             1,
             pool_by_expression,
             [],
@@ -1607,12 +1607,12 @@ def test_pipeline_skips_high_cloud_similarity_before_official_validation():
                 "expression": crowded.expression,
             }
         ]
-        pipeline._refresh_cloud_similarity_index()
+        pipeline.services.candidate_pool._refresh_cloud_similarity_index()
         pool_by_expression = {expr_key(candidate): candidate for candidate in (crowded, safe)}
         archive_stats: dict[str, int] = {}
         blocked_expressions: set[str] = set()
 
-        pipeline._validate_for_open_backtest_slots(
+        pipeline.services.official_validation._validate_for_open_backtest_slots(
             1,
             pool_by_expression,
             [],

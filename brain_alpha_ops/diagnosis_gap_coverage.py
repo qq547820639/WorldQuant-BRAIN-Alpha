@@ -6,6 +6,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
+import brain_alpha_ops.web  # noqa: F401  ensure web bridge meta-path finder is installed
 from brain_alpha_ops.web_check_availability import CHECK_LABELS
 
 SCHEMA_VERSION = "diagnosis_gap_coverage.v1"

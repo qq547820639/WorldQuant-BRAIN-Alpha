@@ -93,7 +93,7 @@ class CandidatePoolService_:
                 candidate.scorecard = {"total_score": 0.0, "error": _score_msg}
                 candidate.lifecycle_status = "local_prefilter_rejected"
                 candidate.gate = _blocked_gate("SCORING_ERROR", [_score_msg])
-                p._event("scoring_failed", _score_msg, candidate.alpha_id, level="WARN")
+                p.services.runtime._event("scoring_failed", _score_msg, candidate.alpha_id, level="WARN")
                 continue
             _expr_key_val = getattr(candidate, "expression", "") or ""
             _cur_ds = getattr(p, "_active_dataset_id", "")
@@ -118,22 +118,22 @@ class CandidatePoolService_:
                     "warnings": context_reasons,
                 }
                 candidate.local_quality.setdefault("warnings", []).extend(context_reasons)
-                p._event("official_context_warning", "; ".join(context_reasons), candidate.alpha_id)
+                p.services.runtime._event("official_context_warning", "; ".join(context_reasons), candidate.alpha_id)
             if candidate.local_quality["passed"]:
                 candidate.lifecycle_status = "local_prefilter_passed"
                 passed.append(candidate)
             else:
                 candidate.lifecycle_status = "local_prefilter_rejected"
                 candidate.gate = _blocked_gate("LOCAL_PREFILTER_REJECTED", candidate.local_quality["reasons"])
-                p._event("local_prefilter_rejected", "; ".join(candidate.local_quality["reasons"]), candidate.alpha_id)
+                p.services.runtime._event("local_prefilter_rejected", "; ".join(candidate.local_quality["reasons"]), candidate.alpha_id)
                 _reasons = " ".join(candidate.local_quality.get("reasons", []))
                 if "prod_correlation" in _reasons and hasattr(p, "_generator") and hasattr(p._generator, "adjust_hypothesis_weight"):
                     _hyp = getattr(candidate, "hypothesis", "") or ""
                     if _hyp:
                         p._generator.adjust_hypothesis_weight(_hyp, 0.5)
-            p._record_lifecycle(candidate, "local_scored", "; ".join(candidate.local_quality.get("reasons", [])))
+            p.services.runtime._record_lifecycle(candidate, "local_scored", "; ".join(candidate.local_quality.get("reasons", [])))
             visible_candidates = rank_candidates(passed)
-            p._progress(
+            p.services.runtime._progress(
                 "local_scoring",
                 index,
                 total,
@@ -151,7 +151,7 @@ class CandidatePoolService_:
                 },
             )
         ranked = rank_candidates(passed)
-        p._event("local_candidates_ranked", f"Ranked {len(ranked)} local candidates before official calls.")
+        p.services.runtime._event("local_candidates_ranked", f"Ranked {len(ranked)} local candidates before official calls.")
         return ranked
 
     def _apply_local_backtest_prefilter(self, candidate: Candidate) -> None:
@@ -217,7 +217,7 @@ class CandidatePoolService_:
             )
             p._knowledge_base.save(entry)
         except Exception as exc:
-            p._event(
+            p.services.runtime._event(
                 "knowledge_base_write_failed",
                 redact_error_message(exc, max_length=160),
                 candidate.alpha_id,
@@ -231,7 +231,7 @@ class CandidatePoolService_:
         while (
             len(self._candidate_pool_candidates(list(pool_by_expression.values()))) < retained_limit
             and attempts < 2
-            and not p._should_stop()
+            and not p.services.runtime._should_stop()
         ):
             available = len(self._candidate_pool_candidates(list(pool_by_expression.values())))
             deficit = retained_limit - available
@@ -246,22 +246,22 @@ class CandidatePoolService_:
             p._attach_active_assistant_guidance(generated)
             p.produced_count += len(generated)
             for candidate in generated:
-                p._record_lifecycle(candidate, "generated", "候选池补位生成")
-            p._event("candidates_top_up_generated", f"Cycle {cycle}: generated {len(generated)} top-up candidates.")
+                p.services.runtime._record_lifecycle(candidate, "generated", "候选池补位生成")
+            p.services.runtime._event("candidates_top_up_generated", f"Cycle {cycle}: generated {len(generated)} top-up candidates.")
             locally_passed = self._local_prefilter(generated, cycle, fields, operators)
-            p._archive(
+            p.services.runtime._archive(
                 archive_stats,
                 archive_samples,
                 [candidate for candidate in generated if candidate.lifecycle_status == "local_prefilter_rejected"],
             )
-            p._archive(archive_stats, archive_samples, self._merge_into_pool(pool_by_expression, locally_passed, blocked_expressions))
-            p._archive(archive_stats, archive_samples, self._remove_below_local_standard(pool_by_expression))
-            p._archive(archive_stats, archive_samples, self._prune_pool(pool_by_expression))
+            p.services.runtime._archive(archive_stats, archive_samples, self._merge_into_pool(pool_by_expression, locally_passed, blocked_expressions))
+            p.services.runtime._archive(archive_stats, archive_samples, self._remove_below_local_standard(pool_by_expression))
+            p.services.runtime._archive(archive_stats, archive_samples, self._prune_pool(pool_by_expression))
 
         if attempts:
             pool = rank_candidates(list(pool_by_expression.values()))
             available = len(self._candidate_pool_candidates(pool))
-            p._progress(
+            p.services.runtime._progress(
                 "candidate_pool",
                 available,
                 retained_limit,
@@ -307,7 +307,7 @@ class CandidatePoolService_:
         targets = p._candidate_pool_service().validation_targets(pool)
         filtered: list[Candidate] = []
         for candidate in targets:
-            if p._block_observability_duplicate_before_official(candidate, phase="official_validation"):
+            if p.services.official_validation._block_observability_duplicate_before_official(candidate, phase="official_validation"):
                 continue
             if self._reject_high_cloud_similarity_before_official(candidate):
                 continue

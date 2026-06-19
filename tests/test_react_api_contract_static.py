@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+import brain_alpha_ops.web  # noqa: F401  install meta-path bridge for web_* modules
 from brain_alpha_ops.web_routes import GET_ROUTES, POST_ROUTES, route_for
 
 

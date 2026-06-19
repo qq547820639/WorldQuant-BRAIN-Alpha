@@ -7,6 +7,12 @@ has an optional dependency missing from the current Python environment.
 
 from __future__ import annotations
 
+# Install web_* flat-import bridge early so old paths work without
+# requiring an explicit import brain_alpha_ops.web first.
+from brain_alpha_ops._web_bridge import install_web_bridge as _install_web_bridge
+_install_web_bridge()
+
+
 import importlib
 import logging
 from typing import Any

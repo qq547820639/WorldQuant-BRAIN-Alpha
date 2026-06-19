@@ -36,6 +36,12 @@ interface ViewProps {
   onStop: () => void;
   onCredentialClick?: () => void;
   onRetry?: () => void;
+  /** P1-3: whether SSE auto-retries are exhausted and manual retry is needed */
+  sseRetryExhausted?: boolean;
+  /** P1-3: countdown seconds for the current SSE retry */
+  sseRetryCountdown?: number;
+  /** P1-3: manual retry after SSE auto-retries exhausted */
+  onSseExhaustedRetry?: () => void;
 }
 
 /** Single view component — shared between controlled and standalone modes */
@@ -43,6 +49,7 @@ function JobMonitorView({
   credentialSource, validationId, running, connected, progress, error, status, events,
   loading, showCredentialWarning, reconnectAttempts = 0,
   onStart, onResume, onStop, onCredentialClick, onRetry,
+  sseRetryExhausted = false, sseRetryCountdown = 0, onSseExhaustedRetry,
 }: ViewProps) {
   const summary = productionSummary(status);
   const hasEvidence = Boolean(status?.job_id || validationId);
@@ -77,6 +84,42 @@ function JobMonitorView({
             <span>
               实时连接已断开{reconnectAttempts > 0 ? `（第 ${reconnectAttempts} 次重连中…）` : "，正在重连…"}后台任务继续运行。
             </span>
+          </div>
+        )}
+        {/* P1-3: SSE auto-retry countdown banner */}
+        {sseRetryCountdown > 0 && (
+          <div className="mb-3" style={{
+            padding: "8px 12px", borderRadius: 6,
+            border: "1px solid", borderColor: "oklch(0.58 0.12 245 / 0.30)",
+            background: "oklch(0.58 0.06 245 / 0.08)",
+            display: "flex", alignItems: "center", gap: 8,
+            fontSize: 13, color: "oklch(0.58 0.12 245)",
+          }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" style={{ flexShrink: 0, animation: "spin 2s linear infinite" }}>
+              <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
+            </svg>
+            <span>同步通道中断，{sseRetryCountdown}秒后自动重试…</span>
+          </div>
+        )}
+        {/* P1-3: SSE retry exhausted — manual retry button */}
+        {sseRetryExhausted && (
+          <div className="mb-3" style={{
+            padding: "10px 12px", borderRadius: 6,
+            border: "1px solid", borderColor: "oklch(0.48 0.08 22 / 0.30)",
+            background: "oklch(0.48 0.06 22 / 0.08)",
+            display: "flex", flexDirection: "column", gap: 8,
+            fontSize: 13,
+          }}>
+            <p className="text-sm text-negative font-medium">同步通道已中断，自动重试均已失败</p>
+            <p className="text-xs text-text-secondary">建议检查网络连接后手动重试，或等待后台任务自行恢复。</p>
+            {onSseExhaustedRetry && (
+              <button type="button" className="btn btn-primary btn-sm" onClick={onSseExhaustedRetry} style={{ alignSelf: "flex-start" }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" style={{ marginRight: 6 }}>
+                  <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
+                </svg>
+                手动重试
+              </button>
+            )}
           </div>
         )}
         <p className="text-sm text-text-secondary mb-4">
@@ -185,6 +228,28 @@ export default function JobMonitor({ notify, credentials, onNeedCredentials, job
   const [running, setRunning] = useState(false);
   const [events, setEvents] = useState<string[]>([]);
   const [progressError, setProgressError] = useState<string | null>(null);
+
+  // P1-3: auto-retry tracking for SSE exhaustion
+  const sseRetryCountRef = useRef(0);
+  const sseRetryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [sseRetryCountdown, setSseRetryCountdown] = useState(0);
+  const [sseRetryExhausted, setSseRetryExhausted] = useState(false);
+  const sseRetryCountdownIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // P1-3: exponential backoff delays: 5s, 10s, 20s
+  const SSE_RETRY_DELAYS = [5000, 10000, 20000];
+  const SSE_MAX_RETRIES = SSE_RETRY_DELAYS.length;
+
+  const clearSseRetryTimers = useCallback(() => {
+    if (sseRetryTimerRef.current) {
+      clearTimeout(sseRetryTimerRef.current);
+      sseRetryTimerRef.current = null;
+    }
+    if (sseRetryCountdownIntervalRef.current) {
+      clearInterval(sseRetryCountdownIntervalRef.current);
+      sseRetryCountdownIntervalRef.current = null;
+    }
+  }, []);
   const [pollFailures, setPollFailures] = useState(0);
   const autoCancelRequests = useRef<Set<string>>(new Set());
   const api = useApi();
@@ -277,17 +342,67 @@ export default function JobMonitor({ notify, credentials, onNeedCredentials, job
 
   const sseUrl = jobId ? `/sse?job_id=${encodeURIComponent(jobId)}` : null;
   const handleStreamExhausted = useCallback(() => {
-    const msg = "页面暂时收不到最新进度，本次验证状态不明确，正在请求自动中断。";
+    // P1-3: auto-retry with exponential backoff before falling back to cancel
+    const retryCount = sseRetryCountRef.current;
+    if (retryCount < SSE_MAX_RETRIES) {
+      sseRetryCountRef.current = retryCount + 1;
+      const delay = SSE_RETRY_DELAYS[retryCount];
+      const delaySeconds = Math.ceil(delay / 1000);
+      setSseRetryCountdown(delaySeconds);
+      notify("warning", `同步进度通道中断，${delaySeconds}秒后自动重试 (${retryCount + 1}/${SSE_MAX_RETRIES})`);
+
+      // Countdown timer
+      sseRetryCountdownIntervalRef.current = setInterval(() => {
+        setSseRetryCountdown((c) => {
+          if (c <= 1) {
+            if (sseRetryCountdownIntervalRef.current) {
+              clearInterval(sseRetryCountdownIntervalRef.current);
+              sseRetryCountdownIntervalRef.current = null;
+            }
+            return 0;
+          }
+          return c - 1;
+        });
+      }, 1000);
+
+      sseRetryTimerRef.current = setTimeout(() => {
+        sseRetryTimerRef.current = null;
+        setSseRetryCountdown(0);
+        // Re-attempt by restarting the job (resume mode)
+        void startJob(true);
+      }, delay);
+      return;
+    }
+
+    // Exhausted all retries — show manual retry
+    sseRetryCountRef.current = 0;
+    setSseRetryCountdown(0);
+    setSseRetryExhausted(true);
+    const msg = `同步进度通道已中断 ${SSE_MAX_RETRIES} 次自动重试均未恢复，正在请求自动中断。`;
     notify("warning", msg);
     failMonitor(msg);
     void cancelAmbiguousJob("sse_exhausted", msg);
-  }, [cancelAmbiguousJob, failMonitor, notify]);
+  }, [cancelAmbiguousJob, failMonitor, notify, startJob]);
+
+  // P1-3: manual retry after all auto-retries exhausted
+  const handleSseExhaustedManualRetry = useCallback(() => {
+    sseRetryCountRef.current = 0;
+    setSseRetryExhausted(false);
+    setSseRetryCountdown(0);
+    clearSseRetryTimers();
+    void startJob(true);
+  }, [clearSseRetryTimers, startJob]);
 
   const { connected, reconnectAttempts } = useSSE(sseUrl, { onEvent: handleSSEEvent, onExhausted: handleStreamExhausted });
 
   const startJob = useCallback(async (resume = false) => {
     if (!hasCredentials(credentials)) notify("info", "未填写页面凭证，将使用维护者配置的托管凭证启动非提交验证。");
     setRunning(true); autoCancelRequests.current.clear(); setPollFailures(0); setProgressError(null);
+    // P1-3: reset SSE retry state on new job start
+    sseRetryCountRef.current = 0;
+    setSseRetryCountdown(0);
+    setSseRetryExhausted(false);
+    clearSseRetryTimers();
     setStatus({ job_id: "", task_id: "", status: "running", phase: "queued", progress: { phase: "queued", status_message: "正在启动非提交流水线验证。", percent_complete: 0 } });
     const result = await api.call<{ job_id: string }>("/api/run", { method: "POST", body: JSON.stringify(buildRunPayload(resume, credentials)) });
     const jid = String(result?.job_id || "");
@@ -340,7 +455,7 @@ export default function JobMonitor({ notify, credentials, onNeedCredentials, job
   const recordStatusRefreshFailure = useCallback((message: string) => {
     setPollFailures((previous) => {
       const next = previous + 1;
-      if (next >= 3) {
+      if (next >= 12) {
         const failure = `状态连续刷新失败，本次验证状态不明确，正在请求自动中断: ${message}`;
         failMonitor(failure);
         void cancelAmbiguousJob("status_failed", failure);
@@ -381,6 +496,13 @@ export default function JobMonitor({ notify, credentials, onNeedCredentials, job
     return () => clearInterval(interval);
   }, [running, jobId, api, cancelAmbiguousJob, clearTransientProgressError, failMonitor, notify, recordStatusRefreshFailure]);
 
+  // P1-3: cleanup SSE retry timers on unmount
+  useEffect(() => {
+    return () => {
+      clearSseRetryTimers();
+    };
+  }, [clearSseRetryTimers]);
+
   const cycleProgress = status?.cycle && status?.max_cycles ? Math.round((status.cycle / status.max_cycles) * 100) : 0;
   const progress = status?.progress || { phase: status?.phase, percent_complete: status?.percent_complete ?? cycleProgress, eta_seconds: status?.eta_seconds, status_message: status?.status_message };
 
@@ -402,6 +524,9 @@ export default function JobMonitor({ notify, credentials, onNeedCredentials, job
       onCredentialClick={onNeedCredentials}
       onRetry={progressError ? () => startJob(false) : undefined}
       reconnectAttempts={reconnectAttempts}
+      sseRetryExhausted={sseRetryExhausted}
+      sseRetryCountdown={sseRetryCountdown}
+      onSseExhaustedRetry={handleSseExhaustedManualRetry}
     />
   );
 }

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from brain_alpha_ops.web_backtest_slots import is_submit_only_quality_reason
+from brain_alpha_ops.web.misc.web_backtest_slots import is_submit_only_quality_reason
 from brain_alpha_ops.web_candidates.audit import scientific_audit_summary
 from brain_alpha_ops.web_candidates.decisions import (
     annotate_candidate_decision,

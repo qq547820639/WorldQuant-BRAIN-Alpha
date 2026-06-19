@@ -51,12 +51,12 @@ class BacktestFlowService:
             candidate = self._next_backtest_candidate(pool)
             if not candidate:
                 return
-            if p._block_observability_duplicate_before_official(candidate, phase="official_simulation"):
+            if p.services.official_validation._block_observability_duplicate_before_official(candidate, phase="official_simulation"):
                 state.pool_by_expression.pop(_expr_key(candidate), None)
                 state.blocked_expressions.add(_expr_key(candidate))
-                p._archive(state.archive_stats, state.archive_samples, [candidate])
+                p.services.runtime._archive(state.archive_stats, state.archive_samples, [candidate])
                 continue
-            p._progress(
+            p.services.runtime._progress(
                 "simulation_submit",
                 slot - 1,
                 active_limit,
@@ -66,13 +66,13 @@ class BacktestFlowService:
             )
             outcome = submission_service.submit_slot(slot, candidate)
             if not outcome.submitted:
-                p._record_backtest(
+                p.services.runtime._record_backtest(
                     candidate,
                     "submit_failed",
                     slot=slot,
                     note=redact_error_message(outcome.error) if outcome.error else outcome.note,
                     error_context=(
-                        p._official_error_context(
+                        p.services.runtime._official_error_context(
                             outcome.error,
                             outcome.error_code or "SIMULATION_SUBMIT_ERROR",
                             phase="simulation_submit",
@@ -82,7 +82,7 @@ class BacktestFlowService:
                         else None
                     ),
                 )
-                p._progress(
+                p.services.runtime._progress(
                     "official_deferred" if p.official_calls_halted else "simulation_submit",
                     slot,
                     active_limit,
@@ -93,9 +93,9 @@ class BacktestFlowService:
                 return
 
             p.backtests_submitted += 1
-            p._record_lifecycle(candidate, "simulation_submitted", f"slot={slot}")
-            p._record_backtest(candidate, "submitted", slot=slot, status="SUBMITTED")
-            p._progress(
+            p.services.runtime._record_lifecycle(candidate, "simulation_submitted", f"slot={slot}")
+            p.services.runtime._record_backtest(candidate, "submitted", slot=slot, status="SUBMITTED")
+            p.services.runtime._progress(
                 "simulation_submit",
                 slot,
                 active_limit,
@@ -107,7 +107,7 @@ class BacktestFlowService:
     def _next_backtest_candidate(self, pool: list[Candidate]) -> Candidate | None:
         p = self._pipeline
         return p.backtest_slot_manager.next_candidate(
-            p._backtest_targets(pool),
+            p.services.candidate_pool._backtest_targets(pool),
             key_fn=_expr_key,
         )
 
@@ -140,7 +140,7 @@ class BacktestFlowService:
                     continue
 
             candidate.submission["poll_count"] = int(candidate.submission.get("poll_count", 0) or 0) + 1
-            p._progress(
+            p.services.runtime._progress(
                 "simulation_wait",
                 slot,
                 p._active_backtest_limit(),
@@ -150,14 +150,14 @@ class BacktestFlowService:
             )
             outcome = polling_service.poll(candidate, now=now, interval=interval)
             for record in outcome.records:
-                p._record_backtest(
+                p.services.runtime._record_backtest(
                     candidate,
                     record.action,
                     slot=slot,
                     status=record.status,
                     note=record.note,
                     error_context=(
-                        p._official_error_context(
+                        p.services.runtime._official_error_context(
                             record.error,
                             record.error_code,
                             phase=record.phase,
@@ -190,7 +190,7 @@ class BacktestFlowService:
             if outcome.halted:
                 return submitted_this_run
 
-            p._progress(
+            p.services.runtime._progress(
                 "simulation_wait",
                 slot,
                 p._active_backtest_limit(),
@@ -222,12 +222,12 @@ class BacktestFlowService:
             }
             if not report.passed:
                 failed_names = [r.check_name for r in report.results if not r.passed and r.severity == "ERROR"]
-                p._event("alpha_checks_failed",
+                p.services.runtime._event("alpha_checks_failed",
                     f"Cycle {cycle}: AlphaCheckRegistry found {report.failed_count}/{report.total} failures "
                     f"for {candidate.alpha_id}: {failed_names[:5]}",
                     candidate.alpha_id, level="WARN")
             else:
-                p._event("alpha_checks_passed",
+                p.services.runtime._event("alpha_checks_passed",
                     f"Cycle {cycle}: Alpha {candidate.alpha_id} passed {report.passed_count}/{report.total} checks.",
                     candidate.alpha_id, level="INFO")
         except Exception as exc:
@@ -240,7 +240,7 @@ class BacktestFlowService:
                 "registry_error": True,
             }
             candidate.gate = _blocked_gate("CHECK_REGISTRY_ERROR", [_err_msg])
-            p._event(
+            p.services.runtime._event(
                 "alpha_checks_error",
                 f"AlphaCheckRegistry crashed for {candidate.alpha_id}",
                 candidate.alpha_id, level="ERROR"
@@ -254,9 +254,9 @@ class BacktestFlowService:
             candidate.submission["anti_overfit_report"] = anti_report
             candidate.submission["rolling_validation_report"] = rolling_report
             policy = RobustnessPolicy().apply(candidate, anti_report, rolling_report)
-            p._record_robustness_feedback(candidate, cycle=cycle, policy=policy)
+            p.services.runtime._record_robustness_feedback(candidate, cycle=cycle, policy=policy)
             if policy.get("action") != "allow":
-                p._event(
+                p.services.runtime._event(
                     "robustness_checks_caution",
                     f"Cycle {cycle}: robustness checks flagged {candidate.alpha_id}.",
                     candidate.alpha_id,
@@ -268,7 +268,7 @@ class BacktestFlowService:
                     },
                 )
             else:
-                p._event(
+                p.services.runtime._event(
                     "robustness_checks_passed",
                     f"Cycle {cycle}: robustness checks completed for {candidate.alpha_id}.",
                     candidate.alpha_id,
@@ -281,7 +281,7 @@ class BacktestFlowService:
         except Exception as exc:
             message = redact_error_message(exc)
             candidate.submission["robustness_check_error"] = message
-            p._event(
+            p.services.runtime._event(
                 "robustness_checks_error",
                 f"Cycle {cycle}: robustness checks failed for {candidate.alpha_id}: {message}",
                 candidate.alpha_id,
@@ -348,8 +348,8 @@ class BacktestFlowService:
         candidate.submission["poll_count"] = 0
         candidate.gate = _blocked_gate("SIMULATION_RETRY_PENDING", [reason])
         pool_by_expression[_expr_key(candidate)] = candidate
-        p._record_lifecycle(candidate, "simulation_retry_pending", reason)
-        p._event(
+        p.services.runtime._record_lifecycle(candidate, "simulation_retry_pending", reason)
+        p.services.runtime._event(
             "simulation_retry_scheduled",
             f"Retry {retry_count + 1}/{max_retries} scheduled after official simulation failure.",
             candidate.alpha_id,

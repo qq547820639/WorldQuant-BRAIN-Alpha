@@ -22,7 +22,9 @@ from brain_alpha_ops.web_cloud.snapshot import (
     read_official_context_metadata,
     save_official_context_json,
 )
-from brain_alpha_ops.web_post_handlers import connection_test_post_payload
+from brain_alpha_ops.web_post_handlers import (
+    connection_test_post_payload,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -99,7 +101,6 @@ def sync_cloud_alphas_payload(
 
 __all__ = [
     "cached_user_alpha_paths",
-    "connection_test_post_payload",
     "latest_cached_user_alpha_path",
     "latest_cached_user_alphas",
     "official_context_file_counts",

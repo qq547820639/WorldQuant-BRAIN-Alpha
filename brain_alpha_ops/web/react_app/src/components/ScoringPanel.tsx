@@ -6,6 +6,7 @@ import { resolveJobEventState } from "@/helpers/runPayload";
 import { useApi } from "@/hooks/useApi";
 import { useSSE } from "@/hooks/useSSE";
 import ProgressFeedback from "@/components/ProgressFeedback";
+import type { ScoreHistoryPoint } from "@/components/ScoreBreakdown";
 import type {
   AttributionNode, Candidate, FailureItem,
   OfficialGateCheckItem, OfficialGateResult,
@@ -45,6 +46,10 @@ export default function ScoringPanel({ notify, candidate }: Props) {
   const attributionData = attributionApi.data;
   const attributionLoading = attributionApi.loading;
   const attributionError = attributionApi.error;
+  const lifecycleApi = useApi<{ records?: Array<Record<string, unknown>>; items?: Array<Record<string, unknown>> }>();
+  const callLifecycleApi = lifecycleApi.call;
+  const [scoreHistory, setScoreHistory] = useState<ScoreHistoryPoint[] | null>(null);
+  const [scoreHistoryExpanded, setScoreHistoryExpanded] = useState(false);
   const [scoring, setScoring] = useState<ScoringResult | null>(null);
   const [scoreTaskId, setScoreTaskId] = useState<string | null>(null);
   const [scoreState, setScoreState] = useState<"idle" | "loading" | "progress" | "success" | "error">("idle");
@@ -113,6 +118,35 @@ export default function ScoringPanel({ notify, candidate }: Props) {
 
   const loadScore = useCallback(async () => {
     if (!candidate) return;
+    // P2-2: cache check — if scorecard already has a complete scoring result
+    // (total_score > 0 with an attribution tree), reuse it and skip the API calls.
+    const scorecard = candidate.scorecard;
+    if (scorecard && scorecard.total_score > 0 && scorecard.attribution_tree) {
+      const cachedResult: ScoringResult = {
+        alpha_id: candidate.alpha_id,
+        expression: candidate.expression || "",
+        total_score: scorecard.total_score,
+        decision_band: scorecard.decision_band || candidate.decision_band || "--",
+        passed_gate: candidate.gate?.passed ?? false,
+        prior: { score: scorecard.prior?.score ?? scorecard.prior_score ?? 0 },
+        empirical: { score: scorecard.empirical?.score ?? scorecard.empirical_score ?? 0 },
+        checklist: { score: scorecard.submission_checklist?.score ?? scorecard.checklist_score ?? 0 },
+        layer_weights: scorecard.layer_weights,
+        hard_gates: (scorecard.hard_gates as ScoringResult["hard_gates"]) || [],
+        soft_gates: [],
+        attribution_tree: scorecard.attribution_tree,
+        top_failures: scorecard.top_failures || [],
+        improvement_hints: scorecard.improvement_hints || [],
+        score_basis: scorecard.score_basis,
+        scoring_schema: "",
+      };
+      setScoring(cachedResult);
+      setScoreState("success");
+      setScoreError(null);
+      setScoreProgress(null);
+      setScoreTaskId(null);
+      return;
+    }
     setScoring(null); resetAttributionApi(); setScoreState("loading"); setScoreError(null);
     setScoreProgress({ phase: "scoring", status_message: `正在为 ${candidate.alpha_id || "候选"} 启动评分。` });
     const payload = candidate.alpha_id ? { alpha_id: candidate.alpha_id, candidate } : { candidate };
@@ -132,6 +166,24 @@ export default function ScoringPanel({ notify, candidate }: Props) {
   }, [callAttributionApi, callScoreApi, candidate, notify, resetAttributionApi]);
 
   useEffect(() => { if (candidate) loadScore(); }, [candidate?.alpha_id, loadScore]);
+
+  // P1-5: Fetch scoring history from lifecycle API
+  const fetchScoreHistory = useCallback(async () => {
+    if (!candidate?.alpha_id) { setScoreHistory(null); return; }
+    const result = await callLifecycleApi(`/api/alpha_lifecycle?alpha_id=${encodeURIComponent(candidate.alpha_id)}`);
+    if (result?.ok) {
+      const records = result.records || result.items || [];
+      const points: ScoreHistoryPoint[] = records
+        .filter((r) => typeof r.timestamp === "string" && typeof r.total_score === "number")
+        .map((r) => ({ timestamp: String(r.timestamp), totalScore: Number(r.total_score) }))
+        .sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+      setScoreHistory(points.length >= 2 ? points : null);
+    } else {
+      setScoreHistory(null);
+    }
+  }, [callLifecycleApi, candidate?.alpha_id]);
+
+  useEffect(() => { void fetchScoreHistory(); }, [fetchScoreHistory]);
 
   const attribution = scoring?.attribution_tree || attributionData?.attribution || null;
   const hardGates = nonEmpty(scoring?.hard_gates) || nonEmpty(attributionData?.hard_gates) || [];
@@ -257,6 +309,91 @@ export default function ScoringPanel({ notify, candidate }: Props) {
           </div>
         </div>
       </div>
+
+      {/* P1-5: 评分历史时间线 */}
+      {scoreHistory && scoreHistory.length >= 2 && (
+        <div className="panel mb-4">
+          <button
+            type="button"
+            className="panel-header"
+            style={{ width: "100%", textAlign: "left", cursor: "pointer", border: "none", background: "none", font: "inherit" }}
+            onClick={() => setScoreHistoryExpanded(!scoreHistoryExpanded)}
+            aria-expanded={scoreHistoryExpanded}
+          >
+            <span>评分历史 ({scoreHistory.length})</span>
+            <span className="text-text-tertiary" style={{ fontSize: 12 }}>
+              {scoreHistoryExpanded ? "▾ 收起" : "▸ 展开"}
+            </span>
+          </button>
+          {scoreHistoryExpanded && (
+            <div className="panel-body-padded">
+              <div className="scorebreakdown-panel" style={{ background: "none", border: "none", padding: 0 }}>
+                <div className="scorebreakdown-history" style={{ padding: 0 }}>
+                  <div className="scorebreakdown-sparkline-container" style={{ marginTop: 0 }}>
+                    <div
+                      className="scorebreakdown-sparkline"
+                      aria-label={`评分历史趋势，共 ${scoreHistory.length} 个数据点`}
+                      style={{ height: 56, borderBottom: "0.5px solid oklch(0.22 0.007 45)" }}
+                    >
+                      {(() => {
+                        const points = scoreHistory.slice(-10);
+                        const scores = points.map((p) => p.totalScore);
+                        const minScore = Math.min(...scores);
+                        const maxScore = Math.max(...scores);
+                        const range = maxScore - minScore || 1;
+                        const formatLabel = (ts: string): string => {
+                          try {
+                            const d = new Date(ts);
+                            if (isNaN(d.getTime())) return ts.slice(0, 5);
+                            return `${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+                          } catch { return ts.slice(0, 5); }
+                        };
+                        return points.map((point, i) => {
+                          const heightPct = ((point.totalScore - minScore) / range) * 100;
+                          return (
+                            <div
+                              key={`${point.timestamp}-${i}`}
+                              style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", height: "100%" }}
+                              title={`${formatLabel(point.timestamp)}: ${point.totalScore.toFixed(1)}`}
+                            >
+                              <div
+                                style={{
+                                  width: "100%", maxWidth: 24, height: `${Math.max(4, heightPct)}%`,
+                                  minHeight: 2, background: "oklch(0.55 0.14 85 / 0.7)",
+                                  borderRadius: "1px 1px 0 0",
+                                }}
+                              />
+                              <span style={{ fontSize: "0.5rem", color: "oklch(0.52 0.006 45)", marginTop: 2, textAlign: "center", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                {formatLabel(point.timestamp)}
+                              </span>
+                            </div>
+                          );
+                        });
+                      })()}
+                    </div>
+                    <div style={{ marginTop: 8, paddingTop: 6, borderTop: "0.5px solid oklch(0.22 0.007 45)" }}>
+                      {scoreHistory.slice().reverse().slice(0, 10).map((point, i) => (
+                        <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "2px 0", fontSize: "0.625rem" }}>
+                          <span style={{ color: "oklch(0.52 0.006 45)", fontFamily: "monospace" }}>
+                            {(() => {
+                              try {
+                                const d = new Date(point.timestamp);
+                                if (isNaN(d.getTime())) return point.timestamp.slice(0, 10);
+                                return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+                              } catch { return point.timestamp.slice(0, 10); }
+                            })()}
+                          </span>
+                          <span style={{ color: "oklch(0.82 0.04 85)", fontFamily: "monospace" }}>{point.totalScore.toFixed(1)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Gate Checks */}
       <div className="panel mb-4">

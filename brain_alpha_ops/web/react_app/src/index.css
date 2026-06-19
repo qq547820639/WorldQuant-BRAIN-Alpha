@@ -6,6 +6,68 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── Theme CSS Variables (light default, .dark overrides) ── */
+:root {
+  --bg: #f8fafc;
+  --text: #0f172a;
+  --surface: #ffffff;
+  --border: #e2e8f0;
+
+  /* Fix 8: Panel semantic color variables for light mode */
+  --color-panel-info-border: oklch(0.58 0.08 245 / 0.25);
+  --color-panel-info-bg: oklch(0.58 0.04 245 / 0.06);
+  --color-panel-negative-border: oklch(0.48 0.06 22 / 0.25);
+  --color-panel-negative-bg: oklch(0.48 0.04 22 / 0.06);
+  --color-panel-warning-border: oklch(0.65 0.12 80 / 0.35);
+  --color-panel-warning-bg: oklch(0.65 0.04 80 / 0.06);
+  --color-panel-cache-border: oklch(0.58 0.08 65 / 0.25);
+  --color-panel-cache-bg: oklch(0.58 0.04 65 / 0.08);
+  --color-step-bar-border: oklch(0.50 0.02 240 / 0.20);
+  --color-step-complete: oklch(0.48 0.10 160);
+  --color-step-active: oklch(0.55 0.12 245);
+  --color-step-pending: oklch(0.85 0.005 45);
+  --color-step-pending-text: oklch(0.55 0.006 45);
+  --color-warning-icon: oklch(0.65 0.12 80);
+  --color-modal-bg: oklch(0.98 0.002 45);
+  --color-modal-border: oklch(0.85 0.005 45);
+  --color-overlay: oklch(0 0 0 / 0.40);
+  --color-divider: oklch(0.85 0.005 45);
+  --color-report-bg: oklch(0.97 0.002 45);
+  --color-report-text: oklch(0.25 0.005 45);
+  --color-guide-steps-column: auto 1fr;
+  --color-guide-steps-gap: 8px;
+}
+.dark {
+  --bg: #0f172a;
+  --text: #f1f5f9;
+  --surface: #1e293b;
+  --border: #334155;
+
+  /* Fix 8: Panel semantic color variables for dark mode */
+  --color-panel-info-border: oklch(0.58 0.12 245 / 0.30);
+  --color-panel-info-bg: oklch(0.58 0.06 245 / 0.08);
+  --color-panel-negative-border: oklch(0.48 0.08 22 / 0.30);
+  --color-panel-negative-bg: oklch(0.48 0.06 22 / 0.08);
+  --color-panel-warning-border: oklch(0.65 0.14 80 / 0.40);
+  --color-panel-warning-bg: oklch(0.65 0.06 80 / 0.08);
+  --color-panel-cache-border: oklch(0.58 0.10 65 / 0.30);
+  --color-panel-cache-bg: oklch(0.58 0.06 65 / 0.10);
+  --color-step-bar-border: oklch(0.35 0.02 240 / 0.20);
+  --color-step-complete: oklch(0.48 0.10 160);
+  --color-step-active: oklch(0.58 0.12 245);
+  --color-step-pending: oklch(0.22 0.007 45);
+  --color-step-pending-text: oklch(0.50 0.006 45);
+  --color-warning-icon: oklch(0.68 0.12 82);
+  --color-modal-bg: oklch(0.14 0.005 45);
+  --color-modal-border: oklch(0.28 0.005 45);
+  --color-overlay: oklch(0 0 0 / 0.60);
+  --color-divider: oklch(0.18 0.005 45);
+  --color-report-bg: oklch(0.10 0.005 45);
+  --color-report-text: oklch(0.82 0.01 45);
+  --color-guide-steps-column: auto 1fr;
+  --color-guide-steps-gap: 8px;
+}
+
 @layer base {
   *, *::before, *::after { box-sizing: border-box; }
 
@@ -171,6 +233,13 @@
   .panel-body-padded { @apply p-3.5; }
   .panel-body-compact { @apply p-3; }
 
+  /* Fix 8: Semantic panel variants using CSS variables */
+  .panel-info { border-color: var(--color-panel-info-border); background: var(--color-panel-info-bg); }
+  .panel-negative { border-color: var(--color-panel-negative-border); background: var(--color-panel-negative-bg); }
+  .panel-warning { border-color: var(--color-panel-warning-border); background: var(--color-panel-warning-bg); }
+  .panel-cache { border-color: var(--color-panel-cache-border); background: var(--color-panel-cache-bg); }
+  .panel-step-bar { border-color: var(--color-step-bar-border); }
+
   .kpi-card {
     @apply bg-surface-1 border border-border-subtle rounded-md p-3 pb-2.5;
   }
@@ -298,6 +367,15 @@
     position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
     overflow: hidden; clip: rect(0, 0, 0, 0); border: 0;
   }
+  /* Fix 7+8: Guide steps grid for Dashboard */
+  .guide-steps {
+    grid-template-columns: var(--color-guide-steps-column);
+    column-gap: var(--color-guide-steps-gap);
+    align-items: baseline;
+  }
+  .guide-panel { border-color: var(--color-panel-info-border); background: var(--color-panel-info-bg); }
+  .border-modal { border-color: var(--color-modal-border); }
+  .border-divider { border-color: var(--color-divider); }
 }
 
 /* ── Animations ── */
@@ -334,6 +412,46 @@
 @media (min-width: 640px) and (max-width: 1023px) {
   .app-main { padding: 16px 20px; }
   .grid-cols-2 { gap: 12px; }
+}
+
+/* ── Modal ── */
+@layer components {
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 500;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(2px);
+  }
+  .modal-content {
+    background: oklch(0.100 0.007 45);
+    border: 0.5px solid oklch(0.28 0.008 45);
+    border-radius: 8px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+    min-width: 320px;
+    max-width: 480px;
+    max-height: 80vh;
+    overflow-y: auto;
+  }
+  .modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 14px;
+    border-bottom: 0.5px solid oklch(0.22 0.007 45);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: oklch(0.92 0.003 45);
+  }
+  .modal-body {
+    padding: 14px;
+    color: oklch(0.72 0.005 45);
+    font-size: 0.8125rem;
+    line-height: 1.5;
+  }
 }
 
 @media (max-width: 1023px) {
@@ -633,6 +751,378 @@
 @media (min-width: 1024px) {
   .app-shell {
     grid-template-columns: 240px 1fr;
+  }
+}
+
+/* ── Score Breakdown Tooltip ── */
+@layer components {
+  /* Wrapper cell that hosts the tooltip */
+  .score-cell {
+    position: relative;
+    cursor: default;
+  }
+  .score-cell .score-value {
+    display: inline-block;
+    border-bottom: 1px dashed oklch(0.38 0.006 45);
+    transition: border-color 150ms;
+  }
+  .score-cell:hover .score-value {
+    border-bottom-color: oklch(0.65 0.14 80);
+  }
+
+  /* The tooltip panel — hidden by default, shown on hover */
+  .score-tooltip {
+    display: none;
+    position: absolute;
+    z-index: 500;
+    top: 100%;
+    right: 0;
+    margin-top: 6px;
+    min-width: 360px;
+    max-width: 420px;
+    pointer-events: none;
+  }
+  .score-cell:hover .score-tooltip {
+    display: block;
+  }
+
+  /* Panel body */
+  .scorebreakdown-panel {
+    background: oklch(0.112 0.007 45);
+    border: 0.5px solid oklch(0.28 0.008 45);
+    border-radius: 8px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.3);
+    padding: 0;
+    font-size: 0.75rem;
+    line-height: 1.4;
+    color: oklch(0.82 0.004 45);
+    overflow: hidden;
+  }
+
+  .scorebreakdown-header {
+    display: flex;
+    align-items: center;
+    padding: 10px 12px 8px;
+    gap: 4px;
+  }
+
+  .scorebreakdown-total-label {
+    font-size: 0.6875rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: oklch(0.52 0.006 45);
+  }
+
+  .scorebreakdown-total-value {
+    font-family: var(--font-mono, 'JetBrains Mono', monospace);
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: oklch(0.92 0.003 45);
+    font-variant-numeric: tabular-nums;
+    margin: 0 4px;
+  }
+
+  .scorebreakdown-divider {
+    height: 0.5px;
+    background: oklch(0.22 0.007 45);
+    margin: 0;
+  }
+
+  .scorebreakdown-body {
+    padding: 8px 0;
+    max-height: 320px;
+    overflow-y: auto;
+  }
+
+  .scorebreakdown-row {
+    padding: 3px 12px;
+    transition: background-color 100ms;
+  }
+
+  .scorebreakdown-row:hover {
+    background: oklch(0.145 0.007 45);
+  }
+
+  .scorebreakdown-label {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.6875rem;
+    color: oklch(0.72 0.005 45);
+    margin-bottom: 1px;
+  }
+
+  .scorebreakdown-weight {
+    font-family: var(--font-mono, 'JetBrains Mono', monospace);
+    font-size: 0.625rem;
+    color: oklch(0.42 0.007 45);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .scorebreakdown-values {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-wrap: wrap;
+  }
+
+  .scorebreakdown-score {
+    font-family: var(--font-mono, 'JetBrains Mono', monospace);
+    font-size: 0.75rem;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .scorebreakdown-contrib-label {
+    font-size: 0.625rem;
+    color: oklch(0.38 0.006 45);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .scorebreakdown-contrib {
+    font-family: var(--font-mono, 'JetBrains Mono', monospace);
+    font-size: 0.75rem;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .scorebreakdown-contrib-minor {
+    font-family: var(--font-mono, 'JetBrains Mono', monospace);
+    font-size: 0.625rem;
+    color: oklch(0.52 0.006 45);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .scorebreakdown-bar-track {
+    width: 100%;
+    height: 2px;
+    background: oklch(0.18 0.007 45);
+    border-radius: 2px;
+    margin-top: 2px;
+    overflow: hidden;
+  }
+
+  .scorebreakdown-bar-fill {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 0.2s ease;
+  }
+
+  .scorebreakdown-explanation {
+    font-size: 0.625rem;
+    color: oklch(0.42 0.007 45);
+    margin-top: 1px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 100%;
+  }
+
+  /* Gates section */
+  .scorebreakdown-gates {
+    padding: 8px 12px 10px;
+  }
+
+  .scorebreakdown-gates-title {
+    font-size: 0.625rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: oklch(0.52 0.006 45);
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .scorebreakdown-gates-summary {
+    font-size: 0.625rem;
+    font-weight: 400;
+    color: oklch(0.38 0.006 45);
+    text-transform: none;
+    letter-spacing: normal;
+  }
+
+  .scorebreakdown-gates-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  .scorebreakdown-gate-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 0.625rem;
+    white-space: nowrap;
+  }
+
+  .scorebreakdown-gate-item.gate-passed {
+    background: oklch(0.52 0.06 155 / 0.10);
+    color: oklch(0.62 0.10 160);
+  }
+
+  .scorebreakdown-gate-item.gate-failed {
+    background: oklch(0.48 0.12 22 / 0.12);
+    color: oklch(0.58 0.12 25);
+  }
+
+  .scorebreakdown-gate-icon {
+    font-weight: 600;
+    font-size: 0.5625rem;
+  }
+
+  .scorebreakdown-gate-name {
+    font-weight: 500;
+  }
+
+  /* Failures section */
+  .scorebreakdown-failures {
+    padding: 8px 12px 10px;
+  }
+
+  .scorebreakdown-failures-title {
+    font-size: 0.625rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: oklch(0.52 0.006 45);
+    margin-bottom: 4px;
+  }
+
+  .scorebreakdown-failure-item {
+    font-size: 0.625rem;
+    color: oklch(0.58 0.12 25);
+    padding: 1px 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* P1-5: Scoring history sparkline */
+  .scorebreakdown-history {
+    padding: 8px 0 4px;
+  }
+
+  .scorebreakdown-history-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding: 4px 0;
+    border: none;
+    background: none;
+    cursor: pointer;
+    color: inherit;
+    font: inherit;
+  }
+
+  .scorebreakdown-history-toggle:hover {
+    opacity: 0.8;
+  }
+
+  .scorebreakdown-history-title {
+    font-size: 0.625rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: oklch(0.52 0.006 45);
+    display: flex;
+    align-items: center;
+  }
+
+  .scorebreakdown-history-chevron {
+    font-size: 0.625rem;
+    color: oklch(0.52 0.006 45);
+  }
+
+  .scorebreakdown-history-list {
+    margin-top: 8px;
+    padding-top: 6px;
+    border-top: 0.5px solid oklch(0.22 0.007 45);
+  }
+
+  .scorebreakdown-history-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 2px 0;
+    font-size: 0.625rem;
+  }
+
+  .scorebreakdown-history-time {
+    color: oklch(0.52 0.006 45);
+    font-family: monospace;
+  }
+
+  .scorebreakdown-history-score {
+    color: oklch(0.82 0.04 85);
+    font-family: monospace;
+  }
+
+  .scorebreakdown-sparkline-container {
+    margin-top: 4px;
+  }
+
+  .scorebreakdown-sparkline {
+    display: flex;
+    align-items: flex-end;
+    gap: 2px;
+    height: 48px;
+    padding: 2px 0 12px;
+    border-bottom: 0.5px solid oklch(0.22 0.007 45);
+  }
+
+  .scorebreakdown-sparkline-bar-wrapper {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    height: 100%;
+  }
+
+  .scorebreakdown-sparkline-bar {
+    width: 100%;
+    max-width: 16px;
+    min-height: 2px;
+    background: oklch(0.55 0.14 85 / 0.7);
+    border-radius: 1px 1px 0 0;
+    transition: background 0.15s;
+  }
+
+  .scorebreakdown-sparkline-bar-wrapper:hover .scorebreakdown-sparkline-bar {
+    background: oklch(0.62 0.14 85 / 0.9);
+  }
+
+  .scorebreakdown-sparkline-label {
+    font-size: 0.5rem;
+    color: oklch(0.52 0.006 45);
+    margin-top: 2px;
+    text-align: center;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    width: 100%;
+  }
+
+  .scorebreakdown-sparkline-inline {
+    display: flex;
+    align-items: flex-end;
+    gap: 1px;
+    height: 16px;
+    margin-top: 2px;
+    padding: 0 2px;
+  }
+
+  .scorebreakdown-sparkline-dot {
+    flex: 1;
+    background: oklch(0.55 0.14 85 / 0.6);
+    border-radius: 1px 1px 0 0;
+    min-height: 2px;
+    max-width: 12px;
   }
 }
 

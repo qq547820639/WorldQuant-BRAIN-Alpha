@@ -5,7 +5,7 @@ import pytest
 from brain_alpha_ops import web
 from brain_alpha_ops.web_application_context import WEB_CONTEXT_ALLOWED_NAMES
 from brain_alpha_ops.web_facade_bindings import build_web_facade_bindings
-from brain_alpha_ops.web_legacy_exports import LEGACY_EXPORT_SPECS
+from brain_alpha_ops.web import _LEGACY_EXPORT_SPECS as LEGACY_EXPORT_SPECS
 from brain_alpha_ops.web_service_namespace import build_web_service_namespace
 from scripts.check_web_facade_contract import check_web_facade_contract
 

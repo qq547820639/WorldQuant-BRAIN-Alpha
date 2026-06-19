@@ -38,7 +38,7 @@ class PipelineBacktestMixin:
             candidate = self._next_backtest_candidate(pool)
             if not candidate:
                 return
-            if self._block_observability_duplicate_before_official(candidate, phase="official_simulation"):
+            if self.services.official_validation._block_observability_duplicate_before_official(candidate, phase="official_simulation"):
                 state.pool_by_expression.pop(_expr_key(candidate), None)
                 state.blocked_expressions.add(_expr_key(candidate))
                 self._archive(state.archive_stats, state.archive_samples, [candidate])

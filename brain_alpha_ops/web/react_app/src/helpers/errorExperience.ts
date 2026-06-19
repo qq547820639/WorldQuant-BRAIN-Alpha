@@ -81,10 +81,82 @@ export function isSessionInvalidPayload(payload: unknown): boolean {
   return sessionInvalidValues(payload).some((value) => SESSION_INVALID_VALUES.has(value));
 }
 
+// P0-1: exact BRAIN error_code → Chinese translation map.
+// Matched case-insensitively; covers every error_code the backend may
+// emit directly (e.g. from web_errors._BRAIN_ERROR_TRANSLATIONS) plus
+// codes that arrive via BRAIN's own API responses.
+const _BRAIN_ERROR_CODE_MAP: Record<string, string> = {
+  "auth_invalid": "认证失败，用户名或密码不正确。",
+  "auth_bearer_invalid": "Bearer Token 无效，请重新连接。",
+  "auth_token_expired": "登录已过期，请重新输入凭据。",
+  "rate_limited": "BRAIN 平台限流，系统将自动重试，请稍候。",
+  "network_timeout": "连接 BRAIN 平台超时，请检查网络后重试。",
+  "brain_server_error": "BRAIN 平台服务异常，请稍后重试。",
+  "connection_refused": "无法连接到 BRAIN 平台，请确认网络正常。",
+  "concurrent_simulation_limit_exceeded": "BRAIN 回测并发槽位已满，系统将等待释放后自动重试。",
+  "validation_error": "请求参数不合规，请检查输入后重试。",
+  "connection_error": "连接 BRAIN 失败，请检查凭据和网络后重试。",
+  "auth_required": "需要重新登录，请刷新页面或重新输入凭据。",
+  "session_expired": "本地会话已失效，请重新连接后继续。",
+  "admin_auth_required": "远程 Web 访问需要管理员认证。",
+  // Fix 6: Additional common error codes for Chinese coverage
+  "internal_server_error": "服务器内部错误，请稍后重试或联系管理员。",
+  "bad_gateway": "上游 BRAIN 服务暂时不可用，请稍后重试。",
+  "service_unavailable": "服务暂时不可用，正在恢复中，请稍后重试。",
+  "request_timeout": "请求处理超时，BRAIN 平台仍在处理中，请稍后重试。",
+  "too_many_requests": "请求过于频繁，请等待片刻后再试。",
+  "invalid_credentials": "凭据无效，请检查用户名和密码后重新测试连接。",
+  "missing_credentials": "缺少连接凭据，请填写账户邮箱和密码或 API Token。",
+  "sync_failed": "云端同步失败，请检查网络后手动重试。",
+  "sync_timeout": "云端同步超时，建议缩小同步范围后重试。",
+  "cache_unavailable": "本地缓存不可用，请先完成首次同步或检查本地数据目录。",
+  "config_invalid": "配置无效，请检查生产参数后重新保存。",
+  "job_already_running": "已有验证任务在运行，请等待当前任务完成或手动停止后再启动。",
+  "job_start_failed": "验证任务启动失败，请检查配置和连接后重试。",
+  "sse_connection_failed": "实时进度连接失败，系统将自动重试。",
+  "sse_timeout": "实时进度连接超时，请检查网络后刷新页面。",
+  "backtest_failed": "回测请求失败，BRAIN 平台可能暂时繁忙，请稍后重试。",
+  "backtest_timeout": "回测请求超时，BRAIN 平台处理时间较长，系统将继续等待。",
+};
+
+// P1-4: backend next_action → frontend action label.
+// The backend web_state_contract._ERROR_DEFINITIONS defines a
+// ``next_action`` for each error kind.  This table maps those
+// snake_case action names to a human-readable Chinese button label.
+const _NEXT_ACTION_LABELS: Record<string, string> = {
+  "reconnect_session": "重新连接",
+  "refresh_cache": "刷新缓存",
+  "wait_and_retry": "重试",
+  "check_config": "检查配置",
+  "review_official_slots": "查看回测槽位",
+  "refresh_capabilities": "刷新能力集",
+  "fix_expression": "查看候选",
+  "refresh_status": "刷新状态",
+  "restart_flow": "重新启动",
+  "review_active_job": "查看任务",
+  "review_warnings": "查看警告",
+  "resume_or_restart": "恢复流程",
+  "inspect_error": "查看详情",
+  "retry_operation": "重试",
+  "monitor_or_cancel": "查看或停止",
+  "review_results": "查看结果",
+};
+
+/** Get a human-readable Chinese label for a next_action enum value. */
+export function nextActionLabel(nextAction: string | null | undefined): string | null {
+  if (!nextAction) return null;
+  return _NEXT_ACTION_LABELS[nextAction] ?? null;
+}
+
 export function knownApiErrorMessage(value: unknown): string | null {
   const text = String(value || "").trim();
   if (!text) return null;
   const normalized = text.toLowerCase();
+
+  // P0-1: exact error_code match (highest priority, before regex/pattern checks).
+  const codeTranslation = _BRAIN_ERROR_CODE_MAP[normalized];
+  if (codeTranslation) return codeTranslation;
+
   const httpMatch = text.match(/^HTTP[_\s-]?(\d{3})\b/i);
   if (httpMatch) {
     const status = httpMatch[1];

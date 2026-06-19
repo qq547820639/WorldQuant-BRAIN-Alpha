@@ -721,7 +721,7 @@ def _candidate_blocking_codes(row: dict[str, Any]) -> list[str]:
 
 
 def _is_submit_only_blocker(reason: str) -> bool:
-    from brain_alpha_ops.web_backtest_slots import is_submit_only_quality_reason
+    from brain_alpha_ops.web.misc.web_backtest_slots import is_submit_only_quality_reason
 
     return is_submit_only_quality_reason(reason, "")
 

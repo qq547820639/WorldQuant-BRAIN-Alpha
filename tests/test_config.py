@@ -6,7 +6,7 @@ import tempfile
 
 from brain_alpha_ops import config as config_mod
 from brain_alpha_ops import config_type_validation
-from brain_alpha_ops import web_config as web_config_mod
+from brain_alpha_ops.web.config import web_config as web_config_mod
 from brain_alpha_ops.brain_api.canonical import CANONICAL_API_PATHS, CANONICAL_SETTINGS
 import pytest
 import logging

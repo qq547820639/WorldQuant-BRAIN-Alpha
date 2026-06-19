@@ -1,13 +1,29 @@
 """Composition-based service accessor for AlphaResearchPipeline.
 
-This module provides PipelineServices, a lightweight proxy that delegates
-to the pipeline's existing factory methods. This is the recommended pattern
-for new code that needs to interact with pipeline services.
+This module provides PipelineServices, a lazy proxy that creates and
+caches service instances on first access. This is the recommended pattern
+for all code that needs to interact with pipeline services.
 
 Usage:
     services = pipeline.services
     candidates = services.candidate_pool.filter(pool, ...)
     services.backtest_submission.submit(candidates, ...)
+
+── Coverage status (A-04, updated 2026-06-19) ──
+
+  PipelineServices provides access to all 18 pipeline services through
+  two mechanism groups:
+
+  Group A — Mixin factory methods (pipeline_services.py):
+    candidate_pool, generation_phase, dataset_selection,
+    backtest_submission, backtest_polling, backtest_finalization,
+    batch_backtest, official_workflow, experience_feedback,
+    fusion_candidates, secondary_fusion
+
+  Group B — Direct instantiation:
+    strategy, submission_gate, context_sync,
+    official_validation, backtest_flow, runtime,
+    legacy_simulation
 """
 
 from __future__ import annotations
@@ -38,9 +54,16 @@ class PipelineServices:
             cache[name] = factory()
         return cache[name]
 
+    # ═══════════════════════════════════════════════════════════
+    # Group A: Mixin factory methods (pipeline_services.py)
+    # ═══════════════════════════════════════════════════════════
+
     @property
     def candidate_pool(self):
-        return self._get("candidate_pool", "_candidate_pool_service")
+        if "candidate_pool" not in self._cache:
+            from .candidate_pool_service_ import CandidatePoolService_
+            self._cache["candidate_pool"] = CandidatePoolService_(self._pipeline)
+        return self._cache["candidate_pool"]
 
     @property
     def generation_phase(self):
@@ -81,3 +104,61 @@ class PipelineServices:
     @property
     def secondary_fusion(self):
         return self._get("secondary_fusion", "_secondary_fusion_service")
+
+    # ═══════════════════════════════════════════════════════════
+    # Group B: Directly instantiated services (formerly delegate)
+    #
+    # Each property lazily imports and instantiates the
+    # corresponding service class, passing the pipeline reference.
+    # This replaces the thin delegate wrappers that were removed
+    # from AlphaResearchPipeline.
+    # ═══════════════════════════════════════════════════════════
+
+    @property
+    def strategy(self):
+        if "strategy" not in self._cache:
+            from .strategy_service import StrategyService
+            self._cache["strategy"] = StrategyService(self._pipeline)
+        return self._cache["strategy"]
+
+    @property
+    def submission_gate(self):
+        if "submission_gate" not in self._cache:
+            from .submission_gate_service import SubmissionGateService
+            self._cache["submission_gate"] = SubmissionGateService(self._pipeline)
+        return self._cache["submission_gate"]
+
+    @property
+    def context_sync(self):
+        if "context_sync" not in self._cache:
+            from .context_sync_service import ContextSyncService
+            self._cache["context_sync"] = ContextSyncService(self._pipeline)
+        return self._cache["context_sync"]
+
+    @property
+    def official_validation(self):
+        if "official_validation" not in self._cache:
+            from .official_validation_service import OfficialValidationService_
+            self._cache["official_validation"] = OfficialValidationService_(self._pipeline)
+        return self._cache["official_validation"]
+
+    @property
+    def backtest_flow(self):
+        if "backtest_flow" not in self._cache:
+            from .backtest_flow_service import BacktestFlowService
+            self._cache["backtest_flow"] = BacktestFlowService(self._pipeline)
+        return self._cache["backtest_flow"]
+
+    @property
+    def runtime(self):
+        if "runtime" not in self._cache:
+            from .runtime_service import RuntimeService
+            self._cache["runtime"] = RuntimeService(self._pipeline)
+        return self._cache["runtime"]
+
+    @property
+    def legacy_simulation(self):
+        if "legacy_simulation" not in self._cache:
+            from .legacy_simulation_service import LegacySimulationService
+            self._cache["legacy_simulation"] = LegacySimulationService(self._pipeline)
+        return self._cache["legacy_simulation"]

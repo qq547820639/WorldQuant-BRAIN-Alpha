@@ -7,6 +7,11 @@
  * Persistence: jobId is saved to sessionStorage so that page refresh or accidental
  * tab close can recover the running job when the page reopens (within the same
  * browser session).
+ *
+ * P0-2: When SSE stream exhausts or the polling watchdog fires, the hook now
+ * sets a "disconnected" state instead of immediately cancelling the BRAIN job.
+ * The user is shown a persistent toast with [继续等待] / [终止重试] buttons.
+ * If the user takes no action within 60s, auto-cancellation takes effect.
  */
 
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
@@ -16,6 +21,7 @@ import { useApi } from "@/hooks/useApi";
 import { buildRunPayload, classifyJobState, jobStatusMessage, resolveJobEventState, hasCredentials } from "@/helpers/runPayload";
 import type { BrainCredentials, JobStatus, SSEEvent, UnifiedProgress } from "@/types";
 import { reportIgnoredError } from "@/utils/reportIgnoredError";
+import { saveResumeState } from "@/utils/resumeState";
 
 export interface JobState {
   jobId: string | null;
@@ -27,8 +33,15 @@ export interface JobState {
   events: string[];
   recovering: boolean;
   reconnectAttempts: number;
+  /** P0-2: True when the stream/polling watchdog has detected a disconnect and
+   *  is waiting for user confirmation before cancelling the BRAIN job. */
+  disconnected: boolean;
   startJob: (resume?: boolean) => Promise<void>;
   stopJob: () => Promise<void>;
+  /** P0-2: Reset the watchdog counter and resume waiting for reconnection. */
+  resumeWatchdog: () => void;
+  /** P0-2: Immediately cancel the ambiguous BRAIN job (user confirmed). */
+  forceCancelDisconnected: () => void;
 }
 
 const WATCHDOG_POLL_INTERVAL = 2000;
@@ -39,7 +52,27 @@ const SESSION_KEY_JOB_ID = "brain_alpha_active_job_id";
 const TRANSIENT_STATUS_REFRESH_PREFIX = "状态刷新失败:";
 // P2-21 fix: recovery timeout so a stalled status call during session
 // recovery does not leave the user stuck forever.
-const RECOVERY_TIMEOUT_MS = 15000;
+const RECOVERY_TIMEOUT_MS = 8000;
+// P0-2: auto-cancel after 60s of no user response in disconnected state
+const DISCONNECTED_AUTO_CANCEL_MS = 60000;
+
+// P1-2: helper to send browser notification when page is hidden
+function sendCompletionNotification(title: string, body: string): void {
+  try {
+    if (document.hidden && Notification.permission === "granted") {
+      new Notification(title, { body });
+    }
+  } catch { console.warn("useJobState: Notification API not available"); }
+}
+
+// P1-2: request notification permission (call on user gesture like startJob)
+function requestNotificationPermission(): void {
+  try {
+    if (Notification.permission === "default") {
+      Notification.requestPermission();
+    }
+  } catch { console.warn("useJobState: Notification API not available"); }
+}
 
 function saveJobId(id: string): void {
   try {
@@ -67,7 +100,11 @@ function clearSavedJobId(): void {
 }
 
 export function useJobState(
-  notify: (type: "success" | "error" | "warning" | "info", msg: string) => void,
+  notify: (
+    type: "success" | "error" | "warning" | "info",
+    msg: string,
+    action?: { label: string; onClick: () => void },
+  ) => void,
   credentials?: BrainCredentials,
 ): JobState {
   const [jobId, setJobId] = useState<string | null>(null);
@@ -78,8 +115,20 @@ export function useJobState(
   const [pollFailures, setPollFailures] = useState(0);
   const [recovering, setRecovering] = useState(false);
   const [recoveryAttempted, setRecoveryAttempted] = useState(false);
+  // P0-2: disconnected state — true when waiting for user confirmation
+  const [disconnected, setDisconnected] = useState(false);
   const autoCancelRequests = useRef<Set<string>>(new Set());
+  const disconnectedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const disconnectedNotifyRef = useRef(false);
+  // P3-2: ref to track current jobId so the retry timer closure always sees
+  // the latest value.
+  const jobIdRef = useRef<string | null>(null);
   const api = useApi();
+
+  // P3-2: keep jobIdRef in sync with current jobId for the retry timer closure.
+  useEffect(() => {
+    jobIdRef.current = jobId;
+  }, [jobId]);
 
   const clearTransientProgressError = useCallback(() => {
     setProgressError((current) => (
@@ -112,9 +161,10 @@ export function useJobState(
     }
 
     setRecovering(true);
-    setEvents((prev) => [...prev, "正在恢复上次的任务状态…"]);
+    setEvents((prev) => [...prev, "正在检查任务状态…"]);
 
     void (async () => {
+      // Step 1: Check job status from backend
       const result = await api.call<JobStatus>(
         `/api/production-validation/status?job_id=${encodeURIComponent(savedId)}`,
       );
@@ -127,6 +177,7 @@ export function useJobState(
         clearSavedJobId();
         window.clearTimeout(recoveryTimer);
         setRecovering(false);
+        setEvents((prev) => [...prev, "任务状态已失效，已清除挂起的任务会话。"]);
         return;
       }
       const resultState = classifyJobState(result);
@@ -143,16 +194,21 @@ export function useJobState(
         }
         window.clearTimeout(recoveryTimer);
         setRecovering(false);
+        setEvents((prev) => [...prev, resultState.failed ? "恢复检查完成：上次任务已失败。" : "恢复检查完成：上次任务已结束。"]);
         return;
       }
-      // Still running — reconnect
+      // Step 2: Still running — reconnect SSE
+      setEvents((prev) => [...prev, "正在重新连接 SSE 进度流…"]);
       window.clearTimeout(recoveryTimer);
       setJobId(savedId);
       setRunning(true);
       setStatus(result);
       setPollFailures(0);
       window.clearTimeout(recoveryTimer);
+      setEvents((prev) => [...prev, "正在恢复任务上下文…"]);
+      saveResumeState({ lastPipelineJob: savedId, lastPhase: "evaluate", lastConnectionOk: true });
       notify("info", "已恢复正在运行的任务。");
+      setEvents((prev) => [...prev, "任务会话已恢复，正在监听进度。"]);
       setRecovering(false);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -167,6 +223,8 @@ export function useJobState(
       progress: { ...(prev.progress || {}), phase, status_message: message, percent_complete: 100 },
     } : prev);
     setEvents((prev) => [...prev.slice(-50), message]);
+    // P0-4: save error state so user can resume on next visit
+    saveResumeState({ lastError: message, lastConnectionOk: false, lastPipelineJob: null });
   }, []);
 
   const cancelAmbiguousJob = useCallback(async (reason: CancelReason, message: string, targetJobId?: string | null) => {
@@ -192,6 +250,12 @@ export function useJobState(
       const eventFailed = eventOutcome.kind === "failed";
       const eventInterrupted = eventOutcome.kind === "interrupted";
       const nextStatus: JobStatus["status"] = eventOutcome.nextStatus;
+      // P0-4: save resume state on terminal events
+      if (eventFailed || eventInterrupted) {
+        saveResumeState({ lastError: eventOutcome.message, lastConnectionOk: false });
+      } else {
+        saveResumeState({ lastError: null, lastConnectionOk: true });
+      }
       if (eventFailed || eventInterrupted) {
         const message = eventOutcome.message;
         setProgressError(message);
@@ -201,6 +265,8 @@ export function useJobState(
         setProgressError(null);
         notify(eventOutcome.notifyType, eventOutcome.message);
         setEvents((prev) => [...prev, eventOutcome.message]);
+        // P1-2: send browser notification if page hidden
+        sendCompletionNotification("BRAIN Alpha Ops", "管线运行完成！");
       }
       setStatus((prev) => prev ? {
         ...prev,
@@ -223,6 +289,17 @@ export function useJobState(
     } else if (event.type === "progress") {
       setPollFailures(0);
       clearTransientProgressError();
+      // P0-4: update resume state with cycle progress if available
+      const progressData = event.progress || (event.data as Record<string, unknown>);
+      const currentCycle = typeof progressData?.current === "number" ? progressData.current : undefined;
+      const totalCycles = typeof progressData?.total === "number" ? progressData.total : undefined;
+      if (currentCycle != null && currentCycle > 0) {
+        saveResumeState({
+          totalCyclesCompleted: currentCycle,
+          lastPhase: "evaluate",
+          lastConnectionOk: true,
+        });
+      }
       setStatus((prev) => ({
         ...(prev || { job_id: event.job_id || event.task_id || "", status: "running" }),
         job_id: event.job_id || event.task_id || prev?.job_id || "",
@@ -240,17 +317,127 @@ export function useJobState(
   }, [clearTransientProgressError, notify]);
 
   const sseUrl = jobId ? `/sse?job_id=${encodeURIComponent(jobId)}` : null;
+
+  // P0-2 helper: enter the "disconnected" state with user-prompted cancellation
+  const enterDisconnectedState = useCallback((trigger: "sse_exhausted" | "polling_watchdog") => {
+    if (disconnected) return; // already in disconnected state
+    setDisconnected(true);
+    disconnectedNotifyRef.current = true;
+
+    const message = trigger === "sse_exhausted"
+      ? "检测到 SSE 连接中断（已与服务器失去联系超过 40 秒）。BRAIN 平台上的任务可能仍在运行。要终止并重试，还是继续等待自动重连？"
+      : "状态连续刷新失败（已与服务器失去联系超过 24 秒）。BRAIN 平台上的任务可能仍在运行。要终止并重试，还是继续等待自动重连？";
+
+    const cancelFn = () => {
+      clearDisconnectedTimer();
+      setDisconnected(false);
+      disconnectedNotifyRef.current = false;
+      const failureMsg = trigger === "sse_exhausted"
+        ? "页面暂时收不到最新进度，用户确认终止。"
+        : "状态连续刷新失败，用户确认终止。";
+      failMonitor(failureMsg);
+      void cancelAmbiguousJob(
+        trigger === "sse_exhausted" ? "sse_exhausted" : "status_failed",
+        failureMsg,
+      );
+      notify("error", "BRAIN 平台任务已被终止。");
+    };
+
+    const resumeFn = () => {
+      clearDisconnectedTimer();
+      setDisconnected(false);
+      disconnectedNotifyRef.current = false;
+      // Reset watchdog counter so it starts fresh
+      setPollFailures(0);
+      setProgressError(null);
+      setRunning(true);
+      notify("info", "已恢复等待。系统将继续尝试重连…");
+    };
+
+    notify("warning", message, { label: "终止重试", onClick: cancelFn });
+    // P0-2: also show the "continue waiting" button as a second toast
+    notify("info", "点击「继续等待」重置倒计时，系统将继续尝试重连。", { label: "继续等待", onClick: resumeFn });
+
+    // Start the 60s auto-cancel timer
+    disconnectedTimerRef.current = setTimeout(async () => {
+      if (!disconnectedNotifyRef.current) return;
+      // P3-2: before auto-cancelling, check if the job is still running on
+      // the backend.  If it is, just reconnect SSE instead of cancelling.
+      const jid = jobIdRef.current || status?.job_id;
+      if (jid) {
+        try {
+          const statusResult = await api.call<{ status?: string; ok?: boolean }>(
+            `/api/status?job_id=${encodeURIComponent(jid)}`,
+          );
+          if (statusResult?.ok && statusResult?.status === "running") {
+            // Job is still alive — reconnect SSE without restarting.
+            setJobId(jid);
+            setRunning(true);
+            setPollFailures(0);
+            setDisconnected(false);
+            disconnectedNotifyRef.current = false;
+            setProgressError(null);
+            notify("info", "任务仍在运行，已重新连接 SSE 进度流。");
+            return;
+          }
+        } catch { console.warn("useJobState: status check failed, falling through"); }
+      }
+      const autoMsg = trigger === "sse_exhausted"
+        ? "连接中断超过 60 秒未响应，自动终止 BRAIN 平台任务。"
+        : "状态刷新失败超过 60 秒未响应，自动终止 BRAIN 平台任务。";
+      failMonitor(autoMsg);
+      void cancelAmbiguousJob(
+        trigger === "sse_exhausted" ? "sse_exhausted" : "status_failed",
+        autoMsg,
+      );
+      setDisconnected(false);
+      disconnectedNotifyRef.current = false;
+      notify("error", autoMsg);
+    }, DISCONNECTED_AUTO_CANCEL_MS);
+  }, [cancelAmbiguousJob, disconnected, failMonitor, notify, api, status?.job_id]);
+
+  const clearDisconnectedTimer = useCallback(() => {
+    if (disconnectedTimerRef.current) {
+      clearTimeout(disconnectedTimerRef.current);
+      disconnectedTimerRef.current = null;
+    }
+  }, []);
+
+  // P0-2: resumeWatchdog — user chose to continue waiting
+  const resumeWatchdog = useCallback(() => {
+    if (!disconnected) return;
+    clearDisconnectedTimer();
+    setDisconnected(false);
+    disconnectedNotifyRef.current = false;
+    setPollFailures(0);
+    setProgressError(null);
+    setRunning(true);
+    notify("info", "已恢复等待。系统将继续尝试重连…");
+  }, [disconnected, clearDisconnectedTimer, notify]);
+
+  // P0-2: forceCancelDisconnected — user chose to terminate
+  const forceCancelDisconnected = useCallback(() => {
+    if (!disconnected) return;
+    clearDisconnectedTimer();
+    const failureMsg = "用户确认终止连接中断的任务。";
+    failMonitor(failureMsg);
+    void cancelAmbiguousJob("sse_exhausted", failureMsg);
+    setDisconnected(false);
+    disconnectedNotifyRef.current = false;
+    notify("error", "BRAIN 平台任务已被终止。");
+  }, [disconnected, clearDisconnectedTimer, cancelAmbiguousJob, failMonitor, notify]);
+
   const handleStreamExhausted = useCallback(() => {
-    clearSavedJobId();
-    const message = "页面暂时收不到最新进度，本次验证状态不明确，正在请求自动中断。";
-    notify("warning", message);
-    failMonitor(message);
-    void cancelAmbiguousJob("sse_exhausted", message);
-  }, [cancelAmbiguousJob, failMonitor, notify]);
+    // P0-2: enter disconnected state instead of immediately cancelling
+    enterDisconnectedState("sse_exhausted");
+  }, [enterDisconnectedState]);
 
   const { connected, reconnectAttempts } = useSSE(sseUrl, { onEvent: handleSSEEvent, onExhausted: handleStreamExhausted });
 
   const startJob = useCallback(async (resume = false) => {
+    // P1-2: request notification permission on user gesture
+    requestNotificationPermission();
+
     // P2-23 fix: validate credentials before sending the request so the
     // user gets a clear, actionable error instead of a generic message.
     if (!hasCredentials(credentials)) {
@@ -262,6 +449,10 @@ export function useJobState(
       return;
     }
     autoCancelRequests.current.clear(); setPollFailures(0); setProgressError(null);
+    // P0-2: clear any disconnected state when starting a new job
+    clearDisconnectedTimer();
+    setDisconnected(false);
+    disconnectedNotifyRef.current = false;
     setStatus({
       job_id: "", task_id: "", status: "running", phase: "queued",
       progress: { phase: "queued", status_message: "正在启动非提交流水线验证。", percent_complete: 0 },
@@ -275,6 +466,7 @@ export function useJobState(
       setJobId(jid); saveJobId(jid); setRunning(true); setPollFailures(0); setProgressError(null);
       setStatus({ job_id: jid, task_id: jid, status: "running", phase: "queued",
         progress: { phase: "queued", status_message: "非提交流水线已排队。", percent_complete: 0 } });
+      saveResumeState({ lastPhase: "evaluate", lastPipelineJob: jid, lastError: null, lastConnectionOk: true });
       notify("info", `${resume ? "非提交续跑" : "非提交验证"}已启动`);
     } else {
       clearSavedJobId();
@@ -324,17 +516,14 @@ export function useJobState(
     setPollFailures((previous) => {
       const next = previous + 1;
       if (next >= WATCHDOG_MAX_FAILURES) {
-        clearSavedJobId();
-        const failure = `状态连续刷新失败，本次验证状态不明确，正在请求自动中断: ${message}`;
-        failMonitor(failure);
-        void cancelAmbiguousJob("status_failed", failure);
-        notify("error", failure);
+        // P0-2: enter disconnected state instead of immediately cancelling
+        enterDisconnectedState("polling_watchdog");
       } else {
         setProgressError(`状态刷新失败: ${message}`);
       }
       return next;
     });
-  }, [cancelAmbiguousJob, failMonitor, notify]);
+  }, [enterDisconnectedState]);
 
   // Polling watchdog: check job status while running
   useEffect(() => {
@@ -349,9 +538,20 @@ export function useJobState(
           const msg = jobStatusMessage(result, resultState.interrupted ? "验证流程已停止，结果未确认完成。" : "验证流程失败。");
           setProgressError(msg);
           if (result.phase === "watchdog_failed" || result.progress?.phase === "watchdog_failed") void cancelAmbiguousJob("watchdog_failed", msg, result.job_id || jobId);
+          // P0-4: save error state on failure
+          saveResumeState({ lastError: msg, lastConnectionOk: false, lastPipelineJob: null });
           notify(resultState.interrupted ? "warning" : "error", msg);
         } else {
           setProgressError(null);
+          // P0-4: save success state — clear error, bump cycle count
+          saveResumeState({
+            lastError: null,
+            lastConnectionOk: true,
+            lastPipelineJob: null,
+            totalCyclesCompleted: (result.cycle ?? 0) > 0 ? result.cycle : undefined,
+          });
+          // P1-2: send browser notification if page hidden
+          sendCompletionNotification("BRAIN Alpha Ops", "管线运行完成！");
         }
         setJobId(null);
       } else if (result?.ok) {
@@ -366,9 +566,21 @@ export function useJobState(
     return () => clearInterval(interval);
   }, [running, jobId, api, cancelAmbiguousJob, clearTransientProgressError, failMonitor, notify, recordStatusRefreshFailure]);
 
+  // P0-2: Cleanup disconnected timer on unmount
+  useEffect(() => {
+    return () => {
+      if (disconnectedTimerRef.current) {
+        clearTimeout(disconnectedTimerRef.current);
+      }
+    };
+  }, []);
+
   return {
     jobId, running, status, progress, error: progressError, connected, events,
     recovering, reconnectAttempts,
+    disconnected,
     startJob, stopJob,
+    resumeWatchdog,
+    forceCancelDisconnected,
   };
 }

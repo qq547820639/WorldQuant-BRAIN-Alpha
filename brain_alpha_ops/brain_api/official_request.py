@@ -32,20 +32,10 @@ def _http_error_code(status: int, parsed: dict | None, auth_mode: str) -> str:
 
 from .official_helpers import (
     build_official_url,
-)
-from .official_helpers import (
     parse_response as _parse,
-)
-from .official_helpers import (
     retry_after as _retry_after,
-)
-from .official_helpers import (
     retry_delay as _retry_delay,
-)
-from .official_helpers import (
     retryable_status as _retryable_status,
-)
-from .official_helpers import (
     scrub as _scrub,
 )
 
@@ -99,7 +89,16 @@ class OfficialRequestMixin:
             try:
                 with self._open(req, timeout=self.config.timeout_seconds) as resp:
                     raw = resp.read().decode("utf-8")
-                    return _parse(raw), dict(resp.headers.items())
+                    parsed = _parse(raw)
+                    resp_headers = dict(resp.headers.items())
+                    # C30 P0: Restore bearer token after successful cookie-auth fallback.
+                    # When a 401 on bearer mode triggers a cookie-auth retry and succeeds,
+                    # self.token was cleared (line 122) and never restored. Restoring it
+                    # here ensures subsequent requests can fall back to bearer if the
+                    # session cookie expires.
+                    if token_before_auth_fallback is not None and not self.token and auth_mode != "bearer":
+                        self.token = token_before_auth_fallback
+                    return parsed, resp_headers
             except urllib.error.HTTPError as exc:
                 raw = exc.read().decode("utf-8", errors="replace")
                 try:

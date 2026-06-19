@@ -156,14 +156,14 @@ class RuntimeService:
             return StrategyPluginRegistry()
         registry = StrategyPluginRegistry.from_specs(list(p.config.budget.strategy_plugin_specs or []))
         if registry.plugins:
-            p._event(
+            self._event(
                 "strategy_plugins_loaded",
                 f"Loaded strategy plugins: {', '.join(registry.names())}",
                 data={"strategy_plugins": registry.summary()},
                 level="INFO",
             )
         if registry.load_errors:
-            p._event(
+            self._event(
                 "strategy_plugins_load_error",
                 f"Strategy plugin load errors: {len(registry.load_errors)}",
                 data={"strategy_plugins": registry.summary()},
@@ -187,7 +187,7 @@ class RuntimeService:
         payload = {
             "cycle": int(cycle or 0),
             "reason": str(reason or ""),
-            "active_profile": p._current_strategy_profile(),
+            "active_profile": p.services.strategy._current_strategy_profile(),
             "active_profile_index": p.strategy_profile_index,
             "strategy_switch_count": p.strategy_switch_count,
             "official_results_since_strategy_switch": p.official_results_since_strategy_switch,
@@ -199,7 +199,7 @@ class RuntimeService:
         rows = p.strategy_plugins.notify(action, profile=dict(profile or {}), context=payload)
         for row in rows:
             if row.get("status") == "error":
-                p._event(
+                self._event(
                     "strategy_plugin_error",
                     f"{row.get('plugin')} {action} failed: {row.get('error')}",
                     data={"strategy_plugin": row},
@@ -216,7 +216,7 @@ class RuntimeService:
             recovered = p.backtest_slot_manager.recover_from_records(rows, max_slots=p._visible_backtest_slot_limit())
         except Exception as exc:
             message = redact_error_message(exc, max_length=160)
-            p._event("backtest_recovery_failed", message, level="WARN")
+            self._event("backtest_recovery_failed", message, level="WARN")
             return
         p.recovered_backtest_slot_count = p.backtest_slot_manager.recovered_slot_count
         if p.recovered_backtest_slot_count:
@@ -230,7 +230,7 @@ class RuntimeService:
                 }
                 for slot, candidate in sorted(recovered)
             ]
-            p._event(
+            self._event(
                 "backtest_slots_recovered",
                 f"Recovered {p.recovered_backtest_slot_count} persisted backtest slot(s) for polling.",
                 data={"backtests": recovered_rows},
@@ -241,7 +241,7 @@ class RuntimeService:
 
     def _defer_official_cycle(self, cycle: int, pool: list[Candidate], accepted_candidates: list[Candidate], archive_stats: dict[str, int]) -> bool:
         p = self._pipeline
-        p._progress(
+        self._progress(
             "official_deferred", 0, 1,
             f"官方调用已暂停：{p.official_halt_reason}",
             data=p._runtime_data(cycle, pool, accepted_candidates, archive_stats, {
@@ -250,7 +250,7 @@ class RuntimeService:
             }),
         )
         remaining = self._official_retry_remaining_seconds()
-        pause = min(max(0.1, float(p.config.budget.cycle_pause_seconds or 0.1)), p._poll_interval_seconds())
+        pause = min(max(0.1, float(p.config.budget.cycle_pause_seconds or 0.1)), p.services.backtest_flow._poll_interval_seconds())
         if remaining:
             pause = min(pause, max(0.1, remaining))
         if not self._sleep_with_stop(pause):
@@ -262,7 +262,7 @@ class RuntimeService:
         p = self._pipeline
         result = refresh_observability_throttle(
             storage_dir=p.config.storage_dir, cycle=cycle, generator=p.generator,
-            event=p._event, guard_snapshot=p._observability_official_call_guard_snapshot,
+            event=self._event, guard_snapshot=p.services.official_validation._observability_official_call_guard_snapshot,
             observability_builder=build_research_observability_snapshot,
         )
         p.observability_generation_guidance = result.generation_guidance
@@ -271,12 +271,12 @@ class RuntimeService:
         if blocking_flags:
             reason = "observability blocking flags: " + ", ".join(blocking_flags[:5])
             self._halt_official_calls(reason, p.config.budget.official_retry_pause_seconds)
-            p._event("official_calls_halted_by_observability", reason, data={"cycle": cycle, "observability": dict(p.observability_throttle)}, level="WARN")
+            self._event("official_calls_halted_by_observability", reason, data={"cycle": cycle, "observability": dict(p.observability_throttle)}, level="WARN")
         return p.observability_throttle
 
     def _apply_observability_generation_guidance(self, snapshot: dict, context: dict, cycle: int) -> None:
         p = self._pipeline
-        p.observability_generation_guidance = apply_observability_generation_guidance(snapshot=snapshot, context=context, cycle=cycle, generator=p.generator, event=p._event)
+        p.observability_generation_guidance = apply_observability_generation_guidance(snapshot=snapshot, context=context, cycle=cycle, generator=p.generator, event=self._event)
 
     def _halt_official_calls(self, reason: str, retry_seconds: float | None = None):
         p = self._pipeline

@@ -81,7 +81,7 @@ class SubmissionGateService:
         safety = self._assess_auto_submission(candidate, submitted_this_run)
         candidate.submission["safety"] = safety
         if not safety["allowed"]:
-            p._event("auto_submit_skipped", "; ".join(safety["failed_reasons"]), candidate.alpha_id)
+            p.services.runtime._event("auto_submit_skipped", "; ".join(safety["failed_reasons"]), candidate.alpha_id)
             return 0
         cross_review = self._pre_submit_cross_review(candidate)
         candidate.submission["cross_review"] = cross_review
@@ -91,7 +91,7 @@ class SubmissionGateService:
                 failed_reasons = ["cross_review_rejected"]
             candidate.gate = _blocked_gate("CROSS_REVIEW_BLOCKED", failed_reasons)
             candidate.lifecycle_status = "auto_submit_cross_review_blocked"
-            p._event("auto_submit_cross_review_blocked", "; ".join(failed_reasons), candidate.alpha_id, level="WARN")
+            p.services.runtime._event("auto_submit_cross_review_blocked", "; ".join(failed_reasons), candidate.alpha_id, level="WARN")
             return 0
         readiness_gate = live_submit_readiness_hard_gate(
             candidate.to_dict(),
@@ -105,7 +105,7 @@ class SubmissionGateService:
             ]
             candidate.gate = _blocked_gate("LIVE_SUBMIT_READINESS_BLOCKED", failed_reasons)
             candidate.lifecycle_status = "auto_submit_readiness_blocked"
-            p._event("auto_submit_readiness_blocked", "; ".join(failed_reasons), candidate.alpha_id, level="WARN")
+            p.services.runtime._event("auto_submit_readiness_blocked", "; ".join(failed_reasons), candidate.alpha_id, level="WARN")
             return 0
         submission = p.api.submit_alpha(
             candidate.official_alpha_id,
@@ -115,8 +115,8 @@ class SubmissionGateService:
         candidate.submission["result"] = submission
         candidate.lifecycle_status = "submitted"
         p.ledger.record(candidate, submission, mode="auto")
-        p._record_lifecycle(candidate, "submitted", "auto")
-        p._event("alpha_submitted", f"Submitted {candidate.alpha_id}.", candidate.alpha_id)
+        p.services.runtime._record_lifecycle(candidate, "submitted", "auto")
+        p.services.runtime._event("alpha_submitted", f"Submitted {candidate.alpha_id}.", candidate.alpha_id)
         return 1
 
     def _pre_submit_cross_review(self, candidate: Candidate) -> dict:
@@ -144,7 +144,7 @@ class SubmissionGateService:
             }
         except Exception as exc:
             message = redact_error_message(exc, max_length=180)
-            p._event("auto_submit_cross_review_failed", message, candidate.alpha_id, level="WARN")
+            p.services.runtime._event("auto_submit_cross_review_failed", message, candidate.alpha_id, level="WARN")
             return {
                 "allowed": False,
                 "decision": {},
@@ -168,7 +168,7 @@ class SubmissionGateService:
                 "auto_submit": bool(getattr(p.config, "auto_submit", False)),
                 "require_cloud_sync": bool(p.config.budget.require_cloud_sync),
             },
-            "strategy_profile": p._current_strategy_profile(),
+            "strategy_profile": p.services.strategy._current_strategy_profile(),
             "convergence": p.convergence.summary() if hasattr(p, "convergence") else {},
         }
         return {
@@ -246,7 +246,7 @@ class SubmissionGateService:
             "cloud alpha cache is stale" if p.cloud_sync.get("stale") else "cloud alpha sync is fresh",
         )
 
-        cloud_alpha_status = p._cloud_status_for_candidate(candidate)
+        cloud_alpha_status = p.services.candidate_pool._cloud_status_for_candidate(candidate)
         already_submitted = str(cloud_alpha_status.get("status", "")).upper() in SUBMITTED_CLOUD_STATUSES
         add(
             "cloud_status_not_already_submitted",
@@ -254,7 +254,7 @@ class SubmissionGateService:
             cloud_alpha_status.get("status") or "not found",
         )
 
-        cloud_risk = p._cloud_correlation_risk(candidate)
+        cloud_risk = p.services.candidate_pool._cloud_correlation_risk(candidate)
         add(
             "cloud_self_correlation",
             cloud_risk.get("level") != "high",

@@ -15,7 +15,8 @@ import type {
   PhaseId,
 } from "@/types";
 import { useApi } from "@/hooks/useApi";
-import { apiErrorMessage, safeDisplayErrorMessage } from "@/helpers/errorExperience";
+import type { ApiMeta } from "@/hooks/useApi";
+import { apiErrorMessage, nextActionLabel, safeDisplayErrorMessage } from "@/helpers/errorExperience";
 import { useToast } from "@/hooks/useToast";
 import { useJobState } from "@/hooks/useJobState";
 import { usePhaseState, type PhaseApiStatus } from "@/hooks/usePhaseState";
@@ -26,8 +27,10 @@ import CredentialQuickStart from "./components/CredentialQuickStart";  // S-01: 
 import JobMonitor from "@/components/JobMonitor";
 import CandidateTable from "@/components/CandidateTable";
 import ErrorBoundary from "@/components/ErrorBoundary";
+import { FlowGuide } from "./components/FlowGuide";
 import PhaseShell from "@/components/PhaseShell";
 import MobileTabBar from "@/components/MobileTabBar";
+import { useKeyboardShortcuts, KeyboardShortcutsHelp } from "@/hooks/useKeyboardShortcuts";
 import { reportIgnoredError } from "@/utils/reportIgnoredError";
 import { backtestActiveCount, backtestSlotLimit } from "@/utils/backtestSlots";
 
@@ -142,11 +145,18 @@ function LocalCacheSessionCard({
 export default function App() {
   const [activeView, setActiveView] = useState<CardViewId>("dashboard");
   const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null);
-  // B-09 (R3): password held in React state / JS heap — visible to DevTools
-  // TODO: use crypto.subtle.digest() client-side hash or clear after submit
+  // B-09 (R3 — FIXED): password cleared from JS heap immediately after successful auth
   const [credentials, setCredentials] = useState<BrainCredentials>({ username: "", password: "", token: "" });
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [expandedPhases, setExpandedPhases] = useState<Set<string>>(new Set(["connect"]));
+  const [shortcutsHelpOpen, setShortcutsHelpOpen] = useState(false);
+  const [theme, setTheme] = useState<"dark" | "light">(() => {
+    try {
+      return (localStorage.getItem("brain_alpha_theme") as "dark" | "light") || "dark";
+    } catch {
+      return "dark";
+    }
+  });
   const { toasts, addToast, dismissToast } = useToast();
 
   const notify = useCallback(
@@ -174,12 +184,51 @@ export default function App() {
   }, [candidatesApi.call, slotsApi.call, cloudApi.call, configApi.call]);
 
   useEffect(() => {
-    // Independently notify about each API error so the user knows which feature is affected
-    if (candidatesApi.error) notify("warning", `候选数据加载失败: ${safeDisplayErrorMessage(candidatesApi.error)}`);
-    if (slotsApi.error) notify("warning", `回测槽位加载失败: ${safeDisplayErrorMessage(slotsApi.error)}`);
-    if (cloudApi.error) notify("warning", `云端快照加载失败: ${safeDisplayErrorMessage(cloudApi.error)}`);
-    if (configApi.error) notify("warning", `配置状态加载失败: ${safeDisplayErrorMessage(configApi.error)}`);
-  }, [candidatesApi.error, slotsApi.error, cloudApi.error, configApi.error, notify]);
+    // P1-4: build toast action buttons from the backend's next_action hint.
+    const buildAction = (meta: ApiMeta | null, retryFn: () => void) => {
+      const nextAction = meta?.user_error?.next_action || meta?.next_action;
+      const label = meta?.user_error?.action_label || nextActionLabel(nextAction);
+      if (!nextAction || !label) return undefined;
+      switch (nextAction) {
+        case "reconnect_session":
+          return { label, onClick: () => handleOfficialReconnectRequested() };
+        case "refresh_cache":
+          return { label, onClick: () => { void cloudApi.call("/api/snapshot/cloud"); void phaseApi.call("/api/phase_state"); } };
+        case "wait_and_retry":
+          return { label, onClick: () => { notify("info", "5 秒后将自动重试…"); setTimeout(() => retryFn(), 5000); } };
+        case "check_config":
+          return { label, onClick: () => setActiveView("config") };
+        default:
+          return { label, onClick: () => retryFn() };
+      }
+    };
+
+    if (candidatesApi.error) notify("warning", `候选数据加载失败: ${safeDisplayErrorMessage(candidatesApi.error)}`, buildAction(candidatesApi.lastErrorMeta, () => { void candidatesApi.call("/api/candidates?summary=true"); }));
+    if (slotsApi.error) notify("warning", `回测槽位加载失败: ${safeDisplayErrorMessage(slotsApi.error)}`, buildAction(slotsApi.lastErrorMeta, () => { void slotsApi.call("/api/backtest_slots"); }));
+    if (cloudApi.error) notify("warning", `云端快照加载失败: ${safeDisplayErrorMessage(cloudApi.error)}`, buildAction(cloudApi.lastErrorMeta, () => { void cloudApi.call("/api/snapshot/cloud"); }));
+    if (configApi.error) notify("warning", `配置状态加载失败: ${safeDisplayErrorMessage(configApi.error)}`, buildAction(configApi.lastErrorMeta, () => { void configApi.call("/api/config"); }));
+  }, [candidatesApi.error, slotsApi.error, cloudApi.error, configApi.error, notify, candidatesApi.lastErrorMeta, slotsApi.lastErrorMeta, cloudApi.lastErrorMeta, configApi.lastErrorMeta]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps — call/cloudApi/phaseApi/handleOfficialReconnectRequested are stable refs
+
+  // Theme: sync document.documentElement class and localStorage
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", theme === "dark");
+    try { localStorage.setItem("brain_alpha_theme", theme); } catch { console.warn("App: scheduled refresh skipped — backend unavailable"); }
+  }, [theme]);
+
+  const toggleTheme = useCallback(() => {
+    setTheme((prev) => (prev === "dark" ? "light" : "dark"));
+  }, []);
+
+  // Keyboard shortcuts
+  useKeyboardShortcuts({
+    onNavigateDashboard: () => setActiveView("dashboard"),
+    onNavigateCandidates: () => setActiveView("candidates"),
+    onNavigateConfig: () => setActiveView("config"),
+    onToggleSidebar: () => setSidebarOpen((v) => !v),
+    onRefresh: () => { void phaseApi.call("/api/phase_state"); },
+    onEscape: () => setSidebarOpen(false),
+  });
 
   const [connectionOverride, setConnectionOverride] = useState<boolean | null>(null);
   const [connectionError, setConnectionError] = useState<string | null>(null);
@@ -265,6 +314,9 @@ export default function App() {
   const handleConnectionTested = useCallback((ok: boolean, err: string | null) => {
     setConnectionOverride(ok);
     setConnectionError(err);
+    if (ok) {
+      setCredentials((prev) => ({ ...prev, password: "" }));
+    }
     try {
       sessionStorage.removeItem("brain_alpha_connection_tested");
     } catch (storageErr) {
@@ -328,7 +380,19 @@ export default function App() {
   const detailContent = useMemo(() => {
     switch (activeView) {
     case "dashboard":
-      return <Dashboard notify={notify} connected={connected} contextFresh={contextFresh} phaseStatus={phaseApiStatus} onNavigateToSync={handleDashboardSyncStart} onOpenSync={handleDashboardSyncOpen}>
+      return <Dashboard
+        notify={notify}
+        connected={connected}
+        contextFresh={contextFresh}
+        phaseStatus={phaseApiStatus}
+        onNavigateToSync={handleDashboardSyncStart}
+        onOpenSync={handleDashboardSyncOpen}
+        onNavigateToCandidates={() => setActiveView("candidates")}
+        jobRunning={jobState.running}
+        jobStatusMessage={typeof jobState.progress?.status_message === "string" ? jobState.progress.status_message : undefined}
+        jobCycle={jobState.status?.cycle}
+        onStartJob={jobState.startJob}
+      >
         {!connected && contextFresh && <LocalCacheSessionCard notify={notify} onLoggedOut={handleLocalSessionLoggedOut} />}
         {!connected && !contextFresh && <CredentialQuickStart credentials={credentials} managedCredentialsAvailable={managedCredentialsAvailable} onCredentialsChange={setCredentials} notify={notify} onConnectionTested={handleConnectionTested} />}
         {connected && contextFresh && (
@@ -369,7 +433,7 @@ export default function App() {
       return <QualityCheckPanel notify={notify} />;
     case "submission_confirm":
     case "submission":
-      return <SubmissionConfirmPanel notify={notify} />;
+      return <SubmissionConfirmPanel notify={notify} onNavigate={handleNavigate} />;
     case "checkpoint_status":
       return <SnapshotPanel key="checkpoint_status" notify={notify} viewMode="checkpoint_status" onNavigate={handleNavigate} />;
     case "robustness":
@@ -474,6 +538,41 @@ export default function App() {
               {jobState.progress?.percent_complete != null ? `${Math.round(jobState.progress.percent_complete)}%` : "..."} {(jobState.progress?.eta_seconds || 0) > 0 ? fmtEta(jobState.progress!.eta_seconds!) : ""}
             </span>
           )}
+          {/* Theme toggle */}
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            onClick={toggleTheme}
+            aria-label={theme === "dark" ? "切换到浅色模式" : "切换到深色模式"}
+            title={theme === "dark" ? "浅色模式" : "深色模式"}
+          >
+            {theme === "dark" ? (
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="5"/>
+                <line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/>
+                <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+                <line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/>
+                <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+              </svg>
+            ) : (
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+              </svg>
+            )}
+          </button>
+          {/* Keyboard shortcuts help */}
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            onClick={() => setShortcutsHelpOpen(true)}
+            aria-label="键盘快捷键帮助"
+            title="键盘快捷键"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+              <line x1="12" y1="17" x2="12.01" y2="17"/>
+            </svg>
+          </button>
           <span className="badge badge-positive" style={{ fontFamily: "var(--font-mono)", fontSize: 10 }}>
             PRODUCTION
           </span>
@@ -516,6 +615,7 @@ export default function App() {
             unlockCondition={currentPhaseObj.unlockCondition}
             steps={steps}
           >
+            <FlowGuide currentPhase={currentPhase} />
             <div className="animate-fade-in">
               <Suspense fallback={<PageLoader />}>
                 {detailContent}
@@ -551,6 +651,11 @@ export default function App() {
       <MobileTabBar activePhase={currentPhase} onNavigate={handleMobileNavigate} />
 
       <ToastContainer toasts={toasts} onDismiss={dismissToast} />
+
+      {/* Keyboard Shortcuts Help Modal */}
+      {shortcutsHelpOpen && (
+        <KeyboardShortcutsHelp onClose={() => setShortcutsHelpOpen(false)} />
+      )}
     </div>
   );
 }
@@ -625,10 +730,10 @@ function topbarConnectionStatus({ connected, contextFresh, phaseStatus = "ready"
   }
   if (connected && contextFresh) {
     return {
-      label: "已连接 · 本地缓存可用",
+      label: "已连接 · 在线模式",
       tone: "connected",
       dotClass: "status-dot-active",
-      title: "BRAIN 账户已连接，本地缓存也可用。",
+      title: "BRAIN 账户已连接，本地缓存可用。在线模式：可使用全部功能。",
     };
   }
   if (connected) {
@@ -641,17 +746,17 @@ function topbarConnectionStatus({ connected, contextFresh, phaseStatus = "ready"
   }
   if (contextFresh) {
     return {
-      label: "缓存模式 · 本地缓存可用",
+      label: "缓存模式 · 离线可用",
       tone: "cache-ready",
       dotClass: "status-dot-warning",
       title: "BRAIN 账户未连接；本地缓存可用于非提交候选流程，官方同步、回测和提交前复核仍需连接。",
     };
   }
   return {
-    label: "账户未连接",
+    label: "未连接 · 需登录",
     tone: "disconnected",
     dotClass: "status-dot-error",
-    title: "BRAIN 账户未连接，且未检测到完整本地缓存。",
+    title: "BRAIN 账户未连接，且未检测到完整本地缓存。请填写凭据并测试连接。",
   };
 }
 

@@ -3,6 +3,8 @@
 Consolidates 17 web_candidate_*.py files into a single package.
 """
 
+import brain_alpha_ops.web  # noqa: F401  ensure web bridge meta-path finder is installed
+
 from .audit import (
     append_scientific_audit_event,
     scientific_audit_policy_reasons,

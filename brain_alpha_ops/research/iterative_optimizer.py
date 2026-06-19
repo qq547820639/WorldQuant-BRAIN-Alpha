@@ -146,6 +146,15 @@ class IterativeOptimizer:
         mapper: FieldDatasetMapper | None = None,
         rng: random.Random | None = None,
     ):
+        """Initialize the directed iterative optimizer.
+
+        Args:
+            loader: OfficialDataLoader instance for field/operator metadata.
+                Defaults to OfficialDataLoader.instance() if None.
+            mapper: Optional FieldDatasetMapper for semantic field relationships.
+            rng: Optional seeded Random instance for reproducible mutation
+                selection. Defaults to Random(42) if None.
+        """
         self._loader = loader or OfficialDataLoader.instance()
         self._mapper = mapper
         self._rng = rng or random.Random(42)

@@ -46,7 +46,7 @@ import {
   type SelectFieldProps,
   type CheckboxFieldProps,
   type ConfigValueProps,
-} from "./utils";
+} from "./ConfigPanel/utils";
 
 interface Props {
   notify: (type: "success" | "error" | "warning" | "info", msg: string) => void;
@@ -86,22 +86,6 @@ interface ConnectionTestResponse extends ApiErrorExperiencePayload {
   error_code?: string;
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 export default function ConfigPanel({
   notify,
   credentials,
@@ -120,6 +104,7 @@ export default function ConfigPanel({
   const [form, setForm] = useState<ConfigForm | null>(null);
   const [initialForm, setInitialForm] = useState<ConfigForm | null>(null);
   const [temporaryConnectionOpen, setTemporaryConnectionOpen] = useState(false);
+  const [showWeightModal, setShowWeightModal] = useState(false); // P2-4
   const importInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -211,7 +196,7 @@ export default function ConfigPanel({
     }
     const result = await connectionApi.call("/api/test_connection", {
       method: "POST",
-      body: JSON.stringify(payloadFromForm(form, credentials)),
+      body: JSON.stringify({ ...payloadFromForm(form), ...credentialsPayload(credentials) }),
     });
     if (!result?.ok) {
       const err = safeDisplayErrorMessage(apiErrorMessage(result, "BRAIN 连接测试失败"));
@@ -271,6 +256,76 @@ export default function ConfigPanel({
         : managedCredentialsAvailable
           ? "未填写则使用维护者配置的托管凭证"
           : "请临时填写页面凭证";
+
+  const FIELD_HELP: Record<string, { what: string; recommendation: string; risk: string }> = {
+    region: {
+      what: "区域决定了 Alpha 适用的股票市场。USA 针对美国市场，EUR 针对欧洲，GLOBAL 覆盖全球。",
+      recommendation: "推荐从 USA (美国) 开始，这是流动性最好的市场。",
+      risk: "切换区域可能导致已有候选不再适用。",
+    },
+    universe: {
+      what: "股票池大小决定了 Alpha 覆盖的股票数量。TOP3000 覆盖最大的 3000 只股票。",
+      recommendation: "推荐 TOP3000，足够的股票数能保证统计显著性。",
+      risk: "股票池越小，Alpha 越容易被极端值影响。",
+    },
+    delay: {
+      what: "延迟（天）决定了信号从产生到可交易的时间差。Delay-1 表示使用昨天的信号今天交易。",
+      recommendation: "推荐 1 天延迟，这是最标准的设置。",
+      risk: "延迟过短可能引入数据窥探偏差。",
+    },
+    decay: {
+      what: "衰减系数控制历史数据的重要性递减速度。decay=10 表示权重每 10 天衰减一半。",
+      recommendation: "推荐 decay=10，这是 BRAIN 平台最常用的设置。",
+      risk: "decay 太小可能过度反应近期噪音，太大可能错过趋势变化。",
+    },
+    neutralization: {
+      what: "中性化消除特定因子（如行业、市值）对 Alpha 的影响。SUBINDUSTRY 表示在子行业内中性化。",
+      recommendation: "推荐 SUBINDUSTRY，平衡了去偏效果和信号保留。",
+      risk: "过度中性化可能把有用的信号也消除掉。",
+    },
+    pasteurization: {
+      what: "数据净化自动处理异常值和缺失数据，ON 表示启用 BRAIN 平台的自动清理。",
+      recommendation: "推荐保持 ON，避免脏数据污染 Alpha 表现。",
+      risk: "关闭数据净化可能产生虚假的高分 Alpha（实际不可靠）。",
+    },
+    unitHandling: {
+      what: "单位处理决定如何处理不同股票的不同价格量级。VERIFY 表示系统会自动检查并统一单位。",
+      recommendation: "推荐 VERIFY，确保跨股票比较有意义。",
+      risk: "关闭单位处理可能导致不同价格量级的股票不可比较。",
+    },
+    nanHandling: {
+      what: "空值处理决定如何处理缺失数据。ON 表示自动填充或排除空值。",
+      recommendation: "推荐保持 ON。",
+      risk: "关闭后空值可能导致 Alpha 计算异常。",
+    },
+    minSharpe: {
+      what: "最低 Sharpe 比率门禁。Sharpe = 收益 / 波动率，衡量风险调整后收益。",
+      recommendation: "BRAIN 平台标准：Delay-1 最低 1.25，Delay-0 最低 2.0。",
+      risk: "调低门禁可能通过更多低质量 Alpha。",
+    },
+    minFitness: {
+      what: "最低 Fitness 门禁。Fitness = Sharpe × √(|Returns|/max(Turnover, 0.125))，综合衡量收益和换手率。",
+      recommendation: "BRAIN 平台标准：Delay-1 最低 1.0，Delay-0 最低 1.3。",
+      risk: "调低门禁可能通过更多低换手性价比的 Alpha。",
+    },
+    maxSelfCorrelation: {
+      what: "最大自相关门禁。限制提交的 Alpha 与自己已有 Alpha 的相似度。",
+      recommendation: "BRAIN 平台标准：< 0.70。",
+      risk: "自相关过高的 Alpha 会被 BRAIN 平台拒绝。",
+    },
+  };
+
+  const formatHelp = (help: typeof FIELD_HELP[string]) =>
+    `${help.what}\n\n推荐: ${help.recommendation}\n⚠️ ${help.risk}`;
+
+  const HelpIcon = ({ help }: { help: typeof FIELD_HELP[string] }) => (
+    <span title={formatHelp(help)} className="cursor-help ml-1 text-xs opacity-60 hover:opacity-100" aria-label="帮助" role="tooltip">❓</span>
+  );
+
+  const helpContent = (key: string) => {
+    const entry = FIELD_HELP[key];
+    return entry ? <HelpIcon help={entry} /> : null;
+  };
 
   return (
     <form onSubmit={save} className="w-full max-w-5xl min-w-0 space-y-5 animate-fade-in">
@@ -385,33 +440,43 @@ export default function ConfigPanel({
       )}
 
       <ConfigSection title="BRAIN 设置" description="字段和选项来自后端公开的官方能力集校验，不在前端自定义扩展。">
-        <SelectField label="资产类型" value={form.instrumentType} options={optionValues(options, "instrumentType", form.instrumentType, DEFAULT_INSTRUMENT_TYPE_OPTIONS)} onChange={(value) => update("instrumentType", value)} />
-        <SelectField label="区域" value={form.region} options={optionValues(options, "region", form.region, DEFAULT_REGION_OPTIONS)} onChange={(value) => update("region", value)} />
-        <SelectField label="股票池" value={form.universe} options={optionValues(options, "universe", form.universe, DEFAULT_UNIVERSE_OPTIONS)} onChange={(value) => update("universe", value)} />
-        <SelectField label="延迟" value={String(form.delay)} options={optionValues(options, "delay", String(form.delay), DEFAULT_DELAY_OPTIONS)} onChange={(value) => update("delay", Number(value))} />
-        <NumberField label="衰减" value={form.decay} min={0} step={1} onChange={(value) => update("decay", value)} />
-        <SelectField label="中性化" value={form.neutralization} options={optionValues(options, "neutralization", form.neutralization, DEFAULT_NEUTRALIZATION_OPTIONS)} onChange={(value) => update("neutralization", value)} />
-        {datasetChoices.length ? (
-          <SelectField
-            label="数据集"
-            value={form.dataset}
-            options={datasetChoices}
-            placeholder="自动选择"
-            onChange={(value) => update("dataset", value)}
-          />
-        ) : (
-          <TextField
-            label="数据集"
-            value={form.dataset}
-            maxLength={MAX_CONFIG_TEXT_LENGTH}
-            onChange={(value) => update("dataset", sanitizeConfigText(value))}
-          />
-        )}
-        <SelectField label="Alpha 类型" value={form.alphaType} options={optionValues(options, "type", form.alphaType, DEFAULT_ALPHA_TYPE_OPTIONS)} onChange={(value) => update("alphaType", value)} />
-        <SelectField label="数据净化" value={form.pasteurization} options={optionValues(options, "pasteurization", form.pasteurization, DEFAULT_PASTEURIZATION_OPTIONS)} onChange={(value) => update("pasteurization", value)} />
-        <SelectField label="单位处理" value={form.unitHandling} options={optionValues(options, "unitHandling", form.unitHandling, DEFAULT_UNIT_HANDLING_OPTIONS)} onChange={(value) => update("unitHandling", value)} />
-        <SelectField label="空值处理" value={form.nanHandling} options={optionValues(options, "nanHandling", form.nanHandling, DEFAULT_NAN_HANDLING_OPTIONS)} onChange={(value) => update("nanHandling", value)} />
-        <SelectField label="语言" value={form.language} options={optionValues(options, "language", form.language, DEFAULT_LANGUAGE_OPTIONS)} onChange={(value) => update("language", value)} />
+        <details open className="col-span-full group/config-details mb-2">
+          <summary className="text-sm font-medium text-text-secondary cursor-pointer py-1 select-none hover:text-text-primary transition-colors">基础参数</summary>
+          <div className="mt-3 grid grid-cols-1 gap-x-5 gap-y-4 md:grid-cols-2">
+            <SelectField label="资产类型" value={form.instrumentType} options={optionValues(options, "instrumentType", form.instrumentType, DEFAULT_INSTRUMENT_TYPE_OPTIONS)} onChange={(value) => update("instrumentType", value)} />
+            <SelectField label="区域" value={form.region} options={optionValues(options, "region", form.region, DEFAULT_REGION_OPTIONS)} help={helpContent("region")} onChange={(value) => update("region", value)} />
+            <SelectField label="股票池" value={form.universe} options={optionValues(options, "universe", form.universe, DEFAULT_UNIVERSE_OPTIONS)} help={helpContent("universe")} onChange={(value) => update("universe", value)} />
+            <SelectField label="延迟" value={String(form.delay)} options={optionValues(options, "delay", String(form.delay), DEFAULT_DELAY_OPTIONS)} help={helpContent("delay")} onChange={(value) => update("delay", Number(value))} />
+            <NumberField label="衰减" value={form.decay} min={0} step={1} help={helpContent("decay")} onChange={(value) => update("decay", value)} />
+            {datasetChoices.length ? (
+              <SelectField
+                label="数据集"
+                value={form.dataset}
+                options={datasetChoices}
+                placeholder="自动选择"
+                onChange={(value) => update("dataset", value)}
+              />
+            ) : (
+              <TextField
+                label="数据集"
+                value={form.dataset}
+                maxLength={MAX_CONFIG_TEXT_LENGTH}
+                onChange={(value) => update("dataset", sanitizeConfigText(value))}
+              />
+            )}
+            <SelectField label="Alpha 类型" value={form.alphaType} options={optionValues(options, "type", form.alphaType, DEFAULT_ALPHA_TYPE_OPTIONS)} onChange={(value) => update("alphaType", value)} />
+          </div>
+        </details>
+        <details className="col-span-full group/config-details mb-2">
+          <summary className="text-sm font-medium text-text-secondary cursor-pointer py-1 select-none hover:text-text-primary transition-colors">高级参数</summary>
+          <div className="mt-3 grid grid-cols-1 gap-x-5 gap-y-4 md:grid-cols-2">
+            <SelectField label="中性化" value={form.neutralization} options={optionValues(options, "neutralization", form.neutralization, DEFAULT_NEUTRALIZATION_OPTIONS)} help={helpContent("neutralization")} onChange={(value) => update("neutralization", value)} />
+            <SelectField label="数据净化" value={form.pasteurization} options={optionValues(options, "pasteurization", form.pasteurization, DEFAULT_PASTEURIZATION_OPTIONS)} help={helpContent("pasteurization")} onChange={(value) => update("pasteurization", value)} />
+            <SelectField label="单位处理" value={form.unitHandling} options={optionValues(options, "unitHandling", form.unitHandling, DEFAULT_UNIT_HANDLING_OPTIONS)} help={helpContent("unitHandling")} onChange={(value) => update("unitHandling", value)} />
+            <SelectField label="空值处理" value={form.nanHandling} options={optionValues(options, "nanHandling", form.nanHandling, DEFAULT_NAN_HANDLING_OPTIONS)} help={helpContent("nanHandling")} onChange={(value) => update("nanHandling", value)} />
+            <SelectField label="语言" value={form.language} options={optionValues(options, "language", form.language, DEFAULT_LANGUAGE_OPTIONS)} onChange={(value) => update("language", value)} />
+          </div>
+        </details>
       </ConfigSection>
 
       <ConfigSection title="预算控制" description="用于限制单次生产运行的候选数量、轮次和回测批量。">
@@ -428,11 +493,11 @@ export default function ConfigPanel({
       </ConfigSection>
 
       <ConfigSection title="质量阈值" description="提交前门禁，低于阈值的候选只能进入研究或优化状态。">
-        <NumberField label="最低夏普比率" value={form.minSharpe} min={0} step={0.01} onChange={(value) => update("minSharpe", value)} />
-        <NumberField label="最低适应度" value={form.minFitness} min={0} step={0.01} onChange={(value) => update("minFitness", value)} />
+        <NumberField label="最低夏普比率" value={form.minSharpe} min={0} step={0.01} help={helpContent("minSharpe")} onChange={(value) => update("minSharpe", value)} />
+        <NumberField label="最低适应度" value={form.minFitness} min={0} step={0.01} help={helpContent("minFitness")} onChange={(value) => update("minFitness", value)} />
         <NumberField label="最低换手率" value={form.minTurnover} min={0} max={1} step={0.01} onChange={(value) => update("minTurnover", value)} />
         <NumberField label="最高换手率" value={form.platformMaxTurnover} min={0} max={1} step={0.01} onChange={(value) => update("platformMaxTurnover", value)} />
-        <NumberField label="最大自相关性" value={form.maxSelfCorrelation} min={0} max={1} step={0.01} onChange={(value) => update("maxSelfCorrelation", value)} />
+        <NumberField label="最大自相关性" value={form.maxSelfCorrelation} min={0} max={1} step={0.01} help={helpContent("maxSelfCorrelation")} onChange={(value) => update("maxSelfCorrelation", value)} />
         <NumberField label="最大权重集中度" value={form.maxWeightConcentration} min={0} max={1} step={0.01} onChange={(value) => update("maxWeightConcentration", value)} />
       </ConfigSection>
 
@@ -441,12 +506,253 @@ export default function ConfigPanel({
         <ConfigValue label="经验权重" value={scoring?.empirical_layer_weight} />
         <ConfigValue label="检查清单权重" value={scoring?.checklist_layer_weight} />
         <ConfigValue label="市场状态" value={scoring?.market_regime} />
+        {/* P2-4: 查看详细权重按钮 */}
+        <div className="col-span-full mt-2">
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={() => setShowWeightModal(true)}
+          >
+            查看详细权重
+          </button>
+        </div>
       </ConfigSection>
 
       <ConfigSection title="环境设置" description="本地 Web 页面只允许保存非提交运行配置；真实提交必须走单独的人工确认流程。">
         <ConfigValue label="自动提交" value="关闭（Web 保存强制）" />
       </ConfigSection>
+
+      {/* P2-4: 评分权重透明化 Modal */}
+      {showWeightModal && (
+        <ScoringWeightModal
+          schema={schema}
+          scoring={scoring}
+          onClose={() => setShowWeightModal(false)}
+        />
+      )}
     </form>
+  );
+}
+
+/** P2-4: 评分权重透明化 — 从 /api/config_schema 提取 scoring 子维度权重树，只读展示。 */
+interface WeightDimension {
+  name: string;
+  weight: number;
+  children?: WeightDimension[];
+}
+
+function extractScoringWeights(
+  schema: ConfigSchema | undefined,
+  scoring: Record<string, unknown> | undefined,
+): { layers: WeightDimension[] } {
+  const layers: WeightDimension[] = [];
+
+  // Try to extract from schema first (most complete)
+  const schemaScoring = (schema as Record<string, unknown> | undefined)?.scoring as Record<string, unknown> | undefined;
+  const schemaWeights = (schema as Record<string, unknown> | undefined)?.scoring_weights as Record<string, unknown> | undefined;
+
+  // Prior layer
+  const priorWeight = Number(scoring?.prior_layer_weight ?? 0.35);
+  const priorChildren = extractLayerChildren(schemaScoring, "prior", schemaWeights);
+  layers.push({ name: "先验评分", weight: priorWeight, children: priorChildren });
+
+  // Empirical layer
+  const empiricalWeight = Number(scoring?.empirical_layer_weight ?? 0.40);
+  const empiricalChildren = extractLayerChildren(schemaScoring, "empirical", schemaWeights);
+  layers.push({ name: "实证评分", weight: empiricalWeight, children: empiricalChildren });
+
+  // Checklist layer
+  const checklistWeight = Number(scoring?.checklist_layer_weight ?? 0.25);
+  const checklistChildren = extractLayerChildren(schemaScoring, "checklist", schemaWeights);
+  layers.push({ name: "提交清单", weight: checklistWeight, children: checklistChildren });
+
+  return { layers };
+}
+
+function extractLayerChildren(
+  schemaScoring: Record<string, unknown> | undefined,
+  layer: string,
+  schemaWeights: Record<string, unknown> | undefined,
+): WeightDimension[] {
+  const children: WeightDimension[] = [];
+
+  // Try layer-specific sub-dimensions from schema
+  const layerData = schemaScoring?.[layer] as Record<string, unknown> | undefined;
+  const layerWeights = schemaWeights?.[layer] as Record<string, unknown> | undefined;
+  const dims = (layerData?.dimensions ?? layerData?.sub_dimensions ?? layerWeights ?? {}) as Record<string, unknown>;
+
+  if (dims && typeof dims === "object") {
+    for (const [key, value] of Object.entries(dims)) {
+      if (typeof value === "number") {
+        children.push({ name: formatDimName(key), weight: value });
+      } else if (typeof value === "object" && value !== null) {
+        const v = value as Record<string, unknown>;
+        const weight = typeof v.weight === "number" ? v.weight : 0;
+        const subChildren = extractLayerChildren(
+          { [key]: v } as unknown as Record<string, unknown>,
+          key,
+          undefined,
+        );
+        children.push({ name: formatDimName(String(v.name ?? v.label ?? key)), weight, children: subChildren.length ? subChildren : undefined });
+      }
+    }
+  }
+
+  return children;
+}
+
+function formatDimName(key: string): string {
+  // Common dimension name translations
+  const labels: Record<string, string> = {
+    economic_logic: "经济逻辑",
+    structure: "结构复杂度",
+    field_operator_support: "字段与算子",
+    data_compliance: "数据合规",
+    horizon_turnover_proxy: "窗口/换手代理",
+    risk_control_proxy: "风控代理",
+    diversity: "多样性",
+    explainability: "可解释性",
+    economic_concepts: "经济概念",
+    sharpe: "Sharpe",
+    fitness: "Fitness",
+    turnover: "换手率",
+    returns: "收益率",
+    drawdown: "回撤",
+    self_correlation: "自相关",
+    prod_correlation: "生产相关性",
+    weight_concentration: "权重集中度",
+    sub_universe_sharpe: "子宇宙Sharpe",
+    is_oos_ratio: "IS/OOS比率",
+    margin_bps: "保证金(bps)",
+    official_metrics_present: "官方指标存在",
+    official_pass: "官方通过",
+    economic_logic_check: "经济逻辑检查",
+    data_delay_conservative: "保守延迟设置",
+    local_quality: "本地质量预筛",
+    self_correlation_proxy: "自相关代理",
+  };
+  return labels[key] ?? key.replace(/_/g, " ");
+}
+
+function ScoringWeightModal({
+  schema,
+  scoring,
+  onClose,
+}: {
+  schema: ConfigSchema | undefined;
+  scoring: Record<string, unknown> | undefined;
+  onClose: () => void;
+}) {
+  const { layers } = extractScoringWeights(schema, scoring);
+
+  return (
+    <div
+      style={{
+        position: "fixed", inset: 0, zIndex: 9999,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        background: "oklch(0 0 0 / 0.55)", backdropFilter: "blur(3px)",
+      }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      role="dialog"
+      aria-modal="true"
+      aria-label="评分配置详细权重"
+    >
+      <div
+        style={{
+          background: "oklch(0.115 0.007 45)", borderRadius: 8,
+          border: "0.5px solid oklch(0.22 0.007 45)",
+          maxWidth: 560, width: "calc(100% - 32px)", maxHeight: "80vh",
+          overflow: "auto", padding: "24px 20px 20px",
+        }}
+      >
+        {/* Header */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
+          <div>
+            <h3 className="text-base font-semibold text-text-primary">评分配置详细权重</h3>
+            <p className="text-xs text-text-tertiary mt-1">
+              来自 /api/config_schema 的只读展示，各层及其子维度权重分配。
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="btn btn-ghost btn-sm"
+            aria-label="关闭"
+            style={{ padding: "2px 6px", fontSize: 18, lineHeight: 1 }}
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* Weight tree */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          {layers.map((layer, i) => (
+            <div key={i} style={{
+              border: "0.5px solid oklch(0.22 0.007 45)",
+              borderRadius: 6,
+              overflow: "hidden",
+            }}>
+              {/* Layer header */}
+              <div style={{
+                display: "flex", justifyContent: "space-between", alignItems: "center",
+                padding: "10px 14px",
+                background: "oklch(0.10 0.005 45 / 0.50)",
+                borderBottom: layer.children && layer.children.length > 0 ? "0.5px solid oklch(0.22 0.007 45)" : "none",
+              }}>
+                <span className="text-sm font-medium text-text-primary">{layer.name}</span>
+                <span className="text-sm font-mono-value text-accent">
+                  {(layer.weight * 100).toFixed(0)}%
+                </span>
+              </div>
+
+              {/* Sub-dimensions */}
+              {layer.children && layer.children.length > 0 && (
+                <div style={{ padding: "8px 14px" }}>
+                  {layer.children.map((dim, j) => (
+                    <div
+                      key={j}
+                      style={{
+                        display: "flex", justifyContent: "space-between", alignItems: "center",
+                        padding: "6px 0",
+                        borderBottom: j < layer.children!.length - 1 ? "0.5px solid oklch(0.18 0.005 45)" : "none",
+                      }}
+                    >
+                      <span className="text-xs text-text-secondary">{dim.name}</span>
+                      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                        {/* Mini progress bar */}
+                        <div className="progress-bar" style={{ width: 60, height: 4 }} role="progressbar" aria-valuemin={0} aria-valuemax={1} aria-valuenow={dim.weight}>
+                          <div className="progress-bar-fill positive" style={{ width: `${Math.min(100, dim.weight * 100)}%`, height: 4 }} />
+                        </div>
+                        <span className="text-xs font-mono-value text-text-tertiary" style={{ minWidth: 42, textAlign: "right" }}>
+                          {(dim.weight * 100).toFixed(1)}%
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                  {layer.children.length === 0 && (
+                    <p className="text-xs text-text-tertiary py-2">暂无子维度数据</p>
+                  )}
+                </div>
+              )}
+
+              {/* No children fallback */}
+              {(!layer.children || layer.children.length === 0) && (
+                <div style={{ padding: "10px 14px" }}>
+                  <p className="text-xs text-text-tertiary">该层无子维度权重数据</p>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+
+        {/* Footer */}
+        <div style={{ marginTop: 20, display: "flex", justifyContent: "flex-end" }}>
+          <button type="button" onClick={onClose} className="btn btn-secondary btn-sm">
+            关闭
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -501,214 +807,6 @@ function LocalCacheConnectionSection({
     </section>
   );
 }
-
-function formFromConfig(config: RunConfig): ConfigForm {
-  const settings = config.ops?.settings ?? config.settings;
-  const budget = config.ops?.budget ?? config.budget;
-  const thresholds = config.ops?.thresholds ?? config.thresholds;
-  return {
-    environment: config.environment || "production",
-    autoSubmit: false,
-    instrumentType: String(settings?.instrumentType || "EQUITY"),
-    region: String(settings?.region || "USA"),
-    universe: String(settings?.universe || "TOP3000"),
-    delay: Number(settings?.delay ?? 1),
-    decay: Number(settings?.decay ?? 10),
-    neutralization: String(settings?.neutralization || "SUBINDUSTRY"),
-    dataset: String(settings?.dataset || ""),
-    pasteurization: String(settings?.pasteurization || "ON"),
-    unitHandling: String(settings?.unitHandling || "VERIFY"),
-    nanHandling: String(settings?.nanHandling || "ON"),
-    language: String(settings?.language || "FASTEXPR"),
-    alphaType: String(settings?.type || "REGULAR"),
-    candidates: Number(budget?.max_candidates_per_cycle ?? 20),
-    cycles: Number(budget?.max_cycles ?? 10),
-    poolSize: Number(budget?.retained_alpha_pool_size ?? 10),
-    backtestBatchSize: Number(budget?.official_backtest_batch_size ?? 3),
-    requireCloudSync: Boolean(budget?.require_cloud_sync),
-    minSharpe: Number(thresholds?.min_sharpe ?? 1.25),
-    minFitness: Number(thresholds?.min_fitness ?? 1),
-    minTurnover: Number(thresholds?.min_turnover ?? 0.01),
-    platformMaxTurnover: Number(thresholds?.platform_max_turnover ?? 0.7),
-    maxSelfCorrelation: Number(thresholds?.max_self_correlation ?? 0.7),
-    maxWeightConcentration: Number(thresholds?.max_weight_concentration ?? 0.1),
-  };
-}
-,
-    candidates: form.candidates,
-    cycles: form.cycles,
-    poolSize: form.poolSize,
-    backtestBatchSize: form.backtestBatchSize,
-    requireCloudSync: form.requireCloudSync,
-    minSharpe: form.minSharpe,
-    minFitness: form.minFitness,
-    minTurnover: form.minTurnover,
-    platformMaxTurnover: form.platformMaxTurnover,
-    maxSelfCorrelation: form.maxSelfCorrelation,
-    maxWeightConcentration: form.maxWeightConcentration,
-  };
-  const username = credentials?.username.trim() || "";
-  const password = credentials?.password || "";
-  const token = credentials?.token.trim() || "";
-  if (username) payload.username = username;
-  if (password) payload.password = password;
-  if (token) payload.token = token;
-  return payload;
-}
-
-function formFromImport(value: unknown, fallback: ConfigForm): ConfigForm {
-  const root = asRecord(value);
-  if (!root) throw new Error("配置JSON必须是一个对象。");
-  const source = asRecord(root.config) || root;
-  if (asRecord(source.ops)) {
-    const ops = asRecord(source.ops);
-    // JSON import boundary: formFromConfig uses optional chaining (?.) and nullish
-    // coalescing (??) for every field — the assertions below are safe at runtime.
-    return formFromConfig({
-      environment: String(source.environment || "production"),
-      auto_submit: false,
-      ops: {
-        settings: asRecord(ops?.settings) as unknown as BrainSettings,
-        budget: asRecord(ops?.budget) as unknown as BudgetConfig,
-        thresholds: asRecord(ops?.thresholds) as unknown as ThresholdConfig,
-      },
-    });
-  }
-  const settings = asRecord(source.settings) || {};
-  return {
-    ...fallback,
-    environment: stringValue(source.environment, fallback.environment),
-    autoSubmit: false,
-    instrumentType: stringValue(settings.instrumentType, fallback.instrumentType),
-    region: stringValue(settings.region, fallback.region),
-    universe: stringValue(settings.universe, fallback.universe),
-    delay: numberValue(settings.delay, fallback.delay),
-    decay: numberValue(settings.decay, fallback.decay),
-    neutralization: stringValue(settings.neutralization, fallback.neutralization),
-    dataset: stringValue(settings.dataset, fallback.dataset),
-    pasteurization: stringValue(settings.pasteurization, fallback.pasteurization),
-    unitHandling: stringValue(settings.unitHandling, fallback.unitHandling),
-    nanHandling: stringValue(settings.nanHandling, fallback.nanHandling),
-    language: stringValue(settings.language, fallback.language),
-    alphaType: stringValue(settings.type ?? settings.alphaType, fallback.alphaType),
-    candidates: numberValue(source.candidates, fallback.candidates),
-    cycles: numberValue(source.cycles, fallback.cycles),
-    poolSize: numberValue(source.poolSize, fallback.poolSize),
-    backtestBatchSize: numberValue(source.backtestBatchSize, fallback.backtestBatchSize),
-    requireCloudSync: booleanValue(source.requireCloudSync, fallback.requireCloudSync),
-    minSharpe: numberValue(source.minSharpe, fallback.minSharpe),
-    minFitness: numberValue(source.minFitness, fallback.minFitness),
-    minTurnover: numberValue(source.minTurnover, fallback.minTurnover),
-    platformMaxTurnover: numberValue(source.platformMaxTurnover, fallback.platformMaxTurnover),
-    maxSelfCorrelation: numberValue(source.maxSelfCorrelation, fallback.maxSelfCorrelation),
-    maxWeightConcentration: numberValue(source.maxWeightConcentration, fallback.maxWeightConcentration),
-  };
-}
-
-  if (!isAllowedOption(form.instrumentType, options, "instrumentType", DEFAULT_INSTRUMENT_TYPE_OPTIONS)) {
-    return "不支持的资产类型。";
-  }
-  if (!isAllowedOption(form.region, options, "region", DEFAULT_REGION_OPTIONS)) return "不支持的区域。";
-  if (!isAllowedOption(form.universe, options, "universe", DEFAULT_UNIVERSE_OPTIONS)) return "不支持的股票池。";
-  if (!isAllowedOption(form.neutralization, options, "neutralization", DEFAULT_NEUTRALIZATION_OPTIONS)) {
-    return "不支持的中性化方式。";
-  }
-  if (!isAllowedOption(form.alphaType, options, "type", DEFAULT_ALPHA_TYPE_OPTIONS)) {
-    return "不支持的 Alpha 类型。";
-  }
-  if (!isAllowedOption(form.pasteurization, options, "pasteurization", DEFAULT_PASTEURIZATION_OPTIONS)) {
-    return "不支持的数据净化方式。";
-  }
-  if (!isAllowedOption(form.unitHandling, options, "unitHandling", DEFAULT_UNIT_HANDLING_OPTIONS)) {
-    return "不支持的单位处理方式。";
-  }
-  if (!isAllowedOption(form.nanHandling, options, "nanHandling", DEFAULT_NAN_HANDLING_OPTIONS)) {
-    return "不支持的空值处理方式。";
-  }
-  if (!isAllowedOption(form.language, options, "language", DEFAULT_LANGUAGE_OPTIONS)) {
-    return "不支持的表达式语言。";
-  }
-  if (form.dataset.length > MAX_CONFIG_TEXT_LENGTH) return `数据集长度不能超过 ${MAX_CONFIG_TEXT_LENGTH} 个字符。`;
-  if (form.dataset && !CONFIG_TEXT_PATTERN.test(form.dataset)) {
-    return "数据集只能包含字母、数字、下划线、短横线、点或冒号。";
-  }
-  const datasetValues = datasetAllowedValues(schema);
-  // C24 P2: also validate that the dataset ID matches BRAIN naming conventions (alphanumeric + underscore)
-  if (form.dataset && datasetValues.length && !datasetValues.includes(form.dataset)) {
-    return "不支持的数据集，请从下拉列表选择。";
-  }
-  if (!isIntegerInRange(form.delay, 0, 1)) return "延迟必须为 0 或 1。";
-  if (!isIntegerInRange(form.decay, 0)) return "衰减必须为非负整数。";
-  if (!isIntegerInRange(form.candidates, 1, 1000)) return "每轮最大候选数必须在 1 到 1000 之间。";
-  if (!isIntegerInRange(form.cycles, 1, 10000)) return "最大轮次必须在 1 到 10000 之间。";
-  if (!isIntegerInRange(form.poolSize, 1, 5000)) return "候选池大小必须在 1 到 5000 之间。";
-  if (!isIntegerInRange(form.backtestBatchSize, 1, 100)) return "回测批处理大小必须在 1 到 100 之间。";
-  for (const [label, value] of [
-    ["最低夏普比率", form.minSharpe],
-    ["最低适应度", form.minFitness],
-  ] as const) {
-    if (!Number.isFinite(value) || value < 0) return `${label} 必须为非负数。`;
-  }
-  for (const [label, value] of [
-    ["最低换手率", form.minTurnover],
-    ["最高换手率", form.platformMaxTurnover],
-    ["最大自相关性", form.maxSelfCorrelation],
-    ["最大权重集中度", form.maxWeightConcentration],
-  ] as const) {
-    if (!Number.isFinite(value) || value < 0 || value > 1) return `${label} 必须在 0 到 1 之间。`;
-  }
-  if (form.minTurnover > form.platformMaxTurnover) return "最低换手率不能超过最高换手率。";
-  return null;
-}
-
-function optionValues(
-  options: Record<string, Array<string | number>> | undefined,
-  key: string,
-  current: string,
-  fallback: string[] = [],
-) {
-  const values = options?.[key]?.map(String).filter(Boolean) || fallback;
-  return Array.from(new Set([...values, current].filter(Boolean)));
-}
-
-function datasetSelectOptions(schema: ConfigSchema | undefined, current: string): SelectOption[] {
-  const seen = new Set<string>();
-  const rows = schema?.dataset_options || [];
-  const choices: SelectOption[] = [];
-  for (const row of rows) {
-    const value = String(row.id || "").trim();
-    if (!value || seen.has(value)) continue;
-    choices.push({ value, label: datasetOptionLabel(row, value) });
-    seen.add(value);
-  }
-  for (const value of schema?.settings_options?.dataset?.map(String).filter(Boolean) || []) {
-    if (seen.has(value)) continue;
-    choices.push({ value, label: value });
-    seen.add(value);
-  }
-  if (current && !seen.has(current)) {
-    choices.unshift({ value: current, label: `当前值 - ${current}` });
-  }
-  return choices;
-}
-
-` : "";
-  const fieldCount = Number(row.field_count || 0);
-  const count = Number.isFinite(fieldCount) && fieldCount > 0 ? `, ${fieldCount} fields` : "";
-  return `${fallback}${name}${count}`;
-}
-
-
-
-
-
-function asRecord(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
-}
-
-
-
-
 
 function ConfigSection({ title, description, children }: { title: string; description?: string; children: ReactNode }) {
   return (
@@ -785,6 +883,7 @@ function NumberField({
   min,
   max,
   step,
+  help,
   onChange,
 }: {
   label: string;
@@ -792,11 +891,12 @@ function NumberField({
   min?: number;
   max?: number;
   step?: number;
+  help?: ReactNode;
   onChange: (value: number) => void;
 }) {
   return (
     <label className="form-label">
-      <span className="block mb-1">{label}</span>
+      <span className="block mb-1">{label}{help}</span>
       <input
         type="number"
         value={Number.isFinite(value) ? value : ""}
@@ -809,26 +909,26 @@ function NumberField({
     </label>
   );
 }
- : option);
-}
 
 function SelectField({
   label,
   value,
   options,
   placeholder,
+  help,
   onChange,
 }: {
   label: string;
   value: string;
   options: SelectOption[];
   placeholder?: string;
+  help?: ReactNode;
   onChange: (value: string) => void;
 }) {
   const choices = normalizeSelectOptions(options);
   return (
     <label className="form-label">
-      <span className="block mb-1">{label}</span>
+      <span className="block mb-1">{label}{help}</span>
       <select value={value} onChange={(event) => onChange(event.currentTarget.value)} className={inputClass}>
         {placeholder ? <option value="">{placeholder}</option> : null}
         {choices.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}

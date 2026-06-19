@@ -105,7 +105,7 @@ export function saveStoredSyncJobId(jobId: string): void {
   if (value) {
     try {
       sessionStorage.setItem(ACTIVE_SYNC_JOB_ID_KEY, value);
-    } catch { /* ignore */ }
+    } catch { console.warn("OfficialOperations: non-critical operation skipped"); }
   }
 }
 
@@ -120,7 +120,7 @@ export function loadStoredSyncJobId(): string {
 export function clearStoredSyncJobId(): void {
   try {
     sessionStorage.removeItem(ACTIVE_SYNC_JOB_ID_KEY);
-  } catch { /* ignore */ }
+  } catch { console.warn("OfficialOperations: non-critical operation skipped"); }
 }
 
 export function logTone(tone: OperationLogEntry["tone"]): string {

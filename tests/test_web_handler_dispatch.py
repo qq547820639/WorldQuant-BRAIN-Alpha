@@ -8,6 +8,9 @@ import threading
 from types import SimpleNamespace
 from urllib.parse import urlparse
 
+# Phase 3.3: Activate _WebBridgeFinder before importing bridged flat-module aliases
+import brain_alpha_ops.web  # noqa: F401 — side-effect: installs sys.meta_path bridge
+
 from brain_alpha_ops.config import RunConfig
 from brain_alpha_ops.tasks import JobStore
 from brain_alpha_ops.web_handler_dispatch import (
@@ -543,7 +546,7 @@ def test_dispatch_get_logs_handler_exceptions(monkeypatch, caplog):
     )
 
     handler = _Handler()
-    with caplog.at_level(logging.ERROR, logger="brain_alpha_ops.web_handler_dispatch"):
+    with caplog.at_level(logging.ERROR, logger="brain_alpha_ops.web.dispatch.web_handler_dispatch"):
         dispatch_get(handler, urlparse("/boom"), ctx)
 
     assert handler.json_calls[0][0]["error_code"] == "GET_ROUTE_ERROR"
@@ -564,7 +567,7 @@ def test_dispatch_get_treats_client_disconnect_as_completed(monkeypatch, caplog)
 
     handler = _Handler()
     # P1-5: the dispatch loop was moved to web_handler_dispatch_core.
-    with caplog.at_level(logging.INFO, logger="brain_alpha_ops.web_handler_dispatch_core"):
+    with caplog.at_level(logging.INFO, logger="brain_alpha_ops.web.dispatch.web_handler_dispatch_core"):
         dispatch_get(handler, urlparse("/api/candidates"), ctx)
 
     assert handler.json_calls == []
@@ -581,7 +584,7 @@ def test_dispatch_post_logs_handler_exceptions(caplog):
     ctx = dataclasses.replace(ctx, connection_test_post_payload=boom)
 
     handler = _Handler(body={"dry_run": True})
-    with caplog.at_level(logging.ERROR, logger="brain_alpha_ops.web_handler_dispatch"):
+    with caplog.at_level(logging.ERROR, logger="brain_alpha_ops.web.dispatch.web_handler_dispatch"):
         dispatch_post(handler, urlparse("/api/test_connection"), ctx)
 
     assert handler.json_calls[0][0]["error_code"] == "CONNECTION_ERROR"
@@ -766,7 +769,7 @@ def test_submit_with_lock_logs_exceptions(caplog):
     def boom(_payload):
         raise RuntimeError("boom")
 
-    with caplog.at_level(logging.ERROR, logger="brain_alpha_ops.web_handler_dispatch"):
+    with caplog.at_level(logging.ERROR, logger="brain_alpha_ops.web.dispatch.web_handler_dispatch"):
         from brain_alpha_ops.web_handler_dispatch import _submit_with_lock
 
         _submit_with_lock(handler, ctx, boom, "SUBMIT_ERROR", payload={"alpha_id": "A1"})
@@ -1129,26 +1132,17 @@ def test_dispatch_post_session_requires_admin_token_when_remote_admin_is_enabled
 def test_dispatch_post_blocks_legacy_pipeline_start_fallback(monkeypatch):
     ctx, started, _lock = _ctx()
     handler = _Handler(body={"config_path": "config/run_config.json"})
-    legacy_calls = []
-
-    def legacy_dispatch(*args):
-        legacy_calls.append(args)
-        raise AssertionError("legacy dispatch should not be called")
-
-    monkeypatch.setattr("brain_alpha_ops.web.dispatch_post", legacy_dispatch)
 
     dispatch_post(handler, urlparse("/api/pipeline/start"), ctx)
 
     payload, status, _headers = handler.json_calls[0]
     assert status == 404
     assert payload["error_code"] == "LEGACY_ROUTE_DISABLED"
-    assert legacy_calls == []
     assert started == []
 
 
 def test_dispatch_post_unknown_legacy_fallback_is_rate_limited(monkeypatch):
     ctx, _started, _lock = _ctx()
-    legacy_calls = []
     ctx = dataclasses.replace(
         ctx,
         route_for=lambda _method, _path: None,
@@ -1160,12 +1154,6 @@ def test_dispatch_post_unknown_legacy_fallback_is_rate_limited(monkeypatch):
         },
     )
 
-    def legacy_dispatch(*args):
-        legacy_calls.append(args)
-        raise AssertionError("legacy dispatch should not be called while rate-limited")
-
-    monkeypatch.setattr("brain_alpha_ops.web.dispatch_post", legacy_dispatch)
-
     handler = _Handler(body={"alpha": 1})
     dispatch_post(handler, urlparse("/api/legacy-unmigrated"), ctx)
 
@@ -1175,7 +1163,6 @@ def test_dispatch_post_unknown_legacy_fallback_is_rate_limited(monkeypatch):
     assert payload["user_error_kind"] == "web_rate_limited"
     assert payload["user_message"] == "本地 Web 操作请求过于频繁，请稍后再试。"
     assert ("Retry-After", "9") in headers
-    assert legacy_calls == []
 
 
 def test_dispatch_get_clamps_high_cost_history_limits():

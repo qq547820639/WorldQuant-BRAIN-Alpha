@@ -324,7 +324,7 @@ class PipelineCandidatePoolMixin:
         targets = self._candidate_pool_service().validation_targets(pool)
         filtered: list[Candidate] = []
         for candidate in targets:
-            if self._block_observability_duplicate_before_official(candidate, phase="official_validation"):
+            if self.services.official_validation._block_observability_duplicate_before_official(candidate, phase="official_validation"):
                 continue
             if self._reject_high_cloud_similarity_before_official(candidate):
                 continue

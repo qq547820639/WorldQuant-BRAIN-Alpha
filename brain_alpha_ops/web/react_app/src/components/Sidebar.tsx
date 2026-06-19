@@ -73,6 +73,9 @@ export default memo(function Sidebar({
       {phases?.map((group) => {
         const isLocked = group.status === "locked" || group.status === "pending";
         const statusLabel = PHASE_STATUS_LABELS[group.status] || group.status;
+        const unlockTip = isLocked && group.unlockCondition
+          ? group.unlockCondition
+          : undefined;
         return (
           <div key={group.id} className={`phase-group ${group.expanded ? "is-expanded" : ""} ${isLocked ? "is-locked" : ""}`}>
             <button
@@ -81,11 +84,19 @@ export default memo(function Sidebar({
               onClick={() => handlePhaseToggle(group.id)}
               aria-expanded={group.expanded}
               aria-controls={`phase-${group.id}-items`}
+              title={unlockTip}
             >
               <ChevronRight expanded={group.expanded} locked={isLocked} />
               <span className="phase-group-label">{group.label}</span>
               <span className={`phase-group-status ${group.status}`}>{statusLabel}</span>
             </button>
+            {isLocked && group.unlockCondition && (
+              <div className="px-9 pb-1.5">
+                <span className="text-[10px] text-text-disabled italic" title={group.unlockCondition}>
+                  🔒 {group.unlockCondition}
+                </span>
+              </div>
+            )}
             {group.expanded && (
               <div id={`phase-${group.id}-items`} role="region" aria-label={`${group.label} 导航项`} className="sidebar-nav">
                 {group.items.map((item) => {

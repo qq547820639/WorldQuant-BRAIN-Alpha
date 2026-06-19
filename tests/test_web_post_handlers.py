@@ -1,4 +1,4 @@
-from brain_alpha_ops.web_post_handlers import (
+from brain_alpha_ops.web.dispatch.web_post_handlers import (
     assistant_response_guidance_post_payload,
     assistant_response_parse_post_payload,
     background_job_start_payload,
