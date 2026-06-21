@@ -12,9 +12,9 @@ from typing import Any
 
 _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
     "CandidateGenerator": ("brain_alpha_ops.research.generator", "CandidateGenerator"),
-    "extract_fields": ("brain_alpha_ops.research.generator", "extract_fields"),
-    "extract_operators": ("brain_alpha_ops.research.generator", "extract_operators"),
-    "local_quality": ("brain_alpha_ops.research.generator", "local_quality"),
+    "extract_fields": ("brain_alpha_ops.scoring.local_quality", "extract_fields"),
+    "extract_operators": ("brain_alpha_ops.scoring.local_quality", "extract_operators"),
+    "local_quality": ("brain_alpha_ops.scoring.local_quality", "local_quality"),
     "DynamicThemeEngine": ("brain_alpha_ops.research.theme_engine", "DynamicThemeEngine"),
     "DatasetSelector": ("brain_alpha_ops.research.dataset_selector", "DatasetSelector"),
     "AlphaCheck": ("brain_alpha_ops.research.alpha_checks", "AlphaCheck"),
