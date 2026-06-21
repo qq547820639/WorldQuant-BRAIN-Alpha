@@ -19,9 +19,6 @@ from brain_alpha_ops.agent_guidance_tools import (
     merge_generation_guidance,
 )
 from brain_alpha_ops.agent_live_tools import (
-    MAX_BATCH_SIMULATION_WORKERS,
-    MAX_BATCH_SIMULATIONS,
-    MAX_SYNC_RANGE,
     AgentLiveToolsMixin,
 )
 from brain_alpha_ops.agent_research_tools import (

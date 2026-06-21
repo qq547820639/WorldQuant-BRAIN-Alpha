@@ -6,7 +6,7 @@ as a separate mixin class to keep official_context.py under the module-size limi
 
 from __future__ import annotations
 
-from typing import Any, Callable
+from typing import Any
 
 from . import pagination_limits
 from .base import BrainAPIError
@@ -49,9 +49,7 @@ from .official_helpers import (
 )
 from .official_query_params import (
     alpha_filter_params,
-    apply_market_discovery_filters,
 )
-from .pagination import _paginate_collection
 
 # P2-4: transient retry constants centralised in user_alpha_transient.
 # Kept as module-level aliases here so existing in-file references
@@ -112,6 +110,10 @@ def _compat_blank(value: Any) -> bool:
 
 
 class AlphaQueryMixin:
+
+    def _hidden_for_audit_log(self):
+        """Stub: returns None. Override in subclass to enable audit logging."""
+        return None
 
     def locate_dataset(self, dataset_id: str) -> dict:
         value = str(dataset_id or "").strip()
@@ -394,6 +396,12 @@ class AlphaQueryMixin:
         body.update(extra)
         if not body:
             raise BrainAPIError("patch_properties requires at least one property to update")
+        # P1-3 fix: audit log for alpha property changes
+        if hlr := self._hidden_for_audit_log():
+            hlr.info("patch_properties: alpha_id=%s fields=%s", value, sorted(body.keys()))
+        else:
+            import logging
+            logging.getLogger(__name__).info("patch_properties: alpha_id=%s fields=%s", value, sorted(body.keys()))
         path = self.config.alpha_path_template.format(alpha_id=value)
         data, _headers = self._request("PATCH", path, body=body)
         return _normal_alpha(data if isinstance(data, dict) else {})

@@ -235,7 +235,7 @@ def serve(port=None, open_browser=True, host=HOST, **kw):
             _find_free_port=_find_free_port,
             **kw,
         )
-        SERVER = _serve_server._SERVER if hasattr(_serve_server, '_SERVER') else None  # type: ignore[attr-defined]
+        SERVER = getattr(_serve_server, "_SERVER", None)
     return url
 
 def shutdown_server():
@@ -413,7 +413,7 @@ def _install_facade_bindings() -> None:
         globals().update(_build_web_facade_bindings(globals()))
         globals()["_LEGACY_IMPORTED_EXPORTS"] = _build_legacy_imported_exports(globals())
     except Exception as e:
-        logger.error("Facade bindings install failed: %s", e)
+        from brain_alpha_ops.redaction import redact_error_message; logger.error("Facade bindings install failed: %s", redact_error_message(e))
 
 
 def web_application_context():
@@ -423,6 +423,10 @@ def web_application_context():
 def _app_context():
     return WEB_APPLICATION_CONTEXT
 
+
+# Pre-declared for mypy — populated by _install_facade_bindings() below.
+JOB_REGISTRY: object = None  # type: ignore[assignment]
+_LEGACY_IMPORTED_EXPORTS: object = {}  # type: ignore[assignment]
 
 def __getattr__(name: str):
     if name == "JOBS":

@@ -39,13 +39,13 @@ def _validate_fusion_expr(expr: str, label: str = "fusion") -> str | None:
     Callers should handle None as a signal to skip or fall back.
     """
     if len(expr) > _FUSION_MAX_EXPR_LENGTH:
-        return None
+        return ""
     depth = 0
     for ch in expr:
         if ch == "(":
             depth += 1
             if depth > _FUSION_MAX_PAREN_DEPTH:
-                return None
+                return ""
         elif ch == ")":
             depth -= 1
     return expr

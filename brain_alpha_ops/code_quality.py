@@ -13,9 +13,11 @@ Usage:
 from __future__ import annotations
 
 import ast
+import logging
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -49,7 +51,8 @@ def _count_lines(filepath: Path) -> int:
     try:
         content = filepath.read_text(encoding="utf-8")
         return len(content.splitlines())
-    except Exception:
+    except Exception as exc:
+        logger.debug("Failed to count lines in %s: %s", filepath, exc)
         return 0
 
 
@@ -59,7 +62,8 @@ def _has_docstring(filepath: Path) -> bool:
         content = filepath.read_text(encoding="utf-8")
         tree = ast.parse(content)
         return ast.get_docstring(tree) is not None
-    except Exception:
+    except Exception as exc:
+        logger.debug("Failed to check docstring in %s: %s", filepath, exc)
         return False
 
 
@@ -69,7 +73,8 @@ def _count_functions(filepath: Path) -> int:
         content = filepath.read_text(encoding="utf-8")
         tree = ast.parse(content)
         return sum(1 for node in ast.walk(tree) if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)))
-    except Exception:
+    except Exception as exc:
+        logger.debug("Failed to count functions in %s: %s", filepath, exc)
         return 0
 
 
@@ -79,7 +84,8 @@ def _count_classes(filepath: Path) -> int:
         content = filepath.read_text(encoding="utf-8")
         tree = ast.parse(content)
         return sum(1 for node in ast.walk(tree) if isinstance(node, ast.ClassDef))
-    except Exception:
+    except Exception as exc:
+        logger.debug("Failed to count classes in %s: %s", filepath, exc)
         return 0
 
 
@@ -89,7 +95,8 @@ def _count_imports(filepath: Path) -> int:
         content = filepath.read_text(encoding="utf-8")
         tree = ast.parse(content)
         return sum(1 for node in ast.walk(tree) if isinstance(node, (ast.Import, ast.ImportFrom)))
-    except Exception:
+    except Exception as exc:
+        logger.debug("Failed to count imports in %s: %s", filepath, exc)
         return 0
 
 
@@ -98,7 +105,8 @@ def _has_type_annotations(filepath: Path) -> bool:
     try:
         content = filepath.read_text(encoding="utf-8")
         return "def " in content and "->" in content
-    except Exception:
+    except Exception as exc:
+        logger.debug("Failed to check type annotations in %s: %s", filepath, exc)
         return False
 
 

@@ -20,16 +20,13 @@ from typing import Any, Callable
 
 from brain_alpha_ops.config import RunConfig
 from brain_alpha_ops.error_knowledge import classify_ux_error as _unified_classify
-from brain_alpha_ops.models import PipelineEvent, PipelineResult
+from brain_alpha_ops.models import PipelineResult
 from brain_alpha_ops.redaction import redact_error_message
 from brain_alpha_ops.runner import run_pipeline_from_config
 from brain_alpha_ops.ux import guided_display, guided_storage
-from brain_alpha_ops.ux.guided_formatting import (
-    format_candidate_summary,
-    format_error_for_user,
-    format_pipeline_progress,
-)
-from brain_alpha_ops.ux.guided_models import CheckpointData, PipelinePhase, RunRecord
+from brain_alpha_ops.ux.guided_models import CheckpointData, PipelinePhase
+
+from .guided_models import RunRecord  # noqa: F401  # backward-compat
 
 logger = logging.getLogger(__name__)
 
@@ -507,3 +504,14 @@ class GuidedPipeline:
     def print_summary(self, result: PipelineResult | None = None) -> None:
         """Print structured result summary."""
         guided_display.print_summary(self.phases, result or self._last_result)
+
+# Backward-compat re-export for Phase 3.x migration
+from .guided_models import RunRecord  # noqa: F401
+
+
+# ---- Backward-compat re-export for Phase 3.x migration ----
+from .guided_formatting import format_candidate_summary  # noqa: F401  # backward-compat re-export
+
+from .guided_formatting import format_error_for_user  # noqa: F401
+
+from .guided_formatting import format_pipeline_progress  # noqa: F401

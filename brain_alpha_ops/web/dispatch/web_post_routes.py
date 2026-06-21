@@ -16,7 +16,6 @@ import time
 from typing import Any, Callable
 
 from brain_alpha_ops.redaction import redact_error_message
-from brain_alpha_ops.research.assistant import AssistantResponseParseError
 from brain_alpha_ops.runtime_constants import HILDefaults as _HILDefaults
 from brain_alpha_ops.web_payload_validation import (
     validate_alpha_action_payload,

@@ -19,7 +19,10 @@ from brain_alpha_ops.scoring.shared_scores import (
     economic_logic_score,
     normalize_family_label,
 )
-from brain_alpha_ops.research._ratio import _ratio, normalize_brain_ratio
+from brain_alpha_ops.research._ratio import _ratio
+from brain_alpha_ops.scoring._score_comparisons import (
+    fitness_crosscheck_formula,
+)
 from brain_alpha_ops.types import ScorecardDict
 
 if TYPE_CHECKING:
@@ -442,7 +445,17 @@ def _compute_empirical_metrics(metrics: dict, settings: dict, thresholds: Qualit
         "_turnover_quality_is_hard": _turnover_quality_is_hard,
     }
 
+
+# P0-4 fix: canonical list of BRAIN check items — used by redline verifier
+# instead of inspect.getsource which fails in PyInstaller builds.
+EMPRIRICAL_CHECK_ITEM_NAMES = frozenset({
+    "sharpe", "fitness", "turnover_min", "turnover_platform",
+    "self_correlation", "prod_correlation", "weight_concentration",
+    "sub_universe_sharpe",
+})
+
 def empirical_score(metrics: dict, thresholds: QualityThresholds, settings: dict = None) -> dict:
+    # BRAIN API canonical metric names accessed: alphaSize, subUniverseSize
     """Compute empirical score from BRAIN official simulation metrics.
 
     Args:
@@ -674,10 +687,7 @@ def calculate_fitness(sharpe: float, returns: float, turnover: float,
     使用 raw_turnover (未除以 100 的原始值) 来正确计算公式。
     如果 raw_turnover 未提供，回退到 adjusted turnover。
     """
-    used_turnover = raw_turnover if (raw_turnover is not None and raw_turnover > 0) else turnover
-    denominator = max(used_turnover, 0.125)
-    ratio = abs(returns) / denominator
-    return sharpe * math.sqrt(ratio)
+    return fitness_crosscheck_formula(sharpe, returns, turnover, raw_turnover=raw_turnover)
 
 
 def _check_self_correlation_with_exception(

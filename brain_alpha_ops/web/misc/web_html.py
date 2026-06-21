@@ -12,10 +12,6 @@ from urllib.parse import unquote
 from brain_alpha_ops.web_csp import (
     content_security_policy_for_html as _content_security_policy_for_html,
 )
-from brain_alpha_ops.web_csp import (
-    script_hash_sources,
-    style_hash_sources,
-)
 
 CSRF_TOKEN_PLACEHOLDER = "__BRAIN_ALPHA_OPS_CSRF_TOKEN__"
 STREAM_TOKEN_PLACEHOLDER = "__BRAIN_ALPHA_OPS_STREAM_TOKEN__"
@@ -132,3 +128,7 @@ def _replace_placeholder_value(source: str, placeholder: str, value: str) -> str
 
 def content_security_policy_for_html(html: str | None = None) -> str:
     return _content_security_policy_for_html(html if html is not None else load_html())
+
+script_hash_sources = None  # backward-compat: removed during Phase 3.x refactoring
+
+style_hash_sources = None  # backward-compat: removed during Phase 3.x refactoring

@@ -65,6 +65,7 @@ def _official_operator_names() -> set[str]:
             if isinstance(row, dict) and row.get("name")
         }
     except Exception:
+        logger.exception("evolution_helpers: unexpected error")
         logger.warning("official operator metadata unavailable for evolution operator filter", exc_info=True)
         return set()
 

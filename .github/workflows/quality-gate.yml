@@ -7,8 +7,12 @@ on:
 
 jobs:
   quality-gate:
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        python-version: ["3.12"]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
 
     steps:
       - name: Checkout
@@ -19,7 +23,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: ${{ matrix.python-version }}
           cache: pip
 
       - name: Install package and dev tooling
@@ -27,26 +31,36 @@ jobs:
           python -m pip install -r requirements.lock
           python -m pip install -e ".[test]" --no-deps --no-build-isolation
 
-      - name: 1/8 - Python compile check
+      - name: 0/9 - Clean stale bytecode cache
+        run: find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null; find . -type f -name "*.pyc" -delete 2>/dev/null; echo "Cache cleaned"
+
+      - name: 1/9 - Python compile check
         run: python -m compileall -q brain_alpha_ops scripts tests
 
-      - name: 2/8 - Config validation
+      - name: 2/9 - Config validation
         run: "python -c \"from brain_alpha_ops.config import load_run_config; cfg=load_run_config('config/run_config.json'); print({'ok': True, 'environment': cfg.environment})\""
 
-      - name: 3/8 - Dependency policy
+      - name: 3/9 - Dependency policy
         run: python scripts/check_dependency_policy.py --pyproject pyproject.toml --json
 
-      - name: 4/8 - Frontend inline sync
+      - name: 4/9 - Frontend inline sync
         run: python brain_alpha_ops/build_inline.py --check --json
 
-      - name: 5/8 - Secret scan
+      - name: 5/9 - Secret scan
         run: python scripts/scan_sensitive_artifacts.py --root . --json --fail-on-findings --include-all 
 
-      - name: 6/8 - Log redaction audit
+      - name: 6/9 - Log redaction audit
         run: python scripts/check_log_redaction.py --root brain_alpha_ops --json
 
-      - name: 7/8 - Module size audit
+      - name: 7/9 - Module size audit
         run: python scripts/check_module_size.py --root . --json
 
-      - name: 8/8 - Run tests with coverage
-        run: python -m pytest tests/ -v --tb=short --cov=brain_alpha_ops --cov-report=term
+      - name: 8/9 - Run tests with coverage
+        run: python -m pytest tests/ -v --tb=short --cov=brain_alpha_ops --cov-report=term --cov-report=xml
+
+      - name: 9/9 - Upload coverage
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./coverage.xml
+          flags: ${{ matrix.os }},py${{ matrix.python-version }}
+        continue-on-error: true

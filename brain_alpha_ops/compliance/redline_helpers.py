@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-import ast
 import logging
 import re
-import textwrap
 from pathlib import Path
 from typing import Any
 
@@ -134,27 +132,20 @@ def _verify_generator_templates_against_official_context(data_dir: Path) -> dict
 
 
 def _candidate_generator_fallback_templates() -> list[str]:
-    """Extract fallback template strings from CandidateGenerator source."""
+    """Return fallback expression templates used by CandidateGenerator.
+
+    Delegates to generator._load_fallback_templates() -- the same source
+    used at runtime -- instead of AST-parsing the source code (which
+    broke when templates moved from inline constants to templates.yaml).
+    """
     try:
-        import inspect
+        from brain_alpha_ops.research.generator import _load_fallback_templates
 
-        from brain_alpha_ops.research.generator import CandidateGenerator
-
-        source = textwrap.dedent(inspect.getsource(CandidateGenerator._generate_fallback))
-        tree = ast.parse(source)
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Assign):
-                names = [target.id for target in node.targets if isinstance(target, ast.Name)]
-                if "templates" in names and isinstance(node.value, ast.List):
-                    values: list[str] = []
-                    for elt in node.value.elts:
-                        if isinstance(elt, ast.Constant) and isinstance(elt.value, str):
-                            values.append(elt.value)
-                    return values
+        templates, _families = _load_fallback_templates()
+        return list(templates)
     except Exception:
         logger.warning("redline verifier failed to extract generator fallback templates", exc_info=True)
         return []
-    return []
 
 
 def _sample_official_fields_for_templates(official_fields: set[str]) -> dict[str, str]:

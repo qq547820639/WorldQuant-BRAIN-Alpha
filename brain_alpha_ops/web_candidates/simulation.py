@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Any, Callable
+from typing import Any
 
 from brain_alpha_ops.brain_api.base import BrainAPIError
 from brain_alpha_ops.config import load_run_config
@@ -33,8 +33,6 @@ from brain_alpha_ops.web_candidates.simulation_failures import (
 from brain_alpha_ops.web_candidates.simulation_runtime import (
     _create_api,
     _progress_percent,
-    _resolve_credentials,
-    _simulation_poll_interval,
     _simulation_poll_timeout,
     _simulation_retry_pause_seconds,
     _update_simulation_progress,
@@ -89,13 +87,7 @@ from brain_alpha_ops.web_candidates.simulation_state import (
     save_candidate_update as _save_candidate_update,
 )
 from brain_alpha_ops.web_candidates.simulation_state import (
-    save_candidates as _save_candidates,
-)
-from brain_alpha_ops.web_candidates.simulation_state import (
     score_simulated_candidate as _score_simulated_candidate,
-)
-from brain_alpha_ops.web_candidates.simulation_state import (
-    simulation_target_key as _simulation_target_key,
 )
 
 logger = logging.getLogger(__name__)
@@ -1030,3 +1022,10 @@ def simulation_candidates_payload(payload: dict[str, Any]) -> dict[str, Any]:
         dedupe_simulation_targets=_dedupe_simulation_targets,
         default_dataset=_default_simulation_dataset(config),
     )
+
+
+from .simulation_state import save_candidates as _save_candidates  # noqa: F401  # backward-compat
+
+
+# ---- Backward-compat re-export for Phase 3.x migration ----
+from .simulation_runtime import _simulation_poll_interval  # noqa: F401  # backward-compat re-export

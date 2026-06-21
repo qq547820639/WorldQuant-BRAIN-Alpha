@@ -3,7 +3,7 @@
 ![React](https://img.shields.io/badge/React-18+-61DAFB?style=flat-square)
 ![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)
 ![Version](https://img.shields.io/badge/Version-0.3.0-blueviolet?style=flat-square)
-![Tests](https://img.shields.io/badge/Tests-2649%20passed-success?style=flat-square)
+![Tests](https://img.shields.io/badge/Tests-2874%20passed-success?style=flat-square)
 > **你的 WorldQuant BRAIN 智能研究助手 — 帮你「找 alpha」，但绝不替你按「提交」按钮。**
 
 ![生产环境主界面](screenshots/prod-main-dashboard.png)
@@ -65,16 +65,16 @@ BRAIN Alpha Ops 是跑在你**自己电脑**上的 alpha 研究工作台。它�
 
 | 指标 | 数值 |
 |------|------|
-| 生产 Python 模块 | 303 个 .py 文件 |
-| React 前端组件 | 39 个 .ts/.tsx |
+| 生产 Python 模块 | 338 个 .py 文件 |
+| React 前端组件 | 41 个 .ts/.tsx |
 | 官方数据字段 | 8,599 |
 | 官方数据集 | 20 |
 | 内置投资想法 | 11 类（YAML 配置） |
 | 评分检查项 | 25 项（8 ERROR + 10 WARNING + 7 INFO） |
-| Pipeline Mixin 数量 | 10 |
-| BRAIN API 适配文件 | 20 |
-| 测试用例 | ~2,649 |
-| Web API 路由 | 14 POST + 40 GET |
+| Pipeline Mixin 数量 | 6 |
+| BRAIN API 适配文件 | 21 |
+| 测试用例 | ~2,874 |
+| Web API 路由 | 通过 web_handler_dispatch.py 统一分发 |
 | 支持 Alpha 类型 | REGULAR / POWER_POOL / ATOM / PYRAMID |
 
 ---

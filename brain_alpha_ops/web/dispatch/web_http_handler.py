@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import time
+import os
 from datetime import date, datetime
 from decimal import Decimal
 from http.server import BaseHTTPRequestHandler
@@ -245,6 +246,11 @@ def create_handler_class(
             if not self._is_allowed_local_request():
                 self._json({"ok": False, "error_code": "ORIGIN_FORBIDDEN", "error": "forbidden local request origin"}, status=403)
                 return
+            # P0-4 fix: prevent path traversal (e.g. /assets/../../data/secrets.json)
+            normalized = os.path.normpath(request_path)
+            if ".." in normalized.split(os.sep) or not normalized.startswith(os.sep + "assets" + os.sep) and not normalized.startswith("/assets/"):
+                self._json({"ok": False, "error_code": "ORIGIN_FORBIDDEN", "error": "forbidden asset path"}, status=403)
+                return
             asset = resolve_static_asset_value(request_path)
             if asset is None:
                 self._json({"ok": False, "error_code": "NOT_FOUND", "error": "not found"}, status=404)
@@ -276,6 +282,13 @@ def create_handler_class(
             self.send_header("Content-Type", "application/json; charset=utf-8")
             self.send_header("Cache-Control", "no-store")
             self._send_security_headers()
+            # P0-2 fix: CORS headers consistent with _send_json
+            self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+            self.send_header(
+                "Access-Control-Allow-Headers",
+                "Content-Type, X-Brain-Alpha-CSRF, X-Brain-Alpha-Request-ID, X-Brain-Alpha-Request-Timestamp",
+            )
+            self.send_header("Access-Control-Allow-Credentials", "true")
             for name, value in extra_headers or []:
                 self.send_header(name, value)
             self.send_header("Content-Length", str(len(data)))

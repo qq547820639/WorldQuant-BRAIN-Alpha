@@ -14,7 +14,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 DEFAULT_CONFIG = ROOT / "config" / "run_config.json"
-DEFAULT_REPORT = ROOT / "docs" / "ALPHA_PRODUCTION_DIAGNOSIS_20260522.md"
+DEFAULT_REPORT = ROOT / "docs" / "ALPHA_PRODUCTION_DIAGNOSIS_20260620.md"
 REQUIRED_DIMENSIONS = [
     "Functional closure",
     "Technical compliance",

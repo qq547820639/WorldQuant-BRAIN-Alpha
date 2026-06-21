@@ -21,7 +21,6 @@ from brain_alpha_ops.jsonl import (
     find_jsonl_record_reverse,
     iter_jsonl_records,
     read_jsonl_records,
-    read_jsonl_tail,
     read_jsonl_tail_with_stats,
 )
 from brain_alpha_ops.redaction import redact_error_message, redact_text

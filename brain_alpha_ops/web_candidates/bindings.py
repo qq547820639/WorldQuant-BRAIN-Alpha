@@ -192,7 +192,6 @@ def save_run_config_payload(payload):
 
 # ==================== web_job_bindings ====================
 
-from brain_alpha_ops.web_job_registry import resolve_web_job_registry
 
 
 def _web():
@@ -258,9 +257,7 @@ def normalize_host(host: str | None) -> str:
 
 # ==================== web_runtime_bindings ====================
 
-import threading
 
-from brain_alpha_ops.runtime_constants import WebDefaults as _WebDefaults
 
 
 def _web():

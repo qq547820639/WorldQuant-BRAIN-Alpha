@@ -18,8 +18,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
-import re
 import threading
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
@@ -27,12 +25,9 @@ from hashlib import sha256
 from pathlib import Path
 from typing import Any
 
-from brain_alpha_ops.jsonl import read_jsonl_tail
 from brain_alpha_ops.redaction import redact_error_message, redact_text
 from brain_alpha_ops.research.expression_ast import (
     expression_fingerprint,
-    expression_key,
-    expression_profile_summary,
 )
 
 logger = logging.getLogger(__name__)
@@ -177,6 +172,7 @@ def _stringify_evidence(value: Any) -> str:
     try:
         return json.dumps(value, ensure_ascii=False, default=str)
     except Exception:
+        logger.exception("knowledge_base: unexpected error")
         logger.warning("knowledge_base: failed to serialize evidence value; using string fallback", exc_info=True)
         return str(value)
 

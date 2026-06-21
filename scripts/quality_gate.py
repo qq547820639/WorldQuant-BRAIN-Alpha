@@ -51,13 +51,8 @@ COMPILE_TARGETS = [
     "scripts",
     "tests",
     "build_prod.py",
-    "calibrate_weights.py",
     "fetch_official_context.py",
     "launch_web.py",
-    "test_api_format.py",
-    "test_api_root.py",
-    "test_auth.py",
-    "test_datasets_api.py",
     "validate_data.py",
     "_launch_monitor.py",
     "_status.py",
@@ -469,7 +464,7 @@ def _diagnostic_report_sync(config_path: Path) -> tuple[bool, dict]:
             "--config",
             str(config_path),
             "--report",
-            str(ROOT / "docs" / "ALPHA_PRODUCTION_DIAGNOSIS_20260522.md"),
+            str(ROOT / "docs" / "ALPHA_PRODUCTION_DIAGNOSIS_20260620.md"),
             "--json",
         ]
     )

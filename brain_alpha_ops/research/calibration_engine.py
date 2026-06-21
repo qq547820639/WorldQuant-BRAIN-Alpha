@@ -11,8 +11,7 @@ import json
 import math
 import os
 import random
-from collections import defaultdict
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List
 
 from brain_alpha_ops.scoring.shared_scores import default_prior_dimensions
 
@@ -354,7 +353,7 @@ def print_calibration_report(
 
     # ── Prior weights ──
     if prior_result:
-        print(f"\n  【Prior Score 权重校准】")
+        print("\n  【Prior Score 权重校准】")
         print(f"  样本数: {prior_result.get('sample_size', 0)} | "
               f"目标: {prior_result.get('target', 'sharpe')} | "
               f"R²: {prior_result.get('r_squared', 'N/A')}")
@@ -373,7 +372,7 @@ def print_calibration_report(
 
     # ── Scorecard weights ──
     if scorecard_result:
-        print(f"\n  【Scorecard 三层权重校准】")
+        print("\n  【Scorecard 三层权重校准】")
         print(f"  样本数: {scorecard_result.get('sample_size', 0)} | "
               f"与 Sharpe 相关系数: {scorecard_result.get('correlation_with_sharpe', 'N/A')}")
         if "original_weights" not in scorecard_result:
@@ -389,19 +388,19 @@ def print_calibration_report(
             print(f"\n  {scorecard_result.get('summary', '')}")
 
     # ── 使用建议 ──
-    print(f"\n  【使用建议】")
+    print("\n  【使用建议】")
     if prior_result.get("optimized_weights"):
-        print(f"  将以下配置加入 config/run_config.json 的 scoring 段:")
-        print(f"  \"prior_weights_override\": {{")
+        print("  将以下配置加入 config/run_config.json 的 scoring 段:")
+        print("  \"prior_weights_override\": {")
         for dim, w in prior_result["optimized_weights"].items():
             print(f'    "{dim}": {w:.4f},')
-        print(f"  }}")
+        print("  }")
     if scorecard_result.get("optimized_weights"):
-        print(f"\n  \"scorecard_layer_weights\": {{")
+        print("\n  \"scorecard_layer_weights\": {")
         sw = scorecard_result["optimized_weights"]
         for k in ["prior", "empirical", "checklist"]:
             print(f'    "{k}": {sw.get(k, 0)}')
-        print(f"  }}")
+        print("  }")
 
     print("\n" + "=" * 72)
 

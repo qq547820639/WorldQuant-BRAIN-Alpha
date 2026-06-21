@@ -170,7 +170,7 @@ export default function SubmissionConfirmPanel({ notify, onNavigate }: Props) {
 
       <StatusFlowDiagram stages={flowStages} />
 
-      <ReadinessSummary readiness={readiness} onNavigate={onNavigate} />
+      <ReadinessSummary readiness={readiness} onNavigate={onNavigate} onDrillOpen={() => { setDrillOpen(true); setDrillChecks(new Set()); }} />
 
       <ConfirmationTable
         title="预检查通过"
@@ -348,9 +348,11 @@ function blockerActionForProductionGap(
 function ReadinessSummary({
   readiness,
   onNavigate,
+  onDrillOpen,
 }: {
   readiness: SubmitReadinessResponse | null;
   onNavigate?: (view: string) => void;
+  onDrillOpen?: () => void;
 }) {
   const summary = readiness?.summary_counts || {};
   const allBlockers = readiness?.top_blocking_reasons || [];
@@ -415,7 +417,7 @@ function ReadinessSummary({
                 <button
                   type="button"
                   className="btn btn-secondary text-sm"
-                  onClick={() => { setDrillOpen(true); setDrillChecks(new Set()); }}
+                  onClick={() => onDrillOpen?.()}
                 >
                   模拟提交演练
                 </button>

@@ -50,6 +50,7 @@ import {
   EmptyState,
 } from "./CandidateTableSubComponents";
 import { CandidateRow } from "./CandidateRow";
+import CandidateTablePagination from "./CandidateTablePagination";
 import { CandidateTableToolbar } from "./CandidateTableToolbar";
 import type { QualitySummaryData } from "./CandidateTableToolbar";
 import { useCandidateColumns } from "./useCandidateColumns";
@@ -982,18 +983,15 @@ export default function CandidateTable({
         </div>
 
         {/* Pagination */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-t border-border-subtle px-3.5 py-3">
-          <div className="text-sm text-text-tertiary" role="status" aria-live="polite">
-            显示 {visibleStart}-{visibleEnd}，共 {sortedCandidates.length} 条
-          </div>
-          {sortedCandidates.length > PAGE_SIZE && (
-            <div className="flex items-center gap-2">
-              <button type="button" onClick={() => setCurrentPage((p) => Math.max(1, p - 1))} disabled={currentPage === 1} className="btn btn-ghost btn-sm">上一页</button>
-              <span className="text-sm text-text-secondary">{currentPage} / {totalPages}</span>
-              <button type="button" onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="btn btn-ghost btn-sm">下一页</button>
-            </div>
-          )}
-        </div>
+        <CandidateTablePagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          visibleStart={visibleStart}
+          visibleEnd={visibleEnd}
+          totalItems={sortedCandidates.length}
+          pageSize={PAGE_SIZE}
+          onPageChange={setCurrentPage}
+        />
       </div>
     </div>
   );

@@ -22,10 +22,13 @@ Usage::
     tracker.record_cycle(cycle, candidates, accepted)
     status = tracker.status()
     if status["stalled"]:
-        print(f"Convergence stalled: {status['recommendation']}")
+        logger.warning("Convergence stalled: %s", status["recommendation"])
 """
 from __future__ import annotations
 
+import logging
+
+logger = logging.getLogger(__name__)
 import math
 import random
 from collections import deque

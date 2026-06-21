@@ -128,6 +128,11 @@ class LocalSessionManager:
         return f"{self.cookie_name}=; Path=/; Max-Age=0; HttpOnly; SameSite=Strict{secure}"
 
     def prune(self, now: float | None = None) -> None:
+        """Remove expired sessions and their stale replay-cache entries.
+
+        P2-6: also cleans up per-session request_replay entries that have
+        exceeded their TTL to prevent memory accumulation.
+        """
         current = time.time() if now is None else now
         with self.lock:
             for session_id, row in list(self.sessions.items()):
@@ -135,6 +140,13 @@ class LocalSessionManager:
                 absolute_expires_at = float(row.get("absolute_expires_at", expires_at) or expires_at)
                 if expires_at <= current or absolute_expires_at <= current:
                     self.sessions.pop(session_id, None)
+                    continue
+                # P2-6: prune stale request_replay entries within live sessions
+                replay_cache = row.get("request_replay")
+                if isinstance(replay_cache, dict):
+                    stale = [cid for cid, exp in replay_cache.items() if float(exp or 0.0) <= current]
+                    for cid in stale:
+                        replay_cache.pop(cid, None)
 
     def create(self) -> tuple[str, str]:
         self.prune()
@@ -272,6 +284,12 @@ class LocalSessionManager:
             if request_id in replay_cache:
                 return {"ok": False, "error_code": "REPLAY_DETECTED", "error": "duplicate request id"}
             # R-03: Hard cap on replay cache size to prevent DoS memory exhaustion
+            # P2-6: aggressively prune stale entries when cache exceeds 50% capacity.
+            if len(replay_cache) >= MAX_REPLAY_CACHE_SIZE // 2:
+                half_ttl = ttl_seconds / 2
+                stale = [cid for cid, exp in replay_cache.items() if float(exp or 0.0) <= current + half_ttl]
+                for cid in stale:
+                    replay_cache.pop(cid, None)
             if len(replay_cache) >= MAX_REPLAY_CACHE_SIZE:
                 logger.warning(
                     "Replay cache full for session %s (size=%d), rejecting request",

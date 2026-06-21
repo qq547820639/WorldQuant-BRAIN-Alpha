@@ -14,11 +14,6 @@ from brain_alpha_ops.brain_api.user_alpha_sync import (
 from brain_alpha_ops.config import RunConfig
 from brain_alpha_ops.official_context_datasets import list_official_datasets_or_derive
 from brain_alpha_ops.research.repository import ResearchRepository
-from brain_alpha_ops.web_cloud.snapshot import (
-    cloud_alpha_id,
-    cloud_row_sort_key,
-    path_modified_at,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -632,3 +627,4 @@ def run_sync_job_service(
                 **_timing_payload(started_at, done=int(stats.get("scanned", 0) or 0)),
             },
         )
+from .snapshot import path_modified_at  # noqa: F401

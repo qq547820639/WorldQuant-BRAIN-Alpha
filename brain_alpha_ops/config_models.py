@@ -124,6 +124,7 @@ class QualityThresholds:
     max_drawdown: float = 0.25
     min_returns: float = 0.0
     enforce_target_turnover_as_hard_gate: bool = False
+    threshold_mode: str = "static"  # "static" | "dynamic" (Phase 3.2 W-08)
     market_regime: str = "normal"
     regime_adjustments: dict = field(
         default_factory=lambda: {

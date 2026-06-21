@@ -41,4 +41,5 @@ PyInstaller.__main__.run([
     "launch_web.py",
 ])
 
-print("\nBuild complete. Output: dist/BrainAlphaConsole.exe")
+ext = ".exe" if sys.platform == "win32" else ""
+print(f"\nBuild complete. Output: dist/BrainAlphaConsole{ext}")

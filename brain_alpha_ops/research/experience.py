@@ -15,12 +15,15 @@ Usage::
 
     # Extract winning patterns.
     patterns = get_winning_patterns("data", min_sharpe=2.0)
-    print(patterns["field_combinations"])
-    print(patterns["top_operators"])
-    print(patterns["preferred_windows"])
+    logger.info("Winning field combinations: %s", patterns.get("field_combinations"))
+    logger.info("Top operators: %s", patterns.get("top_operators"))
+    logger.info("Preferred windows: %s", patterns.get("preferred_windows"))
 """
 from __future__ import annotations
 
+import logging
+
+logger = logging.getLogger(__name__)
 import json
 import os
 import re

@@ -74,6 +74,11 @@ class OfficialRequestMixin:
 
             caller_headers = dict(headers or {})
             skip_auto_auth = caller_headers.pop("X-Auth-Mode", "") == "json"
+            if skip_auto_auth and not any(h.lower() == "authorization" for h in caller_headers):
+                logger.warning(
+                    "X-Auth-Mode=json without explicit Authorization header "
+                    "— request will be sent with no auth. Path: %s", path_or_url
+                )
 
             if self._prefer_cookie_auth and self._has_session_cookie():
                 auth_mode = "cookie"
@@ -84,6 +89,12 @@ class OfficialRequestMixin:
                 request_headers["Authorization"] = f"Basic {self._basic_auth()}"
                 auth_mode = "basic"
             request_headers.update(caller_headers)
+            if auth_mode == 'none' and 'Authorization' not in request_headers:
+                logger.warning(
+                    'HTTP request without Authorization header (auth_mode=none, '
+                    'skip_auto_auth=%s, method=%s, path=%s)',
+                    skip_auto_auth, method, path_or_url,
+                )
             self._throttle()
             req = urllib.request.Request(url, data=payload, headers=request_headers, method=method)
             try:

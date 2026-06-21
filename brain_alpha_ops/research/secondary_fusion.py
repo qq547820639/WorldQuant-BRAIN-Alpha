@@ -15,8 +15,8 @@ from .generator import (
     extract_fields,
     extract_operators,
     local_quality,
-    mutate_expression,
 )
+from .generator_mutation import mutate_expression
 from .scoring import build_scorecard
 
 logger = logging.getLogger(__name__)

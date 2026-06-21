@@ -12,7 +12,6 @@ Import conventions
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Final
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -291,7 +290,14 @@ class JournalArchiveDefaults:
 # ═══════════════════════════════════════════════════════════════════════════
 
 class ScoringDefaults:
-    """Defaults for the scoring system and quality gates."""
+    """Defaults for the scoring system and quality gates.
+
+    .. deprecated:: 0.3.1
+        Target removal: v0.4 (2026-Q3).  Use ``ScoringConfig`` from ``brain_alpha_ops.config_models`` instead.
+        This class is retained only for backward compatibility with
+        ``tests/test_runtime_constants.py`` and will be removed in v0.4.
+        The authoritative defaults now live in ``config_models.ScoringConfig``.
+    """
 
     DEFAULT_PRIOR_LAYER_WEIGHT: float = 0.30
     DEFAULT_EMPIRICAL_LAYER_WEIGHT: float = 0.45
@@ -306,7 +312,14 @@ class ScoringDefaults:
 
 
 class PipelineDefaults:
-    """Defaults for the alpha research pipeline."""
+    """Defaults for the alpha research pipeline.
+
+    .. deprecated:: 0.3.1
+        Target removal: v0.4 (2026-Q3).  Use ``ResearchBudget`` from ``brain_alpha_ops.config_models`` instead.
+        This class is retained only for backward compatibility with
+        ``tests/test_runtime_constants.py`` and will be removed in v0.4.
+        The authoritative defaults now live in ``config_models.ResearchBudget``.
+    """
 
     DEFAULT_MAX_CANDIDATES_PER_CYCLE: int = 20
     DEFAULT_MAX_VALIDATIONS_PER_CYCLE: int = 10

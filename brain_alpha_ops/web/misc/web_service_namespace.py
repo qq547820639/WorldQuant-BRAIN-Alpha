@@ -67,7 +67,7 @@ from brain_alpha_ops.web.handlers.sync import (
     sync_cloud_alphas_payload as _sync_cloud_alphas_payload,
 )
 from brain_alpha_ops.web_async_jobs import (
-    background_job_start_payload as _background_job_start_payload,
+    start_background_job_payload as _background_job_start_payload,
 )
 from brain_alpha_ops.web_async_jobs import progress_update as _progress_update
 from brain_alpha_ops.web_async_jobs import (

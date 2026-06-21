@@ -11,7 +11,6 @@ import math
 from typing import Any
 
 from brain_alpha_ops.brain_api.canonical import (
-    CANONICAL_METRIC_NAMES,
     CANONICAL_THRESHOLDS,
 )
 from brain_alpha_ops.models import Candidate

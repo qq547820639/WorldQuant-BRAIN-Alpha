@@ -20,12 +20,17 @@ from brain_alpha_ops.research.expression_ast import (
 # P0: Operator signatures — authoritative from BRAIN official docs
 # ═══════════════════════════════════════════════════════════════════
 
-# TODO R3 S-15: missing winsorize, truncate, group_rank etc; add or warn on unknown
 OPERATOR_SIGNATURES: dict[str, dict[str, Any]] = {
     # Cross-sectional
-    "rank":    {"params": ["x"],   "category": "cross_sectional"},
-    "zscore":  {"params": ["x"],   "category": "cross_sectional"},
-    "scale":   {"params": ["x"],   "category": "cross_sectional"},
+    "rank":           {"params": ["x"],   "category": "cross_sectional"},
+    "zscore":         {"params": ["x"],   "category": "cross_sectional"},
+    "scale":          {"params": ["x"],   "category": "cross_sectional"},
+    "group_rank":     {"params": ["x", "sector"], "category": "cross_sectional"},
+    "group_zscore":   {"params": ["x", "sector"], "category": "cross_sectional"},
+    "group_neutralize":{"params": ["x", "sector"], "category": "cross_sectional"},
+    # Transformation / sanitization
+    "winsorize":      {"params": ["x", "std"], "category": "transformation"},
+    "truncate":       {"params": ["x", "limit"], "category": "transformation"},
     # Time series (2-param)
     "ts_mean":         {"params": ["x", "d"], "category": "time_series"},
     "ts_std_dev":          {"params": ["x", "d"], "category": "time_series"},
@@ -48,6 +53,8 @@ OPERATOR_SIGNATURES: dict[str, dict[str, Any]] = {
 
 # Window constraints per operator
 WINDOW_CONSTRAINTS: dict[str, dict[str, int]] = {
+    "winsorize":       {"min": 1,  "max": 5},
+    "truncate":        {"min": 1,  "max": 10},
     "ts_mean":         {"min": 2,  "max": 252},
     "ts_std_dev":          {"min": 5,  "max": 252},
     "ts_sum":          {"min": 2,  "max": 252},
@@ -237,6 +244,7 @@ def validate_expression(expression: str) -> dict[str, Any]:
     for match in tokens:
         op = match.group(1)
         if op not in OPERATOR_SIGNATURES:
+            warnings.append(f"Unknown operator '{op}' — expression may fail BRAIN validation")
             continue
         sig = OPERATOR_SIGNATURES[op]
         # Extract arguments by counting parentheses from the opening bracket
@@ -435,10 +443,10 @@ def _passes_diversity(
     existing: list[dict[str, Any]],
     threshold: float,
 ) -> bool:
-    # TODO R3 S-06: O(n²) pairwise comparison; consider MinHash pre-filter
     """Check that *new_expr* is sufficiently different from all existing candidates.
 
-    Uses Jaccard similarity on operator+field token sets. Returns False if
+    Uses Jaccard similarity on operator+field token sets with MinHash
+    pre-filter for large candidate sets (n >= 20). Returns False if
     any existing candidate exceeds *threshold*.
     """
     if not existing or threshold >= 1.0:
@@ -448,7 +456,14 @@ def _passes_diversity(
     if not new_tokens:
         return True
 
-    for c in existing:
+    # MinHash pre-filter for n >= 20: reduce O(n²) to O(n × k) where k << n
+    candidates = list(existing)
+    if len(candidates) >= 20:
+        candidates = _minhash_top_k(new_tokens, candidates, k=10, threshold=threshold)
+        if not candidates:
+            return True
+
+    for c in candidates:
         existing_expr = str(c.get("expression", ""))
         if expression_similarity(new_expr, existing_expr) > threshold:
             return False
@@ -462,6 +477,49 @@ def _passes_diversity(
             return False
 
     return True
+
+
+def _minhash_top_k(
+    new_tokens: set[str],
+    existing: list[dict[str, Any]],
+    k: int = 10,
+    threshold: float = 0.40,
+) -> list[dict[str, Any]]:
+    """MinHash pre-filter: return top-k candidates by estimated Jaccard similarity.
+    
+    Uses 64 hash functions for stable estimation. For n >= 20 candidates,
+    this reduces the O(n²) pairwise comparison to O(n × k) where k << n.
+    """
+    n_hashes = 64
+    existing_sigs: list[list[int]] = []
+    for c in existing:
+        tokens = set(_tokenize(str(c.get("expression", ""))))
+        existing_sigs.append(_minhash_signature(tokens, n_hashes))
+    new_sig = _minhash_signature(new_tokens, n_hashes)
+
+    estimates: list[tuple[int, float]] = []
+    for i, sig in enumerate(existing_sigs):
+        matches = sum(1 for a, b in zip(new_sig, sig) if a == b)
+        est = matches / n_hashes
+        if est > threshold * 0.5:  # loose pre-filter
+            estimates.append((i, est))
+    estimates.sort(key=lambda x: -x[1])
+    return [existing[i] for i, _ in estimates[:k]]
+
+
+def _minhash_signature(tokens: set[str], n: int = 64) -> list[int]:
+    """Compute MinHash signature for a set of tokens."""
+    if not tokens:
+        return [0] * n
+    sig = []
+    for i in range(n):
+        min_hash = None
+        for token in tokens:
+            h = hash((i, token)) & 0x7FFFFFFF
+            if min_hash is None or h < min_hash:
+                min_hash = h
+        sig.append(min_hash if min_hash is not None else 0)
+    return sig
 
 
 def _tokenize(expression: str) -> list[str]:

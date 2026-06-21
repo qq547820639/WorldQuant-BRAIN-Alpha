@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from collections import Counter, defaultdict
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 from brain_alpha_ops.jsonl import read_jsonl_tail
 from brain_alpha_ops.research.expression_ast import (

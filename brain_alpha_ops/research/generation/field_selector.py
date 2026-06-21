@@ -98,11 +98,11 @@ class FieldSelector:
             try:
                 fields = self._selector.get_fields_by_category(
                     category_name, dataset_id
-                )  # type: ignore[attr-defined]
+                )
             except TypeError:
                 fields = self._selector.get_fields_by_category(
                     category_name
-                )  # type: ignore[attr-defined]
+                )
 
         dataset_fields = self._dataset_field_set(dataset_id)
         if dataset_fields:

@@ -24,6 +24,8 @@ from brain_alpha_ops.web_server_lifecycle import (
 
 __all__ = ["main", "shutdown_server", "serve", "smoke_test_server"]
 
+from typing import Any
+"""Module-level server reference for shutdown and smoke testing."""
 
 def serve(port=None, open_browser=True, host="127.0.0.1", *,
           default_port=8765, handler_class=None,
@@ -76,9 +78,10 @@ def serve(port=None, open_browser=True, host="127.0.0.1", *,
 
 def shutdown_server(server=None, server_stop=None) -> None:
     """Shutdown the web server (backward-compatible shim)."""
+    global _SERVER
     if server_stop:
         server_stop.set()
-    srv = server or _SERVER
+    srv = server or _SERVER  # noqa: F823  # type: ignore[used-before-def]
     if srv:
         try:
             thread = getattr(srv, "_serve_thread", None)

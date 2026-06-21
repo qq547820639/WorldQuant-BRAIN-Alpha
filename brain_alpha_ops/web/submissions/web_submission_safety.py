@@ -25,11 +25,6 @@ from brain_alpha_ops.web_check_availability import (
     build_cloud_self_correlation_explanation,
     build_context_health_explanation,
 )
-from brain_alpha_ops.web_cloud.snapshot import (
-    dedupe_cloud_alpha_rows,
-    extract_alpha_rows,
-)
-from brain_alpha_ops.web_post_handlers import save_assistant_guidance_post_payload
 
 LedgerFactory = Callable[[str], SubmissionLedger]
 CloudAlphaSnapshot = Callable[..., dict[str, Any]]
@@ -407,3 +402,6 @@ def record_submit_blocked_event(
             redact_text(failure_reason, max_length=160),
             redact_error_message(exc),
         )
+from brain_alpha_ops.web_cloud.snapshot import dedupe_cloud_alpha_rows  # noqa: F401
+from brain_alpha_ops.web_cloud.snapshot import extract_alpha_rows  # noqa: F401
+from brain_alpha_ops.web_candidates.payloads import save_assistant_guidance_post_payload  # noqa: F401

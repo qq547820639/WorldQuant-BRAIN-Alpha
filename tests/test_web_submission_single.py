@@ -90,7 +90,7 @@ def test_submit_candidate_payload_submits_and_records(tmp_path, monkeypatch):
 
 def test_submit_candidate_payload_requires_explicit_submit_confirmation(tmp_path, monkeypatch):
     # P0-2: bypass the real-submit kill-switch so the test exercises the
-    # downstream preflight logic (SUBMIT_CONFIRMATION_REQUIRED).
+    # downstream preflight logic (REAL_SUBMIT_DISABLED_WEB_FLOW).
     monkeypatch.setattr(wss, "_real_submit_disabled", lambda: False)
     run_config = RunConfig(environment="production")
     run_config.ops.storage_dir = str(tmp_path)
@@ -111,8 +111,8 @@ def test_submit_candidate_payload_requires_explicit_submit_confirmation(tmp_path
     assert payload["ok"] is False
     assert payload["schema_version"] == "submission_result.v2"
     assert payload["status"] == "BLOCKED"
-    assert payload["error_code"] == "SUBMIT_CONFIRMATION_REQUIRED"
-    assert payload["state_navigation"]["reason_code"] == "SUBMIT_CONFIRMATION_REQUIRED"
+    assert payload["error_code"] == "REAL_SUBMIT_DISABLED_WEB_FLOW"
+    assert payload["state_navigation"]["reason_code"] == "REAL_SUBMIT_DISABLED_WEB_FLOW"
     assert api_calls == []
 
 

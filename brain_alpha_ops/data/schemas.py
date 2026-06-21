@@ -1,7 +1,7 @@
 """Data schemas matching official WorldQuant BRAIN API JSON structures."""
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Optional
 
 

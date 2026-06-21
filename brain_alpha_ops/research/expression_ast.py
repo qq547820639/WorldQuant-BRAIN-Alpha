@@ -316,7 +316,7 @@ def _tokenize(expression: str) -> list[str]:
 
 def canonicalize(node: ExprNode, max_depth: int = 64) -> str:
     if max_depth < 1:
-        raise ExpressionParseError(f"AST canonicalize depth limit exceeded")
+        raise ExpressionParseError("AST canonicalize depth limit exceeded")
     if node.kind in {"identifier", "number"}:
         return node.value
     if node.kind == "call":
@@ -358,7 +358,7 @@ def _canonical_child(child: ExprNode, parent_op: str, *, is_right: bool, max_dep
 
 def _flatten(node: ExprNode, op: str, max_depth: int = 64) -> Iterable[ExprNode]:
     if max_depth < 1:
-        raise ExpressionParseError(f"AST flatten depth limit exceeded")
+        raise ExpressionParseError("AST flatten depth limit exceeded")
     if node.kind == "binary" and node.value == op:
         for child in node.children:
             yield from _flatten(child, op, max_depth - 1)
@@ -368,7 +368,7 @@ def _flatten(node: ExprNode, op: str, max_depth: int = 64) -> Iterable[ExprNode]
 
 def _collect(node: ExprNode, operators: list[str], fields: list[str], windows: list[int], max_depth: int = 64) -> None:
     if max_depth < 1:
-        raise ExpressionParseError(f"AST collect depth limit exceeded")
+        raise ExpressionParseError("AST collect depth limit exceeded")
     """Recursively collect operators, fields, and window values from an expression AST.
     S-15: The `index > 0` heuristic treats the second+ argument to any call as a window.
     This works for common operators like ts_mean(x, 20) but may misidentify non-window
@@ -398,7 +398,7 @@ def _collect(node: ExprNode, operators: list[str], fields: list[str], windows: l
 
 def _collect_operators(node: ExprNode, operators: list[str], max_depth: int = 64) -> None:
     if max_depth < 1:
-        raise ExpressionParseError(f"AST collect_operators depth limit exceeded")
+        raise ExpressionParseError("AST collect_operators depth limit exceeded")
     if node.kind == "call":
         operators.append(node.value)
     for child in node.children:

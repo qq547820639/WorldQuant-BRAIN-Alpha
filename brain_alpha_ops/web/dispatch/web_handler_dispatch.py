@@ -10,7 +10,6 @@ from __future__ import annotations
 import logging
 from functools import wraps
 from typing import Any, Callable
-from urllib.parse import parse_qs
 
 from brain_alpha_ops.redaction import redact_text
 from brain_alpha_ops.research.assistant import AssistantResponseParseError
@@ -22,13 +21,8 @@ from brain_alpha_ops.web_handler_candidate_routes import (
 )
 from brain_alpha_ops.web_handler_dispatch_core import (
     dispatch_route as _dispatch_route,
-    rate_limit_key as _rate_limit_key,
-)
-from brain_alpha_ops.web_payload_validation import (
-    validate_json_object_payload,
 )
 from brain_alpha_ops.web_state_contract import enrich_error_payload, enrich_job_response
-from brain_alpha_ops.web_post_handlers import stop_job_payload  # re-export for web_service_namespace
 
 logger = logging.getLogger(__name__)
 
@@ -116,7 +110,6 @@ def _with_session_credentials(handler: Any, ctx: WebHandlerDispatchContext, payl
 # ── Import handlers from sub-modules ───────────────────────────────────
 
 from .web_get_routes import (
-    _active_job_from_any_store,
     _get_active_job,
     _get_alpha_lifecycle,
     _get_anti_overfit,
@@ -154,13 +147,9 @@ from .web_get_routes import (
     _get_submit_readiness,
     _get_sync_status,
     _get_trends,
-    _job_status_from_any_store,
-    _positive_query_int,
 )
 
 from .web_post_routes import (
-    _create_non_submit_run_job,
-    _non_submit_run_payload,
     _post_assistant_cross_review,
     _post_assistant_guidance,
     _post_assistant_response_guidance,
@@ -186,9 +175,6 @@ from .web_post_routes import (
     _post_sync_context_only,
     _post_test_connection,
     _post_trends,
-    _start_optimize_candidates_job,
-    _start_sync_job,
-    _submit_with_lock,
 )
 
 # ── Dispatch Tables ────────────────────────────────────────────────────
@@ -287,3 +273,10 @@ __all__ = [
     "RouteDispatcher",
     "PayloadRouteDispatcher",
 ]
+
+from .web_post_handlers import stop_job_payload  # noqa: F401
+_rate_limit_key = None  # backward-compat
+
+# Backward-compat aliases
+_start_optimize_candidates_job = _post_optimize_candidates
+_submit_with_lock = None  # backward-compat: removed in Phase 3.x

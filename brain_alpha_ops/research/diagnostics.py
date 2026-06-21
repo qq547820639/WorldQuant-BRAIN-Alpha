@@ -11,12 +11,15 @@ Usage::
 
     diag = diagnose(candidate, QualityThresholds())
     if diag["primary_failure"]:
-        print(f"Primary failure: {diag['primary_failure']}")
+        logger.warning("Primary failure: %s", diag["primary_failure"])
         for mut in diag["suggested_mutations"]:
-            print(f"  -> {mut}")
+            logger.debug("  -> %s", mut)
 """
 from __future__ import annotations
 
+import logging
+
+logger = logging.getLogger(__name__)
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:

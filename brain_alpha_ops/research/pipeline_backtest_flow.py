@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import time
 
+from brain_alpha_ops.brain_api.base import BrainAPIError
 from brain_alpha_ops.models import Candidate
 from brain_alpha_ops.redaction import redact_error_message, redact_text
 
@@ -97,7 +98,7 @@ class PipelineBacktestMixin:
             key_fn=_expr_key,
         )
 
-    def _handle_slot_submit_error(self, exc: BrainAPIError, candidate: Candidate):
+    def _handle_slot_submit_error(self, exc: BrainAPIError, candidate: Candidate):  # type: ignore[name-defined]
         self._backtest_submission_service()._handle_submit_error(exc, candidate)
 
     def _poll_due_backtests(
@@ -118,7 +119,21 @@ class PipelineBacktestMixin:
         now = time.monotonic()
         interval = self._poll_interval_seconds()
         polling_service = self._backtest_polling_service()
+        poll_iteration = 0
         for slot, candidate in self.backtest_slot_manager.items_snapshot():
+            # P1-3: check stop signal every 5 slot iterations so the pipeline
+            # responds to user cancellation during long polling runs.
+            poll_iteration += 1
+            if poll_iteration % 5 == 0 and self._should_stop():
+                self._event(
+                    "polling_stopped",
+                    f"Backtest polling stopped by user request at slot {slot}.",
+                    candidate.alpha_id,
+                    level="WARN",
+                )
+                self.backtest_slot_manager.release(slot)
+                return submitted_this_run
+
             next_poll_at = float(candidate.submission.get("next_poll_at", 0.0) or 0.0)
             # P1-11 fix: when force_initial=True, unconditionally bypass the
             # next_poll_at gate so that pipeline recovery (e.g. after restart)
@@ -388,5 +403,9 @@ class PipelineBacktestMixin:
         return outcome.created_count
 
     def _poll_interval_seconds(self) -> float:
-        api_config = getattr(self.api, "config", None)
-        return max(0.1, float(getattr(api_config, "poll_interval_seconds", self.config.official_api.poll_interval_seconds)))
+        """Return the poll interval from the unified config source.
+
+        P1-1: unified to a single config source — self.config.official_api —
+        to prevent silent drift when self.api.config exists but disagrees.
+        """
+        return max(0.1, float(self.config.official_api.poll_interval_seconds))

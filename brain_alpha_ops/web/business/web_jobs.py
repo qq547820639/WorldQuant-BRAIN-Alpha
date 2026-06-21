@@ -25,7 +25,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import threading
 import time
 import uuid
@@ -167,6 +166,12 @@ def load_jobs_from_jsonl() -> int:
             status = str(row.get("status", "")).lower()
             if status in _ASYNC_JOB_TERMINAL_STATUSES:
                 continue  # don't restore finished/cancelled jobs
+            # P2-5: mark restored jobs as interrupted so the frontend knows
+            # the background thread is gone after a process restart.
+            row["status"] = "interrupted"
+            progress = row.get("progress") if isinstance(row.get("progress"), dict) else {}
+            progress["status_message"] = "服务重启，任务已中断。可尝试从检查点续跑。"
+            row["progress"] = progress
             if jid not in ASYNC_JOBS:
                 ASYNC_JOBS[jid] = row
                 restored += 1

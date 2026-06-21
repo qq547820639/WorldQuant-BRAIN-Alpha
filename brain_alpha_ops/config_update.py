@@ -33,6 +33,11 @@ def update_dataclass_from_mapping(
     pending: dict[str, Any] = {}
     for key, value in data.items():
         if key not in field_map:
+            if logger:
+                logger.warning(
+                    "unknown config key '%s' at %s — ignored; check for typos in config file",
+                    key, path or "(root)",
+                )
             continue
         item = field_map[key]
         current = getattr(instance, key)

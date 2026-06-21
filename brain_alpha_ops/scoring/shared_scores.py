@@ -73,8 +73,7 @@ def economic_logic_score(
     detected = [
         concept_name
         for concept_name, info in concepts.items()
-        # TODO S-12: prefer \b word-boundary regex over substring match
-            if any(keyword in text for keyword in info["keywords"])
+            if any(re.search(rf"\b{re.escape(keyword)}\b", text) for keyword in info["keywords"])
     ]
 
     if not detected:
@@ -109,7 +108,9 @@ def default_prior_dimensions(
     economic_result: dict[str, Any] | None = None,
 ) -> dict[str, float]:
     """Compute the default eight prior-score dimensions."""
-    windows = [int(value) for value in re.findall(r"\b\d+\b", expression)]  # TODO S-13: only extract windows from ts_* calls, not all integers
+    # Extract window parameters from ts_<op>(..., d) and ts_<op>(..., ..., d) calls only.
+    windows = [int(value) for value in re.findall(r'ts_\w+\([^,]*,\s*(\d+)\s*\)', expression)]
+    windows += [int(value) for value in re.findall(r'ts_\w+\([^,]*,\s*[^,]*,\s*(\d+)\s*\)', expression)]
     has_cross_section = any(op in operators for op in ("rank", "zscore", "scale", "group_rank", "group_zscore"))
     has_time_series = any(op.startswith("ts_") for op in operators)
     has_risk_control = any(op in operators for op in ("winsorize", "zscore", "scale", "group_rank")) or "adv20" in fields

@@ -7,7 +7,7 @@ import random
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from brain_alpha_ops.data import FieldDatasetMapper, OfficialDataLoader
+    from brain_alpha_ops.data import OfficialDataLoader
 
 logger = logging.getLogger(__name__)
 
@@ -118,6 +118,7 @@ class DatasetSelector:
                 if cat and field_id:
                     self._category_index.setdefault(cat, []).append(field_id)
         except Exception:
+            logger.exception("dataset_selector: unexpected error")
             logger.warning("dataset selector category index unavailable", exc_info=True)
 
     def get_fields_by_category(self, category: str, dataset_id: str = "") -> list[str]:

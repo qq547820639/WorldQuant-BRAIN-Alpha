@@ -23,7 +23,7 @@ if tests_dir not in sys.path:
 os.environ.setdefault("BRAIN_ALPHA_FORCE_REAL_SUBMIT", "1")
 
 
-def pytest_ignore_collect(collection_path, path, config):
+def pytest_ignore_collect(collection_path, config):
     """Skip e2e tests when playwright is not installed (CI does not have browser deps)."""
     if "e2e_" in str(collection_path):
         try:

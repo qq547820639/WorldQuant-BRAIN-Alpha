@@ -9,7 +9,6 @@ from urllib.parse import parse_qs
 from brain_alpha_ops.web_candidates.payloads import (
     candidate_payload,
     candidate_result_total,
-    candidate_summary_from_iter,
     has_candidate_like_rows,
 )
 

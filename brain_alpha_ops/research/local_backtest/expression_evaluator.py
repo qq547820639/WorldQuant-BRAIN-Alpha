@@ -16,6 +16,10 @@ from brain_alpha_ops.research.local_backtest_metrics_helpers import (
     safe_stdev as _safe_stdev,
 )
 
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from brain_alpha_ops.market_data_vector import MarketDataFrame
+
 # Pre-compiled tokenizer regex — executed once at import, not per-expression
 _TOKEN_PATTERN = re.compile(
     r"("

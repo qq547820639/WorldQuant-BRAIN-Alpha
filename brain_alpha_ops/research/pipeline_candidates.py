@@ -28,7 +28,6 @@ from .pipeline_cloud import (
     smart_ranking_score,
 )
 from .pipeline_helpers import blocked_gate as _blocked_gate
-from .pipeline_helpers import expr_key as _expr_key
 from .pipeline_helpers import rank_candidates
 from .pipeline_official_context import (
     active_dataset_field_names,

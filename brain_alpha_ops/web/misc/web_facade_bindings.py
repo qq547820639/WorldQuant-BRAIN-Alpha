@@ -7,7 +7,6 @@ which in turn re-export from the consolidated web/bindings.py.
 from __future__ import annotations
 
 import threading
-from collections.abc import Mapping
 
 from brain_alpha_ops.web_candidates.bindings import (  # noqa: F401
     candidate_from_payload as _candidate_from_payload,

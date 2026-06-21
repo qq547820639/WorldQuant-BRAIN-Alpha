@@ -31,14 +31,7 @@ from brain_alpha_ops.core_state import (
     JOB_ACTIVE_STATUSES as ACTIVE_STATUSES,
 )
 from brain_alpha_ops.core_state import (
-    JOB_KNOWN_STATUSES as KNOWN_STATUSES,
-)
-from brain_alpha_ops.core_state import (
     JOB_TERMINAL_STATUSES as TERMINAL_STATUSES,
-)
-from brain_alpha_ops.core_state import (
-    is_active_job_status,
-    is_terminal_job_status,
 )
 from brain_alpha_ops.redaction import redact_data
 

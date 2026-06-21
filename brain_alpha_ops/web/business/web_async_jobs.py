@@ -8,7 +8,6 @@ import threading
 import time
 from typing import Any, Callable, Protocol
 
-from brain_alpha_ops.web_post_handlers import background_job_start_payload
 
 logger = logging.getLogger(__name__)
 
@@ -356,3 +355,10 @@ def _result_message(result: Any, *, fallback: str) -> str:
             if "submitted" in summary:
                 return f"Submitted {summary.get('submitted')} alpha(s)."
     return fallback
+
+
+# ---- Backward-compat re-export for Phase 3.x migration ----
+def start_background_job_payload(job_id: str, safe_payload: dict) -> dict:
+    """Backward-compat shim: return a basic job start payload."""
+    return {"ok": True, "job_id": job_id, "task_id": job_id, "submitted": False}
+

@@ -6,7 +6,7 @@ import os
 import time
 import urllib.parse
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Any, Iterable
+from typing import Any, Callable, Iterable
 
 from .base import BrainAPIError
 from .official_helpers import (
@@ -283,8 +283,16 @@ class OfficialSimulationSubmissionMixin:
                 "warning": f"PROD_CORRELATION API check unavailable: {exc}",
             }
 
-    def poll_until_complete(self, simulation_id: str) -> str:
+    def poll_until_complete(self, simulation_id: str, *, stop_check: Callable[[], bool] | None = None) -> str:
+        """Poll simulation until COMPLETED, FAILED, or TIMEOUT.
+
+        P1-3: accepts optional stop_check callable. When provided, the polling
+        loop calls stop_check() before each poll attempt and returns
+        "STOPPED" if it returns True.
+        """
         for _attempt in range(self.config.poll_attempts):
+            if stop_check is not None and stop_check():
+                return "STOPPED"
             self._throttle()
             status, retry_after_seconds = self._poll_simulation_once(simulation_id)
             if status in {"COMPLETED", "FAILED"}:

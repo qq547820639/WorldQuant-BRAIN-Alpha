@@ -40,7 +40,6 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-import math
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
@@ -58,7 +57,6 @@ from brain_alpha_ops.scoring.attribution import (
     dim_explanation,
 )
 from brain_alpha_ops.scoring.gates import (
-    OFFICIAL_HARD_GATE_NAMES,
     GateConfig,
     GateResult,
 )

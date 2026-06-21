@@ -209,7 +209,7 @@ def _int(value: Any) -> int:
 
 import logging
 from pathlib import Path
-from typing import Any, Callable
+from typing import Callable
 
 from brain_alpha_ops.models import utc_now
 from brain_alpha_ops.redaction import redact_text

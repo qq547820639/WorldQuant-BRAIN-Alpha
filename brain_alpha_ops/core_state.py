@@ -86,11 +86,13 @@ BACKTEST_TERMINAL_ACTIONS: frozenset[str] = frozenset(
 # ── Helpers ────────────────────────────────────────────────────────────────
 
 def is_active_job_status(status: str) -> bool:
-    return str(status or "").lower() in {s.lower() for s in JOB_ACTIVE_STATUSES}
+    """Case-insensitive: accepts any casing."""
+    return str(status or "").upper() in {s.upper() for s in JOB_ACTIVE_STATUSES}
 
 
 def is_terminal_job_status(status: str) -> bool:
-    return str(status or "").lower() in {s.lower() for s in JOB_TERMINAL_STATUSES}
+    """Case-insensitive: accepts any casing."""
+    return str(status or "").upper() in {s.upper() for s in JOB_TERMINAL_STATUSES}
 
 
 def classify_job_status(status: str) -> str:
@@ -99,8 +101,10 @@ def classify_job_status(status: str) -> str:
 
 
 def is_active_backtest_status(status: str) -> bool:
-    return str(status or "").upper() in BACKTEST_ACTIVE_STATUSES
+    """Case-insensitive for consistency with job helpers."""
+    return str(status or "").upper() in {s.upper() for s in BACKTEST_ACTIVE_STATUSES}
 
 
 def is_terminal_backtest_status(status: str) -> bool:
-    return str(status or "").upper() in BACKTEST_TERMINAL_STATUSES
+    """Case-insensitive for consistency with job helpers."""
+    return str(status or "").upper() in {s.upper() for s in BACKTEST_TERMINAL_STATUSES}

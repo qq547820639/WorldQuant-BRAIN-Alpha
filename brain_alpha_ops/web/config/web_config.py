@@ -528,3 +528,4 @@ def validate_settings_enums(settings: dict) -> None:
         errors.append(f"Invalid alpha type: '{alpha_type}'. Valid: {sorted(_VALID_TYPES)}")
     if errors:
         raise ValueError("; ".join(errors))
+from brain_alpha_ops.web.dispatch.web_post_handlers import connection_test_post_payload  # noqa: F401

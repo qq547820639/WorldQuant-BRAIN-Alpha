@@ -13,16 +13,6 @@ from typing import Any, Callable
 
 from brain_alpha_ops.config import load_run_config, runtime_project_root
 from brain_alpha_ops.redaction import redact_error_message
-from brain_alpha_ops.types import (
-    BacktestSlotResponse,
-    CandidateListResponse,
-    ConfigResponse,
-    SubmissionReadinessResponse,
-    WebRouteResponse,
-)
-from brain_alpha_ops.web_backtest_slots import (
-    backtest_queue_next_action as _backtest_queue_next_action,
-)
 from brain_alpha_ops.web_backtest_slots import (
     backtest_slot_limit as _shared_backtest_slot_limit,
 )
@@ -30,37 +20,7 @@ from brain_alpha_ops.web_backtest_slots import (
     backtest_slots_payload as _shared_backtest_slots_payload,
 )
 from brain_alpha_ops.web_backtest_slots import (
-    candidate_high_cloud_similarity_blocked as _candidate_high_cloud_similarity_blocked,
-)
-from brain_alpha_ops.web_backtest_slots import (
-    candidate_local_backtest_failed as _candidate_local_backtest_failed,
-)
-from brain_alpha_ops.web_backtest_slots import (
-    candidate_local_valid as _candidate_local_valid,
-)
-from brain_alpha_ops.web_backtest_slots import (
-    candidate_official_review_blockers as _candidate_official_review_blockers,
-)
-from brain_alpha_ops.web_backtest_slots import (
-    candidate_score as _candidate_score,
-)
-from brain_alpha_ops.web_backtest_slots import (
-    candidate_submit_evidence_blockers as _candidate_submit_evidence_blockers,
-)
-from brain_alpha_ops.web_backtest_slots import (
-    is_submit_only_quality_reason as _is_submit_only_quality_reason,
-)
-from brain_alpha_ops.web_backtest_slots import (
     official_simulation_score_threshold as _shared_official_simulation_score_threshold,
-)
-from brain_alpha_ops.web_backtest_slots import (
-    slot_active as _slot_active,
-)
-from brain_alpha_ops.web_backtest_slots import (
-    slot_has_official_work_record as _slot_has_official_work_record,
-)
-from brain_alpha_ops.web_backtest_slots import (
-    slot_payload as _slot_payload,
 )
 from brain_alpha_ops.web_candidates.payloads import (
     annotate_candidate_rows as _annotate_candidate_rows,
@@ -81,6 +41,7 @@ from brain_alpha_ops.web_candidates.workflow import (
     candidate_workflow_plan as _candidate_workflow_plan,
 )
 from brain_alpha_ops.web_session import session_status as _web_session_status
+from .web_get_handlers import health_payload as _health_payload
 from brain_alpha_ops.web_submit_readiness import (
     submit_readiness_payload as _build_submit_readiness_payload,
 )
@@ -104,7 +65,7 @@ def dispatch_get(handler: Any, path: str, query: dict) -> None:
     """Dispatch GET requests to appropriate handlers."""
     # Health and session endpoints
     if path in ("/api/health", "/api/refresh_session"):
-        handler._send_json(health_payload())
+        handler._send_json(_health_payload())
         return
 
     # Backtest slots
@@ -129,16 +90,10 @@ def dispatch_get(handler: Any, path: str, query: dict) -> None:
             handler._send_json({"ok": False, "error": redact_error_message(exc)}, status=500)
         return
 
-    # Latest result
+    # Latest result (P1-2: uses dedicated _latest_result_payload so this
+    # endpoint and /api/backtest_slots can evolve independently.)
     if path == "/api/latest_result":
-        slots = _backtest_slots_payload()
-        handler._send_json({
-            "ok": True,
-            "source": "local_readonly_snapshot",
-            "status": "completed",
-            "result": {"summary": {"backtest_slots": slots["slots"]}},
-            "progress": {"data": {"backtests": slots["slots"]}},
-        })
+        handler._send_json(_latest_result_payload())
         return
 
     # Status
@@ -288,7 +243,6 @@ def dispatch_post(handler: Any, path: str, body: str) -> None:
 # ═══════════════════════ Route Handlers ═══════════════════════════════
 def _handle_pipeline_start(handler: Any, payload: dict) -> None:
     """Handle pipeline start request."""
-    import os
     import threading
 
     from brain_alpha_ops.redaction import redact_error_message
@@ -443,7 +397,7 @@ def _handle_candidate_simulate(handler: Any, payload: dict) -> None:
         simulate_candidates_job,
         simulation_candidates_payload,
     )
-    from brain_alpha_ops.web_jobs import is_cancelled, job_update, new_job_id
+    from brain_alpha_ops.web_jobs import job_update, new_job_id
 
     # Preview mode: just show eligible candidates without starting simulation
     if payload.get("preview"):
@@ -766,6 +720,23 @@ def _backtest_slots_payload() -> dict:
     return _shared_backtest_slots_payload(_read_jsonl_records, load_config=load_run_config)
 
 
+def _latest_result_payload() -> dict:
+    """Build the /api/latest_result response from backtest slots.
+
+    P1-2: independent function for /api/latest_result. Currently wraps
+    _backtest_slots_payload() but returns its own structure so the two
+    endpoints can evolve independently.
+    """
+    slots = _backtest_slots_payload()
+    return {
+        "ok": True,
+        "source": "local_readonly_snapshot",
+        "status": "completed",
+        "result": {"summary": {"backtest_slots": slots["slots"]}},
+        "progress": {"data": {"backtests": slots["slots"]}},
+    }
+
+
 def _official_simulation_score_threshold() -> float:
     return _shared_official_simulation_score_threshold(load_run_config)
 
@@ -934,3 +905,31 @@ def route_for(method: str, path: str) -> Route | None:
     g, p = _get_routes()
     _map = {"GET": g, "POST": p}.get(method.upper(), {})
     return _map.get(path)
+
+
+from brain_alpha_ops.web.misc.web_backtest_slots import slot_payload as _slot_payload  # noqa: F401  # backward-compat
+
+
+# ---- Phase 3.x backward-compat re-exports ---- (tracked in REFACTORING_PLAN.md: "Phase 4 remove compat layer")
+# grep 'from brain_alpha_ops.web.misc.web_backtest_slots import' brain_alpha_ops/ -r --include='*.py' | grep -v web_routes.py
+# to check consumers before removal
+# ---- Backward-compat re-export for Phase 3.x migration ----
+from brain_alpha_ops.web.misc.web_backtest_slots import slot_active as _slot_active  # noqa: F401  # backward-compat re-export
+
+# Backward-compat: _slot_has_official_work_record moved to web_backtest_slots
+from brain_alpha_ops.web.misc.web_backtest_slots import slot_has_official_work_record as _slot_has_official_work_record  # noqa: F401
+
+from brain_alpha_ops.web.misc.web_backtest_slots import candidate_score as _candidate_score  # noqa: F401
+
+from brain_alpha_ops.web.misc.web_backtest_slots import candidate_local_valid as _candidate_local_valid  # noqa: F401
+
+from brain_alpha_ops.web.misc.web_backtest_slots import candidate_official_review_blockers as _candidate_official_review_blockers  # noqa: F401
+
+from brain_alpha_ops.web.misc.web_backtest_slots import candidate_submit_evidence_blockers as _candidate_submit_evidence_blockers  # noqa: F401
+
+from brain_alpha_ops.web.misc.web_backtest_slots import is_submit_only_quality_reason as _is_submit_only_quality_reason  # noqa: F401
+
+from brain_alpha_ops.web.misc.web_backtest_slots import candidate_high_cloud_similarity_blocked as _candidate_high_cloud_similarity_blocked  # noqa: F401
+
+from brain_alpha_ops.web.misc.web_backtest_slots import candidate_local_backtest_failed as _candidate_local_backtest_failed  # noqa: F401
+from brain_alpha_ops.web.misc.web_backtest_slots import backtest_queue_next_action as _backtest_queue_next_action  # noqa: F401

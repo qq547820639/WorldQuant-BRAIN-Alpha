@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import Any
 
 from brain_alpha_ops.errors import classify_error
-from brain_alpha_ops.redaction import redact_text
 
 
 def observability_error_rows(

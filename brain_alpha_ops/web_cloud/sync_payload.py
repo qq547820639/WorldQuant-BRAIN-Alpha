@@ -22,9 +22,6 @@ from brain_alpha_ops.web_cloud.snapshot import (
     read_official_context_metadata,
     save_official_context_json,
 )
-from brain_alpha_ops.web_post_handlers import (
-    connection_test_post_payload,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -109,3 +106,4 @@ __all__ = [
     "save_official_context_json",
     "sync_cloud_alphas_payload",
 ]
+from brain_alpha_ops.web.config.web_config import connection_test_post_payload  # noqa: F401

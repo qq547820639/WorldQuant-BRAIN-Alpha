@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
-from brain_alpha_ops.redaction import redact_error_message
 
 from . import pagination_limits
 from .base import BrainAPIError
@@ -26,9 +25,6 @@ from .official_helpers import (
     looks_partial_context_cache as _looks_partial_context_cache,
 )
 from .official_helpers import (
-    normal_alpha as _normal_alpha,
-)
-from .official_helpers import (
     normal_data_category as _normal_data_category,
 )
 from .official_helpers import (
@@ -46,32 +42,10 @@ from .official_helpers import (
 from .official_helpers import (
     total_count as _total_count,
 )
-from .official_helpers import (
-    user_alpha_cursor_recovery as _user_alpha_cursor_recovery,
-)
-from .official_helpers import (
-    user_alpha_offset_recovery as _user_alpha_offset_recovery,
-)
-from .official_helpers import (
-    user_alpha_progress as _user_alpha_progress,
-)
 from .official_query_params import (
-    alpha_filter_params,
     apply_market_discovery_filters,
 )
 from .pagination import _paginate_collection
-from .user_alpha_transient import (
-    USER_ALPHA_TRANSIENT_PAGE_RETRY_ATTEMPTS as _USER_ALPHA_TRANSIENT_PAGE_RETRY_ATTEMPTS,
-)
-from .user_alpha_transient import (
-    USER_ALPHA_TRANSIENT_PAGE_RETRY_EXCEPTIONS as _USER_ALPHA_TRANSIENT_PAGE_RETRY_EXCEPTIONS,
-)
-from .user_alpha_transient import (
-    USER_ALPHA_TRANSIENT_PAGE_RETRY_SECONDS as _USER_ALPHA_TRANSIENT_PAGE_RETRY_SECONDS,
-)
-from .user_alpha_transient import (
-    USER_ALPHA_TRANSIENT_RETRY_STATUSES as _USER_ALPHA_TRANSIENT_RETRY_STATUSES,
-)
 
 _DISCOVERY_OPTION_KEYS = frozenset({"instrument_type", "region", "universe", "delay", "dataset"})
 _ALPHA_FILTER_OPTION_KEYS = frozenset({"instrument_type", "region", "universe", "delay"})
@@ -632,3 +606,83 @@ class OfficialContextDataMixin(AlphaQueryMixin):
                 break
             current_offset = next_offset
         return _dedupe_alpha_items(rows)
+
+
+# ═════════════════════════════════════════════════════════════════════
+# Phase 3.2 (W-08): Dynamic gate threshold polling infrastructure.
+# Provides optional BRAIN API-driven threshold refresh with static
+# fallback. Enabled via `threshold_mode: "dynamic"` in run_config.json.
+# ═════════════════════════════════════════════════════════════════════
+
+def fetch_official_thresholds(
+    api: Any,
+    *,
+    timeout_seconds: int = 30,
+) -> dict[str, Any]:
+    """Poll BRAIN API for current quality gate thresholds.
+
+    Returns a dict with min_sharpe, min_fitness, max_turnover, etc.
+    Falls back to an empty dict on any error — callers should merge
+    with their static QualityThresholds defaults.
+
+    This is a best-effort advisory function: failure here MUST NOT
+    block pipeline startup or gate evaluation.
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+    try:
+        raw = api._request("GET", "/data-check", timeout=timeout_seconds) or {}
+    except Exception as exc:
+        from brain_alpha_ops.redaction import redact_error_message
+        logger.info(
+            "Dynamic threshold fetch failed (static defaults will be used): %s",
+            redact_error_message(exc, max_length=160),
+        )
+        return {}
+    if not isinstance(raw, dict):
+        return {}
+    checks = raw.get("checks") if isinstance(raw.get("checks"), dict) else {}
+    thresholds: dict[str, Any] = {}
+    for check_name, check_data in checks.items():
+        if not isinstance(check_data, dict):
+            continue
+        value = check_data.get("threshold")
+        if value is not None:
+            thresholds[check_name] = value
+    return thresholds
+
+
+def merge_dynamic_thresholds(
+    static_thresholds: Any,
+    dynamic_data: dict[str, Any],
+) -> dict[str, Any]:
+    """Merge dynamic BRAIN API thresholds into static QualityThresholds.
+
+    Only updates fields that are present in the dynamic response;
+    all other values remain unchanged.
+    """
+    import dataclasses
+    if not dynamic_data:
+        return dataclasses.asdict(static_thresholds) if dataclasses.is_dataclass(static_thresholds) else dict(static_thresholds)
+    merged = dataclasses.asdict(static_thresholds) if dataclasses.is_dataclass(static_thresholds) else dict(static_thresholds)
+
+    mapping = {
+        "LOW_SHARPE": ("min_sharpe", "min_sharpe_delay0"),
+        "LOW_FITNESS": ("min_fitness", "min_fitness_delay0"),
+        "HIGH_TURNOVER": ("platform_max_turnover",),
+        "SELF_CORRELATION": ("max_self_correlation",),
+        "CONCENTRATED_WEIGHT": ("max_weight_concentration",),
+        "LOW_SUB_UNIVERSE_SHARPE": ("sub_universe_sharpe_min_ratio",),
+    }
+    for check_name, threshold_value in dynamic_data.items():
+        fields = mapping.get(check_name)
+        if not fields:
+            continue
+        try:
+            numeric = float(threshold_value)
+        except (TypeError, ValueError):
+            continue
+        for field in fields:
+            merged[field] = numeric
+
+    return merged

@@ -7,19 +7,17 @@ import time
 from datetime import datetime, timezone
 from typing import Any
 
+from brain_alpha_ops.web.dispatch.web_post_handlers import session_end_payload  # noqa: F401  # re-export
+from brain_alpha_ops.web.dispatch.web_post_handlers import session_end_payload  # noqa: F401  # re-export
 from brain_alpha_ops.redaction import redact_data
-from brain_alpha_ops.web_post_handlers import session_end_payload
 from brain_alpha_ops.web_security import (
     DEFAULT_SESSION_TTL_SECONDS,
     LOCAL_HOSTS,
     SESSION_COOKIE_NAME,
     LocalSessionManager,
     admin_token_from_headers,
-    header_hostname,
-    header_port,
     is_allowed_local_request,
     parse_cookies,
-    path_requires_session,
     validate_admin_token,
 )
 from brain_alpha_ops.web_security import (
@@ -457,3 +455,10 @@ def validate_replay_request(
         request_id=request_id,
         request_timestamp=request_timestamp,
     )
+
+from .web_security import header_hostname  # noqa: F401  # backward-compat
+
+from .web_security import header_port  # noqa: F401
+
+from .web_security import path_requires_session  # noqa: F401
+

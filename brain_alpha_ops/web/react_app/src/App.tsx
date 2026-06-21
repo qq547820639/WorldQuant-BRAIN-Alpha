@@ -4,7 +4,7 @@
  * 渐进式 4 阶段导航，基于新架构重新实现
  */
 
-import { useState, useCallback, useRef, useEffect, lazy, Suspense, useMemo } from "react";
+import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import type {
   BacktestSlotsResponse,
   BrainCredentials,
@@ -22,36 +22,25 @@ import { useJobState } from "@/hooks/useJobState";
 import { usePhaseState, type PhaseApiStatus } from "@/hooks/usePhaseState";
 import ToastContainer from "@/components/ToastContainer";
 import Sidebar from "@/components/Sidebar";
-import Dashboard from "@/components/Dashboard";
-import CredentialQuickStart from "./components/CredentialQuickStart";  // S-01: deduplicated from inline
-import JobMonitor from "@/components/JobMonitor";
-import CandidateTable from "@/components/CandidateTable";
-import ErrorBoundary from "@/components/ErrorBoundary";
+// Dashboard imported via renderView
+// import Dashboard from "@/components/Dashboard";
+// CredentialQuickStart imported via renderView
+// import CredentialQuickStart from "./components/CredentialQuickStart";  // S-01: deduplicated from inline
+// JobMonitor imported via renderView
+// import JobMonitor from "@/components/JobMonitor";
+// CandidateTable imported via renderView
+// import CandidateTable from "@/components/CandidateTable";
+// ErrorBoundary imported via renderView
+// import ErrorBoundary from "@/components/ErrorBoundary";
 import { FlowGuide } from "./components/FlowGuide";
 import PhaseShell from "@/components/PhaseShell";
 import MobileTabBar from "@/components/MobileTabBar";
 import { useKeyboardShortcuts, KeyboardShortcutsHelp } from "@/hooks/useKeyboardShortcuts";
 import { reportIgnoredError } from "@/utils/reportIgnoredError";
-import { backtestActiveCount, backtestSlotLimit } from "@/utils/backtestSlots";
+import { renderActiveView, type RenderViewProps } from "@/components/views/renderView";
+import { topbarConnectionStatus, fmtEta, formatBacktestBadge, formatCloudBadge, cloudBadgeTotal } from "@/components/views/helpers";
+import { GlobalDataProvider, useGlobalData } from "@/hooks/useGlobalData";
 
-// Lazy-loaded: non-critical pages loaded on demand
-const OfficialOperationsPanel = lazy(() => import("@/components/OfficialOperationsPanel"));
-const OfficialBacktestSlots  = lazy(() => import("@/components/OfficialBacktestSlots"));
-const QualityCheckPanel      = lazy(() => import("@/components/QualityCheckPanel"));
-const ScoringPanel           = lazy(() => import("@/components/ScoringPanel"));
-const SubmissionConfirmPanel = lazy(() => import("@/components/SubmissionConfirmPanel"));
-const ConfigPanel            = lazy(() => import("@/components/ConfigPanel"));
-const SnapshotPanel          = lazy(() => import("@/components/SnapshotPanel"));
-
-/** Lightweight loading fallback for lazy pages */
-function PageLoader() {
-  return (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "3rem" }}>
-      <span className="spinner" />
-      <span className="text-text-tertiary text-sm ml-3">加载中...</span>
-    </div>
-  );
-}
 
 // ── Config ──────────────────────────────────────────────────────────────────
 
@@ -86,56 +75,6 @@ interface SidebarBadges {
   checkpoint_status?: number;
   cloud?: string;
 }
-
-
-function LocalCacheSessionCard({
-  notify,
-  onLoggedOut,
-}: {
-  notify: (type: "success" | "error" | "warning" | "info", msg: string) => void;
-  onLoggedOut: () => void;
-}) {
-  const logoutApi = useApi<{ ok: boolean; error?: string; error_code?: string }>();
-  const logoutErrorMessage = logoutApi.error ? safeDisplayErrorMessage(logoutApi.error) : null;
-
-  const logout = async () => {
-    const result = await logoutApi.call("/api/logout", { method: "POST" });
-    if (!result?.ok) {
-      notify("error", safeDisplayErrorMessage(apiErrorMessage(result, "退出本地会话失败")));
-      return;
-    }
-    onLoggedOut();
-    notify("success", "已退出本地会话并清空页面凭证");
-  };
-
-  return (
-    <div className="panel mb-4" style={{
-      borderColor: "oklch(0.58 0.10 65 / 0.30)",
-      background: "oklch(0.58 0.06 65 / 0.10)",
-    }}>
-      <div className="panel-header">
-        <span>本地缓存会话</span>
-        <span className="badge badge-positive">缓存可用</span>
-      </div>
-      <div className="panel-body-padded" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, flexWrap: "wrap" }}>
-        <div style={{ minWidth: 240, flex: "1 1 320px" }}>
-          <p className="text-sm font-medium text-warning mb-1">当前使用本地缓存，不需要重新登录</p>
-          <p className="text-xs text-text-secondary" style={{ lineHeight: 1.6 }}>
-            页面会继续读取本地 Alpha 快照和官方上下文缓存；退出只清空当前页面会话与临时凭证，不删除本地缓存。
-          </p>
-          {logoutErrorMessage && (
-            <p className="text-xs text-negative mt-2" role="alert">退出失败: {logoutErrorMessage}</p>
-          )}
-        </div>
-        <button
-          type="button"
-          className="btn btn-danger btn-sm"
-          onClick={logout}
-          disabled={logoutApi.loading}
-        >
-          {logoutApi.loading ? "退出中..." : "退出本地会话"}
-        </button>
-      </div>
     </div>
   );
 }
@@ -171,17 +110,8 @@ export default function App() {
   // for cache deduplication and stale-while-revalidate patterns.
 
 
-  const candidatesApi = useApi<{ candidates?: Candidate[]; total?: number }>();
-  const slotsApi = useApi<BacktestSlotsResponse>();
-  const cloudApi = useApi<{ count?: number; total?: number; summary?: Record<string, unknown> }>();
-  const configApi = useApi<{ config?: { credentials?: { managed_credentials_available?: boolean } } }>();
-
-  useEffect(() => {
-    void candidatesApi.call("/api/candidates?summary=true");
-    void slotsApi.call("/api/backtest_slots");
-    void cloudApi.call("/api/snapshot/cloud");
-    void configApi.call("/api/config");
-  }, [candidatesApi.call, slotsApi.call, cloudApi.call, configApi.call]);
+  // P0-7 fix: replaced 4 independent useApi hooks with single GlobalDataProvider
+  const globalData = useGlobalData();
 
   useEffect(() => {
     // P1-4: build toast action buttons from the backend's next_action hint.
@@ -193,7 +123,7 @@ export default function App() {
         case "reconnect_session":
           return { label, onClick: () => handleOfficialReconnectRequested() };
         case "refresh_cache":
-          return { label, onClick: () => { void cloudApi.call("/api/snapshot/cloud"); void phaseApi.call("/api/phase_state"); } };
+          return { label, onClick: () => { globalData.refreshAll(); void phaseApi.call("/api/phase_state"); } };
         case "wait_and_retry":
           return { label, onClick: () => { notify("info", "5 秒后将自动重试…"); setTimeout(() => retryFn(), 5000); } };
         case "check_config":
@@ -203,12 +133,12 @@ export default function App() {
       }
     };
 
-    if (candidatesApi.error) notify("warning", `候选数据加载失败: ${safeDisplayErrorMessage(candidatesApi.error)}`, buildAction(candidatesApi.lastErrorMeta, () => { void candidatesApi.call("/api/candidates?summary=true"); }));
-    if (slotsApi.error) notify("warning", `回测槽位加载失败: ${safeDisplayErrorMessage(slotsApi.error)}`, buildAction(slotsApi.lastErrorMeta, () => { void slotsApi.call("/api/backtest_slots"); }));
-    if (cloudApi.error) notify("warning", `云端快照加载失败: ${safeDisplayErrorMessage(cloudApi.error)}`, buildAction(cloudApi.lastErrorMeta, () => { void cloudApi.call("/api/snapshot/cloud"); }));
-    if (configApi.error) notify("warning", `配置状态加载失败: ${safeDisplayErrorMessage(configApi.error)}`, buildAction(configApi.lastErrorMeta, () => { void configApi.call("/api/config"); }));
-  }, [candidatesApi.error, slotsApi.error, cloudApi.error, configApi.error, notify, candidatesApi.lastErrorMeta, slotsApi.lastErrorMeta, cloudApi.lastErrorMeta, configApi.lastErrorMeta]);
-  // eslint-disable-next-line react-hooks/exhaustive-deps — call/cloudApi/phaseApi/handleOfficialReconnectRequested are stable refs
+    const gd = globalData;
+    if (gd.candidates.error) notify("warning", `候选数据加载失败: ${safeDisplayErrorMessage(gd.candidates.error)}`, buildAction(gd.candidates.lastErrorMeta, () => { gd.refreshAll(); }));
+    if (gd.slots.error) notify("warning", `回测槽位加载失败: ${safeDisplayErrorMessage(gd.slots.error)}`, buildAction(gd.slots.lastErrorMeta, () => { gd.refreshAll(); }));
+    if (gd.cloud.error) notify("warning", `云端快照加载失败: ${safeDisplayErrorMessage(gd.cloud.error)}`, buildAction(gd.cloud.lastErrorMeta, () => { gd.refreshAll(); }));
+    if (gd.config.error) notify("warning", `配置状态加载失败: ${safeDisplayErrorMessage(gd.config.error)}`, buildAction(gd.config.lastErrorMeta, () => { gd.refreshAll(); }));
+  }, [globalData, notify]);
 
   // Theme: sync document.documentElement class and localStorage
   useEffect(() => {
@@ -258,11 +188,11 @@ export default function App() {
   const phaseConnected = Boolean(phaseData?.connected);
   const connected = Boolean(connectionOverride ?? phaseConnected) && !connectionError;
   const contextFresh = phaseData?.context_fresh ?? false;
-  const candidatesCount = phaseData?.candidates_count ?? candidatesApi.data?.total ?? 0;
+  const candidatesCount = phaseData?.candidates_count ?? globalData.candidates.data?.total ?? 0;
   const scoredCount = phaseData?.scored_count ?? 0;
   const readinessPassed = phaseData?.readiness_passed ?? false;
   const managedCredentialsAvailable = Boolean(
-    configApi.data?.config?.credentials?.managed_credentials_available,
+    globalData.config.data?.config?.credentials?.managed_credentials_available,
   );
 
   const { phaseState, steps, currentPhase } = usePhaseState({
@@ -302,9 +232,9 @@ export default function App() {
   }, [phaseState.phases, expandedPhases]);
 
   const sidebarBadges: SidebarBadges = {
-    candidates: candidatesApi.data?.total ?? candidatesApi.data?.candidates?.length,
-    official_backtests: formatBacktestBadge(slotsApi.data),
-    cloud: formatCloudBadge(cloudBadgeTotal(cloudApi.data)),
+    candidates: globalData.candidates.data?.total ?? globalData.candidates.data?.candidates?.length,
+    official_backtests: formatBacktestBadge(globalData.slots.data),
+    cloud: formatCloudBadge(cloudBadgeTotal(globalData.cloud.data)),
   };
 
   const handleNavigate = useCallback((view: CardViewId) => {
@@ -337,17 +267,17 @@ export default function App() {
 
   const handleOfficialSyncCompleted = useCallback(() => {
     void phaseApi.call("/api/phase_state");
-    void cloudApi.call("/api/snapshot/cloud");
-  }, [cloudApi.call, phaseApi.call]);
+    globalData.refreshAll();
+  }, [phaseApi.call]);
 
   const handleOfficialReconnectRequested = useCallback(() => {
     setActiveView("dashboard");
   }, []);
 
   const handleCandidatePoolUpdated = useCallback(() => {
-    void candidatesApi.call("/api/candidates?summary=true");
+    globalData.refreshAll();
     void phaseApi.call("/api/phase_state");
-  }, [candidatesApi.call, phaseApi.call]);
+  }, [phaseApi.call]);
 
   const handleLocalSessionLoggedOut = useCallback(() => {
     setCredentials({ username: "", password: "", token: "" });
@@ -377,112 +307,28 @@ export default function App() {
     setActiveView("scoring");
   }, []);
 
+  const viewProps: RenderViewProps = {
+    activeView, selectedCandidate, credentials, notify,
+    connected, contextFresh, phaseApiStatus, managedCredentialsAvailable,
+    officialOpsAutoStart, jobState,
+    onOpenScoring: openScoring,
+    onNavigate: handleNavigate,
+    onConnectionTested: handleConnectionTested,
+    onCredentialsChange: setCredentials,
+    onDashboardSyncStart: handleDashboardSyncStart,
+    onDashboardSyncOpen: handleDashboardSyncOpen,
+    onOfficialSyncCompleted: handleOfficialSyncCompleted,
+    onOfficialReconnectRequested: handleOfficialReconnectRequested,
+    onCandidatePoolUpdated: handleCandidatePoolUpdated,
+    onLocalSessionLoggedOut: handleLocalSessionLoggedOut,
+    onAutoStartConsumed: () => setOfficialOpsAutoStart(false),
+    phaseData: phaseData as Record<string, unknown> | null,
+  };
+
   const detailContent = useMemo(() => {
-    switch (activeView) {
-    case "dashboard":
-      return <Dashboard
-        notify={notify}
-        connected={connected}
-        contextFresh={contextFresh}
-        phaseStatus={phaseApiStatus}
-        onNavigateToSync={handleDashboardSyncStart}
-        onOpenSync={handleDashboardSyncOpen}
-        onNavigateToCandidates={() => setActiveView("candidates")}
-        jobRunning={jobState.running}
-        jobStatusMessage={typeof jobState.progress?.status_message === "string" ? jobState.progress.status_message : undefined}
-        jobCycle={jobState.status?.cycle}
-        onStartJob={jobState.startJob}
-      >
-        {!connected && contextFresh && <LocalCacheSessionCard notify={notify} onLoggedOut={handleLocalSessionLoggedOut} />}
-        {!connected && !contextFresh && <CredentialQuickStart credentials={credentials} managedCredentialsAvailable={managedCredentialsAvailable} onCredentialsChange={setCredentials} notify={notify} onConnectionTested={handleConnectionTested} />}
-        {connected && contextFresh && (
-          <div className="animate-fade-in">
-            <JobMonitor notify={notify} credentials={credentials} jobState={jobState} />
-          </div>
-        )}
-      </Dashboard>;
-    case "official_operations":
-      return (
-        <OfficialOperationsPanel
-          notify={notify}
-          credentials={credentials}
-          autoStart={officialOpsAutoStart}
-          connectionReady={connected || managedCredentialsAvailable}
-          officialContextCache={phaseData?.official_context_cache}
-          cloudAlphaCache={phaseData?.cloud_alpha_cache}
-          onAutoStartConsumed={() => setOfficialOpsAutoStart(false)}
-          onSyncCompleted={handleOfficialSyncCompleted}
-          onReconnectRequested={handleOfficialReconnectRequested}
-          onNavigateToCandidates={() => setActiveView("candidates")}
-        />
-      );
-    case "candidates":
-      return (
-        <ErrorBoundary key="candidates">
-          <CandidateTable notify={notify} showProductionControls showRowActions
-            onScore={openScoring} credentials={credentials} onCandidatePoolUpdated={handleCandidatePoolUpdated} />
-        </ErrorBoundary>
-      );
-    case "official_backtests":
-      return <OfficialBacktestSlots notify={notify} />;
-    case "scoring":
-      return selectedCandidate
-        ? <ScoringPanel notify={notify} candidate={selectedCandidate} />
-        : <ScoringPlaceholder onPickCandidate={() => setActiveView("candidates")} />;
-    case "quality_check":
-      return <QualityCheckPanel notify={notify} />;
-    case "submission_confirm":
-    case "submission":
-      return <SubmissionConfirmPanel notify={notify} onNavigate={handleNavigate} />;
-    case "checkpoint_status":
-      return <SnapshotPanel key="checkpoint_status" notify={notify} viewMode="checkpoint_status" onNavigate={handleNavigate} />;
-    case "robustness":
-      return <SnapshotPanel key="robustness" notify={notify} viewMode="robustness" onNavigate={handleNavigate} />;
-    case "config":
-      return (
-        <ConfigPanel
-          notify={notify}
-          credentials={credentials}
-          onCredentialsChange={setCredentials}
-          onConnectionTested={handleConnectionTested}
-          connected={connected}
-          contextFresh={contextFresh}
-          managedCredentialsAvailable={managedCredentialsAvailable}
-          onLoggedOut={handleLocalSessionLoggedOut}
-        />
-      );
-    case "cloud":
-      return <SnapshotPanel key="cloud" notify={notify} viewMode="cloud" onNavigate={handleNavigate} />;
-    default:
-      return (
-        <div className="panel">
-          <div className="panel-body-padded" style={{ textAlign: "center", padding: "3rem" }}>
-            <p className="text-text-tertiary">未知视图</p>
-          </div>
-        </div>
-      );
-  }
-  }, [
-    activeView,
-    selectedCandidate,
-    credentials,
-    notify,
-    openScoring,
-    handleNavigate,
-    handleConnectionTested,
-    connected,
-    contextFresh,
-    phaseApiStatus,
-    jobState,
-    managedCredentialsAvailable,
-    officialOpsAutoStart,
-    handleDashboardSyncStart,
-    handleDashboardSyncOpen,
-    handleOfficialSyncCompleted,
-    handleOfficialReconnectRequested,
-    handleCandidatePoolUpdated,
-    handleLocalSessionLoggedOut,
-  ]);
+    return renderActiveView(viewProps);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeView, selectedCandidate, connected, contextFresh, phaseApiStatus, jobState.running]);;
 
   const viewLabel = VIEW_LABELS[activeView] || activeView;
   const currentPhaseObj = phaseState.phases[currentPhase];
@@ -503,6 +349,7 @@ export default function App() {
     : "pending";
 
   return (
+    <GlobalDataProvider>
     <div className="app-shell">
 
       {/* ═══ Top Bar (v3.0 redesign) ═══ */}
@@ -657,36 +504,11 @@ export default function App() {
         <KeyboardShortcutsHelp onClose={() => setShortcutsHelpOpen(false)} />
       )}
     </div>
-  );
+  </GlobalDataProvider>);
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
-function ScoringPlaceholder({ onPickCandidate }: { onPickCandidate: () => void }) {
-  return (
-    <div className="animate-fade-in" style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "60vh", gap: 16 }}>
-      <div style={{
-        width: 64, height: 64, borderRadius: "50%",
-        background: "oklch(0.58 0.10 248 / 0.12)",
-        display: "flex", alignItems: "center", justifyContent: "center",
-      }}>
-        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="oklch(0.62 0.10 250)" strokeWidth="2" strokeLinecap="round">
-          <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/>
-          <rect x="9" y="3" width="6" height="4" rx="1"/>
-          <path d="M9 12h6"/><path d="M9 16h4"/>
-        </svg>
-      </div>
-      <h2 className="text-lg font-semibold text-text-primary">尚未选择候选</h2>
-      <p className="text-sm text-text-secondary max-w-xs text-center" style={{ lineHeight: 1.6 }}>
-        科学评分需要先选择一个候选 Alpha。
-        <br />请在候选管理中选择要评分的 Alpha。
-      </p>
-      <button type="button" className="btn btn-primary" onClick={onPickCandidate}>
-        前往候选管理
-      </button>
-    </div>
-  );
-}
 
 function formatBacktestBadge(data?: BacktestSlotsResponse | null): string | undefined {
   if (!data) return undefined;

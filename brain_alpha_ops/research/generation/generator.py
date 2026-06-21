@@ -34,7 +34,6 @@ from brain_alpha_ops.research.hypothesis_generator_helpers import (
 )
 from brain_alpha_ops.research.hypothesis_library import (
     GenerationMeta,
-    Hypothesis,
 )
 
 from . import expression_builder

@@ -6,7 +6,6 @@ using composition instead of inheritance.
 
 from __future__ import annotations
 
-import time
 from typing import TYPE_CHECKING
 
 from brain_alpha_ops.brain_api.base import BrainAPIError

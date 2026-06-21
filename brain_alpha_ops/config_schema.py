@@ -310,6 +310,9 @@ def _validate_config_without_jsonschema(
                 errors.append(f"{path_label(path)}: {value!r} is not a boolean")
                 return
         elif expected_type == "integer":
+            # NOTE: isinstance(True, int) is True in Python, so the bool check
+            # MUST come before the int check. If the two checks are reordered,
+            # booleans will silently pass as integers (1/0). Keep this order.
             if isinstance(value, bool) or not isinstance(value, int):
                 errors.append(f"{path_label(path)}: {value!r} is not an integer")
                 return

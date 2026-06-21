@@ -729,7 +729,7 @@ def _check_is_oos_robustness(sim: dict[str, Any]) -> CheckResult:
     return CheckResult(
         check_name="is_oos_robustness", passed=passed, actual=ratio,
         expected=">= 0.5 (SubUniverseSharpe/Sharpe as OOS proxy)",
-        message=f"IS/OOS ratio={ratio:.4f}" + ("" if passed else f" (below 0.5 — possible overfitting)"),
+        message=f"IS/OOS ratio={ratio:.4f}" + ("" if passed else " (below 0.5 — possible overfitting)"),
     )
 
 

@@ -36,10 +36,11 @@ SAFE_CHILD_ENV_KEYS = {
     "WINDIR",
 }
 SENSITIVE_CHILD_ENV_KEYS = {
-    "BRAIN_USERNAME",
+    "BRAIN_ALPHA_FORCE_REAL_SUBMIT",
+    "BRAIN_ALPHA_OPS_ADMIN_TOKEN",
     "BRAIN_PASSWORD",
     "BRAIN_TOKEN",
-    "BRAIN_ALPHA_OPS_ADMIN_TOKEN",
+    "BRAIN_USERNAME",
 }
 
 
@@ -53,6 +54,9 @@ def sanitized_child_env(source: dict[str, str] | None = None) -> dict[str, str]:
 
 
 def main(argv: list[str] | None = None) -> int:
+    if sys.platform != "win32":
+        print("[MONITOR] Skipped — launch monitor is Windows-only (BrainAlphaProd.exe).")
+        return 0
     _argv = argv or []
     if _argv:
         print(f"[MONITOR] ERROR: unsupported arguments: {' '.join(_argv)}")
@@ -97,7 +101,11 @@ def main(argv: list[str] | None = None) -> int:
                 if re.search(r'\bDONE\b', line) or "run_completed" in line.lower():
                     print("[MONITOR] PIPELINE COMPLETED!")
                     break
-                if re.search(r'\bFAILED\b', line) or re.search(r'\b(?<!no_)error\b', line.lower()):
+                lower = line.lower()
+                if (
+                    re.search(r'\b(failed|error)\b', lower)
+                    and "no_error" not in lower
+                ):
                     print(f"[MONITOR] ALERT: {line.rstrip()[:150]}")
         except KeyboardInterrupt:
             print("[MONITOR] Interrupted. Terminating...")

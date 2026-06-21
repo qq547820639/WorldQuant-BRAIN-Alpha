@@ -10,55 +10,17 @@ from pathlib import Path
 from typing import Any
 
 from brain_alpha_ops.config_domain_validation import (
-    _VALID_ALPHA_TYPES,
-    _VALID_DATASET_STRATEGIES,
-    _VALID_DELAYS,
-    _VALID_ENVIRONMENT,
-    _VALID_MARKET_REGIMES,
-    _VALID_NEUTRALIZATIONS,
-    _VALID_ON_OFF,
-    _VALID_REGIONS,
-    _VALID_UNIT_HANDLING,
-    _VALID_UNIVERSES,
-)
-from brain_alpha_ops.config_domain_validation import (
-    validate_budget as _validate_budget,
-)
-from brain_alpha_ops.config_domain_validation import (
     validate_credentials as _validate_credentials,
-)
-from brain_alpha_ops.config_domain_validation import (
-    validate_official_api as _validate_official_api,
 )
 from brain_alpha_ops.config_domain_validation import (
     validate_ops as _validate_ops,
 )
 from brain_alpha_ops.config_domain_validation import (
-    validate_scoring as _validate_scoring,
-)
-from brain_alpha_ops.config_domain_validation import (
-    validate_settings as _validate_settings,
-)
-from brain_alpha_ops.config_domain_validation import (
-    validate_submission_policy as _validate_submission_policy,
-)
-from brain_alpha_ops.config_domain_validation import (
-    validate_thresholds as _validate_thresholds,
-)
-from brain_alpha_ops.config_domain_validation import (
     validate_web as _validate_web,
 )
 from brain_alpha_ops.config_models import (
-    BrainSettings,
-    CredentialConfig,
-    OfficialAPIConfig,
     OpsConfig,
-    QualityThresholds,
-    ResearchBudget,
     RunConfig,
-    ScoringConfig,
-    SubmissionPolicy,
-    WebConfig,
 )
 from brain_alpha_ops.config_update import update_dataclass_from_mapping
 from brain_alpha_ops.config_validation_helpers import require_bool

@@ -8,10 +8,6 @@ from typing import Any, Callable
 from brain_alpha_ops.research.observability import build_research_observability_snapshot
 from brain_alpha_ops.research.repository import ResearchRepository
 from brain_alpha_ops.web_candidates.payloads import DEFAULT_MAIN_POOL_SIZE
-from brain_alpha_ops.web_post_handlers import (
-    assistant_response_guidance_post_payload,
-    assistant_response_parse_post_payload,
-)
 from brain_alpha_ops.web_review import (
     anti_overfit_snapshot as anti_overfit_snapshot_service,
 )

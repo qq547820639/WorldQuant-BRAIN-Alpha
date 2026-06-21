@@ -24,9 +24,6 @@ from brain_alpha_ops.redaction import redact_text
 
 logger = logging.getLogger(__name__)
 
-# Constant copied from web_handler_dispatch.py so this module is
-# self-sufficient.  Kept verbatim to preserve behaviour.
-_LEGACY_FALLBACK_DISABLED_POST_PATHS = frozenset({"/api/pipeline/start"})
 
 def error_response(payload: dict, *, fallback_kind: str | None = None) -> dict:
     """Return error payload with state-contract enrichment.
@@ -56,7 +53,6 @@ def rate_limit_key(handler: Any) -> str:
 
 def apply_rate_limit(handler: Any, ctx: Any, method: str, path: str) -> bool:
     """Apply the configured per-bucket rate limit. Returns False if rejected."""
-    from brain_alpha_ops.web_state_contract import enrich_error_payload
 
     rate_result = ctx.rate_limit_request(rate_limit_key(handler), method, path)
     if rate_result.get("ok"):
@@ -99,14 +95,6 @@ def dispatch_route(
         return
     route = ctx.route_for(method, parsed.path)
     if not route:
-        if method == "POST" and parsed.path in _LEGACY_FALLBACK_DISABLED_POST_PATHS:
-            handler._json(
-                error_response_fn(
-                    {"ok": False, "error_code": "LEGACY_ROUTE_DISABLED", "error": "legacy pipeline route is disabled; use /api/run"}
-                ),
-                status=404,
-            )
-            return
         # P0-4 fix: extend session validation to unknown GET API routes
         # as well.  Previously only POST fell through to the session check;
         # an unregistered GET /api/* path could reach the legacy dispatch

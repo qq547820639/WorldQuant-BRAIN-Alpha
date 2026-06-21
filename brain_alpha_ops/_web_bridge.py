@@ -73,8 +73,12 @@ _WEB_BRIDGE_MAP: dict[str, tuple[str, str]] = {
 class _WebBridgeFinder:
     """Meta-path finder: redirects brain_alpha_ops.web_* to web/<sub>/."""
 
+    def __init__(self):
+        # P3-7: precompute bridge prefix set to avoid dict scan on every import.
+        self._bridge_names = frozenset(_WEB_BRIDGE_MAP)
+
     def find_spec(self, fullname: str, path=None, target=None):
-        if fullname not in _WEB_BRIDGE_MAP:
+        if fullname not in self._bridge_names:
             return None
         if fullname in sys.modules:
             return None

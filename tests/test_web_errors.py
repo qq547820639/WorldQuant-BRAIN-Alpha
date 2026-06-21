@@ -7,10 +7,10 @@ from brain_alpha_ops.web_errors import safe_error_message, safe_error_payload, w
 
 def test_safe_error_message_redacts_auth_secrets():
     assert safe_error_message(RuntimeError("token secret-token-123 failed")) == (
-        "Authentication failed; check credentials or connection settings."
+        "认证失败，请检查凭据或连接设置。"
     )
     assert safe_error_message(RuntimeError("production mode requires credentials")) == (
-        "production mode requires BRAIN_USERNAME/BRAIN_PASSWORD or BRAIN_TOKEN"
+        "生产模式需要：请设置 BRAIN_USERNAME 和 BRAIN_PASSWORD 环境变量"
     )
 
 
@@ -39,7 +39,7 @@ def test_safe_error_payload_maps_plain_403_to_actionable_auth_message():
     assert payload["error_category"] == "auth"
     assert payload["retryable"] is False
     assert payload["status_code"] == 403
-    assert payload["error"] == "Authentication failed; check credentials or connection settings."
+    assert payload["error"] == "认证失败，请检查凭据或连接设置。"
 
 
 def test_web_error_payload_adds_cloud_self_correlation_guidance():

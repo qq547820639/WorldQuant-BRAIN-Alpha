@@ -2,11 +2,17 @@
 
 from __future__ import annotations
 
-import math
 from dataclasses import asdict, dataclass, field
 from typing import Any, Mapping
 
 from brain_alpha_ops.config import QualityThresholds
+from brain_alpha_ops.scoring._score_comparisons import (
+    is_finite_float,
+    min_check,
+    max_check,
+    safe_text,
+    sub_universe_sharpe_formula,
+)
 
 RELEASE_SCORE_GATE_SCHEMA = "release_score_gate.v1"
 
@@ -32,15 +38,15 @@ class OfficialSnapshot:
     def from_metrics(cls, metrics: Mapping[str, Any] | None) -> "OfficialSnapshot":
         raw: Mapping[str, Any] = dict(metrics or {})
         return cls(
-            sharpe=_num(raw.get("sharpe")),
-            fitness=_num(raw.get("fitness")),
-            turnover=_num(raw.get("turnover")),
-            returns=_num(raw.get("returns")),
-            drawdown=_num(raw.get("drawdown")),
-            margin=_num(raw.get("margin")),
-            self_correlation=_num(raw.get("self_correlation")),
-            prod_correlation=_num(raw.get("prod_correlation")),
-            weight_concentration=_num(raw.get("weight_concentration")),
+            sharpe=is_finite_float(raw.get("sharpe")),
+            fitness=is_finite_float(raw.get("fitness")),
+            turnover=is_finite_float(raw.get("turnover")),
+            returns=is_finite_float(raw.get("returns")),
+            drawdown=is_finite_float(raw.get("drawdown")),
+            margin=is_finite_float(raw.get("margin")),
+            self_correlation=is_finite_float(raw.get("self_correlation")),
+            prod_correlation=is_finite_float(raw.get("prod_correlation")),
+            weight_concentration=is_finite_float(raw.get("weight_concentration")),
             sub_universe_sharpe=_metric_with_check_fallback(
                 raw,
                 "LOW_SUB_UNIVERSE_SHARPE",
@@ -49,7 +55,7 @@ class OfficialSnapshot:
             ),
             sub_universe_size=_metric(raw, "subUniverseSize", "sub_universe_size", "sub_size"),
             alpha_size=_metric(raw, "alphaSize", "alpha_size"),
-            pass_fail=_text(raw.get("pass_fail")),
+            pass_fail=safe_text(raw.get("pass_fail")),
             raw=raw,
         )
 
@@ -192,15 +198,7 @@ def _official_pass_attr(official: OfficialSnapshot, policy: ThresholdPolicy) -> 
     )
 
 
-def _cmp_min(
-    name: str,
-    actual: float | None,
-    expected: float,
-    severity: str,
-    reason: str,
-) -> ScoreAttribution:
-    passed = actual is not None and actual >= expected
-    return ScoreAttribution(name, passed, actual, expected, severity, reason)
+# _cmp_min: imported from _score_comparisons
 
 
 def _cmp_required_min(
@@ -213,18 +211,11 @@ def _cmp_required_min(
 ) -> ScoreAttribution:
     if actual is None and not policy.require_official_metrics:
         return ScoreAttribution(name, True, actual, expected, "INFO", f"{reason}; metric not required")
-    return _cmp_min(name, actual, expected, severity, reason)
+    result = min_check(name, actual, expected, severity, reason, pass_fail=True)
+    return ScoreAttribution(**result)
 
 
-def _cmp_max(
-    name: str,
-    actual: float | None,
-    expected: float,
-    severity: str,
-    reason: str,
-) -> ScoreAttribution:
-    passed = actual is not None and actual <= expected
-    return ScoreAttribution(name, passed, actual, expected, severity, reason)
+# _cmp_max: imported from _score_comparisons
 
 
 def _cmp_required_max(
@@ -237,7 +228,8 @@ def _cmp_required_max(
 ) -> ScoreAttribution:
     if actual is None and not policy.require_official_metrics:
         return ScoreAttribution(name, True, actual, expected, "INFO", f"{reason}; metric not required")
-    return _cmp_max(name, actual, expected, severity, reason)
+    result = max_check(name, actual, expected, severity, reason, pass_fail=True)
+    return ScoreAttribution(**result)
 
 
 def _cmp_optional_max(
@@ -249,7 +241,8 @@ def _cmp_optional_max(
 ) -> ScoreAttribution:
     if actual is None:
         return ScoreAttribution(name, True, actual, expected, "INFO", f"{reason}; metric not provided")
-    return _cmp_max(name, actual, expected, severity, reason)
+    result = max_check(name, actual, expected, severity, reason, pass_fail=True)
+    return ScoreAttribution(**result)
 
 
 def _sub_universe_sharpe_attr(official: OfficialSnapshot, policy: ThresholdPolicy) -> ScoreAttribution:
@@ -289,16 +282,12 @@ def _sub_universe_sharpe_attr(official: OfficialSnapshot, policy: ThresholdPolic
 
 
 def _sub_universe_sharpe_threshold(official: OfficialSnapshot, policy: ThresholdPolicy) -> float | None:
-    if (
-        official.sharpe is None
-        or official.sub_universe_size is None
-        or official.sub_universe_size <= 0
-        or official.alpha_size is None
-        or official.alpha_size <= 0
-    ):
-        return None
-    size_factor = math.sqrt(official.sub_universe_size / official.alpha_size)
-    return round(policy.sub_universe_sharpe_min_ratio * size_factor * official.sharpe, 4)
+    return sub_universe_sharpe_formula(
+        official.sharpe,
+        official.sub_universe_size,
+        official.alpha_size,
+        policy.sub_universe_sharpe_min_ratio,
+    )
 
 
 def _missing_sub_universe_threshold_inputs(official: OfficialSnapshot) -> list[str]:
@@ -323,7 +312,7 @@ def _threshold_trace(policy: ThresholdPolicy, official: OfficialSnapshot) -> dic
         and official.alpha_size is not None
         and official.alpha_size > 0
     ):
-        size_factor = round(math.sqrt(official.sub_universe_size / official.alpha_size), 8)
+        size_factor = round((official.sub_universe_size / official.alpha_size) ** 0.5, 8)
     return {
         "delay": policy.delay,
         "delay_source": policy.delay_source,
@@ -346,7 +335,7 @@ def _threshold_trace(policy: ThresholdPolicy, official: OfficialSnapshot) -> dic
 
 def _metric(metrics: Mapping[str, Any], *keys: str) -> float | None:
     for key in keys:
-        value = _num(metrics.get(key))
+        value = is_finite_float(metrics.get(key))
         if value is not None:
             return value
     return None
@@ -367,24 +356,13 @@ def _brain_check_value(metrics: Mapping[str, Any], check_name: str) -> float | N
     check = checks.get(check_name)
     if not isinstance(check, Mapping):
         return None
-    return _num(check.get("value"))
+    return is_finite_float(check.get("value"))
 
 
-def _num(value: Any) -> float | None:
-    if value is None or isinstance(value, bool):
-        return None
-    try:
-        parsed = float(value)
-    except (TypeError, ValueError):
-        return None
-    return parsed if math.isfinite(parsed) else None
+# _num: use is_finite_float from _score_comparisons
 
 
-def _text(value: Any) -> str | None:
-    if value is None:
-        return None
-    text = str(value).strip()
-    return text or None
+# _text: use safe_text from _score_comparisons
 
 
 def _settings_delay(settings: Mapping[str, Any] | Any | None) -> int:

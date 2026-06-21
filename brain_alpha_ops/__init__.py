@@ -32,7 +32,7 @@ def _configure_logging() -> None:
         )
     )
     handler.setLevel(logging.WARNING)
-    handler._brain_alpha_ops_handler = True  # type: ignore[attr-defined]
+    setattr(handler, "_brain_alpha_ops_handler", True)
     root.addHandler(handler)
     # NOTE: intentionally do NOT call root.setLevel(...) here.
     # Setting the root logger level is a global side effect that can mask

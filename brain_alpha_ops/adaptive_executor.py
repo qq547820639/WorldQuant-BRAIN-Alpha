@@ -21,7 +21,7 @@ from concurrent.futures import (
     ThreadPoolExecutor,
     TimeoutError,
 )
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Callable
 
 from brain_alpha_ops.job_types import JobExecutionResult

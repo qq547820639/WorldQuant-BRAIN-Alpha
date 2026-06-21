@@ -20,7 +20,7 @@ Usage::
     optimizer = IterativeOptimizer(loader, mapper)
     mutations = optimizer.optimize(candidate, diagnosis)
     for mut in mutations:
-        print(f"Mode: {mut.mode}, Reason: {mut.reason}")
+        logger.debug("Mutation: mode=%s reason=%s", mut.mode, mut.reason)
 """
 
 from __future__ import annotations
@@ -37,9 +37,6 @@ from typing import Any
 from brain_alpha_ops.data.field_dataset_mapper import FieldDatasetMapper
 from brain_alpha_ops.data.loader import OfficialDataLoader
 from brain_alpha_ops.models import Candidate
-from brain_alpha_ops.research.failure_strategy_ranking import (
-    DEFAULT_FAILURE_TO_STRATEGY as _RANKING_FALLBACK,
-)
 from brain_alpha_ops.research.failure_strategy_ranking import (
     get_strategy_for_failure as _ranking_strategies_for,
 )
@@ -76,6 +73,7 @@ def _operator_names_from_loader(loader: Any) -> set[str]:
             if str(getattr(op, "name", "")).strip()
         }
     except Exception:
+        logger.exception("iterative_optimizer: unexpected error")
         logger.warning("official operator metadata unavailable for iterative optimizer", exc_info=True)
         return set()
 

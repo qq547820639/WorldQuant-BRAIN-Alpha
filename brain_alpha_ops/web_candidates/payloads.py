@@ -313,3 +313,4 @@ def compact_job_result(payload: dict[str, Any]) -> dict[str, Any]:
             compact_result[key + "_count"] = len(rows)
             compact_result.pop(key, None)
     return {**payload, "result": compact_result}
+from brain_alpha_ops.web.dispatch.web_post_handlers import save_assistant_guidance_post_payload  # noqa: F401

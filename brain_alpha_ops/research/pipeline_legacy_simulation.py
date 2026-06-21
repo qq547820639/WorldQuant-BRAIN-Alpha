@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import time
 
 from brain_alpha_ops.brain_api.base import BrainAPIError
 from brain_alpha_ops.models import Candidate

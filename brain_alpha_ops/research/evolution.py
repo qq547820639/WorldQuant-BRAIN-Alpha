@@ -10,6 +10,10 @@ and mutations preserve operator arity and field compatibility.
 """
 from __future__ import annotations
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 import random
 import re
 from dataclasses import dataclass, field
@@ -18,11 +22,8 @@ from brain_alpha_ops.research.evolution_helpers import (
     _BINARY_OPERATORS,
     _COMMON_FIELDS,
     _GROUP_OPERATORS,
-    _MAX_EXPRESSION_LENGTH,
     _MAX_MUTATION_ATTEMPTS,
-    _MAX_NESTING_DEPTH,
     _MIN_EXPRESSION_LENGTH,
-    _MUTABLE_OPERATORS,
     _UNARY_OPERATORS,
     _WINDOW_OPERATORS,
     _WINDOW_RANGES,
@@ -37,6 +38,7 @@ from brain_alpha_ops.research.evolution_helpers import (
     _tokenize,
 )
 from brain_alpha_ops.research.generator_metadata import (
+
     expression_windows_within_constraints,
 )
 
@@ -683,3 +685,15 @@ class EvolutionRunner:
             "best_score": self.best_score,
             "generations": [r.to_dict() for r in self._results],
         }
+
+# Backward-compat re-export for Phase 3.x migration
+
+
+
+# ---- Backward-compat re-export for Phase 3.x migration ----
+from .evolution_helpers import _MUTABLE_OPERATORS  # noqa: F401  # backward-compat re-export
+
+# Backward-compat: _MAX_EXPRESSION_LENGTH moved to generator
+from .generator import _MAX_EXPRESSION_LENGTH  # noqa: F401
+
+_MAX_NESTING_DEPTH = 8  # backward-compat: moved to generator.LocalQualityConfig

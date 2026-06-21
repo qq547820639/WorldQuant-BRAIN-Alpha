@@ -59,7 +59,7 @@
       "require_cloud_sync": false,
       "cloud_sync_range": "all",
       "max_cycles": 10,
-      "dataset_strategy": "fixed",
+      "dataset_strategy": "rotate",
       "generation_mode_ratio": "70/20/10",
       "hypothesis_library_dir": "brain_alpha_ops/research/hypotheses",
       "use_assistant_guidance": true,

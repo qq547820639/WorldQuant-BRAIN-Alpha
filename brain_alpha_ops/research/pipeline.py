@@ -11,62 +11,28 @@ from typing import Callable
 
 logger = logging.getLogger(__name__)
 
-from brain_alpha_ops.brain_api.base import BrainAPI, BrainAPIError
-from brain_alpha_ops.config import OpsConfig, RunConfig, runtime_project_root
-from brain_alpha_ops.models import Candidate, PipelineEvent, PipelineResult, new_id
-from brain_alpha_ops.observability import context_payload, error_payload
+from brain_alpha_ops.brain_api.base import BrainAPI
+from brain_alpha_ops.config import OpsConfig
+from brain_alpha_ops.models import Candidate, PipelineResult, new_id
 from brain_alpha_ops.parameter_audit import build_parameter_audit_snapshot
 from brain_alpha_ops.redaction import redact_error_message
 
 from .alpha_checks import AlphaCheckRegistry
-from .anti_overfit import AntiOverfitService
-from .assistant import build_assistant_request_pack
 from .auto_calibrator import AutoCalibrator
-from .backtest_finalization import BacktestFinalizationService
-from .backtest_polling import BacktestPollingService
 from .backtest_slots import BacktestSlotManager
-from .backtest_submission import BacktestSubmissionService
-from .batch_backtest_coordinator import BatchBacktestCoordinator
-from .candidate_pool import (
-    CandidatePoolService,
-    is_active_backtest_candidate,
-    pending_simulation_targets,
-)
-from .context import build_assistant_context_pack
 from .convergence import ConvergenceTracker
-from .dataset_selection import DatasetSelectionService
-from .experience_feedback import ExperienceFeedbackService
-from .fusion_candidates import FusionCandidateService
-from .generation_phase import GenerationPhaseService
 from .generator import (
     CandidateGenerator,
-    extract_fields,
-    extract_operators,
-    local_quality,
-    mutate_expression,
 )
 from .guidance import (
-    assistant_guidance_candidate_metadata,
     ensure_assistant_guidance_digest,
 )
-from .iterative_optimizer import IterativeOptimizer
-from .knowledge_base import KnowledgeEntry, StructuredKnowledgeBase
+from .knowledge_base import StructuredKnowledgeBase
 from .llm_review import CrossReviewService
 from .local_backtest_config import PREFILTER_BACKTEST_DATES, PREFILTER_BACKTEST_SYMBOLS
 from .local_backtest_engine import LocalBacktestEngine
 from .memory import ResearchMemory
-from .observability import build_research_observability_snapshot
 from .official_call_guard import OfficialCallGuard
-from .official_validation import OfficialValidationService
-from .official_workflow import OfficialWorkflowService
-from .pipeline_cloud import (
-    build_cloud_similarity_rows,
-    cloud_correlation_risk,
-    cloud_status_for_candidate,
-    remember_accepted,
-    smart_rank_candidates,
-    smart_ranking_score,
-)
 
 from .pipeline_helpers import (
     assistant_guidance_for_generator as _assistant_guidance_for_generator,
@@ -75,34 +41,11 @@ from .pipeline_helpers import (
     attach_assistant_guidance as _attach_assistant_guidance,
 )
 from .pipeline_helpers import (
-    blocked_gate as _blocked_gate,
-)
-from .pipeline_helpers import (
-    expr_key as _expr_key,
-)
-from .pipeline_helpers import (
     rank_candidates,
 )
 
-from .pipeline_observability import (
-    apply_observability_generation_guidance,
-    refresh_observability_throttle,
-)
-from .pipeline_official_context import (
-    OfficialContextLoadService,
-    active_dataset_field_names,
-    configured_official_context_files_exist,
-    official_context_reasons,
-    refresh_context_validation_cache,
-)
 
 from .pipeline_services import PipelineServiceFactoryMixin
-from .pipeline_snapshot import (
-    PipelineSnapshotBuilder,
-    PipelineSnapshotServices,
-    PipelineSnapshotState,
-    backtest_slot_snapshot,
-)
 from .pipeline_snapshots import PipelineSnapshotMixin
 from .pipeline_candidates import PipelineCandidatePoolMixin
 from .pipeline_backtest_flow import PipelineBacktestMixin
@@ -114,17 +57,11 @@ from .pipeline_state import (
     bind_runtime_state_properties,
     record_strategy_reward,
 )
-from .production_context import build_production_context, eligible_strategy_profiles
+from .production_context import build_production_context
 from .repository import ResearchRepository
 from .research_cycle_orchestrator import ResearchCycleOrchestrator
-from .robustness_policy import RobustnessPolicy
-from .rolling_validation import RollingValidationService
 from .safety import SubmissionLedger
-from .scoring import build_scorecard, evaluate_quality_gate
-from .secondary_fusion import SecondaryFusionService
 from .strategy_lifecycle import StrategyLifecycleTracker
-from .strategy_plugins import StrategyPluginRegistry
-from .strategy_switch import StrategySwitchService
 
 SUBMITTED_CLOUD_STATUSES = {"ACTIVE", "SUBMITTED", "PRODUCTION", "CONDUCTED"}
 
@@ -194,6 +131,7 @@ class AlphaResearchPipeline(
         self.strategy_profile_index = self.services.strategy._initial_strategy_profile_index()
         # ── P1-2: AlphaCheckRegistry for BRAIN-standard quality checks ──
         self.check_registry.build_default_checks()
+
         # P1-5: Register type-specific checks (POWER_POOL / ATOM / PYRAMID)
         alpha_type = str(getattr(config.settings, 'type', 'REGULAR') or 'REGULAR').upper()
         if alpha_type != "REGULAR":
@@ -201,6 +139,11 @@ class AlphaResearchPipeline(
             self.services.runtime._event("type_checks_registered",
                 f"Alpha type '{alpha_type}': registered type-specific checks.",
                 level="INFO")
+
+        # P2-4: cache assistant guidance to reduce JSONL I/O on every cycle.
+        # Guidance is re-read every 5 cycles or when the cache is empty.
+        self._cached_assistant_guidance: dict | None = None
+        self._cached_guidance_at_cycle: int = -1
         self.strategy_plugins = self.services.runtime._load_strategy_plugins()
         # ── P0-2: Iterative optimizer (lazy-init with loader/mapper after context load) ──
 
@@ -704,6 +647,13 @@ class AlphaResearchPipeline(
         self._active_assistant_guidance = None
         if not getattr(self.config.budget, "use_assistant_guidance", True):
             return None
+
+        # P2-4: return cached guidance for up to 5 cycles to avoid
+        # re-reading the JSONL file on every single cycle.
+        if (self._cached_assistant_guidance is not None
+                and cycle - self._cached_guidance_at_cycle < 5):
+            return self._cached_assistant_guidance
+
         try:
             min_confidence = float(getattr(self.config.budget, "assistant_guidance_min_confidence", 0.6) or 0.0)
             guidance = ResearchMemory(self.config.storage_dir).latest_assistant_guidance(
@@ -736,8 +686,12 @@ class AlphaResearchPipeline(
                     "preferred_windows": guidance.get("preferred_windows", [])[:10],
                 },
             )
+            self._cached_assistant_guidance = guidance
+            self._cached_guidance_at_cycle = cycle
             return guidance
         except Exception as exc:
+            # P2-4: invalidate cache on exception so the next cycle re-reads
+            self._cached_assistant_guidance = None
             logger.warning("Assistant guidance unavailable in cycle %s: %s", cycle, redact_error_message(exc))
             logger.debug("Assistant guidance traceback in cycle %s", cycle, exc_info=True)
         return None
@@ -818,3 +772,4 @@ class AlphaResearchPipeline(
 
 
 bind_runtime_state_properties(AlphaResearchPipeline)
+from .observability import build_research_observability_snapshot  # noqa: F401
