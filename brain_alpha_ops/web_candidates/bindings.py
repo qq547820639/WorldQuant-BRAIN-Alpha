@@ -168,12 +168,12 @@ def _web():
 
 def load_run_config_provider():
     web = _web()
-    return web.__dict__.get("load_run_config", web._load_run_config)
+    return web._load_run_config
 
 
 def runtime_project_root_provider():
     web = _web()
-    return web.__dict__.get("runtime_project_root", web._runtime_project_root)
+    return web._runtime_project_root
 
 
 def run_config_from_payload(payload):

@@ -1,6 +1,7 @@
 """Pure helpers for the official BRAIN API adapter."""
 
 from __future__ import annotations
+from dataclasses import asdict
 
 import hashlib
 import json
@@ -41,7 +42,7 @@ def build_simulation_payload(expression: str, settings: dict | BrainSettings) ->
     if isinstance(settings, BrainSettings):
         settings_obj = settings
     else:
-        settings_obj = BrainSettings(**{**BrainSettings().__dict__, **(settings or {})})
+        settings_obj = BrainSettings(**{**asdict(BrainSettings()), **(settings or {})})
     platform = settings_obj.to_platform_dict()
     platform["regular"] = expression
     return platform

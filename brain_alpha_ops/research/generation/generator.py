@@ -144,7 +144,7 @@ class HypothesisDrivenGenerator:
                 )
                 if eligible_fields:
                     self._fields = set(eligible_fields)
-            except Exception:
+            except Exception as exc:
                 logger.warning(
                     "generation field eligibility metadata unavailable for dataset_id=%s",
                     dataset_id,
@@ -273,7 +273,7 @@ class HypothesisDrivenGenerator:
                     str(field).lower()
                     for field in generation_field_ids(loaded_fields)
                 }
-            except Exception:
+            except Exception as exc:
                 logger.warning(
                     "official preferred-field filtering failed closed",
                     exc_info=True,
@@ -339,7 +339,7 @@ class HypothesisDrivenGenerator:
                             seen_keys,
                             seen_expressions,
                         )
-                except Exception:
+                except Exception as exc:
                     logger.warning(
                         "random exploration fallback generation failed",
                         exc_info=True,
@@ -719,7 +719,7 @@ class HypothesisDrivenGenerator:
         try:
             current_key = expression_key(expression_text)
             current_fingerprint = expression_fingerprint(expression_text)
-        except Exception:
+        except Exception as exc:
             current_key = ""
             current_fingerprint = ""
         for pattern in (
@@ -740,7 +740,7 @@ class HypothesisDrivenGenerator:
             try:
                 pattern_key = expression_key(pattern_text)
                 pattern_fingerprint = expression_fingerprint(pattern_text)
-            except Exception:
+            except Exception as exc:
                 pattern_key = ""
                 pattern_fingerprint = ""
             if current_key and pattern_key and current_key == pattern_key:
@@ -757,7 +757,7 @@ class HypothesisDrivenGenerator:
                     >= _FORBIDDEN_PATTERN_SIMILARITY_THRESHOLD
                 ):
                     return True
-            except Exception:
+            except Exception as exc:
                 logger.debug(
                     "failed to compare forbidden expression pattern",
                     exc_info=True,

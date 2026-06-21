@@ -5,6 +5,7 @@ using composition instead of inheritance.
 """
 
 from __future__ import annotations
+from dataclasses import asdict
 
 import logging
 from typing import TYPE_CHECKING
@@ -51,7 +52,7 @@ class SubmissionGateService:
             "operators": getattr(candidate, "operators", []),
         }
         try:
-            sim_result["settings"] = p.config.settings.__dict__
+            sim_result["settings"] = asdict(p.config.settings)
         except Exception as exc:
             logger.warning(
                 "Failed to serialize settings for check registry: %s",

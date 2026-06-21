@@ -83,7 +83,7 @@ class ExperienceFeedbackService:
                 self._emit(cycle, result, "memory_feedback")
                 return result
             return ExperienceFeedbackResult(applied=False, reason="insufficient_samples")
-        except Exception:
+        except Exception as exc:
             logger.exception("experience_feedback: unexpected error")
             self.log.warning("Experience feedback unavailable in cycle %s", cycle, exc_info=True)
             return ExperienceFeedbackResult(applied=False, reason="error")

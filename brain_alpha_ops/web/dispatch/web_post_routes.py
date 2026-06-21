@@ -304,16 +304,17 @@ def _post_config_save(
     handler._json(ctx.save_run_config_payload(payload))
 
 
-@_validated_post_route(validate_job_cancel_payload, "STOP_ERROR")
-def _post_stop(
+def _stop_or_cancel_job(
     handler: Any,
-    _parsed: Any,
     ctx: WebHandlerDispatchContext,
     payload: dict[str, Any],
 ) -> None:
+    """Shared implementation for /api/stop and /api/cancel.
+
+    Searches all job stores (run, sync, check, async) and stops/cancels
+    the matching job. Both endpoints use the same underlying stop mechanism.
+    """
     job_id = str((payload or {}).get("job_id") or "")
-    # P2-3: cross-store search matching _post_cancel.  Iterate all job stores
-    # (run, sync, check, async) so /api/stop works for any job type.
     for store, job_type in (
         (ctx.jobs, "run"),
         (ctx.sync_jobs, "sync"),
@@ -364,6 +365,16 @@ def _post_stop(
         ),
         status=404,
     )
+
+
+@_validated_post_route(validate_job_cancel_payload, "STOP_ERROR")
+def _post_stop(
+    handler: Any,
+    _parsed: Any,
+    ctx: WebHandlerDispatchContext,
+    payload: dict[str, Any],
+) -> None:
+    _stop_or_cancel_job(handler, ctx, payload)
 
 
 # /api/cancel is an alias for /api/stop
@@ -374,58 +385,7 @@ def _post_cancel(
     ctx: WebHandlerDispatchContext,
     payload: dict[str, Any],
 ) -> None:
-    job_id = str((payload or {}).get("job_id") or "")
-    # Search all stores to find the job and determine its type
-    for store, job_type in (
-        (ctx.jobs, "run"),
-        (ctx.sync_jobs, "sync"),
-        (ctx.check_jobs, "check"),
-        (ctx.async_jobs, "async"),
-    ):
-        row = store.get(job_id)
-        if row is not None:
-            status = str(row.get("status", ""))
-            if status in _TERMINAL_STATUSES:
-                handler._json(
-                    _job_response(
-                        {
-                            "ok": True,
-                            "job_id": job_id,
-                            "task_id": job_id,
-                            "job_type": job_type,
-                            "status": status,
-                            "already_terminal": True,
-                        },
-                        job_type=job_type,
-                    )
-                )
-                return
-            result = ctx.stop_job_payload(store, payload)
-            handler._json(
-                _job_response(
-                    {
-                        **result,
-                        "job_id": job_id,
-                        "task_id": job_id,
-                        "job_type": job_type,
-                        "status": "stopping",
-                    },
-                    job_type=job_type,
-                )
-            )
-            return
-    handler._json(
-        _error_response(
-            {
-                "ok": False,
-                "error_code": "JOB_NOT_FOUND",
-                "error": "\u672a\u627e\u5230\u53ef\u505c\u6b62\u7684\u4efb\u52a1\u3002",
-                "job_id": job_id,
-            },
-            fallback_kind="job_not_found",
-        ),
-        status=404,
-    )
+    _stop_or_cancel_job(handler, ctx, payload)
 
 
 @_validated_post_route(validate_sync_alphas_payload, "SYNC_ERROR")

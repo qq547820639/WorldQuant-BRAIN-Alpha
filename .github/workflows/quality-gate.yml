@@ -29,7 +29,7 @@ jobs:
       - name: Install package and dev tooling
         run: |
           python -m pip install -r requirements.lock
-          python -m pip install -e ".[test]" --no-deps --no-build-isolation
+          python -m pip install -e ".[test]" --no-build-isolation
 
       - name: 0/9 - Clean stale bytecode cache
         run: find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null; find . -type f -name "*.pyc" -delete 2>/dev/null; echo "Cache cleaned"

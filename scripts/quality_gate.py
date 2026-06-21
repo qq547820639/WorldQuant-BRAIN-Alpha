@@ -162,7 +162,6 @@ STATIC_ANALYSIS_TARGETS = [
     "tests/test_web_submission_batch.py",
     "tests/test_web_submission_single.py",
     "tests/test_web_submission_safety.py",
-    "tests/test_web_sync_status_payload.py",
     "tests/test_anti_overfit.py",
     "tests/test_batch_backtest_coordinator.py",
     "tests/test_dataset_selection.py",

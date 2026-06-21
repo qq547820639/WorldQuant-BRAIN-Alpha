@@ -64,7 +64,7 @@ def _official_operator_names() -> set[str]:
             for row in rows
             if isinstance(row, dict) and row.get("name")
         }
-    except Exception:
+    except Exception as exc:
         logger.exception("evolution_helpers: unexpected error")
         logger.warning("official operator metadata unavailable for evolution operator filter", exc_info=True)
         return set()
@@ -81,7 +81,7 @@ def _official_field_ids() -> set[str]:
             for row in rows
             if isinstance(row, dict) and (row.get("id") or row.get("name"))
         }
-    except Exception:
+    except Exception as exc:
         logger.warning("official field metadata unavailable for evolution field filter", exc_info=True)
         return set()
 

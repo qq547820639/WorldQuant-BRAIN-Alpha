@@ -32,7 +32,15 @@ from brain_alpha_ops.brain_api.canonical import (
 try:
     import jsonschema
 except ImportError:
-    jsonschema = None  # type: ignore[assignment]
+    try:
+        from pathlib import Path
+        Path("data/config_schema_fallback_warning.txt").write_text(
+            "jsonschema library not installed. Config validation is using built-in fallback, which has limited checks.\n"
+            "Install jsonschema>=4.20 for full structural validation.\n", encoding="utf-8"
+        )
+    except OSError:
+        pass
+    jsonschema = None
 
 # ── Canonical enum lists for jsonschema (sorted for deterministic validation) ──
 _C_REGIONS = sorted(SUPPORTED_REGIONS)               # ["CHN", "EUR", "GLB", "USA"]

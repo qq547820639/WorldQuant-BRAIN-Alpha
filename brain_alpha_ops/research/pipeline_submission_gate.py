@@ -1,6 +1,7 @@
 """Auto-submission safety and cross-review helpers for AlphaResearchPipeline."""
 
 from __future__ import annotations
+from dataclasses import asdict
 
 import logging
 
@@ -42,7 +43,7 @@ class PipelineSubmissionMixin:
             "operators": getattr(candidate, "operators", []),
         }
         try:
-            sim_result["settings"] = self.config.settings.__dict__
+            sim_result["settings"] = asdict(self.config.settings)
         except Exception as exc:
             logger.warning(
                 "Failed to serialize settings for check registry: %s",

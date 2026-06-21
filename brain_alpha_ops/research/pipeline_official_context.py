@@ -83,7 +83,7 @@ def active_dataset_field_names(dataset_id: str, mapper: Any, cache: dict[str, se
         return cached
     try:
         fields = {str(field).lower() for field in mapper.fields_for(dataset)}
-    except Exception:
+    except Exception as exc:
         logger.warning("active dataset field lookup unavailable for dataset_id=%s", dataset, exc_info=True)
         fields = set()
     cache[dataset] = fields

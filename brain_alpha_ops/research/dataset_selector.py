@@ -117,7 +117,7 @@ class DatasetSelector:
                 field_id = str(field.id).lower()
                 if cat and field_id:
                     self._category_index.setdefault(cat, []).append(field_id)
-        except Exception:
+        except Exception as exc:
             logger.exception("dataset_selector: unexpected error")
             logger.warning("dataset selector category index unavailable", exc_info=True)
 

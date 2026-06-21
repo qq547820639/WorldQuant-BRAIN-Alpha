@@ -161,7 +161,7 @@ class BrainAlphaToolbox(AgentLiveToolsMixin):
             fields = [_field_to_dict(field) for field in loader.get_fields()]
             operators = [_operator_to_dict(operator) for operator in loader.get_operators()]
             datasets = [_dataset_to_dict(dataset) for dataset in loader.get_datasets()]
-        except Exception:
+        except Exception as exc:
             logger.warning("official context loader unavailable; using default agent context", exc_info=True)
             from brain_alpha_ops.brain_api.context_defaults import (
                 DEFAULT_FIELDS,
@@ -446,7 +446,7 @@ class BrainAlphaToolbox(AgentLiveToolsMixin):
         memory = ResearchMemory(self.run_config.ops.storage_dir)
         try:
             return memory.generation_guidance(limit=limit, top_n=top_n, min_success_rate=min_success_rate)
-        except Exception:
+        except Exception as exc:
             logger.warning("research memory guidance unavailable; using empty guidance", exc_info=True)
             return {}
 

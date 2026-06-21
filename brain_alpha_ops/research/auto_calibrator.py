@@ -16,6 +16,7 @@ Usage::
         # report["calibrated"] == True means calibration succeeded.
 """
 from __future__ import annotations
+from dataclasses import asdict
 
 import os
 from datetime import datetime, timezone
@@ -414,7 +415,7 @@ class AutoCalibrator:
         combinations = self._generate_grid_combinations(grid_config)
 
         for combo in combinations:
-            test_dim = DimensionParam(**{**base_dim.__dict__, "name": dim_name})
+            test_dim = DimensionParam(**{**asdict(base_dim), "name": dim_name})
             for i, name in enumerate(param_names):
                 setattr(test_dim, name, combo[i])
 

@@ -27,6 +27,7 @@ Architecture
          └── Audit trail recording
 """
 from __future__ import annotations
+from dataclasses import asdict
 
 import json
 import logging
@@ -378,7 +379,7 @@ class CrossReviewPipeline:
             evidence_support=evidence_support,
             risk_flags=_dedup(risk_flags),
             recommendations=_dedup(primary.get("recommended_next_actions") or []),
-            evidence_checks=[er.__dict__ for er in evidence_results],
+            evidence_checks=[asdict(er) for er in evidence_results],
         )
         decision.primary_digest = str(review_result.get("primary_digest") or "")
         decision.reviewer_digest = str(review_result.get("reviewer_digest") or "")
@@ -463,7 +464,7 @@ class CrossReviewPipeline:
         try:
             payload = redact_data({
                 "schema_version": REVIEW_PIPELINE_SCHEMA,
-                "decision": decision.__dict__,
+                "decision": asdict(decision),
                 "review_result": review_result,
             })
             audit_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2, default=str) + "\n", encoding="utf-8")

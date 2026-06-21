@@ -171,7 +171,7 @@ def _stringify_evidence(value: Any) -> str:
         return value
     try:
         return json.dumps(value, ensure_ascii=False, default=str)
-    except Exception:
+    except Exception as exc:
         logger.exception("knowledge_base: unexpected error")
         logger.warning("knowledge_base: failed to serialize evidence value; using string fallback", exc_info=True)
         return str(value)

@@ -162,6 +162,7 @@ def similarity(left: str, right: str) -> float:
 
 
 NON_PRODUCTION_SOURCE_VALUES = {
+    "experience",
     "mock",
     "demo",
     "dry-run",
@@ -182,7 +183,7 @@ NON_PRODUCTION_ID_PREFIXES = tuple(f"{value}_" for value in NON_PRODUCTION_SOURC
 
 def non_production_source_reasons(candidate: Candidate | dict[str, object]) -> list[str]:
     """Return reasons a candidate should be blocked from production submission."""
-    data = candidate if isinstance(candidate, dict) else candidate.__dict__
+    data = candidate if isinstance(candidate, dict) else asdict(candidate)
     reasons: list[str] = []
     alpha_id = str(data.get("alpha_id") or "").strip()
     official_alpha_id = str(data.get("official_alpha_id") or "").strip()

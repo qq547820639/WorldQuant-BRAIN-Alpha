@@ -131,7 +131,7 @@ class FieldSelector:
             fields = set(generation_field_ids(loader.get_fields(dataset_id)))
             self._dataset_field_cache[dataset_id] = fields
             return fields
-        except Exception:
+        except Exception as exc:
             logger.warning(
                 "dataset field metadata unavailable for dataset_id=%s",
                 dataset_id,

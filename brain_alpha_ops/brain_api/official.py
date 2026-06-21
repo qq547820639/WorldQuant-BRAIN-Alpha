@@ -11,6 +11,7 @@ Key types are defined in brain_alpha_ops.types:
 """
 
 from __future__ import annotations
+from dataclasses import asdict
 
 import http.cookiejar
 import logging
@@ -607,7 +608,7 @@ class OfficialBrainAPI:
     def set_market_scope(self, settings: BrainSettings | dict | None):
         # Keep dataset in the market scope so dataset selection continues to work.
         if isinstance(settings, BrainSettings):
-            data = settings.__dict__
+            data = asdict(settings)
         elif isinstance(settings, dict):
             data = settings
         else:

@@ -152,7 +152,7 @@ class ExpressionHistoryIndex:
             )
 
             return ExpressionSqliteIndex(self.storage_dir).summary(top_n=top_n)
-        except Exception:
+        except Exception as exc:
             logger.warning("sqlite expression index summary unavailable", exc_info=True)
             return {}
 
@@ -171,7 +171,7 @@ class ExpressionHistoryIndex:
                 min_similarity=min_similarity,
                 max_scan_rows=max_scan_rows,
             )
-        except Exception:
+        except Exception as exc:
             logger.warning("sqlite expression index lookup unavailable", exc_info=True)
             return {}
 

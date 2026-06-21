@@ -196,7 +196,7 @@ class MutationEngine:
                 ):
                     break
                 mutated = expression
-            except Exception:
+            except Exception as exc:
                 mutated = expression
 
         return MutationResult(
@@ -594,7 +594,7 @@ class EvolutionRunner:
                 for expr in population:
                     try:
                         scores[expr] = float(score_func(expr))
-                    except Exception:
+                    except Exception as exc:
                         scores[expr] = 0.0
             else:
                 scores = {expr: 50.0 for expr in population}

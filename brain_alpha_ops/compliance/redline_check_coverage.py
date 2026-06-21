@@ -27,8 +27,8 @@ def _verify_redline_5_factor_coverage(report: ComplianceReport) -> None:
 
     # 5a. Check against the canonical constant in scoring.py
     try:
-        from brain_alpha_ops.research.scoring import EMPRIRICAL_CHECK_ITEM_NAMES
-        actual_names = set(EMPRIRICAL_CHECK_ITEM_NAMES)
+        from brain_alpha_ops.research.scoring import EMPIRICAL_CHECK_ITEM_NAMES
+        actual_names = set(EMPIRICAL_CHECK_ITEM_NAMES)
         for check_id, check_name in required_checks:
             if check_name in actual_names:
                 report.add_pass()
@@ -37,19 +37,19 @@ def _verify_redline_5_factor_coverage(report: ComplianceReport) -> None:
                     redline_id=redline_id, redline_name="要素全覆盖",
                     severity="BLOCKING", file_path="brain_alpha_ops/research/scoring.py",
                     check_name=f"缺少 BRAIN Alpha Check: {check_id}",
-                    actual_value=f"EMPRIRICAL_CHECK_ITEM_NAMES 缺 {check_name}",
+                    actual_value=f"EMPIRICAL_CHECK_ITEM_NAMES 缺 {check_name}",
                     expected_value=f"包含 {check_id} ({check_name})",
                     deviation=f"empirical_score 未覆盖 {check_id}",
-                    fix_guidance=f"在 empirical_score 的 items 中添加 {check_name} 检查项并更新 EMPRIRICAL_CHECK_ITEM_NAMES。",
+                    fix_guidance=f"在 empirical_score 的 items 中添加 {check_name} 检查项并更新 EMPIRICAL_CHECK_ITEM_NAMES。",
                 ))
     except ImportError as exc:
         for check_id, check_name in required_checks:
             _verification_blocked(
                 report, redline_id=redline_id, redline_name="要素全覆盖",
                 file_path="brain_alpha_ops/research/scoring.py",
-                check_name=f"无法导入 EMPRIRICAL_CHECK_ITEM_NAMES: {check_id}",
+                check_name=f"无法导入 EMPIRICAL_CHECK_ITEM_NAMES: {check_id}",
                 error=exc, expected=f"包含 {check_id} ({check_name})",
-                fix_guidance="确保 scoring.py 定义了 EMPRIRICAL_CHECK_ITEM_NAMES 常量。",
+                fix_guidance="确保 scoring.py 定义了 EMPIRICAL_CHECK_ITEM_NAMES 常量。",
             )
 
     # 5b. Verify calculate_fitness exists
@@ -67,7 +67,7 @@ def _verify_redline_5_factor_coverage(report: ComplianceReport) -> None:
 
     # 5c. Verify self_correlation exception rule via AST (survives PyInstaller)
     try:
-        scoring_path = Path(__file__).resolve().parents[2] / "research" / "scoring.py"
+        scoring_path = Path(__file__).resolve().parents[2] / "brain_alpha_ops" / "research" / "scoring.py"
         tree = ast.parse(scoring_path.read_text(encoding="utf-8"))
         has_exception_applied = False
         for node in ast.walk(tree):

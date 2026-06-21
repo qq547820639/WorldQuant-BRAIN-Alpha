@@ -448,7 +448,7 @@ def _compute_empirical_metrics(metrics: dict, settings: dict, thresholds: Qualit
 
 # P0-4 fix: canonical list of BRAIN check items — used by redline verifier
 # instead of inspect.getsource which fails in PyInstaller builds.
-EMPRIRICAL_CHECK_ITEM_NAMES = frozenset({
+EMPIRICAL_CHECK_ITEM_NAMES = frozenset({
     "sharpe", "fitness", "turnover_min", "turnover_platform",
     "self_correlation", "prod_correlation", "weight_concentration",
     "sub_universe_sharpe",
