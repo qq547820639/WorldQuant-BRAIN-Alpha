@@ -49,6 +49,9 @@ dev = [
 web = [
     # web server uses standard library only; no extra deps needed
 ]
+browser = [
+    "playwright>=1.40,<2",
+]
 
 [tool.brain-alpha-ops]
 default_environment = "production"

@@ -11,6 +11,13 @@ Captures UX metrics: response times, error messages, flow coherence, and
 interaction friction points for optimization reporting.
 """
 
+import pytest
+import requests
+
+pytestmark = pytest.mark.skip(
+    reason="Downgraded to contract test; real E2E uses Playwright browser flow in tests/e2e/"
+)
+
 import json
 import os
 import time
@@ -18,9 +25,6 @@ import traceback
 import uuid
 from pathlib import Path
 from typing import Any
-
-import pytest
-import requests
 
 from brain_alpha_ops import web
 from brain_alpha_ops.redaction import redact_text

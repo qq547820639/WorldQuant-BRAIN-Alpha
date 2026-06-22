@@ -7,10 +7,14 @@ Uses Node.js subprocess with DOM simulation harness (same pattern as test_web_fr
 """
 from __future__ import annotations
 
+import pytest
+
+pytestmark = pytest.mark.skip(
+    reason="Downgraded to contract test; real E2E uses Playwright browser flow in tests/e2e/"
+)
+
 import re
 from pathlib import Path
-
-import pytest
 
 from scripts.check_frontend_syntax import _node_path
 from tests.test_web_frontend_v2 import _build_test_script, _run_node_script, _frontend_module_load_order

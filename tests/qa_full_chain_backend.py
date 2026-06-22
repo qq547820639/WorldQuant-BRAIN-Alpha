@@ -7,13 +7,17 @@ Mirrors the real user journey through the BRAIN Alpha Ops web console.
 """
 from __future__ import annotations
 
+import pytest
+
+pytestmark = pytest.mark.skip(
+    reason="Downgraded to contract test; real E2E uses Playwright browser flow in tests/e2e/"
+)
+
 import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 from unittest.mock import patch, MagicMock
-
-import pytest
 
 from brain_alpha_ops.tasks import JobStore
 from brain_alpha_ops.config import RunConfig, OpsConfig

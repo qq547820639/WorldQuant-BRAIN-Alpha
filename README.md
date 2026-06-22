@@ -181,7 +181,7 @@ BRAIN_ALPHA_OPS_WEB_FRONTEND=react python3 launch_web.py
 
 *续跑记录面板：历史运行记录、可续跑候选、趋势概要。*
 
-> 🛡️ **工具永远不会自动提交。** `REAL_SUBMIT_DISABLED_WEB_FLOW` 是代码级别的硬开关（永远为 `True`），web 端的提交按钮不会激活真实提交流程。环境变量 `BRAIN_ALPHA_FORCE_REAL_SUBMIT=1` 可绕过（仅限受控测试环境）。
+> 🛡️ **工具永远不会自动提交。** `REAL_SUBMIT_DISABLED_WEB_FLOW` 是代码级别的硬开关（永远为 `True`），web 端的提交按钮不会激活真实提交流程。环境变量 `BRAIN_ALPHA_FORCE_REAL_SUBMIT=1` 可绕过（仅限受控测试环境）。`OfficialBrainAPI.submit_alpha()` 直连提交入口仅用于开发/受控实验，**不是默认生产能力**——生产提交必须通过浏览器真实操作 + HIL 闸门二次确认。
 
 ---
 
@@ -347,6 +347,11 @@ python3 -m pytest tests/ --cov=brain_alpha_ops --cov-report=html
 ruff check brain_alpha_ops/
 mypy brain_alpha_ops/
 ```
+
+### 测试说明
+- **单元测试**: `python3 -m pytest tests/ -q` — 测试内部逻辑
+- **契约测试**: `tests/qa_*.py` — 测试本地API契约（已降级，非生产验收）
+- **E2E测试**: `tests/e2e/` — Playwright真实浏览器测试（生产验收标准）
 
 CI 门禁（`.github/workflows/quality-gate.yml`，PR → main 时自动跑）：
 1. Python 编译检查

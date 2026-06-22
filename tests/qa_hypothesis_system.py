@@ -14,6 +14,12 @@ Run: python -m pytest tests/qa_hypothesis_system.py -v
 Or: python tests/qa_hypothesis_system.py (standalone)
 """
 
+import pytest
+
+pytestmark = pytest.mark.skip(
+    reason="Downgraded to contract test; real E2E uses Playwright browser flow in tests/e2e/"
+)
+
 import json
 import os
 import sys
