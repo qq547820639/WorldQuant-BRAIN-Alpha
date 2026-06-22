@@ -258,9 +258,6 @@ class MutationEngine:
                     if inner.strip():
                         return inner
                 break
-            elif ch in _UNARY_OPERATORS and depth == 0:
-                # Handle case like "rank(close)" → "close"
-                pass
 
         # Fallback: try to find any removable operator
         paren_count = expr.count("(")

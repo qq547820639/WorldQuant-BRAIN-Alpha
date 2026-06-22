@@ -101,6 +101,7 @@ def create_handler_class(
             if extra_headers:
                 for name, value in extra_headers:
                     self.send_header(name, value)
+            self._send_security_headers()
             self.end_headers()
             self.wfile.write(body)
 

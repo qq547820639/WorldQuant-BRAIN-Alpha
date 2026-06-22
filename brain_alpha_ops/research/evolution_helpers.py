@@ -47,7 +47,7 @@ _COMMON_FIELDS = {
     "returns", "market_cap", "adv20",
 }
 
-_MAX_EXPRESSION_LENGTH = 2000
+from brain_alpha_ops.research.generator import _MAX_EXPRESSION_LENGTH  # noqa: F811
 _MAX_NESTING_DEPTH = 8
 _MAX_MUTATION_ATTEMPTS = 10
 _MIN_EXPRESSION_LENGTH = 3

@@ -399,8 +399,6 @@ class ConvergenceTracker:
         Returns ``(ci_low, ci_high)``.
         """
         n = len(values)
-        if n < 5:
-            return (0.0, 0.0)
         if n < 3:
             # Use a simple t-style interval; not enough data for BCa.
             mean = sum(values) / n
@@ -408,6 +406,8 @@ class ConvergenceTracker:
             se = (variance / n) ** 0.5 if variance > 0 else 0.01
             z = 1.645  # 90% two-sided
             return (max(0.0, mean - z * se), mean + z * se)
+        if n < 5:
+            return (0.0, 0.0)
 
         # ── Step 1: generate B bootstrap sample means ──
         means: list[float] = []
