@@ -4,7 +4,7 @@
  */
 
 import { lazy, Suspense } from "react";
-import type { BrainCredentials, Candidate, CardViewId } from "@/types";
+import type { BrainCredentials, Candidate, CardViewId, PhaseData } from "@/types";
 import { safeDisplayErrorMessage, apiErrorMessage } from "@/helpers/errorExperience";
 import { useApi } from "@/hooks/useApi";
 import Dashboard from "@/components/Dashboard";
@@ -48,7 +48,7 @@ export interface RenderViewProps {
   onCandidatePoolUpdated: () => void;
   onLocalSessionLoggedOut: () => void;
   onAutoStartConsumed: () => void;
-  phaseData?: Record<string, unknown> | null;
+  phaseData?: PhaseData | null;
 }
 
 function PageLoader() {
@@ -177,8 +177,8 @@ export function renderActiveView(props: RenderViewProps): React.ReactNode {
         credentials={credentials}
         autoStart={officialOpsAutoStart}
         connectionReady={connected || managedCredentialsAvailable}
-        officialContextCache={phaseData?.official_context_cache as Record<string, unknown> | undefined}
-        cloudAlphaCache={phaseData?.cloud_alpha_cache as Record<string, unknown> | undefined}
+        officialContextCache={phaseData?.official_context_cache}
+        cloudAlphaCache={phaseData?.cloud_alpha_cache}
         onAutoStartConsumed={onAutoStartConsumed}
         onSyncCompleted={onOfficialSyncCompleted}
         onReconnectRequested={onOfficialReconnectRequested}

@@ -34,28 +34,28 @@ export default memo(function StatusFlowDiagram({ stages }: Props) {
                   display: "flex", alignItems: "center", justifyContent: "center",
                   fontSize: 16, fontWeight: 500,
                   fontFamily: "var(--font-mono)",
-                  background: stage.status === "complete" ? "oklch(0.52 0.06 155 / 0.15)"
-                    : stage.status === "active" ? "oklch(0.65 0.07 80 / 0.15)"
-                    : stage.status === "blocked" ? "oklch(0.48 0.12 22 / 0.15)"
-                    : "oklch(0.38 0.005 45 / 0.08)",
+                  background: stage.status === "complete" ? "var(--color-status-complete-bg)"
+                    : stage.status === "active" ? "var(--color-status-active-bg)"
+                    : stage.status === "blocked" ? "var(--color-status-blocked-bg)"
+                    : "var(--color-status-pending-bg)",
                   border: `1.5px solid ${
-                    stage.status === "complete" ? "oklch(0.52 0.10 155)"
-                    : stage.status === "active" ? "oklch(0.65 0.14 80)"
-                    : stage.status === "blocked" ? "oklch(0.48 0.12 22)"
-                    : "oklch(0.38 0.006 45)"
+                    stage.status === "complete" ? "var(--color-status-complete-border)"
+                    : stage.status === "active" ? "var(--color-status-active-text)"
+                    : stage.status === "blocked" ? "var(--color-status-blocked-border)"
+                    : "var(--color-text-dim)"
                   }`,
-                  color: stage.status === "complete" ? "oklch(0.62 0.10 160)"
-                    : stage.status === "active" ? "oklch(0.65 0.14 80)"
-                    : stage.status === "blocked" ? "oklch(0.58 0.12 25)"
-                    : "oklch(0.38 0.006 45)",
+                  color: stage.status === "complete" ? "var(--color-status-complete-text)"
+                    : stage.status === "active" ? "var(--color-status-active-text)"
+                    : stage.status === "blocked" ? "var(--color-status-blocked-text)"
+                    : "var(--color-text-dim)",
                   transition: "all 200ms",
                 }}>
                   {stage.count}
                 </div>
-                <div style={{ fontSize: 12, fontWeight: 500, color: stage.status === "pending" ? "oklch(0.38 0.006 45)" : "oklch(0.92 0.003 45)" }}>
+                <div style={{ fontSize: 12, fontWeight: 500, color: stage.status === "pending" ? "var(--color-text-dim)" : "var(--color-text-bright)" }}>
                   {stage.label}
                 </div>
-                <div style={{ fontSize: 11, color: "oklch(0.52 0.006 45)", marginTop: 2 }}>
+                <div style={{ fontSize: 11, color: "var(--color-text-muted)", marginTop: 2 }}>
                   {stage.status === "complete" ? "完成" : stage.status === "active" ? "进行中" : stage.status === "blocked" ? "阻断" : "等待"}
                 </div>
               </div>
@@ -63,14 +63,14 @@ export default memo(function StatusFlowDiagram({ stages }: Props) {
                 <div style={{
                   width: 40, height: 1,
                   marginTop: 20,
-                  background: stage.status === "complete" ? "oklch(0.52 0.10 155)" : "oklch(0.28 0.008 45)",
+                  background: stage.status === "complete" ? "var(--color-status-complete-border)" : "var(--color-border-medium)",
                   flexShrink: 0,
                 }} aria-hidden="true" />
               )}
             </div>
           ))}
         </div>
-        <p className="text-xs text-text-tertiary mt-3" style={{ borderTop: "0.5px solid oklch(0.22 0.007 45)", paddingTop: 8 }}>
+        <p className="text-xs text-text-tertiary mt-3" style={{ borderTop: "0.5px solid var(--color-border-default)", paddingTop: 8 }}>
           本页面不执行真实提交。任何真实提交需另走人工审批。
         </p>
       </div>

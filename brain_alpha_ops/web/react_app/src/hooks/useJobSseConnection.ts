@@ -8,7 +8,8 @@
 import { useCallback } from "react";
 import { useSSE } from "@/hooks/useSSE";
 import { resolveJobEventState } from "@/helpers/runPayload";
-import type { JobStatus, SSEEvent } from "@/types";
+import type { JobStatus, SSEEvent, SSECandidateEventData } from "@/types";
+import { isSSECandidateData } from "@/types";
 import { clearSavedJobId } from "@/hooks/useJobRecovery";
 
 interface SseConnectionCallbacks {
@@ -63,9 +64,11 @@ export function useJobSseConnection(
         clearTransientProgressError();
         onProgress(event);
       } else if (event.type === "candidate") {
-        onCandidate(String((event.data as Record<string, unknown>)?.alpha_id || "?"));
+        const d = isSSECandidateData(event.data) ? event.data : ({} as SSECandidateEventData);
+        onCandidate(String(d.alpha_id || "?"));
       } else if (event.type === "submission") {
-        onSubmission(String((event.data as Record<string, unknown>)?.alpha_id || "未知"));
+        const d = isSSECandidateData(event.data) ? event.data : ({} as SSECandidateEventData);
+        onSubmission(String(d.alpha_id || "未知"));
       }
     },
     [notify, onTerminal, onProgress, onCandidate, onSubmission, setPollFailures, clearTransientProgressError],

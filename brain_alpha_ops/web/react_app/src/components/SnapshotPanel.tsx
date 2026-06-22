@@ -149,8 +149,8 @@ function SnapshotMobileCard({ row }: { row: SnapshotRow }) {
       className="rounded-md p-4 text-sm"
       style={{
         border: '1px solid',
-        borderColor: 'oklch(0.28 0.008 45 / 0.70)',
-        backgroundColor: 'oklch(0.100 0.007 45 / 0.70)',
+        borderColor: 'var(--color-border-medium-alpha)',
+        backgroundColor: 'var(--color-surface-deep-alpha)',
       }}
     >
       <div className="flex min-w-0 items-start justify-between gap-3">
@@ -234,7 +234,7 @@ export default function SnapshotPanel({ notify, viewMode, onNavigate }: Props) {
       {viewMode === "checkpoint_status" && (
         <div
           className="rounded-lg p-4"
-          style={{ border: '1px solid', borderColor: 'oklch(0.65 0.14 80 / 0.25)', backgroundColor: 'oklch(0.65 0.14 80 / 0.10)' }}
+          style={{ border: '1px solid', borderColor: 'var(--color-warning-border-subtle)', backgroundColor: 'var(--color-warning-bg)' }}
         >
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="min-w-0">
@@ -279,7 +279,7 @@ export default function SnapshotPanel({ notify, viewMode, onNavigate }: Props) {
           className="panel"
           role="alert"
           aria-live="assertive"
-          style={{ borderColor: 'oklch(0.48 0.08 22 / 0.30)', backgroundColor: 'oklch(0.48 0.06 22 / 0.08)' }}
+          style={{ borderColor: 'var(--color-error-border)', backgroundColor: 'var(--color-error-bg)' }}
         >
           <div className="flex items-center justify-between gap-3">
             <p className="text-negative text-sm">加载 {config.title} 失败: {api.error}</p>
@@ -309,10 +309,10 @@ export default function SnapshotPanel({ notify, viewMode, onNavigate }: Props) {
           onChange={(event) => setFilter(sanitizeTextInput(event.target.value, MAX_FILTER_LENGTH))}
           className="w-full min-w-0 rounded-md px-3 py-2 text-sm sm:flex-1"
           style={{
-            backgroundColor: 'oklch(0.115 0.007 45)',
+            backgroundColor: 'var(--color-surface-elevated)',
             border: '1px solid',
-            borderColor: 'oklch(0.28 0.008 45)',
-            color: 'oklch(0.92 0.003 45)',
+            borderColor: 'var(--color-border-medium)',
+            color: 'var(--color-text-bright)',
           }}
         />
         <p className="text-xs text-text-tertiary" role="status" aria-live="polite">
@@ -327,8 +327,8 @@ export default function SnapshotPanel({ notify, viewMode, onNavigate }: Props) {
               className="rounded-md px-4 py-6 text-center text-sm text-text-tertiary"
               style={{
                 border: '1px solid',
-                borderColor: 'oklch(0.22 0.007 45 / 0.60)',
-                backgroundColor: 'oklch(0.100 0.007 45 / 0.50)',
+                borderColor: 'var(--color-border-faded-strong)',
+                backgroundColor: 'var(--color-surface-deep-faded)',
               }}
             >
               {config.empty}
@@ -343,7 +343,7 @@ export default function SnapshotPanel({ notify, viewMode, onNavigate }: Props) {
             <thead>
               <tr
                 className="text-left text-xs uppercase tracking-wider"
-                style={{ borderBottom: '1px solid', borderColor: 'oklch(0.28 0.008 45)' }}
+                style={{ borderBottom: '1px solid', borderColor: 'var(--color-border-medium)' }}
               >
                 <th scope="col" className="p-3 text-text-tertiary">类型</th>
                 <th scope="col" className="p-3 text-text-tertiary">名称</th>
@@ -361,8 +361,8 @@ export default function SnapshotPanel({ notify, viewMode, onNavigate }: Props) {
                   <tr
                     key={`${row.kind}_${row.id}_${index}`}
                     className="transition-colors"
-                    style={{ borderBottom: '1px solid', borderColor: 'oklch(0.22 0.007 45 / 0.50)' }}
-                    onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'oklch(0.115 0.007 45 / 0.30)'; }}
+                    style={{ borderBottom: '1px solid', borderColor: 'var(--color-border-faded)' }}
+                    onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--color-surface-hover)'; }}
                     onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.backgroundColor = ''; }}
                   >
                     <td className="p-3 text-xs text-text-tertiary">{displayKind(row.kind)}</td>

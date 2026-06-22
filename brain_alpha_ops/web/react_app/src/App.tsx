@@ -9,8 +9,7 @@ import type {
   BrainCredentials,
   Candidate,
   CardViewId,
-  CloudAlphaCache,
-  OfficialContextCache,
+  PhaseData,
   PhaseId,
 } from "@/types";
 import { useApi } from "@/hooks/useApi";
@@ -178,14 +177,7 @@ export default function App() {
   const [officialOpsAutoStart, setOfficialOpsAutoStart] = useState(false);
 
   // Phase state from backend (poll every 10s)
-  const phaseApi = useApi<{
-    current_phase: string; operation_mode?: "cache_only" | "connected" | "needs_setup"; connected: boolean; context_fresh: boolean;
-    candidates_count: number; scored_count: number; readiness_passed: boolean;
-    sync: { in_progress: boolean; scanned: number; total: number; elapsed_seconds: number; stalled: boolean };
-    official_context_cache?: OfficialContextCache;
-    cloud_alpha_cache?: CloudAlphaCache;
-    readiness: { eligible_count: number; ready: boolean };
-  }>();
+  const phaseApi = useApi<PhaseData>();
 
   useEffect(() => {
     void phaseApi.call("/api/phase_state");
@@ -335,7 +327,7 @@ export default function App() {
     onCandidatePoolUpdated: handleCandidatePoolUpdated,
     onLocalSessionLoggedOut: handleLocalSessionLoggedOut,
     onAutoStartConsumed: () => setOfficialOpsAutoStart(false),
-    phaseData: phaseData as Record<string, unknown> | null,
+    phaseData: phaseData,
   };
 
   const detailContent = useMemo(() => {

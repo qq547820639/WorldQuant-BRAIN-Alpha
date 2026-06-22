@@ -59,7 +59,7 @@ export default function OfficialBacktestSlots({ notify }: Props) {
       <BacktestQueueSummaryStrip summary={queueSummary} activeCount={activeCount} slotLimit={slotLimit} />
 
       {api.error && (
-        <div className="rounded-md border border-[oklch(0.48_0.08_22/0.30)] bg-[oklch(0.48_0.06_22/0.08)] p-4" role="alert" aria-live="assertive">
+        <div className="rounded-md border border-[var(--color-error-border)] bg-[var(--color-error-bg)] p-4" role="alert" aria-live="assertive">
           <div className="flex items-center justify-between gap-3">
             <p className="text-sm text-negative">回测槽位加载失败: {api.error}</p>
             <button type="button" onClick={load} className="btn btn-secondary text-sm">
@@ -73,7 +73,7 @@ export default function OfficialBacktestSlots({ notify }: Props) {
         {slots.map((slot) => {
           const board = slot.status_board;
           return (
-            <article key={slot.slot} className={`rounded-md border border-border-subtle bg-[oklch(0.100_0.007_45)] p-4 min-w-0 border-l-4 ${slotTone(slot.status)}`}>
+            <article key={slot.slot} className={`rounded-md border border-border-subtle bg-[var(--color-surface-deep)] p-4 min-w-0 border-l-4 ${slotTone(slot.status)}`}>
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <h3 className="text-sm font-semibold text-text-primary">官方回测槽 #{slot.slot}</h3>
@@ -104,9 +104,9 @@ export default function OfficialBacktestSlots({ notify }: Props) {
                 <SlotMetric label="操作进度" value={`${boundedPercent(slot.progress_percent)}%`} />
               </dl>
 
-              <div className="mt-4 h-2 overflow-hidden rounded-full bg-[oklch(0.22_0.007_45)]" aria-hidden="true">
+              <div className="mt-4 h-2 overflow-hidden rounded-full bg-[var(--color-border-default)]" aria-hidden="true">
                 <div
-                  className="h-full rounded-full bg-[oklch(0.65_0.14_80)]"
+                  className="h-full rounded-full bg-[var(--color-status-active-text)]"
                   style={{ width: `${boundedPercent(slot.progress_percent)}%` }}
                 />
               </div>
@@ -135,7 +135,7 @@ function BacktestQueueSummaryStrip({
     .map((row) => `${readinessReasonLabel(row.reason)} ${row.count}`)
     .join(" · ");
   return (
-    <div className="rounded-md border border-border-subtle bg-[oklch(0.115_0.007_45)] px-3 py-2">
+    <div className="rounded-md border border-border-subtle bg-[var(--color-surface-elevated)] px-3 py-2">
       <dl className="grid grid-cols-2 gap-3 text-xs sm:grid-cols-4">
         <QueueMetric label="可用槽位" value={`${openSlots}/${slotLimit}`} />
         <QueueMetric label="提交证据缺口" value={formatCount(summary?.submit_evidence_blocking_count)} />
@@ -181,10 +181,10 @@ function normalizeSlots(payload: BacktestSlotsResponse | null): BacktestSlot[] {
 function slotTone(status: unknown) {
   const text = String(status || "").toUpperCase();
   if (text === "EMPTY") return "border-border-subtle";
-  if (text.includes("FAILED") || text.includes("ERROR")) return "border-[oklch(0.48_0.08_22/0.30)]";
+  if (text.includes("FAILED") || text.includes("ERROR")) return "border-[var(--color-error-border)]";
   if (text.includes("COMPLETE")) return "border-border";
-  if (text.includes("DEFERRED") || text.includes("WAIT")) return "border-[oklch(0.65_0.06_85/0.25)]";
-  return "border-[oklch(0.58_0.06_245/0.20)]";
+  if (text.includes("DEFERRED") || text.includes("WAIT")) return "border-[var(--color-info-border-warm)]";
+  return "border-[var(--color-info-border-cool)]";
 }
 
 function slotBadge(status: unknown) {

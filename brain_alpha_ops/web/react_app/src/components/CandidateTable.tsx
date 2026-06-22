@@ -12,8 +12,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { apiErrorMessage } from "@/helpers/errorExperience";
 import { useApi } from "@/hooks/useApi";
-import { useSSE } from "@/hooks/useSSE";
 import { useCandidatePipeline } from "@/hooks/useCandidatePipeline";
+import { useSseManager } from "@/hooks/useSseManager";
 import { useCandidateActions } from "@/hooks/useCandidateActions";
 import type { AlphaLifecycleHistoryResponse, Candidate } from "@/types";
 import { getStarred } from "@/utils/starredCandidates";
@@ -112,6 +112,7 @@ export default function CandidateTable({
   const [targetPoolSize, setTargetPoolSize] = useState(DEFAULT_TARGET_POOL_SIZE);
 
   const pipeline = useCandidatePipeline();
+  const sseManager = useSseManager();
 
   const lastPoolDeficitWarningRef = useRef<number>(0);
   const POOL_DEFICIT_WARNING_COOLDOWN_MS = 30 * 60 * 1000;
@@ -211,25 +212,50 @@ export default function CandidateTable({
     targetPoolSize,
   });
 
-  const taskStream = useSSE(pipeline.task.jobId ? `/sse?job_id=${encodeURIComponent(pipeline.task.jobId)}` : null, {
-    onEvent: actions.handleTaskEvent,
-    onExhausted: actions.handleTaskStreamExhausted,
-  });
+  useEffect(() => {
+    if (pipeline.task.jobId) {
+      sseManager.connect("task", `/sse?job_id=${encodeURIComponent(pipeline.task.jobId)}`, {
+        onEvent: actions.handleTaskEvent,
+        onExhausted: actions.handleTaskStreamExhausted,
+      });
+    } else {
+      sseManager.disconnect("task");
+    }
 
-  useSSE(pipeline.check.jobId ? `/sse?job_id=${encodeURIComponent(pipeline.check.jobId)}` : null, {
-    onEvent: actions.handleCheckEvent,
-    onExhausted: actions.handleCheckStreamExhausted,
-  });
+    if (pipeline.check.jobId) {
+      sseManager.connect("check", `/sse?job_id=${encodeURIComponent(pipeline.check.jobId)}`, {
+        onEvent: actions.handleCheckEvent,
+        onExhausted: actions.handleCheckStreamExhausted,
+      });
+    } else {
+      sseManager.disconnect("check");
+    }
 
-  useSSE(pipeline.optimization.jobId ? `/sse?job_id=${encodeURIComponent(pipeline.optimization.jobId)}` : null, {
-    onEvent: actions.handleOptimizationEvent,
-    onExhausted: actions.handleOptimizationStreamExhausted,
-  });
+    if (pipeline.optimization.jobId) {
+      sseManager.connect("optimization", `/sse?job_id=${encodeURIComponent(pipeline.optimization.jobId)}`, {
+        onEvent: actions.handleOptimizationEvent,
+        onExhausted: actions.handleOptimizationStreamExhausted,
+      });
+    } else {
+      sseManager.disconnect("optimization");
+    }
 
-  useSSE(pipeline.simulation.jobId ? `/sse?job_id=${encodeURIComponent(pipeline.simulation.jobId)}` : null, {
-    onEvent: actions.handleSimEvent,
-    onExhausted: actions.handleSimStreamExhausted,
-  });
+    if (pipeline.simulation.jobId) {
+      sseManager.connect("simulation", `/sse?job_id=${encodeURIComponent(pipeline.simulation.jobId)}`, {
+        onEvent: actions.handleSimEvent,
+        onExhausted: actions.handleSimStreamExhausted,
+      });
+    } else {
+      sseManager.disconnect("simulation");
+    }
+  }, [
+    pipeline.task.jobId, pipeline.check.jobId, pipeline.optimization.jobId, pipeline.simulation.jobId,
+    actions.handleTaskEvent, actions.handleTaskStreamExhausted,
+    actions.handleCheckEvent, actions.handleCheckStreamExhausted,
+    actions.handleOptimizationEvent, actions.handleOptimizationStreamExhausted,
+    actions.handleSimEvent, actions.handleSimStreamExhausted,
+    sseManager,
+  ]);
 
   const rawQueueCandidates = useMemo(
     () => candidates.filter((c) => candidateMatchesQueueView(c, viewMode, checkResults)),
@@ -364,7 +390,7 @@ export default function CandidateTable({
   const detailPanelProps = useMemo(() => ({
     showProductionControls,
     taskState: pipeline.task.state, taskProgress: pipeline.task.progress, taskError: pipeline.task.error,
-    taskStreamExhausted: taskStream.exhausted,
+    taskStreamExhausted: sseManager.task.exhausted,
     onRetryTask: () => { void actions.generateCandidates(); },
     simState: pipeline.simulation.state, simProgress: pipeline.simulation.progress, simError: pipeline.simulation.error,
     onRetrySim: () => { actions.startSimulation(); },
@@ -372,7 +398,7 @@ export default function CandidateTable({
     onRetryOptimization: () => { void actions.startOptimization(); },
     checkState: pipeline.check.state, checkProgress: pipeline.check.progress, checkError: pipeline.check.error,
     onRetryCheck: () => { void actions.startBatchCheck(actions.lastBatchCheckCandidatesRef.current || undefined); },
-  }), [showProductionControls, pipeline.task.state, pipeline.task.progress, pipeline.task.error, taskStream.exhausted, actions.generateCandidates,
+  }), [showProductionControls, pipeline.task.state, pipeline.task.progress, pipeline.task.error, sseManager.task.exhausted, actions.generateCandidates,
     pipeline.simulation.state, pipeline.simulation.progress, pipeline.simulation.error, actions.startSimulation,
     pipeline.optimization.state, pipeline.optimization.progress, pipeline.optimization.error, actions.startOptimization,
     pipeline.check.state, pipeline.check.progress, pipeline.check.error, actions.startBatchCheck, actions.lastBatchCheckCandidatesRef]);

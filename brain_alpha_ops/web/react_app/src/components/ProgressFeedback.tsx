@@ -79,9 +79,9 @@ export default function ProgressFeedback({
 
   if (state === "idle" && compact) return null;
 
-  const errorBorder = state === "error" ? { borderColor: "oklch(0.48 0.08 22 / 0.30)", background: "oklch(0.48 0.06 22 / 0.08)" } : {};
-  const successBorder = state === "success" ? { borderColor: "oklch(0.52 0.06 155 / 0.30)", background: "oklch(0.52 0.06 155 / 0.08)" } : {};
-  const stallBorder = isStalled ? { borderColor: "oklch(0.65 0.08 85 / 0.30)", background: "oklch(0.65 0.06 85 / 0.06)" } : {};
+  const errorBorder = state === "error" ? { borderColor: "var(--color-error-border)", background: "var(--color-error-bg)" } : {};
+  const successBorder = state === "success" ? { borderColor: "var(--color-success-border)", background: "var(--color-success-bg)" } : {};
+  const stallBorder = isStalled ? { borderColor: "var(--color-stall-border)", background: "var(--color-stall-bg)" } : {};
   const badge = progressStatusBadge(state, progress, progressState, percent);
   const fillClass = progressFillClass(state, progress, progressState, isStalled);
 
@@ -106,7 +106,7 @@ export default function ProgressFeedback({
               <span className="text-sm tabular text-accent font-medium">{roundedPercent}%</span>
             )}
             {state === "success" && (
-              <span style={{ width: 24, height: 24, borderRadius: "50%", background: "oklch(0.52 0.06 155 / 0.18)", display: "flex", alignItems: "center", justifyContent: "center", color: "oklch(0.62 0.10 160)", fontSize: 12, fontWeight: 600 }} aria-hidden="true">&#10003;</span>
+              <span style={{ width: 24, height: 24, borderRadius: "50%", background: "var(--color-success-check-bg)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--color-status-complete-text)", fontSize: 12, fontWeight: 600 }} aria-hidden="true">&#10003;</span>
             )}
           </div>
         </div>
@@ -126,26 +126,26 @@ export default function ProgressFeedback({
 
         {/* Message + stall warning */}
         <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-          <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 12, fontSize: "0.8125rem", lineHeight: 1.6, color: "oklch(0.72 0.005 45)" }}>
+          <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 12, fontSize: "0.8125rem", lineHeight: 1.6, color: "var(--color-text-body)" }}>
             <span className="min-w-0 break-words">
               {state === "error" ? displayError : displayMessage}
             </span>
             <span style={{ display: "flex", gap: 12 }}>
-              {scanCount && <span style={{ color: "oklch(0.52 0.006 45)" }}>{scanCount}</span>}
-              {elapsed > 0 && <span className="tabular" style={{ color: "oklch(0.52 0.006 45)" }}>已耗时 {fmtDuration(elapsed)}</span>}
-              {eta && <span className="tabular" style={{ color: "oklch(0.52 0.006 45)" }}>预计剩余 {eta}</span>}
+              {scanCount && <span style={{ color: "var(--color-text-muted)" }}>{scanCount}</span>}
+              {elapsed > 0 && <span className="tabular" style={{ color: "var(--color-text-muted)" }}>已耗时 {fmtDuration(elapsed)}</span>}
+              {eta && <span className="tabular" style={{ color: "var(--color-text-muted)" }}>预计剩余 {eta}</span>}
             </span>
           </div>
           {/* Stall warning */}
           {isStalled && (
-            <div style={{ fontSize: 12, color: "oklch(0.75 0.10 88)", padding: "4px 0" }}>
+            <div style={{ fontSize: 12, color: "var(--color-stall-text)", padding: "4px 0" }}>
               BRAIN 服务器仍在响应中，请耐心等待。
             </div>
           )}
         </div>
 
         {/* Meta info */}
-        <div style={{ display: "flex", flexWrap: "wrap", gap: "8px 16px", marginTop: 8, fontSize: "0.75rem", color: "oklch(0.52 0.006 45)" }}>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "8px 16px", marginTop: 8, fontSize: "0.75rem", color: "var(--color-text-muted)" }}>
           {lastUpdatedAt && <span>最后更新 {fmtClock(lastUpdatedAt)}</span>}
           {state === "error" && <span>{interruptionText(displayError || displayMessage, progress?.phase)}</span>}
         </div>

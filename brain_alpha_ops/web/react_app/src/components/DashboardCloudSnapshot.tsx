@@ -1,9 +1,9 @@
-import type { CloudAlpha, CloudAlphaSummary } from "@/types";
+import type { CloudAlpha, CloudAlphaSummary, CloudAlphaWithMetrics } from "@/types";
 import ProgressFeedback from "@/components/ProgressFeedback";
 import { safeDisplayErrorMessage } from "@/helpers/errorExperience";
 
 export type CloudSnapshotPayload = Partial<CloudAlphaSummary> & Record<string, unknown> & {
-  alphas?: Array<CloudAlpha | Record<string, unknown>>;
+  alphas?: CloudAlphaWithMetrics[];
   summary?: Partial<CloudAlphaSummary> & Record<string, unknown>;
 };
 
@@ -19,7 +19,7 @@ export function cloudSnapshotSummary(cloud: CloudSnapshotPayload | null) {
   };
 }
 
-export function cloudSnapshotPreviewRows(cloud: CloudSnapshotPayload | null): Array<CloudAlpha | Record<string, unknown>> {
+export function cloudSnapshotPreviewRows(cloud: CloudSnapshotPayload | null): CloudAlphaWithMetrics[] {
   const rows = cloud?.sample_alphas || cloud?.alphas || [];
   return Array.isArray(rows) ? rows : [];
 }
@@ -55,21 +55,18 @@ export function formatSyncAge(ageSeconds?: number, loadedAt?: string) {
   return "未同步";
 }
 
-function cloudAlphaId(row: CloudAlpha | Record<string, unknown>) {
-  const data = row as Record<string, unknown>;
-  return String(data.alpha_id || data.id || "-");
+function cloudAlphaId(row: CloudAlphaWithMetrics) {
+  return String(row.alpha_id || row.id || "-");
 }
 
-function cloudAlphaPassFail(row: CloudAlpha | Record<string, unknown>) {
-  const data = row as Record<string, unknown>;
-  const metrics = (data.metrics && typeof data.metrics === "object" ? data.metrics : {}) as Record<string, unknown>;
-  return String(data.pass_fail || metrics.pass_fail || "");
+function cloudAlphaPassFail(row: CloudAlphaWithMetrics) {
+  const metrics = row.metrics && typeof row.metrics === "object" ? row.metrics : {};
+  return String(row.pass_fail || metrics.pass_fail || "");
 }
 
-function cloudAlphaMetric(row: CloudAlpha | Record<string, unknown>, key: string) {
-  const data = row as Record<string, unknown>;
-  const metrics = (data.metrics && typeof data.metrics === "object" ? data.metrics : {}) as Record<string, unknown>;
-  return numberOrUndefined(data[key] ?? metrics[key]);
+function cloudAlphaMetric(row: CloudAlphaWithMetrics, key: string) {
+  const metrics = row.metrics && typeof row.metrics === "object" ? row.metrics : {};
+  return numberOrUndefined((row as Record<string, unknown>)[key] ?? (metrics as Record<string, unknown>)[key]);
 }
 
 function formatMetric(value: number | undefined) {

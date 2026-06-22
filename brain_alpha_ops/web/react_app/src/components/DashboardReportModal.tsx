@@ -1,6 +1,6 @@
 import React from "react";
 import { type TrendData } from "@/components/TrendPanel";
-import type { JobStatus, CloudAlpha, ResearchMemorySummary } from "@/types";
+import type { JobStatus, CloudAlphaWithMetrics, ResearchMemorySummary } from "@/types";
 
 interface CloudSummaryData {
   count?: number;
@@ -17,24 +17,21 @@ interface ReportInput {
   cloudSummary: CloudSummaryData;
   memory: ResearchMemorySummary | null;
   status: JobStatus | null;
-  cloudPreviewRows: Array<CloudAlpha | Record<string, unknown>>;
+  cloudPreviewRows: CloudAlphaWithMetrics[];
 }
 
-function cloudAlphaId(row: CloudAlpha | Record<string, unknown>) {
-  const data = row as Record<string, unknown>;
-  return String(data.alpha_id || data.id || "-");
+function cloudAlphaId(row: CloudAlphaWithMetrics) {
+  return String(row.alpha_id || row.id || "-");
 }
 
-function cloudAlphaPassFail(row: CloudAlpha | Record<string, unknown>) {
-  const data = row as Record<string, unknown>;
-  const metrics = (data.metrics && typeof data.metrics === "object" ? data.metrics : {}) as Record<string, unknown>;
-  return String(data.pass_fail || metrics.pass_fail || "");
+function cloudAlphaPassFail(row: CloudAlphaWithMetrics) {
+  const metrics = row.metrics && typeof row.metrics === "object" ? row.metrics : {};
+  return String(row.pass_fail || metrics.pass_fail || "");
 }
 
-function cloudAlphaMetric(row: CloudAlpha | Record<string, unknown>, key: string) {
-  const data = row as Record<string, unknown>;
-  const metrics = (data.metrics && typeof data.metrics === "object" ? data.metrics : {}) as Record<string, unknown>;
-  const value = data[key] ?? metrics[key];
+function cloudAlphaMetric(row: CloudAlphaWithMetrics, key: string) {
+  const metrics = row.metrics && typeof row.metrics === "object" ? row.metrics : {};
+  const value = (row as Record<string, unknown>)[key] ?? (metrics as Record<string, unknown>)[key];
   const number = Number(value);
   return Number.isFinite(number) ? number : undefined;
 }

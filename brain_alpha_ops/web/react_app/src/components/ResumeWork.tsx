@@ -139,8 +139,8 @@ export default function ResumeWork({
   if (jobRunning) {
     return (
       <div className="panel mb-4 animate-fade-in" style={{
-        borderColor: "oklch(0.58 0.12 245 / 0.30)",
-        background: "oklch(0.58 0.06 245 / 0.10)",
+        borderColor: "var(--color-info-border)",
+        background: "var(--color-info-bg)",
       }}>
         <div className="panel-body-padded" style={{ display: "flex", alignItems: "center", gap: 12 }}>
           {/* Pulsing indicator */}
@@ -176,8 +176,8 @@ export default function ResumeWork({
   // ═══ Resume card ═══
   return (
     <div className="panel mb-4 animate-fade-in" style={{
-      borderColor: hasError ? "oklch(0.48 0.08 22 / 0.30)" : "oklch(0.65 0.14 80 / 0.40)",
-      background: hasError ? "oklch(0.48 0.06 22 / 0.06)" : "oklch(0.65 0.06 80 / 0.08)",
+      borderColor: hasError ? "var(--color-error-border)" : "var(--color-warning-border)",
+      background: hasError ? "var(--color-error-bg-faint)" : "var(--color-warning-bg)",
     }}>
       <div className="panel-body-padded" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, flexWrap: "wrap" }}>
         {/* Left: status info */}
@@ -187,17 +187,17 @@ export default function ResumeWork({
             {/* Icon */}
             <div style={{
               width: 28, height: 28, borderRadius: "50%", flexShrink: 0,
-              background: hasError ? "oklch(0.48 0.08 22 / 0.15)" : "oklch(0.65 0.14 80 / 0.15)",
+              background: hasError ? "var(--color-error-bg-subtle)" : "var(--color-warning-bg-subtle)",
               display: "flex", alignItems: "center", justifyContent: "center",
             }}>
               {hasError ? (
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="oklch(0.52 0.10 25)" strokeWidth="2" strokeLinecap="round">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--color-icon-error)" strokeWidth="2" strokeLinecap="round">
                   <circle cx="12" cy="12" r="10" />
                   <line x1="12" y1="8" x2="12" y2="12" />
                   <line x1="12" y1="16" x2="12.01" y2="16" />
                 </svg>
               ) : (
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="oklch(0.68 0.12 82)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--color-icon-warning)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2" />
                 </svg>
               )}
@@ -248,8 +248,8 @@ export default function ResumeWork({
           {hasInterruptedJob && resumeState.lastError && (
             <div className="mt-2" style={{
               padding: "6px 10px", borderRadius: 6,
-              background: "oklch(0.48 0.06 22 / 0.12)",
-              border: "1px solid oklch(0.48 0.08 22 / 0.20)",
+              background: "var(--color-error-bg-medium)",
+              border: "1px solid var(--color-error-border-subtle)",
             }}>
               <p className="text-xs text-negative/90 font-medium mb-0.5">上次中断原因</p>
               <p className="text-xs text-text-secondary" style={{ lineHeight: 1.4 }}>

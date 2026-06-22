@@ -4,7 +4,8 @@ import { cancelResultEventMessage, requestJobCancel, type CancelReason } from "@
 import { useSSE } from "@/hooks/useSSE";
 import { useApi } from "@/hooks/useApi";
 import { buildRunPayload, classifyJobState, hasCredentials, jobStatusMessage, resolveJobEventState, shortValidationId } from "@/helpers/runPayload";
-import type { BrainCredentials, JobStatus, SSEEvent, UnifiedProgress } from "@/types";
+import type { BrainCredentials, JobStatus, SSEEvent, UnifiedProgress, SSECandidateEventData } from "@/types";
+import { isSSECandidateData } from "@/types";
 import type { JobState } from "@/hooks/useJobState";
 import ProgressFeedback from "@/components/ProgressFeedback";
 
@@ -333,10 +334,12 @@ export default function JobMonitor({ notify, credentials, onNeedCredentials, job
         progress: event.progress || (event.data as JobStatus["progress"]),
       }));
     } else if (event.type === "candidate") {
-      setEvents((prev) => [...prev.slice(-50), `候选 ${(event.data as Record<string, unknown>)?.alpha_id || "?"} 得分 ${(event.data as Record<string, unknown>)?.score || 0}`]);
+      const d = isSSECandidateData(event.data) ? event.data : ({} as SSECandidateEventData);
+      setEvents((prev) => [...prev.slice(-50), `候选 ${d.alpha_id || "?"} 得分 ${d.score || 0}`]);
     } else if (event.type === "submission") {
-      notify("warning", `检测到真实提交安全事件: ${(event.data as Record<string, unknown>)?.alpha_id || "未知"}`);
-      setEvents((prev) => [...prev.slice(-50), `真实提交安全事件 ${(event.data as Record<string, unknown>)?.alpha_id || "?"}`]);
+      const d = isSSECandidateData(event.data) ? event.data : ({} as SSECandidateEventData);
+      notify("warning", `检测到真实提交安全事件: ${d.alpha_id || "未知"}`);
+      setEvents((prev) => [...prev.slice(-50), `真实提交安全事件 ${d.alpha_id || "?"}`]);
     }
   }, [clearTransientProgressError, notify]);
 

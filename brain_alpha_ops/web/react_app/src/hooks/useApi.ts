@@ -75,7 +75,7 @@ export function useApi<T = unknown>() {
         if (!res.ok) {
           const json = await safeJson<R & ApiMeta>(res);
           if (json) {
-            refreshSessionTokens(json as Record<string, unknown>);
+            refreshSessionTokens(json);
             if (canRecoverSession(url, method, json)) {
               const recovered = await bootstrapSession();
               if (recovered) {
@@ -90,7 +90,7 @@ export function useApi<T = unknown>() {
                 res = await request();
                 if (res.ok) {
                   const retryJson = await res.json() as R & ApiMeta;
-                  refreshSessionTokens(retryJson as Record<string, unknown>);
+                  refreshSessionTokens(retryJson);
                   const retryOk = retryJson.ok !== false && !(
                     retryJson.ok === undefined &&
                     Boolean(retryJson.error || retryJson.error_code)
@@ -100,8 +100,7 @@ export function useApi<T = unknown>() {
                     setState({ data: null, loading: false, error: apiErrorMessage(retryJson), lastErrorMeta: retryJson });
                     return normalizedRetry;
                   }
-                  const retryRaw = retryJson as Record<string, unknown>;
-                  setState({ data: (retryRaw.data !== undefined ? retryRaw.data : retryJson) as T, loading: false, error: null, lastErrorMeta: null });
+                  setState({ data: (("data" in retryJson && retryJson.data !== undefined) ? retryJson.data : retryJson) as T, loading: false, error: null, lastErrorMeta: null });
                   if (method === "POST") {
                     saveResumeState({ lastConnectionOk: true, lastError: null });
                   }
@@ -109,7 +108,7 @@ export function useApi<T = unknown>() {
                 }
                 const retryError = await safeJson<R & ApiMeta>(res);
                 if (retryError) {
-                  refreshSessionTokens(retryError as Record<string, unknown>);
+                  refreshSessionTokens(retryError);
                   const retryMsg = apiErrorMessage(retryError, `HTTP ${res.status}: ${res.statusText}`);
                   const normalizedRetryError = { ...retryError, ok: false } as R & ApiMeta;
                   setState({ data: null, loading: false, error: retryMsg, lastErrorMeta: retryError });
@@ -127,7 +126,7 @@ export function useApi<T = unknown>() {
           return null;
         }
         const json = await res.json() as R & ApiMeta;
-        refreshSessionTokens(json as Record<string, unknown>);
+        refreshSessionTokens(json);
         const ok = json.ok !== false && !(
           json.ok === undefined &&
           Boolean(json.error || json.error_code)
@@ -139,8 +138,7 @@ export function useApi<T = unknown>() {
         }
         // SAFETY: json is structurally R & ApiMeta; the backend returns flat JSON.
         // Extract .data if present, otherwise use the whole payload as the data portion.
-        const raw = json as Record<string, unknown>;
-        setState({ data: (raw.data !== undefined ? raw.data : json) as T, loading: false, error: null, lastErrorMeta: null });
+        setState({ data: (("data" in json && json.data !== undefined) ? json.data : json) as T, loading: false, error: null, lastErrorMeta: null });
         // P0-4: persist connection health after every successful POST
         if (method === "POST") {
           saveResumeState({ lastConnectionOk: true, lastError: null });
@@ -174,9 +172,11 @@ async function safeJson<R>(res: Response): Promise<R | null> {
   }
 }
 
-function refreshSessionTokens(payload: Record<string, unknown>) {
-  const csrf = typeof payload.csrf_token === "string" ? payload.csrf_token : "";
-  const stream = typeof payload.stream_token === "string" ? payload.stream_token : "";
+function refreshSessionTokens(payload: unknown) {
+  if (!payload || typeof payload !== "object") return;
+  const p = payload as Record<string, unknown>;
+  const csrf = typeof p.csrf_token === "string" ? p.csrf_token : "";
+  const stream = typeof p.stream_token === "string" ? p.stream_token : "";
   if (csrf) setCsrfToken(csrf);
   if (stream) setStreamToken(stream);
 }

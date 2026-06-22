@@ -782,6 +782,73 @@ export interface SSEEvent {
 
 // ── Cloud / Snapshot Types ────────────────────────────────────────────────
 
+/** Phase state response from /api/phase_state */
+export interface PhaseData {
+  current_phase?: string;
+  operation_mode?: "cache_only" | "connected" | "needs_setup";
+  connected: boolean;
+  context_fresh: boolean;
+  candidates_count: number;
+  scored_count: number;
+  readiness_passed: boolean;
+  sync?: {
+    in_progress?: boolean;
+    scanned?: number;
+    total?: number;
+    elapsed_seconds?: number;
+    stalled?: boolean;
+  };
+  official_context_cache?: OfficialContextCache;
+  cloud_alpha_cache?: CloudAlphaCache;
+  readiness?: {
+    eligible_count?: number;
+    ready?: boolean;
+  };
+  [key: string]: unknown;
+}
+
+/** Cloud alpha row that may come as a flat CloudAlpha or with a nested metrics object */
+export type CloudAlphaWithMetrics = CloudAlpha & {
+  id?: string;
+  metrics?: {
+    pass_fail?: string;
+    sharpe?: number;
+    fitness?: number;
+    turnover?: number;
+    [key: string]: unknown;
+  };
+  [key: string]: unknown;
+};
+
+/** Trend API response from /api/trends */
+export interface TrendApiResponse {
+  ok: boolean;
+  data?: Array<{
+    date?: string;
+    candidates?: number;
+    submissions?: number;
+    [key: string]: unknown;
+  }>;
+}
+
+/** SSE event data payload for candidate/submission events */
+export interface SSECandidateEventData {
+  alpha_id?: string | number;
+  score?: number | string;
+  [key: string]: unknown;
+}
+
+/** Production result summary embedded in JobStatus.result */
+export interface ProductionResultSummary {
+  official_validation_attempted?: number;
+  official_validation_passed?: number;
+  officially_simulated?: number;
+  backtests_submitted?: number;
+  submitted_this_run?: number;
+  auto_submitted?: number;
+  [key: string]: unknown;
+}
+
 export interface CloudAlphaSummary {
   source: string;
   count: number;
@@ -1062,3 +1129,15 @@ export type CardViewId =
   | "checkpoint_status"
   | "cloud"
   | "robustness";
+
+// ── Type Guards ──────────────────────────────────────────────────────────
+
+/** Narrow unknown JSON to a plain object (not null, not array). */
+export function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+/** Narrow SSE event.data to SSECandidateEventData. */
+export function isSSECandidateData(data: unknown): data is SSECandidateEventData {
+  return isRecord(data);
+}

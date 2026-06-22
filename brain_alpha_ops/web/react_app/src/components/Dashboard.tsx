@@ -1,7 +1,7 @@
 /** Dashboard — Progressive flow with step-based guidance v3.1 */
 import { useEffect, useState, useRef, type ReactNode } from "react";
 import { useApi } from "@/hooks/useApi";
-import type { JobStatus, ResearchMemorySummary } from "@/types";
+import type { JobStatus, ResearchMemorySummary, TrendApiResponse } from "@/types";
 import KpiCard from "@/components/KpiCard";
 import TrendPanel, { type TrendData } from "@/components/TrendPanel";
 import ProgressFeedback from "@/components/ProgressFeedback";
@@ -77,15 +77,10 @@ export default function Dashboard({ notify, connected, contextFresh, phaseStatus
       try {
         const res = await fetch("/api/trends?days=30");
         if (!res.ok) return;
-        const json: unknown = await res.json();
-        if (
-          !json ||
-          typeof json !== "object" ||
-          !("ok" in (json as Record<string, unknown>)) ||
-          !(json as Record<string, unknown>).ok
-        )
+        const json = await res.json() as TrendApiResponse;
+        if (!json || typeof json !== "object" || !json.ok)
           return;
-        const data = (json as { data?: Array<Record<string, unknown>> }).data;
+        const data = json.data;
         if (!Array.isArray(data) || data.length === 0) return;
         const candidatesPoints: TrendData[] = [];
         const submissionsPoints: TrendData[] = [];
