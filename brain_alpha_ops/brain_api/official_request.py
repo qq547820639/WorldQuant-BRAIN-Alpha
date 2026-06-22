@@ -80,14 +80,15 @@ class OfficialRequestMixin:
                     "— request will be sent with no auth. Path: %s", path_or_url
                 )
 
-            if self._prefer_cookie_auth and self._has_session_cookie():
-                auth_mode = "cookie"
-            elif self.token and not skip_auto_auth:
-                request_headers["Authorization"] = f"Bearer {self.token}"
-                auth_mode = "bearer"
-            elif self.username and self.password and not skip_auto_auth:
-                request_headers["Authorization"] = f"Basic {self._basic_auth()}"
-                auth_mode = "basic"
+            with self._request_lock:
+                if self._prefer_cookie_auth and self._has_session_cookie():
+                    auth_mode = "cookie"
+                elif self.token and not skip_auto_auth:
+                    request_headers["Authorization"] = f"Bearer {self.token}"
+                    auth_mode = "bearer"
+                elif self.username and self.password and not skip_auto_auth:
+                    request_headers["Authorization"] = f"Basic {self._basic_auth()}"
+                    auth_mode = "basic"
             request_headers.update(caller_headers)
             if auth_mode == 'none' and 'Authorization' not in request_headers:
                 logger.warning(
@@ -108,7 +109,8 @@ class OfficialRequestMixin:
                     # here ensures subsequent requests can fall back to bearer if the
                     # session cookie expires.
                     if token_before_auth_fallback is not None and not self.token and auth_mode != "bearer":
-                        self.token = token_before_auth_fallback
+                        with self._request_lock:
+                            self.token = token_before_auth_fallback
                     return parsed, resp_headers
             except urllib.error.HTTPError as exc:
                 raw = exc.read().decode("utf-8", errors="replace")
@@ -128,10 +130,11 @@ class OfficialRequestMixin:
                     continue
                 # C30 P0: 401 bearer token may be expired — differentiate from hard auth failure
                 if exc.code == 401 and auth_mode == "bearer" and attempt < attempts - 1:
-                    token_before_auth_fallback = self.token
-                    self.token = ""
-                    if self._has_session_cookie():
-                        self._prefer_cookie_auth = True
+                    with self._request_lock:
+                        token_before_auth_fallback = self.token
+                        self.token = ""
+                        if self._has_session_cookie():
+                            self._prefer_cookie_auth = True
                     continue
                 if (
                     exc.code in {401, 403}
@@ -151,8 +154,9 @@ class OfficialRequestMixin:
                             exc_info=True,
                         )
                     else:
-                        if self._has_session_cookie():
-                            self._prefer_cookie_auth = True
+                        with self._request_lock:
+                            if self._has_session_cookie():
+                                self._prefer_cookie_auth = True
                         continue
                 logger.debug(
                     "API auth context: method=%s path=%s auth_mode=%s "
@@ -173,7 +177,8 @@ class OfficialRequestMixin:
                     error_code=_error_code,
                 )
                 if token_before_auth_fallback is not None and not self.token:
-                    self.token = token_before_auth_fallback
+                    with self._request_lock:
+                        self.token = token_before_auth_fallback
                 raise last_error from exc
             except urllib.error.URLError as exc:
                 last_error = BrainAPIError(f"network error: {exc}")
@@ -181,11 +186,13 @@ class OfficialRequestMixin:
                     time.sleep(_retry_delay(None, attempt, self.config.rate_limit_backoff_seconds))
                     continue
                 if token_before_auth_fallback is not None and not self.token:
-                    self.token = token_before_auth_fallback
+                    with self._request_lock:
+                        self.token = token_before_auth_fallback
                 raise last_error from exc
         if last_error is not None:
             if token_before_auth_fallback is not None and not self.token:
-                self.token = token_before_auth_fallback
+                with self._request_lock:
+                    self.token = token_before_auth_fallback
             raise BrainAPIError(
                 f"request failed after retries: {redact_error_message(last_error)}",
                 status_code=last_error.status_code,

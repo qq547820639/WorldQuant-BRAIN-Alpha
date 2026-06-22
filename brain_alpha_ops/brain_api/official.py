@@ -629,10 +629,9 @@ class OfficialBrainAPI:
             now = time.monotonic()
             elapsed = now - self._last_request_at
             wait_time = max(0.0, interval - elapsed)
-            # Pre-reserve the slot so concurrent threads see the updated time.
             self._last_request_at = now + wait_time
-        if wait_time > 0:
-            time.sleep(wait_time)
+            if wait_time > 0:
+                time.sleep(wait_time)
 
     def _open(self, req: urllib.request.Request, *, timeout: int):
         return self._opener.open(req, timeout=timeout)
