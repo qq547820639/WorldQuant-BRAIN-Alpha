@@ -82,10 +82,9 @@ class DatasetSelector:
         return [self._datasets[idx]]
 
     def _select_random(self, n: int = 3, seed: int | None = None) -> list[str]:
-        if seed is not None:
-            random.seed(seed)
+        rng = random.Random(seed) if seed is not None else random.Random()
         k = min(n, len(self._datasets))
-        return random.sample(self._datasets, k)
+        return rng.sample(self._datasets, k)
 
     # ------------------------------------------------------------------
     # Convenience

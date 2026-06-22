@@ -258,7 +258,7 @@ def _handle_pipeline_start(handler: Any, payload: dict) -> None:
             from brain_alpha_ops.config import load_run_config
             from brain_alpha_ops.research.pipeline import AlphaResearchPipeline
 
-            config = load_run_config(payload.get("config_path"))
+            config = load_run_config()
             ops = config.ops
             cred = config.credentials
             from brain_alpha_ops.secure_credentials import resolve_credentials

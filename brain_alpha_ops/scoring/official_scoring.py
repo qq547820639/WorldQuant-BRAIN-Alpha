@@ -400,12 +400,12 @@ class OfficialScoringSystem:
         checklist = scorecard.get("submission_checklist", {})
         checklist_items = checklist.get("items", [])
         if checklist_items:
-            failed = [r for r in checklist_items if not r["passed"]]
+            failed = [r for r in checklist_items if not r.get("passed", True)]
             gates.append(GateResult(
                 gate_name="SUBMISSION_CHECKLIST",
                 passed=not failed,
                 check_items=[
-                    {"name": r["name"], "passed": r["passed"], "meaning": r.get("meaning", "")}
+                    {"name": r["name"], "passed": r.get("passed", True), "meaning": r.get("meaning", "")}
                     for r in checklist_items
                 ],
                 failed_items=[f"{r['name']}: {r.get('meaning', '')}" for r in failed],
@@ -446,7 +446,7 @@ class OfficialScoringSystem:
 
         # Empirical failures
         for item in empirical.get("items", []):
-            if not item["passed"]:
+            if not item.get("passed", True):
                 name = item["name"]
                 if name == "sharpe":
                     hints.append(
@@ -482,7 +482,7 @@ class OfficialScoringSystem:
         # Checklist failures
         checklist = scorecard.get("submission_checklist", {})
         for item in checklist.get("items", []):
-            if not item["passed"]:
+            if not item.get("passed", True):
                 if item["name"] == "official_metrics_present":
                     hints.append("Missing official simulation results — run BRAIN API simulation first.")
                 elif item["name"] == "official_pass":
@@ -508,7 +508,7 @@ class OfficialScoringSystem:
 
         empirical = scorecard.get("empirical", {})
         for item in empirical.get("items", []):
-            if not item["passed"]:
+            if not item.get("passed", True):
                 severity = "HARD" if item.get("is_hard_gate") else "SOFT"
                 failures.append({
                     "item": item["name"],
@@ -519,7 +519,7 @@ class OfficialScoringSystem:
 
         checklist = scorecard.get("submission_checklist", {})
         for item in checklist.get("items", []):
-            if not item["passed"]:
+            if not item.get("passed", True):
                 failures.append({
                     "item": item["name"],
                     "severity": "SOFT",

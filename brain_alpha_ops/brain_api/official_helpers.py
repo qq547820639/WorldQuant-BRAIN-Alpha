@@ -151,6 +151,8 @@ def normalize_metrics(payload: Any) -> dict:
 
 
 def build_official_url(base: str, path_or_url: str, query: dict | None) -> str:
+    if ".." in path_or_url:
+        raise BrainAPIError("refusing path traversal in official API path")
     base_parts = urllib.parse.urlparse(base)
     _validate_official_api_origin(base_parts, label="base_url")
     if path_or_url.startswith(("http://", "https://")):

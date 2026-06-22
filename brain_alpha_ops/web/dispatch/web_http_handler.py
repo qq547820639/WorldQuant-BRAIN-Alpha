@@ -115,6 +115,13 @@ def create_handler_class(
             # BaseHTTPRequestHandler does not allow send_header/end_headers
             # after the first body write.  These are also re-emitted on the
             # CORS preflight OPTIONS handler below.
+            origin = self.headers.get("Origin", "")
+            if origin and _is_origin_allowed(origin):
+                self.send_header("Access-Control-Allow-Origin", origin)
+            elif not origin:
+                host = self.headers.get("Host", "127.0.0.1")
+                _fallback = f"http://{host}" if "://" not in host else f"https://{host}"
+                self.send_header("Access-Control-Allow-Origin", _fallback)
             self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
             self.send_header(
                 "Access-Control-Allow-Headers",

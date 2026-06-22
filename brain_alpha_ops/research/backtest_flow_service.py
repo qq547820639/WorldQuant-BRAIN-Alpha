@@ -332,8 +332,6 @@ class BacktestFlowService:
         if candidate.official_metrics or retry_count >= max_retries:
             return False
 
-        if candidate.official_metrics:
-            candidate.submission["previous_official_metrics"] = dict(candidate.official_metrics)
         if candidate.official_alpha_id:
             candidate.submission["previous_official_alpha_id"] = candidate.official_alpha_id
         if candidate.simulation_id:

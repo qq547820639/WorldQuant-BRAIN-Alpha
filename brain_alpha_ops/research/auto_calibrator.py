@@ -451,13 +451,18 @@ class AutoCalibrator:
 
         Data format is compatible with calibrate_weights.py:calibrate_prior_weights().
         """
+        import importlib.util
         import os
-        import sys
-        sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
         try:
-            from calibrate_weights import calibrate_prior_weights as _calib_fn
-            return _calib_fn(records, target_metric="sharpe")
-        except ImportError:
+            _mod_path = os.path.join(
+                os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+                "calibrate_weights.py",
+            )
+            _spec = importlib.util.spec_from_file_location("calibrate_weights", _mod_path)
+            _mod = importlib.util.module_from_spec(_spec)
+            _spec.loader.exec_module(_mod)
+            return _mod.calibrate_prior_weights(records, target_metric="sharpe")
+        except (ImportError, FileNotFoundError, AttributeError):
             return {
                 "sample_size": len(records),
                 "error": "calibrate_weights module not importable",
@@ -468,13 +473,18 @@ class AutoCalibrator:
 
         Data format is compatible with calibrate_weights.py:calibrate_scorecard_weights().
         """
+        import importlib.util
         import os
-        import sys
-        sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
         try:
-            from calibrate_weights import calibrate_scorecard_weights as _calib_fn
-            return _calib_fn(records)
-        except ImportError:
+            _mod_path = os.path.join(
+                os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+                "calibrate_weights.py",
+            )
+            _spec = importlib.util.spec_from_file_location("calibrate_weights", _mod_path)
+            _mod = importlib.util.module_from_spec(_spec)
+            _spec.loader.exec_module(_mod)
+            return _mod.calibrate_scorecard_weights(records)
+        except (ImportError, FileNotFoundError, AttributeError):
             return {
                 "sample_size": len(records),
                 "error": "calibrate_weights module not importable",

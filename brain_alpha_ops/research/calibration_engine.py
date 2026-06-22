@@ -456,8 +456,8 @@ def auto_calibrate_if_stalled(
     advice = {}
     if prior_result.get("optimized_weights"):
         advice["prior_weights_override"] = prior_result["optimized_weights"]
-    if scorecard_result.get("optimized_layer_weights"):
-        advice.update(scorecard_result["optimized_layer_weights"])
+    if scorecard_result.get("optimized_weights"):
+        advice.update(scorecard_result["optimized_weights"])
 
     return {
         "ok": True,

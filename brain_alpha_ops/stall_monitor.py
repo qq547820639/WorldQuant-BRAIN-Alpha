@@ -132,7 +132,7 @@ class StallMonitor:
                 current = JobStallSnapshot(
                     job_id=job_id,
                     status=status,
-                    percent_complete=float(progress.get("percent_complete", 0)),
+                    percent_complete=float(progress.get("percent", progress.get("percent_complete", 0))),
                     phase=str(progress.get("phase", "")),
                     status_message=str(progress.get("status_message", "")),
                     observed_at=now,

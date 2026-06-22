@@ -51,13 +51,16 @@ class BacktestSlotManager:
             return self.slots.get(int(slot or 0))
 
     def values(self) -> list[Candidate]:
-        return list(self.slots.values())
+        with self._lock:
+            return list(self.slots.values())
 
     def items_snapshot(self) -> list[tuple[int, Candidate]]:
-        return list(self.slots.items())
+        with self._lock:
+            return list(self.slots.items())
 
     def active_expression_keys(self, key_fn: ExpressionKey) -> set[str]:
-        return {key_fn(candidate) for candidate in self.slots.values()}
+        with self._lock:
+            return {key_fn(candidate) for candidate in self.slots.values()}
 
     def next_candidate(
         self,

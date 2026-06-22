@@ -143,6 +143,7 @@ class OfficialRequestMixin:
                     and attempt < attempts - 1
                 ):
                     auth_refresh_attempted = True
+                    auth_refresh_available = False
                     try:
                         self.authenticate()
                     except BrainAPIError:

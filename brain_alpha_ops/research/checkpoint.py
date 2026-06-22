@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import threading
 import time
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
@@ -66,7 +67,7 @@ class CheckpointManager:
     def __init__(self, directory: str | Path):
         self.directory = Path(directory)
         self.directory.mkdir(parents=True, exist_ok=True)
-        self._index_lock = __import__("threading").Lock()
+        self._index_lock = threading.Lock()
         self._ensure_index()
 
     def save(
@@ -134,29 +135,30 @@ class CheckpointManager:
     # ── Internal ──
 
     def _atomic_write(self, cp: Checkpoint) -> str:
-        filename = self.CHECKPOINT_FILE_PATTERN.format(index=cp.cycle_index)
-        filepath = self.directory / filename
-        tmp_path = filepath.with_suffix(filepath.suffix + ".tmp")
+        with self._index_lock:
+            filename = self.CHECKPOINT_FILE_PATTERN.format(index=cp.cycle_index)
+            filepath = self.directory / filename
+            tmp_path = filepath.with_suffix(filepath.suffix + ".tmp")
 
-        try:
-            payload = json.dumps(cp.to_dict(), ensure_ascii=False, indent=2)
-            tmp_path.write_text(payload, encoding="utf-8")
-            os.replace(tmp_path, filepath)
-        except OSError as exc:
-            logger.error(
-                "CheckpointManager: failed to write checkpoint %s: %s",
-                redact_text(filepath, max_length=180),
-                redact_error_message(exc),
-            )
             try:
-                tmp_path.unlink()
-            except OSError:
-                pass
-            return ""
+                payload = json.dumps(cp.to_dict(), ensure_ascii=False, indent=2)
+                tmp_path.write_text(payload, encoding="utf-8")
+                os.replace(tmp_path, filepath)
+            except OSError as exc:
+                logger.error(
+                    "CheckpointManager: failed to write checkpoint %s: %s",
+                    redact_text(filepath, max_length=180),
+                    redact_error_message(exc),
+                )
+                try:
+                    tmp_path.unlink()
+                except OSError:
+                    pass
+                return ""
 
-        self._register_index_entry(cp, filename)
-        self._prune_old()
-        return cp.checkpoint_id
+            self._register_index_entry(cp, filename)
+            self._prune_old()
+            return cp.checkpoint_id
 
     def _ensure_index(self) -> None:
         index_path = self.directory / self.INDEX_FILE
