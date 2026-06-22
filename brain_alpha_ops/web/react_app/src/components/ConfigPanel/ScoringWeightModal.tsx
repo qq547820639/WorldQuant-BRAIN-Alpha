@@ -1,6 +1,7 @@
 /** P2-4: Scoring weight transparency modal — read-only display from /api/config_schema. */
 
 import type { ConfigSchema } from "./utils";
+import { isRecord } from "@/types";
 
 interface WeightDimension {
   name: string;
@@ -14,8 +15,8 @@ function extractScoringWeights(
 ): { layers: WeightDimension[] } {
   const layers: WeightDimension[] = [];
 
-  const schemaScoring = (schema as Record<string, unknown> | undefined)?.scoring as Record<string, unknown> | undefined;
-  const schemaWeights = (schema as Record<string, unknown> | undefined)?.scoring_weights as Record<string, unknown> | undefined;
+  const schemaScoring = schema?.scoring;
+  const schemaWeights = schema?.scoring_weights;
 
   const priorWeight = Number(scoring?.prior_layer_weight ?? 0.35);
   const priorChildren = extractLayerChildren(schemaScoring, "prior", schemaWeights);
@@ -39,23 +40,25 @@ function extractLayerChildren(
 ): WeightDimension[] {
   const children: WeightDimension[] = [];
 
-  const layerData = schemaScoring?.[layer] as Record<string, unknown> | undefined;
-  const layerWeights = schemaWeights?.[layer] as Record<string, unknown> | undefined;
-  const dims = (layerData?.dimensions ?? layerData?.sub_dimensions ?? layerWeights ?? {}) as Record<string, unknown>;
+  const layerRaw = schemaScoring?.[layer];
+  const layerData = isRecord(layerRaw) ? layerRaw : undefined;
+  const weightsRaw = schemaWeights?.[layer];
+  const layerWeights = isRecord(weightsRaw) ? weightsRaw : undefined;
+  const dimsRaw = layerData?.dimensions ?? layerData?.sub_dimensions ?? layerWeights ?? {};
+  const dims = isRecord(dimsRaw) ? dimsRaw : {};
 
   if (dims && typeof dims === "object") {
     for (const [key, value] of Object.entries(dims)) {
       if (typeof value === "number") {
         children.push({ name: formatDimName(key), weight: value });
-      } else if (typeof value === "object" && value !== null) {
-        const v = value as Record<string, unknown>;
-        const weight = typeof v.weight === "number" ? v.weight : 0;
+      } else if (isRecord(value)) {
+        const weight = typeof value.weight === "number" ? value.weight : 0;
         const subChildren = extractLayerChildren(
-          { [key]: v } as unknown as Record<string, unknown>,
+          { [key]: value },
           key,
           undefined,
         );
-        children.push({ name: formatDimName(String(v.name ?? v.label ?? key)), weight, children: subChildren.length ? subChildren : undefined });
+        children.push({ name: formatDimName(String(value.name ?? value.label ?? key)), weight, children: subChildren.length ? subChildren : undefined });
       }
     }
   }
@@ -111,7 +114,7 @@ export default function ScoringWeightModal({
       style={{
         position: "fixed", inset: 0, zIndex: 9999,
         display: "flex", alignItems: "center", justifyContent: "center",
-        background: "oklch(0 0 0 / 0.55)", backdropFilter: "blur(3px)",
+        background: "var(--color-overlay-strong)", backdropFilter: "blur(3px)",
       }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
       role="dialog"
@@ -120,8 +123,8 @@ export default function ScoringWeightModal({
     >
       <div
         style={{
-          background: "oklch(0.115 0.007 45)", borderRadius: 8,
-          border: "0.5px solid oklch(0.22 0.007 45)",
+          background: "var(--color-surface-elevated)", borderRadius: 8,
+          border: "0.5px solid var(--color-border-default)",
           maxWidth: 560, width: "calc(100% - 32px)", maxHeight: "80vh",
           overflow: "auto", padding: "24px 20px 20px",
         }}
@@ -147,15 +150,15 @@ export default function ScoringWeightModal({
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           {layers.map((layer, i) => (
             <div key={i} style={{
-              border: "0.5px solid oklch(0.22 0.007 45)",
+              border: "0.5px solid var(--color-border-default)",
               borderRadius: 6,
               overflow: "hidden",
             }}>
               <div style={{
                 display: "flex", justifyContent: "space-between", alignItems: "center",
                 padding: "10px 14px",
-                background: "oklch(0.10 0.005 45 / 0.50)",
-                borderBottom: layer.children && layer.children.length > 0 ? "0.5px solid oklch(0.22 0.007 45)" : "none",
+                background: "var(--color-layer-header-bg)",
+                borderBottom: layer.children && layer.children.length > 0 ? "0.5px solid var(--color-border-default)" : "none",
               }}>
                 <span className="text-sm font-medium text-text-primary">{layer.name}</span>
                 <span className="text-sm font-mono-value text-accent">
@@ -171,7 +174,7 @@ export default function ScoringWeightModal({
                       style={{
                         display: "flex", justifyContent: "space-between", alignItems: "center",
                         padding: "6px 0",
-                        borderBottom: j < layer.children!.length - 1 ? "0.5px solid oklch(0.18 0.005 45)" : "none",
+                        borderBottom: j < layer.children!.length - 1 ? "0.5px solid var(--color-divider)" : "none",
                       }}
                     >
                       <span className="text-xs text-text-secondary">{dim.name}</span>

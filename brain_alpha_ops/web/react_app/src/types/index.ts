@@ -690,6 +690,7 @@ export interface FailureItem {
 export interface RunConfig {
   environment: string;
   auto_submit: boolean;
+  autoSubmit?: boolean;
   credentials?: {
     username?: string;
     password?: string;

@@ -375,7 +375,7 @@ export default function App() {
             <span className={`status-dot ${topbarStatus.dotClass}`} />
             {topbarStatus.label}
           </span>
-          <span style={{ color: "oklch(0.38 0.006 45)", fontSize: 12 }}>·</span>
+          <span style={{ color: "var(--color-text-dim)", fontSize: 12 }}>·</span>
           {/* Phase indicator */}
           <span className="topbar-phase">
             Phase {steps.findIndex((s) => s.status === "active") + 1 || "?"} · <strong>{currentPhaseObj?.label || viewLabel}</strong>

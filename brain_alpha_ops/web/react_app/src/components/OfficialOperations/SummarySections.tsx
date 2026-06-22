@@ -91,7 +91,7 @@ export default function SummarySections({ readiness, displaySyncStatus, onNaviga
 
   return (
     <section className="grid gap-4 lg:grid-cols-3">
-      <section className="rounded-md border border-border-subtle bg-[oklch(0.100_0.007_45)] p-4">
+      <section className="rounded-md border border-border-subtle bg-[var(--color-surface-deep)] p-4">
         <h3 className="text-sm font-semibold text-text-primary">阻断复核摘要</h3>
         <dl className="mt-3 grid grid-cols-2 gap-3 text-sm">
           <SummaryMetric label="复核通过" value={readiness?.ready_to_submit ? "是" : "否"} />
@@ -126,7 +126,7 @@ export default function SummarySections({ readiness, displaySyncStatus, onNaviga
         )}
       </section>
 
-      <section className="rounded-md border border-border-subtle bg-[oklch(0.100_0.007_45)] p-4">
+      <section className="rounded-md border border-border-subtle bg-[var(--color-surface-deep)] p-4">
         <h3 className="text-sm font-semibold text-text-primary">收敛诊断</h3>
         <dl className="mt-3 grid grid-cols-2 gap-3 text-sm">
           <SummaryMetric label="官方验证" value={String(summaryCounts.official_validation_passed ?? 0)} />
@@ -138,7 +138,7 @@ export default function SummarySections({ readiness, displaySyncStatus, onNaviga
           <BlockerList title={countTitle("生产缺口", allProductionGaps.length)} rows={allProductionGaps.map(findingText)} empty="先读取阻断复核证据" />
           <BlockerList title={countTitle("最佳候选阻断", allBestCandidateReasons.length)} rows={allBestCandidateReasons.map((reason) => readinessReasonLabel(reason))} empty="暂无最佳候选阻断" />
         </div>
-        <div className="mt-3 rounded-md border border-border-subtle bg-[oklch(0.115_0.007_45)] p-3 text-sm leading-6 text-text-secondary">
+        <div className="mt-3 rounded-md border border-border-subtle bg-[var(--color-surface-elevated)] p-3 text-sm leading-6 text-text-secondary">
           <p className="text-xs font-semibold uppercase tracking-wide text-text-tertiary">最佳候选证据</p>
           <dl className="mt-2 grid grid-cols-2 gap-3">
             <SummaryMetric label="Alpha" value={hasBestCandidateEvidence ? bestCandidate.alpha_id || "-" : "-"} mono />
@@ -151,7 +151,7 @@ export default function SummarySections({ readiness, displaySyncStatus, onNaviga
         </div>
       </section>
 
-      <section className="rounded-md border border-border-subtle bg-[oklch(0.100_0.007_45)] p-4">
+      <section className="rounded-md border border-border-subtle bg-[var(--color-surface-deep)] p-4">
         <h3 className="text-sm font-semibold text-text-primary">官方上下文摘要</h3>
         <dl className="mt-3 grid grid-cols-3 gap-3 text-sm">
           <SummaryMetric label="字段" value={contextSummaryField(displaySyncStatus as import("@/types").JobStatus | null, "fields_count")} />

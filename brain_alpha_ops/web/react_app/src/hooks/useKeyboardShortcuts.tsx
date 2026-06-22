@@ -99,31 +99,31 @@ export function KeyboardShortcutsHelp({ onClose }: { onClose: () => void }) {
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr>
-                <th style={{ textAlign: "left", padding: "8px", borderBottom: "1px solid oklch(0.28 0.008 45)", color: "oklch(0.52 0.006 45)", fontSize: "11px", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" }}>Keys</th>
-                <th style={{ textAlign: "left", padding: "8px", borderBottom: "1px solid oklch(0.28 0.008 45)", color: "oklch(0.52 0.006 45)", fontSize: "11px", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" }}>Action</th>
+                <th style={{ textAlign: "left", padding: "8px", borderBottom: "1px solid var(--color-border-medium)", color: "var(--color-text-muted)", fontSize: "11px", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" }}>Keys</th>
+                <th style={{ textAlign: "left", padding: "8px", borderBottom: "1px solid var(--color-border-medium)", color: "var(--color-text-muted)", fontSize: "11px", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em" }}>Action</th>
               </tr>
             </thead>
             <tbody>
               {shortcuts.map((shortcut, i) => (
                 <tr key={i}>
-                  <td style={{ padding: "8px", borderBottom: "1px solid oklch(0.18 0.007 45)" }}>
+                  <td style={{ padding: "8px", borderBottom: "1px solid var(--color-border-subtle)" }}>
                     {shortcut.keys.map((key, j) => (
                       <kbd key={j} style={{
                         display: "inline-block",
                         padding: "2px 6px",
                         fontSize: "12px",
                         fontFamily: "var(--font-mono, monospace)",
-                        background: "oklch(0.22 0.008 45)",
-                        color: "oklch(0.92 0.003 45)",
+                        background: "var(--color-kbd-bg)",
+                        color: "var(--color-text-bright)",
                         borderRadius: "4px",
                         marginRight: "4px",
-                        border: "0.5px solid oklch(0.30 0.008 45)",
+                        border: "0.5px solid var(--color-kbd-border)",
                       }}>
                         {key}
                       </kbd>
                     ))}
                   </td>
-                  <td style={{ padding: "8px", borderBottom: "1px solid oklch(0.18 0.007 45)", color: "oklch(0.82 0.004 45)" }}>
+                  <td style={{ padding: "8px", borderBottom: "1px solid var(--color-border-subtle)", color: "var(--color-text-score)" }}>
                     {shortcut.action}
                   </td>
                 </tr>

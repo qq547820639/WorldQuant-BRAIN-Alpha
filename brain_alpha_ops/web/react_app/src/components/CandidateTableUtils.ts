@@ -4,6 +4,7 @@
  */
 
 import type { AlphaLifecycleTrace, Candidate, SSEEvent } from "@/types";
+import { isRecord } from "@/types";
 import { RAW_UNSAFE_DISPLAY_TEXT_PATTERN } from "@/helpers/errorExperience";
 
 const MIN_TARGET_POOL_SIZE = 1;
@@ -317,7 +318,7 @@ export function mostCommon(values: unknown[]) {
 }
 
 export function record(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+  return isRecord(value) ? value : {};
 }
 
 export function rankPoolCandidates(candidates: Candidate[]) {

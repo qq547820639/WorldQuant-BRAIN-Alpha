@@ -200,8 +200,8 @@ export default function CredentialQuickStart({
         {errorGuide && (
           <div style={{
             padding: "10px 12px", borderRadius: 6,
-            background: "oklch(0.48 0.06 22 / 0.08)",
-            border: "1px solid oklch(0.48 0.08 22 / 0.25)",
+            background: "var(--color-error-bg)",
+            border: "1px solid var(--color-error-guide-border)",
             display: "flex", flexDirection: "column", gap: 8,
           }}>
             <p className="text-sm text-negative font-medium">{errorGuide.message}</p>
@@ -224,15 +224,15 @@ export default function CredentialQuickStart({
         <div style={{
           display: "flex", alignItems: "flex-start", gap: 8,
           padding: "10px 12px", borderRadius: 6,
-          background: "oklch(0.58 0.04 245 / 0.08)",
-          border: "1px solid oklch(0.58 0.10 245 / 0.20)",
+          background: "var(--color-info-bg-soft)",
+          border: "1px solid var(--color-info-border-soft)",
         }}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="oklch(0.58 0.12 245)" strokeWidth="2" strokeLinecap="round" style={{ flexShrink: 0, marginTop: 1 }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--color-info-text)" strokeWidth="2" strokeLinecap="round" style={{ flexShrink: 0, marginTop: 1 }}>
             <circle cx="12" cy="12" r="10"/>
             <line x1="12" y1="16" x2="12" y2="12"/>
             <line x1="12" y1="8" x2="12.01" y2="8"/>
           </svg>
-          <p className="text-xs" style={{ color: "oklch(0.58 0.08 245)", lineHeight: 1.5 }}>
+          <p className="text-xs" style={{ color: "var(--color-info-text-soft)", lineHeight: 1.5 }}>
             还没有 BRAIN 账户？前往{" "}
             <a
               href="https://platform.worldquantbrain.com"

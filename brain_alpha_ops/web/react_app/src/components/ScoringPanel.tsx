@@ -332,7 +332,7 @@ export default function ScoringPanel({ notify, candidate }: Props) {
                     <div
                       className="scorebreakdown-sparkline"
                       aria-label={`评分历史趋势，共 ${scoreHistory.length} 个数据点`}
-                      style={{ height: 56, borderBottom: "0.5px solid oklch(0.22 0.007 45)" }}
+                      style={{ height: 56, borderBottom: "0.5px solid var(--color-border-default)" }}
                     >
                       {(() => {
                         const points = scoreHistory.slice(-10);
@@ -358,11 +358,11 @@ export default function ScoringPanel({ notify, candidate }: Props) {
                               <div
                                 style={{
                                   width: "100%", maxWidth: 24, height: `${Math.max(4, heightPct)}%`,
-                                  minHeight: 2, background: "oklch(0.55 0.14 85 / 0.7)",
+                                  minHeight: 2, background: "var(--color-sparkline-bar)",
                                   borderRadius: "1px 1px 0 0",
                                 }}
                               />
-                              <span style={{ fontSize: "0.5rem", color: "oklch(0.52 0.006 45)", marginTop: 2, textAlign: "center", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                              <span style={{ fontSize: "0.5rem", color: "var(--color-text-muted)", marginTop: 2, textAlign: "center", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                                 {formatLabel(point.timestamp)}
                               </span>
                             </div>
@@ -370,10 +370,10 @@ export default function ScoringPanel({ notify, candidate }: Props) {
                         });
                       })()}
                     </div>
-                    <div style={{ marginTop: 8, paddingTop: 6, borderTop: "0.5px solid oklch(0.22 0.007 45)" }}>
+                    <div style={{ marginTop: 8, paddingTop: 6, borderTop: "0.5px solid var(--color-border-default)" }}>
                       {scoreHistory.slice().reverse().slice(0, 10).map((point, i) => (
                         <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "2px 0", fontSize: "0.625rem" }}>
-                          <span style={{ color: "oklch(0.52 0.006 45)", fontFamily: "monospace" }}>
+                          <span style={{ color: "var(--color-text-muted)", fontFamily: "monospace" }}>
                             {(() => {
                               try {
                                 const d = new Date(point.timestamp);
@@ -382,7 +382,7 @@ export default function ScoringPanel({ notify, candidate }: Props) {
                               } catch { return point.timestamp.slice(0, 10); }
                             })()}
                           </span>
-                          <span style={{ color: "oklch(0.82 0.04 85)", fontFamily: "monospace" }}>{point.totalScore.toFixed(1)}</span>
+                          <span style={{ color: "var(--color-score-highlight)", fontFamily: "monospace" }}>{point.totalScore.toFixed(1)}</span>
                         </div>
                       ))}
                     </div>

@@ -9,6 +9,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiErrorMessage } from "@/helpers/errorExperience";
 import { useApi } from "@/hooks/useApi";
 import type { Candidate, SubmitReadinessResponse } from "@/types";
+import { isRecord } from "@/types";
 import ProgressFeedback from "@/components/ProgressFeedback";
 import StatusFlowDiagram from "@/components/StatusFlowDiagram";
 import { ConfirmationTable, buildRows, formatCount, type CheckResult } from "@/components/SubmissionChecklist";
@@ -59,7 +60,7 @@ export default function SubmissionConfirmPanel({ notify, onNavigate }: Props) {
         if (!res.ok) return;
         const json: unknown = await res.json();
         if (!json || typeof json !== "object") return;
-        const data = json as Record<string, unknown>;
+        const data = isRecord(json) ? json : {};
         const currentPerformed = Boolean(data.real_submit_performed);
         if (currentPerformed && prevRealSubmitRef.current === false) {
           prevRealSubmitRef.current = true;
@@ -132,7 +133,7 @@ export default function SubmissionConfirmPanel({ notify, onNavigate }: Props) {
       </div>
 
       {error && (
-        <div className="rounded-md border border-[oklch(0.48_0.08_22/0.30)] bg-[oklch(0.48_0.06_22/0.08)] p-4" role="alert" aria-live="assertive">
+        <div className="rounded-md border border-[var(--color-error-border)] bg-[var(--color-error-bg)] p-4" role="alert" aria-live="assertive">
           <div className="flex items-center justify-between gap-3">
             <p className="text-sm text-negative">提交前阻断复核数据加载失败: {error}</p>
             <button type="button" onClick={load} className="btn btn-secondary text-sm">

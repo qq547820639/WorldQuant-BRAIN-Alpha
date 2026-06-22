@@ -65,10 +65,10 @@ function ScoringPlaceholder({ onPickCandidate }: { onPickCandidate: () => void }
     <div className="animate-fade-in" style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "60vh", gap: 16 }}>
       <div style={{
         width: 64, height: 64, borderRadius: "50%",
-        background: "oklch(0.58 0.10 248 / 0.12)",
+        background: "var(--color-scoring-placeholder-bg)",
         display: "flex", alignItems: "center", justifyContent: "center",
       }}>
-        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="oklch(0.62 0.10 250)" strokeWidth="2" strokeLinecap="round">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--color-scoring-placeholder-stroke)" strokeWidth="2" strokeLinecap="round">
           <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/>
           <rect x="9" y="3" width="6" height="4" rx="1"/>
           <path d="M9 12h6"/><path d="M9 16h4"/>
@@ -108,8 +108,8 @@ function LocalCacheSessionCard({
 
   return (
     <div className="panel mb-4" style={{
-      borderColor: "oklch(0.58 0.10 65 / 0.30)",
-      background: "oklch(0.58 0.06 65 / 0.10)",
+      borderColor: "var(--color-deferred-border)",
+      background: "var(--color-deferred-bg)",
     }}>
       <div className="panel-header">
         <span>本地缓存会话</span>

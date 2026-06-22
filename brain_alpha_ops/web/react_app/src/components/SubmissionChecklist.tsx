@@ -82,10 +82,10 @@ export function ConfirmationTable({ title, empty, rows }: { title: string; empty
       <h3 className="text-sm font-semibold text-text-secondary">{title}</h3>
       <div className="space-y-3 md:hidden" aria-label={`${title} 移动端卡片`}>
         {rows.length === 0 ? (
-          <div className="rounded-md border border-border-subtle bg-[oklch(0.115_0.007_45)] p-4 text-center text-sm text-text-tertiary">{empty}</div>
+          <div className="rounded-md border border-border-subtle bg-[var(--color-surface-elevated)] p-4 text-center text-sm text-text-tertiary">{empty}</div>
         ) : (
           rows.map((row) => (
-            <article key={`${title}_mobile_${row.id}`} className="rounded-md border border-border-subtle bg-[oklch(0.115_0.007_45)] p-4 text-sm">
+            <article key={`${title}_mobile_${row.id}`} className="rounded-md border border-border-subtle bg-[var(--color-surface-elevated)] p-4 text-sm">
               <div className="flex min-w-0 items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="break-all font-mono-value text-xs text-accent">{row.id}</p>
@@ -113,7 +113,7 @@ export function ConfirmationTable({ title, empty, rows }: { title: string; empty
           ))
         )}
       </div>
-      <div className="hidden min-w-0 overflow-hidden md:block rounded-md border border-border-subtle bg-[oklch(0.100_0.007_45)]">
+      <div className="hidden min-w-0 overflow-hidden md:block rounded-md border border-border-subtle bg-[var(--color-surface-deep)]">
         <div className="max-w-full overflow-auto">
           <table className="min-w-[760px] w-full text-sm" aria-label={title}>
             <thead>

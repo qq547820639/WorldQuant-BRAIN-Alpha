@@ -2,6 +2,7 @@
 
 import { apiErrorMessage, knownApiErrorMessage, type ApiErrorExperiencePayload } from "@/helpers/errorExperience";
 import type { BrainCredentials, JobStatus, ProgressLifecycle, UnifiedProgress } from "@/types";
+import { isRecord } from "@/types";
 
 type JobStateInput = {
   error?: unknown;
@@ -321,7 +322,7 @@ export function resolveJobEventState(
 }
 
 function record(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" ? value as Record<string, unknown> : {};
+  return isRecord(value) ? value : {};
 }
 
 function textField(value: unknown): string {
@@ -354,16 +355,14 @@ export function buildRunPayload(resume: boolean, credentials?: BrainCredentials)
 
 /** Type guard: check if an unknown value is a valid JobStatus */
 export function isJobStatus(value: unknown): value is JobStatus {
-  if (!value || typeof value !== "object") return false;
-  const v = value as Record<string, unknown>;
-  return typeof v.status === "string" || typeof v.job_id === "string" || typeof v.phase === "string";
+  if (!isRecord(value)) return false;
+  return typeof value.status === "string" || typeof value.job_id === "string" || typeof value.phase === "string";
 }
 
 /** Extract jobId from an API response with various possible shapes */
 export function extractJobId(result: unknown): string {
-  if (!result || typeof result !== "object") return "";
-  const r = result as Record<string, unknown>;
-  return String(r.job_id || r.task_id || "");
+  if (!isRecord(result)) return "";
+  return String(result.job_id || result.task_id || "");
 }
 
 /** Format a validation ID for compact display */

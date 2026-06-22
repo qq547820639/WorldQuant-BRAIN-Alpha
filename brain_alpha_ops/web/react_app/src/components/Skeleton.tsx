@@ -19,7 +19,7 @@ function Skeleton({ width = "100%", height = "20px", borderRadius = "4px", class
         width,
         height,
         borderRadius,
-        background: "linear-gradient(90deg, oklch(0.92 0.006 45) 25%, oklch(0.88 0.006 45) 50%, oklch(0.92 0.006 45) 75%)",
+        background: "linear-gradient(90deg, var(--color-skeleton-light-base) 25%, var(--color-skeleton-light-mid) 50%, var(--color-skeleton-light-base) 75%)",
         backgroundSize: "200% 100%",
         animation: "skeleton-pulse 1.5s ease-in-out infinite",
       }}
@@ -80,14 +80,14 @@ export const SkeletonTable = memo(function SkeletonTable({ rows = 5, columns = 4
   return (
     <div className="skeleton-table">
       {/* Header */}
-      <div style={{ display: "flex", gap: 8, padding: "8px 12px", borderBottom: "1px solid oklch(0.92 0.006 45)" }}>
+      <div style={{ display: "flex", gap: 8, padding: "8px 12px", borderBottom: "1px solid var(--color-skeleton-light-base)" }}>
         {Array.from({ length: columns }, (_, i) => (
           <Skeleton key={i} width="80px" height="14px" />
         ))}
       </div>
       {/* Rows */}
       {Array.from({ length: rows }, (_, rowIndex) => (
-        <div key={rowIndex} style={{ display: "flex", gap: 8, padding: "12px", borderBottom: "1px solid oklch(0.95 0.006 45)" }}>
+        <div key={rowIndex} style={{ display: "flex", gap: 8, padding: "12px", borderBottom: "1px solid var(--color-skeleton-light-end)" }}>
           {Array.from({ length: columns }, (_, colIndex) => (
             <Skeleton
               key={colIndex}

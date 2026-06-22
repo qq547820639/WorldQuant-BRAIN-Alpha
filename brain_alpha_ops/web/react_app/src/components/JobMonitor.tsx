@@ -5,7 +5,7 @@ import { useSSE } from "@/hooks/useSSE";
 import { useApi } from "@/hooks/useApi";
 import { buildRunPayload, classifyJobState, hasCredentials, jobStatusMessage, resolveJobEventState, shortValidationId } from "@/helpers/runPayload";
 import type { BrainCredentials, JobStatus, SSEEvent, UnifiedProgress, SSECandidateEventData } from "@/types";
-import { isSSECandidateData } from "@/types";
+import { isSSECandidateData, isRecord } from "@/types";
 import type { JobState } from "@/hooks/useJobState";
 import ProgressFeedback from "@/components/ProgressFeedback";
 
@@ -73,10 +73,10 @@ function JobMonitorView({
         {running && !connected && (
           <div className="mb-3" style={{
             padding: "8px 12px", borderRadius: 6,
-            border: "1px solid", borderColor: "oklch(0.58 0.10 65 / 0.30)",
-            background: "oklch(0.58 0.06 65 / 0.10)",
+            border: "1px solid", borderColor: "var(--color-deferred-border)",
+            background: "var(--color-deferred-bg)",
             display: "flex", alignItems: "center", gap: 8,
-            fontSize: 13, color: "oklch(0.68 0.12 65)",
+            fontSize: 13, color: "var(--color-deferred-icon)",
           }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" style={{ flexShrink: 0 }}>
               <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
@@ -91,10 +91,10 @@ function JobMonitorView({
         {sseRetryCountdown > 0 && (
           <div className="mb-3" style={{
             padding: "8px 12px", borderRadius: 6,
-            border: "1px solid", borderColor: "oklch(0.58 0.12 245 / 0.30)",
-            background: "oklch(0.58 0.06 245 / 0.08)",
+            border: "1px solid", borderColor: "var(--color-info-border)",
+            background: "var(--color-info-bg-faint)",
             display: "flex", alignItems: "center", gap: 8,
-            fontSize: 13, color: "oklch(0.58 0.12 245)",
+            fontSize: 13, color: "var(--color-info-text)",
           }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" style={{ flexShrink: 0, animation: "spin 2s linear infinite" }}>
               <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
@@ -106,8 +106,8 @@ function JobMonitorView({
         {sseRetryExhausted && (
           <div className="mb-3" style={{
             padding: "10px 12px", borderRadius: 6,
-            border: "1px solid", borderColor: "oklch(0.48 0.08 22 / 0.30)",
-            background: "oklch(0.48 0.06 22 / 0.08)",
+            border: "1px solid", borderColor: "var(--color-error-border)",
+            background: "var(--color-error-bg)",
             display: "flex", flexDirection: "column", gap: 8,
             fontSize: 13,
           }}>
@@ -561,7 +561,8 @@ function firstNum(...values: unknown[]) {
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
+  if (isRecord(value)) return value;
+  return null;
 }
 
 function PlayIcon() { return <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7L8 5Z"/></svg>; }

@@ -23,7 +23,7 @@ export function DrillModal({
       style={{
         position: "fixed", inset: 0, zIndex: 9999,
         display: "flex", alignItems: "center", justifyContent: "center",
-        background: "oklch(0 0 0 / 0.55)", backdropFilter: "blur(3px)",
+        background: "var(--color-overlay-strong)", backdropFilter: "blur(3px)",
       }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
       role="dialog"
@@ -33,8 +33,8 @@ export function DrillModal({
       <div
         className="drill-modal-content"
         style={{
-          background: "oklch(0.115 0.007 45)", borderRadius: 8,
-          border: "0.5px solid oklch(0.22 0.007 45)",
+          background: "var(--color-surface-elevated)", borderRadius: 8,
+          border: "0.5px solid var(--color-border-default)",
           maxWidth: 480, width: "calc(100% - 32px)", maxHeight: "90vh",
           overflow: "auto", padding: "24px 20px 20px",
         }}
@@ -71,8 +71,8 @@ export function DrillModal({
                   display: "flex", alignItems: "flex-start", gap: 12,
                   padding: "10px 12px", borderRadius: 6,
                   cursor: "pointer",
-                  background: checked ? "oklch(0.55 0.08 85 / 0.08)" : "oklch(0.10 0.005 45 / 0.50)",
-                  border: `0.5px solid ${checked ? "oklch(0.55 0.10 85 / 0.30)" : "oklch(0.22 0.007 45)"}`,
+                  background: checked ? "var(--color-step-checked-bg)" : "var(--color-layer-header-bg)",
+                  border: `0.5px solid ${checked ? "var(--color-step-checked-border)" : "var(--color-border-default)"}`,
                   transition: "all 0.15s",
                 }}
               >
@@ -80,13 +80,13 @@ export function DrillModal({
                   type="checkbox"
                   checked={checked}
                   onChange={() => onToggle(step.id)}
-                  style={{ marginTop: 2, flexShrink: 0, accentColor: "oklch(0.65 0.14 80)" }}
+                  style={{ marginTop: 2, flexShrink: 0, accentColor: "var(--color-status-active-text)" }}
                 />
                 <div>
                   <span
                     className="text-sm font-medium"
                     style={{
-                      color: checked ? "oklch(0.75 0.10 85)" : "oklch(0.62 0.01 45)",
+                      color: checked ? "var(--color-stall-text)" : "var(--color-step-checked-text)",
                       textDecoration: checked ? "line-through" : "none",
                     }}
                   >

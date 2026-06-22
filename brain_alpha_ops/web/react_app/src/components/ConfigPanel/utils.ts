@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import type { BrainCredentials, RunConfig } from "@/types";
+import { isRecord } from "@/types";
 
 export const MAX_CONFIG_TEXT_LENGTH = 128;
 export const CONFIG_TEXT_PATTERN = /^[A-Za-z0-9_.:-]*$/;
@@ -49,6 +50,9 @@ export interface ConfigForm {
 export interface ConfigSchema {
   settings_options?: Record<string, Array<string | number>>;
   dataset_options?: Array<{ id: string; name?: string; field_count?: number; category?: string; label?: string }>;
+  scoring?: Record<string, unknown>;
+  scoring_weights?: Record<string, unknown>;
+  [key: string]: unknown;
 }
 
 export function sanitizeConfigText(value: string): string {
@@ -115,7 +119,7 @@ export function parseNumber(value: string): number {
 }
 
 export function asRecord(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
+  return isRecord(value) ? value : null;
 }
 
 export function stringValue(value: unknown, fallback: string): string {
@@ -200,7 +204,7 @@ export function formFromConfig(config: RunConfig | null): ConfigForm {
   const thresholds = config.thresholds || {};
   return {
     environment: "",
-    autoSubmit: booleanValue((config as Record<string, unknown>)?.autoSubmit, false),
+    autoSubmit: booleanValue(config.autoSubmit, false),
     instrumentType: stringValue(settings.instrumentType, "EQUITY"),
     region: stringValue(settings.region, "USA"),
     universe: stringValue(settings.universe, "TOP3000"),

@@ -68,9 +68,9 @@ const LAYER_NAMES: Record<string, string> = {
 
 /** Layer accent colors for visual distinction. */
 const LAYER_COLORS: Record<string, string> = {
-  prior_score: "oklch(0.65 0.12 245 / 0.85)",
-  empirical_score: "oklch(0.65 0.10 155 / 0.85)",
-  submission_checklist: "oklch(0.65 0.10 80 / 0.85)",
+  prior_score: "var(--color-layer-color-info)",
+  empirical_score: "var(--color-layer-color-success)",
+  submission_checklist: "var(--color-layer-color-warning)",
 };
 
 function labelFor(name: string): string {

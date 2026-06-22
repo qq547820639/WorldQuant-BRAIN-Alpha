@@ -60,7 +60,7 @@ export default function QualityCheckPanel({ notify }: Props) {
           className="panel"
           role="alert"
           aria-live="assertive"
-          style={{ borderColor: 'oklch(0.48 0.08 22 / 0.30)', backgroundColor: 'oklch(0.48 0.06 22 / 0.08)' }}
+          style={{ borderColor: 'var(--color-error-border)', backgroundColor: 'var(--color-error-bg)' }}
         >
           <div className="flex items-center justify-between gap-3">
             <p className="text-sm text-negative">达标检查数据加载失败: {error}</p>
@@ -108,7 +108,7 @@ function QualitySummaryStrip({ summary }: { summary: QualitySummary }) {
   return (
     <section
       className="rounded-md px-3 py-3"
-      style={{ border: '1px solid', borderColor: 'oklch(0.28 0.008 45)', backgroundColor: 'oklch(0.100 0.007 45 / 0.60)' }}
+      style={{ border: '1px solid', borderColor: 'var(--color-border-medium)', backgroundColor: 'var(--color-surface-deep-60)' }}
     >
       <dl className="grid grid-cols-2 gap-3 text-xs sm:grid-cols-4">
         <QualityMetric label="候选" value={String(summary.total)} />

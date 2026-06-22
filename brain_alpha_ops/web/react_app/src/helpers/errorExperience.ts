@@ -1,3 +1,5 @@
+import { isRecord } from "@/types";
+
 export interface ApiUserError {
   kind?: string;
   title?: string;
@@ -236,24 +238,23 @@ function sessionInvalidValues(payload: unknown): string[] {
   if (payload == null) return [];
   if (typeof payload === "string") return [payload.trim().toLowerCase()].filter(Boolean);
   if (Array.isArray(payload)) return payload.flatMap((item) => sessionInvalidValues(item));
-  if (typeof payload !== "object") return [];
-
-  const record = payload as Record<string, unknown>;
+  if (!isRecord(payload)) return [];
+  const rec = payload;
   const values = [
-    record.error,
-    record.error_code,
-    record.user_error_kind,
-    record.status_code,
-    record.status,
-    record.phase,
+    rec.error,
+    rec.error_code,
+    rec.user_error_kind,
+    rec.status_code,
+    rec.status,
+    rec.phase,
   ];
-  const userError = record.user_error;
-  if (userError && typeof userError === "object") {
-    values.push((userError as Record<string, unknown>).kind);
+  const userError = rec.user_error;
+  if (isRecord(userError)) {
+    values.push(userError.kind);
   }
   return [
     ...values.map((value) => String(value || "").trim().toLowerCase()).filter(Boolean),
-    ...sessionInvalidValues(record.progress),
-    ...sessionInvalidValues(record.data),
+    ...sessionInvalidValues(rec.progress),
+    ...sessionInvalidValues(rec.data),
   ];
 }

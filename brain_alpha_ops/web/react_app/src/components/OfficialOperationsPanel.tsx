@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { classifyJobState } from "@/helpers/runPayload";
 import { useApi } from "@/hooks/useApi";
 import type { BrainCredentials, CloudAlphaCache, JobStatus, OfficialContextCache, SubmitReadinessResponse } from "@/types";
+import { isRecord } from "@/types";
 import ProgressFeedback from "@/components/ProgressFeedback";
 import {
   ActionPanel,
@@ -220,7 +221,7 @@ export default function OfficialOperationsPanel({
     if (!jobId) return false;
     const terminal = isTerminalSyncStatus(result);
     setMode("context_refresh");
-    setContextOnlyMode(Boolean(result?.progress?.context_only || (result?.result as Record<string, unknown> | undefined)?.context_only));
+    setContextOnlyMode(Boolean(result?.progress?.context_only || (isRecord(result?.result) ? result.result.context_only : undefined)));
     updateSyncJobId(jobId);
     setSyncStatus(result);
     setSyncRunning(!terminal);
@@ -756,7 +757,7 @@ export default function OfficialOperationsPanel({
 	        </div>
 
 	        {(syncJobId || displaySyncStatus?.official_context_cache) && (
-	          <section className="rounded-md border border-border-subtle bg-[oklch(0.115_0.007_45)] p-3" aria-label="官方上下文快速摘要">
+	          <section className="rounded-md border border-border-subtle bg-[var(--color-surface-elevated)] p-3" aria-label="官方上下文快速摘要">
 	            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 	              <dl className="grid min-w-0 flex-1 grid-cols-3 gap-3 text-sm">
 	                <SummaryMetric label="字段" value={contextSummaryField(displaySyncStatus, "fields_count")} />
@@ -774,7 +775,7 @@ export default function OfficialOperationsPanel({
 	        )}
 
         {(syncHistory.length > 0 || syncHistoryError) && (
-          <section className="rounded-md border border-border-subtle bg-[oklch(0.100_0.007_45)] p-4" aria-label="最近官方同步">
+          <section className="rounded-md border border-border-subtle bg-[var(--color-surface-deep)] p-4" aria-label="最近官方同步">
             <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <h3 className="text-sm font-semibold text-text-primary">最近官方同步</h3>
@@ -795,13 +796,13 @@ export default function OfficialOperationsPanel({
         )}
 
 		        {syncStatus?.status === "stopping" && (
-		          <div className="rounded-md border border-[oklch(0.65_0.06_85/0.25)] bg-warning-subtle p-3 text-sm leading-6 text-warning">
+		          <div className="rounded-md border border-[var(--color-info-border-warm)] bg-warning-subtle p-3 text-sm leading-6 text-warning">
 	            停止请求已发送，等待当前官方接口返回后结束。已等待 {formatDuration(stoppingElapsedSeconds)}；通常在 15 秒内生效，超过 60 秒会自动重试一次。
 	          </div>
 	        )}
 
         {syncStatus?.phase === "session_invalid" && (
-          <div className="rounded-md border border-[oklch(0.62_0.10_35/0.35)] bg-negative-subtle p-3 text-sm leading-6 text-negative" role="alert">
+          <div className="rounded-md border border-[var(--color-session-invalid-border)] bg-negative-subtle p-3 text-sm leading-6 text-negative" role="alert">
             <p className="font-medium">本地会话需要重新连接</p>
             <p className="mt-1 text-text-secondary">
               同步任务可能仍在后台运行，但当前页面无法继续读取状态。请回到运行总览重新测试连接，再回到官方操作页恢复监控。

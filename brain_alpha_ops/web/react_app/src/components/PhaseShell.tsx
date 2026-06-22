@@ -52,9 +52,9 @@ export default memo(function PhaseShell({
       {isBlocked && (
         <div style={{
           margin: "0 16px 8px", padding: "8px 14px", borderRadius: 6,
-          border: "1px solid", borderColor: "oklch(0.48 0.06 22 / 0.25)",
-          background: "oklch(0.48 0.04 22 / 0.08)",
-          fontSize: 13, color: "oklch(0.55 0.06 22)",
+          border: "1px solid", borderColor: "var(--color-panel-negative-border)",
+          background: "var(--color-warning-banner-bg)",
+          fontSize: 13, color: "var(--color-warning-banner-text)",
           display: "flex", alignItems: "center", gap: 8,
         }}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" style={{ flexShrink: 0 }}>

@@ -14,7 +14,7 @@ interface Props {
 
 function EmptyIcon() {
   return (
-    <svg width="48" height="48" viewBox="0 0 48 48" fill="none" stroke="oklch(0.52 0.006 45)" strokeWidth="1" opacity="0.5">
+    <svg width="48" height="48" viewBox="0 0 48 48" fill="none" stroke="var(--color-text-muted)" strokeWidth="1" opacity="0.5">
       <rect x="8" y="8" width="32" height="32" rx="4" />
       <line x1="16" y1="18" x2="32" y2="18" />
       <line x1="16" y1="24" x2="28" y2="24" />

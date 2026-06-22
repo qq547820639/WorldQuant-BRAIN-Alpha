@@ -57,7 +57,7 @@ interface SyncHistoryListProps {
 
 export default function SyncHistoryList({ rows }: SyncHistoryListProps) {
   return (
-    <ul className="mt-3 divide-y divide-border-subtle rounded-md border border-border-subtle bg-[oklch(0.115_0.007_45)]" aria-label="最近官方同步列表">
+    <ul className="mt-3 divide-y divide-border-subtle rounded-md border border-border-subtle bg-[var(--color-surface-elevated)]" aria-label="最近官方同步列表">
       {rows.slice(0, 5).map((row) => (
         <li key={row.job_id} className="grid gap-3 p-3 sm:grid-cols-[minmax(0,1fr)_auto]">
           <div className="min-w-0">

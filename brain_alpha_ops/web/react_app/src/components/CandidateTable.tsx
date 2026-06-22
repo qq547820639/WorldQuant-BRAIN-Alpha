@@ -479,9 +479,9 @@ export default function CandidateTable({
           <div
             className="panel-body-padded"
             style={{
-              borderBottom: "0.5px solid oklch(0.22 0.007 45)",
-              background: "oklch(0.55 0.08 85 / 0.06)",
-              borderLeft: "3px solid oklch(0.55 0.14 85 / 0.6)",
+              borderBottom: "0.5px solid var(--color-border-default)",
+              background: "var(--color-task-success-bg)",
+              borderLeft: "3px solid var(--color-sparkline-dot)",
               margin: 0,
             }}
             role="status"

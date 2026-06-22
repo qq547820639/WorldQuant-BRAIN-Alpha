@@ -1,6 +1,7 @@
 /** Shared utilities for SnapshotPanel sub-components. */
 
 import { knownApiErrorMessage } from "@/helpers/errorExperience";
+import { isRecord } from "@/types";
 
 export const MAX_FILTER_LENGTH = 200;
 export const RAW_SNAPSHOT_TEXT_PATTERN = /(?:raw\s+backend|raw_backend|RAW_BACKEND|SESSION_INVALID|session_invalid|invalid local session|unknown sync job|unknown job|csrf[_-]?token|session[_-]?id|access[_-]?token|refresh[_-]?token|password|passwd|pwd|set[_-]?cookie|cookie|authorization|client[_-]?secret|api[_-]?key)/i;
@@ -63,7 +64,7 @@ export function text(value: unknown): string {
 }
 
 export function record(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+  return isRecord(value) ? value : {};
 }
 
 export function array(value: unknown): unknown[] {

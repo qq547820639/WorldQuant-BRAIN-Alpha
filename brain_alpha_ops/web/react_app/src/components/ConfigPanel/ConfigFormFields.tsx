@@ -138,7 +138,7 @@ export function CheckboxField({ label, checked, onChange }: { label: string; che
   return (
     <label
       className="flex items-center justify-between gap-3 py-2 text-sm font-medium text-text-secondary"
-      style={{ borderBottom: '1px solid', borderBottomColor: 'oklch(0.22 0.007 45)' }}
+      style={{ borderBottom: '1px solid', borderBottomColor: 'var(--color-border-default)' }}
     >
       <span>{label}</span>
       <input
@@ -146,7 +146,7 @@ export function CheckboxField({ label, checked, onChange }: { label: string; che
         checked={checked}
         onChange={(event) => onChange(event.currentTarget.checked)}
         className="h-4 w-4"
-        style={{ accentColor: 'oklch(0.65 0.14 80)' }}
+        style={{ accentColor: 'var(--color-status-active-text)' }}
       />
     </label>
   );
@@ -156,7 +156,7 @@ export function ConfigValue({ label, value }: { label: string; value: unknown })
   return (
     <div
       className="flex min-w-0 flex-wrap justify-between gap-x-3 gap-y-1 py-1.5 text-sm"
-      style={{ borderBottom: '1px solid', borderBottomColor: 'oklch(0.22 0.007 45)' }}
+      style={{ borderBottom: '1px solid', borderBottomColor: 'var(--color-border-default)' }}
     >
       <span className="text-text-secondary">{label}</span>
       <span className="min-w-0 break-all font-mono-value text-text-primary">{String(value ?? "-")}</span>

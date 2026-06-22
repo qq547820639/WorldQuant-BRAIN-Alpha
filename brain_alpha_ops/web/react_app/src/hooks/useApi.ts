@@ -174,7 +174,7 @@ async function safeJson<R>(res: Response): Promise<R | null> {
 
 function refreshSessionTokens(payload: unknown) {
   if (!payload || typeof payload !== "object") return;
-  const p = payload as Record<string, unknown>;
+  const p = payload as { csrf_token?: unknown; stream_token?: unknown };
   const csrf = typeof p.csrf_token === "string" ? p.csrf_token : "";
   const stream = typeof p.stream_token === "string" ? p.stream_token : "";
   if (csrf) setCsrfToken(csrf);

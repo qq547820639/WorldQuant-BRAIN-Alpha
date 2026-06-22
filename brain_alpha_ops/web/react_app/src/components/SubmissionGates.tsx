@@ -99,7 +99,7 @@ function BlockerGuidanceList({
         {items.map((item, index) => (
           <li
             key={`${title}_${index}`}
-            className="flex flex-wrap items-start justify-between gap-2 rounded bg-[oklch(0.10_0.005_45/0.50)] px-3 py-2"
+            className="flex flex-wrap items-start justify-between gap-2 rounded bg-[var(--color-layer-header-bg)] px-3 py-2"
           >
             <div className="min-w-0 flex-1">
               <span className="text-xs text-text-secondary">{item.reason}</span>
@@ -140,7 +140,7 @@ export function ReadinessSummary({
 
   return (
     <>
-      <section className="rounded-md border border-border-subtle bg-[oklch(0.115_0.007_45)] px-3 py-3">
+      <section className="rounded-md border border-border-subtle bg-[var(--color-surface-elevated)] px-3 py-3">
         <dl className="grid grid-cols-2 gap-3 text-xs sm:grid-cols-4">
           <ReadinessMetric label="阻断复核" value={ready ? "通过" : "未通过"} tone={ready ? "text-positive" : "text-warning"} />
           <ReadinessMetric label="复核候选" value={formatCount(readiness?.eligible_count)} />
@@ -160,7 +160,7 @@ export function ReadinessSummary({
       </section>
 
       {showManualSubmitGuidance && (
-        <section className="rounded-md border border-[oklch(0.55_0.12_85/0.35)] bg-[oklch(0.55_0.10_85/0.08)] p-4">
+        <section className="rounded-md border border-[var(--color-gate-passed-border)] bg-[var(--color-gate-passed-fg)] p-4">
           <div className="flex items-start gap-3">
             <span className="mt-0.5 text-lg" aria-hidden="true">✅</span>
             <div className="min-w-0 flex-1">
@@ -199,7 +199,7 @@ export function ReadinessSummary({
                 )}
               </div>
               {hasBestCandidate && (
-                <div className="mt-3 rounded bg-[oklch(0.10_0.005_45/0.50)] px-3 py-2 text-xs text-text-tertiary">
+                <div className="mt-3 rounded bg-[var(--color-layer-header-bg)] px-3 py-2 text-xs text-text-tertiary">
                   <span className="font-mono-value text-accent">{best.alpha_id || "-"}</span>
                   {" · "}
                   生命周期 {best.lifecycle_status || "-"}
@@ -223,7 +223,7 @@ export function ReadinessSummary({
       )}
 
       {showBlockedGuidance && (
-        <section className="rounded-md border border-[oklch(0.48_0.10_32/0.30)] bg-[oklch(0.48_0.08_32/0.06)] p-4">
+        <section className="rounded-md border border-[var(--color-blocked-section-border)] bg-[var(--color-blocked-section-bg)] p-4">
           <div className="flex items-start gap-3">
             <span className="mt-0.5 text-lg" aria-hidden="true">🚧</span>
             <div className="min-w-0 flex-1">
@@ -308,7 +308,7 @@ export function ReadinessSummary({
       )}
 
       {hasBestCandidate && !showManualSubmitGuidance && (
-        <section className="rounded-md border border-border-subtle bg-[oklch(0.115_0.007_45)] px-3 py-3 text-xs text-text-tertiary">
+        <section className="rounded-md border border-border-subtle bg-[var(--color-surface-elevated)] px-3 py-3 text-xs text-text-tertiary">
           <p className="font-semibold text-text-secondary">最佳候选</p>
           <div className="mt-1 space-y-0.5">
             <p>Alpha: <span className="font-mono-value text-accent">{best.alpha_id || "-"}</span></p>

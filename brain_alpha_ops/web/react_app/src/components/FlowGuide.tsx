@@ -47,16 +47,16 @@ export const FlowGuide: React.FC<FlowGuideProps> = ({ currentPhase, onDismiss })
   const currentStep = FLOW_STEPS.find(s => s.phase === currentPhase);
 
   return (
-    <div className="rounded-lg p-4 mb-4" style={{ background: "oklch(0.58 0.06 245 / 0.10)", border: "1px solid oklch(0.58 0.10 245 / 0.25)" }}>
+    <div className="rounded-lg p-4 mb-4" style={{ background: "var(--color-info-bg)", border: "1px solid var(--color-info-border-soft)" }}>
       <div className="flex items-start justify-between">
         <div className="flex-1">
-          <h3 className="text-sm font-semibold mb-2" style={{ color: "oklch(0.68 0.10 248)" }}>
+          <h3 className="text-sm font-semibold mb-2" style={{ color: "var(--color-icon-info)" }}>
             📋 流程指引 — {currentStep?.title || currentPhase}
           </h3>
-          <p className="text-sm mb-2" style={{ color: "oklch(0.58 0.12 245)" }}>
+          <p className="text-sm mb-2" style={{ color: "var(--color-info-text)" }}>
             {currentStep?.description}
           </p>
-          <p className="text-xs rounded px-2 py-1 inline-block" style={{ background: "oklch(0.58 0.06 245 / 0.15)", color: "oklch(0.58 0.12 245)" }}>
+          <p className="text-xs rounded px-2 py-1 inline-block" style={{ background: "var(--color-info-bg-medium)", color: "var(--color-info-text)" }}>
             💡 {currentStep?.action}
           </p>
           <div className="mt-3 flex gap-1">
@@ -69,10 +69,10 @@ export const FlowGuide: React.FC<FlowGuideProps> = ({ currentPhase, onDismiss })
                   style={{
                     background:
                       step.phase === currentPhase
-                        ? "oklch(0.58 0.12 245)"
+                        ? "var(--color-info-text)"
                         : currentIdx > idx
-                        ? "oklch(0.58 0.06 245 / 0.40)"
-                        : "oklch(0.22 0.007 45)",
+                        ? "var(--color-info-bg-strong)"
+                        : "var(--color-border-default)",
                   }}
                   title={step.title}
                 />
@@ -84,7 +84,7 @@ export const FlowGuide: React.FC<FlowGuideProps> = ({ currentPhase, onDismiss })
           <button
             onClick={() => { setDismissed(true); onDismiss?.(); }}
             className="text-xs ml-2 hover:opacity-80"
-            style={{ color: "oklch(0.58 0.10 245)" }}
+            style={{ color: "var(--color-info-text-soft)" }}
           >
             ✕
           </button>

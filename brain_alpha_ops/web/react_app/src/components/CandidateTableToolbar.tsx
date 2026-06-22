@@ -229,8 +229,8 @@ export function CandidateTableToolbar({
         <div
           className="mb-4 px-3 py-2 rounded-md flex flex-wrap items-center gap-3"
           style={{
-            background: "oklch(0.55 0.14 240 / 0.08)",
-            border: "1px solid oklch(0.55 0.14 240 / 0.25)",
+            background: "var(--color-batch-select-bg)",
+            border: "1px solid var(--color-batch-select-border)",
           }}
           role="status"
           aria-live="polite"
@@ -360,7 +360,7 @@ export function CandidateTableToolbar({
       )}
 
       {loadError && (
-        <div className="panel mb-4" style={{ borderColor: "oklch(0.48 0.08 22 / 0.30)", background: "oklch(0.48 0.06 22 / 0.08)" }} role="alert" aria-live="assertive">
+        <div className="panel mb-4" style={{ borderColor: "var(--color-error-border)", background: "var(--color-error-bg)" }} role="alert" aria-live="assertive">
           <div className="panel-body-padded" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <p className="text-sm text-negative">加载候选失败: {loadError}</p>
             <button type="button" onClick={onRetryLoad} className="btn btn-secondary btn-sm">重试</button>
@@ -413,8 +413,8 @@ export function CandidateTableToolbar({
                 marginTop: 4,
                 zIndex: 50,
                 minWidth: 120,
-                background: "oklch(0.18 0.005 45)",
-                border: "1px solid oklch(0.25 0.007 45)",
+                background: "var(--color-divider)",
+                border: "1px solid var(--color-scrollbar-thumb)",
                 borderRadius: 6,
                 padding: "4px 0",
                 boxShadow: "0 4px 12px rgba(0,0,0,0.3)",

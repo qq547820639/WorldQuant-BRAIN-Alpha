@@ -58,7 +58,7 @@ const TrendPanel: React.FC<TrendPanelProps> = ({ title, data, unit, color, curre
               className="w-full rounded-t"
               style={{
                 height: `${Math.max(8, ((d.value - minVal) / range) * 40)}px`,
-                backgroundColor: color || "oklch(0.65 0.14 80)",
+                backgroundColor: color || "var(--color-status-active-text)",
                 opacity: 0.7,
               }}
               title={`${d.date}: ${d.value?.toFixed(1)} ${unit}`}

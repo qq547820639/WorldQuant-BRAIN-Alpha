@@ -66,7 +66,7 @@ function cloudAlphaPassFail(row: CloudAlphaWithMetrics) {
 
 function cloudAlphaMetric(row: CloudAlphaWithMetrics, key: string) {
   const metrics = row.metrics && typeof row.metrics === "object" ? row.metrics : {};
-  return numberOrUndefined((row as Record<string, unknown>)[key] ?? (metrics as Record<string, unknown>)[key]);
+  return numberOrUndefined(row[key] ?? metrics[key]);
 }
 
 function formatMetric(value: number | undefined) {

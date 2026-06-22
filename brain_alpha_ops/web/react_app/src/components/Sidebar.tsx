@@ -145,17 +145,17 @@ export default memo(function Sidebar({
       </div>
 
       {/* User Info (bottom) */}
-      <div style={{ marginTop: "auto", padding: "14px 16px", borderTop: "0.5px solid oklch(0.22 0.007 45)" }}>
+      <div style={{ marginTop: "auto", padding: "14px 16px", borderTop: "0.5px solid var(--color-border-default)" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <div style={{
             width: 24, height: 24, borderRadius: "50%",
-            background: "oklch(0.135 0.008 45)",
+            background: "var(--color-avatar-bg)",
             display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: 10, color: "oklch(0.52 0.006 45)",
+            fontSize: 10, color: "var(--color-text-muted)",
           }}>U</div>
           <div>
-            <div style={{ fontSize: 12, color: "oklch(0.92 0.003 45)" }}>operator</div>
-            <div style={{ fontSize: 10, color: "oklch(0.52 0.006 45)" }}>本地非提交</div>
+            <div style={{ fontSize: 12, color: "var(--color-text-bright)" }}>operator</div>
+            <div style={{ fontSize: 10, color: "var(--color-text-muted)" }}>本地非提交</div>
           </div>
         </div>
       </div>

@@ -98,7 +98,7 @@ export function CandidateRow({
         </div>
         <div className="text-2xs text-text-tertiary mt-1">{safeCandidateDisplayText(candidate.family, "家族待确认")}</div>
       </td>
-      <td className="num score-cell" style={{ fontWeight: 500, color: "oklch(0.92 0.003 45)" }}>
+      <td className="num score-cell" style={{ fontWeight: 500, color: "var(--color-text-bright)" }}>
         <span className="score-value">
           {candidate.scorecard?.total_score?.toFixed(1) ?? "--"}
         </span>

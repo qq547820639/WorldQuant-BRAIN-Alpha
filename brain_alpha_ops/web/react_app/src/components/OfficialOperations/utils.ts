@@ -4,6 +4,7 @@ import { apiErrorMessage, knownApiErrorMessage } from "@/helpers/errorExperience
 import { readinessNextActionLabel, readinessProductionGapLabel, readinessReasonLabel } from "@/helpers/readinessLabels";
 import { classifyJobState, jobStatusMessage } from "@/helpers/runPayload";
 import type { BrainCredentials, CloudAlphaCache, JobStatus, OfficialContextCache, SubmitReadinessResponse, UnifiedProgress } from "@/types";
+import { isRecord } from "@/types";
 
 export const POLL_INTERVAL_MS = 2000;
 export const SYNC_STATUS_FAILURE_LIMIT = 3;
@@ -161,7 +162,7 @@ export function isTerminalSyncStatus(result: JobStatus | null): boolean {
 
 export function operationFailureMessage(result: unknown, fallback: string): string {
   if (!result) return fallback;
-  const error = (result as Record<string, unknown>)?.error;
+  const error = isRecord(result) ? result.error : undefined;
   if (typeof error === "string" && error.trim()) return error.trim();
   return fallback;
 }
@@ -808,7 +809,7 @@ export function phaseLabel(status: JobStatus | null) {
 export function fieldFromProgress(status: JobStatus | null, field: string) {
   const fromProgress = numberField(status?.progress, field);
   if (fromProgress > 0) return String(fromProgress);
-  const result = status?.result as Record<string, unknown> | undefined;
+  const result = isRecord(status?.result) ? status.result : undefined;
   const fromResult = Number(result?.[field]);
   if (Number.isFinite(fromResult) && fromResult > 0) return String(fromResult);
   const fromCache = contextCacheNumber(status?.official_context_cache, field);
@@ -880,9 +881,7 @@ export function officialContextInlineSummary(status: JobStatus | null) {
 
 export function canRetryContextOnly(status: JobStatus | null) {
   if (!status) return false;
-  const result = status.result && typeof status.result === "object" && !Array.isArray(status.result)
-    ? status.result as Record<string, unknown>
-    : {};
+  const result = isRecord(status.result) ? status.result : {};
   const contextStatus = String(status.progress?.context_status || result.context_status || "").toLowerCase();
   const contextError = String(status.progress?.context_error || result.context_error || "").trim();
   return Boolean(contextError || contextStatus === "failed");
@@ -899,7 +898,7 @@ export function contextSummaryNumber(status: JobStatus | null, field: string) {
 export function contextCacheNumber(cache: OfficialContextCache | undefined, field: string) {
   if (!contextCacheComplete(cache)) return 0;
   return firstPositiveNumber(
-    numberField(cache as Record<string, unknown> | undefined, field),
+    isRecord(cache) ? numberField(cache, field) : 0,
     contextCacheManifestRecordCount(cache, field),
   );
 }
@@ -926,15 +925,15 @@ export function cloudAlphaCacheUpdatedAt(cache: CloudAlphaCache | undefined) {
 
 export function resultNumberField(status: JobStatus | null, field: string) {
   const result = status?.result;
-  if (!result || typeof result !== "object" || Array.isArray(result)) return 0;
-  const value = Number((result as Record<string, unknown>)[field]);
+  if (!isRecord(result)) return 0;
+  const value = Number(result[field]);
   return Number.isFinite(value) ? value : 0;
 }
 
 export function resultStringField(status: JobStatus | null, field: string) {
   const result = status?.result;
-  if (!result || typeof result !== "object" || Array.isArray(result)) return "";
-  return String((result as Record<string, unknown>)[field] || "");
+  if (!isRecord(result)) return "";
+  return String(result[field] || "");
 }
 
 export function firstPositiveNumber(...values: Array<number | null | undefined>) {
