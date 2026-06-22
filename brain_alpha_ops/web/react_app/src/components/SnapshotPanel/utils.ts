@@ -147,3 +147,114 @@ export function formatLocalBacktestStatus(value: unknown, hasEvidence: boolean):
   if (value === false) return "未通过";
   return "-";
 }
+
+export type SnapshotPayload = Record<string, unknown>;
+
+export function compactJoin(values: string[]): string {
+  return values.filter(Boolean).join(" ");
+}
+
+export function rowId(row: SnapshotPayload, fallback: string): string {
+  return text(row.alpha_id || row.official_alpha_id || row.simulation_id || row.id || row.checkpoint_id || row.knowledge_id || row.entry_id || row.run_id || row.prompt_digest || row.expression_fingerprint || fallback);
+}
+
+export function dedupeSnapshotRows(rows: SnapshotRow[]): SnapshotRow[] {
+  const seen = new Set<string>();
+  const result: SnapshotRow[] = [];
+  for (const row of rows) {
+    const key = `${row.kind}:${row.id}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(row);
+  }
+  return result;
+}
+
+export function dedupeRows(rows: unknown[]): SnapshotPayload[] {
+  const seen = new Set<string>();
+  const result: SnapshotPayload[] = [];
+  for (const item of rows.map(record)) {
+    const key = rowId(item, text(result.length));
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(item);
+  }
+  return result;
+}
+
+export function namedRows(kind: string, rows: unknown[], titleKey: string): SnapshotRow[] {
+  return rows.map((item, index) => {
+    const row = record(item);
+    return {
+      id: rowId(row, `${kind}_${index}`),
+      kind,
+      title: text(row[titleKey] || row.name || row.reason || row.id || `${kind}_${index + 1}`),
+      status: text(row.status || row.pass_fail || row.ok),
+      metric: compactJoin([
+        metricText("count", row.count ?? row.record_count),
+        metricText("rate", row.success_rate ?? row.failure_rate),
+        metricText("score", row.avg_score ?? row.max_score ?? row.score),
+      ]),
+      detail: text(row.detail || row.summary || row.body || row.expression || row.expression_canonical || row.error),
+      timestamp: text(row.timestamp || row.updated_at || row.created_at),
+    };
+  });
+}
+
+export function signalRows(kind: string, rows: unknown[], status: string): SnapshotRow[] {
+  return rows.map((item, index) => ({
+    id: `${kind}_${index}`,
+    kind,
+    title: `${kind}_${index + 1}`,
+    status,
+    metric: "",
+    detail: text(item),
+    timestamp: "",
+  }));
+}
+
+export function rowText(row: SnapshotRow): string {
+  return [
+    safeSnapshotDisplayText(row.id, ""),
+    displayKind(row.kind),
+    row.title,
+    row.status,
+    row.metric,
+    row.detail,
+    row.timestamp,
+  ].join(" ").toLowerCase();
+}
+
+export function displayKind(kind: string): string {
+  const labels: Record<string, string> = {
+    checkpoint: "续跑记录",
+    history: "历史记录",
+    comparison: "对比",
+    analytics: "趋势",
+    lifecycle: "生命周期",
+    replay_audit: "回放审计",
+    replay_decision: "决策审计",
+    replay_scientific: "科学审计",
+  };
+  return labels[kind] || safeSnapshotDisplayText(kind, "类型待确认") || "类型待确认";
+}
+
+export function normalizeSnapshotRow(row: SnapshotRow): SnapshotRow {
+  return {
+    ...row,
+    title: safeSnapshotDisplayText(row.title || row.id, "记录待确认"),
+    status: snapshotStatusLabel(row.status),
+    metric: safeSnapshotDisplayText(row.metric, "指标待确认"),
+    detail: safeSnapshotDetail(row.detail),
+    timestamp: safeSnapshotDisplayText(row.timestamp, "时间待确认"),
+  };
+}
+
+export function defaultMetrics(payload: SnapshotPayload, rows: SnapshotRow[]): SnapshotMetric[] {
+  return [
+    { label: "行数", value: String(rows.length) },
+    { label: "来源", value: text(payload.source || "快照") },
+    { label: "版本", value: text(payload.schema_version || "-") },
+    { label: "状态", value: payload.ok === false ? "错误" : "就绪" },
+  ];
+}
