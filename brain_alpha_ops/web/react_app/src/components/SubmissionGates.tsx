@@ -165,7 +165,7 @@ export function ReadinessSummary({
             <span className="mt-0.5 text-lg" aria-hidden="true">✅</span>
             <div className="min-w-0 flex-1">
               <h3 className="text-sm font-semibold text-text-primary">
-                所有门禁均已通过 — 需通过 BRAIN 平台手动提交
+                所有门禁均已通过 — 需通过 BRAIN 平台人工复核提交
               </h3>
               <p className="mt-1 text-xs text-text-secondary leading-relaxed">
                 您的候选已通过全部质量门禁。Web 控制台仅负责就绪复核，不执行真实提交。
@@ -301,7 +301,7 @@ export function ReadinessSummary({
               >
                 BRAIN 平台控制台
               </a>
-              {" "}手动提交。
+              {" "}人工复核提交。
             </p>
           </div>
         </section>

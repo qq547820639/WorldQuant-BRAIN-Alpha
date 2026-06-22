@@ -13,6 +13,10 @@ def _component(name: str) -> str:
     return (REACT_COMPONENTS / name).read_text(encoding="utf-8")
 
 
+def _components(names: list[str]) -> str:
+    return "\n".join(_component(name) for name in names)
+
+
 def test_react_app_state_cards_have_accessible_navigation_semantics():
     app = APP.read_text(encoding="utf-8")
     state_cards = _component("StateCards.tsx")
@@ -30,7 +34,12 @@ def test_react_app_state_cards_have_accessible_navigation_semantics():
 
 def test_react_dashboard_and_candidate_errors_are_announced():
     dashboard = _component("Dashboard.tsx")
-    candidates = _component("CandidateTable.tsx")
+    candidates = _components([
+        "CandidateTable.tsx",
+        "CandidateTableToolbar.tsx",
+        "CandidateTableSubComponents.tsx",
+        "CandidateDetailPanel.tsx",
+    ])
     snapshots = _component("SnapshotPanel.tsx")
 
     assert 'role="alert"' in dashboard

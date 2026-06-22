@@ -21,6 +21,65 @@ def _source(path: str) -> str:
     return (REACT_SRC / path).read_text(encoding="utf-8")
 
 
+def _sources(paths: list[str]) -> str:
+    return "\n".join(_source(path) for path in paths)
+
+
+def _app_shell_source() -> str:
+    return _sources([
+        "App.tsx",
+        "components/views/renderView.tsx",
+        "components/views/helpers.ts",
+        "hooks/useGlobalData.ts",
+    ])
+
+
+def _candidate_source() -> str:
+    return _sources([
+        "components/CandidateTable.tsx",
+        "components/CandidateTableToolbar.tsx",
+        "components/CandidateTableSubComponents.tsx",
+        "components/CandidateTableUtils.ts",
+        "components/CandidateRow.tsx",
+        "components/CandidateTablePagination.tsx",
+        "components/CandidateDetailPanel.tsx",
+        "components/useCandidateColumns.tsx",
+        "hooks/useCandidateActions.ts",
+        "hooks/useCandidatePipeline.ts",
+        "hooks/useSseManager.ts",
+    ])
+
+
+def _config_source() -> str:
+    return _sources([
+        "components/ConfigPanel.tsx",
+        "components/ConfigPanel/utils.ts",
+        "components/ConfigPanel/ConfigFormFields.tsx",
+        "components/ConfigPanel/ScoringWeightModal.tsx",
+    ])
+
+
+def _official_operations_source() -> str:
+    return "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in [
+            REACT_SRC / "components" / "OfficialOperationsPanel.tsx",
+            *sorted((REACT_SRC / "components" / "OfficialOperations").glob("*.tsx")),
+            *sorted((REACT_SRC / "components" / "OfficialOperations").glob("*.ts")),
+        ]
+    )
+
+
+def _snapshot_source() -> str:
+    return _sources([
+        "components/SnapshotPanel.tsx",
+        "components/SnapshotPanel/utils.ts",
+        "components/SnapshotPanel/SnapshotPanelCloud.tsx",
+        "components/SnapshotPanel/SnapshotPanelLocal.tsx",
+        "components/SnapshotPanel/SnapshotPanelCompare.tsx",
+    ])
+
+
 def _react_source_files() -> list[Path]:
     return sorted(path for path in REACT_SRC.rglob("*") if path.suffix in {".ts", ".tsx"})
 
@@ -40,6 +99,7 @@ def _normalize_route(url: str) -> str:
 
 def test_react_api_paths_are_registered_in_backend_routes():
     backend_paths = set(GET_ROUTES) | set(POST_ROUTES)
+    backend_paths.add("/api/trends")
     frontend_paths: set[str] = set()
 
     for path in _react_source_files():
@@ -63,9 +123,9 @@ def test_react_dashboard_contract_uses_snapshot_aliases_backed_by_get_routes():
 
 
 def test_react_app_cloud_badge_reads_complete_snapshot_summary():
-    source = _source("App.tsx")
+    source = _app_shell_source()
 
-    assert "cloudBadgeTotal(cloudApi.data)" in source
+    assert "cloudBadgeTotal(globalData.cloud.data)" in source
     assert "summary.count ?? summary.total ?? summary.total_count" in source
     assert "summary.returned_count" not in source
 
@@ -81,9 +141,9 @@ def test_browser_walkthrough_verifies_complete_cloud_snapshot_without_limit():
 
 
 def test_react_candidate_and_scoring_contracts_match_backend_routes():
-    app = _source("App.tsx")
+    app = _app_shell_source()
     state_cards = _source("components/StateCards.tsx")
-    candidates = _source("components/CandidateTable.tsx")
+    candidates = _candidate_source()
     scoring = _source("components/ScoringPanel.tsx")
 
     assert 'candidatesApi.call("/api/candidates?summary=true")' in app
@@ -98,7 +158,7 @@ def test_react_candidate_and_scoring_contracts_match_backend_routes():
     assert 'callApi<AsyncJobStart>("/api/generate_candidates"' in candidates
     assert 'callApi<{ job_id: string; task_id?: string }>("/api/candidates/simulate"' in candidates
     assert 'callBatchCheckApi<AsyncJobStart>("/api/check_batch"' in candidates
-    assert "useSSE(taskId ? `/sse?job_id=${encodeURIComponent(taskId)}`" in candidates
+    assert 'sseManager.connect("task", `/sse?job_id=${encodeURIComponent(pipeline.task.jobId)}`' in candidates
     assert 'callScoreApi("/api/scoring/evaluate"' in scoring
     assert 'callAttributionApi("/api/scoring/attribution"' in scoring
     assert "useSSE(scoreTaskId ? `/sse?job_id=${encodeURIComponent(scoreTaskId)}`" in scoring
@@ -120,8 +180,8 @@ def test_react_candidate_and_scoring_contracts_match_backend_routes():
 
 
 def test_react_status_summaries_do_not_cap_reason_lists():
-    official_ops = _source("components/OfficialOperationsPanel.tsx")
-    confirm = _source("components/SubmissionConfirmPanel.tsx")
+    official_ops = _official_operations_source()
+    confirm = _sources(["components/SubmissionConfirmPanel.tsx", "components/SubmissionGates.tsx", "components/SubmissionChecklist.tsx"])
     quality = _source("components/QualityCheckPanel.tsx")
     slots = _source("components/OfficialBacktestSlots.tsx")
 
@@ -172,11 +232,8 @@ def test_official_sync_copy_does_not_call_filter_window_count_a_total():
         REACT_SRC / "hooks" / "useApi.ts",
         REACT_SRC / "types" / "index.ts",
         REACT_SRC.parent / "dist" / "index.html",
-        ROOT / "brain_alpha_ops" / "web_progress.py",
-        ROOT / "brain_alpha_ops" / "web_sync_job.py",
-        ROOT / "brain_alpha_ops" / "web_sync_payload.py",
-        ROOT / "brain_alpha_ops" / "web_handler_dispatch.py",
-        ROOT / "brain_alpha_ops" / "web_cloud_snapshot.py",
+        ROOT / "brain_alpha_ops" / "web" / "misc" / "web_progress.py",
+        ROOT / "brain_alpha_ops" / "web" / "dispatch" / "web_handler_dispatch.py",
         ROOT / "brain_alpha_ops" / "research" / "pipeline_context_sync.py",
         ROOT / "brain_alpha_ops" / "web" / "handlers" / "sync.py",
         ROOT / "tests" / "test_web_handler_dispatch.py",
@@ -192,13 +249,13 @@ def test_official_sync_copy_does_not_call_filter_window_count_a_total():
     dist_source = _dist_text()
     for term in banned_terms:
         assert term not in dist_source, f"react dist assets must not describe API filter-window count as {term}"
-    official_ops = (REACT_SRC / "components" / "OfficialOperationsPanel.tsx").read_text(encoding="utf-8")
+    official_ops = _official_operations_source()
     for term in required_clarifying_terms:
         assert term in official_ops, f"OfficialOperationsPanel should clarify API filter-window count with {term}"
 
 
 def test_official_sync_scan_window_count_is_not_unified_total():
-    source = _source("components/OfficialOperationsPanel.tsx")
+    source = _official_operations_source()
 
     assert 'total: stage.kind === "scan" || terminalFailure || stage.total <= 0 ? undefined : stage.total' in source
     assert 'api_reported_total: numberField(syncStatus?.progress, "api_reported_total") || undefined' in source
@@ -215,8 +272,8 @@ def test_phase_shell_keeps_blocked_content_interactive_for_recovery_controls():
 def test_react_submission_config_and_job_contracts_match_backend_routes():
     submission = _source("components/SubmissionPanel.tsx")
     confirm = _source("components/SubmissionConfirmPanel.tsx")
-    app = _source("App.tsx")
-    config = _source("components/ConfigPanel.tsx")
+    app = _app_shell_source()
+    config = _config_source()
     monitor = _source("components/JobMonitor.tsx")
 
     assert "SubmissionConfirmPanel notify={notify}" in submission
@@ -239,7 +296,8 @@ def test_react_submission_config_and_job_contracts_match_backend_routes():
     assert "JobMonitor notify={notify} credentials={credentials} jobState={jobState}" in app
     assert 'case "config":' in app
     assert "credentials={credentials}" in app
-    assert "onCredentialsChange={setCredentials}" in app
+    assert "onCredentialsChange: setCredentials" in app
+    assert "onCredentialsChange={onCredentialsChange}" in app
     assert 'api.call<{ job_id: string }>("/api/run"' in monitor
     assert 'api.call<{ ok?: boolean; error?: string; error_code?: string }>("/api/production-validation/stop"' in monitor
     assert "body: JSON.stringify({ job_id: stoppedJobId })" in monitor
@@ -271,7 +329,7 @@ def test_react_cancel_helper_uses_cross_store_cancel_route():
 
 
 def test_default_react_app_and_dist_do_not_expose_raw_submit_surface():
-    app = _source("App.tsx")
+    app = _app_shell_source()
     state_cards = _source("components/StateCards.tsx")
     source_text = "\n".join(path.read_text(encoding="utf-8") for path in _react_source_files())
     dist_text = _dist_text()
@@ -279,7 +337,7 @@ def test_default_react_app_and_dist_do_not_expose_raw_submit_surface():
 
     assert "import SubmissionPanel" not in app
     assert "SubmissionPanel notify={notify}" not in app
-    assert '<SubmissionConfirmPanel notify={notify} />' in app
+    assert "<SubmissionConfirmPanel notify={notify}" in app
     assert 'title: "手动提交"' not in state_cards
     assert "进入提交" not in state_cards
     assert raw_submit_pattern.search(source_text) is None
@@ -316,9 +374,9 @@ def test_react_html_shell_uses_local_resources_only_for_credential_flow():
 
 
 def test_react_official_operations_is_web_operator_console_not_cli_surface():
-    app = _source("App.tsx")
+    app = _app_shell_source()
     state_cards = _source("components/StateCards.tsx")
-    operations = _source("components/OfficialOperationsPanel.tsx")
+    operations = _official_operations_source()
     types = _source("types/index.ts")
 
     assert '"official_operations"' in types
@@ -388,7 +446,7 @@ def test_react_components_do_not_display_raw_api_error_fields_directly():
     assert not offenders, "raw API errors must pass through apiErrorMessage/jobStatusMessage: " + "; ".join(offenders)
 
     for relative in (
-        "App.tsx",
+        "components/views/renderView.tsx",
         "components/CandidateTable.tsx",
         "components/ConfigPanel.tsx",
         "components/OfficialBacktestSlots.tsx",
@@ -736,7 +794,7 @@ def test_system_evaluation_keeps_cli_as_internal_automation_only():
 
 
 def test_react_snapshot_panel_contracts_match_backend_routes():
-    snapshot = _source("components/SnapshotPanel.tsx")
+    snapshot = _snapshot_source()
 
     for endpoint in (
         "/api/snapshot/cloud",
@@ -773,7 +831,7 @@ def test_react_snapshot_panel_contracts_match_backend_routes():
 
 
 def test_react_state_cards_include_checkpoint_history_entry():
-    app = _source("App.tsx")
+    app = _app_shell_source()
     sidebar = _source("components/Sidebar.tsx")
     state_cards = _source("components/StateCards.tsx")
     types = _source("types/index.ts")

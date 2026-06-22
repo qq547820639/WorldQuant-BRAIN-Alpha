@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import logging
 
+from brain_alpha_ops.redaction import redact_error_message
+
 logger = logging.getLogger(__name__)
 
 
@@ -34,7 +36,7 @@ def register_all_backends() -> list[str]:
         registered.append("api")
         logger.debug("Registered execution backend: api")
     except Exception as e:
-        logger.warning("Failed to register API execution backend: %s", e)
+        logger.warning("Failed to register API execution backend: %s", redact_error_message(e))
 
     # Browser backend (optional — depends on playwright)
     try:
@@ -49,10 +51,10 @@ def register_all_backends() -> list[str]:
             "Browser execution backend not available (missing playwright). "
             "Install with: pip install -e '.[browser]' && playwright install chromium. "
             "Error: %s",
-            e,
+            redact_error_message(e),
         )
     except Exception as e:
-        logger.warning("Failed to register browser execution backend: %s", e)
+        logger.warning("Failed to register browser execution backend: %s", redact_error_message(e))
 
     return registered
 

@@ -1,16 +1,13 @@
-"""Real browser-driven E2E tests for BRAIN Alpha Ops.
-
-These tests use Playwright to drive real browser interactions with the BRAIN platform.
-They are the ONLY acceptable production validation tests.
-"""
 import pytest
 import os
 
-pytestmark = [pytest.mark.integration, pytest.mark.slow]
+pytestmark = [pytest.mark.integration, pytest.mark.slow, pytest.mark.browser, pytest.mark.live]
 
 requires_brain = pytest.mark.skipif(
-    not os.environ.get("BRAIN_USERNAME") or not os.environ.get("BRAIN_PASSWORD"),
-    reason="Requires BRAIN credentials in environment",
+    os.environ.get("BRAIN_BROWSER_E2E_LIVE") != "1"
+    or not os.environ.get("BRAIN_USERNAME")
+    or not os.environ.get("BRAIN_PASSWORD"),
+    reason="Requires BRAIN_BROWSER_E2E_LIVE=1 plus BRAIN credentials",
 )
 
 @pytest.mark.usefixtures("brain_runner", "brain_credentials")
@@ -27,7 +24,7 @@ class TestRealBrainWebFlow:
         assert result["ok"], f"Login failed: {result}"
     
     def test_alpha_creation_flow(self, brain_runner, brain_credentials):
-        """Full alpha creation flow via browser."""
+        """Readonly alpha creation page evidence flow; real simulation is never triggered by default."""
         # Login
         login_result = brain_runner.login(
             brain_credentials["username"],
@@ -42,15 +39,7 @@ class TestRealBrainWebFlow:
         # Fill expression
         fill_result = brain_runner.fill_expression("rank(close)")
         assert fill_result["ok"]
-        
-        # Trigger simulation
-        sim_result = brain_runner.trigger_simulation()
-        assert sim_result["ok"]
-        
-        # Check results
-        results = brain_runner.check_results()
-        assert results["ok"]
-        
+
         # Verify evidence collected
         evidence = brain_runner.get_evidence()
         assert len(evidence["screenshots"]) > 0

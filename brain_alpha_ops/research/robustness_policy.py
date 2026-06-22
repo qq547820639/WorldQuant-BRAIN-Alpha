@@ -52,8 +52,40 @@ class RobustnessPolicy:
         multiplier = 1.0
 
         anti_recommendation = str(anti_overfit_report.get("recommendation") or "").strip().lower()
-        if anti_recommendation == "block":
-            message = "anti-overfit recommendation is block"
+        anti_ok = anti_overfit_report.get("ok")
+        anti_passed = anti_overfit_report.get("passed")
+        if anti_recommendation in {"block", "insufficient_data"}:
+            message = f"anti-overfit recommendation is {anti_recommendation}"
+            if self.block_on_anti_overfit:
+                reasons.append(message)
+                action = "block"
+                multiplier = self.block_multiplier
+            else:
+                warnings.append(message)
+                action = "downgrade"
+                multiplier = min(multiplier, self.caution_multiplier)
+        elif not anti_recommendation:
+            message = "anti-overfit recommendation is missing"
+            if self.block_on_anti_overfit:
+                reasons.append(message)
+                action = "block"
+                multiplier = self.block_multiplier
+            else:
+                warnings.append(message)
+                action = "downgrade"
+                multiplier = min(multiplier, self.caution_multiplier)
+        elif anti_ok is False:
+            message = "anti-overfit report is not ok"
+            if self.block_on_anti_overfit:
+                reasons.append(message)
+                action = "block"
+                multiplier = self.block_multiplier
+            else:
+                warnings.append(message)
+                action = "downgrade"
+                multiplier = min(multiplier, self.caution_multiplier)
+        elif anti_passed is not True:
+            message = "anti-overfit suite did not pass"
             if self.block_on_anti_overfit:
                 reasons.append(message)
                 action = "block"

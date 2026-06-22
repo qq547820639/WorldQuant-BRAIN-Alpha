@@ -409,6 +409,23 @@ def _install_facade_bindings() -> None:
     try:
         namespace = _build_web_service_namespace()
         globals().update(namespace)
+        from brain_alpha_ops.web.business import web_business as _business_handlers
+        from brain_alpha_ops.web.business.web_business import (
+            _persist_generated_candidates as _business_persist_generated_candidates,
+            _real_check as _business_real_check,
+            _real_submit as _business_real_submit,
+        )
+
+        def _legacy_real_generate(payload):
+            _business_handlers.inject_dependencies(
+                load_run_config=globals().get("load_run_config", _load_run_config),
+            )
+            return _business_handlers._real_generate(payload)
+
+        globals()["_persist_generated_candidates"] = _business_persist_generated_candidates
+        globals()["_real_check"] = _business_real_check
+        globals()["_real_generate"] = _legacy_real_generate
+        globals()["_real_submit"] = _business_real_submit
         globals()["_runtime_facade"] = _web_runtime_facade
         globals().update(_build_web_facade_bindings(globals()))
         globals()["_LEGACY_IMPORTED_EXPORTS"] = _build_legacy_imported_exports(globals())

@@ -1,7 +1,7 @@
 import logging
-import inspect
 
 from brain_alpha_ops import data as data_module
+from brain_alpha_ops.research import generator as generator_module
 from brain_alpha_ops.compliance import redline_check_alignment
 from brain_alpha_ops.compliance import redline_check_coverage
 from brain_alpha_ops.compliance import redline_check_datasets
@@ -37,10 +37,10 @@ def test_redline_verifier_reexports_check_functions():
 
 
 def test_candidate_generator_fallback_template_extraction_warns_on_failure(monkeypatch, caplog):
-    def fail_getsource(_object):
+    def fail_load_fallback_templates():
         raise OSError("source unavailable")
 
-    monkeypatch.setattr(inspect, "getsource", fail_getsource)
+    monkeypatch.setattr(generator_module, "_load_fallback_templates", fail_load_fallback_templates)
 
     with caplog.at_level(logging.WARNING, logger="brain_alpha_ops.compliance.redline_verifier"):
         templates = redline_verifier._candidate_generator_fallback_templates()

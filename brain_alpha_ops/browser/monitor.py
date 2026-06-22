@@ -4,6 +4,8 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
+from brain_alpha_ops.redaction import redact_error_message
+
 logger = logging.getLogger(__name__)
 
 @dataclass
@@ -60,8 +62,47 @@ class BrowserMonitor:
             "heartbeat_age": age,
             "consecutive_errors": self._consecutive_errors,
             "network_failures": self._network_failures,
+            "classification": self.classify_fail_closed(issues),
         }
         return health
+
+    def classify_fail_closed(self, issues: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+        """Classify browser health into actionable interrupt decisions."""
+        issues = list(issues or [])
+        responses = [
+            row
+            for row in getattr(self.runner.state, "network_logs", [])
+            if isinstance(row, dict) and row.get("phase") == "response"
+        ]
+        if any(row.get("status") == 429 for row in responses):
+            return {
+                "status": "blocked",
+                "code": "BROWSER_RATE_LIMITED",
+                "retryable": True,
+                "message": "BROWSER_RATE_LIMITED: stop side-effecting browser flow and back off",
+            }
+        if any(isinstance(row.get("status"), int) and row.get("status") >= 500 for row in responses):
+            return {
+                "status": "blocked",
+                "code": "BROWSER_SERVER_ERROR",
+                "retryable": True,
+                "message": "BROWSER_SERVER_ERROR: stop side-effecting browser flow",
+            }
+        if any(issue.get("severity") == "critical" for issue in issues):
+            return {
+                "status": "blocked",
+                "code": "BROWSER_CRITICAL_HEALTH",
+                "retryable": False,
+                "message": "Critical browser health issue blocks the flow",
+            }
+        if any(issue.get("severity") == "high" for issue in issues):
+            return {
+                "status": "warning",
+                "code": "BROWSER_DEGRADED",
+                "retryable": True,
+                "message": "Browser health is degraded",
+            }
+        return {"status": "ok", "code": "OK", "retryable": False, "message": "Browser health ok"}
 
     def auto_heal(self, health: dict[str, Any]) -> bool:
         """Attempt automatic healing based on health issues."""
@@ -76,13 +117,13 @@ class BrowserMonitor:
                 try:
                     self.runner._page.reload(wait_until="domcontentloaded")
                     return True
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.warning("Browser auto-heal reload failed: %s", redact_error_message(exc))
             elif issue["type"] == "heartbeat_stale":
                 logger.info("Healing: clicking page to trigger activity")
                 try:
                     self.runner._page.mouse.click(100, 100)
                     return True
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.warning("Browser auto-heal click failed: %s", redact_error_message(exc))
         return False

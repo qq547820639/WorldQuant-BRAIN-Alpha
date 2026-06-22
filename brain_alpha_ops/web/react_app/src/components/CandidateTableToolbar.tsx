@@ -25,6 +25,8 @@ import {
   queueViewLabel,
   candidateIdentity,
   candidateText,
+  MIN_TARGET_POOL_SIZE,
+  MAX_TARGET_POOL_SIZE,
 } from "./CandidateTableUtils";
 import {
   QualitySummaryItem,
@@ -278,8 +280,8 @@ export function CandidateTableToolbar({
             目标池容量
             <input
               type="number"
-              min={1}
-              max={100}
+              min={MIN_TARGET_POOL_SIZE}
+              max={MAX_TARGET_POOL_SIZE}
               value={targetPoolSize}
               disabled={candidateWorkflowBusy}
               onChange={(event) => onTargetPoolSizeChange(event.target.value)}

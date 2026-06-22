@@ -1,9 +1,14 @@
 from __future__ import annotations
+import json
 import os
+import re
 import time
 import logging
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
+
+from brain_alpha_ops.redaction import redact_error_message, redact_text
 
 logger = logging.getLogger(__name__)
 
@@ -17,13 +22,44 @@ class BrowserRunState:
     network_logs: list[dict[str, Any]] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
 
+
+LIVE_BROWSER_OPT_IN_ENV = "BRAIN_BROWSER_E2E_LIVE"
+_REAL_BRAIN_HOSTS = ("brain.worldquant.com", "platform.worldquantbrain.com")
+_COOKIE_PAIR_RE = re.compile(r"(?i)(\b(?:set-)?cookie\s*:\s*)([^;\n\r]+(?:;[^\n\r]*)?)")
+_COOKIE_VALUE_RE = re.compile(r"(?i)(\b[A-Za-z0-9_.-]*(?:session|csrf|token|auth|cookie)[A-Za-z0-9_.-]*\s*=\s*)[^;\s]+")
+_SENSITIVE_HTML_FIELD_RE = re.compile(
+    r"(?is)(<(?:input|textarea)\b(?=[^>]*(?:type|name|id)\s*=\s*['\"]?"
+    r"[^'\"\s>]*(?:password|token|secret|csrf|session|cookie|authorization|auth)"
+    r"[^'\"\s>]*)[^>]*\bvalue\s*=\s*)(['\"]?)(.*?)(\2)([^>]*>)"
+)
+
+
 class BrainBrowserRunner:
     """Browser-first executor for real BRAIN web interactions."""
 
-    def __init__(self, base_url: str = "https://brain.worldquant.com", headless: bool = True, evidence_dir: str = "artifacts"):
+    def __init__(
+        self,
+        base_url: str = "https://brain.worldquant.com",
+        headless: bool = True,
+        evidence_dir: str = "artifacts",
+        *,
+        mode: str = "readonly",
+        allow_live_navigation: bool | None = None,
+        readonly: bool = True,
+        record_har: bool = False,
+    ):
         self.base_url = base_url.rstrip("/")
         self.headless = headless
         self.evidence_dir = evidence_dir
+        self.mode = str(mode or "readonly").lower()
+        self.readonly = bool(readonly)
+        self.record_har = bool(record_har)
+        self.har_path: str | None = None
+        self.allow_live_navigation = (
+            bool(allow_live_navigation)
+            if allow_live_navigation is not None
+            else self.mode == "live" and os.environ.get(LIVE_BROWSER_OPT_IN_ENV) == "1"
+        )
         self.state = BrowserRunState()
         self._pw = None
         self._browser = None
@@ -32,14 +68,17 @@ class BrainBrowserRunner:
 
     def __enter__(self):
         from playwright.sync_api import sync_playwright
+        guard = self.live_navigation_guard()
+        if not guard["allowed"]:
+            raise RuntimeError(guard["message"])
         os.makedirs(self.evidence_dir, exist_ok=True)
         self._pw = sync_playwright().start()
         self._browser = self._pw.chromium.launch(headless=self.headless)
-        har_path = os.path.join(self.evidence_dir, "brain_interactions.har")
-        self._context = self._browser.new_context(
-            record_har_path=har_path,
-            viewport={"width": 1920, "height": 1080},
-        )
+        context_options: dict[str, Any] = {"viewport": {"width": 1920, "height": 1080}}
+        if self.record_har:
+            self.har_path = os.path.join(self.evidence_dir, "brain_interactions.har")
+            context_options["record_har_path"] = self.har_path
+        self._context = self._browser.new_context(**context_options)
         self._page = self._context.new_page()
         self._page.on("console", self._on_console)
         self._page.on("pageerror", self._on_page_error)
@@ -53,8 +92,8 @@ class BrainBrowserRunner:
             if self._page:
                 self._take_screenshot("final_state")
                 self._snapshot_dom("final_state")
-        except Exception:
-            pass
+        except Exception as exc:
+            self.state.errors.append(f"final_evidence_capture_failed: {redact_error_message(exc)}")
         if self._context:
             self._context.close()
         if self._browser:
@@ -63,18 +102,19 @@ class BrainBrowserRunner:
             self._pw.stop()
 
     def _on_console(self, msg):
-        self.state.console_logs.append({"type": msg.type, "text": msg.text, "ts": time.time()})
+        text = _redact_text(msg.text)
+        self.state.console_logs.append({"type": msg.type, "text": text, "ts": time.time()})
         if msg.type == "error":
-            self.state.errors.append(f"console.error: {msg.text}")
+            self.state.errors.append(f"console.error: {text}")
 
     def _on_page_error(self, error):
-        self.state.errors.append(f"pageerror: {error}")
+        self.state.errors.append(f"pageerror: {_redact_text(str(error))}")
 
     def _on_request(self, request):
-        self.state.network_logs.append({"url": request.url, "method": request.method, "ts": time.time(), "phase": "request"})
+        self.state.network_logs.append({"url": _redact_url(request.url), "method": request.method, "ts": time.time(), "phase": "request"})
 
     def _on_response(self, response):
-        self.state.network_logs.append({"url": response.url, "status": response.status, "ts": time.time(), "phase": "response"})
+        self.state.network_logs.append({"url": _redact_url(response.url), "status": response.status, "ts": time.time(), "phase": "response"})
 
     def _take_screenshot(self, name: str):
         path = os.path.join(self.evidence_dir, f"{name}_{int(time.time())}.png")
@@ -83,10 +123,79 @@ class BrainBrowserRunner:
 
     def _snapshot_dom(self, name: str):
         path = os.path.join(self.evidence_dir, f"{name}_{int(time.time())}.html")
-        content = self._page.content()
-        with open(path, "w") as f:
+        content = _redact_text(self._page.content())
+        with open(path, "w", encoding="utf-8") as f:
             f.write(content)
         self.state.dom_snapshots.append(path)
+
+    def live_navigation_guard(self) -> dict[str, Any]:
+        """Return fail-closed status before opening a real BRAIN browser page."""
+        is_real_brain = any(host in self.base_url for host in _REAL_BRAIN_HOSTS)
+        if is_real_brain and not self.allow_live_navigation:
+            return {
+                "allowed": False,
+                "code": "LIVE_BROWSER_NAVIGATION_NOT_APPROVED",
+                "message": (
+                    f"Live BRAIN browser navigation requires mode='live' and "
+                    f"{LIVE_BROWSER_OPT_IN_ENV}=1"
+                ),
+            }
+        return {"allowed": True, "code": "OK"}
+
+    def side_effect_guard(self, action: str) -> dict[str, Any]:
+        if self.readonly:
+            return {
+                "allowed": False,
+                "code": "BROWSER_READONLY_MODE",
+                "message": f"Browser action {action} is blocked in readonly mode",
+            }
+        return {"allowed": True, "code": "OK"}
+
+    def classify_blocking_state(self) -> dict[str, Any] | None:
+        page_text = ""
+        try:
+            page_text = self._page.inner_text("body") if self._page is not None else ""
+        except Exception:
+            page_text = ""
+        lowered = page_text.lower()
+        statuses = [
+            row.get("status")
+            for row in self.state.network_logs
+            if isinstance(row, dict) and row.get("phase") == "response"
+        ]
+        if any(status == 429 for status in statuses) or any(token in lowered for token in ("rate limit", "too many requests")):
+            return {"code": "BROWSER_RATE_LIMITED", "message": "Browser flow saw rate-limit evidence", "retryable": True}
+        if any(isinstance(status, int) and status >= 500 for status in statuses) or any(
+            token in lowered for token in ("service unavailable", "internal server error", "bad gateway")
+        ):
+            return {"code": "BROWSER_SERVER_ERROR", "message": "Browser flow saw server-side failure evidence", "retryable": True}
+        if any(token in lowered for token in ("captcha", "two-factor", "2fa", "session expired", "session invalid")):
+            return {"code": "BROWSER_INTERACTIVE_AUTH_REQUIRED", "message": "Browser flow requires interactive auth", "retryable": False}
+        if _looks_like_login_page(lowered):
+            return {"code": "BROWSER_LOGIN_LOOP", "message": "Browser flow returned to login/session page", "retryable": False}
+        modal_text = self._modal_text()
+        if modal_text and _unexpected_modal(modal_text):
+            return {
+                "code": "BROWSER_UNKNOWN_MODAL",
+                "message": "Unexpected modal detected during browser flow",
+                "retryable": False,
+                "modal_text": _redact_text(modal_text)[:500],
+            }
+        return None
+
+    def _modal_text(self) -> str:
+        selectors = ("[role='dialog']", ".modal", ".ant-modal", ".MuiDialog-root", "[aria-modal='true']")
+        for selector in selectors:
+            try:
+                locator = self._page.locator(selector)
+                if locator.count() > 0:
+                    return str(locator.first.inner_text() or "")
+            except Exception as exc:
+                self.state.errors.append(
+                    f"modal_probe_failed:{selector}:{redact_error_message(exc, max_length=120)}"
+                )
+                continue
+        return ""
 
     def heartbeat(self) -> bool:
         """Check if the browser page is still responsive."""
@@ -107,7 +216,6 @@ class BrainBrowserRunner:
         self.state.last_step = "login.fill_credentials"
         self._page.fill('input[name="email"], input[type="email"], input[name="username"]', username)
         self._page.fill('input[name="password"], input[type="password"]', password)
-        self._take_screenshot("credentials_filled")
 
         self.state.last_step = "login.submit"
         self._page.click('button[type="submit"], input[type="submit"]')
@@ -115,7 +223,10 @@ class BrainBrowserRunner:
         self._take_screenshot("post_login")
 
         self.state.last_step = "login.verify"
-        is_logged_in = self._page.locator("[data-testid='dashboard'], .dashboard, #root > div").count() > 0
+        blocking = self.classify_blocking_state()
+        if blocking:
+            return {"ok": False, "step": self.state.last_step, "error": blocking["message"], "details": blocking}
+        is_logged_in = self._page.locator("[data-testid='dashboard'], .dashboard, [data-testid='user-menu'], nav").count() > 0
 
         return {
             "ok": is_logged_in,
@@ -142,6 +253,9 @@ class BrainBrowserRunner:
 
     def trigger_simulation(self) -> dict[str, Any]:
         """Click the simulate/run button."""
+        guard = self.side_effect_guard("simulate")
+        if not guard["allowed"]:
+            return {"ok": False, "step": "simulate.guard", **guard}
         self.state.last_step = "simulate.trigger"
         sim_button = self._page.locator("button:has-text('Simulate'), button:has-text('Run'), button:has-text('Test')")
         if sim_button.count() > 0:
@@ -165,6 +279,23 @@ class BrainBrowserRunner:
             "evidence": self.get_evidence(),
         }
 
+    def write_evidence_manifest(self) -> str:
+        path = Path(self.evidence_dir) / "browser_evidence_manifest.json"
+        payload = {
+            "schema_version": "browser_evidence_manifest.v1",
+            "transport": "browser",
+            "mode": self.mode,
+            "readonly": self.readonly,
+            "screenshots": list(self.state.screenshots),
+            "dom_snapshots": list(self.state.dom_snapshots),
+            "console_log_count": len(self.state.console_logs),
+            "network_log_count": len(self.state.network_logs),
+            "errors": [_redact_text(item) for item in self.state.errors],
+        }
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        return str(path)
+
     def get_evidence(self) -> dict[str, Any]:
         """Collect all interaction evidence."""
         return {
@@ -174,4 +305,40 @@ class BrainBrowserRunner:
             "console_logs": list(self.state.console_logs),
             "network_logs": list(self.state.network_logs),
             "errors": list(self.state.errors),
+            "har_path": self.har_path,
         }
+
+
+def _redact_text(value: str) -> str:
+    text = redact_text(value)
+    text = _COOKIE_PAIR_RE.sub(
+        lambda match: match.group(1) + _COOKIE_VALUE_RE.sub(
+            lambda cookie_match: f"{cookie_match.group(1)}<redacted>",
+            match.group(2),
+        ),
+        text,
+    )
+    text = _SENSITIVE_HTML_FIELD_RE.sub(
+        lambda match: f"{match.group(1)}{match.group(2)}<redacted>{match.group(4)}{match.group(5)}",
+        text,
+    )
+    return text
+
+
+def _redact_url(value: str) -> str:
+    text = _redact_text(value)
+    if "?" not in text:
+        return text
+    return text.split("?", 1)[0] + "?[redacted-query]"
+
+
+def _looks_like_login_page(lowered_text: str) -> bool:
+    login_tokens = ("sign in", "log in", "login", "password")
+    submit_tokens = ("submit alpha", "confirm submit", "alpha submitted")
+    return any(token in lowered_text for token in login_tokens) and not any(token in lowered_text for token in submit_tokens)
+
+
+def _unexpected_modal(text: str) -> bool:
+    lowered = text.lower()
+    expected = ("submit", "confirm", "are you sure", "approval")
+    return not any(token in lowered for token in expected)

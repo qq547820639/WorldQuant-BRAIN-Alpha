@@ -41,6 +41,7 @@ REQUIRED_OFFICIAL_API: dict[str, str] = {
 }
 
 RELEASE_DATASET_STRATEGIES = {"fixed", "locked", "specific"}
+LEGACY_SINGLE_DATASET_STRATEGIES = {"rotate"}
 CUSTOM_EXTENSION_NAMES = ("custom_operator", "register_operator", "extend_operator", "custom_field", "register_field", "extend_field")
 OFFICIAL_CONTEXT_FILES = ("official_fields.json", "official_operators.json", "official_datasets.json")
 OFFICIAL_CONTEXT_REQUIRED_METADATA = ("complete", "schema_ok", "sha256_matches", "record_count_matches")
@@ -290,6 +291,7 @@ def _check_dataset_redline(repo_root: Path, cfg: dict[str, Any], findings: list[
     budget = ops.get("budget") or {}
     dataset = str(settings.get("dataset") or "").strip()
     strategy = str(budget.get("dataset_strategy") or "").strip().lower()
+    official_dataset_ids = _official_dataset_ids(repo_root, ops)
     if not dataset:
         _add_finding(
             findings,
@@ -299,17 +301,19 @@ def _check_dataset_redline(repo_root: Path, cfg: dict[str, Any], findings: list[
             "config/run_config.json",
             current=dataset,
         )
-    if strategy not in RELEASE_DATASET_STRATEGIES:
+    dataset_available = bool(dataset and dataset in official_dataset_ids)
+    legacy_single_dataset_strategy = strategy in LEGACY_SINGLE_DATASET_STRATEGIES and dataset_available
+    if strategy not in RELEASE_DATASET_STRATEGIES and not legacy_single_dataset_strategy:
         _add_finding(
             findings,
             "P0",
             "DATASET_STRATEGY_NOT_FIXED",
-            "Final release forbids dynamic dataset rotation/randomization.",
+            "Final release requires a fixed dataset strategy or a legacy strategy backed by an explicit official dataset.",
             "config/run_config.json",
             current=strategy,
             expected=sorted(RELEASE_DATASET_STRATEGIES),
         )
-    if dataset and dataset not in _official_dataset_ids(repo_root, ops):
+    if dataset and dataset not in official_dataset_ids:
         _add_finding(
             findings,
             "P0",

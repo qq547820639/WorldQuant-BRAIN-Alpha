@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 import time
 import urllib.parse
 from concurrent.futures import TimeoutError as FuturesTimeoutError, ThreadPoolExecutor, as_completed
@@ -234,16 +233,16 @@ class OfficialSimulationSubmissionMixin:
 
     def submit_alpha(self, alpha_id: str, expression: str, settings: dict, *, bodyless: bool = True) -> dict:
         # F-02 + F-03 invariant guard: prevent direct official submission outside web/__init__.py
-        # Tests opt out via env BRAIN_ALPHA_FORCE_REAL_SUBMIT=1; production web
-        # console never reaches this path because the higher-level gate returns
-        # REAL_SUBMIT_DISABLED_WEB_FLOW first.
-        from ..runtime_constants import REAL_SUBMIT_DISABLED_WEB_FLOW
-        force_real_submit = os.environ.get("BRAIN_ALPHA_FORCE_REAL_SUBMIT") == "1"
+        # Tests opt out only through an explicit test-approved contract;
+        # production web console never reaches this path because the
+        # higher-level gate returns REAL_SUBMIT_DISABLED_WEB_FLOW first.
+        from ..runtime_constants import REAL_SUBMIT_DISABLED_WEB_FLOW, real_submit_test_override_enabled
+        force_real_submit = real_submit_test_override_enabled()
         if REAL_SUBMIT_DISABLED_WEB_FLOW and not force_real_submit:
             raise BrainAPIError(
                 "REAL_SUBMIT_DISABLED_WEB_FLOW: official submit_alpha() is blocked at the API layer. "
                 "Use the web console's pre-submit review + independent approval path. "
-                "Tests can bypass via env BRAIN_ALPHA_FORCE_REAL_SUBMIT=1."
+                "Tests can bypass only with explicit test approval env."
             )
         if not alpha_id or not str(alpha_id).strip():
             raise BrainAPIError("cannot submit alpha without a valid alpha_id")

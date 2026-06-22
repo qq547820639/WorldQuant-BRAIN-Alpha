@@ -13,7 +13,10 @@ def _source(path: Path) -> str:
 
 
 def test_app_routes_quality_check_to_dedicated_panel():
-    app = _source(SRC / "App.tsx")
+    app = "\n".join([
+        _source(SRC / "App.tsx"),
+        _source(SRC / "components" / "views" / "renderView.tsx"),
+    ])
 
     assert 'lazy(() => import("@/components/QualityCheckPanel"))' in app
     assert 'case "quality_check":' in app

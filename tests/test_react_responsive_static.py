@@ -12,6 +12,10 @@ def _source(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
+def _joined(paths: list[Path]) -> str:
+    return "\n".join(path.read_text(encoding="utf-8") for path in paths)
+
+
 def test_app_shell_uses_mobile_safe_spacing_and_horizontal_tab_scroll():
     source = _source(REACT_SRC / "App.tsx")
 
@@ -39,7 +43,12 @@ def test_readability_compat_layer_keeps_primary_buttons_high_contrast():
 
 
 def test_candidate_toolbar_wraps_and_keeps_filter_input_shrinkable():
-    source = _source(COMPONENTS / "CandidateTable.tsx")
+    source = _joined([
+        COMPONENTS / "CandidateTable.tsx",
+        COMPONENTS / "CandidateTableToolbar.tsx",
+        COMPONENTS / "CandidateTableSubComponents.tsx",
+        COMPONENTS / "CandidateRow.tsx",
+    ])
 
     assert 'className="animate-fade-in"' in source
     assert 'className="flex flex-wrap items-center gap-3 mb-4"' in source
@@ -47,13 +56,16 @@ def test_candidate_toolbar_wraps_and_keeps_filter_input_shrinkable():
     assert "flex-1" in source
     assert 'className="panel"' in source
     assert 'aria-label="候选结果"' in source
-    assert 'className="hidden md:block"' in source
+    assert 'className="hidden md:block overflow-auto"' in source
     assert "minWidth: 980" in source
     assert "break-words" in source
 
 
 def test_config_actions_and_toasts_fit_narrow_viewports():
-    config = _source(COMPONENTS / "ConfigPanel.tsx")
+    config = _joined([
+        COMPONENTS / "ConfigPanel.tsx",
+        COMPONENTS / "ConfigPanel" / "ConfigFormFields.tsx",
+    ])
     toast = _source(COMPONENTS / "ToastContainer.tsx")
 
     assert 'className="w-full max-w-5xl min-w-0 space-y-5 animate-fade-in"' in config
@@ -76,7 +88,13 @@ def test_operational_panels_wrap_on_narrow_viewports():
     submission = _source(COMPONENTS / "SubmissionPanel.tsx")
     scoring = _source(COMPONENTS / "ScoringPanel.tsx")
     job_monitor = _source(COMPONENTS / "JobMonitor.tsx")
-    snapshot = _source(COMPONENTS / "SnapshotPanel.tsx")
+    snapshot = _joined([
+        COMPONENTS / "SnapshotPanel.tsx",
+        COMPONENTS / "SnapshotPanel" / "utils.ts",
+        COMPONENTS / "SnapshotPanel" / "SnapshotPanelCloud.tsx",
+        COMPONENTS / "SnapshotPanel" / "SnapshotPanelLocal.tsx",
+        COMPONENTS / "SnapshotPanel" / "SnapshotPanelCompare.tsx",
+    ])
 
     assert 'className="w-full max-w-3xl min-w-0 space-y-6 animate-fade-in"' in submission
     assert "min-w-0 outline-none focus:ring-2 focus:ring-brand-500/50" in submission

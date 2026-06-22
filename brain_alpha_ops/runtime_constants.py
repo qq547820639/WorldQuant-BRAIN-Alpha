@@ -346,8 +346,7 @@ class PipelineDefaults:
 # Web console must NEVER call api.submit_alpha for real.  Production submits
 # require a separate approval path.  This constant is imported by every
 # web_submission_*.py entry point and by the in-tree `REAL_SUBMIT_DISABLED_WEB_FLOW`
-# blocker.  Tests can override via env BRAIN_ALPHA_FORCE_REAL_SUBMIT=1 only when
-# the runtime_constants.allow_real_submit_override is True (consultant-gated).
+# blocker. Tests can override only through real_submit_test_override_enabled().
 REAL_SUBMIT_DISABLED_WEB_FLOW: Final[bool] = True
 """Hard kill-switch: when True, the Web console's submit endpoints always return
 ``REAL_SUBMIT_DISABLED_WEB_FLOW`` and never invoke ``api.submit_alpha``.
@@ -356,3 +355,15 @@ F-02 fix: ``Final[bool]`` annotation signals to type checkers this is a hard
 constant.  The runtime guard in ``brain_api/official_simulation.py`` also
 enforces it at the API layer so direct imports cannot bypass it.
 """
+
+
+def real_submit_test_override_enabled() -> bool:
+    """Return True only for explicit test-approved direct-submit exercises."""
+
+    import os
+
+    return (
+        os.environ.get("BRAIN_ALPHA_FORCE_REAL_SUBMIT") == "1"
+        and os.environ.get("BRAIN_ALPHA_ENABLE_REAL_SUBMIT_TESTS") == "1"
+        and bool(os.environ.get("PYTEST_CURRENT_TEST"))
+    )

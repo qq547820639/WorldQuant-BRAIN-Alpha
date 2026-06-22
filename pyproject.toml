@@ -65,6 +65,11 @@ cache_dir = ".pytest_cache_runtime"
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
     "integration: marks tests that require network or external services",
+    "e2e: marks end-to-end tests",
+    "browser: marks tests that exercise browser execution contracts",
+    "live: marks tests that may navigate to live external systems when explicitly enabled",
+    "readonly: marks tests that must not mutate remote systems",
+    "mock: marks tests backed by local mocks/fakes",
 ]
 
 [tool.coverage.run]

@@ -5,10 +5,20 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 CONFIG_PANEL = ROOT / "brain_alpha_ops" / "web" / "react_app" / "src" / "components" / "ConfigPanel.tsx"
+CONFIG_MODULES = [
+    CONFIG_PANEL,
+    CONFIG_PANEL.parent / "ConfigPanel" / "utils.ts",
+    CONFIG_PANEL.parent / "ConfigPanel" / "ConfigFormFields.tsx",
+    CONFIG_PANEL.parent / "ConfigPanel" / "ScoringWeightModal.tsx",
+]
+
+
+def _source() -> str:
+    return "\n".join(path.read_text(encoding="utf-8") for path in CONFIG_MODULES)
 
 
 def test_config_panel_exposes_import_export_controls():
-    source = CONFIG_PANEL.read_text(encoding="utf-8")
+    source = _source()
 
     assert 'aria-label="导入配置JSON"' in source
     assert 'accept="application/json,.json"' in source
@@ -18,7 +28,7 @@ def test_config_panel_exposes_import_export_controls():
 
 
 def test_config_panel_exposes_session_only_brain_connection_credentials():
-    source = CONFIG_PANEL.read_text(encoding="utf-8")
+    source = _source()
 
     assert "const cacheOnlyMode = contextFresh && !connected;" in source
     assert "const showCredentialEditor = !cacheOnlyMode || temporaryConnectionOpen;" in source
@@ -34,13 +44,14 @@ def test_config_panel_exposes_session_only_brain_connection_credentials():
     assert 'connectionApi.call("/api/test_connection"' in source
     assert "测试 BRAIN 连接" in source
     assert "BRAIN 连接测试通过" in source
-    assert "payloadFromForm(form, credentials)" in source
+    assert "payloadFromForm(form)" in source
+    assert "credentialsPayload(credentials)" in source
     assert "hasSessionCredentials" in source
     assert "保存配置不会保存账号、密码或 token" in source
 
 
 def test_config_panel_exports_current_edit_payload_without_saving():
-    source = CONFIG_PANEL.read_text(encoding="utf-8")
+    source = _source()
 
     assert "const exportConfig = () =>" in source
     assert "JSON.stringify(payloadFromForm(form), null, 2)" in source
@@ -51,7 +62,7 @@ def test_config_panel_exports_current_edit_payload_without_saving():
 
 
 def test_config_panel_imports_and_validates_json_before_save():
-    source = CONFIG_PANEL.read_text(encoding="utf-8")
+    source = _source()
 
     assert "const importConfig = async" in source
     assert "JSON.parse(await file.text())" in source
@@ -62,7 +73,7 @@ def test_config_panel_imports_and_validates_json_before_save():
 
 
 def test_config_panel_import_accepts_export_payload_and_public_config_shapes():
-    source = CONFIG_PANEL.read_text(encoding="utf-8")
+    source = _source()
 
     assert "const source = asRecord(root.config) || root" in source
     assert "if (asRecord(source.ops))" in source
@@ -73,12 +84,12 @@ def test_config_panel_import_accepts_export_payload_and_public_config_shapes():
     assert 'value="关闭（Web 保存强制）"' in source
     assert "instrumentType: stringValue(settings.instrumentType" in source
     assert "region: stringValue(settings.region" in source
-    assert "alphaType: stringValue(settings.type ?? settings.alphaType" in source
+    assert "alphaType: stringValue(settings.type, current.alphaType)" in source
     assert "maxWeightConcentration: numberValue(source.maxWeightConcentration" in source
 
 
 def test_config_panel_validates_canonical_settings_and_dataset_options():
-    source = CONFIG_PANEL.read_text(encoding="utf-8")
+    source = _source()
 
     assert "const MAX_CONFIG_TEXT_LENGTH = 128;" in source
     assert "const CONFIG_TEXT_PATTERN = /^[A-Za-z0-9_.:-]*$/;" in source
@@ -99,7 +110,7 @@ def test_config_panel_validates_canonical_settings_and_dataset_options():
 
 
 def test_config_panel_sanitizes_user_editable_text_inputs():
-    source = CONFIG_PANEL.read_text(encoding="utf-8")
+    source = _source()
 
     assert "function sanitizeConfigText(value: string)" in source
     assert 'value.replace(/[\\x00-\\x1F\\x7F]/g, "").slice(0, MAX_CONFIG_TEXT_LENGTH)' in source

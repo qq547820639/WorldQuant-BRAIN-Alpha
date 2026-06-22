@@ -67,7 +67,7 @@ class CheckpointManager:
     def __init__(self, directory: str | Path):
         self.directory = Path(directory)
         self.directory.mkdir(parents=True, exist_ok=True)
-        self._index_lock = threading.Lock()
+        self._index_lock = threading.RLock()
         self._ensure_index()
 
     def save(

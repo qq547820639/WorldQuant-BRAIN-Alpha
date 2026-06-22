@@ -7,8 +7,8 @@ import type { AlphaLifecycleTrace, Candidate, SSEEvent } from "@/types";
 import { isRecord } from "@/types";
 import { RAW_UNSAFE_DISPLAY_TEXT_PATTERN } from "@/helpers/errorExperience";
 
-const MIN_TARGET_POOL_SIZE = 1;
-const MAX_TARGET_POOL_SIZE = 100;
+export const MIN_TARGET_POOL_SIZE = 1;
+export const MAX_TARGET_POOL_SIZE = 100;
 
 export const DEFAULT_TARGET_POOL_SIZE = 10;
 export const MAX_FILTER_LENGTH = 200;

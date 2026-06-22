@@ -31,6 +31,12 @@ from brain_alpha_ops.brain_api.official_validation import OfficialExpressionVali
 from brain_alpha_ops.config import BrainSettings, OfficialAPIConfig
 
 
+def _enable_real_submit_test_override(monkeypatch):
+    monkeypatch.setenv("BRAIN_ALPHA_FORCE_REAL_SUBMIT", "1")
+    monkeypatch.setenv("BRAIN_ALPHA_ENABLE_REAL_SUBMIT_TESTS", "1")
+    monkeypatch.setenv("PYTEST_CURRENT_TEST", "tests/test_official_adapter.py::submit_override (call)")
+
+
 def _query_params(url: str) -> dict[str, list[str]]:
     return urllib.parse.parse_qs(urllib.parse.urlsplit(url).query)
 
@@ -3280,7 +3286,45 @@ def test_check_prod_correlation_returns_warning_when_official_endpoint_unavailab
     assert "PROD_CORRELATION API check unavailable" in result["warning"]
 
 
-def test_submit_alpha_uses_bodyless_post_after_explicit_check_pass():
+def test_submit_alpha_blocks_by_default_before_network_call():
+    calls = []
+    api = OfficialBrainAPI(
+        OfficialAPIConfig(base_url="https://example.test", min_request_interval_seconds=0),
+        token="token",
+    )
+    api._request = lambda *args, **kwargs: calls.append((args, kwargs))
+
+    try:
+        api.submit_alpha("prodAlpha123", "rank(close)", {"region": "USA"})
+    except BrainAPIError as exc:
+        assert "REAL_SUBMIT_DISABLED_WEB_FLOW" in str(exc)
+    else:
+        raise AssertionError("expected submit_alpha to be blocked by default")
+
+    assert calls == []
+
+
+def test_submit_alpha_requires_full_test_approval_env(monkeypatch):
+    api = OfficialBrainAPI(
+        OfficialAPIConfig(base_url="https://example.test", min_request_interval_seconds=0),
+        token="token",
+    )
+    api._request = lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("_request must not be called"))
+
+    monkeypatch.setenv("BRAIN_ALPHA_FORCE_REAL_SUBMIT", "1")
+    monkeypatch.delenv("BRAIN_ALPHA_ENABLE_REAL_SUBMIT_TESTS", raising=False)
+    monkeypatch.setenv("PYTEST_CURRENT_TEST", "tests/test_official_adapter.py::partial (call)")
+
+    try:
+        api.submit_alpha("prodAlpha123", "rank(close)", {"region": "USA"})
+    except BrainAPIError as exc:
+        assert "REAL_SUBMIT_DISABLED_WEB_FLOW" in str(exc)
+    else:
+        raise AssertionError("expected partial override to be blocked")
+
+
+def test_submit_alpha_uses_bodyless_post_after_explicit_check_pass(monkeypatch):
+    _enable_real_submit_test_override(monkeypatch)
     calls = []
 
     api = OfficialBrainAPI(
@@ -3309,7 +3353,8 @@ def test_submit_alpha_uses_bodyless_post_after_explicit_check_pass():
     assert result["request_body_sent"] is False
 
 
-def test_submit_alpha_rejects_body_submit_shape():
+def test_submit_alpha_rejects_body_submit_shape(monkeypatch):
+    _enable_real_submit_test_override(monkeypatch)
     api = OfficialBrainAPI(
         OfficialAPIConfig(base_url="https://example.test", min_request_interval_seconds=0),
         token="token",
@@ -3323,7 +3368,8 @@ def test_submit_alpha_rejects_body_submit_shape():
         raise AssertionError("expected non-bodyless official submit to be rejected")
 
 
-def test_submit_alpha_blocks_pending_or_unknown_pre_submit_checks():
+def test_submit_alpha_blocks_pending_or_unknown_pre_submit_checks(monkeypatch):
+    _enable_real_submit_test_override(monkeypatch)
     api = OfficialBrainAPI(
         OfficialAPIConfig(base_url="https://example.test", min_request_interval_seconds=0),
         token="token",
@@ -3342,7 +3388,8 @@ def test_submit_alpha_blocks_pending_or_unknown_pre_submit_checks():
         raise AssertionError("expected pending official check to block submit")
 
 
-def test_submit_alpha_blocks_mixed_top_level_and_nested_failed_pre_submit_checks():
+def test_submit_alpha_blocks_mixed_top_level_and_nested_failed_pre_submit_checks(monkeypatch):
+    _enable_real_submit_test_override(monkeypatch)
     api = OfficialBrainAPI(
         OfficialAPIConfig(base_url="https://example.test", min_request_interval_seconds=0),
         token="token",
@@ -3364,7 +3411,8 @@ def test_submit_alpha_blocks_mixed_top_level_and_nested_failed_pre_submit_checks
         raise AssertionError("expected mixed failed official check to block submit")
 
 
-def test_submit_alpha_blocks_failed_or_pending_submit_response_checks():
+def test_submit_alpha_blocks_failed_or_pending_submit_response_checks(monkeypatch):
+    _enable_real_submit_test_override(monkeypatch)
     api = OfficialBrainAPI(
         OfficialAPIConfig(base_url="https://example.test", min_request_interval_seconds=0),
         token="token",
@@ -3384,7 +3432,8 @@ def test_submit_alpha_blocks_failed_or_pending_submit_response_checks():
         raise AssertionError("expected failed submit response check to block submit")
 
 
-def test_submit_alpha_records_passing_submit_response_checks():
+def test_submit_alpha_records_passing_submit_response_checks(monkeypatch):
+    _enable_real_submit_test_override(monkeypatch)
     api = OfficialBrainAPI(
         OfficialAPIConfig(base_url="https://example.test", min_request_interval_seconds=0),
         token="token",

@@ -3,13 +3,13 @@
 P0-2 guard: a hard ``REAL_SUBMIT_DISABLED_WEB_FLOW`` kill-switch prevents
 the Web console from issuing real ``api.submit_alpha`` calls.  Tests can
 opt out by patching ``brain_alpha_ops.runtime_constants.REAL_SUBMIT_DISABLED_WEB_FLOW``
-to ``False`` for the duration of the test (monkeypatch.setattr).  See
+to ``False`` for the duration of the test or by monkeypatching
+``_real_submit_disabled`` in this module.  See
 ``tests/test_web_submission_single.py`` for the canonical pattern.
 """
 from __future__ import annotations
 
 import logging
-import os
 from typing import Any, Callable
 
 from brain_alpha_ops.config import RunConfig
@@ -25,15 +25,10 @@ logger = logging.getLogger(__name__)
 def _real_submit_disabled() -> bool:
     """Return True if the Web console's real submit flow is hard-blocked.
 
-    Honours an opt-out env var for tests: setting
-    ``BRAIN_ALPHA_ENABLE_REAL_SUBMIT_TESTS=1`` (and only that env var, no
-    other channel) returns False.  Production never sets this.
+    The Web console does not honor environment-variable submit overrides.
+    Tests that exercise downstream branches must monkeypatch this helper.
     """
-    if REAL_SUBMIT_DISABLED_WEB_FLOW is False:
-        return False
-    if os.environ.get("BRAIN_ALPHA_ENABLE_REAL_SUBMIT_TESTS") == "1":
-        return False
-    return True
+    return REAL_SUBMIT_DISABLED_WEB_FLOW is not False
 
 RunConfigFromPayload = Callable[[dict[str, Any]], RunConfig]
 CandidateFromPayload = Callable[[dict[str, Any]], dict[str, Any]]

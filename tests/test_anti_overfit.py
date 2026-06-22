@@ -10,7 +10,9 @@ import math
 import pytest
 
 from brain_alpha_ops.scoring.anti_overfit import (
+    ANTI_OVERFIT_SCHEMA_VERSION,
     AntiOverfitResult,
+    AntiOverfitService,
     run_anti_overfit_suite,
     compute_ic_stability,
     compute_regime_stress,
@@ -25,6 +27,46 @@ from brain_alpha_ops.scoring.anti_overfit import (
     _safe_mean,
     _safe_std,
 )
+
+
+def test_candidate_anti_overfit_missing_official_series_fails_closed():
+    candidate = {
+        "expression": "rank(close)",
+        "official_metrics": {"sharpe": 1.8, "fitness": 1.2},
+        "submission": {},
+    }
+
+    report = AntiOverfitService().evaluate(candidate)
+
+    assert report["ok"] is False
+    assert report["passed"] is False
+    assert report["recommendation"] == "insufficient_data"
+    assert report["schema_version"] == ANTI_OVERFIT_SCHEMA_VERSION
+    assert candidate["submission"]["anti_overfit_report"] is report
+
+
+def test_candidate_anti_overfit_short_official_series_fails_closed():
+    candidate = {
+        "expression": "rank(close)",
+        "official_metrics": {
+            "ic_series": [0.02] * 20,
+            "returns_series": [0.01] * 20,
+        },
+        "submission": {},
+    }
+
+    report = AntiOverfitService().evaluate(candidate)
+
+    assert report["ok"] is False
+    assert report["passed"] is False
+    assert report["sample_size"] == 20
+    assert report["recommendation"] == "insufficient_data"
+
+
+def test_research_anti_overfit_imports_canonical_service():
+    from brain_alpha_ops.research.anti_overfit import AntiOverfitService as ResearchService
+
+    assert ResearchService is AntiOverfitService
 
 
 # ═══════════════════════ Helper Tests ═══════════════════════════════

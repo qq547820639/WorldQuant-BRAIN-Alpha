@@ -225,6 +225,7 @@ class LocalBacktestEngine:
             result = metrics.to_dict()
             result["ok"] = True
             result["expression"] = expression
+            result.update(self._synthetic_metadata())
             result["pass_local"] = (
                 metrics.sharpe >= 1.25
                 and metrics.fitness >= 1.0
@@ -243,6 +244,7 @@ class LocalBacktestEngine:
                 "error": redact_error_message(exc),
                 "error_type": type(exc).__name__,
                 "pass_local": False,
+                **self._synthetic_metadata(),
             }
         except (KeyboardInterrupt, SystemExit, TimeoutError):
             raise
@@ -258,6 +260,7 @@ class LocalBacktestEngine:
                 "error": redact_error_message(exc),
                 "error_type": type(exc).__name__,
                 "pass_local": False,
+                **self._synthetic_metadata(),
             }
 
     def batch_evaluate(
@@ -327,6 +330,17 @@ class LocalBacktestEngine:
                 f"Concentration {metrics.weight_concentration:.2%} > 10% (FAIL)"
             )
         return reasons
+
+    def _synthetic_metadata(self) -> dict[str, Any]:
+        return {
+            "data_source": "synthetic_prefilter",
+            "is_official_equivalent": False,
+            "synthetic_config": {
+                "seed": self.seed,
+                "n_dates": self.n_dates,
+                "n_symbols": self.n_symbols,
+            },
+        }
 
 
 __all__ = ["LocalBacktestEngine", "MarketDataFrame"]

@@ -84,7 +84,7 @@ class SubmissionGateService:
         if not safety["allowed"]:
             p.services.runtime._event("auto_submit_skipped", "; ".join(safety["failed_reasons"]), candidate.alpha_id)
             return 0
-        cross_review = self._pre_submit_cross_review(candidate)
+        cross_review = p._pre_submit_cross_review(candidate)
         candidate.submission["cross_review"] = cross_review
         if not cross_review.get("allowed", False):
             failed_reasons = list(cross_review.get("failed_reasons") or [])
@@ -94,11 +94,7 @@ class SubmissionGateService:
             candidate.lifecycle_status = "auto_submit_cross_review_blocked"
             p.services.runtime._event("auto_submit_cross_review_blocked", "; ".join(failed_reasons), candidate.alpha_id, level="WARN")
             return 0
-        readiness_gate = live_submit_readiness_hard_gate(
-            candidate.to_dict(),
-            RunConfig(ops=p.config),
-            candidate.official_alpha_id,
-        )
+        readiness_gate = p._live_submit_readiness_gate(candidate)
         candidate.submission["live_submit_readiness"] = readiness_gate
         if not readiness_gate.get("ok"):
             failed_reasons = [

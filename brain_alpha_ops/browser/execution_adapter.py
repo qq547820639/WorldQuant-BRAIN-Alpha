@@ -24,8 +24,9 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any
 
-from brain_alpha_ops.execution_backend import ExecutionEvidence
 from brain_alpha_ops.browser.brain_ui_runner import BrainBrowserRunner
+from brain_alpha_ops.execution_backend import ExecutionEvidence
+from brain_alpha_ops.redaction import redact_error_message
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +40,12 @@ class BrowserExecutionAdapter:
     base_url: str = "https://brain.worldquant.com"
     headless: bool = True
     evidence_dir: str = "artifacts"
+    mode: str = "readonly"
+    allow_live_navigation: bool | None = None
+    readonly: bool = True
+    approval_ticket: str = ""
+    idempotency_key: str = ""
+    _used_idempotency_keys: set[str] = field(default_factory=set, init=False, repr=False)
 
     # Internal state — managed by context manager
     _runner: BrainBrowserRunner | None = field(default=None, init=False, repr=False)
@@ -51,6 +58,9 @@ class BrowserExecutionAdapter:
             base_url=self.base_url,
             headless=self.headless,
             evidence_dir=self.evidence_dir,
+            mode=self.mode,
+            allow_live_navigation=self.allow_live_navigation,
+            readonly=self.readonly,
         )
         self._runner.__enter__()
         return self
@@ -195,12 +205,18 @@ class BrowserExecutionAdapter:
                 "error": f"Failed to extract check results: {e}",
             }
 
-    def submit_alpha(self, alpha_id: str) -> dict[str, Any]:
+    def submit_alpha(
+        self,
+        alpha_id: str,
+        *,
+        approval_ticket: str | None = None,
+        idempotency_key: str | None = None,
+    ) -> dict[str, Any]:
         """Submit an Alpha via browser interaction.
 
         **Security note**: This method navigates the real BRAIN submit flow.
-        It is gated upstream by ``REAL_SUBMIT_DISABLED_WEB_FLOW`` and should
-        only be called after explicit human confirmation in the browser UI.
+        It requires a human approval ticket and idempotency key before the
+        adapter touches the browser page.
 
         Args:
             alpha_id: BRAIN Alpha identifier to submit.
@@ -208,8 +224,31 @@ class BrowserExecutionAdapter:
         Returns:
             {"ok": bool, "alpha_id": str, "confirmation": ...}
         """
+        approval = str(approval_ticket if approval_ticket is not None else self.approval_ticket).strip()
+        key = str(idempotency_key if idempotency_key is not None else self.idempotency_key).strip()
+        missing = [name for name, value in (("approval_ticket", approval), ("idempotency_key", key)) if not value]
+        if missing:
+            return {
+                "ok": False,
+                "alpha_id": alpha_id,
+                "step": "submit.guard",
+                "error_code": "BROWSER_SUBMIT_GUARD_MISSING",
+                "error": "Browser submit requires approval_ticket and idempotency_key",
+                "missing": missing,
+            }
+        if key in self._used_idempotency_keys:
+            return {
+                "ok": False,
+                "alpha_id": alpha_id,
+                "step": "submit.guard",
+                "error_code": "BROWSER_SUBMIT_DUPLICATE_IDEMPOTENCY_KEY",
+                "error": "Browser submit idempotency key was already used in this adapter session",
+            }
         if not self._authenticated:
             return {"ok": False, "error": "Not authenticated", "step": "submit.not_authenticated"}
+        guard = self.runner.side_effect_guard("submit")
+        if not guard["allowed"]:
+            return {"ok": False, "alpha_id": alpha_id, "step": "submit.guard", **guard}
 
         # Navigate to submit page
         try:
@@ -219,9 +258,19 @@ class BrowserExecutionAdapter:
                 timeout=30000,
             )
         except Exception as e:
-            return {"ok": False, "error": f"Navigation failed: {e}", "alpha_id": alpha_id}
+            return self._submit_failure(alpha_id, "submit.navigate", f"Navigation failed: {e}")
 
         self.runner._take_screenshot(f"submit_before_{alpha_id}")
+        self.runner._snapshot_dom(f"submit_before_{alpha_id}")
+        blocking = self.runner.classify_blocking_state()
+        if blocking:
+            return self._submit_failure(
+                alpha_id,
+                "submit.blocked_state",
+                blocking["message"],
+                error_code=str(blocking["code"]),
+                details=blocking,
+            )
 
         # Click confirm/submit button
         try:
@@ -229,17 +278,43 @@ class BrowserExecutionAdapter:
                 'button:has-text("Submit"), button:has-text("Confirm"), '
                 'button:has-text("Yes"), input[type="submit"]'
             )
-            if confirm.count() > 0:
-                confirm.first.click()
-                self.runner._page.wait_for_load_state("networkidle", timeout=30000)
+            if confirm.count() <= 0:
+                return self._submit_failure(
+                    alpha_id,
+                    "submit.confirm_missing",
+                    "Submit confirmation button not found",
+                    error_code="BROWSER_SUBMIT_CONFIRMATION_MISSING",
+                )
+            confirm.first.click()
+            self.runner._page.wait_for_load_state("networkidle", timeout=30000)
         except Exception as e:
-            logger.warning(f"Submit confirmation click may have failed: {e}")
+            message = redact_error_message(e)
+            logger.warning("Submit confirmation click failed: %s", message)
+            return self._submit_failure(
+                alpha_id,
+                "submit.confirm_failed",
+                f"Submit confirmation failed: {message}",
+                error_code="BROWSER_SUBMIT_CONFIRMATION_FAILED",
+            )
 
         self.runner._take_screenshot(f"submit_after_{alpha_id}")
+        self.runner._snapshot_dom(f"submit_after_{alpha_id}")
+        blocking = self.runner.classify_blocking_state()
+        if blocking:
+            return self._submit_failure(
+                alpha_id,
+                "submit.post_submit_blocked_state",
+                blocking["message"],
+                error_code=str(blocking["code"]),
+                details=blocking,
+            )
+        self._used_idempotency_keys.add(key)
 
         return {
             "ok": True,
             "alpha_id": alpha_id,
+            "approval_ticket": approval,
+            "idempotency_key": key,
             "evidence": self.get_evidence(),
         }
 
@@ -250,7 +325,32 @@ class BrowserExecutionAdapter:
             transport=raw.get("transport", "browser"),
             screenshots=list(raw.get("screenshots", [])),
             dom_snapshots=list(raw.get("dom_snapshots", [])),
-            har_path=f"{self.evidence_dir}/brain_interactions.har",
+            har_path=raw.get("har_path"),
             console_logs=list(raw.get("console_logs", [])),
             network_logs=list(raw.get("network_logs", [])),
         )
+
+    def _submit_failure(
+        self,
+        alpha_id: str,
+        step: str,
+        error: str,
+        *,
+        error_code: str = "BROWSER_SUBMIT_FAILED",
+        details: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        try:
+            evidence = self.get_evidence()
+        except Exception as exc:  # pragma: no cover - defensive evidence fallback
+            evidence = {"transport": "browser", "error": f"evidence collection failed: {exc}"}
+        payload: dict[str, Any] = {
+            "ok": False,
+            "alpha_id": alpha_id,
+            "step": step,
+            "error_code": error_code,
+            "error": error,
+            "evidence": evidence,
+        }
+        if details is not None:
+            payload["details"] = details
+        return payload

@@ -75,11 +75,12 @@ def _verify_generator_templates_against_official_context(data_dir: Path) -> dict
             if str(getattr(operator, "name", "") or "")
         }
     except Exception as exc:
+        message = redact_error_message(exc)
         logger.warning(
-            "redline verifier official context unavailable for generator template validation",
-            exc_info=True,
+            "redline verifier official context unavailable for generator template validation: %s",
+            message,
         )
-        return {"ok": False, "reason": f"official context unavailable: {exc}"}
+        return {"ok": False, "reason": f"official context unavailable: {message}"}
 
     templates = _candidate_generator_fallback_templates()
     if not official_fields or not official_operators:
@@ -143,8 +144,11 @@ def _candidate_generator_fallback_templates() -> list[str]:
 
         templates, _families = _load_fallback_templates()
         return list(templates)
-    except Exception:
-        logger.warning("redline verifier failed to extract generator fallback templates", exc_info=True)
+    except Exception as exc:
+        logger.warning(
+            "redline verifier failed to extract generator fallback templates: %s",
+            redact_error_message(exc),
+        )
         return []
 
 

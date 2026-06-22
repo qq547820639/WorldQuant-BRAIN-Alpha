@@ -13,15 +13,33 @@ CANDIDATE_TABLE = (
     / "components"
     / "CandidateTable.tsx"
 )
+REACT_SRC = ROOT / "brain_alpha_ops" / "web" / "react_app" / "src"
 APP = ROOT / "brain_alpha_ops" / "web" / "react_app" / "src" / "App.tsx"
+CANDIDATE_TABLE_MODULES = [
+    CANDIDATE_TABLE,
+    REACT_SRC / "components" / "CandidateTableToolbar.tsx",
+    REACT_SRC / "components" / "CandidateTableSubComponents.tsx",
+    REACT_SRC / "components" / "CandidateTableUtils.ts",
+    REACT_SRC / "components" / "CandidateRow.tsx",
+    REACT_SRC / "components" / "CandidateTablePagination.tsx",
+    REACT_SRC / "components" / "CandidateDetailPanel.tsx",
+    REACT_SRC / "components" / "useCandidateColumns.tsx",
+    REACT_SRC / "hooks" / "useCandidateActions.ts",
+    REACT_SRC / "hooks" / "useCandidatePipeline.ts",
+    REACT_SRC / "hooks" / "useSseManager.ts",
+]
 
 
 def _source() -> str:
-    return CANDIDATE_TABLE.read_text(encoding="utf-8")
+    return "\n".join(path.read_text(encoding="utf-8") for path in CANDIDATE_TABLE_MODULES)
 
 
 def _app_source() -> str:
-    return APP.read_text(encoding="utf-8")
+    return "\n".join([
+        APP.read_text(encoding="utf-8"),
+        (REACT_SRC / "components" / "views" / "renderView.tsx").read_text(encoding="utf-8"),
+        (REACT_SRC / "hooks" / "useGlobalData.ts").read_text(encoding="utf-8"),
+    ])
 
 
 def test_candidate_table_fetches_all_candidates_and_uses_local_pagination_window():
@@ -38,7 +56,7 @@ def test_candidate_table_fetches_all_candidates_and_uses_local_pagination_window
     assert "sorted.slice(0, 50)" not in source
     assert "showMoreCandidates" not in source
     assert "Show more" not in source
-    assert "显示 {visibleStart}-{visibleEnd}，共 {sortedCandidates.length} 条" in source
+    assert "显示 {visibleStart}-{visibleEnd}，共 {totalItems} 条" in source
     assert "当前接口返回 {candidateMeta.returned} 条候选" in source
 
 
@@ -47,21 +65,21 @@ def test_candidate_table_exposes_paginated_table_accessibility_metadata():
 
     assert 'aria-label="候选结果"' in source
     assert "function CandidateMobileCard" in source
-    assert 'className="hidden md:block"' in source
+    assert 'className="hidden md:block overflow-auto"' in source
     assert 'maxWidth: "100%"' in source
     assert 'role="alert"' in source
     assert 'role="status"' in source
     assert 'aria-live="polite"' in source
     assert 'aria-live="assertive"' in source
-    assert "colSpan={hasActions ? 9 : 8}" in source
+    assert "const columnCount = params.hasActions ? 11 : 10;" in source
 
 
 def test_candidate_table_bounds_target_pool_size_and_sanitizes_filter_input():
     source = _source()
 
-    assert "const MIN_TARGET_POOL_SIZE = 1;" in source
-    assert "const MAX_TARGET_POOL_SIZE = 100;" in source
-    assert "const MAX_FILTER_LENGTH = 200;" in source
+    assert "export const MIN_TARGET_POOL_SIZE = 1;" in source
+    assert "export const MAX_TARGET_POOL_SIZE = 100;" in source
+    assert "export const MAX_FILTER_LENGTH = 200;" in source
     assert "setTargetPoolSize(clampTargetPoolSize(value));" in source
     assert "min={MIN_TARGET_POOL_SIZE}" in source
     assert "max={MAX_TARGET_POOL_SIZE}" in source
@@ -73,7 +91,7 @@ def test_candidate_table_bounds_target_pool_size_and_sanitizes_filter_input():
     assert 'automation_mode: "maintain_candidate_pool"' in source
     assert "auto_simulate_after_generation: false" in source
     assert "auto_check_after_simulation: false" in source
-    assert "maxLength={MAX_FILTER_LENGTH}" in source
+    assert "maxLength={200}" in source
     assert "setFilter(sanitizeTextInput(value, MAX_FILTER_LENGTH));" in source
     assert 'value.replace(/[\\x00-\\x1F\\x7F]/g, "").slice(0, maxLength)' in source
 
@@ -86,8 +104,10 @@ def test_candidate_pool_updates_refresh_phase_state_in_app_shell():
     assert "onCandidatePoolUpdated?.()" in source
     assert "const handleCandidatePoolUpdated = useCallback(() => {" in app
     assert 'void candidatesApi.call("/api/candidates?summary=true");' in app
+    assert "globalData.refreshAll();" in app
     assert 'void phaseApi.call("/api/phase_state");' in app
-    assert "onCandidatePoolUpdated={handleCandidatePoolUpdated}" in app
+    assert "onCandidatePoolUpdated: handleCandidatePoolUpdated" in app
+    assert "onCandidatePoolUpdated={onCandidatePoolUpdated}" in app
 
 
 def test_candidate_table_sort_headers_expose_column_sort_state():
@@ -143,9 +163,9 @@ def test_candidate_table_exposes_alpha_quality_diagnostics_and_output_config():
     assert '<QualitySummaryItem label="输出模式" value={qualitySummary.outputMode} />' in source
     assert '"expression_too_nested"' in source
     assert "const displayQueueCandidates = useMemo(" in source
-    assert 'viewMode === "candidates"\n        ? candidateManagementDisplayCandidates(candidates, retainedPoolCandidates, serverWorkflowPlan)\n        : rawQueueCandidates' in source
+    assert 'viewMode === "candidates" ? candidateManagementDisplayCandidates(candidates, retainedPoolCandidates, serverWorkflowPlan) : rawQueueCandidates' in source
     assert "const summaryCandidates = displayQueueCandidates;" in source
-    assert "colSpan={hasActions ? 9 : 8}" in source
+    assert "const columnCount = params.hasActions ? 11 : 10;" in source
 
 
 def test_candidate_table_exposes_queue_view_filters_for_inline_parity():
@@ -160,7 +180,7 @@ def test_candidate_table_exposes_queue_view_filters_for_inline_parity():
     assert '| "failed";' in source
     assert 'viewMode?: CandidateQueueView;' in source
     assert 'viewMode = "candidates"' in source
-    assert "candidates.filter((candidate) => candidateMatchesQueueView(candidate, viewMode, checkResults))" in source
+    assert "candidates.filter((c) => candidateMatchesQueueView(c, viewMode, checkResults))" in source
     assert 'if (viewMode === "pending_backtest") return status === "pending_backtest";' in source
     assert 'if (viewMode === "running_backtest") return status === "running_backtest" || status === "running";' in source
     assert 'if (viewMode === "backtest_rework") return status === "backtest_rework" || status === "failed_backtest" || status === "rejected";' in source
@@ -215,12 +235,12 @@ def test_candidate_table_auto_pool_simulates_top_three_main_pool_ids():
     source = _source()
 
     assert "const AUTO_SIMULATION_BATCH_SIZE = 3;" in source
-    assert "serverMainPoolCandidates\n        ? rankPoolCandidates(serverMainPoolCandidates)" in source
+    assert "serverMainPoolCandidates ? rankPoolCandidates(serverMainPoolCandidates)" in source
     assert "const hasExplicitOverride = Boolean(candidateOverride && candidateOverride.length);" in source
     assert "workflowCandidatesForQueue(candidates, retainedPoolCandidates, serverWorkflowPlan?.validator?.next_candidate_ids)" in source
-    assert "const candidateIds = simulationCandidateIds(candidatesForSimulation, AUTO_SIMULATION_BATCH_SIZE);" in source
-    assert "payload.candidate_ids = candidateIds;" in source
-    assert "payload.max_simulations = Math.min(AUTO_SIMULATION_BATCH_SIZE, candidateIds.length);" in source
+    assert "const cIds = simulationCandidateIds(candidatesForSimulation, AUTO_SIMULATION_BATCH_SIZE);" in source
+    assert "payload.candidate_ids = cIds;" in source
+    assert "payload.max_simulations = Math.min(AUTO_SIMULATION_BATCH_SIZE, cIds.length);" in source
     assert "const fallbackScore = (candidate as { score?: unknown }).score;" in source
     assert "const score = Number(candidate.scorecard?.total_score ?? fallbackScore ?? 0);" in source
 
@@ -230,9 +250,9 @@ def test_candidate_table_only_runs_batch_check_after_successful_simulation():
 
     assert "const result = simulationResultSummary(event);" in source
     assert "const simulationSucceeded = result.completed > 0;" in source
-    assert 'if (autoPipelineStageRef.current === "await_quality_check" && simulationSucceeded)' in source
-    assert "const candidatesForCheck = nextBatchCheckCandidatesRef.current || undefined;" in source
-    assert "void startBatchCheck(candidatesForCheck);" in source
+    assert 'if (pipeline.autoPipelineStageRef.current === "await_quality_check" && simulationSucceeded)' in source
+    assert "const cForCheck = nextBatchCheckCandidatesRef.current || undefined;" in source
+    assert "void startBatchCheck(cForCheck);" in source
     assert "resetAutoPipelineStageIfCurrent(\"await_quality_check\");" in source
     assert "nextBatchCheckCandidatesRef.current = null;" in source
 
@@ -242,7 +262,7 @@ def test_candidate_table_refills_after_quality_check_deficit():
 
     assert "snapshot: candidatePoolSnapshot(nextRows, nextMainPool, targetPoolSize, nextWorkflowPlan)" in source
     assert "const producerDeficit = Number(workflowPlan?.producer?.deficit);" in source
-    assert 'const shouldContinueMaintenance = autoPipelineStageRef.current === "await_quality_check";' in source
+    assert 'const shouldContinueMaintenance = pipeline.autoPipelineStageRef.current === "await_quality_check";' in source
     assert '"await_simulation"' not in source
     assert "auto_simulate_after_generation !== false" not in source
     assert "loaded?.snapshot.deficit" in source
@@ -250,8 +270,8 @@ def test_candidate_table_refills_after_quality_check_deficit():
     assert "void generateCandidates(loaded.snapshot)" in source
     assert "主池仍缺 ${loaded.snapshot.deficit} 个候选，继续自动补位。" in source
     assert 'resetAutoPipelineStageIfCurrent("await_quality_check");' in source
-    assert 'onClick={() => void generateCandidates()}' in source
-    assert 'onRetry={() => void generateCandidates()}' in source
+    assert 'onGenerateCandidates={() => { void actions.generateCandidates(); }}' in source
+    assert "onRetryTask: () => { void actions.generateCandidates(); }" in source
 
 
 def test_candidate_table_optimizes_rework_before_refill_without_submit_or_credentials():
@@ -273,13 +293,13 @@ def test_candidate_table_optimizes_rework_before_refill_without_submit_or_creden
     assert "function optimizationChildrenForSimulation" not in source
     assert "const nextBatchCheckCandidatesRef = useRef<Candidate[] | null>(null);" in source
     assert "const hasExplicitOverride = Boolean(candidateOverride && candidateOverride.length);" in source
-    assert "nextBatchCheckCandidatesRef.current = candidateIds" in source
+    assert "nextBatchCheckCandidatesRef.current = cIds" in source
     assert ".map((id) => candidatesForSimulation.find((row) => candidateIdentity(row) === id))" in source
     assert "const startBatchCheck = useCallback(async (candidateOverride?: Candidate[])" in source
     assert "const candidatesForCheck = candidateOverride && candidateOverride.length" in source
-    assert "void startBatchCheck(candidatesForCheck);" in source
+    assert "void startBatchCheck(cForCheck);" in source
     assert 'failed: "候选本地优化失败"' in source
-    assert "setOptimizationError(message);" in source
+    assert "pipeline.optimization.setError(message);" in source
     assert 'updateAutoPipelineStage("idle");' in source
     optimize_body = source.split('"/api/candidates/optimize"', 1)[1].split("});", 1)[0]
     assert "...buildCredentialOverrides()" not in optimize_body

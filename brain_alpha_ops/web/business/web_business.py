@@ -14,12 +14,12 @@ from brain_alpha_ops.config import load_run_config as _load_run_config
 from brain_alpha_ops.runtime_constants import (
     REAL_SUBMIT_DISABLED_WEB_FLOW,
 )
-from brain_alpha_ops.web_jobs import job_update as _job_update
-from brain_alpha_ops.web_jobs import new_job_id as _new_job_id
-from brain_alpha_ops.web_session import (
+from brain_alpha_ops.web.business.web_jobs import job_update as _job_update
+from brain_alpha_ops.web.business.web_jobs import new_job_id as _new_job_id
+from brain_alpha_ops.web.security.web_session import (
     DEFAULT_SESSION_TTL_SECONDS as _SESSION_TTL_SECONDS,
 )
-from brain_alpha_ops.web_session import csrf_for_session as _csrf_for_session
+from brain_alpha_ops.web.security.web_session import csrf_for_session as _csrf_for_session
 
 # ═══════════════════════════════════════════════════════════════════════
 # B-07: Explicit dependency injection points (replaces globals().get())
@@ -709,7 +709,7 @@ def _real_stop(payload):
 
 def _real_session(payload):
     """Create or validate a web session."""
-    from brain_alpha_ops.web_session import new_session_id
+    from brain_alpha_ops.web.security.web_session import new_session_id
     sid = new_session_id()
     csrf = _csrf_for_session(sid)
     return {

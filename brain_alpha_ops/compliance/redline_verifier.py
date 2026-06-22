@@ -39,10 +39,15 @@ from brain_alpha_ops.compliance.redline_check_thresholds import (
 from brain_alpha_ops.compliance.redline_check_traceability import (
     _verify_redline_4_parameter_traceability,
 )
+from brain_alpha_ops.compliance.redline_helpers import (
+    _candidate_generator_fallback_templates,
+    _verification_blocked,
+    _verify_generator_templates_against_official_context,
+)
 from brain_alpha_ops.compliance.redline_models import (
-
     ComplianceReport,
     RedLineBlockedError,
+    RedLineViolation,
 )
 
 
@@ -125,6 +130,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
-# Backward-compat re-export for Phase 3.x migration
-from .redline_models import RedLineViolation  # noqa: F401

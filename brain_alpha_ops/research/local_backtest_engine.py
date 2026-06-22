@@ -1,7 +1,8 @@
 """Local synthetic prefilter — evaluates alpha expressions using synthetic market data.
 
 THIS IS NOT A REAL HISTORICAL BACKTEST. All data is synthetically generated
-(84×160 synthetic market data). Results are approximate prefilter scores only.
+from the engine's configured ``synthetic_config``. Results are approximate
+prefilter scores only.
 Use official BRAIN simulation results for real historical performance estimates.
 
 Supports a subset of FASTEXPR operators locally and computes standard metrics

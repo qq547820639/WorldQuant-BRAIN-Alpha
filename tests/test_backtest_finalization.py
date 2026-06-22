@@ -54,6 +54,28 @@ def _weak_metrics():
     }
 
 
+def _passing_robustness_reports() -> dict:
+    return {
+        "anti_overfit_report": {
+            "ok": True,
+            "schema_version": "anti_overfit_report.v1",
+            "passed": True,
+            "score": 100.0,
+            "recommendation": "pass",
+            "sample_size": 120,
+            "data_source": "official_metrics",
+        },
+        "rolling_validation_report": {
+            "ok": True,
+            "schema_version": "rolling_validation_report.v1",
+            "status": "pass",
+            "passed": True,
+            "sample_size": 12,
+            "score": 90.0,
+        },
+    }
+
+
 def _expr_key(candidate: Candidate) -> str:
     return " ".join(candidate.expression.split()).lower()
 
@@ -145,6 +167,7 @@ def test_backtest_finalization_accepts_submission_ready_candidate(tmp_path):
     harness = _Harness(auto_submit_increment=1)
     service = harness.service(config)
     candidate = _candidate(_strong_metrics())
+    candidate.submission.update(_passing_robustness_reports())
     pool = {_expr_key(candidate): candidate}
     accepted = []
 
@@ -168,6 +191,71 @@ def test_backtest_finalization_accepts_submission_ready_candidate(tmp_path):
     assert harness.lifecycle[-1][1] == "submission_ready"
     assert candidate.gate["submission_ready"] is True
     assert candidate.gate["check_summary"]["passed"] is True
+    assert candidate.gate["anti_overfit"]["recommendation"] == "pass"
+
+
+def test_backtest_finalization_blocks_submission_ready_without_anti_overfit_evidence(tmp_path):
+    config = OpsConfig(budget=ResearchBudget(require_cloud_sync=False), storage_dir=str(tmp_path))
+    harness = _Harness(auto_submit_increment=1)
+    service = harness.service(config)
+    candidate = _candidate(_strong_metrics())
+    pool = {_expr_key(candidate): candidate}
+    accepted = []
+
+    outcome = service.finalize(
+        candidate,
+        pool_by_expression=pool,
+        accepted_candidates=accepted,
+        archive_stats={},
+        archive_samples=[],
+        blocked_expressions=set(),
+        submitted_this_run=2,
+        auto_submit=True,
+    )
+
+    assert outcome.accepted is False
+    assert outcome.ready_increment == 0
+    assert outcome.auto_submitted_increment == 0
+    assert accepted == []
+    assert candidate.gate["submission_ready"] is False
+    assert candidate.gate["anti_overfit"]["recommendation"] == "insufficient_data"
+    assert candidate.submission["anti_overfit_report"]["passed"] is False
+
+
+def test_backtest_finalization_recomputes_legacy_anti_overfit_report(tmp_path):
+    config = OpsConfig(budget=ResearchBudget(require_cloud_sync=False), storage_dir=str(tmp_path))
+    harness = _Harness(auto_submit_increment=1)
+    service = harness.service(config)
+    candidate = _candidate(_strong_metrics())
+    candidate.submission["anti_overfit_report"] = {
+        "ok": True,
+        "recommendation": "pass",
+        "score": 100.0,
+    }
+    candidate.submission["rolling_validation_report"] = _passing_robustness_reports()[
+        "rolling_validation_report"
+    ]
+    pool = {_expr_key(candidate): candidate}
+    accepted = []
+
+    outcome = service.finalize(
+        candidate,
+        pool_by_expression=pool,
+        accepted_candidates=accepted,
+        archive_stats={},
+        archive_samples=[],
+        blocked_expressions=set(),
+        submitted_this_run=2,
+        auto_submit=True,
+    )
+
+    assert outcome.accepted is False
+    assert outcome.auto_submitted_increment == 0
+    assert accepted == []
+    assert candidate.gate["submission_ready"] is False
+    assert candidate.submission["anti_overfit_report"]["schema_version"] == "anti_overfit_report.v1"
+    assert candidate.submission["anti_overfit_report"]["passed"] is False
+    assert candidate.gate["anti_overfit"]["recommendation"] == "insufficient_data"
 
 
 def test_backtest_finalization_retries_failed_candidate_without_metrics():

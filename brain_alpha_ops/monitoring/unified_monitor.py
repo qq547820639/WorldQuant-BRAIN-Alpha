@@ -17,6 +17,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
+from brain_alpha_ops.redaction import redact_error_message
+
 logger = logging.getLogger(__name__)
 
 
@@ -162,15 +164,15 @@ class UnifiedMonitor:
                     if healed:
                         actions.append("browser_auto_heal")
                 except Exception as e:
-                    logger.warning("Auto-heal failed: %s", e)
+                    logger.warning("Auto-heal failed: %s", redact_error_message(e))
             elif event.action == "snapshot" and self._browser is not None:
                 try:
                     self._browser.runner._take_screenshot(
                         f"monitor_event_{int(time.time())}"
                     )
                     actions.append("browser_snapshot")
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.warning("Browser snapshot capture failed: %s", redact_error_message(e))
 
         logger.info("Healing actions: %s", actions)
         return actions

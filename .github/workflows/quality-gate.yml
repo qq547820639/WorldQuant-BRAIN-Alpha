@@ -64,3 +64,27 @@ jobs:
           files: ./coverage.xml
           flags: ${{ matrix.os }},py${{ matrix.python-version }}
         continue-on-error: true
+
+  browser-e2e-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install package and test tooling
+        run: |
+          python -m pip install -r requirements.lock
+          python -m pip install -e ".[test]" --no-build-isolation
+
+      - name: Browser mock/readonly contract tests
+        env:
+          BRAIN_BROWSER_E2E_LIVE: "0"
+        run: python -m pytest tests/test_browser_execution_adapter.py -v --tb=short

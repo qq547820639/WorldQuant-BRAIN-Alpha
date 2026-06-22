@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import sys
+import threading
 from pathlib import Path
 
 import pytest
@@ -37,6 +38,23 @@ class TestCheckpointManager:
         assert latest is not None
         assert latest.cycle_index == 0
         assert latest.stage == "generation"
+
+    def test_save_does_not_deadlock_index_registration(self, tmp_path):
+        """save() should finish when index registration runs under the write lock."""
+        mgr = CheckpointManager(tmp_path / "checkpoints")
+        result: dict[str, str] = {}
+
+        worker = threading.Thread(
+            target=lambda: result.setdefault(
+                "checkpoint_id",
+                mgr.save(cycle_index=0, stage="generation"),
+            )
+        )
+        worker.start()
+        worker.join(timeout=2)
+
+        assert not worker.is_alive()
+        assert result["checkpoint_id"] != ""
 
     def test_can_resume(self, tmp_path):
         """can_resume should be True after save, False on empty."""

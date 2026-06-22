@@ -12,7 +12,7 @@ from typing import Callable
 logger = logging.getLogger(__name__)
 
 from brain_alpha_ops.brain_api.base import BrainAPI
-from brain_alpha_ops.config import OpsConfig
+from brain_alpha_ops.config import OpsConfig, RunConfig
 from brain_alpha_ops.models import Candidate, PipelineResult, new_id
 from brain_alpha_ops.parameter_audit import build_parameter_audit_snapshot
 from brain_alpha_ops.redaction import redact_error_message
@@ -50,7 +50,7 @@ from .pipeline_snapshots import PipelineSnapshotMixin
 from .pipeline_candidates import PipelineCandidatePoolMixin
 from .pipeline_backtest_flow import PipelineBacktestMixin
 from .pipeline_context_sync import PipelineContextSyncMixin
-from .pipeline_submission_gate import PipelineSubmissionMixin
+from .pipeline_submission_gate import PipelineSubmissionMixin, live_submit_readiness_hard_gate
 from .pipeline_state import (
     CycleState,
     PipelineRuntimeState,
@@ -142,10 +142,6 @@ class AlphaResearchPipeline(
                 f"Alpha type '{alpha_type}': registered type-specific checks.",
                 level="INFO")
 
-        # P2-4: cache assistant guidance to reduce JSONL I/O on every cycle.
-        # Guidance is re-read every 5 cycles or when the cache is empty.
-        self._cached_assistant_guidance: dict | None = None
-        self._cached_guidance_at_cycle: int = -1
         self.strategy_plugins = self.services.runtime._load_strategy_plugins()
         # ── P0-2: Iterative optimizer (lazy-init with loader/mapper after context load) ──
 
@@ -250,12 +246,22 @@ class AlphaResearchPipeline(
             and conv_summary.get("stall_cycles", 0) >= 3
         ):
             try:
-                self.services.backtest_flow._try_fusion_top_candidates(pool_by_expression, blocked_expressions=None, cycle=cycle)
+                self._try_fusion_top_candidates(
+                    pool_by_expression,
+                    blocked_expressions=None,
+                    cycle=cycle,
+                )
             except Exception as exc:
-                logger.warning("Secondary fusion attempt failed in cycle %s", cycle, exc_info=True)
+                message = redact_error_message(exc)
+                logger.warning(
+                    "Secondary fusion attempt failed in cycle %s: %s",
+                    cycle,
+                    message,
+                )
+                logger.debug("Secondary fusion traceback in cycle %s", cycle, exc_info=True)
                 self.services.runtime._event(
                     "fusion_attempt_failed",
-                    f"Fusion attempt during convergence stall failed: {exc}",
+                    f"Fusion attempt during convergence stall failed: {message}",
                     level="WARN",
                 )
 
@@ -526,18 +532,23 @@ class AlphaResearchPipeline(
             # ── P2-05: Single official_calls_halted gate moved into _cycle_simulate_and_submit ──
             self.services.runtime._refresh_observability_throttle(cycle)
 
-            validation_targets = self.services.official_validation._filter_observability_duplicate_targets(
-                self.services.candidate_pool._validation_targets(pool),
-                phase="official_validation",
-            )
+            validation_targets = []
+            if not self.official_calls_halted:
+                validation_targets = self.services.official_validation._filter_observability_duplicate_targets(
+                    self.services.candidate_pool._validation_targets(pool),
+                    phase="official_validation",
+                )
             self.services.runtime._archive(
                 archive_stats,
                 archive_samples,
                 self.services.official_validation._archive_validation_failures(pool_by_expression, pool, blocked_expressions),
             )
             pool = rank_candidates(list(pool_by_expression.values()))
-            validation_quota = self.services.candidate_pool._validation_quota(pool)
-            self.services.official_validation._validate(validation_targets[:validation_quota])
+            validation_quota = 0 if self.official_calls_halted else self.services.candidate_pool._validation_quota(pool)
+            if self.official_calls_halted:
+                validation_quota = 0
+            elif validation_quota > 0:
+                self.services.official_validation._validate(validation_targets[:validation_quota])
             pool = rank_candidates(list(pool_by_expression.values()))
             self.services.runtime._archive(
                 archive_stats,
@@ -707,6 +718,13 @@ class AlphaResearchPipeline(
         for candidate in candidates:
             _attach_assistant_guidance(candidate, guidance)
 
+    def _live_submit_readiness_gate(self, candidate: Candidate) -> dict:
+        return live_submit_readiness_hard_gate(
+            candidate.to_dict(),
+            RunConfig(ops=self.config),
+            candidate.official_alpha_id,
+        )
+
     def _cycle_simulate_and_submit(
         self,
         cycle: int,
@@ -726,7 +744,7 @@ class AlphaResearchPipeline(
           abort=None  → normal flow, caller should proceed
         """
         # ── Gate guard: consolidated official_calls_halted check (P2-05) ──
-        if self.official_calls_halted:
+        if self.official_calls_halted and self.official_halt_cycle != cycle:
             self.services.runtime._maybe_resume_official_calls()
         if self.official_calls_halted:
             pool = rank_candidates(list(pool_by_expression.values()))

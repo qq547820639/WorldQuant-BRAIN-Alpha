@@ -1,6 +1,5 @@
 from brain_alpha_ops.config import RunConfig
-from brain_alpha_ops import web_submission_single as wss
-from brain_alpha_ops.web_submission_single import submit_candidate_payload
+import brain_alpha_ops.web_submission_single as wss
 
 
 class FakeApi:
@@ -60,7 +59,7 @@ def test_submit_candidate_payload_submits_and_records(tmp_path, monkeypatch):
     ledger_records = []
     lifecycle_records = []
 
-    payload = submit_candidate_payload(
+    payload = wss.submit_candidate_payload(
         {"candidate": _candidate(), "job_id": "job_1", "submit_mode": "manual", "confirm_submit": True},
         candidate_from_payload=lambda body: body["candidate"],
         run_config_from_payload=lambda body: run_config,
@@ -96,7 +95,7 @@ def test_submit_candidate_payload_requires_explicit_submit_confirmation(tmp_path
     run_config.ops.storage_dir = str(tmp_path)
     api_calls = []
 
-    payload = submit_candidate_payload(
+    payload = wss.submit_candidate_payload(
         {"candidate": _candidate(), "job_id": "job_1", "submit_mode": "manual"},
         candidate_from_payload=lambda body: body["candidate"],
         run_config_from_payload=lambda body: run_config,
@@ -111,8 +110,8 @@ def test_submit_candidate_payload_requires_explicit_submit_confirmation(tmp_path
     assert payload["ok"] is False
     assert payload["schema_version"] == "submission_result.v2"
     assert payload["status"] == "BLOCKED"
-    assert payload["error_code"] == "REAL_SUBMIT_DISABLED_WEB_FLOW"
-    assert payload["state_navigation"]["reason_code"] == "REAL_SUBMIT_DISABLED_WEB_FLOW"
+    assert payload["error_code"] == "SUBMIT_CONFIRMATION_REQUIRED"
+    assert payload["state_navigation"]["reason_code"] == "SUBMIT_CONFIRMATION_REQUIRED"
     assert api_calls == []
 
 
@@ -123,7 +122,7 @@ def test_submit_candidate_payload_records_preflight_block(tmp_path, monkeypatch)
     run_config.ops.storage_dir = str(tmp_path)
     blocked = []
 
-    payload = submit_candidate_payload(
+    payload = wss.submit_candidate_payload(
         {"candidate": _candidate(), "confirm_submit": True},
         candidate_from_payload=lambda body: body["candidate"],
         run_config_from_payload=lambda body: run_config,
@@ -151,7 +150,7 @@ def test_submit_candidate_payload_blocks_when_live_readiness_not_ready(tmp_path,
     api_calls = []
     blocked = []
 
-    payload = submit_candidate_payload(
+    payload = wss.submit_candidate_payload(
         {"candidate": _candidate(), "confirm_submit": True},
         candidate_from_payload=lambda body: body["candidate"],
         run_config_from_payload=lambda body: run_config,

@@ -232,9 +232,23 @@ export function formFromConfig(config: RunConfig | null): ConfigForm {
 }
 
 export function formFromImport(imported: Record<string, unknown>, current: ConfigForm): ConfigForm {
-  const settings = asRecord(imported.settings) || {};
-  const budget = asRecord(imported.budget) || {};
-  const thresholds = asRecord(imported.thresholds) || {};
+  const root = asRecord(imported) || {};
+  const source = asRecord(root.config) || root;
+  if (asRecord(source.ops)) {
+    return formFromConfig({
+      environment: String(source.environment || "production"),
+      ops: asRecord(source.ops) || {},
+      settings: asRecord(source.settings) || {},
+      budget: asRecord(source.budget) || {},
+      thresholds: asRecord(source.thresholds) || {},
+      scoring: asRecord(source.scoring) || undefined,
+      autoSubmit: false,
+      maxWeightConcentration: numberValue(source.maxWeightConcentration, current.maxWeightConcentration),
+    } as unknown as RunConfig);
+  }
+  const settings = asRecord(source.settings) || {};
+  const budget = asRecord(source.budget) || {};
+  const thresholds = asRecord(source.thresholds) || {};
   return {
     ...current,
     instrumentType: stringValue(settings.instrumentType, current.instrumentType),
@@ -264,15 +278,18 @@ export function formFromImport(imported: Record<string, unknown>, current: Confi
 }
 
 export function validateForm(form: ConfigForm, schema: ConfigSchema | undefined): string | null {
+  if (form.dataset.length > MAX_CONFIG_TEXT_LENGTH) return `数据集长度不能超过 ${MAX_CONFIG_TEXT_LENGTH} 个字符。`;
+  if (!CONFIG_TEXT_PATTERN.test(form.dataset)) return "数据集只能包含字母、数字、下划线、短横线、点或冒号。";
   if (!CONFIG_TEXT_PATTERN.test(form.dataset)) return "数据集名称包含非法字符";
   if (!isIntegerInRange(form.delay, 0, 1)) return "延迟值必须为 0 或 1";
   if (!isIntegerInRange(form.candidates, 1, 1000)) return "候选数必须在 1-1000 之间";
   if (!isIntegerInRange(form.cycles, 1, 1000)) return "周期数必须在 1-1000 之间";
   if (!isIntegerInRange(form.poolSize, 1, 1000)) return "池大小必须在 1-1000 之间";
   if (!isIntegerInRange(form.backtestBatchSize, 1, 100)) return "回测批次大小必须在 1-100 之间";
-  if (!isAllowedOption(schema?.settings_options, "region", form.region, DEFAULT_REGION_OPTIONS)) return "无效的区域选项";
-  if (!isAllowedOption(schema?.settings_options, "universe", form.universe, DEFAULT_UNIVERSE_OPTIONS)) return "无效的宇宙选项";
-  if (!isAllowedOption(schema?.settings_options, "neutralization", form.neutralization, DEFAULT_NEUTRALIZATION_OPTIONS)) return "无效的中性化选项";
+  if (!isAllowedOption(schema?.settings_options, "region", form.region, DEFAULT_REGION_OPTIONS)) return "不支持的区域。";
+  if (!isAllowedOption(schema?.settings_options, "universe", form.universe, DEFAULT_UNIVERSE_OPTIONS)) return "不支持的股票池。";
+  if (!isAllowedOption(schema?.settings_options, "neutralization", form.neutralization, DEFAULT_NEUTRALIZATION_OPTIONS)) return "不支持的中性化方式。";
+  if (schema?.dataset_options?.length && !datasetAllowedValues(schema).includes(form.dataset)) return "不支持的数据集，请从下拉列表选择。";
   return null;
 }
 

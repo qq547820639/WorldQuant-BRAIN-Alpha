@@ -22,6 +22,7 @@ from typing import Any
 
 from brain_alpha_ops.execution_backend import ExecutionEvidence
 from brain_alpha_ops.monitoring.evidence import EvidenceArchival
+from brain_alpha_ops.redaction import redact_error_message
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +67,7 @@ def capture_evidence(
                 arc.archive_session(sid, evidence_dict)
                 logger.info("Auto-archived evidence for session: %s", sid)
             except Exception as e:
-                logger.warning("Failed to auto-archive evidence: %s", e)
+                logger.warning("Failed to auto-archive evidence: %s", redact_error_message(e))
 
 
 def archive_execution_evidence(

@@ -15,7 +15,7 @@ import {
   contextSummaryField,
   officialContextSummaryMessage,
   shortOperationId,
-} from "./OfficialOperations";
+} from ".";
 
 interface Props {
   readiness: SubmitReadinessResponse | null;

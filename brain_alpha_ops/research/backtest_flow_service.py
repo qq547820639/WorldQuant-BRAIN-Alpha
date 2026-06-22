@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 from brain_alpha_ops.models import Candidate
 from brain_alpha_ops.redaction import redact_error_message, redact_text
 
-from .anti_overfit import AntiOverfitService
+from brain_alpha_ops.scoring.anti_overfit import AntiOverfitService
 from .pipeline_helpers import blocked_gate as _blocked_gate
 from .pipeline_helpers import expr_key as _expr_key
 from .pipeline_helpers import rank_candidates
@@ -281,6 +281,7 @@ class BacktestFlowService:
         except Exception as exc:
             message = redact_error_message(exc)
             candidate.submission["robustness_check_error"] = message
+            candidate.gate = _blocked_gate("ROBUSTNESS_CHECK_ERROR", [message])
             p.services.runtime._event(
                 "robustness_checks_error",
                 f"Cycle {cycle}: robustness checks failed for {candidate.alpha_id}: {message}",
@@ -380,13 +381,7 @@ class BacktestFlowService:
         cycle: int,
     ) -> int:
         p = self._pipeline
-        outcome = p._fusion_candidate_service().create_top_candidate_fusions(
-            pool_by_expression,
-            blocked_expressions,
-            cycle=cycle,
-        )
-        p.produced_count += outcome.created_count
-        return outcome.created_count
+        return p._try_fusion_top_candidates(pool_by_expression, blocked_expressions, cycle)
 
     def _poll_interval_seconds(self) -> float:
         p = self._pipeline

@@ -9,7 +9,13 @@ def evidence_dir(tmp_path_factory):
 @pytest.fixture(scope="session")
 def brain_runner(evidence_dir):
     from brain_alpha_ops.browser.brain_ui_runner import BrainBrowserRunner
-    with BrainBrowserRunner(headless=True, evidence_dir=evidence_dir) as runner:
+    with BrainBrowserRunner(
+        headless=True,
+        evidence_dir=evidence_dir,
+        mode="live",
+        allow_live_navigation=os.environ.get("BRAIN_BROWSER_E2E_LIVE") == "1",
+        readonly=True,
+    ) as runner:
         yield runner
 
 @pytest.fixture(scope="session")

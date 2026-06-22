@@ -5,10 +5,17 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SNAPSHOT_PANEL = ROOT / "brain_alpha_ops" / "web" / "react_app" / "src" / "components" / "SnapshotPanel.tsx"
+SNAPSHOT_MODULES = [
+    SNAPSHOT_PANEL,
+    SNAPSHOT_PANEL.parent / "SnapshotPanel" / "utils.ts",
+    SNAPSHOT_PANEL.parent / "SnapshotPanel" / "SnapshotPanelCloud.tsx",
+    SNAPSHOT_PANEL.parent / "SnapshotPanel" / "SnapshotPanelLocal.tsx",
+    SNAPSHOT_PANEL.parent / "SnapshotPanel" / "SnapshotPanelCompare.tsx",
+]
 
 
 def test_snapshot_panel_declares_all_data_views_and_endpoints():
-    source = SNAPSHOT_PANEL.read_text(encoding="utf-8")
+    source = "\n".join(path.read_text(encoding="utf-8") for path in SNAPSHOT_MODULES)
 
     assert 'export type SnapshotView =' in source
     assert '| "cloud"' in source
@@ -49,6 +56,6 @@ def test_snapshot_panel_declares_all_data_views_and_endpoints():
     assert 'function checkpointStatusRows(payload: SnapshotPayload)' in source
     assert 'function comparisonRows(comparison: SnapshotPayload)' in source
     assert 'function analyticsRows(analytics: SnapshotPayload)' in source
-    assert '{ label: "缓存总数", value: text(summary.total ?? summary.count ?? summary.total_count ?? "-") }' in source
+    assert '{ label: "缓存总数", value: text((summary.total ?? summary.count ?? summary.total_count ?? "-") as string) }' in source
     assert '{ label: "载入状态", value: cloudLoadStatus(summary) }' in source
     assert 'return "完整载入";' in source

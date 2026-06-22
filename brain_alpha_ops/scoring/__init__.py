@@ -1,10 +1,13 @@
 """Scientific scoring layer for BRAIN Alpha Ops."""
 
 from brain_alpha_ops.scoring.anti_overfit import (
+    ANTI_OVERFIT_SCHEMA_VERSION,
     AntiOverfitResult,
+    AntiOverfitService,
     compute_ic_stability,
     compute_placebo_test,
     compute_regime_stress,
+    evaluate_candidate,
     estimate_half_life,
     run_anti_overfit_suite,
 )
@@ -31,7 +34,10 @@ __all__ = [
     "ScoreAttribution",
     "ThresholdPolicy",
     "ScoreHistoryDB",
+    "ANTI_OVERFIT_SCHEMA_VERSION",
     "AntiOverfitResult",
+    "AntiOverfitService",
+    "evaluate_candidate",
     "run_anti_overfit_suite",
     "compute_ic_stability",
     "compute_regime_stress",

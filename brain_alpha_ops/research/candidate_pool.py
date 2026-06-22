@@ -155,10 +155,7 @@ class CandidatePoolService:
         return pruned
 
     def validation_targets(self, pool: list[Candidate]) -> list[Candidate]:
-        threshold = max(
-            self.min_prior_score_for_official_validation,
-            self.min_prior_score_for_official_simulation,
-        )
+        threshold = self.min_prior_score_for_official_validation
         return [
             candidate
             for candidate in pool

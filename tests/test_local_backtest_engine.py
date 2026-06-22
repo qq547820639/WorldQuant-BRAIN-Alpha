@@ -170,9 +170,15 @@ def test_local_backtest_engine_evaluate_batch_rank_and_cache():
 
     assert ok["ok"] is True
     assert ok["expression"] == "rank(ts_delta(close, 1))"
+    assert ok["data_source"] == "synthetic_prefilter"
+    assert ok["is_official_equivalent"] is False
+    assert ok["synthetic_config"] == {"seed": 1, "n_dates": 8, "n_symbols": 5}
     assert len(ok["pass_reasons"]) == 5
     assert bad["ok"] is False
     assert bad["pass_local"] is False
+    assert bad["data_source"] == "synthetic_prefilter"
+    assert bad["is_official_equivalent"] is False
+    assert bad["synthetic_config"] == {"seed": 1, "n_dates": 8, "n_symbols": 5}
     assert len(batch) == 2
     assert len(ranked) == 1
     assert ranked[0]["ok"] is True

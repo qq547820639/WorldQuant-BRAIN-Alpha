@@ -5,6 +5,7 @@ from brain_alpha_ops.runtime_constants import (
     HILDefaults,
     ScoringDefaults,
     PipelineDefaults,
+    real_submit_test_override_enabled,
 )
 
 
@@ -17,6 +18,22 @@ class TestSubmissionSafety:
         """The constant should be a Final type annotation (static check)."""
         # At runtime, just verify it's a bool True
         assert isinstance(REAL_SUBMIT_DISABLED_WEB_FLOW, bool)
+
+    def test_real_submit_test_override_disabled_by_default(self, monkeypatch):
+        monkeypatch.delenv("BRAIN_ALPHA_FORCE_REAL_SUBMIT", raising=False)
+        monkeypatch.delenv("BRAIN_ALPHA_ENABLE_REAL_SUBMIT_TESTS", raising=False)
+        monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
+
+        assert real_submit_test_override_enabled() is False
+
+    def test_real_submit_test_override_requires_all_test_approval_env(self, monkeypatch):
+        monkeypatch.setenv("BRAIN_ALPHA_FORCE_REAL_SUBMIT", "1")
+        monkeypatch.setenv("BRAIN_ALPHA_ENABLE_REAL_SUBMIT_TESTS", "1")
+        monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
+        assert real_submit_test_override_enabled() is False
+
+        monkeypatch.setenv("PYTEST_CURRENT_TEST", "tests/test_runtime_constants.py::test_case (call)")
+        assert real_submit_test_override_enabled() is True
 
 
 class TestWebDefaults:

@@ -9,7 +9,13 @@ from typing import Callable, Optional
 from brain_alpha_ops.config import OpsConfig
 from brain_alpha_ops.models import Candidate
 from brain_alpha_ops.redaction import redact_error_message, redact_text
+from brain_alpha_ops.scoring.anti_overfit import (
+    ANTI_OVERFIT_SCHEMA_VERSION,
+    AntiOverfitService,
+)
 
+from .robustness_policy import RobustnessPolicy
+from .rolling_validation import RollingValidationService
 from .scoring import build_scorecard, evaluate_quality_gate
 
 logger = logging.getLogger(__name__)
@@ -123,11 +129,30 @@ class BacktestFinalizationService:
             settings=settings,
         )
         evaluate_quality_gate(candidate, self.config.thresholds, settings=settings)
+        self._ensure_robustness_gate(candidate)
         check_summary = self._run_submission_checks(candidate)
         gate = candidate.gate or {}
         gate["check_summary"] = check_summary
         candidate.gate = gate
         self._record_experience(candidate)
+
+    def _ensure_robustness_gate(self, candidate: Candidate) -> None:
+        submission = candidate.submission if isinstance(candidate.submission, dict) else {}
+        candidate.submission = submission
+        anti_report = submission.get("anti_overfit_report")
+        if not _is_canonical_anti_overfit_report(anti_report):
+            anti_report = AntiOverfitService().evaluate(candidate)
+            submission["anti_overfit_report"] = anti_report
+        rolling_report = submission.get("rolling_validation_report")
+        if not isinstance(rolling_report, dict):
+            rolling_report = RollingValidationService().evaluate(candidate)
+            submission["rolling_validation_report"] = rolling_report
+        policy = RobustnessPolicy().apply(candidate, anti_report, rolling_report)
+        gate = candidate.gate if isinstance(candidate.gate, dict) else {}
+        gate["anti_overfit"] = anti_report
+        gate["rolling_validation"] = rolling_report
+        gate["robustness_policy"] = policy
+        candidate.gate = gate
 
     def _run_submission_checks(self, candidate: Candidate) -> dict:
         check_summary: dict = {"passed": True, "errors": [], "warnings": [], "info": []}
@@ -182,3 +207,18 @@ class BacktestFinalizationService:
                 exc.__class__.__name__,
                 redact_error_message(exc),
             )
+
+
+def _is_canonical_anti_overfit_report(report: object) -> bool:
+    if not isinstance(report, dict):
+        return False
+    if report.get("schema_version") != ANTI_OVERFIT_SCHEMA_VERSION:
+        return False
+    required_fields = ("ok", "passed", "recommendation", "sample_size", "data_source")
+    if any(field not in report for field in required_fields):
+        return False
+    if not isinstance(report.get("ok"), bool):
+        return False
+    if not isinstance(report.get("passed"), bool):
+        return False
+    return bool(str(report.get("recommendation") or "").strip())

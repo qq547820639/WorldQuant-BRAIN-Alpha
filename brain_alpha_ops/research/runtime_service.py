@@ -270,7 +270,7 @@ class RuntimeService:
         blocking_flags = result.blocking_flags
         if blocking_flags:
             reason = "observability blocking flags: " + ", ".join(blocking_flags[:5])
-            self._halt_official_calls(reason, p.config.budget.official_retry_pause_seconds)
+            self._halt_official_calls(reason, p.config.budget.official_retry_pause_seconds, cycle=cycle)
             self._event("official_calls_halted_by_observability", reason, data={"cycle": cycle, "observability": dict(p.observability_throttle)}, level="WARN")
         return p.observability_throttle
 
@@ -278,10 +278,11 @@ class RuntimeService:
         p = self._pipeline
         p.observability_generation_guidance = apply_observability_generation_guidance(snapshot=snapshot, context=context, cycle=cycle, generator=p.generator, event=self._event)
 
-    def _halt_official_calls(self, reason: str, retry_seconds: float | None = None):
+    def _halt_official_calls(self, reason: str, retry_seconds: float | None = None, *, cycle: int = 0):
         p = self._pipeline
         p.official_calls_halted = True
         p.official_halt_reason = reason
+        p.official_halt_cycle = int(cycle or 0)
         wait = p.config.budget.official_retry_pause_seconds if retry_seconds is None else retry_seconds
         p.official_resume_at = time.monotonic() + max(0.0, float(wait or 0.0))
 

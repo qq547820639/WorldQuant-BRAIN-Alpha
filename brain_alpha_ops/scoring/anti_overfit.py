@@ -17,11 +17,14 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
+ANTI_OVERFIT_SCHEMA_VERSION = "anti_overfit_report.v1"
+
 # ── Constants ──
 _IC_STABILITY_WINDOW_MIN = 20   # minimum samples for IC calculation
 _REGIME_MIN_SAMPLES = 30        # minimum samples per regime
 _PLACEBO_TRIALS = 50            # random permutation trials
 _DEFAULT_HALF_LIFE_WINDOW = 60  # default half-life estimation window
+_MIN_CANDIDATE_SERIES = 60
 
 @dataclass
 class AntiOverfitResult:
@@ -425,9 +428,171 @@ def run_anti_overfit_suite(
 
     return result
 
+
+class AntiOverfitService:
+    """Canonical candidate-level anti-overfit report service.
+
+    The production submission gate consumes this report.  Missing or short
+    official robustness series fail closed so a candidate cannot become
+    submission-ready merely because evidence is absent.
+    """
+
+    def evaluate(self, candidate: dict[str, Any] | Any) -> dict[str, Any]:
+        metrics = _candidate_metrics(candidate)
+        factor_values = _number_series(
+            metrics.get("factor_values")
+            or metrics.get("factor_values_series")
+            or metrics.get("ic_series")
+            or metrics.get("rank_ic_series")
+            or _candidate_value(candidate, "ic_series")
+            or _candidate_value(candidate, "rank_ic_series")
+        )
+        returns = _number_series(
+            metrics.get("returns_series")
+            or metrics.get("forward_returns")
+            or metrics.get("forward_returns_series")
+            or metrics.get("rank_ic_series")
+            or metrics.get("ic_series")
+            or _candidate_value(candidate, "returns_series")
+            or factor_values
+        )
+        forward_returns = _number_series(
+            metrics.get("forward_returns")
+            or metrics.get("forward_returns_series")
+            or metrics.get("rank_ic_series")
+            or metrics.get("ic_series")
+            or _candidate_value(candidate, "forward_returns")
+            or returns
+        )
+
+        sample_size = min(len(factor_values), len(returns), len(forward_returns))
+        if sample_size < _MIN_CANDIDATE_SERIES:
+            report = _candidate_report(
+                ok=False,
+                passed=False,
+                recommendation="insufficient_data",
+                score=0.0,
+                sample_size=sample_size,
+                data_source="official_metrics",
+                reason=(
+                    "anti-overfit requires at least "
+                    f"{_MIN_CANDIDATE_SERIES} official robustness samples"
+                ),
+            )
+            _attach_submission_report(candidate, "anti_overfit_report", report)
+            return report
+
+        try:
+            result = run_anti_overfit_suite(
+                factor_values[:sample_size],
+                returns[:sample_size],
+                forward_returns=forward_returns[:sample_size],
+            )
+        except (TypeError, ValueError, OverflowError) as exc:
+            report = _candidate_report(
+                ok=False,
+                passed=False,
+                recommendation="block",
+                score=0.0,
+                sample_size=sample_size,
+                data_source="official_metrics",
+                reason=f"anti-overfit suite failed: {exc.__class__.__name__}",
+            )
+            _attach_submission_report(candidate, "anti_overfit_report", report)
+            return report
+
+        payload = result.to_dict()
+        passed = bool(result.passed)
+        recommendation = (
+            "pass"
+            if passed
+            else ("caution" if result.overall_score >= 50.0 else "block")
+        )
+        report = {
+            "ok": True,
+            "schema_version": ANTI_OVERFIT_SCHEMA_VERSION,
+            "passed": passed,
+            "score": round(float(result.overall_score), 4),
+            "recommendation": recommendation,
+            "sample_size": sample_size,
+            "data_source": "official_metrics",
+            "suite": payload,
+            "warnings": list(result.warnings),
+        }
+        if not passed:
+            report["reason"] = "statistical_robustness_below_threshold"
+        _attach_submission_report(candidate, "anti_overfit_report", report)
+        return report
+
+
+def evaluate_candidate(candidate: dict[str, Any] | Any) -> dict[str, Any]:
+    return AntiOverfitService().evaluate(candidate)
+
 # ═══════════════════════════════════════════════════════════════════════
 # Internal helpers
 # ═══════════════════════════════════════════════════════════════════════
+
+
+def _candidate_report(
+    *,
+    ok: bool,
+    passed: bool,
+    recommendation: str,
+    score: float,
+    sample_size: int,
+    data_source: str,
+    reason: str,
+) -> dict[str, Any]:
+    return {
+        "ok": bool(ok),
+        "schema_version": ANTI_OVERFIT_SCHEMA_VERSION,
+        "passed": bool(passed),
+        "score": float(score),
+        "recommendation": recommendation,
+        "sample_size": int(sample_size),
+        "data_source": data_source,
+        "reason": reason,
+    }
+
+
+def _candidate_metrics(candidate: dict[str, Any] | Any) -> dict[str, Any]:
+    metrics = _candidate_value(candidate, "official_metrics")
+    return metrics if isinstance(metrics, dict) else {}
+
+
+def _candidate_value(candidate: dict[str, Any] | Any, key: str) -> Any:
+    if isinstance(candidate, dict):
+        return candidate.get(key)
+    return getattr(candidate, key, None)
+
+
+def _number_series(value: Any) -> list[float]:
+    if not isinstance(value, (list, tuple)):
+        return []
+    result: list[float] = []
+    for item in value:
+        try:
+            number = float(item)
+        except (TypeError, ValueError):
+            continue
+        if math.isfinite(number):
+            result.append(number)
+    return result
+
+
+def _attach_submission_report(candidate: dict[str, Any] | Any, key: str, report: dict[str, Any]) -> None:
+    if isinstance(candidate, dict):
+        submission = candidate.get("submission")
+        if not isinstance(submission, dict):
+            submission = {}
+            candidate["submission"] = submission
+        submission[key] = report
+        return
+    submission = getattr(candidate, "submission", None)
+    if not isinstance(submission, dict):
+        submission = {}
+        setattr(candidate, "submission", submission)
+    submission[key] = report
 
 def _rank_ic(x: list[float], y: list[float]) -> list[float]:
     """Compute rank IC (Spearman correlation) per cross-section.

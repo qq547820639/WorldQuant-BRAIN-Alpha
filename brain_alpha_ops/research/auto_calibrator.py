@@ -451,17 +451,10 @@ class AutoCalibrator:
 
         Data format is compatible with calibrate_weights.py:calibrate_prior_weights().
         """
-        import importlib.util
-        import os
         try:
-            _mod_path = os.path.join(
-                os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
-                "calibrate_weights.py",
-            )
-            _spec = importlib.util.spec_from_file_location("calibrate_weights", _mod_path)
-            _mod = importlib.util.module_from_spec(_spec)
-            _spec.loader.exec_module(_mod)
-            return _mod.calibrate_prior_weights(records, target_metric="sharpe")
+            from calibrate_weights import calibrate_prior_weights
+
+            return calibrate_prior_weights(records, target_metric="sharpe")
         except (ImportError, FileNotFoundError, AttributeError):
             return {
                 "sample_size": len(records),
@@ -473,17 +466,10 @@ class AutoCalibrator:
 
         Data format is compatible with calibrate_weights.py:calibrate_scorecard_weights().
         """
-        import importlib.util
-        import os
         try:
-            _mod_path = os.path.join(
-                os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
-                "calibrate_weights.py",
-            )
-            _spec = importlib.util.spec_from_file_location("calibrate_weights", _mod_path)
-            _mod = importlib.util.module_from_spec(_spec)
-            _spec.loader.exec_module(_mod)
-            return _mod.calibrate_scorecard_weights(records)
+            from calibrate_weights import calibrate_scorecard_weights
+
+            return calibrate_scorecard_weights(records)
         except (ImportError, FileNotFoundError, AttributeError):
             return {
                 "sample_size": len(records),
