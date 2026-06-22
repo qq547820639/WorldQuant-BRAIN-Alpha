@@ -44,6 +44,8 @@ import {
   simulationCandidateIds,
   workflowCandidatesForQueue,
   candidateMatchesQueueView,
+  DEFAULT_TARGET_POOL_SIZE,
+  MAX_FILTER_LENGTH,
 } from "./CandidateTableUtils";
 import {
   CandidateMobileCard,
@@ -55,10 +57,8 @@ import { CandidateTableToolbar } from "./CandidateTableToolbar";
 import type { QualitySummaryData } from "./CandidateTableToolbar";
 import { useCandidateColumns } from "./useCandidateColumns";
 
-const DEFAULT_TARGET_POOL_SIZE = 10;
 const AUTO_SIMULATION_BATCH_SIZE = 3;
 const MAX_AUTO_OPTIMIZATION_CYCLES = 1;
-const MAX_FILTER_LENGTH = 200;
 const PAGE_SIZE = 20;
 
 type SortKey = "score" | "status" | "created";

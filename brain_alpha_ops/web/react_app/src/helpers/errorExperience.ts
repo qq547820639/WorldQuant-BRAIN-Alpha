@@ -28,6 +28,8 @@ export interface ApiErrorExperiencePayload {
   data?: ApiErrorExperiencePayload;
 }
 
+export const RAW_UNSAFE_DISPLAY_TEXT_PATTERN = /(?:raw\s+backend|raw_backend|RAW_BACKEND|SESSION_INVALID|session_invalid|invalid local session|traceback|exception|stack trace|csrf[_-]?token|session[_-]?id|access[_-]?token|refresh[_-]?token|api[_-]?key|client[_-]?secret|password|passwd|pwd|token=|password=|api_key=|csrf_token=)/i;
+
 const SESSION_INVALID_VALUES = new Set(["session_invalid", "invalid local session", "session_expired"]);
 
 export function userErrorFromPayload(payload: ApiErrorExperiencePayload | null | undefined): ApiUserError | null {

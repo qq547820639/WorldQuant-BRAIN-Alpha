@@ -4,13 +4,13 @@
  */
 
 import type { AlphaLifecycleTrace, Candidate, SSEEvent } from "@/types";
+import { RAW_UNSAFE_DISPLAY_TEXT_PATTERN } from "@/helpers/errorExperience";
 
-const DEFAULT_TARGET_POOL_SIZE = 10;
 const MIN_TARGET_POOL_SIZE = 1;
 const MAX_TARGET_POOL_SIZE = 100;
-const MAX_FILTER_LENGTH = 200;
-const RAW_CANDIDATE_DISPLAY_TEXT_PATTERN = /(?:raw\s+backend|raw_backend|RAW_BACKEND|SESSION_INVALID|session_invalid|invalid local session|traceback|exception|stack trace|csrf[_-]?token|session[_-]?id|access[_-]?token|refresh[_-]?token|api[_-]?key|client[_-]?secret|password|passwd|pwd|token=|password=|api_key=|csrf_token=)/i;
 
+export const DEFAULT_TARGET_POOL_SIZE = 10;
+export const MAX_FILTER_LENGTH = 200;
 export type CandidateQueueView =
   | "candidates"
   | "pending_backtest"
@@ -97,7 +97,7 @@ export function candidateText(value: unknown) {
 export function safeCandidateDisplayText(value: unknown, fallback: string) {
   const text = candidateText(value).trim();
   if (!text) return fallback;
-  return RAW_CANDIDATE_DISPLAY_TEXT_PATTERN.test(text) ? fallback : text;
+  return RAW_UNSAFE_DISPLAY_TEXT_PATTERN.test(text) ? fallback : text;
 }
 
 export function candidateCreatedAt(candidate: Candidate) {

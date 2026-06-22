@@ -1,7 +1,7 @@
 /** Scoring visualization — Terminal Precision v2.0 */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { cancelResultExperience, requestJobCancel } from "@/api/jobCancel";
-import { apiErrorMessage } from "@/helpers/errorExperience";
+import { apiErrorMessage, RAW_UNSAFE_DISPLAY_TEXT_PATTERN } from "@/helpers/errorExperience";
 import { resolveJobEventState } from "@/helpers/runPayload";
 import { useApi } from "@/hooks/useApi";
 import { useSSE } from "@/hooks/useSSE";
@@ -13,7 +13,6 @@ import type {
   ScoringAttributionResponse, ScoringResult, SSEEvent, UnifiedProgress,
 } from "@/types";
 
-const RAW_SCORING_TEXT_PATTERN = /(?:raw\s+backend|raw_backend|RAW_BACKEND|SESSION_INVALID|session_invalid|invalid local session|traceback|exception|stack trace|csrf[_-]?token|session[_-]?id|access[_-]?token|refresh[_-]?token|api[_-]?key|client[_-]?secret|password|passwd|pwd|token=|password=|api_key=|csrf_token=)/i;
 const BACKEND_STATUS_CODE_PATTERN = /^[A-Z][A-Z0-9_]{2,}$/;
 const SNAKE_STATUS_CODE_PATTERN = /^[a-z]+(?:_[a-z0-9]+)+$/;
 
@@ -539,7 +538,7 @@ function safeScoringText(value: unknown, fallback: string) {
 }
 
 function isUnsafeScoringText(text: string) {
-  return RAW_SCORING_TEXT_PATTERN.test(text) || BACKEND_STATUS_CODE_PATTERN.test(text);
+  return RAW_UNSAFE_DISPLAY_TEXT_PATTERN.test(text) || BACKEND_STATUS_CODE_PATTERN.test(text);
 }
 
 function metricWithStatus(primary: unknown, status: unknown, fallback: unknown): string | number | undefined {

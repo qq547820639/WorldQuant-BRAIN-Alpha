@@ -79,12 +79,12 @@ export function useSSE(
         const es = new EventSource(withStreamToken(streamUrl), { withCredentials: true });
         eventSourceRef.current = es;
 
-	        es.onopen = () => {
-	          setConnected(true);
-	          setExhausted(false);
-	          reconnectCountRef.current = 0;
-	          setReconnectAttempts(0);
-	        };
+        es.onopen = () => {
+          setConnected(true);
+          setExhausted(false);
+          reconnectCountRef.current = 0;
+          setReconnectAttempts(0);
+        };
 
         const handleMessage = (msg: MessageEvent, fallbackType?: NamedSSEEvent) => {
           try {
@@ -144,15 +144,15 @@ export function useSSE(
             setExhausted(true);
             onExhaustedRef.current?.();
           }
-	        };
-		      } catch (err) {
-		        // EventSource constructor failed — retry
-		        reportIgnoredError("SSE EventSource connection failed", err);
-		        if (reconnectCountRef.current < maxReconnectAttempts) {
-	          reconnectCountRef.current += 1;
-	          setReconnectAttempts(reconnectCountRef.current);
-	          scheduleReconnect(connect, reconnectIntervalMs);
-	        } else {
+        };
+      } catch (err) {
+        // EventSource constructor failed — retry
+        reportIgnoredError("SSE EventSource connection failed", err);
+        if (reconnectCountRef.current < maxReconnectAttempts) {
+          reconnectCountRef.current += 1;
+          setReconnectAttempts(reconnectCountRef.current);
+          scheduleReconnect(connect, reconnectIntervalMs);
+        } else {
           clearReconnectTimer();
           setExhausted(true);
           onExhaustedRef.current?.();
@@ -167,7 +167,7 @@ export function useSSE(
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [url, reconnectIntervalMs, maxReconnectAttempts]);
 
-	  return { connected, exhausted, reconnectAttempts, lastEvent, close };
+  return { connected, exhausted, reconnectAttempts, lastEvent, close };
 
   function clearReconnectTimer() {
     if (reconnectTimerRef.current) {
