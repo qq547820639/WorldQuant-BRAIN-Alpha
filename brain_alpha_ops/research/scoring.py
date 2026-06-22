@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import math
 import re
 from typing import TYPE_CHECKING
@@ -536,7 +537,6 @@ def empirical_score(metrics: dict, thresholds: QualityThresholds, settings: dict
     # P1-3: Log WARNING when BRAIN API fitness differs significantly from local calculation
     fitness_diff = abs(fitness - calculate_fitness(sharpe, returns, turnover, raw_turnover=turnover_raw))
     if fitness > 0 and fitness_diff > 0.05:
-        import logging
         logging.warning(
             "Fitness crosscheck discrepancy: BRAIN API fitness=%.4f vs local=%.4f (diff=%.4f). "
             "This may indicate formula mismatch or API version differences.",
@@ -841,7 +841,7 @@ def estimate_score_confidence(scorecard: dict) -> dict:
         dispersion = 1.0
     else:
         mean_score = sum(scores) / n_items
-        variance = sum((s - mean_score) ** 2 for s in scores) / max(n_items - 1, 1)
+        variance = sum((s - mean_score) ** 2 for s in scores) / n_items
         std_dev = variance ** 0.5
         dispersion = std_dev / max(mean_score, 0.01)
 

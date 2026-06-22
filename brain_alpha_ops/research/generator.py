@@ -183,8 +183,7 @@ class CandidateGenerator:
                     effective_limit = min(pool_size, dynamic_limit) if pool_size > 0 else dynamic_limit
                     return [fid for _, fid in scored[:effective_limit]]
             except Exception:
-                import logging
-                logging.getLogger(__name__).warning(
+                logger.warning(
                     "OfficialDataLoader field pool failed for dataset %s", dataset_id, exc_info=True)
 
         # Priority 2: context_defaults (lazy-loaded from official JSON files)
@@ -644,7 +643,7 @@ _BUILTIN_FALLBACK_TEMPLATES: list[tuple[str, str]] = [
     ("rank(subtract(ts_mean({f1}, {w}), ts_mean({f2}, {w})))", "relative_momentum"),
     ("rank(ts_covariance({f1}, {f2}, {w}))", "co_movement"),
     ("rank(if_else(greater(ts_delta({f1}, {w}), 0), {f1}, reverse({f1})))", "conditional"),
-    ("rank(winsorize(ts_delta({f1}, {w}), 3))", "momentum"),
+    ("rank(winsorize(ts_delta({f1}, {w}), 4))", "momentum"),
     ("rank(divide(ts_std_dev({f1}, {w}), ts_std_dev({f2}, {w})))", "volatility"),
     ("rank(divide(ts_mean({f1}, {w}), ts_std_dev({f2}, {w})))", "hybrid"),
     ("rank(ts_sum(ts_delta({f1}, {w}), {w}))", "momentum"),

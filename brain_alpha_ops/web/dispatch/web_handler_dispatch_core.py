@@ -57,11 +57,11 @@ def apply_rate_limit(handler: Any, ctx: Any, method: str, path: str) -> bool:
     rate_result = ctx.rate_limit_request(rate_limit_key(handler), method, path)
     if rate_result.get("ok"):
         return True
-    retry_value = rate_result.get("retry_after") or 1
+    retry_value = rate_result.get("retry_after") or 10
     try:
         retry_after = str(int(float(retry_value)))
     except (TypeError, ValueError):
-        retry_after = "1"
+        retry_after = "10"
     handler._json(
         error_response({"ok": False, **rate_result}, fallback_kind="web_rate_limited"),
         status=429,
