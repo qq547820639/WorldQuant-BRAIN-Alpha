@@ -234,8 +234,8 @@ def compute_placebo_test(
             "warning": f"insufficient samples ({n} < {_IC_STABILITY_WINDOW_MIN})",
         }
 
-    import random
-    random.seed(42)
+    import random as _random
+    rng = _random.Random(42)
 
     real_ic = abs(_spearman_r(factor_values[:n], returns[:n]))
 
@@ -243,7 +243,7 @@ def compute_placebo_test(
     placebo_ics: list[float] = []
     ret_list = list(returns[:n])
     for _ in range(trials):
-        random.shuffle(ret_list)
+        rng.shuffle(ret_list)
         placebo_ics.append(abs(_spearman_r(factor_values[:n], ret_list)))
 
     # p-value: fraction of placebo ICs >= real IC

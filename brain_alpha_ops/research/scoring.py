@@ -841,7 +841,7 @@ def estimate_score_confidence(scorecard: dict) -> dict:
         dispersion = 1.0
     else:
         mean_score = sum(scores) / n_items
-        variance = sum((s - mean_score) ** 2 for s in scores) / n_items
+        variance = sum((s - mean_score) ** 2 for s in scores) / max(n_items - 1, 1)
         std_dev = variance ** 0.5
         dispersion = std_dev / max(mean_score, 0.01)
 

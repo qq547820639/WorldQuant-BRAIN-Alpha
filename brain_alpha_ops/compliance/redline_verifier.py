@@ -128,6 +128,3 @@ if __name__ == "__main__":
 
 # Backward-compat re-export for Phase 3.x migration
 from .redline_models import RedLineViolation  # noqa: F401
-
-# Backward-compat re-export for Phase 3.x migration
-from .redline_models import RedLineViolation  # noqa: F401

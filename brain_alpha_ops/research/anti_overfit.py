@@ -141,7 +141,7 @@ def _placebo_test(expression: str, values: list[float]) -> dict[str, Any]:
         rng.shuffle(shuffled)
         signs = [1 if rng.random() >= 0.5 else -1 for _ in shuffled]
         placebo_means.append(abs(mean(value * sign for value, sign in zip(shuffled, signs))))
-    threshold = sorted(placebo_means)[94]
+    threshold = sorted(placebo_means)[int(len(placebo_means) * 0.95) - 1]
     passed = observed > threshold
     return _test("placebo", passed, {"observed_abs_ic": round(observed, 6), "placebo_p95": round(threshold, 6)})
 

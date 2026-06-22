@@ -363,7 +363,10 @@ class IterativeOptimizer:
         if not target or target not in expression:
             return expression
 
-        replacement = self._rng.choice([f for f in alt_pool if f != target])
+        alternatives = [f for f in alt_pool if f != target]
+        if not alternatives:
+            return expression
+        replacement = self._rng.choice(alternatives)
         return self._safe_replace_token(expression, target, replacement)
 
     def field_swap_semantic(self, expression: str, dataset_id: str = "") -> str:
@@ -388,8 +391,10 @@ class IterativeOptimizer:
         if self._mapper and dataset_id:
             replacements = self._mapper.fields_for(dataset_id)
             if replacements:
-                replacement = self._rng.choice([f for f in replacements if f != target])
-                return self._safe_replace_token(expression, target, replacement)
+                alternatives = [f for f in replacements if f != target]
+                if alternatives:
+                    replacement = self._rng.choice(alternatives)
+                    return self._safe_replace_token(expression, target, replacement)
 
         return expression
 

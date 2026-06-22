@@ -64,6 +64,8 @@ from .safety import SubmissionLedger
 from .strategy_lifecycle import StrategyLifecycleTracker
 
 SUBMITTED_CLOUD_STATUSES = {"ACTIVE", "SUBMITTED", "PRODUCTION", "CONDUCTED"}
+CONVERGENCE_REPORT_INTERVAL = 10
+CONTEXT_REFRESH_INTERVAL_SECONDS = 86400
 
 
 # NOTE: Mixin inheritance reduced from 10+ to 2 (PipelineServiceFactoryMixin, PipelineSnapshotMixin). Remaining services are accessed via self.services composition container. See pipeline_services_container.py.
@@ -200,9 +202,11 @@ class AlphaResearchPipeline(
             metrics=reward_snapshot.metrics,
         )
 
+        conv_summary = self.convergence.summary()
+
         # ── P2-2: Output convergence report every 10 cycles ──
-        if cycle > 0 and cycle % 10 == 0:
-            conv = self.convergence.summary()
+        if cycle > 0 and cycle % CONVERGENCE_REPORT_INTERVAL == 0:
+            conv = conv_summary
             self.services.runtime._event(
                 "convergence_report",
                 f"Cycle {cycle} convergence: {conv['sharpe_trend']}, "
@@ -242,8 +246,8 @@ class AlphaResearchPipeline(
         if (
             cycle > 0
             and self.config.budget.enable_secondary_fusion
-            and self.convergence.summary().get("stalled")
-            and self.convergence.summary().get("stall_cycles", 0) >= 3
+            and conv_summary.get("stalled")
+            and conv_summary.get("stall_cycles", 0) >= 3
         ):
             try:
                 self.services.backtest_flow._try_fusion_top_candidates(pool_by_expression, blocked_expressions=None, cycle=cycle)
@@ -455,7 +459,7 @@ class AlphaResearchPipeline(
 
             # ── P2-5: Periodic context refresh (every ~24h / 50 cycles) ──
             if self._loader and (cycle == 1 or (cycle % 50 == 0) or
-                                (time.time() - self._last_context_refresh > 86400)):
+                                (time.time() - self._last_context_refresh > CONTEXT_REFRESH_INTERVAL_SECONDS)):
                 try:
                     refresh_result = self._loader.refresh()
                     self._last_context_refresh = time.time()
