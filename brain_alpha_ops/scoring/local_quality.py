@@ -94,7 +94,7 @@ def nesting_depth(expression: str) -> int:
 
 def local_quality(
     candidate: Candidate,
-    min_score: float,
+    min_quality_level: float,
     config: LocalQualityConfig | None = None,
 ) -> dict:
     cfg = config or LocalQualityConfig()
@@ -140,11 +140,11 @@ def local_quality(
         reasons.extend("high_turnover_generation_risk:" + reason for reason in generation_risks)
 
     score = max(0.0, min(100.0, round(score, 2)))
-    passed = score >= min_score * 10 and not generation_risks
+    passed = score >= min_quality_level * 10 and not generation_risks
     return {
         "schema_version": "local-quality-v2",
         "score": score,
-        "threshold": min_score * 10,
+        "threshold": min_quality_level * 10,
         "passed": passed,
         "reasons": reasons or ["passed_local_prefilter"],
         "field_count": len(set(fields)),

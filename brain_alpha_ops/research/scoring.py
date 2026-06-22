@@ -32,6 +32,9 @@ if TYPE_CHECKING:
 
 _economic_logic_score = economic_logic_score
 
+SCORECARD_SCHEMA_VERSION = "scorecard-v2.3"
+PRODUCTION_GATE_SCHEMA_VERSION = "production-gate-v2.2"
+
 
 def _format_empirical_failure(row: dict) -> str:
     return (
@@ -71,7 +74,7 @@ def build_scorecard(
         total = _bounded_score(local_rank_score)
         score_basis = "local_prior"
     scorecard = {
-        "schema_version": "scorecard-v2.3",
+        "schema_version": SCORECARD_SCHEMA_VERSION,
         "total_score": total,
         "decision_band": decision_band(total, empirical.get("hard_gate_failed", False), scoring=scoring),
         "score_basis": score_basis,
@@ -625,7 +628,7 @@ def evaluate_quality_gate(
         warnings.append("research_candidate_only_not_submission_ready")
 
     gate = {
-        "schema_version": "production-gate-v2.2",
+        "schema_version": PRODUCTION_GATE_SCHEMA_VERSION,
         "submission_ready": passed,
         "status": "SUBMISSION_READY" if passed else "NEEDS_ITERATION",
         "failed_reasons": failed,

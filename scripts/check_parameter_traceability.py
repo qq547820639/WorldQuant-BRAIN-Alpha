@@ -502,7 +502,7 @@ def validate_generation_mutation_no_custom_extensions(
     coverage_paths.append(_coverage_path("evolution_mutation_engine", "brain_alpha_ops.research.evolution.MutationEngine", "warning", "inspect mutation field/operator constants against official context names or FASTEXPR aliases", evolution_issues, evolution_details))
 
     try:
-        from brain_alpha_ops.research.generator import OFFICIAL_OPERATOR_SUBSTITUTE_FAMILIES
+        from brain_alpha_ops.research.generator_metadata import OFFICIAL_OPERATOR_SUBSTITUTE_FAMILIES
         legacy_ops = sorted({str(operator).lower() for operators in OFFICIAL_OPERATOR_SUBSTITUTE_FAMILIES.values() for operator in operators})
         legacy_issues, legacy_details = _surface_warnings("legacy_mutation", [], legacy_ops, official_fields, official_operators)
         legacy_details["operator_source"] = "OFFICIAL_OPERATOR_SUBSTITUTE_FAMILIES"

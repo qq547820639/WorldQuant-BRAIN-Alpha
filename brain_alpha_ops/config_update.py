@@ -12,6 +12,7 @@ from brain_alpha_ops.config_type_validation import (
     type_hint_name,
     value_matches_type_hint,
 )
+from brain_alpha_ops.redaction import redact_text
 
 
 def update_dataclass_from_mapping(
@@ -31,17 +32,17 @@ def update_dataclass_from_mapping(
     # returned instance is the new frozen object; the caller is responsible
     # for rebinding it (``setattr`` on the parent or reassignment).
     pending: dict[str, Any] = {}
-    for key, value in data.items():
-        if key not in field_map:
+    for config_key, value in data.items():
+        if config_key not in field_map:
             if logger:
                 logger.warning(
                     "unknown config key '%s' at %s — ignored; check for typos in config file",
-                    key, path or "(root)",
+                    config_key, redact_text(path or "(root)"),
                 )
             continue
-        item = field_map[key]
-        current = getattr(instance, key)
-        field_path = f"{path}.{key}" if path else key
+        item = field_map[config_key]
+        current = getattr(instance, config_key)
+        field_path = f"{path}.{config_key}" if path else config_key
         if is_dataclass(current) and isinstance(value, dict):
             new_child = update_dataclass_from_mapping(
                 current,
@@ -51,7 +52,7 @@ def update_dataclass_from_mapping(
                 logger=logger,
             )
             if new_child is not current:
-                pending[key] = new_child
+                pending[config_key] = new_child
         elif is_dataclass(current):
             if logger:
                 logger.warning(
@@ -74,7 +75,7 @@ def update_dataclass_from_mapping(
                 raise error_cls(
                     f"{field_path} has invalid type: expected {expected_name}, got {type(value).__name__}"
                 )
-            pending[key] = value
+            pending[config_key] = value
     if pending:
         try:
             new_instance = dataclasses.replace(instance, **pending)

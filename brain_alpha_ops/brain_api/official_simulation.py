@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 import time
 import urllib.parse
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import TimeoutError as FuturesTimeoutError, ThreadPoolExecutor, as_completed
 from typing import Any, Callable, Iterable
 
 from .base import BrainAPIError
@@ -103,6 +103,7 @@ class OfficialSimulationSubmissionMixin:
         concurrency: int = _MAX_DEFAULT_CONCURRENT_OFFICIAL_JOBS,
         *,
         return_exceptions: bool = False,
+        timeout: float = 300,
     ) -> list[dict[str, Any] | BaseException]:
         rows = list(alphas or [])
         if not rows:
@@ -117,7 +118,16 @@ class OfficialSimulationSubmissionMixin:
             for future in as_completed(futures):
                 index = futures[future]
                 try:
-                    results[index] = future.result()
+                    results[index] = future.result(timeout=timeout)
+                except FuturesTimeoutError:
+                    future.cancel()
+                    timeout_exc = FuturesTimeoutError(f"simulation timed out after {timeout}s")
+                    results[index] = timeout_exc if return_exceptions else {
+                        "ok": False,
+                        "index": index,
+                        "status": "TIMEOUT",
+                        "error": f"simulation timed out after {timeout}s",
+                    }
                 except Exception as exc:  # pragma: no cover - defensive; worker already wraps expected failures
                     results[index] = exc if return_exceptions else {
                         "ok": False,
@@ -133,6 +143,7 @@ class OfficialSimulationSubmissionMixin:
         concurrency: int = _MAX_DEFAULT_CONCURRENT_OFFICIAL_JOBS,
         *,
         return_exceptions: bool = False,
+        timeout: float = 300,
     ) -> list[dict[str, Any] | BaseException]:
         ids = [str(alpha_id or "").strip() for alpha_id in (alpha_ids or [])]
         if not ids:
@@ -147,7 +158,18 @@ class OfficialSimulationSubmissionMixin:
             for future in as_completed(futures):
                 index = futures[future]
                 try:
-                    results[index] = future.result()
+                    results[index] = future.result(timeout=timeout)
+                except FuturesTimeoutError:
+                    future.cancel()
+                    timeout_exc = FuturesTimeoutError(f"check timed out after {timeout}s")
+                    results[index] = timeout_exc if return_exceptions else {
+                        "ok": False,
+                        "index": index,
+                        "alpha_id": ids[index],
+                        "status": "TIMEOUT",
+                        "complete": False,
+                        "error": f"check timed out after {timeout}s",
+                    }
                 except Exception as exc:  # pragma: no cover - defensive; worker already wraps expected failures
                     results[index] = exc if return_exceptions else {
                         "ok": False,

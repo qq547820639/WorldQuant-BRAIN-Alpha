@@ -23,7 +23,7 @@ def test_local_quality_passes_simple_expression():
         expression="rank(ts_mean(returns, 20))",
         hypothesis="momentum based on 20 day average returns",
     )
-    result = local_quality(candidate, min_score=4.0)
+    result = local_quality(candidate, min_quality_level=4.0)
     assert result["passed"] is True
     assert result["score"] >= 40.0
     assert "passed_local_prefilter" in result["reasons"]
@@ -36,7 +36,7 @@ def test_local_quality_fails_no_fields():
         expression="rank(1)",
         hypothesis="test",
     )
-    result = local_quality(candidate, min_score=4.0)
+    result = local_quality(candidate, min_quality_level=4.0)
     assert "no_known_data_field" in result["reasons"]
 
 

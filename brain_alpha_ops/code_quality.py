@@ -17,6 +17,8 @@ import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from brain_alpha_ops.redaction import redact_error_message, redact_text
+
 logger = logging.getLogger(__name__)
 
 
@@ -52,7 +54,7 @@ def _count_lines(filepath: Path) -> int:
         content = filepath.read_text(encoding="utf-8")
         return len(content.splitlines())
     except Exception as exc:
-        logger.debug("Failed to count lines in %s: %s", filepath, exc)
+        logger.debug("Failed to count lines in %s: %s", redact_text(filepath), redact_error_message(exc))
         return 0
 
 
@@ -63,7 +65,7 @@ def _has_docstring(filepath: Path) -> bool:
         tree = ast.parse(content)
         return ast.get_docstring(tree) is not None
     except Exception as exc:
-        logger.debug("Failed to check docstring in %s: %s", filepath, exc)
+        logger.debug("Failed to check docstring in %s: %s", redact_text(filepath), redact_error_message(exc))
         return False
 
 
@@ -74,7 +76,7 @@ def _count_functions(filepath: Path) -> int:
         tree = ast.parse(content)
         return sum(1 for node in ast.walk(tree) if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)))
     except Exception as exc:
-        logger.debug("Failed to count functions in %s: %s", filepath, exc)
+        logger.debug("Failed to count functions in %s: %s", redact_text(filepath), redact_error_message(exc))
         return 0
 
 
@@ -85,7 +87,7 @@ def _count_classes(filepath: Path) -> int:
         tree = ast.parse(content)
         return sum(1 for node in ast.walk(tree) if isinstance(node, ast.ClassDef))
     except Exception as exc:
-        logger.debug("Failed to count classes in %s: %s", filepath, exc)
+        logger.debug("Failed to count classes in %s: %s", redact_text(filepath), redact_error_message(exc))
         return 0
 
 
@@ -96,7 +98,7 @@ def _count_imports(filepath: Path) -> int:
         tree = ast.parse(content)
         return sum(1 for node in ast.walk(tree) if isinstance(node, (ast.Import, ast.ImportFrom)))
     except Exception as exc:
-        logger.debug("Failed to count imports in %s: %s", filepath, exc)
+        logger.debug("Failed to count imports in %s: %s", redact_text(filepath), redact_error_message(exc))
         return 0
 
 
@@ -106,7 +108,7 @@ def _has_type_annotations(filepath: Path) -> bool:
         content = filepath.read_text(encoding="utf-8")
         return "def " in content and "->" in content
     except Exception as exc:
-        logger.debug("Failed to check type annotations in %s: %s", filepath, exc)
+        logger.debug("Failed to check type annotations in %s: %s", redact_text(filepath), redact_error_message(exc))
         return False
 
 

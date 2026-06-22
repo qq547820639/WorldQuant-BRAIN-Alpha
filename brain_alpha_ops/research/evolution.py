@@ -427,7 +427,12 @@ class CrossoverEngine:
         if not tokens_a or not tokens_b:
             return None
 
-        # Simple crossover: take first N tokens from A, rest from B
+        # Simple crossover: take first N tokens from A, rest from B.
+        # This deliberately produces many syntactically invalid expressions by
+        # cutting at arbitrary token boundaries. The high rejection rate is
+        # acceptable because it maximises exploration diversity — each valid
+        # offspring discovers novel sub-expression combinations that
+        # structure-aware crossover would never generate.
         crossover_point = self.rng.randint(1, min(len(tokens_a), len(tokens_b)) - 1)
 
         combined = " ".join(tokens_a[:crossover_point] + tokens_b[crossover_point:])
