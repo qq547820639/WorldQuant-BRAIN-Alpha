@@ -561,4 +561,7 @@ def _job_safe(value: Any) -> Any:
     if isinstance(safe, dict) and "result" in safe:
         safe = dict(safe)
         safe["result"] = _compact_runtime_result(safe.get("result"))
-    return redact_data(safe)
+    return redact_data(
+        safe,
+        key_fragments=("credential", "secret", "api_key", "session_token", "access_token", "refresh_token"),
+    )

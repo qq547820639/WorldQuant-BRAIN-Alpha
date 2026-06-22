@@ -139,7 +139,7 @@ class ConvergenceTracker:
         self._window_size = max(5, int(window_size))
         self._stall_threshold = max(3, int(stall_threshold))
         self._bootstrap_samples = max(100, int(bootstrap_samples))
-        self._rng = rng if rng is not None else random.Random(42)
+        self._rng = rng if rng is not None else random.Random()
         self._records: deque[CycleRecord] = deque(maxlen=self._window_size)
         self._all_records: list[CycleRecord] = []
         self._stall_counter: int = 0
@@ -400,12 +400,13 @@ class ConvergenceTracker:
         """
         n = len(values)
         if n < 3:
-            # Use a simple t-style interval; not enough data for BCa.
+            # n < 3: use t-distribution interval (limited data)
             mean = sum(values) / n
             variance = sum((x - mean) ** 2 for x in values) / max(n - 1, 1)
             se = (variance / n) ** 0.5 if variance > 0 else 0.01
             z = 1.645  # 90% two-sided
             return (max(0.0, mean - z * se), mean + z * se)
+        # n 3-4: return (0.0, 0.0) - not enough for BCa, too much for t-dist to be reliable
         if n < 5:
             return (0.0, 0.0)
 

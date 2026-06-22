@@ -30,7 +30,6 @@ import logging
 import random
 import re
 from dataclasses import dataclass, field
-from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -48,7 +47,6 @@ from brain_alpha_ops.research.fallback_generation import normalize_operator_alia
 logger = logging.getLogger(__name__)
 
 
-@lru_cache(maxsize=1)
 def _current_official_operator_names() -> frozenset[str]:
     path = Path(__file__).resolve().parents[2] / "data" / "official_operators.json"
     try:

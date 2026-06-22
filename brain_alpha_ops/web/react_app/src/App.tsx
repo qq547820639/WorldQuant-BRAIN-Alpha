@@ -4,7 +4,7 @@
  * 渐进式 4 阶段导航，基于新架构重新实现
  */
 
-import { useState, useCallback, useRef, useEffect, useMemo } from "react";
+import { Suspense, useState, useCallback, useRef, useEffect, useMemo } from "react";
 import type {
   BacktestSlotsResponse,
   BrainCredentials,
@@ -75,9 +75,6 @@ interface SidebarBadges {
   checkpoint_status?: number;
   cloud?: string;
 }
-    </div>
-  );
-}
 
 // ── App Shell ───────────────────────────────────────────────────────────────
 
@@ -113,6 +110,11 @@ export default function App() {
   // P0-7 fix: replaced 4 independent useApi hooks with single GlobalDataProvider
   const globalData = useGlobalData();
 
+  const lastCandidatesErrorRef = useRef<string>('');
+  const lastSlotsErrorRef = useRef<string>('');
+  const lastCloudErrorRef = useRef<string>('');
+  const lastConfigErrorRef = useRef<string>('');
+
   useEffect(() => {
     // P1-4: build toast action buttons from the backend's next_action hint.
     const buildAction = (meta: ApiMeta | null, retryFn: () => void) => {
@@ -134,10 +136,22 @@ export default function App() {
     };
 
     const gd = globalData;
-    if (gd.candidates.error) notify("warning", `候选数据加载失败: ${safeDisplayErrorMessage(gd.candidates.error)}`, buildAction(gd.candidates.lastErrorMeta, () => { gd.refreshAll(); }));
-    if (gd.slots.error) notify("warning", `回测槽位加载失败: ${safeDisplayErrorMessage(gd.slots.error)}`, buildAction(gd.slots.lastErrorMeta, () => { gd.refreshAll(); }));
-    if (gd.cloud.error) notify("warning", `云端快照加载失败: ${safeDisplayErrorMessage(gd.cloud.error)}`, buildAction(gd.cloud.lastErrorMeta, () => { gd.refreshAll(); }));
-    if (gd.config.error) notify("warning", `配置状态加载失败: ${safeDisplayErrorMessage(gd.config.error)}`, buildAction(gd.config.lastErrorMeta, () => { gd.refreshAll(); }));
+    if (gd.candidates.error && gd.candidates.error !== lastCandidatesErrorRef.current) {
+      lastCandidatesErrorRef.current = gd.candidates.error;
+      notify("warning", `候选数据加载失败: ${safeDisplayErrorMessage(gd.candidates.error)}`, buildAction(gd.candidates.lastErrorMeta, () => { gd.refreshAll(); }));
+    }
+    if (gd.slots.error && gd.slots.error !== lastSlotsErrorRef.current) {
+      lastSlotsErrorRef.current = gd.slots.error;
+      notify("warning", `回测槽位加载失败: ${safeDisplayErrorMessage(gd.slots.error)}`, buildAction(gd.slots.lastErrorMeta, () => { gd.refreshAll(); }));
+    }
+    if (gd.cloud.error && gd.cloud.error !== lastCloudErrorRef.current) {
+      lastCloudErrorRef.current = gd.cloud.error;
+      notify("warning", `云端快照加载失败: ${safeDisplayErrorMessage(gd.cloud.error)}`, buildAction(gd.cloud.lastErrorMeta, () => { gd.refreshAll(); }));
+    }
+    if (gd.config.error && gd.config.error !== lastConfigErrorRef.current) {
+      lastConfigErrorRef.current = gd.config.error;
+      notify("warning", `配置状态加载失败: ${safeDisplayErrorMessage(gd.config.error)}`, buildAction(gd.config.lastErrorMeta, () => { gd.refreshAll(); }));
+    }
   }, [globalData, notify]);
 
   // Theme: sync document.documentElement class and localStorage

@@ -236,47 +236,52 @@ export default function CandidateTable({
   useEffect(() => { void refreshCheckResults(); }, [refreshCheckResults]);
 
   const handleTaskEvent = useCallback((event: SSEEvent) => {
-    const progress = event.progress || event.data || {};
-    setTaskProgress(progress as UnifiedProgress);
-    const outcome = resolveJobEventState(event, progress, {
-      failed: "候选池自动推进失败",
-      interrupted: "候选池自动推进已停止，结果未确认完成。",
-    });
-    if (outcome.kind === "failed") {
-      setTaskState("error"); setTaskError(outcome.message);
-      setTaskSuccessBanner(null);
-      updateAutoPipelineStage("idle"); notify(outcome.notifyType, outcome.message);
-      return;
-    }
-    if (outcome.kind === "interrupted") {
-      setTaskState("error"); setTaskError(outcome.message);
-      updateAutoPipelineStage("idle"); notify(outcome.notifyType, outcome.message);
-      setTaskId(null);
-      void loadCandidates().then(() => onCandidatePoolUpdated?.());
-      return;
-    }
-    if (outcome.kind === "success") {
-      setTaskState("success");
-      const result = event.result as { candidates?: Candidate[]; candidates_preview?: Candidate[]; count?: number; new_candidates?: Candidate[]; optimized_candidates?: Candidate[] } | undefined;
-      const rows = result?.candidates || [];
-      if (rows.length) setCandidates(rows);
-      // P2-3: Store success banner data
-      const newCount = Array.isArray(result?.new_candidates) ? result.new_candidates.length : (rows.length > 0 ? rows.length : 0);
-      const optimizedCount = Array.isArray(result?.optimized_candidates) ? result.optimized_candidates.length : 0;
-      setTaskSuccessBanner({
-        newCount,
-        optimizedCount,
-        message: outcome.message,
+    try {
+      const progress = event.progress || event.data || {};
+      setTaskProgress(progress as UnifiedProgress);
+      const outcome = resolveJobEventState(event, progress, {
+        failed: "候选池自动推进失败",
+        interrupted: "候选池自动推进已停止，结果未确认完成。",
       });
-      notify(outcome.notifyType, `候选池自动推进完成${result?.count ? `: ${result.count}` : ""}`);
-      void loadCandidates().then(() => {
-        onCandidatePoolUpdated?.();
-        resetAutoPipelineStageIfCurrent("await_generation");
-      });
-      setTaskId(null);
-      return;
+      if (outcome.kind === "failed") {
+        setTaskState("error"); setTaskError(outcome.message);
+        setTaskSuccessBanner(null);
+        updateAutoPipelineStage("idle"); notify(outcome.notifyType, outcome.message);
+        return;
+      }
+      if (outcome.kind === "interrupted") {
+        setTaskState("error"); setTaskError(outcome.message);
+        updateAutoPipelineStage("idle"); notify(outcome.notifyType, outcome.message);
+        setTaskId(null);
+        void loadCandidates().then(() => onCandidatePoolUpdated?.());
+        return;
+      }
+      if (outcome.kind === "success") {
+        setTaskState("success");
+        const result = event.result as { candidates?: Candidate[]; candidates_preview?: Candidate[]; count?: number; new_candidates?: Candidate[]; optimized_candidates?: Candidate[] } | undefined;
+        const rows = result?.candidates || [];
+        if (rows.length) setCandidates(rows);
+        // P2-3: Store success banner data
+        const newCount = Array.isArray(result?.new_candidates) ? result.new_candidates.length : (rows.length > 0 ? rows.length : 0);
+        const optimizedCount = Array.isArray(result?.optimized_candidates) ? result.optimized_candidates.length : 0;
+        setTaskSuccessBanner({
+          newCount,
+          optimizedCount,
+          message: outcome.message,
+        });
+        notify(outcome.notifyType, `候选池自动推进完成${result?.count ? `: ${result.count}` : ""}`);
+        void loadCandidates().then(() => {
+          onCandidatePoolUpdated?.();
+          resetAutoPipelineStageIfCurrent("await_generation");
+        });
+        setTaskId(null);
+        return;
+      }
+      setTaskState("progress");
+    } catch (err) {
+      console.error("SSE event handler error:", err);
+      setTaskError("事件处理异常");
     }
-    setTaskState("progress");
   }, [loadCandidates, notify, onCandidatePoolUpdated, resetAutoPipelineStageIfCurrent, updateAutoPipelineStage]);
 
   const handleTaskStreamExhausted = useCallback(() => {
@@ -474,43 +479,48 @@ export default function CandidateTable({
   }, [buildCredentialOverrides, callBatchCheckApi, notify, poolEligibleCandidates, retainedPoolCandidates, targetPoolSize, updateAutoPipelineStage]);
 
   const handleCheckEvent = useCallback((event: SSEEvent) => {
-    const progress = event.progress || event.data || {};
-    setCheckProgress(progress as UnifiedProgress);
-    const outcome = resolveJobEventState(event, progress, { failed: "质量门槛检查失败", interrupted: "质量门槛检查已停止，结果未确认完成。", success: "质量门槛检查完成。" });
-    if (outcome.kind === "failed") {
-      setCheckState("error"); setCheckError(outcome.message); updateAutoPipelineStage("idle");
-      notify(outcome.notifyType, outcome.message); setCheckJobId(null);
-      return;
-    }
-    if (outcome.kind === "interrupted") {
-      setCheckState("error"); setCheckError(outcome.message); updateAutoPipelineStage("idle");
-      notify(outcome.notifyType, outcome.message); setCheckJobId(null);
-      void loadCandidates().then(() => onCandidatePoolUpdated?.());
-      return;
-    }
-    if (outcome.kind === "success") {
-      setCheckState("success"); setCheckJobId(null);
-      const shouldContinueMaintenance = autoPipelineStageRef.current === "await_quality_check";
-      void loadCandidates().then((loaded) => {
-        onCandidatePoolUpdated?.();
-        if (shouldContinueMaintenance && loaded?.snapshot.deficit && loaded.snapshot.deficit > 0) {
-          const reworkCandidates = optimizationCandidatesForPool(loaded.rows, loaded.snapshot.retainedCandidates, loaded.workflowPlan?.rework?.candidate_ids);
-          if (autoOptimizationCycles < MAX_AUTO_OPTIMIZATION_CYCLES && reworkCandidates.length) {
-            notify("info", `主池仍缺 ${loaded.snapshot.deficit} 个候选，先优化 ${Math.min(reworkCandidates.length, AUTO_SIMULATION_BATCH_SIZE)} 个需优化候选。`);
-            void startOptimization(loaded.snapshot, reworkCandidates);
-            return;
+    try {
+      const progress = event.progress || event.data || {};
+      setCheckProgress(progress as UnifiedProgress);
+      const outcome = resolveJobEventState(event, progress, { failed: "质量门槛检查失败", interrupted: "质量门槛检查已停止，结果未确认完成。", success: "质量门槛检查完成。" });
+      if (outcome.kind === "failed") {
+        setCheckState("error"); setCheckError(outcome.message); updateAutoPipelineStage("idle");
+        notify(outcome.notifyType, outcome.message); setCheckJobId(null);
+        return;
+      }
+      if (outcome.kind === "interrupted") {
+        setCheckState("error"); setCheckError(outcome.message); updateAutoPipelineStage("idle");
+        notify(outcome.notifyType, outcome.message); setCheckJobId(null);
+        void loadCandidates().then(() => onCandidatePoolUpdated?.());
+        return;
+      }
+      if (outcome.kind === "success") {
+        setCheckState("success"); setCheckJobId(null);
+        const shouldContinueMaintenance = autoPipelineStageRef.current === "await_quality_check";
+        void loadCandidates().then((loaded) => {
+          onCandidatePoolUpdated?.();
+          if (shouldContinueMaintenance && loaded?.snapshot.deficit && loaded.snapshot.deficit > 0) {
+            const reworkCandidates = optimizationCandidatesForPool(loaded.rows, loaded.snapshot.retainedCandidates, loaded.workflowPlan?.rework?.candidate_ids);
+            if (autoOptimizationCycles < MAX_AUTO_OPTIMIZATION_CYCLES && reworkCandidates.length) {
+              notify("info", `主池仍缺 ${loaded.snapshot.deficit} 个候选，先优化 ${Math.min(reworkCandidates.length, AUTO_SIMULATION_BATCH_SIZE)} 个需优化候选。`);
+              void startOptimization(loaded.snapshot, reworkCandidates);
+              return;
+            }
+            notify("info", `主池仍缺 ${loaded.snapshot.deficit} 个候选，继续自动补位。`);
+            void generateCandidates(loaded.snapshot);
+          } else {
+            resetAutoPipelineStageIfCurrent("await_quality_check");
           }
-          notify("info", `主池仍缺 ${loaded.snapshot.deficit} 个候选，继续自动补位。`);
-          void generateCandidates(loaded.snapshot);
-        } else {
-          resetAutoPipelineStageIfCurrent("await_quality_check");
-        }
-      });
-      void refreshCheckResults();
-      notify(outcome.notifyType, outcome.message);
-      return;
+        });
+        void refreshCheckResults();
+        notify(outcome.notifyType, outcome.message);
+        return;
+      }
+      setCheckState("progress");
+    } catch (err) {
+      console.error("SSE event handler error:", err);
+      setCheckError("事件处理异常");
     }
-    setCheckState("progress");
   }, [autoOptimizationCycles, generateCandidates, loadCandidates, notify, onCandidatePoolUpdated, refreshCheckResults, resetAutoPipelineStageIfCurrent, startOptimization, updateAutoPipelineStage]);
 
   const handleCheckStreamExhausted = useCallback(() => {
@@ -535,37 +545,42 @@ export default function CandidateTable({
   useSSE(checkJobId ? `/sse?job_id=${encodeURIComponent(checkJobId)}` : null, { onEvent: handleCheckEvent, onExhausted: handleCheckStreamExhausted });
 
   const handleOptimizationEvent = useCallback((event: SSEEvent) => {
-    const progress = event.progress || event.data || {};
-    setOptimizationProgress(progress as UnifiedProgress);
-    const outcome = resolveJobEventState(event, progress, { failed: "候选本地优化失败", interrupted: "候选本地优化已停止，结果未确认完成。" });
-    if (outcome.kind === "failed") {
-      setOptimizationState("error"); setOptimizationError(outcome.message); updateAutoPipelineStage("idle");
-      notify(outcome.notifyType, outcome.message); setOptimizationJobId(null);
-      return;
+    try {
+      const progress = event.progress || event.data || {};
+      setOptimizationProgress(progress as UnifiedProgress);
+      const outcome = resolveJobEventState(event, progress, { failed: "候选本地优化失败", interrupted: "候选本地优化已停止，结果未确认完成。" });
+      if (outcome.kind === "failed") {
+        setOptimizationState("error"); setOptimizationError(outcome.message); updateAutoPipelineStage("idle");
+        notify(outcome.notifyType, outcome.message); setOptimizationJobId(null);
+        return;
+      }
+      if (outcome.kind === "interrupted") {
+        setOptimizationState("error"); setOptimizationError(outcome.message); updateAutoPipelineStage("idle");
+        notify(outcome.notifyType, outcome.message); setOptimizationJobId(null);
+        void loadCandidates().then(() => onCandidatePoolUpdated?.());
+        return;
+      }
+      if (outcome.kind === "success") {
+        setOptimizationState("success"); setOptimizationJobId(null);
+        const result = event.result as CandidateOptimizationResult | undefined;
+        const optimizedRows = Array.isArray(result?.candidates) ? result.candidates : [];
+        notify(outcome.notifyType, `候选本地优化完成: ${Number(result?.returned_count ?? optimizedRows.length)} 个子候选回池。`);
+        void loadCandidates().then((loaded) => {
+          onCandidatePoolUpdated?.();
+          if (loaded?.snapshot.deficit && loaded.snapshot.deficit > 0) {
+            notify("info", `本地优化已回池；主池仍缺 ${loaded.snapshot.deficit} 个候选，继续自动补位。`);
+            void generateCandidates(loaded.snapshot);
+            return;
+          }
+          resetAutoPipelineStageIfCurrent("await_optimization");
+        });
+        return;
+      }
+      setOptimizationState("progress");
+    } catch (err) {
+      console.error("SSE event handler error:", err);
+      setOptimizationError("事件处理异常");
     }
-    if (outcome.kind === "interrupted") {
-      setOptimizationState("error"); setOptimizationError(outcome.message); updateAutoPipelineStage("idle");
-      notify(outcome.notifyType, outcome.message); setOptimizationJobId(null);
-      void loadCandidates().then(() => onCandidatePoolUpdated?.());
-      return;
-    }
-    if (outcome.kind === "success") {
-      setOptimizationState("success"); setOptimizationJobId(null);
-      const result = event.result as CandidateOptimizationResult | undefined;
-      const optimizedRows = Array.isArray(result?.candidates) ? result.candidates : [];
-      notify(outcome.notifyType, `候选本地优化完成: ${Number(result?.returned_count ?? optimizedRows.length)} 个子候选回池。`);
-      void loadCandidates().then((loaded) => {
-        onCandidatePoolUpdated?.();
-        if (loaded?.snapshot.deficit && loaded.snapshot.deficit > 0) {
-          notify("info", `本地优化已回池；主池仍缺 ${loaded.snapshot.deficit} 个候选，继续自动补位。`);
-          void generateCandidates(loaded.snapshot);
-          return;
-        }
-        resetAutoPipelineStageIfCurrent("await_optimization");
-      });
-      return;
-    }
-    setOptimizationState("progress");
   }, [generateCandidates, loadCandidates, notify, onCandidatePoolUpdated, resetAutoPipelineStageIfCurrent, updateAutoPipelineStage]);
 
   const handleOptimizationStreamExhausted = useCallback(() => {
@@ -591,42 +606,47 @@ export default function CandidateTable({
 
   // SSE stream for simulation progress
   const handleSimEvent = useCallback((event: SSEEvent) => {
-    const progress = event.progress || event.data || {};
-    setSimProgress(progress as UnifiedProgress);
-    const outcome = resolveJobEventState(event, progress, { failed: "BRAIN模拟失败", interrupted: "BRAIN模拟已停止，结果未确认完成。" });
-    if (outcome.kind === "failed") {
-      setSimState("error"); setSimError(outcome.message); updateAutoPipelineStage("idle");
-      nextBatchCheckCandidatesRef.current = null; notify(outcome.notifyType, outcome.message); setSimJobId(null);
-      return;
-    }
-    if (outcome.kind === "interrupted") {
-      setSimState("error"); setSimError(outcome.message); updateAutoPipelineStage("idle");
-      nextBatchCheckCandidatesRef.current = null; notify(outcome.notifyType, outcome.message); setSimJobId(null);
-      void loadCandidates().then(() => onCandidatePoolUpdated?.());
-      return;
-    }
-    if (outcome.kind === "success") {
-      const result = simulationResultSummary(event);
-      const message = simulationCompletionMessage(result);
-      const simulationSucceeded = result.completed > 0;
-      if (!simulationSucceeded) {
-        setSimState("error"); setSimError(message); notify("error", message);
-      } else {
-        setSimState("success"); notify(result.failed > 0 ? "warning" : outcome.notifyType, message);
+    try {
+      const progress = event.progress || event.data || {};
+      setSimProgress(progress as UnifiedProgress);
+      const outcome = resolveJobEventState(event, progress, { failed: "BRAIN模拟失败", interrupted: "BRAIN模拟已停止，结果未确认完成。" });
+      if (outcome.kind === "failed") {
+        setSimState("error"); setSimError(outcome.message); updateAutoPipelineStage("idle");
+        nextBatchCheckCandidatesRef.current = null; notify(outcome.notifyType, outcome.message); setSimJobId(null);
+        return;
       }
-      setSimJobId(null);
-      if (autoPipelineStageRef.current === "await_quality_check" && simulationSucceeded) {
-        const cForCheck = nextBatchCheckCandidatesRef.current || undefined;
-        nextBatchCheckCandidatesRef.current = null;
-        void startBatchCheck(cForCheck);
-      } else {
-        nextBatchCheckCandidatesRef.current = null;
-        resetAutoPipelineStageIfCurrent("await_quality_check");
+      if (outcome.kind === "interrupted") {
+        setSimState("error"); setSimError(outcome.message); updateAutoPipelineStage("idle");
+        nextBatchCheckCandidatesRef.current = null; notify(outcome.notifyType, outcome.message); setSimJobId(null);
+        void loadCandidates().then(() => onCandidatePoolUpdated?.());
+        return;
       }
-      void loadCandidates().then(() => onCandidatePoolUpdated?.());
-      return;
+      if (outcome.kind === "success") {
+        const result = simulationResultSummary(event);
+        const message = simulationCompletionMessage(result);
+        const simulationSucceeded = result.completed > 0;
+        if (!simulationSucceeded) {
+          setSimState("error"); setSimError(message); notify("error", message);
+        } else {
+          setSimState("success"); notify(result.failed > 0 ? "warning" : outcome.notifyType, message);
+        }
+        setSimJobId(null);
+        if (autoPipelineStageRef.current === "await_quality_check" && simulationSucceeded) {
+          const cForCheck = nextBatchCheckCandidatesRef.current || undefined;
+          nextBatchCheckCandidatesRef.current = null;
+          void startBatchCheck(cForCheck);
+        } else {
+          nextBatchCheckCandidatesRef.current = null;
+          resetAutoPipelineStageIfCurrent("await_quality_check");
+        }
+        void loadCandidates().then(() => onCandidatePoolUpdated?.());
+        return;
+      }
+      setSimState("progress");
+    } catch (err) {
+      console.error("SSE event handler error:", err);
+      setSimError("事件处理异常");
     }
-    setSimState("progress");
   }, [loadCandidates, notify, onCandidatePoolUpdated, resetAutoPipelineStageIfCurrent, startBatchCheck, updateAutoPipelineStage]);
 
   const handleSimStreamExhausted = useCallback(() => {

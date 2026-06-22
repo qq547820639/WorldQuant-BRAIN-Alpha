@@ -5,7 +5,8 @@
 
 import { lazy, Suspense } from "react";
 import type { BrainCredentials, Candidate, CardViewId } from "@/types";
-import { safeDisplayErrorMessage } from "@/helpers/errorExperience";
+import { safeDisplayErrorMessage, apiErrorMessage } from "@/helpers/errorExperience";
+import { useApi } from "@/hooks/useApi";
 import Dashboard from "@/components/Dashboard";
 import CredentialQuickStart from "../CredentialQuickStart";
 import JobMonitor from "@/components/JobMonitor";
@@ -92,8 +93,6 @@ function LocalCacheSessionCard({
   notify: (type: "success" | "error" | "warning" | "info", msg: string) => void;
   onLoggedOut: () => void;
 }) {
-  const { useApi } = require("@/hooks/useApi");
-  const { apiErrorMessage } = require("@/helpers/errorExperience");
   const logoutApi = useApi<{ ok: boolean; error?: string; error_code?: string }>();
   const logoutErrorMessage = logoutApi.error ? safeDisplayErrorMessage(logoutApi.error) : null;
 

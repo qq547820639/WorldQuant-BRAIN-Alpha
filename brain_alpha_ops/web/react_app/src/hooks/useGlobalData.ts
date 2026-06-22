@@ -63,6 +63,13 @@ export function GlobalDataProvider({ children }: { children: React.ReactNode }) 
     refreshAll();
   }, [refreshAll]);
 
+  useEffect(() => {
+    const interval = setInterval(() => {
+      refreshAll();
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [refreshAll]);
+
   const value: GlobalDataState = {
     candidates: {
       data: candidatesApi.data,

@@ -125,7 +125,7 @@ class AlphaResearchPipeline(
                 "warning": "",
             },
             check_registry=AlphaCheckRegistry(),
-            convergence=ConvergenceTracker(window_size=10, stall_threshold=5, rng=random.Random(42)),
+            convergence=ConvergenceTracker(window_size=10, stall_threshold=5, rng=random.Random()),
             auto_calibrator=AutoCalibrator(storage_dir=getattr(config, "storage_dir", "data")),
         )
         # ── Composition-based service container ──
