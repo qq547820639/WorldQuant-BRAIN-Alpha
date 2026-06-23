@@ -43,6 +43,16 @@ jobs:
       - name: 3/9 - Dependency policy
         run: python scripts/check_dependency_policy.py --pyproject pyproject.toml --json
 
+      - name: 3.5/9 - Frontend dependency audit
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: 3.5/9 - npm audit
+        working-directory: brain_alpha_ops/web/react_app
+        run: npm ci --ignore-scripts 2>/dev/null && npm audit --audit-level=critical
+        continue-on-error: true
+
       - name: 4/9 - Frontend inline sync
         run: python brain_alpha_ops/build_inline.py --check --json
 
@@ -88,3 +98,25 @@ jobs:
         env:
           BRAIN_BROWSER_E2E_LIVE: "0"
         run: python -m pytest tests/test_browser_execution_adapter.py -v --tb=short
+
+  frontend-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install frontend dependencies
+        working-directory: brain_alpha_ops/web/react_app
+        run: npm ci
+
+      - name: npm audit
+        working-directory: brain_alpha_ops/web/react_app
+        run: npm audit --audit-level=moderate
+        continue-on-error: true
