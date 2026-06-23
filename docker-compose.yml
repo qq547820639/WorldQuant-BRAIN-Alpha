@@ -1,0 +1,18 @@
+services:
+  brain-alpha-ops:
+    build: .
+    ports:
+      - "8765:8765"
+    environment:
+      - BRAIN_ALPHA_EXECUTION_BACKEND=browser
+      - BRAIN_ALPHA_OPS_WEB_FRONTEND=react
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - ./data:/app/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8765/api/health')"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3

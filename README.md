@@ -1,5 +1,5 @@
 # BRAIN Alpha Ops
-![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=flat-square)
+![Python](https://img.shields.io/badge/Python-3.12+-3776AB?style=flat-square)
 ![React](https://img.shields.io/badge/React-18+-61DAFB?style=flat-square)
 ![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)
 ![Version](https://img.shields.io/badge/Version-0.3.0-blueviolet?style=flat-square)
@@ -23,10 +23,11 @@
 9. [常见问题 FAQ](#9-常见问题-faq)
 10. [故障排查](#10-故障排查)
 11. [开发与贡献](#11-开发与贡献)
-12. [已知限制](#12-已知限制)
-13. [相关链接](#13-相关链接)
-14. [术语小词典](#14-术语小词典)
-15. [核心操作流程](#15-核心操作流程)
+12. [Docker 部署](#12-docker-部署)
+13. [已知限制](#13-已知限制)
+14. [相关链接](#14-相关链接)
+15. [术语小词典](#15-术语小词典)
+16. [核心操作流程](#16-核心操作流程)
 
 ---
 
@@ -53,7 +54,7 @@ BRAIN Alpha Ops 是跑在你**自己电脑**上的 alpha 研究工作台。它�
 | 工具自动做的事 | 怎么做的 | 你需要做什么 |
 |-------------|---------|------------|
 | 加载 BRAIN 平台 **8,599** 个数据字段 | 启动一次从官方 API 拉取并缓存到本地 | 启动一次，后面不管 |
-| 从 **11 类**投资想法生成候选 alpha | 模板生成（70%）+ 假设驱动（20%）+ 兜底变异（10%） | 选你要研究的主题 |
+| 从 **11 类**投资想法生成候选 alpha | 假设驱动（70%）+ 经验反馈（20%）+ 随机探索（10%） | 选你要研究的主题 |
 | 本地快速筛选 | 84×160 合成数据跑一遍，过滤明显不靠谱的 | 不用管 |
 | 调官方 API 做真实回测 | 受速率限制保护，不会超额度 | 不用管 |
 | 按 **25 项**规则打分 | 8 硬错误 + 10 软警告 + 7 信息项 | 不用管 |
@@ -65,8 +66,8 @@ BRAIN Alpha Ops 是跑在你**自己电脑**上的 alpha 研究工作台。它�
 
 | 指标 | 数值 |
 |------|------|
-| 生产 Python 模块 | 338 个 .py 文件 |
-| React 前端组件 | 41 个 .ts/.tsx |
+| 生产 Python 模块 | 357 个 .py 文件 |
+| React 前端组件 | 91 个 .ts/.tsx |
 | 官方数据字段 | 8,599 |
 | 官方数据集 | 20 |
 | 内置投资想法 | 11 类（YAML 配置） |
@@ -85,7 +86,7 @@ BRAIN Alpha Ops 是跑在你**自己电脑**上的 alpha 研究工作台。它�
 
 | 准备项 | 说明 | 必须？ |
 |------|------|------|
-| 电脑（Mac / Windows / Linux） | Python 3.10+ | ✅ |
+| 电脑（Mac / Windows / Linux） | Python 3.12+（推荐 3.12，CI 验证版本） | ✅ |
 | WorldQuant BRAIN 账号 | [brain.worldquant.com](https://brain.worldquant.com) 注册 | ✅ |
 | 浏览器 | Chrome / Edge / Safari / Firefox | ✅ |
 | ~10GB 硬盘 | 首次启动下载 8,599 字段到本地 | ⚠️ 建议 |
@@ -291,8 +292,8 @@ BRAIN_ALPHA_OPS_WEB_FRONTEND=react python3 launch_web.py
 
 | 层 | 技术 | 规模 |
 |----|------|------|
-| Python 后端 | Python 3.10+, stdlib `http.server`（无 Flask/FastAPI） | 303 文件 |
-| React 前端 | React 18 + TypeScript + Vite + Tailwind CSS | 39 文件 |
+| Python 后端 | Python 3.12+, stdlib `http.server`（无 Flask/FastAPI） | 357 文件 |
+| React 前端 | React 18 + TypeScript + Vite + Tailwind CSS | 91 文件 |
 | 存储 | JSONL 事件流 + SQLite 表达式索引 + JSON 缓存 | 无外部数据库 |
 | CI | GitHub Actions（8 步质量门禁） | 1 workflow |
 | 包管理 | pyproject.toml + pip | — |
@@ -302,8 +303,8 @@ BRAIN_ALPHA_OPS_WEB_FRONTEND=react python3 launch_web.py
 ```
 brain_alpha_ops/                    # 核心源码
 ├── web/                            # Web 控制台
-│   ├── __init__.py (1015 行)       # HTTP Server + Handler + 14 条 POST 路由
-│   ├── react_app/ (39 文件)        # React 前端（12 页面 + hooks + utils）
+│   ├── __init__.py (486 行)        # HTTP Server + Handler + POST 路由
+│   ├── react_app/ (91 文件)        # React 前端（页面 + hooks + utils）
 │   └── web_handler_dispatch.py     # 65 个 handler 分发表
 ├── brain_api/ (20 文件)            # BRAIN 官方 API 适配
 │   ├── official.py                 # OfficialBrainAPI（4-Mixin 装配）
@@ -471,7 +472,40 @@ git push origin my-feature
 
 ---
 
-## 12. 已知限制
+## 12. Docker 部署
+
+### 构建镜像
+
+```bash
+docker build -t brain-alpha-ops .
+```
+
+### 运行容器
+
+```bash
+docker run -p 8765:8765 brain-alpha-ops
+```
+
+启动后访问 `http://127.0.0.1:8765`。
+
+### 使用 docker-compose
+
+```bash
+docker compose up -d
+```
+
+### 环境变量
+
+| 变量 | 默认值 | 说明 |
+|------|--------|------|
+| `BRAIN_ALPHA_EXECUTION_BACKEND` | `browser` | 执行后端：`browser` 或 `api` |
+| `BRAIN_ALPHA_OPS_WEB_FRONTEND` | `react` | 前端模式：`react` 或默认 HTML |
+| `PYTHONDONTWRITEBYTECODE` | `1` | 禁止生成 .pyc |
+| `PYTHONUNBUFFERED` | `1` | 禁止 Python 输出缓冲 |
+
+---
+
+## 13. 已知限制
 
 | 限制 | 说明 |
 |------|------|
@@ -480,11 +514,11 @@ git push origin my-feature
 | 单机运行 | 不支持多机分布式协作 |
 | API 速率受限 | BRAIN 平台有每日/每小时调用上限，工具会自律控频 |
 | 首次启动慢 | 需下载 8,599 字段 + 20 数据集到本地（约 30 秒 - 2 分钟） |
-| Python 3.10+ | 不支持更老版本（依赖 `from __future__ import annotations` + PEP 604） |
+| Python 3.12+ | 不支持更老版本（CI 验证 3.12，依赖 `from __future__ import annotations` + PEP 604） |
 
 ---
 
-## 13. 相关链接
+## 14. 相关链接
 
 - [GitHub 仓库](https://github.com/qq547820639/WorldQuant-BRAIN-Alpha)
 - [CI / Quality Gate](https://github.com/qq547820639/WorldQuant-BRAIN-Alpha/actions)
@@ -494,7 +528,7 @@ git push origin my-feature
 
 ---
 
-## 14. 术语小词典
+## 15. 术语小词典
 
 | 术语 | 通俗解释 |
 |------|---------|
@@ -526,7 +560,7 @@ git push origin my-feature
 - Web 控制台提供完整的预提交审查界面，确保每一步都有据可查
 
 ---
-## 核心操作流程
+## 16. 核心操作流程
 
 BRAIN Alpha Ops 的核心操作流程围绕生成、测试、打分、筛选四个阶段循环进行：
 

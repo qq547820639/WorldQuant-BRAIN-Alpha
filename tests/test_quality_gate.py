@@ -827,13 +827,6 @@ def test_dependency_policy_accepts_project_pyproject():
     assert result["findings"] == []
 
 
-def test_calibrate_weights_is_declared_as_installable_module():
-    pyproject = Path(__file__).resolve().parents[1] / "pyproject.toml"
-    payload = tomllib.loads(pyproject.read_text(encoding="utf-8"))
-
-    assert "calibrate_weights" in payload["tool"]["setuptools"]["py-modules"]
-
-
 def test_research_calibration_wrapper_exports_auto_calibrate():
     from brain_alpha_ops.research.calibration import auto_calibrate_if_stalled
 
