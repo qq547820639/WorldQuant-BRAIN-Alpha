@@ -50,7 +50,6 @@ const VIEW_LABELS: Record<string, string> = {
   scoring: "科学评分",
   quality_check: "质量门禁",
   submission_confirm: "阻断复核",
-  submission: "阻断复核",
   checkpoint_status: "续跑记录",
   robustness: "稳健性证据",
   config: "系统配置",

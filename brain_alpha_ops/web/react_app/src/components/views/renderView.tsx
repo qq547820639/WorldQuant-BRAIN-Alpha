@@ -201,7 +201,6 @@ export function renderActiveView(props: RenderViewProps): React.ReactNode {
   case "quality_check":
     return <QualityCheckPanel notify={notify} />;
   case "submission_confirm":
-  case "submission":
     return <SubmissionConfirmPanel notify={notify} onNavigate={onNavigate} />;
   case "checkpoint_status":
     return <SnapshotPanel key="checkpoint_status" notify={notify} viewMode="checkpoint_status" onNavigate={onNavigate} />;

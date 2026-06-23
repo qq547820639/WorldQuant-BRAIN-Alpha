@@ -1125,7 +1125,6 @@ export type CardViewId =
   | "scoring"
   | "quality_check"
   | "submission_confirm"
-  | "submission"
   | "config"
   | "checkpoint_status"
   | "cloud"

@@ -244,6 +244,7 @@ export function CandidateTableToolbar({
             type="button"
             className="btn btn-primary btn-sm"
             disabled={candidateWorkflowBusy || selectedCount === 0}
+            aria-busy={candidateWorkflowBusy}
             onClick={onBatchScore}
           >
             批量评分
@@ -252,6 +253,7 @@ export function CandidateTableToolbar({
             type="button"
             className="btn btn-secondary btn-sm"
             disabled={candidateWorkflowBusy || selectedCount === 0}
+            aria-busy={candidateWorkflowBusy}
             onClick={onBatchCheck}
           >
             批量补查
@@ -260,6 +262,7 @@ export function CandidateTableToolbar({
             type="button"
             className="btn btn-secondary btn-sm"
             disabled={candidateWorkflowBusy || selectedCount === 0}
+            aria-busy={candidateWorkflowBusy}
             onClick={onBatchSimulate}
           >
             批量补模拟
@@ -292,6 +295,7 @@ export function CandidateTableToolbar({
             type="button"
             onClick={onGenerateCandidates}
             disabled={candidateWorkflowBusy}
+            aria-busy={taskState === "loading" || taskState === "progress"}
             className="btn btn-primary btn-sm"
             title="自动维护目标池容量，并在非提交边界内继续官方模拟与质量检查"
           >
@@ -301,6 +305,7 @@ export function CandidateTableToolbar({
             type="button"
             onClick={onStartValidationQueue}
             disabled={candidateWorkflowBusy}
+            aria-busy={simState === "loading" || simState === "progress"}
             className="btn btn-secondary btn-sm"
             title="自动推进中断或单批证据缺失时使用；按 Top3 进入官方模拟后自动接质量门槛检查，不执行真实 Alpha submit"
           >
@@ -310,6 +315,7 @@ export function CandidateTableToolbar({
             type="button"
             onClick={onStartOptimization}
             disabled={candidateWorkflowBusy}
+            aria-busy={optimizationState === "loading" || optimizationState === "progress"}
             className="btn btn-secondary btn-sm"
             title="根据服务端返工队列进行本地优化；不会携带凭据，也不会提交 Alpha"
           >
@@ -380,7 +386,7 @@ export function CandidateTableToolbar({
           onChange={(event) => onFilterChange(event.target.value)}
           className="form-input flex-1"
         />
-        <button type="button" onClick={onRetryLoad} disabled={apiLoading} className="btn btn-secondary btn-sm">
+        <button type="button" onClick={onRetryLoad} disabled={apiLoading} aria-busy={apiLoading} className="btn btn-secondary btn-sm">
           {apiLoading ? "刷新中..." : "刷新"}
         </button>
         {onToggleStarFilter && (
