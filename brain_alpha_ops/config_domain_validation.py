@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+
 from brain_alpha_ops.brain_api.canonical import (
     SUPPORTED_ALPHA_TYPES,
     SUPPORTED_DELAYS,
@@ -59,6 +61,21 @@ def validate_credentials(errors: list[str], credentials: CredentialConfig) -> No
         return
     for field_name in ("username", "password", "token", "username_env", "password_env", "token_env"):
         require_str(errors, f"credentials.{field_name}", getattr(credentials, field_name))
+    _reject_plaintext_credentials(errors, credentials)
+
+
+def _reject_plaintext_credentials(errors: list[str], credentials: CredentialConfig) -> None:
+    """Reject non-empty plaintext credentials unless BRAIN_ALLOW_PLAINTEXT_CREDENTIALS is set."""
+    if os.environ.get("BRAIN_ALLOW_PLAINTEXT_CREDENTIALS"):
+        return
+    for field_name in ("username", "password", "token"):
+        value = getattr(credentials, field_name)
+        if value:
+            errors.append(
+                f"credentials.{field_name} contains a non-empty plaintext value; "
+                "set it via the *_env field and environment variable instead, "
+                "or set BRAIN_ALLOW_PLAINTEXT_CREDENTIALS=1 to override"
+            )
 
 
 def validate_web(errors: list[str], web: WebConfig) -> None:

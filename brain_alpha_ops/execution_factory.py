@@ -19,6 +19,7 @@ from brain_alpha_ops.execution_backend import AlphaExecutionBackend
 logger = logging.getLogger(__name__)
 
 ENV_EXECUTION_MODE = "BRAIN_ALPHA_OPS_EXECUTION_MODE"
+_ENV_EXECUTION_MODE_LEGACY = "BRAIN_ALPHA_EXECUTION_BACKEND"
 
 
 def create_execution_backend(
@@ -36,7 +37,7 @@ def create_execution_backend(
     Returns:
         An instance satisfying the ``AlphaExecutionBackend`` Protocol.
     """
-    resolved_mode = os.environ.get(ENV_EXECUTION_MODE, mode)
+    resolved_mode = os.environ.get(ENV_EXECUTION_MODE) or os.environ.get(_ENV_EXECUTION_MODE_LEGACY) or mode
 
     if resolved_mode == "browser" or (resolved_mode == "auto" and _playwright_available()):
         return _create_browser_backend(browser_config or {})
