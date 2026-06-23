@@ -331,6 +331,37 @@ brain_alpha_ops/                    # 核心源码
 └── config/                         # 配置加载 + jsonschema 校验
 ```
 
+### 执行后端
+
+系统支持两种执行后端，通过 `AlphaExecutionBackend` Protocol 统一接口：
+
+| 后端 | 模式 | 说明 | 适用场景 |
+|------|------|------|----------|
+| **Browser** | `browser` | Playwright 驱动真实 BRAIN 网页操作 | 生产环境，采集截图/DOM/HAR 证据 |
+| **API** | `api` | OfficialBrainAPI 直接调用 | 开发调试，无需浏览器 |
+
+通过环境变量切换：
+```bash
+BRAIN_ALPHA_OPS_EXECUTION_MODE=browser python3 launch_web.py  # 生产模式（默认）
+BRAIN_ALPHA_OPS_EXECUTION_MODE=api python3 launch_web.py       # 开发模式
+```
+
+或在代码中使用工厂函数：
+```python
+from brain_alpha_ops.execution_factory import create_execution_backend
+
+backend = create_execution_backend(mode="auto")  # auto: 优先 browser，fallback api
+```
+
+Pipeline 同时支持两种传入方式：
+```python
+# 传统方式：直接传 BrainAPI 实例
+pipeline = AlphaResearchPipeline(config=config, api=brain_api)
+
+# 新方式：传 execution backend，自动桥接到 BrainAPI 协议
+pipeline = AlphaResearchPipeline(config=config, execution_backend=backend)
+```
+
 ### 测试与 CI
 
 ```bash

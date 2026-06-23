@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 
 from brain_alpha_ops.brain_api.base import BrainAPI
 from brain_alpha_ops.config import OpsConfig, RunConfig
+from brain_alpha_ops.execution_backend import AlphaExecutionBackend
 from brain_alpha_ops.models import Candidate, PipelineResult, new_id
 from brain_alpha_ops.parameter_audit import build_parameter_audit_snapshot
 from brain_alpha_ops.redaction import redact_error_message
@@ -92,12 +93,22 @@ class AlphaResearchPipeline(
         self,
         *,
         config: OpsConfig,
-        api: BrainAPI,
+        api: BrainAPI | None = None,
+        execution_backend: AlphaExecutionBackend | None = None,
         repository: ResearchRepository | None = None,
         ledger: SubmissionLedger | None = None,
         progress_callback: Callable[[dict], None] | None = None,
         stop_callback: Callable[[], bool] | None = None,
     ):
+        if api is None and execution_backend is None:
+            raise ValueError(
+                "Either 'api' or 'execution_backend' must be provided. "
+                "Use 'api' for direct BrainAPI usage, or 'execution_backend' "
+                "for browser/API backend selection via AlphaExecutionBackend."
+            )
+        if execution_backend is not None and api is None:
+            from brain_alpha_ops.brain_api.brain_api_bridge import BrainAPIBridge
+            api = BrainAPIBridge(execution_backend)
         backtest_slot_manager = BacktestSlotManager()
         self._runtime_state = PipelineRuntimeState(
             config=config,
