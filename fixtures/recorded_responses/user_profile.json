@@ -1,0 +1,7 @@
+{
+  "id": "user_mock_001",
+  "username": "test_user",
+  "email": "test@example.com",
+  "alphas_count": 2,
+  "joined": "2025-01-15T00:00:00Z"
+}

@@ -1,0 +1,44 @@
+{
+  "id": "sim_mock_001",
+  "alpha": {
+    "id": "alpha_mock_001",
+    "expression": "rank(ts_delta(volume, 5))",
+    "settings": {
+      "instrumentType": "EQUITY",
+      "region": "USA",
+      "universe": "TOP3000",
+      "delay": 1,
+      "decay": 10,
+      "neutralization": "SUBINDUSTRY",
+      "truncation": 0.05,
+      "pasteurization": "ON",
+      "unitHandling": "VERIFY",
+      "nanHandling": "ON",
+      "language": "FASTEXPR",
+      "visualization": false,
+      "type": "REGULAR"
+    }
+  },
+  "status": "OK",
+  "result": {
+    "sharpe": 1.45,
+    "fitness": 1.12,
+    "turnover": 0.28,
+    "drawdown": 0.18,
+    "returns": 0.15,
+    "pnl": 125000,
+    "volume": 850000,
+    "medianTurnover": 0.22,
+    "meanTurnover": 0.28,
+    "subUniverseSharpe": 1.38,
+    "selfCorrelation": 0.15,
+    "prodCorrelation": 0.22,
+    "weightConcentration": 0.08,
+    "yearlyData": {
+      "2025": {"sharpe": 1.52, "fitness": 1.18, "returns": 0.16},
+      "2024": {"sharpe": 1.38, "fitness": 1.06, "returns": 0.14},
+      "2023": {"sharpe": 1.45, "fitness": 1.12, "returns": 0.15}
+    }
+  },
+  "ts": "2026-06-20T10:30:00Z"
+}

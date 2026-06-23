@@ -1,0 +1,48 @@
+{
+  "data": [
+    {
+      "id": "alpha_mock_001",
+      "expression": "rank(ts_delta(volume, 5))",
+      "name": "Mock Alpha 1",
+      "status": "UNSUBMITTED",
+      "settings": {
+        "instrumentType": "EQUITY",
+        "region": "USA",
+        "universe": "TOP3000",
+        "delay": 1,
+        "decay": 10,
+        "neutralization": "SUBINDUSTRY",
+        "truncation": 0.05,
+        "pasteurization": "ON",
+        "unitHandling": "VERIFY",
+        "nanHandling": "ON",
+        "language": "FASTEXPR",
+        "visualization": false,
+        "type": "REGULAR"
+      },
+      "created": "2026-06-20T10:00:00Z"
+    },
+    {
+      "id": "alpha_mock_002",
+      "expression": "rank(zscore(returns))",
+      "name": "Mock Alpha 2",
+      "status": "UNSUBMITTED",
+      "settings": {
+        "instrumentType": "EQUITY",
+        "region": "USA",
+        "universe": "TOP3000",
+        "delay": 1,
+        "decay": 10,
+        "neutralization": "SUBINDUSTRY",
+        "truncation": 0.05,
+        "pasteurization": "ON",
+        "unitHandling": "VERIFY",
+        "nanHandling": "ON",
+        "language": "FASTEXPR",
+        "visualization": false,
+        "type": "REGULAR"
+      },
+      "created": "2026-06-20T10:05:00Z"
+    }
+  ]
+}

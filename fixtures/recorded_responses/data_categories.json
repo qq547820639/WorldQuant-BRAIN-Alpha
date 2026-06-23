@@ -1,0 +1,24 @@
+{
+  "data": [
+    {
+      "id": "fundamental",
+      "name": "Fundamental",
+      "description": "Fundamental data fields"
+    },
+    {
+      "id": "price",
+      "name": "Price",
+      "description": "Price and volume data"
+    },
+    {
+      "id": "analyst",
+      "name": "Analyst",
+      "description": "Analyst estimates and revisions"
+    },
+    {
+      "id": "quant",
+      "name": "Quant",
+      "description": "Quantitative factors"
+    }
+  ]
+}

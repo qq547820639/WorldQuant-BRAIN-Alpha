@@ -32,6 +32,62 @@ class BrainSettings:
 
 
 @dataclass
+class MutationStrategy:
+    """Configuration for a single mutation strategy."""
+    name: str
+    weight: float = 1.0
+    enabled: bool = True
+    params: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class GenerationConfig:
+    """Configurable generation strategies and parameters."""
+    dynamic_fallback_ratio: str = "70/30"  # dynamic / fallback mode ratio
+    mutation_strategies: list[MutationStrategy] = field(
+        default_factory=lambda: [
+            MutationStrategy(name="window_shift", weight=1.0),
+            MutationStrategy(name="field_swap", weight=0.8),
+            MutationStrategy(name="operator_replace", weight=0.6),
+            MutationStrategy(name="nesting_transform", weight=0.4),
+        ]
+    )
+    template_preference: str = "weighted"  # weighted | random | sequential
+    template_weights: dict[str, float] = field(
+        default_factory=lambda: {
+            "momentum": 1.0,
+            "value": 0.8,
+            "quality": 0.7,
+            "liquidity": 0.6,
+            "reversal": 0.5,
+            "hybrid": 0.9,
+            "co_movement": 0.6,
+            "decay": 0.7,
+            "volatility": 0.5,
+            "relative_momentum": 0.7,
+            "relative_value": 0.6,
+            "conditional": 0.4,
+        }
+    )
+    max_expression_length: int = 220
+    max_nesting_depth: int = 8
+    diversity_boost_on_high_duplicates: bool = True
+    duplicate_ratio_threshold: float = 0.25
+
+    def get_mutation_weights(self) -> dict[str, float]:
+        """Return enabled mutation strategies with their weights."""
+        return {
+            s.name: s.weight
+            for s in self.mutation_strategies
+            if s.enabled
+        }
+
+    def get_template_weights_for_family(self, family: str) -> float:
+        """Return weight for a template family, defaulting to 1.0 if unknown."""
+        return self.template_weights.get(family, 1.0)
+
+
+@dataclass
 class ResearchBudget:
     max_candidates_per_cycle: int = 20
     max_generation_attempts: int = 5
@@ -65,6 +121,7 @@ class ResearchBudget:
     strategy_plugin_specs: list[str] = field(default_factory=list)
     use_assistant_guidance: bool = True
     assistant_guidance_min_confidence: float = 0.6
+    generation: GenerationConfig = field(default_factory=GenerationConfig)
 
 
 @dataclass(frozen=True)
@@ -191,6 +248,7 @@ class OpsConfig:
     thresholds: QualityThresholds = field(default_factory=QualityThresholds)
     submission_policy: SubmissionPolicy = field(default_factory=SubmissionPolicy)
     official_api: OfficialAPIConfig = field(default_factory=OfficialAPIConfig)
+    generation: GenerationConfig = field(default_factory=GenerationConfig)
     storage_dir: str = "data"
     source_tag_policy: str = "official/experience/inference/manual"
 

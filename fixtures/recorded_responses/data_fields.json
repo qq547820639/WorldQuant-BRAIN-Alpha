@@ -1,0 +1,92 @@
+{
+  "data": [
+    {
+      "id": "volume",
+      "name": "Volume",
+      "description": "Trading volume",
+      "category": "Volume",
+      "type": "float",
+      "coverage": 0.99,
+      "userCount": 150,
+      "alphaCount": 450,
+      "dataset": {"id": "analyst4"}
+    },
+    {
+      "id": "close",
+      "name": "Close",
+      "description": "Closing price",
+      "category": "Price",
+      "type": "float",
+      "coverage": 1.0,
+      "userCount": 200,
+      "alphaCount": 600,
+      "dataset": {"id": "analyst4"}
+    },
+    {
+      "id": "open",
+      "name": "Open",
+      "description": "Opening price",
+      "category": "Price",
+      "type": "float",
+      "coverage": 1.0,
+      "userCount": 180,
+      "alphaCount": 500,
+      "dataset": {"id": "analyst4"}
+    },
+    {
+      "id": "returns",
+      "name": "Returns",
+      "description": "Daily returns",
+      "category": "Price",
+      "type": "float",
+      "coverage": 0.99,
+      "userCount": 190,
+      "alphaCount": 550,
+      "dataset": {"id": "analyst4"}
+    },
+    {
+      "id": "adv20",
+      "name": "Adv20",
+      "description": "20-day average daily volume",
+      "category": "Volume",
+      "type": "float",
+      "coverage": 0.98,
+      "userCount": 170,
+      "alphaCount": 480,
+      "dataset": {"id": "analyst4"}
+    },
+    {
+      "id": "vwap",
+      "name": "VWAP",
+      "description": "Volume weighted average price",
+      "category": "Price",
+      "type": "float",
+      "coverage": 0.95,
+      "userCount": 160,
+      "alphaCount": 420,
+      "dataset": {"id": "analyst4"}
+    },
+    {
+      "id": "market_cap",
+      "name": "Market Cap",
+      "description": "Market capitalization",
+      "category": "Fundamental",
+      "type": "float",
+      "coverage": 0.99,
+      "userCount": 140,
+      "alphaCount": 380,
+      "dataset": {"id": "analyst4"}
+    },
+    {
+      "id": "sector",
+      "name": "Sector",
+      "description": "GICS sector classification",
+      "category": "Classification",
+      "type": "string",
+      "coverage": 1.0,
+      "userCount": 120,
+      "alphaCount": 300,
+      "dataset": {"id": "analyst4"}
+    }
+  ]
+}

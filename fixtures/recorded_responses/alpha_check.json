@@ -1,0 +1,26 @@
+{
+  "id": "alpha_mock_001",
+  "passed": true,
+  "result": {
+    "sharpe": 1.45,
+    "fitness": 1.12,
+    "turnover": 0.28,
+    "drawdown": 0.18,
+    "returns": 0.15,
+    "subUniverseSharpe": 1.38,
+    "selfCorrelation": 0.15,
+    "prodCorrelation": 0.22,
+    "weightConcentration": 0.08,
+    "checks": {
+      "sharpe": {"passed": true, "actual": 1.45, "target": 1.25, "direction": ">="},
+      "fitness": {"passed": true, "actual": 1.12, "target": 1.0, "direction": ">="},
+      "turnover_min": {"passed": true, "actual": 0.28, "target": 0.01, "direction": ">="},
+      "turnover_platform": {"passed": true, "actual": 0.28, "target": 0.70, "direction": "<="},
+      "self_correlation": {"passed": true, "actual": 0.15, "target": 0.70, "direction": "<="},
+      "prod_correlation": {"passed": true, "actual": 0.22, "target": 0.70, "direction": "<="},
+      "weight_concentration": {"passed": true, "actual": 0.08, "target": 0.10, "direction": "<="},
+      "sub_universe_sharpe": {"passed": true, "actual": 1.38, "target": 1.05, "direction": ">="}
+    }
+  },
+  "ts": "2026-06-20T10:35:00Z"
+}

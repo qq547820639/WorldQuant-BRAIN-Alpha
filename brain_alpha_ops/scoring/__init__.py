@@ -27,6 +27,13 @@ from brain_alpha_ops.scoring.release_score_gate import (
     decide_release,
     evaluate_release_score,
 )
+from brain_alpha_ops.scoring.schema import (
+    GATE_RESULT_SCHEMA,
+    SCORECARD_DICT_SCHEMA,
+    SCORING_RESULT_SCHEMA,
+    validate_gate_result,
+    validate_scoring_result,
+)
 
 __all__ = [
     "GateDecision",
@@ -50,4 +57,9 @@ __all__ = [
     "extract_operators",
     "local_quality",
     "nesting_depth",
+    "SCORING_RESULT_SCHEMA",
+    "GATE_RESULT_SCHEMA",
+    "SCORECARD_DICT_SCHEMA",
+    "validate_scoring_result",
+    "validate_gate_result",
 ]
