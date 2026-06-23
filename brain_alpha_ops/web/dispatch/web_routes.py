@@ -459,8 +459,14 @@ def _handle_candidate_simulate(handler: Any, payload: dict) -> None:
 # ═══════════════════════ Data Helpers ═════════════════════════════════
 def _public_config(config: dict) -> dict:
     """Sanitize config for public consumption."""
+    import os
     data = dict(config or {})
     credentials = data.get("credentials") if isinstance(data.get("credentials"), dict) else {}
+    managed_credentials_available = bool(
+        os.environ.get("BRAIN_USERNAME")
+        or os.environ.get("BRAIN_PASSWORD")
+        or os.environ.get("BRAIN_TOKEN")
+    )
     data["credentials"] = {
         "username": "",
         "password": "",
@@ -468,6 +474,7 @@ def _public_config(config: dict) -> dict:
         "username_env": credentials.get("username_env", "BRAIN_USERNAME"),
         "password_env": credentials.get("password_env", "BRAIN_PASSWORD"),
         "token_env": credentials.get("token_env", "BRAIN_TOKEN"),
+        "managed_credentials_available": managed_credentials_available,
     }
     return data
 

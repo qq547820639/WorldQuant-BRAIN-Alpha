@@ -37,7 +37,7 @@ import { useKeyboardShortcuts, KeyboardShortcutsHelp } from "@/hooks/useKeyboard
 import { reportIgnoredError } from "@/utils/reportIgnoredError";
 import { renderActiveView, type RenderViewProps } from "@/components/views/renderView";
 import { topbarConnectionStatus, fmtEta, formatBacktestBadge, formatCloudBadge, cloudBadgeTotal } from "@/components/views/helpers";
-import { GlobalDataProvider, useGlobalData } from "@/hooks/useGlobalData";
+import { useGlobalData } from "@/hooks/useGlobalData";
 
 
 // ── Config ──────────────────────────────────────────────────────────────────
@@ -329,10 +329,7 @@ export default function App() {
     phaseData: phaseData,
   };
 
-  const detailContent = useMemo(() => {
-    return renderActiveView(viewProps);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeView, selectedCandidate, connected, contextFresh, phaseApiStatus, jobState.running]);;
+  const detailContent = renderActiveView(viewProps);
 
   const viewLabel = VIEW_LABELS[activeView] || activeView;
   const currentPhaseObj = phaseState.phases[currentPhase];
@@ -353,7 +350,6 @@ export default function App() {
     : "pending";
 
   return (
-    <GlobalDataProvider>
     <div className="app-shell">
 
       {/* ═══ Top Bar (v3.0 redesign) ═══ */}
@@ -507,6 +503,5 @@ export default function App() {
       {shortcutsHelpOpen && (
         <KeyboardShortcutsHelp onClose={() => setShortcutsHelpOpen(false)} />
       )}
-    </div>
-  </GlobalDataProvider>);
+    </div>);
 }
