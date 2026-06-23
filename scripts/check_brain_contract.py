@@ -4,6 +4,11 @@ The check is intentionally offline and deterministic. It consumes the same
 structured diagnosis used by the one-page report, then turns drift in red
 lines, thresholds, official context lineage, scoring simulation, frontend sync,
 and checkpoint history into machine-readable findings.
+
+Extended checks:
+  - Blocking/Warning/Info severity levels with per-level enforcement
+  - Bidirectional consistency check (registry ↔ code)
+  - Threshold version diff check
 """
 
 from __future__ import annotations
@@ -27,8 +32,17 @@ def check_brain_contract(
     *,
     config_path: str | Path = DEFAULT_CONFIG,
     strict_freshness: bool = False,
+    include_consistency: bool = False,
+    threshold_snapshot_path: str | Path | None = None,
 ) -> dict[str, Any]:
-    """Return a structured BRAIN contract comparison result."""
+    """Return a structured BRAIN contract comparison result.
+
+    Args:
+        config_path: path to run_config.json
+        strict_freshness: fail on stale or unrefreshed official context
+        include_consistency: include bidirectional registry consistency check
+        threshold_snapshot_path: optional path to previous threshold snapshot for diff
+    """
     from brain_alpha_ops.brain_api.canonical import CANONICAL_SETTINGS
     from brain_alpha_ops.production_diagnostics import build_diagnostic_snapshot
 
@@ -101,6 +115,18 @@ def check_brain_contract(
     _check_threshold_trace(scoring.get("threshold_trace") or {}, findings)
     _check_official_refresh(refresh, validation, findings, strict_freshness=strict_freshness)
 
+    # Module 21: Bidirectional consistency check
+    consistency_result = None
+    if include_consistency:
+        consistency_result = _check_bidirectional_consistency(findings)
+
+    # Module 21: Threshold version diff check
+    threshold_diff = None
+    if threshold_snapshot_path:
+        threshold_diff = _check_threshold_version_diff(
+            threshold_snapshot_path, scoring.get("threshold_trace") or {}, findings
+        )
+
     blocking = [finding for finding in findings if finding["severity"] in STRICT_SEVERITIES]
     if not strict_freshness:
         blocking = [finding for finding in blocking if finding["severity"] == "P0"]
@@ -131,6 +157,8 @@ def check_brain_contract(
         "history_replay": snapshot.get("history_replay"),
         "findings": findings,
         "blocking_count": len(blocking),
+        "consistency_check": consistency_result,
+        "threshold_diff": threshold_diff,
     }
 
 
@@ -235,14 +263,109 @@ def _check_official_refresh(
         )
 
 
+def _check_bidirectional_consistency(findings: list[dict[str, Any]]) -> dict[str, Any]:
+    """Run bidirectional consistency check between registry and code."""
+    try:
+        from brain_alpha_ops.registry_validation import validate_registry_consistency
+
+        scoring_ops = {"rank", "ts_mean", "ts_std", "ts_delta", "ts_rank", "ts_min",
+                       "ts_max", "ts_sum", "ts_argmin", "ts_argmax", "group_neutralize",
+                       "zscore", "quantile", "power", "abs", "log", "sign", "add",
+                       "subtract", "multiply", "divide", "max", "min", "delay",
+                       "ts_decay_linear", "ts_corr", "ts_cov", "decay_linear",
+                       "indneutralize", "winsorize", "normalize", "demean"}
+        gate_ops = {"sharpe", "fitness", "turnover_min", "turnover_platform",
+                    "self_correlation", "prod_correlation", "weight_concentration",
+                    "sub_universe_sharpe"}
+
+        result = validate_registry_consistency(
+            scoring_operators=scoring_ops,
+            gate_operators=gate_ops,
+        )
+        for finding in result.get("findings", []):
+            findings.append({
+                "code": f"consistency:{finding['code']}",
+                "severity": finding["severity"],
+                "message": finding["message"],
+                "evidence": finding.get("details"),
+            })
+        return result
+    except Exception as exc:
+        findings.append({
+            "code": "consistency_check_failed",
+            "severity": "WARNING",
+            "message": f"Bidirectional consistency check failed: {exc}",
+        })
+        return {"ok": False, "error": str(exc)}
+
+
+def _check_threshold_version_diff(
+    snapshot_path: str | Path,
+    current_trace: dict[str, Any],
+    findings: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Compare current thresholds against a previous snapshot."""
+    try:
+        from brain_alpha_ops.registry_validation import compare_threshold_snapshots, snapshot_threshold_version
+
+        snapshot_file = Path(snapshot_path)
+        if not snapshot_file.is_file():
+            findings.append({
+                "code": "threshold_snapshot_missing",
+                "severity": "WARNING",
+                "message": f"Threshold snapshot file not found: {snapshot_path}",
+            })
+            return {"ok": False, "error": "file not found"}
+
+        previous = json.loads(snapshot_file.read_text(encoding="utf-8"))
+        current_thresholds = {
+            key: entry.get("value") if isinstance(entry, dict) else entry
+            for key, entry in current_trace.items()
+        }
+        current_snapshot = snapshot_threshold_version(current_thresholds)
+        diff = compare_threshold_snapshots(previous, current_snapshot)
+
+        if not diff["identical"]:
+            changed_keys = [c["key"] for c in diff.get("changed", [])]
+            findings.append({
+                "code": "threshold_version_drift",
+                "severity": "P1",
+                "message": f"Threshold values changed since snapshot: {changed_keys[:10]}",
+                "evidence": {
+                    "changed": diff.get("changed", []),
+                    "added": diff.get("added", []),
+                    "removed": diff.get("removed", []),
+                    "previous_hash": diff.get("snapshot_a_hash", ""),
+                    "current_hash": diff.get("snapshot_b_hash", ""),
+                },
+            })
+        return diff
+    except Exception as exc:
+        findings.append({
+            "code": "threshold_diff_check_failed",
+            "severity": "WARNING",
+            "message": f"Threshold version diff check failed: {exc}",
+        })
+        return {"ok": False, "error": str(exc)}
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Validate local BRAIN production contract evidence.")
     parser.add_argument("--config", default=str(DEFAULT_CONFIG), help="Run config path.")
     parser.add_argument("--strict-freshness", action="store_true", help="Fail on stale or unrefreshed official context metadata.")
     parser.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
+    parser.add_argument("--consistency", action="store_true",
+                        help="Include bidirectional registry consistency check.")
+    parser.add_argument("--threshold-snapshot", default=None,
+                        help="Path to previous threshold snapshot for diff check.")
     args = parser.parse_args(argv)
 
-    result = check_brain_contract(config_path=args.config, strict_freshness=args.strict_freshness)
+    result = check_brain_contract(
+        config_path=args.config,
+        strict_freshness=args.strict_freshness,
+        include_consistency=args.consistency,
+        threshold_snapshot_path=args.threshold_snapshot,
+    )
     if args.json:
         print(json.dumps(result, ensure_ascii=False, indent=2, default=str))
     elif result["ok"]:

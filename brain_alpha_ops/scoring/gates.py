@@ -35,6 +35,7 @@ class GateResult:
     threshold_source: str = "BRAIN_Official"
     notes: list[str] = field(default_factory=list)
     zero_deviation: bool = True
+    triggered_rules: list[dict[str, Any]] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         """S-01: Convert tuple fields back to lists for backward compatibility."""
@@ -47,6 +48,7 @@ class GateResult:
             "threshold_source": self.threshold_source,
             "notes": list(self.notes),
             "zero_deviation": self.zero_deviation,
+            "triggered_rules": list(self.triggered_rules),
         }
 
 
@@ -94,6 +96,7 @@ class GateConfig:
         passed_all = True
         items: list[dict[str, Any]] = []
         failed: list[str] = []
+        triggered_rules: list[dict[str, Any]] = []
         official_rows = _official_hard_gate_rows(metrics, self.thresholds)
         for gate in self._gates:
             passed, payload, reason = _evaluate_gate(gate, metrics, self.thresholds, official_rows)
@@ -102,6 +105,15 @@ class GateConfig:
                 failed.append(reason)
                 if gate["type"] == "HARD":
                     passed_all = False
+                triggered_rules.append({
+                    "gate_name": gate["name"],
+                    "gate_type": gate["type"],
+                    "source": gate["source"],
+                    "description": gate["description"],
+                    "actual": payload.get("actual"),
+                    "target": payload.get("target"),
+                    "direction": payload.get("direction"),
+                })
         return GateResult(
             gate_name="OFFICIAL_CONFIGURED_GATE",
             passed=passed_all,
@@ -109,6 +121,7 @@ class GateConfig:
             failed_items=failed,
             threshold_source="BRAIN_Official",
             zero_deviation=all(bool(item.get("zero_deviation", True)) for item in items),
+            triggered_rules=triggered_rules,
         )
 
 

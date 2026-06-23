@@ -50,6 +50,7 @@ SCORING_RESULT_SCHEMA: dict[str, Any] = {
         "deviation_details": {"type": "array", "items": {"type": "string"}},
         "threshold_version": {"type": "string"},
         "scoring_schema": {"type": "string"},
+        "scoring_version": {"type": "string"},
         "config_hash": {"type": "string"},
         "score_basis": {"type": "string"},
         "settings_trace": {"type": "object"},
@@ -90,6 +91,7 @@ SCORING_RESULT_SCHEMA: dict[str, Any] = {
                 "threshold_source": {"type": "string"},
                 "notes": {"type": "array", "items": {"type": "string"}},
                 "zero_deviation": {"type": "boolean"},
+                "triggered_rules": {"type": "array", "items": {"type": "object"}},
             },
         },
         "ReleaseGate": {

@@ -71,6 +71,8 @@ from brain_alpha_ops.scoring.visualization import summarize_score_attribution
 
 logger = logging.getLogger(__name__)
 
+SCORING_VERSION = "scoring-v2.4"
+
 _MAX_SCORE_HISTORY_PER_ALPHA = 100
 _MAX_SCORE_HISTORY_TOTAL_ENTRIES = 10_000
 
@@ -124,6 +126,7 @@ class ScoringResult:
     # Traceability
     threshold_version: str = "CANONICAL_v2"
     scoring_schema: str = "scorecard-v2.3"
+    scoring_version: str = ""
     config_hash: str = ""
     score_basis: str = ""
     settings_trace: Dict[str, Any] = field(default_factory=dict)
@@ -153,6 +156,7 @@ class ScoringResult:
             "deviation_details": self.deviation_details,
             "threshold_version": self.threshold_version,
             "scoring_schema": self.scoring_schema,
+            "scoring_version": self.scoring_version,
             "config_hash": self.config_hash,
             "score_basis": self.score_basis,
             "settings_trace": self.settings_trace,
@@ -234,7 +238,7 @@ class OfficialScoringSystem:
       5. Historical score tracking for convergence analysis
     """
 
-    def __init__(self, ops_config: Optional[OpsConfig] = None, *, gate_config: "GateConfig | None" = None, persist_history: bool = True):
+    def __init__(self, ops_config: Optional[OpsConfig] = None, *, gate_config: "GateConfig | None" = None, persist_history: bool = True, audit_trail_dir: str | None = None):
         self.ops_config = ops_config or OpsConfig()
         self.thresholds = self.ops_config.thresholds
         self.scoring = self.ops_config.scoring
@@ -244,6 +248,7 @@ class OfficialScoringSystem:
         self._score_history: Dict[str, List[Dict[str, Any]]] = {}
         # Optional persistent history for convergence tracking across restarts
         self._persisted_history = _PersistedScoreHistoryDB() if persist_history else None
+        self._audit_trail_dir = audit_trail_dir
 
     # ── Core Evaluation ──
 
@@ -312,6 +317,7 @@ class OfficialScoringSystem:
             simulated_api_output=api_sim,
             api_output_deviation=api_dev,
             deviation_details=dev_details,
+            scoring_version=SCORING_VERSION,
             config_hash=self._config_hash(),
             score_basis=scorecard.get("score_basis", ""),
             settings_trace=scorecard.get("settings_trace", {}),
@@ -321,6 +327,9 @@ class OfficialScoringSystem:
 
         # Track history
         self._record_history(candidate.alpha_id, result)
+
+        # Write audit trail
+        self._write_audit_trail(result)
 
         return result
 
@@ -553,6 +562,18 @@ class OfficialScoringSystem:
                 self._persisted_history.append(result)
             except Exception:
                 logger.debug("failed to persist score history", exc_info=True)
+
+    def _write_audit_trail(self, result: ScoringResult) -> None:
+        """Write scoring result to audit trail for traceability."""
+        try:
+            from brain_alpha_ops.audit_trail import write_scoring_audit
+            write_scoring_audit(
+                result,
+                audit_dir=self._audit_trail_dir or "data/audit_trail",
+                scoring_version=SCORING_VERSION,
+            )
+        except Exception:
+            logger.debug("failed to write audit trail", exc_info=True)
 
     def _trim_score_history(self) -> None:
         total_entries = sum(len(history) for history in self._score_history.values())
