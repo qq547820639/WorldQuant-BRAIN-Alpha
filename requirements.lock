@@ -1,5 +1,12 @@
 # Locked Python dependencies for CI/test reproducibility.
 # Install with: python -m pip install -r requirements.lock
+#
+# Runtime dependencies (mirrors pyproject.toml [project].dependencies)
+requests==2.32.4
+certifi==2025.4.26
+charset-normalizer==3.4.2
+idna==3.10
+urllib3==2.4.0
 
 PyYAML==6.0.2
 jsonschema==4.25.1
@@ -7,6 +14,8 @@ attrs==25.3.0
 jsonschema-specifications==2025.4.1
 referencing==0.36.2
 rpds-py==0.25.1
+
+# Test dependencies
 pytest==8.4.1
 coverage==7.10.6
 iniconfig==2.1.0

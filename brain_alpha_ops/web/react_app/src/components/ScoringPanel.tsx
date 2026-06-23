@@ -23,6 +23,7 @@ const LIFECYCLE_STATUS_LABELS: Record<string, string> = {
   pending_backtest: "等待回测",
   candidate_pool_retained: "候选池保留",
   local_prefilter_rejected: "本地预筛未通过",
+  local_prefilter_passed: "本地预筛通过",
   official_validation_queue: "等待官方验证",
   optimize: "继续优化",
   failed: "未通过",
@@ -259,6 +260,27 @@ export default function ScoringPanel({ notify, candidate }: Props) {
             <span className="text-text-tertiary">状态: <span className={`badge ${scoring?.passed_gate || candidate.gate?.passed ? "badge-positive" : "badge-negative"}`}>{lifecycleStatus}</span></span>
             <span className="text-text-tertiary">ID: <span className="font-mono text-text-secondary">{candidate.alpha_id}</span></span>
           </div>
+          {isLocalPrefilterStatus(candidate.lifecycle_status) && (
+            <div
+              style={{
+                marginTop: 12, padding: "10px 14px", borderRadius: 6,
+                border: "1px solid var(--color-warning-border-subtle)",
+                backgroundColor: "var(--color-warning-bg)", fontSize: 12,
+                lineHeight: 1.6,
+              }}
+              role="note"
+              aria-label="本地预筛边界警告"
+            >
+              <p style={{ fontWeight: 600, color: "var(--color-text-primary)", marginBottom: 4 }}>
+                本地预筛边界提示
+              </p>
+              <p style={{ color: "var(--color-text-secondary)" }}>
+                本地预筛使用合成数据（synthetic data）进行快速评估，而非真实历史回测数据。
+                本地预筛结果仅作为初筛参考，不代表该 Alpha 在真实市场中的实际表现。
+                请以官方 BRAIN 模拟回测结果为准。
+              </p>
+            </div>
+          )}
         </div>
       </div>
 
@@ -556,6 +578,17 @@ function nonEmpty<T>(items?: T[] | null): T[] | null {
 
 function childNodes(node: AttributionNode): AttributionNode[] {
   return Array.isArray(node.children) ? node.children : [];
+}
+
+const LOCAL_PREFILTER_STATUSES = new Set([
+  "local_prefilter_rejected",
+  "local_prefilter_passed",
+  "pending_backtest",
+  "running_backtest",
+]);
+
+function isLocalPrefilterStatus(status: unknown): boolean {
+  return typeof status === "string" && LOCAL_PREFILTER_STATUSES.has(status.toLowerCase());
 }
 
 function MetricRow({ label, value, threshold, max, format }: {

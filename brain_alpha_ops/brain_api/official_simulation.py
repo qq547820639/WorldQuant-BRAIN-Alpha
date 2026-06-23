@@ -232,18 +232,68 @@ class OfficialSimulationSubmissionMixin:
             }
 
     def submit_alpha(self, alpha_id: str, expression: str, settings: dict, *, bodyless: bool = True) -> dict:
-        # F-02 + F-03 invariant guard: prevent direct official submission outside web/__init__.py
-        # Tests opt out only through an explicit test-approved contract;
-        # production web console never reaches this path because the
-        # higher-level gate returns REAL_SUBMIT_DISABLED_WEB_FLOW first.
+        import logging as _logging
+
+        _submit_log = _logging.getLogger("brain_alpha_ops.brain_api.submit")
+
+        # ── Guard integrity check ───────────────────────────────────────
+        # Verify the runtime_constants module hasn't been tampered with.
+        # Fail-closed: if we can't verify, block the submission.
+        try:
+            from .. import runtime_constants as _rc
+            if not hasattr(_rc, "REAL_SUBMIT_DISABLED_WEB_FLOW"):
+                _submit_log.critical(
+                    "SUBMIT BLOCKED: runtime_constants.REAL_SUBMIT_DISABLED_WEB_FLOW missing — "
+                    "module may have been tampered with."
+                )
+                raise BrainAPIError(
+                    "SUBMIT INTEGRITY FAILURE: REAL_SUBMIT_DISABLED_WEB_FLOW attribute missing from "
+                    "runtime_constants. Submission blocked as a safety precaution."
+                )
+            if _rc.REAL_SUBMIT_DISABLED_WEB_FLOW is not True:
+                _submit_log.critical(
+                    "SUBMIT BLOCKED: REAL_SUBMIT_DISABLED_WEB_FLOW was modified to %r — "
+                    "expected True. Submission refused.",
+                    _rc.REAL_SUBMIT_DISABLED_WEB_FLOW,
+                )
+                raise BrainAPIError(
+                    "SUBMIT INTEGRITY FAILURE: REAL_SUBMIT_DISABLED_WEB_FLOW was modified from its "
+                    "hardcoded True value. Submission refused."
+                )
+            from ..runtime_constants import _SUBMIT_GUARD_SENTINEL
+            if _SUBMIT_GUARD_SENTINEL != "BRAIN_ALPHA_SUBMIT_GUARD_v1":
+                _submit_log.critical(
+                    "SUBMIT BLOCKED: _SUBMIT_GUARD_SENTINEL mismatch — expected "
+                    "BRAIN_ALPHA_SUBMIT_GUARD_v1, got %r.",
+                    _SUBMIT_GUARD_SENTINEL,
+                )
+                raise BrainAPIError(
+                    "SUBMIT INTEGRITY FAILURE: guard sentinel mismatch. Submission refused."
+                )
+        except ImportError:
+            _submit_log.critical("SUBMIT BLOCKED: failed to import runtime_constants — module integrity unknown.")
+            raise BrainAPIError(
+                "SUBMIT INTEGRITY FAILURE: cannot import runtime_constants. Submission blocked."
+            )
+
+        # ── Standard guard check ────────────────────────────────────────
         from ..runtime_constants import REAL_SUBMIT_DISABLED_WEB_FLOW, real_submit_test_override_enabled
         force_real_submit = real_submit_test_override_enabled()
         if REAL_SUBMIT_DISABLED_WEB_FLOW and not force_real_submit:
+            _submit_log.warning(
+                "submit_alpha() blocked: REAL_SUBMIT_DISABLED_WEB_FLOW=True, "
+                "force_real_submit=%s, alpha_id=%s",
+                force_real_submit, alpha_id,
+            )
             raise BrainAPIError(
                 "REAL_SUBMIT_DISABLED_WEB_FLOW: official submit_alpha() is blocked at the API layer. "
                 "Use the web console's pre-submit review + independent approval path. "
                 "Tests can bypass only with explicit test approval env."
             )
+        _submit_log.info(
+            "submit_alpha() guard passed — proceeding with submission: alpha_id=%s, bodyless=%s",
+            alpha_id, bodyless,
+        )
         if not alpha_id or not str(alpha_id).strip():
             raise BrainAPIError("cannot submit alpha without a valid alpha_id")
         if bodyless is not True:

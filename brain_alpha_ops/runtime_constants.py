@@ -367,3 +367,13 @@ def real_submit_test_override_enabled() -> bool:
         and os.environ.get("BRAIN_ALPHA_ENABLE_REAL_SUBMIT_TESTS") == "1"
         and bool(os.environ.get("PYTEST_CURRENT_TEST"))
     )
+
+
+# ─── Submit guard integrity check ───────────────────────────────────────
+# The REAL_SUBMIT_DISABLED_WEB_FLOW constant is annotated Final[bool] = True.
+# This sentinel value is used at runtime to verify it hasn't been tampered
+# with (e.g. via monkey-patching or attribute reassignment).  If the value
+# doesn't match, submit_alpha() will refuse to proceed.
+
+_SUBMIT_GUARD_SENTINEL: Final[str] = "BRAIN_ALPHA_SUBMIT_GUARD_v1"
+"""Immutable sentinel used to detect runtime modification of the submit guard."""
