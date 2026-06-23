@@ -12,6 +12,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { apiErrorMessage } from "@/helpers/errorExperience";
 import { useApi } from "@/hooks/useApi";
+import { useGlobalData } from "@/hooks/useGlobalData";
 import { useCandidatePipeline } from "@/hooks/useCandidatePipeline";
 import { useSseManager } from "@/hooks/useSseManager";
 import { useCandidateActions } from "@/hooks/useCandidateActions";
@@ -84,12 +85,13 @@ export default function CandidateTable({
   showRowActions = false,
   viewMode = "candidates",
 }: Props) {
-  const api = useApi<{ candidates?: Candidate[]; items?: Candidate[]; main_pool_candidates?: Candidate[]; workflow_plan?: CandidateWorkflowPlan; candidate_workflow?: CandidateWorkflowPlan; returned_count?: number; total?: number; total_count?: number; partial?: boolean; warning?: string }>();
+  const { candidates: globalCandidates, refreshAll } = useGlobalData();
+  const actionApi = useApi<{ ok?: boolean; job_id?: string; task_id?: string; error?: string }>();
   const checkResultsApi = useApi<{ items?: CandidateCheckResult[] }>();
   const lifecycleApi = useApi<AlphaLifecycleHistoryResponse>();
   const singleCheckApi = useApi<CandidateCheckResult>();
   const batchCheckApi = useApi<{ ok?: boolean; job_id?: string; task_id?: string; error?: string }>();
-  const callApi = api.call;
+  const callApi = actionApi.call;
   const callCheckResultsApi = checkResultsApi.call;
   const callLifecycleApi = lifecycleApi.call;
   const callSingleCheckApi = singleCheckApi.call;
@@ -117,46 +119,48 @@ export default function CandidateTable({
   const lastPoolDeficitWarningRef = useRef<number>(0);
   const POOL_DEFICIT_WARNING_COOLDOWN_MS = 30 * 60 * 1000;
 
+  const processCandidatesData = useCallback((result: typeof globalCandidates.data): LoadedCandidateState | null => {
+    if (!result?.ok) return null;
+    const nextRows = result.candidates || result.items || [];
+    const nextMainPool = Array.isArray(result.main_pool_candidates) ? result.main_pool_candidates : null;
+    const nextWorkflowPlan = (result.workflow_plan || result.candidate_workflow || null) as CandidateWorkflowPlan | null;
+    setCandidates(nextRows);
+    setServerMainPoolCandidates(nextMainPool);
+    setServerWorkflowPlan(nextWorkflowPlan);
+    setCandidateMeta({
+      returned: Number(result.returned_count ?? nextRows.length),
+      total: Number(result.total ?? result.total_count ?? nextRows.length),
+    });
+    const snapshot = candidatePoolSnapshot(nextRows, nextMainPool, targetPoolSize, nextWorkflowPlan);
+    const eligibleCount = snapshot.eligibleCount;
+    if (eligibleCount < targetPoolSize) {
+      const now = Date.now();
+      if (now - lastPoolDeficitWarningRef.current >= POOL_DEFICIT_WARNING_COOLDOWN_MS) {
+        lastPoolDeficitWarningRef.current = now;
+        notify("warning", `候选池不足: 当前合格候选 ${eligibleCount}，目标池容量 ${targetPoolSize}，建议启动候选池自动推进补充候选。`);
+      }
+    }
+    return {
+      rows: nextRows,
+      mainPoolCandidates: nextMainPool,
+      workflowPlan: nextWorkflowPlan,
+      snapshot,
+    };
+  }, [notify, targetPoolSize]);
+
+  useEffect(() => {
+    if (globalCandidates.data) {
+      processCandidatesData(globalCandidates.data);
+    }
+  }, [globalCandidates.data, processCandidatesData]);
+
   const loadCandidates = useCallback(async (): Promise<LoadedCandidateState | null> => {
-    const [result, checkResultsResult, lifecycleResult] = await Promise.all([
-      callApi("/api/candidates"),
+    refreshAll();
+    const loaded = processCandidatesData(globalCandidates.data);
+    const [checkResultsResult, lifecycleResult] = await Promise.all([
       callCheckResultsApi<{ items?: CandidateCheckResult[] }>("/api/check_results"),
       callLifecycleApi<AlphaLifecycleHistoryResponse>("/api/alpha_lifecycle?limit=250"),
     ]);
-    let loaded: LoadedCandidateState | null = null;
-    if (result?.ok) {
-      const nextRows = result.candidates || result.items || [];
-      const nextMainPool = Array.isArray(result.main_pool_candidates) ? result.main_pool_candidates : null;
-      const nextWorkflowPlan = result.workflow_plan || result.candidate_workflow || null;
-      setCandidates((current) => (
-        result.partial && nextRows.length === 0 && current.length > 0 ? current : nextRows
-      ));
-      setServerMainPoolCandidates(nextMainPool);
-      setServerWorkflowPlan(nextWorkflowPlan);
-      setCandidateMeta({
-        returned: Number(result.returned_count ?? nextRows.length),
-        total: Number(result.total ?? result.total_count ?? nextRows.length),
-      });
-      loaded = {
-        rows: nextRows,
-        mainPoolCandidates: nextMainPool,
-        workflowPlan: nextWorkflowPlan,
-        snapshot: candidatePoolSnapshot(nextRows, nextMainPool, targetPoolSize, nextWorkflowPlan),
-      };
-      const eligibleCount = loaded.snapshot.eligibleCount;
-      if (eligibleCount < targetPoolSize) {
-        const now = Date.now();
-        if (now - lastPoolDeficitWarningRef.current >= POOL_DEFICIT_WARNING_COOLDOWN_MS) {
-          lastPoolDeficitWarningRef.current = now;
-          notify("warning", `候选池不足: 当前合格候选 ${eligibleCount}，目标池容量 ${targetPoolSize}，建议启动候选池自动推进补充候选。`);
-        }
-      }
-      if (result.partial) {
-        notify("warning", result.warning || "候选账本暂不可用，当前仅为预览数据。");
-      }
-    } else if (result?.error) {
-      notify("error", apiErrorMessage(result, "候选数据加载失败"));
-    }
     if (checkResultsResult?.ok) {
       setCheckResults(indexCheckResults(checkResultsResult.items || []));
     } else if (checkResultsResult?.error) {
@@ -171,7 +175,7 @@ export default function CandidateTable({
       setLifecycleError("生命周期历史加载失败");
     }
     return loaded;
-  }, [callApi, callCheckResultsApi, callLifecycleApi, notify, targetPoolSize]);
+  }, [refreshAll, processCandidatesData, globalCandidates.data, callCheckResultsApi, callLifecycleApi, notify]);
 
   const refreshCheckResults = useCallback(async () => {
     if (viewMode !== "submittable") return;
@@ -369,8 +373,8 @@ export default function CandidateTable({
     setSelectedIds(new Set());
   }, []);
 
-  const loading = api.loading;
-  const loadError = api.error;
+  const loading = globalCandidates.loading;
+  const loadError = globalCandidates.error;
   const visibleStart = sortedCandidates.length === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1;
   const visibleEnd = Math.min(currentPage * PAGE_SIZE, sortedCandidates.length);
   const title = viewMode === "candidates" ? "候选管理" : `${queueViewLabel(viewMode)}候选`;
@@ -460,7 +464,7 @@ export default function CandidateTable({
         visibleLifecycleTraces={visibleLifecycleTraces}
         detailPanel={detailPanelProps}
         loadError={loadError}
-        apiLoading={api.loading}
+        apiLoading={globalCandidates.loading}
         onRetryLoad={loadCandidates}
         onFilterChange={handleFilterChange}
         showStarredOnly={showStarredOnly}

@@ -18,7 +18,17 @@ import type { ApiMeta } from "@/hooks/useApi";
 
 export interface GlobalDataState {
   candidates: {
-    data: { candidates?: Candidate[]; total?: number } | null;
+    data: {
+      candidates?: Candidate[];
+      items?: Candidate[];
+      main_pool_candidates?: Candidate[];
+      workflow_plan?: Record<string, unknown> | null;
+      candidate_workflow?: Record<string, unknown> | null;
+      pool_summary?: Record<string, unknown>;
+      total?: number;
+      returned_count?: number;
+      total_count?: number;
+    } | null;
     error: string | null;
     loading: boolean;
     lastErrorMeta: ApiMeta | null;
@@ -47,13 +57,23 @@ export interface GlobalDataState {
 const GlobalDataContext = createContext<GlobalDataState | null>(null);
 
 export function GlobalDataProvider({ children }: { children: React.ReactNode }) {
-  const candidatesApi = useApi<{ candidates?: Candidate[]; total?: number }>();
+  const candidatesApi = useApi<{
+    candidates?: Candidate[];
+    items?: Candidate[];
+    main_pool_candidates?: Candidate[];
+    workflow_plan?: Record<string, unknown> | null;
+    candidate_workflow?: Record<string, unknown> | null;
+    pool_summary?: Record<string, unknown>;
+    total?: number;
+    returned_count?: number;
+    total_count?: number;
+  }>();
   const slotsApi = useApi<BacktestSlotsResponse>();
   const cloudApi = useApi<{ count?: number; total?: number; summary?: Record<string, unknown> }>();
   const configApi = useApi<{ config?: { credentials?: { managed_credentials_available?: boolean } } }>();
 
   const refreshAll = useCallback(() => {
-    void candidatesApi.call("/api/candidates?summary=true");
+    void candidatesApi.call("/api/candidates");
     void slotsApi.call("/api/backtest_slots");
     void cloudApi.call("/api/snapshot/cloud");
     void configApi.call("/api/config");

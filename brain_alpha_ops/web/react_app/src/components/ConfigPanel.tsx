@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import { apiErrorMessage, safeDisplayErrorMessage, type ApiErrorExperiencePayload } from "@/helpers/errorExperience";
 import { useApi } from "@/hooks/useApi";
+import { useGlobalData } from "@/hooks/useGlobalData";
 import type { BrainCredentials, RunConfig } from "@/types";
 import ProgressFeedback from "@/components/ProgressFeedback";
 import {
@@ -78,7 +79,7 @@ export default function ConfigPanel({
   managedCredentialsAvailable = false,
   onLoggedOut,
 }: Props) {
-  const configApi = useApi<ConfigResponse>();
+  const { config: globalConfig, refreshAll } = useGlobalData();
   const schemaApi = useApi<ConfigSchemaResponse>();
   const saveApi = useApi<ConfigResponse>();
   const connectionApi = useApi<ConnectionTestResponse>();
@@ -90,11 +91,10 @@ export default function ConfigPanel({
   const importInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
-    void configApi.call("/api/config");
     void schemaApi.call("/api/config_schema");
-  }, [configApi.call, schemaApi.call]);
+  }, [schemaApi.call]);
 
-  const config = useMemo(() => configApi.data?.config ?? null, [configApi.data]);
+  const config = useMemo(() => globalConfig.data?.config ?? null, [globalConfig.data]);
   const schema = schemaApi.data?.schema;
 
   useEffect(() => {
@@ -119,7 +119,7 @@ export default function ConfigPanel({
   };
 
   const reload = () => {
-    void configApi.call("/api/config");
+    refreshAll();
     void schemaApi.call("/api/config_schema");
   };
 
@@ -138,7 +138,7 @@ export default function ConfigPanel({
       return;
     }
     notify("success", "配置已保存");
-    void configApi.call("/api/config");
+    refreshAll();
   };
 
   const exportConfig = () => {
@@ -202,7 +202,7 @@ export default function ConfigPanel({
     notify("success", "已退出本地会话并清空页面凭证");
   };
 
-  if (configApi.loading && !config) {
+  if (globalConfig.loading && !config) {
     return (
       <ProgressFeedback
         state="loading"
@@ -212,10 +212,10 @@ export default function ConfigPanel({
     );
   }
 
-  if (configApi.error && !config) {
+  if (globalConfig.error && !config) {
     return (
       <div className="panel">
-        <p className="text-negative text-sm">加载配置失败: {safeDisplayErrorMessage(configApi.error)}</p>
+        <p className="text-negative text-sm">加载配置失败: {safeDisplayErrorMessage(globalConfig.error)}</p>
         <button type="button" onClick={reload} className="btn btn-secondary btn-sm">重试</button>
       </div>
     );

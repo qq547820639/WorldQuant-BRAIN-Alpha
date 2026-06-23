@@ -8,6 +8,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiErrorMessage } from "@/helpers/errorExperience";
 import { useApi } from "@/hooks/useApi";
+import { useGlobalData } from "@/hooks/useGlobalData";
 import type { Candidate, SubmitReadinessResponse } from "@/types";
 import { isRecord } from "@/types";
 import ProgressFeedback from "@/components/ProgressFeedback";
@@ -22,23 +23,21 @@ interface Props {
 }
 
 export default function SubmissionConfirmPanel({ notify, onNavigate }: Props) {
-  const candidatesApi = useApi<{ candidates?: Candidate[]; items?: Candidate[] }>();
+  const { candidates: globalCandidates, refreshAll } = useGlobalData();
   const checksApi = useApi<{ items?: CheckResult[] }>();
   const readinessApi = useApi<SubmitReadinessResponse>();
-  const callCandidates = candidatesApi.call;
   const callChecks = checksApi.call;
   const callReadiness = readinessApi.call;
 
   const load = useCallback(async () => {
-    const [candidatesResult, checksResult, readinessResult] = await Promise.all([
-      callCandidates<{ candidates?: Candidate[]; items?: Candidate[] }>("/api/candidates"),
+    refreshAll();
+    const [checksResult, readinessResult] = await Promise.all([
       callChecks<{ items?: CheckResult[] }>("/api/check_results"),
       callReadiness<SubmitReadinessResponse>("/api/submit_readiness"),
     ]);
-    if (candidatesResult?.error) notify("error", apiErrorMessage(candidatesResult, "候选数据加载失败"));
     if (checksResult?.error) notify("error", apiErrorMessage(checksResult, "检查结果加载失败"));
     if (readinessResult?.error) notify("error", apiErrorMessage(readinessResult, "提交阻断复核加载失败"));
-  }, [callCandidates, callChecks, callReadiness, notify]);
+  }, [callChecks, callReadiness, notify, refreshAll]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -78,7 +77,7 @@ export default function SubmissionConfirmPanel({ notify, onNavigate }: Props) {
     };
   }, [readyToSubmit, readiness?.real_submit_performed, load, notify]);
 
-  const candidates = candidatesApi.data?.candidates || candidatesApi.data?.items || [];
+  const candidates = globalCandidates.data?.candidates || globalCandidates.data?.items || [];
   const checks = checksApi.data?.items || [];
   const rows = useMemo(() => buildRows(candidates, checks), [candidates, checks]);
 
@@ -97,11 +96,11 @@ export default function SubmissionConfirmPanel({ notify, onNavigate }: Props) {
   const readyCount = readiness?.eligible_count ?? readyRows.length;
   const readinessCandidateCount = readiness?.job_family_candidate_count ?? readiness?.candidate_count ?? rows.length;
   const blockedCount = readiness ? Math.max(0, readinessCandidateCount - readyCount) : blockedRows.length;
-  const loading = (candidatesApi.loading || checksApi.loading || readinessApi.loading)
-    && !candidatesApi.data
+  const loading = (globalCandidates.loading || checksApi.loading || readinessApi.loading)
+    && !globalCandidates.data
     && !checksApi.data
     && !readinessApi.data;
-      const error = candidatesApi.error || checksApi.error || readinessApi.error;
+      const error = globalCandidates.error || checksApi.error || readinessApi.error;
 
   const flowStages = useMemo(() => {
   const checked = new Set(checks.filter((c) => c.passed || c.submittable).map(c => c.alpha_id || c.official_alpha_id || c.simulation_id || JSON.stringify(c))).size;

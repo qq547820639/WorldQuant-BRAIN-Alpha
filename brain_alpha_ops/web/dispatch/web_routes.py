@@ -382,8 +382,8 @@ def _handle_candidate_check(handler: Any, path: str, payload: dict) -> None:
                 "ok": False,
                 "candidate_id": candidate_id,
                 "error_code": "USE_BATCH_CHECK",
-                "error": "请使用批量检查端点 /api/check_batch 进行候选检查。",
-                "suggestion": "POST /api/check_batch with {\"expressions\": [\"<expression>\"]}",
+                "error": "请使用检查端点 /api/check 或批量检查端点 /api/check_batch 进行候选检查。",
+                "suggestion": "POST /api/check with {\"candidate\": <candidate_object>} or POST /api/check_batch with {\"check_candidates\": [<candidate_objects>]}",
             },
             status=410,
         )
