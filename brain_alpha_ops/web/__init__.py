@@ -70,7 +70,8 @@ logger = logging.getLogger(__name__)
 WebApplicationContext = _WebApplicationContext
 
 # ═══════════════════════ Server config ═══════════════════════════
-HOST = "127.0.0.1"
+import os as _os
+HOST = _os.environ.get("WEB_HOST", "127.0.0.1")
 DEFAULT_PORT = 8765
 SESSION_TTL_SECONDS = _DEFAULT_SESSION_TTL_SECONDS
 SESSION_ALLOW_MULTIPLE = True

@@ -29,7 +29,7 @@ def handle_request(request: dict[str, Any], toolbox: BrainAlphaToolbox) -> dict[
         return _result(request_id, {
             "protocolVersion": str(params.get("protocolVersion") or "2024-11-05"),
             "capabilities": {"tools": {}},
-            "serverInfo": {"name": "brain-alpha-ops", "version": "0.3.0"},
+            "serverInfo": {"name": "brain-alpha-ops", "version": "0.5.0"},
         })
     if method == "tools/list":
         return _result(request_id, {

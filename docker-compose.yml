@@ -8,6 +8,7 @@ services:
       - BRAIN_ALPHA_OPS_WEB_FRONTEND=react
       - PYTHONDONTWRITEBYTECODE=1
       - PYTHONUNBUFFERED=1
+      - WEB_HOST=0.0.0.0
     volumes:
       - ./data:/app/data
     healthcheck:

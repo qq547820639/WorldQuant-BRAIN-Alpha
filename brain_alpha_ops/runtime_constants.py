@@ -27,7 +27,7 @@ class WebDefaults:
     PORT: int = 8765
     """Default listen port."""
 
-    SERVER_VERSION: str = "BrainAlphaOps/0.3"
+    SERVER_VERSION: str = "BrainAlphaOps/0.5"
     """HTTP Server header value."""
 
     MAX_BODY_BYTES: int = 2 * 1024 * 1024
