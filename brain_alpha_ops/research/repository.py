@@ -93,6 +93,8 @@ class ResearchRepository:
         *,
         status: str = "completed",
         parameter_audit: dict[str, Any] | None = None,
+        experiment_id: str = "",
+        experiment_version: str = "",
     ) -> Path:
         """Persist the latest run snapshot for UI recovery after app restart."""
         history_dir = Path(self.storage_dir) / "run_history"
@@ -103,6 +105,10 @@ class ResearchRepository:
             "status": status,
             "timestamp": utc_now(),
         }
+        if experiment_id:
+            payload["experiment_id"] = experiment_id
+        if experiment_version:
+            payload["experiment_version"] = experiment_version
         if parameter_audit is not None:
             payload["parameter_audit"] = parameter_audit
         payload = _repository_safe(payload)

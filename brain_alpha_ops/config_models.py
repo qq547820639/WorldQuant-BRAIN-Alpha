@@ -121,6 +121,7 @@ class ResearchBudget:
     strategy_plugin_specs: list[str] = field(default_factory=list)
     use_assistant_guidance: bool = True
     assistant_guidance_min_confidence: float = 0.6
+    random_seed: int = 42
     generation: GenerationConfig = field(default_factory=GenerationConfig)
 
 
@@ -297,6 +298,9 @@ class WebConfig:
 class RunConfig:
     environment: str = "production"
     auto_submit: bool = False
+    demo_mode: bool = False
+    experiment_id: str = ""
+    experiment_version: str = ""
     credentials: CredentialConfig = field(default_factory=CredentialConfig)
     web: WebConfig = field(default_factory=WebConfig)
     ops: OpsConfig = field(default_factory=OpsConfig)

@@ -1,0 +1,89 @@
+{
+  "schema_version": "v2.0",
+  "environment": "demo",
+  "auto_submit": false,
+  "demo_mode": true,
+  "experiment_id": "demo-run-001",
+  "experiment_version": "1.0.0",
+  "credentials": {
+    "username_env": "BRAIN_USERNAME",
+    "password_env": "BRAIN_PASSWORD",
+    "token_env": "BRAIN_TOKEN"
+  },
+  "web": {
+    "host": "127.0.0.1",
+    "port": 8765,
+    "open_browser": false,
+    "session_ttl_seconds": 43200,
+    "allow_multiple_sessions": true,
+    "allow_remote": false,
+    "admin_token_env": "BRAIN_ALPHA_OPS_WEB_ADMIN_TOKEN"
+  },
+  "ops": {
+    "storage_dir": "data/demo",
+    "source_tag_policy": "official/experience/inference/manual",
+    "settings": {
+      "instrumentType": "EQUITY",
+      "region": "USA",
+      "universe": "TOP3000",
+      "delay": 1,
+      "dataset": "pv1",
+      "decay": 10,
+      "neutralization": "SUBINDUSTRY",
+      "truncation": 0.05,
+      "pasteurization": "ON",
+      "unitHandling": "VERIFY",
+      "nanHandling": "ON",
+      "language": "FASTEXPR",
+      "visualization": false,
+      "type": "REGULAR"
+    },
+    "budget": {
+      "max_candidates_per_cycle": 10,
+      "max_cycles": 1,
+      "run_forever": false,
+      "random_seed": 42,
+      "max_official_validations_per_cycle": 3,
+      "max_official_simulations_per_cycle": 1,
+      "max_official_concurrent_simulations": 1,
+      "retained_alpha_pool_size": 5,
+      "official_backtest_batch_size": 1,
+      "min_local_quality_score": 3.0,
+      "min_prior_score_for_official_validation": 40.0,
+      "min_prior_score_for_official_simulation": 50.0,
+      "stop_official_calls_on_rate_limit": true,
+      "cycle_pause_seconds": 0.5,
+      "official_retry_pause_seconds": 30.0,
+      "adaptive_strategy_enabled": false,
+      "require_cloud_sync": false,
+      "dataset_strategy": "specific",
+      "use_assistant_guidance": false
+    },
+    "scoring": {
+      "assistant_guidance_score_adjustment_enabled": false
+    },
+    "thresholds": {
+      "require_official_pass": false,
+      "require_official_metrics": false,
+      "require_data_compliance": false,
+      "require_economic_logic": false
+    },
+    "submission_policy": {
+      "max_auto_submissions_per_day": 0,
+      "max_auto_submissions_per_run": 0,
+      "require_pre_submit_check_passed": false
+    },
+    "official_api": {
+      "base_url": "http://127.0.0.1:9999",
+      "timeout_seconds": 10,
+      "poll_attempts": 5,
+      "poll_interval_seconds": 1.0,
+      "min_request_interval_seconds": 0.1,
+      "rate_limit_retry_attempts": 1,
+      "rate_limit_backoff_seconds": 5.0,
+      "cache_dir": "data/demo/api_cache",
+      "context_cache_ttl_seconds": 86400,
+      "allow_stale_context_on_rate_limit": true
+    }
+  }
+}

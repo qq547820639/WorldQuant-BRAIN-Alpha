@@ -99,6 +99,8 @@ class AlphaResearchPipeline(
         ledger: SubmissionLedger | None = None,
         progress_callback: Callable[[dict], None] | None = None,
         stop_callback: Callable[[], bool] | None = None,
+        experiment_id: str = "",
+        experiment_version: str = "",
     ):
         if api is None and execution_backend is None:
             raise ValueError(
@@ -112,6 +114,8 @@ class AlphaResearchPipeline(
             underlying_api = getattr(execution_backend, '_api', None)
             api = BrainAPIBridge(execution_backend, api=underlying_api)
         backtest_slot_manager = BacktestSlotManager()
+        self._experiment_id = experiment_id
+        self._experiment_version = experiment_version
         self._runtime_state = PipelineRuntimeState(
             config=config,
             api=api,
@@ -124,6 +128,7 @@ class AlphaResearchPipeline(
             official_call_guard=OfficialCallGuard(),
             _knowledge_base=StructuredKnowledgeBase(config.storage_dir),
             _local_backtest_engine=LocalBacktestEngine(
+                seed=config.budget.random_seed,
                 n_dates=PREFILTER_BACKTEST_DATES,
                 n_symbols=PREFILTER_BACKTEST_SYMBOLS,
             ),
@@ -138,7 +143,7 @@ class AlphaResearchPipeline(
                 "warning": "",
             },
             check_registry=AlphaCheckRegistry(),
-            convergence=ConvergenceTracker(window_size=10, stall_threshold=5, rng=random.Random()),
+            convergence=ConvergenceTracker(window_size=10, stall_threshold=5, rng=random.Random(config.budget.random_seed)),
             auto_calibrator=AutoCalibrator(storage_dir=getattr(config, "storage_dir", "data")),
         )
         # ── Composition-based service container ──
@@ -380,7 +385,9 @@ class AlphaResearchPipeline(
         try:
             self.repository.save_run_history(run_id, result.to_dict(), status=run_status,
                 parameter_audit=build_parameter_audit_snapshot(
-                    self.config, auto_submit=auto_submit, source="pipeline_run"))
+                    self.config, auto_submit=auto_submit, source="pipeline_run"),
+                experiment_id=self._experiment_id,
+                experiment_version=self._experiment_version)
         except Exception as exc:
             logger.warning("failed to persist run history for %s: %s", run_id, redact_error_message(exc))
             logger.debug("run history persistence traceback for %s", run_id, exc_info=True)

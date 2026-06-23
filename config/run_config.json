@@ -2,6 +2,8 @@
   "schema_version": "v2.0",
   "environment": "production",
   "auto_submit": false,
+  "experiment_id": "",
+  "experiment_version": "",
   "credentials": {
     "username_env": "BRAIN_USERNAME",
     "password_env": "BRAIN_PASSWORD",
@@ -56,6 +58,7 @@
       "require_cloud_sync": false,
       "cloud_sync_range": "all",
       "max_cycles": 10,
+      "random_seed": 42,
       "dataset_strategy": "rotate",
       "generation_mode_ratio": "70/20/10",
       "hypothesis_library_dir": "brain_alpha_ops/research/hypotheses",
