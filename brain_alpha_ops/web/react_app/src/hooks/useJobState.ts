@@ -11,7 +11,7 @@
  * P0-2: When SSE stream exhausts or the polling watchdog fires, the hook now
  * sets a "disconnected" state instead of immediately cancelling the BRAIN job.
  * The user is shown a persistent toast with [继续等待] / [终止重试] buttons.
- * If the user takes no action within 60s, auto-cancellation takes effect.
+ * If the user takes no action within 5 minutes, auto-cancellation takes effect.
  */
 
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
@@ -284,7 +284,7 @@ export function useJobState(
     setStatus(result);
   }, []);
 
-  useJobWatchdog(running, jobId, {
+  useJobWatchdog(running, jobId, connected, {
     pollFailures,
     setPollFailures,
     callApi: api.call,

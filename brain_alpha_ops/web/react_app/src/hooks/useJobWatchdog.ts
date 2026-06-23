@@ -1,9 +1,9 @@
 /**
  * useJobWatchdog — Polling watchdog that detects stalled jobs.
  *
- * Periodically polls the backend job status while a job is running.
- * Tracks consecutive failures and triggers the disconnected state when
- * the threshold is exceeded.
+ * Only polls the backend when SSE is disconnected, avoiding redundant
+ * network traffic while the event stream is healthy. Tracks consecutive
+ * failures and triggers the disconnected state when the threshold is exceeded.
  */
 
 import { useEffect, useCallback } from "react";
@@ -40,6 +40,7 @@ interface WatchdogCallbacks {
 export function useJobWatchdog(
   running: boolean,
   jobId: string | null,
+  sseConnected: boolean,
   {
     pollFailures,
     setPollFailures,
@@ -61,9 +62,9 @@ export function useJobWatchdog(
     [setPollFailures],
   );
 
-  // Polling watchdog: check job status while running
+  // Polling watchdog: only poll when SSE is disconnected
   useEffect(() => {
-    if (!running || !jobId) return;
+    if (!running || !jobId || sseConnected) return;
     const interval = setInterval(async () => {
       const result = await callApi<JobStatus>(
         `/api/production-validation/status?job_id=${encodeURIComponent(jobId)}`,
@@ -103,7 +104,7 @@ export function useJobWatchdog(
     }, WATCHDOG_POLL_INTERVAL);
     return () => clearInterval(interval);
   }, [
-    running, jobId, callApi, cancelAmbiguousJob, clearTransientProgressError,
+    running, jobId, sseConnected, callApi, cancelAmbiguousJob, clearTransientProgressError,
     notify, recordStatusRefreshFailure, onTerminal, onProgressUpdate, setPollFailures,
   ]);
 }

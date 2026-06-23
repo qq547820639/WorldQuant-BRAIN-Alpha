@@ -304,6 +304,20 @@ export default function ConfigPanel({
     <span title={formatHelp(help)} className="cursor-help ml-1 text-xs opacity-60 hover:opacity-100" aria-label="帮助" role="tooltip">❓</span>
   );
 
+  const optionValues = (
+    settingsOptions: ConfigSchema["settings_options"] | undefined,
+    key: string,
+    currentValue: string,
+    fallback: string[],
+  ): string[] => {
+    const values = settingsOptions?.[key]?.map(String).filter(Boolean);
+    const options = values?.length ? values : fallback;
+    if (currentValue && !options.includes(currentValue)) {
+      return [currentValue, ...options];
+    }
+    return options;
+  };
+
   const helpContent = (key: string) => {
     const entry = FIELD_HELP[key];
     return entry ? <HelpIcon help={entry} /> : null;

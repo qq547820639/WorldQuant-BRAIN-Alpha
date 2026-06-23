@@ -3,13 +3,13 @@
  *
  * When SSE exhausts or the polling watchdog fires, enters a "disconnected"
  * state where the user is shown a toast with [继续等待] / [终止重试] buttons.
- * If the user takes no action within 60s, auto-cancellation takes effect.
+ * If the user takes no action within 5 minutes, auto-cancellation takes effect.
  */
 
 import { useState, useCallback, useRef, useEffect } from "react";
 import type { CancelReason } from "@/api/jobCancel";
 
-const DISCONNECTED_AUTO_CANCEL_MS = 60000;
+const DISCONNECTED_AUTO_CANCEL_MS = 300000;
 
 interface AutoCancelCallbacks {
   jobId: string | null | undefined;
@@ -115,8 +115,8 @@ export function useJobDisconnectedState({
         }
         const autoMsg =
           trigger === "sse_exhausted"
-            ? "连接中断超过 60 秒未响应，自动终止 BRAIN 平台任务。"
-            : "状态刷新失败超过 60 秒未响应，自动终止 BRAIN 平台任务。";
+            ? "连接中断超过 5 分钟未响应，自动终止 BRAIN 平台任务。"
+            : "状态刷新失败超过 5 分钟未响应，自动终止 BRAIN 平台任务。";
         failMonitor(autoMsg);
         void cancelAmbiguousJob(
           trigger === "sse_exhausted" ? "sse_exhausted" : "status_failed",
