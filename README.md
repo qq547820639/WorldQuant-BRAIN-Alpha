@@ -498,7 +498,7 @@ docker compose up -d
 
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
-| `BRAIN_ALPHA_EXECUTION_BACKEND` | `browser` | 执行后端：`browser` 或 `api` |
+| `BRAIN_ALPHA_OPS_EXECUTION_MODE` | `browser` | 执行后端：`browser` 或 `api` |
 | `BRAIN_ALPHA_OPS_WEB_FRONTEND` | `react` | 前端模式：`react` 或默认 HTML |
 | `PYTHONDONTWRITEBYTECODE` | `1` | 禁止生成 .pyc |
 | `PYTHONUNBUFFERED` | `1` | 禁止 Python 输出缓冲 |

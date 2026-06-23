@@ -1,9 +1,8 @@
 /** Read-only rendering for the three independent official backtest slots. */
 
 import { useCallback, useEffect } from "react";
-import { apiErrorMessage } from "@/helpers/errorExperience";
 import { readinessReasonLabel } from "@/helpers/readinessLabels";
-import { useApi } from "@/hooks/useApi";
+import { useGlobalData } from "@/hooks/useGlobalData";
 import type { BacktestQueueSummary, BacktestSlot, BacktestSlotsResponse } from "@/types";
 import ProgressFeedback from "@/components/ProgressFeedback";
 import { backtestActiveCount, backtestSlotLimit } from "@/utils/backtestSlots";
@@ -15,13 +14,11 @@ interface Props {
 const POLL_INTERVAL_MS = 5000;
 
 export default function OfficialBacktestSlots({ notify }: Props) {
-  const api = useApi<BacktestSlotsResponse>();
-  const callApi = api.call;
+  const { slots: slotsGlobal, refreshAll } = useGlobalData();
 
   const load = useCallback(async () => {
-    const result = await callApi<BacktestSlotsResponse>("/api/backtest_slots");
-    if (result?.error) notify("error", apiErrorMessage(result, "回测槽位加载失败"));
-  }, [callApi, notify]);
+    refreshAll();
+  }, [refreshAll]);
 
   useEffect(() => {
     void load();
@@ -29,12 +26,12 @@ export default function OfficialBacktestSlots({ notify }: Props) {
     return () => window.clearInterval(id);
   }, [load]);
 
-  const slots = normalizeSlots(api.data);
-  const slotLimit = backtestSlotLimit(api.data);
-  const activeCount = backtestActiveCount(api.data);
-  const queueSummary = api.data?.queue_summary;
+  const slots = normalizeSlots(slotsGlobal.data);
+  const slotLimit = backtestSlotLimit(slotsGlobal.data);
+  const activeCount = backtestActiveCount(slotsGlobal.data);
+  const queueSummary = slotsGlobal.data?.queue_summary;
 
-  if (api.loading && !api.data) {
+  if (slotsGlobal.loading && !slotsGlobal.data) {
     return (
       <ProgressFeedback
         state="loading"
@@ -52,16 +49,16 @@ export default function OfficialBacktestSlots({ notify }: Props) {
           <p className="text-xs text-text-tertiary">活跃 {activeCount}/{slotLimit}</p>
         </div>
         <p className="text-xs text-text-tertiary" role="status" aria-live="polite">
-          {api.data?.updated_at || api.data?.source || "本地快照"}
+          {slotsGlobal.data?.updated_at || slotsGlobal.data?.source || "本地快照"}
         </p>
       </div>
 
       <BacktestQueueSummaryStrip summary={queueSummary} activeCount={activeCount} slotLimit={slotLimit} />
 
-      {api.error && (
+      {slotsGlobal.error && (
         <div className="rounded-md border border-[var(--color-error-border)] bg-[var(--color-error-bg)] p-4" role="alert" aria-live="assertive">
           <div className="flex items-center justify-between gap-3">
-            <p className="text-sm text-negative">回测槽位加载失败: {api.error}</p>
+            <p className="text-sm text-negative">回测槽位加载失败: {slotsGlobal.error}</p>
             <button type="button" onClick={load} className="btn btn-secondary text-sm">
               重试
             </button>

@@ -1,35 +1,23 @@
 /** Scoring visualization — Terminal Precision v2.0 */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { cancelResultExperience, requestJobCancel } from "@/api/jobCancel";
-import { apiErrorMessage, RAW_UNSAFE_DISPLAY_TEXT_PATTERN } from "@/helpers/errorExperience";
+import { apiErrorMessage } from "@/helpers/errorExperience";
 import { resolveJobEventState } from "@/helpers/runPayload";
 import { useApi } from "@/hooks/useApi";
 import { useSSE } from "@/hooks/useSSE";
 import ProgressFeedback from "@/components/ProgressFeedback";
 import type { ScoreHistoryPoint } from "@/components/ScoreBreakdown";
 import type {
-  AttributionNode, Candidate, FailureItem,
-  OfficialGateCheckItem, OfficialGateResult,
+  AttributionNode, Candidate,
+  OfficialGateResult,
   ScoringAttributionResponse, ScoringResult, SSEEvent, UnifiedProgress,
 } from "@/types";
-
-const BACKEND_STATUS_CODE_PATTERN = /^[A-Z][A-Z0-9_]{2,}$/;
-const SNAKE_STATUS_CODE_PATTERN = /^[a-z]+(?:_[a-z0-9]+)+$/;
-
-const LIFECYCLE_STATUS_LABELS: Record<string, string> = {
-  completed: "已完成",
-  submission_ready: "待提交复核",
-  running_backtest: "回测运行中",
-  pending_backtest: "等待回测",
-  candidate_pool_retained: "候选池保留",
-  local_prefilter_rejected: "本地预筛未通过",
-  local_prefilter_passed: "本地预筛通过",
-  official_validation_queue: "等待官方验证",
-  optimize: "继续优化",
-  failed: "未通过",
-  blocked: "已阻断",
-  running: "运行中",
-};
+import ScoringHeader from "./ScoringPanel/Header";
+import GateResults from "./ScoringPanel/GateResults";
+import ImprovementHints from "./ScoringPanel/ImprovementHints";
+import {
+  safeScoringText, lifecycleStatusLabel, metricWithStatus, nonEmpty,
+} from "./ScoringPanel/utils";
 
 interface Props {
   notify: (type: "success" | "error" | "warning" | "info", msg: string) => void;
@@ -118,8 +106,6 @@ export default function ScoringPanel({ notify, candidate }: Props) {
 
   const loadScore = useCallback(async () => {
     if (!candidate) return;
-    // P2-2: cache check — if scorecard already has a complete scoring result
-    // (total_score > 0 with an attribution tree), reuse it and skip the API calls.
     const scorecard = candidate.scorecard;
     if (scorecard && scorecard.total_score > 0 && scorecard.attribution_tree) {
       const cachedResult: ScoringResult = {
@@ -167,7 +153,6 @@ export default function ScoringPanel({ notify, candidate }: Props) {
 
   useEffect(() => { if (candidate) loadScore(); }, [candidate?.alpha_id, loadScore]);
 
-  // P1-5: Fetch scoring history from lifecycle API
   const fetchScoreHistory = useCallback(async () => {
     if (!candidate?.alpha_id) { setScoreHistory(null); return; }
     const result = await callLifecycleApi(`/api/alpha_lifecycle?alpha_id=${encodeURIComponent(candidate.alpha_id)}`);
@@ -190,8 +175,7 @@ export default function ScoringPanel({ notify, candidate }: Props) {
   const softGates = nonEmpty(scoring?.soft_gates) || nonEmpty(attributionData?.soft_gates) || [];
   const failures = nonEmpty(scoring?.top_failures) || nonEmpty(attributionData?.top_failures) || [];
   const hints = nonEmpty(scoring?.improvement_hints) || nonEmpty(attributionData?.improvement_hints) || [];
-  const m = candidate?.official_metrics;
-  const selfCorrelation = metricWithStatus(m?.self_correlation, m?.self_correlation_status, m?.correlation);
+  const selfCorrelation = metricWithStatus(candidate?.official_metrics?.self_correlation, candidate?.official_metrics?.self_correlation_status, candidate?.official_metrics?.correlation);
   const loading = scoreState === "loading" || scoreState === "progress" || attributionLoading;
   const error = scoreError || scoreApiError || attributionError;
   const lifecycleStatus = lifecycleStatusLabel(candidate?.lifecycle_status);
@@ -201,22 +185,6 @@ export default function ScoringPanel({ notify, candidate }: Props) {
     const checklist = Number(scoring?.checklist?.score ?? candidate?.scorecard?.checklist_score ?? 0);
     return { prior, empirical, checklist };
   }, [candidate?.scorecard, scoring]);
-
-  const renderAttribution = (node: AttributionNode | null | undefined, depth = 0) => {
-    if (!node) return null;
-    return (
-      <div style={{ marginLeft: depth > 0 ? 16 : 0, paddingLeft: depth > 0 ? 12 : 0 }} className={depth > 0 ? "border-l border-border-subtle" : ""}>
-        <div style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", fontSize: 12 }}>
-          <span className="text-text-secondary">{safeScoringText(node.name, "归因项待确认")}</span>
-          <span className="tabular text-text-tertiary">{fmtNum(node.score, 1)} x {fmtNum(node.weight, 2)}</span>
-        </div>
-        {node.explanation && <p className="text-2xs text-text-tertiary pb-1">{safeScoringText(node.explanation, "说明待确认")}</p>}
-        {childNodes(node).map((child) => (
-          <div key={`${safeScoringText(child.name, "attribution")}-${depth}`}>{renderAttribution(child, depth + 1)}</div>
-        ))}
-      </div>
-    );
-  };
 
   if (!candidate) {
     return (
@@ -245,91 +213,16 @@ export default function ScoringPanel({ notify, candidate }: Props) {
 
       <ProgressFeedback state={error ? "error" : scoreState} title="评分与验证" progress={scoreProgress} error={error} onRetry={loadScore} compact={scoreState === "idle" || scoreState === "success"} />
 
-      {/* Expression overview + Score Hero */}
-      <div className="panel mb-4">
-        <div className="panel-header">
-          <span>Alpha 表达式</span>
-          <button onClick={loadScore} className="btn btn-ghost btn-sm" disabled={loading}>{loading ? "评分中..." : "刷新评分"}</button>
-        </div>
-        <div className="panel-body-padded">
-          <code className="block font-mono text-xs text-text-secondary p-3 rounded-md bg-surface-2 break-all" style={{ lineHeight: 1.6 }}>
-            {candidate.expression}
-          </code>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "8px 16px", marginTop: 12, fontSize: 12 }}>
-            <span className="text-text-tertiary">家族: <span className="text-text-secondary">{safeScoringText(candidate.family, "家族待确认")}</span></span>
-            <span className="text-text-tertiary">状态: <span className={`badge ${scoring?.passed_gate || candidate.gate?.passed ? "badge-positive" : "badge-negative"}`}>{lifecycleStatus}</span></span>
-            <span className="text-text-tertiary">ID: <span className="font-mono text-text-secondary">{candidate.alpha_id}</span></span>
-          </div>
-          {isLocalPrefilterStatus(candidate.lifecycle_status) && (
-            <div
-              style={{
-                marginTop: 12, padding: "10px 14px", borderRadius: 6,
-                border: "1px solid var(--color-warning-border-subtle)",
-                backgroundColor: "var(--color-warning-bg)", fontSize: 12,
-                lineHeight: 1.6,
-              }}
-              role="note"
-              aria-label="本地预筛边界警告"
-            >
-              <p style={{ fontWeight: 600, color: "var(--color-text-primary)", marginBottom: 4 }}>
-                本地预筛边界提示
-              </p>
-              <p style={{ color: "var(--color-text-secondary)" }}>
-                本地预筛使用合成数据（synthetic data）进行快速评估，而非真实历史回测数据。
-                本地预筛结果仅作为初筛参考，不代表该 Alpha 在真实市场中的实际表现。
-                请以官方 BRAIN 模拟回测结果为准。
-              </p>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Score Scoreboard + Official Metrics */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
-        {/* Scoreboard */}
-        <div className="panel">
-          <div className="panel-header"><span>评分卡</span></div>
-          <div className="panel-body-padded">
-            <div style={{ textAlign: "center", marginBottom: 16 }}>
-              <span className="font-mono-value text-3xl text-positive" style={{ fontSize: 42, fontWeight: 500 }}>
-                {fmtNum(scoring?.total_score ?? candidate.scorecard?.total_score, 1)}
-              </span>
-              <span className="text-text-tertiary" style={{ fontSize: 20 }}>/100</span>
-            </div>
-            <ScoreBar label="先验" value={layerScores.prior} max={35} />
-            <ScoreBar label="实证" value={layerScores.empirical} max={40} />
-            <ScoreBar label="清单" value={layerScores.checklist} max={25} />
-            <div className="grid grid-cols-2 gap-2 mt-4 text-xs">
-              <InfoPill label="决策" value={scoring?.decision_band || candidate.decision_band || "--"} />
-              <InfoPill label="模式" value={scoring?.scoring_schema || "--"} />
-              <InfoPill label="门禁" value={scoring?.passed_gate ? "通过" : "失败"} />
-              <InfoPill label="API 偏差" value={fmtNum(scoring?.api_output_deviation, 4)} />
-            </div>
-            {attribution && (
-              <div className="mt-4 pt-3 border-t border-border-subtle">
-                <p className="text-xs font-medium text-text-secondary mb-2">归因分析</p>
-                {renderAttribution(attribution)}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Official Metrics */}
-        <div className="panel">
-          <div className="panel-header"><span>官方指标</span></div>
-          <div className="panel-body-padded">
-            <div className="grid grid-cols-2 gap-3 text-xs">
-              <MetricRow label="夏普比率" value={m?.sharpe} threshold={1.25} />
-              <MetricRow label="适应度" value={m?.fitness} threshold={1.0} />
-              <MetricRow label="换手率" value={m?.turnover} format="percent" />
-              <MetricRow label="收益率" value={m?.returns} format="percent" />
-              <MetricRow label="回撤" value={m?.drawdown} format="percent" max={0.25} />
-              <MetricRow label="自相关性" value={selfCorrelation} max={0.70} />
-              <MetricRow label="集中度" value={m?.weight_concentration} max={0.10} format="percent" />
-            </div>
-          </div>
-        </div>
-      </div>
+      <ScoringHeader
+        candidate={candidate}
+        scoring={scoring}
+        layerScores={layerScores}
+        loading={loading}
+        onRetry={loadScore}
+        lifecycleStatus={lifecycleStatus}
+        officialMetrics={candidate.official_metrics}
+        attribution={attribution}
+      />
 
       {/* P1-5: 评分历史时间线 */}
       {scoreHistory && scoreHistory.length >= 2 && (
@@ -416,197 +309,9 @@ export default function ScoringPanel({ notify, candidate }: Props) {
         </div>
       )}
 
-      {/* Gate Checks */}
-      <div className="panel mb-4">
-        <div className="panel-header"><span>官方门禁检查</span></div>
-        <div className="panel-body-padded">
-          <GateGroup title="硬门禁" gates={hardGates} />
-          <div style={{ marginTop: 16 }}>
-            <GateGroup title="软门禁" gates={softGates} />
-          </div>
-        </div>
-      </div>
+      <GateResults hardGates={hardGates} softGates={softGates} />
 
-      {/* Failures & Hints */}
-      {(failures.length > 0 || hints.length > 0) && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <InsightList title="主要失败原因" items={failures} />
-          <HintList title="改进建议" items={hints} />
-        </div>
-      )}
-    </div>
-  );
-}
-
-function ScoreBar({ label, value, max }: { label: string; value: number; max: number }) {
-  const pct = Math.min(100, (value / max) * 100);
-  return (
-    <div style={{ marginBottom: 10 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4, fontSize: 12 }}>
-        <span className="text-text-tertiary">{label}</span>
-        <span className="tabular text-text-tertiary">{value.toFixed(1)}/{max}</span>
-      </div>
-      <div className="progress-bar" role="progressbar" aria-label={`${label} score`} aria-valuemin={0} aria-valuemax={max} aria-valuenow={value}>
-        <div className="progress-bar-fill positive" style={{ width: `${pct}%` }} />
-      </div>
-    </div>
-  );
-}
-
-function InfoPill({ label, value }: { label: string; value: unknown }) {
-  return (
-    <div className="bg-surface-2" style={{ padding: "8px 10px", borderRadius: 4 }}>
-      <span className="text-2xs text-text-tertiary block">{label}</span>
-      <span className="text-sm font-mono text-text-primary truncate block">{safeScoringText(value, "待确认")}</span>
-    </div>
-  );
-}
-
-function GateGroup({ title, gates }: { title: string; gates: OfficialGateResult[] }) {
-  const safeGates = Array.isArray(gates) ? gates : [];
-  if (!safeGates.length) return <p className="text-xs text-text-tertiary">{title}: 暂无数据</p>;
-  return (
-    <div>
-      <p className="text-xs font-medium text-text-secondary mb-2">{title}</p>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-        {safeGates.flatMap((gate) => {
-          const checkItems = Array.isArray(gate.check_items) ? gate.check_items : [];
-          const checks: OfficialGateCheckItem[] = checkItems.length ? checkItems : [{ name: gate.gate_name, passed: gate.passed }];
-          return checks.map((check, i) => (
-            <div key={`${safeScoringText(gate.gate_name, "gate")}-${safeScoringText(check.name, "check")}-${i}`}
-              className={check.passed ? "bg-positive-subtle border-positive-subtle" : "bg-negative-subtle border-negative-subtle"}
-              style={{
-                display: "flex", alignItems: "flex-start", gap: 8, padding: "8px 10px",
-                borderRadius: 4, fontSize: 12, borderWidth: "0.5px", borderStyle: "solid",
-              }}
-            >
-              <span className={check.passed ? "text-positive" : "text-negative"}>{check.passed ? "\u2713" : "\u2715"}</span>
-              <div>
-                <span className="font-medium">{safeScoringText(check.name, "检查项待确认")}</span>
-                <p className="text-text-tertiary text-2xs">{formatGateDetail(check.actual, check.direction, check.target, check.meaning)}</p>
-                <p className="text-text-tertiary text-2xs">{safeScoringText(gate.gate_name, "门禁待确认")}</p>
-              </div>
-            </div>
-          ));
-        })}
-      </div>
-    </div>
-  );
-}
-
-function InsightList({ title, items }: { title: string; items: FailureItem[] }) {
-  return (
-    <div className="panel">
-      <div className="panel-header"><span>{title}</span></div>
-      <div className="panel-body">
-        {items.map((item, i) => (
-          <div key={`${item.item || "failure"}-${i}`} className="text-xs px-3.5 py-2 border-b border-border-subtle last:border-0">
-            <p className="text-negative font-medium">{safeScoringText(item.item, "评分项待确认")}</p>
-            <p className="text-text-tertiary">{safeScoringText(item.reason || item.severity, "原因待确认")}</p>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function HintList({ title, items }: { title: string; items: string[] }) {
-  return (
-    <div className="panel">
-      <div className="panel-header"><span>{title}</span></div>
-      <div className="panel-body">
-        {items.map((item, i) => (
-          <p key={`${item}-${i}`} className="text-xs text-text-secondary px-3.5 py-2 border-b border-border-subtle last:border-0">
-            {safeScoringText(item, "建议待确认")}
-          </p>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function formatGateDetail(actual: unknown, direction: unknown, target: unknown, fallback: unknown) {
-  const parts = [actual, direction, target]
-    .map((value) => safeScoringText(value, ""))
-    .filter((value) => value);
-  if (parts.length) return parts.join(" ");
-  return safeScoringText(fallback, "--");
-}
-
-function fmtNum(value: unknown, digits: number) {
-  const num = Number(value);
-  return Number.isFinite(num) ? num.toFixed(digits) : "--";
-}
-
-function lifecycleStatusLabel(value: unknown) {
-  const text = String(value || "").trim();
-  if (!text) return "--";
-  const normalized = text.toLowerCase();
-  if (LIFECYCLE_STATUS_LABELS[normalized]) return LIFECYCLE_STATUS_LABELS[normalized];
-  if (isUnsafeScoringText(text) || BACKEND_STATUS_CODE_PATTERN.test(text) || SNAKE_STATUS_CODE_PATTERN.test(text)) {
-    return "状态待确认";
-  }
-  return text;
-}
-
-function safeScoringText(value: unknown, fallback: string) {
-  if (value === undefined || value === null || value === "") return fallback;
-  if (typeof value === "number") return Number.isFinite(value) ? String(value) : fallback;
-  if (typeof value === "boolean") return value ? "是" : "否";
-  const text = String(value).trim();
-  if (!text) return fallback;
-  if (isUnsafeScoringText(text)) return fallback;
-  return text;
-}
-
-function isUnsafeScoringText(text: string) {
-  return RAW_UNSAFE_DISPLAY_TEXT_PATTERN.test(text) || BACKEND_STATUS_CODE_PATTERN.test(text);
-}
-
-function metricWithStatus(primary: unknown, status: unknown, fallback: unknown): string | number | undefined {
-  return metricValue(primary) ?? metricValue(status) ?? metricValue(fallback);
-}
-
-function metricValue(value: unknown): string | number | undefined {
-  if (value === undefined || value === null || value === "") return undefined;
-  return typeof value === "number" || typeof value === "string" ? value : undefined;
-}
-
-function nonEmpty<T>(items?: T[] | null): T[] | null {
-  return Array.isArray(items) && items.length ? items : null;
-}
-
-function childNodes(node: AttributionNode): AttributionNode[] {
-  return Array.isArray(node.children) ? node.children : [];
-}
-
-const LOCAL_PREFILTER_STATUSES = new Set([
-  "local_prefilter_rejected",
-  "local_prefilter_passed",
-  "pending_backtest",
-  "running_backtest",
-]);
-
-function isLocalPrefilterStatus(status: unknown): boolean {
-  return typeof status === "string" && LOCAL_PREFILTER_STATUSES.has(status.toLowerCase());
-}
-
-function MetricRow({ label, value, threshold, max, format }: {
-  label: string; value?: number | string; threshold?: number; max?: number; format?: "percent";
-}) {
-  if (value == null) return null;
-  const numericValue = Number(value);
-  const isNumeric = Number.isFinite(numericValue);
-  const formatted = isNumeric
-    ? format === "percent" ? `${(numericValue * 100).toFixed(1)}%` : numericValue.toFixed(2)
-    : String(value);
-  const ok = isNumeric
-    ? threshold != null ? numericValue >= threshold : max != null ? numericValue <= max : true
-    : true;
-  return (
-    <div className="bg-surface-2" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 8px", borderRadius: 4 }}>
-      <span className="text-text-tertiary">{label}</span>
-      <span className={`font-mono-value text-sm ${ok ? "text-positive" : "text-negative"}`}>{formatted}</span>
+      <ImprovementHints failures={failures} hints={hints} />
     </div>
   );
 }

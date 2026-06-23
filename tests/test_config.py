@@ -203,7 +203,8 @@ def test_write_run_config_round_trips():
         assert loaded.ops.settings.region == "CHN"
 
 
-def test_write_run_config_does_not_persist_direct_credentials():
+def test_write_run_config_does_not_persist_direct_credentials(monkeypatch):
+    monkeypatch.setenv("BRAIN_ALLOW_PLAINTEXT_CREDENTIALS", "1")
     with tempfile.TemporaryDirectory() as tmp:
         path = os.path.join(tmp, "run_config.json")
         original = RunConfig()

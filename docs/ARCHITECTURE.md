@@ -1,6 +1,6 @@
 # Architecture — BRAIN Alpha Ops
 
-> Version 0.3.0 — Local alpha research workstation for the WorldQuant BRAIN platform.
+> Version 0.5.0 — Local alpha research workstation for the WorldQuant BRAIN platform.
 
 ## System Overview
 
@@ -145,7 +145,7 @@ Metrics, health checks, and runtime monitoring.
 ### Execution Backend Selection
 
 ```
-BRAIN_ALPHA_EXECUTION_BACKEND env var
+BRAIN_ALPHA_OPS_EXECUTION_MODE env var
         │
         ├── "browser" (default) → BrowserExecutionAdapter (Playwright)
         │   └── Drives real BRAIN Web UI
@@ -257,7 +257,7 @@ Central configuration file validated by JSON Schema. Structure:
 | Variable | Purpose |
 |---|---|
 | `BRAIN_USERNAME` / `BRAIN_PASSWORD` / `BRAIN_TOKEN` | API credentials |
-| `BRAIN_ALPHA_EXECUTION_BACKEND` | `browser` or `api` |
+| `BRAIN_ALPHA_OPS_EXECUTION_MODE` | `browser` or `api` |
 | `BRAIN_ALPHA_OPS_WEB_FRONTEND` | `react` or default HTML |
 | `BRAIN_ALPHA_OPS_HOME` | Override project root |
 | `BRAIN_ALPHA_OPS_WEB_ADMIN_TOKEN` | Admin token for remote access |

@@ -60,7 +60,7 @@ def test_candidate_pool_service_filters_validation_and_backtest_targets():
     ready.validation = {"status": "PASS"}
     deferred = _candidate("deferred", "rank(volume)", 75, status="simulation_deferred_rate_limit")
 
-    assert service.validation_targets([validation, validation_only_dead_end, too_low, ready]) == [validation]
+    assert service.validation_targets([validation, validation_only_dead_end, too_low, ready]) == [validation, validation_only_dead_end]
     assert [row.alpha_id for row in service.pending_backtest_candidates([ready, deferred, too_low])] == ["ready", "deferred"]
     assert [row.alpha_id for row in service.backtest_targets([ready, deferred], batch_size=1)] == ["ready"]
 

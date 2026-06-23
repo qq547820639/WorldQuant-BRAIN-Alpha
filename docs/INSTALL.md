@@ -1,6 +1,6 @@
 # Installation — BRAIN Alpha Ops
 
-> Version 0.3.0 — Local alpha research workstation for the WorldQuant BRAIN platform.
+> Version 0.5.0 — Local alpha research workstation for the WorldQuant BRAIN platform.
 
 ## System Requirements
 
@@ -173,7 +173,7 @@ Python backend.
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `BRAIN_ALPHA_EXECUTION_BACKEND` | `browser` | Execution backend: `browser` or `api` |
+| `BRAIN_ALPHA_OPS_EXECUTION_MODE` | `browser` | Execution backend: `browser` or `api` |
 | `BRAIN_ALPHA_OPS_WEB_FRONTEND` | `react` | Web frontend: `react` or default HTML |
 | `BRAIN_ALPHA_OPS_HOME` | (project root) | Override project root directory |
 | `BRAIN_ALPHA_OPS_WEB_ADMIN_TOKEN` | — | Required for remote access |

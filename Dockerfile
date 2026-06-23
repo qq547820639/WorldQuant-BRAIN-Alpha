@@ -22,7 +22,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     BRAIN_ALPHA_OPS_EXECUTION_MODE=browser \
-    BRAIN_ALPHA_OPS_WEB_FRONTEND=react
+    BRAIN_ALPHA_OPS_WEB_FRONTEND=react \
+    WEB_HOST=0.0.0.0
 
 WORKDIR /app
 

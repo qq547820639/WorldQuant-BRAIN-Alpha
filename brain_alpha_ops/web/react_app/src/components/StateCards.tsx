@@ -10,12 +10,10 @@
 
 import { useCallback, useEffect, useMemo } from "react";
 import { useApi } from "@/hooks/useApi";
+import { useGlobalData } from "@/hooks/useGlobalData";
 import type {
-  BacktestSlotsResponse,
   Candidate,
   CardViewId,
-  CloudAlphaSummary,
-  RunConfig,
 } from "@/types";
 import ProgressFeedback from "@/components/ProgressFeedback";
 import { safeDisplayErrorMessage } from "@/helpers/errorExperience";
@@ -126,20 +124,13 @@ const CARD_CONFIGS: CardConfig[] = [
 ];
 
 export default function StateCards({ onNavigate, notify }: Props) {
-  // API调用
-  const candidatesApi = useApi<{ candidates?: Candidate[]; items?: Candidate[]; total?: number; ready_count?: number }>();
-  const slotsApi = useApi<BacktestSlotsResponse>();
-  const configApi = useApi<{ config?: RunConfig }>();
+  const { candidates: candidatesGlobal, slots: slotsGlobal, config: configGlobal, cloud: cloudGlobal, refreshAll } = useGlobalData();
   const checkpointApi = useApi<CheckpointStatusSummary>();
-  const cloudApi = useApi<CloudAlphaSummary & { summary?: Record<string, unknown>; total?: number }>();
 
   const loadStateSnapshots = useCallback(() => {
-    void candidatesApi.call("/api/candidates?summary=true");
-    void slotsApi.call("/api/backtest_slots");
-    void configApi.call("/api/config");
+    refreshAll();
     void checkpointApi.call("/api/checkpoint_status");
-    void cloudApi.call("/api/snapshot/cloud");
-  }, [candidatesApi.call, slotsApi.call, configApi.call, checkpointApi.call, cloudApi.call]);
+  }, [refreshAll, checkpointApi.call]);
 
   // 加载数据
   useEffect(() => {
@@ -149,13 +140,13 @@ export default function StateCards({ onNavigate, notify }: Props) {
   // 错误处理
   const stateErrors = useMemo(
     () => [
-      labeledError("候选", candidatesApi.error),
-      labeledError("回测", slotsApi.error),
-      labeledError("配置", configApi.error),
+      labeledError("候选", candidatesGlobal.error),
+      labeledError("回测", slotsGlobal.error),
+      labeledError("配置", configGlobal.error),
       labeledError("历史", checkpointApi.error),
-      labeledError("云端", cloudApi.error),
+      labeledError("云端", cloudGlobal.error),
     ].filter(Boolean),
-    [candidatesApi.error, slotsApi.error, configApi.error, checkpointApi.error, cloudApi.error],
+    [candidatesGlobal.error, slotsGlobal.error, configGlobal.error, checkpointApi.error, cloudGlobal.error],
   );
 
   useEffect(() => {
@@ -163,16 +154,16 @@ export default function StateCards({ onNavigate, notify }: Props) {
   }, [notify, stateErrors]);
 
   // 计算核心指标
-  const candidates = candidatesApi.data?.candidates || candidatesApi.data?.items || [];
+  const candidates = candidatesGlobal.data?.candidates || candidatesGlobal.data?.items || [];
   const metrics = useMemo(() => {
-    const slotLimit = backtestSlotLimit(slotsApi.data);
-    const activeSlots = backtestActiveCount(slotsApi.data);
-    const qualityCount = candidatesApi.data?.ready_count ?? candidates.filter(isSubmissionReadyCandidate).length;
-    const cloudCount = cloudTotal(cloudApi.data);
+    const slotLimit = backtestSlotLimit(slotsGlobal.data);
+    const activeSlots = backtestActiveCount(slotsGlobal.data);
+    const qualityCount = candidatesGlobal.data?.ready_count ?? candidates.filter(isSubmissionReadyCandidate).length;
+    const cloudCount = cloudTotal(cloudGlobal.data);
 
     return {
       candidates: {
-        total: candidatesApi.data?.total ?? candidates.length,
+        total: candidatesGlobal.data?.total ?? candidates.length,
         label: "候选总数",
       },
       official_backtests: `${activeSlots}/${slotLimit}`,
@@ -190,7 +181,7 @@ export default function StateCards({ onNavigate, notify }: Props) {
         label: "历史记录",
       },
       config: {
-        environment: configApi.data?.config?.environment || "-",
+        environment: configGlobal.data?.config?.environment || "-",
         label: "运行环境",
       },
       cloud: {
@@ -198,15 +189,15 @@ export default function StateCards({ onNavigate, notify }: Props) {
         label: "云端缓存",
       },
     };
-  }, [candidates, candidatesApi.data?.ready_count, candidatesApi.data?.total, configApi.data, checkpointApi.data, cloudApi.data, slotsApi.data]);
+  }, [candidates, candidatesGlobal.data?.ready_count, candidatesGlobal.data?.total, configGlobal.data, checkpointApi.data, cloudGlobal.data, slotsGlobal.data]);
 
   // 加载状态
   const loading = [
-    candidatesApi,
-    slotsApi,
-    configApi,
+    candidatesGlobal,
+    slotsGlobal,
+    configGlobal,
     checkpointApi,
-    cloudApi,
+    cloudGlobal,
   ].some((api) => api.loading && !api.data);
   const loadError = stateErrors.length ? stateErrors.join("；") : "";
 

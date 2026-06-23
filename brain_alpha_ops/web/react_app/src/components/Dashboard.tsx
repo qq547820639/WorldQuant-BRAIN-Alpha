@@ -1,6 +1,7 @@
 /** Dashboard — Progressive flow with step-based guidance v3.1 */
 import { useEffect, useState, useRef, type ReactNode } from "react";
 import { useApi } from "@/hooks/useApi";
+import { useGlobalData } from "@/hooks/useGlobalData";
 import type { JobStatus, ResearchMemorySummary, TrendApiResponse } from "@/types";
 import KpiCard from "@/components/KpiCard";
 import TrendPanel, { type TrendData } from "@/components/TrendPanel";
@@ -17,7 +18,6 @@ import {
 } from "@/components/DashboardTrendData";
 import { generateReportMarkdown, DashboardReportModal } from "@/components/DashboardReportModal";
 import {
-  CloudSnapshotPayload,
   cloudSnapshotSummary,
   cloudSnapshotPreviewRows,
   formatSyncAge,
@@ -47,14 +47,13 @@ export default function Dashboard({ notify, connected, contextFresh, phaseStatus
   const [trendCandidates, setTrendCandidates] = useState<TrendData[]>(() => loadTrendData(TREND_KEY.CANDIDATES));
   const [trendSubmissions, setTrendSubmissions] = useState<TrendData[]>(() => loadTrendData(TREND_KEY.SUBMISSIONS));
   const statusApi = useApi<JobStatus>();
-  const cloudApi = useApi<CloudSnapshotPayload>();
   const memoryApi = useApi<ResearchMemorySummary>();
+  const { cloud: cloudGlobal, refreshAll } = useGlobalData();
 
   useEffect(() => {
     statusApi.call("/api/production-validation/status");
-    cloudApi.call("/api/snapshot/cloud");
     memoryApi.call("/api/snapshot/memory?limit=100&top_n=5");
-  }, [statusApi.call, cloudApi.call, memoryApi.call]);
+  }, [statusApi.call, memoryApi.call]);
 
   useEffect(() => {
     const poolSize = memory?.total_candidates ?? status?.progress?.candidates_generated;
@@ -64,12 +63,12 @@ export default function Dashboard({ notify, connected, contextFresh, phaseStatus
   }, [memory?.total_candidates, status?.progress?.candidates_generated]);
 
   useEffect(() => {
-    if (cloud != null && !cloudApi.loading && !cloudApi.error) {
+    if (cloud != null && !cloudGlobal.loading && !cloudGlobal.error) {
       const syncTime = cloudSnapshotSummary(cloud).loaded_at || new Date().toISOString();
       saveResumeState({ lastSyncTime: syncTime });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cloud != null, cloudApi.loading]);
+  }, [cloud != null, cloudGlobal.loading]);
 
   useEffect(() => {
     let cancelled = false;
@@ -150,23 +149,23 @@ export default function Dashboard({ notify, connected, contextFresh, phaseStatus
   }, [jobRunning]);
 
   const status = statusApi.data;
-  const cloud = cloudApi.data;
+  const cloud = cloudGlobal.data;
   const memory = memoryApi.data;
   const cloudSummaryData = cloudSnapshotSummary(cloud);
   const cloudPreviewRows = cloudSnapshotPreviewRows(cloud);
 
   const retryAll = () => {
     statusApi.call("/api/production-validation/status");
-    cloudApi.call("/api/snapshot/cloud");
     memoryApi.call("/api/snapshot/memory?limit=100&top_n=5");
+    refreshAll();
   };
 
   const errors = [
     statusApi.error ? `Status: ${safeDisplayErrorMessage(statusApi.error)}` : "",
-    cloudApi.error ? `Cloud: ${safeDisplayErrorMessage(cloudApi.error)}` : "",
+    cloudGlobal.error ? `Cloud: ${safeDisplayErrorMessage(cloudGlobal.error)}` : "",
     memoryApi.error ? `Memory: ${safeDisplayErrorMessage(memoryApi.error)}` : "",
   ].filter(Boolean);
-  const loading = statusApi.loading || cloudApi.loading || memoryApi.loading;
+  const loading = statusApi.loading || cloudGlobal.loading || memoryApi.loading;
   const [showGuide, setShowGuide] = useState(() => !localStorage.getItem("brain_alpha_guide_dismissed"));
 
   const dismissGuide = () => {
@@ -364,9 +363,9 @@ export default function Dashboard({ notify, connected, contextFresh, phaseStatus
 
           <DashboardCloudSnapshot
             cloud={cloud}
-            loading={cloudApi.loading}
-            error={cloudApi.error ? safeDisplayErrorMessage(cloudApi.error) : null}
-            onRetry={() => cloudApi.call("/api/snapshot/cloud")}
+            loading={cloudGlobal.loading}
+            error={cloudGlobal.error ? safeDisplayErrorMessage(cloudGlobal.error) : null}
+            onRetry={() => refreshAll()}
             onOpenSync={openManualSync}
           />
 

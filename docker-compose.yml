@@ -4,7 +4,7 @@ services:
     ports:
       - "8765:8765"
     environment:
-      - BRAIN_ALPHA_EXECUTION_BACKEND=browser
+      - BRAIN_ALPHA_OPS_EXECUTION_MODE=browser
       - BRAIN_ALPHA_OPS_WEB_FRONTEND=react
       - PYTHONDONTWRITEBYTECODE=1
       - PYTHONUNBUFFERED=1

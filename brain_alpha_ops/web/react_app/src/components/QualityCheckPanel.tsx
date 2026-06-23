@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo } from "react";
 import { apiErrorMessage } from "@/helpers/errorExperience";
 import { readinessNextActionLabel, readinessReasonLabel } from "@/helpers/readinessLabels";
 import { useApi } from "@/hooks/useApi";
+import { useGlobalData } from "@/hooks/useGlobalData";
 import type { BacktestSlotsResponse, SubmitReadinessResponse } from "@/types";
 import CandidateTable from "@/components/CandidateTable";
 import ProgressFeedback from "@/components/ProgressFeedback";
@@ -13,28 +14,23 @@ interface Props {
 }
 
 export default function QualityCheckPanel({ notify }: Props) {
-  const slotsApi = useApi<BacktestSlotsResponse>();
+  const { slots: slotsGlobal } = useGlobalData();
   const readinessApi = useApi<SubmitReadinessResponse>();
-  const callSlots = slotsApi.call;
   const callReadiness = readinessApi.call;
 
   const load = useCallback(async () => {
-    const [slotsResult, readinessResult] = await Promise.all([
-      callSlots<BacktestSlotsResponse>("/api/backtest_slots"),
-      callReadiness<SubmitReadinessResponse>("/api/submit_readiness"),
-    ]);
-    if (slotsResult?.error) notify("error", apiErrorMessage(slotsResult, "回测槽位加载失败"));
+    const readinessResult = await callReadiness<SubmitReadinessResponse>("/api/submit_readiness");
     if (readinessResult?.error) notify("error", apiErrorMessage(readinessResult, "提交阻断复核加载失败"));
-  }, [callSlots, callReadiness, notify]);
+  }, [callReadiness, notify]);
 
   useEffect(() => { void load(); }, [load]);
 
   const summary = useMemo(
-    () => buildQualitySummary(slotsApi.data, readinessApi.data),
-    [slotsApi.data, readinessApi.data],
+    () => buildQualitySummary(slotsGlobal.data, readinessApi.data),
+    [slotsGlobal.data, readinessApi.data],
   );
-  const loading = slotsApi.loading || readinessApi.loading;
-  const error = slotsApi.error || readinessApi.error;
+  const loading = slotsGlobal.loading || readinessApi.loading;
+  const error = slotsGlobal.error || readinessApi.error;
 
   if (loading) {
     return (
