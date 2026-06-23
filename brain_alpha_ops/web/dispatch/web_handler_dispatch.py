@@ -275,8 +275,8 @@ __all__ = [
 ]
 
 from .web_post_handlers import stop_job_payload  # noqa: F401
-_rate_limit_key = None  # backward-compat
+from .web_handler_dispatch_core import rate_limit_key as _rate_limit_key  # noqa: F401
 
 # Backward-compat aliases
-_start_optimize_candidates_job = _post_optimize_candidates
-_submit_with_lock = None  # backward-compat: removed in Phase 3.x
+from .web_post_routes import _start_optimize_candidates_job  # noqa: F401
+from .web_post_routes import _submit_with_lock  # noqa: F401

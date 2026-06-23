@@ -252,6 +252,8 @@ class WebDispatchCoreContext:
     bounded_query_int: Callable[[Any, int, int], int]
     bounded_query_float: Callable[[Any, float, float], float]
     rate_limit_request: Callable[[str, str, str], dict[str, Any]]
+    safe_error_message: Callable[[Exception], str]
+    error_payload: Callable[..., dict[str, Any]]
 
 
 @dataclass(frozen=True)
@@ -286,6 +288,7 @@ class WebDispatchJobContext:
     start_run_job: Callable[[str, dict[str, Any]], None]
     stop_job_payload: Callable[..., dict[str, Any]]
     active_auxiliary_operation: Callable[..., tuple[str, str] | None]
+    run_simple_async_job_service: Callable[..., None]
 
 
 @dataclass(frozen=True)
@@ -300,6 +303,7 @@ class WebDispatchConfigContext:
     test_connection: Callable[[dict[str, Any]], dict[str, Any]]
     validate_run_payload: Callable[[dict[str, Any]], None]
     load_presets: Callable[[], dict[str, Any]]
+    run_config_from_payload: Callable[[dict[str, Any]], Any]
 
 
 @dataclass(frozen=True)

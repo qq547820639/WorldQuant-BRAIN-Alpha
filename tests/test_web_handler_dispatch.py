@@ -193,6 +193,8 @@ def _ctx():
         payload_truthy=lambda value: value not in (False, "false", "0", 0, None),
         bounded_query_int=lambda value, low, high: max(low, min(high, int(value))),
         bounded_query_float=lambda value, low, high: max(low, min(high, float(value))),
+        safe_error_message=lambda exc: str(exc),
+        error_payload=lambda exc, **kwargs: {"ok": False, "error": str(exc), **kwargs},
         remote_admin_required=lambda: False,
         has_valid_admin_token=lambda headers: headers.get("Authorization") == "Bearer admin-token",
         get_or_create_session=lambda existing: ("session_1", "csrf_1"),
@@ -222,6 +224,7 @@ def _ctx():
         check_jobs=check_jobs,
         async_jobs=async_jobs,
         enrich_progress=lambda progress: {**progress, "enriched": True},
+        run_simple_async_job_service=lambda job_id, payload, **kw: None,
         public_run_config=lambda: {"environment": "production"},
         public_config_schema=lambda: {"schema_version": "test_schema"},
         save_run_config_payload=lambda payload: {"ok": True, "config": {"environment": payload.get("environment", "production")}, "path": "config/run_config.json"},
@@ -263,6 +266,7 @@ def _ctx():
         connection_test_post_payload=lambda payload, handler: handler(payload),
         test_connection=lambda payload: {"ok": True, "dry_run": payload.get("dry_run")},
         validate_run_payload=lambda payload: None,
+        run_config_from_payload=lambda payload: RunConfig(environment=payload.get("environment", "production")),
         background_job_start_payload=lambda store, payload, starter, conflict_error: (
             starter("job_1", payload) or {
                 "ok": True,
