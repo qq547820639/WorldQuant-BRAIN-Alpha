@@ -150,7 +150,7 @@ def redact_data(
     *,
     key_fragments: tuple[str, ...] | None = None,
     redacted_keys: set[str] | None = None,
-    max_depth: int = 64,
+    max_depth: int = 8,
 ) -> Any:
     fragments = tuple(_normalize_key(fragment) for fragment in (key_fragments or ()))
     return _redact_data(
@@ -265,8 +265,7 @@ def _redact_value_for_key(
 def _is_sensitive_key(normalized_key: str, fragments: tuple[str, ...]) -> bool:
     if _is_non_secret_metadata_key(normalized_key):
         return False
-    sensitive_keys = {_normalize_key(key) for key in SENSITIVE_KEYS}
-    if normalized_key in sensitive_keys:
+    if normalized_key in _SENSITIVE_KEYS_NORMALIZED:
         return True
     parts = {part for part in normalized_key.split("_") if part}
     if "token" in parts and any(part for part in parts if part not in {"x", "brain", "alpha", "token"}):
@@ -295,6 +294,9 @@ def _normalize_key(value: str) -> str:
     value = value.strip()
     value = re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", value)
     return re.sub(r"[^A-Za-z0-9]+", "_", value).strip("_").lower()
+
+
+_SENSITIVE_KEYS_NORMALIZED = frozenset(_normalize_key(k) for k in SENSITIVE_KEYS)
 
 
 def _is_non_secret_metadata_key(normalized_key: str) -> bool:

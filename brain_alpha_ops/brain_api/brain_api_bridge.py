@@ -38,6 +38,7 @@ class BrainAPIBridge:
     # ---- BrainAPI Protocol: auth ----
 
     def authenticate(self, **kwargs) -> dict:
+        import os
         credentials = {}
         if "username" in kwargs:
             credentials["username"] = kwargs["username"]
@@ -45,6 +46,17 @@ class BrainAPIBridge:
             credentials["password"] = kwargs["password"]
         if "token" in kwargs:
             credentials["token"] = kwargs["token"]
+        # Fall back to environment variables if no credentials provided
+        if not credentials:
+            username = os.environ.get("BRAIN_USERNAME", "")
+            password = os.environ.get("BRAIN_PASSWORD", "")
+            token = os.environ.get("BRAIN_TOKEN", "")
+            if username:
+                credentials["username"] = username
+            if password:
+                credentials["password"] = password
+            if token:
+                credentials["token"] = token
         result = self._backend.authenticate(credentials)
         self._authenticated = result.get("ok", False)
         if not self._authenticated:

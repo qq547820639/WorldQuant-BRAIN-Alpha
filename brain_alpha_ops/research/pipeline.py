@@ -108,7 +108,9 @@ class AlphaResearchPipeline(
             )
         if execution_backend is not None and api is None:
             from brain_alpha_ops.brain_api.brain_api_bridge import BrainAPIBridge
-            api = BrainAPIBridge(execution_backend)
+            # Pass underlying API if backend has one (for data queries)
+            underlying_api = getattr(execution_backend, '_api', None)
+            api = BrainAPIBridge(execution_backend, api=underlying_api)
         backtest_slot_manager = BacktestSlotManager()
         self._runtime_state = PipelineRuntimeState(
             config=config,

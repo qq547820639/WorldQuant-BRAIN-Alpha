@@ -65,4 +65,5 @@ def _create_api_backend() -> AlphaExecutionBackend:
     from brain_alpha_ops.brain_api.api_execution_adapter import ApiExecutionAdapter
     from brain_alpha_ops.brain_api.official import OfficialBrainAPI
 
-    return ApiExecutionAdapter(OfficialBrainAPI())
+    api = OfficialBrainAPI()
+    return ApiExecutionAdapter(api)

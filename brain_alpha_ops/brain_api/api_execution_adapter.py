@@ -43,19 +43,15 @@ class ApiExecutionAdapter:
     # ---- AlphaExecutionBackend Protocol methods ----
 
     def authenticate(self, credentials: dict[str, str]) -> dict[str, Any]:
-        """Delegate authentication to underlying BrainAPI."""
+        """Delegate authentication to underlying BrainAPI.
+        
+        OfficialBrainAPI resolves credentials from environment variables in __init__,
+        so we just need to call authenticate() without arguments.
+        """
         try:
-            username = credentials.get("username", "")
-            password = credentials.get("password", "")
-            token = credentials.get("token", "")
-
-            if token:
-                self._api.authenticate(token=token)
-            elif username and password:
-                self._api.authenticate(username=username, password=password)
-            else:
-                return {"ok": False, "error": "Missing credentials"}
-
+            # OfficialBrainAPI.authenticate() takes no args - credentials are
+            # resolved from BRAIN_USERNAME/BRAIN_PASSWORD env vars in __init__
+            self._api.authenticate()
             self._authenticated = True
             return {"ok": True, "step": "auth.api_done"}
         except Exception as e:
