@@ -7,11 +7,9 @@ import type { BrainCredentials, CloudAlphaCache, JobStatus, OfficialContextCache
 import { isRecord } from "@/types";
 import ProgressFeedback from "@/components/ProgressFeedback";
 import {
-  ActionPanel,
-  OperationLog,
-  OperationMetric,
-  OverviewCard,
-  SummaryMetric,
+  ActionButtons,
+  MetricsDisplay,
+  OperationsLog,
   SummarySections,
   SyncHistoryList,
   type OperationLogEntry,
@@ -26,7 +24,6 @@ import {
   MAX_LOG_ROWS,
   formatClock,
   formatDuration,
-  formatCount,
   shortOperationId,
   credentialsPayload,
   hasPageCredentials,
@@ -52,6 +49,7 @@ import {
   isSessionInvalidResult,
   numberField,
   operationStatusMessage,
+  SummaryMetric,
 } from "./OfficialOperations";
 
 interface Props {
@@ -512,7 +510,7 @@ export default function OfficialOperationsPanel({
 	        appendLog(resultState.warning ? "warning" : "success", operationStatusMessage(result));
 	        notify(resultState.warning ? "warning" : "success", "官方上下文刷新完成");
 	        onSyncCompleted?.();
-      } else if (resultState.failed || resultState.interrupted || resultState.missing) {
+	      } else if (resultState.failed || resultState.interrupted || resultState.missing) {
 	        clearStoredSyncJobId();
 	        setSyncRunning(false);
 	        setStoppingSinceMs(0);
@@ -631,10 +629,10 @@ export default function OfficialOperationsPanel({
   const readiness = readinessApi.data;
   const checkRows = checkResultsApi.data?.items || checkResultsApi.data?.checks || [];
 	  const displaySyncStatus = syncStatusForDisplay(syncStatus, officialContextCache);
-		  const syncOverview = syncDataOverview(displaySyncStatus, syncRunning, cloudAlphaCache);
-      const syncHistory = displaySyncStatus?.sync_history || [];
-      const syncHistoryError = displaySyncStatus?.sync_history_error || "";
-      const syncHistoryErrorTitle = syncHistoryError ? syncHistoryReadErrorTitle(syncHistoryError) : "";
+	  const syncOverview = syncDataOverview(displaySyncStatus, syncRunning, cloudAlphaCache);
+    const syncHistory = displaySyncStatus?.sync_history || [];
+    const syncHistoryError = displaySyncStatus?.sync_history_error || "";
+    const syncHistoryErrorTitle = syncHistoryError ? syncHistoryReadErrorTitle(syncHistoryError) : "";
 	  const canRetryContext = canRetryContextOnly(syncStatus);
   const syncState = classifyJobState(syncStatus);
   const displaySyncState = classifyJobState(displaySyncStatus);
@@ -662,99 +660,34 @@ export default function OfficialOperationsPanel({
               这里把官方上下文刷新、提交前阻断复核和质量结果放在同一个页面里：点击按钮、看进度、读记录、处理阻断。系统会自动处理请求，用户只需留在浏览器里查看进度和结果。
             </p>
           </div>
-          <div className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-4 lg:min-w-[420px]">
-            <OperationMetric label="官方上下文" value={syncContextStatus(displaySyncStatus)} tone={syncRunning ? "warning" : contextCacheComplete(displaySyncStatus?.official_context_cache) || displaySyncState.successful ? "success" : "neutral"} />
-            <OperationMetric label="复核候选" value={String(readiness?.eligible_count ?? "-")} tone={readiness?.ready_to_submit ? "success" : "warning"} />
-            <OperationMetric label="检查记录" value={String(checkRows.length || "-")} />
-            <OperationMetric label="真实提交" value="关闭" tone="success" />
-          </div>
+          <MetricsDisplay
+            syncRunning={syncRunning}
+            syncStatus={syncStatus}
+            officialContextCache={officialContextCache}
+            cloudAlphaCache={cloudAlphaCache}
+            readinessEligibleCount={readiness?.eligible_count}
+            readinessReadyToSubmit={readiness?.ready_to_submit}
+            checkRowsCount={checkRows.length}
+          />
         </div>
 
-        <section className="grid gap-3 md:grid-cols-3" aria-label="官方同步数据总览">
-          <OverviewCard
-            label="同步状态"
-            value={syncOverview.statusValue}
-            detail={syncOverview.statusDetail}
-            tone={syncOverview.statusTone}
-          />
-          <OverviewCard
-            label="更新时间"
-            value={syncOverview.updatedAtValue}
-            detail={syncOverview.updatedAtDetail}
-          />
-          <OverviewCard
-            label="分页拉取"
-            value={syncOverview.totalValue}
-            detail={syncOverview.totalDetail}
-            tone={syncOverview.totalTone}
-          />
-        </section>
-
-        {syncRunning && syncOverview.hasLiveMetrics && (
-          <section className="grid gap-3 md:grid-cols-2" aria-label="同步实时指标">
-            <OverviewCard
-              label={syncOverview.etaLabel}
-              value={syncOverview.etaValue}
-              detail={syncOverview.etaDetail}
-              tone="warning"
-            />
-            <OverviewCard
-              label={syncOverview.rateLabel}
-              value={syncOverview.rateValue}
-              detail={syncOverview.rateDetail}
-            />
-          </section>
-        )}
-
-        <div className="grid gap-3 lg:grid-cols-3">
-	          <ActionPanel
-	            title={refreshPanelTitle}
-	            description={refreshPanelDescription}
-            status={syncStatus?.status === "stopping" ? "停止中" : syncRunning ? "运行中" : displaySyncStatus ? syncContextStatus(displaySyncStatus) : "待启动"}
-	            primaryLabel={syncRunning ? "刷新中..." : syncNeedsRetry ? "重新刷新" : "开始刷新"}
-	            disabled={syncRunning || syncStartApi.loading}
-	            onPrimary={() => void startOfficialContextRefresh()}
-	            secondaryLabel="停止"
-	            secondaryDisabled={!syncRunning || !syncJobId || syncStatus?.status === "stopping"}
-	            onSecondary={stopOfficialContextRefresh}
-	          >
-	            <label className="mt-3 block text-xs text-text-secondary">
-	              <span className="mb-1 block text-text-tertiary">同步范围</span>
-	              <select
-	                className="input w-full text-sm"
-	                value={syncRange}
-	                disabled={syncRunning || syncStartApi.loading}
-	                onChange={(event) => setSyncRange(event.target.value as SyncRange)}
-	                aria-label="同步范围"
-	              >
-	                <option value="all">全部（推荐）</option>
-	                <option value="3d">近 3 天（快速检查）</option>
-	                <option value="7d">近 7 天</option>
-	                <option value="recent">近期 30 天</option>
-	                <option value="6months">近 6 个月</option>
-	              </select>
-	              <span className="mt-1 block text-text-tertiary">
-	                默认完整同步；小范围同步更快，适合快速检查最近变化。
-	              </span>
-	            </label>
-	          </ActionPanel>
-          <ActionPanel
-            title="检查阻断复核"
-            description="读取本地提交前阻断复核门禁，不调用真实提交。"
-            status={readiness?.ready_to_submit ? "有候选" : readiness ? "仍阻断" : "待检查"}
-            primaryLabel={readinessApi.loading ? "检查中..." : "读取复核"}
-            disabled={readinessApi.loading}
-            onPrimary={loadReadiness}
-          />
-          <ActionPanel
-            title="回看检查结果"
-            description="读取质量检查结果和阻断原因，方便继续迭代候选。"
-            status={checkRows.length ? `${checkRows.length} 条记录` : "待读取"}
-            primaryLabel={checkResultsApi.loading ? "加载中..." : "查看结果"}
-            disabled={checkResultsApi.loading}
-            onPrimary={loadChecks}
-          />
-	        </div>
+        <ActionButtons
+          mode={mode}
+          syncRange={syncRange}
+          syncRunning={syncRunning}
+          syncStartLoading={syncStartApi.loading}
+          syncNeedsRetry={syncNeedsRetry}
+          readinessLoading={readinessApi.loading}
+          checkResultsLoading={checkResultsApi.loading}
+          checkRowsCount={checkRows.length}
+          readiness={readiness}
+          contextOnlyMode={contextOnlyMode}
+          onSyncRangeChange={setSyncRange}
+          onStartRefresh={() => void startOfficialContextRefresh()}
+          onStopRefresh={stopOfficialContextRefresh}
+          onLoadReadiness={loadReadiness}
+          onLoadChecks={loadChecks}
+	        />
 
 	        {(syncJobId || displaySyncStatus?.official_context_cache) && (
 	          <section className="rounded-md border border-border-subtle bg-[var(--color-surface-elevated)] p-3" aria-label="官方上下文快速摘要">
@@ -823,7 +756,7 @@ export default function OfficialOperationsPanel({
 	          onRetry={mode === "context_refresh" ? (canRetryContext ? startContextOnlyRefresh : () => void startOfficialContextRefresh()) : mode === "readiness" ? loadReadiness : mode === "checks" ? loadChecks : undefined}
 	        />
 
-	        <OperationLog logs={logs} onClear={() => setLogs([])} />
+	        <OperationsLog logs={logs} onClear={() => setLogs([])} />
 
 	      </section>
 

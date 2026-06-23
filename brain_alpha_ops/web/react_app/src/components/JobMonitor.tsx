@@ -7,7 +7,9 @@ import { buildRunPayload, classifyJobState, hasCredentials, jobStatusMessage, re
 import type { BrainCredentials, JobStatus, SSEEvent, UnifiedProgress, SSECandidateEventData } from "@/types";
 import { isSSECandidateData, isRecord } from "@/types";
 import type { JobState } from "@/hooks/useJobState";
-import ProgressFeedback from "@/components/ProgressFeedback";
+import JobStatusCard from "@/components/JobMonitor/JobStatusCard";
+import JobProgressBar, { productionSummary } from "@/components/JobMonitor/JobProgressBar";
+import JobActions from "@/components/JobMonitor/JobActions";
 
 interface Props {
   notify: (type: "success" | "error" | "warning" | "info", msg: string) => void;
@@ -37,11 +39,8 @@ interface ViewProps {
   onStop: () => void;
   onCredentialClick?: () => void;
   onRetry?: () => void;
-  /** P1-3: whether SSE auto-retries are exhausted and manual retry is needed */
   sseRetryExhausted?: boolean;
-  /** P1-3: countdown seconds for the current SSE retry */
   sseRetryCountdown?: number;
-  /** P1-3: manual retry after SSE auto-retries exhausted */
   onSseExhaustedRetry?: () => void;
 }
 
@@ -52,133 +51,39 @@ function JobMonitorView({
   onStart, onResume, onStop, onCredentialClick, onRetry,
   sseRetryExhausted = false, sseRetryCountdown = 0, onSseExhaustedRetry,
 }: ViewProps) {
-  const summary = productionSummary(status);
   const hasEvidence = Boolean(status?.job_id || validationId);
 
   return (
     <div className="panel mb-4">
-      <div className="panel-header">
-        <span>非提交生产验证</span>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span className="badge badge-neutral">非提交</span>
-          <span className="badge badge-neutral">{credentialSource}</span>
-          <span className={`status-dot ${connected ? "status-dot-active" : running ? "status-dot-error" : ""}`} />
-          <span className={`badge ${running ? "badge-positive" : "badge-neutral"}`}>
-            {running ? "运行中" : "空闲"}
-          </span>
-        </div>
-      </div>
+      <JobStatusCard
+        credentialSource={credentialSource}
+        validationId={validationId}
+        running={running}
+        connected={connected}
+        showCredentialWarning={showCredentialWarning}
+        reconnectAttempts={reconnectAttempts}
+      />
       <div className="panel-body-padded">
-        {/* SSE disconnect warning banner */}
-        {running && !connected && (
-          <div className="mb-3" style={{
-            padding: "8px 12px", borderRadius: 6,
-            border: "1px solid", borderColor: "var(--color-deferred-border)",
-            background: "var(--color-deferred-bg)",
-            display: "flex", alignItems: "center", gap: 8,
-            fontSize: 13, color: "var(--color-deferred-icon)",
-          }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" style={{ flexShrink: 0 }}>
-              <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
-              <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
-            </svg>
-            <span>
-              实时连接已断开{reconnectAttempts > 0 ? `（第 ${reconnectAttempts} 次重连中…）` : "，正在重连…"}后台任务继续运行。
-            </span>
-          </div>
-        )}
-        {/* P1-3: SSE auto-retry countdown banner */}
-        {sseRetryCountdown > 0 && (
-          <div className="mb-3" style={{
-            padding: "8px 12px", borderRadius: 6,
-            border: "1px solid", borderColor: "var(--color-info-border)",
-            background: "var(--color-info-bg-faint)",
-            display: "flex", alignItems: "center", gap: 8,
-            fontSize: 13, color: "var(--color-info-text)",
-          }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" style={{ flexShrink: 0, animation: "spin 2s linear infinite" }}>
-              <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
-            </svg>
-            <span>同步通道中断，{sseRetryCountdown}秒后自动重试…</span>
-          </div>
-        )}
-        {/* P1-3: SSE retry exhausted — manual retry button */}
-        {sseRetryExhausted && (
-          <div className="mb-3" style={{
-            padding: "10px 12px", borderRadius: 6,
-            border: "1px solid", borderColor: "var(--color-error-border)",
-            background: "var(--color-error-bg)",
-            display: "flex", flexDirection: "column", gap: 8,
-            fontSize: 13,
-          }}>
-            <p className="text-sm text-negative font-medium">同步通道已中断，自动重试均已失败</p>
-            <p className="text-xs text-text-secondary">建议检查网络连接后手动重试，或等待后台任务自行恢复。</p>
-            {onSseExhaustedRetry && (
-              <button type="button" className="btn btn-primary btn-sm" onClick={onSseExhaustedRetry} style={{ alignSelf: "flex-start" }}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" style={{ marginRight: 6 }}>
-                  <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
-                </svg>
-                手动重试
-              </button>
-            )}
-          </div>
-        )}
-        <p className="text-sm text-text-secondary mb-4">
-          生产配置下的非提交验证流程，系统会强制关闭自动提交并保留可回看的进度证据。
-        </p>
+        <JobActions
+          running={running}
+          sseRetryExhausted={sseRetryExhausted}
+          sseRetryCountdown={sseRetryCountdown}
+          onStart={onStart}
+          onResume={onResume}
+          onStop={onStop}
+          onCredentialClick={onCredentialClick}
+          onSseExhaustedRetry={onSseExhaustedRetry}
+          showCredentialWarning={showCredentialWarning}
+        />
 
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-          <ProofMetric label="官方验证" value={hasEvidence ? `${summary.officialValidationPassed}/${summary.officialValidationAttempted}` : "--"} />
-          <ProofMetric label="官方回测" value={hasEvidence ? String(summary.officiallySimulated) : "--"} />
-          <ProofMetric label="本轮真实提交（应为 0）" value={hasEvidence ? String(summary.submittedThisRun) : "--"} tone={summary.submittedThisRun > 0 ? "danger" : "success"} />
-          <ProofMetric label="自动提交" value={hasEvidence ? String(summary.autoSubmitted) : "0"} tone={summary.autoSubmitted > 0 ? "danger" : "success"} />
-        </div>
-
-        {validationId && (
-          <div className="flex items-center gap-2 mb-4 text-xs">
-            <span className="text-text-tertiary">验证编号</span>
-            <span className="font-mono-value px-2 py-0.5 rounded-sm bg-surface-2 text-text-secondary">{shortValidationId(validationId)}</span>
-          </div>
-        )}
-
-        {(running || loading) && (
-          <div className="mb-4">
-            <ProgressFeedback state={error ? "error" : "progress"} title="流水线进度" progress={progress} error={error} compact />
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs text-text-tertiary mt-2">
-              <span>轮次: {status?.cycle ?? 0}/{status?.max_cycles ?? 0}</span>
-              <span>阶段: {status?.phase ?? "--"}</span>
-              <span>候选数: {status?.progress?.candidates_generated ?? 0}</span>
-              <span>回测数: {status?.progress?.backtests_completed ?? 0}</span>
-            </div>
-          </div>
-        )}
-
-        {!running && error && onRetry && (
-          <div className="mb-4">
-            <ProgressFeedback state="error" title="流水线进度" progress={status?.progress} error={error} onRetry={onRetry} compact />
-          </div>
-        )}
-
-        {showCredentialWarning && (
-          <div className="mb-4 px-3 py-2 text-sm rounded-md bg-warning-subtle text-warning">
-            页面凭证为空。可以先填写并测试 BRAIN 账户，也可以继续使用维护者配置的托管凭证运行。
-          </div>
-        )}
-
-        <div className="flex flex-wrap gap-2">
-          {onCredentialClick && showCredentialWarning && (
-            <button type="button" onClick={onCredentialClick} disabled={running} className="btn btn-secondary btn-sm">填写凭证</button>
-          )}
-          <button onClick={onStart} disabled={running} className="btn btn-primary btn-sm">
-            <PlayIcon /> 运行非提交验证
-          </button>
-          <button onClick={onResume} disabled={running} className="btn btn-secondary btn-sm">
-            <ResumeIcon /> 继续上次验证
-          </button>
-          <button onClick={onStop} disabled={!running} className="btn btn-secondary btn-sm">
-            <StopIcon /> 停止
-          </button>
-        </div>
+        <JobProgressBar
+          running={running}
+          loading={loading}
+          progress={progress}
+          error={error}
+          status={status}
+          hasEvidence={hasEvidence}
+        />
 
         {events.length > 0 && (
           <div className="mt-3 panel" style={{ maxHeight: 160, overflow: "auto" }}>
@@ -200,7 +105,6 @@ function JobMonitorView({
 // ── Main component ──────────────────────────────────────────────────────────
 
 export default function JobMonitor({ notify, credentials, onNeedCredentials, jobState: external }: Props) {
-  // Controlled mode: delegate to external state
   if (external) {
     return (
       <JobMonitorView
@@ -223,21 +127,18 @@ export default function JobMonitor({ notify, credentials, onNeedCredentials, job
     );
   }
 
-  // ── Standalone mode (backward compat) ──
   const [jobId, setJobId] = useState<string | null>(null);
   const [status, setStatus] = useState<JobStatus | null>(null);
   const [running, setRunning] = useState(false);
   const [events, setEvents] = useState<string[]>([]);
   const [progressError, setProgressError] = useState<string | null>(null);
 
-  // P1-3: auto-retry tracking for SSE exhaustion
   const sseRetryCountRef = useRef(0);
   const sseRetryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [sseRetryCountdown, setSseRetryCountdown] = useState(0);
   const [sseRetryExhausted, setSseRetryExhausted] = useState(false);
   const sseRetryCountdownIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // P1-3: exponential backoff delays: 5s, 10s, 20s
   const SSE_RETRY_DELAYS = [5000, 10000, 20000];
   const SSE_MAX_RETRIES = SSE_RETRY_DELAYS.length;
 
@@ -345,7 +246,6 @@ export default function JobMonitor({ notify, credentials, onNeedCredentials, job
 
   const sseUrl = jobId ? `/sse?job_id=${encodeURIComponent(jobId)}` : null;
   const handleStreamExhausted = useCallback(() => {
-    // P1-3: auto-retry with exponential backoff before falling back to cancel
     const retryCount = sseRetryCountRef.current;
     if (retryCount < SSE_MAX_RETRIES) {
       sseRetryCountRef.current = retryCount + 1;
@@ -354,7 +254,6 @@ export default function JobMonitor({ notify, credentials, onNeedCredentials, job
       setSseRetryCountdown(delaySeconds);
       notify("warning", `同步进度通道中断，${delaySeconds}秒后自动重试 (${retryCount + 1}/${SSE_MAX_RETRIES})`);
 
-      // Countdown timer
       sseRetryCountdownIntervalRef.current = setInterval(() => {
         setSseRetryCountdown((c) => {
           if (c <= 1) {
@@ -371,13 +270,11 @@ export default function JobMonitor({ notify, credentials, onNeedCredentials, job
       sseRetryTimerRef.current = setTimeout(() => {
         sseRetryTimerRef.current = null;
         setSseRetryCountdown(0);
-        // Re-attempt by restarting the job (resume mode)
         void startJob(true);
       }, delay);
       return;
     }
 
-    // Exhausted all retries — show manual retry
     sseRetryCountRef.current = 0;
     setSseRetryCountdown(0);
     setSseRetryExhausted(true);
@@ -387,7 +284,6 @@ export default function JobMonitor({ notify, credentials, onNeedCredentials, job
     void cancelAmbiguousJob("sse_exhausted", msg);
   }, [cancelAmbiguousJob, failMonitor, notify, startJob]);
 
-  // P1-3: manual retry after all auto-retries exhausted
   const handleSseExhaustedManualRetry = useCallback(() => {
     sseRetryCountRef.current = 0;
     setSseRetryExhausted(false);
@@ -401,7 +297,6 @@ export default function JobMonitor({ notify, credentials, onNeedCredentials, job
   const startJob = useCallback(async (resume = false) => {
     if (!hasCredentials(credentials)) notify("info", "未填写页面凭证，将使用维护者配置的托管凭证启动非提交验证。");
     setRunning(true); autoCancelRequests.current.clear(); setPollFailures(0); setProgressError(null);
-    // P1-3: reset SSE retry state on new job start
     sseRetryCountRef.current = 0;
     setSseRetryCountdown(0);
     setSseRetryExhausted(false);
@@ -499,7 +394,6 @@ export default function JobMonitor({ notify, credentials, onNeedCredentials, job
     return () => clearInterval(interval);
   }, [running, jobId, api, cancelAmbiguousJob, clearTransientProgressError, failMonitor, notify, recordStatusRefreshFailure]);
 
-  // P1-3: cleanup SSE retry timers on unmount
   useEffect(() => {
     return () => {
       clearSseRetryTimers();
@@ -533,38 +427,3 @@ export default function JobMonitor({ notify, credentials, onNeedCredentials, job
     />
   );
 }
-
-// ── Shared helpers ──────────────────────────────────────────────────────────
-
-function ProofMetric({ label, value, tone = "neutral" }: { label: string; value: string; tone?: "neutral" | "success" | "danger" }) {
-  const colorClass = tone === "success" ? "text-positive" : tone === "danger" ? "text-negative" : "text-text-primary";
-  return <div className="kpi-card"><p className="kpi-card-label">{label}</p><p className={`font-mono-value text-lg font-medium ${colorClass}`}>{value}</p></div>;
-}
-
-function productionSummary(status: JobStatus | null) {
-  const result = asRecord(status?.result);
-  const rs = asRecord(result?.summary);
-  const pd = asRecord(status?.progress?.data);
-  return {
-    officialValidationAttempted: firstNum(rs?.official_validation_attempted, pd?.official_validation_attempted),
-    officialValidationPassed: firstNum(rs?.official_validation_passed, pd?.official_validation_passed),
-    officiallySimulated: firstNum(rs?.officially_simulated, pd?.officially_simulated),
-    backtestsSubmitted: firstNum(rs?.backtests_submitted, pd?.backtests_submitted),
-    submittedThisRun: firstNum(rs?.submitted_this_run, pd?.submitted_this_run),
-    autoSubmitted: firstNum(rs?.auto_submitted, pd?.auto_submitted),
-  };
-}
-
-function firstNum(...values: unknown[]) {
-  for (const v of values) { const n = Number(v); if (Number.isFinite(n)) return n; }
-  return 0;
-}
-
-function asRecord(value: unknown): Record<string, unknown> | null {
-  if (isRecord(value)) return value;
-  return null;
-}
-
-function PlayIcon() { return <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7L8 5Z"/></svg>; }
-function ResumeIcon() { return <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 3v6h6"/></svg>; }
-function StopIcon() { return <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>; }
