@@ -11,7 +11,7 @@
  * creating their own useApi hooks for these endpoints.
  */
 
-import React, { createContext, useContext, useCallback, useEffect } from "react";
+import React, { createContext, useContext, useCallback, useEffect, useMemo } from "react";
 import type { BacktestSlotsResponse, Candidate } from "@/types";
 import { useApi } from "@/hooks/useApi";
 import type { ApiMeta } from "@/hooks/useApi";
@@ -90,7 +90,7 @@ export function GlobalDataProvider({ children }: { children: React.ReactNode }) 
     return () => clearInterval(interval);
   }, [refreshAll]);
 
-  const value: GlobalDataState = {
+  const value: GlobalDataState = useMemo(() => ({
     candidates: {
       data: candidatesApi.data,
       error: candidatesApi.error,
@@ -116,7 +116,13 @@ export function GlobalDataProvider({ children }: { children: React.ReactNode }) 
       lastErrorMeta: configApi.lastErrorMeta,
     },
     refreshAll,
-  };
+  }), [
+    candidatesApi.data, candidatesApi.error, candidatesApi.loading, candidatesApi.lastErrorMeta,
+    slotsApi.data, slotsApi.error, slotsApi.loading, slotsApi.lastErrorMeta,
+    cloudApi.data, cloudApi.error, cloudApi.loading, cloudApi.lastErrorMeta,
+    configApi.data, configApi.error, configApi.loading, configApi.lastErrorMeta,
+    refreshAll,
+  ]);
 
   return React.createElement(GlobalDataContext.Provider, { value }, children);
 }

@@ -69,6 +69,7 @@ export function useJobState(
     type: "success" | "error" | "warning" | "info",
     msg: string,
     action?: { label: string; onClick: () => void },
+    secondaryAction?: { label: string; onClick: () => void },
   ) => void,
   credentials?: BrainCredentials,
 ): JobState {

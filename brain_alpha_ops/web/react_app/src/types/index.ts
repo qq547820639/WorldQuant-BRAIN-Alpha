@@ -1070,6 +1070,8 @@ export interface Toast {
   duration_ms?: number;
   action_label?: string;
   on_action?: () => void;
+  secondary_action_label?: string;
+  on_secondary_action?: () => void;
 }
 
 export interface BrainCredentials {

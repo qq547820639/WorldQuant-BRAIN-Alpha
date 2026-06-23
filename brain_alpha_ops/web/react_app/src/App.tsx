@@ -93,8 +93,8 @@ export default function App() {
   const { toasts, addToast, dismissToast } = useToast();
 
   const notify = useCallback(
-    (type: "success" | "error" | "warning" | "info", msg: string, action?: { label: string; onClick: () => void }) => {
-      addToast(type, msg, 5000, action);
+    (type: "success" | "error" | "warning" | "info", msg: string, action?: { label: string; onClick: () => void }, secondaryAction?: { label: string; onClick: () => void }) => {
+      addToast(type, msg, 5000, action, secondaryAction);
     }, [addToast],
   );
 
@@ -311,7 +311,7 @@ export default function App() {
     setActiveView("scoring");
   }, []);
 
-  const viewProps: RenderViewProps = {
+  const viewProps: RenderViewProps = useMemo(() => ({
     activeView, selectedCandidate, credentials, notify,
     connected, contextFresh, phaseApiStatus, managedCredentialsAvailable,
     officialOpsAutoStart, jobState,
@@ -327,7 +327,15 @@ export default function App() {
     onLocalSessionLoggedOut: handleLocalSessionLoggedOut,
     onAutoStartConsumed: () => setOfficialOpsAutoStart(false),
     phaseData: phaseData,
-  };
+  }), [
+    activeView, selectedCandidate, credentials, notify,
+    connected, contextFresh, phaseApiStatus, managedCredentialsAvailable,
+    officialOpsAutoStart, jobState, phaseData,
+    openScoring, handleNavigate, handleConnectionTested,
+    handleDashboardSyncStart, handleDashboardSyncOpen,
+    handleOfficialSyncCompleted, handleOfficialReconnectRequested,
+    handleCandidatePoolUpdated, handleLocalSessionLoggedOut,
+  ]);
 
   const detailContent = renderActiveView(viewProps);
 

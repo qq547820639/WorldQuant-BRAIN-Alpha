@@ -14,6 +14,7 @@ export function useToast(maxToasts = 5) {
       message: string,
       durationMs = 5000,
       action?: { label: string; onClick: () => void },
+      secondaryAction?: { label: string; onClick: () => void },
     ) => {
       const id = `toast_${++counterRef.current}_${Date.now()}`;
       const toast: Toast = {
@@ -23,6 +24,8 @@ export function useToast(maxToasts = 5) {
         duration_ms: durationMs,
         action_label: action?.label,
         on_action: action?.onClick,
+        secondary_action_label: secondaryAction?.label,
+        on_secondary_action: secondaryAction?.onClick,
       };
 
       // P3-28 fix: keep at least 2 error-type toasts even when the

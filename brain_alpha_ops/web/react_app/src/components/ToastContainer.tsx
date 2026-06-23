@@ -42,6 +42,16 @@ export default function ToastContainer({ toasts, onDismiss }: Props) {
               {ICON_MAP[toast.type]}
             </span>
             <p className="flex-1 min-w-0 break-words text-sm">{toast.message}</p>
+            {toast.secondary_action_label && toast.on_secondary_action && (
+              <button
+                type="button"
+                className="text-xs font-semibold underline underline-offset-2 shrink-0"
+                aria-label={`${toast.secondary_action_label}: ${toast.message}`}
+                onClick={() => { toast.on_secondary_action?.(); onDismiss(toast.id); }}
+              >
+                {toast.secondary_action_label}
+              </button>
+            )}
             {toast.action_label && toast.on_action && (
               <button
                 type="button"

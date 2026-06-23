@@ -813,6 +813,7 @@ def _build_route_map() -> dict[str, list[tuple[str, str]]]:
         "/api/submit_readiness": Route("submit_readiness"),
         "/api/candidates/simulate/eligible": Route("candidates_simulate_eligible"),
         "/api/phase_state": Route("phase_state"),
+        "/api/trends": Route("trends"),
     }
     post_routes = {
         "/api/run": Route("run"),
@@ -852,6 +853,7 @@ def _build_route_map() -> dict[str, list[tuple[str, str]]]:
         "/api/scoring/evaluate": Route("scoring_evaluate"),
         "/api/scoring/attribution": Route("scoring_attribution"),
         "/api/candidates/simulate": Route("candidates_simulate"),
+        "/api/trends": Route("trends"),
         "/api/session": Route("session", requires_session=False),    # R-02: creates new session
     }
     return {"GET": get_routes, "POST": post_routes}

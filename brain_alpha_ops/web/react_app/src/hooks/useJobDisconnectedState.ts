@@ -24,6 +24,8 @@ interface AutoCancelCallbacks {
   notify: (
     type: "success" | "error" | "warning" | "info",
     msg: string,
+    action?: { label: string; onClick: () => void },
+    secondaryAction?: { label: string; onClick: () => void },
   ) => void;
 }
 
@@ -85,11 +87,12 @@ export function useJobDisconnectedState({
         notify("info", "已恢复等待。系统将继续尝试重连…");
       };
 
-      notify("warning", message, { label: "终止重试", onClick: cancelFn });
-      notify("info", "点击「继续等待」重置倒计时，系统将继续尝试重连。", {
-        label: "继续等待",
-        onClick: resumeFn,
-      });
+      notify(
+        "warning",
+        message,
+        { label: "终止重试", onClick: cancelFn },
+        { label: "继续等待", onClick: resumeFn },
+      );
 
       disconnectedTimerRef.current = setTimeout(async () => {
         if (!disconnectedNotifyRef.current) return;
