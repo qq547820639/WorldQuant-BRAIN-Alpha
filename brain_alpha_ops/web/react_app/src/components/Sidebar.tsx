@@ -48,7 +48,7 @@ function resolveToolBadge(statsKey: string | undefined, badges?: SidebarBadges):
 
 const ChevronRight = memo(function ChevronRight({ expanded, locked }: { expanded: boolean; locked: boolean }) {
   return (
-    <svg className={`phase-group-chevron${expanded ? "" : ""}`} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" style={{ transform: expanded ? "rotate(90deg)" : "rotate(0deg)", opacity: locked ? 0.25 : 0.5 }}>
+    <svg className={`phase-group-chevron${expanded ? "" : ""}`} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" style={{ transform: expanded ? "rotate(90deg)" : "rotate(0deg)", opacity: locked ? 0.25 : 0.5 }} aria-hidden="true" focusable="false">
       <polyline points="9 18 15 12 9 6" />
     </svg>
   );

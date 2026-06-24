@@ -1,31 +1,14 @@
 /** Dashboard — Progressive flow with step-based guidance v3.2 */
-import { useEffect, useState, useRef, type ReactNode } from "react";
-import { useApi } from "@/hooks/useApi";
-import { useGlobalData } from "@/hooks/useGlobalData";
-import type { JobStatus, ResearchMemorySummary, TrendApiResponse } from "@/types";
+import { type ReactNode } from "react";
+import { useDashboard } from "@/hooks/useDashboard";
 import KpiCard from "@/components/KpiCard";
-import TrendPanel, { type TrendData } from "@/components/TrendPanel";
-import ProgressFeedback from "@/components/ProgressFeedback";
+import TrendPanel from "@/components/TrendPanel";
 import ResumeWork from "@/components/ResumeWork";
-import { safeDisplayErrorMessage } from "@/helpers/errorExperience";
-import { saveResumeState } from "@/utils/resumeState";
 import Skeleton from "./Skeleton";
-import EmptyState from "./EmptyState";
 import ErrorCard from "./ErrorCard";
-import {
-  loadTrendData,
-  appendTrendPoint,
-  computeTrendChange,
-  syncTrendToBackend,
-  TREND_KEY,
-} from "@/components/DashboardTrendData";
+import { computeTrendChange } from "@/components/DashboardTrendData";
 import { generateReportMarkdown, DashboardReportModal } from "@/components/DashboardReportModal";
-import {
-  cloudSnapshotSummary,
-  cloudSnapshotPreviewRows,
-  formatSyncAge,
-  DashboardCloudSnapshot,
-} from "@/components/DashboardCloudSnapshot";
+import { formatSyncAge, DashboardCloudSnapshot } from "@/components/DashboardCloudSnapshot";
 import { StepProgressBar } from "@/components/DashboardStepProgress";
 
 interface Props {
@@ -43,147 +26,69 @@ interface Props {
   children?: ReactNode;
 }
 
-export default function Dashboard({ notify, connected, contextFresh, phaseStatus = "ready", onNavigateToSync, onOpenSync, onNavigateToCandidates, jobRunning = false, jobStatusMessage, jobCycle, onStartJob, children }: Props) {
-  const [snapshotExpanded, setSnapshotExpanded] = useState(false);
-  const [showReport, setShowReport] = useState(false);
-  const [reportMarkdown, setReportMarkdown] = useState("");
-  const [trendCandidates, setTrendCandidates] = useState<TrendData[]>(() => loadTrendData(TREND_KEY.CANDIDATES));
-  const [trendSubmissions, setTrendSubmissions] = useState<TrendData[]>(() => loadTrendData(TREND_KEY.SUBMISSIONS));
-  const statusApi = useApi<JobStatus>();
-  const memoryApi = useApi<ResearchMemorySummary>();
-  const { cloud: cloudGlobal, refreshAll } = useGlobalData();
+export default function Dashboard({
+  notify,
+  connected,
+  contextFresh,
+  phaseStatus = "ready",
+  onNavigateToSync,
+  onOpenSync,
+  onNavigateToCandidates,
+  jobRunning = false,
+  jobStatusMessage,
+  jobCycle,
+  onStartJob,
+  children,
+}: Props) {
+  const {
+    snapshotExpanded,
+    showReport,
+    reportMarkdown,
+    setReportMarkdown,
+    trendCandidates,
+    trendSubmissions,
+    status,
+    memory,
+    cloudSummaryData,
+    cloudPreviewRows,
+    cloud,
+    cloudLoading,
+    cloudError,
+    errors,
+    loading,
+    showGuide,
+    phasePending,
+    phaseFailed,
+    currentStep,
+    stepLabel,
+    openManualSync,
+    retryAll,
+    dismissGuide,
+    toggleGuide,
+    toggleSnapshot,
+    openReport,
+    closeReport,
+  } = useDashboard({
+    connected,
+    contextFresh,
+    phaseStatus,
+    onNavigateToSync,
+    onOpenSync,
+    jobRunning,
+  });
 
-  const status = statusApi.data;
-  const cloud = cloudGlobal.data;
-  const memory = memoryApi.data;
-  const cloudSummaryData = cloudSnapshotSummary(cloud);
-  const cloudPreviewRows = cloudSnapshotPreviewRows(cloud);
-
-  useEffect(() => {
-    statusApi.call("/api/production-validation/status");
-    memoryApi.call("/api/snapshot/memory?limit=100&top_n=5");
-  }, [statusApi.call, memoryApi.call]);
-
-  useEffect(() => {
-    const poolSize = memory?.total_candidates ?? status?.progress?.candidates_generated;
-    if (poolSize != null && poolSize > 0) {
-      saveResumeState({ lastPoolSize: poolSize });
-    }
-  }, [memory?.total_candidates, status?.progress?.candidates_generated]);
-
-  useEffect(() => {
-    if (cloud != null && !cloudGlobal.loading && !cloudGlobal.error) {
-      const syncTime = cloudSnapshotSummary(cloud).loaded_at || new Date().toISOString();
-      saveResumeState({ lastSyncTime: syncTime });
-    }
-  }, [cloud != null, cloudGlobal.loading]);
-
-  useEffect(() => {
-    let cancelled = false;
-    async function fetchTrends() {
-      try {
-        const res = await fetch("/api/trends?days=30");
-        if (!res.ok) return;
-        const json = await res.json() as TrendApiResponse;
-        if (!json || typeof json !== "object" || !json.ok)
-          return;
-        const data = json.data;
-        if (!Array.isArray(data) || data.length === 0) return;
-        const candidatesPoints: TrendData[] = [];
-        const submissionsPoints: TrendData[] = [];
-        for (const row of data) {
-          const date = typeof row.date === "string" ? row.date : "";
-          const c = Number(row.candidates);
-          const s = Number(row.submissions);
-          if (date && Number.isFinite(c)) {
-            candidatesPoints.push({ date, value: c });
-          }
-          if (date && Number.isFinite(s)) {
-            submissionsPoints.push({ date, value: s });
-          }
-        }
-        if (!cancelled) {
-          if (candidatesPoints.length > 0) setTrendCandidates(candidatesPoints.slice(-7));
-          if (submissionsPoints.length > 0) setTrendSubmissions(submissionsPoints.slice(-7));
-        }
-      } catch { console.warn("Dashboard: API unavailable, fallback to localStorage"); }
-    }
-    fetchTrends();
-    return () => { cancelled = true; };
-  }, []);
-
-  useEffect(() => {
-    const poolSize = memory?.total_candidates ?? status?.progress?.candidates_generated;
-    if (poolSize != null && poolSize > 0) {
-      const updated = appendTrendPoint(TREND_KEY.CANDIDATES, poolSize);
-      setTrendCandidates(updated);
-    }
-    const submissions = status?.progress?.submissions ?? cloudSummaryData?.submitted_count;
-    if (submissions != null) {
-      const updated = appendTrendPoint(TREND_KEY.SUBMISSIONS, submissions);
-      setTrendSubmissions(updated);
-    }
-    const syncCandidates = (memory?.total_candidates ?? status?.progress?.candidates_generated ?? 0) as number;
-    const syncSubmissions = (status?.progress?.submissions ?? cloudSummaryData?.submitted_count ?? 0) as number;
-    const syncCycles = (status?.progress?.completed_cycles ?? 0) as number;
-    if (syncCandidates > 0 || syncSubmissions > 0) {
-      syncTrendToBackend(syncCandidates, syncSubmissions, syncCycles);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status?.progress?.candidates_generated, status?.progress?.submissions, cloudSummaryData?.submitted_count, memory?.total_candidates]);
-
-  const prevJobRunningRef = useRef(jobRunning);
-  useEffect(() => {
-    if (prevJobRunningRef.current && !jobRunning) {
-      const poolSize = memory?.total_candidates ?? status?.progress?.candidates_generated;
-      if (poolSize != null && poolSize > 0) {
-        const updated = appendTrendPoint(TREND_KEY.CANDIDATES, poolSize);
-        setTrendCandidates(updated);
-      }
-      const submissions = status?.progress?.submissions ?? cloudSummaryData?.submitted_count;
-      if (submissions != null) {
-        const updated = appendTrendPoint(TREND_KEY.SUBMISSIONS, submissions);
-        setTrendSubmissions(updated);
-      }
-      const syncCandidates = (memory?.total_candidates ?? status?.progress?.candidates_generated ?? 0) as number;
-      const syncSubmissions = (status?.progress?.submissions ?? cloudSummaryData?.submitted_count ?? 0) as number;
-      const syncCycles = (status?.progress?.completed_cycles ?? 0) as number;
-      if (syncCandidates > 0 || syncSubmissions > 0) {
-        syncTrendToBackend(syncCandidates, syncSubmissions, syncCycles);
-      }
-    }
-    prevJobRunningRef.current = jobRunning;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [jobRunning]);
-
-  const retryAll = () => {
-    statusApi.call("/api/production-validation/status");
-    memoryApi.call("/api/snapshot/memory?limit=100&top_n=5");
-    refreshAll();
+  const handleGenerateReport = () => {
+    const md = generateReportMarkdown({
+      trendCandidates,
+      trendSubmissions,
+      cloudSummary: cloudSummaryData,
+      memory,
+      status,
+      cloudPreviewRows,
+    });
+    setReportMarkdown(md);
+    openReport();
   };
-
-  const errors = [
-    statusApi.error ? `Status: ${safeDisplayErrorMessage(statusApi.error)}` : "",
-    cloudGlobal.error ? `Cloud: ${safeDisplayErrorMessage(cloudGlobal.error)}` : "",
-    memoryApi.error ? `Memory: ${safeDisplayErrorMessage(memoryApi.error)}` : "",
-  ].filter(Boolean);
-  const loading = statusApi.loading || cloudGlobal.loading || memoryApi.loading;
-  const [showGuide, setShowGuide] = useState(() => !localStorage.getItem("brain_alpha_guide_dismissed"));
-
-  const dismissGuide = () => {
-    localStorage.setItem("brain_alpha_guide_dismissed", "1");
-    setShowGuide(false);
-  };
-
-  const phasePending = phaseStatus === "loading";
-  const phaseFailed = phaseStatus === "error";
-  const currentStep = phasePending || phaseFailed ? 1 : !contextFresh ? (!connected ? 1 : 2) : 3;
-  const stepLabel = phasePending ? "读取本地状态"
-    : phaseFailed ? "状态读取失败"
-    : currentStep === 1 ? "连接 BRAIN"
-    : currentStep === 2 ? "准备本地缓存"
-    : connected ? "开始验证" : "缓存模式";
-  const openManualSync = onOpenSync || onNavigateToSync;
 
   return (
     <div className="animate-fade-in">
@@ -204,57 +109,29 @@ export default function Dashboard({ notify, connected, contextFresh, phaseStatus
 
       <StepProgressBar currentStep={currentStep} />
 
-      {showGuide && (
-        <div className="panel mb-4 guide-panel">
-          <div className="panel-body-padded flex justify-between items-start gap-3">
-            <div>
-              <p className="text-sm font-medium text-info mb-2">首次使用？按顺序完成以下步骤</p>
-              <div className="grid gap-1 text-xs text-text-secondary guide-steps">
-                <span className={currentStep === 1 ? "text-info-text font-medium text-right" : currentStep > 1 ? "text-positive-text font-medium text-right" : "text-text-disabled font-medium text-right"}>1.</span>
-                <span>
-                  {phasePending
-                    ? "正在读取本地缓存和账户状态"
-                    : phaseFailed
-                      ? "状态读取失败，请刷新页面或重新打开本地控制台"
-                      : contextFresh && !connected
-                    ? "检测到本地缓存，可先以缓存模式继续"
-                    : <>填写账户邮箱和密码，点击 <strong>测试连接</strong>{connected ? " ✓" : ""}</>}
-                </span>
-                <span className={currentStep === 2 ? "text-info-text font-medium text-right" : currentStep > 2 ? "text-positive-text font-medium text-right" : "text-text-disabled font-medium text-right"}>2.</span>
-                <span>本地无缓存时点击 <strong>开始首次同步</strong>；已有缓存会直接使用，可稍后手动刷新{currentStep > 2 ? " ✓" : ""}</span>
-                <span className={currentStep === 3 ? "text-info-text font-medium text-right" : "text-text-disabled font-medium text-right"}>3.</span>
-                <span>同步完成后，在下方点击 <strong>运行非提交验证</strong> 开始生产搜索</span>
-                <span className={currentStep > 3 ? "text-positive-text font-medium text-right" : currentStep >= 3 ? "text-info-text font-medium text-right" : "text-text-disabled font-medium text-right"}>4.</span>
-                <span>在侧边栏「候选发现」「评估与验证」「提交就绪」中继续后续流程</span>
-              </div>
-            </div>
-            <button onClick={dismissGuide} className="btn btn-ghost btn-sm flex-shrink-0" aria-label="关闭引导">✕</button>
-          </div>
-        </div>
-      )}
-
-      {!showGuide && (
-        <div className="mb-4 text-right">
-          <button
-            type="button"
-            className="text-xs text-text-tertiary hover:text-text-secondary underline cursor-pointer bg-transparent border-none p-0"
-            onClick={() => {
-              localStorage.removeItem("brain_alpha_guide_dismissed");
-              setShowGuide(true);
-            }}
-            aria-label="重新显示首次使用引导"
-          >
-            ? 重新显示首次引导
-          </button>
-        </div>
-      )}
+      <GuidePanel
+        show={showGuide}
+        currentStep={currentStep}
+        phasePending={phasePending}
+        phaseFailed={phaseFailed}
+        contextFresh={contextFresh}
+        connected={connected}
+        onDismiss={dismissGuide}
+        onReshow={toggleGuide}
+      />
 
       <div className="flex items-baseline justify-between flex-wrap gap-2 mb-1">
         <div>
           <h1 className="text-xl font-medium text-text-primary mb-1">运行总览</h1>
           <p className="text-sm text-text-tertiary">
             当前阶段：<span className="text-accent font-medium">{stepLabel}</span>
-            {" · "}上次更新: {new Date().toLocaleTimeString("zh-CN", { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+            {" · "}上次更新:{" "}
+            {new Date().toLocaleTimeString("zh-CN", {
+              hour12: false,
+              hour: "2-digit",
+              minute: "2-digit",
+              second: "2-digit",
+            })}
           </p>
         </div>
         {connected && contextFresh && (
@@ -264,17 +141,13 @@ export default function Dashboard({ notify, connected, contextFresh, phaseStatus
         )}
       </div>
 
-      {(phasePending || phaseFailed) && (
-        <PhaseStatusNotice failed={phaseFailed} />
-      )}
+      {(phasePending || phaseFailed) && <PhaseStatusNotice failed={phaseFailed} />}
 
       {!connected && !contextFresh && !phasePending && !phaseFailed && (
         <div className="mb-6">{children}</div>
       )}
 
-      {connected && !contextFresh && (
-        <SyncCloudCTA onNavigateToSync={onNavigateToSync} />
-      )}
+      {connected && !contextFresh && <SyncCloudCTA onNavigateToSync={onNavigateToSync} />}
 
       {contextFresh && (
         <>
@@ -307,13 +180,22 @@ export default function Dashboard({ notify, connected, contextFresh, phaseStatus
                 data={trendCandidates}
                 unit="个"
                 color="#3b82f6"
-                currentValue={memory?.total_candidates ?? status?.progress?.candidates_generated ?? 0}
+                currentValue={
+                  memory?.total_candidates ?? status?.progress?.candidates_generated ?? 0
+                }
                 change={computeTrendChange(trendCandidates)}
               />
               <KpiCard
                 label="云端 Alpha"
                 value={cloudSummaryData.count ?? "--"}
-                subtitle={cloud ? `${cloudSummaryData.submitted_count ?? 0} 已提交 · ${formatSyncAge(cloudSummaryData.age_seconds, cloudSummaryData.loaded_at)}` : "等待刷新"}
+                subtitle={
+                  cloud
+                    ? `${cloudSummaryData.submitted_count ?? 0} 已提交 · ${formatSyncAge(
+                        cloudSummaryData.age_seconds,
+                        cloudSummaryData.loaded_at,
+                      )}`
+                    : "等待刷新"
+                }
                 trend={cloud && (cloudSummaryData.submitted_count ?? 0) > 0 ? "up" : "neutral"}
                 className="hover:shadow-md transition-shadow"
               />
@@ -328,7 +210,9 @@ export default function Dashboard({ notify, connected, contextFresh, phaseStatus
                 data={trendSubmissions}
                 unit="个"
                 color="#f59e0b"
-                currentValue={status?.progress?.submissions ?? cloudSummaryData.submitted_count ?? 0}
+                currentValue={
+                  status?.progress?.submissions ?? cloudSummaryData.submitted_count ?? 0
+                }
                 change={computeTrendChange(trendSubmissions)}
               />
             </div>
@@ -338,88 +222,190 @@ export default function Dashboard({ notify, connected, contextFresh, phaseStatus
             <button
               type="button"
               className="btn btn-ghost btn-sm"
-              onClick={() => setSnapshotExpanded((v) => !v)}
+              onClick={toggleSnapshot}
               aria-expanded={snapshotExpanded}
             >
-              <span className="inline-block transition-transform duration-200" style={{ transform: snapshotExpanded ? "rotate(90deg)" : "rotate(0deg)" }}>▶</span>
-              <span className="ml-1.5">数据快照{snapshotExpanded ? "" : ` (${cloudSummaryData.count ?? "--"} 条 Alpha)`}</span>
+              <span
+                className="inline-block transition-transform duration-200"
+                style={{ transform: snapshotExpanded ? "rotate(90deg)" : "rotate(0deg)" }}
+              >
+                ▶
+              </span>
+              <span className="ml-1.5">
+                数据快照
+                {snapshotExpanded ? "" : ` (${cloudSummaryData.count ?? "--"} 条 Alpha)`}
+              </span>
             </button>
-            <button
-              type="button"
-              className="btn btn-secondary btn-sm"
-              onClick={() => {
-                const md = generateReportMarkdown({
-                  trendCandidates,
-                  trendSubmissions,
-                  cloudSummary: cloudSummaryData,
-                  memory,
-                  status,
-                  cloudPreviewRows,
-                });
-                setReportMarkdown(md);
-                setShowReport(true);
-              }}
-            >
+            <button type="button" className="btn btn-secondary btn-sm" onClick={handleGenerateReport}>
               📋 生成报告
             </button>
           </div>
 
-          {snapshotExpanded && (<>
+          {snapshotExpanded && (
+            <>
+              <DashboardCloudSnapshot
+                cloud={cloud}
+                loading={cloudLoading}
+                error={cloudError}
+                onRetry={retryAll}
+                onOpenSync={openManualSync}
+              />
 
-          <DashboardCloudSnapshot
-            cloud={cloud}
-            loading={cloudGlobal.loading}
-            error={cloudGlobal.error ? safeDisplayErrorMessage(cloudGlobal.error) : null}
-            onRetry={() => refreshAll()}
-            onOpenSync={openManualSync}
-          />
-
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            <div className="panel">
-              <div className="panel-header"><span>热门家族</span></div>
-              <div className="panel-body">
-                {memory?.families?.slice(0, 5).map((f) => (
-                  <div key={f.name} className="flex justify-between text-xs py-2 px-3.5 border-b border-border-subtle last:border-0">
-                    <span className="text-text-secondary">{f.name}</span>
-                    <span className="tabular text-text-tertiary">n={f.count} {f.success_rate?.toFixed(2)}</span>
-                  </div>
-                )) || <div className="panel-body-padded text-xs text-text-tertiary">暂无数据</div>}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                <MemoryPanel title="热门家族" items={memory?.families} />
+                <MemoryPanel title="热门字段" items={memory?.fields} />
+                <FailurePatternsPanel items={memory?.failure_patterns} />
               </div>
-            </div>
-
-            <div className="panel">
-              <div className="panel-header"><span>热门字段</span></div>
-              <div className="panel-body">
-                {memory?.fields?.slice(0, 5).map((f) => (
-                  <div key={f.name} className="flex justify-between text-xs py-2 px-3.5 border-b border-border-subtle last:border-0">
-                    <span className="text-text-secondary">{f.name}</span>
-                    <span className="tabular text-text-tertiary">n={f.count} {f.success_rate?.toFixed(2)}</span>
-                  </div>
-                )) || <div className="panel-body-padded text-xs text-text-tertiary">暂无数据</div>}
-              </div>
-            </div>
-
-            <div className="panel">
-              <div className="panel-header"><span>失败模式</span></div>
-              <div className="panel-body">
-                {memory?.failure_patterns?.slice(0, 5).map((fp) => (
-                  <div key={fp.reason} className="flex justify-between text-xs py-2 px-3.5 border-b border-border-subtle last:border-0">
-                    <span className="text-negative/80">{fp.reason}</span>
-                    <span className="tabular text-text-tertiary">x{fp.count}</span>
-                  </div>
-                )) || <div className="panel-body-padded text-xs text-text-tertiary">暂无失败记录</div>}
-              </div>
-            </div>
-          </div>
-          </>)}
+            </>
+          )}
         </>
       )}
 
-      <DashboardReportModal
-        show={showReport}
-        onClose={() => setShowReport(false)}
-        markdown={reportMarkdown}
-      />
+      <DashboardReportModal show={showReport} onClose={closeReport} markdown={reportMarkdown} />
+    </div>
+  );
+}
+
+interface GuidePanelProps {
+  show: boolean;
+  currentStep: number;
+  phasePending: boolean;
+  phaseFailed: boolean;
+  contextFresh: boolean;
+  connected: boolean;
+  onDismiss: () => void;
+  onReshow: () => void;
+}
+
+function GuidePanel({
+  show,
+  currentStep,
+  phasePending,
+  phaseFailed,
+  contextFresh,
+  connected,
+  onDismiss,
+  onReshow,
+}: GuidePanelProps) {
+  if (show) {
+    return (
+      <div className="panel mb-4 guide-panel">
+        <div className="panel-body-padded flex justify-between items-start gap-3">
+          <div>
+            <p className="text-sm font-medium text-info mb-2">首次使用？按顺序完成以下步骤</p>
+            <div className="grid gap-1 text-xs text-text-secondary guide-steps">
+              <StepLabel step={1} currentStep={currentStep} />
+              <span>
+                {phasePending
+                  ? "正在读取本地缓存和账户状态"
+                  : phaseFailed
+                    ? "状态读取失败，请刷新页面或重新打开本地控制台"
+                    : contextFresh && !connected
+                      ? "检测到本地缓存，可先以缓存模式继续"
+                      : (
+                          <>
+                            填写账户邮箱和密码，点击 <strong>测试连接</strong>
+                            {connected ? " ✓" : ""}
+                          </>
+                        )}
+              </span>
+              <StepLabel step={2} currentStep={currentStep} />
+              <span>
+                本地无缓存时点击 <strong>开始首次同步</strong>
+                ；已有缓存会直接使用，可稍后手动刷新
+                {currentStep > 2 ? " ✓" : ""}
+              </span>
+              <StepLabel step={3} currentStep={currentStep} />
+              <span>同步完成后，在下方点击 <strong>运行非提交验证</strong> 开始生产搜索</span>
+              <StepLabel step={4} currentStep={currentStep} />
+              <span>在侧边栏「候选发现」「评估与验证」「提交就绪」中继续后续流程</span>
+            </div>
+          </div>
+          <button
+            onClick={onDismiss}
+            className="btn btn-ghost btn-sm flex-shrink-0"
+            aria-label="关闭引导"
+          >
+            ✕
+          </button>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="mb-4 text-right">
+      <button
+        type="button"
+        className="text-xs text-text-tertiary hover:text-text-secondary underline cursor-pointer bg-transparent border-none p-0"
+        onClick={onReshow}
+        aria-label="重新显示首次使用引导"
+      >
+        ? 重新显示首次引导
+      </button>
+    </div>
+  );
+}
+
+function StepLabel({ step, currentStep }: { step: number; currentStep: number }) {
+  const className =
+    currentStep === step
+      ? "text-info-text font-medium text-right"
+      : currentStep > step
+        ? "text-positive-text font-medium text-right"
+        : "text-text-disabled font-medium text-right";
+  return <span className={className}>{step}.</span>;
+}
+
+interface MemoryItem {
+  name: string;
+  count: number;
+  success_rate?: number;
+}
+
+function MemoryPanel({ title, items }: { title: string; items?: MemoryItem[] }) {
+  return (
+    <div className="panel">
+      <div className="panel-header">
+        <span>{title}</span>
+      </div>
+      <div className="panel-body">
+        {items?.slice(0, 5).map((item) => (
+          <div
+            key={item.name}
+            className="flex justify-between text-xs py-2 px-3.5 border-b border-border-subtle last:border-0"
+          >
+            <span className="text-text-secondary">{item.name}</span>
+            <span className="tabular text-text-tertiary">
+              n={item.count} {item.success_rate?.toFixed(2)}
+            </span>
+          </div>
+        )) || <div className="panel-body-padded text-xs text-text-tertiary">暂无数据</div>}
+      </div>
+    </div>
+  );
+}
+
+function FailurePatternsPanel({
+  items,
+}: {
+  items?: { reason: string; count: number }[];
+}) {
+  return (
+    <div className="panel">
+      <div className="panel-header">
+        <span>失败模式</span>
+      </div>
+      <div className="panel-body">
+        {items?.slice(0, 5).map((fp) => (
+          <div
+            key={fp.reason}
+            className="flex justify-between text-xs py-2 px-3.5 border-b border-border-subtle last:border-0"
+          >
+            <span className="text-negative/80">{fp.reason}</span>
+            <span className="tabular text-text-tertiary">x{fp.count}</span>
+          </div>
+        )) || <div className="panel-body-padded text-xs text-text-tertiary">暂无失败记录</div>}
+      </div>
     </div>
   );
 }
@@ -429,9 +415,21 @@ function SyncCloudCTA({ onNavigateToSync }: { onNavigateToSync: () => void }) {
     <div className="panel panel-warning mb-6">
       <div className="p-6">
         <div className="flex flex-col items-center text-center gap-3">
-          <div className="w-14 h-14 rounded-full flex items-center justify-center" style={{ background: "var(--color-panel-warning-bg)" }}>
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--color-warning-icon)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
+          <div
+            className="w-14 h-14 rounded-full flex items-center justify-center"
+            style={{ background: "var(--color-panel-warning-bg)" }}
+          >
+            <svg
+              width="28"
+              height="28"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="var(--color-warning-icon)"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2" />
             </svg>
           </div>
           <div>
@@ -446,8 +444,17 @@ function SyncCloudCTA({ onNavigateToSync }: { onNavigateToSync: () => void }) {
             onClick={onNavigateToSync}
             style={{ padding: "10px 32px", fontSize: 15, fontWeight: 600 }}
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="mr-2">
-              <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              className="mr-2"
+            >
+              <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2" />
             </svg>
             开始首次同步
           </button>

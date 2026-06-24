@@ -5,6 +5,7 @@ import { visualizer } from "rollup-plugin-visualizer";
 
 export default defineConfig(({ mode }) => {
   const isAnalyze = mode === "analyze";
+  const isProduction = mode === "production" || isAnalyze;
 
   return {
     plugins: [
@@ -22,19 +23,31 @@ export default defineConfig(({ mode }) => {
     },
     server: {
       port: 3000,
+      hmr: {
+        overlay: true,
+      },
       proxy: {
         "/api": "http://127.0.0.1:8765",
         "/sse": "http://127.0.0.1:8765",
       },
+      watch: {
+        usePolling: false,
+      },
+    },
+    optimizeDeps: {
+      include: ["react", "react-dom", "@tanstack/react-virtual"],
+      exclude: [],
     },
     build: {
       outDir: "dist",
       emptyOutDir: true,
-      sourcemap: false,
+      sourcemap: !isProduction,
       target: "es2022",
       cssCodeSplit: true,
       cssMinify: true,
       minify: "esbuild",
+      reportCompressedSize: true,
+      chunkSizeWarningLimit: 200,
       rollupOptions: {
         output: {
           manualChunks(id) {
@@ -43,9 +56,14 @@ export default defineConfig(({ mode }) => {
             if (id.includes("/react/") || id.includes("/react-dom/") || id.includes("/scheduler/")) return "react-vendor";
             return "vendor";
           },
+          chunkFileNames: "assets/[name]-[hash].js",
+          entryFileNames: "assets/[name]-[hash].js",
+          assetFileNames: "assets/[name]-[hash].[ext]",
         },
       },
-      chunkSizeWarningLimit: 300,
+    },
+    esbuild: {
+      drop: isProduction ? ["console", "debugger"] : [],
     },
     test: {
       environment: "jsdom",

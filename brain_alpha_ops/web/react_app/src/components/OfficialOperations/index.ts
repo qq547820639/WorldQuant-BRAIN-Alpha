@@ -11,4 +11,5 @@ export { default as OverviewCard } from "./OverviewCard";
 export { default as SummaryMetric } from "./SummaryMetric";
 export { default as SummarySections } from "./SummarySections";
 export { default as SyncHistoryList } from "./SyncHistoryList";
+export { useOfficialOperations } from "./useOfficialOperations";
 export * from "./utils";

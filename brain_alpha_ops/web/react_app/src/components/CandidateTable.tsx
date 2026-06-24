@@ -187,19 +187,6 @@ export default function CandidateTable({
   const loadError = globalCandidates.error;
   const title = viewMode === "candidates" ? "候选管理" : `${queueViewLabel(viewMode)}候选`;
 
-  if (loading) {
-    return (
-      <CandidateTableLoading
-        title={title}
-        viewMode={viewMode}
-        targetPoolSize={tableState.targetPoolSize}
-        showProductionControls={showProductionControls}
-        onTargetPoolSizeChange={tableState.handleTargetPoolSizeChange}
-        onRetryLoad={loadCandidates}
-      />
-    );
-  }
-
   const detailPanelProps = useMemo(() => ({
     showProductionControls,
     taskState: pipeline.task.state, taskProgress: pipeline.task.progress, taskError: pipeline.task.error,
@@ -217,6 +204,19 @@ export default function CandidateTable({
     pipeline.check.state, pipeline.check.progress, pipeline.check.error, actions.startBatchCheck, actions.lastBatchCheckCandidatesRef]);
 
   const totalPages = Math.max(1, Math.ceil(sortedCandidates.length / PAGE_SIZE));
+
+  if (loading) {
+    return (
+      <CandidateTableLoading
+        title={title}
+        viewMode={viewMode}
+        targetPoolSize={tableState.targetPoolSize}
+        showProductionControls={showProductionControls}
+        onTargetPoolSizeChange={tableState.handleTargetPoolSizeChange}
+        onRetryLoad={loadCandidates}
+      />
+    );
+  }
 
   return (
     <div className="animate-fade-in">

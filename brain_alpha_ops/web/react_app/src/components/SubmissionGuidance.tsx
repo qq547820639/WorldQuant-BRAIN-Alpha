@@ -1,4 +1,4 @@
-import { memo } from "react";
+import { memo, useEffect, useRef } from "react";
 
 interface DrillStep {
   id: number;
@@ -19,6 +19,32 @@ export const DrillModal = memo(function DrillModal({
   allChecked: boolean;
   onClose: () => void;
 }) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    const timer = setTimeout(() => {
+      closeButtonRef.current?.focus();
+    }, 50);
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        onClose();
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
+      document.removeEventListener("keydown", handleKeyDown);
+      clearTimeout(timer);
+    };
+  }, [onClose]);
+
   return (
     <div
       className="drill-modal-overlay"
@@ -30,9 +56,10 @@ export const DrillModal = memo(function DrillModal({
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
       role="dialog"
       aria-modal="true"
-      aria-label="模拟提交演练"
+      aria-labelledby="drill-modal-title"
     >
       <div
+        ref={dialogRef}
         className="drill-modal-content"
         style={{
           background: "var(--color-surface-elevated)", borderRadius: 8,
@@ -43,12 +70,13 @@ export const DrillModal = memo(function DrillModal({
       >
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
           <div>
-            <h3 className="text-base font-semibold text-text-primary">模拟提交演练</h3>
+            <h3 id="drill-modal-title" className="text-base font-semibold text-text-primary">模拟提交演练</h3>
             <p className="text-xs text-text-tertiary mt-1">
               逐项确认提交步骤，帮助你在 BRAIN 平台上顺利完成真实提交。
             </p>
           </div>
           <button
+            ref={closeButtonRef}
             type="button"
             onClick={onClose}
             className="btn btn-ghost btn-sm"

@@ -1,5 +1,6 @@
 /** P2-4: Scoring weight transparency modal — read-only display from /api/config_schema. */
 
+import { useEffect, useRef } from "react";
 import type { ConfigSchema } from "./utils";
 import { isRecord } from "@/types";
 
@@ -108,6 +109,31 @@ export default function ScoringWeightModal({
   onClose: () => void;
 }) {
   const { layers } = extractScoringWeights(schema, scoring);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    const timer = setTimeout(() => {
+      closeButtonRef.current?.focus();
+    }, 50);
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        onClose();
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
+      document.removeEventListener("keydown", handleKeyDown);
+      clearTimeout(timer);
+    };
+  }, [onClose]);
 
   return (
     <div
@@ -119,9 +145,10 @@ export default function ScoringWeightModal({
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
       role="dialog"
       aria-modal="true"
-      aria-label="评分配置详细权重"
+      aria-labelledby="scoring-weight-title"
     >
       <div
+        ref={dialogRef}
         style={{
           background: "var(--color-surface-elevated)", borderRadius: 8,
           border: "0.5px solid var(--color-border-default)",
@@ -131,12 +158,13 @@ export default function ScoringWeightModal({
       >
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
           <div>
-            <h3 className="text-base font-semibold text-text-primary">评分配置详细权重</h3>
+            <h3 id="scoring-weight-title" className="text-base font-semibold text-text-primary">评分配置详细权重</h3>
             <p className="text-xs text-text-tertiary mt-1">
               来自 /api/config_schema 的只读展示，各层及其子维度权重分配。
             </p>
           </div>
           <button
+            ref={closeButtonRef}
             type="button"
             onClick={onClose}
             className="btn btn-ghost btn-sm"

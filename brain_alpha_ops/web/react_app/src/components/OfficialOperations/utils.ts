@@ -3,7 +3,7 @@
 import { apiErrorMessage, knownApiErrorMessage } from "@/helpers/errorExperience";
 import { readinessNextActionLabel, readinessProductionGapLabel, readinessReasonLabel } from "@/helpers/readinessLabels";
 import { classifyJobState, jobStatusMessage } from "@/helpers/runPayload";
-import type { BrainCredentials, CloudAlphaCache, JobStatus, OfficialContextCache, SubmitReadinessResponse, UnifiedProgress } from "@/types";
+import type { BrainCredentials, CloudAlphaCache, JobStatus, OfficialContextCache, ProgressLifecycle, SubmitReadinessResponse, UnifiedProgress } from "@/types";
 import { isRecord } from "@/types";
 
 export const POLL_INTERVAL_MS = 2000;
@@ -512,7 +512,7 @@ export function progressState(
   readinessLoading: boolean,
   checksLoading: boolean,
   error: string | null,
-) {
+): ProgressLifecycle {
   if (error) return "error";
   if (syncRunning || readinessLoading || checksLoading) return "progress";
   const syncState = classifyJobState(syncStatus);

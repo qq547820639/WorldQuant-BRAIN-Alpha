@@ -1,4 +1,4 @@
-import React, { memo } from "react";
+import React, { memo, useEffect, useRef } from "react";
 import { type TrendData } from "@/components/TrendPanel";
 import type { JobStatus, CloudAlphaWithMetrics, ResearchMemorySummary } from "@/types";
 
@@ -118,6 +118,34 @@ interface DashboardReportModalProps {
 }
 
 export const DashboardReportModal = memo(function DashboardReportModal({ show, onClose, markdown }: DashboardReportModalProps) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!show) return;
+
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    const timer = setTimeout(() => {
+      closeButtonRef.current?.focus();
+    }, 50);
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        onClose();
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
+      document.removeEventListener("keydown", handleKeyDown);
+      clearTimeout(timer);
+    };
+  }, [show, onClose]);
+
   if (!show) return null;
 
   const handleCopy = async () => {
@@ -143,12 +171,13 @@ export const DashboardReportModal = memo(function DashboardReportModal({ show, o
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
       role="dialog"
       aria-modal="true"
-      aria-label="工作日报"
+      aria-labelledby="report-modal-title"
     >
-      <div className="flex flex-col rounded-lg shadow-lg border border-modal max-w-[640px] w-[calc(100%-32px)] max-h-[80vh]" style={{ backgroundColor: "var(--color-modal-bg)" }}>
+      <div ref={dialogRef} className="flex flex-col rounded-lg shadow-lg border border-modal max-w-[640px] w-[calc(100%-32px)] max-h-[80vh]" style={{ backgroundColor: "var(--color-modal-bg)" }}>
         <div className="flex justify-between items-center px-5 py-4 border-b border-modal-border">
-          <h2 className="text-base font-semibold text-text-primary">📋 工作日报</h2>
+          <h2 id="report-modal-title" className="text-base font-semibold text-text-primary">📋 工作日报</h2>
           <button
+            ref={closeButtonRef}
             type="button"
             className="btn btn-ghost btn-sm"
             onClick={onClose}
