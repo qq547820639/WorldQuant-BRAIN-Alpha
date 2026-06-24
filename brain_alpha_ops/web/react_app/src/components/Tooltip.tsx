@@ -1,4 +1,4 @@
-import { useState, useRef, useId, useEffect } from "react";
+import { memo, useState, useRef, useId, useEffect } from "react";
 
 type TooltipPlacement = "top" | "bottom" | "left" | "right";
 
@@ -9,7 +9,7 @@ interface TooltipProps {
   children: React.ReactElement;
 }
 
-export default function Tooltip({
+export default memo(function Tooltip({
   content,
   placement = "top",
   delay = 300,
@@ -203,4 +203,4 @@ export default function Tooltip({
       )}
     </span>
   );
-}
+});

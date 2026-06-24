@@ -1,5 +1,7 @@
 /** Individual job status display card. */
 
+import { memo } from "react";
+
 interface Props {
   credentialSource: string;
   validationId: string | null;
@@ -9,7 +11,7 @@ interface Props {
   reconnectAttempts?: number;
 }
 
-export default function JobStatusCard({
+export default memo(function JobStatusCard({
   credentialSource,
   validationId,
   running,
@@ -93,4 +95,4 @@ export default function JobStatusCard({
       </div>
     </>
   );
-}
+});

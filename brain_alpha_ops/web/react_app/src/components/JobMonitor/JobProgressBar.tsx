@@ -1,5 +1,6 @@
 /** Progress bar and status metrics display. */
 
+import { memo } from "react";
 import ProgressFeedback from "@/components/ProgressFeedback";
 import type { UnifiedProgress, JobStatus } from "@/types";
 
@@ -80,7 +81,7 @@ interface Props {
   hasEvidence: boolean;
 }
 
-export default function JobProgressBar({
+export default memo(function JobProgressBar({
   running,
   loading,
   progress,
@@ -156,4 +157,4 @@ export default function JobProgressBar({
       )}
     </>
   );
-}
+});

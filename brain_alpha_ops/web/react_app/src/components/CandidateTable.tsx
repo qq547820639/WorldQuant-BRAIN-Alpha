@@ -16,6 +16,7 @@ import { useGlobalData } from "@/hooks/useGlobalData";
 import { useCandidatePipeline } from "@/hooks/useCandidatePipeline";
 import { useSseManager } from "@/hooks/useSseManager";
 import { useCandidateActions } from "@/hooks/useCandidateActions";
+import { useDebounce } from "@/hooks/useDebounce";
 import type { AlphaLifecycleHistoryResponse, Candidate } from "@/types";
 import { getStarred } from "@/utils/starredCandidates";
 import ProgressFeedback from "@/components/ProgressFeedback";
@@ -107,7 +108,10 @@ export default function CandidateTable({
   const [lifecycleHistory, setLifecycleHistory] = useState<AlphaLifecycleHistoryResponse | null>(null);
   const [lifecycleError, setLifecycleError] = useState<string | null>(null);
 
-  const [filter, setFilter] = useState("");
+  // Filter with debounce for better performance
+  const [filterInput, setFilterInput] = useState("");
+  const filter = useDebounce(filterInput, 300);
+
   const [showStarredOnly, setShowStarredOnly] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [currentPage, setCurrentPage] = useState(1);
@@ -347,7 +351,7 @@ export default function CandidateTable({
     if (sortKey === key) { setSortAsc(!sortAsc); } else { setSortKey(key); setSortAsc(false); }
   };
   const handleTargetPoolSizeChange = (value: string) => { setTargetPoolSize(clampTargetPoolSize(value)); };
-  const handleFilterChange = (value: string) => { setFilter(sanitizeTextInput(value, MAX_FILTER_LENGTH)); };
+  const handleFilterChange = (value: string) => { setFilterInput(sanitizeTextInput(value, MAX_FILTER_LENGTH)); };
 
   const handleToggleSelect = useCallback((id: string) => {
     setSelectedIds((prev) => {
@@ -560,6 +564,7 @@ export default function CandidateTable({
         sortedCount={sortedCandidates.length}
         candidateMeta={candidateMeta}
         filter={filter}
+        filterInput={filterInput}
         remoteTruncated={remoteTruncated}
         showProductionControls={showProductionControls}
         candidateWorkflowBusy={candidateWorkflowBusy}
@@ -641,7 +646,7 @@ export default function CandidateTable({
               description={filter ? "尝试调整筛选条件，或清除筛选查看全部候选。" : (showProductionControls ? "候选 Alpha 通过顶部「自动推进候选池」启动生产搜索、预筛与本地排序；官方验证队列和质量检查单独推进。全流程保持非提交边界，提交仍需人工确认。" : "请先运行非提交验证产生候选，或从候选管理页面选择一个候选进入评分。")}
             >
               {filter ? (
-                <button type="button" className="btn btn-secondary btn-sm" onClick={() => setFilter("")}>
+                <button type="button" className="btn btn-secondary btn-sm" onClick={() => setFilterInput("")}>
                   清除筛选
                 </button>
               ) : showProductionControls ? (
@@ -708,7 +713,7 @@ export default function CandidateTable({
                       description={filter ? "尝试调整筛选条件，或清除筛选查看全部候选。" : (showProductionControls ? "候选 Alpha 通过顶部「自动推进候选池」启动生产搜索、预筛与本地排序；官方验证队列和质量检查单独推进。全流程保持非提交边界，提交仍需人工确认。" : "请先运行非提交验证产生候选，或从候选管理页面选择一个候选进入评分。")}
                     >
                       {filter ? (
-                        <button type="button" className="btn btn-secondary btn-sm" onClick={() => setFilter("")}>
+                        <button type="button" className="btn btn-secondary btn-sm" onClick={() => setFilterInput("")}>
                           清除筛选
                         </button>
                       ) : showProductionControls ? (

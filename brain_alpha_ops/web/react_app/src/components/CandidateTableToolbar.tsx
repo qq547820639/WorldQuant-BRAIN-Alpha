@@ -56,6 +56,8 @@ export interface CandidateTableToolbarProps {
   sortedCount: number;
   candidateMeta: CandidateListMeta;
   filter: string;
+  /** The raw input value from the user (before debounce) */
+  filterInput?: string;
   remoteTruncated: boolean;
 
   // Controls
@@ -172,6 +174,7 @@ export function CandidateTableToolbar({
   sortedCount,
   candidateMeta,
   filter,
+  filterInput,
   remoteTruncated,
   showProductionControls,
   candidateWorkflowBusy,
@@ -385,7 +388,7 @@ export function CandidateTableToolbar({
           type="text"
           aria-label="过滤候选"
           placeholder="按表达式、家族、ID、质量原因搜索..."
-          value={filter}
+          value={filterInput ?? filter}
           maxLength={200}
           onChange={(event) => onFilterChange(event.target.value)}
           className="form-input flex-1"

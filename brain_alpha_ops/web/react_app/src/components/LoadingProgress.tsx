@@ -1,5 +1,5 @@
 /** Loading progress bar component */
-import type { ReactNode } from "react";
+import { memo, type ReactNode } from "react";
 
 interface LoadingProgressProps {
   /** Current progress value (for determinate progress) */
@@ -14,7 +14,7 @@ interface LoadingProgressProps {
   className?: string;
 }
 
-export default function LoadingProgress({
+export default memo(function LoadingProgress({
   value = 0,
   max = 100,
   label,
@@ -55,7 +55,7 @@ export default function LoadingProgress({
       </div>
     </div>
   );
-}
+});
 
 interface ProgressFeedbackProps {
   /** Whether content is loading */
@@ -65,7 +65,7 @@ interface ProgressFeedbackProps {
 }
 
 /** Simple wrapper that shows children when not loading */
-export function ProgressFeedback({ loading, children }: ProgressFeedbackProps) {
+export const ProgressFeedback = memo(function ProgressFeedback({ loading, children }: ProgressFeedbackProps) {
   if (!loading) return <>{children}</>;
   return (
     <div className="animate-pulse">
@@ -73,4 +73,4 @@ export function ProgressFeedback({ loading, children }: ProgressFeedbackProps) {
       <div className="h-4 bg-surface-2 rounded w-1/2" />
     </div>
   );
-}
+});

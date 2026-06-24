@@ -3,7 +3,7 @@
  * Extracted from CandidateTable.tsx.
  */
 
-import { useCallback, useState } from "react";
+import { memo, useCallback, useState } from "react";
 import type { Candidate, CandidateCheckResult } from "@/types";
 import ScoreBreakdown from "./ScoreBreakdown";
 import { isStarred, toggleStar } from "@/utils/starredCandidates";
@@ -38,7 +38,7 @@ export interface CandidateRowProps {
   style?: React.CSSProperties;
 }
 
-export function CandidateRow({
+export const CandidateRow = memo(function CandidateRow({
   candidate,
   checkResults,
   hasActions,
@@ -161,4 +161,4 @@ export function CandidateRow({
       )}
     </tr>
   );
-}
+});

@@ -1,5 +1,7 @@
 /** Start/stop/retry buttons and SSE banners. */
 
+import { memo } from "react";
+
 interface Props {
   running: boolean;
   sseRetryExhausted?: boolean;
@@ -58,7 +60,7 @@ function StopIcon() {
   );
 }
 
-export default function JobActions({
+export default memo(function JobActions({
   running,
   sseRetryExhausted = false,
   sseRetryCountdown = 0,
@@ -184,4 +186,4 @@ export default function JobActions({
       </div>
     </>
   );
-}
+});
