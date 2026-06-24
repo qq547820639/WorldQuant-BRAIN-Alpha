@@ -29,8 +29,20 @@ _HTML_LOCK = threading.RLock()
 def selected_frontend(value: str | None = None) -> str:
     frontend = str(value if value is not None else os.getenv(WEB_FRONTEND_ENV, INLINE_FRONTEND)).strip().lower()
     if frontend not in {INLINE_FRONTEND, REACT_FRONTEND}:
-        return INLINE_FRONTEND
+        raise ValueError(f"{WEB_FRONTEND_ENV} must be '{INLINE_FRONTEND}' or '{REACT_FRONTEND}'")
     return frontend
+
+
+def safe_selected_frontend(value: str | None = None) -> str:
+    """Safe version of selected_frontend that falls back to inline on invalid values.
+
+    Used in error handling paths and other contexts where we must not raise
+    (to avoid infinite error loops), but still want a sensible default.
+    """
+    try:
+        return selected_frontend(value)
+    except (ValueError, TypeError):
+        return INLINE_FRONTEND
 
 
 def inline_html_path() -> Path:

@@ -30,6 +30,7 @@ import {
 } from "./ConfigPanel/utils";
 import { ConfigSection, TextField, PasswordField, NumberField, SelectField, CheckboxField, ConfigValue } from "./ConfigPanel/ConfigFormFields";
 import ScoringWeightModal from "./ConfigPanel/ScoringWeightModal";
+import LocalCacheConnectionSection from "./ConfigPanel/LocalCacheConnectionSection";
 
 interface Props {
   notify: (type: "success" | "error" | "warning" | "info", msg: string) => void;
@@ -380,7 +381,7 @@ export default function ConfigPanel({
       {validationError !== null && <p role="alert" className="text-xs text-negative">{validationError}</p>}
       {saveApi.error && <p role="alert" className="text-xs text-negative">{safeDisplayErrorMessage(saveApi.error)}</p>}
 
-      {cacheOnlyMode && (
+      {cacheOnlyMode ? (
         <LocalCacheConnectionSection
           temporaryConnectionOpen={temporaryConnectionOpen}
           logoutLoading={logoutApi.loading}
@@ -388,15 +389,48 @@ export default function ConfigPanel({
           onOpenTemporaryConnection={() => setTemporaryConnectionOpen(true)}
           onCloseTemporaryConnection={() => setTemporaryConnectionOpen(false)}
           onLogout={logoutLocalSession}
-        />
-      )}
-
-      {showCredentialEditor && (
+        >
+          <div className="grid grid-cols-1 gap-x-5 gap-y-4 md:grid-cols-2">
+            <TextField
+              label="账户邮箱"
+              value={credentials.username}
+              autoComplete="off"
+              inputMode="email"
+              maxLength={160}
+              onChange={(value) => updateCredential("username", value.trim())}
+            />
+            <PasswordField
+              label="密码"
+              value={credentials.password}
+              autoComplete="new-password"
+              onChange={(value) => updateCredential("password", value)}
+            />
+            <PasswordField
+              label="Token"
+              value={credentials.token}
+              autoComplete="off"
+              maxLength={512}
+              onChange={(value) => updateCredential("token", value.trim())}
+            />
+            <div className="flex flex-col gap-2 sm:items-start md:col-span-2">
+              <button
+                type="button"
+                onClick={testConnection}
+                className="btn btn-secondary btn-sm"
+                disabled={connectionApi.loading || validationError !== null}
+              >
+                {connectionApi.loading ? "测试中..." : "测试 BRAIN 连接"}
+              </button>
+              <p className={`text-xs ${connectionApi.error ? "text-negative" : connectionApi.data?.ok ? "text-positive" : "text-text-tertiary"}`} role="status" aria-live="polite">
+                {connectionStatusText}
+              </p>
+            </div>
+          </div>
+        </LocalCacheConnectionSection>
+      ) : showCredentialEditor ? (
         <ConfigSection
-          title={cacheOnlyMode ? "临时连接官方服务" : "BRAIN 连接"}
-          description={cacheOnlyMode
-            ? "这些字段仅用于本次同步、官方回测或提交前复核；折叠后不会保存到配置文件。"
-            : "这些字段只保留在当前页面，用于本次连接测试和验证。"}
+          title="BRAIN 连接"
+          description="这些字段只保留在当前页面，用于本次连接测试和验证。"
         >
           <TextField
             label="账户邮箱"
@@ -433,7 +467,7 @@ export default function ConfigPanel({
             </p>
           </div>
         </ConfigSection>
-      )}
+      ) : null}
 
       <ConfigSection title="BRAIN 设置" description="字段和选项来自后端公开的官方能力集校验，不在前端自定义扩展。">
         <details open className="col-span-full group/config-details mb-2">
