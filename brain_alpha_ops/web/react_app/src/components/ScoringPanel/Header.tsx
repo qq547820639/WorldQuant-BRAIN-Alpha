@@ -2,6 +2,7 @@ import type { AttributionNode, Candidate, ScoringResult } from "@/types";
 import { safeScoringText, fmtNum, isLocalPrefilterStatus } from "./utils";
 import AttributionTree from "./AttributionTree";
 import Skeleton from "../Skeleton";
+import Tooltip from "../Tooltip";
 
 interface Props {
   candidate: Candidate;
@@ -192,6 +193,16 @@ function InfoPill({ label, value }: { label: string; value: unknown }) {
   );
 }
 
+const METRIC_TOOLTIPS: Record<string, string> = {
+  "夏普比率": "风险调整后收益指标，衡量每单位风险所获得的超额收益。阈值 ≥ 1.25",
+  "适应度": "综合评估策略质量的多维度指标，考虑收益、风险、稳定性等因素。阈值 ≥ 1.0",
+  "换手率": "策略在一定时间内买卖资产的频率。过高的换手率会增加交易成本",
+  "收益率": "策略在回测期间的总回报率",
+  "回撤": "策略从峰值到谷底的最大跌幅，衡量下行风险。阈值 ≤ 25%",
+  "自相关性": "策略收益的自相关程度，过高可能表示过拟合。阈值 ≤ 0.70",
+  "集中度": "持仓权重的集中程度，衡量分散化水平。阈值 ≤ 10%",
+};
+
 function MetricRow({ label, value, threshold, max, format }: {
   label: string; value?: number | string; threshold?: number; max?: number; format?: "percent";
 }) {
@@ -204,10 +215,13 @@ function MetricRow({ label, value, threshold, max, format }: {
   const ok = isNumeric
     ? threshold != null ? numericValue >= threshold : max != null ? numericValue <= max : true
     : true;
+  const tooltipContent = METRIC_TOOLTIPS[label] || label;
   return (
-    <div className="bg-surface-2" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 8px", borderRadius: 4 }}>
-      <span className="text-text-tertiary">{label}</span>
-      <span className={`font-mono-value text-sm ${ok ? "text-positive" : "text-negative"}`}>{formatted}</span>
-    </div>
+    <Tooltip content={tooltipContent} placement="top">
+      <div className="bg-surface-2" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 8px", borderRadius: 4, cursor: "help" }}>
+        <span className="text-text-tertiary">{label}</span>
+        <span className={`font-mono-value text-sm ${ok ? "text-positive" : "text-negative"}`}>{formatted}</span>
+      </div>
+    </Tooltip>
   );
 }

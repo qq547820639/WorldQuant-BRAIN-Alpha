@@ -240,14 +240,16 @@ export default function ScoringPanel({ notify, candidate }: Props) {
             style={{ width: "100%", textAlign: "left", cursor: "pointer", border: "none", background: "none", font: "inherit" }}
             onClick={() => setScoreHistoryExpanded(!scoreHistoryExpanded)}
             aria-expanded={scoreHistoryExpanded}
+            aria-controls="score-history-content"
+            aria-label={`评分历史，共 ${scoreHistory.length} 条记录，点击${scoreHistoryExpanded ? "收起" : "展开"}`}
           >
             <span>评分历史 ({scoreHistory.length})</span>
-            <span className="text-text-tertiary" style={{ fontSize: 12 }}>
+            <span className="text-text-tertiary" style={{ fontSize: 12 }} aria-hidden="true">
               {scoreHistoryExpanded ? "▾ 收起" : "▸ 展开"}
             </span>
           </button>
           {scoreHistoryExpanded && (
-            <div className="panel-body-padded">
+            <div id="score-history-content" className="panel-body-padded" role="region" aria-label="评分历史详情">
               <div className="scorebreakdown-panel" style={{ background: "none", border: "none", padding: 0 }}>
                 <div className="scorebreakdown-history" style={{ padding: 0 }}>
                   <div className="scorebreakdown-sparkline-container" style={{ marginTop: 0 }}>

@@ -242,6 +242,7 @@ export default function Dashboard({ notify, connected, contextFresh, phaseStatus
               localStorage.removeItem("brain_alpha_guide_dismissed");
               setShowGuide(true);
             }}
+            aria-label="重新显示首次使用引导"
           >
             ? 重新显示首次引导
           </button>

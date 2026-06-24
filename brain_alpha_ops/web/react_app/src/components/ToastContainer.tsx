@@ -27,7 +27,7 @@ export default function ToastContainer({ toasts, onDismiss }: Props) {
   const visible = toasts.slice(-MAX_VISIBLE);
 
   return (
-    <div className="toast-container">
+    <div className="toast-container" role="region" aria-label="通知消息" aria-live="polite">
       {visible.map((toast) => {
         const urgent = toast.type === "error";
         return (

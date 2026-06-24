@@ -1,13 +1,10 @@
-/** P1-10 fix: Generic React Error Boundary for component-level crash
- * isolation.  Catches rendering errors and displays a fallback UI instead
- * of a white screen.  Designed for data-heavy panels like CandidateTable. */
-
 import { Component, type ReactNode } from "react";
 
 interface Props {
   children: ReactNode;
   fallback?: ReactNode;
   onError?: (error: Error) => void;
+  onReset?: () => void;
 }
 
 interface State {
@@ -26,35 +23,118 @@ export default class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: { componentStack: string }) {
-    console.error("ErrorBoundary caught:", error.message, info.componentStack);
+    console.error("ErrorBoundary caught an error:", error);
+    console.error("Component stack:", info.componentStack);
     this.props.onError?.(error);
   }
 
+  handleReset = () => {
+    this.setState({ hasError: false, error: null });
+    this.props.onReset?.();
+  };
+
+  handleGoHome = () => {
+    this.setState({ hasError: false, error: null });
+    this.props.onReset?.();
+    window.location.hash = "";
+  };
+
   render() {
     if (this.state.hasError) {
-      return this.props.fallback || (
-        <div style={{
-          padding: "2rem 1.5rem",
-          border: "1px solid var(--color-error-border)",
-          borderRadius: 8,
-          background: "var(--color-error-bg-faint)",
-          textAlign: "center",
-        }}>
-          <p style={{ color: "var(--color-error-text)", fontWeight: 500, fontSize: 14, marginBottom: 8 }}>
-            面板加载异常
-          </p>
-          <p style={{ color: "var(--color-text-medium)", fontSize: 12, lineHeight: 1.5, maxWidth: 320, margin: "0 auto 12px" }}>
-            候选管理面板在渲染过程中遇到未预期的错误。请尝试刷新页面或返回上一步操作。
-          </p>
-          <details style={{ fontSize: 11, color: "var(--color-text-extra-dim)", textAlign: "left", maxWidth: 400, margin: "0 auto" }}>
-            <summary>错误详情</summary>
-            <pre style={{ marginTop: 4, whiteSpace: "pre-wrap", wordBreak: "break-all" }}>
-              {this.state.error?.message}
-            </pre>
-          </details>
+      if (this.props.fallback) {
+        return this.props.fallback;
+      }
+
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-surface-root p-4" role="alert">
+          <div className="max-w-md w-full text-center">
+            <div className="mb-6 flex justify-center">
+              <div
+                className="w-16 h-16 rounded-full flex items-center justify-center"
+                style={{
+                  backgroundColor: "var(--color-error-bg-faint)",
+                  border: "1px solid var(--color-error-border-subtle)",
+                }}
+                aria-hidden="true"
+              >
+                <svg
+                  width="32"
+                  height="32"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  style={{ color: "var(--color-error-text)" }}
+                  aria-hidden="true"
+                >
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="12" y1="8" x2="12" y2="12" />
+                  <line x1="12" y1="16" x2="12.01" y2="16" />
+                </svg>
+              </div>
+            </div>
+
+            <h1
+              className="text-xl font-semibold mb-3"
+              style={{ color: "var(--color-text-bright)" }}
+            >
+              出现了一些问题
+            </h1>
+
+            <p
+              className="text-sm mb-8 leading-relaxed"
+              style={{ color: "var(--color-text-muted)" }}
+            >
+              页面渲染时发生了意外错误，请尝试刷新或返回首页
+            </p>
+
+            {this.state.error && (
+              <details
+                className="text-left mb-6 text-xs rounded-md p-3"
+                style={{
+                  backgroundColor: "var(--color-surface-deep)",
+                  border: "1px solid var(--color-border-default)",
+                  color: "var(--color-text-dim)",
+                }}
+              >
+                <summary
+                  className="cursor-pointer font-medium"
+                  style={{ color: "var(--color-text-muted)" }}
+                >
+                  错误详情
+                </summary>
+                <pre
+                  className="mt-2 whitespace-pre-wrap break-all font-mono text-xs"
+                  style={{ color: "var(--color-text-dim)" }}
+                >
+                  {this.state.error.message}
+                </pre>
+              </details>
+            )}
+
+            <div className="flex items-center justify-center gap-3">
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={this.handleReset}
+              >
+                重试
+              </button>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={this.handleGoHome}
+              >
+                返回首页
+              </button>
+            </div>
+          </div>
         </div>
       );
     }
+
     return this.props.children;
   }
 }

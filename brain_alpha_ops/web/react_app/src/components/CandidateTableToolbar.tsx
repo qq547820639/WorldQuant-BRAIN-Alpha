@@ -34,6 +34,7 @@ import {
 } from "./CandidateTableSubComponents";
 import { CandidateDetailPanel } from "./CandidateDetailPanel";
 import ErrorCard from "./ErrorCard";
+import Tooltip from "./Tooltip";
 
 export interface QualitySummaryData {
   ready?: number;
@@ -393,30 +394,37 @@ export function CandidateTableToolbar({
           {apiLoading ? "刷新中..." : "刷新"}
         </button>
         {onToggleStarFilter && (
-          <button
-            type="button"
-            onClick={onToggleStarFilter}
-            className={`btn btn-sm ${showStarredOnly ? "btn-primary" : "btn-secondary"}`}
-            title={showStarredOnly ? "显示全部候选" : "仅显示收藏"}
-          >
-            ⭐ {showStarredOnly ? "收藏中" : "仅收藏"}
-          </button>
+          <Tooltip content={showStarredOnly ? "点击显示全部候选" : "点击仅显示收藏的候选"} placement="bottom">
+            <button
+              type="button"
+              onClick={onToggleStarFilter}
+              className={`btn btn-sm ${showStarredOnly ? "btn-primary" : "btn-secondary"}`}
+              aria-pressed={showStarredOnly}
+              aria-label={showStarredOnly ? "显示全部候选" : "仅显示收藏的候选"}
+            >
+              ⭐ {showStarredOnly ? "收藏中" : "仅收藏"}
+            </button>
+          </Tooltip>
         )}
         {/* Export dropdown */}
         <div ref={exportRef} style={{ position: "relative" }}>
-          <button
-            type="button"
-            className="btn btn-secondary btn-sm"
-            disabled={sortedCandidates.length === 0}
-            onClick={() => setExportOpen((v) => !v)}
-            aria-haspopup="true"
-            aria-expanded={exportOpen}
-          >
-            导出 ▾
-          </button>
+          <Tooltip content="导出当前候选列表为 CSV 或 JSON 格式" placement="bottom">
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              disabled={sortedCandidates.length === 0}
+              onClick={() => setExportOpen((v) => !v)}
+              aria-haspopup="true"
+              aria-expanded={exportOpen}
+            >
+              导出 ▾
+            </button>
+          </Tooltip>
           {exportOpen && (
             <div
               className="dropdown-menu"
+              role="menu"
+              aria-label="导出选项"
               style={{
                 position: "absolute",
                 right: 0,
@@ -433,17 +441,21 @@ export function CandidateTableToolbar({
             >
               <button
                 type="button"
+                role="menuitem"
                 className="btn btn-ghost btn-sm"
                 style={{ display: "block", width: "100%", textAlign: "left", padding: "6px 12px" }}
                 onClick={handleExportCSV}
+                aria-label="导出为 CSV 格式"
               >
                 CSV
               </button>
               <button
                 type="button"
+                role="menuitem"
                 className="btn btn-ghost btn-sm"
                 style={{ display: "block", width: "100%", textAlign: "left", padding: "6px 12px" }}
                 onClick={handleExportJSON}
+                aria-label="导出为 JSON 格式"
               >
                 JSON
               </button>

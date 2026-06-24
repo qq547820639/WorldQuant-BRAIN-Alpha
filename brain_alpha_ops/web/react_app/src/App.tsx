@@ -19,25 +19,20 @@ import { useToast } from "@/hooks/useToast";
 import { useJobState } from "@/hooks/useJobState";
 import { usePhaseState, type PhaseApiStatus } from "@/hooks/usePhaseState";
 import ToastContainer from "@/components/ToastContainer";
+import { ToastProvider } from "@/components/Toast";
 import Sidebar from "@/components/Sidebar";
-// Dashboard imported via renderView
-// import Dashboard from "@/components/Dashboard";
-// CredentialQuickStart imported via renderView
-// import CredentialQuickStart from "./components/CredentialQuickStart";  // S-01: deduplicated from inline
-// JobMonitor imported via renderView
-// import JobMonitor from "@/components/JobMonitor";
-// CandidateTable imported via renderView
-// import CandidateTable from "@/components/CandidateTable";
-// ErrorBoundary imported via renderView
-// import ErrorBoundary from "@/components/ErrorBoundary";
+import ErrorBoundary from "@/components/ErrorBoundary";
 import { FlowGuide } from "./components/FlowGuide";
 import PhaseShell from "@/components/PhaseShell";
 import MobileTabBar from "@/components/MobileTabBar";
-import { useKeyboardShortcuts, KeyboardShortcutsHelp } from "@/hooks/useKeyboardShortcuts";
+import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
+import KeyboardShortcutsHelp from "@/components/KeyboardShortcutsHelp";
 import { reportIgnoredError } from "@/utils/reportIgnoredError";
 import { renderActiveView, PageLoader, type RenderViewProps } from "@/components/views/renderView";
 import { topbarConnectionStatus, fmtEta, formatBacktestBadge, formatCloudBadge, cloudBadgeTotal } from "@/components/views/helpers";
 import { useGlobalData } from "@/hooks/useGlobalData";
+import { ThemeProvider, useThemeContext } from "@/components/ThemeProvider";
+import Tooltip from "@/components/Tooltip";
 
 
 // ── Config ──────────────────────────────────────────────────────────────────
@@ -76,6 +71,14 @@ interface SidebarBadges {
 // ── App Shell ───────────────────────────────────────────────────────────────
 
 export default function App() {
+  return (
+    <ThemeProvider>
+      <AppContent />
+    </ThemeProvider>
+  );
+}
+
+function AppContent() {
   const [activeView, setActiveView] = useState<CardViewId>("dashboard");
   const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null);
   // B-09 (R3 — FIXED): password cleared from JS heap immediately after successful auth
@@ -83,13 +86,7 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [expandedPhases, setExpandedPhases] = useState<Set<string>>(new Set(["connect"]));
   const [shortcutsHelpOpen, setShortcutsHelpOpen] = useState(false);
-  const [theme, setTheme] = useState<"dark" | "light">(() => {
-    try {
-      return (localStorage.getItem("brain_alpha_theme") as "dark" | "light") || "dark";
-    } catch {
-      return "dark";
-    }
-  });
+  const { theme, toggleTheme } = useThemeContext();
   const { toasts, addToast, dismissToast } = useToast();
 
   const notify = useCallback(
@@ -99,10 +96,6 @@ export default function App() {
   );
 
   const jobState = useJobState(notify, credentials);
-  // SA-1: Multiple components independently call the same API endpoints.
-  // Consider a global data-fetching layer (React Context + SWR or Zustand)
-  // for cache deduplication and stale-while-revalidate patterns.
-
 
   // P0-7 fix: replaced 4 independent useApi hooks with single GlobalDataProvider
   const globalData = useGlobalData();
@@ -151,24 +144,16 @@ export default function App() {
     }
   }, [globalData, notify]);
 
-  // Theme: sync document.documentElement class and localStorage
-  useEffect(() => {
-    document.documentElement.classList.toggle("dark", theme === "dark");
-    try { localStorage.setItem("brain_alpha_theme", theme); } catch { console.warn("App: scheduled refresh skipped — backend unavailable"); }
-  }, [theme]);
-
-  const toggleTheme = useCallback(() => {
-    setTheme((prev) => (prev === "dark" ? "light" : "dark"));
-  }, []);
-
   // Keyboard shortcuts
   useKeyboardShortcuts({
-    onNavigateDashboard: () => setActiveView("dashboard"),
-    onNavigateCandidates: () => setActiveView("candidates"),
-    onNavigateConfig: () => setActiveView("config"),
-    onToggleSidebar: () => setSidebarOpen((v) => !v),
-    onRefresh: () => { void phaseApi.call("/api/phase_state"); },
-    onEscape: () => setSidebarOpen(false),
+    onNavigateToDashboard: () => setActiveView("dashboard"),
+    onNavigateToConfig: () => setActiveView("config"),
+    onRefresh: () => { void phaseApi.call("/api/phase_state"); globalData.refreshAll(); },
+    onShowHelp: () => setShortcutsHelpOpen(true),
+    onEscape: () => {
+      setSidebarOpen(false);
+      setShortcutsHelpOpen(false);
+    },
   });
 
   const [connectionOverride, setConnectionOverride] = useState<boolean | null>(null);
@@ -356,158 +341,170 @@ export default function App() {
     : "pending";
 
   return (
-    <div className="app-shell">
+    <ErrorBoundary>
+      <ToastProvider>
+        <div className="app-shell">
 
-      {/* ═══ Top Bar (v3.0 redesign) ═══ */}
-      <header className="app-topbar">
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <button
-            type="button"
-            className="btn btn-ghost btn-sm lg:hidden"
-            onClick={() => setSidebarOpen((prev) => !prev)}
-            aria-label="切换导航菜单"
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-              <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
-            </svg>
-          </button>
-          {/* Connection state */}
-          <span className={`topbar-connection ${topbarStatus.tone}`} title={topbarStatus.title}>
-            <span className={`status-dot ${topbarStatus.dotClass}`} />
-            {topbarStatus.label}
-          </span>
-          <span style={{ color: "var(--color-text-dim)", fontSize: 12 }}>·</span>
-          {/* Phase indicator */}
-          <span className="topbar-phase">
-            Phase {steps.findIndex((s) => s.status === "active") + 1 || "?"} · <strong>{currentPhaseObj?.label || viewLabel}</strong>
-          </span>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          {jobState.running && (
-            <span className="badge badge-warning" style={{ fontFamily: "var(--font-mono)", fontSize: 10, cursor: "pointer" }}
-              title={`${safeDisplayErrorMessage(jobState.progress?.status_message, "任务状态待确认")} · ${jobState.progress?.percent_complete != null ? Math.round(jobState.progress.percent_complete) + "%" : ""}`}
-              onClick={() => setActiveView("dashboard")}
-            >
-              {jobState.progress?.percent_complete != null ? `${Math.round(jobState.progress.percent_complete)}%` : "..."} {(jobState.progress?.eta_seconds || 0) > 0 ? fmtEta(jobState.progress!.eta_seconds!) : ""}
-            </span>
-          )}
-          {/* Theme toggle */}
-          <button
-            type="button"
-            className="btn btn-ghost btn-sm"
-            onClick={toggleTheme}
-            aria-label={theme === "dark" ? "切换到浅色模式" : "切换到深色模式"}
-            title={theme === "dark" ? "浅色模式" : "深色模式"}
-          >
-            {theme === "dark" ? (
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="5"/>
-                <line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/>
-                <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
-                <line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/>
-                <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
-              </svg>
-            ) : (
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
-              </svg>
-            )}
-          </button>
-          {/* Keyboard shortcuts help */}
-          <button
-            type="button"
-            className="btn btn-ghost btn-sm"
-            onClick={() => setShortcutsHelpOpen(true)}
-            aria-label="键盘快捷键帮助"
-            title="键盘快捷键"
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
-              <line x1="12" y1="17" x2="12.01" y2="17"/>
-            </svg>
-          </button>
-          <span className="badge badge-positive" style={{ fontFamily: "var(--font-mono)", fontSize: 10 }}>
-            PRODUCTION
-          </span>
-        </div>
-      </header>
-
-      {/* ═══ Sidebar (v3.0 phase groups) ═══ */}
-      <Sidebar
-        className={sidebarOpen ? "is-open" : ""}
-        activeView={activeView}
-        badges={sidebarBadges}
-        onNavigate={handleNavigate}
-        onClose={() => setSidebarOpen(false)}
-        onTogglePhase={handleTogglePhase}
-        phases={sidebarPhases}
-      />
-      {sidebarOpen && (
-        <div
-          style={{ position: "fixed", inset: 0, zIndex: 150, backgroundColor: "rgba(0,0,0,0.4)" }}
-          onClick={() => setSidebarOpen(false)}
-          className="lg:hidden"
-          aria-hidden="true"
-        />
-      )}
-
-      {/* ═══ Main Content ═══ */}
-      <main className="app-main" id="main-content" tabIndex={-1}>
-        <a href="#app-main-start" className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-[999] focus:px-4 focus:py-2 focus:bg-accent focus:text-text-inverse focus:rounded-md focus:font-medium focus:text-sm">
-          跳到主内容
-        </a>
-        <div id="app-main-start" />
-
-        {/* PhaseShell wrapper (v3.0) */}
-        {currentPhaseObj && (
-          <PhaseShell
-            phaseId={currentPhase}
-            phaseLabel={currentPhaseObj.label}
-            statusLabel={phaseShellStatusLabel}
-            statusTone={phaseShellStatusTone}
-            unlockCondition={currentPhaseObj.unlockCondition}
-            steps={steps}
-          >
-            <FlowGuide currentPhase={currentPhase} />
-            <div className="animate-fade-in">
-              <Suspense fallback={<PageLoader />}>
-                {detailContent}
-              </Suspense>
+          {/* ═══ Top Bar (v3.0 redesign) ═══ */}
+          <header className="app-topbar">
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm lg:hidden"
+                onClick={() => setSidebarOpen((prev) => !prev)}
+                aria-label="切换导航菜单"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                  <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
+                </svg>
+              </button>
+              {/* Connection state */}
+              <span className={`topbar-connection ${topbarStatus.tone}`} title={topbarStatus.title}>
+                <span className={`status-dot ${topbarStatus.dotClass}`} />
+                {topbarStatus.label}
+              </span>
+              <span style={{ color: "var(--color-text-dim)", fontSize: 12 }}>·</span>
+              {/* Phase indicator */}
+              <span className="topbar-phase">
+                Phase {steps.findIndex((s) => s.status === "active") + 1 || "?"} · <strong>{currentPhaseObj?.label || viewLabel}</strong>
+              </span>
             </div>
-          </PhaseShell>
-        )}
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              {jobState.running && (
+                <button
+                  type="button"
+                  className="badge badge-warning"
+                  style={{ fontFamily: "var(--font-mono)", fontSize: 10, cursor: "pointer", border: "none" }}
+                  title={`${safeDisplayErrorMessage(jobState.progress?.status_message, "任务状态待确认")} · ${jobState.progress?.percent_complete != null ? Math.round(jobState.progress.percent_complete) + "%" : ""}`}
+                  onClick={() => setActiveView("dashboard")}
+                  aria-label={`任务运行中，${jobState.progress?.percent_complete != null ? Math.round(jobState.progress.percent_complete) + "%" : ""}，点击跳转到运行总览`}
+                >
+                  {jobState.progress?.percent_complete != null ? `${Math.round(jobState.progress.percent_complete)}%` : "..."} {(jobState.progress?.eta_seconds || 0) > 0 ? fmtEta(jobState.progress!.eta_seconds!) : ""}
+                </button>
+              )}
+              {/* Theme toggle */}
+              <Tooltip content={theme === "dark" ? "切换到浅色模式" : "切换到深色模式"} placement="bottom">
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-sm"
+                  onClick={toggleTheme}
+                  aria-label={theme === "dark" ? "切换到浅色模式" : "切换到深色模式"}
+                >
+                  {theme === "dark" ? (
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="12" cy="12" r="5"/>
+                      <line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/>
+                      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+                      <line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/>
+                      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+                    </svg>
+                  ) : (
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+                    </svg>
+                  )}
+                </button>
+              </Tooltip>
+              {/* Keyboard shortcuts help */}
+              <Tooltip content="键盘快捷键帮助 (按 ? 打开)" placement="bottom">
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-sm"
+                  onClick={() => setShortcutsHelpOpen(true)}
+                  aria-label="键盘快捷键帮助"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+                    <line x1="12" y1="17" x2="12.01" y2="17"/>
+                  </svg>
+                </button>
+              </Tooltip>
+              <span className="badge badge-positive" style={{ fontFamily: "var(--font-mono)", fontSize: 10 }}>
+                PRODUCTION
+              </span>
+            </div>
+          </header>
 
-        {/* No phase: just show content */}
-        {!currentPhaseObj && (
-          <div className="animate-fade-in">
-            <Suspense fallback={<PageLoader />}>
-              {detailContent}
-            </Suspense>
-          </div>
-        )}
-      </main>
+          {/* ═══ Sidebar (v3.0 phase groups) ═══ */}
+          <Sidebar
+            className={sidebarOpen ? "is-open" : ""}
+            activeView={activeView}
+            badges={sidebarBadges}
+            onNavigate={handleNavigate}
+            onClose={() => setSidebarOpen(false)}
+            onTogglePhase={handleTogglePhase}
+            phases={sidebarPhases}
+          />
+          {sidebarOpen && (
+            <div
+              role="presentation"
+              style={{ position: "fixed", inset: 0, zIndex: 150, backgroundColor: "rgba(0,0,0,0.4)" }}
+              onClick={() => setSidebarOpen(false)}
+              className="lg:hidden"
+              aria-hidden="true"
+            />
+          )}
 
-      {/* ═══ Status Bar ═══ */}
-      <footer className="app-statusbar">
-        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-          <span className="status-dot status-dot-active" />
-          <span>BRAIN API</span>
-          <span>runtime: production</span>
+          {/* ═══ Main Content ═══ */}
+          <main className="app-main" id="main-content" tabIndex={-1}>
+            <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-[999] focus:px-4 focus:py-2 focus:bg-accent focus:text-text-inverse focus:rounded-md focus:font-medium focus:text-sm">
+              跳到主内容
+            </a>
+
+            {/* PhaseShell wrapper (v3.0) */}
+            {currentPhaseObj && (
+              <PhaseShell
+                phaseId={currentPhase}
+                phaseLabel={currentPhaseObj.label}
+                statusLabel={phaseShellStatusLabel}
+                statusTone={phaseShellStatusTone}
+                unlockCondition={currentPhaseObj.unlockCondition}
+                steps={steps}
+              >
+                <FlowGuide currentPhase={currentPhase} />
+                <div className="animate-fade-in">
+                  <Suspense fallback={<PageLoader />}>
+                    {detailContent}
+                  </Suspense>
+                </div>
+              </PhaseShell>
+            )}
+
+            {/* No phase: just show content */}
+            {!currentPhaseObj && (
+              <div className="animate-fade-in">
+                <Suspense fallback={<PageLoader />}>
+                  {detailContent}
+                </Suspense>
+              </div>
+            )}
+          </main>
+
+          {/* ═══ Status Bar ═══ */}
+          <footer className="app-statusbar">
+            <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+              <span className="status-dot status-dot-active" />
+              <span>BRAIN API</span>
+              <span>runtime: production</span>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+              <span>v3.0 · Phase Navigation</span>
+              <span>本地非提交页面</span>
+            </div>
+          </footer>
+
+          {/* ═══ Mobile Tab Bar (v3.0) ═══ */}
+          <MobileTabBar activePhase={currentPhase} onNavigate={handleMobileNavigate} />
+
+          <ToastContainer toasts={toasts} onDismiss={dismissToast} />
+
+          {/* Keyboard Shortcuts Help Modal */}
+          <KeyboardShortcutsHelp
+            open={shortcutsHelpOpen}
+            onClose={() => setShortcutsHelpOpen(false)}
+          />
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-          <span>v3.0 · Phase Navigation</span>
-          <span>本地非提交页面</span>
-        </div>
-      </footer>
-
-      {/* ═══ Mobile Tab Bar (v3.0) ═══ */}
-      <MobileTabBar activePhase={currentPhase} onNavigate={handleMobileNavigate} />
-
-      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
-
-      {/* Keyboard Shortcuts Help Modal */}
-      {shortcutsHelpOpen && (
-        <KeyboardShortcutsHelp onClose={() => setShortcutsHelpOpen(false)} />
-      )}
-    </div>);
+      </ToastProvider>
+    </ErrorBoundary>
+  );
 }

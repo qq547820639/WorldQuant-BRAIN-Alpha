@@ -8,6 +8,17 @@
 
 /* ── Theme CSS Variables (light default, .dark overrides) ── */
 :root {
+  color-scheme: light;
+}
+.dark {
+  color-scheme: dark;
+}
+
+* {
+  transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease;
+}
+
+:root {
   --bg: #f8fafc;
   --text: #0f172a;
   --surface: #ffffff;
@@ -37,17 +48,17 @@
   --color-guide-steps-column: auto 1fr;
   --color-guide-steps-gap: 8px;
 
-  /* ── Extracted inline oklch tokens ── */
-  --color-text-bright: oklch(0.92 0.003 45);
-  --color-text-body: oklch(0.72 0.005 45);
-  --color-text-muted: oklch(0.52 0.006 45);
-  --color-text-dim: oklch(0.38 0.006 45);
-  --color-text-extra-dim: oklch(0.44 0.006 45);
-  --color-border-default: oklch(0.22 0.007 45);
-  --color-border-medium: oklch(0.28 0.008 45);
-  --color-border-subtle: oklch(0.18 0.007 45);
-  --color-surface-elevated: oklch(0.115 0.007 45);
-  --color-surface-deep: oklch(0.100 0.007 45);
+  /* ── Extracted inline oklch tokens (light mode) ── */
+  --color-text-bright: oklch(0.15 0.006 45);
+  --color-text-body: oklch(0.30 0.006 45);
+  --color-text-muted: oklch(0.50 0.006 45);
+  --color-text-dim: oklch(0.65 0.005 45);
+  --color-text-extra-dim: oklch(0.58 0.006 45);
+  --color-border-default: oklch(0.85 0.005 45);
+  --color-border-medium: oklch(0.80 0.005 45);
+  --color-border-subtle: oklch(0.90 0.004 45);
+  --color-surface-elevated: oklch(0.98 0.002 45);
+  --color-surface-deep: oklch(1.00 0.000 45);
   --color-overlay-strong: oklch(0 0 0 / 0.55);
   --color-status-complete-text: oklch(0.62 0.10 160);
   --color-status-complete-border: oklch(0.52 0.10 155);
@@ -93,21 +104,21 @@
   --color-deferred-bg: oklch(0.58 0.06 65 / 0.10);
   --color-deferred-icon: oklch(0.68 0.12 65);
 
-  /* ── Additional extracted inline oklch tokens ── */
-  --color-text-light: oklch(0.65 0.003 45);
-  --color-text-medium: oklch(0.50 0.006 45);
-  --color-text-score: oklch(0.82 0.004 45);
-  --color-avatar-bg: oklch(0.135 0.008 45);
-  --color-phase-group-hover: oklch(0.155 0.008 45);
-  --color-phase-active-text: oklch(0.75 0.08 268);
+  /* ── Additional extracted inline oklch tokens (light mode) ── */
+  --color-text-light: oklch(0.55 0.005 45);
+  --color-text-medium: oklch(0.40 0.006 45);
+  --color-text-score: oklch(0.25 0.006 45);
+  --color-avatar-bg: oklch(0.92 0.004 45);
+  --color-phase-group-hover: oklch(0.94 0.003 45);
+  --color-phase-active-text: oklch(0.55 0.08 268);
   --color-phase-active-bg: oklch(0.65 0.06 265 / 0.12);
-  --color-skeleton-base: oklch(0.135 0.008 45);
-  --color-skeleton-mid: oklch(0.155 0.008 45);
+  --color-skeleton-base: oklch(0.92 0.006 45);
+  --color-skeleton-mid: oklch(0.88 0.006 45);
   --color-skeleton-light-base: oklch(0.92 0.006 45);
   --color-skeleton-light-mid: oklch(0.88 0.006 45);
   --color-skeleton-light-end: oklch(0.95 0.006 45);
-  --color-scrollbar-thumb: oklch(0.25 0.007 45);
-  --color-scrollbar-thumb-hover: oklch(0.32 0.007 45);
+  --color-scrollbar-thumb: oklch(0.75 0.005 45);
+  --color-scrollbar-thumb-hover: oklch(0.65 0.005 45);
   --color-selection-bg: oklch(0.65 0.12 80 / 0.30);
   --color-btn-danger-border: oklch(0.48 0.12 22 / 0.30);
   --color-btn-danger-hover: oklch(0.48 0.06 22 / 0.24);
@@ -125,9 +136,9 @@
   --color-search-ring-bg: oklch(0.65 0.08 80 / 0.12);
   --color-batch-select-bg: oklch(0.55 0.14 240 / 0.08);
   --color-batch-select-border: oklch(0.55 0.14 240 / 0.25);
-  --color-dropdown-bg: oklch(0.18 0.005 45);
-  --color-dropdown-border: oklch(0.25 0.007 45);
-  --color-layer-header-bg: oklch(0.10 0.005 45 / 0.50);
+  --color-dropdown-bg: oklch(1.00 0.000 45);
+  --color-dropdown-border: oklch(0.85 0.005 45);
+  --color-layer-header-bg: oklch(0.98 0.002 45 / 0.50);
   --color-info-bg-soft: oklch(0.58 0.04 245 / 0.08);
   --color-info-border-soft: oklch(0.58 0.10 245 / 0.20);
   --color-info-text-soft: oklch(0.58 0.08 245);
@@ -137,29 +148,29 @@
   --color-error-text: oklch(0.48 0.10 22);
   --color-warning-banner-bg: oklch(0.48 0.04 22 / 0.08);
   --color-warning-banner-text: oklch(0.55 0.06 22);
-  --color-surface-deep-60: oklch(0.100 0.007 45 / 0.60);
+  --color-surface-deep-60: oklch(1.00 0.000 45 / 0.60);
   --color-layer-color-info: oklch(0.65 0.12 245 / 0.85);
   --color-layer-color-success: oklch(0.65 0.10 155 / 0.85);
   --color-layer-color-warning: oklch(0.65 0.10 80 / 0.85);
   --color-sparkline-bar: oklch(0.55 0.14 85 / 0.7);
   --color-sparkline-bar-hover: oklch(0.62 0.14 85 / 0.9);
   --color-sparkline-dot: oklch(0.55 0.14 85 / 0.6);
-  --color-score-highlight: oklch(0.82 0.04 85);
-  --color-scorebreakdown-panel: oklch(0.112 0.007 45);
-  --color-scorebreakdown-row-hover: oklch(0.145 0.007 45);
-  --color-scorebreakdown-weight: oklch(0.42 0.007 45);
+  --color-score-highlight: oklch(0.55 0.10 85);
+  --color-scorebreakdown-panel: oklch(0.98 0.002 45);
+  --color-scorebreakdown-row-hover: oklch(0.94 0.003 45);
+  --color-scorebreakdown-weight: oklch(0.55 0.005 45);
   --color-gate-passed-border: oklch(0.55 0.12 85 / 0.35);
   --color-gate-passed-fg: oklch(0.55 0.10 85 / 0.08);
   --color-blocked-section-border: oklch(0.48 0.10 32 / 0.30);
   --color-blocked-section-bg: oklch(0.48 0.08 32 / 0.06);
   --color-step-checked-bg: oklch(0.55 0.08 85 / 0.08);
   --color-step-checked-border: oklch(0.55 0.10 85 / 0.30);
-  --color-step-checked-text: oklch(0.62 0.01 45);
+  --color-step-checked-text: oklch(0.40 0.006 45);
   --color-scoring-placeholder-bg: oklch(0.58 0.10 248 / 0.12);
   --color-scoring-placeholder-stroke: oklch(0.62 0.10 250);
   --color-session-invalid-border: oklch(0.62 0.10 35 / 0.35);
-  --color-kbd-bg: oklch(0.22 0.008 45);
-  --color-kbd-border: oklch(0.30 0.008 45);
+  --color-kbd-bg: oklch(0.92 0.004 45);
+  --color-kbd-border: oklch(0.80 0.005 45);
 }
 .dark {
   --bg: #0f172a;
@@ -337,7 +348,12 @@
 
   :focus-visible {
     outline: 2px solid var(--color-status-active-text);
-    outline-offset: 1px;
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+
+  :focus:not(:focus-visible) {
+    outline: none;
   }
 
   ::selection {

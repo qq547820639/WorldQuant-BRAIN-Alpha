@@ -639,7 +639,17 @@ export default function CandidateTable({
             <EmptyState
               title={filter ? "没有匹配的候选" : "暂无候选记录"}
               description={filter ? "尝试调整筛选条件，或清除筛选查看全部候选。" : (showProductionControls ? "候选 Alpha 通过顶部「自动推进候选池」启动生产搜索、预筛与本地排序；官方验证队列和质量检查单独推进。全流程保持非提交边界，提交仍需人工确认。" : "请先运行非提交验证产生候选，或从候选管理页面选择一个候选进入评分。")}
-            />
+            >
+              {filter ? (
+                <button type="button" className="btn btn-secondary btn-sm" onClick={() => setFilter("")}>
+                  清除筛选
+                </button>
+              ) : showProductionControls ? (
+                <button type="button" className="btn btn-primary btn-sm" onClick={() => { void actions.generateCandidates(); }}>
+                  启动自动推进
+                </button>
+              ) : null}
+            </EmptyState>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {paginatedCandidates.map((candidate, index) => (
@@ -696,7 +706,17 @@ export default function CandidateTable({
                     <EmptyState
                       title={filter ? "没有匹配的候选" : "暂无候选记录"}
                       description={filter ? "尝试调整筛选条件，或清除筛选查看全部候选。" : (showProductionControls ? "候选 Alpha 通过顶部「自动推进候选池」启动生产搜索、预筛与本地排序；官方验证队列和质量检查单独推进。全流程保持非提交边界，提交仍需人工确认。" : "请先运行非提交验证产生候选，或从候选管理页面选择一个候选进入评分。")}
-                    />
+                    >
+                      {filter ? (
+                        <button type="button" className="btn btn-secondary btn-sm" onClick={() => setFilter("")}>
+                          清除筛选
+                        </button>
+                      ) : showProductionControls ? (
+                        <button type="button" className="btn btn-primary btn-sm" onClick={() => { void actions.generateCandidates(); }}>
+                          启动自动推进
+                        </button>
+                      ) : null}
+                    </EmptyState>
                   </td>
                 </tr>
               )}

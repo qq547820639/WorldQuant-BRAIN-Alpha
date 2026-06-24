@@ -78,15 +78,31 @@ export default function OfficialBacktestSlots({ notify }: Props) {
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
         {slots.map((slot) => {
           const board = slot.status_board;
+          const tone = slotTone(slot.status);
+          const badge = slotBadge(slot.status);
+          const progressColor = slotProgressColor(slot.status);
           return (
-            <article key={slot.slot} className={`rounded-lg border border-gray-200 bg-white p-4 min-w-0 border-l-4 ${slotTone(slot.status)} shadow-sm`}>
+            <article
+              key={slot.slot}
+              className="rounded-lg p-4 min-w-0 border-l-4 shadow-sm"
+              style={{
+                border: `0.5px solid var(--color-border-default)`,
+                borderLeft: `4px solid ${tone}`,
+                background: "var(--color-surface-deep)",
+              }}
+            >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <h3 className="text-sm font-semibold text-text-primary">官方回测槽 #{slot.slot}</h3>
                   <p className="mt-1 text-xs text-text-tertiary">{slot.message || slotMessage(slot.status)}</p>
                 </div>
                 <span
-                  className={`badge max-w-[9rem] truncate text-xs ${slotBadge(slot.status)}`}
+                  className="badge max-w-[9rem] truncate text-xs"
+                  style={{
+                    background: badge.bg,
+                    color: badge.text,
+                    border: `0.5px solid ${badge.border}`,
+                  }}
                   title={String(slot.status || "EMPTY")}
                 >
                   {slotStatusLabel(slot.status)}
@@ -110,10 +126,10 @@ export default function OfficialBacktestSlots({ notify }: Props) {
                 <SlotMetric label="操作进度" value={`${boundedPercent(slot.progress_percent)}%`} />
               </dl>
 
-              <div className="mt-4 h-2 overflow-hidden rounded-full bg-gray-200" aria-hidden="true">
+              <div className="mt-4 h-2 overflow-hidden rounded-full" style={{ background: "var(--color-border-subtle)" }} aria-hidden="true">
                 <div
-                  className={`h-full rounded-full transition-all duration-300 ${slotProgressColor(slot.status)}`}
-                  style={{ width: `${boundedPercent(slot.progress_percent)}%` }}
+                  className="h-full rounded-full transition-all duration-300"
+                  style={{ width: `${boundedPercent(slot.progress_percent)}%`, backgroundColor: progressColor }}
                 />
               </div>
             </article>
@@ -184,55 +200,65 @@ function normalizeSlots(payload: BacktestSlotsResponse | null): BacktestSlot[] {
     .map((slot) => rows.find((row) => Number(row.slot) === slot) || { slot, status: "EMPTY" });
 }
 
-function slotTone(status: unknown) {
+function slotTone(status: unknown): string {
   const text = String(status || "").toUpperCase();
-  // idle: gray
-  if (text === "EMPTY") return "border-l-gray-400";
-  // failed: red
-  if (text.includes("FAILED") || text.includes("ERROR")) return "border-l-red-500";
-  // done: green
-  if (text.includes("COMPLETE") || text.includes("DONE")) return "border-l-green-500";
-  // submitting: yellow
-  if (text.includes("SUBMITTING")) return "border-l-yellow-500";
-  // polling: blue
-  if (text.includes("POLLING") || text.includes("RUNNING")) return "border-l-blue-500";
-  // cooldown: orange
-  if (text.includes("WAIT") || text.includes("DEFERRED") || text.includes("COOLDOWN") || text.includes("RATE_LIMITED")) return "border-l-orange-500";
-  return "border-l-gray-400";
+  if (text === "EMPTY") return "var(--color-text-dim)";
+  if (text.includes("FAILED") || text.includes("ERROR")) return "var(--color-status-blocked-border)";
+  if (text.includes("COMPLETE") || text.includes("DONE")) return "var(--color-status-complete-border)";
+  if (text.includes("SUBMITTING")) return "var(--color-warning-border)";
+  if (text.includes("POLLING") || text.includes("RUNNING")) return "var(--color-info-border)";
+  if (text.includes("WAIT") || text.includes("DEFERRED") || text.includes("COOLDOWN") || text.includes("RATE_LIMITED")) return "var(--color-stall-border)";
+  return "var(--color-text-dim)";
 }
 
-function slotBadge(status: unknown) {
+function slotBadge(status: unknown): { bg: string; text: string; border: string } {
   const text = String(status || "").toUpperCase();
-  // idle: gray
-  if (text === "EMPTY") return "bg-gray-100 text-gray-700 border border-gray-300";
-  // failed: red
-  if (text.includes("FAILED") || text.includes("ERROR")) return "bg-red-50 text-red-700 border border-red-200";
-  // done: green
-  if (text.includes("COMPLETE") || text.includes("DONE")) return "bg-green-50 text-green-700 border border-green-200";
-  // submitting: yellow
-  if (text.includes("SUBMITTING")) return "bg-yellow-50 text-yellow-700 border border-yellow-200";
-  // polling: blue
-  if (text.includes("POLLING") || text.includes("RUNNING")) return "bg-blue-50 text-blue-700 border border-blue-200";
-  // cooldown: orange
-  if (text.includes("WAIT") || text.includes("DEFERRED") || text.includes("COOLDOWN") || text.includes("RATE_LIMITED")) return "bg-orange-50 text-orange-700 border border-orange-200";
-  return "bg-gray-100 text-gray-700 border border-gray-300";
+  if (text === "EMPTY") return {
+    bg: "var(--color-surface-hover)",
+    text: "var(--color-text-muted)",
+    border: "var(--color-border-default)",
+  };
+  if (text.includes("FAILED") || text.includes("ERROR")) return {
+    bg: "var(--color-status-blocked-bg)",
+    text: "var(--color-status-blocked-text)",
+    border: "var(--color-status-blocked-border)",
+  };
+  if (text.includes("COMPLETE") || text.includes("DONE")) return {
+    bg: "var(--color-status-complete-bg)",
+    text: "var(--color-status-complete-text)",
+    border: "var(--color-status-complete-border)",
+  };
+  if (text.includes("SUBMITTING")) return {
+    bg: "var(--color-warning-bg)",
+    text: "var(--color-warning-border)",
+    border: "var(--color-warning-border-subtle)",
+  };
+  if (text.includes("POLLING") || text.includes("RUNNING")) return {
+    bg: "var(--color-info-bg)",
+    text: "var(--color-info-text)",
+    border: "var(--color-info-border)",
+  };
+  if (text.includes("WAIT") || text.includes("DEFERRED") || text.includes("COOLDOWN") || text.includes("RATE_LIMITED")) return {
+    bg: "var(--color-stall-bg)",
+    text: "var(--color-stall-text)",
+    border: "var(--color-stall-border)",
+  };
+  return {
+    bg: "var(--color-surface-hover)",
+    text: "var(--color-text-muted)",
+    border: "var(--color-border-default)",
+  };
 }
 
-function slotProgressColor(status: unknown) {
+function slotProgressColor(status: unknown): string {
   const text = String(status || "").toUpperCase();
-  // idle: gray
-  if (text === "EMPTY") return "bg-gray-400";
-  // failed: red
-  if (text.includes("FAILED") || text.includes("ERROR")) return "bg-red-500";
-  // done: green
-  if (text.includes("COMPLETE") || text.includes("DONE")) return "bg-green-500";
-  // submitting: yellow
-  if (text.includes("SUBMITTING")) return "bg-yellow-500";
-  // polling: blue
-  if (text.includes("POLLING") || text.includes("RUNNING")) return "bg-blue-500";
-  // cooldown: orange
-  if (text.includes("WAIT") || text.includes("DEFERRED") || text.includes("COOLDOWN") || text.includes("RATE_LIMITED")) return "bg-orange-500";
-  return "bg-gray-400";
+  if (text === "EMPTY") return "var(--color-text-dim)";
+  if (text.includes("FAILED") || text.includes("ERROR")) return "var(--color-status-blocked-border)";
+  if (text.includes("COMPLETE") || text.includes("DONE")) return "var(--color-status-complete-border)";
+  if (text.includes("SUBMITTING")) return "var(--color-warning-border)";
+  if (text.includes("POLLING") || text.includes("RUNNING")) return "var(--color-info-border)";
+  if (text.includes("WAIT") || text.includes("DEFERRED") || text.includes("COOLDOWN") || text.includes("RATE_LIMITED")) return "var(--color-stall-border)";
+  return "var(--color-text-dim)";
 }
 
 function slotStatusLabel(status: unknown) {

@@ -34,6 +34,7 @@ import {
 import { ConfigSection, TextField, PasswordField, NumberField, SelectField, CheckboxField, ConfigValue } from "./ConfigPanel/ConfigFormFields";
 import ScoringWeightModal from "./ConfigPanel/ScoringWeightModal";
 import LocalCacheConnectionSection from "./ConfigPanel/LocalCacheConnectionSection";
+import { useThemeContext } from "@/components/ThemeProvider";
 
 interface Props {
   notify: (type: "success" | "error" | "warning" | "info", msg: string) => void;
@@ -83,6 +84,7 @@ export default function ConfigPanel({
   managedCredentialsAvailable = false,
   onLoggedOut,
 }: Props) {
+  const { isDark, toggleTheme } = useThemeContext();
   const { config: globalConfig, refreshAll } = useGlobalData();
   const schemaApi = useApi<ConfigSchemaResponse>();
   const saveApi = useApi<ConfigResponse>();
@@ -314,7 +316,7 @@ export default function ConfigPanel({
     `${help.what}\n\n推荐: ${help.recommendation}\n⚠️ ${help.risk}`;
 
   const HelpIcon = ({ help }: { help: typeof FIELD_HELP[string] }) => (
-    <span title={formatHelp(help)} className="cursor-help ml-1 text-xs opacity-60 hover:opacity-100" aria-label="帮助" role="tooltip">❓</span>
+    <span title={formatHelp(help)} className="cursor-help ml-1 text-xs opacity-60 hover:opacity-100" aria-label="字段帮助信息" role="img">❓</span>
   );
 
   const optionValues = (
@@ -582,6 +584,16 @@ export default function ConfigPanel({
       </ConfigSection>
 
       <ConfigSection title="环境设置" description="本地 Web 页面只允许保存非提交运行配置；真实提交必须走单独的人工确认流程。">
+        <div className="col-span-full">
+          <CheckboxField
+            label="暗色模式"
+            checked={isDark}
+            onChange={toggleTheme}
+          />
+          <p className="mt-1 text-xs leading-5 text-text-tertiary">
+            切换亮色/暗色主题，设置会保存在本地浏览器中。
+          </p>
+        </div>
         <ConfigValue label="自动提交" value="关闭（Web 保存强制）" />
       </ConfigSection>
 

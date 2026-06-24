@@ -64,9 +64,9 @@ export default memo(function Sidebar({
   return (
     <nav className={`app-sidebar ${className}`} aria-label="主导航">
       {/* Brand */}
-      <div className="sidebar-brand">
-        <div className="sidebar-brand-mark">B</div>
-        <span className="sidebar-brand-text">Alpha Ops</span>
+      <div className="sidebar-brand" role="banner">
+        <div className="sidebar-brand-mark" aria-hidden="true">B</div>
+        <span className="sidebar-brand-text">BRAIN Alpha Ops</span>
       </div>
 
       {/* Phase Groups */}
@@ -121,8 +121,8 @@ export default memo(function Sidebar({
       })}
 
       {/* Global Tools */}
-      <div className="sidebar-section-label">工具</div>
-      <div className="sidebar-nav">
+      <h2 className="sidebar-section-label" id="sidebar-tools-heading">工具</h2>
+      <div className="sidebar-nav" role="region" aria-labelledby="sidebar-tools-heading">
         {TOOLS_ITEMS.map((item) => {
           const isActive = activeView === item.id;
           const badge = resolveToolBadge(item.statsKey, badges);
@@ -143,14 +143,14 @@ export default memo(function Sidebar({
       </div>
 
       {/* User Info (bottom) */}
-      <div style={{ marginTop: "auto", padding: "14px 16px", borderTop: "0.5px solid var(--color-border-default)" }}>
+      <div style={{ marginTop: "auto", padding: "14px 16px", borderTop: "0.5px solid var(--color-border-default)" }} role="contentinfo">
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <div style={{
             width: 24, height: 24, borderRadius: "50%",
             background: "var(--color-avatar-bg)",
             display: "flex", alignItems: "center", justifyContent: "center",
             fontSize: 10, color: "var(--color-text-muted)",
-          }}>U</div>
+          }} aria-hidden="true">U</div>
           <div>
             <div style={{ fontSize: 12, color: "var(--color-text-bright)" }}>operator</div>
             <div style={{ fontSize: 10, color: "var(--color-text-muted)" }}>本地非提交</div>

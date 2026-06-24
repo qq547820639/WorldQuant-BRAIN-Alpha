@@ -21,7 +21,7 @@ function EmptyIcon() {
       fill="none"
       stroke="currentColor"
       strokeWidth="1.5"
-      className="text-gray-400"
+      style={{ color: "var(--color-text-dim)" }}
     >
       <path strokeLinecap="round" strokeLinejoin="round" d="M20 13V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v7m16 0v5a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-5m16 0h-2.586a1 1 0 0 0-.707.293l-2.414 2.414a1 1 0 0 1-.707.293h-3.172a1 1 0 0 1-.707-.293l-2.414-2.414A1 1 0 0 0 6.586 13H4" />
     </svg>
@@ -31,11 +31,11 @@ function EmptyIcon() {
 export default memo(function EmptyState({ icon, title, description, children, className = "" }: EmptyStateProps) {
   return (
     <div className={`flex flex-col items-center justify-center py-12 px-4 text-center ${className}`} role="status">
-      <div className="mb-4 text-gray-400">
+      <div className="mb-4" style={{ color: "var(--color-text-dim)" }}>
         {icon || <EmptyIcon />}
       </div>
-      <h3 className="text-lg font-semibold text-gray-900 mb-1">{title}</h3>
-      {description && <p className="text-sm text-gray-500 mb-4 max-w-sm">{description}</p>}
+      <h3 className="text-lg font-semibold mb-1" style={{ color: "var(--color-text-bright)" }}>{title}</h3>
+      {description && <p className="text-sm mb-4 max-w-sm" style={{ color: "var(--color-text-muted)" }}>{description}</p>}
       {children && <div className="mt-2">{children}</div>}
     </div>
   );
