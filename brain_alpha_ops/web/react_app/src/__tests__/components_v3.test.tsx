@@ -129,16 +129,17 @@ describe("EmptyState", () => {
     expect(screen.getByText("开始生产搜索")).toBeDefined();
   });
 
-  it("renders action button when provided", () => {
+  it("renders action button when provided via children", () => {
     const onClick = vi.fn();
-    render(<EmptyState title="空" action={{ label: "开始", onClick }} />);
+    render(
+      <EmptyState title="空">
+        <button type="button" className="btn btn-primary btn-sm" onClick={onClick}>
+          开始
+        </button>
+      </EmptyState>
+    );
     fireEvent.click(screen.getByText("开始"));
     expect(onClick).toHaveBeenCalledOnce();
-  });
-
-  it("renders hint when provided", () => {
-    render(<EmptyState title="空" hint="请先连接账户" />);
-    expect(screen.getByText("请先连接账户")).toBeDefined();
   });
 
   it("has status role for accessibility", () => {

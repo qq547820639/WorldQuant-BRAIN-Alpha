@@ -6,6 +6,9 @@ import { resolveJobEventState } from "@/helpers/runPayload";
 import { useApi } from "@/hooks/useApi";
 import { useSSE } from "@/hooks/useSSE";
 import ProgressFeedback from "@/components/ProgressFeedback";
+import Skeleton from "./Skeleton";
+import ErrorCard from "./ErrorCard";
+import EmptyState from "./EmptyState";
 import type { ScoreHistoryPoint } from "@/components/ScoreBreakdown/ScoreHistory";
 import type {
   AttributionNode, Candidate,
@@ -190,8 +193,10 @@ export default function ScoringPanel({ notify, candidate }: Props) {
     return (
       <div className="panel">
         <div className="panel-body-padded">
-          <h3 className="text-base font-medium text-text-primary mb-2">选择候选</h3>
-          <p className="text-sm text-text-tertiary">打开候选管理，选择一个真实候选，然后点击评分。</p>
+          <EmptyState
+            title="选择候选"
+            description="打开候选管理，选择一个真实候选，然后点击评分。"
+          />
         </div>
       </div>
     );
@@ -203,11 +208,13 @@ export default function ScoringPanel({ notify, candidate }: Props) {
       <p className="text-sm text-text-tertiary mb-4">{candidate.alpha_id} · {safeScoringText(candidate.family, "家族待确认")}</p>
 
       {error && (
-        <div className="panel mb-4 bg-negative-subtle border-negative-subtle" role="alert">
-          <div className="panel-body-padded" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <p className="text-sm text-negative">加载评分失败: {error}</p>
-            <button onClick={loadScore} className="btn btn-secondary btn-sm" disabled={loading}>重试</button>
-          </div>
+        <div className="mb-4">
+          <ErrorCard
+            title="加载评分失败"
+            details={error}
+            severity="error"
+            onRetry={loadScore}
+          />
         </div>
       )}
 

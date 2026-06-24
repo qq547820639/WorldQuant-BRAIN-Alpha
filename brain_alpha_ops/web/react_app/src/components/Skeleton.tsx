@@ -2,103 +2,50 @@
  * Skeleton — loading skeleton component for better UX.
  * Shows animated placeholder content while data is loading.
  */
-import { memo } from "react";
-
 interface SkeletonProps {
-  width?: string | number;
-  height?: string | number;
-  borderRadius?: string;
+  variant?: 'card' | 'text' | 'avatar' | 'table-row';
   className?: string;
 }
 
-function Skeleton({ width = "100%", height = "20px", borderRadius = "4px", className = "" }: SkeletonProps) {
-  return (
-    <div
-      className={`skeleton ${className}`}
-      style={{
-        width,
-        height,
-        borderRadius,
-        background: "linear-gradient(90deg, var(--color-skeleton-light-base) 25%, var(--color-skeleton-light-mid) 50%, var(--color-skeleton-light-base) 75%)",
-        backgroundSize: "200% 100%",
-        animation: "skeleton-pulse 1.5s ease-in-out infinite",
-      }}
-      aria-hidden="true"
-    />
-  );
-}
+export default function Skeleton({ variant = 'text', className = '' }: SkeletonProps) {
+  const baseClass = 'animate-pulse bg-gray-200';
 
-interface SkeletonTextProps {
-  lines?: number;
-  lastLineWidth?: string;
-}
-
-export const SkeletonText = memo(function SkeletonText({ lines = 3, lastLineWidth = "60%" }: SkeletonTextProps) {
-  return (
-    <div className="skeleton-text">
-      {Array.from({ length: lines }, (_, i) => (
-        <Skeleton
-          key={i}
-          width={i === lines - 1 ? lastLineWidth : "100%"}
-          height="14px"
-          borderRadius="4px"
-        />
-      ))}
-    </div>
-  );
-});
-
-interface SkeletonCardProps {
-  showHeader?: boolean;
-  showActions?: boolean;
-}
-
-export const SkeletonCard = memo(function SkeletonCard({ showHeader = true, showActions = false }: SkeletonCardProps) {
-  return (
-    <div className="panel" style={{ padding: 16 }}>
-      {showHeader && (
-        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
-          <Skeleton width="120px" height="20px" />
-          <Skeleton width="60px" height="24px" borderRadius="12px" />
+  switch (variant) {
+    case 'card':
+      return (
+        <div className={`${baseClass} rounded-lg p-4 ${className}`}>
+          <div className="flex justify-between items-center mb-3">
+            <div className={`${baseClass} h-5 w-28 rounded`} />
+            <div className={`${baseClass} h-6 w-16 rounded-full`} />
+          </div>
+          <div className="space-y-2">
+            <div className={`${baseClass} h-3 w-full rounded`} />
+            <div className={`${baseClass} h-3 w-4/5 rounded`} />
+          </div>
+          <div className="flex gap-2 mt-4">
+            <div className={`${baseClass} h-8 w-20 rounded-md`} />
+            <div className={`${baseClass} h-8 w-20 rounded-md`} />
+          </div>
         </div>
-      )}
-      <SkeletonText lines={2} />
-      <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-        <Skeleton width="80px" height="32px" borderRadius="6px" />
-        {showActions && <Skeleton width="80px" height="32px" borderRadius="6px" />}
-      </div>
-    </div>
-  );
-});
+      );
 
-interface SkeletonTableProps {
-  rows?: number;
-  columns?: number;
-}
+    case 'text':
+      return <div className={`${baseClass} h-3 w-full rounded ${className}`} />;
 
-export const SkeletonTable = memo(function SkeletonTable({ rows = 5, columns = 4 }: SkeletonTableProps) {
-  return (
-    <div className="skeleton-table">
-      {/* Header */}
-      <div style={{ display: "flex", gap: 8, padding: "8px 12px", borderBottom: "1px solid var(--color-skeleton-light-base)" }}>
-        {Array.from({ length: columns }, (_, i) => (
-          <Skeleton key={i} width="80px" height="14px" />
-        ))}
-      </div>
-      {/* Rows */}
-      {Array.from({ length: rows }, (_, rowIndex) => (
-        <div key={rowIndex} style={{ display: "flex", gap: 8, padding: "12px", borderBottom: "1px solid var(--color-skeleton-light-end)" }}>
-          {Array.from({ length: columns }, (_, colIndex) => (
-            <Skeleton
-              key={colIndex}
-              width={colIndex === 0 ? "100px" : "60px"}
-              height="14px"
-            />
-          ))}
+    case 'avatar':
+      return <div className={`${baseClass} h-10 w-10 rounded-full ${className}`} />;
+
+    case 'table-row':
+      return (
+        <div className={`flex gap-4 items-center ${className}`}>
+          <div className={`${baseClass} h-8 w-8 rounded-full`} />
+          <div className={`${baseClass} h-3 w-24 rounded`} />
+          <div className={`${baseClass} h-3 w-32 rounded`} />
+          <div className={`${baseClass} h-3 w-16 rounded`} />
         </div>
-      ))}
-    </div>
-  );
-});
+      );
 
-export default Skeleton;
+    default:
+      return <div className={`${baseClass} h-3 w-full rounded ${className}`} />;
+  }
+}

@@ -33,6 +33,7 @@ import {
   LifecycleReplayPanel,
 } from "./CandidateTableSubComponents";
 import { CandidateDetailPanel } from "./CandidateDetailPanel";
+import ErrorCard from "./ErrorCard";
 
 export interface QualitySummaryData {
   ready?: number;
@@ -369,12 +370,13 @@ export function CandidateTableToolbar({
       )}
 
       {loadError && (
-        <div className="panel mb-4" style={{ borderColor: "var(--color-error-border)", background: "var(--color-error-bg)" }} role="alert" aria-live="assertive">
-          <div className="panel-body-padded" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <p className="text-sm text-negative">加载候选失败: {loadError}</p>
-            <button type="button" onClick={onRetryLoad} className="btn btn-secondary btn-sm">重试</button>
-          </div>
-        </div>
+        <ErrorCard
+          title="加载候选失败"
+          details={loadError}
+          severity="error"
+          onRetry={onRetryLoad}
+          className="mb-4"
+        />
       )}
 
       <div className="flex flex-col sm:flex-row gap-3 mb-4">

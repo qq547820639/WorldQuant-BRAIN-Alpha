@@ -1,4 +1,4 @@
-/** Dashboard — Progressive flow with step-based guidance v3.1 */
+/** Dashboard — Progressive flow with step-based guidance v3.2 */
 import { useEffect, useState, useRef, type ReactNode } from "react";
 import { useApi } from "@/hooks/useApi";
 import { useGlobalData } from "@/hooks/useGlobalData";
@@ -9,6 +9,9 @@ import ProgressFeedback from "@/components/ProgressFeedback";
 import ResumeWork from "@/components/ResumeWork";
 import { safeDisplayErrorMessage } from "@/helpers/errorExperience";
 import { saveResumeState } from "@/utils/resumeState";
+import Skeleton from "./Skeleton";
+import EmptyState from "./EmptyState";
+import ErrorCard from "./ErrorCard";
 import {
   loadTrendData,
   appendTrendPoint,
@@ -277,56 +280,58 @@ export default function Dashboard({ notify, connected, contextFresh, phaseStatus
           {connected && children}
           {!connected && (children || <CacheModeNotice />)}
 
-          {errors.length > 0 && (
-            <div className="panel panel-negative mb-4" role="alert">
-              <div className="panel-body-padded flex justify-between items-start">
-                <div>
-                  <p className="text-sm font-medium text-negative mb-1">仪表盘数据需要关注</p>
-                  {errors.map((e) => <p key={e} className="text-xs text-negative/80">{e}</p>)}
-                </div>
-                <button onClick={retryAll} className="btn btn-secondary btn-sm">重试</button>
-              </div>
+          {loading && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+              <Skeleton variant="card" className="hover:shadow-md transition-shadow" />
+              <Skeleton variant="card" className="hover:shadow-md transition-shadow" />
+              <Skeleton variant="card" className="hover:shadow-md transition-shadow" />
+              <Skeleton variant="card" className="hover:shadow-md transition-shadow" />
             </div>
           )}
 
-          {loading && (
-            <ProgressFeedback
-              state="loading"
-              title="仪表盘数据"
-              progress={{ phase: "dashboard_load", status_message: "正在刷新仪表盘快照。" }}
-              compact
+          {!loading && errors.length > 0 && (
+            <ErrorCard
+              title="仪表盘数据需要关注"
+              details={errors.join("；")}
+              severity="error"
+              onRetry={retryAll}
+              className="mb-4"
             />
           )}
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
-            <TrendPanel
-              title="候选总数"
-              data={trendCandidates}
-              unit="个"
-              color="#3b82f6"
-              currentValue={memory?.total_candidates ?? status?.progress?.candidates_generated ?? 0}
-              change={computeTrendChange(trendCandidates)}
-            />
-            <KpiCard
-              label="云端 Alpha"
-              value={cloudSummaryData.count ?? "--"}
-              subtitle={cloud ? `${cloudSummaryData.submitted_count ?? 0} 已提交 · ${formatSyncAge(cloudSummaryData.age_seconds, cloudSummaryData.loaded_at)}` : "等待刷新"}
-              trend={cloud && (cloudSummaryData.submitted_count ?? 0) > 0 ? "up" : "neutral"}
-            />
-            <KpiCard
-              label="回测数"
-              value={status?.progress?.backtests_completed ?? "--"}
-              subtitle={status ? `${status.progress?.backtests_pending ?? 0} 待处理` : undefined}
-            />
-            <TrendPanel
-              title="提交数"
-              data={trendSubmissions}
-              unit="个"
-              color="#f59e0b"
-              currentValue={status?.progress?.submissions ?? cloudSummaryData.submitted_count ?? 0}
-              change={computeTrendChange(trendSubmissions)}
-            />
-          </div>
+          {!loading && !errors.length && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+              <TrendPanel
+                title="候选总数"
+                data={trendCandidates}
+                unit="个"
+                color="#3b82f6"
+                currentValue={memory?.total_candidates ?? status?.progress?.candidates_generated ?? 0}
+                change={computeTrendChange(trendCandidates)}
+              />
+              <KpiCard
+                label="云端 Alpha"
+                value={cloudSummaryData.count ?? "--"}
+                subtitle={cloud ? `${cloudSummaryData.submitted_count ?? 0} 已提交 · ${formatSyncAge(cloudSummaryData.age_seconds, cloudSummaryData.loaded_at)}` : "等待刷新"}
+                trend={cloud && (cloudSummaryData.submitted_count ?? 0) > 0 ? "up" : "neutral"}
+                className="hover:shadow-md transition-shadow"
+              />
+              <KpiCard
+                label="回测数"
+                value={status?.progress?.backtests_completed ?? "--"}
+                subtitle={status ? `${status.progress?.backtests_pending ?? 0} 待处理` : undefined}
+                className="hover:shadow-md transition-shadow"
+              />
+              <TrendPanel
+                title="提交数"
+                data={trendSubmissions}
+                unit="个"
+                color="#f59e0b"
+                currentValue={status?.progress?.submissions ?? cloudSummaryData.submitted_count ?? 0}
+                change={computeTrendChange(trendSubmissions)}
+              />
+            </div>
+          )}
 
           <div className="flex items-center gap-2 flex-wrap mb-4">
             <button

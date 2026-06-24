@@ -5,6 +5,8 @@ import { apiErrorMessage, safeDisplayErrorMessage, type ApiErrorExperiencePayloa
 import { useApi } from "@/hooks/useApi";
 import { useGlobalData } from "@/hooks/useGlobalData";
 import type { BrainCredentials, RunConfig } from "@/types";
+import Skeleton from "./Skeleton";
+import ErrorCard from "./ErrorCard";
 import ProgressFeedback from "@/components/ProgressFeedback";
 import {
   MAX_CONFIG_TEXT_LENGTH,
@@ -90,6 +92,7 @@ export default function ConfigPanel({
   const [initialForm, setInitialForm] = useState<ConfigForm | null>(null);
   const [temporaryConnectionOpen, setTemporaryConnectionOpen] = useState(false);
   const [showWeightModal, setShowWeightModal] = useState(false); // P2-4
+  const [saveSuccess, setSaveSuccess] = useState(false);
   const importInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -114,6 +117,7 @@ export default function ConfigPanel({
 
   const update = <K extends keyof ConfigForm>(key: K, value: ConfigForm[K]) => {
     setForm((current) => current ? { ...current, [key]: value } : current);
+    setSaveSuccess(false);
   };
 
   const updateCredential = <K extends keyof BrainCredentials>(key: K, value: BrainCredentials[K]) => {
@@ -140,6 +144,7 @@ export default function ConfigPanel({
       return;
     }
     notify("success", "配置已保存");
+    setSaveSuccess(true);
     refreshAll();
   };
 
@@ -206,18 +211,24 @@ export default function ConfigPanel({
 
   if (globalConfig.loading && !config) {
     return (
-      <ProgressFeedback
-        state="loading"
-        title="配置"
-        progress={{ phase: "config_load", status_message: "正在加载配置。" }}
-      />
+      <div className="w-full max-w-5xl space-y-4">
+        <Skeleton variant="card" className="mb-4" />
+        <Skeleton variant="card" className="mb-4" />
+        <Skeleton variant="card" />
+      </div>
     );
   }
 
   if (globalConfig.error && !config) {
     return (
-      <div className="panel">
-        <p className="text-negative text-sm">加载配置失败: {safeDisplayErrorMessage(globalConfig.error)}</p>
+      <div className="w-full max-w-5xl">
+        <ErrorCard
+          title="加载配置失败"
+          details={safeDisplayErrorMessage(globalConfig.error)}
+          severity="error"
+          onRetry={reload}
+          className="mb-4"
+        />
         <button type="button" onClick={reload} className="btn btn-secondary btn-sm">重试</button>
       </div>
     );
@@ -379,8 +390,29 @@ export default function ConfigPanel({
         </div>
       </div>
 
-      {validationError !== null && <p role="alert" className="text-xs text-negative">{validationError}</p>}
-      {saveApi.error && <p role="alert" className="text-xs text-negative">{safeDisplayErrorMessage(saveApi.error)}</p>}
+      {validationError !== null && (
+        <ErrorCard
+          title="配置验证失败"
+          details={validationError}
+          severity="warning"
+        />
+      )}
+      {saveApi.error && (
+        <ErrorCard
+          title="保存配置失败"
+          details={safeDisplayErrorMessage(saveApi.error)}
+          severity="error"
+          onRetry={() => void saveApi.call("/api/config", {
+            method: "POST",
+            body: JSON.stringify(payloadFromForm(form)),
+          })}
+        />
+      )}
+      {saveSuccess && (
+        <div className="rounded-md bg-positive/10 border border-positive/30 p-3 text-sm text-positive" role="status">
+          配置已保存成功
+        </div>
+      )}
 
       {cacheOnlyMode ? (
         <LocalCacheConnectionSection

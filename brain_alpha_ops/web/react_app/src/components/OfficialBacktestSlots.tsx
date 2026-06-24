@@ -6,6 +6,8 @@ import { useGlobalData } from "@/hooks/useGlobalData";
 import type { BacktestQueueSummary, BacktestSlot, BacktestSlotsResponse } from "@/types";
 import ProgressFeedback from "@/components/ProgressFeedback";
 import { backtestActiveCount, backtestSlotLimit } from "@/utils/backtestSlots";
+import Skeleton from "./Skeleton";
+import ErrorCard from "./ErrorCard";
 
 interface Props {
   notify: (type: "success" | "error" | "warning" | "info", msg: string) => void;
@@ -33,11 +35,20 @@ export default function OfficialBacktestSlots({ notify }: Props) {
 
   if (slotsGlobal.loading && !slotsGlobal.data) {
     return (
-      <ProgressFeedback
-        state="loading"
-        title="官方回测"
-        progress={{ phase: "backtest_slots_load", status_message: "正在加载官方回测槽位。" }}
-      />
+      <div className="min-w-0 space-y-4 animate-fade-in">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+          <div className="min-w-0">
+            <Skeleton variant="text" className="h-6 w-32 mb-1" />
+            <Skeleton variant="text" className="h-4 w-20" />
+          </div>
+          <Skeleton variant="text" className="h-4 w-24" />
+        </div>
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
+          {Array.from({ length: 3 }, (_, i) => i + 1).map((slotIdx) => (
+            <Skeleton key={slotIdx} variant="card" />
+          ))}
+        </div>
+      </div>
     );
   }
 
@@ -56,21 +67,19 @@ export default function OfficialBacktestSlots({ notify }: Props) {
       <BacktestQueueSummaryStrip summary={queueSummary} activeCount={activeCount} slotLimit={slotLimit} />
 
       {slotsGlobal.error && (
-        <div className="rounded-md border border-[var(--color-error-border)] bg-[var(--color-error-bg)] p-4" role="alert" aria-live="assertive">
-          <div className="flex items-center justify-between gap-3">
-            <p className="text-sm text-negative">回测槽位加载失败: {slotsGlobal.error}</p>
-            <button type="button" onClick={load} className="btn btn-secondary text-sm">
-              重试
-            </button>
-          </div>
-        </div>
+        <ErrorCard
+          title="回测槽位加载失败"
+          reason={slotsGlobal.error}
+          severity="error"
+          onRetry={load}
+        />
       )}
 
       <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
         {slots.map((slot) => {
           const board = slot.status_board;
           return (
-            <article key={slot.slot} className={`rounded-md border border-border-subtle bg-[var(--color-surface-deep)] p-4 min-w-0 border-l-4 ${slotTone(slot.status)}`}>
+            <article key={slot.slot} className={`rounded-lg border border-gray-200 bg-white p-4 min-w-0 border-l-4 ${slotTone(slot.status)} shadow-sm`}>
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <h3 className="text-sm font-semibold text-text-primary">官方回测槽 #{slot.slot}</h3>
@@ -101,9 +110,9 @@ export default function OfficialBacktestSlots({ notify }: Props) {
                 <SlotMetric label="操作进度" value={`${boundedPercent(slot.progress_percent)}%`} />
               </dl>
 
-              <div className="mt-4 h-2 overflow-hidden rounded-full bg-[var(--color-border-default)]" aria-hidden="true">
+              <div className="mt-4 h-2 overflow-hidden rounded-full bg-gray-200" aria-hidden="true">
                 <div
-                  className="h-full rounded-full bg-[var(--color-status-active-text)]"
+                  className={`h-full rounded-full transition-all duration-300 ${slotProgressColor(slot.status)}`}
                   style={{ width: `${boundedPercent(slot.progress_percent)}%` }}
                 />
               </div>
@@ -177,19 +186,53 @@ function normalizeSlots(payload: BacktestSlotsResponse | null): BacktestSlot[] {
 
 function slotTone(status: unknown) {
   const text = String(status || "").toUpperCase();
-  if (text === "EMPTY") return "border-border-subtle";
-  if (text.includes("FAILED") || text.includes("ERROR")) return "border-[var(--color-error-border)]";
-  if (text.includes("COMPLETE")) return "border-border";
-  if (text.includes("DEFERRED") || text.includes("WAIT")) return "border-[var(--color-info-border-warm)]";
-  return "border-[var(--color-info-border-cool)]";
+  // idle: gray
+  if (text === "EMPTY") return "border-l-gray-400";
+  // failed: red
+  if (text.includes("FAILED") || text.includes("ERROR")) return "border-l-red-500";
+  // done: green
+  if (text.includes("COMPLETE") || text.includes("DONE")) return "border-l-green-500";
+  // submitting: yellow
+  if (text.includes("SUBMITTING")) return "border-l-yellow-500";
+  // polling: blue
+  if (text.includes("POLLING") || text.includes("RUNNING")) return "border-l-blue-500";
+  // cooldown: orange
+  if (text.includes("WAIT") || text.includes("DEFERRED") || text.includes("COOLDOWN") || text.includes("RATE_LIMITED")) return "border-l-orange-500";
+  return "border-l-gray-400";
 }
 
 function slotBadge(status: unknown) {
   const text = String(status || "").toUpperCase();
-  if (text === "EMPTY") return "badge-neutral";
-  if (text.includes("FAILED") || text.includes("ERROR")) return "badge-negative";
-  if (text.includes("COMPLETE")) return "badge-positive";
-  return "badge-warning";
+  // idle: gray
+  if (text === "EMPTY") return "bg-gray-100 text-gray-700 border border-gray-300";
+  // failed: red
+  if (text.includes("FAILED") || text.includes("ERROR")) return "bg-red-50 text-red-700 border border-red-200";
+  // done: green
+  if (text.includes("COMPLETE") || text.includes("DONE")) return "bg-green-50 text-green-700 border border-green-200";
+  // submitting: yellow
+  if (text.includes("SUBMITTING")) return "bg-yellow-50 text-yellow-700 border border-yellow-200";
+  // polling: blue
+  if (text.includes("POLLING") || text.includes("RUNNING")) return "bg-blue-50 text-blue-700 border border-blue-200";
+  // cooldown: orange
+  if (text.includes("WAIT") || text.includes("DEFERRED") || text.includes("COOLDOWN") || text.includes("RATE_LIMITED")) return "bg-orange-50 text-orange-700 border border-orange-200";
+  return "bg-gray-100 text-gray-700 border border-gray-300";
+}
+
+function slotProgressColor(status: unknown) {
+  const text = String(status || "").toUpperCase();
+  // idle: gray
+  if (text === "EMPTY") return "bg-gray-400";
+  // failed: red
+  if (text.includes("FAILED") || text.includes("ERROR")) return "bg-red-500";
+  // done: green
+  if (text.includes("COMPLETE") || text.includes("DONE")) return "bg-green-500";
+  // submitting: yellow
+  if (text.includes("SUBMITTING")) return "bg-yellow-500";
+  // polling: blue
+  if (text.includes("POLLING") || text.includes("RUNNING")) return "bg-blue-500";
+  // cooldown: orange
+  if (text.includes("WAIT") || text.includes("DEFERRED") || text.includes("COOLDOWN") || text.includes("RATE_LIMITED")) return "bg-orange-500";
+  return "bg-gray-400";
 }
 
 function slotStatusLabel(status: unknown) {

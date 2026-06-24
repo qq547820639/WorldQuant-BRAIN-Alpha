@@ -430,6 +430,7 @@
   .btn {
     @apply inline-flex items-center justify-center gap-2 px-3.5 py-1.5 text-sm font-medium;
     @apply rounded-md transition-all duration-[120ms] select-none;
+    @apply active:scale-95 transition-transform;
     border: 0.5px solid transparent;
     min-height: 32px; line-height: 1; white-space: nowrap;
   }
@@ -472,7 +473,9 @@
 @layer components {
   .panel {
     @apply bg-surface-1 border border-border-subtle rounded-lg overflow-hidden;
+    @apply transition-all duration-200;
   }
+  .panel:hover { @apply shadow-lg; }
   .panel-header {
     @apply flex items-center justify-between px-3.5 py-2.5 border-b border-border-subtle;
     @apply text-2xs font-semibold uppercase tracking-wider text-text-tertiary;
@@ -504,6 +507,10 @@
 
 /* ── Data Table ── */
 @layer components {
+  .data-table-wrapper {
+    @apply overflow-x-auto;
+    -webkit-overflow-scrolling: touch;
+  }
   .data-table { @apply w-full border-collapse text-sm tabular; }
   .data-table thead { @apply sticky top-0 z-10; }
   .data-table th {
@@ -650,6 +657,15 @@
 }
 
 /* ── Responsive ── */
+/* Extra small mobile: 375px and below */
+@media (max-width: 374px) {
+  .app-main { padding: 8px; }
+  .kpi-card { padding: 8px 10px 6px; }
+  .panel-header, .panel-body-padded { padding-left: 10px; padding-right: 10px; }
+  .btn { padding: 0.375rem 0.625rem; font-size: 0.8125rem; }
+  .mobile-tab-bar { grid-template-columns: repeat(3, 1fr); }
+}
+
 @media (max-width: 639px) {
   .app-main { padding: 12px; }
   .kpi-card { padding: 10px 12px 8px; }
@@ -774,6 +790,17 @@
 
   .phase-group .sidebar-nav-item {
     padding-left: 36px;
+  }
+
+  .phase-group-content {
+    overflow: hidden;
+    transition: max-height 200ms ease-out, opacity 200ms ease-out;
+    max-height: 0;
+    opacity: 0;
+  }
+  .phase-group.is-expanded .phase-group-content {
+    max-height: 500px;
+    opacity: 1;
   }
 }
 

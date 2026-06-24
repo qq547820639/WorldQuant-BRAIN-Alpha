@@ -1,6 +1,7 @@
 import type { AttributionNode, Candidate, ScoringResult } from "@/types";
 import { safeScoringText, fmtNum, isLocalPrefilterStatus } from "./utils";
 import AttributionTree from "./AttributionTree";
+import Skeleton from "../Skeleton";
 
 interface Props {
   candidate: Candidate;
@@ -13,8 +14,26 @@ interface Props {
   attribution: AttributionNode | null;
 }
 
+/**
+ * 获取分数颜色编码
+ * 优秀（≥0.8）：green
+ * 良好（0.6-0.8）：blue
+ * 一般（0.4-0.6）：yellow
+ * 差（<0.4）：red
+ */
+function getScoreColorClass(score: number | undefined): string {
+  if (score == null) return "text-gray-400";
+  if (score >= 0.8) return "text-green-600";
+  if (score >= 0.6) return "text-blue-600";
+  if (score >= 0.4) return "text-yellow-600";
+  return "text-red-600";
+}
+
 export default function ScoringHeader({ candidate, scoring, layerScores, loading, onRetry, lifecycleStatus, officialMetrics, attribution }: Props) {
   const m = officialMetrics;
+  const totalScore = scoring?.total_score ?? candidate.scorecard?.total_score;
+  const normalizedScore = totalScore != null ? totalScore / 100 : undefined;
+
   return (
     <>
       {/* Expression overview + Score Hero */}
@@ -24,9 +43,16 @@ export default function ScoringHeader({ candidate, scoring, layerScores, loading
           <button onClick={onRetry} className="btn btn-ghost btn-sm" disabled={loading}>{loading ? "评分中..." : "刷新评分"}</button>
         </div>
         <div className="panel-body-padded">
-          <code className="block font-mono text-xs text-text-secondary p-3 rounded-md bg-surface-2 break-all" style={{ lineHeight: 1.6 }}>
-            {candidate.expression}
-          </code>
+          {loading && !scoring ? (
+            <div className="space-y-3">
+              <Skeleton variant="text" className="h-16 w-full" />
+              <Skeleton variant="text" className="h-4 w-3/4" />
+            </div>
+          ) : (
+            <code className="block font-mono text-xs text-text-secondary p-3 rounded-md bg-surface-2 break-all" style={{ lineHeight: 1.6 }}>
+              {candidate.expression}
+            </code>
+          )}
           <div style={{ display: "flex", flexWrap: "wrap", gap: "8px 16px", marginTop: 12, fontSize: 12 }}>
             <span className="text-text-tertiary">家族: <span className="text-text-secondary">{safeScoringText(candidate.family, "家族待确认")}</span></span>
             <span className="text-text-tertiary">状态: <span className={`badge ${scoring?.passed_gate || candidate.gate?.passed ? "badge-positive" : "badge-negative"}`}>{lifecycleStatus}</span></span>
@@ -62,25 +88,53 @@ export default function ScoringHeader({ candidate, scoring, layerScores, loading
         <div className="panel">
           <div className="panel-header"><span>评分卡</span></div>
           <div className="panel-body-padded">
-            <div style={{ textAlign: "center", marginBottom: 16 }}>
-              <span className="font-mono-value text-3xl text-positive" style={{ fontSize: 42, fontWeight: 500 }}>
-                {fmtNum(scoring?.total_score ?? candidate.scorecard?.total_score, 1)}
-              </span>
-              <span className="text-text-tertiary" style={{ fontSize: 20 }}>/100</span>
-            </div>
-            <ScoreBar label="先验" value={layerScores.prior} max={35} />
-            <ScoreBar label="实证" value={layerScores.empirical} max={40} />
-            <ScoreBar label="清单" value={layerScores.checklist} max={25} />
-            <div className="grid grid-cols-2 gap-2 mt-4 text-xs">
-              <InfoPill label="决策" value={scoring?.decision_band || candidate.decision_band || "--"} />
-              <InfoPill label="模式" value={scoring?.scoring_schema || "--"} />
-              <InfoPill label="门禁" value={scoring?.passed_gate ? "通过" : "失败"} />
-              <InfoPill label="API 偏差" value={fmtNum(scoring?.api_output_deviation, 4)} />
-            </div>
-            {attribution && (
+            {loading && !scoring ? (
+              <div className="space-y-4">
+                <div className="text-center">
+                  <Skeleton variant="card" className="w-32 h-16 mx-auto mb-4" />
+                </div>
+                <Skeleton variant="text" className="h-8 w-full" />
+                <Skeleton variant="text" className="h-8 w-full" />
+                <Skeleton variant="text" className="h-8 w-full" />
+              </div>
+            ) : (
+              <>
+                <div style={{ textAlign: "center", marginBottom: 16 }}>
+                  <span
+                    className={`font-mono-value font-bold ${getScoreColorClass(normalizedScore)}`}
+                    style={{ fontSize: 48, lineHeight: 1.2 }}
+                  >
+                    {fmtNum(totalScore, 1)}
+                  </span>
+                  <span className="text-text-tertiary text-xl">/100</span>
+                  {normalizedScore != null && (
+                    <div className={`text-sm font-medium ${getScoreColorClass(normalizedScore)} mt-1`}>
+                      {normalizedScore >= 0.8 ? "优秀" : normalizedScore >= 0.6 ? "良好" : normalizedScore >= 0.4 ? "一般" : "差"}
+                    </div>
+                  )}
+                </div>
+                <ScoreBar label="先验" value={layerScores.prior} max={35} />
+                <ScoreBar label="实证" value={layerScores.empirical} max={40} />
+                <ScoreBar label="清单" value={layerScores.checklist} max={25} />
+                <div className="grid grid-cols-2 gap-2 mt-4 text-xs">
+                  <InfoPill label="决策" value={scoring?.decision_band || candidate.decision_band || "--"} />
+                  <InfoPill label="模式" value={scoring?.scoring_schema || "--"} />
+                  <InfoPill label="门禁" value={scoring?.passed_gate ? "通过" : "失败"} />
+                  <InfoPill label="API 偏差" value={fmtNum(scoring?.api_output_deviation, 4)} />
+                </div>
+              </>
+            )}
+            {attribution && !loading && (
               <div className="mt-4 pt-3 border-t border-border-subtle">
                 <p className="text-xs font-medium text-text-secondary mb-2">归因分析</p>
                 <AttributionTree attribution={attribution} />
+              </div>
+            )}
+            {loading && !attribution && (
+              <div className="mt-4 pt-3 border-t border-border-subtle">
+                <Skeleton variant="text" className="h-4 w-24 mb-2" />
+                <Skeleton variant="text" className="h-6 w-full mb-1" />
+                <Skeleton variant="text" className="h-6 w-4/5" />
               </div>
             )}
           </div>
@@ -90,15 +144,23 @@ export default function ScoringHeader({ candidate, scoring, layerScores, loading
         <div className="panel">
           <div className="panel-header"><span>官方指标</span></div>
           <div className="panel-body-padded">
-            <div className="grid grid-cols-2 gap-3 text-xs">
-              <MetricRow label="夏普比率" value={m?.sharpe} threshold={1.25} />
-              <MetricRow label="适应度" value={m?.fitness} threshold={1.0} />
-              <MetricRow label="换手率" value={m?.turnover} format="percent" />
-              <MetricRow label="收益率" value={m?.returns} format="percent" />
-              <MetricRow label="回撤" value={m?.drawdown} format="percent" max={0.25} />
-              <MetricRow label="自相关性" value={m?.self_correlation} max={0.70} />
-              <MetricRow label="集中度" value={m?.weight_concentration} max={0.10} format="percent" />
-            </div>
+            {loading && !officialMetrics ? (
+              <div className="space-y-2">
+                {[...Array(7)].map((_, i) => (
+                  <Skeleton key={i} variant="table-row" className="h-10 w-full" />
+                ))}
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-3 text-xs">
+                <MetricRow label="夏普比率" value={m?.sharpe} threshold={1.25} />
+                <MetricRow label="适应度" value={m?.fitness} threshold={1.0} />
+                <MetricRow label="换手率" value={m?.turnover} format="percent" />
+                <MetricRow label="收益率" value={m?.returns} format="percent" />
+                <MetricRow label="回撤" value={m?.drawdown} format="percent" max={0.25} />
+                <MetricRow label="自相关性" value={m?.self_correlation} max={0.70} />
+                <MetricRow label="集中度" value={m?.weight_concentration} max={0.10} format="percent" />
+              </div>
+            )}
           </div>
         </div>
       </div>

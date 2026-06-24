@@ -47,8 +47,10 @@ import {
 } from "./CandidateTableUtils";
 import {
   CandidateMobileCard,
-  EmptyState,
 } from "./CandidateTableSubComponents";
+import Skeleton from "./Skeleton";
+import EmptyState from "./EmptyState";
+import ErrorCard from "./ErrorCard";
 import { CandidateRow } from "./CandidateRow";
 import CandidateTablePagination from "./CandidateTablePagination";
 import { CandidateTableToolbar } from "./CandidateTableToolbar";
@@ -385,9 +387,120 @@ export default function CandidateTable({
     || (pipeline.optimization.state === "loading" || pipeline.optimization.state === "progress")
     || (pipeline.check.state === "loading" || pipeline.check.state === "progress");
 
+  // Minimal detailPanel for loading state
+  const loadingDetailPanel = {
+    showProductionControls: false,
+    taskState: "idle" as const,
+    taskProgress: null,
+    taskError: null,
+    taskStreamExhausted: false,
+    onRetryTask: () => {},
+    simState: "idle" as const,
+    simProgress: null,
+    simError: null,
+    onRetrySim: () => {},
+    optimizationState: "idle" as const,
+    optimizationProgress: null,
+    optimizationError: null,
+    onRetryOptimization: () => {},
+    checkState: "idle" as const,
+    checkProgress: null,
+    checkError: null,
+    onRetryCheck: () => {},
+  };
+
   if (loading) {
     return (
-      <ProgressFeedback state="loading" title="候选管理" progress={{ phase: "candidate_load", status_message: "正在加载候选数据。" }} />
+      <div className="animate-fade-in">
+        <CandidateTableToolbar
+          title={title}
+          viewMode={viewMode}
+          retainedCount={0}
+          targetPoolSize={targetPoolSize}
+          poolEligibleCount={0}
+          rawQueueCount={0}
+          sortedCount={0}
+          candidateMeta={{ returned: 0, total: 0 }}
+          filter=""
+          remoteTruncated={false}
+          showProductionControls={showProductionControls}
+          candidateWorkflowBusy={false}
+          taskState="idle"
+          simState="idle"
+          optimizationState="idle"
+          onTargetPoolSizeChange={handleTargetPoolSizeChange}
+          onGenerateCandidates={() => {}}
+          onStartValidationQueue={() => {}}
+          onStartOptimization={() => {}}
+          qualitySummary={{ retained: "0", promotable: 0, rework: 0, blocked: 0, outputMode: "-" }}
+          lifecycleHistory={null}
+          lifecycleError={null}
+          lifecycleLoading={false}
+          visibleLifecycleTraces={[]}
+          detailPanel={loadingDetailPanel}
+          loadError={null}
+          apiLoading={true}
+          onRetryLoad={loadCandidates}
+          onFilterChange={() => {}}
+          showStarredOnly={false}
+          onToggleStarFilter={() => {}}
+          selectedIds={new Set()}
+          selectedCount={0}
+          onClearSelection={() => {}}
+          onBatchScore={() => {}}
+          onBatchCheck={() => {}}
+          onBatchSimulate={() => {}}
+          sortedCandidates={[]}
+        />
+
+        <div className="panel">
+          <div className="hidden md:block overflow-auto" style={{ maxWidth: "100%", height: "min(640px, 70vh)" }}>
+            <table className="data-table card-view" style={{ minWidth: 980 }} aria-label="候选结果">
+              <thead>
+                <tr className="bg-surface-2">
+                  <th className="px-3 py-2 text-left text-xs font-medium text-text-secondary" style={{ width: "7rem" }}>加载中...</th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-text-secondary">ID</th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-text-secondary">表达式</th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-text-secondary">家族</th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-text-secondary">状态</th>
+                  <th className="px-3 py-2 text-left text-xs font-medium text-text-secondary">评分</th>
+                </tr>
+              </thead>
+              <tbody>
+                {Array.from({ length: 8 }).map((_, index) => (
+                  <tr key={`skeleton-${index}`} className="border-b border-border-subtle">
+                    <td className="px-3 py-3" colSpan={6}>
+                      <Skeleton variant="table-row" />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="panel-body md:hidden">
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {Array.from({ length: 4 }).map((_, index) => (
+                <div key={`skeleton-mobile-${index}`} className="panel" style={{ padding: "12px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <Skeleton variant="avatar" className="w-8 h-8 rounded-full" />
+                      <Skeleton variant="text" className="w-24 h-3" />
+                    </div>
+                    <Skeleton variant="text" className="w-16 h-5 rounded-full" />
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 12 }}>
+                    <Skeleton variant="text" className="w-full h-3" />
+                    <Skeleton variant="text" className="w-full h-3" />
+                    <Skeleton variant="text" className="w-full h-3 col-span-2" />
+                    <Skeleton variant="text" className="w-full h-3 col-span-2" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
     );
   }
 
@@ -523,7 +636,10 @@ export default function CandidateTable({
 
         <div className="panel-body md:hidden">
           {paginatedCandidates.length === 0 ? (
-            <EmptyState filter={!!filter} showProductionControls={showProductionControls} />
+            <EmptyState
+              title={filter ? "没有匹配的候选" : "暂无候选记录"}
+              description={filter ? "尝试调整筛选条件，或清除筛选查看全部候选。" : (showProductionControls ? "候选 Alpha 通过顶部「自动推进候选池」启动生产搜索、预筛与本地排序；官方验证队列和质量检查单独推进。全流程保持非提交边界，提交仍需人工确认。" : "请先运行非提交验证产生候选，或从候选管理页面选择一个候选进入评分。")}
+            />
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {paginatedCandidates.map((candidate, index) => (
@@ -577,7 +693,10 @@ export default function CandidateTable({
               {paginatedCandidates.length === 0 && (
                 <tr>
                   <td colSpan={columnCount} style={{ padding: "1.5rem", textAlign: "center" }}>
-                    <EmptyState filter={!!filter} showProductionControls={showProductionControls} />
+                    <EmptyState
+                      title={filter ? "没有匹配的候选" : "暂无候选记录"}
+                      description={filter ? "尝试调整筛选条件，或清除筛选查看全部候选。" : (showProductionControls ? "候选 Alpha 通过顶部「自动推进候选池」启动生产搜索、预筛与本地排序；官方验证队列和质量检查单独推进。全流程保持非提交边界，提交仍需人工确认。" : "请先运行非提交验证产生候选，或从候选管理页面选择一个候选进入评分。")}
+                    />
                   </td>
                 </tr>
               )}

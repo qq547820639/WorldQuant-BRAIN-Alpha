@@ -97,27 +97,25 @@ export default memo(function Sidebar({
                 </span>
               </div>
             )}
-            {group.expanded && (
-              <div id={`phase-${group.id}-items`} role="region" aria-label={`${group.label} 导航项`} className="sidebar-nav">
-                {group.items.map((item) => {
-                  const isActive = activeView === item.id;
-                  const badge = item.badge != null ? String(item.badge) : undefined;
-                  return (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onClick={() => { onNavigate(item.id); onClose?.(); }}
-                      className={`sidebar-nav-item${isActive ? " is-active" : ""}`}
-                      aria-current={isActive ? "page" : undefined}
-                    >
-                      <span style={{ fontSize: 11, opacity: 0.6, minWidth: 18 }}>{item.icon}</span>
-                      <span>{item.label}</span>
-                      {badge && <span className="nav-badge">{badge}</span>}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
+            <div id={`phase-${group.id}-items`} role="region" aria-label={`${group.label} 导航项`} className="sidebar-nav phase-group-content">
+              {group.items.map((item) => {
+                const isActive = activeView === item.id;
+                const badge = item.badge != null ? String(item.badge) : undefined;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => { onNavigate(item.id); onClose?.(); }}
+                    className={`sidebar-nav-item${isActive ? " is-active" : ""}`}
+                    aria-current={isActive ? "page" : undefined}
+                  >
+                    <span style={{ fontSize: 11, opacity: 0.6, minWidth: 18 }}>{item.icon}</span>
+                    <span>{item.label}</span>
+                    {badge && <span className="nav-badge">{badge}</span>}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         );
       })}
