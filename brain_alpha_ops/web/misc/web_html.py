@@ -29,7 +29,7 @@ _HTML_LOCK = threading.RLock()
 def selected_frontend(value: str | None = None) -> str:
     frontend = str(value if value is not None else os.getenv(WEB_FRONTEND_ENV, INLINE_FRONTEND)).strip().lower()
     if frontend not in {INLINE_FRONTEND, REACT_FRONTEND}:
-        raise ValueError(f"{WEB_FRONTEND_ENV} must be '{INLINE_FRONTEND}' or '{REACT_FRONTEND}'")
+        return INLINE_FRONTEND
     return frontend
 
 

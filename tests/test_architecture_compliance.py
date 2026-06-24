@@ -9,4 +9,4 @@ sys.path.insert(0, str(ROOT))
 def test_architecture_no_dependency_violations():
     from scripts.check_architecture import check
     result = check()
-    assert result == 0, f"Architecture violations found (exit code {result})"
+    assert result["ok"], f"Architecture violations found: {result['violations']}"

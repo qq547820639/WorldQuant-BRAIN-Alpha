@@ -145,7 +145,7 @@ export default function ScoreDetails({ scorecard }: Props) {
       if (children && children.length > 0) {
         layerMaxScores[layer.name] = children.reduce(
           (acc, c) =>
-            acc + (c.weight > 0 ? c.score / (c.contribution > 0 ? c.weight : 1) : c.score),
+            acc + (c.weight > 0 ? c.score / ((c.contribution ?? 0) > 0 ? c.weight : 1) : c.score),
           0,
         );
       } else {

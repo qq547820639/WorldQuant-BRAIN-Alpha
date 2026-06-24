@@ -1,6 +1,6 @@
 /** Metrics and stats display for official operations. */
 
-import { OperationMetric, OverviewCard } from "./OfficialOperations/index";
+import { OperationMetric, OverviewCard } from "./index";
 import type { JobStatus, OfficialContextCache, CloudAlphaCache } from "@/types";
 import {
   syncContextStatus,

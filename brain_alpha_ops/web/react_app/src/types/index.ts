@@ -33,6 +33,7 @@ export interface JobStatus {
   job_id: string;
   task_id?: string;
   status: "idle" | "queued" | "running" | "stopping" | "stopped" | "completed" | "completed_with_warnings" | "failed" | "cancelled" | "missing";
+  ok?: boolean;
   phase?: string;
   cycle?: number;
   max_cycles?: number;
@@ -121,6 +122,7 @@ export interface OfficialContextCache {
     invalid_files?: string[];
     record_counts?: Record<string, number>;
   };
+  [key: string]: unknown;
 }
 
 export interface CloudAlphaCache {
@@ -197,6 +199,8 @@ export interface Candidate {
   family: string;
   hypothesis: string;
   lifecycle_status: string;
+  status?: string;
+  blocking_reasons?: string[];
   scorecard?: Scorecard;
   official_metrics?: OfficialMetrics;
   gate?: QualityGate;
@@ -222,6 +226,7 @@ export interface Candidate {
   validation?: Record<string, unknown>;
   created_at?: string;
   updated_at?: string;
+  [key: string]: unknown;
 }
 
 export interface AlphaLifecycleRecord {
@@ -998,6 +1003,7 @@ export interface CloudAlpha {
   sharpe: number;
   fitness: number;
   turnover: number;
+  [key: string]: unknown;
 }
 
 export interface ResearchMemorySummary {
@@ -1083,7 +1089,7 @@ export interface BrainCredentials {
 // ── Phase Navigation Types (UI Design System v3.0) ─────────────────────
 
 export type PhaseId = "connect" | "discover" | "evaluate" | "ready";
-export type PhaseStatus = "locked" | "pending" | "active" | "complete" | "blocked";
+export type PhaseStatus = "locked" | "pending" | "active" | "complete" | "blocked" | "loading" | "error" | "ready";
 
 export interface PhaseGroup {
   id: PhaseId;
@@ -1142,4 +1148,73 @@ export function isRecord(value: unknown): value is Record<string, unknown> {
 /** Narrow SSE event.data to SSECandidateEventData. */
 export function isSSECandidateData(data: unknown): data is SSECandidateEventData {
   return isRecord(data);
+}
+
+// ── Aliases & additional shared types ────────────────────────────────────
+
+export type PhaseApiStatus = PhaseStatus;
+
+export interface CandidateCheckResult {
+  alpha_id?: string;
+  official_alpha_id?: string;
+  simulation_id?: string;
+  status?: string;
+  passed?: boolean;
+  submittable?: boolean;
+  is_stale?: boolean;
+  score?: number;
+  failed_reasons?: string[];
+  checked_at?: string;
+  [key: string]: unknown;
+}
+
+export interface CandidateWorkflowPlan {
+  producer?: { deficit?: number };
+  validator?: Record<string, unknown>;
+  rework?: Record<string, unknown>;
+  review?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+export type CandidateListMeta = {
+  returned: number;
+  total: number;
+  [key: string]: unknown;
+};
+
+export type CandidateQueueView =
+  | "candidates"
+  | "pending_backtest"
+  | "running_backtest"
+  | "backtest_rework"
+  | "passed"
+  | "submittable"
+  | "submitted"
+  | "failed";
+
+export interface LifecycleMetric {
+  label: string;
+  value: string | number;
+  tone?: "positive" | "negative" | "warning" | "info" | "neutral";
+  [key: string]: unknown;
+}
+
+export interface LifecycleMetricProps {
+  metric: LifecycleMetric;
+  [key: string]: unknown;
+}
+
+export interface LifecycleReplayPanelProps {
+  alphaId?: string;
+  [key: string]: unknown;
+}
+
+export interface QualitySummaryData {
+  ready?: number;
+  retained?: string;
+  promotable?: number;
+  rework?: number;
+  blocked?: number;
+  outputMode?: string;
+  [key: string]: unknown;
 }
