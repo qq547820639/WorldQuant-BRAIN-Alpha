@@ -27,6 +27,8 @@ def handler_dispatch_context(web):
             bounded_query_int=web._bounded_query_int,
             bounded_query_float=web._bounded_query_float,
             rate_limit_request=web.rate_limit_request,
+            safe_error_message=web.safe_error_message,
+            error_payload=web.error_payload,
         ),
         session=web.WebDispatchSessionContext(
             remote_admin_required=web._remote_admin_required,
@@ -57,6 +59,7 @@ def handler_dispatch_context(web):
             start_run_job=lambda job_id, body: web._submit_background_job(web.run_job, job_id, body),
             stop_job_payload=web.stop_job_payload,
             active_auxiliary_operation=web.active_auxiliary_operation,
+            run_simple_async_job_service=web.run_simple_async_job_service,
         ),
         config=web.WebDispatchConfigContext(
             health_payload=web.health_payload,
@@ -69,6 +72,7 @@ def handler_dispatch_context(web):
             test_connection=web.test_connection,
             validate_run_payload=lambda body: web.run_config_from_payload(body),
             load_presets=web._load_presets,
+            run_config_from_payload=web.run_config_from_payload,
         ),
         research=web.WebDispatchResearchContext(
             latest_result_snapshot=web.latest_result_snapshot,
