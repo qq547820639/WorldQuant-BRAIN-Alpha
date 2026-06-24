@@ -25,6 +25,7 @@ export interface GlobalDataState {
       workflow_plan?: Record<string, unknown> | null;
       candidate_workflow?: Record<string, unknown> | null;
       pool_summary?: Record<string, unknown>;
+      ready_count?: number;
       total?: number;
       returned_count?: number;
       total_count?: number;
@@ -46,7 +47,7 @@ export interface GlobalDataState {
     lastErrorMeta: ApiMeta | null;
   };
   config: {
-    data: { config?: { credentials?: { managed_credentials_available?: boolean } } } | null;
+    data: { config?: { environment?: string; credentials?: { managed_credentials_available?: boolean } } } | null;
     error: string | null;
     loading: boolean;
     lastErrorMeta: ApiMeta | null;
@@ -64,13 +65,14 @@ export function GlobalDataProvider({ children }: { children: React.ReactNode }) 
     workflow_plan?: Record<string, unknown> | null;
     candidate_workflow?: Record<string, unknown> | null;
     pool_summary?: Record<string, unknown>;
+    ready_count?: number;
     total?: number;
     returned_count?: number;
     total_count?: number;
   }>();
   const slotsApi = useApi<BacktestSlotsResponse>();
   const cloudApi = useApi<{ count?: number; total?: number; summary?: Record<string, unknown> }>();
-  const configApi = useApi<{ config?: { credentials?: { managed_credentials_available?: boolean } } }>();
+  const configApi = useApi<{ config?: { environment?: string; credentials?: { managed_credentials_available?: boolean } } }>();
 
   const refreshAll = useCallback(() => {
     void candidatesApi.call("/api/candidates");

@@ -1,6 +1,6 @@
 /** Action buttons panel for sync/validate/submit operations. */
 
-import { ActionPanel } from "./ActionPanel";
+import ActionPanel from "./ActionPanel";
 import type { OperationMode, SyncRange } from "./utils";
 import type { SubmitReadinessResponse } from "@/types";
 

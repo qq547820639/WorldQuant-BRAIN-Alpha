@@ -14,6 +14,7 @@ import { useGlobalData } from "@/hooks/useGlobalData";
 import type {
   Candidate,
   CardViewId,
+  CloudAlphaSummary,
 } from "@/types";
 import ProgressFeedback from "@/components/ProgressFeedback";
 import { safeDisplayErrorMessage } from "@/helpers/errorExperience";
