@@ -1,10 +1,12 @@
+import { memo } from "react";
+
 interface DrillStep {
   id: number;
   label: string;
   description: string;
 }
 
-export function DrillModal({
+export const DrillModal = memo(function DrillModal({
   steps,
   checks,
   onToggle,
@@ -117,4 +119,4 @@ export function DrillModal({
       </div>
     </div>
   );
-}
+});

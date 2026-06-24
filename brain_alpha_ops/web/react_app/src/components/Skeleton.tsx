@@ -2,6 +2,8 @@
  * Skeleton — loading skeleton component for better UX.
  * Shows animated placeholder content while data is loading.
  */
+import { memo } from "react";
+
 interface SkeletonProps {
   variant?: 'card' | 'text' | 'avatar' | 'table-row';
   className?: string;
@@ -9,7 +11,7 @@ interface SkeletonProps {
 
 const skeletonStyle = { backgroundColor: "var(--color-border-subtle)" };
 
-export default function Skeleton({ variant = 'text', className = '' }: SkeletonProps) {
+export default memo(function Skeleton({ variant = 'text', className = '' }: SkeletonProps) {
   const baseClass = 'animate-pulse';
 
   switch (variant) {
@@ -50,4 +52,4 @@ export default function Skeleton({ variant = 'text', className = '' }: SkeletonP
     default:
       return <div className={`${baseClass} h-3 w-full rounded ${className}`} style={skeletonStyle} />;
   }
-}
+});

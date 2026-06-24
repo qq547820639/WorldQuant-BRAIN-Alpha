@@ -1,5 +1,6 @@
 /** Detailed score breakdown — header, layers, hard gates, and top failures. */
 
+import { memo } from "react";
 import type { Scorecard, ScoreLayerItem } from "@/types";
 import ScoreBar, { formatScore, labelFor } from "./ScoreBar";
 import { LAYER_COLORS } from "./ScoreBar";
@@ -47,7 +48,7 @@ interface FallbackProps {
   scorecard: Scorecard;
 }
 
-function FallbackBreakdown({ scorecard }: FallbackProps) {
+const FallbackBreakdown = memo(function FallbackBreakdown({ scorecard }: FallbackProps) {
   const lw = scorecard.layer_weights ?? {
     prior: 0.3,
     empirical: 0.45,
@@ -126,13 +127,13 @@ function FallbackBreakdown({ scorecard }: FallbackProps) {
       ))}
     </>
   );
-}
+});
 
 interface Props {
   scorecard: Scorecard;
 }
 
-export default function ScoreDetails({ scorecard }: Props) {
+export default memo(function ScoreDetails({ scorecard }: Props) {
   const tree = scorecard.attribution_tree;
   const layers = tree?.children;
   const hardGates = extractHardGates(scorecard);
@@ -252,4 +253,4 @@ export default function ScoreDetails({ scorecard }: Props) {
       )}
     </>
   );
-}
+});

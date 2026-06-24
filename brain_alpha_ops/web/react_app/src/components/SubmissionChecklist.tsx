@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { readinessReasonLabel } from "@/helpers/readinessLabels";
 import type { Candidate } from "@/types";
 
@@ -76,7 +77,7 @@ function formatNumber(value: unknown) {
   return number.toFixed(2);
 }
 
-export function ConfirmationTable({ title, empty, rows }: { title: string; empty: string; rows: ConfirmationRow[] }) {
+export const ConfirmationTable = memo(function ConfirmationTable({ title, empty, rows }: { title: string; empty: string; rows: ConfirmationRow[] }) {
   return (
     <section className="min-w-0 space-y-3">
       <h3 className="text-sm font-semibold text-text-secondary">{title}</h3>
@@ -147,4 +148,4 @@ export function ConfirmationTable({ title, empty, rows }: { title: string; empty
       </div>
     </section>
   );
-}
+});

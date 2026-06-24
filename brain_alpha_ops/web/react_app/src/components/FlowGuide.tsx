@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo } from 'react';
 
 interface Step {
   phase: string;
@@ -39,7 +39,7 @@ interface FlowGuideProps {
   onDismiss?: () => void;
 }
 
-export const FlowGuide: React.FC<FlowGuideProps> = ({ currentPhase, onDismiss }) => {
+export const FlowGuide = memo(function FlowGuide({ currentPhase, onDismiss }: FlowGuideProps) {
   const [dismissed, setDismissed] = React.useState(false);
 
   if (dismissed) return null;
@@ -92,4 +92,4 @@ export const FlowGuide: React.FC<FlowGuideProps> = ({ currentPhase, onDismiss })
       </div>
     </div>
   );
-};
+});

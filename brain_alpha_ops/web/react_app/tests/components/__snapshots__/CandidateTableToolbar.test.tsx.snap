@@ -1,0 +1,170 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`CandidateTableToolbar > matches snapshot 1`] = `
+<div>
+  <h1
+    class="text-xl font-medium text-text-primary mb-1"
+  >
+    候选管理
+  </h1>
+  <p
+    aria-live="polite"
+    class="text-sm text-text-tertiary mb-4"
+    role="status"
+  >
+    主池 5/10 · 可推进 3 · 历史 10
+     · 已返回 10/10
+  </p>
+  <div
+    class="flex flex-wrap items-center gap-3 mb-4"
+  >
+    <label
+      class="flex items-center gap-2 text-sm font-medium text-text-secondary"
+    >
+      目标池容量
+      <input
+        class="form-input w-20"
+        max="100"
+        min="1"
+        type="number"
+        value="10"
+      />
+    </label>
+    <button
+      aria-busy="false"
+      class="btn btn-primary btn-sm"
+      title="自动维护目标池容量，并在非提交边界内继续官方模拟与质量检查"
+      type="button"
+    >
+      自动推进候选池
+    </button>
+    <button
+      aria-busy="false"
+      class="btn btn-secondary btn-sm"
+      title="自动推进中断或单批证据缺失时使用；按 Top3 进入官方模拟后自动接质量门槛检查，不执行真实 Alpha submit"
+      type="button"
+    >
+      运行官方验证队列
+    </button>
+    <button
+      aria-busy="false"
+      class="btn btn-secondary btn-sm"
+      title="根据服务端返工队列进行本地优化；不会携带凭据，也不会提交 Alpha"
+      type="button"
+    >
+      优化返工队列
+    </button>
+  </div>
+  <div
+    class="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-4"
+  >
+    <div
+      data-testid="quality-主池保留"
+    >
+      <span>
+        主池保留
+      </span>
+      <span>
+        5
+      </span>
+    </div>
+    <div
+      data-testid="quality-可推进"
+    >
+      <span>
+        可推进
+      </span>
+      <span>
+        3
+      </span>
+    </div>
+    <div
+      data-testid="quality-需优化"
+    >
+      <span>
+        需优化
+      </span>
+      <span>
+        2
+      </span>
+    </div>
+    <div
+      data-testid="quality-阻断"
+    >
+      <span>
+        阻断
+      </span>
+      <span>
+        1
+      </span>
+    </div>
+    <div
+      data-testid="quality-输出模式"
+    >
+      <span>
+        输出模式
+      </span>
+      <span>
+        标准模式
+      </span>
+    </div>
+  </div>
+  <div
+    data-testid="lifecycle-replay-panel"
+  />
+  <div
+    data-testid="candidate-detail-panel"
+  />
+  <div
+    class="flex flex-col sm:flex-row gap-3 mb-4"
+  >
+    <input
+      aria-label="过滤候选"
+      class="form-input flex-1"
+      maxlength="200"
+      placeholder="按表达式、家族、ID、质量原因搜索..."
+      type="text"
+      value=""
+    />
+    <button
+      aria-busy="false"
+      class="btn btn-secondary btn-sm"
+      type="button"
+    >
+      刷新
+    </button>
+    <div
+      data-testid="tooltip"
+      title="点击仅显示收藏的候选"
+    >
+      <button
+        aria-label="仅显示收藏的候选"
+        aria-pressed="false"
+        class="btn btn-sm btn-secondary"
+        type="button"
+      >
+        ⭐ 
+        仅收藏
+      </button>
+    </div>
+    <div
+      style="position: relative;"
+    >
+      <div
+        data-testid="tooltip"
+        title="导出当前候选列表为 CSV 或 JSON 格式"
+      >
+        <button
+          aria-expanded="false"
+          aria-haspopup="true"
+          class="btn btn-secondary btn-sm"
+          disabled=""
+          type="button"
+        >
+          导出 ▾
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+`;

@@ -1,0 +1,970 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`ConfigPanel Component > matches snapshot with default form 1`] = `
+<div>
+  <form
+    class="w-full max-w-5xl min-w-0 space-y-5 animate-fade-in"
+  >
+    <div
+      class="panel flex flex-wrap items-start justify-between gap-4"
+    >
+      <div
+        class="min-w-0 max-w-2xl"
+      >
+        <h2
+          class="text-xl font-semibold text-text-primary"
+        >
+          连接与生产参数
+        </h2>
+        <p
+          class="mt-2 text-sm leading-6 text-text-secondary"
+        >
+          调整本次运行参数；需要官方同步、官方回测或提交前复核时，临时填写 BRAIN 会话凭证并测试连接。保存配置不会保存账号、密码或 token。
+        </p>
+      </div>
+      <div
+        class="flex w-full flex-wrap justify-end gap-2 sm:w-auto"
+      >
+        <input
+          accept="application/json,.json"
+          aria-label="导入配置JSON"
+          class="hidden"
+          type="file"
+        />
+        <button
+          class="btn btn-secondary btn-sm"
+          type="button"
+        >
+          导入
+        </button>
+        <button
+          class="btn btn-secondary btn-sm"
+          type="button"
+        >
+          导出
+        </button>
+        <button
+          class="btn btn-secondary btn-sm disabled:opacity-50"
+          disabled=""
+          type="button"
+        >
+          重置
+        </button>
+        <button
+          class="btn btn-primary btn-sm"
+          disabled=""
+          type="submit"
+        >
+          保存
+        </button>
+      </div>
+    </div>
+    <fieldset
+      class="panel min-w-0"
+    >
+      <legend
+        class="px-1 text-base font-semibold text-text-primary"
+      >
+        BRAIN 连接
+      </legend>
+      <p
+        class="mt-2 max-w-3xl text-sm leading-6 text-text-secondary"
+      >
+        这些字段只保留在当前页面，用于本次连接测试和验证。
+      </p>
+      <div
+        class="mt-4 grid grid-cols-1 gap-x-5 gap-y-4 md:grid-cols-2"
+      >
+        <div
+          class="grid grid-cols-1 gap-x-5 gap-y-4 md:grid-cols-2"
+        >
+          <label
+            class="form-label"
+          >
+            <span
+              class="block mb-1"
+            >
+              账户邮箱
+            </span>
+            <input
+              autocomplete="off"
+              class="form-input"
+              inputmode="email"
+              maxlength="160"
+              type="text"
+              value=""
+            />
+          </label>
+          <label
+            class="form-label"
+          >
+            <span
+              class="mb-1 block"
+            >
+              密码
+            </span>
+            <input
+              autocomplete="new-password"
+              class="form-input"
+              type="password"
+              value=""
+            />
+          </label>
+          <label
+            class="form-label"
+          >
+            <span
+              class="mb-1 block"
+            >
+              Token
+            </span>
+            <input
+              autocomplete="off"
+              class="form-input"
+              maxlength="512"
+              type="password"
+              value=""
+            />
+          </label>
+          <div
+            class="flex flex-col gap-2 sm:items-start md:col-span-2"
+          >
+            <button
+              class="btn btn-secondary btn-sm"
+              type="button"
+            >
+              测试 BRAIN 连接
+            </button>
+            <p
+              aria-live="polite"
+              class="text-xs text-text-tertiary"
+              role="status"
+            >
+              请临时填写页面凭证
+            </p>
+          </div>
+        </div>
+      </div>
+    </fieldset>
+    <fieldset
+      class="panel min-w-0"
+    >
+      <legend
+        class="px-1 text-base font-semibold text-text-primary"
+      >
+        BRAIN 设置
+      </legend>
+      <p
+        class="mt-2 max-w-3xl text-sm leading-6 text-text-secondary"
+      >
+        字段和选项来自后端公开的官方能力集校验，不在前端自定义扩展。
+      </p>
+      <div
+        class="mt-4 grid grid-cols-1 gap-x-5 gap-y-4 md:grid-cols-2"
+      >
+        <details
+          class="col-span-full group/config-details mb-2"
+          open=""
+        >
+          <summary
+            class="text-sm font-medium text-text-secondary cursor-pointer py-1 select-none hover:text-text-primary transition-colors"
+          >
+            基础参数
+          </summary>
+          <div
+            class="mt-3 grid grid-cols-1 gap-x-5 gap-y-4 md:grid-cols-2"
+          >
+            <label
+              class="form-label"
+            >
+              <span
+                class="block mb-1"
+              >
+                资产类型
+              </span>
+              <select
+                class="form-input"
+              >
+                <option
+                  value="EQUITY"
+                >
+                  EQUITY
+                </option>
+              </select>
+            </label>
+            <label
+              class="form-label"
+            >
+              <span
+                class="block mb-1"
+              >
+                区域
+                <span
+                  aria-label="字段帮助信息"
+                  class="cursor-help ml-1 text-xs opacity-60 hover:opacity-100"
+                  role="img"
+                  title="区域决定了 Alpha 适用的股票市场。USA 针对美国市场，EUR 针对欧洲，GLOBAL 覆盖全球。
+
+推荐: 推荐从 USA (美国) 开始，这是流动性最好的市场。
+⚠️ 切换区域可能导致已有候选不再适用。"
+                >
+                  ❓
+                </span>
+              </span>
+              <select
+                class="form-input"
+              >
+                <option
+                  value="USA"
+                >
+                  USA
+                </option>
+                <option
+                  value="CHN"
+                >
+                  CHN
+                </option>
+                <option
+                  value="EUR"
+                >
+                  EUR
+                </option>
+                <option
+                  value="GLB"
+                >
+                  GLB
+                </option>
+              </select>
+            </label>
+            <label
+              class="form-label"
+            >
+              <span
+                class="block mb-1"
+              >
+                股票池
+                <span
+                  aria-label="字段帮助信息"
+                  class="cursor-help ml-1 text-xs opacity-60 hover:opacity-100"
+                  role="img"
+                  title="股票池大小决定了 Alpha 覆盖的股票数量。TOP3000 覆盖最大的 3000 只股票。
+
+推荐: 推荐 TOP3000，足够的股票数能保证统计显著性。
+⚠️ 股票池越小，Alpha 越容易被极端值影响。"
+                >
+                  ❓
+                </span>
+              </span>
+              <select
+                class="form-input"
+              >
+                <option
+                  value="TOP3000"
+                >
+                  TOP3000
+                </option>
+                <option
+                  value="TOP1000"
+                >
+                  TOP1000
+                </option>
+                <option
+                  value="TOP500"
+                >
+                  TOP500
+                </option>
+              </select>
+            </label>
+            <label
+              class="form-label"
+            >
+              <span
+                class="block mb-1"
+              >
+                延迟
+                <span
+                  aria-label="字段帮助信息"
+                  class="cursor-help ml-1 text-xs opacity-60 hover:opacity-100"
+                  role="img"
+                  title="延迟（天）决定了信号从产生到可交易的时间差。Delay-1 表示使用昨天的信号今天交易。
+
+推荐: 推荐 1 天延迟，这是最标准的设置。
+⚠️ 延迟过短可能引入数据窥探偏差。"
+                >
+                  ❓
+                </span>
+              </span>
+              <select
+                class="form-input"
+              >
+                <option
+                  value="0"
+                >
+                  0
+                </option>
+                <option
+                  value="1"
+                >
+                  1
+                </option>
+              </select>
+            </label>
+            <label
+              class="form-label"
+            >
+              <span
+                class="block mb-1"
+              >
+                衰减
+                <span
+                  aria-label="字段帮助信息"
+                  class="cursor-help ml-1 text-xs opacity-60 hover:opacity-100"
+                  role="img"
+                  title="衰减系数控制历史数据的重要性递减速度。decay=10 表示权重每 10 天衰减一半。
+
+推荐: 推荐 decay=10，这是 BRAIN 平台最常用的设置。
+⚠️ decay 太小可能过度反应近期噪音，太大可能错过趋势变化。"
+                >
+                  ❓
+                </span>
+              </span>
+              <input
+                class="form-input"
+                min="0"
+                step="1"
+                type="number"
+                value="10"
+              />
+            </label>
+            <label
+              class="form-label"
+            >
+              <span
+                class="block mb-1"
+              >
+                数据集
+              </span>
+              <input
+                class="form-input"
+                maxlength="128"
+                type="text"
+                value="pv1"
+              />
+            </label>
+            <label
+              class="form-label"
+            >
+              <span
+                class="block mb-1"
+              >
+                Alpha 类型
+              </span>
+              <select
+                class="form-input"
+              >
+                <option
+                  value="REGULAR"
+                >
+                  REGULAR
+                </option>
+                <option
+                  value="POWER_POOL"
+                >
+                  POWER_POOL
+                </option>
+              </select>
+            </label>
+          </div>
+        </details>
+        <details
+          class="col-span-full group/config-details mb-2"
+        >
+          <summary
+            class="text-sm font-medium text-text-secondary cursor-pointer py-1 select-none hover:text-text-primary transition-colors"
+          >
+            高级参数
+          </summary>
+          <div
+            class="mt-3 grid grid-cols-1 gap-x-5 gap-y-4 md:grid-cols-2"
+          >
+            <label
+              class="form-label"
+            >
+              <span
+                class="block mb-1"
+              >
+                中性化
+                <span
+                  aria-label="字段帮助信息"
+                  class="cursor-help ml-1 text-xs opacity-60 hover:opacity-100"
+                  role="img"
+                  title="中性化消除特定因子（如行业、市值）对 Alpha 的影响。SUBINDUSTRY 表示在子行业内中性化。
+
+推荐: 推荐 SUBINDUSTRY，平衡了去偏效果和信号保留。
+⚠️ 过度中性化可能把有用的信号也消除掉。"
+                >
+                  ❓
+                </span>
+              </span>
+              <select
+                class="form-input"
+              >
+                <option
+                  value="SUBINDUSTRY"
+                >
+                  SUBINDUSTRY
+                </option>
+                <option
+                  value="INDUSTRY"
+                >
+                  INDUSTRY
+                </option>
+                <option
+                  value="SECTOR"
+                >
+                  SECTOR
+                </option>
+                <option
+                  value="MARKET"
+                >
+                  MARKET
+                </option>
+                <option
+                  value="NONE"
+                >
+                  NONE
+                </option>
+              </select>
+            </label>
+            <label
+              class="form-label"
+            >
+              <span
+                class="block mb-1"
+              >
+                数据净化
+                <span
+                  aria-label="字段帮助信息"
+                  class="cursor-help ml-1 text-xs opacity-60 hover:opacity-100"
+                  role="img"
+                  title="数据净化自动处理异常值和缺失数据，ON 表示启用 BRAIN 平台的自动清理。
+
+推荐: 推荐保持 ON，避免脏数据污染 Alpha 表现。
+⚠️ 关闭数据净化可能产生虚假的高分 Alpha（实际不可靠）。"
+                >
+                  ❓
+                </span>
+              </span>
+              <select
+                class="form-input"
+              >
+                <option
+                  value="ON"
+                >
+                  ON
+                </option>
+                <option
+                  value="OFF"
+                >
+                  OFF
+                </option>
+              </select>
+            </label>
+            <label
+              class="form-label"
+            >
+              <span
+                class="block mb-1"
+              >
+                单位处理
+                <span
+                  aria-label="字段帮助信息"
+                  class="cursor-help ml-1 text-xs opacity-60 hover:opacity-100"
+                  role="img"
+                  title="单位处理决定如何处理不同股票的不同价格量级。VERIFY 表示系统会自动检查并统一单位。
+
+推荐: 推荐 VERIFY，确保跨股票比较有意义。
+⚠️ 关闭单位处理可能导致不同价格量级的股票不可比较。"
+                >
+                  ❓
+                </span>
+              </span>
+              <select
+                class="form-input"
+              >
+                <option
+                  value="VERIFY"
+                >
+                  VERIFY
+                </option>
+                <option
+                  value="RAW"
+                >
+                  RAW
+                </option>
+                <option
+                  value="NONE"
+                >
+                  NONE
+                </option>
+              </select>
+            </label>
+            <label
+              class="form-label"
+            >
+              <span
+                class="block mb-1"
+              >
+                空值处理
+                <span
+                  aria-label="字段帮助信息"
+                  class="cursor-help ml-1 text-xs opacity-60 hover:opacity-100"
+                  role="img"
+                  title="空值处理决定如何处理缺失数据。ON 表示自动填充或排除空值。
+
+推荐: 推荐保持 ON。
+⚠️ 关闭后空值可能导致 Alpha 计算异常。"
+                >
+                  ❓
+                </span>
+              </span>
+              <select
+                class="form-input"
+              >
+                <option
+                  value="ON"
+                >
+                  ON
+                </option>
+                <option
+                  value="OFF"
+                >
+                  OFF
+                </option>
+              </select>
+            </label>
+            <label
+              class="form-label"
+            >
+              <span
+                class="block mb-1"
+              >
+                语言
+              </span>
+              <select
+                class="form-input"
+              >
+                <option
+                  value="FASTEXPR"
+                >
+                  FASTEXPR
+                </option>
+              </select>
+            </label>
+          </div>
+        </details>
+      </div>
+    </fieldset>
+    <fieldset
+      class="panel min-w-0"
+    >
+      <legend
+        class="px-1 text-base font-semibold text-text-primary"
+      >
+        预算控制
+      </legend>
+      <p
+        class="mt-2 max-w-3xl text-sm leading-6 text-text-secondary"
+      >
+        用于限制单次生产运行的候选数量、轮次和回测批量。
+      </p>
+      <div
+        class="mt-4 grid grid-cols-1 gap-x-5 gap-y-4 md:grid-cols-2"
+      >
+        <label
+          class="form-label"
+        >
+          <span
+            class="block mb-1"
+          >
+            每轮最大候选数
+          </span>
+          <input
+            class="form-input"
+            max="1000"
+            min="1"
+            step="1"
+            type="number"
+            value="20"
+          />
+        </label>
+        <label
+          class="form-label"
+        >
+          <span
+            class="block mb-1"
+          >
+            最大轮次
+          </span>
+          <input
+            class="form-input"
+            max="10000"
+            min="1"
+            step="1"
+            type="number"
+            value="10"
+          />
+        </label>
+        <label
+          class="form-label"
+        >
+          <span
+            class="block mb-1"
+          >
+            候选池大小
+          </span>
+          <input
+            class="form-input"
+            max="5000"
+            min="1"
+            step="1"
+            type="number"
+            value="10"
+          />
+        </label>
+        <label
+          class="form-label"
+        >
+          <span
+            class="block mb-1"
+          >
+            回测批处理大小
+          </span>
+          <input
+            class="form-input"
+            max="100"
+            min="1"
+            step="1"
+            type="number"
+            value="3"
+          />
+        </label>
+        <div>
+          <label
+            class="flex items-center justify-between gap-3 py-2 text-sm font-medium text-text-secondary"
+            style="border-bottom-color: var(--color-border-default);"
+          >
+            <span>
+              每次运行前强制云端同步
+            </span>
+            <input
+              class="h-4 w-4"
+              style="accent-color: var(--color-status-active-text);"
+              type="checkbox"
+            />
+          </label>
+          <p
+            class="mt-1 text-xs leading-5 text-text-tertiary"
+          >
+            默认关闭：首次无缓存时自动同步，之后直接使用本地缓存；开启后，每次生产运行前都会重新拉取云端 Alpha 与官方能力集。
+          </p>
+        </div>
+      </div>
+    </fieldset>
+    <fieldset
+      class="panel min-w-0"
+    >
+      <legend
+        class="px-1 text-base font-semibold text-text-primary"
+      >
+        质量阈值
+      </legend>
+      <p
+        class="mt-2 max-w-3xl text-sm leading-6 text-text-secondary"
+      >
+        提交前门禁，低于阈值的候选只能进入研究或优化状态。
+      </p>
+      <div
+        class="mt-4 grid grid-cols-1 gap-x-5 gap-y-4 md:grid-cols-2"
+      >
+        <label
+          class="form-label"
+        >
+          <span
+            class="block mb-1"
+          >
+            最低夏普比率
+            <span
+              aria-label="字段帮助信息"
+              class="cursor-help ml-1 text-xs opacity-60 hover:opacity-100"
+              role="img"
+              title="最低 Sharpe 比率门禁。Sharpe = 收益 / 波动率，衡量风险调整后收益。
+
+推荐: BRAIN 平台标准：Delay-1 最低 1.25，Delay-0 最低 2.0。
+⚠️ 调低门禁可能通过更多低质量 Alpha。"
+            >
+              ❓
+            </span>
+          </span>
+          <input
+            class="form-input"
+            min="0"
+            step="0.01"
+            type="number"
+            value="1.25"
+          />
+        </label>
+        <label
+          class="form-label"
+        >
+          <span
+            class="block mb-1"
+          >
+            最低适应度
+            <span
+              aria-label="字段帮助信息"
+              class="cursor-help ml-1 text-xs opacity-60 hover:opacity-100"
+              role="img"
+              title="最低 Fitness 门禁。Fitness = Sharpe × √(|Returns|/max(Turnover, 0.125))，综合衡量收益和换手率。
+
+推荐: BRAIN 平台标准：Delay-1 最低 1.0，Delay-0 最低 1.3。
+⚠️ 调低门禁可能通过更多低换手性价比的 Alpha。"
+            >
+              ❓
+            </span>
+          </span>
+          <input
+            class="form-input"
+            min="0"
+            step="0.01"
+            type="number"
+            value="1"
+          />
+        </label>
+        <label
+          class="form-label"
+        >
+          <span
+            class="block mb-1"
+          >
+            最低换手率
+          </span>
+          <input
+            class="form-input"
+            max="1"
+            min="0"
+            step="0.01"
+            type="number"
+            value="0.01"
+          />
+        </label>
+        <label
+          class="form-label"
+        >
+          <span
+            class="block mb-1"
+          >
+            最高换手率
+          </span>
+          <input
+            class="form-input"
+            max="1"
+            min="0"
+            step="0.01"
+            type="number"
+            value="0.7"
+          />
+        </label>
+        <label
+          class="form-label"
+        >
+          <span
+            class="block mb-1"
+          >
+            最大自相关性
+            <span
+              aria-label="字段帮助信息"
+              class="cursor-help ml-1 text-xs opacity-60 hover:opacity-100"
+              role="img"
+              title="最大自相关门禁。限制提交的 Alpha 与自己已有 Alpha 的相似度。
+
+推荐: BRAIN 平台标准：< 0.70。
+⚠️ 自相关过高的 Alpha 会被 BRAIN 平台拒绝。"
+            >
+              ❓
+            </span>
+          </span>
+          <input
+            class="form-input"
+            max="1"
+            min="0"
+            step="0.01"
+            type="number"
+            value="0.7"
+          />
+        </label>
+        <label
+          class="form-label"
+        >
+          <span
+            class="block mb-1"
+          >
+            最大权重集中度
+          </span>
+          <input
+            class="form-input"
+            max="1"
+            min="0"
+            step="0.01"
+            type="number"
+            value="0.1"
+          />
+        </label>
+      </div>
+    </fieldset>
+    <fieldset
+      class="panel min-w-0"
+    >
+      <legend
+        class="px-1 text-base font-semibold text-text-primary"
+      >
+        评分配置
+      </legend>
+      <p
+        class="mt-2 max-w-3xl text-sm leading-6 text-text-secondary"
+      >
+        当前评分层权重为只读展示，避免和官方门禁配置混淆。
+      </p>
+      <div
+        class="mt-4 grid grid-cols-1 gap-x-5 gap-y-4 md:grid-cols-2"
+      >
+        <div
+          class="flex min-w-0 flex-wrap justify-between gap-x-3 gap-y-1 py-1.5 text-sm"
+          style="border-bottom-color: var(--color-border-default);"
+        >
+          <span
+            class="text-text-secondary"
+          >
+            先验权重
+          </span>
+          <span
+            class="min-w-0 break-all font-mono-value text-text-primary"
+          >
+            -
+          </span>
+        </div>
+        <div
+          class="flex min-w-0 flex-wrap justify-between gap-x-3 gap-y-1 py-1.5 text-sm"
+          style="border-bottom-color: var(--color-border-default);"
+        >
+          <span
+            class="text-text-secondary"
+          >
+            经验权重
+          </span>
+          <span
+            class="min-w-0 break-all font-mono-value text-text-primary"
+          >
+            -
+          </span>
+        </div>
+        <div
+          class="flex min-w-0 flex-wrap justify-between gap-x-3 gap-y-1 py-1.5 text-sm"
+          style="border-bottom-color: var(--color-border-default);"
+        >
+          <span
+            class="text-text-secondary"
+          >
+            检查清单权重
+          </span>
+          <span
+            class="min-w-0 break-all font-mono-value text-text-primary"
+          >
+            -
+          </span>
+        </div>
+        <div
+          class="flex min-w-0 flex-wrap justify-between gap-x-3 gap-y-1 py-1.5 text-sm"
+          style="border-bottom-color: var(--color-border-default);"
+        >
+          <span
+            class="text-text-secondary"
+          >
+            市场状态
+          </span>
+          <span
+            class="min-w-0 break-all font-mono-value text-text-primary"
+          >
+            -
+          </span>
+        </div>
+        <div
+          class="col-span-full mt-2"
+        >
+          <button
+            class="btn btn-secondary btn-sm"
+            type="button"
+          >
+            查看详细权重
+          </button>
+        </div>
+      </div>
+    </fieldset>
+    <fieldset
+      class="panel min-w-0"
+    >
+      <legend
+        class="px-1 text-base font-semibold text-text-primary"
+      >
+        环境设置
+      </legend>
+      <p
+        class="mt-2 max-w-3xl text-sm leading-6 text-text-secondary"
+      >
+        本地 Web 页面只允许保存非提交运行配置；真实提交必须走单独的人工确认流程。
+      </p>
+      <div
+        class="mt-4 grid grid-cols-1 gap-x-5 gap-y-4 md:grid-cols-2"
+      >
+        <div
+          class="col-span-full"
+        >
+          <label
+            class="flex items-center justify-between gap-3 py-2 text-sm font-medium text-text-secondary"
+            style="border-bottom-color: var(--color-border-default);"
+          >
+            <span>
+              暗色模式
+            </span>
+            <input
+              class="h-4 w-4"
+              style="accent-color: var(--color-status-active-text);"
+              type="checkbox"
+            />
+          </label>
+          <p
+            class="mt-1 text-xs leading-5 text-text-tertiary"
+          >
+            切换亮色/暗色主题，设置会保存在本地浏览器中。
+          </p>
+        </div>
+        <div
+          class="flex min-w-0 flex-wrap justify-between gap-x-3 gap-y-1 py-1.5 text-sm"
+          style="border-bottom-color: var(--color-border-default);"
+        >
+          <span
+            class="text-text-secondary"
+          >
+            自动提交
+          </span>
+          <span
+            class="min-w-0 break-all font-mono-value text-text-primary"
+          >
+            关闭（Web 保存强制）
+          </span>
+        </div>
+      </div>
+    </fieldset>
+  </form>
+</div>
+`;

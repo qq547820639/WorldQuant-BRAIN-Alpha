@@ -1,6 +1,6 @@
 /** Sub-components for CandidateTable. */
 
-import { useCallback, useState } from "react";
+import { useCallback, useState, memo } from "react";
 import type { AlphaLifecycleHistoryResponse, AlphaLifecycleTrace, Candidate } from "@/types";
 import { isStarred, toggleStar } from "@/utils/starredCandidates";
 import {
@@ -26,7 +26,7 @@ import type { LifecycleMetric as LifecycleMetricType, LifecycleMetricProps, Life
 
 type SortKey = "score" | "status" | "created";
 
-export function SortHeader({ column, label, sortKey, sortAsc, onSort }: {
+export const SortHeader = memo(function SortHeader({ column, label, sortKey, sortAsc, onSort }: {
   column: SortKey; label: string; sortKey: SortKey; sortAsc: boolean; onSort: (column: SortKey) => void;
 }) {
   const active = sortKey === column;
@@ -39,18 +39,18 @@ export function SortHeader({ column, label, sortKey, sortAsc, onSort }: {
       </button>
     </th>
   );
-}
+});
 
-export function QualitySummaryItem({ label, value }: { label: string; value: string }) {
+export const QualitySummaryItem = memo(function QualitySummaryItem({ label, value }: { label: string; value: string }) {
   return (
     <div className="kpi-card">
       <p className="kpi-card-label">{label}</p>
       <p className="font-mono-value text-base font-medium text-text-primary">{value}</p>
     </div>
   );
-}
+});
 
-export function LifecycleReplayPanel({
+export const LifecycleReplayPanel = memo(function LifecycleReplayPanel({
   error,
   filterActive,
   history,
@@ -131,18 +131,18 @@ export function LifecycleReplayPanel({
       </div>
     </section>
   );
-}
+});
 
-export function LifecycleMetric({ label, tone = "text-text-primary", value }: { label: string; tone?: string; value: string }) {
+export const LifecycleMetric = memo(function LifecycleMetric({ label, tone = "text-text-primary", value }: { label: string; tone?: string; value: string }) {
   return (
     <div className="min-w-0 border-l border-border-subtle pl-3">
       <p className="text-2xs font-semibold uppercase tracking-wider text-text-tertiary">{label}</p>
       <p className={`font-mono-value text-base font-medium ${tone}`}>{value}</p>
     </div>
   );
-}
+});
 
-export function CandidateMobileCard({
+export const CandidateMobileCard = memo(function CandidateMobileCard({
   candidate,
   checkResults,
   canShowRowActions,
@@ -155,6 +155,8 @@ export function CandidateMobileCard({
   onScore,
   onSimulate,
   onCheck,
+  cardRef,
+  style,
 }: {
   candidate: Candidate;
   checkResults: Map<string, CandidateCheckResult>;
@@ -168,6 +170,8 @@ export function CandidateMobileCard({
   onScore?: (candidate: Candidate) => void;
   onSimulate?: (candidate: Candidate) => void;
   onCheck?: (candidate: Candidate) => void;
+  cardRef?: React.Ref<HTMLDivElement>;
+  style?: React.CSSProperties;
 }) {
   const quality = candidateQualityBadge(candidate);
   const evidence = officialEvidenceText(candidate, checkResults);
@@ -179,7 +183,7 @@ export function CandidateMobileCard({
     setStarred(newState);
   }, [identity]);
   return (
-    <div className="panel" style={{ padding: "12px" }}>
+    <div ref={cardRef} className="panel" style={{ padding: "12px", ...style }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -244,9 +248,9 @@ export function CandidateMobileCard({
       )}
     </div>
   );
-}
+});
 
-export function EmptyState({ filter, showProductionControls }: { filter: boolean; showProductionControls: boolean }) {
+export const EmptyState = memo(function EmptyState({ filter, showProductionControls }: { filter: boolean; showProductionControls: boolean }) {
   if (filter) {
     return (
       <div style={{ padding: "2rem 0", color: "var(--color-text-muted)", fontSize: 13 }}>
@@ -289,4 +293,4 @@ export function EmptyState({ filter, showProductionControls }: { filter: boolean
       </p>
     </div>
   );
-}
+});

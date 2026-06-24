@@ -6,7 +6,7 @@
  * previous session.
  */
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, memo } from "react";
 import { getResumeState, hasResumeHistory, type ResumeState } from "@/utils/resumeState";
 
 // ── Props ──────────────────────────────────────────────────────────────────
@@ -73,7 +73,7 @@ function formatSyncAge(iso: string | null): string {
 
 // ── Component ──────────────────────────────────────────────────────────────
 
-export default function ResumeWork({
+export default memo(function ResumeWork({
   notify,
   connected,
   contextFresh,
@@ -301,4 +301,4 @@ export default function ResumeWork({
       </div>
     </div>
   );
-}
+});

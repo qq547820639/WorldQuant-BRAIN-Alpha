@@ -1,4 +1,4 @@
-import React from "react";
+import React, { memo } from "react";
 
 export interface TrendData {
   date: string;
@@ -14,7 +14,7 @@ interface TrendPanelProps {
   change?: number; // 变化百分比
 }
 
-const TrendPanel: React.FC<TrendPanelProps> = ({ title, data, unit, color, currentValue, change }) => {
+const TrendPanel = memo(function TrendPanel({ title, data, unit, color, currentValue, change }: TrendPanelProps) {
   if (!data || data.length === 0) {
     return (
       <div className="bg-surface-1 rounded-lg p-4 border border-border-subtle">
@@ -72,6 +72,6 @@ const TrendPanel: React.FC<TrendPanelProps> = ({ title, data, unit, color, curre
       </div>
     </div>
   );
-};
+});
 
 export default TrendPanel;

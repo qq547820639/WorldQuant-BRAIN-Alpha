@@ -1,5 +1,5 @@
 /** Unified progress and loading feedback — Terminal Precision design */
-import { useEffect, useMemo, useState, useRef } from "react";
+import { useEffect, useMemo, useState, useRef, memo } from "react";
 import { apiErrorMessage } from "@/helpers/errorExperience";
 import { classifyProgressState, type JobStateClassification } from "@/helpers/runPayload";
 import type { ProgressLifecycle, UnifiedProgress } from "@/types";
@@ -16,7 +16,7 @@ interface Props {
   onRetry?: () => void;
 }
 
-export default function ProgressFeedback({
+export default memo(function ProgressFeedback({
   state, title = "进度", progress, error,
   idleText = "就绪", successText = "完成",
   retryLabel = "重试", compact = false, onRetry,
@@ -163,7 +163,7 @@ export default function ProgressFeedback({
       </div>
     </div>
   );
-}
+});
 
 function progressStatusBadge(
   state: ProgressLifecycle,

@@ -3,7 +3,7 @@
  * Shown when the App is not connected and no context cache is available.
  */
 
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useRef, memo } from "react";
 import type { BrainCredentials } from "@/types";
 import { getConnectionErrorGuide, type ConnectionErrorGuideEntry } from "@/helpers/connectionErrorGuide";
 import { useApi } from "@/hooks/useApi";
@@ -16,7 +16,7 @@ interface Props {
   onConnectionTested: (ok: boolean, err: string | null) => void;
 }
 
-export default function CredentialQuickStart({
+export default memo(function CredentialQuickStart({
   credentials,
   managedCredentialsAvailable,
   onCredentialsChange,
@@ -252,4 +252,4 @@ export default function CredentialQuickStart({
       </div>
     </div>
   );
-}
+});

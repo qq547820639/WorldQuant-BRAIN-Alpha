@@ -1,0 +1,72 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`ScoringPanel > matches snapshot with candidate 1`] = `
+<div>
+  <div
+    class="animate-fade-in"
+  >
+    <h1
+      class="text-xl font-medium text-text-primary mb-1"
+    >
+      科学评分
+    </h1>
+    <p
+      class="text-sm text-text-tertiary mb-4"
+    >
+      alpha_test_001
+       · 
+      momentum
+    </p>
+    <div
+      data-compact="true"
+      data-state="success"
+      data-testid="progress-feedback"
+    >
+      <span>
+        评分与验证
+      </span>
+      <button
+        type="button"
+      >
+        重试
+      </button>
+    </div>
+    <div
+      data-testid="scoring-header"
+    >
+      <span>
+        Scoring Header
+      </span>
+      <button
+        type="button"
+      >
+        重新评分
+      </button>
+    </div>
+    <div
+      data-testid="gate-results"
+    >
+      <span>
+        Hard Gates: 
+        0
+      </span>
+      <span>
+        Soft Gates: 
+        0
+      </span>
+    </div>
+    <div
+      data-testid="improvement-hints"
+    >
+      <span>
+        Failures: 
+        0
+      </span>
+      <span>
+        Hints: 
+        0
+      </span>
+    </div>
+  </div>
+</div>
+`;

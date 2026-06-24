@@ -1,4 +1,4 @@
-import React from "react";
+import React, { memo } from "react";
 import { type TrendData } from "@/components/TrendPanel";
 import type { JobStatus, CloudAlphaWithMetrics, ResearchMemorySummary } from "@/types";
 
@@ -117,7 +117,7 @@ interface DashboardReportModalProps {
   markdown: string;
 }
 
-export function DashboardReportModal({ show, onClose, markdown }: DashboardReportModalProps) {
+export const DashboardReportModal = memo(function DashboardReportModal({ show, onClose, markdown }: DashboardReportModalProps) {
   if (!show) return null;
 
   const handleCopy = async () => {
@@ -164,9 +164,9 @@ export function DashboardReportModal({ show, onClose, markdown }: DashboardRepor
       </div>
     </div>
   );
-}
+});
 
-function ReportFooter({ onClose, onCopy, markdown }: { onClose: () => void; onCopy: () => Promise<boolean>; markdown: string }) {
+const ReportFooter = memo(function ReportFooter({ onClose, onCopy, markdown }: { onClose: () => void; onCopy: () => Promise<boolean>; markdown: string }) {
   const [copied, setCopied] = React.useState(false);
 
   const handleCopy = async () => {
@@ -195,4 +195,4 @@ function ReportFooter({ onClose, onCopy, markdown }: { onClose: () => void; onCo
       </button>
     </div>
   );
-}
+});

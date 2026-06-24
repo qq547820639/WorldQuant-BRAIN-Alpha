@@ -1,0 +1,208 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`SnapshotPanel > matches snapshot with cloud view 1`] = `
+<div>
+  <div
+    class="min-w-0 space-y-4 animate-fade-in"
+  >
+    <div
+      class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"
+    >
+      <div
+        class="min-w-0"
+      >
+        <h2
+          class="text-base font-semibold text-text-primary"
+        >
+          云端数据
+        </h2>
+        <p
+          class="text-xs text-text-tertiary"
+        >
+          完整缓存的 Alpha 状态
+        </p>
+      </div>
+      <button
+        class="btn btn-secondary btn-sm"
+        type="button"
+      >
+        刷新
+      </button>
+    </div>
+    <div
+      data-compact="true"
+      data-state="idle"
+      data-testid="progress-feedback"
+    >
+      <span>
+        云端数据
+      </span>
+      <button
+        type="button"
+      >
+        重试
+      </button>
+    </div>
+    <div
+      class="grid grid-cols-2 gap-3 lg:grid-cols-4"
+    >
+      <div
+        class="kpi-card"
+      >
+        <p
+          class="kpi-card-label"
+        >
+          缓存总数
+        </p>
+        <p
+          class="kpi-card-value"
+        >
+          1
+        </p>
+      </div>
+      <div
+        class="kpi-card"
+      >
+        <p
+          class="kpi-card-label"
+        >
+          载入状态
+        </p>
+        <p
+          class="kpi-card-value"
+        >
+          完整载入
+        </p>
+      </div>
+      <div
+        class="kpi-card"
+      >
+        <p
+          class="kpi-card-label"
+        >
+          已提交
+        </p>
+        <p
+          class="kpi-card-value"
+        >
+          -
+        </p>
+      </div>
+      <div
+        class="kpi-card"
+      >
+        <p
+          class="kpi-card-label"
+        >
+          已通过
+        </p>
+        <p
+          class="kpi-card-value"
+        >
+          -
+        </p>
+      </div>
+    </div>
+    <div
+      class="flex flex-col gap-3 sm:flex-row sm:items-center"
+    >
+      <input
+        aria-label="筛选 云端数据"
+        class="w-full min-w-0 rounded-md px-3 py-2 text-sm sm:flex-1"
+        maxlength="200"
+        placeholder="筛选行..."
+        style="background-color: var(--color-surface-elevated); border-color: var(--color-border-medium); color: var(--color-text-bright);"
+        type="text"
+        value=""
+      />
+      <p
+        aria-live="polite"
+        class="text-xs text-text-tertiary"
+        role="status"
+      >
+        0
+         / 
+        0
+         行
+      </p>
+    </div>
+    <div
+      class="panel overflow-hidden p-0"
+    >
+      <div
+        aria-label="云端数据移动列表"
+        class="space-y-3 p-3 md:hidden"
+      >
+        <div
+          class="rounded-md px-4 py-6 text-center text-sm text-text-tertiary"
+          style="border-color: var(--color-border-faded-strong); background-color: var(--color-surface-deep-faded);"
+        >
+          暂无云端 Alpha 记录
+        </div>
+      </div>
+      <div
+        class="hidden max-w-full overflow-auto md:block"
+      >
+        <table
+          aria-label="云端数据表格"
+          class="data-table min-w-[820px] w-full text-sm"
+        >
+          <thead>
+            <tr
+              class="text-left text-xs uppercase tracking-wider"
+              style="border-bottom: 1px solid; border-color: var(--color-border-medium);"
+            >
+              <th
+                class="p-3 text-text-tertiary"
+                scope="col"
+              >
+                类型
+              </th>
+              <th
+                class="p-3 text-text-tertiary"
+                scope="col"
+              >
+                名称
+              </th>
+              <th
+                class="p-3 text-text-tertiary"
+                scope="col"
+              >
+                状态
+              </th>
+              <th
+                class="p-3 text-text-tertiary"
+                scope="col"
+              >
+                指标
+              </th>
+              <th
+                class="p-3 text-text-tertiary"
+                scope="col"
+              >
+                详情
+              </th>
+              <th
+                class="p-3 text-text-tertiary"
+                scope="col"
+              >
+                时间
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td
+                class="p-6 text-center text-text-tertiary"
+                colspan="6"
+              >
+                暂无云端 Alpha 记录
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+`;

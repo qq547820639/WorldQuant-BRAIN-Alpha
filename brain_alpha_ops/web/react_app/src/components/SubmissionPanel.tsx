@@ -1,5 +1,6 @@
 /** Retired submit surface kept as a compatibility alias for read-only review. */
 
+import { memo } from "react";
 import SubmissionConfirmPanel from "@/components/SubmissionConfirmPanel";
 
 interface Props {
@@ -11,7 +12,7 @@ interface Props {
   onNavigate?: (view: string) => void;
 }
 
-export default function SubmissionPanel({ notify, onNavigate }: Props) {
+export default memo(function SubmissionPanel({ notify, onNavigate }: Props) {
   return (
     <div className="w-full max-w-3xl min-w-0 space-y-6 animate-fade-in">
       <div
@@ -24,4 +25,4 @@ export default function SubmissionPanel({ notify, onNavigate }: Props) {
       <SubmissionConfirmPanel notify={notify} onNavigate={onNavigate} />
     </div>
   );
-}
+});

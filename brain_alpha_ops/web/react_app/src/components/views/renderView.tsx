@@ -145,45 +145,66 @@ export function renderActiveView(props: RenderViewProps): React.ReactNode {
 
   switch (activeView) {
   case "dashboard":
-    return <Dashboard
-      notify={notify}
-      connected={connected}
-      contextFresh={contextFresh}
-      phaseStatus={phaseApiStatus}
-      onNavigateToSync={onDashboardSyncStart}
-      onOpenSync={onDashboardSyncOpen}
-      onNavigateToCandidates={() => onNavigate("candidates")}
-      jobRunning={jobState.running}
-      jobStatusMessage={typeof jobState.progress?.status_message === "string" ? jobState.progress.status_message : undefined}
-      jobCycle={jobState.status?.cycle}
-      onStartJob={jobState.startJob}
-    >
-      {!connected && contextFresh && <LocalCacheSessionCard notify={notify} onLoggedOut={onLocalSessionLoggedOut} />}
-      {!connected && !contextFresh && <CredentialQuickStart credentials={credentials} managedCredentialsAvailable={managedCredentialsAvailable} onCredentialsChange={onCredentialsChange} notify={notify} onConnectionTested={onConnectionTested} />}
-      {connected && contextFresh && (
-        <div className="animate-fade-in">
-          <JobMonitor notify={notify} credentials={credentials} jobState={jobState} />
-        </div>
-      )}
-    </Dashboard>;
+    return (
+      <ErrorBoundary
+        key="dashboard"
+        level="section"
+        title="运行总览加载失败"
+        description="仪表盘模块渲染时发生错误，请重试"
+      >
+        <Dashboard
+          notify={notify}
+          connected={connected}
+          contextFresh={contextFresh}
+          phaseStatus={phaseApiStatus}
+          onNavigateToSync={onDashboardSyncStart}
+          onOpenSync={onDashboardSyncOpen}
+          onNavigateToCandidates={() => onNavigate("candidates")}
+          jobRunning={jobState.running}
+          jobStatusMessage={typeof jobState.progress?.status_message === "string" ? jobState.progress.status_message : undefined}
+          jobCycle={jobState.status?.cycle}
+          onStartJob={jobState.startJob}
+        >
+          {!connected && contextFresh && <LocalCacheSessionCard notify={notify} onLoggedOut={onLocalSessionLoggedOut} />}
+          {!connected && !contextFresh && <CredentialQuickStart credentials={credentials} managedCredentialsAvailable={managedCredentialsAvailable} onCredentialsChange={onCredentialsChange} notify={notify} onConnectionTested={onConnectionTested} />}
+          {connected && contextFresh && (
+            <div className="animate-fade-in">
+              <JobMonitor notify={notify} credentials={credentials} jobState={jobState} />
+            </div>
+          )}
+        </Dashboard>
+      </ErrorBoundary>
+    );
   case "official_operations":
     return (
-      <OfficialOperationsPanel
-        notify={notify}
-        credentials={credentials}
-        autoStart={officialOpsAutoStart}
-        connectionReady={connected || managedCredentialsAvailable}
-        officialContextCache={phaseData?.official_context_cache}
-        cloudAlphaCache={phaseData?.cloud_alpha_cache}
-        onAutoStartConsumed={onAutoStartConsumed}
-        onSyncCompleted={onOfficialSyncCompleted}
-        onReconnectRequested={onOfficialReconnectRequested}
-        onNavigateToCandidates={() => onNavigate("candidates")}
-      />
+      <ErrorBoundary
+        key="official_operations"
+        level="section"
+        title="官方操作加载失败"
+        description="官方操作模块渲染时发生错误，请重试"
+      >
+        <OfficialOperationsPanel
+          notify={notify}
+          credentials={credentials}
+          autoStart={officialOpsAutoStart}
+          connectionReady={connected || managedCredentialsAvailable}
+          officialContextCache={phaseData?.official_context_cache}
+          cloudAlphaCache={phaseData?.cloud_alpha_cache}
+          onAutoStartConsumed={onAutoStartConsumed}
+          onSyncCompleted={onOfficialSyncCompleted}
+          onReconnectRequested={onOfficialReconnectRequested}
+          onNavigateToCandidates={() => onNavigate("candidates")}
+        />
+      </ErrorBoundary>
     );
   case "candidates":
     return (
-      <ErrorBoundary key="candidates">
+      <ErrorBoundary
+        key="candidates"
+        level="section"
+        title="候选管理加载失败"
+        description="候选列表模块渲染时发生错误，请重试"
+      >
         <CandidateTable notify={notify} showProductionControls showRowActions
           onScore={onOpenScoring} credentials={credentials} onCandidatePoolUpdated={onCandidatePoolUpdated} />
       </ErrorBoundary>
@@ -191,32 +212,82 @@ export function renderActiveView(props: RenderViewProps): React.ReactNode {
   case "official_backtests":
     return <OfficialBacktestSlots notify={notify} />;
   case "scoring":
-    return selectedCandidate
-      ? <ScoringPanel notify={notify} candidate={selectedCandidate} />
-      : <ScoringPlaceholder onPickCandidate={() => onNavigate("candidates")} />;
+    return selectedCandidate ? (
+      <ErrorBoundary
+        key="scoring"
+        level="section"
+        title="科学评分加载失败"
+        description="评分模块渲染时发生错误，请重试"
+      >
+        <ScoringPanel notify={notify} candidate={selectedCandidate} />
+      </ErrorBoundary>
+    ) : <ScoringPlaceholder onPickCandidate={() => onNavigate("candidates")} />;
   case "quality_check":
-    return <QualityCheckPanel notify={notify} />;
+    return (
+      <ErrorBoundary
+        key="quality_check"
+        level="section"
+        title="质量门禁加载失败"
+        description="质量检查模块渲染时发生错误，请重试"
+      >
+        <QualityCheckPanel notify={notify} />
+      </ErrorBoundary>
+    );
   case "submission_confirm":
     return <SubmissionConfirmPanel notify={notify} onNavigate={onNavigate} />;
   case "checkpoint_status":
-    return <SnapshotPanel key="checkpoint_status" notify={notify} viewMode="checkpoint_status" onNavigate={onNavigate} />;
+    return (
+      <ErrorBoundary
+        key="checkpoint_status"
+        level="section"
+        title="续跑记录加载失败"
+        description="续跑记录模块渲染时发生错误，请重试"
+      >
+        <SnapshotPanel notify={notify} viewMode="checkpoint_status" onNavigate={onNavigate} />
+      </ErrorBoundary>
+    );
   case "robustness":
-    return <SnapshotPanel key="robustness" notify={notify} viewMode="robustness" onNavigate={onNavigate} />;
+    return (
+      <ErrorBoundary
+        key="robustness"
+        level="section"
+        title="稳健性证据加载失败"
+        description="稳健性模块渲染时发生错误，请重试"
+      >
+        <SnapshotPanel notify={notify} viewMode="robustness" onNavigate={onNavigate} />
+      </ErrorBoundary>
+    );
   case "config":
     return (
-      <ConfigPanel
-        notify={notify}
-        credentials={credentials}
-        onCredentialsChange={onCredentialsChange}
-        onConnectionTested={onConnectionTested}
-        connected={connected}
-        contextFresh={contextFresh}
-        managedCredentialsAvailable={managedCredentialsAvailable}
-        onLoggedOut={onLocalSessionLoggedOut}
-      />
+      <ErrorBoundary
+        key="config"
+        level="section"
+        title="系统配置加载失败"
+        description="配置模块渲染时发生错误，请重试"
+      >
+        <ConfigPanel
+          notify={notify}
+          credentials={credentials}
+          onCredentialsChange={onCredentialsChange}
+          onConnectionTested={onConnectionTested}
+          connected={connected}
+          contextFresh={contextFresh}
+          managedCredentialsAvailable={managedCredentialsAvailable}
+          onLoggedOut={onLocalSessionLoggedOut}
+        />
+      </ErrorBoundary>
     );
   case "cloud":
-    return <SnapshotPanel key="cloud" notify={notify} viewMode="cloud" onNavigate={onNavigate} />;
+    return (
+      <ErrorBoundary
+        key="cloud"
+        level="section"
+        title="云端快照加载失败"
+        description="云端快照模块渲染时发生错误，请重试"
+      >
+        <SnapshotPanel notify={notify} viewMode="cloud" onNavigate={onNavigate} />
+      </ErrorBoundary>
+    );
   default:
     return (
       <div className="panel">

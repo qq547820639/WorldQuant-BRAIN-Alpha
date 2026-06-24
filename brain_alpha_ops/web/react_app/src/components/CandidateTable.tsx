@@ -1,73 +1,24 @@
-/**
- * Candidate management table for the state-card UI.
- *
- * The table keeps the compact card-first workflow, but preserves the production
- * semantics users need before official validation or pre-submit blocker review checks.
- *
- * Refactored: extracted CandidateRow, CandidateTableToolbar, useCandidateColumns,
- * CandidateDetailPanel, useCandidatePipeline, and useCandidateActions into separate files.
- */
-
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useVirtualizer } from "@tanstack/react-virtual";
-import { apiErrorMessage } from "@/helpers/errorExperience";
+import { useCallback, useEffect, useMemo } from "react";
 import { useApi } from "@/hooks/useApi";
 import { useGlobalData } from "@/hooks/useGlobalData";
 import { useCandidatePipeline } from "@/hooks/useCandidatePipeline";
 import { useSseManager } from "@/hooks/useSseManager";
 import { useCandidateActions } from "@/hooks/useCandidateActions";
-import { useDebounce } from "@/hooks/useDebounce";
+import { useCandidateTableState, PAGE_SIZE } from "@/hooks/useCandidateTableState";
+import { useCandidateTableData } from "@/hooks/useCandidateTableData";
 import type { AlphaLifecycleHistoryResponse, Candidate } from "@/types";
-import { getStarred } from "@/utils/starredCandidates";
-import ProgressFeedback from "@/components/ProgressFeedback";
 import {
   candidateIdentity,
-  candidateStatus,
-  candidateCreatedAt,
-  candidateText,
-  candidateQualitySearchText,
-  candidateNeedsOptimization,
-  candidateRetainedPoolEligible,
-  clampTargetPoolSize,
-  sanitizeTextInput,
-  indexCheckResults,
-  lifecycleTracesForCandidates,
   queueViewLabel,
   CandidateCheckResult,
   CandidateQueueView,
-  CandidatePoolSnapshot,
-  CandidateWorkflowPlan,
-  CandidateListMeta,
-  summarizeCandidateQuality,
-  rankPoolCandidates,
-  candidatePoolSnapshot,
-  workflowCandidatesForQueue,
-  candidateMatchesQueueView,
-  DEFAULT_TARGET_POOL_SIZE,
-  MAX_FILTER_LENGTH,
 } from "./CandidateTableUtils";
-import {
-  CandidateMobileCard,
-} from "./CandidateTableSubComponents";
-import Skeleton from "./Skeleton";
-import EmptyState from "./EmptyState";
-import ErrorCard from "./ErrorCard";
-import { CandidateRow } from "./CandidateRow";
 import CandidateTablePagination from "./CandidateTablePagination";
 import { CandidateTableToolbar } from "./CandidateTableToolbar";
 import type { QualitySummaryData } from "./CandidateTableToolbar";
-import { useCandidateColumns } from "./useCandidateColumns";
-
-const PAGE_SIZE = 20;
-
-type SortKey = "score" | "status" | "created";
-
-type LoadedCandidateState = {
-  rows: Candidate[];
-  mainPoolCandidates: Candidate[] | null;
-  snapshot: CandidatePoolSnapshot;
-  workflowPlan?: CandidateWorkflowPlan | null;
-};
+import CandidateTableDesktop from "./CandidateTableDesktop";
+import CandidateTableMobile from "./CandidateTableMobile";
+import CandidateTableLoading from "./CandidateTableLoading";
 
 interface Props {
   notify: (type: "success" | "error" | "warning" | "info", msg: string) => void;
@@ -100,110 +51,50 @@ export default function CandidateTable({
   const callSingleCheckApi = singleCheckApi.call;
   const callBatchCheckApi = batchCheckApi.call;
 
-  const [candidates, setCandidates] = useState<Candidate[]>([]);
-  const [serverMainPoolCandidates, setServerMainPoolCandidates] = useState<Candidate[] | null>(null);
-  const [serverWorkflowPlan, setServerWorkflowPlan] = useState<CandidateWorkflowPlan | null>(null);
-  const [candidateMeta, setCandidateMeta] = useState<CandidateListMeta>({ returned: 0, total: 0 });
-  const [checkResults, setCheckResults] = useState<Map<string, CandidateCheckResult>>(new Map());
-  const [lifecycleHistory, setLifecycleHistory] = useState<AlphaLifecycleHistoryResponse | null>(null);
-  const [lifecycleError, setLifecycleError] = useState<string | null>(null);
-
-  // Filter with debounce for better performance
-  const [filterInput, setFilterInput] = useState("");
-  const filter = useDebounce(filterInput, 300);
-
-  const [showStarredOnly, setShowStarredOnly] = useState(false);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [currentPage, setCurrentPage] = useState(1);
-  const [sortKey, setSortKey] = useState<SortKey>("score");
-  const [sortAsc, setSortAsc] = useState(false);
-  const [targetPoolSize, setTargetPoolSize] = useState(DEFAULT_TARGET_POOL_SIZE);
-
   const pipeline = useCandidatePipeline();
   const sseManager = useSseManager();
 
-  const lastPoolDeficitWarningRef = useRef<number>(0);
-  const POOL_DEFICIT_WARNING_COOLDOWN_MS = 30 * 60 * 1000;
+  const tableState = useCandidateTableState({
+    totalItems: 0,
+    viewMode,
+  });
 
-  const processCandidatesData = useCallback((result: typeof globalCandidates.data): LoadedCandidateState | null => {
-    if (!result) return null;
-    const nextRows = result.candidates || result.items || [];
-    const nextMainPool = Array.isArray(result.main_pool_candidates) ? result.main_pool_candidates : null;
-    const nextWorkflowPlan = (result.workflow_plan || result.candidate_workflow || null) as CandidateWorkflowPlan | null;
-    setCandidates(nextRows);
-    setServerMainPoolCandidates(nextMainPool);
-    setServerWorkflowPlan(nextWorkflowPlan);
-    setCandidateMeta({
-      returned: Number(result.returned_count ?? nextRows.length),
-      total: Number(result.total ?? result.total_count ?? nextRows.length),
-    });
-    const snapshot = candidatePoolSnapshot(nextRows, nextMainPool, targetPoolSize, nextWorkflowPlan);
-    const eligibleCount = snapshot.eligibleCount;
-    if (eligibleCount < targetPoolSize) {
-      const now = Date.now();
-      if (now - lastPoolDeficitWarningRef.current >= POOL_DEFICIT_WARNING_COOLDOWN_MS) {
-        lastPoolDeficitWarningRef.current = now;
-        notify("warning", `候选池不足: 当前合格候选 ${eligibleCount}，目标池容量 ${targetPoolSize}，建议启动候选池自动推进补充候选。`);
-      }
-    }
-    return {
-      rows: nextRows,
-      mainPoolCandidates: nextMainPool,
-      workflowPlan: nextWorkflowPlan,
-      snapshot,
-    };
-  }, [notify, targetPoolSize]);
+  const tableData = useCandidateTableData({
+    globalCandidatesData: globalCandidates.data,
+    refreshAll,
+    callCheckResultsApi,
+    callLifecycleApi,
+    notify,
+    viewMode,
+    targetPoolSize: tableState.targetPoolSize,
+    filter: tableState.filter,
+    showStarredOnly: tableState.showStarredOnly,
+    sortKey: tableState.sortKey,
+    sortAsc: tableState.sortAsc,
+    currentPage: tableState.currentPage,
+    lifecycleLoading: lifecycleApi.loading,
+  });
 
-  useEffect(() => {
-    if (globalCandidates.data) {
-      processCandidatesData(globalCandidates.data);
-    }
-  }, [globalCandidates.data, processCandidatesData]);
-
-  const loadCandidates = useCallback(async (): Promise<LoadedCandidateState | null> => {
-    refreshAll();
-    const loaded = processCandidatesData(globalCandidates.data);
-    const [checkResultsResult, lifecycleResult] = await Promise.all([
-      callCheckResultsApi<{ items?: CandidateCheckResult[] }>("/api/check_results"),
-      callLifecycleApi<AlphaLifecycleHistoryResponse>("/api/alpha_lifecycle?limit=250"),
-    ]);
-    if (checkResultsResult?.ok) {
-      setCheckResults(indexCheckResults(checkResultsResult.items || []));
-    } else if (checkResultsResult?.error) {
-      notify("error", apiErrorMessage(checkResultsResult, "检查结果加载失败"));
-    }
-    if (lifecycleResult?.ok) {
-      setLifecycleHistory(lifecycleResult);
-      setLifecycleError(null);
-    } else if (lifecycleResult) {
-      setLifecycleError(apiErrorMessage(lifecycleResult, "生命周期历史加载失败"));
-    } else {
-      setLifecycleError("生命周期历史加载失败");
-    }
-    return loaded;
-  }, [refreshAll, processCandidatesData, globalCandidates.data, callCheckResultsApi, callLifecycleApi, notify]);
-
-  const refreshCheckResults = useCallback(async () => {
-    if (viewMode !== "submittable") return;
-    const result = await callCheckResultsApi<{ items?: CandidateCheckResult[] }>("/api/check_results");
-    if (result?.ok) {
-      setCheckResults(indexCheckResults(result.items || []));
-    } else if (result?.error) {
-      notify("error", apiErrorMessage(result, "检查结果加载失败"));
-    }
-  }, [callCheckResultsApi, notify, viewMode]);
-
-  useEffect(() => { void loadCandidates(); }, [loadCandidates]);
-  useEffect(() => { void refreshCheckResults(); }, [refreshCheckResults]);
-
-  const poolEligibleCandidates = useMemo(
-    () => (serverMainPoolCandidates ? rankPoolCandidates(serverMainPoolCandidates) : rankPoolCandidates(candidates.filter(candidateRetainedPoolEligible))),
-    [candidates, serverMainPoolCandidates],
-  );
-  const retainedPoolCandidates = useMemo(
-    () => poolEligibleCandidates.slice(0, targetPoolSize),
-    [poolEligibleCandidates, targetPoolSize],
-  );
+  const {
+    candidates,
+    serverMainPoolCandidates,
+    serverWorkflowPlan,
+    candidateMeta,
+    checkResults,
+    lifecycleHistory,
+    lifecycleError,
+    poolEligibleCandidates,
+    retainedPoolCandidates,
+    rawQueueCandidates,
+    visibleLifecycleTraces,
+    sortedCandidates,
+    qualitySummary,
+    paginatedCandidates,
+    currentPageIds,
+    remoteTruncated,
+    loadCandidates,
+    refreshCheckResults,
+  } = tableData;
 
   const actions = useCandidateActions({
     pipeline,
@@ -219,7 +110,7 @@ export default function CandidateTable({
     retainedPoolCandidates,
     poolEligibleCandidates,
     serverWorkflowPlan,
-    targetPoolSize,
+    targetPoolSize: tableState.targetPoolSize,
   });
 
   useEffect(() => {
@@ -267,244 +158,45 @@ export default function CandidateTable({
     sseManager,
   ]);
 
-  const rawQueueCandidates = useMemo(
-    () => candidates.filter((c) => candidateMatchesQueueView(c, viewMode, checkResults)),
-    [candidates, checkResults, viewMode],
-  );
-  const displayQueueCandidates = useMemo(
-    () => (viewMode === "candidates" ? candidateManagementDisplayCandidates(candidates, retainedPoolCandidates, serverWorkflowPlan) : rawQueueCandidates),
-    [candidates, rawQueueCandidates, retainedPoolCandidates, serverWorkflowPlan, viewMode],
-  );
-  const visibleLifecycleTraces = useMemo(
-    () => lifecycleTracesForCandidates(lifecycleHistory?.alpha_traces || [], displayQueueCandidates, filter),
-    [displayQueueCandidates, filter, lifecycleHistory],
-  );
-
-  const sortedCandidates = useMemo(() => {
-    const normalizedFilter = filter.trim().toLowerCase();
-    const filtered = normalizedFilter
-      ? displayQueueCandidates.filter((c) =>
-          candidateText(c.expression).toLowerCase().includes(normalizedFilter) ||
-          candidateText(c.family).toLowerCase().includes(normalizedFilter) ||
-          candidateIdentity(c).toLowerCase().includes(normalizedFilter) ||
-          candidateQualitySearchText(c).toLowerCase().includes(normalizedFilter)
-        )
-      : displayQueueCandidates;
-    const starFiltered = showStarredOnly
-      ? filtered.filter((c) => getStarred().has(candidateIdentity(c)))
-      : filtered;
-    return [...starFiltered].sort((a, b) => {
-      let va: number; let vb: number;
-      switch (sortKey) {
-        case "score": va = a.scorecard?.total_score ?? 0; vb = b.scorecard?.total_score ?? 0; break;
-        case "status": return candidateStatus(a).localeCompare(candidateStatus(b)) * (sortAsc ? 1 : -1);
-        case "created": va = candidateCreatedAt(a); vb = candidateCreatedAt(b); break;
-        default: return 0;
-      }
-      return sortAsc ? va - vb : vb - va;
-    });
-  }, [displayQueueCandidates, filter, sortAsc, sortKey, showStarredOnly]);
-
-  const summaryCandidates = displayQueueCandidates;
-  const qualitySummary = useMemo(
-    () => summarizeCandidateQuality(summaryCandidates, retainedPoolCandidates.length, targetPoolSize),
-    [summaryCandidates, retainedPoolCandidates.length, targetPoolSize],
-  );
-  const totalPages = Math.max(1, Math.ceil(sortedCandidates.length / PAGE_SIZE));
-  const paginatedCandidates = useMemo(() => {
-    const startIndex = (currentPage - 1) * PAGE_SIZE;
-    return sortedCandidates.slice(startIndex, startIndex + PAGE_SIZE);
-  }, [currentPage, sortedCandidates]);
-
-  const currentPageIds = useMemo(
-    () => paginatedCandidates.map((c) => candidateIdentity(c)),
-    [paginatedCandidates],
-  );
-
-  const selectedCount = selectedIds.size;
-  const canShowRowActions = showRowActions && Boolean(onScore);
-
-  const handleBatchScore = useCallback(() => {
-    if (!onScore) return;
-    const selected = sortedCandidates.filter((c) => selectedIds.has(candidateIdentity(c)));
-    selected.forEach((c) => onScore(c));
-  }, [onScore, selectedIds, sortedCandidates]);
-
-  const handleBatchCheck = useCallback(() => {
-    const selected = sortedCandidates.filter((c) => selectedIds.has(candidateIdentity(c)));
-    if (selected.length > 0) {
-      void actions.startBatchCheck(selected);
-    }
-  }, [selectedIds, sortedCandidates, actions.startBatchCheck]);
-
-  const handleBatchSimulate = useCallback(() => {
-    const selected = sortedCandidates.filter((c) => selectedIds.has(candidateIdentity(c)));
-    if (selected.length > 0) {
-      actions.startSimulation(undefined, selected);
-    }
-  }, [selectedIds, sortedCandidates, actions.startSimulation]);
-
-  useEffect(() => { setCurrentPage(1); }, [filter, sortKey, sortAsc, viewMode]);
-  useEffect(() => { setCurrentPage((page) => Math.min(page, totalPages)); }, [totalPages]);
-
-  const handleSort = (key: SortKey) => {
-    if (sortKey === key) { setSortAsc(!sortAsc); } else { setSortKey(key); setSortAsc(false); }
-  };
-  const handleTargetPoolSizeChange = (value: string) => { setTargetPoolSize(clampTargetPoolSize(value)); };
-  const handleFilterChange = (value: string) => { setFilterInput(sanitizeTextInput(value, MAX_FILTER_LENGTH)); };
-
-  const handleToggleSelect = useCallback((id: string) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }, []);
-
-  const handleToggleSelectAll = useCallback((ids: string[]) => {
-    setSelectedIds((prev) => {
-      const allSelected = ids.length > 0 && ids.every((id) => prev.has(id));
-      const next = new Set(prev);
-      if (allSelected) {
-        ids.forEach((id) => next.delete(id));
-      } else {
-        ids.forEach((id) => next.add(id));
-      }
-      return next;
-    });
-  }, []);
-
-  const handleClearSelection = useCallback(() => {
-    setSelectedIds(new Set());
-  }, []);
-
-  const loading = globalCandidates.loading;
-  const loadError = globalCandidates.error;
-  const visibleStart = sortedCandidates.length === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1;
-  const visibleEnd = Math.min(currentPage * PAGE_SIZE, sortedCandidates.length);
-  const title = viewMode === "candidates" ? "候选管理" : `${queueViewLabel(viewMode)}候选`;
-  const remoteTruncated = candidateMeta.total > candidateMeta.returned;
-  const hasActions = canShowRowActions || showProductionControls;
   const candidateWorkflowBusy = (pipeline.task.state === "loading" || pipeline.task.state === "progress")
     || (pipeline.simulation.state === "loading" || pipeline.simulation.state === "progress")
     || (pipeline.optimization.state === "loading" || pipeline.optimization.state === "progress")
     || (pipeline.check.state === "loading" || pipeline.check.state === "progress");
 
-  // Minimal detailPanel for loading state
-  const loadingDetailPanel = {
-    showProductionControls: false,
-    taskState: "idle" as const,
-    taskProgress: null,
-    taskError: null,
-    taskStreamExhausted: false,
-    onRetryTask: () => {},
-    simState: "idle" as const,
-    simProgress: null,
-    simError: null,
-    onRetrySim: () => {},
-    optimizationState: "idle" as const,
-    optimizationProgress: null,
-    optimizationError: null,
-    onRetryOptimization: () => {},
-    checkState: "idle" as const,
-    checkProgress: null,
-    checkError: null,
-    onRetryCheck: () => {},
-  };
+  const handleBatchScore = useCallback(() => {
+    if (!onScore) return;
+    const selected = sortedCandidates.filter((c) => tableState.selectedIds.has(candidateIdentity(c)));
+    selected.forEach((c) => onScore(c));
+  }, [onScore, tableState.selectedIds, sortedCandidates]);
+
+  const handleBatchCheck = useCallback(() => {
+    const selected = sortedCandidates.filter((c) => tableState.selectedIds.has(candidateIdentity(c)));
+    if (selected.length > 0) {
+      void actions.startBatchCheck(selected);
+    }
+  }, [tableState.selectedIds, sortedCandidates, actions.startBatchCheck]);
+
+  const handleBatchSimulate = useCallback(() => {
+    const selected = sortedCandidates.filter((c) => tableState.selectedIds.has(candidateIdentity(c)));
+    if (selected.length > 0) {
+      actions.startSimulation(undefined, selected);
+    }
+  }, [tableState.selectedIds, sortedCandidates, actions.startSimulation]);
+
+  const loading = globalCandidates.loading;
+  const loadError = globalCandidates.error;
+  const title = viewMode === "candidates" ? "候选管理" : `${queueViewLabel(viewMode)}候选`;
 
   if (loading) {
     return (
-      <div className="animate-fade-in">
-        <CandidateTableToolbar
-          title={title}
-          viewMode={viewMode}
-          retainedCount={0}
-          targetPoolSize={targetPoolSize}
-          poolEligibleCount={0}
-          rawQueueCount={0}
-          sortedCount={0}
-          candidateMeta={{ returned: 0, total: 0 }}
-          filter=""
-          remoteTruncated={false}
-          showProductionControls={showProductionControls}
-          candidateWorkflowBusy={false}
-          taskState="idle"
-          simState="idle"
-          optimizationState="idle"
-          onTargetPoolSizeChange={handleTargetPoolSizeChange}
-          onGenerateCandidates={() => {}}
-          onStartValidationQueue={() => {}}
-          onStartOptimization={() => {}}
-          qualitySummary={{ retained: "0", promotable: 0, rework: 0, blocked: 0, outputMode: "-" }}
-          lifecycleHistory={null}
-          lifecycleError={null}
-          lifecycleLoading={false}
-          visibleLifecycleTraces={[]}
-          detailPanel={loadingDetailPanel}
-          loadError={null}
-          apiLoading={true}
-          onRetryLoad={loadCandidates}
-          onFilterChange={() => {}}
-          showStarredOnly={false}
-          onToggleStarFilter={() => {}}
-          selectedIds={new Set()}
-          selectedCount={0}
-          onClearSelection={() => {}}
-          onBatchScore={() => {}}
-          onBatchCheck={() => {}}
-          onBatchSimulate={() => {}}
-          sortedCandidates={[]}
-        />
-
-        <div className="panel">
-          <div className="hidden md:block overflow-auto" style={{ maxWidth: "100%", height: "min(640px, 70vh)" }}>
-            <table className="data-table card-view" style={{ minWidth: 980 }} aria-label="候选结果">
-              <thead>
-                <tr className="bg-surface-2">
-                  <th className="px-3 py-2 text-left text-xs font-medium text-text-secondary" style={{ width: "7rem" }}>加载中...</th>
-                  <th className="px-3 py-2 text-left text-xs font-medium text-text-secondary">ID</th>
-                  <th className="px-3 py-2 text-left text-xs font-medium text-text-secondary">表达式</th>
-                  <th className="px-3 py-2 text-left text-xs font-medium text-text-secondary">家族</th>
-                  <th className="px-3 py-2 text-left text-xs font-medium text-text-secondary">状态</th>
-                  <th className="px-3 py-2 text-left text-xs font-medium text-text-secondary">评分</th>
-                </tr>
-              </thead>
-              <tbody>
-                {Array.from({ length: 8 }).map((_, index) => (
-                  <tr key={`skeleton-${index}`} className="border-b border-border-subtle">
-                    <td className="px-3 py-3" colSpan={6}>
-                      <Skeleton variant="table-row" />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          <div className="panel-body md:hidden">
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {Array.from({ length: 4 }).map((_, index) => (
-                <div key={`skeleton-mobile-${index}`} className="panel" style={{ padding: "12px" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                      <Skeleton variant="avatar" className="w-8 h-8 rounded-full" />
-                      <Skeleton variant="text" className="w-24 h-3" />
-                    </div>
-                    <Skeleton variant="text" className="w-16 h-5 rounded-full" />
-                  </div>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 12 }}>
-                    <Skeleton variant="text" className="w-full h-3" />
-                    <Skeleton variant="text" className="w-full h-3" />
-                    <Skeleton variant="text" className="w-full h-3 col-span-2" />
-                    <Skeleton variant="text" className="w-full h-3 col-span-2" />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
+      <CandidateTableLoading
+        title={title}
+        viewMode={viewMode}
+        targetPoolSize={tableState.targetPoolSize}
+        showProductionControls={showProductionControls}
+        onTargetPoolSizeChange={tableState.handleTargetPoolSizeChange}
+        onRetryLoad={loadCandidates}
+      />
     );
   }
 
@@ -524,33 +216,7 @@ export default function CandidateTable({
     pipeline.optimization.state, pipeline.optimization.progress, pipeline.optimization.error, actions.startOptimization,
     pipeline.check.state, pipeline.check.progress, pipeline.check.error, actions.startBatchCheck, actions.lastBatchCheckCandidatesRef]);
 
-  const { columnCount, renderHeader } = useCandidateColumns({
-    sortKey,
-    sortAsc,
-    hasActions,
-    checkResults,
-    canShowRowActions,
-    showProductionControls,
-    candidateWorkflowBusy,
-    checkingAlphaId: pipeline.checkingAlphaId,
-    onSort: handleSort,
-    onScore,
-    onSimulate: (c: Candidate) => { actions.startSimulation(c); },
-    onCheck: actions.startSingleCheck,
-    allCurrentPageIds: currentPageIds,
-    selectedIds,
-    onToggleSelectAll: handleToggleSelectAll,
-    onToggleSelect: handleToggleSelect,
-  });
-
-  const tableContainerRef = useRef<HTMLDivElement>(null);
-  const ESTIMATED_ROW_HEIGHT = 48;
-  const rowVirtualizer = useVirtualizer({
-    count: paginatedCandidates.length,
-    getScrollElement: () => tableContainerRef.current,
-    estimateSize: () => ESTIMATED_ROW_HEIGHT,
-    overscan: 5,
-  });
+  const totalPages = Math.max(1, Math.ceil(sortedCandidates.length / PAGE_SIZE));
 
   return (
     <div className="animate-fade-in">
@@ -558,20 +224,20 @@ export default function CandidateTable({
         title={title}
         viewMode={viewMode}
         retainedCount={retainedPoolCandidates.length}
-        targetPoolSize={targetPoolSize}
+        targetPoolSize={tableState.targetPoolSize}
         poolEligibleCount={poolEligibleCandidates.length}
         rawQueueCount={rawQueueCandidates.length}
         sortedCount={sortedCandidates.length}
         candidateMeta={candidateMeta}
-        filter={filter}
-        filterInput={filterInput}
+        filter={tableState.filter}
+        filterInput={tableState.filterInput}
         remoteTruncated={remoteTruncated}
         showProductionControls={showProductionControls}
         candidateWorkflowBusy={candidateWorkflowBusy}
         taskState={pipeline.task.state}
         simState={pipeline.simulation.state}
         optimizationState={pipeline.optimization.state}
-        onTargetPoolSizeChange={handleTargetPoolSizeChange}
+        onTargetPoolSizeChange={tableState.handleTargetPoolSizeChange}
         onGenerateCandidates={() => { void actions.generateCandidates(); }}
         onStartValidationQueue={actions.startOfficialValidationQueue}
         onStartOptimization={() => { void actions.startOptimization(); }}
@@ -584,12 +250,12 @@ export default function CandidateTable({
         loadError={loadError}
         apiLoading={globalCandidates.loading}
         onRetryLoad={loadCandidates}
-        onFilterChange={handleFilterChange}
-        showStarredOnly={showStarredOnly}
-        onToggleStarFilter={() => setShowStarredOnly((v) => !v)}
-        selectedIds={selectedIds}
-        selectedCount={selectedCount}
-        onClearSelection={handleClearSelection}
+        onFilterChange={tableState.handleFilterChange}
+        showStarredOnly={tableState.showStarredOnly}
+        onToggleStarFilter={tableState.handleToggleStarFilter}
+        selectedIds={tableState.selectedIds}
+        selectedCount={tableState.selectedCount}
+        onClearSelection={tableState.handleClearSelection}
         onBatchScore={handleBatchScore}
         onBatchCheck={handleBatchCheck}
         onBatchSimulate={handleBatchSimulate}
@@ -624,7 +290,7 @@ export default function CandidateTable({
               )}
               <span className="text-xs text-text-tertiary">
                 当前池状态：
-                <span className="font-mono-value text-text-primary">{retainedPoolCandidates.length}/{targetPoolSize}</span>
+                <span className="font-mono-value text-text-primary">{retainedPoolCandidates.length}/{tableState.targetPoolSize}</span>
               </span>
             </div>
             <button
@@ -639,132 +305,53 @@ export default function CandidateTable({
           </div>
         )}
 
-        <div className="panel-body md:hidden">
-          {paginatedCandidates.length === 0 ? (
-            <EmptyState
-              title={filter ? "没有匹配的候选" : "暂无候选记录"}
-              description={filter ? "尝试调整筛选条件，或清除筛选查看全部候选。" : (showProductionControls ? "候选 Alpha 通过顶部「自动推进候选池」启动生产搜索、预筛与本地排序；官方验证队列和质量检查单独推进。全流程保持非提交边界，提交仍需人工确认。" : "请先运行非提交验证产生候选，或从候选管理页面选择一个候选进入评分。")}
-            >
-              {filter ? (
-                <button type="button" className="btn btn-secondary btn-sm" onClick={() => setFilterInput("")}>
-                  清除筛选
-                </button>
-              ) : showProductionControls ? (
-                <button type="button" className="btn btn-primary btn-sm" onClick={() => { void actions.generateCandidates(); }}>
-                  启动自动推进
-                </button>
-              ) : null}
-            </EmptyState>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {paginatedCandidates.map((candidate, index) => (
-                <CandidateMobileCard
-                  key={`${candidateIdentity(candidate)}_mobile_${index}`}
-                  candidate={candidate}
-                  checkResults={checkResults}
-                  canShowRowActions={canShowRowActions}
-                  canSimulate={showProductionControls}
-                  canCheck={showProductionControls}
-                  workflowBusy={candidateWorkflowBusy}
-                  simulationBusy={candidateWorkflowBusy}
-                  checkingAlphaId={pipeline.checkingAlphaId}
-                  checkBusy={candidateWorkflowBusy}
-                  onScore={onScore}
-                  onSimulate={actions.startSimulation}
-                  onCheck={actions.startSingleCheck}
-                />
-              ))}
-            </div>
-          )}
-        </div>
+        <CandidateTableMobile
+          candidates={paginatedCandidates}
+          checkResults={checkResults}
+          onScore={onScore}
+          onSimulate={actions.startSimulation}
+          onCheck={actions.startSingleCheck}
+          showRowActions={showRowActions}
+          showProductionControls={showProductionControls}
+          workflowBusy={candidateWorkflowBusy}
+          checkingAlphaId={pipeline.checkingAlphaId}
+          filter={tableState.filter}
+          onClearFilter={() => tableState.setFilterInput("")}
+          onGenerateCandidates={() => { void actions.generateCandidates(); }}
+        />
 
-        <div ref={tableContainerRef} className="hidden md:block overflow-auto" style={{ maxWidth: "100%", height: "min(640px, 70vh)" }}>
-          <table className="data-table card-view" style={{ minWidth: 980 }} aria-label="候选结果">
-            <thead>
-              {renderHeader()}
-            </thead>
-            <tbody style={{ position: "relative", height: rowVirtualizer.getTotalSize() }}>
-              {rowVirtualizer.getVirtualItems().map((virtualRow) => {
-                const candidate = paginatedCandidates[virtualRow.index];
-                return (
-                  <CandidateRow
-                    key={`${candidateIdentity(candidate)}_v_${virtualRow.index}`}
-                    candidate={candidate}
-                    checkResults={checkResults}
-                    hasActions={hasActions}
-                    canShowRowActions={canShowRowActions}
-                    showProductionControls={showProductionControls}
-                    candidateWorkflowBusy={candidateWorkflowBusy}
-                    checkingAlphaId={pipeline.checkingAlphaId}
-                    onScore={onScore}
-                    onSimulate={(c) => { actions.startSimulation(c); }}
-                    onCheck={actions.startSingleCheck}
-                    isSelected={selectedIds.has(candidateIdentity(candidate))}
-                    onToggleSelect={handleToggleSelect}
-                    style={{ position: "absolute", top: 0, left: 0, width: "100%", transform: `translateY(${virtualRow.start}px)` }}
-                  />
-                );
-              })}
-              {paginatedCandidates.length === 0 && (
-                <tr>
-                  <td colSpan={columnCount} style={{ padding: "1.5rem", textAlign: "center" }}>
-                    <EmptyState
-                      title={filter ? "没有匹配的候选" : "暂无候选记录"}
-                      description={filter ? "尝试调整筛选条件，或清除筛选查看全部候选。" : (showProductionControls ? "候选 Alpha 通过顶部「自动推进候选池」启动生产搜索、预筛与本地排序；官方验证队列和质量检查单独推进。全流程保持非提交边界，提交仍需人工确认。" : "请先运行非提交验证产生候选，或从候选管理页面选择一个候选进入评分。")}
-                    >
-                      {filter ? (
-                        <button type="button" className="btn btn-secondary btn-sm" onClick={() => setFilterInput("")}>
-                          清除筛选
-                        </button>
-                      ) : showProductionControls ? (
-                        <button type="button" className="btn btn-primary btn-sm" onClick={() => { void actions.generateCandidates(); }}>
-                          启动自动推进
-                        </button>
-                      ) : null}
-                    </EmptyState>
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+        <CandidateTableDesktop
+          candidates={paginatedCandidates}
+          checkResults={checkResults}
+          selectedIds={tableState.selectedIds}
+          onToggleSelect={tableState.handleToggleSelect}
+          onToggleSelectAll={tableState.handleToggleSelectAll}
+          sortKey={tableState.sortKey}
+          sortAsc={tableState.sortAsc}
+          onSort={tableState.handleSort}
+          onScore={onScore}
+          onSimulate={(c) => { actions.startSimulation(c); }}
+          onCheck={actions.startSingleCheck}
+          showRowActions={showRowActions}
+          showProductionControls={showProductionControls}
+          workflowBusy={candidateWorkflowBusy}
+          checkingAlphaId={pipeline.checkingAlphaId}
+          allCurrentPageIds={currentPageIds}
+          filter={tableState.filter}
+          onClearFilter={() => tableState.setFilterInput("")}
+          onGenerateCandidates={() => { void actions.generateCandidates(); }}
+        />
 
         <CandidateTablePagination
-          currentPage={currentPage}
+          currentPage={tableState.currentPage}
           totalPages={totalPages}
-          visibleStart={visibleStart}
-          visibleEnd={visibleEnd}
+          visibleStart={tableState.visibleStart}
+          visibleEnd={tableState.visibleEnd}
           totalItems={sortedCandidates.length}
           pageSize={PAGE_SIZE}
-          onPageChange={setCurrentPage}
+          onPageChange={tableState.setCurrentPage}
         />
       </div>
     </div>
   );
-}
-
-function candidateManagementDisplayCandidates(
-  rows: Candidate[],
-  retainedCandidates: Candidate[],
-  workflowPlan?: CandidateWorkflowPlan | null,
-) {
-  const queued = [
-    ...workflowCandidatesForQueue(rows, [], workflowPlan?.validator?.next_candidate_ids || workflowPlan?.validator?.candidate_ids),
-    ...workflowCandidatesForQueue(rows, [], workflowPlan?.rework?.candidate_ids),
-    ...workflowCandidatesForQueue(rows, [], workflowPlan?.review?.candidate_ids),
-    ...rows.filter(candidateNeedsOptimization),
-  ];
-  return rankPoolCandidates(uniqueCandidatesByIdentity([...retainedCandidates, ...queued]));
-}
-
-function uniqueCandidatesByIdentity(candidates: Candidate[]) {
-  const seen = new Set<string>();
-  const selected: Candidate[] = [];
-  for (const candidate of candidates) {
-    const id = candidateIdentity(candidate) || (candidate.expression || "");
-    if (!id || seen.has(id)) continue;
-    seen.add(id);
-    selected.push(candidate);
-  }
-  return selected;
 }

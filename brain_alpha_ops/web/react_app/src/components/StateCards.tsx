@@ -8,7 +8,7 @@
  * 4. 统一中文界面
  */
 
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, memo } from "react";
 import { useApi } from "@/hooks/useApi";
 import { useGlobalData } from "@/hooks/useGlobalData";
 import type {
@@ -124,7 +124,7 @@ const CARD_CONFIGS: CardConfig[] = [
   },
 ];
 
-export default function StateCards({ onNavigate, notify }: Props) {
+export default memo(function StateCards({ onNavigate, notify }: Props) {
   const { candidates: candidatesGlobal, slots: slotsGlobal, config: configGlobal, cloud: cloudGlobal, refreshAll } = useGlobalData();
   const checkpointApi = useApi<CheckpointStatusSummary>();
 
@@ -357,7 +357,7 @@ export default function StateCards({ onNavigate, notify }: Props) {
       </div>
     </div>
   );
-}
+});
 
 // 辅助函数
 function isSubmissionReadyCandidate(candidate: Candidate) {

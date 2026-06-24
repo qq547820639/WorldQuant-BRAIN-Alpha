@@ -1,8 +1,10 @@
+import { memo } from "react";
+
 interface StepProgressBarProps {
   currentStep: number;
 }
 
-export function StepProgressBar({ currentStep }: StepProgressBarProps) {
+export const StepProgressBar = memo(function StepProgressBar({ currentStep }: StepProgressBarProps) {
   const steps = [
     { num: 1, label: "账户/缓存", desc: "测试连接或使用已有本地缓存" },
     { num: 2, label: "本地缓存", desc: "首次同步后默认使用本地缓存" },
@@ -54,4 +56,4 @@ export function StepProgressBar({ currentStep }: StepProgressBarProps) {
       </div>
     </div>
   );
-}
+});

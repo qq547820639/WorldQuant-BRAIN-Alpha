@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { apiErrorMessage } from "@/helpers/errorExperience";
+import { useDebounce } from "@/hooks/useDebounce";
 import {
   MAX_FILTER_LENGTH,
   type SnapshotRow,
@@ -180,7 +181,8 @@ function SnapshotMobileCard({ row }: { row: SnapshotRow }) {
 
 export default function SnapshotPanel({ notify, viewMode, onNavigate }: Props) {
   const api = useApi<SnapshotPayload>();
-  const [filter, setFilter] = useState("");
+  const [filterInput, setFilterInput] = useState("");
+  const filter = useDebounce(filterInput, 300);
   const config = SNAPSHOT_VIEWS[viewMode];
   const callApi = api.call;
 
@@ -304,9 +306,9 @@ export default function SnapshotPanel({ notify, viewMode, onNavigate }: Props) {
           type="text"
           aria-label={`筛选 ${config.title}`}
           placeholder="筛选行..."
-          value={filter}
+          value={filterInput}
           maxLength={MAX_FILTER_LENGTH}
-          onChange={(event) => setFilter(sanitizeTextInput(event.target.value, MAX_FILTER_LENGTH))}
+          onChange={(event) => setFilterInput(sanitizeTextInput(event.target.value, MAX_FILTER_LENGTH))}
           className="w-full min-w-0 rounded-md px-3 py-2 text-sm sm:flex-1"
           style={{
             backgroundColor: 'var(--color-surface-elevated)',

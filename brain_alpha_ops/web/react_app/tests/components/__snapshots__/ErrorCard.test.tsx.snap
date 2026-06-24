@@ -1,0 +1,59 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`ErrorCard > matches snapshot with all props 1`] = `
+<div>
+  <div
+    class="error-card snapshot-test-class"
+    role="alert"
+    style="border: 1px solid var(--color-error-border); border-radius: 8px; background: var(--color-error-bg-faint); padding: 16px;"
+  >
+    <div
+      style="display: flex; align-items: flex-start; gap: 12px;"
+    >
+      <div
+        style="flex-shrink: 0; margin-top: 2px;"
+      >
+        <svg
+          aria-hidden="true"
+          fill="var(--color-icon-error)"
+          focusable="false"
+          height="20"
+          viewBox="0 0 24 24"
+          width="20"
+        >
+          <path
+            d="M12 2C6.47 2 2 6.47 2 12s4.47 10 10 10 10-4.47 10-10S17.53 2 12 2zm5 13.59L15.59 17 12 13.41 8.41 17 7 15.59 10.59 12 7 8.41 8.41 7 12 10.59 15.59 7 17 8.41 13.41 12 17 15.59z"
+          />
+        </svg>
+      </div>
+      <div
+        style="flex: 1 1 0%; min-width: 0;"
+      >
+        <p
+          style="font-size: 14px; font-weight: 500; color: var(--color-error-text); margin-bottom: 8px;"
+        >
+          快照测试标题
+        </p>
+        <p
+          style="font-size: 13px; color: var(--color-text-body); line-height: 1.5; margin-bottom: 8px;"
+        >
+          快照测试详情
+        </p>
+        <p
+          style="font-size: 12px; color: var(--color-text-muted); line-height: 1.5;"
+        >
+          原因：
+          快照测试原因
+        </p>
+        <button
+          class="btn btn-sm"
+          style="margin-top: 12px; background: var(--color-surface-elevated); border: 0.5px solid var(--color-border-medium); color: var(--color-text-primary);"
+          type="button"
+        >
+          重试
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+`;

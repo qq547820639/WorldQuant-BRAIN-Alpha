@@ -36,6 +36,8 @@ export interface CandidateRowProps {
   onToggleSelect: (id: string) => void;
   /** Optional style for virtual scrolling positioning */
   style?: React.CSSProperties;
+  /** Ref for dynamic row height measurement */
+  rowRef?: React.Ref<HTMLTableRowElement>;
 }
 
 export const CandidateRow = memo(function CandidateRow({
@@ -52,6 +54,7 @@ export const CandidateRow = memo(function CandidateRow({
   isSelected,
   onToggleSelect,
   style,
+  rowRef,
 }: CandidateRowProps) {
   const quality = candidateQualityBadge(candidate);
   const evidence = officialEvidenceText(candidate, checkResults);
@@ -65,7 +68,7 @@ export const CandidateRow = memo(function CandidateRow({
   }, [identity]);
 
   return (
-    <tr style={style}>
+    <tr ref={rowRef} style={style}>
       {/* Batch selection checkbox */}
       <td style={{ textAlign: "center", padding: "4px 2px" }}>
         <input

@@ -1,6 +1,7 @@
 /** Reusable form field components for ConfigPanel. */
 
 import type { ReactNode } from "react";
+import { useEffect, useState } from "react";
 import { normalizeSelectOptions, parseNumber, type SelectOption } from "./utils";
 
 const inputClass = "form-input";
@@ -81,6 +82,7 @@ export function NumberField({
   max,
   step,
   help,
+  debounceMs,
   onChange,
 }: {
   label: string;
@@ -89,18 +91,44 @@ export function NumberField({
   max?: number;
   step?: number;
   help?: ReactNode;
+  debounceMs?: number;
   onChange: (value: number) => void;
 }) {
+  const [localValue, setLocalValue] = useState<number>(value);
+
+  useEffect(() => {
+    setLocalValue(value);
+  }, [value]);
+
+  useEffect(() => {
+    if (!debounceMs) {
+      return;
+    }
+    const timer = setTimeout(() => {
+      onChange(localValue);
+    }, debounceMs);
+    return () => clearTimeout(timer);
+  }, [localValue, debounceMs, onChange]);
+
+  const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const newValue = parseNumber(event.currentTarget.value);
+    if (debounceMs) {
+      setLocalValue(newValue);
+    } else {
+      onChange(newValue);
+    }
+  };
+
   return (
     <label className="form-label">
       <span className="block mb-1">{label}{help}</span>
       <input
         type="number"
-        value={Number.isFinite(value) ? value : ""}
+        value={Number.isFinite(localValue) ? localValue : ""}
         min={min}
         max={max}
         step={step}
-        onChange={(event) => onChange(parseNumber(event.currentTarget.value))}
+        onChange={handleChange}
         className={inputClass}
       />
     </label>

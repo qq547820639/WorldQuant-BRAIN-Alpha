@@ -1,3 +1,4 @@
+import { memo } from "react";
 import type { CloudAlpha, CloudAlphaSummary, CloudAlphaWithMetrics } from "@/types";
 import ProgressFeedback from "@/components/ProgressFeedback";
 import { safeDisplayErrorMessage } from "@/helpers/errorExperience";
@@ -81,7 +82,7 @@ interface DashboardCloudSnapshotProps {
   onOpenSync: () => void;
 }
 
-export function DashboardCloudSnapshot({ cloud, loading, error, onRetry, onOpenSync }: DashboardCloudSnapshotProps) {
+export const DashboardCloudSnapshot = memo(function DashboardCloudSnapshot({ cloud, loading, error, onRetry, onOpenSync }: DashboardCloudSnapshotProps) {
   const summary = cloudSnapshotSummary(cloud);
   const previewRows = cloudSnapshotPreviewRows(cloud);
 
@@ -146,4 +147,4 @@ export function DashboardCloudSnapshot({ cloud, loading, error, onRetry, onOpenS
       </div>
     </div>
   );
-}
+});

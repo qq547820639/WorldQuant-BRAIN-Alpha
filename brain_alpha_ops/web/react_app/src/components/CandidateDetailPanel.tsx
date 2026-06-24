@@ -15,6 +15,7 @@
  * serves as the operational status panel and can be extended in the future.
  */
 
+import { memo } from "react";
 import type { UnifiedProgress } from "@/types";
 import ProgressFeedback from "@/components/ProgressFeedback";
 
@@ -47,7 +48,7 @@ export interface CandidateDetailPanelProps {
   onRetryCheck: () => void;
 }
 
-export function CandidateDetailPanel({
+export const CandidateDetailPanel = memo(function CandidateDetailPanel({
   showProductionControls,
   taskState,
   taskProgress,
@@ -118,4 +119,4 @@ export function CandidateDetailPanel({
       )}
     </>
   );
-}
+});

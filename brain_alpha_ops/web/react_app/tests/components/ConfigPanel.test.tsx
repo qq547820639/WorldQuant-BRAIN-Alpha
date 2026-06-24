@@ -363,3 +363,267 @@ describe("ConfigPanel utils - formFromImport", () => {
     expect(result.candidates).toBe(50);
   });
 });
+
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { vi, describe, expect, it, beforeEach } from "vitest";
+import React from "react";
+import ConfigPanel from "@/components/ConfigPanel";
+import { ThemeProvider } from "@/components/ThemeProvider";
+
+vi.mock("@/hooks/useConfigForm", () => ({
+  useConfigForm: vi.fn(),
+}));
+
+import { useConfigForm } from "@/hooks/useConfigForm";
+
+const mockUseConfigForm = vi.mocked(useConfigForm);
+
+function mockConfigForm(overrides: Record<string, unknown> = {}) {
+  const form = defaultForm();
+  mockUseConfigForm.mockReturnValue({
+    form,
+    schema: defaultSchema(),
+    globalConfig: { data: { config: {} }, loading: false, error: null, call: vi.fn() },
+    saveApi: { loading: false, error: null, data: null, call: vi.fn() },
+    connectionApi: { loading: false, error: null, data: null, call: vi.fn() },
+    logoutApi: { loading: false, error: null, data: null, call: vi.fn() },
+    dirty: false,
+    validationError: null,
+    saveSuccess: false,
+    importInputRef: { current: null },
+    datasetChoices: [],
+    scoring: null,
+    update: vi.fn(),
+    updateCredential: vi.fn(),
+    reload: vi.fn(),
+    save: vi.fn(),
+    exportConfig: vi.fn(),
+    importConfig: vi.fn(),
+    testConnection: vi.fn(),
+    logoutLocalSession: vi.fn(),
+    resetForm: vi.fn(),
+    ...overrides,
+  });
+}
+
+const mockCredentials = {
+  username: "",
+  password: "",
+  token: "",
+};
+
+function renderWithTheme(ui: React.ReactElement) {
+  window.matchMedia = vi.fn().mockImplementation((query) => ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  }));
+  return render(<ThemeProvider>{ui}</ThemeProvider>);
+}
+
+describe("ConfigPanel Component", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("renders loading skeletons when globalConfig is loading", () => {
+    mockConfigForm({
+      globalConfig: { data: null, loading: true, error: null, call: vi.fn() },
+      form: null,
+    });
+
+    const { container } = renderWithTheme(<ConfigPanel notify={vi.fn()} credentials={mockCredentials} onCredentialsChange={vi.fn()} />);
+
+    expect(container.querySelector(".animate-pulse")).toBeInTheDocument();
+  });
+
+  it("renders error state when globalConfig fails", () => {
+    const reload = vi.fn();
+    mockConfigForm({
+      globalConfig: { data: null, loading: false, error: "Failed to load", call: vi.fn() },
+      form: null,
+      reload,
+    });
+
+    renderWithTheme(<ConfigPanel notify={vi.fn()} credentials={mockCredentials} onCredentialsChange={vi.fn()} />);
+
+    expect(screen.getByText("加载配置失败")).toBeInTheDocument();
+    expect(screen.getAllByText("重试").length).toBeGreaterThan(0);
+  });
+
+  it("renders main form with title", () => {
+    mockConfigForm();
+
+    renderWithTheme(<ConfigPanel notify={vi.fn()} credentials={mockCredentials} onCredentialsChange={vi.fn()} />);
+
+    expect(screen.getByText("连接与生产参数")).toBeInTheDocument();
+  });
+
+  it("renders action buttons (导入, 导出, 重置, 保存)", () => {
+    mockConfigForm({ dirty: true });
+
+    renderWithTheme(<ConfigPanel notify={vi.fn()} credentials={mockCredentials} onCredentialsChange={vi.fn()} />);
+
+    expect(screen.getByRole("button", { name: "导入" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "导出" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "重置" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "保存" })).toBeInTheDocument();
+  });
+
+  it("disables save button when not dirty", () => {
+    mockConfigForm({ dirty: false });
+
+    renderWithTheme(<ConfigPanel notify={vi.fn()} credentials={mockCredentials} onCredentialsChange={vi.fn()} />);
+
+    const saveButton = screen.getByRole("button", { name: "保存" });
+    expect(saveButton).toBeDisabled();
+  });
+
+  it("enables save button when dirty and no validation error", () => {
+    mockConfigForm({ dirty: true, validationError: null });
+
+    renderWithTheme(<ConfigPanel notify={vi.fn()} credentials={mockCredentials} onCredentialsChange={vi.fn()} />);
+
+    const saveButton = screen.getByRole("button", { name: "保存" });
+    expect(saveButton).not.toBeDisabled();
+  });
+
+  it("disables save button when there is a validation error", () => {
+    mockConfigForm({ dirty: true, validationError: "Invalid config" });
+
+    renderWithTheme(<ConfigPanel notify={vi.fn()} credentials={mockCredentials} onCredentialsChange={vi.fn()} />);
+
+    const saveButton = screen.getByRole("button", { name: "保存" });
+    expect(saveButton).toBeDisabled();
+  });
+
+  it("shows validation error when present", () => {
+    mockConfigForm({ dirty: true, validationError: "数据集配置无效" });
+
+    renderWithTheme(<ConfigPanel notify={vi.fn()} credentials={mockCredentials} onCredentialsChange={vi.fn()} />);
+
+    expect(screen.getByText("配置验证失败")).toBeInTheDocument();
+    expect(screen.getByText("数据集配置无效")).toBeInTheDocument();
+  });
+
+  it("shows save error when present", () => {
+    const saveCall = vi.fn();
+    mockConfigForm({
+      dirty: true,
+      saveApi: { loading: false, error: "Save failed", data: null, call: saveCall },
+    });
+
+    renderWithTheme(<ConfigPanel notify={vi.fn()} credentials={mockCredentials} onCredentialsChange={vi.fn()} />);
+
+    expect(screen.getByText("保存配置失败")).toBeInTheDocument();
+  });
+
+  it("shows save success message when save succeeds", () => {
+    mockConfigForm({ dirty: false, saveSuccess: true });
+
+    renderWithTheme(<ConfigPanel notify={vi.fn()} credentials={mockCredentials} onCredentialsChange={vi.fn()} />);
+
+    expect(screen.getAllByRole("status").length).toBeGreaterThan(0);
+  });
+
+  it("calls save function when form is submitted", async () => {
+    const user = userEvent.setup();
+    const save = vi.fn((e: React.FormEvent) => {
+      e.preventDefault();
+    });
+    mockConfigForm({ dirty: true, save });
+
+    renderWithTheme(<ConfigPanel notify={vi.fn()} credentials={mockCredentials} onCredentialsChange={vi.fn()} />);
+
+    const saveButton = screen.getByRole("button", { name: "保存" });
+    await user.click(saveButton);
+
+    expect(save).toHaveBeenCalledTimes(1);
+  });
+
+  it("calls exportConfig when export button clicked", async () => {
+    const user = userEvent.setup();
+    const exportConfig = vi.fn();
+    mockConfigForm({ exportConfig });
+
+    renderWithTheme(<ConfigPanel notify={vi.fn()} credentials={mockCredentials} onCredentialsChange={vi.fn()} />);
+
+    const exportButton = screen.getByRole("button", { name: "导出" });
+    await user.click(exportButton);
+
+    expect(exportConfig).toHaveBeenCalledTimes(1);
+  });
+
+  it("calls resetForm when reset button clicked", async () => {
+    const user = userEvent.setup();
+    const resetForm = vi.fn();
+    mockConfigForm({ dirty: true, resetForm });
+
+    renderWithTheme(<ConfigPanel notify={vi.fn()} credentials={mockCredentials} onCredentialsChange={vi.fn()} />);
+
+    const resetButton = screen.getByRole("button", { name: "重置" });
+    await user.click(resetButton);
+
+    expect(resetForm).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows loading state on save button", () => {
+    mockConfigForm({
+      dirty: true,
+      saveApi: { loading: true, error: null, data: null, call: vi.fn() },
+    });
+
+    renderWithTheme(<ConfigPanel notify={vi.fn()} credentials={mockCredentials} onCredentialsChange={vi.fn()} />);
+
+    expect(screen.getByRole("button", { name: "保存中..." })).toBeInTheDocument();
+  });
+
+  it("shows cache mode message when contextFresh and not connected", () => {
+    mockConfigForm();
+
+    renderWithTheme(
+      <ConfigPanel
+        notify={vi.fn()}
+        credentials={mockCredentials}
+        onCredentialsChange={vi.fn()}
+        connected={false}
+        contextFresh
+      />,
+    );
+
+    expect(screen.getAllByText(/当前使用本地缓存/).length).toBeGreaterThan(0);
+  });
+
+  it("shows credentials section when not in cache only mode", () => {
+    mockConfigForm();
+
+    renderWithTheme(
+      <ConfigPanel
+        notify={vi.fn()}
+        credentials={mockCredentials}
+        onCredentialsChange={vi.fn()}
+        connected
+        contextFresh
+      />,
+    );
+
+    expect(screen.getAllByText(/测试连接|凭证|账户/).length).toBeGreaterThan(0);
+  });
+
+  it("matches snapshot with default form", () => {
+    mockConfigForm();
+    localStorage.setItem("brain_alpha_guide_dismissed", "1");
+
+    const { container } = renderWithTheme(
+      <ConfigPanel notify={vi.fn()} credentials={mockCredentials} onCredentialsChange={vi.fn()} connected contextFresh />,
+    );
+
+    expect(container).toMatchSnapshot();
+  });
+});
