@@ -35,7 +35,7 @@ import PhaseShell from "@/components/PhaseShell";
 import MobileTabBar from "@/components/MobileTabBar";
 import { useKeyboardShortcuts, KeyboardShortcutsHelp } from "@/hooks/useKeyboardShortcuts";
 import { reportIgnoredError } from "@/utils/reportIgnoredError";
-import { renderActiveView, type RenderViewProps } from "@/components/views/renderView";
+import { renderActiveView, PageLoader, type RenderViewProps } from "@/components/views/renderView";
 import { topbarConnectionStatus, fmtEta, formatBacktestBadge, formatCloudBadge, cloudBadgeTotal } from "@/components/views/helpers";
 import { useGlobalData } from "@/hooks/useGlobalData";
 

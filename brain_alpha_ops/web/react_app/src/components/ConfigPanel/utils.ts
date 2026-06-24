@@ -19,6 +19,62 @@ export const DEFAULT_ALPHA_TYPE_OPTIONS = ["REGULAR", "POWER_POOL", "ATOM", "PYR
 
 export type SelectOption = string | { value: string; label: string };
 
+export interface PartialConfig {
+  environment?: string;
+  autoSubmit?: boolean;
+  credentials?: {
+    username?: string;
+    password?: string;
+    token?: string;
+    username_env?: string;
+    password_env?: string;
+    token_env?: string;
+    managed_credentials_available?: boolean;
+  };
+  settings?: {
+    instrumentType?: string;
+    region?: string;
+    universe?: string;
+    delay?: number;
+    decay?: number;
+    neutralization?: string;
+    dataset?: string;
+    truncation?: number;
+    pasteurization?: string;
+    unitHandling?: string;
+    nanHandling?: string;
+    language?: string;
+    type?: string;
+  };
+  budget?: {
+    max_candidates_per_cycle?: number;
+    max_cycles?: number;
+    retained_alpha_pool_size?: number;
+    official_backtest_batch_size?: number;
+    require_cloud_sync?: boolean;
+  };
+  thresholds?: {
+    min_sharpe?: number;
+    min_fitness?: number;
+    min_turnover?: number;
+    platform_max_turnover?: number;
+    max_self_correlation?: number;
+    max_weight_concentration?: number;
+  };
+  scoring?: {
+    prior_layer_weight?: number;
+    empirical_layer_weight?: number;
+    checklist_layer_weight?: number;
+    market_regime?: string;
+  };
+  ops?: {
+    settings?: PartialConfig["settings"];
+    budget?: PartialConfig["budget"];
+    thresholds?: PartialConfig["thresholds"];
+    scoring?: PartialConfig["scoring"];
+  };
+}
+
 export interface ConfigForm {
   environment: string;
   autoSubmit: boolean;
@@ -169,7 +225,7 @@ export function payloadFromForm(form: ConfigForm): Record<string, unknown> {
   };
 }
 
-export function formFromConfig(config: RunConfig | null): ConfigForm {
+export function formFromConfig(config: PartialConfig | null): ConfigForm {
   if (!config) {
     return {
       environment: "",

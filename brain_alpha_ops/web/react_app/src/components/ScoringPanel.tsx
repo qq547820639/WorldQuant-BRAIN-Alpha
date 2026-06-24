@@ -6,7 +6,7 @@ import { resolveJobEventState } from "@/helpers/runPayload";
 import { useApi } from "@/hooks/useApi";
 import { useSSE } from "@/hooks/useSSE";
 import ProgressFeedback from "@/components/ProgressFeedback";
-import type { ScoreHistoryPoint } from "@/components/ScoreBreakdown";
+import type { ScoreHistoryPoint } from "@/components/ScoreBreakdown/ScoreHistory";
 import type {
   AttributionNode, Candidate,
   OfficialGateResult,
@@ -118,7 +118,7 @@ export default function ScoringPanel({ notify, candidate }: Props) {
         empirical: { score: scorecard.empirical?.score ?? scorecard.empirical_score ?? 0 },
         checklist: { score: scorecard.submission_checklist?.score ?? scorecard.checklist_score ?? 0 },
         layer_weights: scorecard.layer_weights,
-        hard_gates: (scorecard.hard_gates as ScoringResult["hard_gates"]) || [],
+        hard_gates: (scorecard.hard_gates as unknown as ScoringResult["hard_gates"]) || [],
         soft_gates: [],
         attribution_tree: scorecard.attribution_tree,
         top_failures: scorecard.top_failures || [],

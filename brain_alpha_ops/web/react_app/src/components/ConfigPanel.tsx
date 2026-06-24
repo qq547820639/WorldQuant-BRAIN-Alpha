@@ -18,6 +18,7 @@ import {
   DEFAULT_NAN_HANDLING_OPTIONS,
   DEFAULT_LANGUAGE_OPTIONS,
   DEFAULT_ALPHA_TYPE_OPTIONS,
+  type PartialConfig,
   type ConfigForm,
   type ConfigSchema,
   sanitizeConfigText,
@@ -95,7 +96,7 @@ export default function ConfigPanel({
     void schemaApi.call("/api/config_schema");
   }, [schemaApi.call]);
 
-  const config = useMemo(() => globalConfig.data?.config ?? null, [globalConfig.data]);
+  const config = useMemo(() => (globalConfig.data?.config ?? null) as PartialConfig | null, [globalConfig.data]);
   const schema = schemaApi.data?.schema;
 
   useEffect(() => {

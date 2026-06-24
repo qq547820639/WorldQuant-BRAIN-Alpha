@@ -120,9 +120,9 @@ export default function Dashboard({ notify, connected, contextFresh, phaseStatus
       const updated = appendTrendPoint(TREND_KEY.SUBMISSIONS, submissions);
       setTrendSubmissions(updated);
     }
-    const syncCandidates = memory?.total_candidates ?? status?.progress?.candidates_generated ?? 0;
-    const syncSubmissions = status?.progress?.submissions ?? cloudSummaryData?.submitted_count ?? 0;
-    const syncCycles = status?.progress?.completed_cycles ?? 0;
+    const syncCandidates = (memory?.total_candidates ?? status?.progress?.candidates_generated ?? 0) as number;
+    const syncSubmissions = (status?.progress?.submissions ?? cloudSummaryData?.submitted_count ?? 0) as number;
+    const syncCycles = (status?.progress?.completed_cycles ?? 0) as number;
     if (syncCandidates > 0 || syncSubmissions > 0) {
       syncTrendToBackend(syncCandidates, syncSubmissions, syncCycles);
     }
@@ -142,9 +142,9 @@ export default function Dashboard({ notify, connected, contextFresh, phaseStatus
         const updated = appendTrendPoint(TREND_KEY.SUBMISSIONS, submissions);
         setTrendSubmissions(updated);
       }
-      const syncCandidates = memory?.total_candidates ?? status?.progress?.candidates_generated ?? 0;
-      const syncSubmissions = status?.progress?.submissions ?? cloudSummaryData?.submitted_count ?? 0;
-      const syncCycles = status?.progress?.completed_cycles ?? 0;
+      const syncCandidates = (memory?.total_candidates ?? status?.progress?.candidates_generated ?? 0) as number;
+      const syncSubmissions = (status?.progress?.submissions ?? cloudSummaryData?.submitted_count ?? 0) as number;
+      const syncCycles = (status?.progress?.completed_cycles ?? 0) as number;
       if (syncCandidates > 0 || syncSubmissions > 0) {
         syncTrendToBackend(syncCandidates, syncSubmissions, syncCycles);
       }

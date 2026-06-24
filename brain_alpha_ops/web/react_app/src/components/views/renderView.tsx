@@ -5,6 +5,7 @@
 
 import { lazy, Suspense } from "react";
 import type { BrainCredentials, Candidate, CardViewId, PhaseData } from "@/types";
+import type { JobState } from "@/hooks/useJobState";
 import { safeDisplayErrorMessage, apiErrorMessage } from "@/helpers/errorExperience";
 import { useApi } from "@/hooks/useApi";
 import Dashboard from "@/components/Dashboard";
@@ -31,12 +32,7 @@ export interface RenderViewProps {
   phaseApiStatus: "ready" | "error" | "loading";
   managedCredentialsAvailable: boolean;
   officialOpsAutoStart: boolean;
-  jobState: {
-    running: boolean;
-    progress?: { status_message?: string; percent_complete?: number; eta_seconds?: number };
-    status?: { cycle?: number };
-    startJob: () => void;
-  };
+  jobState: JobState;
   onOpenScoring: (candidate: Candidate) => void;
   onNavigate: (view: CardViewId) => void;
   onConnectionTested: (ok: boolean, err: string | null) => void;
@@ -51,7 +47,7 @@ export interface RenderViewProps {
   phaseData?: PhaseData | null;
 }
 
-function PageLoader() {
+export function PageLoader() {
   return (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "3rem" }}>
       <span className="spinner" />

@@ -3,8 +3,9 @@
  * Extracted from CandidateTable.tsx for better code organization.
  */
 
-import type { AlphaLifecycleTrace, Candidate, SSEEvent } from "@/types";
+import type { AlphaLifecycleTrace, Candidate, SSEEvent, LifecycleMetric, LifecycleMetricProps, LifecycleReplayPanelProps } from "@/types";
 import { isRecord } from "@/types";
+export type { LifecycleMetric, LifecycleMetricProps, LifecycleReplayPanelProps };
 import { RAW_UNSAFE_DISPLAY_TEXT_PATTERN } from "@/helpers/errorExperience";
 
 export const MIN_TARGET_POOL_SIZE = 1;
@@ -55,7 +56,10 @@ export type CandidatePoolSnapshot = {
 };
 
 export type CandidateWorkflowPlan = {
-  producer?: { deficit?: number };
+  producer?: { deficit?: number; candidate_ids?: string[]; next_candidate_ids?: string[] };
+  validator?: { deficit?: number; candidate_ids?: string[]; next_candidate_ids?: string[] };
+  rework?: { deficit?: number; candidate_ids?: string[]; next_candidate_ids?: string[] };
+  review?: { deficit?: number; candidate_ids?: string[]; next_candidate_ids?: string[] };
 };
 
 export const SUBMIT_ONLY_BLOCKER_CODES = new Set([

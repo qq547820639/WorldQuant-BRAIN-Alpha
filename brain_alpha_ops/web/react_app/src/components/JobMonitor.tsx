@@ -155,6 +155,7 @@ export default function JobMonitor({ notify, credentials, onNeedCredentials, job
   const [pollFailures, setPollFailures] = useState(0);
   const autoCancelRequests = useRef<Set<string>>(new Set());
   const api = useApi();
+  const startJobRef = useRef<((resume?: boolean) => Promise<void>) | null>(null);
 
   const clearTransientProgressError = useCallback(() => {
     setProgressError((current) => (
@@ -270,7 +271,7 @@ export default function JobMonitor({ notify, credentials, onNeedCredentials, job
       sseRetryTimerRef.current = setTimeout(() => {
         sseRetryTimerRef.current = null;
         setSseRetryCountdown(0);
-        void startJob(true);
+        void startJobRef.current?.(true);
       }, delay);
       return;
     }
@@ -282,15 +283,15 @@ export default function JobMonitor({ notify, credentials, onNeedCredentials, job
     notify("warning", msg);
     failMonitor(msg);
     void cancelAmbiguousJob("sse_exhausted", msg);
-  }, [cancelAmbiguousJob, failMonitor, notify, startJob]);
+  }, [cancelAmbiguousJob, failMonitor, notify, startJobRef]);
 
   const handleSseExhaustedManualRetry = useCallback(() => {
     sseRetryCountRef.current = 0;
     setSseRetryExhausted(false);
     setSseRetryCountdown(0);
     clearSseRetryTimers();
-    void startJob(true);
-  }, [clearSseRetryTimers, startJob]);
+    void startJobRef.current?.(true);
+  }, [clearSseRetryTimers, startJobRef]);
 
   const { connected, reconnectAttempts } = useSSE(sseUrl, { onEvent: handleSSEEvent, onExhausted: handleStreamExhausted });
 
@@ -317,6 +318,9 @@ export default function JobMonitor({ notify, credentials, onNeedCredentials, job
       setJobId(null);
     }
   }, [api, credentials, notify]);
+
+  // Keep ref in sync with startJob callback
+  startJobRef.current = startJob;
 
   const stopJob = useCallback(async () => {
     if (!jobId) return;

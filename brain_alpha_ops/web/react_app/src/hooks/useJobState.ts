@@ -132,6 +132,13 @@ export function useJobState(
     setRunning(true);
   }, []);
 
+  const reconnectJob = useCallback((jid: string) => {
+    setJobId(jid);
+    setRunning(true);
+    setPollFailures(0);
+    setProgressError(null);
+  }, []);
+
   const {
     disconnected,
     enterDisconnectedState,
@@ -140,9 +147,12 @@ export function useJobState(
     clearDisconnectedTimer,
     setDisconnected,
   } = useJobDisconnectedState({
+    jobId,
+    callApi: api.call,
     notify,
     failMonitor,
     cancelAmbiguousJob,
+    reconnectJob,
     onReconnect,
   });
 
@@ -251,15 +261,10 @@ export function useJobState(
       callApi: api.call,
       failMonitor,
       cancelAmbiguousJob,
-      reconnectJob: (jid: string) => {
-        setJobId(jid);
-        setRunning(true);
-        setPollFailures(0);
-        setProgressError(null);
-      },
+      reconnectJob,
       notify,
     });
-  }, [enterDisconnectedState, failMonitor, cancelAmbiguousJob, notify, api.call]);
+  }, [enterDisconnectedState, failMonitor, cancelAmbiguousJob, reconnectJob, notify, api.call]);
 
   const { connected, reconnectAttempts } = useJobSseConnection(jobId, {
     notify,
@@ -303,16 +308,11 @@ export function useJobState(
         callApi: api.call,
         failMonitor,
         cancelAmbiguousJob,
-        reconnectJob: (jid: string) => {
-          setJobId(jid);
-          setRunning(true);
-          setPollFailures(0);
-          setProgressError(null);
-        },
+        reconnectJob,
         notify,
       });
     }
-  }, [pollFailures, enterDisconnectedState, failMonitor, cancelAmbiguousJob, notify, api.call]);
+  }, [pollFailures, enterDisconnectedState, failMonitor, cancelAmbiguousJob, reconnectJob, notify, api.call]);
 
   // ── startJob ─────────────────────────────────────────────────────────
   const startJob = useCallback(async (resume = false) => {

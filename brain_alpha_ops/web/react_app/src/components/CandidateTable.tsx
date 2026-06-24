@@ -120,7 +120,7 @@ export default function CandidateTable({
   const POOL_DEFICIT_WARNING_COOLDOWN_MS = 30 * 60 * 1000;
 
   const processCandidatesData = useCallback((result: typeof globalCandidates.data): LoadedCandidateState | null => {
-    if (!result?.ok) return null;
+    if (!result) return null;
     const nextRows = result.candidates || result.items || [];
     const nextMainPool = Array.isArray(result.main_pool_candidates) ? result.main_pool_candidates : null;
     const nextWorkflowPlan = (result.workflow_plan || result.candidate_workflow || null) as CandidateWorkflowPlan | null;

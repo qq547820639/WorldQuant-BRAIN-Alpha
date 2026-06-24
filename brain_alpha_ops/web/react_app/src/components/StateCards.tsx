@@ -369,7 +369,7 @@ function isSubmissionReadyCandidate(candidate: Candidate) {
   );
 }
 
-function cloudTotal(payload: (CloudAlphaSummary & { summary?: Record<string, unknown>; total?: number }) | null) {
+function cloudTotal(payload: { count?: number; total?: number; summary?: Record<string, unknown> } | null) {
   const summary = payload?.summary || {};
   const value = payload?.count ?? payload?.total ?? summary.count ?? summary.total ?? summary.total_count;
   return value == null ? "-" : String(value);

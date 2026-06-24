@@ -495,6 +495,9 @@ export interface Scorecard {
   empirical_score: number;
   checklist_score: number;
   decision_band: string;
+  sharpe?: number;
+  fitness?: number;
+  turnover?: number;
   attribution?: ScoreAttribution[];
   /** Full attribution tree from backend build_attribution_tree() */
   attribution_tree?: AttributionNode | null;
@@ -694,7 +697,7 @@ export interface FailureItem {
 
 export interface RunConfig {
   environment: string;
-  auto_submit: boolean;
+  auto_submit?: boolean;
   autoSubmit?: boolean;
   credentials?: {
     username?: string;

@@ -35,7 +35,8 @@ import {
 import { CandidateDetailPanel } from "./CandidateDetailPanel";
 
 export interface QualitySummaryData {
-  retained: number;
+  ready?: number;
+  retained: string;
   promotable: number;
   rework: number;
   blocked: number;

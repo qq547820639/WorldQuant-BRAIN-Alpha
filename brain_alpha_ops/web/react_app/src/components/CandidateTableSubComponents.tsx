@@ -16,15 +16,13 @@ import {
   lifecycleStatusBadgeClass,
   lifecycleStatusLabel,
   lifecycleTraceTitle,
-  LifecycleMetric,
-  LifecycleMetricProps,
-  LifecycleReplayPanelProps,
   numericResultField,
   officialEvidenceText,
   safeLifecycleNote,
   shortLifecycleTraceId,
   statusBadgeClass,
 } from "./CandidateTableUtils";
+import type { LifecycleMetric as LifecycleMetricType, LifecycleMetricProps, LifecycleReplayPanelProps } from "./CandidateTableUtils";
 
 type SortKey = "score" | "status" | "created";
 

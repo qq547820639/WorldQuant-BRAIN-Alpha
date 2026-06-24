@@ -31,13 +31,13 @@ export interface CandidatePipeline {
   };
   simulation: PipelineState & {
     setState: (s: PipelineStage) => void;
-    setProgress: (p: UnifiedProgress | null) => void;
+    setProgress: (p: UnifiedProgress | null | ((prev: UnifiedProgress | null) => UnifiedProgress | null)) => void;
     setError: (e: string | null) => void;
     setJobId: (id: string | null) => void;
   };
   optimization: PipelineState & {
     setState: (s: PipelineStage) => void;
-    setProgress: (p: UnifiedProgress | null) => void;
+    setProgress: (p: UnifiedProgress | null | ((prev: UnifiedProgress | null) => UnifiedProgress | null)) => void;
     setError: (e: string | null) => void;
     setJobId: (id: string | null) => void;
   };
