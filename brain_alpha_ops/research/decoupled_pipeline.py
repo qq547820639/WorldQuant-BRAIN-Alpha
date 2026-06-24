@@ -259,11 +259,6 @@ class FilterWorker:
                 self.shared.archive_stats.get("local_pruned", 0) + len(to_remove)
             )
 
-    def stop(self) -> None:
-        self._state = WorkerState.STOPPED
-        if self._thread:
-            self._thread.join(timeout=30)
-
     @property
     def state(self) -> WorkerState:
         return self._state

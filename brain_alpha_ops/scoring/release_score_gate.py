@@ -115,7 +115,7 @@ class GateDecision:
     status: str
     pass_fail: bool
     official_snapshot: dict[str, Any]
-    attributions: list[dict[str, Any]]
+    attributions: tuple[dict[str, Any], ...] = field(default_factory=tuple)
     threshold_trace: dict[str, Any] = field(default_factory=dict)
     schema_version: str = RELEASE_SCORE_GATE_SCHEMA
 
@@ -164,7 +164,7 @@ def decide_release(official: OfficialSnapshot, policy: ThresholdPolicy) -> GateD
         status="FAIL" if hard_fail else ("WARN" if warn_only else "PASS"),
         pass_fail=not hard_fail,
         official_snapshot=asdict(official),
-        attributions=[asdict(item) for item in attrs],
+        attributions=tuple(asdict(item) for item in attrs),
         threshold_trace=_threshold_trace(policy, official),
     )
 

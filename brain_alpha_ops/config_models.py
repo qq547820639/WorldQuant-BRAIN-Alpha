@@ -273,6 +273,10 @@ class CredentialConfig:
             "token": self.token or os.getenv(self.token_env, ""),
         }
 
+    def to_dict(self) -> dict[str, Any]:
+        """Override to exclude secret credential values from serialization."""
+        return self.to_safe_dict()
+
     def to_safe_dict(self) -> dict[str, Any]:
         """Serialize without credential values (keeps env-var names only)."""
         return {
@@ -306,4 +310,10 @@ class RunConfig:
     ops: OpsConfig = field(default_factory=OpsConfig)
 
     def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
+        data = asdict(self)
+        creds = data.get("credentials")
+        if isinstance(creds, dict):
+            creds.pop("username", None)
+            creds.pop("password", None)
+            creds.pop("token", None)
+        return data

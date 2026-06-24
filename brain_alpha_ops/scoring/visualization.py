@@ -101,7 +101,7 @@ def _contributors(nodes: list[dict[str, Any]], *, positive: bool) -> list[dict[s
     filtered = [
         node
         for node in nodes
-        if (float(node.get("contribution") or 0.0) >= 0 if positive else float(node.get("contribution") or 0.0) < 0)
+        if (float(node.get("contribution") or 0.0) >= 0) == positive
     ]
     filtered.sort(key=lambda row: abs(float(row.get("contribution") or 0.0)), reverse=True)
     return filtered[:5]

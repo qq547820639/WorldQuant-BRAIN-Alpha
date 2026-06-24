@@ -161,12 +161,11 @@ class OfficialRequestMixin:
                         continue
                 logger.debug(
                     "API auth context: method=%s path=%s auth_mode=%s "
-                    "has_cookie=%s has_user_pass=%s",
+                    "has_cookie=%s",
                     method,
                     path_or_url,
                     auth_mode,
                     self._has_session_cookie(),
-                    bool(self.username and self.password),
                 )
                 # C20 P0: derive error_code from HTTP status for frontend display
                 _error_code = _http_error_code(exc.code, parsed, auth_mode)

@@ -90,6 +90,12 @@ def validate_web(errors: list[str], web: WebConfig) -> None:
     require_bool(errors, "web.allow_remote", web.allow_remote)
     require_bool(errors, "web.secure_cookies", web.secure_cookies)
     require_str(errors, "web.admin_token_env", web.admin_token_env, allow_empty=False)
+    admin_token = os.environ.get(web.admin_token_env, "")
+    if admin_token and len(admin_token) < 16:
+        errors.append(
+            f"web.admin_token (from {web.admin_token_env}) is too short; "
+            "minimum 16 characters required for security"
+        )
 
 
 def validate_ops(errors: list[str], ops: OpsConfig) -> None:

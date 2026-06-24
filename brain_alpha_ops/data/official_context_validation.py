@@ -13,6 +13,7 @@ from typing import Any
 from brain_alpha_ops.config import load_run_config, runtime_project_root
 from brain_alpha_ops.data.cache_metadata import (
     CONTEXT_CACHE_METADATA_SCHEMA,
+    _items_hash,
     metadata_path_for,
 )
 
@@ -315,12 +316,6 @@ def _identifier(row: dict[str, Any], keys: tuple[str, ...]) -> str:
         if value:
             return value
     return ""
-
-
-# S-10: DUPLICATE of cache_metadata.py:_items_hash — consolidate into shared util
-def _items_hash(items: list[dict[str, Any]]) -> str:
-    payload = json.dumps(items, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str)
-    return sha256(payload.encode("utf-8")).hexdigest()
 
 
 def _parse_timestamp(value: Any) -> datetime | None:

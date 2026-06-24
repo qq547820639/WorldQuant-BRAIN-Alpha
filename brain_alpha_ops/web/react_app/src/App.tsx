@@ -248,9 +248,7 @@ export default function App() {
   const handleConnectionTested = useCallback((ok: boolean, err: string | null) => {
     setConnectionOverride(ok);
     setConnectionError(err);
-    if (ok) {
-      setCredentials((prev) => ({ ...prev, password: "" }));
-    }
+    setCredentials((prev) => ({ ...prev, password: "" }));
     try {
       sessionStorage.removeItem("brain_alpha_connection_tested");
     } catch (storageErr) {

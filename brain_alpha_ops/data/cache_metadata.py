@@ -11,6 +11,12 @@ from typing import Any
 CONTEXT_CACHE_METADATA_SCHEMA = "official_context_cache_metadata.v1"
 
 
+def _items_hash(items: list[dict[str, Any]]) -> str:
+    """Compute SHA-256 hash of JSON-serialized items. Shared across modules."""
+    payload = json.dumps(items, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str)
+    return sha256(payload.encode("utf-8")).hexdigest()
+
+
 def metadata_path_for(path: Path) -> Path:
     return path.with_name(f"{path.stem}.meta.json")
 
@@ -67,12 +73,6 @@ def read_context_cache_metadata(target_path: Path) -> dict[str, Any]:
     return data if isinstance(data, dict) else {}
 
 
-# S-10: DUPLICATE of official_context_validation.py:_items_hash — consolidate into shared util
-def _items_hash(items: list[dict[str, Any]]) -> str:
-    payload = json.dumps(items, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str)
-    return sha256(payload.encode("utf-8")).hexdigest()
-
-
 def _completeness(items: list[dict[str, Any]]) -> dict[str, Any]:
     count = len(items)
     if not count:
@@ -115,7 +115,10 @@ def build_cache_audit_snapshot(cache_dir: str | Path) -> dict[str, Any]:
         stale = False
         if expires_at:
             try:
-                stale = datetime.fromisoformat(expires_at) <= now
+                exp_dt = datetime.fromisoformat(expires_at)
+                if exp_dt.tzinfo is None:
+                    exp_dt = exp_dt.replace(tzinfo=timezone.utc)
+                stale = exp_dt <= now
             except (TypeError, ValueError):
                 pass
 

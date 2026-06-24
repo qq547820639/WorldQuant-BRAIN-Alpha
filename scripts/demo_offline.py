@@ -38,7 +38,7 @@ DEMO_PORT = 9999
 MOCK_FIXTURES_DIR = Path(PROJECT_ROOT) / "fixtures" / "recorded_responses"
 
 
-def _build_demo_config(config_path: str | None = None) -> RunConfig:
+def _build_demo_config(config_path: str | None = None, port: int = DEMO_PORT) -> RunConfig:
     """Build a RunConfig for offline demo mode."""
     if config_path and Path(config_path).exists():
         raw = json.loads(Path(config_path).read_text(encoding="utf-8"))
@@ -71,7 +71,7 @@ def _build_demo_config(config_path: str | None = None) -> RunConfig:
                     require_pre_submit_check_passed=False,
                 ),
                 official_api=OfficialAPIConfig(
-                    base_url=f"http://127.0.0.1:{DEMO_PORT}",
+                    base_url=f"http://127.0.0.1:{port}",
                     timeout_seconds=10,
                     poll_attempts=5,
                     poll_interval_seconds=1.0,
@@ -113,7 +113,7 @@ def _build_demo_config(config_path: str | None = None) -> RunConfig:
                 require_pre_submit_check_passed=False,
             ),
             official_api=OfficialAPIConfig(
-                base_url=f"http://127.0.0.1:{DEMO_PORT}",
+                base_url=f"http://127.0.0.1:{port}",
                 timeout_seconds=10,
                 poll_attempts=5,
                 poll_interval_seconds=1.0,
@@ -157,18 +157,21 @@ def main() -> int:
 
     parser = argparse.ArgumentParser(description="Run BRAIN Alpha Ops in offline demo mode")
     parser.add_argument("--config", default=None, help="Path to demo config JSON")
+    parser.add_argument("--port", type=int, default=DEMO_PORT, help=f"Mock server port (default: {DEMO_PORT})")
     args = parser.parse_args()
+
+    port = args.port
 
     print("=" * 60)
     print("  BRAIN Alpha Ops — Offline Demo Mode")
     print("=" * 60)
 
-    config = _build_demo_config(args.config)
+    config = _build_demo_config(args.config, port=port)
 
     print("\n[1/3] Starting mock BRAIN API server …")
     server = MockBRAINApiServer(
         host="127.0.0.1",
-        port=DEMO_PORT,
+        port=port,
         fixtures_dir=MOCK_FIXTURES_DIR,
     )
     server.start()

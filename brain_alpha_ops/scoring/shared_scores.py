@@ -38,7 +38,7 @@ def economic_logic_score(
         },
         "mean_reversion": {
             "keywords": ["reversal", "mean_revert", "zscore", "ts_zscore",
-                         "overbought", "oversold", "-ts_", "bounce", "revert"],
+                         "overbought", "oversold", "ts_", "bounce", "revert"],
         },
         "value": {
             "keywords": ["value", "cheap", "undervalue", "pe_ratio", "pb_ratio",
@@ -108,9 +108,8 @@ def default_prior_dimensions(
     economic_result: dict[str, Any] | None = None,
 ) -> dict[str, float]:
     """Compute the default eight prior-score dimensions."""
-    # Extract window parameters from ts_<op>(..., d) and ts_<op>(..., ..., d) calls only.
-    windows = [int(value) for value in re.findall(r'ts_\w+\([^,]*,\s*(\d+)\s*\)', expression)]
-    windows += [int(value) for value in re.findall(r'ts_\w+\([^,]*,\s*[^,]*,\s*(\d+)\s*\)', expression)]
+    # Extract window parameters from ts_<op>(..., d) calls (any argument count).
+    windows = [int(value) for value in re.findall(r'ts_\w+\([^)]*,\s*(\d+)\s*\)', expression)]
     has_cross_section = any(op in operators for op in ("rank", "zscore", "scale", "group_rank", "group_zscore"))
     has_time_series = any(op.startswith("ts_") for op in operators)
     has_risk_control = any(op in operators for op in ("winsorize", "zscore", "scale", "group_rank")) or "adv20" in fields

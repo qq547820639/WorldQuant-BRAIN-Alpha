@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -18,6 +19,7 @@ class ScoreHistoryDB:
         target = Path(path)
         self._path = target if target.suffix.lower() == ".jsonl" else target / "score_history.jsonl"
         self._path.parent.mkdir(parents=True, exist_ok=True)
+        self._lock = threading.Lock()
 
     def append(self, result: Any) -> None:
         record = {
@@ -32,8 +34,9 @@ class ScoreHistoryDB:
             "checklist": result.checklist.get("score"),
             "config_hash": result.config_hash,
         }
-        with open(self._path, "a", encoding="utf-8") as f:
-            f.write(json.dumps(record, ensure_ascii=False) + "\n")
+        with self._lock:
+            with open(self._path, "a", encoding="utf-8") as f:
+                f.write(json.dumps(record, ensure_ascii=False) + "\n")
 
     def load_all(self, *, limit: int | None = None) -> list[dict[str, Any]]:
         return read_jsonl_records(self._path, limit=limit)

@@ -7,13 +7,13 @@ Provides zero-deviation BRAIN API response simulation that:
 """
 from __future__ import annotations
 
-import math
 from typing import Any
 
 from brain_alpha_ops.brain_api.canonical import (
     CANONICAL_THRESHOLDS,
 )
 from brain_alpha_ops.models import Candidate
+from brain_alpha_ops.scoring._score_comparisons import is_finite_float as _float_or_none
 
 # Tolerable floating-point epsilon for deviation detection
 _ZERO_DEVIATION_EPSILON = 1e-9
@@ -256,18 +256,6 @@ def _compare_canonical_metrics(
                     )
 
     return deviations
-
-def _float_or_none(value: Any) -> float | None:
-    """Safely convert to float, returning None for non-numeric values."""
-    if value is None or isinstance(value, bool):
-        return None
-    try:
-        val = float(value)
-        if math.isnan(val) or math.isinf(val):
-            return None
-        return val
-    except (TypeError, ValueError):
-        return None
 
 # Public API for simple PASS/FAIL deviation check
 def is_zero_deviation(

@@ -59,9 +59,10 @@ def candidate_official_work_blockers(candidate: Candidate) -> list[str]:
         if isinstance(local_backtest, dict) and local_backtest.get("pass_local") is False:
             blockers.append("local_backtest_failed")
 
-    status = f"{candidate.lifecycle_status} {candidate.gate.get('status', '')}"
-    if str(candidate.gate.get("status") or "").upper() == "OFFICIAL_CONTEXT_WARNING":
-        warnings = candidate.gate.get("warnings") if isinstance(candidate.gate, dict) else []
+    gate = candidate.gate if isinstance(candidate.gate, dict) else {}
+    status = f"{candidate.lifecycle_status} {gate.get('status', '')}"
+    if str(gate.get("status") or "").upper() == "OFFICIAL_CONTEXT_WARNING":
+        warnings = gate.get("warnings")
         for warning in warnings if isinstance(warnings, list) else []:
             if str(warning).strip():
                 blockers.append(f"official_context_warning:{warning}")
@@ -175,9 +176,11 @@ class CandidatePoolService:
 
     def is_pending_backtest_candidate(self, candidate: Candidate, threshold: float | None = None) -> bool:
         threshold = self.min_prior_score_for_official_simulation if threshold is None else threshold
-        status = f"{candidate.lifecycle_status} {candidate.gate.get('status', '')}".lower()
+        gate = candidate.gate if isinstance(candidate.gate, dict) else {}
+        status = f"{candidate.lifecycle_status} {gate.get('status', '')}".lower()
+        validation = candidate.validation if isinstance(candidate.validation, dict) else {}
         has_precheck = (
-            candidate.validation.get("status") == "PASS"
+            validation.get("status") == "PASS"
             or "backtest_batch_selected" in status
             or "backtest_slot_selected" in status
             or "simulation_deferred_concurrency_limit" in status
@@ -200,8 +203,9 @@ class CandidatePoolService:
     ) -> list[Candidate]:
         available: list[Candidate] = []
         for candidate in pool:
-            status = f"{candidate.lifecycle_status} {candidate.gate.get('status', '')}".lower()
-            if candidate.official_metrics or candidate.gate.get("submission_ready"):
+            gate = candidate.gate if isinstance(candidate.gate, dict) else {}
+            status = f"{candidate.lifecycle_status} {gate.get('status', '')}".lower()
+            if candidate.official_metrics or gate.get("submission_ready"):
                 continue
             if is_active_backtest_candidate(candidate) or self.is_pending_backtest_candidate(candidate):
                 continue

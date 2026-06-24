@@ -6,6 +6,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
 
+VALID_SEVERITIES = frozenset({"BLOCKING", "WARNING", "INFO"})
+
 
 @dataclass
 class RedLineViolation:
@@ -48,15 +50,6 @@ class ComplianceReport:
         self.total_checks += 1
         self.passed += 1
 
-    @property
-    def ok(self) -> bool:
-        """Compatibility flag for CLI/Web callers: no blocking violations.
-
-        B-05: Checks self.failed directly instead of relying on self.overall,
-        which defaults to "PENDING" before finalize() is called.
-        """
-        return self.failed == 0 and self.overall != "FAIL"
-
     def finalize(self) -> "ComplianceReport":
         if self.failed > 0:
             self.overall = "FAIL"
@@ -65,6 +58,15 @@ class ComplianceReport:
         else:
             self.overall = "PASS"
         return self
+
+    @property
+    def ok(self) -> bool:
+        """Compatibility flag for CLI/Web callers: no blocking violations.
+
+        B-05: Checks self.failed directly instead of relying on self.overall,
+        which defaults to "PENDING" before finalize() is called.
+        """
+        return self.failed == 0 and self.overall != "FAIL"
 
     def report(self) -> str:
         lines = [

@@ -50,7 +50,7 @@ def _verification_blocked(
         severity="BLOCKING",
         file_path=file_path,
         check_name=check_name,
-        actual_value=message[:300],
+        actual_value=message[:500],
         expected_value=expected,
         deviation="关键红线证据无法验证，按失败关闭处理",
         fix_guidance=fix_guidance,

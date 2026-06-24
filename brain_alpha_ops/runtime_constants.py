@@ -51,6 +51,9 @@ class WebDefaults:
     JOB_ID_WIDTH: int = 4
     """Zero-pad width for legacy job IDs (e.g. job_0001)."""
 
+    SMOKE_TEST_TIMEOUT: float = 5.0
+    """Timeout in seconds for smoke-test HTTP requests and thread joins."""
+
 
 class SnapshotDefaults:
     """Defaults for web console snapshot / query endpoints."""
@@ -185,7 +188,7 @@ class AgentLimits:
     # evaluation time.
     # ``6months`` and is no longer authoritative.
     MAX_SYNC_RANGE: frozenset[str] = ContextRefreshDefaults.ALLOWED_SYNC_RANGES
-    """Allowed values for sync_range parameter."""
+    """Allowed sync_range values (alias for ALLOWED_SYNC_RANGES)."""
 
     MAX_BATCH_SIMULATIONS: int = 10
     """Maximum expressions per run_simulation_batch call."""
@@ -198,7 +201,7 @@ class AgentLimits:
     POLL_INTERVAL_MIN: float = 0.5
     POLL_INTERVAL_MAX: float = 30.0
     POLL_INTERVAL_DEFAULT: float = 2.0
-    """Allowed values for sync_range parameter."""
+    """Default poll interval in seconds."""
 
     EXPRESSION_INDEX_LIMIT_MAX: int = 50000
     MEMORY_LIMIT_MAX: int = 50000

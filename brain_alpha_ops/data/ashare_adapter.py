@@ -260,6 +260,8 @@ class BaoStockAdapter:
         has_adjfactor = "adjfactor" in fields
         while rs.next():
             row = rs.get_row_data()
+            if len(row) < 8:
+                continue
             rows.append({
                 "date": row[0],
                 "symbol": symbol,
@@ -270,7 +272,7 @@ class BaoStockAdapter:
                 "volume": _safe_float(row[5]),
                 "amount": _safe_float(row[6]),
                 "turnover_rate": _safe_float(row[7]),
-                "adj_factor": _safe_float(row[8], default=1.0) if has_adjfactor else 1.0,
+                "adj_factor": _safe_float(row[8], default=1.0) if has_adjfactor and len(row) > 8 else 1.0,
             })
         return rows
 
@@ -288,12 +290,14 @@ class BaoStockAdapter:
         stocks = []
         while rs.next():
             row = rs.get_row_data()
+            if len(row) < 5:
+                continue
             stocks.append({
                 "symbol": row[0],
                 "name": row[1],
                 "ipo_date": row[2],
                 "type": row[3],
-                "status": row[4] if len(row) > 4 else "",
+                "status": row[4],
             })
         return stocks
 
@@ -558,7 +562,10 @@ class AShareDataProvider:
             if self._stock_list is None and self._baostock.available:
                 self._stock_list = self._baostock.fetch_stock_list()
             symbols = [s.get("symbol", "") for s in (self._stock_list or [])]
-            symbols = symbols[:500]  # Limit
+            if len(symbols) > 500:
+                import logging as _log
+                _log.getLogger(__name__).warning("load_index_universe: truncating %d symbols to 500", len(symbols))
+                symbols = symbols[:500]
             if not symbols:
                 self._record_diagnostic(
                     source="baostock",

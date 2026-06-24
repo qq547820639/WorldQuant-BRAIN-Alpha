@@ -239,6 +239,10 @@ class OfficialSimulationSubmissionMixin:
         # ── Guard integrity check ───────────────────────────────────────
         # Verify the runtime_constants module hasn't been tampered with.
         # Fail-closed: if we can't verify, block the submission.
+        # Uses hash-based verification so monkeypatching the sentinel string
+        # alone is insufficient — the attacker must also override the hash
+        # comparison function.
+        import hashlib as _hashlib
         try:
             from .. import runtime_constants as _rc
             if not hasattr(_rc, "REAL_SUBMIT_DISABLED_WEB_FLOW"):
@@ -261,14 +265,24 @@ class OfficialSimulationSubmissionMixin:
                     "hardcoded True value. Submission refused."
                 )
             from ..runtime_constants import _SUBMIT_GUARD_SENTINEL
-            if _SUBMIT_GUARD_SENTINEL != "BRAIN_ALPHA_SUBMIT_GUARD_v1":
+            _expected_sentinel_hash = _hashlib.sha256(b"BRAIN_ALPHA_SUBMIT_GUARD_v1").hexdigest()
+            _actual_sentinel_hash = _hashlib.sha256(str(_SUBMIT_GUARD_SENTINEL).encode()).hexdigest()
+            if _actual_sentinel_hash != _expected_sentinel_hash:
                 _submit_log.critical(
-                    "SUBMIT BLOCKED: _SUBMIT_GUARD_SENTINEL mismatch — expected "
+                    "SUBMIT BLOCKED: _SUBMIT_GUARD_SENTINEL hash mismatch — expected "
                     "BRAIN_ALPHA_SUBMIT_GUARD_v1, got %r.",
                     _SUBMIT_GUARD_SENTINEL,
                 )
                 raise BrainAPIError(
                     "SUBMIT INTEGRITY FAILURE: guard sentinel mismatch. Submission refused."
+                )
+            if not hasattr(_rc, "_SUBMIT_GUARD_SENTINEL") or not hasattr(_rc, "real_submit_test_override_enabled"):
+                _submit_log.critical(
+                    "SUBMIT BLOCKED: runtime_constants missing required guard functions — "
+                    "module may have been tampered with."
+                )
+                raise BrainAPIError(
+                    "SUBMIT INTEGRITY FAILURE: guard function missing. Submission blocked."
                 )
         except ImportError:
             _submit_log.critical("SUBMIT BLOCKED: failed to import runtime_constants — module integrity unknown.")

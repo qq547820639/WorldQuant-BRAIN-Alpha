@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import sys
 from pathlib import Path
 from typing import Any
@@ -35,9 +36,7 @@ def _is_dataset_id_in_official_cache(dataset_id: str, storage_dir: str) -> bool:
     """
     datasets_path = Path(storage_dir) / "official_datasets.json"
     if not datasets_path.is_file():
-        # First-time setup: cache not yet downloaded; allow the ID.
-        # We cannot reject an ID we haven't had a chance to validate against.
-        return True
+        return False
     try:
         with open(datasets_path, encoding="utf-8") as fh:
             datasets = json.load(fh)
@@ -56,6 +55,8 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_RUN_CONFIG_PATH = PROJECT_ROOT / "config" / "run_config.json"
 
 logger = logging.getLogger(__name__)
+
+_UUID_RE = re.compile(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$')
 
 
 class ConfigValidationError(ValueError):
@@ -188,8 +189,6 @@ def validate_run_config(config: RunConfig, *, skip_cache_check: bool = False) ->
         # (e.g. "pv1", "analyst4"), a UUID, or the special value "all".
         # Unknown IDs cause all BRAIN API calls to fail silently; catching
         # them here gives the user a clear error message.
-        import re
-        _UUID_RE = re.compile(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$')
         cache_ok = _is_dataset_id_in_official_cache(resolved, config.ops.storage_dir) if not skip_cache_check else True
         if (
             resolved.lower() not in ("all", "")

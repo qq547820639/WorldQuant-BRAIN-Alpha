@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import logging
 import time
+from collections import deque
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
@@ -78,7 +79,7 @@ class UnifiedMonitor:
         """
         self._browser = browser_monitor
         self._stall = stall_monitor
-        self._history: list[UnifiedHealth] = []
+        self._history: deque[UnifiedHealth] = deque(maxlen=1000)
 
     def check(self) -> UnifiedHealth:
         """Run all health checks and return unified status."""
@@ -167,9 +168,11 @@ class UnifiedMonitor:
                     logger.warning("Auto-heal failed: %s", redact_error_message(e))
             elif event.action == "snapshot" and self._browser is not None:
                 try:
-                    self._browser.runner._take_screenshot(
-                        f"monitor_event_{int(time.time())}"
-                    )
+                    runner = getattr(self._browser, "runner", None)
+                    if runner is not None and hasattr(runner, "_take_screenshot"):
+                        runner._take_screenshot(
+                            f"monitor_event_{int(time.time())}"
+                        )
                     actions.append("browser_snapshot")
                 except Exception as e:
                     logger.warning("Browser snapshot capture failed: %s", redact_error_message(e))
@@ -190,8 +193,8 @@ class UnifiedMonitor:
                 else Severity.WARNING
             )
             action = (
-                "heal" if issue["type"] in ("dom_broken", "heartbeat_stale")
-                else "snapshot" if issue["type"] == "console_errors"
+                "heal" if issue.get("type") in ("dom_broken", "heartbeat_stale")
+                else "snapshot" if issue.get("type") == "console_errors"
                 else "log"
             )
             events.append(MonitorEvent(

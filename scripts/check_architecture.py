@@ -7,10 +7,11 @@ Checks:
   3. config/ does not import from research/ or web/
   4. research/ does not import from web/
 
-Usage: python3 scripts/check_architecture.py
+Usage: python3 scripts/check_architecture.py [--json]
 """
 
 import ast
+import json
 import sys
 from pathlib import Path
 
@@ -52,13 +53,29 @@ def check():
             if bad:
                 violations.append(f"  {rel}: imports {bad} — {rule['message']}")
 
-    if violations:
-        print(f"ARCHITECTURE VIOLATIONS ({len(violations)}):")
-        for v in violations:
+    return {
+        "ok": len(violations) == 0,
+        "violations": violations,
+        "checked_domains": list(RULES.keys()),
+    }
+
+
+def main(argv: list[str] | None = None) -> int:
+    import argparse
+    parser = argparse.ArgumentParser(description="Architecture compliance check.")
+    parser.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
+    args = parser.parse_args(argv)
+    result = check()
+    if args.json:
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+    elif result["ok"]:
+        print("ARCHITECTURE CHECK PASSED — no dependency violations")
+    else:
+        print(f"ARCHITECTURE VIOLATIONS ({len(result['violations'])}):")
+        for v in result["violations"]:
             print(v)
-        return 1
-    print("ARCHITECTURE CHECK PASSED — no dependency violations")
-    return 0
+    return 0 if result["ok"] else 1
+
 
 if __name__ == "__main__":
-    sys.exit(check())
+    sys.exit(main())

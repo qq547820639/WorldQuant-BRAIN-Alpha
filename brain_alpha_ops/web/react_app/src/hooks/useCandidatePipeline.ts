@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import type { UnifiedProgress } from "@/types";
 
 export type PipelineStage = "idle" | "loading" | "progress" | "success" | "error";
@@ -96,7 +96,7 @@ export function useCandidatePipeline(): CandidatePipeline {
 
   const [autoOptimizationCycles, setAutoOptimizationCycles] = useState(0);
 
-  return {
+  return useMemo(() => ({
     task: {
       state: taskState,
       progress: taskProgress,
@@ -147,5 +147,17 @@ export function useCandidatePipeline(): CandidatePipeline {
     resetAutoPipelineStageIfCurrent,
     autoOptimizationCycles,
     setAutoOptimizationCycles,
-  };
+  }), [
+    taskState, taskProgress, taskError, taskId,
+    simState, simProgress, simError, simJobId,
+    optimizationState, optimizationProgress, optimizationError, optimizationJobId,
+    checkState, checkProgress, checkError, checkJobId,
+    checkingAlphaId, taskSuccessBanner, autoPipelineStage, autoOptimizationCycles,
+    setTaskState, setTaskProgress, setTaskError, setTaskId,
+    setSimState, setSimProgress, setSimError, setSimJobId,
+    setOptimizationState, setOptimizationProgress, setOptimizationError, setOptimizationJobId,
+    setCheckState, setCheckProgress, setCheckError, setCheckJobId,
+    setCheckingAlphaId, setTaskSuccessBanner,
+    updateAutoPipelineStage, resetAutoPipelineStageIfCurrent, setAutoOptimizationCycles,
+  ]);
 }

@@ -316,6 +316,15 @@ def create_handler_class(
 
 
 # F-05: CORS origin 白名单 — 防止反射未授权 origin
+_CORS_ALLOWED_ORIGINS_CACHE: str | None = None
+
+def _get_cors_allowed_origins() -> str:
+    """Cache the CORS allowed origins env var to avoid per-request OS calls."""
+    global _CORS_ALLOWED_ORIGINS_CACHE
+    if _CORS_ALLOWED_ORIGINS_CACHE is None:
+        _CORS_ALLOWED_ORIGINS_CACHE = os.environ.get("BRAIN_ALPHA_OPS_CORS_ALLOWED_ORIGINS", "")
+    return _CORS_ALLOWED_ORIGINS_CACHE
+
 def _is_origin_allowed(origin: str) -> bool:
     """Check whether the given CORS origin is in the configured allowlist.
 
@@ -334,8 +343,7 @@ def _is_origin_allowed(origin: str) -> bool:
     if host in ("127.0.0.1", "localhost", "::1", "0.0.0.0"):
         return True
     # Check explicit allowlist from env
-    import os
-    raw = os.environ.get("BRAIN_ALPHA_OPS_CORS_ALLOWED_ORIGINS", "")
+    raw = _get_cors_allowed_origins()
     if not raw:
         return False
     allowed = {entry.strip().lower() for entry in raw.split(",") if entry.strip()}

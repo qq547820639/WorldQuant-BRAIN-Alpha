@@ -15,26 +15,40 @@ Usage::
 
 from __future__ import annotations
 
+import os
+import threading
 import uuid
 import logging
 from contextlib import contextmanager
-from typing import Any
+from pathlib import Path
+from typing import Any, TYPE_CHECKING
 
 from brain_alpha_ops.execution_backend import ExecutionEvidence
 from brain_alpha_ops.monitoring.evidence import EvidenceArchival
 from brain_alpha_ops.redaction import redact_error_message
 
+if TYPE_CHECKING:
+    from brain_alpha_ops.execution_backend import AlphaExecutionBackend
+
 logger = logging.getLogger(__name__)
 
 # Singleton archival instance — created lazily
 _archiver: EvidenceArchival | None = None
+_archiver_lock = threading.Lock()
 
 
-def get_archiver(evidence_dir: str = "artifacts/evidence") -> EvidenceArchival:
+_PROJECT_ROOT = Path(__file__).resolve().parents[2]
+
+
+def get_archiver(evidence_dir: str | None = None) -> EvidenceArchival:
     """Return the singleton EvidenceArchival instance."""
+    if evidence_dir is None:
+        evidence_dir = os.path.join(str(_PROJECT_ROOT), "artifacts", "evidence")
     global _archiver
     if _archiver is None:
-        _archiver = EvidenceArchival(evidence_dir=evidence_dir)
+        with _archiver_lock:
+            if _archiver is None:
+                _archiver = EvidenceArchival(evidence_dir=evidence_dir)
     return _archiver
 
 
@@ -42,7 +56,7 @@ def get_archiver(evidence_dir: str = "artifacts/evidence") -> EvidenceArchival:
 def capture_evidence(
     session_id: str | None = None,
     *,
-    backend=None,
+    backend: AlphaExecutionBackend | None = None,
     archiver: EvidenceArchival | None = None,
 ):
     """Context manager that auto-archives backend evidence on exit.

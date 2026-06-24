@@ -68,7 +68,7 @@ export default function CredentialQuickStart({
     setTesting(true);
     setTestResult(null);
     try {
-      onCredentialsChange({ username: username.trim(), password: password.trim(), token: token.trim() });
+      onCredentialsChange({ username: username.trim(), password: "", token: token.trim() });
       const json = await call("/api/test_connection", {
         method: "POST",
         body: JSON.stringify({ username: username.trim(), password: password.trim(), token: token.trim() }),

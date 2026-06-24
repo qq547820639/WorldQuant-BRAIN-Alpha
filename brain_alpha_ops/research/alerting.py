@@ -82,13 +82,13 @@ class AlertDeliveryService:
                 self.sender(payload)
                 sender_result = {"delivered": True}
             except Exception as exc:
-                message = redact_error_message(exc)
+                alert_msg = redact_error_message(exc)
                 logger.warning(
                     "alert callback sender failed for channel=%s: %s",
                     redact_text(clean_channel, max_length=80),
-                    message,
+                    alert_msg,
                 )
-                sender_result = {"delivered": False, "error": message}
+                sender_result = {"delivered": False, "error": alert_msg}
         payload["transport"] = transport
         payload["sender"] = sender_result
         payload["persisted"] = persist_result

@@ -474,7 +474,7 @@ def _review_gap_closure_tracker() -> tuple[bool, dict]:
     # When official context is fresh (p1_count=0), the tracker's
     # stale-fact checks for "official context refresh" queue items
     # are expected findings; treat those as non-blocking.
-    import json, pathlib; status_path = pathlib.Path("data/official_context_refresh_status.json"); refresh_status = {}; exec("if status_path.is_file(): refresh_status = json.loads(status_path.read_text())") if False else (refresh_status := json.loads(status_path.read_text()) if status_path.is_file() else {})
+    import json, pathlib; status_path = pathlib.Path("data/official_context_refresh_status.json"); refresh_status = json.loads(status_path.read_text()) if status_path.is_file() else {}
     if refresh_status.get("status") == "refreshed" and not refresh_status.get("after", {}).get("manifest_stale", True):
         findings = detail.get("findings", [])
         stale_codes = {

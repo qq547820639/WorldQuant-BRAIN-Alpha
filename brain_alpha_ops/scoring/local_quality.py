@@ -133,7 +133,7 @@ def local_quality(
         score -= cfg.penalty_weak_hypothesis
         reasons.append("weak_research_hypothesis")
     for op_name, bonus in cfg.bonus_operators.items():
-        if op_name in expression:
+        if re.search(rf'\b{re.escape(op_name)}\b', expression):
             score += bonus
     if generation_risks:
         score -= cfg.penalty_sell_risk

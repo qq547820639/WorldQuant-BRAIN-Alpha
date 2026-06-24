@@ -769,25 +769,25 @@ def main(argv: list[str] | None = None) -> int:
     if args.json:
         print(json.dumps(result, ensure_ascii=False, indent=2, default=str))
     else:
-        status = "✅ PASSED" if result["passed"] else "❌ FAILED"
+        status = "PASSED" if result["passed"] else "FAILED"
         print(f"BRAIN Parameter Traceability Audit: {status}")
         print(f"  Errors: {result['errors']}, Warnings: {result['warnings']}")
         print()
 
         for check_name, check_result in result["checks"].items():
             if isinstance(check_result, dict) and "passed" in check_result:
-                icon = "✅" if check_result["passed"] else "❌"
+                icon = "OK" if check_result["passed"] else "FAIL"
                 print(f"  {icon} {check_name}: {check_result['checked']} checked, "
                       f"{check_result['issues_found']} issue(s)")
 
         if result["errors_list"]:
-            print(f"\n🔴 ERRORS ({len(result['errors_list'])}):")
+            print(f"\nERRORS ({len(result['errors_list'])}):")
             for issue in result["errors_list"]:
                 print(f"  - [{issue['check']}] {issue['details']}")
                 print(f"    Fix: {issue['fix']}")
 
         if result["warnings_list"]:
-            print(f"\n🟡 WARNINGS ({len(result['warnings_list'])}):")
+            print(f"\nWARNINGS ({len(result['warnings_list'])}):")
             for issue in result["warnings_list"]:
                 print(f"  - [{issue['check']}] {issue['details']}")
 

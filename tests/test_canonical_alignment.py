@@ -276,6 +276,9 @@ class TestThresholdAlignment:
             config.ops.settings.dataset = "pv1"
             config.ops.official_api.cache_dir = os.path.join(storage, "api_cache")
             os.makedirs(config.ops.official_api.cache_dir, exist_ok=True)
+            import json
+            with open(os.path.join(storage, "official_datasets.json"), "w") as f:
+                json.dump([{"id": "pv1", "name": "PV1"}], f)
             config.ops.budget.hypothesis_library_dir = os.path.join(tmp, "hypotheses")
             os.makedirs(config.ops.budget.hypothesis_library_dir, exist_ok=True)
             try:

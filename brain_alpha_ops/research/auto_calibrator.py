@@ -18,12 +18,16 @@ Usage::
 from __future__ import annotations
 from dataclasses import asdict
 
+import logging
 import os
+import re
 from datetime import datetime, timezone
 from typing import Any
 
 from brain_alpha_ops.jsonl import count_jsonl_records, read_jsonl_records
 from brain_alpha_ops.research.scoring_params import DimensionParam, ScoringParams
+
+logger = logging.getLogger(__name__)
 
 # ═══════════════════════════════════════════════════════════════════════
 # Auto-calibrator
@@ -296,7 +300,6 @@ class AutoCalibrator:
         hypothesis = record.get("hypothesis", "")
         family = record.get("family", "")
 
-        import re
         windows = [int(v) for v in re.findall(r"\b\d+\b", expression)]
         median_window = sorted(windows)[len(windows) // 2] if windows else 0
 
@@ -455,7 +458,8 @@ class AutoCalibrator:
             from calibrate_weights import calibrate_prior_weights
 
             return calibrate_prior_weights(records, target_metric="sharpe")
-        except (ImportError, FileNotFoundError, AttributeError):
+        except (ImportError, FileNotFoundError, AttributeError) as exc:
+            logger.warning("calibrate_weights module not available for dimension weights: %s", exc)
             return {
                 "sample_size": len(records),
                 "error": "calibrate_weights module not importable",
@@ -470,7 +474,8 @@ class AutoCalibrator:
             from calibrate_weights import calibrate_scorecard_weights
 
             return calibrate_scorecard_weights(records)
-        except (ImportError, FileNotFoundError, AttributeError):
+        except (ImportError, FileNotFoundError, AttributeError) as exc:
+            logger.warning("calibrate_weights module not available for layer weights: %s", exc)
             return {
                 "sample_size": len(records),
                 "error": "calibrate_weights module not importable",

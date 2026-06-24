@@ -63,8 +63,18 @@ class Route:
 # ═══════════════════════ GET Routes ═══════════════════════════════════
 def dispatch_get(handler: Any, path: str, query: dict) -> None:
     """Dispatch GET requests to appropriate handlers."""
-    # Health and session endpoints
-    if path in ("/api/health", "/api/refresh_session"):
+    # Health endpoint — no auth required
+    if path == "/api/health":
+        handler._send_json(_health_payload())
+        return
+
+    # Authentication gate for all other endpoints
+    if not handler._has_valid_session():
+        handler._send_json({"ok": False, "error_code": "AUTH_REQUIRED", "error": "session required"}, status=401)
+        return
+
+    # Session refresh (authenticated)
+    if path == "/api/refresh_session":
         handler._send_json(_health_payload())
         return
 
@@ -200,6 +210,11 @@ def dispatch_get(handler: Any, path: str, query: dict) -> None:
 # ═══════════════════════ POST Routes ══════════════════════════════════
 def dispatch_post(handler: Any, path: str, body: str) -> None:
     """Dispatch POST requests to appropriate handlers."""
+    # Authentication gate for all POST endpoints
+    if not handler._has_valid_session():
+        handler._send_json({"ok": False, "error_code": "AUTH_REQUIRED", "error": "session required"}, status=401)
+        return
+
     try:
         payload = json.loads(body) if body else {}
     except json.JSONDecodeError:
@@ -281,6 +296,8 @@ def _handle_pipeline_start(handler: Any, payload: dict) -> None:
         except Exception as e:
             logger.exception("Pipeline failed")
             job_update(job_id, status="failed", error=redact_error_message(e))
+        finally:
+            username = password = token = None
 
     threading.Thread(target=run_pipeline, daemon=True).start()
     handler._send_json({"ok": True, "job_id": job_id})

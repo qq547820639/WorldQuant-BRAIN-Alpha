@@ -153,7 +153,11 @@ class Handler(BaseHTTPRequestHandler):
         )
 
     def _read_json(self):
-        length = int(self.headers.get("Content-Length", "0"))
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+        except (ValueError, TypeError):
+            length = 0
+        length = min(length, self._MAX_BODY_BYTES)
         if length < 0:
             raise ValueError("invalid request body length")
         if length > self._MAX_BODY_BYTES:

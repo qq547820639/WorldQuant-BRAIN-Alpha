@@ -50,6 +50,12 @@ export default function Dashboard({ notify, connected, contextFresh, phaseStatus
   const memoryApi = useApi<ResearchMemorySummary>();
   const { cloud: cloudGlobal, refreshAll } = useGlobalData();
 
+  const status = statusApi.data;
+  const cloud = cloudGlobal.data;
+  const memory = memoryApi.data;
+  const cloudSummaryData = cloudSnapshotSummary(cloud);
+  const cloudPreviewRows = cloudSnapshotPreviewRows(cloud);
+
   useEffect(() => {
     statusApi.call("/api/production-validation/status");
     memoryApi.call("/api/snapshot/memory?limit=100&top_n=5");
@@ -67,7 +73,6 @@ export default function Dashboard({ notify, connected, contextFresh, phaseStatus
       const syncTime = cloudSnapshotSummary(cloud).loaded_at || new Date().toISOString();
       saveResumeState({ lastSyncTime: syncTime });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cloud != null, cloudGlobal.loading]);
 
   useEffect(() => {
@@ -110,19 +115,19 @@ export default function Dashboard({ notify, connected, contextFresh, phaseStatus
       const updated = appendTrendPoint(TREND_KEY.CANDIDATES, poolSize);
       setTrendCandidates(updated);
     }
-    const submissions = status?.progress?.submissions ?? cloudSummary?.submitted_count;
+    const submissions = status?.progress?.submissions ?? cloudSummaryData?.submitted_count;
     if (submissions != null) {
       const updated = appendTrendPoint(TREND_KEY.SUBMISSIONS, submissions);
       setTrendSubmissions(updated);
     }
     const syncCandidates = memory?.total_candidates ?? status?.progress?.candidates_generated ?? 0;
-    const syncSubmissions = status?.progress?.submissions ?? cloudSummary?.submitted_count ?? 0;
+    const syncSubmissions = status?.progress?.submissions ?? cloudSummaryData?.submitted_count ?? 0;
     const syncCycles = status?.progress?.completed_cycles ?? 0;
     if (syncCandidates > 0 || syncSubmissions > 0) {
       syncTrendToBackend(syncCandidates, syncSubmissions, syncCycles);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status?.progress?.candidates_generated, status?.progress?.submissions, cloudSummary?.submitted_count, memory?.total_candidates]);
+  }, [status?.progress?.candidates_generated, status?.progress?.submissions, cloudSummaryData?.submitted_count, memory?.total_candidates]);
 
   const prevJobRunningRef = useRef(jobRunning);
   useEffect(() => {
@@ -132,13 +137,13 @@ export default function Dashboard({ notify, connected, contextFresh, phaseStatus
         const updated = appendTrendPoint(TREND_KEY.CANDIDATES, poolSize);
         setTrendCandidates(updated);
       }
-      const submissions = status?.progress?.submissions ?? cloudSummary?.submitted_count;
+      const submissions = status?.progress?.submissions ?? cloudSummaryData?.submitted_count;
       if (submissions != null) {
         const updated = appendTrendPoint(TREND_KEY.SUBMISSIONS, submissions);
         setTrendSubmissions(updated);
       }
       const syncCandidates = memory?.total_candidates ?? status?.progress?.candidates_generated ?? 0;
-      const syncSubmissions = status?.progress?.submissions ?? cloudSummary?.submitted_count ?? 0;
+      const syncSubmissions = status?.progress?.submissions ?? cloudSummaryData?.submitted_count ?? 0;
       const syncCycles = status?.progress?.completed_cycles ?? 0;
       if (syncCandidates > 0 || syncSubmissions > 0) {
         syncTrendToBackend(syncCandidates, syncSubmissions, syncCycles);
@@ -147,12 +152,6 @@ export default function Dashboard({ notify, connected, contextFresh, phaseStatus
     prevJobRunningRef.current = jobRunning;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jobRunning]);
-
-  const status = statusApi.data;
-  const cloud = cloudGlobal.data;
-  const memory = memoryApi.data;
-  const cloudSummaryData = cloudSnapshotSummary(cloud);
-  const cloudPreviewRows = cloudSnapshotPreviewRows(cloud);
 
   const retryAll = () => {
     statusApi.call("/api/production-validation/status");

@@ -76,6 +76,11 @@ SCORING_VERSION = "scoring-v2.4"
 _MAX_SCORE_HISTORY_PER_ALPHA = 100
 _MAX_SCORE_HISTORY_TOTAL_ENTRIES = 10_000
 
+# Named thresholds extracted from hardcoded values
+_SOFT_GATE_TOLERANCE = 2  # max allowed soft-gate failures (line ~404)
+_TREND_DELTA_IMPROVING = 5  # score delta for "improving" trend
+_TREND_DELTA_DECLINING = -5  # score delta for "declining" trend
+
 def _gate_item_value(row: dict, key: str, default: str = "-") -> str:
     value = row.get(key, default)
     return str(value if value not in (None, "") else default)
@@ -260,6 +265,9 @@ class OfficialScoringSystem:
         if isinstance(candidate, dict):
             candidate = Candidate.from_dict(candidate)
 
+        import copy
+        candidate = copy.copy(candidate)
+
         # 1. Build scorecard
         scorecard = build_scorecard(
             candidate,
@@ -398,7 +406,7 @@ class OfficialScoringSystem:
             ]
             gates.append(GateResult(
                 gate_name="QUALITY_TARGETS",
-                passed=len(soft_failed) <= 2,  # Allow up to 2 warnings
+                passed=len(soft_failed) <= _SOFT_GATE_TOLERANCE,
                 check_items=gate_items,
                 failed_items=[_format_gate_failure(r) for r in soft_failed],
                 threshold_source="Advisor_Standard",
@@ -561,7 +569,7 @@ class OfficialScoringSystem:
             try:
                 self._persisted_history.append(result)
             except Exception:
-                logger.debug("failed to persist score history", exc_info=True)
+                logger.warning("failed to persist score history", exc_info=True)
 
     def _write_audit_trail(self, result: ScoringResult) -> None:
         """Write scoring result to audit trail for traceability."""
@@ -573,7 +581,7 @@ class OfficialScoringSystem:
                 scoring_version=SCORING_VERSION,
             )
         except Exception:
-            logger.debug("failed to write audit trail", exc_info=True)
+            logger.warning("failed to write audit trail", exc_info=True)
 
     def _trim_score_history(self) -> None:
         total_entries = sum(len(history) for history in self._score_history.values())
@@ -606,9 +614,9 @@ class OfficialScoringSystem:
         first = history[0]["total_score"]
         last = history[-1]["total_score"]
         delta = last - first
-        if delta > 5:
+        if delta > _TREND_DELTA_IMPROVING:
             return "improving"
-        if delta < -5:
+        if delta < _TREND_DELTA_DECLINING:
             return "declining"
         return "stable"
 

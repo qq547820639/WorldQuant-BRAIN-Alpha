@@ -49,7 +49,7 @@ def check_registry_consistency() -> dict[str, Any]:
                    "zscore", "quantile", "power", "abs", "log", "sign", "add",
                    "subtract", "multiply", "divide", "max", "min", "delay",
                    "ts_decay_linear", "ts_corr", "ts_cov", "decay_linear",
-                   "indneutralize", "winsorize", "normalize", " demean"}
+                   "indneutralize", "winsorize", "normalize", "demean"}
 
     gate_ops = {"sharpe", "fitness", "turnover_min", "turnover_platform",
                 "self_correlation", "prod_correlation", "weight_concentration",

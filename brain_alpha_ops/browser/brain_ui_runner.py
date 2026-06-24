@@ -2,8 +2,10 @@ from __future__ import annotations
 import json
 import os
 import re
+import threading
 import time
 import logging
+import weakref
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -26,12 +28,13 @@ class BrowserRunState:
 LIVE_BROWSER_OPT_IN_ENV = "BRAIN_BROWSER_E2E_LIVE"
 _REAL_BRAIN_HOSTS = ("brain.worldquant.com", "platform.worldquantbrain.com")
 _COOKIE_PAIR_RE = re.compile(r"(?i)(\b(?:set-)?cookie\s*:\s*)([^;\n\r]+(?:;[^\n\r]*)?)")
-_COOKIE_VALUE_RE = re.compile(r"(?i)(\b[A-Za-z0-9_.-]*(?:session|csrf|token|auth|cookie)[A-Za-z0-9_.-]*\s*=\s*)[^;\s]+")
+_COOKIE_VALUE_RE = re.compile(r"(?i)(\b\w+\s*=\s*)[^;\s]+")
 _SENSITIVE_HTML_FIELD_RE = re.compile(
     r"(?is)(<(?:input|textarea)\b(?=[^>]*(?:type|name|id)\s*=\s*['\"]?"
     r"[^'\"\s>]*(?:password|token|secret|csrf|session|cookie|authorization|auth)"
     r"[^'\"\s>]*)[^>]*\bvalue\s*=\s*)(['\"]?)(.*?)(\2)([^>]*>)"
 )
+_DEFAULT_PAGE_TIMEOUT_MS = 30000
 
 
 class BrainBrowserRunner:
@@ -61,10 +64,12 @@ class BrainBrowserRunner:
             else self.mode == "live" and os.environ.get(LIVE_BROWSER_OPT_IN_ENV) == "1"
         )
         self.state = BrowserRunState()
+        self._state_lock = threading.Lock()
         self._pw = None
         self._browser = None
         self._context = None
         self._page = None
+        weakref.finalize(self, self._cleanup_resources, self._pw, self._browser, self._context)
 
     def __enter__(self):
         from playwright.sync_api import sync_playwright
@@ -72,61 +77,88 @@ class BrainBrowserRunner:
         if not guard["allowed"]:
             raise RuntimeError(guard["message"])
         os.makedirs(self.evidence_dir, exist_ok=True)
-        self._pw = sync_playwright().start()
-        self._browser = self._pw.chromium.launch(headless=self.headless)
-        context_options: dict[str, Any] = {"viewport": {"width": 1920, "height": 1080}}
-        if self.record_har:
-            self.har_path = os.path.join(self.evidence_dir, "brain_interactions.har")
-            context_options["record_har_path"] = self.har_path
-        self._context = self._browser.new_context(**context_options)
-        self._page = self._context.new_page()
-        self._page.on("console", self._on_console)
-        self._page.on("pageerror", self._on_page_error)
-        self._page.on("request", self._on_request)
-        self._page.on("response", self._on_response)
+        try:
+            self._pw = sync_playwright().start()
+            self._browser = self._pw.chromium.launch(headless=self.headless)
+            context_options: dict[str, Any] = {"viewport": {"width": 1920, "height": 1080}}
+            if self.record_har:
+                self.har_path = os.path.join(self.evidence_dir, "brain_interactions.har")
+                context_options["record_har_path"] = self.har_path
+            self._context = self._browser.new_context(**context_options)
+            self._page = self._context.new_page()
+            self._page.on("console", self._on_console)
+            self._page.on("pageerror", self._on_page_error)
+            self._page.on("request", self._on_request)
+            self._page.on("response", self._on_response)
+        except Exception:
+            self.__exit__(None, None, None)
+            raise
         self.state.last_heartbeat_ts = time.time()
         return self
 
-    def __exit__(self, exc_type, exc, tb):
+    def __exit__(self, exc_type, exc_value, tb):
         try:
             if self._page:
                 self._take_screenshot("final_state")
                 self._snapshot_dom("final_state")
-        except Exception as exc:
-            self.state.errors.append(f"final_evidence_capture_failed: {redact_error_message(exc)}")
-        if self._context:
-            self._context.close()
-        if self._browser:
-            self._browser.close()
-        if self._pw:
-            self._pw.stop()
+        except Exception as capture_exc:
+            self.state.errors.append(f"final_evidence_capture_failed: {redact_error_message(capture_exc)}")
+        self._cleanup_resources(self._pw, self._browser, self._context)
+        self._pw = None
+        self._browser = None
+        self._context = None
+        self._page = None
+
+    @staticmethod
+    def _cleanup_resources(pw, browser, context):
+        try:
+            if context:
+                context.close()
+        except Exception:
+            pass
+        try:
+            if browser:
+                browser.close()
+        except Exception:
+            pass
+        try:
+            if pw:
+                pw.stop()
+        except Exception:
+            pass
 
     def _on_console(self, msg):
         text = _redact_text(msg.text)
-        self.state.console_logs.append({"type": msg.type, "text": text, "ts": time.time()})
-        if msg.type == "error":
-            self.state.errors.append(f"console.error: {text}")
+        with self._state_lock:
+            self.state.console_logs.append({"type": msg.type, "text": text, "ts": time.time()})
+            if msg.type == "error":
+                self.state.errors.append(f"console.error: {text}")
 
     def _on_page_error(self, error):
-        self.state.errors.append(f"pageerror: {_redact_text(str(error))}")
+        with self._state_lock:
+            self.state.errors.append(f"pageerror: {_redact_text(str(error))}")
 
     def _on_request(self, request):
-        self.state.network_logs.append({"url": _redact_url(request.url), "method": request.method, "ts": time.time(), "phase": "request"})
+        with self._state_lock:
+            self.state.network_logs.append({"url": _redact_url(request.url), "method": request.method, "ts": time.time(), "phase": "request"})
 
     def _on_response(self, response):
-        self.state.network_logs.append({"url": _redact_url(response.url), "status": response.status, "ts": time.time(), "phase": "response"})
+        with self._state_lock:
+            self.state.network_logs.append({"url": _redact_url(response.url), "status": response.status, "ts": time.time(), "phase": "response"})
 
     def _take_screenshot(self, name: str):
         path = os.path.join(self.evidence_dir, f"{name}_{int(time.time())}.png")
         self._page.screenshot(path=path)
-        self.state.screenshots.append(path)
+        with self._state_lock:
+            self.state.screenshots.append(path)
 
     def _snapshot_dom(self, name: str):
         path = os.path.join(self.evidence_dir, f"{name}_{int(time.time())}.html")
         content = _redact_text(self._page.content())
         with open(path, "w", encoding="utf-8") as f:
             f.write(content)
-        self.state.dom_snapshots.append(path)
+        with self._state_lock:
+            self.state.dom_snapshots.append(path)
 
     def live_navigation_guard(self) -> dict[str, Any]:
         """Return fail-closed status before opening a real BRAIN browser page."""
@@ -200,17 +232,20 @@ class BrainBrowserRunner:
     def heartbeat(self) -> bool:
         """Check if the browser page is still responsive."""
         try:
-            self._page.evaluate("() => document.readyState")
+            page = getattr(self, "_page", None)
+            if page is None:
+                return False
+            page.evaluate("() => document.readyState")
             self.state.last_heartbeat_ts = time.time()
             return True
         except Exception as e:
-            self.state.errors.append(f"heartbeat_failed: {e}")
+            self.state.errors.append(f"heartbeat_failed: {redact_error_message(str(e))}")
             return False
 
     def login(self, username: str, password: str) -> dict[str, Any]:
         """Login to BRAIN via real browser interaction."""
         self.state.last_step = "login.navigate"
-        self._page.goto(f"{self.base_url}/", wait_until="domcontentloaded", timeout=30000)
+        self._page.goto(f"{self.base_url}/", wait_until="domcontentloaded", timeout=_DEFAULT_PAGE_TIMEOUT_MS)
         self._take_screenshot("login_page")
 
         self.state.last_step = "login.fill_credentials"
@@ -219,7 +254,7 @@ class BrainBrowserRunner:
 
         self.state.last_step = "login.submit"
         self._page.click('button[type="submit"], input[type="submit"]')
-        self._page.wait_for_load_state("networkidle", timeout=30000)
+        self._page.wait_for_load_state("networkidle", timeout=_DEFAULT_PAGE_TIMEOUT_MS)
         self._take_screenshot("post_login")
 
         self.state.last_step = "login.verify"
@@ -237,7 +272,7 @@ class BrainBrowserRunner:
     def navigate_to_alpha_creation(self) -> dict[str, Any]:
         """Navigate to alpha creation page."""
         self.state.last_step = "navigate.alpha_creation"
-        self._page.goto(f"{self.base_url}/alpha/new", wait_until="domcontentloaded", timeout=30000)
+        self._page.goto(f"{self.base_url}/alpha/new", wait_until="domcontentloaded", timeout=_DEFAULT_PAGE_TIMEOUT_MS)
         self._take_screenshot("alpha_creation_page")
         return {"ok": True, "step": self.state.last_step}
 
@@ -327,6 +362,8 @@ def _redact_text(value: str) -> str:
 
 def _redact_url(value: str) -> str:
     text = _redact_text(value)
+    if "#" in text:
+        text = text.split("#", 1)[0]
     if "?" not in text:
         return text
     return text.split("?", 1)[0] + "?[redacted-query]"

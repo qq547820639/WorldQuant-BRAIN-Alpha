@@ -21,6 +21,7 @@ from brain_alpha_ops.web_server_lifecycle import (
 from brain_alpha_ops.web_server_lifecycle import (
     find_free_port as _canonical_find_free_port,
 )
+from brain_alpha_ops.runtime_constants import WebDefaults
 
 __all__ = ["main", "shutdown_server", "serve", "smoke_test_server"]
 
@@ -90,7 +91,7 @@ def shutdown_server(server=None, server_stop=None) -> None:
         srv.shutdown()
         srv.server_close()
         if thread is not None and thread.is_alive():
-            thread.join(timeout=5.0)
+            thread.join(timeout=WebDefaults.SMOKE_TEST_TIMEOUT)
         if server is None:
             _SERVER = None
 

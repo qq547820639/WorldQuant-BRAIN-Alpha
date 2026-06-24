@@ -89,7 +89,12 @@ export function useApi<T = unknown>() {
                 }
                 res = await request();
                 if (res.ok) {
-                  const retryJson = await res.json() as R & ApiMeta;
+                  const retryJson = await safeJson<R & ApiMeta>(res);
+                  if (!retryJson) {
+                    const msg = `HTTP ${res.status}: ${res.statusText}`;
+                    setState({ data: null, loading: false, error: msg, lastErrorMeta: null });
+                    return null;
+                  }
                   refreshSessionTokens(retryJson);
                   const retryOk = retryJson.ok !== false && !(
                     retryJson.ok === undefined &&

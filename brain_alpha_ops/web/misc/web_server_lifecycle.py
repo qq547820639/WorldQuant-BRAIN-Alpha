@@ -12,6 +12,8 @@ import webbrowser
 from http.server import ThreadingHTTPServer
 from typing import Any, Callable
 
+from brain_alpha_ops.runtime_constants import WebDefaults
+
 
 class SafeThreadingHTTPServer(ThreadingHTTPServer):
     allow_reuse_address = True
@@ -130,7 +132,7 @@ def smoke_test_server(
 ) -> dict[str, Any]:
     url = serve_func(port=default_port if port is None else port, open_browser=False)
     try:
-        root_response = urlopen(url, timeout=5)
+        root_response = urlopen(url, timeout=WebDefaults.SMOKE_TEST_TIMEOUT)
         root_html = root_response.read().decode("utf-8", errors="replace")
         if "BRAIN Alpha Ops" not in root_html:
             raise RuntimeError("web root did not render console HTML")
@@ -147,7 +149,7 @@ def smoke_test_server(
                 "X-Brain-Alpha-CSRF": csrf_token,
             },
         )
-        with urlopen(request, timeout=5) as response:
+        with urlopen(request, timeout=WebDefaults.SMOKE_TEST_TIMEOUT) as response:
             payload = json.loads(response.read().decode("utf-8"))
         if payload.get("ok") is not True:
             raise RuntimeError(f"config API smoke check failed: {payload}")

@@ -9,6 +9,8 @@ from __future__ import annotations
 import json
 import logging
 import threading
+import uuid
+from collections.abc import Generator
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -74,6 +76,8 @@ class AuditTrailWriter:
                 len(line.encode("utf-8")),
             )
             record["details"] = {"_truncated": True}
+            record["gate_decisions"] = []
+            record["triggered_rules"] = []
             line = json.dumps(record, ensure_ascii=False, default=str)
         with self._lock:
             with open(self._path, "a", encoding="utf-8") as f:
@@ -89,31 +93,30 @@ class AuditTrailWriter:
         if not self._path.is_file():
             return []
         entries: list[dict[str, Any]] = []
-        with open(self._path, "r", encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    record = json.loads(line)
-                except json.JSONDecodeError:
-                    continue
-                if alpha_id and record.get("alpha_id") != alpha_id:
-                    continue
-                entries.append(record)
-                if len(entries) >= limit:
-                    break
+        with self._lock:
+            with open(self._path, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        record = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    if alpha_id and record.get("alpha_id") != alpha_id:
+                        continue
+                    entries.append(record)
+                    if len(entries) >= limit:
+                        break
         return list(reversed(entries))
 
     def entry_count(self) -> int:
         """Return the total number of audit trail entries."""
         if not self._path.is_file():
             return 0
-        count = 0
-        with open(self._path, "r", encoding="utf-8") as f:
-            for line in f:
-                if line.strip():
-                    count += 1
+        with self._lock:
+            with open(self._path, "rb") as f:
+                count = sum(1 for _ in f)
         return count
 
 
@@ -135,7 +138,7 @@ def write_scoring_audit(
     triggered_rules = _extract_triggered_rules(scoring_result)
 
     entry = AuditTrailEntry(
-        entry_id=f"{alpha_id}_{now[:19].replace(':', '').replace('-', '')}",
+        entry_id=f"{alpha_id}_{now[:19].replace(':', '').replace('-', '')}_{uuid.uuid4().hex[:8]}",
         alpha_id=alpha_id,
         expression=expression,
         event_type="scoring_evaluated",
@@ -152,30 +155,46 @@ def write_scoring_audit(
         details=extra_details or {},
     )
 
-    writer = AuditTrailWriter(audit_dir)
+    writer = _get_writer(audit_dir)
     writer.write_entry(entry)
     return entry
+
+
+_writer_lock = threading.Lock()
+_writer_instances: dict[str, AuditTrailWriter] = {}
+
+
+def _get_writer(audit_dir: str | Path = _DEFAULT_AUDIT_DIR) -> AuditTrailWriter:
+    key = str(Path(audit_dir))
+    if key not in _writer_instances:
+        with _writer_lock:
+            if key not in _writer_instances:
+                _writer_instances[key] = AuditTrailWriter(audit_dir)
+    return _writer_instances[key]
+
+
+def _iter_gates(scoring_result: Any) -> Generator[tuple[str, Any], None, None]:
+    for gate in getattr(scoring_result, "hard_gates", []):
+        yield "HARD", gate
+    for gate in getattr(scoring_result, "soft_gates", []):
+        yield "SOFT", gate
+
+
+def _gate_to_dict(gate: Any) -> dict[str, Any]:
+    if hasattr(gate, "to_dict"):
+        return gate.to_dict()
+    return gate if isinstance(gate, dict) else {}
 
 
 def _extract_gate_decisions(scoring_result: Any) -> list[dict[str, Any]]:
     """Extract gate decisions from a ScoringResult for audit trail."""
     decisions: list[dict[str, Any]] = []
-    for gate in getattr(scoring_result, "hard_gates", []):
-        gate_dict = gate.to_dict() if hasattr(gate, "to_dict") else (gate if isinstance(gate, dict) else {})
+    for gate_type, gate in _iter_gates(scoring_result):
+        gate_dict = _gate_to_dict(gate)
         decisions.append({
             "gate_name": gate_dict.get("gate_name", ""),
             "passed": gate_dict.get("passed", False),
-            "gate_type": "HARD",
-            "threshold_source": gate_dict.get("threshold_source", ""),
-            "failed_items": gate_dict.get("failed_items", []),
-            "check_count": len(gate_dict.get("check_items", [])),
-        })
-    for gate in getattr(scoring_result, "soft_gates", []):
-        gate_dict = gate.to_dict() if hasattr(gate, "to_dict") else (gate if isinstance(gate, dict) else {})
-        decisions.append({
-            "gate_name": gate_dict.get("gate_name", ""),
-            "passed": gate_dict.get("passed", False),
-            "gate_type": "SOFT",
+            "gate_type": gate_type,
             "threshold_source": gate_dict.get("threshold_source", ""),
             "failed_items": gate_dict.get("failed_items", []),
             "check_count": len(gate_dict.get("check_items", [])),
@@ -200,27 +219,14 @@ def _extract_gate_decisions(scoring_result: Any) -> list[dict[str, Any]]:
 def _extract_triggered_rules(scoring_result: Any) -> list[dict[str, Any]]:
     """Extract triggered (failed) rules from gate check items for explainability."""
     rules: list[dict[str, Any]] = []
-    for gate in getattr(scoring_result, "hard_gates", []):
-        gate_dict = gate.to_dict() if hasattr(gate, "to_dict") else (gate if isinstance(gate, dict) else {})
+    for gate_type, gate in _iter_gates(scoring_result):
+        gate_dict = _gate_to_dict(gate)
         for item in gate_dict.get("check_items", []):
             if not item.get("passed", True):
                 rules.append({
                     "gate": gate_dict.get("gate_name", ""),
                     "rule": item.get("name", ""),
-                    "gate_type": "HARD",
-                    "actual": item.get("actual"),
-                    "target": item.get("target"),
-                    "direction": item.get("direction", ""),
-                    "source": item.get("source", ""),
-                })
-    for gate in getattr(scoring_result, "soft_gates", []):
-        gate_dict = gate.to_dict() if hasattr(gate, "to_dict") else (gate if isinstance(gate, dict) else {})
-        for item in gate_dict.get("check_items", []):
-            if not item.get("passed", True):
-                rules.append({
-                    "gate": gate_dict.get("gate_name", ""),
-                    "rule": item.get("name", ""),
-                    "gate_type": "SOFT",
+                    "gate_type": gate_type,
                     "actual": item.get("actual"),
                     "target": item.get("target"),
                     "direction": item.get("direction", ""),

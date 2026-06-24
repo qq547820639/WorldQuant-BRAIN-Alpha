@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from typing import Any
 
 from brain_alpha_ops.compliance.redline_helpers import (
@@ -10,6 +11,8 @@ from brain_alpha_ops.compliance.redline_helpers import (
     _verification_blocked,
 )
 from brain_alpha_ops.compliance.redline_models import ComplianceReport, RedLineViolation
+
+_MAX_CONFIG_READ_BYTES = 1 * 1024 * 1024  # 1 MiB limit for config file reads
 
 
 def _verify_redline_4_parameter_traceability(
@@ -102,18 +105,30 @@ def _verify_redline_4_parameter_traceability(
     config_path = _project_root() / "config" / "run_config.json"
     if config_path.exists():
         try:
-            data = json.loads(config_path.read_text(encoding="utf-8"))
-            if "schema_version" in data or "config_version" in data:
-                report.add_pass()
-            else:
+            file_size = config_path.stat().st_size
+            if file_size > _MAX_CONFIG_READ_BYTES:
                 report.add(RedLineViolation(
                     redline_id=redline_id, redline_name="参数全链路可溯",
                     severity="WARNING", file_path=str(config_path),
-                    check_name="配置文件缺少版本号",
-                    actual_value="无版本字段", expected_value="schema_version",
-                    deviation="配置版本不可追溯",
-                    fix_guidance="在 run_config.json 添加 \"schema_version\": \"v2.0\"",
+                    check_name="配置文件超过读取大小限制",
+                    actual_value=f"{file_size} bytes",
+                    expected_value=f"<= {_MAX_CONFIG_READ_BYTES} bytes",
+                    deviation="配置文件过大，可能存在异常",
+                    fix_guidance="检查 run_config.json 是否包含异常数据",
                 ))
+            else:
+                data = json.loads(config_path.read_text(encoding="utf-8"))
+                if "schema_version" in data or "config_version" in data:
+                    report.add_pass()
+                else:
+                    report.add(RedLineViolation(
+                        redline_id=redline_id, redline_name="参数全链路可溯",
+                        severity="WARNING", file_path=str(config_path),
+                        check_name="配置文件缺少版本号",
+                        actual_value="无版本字段", expected_value="schema_version",
+                        deviation="配置版本不可追溯",
+                        fix_guidance="在 run_config.json 添加 \"schema_version\": \"v2.0\"",
+                    ))
         except Exception as exc:
             _verification_blocked(
                 report, redline_id=redline_id, redline_name="参数全链路可溯",

@@ -20,7 +20,9 @@ class EvidenceArchival:
     
     def archive_session(self, session_id: str, evidence: dict[str, Any]) -> str:
         """Archive evidence from a browser session."""
-        session_dir = self.evidence_dir / session_id
+        import re
+        sanitized = re.sub(r'[^a-zA-Z0-9_\-]', '_', session_id)
+        session_dir = self.evidence_dir / sanitized
         session_dir.mkdir(parents=True, exist_ok=True)
         
         # Copy screenshots

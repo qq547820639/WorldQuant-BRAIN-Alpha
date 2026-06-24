@@ -252,11 +252,15 @@ def _inside(parser: ConsoleContractParser, element_id: str, ancestor_id: str) ->
 
 def _expect(condition: bool, code: str, expected: str, actual: str, findings: list[dict[str, str]]) -> None:
     if not condition:
-        findings.append(_finding(code, expected, f"actual: {actual}"))
+        findings.append(_finding(code, expected, actual=actual))
 
 
-def _finding(code: str, expected: str, message: str) -> dict[str, str]:
-    return {"code": code, "expected": expected, "message": message}
+def _finding(code: str, expected: str, message: str = "", *, actual: str = "") -> dict[str, str]:
+    msg = message or f"expected: {expected}, actual: {actual}"
+    result: dict[str, str] = {"code": code, "expected": expected, "message": msg}
+    if actual:
+        result["actual"] = actual
+    return result
 
 
 def main(argv: list[str] | None = None) -> int:

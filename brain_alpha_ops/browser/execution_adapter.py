@@ -21,6 +21,7 @@ Usage::
 from __future__ import annotations
 
 import logging
+from collections import deque
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -29,6 +30,8 @@ from brain_alpha_ops.execution_backend import ExecutionEvidence
 from brain_alpha_ops.redaction import redact_error_message
 
 logger = logging.getLogger(__name__)
+
+_DEFAULT_NAV_TIMEOUT_MS = 30000
 
 
 @dataclass
@@ -46,6 +49,8 @@ class BrowserExecutionAdapter:
     approval_ticket: str = ""
     idempotency_key: str = ""
     _used_idempotency_keys: set[str] = field(default_factory=set, init=False, repr=False)
+    _idempotency_key_order: deque[str] = field(default_factory=deque, init=False, repr=False)
+    _MAX_IDEMPOTENCY_KEYS = 1000
 
     # Internal state — managed by context manager
     _runner: BrainBrowserRunner | None = field(default=None, init=False, repr=False)
@@ -62,7 +67,11 @@ class BrowserExecutionAdapter:
             allow_live_navigation=self.allow_live_navigation,
             readonly=self.readonly,
         )
-        self._runner.__enter__()
+        try:
+            self._runner.__enter__()
+        except Exception:
+            self._runner = None
+            raise
         return self
 
     def __exit__(self, exc_type, exc, tb) -> None:
@@ -133,19 +142,23 @@ class BrowserExecutionAdapter:
             delay = settings.get("delay", "")
             if universe:
                 try:
-                    self.runner._page.fill(
-                        'input[name="universe"], select[name="universe"]',
-                        universe,
-                    )
-                except Exception:
+                    page = getattr(self.runner, "_page", None)
+                    if page is not None:
+                        page.fill(
+                            'input[name="universe"], select[name="universe"]',
+                            universe,
+                        )
+                except (AttributeError, Exception):
                     logger.warning("Could not set universe selector")
             if delay:
                 try:
-                    self.runner._page.fill(
-                        'input[name="delay"], select[name="delay"]',
-                        str(delay),
-                    )
-                except Exception:
+                    page = getattr(self.runner, "_page", None)
+                    if page is not None:
+                        page.fill(
+                            'input[name="delay"], select[name="delay"]',
+                            str(delay),
+                        )
+                except (AttributeError, Exception):
                     logger.warning("Could not set delay selector")
 
         # Step 4: Trigger simulation
@@ -174,14 +187,17 @@ class BrowserExecutionAdapter:
             {"ok": bool, "alpha_id": str, "checks": ..., "evidence": ...}
         """
         if not self._authenticated:
-            return {"ok": False, "error": "Not authenticated", "step": "check.not_authenticated"}
+            return {"ok": False, "error": "Not authenticated", "step": "check.not_authenticated", "alpha_id": alpha_id}
 
         # Navigate to the Alpha detail page
         try:
-            self.runner._page.goto(
+            page = getattr(self.runner, "_page", None)
+            if page is None:
+                return {"ok": False, "error": "Browser page not initialized", "alpha_id": alpha_id}
+            page.goto(
                 f"{self.base_url}/alpha/{alpha_id}",
                 wait_until="domcontentloaded",
-                timeout=30000,
+                timeout=_DEFAULT_NAV_TIMEOUT_MS,
             )
         except Exception as e:
             return {"ok": False, "error": f"Navigation failed: {e}", "alpha_id": alpha_id}
@@ -191,11 +207,18 @@ class BrowserExecutionAdapter:
 
         # Extract check results from page
         try:
-            page_text = self.runner._page.inner_text("body")
+            page = getattr(self.runner, "_page", None)
+            if page is None:
+                return {
+                    "ok": False,
+                    "alpha_id": alpha_id,
+                    "error": "Browser page not initialized",
+                }
+            page_text = page.inner_text("body")
             return {
                 "ok": True,
                 "alpha_id": alpha_id,
-                "checks": page_text[:3000],
+                "checks": page_text[:2000],
                 "evidence": self.get_evidence(),
             }
         except Exception as e:
@@ -252,10 +275,13 @@ class BrowserExecutionAdapter:
 
         # Navigate to submit page
         try:
-            self.runner._page.goto(
+            page = getattr(self.runner, "_page", None)
+            if page is None:
+                return self._submit_failure(alpha_id, "submit.navigate", "Browser page not initialized")
+            page.goto(
                 f"{self.base_url}/alpha/{alpha_id}/submit",
                 wait_until="domcontentloaded",
-                timeout=30000,
+                timeout=_DEFAULT_NAV_TIMEOUT_MS,
             )
         except Exception as e:
             return self._submit_failure(alpha_id, "submit.navigate", f"Navigation failed: {e}")
@@ -274,7 +300,10 @@ class BrowserExecutionAdapter:
 
         # Click confirm/submit button
         try:
-            confirm = self.runner._page.locator(
+            page = getattr(self.runner, "_page", None)
+            if page is None:
+                return self._submit_failure(alpha_id, "submit.confirm_missing", "Browser page not initialized")
+            confirm = page.locator(
                 'button:has-text("Submit"), button:has-text("Confirm"), '
                 'button:has-text("Yes"), input[type="submit"]'
             )
@@ -286,7 +315,7 @@ class BrowserExecutionAdapter:
                     error_code="BROWSER_SUBMIT_CONFIRMATION_MISSING",
                 )
             confirm.first.click()
-            self.runner._page.wait_for_load_state("networkidle", timeout=30000)
+            page.wait_for_load_state("networkidle", timeout=_DEFAULT_NAV_TIMEOUT_MS)
         except Exception as e:
             message = redact_error_message(e)
             logger.warning("Submit confirmation click failed: %s", message)
@@ -309,6 +338,10 @@ class BrowserExecutionAdapter:
                 details=blocking,
             )
         self._used_idempotency_keys.add(key)
+        self._idempotency_key_order.append(key)
+        if len(self._idempotency_key_order) > self._MAX_IDEMPOTENCY_KEYS:
+            old = self._idempotency_key_order.popleft()
+            self._used_idempotency_keys.discard(old)
 
         return {
             "ok": True,
@@ -341,8 +374,15 @@ class BrowserExecutionAdapter:
     ) -> dict[str, Any]:
         try:
             evidence = self.get_evidence()
-        except Exception as exc:  # pragma: no cover - defensive evidence fallback
-            evidence = {"transport": "browser", "error": f"evidence collection failed: {exc}"}
+        except (AttributeError, RuntimeError):  # pragma: no cover - defensive evidence fallback
+            evidence = ExecutionEvidence(
+                transport="browser",
+                screenshots=[],
+                dom_snapshots=[],
+                console_logs=[],
+                network_logs=[],
+                har_path=None,
+            )
         payload: dict[str, Any] = {
             "ok": False,
             "alpha_id": alpha_id,

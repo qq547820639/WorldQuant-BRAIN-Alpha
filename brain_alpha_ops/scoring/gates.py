@@ -30,12 +30,12 @@ class GateResult:
 
     gate_name: str
     passed: bool
-    check_items: list[dict[str, Any]] = field(default_factory=list)  # N-05: mutable in frozen; to_dict() converts to list
-    failed_items: list[str] = field(default_factory=list)
+    check_items: tuple[dict[str, Any], ...] = field(default_factory=tuple)
+    failed_items: tuple[str, ...] = field(default_factory=tuple)
     threshold_source: str = "BRAIN_Official"
-    notes: list[str] = field(default_factory=list)
+    notes: tuple[str, ...] = field(default_factory=tuple)
     zero_deviation: bool = True
-    triggered_rules: list[dict[str, Any]] = field(default_factory=list)
+    triggered_rules: tuple[dict[str, Any], ...] = field(default_factory=tuple)
 
     def to_dict(self) -> dict:
         """S-01: Convert tuple fields back to lists for backward compatibility."""

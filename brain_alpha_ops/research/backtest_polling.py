@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from typing import Callable
 
@@ -83,7 +84,6 @@ class BacktestPollingService:
             return outcome
         # Unrecognised status — log a warning and defer so the candidate is
         # not stuck in an infinite loop.
-        import logging
         _log = logging.getLogger(__name__)
         _log.warning(
             "BacktestPollingService.poll: unrecognised simulation status %r for %s; deferring",

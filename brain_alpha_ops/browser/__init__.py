@@ -11,6 +11,8 @@ Install with: ``pip install -e ".[browser]"`` then ``playwright install chromium
 
 from __future__ import annotations
 
+import os
+
 
 def _register_browser_backend() -> None:
     """Lazily register the browser execution backend.
@@ -19,13 +21,19 @@ def _register_browser_backend() -> None:
     is not installed, logging a warning instead of crashing.
     """
     try:
+        from brain_alpha_ops.execution_backend import list_backends
+        if "browser" in list_backends():
+            return
+
         from brain_alpha_ops.browser.execution_adapter import BrowserExecutionAdapter
         from brain_alpha_ops.execution_backend import register_backend
+
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
         def _factory():
             return BrowserExecutionAdapter(
                 headless=True,
-                evidence_dir="artifacts",
+                evidence_dir=os.path.join(project_root, "artifacts"),
             )
 
         register_backend("browser", _factory)

@@ -98,7 +98,7 @@ export function useJobState(
   }, [status]);
 
   const addEvent = useCallback((msg: string) => {
-    setEvents((prev) => [...prev, msg]);
+    setEvents((prev) => [...prev.slice(-999), msg]);
   }, []);
 
   const addEventSlice = useCallback((msg: string) => {

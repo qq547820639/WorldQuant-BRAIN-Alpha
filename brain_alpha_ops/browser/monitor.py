@@ -35,7 +35,7 @@ class BrowserMonitor:
         if not heartbeat_ok:
             issues.append({"type": "heartbeat", "severity": "high", "message": "Browser page not responding"})
 
-        age = time.time() - self.runner.state.last_heartbeat_ts
+        age = time.time() - getattr(self.runner.state, "last_heartbeat_ts", time.time())
         if age > self.config.max_heartbeat_age:
             issues.append({"type": "heartbeat_stale", "severity": "medium", "message": f"Heartbeat stale for {age:.1f}s"})
 
@@ -43,6 +43,8 @@ class BrowserMonitor:
         if len(recent_errors) > self.config.max_consecutive_errors:
             issues.append({"type": "console_errors", "severity": "high", "message": f"{len(recent_errors)} console errors"})
             self._consecutive_errors = len(recent_errors)
+        else:
+            self._consecutive_errors = 0
 
         failed_requests = [r for r in self.runner.state.network_logs if r.get("phase") == "response" and r.get("status", 200) >= 400]
         if len(failed_requests) > self.config.max_network_failures:
@@ -50,7 +52,11 @@ class BrowserMonitor:
             self._network_failures = len(failed_requests)
 
         try:
-            root_exists = self.runner._page.locator("#root").count() > 0
+            page = getattr(self.runner, "_page", None)
+            if page is not None:
+                root_exists = page.locator("#root").count() > 0
+            else:
+                root_exists = False
             if not root_exists:
                 issues.append({"type": "dom_broken", "severity": "critical", "message": "Root DOM element missing"})
         except Exception as e:
@@ -111,19 +117,24 @@ class BrowserMonitor:
             return False
 
         self._heal_attempts += 1
+        healed = False
         for issue in health.get("issues", []):
-            if issue["type"] == "dom_broken":
+            if issue.get("type") == "dom_broken":
                 logger.info("Healing: refreshing page")
                 try:
-                    self.runner._page.reload(wait_until="domcontentloaded")
-                    return True
+                    page = getattr(self.runner, "_page", None)
+                    if page is not None:
+                        page.reload(wait_until="domcontentloaded")
+                    healed = True
                 except Exception as exc:
                     logger.warning("Browser auto-heal reload failed: %s", redact_error_message(exc))
-            elif issue["type"] == "heartbeat_stale":
-                logger.info("Healing: clicking page to trigger activity")
+            elif issue.get("type") == "heartbeat_stale":
+                logger.info("Healing: clicking page center to trigger activity")
                 try:
-                    self.runner._page.mouse.click(100, 100)
-                    return True
+                    page = getattr(self.runner, "_page", None)
+                    if page is not None:
+                        page.mouse.click(960, 540)
+                    healed = True
                 except Exception as exc:
                     logger.warning("Browser auto-heal click failed: %s", redact_error_message(exc))
-        return False
+        return healed

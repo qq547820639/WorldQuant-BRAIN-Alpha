@@ -163,7 +163,8 @@ class OfficialDataLoader:
     @classmethod
     def reload(cls) -> "OfficialDataLoader":
         """Force re-load from disk (useful during development)."""
-        cls._instance = None
+        with cls._instance_lock:
+            cls._instance = None
         return cls.instance()
 
     # ------------------------------------------------------------------
@@ -448,7 +449,10 @@ class OfficialDataLoader:
     def _load_fields(self, path: Path) -> None:
         if not path.exists():
             return
-        raw = json.loads(path.read_text(encoding="utf-8"))
+        try:
+            raw = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return
         if not isinstance(raw, list):
             return
         for item in raw:
@@ -459,19 +463,22 @@ class OfficialDataLoader:
                 continue
             ds_raw = item.get("dataset") if isinstance(item.get("dataset"), dict) else None
             cat_raw = item.get("category") if isinstance(item.get("category"), dict) else None
-            field = OfficialField(
-                id=field_id,
-                description=str(item.get("description") or ""),
-                dataset=DatasetRef(id=str(ds_raw.get("id", "")), name=str(ds_raw.get("name", ""))) if ds_raw else None,
-                category=str(cat_raw.get("id", "") if cat_raw else item.get("category", "")),
-                region=str(item.get("region", "USA")),
-                delay=int(item.get("delay", 1)),
-                universe=str(item.get("universe", "TOP3000")),
-                type=str(item.get("type", "MATRIX")),
-                coverage=float(item.get("coverage", 0.0)),
-                userCount=int(item.get("userCount", 0)),
-                alphaCount=int(item.get("alphaCount", 0)),
-            )
+            try:
+                field = OfficialField(
+                    id=field_id,
+                    description=str(item.get("description") or ""),
+                    dataset=DatasetRef(id=str(ds_raw.get("id", "")), name=str(ds_raw.get("name", ""))) if ds_raw else None,
+                    category=str(cat_raw.get("id", "") if cat_raw else item.get("category", "")),
+                    region=str(item.get("region", "USA")),
+                    delay=int(item.get("delay", 1)),
+                    universe=str(item.get("universe", "TOP3000")),
+                    type=str(item.get("type", "MATRIX")),
+                    coverage=float(item.get("coverage", 0.0)),
+                    userCount=int(item.get("userCount", 0)),
+                    alphaCount=int(item.get("alphaCount", 0)),
+                )
+            except (TypeError, ValueError):
+                continue
             self._fields[field.id] = field
             key = field.id.lower()
             self._fields_by_name.setdefault(key, []).append(field)
@@ -479,7 +486,10 @@ class OfficialDataLoader:
     def _load_operators(self, path: Path) -> None:
         if not path.exists():
             return
-        raw = json.loads(path.read_text(encoding="utf-8"))
+        try:
+            raw = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return
         if not isinstance(raw, list):
             return
         for item in raw:
@@ -494,7 +504,10 @@ class OfficialDataLoader:
     def _load_datasets(self, path: Path) -> None:
         if not path.exists():
             return
-        raw = json.loads(path.read_text(encoding="utf-8"))
+        try:
+            raw = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return
         if not isinstance(raw, list):
             return
         for item in raw:
