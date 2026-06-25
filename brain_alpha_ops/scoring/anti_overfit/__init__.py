@@ -1,22 +1,4 @@
-"""Anti-overfitting validation suite.
-
-Four-layer verification inspired by QuantGPT architecture:
-  1. IC Stability — Information Coefficient stability across time
-  2. Subsample Stress Test — performance in bull/bear/sideways regimes
-  3. Placebo Test — random-permuted target signal baseline
-  4. Half-Life Estimation — decay rate of predictive power
-
-Plus compliance guardrails:
-  5. Similarity Detection — auto-block near-duplicate expressions (>0.95)
-  6. Parameter Tweak Detection — flag Decay/Delay-only changes (<5% improvement)
-  7. Duplicate Submission Detection — block same expression within 7 days
-  8. High-Frequency Retry Detection — block >3 failures per expression
-
-All tests produce a 0-1 stability score and detailed diagnostics.
-"""
-from __future__ import annotations
-
-from .anti_overfit.models import (
+from .models import (
     ANTI_OVERFIT_SCHEMA_VERSION,
     AntiOverfitResult,
     ComplianceGuardrailResult,
@@ -30,7 +12,7 @@ from .anti_overfit.models import (
     _PLACEBO_TRIALS,
     _REGIME_MIN_SAMPLES,
 )
-from .anti_overfit.utils import (
+from .utils import (
     _auto_classify_regimes,
     _pearson_r,
     _rank_ic,
@@ -40,20 +22,20 @@ from .anti_overfit.utils import (
     _sharpe,
     _spearman_r,
 )
-from .anti_overfit.ic_stability import compute_ic_stability
-from .anti_overfit.regime_stress import compute_regime_stress
-from .anti_overfit.placebo import compute_placebo_test
-from .anti_overfit.half_life import estimate_half_life
-from .anti_overfit.suite import run_anti_overfit_suite
-from .anti_overfit.candidate import (
+from .ic_stability import compute_ic_stability
+from .regime_stress import compute_regime_stress
+from .placebo import compute_placebo_test
+from .half_life import estimate_half_life
+from .suite import run_anti_overfit_suite
+from .candidate import (
     _attach_submission_report,
     _candidate_metrics,
     _candidate_report,
     _candidate_value,
     _number_series,
 )
-from .anti_overfit.service import AntiOverfitService, evaluate_candidate
-from .anti_overfit.compliance import (
+from .service import AntiOverfitService, evaluate_candidate
+from .compliance import (
     check_duplicate_submission,
     check_expression_similarity,
     check_high_frequency_retry,

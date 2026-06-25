@@ -1,34 +1,22 @@
-"""POST route handlers for the web console.
-
-Contains all ``_post_*`` handler functions (25 routes) plus supporting helpers
-(``_start_sync_job``, ``_start_optimize_candidates_job``, ``_submit_with_lock``,
-``_non_submit_run_payload``, ``_create_non_submit_run_job``).
-
-These handlers are imported by ``web_handler_dispatch.py`` and registered in
-``_POST_DISPATCH_HANDLERS``.
-"""
-
-from __future__ import annotations
-
-from .post_routes.helpers import (
+from .helpers import (
     _create_non_submit_run_job,
     _non_submit_run_payload,
     _start_optimize_candidates_job,
     _start_sync_job,
     _submit_with_lock,
 )
-from .post_routes.job_management import (
+from .job_management import (
     _post_cancel,
     _post_run,
     _post_stop,
     _stop_or_cancel_job,
 )
-from .post_routes.sync import (
+from .sync import (
     _post_sync_alphas,
     _post_sync_cancel,
     _post_sync_context_only,
 )
-from .post_routes.candidates import (
+from .candidates import (
     _post_candidates_simulate,
     _post_check,
     _post_check_batch,
@@ -37,17 +25,17 @@ from .post_routes.candidates import (
     _post_scoring_attribution,
     _post_scoring_evaluate,
 )
-from .post_routes.submit import (
+from .submit import (
     _post_submit,
     _post_submit_batch,
 )
-from .post_routes.assistant import (
+from .assistant import (
     _post_assistant_cross_review,
     _post_assistant_guidance,
     _post_assistant_response_guidance,
     _post_assistant_response_parse,
 )
-from .post_routes.misc import (
+from .misc import (
     _post_config_save,
     _post_logout,
     _post_session,
