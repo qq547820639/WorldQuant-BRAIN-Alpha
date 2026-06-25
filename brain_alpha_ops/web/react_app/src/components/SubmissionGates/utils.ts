@@ -22,7 +22,7 @@ export function blockerActionForProductionGap(
     label: "修复生产缺口",
     description: readinessProductionGapLabel(finding),
     view: "candidates",
-    action_type: "navigate",
+    action_type: "navigate" as const,
   };
 }
 
