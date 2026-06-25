@@ -1,3 +1,4 @@
+import { memo } from "react";
 import type { ProgressLifecycle, UnifiedProgress } from "@/types";
 import { fmtClock, interruptionText } from "./progressUtils";
 
@@ -11,7 +12,7 @@ interface ProgressFooterProps {
   retryLabel: string;
 }
 
-export default function ProgressFooter({
+function ProgressFooter({
   state,
   lastUpdatedAt,
   displayError,
@@ -39,3 +40,5 @@ export default function ProgressFooter({
     </>
   );
 }
+
+export default memo(ProgressFooter);

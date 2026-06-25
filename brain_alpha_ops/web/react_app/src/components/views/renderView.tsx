@@ -210,7 +210,16 @@ export function renderActiveView(props: RenderViewProps): React.ReactNode {
       </ErrorBoundary>
     );
   case "official_backtests":
-    return <OfficialBacktestSlots notify={notify} />;
+    return (
+      <ErrorBoundary
+        key="official_backtests"
+        level="section"
+        title="回测监控加载失败"
+        description="回测槽位模块渲染时发生错误，请重试"
+      >
+        <OfficialBacktestSlots notify={notify} />
+      </ErrorBoundary>
+    );
   case "scoring":
     return selectedCandidate ? (
       <ErrorBoundary
@@ -234,7 +243,16 @@ export function renderActiveView(props: RenderViewProps): React.ReactNode {
       </ErrorBoundary>
     );
   case "submission_confirm":
-    return <SubmissionConfirmPanel notify={notify} onNavigate={onNavigate} />;
+    return (
+      <ErrorBoundary
+        key="submission_confirm"
+        level="section"
+        title="阻断复核加载失败"
+        description="提交复核模块渲染时发生错误，请重试"
+      >
+        <SubmissionConfirmPanel notify={notify} onNavigate={onNavigate} />
+      </ErrorBoundary>
+    );
   case "checkpoint_status":
     return (
       <ErrorBoundary

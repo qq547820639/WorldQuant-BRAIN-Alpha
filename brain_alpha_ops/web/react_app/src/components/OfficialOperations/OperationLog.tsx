@@ -1,3 +1,5 @@
+import { memo } from "react";
+
 /** Operation log display component. */
 
 import { type OperationLogEntry, logTone, logDotTone } from "./utils";
@@ -7,7 +9,7 @@ interface Props {
   onClear?: () => void;
 }
 
-export default function OperationLog({ logs, onClear }: Props) {
+function OperationLog({ logs, onClear }: Props) {
   return (
     <details className="rounded-md border border-border-subtle bg-[var(--color-surface-deep)] p-3">
       <summary className="cursor-pointer text-sm font-semibold text-text-primary">
@@ -37,3 +39,5 @@ export default function OperationLog({ logs, onClear }: Props) {
     </details>
   );
 }
+
+export default memo(OperationLog);

@@ -1,3 +1,5 @@
+import { memo } from "react";
+
 /** Sync history list display component. */
 
 import type { SyncHistoryItem } from "@/types";
@@ -55,7 +57,7 @@ interface SyncHistoryListProps {
   rows: SyncHistoryItem[];
 }
 
-export default function SyncHistoryList({ rows }: SyncHistoryListProps) {
+function SyncHistoryList({ rows }: SyncHistoryListProps) {
   return (
     <ul className="mt-3 divide-y divide-border-subtle rounded-md border border-border-subtle bg-[var(--color-surface-elevated)]" aria-label="最近官方同步列表">
       {rows.slice(0, 5).map((row) => (
@@ -79,6 +81,8 @@ export default function SyncHistoryList({ rows }: SyncHistoryListProps) {
     </ul>
   );
 }
+
+export default memo(SyncHistoryList);
 
 function syncHistoryMessage(row: SyncHistoryItem) {
   const explicit = readableBackendText(row.status_message || "");

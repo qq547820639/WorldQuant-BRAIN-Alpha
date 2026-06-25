@@ -1,3 +1,5 @@
+import { memo } from "react";
+
 /** Blocker list display for readiness diagnostics. */
 
 interface Props {
@@ -6,7 +8,7 @@ interface Props {
   empty: string;
 }
 
-export default function BlockerList({ title, rows, empty }: Props) {
+function BlockerList({ title, rows, empty }: Props) {
   return (
     <div>
       <p className="text-xs font-semibold uppercase tracking-wide text-text-tertiary">{title}</p>
@@ -18,3 +20,5 @@ export default function BlockerList({ title, rows, empty }: Props) {
     </div>
   );
 }
+
+export default memo(BlockerList);
