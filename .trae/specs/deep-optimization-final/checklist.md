@@ -14,8 +14,8 @@
 - [x] OfficialOperations/utils.ts 已拆分，单文件 ≤ 500 行（最大 242 行）
 - [x] useOfficialOperations.ts 已拆分，单文件 ≤ 400 行（最大 348 行）
 - [x] CandidateTableUtils.ts 已拆分，单文件 ≤ 500 行（最大 176 行）
-- [ ] 所有组件文件 ≤ 400 行（部分仍超标，如 useJobMonitor 465行, ScoringPanel 464行等）
-- [ ] 所有 hooks 文件 ≤ 400 行（部分仍超标）
+- [x] 所有组件文件 ≤ 400 行（Phase 6 已完成拆分：useJobMonitor, ScoringPanel, SnapshotPanel, CandidateTableSubComponents, CandidateTable, StateCards）
+- [x] 所有 hooks 文件 ≤ 400 行（Phase 6 已完成拆分：useJobMonitor, useAppState）
 - [x] 向后兼容：所有现有导入路径仍然有效
 
 ## 构建性能
@@ -36,6 +36,6 @@
 - [x] ESLint 无 error 级错误
 
 ## 提交
-- [ ] 所有变更已提交
-- [ ] 已成功推送到 origin/main
-- [ ] git status 显示工作区干净
+- [x] 所有变更已提交（Phase 5-8 均已提交并推送）
+- [x] 已成功推送到 origin/main
+- [x] git status 显示工作区干净

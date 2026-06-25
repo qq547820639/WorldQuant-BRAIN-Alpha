@@ -309,7 +309,10 @@ def test_review_gap_closure_tracker_accepts_current_document():
     # findings may include queue items from DEFAULT_TRACKER
 
 def test_current_silent_exception_review_evidence_matches_source():
-    guided_source = (ROOT / "brain_alpha_ops" / "ux" / "guided_pipeline.py").read_text(encoding="utf-8")
+    guided_dir = ROOT / "brain_alpha_ops" / "ux" / "guided_pipeline"
+    guided_source = "\n".join(
+        p.read_text(encoding="utf-8") for p in sorted(guided_dir.glob("*.py"))
+    )
     walkthrough_source = (ROOT / "scripts" / "ux_walkthrough_local.py").read_text(encoding="utf-8")
 
     assert "pass  # Don't let callback failures break the pipeline" not in guided_source
@@ -1346,7 +1349,10 @@ def test_review_gap_closure_tracker_accepts_current_document():
     # findings may include queue items from DEFAULT_TRACKER
 
 def test_current_silent_exception_review_evidence_matches_source():
-    guided_source = (ROOT / "brain_alpha_ops" / "ux" / "guided_pipeline.py").read_text(encoding="utf-8")
+    guided_dir = ROOT / "brain_alpha_ops" / "ux" / "guided_pipeline"
+    guided_source = "\n".join(
+        p.read_text(encoding="utf-8") for p in sorted(guided_dir.glob("*.py"))
+    )
     walkthrough_source = (ROOT / "scripts" / "ux_walkthrough_local.py").read_text(encoding="utf-8")
 
     assert "pass  # Don't let callback failures break the pipeline" not in guided_source

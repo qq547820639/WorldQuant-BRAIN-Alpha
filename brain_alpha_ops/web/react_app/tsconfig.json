@@ -8,6 +8,8 @@
     "strict": false,
     "noImplicitAny": false,
     "strictNullChecks": false,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,

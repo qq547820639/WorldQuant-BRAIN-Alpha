@@ -55,6 +55,12 @@ export default defineConfig(({ mode }) => {
         output: {
           manualChunks(id) {
             if (!id.includes("node_modules")) return;
+            if (id.includes("react-dom") || id.includes("/react/") || id.includes("react/jsx-runtime")) {
+              return "react-vendor";
+            }
+            if (id.includes("@tanstack/")) {
+              return "tanstack-vendor";
+            }
             return "vendor";
           },
           chunkFileNames: "assets/[name]-[hash].js",
@@ -70,7 +76,7 @@ export default defineConfig(({ mode }) => {
     test: {
       environment: "jsdom",
       setupFiles: "./tests/setup.ts",
-      include: ["tests/**/*.test.{ts,tsx}"],
+      include: ["tests/**/*.test.{ts,tsx}", "src/**/__tests__/**/*.test.{ts,tsx}"],
       restoreMocks: true,
       clearMocks: true,
     },

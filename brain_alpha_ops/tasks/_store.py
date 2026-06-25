@@ -1,20 +1,7 @@
-"""Reusable task state storage for long-running operations (pipeline jobs).
+"""Thread-safe job state store with optional JSON persistence.
 
-**Purpose**: Persist pipeline background jobs (production, sync, check,
-async) with thread-safe state, watchdog, and atomic JSON persistence.
-
-**Relationship to web_jobs.py**: This module tracks *pipeline* background
-jobs; ``brain_alpha_ops.web_jobs`` tracks *Web UI* user operations.  They
-serve different lifecycles and should NOT be unified (P1-7 clarification).
-See ``web_jobs.get_web_job_store()`` for the Protocol-based bridge that
-allows background services to use web_jobs without a full JobStore.
-
-
-
-The web console and internal automation share the same small contract for job
-lifecycle state. The store intentionally keeps the
-runtime payload narrow: status, progress, result, cancellation flag, and error.
-It never persists request credentials.
+The store keeps the runtime payload narrow: status, progress, result,
+cancellation flag, and error. It never persists request credentials.
 """
 from __future__ import annotations
 
@@ -27,20 +14,22 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
-from brain_alpha_ops.core_state import (
-    JOB_ACTIVE_STATUSES as ACTIVE_STATUSES,
-)
-from brain_alpha_ops.core_state import (
-    JOB_TERMINAL_STATUSES as TERMINAL_STATUSES,
-)
-from brain_alpha_ops.redaction import redact_data
+from brain_alpha_ops.core_state import JOB_ACTIVE_STATUSES as ACTIVE_STATUSES
+from brain_alpha_ops.core_state import JOB_TERMINAL_STATUSES as TERMINAL_STATUSES
 
-DEFAULT_RECOVERY_ERROR = "Process restarted before this task completed."
-DEFAULT_WATCHDOG_TIMEOUT_SECONDS = 300.0
-DEFAULT_WATCHDOG_ERROR = "Web flow watchdog stopped this task after no clear progress update."
-JOB_PREVIEW_ROWS = 5
-COMPACT_LIST_KEYS = {"alphas", "cloud_alphas", "candidates", "backtests", "lifecycle_records"}
-DEFAULT_MAX_PERSISTENCE_LOAD_BYTES = 50 * 1024 * 1024
+from ._compaction import _job_safe
+from ._constants import (
+    DEFAULT_MAX_PERSISTENCE_LOAD_BYTES,
+    DEFAULT_RECOVERY_ERROR,
+    DEFAULT_WATCHDOG_TIMEOUT_SECONDS,
+)
+from ._watchdog import (
+    _mark_watchdog_failed,
+    _reject_watchdog_terminal_update,
+    _updated_at,
+    _watchdog_should_stop,
+)
+
 
 class JobStore:
     """Thread-safe job state store with optional JSON persistence."""
@@ -239,12 +228,7 @@ class JobStore:
             return [(job_id, deepcopy(job)) for job_id, job in rows]
 
     def watchdog_sweep(self, *, now: float | None = None) -> int:
-        """Fail active jobs that have stalled or entered an unknown state.
-
-        The Web UI polls job status as the user operates the console. Running
-        the sweep on reads turns ambiguous hangs into explicit, user-visible
-        failure states without using tests to tune Alpha expressions.
-        """
+        """Fail active jobs that have stalled or entered an unknown state."""
         with self.lock:
             return self._watchdog_locked(time.time() if now is None else float(now))
 
@@ -316,14 +300,13 @@ class JobStore:
         if len(self.jobs) <= self.max_jobs:
             return
         ordered = sorted(self.jobs.items(), key=lambda item: _updated_at(item[1]))
-        # Phase 1: remove non-active (terminal) jobs, oldest first.
+        # Phase 1: remove terminal jobs, oldest first.
         for job_id, job in ordered:
             if len(self.jobs) <= self.max_jobs:
                 break
             if job.get("status") not in ACTIVE_STATUSES:
                 self.jobs.pop(job_id, None)
-        # Phase 2: if still over the limit, only remove long-completed jobs
-        # (status completed / failed) rather than active ones.
+        # Phase 2: if still over limit, remove completed/failed jobs.
         if len(self.jobs) > self.max_jobs:
             for job_id, job in ordered:
                 if len(self.jobs) <= self.max_jobs:
@@ -365,203 +348,3 @@ class JobStore:
         if changed:
             self._persist_locked()
         return changed
-
-def _updated_at(job: dict[str, Any]) -> float:
-    try:
-        return float(job.get("updated_at", 0.0) or 0.0)
-    except (TypeError, ValueError):
-        return 0.0
-
-def _watchdog_should_stop(job: dict[str, Any], now: float, timeout_seconds: float) -> bool:
-    status = str(job.get("status") or "").strip().lower()
-    if status in TERMINAL_STATUSES:
-        return False
-    if status not in ACTIVE_STATUSES:
-        return True
-    updated_at = _updated_at(job)
-    return updated_at <= 0 or now - updated_at > timeout_seconds
-
-def _mark_watchdog_failed(job: dict[str, Any], now: float) -> None:
-    status = str(job.get("status") or "unknown").strip().lower() or "unknown"
-    message = (
-        "Web flow watchdog stopped this task because its status was unclear."
-        if status not in ACTIVE_STATUSES
-        else DEFAULT_WATCHDOG_ERROR
-    )
-    job["status"] = "failed"
-    job["cancel"] = True
-    job["error"] = message
-    job["updated_at"] = now
-    progress = dict(job.get("progress") or {})
-    progress.update({
-        "phase": "watchdog_failed",
-        "percent": 100,
-        "percent_complete": 100,
-        "message": message,
-        "status_message": message,
-        "watchdog": {
-            "triggered": True,
-            "previous_status": status,
-        },
-    })
-    job["progress"] = progress
-
-def _reject_watchdog_terminal_update(
-    current: dict[str, Any],
-    update: dict[str, Any],
-    allow_terminal_overwrite: bool,
-) -> bool:
-    if allow_terminal_overwrite or not _is_watchdog_terminal_failed(current):
-        return False
-    return True
-
-def _is_watchdog_terminal_failed(job: dict[str, Any]) -> bool:
-    if str(job.get("status") or "").strip().lower() != "failed":
-        return False
-    progress = job.get("progress") if isinstance(job.get("progress"), dict) else {}
-    watchdog = progress.get("watchdog") if isinstance(progress.get("watchdog"), dict) else {}
-    return progress.get("phase") == "watchdog_failed" or watchdog.get("triggered") is True
-
-def _json_safe(value: Any) -> Any:
-    return json.loads(json.dumps(value, ensure_ascii=False, default=str))
-
-def _compact_runtime_result(value: Any, *, preview_rows: int = JOB_PREVIEW_ROWS) -> Any:
-    if isinstance(value, dict):
-        compact: dict[str, Any] = {}
-        for key, item in value.items():
-            if _should_compact_named_list(key, item):
-                compact[f"{key}_count"] = len(item)
-                compact[f"{key}_preview"] = [_compact_runtime_result(row, preview_rows=preview_rows) for row in item[:preview_rows]]
-                evidence = _submission_evidence_rows(item, preview_rows=preview_rows)
-                if evidence:
-                    compact[f"{key}_submission_evidence"] = evidence
-                continue
-            compact[key] = _compact_runtime_result(item, preview_rows=preview_rows)
-        return compact
-    if isinstance(value, list):
-        if len(value) > preview_rows:
-            return {
-                "items_count": len(value),
-                "items_preview": [_compact_runtime_result(item, preview_rows=preview_rows) for item in value[:preview_rows]],
-            }
-        return [_compact_runtime_result(item, preview_rows=preview_rows) for item in value]
-    return value
-
-def _should_compact_named_list(key: str, item: Any) -> bool:
-    if not isinstance(item, list):
-        return False
-    return key in COMPACT_LIST_KEYS or key.endswith("candidates")
-
-def _submission_evidence_rows(items: list[Any], *, preview_rows: int) -> list[Any]:
-    evidence: list[Any] = []
-    hidden_start = max(0, int(preview_rows or 0))
-    seen: set[str] = {
-        _submission_evidence_key(item)
-        for item in items[:hidden_start]
-        if isinstance(item, dict)
-    }
-    for item in items[hidden_start:]:
-        if not isinstance(item, dict):
-            continue
-        compact = _candidate_submission_audit_evidence(item, preview_rows=preview_rows)
-        key = _submission_evidence_key(compact)
-        if key in seen:
-            continue
-        seen.add(key)
-        evidence.append(compact)
-    return evidence
-
-def _candidate_submission_audit_evidence(candidate: dict[str, Any], *, preview_rows: int) -> dict[str, Any]:
-    evidence: dict[str, Any] = {}
-    for key in (
-        "alpha_id",
-        "official_alpha_id",
-        "simulation_id",
-        "expression",
-        "family",
-        "hypothesis",
-        "dataset_id",
-        "data_fields",
-        "operators",
-        "alpha_output_config",
-        "quality_diagnosis",
-        "local_quality",
-        "source_tags",
-        "lifecycle_status",
-        "decision_band",
-        "score",
-    ):
-        if key in candidate:
-            evidence[key] = candidate[key]
-    for key, nested_keys in (
-        ("scorecard", ("total_score", "decision_band", "status", "hard_gate_failed")),
-        ("gate", ("submission_ready", "status", "blocking_reasons")),
-        (
-            "official_metrics",
-            (
-                "official_alpha_id",
-                "pass_fail",
-                "sharpe",
-                "fitness",
-                "turnover",
-                "returns",
-                "drawdown",
-                "correlation",
-                "prod_correlation",
-            ),
-        ),
-        (
-            "metrics",
-            (
-                "official_alpha_id",
-                "pass_fail",
-                "sharpe",
-                "fitness",
-                "turnover",
-                "returns",
-                "drawdown",
-                "correlation",
-                "prod_correlation",
-            ),
-        ),
-        ("cloud_correlation_risk", ("level", "max_similarity", "status", "matched_alpha_id", "matched_expression")),
-    ):
-        nested = candidate.get(key) if isinstance(candidate.get(key), dict) else {}
-        if nested:
-            evidence[key] = {
-                nested_key: nested[nested_key]
-                for nested_key in nested_keys
-                if nested_key in nested
-            }
-    submission = candidate.get("submission") if isinstance(candidate.get("submission"), dict) else {}
-    local_backtest = submission.get("local_backtest") if isinstance(submission.get("local_backtest"), dict) else {}
-    if local_backtest:
-        evidence["submission"] = {
-            "local_backtest": {
-                key: local_backtest[key]
-                for key in ("pass_local", "reasons", "diagnostics")
-                if key in local_backtest
-            }
-        }
-    return _compact_runtime_result(evidence, preview_rows=preview_rows)
-
-def _submission_evidence_key(candidate: Any) -> str:
-    if not isinstance(candidate, dict):
-        return str(id(candidate))
-    return str(
-        candidate.get("alpha_id")
-        or candidate.get("official_alpha_id")
-        or candidate.get("simulation_id")
-        or candidate.get("expression")
-        or id(candidate)
-    )
-
-def _job_safe(value: Any) -> Any:
-    safe = _json_safe(value)
-    if isinstance(safe, dict) and "result" in safe:
-        safe = dict(safe)
-        safe["result"] = _compact_runtime_result(safe.get("result"))
-    return redact_data(
-        safe,
-        key_fragments=("credential", "secret", "api_key", "session_token", "access_token", "refresh_token"),
-    )
