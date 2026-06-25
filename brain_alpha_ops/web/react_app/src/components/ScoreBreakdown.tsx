@@ -7,10 +7,10 @@
  * P1-5: Accept optional scoreHistory to render a mini sparkline at the bottom.
  */
 
-import type { Scorecard } from "@/types";
-import ScoreDetails from "@/components/ScoreBreakdown/ScoreDetails";
-import ScoreHistory from "@/components/ScoreBreakdown/ScoreHistory";
-import type { ScoreHistoryPoint } from "@/components/ScoreBreakdown/ScoreHistory";
+import type { Scorecard } from '@/types';
+import ScoreDetails from '@/components/ScoreBreakdown/ScoreDetails';
+import ScoreHistory from '@/components/ScoreBreakdown/ScoreHistory';
+import type { ScoreHistoryPoint } from '@/components/ScoreBreakdown/ScoreHistory';
 
 interface ScoreBreakdownProps {
   scorecard: Scorecard;

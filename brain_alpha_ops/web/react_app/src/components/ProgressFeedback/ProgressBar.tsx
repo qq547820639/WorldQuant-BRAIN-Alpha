@@ -1,7 +1,7 @@
-import { memo } from "react";
-import type { ProgressLifecycle, UnifiedProgress } from "@/types";
-import type { JobStateClassification } from "@/helpers/runPayload";
-import { progressFillClass } from "./progressUtils";
+import { memo } from 'react';
+import type { ProgressLifecycle, UnifiedProgress } from '@/types';
+import type { JobStateClassification } from '@/helpers/runPayload';
+import { progressFillClass } from './progressUtils';
 
 interface ProgressBarProps {
   title: string;
@@ -33,14 +33,19 @@ function ProgressBar({
   const fillClass = progressFillClass(state, progress, progressState, isStalled);
 
   return (
-    <div className={`progress-bar ${isDeterminate ? "" : "indeterminate"}`}
+    <div
+      className={`progress-bar ${isDeterminate ? '' : 'indeterminate'}`}
       role="progressbar"
       aria-label={`${title}: ${label}`}
-      aria-valuemin={0} aria-valuemax={100}
+      aria-valuemin={0}
+      aria-valuemax={100}
       aria-valuenow={isDeterminate ? roundedPercent : undefined}
       style={{ marginBottom: 12 }}
     >
-      <div className={`progress-bar-fill ${fillClass}`} style={isDeterminate ? { width: `${percent}%` } : undefined} />
+      <div
+        className={`progress-bar-fill ${fillClass}`}
+        style={isDeterminate ? { width: `${percent}%` } : undefined}
+      />
     </div>
   );
 }

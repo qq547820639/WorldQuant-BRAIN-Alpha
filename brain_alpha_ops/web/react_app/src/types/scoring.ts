@@ -56,7 +56,7 @@ export interface ScoreLayerDetail {
 
 /** Score confidence estimate */
 export interface ScoreConfidence {
-  confidence_level: "high" | "medium" | "low";
+  confidence_level: 'high' | 'medium' | 'low';
   item_count: number;
   passed_count: number;
   score_variance: number;

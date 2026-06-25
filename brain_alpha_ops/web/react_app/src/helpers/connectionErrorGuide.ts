@@ -14,23 +14,23 @@ export interface ConnectionErrorGuideEntry {
 
 export const CONNECTION_ERROR_GUIDE: Record<string, ConnectionErrorGuideEntry> = {
   rate_limit: {
-    message: "BRAIN 平台限流，请稍后重试",
-    actionLabel: "30秒后重试",
+    message: 'BRAIN 平台限流，请稍后重试',
+    actionLabel: '30秒后重试',
     waitSeconds: 30,
   },
   invalid_credentials: {
-    message: "用户名或密码不正确",
-    actionLabel: "重新输入",
+    message: '用户名或密码不正确',
+    actionLabel: '重新输入',
     waitSeconds: 0,
   },
   network_timeout: {
-    message: "连接超时，请检查网络",
-    actionLabel: "重试",
+    message: '连接超时，请检查网络',
+    actionLabel: '重试',
     waitSeconds: 0,
   },
   brain_error: {
-    message: "BRAIN 平台异常，请稍后重试",
-    actionLabel: "60秒后重试",
+    message: 'BRAIN 平台异常，请稍后重试',
+    actionLabel: '60秒后重试',
     waitSeconds: 60,
   },
 };
@@ -40,7 +40,7 @@ export const CONNECTION_ERROR_GUIDE: Record<string, ConnectionErrorGuideEntry> =
  * Returns undefined if no matching guide is found.
  */
 export function getConnectionErrorGuide(
-  errorCode: string | undefined | null,
+  errorCode: string | undefined | null
 ): ConnectionErrorGuideEntry | undefined {
   if (!errorCode) return undefined;
   return CONNECTION_ERROR_GUIDE[errorCode];

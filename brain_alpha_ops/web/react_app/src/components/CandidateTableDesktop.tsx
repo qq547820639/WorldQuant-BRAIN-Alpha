@@ -1,12 +1,12 @@
-import { useRef } from "react";
-import { useVirtualizer } from "@tanstack/react-virtual";
-import type { Candidate, CandidateCheckResult } from "@/types";
-import { candidateIdentity } from "./CandidateTableUtils";
-import { CandidateRow } from "./CandidateRow";
-import { useCandidateColumns } from "./useCandidateColumns";
-import EmptyState from "./EmptyState";
+import { useRef } from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
+import type { Candidate, CandidateCheckResult } from '@/types';
+import { candidateIdentity } from './CandidateTableUtils';
+import { CandidateRow } from './CandidateRow';
+import { useCandidateColumns } from './useCandidateColumns';
+import EmptyState from './EmptyState';
 
-type SortKey = "score" | "status" | "created";
+type SortKey = 'score' | 'status' | 'created';
 
 interface CandidateTableDesktopProps {
   candidates: Candidate[];
@@ -84,12 +84,14 @@ export default function CandidateTableDesktop({
   });
 
   return (
-    <div ref={tableContainerRef} className="hidden md:block overflow-auto" style={{ maxWidth: "100%", height: "min(640px, 70vh)" }}>
+    <div
+      ref={tableContainerRef}
+      className="hidden md:block overflow-auto"
+      style={{ maxWidth: '100%', height: 'min(640px, 70vh)' }}
+    >
       <table className="data-table card-view" style={{ minWidth: 980 }} aria-label="候选结果">
-        <thead>
-          {renderHeader()}
-        </thead>
-        <tbody style={{ position: "relative", height: rowVirtualizer.getTotalSize() }}>
+        <thead>{renderHeader()}</thead>
+        <tbody style={{ position: 'relative', height: rowVirtualizer.getTotalSize() }}>
           {rowVirtualizer.getVirtualItems().map((virtualRow) => {
             const candidate = candidates[virtualRow.index];
             return (
@@ -107,24 +109,46 @@ export default function CandidateTableDesktop({
                 onCheck={onCheck}
                 isSelected={selectedIds.has(candidateIdentity(candidate))}
                 onToggleSelect={onToggleSelect}
-                rowRef={(node) => { if (node) rowVirtualizer.measureElement(node); }}
-                style={{ position: "absolute", top: 0, left: 0, width: "100%", transform: `translateY(${virtualRow.start}px)` }}
+                rowRef={(node) => {
+                  if (node) rowVirtualizer.measureElement(node);
+                }}
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  width: '100%',
+                  transform: `translateY(${virtualRow.start}px)`,
+                }}
               />
             );
           })}
           {candidates.length === 0 && (
             <tr>
-              <td colSpan={columnCount} style={{ padding: "1.5rem", textAlign: "center" }}>
+              <td colSpan={columnCount} style={{ padding: '1.5rem', textAlign: 'center' }}>
                 <EmptyState
-                  title={filter ? "没有匹配的候选" : "暂无候选记录"}
-                  description={filter ? "尝试调整筛选条件，或清除筛选查看全部候选。" : (showProductionControls ? "候选 Alpha 通过顶部「自动推进候选池」启动生产搜索、预筛与本地排序；官方验证队列和质量检查单独推进。全流程保持非提交边界，提交仍需人工确认。" : "请先运行非提交验证产生候选，或从候选管理页面选择一个候选进入评分。")}
+                  title={filter ? '没有匹配的候选' : '暂无候选记录'}
+                  description={
+                    filter
+                      ? '尝试调整筛选条件，或清除筛选查看全部候选。'
+                      : showProductionControls
+                        ? '候选 Alpha 通过顶部「自动推进候选池」启动生产搜索、预筛与本地排序；官方验证队列和质量检查单独推进。全流程保持非提交边界，提交仍需人工确认。'
+                        : '请先运行非提交验证产生候选，或从候选管理页面选择一个候选进入评分。'
+                  }
                 >
                   {filter ? (
-                    <button type="button" className="btn btn-secondary btn-sm" onClick={onClearFilter}>
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      onClick={onClearFilter}
+                    >
                       清除筛选
                     </button>
                   ) : showProductionControls ? (
-                    <button type="button" className="btn btn-primary btn-sm" onClick={onGenerateCandidates}>
+                    <button
+                      type="button"
+                      className="btn btn-primary btn-sm"
+                      onClick={onGenerateCandidates}
+                    >
                       启动自动推进
                     </button>
                   ) : null}

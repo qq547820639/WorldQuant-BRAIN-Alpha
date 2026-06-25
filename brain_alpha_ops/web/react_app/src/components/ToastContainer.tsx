@@ -1,23 +1,23 @@
 /** Toast notification container — Terminal Precision design */
-import type { Toast } from "@/types";
+import type { Toast } from '@/types';
 
 interface Props {
   toasts: Toast[];
   onDismiss: (id: string) => void;
 }
 
-const ICON_MAP: Record<Toast["type"], string> = {
-  success: "\u2713",
-  error: "\u2715",
-  warning: "\u26A0",
-  info: "\u2139",
+const ICON_MAP: Record<Toast['type'], string> = {
+  success: '\u2713',
+  error: '\u2715',
+  warning: '\u26A0',
+  info: '\u2139',
 };
 
-const TOAST_CLASS: Record<Toast["type"], string> = {
-  success: "toast-success",
-  error: "toast-error",
-  warning: "toast-warning",
-  info: "toast-info",
+const TOAST_CLASS: Record<Toast['type'], string> = {
+  success: 'toast-success',
+  error: 'toast-error',
+  warning: 'toast-warning',
+  info: 'toast-info',
 };
 
 const MAX_VISIBLE = 3;
@@ -29,13 +29,13 @@ export default function ToastContainer({ toasts, onDismiss }: Props) {
   return (
     <div className="toast-container" role="region" aria-label="通知消息" aria-live="polite">
       {visible.map((toast) => {
-        const urgent = toast.type === "error";
+        const urgent = toast.type === 'error';
         return (
           <div
             key={toast.id}
             className={`toast ${TOAST_CLASS[toast.type]}`}
-            role={urgent ? "alert" : "status"}
-            aria-live={urgent ? "assertive" : "polite"}
+            role={urgent ? 'alert' : 'status'}
+            aria-live={urgent ? 'assertive' : 'polite'}
             aria-atomic="true"
           >
             <span className="text-sm font-semibold shrink-0 mt-0.5" aria-hidden="true">
@@ -47,7 +47,10 @@ export default function ToastContainer({ toasts, onDismiss }: Props) {
                 type="button"
                 className="text-xs font-semibold underline underline-offset-2 shrink-0"
                 aria-label={`${toast.secondary_action_label}: ${toast.message}`}
-                onClick={() => { toast.on_secondary_action?.(); onDismiss(toast.id); }}
+                onClick={() => {
+                  toast.on_secondary_action?.();
+                  onDismiss(toast.id);
+                }}
               >
                 {toast.secondary_action_label}
               </button>
@@ -57,7 +60,10 @@ export default function ToastContainer({ toasts, onDismiss }: Props) {
                 type="button"
                 className="text-xs font-semibold underline underline-offset-2 shrink-0"
                 aria-label={`${toast.action_label}: ${toast.message}`}
-                onClick={() => { toast.on_action?.(); onDismiss(toast.id); }}
+                onClick={() => {
+                  toast.on_action?.();
+                  onDismiss(toast.id);
+                }}
               >
                 {toast.action_label}
               </button>

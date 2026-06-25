@@ -43,7 +43,7 @@ describe("errorExperience", () => {
     expect(apiErrorMessage({ error_code: "SESSION_INVALID", error: "invalid local session" }))
       .toBe("本地会话已失效，请重新连接后继续。");
     expect(apiErrorMessage({ error_code: "CONCURRENT_SIMULATION_LIMIT_EXCEEDED" }))
-      .toBe("官方模拟并发槽位已满，请等待当前回测结束后再重试。");
+      .toBe("BRAIN 回测并发槽位已满，系统将等待释放后自动重试。");
     expect(apiErrorMessage({ error: "raw backend cancellation" }))
       .toBe("验证流程已停止，结果未确认完成。");
     expect(apiErrorMessage({ error: "backend did not confirm stop" }))

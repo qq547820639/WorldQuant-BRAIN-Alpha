@@ -2,14 +2,14 @@
  * Skeleton — loading skeleton component for better UX.
  * Shows animated placeholder content while data is loading.
  */
-import { memo } from "react";
+import { memo } from 'react';
 
 interface SkeletonProps {
   variant?: 'card' | 'text' | 'avatar' | 'table-row';
   className?: string;
 }
 
-const skeletonStyle = { backgroundColor: "var(--color-border-subtle)" };
+const skeletonStyle = { backgroundColor: 'var(--color-border-subtle)' };
 
 export default memo(function Skeleton({ variant = 'text', className = '' }: SkeletonProps) {
   const baseClass = 'animate-pulse';
@@ -34,10 +34,14 @@ export default memo(function Skeleton({ variant = 'text', className = '' }: Skel
       );
 
     case 'text':
-      return <div className={`${baseClass} h-3 w-full rounded ${className}`} style={skeletonStyle} />;
+      return (
+        <div className={`${baseClass} h-3 w-full rounded ${className}`} style={skeletonStyle} />
+      );
 
     case 'avatar':
-      return <div className={`${baseClass} h-10 w-10 rounded-full ${className}`} style={skeletonStyle} />;
+      return (
+        <div className={`${baseClass} h-10 w-10 rounded-full ${className}`} style={skeletonStyle} />
+      );
 
     case 'table-row':
       return (
@@ -50,6 +54,8 @@ export default memo(function Skeleton({ variant = 'text', className = '' }: Skel
       );
 
     default:
-      return <div className={`${baseClass} h-3 w-full rounded ${className}`} style={skeletonStyle} />;
+      return (
+        <div className={`${baseClass} h-3 w-full rounded ${className}`} style={skeletonStyle} />
+      );
   }
 });

@@ -12,7 +12,7 @@ export class ApiError extends Error {
     public response?: unknown
   ) {
     super(message);
-    this.name = "ApiError";
+    this.name = 'ApiError';
   }
 }
 
@@ -25,7 +25,7 @@ export class ValidationError extends Error {
     public field?: string
   ) {
     super(message);
-    this.name = "ValidationError";
+    this.name = 'ValidationError';
   }
 }
 
@@ -38,8 +38,8 @@ export function logError(error: unknown, context?: string): void {
   const errorStack = error instanceof Error ? error.stack : undefined;
 
   console.error(
-    `[${timestamp}]${context ? ` [${context}]` : ""} ${errorMessage}`,
-    errorStack || ""
+    `[${timestamp}]${context ? ` [${context}]` : ''} ${errorMessage}`,
+    errorStack || ''
   );
 }
 
@@ -49,18 +49,18 @@ export function logError(error: unknown, context?: string): void {
 export function formatErrorForUser(error: unknown): string {
   if (error instanceof ApiError) {
     if (error.statusCode === 401) {
-      return "登录已过期，请重新登录。";
+      return '登录已过期，请重新登录。';
     }
     if (error.statusCode === 403) {
-      return "您没有权限执行此操作。";
+      return '您没有权限执行此操作。';
     }
     if (error.statusCode === 404) {
-      return "请求的资源不存在。";
+      return '请求的资源不存在。';
     }
     if (error.statusCode === 500) {
-      return "服务器错误，请稍后再试。";
+      return '服务器错误，请稍后再试。';
     }
-    return error.message || "发生错误，请稍后再试。";
+    return error.message || '发生错误，请稍后再试。';
   }
 
   if (error instanceof ValidationError) {
@@ -71,7 +71,7 @@ export function formatErrorForUser(error: unknown): string {
     return error.message;
   }
 
-  return "发生未知错误，请稍后再试。";
+  return '发生未知错误，请稍后再试。';
 }
 
 /**
@@ -79,7 +79,7 @@ export function formatErrorForUser(error: unknown): string {
  */
 export function shouldReportError(error: unknown): boolean {
   // Don't report user cancellation errors
-  if (error instanceof Error && error.name === "AbortError") {
+  if (error instanceof Error && error.name === 'AbortError') {
     return false;
   }
 

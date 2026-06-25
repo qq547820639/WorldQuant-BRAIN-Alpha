@@ -1,5 +1,5 @@
 /** Loading progress bar component */
-import { memo, type ReactNode } from "react";
+import { memo, type ReactNode } from 'react';
 
 interface LoadingProgressProps {
   /** Current progress value (for determinate progress) */
@@ -19,7 +19,7 @@ export default memo(function LoadingProgress({
   max = 100,
   label,
   indeterminate = false,
-  className = "",
+  className = '',
 }: LoadingProgressProps) {
   const percent = max > 0 ? Math.min(100, Math.max(0, (value / max) * 100)) : 0;
   const isDeterminate = !indeterminate && value !== undefined;
@@ -30,9 +30,7 @@ export default memo(function LoadingProgress({
         <div className="flex justify-between items-center text-sm">
           {label && <span className="text-text-secondary">{label}</span>}
           {isDeterminate && (
-            <span className="text-accent font-medium tabular-nums">
-              {Math.round(percent)}%
-            </span>
+            <span className="text-accent font-medium tabular-nums">{Math.round(percent)}%</span>
           )}
         </div>
       )}
@@ -42,7 +40,7 @@ export default memo(function LoadingProgress({
         aria-valuenow={isDeterminate ? Math.round(percent) : undefined}
         aria-valuemin={0}
         aria-valuemax={100}
-        aria-label={label || "加载进度"}
+        aria-label={label || '加载进度'}
       >
         {indeterminate ? (
           <div className="h-full bg-accent rounded-full animate-pulse w-full" />
@@ -65,7 +63,10 @@ interface ProgressFeedbackProps {
 }
 
 /** Simple wrapper that shows children when not loading */
-export const ProgressFeedback = memo(function ProgressFeedback({ loading, children }: ProgressFeedbackProps) {
+export const ProgressFeedback = memo(function ProgressFeedback({
+  loading,
+  children,
+}: ProgressFeedbackProps) {
   if (!loading) return <>{children}</>;
   return (
     <div className="animate-pulse">

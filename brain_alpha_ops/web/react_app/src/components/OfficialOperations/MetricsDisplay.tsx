@@ -1,13 +1,13 @@
 /** Metrics and stats display for official operations. */
 
-import { OperationMetric, OverviewCard } from "./index";
-import type { JobStatus, OfficialContextCache, CloudAlphaCache } from "@/types";
+import { OperationMetric, OverviewCard } from './index';
+import type { JobStatus, OfficialContextCache, CloudAlphaCache } from '@/types';
 import {
   syncContextStatus,
   contextCacheComplete,
   syncDataOverview,
   syncStatusForDisplay,
-} from "./utils";
+} from './utils';
 
 interface Props {
   syncRunning: boolean;
@@ -40,29 +40,23 @@ export default function MetricsDisplay({
           value={syncContextStatus(displaySyncStatus)}
           tone={
             syncRunning
-              ? "warning"
+              ? 'warning'
               : contextCacheComplete(displaySyncStatus?.official_context_cache) ||
                   displaySyncState.successful
-                ? "success"
-                : "neutral"
+                ? 'success'
+                : 'neutral'
           }
         />
         <OperationMetric
           label="复核候选"
-          value={String(readinessEligibleCount ?? "-")}
-          tone={readinessReadyToSubmit ? "success" : "warning"}
+          value={String(readinessEligibleCount ?? '-')}
+          tone={readinessReadyToSubmit ? 'success' : 'warning'}
         />
-        <OperationMetric
-          label="检查记录"
-          value={String(checkRowsCount || "-")}
-        />
+        <OperationMetric label="检查记录" value={String(checkRowsCount || '-')} />
         <OperationMetric label="真实提交" value="关闭" tone="success" />
       </div>
 
-      <section
-        className="grid gap-3 md:grid-cols-3"
-        aria-label="官方同步数据总览"
-      >
+      <section className="grid gap-3 md:grid-cols-3" aria-label="官方同步数据总览">
         <OverviewCard
           label="同步状态"
           value={syncOverview.statusValue}
@@ -83,10 +77,7 @@ export default function MetricsDisplay({
       </section>
 
       {syncRunning && syncOverview.hasLiveMetrics && (
-        <section
-          className="grid gap-3 md:grid-cols-2"
-          aria-label="同步实时指标"
-        >
+        <section className="grid gap-3 md:grid-cols-2" aria-label="同步实时指标">
           <OverviewCard
             label={syncOverview.etaLabel}
             value={syncOverview.etaValue}

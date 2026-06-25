@@ -2,8 +2,8 @@
  * Sidebar — Phase-grouped navigation (UI Design System v3.0)
  * Replaces flat 10-item nav with 4 collapsible phase groups + global tools.
  */
-import { memo, useCallback } from "react";
-import type { CardViewId, PhaseGroup } from "@/types";
+import { memo, useCallback } from 'react';
+import type { CardViewId, PhaseGroup } from '@/types';
 
 interface SidebarBadges {
   candidates?: number;
@@ -24,60 +24,97 @@ interface Props {
 }
 
 const PHASE_STATUS_LABELS: Record<string, string> = {
-  complete: "已完成",
-  active: "进行中",
-  pending: "待解锁",
-  blocked: "已阻断",
-  locked: "未解锁",
+  complete: '已完成',
+  active: '进行中',
+  pending: '待解锁',
+  blocked: '已阻断',
+  locked: '未解锁',
 };
 
 const TOOLS_ITEMS: Array<{ id: CardViewId; label: string; icon: string; statsKey?: string }> = [
-  { id: "dashboard",          label: "运行总览", icon: "01" },
-  { id: "cloud",              label: "云端快照", icon: "09", statsKey: "cloud" },
-  { id: "checkpoint_status",  label: "续跑记录", icon: "08", statsKey: "checkpoint_status" },
-  { id: "robustness",         label: "稳健性证据", icon: "07" },
-  { id: "config",             label: "系统配置", icon: "10" },
+  { id: 'dashboard', label: '运行总览', icon: '01' },
+  { id: 'cloud', label: '云端快照', icon: '09', statsKey: 'cloud' },
+  { id: 'checkpoint_status', label: '续跑记录', icon: '08', statsKey: 'checkpoint_status' },
+  { id: 'robustness', label: '稳健性证据', icon: '07' },
+  { id: 'config', label: '系统配置', icon: '10' },
 ];
 
-function resolveToolBadge(statsKey: string | undefined, badges?: SidebarBadges): string | undefined {
+function resolveToolBadge(
+  statsKey: string | undefined,
+  badges?: SidebarBadges
+): string | undefined {
   if (!statsKey || !badges) return undefined;
-  if (statsKey === "cloud" && badges.cloud) return badges.cloud;
-  if (statsKey === "checkpoint_status" && badges.checkpoint_status != null) return String(badges.checkpoint_status);
+  if (statsKey === 'cloud' && badges.cloud) return badges.cloud;
+  if (statsKey === 'checkpoint_status' && badges.checkpoint_status != null)
+    return String(badges.checkpoint_status);
   return undefined;
 }
 
-const ChevronRight = memo(function ChevronRight({ expanded, locked }: { expanded: boolean; locked: boolean }) {
+const ChevronRight = memo(function ChevronRight({
+  expanded,
+  locked,
+}: {
+  expanded: boolean;
+  locked: boolean;
+}) {
   return (
-    <svg className={`phase-group-chevron${expanded ? "" : ""}`} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" style={{ transform: expanded ? "rotate(90deg)" : "rotate(0deg)", opacity: locked ? 0.25 : 0.5 }} aria-hidden="true" focusable="false">
+    <svg
+      className={`phase-group-chevron${expanded ? '' : ''}`}
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      style={{
+        transform: expanded ? 'rotate(90deg)' : 'rotate(0deg)',
+        opacity: locked ? 0.25 : 0.5,
+      }}
+      aria-hidden="true"
+      focusable="false"
+    >
       <polyline points="9 18 15 12 9 6" />
     </svg>
   );
 });
 
 export default memo(function Sidebar({
-  activeView, badges, onNavigate, onClose, onTogglePhase, phases, className = "",
+  activeView,
+  badges,
+  onNavigate,
+  onClose,
+  onTogglePhase,
+  phases,
+  className = '',
 }: Props) {
-  const handlePhaseToggle = useCallback((phaseId: string) => {
-    onTogglePhase?.(phaseId);
-  }, [onTogglePhase]);
+  const handlePhaseToggle = useCallback(
+    (phaseId: string) => {
+      onTogglePhase?.(phaseId);
+    },
+    [onTogglePhase]
+  );
 
   return (
     <nav className={`app-sidebar ${className}`} aria-label="主导航">
       {/* Brand */}
       <div className="sidebar-brand" role="banner">
-        <div className="sidebar-brand-mark" aria-hidden="true">B</div>
+        <div className="sidebar-brand-mark" aria-hidden="true">
+          B
+        </div>
         <span className="sidebar-brand-text">BRAIN Alpha Ops</span>
       </div>
 
       {/* Phase Groups */}
       {phases?.map((group) => {
-        const isLocked = group.status === "locked" || group.status === "pending";
+        const isLocked = group.status === 'locked' || group.status === 'pending';
         const statusLabel = PHASE_STATUS_LABELS[group.status] || group.status;
-        const unlockTip = isLocked && group.unlockCondition
-          ? group.unlockCondition
-          : undefined;
+        const unlockTip = isLocked && group.unlockCondition ? group.unlockCondition : undefined;
         return (
-          <div key={group.id} className={`phase-group ${group.expanded ? "is-expanded" : ""} ${isLocked ? "is-locked" : ""}`}>
+          <div
+            key={group.id}
+            className={`phase-group ${group.expanded ? 'is-expanded' : ''} ${isLocked ? 'is-locked' : ''}`}
+          >
             <button
               type="button"
               className="phase-group-header"
@@ -92,12 +129,20 @@ export default memo(function Sidebar({
             </button>
             {isLocked && group.unlockCondition && (
               <div className="px-9 pb-1.5">
-                <span className="text-[10px] text-text-disabled italic" title={group.unlockCondition}>
+                <span
+                  className="text-[10px] text-text-disabled italic"
+                  title={group.unlockCondition}
+                >
                   🔒 {group.unlockCondition}
                 </span>
               </div>
             )}
-            <div id={`phase-${group.id}-items`} role="region" aria-label={`${group.label} 导航项`} className="sidebar-nav phase-group-content">
+            <div
+              id={`phase-${group.id}-items`}
+              role="region"
+              aria-label={`${group.label} 导航项`}
+              className="sidebar-nav phase-group-content"
+            >
               {group.items.map((item) => {
                 const isActive = activeView === item.id;
                 const badge = item.badge != null ? String(item.badge) : undefined;
@@ -105,9 +150,12 @@ export default memo(function Sidebar({
                   <button
                     key={item.id}
                     type="button"
-                    onClick={() => { onNavigate(item.id); onClose?.(); }}
-                    className={`sidebar-nav-item${isActive ? " is-active" : ""}`}
-                    aria-current={isActive ? "page" : undefined}
+                    onClick={() => {
+                      onNavigate(item.id);
+                      onClose?.();
+                    }}
+                    className={`sidebar-nav-item${isActive ? ' is-active' : ''}`}
+                    aria-current={isActive ? 'page' : undefined}
                   >
                     <span style={{ fontSize: 11, opacity: 0.6, minWidth: 18 }}>{item.icon}</span>
                     <span>{item.label}</span>
@@ -121,7 +169,9 @@ export default memo(function Sidebar({
       })}
 
       {/* Global Tools */}
-      <h2 className="sidebar-section-label" id="sidebar-tools-heading">工具</h2>
+      <h2 className="sidebar-section-label" id="sidebar-tools-heading">
+        工具
+      </h2>
       <div className="sidebar-nav" role="region" aria-labelledby="sidebar-tools-heading">
         {TOOLS_ITEMS.map((item) => {
           const isActive = activeView === item.id;
@@ -130,9 +180,12 @@ export default memo(function Sidebar({
             <button
               key={item.id}
               type="button"
-              onClick={() => { onNavigate(item.id); onClose?.(); }}
-              className={`sidebar-nav-item${isActive ? " is-active" : ""}`}
-              aria-current={isActive ? "page" : undefined}
+              onClick={() => {
+                onNavigate(item.id);
+                onClose?.();
+              }}
+              className={`sidebar-nav-item${isActive ? ' is-active' : ''}`}
+              aria-current={isActive ? 'page' : undefined}
             >
               <span style={{ fontSize: 11, opacity: 0.6, minWidth: 18 }}>{item.icon}</span>
               <span>{item.label}</span>
@@ -143,17 +196,34 @@ export default memo(function Sidebar({
       </div>
 
       {/* User Info (bottom) */}
-      <div style={{ marginTop: "auto", padding: "14px 16px", borderTop: "0.5px solid var(--color-border-default)" }} role="contentinfo">
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <div style={{
-            width: 24, height: 24, borderRadius: "50%",
-            background: "var(--color-avatar-bg)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: 10, color: "var(--color-text-muted)",
-          }} aria-hidden="true">U</div>
+      <div
+        style={{
+          marginTop: 'auto',
+          padding: '14px 16px',
+          borderTop: '0.5px solid var(--color-border-default)',
+        }}
+        role="contentinfo"
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div
+            style={{
+              width: 24,
+              height: 24,
+              borderRadius: '50%',
+              background: 'var(--color-avatar-bg)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: 10,
+              color: 'var(--color-text-muted)',
+            }}
+            aria-hidden="true"
+          >
+            U
+          </div>
           <div>
-            <div style={{ fontSize: 12, color: "var(--color-text-bright)" }}>operator</div>
-            <div style={{ fontSize: 10, color: "var(--color-text-muted)" }}>本地非提交</div>
+            <div style={{ fontSize: 12, color: 'var(--color-text-bright)' }}>operator</div>
+            <div style={{ fontSize: 10, color: 'var(--color-text-muted)' }}>本地非提交</div>
           </div>
         </div>
       </div>

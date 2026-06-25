@@ -1,24 +1,28 @@
 /** Dashboard — Progressive flow with step-based guidance v3.2 */
-import { type ReactNode } from "react";
-import { useDashboard } from "@/hooks/useDashboard";
-import KpiCard from "@/components/KpiCard";
-import TrendPanel from "@/components/TrendPanel";
-import ResumeWork from "@/components/ResumeWork";
-import Skeleton from "@/components/Skeleton";
-import ErrorCard from "@/components/ErrorCard";
-import { computeTrendChange } from "@/components/DashboardTrendData";
-import { generateReportMarkdown, DashboardReportModal } from "@/components/DashboardReportModal";
-import { formatSyncAge, DashboardCloudSnapshot } from "@/components/DashboardCloudSnapshot";
-import { StepProgressBar } from "@/components/DashboardStepProgress";
-import { GuidePanel } from "@/components/Dashboard/DashboardGuides";
-import { MemoryPanel, FailurePatternsPanel } from "@/components/Dashboard/DashboardPanels";
-import { SyncCloudCTA, CacheModeNotice, PhaseStatusNotice } from "@/components/Dashboard/DashboardNotices";
+import { type ReactNode } from 'react';
+import { useDashboard } from '@/hooks/useDashboard';
+import KpiCard from '@/components/KpiCard';
+import TrendPanel from '@/components/TrendPanel';
+import ResumeWork from '@/components/ResumeWork';
+import Skeleton from '@/components/Skeleton';
+import ErrorCard from '@/components/ErrorCard';
+import { computeTrendChange } from '@/components/DashboardTrendData';
+import { generateReportMarkdown, DashboardReportModal } from '@/components/DashboardReportModal';
+import { formatSyncAge, DashboardCloudSnapshot } from '@/components/DashboardCloudSnapshot';
+import { StepProgressBar } from '@/components/DashboardStepProgress';
+import { GuidePanel } from '@/components/Dashboard/DashboardGuides';
+import { MemoryPanel, FailurePatternsPanel } from '@/components/Dashboard/DashboardPanels';
+import {
+  SyncCloudCTA,
+  CacheModeNotice,
+  PhaseStatusNotice,
+} from '@/components/Dashboard/DashboardNotices';
 
 interface Props {
-  notify: (type: "success" | "error" | "warning" | "info", msg: string) => void;
+  notify: (type: 'success' | 'error' | 'warning' | 'info', msg: string) => void;
   connected: boolean;
   contextFresh: boolean;
-  phaseStatus?: "loading" | "error" | "ready";
+  phaseStatus?: 'loading' | 'error' | 'ready';
   onNavigateToSync: () => void;
   onOpenSync?: () => void;
   onNavigateToCandidates?: () => void;
@@ -33,7 +37,7 @@ export default function Dashboard({
   notify,
   connected,
   contextFresh,
-  phaseStatus = "ready",
+  phaseStatus = 'ready',
   onNavigateToSync,
   onOpenSync,
   onNavigateToCandidates,
@@ -128,12 +132,12 @@ export default function Dashboard({
           <h1 className="text-xl font-medium text-text-primary mb-1">运行总览</h1>
           <p className="text-sm text-text-tertiary">
             当前阶段：<span className="text-accent font-medium">{stepLabel}</span>
-            {" · "}上次更新:{" "}
-            {new Date().toLocaleTimeString("zh-CN", {
+            {' · '}上次更新:{' '}
+            {new Date().toLocaleTimeString('zh-CN', {
               hour12: false,
-              hour: "2-digit",
-              minute: "2-digit",
-              second: "2-digit",
+              hour: '2-digit',
+              minute: '2-digit',
+              second: '2-digit',
             })}
           </p>
         </div>
@@ -169,7 +173,7 @@ export default function Dashboard({
           {!loading && errors.length > 0 && (
             <ErrorCard
               title="仪表盘数据需要关注"
-              details={errors.join("；")}
+              details={errors.join('；')}
               severity="error"
               onRetry={retryAll}
               className="mb-4"
@@ -190,21 +194,21 @@ export default function Dashboard({
               />
               <KpiCard
                 label="云端 Alpha"
-                value={cloudSummaryData.count ?? "--"}
+                value={cloudSummaryData.count ?? '--'}
                 subtitle={
                   cloud
                     ? `${cloudSummaryData.submitted_count ?? 0} 已提交 · ${formatSyncAge(
                         cloudSummaryData.age_seconds,
-                        cloudSummaryData.loaded_at,
+                        cloudSummaryData.loaded_at
                       )}`
-                    : "等待刷新"
+                    : '等待刷新'
                 }
-                trend={cloud && (cloudSummaryData.submitted_count ?? 0) > 0 ? "up" : "neutral"}
+                trend={cloud && (cloudSummaryData.submitted_count ?? 0) > 0 ? 'up' : 'neutral'}
                 className="hover:shadow-md transition-shadow"
               />
               <KpiCard
                 label="回测数"
-                value={status?.progress?.backtests_completed ?? "--"}
+                value={status?.progress?.backtests_completed ?? '--'}
                 subtitle={status ? `${status.progress?.backtests_pending ?? 0} 待处理` : undefined}
                 className="hover:shadow-md transition-shadow"
               />
@@ -230,16 +234,20 @@ export default function Dashboard({
             >
               <span
                 className="inline-block transition-transform duration-200"
-                style={{ transform: snapshotExpanded ? "rotate(90deg)" : "rotate(0deg)" }}
+                style={{ transform: snapshotExpanded ? 'rotate(90deg)' : 'rotate(0deg)' }}
               >
                 ▶
               </span>
               <span className="ml-1.5">
                 数据快照
-                {snapshotExpanded ? "" : ` (${cloudSummaryData.count ?? "--"} 条 Alpha)`}
+                {snapshotExpanded ? '' : ` (${cloudSummaryData.count ?? '--'} 条 Alpha)`}
               </span>
             </button>
-            <button type="button" className="btn btn-secondary btn-sm" onClick={handleGenerateReport}>
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={handleGenerateReport}
+            >
               📋 生成报告
             </button>
           </div>

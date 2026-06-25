@@ -1,21 +1,13 @@
-import {
-  type ConfigForm,
-} from "./utils";
-import {
-  ConfigSection,
-  NumberField,
-} from "./ConfigFormFields";
-import { helpContent } from "./fieldHelp";
+import { type ConfigForm } from './utils';
+import { ConfigSection, NumberField } from './ConfigFormFields';
+import { helpContent } from './fieldHelp';
 
 interface AdvancedConfigGroupProps {
   form: ConfigForm;
   onUpdate: <K extends keyof ConfigForm>(key: K, value: ConfigForm[K]) => void;
 }
 
-export default function AdvancedConfigGroup({
-  form,
-  onUpdate,
-}: AdvancedConfigGroupProps) {
+export default function AdvancedConfigGroup({ form, onUpdate }: AdvancedConfigGroupProps) {
   return (
     <ConfigSection
       title="质量阈值"
@@ -26,18 +18,18 @@ export default function AdvancedConfigGroup({
         value={form.minSharpe}
         min={0}
         step={0.01}
-        help={helpContent("minSharpe")}
+        help={helpContent('minSharpe')}
         debounceMs={300}
-        onChange={(value) => onUpdate("minSharpe", value)}
+        onChange={(value) => onUpdate('minSharpe', value)}
       />
       <NumberField
         label="最低适应度"
         value={form.minFitness}
         min={0}
         step={0.01}
-        help={helpContent("minFitness")}
+        help={helpContent('minFitness')}
         debounceMs={300}
-        onChange={(value) => onUpdate("minFitness", value)}
+        onChange={(value) => onUpdate('minFitness', value)}
       />
       <NumberField
         label="最低换手率"
@@ -46,7 +38,7 @@ export default function AdvancedConfigGroup({
         max={1}
         step={0.01}
         debounceMs={300}
-        onChange={(value) => onUpdate("minTurnover", value)}
+        onChange={(value) => onUpdate('minTurnover', value)}
       />
       <NumberField
         label="最高换手率"
@@ -55,7 +47,7 @@ export default function AdvancedConfigGroup({
         max={1}
         step={0.01}
         debounceMs={300}
-        onChange={(value) => onUpdate("platformMaxTurnover", value)}
+        onChange={(value) => onUpdate('platformMaxTurnover', value)}
       />
       <NumberField
         label="最大自相关性"
@@ -63,9 +55,9 @@ export default function AdvancedConfigGroup({
         min={0}
         max={1}
         step={0.01}
-        help={helpContent("maxSelfCorrelation")}
+        help={helpContent('maxSelfCorrelation')}
         debounceMs={300}
-        onChange={(value) => onUpdate("maxSelfCorrelation", value)}
+        onChange={(value) => onUpdate('maxSelfCorrelation', value)}
       />
       <NumberField
         label="最大权重集中度"
@@ -74,7 +66,7 @@ export default function AdvancedConfigGroup({
         max={1}
         step={0.01}
         debounceMs={300}
-        onChange={(value) => onUpdate("maxWeightConcentration", value)}
+        onChange={(value) => onUpdate('maxWeightConcentration', value)}
       />
     </ConfigSection>
   );

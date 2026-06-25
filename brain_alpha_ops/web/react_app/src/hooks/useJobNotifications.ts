@@ -1,17 +1,21 @@
 export function sendCompletionNotification(title: string, body: string): void {
   try {
-    if (document.hidden && Notification.permission === "granted") {
+    if (document.hidden && Notification.permission === 'granted') {
       new Notification(title, { body });
     }
-  } catch { console.warn("useJobState: Notification API not available"); }
+  } catch {
+    console.warn('useJobState: Notification API not available');
+  }
 }
 
 export function requestNotificationPermission(): void {
   try {
-    if (Notification.permission === "default") {
+    if (Notification.permission === 'default') {
       Notification.requestPermission();
     }
-  } catch { console.warn("useJobState: Notification API not available"); }
+  } catch {
+    console.warn('useJobState: Notification API not available');
+  }
 }
 
 export interface JobNotifications {

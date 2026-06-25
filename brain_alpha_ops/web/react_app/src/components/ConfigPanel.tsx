@@ -1,17 +1,17 @@
 /** Editable configuration panel for the next research run. */
 
-import { useMemo, useState } from "react";
-import { safeDisplayErrorMessage } from "@/helpers/errorExperience";
-import type { BrainCredentials } from "@/types";
-import Skeleton from "./Skeleton";
-import ErrorCard from "./ErrorCard";
-import { useConfigForm } from "@/hooks/useConfigForm";
-import CredentialsSection from "./ConfigPanel/CredentialsSection";
-import RunConfigSection from "./ConfigPanel/RunConfigSection";
-import { payloadFromForm } from "./ConfigPanel/utils";
+import { useMemo, useState } from 'react';
+import { safeDisplayErrorMessage } from '@/helpers/errorExperience';
+import type { BrainCredentials } from '@/types';
+import Skeleton from './Skeleton';
+import ErrorCard from './ErrorCard';
+import { useConfigForm } from '@/hooks/useConfigForm';
+import CredentialsSection from './ConfigPanel/CredentialsSection';
+import RunConfigSection from './ConfigPanel/RunConfigSection';
+import { payloadFromForm } from './ConfigPanel/utils';
 
 interface Props {
-  notify: (type: "success" | "error" | "warning" | "info", msg: string) => void;
+  notify: (type: 'success' | 'error' | 'warning' | 'info', msg: string) => void;
   credentials: BrainCredentials;
   onCredentialsChange: (credentials: BrainCredentials) => void;
   onConnectionTested?: (success: boolean, error: string | null) => void;
@@ -65,11 +65,17 @@ export default function ConfigPanel({
   const [showWeightModal, setShowWeightModal] = useState(false);
 
   const config = useMemo(
-    () => (globalConfig.data?.config ?? null) as { ops?: { scoring?: unknown }; scoring?: unknown } | null,
-    [globalConfig.data],
+    () =>
+      (globalConfig.data?.config ?? null) as {
+        ops?: { scoring?: unknown };
+        scoring?: unknown;
+      } | null,
+    [globalConfig.data]
   );
 
-  const hasSessionCredentials = Boolean(credentials.username || credentials.password || credentials.token);
+  const hasSessionCredentials = Boolean(
+    credentials.username || credentials.password || credentials.token
+  );
   const cacheOnlyMode = contextFresh && !connected;
   const showCredentialEditor = !cacheOnlyMode || temporaryConnectionOpen;
 
@@ -78,10 +84,10 @@ export default function ConfigPanel({
     : connectionApi.data?.ok
       ? `连接正常: ${connectionApi.data.environment || form?.environment}`
       : hasSessionCredentials
-        ? "凭证已填写，尚未测试"
+        ? '凭证已填写，尚未测试'
         : managedCredentialsAvailable
-          ? "未填写则使用维护者配置的托管凭证"
-          : "请临时填写页面凭证";
+          ? '未填写则使用维护者配置的托管凭证'
+          : '请临时填写页面凭证';
 
   const handleLogout = () => {
     void logoutLocalSession();
@@ -124,8 +130,8 @@ export default function ConfigPanel({
           <h2 className="text-xl font-semibold text-text-primary">连接与生产参数</h2>
           <p className="mt-2 text-sm leading-6 text-text-secondary">
             {cacheOnlyMode
-              ? "当前使用本地缓存。需要官方同步、官方回测或提交前复核时，再临时连接官方服务。"
-              : "调整本次运行参数；需要官方同步、官方回测或提交前复核时，临时填写 BRAIN 会话凭证并测试连接。保存配置不会保存账号、密码或 token。"}
+              ? '当前使用本地缓存。需要官方同步、官方回测或提交前复核时，再临时连接官方服务。'
+              : '调整本次运行参数；需要官方同步、官方回测或提交前复核时，临时填写 BRAIN 会话凭证并测试连接。保存配置不会保存账号、密码或 token。'}
           </p>
         </div>
         <div className="flex w-full flex-wrap justify-end gap-2 sm:w-auto">
@@ -166,7 +172,7 @@ export default function ConfigPanel({
             className="btn btn-primary btn-sm"
             disabled={!dirty || validationError !== null || saveApi.loading}
           >
-            {saveApi.loading ? "保存中..." : "保存"}
+            {saveApi.loading ? '保存中...' : '保存'}
           </button>
         </div>
       </div>
@@ -180,8 +186,8 @@ export default function ConfigPanel({
           details={safeDisplayErrorMessage(saveApi.error)}
           severity="error"
           onRetry={() =>
-            void saveApi.call("/api/config", {
-              method: "POST",
+            void saveApi.call('/api/config', {
+              method: 'POST',
               body: JSON.stringify(payloadFromForm(form)),
             })
           }
@@ -218,14 +224,7 @@ export default function ConfigPanel({
         form={form}
         schema={schema}
         datasetChoices={datasetChoices}
-        scoring={scoring as
-          | {
-              prior_layer_weight?: number;
-              empirical_layer_weight?: number;
-              checklist_layer_weight?: number;
-              market_regime?: string;
-            }
-          | undefined}
+        scoring={scoring}
         showWeightModal={showWeightModal}
         onUpdate={update}
         onShowWeightModal={setShowWeightModal}

@@ -144,8 +144,9 @@ exports[`Dashboard > matches snapshot with data loaded 1`] = `
             开始验证
           </span>
            · 
-          上次更新: 
-          11:59:50
+          上次更新:
+           
+          15:17:21
         </p>
       </div>
       <button
@@ -190,7 +191,7 @@ exports[`Dashboard > matches snapshot with data loaded 1`] = `
             <div
               class="w-full rounded-t"
               style="height: 8px; background-color: rgb(59, 130, 246); opacity: 0.7;"
-              title="06/24: 50.0 个"
+              title="06/25: 50.0 个"
             />
           </div>
         </div>
@@ -198,10 +199,10 @@ exports[`Dashboard > matches snapshot with data loaded 1`] = `
           class="flex justify-between text-[10px] text-text-tertiary mt-1"
         >
           <span>
-            06/24
+            06/25
           </span>
           <span>
-            06/24
+            06/25
           </span>
         </div>
       </div>
@@ -279,7 +280,7 @@ exports[`Dashboard > matches snapshot with data loaded 1`] = `
             <div
               class="w-full rounded-t"
               style="height: 8px; background-color: rgb(245, 158, 11); opacity: 0.7;"
-              title="06/24: 10.0 个"
+              title="06/25: 10.0 个"
             />
           </div>
         </div>
@@ -287,10 +288,10 @@ exports[`Dashboard > matches snapshot with data loaded 1`] = `
           class="flex justify-between text-[10px] text-text-tertiary mt-1"
         >
           <span>
-            06/24
+            06/25
           </span>
           <span>
-            06/24
+            06/25
           </span>
         </div>
       </div>

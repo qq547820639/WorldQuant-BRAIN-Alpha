@@ -1,13 +1,13 @@
 /** Retired submit surface kept as a compatibility alias for read-only review. */
 
-import { memo } from "react";
-import SubmissionConfirmPanel from "@/components/SubmissionConfirmPanel";
+import { memo } from 'react';
+import SubmissionConfirmPanel from '@/components/SubmissionConfirmPanel';
 
 interface Props {
   notify: (
-    type: "success" | "error" | "warning" | "info",
+    type: 'success' | 'error' | 'warning' | 'info',
     msg: string,
-    action?: { label: string; onClick: () => void },
+    action?: { label: string; onClick: () => void }
   ) => void;
   onNavigate?: (view: string) => void;
 }

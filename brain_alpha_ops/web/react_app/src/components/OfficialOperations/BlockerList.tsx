@@ -1,4 +1,4 @@
-import { memo } from "react";
+import { memo } from 'react';
 
 /** Blocker list display for readiness diagnostics. */
 
@@ -14,7 +14,9 @@ function BlockerList({ title, rows, empty }: Props) {
       <p className="text-xs font-semibold uppercase tracking-wide text-text-tertiary">{title}</p>
       <ul className="mt-1 space-y-1">
         {(rows.length ? rows : [empty]).map((row, index) => (
-          <li key={`${title}_${index}`} className="break-words">{row}</li>
+          <li key={`${title}_${index}`} className="break-words">
+            {row}
+          </li>
         ))}
       </ul>
     </div>

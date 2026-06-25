@@ -1,35 +1,35 @@
 // ── UI State Types ────────────────────────────────────────────────────────
 
 export type TabId =
-  | "candidates"
-  | "official_backtests"
-  | "quality_check"
-  | "submission_confirm"
-  | "checkpoint_status"
-  | "cloud"
-  | "dashboard"
-  | "pending_backtest"
-  | "running_backtest"
-  | "backtest_rework"
-  | "passed"
-  | "submittable"
-  | "submitted"
-  | "failed"
-  | "lifecycle"
-  | "research_memory"
-  | "research_knowledge"
-  | "research_observability"
-  | "prompt_runs"
-  | "sqlite_indexes"
-  | "robustness"
-  | "scoring"
-  | "submission"
-  | "config"
-  | "knowledge";
+  | 'candidates'
+  | 'official_backtests'
+  | 'quality_check'
+  | 'submission_confirm'
+  | 'checkpoint_status'
+  | 'cloud'
+  | 'dashboard'
+  | 'pending_backtest'
+  | 'running_backtest'
+  | 'backtest_rework'
+  | 'passed'
+  | 'submittable'
+  | 'submitted'
+  | 'failed'
+  | 'lifecycle'
+  | 'research_memory'
+  | 'research_knowledge'
+  | 'research_observability'
+  | 'prompt_runs'
+  | 'sqlite_indexes'
+  | 'robustness'
+  | 'scoring'
+  | 'submission'
+  | 'config'
+  | 'knowledge';
 
 export interface Toast {
   id: string;
-  type: "success" | "error" | "warning" | "info";
+  type: 'success' | 'error' | 'warning' | 'info';
   message: string;
   duration_ms?: number;
   action_label?: string;
@@ -40,8 +40,16 @@ export interface Toast {
 
 // ── Phase Navigation Types (UI Design System v3.0) ─────────────────────
 
-export type PhaseId = "connect" | "discover" | "evaluate" | "ready";
-export type PhaseStatus = "locked" | "pending" | "active" | "complete" | "blocked" | "loading" | "error" | "ready";
+export type PhaseId = 'connect' | 'discover' | 'evaluate' | 'ready';
+export type PhaseStatus =
+  | 'locked'
+  | 'pending'
+  | 'active'
+  | 'complete'
+  | 'blocked'
+  | 'loading'
+  | 'error'
+  | 'ready';
 
 export interface PhaseGroup {
   id: PhaseId;
@@ -57,7 +65,7 @@ export interface PhaseNavItem {
   label: string;
   icon: string;
   badge?: string | number;
-  badgeTone?: "neutral" | "positive" | "warning" | "info";
+  badgeTone?: 'neutral' | 'positive' | 'warning' | 'info';
 }
 
 export interface PhaseState {
@@ -69,7 +77,7 @@ export interface PhaseState {
 export interface StepGuideItem {
   id: string;
   label: string;
-  status: "complete" | "active" | "pending";
+  status: 'complete' | 'active' | 'pending';
   phase: PhaseId;
 }
 
@@ -78,17 +86,17 @@ export interface StepGuideItem {
  * A subset of TabId used by the StateCards detail view routing.
  */
 export type CardViewId =
-  | "official_operations"
-  | "dashboard"
-  | "candidates"
-  | "official_backtests"
-  | "scoring"
-  | "quality_check"
-  | "submission_confirm"
-  | "config"
-  | "checkpoint_status"
-  | "cloud"
-  | "robustness";
+  | 'official_operations'
+  | 'dashboard'
+  | 'candidates'
+  | 'official_backtests'
+  | 'scoring'
+  | 'quality_check'
+  | 'submission_confirm'
+  | 'config'
+  | 'checkpoint_status'
+  | 'cloud'
+  | 'robustness';
 
 // ── Aliases & additional shared types ────────────────────────────────────
 
@@ -97,7 +105,7 @@ export type PhaseApiStatus = PhaseStatus;
 export interface LifecycleMetric {
   label: string;
   value: string | number;
-  tone?: "positive" | "negative" | "warning" | "info" | "neutral";
+  tone?: 'positive' | 'negative' | 'warning' | 'info' | 'neutral';
   [key: string]: unknown;
 }
 

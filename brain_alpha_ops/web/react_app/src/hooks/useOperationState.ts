@@ -1,8 +1,8 @@
 /** Unified operation state management for CandidateTable actions. */
 
-import { useState, useCallback } from "react";
+import { useState, useCallback } from 'react';
 
-export type OperationState = "idle" | "loading" | "progress" | "success" | "error";
+export type OperationState = 'idle' | 'loading' | 'progress' | 'success' | 'error';
 
 export interface OperationStateEntry {
   state: OperationState;
@@ -20,7 +20,7 @@ export interface UseOperationStateReturn {
   anyBusy: () => boolean;
 }
 
-const INITIAL_STATE: OperationStateEntry = { state: "idle", error: null };
+const INITIAL_STATE: OperationStateEntry = { state: 'idle', error: null };
 
 export function useOperationState(keys: string[]): UseOperationStateReturn {
   const [states, setStates] = useState<Record<string, OperationStateEntry>>(() => {
@@ -34,32 +34,35 @@ export function useOperationState(keys: string[]): UseOperationStateReturn {
   const get = useCallback((key: string) => states[key] || INITIAL_STATE, [states]);
 
   const setIdle = useCallback((key: string) => {
-    setStates((prev) => ({ ...prev, [key]: { state: "idle", error: null } }));
+    setStates((prev) => ({ ...prev, [key]: { state: 'idle', error: null } }));
   }, []);
 
   const setLoading = useCallback((key: string) => {
-    setStates((prev) => ({ ...prev, [key]: { state: "loading", error: null } }));
+    setStates((prev) => ({ ...prev, [key]: { state: 'loading', error: null } }));
   }, []);
 
   const setProgress = useCallback((key: string) => {
-    setStates((prev) => ({ ...prev, [key]: { state: "progress", error: null } }));
+    setStates((prev) => ({ ...prev, [key]: { state: 'progress', error: null } }));
   }, []);
 
   const setSuccess = useCallback((key: string) => {
-    setStates((prev) => ({ ...prev, [key]: { state: "success", error: null } }));
+    setStates((prev) => ({ ...prev, [key]: { state: 'success', error: null } }));
   }, []);
 
   const setError = useCallback((key: string, error: string) => {
-    setStates((prev) => ({ ...prev, [key]: { state: "error", error } }));
+    setStates((prev) => ({ ...prev, [key]: { state: 'error', error } }));
   }, []);
 
-  const isBusy = useCallback((key: string) => {
-    const s = states[key]?.state;
-    return s === "loading" || s === "progress";
-  }, [states]);
+  const isBusy = useCallback(
+    (key: string) => {
+      const s = states[key]?.state;
+      return s === 'loading' || s === 'progress';
+    },
+    [states]
+  );
 
   const anyBusy = useCallback(() => {
-    return Object.values(states).some((s) => s.state === "loading" || s.state === "progress");
+    return Object.values(states).some((s) => s.state === 'loading' || s.state === 'progress');
   }, [states]);
 
   return { get, setIdle, setLoading, setProgress, setSuccess, setError, isBusy, anyBusy };

@@ -1,15 +1,15 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { useDebounce } from "@/hooks/useDebounce";
-import { usePagination } from "@/hooks/usePagination";
-import { useSorting } from "@/hooks/useSorting";
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useDebounce } from '@/hooks/useDebounce';
+import { usePagination } from '@/hooks/usePagination';
+import { useSorting } from '@/hooks/useSorting';
 import {
   clampTargetPoolSize,
   sanitizeTextInput,
   MAX_FILTER_LENGTH,
   DEFAULT_TARGET_POOL_SIZE,
-} from "@/components/CandidateTableUtils";
+} from '@/components/CandidateTableUtils';
 
-export type SortKey = "score" | "status" | "created";
+export type SortKey = 'score' | 'status' | 'created';
 
 export const PAGE_SIZE = 20;
 
@@ -21,7 +21,7 @@ interface UseCandidateTableStateOptions {
 export function useCandidateTableState(options: UseCandidateTableStateOptions) {
   const { totalItems, viewMode } = options;
 
-  const [filterInput, setFilterInput] = useState("");
+  const [filterInput, setFilterInput] = useState('');
   const filter = useDebounce(filterInput, 300);
 
   const [showStarredOnly, setShowStarredOnly] = useState(false);
@@ -35,11 +35,17 @@ export function useCandidateTableState(options: UseCandidateTableStateOptions) {
   });
 
   const sorting = useSorting<SortKey>({
-    initialSortKey: "score",
+    initialSortKey: 'score',
     initialSortAsc: false,
   });
 
-  const { currentPage, totalPages, startIndex: visibleStart, endIndex: visibleEnd, setCurrentPage } = pagination;
+  const {
+    currentPage,
+    totalPages,
+    startIndex: visibleStart,
+    endIndex: visibleEnd,
+    setCurrentPage,
+  } = pagination;
   const { sortKey, sortAsc, handleSort } = sorting;
 
   const selectedCount = useMemo(() => selectedIds.size, [selectedIds]);

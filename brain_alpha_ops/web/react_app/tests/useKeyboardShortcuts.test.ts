@@ -1,7 +1,7 @@
 /** Unit tests for useKeyboardShortcuts hook */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderHook, act } from "@testing-library/react";
-import { useKeyboardShortcuts } from "../src/hooks/useKeyboardShortcuts";
+import { useKeyboardShortcuts, SHORTCUTS_LIST } from "../src/hooks/useKeyboardShortcuts";
 
 // ── useKeyboardShortcuts Tests ────────────────────────────────
 
@@ -141,16 +141,12 @@ describe("useKeyboardShortcuts", () => {
 
 describe("SHORTCUTS_LIST", () => {
   it("exports a list of shortcuts", () => {
-    const { SHORTCUTS_LIST } = require("../src/hooks/useKeyboardShortcuts");
-
     expect(SHORTCUTS_LIST).toBeDefined();
     expect(Array.isArray(SHORTCUTS_LIST)).toBe(true);
     expect(SHORTCUTS_LIST.length).toBeGreaterThan(0);
   });
 
   it("each shortcut has required properties", () => {
-    const { SHORTCUTS_LIST } = require("../src/hooks/useKeyboardShortcuts");
-
     SHORTCUTS_LIST.forEach((shortcut: { keys: unknown[]; description: string; category: string }) => {
       expect(shortcut).toHaveProperty("keys");
       expect(shortcut).toHaveProperty("description");
@@ -161,15 +157,11 @@ describe("SHORTCUTS_LIST", () => {
   });
 
   it("contains navigation shortcuts", () => {
-    const { SHORTCUTS_LIST } = require("../src/hooks/useKeyboardShortcuts");
-
     const navShortcuts = SHORTCUTS_LIST.filter((s: { category: string }) => s.category === "导航");
     expect(navShortcuts.length).toBeGreaterThan(0);
   });
 
   it("contains help shortcuts", () => {
-    const { SHORTCUTS_LIST } = require("../src/hooks/useKeyboardShortcuts");
-
     const helpShortcuts = SHORTCUTS_LIST.filter((s: { category: string }) => s.category === "帮助");
     expect(helpShortcuts.length).toBeGreaterThan(0);
   });

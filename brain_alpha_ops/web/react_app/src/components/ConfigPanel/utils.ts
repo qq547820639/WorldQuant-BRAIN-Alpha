@@ -1,21 +1,27 @@
 /** Shared utilities for ConfigPanel sub-components. */
 
-import type { ReactNode } from "react";
-import type { BrainCredentials, RunConfig } from "@/types";
-import { isRecord } from "@/types";
+import type { ReactNode } from 'react';
+import type { BrainCredentials, RunConfig } from '@/types';
+import { isRecord } from '@/types';
 
 export const MAX_CONFIG_TEXT_LENGTH = 128;
 export const CONFIG_TEXT_PATTERN = /^[A-Za-z0-9_.:-]*$/;
-export const DEFAULT_REGION_OPTIONS = ["USA", "CHN", "EUR", "GLB"];
-export const DEFAULT_UNIVERSE_OPTIONS = ["TOP3000", "TOP1000", "TOP500"];
-export const DEFAULT_DELAY_OPTIONS = ["0", "1"];
-export const DEFAULT_NEUTRALIZATION_OPTIONS = ["SUBINDUSTRY", "INDUSTRY", "SECTOR", "MARKET", "NONE"];
-export const DEFAULT_INSTRUMENT_TYPE_OPTIONS = ["EQUITY"];
-export const DEFAULT_PASTEURIZATION_OPTIONS = ["ON", "OFF"];
-export const DEFAULT_UNIT_HANDLING_OPTIONS = ["VERIFY", "RAW", "NONE"];
-export const DEFAULT_NAN_HANDLING_OPTIONS = ["ON", "OFF"];
-export const DEFAULT_LANGUAGE_OPTIONS = ["FASTEXPR"];
-export const DEFAULT_ALPHA_TYPE_OPTIONS = ["REGULAR", "POWER_POOL", "ATOM", "PYRAMID"];
+export const DEFAULT_REGION_OPTIONS = ['USA', 'CHN', 'EUR', 'GLB'];
+export const DEFAULT_UNIVERSE_OPTIONS = ['TOP3000', 'TOP1000', 'TOP500'];
+export const DEFAULT_DELAY_OPTIONS = ['0', '1'];
+export const DEFAULT_NEUTRALIZATION_OPTIONS = [
+  'SUBINDUSTRY',
+  'INDUSTRY',
+  'SECTOR',
+  'MARKET',
+  'NONE',
+];
+export const DEFAULT_INSTRUMENT_TYPE_OPTIONS = ['EQUITY'];
+export const DEFAULT_PASTEURIZATION_OPTIONS = ['ON', 'OFF'];
+export const DEFAULT_UNIT_HANDLING_OPTIONS = ['VERIFY', 'RAW', 'NONE'];
+export const DEFAULT_NAN_HANDLING_OPTIONS = ['ON', 'OFF'];
+export const DEFAULT_LANGUAGE_OPTIONS = ['FASTEXPR'];
+export const DEFAULT_ALPHA_TYPE_OPTIONS = ['REGULAR', 'POWER_POOL', 'ATOM', 'PYRAMID'];
 
 export type SelectOption = string | { value: string; label: string };
 
@@ -68,10 +74,10 @@ export interface PartialConfig {
     market_regime?: string;
   };
   ops?: {
-    settings?: PartialConfig["settings"];
-    budget?: PartialConfig["budget"];
-    thresholds?: PartialConfig["thresholds"];
-    scoring?: PartialConfig["scoring"];
+    settings?: PartialConfig['settings'];
+    budget?: PartialConfig['budget'];
+    thresholds?: PartialConfig['thresholds'];
+    scoring?: PartialConfig['scoring'];
   };
 }
 
@@ -105,25 +111,38 @@ export interface ConfigForm {
 
 export interface ConfigSchema {
   settings_options?: Record<string, Array<string | number>>;
-  dataset_options?: Array<{ id: string; name?: string; field_count?: number; category?: string; label?: string }>;
+  dataset_options?: Array<{
+    id: string;
+    name?: string;
+    field_count?: number;
+    category?: string;
+    label?: string;
+  }>;
   scoring?: Record<string, unknown>;
   scoring_weights?: Record<string, unknown>;
   [key: string]: unknown;
 }
 
 export function sanitizeConfigText(value: string): string {
-  return value.replace(/[\x00-\x1F\x7F]/g, "").slice(0, MAX_CONFIG_TEXT_LENGTH);
+  return value.replace(/[\x00-\x1F\x7F]/g, '').slice(0, MAX_CONFIG_TEXT_LENGTH);
 }
 
-export function normalizeSelectOptions(options: SelectOption[]): Array<{ value: string; label: string }> {
-  return options.map((option) => typeof option === "string" ? { value: option, label: option } : option);
+export function normalizeSelectOptions(
+  options: SelectOption[]
+): Array<{ value: string; label: string }> {
+  return options.map((option) =>
+    typeof option === 'string' ? { value: option, label: option } : option
+  );
 }
 
-export function datasetSelectOptions(schema: ConfigSchema | undefined, currentDataset: string): Array<{ value: string; label: string }> {
+export function datasetSelectOptions(
+  schema: ConfigSchema | undefined,
+  currentDataset: string
+): Array<{ value: string; label: string }> {
   const choices: Array<{ value: string; label: string }> = [];
   const rows = schema?.dataset_options || [];
   for (const row of rows) {
-    const value = String(row.id || "").trim();
+    const value = String(row.id || '').trim();
     if (!value) continue;
     const label = datasetOptionLabel(row, value);
     choices.push({ value, label });
@@ -137,36 +156,45 @@ export function datasetSelectOptions(schema: ConfigSchema | undefined, currentDa
 }
 
 export function datasetAllowedValues(schema: ConfigSchema | undefined): string[] {
-  return datasetSelectOptions(schema, "").map((option) => typeof option === "string" ? option : option.value);
+  return datasetSelectOptions(schema, '').map((option) =>
+    typeof option === 'string' ? option : option.value
+  );
 }
 
-export function datasetOptionLabel(row: { name?: string; field_count?: number; label?: string }, fallback: string): string {
+export function datasetOptionLabel(
+  row: { name?: string; field_count?: number; label?: string },
+  fallback: string
+): string {
   if (row.label) return row.label;
-  const name = row.name ? ` - ${row.name}` : "";
+  const name = row.name ? ` - ${row.name}` : '';
   const fieldCount = Number(row.field_count || 0);
-  const count = Number.isFinite(fieldCount) && fieldCount > 0 ? `, ${fieldCount} fields` : "";
+  const count = Number.isFinite(fieldCount) && fieldCount > 0 ? `, ${fieldCount} fields` : '';
   return `${fallback}${name}${count}`;
 }
 
 export function allowedOptionValues(
-  options: ConfigSchema["settings_options"] | undefined,
+  options: ConfigSchema['settings_options'] | undefined,
   key: string,
-  fallback: string[],
+  fallback: string[]
 ): string[] {
   const values = options?.[key]?.map(String).filter(Boolean);
   return values?.length ? values : fallback;
 }
 
 export function isAllowedOption(
-  options: ConfigSchema["settings_options"] | undefined,
+  options: ConfigSchema['settings_options'] | undefined,
   key: string,
   value: string,
-  fallback: string[],
+  fallback: string[]
 ): boolean {
   return allowedOptionValues(options, key, fallback).includes(value);
 }
 
-export function isIntegerInRange(value: number, min: number, max = Number.POSITIVE_INFINITY): boolean {
+export function isIntegerInRange(
+  value: number,
+  min: number,
+  max = Number.POSITIVE_INFINITY
+): boolean {
   return Number.isInteger(value) && value >= min && value <= max;
 }
 
@@ -179,7 +207,7 @@ export function asRecord(value: unknown): Record<string, unknown> | null {
 }
 
 export function stringValue(value: unknown, fallback: string): string {
-  return typeof value === "string" ? value : fallback;
+  return typeof value === 'string' ? value : fallback;
 }
 
 export function numberValue(value: unknown, fallback: number): number {
@@ -188,7 +216,7 @@ export function numberValue(value: unknown, fallback: number): number {
 }
 
 export function booleanValue(value: unknown, fallback: boolean): boolean {
-  return typeof value === "boolean" ? value : fallback;
+  return typeof value === 'boolean' ? value : fallback;
 }
 
 export function payloadFromForm(form: ConfigForm): Record<string, unknown> {
@@ -228,20 +256,20 @@ export function payloadFromForm(form: ConfigForm): Record<string, unknown> {
 export function formFromConfig(config: PartialConfig | null): ConfigForm {
   if (!config) {
     return {
-      environment: "",
+      environment: '',
       autoSubmit: false,
-      instrumentType: "EQUITY",
-      region: "USA",
-      universe: "TOP3000",
+      instrumentType: 'EQUITY',
+      region: 'USA',
+      universe: 'TOP3000',
       delay: 1,
       decay: 10,
-      neutralization: "SUBINDUSTRY",
-      dataset: "",
-      pasteurization: "ON",
-      unitHandling: "VERIFY",
-      nanHandling: "ON",
-      language: "FASTEXPR",
-      alphaType: "REGULAR",
+      neutralization: 'SUBINDUSTRY',
+      dataset: '',
+      pasteurization: 'ON',
+      unitHandling: 'VERIFY',
+      nanHandling: 'ON',
+      language: 'FASTEXPR',
+      alphaType: 'REGULAR',
       candidates: 20,
       cycles: 10,
       poolSize: 10,
@@ -250,29 +278,29 @@ export function formFromConfig(config: PartialConfig | null): ConfigForm {
       minSharpe: 1.25,
       minFitness: 1.0,
       minTurnover: 0.01,
-      platformMaxTurnover: 0.70,
-      maxSelfCorrelation: 0.70,
-      maxWeightConcentration: 0.10,
+      platformMaxTurnover: 0.7,
+      maxSelfCorrelation: 0.7,
+      maxWeightConcentration: 0.1,
     };
   }
   const settings = config.settings || {};
   const budget = config.budget || {};
   const thresholds = config.thresholds || {};
   return {
-    environment: "",
+    environment: '',
     autoSubmit: booleanValue(config.autoSubmit, false),
-    instrumentType: stringValue(settings.instrumentType, "EQUITY"),
-    region: stringValue(settings.region, "USA"),
-    universe: stringValue(settings.universe, "TOP3000"),
+    instrumentType: stringValue(settings.instrumentType, 'EQUITY'),
+    region: stringValue(settings.region, 'USA'),
+    universe: stringValue(settings.universe, 'TOP3000'),
     delay: numberValue(settings.delay, 1),
     decay: numberValue(settings.decay, 10),
-    neutralization: stringValue(settings.neutralization, "SUBINDUSTRY"),
-    dataset: stringValue(settings.dataset, ""),
-    pasteurization: stringValue(settings.pasteurization, "ON"),
-    unitHandling: stringValue(settings.unitHandling, "VERIFY"),
-    nanHandling: stringValue(settings.nanHandling, "ON"),
-    language: stringValue(settings.language, "FASTEXPR"),
-    alphaType: stringValue(settings.type, "REGULAR"),
+    neutralization: stringValue(settings.neutralization, 'SUBINDUSTRY'),
+    dataset: stringValue(settings.dataset, ''),
+    pasteurization: stringValue(settings.pasteurization, 'ON'),
+    unitHandling: stringValue(settings.unitHandling, 'VERIFY'),
+    nanHandling: stringValue(settings.nanHandling, 'ON'),
+    language: stringValue(settings.language, 'FASTEXPR'),
+    alphaType: stringValue(settings.type, 'REGULAR'),
     candidates: numberValue(budget.max_candidates_per_cycle, 20),
     cycles: numberValue(budget.max_cycles, 10),
     poolSize: numberValue(budget.retained_alpha_pool_size, 10),
@@ -281,9 +309,9 @@ export function formFromConfig(config: PartialConfig | null): ConfigForm {
     minSharpe: numberValue(thresholds.min_sharpe, 1.25),
     minFitness: numberValue(thresholds.min_fitness, 1.0),
     minTurnover: numberValue(thresholds.min_turnover, 0.01),
-    platformMaxTurnover: numberValue(thresholds.platform_max_turnover, 0.70),
-    maxSelfCorrelation: numberValue(thresholds.max_self_correlation, 0.70),
-    maxWeightConcentration: numberValue(thresholds.max_weight_concentration, 0.10),
+    platformMaxTurnover: numberValue(thresholds.platform_max_turnover, 0.7),
+    maxSelfCorrelation: numberValue(thresholds.max_self_correlation, 0.7),
+    maxWeightConcentration: numberValue(thresholds.max_weight_concentration, 0.1),
   };
 }
 
@@ -292,15 +320,18 @@ export function formFromImport(imported: Record<string, unknown>, current: Confi
   const source = asRecord(root.config) || root;
   if (asRecord(source.ops)) {
     return formFromConfig({
-      environment: String(source.environment || "production"),
+      environment: String(source.environment || 'production'),
       ops: asRecord(source.ops) || {},
       settings: asRecord(source.settings) || {},
       budget: asRecord(source.budget) || {},
       thresholds: asRecord(source.thresholds) || {},
       scoring: asRecord(source.scoring) || undefined,
       autoSubmit: false,
-      maxWeightConcentration: numberValue(source.maxWeightConcentration, current.maxWeightConcentration),
-    } as unknown as RunConfig);
+      maxWeightConcentration: numberValue(
+        source.maxWeightConcentration,
+        current.maxWeightConcentration
+      ),
+    } as unknown);
   }
   const settings = asRecord(source.settings) || {};
   const budget = asRecord(source.budget) || {};
@@ -329,31 +360,49 @@ export function formFromImport(imported: Record<string, unknown>, current: Confi
     minTurnover: numberValue(thresholds.min_turnover, current.minTurnover),
     platformMaxTurnover: numberValue(thresholds.platform_max_turnover, current.platformMaxTurnover),
     maxSelfCorrelation: numberValue(thresholds.max_self_correlation, current.maxSelfCorrelation),
-    maxWeightConcentration: numberValue(thresholds.max_weight_concentration, current.maxWeightConcentration),
+    maxWeightConcentration: numberValue(
+      thresholds.max_weight_concentration,
+      current.maxWeightConcentration
+    ),
   };
 }
 
 export function validateForm(form: ConfigForm, schema: ConfigSchema | undefined): string | null {
-  if (form.dataset.length > MAX_CONFIG_TEXT_LENGTH) return `数据集长度不能超过 ${MAX_CONFIG_TEXT_LENGTH} 个字符。`;
-  if (!CONFIG_TEXT_PATTERN.test(form.dataset)) return "数据集只能包含字母、数字、下划线、短横线、点或冒号。";
-  if (!CONFIG_TEXT_PATTERN.test(form.dataset)) return "数据集名称包含非法字符";
-  if (!isIntegerInRange(form.delay, 0, 1)) return "延迟值必须为 0 或 1";
-  if (!isIntegerInRange(form.candidates, 1, 1000)) return "候选数必须在 1-1000 之间";
-  if (!isIntegerInRange(form.cycles, 1, 1000)) return "周期数必须在 1-1000 之间";
-  if (!isIntegerInRange(form.poolSize, 1, 1000)) return "池大小必须在 1-1000 之间";
-  if (!isIntegerInRange(form.backtestBatchSize, 1, 100)) return "回测批次大小必须在 1-100 之间";
-  if (!isAllowedOption(schema?.settings_options, "region", form.region, DEFAULT_REGION_OPTIONS)) return "不支持的区域。";
-  if (!isAllowedOption(schema?.settings_options, "universe", form.universe, DEFAULT_UNIVERSE_OPTIONS)) return "不支持的股票池。";
-  if (!isAllowedOption(schema?.settings_options, "neutralization", form.neutralization, DEFAULT_NEUTRALIZATION_OPTIONS)) return "不支持的中性化方式。";
-  if (schema?.dataset_options?.length && !datasetAllowedValues(schema).includes(form.dataset)) return "不支持的数据集，请从下拉列表选择。";
+  if (form.dataset.length > MAX_CONFIG_TEXT_LENGTH)
+    return `数据集长度不能超过 ${MAX_CONFIG_TEXT_LENGTH} 个字符。`;
+  if (!CONFIG_TEXT_PATTERN.test(form.dataset))
+    return '数据集只能包含字母、数字、下划线、短横线、点或冒号。';
+  if (!CONFIG_TEXT_PATTERN.test(form.dataset)) return '数据集名称包含非法字符';
+  if (!isIntegerInRange(form.delay, 0, 1)) return '延迟值必须为 0 或 1';
+  if (!isIntegerInRange(form.candidates, 1, 1000)) return '候选数必须在 1-1000 之间';
+  if (!isIntegerInRange(form.cycles, 1, 1000)) return '周期数必须在 1-1000 之间';
+  if (!isIntegerInRange(form.poolSize, 1, 1000)) return '池大小必须在 1-1000 之间';
+  if (!isIntegerInRange(form.backtestBatchSize, 1, 100)) return '回测批次大小必须在 1-100 之间';
+  if (!isAllowedOption(schema?.settings_options, 'region', form.region, DEFAULT_REGION_OPTIONS))
+    return '不支持的区域。';
+  if (
+    !isAllowedOption(schema?.settings_options, 'universe', form.universe, DEFAULT_UNIVERSE_OPTIONS)
+  )
+    return '不支持的股票池。';
+  if (
+    !isAllowedOption(
+      schema?.settings_options,
+      'neutralization',
+      form.neutralization,
+      DEFAULT_NEUTRALIZATION_OPTIONS
+    )
+  )
+    return '不支持的中性化方式。';
+  if (schema?.dataset_options?.length && !datasetAllowedValues(schema).includes(form.dataset))
+    return '不支持的数据集，请从下拉列表选择。';
   return null;
 }
 
 export function credentialsPayload(credentials: BrainCredentials): Record<string, string> {
   const payload: Record<string, string> = {};
-  const username = credentials.username?.trim() || "";
-  const password = credentials.password || "";
-  const token = credentials.token?.trim() || "";
+  const username = credentials.username?.trim() || '';
+  const password = credentials.password || '';
+  const token = credentials.token?.trim() || '';
   if (username) payload.username = username;
   if (password) payload.password = password;
   if (token) payload.token = token;

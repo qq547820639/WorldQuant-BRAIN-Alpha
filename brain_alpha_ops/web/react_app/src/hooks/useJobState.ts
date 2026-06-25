@@ -14,10 +14,10 @@
  * If the user takes no action within 5 minutes, auto-cancellation takes effect.
  */
 
-import type { BrainCredentials, JobStatus, UnifiedProgress } from "@/types";
-import { useJobStatus } from "./useJobStatusHook";
-import { useJobLifecycle } from "./useJobLifecycle";
-import { useJobNotifications } from "./useJobNotifications";
+import type { BrainCredentials, JobStatus, UnifiedProgress } from '@/types';
+import { useJobStatus } from './useJobStatusHook';
+import { useJobLifecycle } from './useJobLifecycle';
+import { useJobNotifications } from './useJobNotifications';
 
 export interface JobState {
   jobId: string | null;
@@ -38,12 +38,12 @@ export interface JobState {
 
 export function useJobState(
   notify: (
-    type: "success" | "error" | "warning" | "info",
+    type: 'success' | 'error' | 'warning' | 'info',
     msg: string,
     action?: { label: string; onClick: () => void },
-    secondaryAction?: { label: string; onClick: () => void },
+    secondaryAction?: { label: string; onClick: () => void }
   ) => void,
-  credentials?: BrainCredentials,
+  credentials?: BrainCredentials
 ): JobState {
   const status = useJobStatus({ notify, credentials });
   const lifecycle = useJobLifecycle({
@@ -55,8 +55,8 @@ export function useJobState(
     setStatus: status.setStatus,
     setProgressError: status.setProgressError,
     setPollFailures: status.setPollFailures,
-    clearDisconnectedTimer: status.clearDisconnectedTimer!,
-    setDisconnected: status.setDisconnected!,
+    clearDisconnectedTimer: status.clearDisconnectedTimer,
+    setDisconnected: status.setDisconnected,
     addEventSlice: status.addEventSlice,
     api: status.api,
   });

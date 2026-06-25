@@ -1,8 +1,8 @@
 /** P2-4: Scoring weight transparency modal — read-only display from /api/config_schema. */
 
-import { useEffect, useRef } from "react";
-import type { ConfigSchema } from "./utils";
-import { isRecord } from "@/types";
+import { useEffect, useRef } from 'react';
+import type { ConfigSchema } from './utils';
+import { isRecord } from '@/types';
 
 interface WeightDimension {
   name: string;
@@ -12,7 +12,7 @@ interface WeightDimension {
 
 function extractScoringWeights(
   schema: ConfigSchema | undefined,
-  scoring: Record<string, unknown> | undefined,
+  scoring: Record<string, unknown> | undefined
 ): { layers: WeightDimension[] } {
   const layers: WeightDimension[] = [];
 
@@ -20,16 +20,16 @@ function extractScoringWeights(
   const schemaWeights = schema?.scoring_weights;
 
   const priorWeight = Number(scoring?.prior_layer_weight ?? 0.35);
-  const priorChildren = extractLayerChildren(schemaScoring, "prior", schemaWeights);
-  layers.push({ name: "先验评分", weight: priorWeight, children: priorChildren });
+  const priorChildren = extractLayerChildren(schemaScoring, 'prior', schemaWeights);
+  layers.push({ name: '先验评分', weight: priorWeight, children: priorChildren });
 
-  const empiricalWeight = Number(scoring?.empirical_layer_weight ?? 0.40);
-  const empiricalChildren = extractLayerChildren(schemaScoring, "empirical", schemaWeights);
-  layers.push({ name: "实证评分", weight: empiricalWeight, children: empiricalChildren });
+  const empiricalWeight = Number(scoring?.empirical_layer_weight ?? 0.4);
+  const empiricalChildren = extractLayerChildren(schemaScoring, 'empirical', schemaWeights);
+  layers.push({ name: '实证评分', weight: empiricalWeight, children: empiricalChildren });
 
   const checklistWeight = Number(scoring?.checklist_layer_weight ?? 0.25);
-  const checklistChildren = extractLayerChildren(schemaScoring, "checklist", schemaWeights);
-  layers.push({ name: "提交清单", weight: checklistWeight, children: checklistChildren });
+  const checklistChildren = extractLayerChildren(schemaScoring, 'checklist', schemaWeights);
+  layers.push({ name: '提交清单', weight: checklistWeight, children: checklistChildren });
 
   return { layers };
 }
@@ -37,7 +37,7 @@ function extractScoringWeights(
 function extractLayerChildren(
   schemaScoring: Record<string, unknown> | undefined,
   layer: string,
-  schemaWeights: Record<string, unknown> | undefined,
+  schemaWeights: Record<string, unknown> | undefined
 ): WeightDimension[] {
   const children: WeightDimension[] = [];
 
@@ -48,18 +48,18 @@ function extractLayerChildren(
   const dimsRaw = layerData?.dimensions ?? layerData?.sub_dimensions ?? layerWeights ?? {};
   const dims = isRecord(dimsRaw) ? dimsRaw : {};
 
-  if (dims && typeof dims === "object") {
+  if (dims && typeof dims === 'object') {
     for (const [key, value] of Object.entries(dims)) {
-      if (typeof value === "number") {
+      if (typeof value === 'number') {
         children.push({ name: formatDimName(key), weight: value });
       } else if (isRecord(value)) {
-        const weight = typeof value.weight === "number" ? value.weight : 0;
-        const subChildren = extractLayerChildren(
-          { [key]: value },
-          key,
-          undefined,
-        );
-        children.push({ name: formatDimName(String(value.name ?? value.label ?? key)), weight, children: subChildren.length ? subChildren : undefined });
+        const weight = typeof value.weight === 'number' ? value.weight : 0;
+        const subChildren = extractLayerChildren({ [key]: value }, key, undefined);
+        children.push({
+          name: formatDimName(String(value.name ?? value.label ?? key)),
+          weight,
+          children: subChildren.length ? subChildren : undefined,
+        });
       }
     }
   }
@@ -69,34 +69,34 @@ function extractLayerChildren(
 
 function formatDimName(key: string): string {
   const labels: Record<string, string> = {
-    economic_logic: "经济逻辑",
-    structure: "结构复杂度",
-    field_operator_support: "字段与算子",
-    data_compliance: "数据合规",
-    horizon_turnover_proxy: "窗口/换手代理",
-    risk_control_proxy: "风控代理",
-    diversity: "多样性",
-    explainability: "可解释性",
-    economic_concepts: "经济概念",
-    sharpe: "Sharpe",
-    fitness: "Fitness",
-    turnover: "换手率",
-    returns: "收益率",
-    drawdown: "回撤",
-    self_correlation: "自相关",
-    prod_correlation: "生产相关性",
-    weight_concentration: "权重集中度",
-    sub_universe_sharpe: "子宇宙Sharpe",
-    is_oos_ratio: "IS/OOS比率",
-    margin_bps: "保证金(bps)",
-    official_metrics_present: "官方指标存在",
-    official_pass: "官方通过",
-    economic_logic_check: "经济逻辑检查",
-    data_delay_conservative: "保守延迟设置",
-    local_quality: "本地质量预筛",
-    self_correlation_proxy: "自相关代理",
+    economic_logic: '经济逻辑',
+    structure: '结构复杂度',
+    field_operator_support: '字段与算子',
+    data_compliance: '数据合规',
+    horizon_turnover_proxy: '窗口/换手代理',
+    risk_control_proxy: '风控代理',
+    diversity: '多样性',
+    explainability: '可解释性',
+    economic_concepts: '经济概念',
+    sharpe: 'Sharpe',
+    fitness: 'Fitness',
+    turnover: '换手率',
+    returns: '收益率',
+    drawdown: '回撤',
+    self_correlation: '自相关',
+    prod_correlation: '生产相关性',
+    weight_concentration: '权重集中度',
+    sub_universe_sharpe: '子宇宙Sharpe',
+    is_oos_ratio: 'IS/OOS比率',
+    margin_bps: '保证金(bps)',
+    official_metrics_present: '官方指标存在',
+    official_pass: '官方通过',
+    economic_logic_check: '经济逻辑检查',
+    data_delay_conservative: '保守延迟设置',
+    local_quality: '本地质量预筛',
+    self_correlation_proxy: '自相关代理',
   };
-  return labels[key] ?? key.replace(/_/g, " ");
+  return labels[key] ?? key.replace(/_/g, ' ');
 }
 
 export default function ScoringWeightModal({
@@ -114,23 +114,23 @@ export default function ScoringWeightModal({
 
   useEffect(() => {
     const originalOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    document.body.style.overflow = 'hidden';
 
     const timer = setTimeout(() => {
       closeButtonRef.current?.focus();
     }, 50);
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
+      if (e.key === 'Escape') {
         onClose();
       }
     };
 
-    document.addEventListener("keydown", handleKeyDown);
+    document.addEventListener('keydown', handleKeyDown);
 
     return () => {
       document.body.style.overflow = originalOverflow;
-      document.removeEventListener("keydown", handleKeyDown);
+      document.removeEventListener('keydown', handleKeyDown);
       clearTimeout(timer);
     };
   }, [onClose]);
@@ -138,11 +138,18 @@ export default function ScoringWeightModal({
   return (
     <div
       style={{
-        position: "fixed", inset: 0, zIndex: 9999,
-        display: "flex", alignItems: "center", justifyContent: "center",
-        background: "var(--color-overlay-strong)", backdropFilter: "blur(3px)",
+        position: 'fixed',
+        inset: 0,
+        zIndex: 9999,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: 'var(--color-overlay-strong)',
+        backdropFilter: 'blur(3px)',
       }}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
       role="dialog"
       aria-modal="true"
       aria-labelledby="scoring-weight-title"
@@ -150,15 +157,28 @@ export default function ScoringWeightModal({
       <div
         ref={dialogRef}
         style={{
-          background: "var(--color-surface-elevated)", borderRadius: 8,
-          border: "0.5px solid var(--color-border-default)",
-          maxWidth: 560, width: "calc(100% - 32px)", maxHeight: "80vh",
-          overflow: "auto", padding: "24px 20px 20px",
+          background: 'var(--color-surface-elevated)',
+          borderRadius: 8,
+          border: '0.5px solid var(--color-border-default)',
+          maxWidth: 560,
+          width: 'calc(100% - 32px)',
+          maxHeight: '80vh',
+          overflow: 'auto',
+          padding: '24px 20px 20px',
         }}
       >
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'flex-start',
+            marginBottom: 20,
+          }}
+        >
           <div>
-            <h3 id="scoring-weight-title" className="text-base font-semibold text-text-primary">评分配置详细权重</h3>
+            <h3 id="scoring-weight-title" className="text-base font-semibold text-text-primary">
+              评分配置详细权重
+            </h3>
             <p className="text-xs text-text-tertiary mt-1">
               来自 /api/config_schema 的只读展示，各层及其子维度权重分配。
             </p>
@@ -169,25 +189,35 @@ export default function ScoringWeightModal({
             onClick={onClose}
             className="btn btn-ghost btn-sm"
             aria-label="关闭"
-            style={{ padding: "2px 6px", fontSize: 18, lineHeight: 1 }}
+            style={{ padding: '2px 6px', fontSize: 18, lineHeight: 1 }}
           >
             ✕
           </button>
         </div>
 
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           {layers.map((layer, i) => (
-            <div key={i} style={{
-              border: "0.5px solid var(--color-border-default)",
-              borderRadius: 6,
-              overflow: "hidden",
-            }}>
-              <div style={{
-                display: "flex", justifyContent: "space-between", alignItems: "center",
-                padding: "10px 14px",
-                background: "var(--color-layer-header-bg)",
-                borderBottom: layer.children && layer.children.length > 0 ? "0.5px solid var(--color-border-default)" : "none",
-              }}>
+            <div
+              key={i}
+              style={{
+                border: '0.5px solid var(--color-border-default)',
+                borderRadius: 6,
+                overflow: 'hidden',
+              }}
+            >
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  padding: '10px 14px',
+                  background: 'var(--color-layer-header-bg)',
+                  borderBottom:
+                    layer.children && layer.children.length > 0
+                      ? '0.5px solid var(--color-border-default)'
+                      : 'none',
+                }}
+              >
                 <span className="text-sm font-medium text-text-primary">{layer.name}</span>
                 <span className="text-sm font-mono-value text-accent">
                   {(layer.weight * 100).toFixed(0)}%
@@ -195,22 +225,40 @@ export default function ScoringWeightModal({
               </div>
 
               {layer.children && layer.children.length > 0 && (
-                <div style={{ padding: "8px 14px" }}>
+                <div style={{ padding: '8px 14px' }}>
                   {layer.children.map((dim, j) => (
                     <div
                       key={j}
                       style={{
-                        display: "flex", justifyContent: "space-between", alignItems: "center",
-                        padding: "6px 0",
-                        borderBottom: j < layer.children!.length - 1 ? "0.5px solid var(--color-divider)" : "none",
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        padding: '6px 0',
+                        borderBottom:
+                          j < layer.children.length - 1
+                            ? '0.5px solid var(--color-divider)'
+                            : 'none',
                       }}
                     >
                       <span className="text-xs text-text-secondary">{dim.name}</span>
-                      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                        <div className="progress-bar" style={{ width: 60, height: 4 }} role="progressbar" aria-valuemin={0} aria-valuemax={1} aria-valuenow={dim.weight}>
-                          <div className="progress-bar-fill positive" style={{ width: `${Math.min(100, dim.weight * 100)}%`, height: 4 }} />
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                        <div
+                          className="progress-bar"
+                          style={{ width: 60, height: 4 }}
+                          role="progressbar"
+                          aria-valuemin={0}
+                          aria-valuemax={1}
+                          aria-valuenow={dim.weight}
+                        >
+                          <div
+                            className="progress-bar-fill positive"
+                            style={{ width: `${Math.min(100, dim.weight * 100)}%`, height: 4 }}
+                          />
                         </div>
-                        <span className="text-xs font-mono-value text-text-tertiary" style={{ minWidth: 42, textAlign: "right" }}>
+                        <span
+                          className="text-xs font-mono-value text-text-tertiary"
+                          style={{ minWidth: 42, textAlign: 'right' }}
+                        >
                           {(dim.weight * 100).toFixed(1)}%
                         </span>
                       </div>
@@ -223,7 +271,7 @@ export default function ScoringWeightModal({
               )}
 
               {(!layer.children || layer.children.length === 0) && (
-                <div style={{ padding: "10px 14px" }}>
+                <div style={{ padding: '10px 14px' }}>
                   <p className="text-xs text-text-tertiary">该层无子维度权重数据</p>
                 </div>
               )}
@@ -231,7 +279,7 @@ export default function ScoringWeightModal({
           ))}
         </div>
 
-        <div style={{ marginTop: 20, display: "flex", justifyContent: "flex-end" }}>
+        <div style={{ marginTop: 20, display: 'flex', justifyContent: 'flex-end' }}>
           <button type="button" onClick={onClose} className="btn btn-secondary btn-sm">
             关闭
           </button>

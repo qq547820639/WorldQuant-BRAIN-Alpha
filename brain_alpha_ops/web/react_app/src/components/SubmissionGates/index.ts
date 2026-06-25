@@ -1,1 +1,1 @@
-export { ReadinessSummary } from "./SubmissionGates";
+export { ReadinessSummary } from './SubmissionGates';

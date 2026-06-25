@@ -35,7 +35,7 @@ export default defineConfig(({ mode }) => {
       },
     },
     optimizeDeps: {
-      include: ["react", "react-dom", "@tanstack/react-virtual"],
+      include: ["react", "react-dom", "react-dom/client", "@tanstack/react-virtual"],
       exclude: [],
     },
     build: {
@@ -43,13 +43,13 @@ export default defineConfig(({ mode }) => {
       emptyOutDir: true,
       sourcemap: !isProduction,
       target: "es2022",
-      cssCodeSplit: true,
+      cssCodeSplit: false,
       cssMinify: "esbuild",
       minify: "esbuild",
-      reportCompressedSize: true,
-      chunkSizeWarningLimit: 500,
+      reportCompressedSize: false,
+      chunkSizeWarningLimit: 1500,
       modulePreload: false,
-      assetsInlineLimit: 8192,
+      assetsInlineLimit: 16384,
       rollupOptions: {
         treeshake: false,
         output: {

@@ -331,7 +331,7 @@ describe("Dashboard", () => {
     expect(reportButton).toBeInTheDocument();
 
     await user.click(reportButton);
-    expect(screen.getByRole("dialog", { name: "工作日报" })).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: /工作日报/ })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "复制为 Markdown" })).toBeInTheDocument();
   });
 

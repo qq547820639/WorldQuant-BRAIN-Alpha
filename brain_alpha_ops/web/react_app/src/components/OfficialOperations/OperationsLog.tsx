@@ -1,7 +1,7 @@
 /** Operation history log display wrapper. */
 
-import OperationLog from "./OperationLog";
-import type { OperationLogEntry } from "./utils";
+import OperationLog from './OperationLog';
+import type { OperationLogEntry } from './utils';
 
 interface Props {
   logs: OperationLogEntry[];

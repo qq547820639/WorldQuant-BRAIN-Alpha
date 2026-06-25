@@ -1,4 +1,4 @@
-import React, { memo } from "react";
+import React, { memo } from 'react';
 
 export interface TrendData {
   date: string;
@@ -14,13 +14,20 @@ interface TrendPanelProps {
   change?: number; // 变化百分比
 }
 
-const TrendPanel = memo(function TrendPanel({ title, data, unit, color, currentValue, change }: TrendPanelProps) {
+const TrendPanel = memo(function TrendPanel({
+  title,
+  data,
+  unit,
+  color,
+  currentValue,
+  change,
+}: TrendPanelProps) {
   if (!data || data.length === 0) {
     return (
       <div className="bg-surface-1 rounded-lg p-4 border border-border-subtle">
         <div className="text-sm text-text-secondary mb-2">{title}</div>
         <div className="text-2xl font-bold text-text-primary">
-          {currentValue?.toFixed(1)}{" "}
+          {currentValue?.toFixed(1)}{' '}
           <span className="text-sm font-normal text-text-tertiary">{unit}</span>
         </div>
         <div className="text-xs text-text-tertiary mt-2">趋势数据将在运行 3 个周期后显示</div>
@@ -38,16 +45,14 @@ const TrendPanel = memo(function TrendPanel({ title, data, unit, color, currentV
         <div className="text-sm text-text-secondary">{title}</div>
         {change !== undefined && (
           <span
-            className={`text-xs font-medium ${
-              change >= 0 ? "text-positive" : "text-negative"
-            }`}
+            className={`text-xs font-medium ${change >= 0 ? 'text-positive' : 'text-negative'}`}
           >
-            {change >= 0 ? "↑" : "↓"} {Math.abs(change).toFixed(0)}%
+            {change >= 0 ? '↑' : '↓'} {Math.abs(change).toFixed(0)}%
           </span>
         )}
       </div>
       <div className="text-2xl font-bold text-text-primary mb-3">
-        {currentValue?.toFixed(1)}{" "}
+        {currentValue?.toFixed(1)}{' '}
         <span className="text-sm font-normal text-text-tertiary">{unit}</span>
       </div>
       {/* Simple sparkline bar chart */}
@@ -58,7 +63,7 @@ const TrendPanel = memo(function TrendPanel({ title, data, unit, color, currentV
               className="w-full rounded-t"
               style={{
                 height: `${Math.max(8, ((d.value - minVal) / range) * 40)}px`,
-                backgroundColor: color || "var(--color-status-active-text)",
+                backgroundColor: color || 'var(--color-status-active-text)',
                 opacity: 0.7,
               }}
               title={`${d.date}: ${d.value?.toFixed(1)} ${unit}`}

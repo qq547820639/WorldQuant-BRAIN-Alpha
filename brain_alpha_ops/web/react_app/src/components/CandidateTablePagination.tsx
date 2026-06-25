@@ -37,7 +37,9 @@ export default function CandidateTablePagination({
           >
             上一页
           </button>
-          <span className="text-sm text-text-secondary">{currentPage} / {totalPages}</span>
+          <span className="text-sm text-text-secondary">
+            {currentPage} / {totalPages}
+          </span>
           <button
             type="button"
             onClick={() => onPageChange(Math.min(totalPages, currentPage + 1))}

@@ -5,7 +5,7 @@
  * can resume where they left off on the next visit.
  */
 
-import { reportIgnoredError } from "@/utils/reportIgnoredError";
+import { reportIgnoredError } from '@/utils/reportIgnoredError';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -30,11 +30,11 @@ export interface ResumeState {
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
-const STORAGE_KEY = "brain_alpha_resume_state";
+const STORAGE_KEY = 'brain_alpha_resume_state';
 
 const DEFAULT_STATE: ResumeState = {
-  lastSessionDate: "",
-  lastPhase: "connect",
+  lastSessionDate: '',
+  lastPhase: 'connect',
   lastPipelineJob: null,
   lastPoolSize: 0,
   lastSyncTime: null,
@@ -52,17 +52,34 @@ export function getResumeState(): ResumeState {
     if (!raw) return { ...DEFAULT_STATE };
     const parsed = JSON.parse(raw) as Partial<ResumeState>;
     return {
-      lastSessionDate: typeof parsed.lastSessionDate === "string" ? parsed.lastSessionDate : DEFAULT_STATE.lastSessionDate,
-      lastPhase: typeof parsed.lastPhase === "string" ? parsed.lastPhase : DEFAULT_STATE.lastPhase,
-      lastPipelineJob: typeof parsed.lastPipelineJob === "string" ? parsed.lastPipelineJob : DEFAULT_STATE.lastPipelineJob,
-      lastPoolSize: typeof parsed.lastPoolSize === "number" && Number.isFinite(parsed.lastPoolSize) ? parsed.lastPoolSize : DEFAULT_STATE.lastPoolSize,
-      lastSyncTime: typeof parsed.lastSyncTime === "string" ? parsed.lastSyncTime : DEFAULT_STATE.lastSyncTime,
-      lastConnectionOk: typeof parsed.lastConnectionOk === "boolean" ? parsed.lastConnectionOk : DEFAULT_STATE.lastConnectionOk,
-      lastError: typeof parsed.lastError === "string" ? parsed.lastError : DEFAULT_STATE.lastError,
-      totalCyclesCompleted: typeof parsed.totalCyclesCompleted === "number" && Number.isFinite(parsed.totalCyclesCompleted) ? parsed.totalCyclesCompleted : DEFAULT_STATE.totalCyclesCompleted,
+      lastSessionDate:
+        typeof parsed.lastSessionDate === 'string'
+          ? parsed.lastSessionDate
+          : DEFAULT_STATE.lastSessionDate,
+      lastPhase: typeof parsed.lastPhase === 'string' ? parsed.lastPhase : DEFAULT_STATE.lastPhase,
+      lastPipelineJob:
+        typeof parsed.lastPipelineJob === 'string'
+          ? parsed.lastPipelineJob
+          : DEFAULT_STATE.lastPipelineJob,
+      lastPoolSize:
+        typeof parsed.lastPoolSize === 'number' && Number.isFinite(parsed.lastPoolSize)
+          ? parsed.lastPoolSize
+          : DEFAULT_STATE.lastPoolSize,
+      lastSyncTime:
+        typeof parsed.lastSyncTime === 'string' ? parsed.lastSyncTime : DEFAULT_STATE.lastSyncTime,
+      lastConnectionOk:
+        typeof parsed.lastConnectionOk === 'boolean'
+          ? parsed.lastConnectionOk
+          : DEFAULT_STATE.lastConnectionOk,
+      lastError: typeof parsed.lastError === 'string' ? parsed.lastError : DEFAULT_STATE.lastError,
+      totalCyclesCompleted:
+        typeof parsed.totalCyclesCompleted === 'number' &&
+        Number.isFinite(parsed.totalCyclesCompleted)
+          ? parsed.totalCyclesCompleted
+          : DEFAULT_STATE.totalCyclesCompleted,
     };
   } catch (err) {
-    reportIgnoredError("resume state localStorage read failed", err);
+    reportIgnoredError('resume state localStorage read failed', err);
     return { ...DEFAULT_STATE };
   }
 }
@@ -85,7 +102,7 @@ export function saveResumeState(partial: Partial<ResumeState>): void {
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
   } catch (err) {
-    reportIgnoredError("resume state localStorage write failed", err);
+    reportIgnoredError('resume state localStorage write failed', err);
   }
 }
 
@@ -94,7 +111,7 @@ export function clearResumeState(): void {
   try {
     localStorage.removeItem(STORAGE_KEY);
   } catch (err) {
-    reportIgnoredError("resume state localStorage clear failed", err);
+    reportIgnoredError('resume state localStorage clear failed', err);
   }
 }
 

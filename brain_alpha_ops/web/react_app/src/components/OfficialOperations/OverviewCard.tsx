@@ -1,4 +1,4 @@
-import { memo } from "react";
+import { memo } from 'react';
 
 /** Overview card for displaying metrics. */
 
@@ -6,11 +6,16 @@ interface Props {
   label: string;
   value: string;
   detail?: string;
-  tone?: "success" | "warning" | "neutral";
+  tone?: 'success' | 'warning' | 'neutral';
 }
 
-function OverviewCard({ label, value, detail, tone = "neutral" }: Props) {
-  const toneClass = tone === "success" ? "text-positive" : tone === "warning" ? "text-warning" : "text-text-primary";
+function OverviewCard({ label, value, detail, tone = 'neutral' }: Props) {
+  const toneClass =
+    tone === 'success'
+      ? 'text-positive'
+      : tone === 'warning'
+        ? 'text-warning'
+        : 'text-text-primary';
   return (
     <div className="panel min-w-0 p-3">
       <p className="text-xs text-text-tertiary">{label}</p>

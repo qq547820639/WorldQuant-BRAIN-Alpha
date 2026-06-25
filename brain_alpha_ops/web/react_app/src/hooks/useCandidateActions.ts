@@ -1,22 +1,31 @@
-import { useCallback, useRef, useMemo } from "react";
-import type { SSEEvent, Candidate } from "@/types";
+import { useCallback, useRef, useMemo } from 'react';
+import type { SSEEvent, Candidate } from '@/types';
 import {
   type CandidatePoolSnapshot,
   type CandidateWorkflowPlan,
   type CandidateCheckResult,
-} from "@/components/CandidateTableUtils";
-import type { CandidatePipeline, AutoPipelineStage } from "./useCandidatePipeline";
-import { useCandidateGeneration } from "./useCandidateGeneration";
-import { useCandidateSimulation } from "./useCandidateSimulation";
-import { useCandidateOptimization, optimizationCandidatesForPool } from "./useCandidateOptimization";
-import { useCandidateCheck } from "./useCandidateCheck";
-import { useCandidateSSEHandlers } from "./useCandidateSSEHandlers";
+} from '@/components/CandidateTableUtils';
+import type { CandidatePipeline, AutoPipelineStage } from './useCandidatePipeline';
+import { useCandidateGeneration } from './useCandidateGeneration';
+import { useCandidateSimulation } from './useCandidateSimulation';
+import {
+  useCandidateOptimization,
+  optimizationCandidatesForPool,
+} from './useCandidateOptimization';
+import { useCandidateCheck } from './useCandidateCheck';
+import { useCandidateSSEHandlers } from './useCandidateSSEHandlers';
 
 export interface CandidateActionsDeps {
   pipeline: CandidatePipeline;
   callApi: <T>(url: string, opts?: RequestInit) => Promise<T & { ok?: boolean; error?: string }>;
-  callSingleCheckApi: <T>(url: string, opts?: RequestInit) => Promise<T & { ok?: boolean; error?: string }>;
-  callBatchCheckApi: <T>(url: string, opts?: RequestInit) => Promise<T & { ok?: boolean; error?: string }>;
+  callSingleCheckApi: <T>(
+    url: string,
+    opts?: RequestInit
+  ) => Promise<T & { ok?: boolean; error?: string }>;
+  callBatchCheckApi: <T>(
+    url: string,
+    opts?: RequestInit
+  ) => Promise<T & { ok?: boolean; error?: string }>;
   loadCandidates: () => Promise<{
     rows: Candidate[];
     mainPoolCandidates: Candidate[] | null;
@@ -25,7 +34,7 @@ export interface CandidateActionsDeps {
   } | null>;
   refreshCheckResults: () => Promise<void>;
   onCandidatePoolUpdated?: () => void;
-  notify: (type: "success" | "error" | "warning" | "info", msg: string) => void;
+  notify: (type: 'success' | 'error' | 'warning' | 'info', msg: string) => void;
   credentials?: { username: string; password: string; token: string };
   candidates: Candidate[];
   retainedPoolCandidates: Candidate[];
@@ -38,7 +47,10 @@ export interface CandidateActions {
   generateCandidates: (poolSnapshot?: CandidatePoolSnapshot) => Promise<void>;
   startSimulation: (candidate?: Candidate, candidateOverride?: Candidate[]) => Promise<void>;
   startOfficialValidationQueue: () => void;
-  startOptimization: (poolSnapshot?: CandidatePoolSnapshot, candidateOverride?: Candidate[]) => Promise<boolean>;
+  startOptimization: (
+    poolSnapshot?: CandidatePoolSnapshot,
+    candidateOverride?: Candidate[]
+  ) => Promise<boolean>;
   startSingleCheck: (candidate: Candidate) => Promise<void>;
   startBatchCheck: (candidateOverride?: Candidate[]) => Promise<void>;
   handleTaskEvent: (event: SSEEvent) => void;
@@ -74,9 +86,9 @@ export function useCandidateActions(deps: CandidateActionsDeps): CandidateAction
 
   const buildCredentialOverrides = useCallback((): Record<string, string> => {
     const overrides: Record<string, string> = {};
-    const username = credentials?.username.trim() || "";
-    const password = credentials?.password || "";
-    const token = credentials?.token.trim() || "";
+    const username = credentials?.username.trim() || '';
+    const password = credentials?.password || '';
+    const token = credentials?.token.trim() || '';
     if (username) overrides.username = username;
     if (password) overrides.password = password;
     if (token) overrides.token = token;
@@ -140,9 +152,12 @@ export function useCandidateActions(deps: CandidateActionsDeps): CandidateAction
     serverWorkflowPlan,
   });
 
-  const handleSimEvent = useCallback((event: SSEEvent) => {
-    simulation.handleSimEvent(event, check.startBatchCheck);
-  }, [simulation, check.startBatchCheck]);
+  const handleSimEvent = useCallback(
+    (event: SSEEvent) => {
+      simulation.handleSimEvent(event, check.startBatchCheck);
+    },
+    [simulation, check.startBatchCheck]
+  );
 
   const sseHandlers = useCandidateSSEHandlers({
     generationHandlers: {

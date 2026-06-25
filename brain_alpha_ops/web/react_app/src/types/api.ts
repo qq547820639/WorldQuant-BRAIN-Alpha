@@ -1,4 +1,4 @@
-import type { OfficialContextCache } from "./cloud";
+import type { OfficialContextCache } from './cloud';
 
 // ── API Response Types ────────────────────────────────────────────────────
 
@@ -32,7 +32,17 @@ export interface ApiUserError {
 export interface JobStatus {
   job_id: string;
   task_id?: string;
-  status: "idle" | "queued" | "running" | "stopping" | "stopped" | "completed" | "completed_with_warnings" | "failed" | "cancelled" | "missing";
+  status:
+    | 'idle'
+    | 'queued'
+    | 'running'
+    | 'stopping'
+    | 'stopped'
+    | 'completed'
+    | 'completed_with_warnings'
+    | 'failed'
+    | 'cancelled'
+    | 'missing';
   ok?: boolean;
   phase?: string;
   cycle?: number;
@@ -46,7 +56,15 @@ export interface JobStatus {
   user_error?: ApiUserError;
   user_error_kind?: string;
   user_message?: string;
-  status_kind?: "active" | "success" | "warning" | "failed" | "interrupted" | "missing" | "idle" | "unknown";
+  status_kind?:
+    | 'active'
+    | 'success'
+    | 'warning'
+    | 'failed'
+    | 'interrupted'
+    | 'missing'
+    | 'idle'
+    | 'unknown';
   state_label?: string;
   terminal?: boolean;
   active?: boolean;
@@ -108,7 +126,7 @@ export interface JobProgress {
   [key: string]: unknown;
 }
 
-export type ProgressLifecycle = "idle" | "loading" | "progress" | "success" | "error";
+export type ProgressLifecycle = 'idle' | 'loading' | 'progress' | 'success' | 'error';
 
 export interface UnifiedProgress {
   task_id?: string;
@@ -165,12 +183,20 @@ export interface UnifiedProgress {
 // ── SSE Event Types ───────────────────────────────────────────────────────
 
 export interface SSEEvent {
-  type?: "progress" | "candidate" | "backtest" | "submission" | "error" | "complete" | "heartbeat" | "stream_timeout";
+  type?:
+    | 'progress'
+    | 'candidate'
+    | 'backtest'
+    | 'submission'
+    | 'error'
+    | 'complete'
+    | 'heartbeat'
+    | 'stream_timeout';
   ok?: boolean;
   job_id?: string;
   task_id?: string;
   status?: string;
-  status_kind?: JobStatus["status_kind"];
+  status_kind?: JobStatus['status_kind'];
   state_label?: string;
   terminal?: boolean;
   active?: boolean;

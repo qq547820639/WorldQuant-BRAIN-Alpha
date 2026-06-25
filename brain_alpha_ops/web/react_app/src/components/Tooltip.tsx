@@ -1,6 +1,6 @@
-import { memo, useState, useRef, useId, useEffect } from "react";
+import { memo, useState, useRef, useId, useEffect } from 'react';
 
-type TooltipPlacement = "top" | "bottom" | "left" | "right";
+type TooltipPlacement = 'top' | 'bottom' | 'left' | 'right';
 
 interface TooltipProps {
   content: string;
@@ -11,7 +11,7 @@ interface TooltipProps {
 
 export default memo(function Tooltip({
   content,
-  placement = "top",
+  placement = 'top',
   delay = 300,
   children,
 }: TooltipProps) {
@@ -45,87 +45,87 @@ export default memo(function Tooltip({
 
   const positionStyles: Record<TooltipPlacement, React.CSSProperties> = {
     top: {
-      bottom: "100%",
-      left: "50%",
-      transform: "translateX(-50%)",
+      bottom: '100%',
+      left: '50%',
+      transform: 'translateX(-50%)',
       marginBottom: 8,
     },
     bottom: {
-      top: "100%",
-      left: "50%",
-      transform: "translateX(-50%)",
+      top: '100%',
+      left: '50%',
+      transform: 'translateX(-50%)',
       marginTop: 8,
     },
     left: {
-      right: "100%",
-      top: "50%",
-      transform: "translateY(-50%)",
+      right: '100%',
+      top: '50%',
+      transform: 'translateY(-50%)',
       marginRight: 8,
     },
     right: {
-      left: "100%",
-      top: "50%",
-      transform: "translateY(-50%)",
+      left: '100%',
+      top: '50%',
+      transform: 'translateY(-50%)',
       marginLeft: 8,
     },
   };
 
   const arrowStyles: Record<TooltipPlacement, React.CSSProperties> = {
     top: {
-      top: "100%",
-      left: "50%",
-      transform: "translateX(-50%)",
-      borderLeft: "5px solid transparent",
-      borderRight: "5px solid transparent",
-      borderTop: "5px solid var(--color-surface-deep)",
+      top: '100%',
+      left: '50%',
+      transform: 'translateX(-50%)',
+      borderLeft: '5px solid transparent',
+      borderRight: '5px solid transparent',
+      borderTop: '5px solid var(--color-surface-deep)',
     },
     bottom: {
-      bottom: "100%",
-      left: "50%",
-      transform: "translateX(-50%)",
-      borderLeft: "5px solid transparent",
-      borderRight: "5px solid transparent",
-      borderBottom: "5px solid var(--color-surface-deep)",
+      bottom: '100%',
+      left: '50%',
+      transform: 'translateX(-50%)',
+      borderLeft: '5px solid transparent',
+      borderRight: '5px solid transparent',
+      borderBottom: '5px solid var(--color-surface-deep)',
     },
     left: {
-      left: "100%",
-      top: "50%",
-      transform: "translateY(-50%)",
-      borderTop: "5px solid transparent",
-      borderBottom: "5px solid transparent",
-      borderLeft: "5px solid var(--color-surface-deep)",
+      left: '100%',
+      top: '50%',
+      transform: 'translateY(-50%)',
+      borderTop: '5px solid transparent',
+      borderBottom: '5px solid transparent',
+      borderLeft: '5px solid var(--color-surface-deep)',
     },
     right: {
-      right: "100%",
-      top: "50%",
-      transform: "translateY(-50%)",
-      borderTop: "5px solid transparent",
-      borderBottom: "5px solid transparent",
-      borderRight: "5px solid var(--color-surface-deep)",
+      right: '100%',
+      top: '50%',
+      transform: 'translateY(-50%)',
+      borderTop: '5px solid transparent',
+      borderBottom: '5px solid transparent',
+      borderRight: '5px solid var(--color-surface-deep)',
     },
   };
 
   const animationClass = visible
-    ? placement === "top" || placement === "bottom"
-      ? "tooltip-fade-y"
-      : "tooltip-fade-x"
-    : "";
+    ? placement === 'top' || placement === 'bottom'
+      ? 'tooltip-fade-y'
+      : 'tooltip-fade-x'
+    : '';
 
   const childWithA11y =
-    typeof children.type === "string"
+    typeof children.type === 'string'
       ? children
       : {
           ...children,
           props: {
             ...children.props,
-            "aria-describedby": tooltipId,
+            'aria-describedby': tooltipId,
           },
         };
 
   return (
     <span
       ref={wrapperRef}
-      style={{ display: "inline-block", position: "relative" }}
+      style={{ display: 'inline-block', position: 'relative' }}
       onMouseEnter={showTooltip}
       onMouseLeave={hideTooltip}
       onFocus={showTooltip}
@@ -138,27 +138,27 @@ export default memo(function Tooltip({
           role="tooltip"
           className={`tooltip-panel ${animationClass}`}
           style={{
-            position: "absolute",
+            position: 'absolute',
             zIndex: 1000,
-            pointerEvents: "none",
+            pointerEvents: 'none',
             ...positionStyles[placement],
-            background: "var(--color-surface-deep)",
-            border: "0.5px solid var(--color-border-default)",
+            background: 'var(--color-surface-deep)',
+            border: '0.5px solid var(--color-border-default)',
             borderRadius: 6,
-            padding: "6px 10px",
+            padding: '6px 10px',
             fontSize: 12,
             lineHeight: 1.4,
-            color: "var(--color-text-bright)",
-            boxShadow: "0 4px 12px rgba(0, 0, 0, 0.3)",
-            maxWidth: "280px",
-            whiteSpace: "normal",
-            wordBreak: "break-word",
+            color: 'var(--color-text-bright)',
+            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
+            maxWidth: '280px',
+            whiteSpace: 'normal',
+            wordBreak: 'break-word',
           }}
         >
           {content}
           <span
             style={{
-              position: "absolute",
+              position: 'absolute',
               width: 0,
               height: 0,
               ...arrowStyles[placement],
@@ -168,7 +168,7 @@ export default memo(function Tooltip({
             @keyframes tooltip-fade-in-y {
               from {
                 opacity: 0;
-                transform: translateX(-50%) translateY(${placement === "top" ? "4px" : "-4px"});
+                transform: translateX(-50%) translateY(${placement === 'top' ? '4px' : '-4px'});
               }
               to {
                 opacity: 1;
@@ -178,7 +178,7 @@ export default memo(function Tooltip({
             @keyframes tooltip-fade-in-x {
               from {
                 opacity: 0;
-                transform: translateY(-50%) translateX(${placement === "left" ? "4px" : "-4px"});
+                transform: translateY(-50%) translateX(${placement === 'left' ? '4px' : '-4px'});
               }
               to {
                 opacity: 1;

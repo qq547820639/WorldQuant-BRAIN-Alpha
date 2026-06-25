@@ -1,4 +1,4 @@
-import type { OfficialMetrics, QualityGate } from "./candidate";
+import type { OfficialMetrics, QualityGate } from './candidate';
 
 // ── Cloud / Snapshot Types ────────────────────────────────────────────────
 
@@ -32,7 +32,7 @@ export interface CloudAlphaCache {
 /** Phase state response from /api/phase_state */
 export interface PhaseData {
   current_phase?: string;
-  operation_mode?: "cache_only" | "connected" | "needs_setup";
+  operation_mode?: 'cache_only' | 'connected' | 'needs_setup';
   connected: boolean;
   context_fresh: boolean;
   candidates_count: number;

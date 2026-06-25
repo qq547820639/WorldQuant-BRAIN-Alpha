@@ -1,6 +1,6 @@
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo } from 'react';
 
-export type SortDirection = "asc" | "desc";
+export type SortDirection = 'asc' | 'desc';
 
 export interface UseSortingOptions<T extends string> {
   initialSortKey?: T;
@@ -23,10 +23,10 @@ export function useSorting<T extends string>(
 ): UseSortingResult<T> {
   const { initialSortKey, initialSortAsc = false } = options;
 
-  const [sortKey, setSortKey] = useState<T>(initialSortKey as T);
+  const [sortKey, setSortKey] = useState<T>(initialSortKey);
   const [sortAsc, setSortAsc] = useState<boolean>(initialSortAsc);
 
-  const sortDirection: SortDirection = sortAsc ? "asc" : "desc";
+  const sortDirection: SortDirection = sortAsc ? 'asc' : 'desc';
 
   const handleSort = useCallback(
     (key: T) => {
@@ -55,15 +55,15 @@ export function useSorting<T extends string>(
         if (aVal === bVal) return 0;
 
         let comparison = 0;
-        if (typeof aVal === "number" && typeof bVal === "number") {
+        if (typeof aVal === 'number' && typeof bVal === 'number') {
           comparison = aVal - bVal;
         } else if (
-          typeof aVal === "object" &&
+          typeof aVal === 'object' &&
           aVal !== null &&
-          typeof (aVal as any).getTime === "function" &&
-          typeof bVal === "object" &&
+          typeof (aVal as any).getTime === 'function' &&
+          typeof bVal === 'object' &&
           bVal !== null &&
-          typeof (bVal as any).getTime === "function"
+          typeof (bVal as any).getTime === 'function'
         ) {
           comparison = (aVal as any).getTime() - (bVal as any).getTime();
         } else {

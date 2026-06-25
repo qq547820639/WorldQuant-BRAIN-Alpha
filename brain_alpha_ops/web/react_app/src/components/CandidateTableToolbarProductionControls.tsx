@@ -1,14 +1,11 @@
-import {
-  MIN_TARGET_POOL_SIZE,
-  MAX_TARGET_POOL_SIZE,
-} from "./CandidateTableUtils";
+import { MIN_TARGET_POOL_SIZE, MAX_TARGET_POOL_SIZE } from './CandidateTableUtils';
 
 export interface ProductionControlsProps {
   targetPoolSize: number;
   candidateWorkflowBusy: boolean;
-  taskState: "idle" | "loading" | "progress" | "success" | "error";
-  simState: "idle" | "loading" | "progress" | "success" | "error";
-  optimizationState: "idle" | "loading" | "progress" | "success" | "error";
+  taskState: 'idle' | 'loading' | 'progress' | 'success' | 'error';
+  simState: 'idle' | 'loading' | 'progress' | 'success' | 'error';
+  optimizationState: 'idle' | 'loading' | 'progress' | 'success' | 'error';
   onTargetPoolSizeChange: (value: string) => void;
   onGenerateCandidates: () => void;
   onStartValidationQueue: () => void;
@@ -44,31 +41,33 @@ export function ProductionControls({
         type="button"
         onClick={onGenerateCandidates}
         disabled={candidateWorkflowBusy}
-        aria-busy={taskState === "loading" || taskState === "progress"}
+        aria-busy={taskState === 'loading' || taskState === 'progress'}
         className="btn btn-primary btn-sm"
         title="自动维护目标池容量，并在非提交边界内继续官方模拟与质量检查"
       >
-        {taskState === "loading" || taskState === "progress" ? "推进中..." : "自动推进候选池"}
+        {taskState === 'loading' || taskState === 'progress' ? '推进中...' : '自动推进候选池'}
       </button>
       <button
         type="button"
         onClick={onStartValidationQueue}
         disabled={candidateWorkflowBusy}
-        aria-busy={simState === "loading" || simState === "progress"}
+        aria-busy={simState === 'loading' || simState === 'progress'}
         className="btn btn-secondary btn-sm"
         title="自动推进中断或单批证据缺失时使用；按 Top3 进入官方模拟后自动接质量门槛检查，不执行真实 Alpha submit"
       >
-        {simState === "loading" || simState === "progress" ? "模拟中..." : "运行官方验证队列"}
+        {simState === 'loading' || simState === 'progress' ? '模拟中...' : '运行官方验证队列'}
       </button>
       <button
         type="button"
         onClick={onStartOptimization}
         disabled={candidateWorkflowBusy}
-        aria-busy={optimizationState === "loading" || optimizationState === "progress"}
+        aria-busy={optimizationState === 'loading' || optimizationState === 'progress'}
         className="btn btn-secondary btn-sm"
         title="根据服务端返工队列进行本地优化；不会携带凭据，也不会提交 Alpha"
       >
-        {optimizationState === "loading" || optimizationState === "progress" ? "优化中..." : "优化返工队列"}
+        {optimizationState === 'loading' || optimizationState === 'progress'
+          ? '优化中...'
+          : '优化返工队列'}
       </button>
     </div>
   );

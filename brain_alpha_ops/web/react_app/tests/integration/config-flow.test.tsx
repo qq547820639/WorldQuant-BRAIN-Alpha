@@ -27,42 +27,40 @@ function baseConfig(dataset: string, managedCredentialsAvailable = false) {
       token_env: "BRAIN_TOKEN",
       managed_credentials_available: managedCredentialsAvailable,
     },
-    ops: {
-      settings: {
-        instrumentType: "EQUITY",
-        region: "USA",
-        universe: "TOP3000",
-        delay: 1,
-        decay: 10,
-        neutralization: "SUBINDUSTRY",
-        dataset,
-        pasteurization: "ON",
-        unitHandling: "VERIFY",
-        nanHandling: "ON",
-        language: "FASTEXPR",
-        type: "REGULAR",
-      },
-      budget: {
-        max_candidates_per_cycle: 20,
-        max_cycles: 10,
-        retained_alpha_pool_size: 30,
-        official_backtest_batch_size: 3,
-        require_cloud_sync: false,
-      },
-      thresholds: {
-        min_sharpe: 1.25,
-        min_fitness: 1,
-        min_turnover: 0.01,
-        platform_max_turnover: 0.7,
-        max_self_correlation: 0.7,
-        max_weight_concentration: 0.5,
-      },
-      scoring: {
-        prior_layer_weight: 0.3,
-        empirical_layer_weight: 0.4,
-        checklist_layer_weight: 0.3,
-        market_regime: "normal",
-      },
+    settings: {
+      instrumentType: "EQUITY",
+      region: "USA",
+      universe: "TOP3000",
+      delay: 1,
+      decay: 10,
+      neutralization: "SUBINDUSTRY",
+      dataset,
+      pasteurization: "ON",
+      unitHandling: "VERIFY",
+      nanHandling: "ON",
+      language: "FASTEXPR",
+      type: "REGULAR",
+    },
+    budget: {
+      max_candidates_per_cycle: 20,
+      max_cycles: 10,
+      retained_alpha_pool_size: 30,
+      official_backtest_batch_size: 3,
+      require_cloud_sync: false,
+    },
+    thresholds: {
+      min_sharpe: 1.25,
+      min_fitness: 1,
+      min_turnover: 0.01,
+      platform_max_turnover: 0.7,
+      max_self_correlation: 0.7,
+      max_weight_concentration: 0.5,
+    },
+    scoring: {
+      prior_layer_weight: 0.3,
+      empirical_layer_weight: 0.4,
+      checklist_layer_weight: 0.3,
+      market_regime: "normal",
     },
   };
 }
@@ -422,6 +420,9 @@ describe("配置流程集成测试", () => {
       }
       if (path === "/api/config") return jsonResponse({ ok: true, config: baseConfig("pv1") });
       if (path === "/api/config_schema") return jsonResponse(baseConfigSchema());
+      if (path === "/api/candidates") return jsonResponse({ ok: true, candidates: [] });
+      if (path === "/api/backtest_slots") return jsonResponse({ ok: true, slots: [] });
+      if (path.startsWith("/api/snapshot/cloud")) return jsonResponse({ ok: true, summary: { count: 0, total: 0 } });
       throw new Error(`Unexpected: ${path}`);
     });
     vi.stubGlobal("fetch", fetchMock);

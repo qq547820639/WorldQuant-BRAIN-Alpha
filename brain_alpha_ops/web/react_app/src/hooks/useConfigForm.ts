@@ -1,9 +1,13 @@
-import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from "react";
-import { apiErrorMessage, safeDisplayErrorMessage, type ApiErrorExperiencePayload } from "@/helpers/errorExperience";
-import { useApi } from "@/hooks/useApi";
-import { useGlobalData } from "@/hooks/useGlobalData";
-import { useFormValidation } from "@/hooks/useFormValidation";
-import type { BrainCredentials, RunConfig } from "@/types";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
+import {
+  apiErrorMessage,
+  safeDisplayErrorMessage,
+  type ApiErrorExperiencePayload,
+} from '@/helpers/errorExperience';
+import { useApi } from '@/hooks/useApi';
+import { useGlobalData } from '@/hooks/useGlobalData';
+import { useFormValidation } from '@/hooks/useFormValidation';
+import type { BrainCredentials, RunConfig } from '@/types';
 import {
   type PartialConfig,
   type ConfigForm,
@@ -14,7 +18,7 @@ import {
   formFromImport,
   validateForm,
   credentialsPayload,
-} from "@/components/ConfigPanel/utils";
+} from '@/components/ConfigPanel/utils';
 
 interface ConfigResponse {
   ok: boolean;
@@ -35,7 +39,7 @@ interface ConnectionTestResponse extends ApiErrorExperiencePayload {
 }
 
 interface UseConfigFormOptions {
-  notify: (type: "success" | "error" | "warning" | "info", msg: string) => void;
+  notify: (type: 'success' | 'error' | 'warning' | 'info', msg: string) => void;
   credentials: BrainCredentials;
   onCredentialsChange: (credentials: BrainCredentials) => void;
   onConnectionTested?: (success: boolean, error: string | null) => void;
@@ -43,20 +47,20 @@ interface UseConfigFormOptions {
 }
 
 const EMPTY_FORM: ConfigForm = {
-  environment: "",
+  environment: '',
   autoSubmit: false,
-  instrumentType: "EQUITY",
-  region: "USA",
-  universe: "TOP3000",
+  instrumentType: 'EQUITY',
+  region: 'USA',
+  universe: 'TOP3000',
   delay: 1,
   decay: 10,
-  neutralization: "SUBINDUSTRY",
-  dataset: "",
-  pasteurization: "ON",
-  unitHandling: "VERIFY",
-  nanHandling: "ON",
-  language: "FASTEXPR",
-  alphaType: "REGULAR",
+  neutralization: 'SUBINDUSTRY',
+  dataset: '',
+  pasteurization: 'ON',
+  unitHandling: 'VERIFY',
+  nanHandling: 'ON',
+  language: 'FASTEXPR',
+  alphaType: 'REGULAR',
   candidates: 20,
   cycles: 10,
   poolSize: 10,
@@ -65,9 +69,9 @@ const EMPTY_FORM: ConfigForm = {
   minSharpe: 1.25,
   minFitness: 1.0,
   minTurnover: 0.01,
-  platformMaxTurnover: 0.70,
-  maxSelfCorrelation: 0.70,
-  maxWeightConcentration: 0.10,
+  platformMaxTurnover: 0.7,
+  maxSelfCorrelation: 0.7,
+  maxWeightConcentration: 0.1,
 };
 
 export function useConfigForm({
@@ -87,19 +91,25 @@ export function useConfigForm({
     initialValues: EMPTY_FORM,
   });
 
-  const { values: form, setValue, setValues: setFormValues, reset, isDirty: dirty } = formValidation;
+  const {
+    values: form,
+    setValue,
+    setValues: setFormValues,
+    reset,
+    isDirty: dirty,
+  } = formValidation;
 
   const [initialForm, setInitialForm] = useState<ConfigForm | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const importInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
-    void schemaApi.call("/api/config_schema");
+    void schemaApi.call('/api/config_schema');
   }, [schemaApi.call]);
 
   const config = useMemo(
     () => (globalConfig.data?.config ?? null) as PartialConfig | null,
-    [globalConfig.data],
+    [globalConfig.data]
   );
   const schema = schemaApi.data?.schema;
 
@@ -123,8 +133,8 @@ export function useConfigForm({
   };
 
   const setForm = (updater: ConfigForm | ((prev: ConfigForm | null) => ConfigForm | null)) => {
-    if (typeof updater === "function") {
-      const fn = updater as (prev: ConfigForm | null) => ConfigForm | null;
+    if (typeof updater === 'function') {
+      const fn = updater;
       const result = fn(form);
       if (result !== null) {
         setFormValues(result);
@@ -135,92 +145,97 @@ export function useConfigForm({
     setSaveSuccess(false);
   };
 
-  const updateCredential = <K extends keyof BrainCredentials>(key: K, value: BrainCredentials[K]) => {
+  const updateCredential = <K extends keyof BrainCredentials>(
+    key: K,
+    value: BrainCredentials[K]
+  ) => {
     onCredentialsChange({ ...credentials, [key]: value });
   };
 
   const reload = () => {
     refreshAll();
-    void schemaApi.call("/api/config_schema");
+    void schemaApi.call('/api/config_schema');
   };
 
   const save = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!hasInitialized || validationError !== null) {
-      notify("warning", validationError || "配置尚未准备好保存");
+      notify('warning', validationError || '配置尚未准备好保存');
       return;
     }
-    const result = await saveApi.call("/api/config", {
-      method: "POST",
+    const result = await saveApi.call('/api/config', {
+      method: 'POST',
       body: JSON.stringify(payloadFromForm(form)),
     });
     if (!result?.ok) {
-      notify("error", apiErrorMessage(result, "保存配置失败"));
+      notify('error', apiErrorMessage(result, '保存配置失败'));
       return;
     }
-    notify("success", "配置已保存");
+    notify('success', '配置已保存');
     setSaveSuccess(true);
     refreshAll();
   };
 
   const exportConfig = () => {
     if (!hasInitialized) return;
-    const blob = new Blob([JSON.stringify(payloadFromForm(form), null, 2)], { type: "application/json" });
+    const blob = new Blob([JSON.stringify(payloadFromForm(form), null, 2)], {
+      type: 'application/json',
+    });
     const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
+    const link = document.createElement('a');
     link.href = url;
     link.download = `brain-alpha-config-${new Date().toISOString().slice(0, 10)}.json`;
     link.click();
     URL.revokeObjectURL(url);
-    notify("success", "配置已导出");
+    notify('success', '配置已导出');
   };
 
   const importConfig = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.currentTarget.files?.[0];
-    event.currentTarget.value = "";
+    event.currentTarget.value = '';
     if (!file || !hasInitialized) return;
     try {
       const imported = formFromImport(JSON.parse(await file.text()), form);
       const error = validateForm(imported, schema);
       if (error !== null) {
-        notify("error", error);
+        notify('error', error);
         return;
       }
       setFormValues(imported);
-      notify("success", "配置已导入");
+      notify('success', '配置已导入');
     } catch (error) {
-      notify("error", error instanceof Error ? error.message : "无效的配置JSON");
+      notify('error', error instanceof Error ? error.message : '无效的配置JSON');
     }
   };
 
   const testConnection = async () => {
     if (!hasInitialized || validationError !== null) {
-      notify("warning", validationError || "配置尚未准备好测试连接");
+      notify('warning', validationError || '配置尚未准备好测试连接');
       return;
     }
-    const result = await connectionApi.call("/api/test_connection", {
-      method: "POST",
+    const result = await connectionApi.call('/api/test_connection', {
+      method: 'POST',
       body: JSON.stringify({ ...payloadFromForm(form), ...credentialsPayload(credentials) }),
     });
     if (!result?.ok) {
-      const err = safeDisplayErrorMessage(apiErrorMessage(result, "BRAIN 连接测试失败"));
-      notify("error", err);
+      const err = safeDisplayErrorMessage(apiErrorMessage(result, 'BRAIN 连接测试失败'));
+      notify('error', err);
       onConnectionTested?.(false, err);
       return;
     }
-    notify("success", "BRAIN 连接测试通过");
+    notify('success', 'BRAIN 连接测试通过');
     onConnectionTested?.(true, null);
   };
 
   const logoutLocalSession = async () => {
-    const result = await logoutApi.call("/api/logout", { method: "POST" });
+    const result = await logoutApi.call('/api/logout', { method: 'POST' });
     if (!result?.ok) {
-      notify("error", safeDisplayErrorMessage(apiErrorMessage(result, "退出本地会话失败")));
+      notify('error', safeDisplayErrorMessage(apiErrorMessage(result, '退出本地会话失败')));
       return;
     }
-    onCredentialsChange({ username: "", password: "", token: "" });
+    onCredentialsChange({ username: '', password: '', token: '' });
     onLoggedOut?.();
-    notify("success", "已退出本地会话并清空页面凭证");
+    notify('success', '已退出本地会话并清空页面凭证');
   };
 
   const resetForm = () => {
@@ -232,13 +247,10 @@ export function useConfigForm({
 
   const datasetChoices = useMemo(
     () => (schema && hasInitialized ? datasetSelectOptions(schema, form.dataset) : []),
-    [schema, form.dataset, hasInitialized],
+    [schema, form.dataset, hasInitialized]
   );
 
-  const scoring = useMemo(
-    () => config?.ops?.scoring ?? config?.scoring,
-    [config],
-  );
+  const scoring = useMemo(() => config?.ops?.scoring ?? config?.scoring, [config]);
 
   return {
     form: hasInitialized ? form : null,

@@ -1,16 +1,16 @@
 /** Read-only quality-gate summary before pre-submit blocker review. */
 
-import { useCallback, useEffect, useMemo } from "react";
-import { apiErrorMessage } from "@/helpers/errorExperience";
-import { readinessNextActionLabel, readinessReasonLabel } from "@/helpers/readinessLabels";
-import { useApi } from "@/hooks/useApi";
-import { useGlobalData } from "@/hooks/useGlobalData";
-import type { BacktestSlotsResponse, SubmitReadinessResponse } from "@/types";
-import CandidateTable from "@/components/CandidateTable";
-import ProgressFeedback from "@/components/ProgressFeedback";
+import { useCallback, useEffect, useMemo } from 'react';
+import { apiErrorMessage } from '@/helpers/errorExperience';
+import { readinessNextActionLabel, readinessReasonLabel } from '@/helpers/readinessLabels';
+import { useApi } from '@/hooks/useApi';
+import { useGlobalData } from '@/hooks/useGlobalData';
+import type { BacktestSlotsResponse, SubmitReadinessResponse } from '@/types';
+import CandidateTable from '@/components/CandidateTable';
+import ProgressFeedback from '@/components/ProgressFeedback';
 
 interface Props {
-  notify: (type: "success" | "error" | "warning" | "info", msg: string) => void;
+  notify: (type: 'success' | 'error' | 'warning' | 'info', msg: string) => void;
 }
 
 export default function QualityCheckPanel({ notify }: Props) {
@@ -19,15 +19,18 @@ export default function QualityCheckPanel({ notify }: Props) {
   const callReadiness = readinessApi.call;
 
   const load = useCallback(async () => {
-    const readinessResult = await callReadiness<SubmitReadinessResponse>("/api/submit_readiness");
-    if (readinessResult?.error) notify("error", apiErrorMessage(readinessResult, "提交阻断复核加载失败"));
+    const readinessResult = await callReadiness<SubmitReadinessResponse>('/api/submit_readiness');
+    if (readinessResult?.error)
+      notify('error', apiErrorMessage(readinessResult, '提交阻断复核加载失败'));
   }, [callReadiness, notify]);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   const summary = useMemo(
     () => buildQualitySummary(slotsGlobal.data, readinessApi.data),
-    [slotsGlobal.data, readinessApi.data],
+    [slotsGlobal.data, readinessApi.data]
   );
   const loading = slotsGlobal.loading || readinessApi.loading;
   const error = slotsGlobal.error || readinessApi.error;
@@ -37,7 +40,7 @@ export default function QualityCheckPanel({ notify }: Props) {
       <ProgressFeedback
         state="loading"
         title="达标检查"
-        progress={{ phase: "quality_check_load", status_message: "正在加载质量门禁快照。" }}
+        progress={{ phase: 'quality_check_load', status_message: '正在加载质量门禁快照。' }}
       />
     );
   }
@@ -47,7 +50,8 @@ export default function QualityCheckPanel({ notify }: Props) {
       <div className="flex flex-col gap-1">
         <h2 className="text-base font-semibold text-text-primary">达标检查</h2>
         <p className="text-xs text-text-tertiary" role="status" aria-live="polite">
-          本地通过 {summary.localValid} · 官方仿真 {summary.officiallySimulated} · 复核候选 {summary.eligible}
+          本地通过 {summary.localValid} · 官方仿真 {summary.officiallySimulated} · 复核候选{' '}
+          {summary.eligible}
         </p>
       </div>
 
@@ -56,7 +60,10 @@ export default function QualityCheckPanel({ notify }: Props) {
           className="panel"
           role="alert"
           aria-live="assertive"
-          style={{ borderColor: 'var(--color-error-border)', backgroundColor: 'var(--color-error-bg)' }}
+          style={{
+            borderColor: 'var(--color-error-border)',
+            backgroundColor: 'var(--color-error-bg)',
+          }}
         >
           <div className="flex items-center justify-between gap-3">
             <p className="text-sm text-negative">达标检查数据加载失败: {error}</p>
@@ -69,12 +76,7 @@ export default function QualityCheckPanel({ notify }: Props) {
 
       <QualitySummaryStrip summary={summary} />
 
-      <CandidateTable
-        notify={notify}
-        viewMode="passed"
-        showProductionControls
-        showRowActions
-      />
+      <CandidateTable notify={notify} viewMode="passed" showProductionControls showRowActions />
     </div>
   );
 }
@@ -104,7 +106,11 @@ function QualitySummaryStrip({ summary }: { summary: QualitySummary }) {
   return (
     <section
       className="rounded-md px-3 py-3"
-      style={{ border: '1px solid', borderColor: 'var(--color-border-medium)', backgroundColor: 'var(--color-surface-deep-60)' }}
+      style={{
+        border: '1px solid',
+        borderColor: 'var(--color-border-medium)',
+        backgroundColor: 'var(--color-surface-deep-60)',
+      }}
     >
       <dl className="grid grid-cols-2 gap-3 text-xs sm:grid-cols-4">
         <QualityMetric label="候选" value={String(summary.total)} />
@@ -116,14 +122,24 @@ function QualitySummaryStrip({ summary }: { summary: QualitySummary }) {
         <QualityMetric label="官方仿真" value={String(summary.officiallySimulated)} />
         <QualityMetric label="阻断复核候选" value={String(summary.eligible)} />
         <QualityMetric label="提交证据缺口" value={String(summary.submitEvidenceBlocked)} />
-        <QualityMetric label="官方接口" value={summary.officialApiCalled ? "已调用" : "未调用"} />
+        <QualityMetric label="官方接口" value={summary.officialApiCalled ? '已调用' : '未调用'} />
       </dl>
       <div className="mt-3 space-y-1 text-xs text-text-tertiary">
-        <p className="truncate" title={summary.thresholdText}>官方门槛: {summary.thresholdText}</p>
-        <p className="truncate" title={summary.reviewBlockers || "暂无"}>官方工作阻断: {summary.reviewBlockers || "暂无"}</p>
-        <p className="truncate" title={summary.submitBlockers || "暂无"}>提交证据阻断: {summary.submitBlockers || "暂无"}</p>
-        <p className="truncate" title={summary.familyBlockers || "暂无"}>候选族阻断: {summary.familyBlockers || "暂无"}</p>
-        <p className="truncate" title={summary.nextAction}>下一步: {summary.nextAction}</p>
+        <p className="truncate" title={summary.thresholdText}>
+          官方门槛: {summary.thresholdText}
+        </p>
+        <p className="truncate" title={summary.reviewBlockers || '暂无'}>
+          官方工作阻断: {summary.reviewBlockers || '暂无'}
+        </p>
+        <p className="truncate" title={summary.submitBlockers || '暂无'}>
+          提交证据阻断: {summary.submitBlockers || '暂无'}
+        </p>
+        <p className="truncate" title={summary.familyBlockers || '暂无'}>
+          候选族阻断: {summary.familyBlockers || '暂无'}
+        </p>
+        <p className="truncate" title={summary.nextAction}>
+          下一步: {summary.nextAction}
+        </p>
       </div>
     </section>
   );
@@ -133,14 +149,16 @@ function QualityMetric({ label, value }: { label: string; value: string }) {
   return (
     <div className="min-w-0">
       <dt className="text-text-tertiary">{label}</dt>
-      <dd className="mt-0.5 truncate font-medium text-text-primary" title={value}>{value}</dd>
+      <dd className="mt-0.5 truncate font-medium text-text-primary" title={value}>
+        {value}
+      </dd>
     </div>
   );
 }
 
 function buildQualitySummary(
   slots: BacktestSlotsResponse | null,
-  readiness: SubmitReadinessResponse | null,
+  readiness: SubmitReadinessResponse | null
 ): QualitySummary {
   const threshold = readiness?.threshold_summary || {};
   const summaryCounts = readiness?.summary_counts || {};
@@ -156,7 +174,8 @@ function buildQualitySummary(
     officiallySimulated: summaryCounts.officially_simulated ?? 0,
     submitReady: summaryCounts.submission_ready ?? 0,
     eligible: readiness?.eligible_count ?? 0,
-    openSlots: queue?.open_slot_count ?? Math.max(0, (slots?.slot_limit ?? 0) - (slots?.active_count ?? 0)),
+    openSlots:
+      queue?.open_slot_count ?? Math.max(0, (slots?.slot_limit ?? 0) - (slots?.active_count ?? 0)),
     slotLimit: queue?.slot_limit ?? slots?.slot_limit ?? 0,
     submitEvidenceBlocked: queue?.submit_evidence_blocking_count ?? 0,
     officialApiCalled: Boolean(readiness?.official_api_called || queue?.official_api_called),
@@ -170,21 +189,19 @@ function buildQualitySummary(
 }
 
 function reasonText(rows: { reason: string; count: number }[] | undefined) {
-  return (rows || [])
-    .map((row) => `${readinessReasonLabel(row.reason)} ${row.count}`)
-    .join(" · ");
+  return (rows || []).map((row) => `${readinessReasonLabel(row.reason)} ${row.count}`).join(' · ');
 }
 
 function nextActionText(action: unknown) {
   const labels: Record<string, string> = {
-    generate_candidates: "先生成候选",
-    improve_or_regenerate_candidates: "优化或重新生成候选",
-    trusted_environment_official_simulation_required: "在可信环境运行官方仿真",
-    wait_for_open_backtest_slot: "等待官方回测槽位释放",
+    generate_candidates: '先生成候选',
+    improve_or_regenerate_candidates: '优化或重新生成候选',
+    trusted_environment_official_simulation_required: '在可信环境运行官方仿真',
+    wait_for_open_backtest_slot: '等待官方回测槽位释放',
   };
-  const key = String(action || "");
-  if (!key) return "等待候选和门禁数据";
-  return labels[key] || readinessNextActionLabel(key, "等待候选和门禁数据");
+  const key = String(action || '');
+  if (!key) return '等待候选和门禁数据';
+  return labels[key] || readinessNextActionLabel(key, '等待候选和门禁数据');
 }
 
 function thresholdText(thresholds: Record<string, unknown>) {
@@ -197,6 +214,6 @@ function thresholdText(thresholds: Record<string, unknown>) {
 
 function valueText(value: unknown) {
   const number = Number(value);
-  if (!Number.isFinite(number)) return "-";
+  if (!Number.isFinite(number)) return '-';
   return Number.isInteger(number) ? String(number) : number.toFixed(2);
 }

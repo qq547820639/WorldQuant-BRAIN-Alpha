@@ -1,11 +1,11 @@
 /** Server-Sent Events hook with automatic reconnection. */
 
-import { useEffect, useRef, useState, useCallback } from "react";
-import type { SSEEvent } from "@/types";
-import { streamToken } from "@/utils/csrf";
-import { reportIgnoredError } from "@/utils/reportIgnoredError";
+import { useEffect, useRef, useState, useCallback } from 'react';
+import type { SSEEvent } from '@/types';
+import { streamToken } from '@/utils/csrf';
+import { reportIgnoredError } from '@/utils/reportIgnoredError';
 
-type NamedSSEEvent = NonNullable<SSEEvent["type"]>;
+type NamedSSEEvent = NonNullable<SSEEvent['type']>;
 
 interface UseSSEOptions {
   onEvent?: (event: SSEEvent) => void;
@@ -15,10 +15,7 @@ interface UseSSEOptions {
   maxReconnectAttempts?: number;
 }
 
-export function useSSE(
-  url: string | null,
-  options: UseSSEOptions = {},
-) {
+export function useSSE(url: string | null, options: UseSSEOptions = {}) {
   const {
     onEvent,
     onError,
@@ -89,25 +86,24 @@ export function useSSE(
         const handleMessage = (msg: MessageEvent, fallbackType?: NamedSSEEvent) => {
           try {
             const parsed = JSON.parse(msg.data) as SSEEvent;
-            const event: SSEEvent = fallbackType && !parsed.type
-              ? { ...parsed, type: fallbackType }
-              : parsed;
+            const event: SSEEvent =
+              fallbackType && !parsed.type ? { ...parsed, type: fallbackType } : parsed;
             setLastEvent(event);
-            if (event.type === "stream_timeout") {
+            if (event.type === 'stream_timeout') {
               setExhausted(true);
               closeTerminalStream();
               onExhaustedRef.current?.();
               return;
             }
             onEventRef.current?.(event);
-            if (event.type === "complete" || event.type === "error") {
+            if (event.type === 'complete' || event.type === 'error') {
               closeTerminalStream();
             }
           } catch (err) {
             // Non-JSON SSE data — log and ignore for debugging
-            reportIgnoredError("SSE non-JSON message ignored", err);
-            if (process.env.NODE_ENV === "development") {
-              console.debug("SSE: received non-JSON data:", msg.data.slice(0, 120));
+            reportIgnoredError('SSE non-JSON message ignored', err);
+            if (process.env.NODE_ENV === 'development') {
+              console.debug('SSE: received non-JSON data:', msg.data.slice(0, 120));
             }
           }
         };
@@ -116,9 +112,15 @@ export function useSSE(
         // below handles named events.  Do NOT add "message" to namedEvents
         // — that would double-fire every unnamed message.
         es.onmessage = (msg: MessageEvent) => handleMessage(msg);
-        const namedEvents: NamedSSEEvent[] = ["progress", "complete", "error", "heartbeat", "stream_timeout"];
+        const namedEvents: NamedSSEEvent[] = [
+          'progress',
+          'complete',
+          'error',
+          'heartbeat',
+          'stream_timeout',
+        ];
         for (const eventName of namedEvents) {
-          es.addEventListener(eventName, (msg) => handleMessage(msg as MessageEvent, eventName));
+          es.addEventListener(eventName, (msg) => handleMessage(msg, eventName));
         }
 
         es.onerror = (err: Event) => {
@@ -147,7 +149,7 @@ export function useSSE(
         };
       } catch (err) {
         // EventSource constructor failed — retry
-        reportIgnoredError("SSE EventSource connection failed", err);
+        reportIgnoredError('SSE EventSource connection failed', err);
         if (reconnectCountRef.current < maxReconnectAttempts) {
           reconnectCountRef.current += 1;
           setReconnectAttempts(reconnectCountRef.current);
@@ -161,10 +163,10 @@ export function useSSE(
     }
 
     return close;
-  // P2-20 fix: close is a stable useCallback identity — including it
-  // in the deps array risks unnecessary re-connection cycles if close
-  // is ever modified to have dependencies.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // P2-20 fix: close is a stable useCallback identity — including it
+    // in the deps array risks unnecessary re-connection cycles if close
+    // is ever modified to have dependencies.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [url, reconnectIntervalMs, maxReconnectAttempts]);
 
   return { connected, exhausted, reconnectAttempts, lastEvent, close };
@@ -195,6 +197,6 @@ export function useSSE(
 function withStreamToken(url: string) {
   const token = streamToken();
   if (!token) return url;
-  const separator = url.includes("?") ? "&" : "?";
+  const separator = url.includes('?') ? '&' : '?';
   return `${url}${separator}stream_token=${encodeURIComponent(token)}`;
 }

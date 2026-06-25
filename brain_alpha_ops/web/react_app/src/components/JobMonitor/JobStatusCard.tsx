@@ -1,6 +1,6 @@
 /** Individual job status display card. */
 
-import { memo } from "react";
+import { memo } from 'react';
 
 interface Props {
   credentialSource: string;
@@ -23,16 +23,14 @@ export default memo(function JobStatusCard({
     <>
       <div className="panel-header">
         <span>非提交生产验证</span>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <span className="badge badge-neutral">非提交</span>
           <span className="badge badge-neutral">{credentialSource}</span>
           <span
-            className={`status-dot ${connected ? "status-dot-active" : running ? "status-dot-error" : ""}`}
+            className={`status-dot ${connected ? 'status-dot-active' : running ? 'status-dot-error' : ''}`}
           />
-          <span
-            className={`badge ${running ? "badge-positive" : "badge-neutral"}`}
-          >
-            {running ? "运行中" : "空闲"}
+          <span className={`badge ${running ? 'badge-positive' : 'badge-neutral'}`}>
+            {running ? '运行中' : '空闲'}
           </span>
         </div>
       </div>
@@ -41,16 +39,16 @@ export default memo(function JobStatusCard({
           <div
             className="mb-3"
             style={{
-              padding: "8px 12px",
+              padding: '8px 12px',
               borderRadius: 6,
-              border: "1px solid",
-              borderColor: "var(--color-deferred-border)",
-              background: "var(--color-deferred-bg)",
-              display: "flex",
-              alignItems: "center",
+              border: '1px solid',
+              borderColor: 'var(--color-deferred-border)',
+              background: 'var(--color-deferred-bg)',
+              display: 'flex',
+              alignItems: 'center',
               gap: 8,
               fontSize: 13,
-              color: "var(--color-deferred-icon)",
+              color: 'var(--color-deferred-icon)',
             }}
           >
             <svg
@@ -69,9 +67,7 @@ export default memo(function JobStatusCard({
             </svg>
             <span>
               实时连接已断开
-              {reconnectAttempts > 0
-                ? `（第 ${reconnectAttempts} 次重连中…）`
-                : "，正在重连…"}
+              {reconnectAttempts > 0 ? `（第 ${reconnectAttempts} 次重连中…）` : '，正在重连…'}
               后台任务继续运行。
             </span>
           </div>

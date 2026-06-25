@@ -1,9 +1,13 @@
 /** Generic fetch hook with loading/error state management. */
 
-import { useState, useCallback } from "react";
-import { apiErrorMessage, isSessionInvalidPayload, networkErrorMessage } from "@/helpers/errorExperience";
-import { csrfHeaders, csrfToken, setCsrfToken, setStreamToken } from "@/utils/csrf";
-import { saveResumeState } from "@/utils/resumeState";
+import { useState, useCallback } from 'react';
+import {
+  apiErrorMessage,
+  isSessionInvalidPayload,
+  networkErrorMessage,
+} from '@/helpers/errorExperience';
+import { csrfHeaders, csrfToken, setCsrfToken, setStreamToken } from '@/utils/csrf';
+import { saveResumeState } from '@/utils/resumeState';
 
 // P2-22 fix: raised from 120s to 600s (10 min) because BRAIN
 // sync/simulate operations routinely take several minutes.
@@ -61,16 +65,17 @@ export function useApi<T = unknown>() {
       setState((prev) => ({ ...prev, loading: true, error: null, lastErrorMeta: null }));
       let controller: AbortController | null = options?.signal ? null : new AbortController();
       let timeout: number | null = controller
-        ? window.setTimeout(() => controller!.abort(), DEFAULT_REQUEST_TIMEOUT_MS)
+        ? window.setTimeout(() => controller.abort(), DEFAULT_REQUEST_TIMEOUT_MS)
         : null;
       try {
-        const method = String(options?.method || "GET").toUpperCase();
-        const request = () => fetch(url, {
-          ...options,
-          credentials: "same-origin",
-          headers: requestHeaders(options, method),
-          signal: options?.signal ?? controller?.signal,
-        });
+        const method = String(options?.method || 'GET').toUpperCase();
+        const request = () =>
+          fetch(url, {
+            ...options,
+            credentials: 'same-origin',
+            headers: requestHeaders(options, method),
+            signal: options?.signal ?? controller?.signal,
+          });
         let res = await request();
         if (!res.ok) {
           const json = await safeJson<R & ApiMeta>(res);
@@ -85,7 +90,7 @@ export function useApi<T = unknown>() {
                 if (controller && !options?.signal) {
                   controller = new AbortController();
                   if (timeout) window.clearTimeout(timeout);
-                  timeout = window.setTimeout(() => controller!.abort(), DEFAULT_REQUEST_TIMEOUT_MS);
+                  timeout = window.setTimeout(() => controller.abort(), DEFAULT_REQUEST_TIMEOUT_MS);
                 }
                 res = await request();
                 if (res.ok) {
@@ -96,17 +101,30 @@ export function useApi<T = unknown>() {
                     return null;
                   }
                   refreshSessionTokens(retryJson);
-                  const retryOk = retryJson.ok !== false && !(
-                    retryJson.ok === undefined &&
-                    Boolean(retryJson.error || retryJson.error_code)
-                  );
+                  const retryOk =
+                    retryJson.ok !== false &&
+                    !(
+                      retryJson.ok === undefined && Boolean(retryJson.error || retryJson.error_code)
+                    );
                   const normalizedRetry = { ...retryJson, ok: retryOk } as R & ApiMeta;
                   if (!retryOk) {
-                    setState({ data: null, loading: false, error: apiErrorMessage(retryJson), lastErrorMeta: retryJson });
+                    setState({
+                      data: null,
+                      loading: false,
+                      error: apiErrorMessage(retryJson),
+                      lastErrorMeta: retryJson,
+                    });
                     return normalizedRetry;
                   }
-                  setState({ data: (("data" in retryJson && retryJson.data !== undefined) ? retryJson.data : retryJson) as T, loading: false, error: null, lastErrorMeta: null });
-                  if (method === "POST") {
+                  setState({
+                    data: ('data' in retryJson && retryJson.data !== undefined
+                      ? retryJson.data
+                      : retryJson) as T,
+                    loading: false,
+                    error: null,
+                    lastErrorMeta: null,
+                  });
+                  if (method === 'POST') {
                     saveResumeState({ lastConnectionOk: true, lastError: null });
                   }
                   return normalizedRetry;
@@ -114,9 +132,17 @@ export function useApi<T = unknown>() {
                 const retryError = await safeJson<R & ApiMeta>(res);
                 if (retryError) {
                   refreshSessionTokens(retryError);
-                  const retryMsg = apiErrorMessage(retryError, `HTTP ${res.status}: ${res.statusText}`);
+                  const retryMsg = apiErrorMessage(
+                    retryError,
+                    `HTTP ${res.status}: ${res.statusText}`
+                  );
                   const normalizedRetryError = { ...retryError, ok: false } as R & ApiMeta;
-                  setState({ data: null, loading: false, error: retryMsg, lastErrorMeta: retryError });
+                  setState({
+                    data: null,
+                    loading: false,
+                    error: retryMsg,
+                    lastErrorMeta: retryError,
+                  });
                   return normalizedRetryError;
                 }
               }
@@ -130,22 +156,30 @@ export function useApi<T = unknown>() {
           setState({ data: null, loading: false, error: msg, lastErrorMeta: null });
           return null;
         }
-        const json = await res.json() as R & ApiMeta;
+        const json = (await res.json()) as R & ApiMeta;
         refreshSessionTokens(json);
-        const ok = json.ok !== false && !(
-          json.ok === undefined &&
-          Boolean(json.error || json.error_code)
-        );
+        const ok =
+          json.ok !== false && !(json.ok === undefined && Boolean(json.error || json.error_code));
         const normalized = { ...json, ok } as R & ApiMeta;
         if (!ok) {
-          setState({ data: null, loading: false, error: apiErrorMessage(json), lastErrorMeta: json });
+          setState({
+            data: null,
+            loading: false,
+            error: apiErrorMessage(json),
+            lastErrorMeta: json,
+          });
           return normalized;
         }
         // SAFETY: json is structurally R & ApiMeta; the backend returns flat JSON.
         // Extract .data if present, otherwise use the whole payload as the data portion.
-        setState({ data: (("data" in json && json.data !== undefined) ? json.data : json) as T, loading: false, error: null, lastErrorMeta: null });
+        setState({
+          data: ('data' in json && json.data !== undefined ? json.data : json) as T,
+          loading: false,
+          error: null,
+          lastErrorMeta: null,
+        });
         // P0-4: persist connection health after every successful POST
-        if (method === "POST") {
+        if (method === 'POST') {
           saveResumeState({ lastConnectionOk: true, lastError: null });
         }
         return normalized;
@@ -159,7 +193,7 @@ export function useApi<T = unknown>() {
         }
       }
     },
-    [],
+    []
   );
 
   const reset = useCallback(() => {
@@ -171,33 +205,33 @@ export function useApi<T = unknown>() {
 
 async function safeJson<R>(res: Response): Promise<R | null> {
   try {
-    return await res.json() as R;
+    return (await res.json()) as R;
   } catch {
     return null;
   }
 }
 
 function refreshSessionTokens(payload: unknown) {
-  if (!payload || typeof payload !== "object") return;
+  if (!payload || typeof payload !== 'object') return;
   const p = payload as { csrf_token?: unknown; stream_token?: unknown };
-  const csrf = typeof p.csrf_token === "string" ? p.csrf_token : "";
-  const stream = typeof p.stream_token === "string" ? p.stream_token : "";
+  const csrf = typeof p.csrf_token === 'string' ? p.csrf_token : '';
+  const stream = typeof p.stream_token === 'string' ? p.stream_token : '';
   if (csrf) setCsrfToken(csrf);
   if (stream) setStreamToken(stream);
 }
 
 function canRecoverSession(url: string, method: string, payload: ApiMeta) {
-  if (url === "/api/session") return false;
-  if (!["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"].includes(method)) return false;
+  if (url === '/api/session') return false;
+  if (!['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) return false;
   return isSessionInvalidPayload(payload);
 }
 
 async function bootstrapSession() {
   try {
-    const res = await fetch("/api/session", {
-      method: "POST",
-      credentials: "same-origin",
-      headers: { "Content-Type": "application/json" },
+    const res = await fetch('/api/session', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
     });
     const json = await safeJson<Record<string, unknown>>(res);
     if (!res.ok || !json || json.ok === false) return false;
@@ -210,20 +244,24 @@ async function bootstrapSession() {
 
 function requestHeaders(options: RequestInit | undefined, method: string): HeadersInit {
   const headers: Record<string, string> = {};
-  if (["POST", "PUT", "PATCH", "DELETE"].includes(method)) {
-    headers["Content-Type"] = "application/json";
+  if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+    headers['Content-Type'] = 'application/json';
     Object.assign(headers, csrfHeaders());
   } else {
     const csrf = csrfToken();
-    if (csrf) headers["X-Brain-Alpha-CSRF"] = csrf;
+    if (csrf) headers['X-Brain-Alpha-CSRF'] = csrf;
   }
   const incoming = options?.headers || {};
   if (incoming instanceof Headers) {
-    incoming.forEach((value, key) => { headers[key] = value; });
+    incoming.forEach((value, key) => {
+      headers[key] = value;
+    });
   } else if (Array.isArray(incoming)) {
-    incoming.forEach(([key, value]) => { headers[key] = String(value); });
+    incoming.forEach(([key, value]) => {
+      headers[key] = String(value);
+    });
   } else {
-    Object.assign(headers, incoming as Record<string, string>);
+    Object.assign(headers, incoming);
   }
   return headers;
 }

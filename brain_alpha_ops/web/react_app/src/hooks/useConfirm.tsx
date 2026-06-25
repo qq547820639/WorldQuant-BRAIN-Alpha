@@ -1,13 +1,13 @@
-import { useCallback, useRef, useState, type FC } from "react";
-import ConfirmDialog from "@/components/ConfirmDialog";
-import type { ConfirmDialogProps } from "@/components/ConfirmDialog";
+import { useCallback, useRef, useState, type FC } from 'react';
+import ConfirmDialog from '@/components/ConfirmDialog';
+import type { ConfirmDialogProps } from '@/components/ConfirmDialog';
 
 export interface ConfirmOptions {
   title: string;
   description?: string;
   confirmText?: string;
   cancelText?: string;
-  variant?: "default" | "danger";
+  variant?: 'default' | 'danger';
 }
 
 export interface UseConfirmReturn {

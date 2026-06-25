@@ -5,7 +5,7 @@
  * under the key "brain_alpha_starred_candidates".
  */
 
-const STORAGE_KEY = "brain_alpha_starred_candidates";
+const STORAGE_KEY = 'brain_alpha_starred_candidates';
 
 /** Read starred alpha_ids from localStorage. Returns a Set of strings. */
 export function getStarred(): Set<string> {
@@ -33,7 +33,9 @@ export function toggleStar(alphaId: string): boolean {
   }
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify([...starred]));
-  } catch { console.warn("starredCandidates: localStorage full or unavailable"); }
+  } catch {
+    console.warn('starredCandidates: localStorage full or unavailable');
+  }
   return !isCurrentlyStarred;
 }
 

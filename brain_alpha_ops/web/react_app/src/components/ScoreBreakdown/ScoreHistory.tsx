@@ -1,6 +1,6 @@
 /** Historical score chart — mini sparkline showing score trends. */
 
-import { useState } from "react";
+import { useState } from 'react';
 
 export interface ScoreHistoryPoint {
   timestamp: string;
@@ -15,7 +15,7 @@ function formatLabel(ts: string): string {
   try {
     const d = new Date(ts);
     if (isNaN(d.getTime())) return ts.slice(0, 5);
-    return `${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    return `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   } catch {
     return ts.slice(0, 5);
   }
@@ -32,13 +32,9 @@ export default function ScoreHistory({ history }: Props) {
   const range = maxScore - minScore || 1;
 
   const trend = scores[scores.length - 1] - scores[0];
-  const trendIcon = trend > 0 ? "▲" : trend < 0 ? "▼" : "─";
+  const trendIcon = trend > 0 ? '▲' : trend < 0 ? '▼' : '─';
   const trendColor =
-    trend > 0
-      ? "text-positive"
-      : trend < 0
-        ? "text-negative"
-        : "text-text-tertiary";
+    trend > 0 ? 'text-positive' : trend < 0 ? 'text-negative' : 'text-text-tertiary';
 
   return (
     <>
@@ -56,11 +52,8 @@ export default function ScoreHistory({ history }: Props) {
               {trendIcon} {Math.abs(trend).toFixed(1)}
             </span>
           </span>
-          <span
-            className="scorebreakdown-history-chevron"
-            aria-hidden="true"
-          >
-            {expanded ? "▾" : "▸"}
+          <span className="scorebreakdown-history-chevron" aria-hidden="true">
+            {expanded ? '▾' : '▸'}
           </span>
         </button>
 
@@ -71,8 +64,7 @@ export default function ScoreHistory({ history }: Props) {
               aria-label={`评分历史趋势，共 ${points.length} 个数据点`}
             >
               {points.map((point, i) => {
-                const heightPct =
-                  ((point.totalScore - minScore) / range) * 100;
+                const heightPct = ((point.totalScore - minScore) / range) * 100;
                 return (
                   <div
                     key={`${point.timestamp}-${i}`}
@@ -110,13 +102,9 @@ export default function ScoreHistory({ history }: Props) {
         )}
 
         {!expanded && (
-          <div
-            className="scorebreakdown-sparkline-inline"
-            aria-hidden="true"
-          >
+          <div className="scorebreakdown-sparkline-inline" aria-hidden="true">
             {points.map((point, i) => {
-              const heightPct =
-                ((point.totalScore - minScore) / range) * 100;
+              const heightPct = ((point.totalScore - minScore) / range) * 100;
               return (
                 <div
                   key={i}

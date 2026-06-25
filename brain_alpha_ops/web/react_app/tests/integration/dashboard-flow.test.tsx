@@ -331,7 +331,7 @@ describe("Dashboard 流程集成测试", () => {
     const reportButton = await screen.findByText("📋 生成报告");
     await user.click(reportButton);
 
-    expect(screen.getByRole("dialog", { name: "工作日报" })).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: /工作日报/ })).toBeInTheDocument();
   });
 
   it("测试报告生成 - 模态框有复制按钮", async () => {

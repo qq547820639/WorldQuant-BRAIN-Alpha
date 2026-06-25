@@ -1,8 +1,8 @@
-import { memo } from "react";
+import { memo } from 'react';
 
 /** Operation log display component. */
 
-import { type OperationLogEntry, logTone, logDotTone } from "./utils";
+import { type OperationLogEntry, logTone, logDotTone } from './utils';
 
 interface Props {
   logs: OperationLogEntry[];
@@ -23,16 +23,26 @@ function OperationLog({ logs, onClear }: Props) {
           </button>
         )}
       </div>
-      <div className="mt-3 max-h-40 min-w-0 overflow-y-auto rounded-md border border-border-subtle bg-[var(--color-surface-elevated)] p-3 text-sm leading-6 text-text-secondary" role="status" aria-live="polite" aria-label="官方操作时间线">
-        {logs.length ? logs.map((entry, index) => (
-          <div key={`${entry.time}_${index}`} className="grid grid-cols-[auto_minmax(0,1fr)] gap-3 border-l border-border-subtle pb-3 pl-3 last:pb-0">
-            <span className={`mt-1 ${logDotTone(entry.tone)}`} aria-hidden="true" />
-            <div className="min-w-0">
-              <p className="text-xs text-text-tertiary">{entry.time}</p>
-              <p className={`break-words ${logTone(entry.tone)}`}>{entry.message}</p>
+      <div
+        className="mt-3 max-h-40 min-w-0 overflow-y-auto rounded-md border border-border-subtle bg-[var(--color-surface-elevated)] p-3 text-sm leading-6 text-text-secondary"
+        role="status"
+        aria-live="polite"
+        aria-label="官方操作时间线"
+      >
+        {logs.length ? (
+          logs.map((entry, index) => (
+            <div
+              key={`${entry.time}_${index}`}
+              className="grid grid-cols-[auto_minmax(0,1fr)] gap-3 border-l border-border-subtle pb-3 pl-3 last:pb-0"
+            >
+              <span className={`mt-1 ${logDotTone(entry.tone)}`} aria-hidden="true" />
+              <div className="min-w-0">
+                <p className="text-xs text-text-tertiary">{entry.time}</p>
+                <p className={`break-words ${logTone(entry.tone)}`}>{entry.message}</p>
+              </div>
             </div>
-          </div>
-        )) : (
+          ))
+        ) : (
           <div className="text-text-tertiary">事件已清空。</div>
         )}
       </div>

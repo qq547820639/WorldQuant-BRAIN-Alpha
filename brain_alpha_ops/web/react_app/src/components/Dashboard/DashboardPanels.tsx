@@ -27,11 +27,7 @@ export function MemoryPanel({ title, items }: { title: string; items?: MemoryIte
   );
 }
 
-export function FailurePatternsPanel({
-  items,
-}: {
-  items?: { reason: string; count: number }[];
-}) {
+export function FailurePatternsPanel({ items }: { items?: { reason: string; count: number }[] }) {
   return (
     <div className="panel">
       <div className="panel-header">

@@ -38,7 +38,7 @@ describe("Sidebar", () => {
 
   it("renders all navigation sections", () => {
     render(<Sidebar activeView="dashboard" onNavigate={onNavigate} phases={phaseGroups()} />);
-    expect(screen.getByText("Alpha Ops")).toBeInTheDocument();
+    expect(screen.getByText("BRAIN Alpha Ops")).toBeInTheDocument();
     expect(screen.getByText("准备与就绪")).toBeInTheDocument();
     expect(screen.getByText("候选发现")).toBeInTheDocument();
     expect(screen.getByText("评估与验证")).toBeInTheDocument();

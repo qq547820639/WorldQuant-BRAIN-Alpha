@@ -1,8 +1,5 @@
-import type {
-  CandidateListMeta,
-  CandidateQueueView,
-} from "@/types";
-import { queueViewLabel } from "./CandidateTableUtils";
+import type { CandidateListMeta, CandidateQueueView } from '@/types';
+import { queueViewLabel } from './CandidateTableUtils';
 
 export interface ToolbarTitleStatsProps {
   title: string;
@@ -43,20 +40,20 @@ export function ToolbarTitleStats({
     <>
       <h1 className="text-xl font-medium text-text-primary mb-1">{title}</h1>
       <p className="text-sm text-text-tertiary mb-4" role="status" aria-live="polite">
-        {viewMode === "candidates"
+        {viewMode === 'candidates'
           ? `主池 ${retainedCount}/${targetPoolSize} · 可推进 ${poolEligibleCount} · 历史 ${rawQueueCount}`
           : `显示 ${sortedCount} / ${rawQueueCount} 个候选`}
         {candidateMeta.total > 0 && ` · 已返回 ${candidateMeta.returned}/${candidateMeta.total}`}
-        {viewMode !== "candidates" && ` · ${queueViewLabel(viewMode)}`}
-        {filter && " · 已过滤"}
+        {viewMode !== 'candidates' && ` · ${queueViewLabel(viewMode)}`}
+        {filter && ' · 已过滤'}
       </p>
 
       {selectedCount > 0 && (
         <div
           className="mb-4 px-3 py-2 rounded-md flex flex-wrap items-center gap-3"
           style={{
-            background: "var(--color-batch-select-bg)",
-            border: "1px solid var(--color-batch-select-border)",
+            background: 'var(--color-batch-select-bg)',
+            border: '1px solid var(--color-batch-select-border)',
           }}
           role="status"
           aria-live="polite"
@@ -91,11 +88,7 @@ export function ToolbarTitleStats({
           >
             批量补模拟
           </button>
-          <button
-            type="button"
-            className="btn btn-ghost btn-sm"
-            onClick={onClearSelection}
-          >
+          <button type="button" className="btn btn-ghost btn-sm" onClick={onClearSelection}>
             取消选择
           </button>
         </div>

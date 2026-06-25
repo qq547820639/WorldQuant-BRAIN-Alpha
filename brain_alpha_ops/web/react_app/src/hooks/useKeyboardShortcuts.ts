@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useRef } from "react";
+import { useEffect, useCallback, useRef } from 'react';
 
 export interface Shortcut {
   key: string;
@@ -29,7 +29,7 @@ function isEditableElement(target: EventTarget | null): boolean {
   }
   if (target.isContentEditable) return true;
   const tagName = target.tagName.toLowerCase();
-  if (tagName === "input" || tagName === "textarea" || tagName === "select") {
+  if (tagName === 'input' || tagName === 'textarea' || tagName === 'select') {
     return true;
   }
   return false;
@@ -37,7 +37,7 @@ function isEditableElement(target: EventTarget | null): boolean {
 
 function focusFirstSearchInput(): boolean {
   const searchInput = document.querySelector<HTMLInputElement>(
-    'input[type="search"], input[placeholder*="搜索"], input[placeholder*="search"], input[aria-label*="搜索"], input[aria-label*="search"]',
+    'input[type="search"], input[placeholder*="搜索"], input[placeholder*="search"], input[aria-label*="搜索"], input[aria-label*="search"]'
   );
   if (searchInput) {
     searchInput.focus();
@@ -76,28 +76,28 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions) {
 
       const key = e.key.toLowerCase();
 
-      if (key === "escape") {
+      if (key === 'escape') {
         e.preventDefault();
         resetSequence();
         options.onEscape?.();
         return;
       }
 
-      if (key === "?" || (e.shiftKey && key === "/")) {
+      if (key === '?' || (e.shiftKey && key === '/')) {
         e.preventDefault();
         resetSequence();
         options.onShowHelp?.();
         return;
       }
 
-      if (sequencePrefixRef.current === "g") {
-        if (key === "d") {
+      if (sequencePrefixRef.current === 'g') {
+        if (key === 'd') {
           e.preventDefault();
           resetSequence();
           options.onNavigateToDashboard?.();
           return;
         }
-        if (key === "c") {
+        if (key === 'c') {
           e.preventDefault();
           resetSequence();
           options.onNavigateToConfig?.();
@@ -106,25 +106,24 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions) {
         resetSequence();
       }
 
-      if (key === "g") {
+      if (key === 'g') {
         e.preventDefault();
-        sequencePrefixRef.current = "g";
+        sequencePrefixRef.current = 'g';
         startSequenceTimer();
         return;
       }
 
-      if (key === "/") {
+      if (key === '/') {
         e.preventDefault();
         resetSequence();
-        const handled =
-          options.onSearchFocus !== undefined ? false : focusFirstSearchInput();
+        const handled = options.onSearchFocus !== undefined ? false : focusFirstSearchInput();
         if (!handled) {
           options.onSearchFocus?.();
         }
         return;
       }
 
-      if (key === "r" && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      if (key === 'r' && !e.ctrlKey && !e.metaKey && !e.altKey) {
         e.preventDefault();
         resetSequence();
         options.onRefresh?.();
@@ -133,13 +132,13 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions) {
 
       resetSequence();
     },
-    [options, resetSequence, startSequenceTimer],
+    [options, resetSequence, startSequenceTimer]
   );
 
   useEffect(() => {
-    document.addEventListener("keydown", handleKeyDown);
+    document.addEventListener('keydown', handleKeyDown);
     return () => {
-      document.removeEventListener("keydown", handleKeyDown);
+      document.removeEventListener('keydown', handleKeyDown);
       clearSequenceTimer();
     };
   }, [handleKeyDown, clearSequenceTimer]);
@@ -151,33 +150,33 @@ export const SHORTCUTS_LIST: Array<{
   category: string;
 }> = [
   {
-    keys: ["/"],
-    description: "聚焦搜索框",
-    category: "导航",
+    keys: ['/'],
+    description: '聚焦搜索框',
+    category: '导航',
   },
   {
-    keys: ["g", "d"],
-    description: "跳转到运行总览",
-    category: "导航",
+    keys: ['g', 'd'],
+    description: '跳转到运行总览',
+    category: '导航',
   },
   {
-    keys: ["g", "c"],
-    description: "跳转到系统配置",
-    category: "导航",
+    keys: ['g', 'c'],
+    description: '跳转到系统配置',
+    category: '导航',
   },
   {
-    keys: ["r"],
-    description: "刷新数据",
-    category: "操作",
+    keys: ['r'],
+    description: '刷新数据',
+    category: '操作',
   },
   {
-    keys: ["?"],
-    description: "显示快捷键帮助",
-    category: "帮助",
+    keys: ['?'],
+    description: '显示快捷键帮助',
+    category: '帮助',
   },
   {
-    keys: ["Esc"],
-    description: "关闭对话框 / 取消操作",
-    category: "操作",
+    keys: ['Esc'],
+    description: '关闭对话框 / 取消操作',
+    category: '操作',
   },
 ];

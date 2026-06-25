@@ -1,4 +1,4 @@
-import type { BlockerAction } from "./constants";
+import type { BlockerAction } from './constants';
 
 export function BlockerActionButton({
   action,
@@ -7,7 +7,7 @@ export function BlockerActionButton({
   action: BlockerAction;
   onNavigate?: (view: string) => void;
 }) {
-  if (action.action_type === "external_link" && action.url) {
+  if (action.action_type === 'external_link' && action.url) {
     return (
       <a
         href={action.url}
@@ -20,20 +20,18 @@ export function BlockerActionButton({
       </a>
     );
   }
-  if (action.action_type === "navigate" && onNavigate && action.view) {
+  if (action.action_type === 'navigate' && onNavigate && action.view) {
     return (
       <button
         type="button"
         className="btn btn-secondary text-xs shrink-0"
-        onClick={() => onNavigate(action.view!)}
+        onClick={() => onNavigate(action.view)}
       >
         {action.label}
       </button>
     );
   }
-  return (
-    <span className="text-xs text-text-tertiary shrink-0">{action.label}</span>
-  );
+  return <span className="text-xs text-text-tertiary shrink-0">{action.label}</span>;
 }
 
 export function BlockerGuidanceList({

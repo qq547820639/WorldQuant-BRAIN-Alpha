@@ -1,16 +1,26 @@
 /** Reusable form field components for ConfigPanel. */
 
-import type { ReactNode } from "react";
-import { useEffect, useState } from "react";
-import { normalizeSelectOptions, parseNumber, type SelectOption } from "./utils";
+import type { ReactNode } from 'react';
+import { useEffect, useState } from 'react';
+import { normalizeSelectOptions, parseNumber, type SelectOption } from './utils';
 
-const inputClass = "form-input";
+const inputClass = 'form-input';
 
-export function ConfigSection({ title, description, children }: { title: string; description?: string; children: ReactNode }) {
+export function ConfigSection({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description?: string;
+  children: ReactNode;
+}) {
   return (
     <fieldset className="panel min-w-0">
       <legend className="px-1 text-base font-semibold text-text-primary">{title}</legend>
-      {description ? <p className="mt-2 max-w-3xl text-sm leading-6 text-text-secondary">{description}</p> : null}
+      {description ? (
+        <p className="mt-2 max-w-3xl text-sm leading-6 text-text-secondary">{description}</p>
+      ) : null}
       <div className="mt-4 grid grid-cols-1 gap-x-5 gap-y-4 md:grid-cols-2">{children}</div>
     </fieldset>
   );
@@ -28,7 +38,7 @@ export function TextField({
   value: string;
   maxLength?: number;
   autoComplete?: string;
-  inputMode?: "email" | "text";
+  inputMode?: 'email' | 'text';
   onChange: (value: string) => void;
 }) {
   return (
@@ -51,7 +61,7 @@ export function PasswordField({
   label,
   value,
   maxLength,
-  autoComplete = "new-password",
+  autoComplete = 'new-password',
   onChange,
 }: {
   label: string;
@@ -121,10 +131,13 @@ export function NumberField({
 
   return (
     <label className="form-label">
-      <span className="block mb-1">{label}{help}</span>
+      <span className="block mb-1">
+        {label}
+        {help}
+      </span>
       <input
         type="number"
-        value={Number.isFinite(localValue) ? localValue : ""}
+        value={Number.isFinite(localValue) ? localValue : ''}
         min={min}
         max={max}
         step={step}
@@ -153,16 +166,35 @@ export function SelectField({
   const choices = normalizeSelectOptions(options);
   return (
     <label className="form-label">
-      <span className="block mb-1">{label}{help}</span>
-      <select value={value} onChange={(event) => onChange(event.currentTarget.value)} className={inputClass}>
+      <span className="block mb-1">
+        {label}
+        {help}
+      </span>
+      <select
+        value={value}
+        onChange={(event) => onChange(event.currentTarget.value)}
+        className={inputClass}
+      >
         {placeholder ? <option value="">{placeholder}</option> : null}
-        {choices.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+        {choices.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
       </select>
     </label>
   );
 }
 
-export function CheckboxField({ label, checked, onChange }: { label: string; checked: boolean; onChange: (value: boolean) => void }) {
+export function CheckboxField({
+  label,
+  checked,
+  onChange,
+}: {
+  label: string;
+  checked: boolean;
+  onChange: (value: boolean) => void;
+}) {
   return (
     <label
       className="flex items-center justify-between gap-3 py-2 text-sm font-medium text-text-secondary"
@@ -187,7 +219,9 @@ export function ConfigValue({ label, value }: { label: string; value: unknown })
       style={{ borderBottom: '1px solid', borderBottomColor: 'var(--color-border-default)' }}
     >
       <span className="text-text-secondary">{label}</span>
-      <span className="min-w-0 break-all font-mono-value text-text-primary">{String(value ?? "-")}</span>
+      <span className="min-w-0 break-all font-mono-value text-text-primary">
+        {String(value ?? '-')}
+      </span>
     </div>
   );
 }

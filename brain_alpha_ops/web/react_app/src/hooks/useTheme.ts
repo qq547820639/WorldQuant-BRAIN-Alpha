@@ -1,23 +1,23 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback } from 'react';
 
-const THEME_STORAGE_KEY = "brain-alpha-ops-theme";
+const THEME_STORAGE_KEY = 'brain-alpha-ops-theme';
 
-export type Theme = "light" | "dark";
+export type Theme = 'light' | 'dark';
 
 function getInitialTheme(): Theme {
-  if (typeof window === "undefined") return "dark";
+  if (typeof window === 'undefined') return 'dark';
 
   try {
     const stored = localStorage.getItem(THEME_STORAGE_KEY);
-    if (stored === "light" || stored === "dark") {
+    if (stored === 'light' || stored === 'dark') {
       return stored;
     }
   } catch {
     // ignore
   }
 
-  const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-  return prefersDark ? "dark" : "light";
+  const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  return prefersDark ? 'dark' : 'light';
 }
 
 export function useTheme() {
@@ -25,7 +25,7 @@ export function useTheme() {
 
   useEffect(() => {
     const root = document.documentElement;
-    root.classList.toggle("dark", theme === "dark");
+    root.classList.toggle('dark', theme === 'dark');
 
     try {
       localStorage.setItem(THEME_STORAGE_KEY, theme);
@@ -35,22 +35,22 @@ export function useTheme() {
   }, [theme]);
 
   useEffect(() => {
-    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
 
     const handleChange = (e: MediaQueryListEvent) => {
       try {
         const stored = localStorage.getItem(THEME_STORAGE_KEY);
-        if (stored === "light" || stored === "dark") {
+        if (stored === 'light' || stored === 'dark') {
           return;
         }
       } catch {
         // ignore
       }
-      setThemeState(e.matches ? "dark" : "light");
+      setThemeState(e.matches ? 'dark' : 'light');
     };
 
-    mediaQuery.addEventListener("change", handleChange);
-    return () => mediaQuery.removeEventListener("change", handleChange);
+    mediaQuery.addEventListener('change', handleChange);
+    return () => mediaQuery.removeEventListener('change', handleChange);
   }, []);
 
   const setTheme = useCallback((nextTheme: Theme) => {
@@ -58,13 +58,13 @@ export function useTheme() {
   }, []);
 
   const toggleTheme = useCallback(() => {
-    setThemeState((prev) => (prev === "dark" ? "light" : "dark"));
+    setThemeState((prev) => (prev === 'dark' ? 'light' : 'dark'));
   }, []);
 
   return {
     theme,
     setTheme,
     toggleTheme,
-    isDark: theme === "dark",
+    isDark: theme === 'dark',
   };
 }

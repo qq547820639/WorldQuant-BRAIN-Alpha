@@ -1,25 +1,25 @@
-import { useEffect, useState, useRef } from "react";
-import { useApi } from "@/hooks/useApi";
-import { useGlobalData } from "@/hooks/useGlobalData";
-import type { JobStatus, ResearchMemorySummary, TrendApiResponse } from "@/types";
-import type { TrendData } from "@/components/TrendPanel";
-import { safeDisplayErrorMessage } from "@/helpers/errorExperience";
-import { saveResumeState } from "@/utils/resumeState";
+import { useEffect, useState, useRef } from 'react';
+import { useApi } from '@/hooks/useApi';
+import { useGlobalData } from '@/hooks/useGlobalData';
+import type { JobStatus, ResearchMemorySummary, TrendApiResponse } from '@/types';
+import type { TrendData } from '@/components/TrendPanel';
+import { safeDisplayErrorMessage } from '@/helpers/errorExperience';
+import { saveResumeState } from '@/utils/resumeState';
 import {
   loadTrendData,
   appendTrendPoint,
   syncTrendToBackend,
   TREND_KEY,
-} from "@/components/DashboardTrendData";
+} from '@/components/DashboardTrendData';
 import {
   cloudSnapshotSummary,
   cloudSnapshotPreviewRows,
-} from "@/components/DashboardCloudSnapshot";
+} from '@/components/DashboardCloudSnapshot';
 
 interface UseDashboardOptions {
   connected: boolean;
   contextFresh: boolean;
-  phaseStatus?: "loading" | "error" | "ready";
+  phaseStatus?: 'loading' | 'error' | 'ready';
   onNavigateToSync: () => void;
   onOpenSync?: () => void;
   jobRunning?: boolean;
@@ -28,22 +28,22 @@ interface UseDashboardOptions {
 export function useDashboard({
   connected,
   contextFresh,
-  phaseStatus = "ready",
+  phaseStatus = 'ready',
   onNavigateToSync,
   onOpenSync,
   jobRunning = false,
 }: UseDashboardOptions) {
   const [snapshotExpanded, setSnapshotExpanded] = useState(false);
   const [showReport, setShowReport] = useState(false);
-  const [reportMarkdown, setReportMarkdown] = useState("");
+  const [reportMarkdown, setReportMarkdown] = useState('');
   const [trendCandidates, setTrendCandidates] = useState<TrendData[]>(() =>
-    loadTrendData(TREND_KEY.CANDIDATES),
+    loadTrendData(TREND_KEY.CANDIDATES)
   );
   const [trendSubmissions, setTrendSubmissions] = useState<TrendData[]>(() =>
-    loadTrendData(TREND_KEY.SUBMISSIONS),
+    loadTrendData(TREND_KEY.SUBMISSIONS)
   );
   const [showGuide, setShowGuide] = useState(
-    () => !localStorage.getItem("brain_alpha_guide_dismissed"),
+    () => !localStorage.getItem('brain_alpha_guide_dismissed')
   );
 
   const statusApi = useApi<JobStatus>();
@@ -59,38 +59,32 @@ export function useDashboard({
   const prevJobRunningRef = useRef(jobRunning);
 
   const errors = [
-    statusApi.error ? `Status: ${safeDisplayErrorMessage(statusApi.error)}` : "",
-    cloudGlobal.error ? `Cloud: ${safeDisplayErrorMessage(cloudGlobal.error)}` : "",
-    memoryApi.error ? `Memory: ${safeDisplayErrorMessage(memoryApi.error)}` : "",
+    statusApi.error ? `Status: ${safeDisplayErrorMessage(statusApi.error)}` : '',
+    cloudGlobal.error ? `Cloud: ${safeDisplayErrorMessage(cloudGlobal.error)}` : '',
+    memoryApi.error ? `Memory: ${safeDisplayErrorMessage(memoryApi.error)}` : '',
   ].filter(Boolean);
 
   const loading = statusApi.loading || cloudGlobal.loading || memoryApi.loading;
 
-  const phasePending = phaseStatus === "loading";
-  const phaseFailed = phaseStatus === "error";
-  const currentStep = phasePending || phaseFailed
-    ? 1
-    : !contextFresh
-      ? !connected
-        ? 1
-        : 2
-      : 3;
+  const phasePending = phaseStatus === 'loading';
+  const phaseFailed = phaseStatus === 'error';
+  const currentStep = phasePending || phaseFailed ? 1 : !contextFresh ? (!connected ? 1 : 2) : 3;
   const stepLabel = phasePending
-    ? "读取本地状态"
+    ? '读取本地状态'
     : phaseFailed
-      ? "状态读取失败"
+      ? '状态读取失败'
       : currentStep === 1
-        ? "连接 BRAIN"
+        ? '连接 BRAIN'
         : currentStep === 2
-          ? "准备本地缓存"
+          ? '准备本地缓存'
           : connected
-            ? "开始验证"
-            : "缓存模式";
+            ? '开始验证'
+            : '缓存模式';
   const openManualSync = onOpenSync || onNavigateToSync;
 
   useEffect(() => {
-    statusApi.call("/api/production-validation/status");
-    memoryApi.call("/api/snapshot/memory?limit=100&top_n=5");
+    statusApi.call('/api/production-validation/status');
+    memoryApi.call('/api/snapshot/memory?limit=100&top_n=5');
   }, [statusApi.call, memoryApi.call]);
 
   useEffect(() => {
@@ -111,16 +105,16 @@ export function useDashboard({
     let cancelled = false;
     async function fetchTrends() {
       try {
-        const res = await fetch("/api/trends?days=30");
+        const res = await fetch('/api/trends?days=30');
         if (!res.ok) return;
         const json = (await res.json()) as TrendApiResponse;
-        if (!json || typeof json !== "object" || !json.ok) return;
+        if (!json || typeof json !== 'object' || !json.ok) return;
         const data = json.data;
         if (!Array.isArray(data) || data.length === 0) return;
         const candidatesPoints: TrendData[] = [];
         const submissionsPoints: TrendData[] = [];
         for (const row of data) {
-          const date = typeof row.date === "string" ? row.date : "";
+          const date = typeof row.date === 'string' ? row.date : '';
           const c = Number(row.candidates);
           const s = Number(row.submissions);
           if (date && Number.isFinite(c)) {
@@ -132,11 +126,10 @@ export function useDashboard({
         }
         if (!cancelled) {
           if (candidatesPoints.length > 0) setTrendCandidates(candidatesPoints.slice(-7));
-          if (submissionsPoints.length > 0)
-            setTrendSubmissions(submissionsPoints.slice(-7));
+          if (submissionsPoints.length > 0) setTrendSubmissions(submissionsPoints.slice(-7));
         }
       } catch {
-        console.warn("Dashboard: API unavailable, fallback to localStorage");
+        console.warn('Dashboard: API unavailable, fallback to localStorage');
       }
     }
     fetchTrends();
@@ -156,12 +149,8 @@ export function useDashboard({
       const updated = appendTrendPoint(TREND_KEY.SUBMISSIONS, submissions);
       setTrendSubmissions(updated);
     }
-    const syncCandidates = (memory?.total_candidates ??
-      status?.progress?.candidates_generated ??
-      0) as number;
-    const syncSubmissions = (status?.progress?.submissions ??
-      cloudSummaryData?.submitted_count ??
-      0) as number;
+    const syncCandidates = memory?.total_candidates ?? status?.progress?.candidates_generated ?? 0;
+    const syncSubmissions = status?.progress?.submissions ?? cloudSummaryData?.submitted_count ?? 0;
     const syncCycles = (status?.progress?.completed_cycles ?? 0) as number;
     if (syncCandidates > 0 || syncSubmissions > 0) {
       syncTrendToBackend(syncCandidates, syncSubmissions, syncCycles);
@@ -186,12 +175,10 @@ export function useDashboard({
         const updated = appendTrendPoint(TREND_KEY.SUBMISSIONS, submissions);
         setTrendSubmissions(updated);
       }
-      const syncCandidates = (memory?.total_candidates ??
-        status?.progress?.candidates_generated ??
-        0) as number;
-      const syncSubmissions = (status?.progress?.submissions ??
-        cloudSummaryData?.submitted_count ??
-        0) as number;
+      const syncCandidates =
+        memory?.total_candidates ?? status?.progress?.candidates_generated ?? 0;
+      const syncSubmissions =
+        status?.progress?.submissions ?? cloudSummaryData?.submitted_count ?? 0;
       const syncCycles = (status?.progress?.completed_cycles ?? 0) as number;
       if (syncCandidates > 0 || syncSubmissions > 0) {
         syncTrendToBackend(syncCandidates, syncSubmissions, syncCycles);
@@ -202,18 +189,18 @@ export function useDashboard({
   }, [jobRunning]);
 
   const retryAll = () => {
-    statusApi.call("/api/production-validation/status");
-    memoryApi.call("/api/snapshot/memory?limit=100&top_n=5");
+    statusApi.call('/api/production-validation/status');
+    memoryApi.call('/api/snapshot/memory?limit=100&top_n=5');
     refreshAll();
   };
 
   const dismissGuide = () => {
-    localStorage.setItem("brain_alpha_guide_dismissed", "1");
+    localStorage.setItem('brain_alpha_guide_dismissed', '1');
     setShowGuide(false);
   };
 
   const toggleGuide = () => {
-    localStorage.removeItem("brain_alpha_guide_dismissed");
+    localStorage.removeItem('brain_alpha_guide_dismissed');
     setShowGuide(true);
   };
 

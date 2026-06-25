@@ -5,7 +5,7 @@
  * This keeps App.tsx focused on rendering and layout.
  */
 
-import { useState, useCallback, useRef, useEffect, useMemo } from "react";
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import type {
   BrainCredentials,
   Candidate,
@@ -13,17 +13,17 @@ import type {
   PhaseData,
   PhaseId,
   PhaseGroup,
-} from "@/types";
-import { useApi } from "@/hooks/useApi";
-import type { ApiMeta } from "@/hooks/useApi";
-import { nextActionLabel, safeDisplayErrorMessage } from "@/helpers/errorExperience";
-import { useToast } from "@/hooks/useToast";
-import { useJobState } from "@/hooks/useJobState";
-import { usePhaseState, type PhaseApiStatus } from "@/hooks/usePhaseState";
-import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
-import { reportIgnoredError } from "@/utils/reportIgnoredError";
-import { useGlobalData } from "@/hooks/useGlobalData";
-import { formatBacktestBadge, formatCloudBadge, cloudBadgeTotal } from "@/components/views/helpers";
+} from '@/types';
+import { useApi } from '@/hooks/useApi';
+import type { ApiMeta } from '@/hooks/useApi';
+import { nextActionLabel, safeDisplayErrorMessage } from '@/helpers/errorExperience';
+import { useToast } from '@/hooks/useToast';
+import { useJobState } from '@/hooks/useJobState';
+import { usePhaseState, type PhaseApiStatus } from '@/hooks/usePhaseState';
+import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
+import { reportIgnoredError } from '@/utils/reportIgnoredError';
+import { useGlobalData } from '@/hooks/useGlobalData';
+import { formatBacktestBadge, formatCloudBadge, cloudBadgeTotal } from '@/components/views/helpers';
 
 interface SidebarBadges {
   candidates?: number;
@@ -43,8 +43,13 @@ export interface AppState {
   connectionOverride: boolean | null;
   connectionError: string | null;
   officialOpsAutoStart: boolean;
-  toasts: ReturnType<typeof useToast>["toasts"];
-  notify: (type: "success" | "error" | "warning" | "info", msg: string, action?: { label: string; onClick: () => void }, secondaryAction?: { label: string; onClick: () => void }) => void;
+  toasts: ReturnType<typeof useToast>['toasts'];
+  notify: (
+    type: 'success' | 'error' | 'warning' | 'info',
+    msg: string,
+    action?: { label: string; onClick: () => void },
+    secondaryAction?: { label: string; onClick: () => void }
+  ) => void;
   dismissToast: (id: string) => void;
   jobState: ReturnType<typeof useJobState>;
   globalData: ReturnType<typeof useGlobalData>;
@@ -58,8 +63,8 @@ export interface AppState {
   scoredCount: number;
   readinessPassed: boolean;
   managedCredentialsAvailable: boolean;
-  phaseState: ReturnType<typeof usePhaseState>["phaseState"];
-  steps: ReturnType<typeof usePhaseState>["steps"];
+  phaseState: ReturnType<typeof usePhaseState>['phaseState'];
+  steps: ReturnType<typeof usePhaseState>['steps'];
   currentPhase: PhaseId;
   sidebarPhases: PhaseGroup[];
   sidebarBadges: SidebarBadges;
@@ -79,23 +84,33 @@ export interface AppState {
   handleOfficialReconnectRequested: () => void;
   handleCandidatePoolUpdated: () => void;
   handleLocalSessionLoggedOut: () => void;
-  handleMobileNavigate: (target: PhaseId | "tools") => void;
+  handleMobileNavigate: (target: PhaseId | 'tools') => void;
   openScoring: (candidate: Candidate) => void;
 }
 
 export function useAppState(): AppState {
-  const [activeView, setActiveView] = useState<CardViewId>("dashboard");
+  const [activeView, setActiveView] = useState<CardViewId>('dashboard');
   const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null);
-  const [credentials, setCredentials] = useState<BrainCredentials>({ username: "", password: "", token: "" });
+  const [credentials, setCredentials] = useState<BrainCredentials>({
+    username: '',
+    password: '',
+    token: '',
+  });
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [expandedPhases, setExpandedPhases] = useState<Set<string>>(new Set(["connect"]));
+  const [expandedPhases, setExpandedPhases] = useState<Set<string>>(new Set(['connect']));
   const [shortcutsHelpOpen, setShortcutsHelpOpen] = useState(false);
   const { toasts, addToast, dismissToast } = useToast();
 
   const notify = useCallback(
-    (type: "success" | "error" | "warning" | "info", msg: string, action?: { label: string; onClick: () => void }, secondaryAction?: { label: string; onClick: () => void }) => {
+    (
+      type: 'success' | 'error' | 'warning' | 'info',
+      msg: string,
+      action?: { label: string; onClick: () => void },
+      secondaryAction?: { label: string; onClick: () => void }
+    ) => {
       addToast(type, msg, 5000, action, secondaryAction);
-    }, [addToast],
+    },
+    [addToast]
   );
 
   const jobState = useJobState(notify, credentials);
@@ -113,55 +128,97 @@ export function useAppState(): AppState {
   const phaseApi = useApi<PhaseData>();
 
   useEffect(() => {
-    void phaseApi.call("/api/phase_state");
+    void phaseApi.call('/api/phase_state');
     const interval = setInterval(() => {
-      void phaseApi.call("/api/phase_state");
+      void phaseApi.call('/api/phase_state');
     }, 10_000);
     return () => clearInterval(interval);
   }, [phaseApi.call]);
 
-  const buildAction = useCallback((meta: ApiMeta | null, retryFn: () => void) => {
-    const nextAction = meta?.user_error?.next_action || meta?.next_action;
-    const label = meta?.user_error?.action_label || nextActionLabel(nextAction);
-    if (!nextAction || !label) return undefined;
-    switch (nextAction) {
-      case "reconnect_session":
-        return { label, onClick: () => handleOfficialReconnectRequested() };
-      case "refresh_cache":
-        return { label, onClick: () => { globalData.refreshAll(); void phaseApi.call("/api/phase_state"); } };
-      case "wait_and_retry":
-        return { label, onClick: () => { notify("info", "5 秒后将自动重试…"); setTimeout(() => retryFn(), 5000); } };
-      case "check_config":
-        return { label, onClick: () => setActiveView("config") };
-      default:
-        return { label, onClick: () => retryFn() };
-    }
-  }, [globalData, phaseApi.call, notify]);
+  const buildAction = useCallback(
+    (meta: ApiMeta | null, retryFn: () => void) => {
+      const nextAction = meta?.user_error?.next_action || meta?.next_action;
+      const label = meta?.user_error?.action_label || nextActionLabel(nextAction);
+      if (!nextAction || !label) return undefined;
+      switch (nextAction) {
+        case 'reconnect_session':
+          return { label, onClick: () => handleOfficialReconnectRequested() };
+        case 'refresh_cache':
+          return {
+            label,
+            onClick: () => {
+              globalData.refreshAll();
+              void phaseApi.call('/api/phase_state');
+            },
+          };
+        case 'wait_and_retry':
+          return {
+            label,
+            onClick: () => {
+              notify('info', '5 秒后将自动重试…');
+              setTimeout(() => retryFn(), 5000);
+            },
+          };
+        case 'check_config':
+          return { label, onClick: () => setActiveView('config') };
+        default:
+          return { label, onClick: () => retryFn() };
+      }
+    },
+    [globalData, phaseApi.call, notify]
+  );
 
   useEffect(() => {
     const gd = globalData;
     if (gd.candidates.error && gd.candidates.error !== lastCandidatesErrorRef.current) {
       lastCandidatesErrorRef.current = gd.candidates.error;
-      notify("warning", `候选数据加载失败: ${safeDisplayErrorMessage(gd.candidates.error)}`, buildAction(gd.candidates.lastErrorMeta, () => { gd.refreshAll(); }));
+      notify(
+        'warning',
+        `候选数据加载失败: ${safeDisplayErrorMessage(gd.candidates.error)}`,
+        buildAction(gd.candidates.lastErrorMeta, () => {
+          gd.refreshAll();
+        })
+      );
     }
     if (gd.slots.error && gd.slots.error !== lastSlotsErrorRef.current) {
       lastSlotsErrorRef.current = gd.slots.error;
-      notify("warning", `回测槽位加载失败: ${safeDisplayErrorMessage(gd.slots.error)}`, buildAction(gd.slots.lastErrorMeta, () => { gd.refreshAll(); }));
+      notify(
+        'warning',
+        `回测槽位加载失败: ${safeDisplayErrorMessage(gd.slots.error)}`,
+        buildAction(gd.slots.lastErrorMeta, () => {
+          gd.refreshAll();
+        })
+      );
     }
     if (gd.cloud.error && gd.cloud.error !== lastCloudErrorRef.current) {
       lastCloudErrorRef.current = gd.cloud.error;
-      notify("warning", `云端快照加载失败: ${safeDisplayErrorMessage(gd.cloud.error)}`, buildAction(gd.cloud.lastErrorMeta, () => { gd.refreshAll(); }));
+      notify(
+        'warning',
+        `云端快照加载失败: ${safeDisplayErrorMessage(gd.cloud.error)}`,
+        buildAction(gd.cloud.lastErrorMeta, () => {
+          gd.refreshAll();
+        })
+      );
     }
     if (gd.config.error && gd.config.error !== lastConfigErrorRef.current) {
       lastConfigErrorRef.current = gd.config.error;
-      notify("warning", `配置状态加载失败: ${safeDisplayErrorMessage(gd.config.error)}`, buildAction(gd.config.lastErrorMeta, () => { gd.refreshAll(); }));
+      notify(
+        'warning',
+        `配置状态加载失败: ${safeDisplayErrorMessage(gd.config.error)}`,
+        buildAction(gd.config.lastErrorMeta, () => {
+          gd.refreshAll();
+        })
+      );
     }
   }, [globalData, notify, buildAction]);
 
   useKeyboardShortcuts({
-    onNavigateToDashboard: () => setActiveView("dashboard"),
-    onNavigateToConfig: () => setActiveView("config"),
-    onRefresh: () => { void phaseApi.call("/api/phase_state"); globalData.refreshAll(); },
+    onNavigateToDashboard: () => setActiveView('dashboard'),
+    onNavigateToConfig: () => setActiveView('config'),
+    onRefresh: () => {
+      void phaseApi.call('/api/phase_state');
+      globalData.refreshAll();
+    },
     onShowHelp: () => setShortcutsHelpOpen(true),
     onEscape: () => {
       setSidebarOpen(false);
@@ -170,7 +227,7 @@ export function useAppState(): AppState {
   });
 
   const phaseData = phaseApi.data;
-  const phaseApiStatus: PhaseApiStatus = phaseData ? "ready" : phaseApi.error ? "error" : "loading";
+  const phaseApiStatus: PhaseApiStatus = phaseData ? 'ready' : phaseApi.error ? 'error' : 'loading';
   const phaseConnected = Boolean(phaseData?.connected);
   const connected = Boolean(connectionOverride ?? phaseConnected) && !connectionError;
   const contextFresh = phaseData?.context_fresh ?? false;
@@ -178,7 +235,7 @@ export function useAppState(): AppState {
   const scoredCount = phaseData?.scored_count ?? 0;
   const readinessPassed = phaseData?.readiness_passed ?? false;
   const managedCredentialsAvailable = Boolean(
-    globalData.config.data?.config?.credentials?.managed_credentials_available,
+    globalData.config.data?.config?.credentials?.managed_credentials_available
   );
 
   const { phaseState, steps, currentPhase } = usePhaseState({
@@ -219,47 +276,50 @@ export function useAppState(): AppState {
     setActiveView(view);
   }, []);
 
-  const handleConnectionTested = useCallback((ok: boolean, err: string | null) => {
-    setConnectionOverride(ok);
-    setConnectionError(err);
-    setCredentials((prev) => ({ ...prev, password: "" }));
-    try {
-      sessionStorage.removeItem("brain_alpha_connection_tested");
-    } catch (storageErr) {
-      reportIgnoredError("legacy connection sessionStorage cleanup failed", storageErr);
-    }
-    void phaseApi.call("/api/phase_state");
-  }, [phaseApi.call]);
+  const handleConnectionTested = useCallback(
+    (ok: boolean, err: string | null) => {
+      setConnectionOverride(ok);
+      setConnectionError(err);
+      setCredentials((prev) => ({ ...prev, password: '' }));
+      try {
+        sessionStorage.removeItem('brain_alpha_connection_tested');
+      } catch (storageErr) {
+        reportIgnoredError('legacy connection sessionStorage cleanup failed', storageErr);
+      }
+      void phaseApi.call('/api/phase_state');
+    },
+    [phaseApi.call]
+  );
 
   const handleDashboardSyncStart = useCallback(() => {
     setOfficialOpsAutoStart(true);
-    setActiveView("official_operations");
+    setActiveView('official_operations');
   }, []);
 
   const handleDashboardSyncOpen = useCallback(() => {
     setOfficialOpsAutoStart(false);
-    setActiveView("official_operations");
+    setActiveView('official_operations');
   }, []);
 
   const handleOfficialSyncCompleted = useCallback(() => {
-    void phaseApi.call("/api/phase_state");
+    void phaseApi.call('/api/phase_state');
     globalData.refreshAll();
   }, [phaseApi.call, globalData]);
 
   const handleOfficialReconnectRequested = useCallback(() => {
-    setActiveView("dashboard");
+    setActiveView('dashboard');
   }, []);
 
   const handleCandidatePoolUpdated = useCallback(() => {
     globalData.refreshAll();
-    void phaseApi.call("/api/phase_state");
+    void phaseApi.call('/api/phase_state');
   }, [phaseApi.call, globalData]);
 
   const handleLocalSessionLoggedOut = useCallback(() => {
-    setCredentials({ username: "", password: "", token: "" });
+    setCredentials({ username: '', password: '', token: '' });
     setConnectionOverride(false);
     setConnectionError(null);
-    void phaseApi.call("/api/phase_state");
+    void phaseApi.call('/api/phase_state');
   }, [phaseApi.call]);
 
   useEffect(() => {
@@ -267,26 +327,33 @@ export function useAppState(): AppState {
     if (connectionOverride === false && !phaseConnected) setConnectionOverride(null);
   }, [connectionOverride, phaseConnected]);
 
-  const handleMobileNavigate = useCallback((target: PhaseId | "tools") => {
-    if (target === "tools") {
-      setActiveView("dashboard");
-    } else {
-      const phase = phaseState.phases[target as PhaseId];
-      if (phase && phase.items.length > 0) {
-        setActiveView(phase.items[0].id);
+  const handleMobileNavigate = useCallback(
+    (target: PhaseId | 'tools') => {
+      if (target === 'tools') {
+        setActiveView('dashboard');
+      } else {
+        const phase = phaseState.phases[target];
+        if (phase && phase.items.length > 0) {
+          setActiveView(phase.items[0].id);
+        }
       }
-    }
-  }, [phaseState.phases]);
+    },
+    [phaseState.phases]
+  );
 
   const openScoring = useCallback((candidate: Candidate) => {
     setSelectedCandidate(candidate);
-    setActiveView("scoring");
+    setActiveView('scoring');
   }, []);
 
   const sidebarBadges: SidebarBadges = {
     candidates: globalData.candidates.data?.total ?? globalData.candidates.data?.candidates?.length,
-    official_backtests: globalData.slots.data ? formatBacktestBadge(globalData.slots.data) : undefined,
-    cloud: globalData.cloud.data ? formatCloudBadge(cloudBadgeTotal(globalData.cloud.data)) : undefined,
+    official_backtests: globalData.slots.data
+      ? formatBacktestBadge(globalData.slots.data)
+      : undefined,
+    cloud: globalData.cloud.data
+      ? formatCloudBadge(cloudBadgeTotal(globalData.cloud.data))
+      : undefined,
   };
 
   return {

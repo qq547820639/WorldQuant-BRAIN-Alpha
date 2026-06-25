@@ -1,8 +1,8 @@
-import type { BrainCredentials } from "@/types";
-import { safeDisplayErrorMessage } from "@/helpers/errorExperience";
-import { TextField, PasswordField } from "./ConfigFormFields";
-import LocalCacheConnectionSection from "./LocalCacheConnectionSection";
-import { ConfigSection } from "./ConfigFormFields";
+import type { BrainCredentials } from '@/types';
+import { safeDisplayErrorMessage } from '@/helpers/errorExperience';
+import { TextField, PasswordField } from './ConfigFormFields';
+import LocalCacheConnectionSection from './LocalCacheConnectionSection';
+import { ConfigSection } from './ConfigFormFields';
 
 interface CredentialsSectionProps {
   credentials: BrainCredentials;
@@ -22,7 +22,10 @@ interface CredentialsSectionProps {
   connectionStatusText: string;
   hasSessionCredentials: boolean;
   environment: string;
-  onUpdateCredential: <K extends keyof BrainCredentials>(key: K, value: BrainCredentials[K]) => void;
+  onUpdateCredential: <K extends keyof BrainCredentials>(
+    key: K,
+    value: BrainCredentials[K]
+  ) => void;
   onTestConnection: () => void;
   onLogout: () => void;
   onOpenTemporaryConnection: () => void;
@@ -53,20 +56,20 @@ export default function CredentialsSection({
         autoComplete="off"
         inputMode="email"
         maxLength={160}
-        onChange={(value) => onUpdateCredential("username", value.trim())}
+        onChange={(value) => onUpdateCredential('username', value.trim())}
       />
       <PasswordField
         label="密码"
         value={credentials.password}
         autoComplete="new-password"
-        onChange={(value) => onUpdateCredential("password", value)}
+        onChange={(value) => onUpdateCredential('password', value)}
       />
       <PasswordField
         label="Token"
         value={credentials.token}
         autoComplete="off"
         maxLength={512}
-        onChange={(value) => onUpdateCredential("token", value.trim())}
+        onChange={(value) => onUpdateCredential('token', value.trim())}
       />
       <div className="flex flex-col gap-2 sm:items-start md:col-span-2">
         <button
@@ -75,10 +78,10 @@ export default function CredentialsSection({
           className="btn btn-secondary btn-sm"
           disabled={connectionApi.loading || validationError !== null}
         >
-          {connectionApi.loading ? "测试中..." : "测试 BRAIN 连接"}
+          {connectionApi.loading ? '测试中...' : '测试 BRAIN 连接'}
         </button>
         <p
-          className={`text-xs ${connectionApi.error ? "text-negative" : connectionApi.data?.ok ? "text-positive" : "text-text-tertiary"}`}
+          className={`text-xs ${connectionApi.error ? 'text-negative' : connectionApi.data?.ok ? 'text-positive' : 'text-text-tertiary'}`}
           role="status"
           aria-live="polite"
         >

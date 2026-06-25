@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useRef, useEffect } from "react";
+import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 
 export type ValidationRule<T> = (value: T, formValues: T) => string | null;
 
@@ -42,7 +42,9 @@ export function useFormValidation<T extends Record<string, any>>(
 
   const [values, setValuesState] = useState<T>(initialValues);
   const [errors, setErrorsState] = useState<FormErrors<T>>({});
-  const [touched, setTouchedState] = useState<Record<keyof T, boolean>>({} as Record<keyof T, boolean>);
+  const [touched, setTouchedState] = useState<Record<keyof T, boolean>>(
+    {} as Record<keyof T, boolean>
+  );
   const [initialValuesState] = useState<T>(initialValues);
 
   const valuesRef = useRef<T>(values);
@@ -145,7 +147,7 @@ export function useFormValidation<T extends Record<string, any>>(
   const setValues = useCallback(
     (updates: Partial<T> | ((prev: T) => Partial<T>)) => {
       setValuesState((prev) => {
-        const partial = typeof updates === "function" ? updates(prev) : updates;
+        const partial = typeof updates === 'function' ? updates(prev) : updates;
         const next = { ...prev, ...partial };
         valuesRef.current = next;
 
@@ -168,7 +170,7 @@ export function useFormValidation<T extends Record<string, any>>(
       });
 
       setTouchedState((prev) => {
-        const partial = typeof updates === "function" ? {} : updates;
+        const partial = typeof updates === 'function' ? {} : updates;
         const next = { ...prev };
         for (const key of Object.keys(partial) as Array<keyof T>) {
           next[key] = true;

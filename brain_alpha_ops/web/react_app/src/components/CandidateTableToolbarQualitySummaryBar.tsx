@@ -1,5 +1,5 @@
-import { QualitySummaryItem } from "./CandidateTableSubComponents";
-import type { QualitySummaryData } from "./CandidateTableToolbar";
+import { QualitySummaryItem } from './CandidateTableSubComponents';
+import type { QualitySummaryData } from './CandidateTableToolbar';
 
 export interface QualitySummaryBarProps {
   qualitySummary: QualitySummaryData;

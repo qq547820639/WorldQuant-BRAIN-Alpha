@@ -5,11 +5,11 @@
  * behind a single connect/disconnect API with per-connection state tracking.
  */
 
-import { useEffect, useRef, useCallback, useState } from "react";
-import { useSSE } from "@/hooks/useSSE";
-import type { SSEEvent } from "@/types";
+import { useEffect, useRef, useCallback, useState } from 'react';
+import { useSSE } from '@/hooks/useSSE';
+import type { SSEEvent } from '@/types';
 
-type ConnectionName = "task" | "check" | "optimization" | "simulation";
+type ConnectionName = 'task' | 'check' | 'optimization' | 'simulation';
 
 interface ConnectionHandlers {
   onEvent?: (event: SSEEvent) => void;
@@ -79,7 +79,10 @@ export function useSseManager(): SseManagerState & SseManagerActions {
     simulation: simulationHandlersRef,
   };
 
-  const urlSettersMap: Record<ConnectionName, React.Dispatch<React.SetStateAction<string | null>>> = {
+  const urlSettersMap: Record<
+    ConnectionName,
+    React.Dispatch<React.SetStateAction<string | null>>
+  > = {
     task: setTaskUrl,
     check: setCheckUrl,
     optimization: setOptimizationUrl,
@@ -96,15 +99,18 @@ export function useSseManager(): SseManagerState & SseManagerActions {
     urlSettersMap[name](null);
   }, []);
 
-  const isConnected = useCallback((name: ConnectionName) => {
-    const states: Record<ConnectionName, boolean> = {
-      task: task.connected,
-      check: check.connected,
-      optimization: optimization.connected,
-      simulation: simulation.connected,
-    };
-    return states[name];
-  }, [task.connected, check.connected, optimization.connected, simulation.connected]);
+  const isConnected = useCallback(
+    (name: ConnectionName) => {
+      const states: Record<ConnectionName, boolean> = {
+        task: task.connected,
+        check: check.connected,
+        optimization: optimization.connected,
+        simulation: simulation.connected,
+      };
+      return states[name];
+    },
+    [task.connected, check.connected, optimization.connected, simulation.connected]
+  );
 
   useEffect(() => {
     return () => {

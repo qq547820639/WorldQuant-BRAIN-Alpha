@@ -5,18 +5,18 @@
  * candidate, submission), and exposes connection state.
  */
 
-import { useCallback } from "react";
-import { useSSE } from "@/hooks/useSSE";
-import { resolveJobEventState } from "@/helpers/runPayload";
-import type { JobStatus, SSEEvent, SSECandidateEventData } from "@/types";
-import { isSSECandidateData } from "@/types";
-import { clearSavedJobId } from "@/hooks/useJobRecovery";
+import { useCallback } from 'react';
+import { useSSE } from '@/hooks/useSSE';
+import { resolveJobEventState } from '@/helpers/runPayload';
+import type { JobStatus, SSEEvent, SSECandidateEventData } from '@/types';
+import { isSSECandidateData } from '@/types';
+import { clearSavedJobId } from '@/hooks/useJobRecovery';
 
 interface SseConnectionCallbacks {
   notify: (
-    type: "success" | "error" | "warning" | "info",
+    type: 'success' | 'error' | 'warning' | 'info',
     msg: string,
-    action?: { label: string; onClick: () => void },
+    action?: { label: string; onClick: () => void }
   ) => void;
   onTerminal: (event: SSEEvent, outcome: ReturnType<typeof resolveJobEventState>) => void;
   onProgress: (event: SSEEvent) => void;
@@ -44,34 +44,42 @@ export function useJobSseConnection(
     onExhausted,
     setPollFailures,
     clearTransientProgressError,
-  }: SseConnectionCallbacks,
+  }: SseConnectionCallbacks
 ): SseConnectionState {
   const sseUrl = jobId ? `/sse?job_id=${encodeURIComponent(jobId)}` : null;
 
   const handleSSEEvent = useCallback(
     (event: SSEEvent) => {
       const eventOutcome = resolveJobEventState(event, event.progress || event.data, {
-        failed: "验证流程错误",
-        interrupted: "验证流程已停止，结果未确认完成。",
-        success: "验证流程已完成",
+        failed: '验证流程错误',
+        interrupted: '验证流程已停止，结果未确认完成。',
+        success: '验证流程已完成',
       });
 
       if (eventOutcome.terminal) {
         clearSavedJobId();
         onTerminal(event, eventOutcome);
-      } else if (event.type === "progress") {
+      } else if (event.type === 'progress') {
         setPollFailures(0);
         clearTransientProgressError();
         onProgress(event);
-      } else if (event.type === "candidate") {
+      } else if (event.type === 'candidate') {
         const d = isSSECandidateData(event.data) ? event.data : ({} as SSECandidateEventData);
-        onCandidate(String(d.alpha_id || "?"));
-      } else if (event.type === "submission") {
+        onCandidate(String(d.alpha_id || '?'));
+      } else if (event.type === 'submission') {
         const d = isSSECandidateData(event.data) ? event.data : ({} as SSECandidateEventData);
-        onSubmission(String(d.alpha_id || "未知"));
+        onSubmission(String(d.alpha_id || '未知'));
       }
     },
-    [notify, onTerminal, onProgress, onCandidate, onSubmission, setPollFailures, clearTransientProgressError],
+    [
+      notify,
+      onTerminal,
+      onProgress,
+      onCandidate,
+      onSubmission,
+      setPollFailures,
+      clearTransientProgressError,
+    ]
   );
 
   const handleStreamExhausted = useCallback(() => {

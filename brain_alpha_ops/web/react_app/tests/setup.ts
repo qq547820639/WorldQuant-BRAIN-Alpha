@@ -9,6 +9,29 @@ if (!HTMLElement.prototype.scrollTo) {
   });
 }
 
+function createMockMatchMedia(query: string) {
+  return {
+    matches: false,
+    media: query,
+    onchange: null,
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  };
+}
+
+beforeEach(() => {
+  if (typeof window !== "undefined") {
+    Object.defineProperty(window, "matchMedia", {
+      writable: true,
+      configurable: true,
+      value: vi.fn(createMockMatchMedia),
+    });
+  }
+});
+
 class MockEventSource {
   static instances: MockEventSource[] = [];
 

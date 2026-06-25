@@ -1,4 +1,4 @@
-import type { SSEEvent } from "@/types";
+import type { SSEEvent } from '@/types';
 
 export interface CandidateSSEHandlers {
   handleTaskEvent: (event: SSEEvent) => void;

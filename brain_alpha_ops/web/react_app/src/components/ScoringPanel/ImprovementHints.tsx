@@ -1,5 +1,5 @@
-import type { FailureItem } from "@/types";
-import { safeScoringText } from "./utils";
+import type { FailureItem } from '@/types';
+import { safeScoringText } from './utils';
 
 interface Props {
   failures: FailureItem[];
@@ -19,12 +19,21 @@ export default function ImprovementHints({ failures, hints }: Props) {
 function InsightList({ title, items }: { title: string; items: FailureItem[] }) {
   return (
     <div className="panel">
-      <div className="panel-header"><span>{title}</span></div>
+      <div className="panel-header">
+        <span>{title}</span>
+      </div>
       <div className="panel-body">
         {items.map((item, i) => (
-          <div key={`${item.item || "failure"}-${i}`} className="text-xs px-3.5 py-2 border-b border-border-subtle last:border-0">
-            <p className="text-negative font-medium">{safeScoringText(item.item, "评分项待确认")}</p>
-            <p className="text-text-tertiary">{safeScoringText(item.reason || item.severity, "原因待确认")}</p>
+          <div
+            key={`${item.item || 'failure'}-${i}`}
+            className="text-xs px-3.5 py-2 border-b border-border-subtle last:border-0"
+          >
+            <p className="text-negative font-medium">
+              {safeScoringText(item.item, '评分项待确认')}
+            </p>
+            <p className="text-text-tertiary">
+              {safeScoringText(item.reason || item.severity, '原因待确认')}
+            </p>
           </div>
         ))}
       </div>
@@ -35,11 +44,16 @@ function InsightList({ title, items }: { title: string; items: FailureItem[] }) 
 function HintList({ title, items }: { title: string; items: string[] }) {
   return (
     <div className="panel">
-      <div className="panel-header"><span>{title}</span></div>
+      <div className="panel-header">
+        <span>{title}</span>
+      </div>
       <div className="panel-body">
         {items.map((item, i) => (
-          <p key={`${item}-${i}`} className="text-xs text-text-secondary px-3.5 py-2 border-b border-border-subtle last:border-0">
-            {safeScoringText(item, "建议待确认")}
+          <p
+            key={`${item}-${i}`}
+            className="text-xs text-text-secondary px-3.5 py-2 border-b border-border-subtle last:border-0"
+          >
+            {safeScoringText(item, '建议待确认')}
           </p>
         ))}
       </div>

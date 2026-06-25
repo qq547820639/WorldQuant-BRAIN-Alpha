@@ -19,16 +19,14 @@ import type {
   Candidate,
   CandidateListMeta,
   CandidateQueueView,
-} from "@/types";
-import {
-  LifecycleReplayPanel,
-} from "./CandidateTableSubComponents";
-import { CandidateDetailPanel } from "./CandidateDetailPanel";
-import ErrorCard from "./ErrorCard";
-import { ToolbarTitleStats } from "./CandidateTableToolbarTitleStats";
-import { ProductionControls } from "./CandidateTableToolbarProductionControls";
-import { QualitySummaryBar } from "./CandidateTableToolbarQualitySummaryBar";
-import { FilterToolbar } from "./CandidateTableToolbarFilterToolbar";
+} from '@/types';
+import { LifecycleReplayPanel } from './CandidateTableSubComponents';
+import { CandidateDetailPanel } from './CandidateDetailPanel';
+import ErrorCard from './ErrorCard';
+import { ToolbarTitleStats } from './CandidateTableToolbarTitleStats';
+import { ProductionControls } from './CandidateTableToolbarProductionControls';
+import { QualitySummaryBar } from './CandidateTableToolbarQualitySummaryBar';
+import { FilterToolbar } from './CandidateTableToolbarFilterToolbar';
 
 export interface QualitySummaryData {
   ready?: number;
@@ -57,9 +55,9 @@ export interface CandidateTableToolbarProps {
   // Controls
   showProductionControls: boolean;
   candidateWorkflowBusy: boolean;
-  taskState: "idle" | "loading" | "progress" | "success" | "error";
-  simState: "idle" | "loading" | "progress" | "success" | "error";
-  optimizationState: "idle" | "loading" | "progress" | "success" | "error";
+  taskState: 'idle' | 'loading' | 'progress' | 'success' | 'error';
+  simState: 'idle' | 'loading' | 'progress' | 'success' | 'error';
+  optimizationState: 'idle' | 'loading' | 'progress' | 'success' | 'error';
   onTargetPoolSizeChange: (value: string) => void;
   onGenerateCandidates: () => void;
   onStartValidationQueue: () => void;
@@ -77,21 +75,21 @@ export interface CandidateTableToolbarProps {
   // Progress detail panels
   detailPanel: {
     showProductionControls: boolean;
-    taskState: "idle" | "loading" | "progress" | "success" | "error";
-    taskProgress: import("@/types").UnifiedProgress | null;
+    taskState: 'idle' | 'loading' | 'progress' | 'success' | 'error';
+    taskProgress: import('@/types').UnifiedProgress | null;
     taskError: string | null;
     taskStreamExhausted: boolean;
     onRetryTask: () => void;
-    simState: "idle" | "loading" | "progress" | "success" | "error";
-    simProgress: import("@/types").UnifiedProgress | null;
+    simState: 'idle' | 'loading' | 'progress' | 'success' | 'error';
+    simProgress: import('@/types').UnifiedProgress | null;
     simError: string | null;
     onRetrySim: () => void;
-    optimizationState: "idle" | "loading" | "progress" | "success" | "error";
-    optimizationProgress: import("@/types").UnifiedProgress | null;
+    optimizationState: 'idle' | 'loading' | 'progress' | 'success' | 'error';
+    optimizationProgress: import('@/types').UnifiedProgress | null;
     optimizationError: string | null;
     onRetryOptimization: () => void;
-    checkState: "idle" | "loading" | "progress" | "success" | "error";
-    checkProgress: import("@/types").UnifiedProgress | null;
+    checkState: 'idle' | 'loading' | 'progress' | 'success' | 'error';
+    checkProgress: import('@/types').UnifiedProgress | null;
     checkError: string | null;
     onRetryCheck: () => void;
   };
@@ -227,8 +225,13 @@ export function CandidateTableToolbar({
       />
 
       {remoteTruncated && (
-        <div className="mb-4 px-3 py-2 text-xs rounded-md bg-warning-subtle text-warning" role="status" aria-live="polite">
-          当前接口返回 {candidateMeta.returned} 条候选，服务端报告总量为 {candidateMeta.total} 条；请刷新或切换到完整候选源，避免把当前列表误认为全集。
+        <div
+          className="mb-4 px-3 py-2 text-xs rounded-md bg-warning-subtle text-warning"
+          role="status"
+          aria-live="polite"
+        >
+          当前接口返回 {candidateMeta.returned} 条候选，服务端报告总量为 {candidateMeta.total}{' '}
+          条；请刷新或切换到完整候选源，避免把当前列表误认为全集。
         </div>
       )}
 

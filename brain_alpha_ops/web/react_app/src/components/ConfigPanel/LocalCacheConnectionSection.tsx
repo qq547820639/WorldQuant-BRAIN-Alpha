@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ReactNode } from 'react';
 
 interface LocalCacheConnectionSectionProps {
   temporaryConnectionOpen: boolean;
@@ -40,7 +40,7 @@ export default function LocalCacheConnectionSection({
           disabled={logoutLoading}
           aria-describedby="cache-logout-desc"
         >
-          {logoutLoading ? "退出中..." : "退出本地会话"}
+          {logoutLoading ? '退出中...' : '退出本地会话'}
         </button>
         {!temporaryConnectionOpen ? (
           <button

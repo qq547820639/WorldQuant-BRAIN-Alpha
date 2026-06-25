@@ -1,9 +1,5 @@
-import { useThemeContext } from "@/components/ThemeProvider";
-import {
-  ConfigSection,
-  ConfigValue,
-  CheckboxField,
-} from "./ConfigFormFields";
+import { useThemeContext } from '@/components/ThemeProvider';
+import { ConfigSection, ConfigValue, CheckboxField } from './ConfigFormFields';
 
 interface ScoringConfigGroupProps {
   scoring:

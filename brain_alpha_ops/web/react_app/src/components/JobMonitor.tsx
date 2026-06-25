@@ -1,14 +1,14 @@
 /** Job monitor with SSE — Terminal Precision v2.0 */
-import { hasCredentials } from "@/helpers/runPayload";
-import type { BrainCredentials, JobStatus, UnifiedProgress } from "@/types";
-import type { JobState } from "@/hooks/useJobState";
-import { useJobMonitor } from "@/hooks/useJobMonitor";
-import JobStatusCard from "@/components/JobMonitor/JobStatusCard";
-import JobProgressBar from "@/components/JobMonitor/JobProgressBar";
-import JobActions from "@/components/JobMonitor/JobActions";
+import { hasCredentials } from '@/helpers/runPayload';
+import type { BrainCredentials, JobStatus, UnifiedProgress } from '@/types';
+import type { JobState } from '@/hooks/useJobState';
+import { useJobMonitor } from '@/hooks/useJobMonitor';
+import JobStatusCard from '@/components/JobMonitor/JobStatusCard';
+import JobProgressBar from '@/components/JobMonitor/JobProgressBar';
+import JobActions from '@/components/JobMonitor/JobActions';
 
 interface Props {
-  notify: (type: "success" | "error" | "warning" | "info", msg: string) => void;
+  notify: (type: 'success' | 'error' | 'warning' | 'info', msg: string) => void;
   credentials?: BrainCredentials;
   onNeedCredentials?: () => void;
   jobState?: JobState;
@@ -37,10 +37,25 @@ interface ViewProps {
 }
 
 function JobMonitorView({
-  credentialSource, validationId, running, connected, progress, error, status, events,
-  loading, showCredentialWarning, reconnectAttempts = 0,
-  onStart, onResume, onStop, onCredentialClick, onRetry,
-  sseRetryExhausted = false, sseRetryCountdown = 0, onSseExhaustedRetry,
+  credentialSource,
+  validationId,
+  running,
+  connected,
+  progress,
+  error,
+  status,
+  events,
+  loading,
+  showCredentialWarning,
+  reconnectAttempts = 0,
+  onStart,
+  onResume,
+  onStop,
+  onCredentialClick,
+  onRetry,
+  sseRetryExhausted = false,
+  sseRetryCountdown = 0,
+  onSseExhaustedRetry,
 }: ViewProps) {
   const hasEvidence = Boolean(status?.job_id || validationId);
 
@@ -77,10 +92,13 @@ function JobMonitorView({
         />
 
         {events.length > 0 && (
-          <div className="mt-3 panel" style={{ maxHeight: 160, overflow: "auto" }}>
+          <div className="mt-3 panel" style={{ maxHeight: 160, overflow: 'auto' }}>
             <div className="panel-body-padded p-2">
               {events.map((e, i) => (
-                <div key={i} className="flex gap-2 text-sm py-1 border-b border-border-subtle last:border-0 text-text-secondary">
+                <div
+                  key={i}
+                  className="flex gap-2 text-sm py-1 border-b border-border-subtle last:border-0 text-text-secondary"
+                >
                   <span className="status-dot status-dot-active mt-1.5 shrink-0" />
                   <span className="min-w-0 break-words">{e}</span>
                 </div>
@@ -93,11 +111,33 @@ function JobMonitorView({
   );
 }
 
-export default function JobMonitor({ notify, credentials, onNeedCredentials, jobState: external }: Props) {
+export default function JobMonitor({
+  notify,
+  credentials,
+  onNeedCredentials,
+  jobState: external,
+}: Props) {
+  const {
+    jobId,
+    status,
+    running,
+    connected,
+    progress,
+    error,
+    events,
+    loading,
+    reconnectAttempts,
+    sseRetryExhausted,
+    sseRetryCountdown,
+    startJob,
+    stopJob,
+    onSseExhaustedRetry,
+  } = useJobMonitor({ notify, credentials });
+
   if (external) {
     return (
       <JobMonitorView
-        credentialSource={hasCredentials(credentials) ? "页面凭证" : "托管凭证"}
+        credentialSource={hasCredentials(credentials) ? '页面凭证' : '托管凭证'}
         validationId={external.jobId}
         running={external.running}
         connected={external.connected}
@@ -116,26 +156,9 @@ export default function JobMonitor({ notify, credentials, onNeedCredentials, job
     );
   }
 
-  const {
-    jobId,
-    status,
-    running,
-    connected,
-    progress,
-    error,
-    events,
-    loading,
-    reconnectAttempts,
-    sseRetryExhausted,
-    sseRetryCountdown,
-    startJob,
-    stopJob,
-    onSseExhaustedRetry,
-  } = useJobMonitor({ notify, credentials });
-
   return (
     <JobMonitorView
-      credentialSource={hasCredentials(credentials) ? "页面凭证" : "托管凭证"}
+      credentialSource={hasCredentials(credentials) ? '页面凭证' : '托管凭证'}
       validationId={status?.job_id || jobId}
       running={running}
       connected={connected}

@@ -1,6 +1,6 @@
-import { CandidateTableToolbar } from "./CandidateTableToolbar";
-import Skeleton from "./Skeleton";
-import type { CandidateQueueView } from "./CandidateTableUtils";
+import { CandidateTableToolbar } from './CandidateTableToolbar';
+import Skeleton from './Skeleton';
+import type { CandidateQueueView } from './CandidateTableUtils';
 
 interface CandidateTableLoadingProps {
   title: string;
@@ -13,20 +13,20 @@ interface CandidateTableLoadingProps {
 
 const loadingDetailPanel = {
   showProductionControls: false,
-  taskState: "idle" as const,
+  taskState: 'idle' as const,
   taskProgress: null,
   taskError: null,
   taskStreamExhausted: false,
   onRetryTask: () => {},
-  simState: "idle" as const,
+  simState: 'idle' as const,
   simProgress: null,
   simError: null,
   onRetrySim: () => {},
-  optimizationState: "idle" as const,
+  optimizationState: 'idle' as const,
   optimizationProgress: null,
   optimizationError: null,
   onRetryOptimization: () => {},
-  checkState: "idle" as const,
+  checkState: 'idle' as const,
   checkProgress: null,
   checkError: null,
   onRetryCheck: () => {},
@@ -62,7 +62,7 @@ export default function CandidateTableLoading({
         onGenerateCandidates={() => {}}
         onStartValidationQueue={() => {}}
         onStartOptimization={() => {}}
-        qualitySummary={{ retained: "0", promotable: 0, rework: 0, blocked: 0, outputMode: "-" }}
+        qualitySummary={{ retained: '0', promotable: 0, rework: 0, blocked: 0, outputMode: '-' }}
         lifecycleHistory={null}
         lifecycleError={null}
         lifecycleLoading={false}
@@ -84,16 +84,32 @@ export default function CandidateTableLoading({
       />
 
       <div className="panel">
-        <div className="hidden md:block overflow-auto" style={{ maxWidth: "100%", height: "min(640px, 70vh)" }}>
+        <div
+          className="hidden md:block overflow-auto"
+          style={{ maxWidth: '100%', height: 'min(640px, 70vh)' }}
+        >
           <table className="data-table card-view" style={{ minWidth: 980 }} aria-label="候选结果">
             <thead>
               <tr className="bg-surface-2">
-                <th className="px-3 py-2 text-left text-xs font-medium text-text-secondary" style={{ width: "7rem" }}>加载中...</th>
+                <th
+                  className="px-3 py-2 text-left text-xs font-medium text-text-secondary"
+                  style={{ width: '7rem' }}
+                >
+                  加载中...
+                </th>
                 <th className="px-3 py-2 text-left text-xs font-medium text-text-secondary">ID</th>
-                <th className="px-3 py-2 text-left text-xs font-medium text-text-secondary">表达式</th>
-                <th className="px-3 py-2 text-left text-xs font-medium text-text-secondary">家族</th>
-                <th className="px-3 py-2 text-left text-xs font-medium text-text-secondary">状态</th>
-                <th className="px-3 py-2 text-left text-xs font-medium text-text-secondary">评分</th>
+                <th className="px-3 py-2 text-left text-xs font-medium text-text-secondary">
+                  表达式
+                </th>
+                <th className="px-3 py-2 text-left text-xs font-medium text-text-secondary">
+                  家族
+                </th>
+                <th className="px-3 py-2 text-left text-xs font-medium text-text-secondary">
+                  状态
+                </th>
+                <th className="px-3 py-2 text-left text-xs font-medium text-text-secondary">
+                  评分
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -109,17 +125,25 @@ export default function CandidateTableLoading({
         </div>
 
         <div className="panel-body md:hidden">
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {Array.from({ length: 4 }).map((_, index) => (
-              <div key={`skeleton-mobile-${index}`} className="panel" style={{ padding: "12px" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <div key={`skeleton-mobile-${index}`} className="panel" style={{ padding: '12px' }}>
+                <div
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'flex-start',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     <Skeleton variant="avatar" className="w-8 h-8 rounded-full" />
                     <Skeleton variant="text" className="w-24 h-3" />
                   </div>
                   <Skeleton variant="text" className="w-16 h-5 rounded-full" />
                 </div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 12 }}>
+                <div
+                  style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 12 }}
+                >
                   <Skeleton variant="text" className="w-full h-3" />
                   <Skeleton variant="text" className="w-full h-3" />
                   <Skeleton variant="text" className="w-full h-3 col-span-2" />

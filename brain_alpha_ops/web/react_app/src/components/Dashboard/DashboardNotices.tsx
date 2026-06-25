@@ -5,7 +5,7 @@ export function SyncCloudCTA({ onNavigateToSync }: { onNavigateToSync: () => voi
         <div className="flex flex-col items-center text-center gap-3">
           <div
             className="w-14 h-14 rounded-full flex items-center justify-center"
-            style={{ background: "var(--color-panel-warning-bg)" }}
+            style={{ background: 'var(--color-panel-warning-bg)' }}
           >
             <svg
               width="28"
@@ -23,14 +23,15 @@ export function SyncCloudCTA({ onNavigateToSync }: { onNavigateToSync: () => voi
           <div>
             <h2 className="text-lg font-semibold text-accent">连接成功！未检测到本地缓存</h2>
             <p className="text-sm text-text-secondary mt-1 max-w-md">
-              BRAIN 连接正常。首次使用需要拉取云端 Alpha 列表和官方能力集；同步完成后，后续登录会默认直接读取本地缓存。
+              BRAIN 连接正常。首次使用需要拉取云端 Alpha
+              列表和官方能力集；同步完成后，后续登录会默认直接读取本地缓存。
             </p>
           </div>
           <button
             type="button"
             className="btn btn-primary"
             onClick={onNavigateToSync}
-            style={{ padding: "10px 32px", fontSize: 15, fontWeight: 600 }}
+            style={{ padding: '10px 32px', fontSize: 15, fontWeight: 600 }}
           >
             <svg
               width="16"
@@ -72,15 +73,15 @@ export function CacheModeNotice() {
 
 export function PhaseStatusNotice({ failed }: { failed: boolean }) {
   return (
-    <div className={`panel mb-6 ${failed ? "panel-negative" : "panel-info"}`}>
+    <div className={`panel mb-6 ${failed ? 'panel-negative' : 'panel-info'}`}>
       <div className="panel-body-padded">
-        <p className={`text-sm font-medium mb-1 ${failed ? "text-negative" : "text-info"}`}>
-          {failed ? "状态读取失败" : "正在读取本地状态"}
+        <p className={`text-sm font-medium mb-1 ${failed ? 'text-negative' : 'text-info'}`}>
+          {failed ? '状态读取失败' : '正在读取本地状态'}
         </p>
         <p className="text-xs text-text-secondary" style={{ lineHeight: 1.6 }}>
           {failed
-            ? "暂时无法确认账户连接和本地缓存状态；请刷新页面或重新打开本地控制台。"
-            : "正在确认本地 session、云端 Alpha 缓存和官方上下文缓存；读取完成前不会判定为未连接。"}
+            ? '暂时无法确认账户连接和本地缓存状态；请刷新页面或重新打开本地控制台。'
+            : '正在确认本地 session、云端 Alpha 缓存和官方上下文缓存；读取完成前不会判定为未连接。'}
         </p>
       </div>
     </div>

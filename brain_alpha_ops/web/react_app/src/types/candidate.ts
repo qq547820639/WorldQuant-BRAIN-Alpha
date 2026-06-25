@@ -1,4 +1,4 @@
-import type { Scorecard } from "./scoring";
+import type { Scorecard } from './scoring';
 
 // ── Candidate Types ───────────────────────────────────────────────────────
 
@@ -327,7 +327,7 @@ export interface GateCheck {
   name: string;
   passed: boolean;
   detail: string;
-  severity: "ERROR" | "WARNING";
+  severity: 'ERROR' | 'WARNING';
 }
 
 export interface CandidateCheckResult {
@@ -359,11 +359,11 @@ export type CandidateListMeta = {
 };
 
 export type CandidateQueueView =
-  | "candidates"
-  | "pending_backtest"
-  | "running_backtest"
-  | "backtest_rework"
-  | "passed"
-  | "submittable"
-  | "submitted"
-  | "failed";
+  | 'candidates'
+  | 'pending_backtest'
+  | 'running_backtest'
+  | 'backtest_rework'
+  | 'passed'
+  | 'submittable'
+  | 'submitted'
+  | 'failed';

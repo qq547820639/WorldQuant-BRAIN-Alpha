@@ -1,11 +1,11 @@
 /** Unified progress and loading feedback — Terminal Precision design */
-import { memo } from "react";
-import type { ProgressLifecycle, UnifiedProgress } from "@/types";
-import { useProgressFeedback } from "@/hooks/useProgressFeedback";
-import ProgressHeader from "@/components/ProgressFeedback/ProgressHeader";
-import ProgressBar from "@/components/ProgressFeedback/ProgressBar";
-import ProgressBody from "@/components/ProgressFeedback/ProgressBody";
-import ProgressFooter from "@/components/ProgressFeedback/ProgressFooter";
+import { memo } from 'react';
+import type { ProgressLifecycle, UnifiedProgress } from '@/types';
+import { useProgressFeedback } from '@/hooks/useProgressFeedback';
+import ProgressHeader from '@/components/ProgressFeedback/ProgressHeader';
+import ProgressBar from '@/components/ProgressFeedback/ProgressBar';
+import ProgressBody from '@/components/ProgressFeedback/ProgressBody';
+import ProgressFooter from '@/components/ProgressFeedback/ProgressFooter';
 
 interface Props {
   state: ProgressLifecycle;
@@ -20,9 +20,15 @@ interface Props {
 }
 
 export default memo(function ProgressFeedback({
-  state, title = "进度", progress, error,
-  idleText = "就绪", successText = "完成",
-  retryLabel = "重试", compact = false, onRetry,
+  state,
+  title = '进度',
+  progress,
+  error,
+  idleText = '就绪',
+  successText = '完成',
+  retryLabel = '重试',
+  compact = false,
+  onRetry,
 }: Props) {
   const {
     lastUpdatedAt,
@@ -41,20 +47,28 @@ export default memo(function ProgressFeedback({
     elapsed,
   } = useProgressFeedback({ state, title, progress, error, idleText, successText });
 
-  if (state === "idle" && compact) return null;
+  if (state === 'idle' && compact) return null;
 
-  const errorBorder = state === "error" ? { borderColor: "var(--color-error-border)", background: "var(--color-error-bg)" } : {};
-  const successBorder = state === "success" ? { borderColor: "var(--color-success-border)", background: "var(--color-success-bg)" } : {};
-  const stallBorder = isStalled ? { borderColor: "var(--color-stall-border)", background: "var(--color-stall-bg)" } : {};
+  const errorBorder =
+    state === 'error'
+      ? { borderColor: 'var(--color-error-border)', background: 'var(--color-error-bg)' }
+      : {};
+  const successBorder =
+    state === 'success'
+      ? { borderColor: 'var(--color-success-border)', background: 'var(--color-success-bg)' }
+      : {};
+  const stallBorder = isStalled
+    ? { borderColor: 'var(--color-stall-border)', background: 'var(--color-stall-bg)' }
+    : {};
 
   return (
     <div
       className="panel animate-fade-in"
       style={{ marginBottom: 16, ...errorBorder, ...successBorder, ...stallBorder }}
-      role={isBusy ? "status" : undefined}
-      aria-live={state === "error" ? "assertive" : "polite"}
+      role={isBusy ? 'status' : undefined}
+      aria-live={state === 'error' ? 'assertive' : 'polite'}
     >
-      <div className={`panel-body-${compact ? "compact" : "padded"}`}>
+      <div className={`panel-body-${compact ? 'compact' : 'padded'}`}>
         <ProgressHeader
           title={title}
           label={label}

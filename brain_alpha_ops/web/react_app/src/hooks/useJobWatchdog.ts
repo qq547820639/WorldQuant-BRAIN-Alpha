@@ -6,31 +6,30 @@
  * failures and triggers the disconnected state when the threshold is exceeded.
  */
 
-import { useEffect, useCallback } from "react";
-import type { JobStatus } from "@/types";
-import { classifyJobState, jobStatusMessage } from "@/helpers/runPayload";
-import { saveResumeState } from "@/utils/resumeState";
-import { clearSavedJobId } from "@/hooks/useJobRecovery";
+import { useEffect, useCallback } from 'react';
+import type { JobStatus } from '@/types';
+import { classifyJobState, jobStatusMessage } from '@/helpers/runPayload';
+import { saveResumeState } from '@/utils/resumeState';
+import { clearSavedJobId } from '@/hooks/useJobRecovery';
 
 const WATCHDOG_POLL_INTERVAL = 2000;
 const WATCHDOG_MAX_FAILURES = 12;
 
 function sendCompletionNotification(title: string, body: string): void {
   try {
-    if (document.hidden && Notification.permission === "granted") {
+    if (document.hidden && Notification.permission === 'granted') {
       new Notification(title, { body });
     }
-  } catch { console.warn("useJobState: Notification API not available"); }
+  } catch {
+    console.warn('useJobState: Notification API not available');
+  }
 }
 
 interface WatchdogCallbacks {
   pollFailures: number;
   setPollFailures: React.Dispatch<React.SetStateAction<number>>;
   callApi: <T>(url: string) => Promise<T | null>;
-  notify: (
-    type: "success" | "error" | "warning" | "info",
-    msg: string,
-  ) => void;
+  notify: (type: 'success' | 'error' | 'warning' | 'info', msg: string) => void;
   cancelAmbiguousJob: (reason: string, message: string, jobId?: string | null) => Promise<unknown>;
   onTerminal: (status: JobStatus) => void;
   onProgressUpdate: (status: JobStatus) => void;
@@ -50,7 +49,7 @@ export function useJobWatchdog(
     onTerminal,
     onProgressUpdate,
     clearTransientProgressError,
-  }: WatchdogCallbacks,
+  }: WatchdogCallbacks
 ) {
   const recordStatusRefreshFailure = useCallback(
     (message: string) => {
@@ -59,7 +58,7 @@ export function useJobWatchdog(
         return next;
       });
     },
-    [setPollFailures],
+    [setPollFailures]
   );
 
   // Polling watchdog: only poll when SSE is disconnected
@@ -67,7 +66,7 @@ export function useJobWatchdog(
     if (!running || !jobId || sseConnected) return;
     const interval = setInterval(async () => {
       const result = await callApi<JobStatus>(
-        `/api/production-validation/status?job_id=${encodeURIComponent(jobId)}`,
+        `/api/production-validation/status?job_id=${encodeURIComponent(jobId)}`
       );
       const resultState = classifyJobState(result);
       if (result?.status && resultState.terminal) {
@@ -76,13 +75,13 @@ export function useJobWatchdog(
         if (resultState.failed || resultState.missing || resultState.interrupted) {
           const msg = jobStatusMessage(
             result,
-            resultState.interrupted ? "验证流程已停止，结果未确认完成。" : "验证流程失败。",
+            resultState.interrupted ? '验证流程已停止，结果未确认完成。' : '验证流程失败。'
           );
-          if (result.phase === "watchdog_failed" || result.progress?.phase === "watchdog_failed") {
-            void cancelAmbiguousJob("watchdog_failed", msg, result.job_id || jobId);
+          if (result.phase === 'watchdog_failed' || result.progress?.phase === 'watchdog_failed') {
+            void cancelAmbiguousJob('watchdog_failed', msg, result.job_id || jobId);
           }
           saveResumeState({ lastError: msg, lastConnectionOk: false, lastPipelineJob: null });
-          notify(resultState.interrupted ? "warning" : "error", msg);
+          notify(resultState.interrupted ? 'warning' : 'error', msg);
         } else {
           saveResumeState({
             lastError: null,
@@ -90,21 +89,30 @@ export function useJobWatchdog(
             lastPipelineJob: null,
             totalCyclesCompleted: (result.cycle ?? 0) > 0 ? result.cycle : undefined,
           });
-          sendCompletionNotification("BRAIN Alpha Ops", "管线运行完成！");
+          sendCompletionNotification('BRAIN Alpha Ops', '管线运行完成！');
         }
       } else if (result?.ok) {
         clearTransientProgressError();
         onProgressUpdate(result);
         setPollFailures(0);
       } else if (result) {
-        recordStatusRefreshFailure(jobStatusMessage(result, "状态刷新失败"));
+        recordStatusRefreshFailure(jobStatusMessage(result, '状态刷新失败'));
       } else {
-        recordStatusRefreshFailure("状态刷新失败或网络中断");
+        recordStatusRefreshFailure('状态刷新失败或网络中断');
       }
     }, WATCHDOG_POLL_INTERVAL);
     return () => clearInterval(interval);
   }, [
-    running, jobId, sseConnected, callApi, cancelAmbiguousJob, clearTransientProgressError,
-    notify, recordStatusRefreshFailure, onTerminal, onProgressUpdate, setPollFailures,
+    running,
+    jobId,
+    sseConnected,
+    callApi,
+    cancelAmbiguousJob,
+    clearTransientProgressError,
+    notify,
+    recordStatusRefreshFailure,
+    onTerminal,
+    onProgressUpdate,
+    setPollFailures,
   ]);
 }

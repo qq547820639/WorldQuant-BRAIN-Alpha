@@ -15,34 +15,34 @@
  * serves as the operational status panel and can be extended in the future.
  */
 
-import { memo } from "react";
-import type { UnifiedProgress } from "@/types";
-import ProgressFeedback from "@/components/ProgressFeedback";
+import { memo } from 'react';
+import type { UnifiedProgress } from '@/types';
+import ProgressFeedback from '@/components/ProgressFeedback';
 
 export interface CandidateDetailPanelProps {
   showProductionControls: boolean;
 
   // Auto-advance task
-  taskState: "idle" | "loading" | "progress" | "success" | "error";
+  taskState: 'idle' | 'loading' | 'progress' | 'success' | 'error';
   taskProgress: UnifiedProgress | null;
   taskError: string | null;
   taskStreamExhausted: boolean;
   onRetryTask: () => void;
 
   // BRAIN simulation
-  simState: "idle" | "loading" | "progress" | "success" | "error";
+  simState: 'idle' | 'loading' | 'progress' | 'success' | 'error';
   simProgress: UnifiedProgress | null;
   simError: string | null;
   onRetrySim: () => void;
 
   // Optimization
-  optimizationState: "idle" | "loading" | "progress" | "success" | "error";
+  optimizationState: 'idle' | 'loading' | 'progress' | 'success' | 'error';
   optimizationProgress: UnifiedProgress | null;
   optimizationError: string | null;
   onRetryOptimization: () => void;
 
   // Batch check
-  checkState: "idle" | "loading" | "progress" | "success" | "error";
+  checkState: 'idle' | 'loading' | 'progress' | 'success' | 'error';
   checkProgress: UnifiedProgress | null;
   checkError: string | null;
   onRetryCheck: () => void;
@@ -74,47 +74,52 @@ export const CandidateDetailPanel = memo(function CandidateDetailPanel({
 
   return (
     <>
-      {taskState !== "idle" && (
+      {taskState !== 'idle' && (
         <ProgressFeedback
-          state={taskStreamExhausted && taskState === "progress" ? "error" : taskState}
+          state={taskStreamExhausted && taskState === 'progress' ? 'error' : taskState}
           title="候选池自动推进"
           progress={taskProgress}
-          error={taskError || (taskStreamExhausted && taskState === "progress" ? "候选池自动推进状态不明确，取消未确认。" : null)}
+          error={
+            taskError ||
+            (taskStreamExhausted && taskState === 'progress'
+              ? '候选池自动推进状态不明确，取消未确认。'
+              : null)
+          }
           onRetry={onRetryTask}
-          compact={taskState === "success"}
+          compact={taskState === 'success'}
         />
       )}
 
-      {simState !== "idle" && (
+      {simState !== 'idle' && (
         <ProgressFeedback
           state={simState}
           title="BRAIN官方模拟"
           progress={simProgress}
           error={simError}
           onRetry={onRetrySim}
-          compact={simState === "success"}
+          compact={simState === 'success'}
         />
       )}
 
-      {optimizationState !== "idle" && (
+      {optimizationState !== 'idle' && (
         <ProgressFeedback
           state={optimizationState}
           title="候选本地优化"
           progress={optimizationProgress}
           error={optimizationError}
           onRetry={onRetryOptimization}
-          compact={optimizationState === "success"}
+          compact={optimizationState === 'success'}
         />
       )}
 
-      {checkState !== "idle" && (
+      {checkState !== 'idle' && (
         <ProgressFeedback
           state={checkState}
           title="质量门槛检查"
           progress={checkProgress}
           error={checkError}
           onRetry={onRetryCheck}
-          compact={checkState === "success"}
+          compact={checkState === 'success'}
         />
       )}
     </>

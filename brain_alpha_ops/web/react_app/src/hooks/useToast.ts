@@ -1,7 +1,7 @@
 /** Lightweight toast notification hook. */
 
-import { useState, useCallback, useRef } from "react";
-import type { Toast } from "@/types";
+import { useState, useCallback, useRef } from 'react';
+import type { Toast } from '@/types';
 
 export function useToast(maxToasts = 5) {
   const [toasts, setToasts] = useState<Toast[]>([]);
@@ -10,11 +10,11 @@ export function useToast(maxToasts = 5) {
 
   const addToast = useCallback(
     (
-      type: Toast["type"],
+      type: Toast['type'],
       message: string,
       durationMs = 5000,
       action?: { label: string; onClick: () => void },
-      secondaryAction?: { label: string; onClick: () => void },
+      secondaryAction?: { label: string; onClick: () => void }
     ) => {
       const id = `toast_${++counterRef.current}_${Date.now()}`;
       const toast: Toast = {
@@ -34,8 +34,8 @@ export function useToast(maxToasts = 5) {
       setToasts((prev) => {
         const next = [...prev, toast];
         if (next.length <= maxToasts) return next;
-        const errors = next.filter((t) => t.type === "error");
-        const others = next.filter((t) => t.type !== "error");
+        const errors = next.filter((t) => t.type === 'error');
+        const others = next.filter((t) => t.type !== 'error');
         const keepErrors = errors.slice(-Math.min(errors.length, 2));
         const keepOthers = others.slice(-(maxToasts - keepErrors.length));
         return [...keepOthers, ...keepErrors];
@@ -47,7 +47,7 @@ export function useToast(maxToasts = 5) {
       }
       return id;
     },
-    [maxToasts],
+    [maxToasts]
   );
 
   const dismissToast = useCallback((id: string) => {

@@ -12,26 +12,27 @@ const FLOW_STEPS: Step[] = [
     phase: 'connect',
     title: '连接与就绪',
     description: '验证 BRAIN 平台连接，同步云端 Alpha 数据，确保系统处于可工作状态',
-    action: '点击「官方操作」面板中的「同步云端 Alpha」按钮开始'
+    action: '点击「官方操作」面板中的「同步云端 Alpha」按钮开始',
   },
   {
     phase: 'discover',
     title: '候选发现',
     description: '基于 BRAIN 平台数据生成候选 Alpha 因子，支持假设驱动、经验反馈和随机探索三种模式',
-    action: '在「候选管理」页面点击「生成候选」开始探索'
+    action: '在「候选管理」页面点击「生成候选」开始探索',
   },
   {
     phase: 'evaluate',
     title: '评估与验证',
     description: '对候选 Alpha 进行本地预筛选和多维度质量评分，通过 8 项硬性门禁检查',
-    action: '点击候选行的「检查」按钮，系统将自动完成评分和门禁验证'
+    action: '点击候选行的「检查」按钮，系统将自动完成评分和门禁验证',
   },
   {
     phase: 'ready',
     title: '提交就绪',
-    description: '通过所有门禁检查的 Alpha 可进入提交审批流程。注意：Web 控制台不允许直接提交，需走人工审批路径',
-    action: '在「提交确认」面板中复核通过项，确认后发起审批'
-  }
+    description:
+      '通过所有门禁检查的 Alpha 可进入提交审批流程。注意：Web 控制台不允许直接提交，需走人工审批路径',
+    action: '在「提交确认」面板中复核通过项，确认后发起审批',
+  },
 ];
 
 interface FlowGuideProps {
@@ -44,24 +45,33 @@ export const FlowGuide = memo(function FlowGuide({ currentPhase, onDismiss }: Fl
 
   if (dismissed) return null;
 
-  const currentStep = FLOW_STEPS.find(s => s.phase === currentPhase);
+  const currentStep = FLOW_STEPS.find((s) => s.phase === currentPhase);
 
   return (
-    <div className="rounded-lg p-4 mb-4" style={{ background: "var(--color-info-bg)", border: "1px solid var(--color-info-border-soft)" }}>
+    <div
+      className="rounded-lg p-4 mb-4"
+      style={{
+        background: 'var(--color-info-bg)',
+        border: '1px solid var(--color-info-border-soft)',
+      }}
+    >
       <div className="flex items-start justify-between">
         <div className="flex-1">
-          <h3 className="text-sm font-semibold mb-2" style={{ color: "var(--color-icon-info)" }}>
+          <h3 className="text-sm font-semibold mb-2" style={{ color: 'var(--color-icon-info)' }}>
             📋 流程指引 — {currentStep?.title || currentPhase}
           </h3>
-          <p className="text-sm mb-2" style={{ color: "var(--color-info-text)" }}>
+          <p className="text-sm mb-2" style={{ color: 'var(--color-info-text)' }}>
             {currentStep?.description}
           </p>
-          <p className="text-xs rounded px-2 py-1 inline-block" style={{ background: "var(--color-info-bg-medium)", color: "var(--color-info-text)" }}>
+          <p
+            className="text-xs rounded px-2 py-1 inline-block"
+            style={{ background: 'var(--color-info-bg-medium)', color: 'var(--color-info-text)' }}
+          >
             💡 {currentStep?.action}
           </p>
           <div className="mt-3 flex gap-1">
             {FLOW_STEPS.map((step, idx) => {
-              const currentIdx = FLOW_STEPS.findIndex(s => s.phase === currentPhase);
+              const currentIdx = FLOW_STEPS.findIndex((s) => s.phase === currentPhase);
               return (
                 <div
                   key={step.phase}
@@ -69,10 +79,10 @@ export const FlowGuide = memo(function FlowGuide({ currentPhase, onDismiss }: Fl
                   style={{
                     background:
                       step.phase === currentPhase
-                        ? "var(--color-info-text)"
+                        ? 'var(--color-info-text)'
                         : currentIdx > idx
-                        ? "var(--color-info-bg-strong)"
-                        : "var(--color-border-default)",
+                          ? 'var(--color-info-bg-strong)'
+                          : 'var(--color-border-default)',
                   }}
                   title={step.title}
                 />
@@ -82,9 +92,12 @@ export const FlowGuide = memo(function FlowGuide({ currentPhase, onDismiss }: Fl
         </div>
         {onDismiss && (
           <button
-            onClick={() => { setDismissed(true); onDismiss?.(); }}
+            onClick={() => {
+              setDismissed(true);
+              onDismiss?.();
+            }}
             className="text-xs ml-2 hover:opacity-80"
-            style={{ color: "var(--color-info-text-soft)" }}
+            style={{ color: 'var(--color-info-text-soft)' }}
           >
             ✕
           </button>
