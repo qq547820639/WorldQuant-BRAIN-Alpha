@@ -1,16 +1,25 @@
 """Structured scoring and production gates.
 
-Backward-compatible re-export shim.  The implementation now lives in the
-``scoring/`` sub-package; this file re-exports the public API so that
-existing import paths continue to work unchanged.
+This package splits the original ``scoring.py`` into focused sub-modules
+while preserving the public API.  All public symbols are re-exported here
+so that ``from brain_alpha_ops.research.scoring import build_scorecard``
+continues to work unchanged.
 
-When both ``scoring.py`` and ``scoring/`` exist, Python loads the
-sub-package, so this shim exists primarily for documentation and as a
-fallback if the sub-package is removed.
+Sub-modules:
+  - ``_helpers``    : pure utility functions (``_num``, ``item``, ``check``, ...)
+  - ``prior``       : prior_score, local_convergence_score, _parameterized_dimensions
+  - ``empirical``   : empirical_score, calculate_fitness, self-correlation checks
+  - ``guidance``    : assistant_guidance_score_adjustment
+  - ``scorecard``   : build_scorecard, evaluate_quality_gate, decision_band,
+                      submission_checklist, estimate_score_confidence,
+                      SCORECARD_SCHEMA_VERSION, PRODUCTION_GATE_SCHEMA_VERSION
 """
+
 from __future__ import annotations
 
-from .scoring._helpers import (
+from brain_alpha_ops.research._ratio import _ratio
+
+from ._helpers import (
     _bounded_score,
     _format_empirical_failure,
     _guidance_outcome_status,
@@ -20,7 +29,7 @@ from .scoring._helpers import (
     check,
     item,
 )
-from .scoring.empirical import (
+from .empirical import (
     EMPIRICAL_CHECK_ITEM_NAMES,
     _build_self_correlation_item,
     _check_self_correlation_with_exception,
@@ -28,14 +37,14 @@ from .scoring.empirical import (
     calculate_fitness,
     empirical_score,
 )
-from .scoring.guidance import assistant_guidance_score_adjustment
-from .scoring.prior import (
+from .guidance import assistant_guidance_score_adjustment
+from .prior import (
     _economic_logic_score,
     _parameterized_dimensions,
     local_convergence_score,
     prior_score,
 )
-from .scoring.scorecard import (
+from .scorecard import (
     PRODUCTION_GATE_SCHEMA_VERSION,
     SCORECARD_SCHEMA_VERSION,
     _scorecard_settings,
@@ -45,7 +54,6 @@ from .scoring.scorecard import (
     evaluate_quality_gate,
     submission_checklist,
 )
-from brain_alpha_ops.research._ratio import _ratio
 
 __all__ = [
     # Constants
@@ -63,7 +71,7 @@ __all__ = [
     "estimate_score_confidence",
     "calculate_fitness",
     "assistant_guidance_score_adjustment",
-    # Helpers
+    # Helpers (used externally by tests and compliance modules)
     "item",
     "check",
     "_ratio",

@@ -1,16 +1,10 @@
 """Hypothesis Library — structured market hypothesis definitions and experience-weighted management.
 
-Re-export shim for the ``hypothesis_library`` subpackage. The original
-monolithic module has been split into focused submodules:
-
-  - ``hypothesis_library._minimal_yaml``: minimal YAML parser fallback
-  - ``hypothesis_library._file_repair``: PyInstaller file repair + safe YAML loader
-  - ``hypothesis_library.models``: dataclasses (Hypothesis, ExpressionFamily, ...)
-  - ``hypothesis_library.library``: ``HypothesisLibrary`` class
-
-This file remains as a backward-compatibility entry point so all existing
-imports (e.g. ``from brain_alpha_ops.research.hypothesis_library import
-HypothesisLibrary``) continue to work without changes.
+Provides:
+  - Dataclasses: Hypothesis, ExpressionFamily, FieldCategoryDef, AdaptationConfig,
+    FailureMode, Rationale, ExperienceWeights, GenerationMeta
+  - HypothesisLibrary: YAML-based loading, querying, and experience weight management
+  - File-repair helpers: ensure_hypothesis_library_files, PACKAGED_HYPOTHESIS_LIBRARY_FILES
 
 Usage::
 
@@ -24,9 +18,10 @@ Usage::
                            expr_fam_weights={"revision_diff": 1.3},
                            window_weights={3: 1.2})
 """
+
 from __future__ import annotations
 
-from .hypothesis_library._file_repair import (
+from ._file_repair import (
     DEFAULT_HYPOTHESIS_LIBRARY_RELATIVE_DIR,
     PACKAGED_HYPOTHESIS_LIBRARY_FILES,
     _bundled_hypothesis_root,
@@ -34,9 +29,9 @@ from .hypothesis_library._file_repair import (
     _yaml_file_is_usable,
     ensure_hypothesis_library_files,
 )
-from .hypothesis_library._minimal_yaml import _minimal_yaml_load
-from .hypothesis_library.library import HypothesisLibrary
-from .hypothesis_library.models import (
+from ._minimal_yaml import _minimal_yaml_load
+from .library import HypothesisLibrary
+from .models import (
     AdaptationConfig,
     ExperienceWeights,
     ExpressionFamily,

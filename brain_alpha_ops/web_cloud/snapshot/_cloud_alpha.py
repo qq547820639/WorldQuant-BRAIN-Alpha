@@ -150,7 +150,7 @@ def cloud_alpha_summary(
         elif status == "UNSUBMITTED" and (pass_fail == "FAIL" or metrics.get("failure_reason")):
             failed_unsubmitted += 1
     # Lazy import to avoid circular dependency at module load time.
-    from ._official_context import official_context_file_counts
+    from ._official_context_read import official_context_file_counts
 
     return {
         "status": "loaded" if rows else "empty",

@@ -1,13 +1,21 @@
 """Assistant request and response helpers.
 
-Backward-compatible re-export shim.  The implementation now lives in the
-``assistant/`` sub-package; this file re-exports the public API so that
-existing import paths continue to work unchanged.
+This package splits the original ``assistant.py`` into focused sub-modules
+while preserving the public API.  All public symbols are re-exported here
+so that ``from brain_alpha_ops.research.assistant import build_assistant_request_pack``
+continues to work unchanged.
 
-When both ``assistant.py`` and ``assistant/`` exist, Python loads the
-sub-package, so this shim exists primarily for documentation and as a
-fallback if the sub-package is removed.
+Sub-modules:
+  - ``_constants`` : schema versions, ASSISTANT_RESPONSE_SCHEMA, logger
+  - ``_helpers``   : pure utility functions (``_as_dict``, ``_clamp``, ...)
+  - ``request``    : build_assistant_request_pack, render_assistant_request_prompt,
+                     prompt diagnostics / budgeting helpers
+  - ``offline``    : build_offline_assistant_response, _offline_summary,
+                     _offline_confidence
+  - ``response``   : parse_assistant_response, assistant_response_to_generation_guidance,
+                     _normalize_assistant_response, _normalize_adjustments
 """
+
 from __future__ import annotations
 
 from brain_alpha_ops.research.assistant_json import AssistantResponseParseError
@@ -15,7 +23,7 @@ from brain_alpha_ops.research.assistant_json import (
     extract_json_payload as _extract_json_payload,
 )
 
-from .assistant._constants import (
+from ._constants import (
     ASSISTANT_GUIDANCE_SCHEMA_VERSION,
     ASSISTANT_REQUEST_SCHEMA_VERSION,
     ASSISTANT_RESPONSE_SCHEMA,
@@ -24,7 +32,7 @@ from .assistant._constants import (
     INTERNAL_CONTEXT_METADATA_KEYS,
     logger,
 )
-from .assistant._helpers import (
+from ._helpers import (
     _as_dict,
     _clamp,
     _digest_json,
@@ -45,12 +53,12 @@ from .assistant._helpers import (
     _unique_strings,
     _weak_guidance_outcome,
 )
-from .assistant.offline import (
+from .offline import (
     _offline_confidence,
     _offline_summary,
     build_offline_assistant_response,
 )
-from .assistant.request import (
+from .request import (
     _assistant_prompt_diagnostics,
     _budgeted_context,
     _compact_context_lists,
@@ -59,7 +67,7 @@ from .assistant.request import (
     build_assistant_request_pack,
     render_assistant_request_prompt,
 )
-from .assistant.response import (
+from .response import (
     _normalize_adjustments,
     _normalize_assistant_response,
     assistant_response_to_generation_guidance,
@@ -82,7 +90,7 @@ __all__ = [
     "build_offline_assistant_response",
     "parse_assistant_response",
     "assistant_response_to_generation_guidance",
-    # Private helpers
+    # Private helpers (re-exported for backward compatibility / monkeypatch)
     "_extract_json_payload",
     "_normalize_assistant_response",
     "_normalize_adjustments",

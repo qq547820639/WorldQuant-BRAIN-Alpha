@@ -48,6 +48,7 @@ from ._cached_alphas import (
 
 # Official context read helpers
 from ._official_context_read import (
+    _metadata_int,
     context_cache_manifest,
     context_items_hash,
     datasets_from_fields,
@@ -66,7 +67,10 @@ from ._official_context_write import (
 
 # Refresh service
 from ._refresh_service import (
+    DatasetsFromFields,
     JobStoreLike,
+    OfficialContextCounts,
+    PersistOfficialContext,
     _cloud_refresh_progress_message,
     refresh_cloud_context_for_check_service,
 )
@@ -112,4 +116,7 @@ __all__ = [
     # Refresh service
     "refresh_cloud_context_for_check_service",
     "JobStoreLike",
+    "OfficialContextCounts",
+    "DatasetsFromFields",
+    "PersistOfficialContext",
 ]

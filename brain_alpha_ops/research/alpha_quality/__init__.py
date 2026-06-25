@@ -1,19 +1,23 @@
 """Structured Alpha output configuration and quality diagnostics.
 
-Re-export shim. The implementation has been split into the
-``brain_alpha_ops.research.alpha_quality`` subpackage. This module remains
-for backward compatibility so existing imports
-``from brain_alpha_ops.research.alpha_quality import ...`` continue to work.
+Subpackage split (formerly ``alpha_quality.py`` monolith):
+  - ``constants``: module-level constants
+  - ``utils``: pure utility helpers shared across builders
+  - ``output_config``: ``build_alpha_output_config`` builder
+  - ``reasons_format``: missing-field / config / expression-format reason builders
+  - ``reasons_quality``: local-quality / scorecard / official-evidence / gate builders
+  - ``diagnosis``: top-level ``diagnose_alpha_candidate`` and summary
 """
+
 from __future__ import annotations
 
-from .alpha_quality.constants import (
+from .constants import (
     _REQUIRED_ALPHA_FIELDS,
     _REQUIRED_OFFICIAL_METRICS,
     _REQUIRED_SETTINGS_FIELDS,
     _RESERVED_WORDS,
 )
-from .alpha_quality.utils import (
+from .utils import (
     _expression_profile,
     _extract_bracketed,
     _finite_number,
@@ -29,22 +33,22 @@ from .alpha_quality.utils import (
     _split_args,
     _status_label,
 )
-from .alpha_quality.output_config import build_alpha_output_config
-from .alpha_quality.reasons_format import (
+from .output_config import build_alpha_output_config
+from .reasons_format import (
     _add_expression_reasons,
     _add_generation_risk_reasons,
     _add_missing_candidate_reasons,
     _add_missing_config_reasons,
     _add_operator_signature_reasons,
 )
-from .alpha_quality.reasons_quality import (
+from .reasons_quality import (
     _add_gate_reasons,
     _add_local_quality_reasons,
     _add_metric_bound,
     _add_official_evidence_reasons,
     _add_scorecard_reasons,
 )
-from .alpha_quality.diagnosis import diagnose_alpha_candidate, summarize_quality_diagnostics
+from .diagnosis import diagnose_alpha_candidate, summarize_quality_diagnostics
 
 __all__ = [
     "build_alpha_output_config",
