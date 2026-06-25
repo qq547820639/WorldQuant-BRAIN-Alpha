@@ -1,3 +1,5 @@
+import { memo } from "react";
+
 /** Overview card for displaying metrics. */
 
 interface Props {
@@ -7,7 +9,7 @@ interface Props {
   tone?: "success" | "warning" | "neutral";
 }
 
-export default function OverviewCard({ label, value, detail, tone = "neutral" }: Props) {
+function OverviewCard({ label, value, detail, tone = "neutral" }: Props) {
   const toneClass = tone === "success" ? "text-positive" : tone === "warning" ? "text-warning" : "text-text-primary";
   return (
     <div className="panel min-w-0 p-3">
@@ -17,3 +19,5 @@ export default function OverviewCard({ label, value, detail, tone = "neutral" }:
     </div>
   );
 }
+
+export default memo(OverviewCard);

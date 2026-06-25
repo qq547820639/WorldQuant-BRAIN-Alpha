@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { fmtDuration } from "./progressUtils";
 
 interface ProgressBodyProps {
@@ -10,7 +11,7 @@ interface ProgressBodyProps {
   isStalled: boolean;
 }
 
-export default function ProgressBody({
+function ProgressBody({
   state,
   displayMessage,
   displayError,
@@ -39,3 +40,5 @@ export default function ProgressBody({
     </div>
   );
 }
+
+export default memo(ProgressBody);

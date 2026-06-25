@@ -44,16 +44,17 @@ export default defineConfig(({ mode }) => {
       sourcemap: !isProduction,
       target: "es2022",
       cssCodeSplit: true,
-      cssMinify: true,
+      cssMinify: "esbuild",
       minify: "esbuild",
       reportCompressedSize: true,
-      chunkSizeWarningLimit: 200,
+      chunkSizeWarningLimit: 500,
+      modulePreload: false,
+      assetsInlineLimit: 8192,
       rollupOptions: {
+        treeshake: false,
         output: {
           manualChunks(id) {
             if (!id.includes("node_modules")) return;
-            if (id.includes("@tanstack")) return "tanstack-virtual";
-            if (id.includes("/react/") || id.includes("/react-dom/") || id.includes("/scheduler/")) return "react-vendor";
             return "vendor";
           },
           chunkFileNames: "assets/[name]-[hash].js",
@@ -64,6 +65,7 @@ export default defineConfig(({ mode }) => {
     },
     esbuild: {
       drop: isProduction ? ["console", "debugger"] : [],
+      legalComments: "none",
     },
     test: {
       environment: "jsdom",

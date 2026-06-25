@@ -1,3 +1,4 @@
+import { memo } from "react";
 import type { ProgressLifecycle, UnifiedProgress } from "@/types";
 import type { JobStateClassification } from "@/helpers/runPayload";
 import { progressFillClass } from "./progressUtils";
@@ -15,7 +16,7 @@ interface ProgressBarProps {
   isStalled: boolean;
 }
 
-export default function ProgressBar({
+function ProgressBar({
   title,
   label,
   state,
@@ -43,3 +44,5 @@ export default function ProgressBar({
     </div>
   );
 }
+
+export default memo(ProgressBar);

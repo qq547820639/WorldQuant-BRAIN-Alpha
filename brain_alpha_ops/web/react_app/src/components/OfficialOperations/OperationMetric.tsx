@@ -1,3 +1,5 @@
+import { memo } from "react";
+
 /** Operation metric display. */
 
 interface Props {
@@ -6,7 +8,7 @@ interface Props {
   tone?: "success" | "warning" | "neutral";
 }
 
-export default function OperationMetric({ label, value, tone = "neutral" }: Props) {
+function OperationMetric({ label, value, tone = "neutral" }: Props) {
   const toneClass = tone === "success" ? "text-positive" : tone === "warning" ? "text-warning" : "text-text-secondary";
   return (
     <div className="rounded-md border border-border-subtle bg-surface-1 p-2">
@@ -15,3 +17,5 @@ export default function OperationMetric({ label, value, tone = "neutral" }: Prop
     </div>
   );
 }
+
+export default memo(OperationMetric);

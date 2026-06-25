@@ -1,3 +1,5 @@
+import { memo } from "react";
+
 /** Summary metric display for label/value pairs. */
 
 interface Props {
@@ -7,7 +9,7 @@ interface Props {
   mono?: boolean;
 }
 
-export default function SummaryMetric({ label, value, title, mono = false }: Props) {
+function SummaryMetric({ label, value, title, mono = false }: Props) {
   return (
     <div className="min-w-0">
       <dt className="text-xs text-text-tertiary">{label}</dt>
@@ -15,3 +17,5 @@ export default function SummaryMetric({ label, value, title, mono = false }: Pro
     </div>
   );
 }
+
+export default memo(SummaryMetric);

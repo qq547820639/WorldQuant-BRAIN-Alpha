@@ -1,6 +1,6 @@
-/** Reusable action panel with status and buttons. */
+import { memo, type ReactNode } from "react";
 
-import type { ReactNode } from "react";
+/** Reusable action panel with status and buttons. */
 
 interface Props {
   title: string;
@@ -15,7 +15,7 @@ interface Props {
   children?: ReactNode;
 }
 
-export default function ActionPanel({
+function ActionPanel({
   title,
   description,
   status,
@@ -62,3 +62,5 @@ export default function ActionPanel({
     </div>
   );
 }
+
+export default memo(ActionPanel);
