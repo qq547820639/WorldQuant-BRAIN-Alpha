@@ -51,7 +51,7 @@ export default defineConfig(({ mode }) => {
       modulePreload: false,
       assetsInlineLimit: 16384,
       rollupOptions: {
-        treeshake: false,
+        treeshake: true,
         output: {
           manualChunks(id) {
             if (!id.includes("node_modules")) return;
