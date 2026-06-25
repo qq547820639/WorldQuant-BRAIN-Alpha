@@ -4,7 +4,6 @@ import { useGlobalData } from '@/hooks/useGlobalData';
 import { useCandidatePipeline } from '@/hooks/useCandidatePipeline';
 import { useSseManager } from '@/hooks/useSseManager';
 import { useCandidateActions } from '@/hooks/useCandidateActions';
-import { useCandidateTableSse } from '@/hooks/useCandidateTableSse';
 import { useCandidateTableState, PAGE_SIZE } from '@/hooks/useCandidateTableState';
 import { useCandidateTableData } from '@/hooks/useCandidateTableData';
 import type { AlphaLifecycleHistoryResponse, Candidate } from '@/types';
@@ -13,14 +12,16 @@ import {
   queueViewLabel,
   CandidateCheckResult,
   CandidateQueueView,
-} from './CandidateTableUtils';
-import CandidateTablePagination from './CandidateTablePagination';
-import { CandidateTableToolbar } from './CandidateTableToolbar';
-import type { QualitySummaryData } from './CandidateTableToolbar';
-import CandidateTableDesktop from './CandidateTableDesktop';
-import CandidateTableMobile from './CandidateTableMobile';
-import CandidateTableLoading from './CandidateTableLoading';
-import CandidateTableSuccessBanner from './CandidateTableSuccessBanner';
+} from '../CandidateTableUtils';
+import CandidateTablePagination from '../CandidateTablePagination';
+import { CandidateTableToolbar } from '../CandidateTableToolbar';
+import type { QualitySummaryData } from '../CandidateTableToolbar';
+import CandidateTableDesktop from '../CandidateTableDesktop';
+import CandidateTableMobile from '../CandidateTableMobile';
+import CandidateTableLoading from '../CandidateTableLoading';
+import TaskSuccessBanner from './TaskSuccessBanner';
+import { useCandidateTableSse } from './useCandidateTableSse';
+import { buildDetailPanelProps } from './detailPanelProps';
 
 interface Props {
   notify: (type: 'success' | 'error' | 'warning' | 'info', msg: string) => void;
@@ -120,7 +121,7 @@ export default function CandidateTable({
     targetPoolSize: tableState.targetPoolSize,
   });
 
-  useCandidateTableSse(pipeline, sseManager, actions);
+  useCandidateTableSse({ pipeline, sseManager, actions });
 
   const candidateWorkflowBusy =
     pipeline.task.state === 'loading' ||
@@ -163,34 +164,7 @@ export default function CandidateTable({
   const title = viewMode === 'candidates' ? '候选管理' : `${queueViewLabel(viewMode)}候选`;
 
   const detailPanelProps = useMemo(
-    () => ({
-      showProductionControls,
-      taskState: pipeline.task.state,
-      taskProgress: pipeline.task.progress,
-      taskError: pipeline.task.error,
-      taskStreamExhausted: sseManager.task.exhausted,
-      onRetryTask: () => {
-        void actions.generateCandidates();
-      },
-      simState: pipeline.simulation.state,
-      simProgress: pipeline.simulation.progress,
-      simError: pipeline.simulation.error,
-      onRetrySim: () => {
-        actions.startSimulation();
-      },
-      optimizationState: pipeline.optimization.state,
-      optimizationProgress: pipeline.optimization.progress,
-      optimizationError: pipeline.optimization.error,
-      onRetryOptimization: () => {
-        void actions.startOptimization();
-      },
-      checkState: pipeline.check.state,
-      checkProgress: pipeline.check.progress,
-      checkError: pipeline.check.error,
-      onRetryCheck: () => {
-        void actions.startBatchCheck(actions.lastBatchCheckCandidatesRef.current || undefined);
-      },
-    }),
+    () => buildDetailPanelProps({ showProductionControls, pipeline, sseManager, actions }),
     [
       showProductionControls,
       pipeline.task.state,
@@ -279,9 +253,9 @@ export default function CandidateTable({
 
       <div className="panel">
         {pipeline.task.state === 'success' && pipeline.taskSuccessBanner && (
-          <CandidateTableSuccessBanner
+          <TaskSuccessBanner
             banner={pipeline.taskSuccessBanner}
-            retainedCount={retainedPoolCandidates.length}
+            retainedPoolCount={retainedPoolCandidates.length}
             targetPoolSize={tableState.targetPoolSize}
             onClose={() => pipeline.setTaskSuccessBanner(null)}
           />
