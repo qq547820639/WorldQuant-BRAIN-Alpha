@@ -190,8 +190,8 @@ def _write_required_tree(root: Path) -> None:
         'append_scientific_audit_event(row, operation="pre_submit_availability_check")\n',
         encoding="utf-8",
     )
-    (root / "brain_alpha_ops" / "research").mkdir(parents=True)
-    (root / "brain_alpha_ops" / "research" / "pipeline_runtime.py").write_text(
+    (root / "brain_alpha_ops" / "research" / "pipeline_runtime").mkdir(parents=True)
+    (root / "brain_alpha_ops" / "research" / "pipeline_runtime" / "_records_mixin.py").write_text(
         'append_scientific_audit_event(row, operation="robustness_feedback")\n',
         encoding="utf-8",
     )

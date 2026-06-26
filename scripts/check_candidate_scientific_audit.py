@@ -23,7 +23,7 @@ DECISIONS_MODULE = ROOT / "brain_alpha_ops" / "web_candidates/decisions.py"
 PAYLOADS_MODULE = ROOT / "brain_alpha_ops" / "web_candidates/payloads.py"
 SIMULATION_MODULE = ROOT / "brain_alpha_ops" / "web_candidates/simulation.py"
 CHECK_EVIDENCE_MODULE = ROOT / "brain_alpha_ops" / "web_candidates/check_evidence.py"
-PIPELINE_RUNTIME_MODULE = ROOT / "brain_alpha_ops" / "research" / "pipeline_runtime.py"
+PIPELINE_RUNTIME_MODULE = ROOT / "brain_alpha_ops" / "research" / "pipeline_runtime" / "_records_mixin.py"
 QUALITY_GATE = ROOT / "scripts" / "quality_gate" / "__init__.py"
 
 REQUIRED_SCHEMA = "candidate-scientific-audit-v1"
@@ -52,7 +52,7 @@ def check_candidate_scientific_audit(root: str | Path = ROOT) -> dict[str, Any]:
         "simulation": root_path / "brain_alpha_ops" / "web_candidates/simulation.py",
         "simulation_failures": root_path / "brain_alpha_ops" / "web_candidates/simulation_failures.py",
         "check_evidence": root_path / "brain_alpha_ops" / "web_candidates/check_evidence.py",
-        "pipeline_runtime": root_path / "brain_alpha_ops" / "research" / "pipeline_runtime.py",
+        "pipeline_runtime": root_path / "brain_alpha_ops" / "research" / "pipeline_runtime" / "_records_mixin.py",
         "quality_gate": root_path / "scripts" / "quality_gate" / "__init__.py",
     }
     findings: list[dict[str, Any]] = []

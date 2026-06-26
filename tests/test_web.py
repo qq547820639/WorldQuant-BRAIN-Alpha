@@ -199,7 +199,8 @@ def test_submit_preflight_errors_are_backend_owned_and_react_readable():
     csrf_utils_ts = _react_source("utils", "csrf.ts")
     submission_tsx = _react_source("components", "SubmissionConfirmPanel.tsx")
     quality_tsx = _react_source("components", "QualityCheckPanel.tsx")
-    safety_py = (Path(__file__).resolve().parents[1] / "brain_alpha_ops" / "web" / "submissions" / "web_submission_safety.py").read_text(encoding="utf-8")
+    _safety_pkg = Path(__file__).resolve().parents[1] / "brain_alpha_ops" / "web" / "submissions" / "web_submission_safety"
+    safety_py = "\n".join(p.read_text(encoding="utf-8") for p in sorted(_safety_pkg.glob("*.py")))
     submission_batch_py = (Path(__file__).resolve().parents[1] / "brain_alpha_ops" / "web" / "submissions" / "web_submission_single.py").read_text(encoding="utf-8")
 
     for code in (
