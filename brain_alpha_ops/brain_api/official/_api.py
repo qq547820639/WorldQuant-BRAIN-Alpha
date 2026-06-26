@@ -1,4 +1,8 @@
-"""Main ``OfficialBrainAPI`` adapter class."""
+"""Main ``OfficialBrainAPI`` adapter class.
+
+Composition file: combines the auth, simulation, and data-access mixins
+with the core ``__init__``/property/utility methods on this class.
+"""
 
 from __future__ import annotations
 from dataclasses import asdict
@@ -13,7 +17,6 @@ from typing import Any
 
 from brain_alpha_ops.config import BrainSettings, OfficialAPIConfig
 from brain_alpha_ops.secure_credentials import resolve_credentials
-from brain_alpha_ops.types import BrainAPIResponse
 
 from ..cache import cache_key as _cache_key
 from ..cache import cache_path as _cache_path
@@ -29,6 +32,9 @@ from ._helpers import (
     _OfficialRequestClient,
     _OfficialSimulationSubmissionClient,
 )
+from ._auth_mixin import _OfficialAuthMixin
+from ._data_access_mixin import _OfficialDataAccessMixin
+from ._simulation_mixin import _OfficialSimulationMixin
 
 logger = logging.getLogger("brain_alpha_ops.brain_api.official")
 
@@ -41,7 +47,7 @@ _standard_pagination_progress = _shared_standard_pagination_progress
 
 # Backward-compat re-exports for Phase 3.x migration
 
-class OfficialBrainAPI:
+class OfficialBrainAPI(_OfficialAuthMixin, _OfficialSimulationMixin, _OfficialDataAccessMixin):
     """Main interface for WorldQuant BRAIN API operations.
 
     This class provides a complete API client for interacting with the
@@ -119,32 +125,6 @@ class OfficialBrainAPI:
     def token(self, value: str) -> None:
         self._credentials.token = value or ""
 
-    def validate_expression(
-        self,
-        expression: str,
-        settings: dict,
-        known_operators: set | None = None,
-        known_fields: set | None = None,
-    ) -> dict:
-        return self._expression_validator.validate_expression(
-            expression,
-            settings,
-            known_operators=known_operators,
-            known_fields=known_fields,
-        )
-
-    def authenticate(self) -> dict:
-        return self._auth_profile.authenticate()
-
-    def get_user_profile(self) -> dict:
-        return self._auth_profile.get_user_profile()
-
-    def _basic_auth(self) -> str:
-        return self._auth_profile._basic_auth()
-
-    def _has_session_cookie(self) -> bool:
-        return self._auth_profile._has_session_cookie()
-
     def _request(
         self,
         method: str,
@@ -163,404 +143,6 @@ class OfficialBrainAPI:
             headers=headers,
             allow_auth_retry=allow_auth_retry,
         )
-
-    def list_fields(
-        self,
-        query: str = "all",
-        region: str = "",
-        dataset: str = "",
-        progress_callback=None,
-    ) -> list[dict]:
-        """List all available data fields from BRAIN platform.
-
-        Args:
-            query: Search query (default: "all" for all fields)
-            region: Geographic region filter (e.g., "USA", "JAPAN")
-            dataset: Dataset ID filter
-            progress_callback: Optional callback for pagination progress
-
-        Returns:
-            List of field dictionaries with id, name, category, etc.
-        """
-        return self._context_data.list_fields(
-            query,
-            region,
-            dataset=dataset,
-            progress_callback=progress_callback,
-        )
-
-    def list_datasets(
-        self,
-        query: str = "all",
-        region: str = "",
-        progress_callback=None,
-    ) -> list[dict]:
-        return self._context_data.list_datasets(query, region, progress_callback=progress_callback)
-
-    def list_operators(self, query: str = "all", progress_callback=None) -> list[dict]:
-        return self._context_data.list_operators(query, progress_callback=progress_callback)
-
-    def list_data_categories(self, progress_callback=None) -> list[dict]:
-        return self._context_data.list_data_categories(progress_callback=progress_callback)
-
-    def search_datasets_limited(
-        self,
-        query: str = "all",
-        region: str = "",
-        *,
-        limit: int = 50,
-        offset: int = 0,
-        **filters,
-    ) -> dict:
-        return self._context_data.search_datasets_limited(
-            query,
-            region,
-            **filters,
-            limit=limit,
-            offset=offset,
-        )
-
-    def discover_datasets_limited(
-        self,
-        query: str = "all",
-        region: str = "",
-        *,
-        options: dict[str, Any] | None = None,
-        **filters,
-    ) -> dict:
-        return self._context_data.discover_datasets_limited(
-            query,
-            region,
-            options=options,
-            **filters,
-        )
-
-    def search_datasets(
-        self,
-        query: str = "all",
-        region: str = "",
-        *,
-        limit: int = 50,
-        offset: int = 0,
-        progress_callback=None,
-        **filters,
-    ) -> list[dict]:
-        return self._context_data.search_datasets(
-            query,
-            region,
-            **filters,
-            limit=limit,
-            offset=offset,
-            progress_callback=progress_callback,
-        )
-
-    def discover_datasets(
-        self,
-        query: str = "all",
-        region: str = "",
-        *,
-        options: dict[str, Any] | None = None,
-        progress_callback=None,
-        **filters,
-    ) -> list[dict]:
-        return self._context_data.discover_datasets(
-            query,
-            region,
-            options=options,
-            progress_callback=progress_callback,
-            **filters,
-        )
-
-    def search_fields_limited(
-        self,
-        query: str = "all",
-        region: str = "",
-        dataset: str = "",
-        *,
-        limit: int = 50,
-        offset: int = 0,
-        **filters,
-    ) -> dict:
-        return self._context_data.search_fields_limited(
-            query,
-            region,
-            dataset=dataset,
-            **filters,
-            limit=limit,
-            offset=offset,
-        )
-
-    def discover_fields_limited(
-        self,
-        query: str = "all",
-        region: str = "",
-        dataset: str = "",
-        *,
-        dataset_id: str = "",
-        options: dict[str, Any] | None = None,
-        **filters,
-    ) -> dict:
-        return self._context_data.discover_fields_limited(
-            query,
-            region,
-            dataset=dataset,
-            dataset_id=dataset_id,
-            options=options,
-            **filters,
-        )
-
-    def search_fields(
-        self,
-        query: str = "all",
-        region: str = "",
-        dataset: str = "",
-        *,
-        limit: int = 50,
-        offset: int = 0,
-        progress_callback=None,
-        **filters,
-    ) -> list[dict]:
-        return self._context_data.search_fields(
-            query,
-            region,
-            dataset=dataset,
-            **filters,
-            limit=limit,
-            offset=offset,
-            progress_callback=progress_callback,
-        )
-
-    def discover_fields(
-        self,
-        query: str = "all",
-        region: str = "",
-        dataset: str = "",
-        *,
-        dataset_id: str = "",
-        options: dict[str, Any] | None = None,
-        progress_callback=None,
-        **filters,
-    ) -> list[dict]:
-        return self._context_data.discover_fields(
-            query,
-            region,
-            dataset=dataset,
-            dataset_id=dataset_id,
-            options=options,
-            progress_callback=progress_callback,
-            **filters,
-        )
-
-    def locate_dataset(self, dataset_id: str) -> dict:
-        return self._context_data.locate_dataset(dataset_id)
-
-    def locate_field(self, field_id: str) -> dict:
-        return self._context_data.locate_field(field_id)
-
-    def locate_alpha(self, alpha_id: str) -> dict:
-        return self._context_data.locate_alpha(alpha_id)
-
-    def get_dataset(self, dataset_id: str = "", *, id: str = "") -> dict:
-        return self._context_data.get_dataset(dataset_id, id=id)
-
-    def get_field(self, field_id: str = "", *, id: str = "") -> dict:
-        return self._context_data.get_field(field_id, id=id)
-
-    def get_alpha(self, alpha_id: str = "", *, id: str = "") -> dict:
-        return self._context_data.get_alpha(alpha_id, id=id)
-
-    def filter_alphas_limited(self, **filters) -> dict:
-        return self._context_data.filter_alphas_limited(**filters)
-
-    def query_alphas_limited(self, *, options: dict[str, Any] | None = None, **filters) -> dict:
-        return self._context_data.query_alphas_limited(options=options, **filters)
-
-    def filter_alphas(self, progress_callback=None, **filters) -> list[dict]:
-        return self._context_data.filter_alphas(progress_callback=progress_callback, **filters)
-
-    def patch_properties(
-        self,
-        alpha_id: str,
-        *,
-        name: str | None = None,
-        alpha_type: str | None = None,
-        decay: int | None = None,
-        neutralization: str | None = None,
-        pasteurization: str | None = None,
-        truncation: Any = None,
-        unit_handling: str | None = None,
-        nan_handling: str | None = None,
-        hidden: bool | None = None,
-        favorite: bool | None = None,
-        category: str | None = None,
-        color: str | None = None,
-        tag: str | None = None,
-        stage: str | None = None,
-        **extra: Any,
-    ) -> dict:
-        return self._context_data.patch_properties(
-            alpha_id,
-            name=name,
-            alpha_type=alpha_type,
-            decay=decay,
-            neutralization=neutralization,
-            pasteurization=pasteurization,
-            truncation=truncation,
-            unit_handling=unit_handling,
-            nan_handling=nan_handling,
-            hidden=hidden,
-            favorite=favorite,
-            category=category,
-            color=color,
-            tag=tag,
-            stage=stage,
-            **extra,
-        )
-
-    def query_alphas(
-        self,
-        progress_callback=None,
-        *,
-        options: dict[str, Any] | None = None,
-        **filters,
-    ) -> list[dict]:
-        return self._context_data.query_alphas(
-            progress_callback=progress_callback,
-            options=options,
-            **filters,
-        )
-
-    def list_user_alphas(
-        self,
-        sync_range: str = "all",
-        progress_callback=None,
-        *,
-        force_refresh: bool = False,
-    ) -> list[dict]:
-        return self._context_data.list_user_alphas(
-            sync_range,
-            progress_callback=progress_callback,
-            force_refresh=force_refresh,
-        )
-
-    def submit_simulation(self, expression: str, settings: dict) -> str:
-        """Submit an alpha expression for simulation.
-
-        Args:
-            expression: Alpha expression (e.g., "rank(ts_delta(close, 20))")
-            settings: Simulation settings (region, delay, universe, etc.)
-
-        Returns:
-            Simulation ID for polling results
-
-        Raises:
-            BrainAPIError: If submission fails
-        """
-        return self._simulation_submission.submit_simulation(expression, settings)
-
-    def poll_simulation(self, simulation_id: str) -> str:
-        """Poll simulation status once.
-
-        Args:
-            simulation_id: ID from submit_simulation()
-
-        Returns:
-            Status string: "RUNNING", "COMPLETED", or "FAILED"
-        """
-        return self._simulation_submission.poll_simulation(simulation_id)
-
-    def fetch_result(self, simulation_id: str) -> BrainAPIResponse:
-        """Fetch simulation results after completion.
-
-        Args:
-            simulation_id: ID from submit_simulation()
-
-        Returns:
-            BrainAPIResponse with simulation_id, alpha_id, metrics, and raw data
-        """
-        return self._simulation_submission.fetch_result(simulation_id)
-
-    def concurrent_simulate(self, alphas, concurrency: int = 3, *, return_exceptions: bool = False) -> list:
-        """Simulate multiple alphas concurrently.
-
-        Args:
-            alphas: List of (expression, settings) tuples or dicts
-            concurrency: Max concurrent simulations
-            return_exceptions: If True, return exceptions instead of raising
-
-        Returns:
-            List of simulation results
-        """
-        return self._simulation_submission.concurrent_simulate(
-            alphas,
-            concurrency=concurrency,
-            return_exceptions=return_exceptions,
-        )
-
-    def concurrent_check(self, alpha_ids, concurrency: int = 3, *, return_exceptions: bool = False) -> list:
-        return self._simulation_submission.concurrent_check(
-            alpha_ids,
-            concurrency=concurrency,
-            return_exceptions=return_exceptions,
-        )
-
-    def check_alpha(self, alpha_id: str) -> BrainAPIResponse:
-        """Check alpha submission readiness.
-
-        Args:
-            alpha_id: BRAIN alpha ID
-
-        Returns:
-            BrainAPIResponse with status ("PASSED"/"FAILED"), checks, and details
-        """
-        return self._simulation_submission.check_alpha(alpha_id)
-
-    def submit_alpha(self, alpha_id: str, expression: str, settings: dict, *, bodyless: bool = True) -> BrainAPIResponse:
-        """Submit alpha to BRAIN platform.
-
-        WARNING: This performs a REAL submission. In production, use the
-        web console's pre-submit review + HIL confirmation flow instead.
-
-        Args:
-            alpha_id: BRAIN alpha ID
-            expression: Alpha expression
-            settings: Submission settings
-            bodyless: Must be True (body sent via pre-submit check)
-
-        Returns:
-            BrainAPIResponse with submission status and details
-
-        Raises:
-            BrainAPIError: If submission is blocked or fails
-        """
-        return self._simulation_submission.submit_alpha(alpha_id, expression, settings, bodyless=bodyless)
-
-    def check_prod_correlation(
-        self,
-        expression: str,
-        settings: dict | None = None,
-    ) -> dict:
-        """Check correlation with existing production alphas.
-
-        Args:
-            expression: Alpha expression to check
-            settings: Optional settings override
-
-        Returns:
-            Dict with max_correlation, related_alphas, warning
-        """
-        return self._simulation_submission.check_prod_correlation(expression, settings)
-
-    def poll_until_complete(self, simulation_id: str) -> str:
-        """Poll simulation until completion or timeout.
-
-        Args:
-            simulation_id: ID from submit_simulation()
-
-        Returns:
-            "COMPLETED", "FAILED", or "TIMEOUT"
-        """
-        return self._simulation_submission.poll_until_complete(simulation_id)
 
     def set_market_scope(self, settings: BrainSettings | dict | None):
         # Keep dataset in the market scope so dataset selection continues to work.
