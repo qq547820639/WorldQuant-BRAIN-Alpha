@@ -1,0 +1,76 @@
+"""Re-export from the ``web_business`` subpackage for backward compatibility."""
+from __future__ import annotations
+
+from ._injection import (
+    _job_registry_injected,
+    _load_run_config_injected,
+    _run_config_from_payload_injected,
+    _submit_background_job_injected,
+    _web_error_injected,
+    inject_dependencies,
+)
+from ._handlers_alpha import (
+    _generation_status_message,
+    _generated_candidate_persistable,
+    _generated_candidate_skip_reasons,
+    _persist_generated_candidates,
+    _real_attribution,
+    _real_check,
+    _real_check_batch,
+    _real_generate,
+    _real_score,
+    _run_generate_candidates_job,
+)
+from ._handlers_misc import (
+    _has_valid_api_session,
+    _has_valid_local_origin,
+    _production_job_store,
+    _real_connection,
+    _real_run,
+    _real_session,
+    _real_stop,
+    _safe_non_submit_run_payload,
+)
+from ._handlers_simulation import (
+    _check_and_submit_alpha,
+    _real_submit,
+    _real_submit_batch,
+    _real_sync,
+    _run_submit_alpha_job,
+    _submit_and_poll_simulation,
+    _submit_disabled_payload,
+)
+
+__all__ = [
+    "inject_dependencies",
+    "_load_run_config_injected",
+    "_run_config_from_payload_injected",
+    "_web_error_injected",
+    "_submit_background_job_injected",
+    "_job_registry_injected",
+    "_real_sync",
+    "_real_generate",
+    "_run_generate_candidates_job",
+    "_persist_generated_candidates",
+    "_generated_candidate_persistable",
+    "_generated_candidate_skip_reasons",
+    "_generation_status_message",
+    "_real_check",
+    "_real_score",
+    "_real_submit",
+    "_submit_disabled_payload",
+    "_run_submit_alpha_job",
+    "_submit_and_poll_simulation",
+    "_check_and_submit_alpha",
+    "_real_connection",
+    "_real_run",
+    "_safe_non_submit_run_payload",
+    "_production_job_store",
+    "_real_check_batch",
+    "_real_submit_batch",
+    "_real_attribution",
+    "_real_stop",
+    "_real_session",
+    "_has_valid_local_origin",
+    "_has_valid_api_session",
+]

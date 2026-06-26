@@ -1,117 +1,44 @@
-"""LLM-ready context packs for alpha research assistance.
+"""LLM-ready context packs — section builders and prompt rendering.
 
-The context pack is a compact, structured snapshot of the current research
-state.  It deliberately stays read-only: it combines run configuration, latest
-local results, cloud alpha cache summaries, and research memory guidance into a
-payload that an assistant can consume before proposing or generating alphas.
+Section builders for run-config / latest-result / cloud / memory /
+expression-index / generation-focus / risk-controls / next-actions /
+prompt-diagnostics contexts, plus the ``render_context_prompt`` text
+renderer.
 """
 from __future__ import annotations
 
 import json
-from dataclasses import asdict, is_dataclass
 from hashlib import sha256
-from pathlib import Path
 from typing import Any
 
-from brain_alpha_ops.config import RunConfig, load_run_config
-from brain_alpha_ops.jsonl import read_jsonl_tail
-from brain_alpha_ops.models import utc_now
-from brain_alpha_ops.redaction import redact_data
-from brain_alpha_ops.research.memory import ResearchMemory
-from brain_alpha_ops.research.observability import (
-    build_research_observability_snapshot,
-    observability_context,
+from brain_alpha_ops.config import RunConfig
+from brain_alpha_ops.research.observability import observability_context
+from brain_alpha_ops.research.robustness_context import format_report_status
+from brain_alpha_ops.research.context._helpers import (
+    _backtest_brief,
+    _backtest_record_brief,
+    _candidate_brief,
+    _cloud_alpha_brief,
+    _cloud_pass_fail,
+    _dataclass_dict,
+    _expression_from_row,
+    _first_dict,
+    _first_list,
+    _float_value,
+    _guidance_outcomes,
+    _int_value,
+    _join_candidate_briefs,
+    _join_duplicate_expressions,
+    _join_failures,
+    _join_field_combinations,
+    _join_guidance_outcomes,
+    _join_stat_bucket,
+    _join_text_items,
+    _strong_guidance_outcome,
+    _unique_text_items,
+    _weak_guidance_outcome,
 )
-from brain_alpha_ops.research.robustness_context import (
-    build_robustness_context,
-    format_report_status,
-    latest_candidate_rows,
-)
 
-ASSISTANT_CONTEXT_SENSITIVE_KEY_FRAGMENTS = (
-    "authorization",
-    "cache_dir",
-    "cookie",
-    "credential",
-    "password",
-    "path",
-    "secret",
-    "storage_dir",
-    "token",
-)
-
-def build_assistant_context_pack(
-    run_config: RunConfig | None = None,
-    *,
-    latest_result_snapshot: dict[str, Any] | None = None,
-    cloud_alpha_snapshot: dict[str, Any] | None = None,
-    memory_summary: dict[str, Any] | None = None,
-    memory_guidance: dict[str, Any] | None = None,
-    observability_snapshot: dict[str, Any] | None = None,
-    limit: int = 5000,
-    top_n: int = 10,
-    include_prompt: bool = True,
-    include_sensitive: bool = False,
-) -> dict[str, Any]:
-    """Build a prompt-ready context pack for an alpha research assistant."""
-    config = run_config or load_run_config()
-    storage_dir = str(config.ops.storage_dir)
-    memory = ResearchMemory(storage_dir)
-
-    summary = memory_summary if memory_summary is not None else memory.summary(limit=limit, top_n=top_n)
-    guidance = memory_guidance if memory_guidance is not None else memory.generation_guidance(limit=limit, top_n=top_n, summary=summary)
-    latest = latest_result_snapshot if latest_result_snapshot is not None else _latest_result_from_storage(storage_dir)
-    cloud = cloud_alpha_snapshot if cloud_alpha_snapshot is not None else _cloud_snapshot_from_storage(storage_dir, top_n=top_n)
-    observability = observability_snapshot if observability_snapshot is not None else build_research_observability_snapshot(storage_dir, limit=limit, top_n=top_n)
-    latest_context = _latest_result_context(latest)
-    robustness = build_robustness_context(latest_candidate_rows(latest), top_n=top_n)
-
-    pack = {
-        "ok": True,
-        "schema_version": "assistant_context_pack.v1",
-        "source": "local_config_run_history_cloud_memory",
-        "generated_at": utc_now(),
-        "storage_dir": storage_dir,
-        "mission": {
-            "role": "quant_investment_ai_assistant",
-            "objective": "Generate, critique, and prioritize WorldQuant BRAIN FASTEXPR alpha ideas using local evidence before live API calls.",
-            "operating_mode": "local_first_memory_guided_research",
-        },
-        "run_config": _run_config_context(config),
-        "latest_result": latest_context,
-        "cloud_alphas": _cloud_context(cloud, top_n=top_n),
-        "research_memory": _memory_context(summary, guidance, top_n=top_n),
-        "expression_index": _expression_index_context(
-            summary.get("expression_index") if isinstance(summary, dict) else {},
-            top_n=top_n,
-        ),
-        "observability": observability_context(observability, top_n=top_n),
-        "robustness": robustness,
-        "generation_focus": _generation_focus(guidance, summary, top_n=top_n),
-        "risk_controls": _risk_controls(config, cloud),
-        "recommended_next_actions": _next_actions(summary, guidance, latest, cloud, robustness=robustness),
-        "compliance": _compliance_context(config),
-    }
-    pack["prompt_diagnostics"] = _prompt_diagnostics(pack, top_n=top_n)
-    if not include_sensitive:
-        pack = _redact_assistant_context_pack(pack)
-    if include_prompt:
-        pack["prompt"] = render_context_prompt(pack)
-    return pack
-
-def _redact_assistant_context_pack(pack: dict[str, Any]) -> dict[str, Any]:
-    redacted_keys: set[str] = set()
-    redacted = redact_data(
-        pack,
-        key_fragments=ASSISTANT_CONTEXT_SENSITIVE_KEY_FRAGMENTS,
-        redacted_keys=redacted_keys,
-    )
-    if not isinstance(redacted, dict):
-        return {}
-    redacted.pop("storage_dir", None)
-    redacted_keys.add("storage_dir")
-    redacted["sensitive_fields_redacted"] = sorted(redacted_keys)
-    return redacted
 
 def render_context_prompt(pack: dict[str, Any]) -> str:
     """Render a concise text prompt from a structured context pack."""
@@ -307,53 +234,6 @@ def _risk_controls(config: RunConfig, cloud_snapshot: dict[str, Any] | None) -> 
         },
     }
 
-def _compliance_context(config: RunConfig) -> dict[str, Any]:
-    """Build lightweight redline + scoring health snapshot.
-
-    On import or execution failure, redline is conservatively reported as
-    "unknown" rather than silently defaulting to "ok".  This prevents
-    silently masking redline violations when the verifier cannot be loaded.
-    """
-    try:
-        from brain_alpha_ops.compliance.redline_verifier import RedLineVerifier
-        verifier = RedLineVerifier(config)
-        report = verifier.verify_all()
-        redline = {
-            "ok": report.ok,
-            "violations": len(report.violations),
-            "summary": report.report()[:300],
-        }
-    except ImportError:
-        import logging
-        logging.getLogger(__name__).debug("RedLineVerifier import failed; reporting redline as unknown.")
-        redline = {"ok": False, "violations": -1, "summary": "redline verifier not available"}
-    except Exception as exc:
-        import logging
-        logging.getLogger(__name__).warning("RedLineVerifier execution failed: %s", exc)
-        redline = {"ok": False, "violations": -1, "summary": f"redline verification error: {exc}"}
-
-    try:
-        from brain_alpha_ops.scoring.history import ScoreHistoryDB
-        db = ScoreHistoryDB(config.ops.storage_dir)
-        stats = db.convergence_stats()
-        scoring_health = stats
-    except ImportError:
-        import logging
-        logging.getLogger(__name__).debug("ScoreHistoryDB not available.")
-        scoring_health = {"available": False, "error": "module not found"}
-    except Exception as exc:
-        import logging
-
-        from brain_alpha_ops.redaction import redact_error_message
-        logging.getLogger(__name__).warning("ScoreHistoryDB failed: %s", exc)
-        scoring_health = {"available": False, "error": redact_error_message(exc)}
-
-    return {
-        "redline": redline,
-        "scoring_health": scoring_health,
-        "thresholds_synced": True,
-    }
-
 def _next_actions(
     summary: dict[str, Any],
     guidance: dict[str, Any],
@@ -447,263 +327,3 @@ def _prompt_diagnostics(pack: dict[str, Any], *, top_n: int) -> dict[str, Any]:
         "risk_flags": risk_flags[:top_n],
         "evidence_digest": sha256(compact_text.encode("utf-8")).hexdigest()[:12],
     }
-
-def _latest_result_from_storage(storage_dir: str) -> dict[str, Any]:
-    latest_path = Path(storage_dir) / "run_history" / "latest.json"
-    if not latest_path.is_file():
-        return {"ok": True, "source": "empty", "status": "idle", "result": None, "progress": {}}
-    try:
-        data = json.loads(latest_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
-        from brain_alpha_ops.redaction import redact_error_message
-        return {"ok": False, "source": "run_history", "error": redact_error_message(exc), "result": None, "progress": {}}
-    summary = data.get("summary") if isinstance(data.get("summary"), dict) else {}
-    return {
-        "ok": True,
-        "source": "run_history",
-        "job_id": str(data.get("run_id") or latest_path.stem),
-        "status": data.get("status") or "completed",
-        "result": {
-            "summary": summary,
-            "candidates": summary.get("candidates") or data.get("candidates") or [],
-        },
-        "progress": {"phase": data.get("status") or "completed", "data": summary},
-    }
-
-def _cloud_snapshot_from_storage(storage_dir: str, *, top_n: int) -> dict[str, Any]:
-    rows = _read_jsonl(Path(storage_dir) / "cloud_alphas.jsonl", limit=None)
-    latest_by_id: dict[str, dict[str, Any]] = {}
-    anonymous: list[dict[str, Any]] = []
-    for row in rows:
-        alpha_id = str(row.get("id") or row.get("alpha_id") or "")
-        if alpha_id:
-            latest_by_id[alpha_id] = row
-        else:
-            anonymous.append(row)
-    deduped = list(latest_by_id.values()) + anonymous
-    summary = {
-        "source": "storage" if deduped else "empty",
-        "count": len(deduped),
-        "submitted_count": sum(1 for row in deduped if str(row.get("status", "")).upper() in {"SUBMITTED", "ACTIVE", "PRODUCTION", "CONDUCTED"}),
-        "passed_unsubmitted_count": sum(1 for row in deduped if _cloud_pass_fail(row) == "PASS" and str(row.get("status", "")).upper() not in {"SUBMITTED", "ACTIVE", "PRODUCTION", "CONDUCTED"}),
-        "failed_unsubmitted_count": sum(1 for row in deduped if _cloud_pass_fail(row) == "FAIL"),
-        "is_stale": False,
-    }
-    return {"alphas": deduped[:top_n], "summary": summary}
-
-def _read_jsonl(path: Path, *, limit: int | None) -> list[dict[str, Any]]:
-    if limit is None:
-        from brain_alpha_ops.jsonl import read_jsonl_records
-
-        return read_jsonl_records(path, limit=None, max_rows=None)
-    return read_jsonl_tail(path, limit=limit)
-
-def _candidate_brief(row: dict[str, Any]) -> dict[str, Any]:
-    metrics = _first_dict(row.get("official_metrics"), row.get("metrics"))
-    scorecard = row.get("scorecard") if isinstance(row.get("scorecard"), dict) else {}
-    gate = row.get("gate") if isinstance(row.get("gate"), dict) else {}
-    return {
-        "alpha_id": row.get("alpha_id") or row.get("id") or "",
-        "official_alpha_id": row.get("official_alpha_id") or "",
-        "family": row.get("family") or "",
-        "hypothesis": row.get("hypothesis") or "",
-        "expression": _expression_from_row(row),
-        "fields": list(row.get("data_fields") or []),
-        "operators": list(row.get("operators") or []),
-        "score": scorecard.get("total_score", row.get("smart_rank_score", row.get("score", 0))),
-        "lifecycle_status": row.get("lifecycle_status") or gate.get("status") or row.get("status") or "",
-        "metrics": {
-            key: metrics.get(key)
-            for key in ("sharpe", "fitness", "turnover", "returns", "drawdown", "correlation", "pass_fail")
-            if key in metrics
-        },
-    }
-
-def _backtest_brief(row: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "slot": row.get("slot", ""),
-        "alpha_id": row.get("alpha_id", ""),
-        "simulation_id": row.get("simulation_id", ""),
-        "status": row.get("status", ""),
-        "message": row.get("message", ""),
-        "next_poll_seconds": row.get("next_poll_seconds"),
-    }
-
-def _backtest_record_brief(row: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "action": row.get("action", ""),
-        "slot": row.get("slot", ""),
-        "alpha_id": row.get("alpha_id", ""),
-        "simulation_id": row.get("simulation_id", ""),
-        "status": row.get("status", ""),
-        "lifecycle_status": row.get("lifecycle_status", ""),
-        "score": row.get("score", 0.0),
-        "poll_count": row.get("poll_count", 0),
-        "expression_fingerprint": row.get("expression_fingerprint", ""),
-        "note": row.get("note", ""),
-    }
-
-def _cloud_alpha_brief(row: dict[str, Any]) -> dict[str, Any]:
-    metrics = _first_dict(row.get("metrics"), row.get("is"))
-    return {
-        "alpha_id": row.get("id") or row.get("alpha_id") or "",
-        "status": row.get("status", ""),
-        "expression": _expression_from_row(row),
-        "pass_fail": metrics.get("pass_fail") or row.get("pass_fail") or "",
-        "sharpe": metrics.get("sharpe", row.get("sharpe")),
-        "fitness": metrics.get("fitness", row.get("fitness")),
-        "turnover": metrics.get("turnover", row.get("turnover")),
-    }
-
-def _expression_from_row(row: dict[str, Any]) -> str:
-    expression = row.get("expression")
-    if isinstance(expression, dict):
-        return str(expression.get("code") or "")
-    if expression:
-        return str(expression)
-    regular = row.get("regular") if isinstance(row.get("regular"), dict) else {}
-    return str(regular.get("code") or "")
-
-def _cloud_pass_fail(row: dict[str, Any]) -> str:
-    metrics = row.get("metrics") if isinstance(row.get("metrics"), dict) else {}
-    return str(metrics.get("pass_fail") or row.get("pass_fail") or "").upper()
-
-def _join_candidate_briefs(rows: list[dict[str, Any]]) -> str:
-    if not rows:
-        return "-"
-    parts = []
-    for row in rows[:5]:
-        parts.append(f"{row.get('alpha_id') or '-'} score={row.get('score', '-')} {row.get('family') or ''}".strip())
-    return "; ".join(parts)
-
-def _join_field_combinations(rows: list[dict[str, Any]]) -> str:
-    if not rows:
-        return "-"
-    return "; ".join("+".join(row.get("fields") or []) for row in rows[:5])
-
-def _join_failures(rows: list[dict[str, Any]]) -> str:
-    if not rows:
-        return "-"
-    return "; ".join(f"{row.get('reason', '-') } x{row.get('count', 0)}" for row in rows[:5])
-
-def _join_stat_bucket(row: dict[str, Any]) -> str:
-    count = _int_value(row.get("count"))
-    if not count:
-        return "-"
-    return (
-        f"count={count} success={_float_value(row.get('success_rate'))} "
-        f"avg_score={_float_value(row.get('avg_score'))}"
-    )
-
-def _join_guidance_outcomes(rows: list[dict[str, Any]]) -> str:
-    if not rows:
-        return "-"
-    parts = []
-    for row in rows[:5]:
-        parts.append(
-            f"{row.get('guidance_digest') or '-'} count={row.get('count', 0)} "
-            f"success={row.get('success_rate', 0)} avg_score={row.get('avg_score', 0)}"
-        )
-    return "; ".join(parts)
-
-def _join_duplicate_expressions(rows: list[dict[str, Any]]) -> str:
-    if not rows:
-        return "-"
-    parts = []
-    for row in rows[:3]:
-        expression = str(row.get("expression_canonical") or "")[:80]
-        parts.append(f"{row.get('count', 0)}x {expression or row.get('expression_fingerprint', '-')}")
-    return "; ".join(parts)
-
-def _join_text_items(rows: list[Any]) -> str:
-    items = [str(item).strip() for item in rows[:5] if str(item).strip()]
-    return "; ".join(items) if items else "-"
-
-def _unique_text_items(rows: list[Any]) -> list[str]:
-    unique: list[str] = []
-    seen: set[str] = set()
-    for item in rows:
-        text = str(item).strip()
-        if not text:
-            continue
-        key = text.lower()
-        if key in seen:
-            continue
-        seen.add(key)
-        unique.append(text)
-    return unique
-
-def _guidance_outcomes(summary: dict[str, Any], *, top_n: int) -> list[dict[str, Any]]:
-    rows = summary.get("assistant_guidance_outcomes") if isinstance(summary, dict) else []
-    if not isinstance(rows, list):
-        return []
-    outcomes: list[dict[str, Any]] = []
-    for row in rows:
-        if not isinstance(row, dict):
-            continue
-        digest = str(row.get("guidance_digest") or "").strip()
-        if not digest:
-            continue
-        pass_fail = row.get("pass_fail") if isinstance(row.get("pass_fail"), dict) else {}
-        outcomes.append({
-            "guidance_digest": digest,
-            "count": _int_value(row.get("count")),
-            "success_count": _int_value(row.get("success_count")),
-            "success_rate": _float_value(row.get("success_rate")),
-            "avg_score": _float_value(row.get("avg_score")),
-            "avg_sharpe": _float_value(row.get("avg_sharpe")),
-            "avg_fitness": _float_value(row.get("avg_fitness")),
-            "pass_fail": dict(pass_fail),
-        })
-    return outcomes[:top_n]
-
-def _strong_guidance_outcome(outcomes: list[dict[str, Any]]) -> dict[str, Any]:
-    for row in outcomes:
-        if _int_value(row.get("count")) <= 0:
-            continue
-        if _float_value(row.get("success_rate")) >= 0.5 or _float_value(row.get("avg_score")) >= 70:
-            return row
-    return {}
-
-def _weak_guidance_outcome(outcomes: list[dict[str, Any]]) -> dict[str, Any]:
-    for row in outcomes:
-        count = _int_value(row.get("count"))
-        if count <= 0:
-            continue
-        success_rate = _float_value(row.get("success_rate"))
-        avg_score = _float_value(row.get("avg_score"))
-        if (count >= 2 and success_rate <= 0.25) or (success_rate == 0.0 and avg_score <= 50):
-            return row
-    return {}
-
-def _int_value(value: Any) -> int:
-    try:
-        return int(float(value))
-    except (TypeError, ValueError):
-        return 0
-
-def _float_value(value: Any) -> float:
-    try:
-        number = float(value)
-    except (TypeError, ValueError):
-        return 0.0
-    return round(number, 4)
-
-def _first_dict(*values: Any) -> dict[str, Any]:
-    for value in values:
-        if isinstance(value, dict):
-            return value
-    return {}
-
-def _first_list(*values: Any) -> list[dict[str, Any]]:
-    for value in values:
-        if isinstance(value, list):
-            return [row for row in value if isinstance(row, dict)]
-    return []
-
-def _dataclass_dict(value: Any) -> dict[str, Any]:
-    if is_dataclass(value):
-        return asdict(value)
-    if isinstance(value, dict):
-        return dict(value)
-    return {}

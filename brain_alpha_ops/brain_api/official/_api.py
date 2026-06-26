@@ -1,14 +1,4 @@
-"""Official BRAIN API adapter.
-
-This adapter intentionally uses only standard-library HTTP helpers so the
-project can run without dependency installation. Endpoint templates are
-configurable because BRAIN API shapes may change.
-
-Key types are defined in brain_alpha_ops.types:
-- OfficialMetrics: Metrics from BRAIN simulation/check results
-- BrainAPIResponse: Standard API response structure
-- SimulationResult: Result from simulation polling
-"""
+"""Main ``OfficialBrainAPI`` adapter class."""
 
 from __future__ import annotations
 from dataclasses import asdict
@@ -25,61 +15,28 @@ from brain_alpha_ops.config import BrainSettings, OfficialAPIConfig
 from brain_alpha_ops.secure_credentials import resolve_credentials
 from brain_alpha_ops.types import BrainAPIResponse
 
-from .cache import cache_key as _cache_key
-from .cache import cache_path as _cache_path
-from .cache import read_cache as _read_cache
-from .cache import write_cache as _write_cache
-from .official_auth import OfficialAuthProfileMixin
-from .official_context import OfficialContextDataMixin
-from .official_request import OfficialRequestMixin
-from .official_simulation import OfficialSimulationSubmissionMixin
-from .official_validation import OfficialExpressionValidator
-from .pagination import (
-
+from ..cache import cache_key as _cache_key
+from ..cache import cache_path as _cache_path
+from ..cache import read_cache as _read_cache
+from ..cache import write_cache as _write_cache
+from ..official_validation import OfficialExpressionValidator
+from ..pagination import (
     _standard_pagination_progress as _shared_standard_pagination_progress,
 )
+from ._helpers import (
+    _OfficialAuthProfileClient,
+    _OfficialContextDataClient,
+    _OfficialRequestClient,
+    _OfficialSimulationSubmissionClient,
+)
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("brain_alpha_ops.brain_api.official")
 
 # P2-2: removed the cross-instance _GLOBAL_LAST_REQUEST_AT / _GLOBAL_TIMESTAMP_LOCK
 # pair.  Per-instance ``self._last_request_at`` is sufficient now that retry_delay
 # uses exponential back-off with jitter; cross-process rate coordination is the
 # BRAIN server's responsibility, not ours.
 _standard_pagination_progress = _shared_standard_pagination_progress
-
-
-class _BoundOfficialAPIComponent:
-    def __init__(self, api: "OfficialBrainAPI"):
-        object.__setattr__(self, "_api", api)
-
-    def __getattr__(self, name: str) -> Any:
-        try:
-            api = object.__getattribute__(self, "_api")
-        except AttributeError as exc:
-            raise AttributeError(name) from exc
-        return getattr(api, name)
-
-    def __setattr__(self, name: str, value: Any) -> None:
-        if name == "_api":
-            object.__setattr__(self, name, value)
-            return
-        setattr(self._api, name, value)
-
-
-class _OfficialAuthProfileClient(OfficialAuthProfileMixin, _BoundOfficialAPIComponent):
-    pass
-
-
-class _OfficialContextDataClient(OfficialContextDataMixin, _BoundOfficialAPIComponent):
-    pass
-
-
-class _OfficialRequestClient(OfficialRequestMixin, _BoundOfficialAPIComponent):
-    pass
-
-
-class _OfficialSimulationSubmissionClient(OfficialSimulationSubmissionMixin, _BoundOfficialAPIComponent):
-    pass
 
 
 # Backward-compat re-exports for Phase 3.x migration
@@ -661,11 +618,3 @@ class OfficialBrainAPI:
             cache_path_builder=lambda _config, cache_name: self._cache_path(cache_name),
             log=logger,
         )
-
-
-
-# ---- Backward-compat re-export for Phase 3.x migration ----
-from .official_helpers import build_simulation_payload, looks_non_production_alpha_id as _looks_non_production_alpha_id  # noqa: F401  # backward-compat re-export
-
-from .official_helpers import normalize_metrics  # noqa: F401
-from brain_alpha_ops.brain_api.base import BrainAPIError  # noqa: F401
