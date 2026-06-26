@@ -176,7 +176,7 @@ def test_runtime_facade_connection_fails_when_profile_returns_auth_error():
     assert payload["error_category"] == "auth"
     assert payload["status_code"] == 403
     assert payload["retryable"] is False
-    assert payload["error"] == "Authentication failed; check credentials or connection settings."
+    assert payload["error"] == "认证失败，请检查凭据或连接设置。"
 
 
 def test_runtime_facade_job_selection_lookup_and_simple_delegates():

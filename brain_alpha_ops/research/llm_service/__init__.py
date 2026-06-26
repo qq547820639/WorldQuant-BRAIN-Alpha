@@ -31,3 +31,15 @@ from brain_alpha_ops.research.llm_service._ledger import (  # noqa: F401
 from brain_alpha_ops.research.llm_service._service import (  # noqa: F401
     LLMService,
 )
+
+__all__ = [
+    # Public API from _types
+    "LLMGenerationGuidance",
+    "LLMReviewResult",
+    # Public API from _ledger
+    "LLM_CALL_MIN_INTERVAL_SECONDS",
+    "LLM_CALL_TOKEN_BUDGET_PER_RUN",
+    "LLMCallLedger",
+    # Public API from _service
+    "LLMService",
+]

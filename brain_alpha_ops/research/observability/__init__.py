@@ -58,3 +58,37 @@ from brain_alpha_ops.research._observability_helpers import (  # noqa: F401
     _text,
     _unique_text_items,
 )
+
+__all__ = [
+    # Public API from _snapshot
+    "JSONL_FILES",
+    "SQLITE_INDEX_DIAGNOSTICS_FILE",
+    "build_research_observability_snapshot",
+    # Public API from _context
+    "observability_context",
+    "official_call_guard_observability",
+    "actionable_duplicate_expression_buckets",
+    "actionable_duplicate_expression_records",
+    # Public API from _health
+    "diagnose_research_health",
+    # Private symbols re-exported from _observability_helpers for backward
+    # compatibility (the original observability.py re-imported these).
+    "_backtest_observability",
+    "_check_observability",
+    "_compact_backtest_row",
+    "_counter_rows",
+    "_error_observability",
+    "_expression_index_failure_summary",
+    "_expression_sqlite_status",
+    "_failure_reason",
+    "_float_from_any",
+    "_int_from_any",
+    "_is_backtest_completed",
+    "_is_backtest_failure",
+    "_is_backtest_submitted",
+    "_observability_expression_payload",
+    "_observability_recommendations",
+    "_row_retryable",
+    "_text",
+    "_unique_text_items",
+]

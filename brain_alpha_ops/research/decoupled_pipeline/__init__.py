@@ -29,3 +29,20 @@ from brain_alpha_ops.research.decoupled_pipeline._workers_ext import (  # noqa: 
     OptimizationWorker,
     ValidationWorker,
 )
+
+__all__ = [
+    # Public API from _pipeline
+    "DecoupledCoordinator",
+    "DecoupledPipeline",
+    # Public API from _state
+    "SharedState",
+    "WorkerState",
+    # Public API from _workers
+    "FilterWorker",
+    "ProductionWorker",
+    # Public API from _workers_ext
+    "OptimizationWorker",
+    "ValidationWorker",
+    # Public logger re-exported via ``*`` from sub-modules
+    "logger",
+]

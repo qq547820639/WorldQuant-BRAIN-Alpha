@@ -730,7 +730,7 @@ describe("App credential quick start", () => {
           error_code: "CONNECTION_FAILED",
           error_category: "auth",
           status_code: 403,
-          error: "Authentication failed; check credentials or connection settings.",
+          error: "认证失败，请检查凭据或连接设置。",
           user_error_kind: "session_expired",
           user_error: {
             kind: "session_expired",

@@ -19,3 +19,22 @@ from brain_alpha_ops.research.experience._common import (  # noqa: F401
 from brain_alpha_ops.research.experience._recording import (  # noqa: F401
     _record_ab_comparison,
 )
+
+__all__ = [
+    # Public API from _common
+    "DEFAULT_HISTORY_LIMIT",
+    "logger",
+    "normalize_brain_ratio",
+    # Public API from _query
+    "get_winning_patterns",
+    "update_hypothesis_weights",
+    # Public API from _recording
+    "record_alpha_result",
+    "get_mutation_effectiveness",
+    # Private symbols re-exported for test monkeypatch compatibility
+    "_empty_patterns",
+    "_load_records",
+    "_num",
+    "_ratio",
+    "_record_ab_comparison",
+]
