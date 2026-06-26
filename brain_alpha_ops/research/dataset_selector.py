@@ -102,12 +102,23 @@ class DatasetSelector:
     # Category index — hypothesis-driven field selection
     # ------------------------------------------------------------------
     def _build_category_index(self) -> None:
-        """Build a category→fields index from OfficialField.category metadata.
+        """Build a category→fields index.
 
-        Group fields by their category attribute (case-insensitive).
-        Falls back to an empty index if the loader is unavailable.
+        Prefers the BRAIN capability registry's ``field_category_index()``
+        so the index is derived from the same canonical source as operators
+        and other capabilities. Falls back to iterating loader fields
+        directly when the registry is unavailable (e.g. minimal test env).
         """
         self._category_index.clear()
+        registry_index = self._registry_field_category_index()
+        if registry_index:
+            self._category_index = {
+                cat: list(fields)
+                for cat, fields in registry_index.items()
+                if cat
+            }
+            return
+        # Fallback: iterate loader fields directly.
         if self._loader is None:
             return
         try:
@@ -119,6 +130,20 @@ class DatasetSelector:
         except Exception as exc:
             logger.exception("dataset_selector: unexpected error")
             logger.warning("dataset selector category index unavailable", exc_info=True)
+
+    @staticmethod
+    def _registry_field_category_index() -> dict[str, list[str]]:
+        """Return the registry's category→field index, or {} if unavailable.
+
+        Imported lazily so ``dataset_selector`` stays importable in minimal
+        test environments that don't load the capability registry.
+        """
+        try:
+            from brain_alpha_ops.data.capability_registry import get_registry
+            return get_registry().field_category_index()
+        except Exception as exc:  # pragma: no cover - defensive import guard
+            logger.debug("capability registry unavailable for category index: %s", exc)
+            return {}
 
     def get_fields_by_category(self, category: str, dataset_id: str = "") -> list[str]:
         """Resolve a semantic field category name to concrete field IDs.

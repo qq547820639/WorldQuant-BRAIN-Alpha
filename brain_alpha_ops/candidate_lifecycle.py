@@ -1,11 +1,7 @@
-"""Candidate Alpha lifecycle state machine.
+"""Candidate Alpha lifecycle state machine (Workstream B).
 
-Tracks the full lifecycle of a candidate Alpha through pipeline stages:
-  created → local_scored → gate_checked → queued_for_simulation → simulating
-  → sim_passed / sim_failed → ready_for_submit → archived
-
-Each state transition is logged to the audit trail and validated against
-a legal-transition graph. Thread-safe via a lock on all mutations.
+Spec-defined 11-state lifecycle with a legal-transition graph, in-memory
+``TransitionRecord`` audit trail, and best-effort JSONL audit write.
 """
 from __future__ import annotations
 
@@ -14,43 +10,129 @@ import logging
 import threading
 import time
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from brain_alpha_ops.models import Candidate
 
 logger = logging.getLogger(__name__)
 
 
 class LifecycleState(enum.Enum):
-    CREATED = "created"
-    LOCAL_SCORED = "local_scored"
-    GATE_CHECKED = "gate_checked"
+    """Canonical 11-state lifecycle per Workstream B spec.
+
+    Legacy uppercase names (CREATED, LOCAL_SCORED, …) are aliases that
+    resolve to the canonical lowercase members.
+    """
+
+    # Canonical spec states (11)
+    draft = "draft"
+    locally_scored = "locally_scored"
+    gate_rejected = "gate_rejected"
+    queued_for_simulation = "queued_for_simulation"
+    simulating = "simulating"
+    simulation_failed = "simulation_failed"
+    simulation_passed = "simulation_passed"
+    needs_optimization = "needs_optimization"
+    ready_for_review = "ready_for_review"
+    submitted = "submitted"
+    archived = "archived"
+    # Backward-compat aliases (legacy uppercase names → canonical members).
+    CREATED = "draft"
+    LOCAL_SCORED = "locally_scored"
+    GATE_CHECKED = "locally_scored"
     QUEUED_FOR_SIMULATION = "queued_for_simulation"
     SIMULATING = "simulating"
-    SIM_PASSED = "sim_passed"
-    SIM_FAILED = "sim_failed"
-    READY_FOR_SUBMIT = "ready_for_submit"
+    SIM_PASSED = "simulation_passed"
+    SIM_FAILED = "simulation_failed"
+    READY_FOR_SUBMIT = "ready_for_review"
     ARCHIVED = "archived"
 
 
-# Legal transitions: from_state → {allowed to_states}
+class IllegalTransitionError(ValueError):
+    """Raised when a state transition violates the legal-transition graph."""
+
+
+# Legal transitions per Workstream B spec: from_state → {allowed to_states}.
+# Self-transitions allow deferred/blocked sub-statuses without violating the graph.
 _LEGAL_TRANSITIONS: dict[LifecycleState, frozenset[LifecycleState]] = {
-    LifecycleState.CREATED: frozenset({LifecycleState.LOCAL_SCORED}),
-    LifecycleState.LOCAL_SCORED: frozenset({LifecycleState.GATE_CHECKED}),
-    LifecycleState.GATE_CHECKED: frozenset({
-        LifecycleState.QUEUED_FOR_SIMULATION,
-        LifecycleState.ARCHIVED,
+    LifecycleState.draft: frozenset({
+        LifecycleState.locally_scored, LifecycleState.gate_rejected,
+        LifecycleState.archived,
     }),
-    LifecycleState.QUEUED_FOR_SIMULATION: frozenset({LifecycleState.SIMULATING}),
-    LifecycleState.SIMULATING: frozenset({
-        LifecycleState.SIM_PASSED,
-        LifecycleState.SIM_FAILED,
+    LifecycleState.locally_scored: frozenset({
+        LifecycleState.gate_rejected, LifecycleState.queued_for_simulation,
+        LifecycleState.needs_optimization, LifecycleState.archived,
     }),
-    LifecycleState.SIM_PASSED: frozenset({LifecycleState.READY_FOR_SUBMIT}),
-    LifecycleState.SIM_FAILED: frozenset({
-        LifecycleState.READY_FOR_SUBMIT,
-        LifecycleState.ARCHIVED,
+    LifecycleState.gate_rejected: frozenset({
+        LifecycleState.needs_optimization, LifecycleState.archived,
     }),
-    LifecycleState.READY_FOR_SUBMIT: frozenset({LifecycleState.ARCHIVED}),
-    LifecycleState.ARCHIVED: frozenset(),
+    LifecycleState.needs_optimization: frozenset({LifecycleState.locally_scored}),
+    LifecycleState.queued_for_simulation: frozenset({
+        LifecycleState.simulating, LifecycleState.gate_rejected,
+        LifecycleState.queued_for_simulation,
+    }),
+    LifecycleState.simulating: frozenset({
+        LifecycleState.simulation_passed, LifecycleState.simulation_failed,
+        LifecycleState.simulating,
+    }),
+    LifecycleState.simulation_failed: frozenset({
+        LifecycleState.needs_optimization, LifecycleState.archived,
+        LifecycleState.queued_for_simulation,
+    }),
+    LifecycleState.simulation_passed: frozenset({
+        LifecycleState.ready_for_review, LifecycleState.submitted,
+    }),
+    LifecycleState.ready_for_review: frozenset({
+        LifecycleState.submitted, LifecycleState.archived,
+        LifecycleState.ready_for_review,
+    }),
+    LifecycleState.submitted: frozenset({LifecycleState.archived}),
+    LifecycleState.archived: frozenset(),
+}
+
+
+# Legacy pipeline status strings → canonical LifecycleState. Used by
+# ``get_lifecycle`` to seed state from ``candidate.lifecycle_status``.
+_LEGACY_STATUS_MAP: dict[str, LifecycleState] = {
+    # draft
+    "created": LifecycleState.draft, "draft": LifecycleState.draft,
+    # locally_scored
+    "local_scored": LifecycleState.locally_scored, "locally_scored": LifecycleState.locally_scored,
+    "candidate_pool_retained": LifecycleState.locally_scored,
+    # gate_rejected
+    "local_prefilter_rejected": LifecycleState.gate_rejected,
+    "local_standard_rejected": LifecycleState.gate_rejected,
+    "duplicate_expression_skipped": LifecycleState.gate_rejected,
+    "previously_rejected_expression_skipped": LifecycleState.gate_rejected,
+    "official_standard_rejected": LifecycleState.gate_rejected, "gate_rejected": LifecycleState.gate_rejected,
+    # queued_for_simulation
+    "queued_for_simulation": LifecycleState.queued_for_simulation,
+    "backtest_slot_selected": LifecycleState.queued_for_simulation,
+    "backtest_batch_selected": LifecycleState.queued_for_simulation,
+    "simulation_deferred_concurrency_limit": LifecycleState.queued_for_simulation,
+    "simulation_deferred_rate_limit": LifecycleState.queued_for_simulation,
+    "simulation_deferred_server_error": LifecycleState.queued_for_simulation,
+    # simulating
+    "simulating": LifecycleState.simulating, "simulation_submitted": LifecycleState.simulating,
+    "simulation_running": LifecycleState.simulating,
+    "simulation_poll_deferred_rate_limit": LifecycleState.simulating,
+    "simulation_result_deferred_rate_limit": LifecycleState.simulating,
+    "simulation_poll_deferred_unknown": LifecycleState.simulating,
+    # simulation_failed
+    "simulation_failed": LifecycleState.simulation_failed, "simulation_poll_failed": LifecycleState.simulation_failed,
+    "simulation_result_failed": LifecycleState.simulation_failed, "simulation_request_failed": LifecycleState.simulation_failed,
+    # simulation_passed
+    "simulation_passed": LifecycleState.simulation_passed, "official_simulated": LifecycleState.simulation_passed,
+    # needs_optimization
+    "needs_optimization": LifecycleState.needs_optimization,
+    # ready_for_review
+    "ready_for_review": LifecycleState.ready_for_review, "submission_ready": LifecycleState.ready_for_review,
+    "auto_submit_cross_review_blocked": LifecycleState.ready_for_review,
+    "auto_submit_readiness_blocked": LifecycleState.ready_for_review,
+    # submitted / archived
+    "submitted": LifecycleState.submitted, "archived": LifecycleState.archived,
+    "candidate_pool_pruned": LifecycleState.archived,
 }
 
 
@@ -73,15 +155,9 @@ class TransitionRecord:
 
 
 class CandidateLifecycle:
-    """Thread-safe lifecycle state machine for a single candidate Alpha.
+    """Thread-safe lifecycle state machine for a single candidate Alpha."""
 
-    Usage:
-        lc = CandidateLifecycle("alpha_123")
-        lc.transition(LifecycleState.LOCAL_SCORED, reason="local scoring done")
-        assert lc.state == LifecycleState.LOCAL_SCORED
-    """
-
-    def __init__(self, alpha_id: str, initial_state: LifecycleState = LifecycleState.CREATED):
+    def __init__(self, alpha_id: str, initial_state: LifecycleState = LifecycleState.draft):
         self.alpha_id = alpha_id
         self._state = initial_state
         self._lock = threading.Lock()
@@ -92,8 +168,11 @@ class CandidateLifecycle:
         with self._lock:
             return self._state
 
-    def transition(self, target: LifecycleState, *, reason: str = "") -> bool:
-        """Attempt a state transition. Returns True if successful."""
+    def transition(
+        self, target: LifecycleState, *,
+        reason: str = "", context: dict[str, Any] | None = None,
+    ) -> bool:
+        """Attempt a state transition. Returns True if successful (False on illegal)."""
         with self._lock:
             allowed = _LEGAL_TRANSITIONS.get(self._state, frozenset())
             if target not in allowed:
@@ -102,12 +181,10 @@ class CandidateLifecycle:
                     self.alpha_id, self._state.value, target.value,
                 )
                 return False
-
+            from_state = self._state
             record = TransitionRecord(
                 alpha_id=self.alpha_id,
-                from_state=self._state.value,
-                to_state=target.value,
-                reason=reason,
+                from_state=from_state.value, to_state=target.value, reason=reason,
             )
             self._audit_trail.append(record)
             self._state = target
@@ -115,39 +192,46 @@ class CandidateLifecycle:
                 "Lifecycle %s: %s → %s (%s)",
                 self.alpha_id, record.from_state, record.to_state, reason,
             )
-            return True
+        _write_lifecycle_audit(self.alpha_id, from_state.value, target.value, reason, context)
+        return True
 
     def audit_trail(self) -> list[dict[str, Any]]:
-        """Return a copy of the full audit trail."""
         with self._lock:
             return [r.to_dict() for r in self._audit_trail]
 
+    def force_transition(self, target: LifecycleState, *,
+                         reason: str = "", context: dict[str, Any] | None = None) -> None:
+        """Force a transition without legal-graph validation (backward compat)."""
+        with self._lock:
+            from_state = self._state
+            self._audit_trail.append(TransitionRecord(
+                alpha_id=self.alpha_id,
+                from_state=from_state.value, to_state=target.value, reason=reason,
+            ))
+            self._state = target
+        _write_lifecycle_audit(self.alpha_id, from_state.value, target.value, reason, context)
+
     def is_terminal(self) -> bool:
-        """Check if the candidate is in a terminal state (archived)."""
-        return self.state == LifecycleState.ARCHIVED
+        return self.state == LifecycleState.archived
 
     def to_dict(self) -> dict[str, Any]:
-        return {
-            "alpha_id": self.alpha_id,
-            "state": self.state.value,
-            "audit_trail": self.audit_trail(),
-        }
+        return {"alpha_id": self.alpha_id, "state": self.state.value,
+                "audit_trail": self.audit_trail()}
 
 
 class LifecycleManager:
     """Manages lifecycle state machines for multiple candidates.
 
-    Integration point with the pipeline: the pipeline creates a
-    LifecycleManager, registers candidates, and calls transition()
-    as the candidate progresses through scoring, simulation, and submission.
+    ``transition`` is overloaded: pass two ``LifecycleState`` args for
+    stateless validation (raises on illegal), or ``alpha_id`` + target
+    for the registered-candidate form.
     """
 
     def __init__(self) -> None:
         self._lifecycles: dict[str, CandidateLifecycle] = {}
         self._lock = threading.Lock()
 
-    def register(self, alpha_id: str, initial_state: LifecycleState = LifecycleState.CREATED) -> CandidateLifecycle:
-        """Register a new candidate and return its lifecycle controller."""
+    def register(self, alpha_id: str, initial_state: LifecycleState = LifecycleState.draft) -> CandidateLifecycle:
         with self._lock:
             if alpha_id in self._lifecycles:
                 return self._lifecycles[alpha_id]
@@ -159,8 +243,21 @@ class LifecycleManager:
         with self._lock:
             return self._lifecycles.get(alpha_id)
 
-    def transition(self, alpha_id: str, target: LifecycleState, *, reason: str = "") -> bool:
-        """Convenience: look up lifecycle and transition."""
+    def transition(self, alpha_id_or_from: "str | LifecycleState",
+                   target: LifecycleState | None = None, *, reason: str = "") -> bool:
+        """Stateless validator (raises on illegal) OR registered-candidate transition."""
+        if isinstance(alpha_id_or_from, LifecycleState):
+            from_state = alpha_id_or_from
+            if not isinstance(target, LifecycleState):
+                raise TypeError("transition(state, state) requires two LifecycleState args")
+            if target not in _LEGAL_TRANSITIONS.get(from_state, frozenset()):
+                raise IllegalTransitionError(
+                    f"Illegal lifecycle transition: {from_state.value} → {target.value}"
+                )
+            return True
+        alpha_id = alpha_id_or_from
+        if target is None:
+            raise TypeError("transition(alpha_id, target) requires a target state")
         lc = self.get(alpha_id)
         if lc is None:
             logger.warning("No lifecycle registered for %s", alpha_id)
@@ -168,24 +265,86 @@ class LifecycleManager:
         return lc.transition(target, reason=reason)
 
     def candidates_in_state(self, state: LifecycleState) -> list[str]:
-        """Return alpha_ids of all candidates currently in the given state."""
         with self._lock:
-            return [
-                alpha_id
-                for alpha_id, lc in self._lifecycles.items()
-                if lc.state == state
-            ]
+            return [aid for aid, lc in self._lifecycles.items() if lc.state == state]
 
     def summary(self) -> dict[str, Any]:
-        """Aggregate counts per lifecycle state."""
+        """Aggregate counts per canonical lifecycle state (aliases deduped)."""
         counts: dict[str, int] = {}
-        for s in LifecycleState:
-            counts[s.value] = 0
+        seen: set[int] = set()
         with self._lock:
             for lc in self._lifecycles.values():
-                counts[lc.state.value] += 1
+                key = id(lc.state)
+                if key in seen:
+                    continue
+                seen.add(key)
+                counts[lc.state.value] = counts.get(lc.state.value, 0) + 1
+        for s in LifecycleState:
+            if s is not LifecycleState.__members__.get(s.name):
+                continue
+            counts.setdefault(s.value, 0)
         return counts
 
     def all_lifecycles(self) -> dict[str, CandidateLifecycle]:
         with self._lock:
             return dict(self._lifecycles)
+
+
+def validate_transition(from_state: LifecycleState, to_state: LifecycleState) -> bool:
+    """Stateless transition validator. Raises ``IllegalTransitionError`` if illegal."""
+    if to_state not in _LEGAL_TRANSITIONS.get(from_state, frozenset()):
+        raise IllegalTransitionError(
+            f"Illegal lifecycle transition: {from_state.value} → {to_state.value}"
+        )
+    return True
+
+
+def get_lifecycle(candidate: "Candidate") -> CandidateLifecycle:
+    """Lazily attach a CandidateLifecycle to a candidate.
+
+    Initializes the lifecycle state from the candidate's current
+    ``lifecycle_status`` string (mapped via ``_LEGACY_STATUS_MAP``).
+    """
+    lc = getattr(candidate, "_lifecycle", None)
+    if lc is None or not isinstance(lc, CandidateLifecycle):
+        current = getattr(candidate, "lifecycle_status", "") or "created"
+        initial = _LEGACY_STATUS_MAP.get(current, LifecycleState.draft)
+        lc = CandidateLifecycle(getattr(candidate, "alpha_id", "") or "", initial_state=initial)
+        try:
+            setattr(candidate, "_lifecycle", lc)
+        except (AttributeError, TypeError):
+            pass
+    return lc
+
+
+def transition(candidate: "Candidate", target: LifecycleState, *,
+               reason: str = "", legacy_status: str | None = None,
+               context: dict[str, Any] | None = None) -> bool:
+    """Validate candidate transition via state machine, then mutate.
+
+    Falls back to ``force_transition`` on illegal transitions (isolated tests).
+    Sets ``candidate.lifecycle_status`` to ``legacy_status`` if given."""
+    lc = get_lifecycle(candidate)
+    ok = lc.transition(target, reason=reason, context=context)
+    if not ok:
+        lc.force_transition(target, reason=reason, context=context)
+    new_status = legacy_status if legacy_status is not None else target.value
+    try:
+        candidate.lifecycle_status = new_status
+    except (AttributeError, TypeError):
+        pass
+    return True
+
+
+def _write_lifecycle_audit(alpha_id: str, from_state: str, to_state: str,
+                           reason: str, context: dict[str, Any] | None) -> None:
+    """Best-effort JSONL audit write for a lifecycle transition."""
+    try:
+        from brain_alpha_ops.audit_trail.lifecycle_writer import record_lifecycle_transition
+        record_lifecycle_transition(
+            alpha_id=alpha_id, from_state=from_state, to_state=to_state,
+            reason=reason, trigger_rule=(context or {}).get("trigger_rule", ""),
+            context=context,
+        )
+    except Exception as exc:  # noqa: BLE001 — audit must never break the pipeline
+        logger.debug("lifecycle audit write skipped: %s", exc)

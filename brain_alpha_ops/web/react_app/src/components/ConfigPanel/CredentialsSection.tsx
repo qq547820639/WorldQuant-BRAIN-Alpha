@@ -21,7 +21,6 @@ interface CredentialsSectionProps {
   validationError: string | null;
   connectionStatusText: string;
   hasSessionCredentials: boolean;
-  environment: string;
   onUpdateCredential: <K extends keyof BrainCredentials>(
     key: K,
     value: BrainCredentials[K]
@@ -41,7 +40,6 @@ export default function CredentialsSection({
   logoutApi,
   validationError,
   connectionStatusText,
-  environment,
   onUpdateCredential,
   onTestConnection,
   onLogout,

@@ -10,6 +10,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, Iterable
 
+from brain_alpha_ops.audit_trail.anti_overfit import record_mutation_result
 from brain_alpha_ops.models import Candidate
 from brain_alpha_ops.research.diagnostics import diagnose
 from brain_alpha_ops.research.expression_ast import profile_expression
@@ -87,6 +88,8 @@ class ParameterSearchService:
     ) -> list[Any]:
         safe_max = max(1, int(max_mutations or 1))
         mutations = list(self.optimizer.optimize(candidate, diagnosis, max_mutations=safe_max) or [])
+        for _mut in mutations:
+            record_mutation_result(alpha_id=candidate.alpha_id, mutation=_mut)
         seen = {str(getattr(item, "expression", "") or "").strip() for item in mutations}
         for fallback in _fallback_mutations(candidate, diagnosis):
             expression = str(getattr(fallback, "expression", "") or "").strip()

@@ -37,6 +37,10 @@ from .post_routes.candidates import (
     _post_scoring_attribution,
     _post_scoring_evaluate,
 )
+from .post_routes.scoring import (
+    _post_scoring_gate_decision,
+    _post_scoring_multi_attribution,
+)
 from .post_routes.submit import (
     _post_submit,
     _post_submit_batch,

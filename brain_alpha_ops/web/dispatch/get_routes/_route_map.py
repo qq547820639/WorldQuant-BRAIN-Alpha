@@ -69,6 +69,7 @@ def _build_route_map() -> dict[str, dict[str, Route]]:
         "/api/candidates/simulate/eligible": Route("candidates_simulate_eligible"),
         "/api/phase_state": Route("phase_state"),
         "/api/trends": Route("trends"),
+        "/api/audit/export": Route("audit_export"),
     }
     post_routes = {
         "/api/run": Route("run"),
@@ -107,6 +108,8 @@ def _build_route_map() -> dict[str, dict[str, Route]]:
         "/api/shutdown": Route("shutdown"),
         "/api/scoring/evaluate": Route("scoring_evaluate"),
         "/api/scoring/attribution": Route("scoring_attribution"),
+        "/api/scoring/gate_decision": Route("scoring_gate_decision"),
+        "/api/scoring/multi_attribution": Route("scoring_multi_attribution"),
         "/api/candidates/simulate": Route("candidates_simulate"),
         "/api/trends": Route("trends"),
         "/api/session": Route("session", requires_session=False),    # R-02: creates new session

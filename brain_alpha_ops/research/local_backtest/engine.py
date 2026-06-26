@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import re
+import warnings
 from typing import Any
 
 from brain_alpha_ops.redaction import redact_error_message, redact_text
@@ -22,6 +23,42 @@ from .portfolio import PortfolioConstructor
 MarketDataFrame = _MarketDataFrame
 
 logger = logging.getLogger(__name__)
+
+# Locally-implementable operators by LocalExpressionEvaluator.
+_FALLBACK_OPERATORS: frozenset[str] = frozenset({
+    "rank", "zscore", "ts_zscore", "ts_mean", "ts_std_dev", "ts_rank", "ts_decay_linear",
+    "ts_delta", "ts_sum", "ts_min", "ts_max", "ts_corr", "group_rank", "group_neutralize",
+    "winsorize", "normalize", "abs", "neg", "reverse", "log", "sign", "power",
+    "multiply", "divide", "subtract", "greater", "if_else",
+})
+
+
+def _derive_supported_operators() -> set[str]:
+    """Derive supported_operators from the BRAIN capability registry.
+
+    Returns the intersection of locally-implementable operators and the
+    official registry. Falls back to ``_FALLBACK_OPERATORS`` with a
+    DeprecationWarning when the registry is unavailable.
+    """
+    registry_ops: set[str] = set()
+    try:
+        from brain_alpha_ops.data.capability_registry import get_registry
+        registry_ops = get_registry().operators()
+    except Exception as exc:  # pragma: no cover - defensive import guard
+        logger.debug("capability registry unavailable: %s", exc)
+
+    if not registry_ops:
+        warnings.warn(
+            "LocalBacktestEngine.supported_operators fell back to hardcoded "
+            "fallback; BRAIN capability registry unavailable.",
+            DeprecationWarning, stacklevel=2,
+        )
+        return set(_FALLBACK_OPERATORS)
+    return set(_FALLBACK_OPERATORS) & registry_ops
+
+
+# Module-level derivation; backward-compatible name for ``from .engine import supported_operators``.
+supported_operators: set[str] = _derive_supported_operators()
 
 
 class LocalBacktestEngine:
@@ -63,35 +100,8 @@ class LocalBacktestEngine:
 
     @property
     def supported_operators(self) -> set[str]:
-        return {
-            "rank",
-            "zscore",
-            "ts_zscore",
-            "ts_mean",
-            "ts_std_dev",
-            "ts_rank",
-            "ts_decay_linear",
-            "ts_delta",
-            "ts_sum",
-            "ts_min",
-            "ts_max",
-            "ts_corr",
-            "group_rank",
-            "group_neutralize",
-            "winsorize",
-            "normalize",
-            "abs",
-            "neg",
-            "reverse",
-            "log",
-            "sign",
-            "power",
-            "multiply",
-            "divide",
-            "subtract",
-            "greater",
-            "if_else",
-        }
+        """Return the registry-derived supported operators (module-level)."""
+        return set(supported_operators)
 
     def generate_data(
         self,
@@ -129,41 +139,12 @@ class LocalBacktestEngine:
         Identifies identifiers that are not function names or constants,
         returning them as potential field references.
         """
-        func_names = {
-            "rank",
-            "zscore",
-            "ts_zscore",
-            "ts_mean",
-            "ts_std_dev",
-            "ts_rank",
-            "ts_decay_linear",
-            "ts_delta",
-            "ts_sum",
-            "ts_min",
-            "ts_max",
-            "ts_corr",
-            "group_rank",
-            "group_neutralize",
-            "winsorize",
-            "normalize",
-            "abs",
-            "neg",
-            "reverse",
-            "log",
-            "sign",
-            "power",
-            "multiply",
-            "divide",
-            "subtract",
-            "greater",
-            "if_else",
-        }
         fields: set[str] = set()
         for match in re.finditer(
             r"\b([a-zA-Z_][a-zA-Z0-9_]*)\b", expression
         ):
             token = match.group(1)
-            if token not in func_names:
+            if token not in _FALLBACK_OPERATORS:
                 fields.add(token)
         return fields
 

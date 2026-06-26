@@ -1,9 +1,9 @@
 /**
  * View renderer extracted from App.tsx detailContent (Phase 2.1).
  * Maps activeView ID to the correct page component.
+ * Workstream E2.1: prop-drilling is legacy — prefer renderActiveViewFromContext().
  */
-
-import { lazy, Suspense } from 'react';
+import { lazy } from 'react';
 import type { BrainCredentials, Candidate, CardViewId, PhaseData } from '@/types';
 import type { JobState } from '@/hooks/useJobState';
 import { safeDisplayErrorMessage, apiErrorMessage } from '@/helpers/errorExperience';

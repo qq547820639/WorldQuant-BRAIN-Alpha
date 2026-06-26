@@ -1,4 +1,6 @@
 import { Component, type ReactNode } from 'react';
+import ActionableError from './ActionableError';
+import type { CardViewId } from '@/types';
 
 type ErrorBoundaryLevel = 'full-page' | 'section';
 
@@ -12,6 +14,12 @@ interface Props {
   description?: string;
   showHomeButton?: boolean;
   errorKey?: string;
+  /**
+   * Optional navigation handler forwarded to <ActionableError> so the
+   * recovery button can route to the correct CardViewId when the
+   * boundary catches a render error (E3 audit).
+   */
+  onNavigate?: (view: CardViewId) => void;
 }
 
 interface State {
@@ -97,27 +105,13 @@ export default class ErrorBoundary extends Component<Props, State> {
           </p>
 
           {this.state.error && (
-            <details
-              className="text-left mb-6 text-xs rounded-md p-3"
-              style={{
-                backgroundColor: 'var(--color-surface-deep)',
-                border: '1px solid var(--color-border-default)',
-                color: 'var(--color-text-dim)',
-              }}
-            >
-              <summary
-                className="cursor-pointer font-medium"
-                style={{ color: 'var(--color-text-muted)' }}
-              >
-                错误详情
-              </summary>
-              <pre
-                className="mt-2 whitespace-pre-wrap break-all font-mono text-xs"
-                style={{ color: 'var(--color-text-dim)' }}
-              >
-                {this.state.error.message}
-              </pre>
-            </details>
+            <div className="mb-6 text-left">
+              <ActionableError
+                error={this.state.error}
+                onNavigate={this.props.onNavigate}
+                title="渲染错误"
+              />
+            </div>
           )}
 
           <div className="flex items-center justify-center gap-3">
@@ -180,29 +174,13 @@ export default class ErrorBoundary extends Component<Props, State> {
           </p>
 
           {this.state.error && (
-            <details
-              className="text-left mb-4 text-xs rounded-md p-2"
-              style={{
-                backgroundColor: 'var(--color-surface-deep)',
-                border: '1px solid var(--color-border-default)',
-                color: 'var(--color-text-dim)',
-                display: 'inline-block',
-                textAlign: 'left',
-              }}
-            >
-              <summary
-                className="cursor-pointer font-medium"
-                style={{ color: 'var(--color-text-muted)' }}
-              >
-                错误详情
-              </summary>
-              <pre
-                className="mt-2 whitespace-pre-wrap break-all font-mono text-xs"
-                style={{ color: 'var(--color-text-dim)' }}
-              >
-                {this.state.error.message}
-              </pre>
-            </details>
+            <div className="mb-4 text-left">
+              <ActionableError
+                error={this.state.error}
+                onNavigate={this.props.onNavigate}
+                title="渲染错误"
+              />
+            </div>
           )}
 
           <div className="flex items-center justify-center gap-2">

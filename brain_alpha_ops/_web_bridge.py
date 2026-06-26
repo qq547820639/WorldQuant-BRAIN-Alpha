@@ -50,6 +50,7 @@ _WEB_BRIDGE_MAP: dict[str, tuple[str, str]] = {
     "brain_alpha_ops.web_payload_validation": ("brain_alpha_ops.web.misc", "web_payload_validation"),
     "brain_alpha_ops.web_progress": ("brain_alpha_ops.web.misc", "web_progress"),
     "brain_alpha_ops.web_redline_scoring": ("brain_alpha_ops.web.misc", "web_redline_scoring"),
+    "brain_alpha_ops.web_scoring_interpreter": ("brain_alpha_ops.web.misc", "web_scoring_interpreter"),
     "brain_alpha_ops.web_review": ("brain_alpha_ops.web.misc", "web_review"),
     "brain_alpha_ops.web_review_api": ("brain_alpha_ops.web.misc", "web_review_api"),
     "brain_alpha_ops.web_sqlite_indexes": ("brain_alpha_ops.web.misc", "web_sqlite_indexes"),

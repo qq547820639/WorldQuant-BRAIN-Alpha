@@ -1,7 +1,9 @@
 """Audit trail writer for scoring results, gate decisions, and attribution.
 
-Writes JSONL records to ``data/audit_trail/`` with structured entries
-covering scoring evaluations, gate decisions, and attribution breakdowns.
+Writes JSONL records to ``data/audit_trail/scoring_audit.jsonl`` with
+structured entries covering scoring evaluations, gate decisions, and
+attribution breakdowns. Lifecycle/gate/optimization/simulation audit
+records live in ``lifecycle_writer.py`` (sibling module).
 """
 
 from __future__ import annotations
@@ -48,14 +50,7 @@ class AuditTrailEntry:
 
 
 class AuditTrailWriter:
-    """Thread-safe JSONL audit trail writer.
-
-    Writes structured audit records to ``{audit_dir}/scoring_audit.jsonl``.
-    Each record captures the full scoring evaluation lifecycle:
-    - Scoring result snapshot
-    - Gate decision breakdown with triggered rules
-    - Attribution summary
-    """
+    """Thread-safe JSONL audit trail writer for scoring evaluations."""
 
     def __init__(self, audit_dir: str | Path = _DEFAULT_AUDIT_DIR):
         self._dir = Path(audit_dir)
@@ -64,7 +59,6 @@ class AuditTrailWriter:
         self._lock = threading.Lock()
 
     def write_entry(self, entry: AuditTrailEntry) -> None:
-        """Append an audit trail entry to the JSONL file."""
         record = entry.to_dict()
         record["schema_version"] = AUDIT_TRAIL_SCHEMA_VERSION
         record["written_at"] = datetime.now(timezone.utc).isoformat()
@@ -72,8 +66,7 @@ class AuditTrailWriter:
         if len(line.encode("utf-8")) > _MAX_ENTRY_SIZE_BYTES:
             logger.warning(
                 "audit_trail: entry for %s exceeds size limit (%d bytes), truncating details",
-                entry.alpha_id,
-                len(line.encode("utf-8")),
+                entry.alpha_id, len(line.encode("utf-8")),
             )
             record["details"] = {"_truncated": True}
             record["gate_decisions"] = []
@@ -83,13 +76,7 @@ class AuditTrailWriter:
             with open(self._path, "a", encoding="utf-8") as f:
                 f.write(line + "\n")
 
-    def read_entries(
-        self,
-        *,
-        alpha_id: str | None = None,
-        limit: int = 100,
-    ) -> list[dict[str, Any]]:
-        """Read recent audit trail entries, optionally filtered by alpha_id."""
+    def read_entries(self, *, alpha_id: str | None = None, limit: int = 100) -> list[dict[str, Any]]:
         if not self._path.is_file():
             return []
         entries: list[dict[str, Any]] = []
@@ -111,7 +98,6 @@ class AuditTrailWriter:
         return list(reversed(entries))
 
     def entry_count(self) -> int:
-        """Return the total number of audit trail entries."""
         if not self._path.is_file():
             return 0
         with self._lock:
@@ -127,10 +113,7 @@ def write_scoring_audit(
     scoring_version: str = "",
     extra_details: dict[str, Any] | None = None,
 ) -> AuditTrailEntry:
-    """Write a complete scoring audit trail entry from a ScoringResult.
-
-    This is the primary integration point for OfficialScoringSystem.evaluate().
-    """
+    """Write a complete scoring audit trail entry from a ScoringResult."""
     now = datetime.now(timezone.utc).isoformat()
     alpha_id = getattr(scoring_result, "alpha_id", "")
     expression = getattr(scoring_result, "expression", "")
@@ -138,7 +121,7 @@ def write_scoring_audit(
     triggered_rules = _extract_triggered_rules(scoring_result)
 
     entry = AuditTrailEntry(
-        entry_id=f"{alpha_id}_{now[:19].replace(':', '').replace('-', '')}_{uuid.uuid4().hex[:8]}",
+        entry_id=_new_entry_id(alpha_id),
         alpha_id=alpha_id,
         expression=expression,
         event_type="scoring_evaluated",
@@ -154,11 +137,11 @@ def write_scoring_audit(
         attribution_summary=getattr(scoring_result, "attribution_report", lambda: "")() if hasattr(scoring_result, "attribution_report") else "",
         details=extra_details or {},
     )
-
-    writer = _get_writer(audit_dir)
-    writer.write_entry(entry)
+    _get_writer(audit_dir).write_entry(entry)
     return entry
 
+
+# --- Singleton cache + helpers ---------------------------------------------
 
 _writer_lock = threading.Lock()
 _writer_instances: dict[str, AuditTrailWriter] = {}
@@ -171,6 +154,10 @@ def _get_writer(audit_dir: str | Path = _DEFAULT_AUDIT_DIR) -> AuditTrailWriter:
             if key not in _writer_instances:
                 _writer_instances[key] = AuditTrailWriter(audit_dir)
     return _writer_instances[key]
+
+
+def _new_entry_id(alpha_id: str) -> str:
+    return f"{alpha_id}_{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S')}_{uuid.uuid4().hex[:8]}"
 
 
 def _iter_gates(scoring_result: Any) -> Generator[tuple[str, Any], None, None]:
@@ -187,7 +174,6 @@ def _gate_to_dict(gate: Any) -> dict[str, Any]:
 
 
 def _extract_gate_decisions(scoring_result: Any) -> list[dict[str, Any]]:
-    """Extract gate decisions from a ScoringResult for audit trail."""
     decisions: list[dict[str, Any]] = []
     for gate_type, gate in _iter_gates(scoring_result):
         gate_dict = _gate_to_dict(gate)
@@ -217,7 +203,6 @@ def _extract_gate_decisions(scoring_result: Any) -> list[dict[str, Any]]:
 
 
 def _extract_triggered_rules(scoring_result: Any) -> list[dict[str, Any]]:
-    """Extract triggered (failed) rules from gate check items for explainability."""
     rules: list[dict[str, Any]] = []
     for gate_type, gate in _iter_gates(scoring_result):
         gate_dict = _gate_to_dict(gate)

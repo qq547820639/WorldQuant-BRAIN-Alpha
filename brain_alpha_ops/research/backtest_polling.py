@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from typing import Callable
 
 from brain_alpha_ops.brain_api.base import BrainAPI, BrainAPIError
+from brain_alpha_ops.candidate_lifecycle import LifecycleState, transition
 from brain_alpha_ops.models import Candidate
 from brain_alpha_ops.redaction import redact_error_message
 
@@ -59,7 +60,11 @@ class BacktestPollingService:
         if status == "COMPLETED":
             return self._fetch_completed_result(candidate, now=now, interval=interval, outcome=outcome)
         if status == "FAILED":
-            candidate.lifecycle_status = "simulation_failed"
+            transition(
+                candidate, LifecycleState.simulation_failed,
+                reason="simulation_failed",
+                legacy_status="simulation_failed",
+            )
             candidate.gate = blocked_gate("SIMULATION_FAILED", [status])
             outcome.action = "failed"
             outcome.finalize = True
@@ -77,7 +82,11 @@ class BacktestPollingService:
             "PROCESSING", "CALCULATING", "EVALUATING", "IN_PROGRESS",
         })
         if status.upper() in _KNOWN_RUNNING_STATUSES:
-            candidate.lifecycle_status = "simulation_running"
+            transition(
+                candidate, LifecycleState.simulating,
+                reason="simulation_running",
+                legacy_status="simulation_running",
+            )
             candidate.submission["next_poll_at"] = now + interval
             outcome.action = "running"
             outcome.records.append(BacktestRecordIntent(action="running", status=status))
@@ -89,7 +98,11 @@ class BacktestPollingService:
             "BacktestPollingService.poll: unrecognised simulation status %r for %s; deferring",
             status, candidate.alpha_id,
         )
-        candidate.lifecycle_status = "simulation_poll_deferred_unknown"
+        transition(
+            candidate, LifecycleState.simulating,
+            reason="simulation_poll_deferred_unknown",
+            legacy_status="simulation_poll_deferred_unknown",
+        )
         candidate.submission["next_poll_at"] = now + max(interval * 2, 30.0)
         outcome.action = "poll_deferred_unknown"
         outcome.records.append(
@@ -113,7 +126,11 @@ class BacktestPollingService:
         if exc.status_code == 429:
             reason = f"official simulation polling rate limit reached; retry later: {exc}"
             self.halt_official_calls(reason, None)
-            candidate.lifecycle_status = "simulation_poll_deferred_rate_limit"
+            transition(
+                candidate, LifecycleState.simulating,
+                reason="simulation_poll_deferred_rate_limit",
+                legacy_status="simulation_poll_deferred_rate_limit",
+            )
             candidate.gate = blocked_gate("SIMULATION_POLL_DEFERRED_RATE_LIMIT", [reason])
             candidate.submission["next_poll_at"] = now + max(interval, float(exc.retry_after or 0.0))
             self.event("official_simulation_poll_deferred", reason, candidate.alpha_id, level="WARN")
@@ -132,7 +149,11 @@ class BacktestPollingService:
             )
 
         note = redact_error_message(exc)
-        candidate.lifecycle_status = "simulation_poll_failed"
+        transition(
+            candidate, LifecycleState.simulation_failed,
+            reason="simulation_poll_failed",
+            legacy_status="simulation_poll_failed",
+        )
         candidate.gate = blocked_gate("SIMULATION_POLL_FAILED", [note])
         return BacktestPollOutcome(
             action="poll_failed",
@@ -163,7 +184,11 @@ class BacktestPollingService:
             if exc.status_code == 429:
                 reason = f"official simulation result rate limit reached; retry later: {exc}"
                 self.halt_official_calls(reason, None)
-                candidate.lifecycle_status = "simulation_result_deferred_rate_limit"
+                transition(
+                    candidate, LifecycleState.simulating,
+                    reason="simulation_result_deferred_rate_limit",
+                    legacy_status="simulation_result_deferred_rate_limit",
+                )
                 candidate.gate = blocked_gate("SIMULATION_RESULT_DEFERRED_RATE_LIMIT", [reason])
                 candidate.submission["next_poll_at"] = now + max(interval, float(exc.retry_after or 0.0))
                 self.event("official_simulation_result_deferred", reason, candidate.alpha_id, level="WARN")
@@ -181,7 +206,11 @@ class BacktestPollingService:
                 return outcome
 
             note = redact_error_message(exc)
-            candidate.lifecycle_status = "simulation_result_failed"
+            transition(
+                candidate, LifecycleState.simulation_failed,
+                reason="simulation_result_failed",
+                legacy_status="simulation_result_failed",
+            )
             candidate.gate = blocked_gate("SIMULATION_RESULT_FAILED", [note])
             outcome.action = "result_failed"
             outcome.finalize = True
@@ -199,7 +228,12 @@ class BacktestPollingService:
 
         candidate.official_alpha_id = result.get("alpha_id", "") or result.get("metrics", {}).get("official_alpha_id", "")
         candidate.official_metrics = result.get("metrics", {})
-        candidate.lifecycle_status = "official_simulated"
+        transition(
+            candidate, LifecycleState.simulation_passed,
+            reason="official_simulated",
+            legacy_status="official_simulated",
+            context={"sim_config": result.get("settings", {}), "result_summary": result.get("metrics", {})},
+        )
         outcome.action = "completed"
         outcome.result = result
         outcome.finalize = True

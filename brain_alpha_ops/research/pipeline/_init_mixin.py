@@ -12,6 +12,7 @@ import random
 from pathlib import Path
 from typing import Any, Callable
 
+from brain_alpha_ops.audit_trail.anti_overfit import make_strategy_audit_sink
 from brain_alpha_ops.brain_api.base import BrainAPI
 from brain_alpha_ops.config import OpsConfig
 from brain_alpha_ops.execution_backend import AlphaExecutionBackend
@@ -86,7 +87,7 @@ class PipelineInitMixin:
             _cross_review_service=CrossReviewService(),
             backtest_slot_manager=backtest_slot_manager,
             backtest_slots=backtest_slot_manager.slots,
-            strategy_lifecycle=StrategyLifecycleTracker(record_sink=lambda row: self.services.runtime._record_strategy_lifecycle(row)),
+            strategy_lifecycle=StrategyLifecycleTracker(record_sink=make_strategy_audit_sink(lambda row: self.services.runtime._record_strategy_lifecycle(row))),
             cloud_sync={
                 "status": "not_started",
                 "range": config.budget.cloud_sync_range,

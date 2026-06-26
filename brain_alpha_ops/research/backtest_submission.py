@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import Callable
 
 from brain_alpha_ops.brain_api.base import BrainAPI, BrainAPIError
+from brain_alpha_ops.candidate_lifecycle import LifecycleState, transition
 from brain_alpha_ops.models import Candidate
 from brain_alpha_ops.redaction import redact_error_message
 
@@ -39,7 +40,11 @@ class BacktestSubmissionService:
     event: EventCallback
 
     def submit_slot(self, slot: int, candidate: Candidate) -> BacktestSubmitOutcome:
-        candidate.lifecycle_status = "backtest_slot_selected"
+        transition(
+            candidate, LifecycleState.queued_for_simulation,
+            reason="backtest_slot_selected",
+            legacy_status="backtest_slot_selected",
+        )
         candidate.submission["backtest_slot"] = slot
         settings = dict(self.settings_provider())
         candidate.submission["settings"] = settings
@@ -49,7 +54,11 @@ class BacktestSubmissionService:
             return self._handle_submit_error(exc, candidate)
 
         candidate.simulation_id = sim_id
-        candidate.lifecycle_status = "simulation_submitted"
+        transition(
+            candidate, LifecycleState.simulating,
+            reason="simulation_submitted",
+            legacy_status="simulation_submitted",
+        )
         candidate.submission["simulation_status"] = "SUBMITTED"
         candidate.submission["next_poll_at"] = time.monotonic() + self.poll_interval()
         candidate.submission["poll_count"] = 0
@@ -60,14 +69,22 @@ class BacktestSubmissionService:
         error_text = redact_error_message(exc)
         if "CONCURRENT_SIMULATION_LIMIT_EXCEEDED" in error_text:
             reason = "official concurrent simulation limit exceeded; retry after running BRAIN simulations finish"
-            candidate.lifecycle_status = "simulation_deferred_concurrency_limit"
+            transition(
+                candidate, LifecycleState.queued_for_simulation,
+                reason="simulation_deferred_concurrency_limit",
+                legacy_status="simulation_deferred_concurrency_limit",
+            )
             candidate.gate = blocked_gate("SIMULATION_DEFERRED_CONCURRENCY_LIMIT", [reason])
             self.halt_official_calls(reason, None)
             return BacktestSubmitOutcome(submitted=False, halted=True, error=exc, error_code="SIMULATION_SUBMIT_ERROR", note=reason)
         if exc.status_code == 429:
             retry_after = f"; retry_after={exc.retry_after}" if exc.retry_after is not None else ""
             reason = f"official API rate limit reached{retry_after}; defer remaining official calls"
-            candidate.lifecycle_status = "simulation_deferred_rate_limit"
+            transition(
+                candidate, LifecycleState.queued_for_simulation,
+                reason="simulation_deferred_rate_limit",
+                legacy_status="simulation_deferred_rate_limit",
+            )
             candidate.gate = blocked_gate("SIMULATION_DEFERRED_RATE_LIMIT", [reason])
             self.halt_official_calls(reason, exc.retry_after)
             return BacktestSubmitOutcome(submitted=False, halted=True, error=exc, error_code="SIMULATION_SUBMIT_ERROR", note=reason)
@@ -78,7 +95,11 @@ class BacktestSubmissionService:
         # BRAIN server is down.  The candidate stays in the pool as retryable.
         backoff_retry = exc.retry_after if exc.retry_after is not None else 30.0
         reason = f"official simulation request failed (status={exc.status_code}); deferring official calls for {backoff_retry}s"
-        candidate.lifecycle_status = "simulation_deferred_server_error"
+        transition(
+            candidate, LifecycleState.queued_for_simulation,
+            reason="simulation_deferred_server_error",
+            legacy_status="simulation_deferred_server_error",
+        )
         candidate.gate = blocked_gate("SIMULATION_DEFERRED_SERVER_ERROR", [error_text[:240]])
         self.halt_official_calls(reason, backoff_retry)
         self.event("official_simulation_deferred", reason, candidate.alpha_id, level="WARN")

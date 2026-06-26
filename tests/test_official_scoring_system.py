@@ -3,7 +3,9 @@ import logging
 
 from brain_alpha_ops.models import Candidate
 from brain_alpha_ops.scoring import official_scoring as official_scoring_module
-from brain_alpha_ops.scoring.official_scoring import GateConfig, OfficialScoringSystem, ScoreHistoryDB
+from brain_alpha_ops.scoring.gates import GateConfig
+from brain_alpha_ops.scoring.history import ScoreHistoryDB
+from brain_alpha_ops.scoring.official_scoring import OfficialScoringSystem
 
 
 def _candidate(metrics):

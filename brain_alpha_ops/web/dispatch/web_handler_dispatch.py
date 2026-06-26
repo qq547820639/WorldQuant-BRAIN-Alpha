@@ -147,6 +147,7 @@ from .web_get_routes import (
     _get_submit_readiness,
     _get_sync_status,
     _get_trends,
+    _get_audit_export,
 )
 
 from .web_post_routes import (
@@ -165,6 +166,8 @@ from .web_post_routes import (
     _post_run,
     _post_scoring_attribution,
     _post_scoring_evaluate,
+    _post_scoring_gate_decision,
+    _post_scoring_multi_attribution,
     _post_session,
     _post_shutdown,
     _post_stop,
@@ -218,6 +221,7 @@ _GET_DISPATCH_HANDLERS: dict[str, RouteDispatcher] = {
     "trends": _get_trends,
     "candidates_simulate_eligible": _get_candidates_simulate_eligible,
     "phase_state": _get_phase_state,
+    "audit_export": _get_audit_export,
     # Route aliases for backward compatibility
     "snapshot_cloud": _get_cloud_alphas,
     "snapshot_memory": _get_research_memory,
@@ -255,6 +259,8 @@ _POST_DISPATCH_HANDLERS: dict[str, RouteDispatcher] = {
     "assistant_response_guidance": _post_assistant_response_guidance,
     "assistant_guidance": _post_assistant_guidance,
     "scoring_attribution": _post_scoring_attribution,
+    "scoring_gate_decision": _post_scoring_gate_decision,
+    "scoring_multi_attribution": _post_scoring_multi_attribution,
     "candidates_simulate": _post_candidates_simulate,
     "trends": _post_trends,
     # Route aliases for backward compatibility

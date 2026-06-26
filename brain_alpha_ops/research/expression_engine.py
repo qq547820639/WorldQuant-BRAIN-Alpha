@@ -7,6 +7,7 @@ and submission gates.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from typing import Any, Iterable
 
@@ -16,11 +17,41 @@ from brain_alpha_ops.research.expression_ast import (
     profile_expression,
 )
 
+logger = logging.getLogger(__name__)
+
 EXPRESSION_ENGINE_SCHEMA_VERSION = "expression-engine-report.v1"
 DEFAULT_MAX_DEPTH = 12
 DEFAULT_MAX_NODE_COUNT = 80
 DEFAULT_MAX_WINDOW = 512
 DEFAULT_MAX_EXPRESSION_LENGTH = 512
+
+
+def _registry_fields() -> set[str]:
+    """Return the set of field names known to the BRAIN capability registry.
+
+    Returns an empty set when the registry is unavailable so callers can
+    fall back to their prior behavior (no field-scope checking).
+    """
+    try:
+        from brain_alpha_ops.data.capability_registry import get_registry
+        return {name.lower() for name in get_registry().fields()}
+    except Exception as exc:  # pragma: no cover - defensive import guard
+        logger.debug("capability registry unavailable for fields: %s", exc)
+        return set()
+
+
+def _registry_operators() -> set[str]:
+    """Return the set of operator names known to the BRAIN capability registry.
+
+    Returns an empty set when the registry is unavailable so callers can
+    fall back to their prior behavior (no operator-scope checking).
+    """
+    try:
+        from brain_alpha_ops.data.capability_registry import get_registry
+        return {name.lower() for name in get_registry().operators()}
+    except Exception as exc:  # pragma: no cover - defensive import guard
+        logger.debug("capability registry unavailable for operators: %s", exc)
+        return set()
 
 
 @dataclass(frozen=True)
@@ -87,8 +118,16 @@ class ExpressionEngine:
         max_window: int = DEFAULT_MAX_WINDOW,
         max_expression_length: int = DEFAULT_MAX_EXPRESSION_LENGTH,
     ) -> None:
-        self.allowed_fields = _normalized_set(allowed_fields)
-        self.allowed_operators = _normalized_set(allowed_operators)
+        if allowed_fields is None:
+            registry_fields = _registry_fields()
+            self.allowed_fields = registry_fields if registry_fields else set()
+        else:
+            self.allowed_fields = _normalized_set(allowed_fields)
+        if allowed_operators is None:
+            registry_ops = _registry_operators()
+            self.allowed_operators = registry_ops if registry_ops else set()
+        else:
+            self.allowed_operators = _normalized_set(allowed_operators)
         self.max_depth = max(1, int(max_depth or DEFAULT_MAX_DEPTH))
         self.max_node_count = max(1, int(max_node_count or DEFAULT_MAX_NODE_COUNT))
         self.max_window = max(1, int(max_window or DEFAULT_MAX_WINDOW))

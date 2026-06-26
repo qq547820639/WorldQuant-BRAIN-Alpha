@@ -57,5 +57,6 @@ from ._routes_misc import (
     _get_scoring_health,
     _get_checkpoint_status,
 )
+from ._routes_audit import _get_audit_export
 
 __all__: list[str] = []  # handlers are private (_-prefixed)

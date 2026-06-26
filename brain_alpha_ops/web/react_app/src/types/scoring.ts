@@ -171,3 +171,119 @@ export interface FailureItem {
   reason?: string;
   severity?: string;
 }
+
+// ── Workstream D4.1: Structured GateDecision / Attribution / Audit export ──
+
+/** Mirrors backend GateDecisionService action constants. */
+export type GateDecisionActionLiteral =
+  | 'enter_official_simulation_queue'
+  | 'continue_optimization'
+  | 'discard_archive'
+  | 'enter_human_confirmation';
+
+/** Evidence snapshot from gate sources used to derive the decision. */
+export interface GateEvidence {
+  hard_gate_failed?: string[];
+  anti_overfit_recommendation?: string;
+  anti_overfit_passed?: boolean;
+  has_official_metrics?: boolean;
+  release_status?: string;
+  gate_submission_ready?: boolean;
+}
+
+/** A single triggered rule contributing to the decision (audit-trail entry). */
+export interface TriggeredRule {
+  source?: string;
+  rule?: string;
+  severity?: string;
+  reason?: string;
+  actual?: number | string | null;
+  expected?: number | string | null;
+  score?: number | null;
+}
+
+/** Candidate snapshot included in the gate-decision payload. */
+export interface GateDecisionCandidateSnapshot {
+  alpha_id?: string;
+  lifecycle_status?: string;
+  total_score?: number;
+  decision_band?: string;
+  has_official_metrics?: boolean;
+  gate_submission_ready?: boolean;
+  gate_hard_blocked?: boolean;
+}
+
+/** POST /api/scoring/gate_decision response payload. */
+export interface GateDecisionPayload {
+  ok: boolean;
+  action: GateDecisionActionLiteral;
+  reason: string;
+  target_state: string;
+  alpha_id?: string;
+  schema_version?: string;
+  gate_evidence?: GateEvidence;
+  triggered_rules?: TriggeredRule[];
+  next_action_hint?: string;
+  release_gate?: Record<string, unknown>;
+  candidate_snapshot?: GateDecisionCandidateSnapshot;
+  error?: string;
+  error_code?: string;
+}
+
+/** One dimension aggregate (mirrors backend DimensionSummary.to_dict). */
+export interface MultiAttributionDimension {
+  dimension: string;
+  value: string;
+  count: number;
+  avg_score: number;
+  pass_count: number;
+  fail_count: number;
+  top_failures: string[];
+}
+
+/** POST /api/scoring/multi_attribution response payload. */
+export interface MultiAttributionPayload {
+  ok: boolean;
+  schema_version?: string;
+  multi_attribution?: {
+    schema_version: string;
+    dimensions: {
+      by_gate: MultiAttributionDimension[];
+      by_metric: MultiAttributionDimension[];
+      by_dataset: MultiAttributionDimension[];
+      by_region: MultiAttributionDimension[];
+      by_time: MultiAttributionDimension[];
+    };
+    total_scorecards: number;
+  };
+  error?: string;
+  error_code?: string;
+}
+
+/** A single replayable audit-trail entry (mirrors audit_trail/export.py). */
+export interface AuditExportEntry {
+  export_schema?: string;
+  entry_id?: string;
+  alpha_id?: string;
+  event_type?: string;
+  written_at?: string;
+  source_file?: string;
+  scoring_version?: string;
+  gate_version?: string;
+  capability_version?: string;
+  sim_config?: Record<string, unknown>;
+  result_summary?: Record<string, unknown>;
+  change_record?: Record<string, unknown>;
+  details?: Record<string, unknown>;
+}
+
+/** GET /api/audit/export response payload. */
+export interface AuditExportResponse {
+  ok: boolean;
+  schema_version?: string;
+  alpha_id?: string;
+  entry_count: number;
+  entries: AuditExportEntry[];
+  error?: string;
+  error_code?: string;
+}

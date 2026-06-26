@@ -212,7 +212,6 @@ export default function ConfigPanel({
         validationError={validationError}
         connectionStatusText={connectionStatusText}
         hasSessionCredentials={hasSessionCredentials}
-        environment={form.environment}
         onUpdateCredential={updateCredential}
         onTestConnection={testConnection}
         onLogout={handleLogout}

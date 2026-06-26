@@ -10,9 +10,11 @@ from dataclasses import asdict
 import logging
 from typing import TYPE_CHECKING
 
+from brain_alpha_ops.candidate_lifecycle import LifecycleState, transition
 from brain_alpha_ops.config import RunConfig
 from brain_alpha_ops.models import Candidate
 from brain_alpha_ops.redaction import redact_error_message
+from brain_alpha_ops.scoring._gate_decision import GateDecisionService
 from brain_alpha_ops.scoring.release_score_gate import evaluate_release_score
 from brain_alpha_ops.submission_readiness import (
     live_submit_readiness_hard_gate,
@@ -38,6 +40,7 @@ class SubmissionGateService:
 
     def __init__(self, pipeline: AlphaResearchPipeline) -> None:
         self._pipeline = pipeline
+        self._gate_decision_service = GateDecisionService()
 
     def _check_before_submit(self, candidate: Candidate) -> dict:
         p = self._pipeline
@@ -91,7 +94,11 @@ class SubmissionGateService:
             if not failed_reasons:
                 failed_reasons = ["cross_review_rejected"]
             candidate.gate = _blocked_gate("CROSS_REVIEW_BLOCKED", failed_reasons)
-            candidate.lifecycle_status = "auto_submit_cross_review_blocked"
+            transition(
+                candidate, LifecycleState.ready_for_review,
+                reason="auto_submit_cross_review_blocked",
+                legacy_status="auto_submit_cross_review_blocked",
+            )
             p.services.runtime._event("auto_submit_cross_review_blocked", "; ".join(failed_reasons), candidate.alpha_id, level="WARN")
             return 0
         readiness_gate = p._live_submit_readiness_gate(candidate)
@@ -101,7 +108,11 @@ class SubmissionGateService:
                 str(readiness_gate.get("error_code") or "SUBMIT_READINESS_NOT_READY")
             ]
             candidate.gate = _blocked_gate("LIVE_SUBMIT_READINESS_BLOCKED", failed_reasons)
-            candidate.lifecycle_status = "auto_submit_readiness_blocked"
+            transition(
+                candidate, LifecycleState.ready_for_review,
+                reason="auto_submit_readiness_blocked",
+                legacy_status="auto_submit_readiness_blocked",
+            )
             p.services.runtime._event("auto_submit_readiness_blocked", "; ".join(failed_reasons), candidate.alpha_id, level="WARN")
             return 0
         submission = p.api.submit_alpha(
@@ -110,7 +121,11 @@ class SubmissionGateService:
             p.config.settings.to_platform_dict()["settings"],
         )
         candidate.submission["result"] = submission
-        candidate.lifecycle_status = "submitted"
+        transition(
+            candidate, LifecycleState.submitted,
+            reason="auto_submitted",
+            legacy_status="submitted",
+        )
         p.ledger.record(candidate, submission, mode="auto")
         p.services.runtime._record_lifecycle(candidate, "submitted", "auto")
         p.services.runtime._event("alpha_submitted", f"Submitted {candidate.alpha_id}.", candidate.alpha_id)
@@ -181,6 +196,46 @@ class SubmissionGateService:
             "latest_backtest": backtest,
         }
 
+    def _record_gate_decision(self, candidate: Candidate, release_gate: dict) -> None:
+        """Map gate outcomes to a lifecycle decision and record it (Workstream D2.2).
+
+        Records the decision via ``record_gate_decision`` and triggers the
+        lifecycle transition when the candidate is not already on a
+        submission path.  Best-effort: never breaks the safety assessment.
+        """
+        try:
+            from brain_alpha_ops.audit_trail.lifecycle_writer import record_gate_decision
+
+            outcome = self._gate_decision_service.decide(
+                candidate, gate_results=candidate.gate, release_gate=release_gate,
+            )
+            record_gate_decision(
+                alpha_id=candidate.alpha_id,
+                gate_name="submission_gate_decision",
+                passed=outcome.action == "enter_official_simulation_queue",
+                reason=outcome.reason,
+                attribution=outcome.to_dict(),
+                context={
+                    "trigger_rule": "gate_decision_service",
+                    "action": outcome.action,
+                    "target_state": outcome.target_state.value,
+                    "next_action_hint": outcome.next_action_hint,
+                },
+            )
+            # Transition only for non-submission outcomes to avoid clobbering
+            # the auto-submit flow (which manages its own transitions).
+            current = getattr(candidate, "lifecycle_status", "") or ""
+            if outcome.target_state.value not in {current, "submitted", "ready_for_review"}:
+                transition(
+                    candidate, outcome.target_state,
+                    reason=f"gate_decision:{outcome.action}",
+                    legacy_status=outcome.action,
+                    context={"trigger_rule": "gate_decision_service"},
+                )
+            candidate.submission["gate_decision"] = outcome.to_dict()
+        except Exception as exc:  # noqa: BLE001 — gate decision must never break safety
+            logger.debug("gate decision recording skipped: %s", exc)
+
     def _assess_auto_submission(self, candidate: Candidate, submitted_this_run: int) -> dict:
         p = self._pipeline
         safety = p.ledger.assess(
@@ -225,6 +280,7 @@ class SubmissionGateService:
                     else "official_release_gate_failed:" + ",".join(failed_gate_names),
                 )
                 safety["official_release_gate"] = release_gate
+                self._record_gate_decision(candidate, release_gate)
 
         cloud_status = str(p.cloud_sync.get("status", "")).lower()
         add(

@@ -125,6 +125,7 @@ export default memo(function Tooltip({
   return (
     <span
       ref={wrapperRef}
+      tabIndex={0}
       style={{ display: 'inline-block', position: 'relative' }}
       onMouseEnter={showTooltip}
       onMouseLeave={hideTooltip}

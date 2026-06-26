@@ -247,6 +247,10 @@ class _SchedulerTickMixin:
         cycle = 0  # will be set by caller context
 
         if "CONCURRENT_SIMULATION_LIMIT_EXCEEDED" in error_text:
+            # Workstream C2.1: reset FIRST (clears candidate/sim_id), THEN
+            # enter cooldown — otherwise reset() wipes cooldown_until/reason
+            # and the slot becomes immediately available (no-op cooldown).
+            slot.reset()
             slot.enter_cooldown(_COOLDOWN_CONCURRENT_LIMIT, "concurrent limit exceeded")
             candidate.lifecycle_status = "simulation_deferred_concurrency_limit"
             self._emit_event(
@@ -256,8 +260,6 @@ class _SchedulerTickMixin:
                 cycle,
                 level="WARN",
             )
-            # Don't halt the whole scheduler — just this slot
-            slot.reset()
             return SlotOutcome(
                 slot_id=slot.slot_id, action="cooldown",
                 candidate=candidate, error=error_text,
@@ -265,6 +267,8 @@ class _SchedulerTickMixin:
 
         if exc.status_code == 429:
             retry_after = exc.retry_after or _COOLDOWN_429
+            # Workstream C2.2: reset before cooldown (same rationale as above).
+            slot.reset()
             slot.enter_cooldown(retry_after, f"rate limited (retry_after={retry_after})")
             candidate.lifecycle_status = "simulation_deferred_rate_limit"
             self._emit_event(
@@ -274,13 +278,14 @@ class _SchedulerTickMixin:
                 cycle,
                 level="WARN",
             )
-            slot.reset()
             return SlotOutcome(
                 slot_id=slot.slot_id, action="cooldown",
                 candidate=candidate, error=error_text,
             )
 
         # Server error — enter cooldown, don't halt pipeline
+        # Workstream C2.3: reset before cooldown (same rationale as above).
+        slot.reset()
         slot.enter_cooldown(_COOLDOWN_SERVER_ERROR, f"server error: {error_text[:120]}")
         candidate.lifecycle_status = "simulation_deferred_server_error"
         self._emit_event(
@@ -290,7 +295,6 @@ class _SchedulerTickMixin:
             cycle,
             level="WARN",
         )
-        slot.reset()
         return SlotOutcome(
             slot_id=slot.slot_id, action="cooldown",
             candidate=candidate, error=error_text,
@@ -304,18 +308,19 @@ class _SchedulerTickMixin:
 
         if exc.status_code == 429:
             retry_after = exc.retry_after or _COOLDOWN_429
+            # Workstream C2.2: save candidate ref, reset, THEN enter cooldown.
+            candidate = slot.candidate
+            slot.reset()
             slot.enter_cooldown(retry_after, f"poll rate limited (retry_after={retry_after})")
-            if slot.candidate:
-                slot.candidate.lifecycle_status = "simulation_poll_deferred_rate_limit"
+            if candidate:
+                candidate.lifecycle_status = "simulation_poll_deferred_rate_limit"
             self._emit_event(
                 "scheduler_poll_rate_limit",
                 f"Slot {slot.slot_id}: poll 429, cooldown {retry_after}s",
-                slot.candidate.alpha_id if slot.candidate else "",
+                candidate.alpha_id if candidate else "",
                 cycle,
                 level="WARN",
             )
-            candidate = slot.candidate
-            slot.reset()
             return SlotOutcome(
                 slot_id=slot.slot_id, action="cooldown",
                 candidate=candidate, error=error_text,

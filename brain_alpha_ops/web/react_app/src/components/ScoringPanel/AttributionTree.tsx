@@ -1,5 +1,6 @@
 import type { AttributionNode } from '@/types';
 import { safeScoringText, fmtNum, childNodes } from './utils';
+import AttributionTooltip from './AttributionTooltip';
 
 interface Props {
   attribution: AttributionNode | null;
@@ -19,7 +20,13 @@ function AttributionNodeView({ node, depth }: { node: AttributionNode; depth: nu
       <div
         style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', fontSize: 12 }}
       >
-        <span className="text-text-secondary">{safeScoringText(node.name, '归因项待确认')}</span>
+        <AttributionTooltip
+          name={node.name}
+          score={node.score}
+          weight={node.weight}
+          contribution={node.contribution}
+          explanation={node.explanation}
+        />
         <span className="tabular text-text-tertiary">
           {fmtNum(node.score, 1)} x {fmtNum(node.weight, 2)}
         </span>

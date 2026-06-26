@@ -617,7 +617,7 @@ def test_quality_gate_final_release_includes_brain_compliance_stop_rules(monkeyp
         "--json",
         "--strict",
     ] in calls
-    assert ["scripts/check_parameter_traceability.py", "--config", str(config_path), "--json"] in calls
+    assert ["-m", "scripts.check_parameter_traceability", "--config", str(config_path), "--json"] in calls
     assert ["scripts/check_live_submit_readiness.py", "--config", str(config_path), "--json"] in calls
     assert ["scripts/final_release_gate.py", "--config", str(config_path), "--json"] in calls
 

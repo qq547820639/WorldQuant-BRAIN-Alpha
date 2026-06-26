@@ -195,7 +195,8 @@ def _write_required_tree(root: Path) -> None:
         'append_scientific_audit_event(row, operation="robustness_feedback")\n',
         encoding="utf-8",
     )
-    (root / "scripts" / "quality_gate.py").write_text(
+    (root / "scripts" / "quality_gate").mkdir(parents=True, exist_ok=True)
+    (root / "scripts" / "quality_gate" / "__init__.py").write_text(
         "candidate_scientific_audit\n",
         encoding="utf-8",
     )

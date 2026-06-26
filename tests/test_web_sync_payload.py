@@ -48,7 +48,7 @@ class Repo:
 def test_sync_modules_keep_single_job_and_payload_owners():
     sync_job_dir = Path("brain_alpha_ops/web_cloud/sync_job")
     sync_job_source = "\n".join(
-        p.read_text(encoding="utf-8") for p in sorted(sync_job_dir.glob("*.py"))
+        p.read_text(encoding="utf-8") for p in sorted(sync_job_dir.rglob("*.py"))
     )
     sync_payload_source = Path("brain_alpha_ops/web_cloud/sync_payload.py").read_text(encoding="utf-8")
     handler_source = Path("brain_alpha_ops/web/handlers/sync.py").read_text(encoding="utf-8")

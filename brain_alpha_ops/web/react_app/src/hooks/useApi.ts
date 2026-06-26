@@ -8,6 +8,7 @@ import {
 } from '@/helpers/errorExperience';
 import { csrfHeaders, csrfToken, setCsrfToken, setStreamToken } from '@/utils/csrf';
 import { saveResumeState } from '@/utils/resumeState';
+import type { ActionableErrorPayload } from '@/types/errors';
 
 // P2-22 fix: raised from 120s to 600s (10 min) because BRAIN
 // sync/simulate operations routinely take several minutes.
@@ -39,6 +40,8 @@ export type ApiMeta = {
   status_kind?: string;
   terminal?: boolean;
   interrupted?: boolean;
+  /** E3: structured actionable error payload from brain_alpha_ops.error_catalog. */
+  actionable?: ActionableErrorPayload;
 };
 
 interface UseApiState<T> {

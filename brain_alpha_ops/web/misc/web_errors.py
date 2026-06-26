@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from brain_alpha_ops.error_catalog import build_actionable_error, classify_exception
 from brain_alpha_ops.error_payloads import user_error_payload
 from brain_alpha_ops.redaction import redact_error_message
 from brain_alpha_ops.web_check_availability import (
@@ -63,7 +64,40 @@ def safe_error_message(exc: Exception, *, error_code: str = "") -> str:
 def safe_error_payload(exc: Exception, *, error_code: str = "UNHANDLED_ERROR") -> dict:
     payload = user_error_payload(exc, error_code=error_code)
     payload["error"] = safe_error_message(exc, error_code=error_code)
-    return enrich_error_payload(payload)
+    enriched = enrich_error_payload(payload)
+    # E3: attach the actionable error payload (additive; existing keys kept).
+    enriched["actionable"] = _build_actionable_for(exc, enriched)
+    return enriched
+
+
+def _build_actionable_for(exc: Exception, payload: dict) -> dict:
+    """Build the actionable error payload for an exception.
+
+    Honors any existing ``kind`` set by upstream callers (e.g. when a
+    handler has already classified the error); otherwise classifies the
+    exception via the catalog.  Includes retry_after when available so
+    the frontend can render "expected X seconds".
+    """
+    context: dict[str, object] = {}
+    retry_after = getattr(exc, "retry_after", None)
+    if retry_after is not None:
+        try:
+            context["retry_after"] = float(retry_after)
+        except (TypeError, ValueError):
+            pass
+    status_code = getattr(exc, "status_code", None)
+    if status_code is not None:
+        context["status_code"] = status_code
+    err_code = getattr(exc, "error_code", "") or payload.get("error_code", "")
+    if err_code:
+        context["error_code"] = str(err_code)
+    # Prefer the catalog's own classification of the exception — it
+    # already maps BRAIN error_code / status_code / known strings to
+    # the 11 ErrorKind values.  The web_state_contract's
+    # ``user_error_kind`` uses a different taxonomy (e.g. ``session_expired``)
+    # and is not directly compatible; we surface it via context instead.
+    kind = classify_exception(exc)
+    return build_actionable_error(kind, context=context)
 
 
 def web_error_payload(exc: Exception, error_code: str) -> dict:

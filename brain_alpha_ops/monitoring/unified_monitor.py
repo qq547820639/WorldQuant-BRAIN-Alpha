@@ -48,6 +48,7 @@ class UnifiedHealth:
     browser: dict[str, Any] | None = None
     backend: dict[str, Any] | None = None
     events: list[MonitorEvent] = field(default_factory=list)
+    production: dict[str, Any] | None = None
     timestamp: float = field(default_factory=time.time)
 
     @property
@@ -70,15 +71,19 @@ class UnifiedMonitor:
             monitor.heal(health)
     """
 
-    def __init__(self, browser_monitor=None, stall_monitor=None):
+    def __init__(self, browser_monitor=None, stall_monitor=None,
+                 production_health_monitor=None):
         """Create unified monitor.
 
         Args:
             browser_monitor: ``BrowserMonitor`` instance (optional — for browser mode).
             stall_monitor: ``StallMonitor`` instance (optional — for job monitoring).
+            production_health_monitor: ``ProductionHealthMonitor`` instance (optional —
+                for production subsystem coverage per Workstream E1).
         """
         self._browser = browser_monitor
         self._stall = stall_monitor
+        self._production = production_health_monitor
         self._history: deque[UnifiedHealth] = deque(maxlen=1000)
 
     def check(self) -> UnifiedHealth:
@@ -113,6 +118,20 @@ class UnifiedMonitor:
                     action="log",
                 ))
 
+        # — Production subsystem health (Workstream E1) —
+        production_snapshot = None
+        if self._production is not None:
+            try:
+                production_snapshot = self._production.aggregate()
+                events.extend(self._translate_production_health(production_snapshot))
+            except Exception as e:
+                events.append(MonitorEvent(
+                    severity=Severity.WARNING,
+                    source="production",
+                    message=f"Production health check failed: {e}",
+                    action="log",
+                ))
+
         # — Cross-source correlation —
         if browser_health and backend_health:
             b_degraded = not browser_health.get("healthy", True)
@@ -128,6 +147,8 @@ class UnifiedMonitor:
 
         # Determine overall severity
         severities = [e.severity for e in events]
+        if production_snapshot is not None:
+            severities.append(production_snapshot.overall)
         if Severity.CRITICAL in severities:
             overall = Severity.CRITICAL
         elif Severity.DEGRADED in severities:
@@ -142,6 +163,7 @@ class UnifiedMonitor:
             browser=browser_health,
             backend=backend_health,
             events=events,
+            production=self._snapshot_to_dict(production_snapshot),
         )
         self._history.append(health)
         return health
@@ -230,3 +252,60 @@ class UnifiedMonitor:
     @staticmethod
     def _is_stalled(backend_health: dict) -> bool:
         return len(backend_health.get("stalled_jobs", [])) > 0
+
+    @staticmethod
+    def _translate_production_health(snapshot: Any) -> list[MonitorEvent]:
+        """Translate a ``UnifiedHealthSnapshot`` into monitor events.
+
+        Non-OK checks become events; CRITICAL checks carry ``action="interrupt"``
+        so that :meth:`heal` triggers ``auto_interrupt`` (E1.2 requirement).
+        """
+        events: list[MonitorEvent] = []
+        checks = getattr(snapshot, "checks", None)
+        if checks is None and isinstance(snapshot, dict):
+            checks = snapshot.get("checks", [])
+        for chk in checks or []:
+            severity = getattr(chk, "severity", None) or (
+                chk.get("severity") if isinstance(chk, dict) else None)
+            if severity is None or severity == Severity.OK:
+                continue
+            component = getattr(chk, "component", None) or (
+                chk.get("component", "") if isinstance(chk, dict) else "")
+            message = getattr(chk, "message", None) or (
+                chk.get("message", "") if isinstance(chk, dict) else "")
+            action = getattr(chk, "suggested_action", "") or (
+                chk.get("suggested_action", "") if isinstance(chk, dict) else "")
+            event_action = "interrupt" if severity == Severity.CRITICAL else "log"
+            events.append(MonitorEvent(
+                severity=severity,
+                source="production",
+                message=f"[{component}] {message}",
+                action=event_action,
+                details={"component": component, "suggested_action": action},
+            ))
+        return events
+
+    @staticmethod
+    def _snapshot_to_dict(snapshot: Any) -> dict[str, Any] | None:
+        """Serialize a ``UnifiedHealthSnapshot`` to a dict for ``UnifiedHealth.production``."""
+        if snapshot is None:
+            return None
+        overall = getattr(snapshot, "overall", None)
+        if overall is None and isinstance(snapshot, dict):
+            return snapshot
+        checks = getattr(snapshot, "checks", [])
+        return {
+            "overall": getattr(overall, "value", overall),
+            "needs_interrupt": bool(getattr(snapshot, "needs_interrupt", False)),
+            "timestamp": float(getattr(snapshot, "timestamp", 0.0) or 0.0),
+            "checks": [
+                {
+                    "severity": getattr(c.severity, "value", c.severity),
+                    "component": c.component,
+                    "message": c.message,
+                    "suggested_action": c.suggested_action,
+                    "context_snapshot": c.context_snapshot,
+                }
+                for c in (checks or [])
+            ],
+        }

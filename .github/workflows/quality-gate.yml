@@ -65,6 +65,12 @@ jobs:
       - name: 7/9 - Module size audit
         run: python scripts/check_module_size.py --root . --json
 
+      - name: 7.5/9 - BRAIN capability registry check
+        run: python scripts/check_capability_registry.py --json
+
+      - name: 7.6/9 - BRAIN contract check
+        run: python scripts/check_brain_contract.py --json
+
       - name: 8/9 - Run tests with coverage
         run: python -m pytest tests/ -v --tb=short --cov=brain_alpha_ops --cov-report=term --cov-report=xml
 
@@ -99,9 +105,15 @@ jobs:
           BRAIN_BROWSER_E2E_LIVE: "0"
         run: python -m pytest tests/test_browser_execution_adapter.py -v --tb=short
 
-  frontend-audit:
+      - name: E2E smoke (mock mode, skip on missing credentials)
+        env:
+          BRAIN_BROWSER_E2E_LIVE: "0"
+        run: python -m pytest tests/e2e/test_real_web_flow.py -v --tb=short
+        continue-on-error: true
+
+  frontend-quality:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 12
 
     steps:
       - name: Checkout
@@ -111,12 +123,31 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: npm
+          cache-dependency-path: brain_alpha_ops/web/react_app/package-lock.json
 
       - name: Install frontend dependencies
         working-directory: brain_alpha_ops/web/react_app
         run: npm ci
 
-      - name: npm audit
+      - name: F3.1 - Type check (tsc -b)
+        working-directory: brain_alpha_ops/web/react_app
+        run: npm run typecheck
+
+      - name: F3.2 - Lint (eslint)
+        working-directory: brain_alpha_ops/web/react_app
+        run: npm run lint
+
+      - name: F3.3 - Format check (prettier)
+        working-directory: brain_alpha_ops/web/react_app
+        run: npm run format:check
+        continue-on-error: true
+
+      - name: F3.4 - Unit tests (vitest run)
+        working-directory: brain_alpha_ops/web/react_app
+        run: npm run test
+
+      - name: npm audit (advisory)
         working-directory: brain_alpha_ops/web/react_app
         run: npm audit --audit-level=moderate
         continue-on-error: true

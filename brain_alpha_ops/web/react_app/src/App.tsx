@@ -4,8 +4,8 @@
  * 渐进式 4 阶段导航，基于新架构重新实现
  */
 
-import { Suspense, useMemo } from 'react';
-import { useAppState } from '@/hooks/useAppState';
+import { Suspense } from 'react';
+import { useAppStateContext, AppStateProvider } from '@/hooks/useAppState/AppStateContext';
 import ToastContainer from '@/components/ToastContainer';
 import { ToastProvider } from '@/components/Toast';
 import Sidebar from '@/components/Sidebar';
@@ -14,7 +14,8 @@ import { FlowGuide } from './components/FlowGuide';
 import PhaseShell from '@/components/PhaseShell';
 import MobileTabBar from '@/components/MobileTabBar';
 import KeyboardShortcutsHelp from '@/components/KeyboardShortcutsHelp';
-import { renderActiveView, PageLoader, type RenderViewProps } from '@/components/views/renderView';
+import { renderActiveViewFromContext } from '@/components/views/renderViewFromContext';
+import { PageLoader } from '@/components/views/renderView';
 import { topbarConnectionStatus, fmtEta } from '@/components/views/helpers';
 import { ThemeProvider, useThemeContext } from '@/components/ThemeProvider';
 import Tooltip from '@/components/Tooltip';
@@ -37,31 +38,25 @@ const VIEW_LABELS: Record<string, string> = {
 export default function App() {
   return (
     <ThemeProvider>
-      <AppContent />
+      <AppStateProvider>
+        <AppContent />
+      </AppStateProvider>
     </ThemeProvider>
   );
 }
 
 function AppContent() {
   const { theme, toggleTheme } = useThemeContext();
-  const appState = useAppState();
-
   const {
     activeView,
-    selectedCandidate,
-    credentials,
     sidebarOpen,
     shortcutsHelpOpen,
     toasts,
-    notify,
     dismissToast,
     jobState,
     connected,
     contextFresh,
     phaseApiStatus,
-    managedCredentialsAvailable,
-    officialOpsAutoStart,
-    phaseData,
     phaseState,
     steps,
     currentPhase,
@@ -72,69 +67,13 @@ function AppContent() {
     setShortcutsHelpOpen,
     handleTogglePhase,
     handleNavigate,
-    handleConnectionTested,
-    handleDashboardSyncStart,
-    handleDashboardSyncOpen,
-    handleOfficialSyncCompleted,
-    handleOfficialReconnectRequested,
-    handleCandidatePoolUpdated,
-    handleLocalSessionLoggedOut,
     handleMobileNavigate,
-    openScoring,
-  } = appState;
+  } = useAppStateContext();
 
-  const viewProps: RenderViewProps = useMemo(
-    () => ({
-      activeView,
-      selectedCandidate,
-      credentials,
-      notify,
-      connected,
-      contextFresh,
-      phaseApiStatus,
-      managedCredentialsAvailable,
-      officialOpsAutoStart,
-      jobState,
-      onOpenScoring: openScoring,
-      onNavigate: handleNavigate,
-      onConnectionTested: handleConnectionTested,
-      onCredentialsChange: appState.setCredentials,
-      onDashboardSyncStart: handleDashboardSyncStart,
-      onDashboardSyncOpen: handleDashboardSyncOpen,
-      onOfficialSyncCompleted: handleOfficialSyncCompleted,
-      onOfficialReconnectRequested: handleOfficialReconnectRequested,
-      onCandidatePoolUpdated: handleCandidatePoolUpdated,
-      onLocalSessionLoggedOut: handleLocalSessionLoggedOut,
-      onAutoStartConsumed: () => appState.setOfficialOpsAutoStart(false),
-      phaseData: phaseData,
-    }),
-    [
-      activeView,
-      selectedCandidate,
-      credentials,
-      notify,
-      connected,
-      contextFresh,
-      phaseApiStatus,
-      managedCredentialsAvailable,
-      officialOpsAutoStart,
-      jobState,
-      phaseData,
-      openScoring,
-      handleNavigate,
-      handleConnectionTested,
-      handleDashboardSyncStart,
-      handleDashboardSyncOpen,
-      handleOfficialSyncCompleted,
-      handleOfficialReconnectRequested,
-      handleCandidatePoolUpdated,
-      handleLocalSessionLoggedOut,
-      appState.setCredentials,
-      appState.setOfficialOpsAutoStart,
-    ]
-  );
-
-  const detailContent = renderActiveView(viewProps);
+  // Workstream E2.1: detailContent now sources state from AppStateContext
+  // via renderActiveViewFromContext(), eliminating the prop-drilling
+  // viewProps useMemo that previously caused state drift between panels.
+  const detailContent = renderActiveViewFromContext();
 
   const viewLabel = VIEW_LABELS[activeView] || activeView;
   const currentPhaseObj = phaseState.phases[currentPhase];

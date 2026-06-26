@@ -13,6 +13,7 @@ import type { ScoreHistoryPoint } from '@/components/ScoreBreakdown/ScoreHistory
 import type {
   AttributionNode,
   Candidate,
+  GateDecisionPayload,
   OfficialGateResult,
   ScoringAttributionResponse,
   ScoringResult,
@@ -20,6 +21,7 @@ import type {
   UnifiedProgress,
 } from '@/types';
 import ScoringHeader from './Header';
+import GateDecisionStrip from './GateDecisionStrip';
 import GateResults from './GateResults';
 import ImprovementHints from './ImprovementHints';
 import ScoreHistory from './ScoreHistory';
@@ -38,13 +40,17 @@ interface Props {
 export default function ScoringPanel({ notify, candidate }: Props) {
   const scoreApi = useApi<{ job_id?: string; task_id?: string }>();
   const attributionApi = useApi<ScoringAttributionResponse>();
+  const gateDecisionApi = useApi<GateDecisionPayload>();
   const callScoreApi = scoreApi.call;
   const scoreApiError = scoreApi.error;
   const callAttributionApi = attributionApi.call;
+  const callGateDecisionApi = gateDecisionApi.call;
   const resetAttributionApi = attributionApi.reset;
   const attributionData = attributionApi.data;
   const attributionLoading = attributionApi.loading;
   const attributionError = attributionApi.error;
+  const gateDecisionData = gateDecisionApi.data;
+  const gateDecisionLoading = gateDecisionApi.loading;
   const lifecycleApi = useApi<{
     records?: Array<Record<string, unknown>>;
     items?: Array<Record<string, unknown>>;
@@ -180,9 +186,13 @@ export default function ScoringPanel({ notify, candidate }: Props) {
     const payload = candidate.alpha_id
       ? { alpha_id: candidate.alpha_id, candidate }
       : { candidate };
-    const [scoreResult, attributionResult] = await Promise.all([
+    const [scoreResult, attributionResult, gateDecisionResult] = await Promise.all([
       callScoreApi('/api/scoring/evaluate', { method: 'POST', body: JSON.stringify(payload) }),
       callAttributionApi('/api/scoring/attribution', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }),
+      callGateDecisionApi('/api/scoring/gate_decision', {
         method: 'POST',
         body: JSON.stringify(payload),
       }),
@@ -200,7 +210,10 @@ export default function ScoringPanel({ notify, candidate }: Props) {
     if (attributionResult && !attributionResult.ok && attributionResult.error) {
       notify('error', apiErrorMessage(attributionResult, '评分归因加载失败'));
     }
-  }, [callAttributionApi, callScoreApi, candidate, notify, resetAttributionApi]);
+    if (gateDecisionResult && !gateDecisionResult.ok && gateDecisionResult.error) {
+      notify('error', apiErrorMessage(gateDecisionResult, '门禁判定加载失败'));
+    }
+  }, [callAttributionApi, callGateDecisionApi, callScoreApi, candidate, notify, resetAttributionApi]);
 
   useEffect(() => {
     if (candidate) loadScore();
@@ -300,6 +313,9 @@ export default function ScoringPanel({ notify, candidate }: Props) {
         officialMetrics={candidate.official_metrics}
         attribution={attribution}
       />
+
+      {/* D4.1: Structured gate-decision interpreter strip */}
+      <GateDecisionStrip decision={gateDecisionData ?? null} loading={gateDecisionLoading} />
 
       {/* P1-5: 评分历史时间线 */}
       {scoreHistory && scoreHistory.length >= 2 && (

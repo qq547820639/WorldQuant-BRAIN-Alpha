@@ -67,6 +67,15 @@ class ThreeSlotScheduler(_SchedulerHelpersMixin, _SchedulerTickMixin):
     _halt_reason: str = field(init=False, default="")
 
     def __post_init__(self) -> None:
+        # Workstream C1.1: verify all official-simulation schedulers /
+        # slot managers / budget defaults agree on the slot limit before
+        # initialising the slot pool. Imported lazily to avoid a circular
+        # import (``_consistency`` imports ``_scheduler`` at call time).
+        from brain_alpha_ops.research.simulation_scheduler._consistency import (
+            assert_scheduler_consistency,
+        )
+        assert_scheduler_consistency(self)
+
         self._slots = [
             SimulationSlot(slot_id=i + 1) for i in range(self.max_slots)
         ]

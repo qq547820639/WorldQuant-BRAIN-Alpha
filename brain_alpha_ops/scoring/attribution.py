@@ -3,6 +3,9 @@
 AttributionNode — single dimension in the attribution tree.
 build_attribution_tree() — builds the full three-layer attribution tree from a scorecard.
 dim_explanation() — human-readable Chinese explanations for each dimension.
+
+Multi-dimensional retrospective aggregation (by gate / metric / dataset /
+region / time) lives in ``scoring._attribution_multi`` (D3.1).
 """
 
 from __future__ import annotations

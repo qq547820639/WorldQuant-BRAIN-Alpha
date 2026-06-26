@@ -7,7 +7,7 @@ and checkpoint history into machine-readable findings.
 
 Extended checks:
   - Blocking/Warning/Info severity levels with per-level enforcement
-  - Bidirectional consistency check (registry ↔ code)
+  - Threshold zero-deviation check (CANONICAL_THRESHOLDS ↔ QualityThresholds)
   - Threshold version diff check
 """
 
@@ -27,12 +27,51 @@ if str(ROOT) not in sys.path:
 DEFAULT_CONFIG = ROOT / "config" / "run_config.json"
 STRICT_SEVERITIES = {"P0", "P1"}
 
+# Maps CANONICAL_THRESHOLDS keys to QualityThresholds field names.
+_CANONICAL_THRESHOLD_FIELDS = {
+    "min_sharpe": "min_sharpe",
+    "min_sharpe_delay0": "min_sharpe_delay0",
+    "min_fitness": "min_fitness",
+    "min_fitness_delay0": "min_fitness_delay0",
+    "min_turnover": "min_turnover",
+    "platform_max_turnover": "platform_max_turnover",
+    "max_self_correlation": "max_self_correlation",
+    "max_prod_correlation": "max_prod_correlation",
+    "max_weight_concentration": "max_weight_concentration",
+    "sub_universe_sharpe_min_ratio": "sub_universe_sharpe_min_ratio",
+}
+
+_EXPECTED_HARD_GATE_NAMES = frozenset({
+    "sharpe", "fitness", "turnover_min", "turnover_platform",
+    "self_correlation", "prod_correlation", "weight_concentration",
+    "sub_universe_sharpe",
+})
+
+# Data-driven contract checks: (contract_key, code, severity, message, evidence_key)
+_CONTRACT_CHECKS = (
+    ("redlines_pass", "redlines", "P0", "Six technical red lines must pass.", None),
+    ("thresholds_zero_deviation", "threshold_zero_deviation", "P0",
+     "Configured thresholds must match canonical BRAIN thresholds exactly.", "thresholds"),
+    ("official_context_loaded", "official_context_loaded", "P0",
+     "Official fields/operators/datasets must all be loadable.", "official_context"),
+    ("official_context_blocking_ok", "official_context_lineage", "P0",
+     "Official context structure, hashes, and Dataset lineage must be blocking-clean.", "lineage"),
+    ("dataset_field_counts_match", "dataset_field_count_lineage", "P0",
+     "Sum of Dataset field_count must match the official field count.", "lineage"),
+    ("scoring_zero_deviation", "scoring_zero_deviation", "P0",
+     "API-shaped scoring simulation must have zero pass/fail deviation.", "deviation_details"),
+    ("frontend_inline_synced", "frontend_inline_sync", "P1",
+     "Generated web console must be synchronized with source modules.", "frontend_inline"),
+    ("history_replay_ready", "history_replay_ready", "P1",
+     "Checkpoint and run-history analytics must be available.", "history_replay"),
+)
+
 
 def check_brain_contract(
     *,
     config_path: str | Path = DEFAULT_CONFIG,
     strict_freshness: bool = False,
-    include_consistency: bool = False,
+    include_threshold_zero_deviation: bool = True,
     threshold_snapshot_path: str | Path | None = None,
 ) -> dict[str, Any]:
     """Return a structured BRAIN contract comparison result.
@@ -40,7 +79,7 @@ def check_brain_contract(
     Args:
         config_path: path to run_config.json
         strict_freshness: fail on stale or unrefreshed official context
-        include_consistency: include bidirectional registry consistency check
+        include_threshold_zero_deviation: verify thresholds match canonical values
         threshold_snapshot_path: optional path to previous threshold snapshot for diff
     """
     from brain_alpha_ops.brain_api.canonical import CANONICAL_SETTINGS
@@ -53,111 +92,60 @@ def check_brain_contract(
     validation = snapshot.get("official_context_validation") or {}
     refresh = snapshot.get("official_refresh") or {}
 
-    _require(contract.get("redlines_pass"), findings, "redlines", "P0", "Six technical red lines must pass.")
-    _require(
-        contract.get("thresholds_zero_deviation"),
-        findings,
-        "threshold_zero_deviation",
-        "P0",
-        "Configured thresholds must match canonical BRAIN thresholds exactly.",
-        evidence=contract.get("thresholds"),
-    )
-    _require(
-        contract.get("official_context_loaded"),
-        findings,
-        "official_context_loaded",
-        "P0",
-        "Official fields/operators/datasets must all be loadable.",
-        evidence=snapshot.get("official_context"),
-    )
-    _require(
-        contract.get("official_context_blocking_ok"),
-        findings,
-        "official_context_lineage",
-        "P0",
-        "Official context structure, hashes, and Dataset lineage must be blocking-clean.",
-        evidence=validation.get("lineage"),
-    )
-    _require(
-        contract.get("dataset_field_counts_match"),
-        findings,
-        "dataset_field_count_lineage",
-        "P0",
-        "Sum of Dataset field_count must match the official field count.",
-        evidence=validation.get("lineage"),
-    )
-    _require(
-        contract.get("scoring_zero_deviation"),
-        findings,
-        "scoring_zero_deviation",
-        "P0",
-        "API-shaped scoring simulation must have zero pass/fail deviation.",
-        evidence=scoring.get("deviation_details"),
-    )
-    _require(
-        contract.get("frontend_inline_synced"),
-        findings,
-        "frontend_inline_sync",
-        "P1",
-        "Generated web console must be synchronized with source modules.",
-        evidence=snapshot.get("frontend_inline"),
-    )
-    _require(
-        contract.get("history_replay_ready"),
-        findings,
-        "history_replay_ready",
-        "P1",
-        "Checkpoint and run-history analytics must be available.",
-        evidence=snapshot.get("history_replay"),
-    )
+    evidence_map = {
+        "thresholds": contract.get("thresholds"),
+        "official_context": snapshot.get("official_context"),
+        "lineage": validation.get("lineage"),
+        "deviation_details": scoring.get("deviation_details"),
+        "frontend_inline": snapshot.get("frontend_inline"),
+        "history_replay": snapshot.get("history_replay"),
+    }
+    for contract_key, code, severity, message, evidence_key in _CONTRACT_CHECKS:
+        _require(
+            contract.get(contract_key), findings, code, severity, message,
+            evidence=evidence_map.get(evidence_key) if evidence_key else None,
+        )
 
     _check_settings_trace(scoring.get("settings_trace") or {}, CANONICAL_SETTINGS, findings)
     _check_threshold_trace(scoring.get("threshold_trace") or {}, findings)
     _check_official_refresh(refresh, validation, findings, strict_freshness=strict_freshness)
 
-    # Module 21: Bidirectional consistency check
-    consistency_result = None
-    if include_consistency:
-        consistency_result = _check_bidirectional_consistency(findings)
+    threshold_zero_deviation = None
+    if include_threshold_zero_deviation:
+        threshold_zero_deviation = _check_threshold_zero_deviation(findings)
 
-    # Module 21: Threshold version diff check
     threshold_diff = None
     if threshold_snapshot_path:
         threshold_diff = _check_threshold_version_diff(
             threshold_snapshot_path, scoring.get("threshold_trace") or {}, findings
         )
 
-    blocking = [finding for finding in findings if finding["severity"] in STRICT_SEVERITIES]
+    blocking = [f for f in findings if f["severity"] in STRICT_SEVERITIES]
     if not strict_freshness:
-        blocking = [finding for finding in blocking if finding["severity"] == "P0"]
+        blocking = [f for f in blocking if f["severity"] == "P0"]
+    redline = snapshot.get("redline") or {}
     return {
         "ok": not blocking,
         "schema_version": "brain_contract_check.v1",
         "config": str(config_path),
         "enforcement_mode": "strict_freshness" if strict_freshness else "blocking_only",
-        "redline": {
-            "overall": (snapshot.get("redline") or {}).get("overall"),
-            "passed": (snapshot.get("redline") or {}).get("passed"),
-            "total_checks": (snapshot.get("redline") or {}).get("total_checks"),
-        },
+        "redline": {k: redline.get(k) for k in ("overall", "passed", "total_checks")},
         "official_context": snapshot.get("official_context"),
         "official_refresh": {
-            "status": refresh.get("status"),
-            "stale_count": refresh.get("stale_count"),
-            "last_attempt_status": refresh.get("last_attempt_status"),
-            "last_attempt_ok": refresh.get("last_attempt_ok"),
-            "last_attempt_error": refresh.get("last_attempt_error"),
+            k: refresh.get(k) for k in (
+                "status", "stale_count", "last_attempt_status",
+                "last_attempt_ok", "last_attempt_error",
+            )
         },
         "scoring": {
-            "api_status": scoring.get("api_status"),
-            "api_output_deviation": scoring.get("api_output_deviation"),
-            "hard_gate_count": scoring.get("hard_gate_count"),
-            "config_hash": scoring.get("config_hash"),
+            k: scoring.get(k) for k in (
+                "api_status", "api_output_deviation", "hard_gate_count", "config_hash",
+            )
         },
         "history_replay": snapshot.get("history_replay"),
         "findings": findings,
         "blocking_count": len(blocking),
-        "consistency_check": consistency_result,
+        "threshold_zero_deviation": threshold_zero_deviation,
         "threshold_diff": threshold_diff,
     }
 
@@ -183,38 +171,32 @@ def _check_settings_trace(
 ) -> None:
     for key, allowed in canonical_settings.items():
         if key not in settings_trace:
-            findings.append(
-                {
-                    "code": f"settings_trace_missing:{key}",
-                    "severity": "P1",
-                    "message": f"Scoring trace is missing BRAIN setting {key}.",
-                }
-            )
+            findings.append({
+                "code": f"settings_trace_missing:{key}",
+                "severity": "P1",
+                "message": f"Scoring trace is missing BRAIN setting {key}.",
+            })
             continue
         value = settings_trace.get(key)
         if value not in allowed:
-            findings.append(
-                {
-                    "code": f"settings_trace_drift:{key}",
-                    "severity": "P0",
-                    "message": f"Scoring trace setting {key} is outside the canonical BRAIN set.",
-                    "evidence": {"value": value, "allowed": sorted(allowed, key=str)},
-                }
-            )
+            findings.append({
+                "code": f"settings_trace_drift:{key}",
+                "severity": "P0",
+                "message": f"Scoring trace setting {key} is outside the canonical BRAIN set.",
+                "evidence": {"value": value, "allowed": sorted(allowed, key=str)},
+            })
 
 
 def _check_threshold_trace(threshold_trace: dict[str, Any], findings: list[dict[str, Any]]) -> None:
     for key, row in threshold_trace.items():
         source = str((row or {}).get("source") or "")
         if source not in {"BRAIN_Official", "derived_from_SELF_CORRELATION"}:
-            findings.append(
-                {
-                    "code": f"threshold_source_drift:{key}",
-                    "severity": "P0",
-                    "message": f"Threshold {key} is not traced to the BRAIN contract.",
-                    "evidence": row,
-                }
-            )
+            findings.append({
+                "code": f"threshold_source_drift:{key}",
+                "severity": "P0",
+                "message": f"Threshold {key} is not traced to the BRAIN contract.",
+                "evidence": row,
+            })
 
 
 def _check_official_refresh(
@@ -225,78 +207,63 @@ def _check_official_refresh(
     strict_freshness: bool,
 ) -> None:
     if validation.get("p1_count", 0):
-        findings.append(
-            {
-                "code": "official_context_refresh_p1",
-                "severity": "P1",
-                "message": "Official context metadata is stale or incomplete.",
-                "evidence": {
-                    "p1_count": validation.get("p1_count"),
-                    "stale_count": refresh.get("stale_count"),
-                    "last_attempt_status": refresh.get("last_attempt_status"),
-                },
-            }
-        )
-    if refresh.get("last_attempt_ok") is False:
-        findings.append(
-            {
-                "code": "official_refresh_failed",
-                "severity": "P1",
-                "message": "Live official context refresh did not complete.",
-                "evidence": {
-                    "status": refresh.get("last_attempt_status"),
-                    "error": refresh.get("last_attempt_error"),
-                },
-            }
-        )
-    if strict_freshness and refresh.get("last_attempt_ok") is not True:
-        findings.append(
-            {
-                "code": "strict_refresh_not_verified",
-                "severity": "P1",
-                "message": "Strict production mode requires a successful credential-backed official context refresh.",
-                "evidence": {
-                    "status": refresh.get("last_attempt_status"),
-                    "error": refresh.get("last_attempt_error"),
-                },
-            }
-        )
-
-
-def _check_bidirectional_consistency(findings: list[dict[str, Any]]) -> dict[str, Any]:
-    """Run bidirectional consistency check between registry and code."""
-    try:
-        from brain_alpha_ops.registry_validation import validate_registry_consistency
-
-        scoring_ops = {"rank", "ts_mean", "ts_std", "ts_delta", "ts_rank", "ts_min",
-                       "ts_max", "ts_sum", "ts_argmin", "ts_argmax", "group_neutralize",
-                       "zscore", "quantile", "power", "abs", "log", "sign", "add",
-                       "subtract", "multiply", "divide", "max", "min", "delay",
-                       "ts_decay_linear", "ts_corr", "ts_cov", "decay_linear",
-                       "indneutralize", "winsorize", "normalize", "demean"}
-        gate_ops = {"sharpe", "fitness", "turnover_min", "turnover_platform",
-                    "self_correlation", "prod_correlation", "weight_concentration",
-                    "sub_universe_sharpe"}
-
-        result = validate_registry_consistency(
-            scoring_operators=scoring_ops,
-            gate_operators=gate_ops,
-        )
-        for finding in result.get("findings", []):
-            findings.append({
-                "code": f"consistency:{finding['code']}",
-                "severity": finding["severity"],
-                "message": finding["message"],
-                "evidence": finding.get("details"),
-            })
-        return result
-    except Exception as exc:
         findings.append({
-            "code": "consistency_check_failed",
-            "severity": "WARNING",
-            "message": f"Bidirectional consistency check failed: {exc}",
+            "code": "official_context_refresh_p1", "severity": "P1",
+            "message": "Official context metadata is stale or incomplete.",
+            "evidence": {"p1_count": validation.get("p1_count"), "stale_count": refresh.get("stale_count"), "last_attempt_status": refresh.get("last_attempt_status")},
         })
-        return {"ok": False, "error": str(exc)}
+    if refresh.get("last_attempt_ok") is False:
+        findings.append({
+            "code": "official_refresh_failed", "severity": "P1",
+            "message": "Live official context refresh did not complete.",
+            "evidence": {"status": refresh.get("last_attempt_status"), "error": refresh.get("last_attempt_error")},
+        })
+    if strict_freshness and refresh.get("last_attempt_ok") is not True:
+        findings.append({
+            "code": "strict_refresh_not_verified", "severity": "P1",
+            "message": "Strict production mode requires a successful credential-backed official context refresh.",
+            "evidence": {"status": refresh.get("last_attempt_status"), "error": refresh.get("last_attempt_error")},
+        })
+
+
+def _check_threshold_zero_deviation(findings: list[dict[str, Any]]) -> dict[str, Any]:
+    """Verify QualityThresholds defaults match CANONICAL_THRESHOLDS exactly."""
+    from brain_alpha_ops.brain_api.canonical import CANONICAL_THRESHOLDS
+    from brain_alpha_ops.config import QualityThresholds
+    from brain_alpha_ops.scoring.gates import OFFICIAL_HARD_GATE_NAMES
+
+    defaults = QualityThresholds()
+    deviations = []
+    for canonical_key, qt_field in _CANONICAL_THRESHOLD_FIELDS.items():
+        canonical_value = CANONICAL_THRESHOLDS[canonical_key]
+        actual_value = getattr(defaults, qt_field)
+        if actual_value != canonical_value:
+            deviations.append({
+                "key": canonical_key,
+                "canonical": canonical_value,
+                "actual": actual_value,
+            })
+
+    expected_gates = set(_EXPECTED_HARD_GATE_NAMES)
+    missing_gates = expected_gates - OFFICIAL_HARD_GATE_NAMES
+    extra_gates = OFFICIAL_HARD_GATE_NAMES - expected_gates
+
+    if deviations:
+        findings.append({"code": "threshold_value_deviation", "severity": "P0",
+            "message": f"{len(deviations)} threshold(s) deviate from CANONICAL_THRESHOLDS.",
+            "evidence": {"deviations": deviations}})
+    if missing_gates or extra_gates:
+        findings.append({"code": "hard_gate_name_mismatch", "severity": "P0",
+            "message": "OFFICIAL_HARD_GATE_NAMES does not match the expected set.",
+            "evidence": {"missing": sorted(missing_gates), "extra": sorted(extra_gates)}})
+
+    return {
+        "ok": not deviations and not missing_gates and not extra_gates,
+        "deviations": deviations,
+        "missing_gates": sorted(missing_gates),
+        "extra_gates": sorted(extra_gates),
+        "verified_thresholds": len(_CANONICAL_THRESHOLD_FIELDS),
+    }
 
 
 def _check_threshold_version_diff(
@@ -354,8 +321,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--config", default=str(DEFAULT_CONFIG), help="Run config path.")
     parser.add_argument("--strict-freshness", action="store_true", help="Fail on stale or unrefreshed official context metadata.")
     parser.add_argument("--json", action="store_true", help="Print machine-readable JSON.")
-    parser.add_argument("--consistency", action="store_true",
-                        help="Include bidirectional registry consistency check.")
+    parser.add_argument("--no-threshold-zero-deviation", action="store_true",
+                        help="Skip the threshold zero-deviation check.")
     parser.add_argument("--threshold-snapshot", default=None,
                         help="Path to previous threshold snapshot for diff check.")
     args = parser.parse_args(argv)
@@ -363,17 +330,14 @@ def main(argv: list[str] | None = None) -> int:
     result = check_brain_contract(
         config_path=args.config,
         strict_freshness=args.strict_freshness,
-        include_consistency=args.consistency,
+        include_threshold_zero_deviation=not args.no_threshold_zero_deviation,
         threshold_snapshot_path=args.threshold_snapshot,
     )
     if args.json:
         print(json.dumps(result, ensure_ascii=False, indent=2, default=str))
-    elif result["ok"]:
-        print(f"BRAIN contract check passed ({result['enforcement_mode']}).")
-        for finding in result["findings"]:
-            print(f"[{finding['severity']}] {finding['code']}: {finding['message']}")
     else:
-        print(f"BRAIN contract check failed ({result['enforcement_mode']}).")
+        status = "passed" if result["ok"] else "failed"
+        print(f"BRAIN contract check {status} ({result['enforcement_mode']}).")
         for finding in result["findings"]:
             print(f"[{finding['severity']}] {finding['code']}: {finding['message']}")
     return 0 if result["ok"] else 1

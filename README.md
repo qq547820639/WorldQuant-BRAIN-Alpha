@@ -66,8 +66,8 @@ BRAIN Alpha Ops 是跑在你**自己电脑**上的 alpha 研究工作台。它�
 
 | 指标 | 数值 |
 |------|------|
-| 生产 Python 模块 | 357 个 .py 文件 |
-| React 前端组件 | 91 个 .ts/.tsx |
+| 生产 Python 模块 | 645 个 .py 文件 |
+| React 前端组件 | 140 个 .tsx |
 | 官方数据字段 | 8,599 |
 | 官方数据集 | 20 |
 | 内置投资想法 | 11 类（YAML 配置） |
@@ -96,7 +96,7 @@ BRAIN Alpha Ops 是跑在你**自己电脑**上的 alpha 研究工作台。它�
 
 ```bash
 # 1. 下载代码
-git clone https://github.com/qq547820639/WorldQuant-BRAIN-Alpha.git
+git clone https://github.com/<your-github-username>/WorldQuant-BRAIN-Alpha.git
 cd WorldQuant-BRAIN-Alpha
 
 # 2. 安装依赖（只做一次，约 2-5 分钟）
@@ -284,6 +284,19 @@ BRAIN_ALPHA_OPS_WEB_FRONTEND=react python3 launch_web.py
 | **密钥扫描** | CI 门禁中自动跑密钥泄露扫描 | `.github/workflows/quality-gate.yml` |
 | **防循环 import** | 双向 import gate（反向 import 门控） | `web_facade_bindings.py` |
 
+### ConfigPanel 缓存模式（凭据折叠 UX）
+
+当本地缓存可用且未连接官方服务时，ConfigPanel 进入**缓存模式**，凭据输入被折叠隐藏，避免无谓暴露账号密码（`ConfigPanel.tsx:76-80`、`LocalCacheConnectionSection.tsx:22-83`）：
+
+| 状态 | UI 表现 |
+|------|---------|
+| 缓存可用 & 未连接 | 仅显示「当前使用本地缓存」+「退出本地会话」+「临时连接官方服务」按钮 |
+| 点击「临时连接官方服务」 | 展开凭据输入区（仅本次会话有效，不保存到配置/本地存储） |
+| 点击「退出本地会话」 | 清空当前页面缓存状态和历史记录 |
+| 已连接官方服务 | 凭据输入区常驻显示，可测试连接 |
+
+用户未展开「临时连接官方服务」时，账号/密码/token 输入框不渲染。切换连接状态后 Dashboard、ConfigPanel、全局状态、后端会话状态保持一致。
+
 ---
 
 ## 8. 架构概览（开发者入口）
@@ -292,8 +305,8 @@ BRAIN_ALPHA_OPS_WEB_FRONTEND=react python3 launch_web.py
 
 | 层 | 技术 | 规模 |
 |----|------|------|
-| Python 后端 | Python 3.12+, stdlib `http.server`（无 Flask/FastAPI） | 357 文件 |
-| React 前端 | React 18 + TypeScript + Vite + Tailwind CSS | 91 文件 |
+| Python 后端 | Python 3.12+, stdlib `http.server`（无 Flask/FastAPI） | 645 文件 |
+| React 前端 | React 18 + TypeScript + Vite + Tailwind CSS | 140 文件 |
 | 存储 | JSONL 事件流 + SQLite 表达式索引 + JSON 缓存 | 无外部数据库 |
 | CI | GitHub Actions（8 步质量门禁） | 1 workflow |
 | 包管理 | pyproject.toml + pip | — |
@@ -304,7 +317,7 @@ BRAIN_ALPHA_OPS_WEB_FRONTEND=react python3 launch_web.py
 brain_alpha_ops/                    # 核心源码
 ├── web/                            # Web 控制台
 │   ├── __init__.py (486 行)        # HTTP Server + Handler + POST 路由
-│   ├── react_app/ (91 文件)        # React 前端（页面 + hooks + utils）
+│   ├── react_app/ (140 .tsx)       # React 前端（页面 + hooks + utils）
 │   └── web_handler_dispatch.py     # 65 个 handler 分发表
 ├── brain_api/ (20 文件)            # BRAIN 官方 API 适配
 │   ├── official.py                 # OfficialBrainAPI（4-Mixin 装配）
@@ -385,15 +398,50 @@ mypy brain_alpha_ops/
 - **契约测试**: `tests/qa_*.py` — 测试本地API契约（已降级，非生产验收）
 - **E2E测试**: `tests/e2e/` — Playwright真实浏览器测试（生产验收标准）
 
-CI 门禁（`.github/workflows/quality-gate.yml`，PR → main 时自动跑）：
-1. Python 编译检查
-2. 配置 schema 校验
-3. 依赖策略扫描
-4. 前端内联同步检查
-5. 密钥泄露扫描
-6. 日志脱敏审计
-7. 模块规模审计
-8. 完整测试套件
+### 前端测试
+
+| 类型 | 命令 / 位置 | 说明 |
+|------|------------|------|
+| Vitest 单测 | `cd brain_alpha_ops/web/react_app && npm run test` | jsdom 行为测试，覆盖关键链路 |
+| 静态文本检查 | `tests/test_react_*.py` | Python 静态扫描 React 源码（保留兼容） |
+| 行为回归 | `react_app/src/__tests__/` | ConfigPanelCacheMode、ConfigPanelFolding、CandidatePoolState、ScoringAttribution、QualityGateInterception、SimulationQueueState、MobileInteractionBehavior |
+
+### CI 门禁清单
+
+`quality-gate.yml`（PR → main 自动跑）完整门禁：
+
+| # | 门禁 | 脚本 / 命令 | 新增? |
+|---|------|------------|-------|
+| 1 | Python 编译 | `python -m compileall` | |
+| 2 | 配置 schema 校验 | `load_run_config` | |
+| 3 | 依赖策略 | `scripts/check_dependency_policy.py` | |
+| 3.5 | 前端依赖审计 | `npm audit` + `npm ci` | |
+| 4 | 前端内联同步 | `build_inline.py --check` | |
+| 5 | 密钥泄露扫描 | `scripts/scan_sensitive_artifacts.py` | |
+| 6 | 日志脱敏审计 | `scripts/check_log_redaction.py` | |
+| 7 | 模块规模审计 | `scripts/check_module_size.py` | |
+| 8 | pytest + 覆盖率 | `pytest --cov` + codecov | |
+| 9 | 覆盖率上传 | codecov-action | |
+| — | Browser E2E 契约 | `tests/test_browser_execution_adapter.py` | |
+| — | 前端审计 | `frontend-audit` job | |
+| F3 | TypeScript 类型 | `npm run typecheck`（`tsc -b`） | ✨ 新增 |
+| F3 | ESLint | `npm run lint` | ✨ 新增 |
+| F3 | Prettier 格式 | `prettier --check` | ✨ 新增 |
+| F3 | Vitest 前端单测 | `npm run test`（`vitest run`） | ✨ 新增 |
+| F3 | E2E 冒烟 | `tests/e2e/test_real_web_flow.py`（凭据缺失 skip） | ✨ 新增 |
+| F3 | 能力集一致性 | `scripts/check_capability_registry.py` | ✨ 新增 |
+| F3 | BRAIN 契约 | `scripts/check_brain_contract.py` | ✨ 新增 |
+| F3 | 构建产物冒烟 | `build-release.yml` 加入 | ✨ 新增 |
+
+### 核心生产子系统
+
+**BRAIN 能力集注册表** — `brain_alpha_ops/data/capability_registry/` 是字段/算子/Dataset ID/Region/Universe/Delay/Decay/Neutralization/Truncation/Pasteurization/NaNHandling/UnitHandling/TestPeriod/Visualization 的**唯一权威来源**。所有生成、解析、评分、门禁、模拟提交统一从 `get_registry()` 读取，禁止散落硬编码。能力缺失返回 `CapabilityResolutionError`，触发"需要人工确认"。
+
+**候选池生命周期状态机** — `candidate_lifecycle.py:LifecycleState` 定义 11 态：`draft`→`locally_scored`→`gate_rejected`/`queued_for_simulation`→`simulating`→`simulation_failed`/`simulation_passed`→`needs_optimization`/`ready_for_review`→`submitted`/`archived`。Pipeline 通过 `CandidateLifecycle.transition()` 迁移（禁止直接赋值字符串），每次迁移生成 `TransitionRecord` 审计记录。非法迁移抛 `IllegalTransitionError`。
+
+**三槽调度器** — `OFFICIAL_SIMULATION_SLOT_LIMIT=3`（`research/simulation_scheduler/_consistency.py`）是官方模拟并发槽的唯一来源。`BacktestSlotManager.active_limit` 与 `ThreeSlotScheduler.max_slots` 必须等于此值；`assert_scheduler_consistency()` 校验零偏差。429 触发账号级冷却，`CONCURRENT_SIMULATION_LIMIT_EXCEEDED` 仅暂停对应槽，候选池继续生产。
+
+**错误目录** — `error_catalog.py:ErrorKind` 定义 11 类用户错误（login_expired/cache_unavailable/official_rate_limited/simulation_concurrency_exceeded/dataset_missing/field_non_compliant/expression_invalid/network_timeout/task_cancelled/queue_blocked/local_service_unavailable）。每类含原因/影响/建议/恢复入口（`RECOVERY_URLS`），前端转换为可操作提示，严禁展示堆栈或空白。
 
 ---
 
@@ -439,7 +487,7 @@ CI 门禁（`.github/workflows/quality-gate.yml`，PR → main 时自动跑）�
 
 如果以上都不管用：
 1. 查 `data/` 目录最新日志
-2. 截日志前 50 行 + 复现步骤 → 发 [GitHub Issues](https://github.com/qq547820639/WorldQuant-BRAIN-Alpha/issues)
+2. 截日志前 50 行 + 复现步骤 → 发 [GitHub Issues](https://github.com/<your-github-username>/WorldQuant-BRAIN-Alpha/issues)
 3. ⚠️ **绝对不要把密码 / Token 贴到 Issue！**
 
 ---
@@ -450,8 +498,8 @@ CI 门禁（`.github/workflows/quality-gate.yml`，PR → main 时自动跑）�
 
 | 类型 | 怎么开始 | 难度 |
 |------|--------|------|
-| 🐛 报 Bug | [开 Issue](https://github.com/qq547820639/WorldQuant-BRAIN-Alpha/issues/new) | ⭐ |
-| 💡 提想法 | [开 Discussion](https://github.com/qq547820639/WorldQuant-BRAIN-Alpha/discussions) | ⭐ |
+| 🐛 报 Bug | [开 Issue](https://github.com/<your-github-username>/WorldQuant-BRAIN-Alpha/issues/new) | ⭐ |
+| 💡 提想法 | [开 Discussion](https://github.com/<your-github-username>/WorldQuant-BRAIN-Alpha/discussions) | ⭐ |
 | 📖 改文档 | 改 .md → PR | ⭐⭐ |
 | 🎯 加假设 | 加 `hypotheses/*.yaml` → PR | ⭐⭐ |
 | 💻 改代码 | 改 `brain_alpha_ops/` → PR | ⭐⭐⭐⭐ |
@@ -520,11 +568,21 @@ docker compose up -d
 
 ## 14. 相关链接
 
-- [GitHub 仓库](https://github.com/qq547820639/WorldQuant-BRAIN-Alpha)
-- [CI / Quality Gate](https://github.com/qq547820639/WorldQuant-BRAIN-Alpha/actions)
+- [GitHub 仓库](https://github.com/<your-github-username>/WorldQuant-BRAIN-Alpha)
+- [CI / Quality Gate](https://github.com/<your-github-username>/WorldQuant-BRAIN-Alpha/actions)
 - [WorldQuant BRAIN 平台](https://brain.worldquant.com/)
-- [独立审计报告 (2026-06-15)](REVIEW_20260615.md)
-- [提交安全验证 (2026-06-13)](PROJECT_PHASE5_IMPLEMENTATION_20260613.md)
+- [开发者手册](docs/DEVELOPER_HANDBOOK.md)
+
+### `.trae/specs/` 规格索引
+
+| 规格文件夹 | 用途 |
+|-----------|------|
+| `overhaul-alpha-production-quality` | 生产系统全栈质量攻坚（本规格，工作流 A–F） |
+| `complete-brain-alpha-ops` | BRAIN Alpha Ops 完整能力补齐 |
+| `upgrade-to-public-product` | 升级为公开产品的错误/空/加载态与可访问性 |
+| `deep-optimization-phase2/6/7/10/11` | 深度优化各阶段（子包 `__all__`、模块拆分等） |
+| `improve-frontend-ux` | 前端 UX 改进 |
+| `deep-optimization-final/fixup` | 深度优化收尾与修复 |
 
 ---
 

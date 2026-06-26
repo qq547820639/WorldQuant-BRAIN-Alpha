@@ -15,6 +15,14 @@ jobs:
       - run: pip install pyinstaller -r requirements.lock
       - run: pip install -e .
       - run: pyinstaller --onefile --windowed --name='BrainAlphaConsole' --add-data='config/run_config.json;config' --add-data='data/official_fields.json;data' --add-data='data/official_operators.json;data' --add-data='data/official_datasets.json;data' --add-data='brain_alpha_ops/web/react_app/dist;brain_alpha_ops/web/react_app/dist' launch_web.py
+      - name: F3.7 - Build artifact smoke
+        shell: pwsh
+        run: |
+          $artifact = "dist/BrainAlphaConsole.exe"
+          if (-not (Test-Path $artifact)) { Write-Error "Build artifact missing: $artifact"; exit 1 }
+          $size = (Get-Item $artifact).Length
+          if ($size -lt 1048576) { Write-Error "Build artifact too small (${size} bytes): $artifact"; exit 1 }
+          Write-Host "Build artifact OK: $artifact (${size} bytes)"
       - uses: actions/upload-artifact@v4
         with: { name: BrainAlphaConsole-Windows, path: dist/BrainAlphaConsole.exe }
 
@@ -27,5 +35,13 @@ jobs:
       - run: pip install pyinstaller -r requirements.lock
       - run: pip install -e .
       - run: pyinstaller --onefile --windowed --name='BrainAlphaConsole' --add-data='config/run_config.json:config' --add-data='data/official_fields.json:data' --add-data='data/official_operators.json:data' --add-data='data/official_datasets.json:data' --add-data='brain_alpha_ops/web/react_app/dist:brain_alpha_ops/web/react_app/dist' launch_web.py
+      - name: F3.7 - Build artifact smoke
+        run: |
+          artifact="dist/BrainAlphaConsole"
+          if [ ! -f "$artifact" ]; then echo "Build artifact missing: $artifact"; exit 1; fi
+          size=$(stat -f%z "$artifact" 2>/dev/null || stat -c%s "$artifact" 2>/dev/null || echo 0)
+          if [ "$size" -lt 1048576 ]; then echo "Build artifact too small (${size} bytes): $artifact"; exit 1; fi
+          if [ ! -x "$artifact" ]; then echo "Build artifact not executable: $artifact"; exit 1; fi
+          echo "Build artifact OK: $artifact (${size} bytes)"
       - uses: actions/upload-artifact@v4
         with: { name: BrainAlphaConsole-macOS, path: dist/BrainAlphaConsole }

@@ -25,6 +25,10 @@ from .candidates import (
     _post_scoring_attribution,
     _post_scoring_evaluate,
 )
+from .scoring import (
+    _post_scoring_gate_decision,
+    _post_scoring_multi_attribution,
+)
 from .submit import (
     _post_submit,
     _post_submit_batch,

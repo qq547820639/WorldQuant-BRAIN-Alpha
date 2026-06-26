@@ -11,6 +11,27 @@ def _write_jsonl(path, rows):
     path.write_text("\n".join(json.dumps(row) for row in rows) + "\n", encoding="utf-8")
 
 
+def _read_jsonl_records_for(tmp_path):
+    """Build a ``read_jsonl_records`` callable reading JSONL files from ``tmp_path``.
+
+    Mirrors the production ``ReadJsonlRecords`` contract
+    (``Callable[[str], tuple[list[dict], int, str]]``) so the low-level
+    ``backtest_slots_payload`` handler can be exercised in tests.
+    """
+
+    def _read(name: str) -> tuple[list[dict], int, str]:
+        path = tmp_path / name
+        rows: list[dict] = []
+        if path.exists():
+            for line in path.read_text(encoding="utf-8").splitlines():
+                line = line.strip()
+                if line:
+                    rows.append(json.loads(line))
+        return rows, len(rows), str(path)
+
+    return _read
+
+
 def test_candidate_local_backtest_failed_ignores_advisory_generation_evidence():
     candidate = {
         "local_quality": {"local_backtest": {"pass_local": False, "advisory": True}},
@@ -99,7 +120,10 @@ def test_backtest_slots_payload_includes_local_readonly_queue_summary(monkeypatc
         ],
     )
 
-    payload = web._backtest_slots_payload()
+    payload = web._backtest_slots_payload(
+        _read_jsonl_records_for(tmp_path),
+        load_config=lambda: run_config,
+    )
     summary = payload["queue_summary"]
 
     assert payload["active_count"] == 1
@@ -147,7 +171,10 @@ def test_backtest_slots_treats_capacity_wait_as_active_local_slot(monkeypatch, t
     )
     _write_jsonl(tmp_path / "candidates.jsonl", [])
 
-    payload = web._backtest_slots_payload()
+    payload = web._backtest_slots_payload(
+        _read_jsonl_records_for(tmp_path),
+        load_config=lambda: run_config,
+    )
     summary = payload["queue_summary"]
 
     assert payload["active_count"] == 1
@@ -184,7 +211,10 @@ def test_backtest_slots_queue_summary_reads_all_existing_candidates(monkeypatch,
     )
     _write_jsonl(tmp_path / "candidates.jsonl", rows)
 
-    payload = web._backtest_slots_payload()
+    payload = web._backtest_slots_payload(
+        _read_jsonl_records_for(tmp_path),
+        load_config=lambda: run_config,
+    )
     summary = payload["queue_summary"]
 
     assert summary["candidate_count"] == 1001
@@ -225,7 +255,10 @@ def test_backtest_slots_queue_summary_keeps_all_blocking_reasons(monkeypatch, tm
     ]
     _write_jsonl(tmp_path / "candidates.jsonl", rows)
 
-    payload = web._backtest_slots_payload()
+    payload = web._backtest_slots_payload(
+        _read_jsonl_records_for(tmp_path),
+        load_config=lambda: run_config,
+    )
     summary = payload["queue_summary"]
 
     assert len(summary["top_blocking_reasons"]) >= 8
@@ -289,7 +322,10 @@ def test_backtest_slots_payload_derives_per_slot_status_board(monkeypatch, tmp_p
         ],
     )
 
-    payload = web._backtest_slots_payload()
+    payload = web._backtest_slots_payload(
+        _read_jsonl_records_for(tmp_path),
+        load_config=lambda: run_config,
+    )
     slot_one = payload["slots"][0]
     slot_two = payload["slots"][1]
 
@@ -343,7 +379,10 @@ def test_backtest_slots_status_board_reads_all_existing_backtest_events(monkeypa
         ],
     )
 
-    payload = web._backtest_slots_payload()
+    payload = web._backtest_slots_payload(
+        _read_jsonl_records_for(tmp_path),
+        load_config=lambda: run_config,
+    )
     slot_one = payload["slots"][0]
 
     assert payload["record_count"] == 1002

@@ -215,6 +215,16 @@ export default function SubmissionConfirmPanel({ notify, onNavigate }: Props) {
         }}
       />
 
+      {blockedCount > 0 && onNavigate && (
+        <button
+          type="button"
+          onClick={() => onNavigate('scoring')}
+          className="btn btn-ghost btn-sm text-xs"
+        >
+          查看门禁判定详情（继续优化 / 丢弃归档 / 队列 / 人工确认）→
+        </button>
+      )}
+
       <ConfirmationTable title="预检查通过" empty="暂无通过预提交检查的 Alpha" rows={readyRows} />
 
       <ConfirmationTable title="阻断与待处理" empty="暂无阻断记录" rows={blockedRows} />

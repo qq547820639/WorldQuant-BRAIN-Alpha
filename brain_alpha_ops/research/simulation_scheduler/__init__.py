@@ -12,6 +12,9 @@ Sub-modules:
   - ``_scheduler_tick``      : ``_SchedulerTickMixin`` (tick loop, submit,
                                poll, outcome handling)
   - ``_scheduler``           : ``ThreeSlotScheduler`` class assembly
+  - ``_consistency``         : ``SchedulerInconsistencyError``,
+                               ``assert_scheduler_consistency()``,
+                               ``OFFICIAL_SIMULATION_SLOT_LIMIT`` (Workstream C1.1)
 """
 from __future__ import annotations
 
@@ -27,6 +30,14 @@ from brain_alpha_ops.research.simulation_scheduler._types import (  # noqa: F401
 )
 from brain_alpha_ops.research.simulation_scheduler._scheduler import (  # noqa: F401
     ThreeSlotScheduler,
+)
+
+# Workstream C1.1: scheduler consistency guard — single source of truth
+# for the official 3-slot simulation limit.
+from brain_alpha_ops.research.simulation_scheduler._consistency import (  # noqa: F401
+    OFFICIAL_SIMULATION_SLOT_LIMIT,
+    SchedulerInconsistencyError,
+    assert_scheduler_consistency,
 )
 
 # Re-export private constants for backward compatibility — the original

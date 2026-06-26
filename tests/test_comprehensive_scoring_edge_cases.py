@@ -44,8 +44,8 @@ from brain_alpha_ops.research.scoring import (
 from brain_alpha_ops.scoring.official_scoring import (
     OfficialScoringSystem,
     ScoringResult,
-    ScoreHistoryDB,
 )
+from brain_alpha_ops.scoring.history import ScoreHistoryDB
 from brain_alpha_ops.scoring.gates import (
     GateConfig,
     GateResult,
