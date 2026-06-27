@@ -95,7 +95,7 @@ def test_quality_gate_runs_core_steps_and_skips_pytest(monkeypatch, tmp_path):
         calls.append(args)
         return True, {"command": args, "exit_code": 0, "duration_seconds": 0.01, "stdout": "", "stderr": ""}
 
-    monkeypatch.setattr(quality_gate, "_run_python_module", fake_run)
+    monkeypatch.setattr(quality_gate._steps, "_run_python_module", fake_run)
 
     result = quality_gate.run_quality_gate(
         config_path=_config_path(tmp_path),
@@ -154,7 +154,7 @@ def test_quality_gate_includes_pytest_args_and_propagates_failure(monkeypatch, t
             detail["actionable_ok"] = False
         return ok, detail
 
-    monkeypatch.setattr(quality_gate, "_run_python_module", fake_run)
+    monkeypatch.setattr(quality_gate._steps, "_run_python_module", fake_run)
 
     result = quality_gate.run_quality_gate(
         config_path=_config_path(tmp_path),
@@ -203,7 +203,7 @@ def test_quality_gate_can_include_git_history_secret_scan(monkeypatch, tmp_path)
     def fake_run(args):
         return True, {"command": args, "exit_code": 0, "duration_seconds": 0.01, "stdout": "", "stderr": ""}
 
-    monkeypatch.setattr(quality_gate, "_run_python_module", fake_run)
+    monkeypatch.setattr(quality_gate._steps, "_run_python_module", fake_run)
 
     result = quality_gate.run_quality_gate(
         config_path=_config_path(tmp_path),
@@ -226,7 +226,7 @@ def test_quality_gate_can_skip_compile(monkeypatch, tmp_path):
         calls.append(args)
         return True, {"command": args, "exit_code": 0, "duration_seconds": 0.01, "stdout": "", "stderr": ""}
 
-    monkeypatch.setattr(quality_gate, "_run_python_module", fake_run)
+    monkeypatch.setattr(quality_gate._steps, "_run_python_module", fake_run)
 
     result = quality_gate.run_quality_gate(
         config_path=_config_path(tmp_path),
@@ -247,7 +247,7 @@ def test_quality_gate_can_include_dependency_audit(monkeypatch, tmp_path):
         calls.append(args)
         return True, {"command": args, "exit_code": 0, "duration_seconds": 0.01, "stdout": "", "stderr": ""}
 
-    monkeypatch.setattr(quality_gate, "_run_python_module", fake_run)
+    monkeypatch.setattr(quality_gate._steps, "_run_python_module", fake_run)
 
     result = quality_gate.run_quality_gate(
         config_path=_config_path(tmp_path),
@@ -296,7 +296,7 @@ def test_quality_gate_can_include_optional_tooling(monkeypatch, tmp_path):
         calls.append(args)
         return True, {"command": args, "exit_code": 0, "duration_seconds": 0.01, "stdout": "", "stderr": ""}
 
-    monkeypatch.setattr(quality_gate, "_run_python_module", fake_run)
+    monkeypatch.setattr(quality_gate._steps, "_run_python_module", fake_run)
 
     result = quality_gate.run_quality_gate(
         config_path=_config_path(tmp_path),
@@ -318,7 +318,7 @@ def test_quality_gate_can_include_static_analysis(monkeypatch, tmp_path):
         calls.append(args)
         return True, {"command": args, "exit_code": 0, "duration_seconds": 0.01, "stdout": "", "stderr": ""}
 
-    monkeypatch.setattr(quality_gate, "_run_python_module", fake_run)
+    monkeypatch.setattr(quality_gate._steps, "_run_python_module", fake_run)
 
     result = quality_gate.run_quality_gate(
         config_path=_config_path(tmp_path),
@@ -372,7 +372,7 @@ def test_quality_gate_can_require_react_build(monkeypatch, tmp_path):
         calls.append(args)
         return True, {"command": args, "exit_code": 0, "duration_seconds": 0.01, "stdout": "", "stderr": ""}
 
-    monkeypatch.setattr(quality_gate, "_run_python_module", fake_run)
+    monkeypatch.setattr(quality_gate._steps, "_run_python_module", fake_run)
 
     result = quality_gate.run_quality_gate(
         config_path=_config_path(tmp_path),
@@ -396,7 +396,7 @@ def test_quality_gate_can_include_react_preview_smoke(monkeypatch, tmp_path):
         calls.append(args)
         return True, {"command": args, "exit_code": 0, "duration_seconds": 0.01, "stdout": "", "stderr": ""}
 
-    monkeypatch.setattr(quality_gate, "_run_python_module", fake_run)
+    monkeypatch.setattr(quality_gate._steps, "_run_python_module", fake_run)
 
     result = quality_gate.run_quality_gate(
         config_path=_config_path(tmp_path),
@@ -418,7 +418,7 @@ def test_quality_gate_runs_frontend_surface_parity_and_forwards_strict_flags(mon
         calls.append(args)
         return True, {"command": args, "exit_code": 0, "duration_seconds": 0.01, "stdout": "", "stderr": ""}
 
-    monkeypatch.setattr(quality_gate, "_run_python_module", fake_run)
+    monkeypatch.setattr(quality_gate._steps, "_run_python_module", fake_run)
 
     result = quality_gate.run_quality_gate(
         config_path=_config_path(tmp_path),
@@ -449,7 +449,7 @@ def test_quality_gate_can_fail_on_runtime_generated_data(monkeypatch, tmp_path):
         calls.append(args)
         return True, {"command": args, "exit_code": 0, "duration_seconds": 0.01, "stdout": "", "stderr": ""}
 
-    monkeypatch.setattr(quality_gate, "_run_python_module", fake_run)
+    monkeypatch.setattr(quality_gate._steps, "_run_python_module", fake_run)
 
     result = quality_gate.run_quality_gate(
         config_path=_config_path(tmp_path),
@@ -470,7 +470,7 @@ def test_quality_gate_can_fail_on_changed_runtime_generated_data(monkeypatch, tm
         calls.append(args)
         return True, {"command": args, "exit_code": 0, "duration_seconds": 0.01, "stdout": "", "stderr": ""}
 
-    monkeypatch.setattr(quality_gate, "_run_python_module", fake_run)
+    monkeypatch.setattr(quality_gate._steps, "_run_python_module", fake_run)
 
     result = quality_gate.run_quality_gate(
         config_path=_config_path(tmp_path),
@@ -491,7 +491,7 @@ def test_quality_gate_can_fail_on_unresolved_tracked_data_boundary(monkeypatch, 
         calls.append(args)
         return True, {"command": args, "exit_code": 0, "duration_seconds": 0.01, "stdout": "", "stderr": ""}
 
-    monkeypatch.setattr(quality_gate, "_run_python_module", fake_run)
+    monkeypatch.setattr(quality_gate._steps, "_run_python_module", fake_run)
 
     result = quality_gate.run_quality_gate(
         config_path=_config_path(tmp_path),
@@ -512,7 +512,7 @@ def test_quality_gate_can_fail_on_stale_tracked_data_boundary(monkeypatch, tmp_p
         calls.append(args)
         return True, {"command": args, "exit_code": 0, "duration_seconds": 0.01, "stdout": "", "stderr": ""}
 
-    monkeypatch.setattr(quality_gate, "_run_python_module", fake_run)
+    monkeypatch.setattr(quality_gate._steps, "_run_python_module", fake_run)
 
     result = quality_gate.run_quality_gate(
         config_path=_config_path(tmp_path),
@@ -531,7 +531,7 @@ def test_quality_gate_propagates_strict_react_build_failure(monkeypatch, tmp_pat
         ok = not any(str(arg).endswith("check_react_build_env.py") for arg in args)
         return ok, {"command": args, "exit_code": 0 if ok else 1, "duration_seconds": 0.01, "stdout": "", "stderr": ""}
 
-    monkeypatch.setattr(quality_gate, "_run_python_module", fake_run)
+    monkeypatch.setattr(quality_gate._steps, "_run_python_module", fake_run)
 
     result = quality_gate.run_quality_gate(
         config_path=_config_path(tmp_path),
@@ -551,7 +551,7 @@ def test_quality_gate_can_include_final_release_gate(monkeypatch, tmp_path):
         calls.append(args)
         return True, {"command": args, "exit_code": 0, "duration_seconds": 0.01, "stdout": "", "stderr": ""}
 
-    monkeypatch.setattr(quality_gate, "_run_python_module", fake_run)
+    monkeypatch.setattr(quality_gate._steps, "_run_python_module", fake_run)
 
     result = quality_gate.run_quality_gate(
         config_path=_config_path(tmp_path),
@@ -573,7 +573,7 @@ def test_quality_gate_final_release_enforces_coverage(monkeypatch, tmp_path):
         kwargs_seen.append(kwargs)
         return True, {"command": args, "exit_code": 0, "duration_seconds": 0.01, "stdout": "", "stderr": ""}
 
-    monkeypatch.setattr(quality_gate, "_run_python_module", fake_run)
+    monkeypatch.setattr(quality_gate._steps, "_run_python_module", fake_run)
 
     result = quality_gate.run_quality_gate(
         config_path=_config_path(tmp_path),
@@ -595,7 +595,7 @@ def test_quality_gate_final_release_includes_brain_compliance_stop_rules(monkeyp
         calls.append(args)
         return True, {"command": args, "exit_code": 0, "duration_seconds": 0.01, "stdout": "", "stderr": ""}
 
-    monkeypatch.setattr(quality_gate, "_run_python_module", fake_run)
+    monkeypatch.setattr(quality_gate._steps, "_run_python_module", fake_run)
     config_path = _config_path(tmp_path)
 
     result = quality_gate.run_quality_gate(
@@ -626,7 +626,7 @@ def test_quality_gate_reports_af006_non_submit_verification_submatrix(monkeypatc
     def fake_run(args, **_kwargs):
         return True, {"command": args, "exit_code": 0, "duration_seconds": 0.01, "stdout": "", "stderr": ""}
 
-    monkeypatch.setattr(quality_gate, "_run_python_module", fake_run)
+    monkeypatch.setattr(quality_gate._steps, "_run_python_module", fake_run)
     config_path = _config_path(tmp_path)
 
     result = quality_gate.run_quality_gate(
@@ -660,7 +660,7 @@ def test_quality_gate_final_release_can_require_live_submit_ready(monkeypatch, t
         calls.append(args)
         return True, {"command": args, "exit_code": 0, "duration_seconds": 0.01, "stdout": "", "stderr": ""}
 
-    monkeypatch.setattr(quality_gate, "_run_python_module", fake_run)
+    monkeypatch.setattr(quality_gate._steps, "_run_python_module", fake_run)
     config_path = _config_path(tmp_path)
 
     result = quality_gate.run_quality_gate(
@@ -690,7 +690,7 @@ def test_quality_gate_can_enable_coverage_without_final_release(monkeypatch, tmp
         kwargs_seen.append(kwargs)
         return True, {"command": args, "exit_code": 0, "duration_seconds": 0.01, "stdout": "", "stderr": ""}
 
-    monkeypatch.setattr(quality_gate, "_run_python_module", fake_run)
+    monkeypatch.setattr(quality_gate._steps, "_run_python_module", fake_run)
 
     result = quality_gate.run_quality_gate(
         config_path=_config_path(tmp_path),
@@ -720,7 +720,7 @@ def test_quality_gate_main_parses_coverage_and_preview_flags(monkeypatch, tmp_pa
         captured.update(kwargs)
         return {"ok": True, "steps": []}
 
-    monkeypatch.setattr(quality_gate, "run_quality_gate", fake_run_quality_gate)
+    monkeypatch.setattr(quality_gate._cli, "run_quality_gate", fake_run_quality_gate)
 
     code = quality_gate.main(
         [
@@ -767,7 +767,7 @@ def test_quality_gate_can_require_fresh_official_context(monkeypatch, tmp_path):
         calls.append(args)
         return True, {"command": args, "exit_code": 0, "duration_seconds": 0.01, "stdout": "", "stderr": ""}
 
-    monkeypatch.setattr(quality_gate, "_run_python_module", fake_run)
+    monkeypatch.setattr(quality_gate._steps, "_run_python_module", fake_run)
 
     result = quality_gate.run_quality_gate(
         config_path=_config_path(tmp_path),
@@ -922,6 +922,12 @@ def test_final_release_gate_blocks_cache_first_without_official_context_cache(tm
     config["ops"]["budget"]["require_cloud_sync"] = False
     config_path = tmp_path / "run_config.json"
     config_path.write_text(json.dumps(config), encoding="utf-8")
+    # [REFACTORED] Supply official_datasets.json so config validation recognises
+    # dataset "pv1" and the gate reaches the CLOUD_SYNC_CACHE_MISSING check path.
+    (tmp_path / "data").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "data" / "official_datasets.json").write_text(
+        json.dumps([{"id": "pv1", "name": "Price Volume"}]), encoding="utf-8"
+    )
 
     report = run_final_release_gate(config_path=config_path)
 
