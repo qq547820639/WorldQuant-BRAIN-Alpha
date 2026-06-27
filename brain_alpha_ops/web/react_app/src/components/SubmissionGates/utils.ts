@@ -1,7 +1,4 @@
-import {
-  readinessProductionGapLabel,
-  readinessReasonLabel,
-} from '@/helpers/readinessLabels';
+import { readinessProductionGapLabel, readinessReasonLabel } from '@/helpers/readinessLabels';
 import { BLOCKER_ACTION_MAP } from './constants';
 
 export function blockerActionForReason(reason: string) {

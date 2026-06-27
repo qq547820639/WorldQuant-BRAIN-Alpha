@@ -91,12 +91,7 @@ export function useConfigForm({
     initialValues: EMPTY_FORM,
   });
 
-  const {
-    values: form,
-    setValue,
-    setValues: setFormValues,
-    isDirty: dirty,
-  } = formValidation;
+  const { values: form, setValue, setValues: setFormValues, isDirty: dirty } = formValidation;
 
   const [initialForm, setInitialForm] = useState<ConfigForm | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);

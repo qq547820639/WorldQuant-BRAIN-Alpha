@@ -16,10 +16,7 @@ import {
   syncStatusUpdatedAt,
 } from './syncProgress';
 import { phaseLabel, scanEtaDetail, syncStageMetric, syncScanPageSummary } from './syncStage';
-import {
-  cloudAlphaCacheReady,
-  cloudAlphaCacheUpdatedAt,
-} from './contextCache';
+import { cloudAlphaCacheReady, cloudAlphaCacheUpdatedAt } from './contextCache';
 import { classifyJobState } from '@/helpers/runPayload';
 import type { CloudAlphaCache, JobStatus } from '@/types';
 

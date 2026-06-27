@@ -35,7 +35,12 @@ function makeCandidate(overrides: Partial<Candidate> = {}): Candidate {
       status: 'gate_rejected',
     },
     local_quality: { passed: false, reasons: [LONG_BLOCKER_TEXT] },
-    gate: { passed: false, status: 'gate_rejected', failed_reasons: [LONG_BLOCKER_TEXT], submission_ready: false },
+    gate: {
+      passed: false,
+      status: 'gate_rejected',
+      failed_reasons: [LONG_BLOCKER_TEXT],
+      submission_ready: false,
+    },
     ...overrides,
   };
 }
@@ -63,7 +68,11 @@ function createMatchMedia(width: number) {
 
 function setViewport(width: number, height: number = 800) {
   Object.defineProperty(window, 'innerWidth', { writable: true, configurable: true, value: width });
-  Object.defineProperty(window, 'innerHeight', { writable: true, configurable: true, value: height });
+  Object.defineProperty(window, 'innerHeight', {
+    writable: true,
+    configurable: true,
+    value: height,
+  });
   Object.defineProperty(window, 'matchMedia', {
     writable: true,
     configurable: true,
@@ -85,7 +94,7 @@ function renderCard(candidate: Candidate, extra: Record<string, unknown> = {}) {
       checkingAlphaId={null}
       checkBusy={false}
       {...extra}
-    />,
+    />
   );
 }
 
@@ -157,7 +166,7 @@ describe('CandidateMobileCard — blocker text rendering', () => {
     const { container } = renderCard(makeCandidate());
     // The blocker paragraph uses the break-words class to wrap long text.
     const blocker = Array.from(container.querySelectorAll('p')).find((p) =>
-      p.textContent?.includes(LONG_BLOCKER_TEXT),
+      p.textContent?.includes(LONG_BLOCKER_TEXT)
     );
     expect(blocker).toBeDefined();
     expect(blocker?.className).toContain('break-words');
@@ -166,7 +175,7 @@ describe('CandidateMobileCard — blocker text rendering', () => {
   it('does not apply line-clamp or overflow-hidden on the blocker paragraph', () => {
     const { container } = renderCard(makeCandidate());
     const blocker = Array.from(container.querySelectorAll('p')).find((p) =>
-      p.textContent?.includes(LONG_BLOCKER_TEXT),
+      p.textContent?.includes(LONG_BLOCKER_TEXT)
     );
     expect(blocker).toBeDefined();
     // No truncation classes — full text is rendered.
@@ -208,7 +217,7 @@ describe('CandidateTableMobile — empty state', () => {
         filter=""
         onClearFilter={noop}
         onGenerateCandidates={noop}
-      />,
+      />
     );
     // EmptyState title (no filter, no production controls).
     expect(screen.getByText('暂无候选记录')).toBeDefined();
@@ -229,7 +238,7 @@ describe('CandidateTableMobile — empty state', () => {
         filter="rank"
         onClearFilter={onClear}
         onGenerateCandidates={noop}
-      />,
+      />
     );
     fireEvent.click(screen.getByText('清除筛选'));
     expect(onClear).toHaveBeenCalledTimes(1);

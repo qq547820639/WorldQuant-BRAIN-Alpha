@@ -144,6 +144,22 @@ function ActionableErrorImpl({
     actionable = buildActionableError(kind, context);
   }
 
+  // [LINT-FIX] useCallback must run before the early return below so the
+  // hook order is stable across renders (rules-of-hooks). The callback
+  // already guards against null `actionable`.
+  const handleRecovery = useCallback(() => {
+    if (!actionable) return;
+    const view = RECOVERY_URL_TO_VIEW[actionable.recovery_url];
+    if (view && onNavigate) {
+      onNavigate(view);
+      return;
+    }
+    // Non-navigation recovery (e.g. /operations/refresh, wait_and_retry).
+    if (onRecoveryAction) {
+      onRecoveryAction(actionable.recovery_action_id, actionable);
+    }
+  }, [actionable, onNavigate, onRecoveryAction]);
+
   // Backward compatibility: when no actionable payload can be derived,
   // delegate to ErrorCard so we never show a blank or "unknown" error.
   if (!actionable) {
@@ -163,19 +179,6 @@ function ActionableErrorImpl({
   const style = SEVERITY_STYLES[actionable.severity] || SEVERITY_STYLES.error;
   const kindLabel = title || KIND_LABELS[actionable.kind] || actionable.kind;
   const recoveryLabel = recoveryActionLabel(actionable.recovery_action_id);
-
-  const handleRecovery = useCallback(() => {
-    if (!actionable) return;
-    const view = RECOVERY_URL_TO_VIEW[actionable.recovery_url];
-    if (view && onNavigate) {
-      onNavigate(view);
-      return;
-    }
-    // Non-navigation recovery (e.g. /operations/refresh, wait_and_retry).
-    if (onRecoveryAction) {
-      onRecoveryAction(actionable.recovery_action_id, actionable);
-    }
-  }, [actionable, onNavigate, onRecoveryAction]);
 
   const containerStyle: CSSProperties = {
     border: `1px solid ${style.border}`,
@@ -205,7 +208,15 @@ function ActionableErrorImpl({
           <XCircleIcon color={style.iconColor} />
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              marginBottom: 8,
+              flexWrap: 'wrap',
+            }}
+          >
             <span
               style={{
                 display: 'inline-block',

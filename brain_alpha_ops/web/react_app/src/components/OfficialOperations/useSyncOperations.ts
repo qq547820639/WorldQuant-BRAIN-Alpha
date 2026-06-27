@@ -31,11 +31,24 @@ interface UseSyncOperationsDeps {
   syncPollGenerationRef: React.MutableRefObject<number>;
   syncPollFailureCountRef: React.MutableRefObject<number>;
   autoStartConsumedRef: React.MutableRefObject<boolean>;
-  syncStartApi: { call: <R = unknown>(url: string, options?: RequestInit) => Promise<(R & ApiMeta) | null>; reset: () => void; data: unknown | null; error: string | null; loading: boolean };
-  syncStatusApi: { call: <R = JobStatus>(url: string, options?: RequestInit) => Promise<(R & ApiMeta) | null>; data: JobStatus | null; error: string | null; loading: boolean };
+  syncStartApi: {
+    call: <R = unknown>(url: string, options?: RequestInit) => Promise<(R & ApiMeta) | null>;
+    reset: () => void;
+    data: unknown;
+    error: string | null;
+    loading: boolean;
+  };
+  syncStatusApi: {
+    call: <R = JobStatus>(url: string, options?: RequestInit) => Promise<(R & ApiMeta) | null>;
+    data: JobStatus | null;
+    error: string | null;
+    loading: boolean;
+  };
   updateSyncJobId: (jobId: string) => void;
   resetSyncProgressMonitor: () => void;
-  inspectSyncProgressMonitor: (result: JobStatus) => { level: 'warning' | 'stop'; message: string } | null;
+  inspectSyncProgressMonitor: (
+    result: JobStatus
+  ) => { level: 'warning' | 'stop'; message: string } | null;
   appendLog: (tone: OperationLogEntry['tone'], message: string) => void;
   notify: (type: 'success' | 'error' | 'warning' | 'info', msg: string) => void;
   credentials?: BrainCredentials;
@@ -235,7 +248,14 @@ export function useSyncOperations(deps: UseSyncOperationsDeps) {
     autoStartConsumedRef.current = true;
     onAutoStartConsumed?.();
     void startOfficialContextRefresh();
-  }, [autoStart, autoStartConsumedRef, onAutoStartConsumed, startOfficialContextRefresh, syncJobId, syncRunning]);
+  }, [
+    autoStart,
+    autoStartConsumedRef,
+    onAutoStartConsumed,
+    startOfficialContextRefresh,
+    syncJobId,
+    syncRunning,
+  ]);
 
   const pollSyncStatus = useCallback(async () => {
     if (!syncJobId) return;

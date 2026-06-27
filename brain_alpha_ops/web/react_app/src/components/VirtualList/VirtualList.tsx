@@ -63,13 +63,18 @@ const VirtualListInner = forwardRef(function VirtualListInner<T>(
     },
   };
 
+  // [LINT-FIX] useWindowScroll is a stable prop (does not change across
+  // renders), so the hook order is stable. useWindowVirtualizer and
+  // useVirtualizer have incompatible getScrollElement signatures
+  // (() => Window vs () => Element), so they cannot be unified.
   const rowVirtualizer = useWindowScroll
-    ? useWindowVirtualizer({
+    ? // eslint-disable-next-line react-hooks/rules-of-hooks
+      useWindowVirtualizer({
         ...virtualizerOptions,
-        // [REFACTORED] useWindowVirtualizer uses 'getScrollElement', not 'scrollElement'
-        getScrollElement: () => typeof window !== 'undefined' ? window : null,
+        getScrollElement: () => (typeof window !== 'undefined' ? window : null),
       })
-    : useVirtualizer({
+    : // eslint-disable-next-line react-hooks/rules-of-hooks
+      useVirtualizer({
         ...virtualizerOptions,
         getScrollElement: () => parentRef.current,
       });

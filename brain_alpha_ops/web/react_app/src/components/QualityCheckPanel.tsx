@@ -77,7 +77,8 @@ export default function QualityCheckPanel({ notify }: Props) {
       <QualitySummaryStrip summary={summary} />
 
       <p className="text-xs text-text-tertiary px-1">
-        详细门禁判定理由（继续优化 / 丢弃归档 / 进入官方模拟队列 / 需要人工确认）请查看「科学评分」面板。
+        详细门禁判定理由（继续优化 / 丢弃归档 / 进入官方模拟队列 /
+        需要人工确认）请查看「科学评分」面板。
       </p>
 
       <CandidateTable notify={notify} viewMode="passed" showProductionControls showRowActions />

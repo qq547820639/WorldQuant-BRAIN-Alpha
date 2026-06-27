@@ -34,7 +34,10 @@ export default function AttributionTooltip({
   const tooltipText = parts.length ? parts.join(' · ') : label;
   return (
     <Tooltip content={tooltipText} placement="top">
-      <span className="text-text-secondary cursor-help" style={{ borderBottom: '1px dotted var(--color-border-subtle)' }}>
+      <span
+        className="text-text-secondary cursor-help"
+        style={{ borderBottom: '1px dotted var(--color-border-subtle)' }}
+      >
         {label}
       </span>
     </Tooltip>

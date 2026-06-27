@@ -10,10 +10,7 @@ interface Props {
 export default function SnapshotDesktopTable({ rows, emptyMessage, title }: Props) {
   return (
     <div className="hidden max-w-full overflow-auto md:block">
-      <table
-        className="data-table min-w-[820px] w-full text-sm"
-        aria-label={`${title}表格`}
-      >
+      <table className="data-table min-w-[820px] w-full text-sm" aria-label={`${title}表格`}>
         <thead>
           <tr
             className="text-left text-xs uppercase tracking-wider"

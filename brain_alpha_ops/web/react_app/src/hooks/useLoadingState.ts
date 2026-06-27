@@ -78,13 +78,16 @@ export function useLoadingState<TError = Error>(
     setError(null);
   }, []);
 
-  const setLoading = useCallback((loading: boolean) => {
-    if (loading) {
-      startLoading();
-    } else {
-      stopLoading();
-    }
-  }, [startLoading, stopLoading]);
+  const setLoading = useCallback(
+    (loading: boolean) => {
+      if (loading) {
+        startLoading();
+      } else {
+        stopLoading();
+      }
+    },
+    [startLoading, stopLoading]
+  );
 
   return {
     isLoading,

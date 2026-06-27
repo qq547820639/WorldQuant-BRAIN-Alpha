@@ -22,12 +22,7 @@ import GateDecisionStrip from './GateDecisionStrip';
 import GateResults from './GateResults';
 import ImprovementHints from './ImprovementHints';
 import ScoreHistory from './ScoreHistory';
-import {
-  safeScoringText,
-  lifecycleStatusLabel,
-  metricWithStatus,
-  nonEmpty,
-} from './utils';
+import { safeScoringText, lifecycleStatusLabel, metricWithStatus, nonEmpty } from './utils';
 
 interface Props {
   notify: (type: 'success' | 'error' | 'warning' | 'info', msg: string) => void;
@@ -210,7 +205,14 @@ export default function ScoringPanel({ notify, candidate }: Props) {
     if (gateDecisionResult && !gateDecisionResult.ok && gateDecisionResult.error) {
       notify('error', apiErrorMessage(gateDecisionResult, '门禁判定加载失败'));
     }
-  }, [callAttributionApi, callGateDecisionApi, callScoreApi, candidate, notify, resetAttributionApi]);
+  }, [
+    callAttributionApi,
+    callGateDecisionApi,
+    callScoreApi,
+    candidate,
+    notify,
+    resetAttributionApi,
+  ]);
 
   useEffect(() => {
     if (candidate) loadScore();

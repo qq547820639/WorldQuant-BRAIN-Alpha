@@ -21,7 +21,12 @@ interface UseSyncRecoveryDeps {
   setContextOnlyMode: Dispatch<SetStateAction<boolean>>;
   syncPollFailureCountRef: React.MutableRefObject<number>;
   syncRecoveryAttemptedRef: React.MutableRefObject<boolean>;
-  syncStatusApi: { call: <R = JobStatus>(url: string, options?: RequestInit) => Promise<(R & ApiMeta) | null>; data: JobStatus | null; error: string | null; loading: boolean };
+  syncStatusApi: {
+    call: <R = JobStatus>(url: string, options?: RequestInit) => Promise<(R & ApiMeta) | null>;
+    data: JobStatus | null;
+    error: string | null;
+    loading: boolean;
+  };
   updateSyncJobId: (jobId: string) => void;
   resetSyncProgressMonitor: () => void;
   appendLog: (tone: OperationLogEntry['tone'], message: string) => void;
@@ -104,7 +109,17 @@ export function useSyncRecovery(deps: UseSyncRecoveryDeps) {
       }
       return true;
     },
-    [appendLog, notify, resetSyncProgressMonitor, setContextOnlyMode, setMode, setSyncRunning, setSyncStatus, syncPollFailureCountRef, updateSyncJobId]
+    [
+      appendLog,
+      notify,
+      resetSyncProgressMonitor,
+      setContextOnlyMode,
+      setMode,
+      setSyncRunning,
+      setSyncStatus,
+      syncPollFailureCountRef,
+      updateSyncJobId,
+    ]
   );
 
   useEffect(() => {
@@ -142,7 +157,13 @@ export function useSyncRecovery(deps: UseSyncRecoveryDeps) {
     return () => {
       active = false;
     };
-  }, [applyRecoveredSyncStatus, applySyncRecoveryFailure, callSyncStatus, setSyncStatus, syncRecoveryAttemptedRef]);
+  }, [
+    applyRecoveredSyncStatus,
+    applySyncRecoveryFailure,
+    callSyncStatus,
+    setSyncStatus,
+    syncRecoveryAttemptedRef,
+  ]);
 
   return {
     applySyncRecoveryFailure,

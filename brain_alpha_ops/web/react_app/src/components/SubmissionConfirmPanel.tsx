@@ -13,11 +13,7 @@ import type { SubmitReadinessResponse } from '@/types';
 import { isRecord } from '@/types';
 import ProgressFeedback from '@/components/ProgressFeedback';
 import StatusFlowDiagram from '@/components/StatusFlowDiagram';
-import {
-  ConfirmationTable,
-  buildRows,
-  type CheckResult,
-} from '@/components/SubmissionChecklist';
+import { ConfirmationTable, buildRows, type CheckResult } from '@/components/SubmissionChecklist';
 import { ReadinessSummary } from '@/components/SubmissionGates';
 import { DrillModal } from '@/components/SubmissionGuidance';
 

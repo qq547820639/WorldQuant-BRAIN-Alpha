@@ -25,25 +25,15 @@ export default function CandidateTableSuccessBanner({
       role="status"
       aria-live="polite"
     >
-      <div
-        style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '4px 16px' }}
-      >
+      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '4px 16px' }}>
         <span style={{ fontSize: 14, marginRight: 4 }}>✅</span>
         <span className="text-sm font-medium text-text-primary">候选池自动推进完成</span>
         <span className="text-xs text-text-secondary">
-          新增{' '}
-          <span className="font-mono-value text-positive">
-            {banner.newCount}
-          </span>{' '}
-          个候选
+          新增 <span className="font-mono-value text-positive">{banner.newCount}</span> 个候选
         </span>
         {banner.optimizedCount > 0 && (
           <span className="text-xs text-text-secondary">
-            优化{' '}
-            <span className="font-mono-value text-accent">
-              {banner.optimizedCount}
-            </span>{' '}
-            个
+            优化 <span className="font-mono-value text-accent">{banner.optimizedCount}</span> 个
           </span>
         )}
         <span className="text-xs text-text-tertiary">

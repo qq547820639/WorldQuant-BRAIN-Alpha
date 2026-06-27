@@ -65,5 +65,5 @@ export default memo(function Skeleton({
     );
   }
 
-  return <BaseSkeleton variant={variant as 'card' | 'text' | 'avatar' | 'table-row'} className={className} />;
+  return <BaseSkeleton variant={variant} className={className} />;
 });

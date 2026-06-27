@@ -15,10 +15,7 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import CandidateTableDesktop from '@/components/CandidateTableDesktop';
 import CandidateTableLoading from '@/components/CandidateTableLoading';
 import { FilterToolbar } from '@/components/CandidateTableToolbarFilterToolbar';
-import {
-  candidateMatchesQueueView,
-  statusBadgeClass,
-} from '@/components/CandidateTableUtils';
+import { candidateMatchesQueueView, statusBadgeClass } from '@/components/CandidateTableUtils';
 import type { Candidate, CandidateCheckResult } from '@/types';
 
 // jsdom has no real layout, so the default @tanstack/react-virtual
@@ -283,9 +280,7 @@ describe('FilterToolbar — filter input behavior', () => {
     const onFilterChange = vi.fn();
     const onRetryLoad = vi.fn();
     const { rerender } = render(
-      <FilterToolbar
-        {...baseFilterProps({ onFilterChange, apiLoading: true, onRetryLoad })}
-      />
+      <FilterToolbar {...baseFilterProps({ onFilterChange, apiLoading: true, onRetryLoad })} />
     );
     fireEvent.change(screen.getByLabelText('过滤候选'), {
       target: { value: 'momentum' },
@@ -294,9 +289,7 @@ describe('FilterToolbar — filter input behavior', () => {
     expect(screen.getByText('刷新中...').closest('button')?.disabled).toBe(true);
 
     rerender(
-      <FilterToolbar
-        {...baseFilterProps({ onFilterChange, apiLoading: false, onRetryLoad })}
-      />
+      <FilterToolbar {...baseFilterProps({ onFilterChange, apiLoading: false, onRetryLoad })} />
     );
     fireEvent.click(screen.getByText('刷新'));
     expect(onRetryLoad).toHaveBeenCalledTimes(1);
@@ -324,11 +317,7 @@ describe('FilterToolbar — filter input behavior', () => {
 describe('candidateMatchesQueueView — state filter logic', () => {
   const results = new Map<string, CandidateCheckResult>();
   const match = (status: string, view: Parameters<typeof candidateMatchesQueueView>[1]) =>
-    candidateMatchesQueueView(
-      makeCandidate({ lifecycle_status: status }),
-      view,
-      results
-    );
+    candidateMatchesQueueView(makeCandidate({ lifecycle_status: status }), view, results);
 
   it('matches candidates view universally and routes statuses to dedicated views', () => {
     expect(match('simulating', 'candidates')).toBe(true);

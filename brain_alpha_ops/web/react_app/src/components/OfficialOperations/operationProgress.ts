@@ -17,7 +17,12 @@ import {
 } from './syncProgress';
 import { phaseLabel, syncStageMetric } from './syncStage';
 import { classifyJobState } from '@/helpers/runPayload';
-import type { JobStatus, ProgressLifecycle, SubmitReadinessResponse, UnifiedProgress } from '@/types';
+import type {
+  JobStatus,
+  ProgressLifecycle,
+  SubmitReadinessResponse,
+  UnifiedProgress,
+} from '@/types';
 
 function userErrorField(source: Record<string, unknown> | undefined) {
   const value = source?.user_error;

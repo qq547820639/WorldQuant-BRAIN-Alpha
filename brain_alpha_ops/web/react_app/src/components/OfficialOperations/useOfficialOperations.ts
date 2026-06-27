@@ -1,10 +1,5 @@
 import { classifyJobState } from '@/helpers/runPayload';
-import type {
-  BrainCredentials,
-  CloudAlphaCache,
-  OfficialContextCache,
-  SubmitReadinessResponse,
-} from '@/types';
+import type { BrainCredentials, CloudAlphaCache, OfficialContextCache } from '@/types';
 import {
   syncStatusForDisplay,
   syncDataOverview,
@@ -20,14 +15,6 @@ import { useSyncRecovery } from './useSyncRecovery';
 import { useSyncStop } from './useSyncStop';
 import { useSyncOperations } from './useSyncOperations';
 import { useReadinessChecks } from './useReadinessChecks';
-
-interface CheckResultsResponse {
-  items?: Array<Record<string, unknown>>;
-  checks?: Array<Record<string, unknown>>;
-  count?: number;
-  ok?: boolean;
-  data?: CheckResultsResponse;
-}
 
 interface UseOfficialOperationsProps {
   notify: (type: 'success' | 'error' | 'warning' | 'info', msg: string) => void;
@@ -162,8 +149,8 @@ export function useOfficialOperations({
   const currentProgress = operationProgress(
     mode,
     syncStatus,
-    readinessApi.data as SubmitReadinessResponse | undefined,
-    checkResultsApi.data as CheckResultsResponse | undefined
+    readinessApi.data,
+    checkResultsApi.data
   );
   const currentError = currentModeError(mode, syncStatus, {
     syncStart: syncStartApi.error,

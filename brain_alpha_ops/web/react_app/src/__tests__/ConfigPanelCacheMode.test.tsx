@@ -47,9 +47,7 @@ const baseLocalCacheProps = {
   onLogout: vi.fn(),
 };
 
-function makeProps(
-  overrides: Partial<CredentialsSectionProps> = {}
-): CredentialsSectionProps {
+function makeProps(overrides: Partial<CredentialsSectionProps> = {}): CredentialsSectionProps {
   return {
     credentials: emptyCredentials,
     cacheOnlyMode: false,
@@ -74,10 +72,7 @@ describe('E4.1 ConfigPanel cache-mode credential folding', () => {
   // Case 1: cache mode + collapsed → only cache UI shown, no credential inputs.
   it('cache mode + collapsed → shows cache UI, hides credential inputs', () => {
     const { container } = render(
-      <LocalCacheConnectionSection
-        {...baseLocalCacheProps}
-        temporaryConnectionOpen={false}
-      >
+      <LocalCacheConnectionSection {...baseLocalCacheProps} temporaryConnectionOpen={false}>
         <CredentialInputs />
       </LocalCacheConnectionSection>
     );
@@ -174,9 +169,7 @@ describe('E4.1 ConfigPanel cache-mode credential folding', () => {
   // Case 4: non-cache mode → credential inputs always shown (no expand action).
   it('non-cache mode → credential inputs always rendered without expand action', () => {
     const { container } = render(
-      <CredentialsSection
-        {...makeProps({ cacheOnlyMode: false, showCredentialEditor: true })}
-      />
+      <CredentialsSection {...makeProps({ cacheOnlyMode: false, showCredentialEditor: true })} />
     );
 
     expect(screen.queryByText(/本地缓存会话/)).toBeNull();
@@ -241,9 +234,7 @@ describe('E4.1 ConfigPanel cache-mode credential folding', () => {
     expect(container.querySelectorAll('input[type="password"]')).toHaveLength(0);
 
     rerender(
-      <CredentialsSection
-        {...makeProps({ cacheOnlyMode: false, showCredentialEditor: true })}
-      />
+      <CredentialsSection {...makeProps({ cacheOnlyMode: false, showCredentialEditor: true })} />
     );
 
     expect(screen.queryByText(/本地缓存会话/)).toBeNull();
@@ -281,9 +272,7 @@ describe('E4.1 ConfigPanel cache-mode credential folding', () => {
   // Edge case: non-cache mode + showCredentialEditor=false → renders nothing.
   it('non-cache mode + showCredentialEditor=false → renders nothing', () => {
     const { container } = render(
-      <CredentialsSection
-        {...makeProps({ cacheOnlyMode: false, showCredentialEditor: false })}
-      />
+      <CredentialsSection {...makeProps({ cacheOnlyMode: false, showCredentialEditor: false })} />
     );
     expect(container.firstChild).toBeNull();
     expect(container.querySelectorAll('input')).toHaveLength(0);

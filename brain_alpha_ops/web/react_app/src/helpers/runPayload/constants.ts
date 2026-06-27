@@ -15,7 +15,12 @@ export const TERMINAL_STATUSES = new Set([
   'missing',
   'session_invalid',
 ]);
-export const SUCCESS_STATUSES = new Set(['completed', 'completed_with_warnings', 'success', 'done']);
+export const SUCCESS_STATUSES = new Set([
+  'completed',
+  'completed_with_warnings',
+  'success',
+  'done',
+]);
 export const WARNING_STATUSES = new Set(['completed_with_warnings', 'warning']);
 export const FAILED_STATUSES = new Set(['failed', 'error', 'watchdog_failed']);
 export const INTERRUPTED_STATUSES = new Set(['stopped', 'cancelled', 'canceled', 'interrupted']);

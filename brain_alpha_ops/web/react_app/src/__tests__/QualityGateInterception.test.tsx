@@ -19,10 +19,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import type {
-  BacktestSlotsResponse,
-  SubmitReadinessResponse,
-} from '@/types';
+import type { BacktestSlotsResponse, SubmitReadinessResponse } from '@/types';
 import type { ActionableErrorPayload } from '@/types/errors';
 
 // ── Module mocks ───────────────────────────────────────────
@@ -186,7 +183,10 @@ describe('QualityCheckPanel — summary strip', () => {
 
   it('falls back to "等待候选和门禁数据" when next_action is empty', () => {
     resetState();
-    slotsState.data = { ...SLOT_PAYLOAD, queue_summary: { ...SLOT_PAYLOAD.queue_summary, next_action: '' } };
+    slotsState.data = {
+      ...SLOT_PAYLOAD,
+      queue_summary: { ...SLOT_PAYLOAD.queue_summary, next_action: '' },
+    };
     render(<QualityCheckPanel notify={NOTIFY} />);
     expect(screen.getByText(/等待候选和门禁数据/)).toBeDefined();
   });

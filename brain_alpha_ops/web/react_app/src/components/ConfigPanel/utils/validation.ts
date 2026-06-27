@@ -8,11 +8,7 @@ import {
   DEFAULT_UNIVERSE_OPTIONS,
   MAX_CONFIG_TEXT_LENGTH,
 } from './constants';
-import {
-  datasetAllowedValues,
-  isAllowedOption,
-  isIntegerInRange,
-} from './helpers';
+import { datasetAllowedValues, isAllowedOption, isIntegerInRange } from './helpers';
 import type { ConfigForm, ConfigSchema } from './types';
 
 export function validateForm(form: ConfigForm, schema: ConfigSchema | undefined): string | null {

@@ -14,10 +14,7 @@ import {
   sqliteIndexRows,
   sqliteIndexMetrics,
 } from './SnapshotPanelLocal';
-import {
-  robustnessRows,
-  robustnessMetrics,
-} from './SnapshotPanelCompare';
+import { robustnessRows, robustnessMetrics } from './SnapshotPanelCompare';
 
 export type SnapshotView =
   | 'cloud'

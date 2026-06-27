@@ -10,6 +10,7 @@ export function useMemoCompare<T>(
   compare: (prev: T | undefined, next: T) => boolean
 ): T {
   const previousRef = useRef<T | undefined>(undefined);
+  // eslint-disable-next-line react-hooks/use-memo -- hook wrapper forwards dynamic deps; array literal cannot be used here.
   const result = useMemo(factory, deps);
 
   if (previousRef.current === undefined || !compare(previousRef.current, result)) {
@@ -38,14 +39,11 @@ function deepEqual(a: unknown, b: unknown): boolean {
     }
 
     if (!Array.isArray(a) && !Array.isArray(b)) {
-      const keysA = Object.keys(a as Record<string, unknown>);
-      const keysB = Object.keys(b as Record<string, unknown>);
+      const keysA = Object.keys(a);
+      const keysB = Object.keys(b);
       if (keysA.length !== keysB.length) return false;
       for (const key of keysA) {
-        if (!deepEqual(
-          (a as Record<string, unknown>)[key],
-          (b as Record<string, unknown>)[key]
-        )) {
+        if (!deepEqual((a as Record<string, unknown>)[key], (b as Record<string, unknown>)[key])) {
           return false;
         }
       }
@@ -82,5 +80,5 @@ export function useDeepMemo<T>(factory: () => T, deps: unknown[]): T {
     };
   }, []);
 
-  return previousResultRef.current as T;
+  return previousResultRef.current;
 }

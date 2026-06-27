@@ -1,12 +1,7 @@
 import { apiErrorMessage } from '@/helpers/errorExperience';
 import { classifyJobState, jobStatusMessage } from '@/helpers/runPayload';
 import type { JobStatus, OfficialContextCache } from '@/types';
-import {
-  firstPositiveNumber,
-  formatCount,
-  numberField,
-  resultNumberField,
-} from './formatters';
+import { firstPositiveNumber, formatCount, numberField, resultNumberField } from './formatters';
 import { readableBackendText } from './errorMessages';
 import { syncScanPageSummary, syncStageCode } from './syncStage';
 

@@ -42,9 +42,7 @@ export interface AppStateProviderProps {
  */
 export function AppStateProvider({ children }: AppStateProviderProps): JSX.Element {
   const appState = useAppState();
-  return (
-    <AppStateContext.Provider value={appState}>{children}</AppStateContext.Provider>
-  );
+  return <AppStateContext.Provider value={appState}>{children}</AppStateContext.Provider>;
 }
 
 /**

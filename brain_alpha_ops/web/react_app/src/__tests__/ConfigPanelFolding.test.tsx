@@ -68,7 +68,11 @@ const lcBase = (overrides: Record<string, unknown> = {}) => ({
 
 describe('CredentialsSection — cache-only folding', () => {
   it('hides credential inputs by default in cache-only mode', () => {
-    render(<CredentialsSection {...cacheProps({ temporaryConnectionOpen: false, showCredentialEditor: false })} />);
+    render(
+      <CredentialsSection
+        {...cacheProps({ temporaryConnectionOpen: false, showCredentialEditor: false })}
+      />
+    );
     expect(screen.queryByLabelText('账户邮箱')).toBeNull();
     expect(screen.queryByLabelText('密码')).toBeNull();
     expect(screen.queryByLabelText('Token')).toBeNull();
@@ -81,7 +85,11 @@ describe('CredentialsSection — cache-only folding', () => {
     const onOpen = vi.fn();
     render(
       <CredentialsSection
-        {...cacheProps({ temporaryConnectionOpen: false, showCredentialEditor: false, onOpenTemporaryConnection: onOpen })}
+        {...cacheProps({
+          temporaryConnectionOpen: false,
+          showCredentialEditor: false,
+          onOpenTemporaryConnection: onOpen,
+        })}
       />
     );
     fireEvent.click(screen.getByText('临时连接官方服务'));
@@ -112,7 +120,9 @@ describe('CredentialsSection — cache-only folding', () => {
 
   it('renders logout error when provided; disables logout button while loading', () => {
     const { rerender } = render(
-      <CredentialsSection {...cacheProps({ logoutApi: { loading: false, error: '退出失败：会话已过期' } })} />
+      <CredentialsSection
+        {...cacheProps({ logoutApi: { loading: false, error: '退出失败：会话已过期' } })}
+      />
     );
     expect(screen.getByText('退出失败：会话已过期')).toBeDefined();
 
@@ -132,11 +142,17 @@ describe('CredentialsSection — cache-only folding', () => {
 
   it('invokes onTestConnection when "测试 BRAIN 连接" is clicked; disables while loading', () => {
     const onTest = vi.fn();
-    const { rerender } = render(<CredentialsSection {...cacheProps({ onTestConnection: onTest })} />);
+    const { rerender } = render(
+      <CredentialsSection {...cacheProps({ onTestConnection: onTest })} />
+    );
     fireEvent.click(screen.getByText('测试 BRAIN 连接'));
     expect(onTest).toHaveBeenCalledTimes(1);
 
-    rerender(<CredentialsSection {...cacheProps({ connectionApi: { loading: true, error: null, data: null } })} />);
+    rerender(
+      <CredentialsSection
+        {...cacheProps({ connectionApi: { loading: true, error: null, data: null } })}
+      />
+    );
     const btn = screen.getByText('测试中...');
     expect(btn.closest('button')?.disabled).toBe(true);
   });
@@ -154,7 +170,9 @@ describe('CredentialsSection — non-cache mode', () => {
   });
 
   it('renders nothing when showCredentialEditor is false and not in cache-only mode', () => {
-    const { container } = render(<CredentialsSection {...baseProps({ showCredentialEditor: false })} />);
+    const { container } = render(
+      <CredentialsSection {...baseProps({ showCredentialEditor: false })} />
+    );
     // Should render nothing — no fieldset, no buttons.
     expect(container.querySelector('fieldset')).toBeNull();
     expect(screen.queryByLabelText('账户邮箱')).toBeNull();

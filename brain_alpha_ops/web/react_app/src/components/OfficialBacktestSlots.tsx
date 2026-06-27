@@ -14,7 +14,7 @@ interface Props {
 
 const POLL_INTERVAL_MS = 5000;
 
-export default function OfficialBacktestSlots({}: Props) {
+export default function OfficialBacktestSlots(_props: Props) {
   const { slots: slotsGlobal, refreshAll } = useGlobalData();
 
   const load = useCallback(async () => {
