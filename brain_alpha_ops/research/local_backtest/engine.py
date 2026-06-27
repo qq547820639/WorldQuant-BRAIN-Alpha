@@ -45,7 +45,7 @@ def _derive_supported_operators() -> set[str]:
         from brain_alpha_ops.data.capability_registry import get_registry
         registry_ops = get_registry().operators()
     except Exception as exc:  # pragma: no cover - defensive import guard
-        logger.debug("capability registry unavailable: %s", exc)
+        logger.debug("capability registry unavailable: %s", redact_error_message(exc))
 
     if not registry_ops:
         warnings.warn(

@@ -12,6 +12,8 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, TYPE_CHECKING
 
+from brain_alpha_ops.redaction import redact_error_message, redact_text
+
 if TYPE_CHECKING:
     from brain_alpha_ops.models import Candidate
 
@@ -178,7 +180,7 @@ class CandidateLifecycle:
             if target not in allowed:
                 logger.warning(
                     "Invalid lifecycle transition for %s: %s → %s",
-                    self.alpha_id, self._state.value, target.value,
+                    redact_text(self.alpha_id), self._state.value, target.value,
                 )
                 return False
             from_state = self._state
@@ -190,7 +192,7 @@ class CandidateLifecycle:
             self._state = target
             logger.info(
                 "Lifecycle %s: %s → %s (%s)",
-                self.alpha_id, record.from_state, record.to_state, reason,
+                redact_text(self.alpha_id), record.from_state, record.to_state, reason,
             )
         _write_lifecycle_audit(self.alpha_id, from_state.value, target.value, reason, context)
         return True
@@ -260,7 +262,7 @@ class LifecycleManager:
             raise TypeError("transition(alpha_id, target) requires a target state")
         lc = self.get(alpha_id)
         if lc is None:
-            logger.warning("No lifecycle registered for %s", alpha_id)
+            logger.warning("No lifecycle registered for %s", redact_text(alpha_id))
             return False
         return lc.transition(target, reason=reason)
 
@@ -347,4 +349,4 @@ def _write_lifecycle_audit(alpha_id: str, from_state: str, to_state: str,
             context=context,
         )
     except Exception as exc:  # noqa: BLE001 — audit must never break the pipeline
-        logger.debug("lifecycle audit write skipped: %s", exc)
+        logger.debug("lifecycle audit write skipped: %s", redact_error_message(exc))

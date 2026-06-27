@@ -209,7 +209,6 @@ export default function ConfigPanel({
         showCredentialEditor={showCredentialEditor}
         connectionApi={connectionApi}
         logoutApi={logoutApi}
-        validationError={validationError}
         connectionStatusText={connectionStatusText}
         hasSessionCredentials={hasSessionCredentials}
         onUpdateCredential={updateCredential}

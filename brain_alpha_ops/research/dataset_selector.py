@@ -6,6 +6,8 @@ import logging
 import random
 from typing import TYPE_CHECKING
 
+from brain_alpha_ops.redaction import redact_error_message
+
 if TYPE_CHECKING:
     from brain_alpha_ops.data import OfficialDataLoader
 
@@ -104,32 +106,32 @@ class DatasetSelector:
     def _build_category_index(self) -> None:
         """Build a category→fields index.
 
-        Prefers the BRAIN capability registry's ``field_category_index()``
-        so the index is derived from the same canonical source as operators
-        and other capabilities. Falls back to iterating loader fields
-        directly when the registry is unavailable (e.g. minimal test env).
+        Prefers the explicitly-provided loader's field category metadata.
+        Falls back to the BRAIN capability registry's ``field_category_index()``
+        when the loader has no category metadata or is unavailable.
         """
         self._category_index.clear()
-        registry_index = self._registry_field_category_index()
-        if registry_index:
-            self._category_index = {
-                cat: list(fields)
-                for cat, fields in registry_index.items()
-                if cat
-            }
-            return
-        # Fallback: iterate loader fields directly.
-        if self._loader is None:
-            return
-        try:
-            for field in self._loader.get_fields():
-                cat = str(getattr(field, "category", "") or "").lower().strip()
-                field_id = str(field.id).lower()
-                if cat and field_id:
-                    self._category_index.setdefault(cat, []).append(field_id)
-        except Exception as exc:
-            logger.exception("dataset_selector: unexpected error")
-            logger.warning("dataset selector category index unavailable", exc_info=True)
+        # Prefer the explicitly-provided loader's field metadata.
+        if self._loader is not None:
+            try:
+                for field in self._loader.get_fields():
+                    cat = str(getattr(field, "category", "") or "").lower().strip()
+                    field_id = str(field.id).lower()
+                    if cat and field_id:
+                        self._category_index.setdefault(cat, []).append(field_id)
+            except Exception:
+                logger.warning("dataset selector category index unavailable", exc_info=True)
+                return
+        # Fallback: use the capability registry's index when the loader
+        # has no category metadata.
+        if not self._category_index:
+            registry_index = self._registry_field_category_index()
+            if registry_index:
+                self._category_index = {
+                    cat: list(fields)
+                    for cat, fields in registry_index.items()
+                    if cat
+                }
 
     @staticmethod
     def _registry_field_category_index() -> dict[str, list[str]]:
@@ -142,7 +144,7 @@ class DatasetSelector:
             from brain_alpha_ops.data.capability_registry import get_registry
             return get_registry().field_category_index()
         except Exception as exc:  # pragma: no cover - defensive import guard
-            logger.debug("capability registry unavailable for category index: %s", exc)
+            logger.debug("capability registry unavailable for category index: %s", redact_error_message(exc))
             return {}
 
     def get_fields_by_category(self, category: str, dataset_id: str = "") -> list[str]:

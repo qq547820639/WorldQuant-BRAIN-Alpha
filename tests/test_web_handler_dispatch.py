@@ -1274,7 +1274,7 @@ def test_dispatch_post_starts_async_operation_jobs(monkeypatch):
     assert started[-1] == ("generate_candidates", "job_1", {"count": 3})
 
     monkeypatch.setattr(
-        "brain_alpha_ops.web_handler_dispatch._start_optimize_candidates_job",
+        "brain_alpha_ops.web.dispatch.post_routes.candidates._start_optimize_candidates_job",
         lambda opt_ctx, job_id, payload: optimized.append((opt_ctx, job_id, payload)),
     )
     optimize = _Handler(body={"candidates": [{"alpha_id": "a1"}], "max_mutations": 3})
@@ -1797,7 +1797,7 @@ def test_dispatch_post_does_not_inject_session_credentials_into_local_or_blocked
     ctx = dataclasses.replace(ctx, save_run_config_payload=save_config)
     monkeypatch.setattr("brain_alpha_ops.web_candidates.simulation.simulation_candidates_payload", preview)
     monkeypatch.setattr(
-        "brain_alpha_ops.web_handler_dispatch._start_optimize_candidates_job",
+        "brain_alpha_ops.web.dispatch.post_routes.candidates._start_optimize_candidates_job",
         lambda _ctx, _job_id, payload: captured.update({"optimize": dict(payload)}),
     )
 
@@ -2003,7 +2003,7 @@ def test_rate_limit_key_falls_back_to_client_address_without_session():
     handler._session_id_from_cookie = lambda: ""
     handler.client_address = ("10.0.0.1", 61234)
 
-    assert hasattr(handler, "_request") and handler.client_address.startswith("client:10.0.0.1")
+    assert _rate_limit_key(handler) == "client:10.0.0.1"
 
 
 def test_dispatch_post_can_cancel_sync_job():
@@ -2219,14 +2219,18 @@ def test_dispatch_get_wraps_route_exceptions_as_json_errors():
     handlers["broken"] = lambda _handler, _parsed, _ctx: (_ for _ in ()).throw(RuntimeError("boom"))
 
     handler = _Handler()
-    from brain_alpha_ops import web_handler_dispatch as dispatch_mod
-
-    original = dispatch_mod._GET_DISPATCH_HANDLERS
-    dispatch_mod._GET_DISPATCH_HANDLERS = handlers
+    # dispatch_get reads _GET_DISPATCH_HANDLERS from its __globals__ (the
+    # bridge module's __dict__ installed by _WebBridgeFinder), which is a
+    # different namespace than the real module that
+    # ``from brain_alpha_ops import web_handler_dispatch`` resolves to.
+    # Patch __globals__ directly so the override is observed by dispatch_get.
+    real_globals = dispatch_get.__globals__
+    original = real_globals["_GET_DISPATCH_HANDLERS"]
+    real_globals["_GET_DISPATCH_HANDLERS"] = handlers
     try:
         dispatch_get(handler, urlparse("/api/health"), ctx)
     finally:
-        dispatch_mod._GET_DISPATCH_HANDLERS = original
+        real_globals["_GET_DISPATCH_HANDLERS"] = original
 
     assert handler.json_calls[-1][1] in (500, 404, 400)
     assert handler.json_calls[-1][0]["error_code"] == "GET_ROUTE_ERROR"
@@ -2242,14 +2246,15 @@ def test_dispatch_post_wraps_route_exceptions_as_json_errors():
     handlers["broken"] = lambda _handler, _parsed, _ctx: (_ for _ in ()).throw(RuntimeError("boom"))
 
     handler = _Handler()
-    from brain_alpha_ops import web_handler_dispatch as dispatch_mod
-
-    original = dispatch_mod._POST_DISPATCH_HANDLERS
-    dispatch_mod._POST_DISPATCH_HANDLERS = handlers
+    # See test_dispatch_get_wraps_route_exceptions_as_json_errors for why we
+    # patch __globals__ directly instead of the bridge module attribute.
+    real_globals = dispatch_post.__globals__
+    original = real_globals["_POST_DISPATCH_HANDLERS"]
+    real_globals["_POST_DISPATCH_HANDLERS"] = handlers
     try:
         dispatch_post(handler, urlparse("/api/run"), ctx)
     finally:
-        dispatch_mod._POST_DISPATCH_HANDLERS = original
+        real_globals["_POST_DISPATCH_HANDLERS"] = original
 
     assert handler.json_calls[-1][1] in (500, 404, 400)
     assert handler.json_calls[-1][0]["error_code"] == "POST_ROUTE_ERROR"

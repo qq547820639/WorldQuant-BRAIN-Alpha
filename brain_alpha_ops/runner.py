@@ -7,8 +7,8 @@ from brain_alpha_ops.config import RunConfig, validate_run_config
 from brain_alpha_ops.research.pipeline import AlphaResearchPipeline
 
 
-def api_from_run_config(run_config: RunConfig):
-    validate_run_config(run_config)
+def api_from_run_config(run_config: RunConfig, *, allow_plaintext_credentials: bool = False):
+    validate_run_config(run_config, allow_plaintext_credentials=allow_plaintext_credentials)
     credentials = run_config.credentials.resolve()
     api = OfficialBrainAPI(run_config.ops.official_api, **credentials)
     api.set_market_scope(run_config.ops.settings)

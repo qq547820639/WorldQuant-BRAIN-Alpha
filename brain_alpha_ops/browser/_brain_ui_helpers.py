@@ -13,7 +13,18 @@ from brain_alpha_ops.redaction import redact_text
 LIVE_BROWSER_OPT_IN_ENV = "BRAIN_BROWSER_E2E_LIVE"
 _REAL_BRAIN_HOSTS = ("brain.worldquant.com", "platform.worldquantbrain.com")
 _COOKIE_PAIR_RE = re.compile(r"(?i)(\b(?:set-)?cookie\s*:\s*)([^;\n\r]+(?:;[^\n\r]*)?)")
-_COOKIE_VALUE_RE = re.compile(r"(?i)(\b\w+\s*=\s*)[^;\s]+")
+# Only redact values of *sensitive* cookie keys (session, csrf, token, auth,
+# password, secret).  Non-sensitive preferences like ``theme=light`` or
+# ``locale=en-US`` must be preserved so logs remain useful for debugging.
+_SENSITIVE_COOKIE_KEY = (
+    r"session|csrf|token|auth(?:entication|orization)?|password|passwd|"
+    r"secret|api[_-]?key|access[_-]?token|refresh[_-]?token|sid|jwt"
+)
+_COOKIE_VALUE_RE = re.compile(
+    r"(?i)(\b(?:"
+    + _SENSITIVE_COOKIE_KEY
+    + r")\s*=\s*)[^;\s]+"
+)
 _SENSITIVE_HTML_FIELD_RE = re.compile(
     r"(?is)(<(?:input|textarea)\b(?=[^>]*(?:type|name|id)\s*=\s*['\"]?"
     r"[^'\"\s>]*(?:password|token|secret|csrf|session|cookie|authorization|auth)"

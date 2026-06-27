@@ -277,6 +277,20 @@ def _real_check_batch(payload):
         check_batch_official_context_payload,
     )
 
-    # Resolve through globals so tests can monkeypatch web.load_run_config.
-    loader = _pkg()._load_run_config_injected or _load_run_config
+    # Resolution order (highest priority first):
+    #   1. ``web.load_run_config`` — honors test monkeypatches on the top-level
+    #      ``brain_alpha_ops.web`` module attribute.
+    #   2. ``_load_run_config_injected`` — production dependency injection.
+    #   3. ``_load_run_config`` — module-level import fallback.
+    import sys as _sys
+    web_mod = _sys.modules.get("brain_alpha_ops.web")
+    loader = None
+    if web_mod is not None:
+        patched = getattr(web_mod, "load_run_config", None)
+        if callable(patched):
+            loader = patched
+    if loader is None:
+        loader = _pkg()._load_run_config_injected
+    if not callable(loader):
+        loader = _load_run_config
     return check_batch_official_context_payload(payload, load_run_config=loader)

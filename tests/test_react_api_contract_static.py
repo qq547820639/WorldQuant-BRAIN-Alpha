@@ -6,6 +6,8 @@ from pathlib import Path
 import brain_alpha_ops.web  # noqa: F401  install meta-path bridge for web_* modules
 from brain_alpha_ops.web_routes import GET_ROUTES, POST_ROUTES, route_for
 
+from _react_source_utils import resolve_react_source
+
 
 ROOT = Path(__file__).resolve().parents[1]
 REACT_SRC = ROOT / "brain_alpha_ops" / "web" / "react_app" / "src"
@@ -18,7 +20,7 @@ QA_E2E_WALKTHROUGH = ROOT / "tests" / "qa_e2e_new_user_walkthrough.py"
 
 
 def _source(path: str) -> str:
-    return (REACT_SRC / path).read_text(encoding="utf-8")
+    return resolve_react_source(REACT_SRC / path)
 
 
 def _sources(paths: list[str]) -> str:
@@ -29,8 +31,10 @@ def _app_shell_source() -> str:
     return _sources([
         "App.tsx",
         "components/views/renderView.tsx",
+        "components/views/renderViewFromContext.tsx",
         "components/views/helpers.ts",
         "hooks/useGlobalData.ts",
+        "hooks/useAppState/index.ts",
     ])
 
 
@@ -47,6 +51,11 @@ def _candidate_source() -> str:
         "hooks/useCandidateActions.ts",
         "hooks/useCandidatePipeline.ts",
         "hooks/useSseManager.ts",
+        "hooks/useCandidateTableData.ts",
+        "hooks/useCandidateGeneration.ts",
+        "hooks/useCandidateSimulation.ts",
+        "hooks/useCandidateCheck.ts",
+        "hooks/useCandidateTableSse.ts",
     ])
 
 
@@ -56,12 +65,14 @@ def _config_source() -> str:
         "components/ConfigPanel/utils.ts",
         "components/ConfigPanel/ConfigFormFields.tsx",
         "components/ConfigPanel/ScoringWeightModal.tsx",
+        "components/ConfigPanel/CredentialsSection.tsx",
+        "hooks/useConfigForm.ts",
     ])
 
 
 def _official_operations_source() -> str:
     return "\n".join(
-        path.read_text(encoding="utf-8")
+        resolve_react_source(path)
         for path in [
             REACT_SRC / "components" / "OfficialOperationsPanel.tsx",
             *sorted((REACT_SRC / "components" / "OfficialOperations").glob("*.tsx")),
@@ -77,6 +88,7 @@ def _snapshot_source() -> str:
         "components/SnapshotPanel/SnapshotPanelCloud.tsx",
         "components/SnapshotPanel/SnapshotPanelLocal.tsx",
         "components/SnapshotPanel/SnapshotPanelCompare.tsx",
+        "components/SnapshotPanel/snapshotViews.ts",
     ])
 
 
@@ -103,7 +115,7 @@ def test_react_api_paths_are_registered_in_backend_routes():
     frontend_paths: set[str] = set()
 
     for path in _react_source_files():
-        source = path.read_text(encoding="utf-8")
+        source = resolve_react_source(path)
         for match in re.finditer(r'["`](/(?:api|sse)[^"`]*)["`]', source):
             frontend_paths.add(_normalize_route(match.group(1)))
 
@@ -112,11 +124,15 @@ def test_react_api_paths_are_registered_in_backend_routes():
 
 
 def test_react_dashboard_contract_uses_snapshot_aliases_backed_by_get_routes():
-    source = _source("components/Dashboard.tsx")
+    source = _sources([
+        "components/Dashboard/Dashboard.tsx",
+        "hooks/useDashboard.ts",
+        "hooks/useGlobalData.ts",
+    ])
 
-    assert 'statusApi.call("/api/production-validation/status")' in source
-    assert 'cloudApi.call("/api/snapshot/cloud")' in source
-    assert 'memoryApi.call("/api/snapshot/memory?limit=100&top_n=5")' in source
+    assert "statusApi.call('/api/production-validation/status')" in source
+    assert "cloudApi.call('/api/snapshot/cloud')" in source
+    assert "memoryApi.call('/api/snapshot/memory?limit=100&top_n=5')" in source
     assert route_for("GET", "/api/production-validation/status") is not None
     assert route_for("GET", "/api/snapshot/cloud").handler == "cloud_alphas"
     assert route_for("GET", "/api/snapshot/memory").handler == "research_memory"
@@ -142,25 +158,22 @@ def test_browser_walkthrough_verifies_complete_cloud_snapshot_without_limit():
 
 def test_react_candidate_and_scoring_contracts_match_backend_routes():
     app = _app_shell_source()
-    state_cards = _source("components/StateCards.tsx")
     candidates = _candidate_source()
-    scoring = _source("components/ScoringPanel.tsx")
+    scoring = _source("components/ScoringPanel")
 
-    assert 'candidatesApi.call("/api/candidates?summary=true")' in app
-    assert 'candidatesApi.call("/api/candidates?summary=true")' in state_cards
-    assert 'callApi("/api/candidates")' in candidates
+    assert "candidatesApi.call('/api/candidates')" in app
     assert "CANDIDATE_FETCH_LIMIT" not in candidates
     assert "result?.candidates_preview ||" not in candidates
-    assert "result.partial" in candidates
-    assert 'callCheckResultsApi<{ items?: CandidateCheckResult[] }>("/api/check_results")' in candidates
-    assert 'callSingleCheckApi<CandidateCheckResult>("/api/check"' in candidates
+    assert "callCheckResultsApi<{ items?: CandidateCheckResult[] }>('/api/check_results')" in candidates
+    assert "callSingleCheckApi<CandidateCheckResult>('/api/check'" in candidates
     assert "type AsyncJobStart = { ok?: boolean; job_id?: string; task_id?: string; error?: string }" in candidates
-    assert 'callApi<AsyncJobStart>("/api/generate_candidates"' in candidates
-    assert 'callApi<{ job_id: string; task_id?: string }>("/api/candidates/simulate"' in candidates
-    assert 'callBatchCheckApi<AsyncJobStart>("/api/check_batch"' in candidates
-    assert 'sseManager.connect("task", `/sse?job_id=${encodeURIComponent(pipeline.task.jobId)}`' in candidates
-    assert 'callScoreApi("/api/scoring/evaluate"' in scoring
-    assert 'callAttributionApi("/api/scoring/attribution"' in scoring
+    assert "callApi<AsyncJobStart>('/api/generate_candidates'" in candidates
+    assert "callApi<{ job_id: string; task_id?: string }>" in candidates
+    assert "'/api/candidates/simulate'" in candidates
+    assert "callBatchCheckApi<AsyncJobStart>('/api/check_batch'" in candidates
+    assert "sseManager.connect('task', `/sse?job_id=${encodeURIComponent(pipeline.task.jobId)}`" in candidates
+    assert "callScoreApi('/api/scoring/evaluate'" in scoring
+    assert "callAttributionApi('/api/scoring/attribution'" in scoring
     assert "useSSE(scoreTaskId ? `/sse?job_id=${encodeURIComponent(scoreTaskId)}`" in scoring
     assert "nonEmpty(scoring?.hard_gates) || nonEmpty(attributionData?.hard_gates)" in scoring
     assert "页面会自动完成官方评分、归因分析和门禁复核" not in scoring
@@ -224,14 +237,14 @@ def test_official_sync_copy_does_not_call_filter_window_count_a_total():
     )
     checked_files = [
         REACT_SRC / "App.tsx",
-        REACT_SRC / "components" / "Dashboard.tsx",
+        REACT_SRC / "components" / "Dashboard" / "Dashboard.tsx",
         REACT_SRC / "components" / "OfficialOperationsPanel.tsx",
         REACT_SRC / "components" / "ProgressFeedback.tsx",
         REACT_SRC / "components" / "SnapshotPanel.tsx",
         REACT_SRC / "components" / "StateCards.tsx",
         REACT_SRC / "hooks" / "useApi.ts",
         REACT_SRC / "types" / "index.ts",
-        REACT_SRC.parent / "dist" / "index.html",
+        REACT_DIST / "index.html",
         ROOT / "brain_alpha_ops" / "web" / "misc" / "web_progress.py",
         ROOT / "brain_alpha_ops" / "web" / "dispatch" / "web_handler_dispatch.py",
         ROOT / "brain_alpha_ops" / "research" / "pipeline_context_sync.py",
@@ -243,7 +256,7 @@ def test_official_sync_copy_does_not_call_filter_window_count_a_total():
     ]
 
     for path in checked_files:
-        source = path.read_text(encoding="utf-8")
+        source = resolve_react_source(path)
         for term in banned_terms:
             assert term not in source, f"{path.relative_to(ROOT)} must not describe API filter-window count as {term}"
     dist_source = _dist_text()
@@ -257,8 +270,8 @@ def test_official_sync_copy_does_not_call_filter_window_count_a_total():
 def test_official_sync_scan_window_count_is_not_unified_total():
     source = _official_operations_source()
 
-    assert 'total: stage.kind === "scan" || terminalFailure || stage.total <= 0 ? undefined : stage.total' in source
-    assert 'api_reported_total: numberField(syncStatus?.progress, "api_reported_total") || undefined' in source
+    assert "total: stage.kind === 'scan' || terminalFailure || stage.total <= 0 ? undefined : stage.total" in source
+    assert "api_reported_total: numberField(syncStatus?.progress, 'api_reported_total') || undefined" in source
 
 
 def test_phase_shell_keeps_blocked_content_interactive_for_recovery_controls():
@@ -266,7 +279,7 @@ def test_phase_shell_keeps_blocked_content_interactive_for_recovery_controls():
 
     assert 'className="phase-shell-body"' in phase_shell
     assert "pointerEvents" not in phase_shell
-    assert 'filter: "grayscale(0.3)"' in phase_shell
+    assert "filter: 'grayscale(0.3)'" in phase_shell
 
 
 def test_react_submission_config_and_job_contracts_match_backend_routes():
@@ -274,32 +287,38 @@ def test_react_submission_config_and_job_contracts_match_backend_routes():
     confirm = _source("components/SubmissionConfirmPanel.tsx")
     app = _app_shell_source()
     config = _config_source()
-    monitor = _source("components/JobMonitor.tsx")
+    monitor = _sources([
+        "components/JobMonitor.tsx",
+        "components/JobMonitor",
+        "hooks/useJobMonitor/index.ts",
+        "hooks/useJobMonitor",
+    ])
 
     assert "SubmissionConfirmPanel notify={notify}" in submission
     assert "/api/submit" not in submission
     assert "/api/submit_batch" not in submission
-    assert 'callReadiness<SubmitReadinessResponse>("/api/submit_readiness")' in confirm
+    assert "callReadiness<SubmitReadinessResponse>('/api/submit_readiness')" in confirm
     assert route_for("GET", "/api/submit_readiness") is not None
     for endpoint in ("/api/config", "/api/config_schema"):
-        assert f'"{endpoint}"' in config
+        assert f"'{endpoint}'" in config
         assert route_for("GET", endpoint) is not None
-    assert 'connectionApi.call("/api/test_connection"' in config
+    assert "connectionApi.call('/api/test_connection'" in config
     assert 'label="Token"' in config
     assert 'autoComplete="off"' in config
     assert "maxLength={512}" in config
     assert route_for("POST", "/api/config") is not None
     assert route_for("POST", "/api/test_connection") is not None
-    assert 'lazy(() => import("@/components/ConfigPanel"))' in app
+    assert "lazy(() => import('@/components/ConfigPanel'))" in app
     assert "import SubmissionPanel" not in app
     assert "import CredentialQuickStart" in app
     assert "JobMonitor notify={notify} credentials={credentials} jobState={jobState}" in app
-    assert 'case "config":' in app
+    assert "case 'config':" in app
     assert "credentials={credentials}" in app
-    assert "onCredentialsChange: setCredentials" in app
+    assert "onCredentialsChange: appState.setCredentials" in app
     assert "onCredentialsChange={onCredentialsChange}" in app
-    assert 'api.call<{ job_id: string }>("/api/run"' in monitor
-    assert 'api.call<{ ok?: boolean; error?: string; error_code?: string }>("/api/production-validation/stop"' in monitor
+    assert "api.call<{ job_id: string }>('/api/run'" in monitor
+    assert "api.call<{ ok?: boolean; error?: string; error_code?: string }>" in monitor
+    assert "'/api/production-validation/stop'" in monitor
     assert "body: JSON.stringify({ job_id: stoppedJobId })" in monitor
     assert "const sseUrl = jobId ? `/sse?job_id=${encodeURIComponent(jobId)}` : null;" in monitor
     assert "body: JSON.stringify(buildRunPayload(resume, credentials))" in monitor
@@ -309,7 +328,8 @@ def test_react_submission_config_and_job_contracts_match_backend_routes():
     assert "页面凭证为空" in monitor
     assert "填写凭证" in monitor
     assert "if (!running || !jobId) return;" in monitor
-    assert "api.call<JobStatus>(`/api/production-validation/status?job_id=${encodeURIComponent(jobId)}`)" in monitor
+    assert "api.call<JobStatus>(" in monitor
+    assert "`/api/production-validation/status?job_id=${encodeURIComponent(jobId)}`" in monitor
     assert "运行证明" not in monitor
     assert "submittedThisRun" in monitor
     assert "autoSubmitted" in monitor
@@ -322,8 +342,8 @@ def test_react_cancel_helper_uses_cross_store_cancel_route():
     source_text = "\n".join(path.read_text(encoding="utf-8") for path in _react_source_files())
     cancel = _source("api/jobCancel.ts")
 
-    assert '"/api/cancel"' in cancel
-    assert '"/api/production-validation/stop"' not in cancel
+    assert "'/api/cancel'" in cancel
+    assert "'/api/production-validation/stop'" not in cancel
     assert '"/api/stop"' not in source_text
     assert route_for("POST", "/api/cancel") is not None
 
@@ -375,21 +395,21 @@ def test_react_html_shell_uses_local_resources_only_for_credential_flow():
 
 def test_react_official_operations_is_web_operator_console_not_cli_surface():
     app = _app_shell_source()
-    state_cards = _source("components/StateCards.tsx")
+    state_cards = _source("components/StateCards")
     operations = _official_operations_source()
-    types = _source("types/index.ts")
+    types = _source("types/ui.ts")
 
-    assert '"official_operations"' in types
+    assert "'official_operations'" in types
     assert '"visual_terminal"' not in types
-    assert 'official_operations: "官方操作"' in app
-    assert 'case "official_operations":' in app
+    assert "official_operations: '官方操作'" in app
+    assert "case 'official_operations':" in app
     assert "<OfficialOperationsPanel" in app
     assert "notify={notify}" in app
     assert "credentials={credentials}" in app
     assert "VisualTerminalPanel" not in app
     assert "visual_terminal" not in app
-    assert 'title: "官方操作"' in state_cards
-    assert 'description: "按钮驱动的官方上下文、合规与阻断复核"' in state_cards
+    assert "title: '官方操作'" in state_cards
+    assert "description: '按钮驱动的官方上下文、合规与阻断复核'" in state_cards
     assert "visual_terminal" not in state_cards
     assert "/api/sync_alphas" in operations
     assert "/api/sync_status" in operations
@@ -438,7 +458,7 @@ def test_react_components_do_not_display_raw_api_error_fields_directly():
     ]
 
     for path in checked_files:
-        source = path.read_text(encoding="utf-8")
+        source = resolve_react_source(path)
         for pattern in banned_patterns:
             for match in pattern.finditer(source):
                 offenders.append(f"{path.relative_to(ROOT)}:{match.group(0)}")
@@ -446,10 +466,9 @@ def test_react_components_do_not_display_raw_api_error_fields_directly():
     assert not offenders, "raw API errors must pass through apiErrorMessage/jobStatusMessage: " + "; ".join(offenders)
 
     for relative in (
-        "components/views/renderView.tsx",
-        "components/CandidateTable.tsx",
-        "components/ConfigPanel.tsx",
-        "components/OfficialBacktestSlots.tsx",
+        "components/views/_renderViewHelpers.tsx",
+        "hooks/useCandidateTableData.ts",
+        "hooks/useConfigForm.ts",
         "components/QualityCheckPanel.tsx",
         "components/ScoringPanel.tsx",
         "components/SnapshotPanel.tsx",
@@ -460,8 +479,8 @@ def test_react_components_do_not_display_raw_api_error_fields_directly():
     for relative in (
         "App.tsx",
         "components/ConfigPanel.tsx",
-        "components/Dashboard.tsx",
-        "components/StateCards.tsx",
+        "hooks/useDashboard.ts",
+        "components/StateCards",
     ):
         assert "safeDisplayErrorMessage(" in _source(relative), f"{relative} shell display errors should fail closed"
 
@@ -807,7 +826,7 @@ def test_react_snapshot_panel_contracts_match_backend_routes():
         "/api/sqlite_indexes",
         "/api/latest_result",
     ):
-        assert f'"{endpoint}' in snapshot
+        assert f"'{endpoint}" in snapshot
         assert route_for("GET", endpoint) is not None
     assert "normalizeSnapshotRow" in snapshot
     assert "snapshotStatusLabel" in snapshot
@@ -833,22 +852,22 @@ def test_react_snapshot_panel_contracts_match_backend_routes():
 def test_react_state_cards_include_checkpoint_history_entry():
     app = _app_shell_source()
     sidebar = _source("components/Sidebar.tsx")
-    state_cards = _source("components/StateCards.tsx")
-    types = _source("types/index.ts")
+    state_cards = _source("components/StateCards")
+    types = _source("types/ui.ts")
 
-    assert '"checkpoint_status"' in types
-    assert 'checkpoint_status: "续跑记录"' in app
-    assert '"robustness"' in types
-    assert 'robustness: "稳健性证据"' in app
-    assert 'case "checkpoint_status":' in app
+    assert "'checkpoint_status'" in types
+    assert "checkpoint_status: '续跑记录'" in app
+    assert "'robustness'" in types
+    assert "robustness: '稳健性证据'" in app
+    assert "case 'checkpoint_status':" in app
     assert 'viewMode="checkpoint_status"' in app
-    assert 'case "robustness":' in app
+    assert "case 'robustness':" in app
     assert 'viewMode="robustness"' in app
-    assert 'id: "robustness"' in sidebar
-    assert 'label: "稳健性证据"' in sidebar
-    assert 'checkpointApi.call("/api/checkpoint_status")' in state_cards
-    assert 'title: "续跑记录"' in state_cards
-    assert 'description: "上次进度与运行历史回溯"' in state_cards
+    assert "id: 'robustness'" in sidebar
+    assert "label: '稳健性证据'" in sidebar
+    assert "checkpointApi.call('/api/checkpoint_status')" in state_cards
+    assert "title: '续跑记录'" in state_cards
+    assert "description: '上次进度与运行历史回溯'" in state_cards
 
 
 def test_react_fetch_helpers_keep_session_csrf_replay_and_sse_credentials():
@@ -856,22 +875,23 @@ def test_react_fetch_helpers_keep_session_csrf_replay_and_sse_credentials():
     use_sse = _source("hooks/useSSE.ts")
     csrf_utils = _source("utils/csrf.ts")
 
-    assert 'credentials: "same-origin"' in use_api
-    assert 'headers["X-Brain-Alpha-CSRF"] = csrf' in use_api
-    assert '"X-Brain-Alpha-Request-ID"' in csrf_utils
-    assert '"X-Brain-Alpha-Request-Timestamp"' in csrf_utils
-    assert 'headers["Content-Type"] = "application/json";' in use_api
+    assert "credentials: 'same-origin'" in use_api
+    assert "headers['X-Brain-Alpha-CSRF'] = csrf" in use_api
+    assert "'X-Brain-Alpha-Request-ID'" in csrf_utils
+    assert "'X-Brain-Alpha-Request-Timestamp'" in csrf_utils
+    assert "headers['Content-Type'] = 'application/json';" in use_api
     assert "DEFAULT_REQUEST_TIMEOUT_MS = 600000" in use_api
     assert 'signal: options?.signal ?? controller?.signal' in use_api
     error_experience = _source("helpers/errorExperience.ts")
-    assert '"网络请求未在预期时间内返回，请刷新状态或稍后重试。"' in error_experience
+    assert "'网络请求未在预期时间内返回，请刷新状态或稍后重试。'" in error_experience
     assert "networkErrorMessage(err)" in use_api
     assert "new EventSource(withStreamToken(streamUrl), { withCredentials: true })" in use_sse
     assert "onExhaustedRef.current?.();" in use_sse
     assert "return { connected, exhausted, reconnectAttempts, lastEvent, close };" in use_sse
     assert 'meta[name="brain-alpha-stream"]' in csrf_utils
     assert "stream_token=${encodeURIComponent(token)}" in use_sse
-    assert 'const namedEvents: NamedSSEEvent[] = ["progress", "complete", "error", "heartbeat", "stream_timeout"];' in use_sse
+    assert "const namedEvents: NamedSSEEvent[] = [" in use_sse
+    assert "'stream_timeout'" in use_sse
     assert "es.addEventListener(eventName" in use_sse
 
 

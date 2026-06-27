@@ -17,6 +17,26 @@ MAX_INIT_SELF_ASSIGNMENTS = 5
 MIN_RUNTIME_STATE_FIELDS = 20
 
 
+def _resolve_pipeline_source(pipeline_path: Path) -> str:
+    """Return the Python source to analyse for the pipeline contract.
+
+    ``pipeline.py`` is a re-export shim after the P1-5 refactor; the actual
+    implementation lives in the ``pipeline/`` subpackage.  When the shim is
+    detected, aggregate every ``.py`` file in the subpackage so the AST
+    checks (class definition, ``__init__`` self-assignments, bind call)
+    operate on the real implementation.
+    """
+    pipeline_path = Path(pipeline_path)
+    source = pipeline_file_text = pipeline_path.read_text(encoding="utf-8")
+    subpackage = pipeline_path.with_suffix("")  # pipeline.py -> pipeline
+    if subpackage.is_dir():
+        parts: list[str] = [pipeline_file_text]
+        for child in sorted(subpackage.glob("*.py")):
+            parts.append(child.read_text(encoding="utf-8"))
+        return "\n\n".join(parts)
+    return source
+
+
 def check_pipeline_runtime_state(
     pipeline_path: str | Path = DEFAULT_PIPELINE,
     state_path: str | Path = DEFAULT_STATE,
@@ -25,7 +45,8 @@ def check_pipeline_runtime_state(
     state_file = Path(state_path)
     findings: list[dict[str, str]] = []
 
-    pipeline_tree = ast.parse(pipeline_file.read_text(encoding="utf-8"), filename=str(pipeline_file))
+    pipeline_source = _resolve_pipeline_source(pipeline_file)
+    pipeline_tree = ast.parse(pipeline_source, filename=str(pipeline_file))
     state_tree = ast.parse(state_file.read_text(encoding="utf-8"), filename=str(state_file))
 
     init_assignments = _init_self_assignments(pipeline_tree)

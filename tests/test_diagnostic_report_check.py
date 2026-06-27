@@ -1,6 +1,20 @@
+import json
+from pathlib import Path
+
 from brain_alpha_ops.config import RunConfig, write_run_config
 from brain_alpha_ops.production_diagnostics import build_diagnostic_snapshot, render_one_page_markdown
 from scripts.check_diagnostic_report import check_diagnostic_report
+
+
+def _write_official_datasets_cache(config) -> None:
+    """Write a minimal official_datasets.json cache so validate_run_config
+    recognises "pv1" as a valid BRAIN dataset short name."""
+    data_dir = Path(config.ops.storage_dir)
+    data_dir.mkdir(parents=True, exist_ok=True)
+    (data_dir / "official_datasets.json").write_text(
+        json.dumps([{"id": "pv1", "name": "Price Volume", "field_count": 1}]),
+        encoding="utf-8",
+    )
 
 
 def test_diagnostic_report_check_accepts_current_snapshot(tmp_path):
@@ -9,6 +23,7 @@ def test_diagnostic_report_check_accepts_current_snapshot(tmp_path):
     config.ops.settings.dataset = "pv1"
     config_path = tmp_path / "run_config.json"
     report_path = tmp_path / "diagnosis.md"
+    _write_official_datasets_cache(config)
     write_run_config(config, config_path)
     snapshot = build_diagnostic_snapshot(config_path)
     report_path.write_text(render_one_page_markdown(snapshot), encoding="utf-8")
@@ -25,6 +40,7 @@ def test_diagnostic_report_check_rejects_stale_counts(tmp_path):
     config.ops.settings.dataset = "pv1"
     config_path = tmp_path / "run_config.json"
     report_path = tmp_path / "diagnosis.md"
+    _write_official_datasets_cache(config)
     write_run_config(config, config_path)
     report_path.write_text("# Alpha Production Diagnosis and Gap Matrix\n\nOfficial context: fields=0, operators=0, datasets=0\n", encoding="utf-8")
 

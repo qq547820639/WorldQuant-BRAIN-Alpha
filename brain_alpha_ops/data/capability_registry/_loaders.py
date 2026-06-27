@@ -19,6 +19,7 @@ from brain_alpha_ops.data.capability_registry._types import (
     CapabilityKind,
     CapabilityRegistry,
 )
+from brain_alpha_ops.redaction import redact_error_message, redact_text
 
 logger = logging.getLogger("brain_alpha_ops.data.capability_registry._loaders")
 
@@ -44,7 +45,7 @@ def build_registry_from_official_context(data_dir: Path) -> CapabilityRegistry:
         path = root / filename
         rows = _read_json_list(path)
         if rows is None:
-            logger.warning("capability_registry: %s missing or unreadable", path)
+            logger.warning("capability_registry: %s missing or unreadable", redact_text(path))
             continue
         for row in rows:
             entry = _row_to_entry(row, kind, str(path))
@@ -64,7 +65,7 @@ def _read_json_list(path: Path) -> list[dict[str, Any]] | None:
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
-        logger.warning("capability_registry: failed to parse %s: %s", path, exc)
+        logger.warning("capability_registry: failed to parse %s: %s", redact_text(path), redact_error_message(exc))
         return None
     if not isinstance(payload, list):
         return None

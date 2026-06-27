@@ -149,9 +149,22 @@ def _install_facade_bindings() -> None:
         globals().update(namespace)
         from brain_alpha_ops.web.business import web_business as _business_handlers
         from brain_alpha_ops.web.business.web_business import (
+            _has_valid_api_session as _business_has_valid_api_session,
+            _has_valid_local_origin as _business_has_valid_local_origin,
             _persist_generated_candidates as _business_persist_generated_candidates,
+            _production_job_store as _business_production_job_store,
+            _real_attribution as _business_real_attribution,
             _real_check as _business_real_check,
+            _real_check_batch as _business_real_check_batch,
+            _real_connection as _business_real_connection,
+            _real_run as _business_real_run,
+            _real_score as _business_real_score,
+            _real_session as _business_real_session,
+            _real_stop as _business_real_stop,
             _real_submit as _business_real_submit,
+            _real_submit_batch as _business_real_submit_batch,
+            _real_sync as _business_real_sync,
+            _safe_non_submit_run_payload as _business_safe_non_submit_run_payload,
         )
 
         def _legacy_real_generate(payload):
@@ -160,10 +173,37 @@ def _install_facade_bindings() -> None:
             )
             return _business_handlers._real_generate(payload)
 
+        # Inject all production dependencies so the ``_real_*`` legacy handlers
+        # (``_real_run``, ``_real_check_batch``, ``_real_connection``, etc.)
+        # resolve to the real services rather than ``None``.  Tests that
+        # ``monkeypatch.setattr(web, "run_config_from_payload", ...)`` still
+        # work because each handler falls back to ``brain_alpha_ops.web``
+        # module globals when the injected callable is absent.
+        _business_handlers.inject_dependencies(
+            load_run_config=globals().get("load_run_config", _load_run_config),
+            run_config_from_payload=globals().get("run_config_from_payload"),
+            web_error=globals().get("web_error_payload") or globals().get("_web_error"),
+            submit_background_job=globals().get("_submit_background_job"),
+            job_registry=globals().get("JOB_REGISTRY"),
+        )
+
         globals()["_persist_generated_candidates"] = _business_persist_generated_candidates
+        globals()["_real_attribution"] = _business_real_attribution
         globals()["_real_check"] = _business_real_check
+        globals()["_real_check_batch"] = _business_real_check_batch
+        globals()["_real_connection"] = _business_real_connection
         globals()["_real_generate"] = _legacy_real_generate
+        globals()["_real_run"] = _business_real_run
+        globals()["_real_score"] = _business_real_score
+        globals()["_real_session"] = _business_real_session
+        globals()["_real_stop"] = _business_real_stop
         globals()["_real_submit"] = _business_real_submit
+        globals()["_real_submit_batch"] = _business_real_submit_batch
+        globals()["_real_sync"] = _business_real_sync
+        globals()["_safe_non_submit_run_payload"] = _business_safe_non_submit_run_payload
+        globals()["_production_job_store"] = _business_production_job_store
+        globals()["_has_valid_api_session"] = _business_has_valid_api_session
+        globals()["_has_valid_local_origin"] = _business_has_valid_local_origin
         globals()["_runtime_facade"] = _web_runtime_facade
         globals().update(_build_web_facade_bindings(globals()))
         globals()["_LEGACY_IMPORTED_EXPORTS"] = _build_legacy_imported_exports(globals())

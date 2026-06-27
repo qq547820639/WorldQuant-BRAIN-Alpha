@@ -36,7 +36,6 @@ const baseProps = (overrides: Record<string, unknown> = {}) => ({
   showCredentialEditor: true,
   connectionApi: { loading: false, error: null as string | null, data: null },
   logoutApi: { loading: false, error: null as string | null },
-  validationError: null as string | null,
   connectionStatusText: '请临时填写页面凭证',
   hasSessionCredentials: false,
   onUpdateCredential: vi.fn(),
@@ -179,10 +178,10 @@ describe('CredentialsSection — non-cache mode', () => {
     expect(screen.getByText('凭证已填写，尚未测试')).toBeDefined();
   });
 
-  it('disables test button when validationError is set', () => {
-    render(<CredentialsSection {...baseProps({ validationError: '账户邮箱格式不正确' })} />);
+  it('keeps test button enabled regardless of form validation state', () => {
+    render(<CredentialsSection {...baseProps()} />);
     const btn = screen.getByText('测试 BRAIN 连接');
-    expect(btn.closest('button')?.disabled).toBe(true);
+    expect(btn.closest('button')?.disabled).toBe(false);
   });
 });
 

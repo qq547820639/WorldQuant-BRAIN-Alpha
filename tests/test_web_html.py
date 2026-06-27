@@ -190,8 +190,8 @@ def test_react_dist_artifact_uses_csp_compatible_runtime_injection():
     assert 'type="text/babel"' not in html
     assert asset_paths
     assert re.search(r"/assets/index-[^\"']+\.js", html)
-    assert re.search(r"/assets/index-[^\"']+\.css", html)
-    assert 'credentials="same-origin"' in asset_text
+    assert re.search(r"/assets/[^\"']+\.css", html)
+    assert 'credentials:"same-origin"' in asset_text
     assert "X-Brain-Alpha-CSRF" in asset_text
     assert "X-Brain-Alpha-Request-ID" in asset_text
     assert "X-Brain-Alpha-Request-Timestamp" in asset_text

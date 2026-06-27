@@ -113,18 +113,18 @@ class BrainBrowserRunner:
         try:
             if context:
                 context.close()
-        except Exception:
-            pass
+        except Exception:  # noqa: BLE001
+            logger.debug("browser context close failed during cleanup", exc_info=True)
         try:
             if browser:
                 browser.close()
-        except Exception:
-            pass
+        except Exception:  # noqa: BLE001
+            logger.debug("browser close failed during cleanup", exc_info=True)
         try:
             if pw:
                 pw.stop()
-        except Exception:
-            pass
+        except Exception:  # noqa: BLE001
+            logger.debug("playwright stop failed during cleanup", exc_info=True)
 
     def _on_console(self, msg):
         text = _redact_text(msg.text)

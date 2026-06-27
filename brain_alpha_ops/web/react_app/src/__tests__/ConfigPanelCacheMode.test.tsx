@@ -57,7 +57,6 @@ function makeProps(
     showCredentialEditor: true,
     connectionApi: { loading: false, error: null, data: null },
     logoutApi: { loading: false, error: null },
-    validationError: null,
     connectionStatusText: '',
     hasSessionCredentials: false,
     onUpdateCredential: vi.fn(),

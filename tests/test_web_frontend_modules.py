@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import brain_alpha_ops.build_inline as build_inline
+from _react_source_utils import resolve_react_source
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -11,51 +12,296 @@ REACT_DIST = ROOT / "brain_alpha_ops" / "web" / "react_app" / "dist"
 
 REACT_CONTRACT_COVERAGE = {
     "App.tsx": "app shell router, sidebar navigation, credential quick-start, and detail view selection",
+    "__tests__/CandidatePoolState.test.tsx": "unit test: candidate pool state",
+    "__tests__/ConfigPanelCacheMode.test.tsx": "unit test: config panel cache mode",
+    "__tests__/ConfigPanelFolding.test.tsx": "unit test: config panel folding",
+    "__tests__/MobileInteractionBehavior.test.tsx": "unit test: mobile interaction behavior",
+    "__tests__/QualityGateInterception.test.tsx": "unit test: quality gate interception",
+    "__tests__/ScoringAttribution.test.tsx": "unit test: scoring attribution",
+    "__tests__/SimulationQueueState.test.tsx": "unit test: simulation queue state",
+    "__tests__/components_v3.test.tsx": "unit tests for PhaseShell, StepGuide, MobileTabBar, EmptyState components (v3.0)",
+    "__tests__/usePhaseState.test.ts": "unit tests for usePhaseState hook — phase transitions and step computation (v3.0)",
     "api/jobCancel.ts": "shared browser job cancellation helper using cross-store job cancel",
-    "main.tsx": "React root bootstrap",
+    "components/A11y/FocusTrap.tsx": "React component (a11y submodule): focus trap",
+    "components/A11y/LiveRegion.tsx": "React component (a11y submodule): live region",
+    "components/A11y/SkipLink.tsx": "React component (a11y submodule): skip link",
+    "components/A11y/VisuallyHidden.tsx": "React component (a11y submodule): visually hidden",
+    "components/A11y/index.ts": "React component (a11y submodule): index",
+    "components/ActionableError.tsx": "React component: actionable error",
+    "components/CandidateDetailPanel.tsx": "React component: candidate detail panel",
+    "components/CandidateRow.tsx": "React component: candidate row",
     "components/CandidateTable.tsx": "candidate generation, filters, queue views, and SSE completion",
+    "components/CandidateTable/CandidateTable.tsx": "React component (candidate table submodule): candidate table",
+    "components/CandidateTable/TaskSuccessBanner.tsx": "React component (candidate table submodule): task success banner",
+    "components/CandidateTable/detailPanelProps.ts": "React component (candidate table submodule): detail panel props",
+    "components/CandidateTable/useCandidateTableSse.ts": "React component (candidate table submodule): use candidate table sse",
+    "components/CandidateTableDesktop.tsx": "React component: candidate table desktop",
+    "components/CandidateTableLoading.tsx": "React component: candidate table loading",
+    "components/CandidateTableMobile.tsx": "React component: candidate table mobile",
+    "components/CandidateTablePagination.tsx": "React component: candidate table pagination",
+    "components/CandidateTableSubComponents.tsx": "React component: candidate table sub components",
+    "components/CandidateTableSubComponents/CandidateMobileCard.tsx": "React component (candidate table sub components submodule): candidate mobile card",
+    "components/CandidateTableSubComponents/EmptyState.tsx": "React component (candidate table sub components submodule): empty state",
+    "components/CandidateTableSubComponents/LifecycleReplayPanel.tsx": "React component (candidate table sub components submodule): lifecycle replay panel",
+    "components/CandidateTableSubComponents/QualitySummaryItem.tsx": "React component (candidate table sub components submodule): quality summary item",
+    "components/CandidateTableSubComponents/SortHeader.tsx": "React component (candidate table sub components submodule): sort header",
+    "components/CandidateTableSubComponents/types.ts": "React component (candidate table sub components submodule): types",
+    "components/CandidateTableSuccessBanner.tsx": "React component: candidate table success banner",
+    "components/CandidateTableToolbar.tsx": "React component: candidate table toolbar",
+    "components/CandidateTableToolbarFilterToolbar.tsx": "React component: candidate table toolbar filter toolbar",
+    "components/CandidateTableToolbarProductionControls.tsx": "React component: candidate table toolbar production controls",
+    "components/CandidateTableToolbarQualitySummaryBar.tsx": "React component: candidate table toolbar quality summary bar",
+    "components/CandidateTableToolbarTitleStats.tsx": "React component: candidate table toolbar title stats",
+    "components/CandidateTableUtils.ts": "React component: candidate table utils",
+    "components/CandidateTableUtils/base.ts": "React component (candidate table utils submodule): base",
+    "components/CandidateTableUtils/constants.ts": "React component (candidate table utils submodule): constants",
+    "components/CandidateTableUtils/formatters.ts": "React component (candidate table utils submodule): formatters",
+    "components/CandidateTableUtils/index.ts": "React component (candidate table utils submodule): index",
+    "components/CandidateTableUtils/lifecycle.ts": "React component (candidate table utils submodule): lifecycle",
+    "components/CandidateTableUtils/pool.ts": "React component (candidate table utils submodule): pool",
+    "components/CandidateTableUtils/quality.ts": "React component (candidate table utils submodule): quality",
+    "components/CandidateTableUtils/types.ts": "React component (candidate table utils submodule): types",
     "components/ConfigPanel.tsx": "session credentials, config hydration, schema options, validation, import/export, and save",
-    "components/Dashboard.tsx": "dashboard snapshots and landing metrics",
+    "components/ConfigPanel/AdvancedConfigGroup.tsx": "React component (config panel submodule): advanced config group",
+    "components/ConfigPanel/BasicConfigGroup.tsx": "React component (config panel submodule): basic config group",
+    "components/ConfigPanel/ConfigFormFields.tsx": "React component (config panel submodule): config form fields",
+    "components/ConfigPanel/CredentialsSection.tsx": "React component (config panel submodule): credentials section",
+    "components/ConfigPanel/LocalCacheConnectionSection.tsx": "React component (config panel submodule): local cache connection section",
+    "components/ConfigPanel/RunConfigSection.tsx": "React component (config panel submodule): run config section",
+    "components/ConfigPanel/ScoringConfigGroup.tsx": "React component (config panel submodule): scoring config group",
+    "components/ConfigPanel/ScoringWeightModal.tsx": "React component (config panel submodule): scoring weight modal",
+    "components/ConfigPanel/fieldHelp.tsx": "React component (config panel submodule): field help",
+    "components/ConfigPanel/utils.ts": "React component (config panel submodule): utils",
+    "components/ConfigPanel/utils/constants.ts": "React component (config panel submodule): constants",
+    "components/ConfigPanel/utils/formConverters.ts": "React component (config panel submodule): form converters",
+    "components/ConfigPanel/utils/helpers.ts": "React component (config panel submodule): helpers",
+    "components/ConfigPanel/utils/index.ts": "React component (config panel submodule): index",
+    "components/ConfigPanel/utils/types.ts": "React component (config panel submodule): types",
+    "components/ConfigPanel/utils/validation.ts": "React component (config panel submodule): validation",
+    "components/ConfirmDialog.tsx": "React component: confirm dialog",
+    "components/CredentialQuickStart.tsx": "React component: credential quick start",
+    "components/Dashboard/Dashboard.tsx": "dashboard snapshots and landing metrics",
+    "components/Dashboard/DashboardGuides.tsx": "React component (dashboard submodule): dashboard guides",
+    "components/Dashboard/DashboardNotices.tsx": "React component (dashboard submodule): dashboard notices",
+    "components/Dashboard/DashboardPanels.tsx": "React component (dashboard submodule): dashboard panels",
+    "components/Dashboard/index.ts": "React component (dashboard submodule): index",
+    "components/DashboardCloudSnapshot.tsx": "React component: dashboard cloud snapshot",
+    "components/DashboardReportModal.tsx": "React component: dashboard report modal",
+    "components/DashboardStepProgress.tsx": "React component: dashboard step progress",
+    "components/DashboardTrendData.tsx": "React component: dashboard trend data",
+    "components/EmptyState.tsx": "centered empty state with icon, title, description, CTA, and hint (v3.0)",
     "components/ErrorBoundary.tsx": "error boundary wrapper with fallback UI and retry recovery",
+    "components/ErrorCard.tsx": "React component: error card",
+    "components/ErrorState/ErrorState.tsx": "React component (error state submodule): error state",
+    "components/ErrorState/RetryButton.tsx": "React component (error state submodule): retry button",
+    "components/ErrorState/index.ts": "React component (error state submodule): index",
+    "components/FlowGuide.tsx": "React component: flow guide",
     "components/JobMonitor.tsx": "production job start/stop/status and SSE progress",
+    "components/JobMonitor/JobActions.tsx": "React component (job monitor submodule): job actions",
+    "components/JobMonitor/JobProgressBar.tsx": "React component (job monitor submodule): job progress bar",
+    "components/JobMonitor/JobStatusCard.tsx": "React component (job monitor submodule): job status card",
+    "components/JobMonitor/index.ts": "React component (job monitor submodule): index",
+    "components/KeyboardShortcutsHelp.tsx": "React component: keyboard shortcuts help",
     "components/KpiCard.tsx": "compact KPI presentation",
+    "components/LazyImage/LazyImage.tsx": "React component (lazy image submodule): lazy image",
+    "components/LazyImage/index.ts": "React component (lazy image submodule): index",
+    "components/LoadingProgress.tsx": "React component: loading progress",
+    "components/LoadingState/ButtonLoader.tsx": "React component (loading state submodule): button loader",
+    "components/LoadingState/PageLoader.tsx": "React component (loading state submodule): page loader",
+    "components/LoadingState/Skeleton.tsx": "React component (loading state submodule): skeleton",
+    "components/LoadingState/Spinner.tsx": "React component (loading state submodule): spinner",
+    "components/LoadingState/index.ts": "React component (loading state submodule): index",
+    "components/MobileTabBar.tsx": "bottom tab navigation for mobile with 4 phase tabs (v3.0)",
     "components/OfficialBacktestSlots.tsx": "official backtest slot polling and conflict guidance",
+    "components/OfficialOperations/ActionButtons.tsx": "React component (official operations submodule): action buttons",
+    "components/OfficialOperations/ActionPanel.tsx": "React component (official operations submodule): action panel",
+    "components/OfficialOperations/BlockerList.tsx": "React component (official operations submodule): blocker list",
+    "components/OfficialOperations/MetricsDisplay.tsx": "React component (official operations submodule): metrics display",
+    "components/OfficialOperations/OperationLog.tsx": "React component (official operations submodule): operation log",
+    "components/OfficialOperations/OperationMetric.tsx": "React component (official operations submodule): operation metric",
+    "components/OfficialOperations/OperationsLog.tsx": "React component (official operations submodule): operations log",
+    "components/OfficialOperations/OverviewCard.tsx": "React component (official operations submodule): overview card",
+    "components/OfficialOperations/SummaryMetric.tsx": "React component (official operations submodule): summary metric",
+    "components/OfficialOperations/SummarySections.tsx": "React component (official operations submodule): summary sections",
+    "components/OfficialOperations/SyncHistoryList.tsx": "React component (official operations submodule): sync history list",
+    "components/OfficialOperations/constants.ts": "React component (official operations submodule): constants",
+    "components/OfficialOperations/contextCache.ts": "React component (official operations submodule): context cache",
+    "components/OfficialOperations/errorMessages.ts": "React component (official operations submodule): error messages",
+    "components/OfficialOperations/formatters.ts": "React component (official operations submodule): formatters",
+    "components/OfficialOperations/index.ts": "React component (official operations submodule): index",
+    "components/OfficialOperations/operationProgress.ts": "React component (official operations submodule): operation progress",
+    "components/OfficialOperations/readiness.ts": "React component (official operations submodule): readiness",
+    "components/OfficialOperations/syncOverview.ts": "React component (official operations submodule): sync overview",
+    "components/OfficialOperations/syncProgress.ts": "React component (official operations submodule): sync progress",
+    "components/OfficialOperations/syncStage.ts": "React component (official operations submodule): sync stage",
+    "components/OfficialOperations/useOfficialOperations.ts": "React component (official operations submodule): use official operations",
+    "components/OfficialOperations/useOfficialOperationsState.ts": "React component (official operations submodule): use official operations state",
+    "components/OfficialOperations/useOperationLog.ts": "React component (official operations submodule): use operation log",
+    "components/OfficialOperations/useReadinessChecks.ts": "React component (official operations submodule): use readiness checks",
+    "components/OfficialOperations/useSyncOperations.ts": "React component (official operations submodule): use sync operations",
+    "components/OfficialOperations/useSyncRecovery.ts": "React component (official operations submodule): use sync recovery",
+    "components/OfficialOperations/useSyncStop.ts": "React component (official operations submodule): use sync stop",
+    "components/OfficialOperations/utils.ts": "React component (official operations submodule): utils",
     "components/OfficialOperationsPanel.tsx": "button-driven official context refresh, blocker review, and operation events",
+    "components/PhaseShell.tsx": "phase wrapper with header, step guide, and unlock condition (UI Design System v3.0)",
     "components/ProgressFeedback.tsx": "accessible progress, spinner, ETA, retry, and indeterminate states",
+    "components/ProgressFeedback/ProgressBar.tsx": "React component (progress feedback submodule): progress bar",
+    "components/ProgressFeedback/ProgressBody.tsx": "React component (progress feedback submodule): progress body",
+    "components/ProgressFeedback/ProgressFooter.tsx": "React component (progress feedback submodule): progress footer",
+    "components/ProgressFeedback/ProgressHeader.tsx": "React component (progress feedback submodule): progress header",
+    "components/ProgressFeedback/index.ts": "React component (progress feedback submodule): index",
+    "components/ProgressFeedback/progressUtils.ts": "React component (progress feedback submodule): progress utils",
     "components/QualityCheckPanel.tsx": "quality gate summary and readiness blockers",
+    "components/ResumeWork.tsx": "React component: resume work",
+    "components/ScoreBreakdown.tsx": "React component: score breakdown",
+    "components/ScoreBreakdown/ScoreBar.tsx": "React component (score breakdown submodule): score bar",
+    "components/ScoreBreakdown/ScoreDetails.tsx": "React component (score breakdown submodule): score details",
+    "components/ScoreBreakdown/ScoreHistory.tsx": "React component (score breakdown submodule): score history",
+    "components/ScoreBreakdown/index.ts": "React component (score breakdown submodule): index",
     "components/ScoringPanel.tsx": "score evaluation, attribution, and result presentation",
+    "components/ScoringPanel/AttributionTooltip.tsx": "React component (scoring panel submodule): attribution tooltip",
+    "components/ScoringPanel/AttributionTree.tsx": "React component (scoring panel submodule): attribution tree",
+    "components/ScoringPanel/GateDecisionStrip.tsx": "React component (scoring panel submodule): gate decision strip",
+    "components/ScoringPanel/GateResults.tsx": "React component (scoring panel submodule): gate results",
+    "components/ScoringPanel/Header.tsx": "React component (scoring panel submodule): header",
+    "components/ScoringPanel/ImprovementHints.tsx": "React component (scoring panel submodule): improvement hints",
+    "components/ScoringPanel/ScoreHistory.tsx": "React component (scoring panel submodule): score history",
+    "components/ScoringPanel/ScoringPanel.tsx": "React component (scoring panel submodule): scoring panel",
+    "components/ScoringPanel/utils.ts": "React component (scoring panel submodule): utils",
     "components/Sidebar.tsx": "persistent left sidebar navigation with badges (Terminal Precision v2.0)",
+    "components/Skeleton.tsx": "loading skeleton components for better UX (SkeletonText, SkeletonCard, SkeletonTable)",
     "components/SnapshotPanel.tsx": "cloud/checkpoint/research/history snapshots",
+    "components/SnapshotPanel/SnapshotDesktopTable.tsx": "React component (snapshot panel submodule): snapshot desktop table",
+    "components/SnapshotPanel/SnapshotMobileCard.tsx": "React component (snapshot panel submodule): snapshot mobile card",
+    "components/SnapshotPanel/SnapshotPanel.tsx": "React component (snapshot panel submodule): snapshot panel",
+    "components/SnapshotPanel/SnapshotPanelCloud.tsx": "React component (snapshot panel submodule): snapshot panel cloud",
+    "components/SnapshotPanel/SnapshotPanelCompare.tsx": "React component (snapshot panel submodule): snapshot panel compare",
+    "components/SnapshotPanel/SnapshotPanelLocal.tsx": "React component (snapshot panel submodule): snapshot panel local",
+    "components/SnapshotPanel/snapshotViews.ts": "React component (snapshot panel submodule): snapshot views",
+    "components/SnapshotPanel/utils.ts": "React component (snapshot panel submodule): utils",
     "components/StateCards.tsx": "card-first navigation and startup status loading (superseded by Sidebar)",
+    "components/StateCards/StateCardItem.tsx": "React component (state cards submodule): state card item",
+    "components/StateCards/StateCards.tsx": "React component (state cards submodule): state cards",
+    "components/StateCards/cardConfigs.ts": "React component (state cards submodule): card configs",
+    "components/StateCards/helpers.ts": "React component (state cards submodule): helpers",
+    "components/StateCards/metrics.ts": "React component (state cards submodule): metrics",
+    "components/StatusFlowDiagram.tsx": "submission readiness flow visualization showing checklist to submit flow (v3.0)",
+    "components/StepGuide.tsx": "horizontal step progress bar with complete/active/pending states (v3.0)",
+    "components/SubmissionChecklist.tsx": "React component: submission checklist",
     "components/SubmissionConfirmPanel.tsx": "read-only pre-submit blocker review",
+    "components/SubmissionGates/BlockerAction.tsx": "React component (submission gates submodule): blocker action",
+    "components/SubmissionGates/SubmissionGates.tsx": "React component (submission gates submodule): submission gates",
+    "components/SubmissionGates/SubmissionMetrics.tsx": "React component (submission gates submodule): submission metrics",
+    "components/SubmissionGates/constants.ts": "React component (submission gates submodule): constants",
+    "components/SubmissionGates/index.ts": "React component (submission gates submodule): index",
+    "components/SubmissionGates/utils.ts": "React component (submission gates submodule): utils",
+    "components/SubmissionGuidance.tsx": "React component: submission guidance",
     "components/SubmissionPanel.tsx": "retired submit compatibility wrapper for read-only readiness review",
+    "components/ThemeProvider.tsx": "React component: theme provider",
+    "components/Toast.tsx": "React component: toast",
     "components/ToastContainer.tsx": "toast roles, actions, and dismissal",
+    "components/Tooltip.tsx": "React component: tooltip",
+    "components/TrendPanel.tsx": "React component: trend panel",
+    "components/VirtualList/VirtualList.tsx": "React component (virtual list submodule): virtual list",
+    "components/VirtualList/index.ts": "React component (virtual list submodule): index",
+    "components/useCandidateColumns.tsx": "React component: use candidate columns",
+    "components/views/_renderViewHelpers.tsx": "React component (views submodule): render view helpers",
+    "components/views/helpers.ts": "React component (views submodule): helpers",
+    "components/views/renderView.tsx": "React component (views submodule): render view",
+    "components/views/renderViewFromContext.tsx": "React component (views submodule): render view from context",
+    "helpers/connectionErrorGuide.ts": "helper module: connection error guide",
     "helpers/errorExperience.ts": "backend user-error payload to user-facing message mapping",
     "helpers/readinessLabels.ts": "official readiness and blocker reason labels shared across review panels",
     "helpers/runPayload.ts": "prod validation run payload builder (Terminal Precision v2.0)",
+    "helpers/runPayload/classify.ts": "helper (run payload submodule): classify",
+    "helpers/runPayload/constants.ts": "helper (run payload submodule): constants",
+    "helpers/runPayload/events.ts": "helper (run payload submodule): events",
+    "helpers/runPayload/index.ts": "helper (run payload submodule): index",
+    "helpers/runPayload/internalHelpers.ts": "helper (run payload submodule): internal helpers",
+    "helpers/runPayload/run.ts": "helper (run payload submodule): run",
+    "helpers/runPayload/types.ts": "helper (run payload submodule): types",
     "hooks/useApi.ts": "CSRF, replay headers, same-origin credentials, and error mapping",
+    "hooks/useAppState.ts": "React hook: use app state",
+    "hooks/useAppState/AppStateContext.tsx": "React hook (use app state submodule): app state context",
+    "hooks/useAppState/index.ts": "React hook (use app state submodule): index",
+    "hooks/useAppState/stateContract.ts": "React hook (use app state submodule): state contract",
+    "hooks/useAppState/types.ts": "React hook (use app state submodule): types",
+    "hooks/useAppState/useBaseState.ts": "React hook (use app state submodule): use base state",
+    "hooks/useAppState/useErrorNotifications.ts": "React hook (use app state submodule): use error notifications",
+    "hooks/useAppState/useHandlers.ts": "React hook (use app state submodule): use handlers",
+    "hooks/useAppState/usePhaseConnection.ts": "React hook (use app state submodule): use phase connection",
+    "hooks/useAppState/usePhaseManagement.ts": "React hook (use app state submodule): use phase management",
+    "hooks/useCandidateActions.ts": "React hook: use candidate actions",
+    "hooks/useCandidateCheck.ts": "React hook: use candidate check",
+    "hooks/useCandidateGeneration.ts": "React hook: use candidate generation",
+    "hooks/useCandidateOptimization.ts": "React hook: use candidate optimization",
+    "hooks/useCandidatePipeline.ts": "React hook: use candidate pipeline",
+    "hooks/useCandidateSSEHandlers.ts": "React hook: use candidate s s e handlers",
+    "hooks/useCandidateSimulation.ts": "React hook: use candidate simulation",
+    "hooks/useCandidateTableData.ts": "React hook: use candidate table data",
+    "hooks/useCandidateTableSse.ts": "React hook: use candidate table sse",
+    "hooks/useCandidateTableState.ts": "React hook: use candidate table state",
+    "hooks/useConfigForm.ts": "React hook: use config form",
+    "hooks/useConfirm.tsx": "React hook: use confirm",
+    "hooks/useDashboard.ts": "React hook: use dashboard",
+    "hooks/useDebounce.ts": "React hook: use debounce",
+    "hooks/useFormValidation.ts": "React hook: use form validation",
+    "hooks/useGlobalData.ts": "React hook: use global data",
+    "hooks/useIntersectionObserver.ts": "React hook: use intersection observer",
+    "hooks/useJobDisconnectedState.ts": "React hook: use job disconnected state",
+    "hooks/useJobLifecycle.ts": "React hook: use job lifecycle",
+    "hooks/useJobMonitor.ts": "React hook: use job monitor",
+    "hooks/useJobMonitor/constants.ts": "React hook (use job monitor submodule): constants",
+    "hooks/useJobMonitor/index.ts": "React hook (use job monitor submodule): index",
+    "hooks/useJobMonitor/types.ts": "React hook (use job monitor submodule): types",
+    "hooks/useJobMonitor/useJobCancellation.ts": "React hook (use job monitor submodule): use job cancellation",
+    "hooks/useJobMonitor/useJobControl.ts": "React hook (use job monitor submodule): use job control",
+    "hooks/useJobMonitor/useSseEventHandler.ts": "React hook (use job monitor submodule): use sse event handler",
+    "hooks/useJobMonitor/useSseRetryState.ts": "React hook (use job monitor submodule): use sse retry state",
+    "hooks/useJobMonitor/useStatusWatchdog.ts": "React hook (use job monitor submodule): use status watchdog",
+    "hooks/useJobNotifications.ts": "React hook: use job notifications",
+    "hooks/useJobRecovery.ts": "React hook: use job recovery",
+    "hooks/useJobSseConnection.ts": "React hook: use job sse connection",
     "hooks/useJobState.ts": "job state lifecycle management (Terminal Precision v2.0)",
+    "hooks/useJobStatusHook.ts": "React hook: use job status hook",
+    "hooks/useJobWatchdog.ts": "React hook: use job watchdog",
+    "hooks/useKeyboardShortcuts.ts": "global keyboard shortcuts and KeyboardShortcutsHelp modal",
+    "hooks/useLoadingState.ts": "React hook: use loading state",
+    "hooks/useMediaQuery.ts": "React hook: use media query",
+    "hooks/useMemoCompare.ts": "React hook: use memo compare",
+    "hooks/useNetworkError.ts": "React hook: use network error",
+    "hooks/useOperationState.ts": "React hook: use operation state",
+    "hooks/usePagination.ts": "React hook: use pagination",
+    "hooks/usePhaseState.ts": "phase navigation state management with phase determination and step computation (v3.0)",
+    "hooks/useProgressFeedback.ts": "React hook: use progress feedback",
     "hooks/useSSE.ts": "stream token, credentials, reconnect, and close semantics",
+    "hooks/useSorting.ts": "React hook: use sorting",
+    "hooks/useSseManager.ts": "React hook: use sse manager",
+    "hooks/useTheme.ts": "React hook: use theme",
+    "hooks/useThrottle.ts": "React hook: use throttle",
     "hooks/useToast.ts": "toast lifecycle state",
+    "main.tsx": "React root bootstrap",
+    "types/api.ts": "TypeScript type definitions: api",
+    "types/candidate.ts": "TypeScript type definitions: candidate",
+    "types/cloud.ts": "TypeScript type definitions: cloud",
+    "types/config.ts": "TypeScript type definitions: config",
+    "types/errors.ts": "TypeScript type definitions: errors",
     "types/index.ts": "shared API, progress, candidate, and card view contracts",
+    "types/scoring.ts": "TypeScript type definitions: scoring",
+    "types/ui.ts": "TypeScript type definitions: ui",
     "utils/backtestSlots.ts": "official backtest slot status and count helpers",
     "utils/csrf.ts": "CSRF token, stream token, and request-ID generation helpers",
+    "utils/debounce.ts": "utility helper: debounce",
+    "utils/errorHandler.ts": "utility helper: error handler",
     "utils/reportIgnoredError.ts": "development-only diagnostics for intentionally ignored browser errors",
-    "components/PhaseShell.tsx": "phase wrapper with header, step guide, and unlock condition (UI Design System v3.0)",
-    "components/StepGuide.tsx": "horizontal step progress bar with complete/active/pending states (v3.0)",
-    "components/MobileTabBar.tsx": "bottom tab navigation for mobile with 4 phase tabs (v3.0)",
-    "components/EmptyState.tsx": "centered empty state with icon, title, description, CTA, and hint (v3.0)",
-    "hooks/usePhaseState.ts": "phase navigation state management with phase determination and step computation (v3.0)",
-    "components/StatusFlowDiagram.tsx": "submission readiness flow visualization showing checklist to submit flow (v3.0)",
-    "__tests__/components_v3.test.tsx": "unit tests for PhaseShell, StepGuide, MobileTabBar, EmptyState components (v3.0)",
-    "__tests__/usePhaseState.test.ts": "unit tests for usePhaseState hook — phase transitions and step computation (v3.0)",
-    "components/Skeleton.tsx": "loading skeleton components for better UX (SkeletonText, SkeletonCard, SkeletonTable)",
-    "hooks/useKeyboardShortcuts.ts": "global keyboard shortcuts and KeyboardShortcutsHelp modal",
+    "utils/resumeState.ts": "utility helper: resume state",
+    "utils/starredCandidates.ts": "utility helper: starred candidates",
+    "vite-env.d.ts": "source module: vite env d",
 }
 
 
 def _source(relative: str) -> str:
-    return (REACT_SRC / relative).read_text(encoding="utf-8")
+    return resolve_react_source(REACT_SRC / relative)
 
 
 def _assert_snippets(source: str, snippets: list[str]) -> None:
@@ -82,7 +328,16 @@ def test_every_frontend_module_has_a_contract_test_entry():
 
 def test_frontend_runtime_modules_render_state_and_interaction_contracts():
     candidate = _source("components/CandidateTable.tsx")
+    candidate_state = _source("hooks/useCandidateTableState.ts")
+    candidate_data = _source("hooks/useCandidateTableData.ts")
+    candidate_generation = _source("hooks/useCandidateGeneration.ts")
+    candidate_sse = _source("hooks/useCandidateTableSse.ts")
+    candidate_desktop = _source("components/CandidateTableDesktop.tsx")
+    candidate_filter = _source("components/CandidateTableToolbarFilterToolbar.tsx")
+    candidate_sort_header = _source("components/CandidateTableSubComponents/SortHeader.tsx")
+    candidate_utils = _source("components/CandidateTableUtils")
     official = _source("components/OfficialOperationsPanel.tsx")
+    official_subdir = _source("components/OfficialOperations")
     submission = _source("components/SubmissionPanel.tsx")
     confirm = _source("components/SubmissionConfirmPanel.tsx")
     quality = _source("components/QualityCheckPanel.tsx")
@@ -98,14 +353,21 @@ def test_frontend_runtime_modules_render_state_and_interaction_contracts():
     csrf_utils = _source("utils/csrf.ts")
 
     _assert_snippets(
-        candidate,
+        candidate
+        + candidate_state
+        + candidate_data
+        + candidate_generation
+        + candidate_sse
+        + candidate_desktop
+        + candidate_filter
+        + candidate_sort_header
+        + candidate_utils,
         [
-            "const PAGE_SIZE = 20;",
-            "candidateMatchesQueueView(candidate, viewMode, checkResults)",
+            "export const PAGE_SIZE = 20;",
+            "candidateMatchesQueueView(c, viewMode, checkResults)",
             "sanitizeTextInput(value, MAX_FILTER_LENGTH)",
             "const rows = result?.candidates || [];",
-            "result.partial",
-            'useSSE(taskId ? `/sse?job_id=${encodeURIComponent(taskId)}` : null',
+            "sseManager.connect('task', `/sse?job_id=${encodeURIComponent(pipeline.task.jobId)}`",
             'aria-label="过滤候选"',
             'aria-label="候选结果"',
             'scope="col"',
@@ -125,9 +387,9 @@ def test_frontend_runtime_modules_render_state_and_interaction_contracts():
     )
     assert "/api/submit" not in submission
     assert "/api/submit_batch" not in submission
-    assert 'callReadiness<SubmitReadinessResponse>("/api/submit_readiness")' in confirm
+    assert "callReadiness<SubmitReadinessResponse>('/api/submit_readiness')" in confirm
     _assert_snippets(
-        official,
+        official + official_subdir,
         [
             'readinessProductionGapLabel',
             "rows={allReadinessBlockers.map(reasonCountText)}",
@@ -139,35 +401,45 @@ def test_frontend_runtime_modules_render_state_and_interaction_contracts():
         ],
     )
     _assert_snippets(
-        official + confirm + quality + slots + readiness_labels,
+        official + official_subdir + confirm + quality + slots + readiness_labels,
         [
             "readinessReasonLabel(",
             "readinessProductionGapLabel(",
             "存在未分类生产缺口",
-            'missing_scientific_audit: "缺少科学审计证据"',
-            'scientific_audit_submit_boundary_breached: "科学审计提交边界异常"',
-            'latest_candidate_scientific_audit_test_feedback_used: "最新候选科学审计含测试反馈"',
-            'incomplete_scientific_audit: "科学审计证据不完整"',
+            "missing_scientific_audit: '缺少科学审计证据'",
+            "scientific_audit_submit_boundary_breached: '科学审计提交边界异常'",
+            "latest_candidate_scientific_audit_test_feedback_used: '最新候选科学审计含测试反馈'",
+            "incomplete_scientific_audit: '科学审计证据不完整'",
         ],
     )
     _assert_snippets(
-        progress + use_api + use_sse + csrf_utils,
+        progress
+        + _source("components/ProgressFeedback")
+        + _source("hooks/useProgressFeedback.ts")
+        + use_api
+        + use_sse
+        + csrf_utils,
         [
             'role="progressbar"',
             "normalizedPercent(progress, progressState)",
-            'credentials: "same-origin"',
-            'headers["X-Brain-Alpha-CSRF"] = csrf',
-            '"X-Brain-Alpha-Request-ID"',
+            "credentials: 'same-origin'",
+            "headers['X-Brain-Alpha-CSRF'] = csrf",
+            "'X-Brain-Alpha-Request-ID'",
             "new EventSource(withStreamToken(streamUrl), { withCredentials: true })",
             "onExhaustedRef.current?.();",
             "stream_token=${encodeURIComponent(token)}",
         ],
     )
     _assert_snippets(
-        run_payload + candidate + scoring + job_monitor + use_job_state,
+        run_payload
+        + candidate
+        + scoring
+        + job_monitor
+        + use_job_state
+        + _source("hooks/useJobMonitor/useSseEventHandler.ts"),
         [
             "export function resolveJobEventState(",
-            'import { resolveJobEventState } from "@/helpers/runPayload";',
+            "import { resolveJobEventState } from '@/helpers/runPayload';",
             "resolveJobEventState(event, progress",
             "resolveJobEventState(event, event.progress || event.data",
         ],
@@ -435,17 +707,34 @@ def test_browser_react_smoke_requires_non_submit_state_error_assertions():
 def test_app_ux_orchestrator_has_tested_navigation_empty_and_busy_contracts():
     app = _source("App.tsx")
     state_cards = _source("components/StateCards.tsx")
+    card_configs = _source("components/StateCards/cardConfigs.ts")
+    state_card_item = _source("components/StateCards/StateCardItem.tsx")
+    base_state = _source("hooks/useAppState/useBaseState.ts")
+    handlers = _source("hooks/useAppState/useHandlers.ts")
+    render_view = _source("components/views/renderView.tsx")
     job_monitor = _source("components/JobMonitor.tsx")
+    job_status_card = _source("components/JobMonitor/JobStatusCard.tsx")
+    use_job_control = _source("hooks/useJobMonitor/useJobControl.ts")
     confirm = _source("components/SubmissionConfirmPanel.tsx")
+    submission_gates = _source("components/SubmissionGates")
 
     _assert_snippets(
-        app + state_cards + job_monitor,
+        app
+        + state_cards
+        + card_configs
+        + state_card_item
+        + base_state
+        + handlers
+        + render_view
+        + job_monitor
+        + job_status_card
+        + use_job_control,
         [
-            'useState<CardViewId>("dashboard")',
+            "useState<CardViewId>('dashboard')",
             "Sidebar",
             "setActiveView(view)",
             'aria-label="切换导航菜单"',
-            'import Sidebar from "@/components/Sidebar"',
+            "import Sidebar from '@/components/Sidebar'",
             "BRAIN Alpha Ops",
             "未填写页面凭证",
             "非提交生产验证",
@@ -457,7 +746,7 @@ def test_app_ux_orchestrator_has_tested_navigation_empty_and_busy_contracts():
             'role="alert"',
             'aria-live="assertive"',
             "ProgressFeedback",
-            'phase: "state_cards_load"',
+            "phase: 'state_cards_load'",
         ],
     )
     for view_id in (
@@ -472,13 +761,13 @@ def test_app_ux_orchestrator_has_tested_navigation_empty_and_busy_contracts():
         "config",
         "cloud",
     ):
-        assert f'id: "{view_id}"' in state_cards
-        assert f'case "{view_id}":' in app
+        assert f"id: '{view_id}'" in card_configs
+        assert f"case '{view_id}':" in render_view
 
     _assert_snippets(
-        confirm,
+        confirm + submission_gates,
         [
-            'callReadiness<SubmitReadinessResponse>("/api/submit_readiness")',
+            "callReadiness<SubmitReadinessResponse>('/api/submit_readiness')",
             "ready_to_submit",
             "official_api_called",
             "production_gaps",
@@ -486,13 +775,17 @@ def test_app_ux_orchestrator_has_tested_navigation_empty_and_busy_contracts():
             "暂无通过预提交检查的 Alpha",
         ],
     )
-    assert '"/api/submit"' not in confirm
+    assert "'/api/submit'" not in confirm
 
 
 def test_ux_styles_cover_interaction_feedback_and_responsive_layout():
-    css = _source("index.css")
+    css = _source("styles")
     app = _source("App.tsx")
     candidate = _source("components/CandidateTable.tsx")
+    candidate_toolbar_controls = _source(
+        "components/CandidateTableToolbarProductionControls.tsx"
+    )
+    candidate_toolbar_filter = _source("components/CandidateTableToolbarFilterToolbar.tsx")
     config = _source("components/ConfigPanel.tsx")
     toast = _source("components/ToastContainer.tsx")
 
@@ -513,7 +806,13 @@ def test_ux_styles_cover_interaction_feedback_and_responsive_layout():
         ],
     )
     _assert_snippets(
-        css + app + candidate + config + toast,
+        css
+        + app
+        + candidate
+        + candidate_toolbar_controls
+        + candidate_toolbar_filter
+        + config
+        + toast,
         [
             "app-shell",
             "app-main",

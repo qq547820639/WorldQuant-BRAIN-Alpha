@@ -12,8 +12,8 @@ function getInitialTheme(): Theme {
     if (stored === 'light' || stored === 'dark') {
       return stored;
     }
-  } catch {
-    // ignore
+  } catch (e) {
+    console.warn('theme storage unavailable', e);
   }
 
   const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
@@ -29,8 +29,8 @@ export function useTheme() {
 
     try {
       localStorage.setItem(THEME_STORAGE_KEY, theme);
-    } catch {
-      // ignore
+    } catch (e) {
+      console.warn('theme storage unavailable', e);
     }
   }, [theme]);
 
@@ -43,8 +43,8 @@ export function useTheme() {
         if (stored === 'light' || stored === 'dark') {
           return;
         }
-      } catch {
-        // ignore
+      } catch (err) {
+        console.warn('theme storage unavailable', err);
       }
       setThemeState(e.matches ? 'dark' : 'light');
     };

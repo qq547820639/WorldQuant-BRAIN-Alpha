@@ -26,7 +26,12 @@ def test_alpha_research_pipeline_owns_runtime_state_container(tmp_path):
     pipeline = AlphaResearchPipeline(config=config, api=_NoopAPI())
 
     assert isinstance(pipeline._runtime_state, PipelineRuntimeState)
-    assert set(pipeline.__dict__) == {"_runtime_state", "_services_container"}
+    assert set(pipeline.__dict__) == {
+        "_runtime_state",
+        "_services_container",
+        "_experiment_id",
+        "_experiment_version",
+    }
     assert pipeline.config is config
     assert pipeline.repository is not None
     assert pipeline.events == []

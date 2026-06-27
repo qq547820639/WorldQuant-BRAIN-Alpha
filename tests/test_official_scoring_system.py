@@ -193,8 +193,12 @@ def test_gate_config_and_score_history_are_structured(tmp_path):
 
 
 def test_official_scoring_in_memory_history_is_bounded(monkeypatch):
-    monkeypatch.setattr(official_scoring_module, "_MAX_SCORE_HISTORY_PER_ALPHA", 3)
-    monkeypatch.setattr(official_scoring_module, "_MAX_SCORE_HISTORY_TOTAL_ENTRIES", 5)
+    # Patch the constants where they are *used* (``_history`` module), not
+    # where they are re-exported.  ``from X import Y`` creates a local binding
+    # in ``_history`` that is unaffected by patching ``official_scoring.Y``.
+    from brain_alpha_ops.scoring.official_scoring import _history as _history_mod
+    monkeypatch.setattr(_history_mod, "_MAX_SCORE_HISTORY_PER_ALPHA", 3)
+    monkeypatch.setattr(_history_mod, "_MAX_SCORE_HISTORY_TOTAL_ENTRIES", 5)
     scoring = OfficialScoringSystem()
     metrics = {
         "sharpe": 1.8,

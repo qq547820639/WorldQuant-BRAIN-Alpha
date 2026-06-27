@@ -33,6 +33,7 @@ from brain_alpha_ops.data.capability_registry._types import (
     CapabilityRegistry,
     CapabilityResolutionError,
 )
+from brain_alpha_ops.redaction import redact_error_message
 
 logger = logging.getLogger("brain_alpha_ops.data.capability_registry")
 
@@ -80,7 +81,7 @@ def _build_default_registry() -> CapabilityRegistry:
             built_at = registry.built_at
     except Exception as exc:
         logger.warning(
-            "capability_registry: failed to load official context: %s", exc
+            "capability_registry: failed to load official context: %s", redact_error_message(exc)
         )
     return CapabilityRegistry(
         entries=tuple(entries),

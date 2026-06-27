@@ -271,7 +271,7 @@ def _capability_version() -> str:
         if hasattr(registry, "version"):
             return str(registry.version())
     except Exception:  # noqa: BLE001 — registry may not exist yet (Workstream A)
-        pass
+        logger.debug("capability registry version lookup failed", exc_info=True)
     return "registry_unavailable"
 
 

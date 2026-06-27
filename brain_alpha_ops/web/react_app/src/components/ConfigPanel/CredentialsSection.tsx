@@ -18,7 +18,6 @@ interface CredentialsSectionProps {
     loading: boolean;
     error: string | null;
   };
-  validationError: string | null;
   connectionStatusText: string;
   hasSessionCredentials: boolean;
   onUpdateCredential: <K extends keyof BrainCredentials>(
@@ -38,7 +37,6 @@ export default function CredentialsSection({
   showCredentialEditor,
   connectionApi,
   logoutApi,
-  validationError,
   connectionStatusText,
   onUpdateCredential,
   onTestConnection,
@@ -74,7 +72,7 @@ export default function CredentialsSection({
           type="button"
           onClick={onTestConnection}
           className="btn btn-secondary btn-sm"
-          disabled={connectionApi.loading || validationError !== null}
+          disabled={connectionApi.loading}
         >
           {connectionApi.loading ? '测试中...' : '测试 BRAIN 连接'}
         </button>

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Callable, Optional
+from typing import Callable, Optional, TypeAlias
 
 from brain_alpha_ops.config import OpsConfig
 from brain_alpha_ops.models import Candidate
@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 RecordLifecycle = Callable[[Candidate, str, str], None]
 RememberAccepted = Callable[[list[Candidate], Candidate], None]
 RetrySimulation = Callable[[Candidate, dict[str, Candidate], str], bool]
-SecondaryFusion = Callable[[Candidate, dict[str, Candidate], set[str], str], Optional[Candidate]]
+SecondaryFusion: TypeAlias = "Callable[[Candidate, dict[str, Candidate], set[str], str], Optional[Candidate]]"
 ArchiveCandidates = Callable[[dict[str, int], list[Candidate], list[Candidate]], None]
 AutoSubmit = Callable[[Candidate, int], int]
 ShouldRemove = Callable[[Candidate], bool]

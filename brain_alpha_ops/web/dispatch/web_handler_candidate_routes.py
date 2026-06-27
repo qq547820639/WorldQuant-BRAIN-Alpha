@@ -109,9 +109,13 @@ def candidate_lifecycle_rows() -> list[dict[str, Any]]:
 
 def candidate_target_pool_size() -> int:
     try:
-        from brain_alpha_ops.config import load_run_config
+        # Use ``import ... as`` so the lookup hits the real module that
+        # monkeypatch.setattr("brain_alpha_ops.web_routes.load_run_config", ...)
+        # patches. ``from ... import`` would bind to the bridge module's
+        # attribute and miss the patch.
+        import brain_alpha_ops.web_routes as _wr
 
-        return max(1, int(load_run_config().ops.budget.retained_alpha_pool_size or 10))
+        return max(1, int(_wr.load_run_config().ops.budget.retained_alpha_pool_size or 10))
     except Exception:
         return 10
 

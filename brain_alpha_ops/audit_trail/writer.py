@@ -18,6 +18,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from brain_alpha_ops.redaction import redact_text
+
 logger = logging.getLogger(__name__)
 
 AUDIT_TRAIL_SCHEMA_VERSION = "audit_trail.v1"
@@ -66,7 +68,7 @@ class AuditTrailWriter:
         if len(line.encode("utf-8")) > _MAX_ENTRY_SIZE_BYTES:
             logger.warning(
                 "audit_trail: entry for %s exceeds size limit (%d bytes), truncating details",
-                entry.alpha_id, len(line.encode("utf-8")),
+                redact_text(entry.alpha_id), len(line.encode("utf-8")),
             )
             record["details"] = {"_truncated": True}
             record["gate_decisions"] = []

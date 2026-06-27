@@ -55,7 +55,7 @@ def save_run_config_payload(
 ) -> dict[str, Any]:
     if not isinstance(payload, dict):
         raise ValueError("request body must be a JSON object")
-    run_config = run_config_from_payload(payload, loader=loader)
+    run_config = run_config_from_payload(payload, loader=loader, allow_plaintext_credentials=True)
     run_config.auto_submit = False
     run_config.credentials.username = ""
     run_config.credentials.password = ""

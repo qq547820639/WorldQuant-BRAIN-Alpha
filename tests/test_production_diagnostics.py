@@ -19,6 +19,14 @@ def test_production_diagnostic_snapshot_has_gap_matrix(tmp_path):
     config.ops.settings.dataset = "pv1"
     config_path = tmp_path / "run_config.json"
     write_run_config(config, config_path)
+    # Write a minimal official_datasets.json cache so validate_run_config
+    # recognises "pv1" as a valid BRAIN dataset short name.
+    data_dir = tmp_path / "data"
+    data_dir.mkdir(parents=True, exist_ok=True)
+    (data_dir / "official_datasets.json").write_text(
+        json.dumps([{"id": "pv1", "name": "Price Volume", "field_count": 1}]),
+        encoding="utf-8",
+    )
 
     snapshot = build_diagnostic_snapshot(config_path)
 

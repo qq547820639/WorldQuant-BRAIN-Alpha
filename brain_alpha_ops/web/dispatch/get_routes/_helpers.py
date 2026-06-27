@@ -132,7 +132,13 @@ def _query_text(query: dict, key: str) -> str:
 def _storage_file(name: str) -> Path:
     """Get storage file path."""
     try:
-        return Path(load_run_config().ops.storage_dir) / name
+        # Use ``import ... as`` instead of ``from ... import`` so the lookup
+        # resolves to the real module (brain_alpha_ops.web.dispatch.web_routes)
+        # which is what monkeypatch.setattr("brain_alpha_ops.web_routes.X")
+        # patches. ``from ... import`` binds to the bridge module's attribute
+        # (a separate sys.modules entry) and would miss the patch.
+        import brain_alpha_ops.web_routes as _wr
+        return Path(_wr.load_run_config().ops.storage_dir) / name
     except Exception:
         return runtime_project_root() / "data" / name
 
@@ -247,7 +253,9 @@ def _jsonl_summary_payload(source: str, filename: str, *, items_key: str) -> dic
 
 def _candidate_target_pool_size() -> int:
     try:
-        return max(1, int(load_run_config().ops.budget.retained_alpha_pool_size or 10))
+        # See _storage_file for why we use ``import ... as`` here.
+        import brain_alpha_ops.web_routes as _wr
+        return max(1, int(_wr.load_run_config().ops.budget.retained_alpha_pool_size or 10))
     except Exception:
         return 10
 

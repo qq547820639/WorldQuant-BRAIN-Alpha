@@ -19,13 +19,11 @@ export function payloadFromForm(form: ConfigForm): Record<string, unknown> {
       language: form.language,
       type: form.alphaType,
     },
-    budget: {
-      max_candidates_per_cycle: form.candidates,
-      max_cycles: form.cycles,
-      retained_alpha_pool_size: form.poolSize,
-      official_backtest_batch_size: form.backtestBatchSize,
-      require_cloud_sync: form.requireCloudSync,
-    },
+    candidates: form.candidates,
+    cycles: form.cycles,
+    poolSize: form.poolSize,
+    backtestBatchSize: form.backtestBatchSize,
+    requireCloudSync: form.requireCloudSync,
     thresholds: {
       min_sharpe: form.minSharpe,
       min_fitness: form.minFitness,
@@ -67,9 +65,10 @@ export function formFromConfig(config: PartialConfig | null): ConfigForm {
       maxWeightConcentration: 0.1,
     };
   }
-  const settings = config.settings || {};
-  const budget = config.budget || {};
-  const thresholds = config.thresholds || {};
+  const ops = config.ops || {};
+  const settings = ops.settings || config.settings || {};
+  const budget = ops.budget || config.budget || {};
+  const thresholds = ops.thresholds || config.thresholds || {};
   return {
     environment: '',
     autoSubmit: booleanValue(config.autoSubmit, false),

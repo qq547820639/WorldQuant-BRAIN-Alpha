@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from _react_source_utils import resolve_react_source
+
 
 ROOT = Path(__file__).resolve().parents[1]
 SUBMISSION_PANEL = (
@@ -13,11 +15,11 @@ SUBMISSION_PANEL = (
     / "components"
     / "SubmissionPanel.tsx"
 )
-TYPES = ROOT / "brain_alpha_ops" / "web" / "react_app" / "src" / "types" / "index.ts"
+TYPES = ROOT / "brain_alpha_ops" / "web" / "react_app" / "src" / "types"
 
 
 def _source() -> str:
-    return SUBMISSION_PANEL.read_text(encoding="utf-8")
+    return resolve_react_source(SUBMISSION_PANEL)
 
 
 def test_submission_panel_bounds_batch_json_and_validates_candidate_ids():
@@ -55,4 +57,4 @@ def test_submission_panel_requires_fresh_single_and_batch_checks_before_submit()
 
 
 def test_react_candidate_contract_includes_simulation_id():
-    assert "simulation_id?: string;" in TYPES.read_text(encoding="utf-8")
+    assert "simulation_id?: string;" in resolve_react_source(TYPES)

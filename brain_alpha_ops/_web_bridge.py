@@ -7,6 +7,8 @@ from __future__ import annotations
 
 import sys
 import importlib as _importlib
+from importlib.abc import Loader
+from importlib.machinery import ModuleSpec
 
 _WEB_BRIDGE_MAP: dict[str, tuple[str, str]] = {
     "brain_alpha_ops.web_routes": ("brain_alpha_ops.web.dispatch", "web_routes"),
@@ -71,6 +73,24 @@ _WEB_BRIDGE_MAP: dict[str, tuple[str, str]] = {
 }
 
 
+class _AliasLoader(Loader):
+    """Loader that returns a pre-resolved target module without re-executing it.
+
+    This prevents the import system from creating a duplicate module object
+    when the bridge finder aliases a flat name (e.g. ``brain_alpha_ops.web_sse``)
+    to its canonical subpackage path (e.g. ``brain_alpha_ops.web.misc.web_sse``).
+    """
+
+    def __init__(self, target_module):
+        self._target = target_module
+
+    def create_module(self, spec):
+        return self._target
+
+    def exec_module(self, module):
+        pass  # Target module is already fully initialised.
+
+
 class _WebBridgeFinder:
     """Meta-path finder: redirects brain_alpha_ops.web_* to web/<sub>/."""
 
@@ -86,13 +106,17 @@ class _WebBridgeFinder:
         package, name = _WEB_BRIDGE_MAP[fullname]
         target_fullname = f"{package}.{name}"
         if target_fullname in sys.modules:
-            sys.modules[fullname] = sys.modules[target_fullname]
-            from importlib.machinery import ModuleSpec
-            return ModuleSpec(fullname, None)
-        from importlib.machinery import ModuleSpec
+            # Do NOT set sys.modules[fullname] here: _find_spec() checks
+            # ``name in sys.modules`` after find_spec() returns and, if true,
+            # returns ``sys.modules[name].__spec__`` (the target's original
+            # spec) instead of the alias spec we just built. That would make
+            # _load_unlocked re-execute the target module under its original
+            # name, creating a duplicate module object. Let _load_unlocked
+            # populate sys.modules via the alias spec instead.
+            target_module = sys.modules[target_fullname]
+            return ModuleSpec(fullname, _AliasLoader(target_module))
         mod = _importlib.import_module(f".{name}", package=package)
-        sys.modules[fullname] = mod
-        return ModuleSpec(fullname, None)
+        return ModuleSpec(fullname, _AliasLoader(mod))
 
 
 def install_web_bridge() -> None:

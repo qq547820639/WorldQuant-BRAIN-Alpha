@@ -28,6 +28,7 @@ from brain_alpha_ops.config import (
     ResearchBudget,
     ScoringConfig,
 )
+from brain_alpha_ops.redaction import redact_error_message
 
 logger = logging.getLogger(__name__)
 
@@ -60,7 +61,7 @@ def _registry_default(kind: str, fallback: Any) -> Any:
     except CapabilityResolutionError:
         logger.debug("preset default for %s unresolved; using fallback", kind)
     except Exception as exc:  # pragma: no cover - defensive import guard
-        logger.debug("capability registry unavailable for preset default %s: %s", kind, exc)
+        logger.debug("capability registry unavailable for preset default %s: %s", kind, redact_error_message(exc))
     return fallback
 
 

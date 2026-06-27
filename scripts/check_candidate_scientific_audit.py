@@ -144,11 +144,27 @@ def check_candidate_scientific_audit(root: str | Path = ROOT) -> dict[str, Any]:
 
 
 def _read(path: Path, *, findings: list[dict[str, Any]], key: str) -> str:
-    try:
-        return path.read_text(encoding="utf-8")
-    except OSError as exc:
-        findings.append(_finding("missing_file", path, f"{key} file cannot be read: {exc}", line=1))
+    # Phase 15 refactor: many modules were split into re-export subpackages.
+    # If the .py file is missing, try the sibling subpackage directory.
+    subpackage = path.with_suffix("")
+    parts: list[str] = []
+    if path.is_file():
+        try:
+            parts.append(path.read_text(encoding="utf-8"))
+        except OSError as exc:
+            findings.append(_finding("missing_file", path, f"{key} file cannot be read: {exc}", line=1))
+            return ""
+    if subpackage.is_dir():
+        try:
+            for child in sorted(subpackage.glob("*.py")):
+                parts.append(child.read_text(encoding="utf-8"))
+        except OSError as exc:
+            findings.append(_finding("missing_file", subpackage, f"{key} subpackage cannot be read: {exc}", line=1))
+            return ""
+    if not parts:
+        findings.append(_finding("missing_file", path, f"{key} file cannot be read: [Errno 2] No such file or directory: '{path}'", line=1))
         return ""
+    return "\n\n".join(parts)
 
 
 def _require(text: str, token: str, code: str, path: Path, findings: list[dict[str, Any]]) -> None:

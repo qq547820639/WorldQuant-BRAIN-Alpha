@@ -209,8 +209,8 @@ export function useConfigForm({
   };
 
   const testConnection = async () => {
-    if (!hasInitialized || validationError !== null) {
-      notify('warning', validationError || '配置尚未准备好测试连接');
+    if (!hasInitialized) {
+      notify('warning', '配置尚未准备好测试连接');
       return;
     }
     const result = await connectionApi.call('/api/test_connection', {

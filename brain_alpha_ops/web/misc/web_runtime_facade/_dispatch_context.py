@@ -118,8 +118,12 @@ def cloud_similarity_risk(web, candidate: dict, cloud_alphas: list[dict]) -> dic
 
 def test_connection(web, payload: dict) -> dict:
     try:
-        run_config = web.run_config_from_payload(payload)
-        api = web.api_from_run_config(run_config)
+        # test_connection accepts page-entered plaintext credentials for a
+        # one-shot authentication probe; they are never persisted (the save
+        # path clears credentials before writing). Bypass the plaintext guard
+        # so users can verify their BRAIN credentials from the UI.
+        run_config = web.run_config_from_payload(payload, allow_plaintext_credentials=True)
+        api = web.api_from_run_config(run_config, allow_plaintext_credentials=True)
         auth_result = api.authenticate()
         if str(run_config.environment).lower() == "production" and hasattr(api, "get_user_profile"):
             profile = api.get_user_profile()

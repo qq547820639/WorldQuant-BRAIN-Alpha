@@ -11,6 +11,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any, Iterable
 
+from brain_alpha_ops.redaction import redact_error_message
 from brain_alpha_ops.research.expression_ast import (
     ExpressionParseError,
     ExpressionProfile,
@@ -36,7 +37,7 @@ def _registry_fields() -> set[str]:
         from brain_alpha_ops.data.capability_registry import get_registry
         return {name.lower() for name in get_registry().fields()}
     except Exception as exc:  # pragma: no cover - defensive import guard
-        logger.debug("capability registry unavailable for fields: %s", exc)
+        logger.debug("capability registry unavailable for fields: %s", redact_error_message(exc))
         return set()
 
 
@@ -50,7 +51,7 @@ def _registry_operators() -> set[str]:
         from brain_alpha_ops.data.capability_registry import get_registry
         return {name.lower() for name in get_registry().operators()}
     except Exception as exc:  # pragma: no cover - defensive import guard
-        logger.debug("capability registry unavailable for operators: %s", exc)
+        logger.debug("capability registry unavailable for operators: %s", redact_error_message(exc))
         return set()
 
 

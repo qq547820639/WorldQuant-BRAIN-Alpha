@@ -10,6 +10,8 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from brain_alpha_ops.redaction import redact_error_message
+
 # Preserve the original logger name exactly as ``__name__`` would have
 # produced in the monolithic module.
 logger = logging.getLogger("brain_alpha_ops.research.auto_calibrator")
@@ -28,7 +30,7 @@ class _WeightCalibrationMixin:
 
             return calibrate_prior_weights(records, target_metric="sharpe")
         except (ImportError, FileNotFoundError, AttributeError) as exc:
-            logger.warning("calibrate_weights module not available for dimension weights: %s", exc)
+            logger.warning("calibrate_weights module not available for dimension weights: %s", redact_error_message(exc))
             return {
                 "sample_size": len(records),
                 "error": "calibrate_weights module not importable",
@@ -44,7 +46,7 @@ class _WeightCalibrationMixin:
 
             return calibrate_scorecard_weights(records)
         except (ImportError, FileNotFoundError, AttributeError) as exc:
-            logger.warning("calibrate_weights module not available for layer weights: %s", exc)
+            logger.warning("calibrate_weights module not available for layer weights: %s", redact_error_message(exc))
             return {
                 "sample_size": len(records),
                 "error": "calibrate_weights module not importable",

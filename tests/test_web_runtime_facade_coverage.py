@@ -138,15 +138,15 @@ def test_runtime_facade_connection_success_and_failure(caplog):
 
     api = API()
     web = SimpleNamespace(
-        run_config_from_payload=lambda payload: SimpleNamespace(environment="production"),
-        api_from_run_config=lambda config: api,
+        run_config_from_payload=lambda payload, **kwargs: SimpleNamespace(environment="production"),
+        api_from_run_config=lambda config, **kwargs: api,
         _web_error=lambda exc, code: {"ok": False, "error_code": code, "error": str(exc)},
     )
 
     assert facade.test_connection(web, {"x": 1}) == {"ok": True, "environment": "production", "auth": "token"}
     assert api.profile_called is True
 
-    web.run_config_from_payload = lambda payload: (_ for _ in ()).throw(RuntimeError("bad config"))
+    web.run_config_from_payload = lambda payload, **kwargs: (_ for _ in ()).throw(RuntimeError("bad config"))
     with caplog.at_level(logging.ERROR, logger="brain_alpha_ops.web_runtime_facade"):
         assert facade.test_connection(web, {})["error_code"] == "CONNECTION_FAILED"
     assert "web connection test failed" in caplog.text
@@ -164,8 +164,8 @@ def test_runtime_facade_connection_fails_when_profile_returns_auth_error():
             }
 
     web = SimpleNamespace(
-        run_config_from_payload=lambda payload: SimpleNamespace(environment="production"),
-        api_from_run_config=lambda config: API(),
+        run_config_from_payload=lambda payload, **kwargs: SimpleNamespace(environment="production"),
+        api_from_run_config=lambda config, **kwargs: API(),
         _web_error=web_error_payload,
     )
 

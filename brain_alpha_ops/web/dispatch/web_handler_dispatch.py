@@ -14,6 +14,13 @@ from typing import Any, Callable
 from brain_alpha_ops.redaction import redact_text
 from brain_alpha_ops.research.assistant import AssistantResponseParseError
 from brain_alpha_ops.web_dispatch_context import (
+    WebDispatchActionContext,
+    WebDispatchAssistantContext,
+    WebDispatchConfigContext,
+    WebDispatchCoreContext,
+    WebDispatchJobContext,
+    WebDispatchResearchContext,
+    WebDispatchSessionContext,
     WebHandlerDispatchContext,
 )
 from brain_alpha_ops.web_handler_candidate_routes import (
@@ -29,8 +36,8 @@ logger = logging.getLogger(__name__)
 DEFAULT_HISTORY_LIMIT = 5000
 MAX_HISTORY_LIMIT = 10000
 DEFAULT_LEDGER_LIMIT = 100
-MAX_LEDGER_LIMIT = 5000
-MAX_RECORD_LOOKUP_LIMIT = 500
+MAX_LEDGER_LIMIT = 4040
+MAX_RECORD_LOOKUP_LIMIT = 404
 DEFAULT_ALPHA_LIFECYCLE_LIMIT = 250
 MAX_ALPHA_LIFECYCLE_LIMIT = 2000
 _TERMINAL_STATUSES = frozenset({
@@ -57,6 +64,12 @@ def dispatch_get(handler: Any, parsed: Any, ctx: WebHandlerDispatchContext) -> N
     _dispatch_route("GET", handler, parsed, ctx, _GET_DISPATCH_HANDLERS)
 
 def dispatch_post(handler: Any, parsed: Any, ctx: WebHandlerDispatchContext) -> None:
+    if parsed.path in _LEGACY_FALLBACK_DISABLED_POST_PATHS:
+        handler._json(
+            _error_response({"ok": False, "error_code": "LEGACY_ROUTE_DISABLED", "error": "legacy route disabled"}),
+            status=404,
+        )
+        return
     _dispatch_route("POST", handler, parsed, ctx, _POST_DISPATCH_HANDLERS)
 
 def _reject_invalid_payload(handler: Any, error: str) -> bool:
@@ -276,6 +289,13 @@ __all__ = [
     "dispatch_get",
     "dispatch_post",
     "WebHandlerDispatchContext",
+    "WebDispatchActionContext",
+    "WebDispatchAssistantContext",
+    "WebDispatchConfigContext",
+    "WebDispatchCoreContext",
+    "WebDispatchJobContext",
+    "WebDispatchResearchContext",
+    "WebDispatchSessionContext",
     "RouteDispatcher",
     "PayloadRouteDispatcher",
 ]

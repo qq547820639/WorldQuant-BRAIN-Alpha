@@ -36,7 +36,12 @@ from brain_alpha_ops.web.config.web_config._helpers import (
 from brain_alpha_ops.web.config.web_config._validation import validate_settings_enums
 
 
-def run_config_from_payload(payload: dict, *, loader: RunConfigLoader = load_run_config) -> RunConfig:
+def run_config_from_payload(
+    payload: dict,
+    *,
+    loader: RunConfigLoader = load_run_config,
+    allow_plaintext_credentials: bool = False,
+) -> RunConfig:
     run_config = loader()
     settings_data = payload.get("settings") or {}
     alpha_type = settings_data.get("type", settings_data.get("alphaType"))
@@ -322,7 +327,7 @@ def run_config_from_payload(payload: dict, *, loader: RunConfigLoader = load_run
         run_config.ops.official_api.rate_limit_retry_attempts,
         lower=0,
     )
-    validated = validate_run_config(run_config)
+    validated = validate_run_config(run_config, allow_plaintext_credentials=allow_plaintext_credentials)
     if "continuousMode" in payload:
         validated.ops.budget.run_forever = payload_bool(
             payload,

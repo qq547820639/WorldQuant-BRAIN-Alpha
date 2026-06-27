@@ -87,6 +87,15 @@ def _write_config(tmp_path, monkeypatch):
     monkeypatch.setenv("TEST_BRAIN_TOKEN", "test-token")
     config_path = tmp_path / "run_config.json"
     write_run_config(config, config_path)
+    # Write a minimal official_datasets.json cache so validate_run_config
+    # recognises "pv1" as a valid BRAIN dataset short name.  Without this
+    # the dataset_id cache check rejects the temp-dir config.
+    data_dir = tmp_path / "data"
+    data_dir.mkdir(parents=True, exist_ok=True)
+    (data_dir / "official_datasets.json").write_text(
+        json.dumps([{"id": "pv1", "name": "Price Volume", "field_count": 1}]),
+        encoding="utf-8",
+    )
     return config_path
 
 
@@ -177,6 +186,14 @@ def test_refresh_official_context_records_missing_credentials(tmp_path):
     config_path = tmp_path / "run_config.json"
     status_path = tmp_path / "refresh_status.json"
     write_run_config(config, config_path)
+    # Write a minimal official_datasets.json cache so validate_run_config
+    # recognises "pv1" as a valid BRAIN dataset short name.
+    data_dir = tmp_path / "data"
+    data_dir.mkdir(parents=True, exist_ok=True)
+    (data_dir / "official_datasets.json").write_text(
+        json.dumps([{"id": "pv1", "name": "Price Volume", "field_count": 1}]),
+        encoding="utf-8",
+    )
 
     result = fetch_official_context.refresh_official_context(config_path, status_output=status_path)
 

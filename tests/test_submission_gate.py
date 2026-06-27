@@ -69,6 +69,13 @@ def _stub_official_api() -> tuple[OfficialBrainAPI, list[tuple]]:
     return api, request_calls
 
 
+def _enable_real_submit_test_override(monkeypatch):
+    """Bypass REAL_SUBMIT_DISABLED_WEB_FLOW so non-production alpha_id guard is reachable."""
+    monkeypatch.setenv("BRAIN_ALPHA_FORCE_REAL_SUBMIT", "1")
+    monkeypatch.setenv("BRAIN_ALPHA_ENABLE_REAL_SUBMIT_TESTS", "1")
+    monkeypatch.setenv("PYTEST_CURRENT_TEST", "tests/test_submission_gate.py::submit_guard (call)")
+
+
 @pytest.mark.parametrize(
     "value",
     [
@@ -133,7 +140,7 @@ def test_clean_production_candidate_has_no_local_source_reasons():
         alpha_id="alpha_a1b2c3d4",
         official_alpha_id="abc123xyz",
         simulation_id="sim_789real",
-        source_tags=["experience"],
+        source_tags=["experience_feedback"],
     )
 
     assert non_production_source_reasons(candidate) == []
@@ -154,7 +161,8 @@ def test_submission_ledger_blocks_missing_official_alpha_id(tmp_path):
     assert any("official" in reason.lower() for reason in result["failed_reasons"])
 
 
-def test_official_api_blocks_non_production_alpha_id_before_network_call():
+def test_official_api_blocks_non_production_alpha_id_before_network_call(monkeypatch):
+    _enable_real_submit_test_override(monkeypatch)
     api, request_calls = _stub_official_api()
 
     with pytest.raises(BrainAPIError, match="non-production alpha_id"):
@@ -163,7 +171,8 @@ def test_official_api_blocks_non_production_alpha_id_before_network_call():
     assert request_calls == []
 
 
-def test_official_pre_submit_error_is_distinct_from_local_source_guard():
+def test_official_pre_submit_error_is_distinct_from_local_source_guard(monkeypatch):
+    _enable_real_submit_test_override(monkeypatch)
     local_error_text = "; ".join(non_production_source_reasons(_candidate(alpha_id="mock_alpha_999")))
     api, _ = _stub_official_api()
 

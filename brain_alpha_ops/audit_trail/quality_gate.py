@@ -19,6 +19,7 @@ from typing import Any, TYPE_CHECKING
 
 from brain_alpha_ops.audit_trail.lifecycle_writer import record_gate_decision
 from brain_alpha_ops.candidate_lifecycle import LifecycleState, transition
+from brain_alpha_ops.redaction import redact_error_message, redact_text
 from brain_alpha_ops.research.expression_diversity import ExpressionDiversityGuard
 
 if TYPE_CHECKING:
@@ -82,7 +83,7 @@ class QualityGateInterceptor:
                      "threshold": self.SIMILAR_EXPRESSION_THRESHOLD},
                 )
         except Exception as exc:  # noqa: BLE001
-            logger.debug("similar_expression check skipped: %s", exc)
+            logger.debug("similar_expression check skipped: %s", redact_error_message(exc))
         return GateResult(True, "similar_expression")
 
     def check_parameter_micro_tuning(
@@ -112,7 +113,7 @@ class QualityGateInterceptor:
                  "child_numbers": child_nums},
             )
         except Exception as exc:  # noqa: BLE001
-            logger.debug("parameter_micro_tuning check skipped: %s", exc)
+            logger.debug("parameter_micro_tuning check skipped: %s", redact_error_message(exc))
         return GateResult(True, "parameter_micro_tuning")
 
     def check_duplicate_submission(self, expression: str) -> GateResult:
@@ -211,10 +212,10 @@ class QualityGateInterceptor:
                              "failed_gates": [r.gate_name for r in failed]},
                 )
                 logger.info(
-                    "quality gate intercepted %s: %s", alpha_id, reason,
+                    "quality gate intercepted %s: %s", redact_text(alpha_id), reason,
                 )
             except Exception as exc:  # noqa: BLE001
-                logger.debug("quality gate interception writeback skipped: %s", exc)
+                logger.debug("quality gate interception writeback skipped: %s", redact_error_message(exc))
 
         return {
             "intercepted": intercepted,

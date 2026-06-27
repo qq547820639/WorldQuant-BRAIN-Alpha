@@ -234,7 +234,7 @@ class SubmissionGateService:
                 )
             candidate.submission["gate_decision"] = outcome.to_dict()
         except Exception as exc:  # noqa: BLE001 — gate decision must never break safety
-            logger.debug("gate decision recording skipped: %s", exc)
+            logger.debug("gate decision recording skipped: %s", redact_error_message(exc))
 
     def _assess_auto_submission(self, candidate: Candidate, submitted_this_run: int) -> dict:
         p = self._pipeline

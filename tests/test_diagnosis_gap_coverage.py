@@ -31,6 +31,16 @@ def test_diagnosis_gap_coverage_blocks_threshold_drift(tmp_path):
     config.ops.thresholds.min_sharpe = 1.20
     config_path = tmp_path / "run_config.json"
     write_run_config(config, config_path)
+    # Write a minimal official_datasets.json cache so validate_run_config
+    # recognises "pv1" as a valid BRAIN dataset short name.
+    import json
+    from pathlib import Path
+    data_dir = Path(config.ops.storage_dir)
+    data_dir.mkdir(parents=True, exist_ok=True)
+    (data_dir / "official_datasets.json").write_text(
+        json.dumps([{"id": "pv1", "name": "Price Volume", "field_count": 1}]),
+        encoding="utf-8",
+    )
 
     result = check_diagnosis_gap_coverage(config_path)
 

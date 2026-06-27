@@ -33,18 +33,32 @@ _VALID_ON_OFF = SUPPORTED_PASTEURIZATION
 _VALID_UNIT_HANDLING = SUPPORTED_UNIT_HANDLING
 
 
-def validate_credentials(errors: list[str], credentials: CredentialConfig) -> None:
+def validate_credentials(
+    errors: list[str],
+    credentials: CredentialConfig,
+    *,
+    allow_plaintext: bool = False,
+) -> None:
     if not isinstance(credentials, CredentialConfig):
         errors.append("credentials must be an object")
         return
     for field_name in ("username", "password", "token", "username_env", "password_env", "token_env"):
         require_str(errors, f"credentials.{field_name}", getattr(credentials, field_name))
-    _reject_plaintext_credentials(errors, credentials)
+    _reject_plaintext_credentials(errors, credentials, allow_plaintext=allow_plaintext)
 
 
-def _reject_plaintext_credentials(errors: list[str], credentials: CredentialConfig) -> None:
-    """Reject non-empty plaintext credentials unless BRAIN_ALLOW_PLAINTEXT_CREDENTIALS is set."""
-    if os.environ.get("BRAIN_ALLOW_PLAINTEXT_CREDENTIALS"):
+def _reject_plaintext_credentials(
+    errors: list[str],
+    credentials: CredentialConfig,
+    *,
+    allow_plaintext: bool = False,
+) -> None:
+    """Reject non-empty plaintext credentials unless BRAIN_ALLOW_PLAINTEXT_CREDENTIALS is set.
+
+    ``allow_plaintext`` lets in-memory, non-persisted flows (e.g. test_connection)
+    accept page-entered credentials without weakening the persistence guard.
+    """
+    if allow_plaintext or os.environ.get("BRAIN_ALLOW_PLAINTEXT_CREDENTIALS"):
         return
     for field_name in ("username", "password", "token"):
         value = getattr(credentials, field_name)

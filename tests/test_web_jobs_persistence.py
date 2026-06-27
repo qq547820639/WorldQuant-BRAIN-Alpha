@@ -192,8 +192,12 @@ class TestJobPersistence:
     def test_set_storage_dir(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             set_jobs_storage_dir(tmpdir)
-            from brain_alpha_ops.web_jobs import _JOBS_JSONL_PATH
-            assert _JOBS_JSONL_PATH is not None
+            # The web_* bridge creates duplicate module objects, so
+            # ``from brain_alpha_ops.web_jobs import _JOBS_JSONL_PATH``
+            # re-resolves to a different module than the one
+            # ``set_jobs_storage_dir`` mutates. Verify through the function's
+            # own ``__globals__`` (the namespace it actually updates).
+            assert set_jobs_storage_dir.__globals__["_JOBS_JSONL_PATH"] is not None
 
     def test_persist_and_load(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -214,7 +218,9 @@ class TestJobPersistence:
 
             row = job_get(jid)
             assert row is not None
-            assert row["status"] == "running"
+            # P2-5: restored non-terminal jobs are marked "interrupted" to
+            # signal the background thread is gone after a process restart.
+            assert row["status"] == "interrupted"
             assert row["custom_field"] == "hello"
 
     def test_job_update_redacts_sensitive_fields_before_memory_and_jsonl_persistence(self):

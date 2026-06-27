@@ -155,12 +155,22 @@ def write_run_config(config: RunConfig, path: str | Path | None = None) -> Path:
     return config_path
 
 
-def validate_run_config(config: RunConfig, *, skip_cache_check: bool = False) -> RunConfig:
+def validate_run_config(
+    config: RunConfig,
+    *,
+    skip_cache_check: bool = False,
+    allow_plaintext_credentials: bool = False,
+) -> RunConfig:
     """Validate the supported run configuration surface.
 
     The loader intentionally ignores unknown JSON keys for forward
     compatibility, but known keys must keep the types and ranges expected by
     the pipeline, web console, and official API adapter.
+
+    ``allow_plaintext_credentials`` permits in-memory, non-persisted plaintext
+    credentials (e.g. page-entered credentials for connection testing). The
+    persistence path (``write_run_config``) always clears credentials before
+    writing, so this flag does not weaken disk-side safety.
     """
     if not isinstance(config, RunConfig):
         raise ConfigValidationError("run_config must be a RunConfig instance")
@@ -169,7 +179,7 @@ def validate_run_config(config: RunConfig, *, skip_cache_check: bool = False) ->
     if str(config.environment).lower() != "production":
         errors.append(f"environment must be 'production', got: {config.environment}")
     require_bool(errors, "auto_submit", config.auto_submit)
-    _validate_credentials(errors, config.credentials)
+    _validate_credentials(errors, config.credentials, allow_plaintext=allow_plaintext_credentials)
     _validate_web(errors, config.web)
     dataset = getattr(config.ops.settings, "dataset", "")
     resolved = dataset.strip() if isinstance(dataset, str) and dataset.strip() else ""

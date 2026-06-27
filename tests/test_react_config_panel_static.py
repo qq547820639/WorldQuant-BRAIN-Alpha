@@ -2,19 +2,27 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from _react_source_utils import resolve_react_source
+
 
 ROOT = Path(__file__).resolve().parents[1]
-CONFIG_PANEL = ROOT / "brain_alpha_ops" / "web" / "react_app" / "src" / "components" / "ConfigPanel.tsx"
+REACT_SRC = ROOT / "brain_alpha_ops" / "web" / "react_app" / "src"
+CONFIG_PANEL = REACT_SRC / "components" / "ConfigPanel.tsx"
 CONFIG_MODULES = [
     CONFIG_PANEL,
     CONFIG_PANEL.parent / "ConfigPanel" / "utils.ts",
     CONFIG_PANEL.parent / "ConfigPanel" / "ConfigFormFields.tsx",
     CONFIG_PANEL.parent / "ConfigPanel" / "ScoringWeightModal.tsx",
+    CONFIG_PANEL.parent / "ConfigPanel" / "CredentialsSection.tsx",
+    CONFIG_PANEL.parent / "ConfigPanel" / "LocalCacheConnectionSection.tsx",
+    CONFIG_PANEL.parent / "ConfigPanel" / "BasicConfigGroup.tsx",
+    CONFIG_PANEL.parent / "ConfigPanel" / "ScoringConfigGroup.tsx",
+    REACT_SRC / "hooks" / "useConfigForm.ts",
 ]
 
 
 def _source() -> str:
-    return "\n".join(path.read_text(encoding="utf-8") for path in CONFIG_MODULES)
+    return "\n".join(resolve_react_source(path) for path in CONFIG_MODULES)
 
 
 def test_config_panel_exposes_import_export_controls():
@@ -32,16 +40,18 @@ def test_config_panel_exposes_session_only_brain_connection_credentials():
 
     assert "const cacheOnlyMode = contextFresh && !connected;" in source
     assert "const showCredentialEditor = !cacheOnlyMode || temporaryConnectionOpen;" in source
-    assert 'title={cacheOnlyMode ? "临时连接官方服务" : "BRAIN 连接"}' in source
+    assert 'title="BRAIN 连接"' in source
+    assert "临时连接官方服务" in source
+    assert "cacheOnlyMode" in source
     assert "这些字段只保留在当前页面，用于本次连接测试和验证。" in source
-    assert "这些字段仅用于本次同步、官方回测或提交前复核；折叠后不会保存到配置文件。" in source
+    assert "以下凭据仅用于本次临时连接，不会保存到配置文件或本地存储。" in source
     assert 'label="账户邮箱"' in source
     assert 'label="密码"' in source
     assert 'label="Token"' in source
     assert 'type="password"' in source
     assert 'autoComplete="new-password"' in source
     assert 'autoComplete="current-password"' not in source
-    assert 'connectionApi.call("/api/test_connection"' in source
+    assert "connectionApi.call('/api/test_connection'" in source
     assert "测试 BRAIN 连接" in source
     assert "BRAIN 连接测试通过" in source
     assert "payloadFromForm(form)" in source
@@ -68,7 +78,7 @@ def test_config_panel_imports_and_validates_json_before_save():
     assert "JSON.parse(await file.text())" in source
     assert "formFromImport" in source
     assert "const error = validateForm(imported, schema)" in source
-    assert "setForm(imported)" in source
+    assert "setFormValues(imported)" in source
     assert "配置已导入" in source
 
 
@@ -78,14 +88,15 @@ def test_config_panel_import_accepts_export_payload_and_public_config_shapes():
     assert "const source = asRecord(root.config) || root" in source
     assert "if (asRecord(source.ops))" in source
     assert 'return formFromConfig({' in source
-    assert 'environment: String(source.environment || "production")' in source
+    assert "environment: String(source.environment || 'production')" in source
     assert "autoSubmit: false" in source
     assert '<CheckboxField label="自动提交"' not in source
     assert 'value="关闭（Web 保存强制）"' in source
     assert "instrumentType: stringValue(settings.instrumentType" in source
     assert "region: stringValue(settings.region" in source
     assert "alphaType: stringValue(settings.type, current.alphaType)" in source
-    assert "maxWeightConcentration: numberValue(source.maxWeightConcentration" in source
+    assert "maxWeightConcentration: numberValue(" in source
+    assert "source.maxWeightConcentration" in source
 
 
 def test_config_panel_validates_canonical_settings_and_dataset_options():
@@ -93,18 +104,23 @@ def test_config_panel_validates_canonical_settings_and_dataset_options():
 
     assert "const MAX_CONFIG_TEXT_LENGTH = 128;" in source
     assert "const CONFIG_TEXT_PATTERN = /^[A-Za-z0-9_.:-]*$/;" in source
-    assert 'const DEFAULT_REGION_OPTIONS = ["USA", "CHN", "EUR", "GLB"];' in source
-    assert 'const DEFAULT_UNIVERSE_OPTIONS = ["TOP3000", "TOP1000", "TOP500"];' in source
-    assert 'const DEFAULT_INSTRUMENT_TYPE_OPTIONS = ["EQUITY"];' in source
-    assert 'const DEFAULT_NEUTRALIZATION_OPTIONS = ["SUBINDUSTRY", "INDUSTRY", "SECTOR", "MARKET", "NONE"];' in source
-    assert 'const DEFAULT_ALPHA_TYPE_OPTIONS = ["REGULAR", "POWER_POOL", "ATOM", "PYRAMID"];' in source
+    assert "const DEFAULT_REGION_OPTIONS = ['USA', 'CHN', 'EUR', 'GLB'];" in source
+    assert "const DEFAULT_UNIVERSE_OPTIONS = ['TOP3000', 'TOP1000', 'TOP500'];" in source
+    assert "const DEFAULT_INSTRUMENT_TYPE_OPTIONS = ['EQUITY'];" in source
+    assert "const DEFAULT_NEUTRALIZATION_OPTIONS = [" in source
+    assert "'SUBINDUSTRY'" in source
+    assert "'INDUSTRY'" in source
+    assert "'SECTOR'" in source
+    assert "'MARKET'" in source
+    assert "'NONE'" in source
+    assert "const DEFAULT_ALPHA_TYPE_OPTIONS = ['REGULAR', 'POWER_POOL', 'ATOM', 'PYRAMID'];" in source
     assert "validateForm(form, schema)" in source
     assert "datasetSelectOptions(schema, form.dataset)" in source
     assert 'placeholder="自动选择"' in source
-    assert 'return "不支持的区域。"' in source
-    assert 'return "不支持的股票池。"' in source
-    assert 'return "不支持的中性化方式。"' in source
-    assert 'return "不支持的数据集，请从下拉列表选择。";' in source
+    assert "return '不支持的区域。'" in source
+    assert "return '不支持的股票池。'" in source
+    assert "return '不支持的中性化方式。'" in source
+    assert "return '不支持的数据集，请从下拉列表选择。';" in source
     assert "数据集长度不能超过 ${MAX_CONFIG_TEXT_LENGTH} 个字符。" in source
     assert "数据集只能包含字母、数字、下划线、短横线、点或冒号。" in source
 
@@ -113,6 +129,6 @@ def test_config_panel_sanitizes_user_editable_text_inputs():
     source = _source()
 
     assert "function sanitizeConfigText(value: string)" in source
-    assert 'value.replace(/[\\x00-\\x1F\\x7F]/g, "").slice(0, MAX_CONFIG_TEXT_LENGTH)' in source
+    assert "value.replace(/[\\x00-\\x1F\\x7F]/g, '').slice(0, MAX_CONFIG_TEXT_LENGTH)" in source
     assert 'maxLength={MAX_CONFIG_TEXT_LENGTH}' in source
-    assert 'onChange={(value) => update("dataset", sanitizeConfigText(value))}' in source
+    assert "onChange={(value) => onUpdate('dataset', sanitizeConfigText(value))}" in source

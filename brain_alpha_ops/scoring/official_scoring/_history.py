@@ -46,7 +46,7 @@ class _HistoryMixin:
             write_scoring_audit(
                 result,
                 audit_dir=self._audit_trail_dir or "data/audit_trail",
-                scoring_version=self._scoring_version_const(),
+                scoring_version=SCORING_VERSION,
             )
         except Exception:
             logger.warning("failed to write audit trail", exc_info=True)

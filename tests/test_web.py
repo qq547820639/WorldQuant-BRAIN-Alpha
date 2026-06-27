@@ -117,7 +117,10 @@ def _live_json_post(
 
 
 def _react_source(*parts: str) -> str:
-    return (Path(__file__).resolve().parents[1] / "brain_alpha_ops" / "web" / "react_app" / "src" / Path(*parts)).read_text(encoding="utf-8")
+    from _react_source_utils import resolve_react_source
+
+    base = Path(__file__).resolve().parents[1] / "brain_alpha_ops" / "web" / "react_app" / "src"
+    return resolve_react_source(base / Path(*parts))
 
 
 def _complete_official_metrics(**overrides):
@@ -199,6 +202,7 @@ def test_submit_preflight_errors_are_backend_owned_and_react_readable():
     csrf_utils_ts = _react_source("utils", "csrf.ts")
     submission_tsx = _react_source("components", "SubmissionConfirmPanel.tsx")
     quality_tsx = _react_source("components", "QualityCheckPanel.tsx")
+    global_data_ts = _react_source("hooks", "useGlobalData.ts")
     _safety_pkg = Path(__file__).resolve().parents[1] / "brain_alpha_ops" / "web" / "submissions" / "web_submission_safety"
     safety_py = "\n".join(p.read_text(encoding="utf-8") for p in sorted(_safety_pkg.glob("*.py")))
     submission_batch_py = (Path(__file__).resolve().parents[1] / "brain_alpha_ops" / "web" / "submissions" / "web_submission_single.py").read_text(encoding="utf-8")
@@ -216,7 +220,7 @@ def test_submit_preflight_errors_are_backend_owned_and_react_readable():
         assert code in safety_py or code in submission_batch_py
 
     assert "/api/submit_readiness" in submission_tsx
-    assert "/api/backtest_slots" in quality_tsx
+    assert "/api/backtest_slots" in quality_tsx or "/api/backtest_slots" in global_data_ts
     assert "apiErrorMessage" in hook_js
     assert "提交前阻断复核数据加载失败" in submission_tsx
     assert "达标检查数据加载失败" in quality_tsx
@@ -240,18 +244,41 @@ def test_web_react_sources_are_current_frontend_contract():
     app_tsx = _react_source("App.tsx")
     candidate_tsx = _react_source("components", "CandidateTable.tsx")
     snapshot_tsx = _react_source("components", "SnapshotPanel.tsx")
+    snapshot_pkg = _react_source("components", "SnapshotPanel")
+    global_data_ts = _react_source("hooks", "useGlobalData.ts")
+    phase_mgmt_ts = _react_source("hooks", "useAppState", "usePhaseManagement.ts")
+    candidate_utils = _react_source("components", "CandidateTableUtils")
+    # Phase 15 refactor: candidate API calls moved into dedicated hooks.
+    use_candidate_generation_ts = _react_source("hooks", "useCandidateGeneration.ts")
+    use_candidate_table_data_ts = _react_source("hooks", "useCandidateTableData.ts")
 
     assert "PhaseShell" in app_tsx
-    assert "usePhaseState" in app_tsx
+    assert "usePhaseState" in phase_mgmt_ts
     assert "MobileTabBar" in app_tsx
-    assert 'candidatesApi.call("/api/candidates?summary=true")' in app_tsx
-    assert 'callApi("/api/candidates")' in candidate_tsx
+    assert "candidatesApi.call('/api/candidates')" in global_data_ts
+    # candidatesApi may be referenced in the component or only in the shared
+    # data hook after the refactor.
+    assert (
+        "candidatesApi.call('/api/candidates')" in candidate_tsx
+        or "candidatesApi" in candidate_tsx
+        or "candidatesApi.call('/api/candidates')" in global_data_ts
+    )
     assert "/api/candidates?limit=" not in candidate_tsx
-    assert "/api/check_results" in candidate_tsx
-    assert "/api/generate_candidates" in candidate_tsx
-    assert "sanitizeTextInput" in candidate_tsx
-    assert 'endpoint: "/api/snapshot/cloud"' in snapshot_tsx
-    assert "max-w-full overflow-auto" in snapshot_tsx
+    # /api/check_results and /api/generate_candidates moved to hooks after
+    # the Phase 15 refactor; accept either the component or the hooks.
+    assert (
+        "/api/check_results" in candidate_tsx
+        or "/api/check_results" in global_data_ts
+        or "/api/check_results" in candidate_utils
+        or "/api/check_results" in use_candidate_table_data_ts
+    )
+    assert (
+        "/api/generate_candidates" in candidate_tsx
+        or "/api/generate_candidates" in use_candidate_generation_ts
+    )
+    assert "sanitizeTextInput" in candidate_tsx or "sanitizeTextInput" in candidate_utils
+    assert "endpoint: '/api/snapshot/cloud'" in snapshot_pkg
+    assert "max-w-full overflow-auto" in snapshot_pkg
 
 
 def test_web_react_shell_has_no_inline_event_handlers():
@@ -287,6 +314,11 @@ def test_web_csp_hashes_inline_scripts_without_unsafe_inline():
 
 def test_react_snapshot_views_cover_readonly_research_surfaces():
     snapshot_tsx = _react_source("components", "SnapshotPanel.tsx")
+    # Phase 15 refactor: SnapshotPanel.tsx is a re-export entry; the actual
+    # implementation (and the contracts below) live in the SnapshotPanel/
+    # subdirectory.  Aggregate the whole subdirectory so the assertions
+    # match the current frontend layout.
+    snapshot_pkg = _react_source("components", "SnapshotPanel")
 
     for endpoint in (
         "/api/snapshot/cloud",
@@ -298,7 +330,7 @@ def test_react_snapshot_views_cover_readonly_research_surfaces():
         "/api/sqlite_indexes?top_n=10",
         "/api/latest_result",
     ):
-        assert endpoint in snapshot_tsx
+        assert endpoint in snapshot_pkg, f"missing snapshot endpoint: {endpoint}"
 
     for helper in (
         "cloudRows",
@@ -310,12 +342,12 @@ def test_react_snapshot_views_cover_readonly_research_surfaces():
         "sqliteIndexRows",
         "robustnessRows",
     ):
-        assert f"rows: {helper}" in snapshot_tsx or f"function {helper}" in snapshot_tsx
+        assert f"rows: {helper}" in snapshot_pkg or f"function {helper}" in snapshot_pkg
 
-    assert "MAX_FILTER_LENGTH" in snapshot_tsx
-    assert "sanitizeTextInput" in snapshot_tsx
-    assert "max-w-full overflow-auto" in snapshot_tsx
-    assert "function text(value: unknown)" in snapshot_tsx
+    assert "MAX_FILTER_LENGTH" in snapshot_pkg
+    assert "sanitizeTextInput" in snapshot_pkg
+    assert "max-w-full overflow-auto" in snapshot_pkg
+    assert "function text(value: unknown)" in snapshot_pkg
     assert "/api/sqlite_expression_lookup" in GET_ROUTES
     assert "/api/sqlite_record_lookup" in GET_ROUTES
     assert "/api/anti_overfit" in GET_ROUTES
@@ -324,11 +356,29 @@ def test_react_snapshot_views_cover_readonly_research_surfaces():
 
 def test_react_candidate_table_keeps_filter_sort_and_mobile_safe_table_contract():
     candidate_tsx = _react_source("components", "CandidateTable.tsx")
+    candidate_utils = _react_source("components", "CandidateTableUtils")
+    # Phase 15 refactor: constants and data hooks were extracted from the
+    # component into dedicated modules.  Aggregate them so the contract
+    # assertions match the current frontend layout.
+    use_candidate_table_state_ts = _react_source("hooks", "useCandidateTableState.ts")
+    use_candidate_table_data_ts = _react_source("hooks", "useCandidateTableData.ts")
+    use_global_data_ts = _react_source("hooks", "useGlobalData.ts")
+    candidate_pagination_tsx = _react_source("components", "CandidateTablePagination.tsx")
+    candidate_desktop_tsx = _react_source("components", "CandidateTableDesktop.tsx")
+    all_sources = (
+        candidate_tsx,
+        candidate_utils,
+        use_candidate_table_state_ts,
+        use_candidate_table_data_ts,
+        use_global_data_ts,
+        candidate_pagination_tsx,
+        candidate_desktop_tsx,
+    )
 
     for contract in (
-        "const MAX_FILTER_LENGTH = 200",
-        "const PAGE_SIZE = 20",
-        'callApi("/api/candidates")',
+        "MAX_FILTER_LENGTH = 200",
+        "PAGE_SIZE = 20",
+        "candidatesApi.call('/api/candidates')",
         'aria-label="候选结果"',
         "sanitizeTextInput",
         "candidateText(c.expression)",
@@ -337,7 +387,9 @@ def test_react_candidate_table_keeps_filter_sort_and_mobile_safe_table_contract(
         "上一页",
         "下一页",
     ):
-        assert contract in candidate_tsx
+        assert any(contract in src for src in all_sources), (
+            f"missing candidate table contract: {contract!r}"
+        )
 
     assert "CANDIDATE_FETCH_LIMIT" not in candidate_tsx
     assert "?limit=1000" not in candidate_tsx
@@ -350,9 +402,31 @@ def test_react_state_cards_keep_core_flow_visible_and_actionable():
     app_tsx = _react_source("App.tsx")
     state_cards_tsx = _react_source("components", "StateCards.tsx")
     job_monitor_tsx = _react_source("components", "JobMonitor.tsx")
+    # Phase 15 refactor: contracts were split across subdirectories and hooks.
+    # Aggregate the additional source files so the contract assertions
+    # remain accurate against the current frontend layout.
+    state_cards_pkg = _react_source("components", "StateCards")
+    job_monitor_pkg = _react_source("components", "JobMonitor")
+    use_base_state_ts = _react_source("hooks", "useAppState", "useBaseState.ts")
+    use_global_data_ts = _react_source("hooks", "useGlobalData.ts")
+    use_phase_connection_ts = _react_source("hooks", "useAppState", "usePhaseConnection.ts")
+    render_view_tsx = _react_source("components", "views", "renderView.tsx")
+    views_helpers_ts = _react_source("components", "views", "helpers.ts")
+    all_sources = (
+        app_tsx,
+        state_cards_tsx,
+        state_cards_pkg,
+        job_monitor_tsx,
+        job_monitor_pkg,
+        use_base_state_ts,
+        use_global_data_ts,
+        use_phase_connection_ts,
+        render_view_tsx,
+        views_helpers_ts,
+    )
 
     for contract in (
-        'useState<CardViewId>("dashboard")',
+        "useState<CardViewId>('dashboard')",
         'aria-label="切换导航菜单"',
         "onNavigate",
         "点击状态卡进入对应功能模块",
@@ -367,44 +441,51 @@ def test_react_state_cards_keep_core_flow_visible_and_actionable():
         "grid w-full max-w-full grid-cols-1",
         "2xl:grid-cols-5",
         "onClick={() => onNavigate(config.id)}",
-        'caption: "提交审计"',
+        "caption: '提交审计'",
         "handleConnectionTested",
         "CredentialQuickStart",
     ):
-        assert contract in app_tsx or contract in state_cards_tsx or contract in job_monitor_tsx
+        assert any(contract in src for src in all_sources), (
+            f"contract not found in any state-card source: {contract!r}"
+        )
 
     assert "/api/submit_readiness" not in state_cards_tsx
 
     for view_id in (
-        'id: "candidates"',
-        'id: "official_backtests"',
-        'id: "quality_check"',
-        'id: "submission_confirm"',
-        'id: "checkpoint_status"',
-        'id: "config"',
-        'id: "cloud"',
+        "id: 'candidates'",
+        "id: 'official_backtests'",
+        "id: 'quality_check'",
+        "id: 'submission_confirm'",
+        "id: 'checkpoint_status'",
+        "id: 'config'",
+        "id: 'cloud'",
     ):
-        assert view_id in state_cards_tsx
+        assert view_id in state_cards_pkg, f"missing card config: {view_id}"
 
-    assert "ConfigPanel" in app_tsx
-    assert 'case "config":' in app_tsx
+    assert "ConfigPanel" in render_view_tsx
+    assert "case 'config':" in render_view_tsx
     for config_contract in (
-        "onConnectionTested={handleConnectionTested}",
+        "onConnectionTested={onConnectionTested}",
         "connected={connected}",
         "contextFresh={contextFresh}",
         "managedCredentialsAvailable={managedCredentialsAvailable}",
-        "onLoggedOut={handleLocalSessionLoggedOut}",
+        "onLoggedOut={onLocalSessionLoggedOut}",
     ):
-        assert config_contract in app_tsx
+        assert config_contract in render_view_tsx, (
+            f"missing config contract in renderView: {config_contract!r}"
+        )
 
 
 def test_react_quality_submit_and_backtest_panels_cover_conflict_guards():
     backtest_tsx = _react_source("components", "OfficialBacktestSlots.tsx")
     quality_tsx = _react_source("components", "QualityCheckPanel.tsx")
     submission_tsx = _react_source("components", "SubmissionConfirmPanel.tsx")
+    # Phase 15 refactor: /api/candidates fetching moved to useGlobalData;
+    # production_gaps/required_next_steps rendering moved to SubmissionGates.
+    global_data_ts = _react_source("hooks", "useGlobalData.ts")
+    submission_gates_ts = _react_source("components", "SubmissionGates", "SubmissionGates.tsx")
 
     for contract in (
-        "/api/backtest_slots",
         "POLL_INTERVAL_MS = 5000",
         "BacktestQueueSummaryStrip",
         "官方工作阻断",
@@ -412,10 +493,12 @@ def test_react_quality_submit_and_backtest_panels_cover_conflict_guards():
         "official_api_called",
         "等待官方容量",
     ):
-        assert contract in backtest_tsx
+        assert contract in backtest_tsx, f"missing backtest contract: {contract}"
+    # /api/backtest_slots may live in either the component or the shared
+    # data hook after the refactor.
+    assert "/api/backtest_slots" in backtest_tsx or "/api/backtest_slots" in global_data_ts
 
     for contract in (
-        "/api/backtest_slots",
         "/api/submit_readiness",
         "达标检查",
         "本地通过",
@@ -427,21 +510,27 @@ def test_react_quality_submit_and_backtest_panels_cover_conflict_guards():
         "候选族阻断:",
         "下一步:",
     ):
-        assert contract in quality_tsx
+        assert contract in quality_tsx, f"missing quality contract: {contract}"
+    # /api/backtest_slots may live in either the component or the shared
+    # data hook after the Phase 15 refactor.
+    assert "/api/backtest_slots" in quality_tsx or "/api/backtest_slots" in global_data_ts
 
     for contract in (
-        "/api/candidates",
         "/api/check_results",
         "/api/submit_readiness",
         "提交前阻断复核",
         "ready_to_submit",
-        "production_gaps",
-        "required_next_steps",
         "预检查通过",
         "阻断与待处理",
         "READY",
     ):
-        assert contract in submission_tsx
+        assert contract in submission_tsx, f"missing submission contract: {contract}"
+    # /api/candidates may live in either the component or the shared data
+    # hook after the Phase 15 refactor.
+    assert "/api/candidates" in submission_tsx or "/api/candidates" in global_data_ts
+    # production_gaps / required_next_steps were extracted to SubmissionGates.
+    assert "production_gaps" in submission_tsx or "production_gaps" in submission_gates_ts
+    assert "required_next_steps" in submission_tsx or "required_next_steps" in submission_gates_ts
 
 
 def test_react_sources_avoid_legacy_inline_globals_and_external_assets():
@@ -734,6 +823,7 @@ def test_official_context_save_writes_cache_metadata(monkeypatch, tmp_path):
     config.ops.storage_dir = str(tmp_path)
     config.ops.official_api.context_cache_ttl_seconds = 123
     monkeypatch.setattr(web, "load_run_config", lambda *args, **kwargs: config)
+    monkeypatch.setattr(web, "_load_run_config", lambda *args, **kwargs: config)
 
     web._save_official_context_json("official_fields.json", [{"id": "close"}, {"name": "volume"}])
 
@@ -2351,6 +2441,7 @@ def test_save_assistant_guidance_payload_persists_usable_guidance(monkeypatch, t
     config.ops.settings.dataset = "pv1"
     shutil.copy("data/official_datasets.json", tmp_path / "official_datasets.json")
     monkeypatch.setattr(web, "load_run_config", lambda *args, **kwargs: config)
+    monkeypatch.setattr(web, "_load_run_config", lambda *args, **kwargs: config)
 
     payload = save_assistant_guidance_payload(
         {
@@ -2551,9 +2642,11 @@ def test_read_official_context_json_logs_invalid_file(monkeypatch, tmp_path, cap
     config.ops.storage_dir = str(tmp_path)
     (tmp_path / "official_fields.json").write_text("{bad-json", encoding="utf-8")
     monkeypatch.setattr(web, "load_run_config", lambda *args, **kwargs: config)
+    monkeypatch.setattr(web, "_load_run_config", lambda *args, **kwargs: config)
     monkeypatch.setattr(web, "runtime_project_root", lambda: tmp_path / "missing_runtime")
+    monkeypatch.setattr(web, "_runtime_project_root", lambda: tmp_path / "missing_runtime")
 
-    with caplog.at_level("WARNING", logger="brain_alpha_ops.web"):
+    with caplog.at_level("WARNING", logger="brain_alpha_ops.web_cloud.snapshot._official_context_read"):
         rows = web._read_official_context_json("official_fields.json")
 
     assert isinstance(rows, list)

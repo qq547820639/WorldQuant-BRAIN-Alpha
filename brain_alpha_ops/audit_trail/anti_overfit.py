@@ -15,6 +15,7 @@ from brain_alpha_ops.audit_trail.lifecycle_writer import (
     record_lifecycle_transition,
     record_optimization_suggestion,
 )
+from brain_alpha_ops.redaction import redact_error_message
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +46,7 @@ def record_mutation_result(
             context=ctx,
         )
     except Exception as exc:  # noqa: BLE001 — audit must never break the pipeline
-        logger.debug("mutation audit skipped: %s", exc)
+        logger.debug("mutation audit skipped: %s", redact_error_message(exc))
 
 
 def record_strategy_event(row: dict[str, Any]) -> None:
@@ -88,7 +89,7 @@ def record_strategy_event(row: dict[str, Any]) -> None:
                 context={**metrics, **meta},
             )
     except Exception as exc:  # noqa: BLE001
-        logger.debug("strategy audit skipped: %s", exc)
+        logger.debug("strategy audit skipped: %s", redact_error_message(exc))
 
 
 def make_strategy_audit_sink(
@@ -108,7 +109,7 @@ def make_strategy_audit_sink(
             try:
                 next_sink(row)
             except Exception:  # noqa: BLE001
-                pass
+                logger.debug("strategy audit sink downstream failed", exc_info=True)
     return _sink
 
 
@@ -124,7 +125,7 @@ def record_alpha_origin(
             context={"source": source, **dict(context or {})},
         )
     except Exception as exc:  # noqa: BLE001
-        logger.debug("alpha origin audit skipped: %s", exc)
+        logger.debug("alpha origin audit skipped: %s", redact_error_message(exc))
 
 
 def _row_meta(row: dict[str, Any]) -> dict[str, Any]:

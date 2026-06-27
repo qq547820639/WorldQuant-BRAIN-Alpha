@@ -2,14 +2,16 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from _react_source_utils import resolve_react_source
+
 
 ROOT = Path(__file__).resolve().parents[1]
 COMPONENTS = ROOT / "brain_alpha_ops" / "web" / "react_app" / "src" / "components"
-TYPES = ROOT / "brain_alpha_ops" / "web" / "react_app" / "src" / "types" / "index.ts"
+TYPES = ROOT / "brain_alpha_ops" / "web" / "react_app" / "src" / "types"
 
 
 def _source(path: Path) -> str:
-    return path.read_text(encoding="utf-8")
+    return resolve_react_source(path)
 
 
 def _submission_source() -> str:
@@ -17,7 +19,7 @@ def _submission_source() -> str:
         _source(COMPONENTS / name)
         for name in (
             "SubmissionConfirmPanel.tsx",
-            "SubmissionGates.tsx",
+            "SubmissionGates/SubmissionGates.tsx",
             "SubmissionChecklist.tsx",
             "SubmissionGuidance.tsx",
         )
@@ -42,33 +44,47 @@ def test_submit_readiness_contract_is_typed_for_react():
 
 
 def test_state_cards_defer_heavy_submit_readiness_to_confirm_panel():
-    source = _source(COMPONENTS / "StateCards.tsx")
+    source = "\n".join(
+        [
+            _source(COMPONENTS / "StateCards.tsx"),
+            _source(COMPONENTS / "StateCards" / "metrics.ts"),
+        ]
+    )
 
     assert 'const readinessApi = useApi<SubmitReadinessResponse>();' not in source
     assert 'void readinessApi.call("/api/submit_readiness");' not in source
     assert "const submitCount = readinessApi.data?.eligible_count ?? 0;" not in source
-    assert "const slotLimit = backtestSlotLimit(slotsApi.data);" in source
+    assert "const slotLimit = backtestSlotLimit(slotsData);" in source
     assert 'official_backtests: `${activeSlots}/${slotLimit}`,' in source
-    assert "backtestActiveCount(slotsApi.data)" in source
-    assert 'caption: "提交审计",' in source
-    assert 'eligible: "打开",' in source
+    assert "backtestActiveCount(slotsData)" in source
+    assert "caption: '提交审计'," in source
+    assert "eligible: '打开'," in source
 
 
 def test_submission_confirm_panel_exposes_readiness_summary():
     source = _submission_source()
 
     assert 'const readinessApi = useApi<SubmitReadinessResponse>();' in source
-    assert 'callReadiness<SubmitReadinessResponse>("/api/submit_readiness")' in source
-    assert "<ReadinessSummary readiness={readiness}" in source
-    assert '<ReadinessMetric label="阻断复核" value={ready ? "通过" : "未通过"}' in source
+    assert "callReadiness<SubmitReadinessResponse>('/api/submit_readiness')" in source
+    assert "<ReadinessSummary" in source
+    assert "readiness={readiness}" in source
+    assert '<ReadinessMetric' in source
+    assert 'label="阻断复核"' in source
+    assert "value={ready ? '通过' : '未通过'}" in source
     assert '<ReadinessMetric label="复核候选" value={formatCount(readiness?.eligible_count)} />' in source
     assert '<ReadinessMetric label="官方仿真" value={formatCount(summary.officially_simulated)} />' in source
-    assert '<ReadinessMetric label="官方接口" value={readiness?.official_api_called ? "已调用" : "未调用"} />' in source
-    assert '<ReadinessMetric label="真实提交" value={readiness?.real_submit_performed ? "真实提交已发生" : "未执行真实提交"}' in source
-    assert "readiness?.authoritative_stop_rule || readiness?.validation_command || readiness?.source" in source
-    assert 'readiness?.submit_ready_claim_allowed ? "可按验证结果继续人工复核" : "不可声明提交就绪"' in source
-    assert "判定来源: {readiness?.authoritative_stop_rule || readiness?.validation_command || readiness?.source" in source
-    assert "提交就绪声明: {readiness?.submit_ready_claim_allowed" in source
+    assert 'label="官方接口"' in source
+    assert "value={readiness?.official_api_called ? '已调用' : '未调用'}" in source
+    assert 'label="真实提交"' in source
+    assert "value={readiness?.real_submit_performed ? '真实提交已发生' : '未执行真实提交'}" in source
+    assert "readiness?.authoritative_stop_rule" in source
+    assert "readiness?.validation_command" in source
+    assert "readiness?.source" in source
+    assert "readiness?.submit_ready_claim_allowed" in source
+    assert "'可按验证结果继续人工复核'" in source
+    assert "'不可声明提交就绪'" in source
+    assert "判定来源:" in source
+    assert "提交就绪声明:" in source
     assert "allBlockers = readiness?.top_blocking_reasons || [];" in source
     assert "allFamilyBlockers = readiness?.top_family_blocking_reasons || [];" in source
     assert "allProductionGaps = readiness?.production_gaps || [];" in source

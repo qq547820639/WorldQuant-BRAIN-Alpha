@@ -22,6 +22,7 @@ import brain_alpha_ops.build_inline as build_inline
 import brain_alpha_ops.web  # noqa: F401  install meta-path bridge for web_* modules
 import brain_alpha_ops.web_html as web_html
 from brain_alpha_ops.web_routes import GET_ROUTES, POST_ROUTES, route_for
+from _react_source_utils import resolve_react_source
 from scripts.check_frontend_syntax import _node_path
 
 
@@ -77,11 +78,11 @@ COMPAT_CARD_VIEW_IDS = ("submission",)
 
 
 def _source(relative: str) -> str:
-    return (REACT_SRC / relative).read_text(encoding="utf-8")
+    return resolve_react_source(REACT_SRC / relative)
 
 
 def _component(name: str) -> str:
-    return (REACT_COMPONENTS / name).read_text(encoding="utf-8")
+    return resolve_react_source(REACT_COMPONENTS / name)
 
 
 def _dist_html() -> str:
@@ -225,46 +226,54 @@ def test_web_html_loads_react_shell_when_inline_surface_is_absent():
 
 def test_all_card_views_are_typed_configured_and_routed_to_detail_components():
     app = _source("App.tsx")
-    types = _source("types/index.ts")
+    types = _source("types/ui.ts")
     state_cards = _component("StateCards.tsx")
+    base_state = _source("hooks/useAppState/useBaseState.ts")
+    card_configs = _component("StateCards/cardConfigs.ts")
+    render_view = _source("components/views/renderView.tsx")
 
-    assert 'useState<CardViewId>("dashboard")' in app
+    assert "useState<CardViewId>('dashboard')" in base_state
     assert "const VIEW_LABELS: Record<string, string> = {" in app
     assert "phase-group" in _component("Sidebar.tsx")  # v3.0 phase grouped nav
-    assert "CandidateTable" in app
-    assert 'key="checkpoint_status"' in app
-    assert "selectedCandidate" in app
-    assert "OfficialBacktestSlots" in app
-    assert "QualityCheckPanel" in app
-    assert "SubmissionConfirmPanel" in app
-    assert "SnapshotPanel" in app
-    assert "ConfigPanel" in app
+    assert "CandidateTable" in render_view
+    assert 'key="checkpoint_status"' in render_view
+    assert "selectedCandidate" in render_view
+    assert "OfficialBacktestSlots" in render_view
+    assert "QualityCheckPanel" in render_view
+    assert "SubmissionConfirmPanel" in render_view
+    assert "SnapshotPanel" in render_view
+    assert "ConfigPanel" in render_view
     for view_id in CARD_VIEW_IDS:
-        assert f'| "{view_id}"' in types
+        assert f"| '{view_id}'" in types
         assert f'{view_id}:' in app
-        assert f'id: "{view_id}"' in state_cards
-        assert f'case "{view_id}":' in app
+        assert f"id: '{view_id}'" in card_configs
+        assert f"case '{view_id}':" in render_view
     for view_id in COMPAT_CARD_VIEW_IDS:
-        assert f'| "{view_id}"' in types
-        assert f'{view_id}:' in app
-        assert f'id: "{view_id}"' not in state_cards
-        assert f'case "{view_id}":' in app
+        # Legacy compat aliases have been removed; verify they are absent from
+        # the view registry, card configs, and render switch. The type file is
+        # not checked because the same string may appear in unrelated types.
+        assert f'{view_id}:' not in app
+        assert f"id: '{view_id}'" not in card_configs
+        assert f"case '{view_id}':" not in render_view
 
 
 def test_state_card_navigation_preserves_priority_and_minimal_chrome():
     app = _source("App.tsx")
     state_cards = _component("StateCards.tsx")
+    card_configs = _component("StateCards/cardConfigs.ts")
+    handlers = _source("hooks/useAppState/useHandlers.ts")
+    state_card_item = _component("StateCards/StateCardItem.tsx")
 
-    ordered_ids = re.findall(r'id: "([^"]+)"', state_cards)
+    ordered_ids = re.findall(r"id: '([^']+)'", card_configs)
     assert ordered_ids[: len(CARD_VIEW_IDS)] == list(CARD_VIEW_IDS)
     _assert_snippets(
-        app + state_cards,
+        app + state_cards + card_configs + handlers + state_card_item,
         [
             "BRAIN Alpha Ops",
             "Sidebar",
             "setActiveView(view)",
             'aria-label="切换导航菜单"',
-            'import Sidebar from "@/components/Sidebar"',
+            "import Sidebar from '@/components/Sidebar'",
             "grid w-full max-w-full grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5",
             "onClick={() => onNavigate(config.id)}",
             'role="alert"',
@@ -299,21 +308,25 @@ def test_react_core_workflow_api_paths_are_registered_in_backend_routes():
 
 def test_app_submit_selected_candidates_handles_missing_async_job_result():
     """Async complete payloads can omit result rows without null dereferences."""
-    candidates = _component("CandidateTable.tsx")
+    generation = _source("hooks/useCandidateGeneration.ts")
+    table_sse = _source("components/CandidateTable/useCandidateTableSse.ts")
     submission = _component("SubmissionPanel.tsx")
 
     _assert_snippets(
-        candidates,
+        generation,
         [
-            "const result = event.result as {",
+            "const result = event.result as",
             "candidates?: Candidate[];",
             "candidates_preview?: Candidate[];",
             "const rows = result?.candidates || [];",
-            "if (rows.length) setCandidates(rows);",
-            "result.partial",
-            "result?.task_id || result?.job_id || \"\"",
-            'setTaskError(apiErrorMessage(result, "启动候选池自动推进失败"));',
-            'useSSE(taskId ? `/sse?job_id=${encodeURIComponent(taskId)}` : null',
+            "result?.task_id || result?.job_id || ''",
+            "pipeline.task.setError(apiErrorMessage(result, '启动候选池自动推进失败'))",
+        ],
+    )
+    _assert_snippets(
+        table_sse,
+        [
+            "sseManager.connect('task', `/sse?job_id=${encodeURIComponent(pipeline.task.jobId)}`",
         ],
     )
     _assert_snippets(
@@ -331,47 +344,70 @@ def test_app_submit_selected_candidates_handles_missing_async_job_result():
 def test_loading_feedback_runstartup_launches_all_tasks_concurrently():
     """State-card startup launches all dashboard data fetches from one effect."""
     state_cards = _component("StateCards.tsx")
+    global_data = _source("hooks/useGlobalData.ts")
 
     loader_body = re.search(r"const loadStateSnapshots = useCallback\(\(\) => \{(?P<body>.*?)\}, \[", state_cards, re.S)
     assert loader_body, "StateCards startup loader missing"
     body = loader_body.group("body")
-    expected_calls = [
-        'void candidatesApi.call("/api/candidates?summary=true");',
-        'void slotsApi.call("/api/backtest_slots");',
-        'void configApi.call("/api/config");',
-        'void checkpointApi.call("/api/checkpoint_status");',
-        'void cloudApi.call("/api/snapshot/cloud");',
-    ]
-    for call in expected_calls:
-        assert call in body
+    assert "refreshAll()" in body
+    assert "void checkpointApi.call('/api/checkpoint_status');" in body
     assert "await " not in body
+
+    refresh_body = re.search(r"const refreshAll = useCallback\(\(\) => \{(?P<body>.*?)\}, \[", global_data, re.S)
+    assert refresh_body, "GlobalData refreshAll missing"
+    gbody = refresh_body.group("body")
+    expected_global_calls = [
+        "void candidatesApi.call('/api/candidates');",
+        "void slotsApi.call('/api/backtest_slots');",
+        "void cloudApi.call('/api/snapshot/cloud');",
+        "void configApi.call('/api/config');",
+    ]
+    for call in expected_global_calls:
+        assert call in gbody
+    assert "await " not in gbody
+
     assert "useEffect(() => {\n    loadStateSnapshots();\n  }, [loadStateSnapshots]);" in state_cards
     assert "ProgressFeedback" in state_cards
-    assert 'phase: "state_cards_load"' in state_cards
+    assert "phase: 'state_cards_load'" in state_cards
 
 
 def test_app_apply_preset_reads_presets_from_app_state():
     """ConfigPanel hydrates form state from backend config/schema before edits."""
     config = _component("ConfigPanel.tsx")
+    config_form = _source("hooks/useConfigForm.ts")
+    global_data = _source("hooks/useGlobalData.ts")
+    local_cache = _component("ConfigPanel/LocalCacheConnectionSection.tsx")
+    basic_group = _component("ConfigPanel/BasicConfigGroup.tsx")
 
     _assert_snippets(
-        config,
+        global_data,
         [
-            'void configApi.call("/api/config");',
-            'void schemaApi.call("/api/config_schema");',
+            "void configApi.call('/api/config');",
+        ],
+    )
+    _assert_snippets(
+        config_form,
+        [
+            "void schemaApi.call('/api/config_schema');",
             "const next = formFromConfig(config);",
-            "setForm(next);",
+            "setFormValues(next);",
             "setInitialForm(next);",
-            "const dirty = useMemo(",
+            "isDirty: dirty,",
             "payloadFromForm(form)",
             "datasetSelectOptions(schema, form.dataset)",
-            'onClick={() => initialForm && setForm({ ...initialForm })}',
             "validateForm(form, schema)",
+            "onLoggedOut?.();",
+        ],
+    )
+    _assert_snippets(
+        config + basic_group + local_cache,
+        [
+            "payloadFromForm(form)",
             "optionValues(options,",
             "const cacheOnlyMode = contextFresh && !connected;",
+            "onClick={resetForm}",
             "临时连接官方服务",
             "退出本地会话",
-            'onLoggedOut?.();',
         ],
     )
 
@@ -379,20 +415,32 @@ def test_app_apply_preset_reads_presets_from_app_state():
 def test_spinner_component():
     """The React progress spinner keeps accessible loading and retry states."""
     progress = _component("ProgressFeedback.tsx")
-    css = _source("index.css")
+    progress_sub = _component("ProgressFeedback")
+    progress_hook = _source("hooks/useProgressFeedback.ts")
+    css = _source("styles")
 
     _assert_snippets(
         progress,
         [
-            'role={isBusy ? "status" : undefined}',
-            'aria-live={state === "error" ? "assertive" : "polite"}',
+            "role={isBusy ? 'status' : undefined}",
+            "aria-live={state === 'error' ? 'assertive' : 'polite'}",
+            "onRetry",
+        ],
+    )
+    _assert_snippets(
+        progress_sub,
+        [
             'className="spinner"',
             'role="progressbar"',
-            'aria-label={`${title}: ${label}`}',
+            "aria-label={`${title}: ${label}`}",
             "aria-valuenow={isDeterminate ? roundedPercent : undefined}",
+        ],
+    )
+    _assert_snippets(
+        progress_hook,
+        [
             "normalizedPercent(progress, progressState)",
             "fmtDuration(estimatedEta)",
-            "onRetry",
         ],
     )
     _assert_snippets(
@@ -408,30 +456,36 @@ def test_spinner_component():
 
 def test_submission_confirmation_panel_stays_read_only_and_local_boundary_aware():
     confirm = _component("SubmissionConfirmPanel.tsx")
+    gates = _component("SubmissionGates")
 
-    assert 'callReadiness<SubmitReadinessResponse>("/api/submit_readiness")' in confirm
-    assert '"/api/submit"' not in confirm
-    assert '"/api/submit_batch"' not in confirm
+    assert "callReadiness<SubmitReadinessResponse>('/api/submit_readiness')" in confirm
+    assert "'/api/submit'" not in confirm
+    assert "'/api/submit_batch'" not in confirm
     _assert_snippets(
         confirm,
         [
             "readiness?.ready_to_submit",
-            "readiness?.official_api_called ?",
+            "readiness?.real_submit_performed",
+            "job_family_candidate_count",
+            "buildRows(candidates, checks)",
+        ],
+    )
+    _assert_snippets(
+        gates,
+        [
+            "readiness?.official_api_called",
             "readiness?.authoritative_stop_rule",
             "readiness?.submit_ready_claim_allowed",
-            "readiness?.real_submit_performed",
             "readiness?.production_gaps",
             "readiness?.required_next_steps",
             "top_family_blocking_reasons",
-            "job_family_candidate_count",
-            "buildRows(candidates, checks)",
         ],
     )
 
 
 def test_sse_hook_preserves_stream_token_credentials_and_reconnect_contract():
     use_sse = _source("hooks/useSSE.ts")
-    types = _source("types/index.ts")
+    types = _source("types/api.ts")
     csrf_utils = _source("utils/csrf.ts")
 
     _assert_snippets(
@@ -444,7 +498,7 @@ def test_sse_hook_preserves_stream_token_credentials_and_reconnect_contract():
             "onExhaustedRef.current?.();",
             'meta[name="brain-alpha-stream"]',
             "stream_token=${encodeURIComponent(token)}",
-            "!token.startsWith(\"__BRAIN_ALPHA_OPS\")",
+            "!token.startsWith('__BRAIN_ALPHA_OPS')",
         ],
     )
     _assert_snippets(

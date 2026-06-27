@@ -37,6 +37,10 @@ from brain_alpha_ops.web_routes import (
     _submit_readiness_payload,
     _cloud_snapshot_payload,
 )
+from brain_alpha_ops.web.dispatch.get_routes import _helpers as _routes_helpers
+from brain_alpha_ops.web.dispatch.get_routes._helpers import (
+    _build_submit_readiness_payload as _shared_submit_readiness_payload,
+)
 
 
 # ═══════════════════════ Public Config Tests ═════════════════════════
@@ -71,8 +75,13 @@ class TestPublicConfig:
 
 
 def test_web_routes_submit_readiness_uses_shared_compact_contract(monkeypatch):
-    monkeypatch.setattr(
-        "brain_alpha_ops.web_submit_readiness.run_live_submit_readiness_check",
+    # Patch run_live_submit_readiness_check in the exact module globals that
+    # submit_readiness_payload looks it up from. The web_* bridge creates
+    # duplicate module objects, so dotted-string monkeypatch targets resolve
+    # to a different object than the one owning submit_readiness_payload.
+    monkeypatch.setitem(
+        _shared_submit_readiness_payload.__globals__,
+        "run_live_submit_readiness_check",
         lambda: {
             "ok": True,
             "ready_to_submit": False,
@@ -142,9 +151,11 @@ class TestReadJSONLTail:
             temp_path = f.name
 
         try:
-            # Mock _storage_file to return our temp path
-            original_module = __import__("brain_alpha_ops.web_routes", fromlist=["_storage_file"])
-            with patch.object(original_module, "_storage_file", return_value=Path(temp_path)):
+            # Patch _storage_file on the module where _read_jsonl_tail looks
+            # it up (its __globals__). The web_* bridge creates duplicate
+            # module objects, so patching brain_alpha_ops.web_routes would
+            # mutate a different namespace than the one bound to the function.
+            with patch.object(_routes_helpers, "_storage_file", return_value=Path(temp_path)):
                 rows, total, _ = _read_jsonl_tail("test.jsonl", limit=10)
                 assert len(rows) == 3
                 assert total == 3
@@ -159,8 +170,7 @@ class TestReadJSONLTail:
             temp_path = f.name
 
         try:
-            original_module = __import__("brain_alpha_ops.web_routes", fromlist=["_storage_file"])
-            with patch.object(original_module, "_storage_file", return_value=Path(temp_path)):
+            with patch.object(_routes_helpers, "_storage_file", return_value=Path(temp_path)):
                 rows, _, _ = _read_jsonl_tail("test.jsonl", limit=5)
                 # deque limit = 5, so we get last 5 items
                 assert len(rows) == 5
@@ -177,8 +187,7 @@ class TestReadJSONLTail:
             temp_path = f.name
 
         try:
-            original_module = __import__("brain_alpha_ops.web_routes", fromlist=["_storage_file"])
-            with patch.object(original_module, "_storage_file", return_value=Path(temp_path)):
+            with patch.object(_routes_helpers, "_storage_file", return_value=Path(temp_path)):
                 rows, total, _ = _read_jsonl_tail("test.jsonl", limit=10)
                 assert len(rows) == 2  # only dict rows
                 assert total == 2

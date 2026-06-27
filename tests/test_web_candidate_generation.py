@@ -7,6 +7,8 @@ from brain_alpha_ops.research.repository import ResearchRepository
 import brain_alpha_ops.web as web
 import brain_alpha_ops.web_candidates.generation as web_candidate_generation
 from brain_alpha_ops.web_candidates.generation import generate_candidates_payload
+from brain_alpha_ops.web_candidates.generation import _generation as _generation_module
+from brain_alpha_ops.web.business.web_jobs import job_get as _real_job_get
 
 
 class FakeToolbox:
@@ -119,8 +121,8 @@ def test_generate_candidates_payload_delegates_to_toolbox_and_scores_candidates(
         ],
     }
 
-    original_engine = web_candidate_generation.LocalBacktestEngine
-    web_candidate_generation.LocalBacktestEngine = FakePassingLocalBacktestEngine
+    original_engine = _generation_module.LocalBacktestEngine
+    _generation_module.LocalBacktestEngine = FakePassingLocalBacktestEngine
     try:
         payload = generate_candidates_payload(
             {"count": 2000, "assistant_min_confidence": 2, "use_research_memory": False},
@@ -129,7 +131,7 @@ def test_generate_candidates_payload_delegates_to_toolbox_and_scores_candidates(
             repository_factory=lambda storage_dir: FakeRepository(storage_dir, saves),
         )
     finally:
-        web_candidate_generation.LocalBacktestEngine = original_engine
+        _generation_module.LocalBacktestEngine = original_engine
 
     assert payload["ok"] is True
     assert payload["count"] == 1
@@ -153,7 +155,7 @@ def test_generate_candidates_payload_uses_pool_deficit_as_refill_budget(monkeypa
     run_config = RunConfig(environment="production")
     run_config.ops.storage_dir = str(tmp_path)
     run_config.ops.settings.dataset = "pv1"
-    monkeypatch.setattr(web_candidate_generation, "LocalBacktestEngine", FakePassingLocalBacktestEngine)
+    monkeypatch.setattr(_generation_module, "LocalBacktestEngine",FakePassingLocalBacktestEngine)
     calls = []
     toolbox_result = {
         "ok": True,
@@ -216,7 +218,7 @@ def test_generate_candidates_payload_does_not_use_pool_size_without_maintain_mod
     run_config = RunConfig(environment="production")
     run_config.ops.storage_dir = str(tmp_path)
     run_config.ops.settings.dataset = "pv1"
-    monkeypatch.setattr(web_candidate_generation, "LocalBacktestEngine", FakePassingLocalBacktestEngine)
+    monkeypatch.setattr(_generation_module, "LocalBacktestEngine",FakePassingLocalBacktestEngine)
     calls = []
 
     payload = generate_candidates_payload(
@@ -238,7 +240,7 @@ def test_generate_candidates_payload_caps_pool_maintenance_refill_budget(monkeyp
     run_config = RunConfig(environment="production")
     run_config.ops.storage_dir = str(tmp_path)
     run_config.ops.settings.dataset = "pv1"
-    monkeypatch.setattr(web_candidate_generation, "LocalBacktestEngine", FakePassingLocalBacktestEngine)
+    monkeypatch.setattr(_generation_module, "LocalBacktestEngine",FakePassingLocalBacktestEngine)
     calls = []
 
     payload = generate_candidates_payload(
@@ -263,7 +265,7 @@ def test_generate_candidates_payload_attaches_local_backtest_evidence(monkeypatc
     run_config = RunConfig(environment="production")
     run_config.ops.storage_dir = str(tmp_path)
     run_config.ops.settings.dataset = "pv1"
-    monkeypatch.setattr(web_candidate_generation, "LocalBacktestEngine", FakeLocalBacktestEngine)
+    monkeypatch.setattr(_generation_module, "LocalBacktestEngine",FakeLocalBacktestEngine)
     calls = []
     toolbox_result = {
         "ok": True,
@@ -312,7 +314,7 @@ def test_generate_candidates_payload_rejects_unsupported_local_backtest_fields(m
     run_config = RunConfig(environment="production")
     run_config.ops.storage_dir = str(tmp_path)
     run_config.ops.settings.dataset = "pv1"
-    monkeypatch.setattr(web_candidate_generation, "LocalBacktestEngine", FakeLocalBacktestEngine)
+    monkeypatch.setattr(_generation_module, "LocalBacktestEngine",FakeLocalBacktestEngine)
     toolbox_result = {
         "ok": True,
         "candidates": [
@@ -355,7 +357,7 @@ def test_generate_candidates_payload_rejects_rha_metadata_fields(monkeypatch, tm
     run_config = RunConfig(environment="production")
     run_config.ops.storage_dir = str(tmp_path)
     run_config.ops.settings.dataset = "pv13"
-    monkeypatch.setattr(web_candidate_generation, "LocalBacktestEngine", FakeLocalBacktestEngine)
+    monkeypatch.setattr(_generation_module, "LocalBacktestEngine",FakeLocalBacktestEngine)
     toolbox_result = {
         "ok": True,
         "candidates": [
@@ -414,7 +416,7 @@ def test_generate_candidates_payload_rejects_non_signal_fields_even_when_locally
     run_config.ops.storage_dir = str(tmp_path)
     run_config.ops.settings.dataset = "pv13"
     run_config.ops.budget.min_local_quality_score = 0.0
-    monkeypatch.setattr(web_candidate_generation, "LocalBacktestEngine", PermissiveBacktestEngine)
+    monkeypatch.setattr(_generation_module, "LocalBacktestEngine",PermissiveBacktestEngine)
     toolbox_result = {
         "ok": True,
         "candidates": [
@@ -452,7 +454,7 @@ def test_generate_candidates_payload_marks_generation_risk_candidate(monkeypatch
     run_config = RunConfig(environment="production")
     run_config.ops.storage_dir = str(tmp_path)
     run_config.ops.settings.dataset = "pv1"
-    monkeypatch.setattr(web_candidate_generation, "LocalBacktestEngine", FakeLocalBacktestEngine)
+    monkeypatch.setattr(_generation_module, "LocalBacktestEngine",FakeLocalBacktestEngine)
     toolbox_result = {
         "ok": True,
         "candidates": [
@@ -488,7 +490,7 @@ def test_generate_candidates_payload_filters_local_backtest_failed_metrics(monke
     run_config = RunConfig(environment="production")
     run_config.ops.storage_dir = str(tmp_path)
     run_config.ops.settings.dataset = "pv1"
-    monkeypatch.setattr(web_candidate_generation, "LocalBacktestEngine", FakeLocalBacktestEngine)
+    monkeypatch.setattr(_generation_module, "LocalBacktestEngine",FakeLocalBacktestEngine)
     toolbox_result = {
         "ok": True,
         "candidates": [
@@ -675,7 +677,7 @@ def test_web_generate_route_creates_tracked_quality_job(monkeypatch, tmp_path):
 
     row = None
     for _ in range(50):
-        row = web._job_get(response["job_id"])
+        row = _real_job_get(response["job_id"])
         if row and row.get("status") == "completed":
             break
         time.sleep(0.02)
