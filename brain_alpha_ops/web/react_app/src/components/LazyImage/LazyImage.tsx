@@ -6,7 +6,7 @@ import { memo, useState, useCallback, useEffect, type ImgHTMLAttributes, type Re
 import Skeleton from '../Skeleton';
 import { useInView } from '../../hooks/useIntersectionObserver';
 
-interface LazyImageProps extends Omit<ImgHTMLAttributes<HTMLImageElement>, 'onLoad' | 'onError'> {
+export interface LazyImageProps extends Omit<ImgHTMLAttributes<HTMLImageElement>, 'onLoad' | 'onError'> {
   src: string;
   alt: string;
   placeholder?: ReactNode;

@@ -13,7 +13,6 @@ import { saveResumeState } from '@/utils/resumeState';
 import { clearSavedJobId } from '@/hooks/useJobRecovery';
 
 const WATCHDOG_POLL_INTERVAL = 2000;
-const WATCHDOG_MAX_FAILURES = 12;
 
 function sendCompletionNotification(title: string, body: string): void {
   try {
@@ -41,7 +40,6 @@ export function useJobWatchdog(
   jobId: string | null,
   sseConnected: boolean,
   {
-    pollFailures,
     setPollFailures,
     callApi,
     notify,
@@ -52,7 +50,7 @@ export function useJobWatchdog(
   }: WatchdogCallbacks
 ) {
   const recordStatusRefreshFailure = useCallback(
-    (message: string) => {
+    (_message: string) => {
       setPollFailures((previous) => {
         const next = previous + 1;
         return next;

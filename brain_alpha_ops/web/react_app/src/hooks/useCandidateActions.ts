@@ -1,11 +1,10 @@
-import { useCallback, useRef, useMemo } from 'react';
+import { useCallback } from 'react';
 import type { SSEEvent, Candidate } from '@/types';
 import {
   type CandidatePoolSnapshot,
   type CandidateWorkflowPlan,
-  type CandidateCheckResult,
 } from '@/components/CandidateTableUtils';
-import type { CandidatePipeline, AutoPipelineStage } from './useCandidatePipeline';
+import type { CandidatePipeline } from './useCandidatePipeline';
 import { useCandidateGeneration } from './useCandidateGeneration';
 import { useCandidateSimulation } from './useCandidateSimulation';
 import {

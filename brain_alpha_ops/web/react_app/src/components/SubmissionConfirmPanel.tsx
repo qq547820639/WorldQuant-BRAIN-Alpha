@@ -9,14 +9,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { apiErrorMessage } from '@/helpers/errorExperience';
 import { useApi } from '@/hooks/useApi';
 import { useGlobalData } from '@/hooks/useGlobalData';
-import type { Candidate, SubmitReadinessResponse } from '@/types';
+import type { SubmitReadinessResponse } from '@/types';
 import { isRecord } from '@/types';
 import ProgressFeedback from '@/components/ProgressFeedback';
 import StatusFlowDiagram from '@/components/StatusFlowDiagram';
 import {
   ConfirmationTable,
   buildRows,
-  formatCount,
   type CheckResult,
 } from '@/components/SubmissionChecklist';
 import { ReadinessSummary } from '@/components/SubmissionGates';

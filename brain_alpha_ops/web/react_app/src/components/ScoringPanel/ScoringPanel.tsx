@@ -6,15 +6,12 @@ import { resolveJobEventState } from '@/helpers/runPayload';
 import { useApi } from '@/hooks/useApi';
 import { useSSE } from '@/hooks/useSSE';
 import ProgressFeedback from '@/components/ProgressFeedback';
-import Skeleton from '../Skeleton';
 import ErrorCard from '../ErrorCard';
 import EmptyState from '../EmptyState';
 import type { ScoreHistoryPoint } from '@/components/ScoreBreakdown/ScoreHistory';
 import type {
-  AttributionNode,
   Candidate,
   GateDecisionPayload,
-  OfficialGateResult,
   ScoringAttributionResponse,
   ScoringResult,
   SSEEvent,
@@ -249,7 +246,7 @@ export default function ScoringPanel({ notify, candidate }: Props) {
   const failures = nonEmpty(scoring?.top_failures) || nonEmpty(attributionData?.top_failures) || [];
   const hints =
     nonEmpty(scoring?.improvement_hints) || nonEmpty(attributionData?.improvement_hints) || [];
-  const selfCorrelation = metricWithStatus(
+  metricWithStatus(
     candidate?.official_metrics?.self_correlation,
     candidate?.official_metrics?.self_correlation_status,
     candidate?.official_metrics?.correlation

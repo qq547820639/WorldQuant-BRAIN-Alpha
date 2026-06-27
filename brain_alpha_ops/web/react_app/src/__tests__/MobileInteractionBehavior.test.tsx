@@ -35,7 +35,7 @@ function makeCandidate(overrides: Partial<Candidate> = {}): Candidate {
       status: 'gate_rejected',
     },
     local_quality: { passed: false, reasons: [LONG_BLOCKER_TEXT] },
-    gate: { failed_reasons: [LONG_BLOCKER_TEXT], submission_ready: false },
+    gate: { passed: false, status: 'gate_rejected', failed_reasons: [LONG_BLOCKER_TEXT], submission_ready: false },
     ...overrides,
   };
 }

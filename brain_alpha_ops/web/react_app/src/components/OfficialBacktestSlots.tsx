@@ -4,7 +4,6 @@ import { useCallback, useEffect } from 'react';
 import { readinessReasonLabel } from '@/helpers/readinessLabels';
 import { useGlobalData } from '@/hooks/useGlobalData';
 import type { BacktestQueueSummary, BacktestSlot, BacktestSlotsResponse } from '@/types';
-import ProgressFeedback from '@/components/ProgressFeedback';
 import { backtestActiveCount, backtestSlotLimit } from '@/utils/backtestSlots';
 import Skeleton from './Skeleton';
 import ErrorCard from './ErrorCard';
@@ -15,7 +14,7 @@ interface Props {
 
 const POLL_INTERVAL_MS = 5000;
 
-export default function OfficialBacktestSlots({ notify }: Props) {
+export default function OfficialBacktestSlots({}: Props) {
   const { slots: slotsGlobal, refreshAll } = useGlobalData();
 
   const load = useCallback(async () => {
@@ -385,13 +384,4 @@ function formatRate(value: unknown) {
   const number = Number(value ?? 0);
   if (!Number.isFinite(number) || number <= 0) return '0.0%';
   return `${(Math.max(0, Math.min(1, number)) * 100).toFixed(1)}%`;
-}
-
-function nextActionLabel(value: unknown) {
-  const text = String(value || '');
-  if (text === 'trusted_environment_official_simulation_required') return '官方复核';
-  if (text === 'wait_for_open_backtest_slot') return '等待槽位';
-  if (text === 'generate_candidates') return '生成候选';
-  if (text === 'improve_or_regenerate_candidates') return '改进候选';
-  return text || '-';
 }

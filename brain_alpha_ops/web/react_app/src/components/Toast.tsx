@@ -174,15 +174,6 @@ function SingleToast({ toast, onClose }: SingleToastProps) {
     [duration]
   );
 
-  const pauseTimer = useCallback(() => {
-    if (animationFrameRef.current) {
-      cancelAnimationFrame(animationFrameRef.current);
-      animationFrameRef.current = null;
-    }
-    const elapsed = Date.now() - startTimeRef.current;
-    remainingRef.current = Math.max(0, remainingRef.current - elapsed);
-  }, []);
-
   const handleClose = useCallback(() => {
     if (animationFrameRef.current) {
       cancelAnimationFrame(animationFrameRef.current);

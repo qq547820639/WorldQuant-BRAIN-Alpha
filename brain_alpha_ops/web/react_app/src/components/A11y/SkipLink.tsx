@@ -63,7 +63,7 @@ export default memo(function SkipLink({
         e.currentTarget.style.borderRadius = '6px';
         e.currentTarget.style.color = 'var(--color-text-primary)';
         e.currentTarget.style.fontSize = '14px';
-        e.currentTarget.style.fontWeight = 500;
+        e.currentTarget.style.fontWeight = '500';
       }}
       onBlur={(e) => {
         e.currentTarget.style.left = '-9999px';

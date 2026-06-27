@@ -4,7 +4,7 @@
 import { memo } from 'react';
 import Spinner from '../LoadingState/Spinner';
 
-interface RetryButtonProps {
+export interface RetryButtonProps {
   onRetry: () => void;
   loading?: boolean;
   label?: string;

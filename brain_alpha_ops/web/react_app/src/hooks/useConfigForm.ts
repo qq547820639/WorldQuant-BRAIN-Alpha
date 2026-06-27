@@ -95,7 +95,6 @@ export function useConfigForm({
     values: form,
     setValue,
     setValues: setFormValues,
-    reset,
     isDirty: dirty,
   } = formValidation;
 

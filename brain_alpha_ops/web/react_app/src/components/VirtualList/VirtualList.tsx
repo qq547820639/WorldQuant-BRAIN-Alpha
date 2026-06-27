@@ -7,7 +7,7 @@ import { useVirtualizer, useWindowVirtualizer, type Virtualizer } from '@tanstac
 
 type VirtualListDirection = 'vertical' | 'horizontal';
 
-interface VirtualListProps<T> {
+export interface VirtualListProps<T> {
   items: T[];
   renderItem: (item: T, index: number) => ReactNode;
   itemSize?: number;
@@ -55,15 +55,19 @@ const VirtualListInner = forwardRef(function VirtualListInner<T>(
     horizontal: isHorizontal,
     scrollMargin,
     getItemKey: getItemKey ? (index: number) => getItemKey(index, items[index]) : undefined,
-    onChange: (instance: Virtualizer<Element, Element>) => {
-      onScroll?.(isHorizontal ? instance.scrollLeft : instance.scrollTop);
+    onChange: (instance: { scrollOffset?: number }) => {
+      // [REFACTORED] virtual-core uses scrollOffset, not scrollLeft/scrollTop.
+      // 结构类型同时兼容 useWindowVirtualizer (Virtualizer<Window, Element>)
+      // 与 useVirtualizer (Virtualizer<Element, Element>) 的 onChange 签名。
+      onScroll?.(instance.scrollOffset ?? 0);
     },
   };
 
   const rowVirtualizer = useWindowScroll
     ? useWindowVirtualizer({
         ...virtualizerOptions,
-        scrollElement: typeof window !== 'undefined' ? window : null,
+        // [REFACTORED] useWindowVirtualizer uses 'getScrollElement', not 'scrollElement'
+        getScrollElement: () => typeof window !== 'undefined' ? window : null,
       })
     : useVirtualizer({
         ...virtualizerOptions,

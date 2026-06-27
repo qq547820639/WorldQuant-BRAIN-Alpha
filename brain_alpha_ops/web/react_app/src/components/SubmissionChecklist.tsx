@@ -65,20 +65,10 @@ function candidateIds(
     .filter(Boolean);
 }
 
-function countLabel(label: string, total: number) {
-  return total > 0 ? `${label}（共 ${total}）` : label;
-}
-
 export function formatCount(value: unknown) {
   const number = Number(value ?? 0);
   if (!Number.isFinite(number)) return '0';
   return String(Math.max(0, Math.trunc(number)));
-}
-
-function formatNumber(value: unknown) {
-  const number = Number(value);
-  if (!Number.isFinite(number)) return '-';
-  return number.toFixed(2);
 }
 
 export const ConfirmationTable = memo(function ConfirmationTable({

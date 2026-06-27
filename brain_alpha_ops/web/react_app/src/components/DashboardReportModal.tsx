@@ -218,7 +218,6 @@ export const DashboardReportModal = memo(function DashboardReportModal({
 const ReportFooter = memo(function ReportFooter({
   onClose,
   onCopy,
-  markdown,
 }: {
   onClose: () => void;
   onCopy: () => Promise<boolean>;

@@ -1,9 +1,7 @@
 import {
-  readinessNextActionLabel,
   readinessProductionGapLabel,
   readinessReasonLabel,
 } from '@/helpers/readinessLabels';
-import type { SubmitReadinessResponse } from '@/types';
 import { BLOCKER_ACTION_MAP } from './constants';
 
 export function blockerActionForReason(reason: string) {

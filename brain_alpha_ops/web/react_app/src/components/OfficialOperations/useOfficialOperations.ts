@@ -2,12 +2,10 @@ import { classifyJobState } from '@/helpers/runPayload';
 import type {
   BrainCredentials,
   CloudAlphaCache,
-  JobStatus,
   OfficialContextCache,
   SubmitReadinessResponse,
 } from '@/types';
 import {
-  type OperationLogEntry,
   syncStatusForDisplay,
   syncDataOverview,
   operationProgress,

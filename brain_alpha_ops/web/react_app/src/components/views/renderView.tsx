@@ -6,8 +6,6 @@
 import { lazy } from 'react';
 import type { BrainCredentials, Candidate, CardViewId, PhaseData } from '@/types';
 import type { JobState } from '@/hooks/useJobState';
-import { safeDisplayErrorMessage, apiErrorMessage } from '@/helpers/errorExperience';
-import { useApi } from '@/hooks/useApi';
 import Dashboard from '@/components/Dashboard';
 import CredentialQuickStart from '../CredentialQuickStart';
 import JobMonitor from '@/components/JobMonitor';

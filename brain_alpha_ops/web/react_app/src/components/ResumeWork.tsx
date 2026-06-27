@@ -83,7 +83,6 @@ export default memo(function ResumeWork({
   jobRunning,
   jobStatusMessage,
   jobCycle,
-  onStartJob,
 }: ResumeWorkProps) {
   const [resumeState, setResumeState] = useState<ResumeState | null>(null);
   const [restoring, setRestoring] = useState(false);

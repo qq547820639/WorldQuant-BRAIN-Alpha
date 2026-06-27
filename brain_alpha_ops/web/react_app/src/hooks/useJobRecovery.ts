@@ -5,7 +5,7 @@
  * from the backend, and either marks it terminal or reconnects SSE.
  */
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import type { JobStatus } from '@/types';
 import { classifyJobState } from '@/helpers/runPayload';
 import { reportIgnoredError } from '@/utils/reportIgnoredError';

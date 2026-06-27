@@ -1,7 +1,6 @@
 import { memo } from 'react';
-import type { CloudAlpha, CloudAlphaSummary, CloudAlphaWithMetrics } from '@/types';
+import type { CloudAlphaSummary, CloudAlphaWithMetrics } from '@/types';
 import ProgressFeedback from '@/components/ProgressFeedback';
-import { safeDisplayErrorMessage } from '@/helpers/errorExperience';
 
 export type CloudSnapshotPayload = Partial<CloudAlphaSummary> &
   Record<string, unknown> & {

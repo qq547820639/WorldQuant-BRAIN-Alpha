@@ -14,6 +14,7 @@ import Tooltip from '../Tooltip';
 import type {
   GateDecisionActionLiteral,
   GateDecisionPayload,
+  GateEvidence,
   TriggeredRule,
 } from '@/types';
 import { safeScoringText } from './utils';
@@ -151,7 +152,7 @@ function EvidenceSummary({
   evidence,
   targetState,
 }: {
-  evidence: Record<string, unknown>;
+  evidence: GateEvidence;
   targetState: string;
 }) {
   const items: Array<{ label: string; value: string }> = [];

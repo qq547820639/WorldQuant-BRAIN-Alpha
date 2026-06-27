@@ -43,7 +43,7 @@ export function usePagination(options: UsePaginationOptions): UsePaginationResul
 
   const goToPage = useCallback(
     (page: number) => {
-      setCurrentPage((prev) => {
+      setCurrentPage(() => {
         const next = Math.max(1, Math.min(page, totalPages));
         return next;
       });

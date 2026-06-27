@@ -29,7 +29,7 @@ export function cloudRows(payload: SnapshotPayload): SnapshotRow[] {
   });
 }
 
-export function cloudMetrics(payload: SnapshotPayload, rows: SnapshotRow[]) {
+export function cloudMetrics(payload: SnapshotPayload) {
   const summary = record(payload.summary);
   return [
     {

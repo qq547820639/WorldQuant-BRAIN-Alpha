@@ -52,7 +52,6 @@ function JobMonitorView({
   onResume,
   onStop,
   onCredentialClick,
-  onRetry,
   sseRetryExhausted = false,
   sseRetryCountdown = 0,
   onSseExhaustedRetry,

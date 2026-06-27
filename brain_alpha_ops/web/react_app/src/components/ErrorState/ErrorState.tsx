@@ -8,7 +8,7 @@ import RetryButton from './RetryButton';
 type ErrorSeverity = 'error' | 'warning' | 'info';
 type ErrorDisplayLevel = 'inline' | 'card' | 'page';
 
-interface ErrorStateProps {
+export interface ErrorStateProps {
   title: string;
   description?: string;
   details?: string;
