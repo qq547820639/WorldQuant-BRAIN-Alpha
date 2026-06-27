@@ -1,0 +1,382 @@
+/* ── Modal ── */
+@layer components {
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 500;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(2px);
+  }
+  .modal-content {
+    background: var(--color-surface-deep);
+    border: 0.5px solid var(--color-border-medium);
+    border-radius: 8px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+    min-width: 320px;
+    max-width: 480px;
+    max-height: 80vh;
+    overflow-y: auto;
+  }
+  .modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 14px;
+    border-bottom: 0.5px solid var(--color-border-default);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--color-text-bright);
+  }
+  .modal-body {
+    padding: 14px;
+    color: var(--color-text-body);
+    font-size: 0.8125rem;
+    line-height: 1.5;
+  }
+}
+
+/* ── Phase Group (UI Design System v3.0) ── */
+@layer components {
+  .phase-group {
+    border-bottom: 0.5px solid var(--color-border-default);
+  }
+  .phase-group:last-of-type {
+    border-bottom: none;
+  }
+
+  .phase-group-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px 6px;
+    cursor: pointer;
+    user-select: none;
+    transition: background-color 120ms;
+    min-height: 36px;
+    border: none;
+    background: transparent;
+    width: 100%;
+    text-align: left;
+    font: inherit;
+  }
+  .phase-group-header:hover {
+    background-color: var(--color-phase-group-hover);
+  }
+
+  .phase-group-chevron {
+    width: 14px;
+    height: 14px;
+    transition: transform 200ms ease;
+    opacity: 0.5;
+    flex-shrink: 0;
+  }
+  .phase-group.is-expanded .phase-group-chevron {
+    transform: rotate(90deg);
+  }
+  .phase-group.is-locked .phase-group-chevron {
+    opacity: 0.25;
+  }
+
+  .phase-group-label {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--color-text-body);
+    flex: 1;
+  }
+  .phase-group.is-locked .phase-group-label {
+    color: var(--color-text-dim);
+  }
+
+  .phase-group-status {
+    font-size: 10px;
+    font-weight: 500;
+    padding: 1px 6px;
+    border-radius: 3px;
+    flex-shrink: 0;
+  }
+  .phase-group-status.complete {
+    color: var(--color-status-complete-text);
+    background: var(--color-step-complete-bg);
+  }
+  .phase-group-status.active {
+    color: var(--color-phase-active-text);
+    background: var(--color-phase-active-bg);
+  }
+  .phase-group-status.pending {
+    color: var(--color-text-muted);
+    background: var(--color-status-pending-bg);
+  }
+  .phase-group-status.blocked {
+    color: var(--color-status-blocked-text);
+    background: oklch(0.48 0.12 22 / 0.12);
+  }
+
+  .phase-group .sidebar-nav-item {
+    padding-left: 36px;
+  }
+
+  .phase-group-content {
+    overflow: hidden;
+    transition:
+      max-height 200ms ease-out,
+      opacity 200ms ease-out;
+    max-height: 0;
+    opacity: 0;
+  }
+  .phase-group.is-expanded .phase-group-content {
+    max-height: 500px;
+    opacity: 1;
+  }
+}
+
+/* ── Step Guide (UI Design System v3.0) ── */
+@layer components {
+  .step-guide {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    padding: 10px 14px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .step {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+
+  .step-indicator {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    font-weight: 500;
+    border: 1.5px solid;
+    transition: all 200ms;
+  }
+  .step.complete .step-indicator {
+    background: var(--color-step-complete-bg);
+    border-color: var(--color-toast-success);
+    color: var(--color-status-complete-text);
+  }
+  .step.active .step-indicator {
+    background: var(--color-step-active-bg);
+    border-color: var(--color-status-active-text);
+    color: var(--color-status-active-text);
+    animation: pulse-step 2s ease-in-out infinite;
+  }
+  .step.pending .step-indicator {
+    background: transparent;
+    border-color: var(--color-text-dim);
+    color: var(--color-text-dim);
+  }
+
+  .step-label {
+    font-size: 11px;
+    color: var(--color-text-muted);
+    white-space: nowrap;
+  }
+  .step.complete .step-label {
+    color: var(--color-status-complete-text);
+  }
+  .step.active .step-label {
+    color: var(--color-status-active-text);
+    font-weight: 500;
+  }
+
+  .step-connector {
+    width: 24px;
+    height: 1px;
+    background: var(--color-border-medium);
+    margin: 0 2px;
+    flex-shrink: 0;
+  }
+  .step-connector.complete {
+    background: var(--color-toast-success);
+  }
+  .step-connector.active {
+    background: var(--color-status-active-text);
+  }
+
+  @keyframes pulse-step {
+    0%,
+    100% {
+      box-shadow: 0 0 0 0 var(--color-step-pulse-ring);
+    }
+    50% {
+      box-shadow: 0 0 0 4px var(--color-step-pulse-clear);
+    }
+  }
+}
+
+/* ── PhaseShell (UI Design System v3.0) ── */
+@layer components {
+  .phase-shell {
+    border-radius: 8px;
+    border: 0.5px solid var(--color-border-default);
+    background: var(--color-surface-deep);
+    overflow: hidden;
+    margin-bottom: 16px;
+  }
+  .phase-shell-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    border-bottom: 0.5px solid var(--color-border-default);
+  }
+  .phase-shell-title {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--color-text-bright);
+  }
+  .phase-shell-subtitle {
+    font-size: 12px;
+    color: var(--color-text-muted);
+    margin-top: 2px;
+  }
+  .phase-shell-body {
+    padding: 14px;
+  }
+}
+
+/* ── Skeleton Loader ── */
+@layer components {
+  .skeleton {
+    background: linear-gradient(
+      90deg,
+      var(--color-avatar-bg) 25%,
+      var(--color-phase-group-hover) 50%,
+      var(--color-avatar-bg) 75%
+    );
+    background-size: 200% 100%;
+    animation: skeleton-shimmer 1.5s ease-in-out infinite;
+    border-radius: 4px;
+  }
+  @keyframes skeleton-shimmer {
+    0% {
+      background-position: 200% 0;
+    }
+    100% {
+      background-position: -200% 0;
+    }
+  }
+
+  .skeleton-text {
+    height: 14px;
+    width: 60%;
+    margin-bottom: 8px;
+  }
+  .skeleton-heading {
+    height: 20px;
+    width: 40%;
+    margin-bottom: 12px;
+  }
+  .skeleton-kpi {
+    height: 64px;
+    width: 100%;
+  }
+  .skeleton-row {
+    height: 36px;
+    width: 100%;
+    margin-bottom: 4px;
+  }
+}
+
+/* ── Empty State ── */
+@layer components {
+  .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 48px 24px;
+    text-align: center;
+  }
+  .empty-state-icon {
+    width: 48px;
+    height: 48px;
+    margin-bottom: 16px;
+    opacity: 0.3;
+  }
+  .empty-state-title {
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--color-text-body);
+    margin-bottom: 8px;
+  }
+  .empty-state-description {
+    font-size: 13px;
+    color: var(--color-text-muted);
+    margin-bottom: 20px;
+    max-width: 320px;
+    line-height: 1.5;
+  }
+  .empty-state-hint {
+    font-size: 12px;
+    color: var(--color-text-dim);
+    margin-top: 12px;
+  }
+}
+
+/* ── Mobile Tab Bar (UI Design System v3.0) ── */
+@layer components {
+  .mobile-tab-bar {
+    display: none;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 56px;
+    background: var(--color-surface-deep);
+    border-top: 0.5px solid var(--color-border-default);
+    z-index: 300;
+    grid-template-columns: repeat(4, 1fr);
+    align-items: center;
+    padding: 0 4px 4px;
+    padding-bottom: max(4px, env(safe-area-inset-bottom));
+  }
+  @media (max-width: 1023px) {
+    .mobile-tab-bar {
+      display: grid;
+    }
+    .app-main {
+      padding-bottom: 72px;
+    }
+  }
+
+  .mobile-tab {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    padding: 6px 4px;
+    background: transparent;
+    border: none;
+    color: var(--color-text-muted);
+    font-size: 10px;
+    font-weight: 500;
+    cursor: pointer;
+    min-height: 44px;
+    transition: color 120ms;
+  }
+  .mobile-tab svg {
+    width: 20px;
+    height: 20px;
+    opacity: 0.6;
+  }
+  .mobile-tab[aria-current='true'] {
+    color: var(--color-status-active-text);
+  }
+  .mobile-tab[aria-current='true'] svg {
+    opacity: 1;
+  }
+}

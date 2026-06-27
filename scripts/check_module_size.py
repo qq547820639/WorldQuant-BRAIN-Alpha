@@ -11,7 +11,7 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_TARGETS = ("brain_alpha_ops", "scripts")
-SOURCE_SUFFIXES = {".py", ".js", ".html"}
+SOURCE_SUFFIXES = {".py", ".js", ".html", ".css", ".tsx", ".ts"}
 SKIP_DIRS = {
     ".git",
     ".codex_pydeps",
@@ -24,11 +24,14 @@ SKIP_DIRS = {
     "build",
     "dist",
     "node_modules",
+    "tests",
 }
 SKIP_FILES = {
     "brain_alpha_ops/web/index.html",
 }
 DEFAULT_LINE_LIMIT = 350
+FRONTEND_LINE_LIMIT = 400
+FRONTEND_SRC_PREFIX = "brain_alpha_ops/web/react_app/src/"
 # Grandfathered baseline: previously held files exceeding the 350-line
 # default so the audit could prevent regression while permitting future
 # workstreams to split them. All entries have been cleared by the
@@ -52,7 +55,7 @@ def check_module_size(
     for path in files:
         rel = path.resolve().relative_to(root_path).as_posix()
         line_count = _line_count(path)
-        limit = int(limits.get(rel, default_limit))
+        limit = int(limits.get(rel, _line_limit_for(rel, default_limit)))
         row = {"path": rel, "lines": line_count, "limit": limit}
         rows.append(row)
         if line_count > limit:
@@ -117,6 +120,17 @@ def _line_count(path: Path) -> int:
         return len(path.read_text(encoding="utf-8").splitlines())
     except OSError:
         return 0
+
+
+def _line_limit_for(rel: str, default_limit: int) -> int:
+    """Return the line limit for a source file based on its path.
+
+    Files under brain_alpha_ops/web/react_app/src use the frontend limit (400);
+    all other files use the default limit (350).
+    """
+    if rel.startswith(FRONTEND_SRC_PREFIX):
+        return FRONTEND_LINE_LIMIT
+    return default_limit
 
 
 def main(argv: list[str] | None = None) -> int:

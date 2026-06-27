@@ -1,0 +1,397 @@
+/* ── TopBar Connection (UI Design System v3.0) ── */
+@layer components {
+  .topbar-connection {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 500;
+  }
+  .topbar-connection .status-dot {
+    width: 7px;
+    height: 7px;
+  }
+
+  .topbar-phase {
+    font-size: 12px;
+    color: var(--color-text-muted);
+  }
+  .topbar-phase strong {
+    color: var(--color-text-bright);
+    font-weight: 500;
+  }
+}
+
+/* ── Score Breakdown Tooltip ── */
+@layer components {
+  /* Wrapper cell that hosts the tooltip */
+  .score-cell {
+    position: relative;
+    cursor: default;
+  }
+  .score-cell .score-value {
+    display: inline-block;
+    border-bottom: 1px dashed var(--color-text-dim);
+    transition: border-color 150ms;
+  }
+  .score-cell:hover .score-value {
+    border-bottom-color: var(--color-status-active-text);
+  }
+
+  /* The tooltip panel — hidden by default, shown on hover */
+  .score-tooltip {
+    display: none;
+    position: absolute;
+    z-index: 500;
+    top: 100%;
+    right: 0;
+    margin-top: 6px;
+    min-width: 360px;
+    max-width: 420px;
+    pointer-events: none;
+  }
+  .score-cell:hover .score-tooltip {
+    display: block;
+  }
+
+  /* Panel body */
+  .scorebreakdown-panel {
+    background: var(--color-scorebreakdown-panel);
+    border: 0.5px solid var(--color-border-medium);
+    border-radius: 8px;
+    box-shadow:
+      0 8px 32px rgba(0, 0, 0, 0.5),
+      0 2px 8px rgba(0, 0, 0, 0.3);
+    padding: 0;
+    font-size: 0.75rem;
+    line-height: 1.4;
+    color: var(--color-text-score);
+    overflow: hidden;
+  }
+
+  .scorebreakdown-header {
+    display: flex;
+    align-items: center;
+    padding: 10px 12px 8px;
+    gap: 4px;
+  }
+
+  .scorebreakdown-total-label {
+    font-size: 0.6875rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--color-text-muted);
+  }
+
+  .scorebreakdown-total-value {
+    font-family: var(--font-mono, 'JetBrains Mono', monospace);
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--color-text-bright);
+    font-variant-numeric: tabular-nums;
+    margin: 0 4px;
+  }
+
+  .scorebreakdown-divider {
+    height: 0.5px;
+    background: var(--color-border-default);
+    margin: 0;
+  }
+
+  .scorebreakdown-body {
+    padding: 8px 0;
+    max-height: 320px;
+    overflow-y: auto;
+  }
+
+  .scorebreakdown-row {
+    padding: 3px 12px;
+    transition: background-color 100ms;
+  }
+
+  .scorebreakdown-row:hover {
+    background: var(--color-scorebreakdown-row-hover);
+  }
+
+  .scorebreakdown-label {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.6875rem;
+    color: var(--color-text-body);
+    margin-bottom: 1px;
+  }
+
+  .scorebreakdown-weight {
+    font-family: var(--font-mono, 'JetBrains Mono', monospace);
+    font-size: 0.625rem;
+    color: var(--color-scorebreakdown-weight);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .scorebreakdown-values {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-wrap: wrap;
+  }
+
+  .scorebreakdown-score {
+    font-family: var(--font-mono, 'JetBrains Mono', monospace);
+    font-size: 0.75rem;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .scorebreakdown-contrib-label {
+    font-size: 0.625rem;
+    color: var(--color-text-dim);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .scorebreakdown-contrib {
+    font-family: var(--font-mono, 'JetBrains Mono', monospace);
+    font-size: 0.75rem;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .scorebreakdown-contrib-minor {
+    font-family: var(--font-mono, 'JetBrains Mono', monospace);
+    font-size: 0.625rem;
+    color: var(--color-text-muted);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .scorebreakdown-bar-track {
+    width: 100%;
+    height: 2px;
+    background: var(--color-border-subtle);
+    border-radius: 2px;
+    margin-top: 2px;
+    overflow: hidden;
+  }
+
+  .scorebreakdown-bar-fill {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 0.2s ease;
+  }
+
+  .scorebreakdown-explanation {
+    font-size: 0.625rem;
+    color: var(--color-scorebreakdown-weight);
+    margin-top: 1px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 100%;
+  }
+
+  /* Gates section */
+  .scorebreakdown-gates {
+    padding: 8px 12px 10px;
+  }
+
+  .scorebreakdown-gates-title {
+    font-size: 0.625rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--color-text-muted);
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .scorebreakdown-gates-summary {
+    font-size: 0.625rem;
+    font-weight: 400;
+    color: var(--color-text-dim);
+    text-transform: none;
+    letter-spacing: normal;
+  }
+
+  .scorebreakdown-gates-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  .scorebreakdown-gate-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 0.625rem;
+    white-space: nowrap;
+  }
+
+  .scorebreakdown-gate-item.gate-passed {
+    background: var(--color-success-bg);
+    color: var(--color-status-complete-text);
+  }
+
+  .scorebreakdown-gate-item.gate-failed {
+    background: var(--color-status-blocked-bg);
+    color: var(--color-status-blocked-text);
+  }
+
+  .scorebreakdown-gate-icon {
+    font-weight: 600;
+    font-size: 0.5625rem;
+  }
+
+  .scorebreakdown-gate-name {
+    font-weight: 500;
+  }
+
+  /* Failures section */
+  .scorebreakdown-failures {
+    padding: 8px 12px 10px;
+  }
+
+  .scorebreakdown-failures-title {
+    font-size: 0.625rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--color-text-muted);
+    margin-bottom: 4px;
+  }
+
+  .scorebreakdown-failure-item {
+    font-size: 0.625rem;
+    color: var(--color-status-blocked-text);
+    padding: 1px 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* P1-5: Scoring history sparkline */
+  .scorebreakdown-history {
+    padding: 8px 0 4px;
+  }
+
+  .scorebreakdown-history-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding: 4px 0;
+    border: none;
+    background: none;
+    cursor: pointer;
+    color: inherit;
+    font: inherit;
+  }
+
+  .scorebreakdown-history-toggle:hover {
+    opacity: 0.8;
+  }
+
+  .scorebreakdown-history-title {
+    font-size: 0.625rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--color-text-muted);
+    display: flex;
+    align-items: center;
+  }
+
+  .scorebreakdown-history-chevron {
+    font-size: 0.625rem;
+    color: var(--color-text-muted);
+  }
+
+  .scorebreakdown-history-list {
+    margin-top: 8px;
+    padding-top: 6px;
+    border-top: 0.5px solid var(--color-border-default);
+  }
+
+  .scorebreakdown-history-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 2px 0;
+    font-size: 0.625rem;
+  }
+
+  .scorebreakdown-history-time {
+    color: var(--color-text-muted);
+    font-family: monospace;
+  }
+
+  .scorebreakdown-history-score {
+    color: var(--color-score-highlight);
+    font-family: monospace;
+  }
+
+  .scorebreakdown-sparkline-container {
+    margin-top: 4px;
+  }
+
+  .scorebreakdown-sparkline {
+    display: flex;
+    align-items: flex-end;
+    gap: 2px;
+    height: 48px;
+    padding: 2px 0 12px;
+    border-bottom: 0.5px solid var(--color-border-default);
+  }
+
+  .scorebreakdown-sparkline-bar-wrapper {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    height: 100%;
+  }
+
+  .scorebreakdown-sparkline-bar {
+    width: 100%;
+    max-width: 16px;
+    min-height: 2px;
+    background: var(--color-sparkline-bar);
+    border-radius: 1px 1px 0 0;
+    transition: background 0.15s;
+  }
+
+  .scorebreakdown-sparkline-bar-wrapper:hover .scorebreakdown-sparkline-bar {
+    background: var(--color-sparkline-bar-hover);
+  }
+
+  .scorebreakdown-sparkline-label {
+    font-size: 0.5rem;
+    color: var(--color-text-muted);
+    margin-top: 2px;
+    text-align: center;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    width: 100%;
+  }
+
+  .scorebreakdown-sparkline-inline {
+    display: flex;
+    align-items: flex-end;
+    gap: 1px;
+    height: 16px;
+    margin-top: 2px;
+    padding: 0 2px;
+  }
+
+  .scorebreakdown-sparkline-dot {
+    flex: 1;
+    background: var(--color-sparkline-dot);
+    border-radius: 1px 1px 0 0;
+    min-height: 2px;
+    max-width: 12px;
+  }
+}

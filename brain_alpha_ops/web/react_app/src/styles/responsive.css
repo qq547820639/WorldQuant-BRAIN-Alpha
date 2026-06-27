@@ -1,0 +1,106 @@
+/* ── Responsive ── */
+/* Extra small mobile: 375px and below */
+@media (max-width: 374px) {
+  .app-main {
+    padding: 8px;
+  }
+  .kpi-card {
+    padding: 8px 10px 6px;
+  }
+  .panel-header,
+  .panel-body-padded {
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+  .btn {
+    padding: 0.375rem 0.625rem;
+    font-size: 0.8125rem;
+  }
+  .mobile-tab-bar {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 639px) {
+  .app-main {
+    padding: 12px;
+  }
+  .kpi-card {
+    padding: 10px 12px 8px;
+  }
+  .panel-header,
+  .panel-body-padded {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+}
+
+/* Tablet: 640-1023px — larger padding, sidebar hidden but overlay-ready */
+@media (min-width: 640px) and (max-width: 1023px) {
+  .app-main {
+    padding: 16px 20px;
+  }
+  .grid-cols-2 {
+    gap: 12px;
+  }
+}
+
+@media (max-width: 1023px) {
+  .app-sidebar {
+    display: none;
+    position: fixed;
+    top: 44px;
+    left: 0;
+    bottom: 28px;
+    width: 220px;
+    z-index: 200;
+    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.4);
+  }
+  .app-sidebar.is-open {
+    display: flex;
+  }
+}
+
+/* ── Sidebar width update for phase groups ── */
+@media (min-width: 1024px) {
+  .app-shell {
+    grid-template-columns: 240px 1fr;
+  }
+}
+
+/* ── Data table card view for mobile ── */
+@media (max-width: 639px) {
+  .data-table.card-view thead {
+    display: none;
+  }
+  .data-table.card-view,
+  .data-table.card-view tbody,
+  .data-table.card-view tr,
+  .data-table.card-view td {
+    display: block;
+  }
+  .data-table.card-view tr {
+    margin-bottom: 8px;
+    border: 0.5px solid var(--color-border-default);
+    border-radius: 6px;
+    padding: 10px 12px;
+    background: var(--color-surface-deep);
+  }
+  .data-table.card-view td {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 4px 0;
+    border: none;
+    font-size: 13px;
+  }
+  .data-table.card-view td::before {
+    content: attr(data-label);
+    font-size: 11px;
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+    font-weight: 500;
+    flex-shrink: 0;
+    margin-right: 8px;
+  }
+}
