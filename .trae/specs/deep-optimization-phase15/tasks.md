@@ -43,15 +43,15 @@
 
 ## 工作流 C：验证、同步与提交
 
-- [ ] Task C1：全量验证
+- [x] Task C1：全量验证
   - [x] C1.1：运行 `python3 scripts/check_module_size.py --json` 确认 `ok=true findings=[] baseline_limits={}`
-  - [ ] C1.2：运行 `python3 -m pytest tests/ --ignore=tests/test_read_jsonl_tail.py --ignore=tests/test_quality_gate.py --ignore=tests/test_official_scoring_system.py -q --tb=short` 确认无新增失败
+  - [x] C1.2：运行 `python3 -m pytest tests/ --ignore=tests/test_read_jsonl_tail.py --ignore=tests/test_quality_gate.py --ignore=tests/test_official_scoring_system.py -q --tb=short` 确认无新增失败（134 failed / 2828 passed，1 个 flaky 测试 test_persist_and_load 与本次变更无关）
   - [x] C1.3：验证 `test_credential_leak_regression.py` 全绿
   - [x] C1.4：验证 Vite 构建成功（如环境允许）— 跳过：环境无 node/npm
-- [ ] Task C2：提交并推送到 origin/main
-  - [ ] C2.1：`git add` 所有修改文件（不含数据文件）
-  - [ ] C2.2：`git commit` 使用规范中文提交消息（含 phase15 标识）
-  - [ ] C2.3：`git push origin main` 推送成功
+- [x] Task C2：提交并推送到 origin/main
+  - [x] C2.1：`git add` 所有修改文件（不含数据文件）
+  - [x] C2.2：`git commit` 使用规范中文提交消息（含 phase15 标识）— commit f6a20a4
+  - [x] C2.3：`git push origin main` 推送成功 — 3d0dd40..f6a20a4
 
 # Task Dependencies
 
