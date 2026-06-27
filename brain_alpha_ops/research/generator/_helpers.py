@@ -34,22 +34,11 @@ from brain_alpha_ops.scoring.local_quality import (
     extract_fields,
     extract_operators,
 )
+from brain_alpha_ops.research.generator._extras import _safe_float, update_known_fields
 
 # Hardcoded logger name — preserves original ``brain_alpha_ops.research.generator``
 # identity for test caplog filtering.
 logger = logging.getLogger("brain_alpha_ops.research.generator")
-
-
-def update_known_fields(fields: list[dict]) -> None:
-    """Legacy update (deprecated). Use OfficialDataLoader instead."""
-    pass  # no-op in new architecture
-
-
-def _safe_float(value) -> float:
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return 0.0
 
 
 # ═══════════════════════════════════════════════════════════════════════

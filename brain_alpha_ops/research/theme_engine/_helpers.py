@@ -2,7 +2,10 @@
 
 Contains ``_normalize_operator_aliases``, ``_build_category_map``, and the
 extracted ``_build_auto_skeletons_impl`` body that generates expression
-skeletons by combining BRAIN official operators.
+skeletons by combining BRAIN official operators. Also hosts the
+``_extract_field_slots_impl`` and ``_validate_fill_result_impl`` bodies
+extracted from ``DynamicThemeEngine`` to keep ``_engine.py`` within the
+350-line module limit.
 """
 from __future__ import annotations
 
@@ -201,3 +204,46 @@ def _build_auto_skeletons_impl(loader) -> dict[str, list[str]]:
             break
 
     return {k: v for k, v in auto.items() if v}  # only non-empty categories
+
+
+def _extract_field_slots_impl(expression: str, fields) -> list[str]:
+    """Return dataset field ids present in the generated expression."""
+    import re as _re
+
+    ids = {field.id.lower() for field in fields}
+    tokens = {token.lower() for token in _re.findall(r"\b([a-zA-Z_]\w*)\b", expression)}
+    return sorted(ids & tokens)
+
+
+def _validate_fill_result_impl(
+    result: str,
+    cat_fields: dict[str, list[str]],
+    loader,
+) -> str:
+    """Ensure every field-like token in *result* exists in official field data.
+
+    Phantom fields (e.g. ``anl20_…``, concatenated names) that survive
+    placeholder filling are replaced with a random valid field from
+    *cat_fields*.  This mirrors the safety net in
+    ``HypothesisDrivenGenerator._validate_dataset_fields`` but protects
+    the ``experience_feedback`` / ``random_exploration`` code paths that
+    bypass that generator.
+    """
+    import random
+    import re as _re
+
+    valid_ids = {field.lower() for fields in cat_fields.values() for field in fields}
+    _OPS = {op.name.lower() for op in loader.get_operators()}
+    _OPS.update({"returns", "sector", "industry", "market", "subindustry"})
+
+    tokens = _re.findall(r"\b([a-zA-Z_]\w+)\b", result)
+    all_cat_fields = [f for fields in cat_fields.values() for f in fields]
+
+    for t in tokens:
+        # Only flag tokens that look like field names (contain underscore)
+        # — bare words like std/k/hump are operator parameters, not fields.
+        if t not in _OPS and t.lower() not in valid_ids and "_" in t:
+            replacement = random.choice(all_cat_fields) if all_cat_fields else "returns"
+            result = _re.sub(rf"\b{_re.escape(t)}\b", replacement, result)
+
+    return result

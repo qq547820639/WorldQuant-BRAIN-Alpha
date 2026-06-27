@@ -16,6 +16,7 @@ from typing import Any
 
 from brain_alpha_ops.jsonl import read_jsonl_records
 from brain_alpha_ops.redaction import redact_error_message
+from brain_alpha_ops.research._market_data_helpers import _float, _numeric_values
 
 DEFAULT_MARKET_CACHE_FILENAME = "market_data_cache.json"
 DEFAULT_MARKET_CACHE_SOURCE = "local_market_cache"
@@ -272,12 +273,6 @@ def build_market_data_cache(storage_dir: str | Path = "data") -> MarketDataCache
 def _text(value: Any) -> str:
     return str(value or "").strip()
 
-def _float(value: Any) -> float:
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return 0.0
-
 def _read_records_from_path(path: Path, *, limit: int | None) -> list[dict[str, Any]]:
     if not path.is_file():
         return []
@@ -328,27 +323,3 @@ def _records_from_json_payload(payload: Any) -> list[dict[str, Any]]:
     if _text(payload.get("symbol") or payload.get("id") or payload.get("alpha_id") or payload.get("official_alpha_id")):
         return [dict(payload)]
     return []
-
-def _numeric_values(row: dict[str, Any]) -> dict[str, float]:
-    ignored = {
-        "symbol",
-        "id",
-        "alpha_id",
-        "official_alpha_id",
-        "timestamp",
-        "updated_at",
-        "saved_at",
-        "loaded_at",
-        "values",
-        "metrics",
-        "official_metrics",
-    }
-    values: dict[str, float] = {}
-    for source in (row, row.get("values"), row.get("metrics"), row.get("official_metrics")):
-        if not isinstance(source, dict):
-            continue
-        for key, value in source.items():
-            if key in ignored or not isinstance(value, (int, float)):
-                continue
-            values[str(key)] = _float(value)
-    return values

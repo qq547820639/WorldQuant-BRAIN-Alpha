@@ -15,7 +15,9 @@ from brain_alpha_ops.research.generator_metadata import (
 from brain_alpha_ops.research.theme_engine._helpers import (
     _build_auto_skeletons_impl,
     _build_category_map,
+    _extract_field_slots_impl,
     _normalize_operator_aliases,
+    _validate_fill_result_impl,
 )
 from brain_alpha_ops.research.theme_engine._skeletons import TEMPLATE_SKELETONS
 from brain_alpha_ops.research.theme_engine._template import (
@@ -293,11 +295,7 @@ class DynamicThemeEngine:
 
     def _extract_field_slots(self, expression: str, fields: list["OfficialField"]) -> list[str]:
         """Return dataset field ids present in the generated expression."""
-        import re as _re
-
-        ids = {field.id.lower() for field in fields}
-        tokens = {token.lower() for token in _re.findall(r"\b([a-zA-Z_]\w*)\b", expression)}
-        return sorted(ids & tokens)
+        return _extract_field_slots_impl(expression, fields)
 
     def _validate_fill_result(
         self,
@@ -313,23 +311,7 @@ class DynamicThemeEngine:
         the ``experience_feedback`` / ``random_exploration`` code paths that
         bypass that generator.
         """
-        import re as _re
-
-        valid_ids = {field.lower() for fields in cat_fields.values() for field in fields}
-        _OPS = {op.name.lower() for op in self._loader.get_operators()}
-        _OPS.update({"returns", "sector", "industry", "market", "subindustry"})
-
-        tokens = _re.findall(r"\b([a-zA-Z_]\w+)\b", result)
-        all_cat_fields = [f for fields in cat_fields.values() for f in fields]
-
-        for t in tokens:
-            # Only flag tokens that look like field names (contain underscore)
-            # — bare words like std/k/hump are operator parameters, not fields.
-            if t not in _OPS and t.lower() not in valid_ids and "_" in t:
-                replacement = random.choice(all_cat_fields) if all_cat_fields else "returns"
-                result = _re.sub(rf"\b{_re.escape(t)}\b", replacement, result)
-
-        return result
+        return _validate_fill_result_impl(result, cat_fields, self._loader)
 
     def _official_operator_names(self) -> set[str]:
         return {op.name.lower() for op in self._loader.get_operators()}

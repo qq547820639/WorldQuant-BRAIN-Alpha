@@ -10,6 +10,8 @@ from dataclasses import dataclass, field
 from typing import Any
 from urllib.parse import parse_qs, urlparse
 
+from ._security_helpers import header_hostname, header_port, normalize_host, parse_cookies  # noqa: F401
+
 LOCAL_HOSTS = {"127.0.0.1", "localhost", "::1"}
 LOOPBACK_BIND_HOSTS = {"127.0.0.1", "localhost", "::1"}
 logger = logging.getLogger(__name__)
@@ -21,34 +23,8 @@ MAX_REQUEST_ID_LENGTH = 128
 MAX_REPLAY_CACHE_SIZE = 10_000  # R-03: capacity guard to prevent DoS memory exhaustion
 
 
-def header_hostname(host_header: str) -> str:
-    return (urlparse(f"//{host_header}").hostname or "").lower()
-
-
-def header_port(host_header: str) -> int | None:
-    try:
-        return urlparse(f"//{host_header}").port
-    except ValueError:
-        return None
-
-
 def path_requires_session(path: str) -> bool:
     return path.startswith("/api/") and path != "/api/health"
-
-
-def parse_cookies(cookie_header: str) -> dict[str, str]:
-    cookies: dict[str, str] = {}
-    for part in str(cookie_header or "").split(";"):
-        if "=" not in part:
-            continue
-        key, value = part.split("=", 1)
-        cookies[key.strip()] = value.strip()
-    return cookies
-
-
-def normalize_host(host: str | None, *, default_host: str = "127.0.0.1") -> str:
-    value = str(host or "").strip()
-    return value or default_host
 
 
 def is_allowed_local_request(

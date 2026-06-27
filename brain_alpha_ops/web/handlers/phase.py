@@ -10,6 +10,8 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from ._phase_helpers import _format_timestamp, _safe_bool, _safe_int
+
 logger = logging.getLogger(__name__)
 
 
@@ -342,34 +344,3 @@ def _official_context_cache_summary(counts: dict[str, Any]) -> dict[str, Any]:
             "record_counts": dict(manifest.get("record_counts") or {}),
         }
     return cache
-
-
-def _safe_bool(obj: Any, method_name: str) -> bool:
-    try:
-        fn = getattr(obj, method_name, None)
-        if callable(fn):
-            return bool(fn())
-    except (AttributeError, TypeError, ValueError):
-        pass
-    return False
-
-
-def _format_timestamp(value: Any) -> str | None:
-    if value is None:
-        return None
-    formatter = getattr(value, "isoformat", None)
-    if callable(formatter):
-        return str(formatter())
-    text = str(value).strip()
-    return text or None
-
-
-def _safe_int(obj: Any, method_name: str, *, default: int = 0) -> int:
-    try:
-        fn = getattr(obj, method_name, None)
-        if callable(fn):
-            result = fn()
-            return int(result) if result is not None else default
-    except (AttributeError, TypeError, ValueError):
-        pass
-    return default

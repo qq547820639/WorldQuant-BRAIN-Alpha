@@ -8,6 +8,8 @@ import threading
 import time
 from typing import Any, Callable, Protocol
 
+from ._async_jobs_helpers import _store_get, _store_heartbeat, _store_is_cancelled
+
 
 logger = logging.getLogger(__name__)
 
@@ -247,26 +249,6 @@ def _start_async_heartbeat(
     return thread
 
 
-def _store_heartbeat(
-    store: JobStoreLike,
-    job_id: str,
-    *,
-    operation: str,
-    heartbeat_count: int,
-) -> bool | None:
-    heartbeat = getattr(store, "heartbeat", None)
-    if not callable(heartbeat):
-        return None
-    return bool(
-        heartbeat(
-            job_id,
-            operation=operation,
-            heartbeat_count=heartbeat_count,
-            source="web_async_jobs",
-        )
-    )
-
-
 def _call_worker(worker: Worker, payload: dict[str, Any], cancel_callback: CancelCallback) -> dict[str, Any]:
     try:
         signature = inspect.signature(worker)
@@ -285,29 +267,6 @@ def _stop_async_heartbeat(stop_event: threading.Event, thread: threading.Thread 
     stop_event.set()
     if thread is not None:
         thread.join(timeout=1.0)
-
-
-def _store_get(store: JobStoreLike, job_id: str) -> dict[str, Any]:
-    getter = getattr(store, "get", None)
-    if callable(getter):
-        row = getter(job_id)
-        return row if isinstance(row, dict) else {}
-    rows = getattr(store, "rows", None)
-    if isinstance(rows, dict):
-        row = rows.get(job_id)
-        return row if isinstance(row, dict) else {}
-    jobs = getattr(store, "jobs", None)
-    if isinstance(jobs, dict):
-        row = jobs.get(job_id)
-        return row if isinstance(row, dict) else {}
-    return {}
-
-
-def _store_is_cancelled(store: JobStoreLike, job_id: str) -> bool:
-    checker = getattr(store, "is_cancelled", None)
-    if callable(checker):
-        return bool(checker(job_id))
-    return bool(_store_get(store, job_id).get("cancel"))
 
 
 def _mark_stopped(

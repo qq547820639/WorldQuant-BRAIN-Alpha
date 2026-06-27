@@ -29,29 +29,11 @@ SKIP_FILES = {
     "brain_alpha_ops/web/index.html",
 }
 DEFAULT_LINE_LIMIT = 350
-# Grandfathered baseline: files currently exceeding the 350-line default are
-# recorded with their ACTUAL line counts so the audit prevents regression
-# (any growth beyond the recorded count fails) while permitting future
-# workstreams to split them and remove the entry. Entries for files that no
-# longer exist (split into subpackages in prior phases) have been removed.
-BASELINE_LINE_LIMITS = {
-    "brain_alpha_ops/browser/brain_ui_runner.py": 381,
-    "brain_alpha_ops/config_domain_validation.py": 371,
-    "brain_alpha_ops/config_schema.py": 374,
-    "brain_alpha_ops/research/_observability_helpers.py": 372,
-    "brain_alpha_ops/research/generator/_helpers.py": 355,
-    "brain_alpha_ops/research/market_data_cache.py": 354,
-    "brain_alpha_ops/research/runtime_service.py": 355,
-    "brain_alpha_ops/research/theme_engine/_engine.py": 363,
-    "brain_alpha_ops/runtime_constants.py": 382,
-    "brain_alpha_ops/types.py": 380,
-    "brain_alpha_ops/ux/user_messages.py": 351,
-    "brain_alpha_ops/web/business/web_async_jobs.py": 364,
-    "brain_alpha_ops/web/business/web_jobs.py": 352,
-    "brain_alpha_ops/web/handlers/phase.py": 375,
-    "brain_alpha_ops/web/security/web_security.py": 362,
-    "scripts/check_defect_analysis_report.py": 378,
-}
+# Grandfathered baseline: previously held files exceeding the 350-line
+# default so the audit could prevent regression while permitting future
+# workstreams to split them. All entries have been cleared by the
+# deep-optimization-phase14 convergence (every source file now ≤ 350 lines).
+BASELINE_LINE_LIMITS: dict[str, int] = {}
 
 
 def check_module_size(

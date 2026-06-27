@@ -27,12 +27,12 @@ import json
 import logging
 import threading
 import time
-import uuid
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 from brain_alpha_ops.redaction import redact_data, redact_error_message
+from ._web_jobs_helpers import new_job_id, utc_timestamp
 
 logger = logging.getLogger(__name__)
 
@@ -92,19 +92,6 @@ def get_web_job_store():
     if _WEB_JOB_STORE_ADAPTER is None:
         _WEB_JOB_STORE_ADAPTER = _WebJobStoreAdapter()
     return _WEB_JOB_STORE_ADAPTER
-
-
-
-# ═══════════════════════ Job ID Generation ════════════════════════════
-def new_job_id(prefix: str = "job") -> str:
-    """Generate a new unique job ID."""
-    return f"{prefix}_{uuid.uuid4().hex[:12]}"
-
-
-# ═══════════════════════ Timestamp Helpers ════════════════════════════
-def utc_timestamp() -> str:
-    """Get current UTC timestamp in ISO format."""
-    return datetime.now(timezone.utc).isoformat()
 
 
 # ═══════════════════════ Job CRUD Operations ══════════════════════════

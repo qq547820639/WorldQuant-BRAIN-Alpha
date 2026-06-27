@@ -19,6 +19,11 @@ from .pipeline_observability import (
     apply_observability_generation_guidance,
     refresh_observability_throttle,
 )
+from ._runtime_service_helpers import (
+    archive_candidates,
+    pipeline_should_stop,
+    pipeline_sleep_with_stop,
+)
 from .strategy_plugins import StrategyPluginRegistry
 
 if TYPE_CHECKING:
@@ -300,25 +305,13 @@ class RuntimeService:
         return round(max(0.0, p.official_resume_at - time.monotonic()), 1)
 
     def _archive(self, archive_stats: dict[str, int], archive_samples: list[Candidate], candidates: list[Candidate]):
-        for candidate in candidates:
-            status = candidate.gate.get("status") or candidate.lifecycle_status or "ARCHIVED"
-            if status in {"LOCAL_PREFILTER_REJECTED", "LOCAL_STANDARD_REJECTED", "CANDIDATE_POOL_PRUNED", "DUPLICATE_EXPRESSION_SKIPPED", "PREVIOUSLY_REJECTED_EXPRESSION_SKIPPED"}:
-                continue
-            archive_stats[status] = archive_stats.get(status, 0) + 1
-            if len(archive_samples) < 25 and candidate.official_metrics:
-                archive_samples.append(candidate)
+        archive_candidates(archive_stats, archive_samples, candidates)
 
     def _should_stop(self) -> bool:
-        p = self._pipeline
-        return bool(p.stop_callback and p.stop_callback())
+        return pipeline_should_stop(self._pipeline)
 
     def _sleep_with_stop(self, seconds: float) -> bool:
-        deadline = time.monotonic() + max(0.0, float(seconds or 0.0))
-        while time.monotonic() < deadline:
-            if self._should_stop():
-                return False
-            time.sleep(min(0.5, max(0.0, deadline - time.monotonic())))
-        return not self._should_stop()
+        return pipeline_sleep_with_stop(self._pipeline, seconds)
 
     def _event(self, event: str, message: str, alpha_id: str = "", data: dict | None = None, level: str = "INFO"):
         p = self._pipeline

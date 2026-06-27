@@ -1,7 +1,6 @@
 from __future__ import annotations
 import json
 import os
-import re
 import threading
 import time
 import logging
@@ -10,7 +9,19 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from brain_alpha_ops.redaction import redact_error_message, redact_text
+from brain_alpha_ops.redaction import redact_error_message
+from brain_alpha_ops.browser._brain_ui_helpers import (
+    _COOKIE_PAIR_RE,
+    _COOKIE_VALUE_RE,
+    _DEFAULT_PAGE_TIMEOUT_MS,
+    _REAL_BRAIN_HOSTS,
+    _SENSITIVE_HTML_FIELD_RE,
+    LIVE_BROWSER_OPT_IN_ENV,
+    _looks_like_login_page,
+    _redact_text,
+    _redact_url,
+    _unexpected_modal,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -23,18 +34,6 @@ class BrowserRunState:
     console_logs: list[dict[str, Any]] = field(default_factory=list)
     network_logs: list[dict[str, Any]] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
-
-
-LIVE_BROWSER_OPT_IN_ENV = "BRAIN_BROWSER_E2E_LIVE"
-_REAL_BRAIN_HOSTS = ("brain.worldquant.com", "platform.worldquantbrain.com")
-_COOKIE_PAIR_RE = re.compile(r"(?i)(\b(?:set-)?cookie\s*:\s*)([^;\n\r]+(?:;[^\n\r]*)?)")
-_COOKIE_VALUE_RE = re.compile(r"(?i)(\b\w+\s*=\s*)[^;\s]+")
-_SENSITIVE_HTML_FIELD_RE = re.compile(
-    r"(?is)(<(?:input|textarea)\b(?=[^>]*(?:type|name|id)\s*=\s*['\"]?"
-    r"[^'\"\s>]*(?:password|token|secret|csrf|session|cookie|authorization|auth)"
-    r"[^'\"\s>]*)[^>]*\bvalue\s*=\s*)(['\"]?)(.*?)(\2)([^>]*>)"
-)
-_DEFAULT_PAGE_TIMEOUT_MS = 30000
 
 
 class BrainBrowserRunner:
@@ -342,40 +341,3 @@ class BrainBrowserRunner:
             "errors": list(self.state.errors),
             "har_path": self.har_path,
         }
-
-
-def _redact_text(value: str) -> str:
-    text = redact_text(value)
-    text = _COOKIE_PAIR_RE.sub(
-        lambda match: match.group(1) + _COOKIE_VALUE_RE.sub(
-            lambda cookie_match: f"{cookie_match.group(1)}<redacted>",
-            match.group(2),
-        ),
-        text,
-    )
-    text = _SENSITIVE_HTML_FIELD_RE.sub(
-        lambda match: f"{match.group(1)}{match.group(2)}<redacted>{match.group(4)}{match.group(5)}",
-        text,
-    )
-    return text
-
-
-def _redact_url(value: str) -> str:
-    text = _redact_text(value)
-    if "#" in text:
-        text = text.split("#", 1)[0]
-    if "?" not in text:
-        return text
-    return text.split("?", 1)[0] + "?[redacted-query]"
-
-
-def _looks_like_login_page(lowered_text: str) -> bool:
-    login_tokens = ("sign in", "log in", "login", "password")
-    submit_tokens = ("submit alpha", "confirm submit", "alpha submitted")
-    return any(token in lowered_text for token in login_tokens) and not any(token in lowered_text for token in submit_tokens)
-
-
-def _unexpected_modal(text: str) -> bool:
-    lowered = text.lower()
-    expected = ("submit", "confirm", "are you sure", "approval")
-    return not any(token in lowered for token in expected)
