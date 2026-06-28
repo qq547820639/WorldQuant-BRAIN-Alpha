@@ -220,7 +220,7 @@ export function ConfigValue({ label, value }: { label: string; value: unknown })
     >
       <span className="text-text-secondary">{label}</span>
       <span className="min-w-0 break-all font-mono-value text-text-primary">
-        {String(value ?? '-')}
+        {String((value as string | number | boolean | null | undefined) ?? '-')}
       </span>
     </div>
   );

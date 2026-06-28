@@ -77,7 +77,7 @@ export function safeDisplayErrorMessage(
 ): string {
   const known = knownApiErrorMessage(value);
   if (known) return known;
-  const text = String(value || '').trim();
+  const text = String((value as string | number | boolean | null | undefined) || '').trim();
   if (!text || unsafeBackendText(text)) return fallback;
   return text.length > 140 ? `${text.slice(0, 140)}...` : text;
 }
@@ -164,7 +164,7 @@ export function nextActionLabel(nextAction: string | null | undefined): string |
 }
 
 export function knownApiErrorMessage(value: unknown): string | null {
-  const text = String(value || '').trim();
+  const text = String((value as string | number | boolean | null | undefined) || '').trim();
   if (!text) return null;
   const normalized = text.toLowerCase();
 
@@ -284,7 +284,7 @@ function sessionInvalidValues(payload: unknown): string[] {
   return [
     ...values
       .map((value) =>
-        String(value || '')
+        String((value as string | number | boolean | null | undefined) || '')
           .trim()
           .toLowerCase()
       )

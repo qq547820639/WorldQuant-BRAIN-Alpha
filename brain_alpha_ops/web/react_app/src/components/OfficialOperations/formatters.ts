@@ -128,7 +128,7 @@ export function resultNumberField(status: JobStatus | null, field: string) {
 export function resultStringField(status: JobStatus | null, field: string) {
   const result = status?.result;
   if (!isRecord(result)) return '';
-  return String(result[field] || '');
+  return String((result[field] as string | number | boolean | null | undefined) || '');
 }
 
 export function firstPositiveNumber(...values: Array<number | null | undefined>) {

@@ -103,7 +103,9 @@ export function formFromImport(imported: Record<string, unknown>, current: Confi
   const source = asRecord(root.config) || root;
   if (asRecord(source.ops)) {
     return formFromConfig({
-      environment: String(source.environment || 'production'),
+      environment: String(
+        (source.environment as string | number | boolean | null | undefined) || 'production'
+      ),
       ops: asRecord(source.ops) || {},
       settings: asRecord(source.settings) || {},
       budget: asRecord(source.budget) || {},

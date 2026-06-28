@@ -62,7 +62,8 @@ export type SnapshotMetric = {
 
 export function text(value: unknown): string {
   if (value === undefined || value === null) return '';
-  return String(value);
+  const primitive = value as string | number | boolean;
+  return String(primitive);
 }
 
 export function record(value: unknown): Record<string, unknown> {
@@ -167,7 +168,8 @@ export function metricText(label: string, value: unknown): string {
   if (typeof value === 'number')
     return `${label}:${Number.isInteger(value) ? value : value.toFixed(3)}`;
   const parsed = Number(value);
-  if (Number.isFinite(parsed) && String(value).trim() !== '')
+  const primitive = value as string | number | boolean;
+  if (Number.isFinite(parsed) && String(primitive).trim() !== '')
     return `${label}:${Number.isInteger(parsed) ? parsed : parsed.toFixed(3)}`;
   return `${label}:${text(value)}`;
 }

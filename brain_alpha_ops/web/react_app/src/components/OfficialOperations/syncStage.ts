@@ -10,13 +10,19 @@ import type { JobStatus } from '@/types';
 
 export function syncStageCode(status: JobStatus | null) {
   return String(
-    status?.progress?.status_code || status?.phase || status?.progress?.phase || 'context_refresh'
+    (status?.progress?.status_code as string | number | boolean | null | undefined) ||
+      status?.phase ||
+      status?.progress?.phase ||
+      'context_refresh'
   ).toUpperCase();
 }
 
 export function phaseLabel(status: JobStatus | null) {
   const code = String(
-    status?.progress?.status_code || status?.phase || status?.progress?.phase || 'context_refresh'
+    (status?.progress?.status_code as string | number | boolean | null | undefined) ||
+      status?.phase ||
+      status?.progress?.phase ||
+      'context_refresh'
   );
   const normalizedCode = code.toUpperCase();
   const labels: Record<string, string> = {

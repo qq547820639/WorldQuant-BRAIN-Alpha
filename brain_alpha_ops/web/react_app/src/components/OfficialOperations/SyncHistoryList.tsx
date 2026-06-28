@@ -122,7 +122,7 @@ function syncHistoryMessage(row: SyncHistoryItem) {
 }
 
 function readableBackendText(raw: unknown) {
-  const value = String(raw || '').trim();
+  const value = String((raw as string | number | boolean | null | undefined) || '').trim();
   const labels: Record<string, string> = {
     'Official context refreshed.': '官方上下文已刷新。',
     'candidate family lacks official simulation metrics': '候选族缺少官方仿真指标',

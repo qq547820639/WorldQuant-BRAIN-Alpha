@@ -230,7 +230,7 @@ export default function ScoringPanel({ notify, candidate }: Props) {
       const records = result.records || result.items || [];
       const points: ScoreHistoryPoint[] = records
         .filter((r) => typeof r.timestamp === 'string' && typeof r.total_score === 'number')
-        .map((r) => ({ timestamp: String(r.timestamp), totalScore: Number(r.total_score) }))
+        .map((r) => ({ timestamp: r.timestamp as string, totalScore: Number(r.total_score) }))
         .sort((a, b) => a.timestamp.localeCompare(b.timestamp));
       setScoreHistory(points.length >= 2 ? points : null);
     } else {

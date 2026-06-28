@@ -268,7 +268,7 @@ function stringifyError(err: unknown): string {
     }
     return parts.join(' ');
   }
-  return String(err || '');
+  return String((err as string | number | boolean | null | undefined) || '');
 }
 
 // ── Builder (frontend-side fallback payload) ─────────────────────────────

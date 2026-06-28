@@ -204,7 +204,7 @@ function nextActionText(action: unknown) {
     trusted_environment_official_simulation_required: '在可信环境运行官方仿真',
     wait_for_open_backtest_slot: '等待官方回测槽位释放',
   };
-  const key = String(action || '');
+  const key = String((action as string | number | boolean | null | undefined) || '');
   if (!key) return '等待候选和门禁数据';
   return labels[key] || readinessNextActionLabel(key, '等待候选和门禁数据');
 }

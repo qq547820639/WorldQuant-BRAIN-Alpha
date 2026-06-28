@@ -204,7 +204,7 @@ def test_react_status_summaries_do_not_cap_reason_lists():
         assert "前 ${shown}" not in source
         assert "前 " not in source
     assert "countTitle(" in official_ops
-    assert "countLabel(" in confirm
+    assert "formatCount(" in confirm
     assert "truncate text-xs text-text-tertiary" not in slots
 
 

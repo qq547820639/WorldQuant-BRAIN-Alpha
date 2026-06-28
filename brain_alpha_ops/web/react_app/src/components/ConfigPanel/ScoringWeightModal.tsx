@@ -55,8 +55,12 @@ function extractLayerChildren(
       } else if (isRecord(value)) {
         const weight = typeof value.weight === 'number' ? value.weight : 0;
         const subChildren = extractLayerChildren({ [key]: value }, key, undefined);
+        const dimName: string | number | boolean = (value.name ?? value.label ?? key) as
+          | string
+          | number
+          | boolean;
         children.push({
-          name: formatDimName(String(value.name ?? value.label ?? key)),
+          name: formatDimName(String(dimName)),
           weight,
           children: subChildren.length ? subChildren : undefined,
         });

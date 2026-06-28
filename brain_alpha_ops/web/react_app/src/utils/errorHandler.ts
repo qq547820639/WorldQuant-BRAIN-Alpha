@@ -34,7 +34,13 @@ export class ValidationError extends Error {
  */
 export function logError(error: unknown, context?: string): void {
   const timestamp = new Date().toISOString();
-  const errorMessage = error instanceof Error ? error.message : String(error);
+  let errorMessage: string;
+  if (error instanceof Error) {
+    errorMessage = error.message;
+  } else {
+    const primitive = error as string | number | boolean;
+    errorMessage = String(primitive);
+  }
   const errorStack = error instanceof Error ? error.stack : undefined;
 
   console.error(

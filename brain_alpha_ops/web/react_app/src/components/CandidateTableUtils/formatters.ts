@@ -90,7 +90,11 @@ export function candidateOutputDetail(candidate: Candidate) {
   const dataset = config.dataset_id || candidate.dataset_id || settings.dataset;
   const alphaType = config.alpha_type || settings.type;
   const official = config.official_api_called === true ? 'official_called' : 'official_not_called';
-  return [dataset ? `dataset:${dataset}` : '', alphaType ? `type:${alphaType}` : '', official]
+  return [
+    dataset ? `dataset:${dataset as string | number | boolean}` : '',
+    alphaType ? `type:${alphaType as string | number | boolean}` : '',
+    official,
+  ]
     .filter(Boolean)
     .join(' · ');
 }

@@ -108,7 +108,9 @@ export function officialContextInlineSummary(status: JobStatus | null) {
   const operators = contextSummaryField(status, 'operators_count');
   const datasets = contextSummaryField(status, 'datasets_count');
   const contextError = String(
-    status?.progress?.context_error || resultStringField(status, 'context_error') || ''
+    (status?.progress?.context_error as string | number | boolean | null | undefined) ||
+      resultStringField(status, 'context_error') ||
+      ''
   ).trim();
   if (fields === '-' && operators === '-' && datasets === '-') {
     return '暂无通过完整性校验的官方上下文缓存统计，等待同步状态返回或手动刷新。';
@@ -124,10 +126,14 @@ export function canRetryContextOnly(status: JobStatus | null) {
   if (!status) return false;
   const result = isRecord(status.result) ? status.result : undefined;
   const contextStatus = String(
-    status.progress?.['context_status'] || result?.['context_status'] || ''
+    (status.progress?.['context_status'] as string | number | boolean | null | undefined) ||
+      (result?.['context_status'] as string | number | boolean | null | undefined) ||
+      ''
   ).toLowerCase();
   const contextError = String(
-    status.progress?.['context_error'] || result?.['context_error'] || ''
+    (status.progress?.['context_error'] as string | number | boolean | null | undefined) ||
+      (result?.['context_error'] as string | number | boolean | null | undefined) ||
+      ''
   ).trim();
   return Boolean(contextError || contextStatus === 'failed');
 }

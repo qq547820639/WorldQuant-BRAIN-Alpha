@@ -1,7 +1,9 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import App from './App';
 import ErrorBoundary from '@/components/ErrorBoundary';
+import NotFound from '@/components/NotFound';
 import { GlobalDataProvider } from '@/hooks/useGlobalData';
 import './index.css';
 
@@ -11,7 +13,12 @@ ReactDOM.createRoot(rootEl).render(
   <React.StrictMode>
     <ErrorBoundary>
       <GlobalDataProvider>
-        <App />
+        <BrowserRouter>
+          <Routes>
+            <Route path="/" element={<App />} />
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </BrowserRouter>
       </GlobalDataProvider>
     </ErrorBoundary>
   </React.StrictMode>

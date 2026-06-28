@@ -41,7 +41,8 @@ export function isJobStatus(value: unknown): value is JobStatus {
 /** Extract jobId from an API response with various possible shapes */
 export function extractJobId(result: unknown): string {
   if (!isRecord(result)) return '';
-  return String(result.job_id || result.task_id || '');
+  const raw = (result.job_id || result.task_id) as string | number | boolean | null | undefined;
+  return String(raw || '');
 }
 
 /** Format a validation ID for compact display */

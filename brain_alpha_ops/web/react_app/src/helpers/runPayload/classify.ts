@@ -16,7 +16,7 @@ import { record, truthyField } from './internalHelpers';
 import type { JobStateClassification, JobStateInput, JobStateProgressInput } from './types';
 
 export function normalizedJobStatus(value: unknown): string {
-  return String(value || '')
+  return String((value as string | number | boolean | null | undefined) || '')
     .trim()
     .toLowerCase();
 }
