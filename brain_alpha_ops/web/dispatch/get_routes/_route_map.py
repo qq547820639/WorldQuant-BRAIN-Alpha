@@ -31,18 +31,23 @@ def _build_route_map() -> dict[str, dict[str, Route]]:
         "/api/alpha_lifecycle": Route("alpha_lifecycle"),
         "/api/lifecycle/history": Route("alpha_lifecycle"),
         "/api/candidates": Route("candidates"),
+        # DEPRECATED 2026-06-28: 前端无调用，候选清理，确认无外部脚本使用后再删除
         "/api/candidate/list": Route("candidates"),
         "/api/cloud_alphas": Route("cloud_alphas"),
         "/api/snapshot/cloud": Route("cloud_alphas"),
+        # DEPRECATED 2026-06-28: 前端无调用，候选清理，确认无外部脚本使用后再删除
         "/api/snapshot/cloud_alphas": Route("cloud_alphas"),
         "/api/research_memory": Route("research_memory"),
         "/api/snapshot/memory": Route("research_memory"),
+        # DEPRECATED 2026-06-28: 前端无调用，候选清理，确认无外部脚本使用后再删除
         "/api/snapshot/research_memory": Route("research_memory"),
         "/api/research_knowledge": Route("research_knowledge"),
         "/api/research_observability": Route("research_observability"),
+        # DEPRECATED 2026-06-28: 前端无调用，候选清理，确认无外部脚本使用后再删除
         "/api/snapshot/observability": Route("research_observability"),
         "/api/prompt_runs": Route("prompt_runs"),
         "/api/sqlite_indexes": Route("sqlite_indexes"),
+        # DEPRECATED 2026-06-28: 前端无调用，候选清理，确认无外部脚本使用后再删除
         "/api/snapshot/sqlite_indexes": Route("sqlite_indexes"),
         "/api/sqlite_expression_lookup": Route("sqlite_expression_lookup"),
         "/api/sqlite_record_lookup": Route("sqlite_record_lookup"),
@@ -73,24 +78,32 @@ def _build_route_map() -> dict[str, dict[str, Route]]:
     }
     post_routes = {
         "/api/run": Route("run"),
+        # DEPRECATED 2026-06-28: 前端无调用，候选清理，确认无外部脚本使用后再删除
         "/api/production-validation/start": Route("run"),
         "/api/config": Route("config"),
+        # DEPRECATED 2026-06-28: 前端无调用，候选清理，确认无外部脚本使用后再删除
         "/api/config/update": Route("config"),
         "/api/test_connection": Route("test_connection"),
+        # DEPRECATED 2026-06-28: 前端无调用，候选清理，确认无外部脚本使用后再删除
         "/api/connection_test": Route("test_connection"),
         "/api/stop": Route("stop"),
         "/api/production-validation/stop": Route("stop"),
         "/api/cancel": Route("cancel"),
         "/api/sync_alphas": Route("sync_alphas"),
+        # DEPRECATED 2026-06-28: 前端无调用，候选清理，确认无外部脚本使用后再删除
         "/api/sync-cloud-alphas": Route("sync_alphas"),          # R-02: legacy alias
+        # DEPRECATED 2026-06-28: 前端无调用，候选清理，确认无外部脚本使用后再删除
         "/api/sync/sync_alphas": Route("sync_alphas"),
         "/api/sync_context_only": Route("sync_context_only"),
         "/api/sync_cancel": Route("sync_cancel"),
         "/api/check": Route("check"),
+        # DEPRECATED 2026-06-28: 前端无调用，候选清理，确认无外部脚本使用后再删除
         "/api/candidate/check": Route("check"),
         "/api/generate_candidates": Route("generate_candidates"),
+        # DEPRECATED 2026-06-28: 前端无调用，候选清理，确认无外部脚本使用后再删除
         "/api/generate": Route("generate_candidates"),
         "/api/candidates/optimize": Route("optimize_candidates"),
+        # DEPRECATED 2026-06-28: 前端无调用，候选清理，确认无外部脚本使用后再删除
         "/api/candidate/optimize": Route("optimize_candidates"),
         "/api/check_batch": Route("check_batch"),
         "/api/submit": Route("submit"),

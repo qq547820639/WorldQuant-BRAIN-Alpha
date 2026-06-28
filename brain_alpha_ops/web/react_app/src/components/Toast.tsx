@@ -174,15 +174,7 @@ function SingleToast({ toast, onClose }: SingleToastProps) {
     [duration]
   );
 
-  const pauseTimer = useCallback(() => {
-    if (animationFrameRef.current) {
-      cancelAnimationFrame(animationFrameRef.current);
-      animationFrameRef.current = null;
-    }
-    const elapsed = Date.now() - startTimeRef.current;
-    remainingRef.current = Math.max(0, remainingRef.current - elapsed);
-  }, []);
-
+  // eslint-disable-next-line react-hooks/preserve-manual-memoization -- 回调内 mutate animationFrameRef.current，React Compiler 跳过保留；手动 memo 保证 handleClose 引用稳定，避免 startTimer/effect 链路无谓重渲染
   const handleClose = useCallback(() => {
     if (animationFrameRef.current) {
       cancelAnimationFrame(animationFrameRef.current);

@@ -1,6 +1,7 @@
 services:
   brain-alpha-ops:
     build: .
+    image: brain-alpha-ops:0.5.0
     ports:
       - "8765:8765"
     environment:
@@ -11,9 +12,14 @@ services:
       - WEB_HOST=0.0.0.0
     volumes:
       - ./data:/app/data
+      - ./config:/app/config
+      - brain-alpha-artifacts:/app/artifacts
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8765/api/health')"]
       interval: 30s
       timeout: 5s
       start_period: 30s
       retries: 3
+
+volumes:
+  brain-alpha-artifacts:

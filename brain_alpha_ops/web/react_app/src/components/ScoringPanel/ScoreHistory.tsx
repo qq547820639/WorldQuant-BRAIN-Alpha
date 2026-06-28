@@ -66,7 +66,10 @@ export default function ScoreHistory({ scoreHistory, expanded, onToggleExpanded 
 
 function ScoreHistoryBody({ scoreHistory }: { scoreHistory: ScoreHistoryPoint[] }) {
   return (
-    <div className="scorebreakdown-panel" style={{ background: 'none', border: 'none', padding: 0 }}>
+    <div
+      className="scorebreakdown-panel"
+      style={{ background: 'none', border: 'none', padding: 0 }}
+    >
       <div className="scorebreakdown-history" style={{ padding: 0 }}>
         <div className="scorebreakdown-sparkline-container" style={{ marginTop: 0 }}>
           <ScoreHistorySparkline scoreHistory={scoreHistory} />

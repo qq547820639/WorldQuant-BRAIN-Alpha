@@ -84,13 +84,12 @@ export function candidateManagementDisplayCandidates(
 export function optimizationCandidatesForPool(
   rows: Candidate[],
   retainedCandidates: Candidate[],
-  queueIds?: string[]
+  _queueIds?: string[]
 ) {
   const retained = new Set(retainedCandidates.map((c) => candidateIdentity(c)));
   const selected = rows
     .filter((c) => !retained.has(candidateIdentity(c)))
     .filter(candidateRetainedPoolEligible);
-  const queued = queueIds || [];
   const selectedIds = new Set(selected.map((c) => candidateIdentity(c)));
   const extra = retainedCandidates.filter((c) => !selectedIds.has(candidateIdentity(c)));
   return [...selected, ...extra];

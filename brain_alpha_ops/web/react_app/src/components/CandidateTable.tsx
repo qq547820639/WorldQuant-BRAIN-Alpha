@@ -16,7 +16,6 @@ import {
 } from './CandidateTableUtils';
 import CandidateTablePagination from './CandidateTablePagination';
 import { CandidateTableToolbar } from './CandidateTableToolbar';
-import type { QualitySummaryData } from './CandidateTableToolbar';
 import CandidateTableDesktop from './CandidateTableDesktop';
 import CandidateTableMobile from './CandidateTableMobile';
 import CandidateTableLoading from './CandidateTableLoading';
@@ -84,7 +83,6 @@ export default function CandidateTable({
 
   const {
     candidates,
-    serverMainPoolCandidates,
     serverWorkflowPlan,
     candidateMeta,
     checkResults,

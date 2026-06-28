@@ -55,8 +55,12 @@ function extractLayerChildren(
       } else if (isRecord(value)) {
         const weight = typeof value.weight === 'number' ? value.weight : 0;
         const subChildren = extractLayerChildren({ [key]: value }, key, undefined);
+        const dimName: string | number | boolean = (value.name ?? value.label ?? key) as
+          | string
+          | number
+          | boolean;
         children.push({
-          name: formatDimName(String(value.name ?? value.label ?? key)),
+          name: formatDimName(String(dimName)),
           weight,
           children: subChildren.length ? subChildren : undefined,
         });
@@ -235,7 +239,7 @@ export default function ScoringWeightModal({
                         alignItems: 'center',
                         padding: '6px 0',
                         borderBottom:
-                          j < layer.children.length - 1
+                          j < (layer.children?.length ?? 0) - 1
                             ? '0.5px solid var(--color-divider)'
                             : 'none',
                       }}

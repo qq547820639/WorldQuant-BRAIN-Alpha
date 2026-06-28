@@ -36,8 +36,8 @@ export default memo(function FocusTrap({
       '[tabindex]:not([tabindex="-1"])',
     ];
     return Array.from(
-      containerRef.current.querySelectorAll(focusableSelectors.join(','))
-    ) as HTMLElement[];
+      containerRef.current.querySelectorAll<HTMLElement>(focusableSelectors.join(','))
+    );
   }, []);
 
   const handleKeyDown = useCallback(

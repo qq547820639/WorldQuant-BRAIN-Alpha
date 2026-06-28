@@ -56,7 +56,7 @@ const READINESS_REASON_LABELS: Record<string, string> = {
 };
 
 export function readinessReasonLabel(reason: unknown, fallback = '-') {
-  const key = String(reason || '').trim();
+  const key = String((reason as string | number | boolean | null | undefined) || '').trim();
   if (!key) return fallback;
   return READINESS_REASON_LABELS[key] || '存在未分类阻断原因';
 }
@@ -65,9 +65,10 @@ export function readinessProductionGapLabel(
   finding: { code?: unknown; message?: unknown } | null | undefined,
   fallback = '存在未分类生产缺口'
 ) {
-  const code = String(finding?.code || '').trim();
+  const code = String((finding?.code as string | number | boolean | null | undefined) || '').trim();
   if (code) return READINESS_REASON_LABELS[code] || fallback;
-  const message = String(finding?.message || '').trim();
+  const messageRaw = finding?.message as string | number | boolean | null | undefined;
+  const message = String(messageRaw || '').trim();
   if (!message) return fallback;
   return READINESS_REASON_LABELS[message] || fallback;
 }
@@ -79,7 +80,7 @@ const READINESS_NEXT_ACTION_LABELS: Record<string, string> = {
 };
 
 export function readinessNextActionLabel(step: unknown, fallback = '继续根据阻断复核结果处理') {
-  const key = String(step || '').trim();
+  const key = String((step as string | number | boolean | null | undefined) || '').trim();
   if (!key) return fallback;
   return READINESS_NEXT_ACTION_LABELS[key] || fallback;
 }

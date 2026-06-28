@@ -16,7 +16,9 @@ export function cloudTotal(
   const summary = payload?.summary || {};
   const value =
     payload?.count ?? payload?.total ?? summary.count ?? summary.total ?? summary.total_count;
-  return value == null ? '-' : String(value);
+  if (value == null) return '-';
+  const primitive = value as string | number | boolean;
+  return String(primitive);
 }
 
 export function labeledError(label: string, error: string | null) {

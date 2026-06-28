@@ -14,6 +14,7 @@ import Tooltip from '../Tooltip';
 import type {
   GateDecisionActionLiteral,
   GateDecisionPayload,
+  GateEvidence,
   TriggeredRule,
 } from '@/types';
 import { safeScoringText } from './utils';
@@ -95,9 +96,7 @@ export default function GateDecisionStrip({ decision, loading }: Props) {
             <p className="text-sm text-text-primary break-words">
               {safeScoringText(decision.reason, '门禁原因待确认')}
             </p>
-            {decision.next_action_hint && (
-              <NextActionCTA hint={decision.next_action_hint} />
-            )}
+            {decision.next_action_hint && <NextActionCTA hint={decision.next_action_hint} />}
           </div>
         </div>
         <EvidenceSummary evidence={evidence} targetState={decision.target_state} />
@@ -151,7 +150,7 @@ function EvidenceSummary({
   evidence,
   targetState,
 }: {
-  evidence: Record<string, unknown>;
+  evidence: GateEvidence;
   targetState: string;
 }) {
   const items: Array<{ label: string; value: string }> = [];

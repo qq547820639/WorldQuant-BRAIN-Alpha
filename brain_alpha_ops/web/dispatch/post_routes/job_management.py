@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from brain_alpha_ops.web_dispatch_context import WebHandlerDispatchContext
@@ -19,6 +20,8 @@ from ..web_handler_dispatch import (
 
 from .helpers import _create_non_submit_run_job, _non_submit_run_payload
 
+logger = logging.getLogger(__name__)
+
 
 def _stop_or_cancel_job(
     handler: Any,
@@ -31,6 +34,20 @@ def _stop_or_cancel_job(
     the matching job. Both endpoints use the same underlying stop mechanism.
     """
     job_id = str((payload or {}).get("job_id") or "")
+    # Phase 5 tech-debt cleanup: consume optional cancel telemetry (reason/
+    # message/source) sent by the web UI's auto-cancel flow so it is not
+    # silently dropped. Does not alter stop/cancel response behavior.
+    cancel_reason = str((payload or {}).get("reason") or "").strip()
+    if cancel_reason:
+        cancel_source = str((payload or {}).get("source") or "").strip()
+        cancel_message = str((payload or {}).get("message") or "").strip()
+        logger.info(
+            "job cancel telemetry: job_id=%s reason=%s source=%s message=%s",
+            job_id,
+            cancel_reason,
+            cancel_source,
+            cancel_message[:200],
+        )
     for store, job_type in (
         (ctx.jobs, "run"),
         (ctx.sync_jobs, "sync"),

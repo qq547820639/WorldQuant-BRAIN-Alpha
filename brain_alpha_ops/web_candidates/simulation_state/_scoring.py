@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from brain_alpha_ops.config import RunConfig
@@ -9,6 +10,8 @@ from brain_alpha_ops.models import Candidate
 from brain_alpha_ops.research.scoring import build_scorecard, evaluate_quality_gate
 from brain_alpha_ops.scoring.release_score_gate import evaluate_release_score
 from brain_alpha_ops.submission_readiness import missing_official_metric_fields
+
+logger = logging.getLogger(__name__)
 
 
 def score_simulated_candidate(candidate: dict[str, Any], config: RunConfig) -> dict[str, Any]:
@@ -102,5 +105,9 @@ def default_simulation_dataset(config: RunConfig) -> str:
     try:
         settings = config.ops.settings.to_platform_dict()["settings"]
     except Exception:
+        logger.warning(
+            "failed to extract settings from config; returning empty dataset",
+            exc_info=True,
+        )
         return ""
     return str(settings.get("dataset") or "")

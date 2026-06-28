@@ -1,12 +1,7 @@
 import { apiErrorMessage } from '@/helpers/errorExperience';
 import { classifyJobState, jobStatusMessage } from '@/helpers/runPayload';
 import type { JobStatus, OfficialContextCache } from '@/types';
-import {
-  firstPositiveNumber,
-  formatCount,
-  numberField,
-  resultNumberField,
-} from './formatters';
+import { firstPositiveNumber, formatCount, numberField, resultNumberField } from './formatters';
 import { readableBackendText } from './errorMessages';
 import { syncScanPageSummary, syncStageCode } from './syncStage';
 
@@ -14,11 +9,11 @@ export function syncProgressMonitorSignature(result: JobStatus): string {
   const progress = result?.progress || {};
   return [
     progress.phase || '',
-    progress.status_code || '',
+    String((progress.status_code as string | number | boolean | null | undefined) || ''),
     progress.percent_complete ?? '',
     progress.scanned ?? '',
-    progress.added ?? '',
-    progress.skipped ?? '',
+    String((progress.added as string | number | boolean | null | undefined) ?? ''),
+    String((progress.skipped as string | number | boolean | null | undefined) ?? ''),
     progress.failed ?? '',
   ].join('|');
 }

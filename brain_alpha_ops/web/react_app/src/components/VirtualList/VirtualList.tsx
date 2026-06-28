@@ -7,7 +7,7 @@ import { useVirtualizer, useWindowVirtualizer, type Virtualizer } from '@tanstac
 
 type VirtualListDirection = 'vertical' | 'horizontal';
 
-interface VirtualListProps<T> {
+export interface VirtualListProps<T> {
   items: T[];
   renderItem: (item: T, index: number) => ReactNode;
   itemSize?: number;
@@ -50,22 +50,32 @@ const VirtualListInner = forwardRef(function VirtualListInner<T>(
 
   const virtualizerOptions = {
     count: items.length,
-    estimateSize: estimateSize || (itemSize ? () => itemSize : undefined),
+    estimateSize: estimateSize || (itemSize ? () => itemSize : () => 50),
     overscan,
     horizontal: isHorizontal,
     scrollMargin,
     getItemKey: getItemKey ? (index: number) => getItemKey(index, items[index]) : undefined,
-    onChange: (instance: Virtualizer<Element, Element>) => {
-      onScroll?.(isHorizontal ? instance.scrollLeft : instance.scrollTop);
+    onChange: (instance: { scrollOffset?: number | null }) => {
+      // [REFACTORED] virtual-core uses scrollOffset, not scrollLeft/scrollTop.
+      // 结构类型同时兼容 useWindowVirtualizer (Virtualizer<Window, Element>)
+      // 与 useVirtualizer (Virtualizer<Element, Element>) 的 onChange 签名。
+      // scrollOffset is number | null on the Virtualizer; ?? 0 normalizes it.
+      onScroll?.(instance.scrollOffset ?? 0);
     },
   };
 
+  // [LINT-FIX] useWindowScroll is a stable prop (does not change across
+  // renders), so the hook order is stable. useWindowVirtualizer and
+  // useVirtualizer have incompatible getScrollElement signatures
+  // (() => Window vs () => Element), so they cannot be unified.
   const rowVirtualizer = useWindowScroll
-    ? useWindowVirtualizer({
+    ? // eslint-disable-next-line react-hooks/rules-of-hooks
+      useWindowVirtualizer({
         ...virtualizerOptions,
-        scrollElement: typeof window !== 'undefined' ? window : null,
+        getScrollElement: () => (typeof window !== 'undefined' ? window : null),
       })
-    : useVirtualizer({
+    : // eslint-disable-next-line react-hooks/rules-of-hooks
+      useVirtualizer({
         ...virtualizerOptions,
         getScrollElement: () => parentRef.current,
       });

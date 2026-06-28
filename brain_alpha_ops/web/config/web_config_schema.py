@@ -2,16 +2,23 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from brain_alpha_ops.data import OfficialDataLoader
 from brain_alpha_ops.web_capability_registry import capability_settings_options
+
+logger = logging.getLogger(__name__)
 
 
 def _dataset_options() -> list[dict[str, Any]]:
     try:
         datasets = OfficialDataLoader.instance().get_datasets()
     except Exception:
+        logger.warning(
+            "failed to load datasets for config schema; returning empty options",
+            exc_info=True,
+        )
         return []
     rows: list[dict[str, Any]] = []
     for dataset in sorted(

@@ -61,9 +61,7 @@ export interface ActionableErrorResponse {
 
 // ── Type guards ───────────────────────────────────────────────────────────
 
-export function isActionableErrorPayload(
-  value: unknown
-): value is ActionableErrorPayload {
+export function isActionableErrorPayload(value: unknown): value is ActionableErrorPayload {
   if (typeof value !== 'object' || value === null) return false;
   const rec = value as Record<string, unknown>;
   return (
@@ -78,9 +76,7 @@ export function isActionableErrorPayload(
   );
 }
 
-export function isActionableErrorResponse(
-  value: unknown
-): value is ActionableErrorResponse {
+export function isActionableErrorResponse(value: unknown): value is ActionableErrorResponse {
   if (typeof value !== 'object' || value === null) return false;
   const rec = value as Record<string, unknown>;
   return isActionableErrorPayload(rec.actionable);
@@ -177,7 +173,13 @@ const ERROR_KIND_KEYWORDS: Array<{ kind: ErrorKind; needles: string[] }> = [
   },
   {
     kind: 'task_cancelled',
-    needles: ['task_cancelled', 'raw backend cancellation', 'job cancelled', 'aborted', 'aborterror'],
+    needles: [
+      'task_cancelled',
+      'raw backend cancellation',
+      'job cancelled',
+      'aborted',
+      'aborterror',
+    ],
   },
   {
     kind: 'queue_blocked',
@@ -213,10 +215,10 @@ export function classifyError(err: unknown): ErrorKind {
     typeof err === 'number'
       ? err
       : typeof err === 'object' &&
-        err !== null &&
-        typeof (err as { status_code?: unknown }).status_code === 'number'
-      ? (err as { status_code: number }).status_code
-      : null;
+          err !== null &&
+          typeof (err as { status_code?: unknown }).status_code === 'number'
+        ? (err as { status_code: number }).status_code
+        : null;
   if (status !== null) {
     if (status === 401 || status === 403) return 'login_expired';
     if (status === 429) return 'official_rate_limited';
@@ -266,7 +268,7 @@ function stringifyError(err: unknown): string {
     }
     return parts.join(' ');
   }
-  return String(err || '');
+  return String((err as string | number | boolean | null | undefined) || '');
 }
 
 // ── Builder (frontend-side fallback payload) ─────────────────────────────
@@ -291,63 +293,64 @@ export const ERROR_KIND_RECOVERY_URL: Record<ErrorKind, string> = {
 };
 
 /** Default Chinese cause/suggested_action text per kind (compact mirror of catalog). */
-const FALLBACK_TEXT: Record<ErrorKind, { cause: string; action: string; severity: ErrorSeverity }> = {
-  login_expired: {
-    cause: '登录会话已失效或凭据过期。',
-    action: '请前往系统配置重新测试连接。',
-    severity: 'error',
-  },
-  cache_unavailable: {
-    cause: '本地能力集缓存不可用。',
-    action: '请在官方操作入口刷新官方能力集。',
-    severity: 'warning',
-  },
-  official_rate_limited: {
-    cause: 'BRAIN 官方接口限流（429）。',
-    action: '请稍后重试或查看回测队列。',
-    severity: 'warning',
-  },
-  simulation_concurrency_exceeded: {
-    cause: 'BRAIN 回测并发槽位已满。',
-    action: '请等待已有回测完成后再提交。',
-    severity: 'warning',
-  },
-  dataset_missing: {
-    cause: '指定的 Dataset 不在能力集中。',
-    action: '请在系统配置中选择可用 Dataset。',
-    severity: 'error',
-  },
-  field_non_compliant: {
-    cause: '字段/参数不符合 BRAIN 平台规则。',
-    action: '请检查字段名与取值范围。',
-    severity: 'error',
-  },
-  expression_invalid: {
-    cause: '表达式语法非法或包含未知算子。',
-    action: '请在候选管理修正表达式后重试。',
-    severity: 'error',
-  },
-  network_timeout: {
-    cause: '网络请求超时。',
-    action: '请稍后重试或检查网络状态。',
-    severity: 'warning',
-  },
-  task_cancelled: {
-    cause: '任务已取消。',
-    action: '可在运行总览查看任务状态。',
-    severity: 'info',
-  },
-  queue_blocked: {
-    cause: '官方模拟队列阻塞。',
-    action: '请在回测监控查看队列状态。',
-    severity: 'warning',
-  },
-  local_service_unavailable: {
-    cause: '本地 Web 服务未启动。',
-    action: '请让维护者启动本地 Web 服务。',
-    severity: 'error',
-  },
-};
+const FALLBACK_TEXT: Record<ErrorKind, { cause: string; action: string; severity: ErrorSeverity }> =
+  {
+    login_expired: {
+      cause: '登录会话已失效或凭据过期。',
+      action: '请前往系统配置重新测试连接。',
+      severity: 'error',
+    },
+    cache_unavailable: {
+      cause: '本地能力集缓存不可用。',
+      action: '请在官方操作入口刷新官方能力集。',
+      severity: 'warning',
+    },
+    official_rate_limited: {
+      cause: 'BRAIN 官方接口限流（429）。',
+      action: '请稍后重试或查看回测队列。',
+      severity: 'warning',
+    },
+    simulation_concurrency_exceeded: {
+      cause: 'BRAIN 回测并发槽位已满。',
+      action: '请等待已有回测完成后再提交。',
+      severity: 'warning',
+    },
+    dataset_missing: {
+      cause: '指定的 Dataset 不在能力集中。',
+      action: '请在系统配置中选择可用 Dataset。',
+      severity: 'error',
+    },
+    field_non_compliant: {
+      cause: '字段/参数不符合 BRAIN 平台规则。',
+      action: '请检查字段名与取值范围。',
+      severity: 'error',
+    },
+    expression_invalid: {
+      cause: '表达式语法非法或包含未知算子。',
+      action: '请在候选管理修正表达式后重试。',
+      severity: 'error',
+    },
+    network_timeout: {
+      cause: '网络请求超时。',
+      action: '请稍后重试或检查网络状态。',
+      severity: 'warning',
+    },
+    task_cancelled: {
+      cause: '任务已取消。',
+      action: '可在运行总览查看任务状态。',
+      severity: 'info',
+    },
+    queue_blocked: {
+      cause: '官方模拟队列阻塞。',
+      action: '请在回测监控查看队列状态。',
+      severity: 'warning',
+    },
+    local_service_unavailable: {
+      cause: '本地 Web 服务未启动。',
+      action: '请让维护者启动本地 Web 服务。',
+      severity: 'error',
+    },
+  };
 
 /** Recovery action id per kind (mirrors backend recovery_action_id). */
 const RECOVERY_ACTION_ID: Record<ErrorKind, string> = {

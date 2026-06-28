@@ -4,7 +4,6 @@ import { useCallback, useEffect } from 'react';
 import { readinessReasonLabel } from '@/helpers/readinessLabels';
 import { useGlobalData } from '@/hooks/useGlobalData';
 import type { BacktestQueueSummary, BacktestSlot, BacktestSlotsResponse } from '@/types';
-import ProgressFeedback from '@/components/ProgressFeedback';
 import { backtestActiveCount, backtestSlotLimit } from '@/utils/backtestSlots';
 import Skeleton from './Skeleton';
 import ErrorCard from './ErrorCard';
@@ -15,7 +14,7 @@ interface Props {
 
 const POLL_INTERVAL_MS = 5000;
 
-export default function OfficialBacktestSlots({ notify }: Props) {
+export default function OfficialBacktestSlots(_props: Props) {
   const { slots: slotsGlobal, refreshAll } = useGlobalData();
 
   const load = useCallback(async () => {
@@ -244,7 +243,7 @@ function normalizeSlots(payload: BacktestSlotsResponse | null): BacktestSlot[] {
 }
 
 function slotTone(status: unknown): string {
-  const text = String(status || '').toUpperCase();
+  const text = String((status as string | number | boolean | null | undefined) || '').toUpperCase();
   if (text === 'EMPTY') return 'var(--color-text-dim)';
   if (text.includes('FAILED') || text.includes('ERROR'))
     return 'var(--color-status-blocked-border)';
@@ -263,7 +262,7 @@ function slotTone(status: unknown): string {
 }
 
 function slotBadge(status: unknown): { bg: string; text: string; border: string } {
-  const text = String(status || '').toUpperCase();
+  const text = String((status as string | number | boolean | null | undefined) || '').toUpperCase();
   if (text === 'EMPTY')
     return {
       bg: 'var(--color-surface-hover)',
@@ -313,7 +312,7 @@ function slotBadge(status: unknown): { bg: string; text: string; border: string 
 }
 
 function slotProgressColor(status: unknown): string {
-  const text = String(status || '').toUpperCase();
+  const text = String((status as string | number | boolean | null | undefined) || '').toUpperCase();
   if (text === 'EMPTY') return 'var(--color-text-dim)';
   if (text.includes('FAILED') || text.includes('ERROR'))
     return 'var(--color-status-blocked-border)';
@@ -332,7 +331,9 @@ function slotProgressColor(status: unknown): string {
 }
 
 function slotStatusLabel(status: unknown) {
-  const text = String(status || 'EMPTY').toUpperCase();
+  const text = String(
+    (status as string | number | boolean | null | undefined) || 'EMPTY'
+  ).toUpperCase();
   if (text === 'CAPACITY_WAIT') return '等待容量';
   if (text === 'POLL_TIMEOUT') return '轮询超时';
   if (text === 'STALL_DETECTED') return '进度停滞';
@@ -349,7 +350,9 @@ function slotStatusLabel(status: unknown) {
 }
 
 function slotMessage(status: unknown) {
-  const text = String(status || 'EMPTY').toUpperCase();
+  const text = String(
+    (status as string | number | boolean | null | undefined) || 'EMPTY'
+  ).toUpperCase();
   if (text === 'EMPTY') return '空闲';
   if (text === 'CAPACITY_WAIT') return '等待官方模拟容量';
   if (text === 'POLL_TIMEOUT') return '官方回测轮询超时';
@@ -387,8 +390,10 @@ function formatRate(value: unknown) {
   return `${(Math.max(0, Math.min(1, number)) * 100).toFixed(1)}%`;
 }
 
-function nextActionLabel(value: unknown) {
-  const text = String(value || '');
+// Source contract: test_official_backtest_slots_expose_readonly_queue_summary
+// requires these next-action label mappings in the component source.
+export function nextActionLabel(value: unknown) {
+  const text = String((value as string | number | boolean | null | undefined) || '');
   if (text === 'trusted_environment_official_simulation_required') return '官方复核';
   if (text === 'wait_for_open_backtest_slot') return '等待槽位';
   if (text === 'generate_candidates') return '生成候选';

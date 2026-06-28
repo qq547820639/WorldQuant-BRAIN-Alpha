@@ -18,7 +18,7 @@ export function normalizeSelectOptions(
 
 export function datasetSelectOptions(
   schema: ConfigSchema | undefined,
-  currentDataset: string
+  _currentDataset: string
 ): Array<{ value: string; label: string }> {
   const choices: Array<{ value: string; label: string }> = [];
   const rows = schema?.dataset_options || [];

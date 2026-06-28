@@ -16,7 +16,7 @@ export function useJobMonitor({ notify, credentials }: UseJobMonitorOptions): Us
   const [running, setRunning] = useState(false);
   const [events, setEvents] = useState<string[]>([]);
   const [progressError, setProgressError] = useState<string | null>(null);
-  const [pollFailures, setPollFailures] = useState(0);
+  const [, setPollFailures] = useState(0);
 
   const api = useApi();
   const startJobRef = useRef<((resume?: boolean) => Promise<void>) | null>(null);

@@ -19,7 +19,7 @@ export function syncHistoryReadErrorTitle(raw: unknown) {
 }
 
 export function readableBackendText(raw: unknown) {
-  const value = String(raw || '').trim();
+  const value = String((raw as string | number | boolean | null | undefined) || '').trim();
   const sharedMessage = knownApiErrorMessage(value);
   if (sharedMessage) return sharedMessage;
   const fieldRefreshMatch = value.match(/^Updating official fields cache:\s*(.+)$/);

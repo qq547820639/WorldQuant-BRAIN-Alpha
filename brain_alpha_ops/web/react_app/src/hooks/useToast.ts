@@ -50,6 +50,7 @@ export function useToast(maxToasts = 5) {
     [maxToasts]
   );
 
+  // eslint-disable-next-line react-hooks/preserve-manual-memoization -- 回调内 mutate timersRef.current（clearTimeout/delete），React Compiler 因此跳过保留；手动 memo 保证返回给消费者的 dismissToast 引用稳定
   const dismissToast = useCallback((id: string) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
     const timer = timersRef.current.get(id);

@@ -8,7 +8,7 @@ export function record(value: unknown): Record<string, unknown> {
 }
 
 export function candidateText(value: unknown) {
-  return String(value || '');
+  return String((value as string | number | boolean | null | undefined) || '');
 }
 
 export function candidateIdentity(candidate: Candidate) {

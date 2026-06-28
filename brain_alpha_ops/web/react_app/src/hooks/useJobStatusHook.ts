@@ -4,7 +4,7 @@ import { useApi } from '@/hooks/useApi';
 import { classifyJobState, jobStatusMessage, resolveJobEventState } from '@/helpers/runPayload';
 import type { BrainCredentials, JobStatus, SSEEvent, UnifiedProgress } from '@/types';
 import { saveResumeState } from '@/utils/resumeState';
-import { saveJobId as saveSessionJobId, clearSavedJobId } from '@/hooks/useJobRecovery';
+import { clearSavedJobId } from '@/hooks/useJobRecovery';
 import { useJobRecovery } from '@/hooks/useJobRecovery';
 import { useJobSseConnection } from '@/hooks/useJobSseConnection';
 import { useJobWatchdog } from '@/hooks/useJobWatchdog';
@@ -54,8 +54,8 @@ export interface JobStatusHandlers extends JobStatusState {
     targetJobId?: string | null
   ) => Promise<Awaited<ReturnType<typeof requestJobCancel>> | null>;
   clearTransientProgressError: () => void;
-  clearDisconnectedTimer?: () => void;
-  setDisconnected?: (disconnected: boolean) => void;
+  clearDisconnectedTimer: () => void;
+  setDisconnected: (disconnected: boolean) => void;
   jobIdRef: React.MutableRefObject<string | null>;
   api: ReturnType<typeof useApi>;
 }

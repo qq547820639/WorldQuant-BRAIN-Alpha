@@ -161,8 +161,8 @@ function AppContent() {
                   {jobState.progress?.percent_complete != null
                     ? `${Math.round(jobState.progress.percent_complete)}%`
                     : '...'}{' '}
-                  {(jobState.progress?.eta_seconds || 0) > 0
-                    ? fmtEta(jobState.progress.eta_seconds)
+                  {(jobState.progress?.eta_seconds ?? 0) > 0
+                    ? fmtEta(jobState.progress?.eta_seconds ?? 0)
                     : ''}
                 </button>
               )}

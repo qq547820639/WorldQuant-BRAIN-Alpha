@@ -30,7 +30,13 @@ def _redline_summary(findings: list[Finding]) -> dict[str, bool]:
             code in {"RUN_FOREVER_ENABLED", "MAX_CYCLES_NOT_BOUNDED"} for code in codes
         ),
         "full_factor_coverage": not any(
-            code.startswith("OFFICIAL_CONTEXT_") or code in {"CLOUD_SYNC_CACHE_MISSING", "STALE_CONTEXT_ALLOWED"}
+            code.startswith("OFFICIAL_CONTEXT_")
+            or code in {
+                "CLOUD_SYNC_CACHE_MISSING",
+                "STALE_CONTEXT_ALLOWED",
+                "DATASET_ID_NOT_IN_OFFICIAL_CONTEXT",
+                "OFFICIAL_REFRESH_STATUS_MISSING",
+            }
             for code in codes
         ),
         "code_strong_alignment": not any(
@@ -55,7 +61,7 @@ def _build_manifest_hash(
     tracked = [config_path, *(repo_root / path for path in (
         "pyproject.toml",
         "brain_alpha_ops/runner.py",
-        "brain_alpha_ops/brain_api/official.py",
+        "brain_alpha_ops/brain_api/official/__init__.py",
         "brain_alpha_ops/research/pipeline.py",
         "brain_alpha_ops/scoring/release_score_gate/__init__.py",
         "brain_alpha_ops/scoring/release_score_gate/_models.py",

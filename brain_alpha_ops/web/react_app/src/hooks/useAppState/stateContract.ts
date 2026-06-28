@@ -67,20 +67,11 @@ export const LEGAL_TRANSITIONS: Readonly<
   Record<CandidateLifecycleState, readonly CandidateLifecycleState[]>
 > = {
   draft: ['locally_scored', 'gate_rejected', 'archived'],
-  locally_scored: [
-    'gate_rejected',
-    'queued_for_simulation',
-    'needs_optimization',
-    'archived',
-  ],
+  locally_scored: ['gate_rejected', 'queued_for_simulation', 'needs_optimization', 'archived'],
   gate_rejected: ['needs_optimization', 'archived'],
   queued_for_simulation: ['simulating', 'gate_rejected', 'queued_for_simulation'],
   simulating: ['simulation_passed', 'simulation_failed', 'simulating'],
-  simulation_failed: [
-    'needs_optimization',
-    'archived',
-    'queued_for_simulation',
-  ],
+  simulation_failed: ['needs_optimization', 'archived', 'queued_for_simulation'],
   simulation_passed: ['ready_for_review', 'submitted'],
   needs_optimization: ['locally_scored'],
   ready_for_review: ['submitted', 'archived', 'ready_for_review'],
@@ -118,7 +109,7 @@ export type GateDecisionAction =
  * transitions (mirrors `CandidateLifecycle.is_terminal()`).
  */
 export function isTerminalState(
-  state: CandidateLifecycleState | string | null | undefined
+  state: string | null | undefined
 ): state is CandidateLifecycleState {
   return state === 'archived';
 }
@@ -130,7 +121,7 @@ export function isTerminalState(
  * official simulation and is not in an inactive state.
  */
 export function isActiveBacktestState(
-  state: CandidateLifecycleState | string | null | undefined
+  state: string | null | undefined
 ): state is CandidateLifecycleState {
   return state === 'queued_for_simulation' || state === 'simulating';
 }
@@ -142,13 +133,9 @@ export function isActiveBacktestState(
  *   {simulation_failed, gate_rejected, archived}.
  */
 export function isInactiveBacktestState(
-  state: CandidateLifecycleState | string | null | undefined
+  state: string | null | undefined
 ): state is CandidateLifecycleState {
-  return (
-    state === 'simulation_failed' ||
-    state === 'gate_rejected' ||
-    state === 'archived'
-  );
+  return state === 'simulation_failed' || state === 'gate_rejected' || state === 'archived';
 }
 
 // ── Transition helpers ────────────────────────────────────────────────────
@@ -157,22 +144,17 @@ export function isInactiveBacktestState(
  * Validate a transition against the legal-transition graph.
  * Returns true iff `from → to` is permitted by `LEGAL_TRANSITIONS`.
  */
-export function isLegalTransition(
-  from: CandidateLifecycleState | string | null | undefined,
-  to: CandidateLifecycleState | string
-): boolean {
+export function isLegalTransition(from: string | null | undefined, to: string): boolean {
   if (!from) return false;
   const allowed = LEGAL_TRANSITIONS[from as CandidateLifecycleState];
-  return Array.isArray(allowed) && allowed.includes(to as CandidateLifecycleState);
+  return Array.isArray(allowed) && allowed.includes(to);
 }
 
 /**
  * Return the list of states the candidate may legally move to from `from`.
  * Empty for terminal states. Always returns a fresh array (safe to mutate).
  */
-export function legalNextStates(
-  from: CandidateLifecycleState | string
-): CandidateLifecycleState[] {
+export function legalNextStates(from: string): CandidateLifecycleState[] {
   const allowed = LEGAL_TRANSITIONS[from as CandidateLifecycleState];
   return Array.isArray(allowed) ? [...allowed] : [];
 }

@@ -103,7 +103,9 @@ export function formFromImport(imported: Record<string, unknown>, current: Confi
   const source = asRecord(root.config) || root;
   if (asRecord(source.ops)) {
     return formFromConfig({
-      environment: String(source.environment || 'production'),
+      environment: String(
+        (source.environment as string | number | boolean | null | undefined) || 'production'
+      ),
       ops: asRecord(source.ops) || {},
       settings: asRecord(source.settings) || {},
       budget: asRecord(source.budget) || {},
@@ -114,7 +116,7 @@ export function formFromImport(imported: Record<string, unknown>, current: Confi
         source.maxWeightConcentration,
         current.maxWeightConcentration
       ),
-    } as unknown);
+    } as unknown as PartialConfig);
   }
   const settings = asRecord(source.settings) || {};
   const budget = asRecord(source.budget) || {};

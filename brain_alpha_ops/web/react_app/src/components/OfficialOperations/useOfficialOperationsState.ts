@@ -1,14 +1,7 @@
 import { useCallback, useRef, useState } from 'react';
 import { useApi } from '@/hooks/useApi';
-import type {
-  JobStatus,
-  SubmitReadinessResponse,
-} from '@/types';
-import type {
-  OperationMode,
-  SyncRange,
-  SyncProgressMonitorState,
-} from './utils';
+import type { JobStatus, SubmitReadinessResponse } from '@/types';
+import type { OperationMode, SyncRange, SyncProgressMonitorState } from './utils';
 import {
   SYNC_PROGRESS_STALL_WARNING_MS,
   SYNC_PROGRESS_STALL_STOP_MS,

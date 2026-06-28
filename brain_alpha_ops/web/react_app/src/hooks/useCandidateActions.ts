@@ -1,11 +1,10 @@
-import { useCallback, useRef, useMemo } from 'react';
+import { useCallback } from 'react';
 import type { SSEEvent, Candidate } from '@/types';
 import {
   type CandidatePoolSnapshot,
   type CandidateWorkflowPlan,
-  type CandidateCheckResult,
 } from '@/components/CandidateTableUtils';
-import type { CandidatePipeline, AutoPipelineStage } from './useCandidatePipeline';
+import type { CandidatePipeline } from './useCandidatePipeline';
 import { useCandidateGeneration } from './useCandidateGeneration';
 import { useCandidateSimulation } from './useCandidateSimulation';
 import {
@@ -17,15 +16,18 @@ import { useCandidateSSEHandlers } from './useCandidateSSEHandlers';
 
 export interface CandidateActionsDeps {
   pipeline: CandidatePipeline;
-  callApi: <T>(url: string, opts?: RequestInit) => Promise<T & { ok?: boolean; error?: string }>;
+  callApi: <T>(
+    url: string,
+    opts?: RequestInit
+  ) => Promise<(T & { ok?: boolean; error?: string }) | null>;
   callSingleCheckApi: <T>(
     url: string,
     opts?: RequestInit
-  ) => Promise<T & { ok?: boolean; error?: string }>;
+  ) => Promise<(T & { ok?: boolean; error?: string }) | null>;
   callBatchCheckApi: <T>(
     url: string,
     opts?: RequestInit
-  ) => Promise<T & { ok?: boolean; error?: string }>;
+  ) => Promise<(T & { ok?: boolean; error?: string }) | null>;
   loadCandidates: () => Promise<{
     rows: Candidate[];
     mainPoolCandidates: Candidate[] | null;

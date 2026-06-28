@@ -58,6 +58,7 @@ export function useSSE(url: string | null, options: UseSSEOptions = {}) {
 
   useEffect(() => {
     if (!url) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- url 置空时关闭旧连接并更新连接状态（清理副作用）
       close();
       return;
     }

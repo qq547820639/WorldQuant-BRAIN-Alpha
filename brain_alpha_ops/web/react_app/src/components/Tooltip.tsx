@@ -125,6 +125,7 @@ export default memo(function Tooltip({
   return (
     <span
       ref={wrapperRef}
+      // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- intentional: span wraps the tooltip trigger and must be keyboard-focusable to show the tooltip on focus.
       tabIndex={0}
       style={{ display: 'inline-block', position: 'relative' }}
       onMouseEnter={showTooltip}

@@ -142,6 +142,7 @@ export function useDashboard({
     const poolSize = memory?.total_candidates ?? status?.progress?.candidates_generated;
     if (poolSize != null && poolSize > 0) {
       const updated = appendTrendPoint(TREND_KEY.CANDIDATES, poolSize);
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- 进度变化后追加候选趋势点（外部数据→趋势状态同步，已加条件判断）
       setTrendCandidates(updated);
     }
     const submissions = status?.progress?.submissions ?? cloudSummaryData?.submitted_count;
@@ -168,6 +169,7 @@ export function useDashboard({
       const poolSize = memory?.total_candidates ?? status?.progress?.candidates_generated;
       if (poolSize != null && poolSize > 0) {
         const updated = appendTrendPoint(TREND_KEY.CANDIDATES, poolSize);
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- 任务从运行转为停止时追加最终候选趋势点（状态切换边界同步）
         setTrendCandidates(updated);
       }
       const submissions = status?.progress?.submissions ?? cloudSummaryData?.submitted_count;

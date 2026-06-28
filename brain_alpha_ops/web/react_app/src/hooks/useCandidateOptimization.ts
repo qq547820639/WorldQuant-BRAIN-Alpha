@@ -47,7 +47,10 @@ export function optimizationCandidatesForPool(
 
 export interface CandidateOptimizationDeps {
   pipeline: CandidatePipeline;
-  callApi: <T>(url: string, opts?: RequestInit) => Promise<T & { ok?: boolean; error?: string }>;
+  callApi: <T>(
+    url: string,
+    opts?: RequestInit
+  ) => Promise<(T & { ok?: boolean; error?: string }) | null>;
   loadCandidates: () => Promise<{
     rows: Candidate[];
     mainPoolCandidates: Candidate[] | null;

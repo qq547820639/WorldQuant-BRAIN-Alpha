@@ -47,15 +47,13 @@ describe('GateDecisionStrip — null / loading states', () => {
     expect(c1.firstChild).toBeNull();
     const { container: c2 } = render(
       <GateDecisionStrip
-        decision={
-          {
-            ok: false,
-            action: 'continue_optimization',
-            reason: 'some error',
-            target_state: 'needs_optimization',
-            error: 'gate error',
-          } as GateDecisionPayload
-        }
+        decision={{
+          ok: false,
+          action: 'continue_optimization',
+          reason: 'some error',
+          target_state: 'needs_optimization',
+          error: 'gate error',
+        }}
       />
     );
     expect(c2.firstChild).toBeNull();
@@ -88,7 +86,11 @@ describe('GateDecisionStrip — null / loading states', () => {
 
 describe('GateDecisionStrip — action tones and CTA', () => {
   const cases: Array<{ action: GateDecisionActionLiteral; label: string; cssVar: string }> = [
-    { action: 'enter_official_simulation_queue', label: '进入官方模拟队列', cssVar: '--color-status-complete-bg' },
+    {
+      action: 'enter_official_simulation_queue',
+      label: '进入官方模拟队列',
+      cssVar: '--color-status-complete-bg',
+    },
     { action: 'continue_optimization', label: '继续优化', cssVar: '--color-warning-bg' },
     { action: 'discard_archive', label: '丢弃归档', cssVar: '--color-status-blocked-bg' },
     { action: 'enter_human_confirmation', label: '需要人工确认', cssVar: '--color-info-bg' },
@@ -160,7 +162,9 @@ describe('GateDecisionStrip — triggered rules and evidence summary', () => {
       { source: 'anti_overfit', rule: 'ic_stability', reason: 'IC 不稳定' },
     ];
     const { rerender } = render(
-      <GateDecisionStrip decision={makeDecision('continue_optimization', { triggered_rules: rules })} />
+      <GateDecisionStrip
+        decision={makeDecision('continue_optimization', { triggered_rules: rules })}
+      />
     );
     expect(screen.getByText('触发规则')).toBeDefined();
     expect(screen.getByText('sharpe_min')).toBeDefined();
@@ -326,10 +330,15 @@ describe('AttributionTooltip — label and tooltip behavior', () => {
       expect(screen.queryByRole('tooltip')).toBeNull();
 
       const label = screen.getByText('Sharpe');
-      const wrapper = label.parentElement as HTMLElement;
-      act(() => { wrapper.focus(); });
+      // parentElement is non-null: label is rendered inside the tooltip wrapper.
+      const wrapper = label.parentElement!;
+      act(() => {
+        wrapper.focus();
+      });
       // Advance past the 300ms default delay + the 10ms mount delay
-      act(() => { vi.advanceTimersByTime(350); });
+      act(() => {
+        vi.advanceTimersByTime(350);
+      });
 
       const tooltip = screen.getByRole('tooltip');
       expect(tooltip.textContent).toContain('分数: 1.8');
@@ -344,25 +353,37 @@ describe('AttributionTooltip — label and tooltip behavior', () => {
   it('hides the tooltip on blur; uses label as content when no metrics provided', () => {
     vi.useFakeTimers();
     try {
-      const { rerender } = render(
-        <AttributionTooltip name="Sharpe" score={1.8} weight={0.3} />
-      );
+      const { rerender } = render(<AttributionTooltip name="Sharpe" score={1.8} weight={0.3} />);
       const label = screen.getByText('Sharpe');
-      const wrapper = label.parentElement as HTMLElement;
-      act(() => { wrapper.focus(); });
-      act(() => { vi.advanceTimersByTime(350); });
+      // parentElement is non-null: label is rendered inside the tooltip wrapper.
+      const wrapper = label.parentElement!;
+      act(() => {
+        wrapper.focus();
+      });
+      act(() => {
+        vi.advanceTimersByTime(350);
+      });
       expect(screen.getByRole('tooltip')).toBeDefined();
 
-      act(() => { wrapper.blur(); });
-      act(() => { vi.advanceTimersByTime(200); });
+      act(() => {
+        wrapper.blur();
+      });
+      act(() => {
+        vi.advanceTimersByTime(200);
+      });
       expect(screen.queryByRole('tooltip')).toBeNull();
 
       // Re-render with no metrics — tooltip content falls back to label.
       rerender(<AttributionTooltip name="裸维度" />);
       const label2 = screen.getByText('裸维度');
-      const wrapper2 = label2.parentElement as HTMLElement;
-      act(() => { wrapper2.focus(); });
-      act(() => { vi.advanceTimersByTime(350); });
+      // parentElement is non-null: label is rendered inside the tooltip wrapper.
+      const wrapper2 = label2.parentElement!;
+      act(() => {
+        wrapper2.focus();
+      });
+      act(() => {
+        vi.advanceTimersByTime(350);
+      });
       expect(screen.getByRole('tooltip').textContent).toContain('裸维度');
     } finally {
       vi.useRealTimers();

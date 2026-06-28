@@ -203,11 +203,7 @@ export default function SnapshotPanel({ notify, viewMode, onNavigate }: Props) {
       </div>
 
       <div className="panel overflow-hidden p-0">
-        <SnapshotMobileList
-          rows={filteredRows}
-          emptyMessage={config.empty}
-          title={config.title}
-        />
+        <SnapshotMobileList rows={filteredRows} emptyMessage={config.empty} title={config.title} />
         <SnapshotDesktopTable
           rows={filteredRows}
           emptyMessage={config.empty}

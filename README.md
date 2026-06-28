@@ -2,7 +2,7 @@
 ![Python](https://img.shields.io/badge/Python-3.12+-3776AB?style=flat-square)
 ![React](https://img.shields.io/badge/React-18+-61DAFB?style=flat-square)
 ![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)
-![Version](https://img.shields.io/badge/Version-0.3.0-blueviolet?style=flat-square)
+![Version](https://img.shields.io/badge/Version-0.5.0-blueviolet?style=flat-square)
 ![Tests](https://img.shields.io/badge/Tests-2874%20passed-success?style=flat-square)
 > **你的 WorldQuant BRAIN 智能研究助手 — 帮你「找 alpha」，但绝不替你按「提交」按钮。**
 

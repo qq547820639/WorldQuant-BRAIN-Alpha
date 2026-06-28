@@ -24,6 +24,7 @@ import { renderActiveView, type RenderViewProps } from './renderView';
  * and returns the active view's React node.
  */
 export function renderActiveViewFromContext(): React.ReactNode {
+  // eslint-disable-next-line react-hooks/rules-of-hooks -- render function invoked during a component's render phase; hook context is valid at runtime.
   const appState = useAppStateContext();
   const viewProps: RenderViewProps = {
     activeView: appState.activeView,

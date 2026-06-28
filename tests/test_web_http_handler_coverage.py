@@ -97,6 +97,8 @@ def test_handler_dispatch_methods_and_session_delegates():
 
 def test_options_preflight_allows_replay_headers():
     handler, calls, _session = _handler()
+    # 真实预检请求总是携带 Origin；统一 CORS 仅对白名单内 Origin 回显头
+    handler.headers["Origin"] = "http://127.0.0.1:8765"
 
     handler.do_OPTIONS()
 
@@ -252,3 +254,46 @@ def test_sse_status_helpers():
     assert _sse_event_type("stream_timeout") == "stream_timeout"
     assert _sse_event_type("completed_with_warnings") == "complete"
     assert _sse_event_type("queued") == "progress"
+
+
+def test_do_post_rejects_non_json_content_type_when_body_present():
+    """POST with Content-Length > 0 and non-json Content-Type must 415."""
+    handler, calls, _session = _handler()
+    handler.headers["Content-Length"] = "10"
+    handler.headers["Content-Type"] = "text/plain"
+    handler.path = "/api/run"
+
+    handler.do_POST()
+
+    assert ("status", 415) in calls
+    assert b"UNSUPPORTED_MEDIA_TYPE" in handler.wfile.getvalue()
+    # 415 响应仍走 _json → 携带统一 CORS Vary 头
+    assert ("header", "Vary", "Origin") in calls
+    # 不应进入 dispatch_post
+    assert b'"posted"' not in handler.wfile.getvalue()
+
+
+def test_do_post_accepts_application_json_with_charset_when_body_present():
+    """POST with body and application/json; charset=utf-8 must be dispatched."""
+    handler, calls, _session = _handler()
+    handler.headers["Content-Length"] = "10"
+    handler.headers["Content-Type"] = "application/json; charset=utf-8"
+    handler.path = "/api/run"
+
+    handler.do_POST()
+
+    assert b'"posted": "/api/run"' in handler.wfile.getvalue()
+    assert ("status", 200) in calls
+
+
+def test_do_post_skips_content_type_check_for_bodyless_requests():
+    """POST without Content-Length must skip Content-Type check even if CT is non-json."""
+    handler, calls, _session = _handler()
+    # 无 Content-Length → 视为无 body，即便 Content-Type 非 json 也放行
+    handler.headers["Content-Type"] = "text/plain"
+    handler.path = "/api/session"
+
+    handler.do_POST()
+
+    assert b'"posted": "/api/session"' in handler.wfile.getvalue()
+    assert ("status", 415) not in calls

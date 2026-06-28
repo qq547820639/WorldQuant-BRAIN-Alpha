@@ -85,6 +85,7 @@ export function usePhaseConnection({
   }, [phaseApi.call, setCredentials]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 连接状态追平时重置 override（条件同步，已加判断避免无谓重渲染）
     if (connectionOverride === true && phaseConnected) setConnectionOverride(null);
     if (connectionOverride === false && !phaseConnected) setConnectionOverride(null);
   }, [connectionOverride, phaseConnected]);

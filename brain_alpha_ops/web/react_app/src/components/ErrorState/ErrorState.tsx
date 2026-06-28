@@ -8,7 +8,7 @@ import RetryButton from './RetryButton';
 type ErrorSeverity = 'error' | 'warning' | 'info';
 type ErrorDisplayLevel = 'inline' | 'card' | 'page';
 
-interface ErrorStateProps {
+export interface ErrorStateProps {
   title: string;
   description?: string;
   details?: string;
@@ -121,13 +121,8 @@ export default memo(function ErrorState({
         className={`flex flex-col items-center justify-center py-12 px-4 text-center ${className}`}
         role="alert"
       >
-        <div className="mb-4">
-          {icon || <ErrorIcon severity={severity} size={48} />}
-        </div>
-        <h3
-          className="text-lg font-semibold mb-2"
-          style={{ color: 'var(--color-text-bright)' }}
-        >
+        <div className="mb-4">{icon || <ErrorIcon severity={severity} size={48} />}</div>
+        <h3 className="text-lg font-semibold mb-2" style={{ color: 'var(--color-text-bright)' }}>
           {title}
         </h3>
         {description && (
@@ -205,7 +200,12 @@ export default memo(function ErrorState({
           {(onRetry || children) && (
             <div style={{ marginTop: 12, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               {onRetry && (
-                <RetryButton onRetry={onRetry} loading={retryLoading} label={retryLabel} size="sm" />
+                <RetryButton
+                  onRetry={onRetry}
+                  loading={retryLoading}
+                  label={retryLabel}
+                  size="sm"
+                />
               )}
               {children}
             </div>

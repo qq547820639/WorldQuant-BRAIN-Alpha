@@ -2,11 +2,7 @@ import { useCallback, useEffect, type Dispatch, type SetStateAction } from 'reac
 import type { ApiMeta } from '@/hooks/useApi';
 import type { JobStatus } from '@/types';
 import type { OperationLogEntry } from './utils';
-import {
-  STOP_RETRY_AFTER_MS,
-  clearStoredSyncJobId,
-  operationFailureMessage,
-} from './utils';
+import { STOP_RETRY_AFTER_MS, clearStoredSyncJobId, operationFailureMessage } from './utils';
 
 interface UseSyncStopDeps {
   syncJobId: string;
@@ -17,7 +13,13 @@ interface UseSyncStopDeps {
   setStoppingNowMs: Dispatch<SetStateAction<number>>;
   syncPollFailureCountRef: React.MutableRefObject<number>;
   stopRetryStartedAtRef: React.MutableRefObject<number>;
-  syncCancelApi: { call: <R = unknown>(url: string, options?: RequestInit) => Promise<(R & ApiMeta) | null>; reset: () => void; data: unknown | null; error: string | null; loading: boolean };
+  syncCancelApi: {
+    call: <R = unknown>(url: string, options?: RequestInit) => Promise<(R & ApiMeta) | null>;
+    reset: () => void;
+    data: unknown;
+    error: string | null;
+    loading: boolean;
+  };
   resetSyncProgressMonitor: () => void;
   appendLog: (tone: OperationLogEntry['tone'], message: string) => void;
   notify: (type: 'success' | 'error' | 'warning' | 'info', msg: string) => void;
@@ -85,7 +87,15 @@ export function useSyncStop(deps: UseSyncStopDeps) {
       appendLog('warning', message);
       notify('warning', message);
     },
-    [appendLog, callSyncCancel, notify, resetSyncProgressMonitor, setSyncRunning, setSyncStatus, syncJobId]
+    [
+      appendLog,
+      callSyncCancel,
+      notify,
+      resetSyncProgressMonitor,
+      setSyncRunning,
+      setSyncStatus,
+      syncJobId,
+    ]
   );
 
   const stopOfficialContextRefresh = useCallback(async () => {
@@ -151,7 +161,17 @@ export function useSyncStop(deps: UseSyncStopDeps) {
     }));
     appendLog('warning', '已发送停止请求，系统会在当前官方接口返回后结束。');
     notify('info', '停止请求已发送');
-  }, [appendLog, callSyncCancel, notify, resetSyncProgressMonitor, setStoppingSinceMs, setStoppingNowMs, setSyncStatus, syncJobId, syncPollFailureCountRef]);
+  }, [
+    appendLog,
+    callSyncCancel,
+    notify,
+    resetSyncProgressMonitor,
+    setStoppingSinceMs,
+    setStoppingNowMs,
+    setSyncStatus,
+    syncJobId,
+    syncPollFailureCountRef,
+  ]);
 
   useEffect(() => {
     if (syncStatus?.status !== 'stopping') return;
@@ -172,7 +192,14 @@ export function useSyncStop(deps: UseSyncStopDeps) {
       });
     }, waitMs);
     return () => window.clearTimeout(timer);
-  }, [appendLog, callSyncCancel, stoppingSinceMs, stopRetryStartedAtRef, syncJobId, syncStatus?.status]);
+  }, [
+    appendLog,
+    callSyncCancel,
+    stoppingSinceMs,
+    stopRetryStartedAtRef,
+    syncJobId,
+    syncStatus?.status,
+  ]);
 
   return {
     interruptOfficialContextRefresh,

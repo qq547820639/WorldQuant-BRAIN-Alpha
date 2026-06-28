@@ -5,7 +5,7 @@
  * from the backend, and either marks it terminal or reconnects SSE.
  */
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import type { JobStatus } from '@/types';
 import { classifyJobState } from '@/helpers/runPayload';
 import { reportIgnoredError } from '@/utils/reportIgnoredError';
@@ -73,6 +73,7 @@ export function useJobRecovery({
       return;
     }
 
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 挂载时启动恢复流程（一次性初始化）
     setRecovering(true);
     addEvent('正在检查任务状态…');
 

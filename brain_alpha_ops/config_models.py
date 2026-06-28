@@ -300,6 +300,7 @@ class WebConfig:
 
 @dataclass
 class RunConfig:
+    schema_version: str = "v2.0"
     environment: str = "production"
     auto_submit: bool = False
     demo_mode: bool = False

@@ -11,7 +11,7 @@ export const ACTIVE_BACKTEST_SLOT_STATUSES = new Set([
 ]);
 
 export function isActiveBacktestSlotStatus(status: unknown) {
-  const text = String(status || '').toUpperCase();
+  const text = String((status as string | number | boolean | null | undefined) || '').toUpperCase();
   return ACTIVE_BACKTEST_SLOT_STATUSES.has(text);
 }
 

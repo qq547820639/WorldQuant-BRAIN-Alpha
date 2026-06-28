@@ -24,7 +24,6 @@ export function usePhaseState(input: PhaseInput) {
     candidatesCount,
     scoredCount,
     readinessPassed,
-    activeView,
     phaseStatus = 'ready',
   } = input;
 

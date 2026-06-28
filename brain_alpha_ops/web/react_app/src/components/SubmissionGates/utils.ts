@@ -1,9 +1,4 @@
-import {
-  readinessNextActionLabel,
-  readinessProductionGapLabel,
-  readinessReasonLabel,
-} from '@/helpers/readinessLabels';
-import type { SubmitReadinessResponse } from '@/types';
+import { readinessProductionGapLabel, readinessReasonLabel } from '@/helpers/readinessLabels';
 import { BLOCKER_ACTION_MAP } from './constants';
 
 export function blockerActionForReason(reason: string) {
@@ -18,7 +13,8 @@ export function blockerActionForReason(reason: string) {
 }
 
 export function blockerActionForProductionGap(finding: { code?: unknown; message?: unknown }) {
-  const code = String(finding.code || finding.message || '').trim();
+  const raw = (finding.code || finding.message) as string | number | boolean | null | undefined;
+  const code = String(raw || '').trim();
   if (code && BLOCKER_ACTION_MAP[code]) {
     return BLOCKER_ACTION_MAP[code];
   }

@@ -21,11 +21,12 @@ export function BlockerActionButton({
     );
   }
   if (action.action_type === 'navigate' && onNavigate && action.view) {
+    const view = action.view;
     return (
       <button
         type="button"
         className="btn btn-secondary text-xs shrink-0"
-        onClick={() => onNavigate(action.view)}
+        onClick={() => onNavigate(view)}
       >
         {action.label}
       </button>

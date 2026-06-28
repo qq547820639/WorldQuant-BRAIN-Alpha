@@ -3,11 +3,7 @@ import type { ApiMeta } from '@/hooks/useApi';
 import type { SubmitReadinessResponse } from '@/types';
 import type { OperationMode } from './constants';
 import type { OperationLogEntry } from './utils';
-import {
-  operationFailureMessage,
-  requestDeadline,
-  checkResultCount,
-} from './utils';
+import { operationFailureMessage, requestDeadline, checkResultCount } from './utils';
 
 interface CheckResultsResponse {
   items?: Array<Record<string, unknown>>;
@@ -19,8 +15,24 @@ interface CheckResultsResponse {
 
 interface UseReadinessChecksDeps {
   setMode: Dispatch<SetStateAction<OperationMode>>;
-  readinessApi: { call: <R = SubmitReadinessResponse>(url: string, options?: RequestInit) => Promise<(R & ApiMeta) | null>; data: SubmitReadinessResponse | null; error: string | null; loading: boolean };
-  checkResultsApi: { call: <R = CheckResultsResponse>(url: string, options?: RequestInit) => Promise<(R & ApiMeta) | null>; data: CheckResultsResponse | null; error: string | null; loading: boolean };
+  readinessApi: {
+    call: <R = SubmitReadinessResponse>(
+      url: string,
+      options?: RequestInit
+    ) => Promise<(R & ApiMeta) | null>;
+    data: SubmitReadinessResponse | null;
+    error: string | null;
+    loading: boolean;
+  };
+  checkResultsApi: {
+    call: <R = CheckResultsResponse>(
+      url: string,
+      options?: RequestInit
+    ) => Promise<(R & ApiMeta) | null>;
+    data: CheckResultsResponse | null;
+    error: string | null;
+    loading: boolean;
+  };
   appendLog: (tone: OperationLogEntry['tone'], message: string) => void;
   notify: (type: 'success' | 'error' | 'warning' | 'info', msg: string) => void;
 }

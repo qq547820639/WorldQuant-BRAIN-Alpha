@@ -1,0 +1,34 @@
+# Docker 多阶段构建优化 - 验证清单
+
+- [ ] Dockerfile 包含三个命名阶段：`webbuild`、`pybuilder`、`runtime`
+- [ ] Stage 1 `webbuild` 使用 `node:22-bookworm` 基础镜像
+- [ ] Stage 1 拷贝完整 `react_app/` 目录（含 src/、package.json、package-lock.json），执行 `npm ci && npm run build`
+- [ ] Stage 2 `pybuilder` 使用 `python:3.13-slim` 基础镜像
+- [ ] Stage 2 安装完整构建环境 `pip install -e ".[browser,test,dev]"`
+- [ ] Stage 2 用 `pip wheel ".[browser]"` 构建生产依赖 wheel（不含 test/dev）
+- [ ] Stage 2 删除项目自身 wheel（`rm -f /wheels/brain_alpha_ops-*.whl`）
+- [ ] Stage 2 清理源码树：移除 `react_app/`、`__pycache__`、`*.pyc`
+- [ ] Stage 3 `runtime` 使用 `python:3.13-slim` 基础镜像
+- [ ] Stage 3 apt 安装 Chromium 系统依赖库（libnss3、libgtk-3-0、libgbm1 等）
+- [ ] Stage 3 离线安装生产 wheel（`--no-index --find-links=/wheels`）
+- [ ] Stage 3 执行 `python -m playwright install chromium`
+- [ ] Stage 3 不删除 `~/.cache`（保留 Playwright Chromium）
+- [ ] Stage 3 从 pybuilder 拷贝清理后的 `brain_alpha_ops/` 源码到 `/app/brain_alpha_ops/`
+- [ ] Stage 3 从 webbuild 拷贝 `dist/` 到 `brain_alpha_ops/web/react_app/dist`
+- [ ] Stage 3 拷贝 `launch_web.py` 到 `/app/`
+- [ ] Stage 3 拷贝 `data/` 和 `config/` 种子数据
+- [ ] Stage 3 `mkdir -p /app/data /app/config /app/artifacts/evidence`
+- [ ] Stage 3 声明 `VOLUME ["/app/data", "/app/config"]`
+- [ ] Stage 3 `EXPOSE 8765`
+- [ ] Stage 3 HEALTHCHECK 探测 `http://127.0.0.1:8765/api/health`
+- [ ] Stage 3 `CMD ["python", "launch_web.py"]`
+- [ ] 运行时镜像不含 pytest、ruff、mypy、pip-audit
+- [ ] 运行时镜像不含 `node_modules/` 与前端 `src/`
+- [ ] `.dockerignore` 存在且排除 node_modules、__pycache__、.venv、.git、tests/、docs/
+- [ ] `.dockerignore` 保留 README.md（`!README.md`）
+- [ ] `docker-compose.yml` 包含 `image: brain-alpha-ops:0.5.0`
+- [ ] `docker-compose.yml` volumes 包含 `./data:/app/data`、`./config:/app/config`、`brain-alpha-artifacts:/app/artifacts`
+- [ ] `docker-compose.yml` 顶层声明 `volumes: brain-alpha-artifacts:`
+- [ ] `docker-compose.yml` healthcheck 探测 `/api/health`
+- [ ] `docker-compose.yml` 为有效 YAML（通过 yaml 解析验证）
+- [ ] 未修改任何功能性 Python 代码（仅 Dockerfile/.dockerignore/docker-compose.yml）

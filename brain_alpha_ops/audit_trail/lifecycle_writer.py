@@ -259,6 +259,10 @@ def _sanitize(value: Any) -> dict[str, Any]:
         try:
             return value.to_dict()
         except Exception:  # noqa: BLE001
+            logger.warning(
+                "value.to_dict() serialization failed; using _raw fallback",
+                exc_info=True,
+            )
             return {"_raw": str(value)[:200]}
     return {"_value": str(value)[:200]}
 

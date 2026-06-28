@@ -2,11 +2,21 @@
  * LazyImage — 懒加载图片组件
  * 使用 IntersectionObserver 实现懒加载，支持骨架屏和淡入效果
  */
-import { memo, useState, useCallback, useEffect, type ImgHTMLAttributes, type ReactNode } from 'react';
+import {
+  memo,
+  useState,
+  useCallback,
+  useEffect,
+  type ImgHTMLAttributes,
+  type ReactNode,
+} from 'react';
 import Skeleton from '../Skeleton';
 import { useInView } from '../../hooks/useIntersectionObserver';
 
-interface LazyImageProps extends Omit<ImgHTMLAttributes<HTMLImageElement>, 'onLoad' | 'onError'> {
+export interface LazyImageProps extends Omit<
+  ImgHTMLAttributes<HTMLImageElement>,
+  'onLoad' | 'onError'
+> {
   src: string;
   alt: string;
   placeholder?: ReactNode;

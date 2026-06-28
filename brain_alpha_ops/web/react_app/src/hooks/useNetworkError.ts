@@ -20,15 +20,8 @@ interface UseNetworkErrorResult {
   reset: () => void;
 }
 
-export function useNetworkError(
-  options: UseNetworkErrorOptions = {}
-): UseNetworkErrorResult {
-  const {
-    maxRetries = 5,
-    baseDelay = 1000,
-    maxDelay = 30000,
-    enableAutoRetry = true,
-  } = options;
+export function useNetworkError(options: UseNetworkErrorOptions = {}): UseNetworkErrorResult {
+  const { maxRetries = 5, baseDelay = 1000, maxDelay = 30000, enableAutoRetry = true } = options;
 
   const [isOnline, setIsOnline] = useState<boolean>(
     typeof navigator !== 'undefined' ? navigator.onLine : true

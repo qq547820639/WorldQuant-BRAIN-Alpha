@@ -8,7 +8,7 @@
 import { useCallback } from 'react';
 import { useSSE } from '@/hooks/useSSE';
 import { resolveJobEventState } from '@/helpers/runPayload';
-import type { JobStatus, SSEEvent, SSECandidateEventData } from '@/types';
+import type { SSEEvent, SSECandidateEventData } from '@/types';
 import { isSSECandidateData } from '@/types';
 import { clearSavedJobId } from '@/hooks/useJobRecovery';
 

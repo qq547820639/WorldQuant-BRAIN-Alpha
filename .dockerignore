@@ -1,0 +1,35 @@
+# ── Frontend: exclude deps and stale build output (rebuilt in webbuild stage) ──
+brain_alpha_ops/web/react_app/node_modules
+brain_alpha_ops/web/react_app/dist
+
+# ── Python caches and build artifacts ──
+**/__pycache__
+**/*.pyc
+**/*.pyo
+**/*.egg-info
+.pytest_cache
+build/
+
+# ── Virtual environments ──
+.venv
+venv
+env
+
+# ── Version control and IDE / tooling (not needed in image) ──
+.git
+.gitignore
+.github
+.trae
+.mimocode
+.vscode
+.idea
+.DS_Store
+
+# ── Documentation, test fixtures, root-level tests (not needed at runtime) ──
+docs/
+fixtures/
+tests/
+
+# ── Local reports and planning notes (not needed in image) ──
+*.md
+!README.md

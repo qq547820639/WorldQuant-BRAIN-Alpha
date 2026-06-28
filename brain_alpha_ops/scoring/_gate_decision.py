@@ -235,6 +235,10 @@ def _coerce_gate_dict(gate_results: Any) -> dict[str, Any]:
             d = gate_results.to_dict()
             return d if isinstance(d, dict) else {}
         except Exception:  # noqa: BLE001
+            logger.warning(
+                "gate_results.to_dict() coercion failed; returning empty dict",
+                exc_info=True,
+            )
             return {}
     return {}
 

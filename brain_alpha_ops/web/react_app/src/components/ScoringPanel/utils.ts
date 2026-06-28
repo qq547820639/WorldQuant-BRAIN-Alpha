@@ -34,7 +34,8 @@ export function safeScoringText(value: unknown, fallback: string) {
   if (value === undefined || value === null || value === '') return fallback;
   if (typeof value === 'number') return Number.isFinite(value) ? String(value) : fallback;
   if (typeof value === 'boolean') return value ? '是' : '否';
-  const text = String(value).trim();
+  const primitive = value as string | number | boolean;
+  const text = String(primitive).trim();
   if (!text) return fallback;
   if (isUnsafeScoringText(text)) return fallback;
   return text;
@@ -45,7 +46,7 @@ function isUnsafeScoringText(text: string) {
 }
 
 export function lifecycleStatusLabel(value: unknown) {
-  const text = String(value || '').trim();
+  const text = String((value as string | number | boolean | null | undefined) || '').trim();
   if (!text) return '--';
   const normalized = text.toLowerCase();
   if (LIFECYCLE_STATUS_LABELS[normalized]) return LIFECYCLE_STATUS_LABELS[normalized];

@@ -91,11 +91,13 @@ export function useConfigForm({
     initialValues: EMPTY_FORM,
   });
 
+  // Multi-line destructuring preserves the "isDirty: dirty," source contract
+  // expected by test_app_apply_preset_reads_presets_from_app_state.
+  // prettier-ignore
   const {
     values: form,
     setValue,
     setValues: setFormValues,
-    reset,
     isDirty: dirty,
   } = formValidation;
 
@@ -107,8 +109,8 @@ export function useConfigForm({
     void schemaApi.call('/api/config_schema');
   }, [schemaApi.call]);
 
-  const config = useMemo(
-    () => (globalConfig.data?.config ?? null) as PartialConfig | null,
+  const config = useMemo<PartialConfig | null>(
+    () => globalConfig.data?.config ?? null,
     [globalConfig.data]
   );
   const schema = schemaApi.data?.schema;
@@ -119,6 +121,7 @@ export function useConfigForm({
     if (!config) return;
     const next = formFromConfig(config);
     setFormValues(next);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- config 加载后同步表单值与初始快照（外部数据→本地表单状态同步）
     setInitialForm(next);
   }, [config, setFormValues]);
 

@@ -18,9 +18,7 @@ export default function StateCardItem({ config, metrics, onNavigate }: Props) {
       className="group relative min-w-0 overflow-hidden rounded-lg border border-slate-200 bg-white p-5 text-left shadow-sm transition-all duration-200 hover:border-brand-200 hover:bg-brand-50/40 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-brand-500/50 focus:ring-offset-2 focus:ring-offset-slate-50"
     >
       {/* 背景渐变 */}
-      <div
-        className={`absolute inset-x-0 top-0 h-1 bg-gradient-to-r ${config.color} opacity-80`}
-      />
+      <div className={`absolute inset-x-0 top-0 h-1 bg-gradient-to-r ${config.color} opacity-80`} />
 
       {/* 图标 */}
       <div className="relative mb-4">

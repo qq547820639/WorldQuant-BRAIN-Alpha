@@ -151,7 +151,6 @@ export function CandidateTableToolbar({
   onFilterChange,
   showStarredOnly = false,
   onToggleStarFilter,
-  selectedIds,
   selectedCount,
   onClearSelection,
   onBatchScore,
