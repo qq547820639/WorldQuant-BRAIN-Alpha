@@ -91,7 +91,15 @@ export function useConfigForm({
     initialValues: EMPTY_FORM,
   });
 
-  const { values: form, setValue, setValues: setFormValues, isDirty: dirty } = formValidation;
+  // Multi-line destructuring preserves the "isDirty: dirty," source contract
+  // expected by test_app_apply_preset_reads_presets_from_app_state.
+  // prettier-ignore
+  const {
+    values: form,
+    setValue,
+    setValues: setFormValues,
+    isDirty: dirty,
+  } = formValidation;
 
   const [initialForm, setInitialForm] = useState<ConfigForm | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);

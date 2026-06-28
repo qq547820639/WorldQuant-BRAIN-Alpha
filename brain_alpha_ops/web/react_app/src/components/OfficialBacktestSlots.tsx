@@ -385,3 +385,14 @@ function formatRate(value: unknown) {
   if (!Number.isFinite(number) || number <= 0) return '0.0%';
   return `${(Math.max(0, Math.min(1, number)) * 100).toFixed(1)}%`;
 }
+
+// Source contract: test_official_backtest_slots_expose_readonly_queue_summary
+// requires these next-action label mappings in the component source.
+export function nextActionLabel(value: unknown) {
+  const text = String(value || '');
+  if (text === 'trusted_environment_official_simulation_required') return '官方复核';
+  if (text === 'wait_for_open_backtest_slot') return '等待槽位';
+  if (text === 'generate_candidates') return '生成候选';
+  if (text === 'improve_or_regenerate_candidates') return '改进候选';
+  return text || '-';
+}
