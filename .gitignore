@@ -147,6 +147,10 @@ docs/*
 screenshots/
 tools/
 _status.py
+# Fix 5: scripts/check_review_gap_closure_tracker_helpers/_status.py is a real
+# source module (status loaders for the review gap closure tracker), not a dev
+# artifact. Negate the _status.py rule above so it is tracked by git.
+!scripts/check_review_gap_closure_tracker_helpers/_status.py
 overview.md
 responsiveness_check.py
 validate_data.py
