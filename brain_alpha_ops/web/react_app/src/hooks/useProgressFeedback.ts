@@ -58,6 +58,7 @@ export function useProgressFeedback({
   const startedAtRef = useRef(Date.now());
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 外部 progress 变化后同步剩余时间（外部数据→本地计时状态同步）
     setRemaining(etaSecondsFromProgress(progress));
   }, [progress?.eta_deadline_at_ms, progress?.eta_seconds, progress?.task_id, progress?.job_id]);
 
@@ -69,6 +70,7 @@ export function useProgressFeedback({
     if (state === 'loading' || state === 'progress') {
       if (lastUpdatedAt === null) startedAtRef.current = Date.now();
     }
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 进度/状态变化后记录最近更新时间戳（外部数据→本地时间戳同步）
     setLastUpdatedAt(new Date());
   }, [
     error,
@@ -93,6 +95,7 @@ export function useProgressFeedback({
 
   useEffect(() => {
     if (state !== 'loading' && state !== 'progress') {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- 离开 loading/progress 时重置已耗时（状态切换清理）
       setElapsed(0);
       return;
     }

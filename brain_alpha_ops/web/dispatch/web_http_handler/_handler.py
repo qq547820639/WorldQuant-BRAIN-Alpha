@@ -22,10 +22,10 @@ from typing import Any, Callable
 from urllib.parse import parse_qs, urlparse
 
 from ._helpers import (
-    _is_origin_allowed,
     _is_terminal_status,
     _json_default,
     _sse_event_type,
+    set_cors_headers,
 )
 
 
@@ -69,31 +69,52 @@ def create_handler_class(
             dispatch_get(self, parsed, dispatch_context())
 
         def do_POST(self):
+            # P1-2: Content-Type 校验——带 body 的 JSON API 请求必须是 application/json。
+            # 无 body（Content-Length == 0/缺省）时不校验，兼容无 body 的触发类端点
+            # （如 /api/session、/api/logout、/api/shutdown）。校验放在公共层 do_POST
+            # 开头，避免每个端点单独处理。
+            if self._reject_unsupported_json_content_type():
+                return
             dispatch_post(self, urlparse(self.path), dispatch_context())
+
+        def _reject_unsupported_json_content_type(self) -> bool:
+            """对带 body 的 POST 校验 Content-Type 为 application/json。
+
+            仅当 Content-Length > 0 时强制要求 ``Content-Type: application/json``
+            （允许 charset 等参数，如 ``application/json; charset=utf-8``）。无 body
+            请求不校验。不匹配时发送 415 Unsupported Media Type + JSON 错误信息并
+            返回 True；放行时返回 False。
+            """
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+            except (TypeError, ValueError):
+                length = 0
+            if length <= 0:
+                return False
+            content_type = self.headers.get("Content-Type", "")
+            media_type = content_type.split(";", 1)[0].strip().lower()
+            if media_type == "application/json":
+                return False
+            self._json(
+                {
+                    "ok": False,
+                    "error_code": "UNSUPPORTED_MEDIA_TYPE",
+                    "error": "Content-Type \u5fc5\u987b\u662f application/json",
+                    "details": {"content_type": content_type or None},
+                },
+                status=415,
+            )
+            return True
 
         def do_OPTIONS(self):
             self.send_response(204)
-            # F-05 fix: CORS origin 校验 — 仅 echo 已配置 allowlist 中的 origin
-            origin = self.headers.get("Origin", "")
-            if origin and not _is_origin_allowed(origin):
-                # 拒绝跨域预检: 不发 Access-Control-Allow-Origin, 浏览器会拦截
-                self.send_header("Vary", "Origin")
-                self.end_headers()
-                return
-            if not origin:
-                host = self.headers.get("Host", "127.0.0.1")
-                origin = f"http://{host}" if "://" not in host else f"https://{host}"
-            self.send_header("Vary", "Origin")
-            self.send_header("Access-Control-Allow-Origin", origin)
-            # P0-2 fix: the main _send_json path sets Access-Control-Allow-Credentials: true,
-            # but the OPTIONS preflight did not — browsers would reject subsequent credentialed
-            # requests even after a 204 preflight pass.  Also add Allow-Methods for completeness.
-            self.send_header("Access-Control-Allow-Credentials", "true")
-            self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-            self.send_header(
-                "Access-Control-Allow-Headers",
-                "Content-Type, X-Brain-Alpha-CSRF, X-Brain-Alpha-Request-ID, X-Brain-Alpha-Request-Timestamp",
-            )
+            # 统一 CORS: 仅当 Origin 通过白名单校验时回显 ACAO；无 Origin 或白名单外
+            # 不设置 ACAO（不回退 Host 头），浏览器会拦截跨域预检。
+            cors_headers: dict[str, str] = {}
+            set_cors_headers(self.headers, cors_headers)
+            for name, value in cors_headers.items():
+                self.send_header(name, value)
+            self.end_headers()
 
         def _send_html(self, html, *, extra_headers=None):
             body = html.encode("utf-8") if isinstance(html, str) else html
@@ -115,21 +136,12 @@ def create_handler_class(
             self.send_header("Content-Length", str(len(body)))
             # CORS headers MUST be set before end_headers() — Python's
             # BaseHTTPRequestHandler does not allow send_header/end_headers
-            # after the first body write.  These are also re-emitted on the
-            # CORS preflight OPTIONS handler below.
-            origin = self.headers.get("Origin", "")
-            if origin and _is_origin_allowed(origin):
-                self.send_header("Access-Control-Allow-Origin", origin)
-            elif not origin:
-                host = self.headers.get("Host", "127.0.0.1")
-                _fallback = f"http://{host}" if "://" not in host else f"https://{host}"
-                self.send_header("Access-Control-Allow-Origin", _fallback)
-            self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-            self.send_header(
-                "Access-Control-Allow-Headers",
-                "Content-Type, X-Brain-Alpha-CSRF, X-Brain-Alpha-Request-ID, X-Brain-Alpha-Request-Timestamp",
-            )
-            self.send_header("Access-Control-Allow-Credentials", "true")
+            # after the first body write.  Unified via set_cors_headers:
+            # only echo ACAO for allowlisted origins (no Host fallback).
+            cors_headers: dict[str, str] = {}
+            set_cors_headers(self.headers, cors_headers)
+            for name, value in cors_headers.items():
+                self.send_header(name, value)
             if extra_headers:
                 for name, value in extra_headers:
                     self.send_header(name, value)
@@ -292,13 +304,12 @@ def create_handler_class(
             self.send_header("Content-Type", "application/json; charset=utf-8")
             self.send_header("Cache-Control", "no-store")
             self._send_security_headers()
-            # P0-2 fix: CORS headers consistent with _send_json
-            self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-            self.send_header(
-                "Access-Control-Allow-Headers",
-                "Content-Type, X-Brain-Alpha-CSRF, X-Brain-Alpha-Request-ID, X-Brain-Alpha-Request-Timestamp",
-            )
-            self.send_header("Access-Control-Allow-Credentials", "true")
+            # P0-2 fix: CORS headers consistent with _send_json via unified
+            # set_cors_headers (now also sets ACAO for allowlisted origins).
+            cors_headers: dict[str, str] = {}
+            set_cors_headers(self.headers, cors_headers)
+            for name, value in cors_headers.items():
+                self.send_header(name, value)
             for name, value in extra_headers or []:
                 self.send_header(name, value)
             self.send_header("Content-Length", str(len(data)))

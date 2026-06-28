@@ -8,6 +8,7 @@
 
 import { useEffect, useCallback } from 'react';
 import type { JobStatus } from '@/types';
+import type { CancelReason } from '@/api/jobCancel';
 import { classifyJobState, jobStatusMessage } from '@/helpers/runPayload';
 import { saveResumeState } from '@/utils/resumeState';
 import { clearSavedJobId } from '@/hooks/useJobRecovery';
@@ -29,7 +30,11 @@ interface WatchdogCallbacks {
   setPollFailures: React.Dispatch<React.SetStateAction<number>>;
   callApi: <T>(url: string) => Promise<T | null>;
   notify: (type: 'success' | 'error' | 'warning' | 'info', msg: string) => void;
-  cancelAmbiguousJob: (reason: string, message: string, jobId?: string | null) => Promise<unknown>;
+  cancelAmbiguousJob: (
+    reason: CancelReason,
+    message: string,
+    jobId?: string | null
+  ) => Promise<unknown>;
   onTerminal: (status: JobStatus) => void;
   onProgressUpdate: (status: JobStatus) => void;
   clearTransientProgressError: () => void;

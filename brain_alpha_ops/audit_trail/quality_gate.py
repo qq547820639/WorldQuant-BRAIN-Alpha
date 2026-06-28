@@ -83,7 +83,15 @@ class QualityGateInterceptor:
                      "threshold": self.SIMILAR_EXPRESSION_THRESHOLD},
                 )
         except Exception as exc:  # noqa: BLE001
-            logger.debug("similar_expression check skipped: %s", redact_error_message(exc))
+            # Phase 5 tech-debt cleanup: fail-closed on script error (e.g.
+            # ExpressionDiversityGuard regex/parser bug) instead of silently
+            # skipping the check. logger.exception records the full traceback.
+            logger.exception("similar_expression check errored; failing closed")
+            return GateResult(
+                False, "similar_expression",
+                f"similar_expression check errored: {redact_error_message(exc)}",
+                {"error": redact_error_message(exc)},
+            )
         return GateResult(True, "similar_expression")
 
     def check_parameter_micro_tuning(
@@ -113,7 +121,16 @@ class QualityGateInterceptor:
                  "child_numbers": child_nums},
             )
         except Exception as exc:  # noqa: BLE001
-            logger.debug("parameter_micro_tuning check skipped: %s", redact_error_message(exc))
+            # Phase 5 tech-debt cleanup: fail-closed on script error (e.g.
+            # ExpressionDiversityGuard skeleton extraction bug) instead of
+            # silently skipping the check. logger.exception records the full
+            # traceback.
+            logger.exception("parameter_micro_tuning check errored; failing closed")
+            return GateResult(
+                False, "parameter_micro_tuning",
+                f"parameter_micro_tuning check errored: {redact_error_message(exc)}",
+                {"error": redact_error_message(exc)},
+            )
         return GateResult(True, "parameter_micro_tuning")
 
     def check_duplicate_submission(self, expression: str) -> GateResult:
@@ -215,7 +232,12 @@ class QualityGateInterceptor:
                     "quality gate intercepted %s: %s", redact_text(alpha_id), reason,
                 )
             except Exception as exc:  # noqa: BLE001
-                logger.debug("quality gate interception writeback skipped: %s", redact_error_message(exc))
+                # Phase 5 tech-debt cleanup: upgrade from logger.debug to
+                # logger.exception so audit-trail writeback failures are
+                # visible. The check-level decision is already fail-closed
+                # (intercepted=True); this only affects lifecycle transition
+                # recording, so we log loudly without changing the return value.
+                logger.exception("quality gate interception writeback failed: %s", redact_error_message(exc))
 
         return {
             "intercepted": intercepted,

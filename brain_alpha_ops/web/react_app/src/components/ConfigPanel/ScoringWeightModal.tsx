@@ -239,7 +239,7 @@ export default function ScoringWeightModal({
                         alignItems: 'center',
                         padding: '6px 0',
                         borderBottom:
-                          j < layer.children.length - 1
+                          j < (layer.children?.length ?? 0) - 1
                             ? '0.5px solid var(--color-divider)'
                             : 'none',
                       }}

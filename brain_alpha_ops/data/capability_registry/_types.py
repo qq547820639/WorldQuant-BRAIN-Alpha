@@ -10,8 +10,11 @@ original module names after splitting.
 """
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from typing import Any, Callable, Literal
+
+logger = logging.getLogger("brain_alpha_ops.data.capability_registry._types")
 
 CapabilityKind = Literal[
     "field",
@@ -73,6 +76,10 @@ class CapabilityEntry:
             try:
                 return bool(self.validation_rule(value))
             except Exception:
+                logger.warning(
+                    "capability validation_rule raised; failing closed (deny)",
+                    exc_info=True,
+                )
                 return False
         return True
 

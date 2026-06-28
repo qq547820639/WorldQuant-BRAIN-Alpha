@@ -171,7 +171,8 @@ describe('OfficialBacktestSlots — cooldown and simulating progress', () => {
     // The progress bar fill has width:65%.
     const fill = container.querySelector<HTMLElement>('.h-full.rounded-full');
     expect(fill).not.toBeNull();
-    expect(fill.style.width).toBe('65%');
+    // Non-null: assertion above guarantees fill exists in the rendered DOM.
+    expect(fill!.style.width).toBe('65%');
   });
 
   it('clamps progress_percent to [0, 100]', () => {

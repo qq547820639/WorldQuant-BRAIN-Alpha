@@ -107,10 +107,16 @@ export function cancelResultExperience(
   };
 }
 
+// Match useApi's DEFAULT_REQUEST_TIMEOUT_MS (10 min) so cancel round-trips are
+// not prematurely aborted relative to other API calls.
+const CANCEL_REQUEST_TIMEOUT_MS = 600000;
+
 async function callCancelEndpoint(
   endpoint: typeof JOB_CANCEL_ENDPOINT,
   body: string
 ): Promise<ApiResponse> {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), CANCEL_REQUEST_TIMEOUT_MS);
   try {
     const response = await fetch(endpoint, {
       method: 'POST',
@@ -120,17 +126,54 @@ async function callCancelEndpoint(
         ...csrfHeaders(),
       },
       body,
+      signal: controller.signal,
     });
-    const json = (await response.json()) as ApiResponse;
+    // Response status check: on non-2xx, prefer a structured error payload
+    // from the body; fall back to an HTTP status message.
+    if (!response.ok) {
+      const errorJson = await safeParseCancelJson(response);
+      if (errorJson) {
+        return { ...errorJson, ok: false };
+      }
+      return {
+        ok: false,
+        error_code: 'CANCEL_REQUEST_FAILED',
+        error: `自动中断请求失败 (HTTP ${response.status}: ${response.statusText})。`,
+      };
+    }
+    const json = await safeParseCancelJson(response);
+    if (!json) {
+      return {
+        ok: false,
+        error_code: 'CANCEL_REQUEST_FAILED',
+        error: '自动中断响应解析失败，请刷新状态或稍后重试。',
+      };
+    }
     return { ...json, ok: json.ok !== false && !json.error && !json.error_code };
   } catch (err) {
     if (process.env.NODE_ENV === 'development') {
       console.error('jobCancel: network error for', endpoint, err);
     }
+    const aborted =
+      typeof DOMException !== 'undefined' &&
+      err instanceof DOMException &&
+      err.name === 'AbortError';
     return {
       ok: false,
       error_code: 'CANCEL_REQUEST_FAILED',
-      error: '自动中断请求未确认，请刷新状态或稍后重试。',
+      error: aborted
+        ? '自动中断请求超时，请刷新状态或稍后重试。'
+        : '自动中断请求未确认，请刷新状态或稍后重试。',
     };
+  } finally {
+    window.clearTimeout(timeout);
+  }
+}
+
+async function safeParseCancelJson(response: Response): Promise<ApiResponse | null> {
+  try {
+    return (await response.json()) as ApiResponse;
+  } catch {
+    return null;
   }
 }

@@ -50,15 +50,16 @@ const VirtualListInner = forwardRef(function VirtualListInner<T>(
 
   const virtualizerOptions = {
     count: items.length,
-    estimateSize: estimateSize || (itemSize ? () => itemSize : undefined),
+    estimateSize: estimateSize || (itemSize ? () => itemSize : () => 50),
     overscan,
     horizontal: isHorizontal,
     scrollMargin,
     getItemKey: getItemKey ? (index: number) => getItemKey(index, items[index]) : undefined,
-    onChange: (instance: { scrollOffset?: number }) => {
+    onChange: (instance: { scrollOffset?: number | null }) => {
       // [REFACTORED] virtual-core uses scrollOffset, not scrollLeft/scrollTop.
       // 结构类型同时兼容 useWindowVirtualizer (Virtualizer<Window, Element>)
       // 与 useVirtualizer (Virtualizer<Element, Element>) 的 onChange 签名。
+      // scrollOffset is number | null on the Virtualizer; ?? 0 normalizes it.
       onScroll?.(instance.scrollOffset ?? 0);
     },
   };

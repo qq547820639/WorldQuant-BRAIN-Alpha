@@ -86,6 +86,26 @@ def _is_origin_allowed(origin: str) -> bool:
     return False
 
 
+def set_cors_headers(request_headers: Any, response_headers: dict[str, str]) -> None:
+    """统一设置 CORS 响应头。无 Origin 时不设置 ACAO（不回退 Host 头）。
+
+    当且仅当请求携带的 Origin 通过 ``_is_origin_allowed`` 校验时，回显该
+    Origin 并附带凭据/方法/头白名单。无 Origin 或 Origin 不在白名单内时，
+    仅设置 ``Vary: Origin``，不回退 Host 头构造 ACAO（避免反射未授权 origin）。
+    """
+    origin = request_headers.get("Origin", "")
+    response_headers["Vary"] = "Origin"
+    if origin and _is_origin_allowed(origin):
+        response_headers["Access-Control-Allow-Origin"] = origin
+        response_headers["Access-Control-Allow-Credentials"] = "true"
+        response_headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+        response_headers["Access-Control-Allow-Headers"] = (
+            "Content-Type, X-Brain-Alpha-CSRF, "
+            "X-Brain-Alpha-Request-ID, X-Brain-Alpha-Request-Timestamp"
+        )
+    # 无 Origin 或白名单外 → 不设置 ACAO（不回退 Host 头）
+
+
 def _is_terminal_status(status: str) -> bool:
     return str(status or "").lower() in {
         "completed",

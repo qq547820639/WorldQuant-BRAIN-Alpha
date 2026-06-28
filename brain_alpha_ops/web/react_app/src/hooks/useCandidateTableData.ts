@@ -141,6 +141,7 @@ export function useCandidateTableData(options: UseCandidateTableDataOptions) {
 
   useEffect(() => {
     if (globalCandidatesData) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- 外部候选数据变化后同步处理并落库本地行/池状态
       processCandidatesData(globalCandidatesData);
     }
   }, [globalCandidatesData, processCandidatesData]);
@@ -188,9 +189,11 @@ export function useCandidateTableData(options: UseCandidateTableDataOptions) {
   }, [callCheckResultsApi, notify, viewMode]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 依赖变化后加载候选数据（数据获取副作用，setState 在异步回调内）
     void loadCandidates();
   }, [loadCandidates]);
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 视图模式变化后刷新检查结果（数据获取副作用，setState 在异步回调内）
     void refreshCheckResults();
   }, [refreshCheckResults]);
 

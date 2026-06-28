@@ -212,7 +212,12 @@ export function renderActiveView(props: RenderViewProps): React.ReactNode {
           title="阻断复核加载失败"
           description="提交复核模块渲染时发生错误，请重试"
         >
-          <SubmissionConfirmPanel notify={notify} onNavigate={onNavigate} />
+          <SubmissionConfirmPanel
+            notify={notify}
+            // SubmissionConfirmPanel emits known CardViewId strings ('scoring', 'candidates', ...);
+            // cast back to CardViewId for the renderView navigation callback.
+            onNavigate={(view) => onNavigate(view as CardViewId)}
+          />
         </ErrorBoundary>
       );
     case 'checkpoint_status':

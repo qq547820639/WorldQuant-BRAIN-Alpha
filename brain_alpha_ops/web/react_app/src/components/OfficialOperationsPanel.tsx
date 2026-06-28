@@ -118,7 +118,7 @@ export default function OfficialOperationsPanel({
           readinessLoading={readinessApi.loading}
           checkResultsLoading={checkResultsApi.loading}
           checkRowsCount={checkRows.length}
-          readiness={readiness}
+          readiness={readiness ?? undefined}
           contextOnlyMode={contextOnlyMode}
           onSyncRangeChange={setSyncRange}
           onStartRefresh={() => void startOfficialContextRefresh()}

@@ -17,7 +17,10 @@ const AUTO_SIMULATION_BATCH_SIZE = 3;
 
 export interface CandidateSimulationDeps {
   pipeline: CandidatePipeline;
-  callApi: <T>(url: string, opts?: RequestInit) => Promise<T & { ok?: boolean; error?: string }>;
+  callApi: <T>(
+    url: string,
+    opts?: RequestInit
+  ) => Promise<(T & { ok?: boolean; error?: string }) | null>;
   loadCandidates: () => Promise<{
     rows: Candidate[];
     mainPoolCandidates: Candidate[] | null;

@@ -38,6 +38,7 @@ export function usePagination(options: UsePaginationOptions): UsePaginationResul
   }, [currentPage, pageSize, totalItems]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- totalPages 收缩时夹紧当前页（函数式更新已在范围内返回原值，React 会 bail-out；不把 currentPage 加入 deps 以避免循环）
     setCurrentPage((page) => Math.min(page, totalPages));
   }, [totalPages]);
 

@@ -215,9 +215,11 @@ export default function ScoringPanel({ notify, candidate }: Props) {
   ]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- candidate 切换后触发评分加载（数据获取副作用，setState 在异步回调内）
     if (candidate) loadScore();
   }, [candidate?.alpha_id, loadScore]);
 
+  // eslint-disable-next-line react-hooks/preserve-manual-memoization -- async 回调内含 setState 且被下方 useEffect 依赖，引用稳定可避免重复拉取循环；React Compiler 跳过保留
   const fetchScoreHistory = useCallback(async () => {
     if (!candidate?.alpha_id) {
       setScoreHistory(null);
@@ -239,6 +241,7 @@ export default function ScoringPanel({ notify, candidate }: Props) {
   }, [callLifecycleApi, candidate?.alpha_id]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 依赖变化后拉取评分历史（数据获取副作用，setState 在异步回调内）
     void fetchScoreHistory();
   }, [fetchScoreHistory]);
 

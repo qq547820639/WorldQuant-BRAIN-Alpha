@@ -109,8 +109,8 @@ export function useConfigForm({
     void schemaApi.call('/api/config_schema');
   }, [schemaApi.call]);
 
-  const config = useMemo(
-    () => (globalConfig.data?.config ?? null) as PartialConfig | null,
+  const config = useMemo<PartialConfig | null>(
+    () => globalConfig.data?.config ?? null,
     [globalConfig.data]
   );
   const schema = schemaApi.data?.schema;
@@ -121,6 +121,7 @@ export function useConfigForm({
     if (!config) return;
     const next = formFromConfig(config);
     setFormValues(next);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- config 加载后同步表单值与初始快照（外部数据→本地表单状态同步）
     setInitialForm(next);
   }, [config, setFormValues]);
 

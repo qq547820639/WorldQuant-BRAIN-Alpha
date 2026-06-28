@@ -54,8 +54,8 @@ export interface JobStatusHandlers extends JobStatusState {
     targetJobId?: string | null
   ) => Promise<Awaited<ReturnType<typeof requestJobCancel>> | null>;
   clearTransientProgressError: () => void;
-  clearDisconnectedTimer?: () => void;
-  setDisconnected?: (disconnected: boolean) => void;
+  clearDisconnectedTimer: () => void;
+  setDisconnected: (disconnected: boolean) => void;
   jobIdRef: React.MutableRefObject<string | null>;
   api: ReturnType<typeof useApi>;
 }

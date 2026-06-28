@@ -73,6 +73,7 @@ export function useJobRecovery({
       return;
     }
 
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 挂载时启动恢复流程（一次性初始化）
     setRecovering(true);
     addEvent('正在检查任务状态…');
 

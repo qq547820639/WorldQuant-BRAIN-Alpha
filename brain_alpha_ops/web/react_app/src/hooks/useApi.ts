@@ -68,7 +68,8 @@ export function useApi<T = unknown>() {
       setState((prev) => ({ ...prev, loading: true, error: null, lastErrorMeta: null }));
       let controller: AbortController | null = options?.signal ? null : new AbortController();
       let timeout: number | null = controller
-        ? window.setTimeout(() => controller.abort(), DEFAULT_REQUEST_TIMEOUT_MS)
+        ? // controller is non-null in this branch (ternary guard); closure captures the let binding.
+          window.setTimeout(() => controller!.abort(), DEFAULT_REQUEST_TIMEOUT_MS)
         : null;
       try {
         const method = String(options?.method || 'GET').toUpperCase();
@@ -93,7 +94,11 @@ export function useApi<T = unknown>() {
                 if (controller && !options?.signal) {
                   controller = new AbortController();
                   if (timeout) window.clearTimeout(timeout);
-                  timeout = window.setTimeout(() => controller.abort(), DEFAULT_REQUEST_TIMEOUT_MS);
+                  // controller was just reassigned to a fresh instance above.
+                  timeout = window.setTimeout(
+                    () => controller!.abort(),
+                    DEFAULT_REQUEST_TIMEOUT_MS
+                  );
                 }
                 res = await request();
                 if (res.ok) {

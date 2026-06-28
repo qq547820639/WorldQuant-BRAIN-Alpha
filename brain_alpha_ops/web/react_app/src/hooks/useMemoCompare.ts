@@ -56,7 +56,7 @@ function deepEqual(a: unknown, b: unknown): boolean {
   return false;
 }
 
-export function useDeepMemo<T>(factory: () => T, deps: unknown[]): T {
+export function useDeepMemo<T>(factory: () => T, deps: unknown[]): T | null {
   const previousDepsRef = useRef<unknown[] | null>(null);
   const previousResultRef = useRef<T | null>(null);
   const hasChangedRef = useRef(true);

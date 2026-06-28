@@ -116,7 +116,7 @@ export function formFromImport(imported: Record<string, unknown>, current: Confi
         source.maxWeightConcentration,
         current.maxWeightConcentration
       ),
-    } as unknown);
+    } as unknown as PartialConfig);
   }
   const settings = asRecord(source.settings) || {};
   const budget = asRecord(source.budget) || {};

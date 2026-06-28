@@ -330,7 +330,8 @@ describe('AttributionTooltip — label and tooltip behavior', () => {
       expect(screen.queryByRole('tooltip')).toBeNull();
 
       const label = screen.getByText('Sharpe');
-      const wrapper = label.parentElement;
+      // parentElement is non-null: label is rendered inside the tooltip wrapper.
+      const wrapper = label.parentElement!;
       act(() => {
         wrapper.focus();
       });
@@ -354,7 +355,8 @@ describe('AttributionTooltip — label and tooltip behavior', () => {
     try {
       const { rerender } = render(<AttributionTooltip name="Sharpe" score={1.8} weight={0.3} />);
       const label = screen.getByText('Sharpe');
-      const wrapper = label.parentElement;
+      // parentElement is non-null: label is rendered inside the tooltip wrapper.
+      const wrapper = label.parentElement!;
       act(() => {
         wrapper.focus();
       });
@@ -374,7 +376,8 @@ describe('AttributionTooltip — label and tooltip behavior', () => {
       // Re-render with no metrics — tooltip content falls back to label.
       rerender(<AttributionTooltip name="裸维度" />);
       const label2 = screen.getByText('裸维度');
-      const wrapper2 = label2.parentElement;
+      // parentElement is non-null: label is rendered inside the tooltip wrapper.
+      const wrapper2 = label2.parentElement!;
       act(() => {
         wrapper2.focus();
       });

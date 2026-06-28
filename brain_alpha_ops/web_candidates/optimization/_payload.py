@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any, Callable
 
 from brain_alpha_ops.config import RunConfig, resolve_default_dataset_id
@@ -29,6 +30,8 @@ from ._helpers import (
 )
 from ._prepare import _prepare_optimized_candidate
 from ._summary import _summary, _target_pool_size
+
+logger = logging.getLogger(__name__)
 
 RunConfigFromPayload = Callable[[dict[str, Any]], RunConfig]
 RepositoryFactory = Callable[[str], ResearchRepository]
@@ -253,6 +256,10 @@ def _resolve_dataset_id(payload: dict[str, Any], run_config: RunConfig) -> str:
     try:
         return resolve_default_dataset_id(run_config.ops.storage_dir)
     except Exception:
+        logger.warning(
+            "failed to resolve default dataset id; returning empty string",
+            exc_info=True,
+        )
         return ""
 
 

@@ -86,7 +86,7 @@ function SyncHistoryList({ rows }: SyncHistoryListProps) {
             className="text-xs text-text-tertiary sm:text-right"
             dateTime={syncHistoryDate(row)?.toISOString()}
           >
-            {syncHistoryDate(row) ? formatClock(syncHistoryDate(row)) : '-'}
+            {syncHistoryDate(row) ? formatClock(syncHistoryDate(row) ?? undefined) : '-'}
           </time>
         </li>
       ))}

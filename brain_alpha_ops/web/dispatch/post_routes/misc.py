@@ -117,12 +117,22 @@ def _post_shutdown(
     ctx.start_shutdown()
 
 
+_TRENDS_FIELD_LIMITS: tuple[tuple[str, int], ...] = (
+    ("candidates", 10000),
+    ("submissions", 10000),
+    ("cycles", 1000),
+)
+
+
 def _post_trends(
     handler: Any, _parsed: Any, _ctx: WebHandlerDispatchContext
 ) -> None:
     """POST /api/trends — \u8ffd\u52a0\u4e00\u6761\u8d8b\u52bf\u8bb0\u5f55\u3002
 
     \u8bf7\u6c42\u4f53\u5e94\u5305\u542b ``candidates`` (int)\u3001``submissions`` (int) \u548c\u53ef\u9009\u7684 ``cycles`` (int)\u3002
+    \u6bcf\u4e2a\u53c2\u6570\u5fc5\u987b\u662f\u975e\u8d1f\u6574\u6570\u4e14\u4e0d\u8d85\u8fc7\u5404\u81ea\u4e0a\u9650
+    \uff08candidates/submissions \u2264 10000\uff0ccycles \u2264 1000\uff09\u3002\u6821\u9a8c\u5931\u8d25\u8fd4\u56de 400
+    \u5e76\u9644\u5e26 ``{"error": ..., "details": {field: reason}}``\u3002
     """
     from brain_alpha_ops.web.api.trends import (
         record_trend as _record_trend_to_store,
@@ -141,12 +151,41 @@ def _post_trends(
             status=400,
         )
         return
-    candidates = int(payload.get("candidates", 0))
-    submissions = int(payload.get("submissions", 0))
-    cycles = int(payload.get("cycles", 0))
+
+    details: dict[str, str] = {}
+    values: dict[str, int] = {}
+    for field, upper in _TRENDS_FIELD_LIMITS:
+        raw = payload.get(field, 0)
+        # \u7c7b\u578b\u6821\u9a8c\uff1a\u62d2\u7edd bool/float/str/None/list \u7b49\u975e int \u7c7b\u578b
+        # \uff08bool \u662f int \u5b50\u7c7b\u9700\u5355\u72ec\u6392\u9664\uff0c\u5426\u5219 True/False \u4f1a\u88ab\u5f53\u4f5c 1/0\uff09
+        if isinstance(raw, bool) or not isinstance(raw, int):
+            details[field] = f"{field} \u5fc5\u987b\u662f\u6574\u6570"
+            continue
+        if raw < 0:
+            details[field] = f"{field} \u5fc5\u987b\u662f\u975e\u8d1f\u6574\u6570"
+            continue
+        if raw > upper:
+            details[field] = f"{field} \u8d85\u8fc7\u4e0a\u9650 {upper}"
+            continue
+        values[field] = raw
+
+    if details:
+        handler._json(
+            _error_response(
+                {
+                    "ok": False,
+                    "error_code": "VALIDATION_ERROR",
+                    "error": "\u8d8b\u52bf\u53c2\u6570\u6821\u9a8c\u5931\u8d25",
+                    "details": details,
+                }
+            ),
+            status=400,
+        )
+        return
+
     _record_trend_to_store(
-        candidates=candidates,
-        submissions=submissions,
-        completed_cycles=cycles,
+        candidates=values["candidates"],
+        submissions=values["submissions"],
+        completed_cycles=values["cycles"],
     )
     handler._json({"ok": True})

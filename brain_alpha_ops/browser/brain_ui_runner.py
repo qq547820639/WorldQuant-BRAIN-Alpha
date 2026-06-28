@@ -187,6 +187,10 @@ class BrainBrowserRunner:
         try:
             page_text = self._page.inner_text("body") if self._page is not None else ""
         except Exception:
+            logger.warning(
+                "failed to read page text for blocking-state classification",
+                exc_info=True,
+            )
             page_text = ""
         lowered = page_text.lower()
         statuses = [

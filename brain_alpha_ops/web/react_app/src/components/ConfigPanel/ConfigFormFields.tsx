@@ -107,6 +107,7 @@ export function NumberField({
   const [localValue, setLocalValue] = useState<number>(value);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 同步外部受控 value 到本地防抖状态（受控→非受控桥接）
     setLocalValue(value);
   }, [value]);
 

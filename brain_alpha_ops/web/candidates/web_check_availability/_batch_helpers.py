@@ -58,6 +58,10 @@ def _store_is_cancelled(store: JobStoreLike, job_id: str) -> bool:
     try:
         return bool(checker(job_id))
     except Exception:
+        logger.warning(
+            "job cancellation check failed; treating as not cancelled",
+            exc_info=True,
+        )
         return False
 
 

@@ -217,6 +217,9 @@ def _coerce_candidates(raw_candidates: list[Any]) -> list[Any]:
         except Exception:
             # Keep the raw dict so build_multi_dimensional_attribution can
             # still inspect it via getattr-style access where possible.
+            logger.warning(
+                "Candidate.from_dict coercion failed; keeping raw dict", exc_info=True
+            )
             out.append(raw)
     return out
 

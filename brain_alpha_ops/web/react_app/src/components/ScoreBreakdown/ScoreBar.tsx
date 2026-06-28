@@ -140,7 +140,7 @@ export default function ScoreBar({ node, depth, maxScore }: Props) {
       </div>
 
       {hasChildren &&
-        node.children.map((child) => (
+        node.children?.map((child) => (
           <ScoreBar key={child.name} node={child} depth={depth + 1} maxScore={100} />
         ))}
     </>
