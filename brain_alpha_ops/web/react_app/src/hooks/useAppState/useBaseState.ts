@@ -27,7 +27,30 @@ const VALID_VIEWS = new Set<CardViewId>([
   'robustness',
 ]);
 
+/**
+ * W-004: activeView ↔ URL path mapping for BrowserRouter.
+ * Only the four primary navigation surfaces get a real path entry;
+ * other views keep working via internal state (forward compatible).
+ */
+const VIEW_TO_PATH: Partial<Record<CardViewId, string>> = {
+  dashboard: '/',
+  config: '/config',
+  candidates: '/candidates',
+  scoring: '/scoring',
+};
+
+const PATH_TO_VIEW: Record<string, CardViewId> = {
+  '/': 'dashboard',
+  '/config': 'config',
+  '/candidates': 'candidates',
+  '/scoring': 'scoring',
+};
+
 function readViewFromHash(): CardViewId {
+  // Prioritize URL path (BrowserRouter) for forward-compatible routing.
+  const pathView = PATH_TO_VIEW[window.location.pathname];
+  if (pathView) return pathView;
+  // Backward compat: legacy hash-based deep links.
   const hash = window.location.hash.replace('#', '');
   if (hash && VALID_VIEWS.has(hash as CardViewId)) {
     return hash as CardViewId;
@@ -68,27 +91,30 @@ export function useBaseState(): BaseState {
   const [activeView, setActiveViewRaw] = useState<CardViewId>(readViewFromHash);
   const activeViewRef = useRef(activeView);
 
-  /** Wrap setActiveView so it also syncs the URL hash. */
+  /** Wrap setActiveView so it also syncs the URL path (W-004). */
   const setActiveView = useCallback((view: CardViewId | ((prev: CardViewId) => CardViewId)) => {
     setActiveViewRaw((prev) => {
       const next = typeof view === 'function' ? view(prev) : view;
       activeViewRef.current = next;
-      window.location.hash = next;
+      const path = VIEW_TO_PATH[next];
+      if (path && window.location.pathname !== path) {
+        window.history.pushState({}, '', path);
+      }
       return next;
     });
   }, []);
 
-  /** Respond to external hash changes (browser back/forward, manual edit). */
+  /** Respond to external path changes (browser back/forward, manual edit). */
   useEffect(() => {
-    const onHashChange = () => {
+    const onPopState = () => {
       const view = readViewFromHash();
       if (view !== activeViewRef.current) {
         activeViewRef.current = view;
         setActiveViewRaw(view);
       }
     };
-    window.addEventListener('hashchange', onHashChange);
-    return () => window.removeEventListener('hashchange', onHashChange);
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
   }, []);
   const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null);
   const [credentials, setCredentials] = useState<BrainCredentials>({

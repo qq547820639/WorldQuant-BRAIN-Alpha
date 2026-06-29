@@ -4,6 +4,11 @@
  * Only polls the backend when SSE is disconnected, avoiding redundant
  * network traffic while the event stream is healthy. Tracks consecutive
  * failures and triggers the disconnected state when the threshold is exceeded.
+ *
+ * @deprecated Phase 3.1: useJobWatchdog is deprecated. Its polling logic has
+ * been merged into useJobMonitor/useStatusWatchdog. This module is retained
+ * for the legacy useJobState → useJobStatus path; new code should use the
+ * composable useJobMonitor aggregator instead.
  */
 
 import { useEffect, useCallback } from 'react';
@@ -14,6 +19,17 @@ import { saveResumeState } from '@/utils/resumeState';
 import { clearSavedJobId } from '@/hooks/useJobRecovery';
 
 const WATCHDOG_POLL_INTERVAL = 2000;
+
+let warned = false;
+function emitDeprecationWarning(): void {
+  if (warned) return;
+  warned = true;
+  if (typeof console !== 'undefined' && typeof console.warn === 'function') {
+    console.warn(
+      'useJobWatchdog is deprecated; use useJobMonitor/useStatusWatchdog for polling.'
+    );
+  }
+}
 
 function sendCompletionNotification(title: string, body: string): void {
   try {
@@ -54,6 +70,7 @@ export function useJobWatchdog(
     clearTransientProgressError,
   }: WatchdogCallbacks
 ) {
+  emitDeprecationWarning();
   const recordStatusRefreshFailure = useCallback(
     (_message: string) => {
       setPollFailures((previous) => {

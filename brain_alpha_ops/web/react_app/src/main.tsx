@@ -16,6 +16,9 @@ ReactDOM.createRoot(rootEl).render(
         <BrowserRouter>
           <Routes>
             <Route path="/" element={<App />} />
+            <Route path="/config" element={<App />} />
+            <Route path="/candidates" element={<App />} />
+            <Route path="/scoring" element={<App />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>

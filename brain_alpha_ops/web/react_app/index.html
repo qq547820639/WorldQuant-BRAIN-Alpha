@@ -8,9 +8,24 @@
     <meta name="brain-alpha-stream" content="__BRAIN_ALPHA_OPS_STREAM_TOKEN__" />
     <title>BRAIN Alpha Ops</title>
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧠</text></svg>" />
+    <style>
+      .app-boot-skeleton{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;background:var(--color-surface-root,#0d1117);color:var(--color-text-muted,#8b949e);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+      .app-boot-skeleton__logo{font-size:40px;margin-bottom:16px;animation:boot-pulse 1.4s ease-in-out infinite}
+      .app-boot-skeleton__spinner{width:28px;height:28px;border:3px solid rgba(139,148,158,0.2);border-top-color:#58a6ff;border-radius:50%;animation:boot-spin 0.8s linear infinite;margin-bottom:12px}
+      .app-boot-skeleton__label{font-size:13px;letter-spacing:0.04em}
+      @keyframes boot-spin{to{transform:rotate(360deg)}}
+      @keyframes boot-pulse{0%,100%{opacity:0.5}50%{opacity:1}}
+    </style>
   </head>
   <body class="bg-surface-root text-text-primary antialiased">
-    <div id="root"></div>
+    <noscript>请启用 JavaScript 以运行 BRAIN Alpha Ops 控制台。</noscript>
+    <div id="root">
+      <div class="app-boot-skeleton" aria-hidden="true">
+        <div class="app-boot-skeleton__logo">🧠</div>
+        <div class="app-boot-skeleton__spinner"></div>
+        <div class="app-boot-skeleton__label">BRAIN Alpha Ops 加载中…</div>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

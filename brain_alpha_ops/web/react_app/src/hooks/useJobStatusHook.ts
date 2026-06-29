@@ -11,6 +11,25 @@ import { useJobWatchdog } from '@/hooks/useJobWatchdog';
 import { useJobDisconnectedState } from '@/hooks/useJobDisconnectedState';
 import { sendCompletionNotification } from './useJobNotifications';
 
+/**
+ * @deprecated Phase 3.1: useJobStatusHook (useJobStatus) is deprecated. Its
+ * state-management logic is being absorbed into the composable useJobMonitor
+ * aggregator (useJobMonitor/index.ts). This module is retained for the legacy
+ * useJobState path while the migration completes; new code should use
+ * useJobMonitor directly.
+ */
+
+let warned = false;
+function emitDeprecationWarning(): void {
+  if (warned) return;
+  warned = true;
+  if (typeof console !== 'undefined' && typeof console.warn === 'function') {
+    console.warn(
+      'useJobStatus (useJobStatusHook) is deprecated; use the composable useJobMonitor aggregator.'
+    );
+  }
+}
+
 const TRANSIENT_STATUS_REFRESH_PREFIX = '状态刷新失败:';
 
 export interface JobStatusState {
@@ -61,6 +80,7 @@ export interface JobStatusHandlers extends JobStatusState {
 }
 
 export function useJobStatus(deps: JobStatusDeps): JobStatusHandlers {
+  emitDeprecationWarning();
   const { notify } = deps;
   const [jobId, setJobId] = useState<string | null>(null);
   const [running, setRunning] = useState(false);

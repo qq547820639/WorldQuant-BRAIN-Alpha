@@ -13,7 +13,7 @@ import { FlowGuide } from './components/FlowGuide';
 import PhaseShell from '@/components/PhaseShell';
 import MobileTabBar from '@/components/MobileTabBar';
 import KeyboardShortcutsHelp from '@/components/KeyboardShortcutsHelp';
-import { renderActiveViewFromContext } from '@/components/views/renderViewFromContext';
+import { ActiveViewRenderer } from '@/components/views/renderViewFromContext';
 import { PageLoader } from '@/components/views/renderView';
 import { topbarConnectionStatus, fmtEta } from '@/components/views/helpers';
 import { ThemeProvider, useThemeContext } from '@/components/ThemeProvider';
@@ -68,11 +68,6 @@ function AppContent() {
     handleNavigate,
     handleMobileNavigate,
   } = useAppStateContext();
-
-  // Workstream E2.1: detailContent now sources state from AppStateContext
-  // via renderActiveViewFromContext(), eliminating the prop-drilling
-  // viewProps useMemo that previously caused state drift between panels.
-  const detailContent = renderActiveViewFromContext();
 
   const viewLabel = VIEW_LABELS[activeView] || activeView;
   const currentPhaseObj = phaseState.phases[currentPhase];
@@ -292,14 +287,14 @@ function AppContent() {
               >
                 <FlowGuide currentPhase={currentPhase} />
                 <div className="animate-fade-in">
-                  <Suspense fallback={<PageLoader />}>{detailContent}</Suspense>
+                  <Suspense fallback={<PageLoader />}><ActiveViewRenderer /></Suspense>
                 </div>
               </PhaseShell>
             )}
 
             {!currentPhaseObj && (
               <div className="animate-fade-in">
-                <Suspense fallback={<PageLoader />}>{detailContent}</Suspense>
+                <Suspense fallback={<PageLoader />}><ActiveViewRenderer /></Suspense>
               </div>
             )}
           </main>

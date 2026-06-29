@@ -2,10 +2,9 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import type { JobStatus } from '@/types';
 import { useSSE } from '@/hooks/useSSE';
 import { useApi } from '@/hooks/useApi';
+import type { CancelReason } from '@/api/jobCancel';
 import { TRANSIENT_STATUS_REFRESH_PREFIX } from './constants';
 import type { UseJobMonitorOptions, UseJobMonitorResult } from './types';
-import { useJobCancellation } from './useJobCancellation';
-import { useSseRetryState } from './useSseRetryState';
 import { useSseEventHandler } from './useSseEventHandler';
 import { useJobControl } from './useJobControl';
 import { useStatusWatchdog } from './useStatusWatchdog';
@@ -19,7 +18,16 @@ export function useJobMonitor({ notify, credentials }: UseJobMonitorOptions): Us
   const [, setPollFailures] = useState(0);
 
   const api = useApi();
+  // Refs to break the circular dependency between useSseEventHandler (needs
+  // onExhausted → cancelAmbiguousJob / onResume → startJob) and useJobControl
+  // (needs resetSseRetryState). Each hook is called unconditionally; the refs
+  // are populated right after the hook that owns the value returns.
   const startJobRef = useRef<((resume?: boolean) => Promise<void>) | null>(null);
+  const cancelAmbiguousJobRef = useRef<
+    | ((reason: CancelReason, message: string, targetJobId?: string | null) => Promise<unknown>)
+    | null
+  >(null);
+  const resetSseRetryStateRef = useRef<(() => void) | null>(null);
 
   const clearTransientProgressError = useCallback(() => {
     setProgressError((current) =>
@@ -49,12 +57,6 @@ export function useJobMonitor({ notify, credentials }: UseJobMonitorOptions): Us
     setEvents((prev) => [...prev.slice(-50), message]);
   }, []);
 
-  const { cancelAmbiguousJob, clearAutoCancelRequests } = useJobCancellation({
-    jobId,
-    statusJobId: status?.job_id,
-    setEvents,
-  });
-
   const onResume = useCallback(() => {
     void startJobRef.current?.(true);
   }, []);
@@ -62,15 +64,23 @@ export function useJobMonitor({ notify, credentials }: UseJobMonitorOptions): Us
   const onExhausted = useCallback(
     (message: string) => {
       failMonitor(message);
-      void cancelAmbiguousJob('sse_exhausted', message);
+      void cancelAmbiguousJobRef.current?.('sse_exhausted', message);
     },
-    [failMonitor, cancelAmbiguousJob]
+    [failMonitor]
   );
 
-  const sseRetry = useSseRetryState({ notify, onResume, onExhausted });
-
-  const handleSSEEvent = useSseEventHandler({
+  const {
+    handleSSEEvent,
+    sseRetryCountdown,
+    sseRetryExhausted,
+    clearSseRetryTimers,
+    resetSseRetryState,
+    handleStreamExhausted,
+    handleSseExhaustedManualRetry,
+  } = useSseEventHandler({
     notify,
+    onResume,
+    onExhausted,
     setStatus,
     setRunning,
     setJobId,
@@ -80,28 +90,37 @@ export function useJobMonitor({ notify, credentials }: UseJobMonitorOptions): Us
     clearTransientProgressError,
   });
 
-  const sseUrl = jobId ? `/sse?job_id=${encodeURIComponent(jobId)}` : null;
-  const { connected, reconnectAttempts } = useSSE(sseUrl, {
-    onEvent: handleSSEEvent,
-    onExhausted: sseRetry.handleStreamExhausted,
-  });
+  resetSseRetryStateRef.current = resetSseRetryState;
+  const resetSseRetryStateWrapper = useCallback(() => {
+    resetSseRetryStateRef.current?.();
+  }, []);
 
-  const { startJob, stopJob } = useJobControl({
+  const { startJob, stopJob, cancelAmbiguousJob, clearAutoCancelRequests } = useJobControl({
     notify,
     credentials,
     api,
     jobId,
+    statusJobId: status?.job_id,
     setStatus,
     setRunning,
     setJobId,
     setProgressError,
     setEvents,
     setPollFailures,
-    clearAutoCancelRequests,
-    resetSseRetryState: sseRetry.resetSseRetryState,
+    resetSseRetryState: resetSseRetryStateWrapper,
   });
 
   startJobRef.current = startJob;
+  cancelAmbiguousJobRef.current = cancelAmbiguousJob;
+  // clearAutoCancelRequests is wired into useJobControl's startJob; reference
+  // kept to avoid unused-var lint and to preserve the public surface shape.
+  void clearAutoCancelRequests;
+
+  const sseUrl = jobId ? `/sse?job_id=${encodeURIComponent(jobId)}` : null;
+  const { connected, reconnectAttempts } = useSSE(sseUrl, {
+    onEvent: handleSSEEvent,
+    onExhausted: handleStreamExhausted,
+  });
 
   useStatusWatchdog({
     running,
@@ -121,9 +140,9 @@ export function useJobMonitor({ notify, credentials }: UseJobMonitorOptions): Us
 
   useEffect(() => {
     return () => {
-      sseRetry.clearSseRetryTimers();
+      clearSseRetryTimers();
     };
-  }, [sseRetry.clearSseRetryTimers]);
+  }, [clearSseRetryTimers]);
 
   const cycleProgress =
     status?.cycle && status?.max_cycles ? Math.round((status.cycle / status.max_cycles) * 100) : 0;
@@ -144,10 +163,10 @@ export function useJobMonitor({ notify, credentials }: UseJobMonitorOptions): Us
     events,
     loading: api.loading,
     reconnectAttempts,
-    sseRetryExhausted: sseRetry.sseRetryExhausted,
-    sseRetryCountdown: sseRetry.sseRetryCountdown,
+    sseRetryExhausted,
+    sseRetryCountdown,
     startJob,
     stopJob,
-    onSseExhaustedRetry: sseRetry.handleSseExhaustedManualRetry,
+    onSseExhaustedRetry: handleSseExhaustedManualRetry,
   };
 }

@@ -6,6 +6,24 @@ import { saveResumeState } from '@/utils/resumeState';
 import { saveJobId as saveSessionJobId, clearSavedJobId } from '@/hooks/useJobRecovery';
 import { requestNotificationPermission } from './useJobNotifications';
 
+/**
+ * @deprecated Phase 3.1: useJobLifecycle is deprecated. Its start/stop/cancel
+ * surface has been merged into useJobMonitor/useJobControl. This module is
+ * retained for the legacy useJobState → useJobStatus path; new code should
+ * use the composable useJobMonitor aggregator instead.
+ */
+
+let warned = false;
+function emitDeprecationWarning(): void {
+  if (warned) return;
+  warned = true;
+  if (typeof console !== 'undefined' && typeof console.warn === 'function') {
+    console.warn(
+      'useJobLifecycle is deprecated; use useJobMonitor/useJobControl for start/stop/cancel.'
+    );
+  }
+}
+
 export interface JobLifecycleDeps {
   notify: (
     type: 'success' | 'error' | 'warning' | 'info',
@@ -27,6 +45,7 @@ export interface JobLifecycleDeps {
 }
 
 export function useJobLifecycle(deps: JobLifecycleDeps) {
+  emitDeprecationWarning();
   const {
     notify,
     credentials,
@@ -46,28 +65,11 @@ export function useJobLifecycle(deps: JobLifecycleDeps) {
     async (resume = false) => {
       requestNotificationPermission();
 
+      // Phase 3.1: credentials handling aligned with useJobMonitor/useJobControl —
+      // when no page credentials are present, fall back to managed credentials
+      // instead of failing, so the two aggregator paths behave consistently.
       if (!hasCredentials(credentials)) {
-        const msg =
-          '请先在左侧「连接与生产参数」面板填写 BRAIN 账户邮箱和密码，或粘贴 API Token，然后点击「测试连接」。';
-        setProgressError(msg);
-        setStatus((prev) =>
-          prev
-            ? {
-                ...prev,
-                status: 'failed',
-                error: msg,
-                progress: {
-                  ...(prev.progress || {}),
-                  phase: 'failed',
-                  status_message: msg,
-                  percent_complete: 100,
-                },
-              }
-            : prev
-        );
-        setRunning(false);
-        notify('warning', msg);
-        return;
+        notify('info', '未填写页面凭证，将使用维护者配置的托管凭证启动非提交验证。');
       }
       setPollFailures(0);
       setProgressError(null);

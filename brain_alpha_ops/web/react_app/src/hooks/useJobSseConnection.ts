@@ -3,6 +3,11 @@
  *
  * Constructs the SSE URL, processes incoming events (progress, terminal,
  * candidate, submission), and exposes connection state.
+ *
+ * @deprecated Phase 3.1: useJobSseConnection is deprecated. Its SSE event
+ * handling and retry logic have been merged into useJobMonitor/useSseEventHandler.
+ * This module is retained for the legacy useJobState → useJobStatus path; new
+ * code should use the composable useJobMonitor aggregator instead.
  */
 
 import { useCallback } from 'react';
@@ -11,6 +16,17 @@ import { resolveJobEventState } from '@/helpers/runPayload';
 import type { SSEEvent, SSECandidateEventData } from '@/types';
 import { isSSECandidateData } from '@/types';
 import { clearSavedJobId } from '@/hooks/useJobRecovery';
+
+let warned = false;
+function emitDeprecationWarning(): void {
+  if (warned) return;
+  warned = true;
+  if (typeof console !== 'undefined' && typeof console.warn === 'function') {
+    console.warn(
+      'useJobSseConnection is deprecated; use useJobMonitor/useSseEventHandler for SSE.'
+    );
+  }
+}
 
 interface SseConnectionCallbacks {
   notify: (
@@ -46,6 +62,7 @@ export function useJobSseConnection(
     clearTransientProgressError,
   }: SseConnectionCallbacks
 ): SseConnectionState {
+  emitDeprecationWarning();
   const sseUrl = jobId ? `/sse?job_id=${encodeURIComponent(jobId)}` : null;
 
   const handleSSEEvent = useCallback(

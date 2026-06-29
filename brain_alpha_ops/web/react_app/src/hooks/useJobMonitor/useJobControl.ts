@@ -1,8 +1,10 @@
-import { useCallback } from 'react';
+import { useCallback, useRef } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import { buildRunPayload, hasCredentials, jobStatusMessage } from '@/helpers/runPayload';
 import type { BrainCredentials, JobStatus } from '@/types';
 import { useApi } from '@/hooks/useApi';
+import { requestJobCancel, cancelResultEventMessage, type CancelReason } from '@/api/jobCancel';
+import { requestNotificationPermission } from '@/hooks/useJobNotifications';
 import type { NotifyFn } from './types';
 
 type ApiInstance = ReturnType<typeof useApi>;
@@ -12,19 +14,25 @@ export interface UseJobControlOptions {
   credentials?: BrainCredentials;
   api: ApiInstance;
   jobId: string | null;
+  statusJobId: string | undefined;
   setStatus: Dispatch<SetStateAction<JobStatus | null>>;
   setRunning: Dispatch<SetStateAction<boolean>>;
   setJobId: Dispatch<SetStateAction<string | null>>;
   setProgressError: Dispatch<SetStateAction<string | null>>;
   setEvents: Dispatch<SetStateAction<string[]>>;
   setPollFailures: Dispatch<SetStateAction<number>>;
-  clearAutoCancelRequests: () => void;
   resetSseRetryState: () => void;
 }
 
 export interface JobControl {
   startJob: (resume?: boolean) => Promise<void>;
   stopJob: () => Promise<void>;
+  cancelAmbiguousJob: (
+    reason: CancelReason,
+    message: string,
+    targetJobId?: string | null
+  ) => Promise<unknown>;
+  clearAutoCancelRequests: () => void;
 }
 
 export function useJobControl({
@@ -32,17 +40,41 @@ export function useJobControl({
   credentials,
   api,
   jobId,
+  statusJobId,
   setStatus,
   setRunning,
   setJobId,
   setProgressError,
   setEvents,
   setPollFailures,
-  clearAutoCancelRequests,
   resetSseRetryState,
 }: UseJobControlOptions): JobControl {
+  // Phase 3.1: auto-cancel request dedup, absorbed from useJobCancellation.
+  const autoCancelRequests = useRef<Set<string>>(new Set());
+
+  const cancelAmbiguousJob = useCallback(
+    async (reason: CancelReason, message: string, targetJobId?: string | null) => {
+      const id = targetJobId || jobId || statusJobId;
+      if (!id) return null;
+      const key = `${id}:${reason}`;
+      if (autoCancelRequests.current.has(key)) return null;
+      autoCancelRequests.current.add(key);
+      const result = await requestJobCancel({ jobId: id, reason, message });
+      setEvents((prev) => [...prev.slice(-50), cancelResultEventMessage(result)]);
+      return result;
+    },
+    [jobId, statusJobId, setEvents]
+  );
+
+  const clearAutoCancelRequests = useCallback(() => {
+    autoCancelRequests.current.clear();
+  }, []);
+
   const startJob = useCallback(
     async (resume = false) => {
+      // U-008: request Notification permission so completion can fire a system
+      // notification when the tab is in the background.
+      requestNotificationPermission();
       if (!hasCredentials(credentials))
         notify('info', '未填写页面凭证，将使用维护者配置的托管凭证启动非提交验证。');
       setRunning(true);
@@ -156,5 +188,5 @@ export function useJobControl({
     notify('info', '验证流程已停止');
   }, [api, jobId, notify]);
 
-  return { startJob, stopJob };
+  return { startJob, stopJob, cancelAmbiguousJob, clearAutoCancelRequests };
 }

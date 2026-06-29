@@ -34,6 +34,8 @@ export default memo(function CredentialQuickStart({
     environment?: string;
     error?: string;
     error_code?: string;
+    // U-002: backend conveys Retry-After via JSON `retry_after` (seconds).
+    retry_after?: number;
   } | null>(null);
   const [testing, setTesting] = useState(false);
   const [managedTesting, setManagedTesting] = useState(false);
@@ -44,6 +46,8 @@ export default memo(function CredentialQuickStart({
     environment?: string;
     error?: string;
     error_code?: string;
+    // U-002: backend conveys Retry-After via JSON `retry_after` (seconds).
+    retry_after?: number;
   }>();
 
   // P1-2: countdown timer for delayed retry actions
@@ -102,6 +106,8 @@ export default memo(function CredentialQuickStart({
           ok: false,
           error: json.error || '连接失败',
           error_code: json.error_code || undefined,
+          // U-002: capture backend-provided Retry-After (seconds) for countdown.
+          retry_after: typeof json.retry_after === 'number' ? json.retry_after : undefined,
         });
         onConnectionTested(false, json.error || '连接失败');
       }
@@ -131,6 +137,8 @@ export default memo(function CredentialQuickStart({
           ok: false,
           error: json.error || '托管凭证连接失败',
           error_code: json.error_code || undefined,
+          // U-002: capture backend-provided Retry-After (seconds) for countdown.
+          retry_after: typeof json.retry_after === 'number' ? json.retry_after : undefined,
         });
         onConnectionTested(false, json.error || '托管凭证连接失败');
       }
@@ -143,17 +151,25 @@ export default memo(function CredentialQuickStart({
   }, [onConnectionTested, notify, call]);
 
   // P1-2: retry with countdown for delayed-recovery error codes
+  // U-002: prefer backend-provided Retry-After (`retry_after`) over the
+  // static `errorGuide.waitSeconds` so the countdown matches the real
+  // cooldown window the server asked us to wait.
   const handleGuidedRetry = useCallback(() => {
     if (!errorGuide) return;
-    if (errorGuide.waitSeconds && errorGuide.waitSeconds > 0) {
-      setCountdown(errorGuide.waitSeconds);
+    const retryAfter = testResult?.retry_after;
+    const waitSeconds =
+      typeof retryAfter === 'number' && retryAfter > 0
+        ? retryAfter
+        : errorGuide.waitSeconds || 0;
+    if (waitSeconds > 0) {
+      setCountdown(waitSeconds);
       const timer = setTimeout(() => {
         handleTestConnection();
-      }, errorGuide.waitSeconds * 1000);
+      }, waitSeconds * 1000);
       return () => clearTimeout(timer);
     }
     handleTestConnection();
-  }, [errorGuide, handleTestConnection]);
+  }, [errorGuide, testResult, handleTestConnection]);
 
   return (
     <div className="panel" style={{ padding: '1.5rem' }}>

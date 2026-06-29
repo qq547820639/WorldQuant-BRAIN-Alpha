@@ -57,7 +57,11 @@ export default class ErrorBoundary extends Component<Props, State> {
   handleGoHome = () => {
     this.setState({ hasError: false, error: null });
     this.props.onReset?.();
-    window.location.hash = '';
+    if (this.props.onNavigate) {
+      this.props.onNavigate('dashboard');
+    } else {
+      window.location.assign('/');
+    }
   };
 
   renderFullPageFallback() {

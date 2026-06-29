@@ -182,6 +182,9 @@ export function useConfigForm({
       return;
     }
     notify('success', '配置已保存');
+    // U-004: certain config fields (e.g. environment / region / language)
+    // only take effect on the next run, so warn the user after save.
+    notify('warning', '部分配置需重启生效');
     setSaveSuccess(true);
     refreshAll();
   };

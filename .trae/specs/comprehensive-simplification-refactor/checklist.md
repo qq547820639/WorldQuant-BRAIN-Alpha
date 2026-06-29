@@ -82,169 +82,169 @@
 ## Phase 2: 核心功能补全
 
 ### Task 2.1: 修复反过拟合虚假 PASS（F-001/F-002）
-- [ ] `AntiOverfitService.evaluate` fallback 链严格区分 returns/IC 语义，`returns` 不再回退到 `ic_series`/`rank_ic_series`
-- [ ] 必要字段缺失时返回 `insufficient_data`（fail-closed）
-- [ ] `_rank_ic` 按时间窗口分段计算多元素 IC 列表，`ic_std` 反映真实波动
-- [ ] 新增测试：缺失 returns 时返回 insufficient_data；多窗口 IC 计算正确性
-- [ ] `pytest tests/test_anti_overfit*.py -x -q` 通过
+- [x] `AntiOverfitService.evaluate` fallback 链严格区分 returns/IC 语义，`returns` 不再回退到 `ic_series`/`rank_ic_series`
+- [x] 必要字段缺失时返回 `insufficient_data`（fail-closed）
+- [x] `_rank_ic` 按时间窗口分段计算多元素 IC 列表，`ic_std` 反映真实波动
+- [x] 新增测试：缺失 returns 时返回 insufficient_data；多窗口 IC 计算正确性
+- [x] `pytest tests/test_anti_overfit*.py -x -q` 通过
 
 ### Task 2.2: 打通真实浏览器提交流（F-031/F-032）
-- [ ] `runner.run_pipeline_from_config` 根据 `run_config.execution_mode` 注入 `BrowserExecutionAdapter` / `ApiExecutionAdapter`
-- [ ] `execution_factory.py` 已接入 `runner.py`（推荐）或已删除（已孤立）
-- [ ] 若接入：`execution_factory` "auto" 模式 playwright 未装时 `logger.warning` + 显式传入 `RunConfig`
-- [ ] 新增 execution_mode=browser 路径测试
-- [ ] `pytest tests/test_runner*.py tests/test_execution_factory*.py -x -q` 通过
+- [x] `runner.run_pipeline_from_config` 根据 `run_config.execution_mode` 注入 `BrowserExecutionAdapter` / `ApiExecutionAdapter`
+- [x] `execution_factory.py` 已接入 `runner.py`（推荐）或已删除（已孤立）
+- [x] 若接入：`execution_factory` "auto" 模式 playwright 未装时 `logger.warning` + 显式传入 `RunConfig`
+- [x] 新增 execution_mode=browser 路径测试
+- [x] `pytest tests/test_runner*.py tests/test_execution_factory*.py -x -q` 通过
 
 ### Task 2.3: 修复并发参数被忽略与提交门禁 fail-open（F-041/F-012/F-011）
-- [ ] `BrainAPIBridge.concurrent_simulate / concurrent_check` 实现真并发（`ThreadPoolExecutor` + `_bounded_concurrency`）
-- [ ] `check_prod_correlation` API 失败时 `raise`（fail-closed）
-- [ ] `browser/execution_adapter.py` 幂等键改 LRU 淘汰而非 FIFO（F-011）
-- [ ] 新增并发测试
-- [ ] `pytest tests/test_brain_api_bridge*.py tests/test_official_simulation*.py tests/test_browser*.py -x -q` 通过
+- [x] `BrainAPIBridge.concurrent_simulate / concurrent_check` 实现真并发（`ThreadPoolExecutor` + `_bounded_concurrency`）
+- [x] `check_prod_correlation` API 失败时 `raise`（fail-closed）
+- [x] `browser/execution_adapter.py` 幂等键改 LRU 淘汰而非 FIFO（F-011）
+- [x] 新增并发测试
+- [x] `pytest tests/test_brain_api_bridge*.py tests/test_official_simulation*.py tests/test_browser*.py -x -q` 通过
 
 ### Task 2.4: 修复 rolling_validation decay_ratio 符号翻转（F-008）
-- [ ] `rolling_validation` 首末窗口符号不同时视为"方向反转"单独处理
-- [ ] 新增测试：首负末正（改善型）候选应通过
-- [ ] `pytest tests/test_rolling_validation*.py -x -q` 通过
+- [x] `rolling_validation` 首末窗口符号不同时视为"方向反转"单独处理
+- [x] 新增测试：首负末正（改善型）候选应通过
+- [x] `pytest tests/test_rolling_validation*.py -x -q` 通过
 
 ### Task 2.5: 修复 _launch_monitor 凭证剥离与挂起（F-013/F-014/F-015）
-- [ ] `SAFE_CHILD_ENV_KEYS` 改为黑名单，保留 `BRAIN_*` 业务 env + `BRAIN_ALPHA_OPS_*`
-- [ ] `for line in proc.stdout` 改为 `select.select` 周期性 `proc.poll()` + 超时 `proc.kill()`
-- [ ] `DONE` 关键字改为结构化结束标记
-- [ ] `failed|error` 排除集合扩展为 `{"no_error", "no_errors", "0 errors", "error_count=0"}`
-- [ ] `pytest tests/test_launch_monitor*.py -x -q` 通过
+- [x] `SAFE_CHILD_ENV_KEYS` 改为黑名单，保留 `BRAIN_*` 业务 env + `BRAIN_ALPHA_OPS_*`
+- [x] `for line in proc.stdout` 改为 `select.select` 周期性 `proc.poll()` + 超时 `proc.kill()`
+- [x] `DONE` 关键字改为结构化结束标记
+- [x] `failed|error` 排除集合扩展为 `{"no_error", "no_errors", "0 errors", "error_count=0"}`
+- [x] `pytest tests/test_launch_monitor*.py -x -q` 通过
 
 ### Task 2.6: 修复 fetch_official_context 超时与 Retry-After（F-016/F-017）
-- [ ] SIGALRM 替换为 `ThreadPoolExecutor + future.result(timeout=...)`（Windows 与非主线程可用）
-- [ ] `Retry-After` 支持 HTTP-date 解析（`email.utils.parsedate_to_datetime`）
-- [ ] 新增单元测试覆盖 HTTP-date 解析
-- [ ] `python fetch_official_context.py --help` 不报错
+- [x] SIGALRM 替换为 `ThreadPoolExecutor + future.result(timeout=...)`（Windows 与非主线程可用）
+- [x] `Retry-After` 支持 HTTP-date 解析（`email.utils.parsedate_to_datetime`）
+- [x] 新增单元测试覆盖 HTTP-date 解析
+- [x] `python fetch_official_context.py --help` 不报错
 
 ### Task 2.7: 修复 AdaptiveExecutor 与 TimeoutError 语义冲突（F-018/F-019）
-- [ ] `AdaptiveExecutor` 增加 `_closed` 标记，`shutdown()` 后 `submit()` 抛 `RuntimeError("executor is closed")`
-- [ ] `TimeoutError` 业务超时与执行器超时用 `exc.__cause__` 或独立异常类区分
-- [ ] `task_executor.py:76-78` 在 Python 3.11+ 事实错误的注释已修正
-- [ ] `pytest tests/test_adaptive_executor*.py tests/test_task_executor*.py -x -q` 通过
+- [x] `AdaptiveExecutor` 增加 `_closed` 标记，`shutdown()` 后 `submit()` 抛 `RuntimeError("executor is closed")`
+- [x] `TimeoutError` 业务超时与执行器超时用 `exc.__cause__` 或独立异常类区分
+- [x] `task_executor.py:76-78` 在 Python 3.11+ 事实错误的注释已修正
+- [x] `pytest tests/test_adaptive_executor*.py tests/test_task_executor*.py -x -q` 通过
 
 ### Task 2.8: 修复 StallMonitor 与 JobStore 持久化（F-024/F-023）
-- [ ] `TaskExecutor` 维护 `job_id -> future` 映射，`_auto_interrupt` 时 `future.cancel()` + cooperative cancellation
-- [ ] `JobStore` 每次启动重新尝试加载，不永久置位 `persistence_load_skipped`
-- [ ] `pytest tests/test_stall_monitor*.py tests/test_tasks*.py -x -q` 通过
+- [x] `TaskExecutor` 维护 `job_id -> future` 映射，`_auto_interrupt` 时 `future.cancel()` + cooperative cancellation
+- [x] `JobStore` 每次启动重新尝试加载，不永久置位 `persistence_load_skipped`
+- [x] `pytest tests/test_stall_monitor*.py tests/test_tasks*.py -x -q` 通过
 
 ### Task 2.9: 修复 Facade 绑定静默吞异常与 fail-open 泛滥（F-034 + 新发现 Critical×8）
-- [ ] `_install_facade_bindings()` 拆分为多个独立 try/except，按子系统记录
-- [ ] 关键绑定（`Handler` / `serve` / `main` / `dispatch_*`）缺失时 `serve()` 抛硬错拒绝启动
-- [ ] `_async_jobs_helpers` + `_batch_helpers` 两处 `_store_is_cancelled` 改 fail-closed
-- [ ] `web_security.py` Host 空时拒绝
-- [ ] `web_submission_single` kill-switch 接真实配置
-- [ ] `_api_mixin` 429 限流加 `return`
-- [ ] `_backtest_recovery_mixin` 改 fail-closed
-- [ ] `_local_prefilter` 评分失败断链修复
-- [ ] `official_auth` F-012 改 fail-closed
-- [ ] 新增测试覆盖关键绑定缺失时拒绝启动
-- [ ] `pytest tests/test_web*.py -x -q` 通过
+- [x] `_install_facade_bindings()` 拆分为多个独立 try/except，按子系统记录
+- [x] 关键绑定（`Handler` / `serve` / `main` / `dispatch_*`）缺失时 `serve()` 抛硬错拒绝启动
+- [x] `_async_jobs_helpers` + `_batch_helpers` 两处 `_store_is_cancelled` 改 fail-closed
+- [x] `web_security.py` Host 空时拒绝
+- [x] `web_submission_single` kill-switch 接真实配置
+- [x] `_api_mixin` 429 限流加 `return`
+- [x] `_backtest_recovery_mixin` 改 fail-closed
+- [x] `_local_prefilter` 评分失败断链修复
+- [x] `official_auth` F-012 改 fail-closed
+- [x] 新增测试覆盖关键绑定缺失时拒绝启动
+- [x] `pytest tests/test_web*.py -x -q` 通过
 
 ### Task 2.10: 修复假设反馈链路与演化探索（新发现 Critical×3）
-- [ ] `hypothesis_library/library.py` `adjust_weight` 写入的 `_hypothesis_weights` 被 `generate` 路径实际读取（反馈链路闭合）
-- [ ] `evolution/_meta` 新后代 `scores=0` 时给予初始存活窗口，不被立即剪枝
-- [ ] `convergence/_bootstrap_mixin.py` 空列表除零保护
-- [ ] 新增测试覆盖反馈链路、后代存活、除零保护
-- [ ] `pytest tests/test_hypothesis*.py tests/test_evolution*.py tests/test_convergence*.py -x -q` 通过
+- [x] `hypothesis_library/library.py` `adjust_weight` 写入的 `_hypothesis_weights` 被 `generate` 路径实际读取（反馈链路闭合）
+- [x] `evolution/_meta` 新后代 `scores=0` 时给予初始存活窗口，不被立即剪枝
+- [x] `convergence/_bootstrap_mixin.py` 空列表除零保护
+- [x] 新增测试覆盖反馈链路、后代存活、除零保护
+- [x] `pytest tests/test_hypothesis*.py tests/test_evolution*.py tests/test_convergence*.py -x -q` 通过
 
 ### Task 2.11: 修复 empirical_score 分值架构（新发现 Critical）
-- [ ] `empirical_score` 排除 hard_gate 分值后满分 ≥ 100
-- [ ] `status≥70` 的 "ready" 阈值可达
-- [ ] 新增测试：满分场景验证；"ready" 阈值可达性验证
-- [ ] `pytest tests/test_empirical_score*.py -x -q` 通过
+- [x] `empirical_score` 排除 hard_gate 分值后满分 ≥ 100
+- [x] `status≥70` 的 "ready" 阈值可达
+- [x] 新增测试：满分场景验证；"ready" 阈值可达性验证
+- [x] `pytest tests/test_empirical_score*.py -x -q` 通过
 
 ### Task 2.12: 修复 simulation_scheduler 双 lambda（新发现 Critical）
-- [ ] `_scheduler.py` `event_callback` 双 lambda 默认值改为模块级函数或 None sentinel
-- [ ] `pytest tests/test_simulation_scheduler*.py -x -q` 通过
+- [x] `_scheduler.py` `event_callback` 双 lambda 默认值改为模块级函数或 None sentinel
+- [x] `pytest tests/test_simulation_scheduler*.py -x -q` 通过
 
 ### Task 2.13: 修复 auto_calibrator 失效 import（新发现 Critical）
-- [ ] `_weight_calibration.py` 移除不存在的 `calibrate_weights.py` import，或创建该模块
-- [ ] `python -c "from brain_alpha_ops.research.auto_calibrator import _weight_calibration"` 不报错
+- [x] `_weight_calibration.py` 移除不存在的 `calibrate_weights.py` import，或创建该模块
+- [x] `python -c "from brain_alpha_ops.research.auto_calibrator import _weight_calibration"` 不报错
 
 ### Task 2.14: 修复 _ratio 边界与 OfficialScoringSystem 加锁（新发现 High×2）
-- [ ] `official_helpers/_normalize._ratio` 2.0 处不连续修复
-- [ ] `_ratio` 跨模块不一致（>=2.0 vs >=100）统一
-- [ ] `scoring/official_scoring/_history` 加锁（threading.Lock 或 asyncio.Lock）
-- [ ] 新增并发测试
-- [ ] `pytest tests/test_official_helpers*.py tests/test_official_scoring*.py -x -q` 通过
+- [x] `official_helpers/_normalize._ratio` 2.0 处不连续修复
+- [x] `_ratio` 跨模块不一致（>=2.0 vs >=100）统一
+- [x] `scoring/official_scoring/_history` 加锁（threading.Lock 或 asyncio.Lock）
+- [x] 新增并发测试
+- [x] `pytest tests/test_official_helpers*.py tests/test_official_scoring*.py -x -q` 通过
 
 ### Task 2.15: 清理 fetch_official_thresholds 死代码（新发现 High）
-- [ ] `official_context/_composite` 的 `fetch_official_thresholds` / `merge_dynamic_thresholds` 死代码已接入评分路径或删除
-- [ ] `pytest tests/test_official_context*.py -x -q` 通过
+- [x] `official_context/_composite` 的 `fetch_official_thresholds` / `merge_dynamic_thresholds` 死代码已接入评分路径或删除
+- [x] `pytest tests/test_official_context*.py -x -q` 通过
 
 ### Task 2.16: 修复 Web 层 High 18 处（批量）
-- [ ] `post_routes/submit` 硬编码 403 改配置
-- [ ] `web_get_routes/_routes_simulation` 导入失败 500 改降级
-- [ ] `web_assistant_snapshots/_profile` 空 glob 处理
-- [ ] `web_jobs` ASYNC_JOBS OOM 限制大小
-- [ ] `_handlers_alpha` record_trend 加锁
-- [ ] `_handlers_simulation` 批量信息不丢失
-- [ ] `web_check_availability` 12 类检查隔离
-- [ ] `web_config` run_config_from_payload 修复 TypeError
-- [ ] `web_submission_batch` 逐候选错误聚合
-- [ ] `web_submission_safety/_observability` 降级标记
-- [ ] `web_security` validate_replay 时间戳 skew 修复
-- [ ] `web_runtime_state` lifecycle_from_job limit=0 修复
-- [ ] `handlers/phase.py` NameError 修复
-- [ ] `api/trends.ts` 字符串比较 TypeError 修复
-- [ ] `simulation_scheduler/_types.py` reset 重置 error_count
-- [ ] `presets.py:86` capability kind 修正
-- [ ] `_run_mixin` save_run_history 异常吞掉改记录
-- [ ] `_workers` 双评分契约修复
-- [ ] `pytest tests/test_web*.py -x -q` 通过
+- [x] `post_routes/submit` 硬编码 403 改配置
+- [x] `web_get_routes/_routes_simulation` 导入失败 500 改降级
+- [x] `web_assistant_snapshots/_profile` 空 glob 处理
+- [x] `web_jobs` ASYNC_JOBS OOM 限制大小
+- [x] `_handlers_alpha` record_trend 加锁
+- [x] `_handlers_simulation` 批量信息不丢失
+- [x] `web_check_availability` 12 类检查隔离
+- [x] `web_config` run_config_from_payload 修复 TypeError
+- [x] `web_submission_batch` 逐候选错误聚合
+- [x] `web_submission_safety/_observability` 降级标记
+- [x] `web_security` validate_replay 时间戳 skew 修复
+- [x] `web_runtime_state` lifecycle_from_job limit=0 修复
+- [x] `handlers/phase.py` NameError 修复
+- [x] `api/trends.ts` 字符串比较 TypeError 修复
+- [x] `simulation_scheduler/_types.py` reset 重置 error_count
+- [x] `presets.py:86` capability kind 修正
+- [x] `_run_mixin` save_run_history 异常吞掉改记录
+- [x] `_workers` 双评分契约修复
+- [x] `pytest tests/test_web*.py -x -q` 通过
 
 ## Phase 3: UX 流程优化
 
 ### Task 3.1: 合并两套 job 聚合 hook
-- [ ] 保留组合式 `useJobMonitor` 架构，吸收 `useJobStatusHook` 状态管理逻辑
-- [ ] `useJobWatchdog` vs `useJobMonitor/useStatusWatchdog` 重叠已合并为 1 个 watchdog
-- [ ] `useJobSseConnection` vs `useJobMonitor/useSseEventHandler + useSseRetryState` 重叠已合并为 1 套 SSE
-- [ ] `useJobLifecycle` vs `useJobControl` credentials 处理不一致已消除
-- [ ] 目标：1 个聚合 hook + ≤3 个子 hook
-- [ ] 过渡期被合并 hook 在原路径保留 re-export + `DeprecationWarning`
-- [ ] `npm run typecheck` 0 错误；`npm run build` 成功
+- [x] 保留组合式 `useJobMonitor` 架构，吸收 `useJobStatusHook` 状态管理逻辑
+- [x] `useJobWatchdog` vs `useJobMonitor/useStatusWatchdog` 重叠已合并为 1 个 watchdog
+- [x] `useJobSseConnection` vs `useJobMonitor/useSseEventHandler + useSseRetryState` 重叠已合并为 1 套 SSE
+- [x] `useJobLifecycle` vs `useJobControl` credentials 处理不一致已消除
+- [x] 目标：1 个聚合 hook + ≤3 个子 hook
+- [x] 过渡期被合并 hook 在原路径保留 re-export + `DeprecationWarning`
+- [x] `npm run typecheck` 0 错误；`npm run build` 成功
 
 ### Task 3.2: 修复 SSE 断连误取消（U-001）
-- [ ] `useJobDisconnectedState` 探活失败时不再自动取消，改为提示"连接断开，云端任务可能仍在运行"
-- [ ] 探活返回非 running 状态时不再自动取消
-- [ ] 添加"重连"按钮与"手动恢复"入口
-- [ ] 新增测试覆盖断连状态
+- [x] `useJobDisconnectedState` 探活失败时不再自动取消，改为提示"连接断开，云端任务可能仍在运行"
+- [x] 探活返回非 running 状态时不再自动取消
+- [x] 添加"重连"按钮与"手动恢复"入口
+- [x] 新增测试覆盖断连状态
 
 ### Task 3.3: 修复限流倒计时与错误引导（U-002/U-003）
-- [ ] 限流倒计时读取 `Retry-After` 头并按实际值倒计时
-- [ ] `connectionErrorGuide` 覆盖全部错误类型，提供可操作恢复入口
-- [ ] `connectionErrorGuide` vs `errorExperience` 重叠已消除
-- [ ] 新增测试覆盖错误引导
+- [x] 限流倒计时读取 `Retry-After` 头并按实际值倒计时
+- [x] `connectionErrorGuide` 覆盖全部错误类型，提供可操作恢复入口
+- [x] `connectionErrorGuide` vs `errorExperience` 重叠已消除
+- [x] 新增测试覆盖错误引导
 
 ### Task 3.4: 修复配置保存与前台通知（U-004/U-008）
-- [ ] 配置保存后 toast 提示"部分配置需重启生效"
-- [ ] `useJobNotifications` 接 `Notification API`，前台完成时系统通知（不再空转）
+- [x] 配置保存后 toast 提示"部分配置需重启生效"
+- [x] `useJobNotifications` 接 `Notification API`，前台完成时系统通知（不再空转）
 
 ### Task 3.5: 修复轮询 visibility（U-009）
-- [ ] `useGlobalData` 接 `document.visibilitychange`，隐藏时暂停 60s 轮询
+- [x] `useGlobalData` 接 `document.visibilitychange`，隐藏时暂停 60s 轮询
 
 ### Task 3.6: 修复阻断阶段按钮仍可点（W-001）
-- [ ] `PhaseShell` 阻断态增加 `pointer-events: none` 或 `inert` 属性
-- [ ] 内部可交互元素 `disabled`
-- [ ] 视觉灰化 + tooltip 显示阻断原因
+- [x] `PhaseShell` 阻断态增加 `pointer-events: none` 或 `inert` 属性
+- [x] 内部可交互元素 `disabled`
+- [x] 视觉灰化 + tooltip 显示阻断原因
 
 ### Task 3.7: 修复首屏空白、路由 URL、Toast 重复（W-002/W-004/W-010/W-011）
-- [ ] `ErrorBoundary.handleGoHome` 改用 `onNavigate` prop，不再 `window.location.hash = ''`
-- [ ] `main.tsx` 路由表扩展，`activeView` 映射到 URL path（`/` / `/config` / `/candidates` / `/scoring`）
-- [ ] 向前兼容内部 state 切换
-- [ ] `index.html:13` `<div id="root"></div>` 内加 noscript + 内联骨架屏
-- [ ] Toast 三套系统合并为单一系统（`ToastContainer.tsx` + AppStateContext 的 `notify`/`toasts`）
-- [ ] `ui.ts` TabId vs CardViewId 双套导航 ID 已统一
-- [ ] 手动测试首屏不再空白；路由进 URL；Toast 不重复
+- [x] `ErrorBoundary.handleGoHome` 改用 `onNavigate` prop，不再 `window.location.hash = ''`
+- [x] `main.tsx` 路由表扩展，`activeView` 映射到 URL path（`/` / `/config` / `/candidates` / `/scoring`）
+- [x] 向前兼容内部 state 切换
+- [x] `index.html:13` `<div id="root"></div>` 内加 noscript + 内联骨架屏
+- [x] Toast 三套系统合并为单一系统（`ToastContainer.tsx` + AppStateContext 的 `notify`/`toasts`）
+- [x] `ui.ts` TabId vs CardViewId 双套导航 ID 已统一
+- [x] 手动测试首屏不再空白；路由进 URL；Toast 不重复
 
 ### Task 3.8: 修复 renderActiveViewFromContext hook 违规（W-007）
-- [ ] `renderViewFromContext.tsx` 非组件调 hook 已改为标准组件 `<ActiveViewRenderer />` 或提升到父组件
-- [ ] `npm run lint` 不再有该处 eslint-disable
-- [ ] `npm run typecheck` 0 错误
+- [x] `renderViewFromContext.tsx` 非组件调 hook 已改为标准组件 `<ActiveViewRenderer />` 或提升到父组件
+- [x] `npm run lint` 不再有该处 eslint-disable
+- [x] `npm run typecheck` 0 错误
 
 ## Phase 4: UI 视觉统一
 

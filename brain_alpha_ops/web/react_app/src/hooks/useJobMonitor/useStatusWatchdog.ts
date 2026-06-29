@@ -4,6 +4,7 @@ import { classifyJobState, jobStatusMessage } from '@/helpers/runPayload';
 import type { JobStatus } from '@/types';
 import { useApi } from '@/hooks/useApi';
 import type { CancelReason } from '@/api/jobCancel';
+import { sendCompletionNotification } from '@/hooks/useJobNotifications';
 import type { NotifyFn } from './types';
 
 type ApiInstance = ReturnType<typeof useApi>;
@@ -85,6 +86,9 @@ export function useStatusWatchdog({
           notify(resultState.interrupted ? 'warning' : 'error', msg);
         } else {
           setProgressError(null);
+          // U-008: foreground completion triggers a system notification when
+          // the tab is hidden and the user previously granted permission.
+          sendCompletionNotification('BRAIN Alpha Ops', '管线运行完成！');
         }
         setJobId(null);
       } else if (result?.ok) {

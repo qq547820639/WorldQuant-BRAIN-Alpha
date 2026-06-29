@@ -1,5 +1,5 @@
 /**
- * renderViewFromContext — context-based renderer entry point (Workstream E2.1).
+ * ActiveViewRenderer — context-based renderer component (Workstream E2.1).
  *
  * Sibling to `renderView.tsx`. Consumes the unified app state from
  * `AppStateContext` and builds the legacy `RenderViewProps` shape internally,
@@ -13,18 +13,21 @@
  * interface entirely.
  *
  * Must be rendered inside `<AppStateProvider>` (throws otherwise).
+ *
+ * W-007: previously a render function that called hooks (rules-of-hooks
+ * violation suppressed via eslint-disable). Promoted to a standard component
+ * so hook invocation is valid and no eslint-disable is needed.
  */
 
-import type React from 'react';
+import type { RenderViewProps } from './renderView';
+import { renderActiveView } from './renderView';
 import { useAppStateContext } from '@/hooks/useAppState/AppStateContext';
-import { renderActiveView, type RenderViewProps } from './renderView';
 
 /**
- * Preferred renderer entry point. Reads the unified app state from context
- * and returns the active view's React node.
+ * Preferred renderer component. Reads the unified app state from context
+ * and renders the active view's React node.
  */
-export function renderActiveViewFromContext(): React.ReactNode {
-  // eslint-disable-next-line react-hooks/rules-of-hooks -- render function invoked during a component's render phase; hook context is valid at runtime.
+export function ActiveViewRenderer() {
   const appState = useAppStateContext();
   const viewProps: RenderViewProps = {
     activeView: appState.activeView,
