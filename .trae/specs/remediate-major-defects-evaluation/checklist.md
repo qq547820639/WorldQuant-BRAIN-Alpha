@@ -186,3 +186,69 @@
 - [ ] 浏览器 `check_alpha` 解析真实 PASS/FAIL，不返回 `ok=True` + 截断 inner_text
 - [ ] A-Share 缓存 Parquet 损坏时删除并回退 JSON/重取，不永久返回 None
 - [ ] Loader 加载失败时 ERROR 日志，不静默 return 致全量 alpha 被拒
+
+## 阶段 O：扫尾验证 Critical（第五轮 — 顶层入口 / 桥接 / 安全 / 中断机制）
+
+- [ ] `redact_data({"brain_token":"x","brain_password":"y"})` 值被替换为 `[REDACTED]`
+- [ ] 日志含 `BRAIN_TOKEN=abc123` 时 token 被脱敏（`_KEY_VALUE_RE` 支持 `[_-]` 前缀）
+- [ ] StallMonitor `on_interrupt` 调用 `future.cancel()` + 浏览器/进程终止，非仅改 store 状态
+- [ ] StallMonitor 超过 `max_retry_count` 时强制 kill 或通知编排层，非仅 log
+- [ ] StallMonitor 回调移出锁外执行，无死锁/阻塞风险
+- [ ] stall 触发后 job 状态为 `interrupted`，future 被取消
+- [ ] `classify_error(RuntimeError("..."), default_code="VALIDATION_ERROR")` 返回 category=="validation"
+- [ ] ashare_adapter `load_index_universe` 跨天调用 cache_key 不同 / 第 2 天不命中第 1 天缓存
+- [ ] agent_live_tools 3 个 future 卡死时函数在 bounded 时间内返回（`shutdown(wait=False, cancel_futures=True)`）
+- [ ] 业务 `raise TimeoutError` 不被误归类为执行器超时（Python 3.11+ 语义区分）
+- [ ] `executor.submit()` 抛 RuntimeError/PicklingError 时 job 状态为 `failed`（非永久 running）
+- [ ] `_real_session` 若保留则返回完整 sid/csrf；若删除则无引用
+
+## 阶段 P：扫尾验证 High（第五轮 — Web 安全 / 数据加载 / 中断 / 调度）
+
+- [ ] `serve(allow_remote=True, secure_cookies=None)` over HTTP 时 `secure_cookies` 默认 False
+- [ ] allow_remote=True 时空 Host 头直接 reject（400）
+- [ ] replay timestamp 强制秒级或显式 unit 参数，不依赖启发式阈值
+- [ ] backtest_polling 连续 5 次未知状态后 `release_slot=True` + 候选标记 `failed_unknown_status`
+- [ ] 提交异常 `status_message` 走 `redact_error_message`，不含 token
+- [ ] `_submit_and_poll_simulation` 区分瞬时错误与永久错误，永久错误立即 fail job
+- [ ] guided_pipeline threading 超时后 daemon 线程在 bounded 时间内退出（cancel event）
+- [ ] `CapabilityKind` Literal 含 `"language"`，language 条目用 `kind="language"`
+- [ ] `get(name, kind="test_period")` 不返回 language 条目
+- [ ] 普通配置 KeyError 不归 `dataset_missing`（仅 dataset_id 模式匹配才归）
+- [ ] `official_operators.json`/`official_datasets.json` 含非 dict 元素时 loader 不崩溃
+- [ ] `_get_job_status` 中 `**job` 不覆盖显式 ok/source/job_id；`latest_active() == ("", None)` 不崩溃
+- [ ] `adaptive_executor.shutdown()` 后 `submit()` 抛 RuntimeError，不静默重建池
+- [ ] fetch_official_context 在 Windows/非主线程用 threading.Timer 回退，不静默跳过 SIGALRM
+- [ ] `_retry_after_seconds` 支持 HTTP-date 格式 Retry-After
+- [ ] _launch_monitor 看门狗线程 N 秒无输出时 `proc.kill()`
+- [ ] _launch_monitor 仅用 `"run_completed"` 作完成判据，删除 `\bDONE\b`
+- [ ] _launch_monitor 告警正则排除 `0 errors`/`no failed`/`error handling completed`
+- [ ] _launch_monitor `proc.wait(timeout=10)` 超时后 `proc.kill()`
+- [ ] _launch_monitor `sanitized_child_env` 凭证剥离被文档化或修复
+- [ ] `backend_registration._get_brain_api` 加锁；`reset_brain_api()` 可刷新；`OfficialBrainAPI()` 传入 config
+- [ ] fusion `composite_ensemble` max 模式调用 `_validate_fusion_expr`
+- [ ] diagnostics `weight_concentration` 用 `bounded=True`，concentration=5 不触发 HIGH_CONCENTRATION
+- [ ] `agent_live_tools` `poll_interval_seconds` 传 `"abc"` 返回 default=2.0 而非 ValueError
+- [ ] capability_registry `fields()` 与 `field_category_index()` 字段名大小写统一
+- [ ] JobStore Protocol 纳入 `all(limit)`/`latest_any`，调用方使用统一方法名
+- [ ] i18n.t() 含 `{}` 位置占位时不抛 IndexError
+- [ ] metrics 高并发 counter/histogram 无丢失（`threading.Lock` 保护）
+- [ ] jsonl 读取加共享锁，并发写时不丢行
+- [ ] `json.dumps(secure_credentials trace)` 无明文片段；propagate=False logger 被脱敏
+
+## 阶段 Q：扫尾验证 Medium（第五轮 — UX / 派生 / 死代码）
+
+- [ ] trends.jsonl 路径走 `runtime_project_root()`，>10MB 时 GET /api/trends 响应 < 100ms
+- [ ] `list_checkpoints` 按 mtime 排序，`latest_checkpoint` 返回真正最新
+- [ ] guided_pipeline resume 按 `phase_completed` 跳到下一阶段，非从头跑
+- [ ] `assistant_request_snapshot` 透传 `include_prompt` 参数
+- [ ] `lifecycle_from_job(limit=0)` 返回空列表
+- [ ] backtest_slots `backtest_row_submitted` 与 `slot_active` 状态集合一致（POLL_TIMEOUT 归属明确）
+- [ ] `strategy_switch._explore` bandit_counts 全零时不抛 ZeroDivisionError
+- [ ] checkpoint `_register_index_entry` 拆分无锁版本，无冗余加锁
+- [ ] backtest_finalization/submission_gate_service try 块拆分，check_registry 异常不被静默吞
+- [ ] submission_gate_service `logger.debug` 改为 `logger.warning`
+- [ ] diagnosis_gap_coverage import 下沉，不触发 web 子包加载
+- [ ] parameter_audit slot 类对象不抛；非数值 current deviation 为 None
+- [ ] code_quality `_has_type_annotations` 用 ast，仅变量注解无返回注解断言 False
+- [ ] observability.context_payload 类型一致，空容器（0/False/[]/{}）不写入
+- [ ] official_validation_service / pipeline_official_validation_flow 删除裸 `pool` 语句

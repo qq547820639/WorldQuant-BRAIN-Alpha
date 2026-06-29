@@ -2,7 +2,7 @@
 
 ## Why
 
-在完整阅读 brain_alpha_ops **全量源码**（四轮深度分析覆盖所有子模块：core / web / web/dispatch / brain_api（official/official_alphas/official_context/official_helpers/official_simulation） / research（含全部子包：decoupled_pipeline/simulation_scheduler/repository/pipeline mixins/expression_index/iterative_optimizer/cross_review_pipeline/calibration_engine/auto_calibrator/evolution/knowledge_base/memory/experience/theme_engine 等） / scoring（含 official_scoring/release_score_gate） / compliance / audit_trail / monitoring / production_diagnostics / web_candidates / web_cloud / data / agent_tools / mcp_server / browser（execution_adapter） / llm_service / config / execution_backend / strategy / shared / types / security / deployment / tests / scripts）并**交叉核对项目已有的 17 份审计/缺陷文档**后，识别出 **160+ 项实质性重大问题**，覆盖三大维度：
+在完整阅读 brain_alpha_ops **全量源码**（**五轮**深度分析覆盖所有子模块：core / web / web/dispatch / brain_api（official/official_alphas/official_context/official_helpers/official_simulation） / research（含全部子包：decoupled_pipeline/simulation_scheduler/repository/pipeline mixins/expression_index/iterative_optimizer/cross_review_pipeline/calibration_engine/auto_calibrator/evolution/knowledge_base/memory/experience/theme_engine 等） / scoring（含 official_scoring/release_score_gate） / compliance / audit_trail / monitoring / production_diagnostics / web_candidates / web_cloud / data / agent_tools / mcp_server / browser（execution_adapter） / llm_service / config / execution_backend / strategy / shared / types / security / deployment / tests / scripts / **顶层入口（launch_web/_launch_monitor/fetch_official_context/build_prod）/ 桥接文件（_web_bridge/_config_domain_helpers/_runtime_constants_helpers 等）/ UX 子包（ux/errors/ux/guided_pipeline）/ data 子包（ashare_adapter/capability_registry/loader）/ agent_tools/i18n/shared / research 顶层散落文件 94 个**）并**交叉核对项目已有的 17 份审计/缺陷文档**后，识别出 **220+ 项实质性重大问题**（第五轮扫尾新增 8 项 Critical + 22 项 High + 30 项 Medium），覆盖三大维度：
 
 - **功能缺陷**：约 60 项 — 含**反过拟合 returns→factor_values 回退链导致虚假 PASS（核心防线失效）**、Quality Gate 审计失败跳过状态转换、仿真并发超限 deferred 被计为 failed、BCa Bootstrap n<5 退化为 (0,0)、Pearson 系数被 (n-1)/n 系统性缩小、ProdCorrelation 按表达式长度自动放行、状态机非法转换静默回退、真实提交后审计失败致重复提交、浏览器驱动真实提交流缺失（P0）、**三套 backend 注册机制互不协同 + 生产 pipeline 从未接入 execution_backend**、**MCP stdio 单线程阻塞**、**LLM 配额账本是死代码**、**Browser 提交幂等键淘汰后可重放**、**Browser 登录判定用 nav 选择器误判已登录**、registry 校验把枚举值误当数据字段必然误报、strategy profile_id 不含 delay 哈希冲突、参数审计遗漏 10+ official_api 参数、lifecycle_records 无界增长 OOM 等
 - **用户体验**：13 项 — 含 Web 端永久无法真实提交却强制走完整 HIL、SSE 断连误取消但云端任务仍在运行、错误引导仅覆盖 4/11 类等
@@ -42,6 +42,18 @@
 **UX：**
 - 修复 Web 端 `REAL_SUBMIT_DISABLED_WEB_FLOW` 永久 True 却让用户走完整 HIL 才在终点 403 — 提交流程入口前置提示
 - 修复 SSE 断连 5 分钟后前端自动取消任务跟踪但 BRAIN 云端回测仍在运行 — 断连取消须警示云端可能仍在运行
+
+**第五轮扫尾发现 Critical（顶层入口/桥接/安全/中断机制）：**
+- 修复 `redaction.py` 将 `brain_token`/`brain_password`/`brain_username`/`alpha_token` 键显式排除出敏感键，凭证可原样落盘 — 移除反向排除集对 credential 键的影响
+- 修复 `redaction.py` `_KEY_VALUE_RE` 用 `\b` 边界匹配，漏脱 `BRAIN_TOKEN=xxx` 等下划线前缀格式 — 支持 `[_-]` 前缀
+- 修复 `stall_monitor.py` `_on_interrupt` 只改 store 状态不真中断，任务仍后台运行消耗 API 配额 — 调用 `future.cancel()` + 浏览器/进程终止
+- 修复 `stall_monitor.py` 超过 `max_retry_count` 后仅 log 不再干预 — 升级为强制 kill
+- 修复 `errors.py:141` `_safe_status(status_code) == 0` 永不命中（`None == 0` 为 False），调用方语义化 error_code category 被错误覆盖为 internal — 改为 `is None`
+- 修复 `data/ashare_adapter/_provider.py` `load_index_universe` 缓存键未含解析后的 end 日期，跨天返回陈旧数据永久不刷新 — 解析 end 后再构造 cache_key
+- 修复 `agent_live_tools.py` `ThreadPoolExecutor` stall detector `with` 块退出时 `shutdown(wait=True)` 阻塞，30 分钟超时形同虚设 — 用 `shutdown(wait=False, cancel_futures=True)`
+- 修复 `task_executor.py` Python 3.11+ `TimeoutError` 语义冲突，业务超时被误报为执行器超时 — 通过 `exc.__module__` 区分
+- 修复 `task_executor.py` `executor.submit()` 失败时 job 永久卡 running — 包入 try/except，失败时标记 failed
+- 修复 `web/business/web_business/_handlers_misc.py` `_real_session` 截断 session_id/csrf_token（dead code 但已注入 globals，潜在 CSRF 失效）— 删除或修正
 
 ### High 修复（应做）
 
@@ -84,6 +96,24 @@
 - 配置保存仅提示「已保存」无「需重启生效」→ 涉及 Final 常量明确提示
 - 限流倒计时固定 30s 不读 `retry_after` → 读取后端值
 - 前台任务完成无提示 → 补充 toast/徽标
+
+**第五轮扫尾发现 High（Web 安全 / 数据加载 / 中断 / 调度）：**
+- `web_runtime_facade` `secure_cookies` 在 HTTP 下被 `allow_remote=True` 强制 True 致 session 丢失 → 默认 False
+- `web_security` 空 Host 头绕过 + replay timestamp 单位启发式阈值失效 → 拒绝空 Host + 明确单位
+- `backtest_polling` 未知状态 deferred 后槽位永不释放，3 槽位全占满后流水线阻塞 → defer_count 兜底
+- `_handlers_simulation` 提交异常 `str(exc)` 直出绕过 `redact_error_message` → 走脱敏
+- `guided_pipeline` threading 超时无法取消后台线程，副作用持续 → 传入 cancel event
+- `capability_registry` language 复用 test_period kind 槽致能力不可区分 → 显式 kind
+- `error_catalog` 所有 KeyError 一律归 dataset_missing 致错误引导误分类 → 区分
+- `data/loader` `_load_operators`/`_load_datasets` 缺 isinstance 防御，单脏元素使全局 loader 崩溃 → 加防御
+- `agent_tools/_context_mixin` `**job` 展开覆盖显式 ok + `latest_active() or latest_any()` 对 `("", None)` 不 fallback 致 `**None` 崩溃 → 剥离键 + None 防御
+- `adaptive_executor.shutdown` 后池置 None 但不阻止后续 submit 重建池 → `_shutdown` 标志
+- `fetch_official_context` SIGALRM 在 Windows/非主线程静默失效 + 不支持 HTTP-date Retry-After → threading.Timer 回退
+- `_launch_monitor` 子进程挂起无限阻塞 + DONE 关键字误判 + failed|error 误报 + sanitized_child_env 剥离凭证 → 看门狗 + 准确判据
+- `backend_registration._api_instance` 无锁不可刷新 + 无参构造 → 加锁 + reset + 传 config
+- `fusion.composite_ensemble` max 模式无验证 → 加 `_validate_fusion_expr`
+- `diagnostics.weight_concentration` 用 unbounded ratio 致百分比形式误判 → bounded=True
+- `agent_live_tools.poll_interval_seconds` 先 float() 再 bounded_float 致非数值抛 ValueError → 直接 bounded_float
 
 ### Medium 改进方向（记录为后续）
 - 生命周期审计写入异常被 debug 级静默吞 → 提升日志级别
@@ -342,6 +372,122 @@ The system SHALL enforce an upper bound on `MAX_USER_ALPHAS_PAGES` to prevent un
 #### Scenario: 前台运行时长任务完成
 - **WHEN** a long task completes in foreground
 - **THEN** a toast or badge SHALL be shown (not only when `document.hidden`)
+
+## ADDED Requirements (第五轮：扫尾验证 — 顶层入口 / UX / data / research 散落文件)
+
+第五轮针对前四轮未深读的「顶层入口 + 桥接 + UX 子包 + data/agent/i18n/shared + research 顶层散落文件」共约 150 个文件做并行扫尾深读，发现 **8 项 Critical + 22 项 High + 30 项 Medium** 全新缺陷。以下为 ADDED Requirements（仅列 Critical 与 High；Medium 见 tasks.md 阶段 O 末尾备注）。
+
+### Requirement: redaction 须脱敏 BRAIN_TOKEN / brain_token / brain_password 键
+The system SHALL treat any key whose name parts contain "token"/"password"/"secret" as sensitive, regardless of whether other parts are in {"brain", "alpha", "token"}. The current exclusion set causes `brain_token`, `brain_password`, `brain_username`, `alpha_token` keys to NOT be redacted in structured dict payloads.
+
+#### Scenario: structured payload 含 brain_token 键
+- **WHEN** `redact_data({"brain_token": "abc123", "brain_password": "secret"})` is called
+- **THEN** values SHALL be replaced with `[REDACTED]`, not passed through unchanged
+
+### Requirement: redaction 须匹配 BRAIN_TOKEN=xxx 文本格式
+The system SHALL match credential patterns prefixed with `_` (e.g., `BRAIN_TOKEN=xxx`) in free text, not require `\b` word boundary before the key name.
+
+#### Scenario: 日志含 BRAIN_TOKEN=abc123
+- **WHEN** log line `"... BRAIN_TOKEN=abc123 ..."` is processed
+- **THEN** token value SHALL be redacted, not left in plaintext
+
+### Requirement: StallMonitor._on_interrupt 须真正中断任务
+The system SHALL, on stall escalation, cancel the running Future/process/browser page, not only update job store status. Status-only "interrupt" leaves the task running in background consuming API quota and resources.
+
+#### Scenario: stall 触发 on_interrupt
+- **WHEN** StallMonitor calls `on_interrupt(job_id)`
+- **THEN** the corresponding Future SHALL be cancelled, process pool terminated, or browser page closed
+- **AND** job status SHALL be updated to `interrupted`
+
+### Requirement: StallMonitor 超过 max_retry_count 须升级强制 kill
+The system SHALL not silently give up after `max_retry_count`; it SHALL trigger force-kill (terminate future/process) or notify the orchestration layer.
+
+### Requirement: errors.classify_error 须正确判定无 status_code 分支
+The system SHALL use `is None` (not `== 0`) to detect missing `status_code`. `_safe_status(None) == 0` is always `False` (None != 0), causing the "trust caller classification" branch to never execute.
+
+#### Scenario: 调用方传 default_code="VALIDATION_ERROR" 无 status_code
+- **WHEN** `classify_error(RuntimeError("..."), default_code="VALIDATION_ERROR")` is called
+- **THEN** category SHALL be `validation`, not `internal`
+
+### Requirement: ashare_adapter load_index_universe 缓存键须含解析后的 end 日期
+The system SHALL resolve `end = end or date.today().isoformat()` BEFORE constructing the cache key. The current code constructs `cache_key = f"index_universe_{index_code}_{start}_{end}"` with `end=None`, making the key identical across days and returning stale aggregate data forever.
+
+#### Scenario: 跨天查询 index_universe
+- **WHEN** day 2 calls `load_index_universe(..., force_refresh=False)` with same start
+- **THEN** cache SHALL be invalidated due to date change, OR cache key SHALL differ from day 1
+
+### Requirement: agent_live_tools ThreadPoolExecutor 须真正可中断
+The system SHALL use `executor.shutdown(wait=False, cancel_futures=True)` on timeout, not `with ThreadPoolExecutor(...)` block exit which calls `shutdown(wait=True)` and blocks indefinitely on running futures.
+
+#### Scenario: 3 个 simulation future 真正卡死
+- **WHEN** `as_completed(future_map, timeout=1800)` raises TimeoutError
+- **THEN** function SHALL return within bounded time (not block on `with` exit)
+
+### Requirement: task_executor 须区分 Python 3.11+ TimeoutError 语义
+The system SHALL not assume business-logic `TimeoutError` does not inherit from `concurrent.futures.TimeoutError`. On Python 3.11+, they are the same class. Business timeouts SHALL be classified via module attribution or explicit exception type, not via inheritance.
+
+### Requirement: task_executor.submit 失败须将 job 标记为 failed
+The system SHALL wrap `executor.submit(...)` in try/except; on `RuntimeError`/`PicklingError`/`BrokenPool`, job status SHALL be updated to `failed` with error detail, not left as `running` forever.
+
+### Requirement: web_runtime_facade secure_cookies 在 HTTP 下默认 False
+The system SHALL NOT force `secure_cookies=True` when `allow_remote=True` but the server is HTTP. `Secure` cookies are not sent back over HTTP, causing session loss on every refresh.
+
+#### Scenario: allow_remote=True + HTTP 监听
+- **WHEN** `serve(allow_remote=True, secure_cookies=None)` over HTTP
+- **THEN** `secure_cookies` SHALL default to `False`, OR HTTPS detection SHALL be explicit
+
+### Requirement: web_security 须拒绝空 Host 头 + 明确 replay timestamp 单位
+The system SHALL reject requests with empty Host header when `allow_remote=True`. The system SHALL require second-precision timestamp (or explicit unit param), not use heuristic threshold `> 10_000_000_000` to detect milliseconds.
+
+### Requirement: backtest_polling 未知状态须有槽位释放兜底
+The system SHALL introduce `defer_count` counter; when consecutive deferrals exceed threshold (e.g., 5), the candidate SHALL be marked failed and `release_slot=True`. Unknown BRAIN statuses SHALL NOT permanently occupy slots.
+
+#### Scenario: BRAIN 返回未知状态连续 5 次
+- **WHEN** same candidate hits unknown status branch 5 times
+- **THEN** slot SHALL be released and candidate transitioned to `failed_unknown_status`
+
+### Requirement: 提交异常 status_message 须走 redact_error_message
+The system SHALL NOT use `str(exc)` directly in `progress.status_message`. All exception messages exposed to frontend SHALL pass through `redact_error_message`.
+
+### Requirement: guided_pipeline threading 超时须可取消后台线程
+The system SHALL pass a cancel event into the daemon thread; on timeout, the thread SHALL check the event and exit gracefully at the next cancellation point. Pure `thread.join(timeout=...)` without cancellation leaves pipeline running in background.
+
+### Requirement: capability_registry 须为 language 显式定义 kind
+The system SHALL add `"language"` to `CapabilityKind` Literal. The current reuse of `kind="test_period"` for language causes ambiguous resolution and conflates two capability dimensions.
+
+### Requirement: error_catalog.classify_exception 须区分 dataset KeyError 与其它 KeyError
+The system SHALL NOT classify all `KeyError` as `dataset_missing`. Only KeyErrors whose key matches dataset_id pattern OR originates from known dataset query paths SHALL be `dataset_missing`; others SHALL fall through to default.
+
+### Requirement: data/loader _load_operators 与 _load_datasets 须有 isinstance 防御
+The system SHALL skip non-dict elements in `official_operators.json` / `official_datasets.json` arrays, matching `_load_fields` behavior. A single non-dict element SHALL NOT crash the global loader singleton.
+
+### Requirement: agent_tools._context_mixin._get_job_status 须防 **job 覆盖 + None 解包
+The system SHALL strip `ok`/`source`/`job_id` keys from job before `**job` spread. The system SHALL handle `latest_active() == ("", None)` truthy tuple case (not fallback to `latest_any()`).
+
+### Requirement: adaptive_executor.shutdown 须阻止后续 submit 重建池
+The system SHALL set `_shutdown` flag; `submit()` after `shutdown()` SHALL raise `RuntimeError`, not silently create a new pool.
+
+### Requirement: fetch_official_context 须支持 Windows / 非主线程 + HTTP-date Retry-After
+The system SHALL fall back to `threading.Timer`-based timeout on Windows / non-main thread (not silently skip SIGALRM). The system SHALL parse HTTP-date format `Retry-After` headers, not only numeric seconds.
+
+### Requirement: _launch_monitor 须有看门狗 + 准确完成判据 + 准确告警正则
+The system SHALL:
+- Add watchdog thread to kill subprocess on N seconds of no stdout output
+- Use only `"run_completed"` (not `\bDONE\b`) as completion signal
+- Use negative-lookbehind regex for `failed|error` alerts (exclude `0 errors`, `no failed`, `error handling completed`)
+- Document or fix `sanitized_child_env` stripping BRAIN credentials (either pass via secure channel or document sandbox)
+
+### Requirement: backend_registration._api_instance 须线程安全 + 可刷新
+The system SHALL add lock to `_get_brain_api()`. The system SHALL provide `reset_brain_api()` for credential rotation. `OfficialBrainAPI()` SHALL be constructed with config/credentials, not parameterless.
+
+### Requirement: fusion.composite_ensemble max 模式须经验证
+The system SHALL call `_validate_fusion_expr(result, "ensemble_max")` before returning, matching `average`/`rank_average`/`min` modes. Unvalidated `max(...)` may exceed bracket depth / length limits and be rejected by BRAIN.
+
+### Requirement: diagnostics.weight_concentration 须用 bounded ratio
+The system SHALL use `normalize_brain_ratio(value, bounded=True)` for `weight_concentration` (mathematically bounded [0, 1]), not `bounded=False`. Unbounded path leaves percentage-form values (e.g., `5` for 5%) unscaled, triggering false HIGH_CONCENTRATION warnings.
+
+### Requirement: agent_live_tools.poll_interval_seconds 须先 bounded_float 再使用
+The system SHALL NOT call `float(args.get(...))` before `bounded_float(...)`. Non-numeric input SHALL fall through to default via `bounded_float`, not raise `ValueError`.
 
 ## ADDED Requirements (第四轮：解耦流水线 / 校准 / 进化 / Dispatch / 运行时)
 

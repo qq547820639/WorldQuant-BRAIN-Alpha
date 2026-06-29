@@ -270,6 +270,163 @@
 - [ ] Task N19: A-Share 缓存损坏自愈（`data/ashare_adapter/_cache.py:22-34`）
 - [ ] Task N20: Loader 加载失败 ERROR 日志而非静默 return（`data/loader/_loader.py:194-255`）
 
+## 阶段 O：扫尾验证 Critical（第五轮 — 顶层入口 / 桥接 / 安全 / 中断机制）
+
+- [ ] Task O1: redaction 脱敏 BRAIN_TOKEN / brain_token / brain_password 键
+  - [ ] SubTask O1.1: 修改 `redaction.py:271`，移除 `{"brain", "alpha", "token"}` 反向排除集对含 token/password/secret 键的影响
+  - [ ] SubTask O1.2: 修改 `redaction.py:120-124` `_KEY_VALUE_RE`，支持 `[_-]` 前缀键名（覆盖 `BRAIN_TOKEN=xxx`）
+  - [ ] SubTask O1.3: 新增测试：`redact_data({"brain_token":"x","brain_password":"y"})` 断言值被替换；日志含 `BRAIN_TOKEN=abc` 断言被脱敏
+- [ ] Task O2: StallMonitor._on_interrupt 真正中断任务
+  - [ ] SubTask O2.1: 修改 `stall_monitor.py:244-251` `create_stall_monitor_for_web_server` 的 `on_interrupt`，调用 `future.cancel()` + 浏览器/进程终止接口
+  - [ ] SubTask O2.2: 修改 `stall_monitor.py:177-182` 超过 `max_retry_count` 时升级为强制 kill 而非仅 log
+  - [ ] SubTask O2.3: 修改 `stall_monitor.py:121-173` 回调移出锁外执行，避免死锁/阻塞
+  - [ ] SubTask O2.4: 新增测试：stall 触发后断言 future.cancel 被调用、job 状态为 interrupted
+- [ ] Task O3: errors.classify_error 比较运算符修正
+  - [ ] SubTask O3.1: 修改 `errors.py:141`，`_safe_status(status_code) == 0` 改为 `is None`
+  - [ ] SubTask O3.2: 新增测试：`classify_error(RuntimeError("..."), default_code="VALIDATION_ERROR")` 断言 category=="validation"
+- [ ] Task O4: ashare_adapter load_index_universe 缓存键含真实 end
+  - [ ] SubTask O4.1: 修改 `data/ashare_adapter/_provider.py:112-144`，在构造 cache_key 前先 `end = end or date.today().isoformat()`
+  - [ ] SubTask O4.2: 新增测试：跨天调用断言 cache_key 不同 / 第 2 天不命中第 1 天缓存
+- [ ] Task O5: agent_live_tools ThreadPoolExecutor 真正可中断
+  - [ ] SubTask O5.1: 修改 `agent_live_tools.py:91-124`，捕获 TimeoutError 后 `executor.shutdown(wait=False, cancel_futures=True)`，不依赖 `with` 块退出
+  - [ ] SubTask O5.2: 新增测试：3 个 future 卡死时断言函数在 bounded 时间内返回
+- [ ] Task O6: task_executor Python 3.11+ TimeoutError 语义区分
+  - [ ] SubTask O6.1: 修改 `task_executor.py:75-78` 与 `adaptive_executor.py:322`，通过 `exc.__module__` 或显式异常类型区分业务超时与执行器超时
+  - [ ] SubTask O6.2: 新增测试：业务 `raise TimeoutError` 不被误归类为执行器超时
+- [ ] Task O7: task_executor.submit 失败 job 标记 failed
+  - [ ] SubTask O7.1: 修改 `task_executor.py:71-72` 与 `adaptive_executor.py:316-318`，`executor.submit(...)` 包入 try/except，失败时 `store.update(status="failed")`
+  - [ ] SubTask O7.2: 新增测试：submit 抛 RuntimeError/PicklingError 时断言 job 状态为 failed（非 running）
+- [ ] Task O8: _real_session 截断 csrf 修复 / 删除
+  - [ ] SubTask O8.1: 静态分析 `web/business/web_business/_handlers_misc.py:226-236` `_real_session` 的所有调用路径
+  - [ ] SubTask O8.2: 若 dead code 则删除；若仍可能被调用则修正返回完整 sid/csrf（截断仅用于 display 字段）
+  - [ ] SubTask O8.3: 新增测试：若保留则断言返回完整 token；若删除则断言无引用
+
+## 阶段 P：扫尾验证 High（第五轮 — Web 安全 / 数据加载 / 中断 / 调度）
+
+- [ ] Task P1: web_runtime_facade secure_cookies HTTP 下默认 False
+  - [ ] SubTask P1.1: 修改 `web/misc/web_runtime_facade/_server.py` 中 secure_cookies 默认推导逻辑，HTTP 监听时不强制 True
+  - [ ] SubTask P1.2: 新增测试：allow_remote=True + HTTP 监听断言 secure_cookies=False
+- [ ] Task P2: web_security 空 Host 头拒绝 + replay timestamp 单位明确
+  - [ ] SubTask P2.1: 修改 `web/security/web_security.py:30-55`，allow_remote=True 时空 Host 直接 reject
+  - [ ] SubTask P2.2: 修改 `web/security/web_security.py:246-249`，timestamp 强制秒级或显式 unit 参数，移除启发式阈值
+  - [ ] SubTask P2.3: 新增测试：空 Host 断言 400；毫秒 timestamp 断言 reject 或正确转换
+- [ ] Task P3: backtest_polling 未知状态槽位释放兜底
+  - [ ] SubTask P3.1: 修改 `research/backtest_polling.py:36,94-116`，引入 `defer_count`，连续 5 次后 `release_slot=True` + 候选标记 `failed_unknown_status`
+  - [ ] SubTask P3.2: 新增测试：连续 5 次未知状态断言槽位释放
+- [ ] Task P4: 提交异常 status_message 走 redact_error_message
+  - [ ] SubTask P4.1: 修改 `web/business/web_business/_handlers_simulation.py:115`，`str(exc)` 改为 `redact_error_message(exc)`
+  - [ ] SubTask P4.2: 修改 `_submit_and_poll_simulation` 区分瞬时错误与永久错误，永久错误立即 fail job
+  - [ ] SubTask P4.3: 新增测试：异常含 token 时断言 status_message 不含 token
+- [ ] Task P5: guided_pipeline threading 超时可取消
+  - [ ] SubTask P5.1: 修改 `ux/guided_pipeline/_phases.py:180-192`，传入 cancel event，超时后 set event，daemon 线程在取消点检查
+  - [ ] SubTask P5.2: 新增测试：超时后断言 daemon 线程在 bounded 时间内退出
+- [ ] Task P6: capability_registry language 显式 kind
+  - [ ] SubTask P6.1: 修改 `data/capability_registry/_types.py` `CapabilityKind` Literal 增加 `"language"`
+  - [ ] SubTask P6.2: 修改 `data/capability_registry/_defaults.py:104-117`，language 条目用 `kind="language"`
+  - [ ] SubTask P6.3: 新增测试：`get(name, kind="test_period")` 不返回 language 条目
+- [ ] Task P7: error_catalog 区分 dataset KeyError 与其它 KeyError
+  - [ ] SubTask P7.1: 修改 `error_catalog.py:309-310`，仅当 KeyError 键名符合 dataset_id 模式或来自已知 dataset 查询路径时归 dataset_missing
+  - [ ] SubTask P7.2: 新增测试：普通配置 KeyError 断言不归 dataset_missing
+- [ ] Task P8: data/loader _load_operators/_load_datasets isinstance 防御
+  - [ ] SubTask P8.1: 修改 `data/loader/_loader.py:240-265`，循环顶部加 `if not isinstance(item, dict): continue`
+  - [ ] SubTask P8.2: 新增测试：JSON 含 `[1, "x", null]` 元素时断言 loader 不崩溃
+- [ ] Task P9: agent_tools._context_mixin._get_job_status 防 **job 覆盖 + None 解包
+  - [ ] SubTask P9.1: 修改 `agent_tools/_context_mixin.py:207,211-212`，剥离 job 的 ok/source/job_id 键；处理 `("", None)` truthy tuple
+  - [ ] SubTask P9.2: 新增测试：job 含 `"ok": False` 时断言返回 ok=True；latest_active 返回 ("", None) 时不崩溃
+- [ ] Task P10: adaptive_executor.shutdown 阻止后续 submit 重建池
+  - [ ] SubTask P10.1: 修改 `adaptive_executor.py:99-111,130-137`，引入 `_shutdown` 标志，submit 时检查并抛 RuntimeError
+  - [ ] SubTask P10.2: 新增测试：shutdown 后 submit 断言抛 RuntimeError
+- [ ] Task P11: fetch_official_context Windows/非主线程 + HTTP-date Retry-After
+  - [ ] SubTask P11.1: 修改 `fetch_official_context.py:360-385`，Windows/非主线程回退 threading.Timer
+  - [ ] SubTask P11.2: 修改 `_retry_after_seconds` 支持 HTTP-date 格式
+  - [ ] SubTask P11.3: 新增测试：HTTP-date Retry-After 断言正确解析
+- [ ] Task P12: _launch_monitor 看门狗 + 完成判据 + 告警正则
+  - [ ] SubTask P12.1: 修改 `_launch_monitor.py:89-118`，加看门狗线程 N 秒无输出时 `proc.kill()`
+  - [ ] SubTask P12.2: 修改 `_launch_monitor.py:101-103`，删除 `\bDONE\b` 分支，仅保留 `"run_completed"`
+  - [ ] SubTask P12.3: 修改 `_launch_monitor.py:104-109`，用否定上下文正则排除 `0 errors`/`no failed`/`error handling completed`
+  - [ ] SubTask P12.4: 修改 `_launch_monitor.py:17-53`，文档化或修复 `sanitized_child_env` 凭证剥离
+  - [ ] SubTask P12.5: 修改 `_launch_monitor.py:110-114`，`proc.wait(timeout=10)` 超时后 `proc.kill()`
+- [ ] Task P13: backend_registration._api_instance 线程安全 + 可刷新
+  - [ ] SubTask P13.1: 修改 `backend_registration.py:63-74`，加锁；提供 `reset_brain_api()`；`OfficialBrainAPI()` 传入 config
+  - [ ] SubTask P13.2: 新增测试：多线程并发 `_get_brain_api` 断言单例；`reset_brain_api` 后断言新实例
+- [ ] Task P14: fusion.composite_ensemble max 模式验证
+  - [ ] SubTask P14.1: 修改 `research/fusion.py:152-156`，`return result` 前加 `_validate_fusion_expr(result, "ensemble_max")`
+  - [ ] SubTask P14.2: 新增测试：max 模式超长表达式断言被拒绝
+- [ ] Task P15: diagnostics.weight_concentration 用 bounded ratio
+  - [ ] SubTask P15.1: 修改 `research/diagnostics.py:82`，`_ratio(..., bounded=True)`（与 correlation/drawdown 对齐）
+  - [ ] SubTask P15.2: 新增测试：concentration=5（百分比形式）断言不触发 HIGH_CONCENTRATION
+- [ ] Task P16: agent_live_tools.poll_interval_seconds 先 bounded_float
+  - [ ] SubTask P16.1: 修改 `agent_live_tools.py:198-199`，删除裸 `float()`，直接 `bounded_float(args.get(...), 0.5, 30.0, default=2.0)`
+  - [ ] SubTask P16.2: 新增测试：传入 `"abc"` 断言返回 default=2.0 而非 ValueError
+- [ ] Task P17: capability_registry 字段名大小写统一
+  - [ ] SubTask P17.1: 修改 `data/capability_registry/_types.py:107-126`，`fields()` 与 `field_category_index()` 统一小写
+  - [ ] SubTask P17.2: 新增测试：`fields()` 结果可作为 `field_category_index()` 的 key
+- [ ] Task P18: JobStore 协议与 latest_any/all 调用方统一
+  - [ ] SubTask P18.1: 修改 `shared/contracts.py:95-101` `JobStore` Protocol，纳入 `all(limit)` / `latest_any`
+  - [ ] SubTask P18.2: 修改 `agent_research_tools.py:317-322` 与 `_context_mixin.py:208`，使用统一方法名
+  - [ ] SubTask P18.3: 新增测试：所有 JobStore 实现都通过 `enforce_protocol(JobStore)`
+- [ ] Task P19: i18n.t() 兜底 IndexError
+  - [ ] SubTask P19.1: 修改 `i18n/__init__.py:36-39`，except 增加 IndexError，回退到 `default or key`
+  - [ ] SubTask P19.2: 新增测试：含 `{}` 位置占位的模板断言不抛 IndexError
+- [ ] Task P20: metrics 全局单例线程安全
+  - [ ] SubTask P20.1: 修改 `metrics.py:43-51,105`，用 `threading.Lock` 包裹 `_counters`/`_histograms` 写操作；删除未使用的 `_timers`
+  - [ ] SubTask P20.2: 新增测试：高并发 counter/histogram 断言无丢失
+- [ ] Task P21: jsonl 读取加共享锁 + 跳过统计
+  - [ ] SubTask P21.1: 修改 `jsonl.py:56-72`，读取加 `fcntl.flock(LOCK_SH)`（Windows 用 msvcrt）；`iter_jsonl_records` 返回跳过统计
+  - [ ] SubTask P21.2: 新增测试：并发写时读断言不丢行
+- [ ] Task P22: secure_credentials ResolutionTrace.masked 不存明文片段
+  - [ ] SubTask P22.1: 修改 `secure_credentials.py:180,192`，`masked` 字段不存任何明文片段，改为 `"***"` 或 `"*"*len`
+  - [ ] SubTask P22.2: 修改 `secure_credentials.py:271-285`，filter 加到全局 handler 级别，覆盖 `propagate=False` logger
+  - [ ] SubTask P22.3: 新增测试：`json.dumps(trace)` 断言无明文；propagate=False logger 断言被脱敏
+
+## 阶段 Q：扫尾验证 Medium（第五轮 — UX / 派生 / 死代码）
+
+- [ ] Task Q1: trends.jsonl 路径走 runtime_project_root + 读取尾部扫描
+  - [ ] SubTask Q1.1: 修改 `web/api/trends.py:13-15`，路径统一走 `runtime_project_root() / "data" / "trends.jsonl"`
+  - [ ] SubTask Q1.2: 修改 `get_trends` 从文件尾部按行回扫至 N 天前 ts，不全量读取
+  - [ ] SubTask Q1.3: 新增测试：trends.jsonl >10MB 时 GET /api/trends 断言响应时间 < 100ms
+- [ ] Task Q2: ux/guided_storage list_checkpoints 按 mtime 排序
+  - [ ] SubTask Q2.1: 修改 `ux/guided_storage.py:57,77-81`，按 `path.stat().st_mtime` 排序；`latest_checkpoint` 加防御
+  - [ ] SubTask Q2.2: 新增测试：文件名格式变化时断言 latest_checkpoint 返回真正最新
+- [ ] Task Q3: ux/guided_pipeline resume 按阶段跳转
+  - [ ] SubTask Q3.1: 修改 `ux/guided_pipeline/_base.py:110-126`，根据 `phase_completed` 跳到下一阶段继续，非从头跑
+  - [ ] SubTask Q3.2: 新增测试：checkpoint 完成 generation 后 resume 断言不重跑 init/context
+- [ ] Task Q4: assistant_request_snapshot include_prompt 透传
+  - [ ] SubTask Q4.1: 修改 `web/misc/web_assistant_snapshots/_assistant_payloads.py:73-88`，`include_prompt=True` 改为 `include_prompt=include_prompt`
+  - [ ] SubTask Q4.2: 新增测试：传 `include_prompt=False` 断言 prompt 不在响应中
+- [ ] Task Q5: web_runtime_state lifecycle_from_job limit=0 返回空
+  - [ ] SubTask Q5.1: 修改 `web/state/web_runtime_state.py:95`，`if limit is not None and limit <= 0: return []`
+  - [ ] SubTask Q5.2: 新增测试：limit=0 断言返回空列表
+- [ ] Task Q6: backtest_slots backtest_row_submitted 与 slot_active 状态集合统一
+  - [ ] SubTask Q6.1: 修改 `web/misc/web_backtest_slots/_helpers.py:87-99,140-148`，POLL_TIMEOUT 明确归入 active 或 inactive
+  - [ ] SubTask Q6.2: 新增测试：POLL_TIMEOUT 任务断言 slot_active 与 backtest_row_submitted 一致
+- [ ] Task Q7: strategy_switch._explore 全零 bandit_counts 防御
+  - [ ] SubTask Q7.1: 修改 `research/strategy_switch.py:60-62`，`max_count = max(bandit_counts.values(), default=1) or 1`
+  - [ ] SubTask Q7.2: 新增测试：bandit_counts 全零时断言不抛 ZeroDivisionError
+- [ ] Task Q8: checkpoint _register_index_entry 拆分无锁版本
+  - [ ] SubTask Q8.1: 修改 `research/checkpoint.py:138,159,204-205`，拆为 `_register_index_entry_locked`（无锁）与公共版本
+  - [ ] SubTask Q8.2: 新增测试：`_atomic_write` 内调用无锁版本断言无冗余加锁
+- [ ] Task Q9: backtest_finalization/submission_gate_service 拆分 try 块 + 提升日志级别
+  - [ ] SubTask Q9.1: 修改 `research/backtest_finalization.py:159-196`，分离 metrics 解包与 check_registry.evaluate
+  - [ ] SubTask Q9.2: 修改 `research/submission_gate_service.py:236-237`，`logger.debug` 改为 `logger.warning`
+  - [ ] SubTask Q9.3: 新增测试：check_registry 抛 AttributeError 时断言不被静默吞为 check_registry_error
+- [ ] Task Q10: diagnosis_gap_coverage 副作用 import 下沉
+  - [ ] SubTask Q10.1: 修改 `diagnosis_gap_coverage.py:9`，`import brain_alpha_ops.web` 下沉到函数体内
+  - [ ] SubTask Q10.2: 新增测试：import diagnosis_gap_coverage 不触发 web 子包加载
+- [ ] Task Q11: parameter_audit slot 类与 _threshold_trace 非 None 标记
+  - [ ] SubTask Q11.1: 修改 `parameter_audit.py:104-109`，`vars(value)` try/except TypeError 兜底
+  - [ ] SubTask Q11.2: 修改 `parameter_audit.py:118,195-199`，current 非 None 且 _num 失败时 deviation 设为 None
+  - [ ] SubTask Q11.3: 新增测试：slot 类对象断言不抛；非数值 current 断言 deviation 为 None
+- [ ] Task Q12: code_quality._has_type_annotations 用 ast
+  - [ ] SubTask Q12.1: 修改 `code_quality.py:105-112`，用 ast 遍历 FunctionDef/AsyncFunctionDef 检查 returns
+  - [ ] SubTask Q12.2: 新增测试：仅变量注解无返回注解断言 False
+- [ ] Task Q13: observability.context_payload 类型一致 + 空容器过滤
+  - [ ] SubTask Q13.1: 修改 `observability.py:47-50`，统一 str() 化或保留原值；空容器用 truthy 判断
+  - [ ] SubTask Q13.2: 新增测试：value=0/False/[]/{} 断言不写入 payload
+- [ ] Task Q14: official_validation_service / pipeline_official_validation_flow 删除裸 pool 语句
+  - [ ] SubTask Q14.1: 修改 `research/official_validation_service.py:48,56` 与 `research/pipeline_official_validation_flow.py:30,38`，删除裸 `pool` 语句
+  - [ ] SubTask Q14.2: 静态分析确认无遗漏逻辑
+
 # Task Dependencies
 
 - 阶段 A 各任务最高优先，A3 须先于阶段 F（F 中状态迁移依赖正确）
