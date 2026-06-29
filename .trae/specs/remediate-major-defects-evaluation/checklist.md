@@ -1,55 +1,107 @@
 # Checklist
 
-## 阶段 A：后端 Critical
+## 阶段 A：后端核心防线与状态机 Critical
 
-- [ ] Facade 绑定安装失败时异常向上传播，日志记录原始堆栈，不再静默吞
-- [ ] `JOB_REGISTRY` 不再出现 `None` 后被访问为 `AttributeError` 的情况
-- [ ] 真实提交成功后审计写失败不再冒泡为 400 响应
-- [ ] 真实提交成功响应在审计失败时仍返回成功
-- [ ] 审计失败记录到 ERROR 级日志与监控指标
+- [ ] 反过拟合 `returns` 不再回退到 `factor_values`，returns 缺失时显式失败或使用语义不同代理
+- [ ] returns 缺失时反过拟合检查失败（非 PASS），IC/Spearman 不恒等于 1.0
+- [ ] Quality Gate `intercept` 中审计写失败不再跳过 `transition(gate_rejected)`
+- [ ] 审计写失败时候选仍转换到 gate_rejected，审计失败记 ERROR 日志
 - [ ] `candidate_lifecycle.transition()` 非法转换抛 `IllegalTransitionError`，不静默回退 `force_transition`
 - [ ] 仅 `force=True` 时才允许 `force_transition`，且仅测试用例使用
-- [ ] 生产调用方（submission_gate_service / backtest_submission / backtest_polling / audit_trail.quality_gate）已迁移
+- [ ] 生产调用方已迁移
+- [ ] 仿真并发超限（`CONCURRENT_SIMULATION_LIMIT_EXCEEDED`）候选标记 `deferred_concurrency_limit`（非 failed）
+- [ ] `state.failed` 不自增，`stop_new_submissions` 仅暂停受影响槽位
+- [ ] deferred 候选冷却后可重试
+- [ ] 真实提交成功后审计写失败不再冒泡为 400 响应
+- [ ] 提交成功响应在审计失败时仍返回成功
+- [ ] 审计失败记录到 ERROR 级日志与监控指标
+- [ ] Facade 绑定安装失败时异常向上传播，日志记录原始堆栈
+- [ ] `JOB_REGISTRY` 不再出现 `None` 后被访问为 `AttributeError`
+- [ ] web_cloud 同步任务心跳线程不再因非 (OSError,ValueError,TypeError) 静默退出
+- [ ] `stop_heartbeat` join 线程
 
-## 阶段 B：后端 High
+## 阶段 B：研究引擎数值正确性 Critical
 
-- [ ] StallMonitor 超过 max_retry_count 后调用 `_on_interrupt` 中断作业并升级告警
-- [ ] BRAIN 认证 401 时尝试 token 刷新与备选认证方法，指数退避后有限次重试
-- [ ] concurrent_simulate/concurrent_check 超时后显式释放槽位，不依赖无效 `future.cancel()`
-- [ ] 并行回测 `as_completed` 与 `future.result()` 有批次级 timeout，单作业卡死不阻塞全批
-- [ ] 心跳线程异常退出前有限次重启
-- [ ] WebSocket publish 失败 sender 从 `_subscribers` 移除，延迟不累积
+- [ ] BCa Bootstrap n<5 时返回带 `insufficient_samples` 标记的 CI（非 (0,0)）
+- [ ] 不可达死代码（`_bootstrap_mixin.py:88-92`）已清理
+- [ ] insufficient samples 时 stall 检测视为 "no signal" 而非 "significant decline"
+- [ ] n=3 时不触发误判策略切换
+- [ ] Pearson `cov` 与 `std` 统计量一致（同总体或同样本）
+- [ ] n=3 时 Pearson 等于标准相关系数（非 0.667×）
+- [ ] IC_stability / regime_stress / placebo 分数不再系统性偏低
+- [ ] ProdCorrelation 本地回退返回 `unknown`/`blocked`，≥100 分支不放行
+- [ ] API 不可用时长表达式不通过 prod_correlation 硬门禁
+- [ ] ProdCorrelationService 接入评分流水线（非消费 mock 值）或显式标注降级模式
 
-## 阶段 C：WebUI Critical
+## 阶段 C：提交安全闭环 Critical（P0/P1）
 
-- [ ] React 未构建且 inline 模板缺失时返回内置引导 HTML（含诊断信息），非 `Template not found`
+- [ ] `ApiExecutionAdapter.submit_alpha()` 限制为 dev/test only
+- [ ] 生产提交路径必须走 Browser backend
+- [ ] e2e 提交验证使用真实浏览器流程（非 `requests` 命中本地 `/api/*`）
+- [ ] 单 env 旁路（`BRAIN_ALPHA_FORCE_REAL_SUBMIT=1` 无 `BRAIN_ALPHA_ENABLE_REAL_SUBMIT_TESTS=1`）保持禁用
+- [ ] API 层 `submit_alpha()` 公开入口须显式 browser-backend 确认
+
+## 阶段 D：WebUI Critical
+
+- [ ] React 未构建且 inline 模板缺失时返回内置引导 HTML（含诊断信息）
 - [ ] `safe_selected_frontend` 默认回退不再指向不存在的 inline
 - [ ] 核心面板（dashboard/candidates/backtest/scoring/quality/submission/config/history）接入路由
 - [ ] 切换面板后 URL 变化，刷新停留，浏览器后退可回
 - [ ] PhaseShell 阻断/未就绪阶段关键操作区 `inert` 或 `pointer-events:none`
 - [ ] 阻断阶段按钮不可点击、不可 Tab 到达
 
-## 阶段 D：WebUI High
-
-- [ ] `useCandidateTableData` 无刷新循环，切换到 CandidateTable 无高频连环请求
-- [ ] `OfficialBacktestSlots` 仅轮询 `/api/backtest_slots`，不每 5s 全量 `refreshAll`
-- [ ] 任务 SSE 连接独立于 Dashboard 视图生命周期，切离 Dashboard 后进度仍实时更新
-- [ ] 所有 Modal 接入 FocusTrap，Tab 不跳出背景可点击元素
-- [ ] 死代码 ToastProvider 已移除，单一 Toast 系统生效
-
-## 阶段 E：UX Critical/High
+## 阶段 E：UX Critical
 
 - [ ] 候选进入提交队列或打开提交面板时前置提示「Web 端不可真实提交」+ BRAIN 平台外链
 - [ ] SSE 断连超时取消时展示「云端可能仍在运行」警示 + 槽位查询入口
+
+## 阶段 F：后端 High
+
+- [ ] StallMonitor 超过 max_retry_count 后调用 `_on_interrupt` 中断作业并升级告警
+- [ ] BRAIN 认证 401 时尝试 token 刷新与备选认证方法，指数退避后有限次重试
+- [ ] concurrent_simulate/concurrent_check 超时后显式释放槽位，不依赖无效 `future.cancel()`
+- [ ] 并行回测 `as_completed` 与 `future.result()` 有批次级 timeout
+- [ ] 心跳线程（web_run_job）异常退出前有限次重启
+- [ ] WebSocket publish 失败 sender 从 `_subscribers` 移除
+- [ ] `MAX_USER_ALPHAS_PAGES` 有上界，长期同步报告截断
+- [ ] Regime 压力测试全零 Sharpe 判失败（score=0, passed=False）
+- [ ] 重试阈值运算符统一（`>` 与 `>=` 同语义）
+- [ ] Ranker 对 `scorecard=None` 降级（不崩溃整批排序）
+- [ ] 审计 64KB 截断保留 `gate_decisions` 与 `triggered_rules`（仅截断非关键 details）
+- [ ] Evidence `cleanup_old`/`list_sessions` 单文件损坏跳过不中断循环
+- [ ] 诊断快照每个探针 try/except，单探针失败不终止整体
+- [ ] 官方 context 回退路径解析为项目根 `data`（非包内 `brain_alpha_ops/data`）
+- [ ] 无身份候选 update 被拒绝（非追加为新行）
+- [ ] BaoStock `logout` 在 finally 块
+- [ ] FieldDatasetMapper `build()`/`_add_mapping()` 并发安全，无映射丢失
+- [ ] check 证据持久化失败传播或标记 stale
+- [ ] `save_assistant_guidance` 失败不丢失生成结果
+- [ ] `max_official_concurrent_simulations=0` 被尊重（不改写为 3）
+- [ ] 滚动验证 `decay_ratio` first 为负时符号正确，score 不倒置
+- [ ] `ic_stability` 分量上限统一
+- [ ] `RecordSqliteIndex.refresh` 暴露覆盖率或全量索引
+- [ ] Placebo seed 按候选派生（非全局固定 42）
+- [ ] `sub_universe_sharpe` 本地计算按权重 top-half 或明确标注非 BRAIN 语义
+
+## 阶段 G：WebUI High
+
+- [ ] `useCandidateTableData` 无刷新循环
+- [ ] `OfficialBacktestSlots` 仅轮询 `/api/backtest_slots`
+- [ ] 任务 SSE 连接独立于 Dashboard 视图生命周期
+- [ ] 所有 Modal 接入 FocusTrap
+- [ ] 死代码 ToastProvider 已移除，单一 Toast 系统生效
+
+## 阶段 H：UX High
+
 - [ ] 批量提交响应包含 `submitted` 与 `failed` 明细列表
 - [ ] 批量提交前显示候选清单预览
-- [ ] 涉及 Final 常量的配置项保存后提示「需重启服务生效」并标注受影响项
-- [ ] 限流倒计时读取后端 `retry_after`，非固定 30s
-- [ ] 前台任务完成时有 toast/徽标提示，不限于 `document.hidden`
+- [ ] 涉及 Final 常量的配置项保存后提示「需重启服务生效」
+- [ ] 限流倒计时读取后端 `retry_after`（非固定 30s）
+- [ ] 前台任务完成时有 toast/徽标提示
 
-## 阶段 F：验证
+## 阶段 I：验证
 
 - [ ] `python3 -m pytest tests/ -q` 全量通过
 - [ ] `cd brain_alpha_ops/web/react_app && npm run test` 通过
 - [ ] `cd brain_alpha_ops/web/react_app && npm run typecheck` 通过
-- [ ] 无新增回归（关键场景：启动、认证、回测、评分、提交队列、SSE 推送）
+- [ ] 无新增回归（关键场景：启动、认证、回测、评分、反过拟合、提交队列、SSE 推送、prod_correlation）

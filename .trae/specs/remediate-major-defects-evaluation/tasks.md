@@ -1,111 +1,139 @@
 # Tasks
 
-## 阶段 A：后端 Critical 修复（账户安全 + 状态机 + 启动稳定性）
+## 阶段 A：后端核心防线与状态机 Critical
 
-- [ ] Task A1: 修复 Facade 绑定静默吞异常导致整站不可用
-  - [ ] SubTask A1.1: 移除 `_install_facade_bindings` 中的 `try/except Exception` 静默吞异常，改为异常向上传播（保留日志但不吞）
-  - [ ] SubTask A1.2: 修正 `web/__init__.py` 模块级 `JOB_REGISTRY = None` 预声明与 `__getattr__` 访问逻辑，绑定未完成时给出明确启动失败原因
-  - [ ] SubTask A1.3: 新增测试：模拟 facade 子模块 import 异常，断言服务启动失败且错误信息指向根因
-- [ ] Task A2: 修复真实提交成功后审计写失败冒泡为 400 导致重复提交
-  - [ ] SubTask A2.1: 在 `web/submissions/web_submission_single.py` 中将 `api.authenticate()` + `api.submit_alpha()` 后的 `save_lifecycle_record()` 包入 try/except，失败仅 ERROR 日志 + 指标，不抛出
-  - [ ] SubTask A2.2: 提交成功后响应必须返回成功（即使审计失败）
-  - [ ] SubTask A2.3: 新增测试：模拟 `save_lifecycle_record` 抛异常，断言响应仍为成功、审计失败被记录
+- [ ] Task A1: 修复反过拟合 returns→factor_values 回退链导致虚假 PASS
+  - [ ] SubTask A1.1: 修改 `scoring/anti_overfit/service.py:31-56`，禁止 `returns → factor_values` 回退；returns 缺失时显式失败（reason: missing returns data）或使用语义不同的代理
+  - [ ] SubTask A1.2: 新增测试：returns 缺失时断言反过拟合检查失败（非 PASS），IC/Spearman 不恒等于 1.0
+- [ ] Task A2: 修复 Quality Gate 审计失败跳过状态转换
+  - [ ] SubTask A2.1: 修改 `audit_trail/quality_gate.py:216-240` `intercept`，将 `record_gate_decision` 与 `transition(gate_rejected)` 解耦，审计失败仅 ERROR 日志不阻断转换
+  - [ ] SubTask A2.2: 新增测试：审计写失败时断言候选仍转换到 gate_rejected
 - [ ] Task A3: 移除候选生命周期非法转换静默回退 force_transition（BREAKING）
-  - [ ] SubTask A3.1: 修改 `candidate_lifecycle.py:transition()`，非法转换（`lc.transition(target)` 返回 False）抛 `IllegalTransitionError`
-  - [ ] SubTask A3.2: 增加 `force: bool = False` 参数，仅 `force=True` 时调用 `force_transition`
-  - [ ] SubTask A3.3: 排查生产调用方（`submission_gate_service.py`、`backtest_submission.py`、`backtest_polling.py`、`audit_trail/quality_gate.py`），确认迁移到显式 `force=False` 或修复非法转换源
-  - [ ] SubTask A3.4: 测试用例显式传 `force=True`，更新相关测试
+  - [ ] SubTask A3.1: 修改 `candidate_lifecycle.py:transition()`，非法转换抛 `IllegalTransitionError`
+  - [ ] SubTask A3.2: 增加 `force: bool = False` 参数，仅 `force=True` 时 `force_transition`
+  - [ ] SubTask A3.3: 排查生产调用方（submission_gate_service、backtest_submission、backtest_polling、audit_trail.quality_gate），迁移到显式 `force=False` 或修复非法转换源
+  - [ ] SubTask A3.4: 测试用例显式传 `force=True`
+- [ ] Task A4: 修复仿真并发超限 deferred 被计为 failed
+  - [ ] SubTask A4.1: 修改 `web_candidates/simulation/_submit.py:102-221`，`CONCURRENT_SIMULATION_LIMIT_EXCEEDED` 分支：候选标记 `deferred_concurrency_limit`（非 failed），`state.failed` 不自增，`stop_new_submissions` 仅暂停受影响槽位
+  - [ ] SubTask A4.2: 新增测试：并发超限后断言候选状态为 deferred、failed 不自增、可重试
+- [ ] Task A5: 修复真实提交成功后审计失败冒泡为 400
+  - [ ] SubTask A5.1: 修改 `web/submissions/web_submission_single.py:189-203`，`save_lifecycle_record` 包入 try/except，失败仅 ERROR 日志 + 指标
+  - [ ] SubTask A5.2: 新增测试：审计失败时响应仍为成功
+- [ ] Task A6: 修复 Facade 绑定静默吞异常
+  - [ ] SubTask A6.1: 修改 `web/__init__.py:210-211`，移除静默吞，异常向上传播；修正 `JOB_REGISTRY = None` 预声明与 `__getattr__` 访问
+  - [ ] SubTask A6.2: 新增测试：facade import 异常时断言启动失败且错误指向根因
+- [ ] Task A7: 修复 web_cloud 同步任务心跳线程异常吞噬
+  - [ ] SubTask A7.1: 修改 `web_cloud/sync_job/_service/_state.py:107` `_heartbeat_loop`，扩大异常捕获或加有限次重启；`stop_heartbeat` join 线程
+  - [ ] SubTask A7.2: 新增测试：抛 KeyError 时断言线程不静默退出
 
-## 阶段 B：后端 High 修复（容错 + 资源 + 超时）
+## 阶段 B：研究引擎数值正确性 Critical
 
-- [ ] Task B1: 修复 StallMonitor 超限静默放弃
-  - [ ] SubTask B1.1: 修改 `stall_monitor.py:_auto_interrupt`，`stall_count > max_retry_count` 时调用 `_on_interrupt` 中断作业并升级告警（非 `return`）
-  - [ ] SubTask B1.2: 新增测试：超限后断言作业被中断、告警升级
-- [ ] Task B2: 修复 BRAIN 认证仅 basic 单方法、401 无刷新重试
-  - [ ] SubTask B2.1: 修改 `brain_api/official_auth.py:authenticate()`，401 时尝试 token 刷新与备选认证方法（token / cookie），指数退避后有限次重试
-  - [ ] SubTask B2.2: 新增测试：basic 401 后回退 token 认证成功
-- [ ] Task B3: 修复 concurrent_simulate/concurrent_check 超时 cancel 无效线程泄漏
-  - [ ] SubTask B3.1: 修改 `brain_api/official_simulation/_mixin.py`，超时后显式标记槽位释放，改用可中断执行机制（如协作式取消标志）替代无效 `future.cancel()`
-  - [ ] SubTask B3.2: 新增测试：超时后槽位被释放、无累积泄漏
-- [ ] Task B4: 修复并行回测 future.result() 无超时阻塞全批
-  - [ ] SubTask B4.1: 修改 `research/parallel_backtest/_executor.py`，`as_completed` 与 `future.result()` 加批次级 timeout，超时作业标记失败并继续收集其余结果
-  - [ ] SubTask B4.2: 新增测试：单作业卡死不阻塞其余作业结果收集
-- [ ] Task B5: 修复心跳线程异常退出不重启
-  - [ ] SubTask B5.1: 修改 `web/business/web_run_job.py:_heartbeat_loop`，异常退出前有限次（如 3 次）重启，全部失败才放弃
-  - [ ] SubTask B5.2: 新增测试：心跳异常后断言线程重启
-- [ ] Task B6: 修复 WebSocket publish 不清理死亡订阅者
-  - [ ] SubTask B6.1: 修改 `web/ws.py:publish`，失败 sender 从 `_subscribers` 移除
-  - [ ] SubTask B6.2: 新增测试：死连接累积后断言被清理、publish 延迟不增长
+- [ ] Task B1: 修复 BCa Bootstrap 样本不足静默返回 (0,0)
+  - [ ] SubTask B1.1: 修改 `research/convergence/_bootstrap_mixin.py:59-60`，n<5 时返回带 `insufficient_samples` 标记的 CI（非 (0,0)）；清理 `:88-92` 不可达死代码
+  - [ ] SubTask B1.2: 修改 `research/convergence/_tracker.py:131-144`，insufficient samples 时 stall 检测视为 "no signal" 而非 "significant decline"
+  - [ ] SubTask B1.3: 新增测试：n=3 时不触发误判策略切换
+- [ ] Task B2: 修复 Pearson 系数 (n-1)/n 系统性缩小
+  - [ ] SubTask B2.1: 修改 `scoring/anti_overfit/utils.py:12-32`，统一 cov 与 std 为同总体或同样本统计量
+  - [ ] SubTask B2.2: 新增测试：n=3 时 Pearson 等于标准相关系数（非 0.667×）
+- [ ] Task B3: 修复 ProdCorrelation 本地回退按表达式长度放行
+  - [ ] SubTask B3.1: 修改 `research/prod_correlation.py:235-268`，本地回退返回 `unknown`/`blocked`（非 `passed=True`），≥100 分支不得放行
+  - [ ] SubTask B3.2: 新增测试：API 不可用时长表达式断言不通过硬门禁
+- [ ] Task B4: ProdCorrelationService 接入生产流水线
+  - [ ] SubTask B4.1: 在评分流水线中调用 `ProdCorrelationService`（非消费 mock 值），或显式标注 gate 为 "degraded: local-only"
+  - [ ] SubTask B4.2: 新增测试：流水线调用真实服务或正确标注降级
 
-## 阶段 C：WebUI Critical 修复（首屏 + 路由 + 阻断交互）
+## 阶段 C：提交安全闭环 Critical（P0/P1）
 
-- [ ] Task C1: 修复默认 inline HTML 不存在导致首屏空白
-  - [ ] SubTask C1.1: 修改 `web/misc/web_html.py`，`MISSING_TEMPLATE_HTML` 替换为内置引导 HTML（含 frontend 选取结果、缺失原因、`npm run build` 指引、端口信息）
-  - [ ] SubTask C1.2: 修正 `safe_selected_frontend` 默认回退逻辑，避免回退到不存在的 inline
-  - [ ] SubTask C1.3: 新增测试：React 未构建时返回引导 HTML 而非 `Template not found`
-- [ ] Task C2: 核心面板接入路由
-  - [ ] SubTask C2.1: 修改 `main.tsx`，注册 `/dashboard` `/candidates` `/backtest` `/scoring` `/quality` `/submission` `/config` `/history` 路由
-  - [ ] SubTask C2.2: `App.tsx` 中 `setActiveView` 同步更新 URL（`navigate`），URL 变化同步更新 `activeView`
-  - [ ] SubTask C2.3: 新增测试：切换面板后刷新停留、后退可回
-- [ ] Task C3: 修复 PhaseShell 阻断阶段按钮仍可点
-  - [ ] SubTask C3.1: 修改 `components/PhaseShell.tsx`，`statusTone` 为 `pending`/`blocked` 时对关键操作区加 `inert` 属性（或 `pointer-events:none` + 可聚焦元素 `tabindex=-1`）
-  - [ ] SubTask C3.2: 新增测试：阻断阶段断言按钮不可点击、不可 Tab 到达
+- [ ] Task C1: 浏览器驱动真实提交闭环可验证（P0）
+  - [ ] SubTask C1.1: `ApiExecutionAdapter.submit_alpha()` 限制为 dev/test only，生产路径必须走 Browser backend
+  - [ ] SubTask C1.2: e2e 提交验证改用真实浏览器流程（非 `requests` 命中本地 `/api/*`）
+  - [ ] SubTask C1.3: 新增/更新 e2e 测试覆盖浏览器提交闭环
+- [ ] Task C2: 提交安全语义统一（P1）
+  - [ ] SubTask C2.1: 统一三层守门语义，移除歧义 env 旁路：`BRAIN_ALPHA_FORCE_REAL_SUBMIT=1` 须配合 `BRAIN_ALPHA_ENABLE_REAL_SUBMIT_TESTS=1`，否则保持禁用
+  - [ ] SubTask C2.2: API 层 `submit_alpha()` 公开入口须显式 browser-backend 确认
+  - [ ] SubTask C2.3: 新增测试：单 env 旁路断言仍禁用
 
-## 阶段 D：WebUI High 修复（数据流 + SSE + 可访问性）
+## 阶段 D：WebUI Critical
 
-- [ ] Task D1: 修复 useCandidateTableData 刷新循环
-  - [ ] SubTask D1.1: 修改 `hooks/useCandidateTableData.ts`，拆分 `loadCandidates` 对 `globalCandidatesData` 的依赖（用 ref 锁或 useCallback 正确依赖）
-  - [ ] SubTask D1.2: 新增测试：切换到 CandidateTable 后断言无高频连环请求
-- [ ] Task D2: 修复 OfficialBacktestSlots 5s 全量 refreshAll
-  - [ ] SubTask D2.1: 修改 `components/OfficialBacktestSlots.tsx`，`load` 改为仅请求 `/api/backtest_slots`
-  - [ ] SubTask D2.2: 新增测试：停留回测监控页断言不拉 `/api/candidates`
-- [ ] Task D3: 修复 JobMonitor SSE 随 Dashboard 卸载断连
-  - [ ] SubTask D3.1: 将任务 SSE 连接提升到 App 层 context/provider，独立于 Dashboard 视图生命周期
-  - [ ] SubTask D3.2: 新增测试：切离 Dashboard 后 TopBar 进度仍实时更新
-- [ ] Task D4: 所有 Modal 接入 FocusTrap
-  - [ ] SubTask D4.1: 修改 `ConfirmDialog.tsx`、`KeyboardShortcutsHelp.tsx`、提交确认等 Modal，包裹 `A11y/FocusTrap`
-  - [ ] SubTask D4.2: 新增测试：Modal 打开后 Tab 不跳出背景可点击元素
-- [ ] Task D5: 移除死代码 ToastProvider，统一 Toast 系统
-  - [ ] SubTask D5.1: 删除 `App.tsx` 中的 `<ToastProvider>` 包裹与 `components/Toast.tsx` 中的 ToastProvider/Container 死代码
-  - [ ] SubTask D5.2: 确认无业务代码引用 `@/components/Toast` 的 `useToast`
-  - [ ] SubTask D5.3: 新增测试：单一 Toast 容器渲染
+- [ ] Task D1: 修复默认 inline HTML 不存在导致首屏空白
+  - [ ] SubTask D1.1: 修改 `web/misc/web_html.py`，`MISSING_TEMPLATE_HTML` 替换为内置引导 HTML（含 frontend 选取、缺失原因、`npm run build` 指引、端口）
+  - [ ] SubTask D1.2: 修正 `safe_selected_frontend` 默认回退
+  - [ ] SubTask D1.3: 新增测试：React 未构建时返回引导 HTML
+- [ ] Task D2: 核心面板接入路由
+  - [ ] SubTask D2.1: 修改 `main.tsx`，注册 `/dashboard` `/candidates` `/backtest` `/scoring` `/quality` `/submission` `/config` `/history`
+  - [ ] SubTask D2.2: `App.tsx` 中 `setActiveView` 同步 URL，URL 变化同步 activeView
+  - [ ] SubTask D2.3: 新增测试：切换面板后刷新停留、后退可回
+- [ ] Task D3: 修复 PhaseShell 阻断阶段按钮仍可点
+  - [ ] SubTask D3.1: 修改 `components/PhaseShell.tsx:102-107`，阻断/未就绪阶段关键操作区加 `inert`
+  - [ ] SubTask D3.2: 新增测试：阻断阶段断言按钮不可点击、不可 Tab 到达
 
-## 阶段 E：UX Critical/High 修复（提交闭环 + 反馈 + 配置 + 限流）
+## 阶段 E：UX Critical
 
 - [ ] Task E1: Web 端不可真实提交前置提示
-  - [ ] SubTask E1.1: 候选进入提交队列或打开提交面板时，明确展示「Web 端不可真实提交，最终提交需在 BRAIN 平台完成」+ BRAIN 平台外链
-  - [ ] SubTask E1.2: 修改 `SubmissionConfirmPanel.tsx` 顶部 banner，前置告知
+  - [ ] SubTask E1.1: 候选进入提交队列或打开提交面板时展示「Web 端不可真实提交」+ BRAIN 平台外链
+  - [ ] SubTask E1.2: 修改 `SubmissionConfirmPanel.tsx` 顶部 banner
   - [ ] SubTask E1.3: 新增测试：打开提交面板断言前置提示可见
 - [ ] Task E2: SSE 断连取消须警示云端可能仍在运行
-  - [ ] SubTask E2.1: 修改 `hooks/useJobDisconnectedState.ts`，断连取消时展示明确警示 + 槽位查询入口
-  - [ ] SubTask E2.2: 新增测试：断连超时后断言警示文案与槽位查询入口可见
-- [ ] Task E3: 批量提交 dry-run 预览与部分失败明细
-  - [ ] SubTask E3.1: 修改 `web/submissions/web_submission_batch.py`，响应包含 `submitted` 与 `failed` 两个明细列表
-  - [ ] SubTask E3.2: 前端批量提交前显示候选清单预览
-  - [ ] SubTask E3.3: 新增测试：部分失败断言明细列表正确
-- [ ] Task E4: 配置保存生效条件提示
-  - [ ] SubTask E4.1: 修改 `hooks/useConfigForm.ts`，涉及 Final 常量的配置项保存后提示「需重启服务生效」并标注受影响项
-  - [ ] SubTask E4.2: 新增测试：保存涉及 Final 常量的配置断言提示出现
-- [ ] Task E5: 限流倒计时读取后端 retry_after
-  - [ ] SubTask E5.1: 修改 `helpers/connectionErrorGuide.ts`，rate_limit 倒计时读取后端 `retry_after` 而非固定 30s
-  - [ ] SubTask E5.2: 新增测试：后端返回 retry_after=60 断言倒计时为 60s
-- [ ] Task E6: 前台任务完成可见提示
-  - [ ] SubTask E6.1: 修改 `hooks/useJobWatchdog.ts` 与 `useJobNotifications`，前台完成时补充 toast/徽标提示（不限于 `document.hidden`）
-  - [ ] SubTask E6.2: 新增测试：前台任务完成断言 toast 可见
+  - [ ] SubTask E2.1: 修改 `hooks/useJobDisconnectedState.ts`，断连取消时展示警示 + 槽位查询入口
+  - [ ] SubTask E2.2: 新增测试：断连超时后断言警示与槽位查询入口可见
 
-## 阶段 F：验证
+## 阶段 F：后端 High 修复（容错 + 资源 + 数值）
 
-- [ ] Task F1: 全量回归测试通过（`python3 -m pytest tests/ -q`）
-- [ ] Task F2: 前端测试通过（`cd brain_alpha_ops/web/react_app && npm run test && npm run typecheck`）
-- [ ] Task F3: checklist.md 全部 checkpoint 验证通过
+- [ ] Task F1: 修复 StallMonitor 超限静默放弃（`stall_monitor.py:175-182`）
+- [ ] Task F2: 修复 BRAIN 认证仅 basic 单方法（`brain_api/official_auth.py:23-50`）
+- [ ] Task F3: 修复 concurrent_simulate/check 超时 cancel 无效（`brain_api/official_simulation/_mixin.py:124-126`）
+- [ ] Task F4: 修复并行回测 future.result() 无超时（`research/parallel_backtest/_executor.py:234`）
+- [ ] Task F5: 修复心跳线程不重启（`web/business/web_run_job.py:265-267`）
+- [ ] Task F6: 修复 WebSocket publish 不清理死订阅者（`web/ws.py:70-74`）
+- [ ] Task F7: 修复 V5-001 无界分页（`brain_api/pagination_limits.py` `MAX_USER_ALPHAS_PAGES = None`）
+- [ ] Task F8: 修复 Regime 压力测试全零 Sharpe 误判满分（`scoring/anti_overfit/regime_stress.py:51-64`）
+- [ ] Task F9: 统一重试阈值运算符（`scoring/anti_overfit/compliance.py:158` 与 `audit_trail/quality_gate.py:156`）
+- [ ] Task F10: 修复 Ranker scorecard None 致崩溃（`scoring/_ranker.py:88-98,181-183`）
+- [ ] Task F11: 修复审计 64KB 截断丢失关键字段（`audit_trail/writer.py:67-79`、`lifecycle_writer.py:42-50`）
+- [ ] Task F12: 修复 Evidence 清理单点解析失败中断循环（`monitoring/evidence.py:64-85`）
+- [ ] Task F13: 修复诊断快照无异常隔离（`production_diagnostics/_snapshot.py:37-80`）
+- [ ] Task F14: 修复官方 context 回退路径解析为包内 data（`web_cloud/snapshot/_official_context_read.py:230-232`）
+- [ ] Task F15: 修复无身份候选 update 追加为新行（`web_candidates/simulation_state/_candidates.py:59-118`）
+- [ ] Task F16: 修复 BaoStock logout 不在 finally（`data/ashare_adapter/_provider.py:88-110`）
+- [ ] Task F17: 修复 FieldDatasetMapper 并发不安全（`data/field_dataset_mapper.py:14-15,79-93`）
+- [ ] Task F18: 修复 check 证据持久化失败静默（`web_candidates/check_evidence.py:48-55`）
+- [ ] Task F19: 修复 save_assistant_guidance 异常丢失生成结果（`web_candidates/generation/_generation.py:275-279`）
+- [ ] Task F20: 修复 max_official_concurrent_simulations=0 被改写（`web_candidates/simulation/__init__.py:107`）
+- [ ] Task F21: 修复滚动验证 decay_ratio 符号反转（`research/rolling_validation.py:38`）
+- [ ] Task F22: 修复 ic_stability 分量上限不对称（`scoring/anti_overfit/ic_stability.py:40-42` 与 `suite.py:92-98`）
+- [ ] Task F23: 修复 RecordSqliteIndex.refresh 仅索引尾部 10000（`research/record_sqlite_index.py:53-78`）
+- [ ] Task F24: 修复 Placebo 全局固定 seed=42（`scoring/anti_overfit/placebo.py:27-28`）
+- [ ] Task F25: 修复 sub_universe_sharpe 本地按符号下标前半切片（`research/local_backtest/metrics.py:186-200`）
+
+## 阶段 G：WebUI High
+
+- [ ] Task G1: 修复 useCandidateTableData 刷新循环（`hooks/useCandidateTableData.ts:149-198`）
+- [ ] Task G2: 修复 OfficialBacktestSlots 5s 全量 refreshAll（`components/OfficialBacktestSlots.tsx:20-30`）
+- [ ] Task G3: 修复 JobMonitor SSE 随 Dashboard 卸载断连（提升到 App 层 context）
+- [ ] Task G4: 所有 Modal 接入 FocusTrap（ConfirmDialog、KeyboardShortcutsHelp、提交确认等）
+- [ ] Task G5: 移除死代码 ToastProvider，统一 Toast 系统（`App.tsx:110`、`components/Toast.tsx:289-368`）
+
+## 阶段 H：UX High
+
+- [ ] Task H1: 批量提交 dry-run 预览与部分失败明细（`web/submissions/web_submission_batch.py`）
+- [ ] Task H2: 配置保存生效条件提示（`hooks/useConfigForm.ts`）
+- [ ] Task H3: 限流倒计时读取后端 retry_after（`helpers/connectionErrorGuide.ts`）
+- [ ] Task H4: 前台任务完成可见提示（`hooks/useJobWatchdog.ts`、`useJobNotifications`）
+
+## 阶段 I：验证
+
+- [ ] Task I1: 全量回归测试通过（`python3 -m pytest tests/ -q`）
+- [ ] Task I2: 前端测试通过（`cd brain_alpha_ops/web/react_app && npm run test && npm run typecheck`）
+- [ ] Task I3: checklist.md 全部 checkpoint 验证通过
 
 # Task Dependencies
 
-- Task A1 独立（启动稳定性，最高优先）
-- Task A2 独立（账户安全，最高优先）
-- Task A3 影响后端调用方，须先于阶段 B 完成（B 中状态迁移依赖正确）
+- 阶段 A 各任务最高优先，A3 须先于阶段 F（F 中状态迁移依赖正确）
 - 阶段 B 各任务相互独立，可并行
-- 阶段 C 各任务相互独立，可并行
-- Task D3 依赖 Task C2（路由）的 App 层结构调整
+- 阶段 C 提交安全闭环独立
+- 阶段 D 各任务相互独立，可并行；D3 依赖 D2 的 App 层结构调整
 - 阶段 E 各任务相互独立，可并行
-- 阶段 F 依赖所有前置阶段完成
+- 阶段 F 各任务相互独立，可并行（F9 依赖 A2 完成后的 quality_gate 状态）
+- 阶段 G 各任务相互独立，可并行；G3 依赖 D2
+- 阶段 H 各任务相互独立，可并行
+- 阶段 I 依赖所有前置阶段完成
