@@ -3,7 +3,7 @@
  * Maps activeView ID to the correct page component.
  * Workstream E2.1: prop-drilling is legacy — prefer renderActiveViewFromContext().
  */
-import { lazy } from 'react';
+import { lazy, Suspense, Component, type ComponentType, type ReactNode } from 'react';
 import type { BrainCredentials, Candidate, CardViewId, PhaseData } from '@/types';
 import type { JobState } from '@/hooks/useJobState';
 import Dashboard from '@/components/Dashboard';
@@ -13,6 +13,106 @@ import CandidateTable from '@/components/CandidateTable';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import { LocalCacheSessionCard, ScoringPlaceholder } from './_renderViewHelpers';
 
+/**
+ * Detects chunk loading failures (common after deployments when old
+ * asset hashes become stale) and shows a friendly “refresh browser”
+ * prompt instead of a generic error.
+ */
+function isChunkLoadError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  const msg = error.message || '';
+  return (
+    msg.includes('Loading chunk') ||
+    msg.includes('Loading CSS') ||
+    msg.includes('Failed to fetch dynamically imported module') ||
+    msg.includes('Importing a module script')
+  );
+}
+
+function ChunkLoadFallback() {
+  return (
+    <div className="panel" role="alert">
+      <div className="panel-body-padded" style={{ textAlign: 'center', padding: '2rem' }}>
+        <h3
+          className="text-base font-semibold mb-2"
+          style={{ color: 'var(--color-text-bright)' }}
+        >
+          页面已更新
+        </h3>
+        <p
+          className="text-sm mb-4 leading-relaxed"
+          style={{ color: 'var(--color-text-muted)' }}
+        >
+          应用已发布新版本，当前页面资源已过期。请点击下方按钮刷新浏览器以加载最新内容。
+        </p>
+        <button
+          type="button"
+          className="btn btn-primary btn-sm"
+          onClick={() => window.location.reload()}
+        >
+          刷新页面
+        </button>
+      </div>
+    </div>
+  );
+}
+
+interface ChunkErrorBoundaryProps {
+  children: React.ReactNode;
+  fallbackTitle?: string;
+}
+
+interface ChunkErrorBoundaryState {
+  hasError: boolean;
+  isChunkError: boolean;
+}
+
+class ChunkErrorBoundary extends Component<ChunkErrorBoundaryProps, ChunkErrorBoundaryState> {
+  state: ChunkErrorBoundaryState = { hasError: false, isChunkError: false };
+
+  static getDerivedStateFromError(error: Error): ChunkErrorBoundaryState {
+    return { hasError: true, isChunkError: isChunkLoadError(error) };
+  }
+
+  componentDidCatch(error: Error) {
+    if (!isChunkLoadError(error)) {
+      console.error('ChunkErrorBoundary: non-chunk error caught:', error);
+    }
+  }
+
+  render() {
+    if (this.state.hasError && this.state.isChunkError) {
+      return <ChunkLoadFallback />;
+    }
+    if (this.state.hasError) {
+      return (
+        <ErrorBoundary
+          level="section"
+          title={this.props.fallbackTitle || '加载失败'}
+          description="模块渲染时发生错误，请重试"
+        >
+          {null}
+        </ErrorBoundary>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+/** Wraps a lazy component with Suspense + ChunkErrorBoundary. */
+function withLazyGuard(
+  LazyComponent: React.LazyExoticComponent<ComponentType<any>>,
+  fallbackTitle?: string,
+) {
+  return (props: Record<string, unknown>) => (
+    <ChunkErrorBoundary fallbackTitle={fallbackTitle}>
+      <Suspense fallback={<PageLoader />}>
+        <LazyComponent {...props} />
+      </Suspense>
+    </ChunkErrorBoundary>
+  );
+}
+
 const OfficialOperationsPanel = lazy(() => import('@/components/OfficialOperationsPanel'));
 const OfficialBacktestSlots = lazy(() => import('@/components/OfficialBacktestSlots'));
 const QualityCheckPanel = lazy(() => import('@/components/QualityCheckPanel'));
@@ -20,6 +120,15 @@ const ScoringPanel = lazy(() => import('@/components/ScoringPanel'));
 const SubmissionConfirmPanel = lazy(() => import('@/components/SubmissionConfirmPanel'));
 const ConfigPanel = lazy(() => import('@/components/ConfigPanel'));
 const SnapshotPanel = lazy(() => import('@/components/SnapshotPanel'));
+
+/** Lazy components wrapped with chunk-load guard. */
+const SafeOfficialOperationsPanel = withLazyGuard(OfficialOperationsPanel, '官方操作加载失败');
+const SafeOfficialBacktestSlots = withLazyGuard(OfficialBacktestSlots, '回测监控加载失败');
+const SafeQualityCheckPanel = withLazyGuard(QualityCheckPanel, '质量门禁加载失败');
+const SafeScoringPanel = withLazyGuard(ScoringPanel, '科学评分加载失败');
+const SafeSubmissionConfirmPanel = withLazyGuard(SubmissionConfirmPanel, '阻断复核加载失败');
+const SafeConfigPanel = withLazyGuard(ConfigPanel, '系统配置加载失败');
+const SafeSnapshotPanel = withLazyGuard(SnapshotPanel, '面板加载失败');
 
 export interface RenderViewProps {
   activeView: CardViewId;
@@ -131,25 +240,18 @@ export function renderActiveView(props: RenderViewProps): React.ReactNode {
       );
     case 'official_operations':
       return (
-        <ErrorBoundary
-          key="official_operations"
-          level="section"
-          title="官方操作加载失败"
-          description="官方操作模块渲染时发生错误，请重试"
-        >
-          <OfficialOperationsPanel
-            notify={notify}
-            credentials={credentials}
-            autoStart={officialOpsAutoStart}
-            connectionReady={connected || managedCredentialsAvailable}
-            officialContextCache={phaseData?.official_context_cache}
-            cloudAlphaCache={phaseData?.cloud_alpha_cache}
-            onAutoStartConsumed={onAutoStartConsumed}
-            onSyncCompleted={onOfficialSyncCompleted}
-            onReconnectRequested={onOfficialReconnectRequested}
-            onNavigateToCandidates={() => onNavigate('candidates')}
-          />
-        </ErrorBoundary>
+        <SafeOfficialOperationsPanel
+          notify={notify}
+          credentials={credentials}
+          autoStart={officialOpsAutoStart}
+          connectionReady={connected || managedCredentialsAvailable}
+          officialContextCache={phaseData?.official_context_cache}
+          cloudAlphaCache={phaseData?.cloud_alpha_cache}
+          onAutoStartConsumed={onAutoStartConsumed}
+          onSyncCompleted={onOfficialSyncCompleted}
+          onReconnectRequested={onOfficialReconnectRequested}
+          onNavigateToCandidates={() => onNavigate('candidates')}
+        />
       );
     case 'candidates':
       return (
@@ -171,107 +273,51 @@ export function renderActiveView(props: RenderViewProps): React.ReactNode {
       );
     case 'official_backtests':
       return (
-        <ErrorBoundary
-          key="official_backtests"
-          level="section"
-          title="回测监控加载失败"
-          description="回测槽位模块渲染时发生错误，请重试"
-        >
-          <OfficialBacktestSlots notify={notify} />
-        </ErrorBoundary>
+        <SafeOfficialBacktestSlots notify={notify} />
       );
     case 'scoring':
       return selectedCandidate ? (
-        <ErrorBoundary
-          key="scoring"
-          level="section"
-          title="科学评分加载失败"
-          description="评分模块渲染时发生错误，请重试"
-        >
-          <ScoringPanel notify={notify} candidate={selectedCandidate} />
-        </ErrorBoundary>
+        <SafeScoringPanel notify={notify} candidate={selectedCandidate} />
       ) : (
         <ScoringPlaceholder onPickCandidate={() => onNavigate('candidates')} />
       );
     case 'quality_check':
       return (
-        <ErrorBoundary
-          key="quality_check"
-          level="section"
-          title="质量门禁加载失败"
-          description="质量检查模块渲染时发生错误，请重试"
-        >
-          <QualityCheckPanel notify={notify} />
-        </ErrorBoundary>
+        <SafeQualityCheckPanel notify={notify} />
       );
     case 'submission_confirm':
       return (
-        <ErrorBoundary
-          key="submission_confirm"
-          level="section"
-          title="阻断复核加载失败"
-          description="提交复核模块渲染时发生错误，请重试"
-        >
-          <SubmissionConfirmPanel
-            notify={notify}
-            // SubmissionConfirmPanel emits known CardViewId strings ('scoring', 'candidates', ...);
-            // cast back to CardViewId for the renderView navigation callback.
-            onNavigate={(view) => onNavigate(view as CardViewId)}
-          />
-        </ErrorBoundary>
+        <SafeSubmissionConfirmPanel
+          notify={notify}
+          // SubmissionConfirmPanel emits known CardViewId strings ('scoring', 'candidates', ...);
+          // cast back to CardViewId for the renderView navigation callback.
+          onNavigate={(view) => onNavigate(view as CardViewId)}
+        />
       );
     case 'checkpoint_status':
       return (
-        <ErrorBoundary
-          key="checkpoint_status"
-          level="section"
-          title="续跑记录加载失败"
-          description="续跑记录模块渲染时发生错误，请重试"
-        >
-          <SnapshotPanel notify={notify} viewMode="checkpoint_status" onNavigate={onNavigate} />
-        </ErrorBoundary>
+        <SafeSnapshotPanel notify={notify} viewMode="checkpoint_status" onNavigate={onNavigate} />
       );
     case 'robustness':
       return (
-        <ErrorBoundary
-          key="robustness"
-          level="section"
-          title="稳健性证据加载失败"
-          description="稳健性模块渲染时发生错误，请重试"
-        >
-          <SnapshotPanel notify={notify} viewMode="robustness" onNavigate={onNavigate} />
-        </ErrorBoundary>
+        <SafeSnapshotPanel notify={notify} viewMode="robustness" onNavigate={onNavigate} />
       );
     case 'config':
       return (
-        <ErrorBoundary
-          key="config"
-          level="section"
-          title="系统配置加载失败"
-          description="配置模块渲染时发生错误，请重试"
-        >
-          <ConfigPanel
-            notify={notify}
-            credentials={credentials}
-            onCredentialsChange={onCredentialsChange}
-            onConnectionTested={onConnectionTested}
-            connected={connected}
-            contextFresh={contextFresh}
-            managedCredentialsAvailable={managedCredentialsAvailable}
-            onLoggedOut={onLocalSessionLoggedOut}
-          />
-        </ErrorBoundary>
+        <SafeConfigPanel
+          notify={notify}
+          credentials={credentials}
+          onCredentialsChange={onCredentialsChange}
+          onConnectionTested={onConnectionTested}
+          connected={connected}
+          contextFresh={contextFresh}
+          managedCredentialsAvailable={managedCredentialsAvailable}
+          onLoggedOut={onLocalSessionLoggedOut}
+        />
       );
     case 'cloud':
       return (
-        <ErrorBoundary
-          key="cloud"
-          level="section"
-          title="云端快照加载失败"
-          description="云端快照模块渲染时发生错误，请重试"
-        >
-          <SnapshotPanel notify={notify} viewMode="cloud" onNavigate={onNavigate} />
-        </ErrorBoundary>
+        <SafeSnapshotPanel notify={notify} viewMode="cloud" onNavigate={onNavigate} />
       );
     default:
       return (

@@ -732,7 +732,7 @@ def test_app_ux_orchestrator_has_tested_navigation_empty_and_busy_contracts():
         + job_status_card
         + use_job_control,
         [
-            "useState<CardViewId>('dashboard')",
+            "useState<CardViewId>(readViewFromHash)",
             "Sidebar",
             "setActiveView(view)",
             'aria-label="切换导航菜单"',
@@ -741,7 +741,7 @@ def test_app_ux_orchestrator_has_tested_navigation_empty_and_busy_contracts():
             "未填写页面凭证",
             "非提交生产验证",
             "页面凭证为空",
-            'key="checkpoint_status"',
+            'viewMode="checkpoint_status"',
             "selectedCandidate",
             "grid w-full max-w-full grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5",
             "onClick={() => onNavigate(config.id)}",

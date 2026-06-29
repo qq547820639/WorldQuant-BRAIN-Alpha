@@ -16,6 +16,9 @@ services:
       - ./data:/app/data
       - ./config:/app/config
       - brain-alpha-artifacts:/app/artifacts
+    # NOTE: read_only is incompatible with browser execution mode.
+    # If BRAIN_ALPHA_OPS_EXECUTION_MODE=browser, disable read_only or add
+    # tmpfs mounts for Playwright cache paths (~/.cache/ms-playwright/).
     read_only: true
     tmpfs:
       - /tmp

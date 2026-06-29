@@ -58,8 +58,14 @@ def sample_candidate():
             "correlation": 0.25,
             "pass_fail": "PASS",
         },
-        scorecard={"total_score": 82},
-        gate={"status": "PASS", "submission_ready": True},
+        scorecard={"total_score": 82.0, "decision_band": "submit"},
+        gate={
+            "gate_name": "submission",
+            "passed": True,
+            "check_items": [{"name": "sharpe_check", "passed": True}],
+            "failed_items": [],
+            "threshold_source": "config",
+        },
         lifecycle_status="scored",
     )
 
@@ -78,8 +84,6 @@ def sample_metrics() -> dict:
         "correlation": 0.25,
         "weight_concentration": 0.06,
         "pass_fail": "PASS",
-        "turnover_quality_warning": False,
-        "failure_reason": None,
     }
 
 

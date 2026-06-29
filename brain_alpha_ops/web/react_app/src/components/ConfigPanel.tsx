@@ -53,6 +53,7 @@ export default function ConfigPanel({
     testConnection,
     logoutLocalSession,
     resetForm,
+    dismissSaveSuccess,
   } = useConfigForm({
     notify,
     credentials,
@@ -195,10 +196,18 @@ export default function ConfigPanel({
       )}
       {saveSuccess && (
         <div
-          className="rounded-md bg-positive/10 border border-positive/30 p-3 text-sm text-positive"
+          className="flex items-center justify-between rounded-md bg-positive/10 border border-positive/30 p-3 text-sm text-positive"
           role="status"
         >
-          配置已保存成功
+          <span>配置已保存成功</span>
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm text-positive opacity-60 hover:opacity-100"
+            onClick={dismissSaveSuccess}
+            aria-label="关闭提示"
+          >
+            ✕
+          </button>
         </div>
       )}
 

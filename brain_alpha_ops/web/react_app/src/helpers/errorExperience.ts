@@ -49,7 +49,7 @@ export function userErrorFromPayload(
 
 export function apiErrorMessage(
   payload: ApiErrorExperiencePayload | null | undefined,
-  fallback = 'Request failed'
+  fallback = '请求失败，请稍后重试。'
 ): string {
   if (!payload) return fallback;
   const userError = userErrorFromPayload(payload);

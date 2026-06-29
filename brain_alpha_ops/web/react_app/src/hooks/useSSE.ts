@@ -35,6 +35,7 @@ export function useSSE(url: string | null, options: UseSSEOptions = {}) {
   const reconnectCountRef = useRef(0);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const terminalClosedRef = useRef(false);
+  const intentionalCloseRef = useRef(false);
 
   // Use refs so callback identity changes don't trigger SSE reconnect cycles
   const onEventRef = useRef(onEvent);
@@ -45,6 +46,7 @@ export function useSSE(url: string | null, options: UseSSEOptions = {}) {
   onExhaustedRef.current = onExhausted;
 
   const close = useCallback(() => {
+    intentionalCloseRef.current = true;
     if (eventSourceRef.current) {
       eventSourceRef.current.close();
       eventSourceRef.current = null;
@@ -66,12 +68,16 @@ export function useSSE(url: string | null, options: UseSSEOptions = {}) {
     const streamUrl = url;
     reconnectCountRef.current = 0;
     terminalClosedRef.current = false;
+    intentionalCloseRef.current = false;
     setExhausted(false);
     setReconnectAttempts(0);
     connect();
 
     function connect() {
       close();
+      // Reset intentionalClose after internal cleanup close so the new
+      // connection can still attempt reconnection on unexpected errors.
+      intentionalCloseRef.current = false;
 
       try {
         const es = new EventSource(withStreamToken(streamUrl), { withCredentials: true });
@@ -128,11 +134,20 @@ export function useSSE(url: string | null, options: UseSSEOptions = {}) {
           // C25 P2: EventSource.onerror fires on normal close too.
           // Do NOT reconnect if the stream was closed by the server.
           if (terminalClosedRef.current) return;
+          if (intentionalCloseRef.current) return;
           if (es.readyState === EventSource.CLOSED) {
-            // Server-initiated close — don't fake-reconnect
+            // Unexpected close — reconnect rather than marking exhausted
             setConnected(false);
-            setExhausted(true);
-            onExhaustedRef.current?.();
+            onErrorRef.current?.(err);
+            if (reconnectCountRef.current < maxReconnectAttempts) {
+              reconnectCountRef.current += 1;
+              setReconnectAttempts(reconnectCountRef.current);
+              scheduleReconnect(connect, reconnectIntervalMs);
+            } else {
+              clearReconnectTimer();
+              setExhausted(true);
+              onExhaustedRef.current?.();
+            }
             return;
           }
           setConnected(false);
@@ -185,6 +200,7 @@ export function useSSE(url: string | null, options: UseSSEOptions = {}) {
   }
 
   function closeTerminalStream() {
+    intentionalCloseRef.current = true;
     terminalClosedRef.current = true;
     setConnected(false);
     if (eventSourceRef.current) {

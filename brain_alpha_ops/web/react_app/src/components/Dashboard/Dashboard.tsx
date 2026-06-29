@@ -1,11 +1,13 @@
 /** Dashboard — Progressive flow with step-based guidance v3.2 */
 import { type ReactNode } from 'react';
+import { useGlobalData } from '@/hooks/useGlobalData';
 import { useDashboard } from '@/hooks/useDashboard';
 import KpiCard from '@/components/KpiCard';
 import TrendPanel from '@/components/TrendPanel';
 import ResumeWork from '@/components/ResumeWork';
 import Skeleton from '@/components/Skeleton';
 import ErrorCard from '@/components/ErrorCard';
+import EmptyState from '@/components/EmptyState';
 import { computeTrendChange } from '@/components/DashboardTrendData';
 import { generateReportMarkdown, DashboardReportModal } from '@/components/DashboardReportModal';
 import { formatSyncAge, DashboardCloudSnapshot } from '@/components/DashboardCloudSnapshot';
@@ -47,6 +49,7 @@ export default function Dashboard({
   onStartJob,
   children,
 }: Props) {
+  const { lastUpdated } = useGlobalData();
   const {
     snapshotExpanded,
     showReport,
@@ -133,12 +136,14 @@ export default function Dashboard({
           <p className="text-sm text-text-tertiary">
             当前阶段：<span className="text-accent font-medium">{stepLabel}</span>
             {' · '}上次更新:{' '}
-            {new Date().toLocaleTimeString('zh-CN', {
-              hour12: false,
-              hour: '2-digit',
-              minute: '2-digit',
-              second: '2-digit',
-            })}
+            {lastUpdated
+              ? new Date(lastUpdated).toLocaleTimeString('zh-CN', {
+                  hour12: false,
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  second: '2-digit',
+                })
+              : '--:--:--'}
           </p>
         </div>
         {connected && contextFresh && (
@@ -181,6 +186,7 @@ export default function Dashboard({
           )}
 
           {!loading && !errors.length && (
+            <>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
               <TrendPanel
                 title="候选总数"
@@ -223,6 +229,29 @@ export default function Dashboard({
                 change={computeTrendChange(trendSubmissions)}
               />
             </div>
+
+            {!loading &&
+              !memory?.total_candidates &&
+              !cloudSummaryData.count &&
+              !status?.progress?.backtests_completed &&
+              !status?.progress?.submissions && (
+                <EmptyState
+                  title="还没有运行数据"
+                  description="当前没有候选、回测或提交记录。前往「候选管理」页面启动自动推进候选池，系统将自动完成生产搜索、模拟和质量检查。"
+                  className="mb-4"
+                >
+                  {onNavigateToCandidates && (
+                    <button
+                      type="button"
+                      className="btn btn-primary btn-sm"
+                      onClick={onNavigateToCandidates}
+                    >
+                      前往候选管理 →
+                    </button>
+                  )}
+                </EmptyState>
+              )}
+            </>
           )}
 
           <div className="flex items-center gap-2 flex-wrap mb-4">

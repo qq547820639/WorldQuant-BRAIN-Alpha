@@ -8,7 +8,7 @@ import sys
 from typing import Callable, Optional
 if sys.version_info >= (3, 10):
     from typing import TypeAlias
-else:
+else:  # pragma: no cover
     from typing_extensions import TypeAlias
 
 from brain_alpha_ops.config import OpsConfig

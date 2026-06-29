@@ -11,7 +11,7 @@
  * creating their own useApi hooks for these endpoints.
  */
 
-import React, { createContext, useContext, useCallback, useEffect, useMemo } from 'react';
+import React, { createContext, useContext, useCallback, useEffect, useMemo, useState } from 'react';
 import type { BacktestSlotsResponse, Candidate } from '@/types';
 import { useApi } from '@/hooks/useApi';
 import type { ApiMeta } from '@/hooks/useApi';
@@ -54,6 +54,8 @@ export interface GlobalDataState {
     loading: boolean;
     lastErrorMeta: ApiMeta | null;
   };
+  /** ISO timestamp of the last successful data refresh. */
+  lastUpdated: string | null;
   refreshAll: () => void;
 }
 
@@ -78,11 +80,15 @@ export function GlobalDataProvider({ children }: { children: React.ReactNode }) 
     config?: { environment?: string; credentials?: { managed_credentials_available?: boolean } };
   }>();
 
+  const [lastUpdated, setLastUpdated] = useState<string | null>(null);
+
   const refreshAll = useCallback(() => {
     void candidatesApi.call('/api/candidates');
     void slotsApi.call('/api/backtest_slots');
     void cloudApi.call('/api/snapshot/cloud');
     void configApi.call('/api/config');
+    const now = new Date().toISOString();
+    setLastUpdated(now);
   }, [candidatesApi.call, slotsApi.call, cloudApi.call, configApi.call]);
 
   useEffect(() => {
@@ -92,7 +98,7 @@ export function GlobalDataProvider({ children }: { children: React.ReactNode }) 
   useEffect(() => {
     const interval = setInterval(() => {
       refreshAll();
-    }, 30000);
+    }, 60000);
     return () => clearInterval(interval);
   }, [refreshAll]);
 
@@ -122,6 +128,7 @@ export function GlobalDataProvider({ children }: { children: React.ReactNode }) 
         loading: configApi.loading,
         lastErrorMeta: configApi.lastErrorMeta,
       },
+      lastUpdated,
       refreshAll,
     }),
     [
@@ -141,6 +148,7 @@ export function GlobalDataProvider({ children }: { children: React.ReactNode }) 
       configApi.error,
       configApi.loading,
       configApi.lastErrorMeta,
+      lastUpdated,
       refreshAll,
     ]
   );

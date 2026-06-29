@@ -232,11 +232,11 @@ def test_all_card_views_are_typed_configured_and_routed_to_detail_components():
     card_configs = _component("StateCards/cardConfigs.ts")
     render_view = _source("components/views/renderView.tsx")
 
-    assert "useState<CardViewId>('dashboard')" in base_state
+    assert "useState<CardViewId>(readViewFromHash)" in base_state
     assert "const VIEW_LABELS: Record<string, string> = {" in app
     assert "phase-group" in _component("Sidebar.tsx")  # v3.0 phase grouped nav
     assert "CandidateTable" in render_view
-    assert 'key="checkpoint_status"' in render_view
+    assert 'viewMode="checkpoint_status"' in render_view
     assert "selectedCandidate" in render_view
     assert "OfficialBacktestSlots" in render_view
     assert "QualityCheckPanel" in render_view

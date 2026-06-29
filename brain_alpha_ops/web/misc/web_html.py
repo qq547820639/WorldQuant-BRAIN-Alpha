@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import logging
 import mimetypes
 import os
 import re
 import threading
 from pathlib import Path
 from urllib.parse import unquote
+
+_logger = logging.getLogger(__name__)
 
 from brain_alpha_ops.web_csp import (
     content_security_policy_for_html as _content_security_policy_for_html,
@@ -27,9 +30,19 @@ _HTML_LOCK = threading.RLock()
 
 
 def selected_frontend(value: str | None = None) -> str:
-    frontend = str(value if value is not None else os.getenv(WEB_FRONTEND_ENV, INLINE_FRONTEND)).strip().lower()
+    frontend = str(value if value is not None else os.getenv(WEB_FRONTEND_ENV, REACT_FRONTEND)).strip().lower()
     if frontend not in {INLINE_FRONTEND, REACT_FRONTEND}:
         raise ValueError(f"{WEB_FRONTEND_ENV} must be '{INLINE_FRONTEND}' or '{REACT_FRONTEND}'")
+    # Graceful fallback: when React is selected but the build artifact is missing,
+    # fall back to the inline frontend so the web console still loads.
+    if frontend == REACT_FRONTEND:
+        react_index = react_dist_path() / "index.html"
+        if not react_index.is_file():
+            _logger.warning(
+                "React build artifact not found at %s; falling back to inline frontend.",
+                react_index,
+            )
+            frontend = INLINE_FRONTEND
     return frontend
 
 

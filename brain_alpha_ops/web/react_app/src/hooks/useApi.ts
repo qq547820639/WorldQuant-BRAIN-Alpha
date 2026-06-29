@@ -1,6 +1,6 @@
 /** Generic fetch hook with loading/error state management. */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import {
   apiErrorMessage,
   isSessionInvalidPayload,
@@ -50,6 +50,8 @@ interface UseApiState<T> {
   error: string | null;
   /** P1-4: metadata from the last error response (next_action, recoverable, etc.) */
   lastErrorMeta: ApiMeta | null;
+  /** Milliseconds elapsed since the current request started (0 when idle). */
+  elapsedMs: number;
 }
 
 export function useApi<T = unknown>() {
@@ -58,14 +60,37 @@ export function useApi<T = unknown>() {
     loading: false,
     error: null,
     lastErrorMeta: null,
+    elapsedMs: 0,
   });
+  const requestStartRef = useRef<number>(0);
+  const elapsedTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Tick elapsedMs every second while a request is in flight.
+  useEffect(() => {
+    if (state.loading && requestStartRef.current > 0) {
+      elapsedTimerRef.current = setInterval(() => {
+        setState((prev) =>
+          prev.loading ? { ...prev, elapsedMs: Date.now() - requestStartRef.current } : prev
+        );
+      }, 1000);
+    }
+    return () => {
+      if (elapsedTimerRef.current !== null) {
+        clearInterval(elapsedTimerRef.current);
+        elapsedTimerRef.current = null;
+      }
+    };
+  }, [state.loading]);
 
   // NOTE: call<R> returns R & ApiMeta (not ApiResponse<R>) so callers can
   // access endpoint-specific fields like task_id / job_id / candidates without
   // going through .data, matching the flat JSON shape the backend returns.
   const call = useCallback(
     async <R = T>(url: string, options?: RequestInit): Promise<(R & ApiMeta) | null> => {
-      setState((prev) => ({ ...prev, loading: true, error: null, lastErrorMeta: null }));
+      setState((prev) => {
+        requestStartRef.current = Date.now();
+        return { ...prev, loading: true, error: null, lastErrorMeta: null, elapsedMs: 0 };
+      });
       let controller: AbortController | null = options?.signal ? null : new AbortController();
       let timeout: number | null = controller
         ? // controller is non-null in this branch (ternary guard); closure captures the let binding.
@@ -205,7 +230,8 @@ export function useApi<T = unknown>() {
   );
 
   const reset = useCallback(() => {
-    setState({ data: null, loading: false, error: null, lastErrorMeta: null });
+    requestStartRef.current = 0;
+    setState({ data: null, loading: false, error: null, lastErrorMeta: null, elapsedMs: 0 });
   }, []);
 
   return { ...state, call, reset };

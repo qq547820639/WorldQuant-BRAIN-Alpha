@@ -426,7 +426,7 @@ def test_react_state_cards_keep_core_flow_visible_and_actionable():
     )
 
     for contract in (
-        "useState<CardViewId>('dashboard')",
+        "useState<CardViewId>(readViewFromHash)",
         'aria-label="切换导航菜单"',
         "onNavigate",
         "点击状态卡进入对应功能模块",

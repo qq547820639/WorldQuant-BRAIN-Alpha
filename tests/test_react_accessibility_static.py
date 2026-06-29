@@ -24,7 +24,7 @@ def test_react_app_state_cards_have_accessible_navigation_semantics():
     base_state = resolve_react_source(REACT_SRC / "hooks" / "useAppState" / "useBaseState.ts")
     state_cards = _component("StateCards")
 
-    assert "useState<CardViewId>('dashboard')" in base_state
+    assert "useState<CardViewId>(readViewFromHash)" in base_state
     assert 'aria-label="切换导航菜单"' in app
     assert "import Sidebar from '@/components/Sidebar'" in app
     assert "onClick={() => onNavigate(config.id)}" in state_cards

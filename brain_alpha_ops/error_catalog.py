@@ -256,6 +256,14 @@ _CATEGORY_TO_KIND: dict[str, ErrorKind] = {
 }
 
 
+class _StatuscodeException(Exception):
+    """Lightweight exception carrying only an HTTP status code."""
+
+    def __init__(self, sc: int) -> None:
+        self.status_code = sc
+        super().__init__("")
+
+
 def _classify_fallback(
     exc: BaseException | int | str,
     message: str = "",
@@ -283,11 +291,7 @@ def _classify_fallback(
             return kind
 
     if isinstance(exc, int):
-        class _SCExc(Exception):
-            def __init__(self, sc: int) -> None:
-                self.status_code = sc
-                super().__init__("")
-        info = classify_error(_SCExc(exc))
+        info = classify_error(_StatuscodeException(exc))
     elif isinstance(exc, str):
         info = classify_error(Exception(exc))
     else:

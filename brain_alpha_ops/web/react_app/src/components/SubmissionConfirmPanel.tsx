@@ -6,11 +6,10 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { apiErrorMessage } from '@/helpers/errorExperience';
+import { apiErrorMessage, safeDisplayErrorMessage } from '@/helpers/errorExperience';
 import { useApi } from '@/hooks/useApi';
 import { useGlobalData } from '@/hooks/useGlobalData';
 import type { SubmitReadinessResponse } from '@/types';
-import { isRecord } from '@/types';
 import ProgressFeedback from '@/components/ProgressFeedback';
 import StatusFlowDiagram from '@/components/StatusFlowDiagram';
 import { ConfirmationTable, buildRows, type CheckResult } from '@/components/SubmissionChecklist';
@@ -58,12 +57,9 @@ export default function SubmissionConfirmPanel({ notify, onNavigate }: Props) {
 
     const poll = async () => {
       try {
-        const res = await fetch('/api/submit_readiness');
-        if (!res.ok) return;
-        const json: unknown = await res.json();
-        if (!json || typeof json !== 'object') return;
-        const data = isRecord(json) ? json : {};
-        const currentPerformed = Boolean(data.real_submit_performed);
+        const result = await callReadiness<SubmitReadinessResponse>('/api/submit_readiness');
+        if (!result || result.error) return;
+        const currentPerformed = Boolean(result.real_submit_performed);
         if (currentPerformed && prevRealSubmitRef.current === false) {
           prevRealSubmitRef.current = true;
           notify('success', '检测到真实提交已完成！正在自动刷新数据。');
@@ -191,7 +187,7 @@ export default function SubmissionConfirmPanel({ notify, onNavigate }: Props) {
           aria-live="assertive"
         >
           <div className="flex items-center justify-between gap-3">
-            <p className="text-sm text-negative">提交前阻断复核数据加载失败: {error}</p>
+            <p className="text-sm text-negative">提交前阻断复核数据加载失败: {safeDisplayErrorMessage(error)}</p>
             <button type="button" onClick={load} className="btn btn-secondary text-sm">
               重试
             </button>

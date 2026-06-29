@@ -105,6 +105,13 @@ export function useConfigForm({
   const [saveSuccess, setSaveSuccess] = useState(false);
   const importInputRef = useRef<HTMLInputElement | null>(null);
 
+  // Auto-dismiss save success banner after 4 seconds
+  useEffect(() => {
+    if (!saveSuccess) return;
+    const timer = setTimeout(() => setSaveSuccess(false), 4000);
+    return () => clearTimeout(timer);
+  }, [saveSuccess]);
+
   useEffect(() => {
     void schemaApi.call('/api/config_schema');
   }, [schemaApi.call]);
@@ -248,6 +255,8 @@ export function useConfigForm({
     }
   };
 
+  const dismissSaveSuccess = () => setSaveSuccess(false);
+
   const datasetChoices = useMemo(
     () => (schema && hasInitialized ? datasetSelectOptions(schema, form.dataset) : []),
     [schema, form.dataset, hasInitialized]
@@ -281,5 +290,6 @@ export function useConfigForm({
     testConnection,
     logoutLocalSession,
     resetForm,
+    dismissSaveSuccess,
   };
 }
