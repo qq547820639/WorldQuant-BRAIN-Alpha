@@ -211,6 +211,65 @@
   - [ ] SubTask L11.1: 修改 `scripts/generate_sbom.py`，读取 `requirements.lock` 与 `package-lock.json` 提取传递依赖
   - [ ] SubTask L11.2: 验证 SBOM 含 urllib3/certifi 等传递依赖
 
+## 阶段 M：解耦流水线 / 校准 / 进化 / 调度 Critical
+
+- [ ] Task M1: DecoupledPipeline SharedState 线程安全
+  - [ ] SubTask M1.1: 修改 `research/decoupled_pipeline/_state.py` 与 `_workers.py`/`_workers_ext.py`，所有计数器与列表修改纳入 `_lock` 或加独立锁
+  - [ ] SubTask M1.2: 新增测试：4 worker 并发断言计数无丢失
+- [ ] Task M2: ValidationWorker 默认 submission_ready=False
+  - [ ] SubTask M2.1: 修改 `research/decoupled_pipeline/_workers_ext.py:147-154`，`gate.get("submission_ready", False)`
+  - [ ] SubTask M2.2: 新增测试：未评分候选断言不被提交
+- [ ] Task M3: Candidate 跨 worker 加 per-candidate 锁
+  - [ ] SubTask M3.1: 修改 `research/decoupled_pipeline/_workers.py` 与 `_workers_ext.py`，对共享 Candidate 的读改写加 per-candidate 锁
+  - [ ] SubTask M3.2: 新增测试：Filter/Validation 并发断言无 torn reads
+- [ ] Task M4: structure_refine 不破坏含逗号表达式
+  - [ ] SubTask M4.1: 修改 `research/iterative_optimizer/_mutations_mixin.py:130-133`，用 AST 解析或括号匹配移除包装层，不用 rfind(",")
+  - [ ] SubTask M4.2: 新增测试：`zscore(if(x>0,a,b))` 断言保留完整
+- [ ] Task M5: calibrate_prior_weights 保留相关性符号
+  - [ ] SubTask M5.1: 修改 `research/calibration_engine/_calibration.py:79`，用有符号 pearson_r 计算权重（负相关维度零或负权重）
+  - [ ] SubTask M5.2: 新增测试：pearson_r=-0.8 断言权重不为最高
+- [ ] Task M6: calibrate_scorecard_weights 用有符号相关性
+  - [ ] SubTask M6.1: 修改 `research/calibration_engine/_calibration.py:164`，用有符号 corr 选最优
+  - [ ] SubTask M6.2: 新增测试：corr=-0.95 断言不被选为最优
+- [ ] Task M7: auto_calibrator 正确导入校准模块
+  - [ ] SubTask M7.1: 修改 `research/auto_calibrator/_weight_calibration.py:29,45`，从正确路径导入 `calibrate_prior_weights`/`calibrate_scorecard_weights`
+  - [ ] SubTask M7.2: 新增测试：AutoCalibrator.calibrate() 断言权重实际更新
+- [ ] Task M8: EvolutionRunner 用更新后 scores 剪枝
+  - [ ] SubTask M8.1: 修改 `research/evolution/_meta.py:126-198`，突变/交叉产生的新表达式在剪枝前重新评分
+  - [ ] SubTask M8.2: 新增测试：种群已满时断言突变体不被立即淘汰
+- [ ] Task M9: WebApplicationContext 白名单移除安全函数
+  - [ ] SubTask M9.1: 修改 `web/dispatch/web_dispatch_context/_allowed_names.py`，移除 `_csrf_for_session`/`_has_valid_admin_token`/`_get_or_create_session`/`_validate_session` 等安全函数
+  - [ ] SubTask M9.2: 新增测试：注入 handler 覆盖安全函数断言被拒
+- [ ] Task M10: JobStore 跳过加载后可重置持久化
+  - [ ] SubTask M10.1: 修改 `tasks/_store.py:317-336`，`persistence_load_skipped` 在 jobs 变化后可重置；`_persist_locked` 重试写入
+  - [ ] SubTask M10.2: 新增测试：跳过加载后 jobs 变化断言恢复持久化
+- [ ] Task M11: compute_run_stats 接入真实实现
+  - [ ] SubTask M11.1: 修改 `web/misc/web_runtime_facade/_server.py` 或绑定路径，生产 `compute_run_stats`/`status_category` 调用真实实现（`web/state/web_runtime_state.py`）
+  - [ ] SubTask M11.2: 新增测试：生产任务 stats 断言非零
+
+## 阶段 N：Dispatch / Runtime / Scheduler High
+
+- [ ] Task N1: OptimizationWorker 接收真实 optimizer（`research/decoupled_pipeline/_pipeline.py:192-197`）
+- [ ] Task N2: DecoupledCoordinator.wait_for_completion 可靠（worker 退出时设 STOPPED）
+- [ ] Task N3: RepositoryFileLock 防 stale 误判与 unlink 竞态（`research/repository/_file_lock.py`）
+- [ ] Task N4: RecordSqliteIndex 配置 WAL 与 busy_timeout（`research/record_sqlite_index.py:150-153`）
+- [ ] Task N5: recoverable_backtest_candidates 取最新记录（`research/contracts.py:188-224`）
+- [ ] Task N6: 非 429 poll 错误有 halt 或 cooldown（`research/simulation_scheduler/_scheduler_tick.py:329-341`）
+- [ ] Task N7: global_cooldown 自动到期清除（`research/simulation_scheduler/_scheduler_helpers.py`）
+- [ ] Task N8: _scheduler_tick 状态匹配修正（`_scheduler_tick.py:148`，COMPLETE/COMPLETED）
+- [ ] Task N9: ExpressionHistoryIndex.records 不跨源尾部截断（`research/expression_index/_core.py:216-238`）
+- [ ] Task N10: _status_payload 用数值排序时间戳（`web/dispatch/get_routes/_helpers.py:86-92`）
+- [ ] Task N11: trends 写入并发安全与 ts 容错（`web/api/trends.py` + `web/dispatch/post_routes/misc.py`）
+- [ ] Task N12: _read_json 校验 Content-Length 返回 4xx（`web/dispatch/web_http_handler/_handler.py:152-162`）
+- [ ] Task N13: JobStore update 处理显式 None updated_at（`tasks/_store.py:111-121`）
+- [ ] Task N14: JobStore 读操作无 watchdog 副作用（`tasks/_store.py:195-212`）
+- [ ] Task N15: evaluate_release_score 区分 settings 与 metrics（`scoring/release_score_gate/_decision.py:74-85`）
+- [ ] Task N16: 提交异常走 redact_error_message（`web/business/web_business/_handlers_simulation.py:87-118`）
+- [ ] Task N17: fetch_official_thresholds 用正确签名调用 _request（`brain_api/official_context/_composite.py:237`）
+- [ ] Task N18: 浏览器 check_alpha 解析真实 PASS/FAIL（`browser/execution_adapter/_simulate.py:128-134`）
+- [ ] Task N19: A-Share 缓存损坏自愈（`data/ashare_adapter/_cache.py:22-34`）
+- [ ] Task N20: Loader 加载失败 ERROR 日志而非静默 return（`data/loader/_loader.py:194-255`）
+
 # Task Dependencies
 
 - 阶段 A 各任务最高优先，A3 须先于阶段 F（F 中状态迁移依赖正确）

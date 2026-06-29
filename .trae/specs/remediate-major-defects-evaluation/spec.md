@@ -343,6 +343,254 @@ The system SHALL enforce an upper bound on `MAX_USER_ALPHAS_PAGES` to prevent un
 - **WHEN** a long task completes in foreground
 - **THEN** a toast or badge SHALL be shown (not only when `document.hidden`)
 
+## ADDED Requirements (第四轮：解耦流水线 / 校准 / 进化 / Dispatch / 运行时)
+
+### Requirement: DecoupledPipeline SharedState 须线程安全
+The system SHALL protect all `SharedState` counters and lists (`produced_count`, `filtered_count`, `officially_simulated_count`, `submitted_count`, `accepted_candidates`, `archive_stats`, `archive_samples`, `blocked_expressions`) with locks, not rely on GIL for compound `+=` / `append` operations.
+
+#### Scenario: 多 worker 并发
+- **WHEN** Production/Filter/Optimization/Validation workers run concurrently
+- **THEN** counters SHALL not be lost or corrupted
+- **AND** cycle termination conditions SHALL be based on accurate counts
+
+### Requirement: ValidationWorker 不得默认 submission_ready=True
+The system SHALL NOT default `gate.submission_ready` to `True` for un-scored candidates, as this bypasses the local quality gate.
+
+#### Scenario: 未评分候选
+- **WHEN** a candidate has not been scored by FilterWorker (gate empty or missing)
+- **THEN** `submission_ready` SHALL default to `False`
+- **AND** the candidate SHALL NOT be submitted to official simulation
+
+### Requirement: Candidate 跨 worker 修改须加 per-candidate 锁
+The system SHALL synchronize cross-worker mutations to shared `Candidate` objects (lifecycle_status, local_quality, gate, submission dict).
+
+#### Scenario: Filter 与 Validation 并发
+- **WHEN** FilterWorker writes gate while ValidationWorker reads it
+- **THEN** a per-candidate lock SHALL prevent torn reads
+- **AND** submission decisions SHALL be based on consistent state
+
+### Requirement: structure_refine 不得用 rfind(",") 破坏含逗号表达式
+The system SHALL NOT truncate inner expressions by `rfind(",")` which breaks multi-argument calls like `if(x>0, a, b)`.
+
+#### Scenario: 含逗号的包装表达式
+- **WHEN** `structure_refine` removes a wrapper from `zscore(if(x > 0, a, b))`
+- **THEN** the inner expression SHALL remain syntactically valid
+- **AND NOT** be truncated to `"if(x > 0, a"`
+
+### Requirement: calibrate_prior_weights 须保留相关性符号
+The system SHALL NOT use `abs(pearson_r)` for weight computation, as it loses the correlation direction and may invert weights for negatively-correlated dimensions.
+
+#### Scenario: 负相关维度
+- **WHEN** a dimension has `pearson_r = -0.8` (strongly negatively correlated with sharpe)
+- **THEN** the weight SHALL reflect the negative direction (e.g., zero or negative weight)
+- **AND NOT** assign it the highest weight via `abs(-0.8) = 0.8`
+
+### Requirement: calibrate_scorecard_weights 须用有符号相关性选最优
+The system SHALL select optimal scorecard weights by signed correlation, not `abs(corr)`, to avoid picking anti-correlated weights.
+
+#### Scenario: 反相关权重组合
+- **WHEN** a (prior, empirical, checklist) combination has `corr = -0.95` with sharpe
+- **THEN** it SHALL NOT be selected as optimal
+- **AND** optimal SHALL be the max signed correlation
+
+### Requirement: auto_calibrator 须正确导入校准模块
+The system SHALL import `calibrate_prior_weights` / `calibrate_scorecard_weights` from the correct module path; the current `from calibrate_weights import ...` references a non-existent module and silently disables weight calibration.
+
+#### Scenario: 自动校准触发
+- **WHEN** `AutoCalibrator.calibrate()` runs
+- **THEN** dimension weights and three-layer scorecard weights SHALL actually be calibrated
+- **AND NOT** return `{"error": "calibrate_weights module not importable"}` silently
+
+### Requirement: EvolutionRunner 须用更新后的 scores 剪枝
+The system SHALL re-score mutants/crossovers before pruning, not use the stale `scores` dict from the start of the generation.
+
+#### Scenario: 种群已满
+- **WHEN** population reaches `population_size` and mutants are appended
+- **THEN** mutants SHALL be scored before pruning
+- **AND NOT** default to 0.0 and be immediately eliminated
+
+### Requirement: WebApplicationContext 白名单不得含安全函数
+The system SHALL NOT allow `_csrf_for_session`, `_has_valid_admin_token`, `_get_or_create_session`, `_validate_session` to be overwritten via `WebApplicationContext.__setattr__`, as this enables CSRF/auth bypass.
+
+#### Scenario: 注入 handler 覆盖安全函数
+- **WHEN** an injected business handler sets `ctx._csrf_for_session = lambda *a: ""`
+- **THEN** the assignment SHALL be rejected
+- **AND** CSRF and admin token checks SHALL remain enforced
+
+### Requirement: JobStore 跳过加载后不得永久失去持久化
+The system SHALL NOT permanently disable persistence (`persistence_load_skipped=True` forever) after a single load skip; it SHALL retry persistence once jobs change.
+
+#### Scenario: 重启后文件过大
+- **WHEN** `_load` skips a >50MB file
+- **AND** jobs subsequently change
+- **THEN** `_persist_locked` SHALL retry writing (not `return` early forever)
+- **AND** the skip state SHALL be resettable
+
+### Requirement: compute_run_stats 须接入真实实现
+The system SHALL route production `compute_run_stats` / `status_category` calls to the real implementation in `web/state/web_runtime_state.py`, not the stub in `web_runtime_facade/_server.py` that always returns zeros.
+
+#### Scenario: 生产任务统计
+- **WHEN** `web_run_job.py` computes task stats
+- **THEN** it SHALL use the real `compute_run_stats` (candidates/simulations/submissions counts)
+- **AND NOT` return `{"candidates": 0, "simulations": 0, "submissions": 0}` stub
+
+### Requirement: OptimizationWorker 须接收真实 optimizer
+The system SHALL pass a real optimizer to `OptimizationWorker`, not `None` which makes the optimization stage dead code.
+
+#### Scenario: 解耦流水线启动
+- **WHEN** `DecoupledPipeline` constructs `OptimizationWorker`
+- **THEN** a real `IterativeOptimizer` SHALL be passed
+- **AND** `optimization_attempts` SHALL reflect real optimization
+
+### Requirement: DecoupledCoordinator.wait_for_completion 须可靠
+The system SHALL set worker state to STOPPED on loop exit so `wait_for_completion` can detect completion without relying on timeout.
+
+#### Scenario: workers 正常结束
+- **WHEN** workers exit their `_run_loop`
+- **THEN** `_state` SHALL transition to STOPPED
+- **AND** `wait_for_completion` SHALL return without timeout
+
+### Requirement: RepositoryFileLock 须防 stale 误判与 unlink 竞态
+The system SHALL NOT delete lock files based solely on mtime, and SHALL atomically release (close fd without unlinking a possibly-different lock file).
+
+#### Scenario: 长耗时写
+- **WHEN** a write operation exceeds `_LOCK_STALE_SECONDS`
+- **THEN** other processes SHALL NOT seize the lock
+- **AND** `__exit__` SHALL not unlink a lock file that may belong to another process
+
+### Requirement: RecordSqliteIndex 须配置 WAL 与 busy_timeout
+The system SHALL set `PRAGMA journal_mode=WAL` and `PRAGMA busy_timeout` on `RecordSqliteIndex` connections, consistent with `expression_sqlite_index`.
+
+#### Scenario: 并发写
+- **WHEN` multiple threads write to record_sqlite_index
+- **THEN** writes SHALL not immediately throw `database is locked`
+
+### Requirement: recoverable_backtest_candidates 须取最新记录
+The system SHALL select the newest (max timestamp) record per slot for recovery, not the oldest.
+
+#### Scenario: 崩溃恢复
+- **WHEN** multiple active records exist for the same slot
+- **THEN** the newest SHALL be used
+- **AND NOT` the oldest (which would re-poll ended sims and overwrite latest metrics)
+
+### Requirement: 非 429 poll 错误须有 halt 或 cooldown
+The system SHALL trigger `official_calls_halted` or cooldown for non-429 poll errors (500/502/503), not infinitely retry and starve other candidates.
+
+#### Scenario: BRAIN 持续 500
+- **WHEN** poll returns 500 repeatedly
+- **THEN** the slot SHALL enter cooldown or halt
+- **AND** other submission_ready candidates SHALL not be starved
+
+### Requirement: global_cooldown 须自动到期清除
+The system SHALL auto-clear `_global_cooldown_until` when it expires, not require manual `resume()`.
+
+#### Scenario: cooldown 到期
+- **WHEN** `time.time() > _global_cooldown_until`
+- **THEN** slots SHALL become available again automatically
+
+### Requirement: _scheduler_tick 状态匹配须正确
+The system SHALL match both `COMPLETE` and `COMPLETED` simulation statuses (not duplicate `COMPLETED`).
+
+#### Scenario: COMPLETE 状态
+- **WHEN** BRAIN returns status `COMPLETE`
+- **THEN** the slot SHALL be released
+- **AND NOT` be ignored due to a duplicate-string bug
+
+### Requirement: ExpressionHistoryIndex.records 不得跨源尾部截断
+The system SHALL NOT truncate merged cross-source records to the last `limit`, which discards early sources (candidates.jsonl, lifecycle.jsonl).
+
+#### Scenario: 多源合并
+- **WHEN` 6 source files each have ~5000 records
+- **THEN** the index SHALL cover all sources (not just the last 5000)
+- **OR` clearly report per-source coverage
+
+### Requirement: _status_payload 须用数值排序时间戳
+The system SHALL sort jobs by numeric `updated_at`, not `str(updated_at)` which breaks lexicographic ordering ("9.0" > "10.0").
+
+#### Scenario: 查询最新 job
+- **WHEN` `/api/jobs/status` returns the latest job
+- **THEN` it SHALL be the one with max numeric `updated_at`
+
+### Requirement: trends 写入须并发安全与校验
+The system SHALL protect `record_trend` with a lock and SHALL go through `_validated_post_route`; `get_trends` SHALL tolerate non-numeric `ts` without crashing.
+
+#### Scenario: 并发 trends 写入
+- **WHEN` multiple panels refresh simultaneously
+- **THEN` JSONL lines SHALL not interleave
+- **AND` a string `ts` in history SHALL not crash `get_trends`
+
+### Requirement: _read_json 须校验 Content-Length 并返回 4xx
+The system SHALL validate `Content-Length >= 0` and return 400/413 (not 500) for malformed or oversized bodies.
+
+#### Scenario: 负 Content-Length
+- **WHEN` a request has `Content-Length: -1`
+- **THEN` the server SHALL return 400
+- **AND NOT` 500 with possible stack leak
+
+### Requirement: JobStore update 须处理显式 None updated_at
+The system SHALL treat `updated_at=None` as missing (set to `time.time()`), not leave it as None which causes watchdog to misjudge the job as 56-years-stale.
+
+#### Scenario: 异常路径传 None
+- **WHEN` a handler passes `updated_at=None`
+- **THEN` `setdefault` SHALL still set it to now
+- **AND` watchdog SHALL not immediately mark the job failed
+
+### Requirement: JobStore 读操作不得有 watchdog 副作用
+The system SHALL NOT trigger watchdog side-effects on pure read operations (`get`, `latest_active`); reads SHALL return the state at call time.
+
+#### Scenario: 读取超时 job
+- **WHEN` a read is performed on a job that has exceeded watchdog timeout
+- **THEN` the read SHALL return current state without mutating it
+- **AND` watchdog actions SHALL be explicit, not side-effects of reads
+
+### Requirement: evaluate_release_score 须正确区分 settings 与 metrics
+The system SHALL NOT use `metrics` as `settings` when `settings is None`; delay lookup SHALL use actual settings.
+
+#### Scenario: settings 为 None
+- **WHEN` `evaluate_release_score` is called without settings
+- **THEN` delay SHALL default to a safe value (not be looked up in metrics)
+- **AND` release gate delay-based checks SHALL be correct
+
+### Requirement: 提交异常须走 redact_error_message
+The system SHALL use `redact_error_message(exc)` for submit error `status_message`, not `str(exc)[:100]` which may leak Authorization/Cookie.
+
+#### Scenario: 提交失败
+- **WHEN` `_run_submit_alpha_job` catches an exception
+- **THEN` `status_message` SHALL be redacted
+- **AND` no credentials SHALL reach the frontend or audit log
+
+### Requirement: fetch_official_thresholds 须用正确签名调用 _request
+The system SHALL NOT pass a `timeout` kwarg to `_request` (which lacks that parameter); dynamic thresholds SHALL actually be fetched.
+
+#### Scenario: 动态阈值拉取
+- **WHEN` `fetch_official_thresholds` calls `_request`
+- **THEN` the call SHALL succeed (no TypeError)
+- **AND` dynamic thresholds SHALL be used when available
+
+### Requirement: 浏览器 check_alpha 须解析真实 PASS/FAIL
+The system SHALL parse real PASS/FAIL from the check page, not return `ok=True` with truncated `inner_text`.
+
+#### Scenario: 检查失败
+- **WHEN` the BRAIN check page shows a failed check
+- **THEN` `check_alpha` SHALL return `ok=False`
+- **AND` the failing check SHALL be in the result
+
+### Requirement: A-Share 缓存损坏须自愈
+The system SHALL delete a corrupted Parquet cache file and fall back to JSON (or re-fetch), not return None forever.
+
+#### Scenario: Parquet 损坏
+- **WHEN` Parquet read fails
+- **THEN` the corrupted file SHALL be removed
+- **AND` the next get SHALL fall back to JSON or re-fetch
+
+### Requirement: Loader 须记录加载失败而非静默 return
+The system SHALL log at ERROR level when `_load_fields/_load_operators/_load_datasets` fail, not silently return empty.
+
+#### Scenario: 官方元数据损坏
+- **WHEN` `official_fields.json` is corrupted
+- **THEN` an ERROR log SHALL be emitted
+- **AND` the pipeline SHALL fail fast (not silently reject all alphas)
+
 ## ADDED Requirements (第三轮：安全 / Agent / MCP / LLM / 架构)
 
 ### Requirement: Docker 容器不得以 root 运行

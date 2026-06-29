@@ -148,3 +148,41 @@
 - [ ] `StrategySwitchService._explore` bandit_counts 全零时不崩溃
 - [ ] `_launch_monitor.py` 引用 `BrainAlphaConsole.exe`，Popen 有 try/except
 - [ ] SBOM 含传递依赖（urllib3/certifi 等）
+
+## 阶段 M：解耦流水线 / 校准 / 进化 / 调度 Critical
+
+- [ ] DecoupledPipeline `SharedState` 所有计数器与列表修改有锁保护
+- [ ] 4 worker 并发断言计数无丢失
+- [ ] `ValidationWorker` 默认 `submission_ready=False`，未评分候选不被提交
+- [ ] Candidate 跨 worker 读改写有 per-candidate 锁，无 torn reads
+- [ ] `structure_refine` 不用 `rfind(",")`，含逗号表达式（如 `if(x>0,a,b)`）保留完整
+- [ ] `calibrate_prior_weights` 用有符号 pearson_r，负相关维度权重不为最高
+- [ ] `calibrate_scorecard_weights` 用有符号 corr 选最优，corr=-0.95 不被选
+- [ ] `auto_calibrator` 从正确路径导入校准模块，`AutoCalibrator.calibrate()` 权重实际更新
+- [ ] `EvolutionRunner.evolve` 突变体在剪枝前重新评分，种群已满时不被立即淘汰
+- [ ] `WebApplicationContext` 白名单不含安全函数（`_csrf_for_session` 等），覆盖被拒
+- [ ] `JobStore` 跳过加载后 jobs 变化时恢复持久化，不永久 `persistence_load_skipped=True`
+- [ ] 生产 `compute_run_stats` 接入真实实现，任务 stats 非零
+
+## 阶段 N：Dispatch / Runtime / Scheduler High
+
+- [ ] `OptimizationWorker` 接收真实 optimizer，优化阶段非死代码
+- [ ] `DecoupledCoordinator.wait_for_completion` worker 退出时设 STOPPED，不依赖 timeout
+- [ ] `RepositoryFileLock` 不按 mtime 误判 stale，`__exit__` 不 unlink 他人锁文件
+- [ ] `RecordSqliteIndex` 配置 WAL 与 busy_timeout，并发写不立即 `database is locked`
+- [ ] `recoverable_backtest_candidates` 取最新（max timestamp）记录而非最旧
+- [ ] 非 429 poll 错误（500/502/503）有 halt 或 cooldown，不无限重试饿死其他候选
+- [ ] `global_cooldown` 到期自动清除，不依赖手动 `resume()`
+- [ ] `_scheduler_tick` 匹配 `COMPLETE` 与 `COMPLETED`（无重复字符串 bug）
+- [ ] `ExpressionHistoryIndex.records` 不跨源尾部截断，覆盖所有源
+- [ ] `_status_payload` 用数值排序 `updated_at`，返回真正最新 job
+- [ ] `record_trend` 有锁保护、走 `_validated_post_route`；`get_trends` 容忍非数值 ts
+- [ ] `_read_json` 校验 `Content-Length >= 0`，负值返回 400（非 500）
+- [ ] `JobStore.update` 处理显式 `updated_at=None`（设为 now），watchdog 不误判
+- [ ] `JobStore` 读操作无 watchdog 副作用，返回调用时刻状态
+- [ ] `evaluate_release_score` 当 settings 为 None 时不误用 metrics 当 settings
+- [ ] 提交异常走 `redact_error_message`，凭据不泄漏到 status_message
+- [ ] `fetch_official_thresholds` 用正确签名调用 `_request`，动态阈值实际拉取
+- [ ] 浏览器 `check_alpha` 解析真实 PASS/FAIL，不返回 `ok=True` + 截断 inner_text
+- [ ] A-Share 缓存 Parquet 损坏时删除并回退 JSON/重取，不永久返回 None
+- [ ] Loader 加载失败时 ERROR 日志，不静默 return 致全量 alpha 被拒
