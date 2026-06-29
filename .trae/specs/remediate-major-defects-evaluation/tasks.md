@@ -126,6 +126,91 @@
 - [ ] Task I2: 前端测试通过（`cd brain_alpha_ops/web/react_app && npm run test && npm run typecheck`）
 - [ ] Task I3: checklist.md 全部 checkpoint 验证通过
 
+## 阶段 J：安全 Critical（部署 + 证据 + 旁路 + 脱敏）
+
+- [ ] Task J1: Docker 容器不以 root 运行 + evidence 目录不 chmod 777
+  - [ ] SubTask J1.1: 修改 `Dockerfile`，添加非 root `USER`，移除 `chmod 777`，evidence 目录改为受限权限
+  - [ ] SubTask J1.2: 修改 `docker-compose.yml`，绑定 `127.0.0.1:8765:8765`，加 `cap_drop: [ALL]`、`security_opt: [no-new-privileges:true]`、`read_only` 与资源限制
+  - [ ] SubTask J1.3: 验证容器以非 root 启动、evidence 目录非 777
+- [ ] Task J2: 证据归档脱敏
+  - [ ] SubTask J2.1: 修改 `monitoring/evidence.py:archive_session` 与 `pipeline_evidence.py`，HAR 文件 redact Authorization/Set-Cookie/Cookie 头，network_logs/console_logs 走 `redact_text`
+  - [ ] SubTask J2.2: 新增测试：归档后断言 HAR 无明文凭证、日志已脱敏
+- [ ] Task J3: REAL_SUBMIT 旁路改用进程内可信判定
+  - [ ] SubTask J3.1: 修改 `runtime_constants.py:real_submit_test_override_enabled`，移除 `PYTEST_CURRENT_TEST` env 判定，改用 `sys.modules` 检查 pytest 实际在进程内，或直接移除该旁路
+  - [ ] SubTask J3.2: 新增测试：生产 env 设置三个变量断言仍禁用
+- [ ] Task J4: 日志脱敏覆盖纯字母 token
+  - [ ] SubTask J4.1: 修改 `redaction.py:126-130` `_SECRET_FRAGMENT_RE`，移除强制 `\d` 要求
+  - [ ] SubTask J4.2: 新增测试：纯字母 token（如 `token-abc-def-xyz`）断言被脱敏
+- [ ] Task J5: web_security allow_remote 防 DNS rebinding
+  - [ ] SubTask J5.1: 修改 `web/security/web_security.py:is_allowed_local_request`，allow_remote 时信任锚改为配置 allowlist（非 Host 头）
+  - [ ] SubTask J5.2: 新增测试：Host: evil.com + Origin: http://evil.com 断言被拒
+- [ ] Task J6: CI 真正检查依赖 CVE
+  - [ ] SubTask J6.1: 修改 `.github/workflows/quality-gate.yml`，移除 `npm audit --audit-level=critical` 的 `continue-on-error`
+  - [ ] SubTask J6.2: 新增 `pip-audit` 步骤扫描 Python 依赖
+  - [ ] SubTask J6.3: 统一 Python 版本（Docker/CI/pyproject 一致，如 3.12）
+
+## 阶段 K：Agent / MCP / LLM / Browser Critical
+
+- [ ] Task K1: MCP stdio 不被长轮询工具阻塞
+  - [ ] SubTask K1.1: 修改 `mcp_server.py:serve_stdio`，长轮询工具派发到 worker 线程，主循环继续读取 stdin；或返回 progress notification
+  - [ ] SubTask K1.2: 新增测试：长轮询调用期间其他工具可被服务、notifications/cancelled 可消费
+- [ ] Task K2: LLM 配额账本实际生效
+  - [ ] SubTask K2.1: 修改 `research/llm_service/_service_review.py` 与 `_service_guidance.py`，调用前 `wait_for_quota`、调用后 `record` token、预算耗尽 `budget_exhausted` 停止
+  - [ ] SubTask K2.2: 新增测试：超 200K token 预算断言停止 LLM 调用
+- [ ] Task K3: Browser 提交幂等键持久化或不淘汰
+  - [ ] SubTask K3.1: 修改 `browser/execution_adapter/_submit.py` 与 `_base.py`，幂等键持久化到磁盘或使用更大 store，不淘汰可重放键
+  - [ ] SubTask K3.2: 新增测试：超 1000 键或重启后断言重放被拒
+- [ ] Task K4: Browser 登录判定可靠
+  - [ ] SubTask K4.1: 修改 `browser/brain_ui_runner.py:267` 与 `_base.py:98-100`，移除 `nav` 通用选择器，改用登录页特定负向信号（密码字段、登录错误消息）
+  - [ ] SubTask K4.2: 新增测试：错误凭证停留在登录页断言 is_logged_in=False
+- [ ] Task K5: BrainBrowserRunner weakref.finalize 修复
+  - [ ] SubTask K5.1: 修改 `browser/brain_ui_runner.py:71`，finalizer 通过闭包延迟求值（或用 `weakref.finalize(self, _cleanup, self_ref)` 内部读取属性），不传 None
+  - [ ] SubTask K5.2: 新增测试：异常逃逸 with 块后断言 playwright 资源释放
+- [ ] Task K6: LLMService.cross_review_expression 线程安全
+  - [ ] SubTask K6.1: 修改 `research/llm_service/_service_review.py:76-83`，加锁保护 provider 交换
+  - [ ] SubTask K6.2: 新增测试：并发交叉评审断言无串号
+- [ ] Task K7: review_expression 离线 fallback 可达
+  - [ ] SubTask K7.1: 修改 `research/llm_service/_service_review.py:37-52`，重试耗尽后实际调用 `_offline_review`（移除死代码）
+  - [ ] SubTask K7.2: 新增测试：provider 持续异常断言返回离线评审结果
+
+## 阶段 L：架构与配置 High
+
+- [ ] Task L1: 生产 pipeline 接入 execution_backend
+  - [ ] SubTask L1.1: 修改 `runner.py` 与 Web `_handle_pipeline_start`，构造 pipeline 时传 `execution_backend`（生产 browser 模式）
+  - [ ] SubTask L1.2: 启动时调用 `backend_registration.register_all_backends()`
+  - [ ] SubTask L1.3: `register_backend` 增加重复注册检测
+  - [ ] SubTask L1.4: 新增测试：生产路径断言使用 browser backend
+- [ ] Task L2: registry 校验修正枚举值误判
+  - [ ] SubTask L2.1: 修改 `registry_validation.py:237-245`，区分数据字段与枚举值，不再把 settings_options 当字段集
+  - [ ] SubTask L2.2: 新增测试：registry 校验不再必然误报 BLOCKING
+- [ ] Task L3: strategy profile_id 包含 delay
+  - [ ] SubTask L3.1: 修改 `research/strategy_lifecycle.py:161-167`，profile_id 哈希种子加 delay
+  - [ ] SubTask L3.2: 新增测试：同名不同 delay 的 profile 断言 id 不同、rewards 不串扰
+- [ ] Task L4: strategy_switch.build_application 越界不静默取模
+  - [ ] SubTask L4.1: 修改 `research/strategy_switch.py:89-90`，索引越界时抛异常或显式处理，不静默取模映射
+  - [ ] SubTask L4.2: 新增测试：索引 ≥ n_profiles 断言不静默映射错误 profile
+- [ ] Task L5: 参数审计覆盖 official_api 全部参数
+  - [ ] SubTask L5.1: 修改 `parameter_audit.py:26-41` `_API_ATTR_TO_CANONICAL`，补全 cache_dir/context_cache_ttl_seconds/timeout_seconds/rate_limit_retry_attempts 等 10+ 参数
+  - [ ] SubTask L5.2: 新增测试：timeout_seconds 篡改断言产生 finding
+- [ ] Task L6: lifecycle_records 加上限
+  - [ ] SubTask L6.1: 修改 `research/runtime_service.py:73-86`，append 后截断（如 last 500），去重窗口相应调整
+  - [ ] SubTask L6.2: 新增测试：长跑后断言 lifecycle_records 有上限
+- [ ] Task L7: convergence_stats 防除零与越界
+  - [ ] SubTask L7.1: 修改 `scoring/history.py:50-67`，scores 为空时返回默认值，不触发 ZeroDivisionError/IndexError
+  - [ ] SubTask L7.2: 新增测试：records 缺 total_score 字段断言不崩溃
+- [ ] Task L8: build_attribution_tree 用 .get() 而非硬下标
+  - [ ] SubTask L8.1: 修改 `scoring/attribution.py:147-181`，empirical/checklist item 取值改用 `.get()` 带默认
+  - [ ] SubTask L8.2: 新增测试：不完整 scorecard 断言归因接口不崩溃
+- [ ] Task L9: StrategySwitchService._explore 防除零
+  - [ ] SubTask L9.1: 修改 `research/strategy_switch.py:60-62`，bandit_counts 全零时 max_count 兜底为 1
+  - [ ] SubTask L9.2: 新增测试：全零计数断言不崩溃
+- [ ] Task L10: _launch_monitor 修正 exe 名
+  - [ ] SubTask L10.1: 修改 `_launch_monitor.py:14`，`BrainAlphaProd.exe` 改为 `BrainAlphaConsole.exe`，Popen 加 try/except
+  - [ ] SubTask L10.2: 验证 Windows 上 launch monitor 可启动
+- [ ] Task L11: SBOM 含传递依赖
+  - [ ] SubTask L11.1: 修改 `scripts/generate_sbom.py`，读取 `requirements.lock` 与 `package-lock.json` 提取传递依赖
+  - [ ] SubTask L11.2: 验证 SBOM 含 urllib3/certifi 等传递依赖
+
 # Task Dependencies
 
 - 阶段 A 各任务最高优先，A3 须先于阶段 F（F 中状态迁移依赖正确）

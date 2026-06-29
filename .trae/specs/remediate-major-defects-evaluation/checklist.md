@@ -105,3 +105,46 @@
 - [ ] `cd brain_alpha_ops/web/react_app && npm run test` 通过
 - [ ] `cd brain_alpha_ops/web/react_app && npm run typecheck` 通过
 - [ ] 无新增回归（关键场景：启动、认证、回测、评分、反过拟合、提交队列、SSE 推送、prod_correlation）
+
+## 阶段 J：安全 Critical（部署 + 证据 + 旁路 + 脱敏）
+
+- [ ] Docker 容器以非 root 用户运行
+- [ ] evidence 目录不再 chmod 777
+- [ ] docker-compose 绑定 `127.0.0.1:8765:8765`，含 `cap_drop: [ALL]`、`no-new-privileges`、`read_only`、资源限制
+- [ ] 证据归档时 HAR 文件 Authorization/Set-Cookie/Cookie 头已脱敏
+- [ ] network_logs / console_logs 经 `redact_text` 处理
+- [ ] 归档后断言无明文凭证
+- [ ] `real_submit_test_override_enabled` 不再依赖 `PYTEST_CURRENT_TEST` env
+- [ ] 生产 env 设置三变量断言仍禁用真实提交
+- [ ] `_SECRET_FRAGMENT_RE` 不再强制要求含数字，纯字母 token 被脱敏
+- [ ] `web_security` allow_remote 时信任锚为配置 allowlist（非 Host 头），DNS rebinding 攻击被拒
+- [ ] CI `npm audit --audit-level=critical` 无 `continue-on-error`，critical CVE 阻断合并
+- [ ] CI 含 `pip-audit` 步骤扫描 Python 依赖
+- [ ] Python 版本在 Docker / CI / pyproject 一致
+
+## 阶段 K：Agent / MCP / LLM / Browser Critical
+
+- [ ] MCP stdio 长轮询工具不阻塞主循环，其他工具可服务、notifications/cancelled 可消费
+- [ ] LLM 调用前 `wait_for_quota`、调用后 `record` token、预算耗尽停止
+- [ ] 超 200K token 预算断言停止 LLM 调用
+- [ ] Browser 提交幂等键持久化或不淘汰，超 1000 键或重启后重放被拒
+- [ ] Browser 登录判定不使用 `nav` 通用选择器，错误凭证断言 is_logged_in=False
+- [ ] `BrainBrowserRunner` weakref.finalize 不捕获 None，异常逃逸后 playwright 资源释放
+- [ ] `cross_review_expression` 加锁保护 provider 交换，并发无串号
+- [ ] `review_expression` 重试耗尽后实际调用 `_offline_review`（非死代码）
+
+## 阶段 L：架构与配置 High
+
+- [ ] 生产 pipeline（runner / Web `_handle_pipeline_start`）传 `execution_backend`（browser 模式）
+- [ ] 启动时调用 `register_all_backends()`
+- [ ] `register_backend` 检测重复注册
+- [ ] registry 校验区分数据字段与枚举值，不再必然误报 BLOCKING
+- [ ] strategy profile_id 哈希种子含 delay，同名不同 delay 的 profile id 不同
+- [ ] `strategy_switch.build_application` 索引越界不静默取模映射
+- [ ] 参数审计覆盖 official_api 全部参数（cache_dir/timeout_seconds/rate_limit_retry_attempts 等）
+- [ ] `lifecycle_records` 有上限（如 last 500），长跑不 OOM
+- [ ] `convergence_stats` records 缺 total_score 时不崩溃
+- [ ] `build_attribution_tree` 用 `.get()` 而非硬下标，不完整 scorecard 不崩溃
+- [ ] `StrategySwitchService._explore` bandit_counts 全零时不崩溃
+- [ ] `_launch_monitor.py` 引用 `BrainAlphaConsole.exe`，Popen 有 try/except
+- [ ] SBOM 含传递依赖（urllib3/certifi 等）

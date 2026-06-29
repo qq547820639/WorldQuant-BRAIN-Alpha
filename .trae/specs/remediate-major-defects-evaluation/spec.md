@@ -2,13 +2,14 @@
 
 ## Why
 
-在完整阅读 brain_alpha_ops **全量源码**（含 compliance / audit_trail / monitoring / production_diagnostics / scoring / web_candidates / web_cloud / data / research 全部子模块）并**交叉核对项目已有的 17 份审计/缺陷文档**后，识别出 **78 项实质性重大问题**，覆盖三大维度：
+在完整阅读 brain_alpha_ops **全量源码**（三轮深度分析覆盖所有子模块：core / web / brain_api / research / scoring / compliance / audit_trail / monitoring / production_diagnostics / web_candidates / web_cloud / data / agent_tools / mcp_server / browser / llm_service / config / execution_backend / strategy / shared / types / security / deployment）并**交叉核对项目已有的 17 份审计/缺陷文档**后，识别出 **110+ 项实质性重大问题**，覆盖三大维度：
 
-- **功能缺陷**：约 34 项 — 含**反过拟合 returns→factor_values 回退链导致虚假 PASS（核心防线失效）**、Quality Gate 审计失败跳过状态转换、仿真并发超限 deferred 被计为 failed、BCa Bootstrap n<5 退化为 (0,0) 使统计显著性失效、Pearson 系数被 (n-1)/n 系统性缩小、ProdCorrelation 按表达式长度自动放行、状态机非法转换静默回退、真实提交后审计失败致重复提交、浏览器驱动真实提交流缺失（P0）等
+- **功能缺陷**：约 60 项 — 含**反过拟合 returns→factor_values 回退链导致虚假 PASS（核心防线失效）**、Quality Gate 审计失败跳过状态转换、仿真并发超限 deferred 被计为 failed、BCa Bootstrap n<5 退化为 (0,0)、Pearson 系数被 (n-1)/n 系统性缩小、ProdCorrelation 按表达式长度自动放行、状态机非法转换静默回退、真实提交后审计失败致重复提交、浏览器驱动真实提交流缺失（P0）、**三套 backend 注册机制互不协同 + 生产 pipeline 从未接入 execution_backend**、**MCP stdio 单线程阻塞**、**LLM 配额账本是死代码**、**Browser 提交幂等键淘汰后可重放**、**Browser 登录判定用 nav 选择器误判已登录**、registry 校验把枚举值误当数据字段必然误报、strategy profile_id 不含 delay 哈希冲突、参数审计遗漏 10+ official_api 参数、lifecycle_records 无界增长 OOM 等
 - **用户体验**：13 项 — 含 Web 端永久无法真实提交却强制走完整 HIL、SSE 断连误取消但云端任务仍在运行、错误引导仅覆盖 4/11 类等
 - **WebUI**：13 项 — 含阻断阶段按钮仍可点、默认 inline HTML 不存在导致首屏空白、路由不进 URL 等
+- **安全与部署**：约 24 项（第三轮新发现）— 含**Docker 镜像以 root 运行 + evidence 目录 chmod 777**、**证据归档未脱敏（HAR/截图/网络日志含 Authorization/Cookie 原样落盘）**、**REAL_SUBMIT 可被 PYTEST_CURRENT_TEST 环境变量旁路**、CI npm critical CVE continue-on-error、CI 缺失 pip-audit、Python 版本不一致、日志脱敏正则要求含数字漏脱纯字母 token、security_scan 跳过 >1MB 文件、web_security allow_remote 时 Host 头作信任锚（DNS rebinding）、_launch_monitor 引用不存在的 exe、SBOM 仅含直接依赖等
 
-这些问题已对**生产稳定性、账户安全（重复提交 + 长表达式绕过相关性门禁）、反过拟合完整性（虚假 PASS）和可用性**造成实质性影响。本规格聚焦修复 Critical 与 High 级问题，并给出 Medium 级的改进方向。
+这些问题已对**生产稳定性、账户安全（重复提交 + 长表达式绕过相关性门禁 + REAL_SUBMIT 旁路 + 证据含凭证）、反过拟合完整性（虚假 PASS）和可用性**造成实质性影响。本规格聚焦修复 Critical 与 High 级问题，并给出 Medium 级的改进方向。
 
 ## What Changes
 
@@ -341,6 +342,128 @@ The system SHALL enforce an upper bound on `MAX_USER_ALPHAS_PAGES` to prevent un
 #### Scenario: 前台运行时长任务完成
 - **WHEN** a long task completes in foreground
 - **THEN** a toast or badge SHALL be shown (not only when `document.hidden`)
+
+## ADDED Requirements (第三轮：安全 / Agent / MCP / LLM / 架构)
+
+### Requirement: Docker 容器不得以 root 运行
+The system SHALL run the Docker container as a non-root user and SHALL NOT chmod 777 evidence directories.
+
+#### Scenario: 容器启动
+- **WHEN** the Docker container starts
+- **THEN** the process SHALL run as a non-root user (e.g., `appuser`)
+- **AND** evidence directories SHALL NOT be world-writable
+- **AND** docker-compose SHALL bind to `127.0.0.1` only, with `cap_drop: [ALL]` and `no-new-privileges`
+
+### Requirement: 证据归档须脱敏
+The system SHALL redact credentials (Authorization headers, Cookies, tokens) from HAR files, screenshots metadata, network logs, and console logs before persisting to the evidence directory.
+
+#### Scenario: 归档 browser session 证据
+- **WHEN** `archive_session` copies screenshots / DOM / HAR / logs
+- **THEN** HAR files SHALL have Authorization/Set-Cookie/Cookie headers redacted
+- **AND** network_logs / console_logs SHALL be passed through `redact_text`
+- **AND** evidence directory permissions SHALL be restricted (not 777)
+
+### Requirement: REAL_SUBMIT 旁路须基于进程内可信判定
+The system SHALL NOT trust the `PYTEST_CURRENT_TEST` environment variable as a test-environment signal for real-submit override, since it can be set externally.
+
+#### Scenario: 生产环境设置 PYTEST_CURRENT_TEST
+- **WHEN** `BRAIN_ALPHA_FORCE_REAL_SUBMIT=1` + `BRAIN_ALPHA_ENABLE_REAL_SUBMIT_TESTS=1` + `PYTEST_CURRENT_TEST=1` are all set in a production container
+- **THEN** real submission SHALL remain disabled
+- **AND** the override SHALL require a verifiable in-process pytest signal (e.g., `sys.modules` check) or be removed entirely
+
+### Requirement: 生产 pipeline 须接入 execution_backend
+The system SHALL integrate `execution_backend` into the production pipeline path, and SHALL NOT let `DEFAULT_BACKEND="browser"` be a dead default.
+
+#### Scenario: 生产 pipeline 启动
+- **WHEN** `runner.run_pipeline_from_config` or Web `_handle_pipeline_start` constructs `AlphaResearchPipeline`
+- **THEN** it SHALL pass `execution_backend` (browser mode for production)
+- **AND** `backend_registration.register_all_backends()` SHALL be invoked at startup
+- **AND** `register_backend` SHALL detect duplicate registration
+
+### Requirement: MCP stdio 不得被长轮询工具阻塞
+The system SHALL NOT let a single long-running tool call block the entire MCP stdio server.
+
+#### Scenario: 长轮询 simulation 调用
+- **WHEN** a `run_simulation` call polls for up to 600s
+- **THEN** other tool calls (e.g., `list_context`, `get_job_status`) SHALL still be servicable
+- **AND** `notifications/cancelled` SHALL be consumable
+- **OR** long-running tools SHALL be dispatched to a worker and return progress notifications
+
+### Requirement: LLM 配额账本须实际生效
+The system SHALL actually invoke the `LLMCallLedger` (record/wait_for_quota/budget_exhausted) so that the 200K token/run budget and rate limiting take effect.
+
+#### Scenario: LLM 调用
+- **WHEN** `_call_review_provider` or `_call_guidance_provider` calls the provider
+- **THEN** token usage SHALL be recorded in the ledger
+- **AND** the ledger SHALL be checked before the call (wait_for_quota)
+- **AND** budget exhaustion SHALL halt further LLM calls
+
+### Requirement: Browser 提交幂等键须持久化或不淘汰
+The system SHALL NOT evict idempotency keys such that a real submission can be replayed.
+
+#### Scenario: 长生命周期 adapter 或重启
+- **WHEN** the adapter exceeds `_MAX_IDEMPOTENCY_KEYS=1000` OR restarts
+- **THEN** idempotency keys SHALL persist to disk (or a larger store)
+- **AND** a replayed submission SHALL be rejected
+- **AND NOT** evict the oldest key allowing replay
+
+### Requirement: Browser 登录判定须可靠
+The system SHALL NOT use the generic `nav` selector as a login-success signal.
+
+#### Scenario: 错误凭证
+- **WHEN** login fails and the page stays on the login page
+- **THEN** `is_logged_in` SHALL be False
+- **AND** the check SHALL use login-page-specific negative signals (e.g., presence of password field, login error message)
+- **AND NOT** count `nav` elements which exist on both login and dashboard pages
+
+### Requirement: web_security allow_remote 须防 DNS rebinding
+The system SHALL NOT trust the attacker-controlled `Host` header as the trust anchor when `allow_remote=True`.
+
+#### Scenario: DNS rebinding attack
+- **WHEN** `allow_remote=True` and an attacker sends `Host: evil.com` + `Origin: http://evil.com`
+- **THEN** the request SHALL be rejected
+- **AND** the trust anchor SHALL be a configured allowlist (not the Host header)
+
+### Requirement: 日志脱敏须覆盖纯字母 token
+The system SHALL redact tokens that do not contain digits, not only those matching `\d`.
+
+#### Scenario: 纯字母 token
+- **WHEN** a log line contains `token-abc-def-xyz` or `session-cookie-abcd`
+- **THEN** the redaction filter SHALL redact it
+- **AND NOT** require a digit in the secret fragment
+
+### Requirement: CI 须真正检查依赖 CVE
+The system SHALL NOT use `continue-on-error` for npm critical CVE audit and SHALL add `pip-audit` for Python dependencies.
+
+#### Scenario: npm critical CVE
+- **WHEN** `npm audit --audit-level=critical` finds a critical CVE
+- **THEN** the CI gate SHALL fail
+- **AND NOT` continue-on-error`
+- **AND** Python dependencies SHALL be scanned by `pip-audit`
+
+### Requirement: strategy profile_id 须包含 delay
+The system SHALL include `delay` in the strategy profile_id hash to avoid collisions between same-name profiles with different delays.
+
+#### Scenario: 同名不同 delay 的 profile
+- **WHEN** two profiles share index/name/region/universe/neutralization but differ in delay
+- **THEN** their profile_ids SHALL be distinct
+- **AND** rewards/lineage/retired SHALL NOT cross-contaminate
+
+### Requirement: 参数审计须覆盖 official_api 全部参数
+The system SHALL include all `official_api` config parameters (cache_dir, context_cache_ttl_seconds, timeout_seconds, rate_limit_retry_attempts, etc.) in the parameter audit trace.
+
+#### Scenario: timeout_seconds 被篡改
+- **WHEN** `timeout_seconds` deviates from canonical
+- **THEN** the audit SHALL produce a finding
+- **AND** `api_paths_aligned` SHALL be False
+
+### Requirement: lifecycle_records 须有上限
+The system SHALL cap `lifecycle_records` growth (like `backtest_records` is capped at 200) to prevent OOM in `run_forever` mode.
+
+#### Scenario: 长跑流水线
+- **WHEN** `run_forever` mode runs for an extended period
+- **THEN** `lifecycle_records` SHALL be capped (e.g., last 500)
+- **AND** dedup window SHALL scale accordingly
 
 ## MODIFIED Requirements
 
