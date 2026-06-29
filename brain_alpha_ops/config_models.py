@@ -304,6 +304,11 @@ class RunConfig:
     environment: str = "production"
     auto_submit: bool = False
     demo_mode: bool = False
+    # F-031: execution backend selection. "auto" uses browser if playwright
+    # is installed, else falls back to API. "browser" forces the browser
+    # backend (production submit flow). "api" forces the API backend
+    # (development/diagnostic only).
+    execution_mode: str = "auto"
     experiment_id: str = ""
     experiment_version: str = ""
     credentials: CredentialConfig = field(default_factory=CredentialConfig)

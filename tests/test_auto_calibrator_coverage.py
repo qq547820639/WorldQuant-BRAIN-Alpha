@@ -31,9 +31,16 @@ class TestAutoCalibratorFallback:
 
     def test_calibrate_dimension_weights_when_importable(self, auto_cal):
         """When calibrate_weights IS importable, returns calibration result."""
-        with patch.dict(sys.modules, {"calibrate_weights": type(sys)("calibrate_weights")}):
-            import calibrate_weights
-            calibrate_weights.calibrate_prior_weights = lambda records, target_metric: {"sample_size": len(records), "calibrated": True}
+        # Task 2.13: the import path was corrected from the non-existent
+        # ``calibrate_weights`` module to ``calibration_engine``. Patch the
+        # real module so the lazy ``from ... import`` inside the method
+        # resolves to the stub.
+        from brain_alpha_ops.research import calibration_engine
+        with patch.object(
+            calibration_engine,
+            "calibrate_prior_weights",
+            lambda records, target_metric="sharpe": {"sample_size": len(records), "calibrated": True},
+        ):
             records = [{"sharpe": 2.0}]
             result = auto_cal._calibrate_dimension_weights(records)
             assert result.get("calibrated") is True

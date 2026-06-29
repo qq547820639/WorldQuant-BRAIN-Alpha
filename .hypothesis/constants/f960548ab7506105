@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web/handlers/sync.py
+# hypothesis_version: 6.141.1
+
+['JobStoreLike', 'SyncJobCancelled', '_scan_observability', '_timing_payload', 'active_job_payload', 'cloud_alpha_id', 'cloud_row_sort_key', 'health_payload', 'job_status_payload', 'lifecycle_payload', 'path_modified_at', 'presets_payload', 'profile_payload', 'run_sync_job_service']

@@ -95,6 +95,8 @@ class AdaptiveExecutor:
         self._cpu_pool: ProcessPoolExecutor | None = None
         self._cpu_fallback_warned = False
         self._lock = threading.Lock()
+        self._closed = False  # F-018: prevent submit() after shutdown()
+        self._futures: dict[str, Future] = {}  # F-024: job_id -> future
 
     def submit(
         self,
@@ -104,11 +106,21 @@ class AdaptiveExecutor:
         **kwargs: Any,
     ) -> Future:
         """Submit a task; pool is auto-selected unless *category* is explicit."""
+        if self._closed:  # F-018
+            raise RuntimeError("executor is closed")
         cat = category or _classify_task(fn)
         if cat == TaskCategory.CPU_BOUND:
             return self._submit_cpu(fn, *args, **kwargs)
-        else:
-            return self._get_io_pool().submit(fn, *args, **kwargs)
+        return self._get_io_pool().submit(fn, *args, **kwargs)
+
+    def register_future(self, job_id: str, future: Future) -> None:
+        """F-024: track a future under *job_id* for cooperative cancellation."""
+        self._futures[job_id] = future
+
+    def cancel(self, job_id: str) -> bool:
+        """F-024: cancel the future tracked under *job_id*."""
+        future = self._futures.pop(job_id, None)
+        return future.cancel() if future is not None else False
 
     def _submit_cpu(
         self, fn: Callable[..., Any], *args: Any, **kwargs: Any
@@ -129,6 +141,7 @@ class AdaptiveExecutor:
 
     def shutdown(self) -> None:
         with self._lock:
+            self._closed = True  # F-018
             if self._io_pool is not None:
                 self._io_pool.shutdown(wait=False, cancel_futures=True)
                 self._io_pool = None
@@ -322,10 +335,19 @@ def run_adaptive_job(
     store.update(active_job_id, status="running",
                  progress={"phase": "running", "percent": 5})
     future = executor.submit(fn, *args, category=category, **kwargs)
+    executor.register_future(active_job_id, future)  # F-024
 
     try:
         result = future.result(timeout=timeout)
     except TimeoutError:
+        # F-019: distinguish executor timeout (future still running) from
+        # business TimeoutError (future completed with that exception).
+        if future.done():
+            msg = redact_error_message(exc)
+            store.update(active_job_id, status="failed", error=msg,
+                         progress={"phase": "failed", "percent": 100, "message": msg})
+            return JobExecutionResult(active_job_id, "failed", error=msg,
+                                      duration_seconds=round(time.perf_counter() - started, 3))
         future.cancel()
         msg = "task timed out"
         logger.warning("adaptive_executor: job %s timed out after %.1fs",

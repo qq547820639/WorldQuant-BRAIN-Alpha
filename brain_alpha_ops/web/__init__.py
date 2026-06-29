@@ -150,11 +150,16 @@ def _install_facade_bindings() -> None:
     See ``web_handler_dispatch.py`` for the route table and
     ``web_handler_dispatch_core.py`` for the dispatch loop.
     """
+    from brain_alpha_ops.redaction import redact_error_message as _redact_err
+    # Build a merged namespace for facade bindings: globals + _SERVICE_NS.
+    # This allows build_web_facade_bindings to access service namespace
+    # values without polluting module globals.
+    merged_ns = {**globals(), **_SERVICE_NS}
+
+    # ── Subsystem 1: business handler import + dependency injection (CRITICAL) ──
+    # F-034 fix: a half-installed facade leaves ``serve()`` dispatching to
+    # ``None`` handlers.  Refuse to start instead of silently degrading.
     try:
-        # Build a merged namespace for facade bindings: globals + _SERVICE_NS.
-        # This allows build_web_facade_bindings to access service namespace
-        # values without polluting module globals.
-        merged_ns = {**globals(), **_SERVICE_NS}
         from brain_alpha_ops.web.business import web_business as _business_handlers
         from brain_alpha_ops.web.business.web_business import (
             _has_valid_api_session as _business_has_valid_api_session,
@@ -213,10 +218,22 @@ def _install_facade_bindings() -> None:
         globals()["_has_valid_api_session"] = _business_has_valid_api_session
         globals()["_has_valid_local_origin"] = _business_has_valid_local_origin
         globals()["_runtime_facade"] = _web_runtime_facade
+    except Exception as e:
+        logger.error("Facade bindings: CRITICAL business handler install failed: %s", _redact_err(e))
+        raise  # refuse half-installed facade — see F-034
+
+    # ── Subsystem 2: extended facade bindings (NON-CRITICAL — legacy alt path) ──
+    try:
         globals().update(_build_web_facade_bindings(merged_ns))
+    except Exception as e:
+        logger.error("Facade bindings: extended facade build failed (non-critical): %s", _redact_err(e))
+
+    # ── Subsystem 3: legacy re-export lookup (NON-CRITICAL) ──
+    try:
         globals()["_LEGACY_IMPORTED_EXPORTS"] = _build_legacy_imported_exports(merged_ns)
     except Exception as e:
-        from brain_alpha_ops.redaction import redact_error_message; logger.error("Facade bindings install failed: %s", redact_error_message(e))
+        logger.error("Facade bindings: legacy exports build failed (non-critical): %s", _redact_err(e))
+        globals()["_LEGACY_IMPORTED_EXPORTS"] = {}
 
 
 def web_application_context():

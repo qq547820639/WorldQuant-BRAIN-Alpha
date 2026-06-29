@@ -269,6 +269,7 @@ class _SchedulerTickMixin:
             retry_after = exc.retry_after or _COOLDOWN_429
             # Workstream C2.2: reset before cooldown (same rationale as above).
             slot.reset()
+            slot.last_error = error_text
             slot.enter_cooldown(retry_after, f"rate limited (retry_after={retry_after})")
             candidate.lifecycle_status = "simulation_deferred_rate_limit"
             self._emit_event(

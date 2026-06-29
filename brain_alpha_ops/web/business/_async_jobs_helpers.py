@@ -52,5 +52,13 @@ def _store_get(store: Any, job_id: str) -> dict[str, Any]:
 def _store_is_cancelled(store: Any, job_id: str) -> bool:
     checker = getattr(store, "is_cancelled", None)
     if callable(checker):
-        return bool(checker(job_id))
-    return bool(_store_get(store, job_id).get("cancel"))
+        try:
+            return bool(checker(job_id))
+        except Exception:
+            # F-034 fix: fail-closed — treat probe errors as cancelled so a
+            # failing store probe cannot silently keep a job running.
+            return True
+    try:
+        return bool(_store_get(store, job_id).get("cancel"))
+    except Exception:
+        return True

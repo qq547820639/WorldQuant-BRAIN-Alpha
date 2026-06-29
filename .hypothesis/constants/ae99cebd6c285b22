@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/browser/execution_adapter/_base.py
+# hypothesis_version: 6.141.1
+
+[1000, 'Missing credentials', 'alpha_id', 'artifacts', 'browser', 'console_logs', 'details', 'dom_snapshots', 'error', 'error_code', 'evidence', 'har_path', 'network_logs', 'ok', 'password', 'readonly', 'screenshots', 'step', 'transport', 'username']

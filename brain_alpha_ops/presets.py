@@ -83,7 +83,7 @@ def _build_settings(**overrides: Any) -> BrainSettings:
         "pasteurization": _registry_default("pasteurization", "ON"),
         "unitHandling": _registry_default("unit_handling", "VERIFY"),
         "nanHandling": _registry_default("nan_handling", "ON"),
-        "language": _registry_default("test_period", "FASTEXPR"),
+        "language": _registry_default("language", "FASTEXPR"),
     }
     defaults.update(overrides)
     return BrainSettings(**defaults)

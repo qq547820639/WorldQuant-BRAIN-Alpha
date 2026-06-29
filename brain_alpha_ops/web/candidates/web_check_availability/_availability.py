@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from brain_alpha_ops.models import utc_now
-from brain_alpha_ops.redaction import redact_text
+from brain_alpha_ops.redaction import redact_error_message, redact_text
 from brain_alpha_ops.research.expression_ast import expression_key
 from brain_alpha_ops.research.safety import similarity
 from brain_alpha_ops.submission_readiness import missing_official_metric_fields
@@ -79,7 +79,10 @@ def check_candidate_availability(
         raw_metrics = candidate.get("metrics")
         metrics = raw_metrics if isinstance(raw_metrics, dict) else {}
     pass_fail = str(metrics.get("pass_fail") or "").strip().upper()
-    missing_metric_fields = missing_official_metric_fields(metrics) if metrics else []
+    try:
+        missing_metric_fields = missing_official_metric_fields(metrics) if metrics else []
+    except Exception:
+        missing_metric_fields = []
     decision_band = _submission_decision_band(candidate)
     add("production_gate", is_passed_candidate_for_check(candidate), gate.get("status", ""))
     add("official_alpha_id", bool(official_id), official_id or "missing official alpha id")
@@ -98,39 +101,66 @@ def check_candidate_availability(
     add("not_failed_locally", not any(word in status_text for word in ("failed", "rejected", "not_passed")), candidate.get("lifecycle_status", ""))
     add("cloud_sync_available", not cloud_error, cloud_error or f"{len(cloud_alphas)} cloud alphas loaded")
 
-    records = ledger.records()
-    duplicate_id = official_id and any(row.get("official_alpha_id") == official_id for row in records)
-    candidate_expr_key = expression_key(str(candidate.get("expression", "")))
-    duplicate_expr = bool(candidate_expr_key) and any(expression_key(str(row.get("expression", ""))) == candidate_expr_key for row in records)
-    add("not_submitted_before", not duplicate_id and not duplicate_expr, "duplicate local submission record" if (duplicate_id or duplicate_expr) else "new local submission")
+    # 12-check isolation: each subsequent check involves external calls or
+    # heavier logic — wrap per-check so one failure cannot abort the whole
+    # panel. Failed checks record a ``check error`` row instead of crashing.
+    try:
+        records = ledger.records()
+        duplicate_id = official_id and any(row.get("official_alpha_id") == official_id for row in records)
+        candidate_expr_key = expression_key(str(candidate.get("expression", "")))
+        duplicate_expr = bool(candidate_expr_key) and any(expression_key(str(row.get("expression", ""))) == candidate_expr_key for row in records)
+        add("not_submitted_before", not duplicate_id and not duplicate_expr, "duplicate local submission record" if (duplicate_id or duplicate_expr) else "new local submission")
+    except Exception as exc:
+        logger.warning("availability check 'not_submitted_before' raised: %s", redact_error_message(exc))
+        add("not_submitted_before", False, "check error")
 
-    cloud_status = cloud_status_for(candidate, cloud_alphas)
-    already_submitted_status = str(cloud_status.get("status", "")).upper() in {"ACTIVE", "SUBMITTED", "PRODUCTION", "CONDUCTED"}
-    add("cloud_status_not_already_submitted", not already_submitted_status, cloud_status.get("status", "not found"))
+    try:
+        cloud_status = cloud_status_for(candidate, cloud_alphas)
+        already_submitted_status = str(cloud_status.get("status", "")).upper() in {"ACTIVE", "SUBMITTED", "PRODUCTION", "CONDUCTED"}
+        add("cloud_status_not_already_submitted", not already_submitted_status, cloud_status.get("status", "not found"))
+    except Exception as exc:
+        logger.warning("availability check 'cloud_status_not_already_submitted' raised: %s", redact_error_message(exc))
+        cloud_status = {"id": "", "status": "", "match": "none"}
+        add("cloud_status_not_already_submitted", False, "check error")
 
-    cloud_risk = cloud_similarity_risk(candidate, cloud_alphas)
-    observability_preflight = observability_preflight or observability_submission_preflight(str(Path(ledger.path).parent))
-    cloud_check_context = _cloud_self_correlation_check_context(observability_preflight)
-    cloud_explanation = build_cloud_self_correlation_explanation(candidate, cloud_risk, check_context=cloud_check_context)
-    add(
-        "cloud_self_correlation",
-        cloud_risk["level"] != "high",
-        f"{cloud_risk['level']} {cloud_risk['max_similarity']:.4f}",
-        risk_explanation=cloud_explanation if cloud_risk["level"] in {"high", "medium"} else None,
-        state_navigation=cloud_explanation.get("navigation") if cloud_risk["level"] == "high" else None,
-        severity=cloud_explanation.get("severity"),
-    )
+    try:
+        observability_preflight = observability_preflight or observability_submission_preflight(str(Path(ledger.path).parent))
+    except Exception as exc:
+        logger.warning("observability preflight computation failed: %s", redact_error_message(exc))
+        observability_preflight = observability_preflight or {}
 
-    context_explanation = build_context_health_explanation(observability_preflight)
-    context_blocked = bool(context_explanation.get("blocking_flags"))
-    add(
-        "context_health_preflight",
-        not context_blocked,
-        context_explanation.get("summary", ""),
-        risk_explanation=context_explanation if context_blocked else None,
-        state_navigation=context_explanation.get("navigation") if context_blocked else None,
-        severity=context_explanation.get("severity"),
-    )
+    try:
+        cloud_risk = cloud_similarity_risk(candidate, cloud_alphas)
+        cloud_check_context = _cloud_self_correlation_check_context(observability_preflight)
+        cloud_explanation = build_cloud_self_correlation_explanation(candidate, cloud_risk, check_context=cloud_check_context)
+        add(
+            "cloud_self_correlation",
+            cloud_risk["level"] != "high",
+            f"{cloud_risk['level']} {cloud_risk['max_similarity']:.4f}",
+            risk_explanation=cloud_explanation if cloud_risk["level"] in {"high", "medium"} else None,
+            state_navigation=cloud_explanation.get("navigation") if cloud_risk["level"] == "high" else None,
+            severity=cloud_explanation.get("severity"),
+        )
+    except Exception as exc:
+        logger.warning("availability check 'cloud_self_correlation' raised: %s", redact_error_message(exc))
+        cloud_risk = {"level": "unknown", "max_similarity": 0.0, "matched_alpha_id": "", "matched_status": ""}
+        add("cloud_self_correlation", False, "check error")
+
+    try:
+        context_explanation = build_context_health_explanation(observability_preflight)
+        context_blocked = bool(context_explanation.get("blocking_flags"))
+        add(
+            "context_health_preflight",
+            not context_blocked,
+            context_explanation.get("summary", ""),
+            risk_explanation=context_explanation if context_blocked else None,
+            state_navigation=context_explanation.get("navigation") if context_blocked else None,
+            severity=context_explanation.get("severity"),
+        )
+    except Exception as exc:
+        logger.warning("availability check 'context_health_preflight' raised: %s", redact_error_message(exc))
+        context_explanation = {"summary": "check error", "blocking_flags": []}
+        add("context_health_preflight", False, "check error")
 
     official_check_passed = False
     local_preflight_passed = all(row["passed"] for row in checks)

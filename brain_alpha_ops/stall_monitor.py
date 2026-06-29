@@ -63,11 +63,13 @@ class StallMonitor:
         config: StallMonitorConfig | None = None,
         on_stall: Callable[[str, JobStallSnapshot], None] | None = None,
         on_interrupt: Callable[[str], None] | None = None,
+        future_canceller: Callable[[str], bool] | None = None,
     ):
         self._get_jobs = job_store_getter
         self.config = config or StallMonitorConfig()
         self._on_stall = on_stall
         self._on_interrupt = on_interrupt
+        self._future_canceller = future_canceller  # F-024: actually cancel futures
         self._snapshots: dict[str, JobStallSnapshot] = {}
         self._stall_counts: dict[str, int] = {}
         self._interrupt_counts: dict[str, int] = {}
@@ -204,7 +206,14 @@ class StallMonitor:
                 self._auto_interrupt(job_id, stall_count)
 
     def _auto_interrupt(self, job_id: str, stall_count: int) -> None:
-        """Auto-interrupt a stalled job."""
+        """Auto-interrupt a stalled job.
+
+        F-024: in addition to the ``on_interrupt`` callback (which marks the
+        job), call ``future_canceller`` to actually cancel the pending/running
+        future.  ``future.cancel()`` only prevents a *pending* task from
+        starting; a *running* task must cooperate by checking the job's
+        cancel flag in the store.
+        """
         if stall_count > self.config.max_retry_count:
             logger.error(
                 "StallMonitor: job %s exceeded max retry count (%d), escalating",
@@ -214,6 +223,13 @@ class StallMonitor:
 
         logger.warning("StallMonitor: auto-interrupting job %s (attempt %d/%d)",
                       job_id[:12], stall_count, self.config.max_retry_count)
+        if self._future_canceller is not None:
+            try:
+                cancelled = self._future_canceller(job_id)
+            except Exception:
+                logger.debug("StallMonitor: future_canceller raised for %s", job_id[:12], exc_info=True)
+                cancelled = False
+            logger.info("StallMonitor: future cancel for %s -> %s", job_id[:12], cancelled)
         if self._on_interrupt:
             self._on_interrupt(job_id)
 

@@ -146,16 +146,19 @@ def _get_candidates_simulate_eligible(
         }
         handler._json(simulation_candidates_payload(_flat))
     except Exception as exc:
-        logger.exception("simulation_candidates_payload failed")
+        # Degrade gracefully: return 200 with an empty candidate list so the
+        # frontend can still render the simulation panel instead of surfacing
+        # a 500 that blocks the whole view. The error is still surfaced via
+        # ``error_code`` for diagnostics.
+        logger.warning("simulation_candidates_payload failed — returning degraded empty list", exc_info=True)
         handler._json(
-            _error_response(
-                {
-                    "ok": False,
-                    "error_code": "SIMULATION_PREVIEW_ERROR",
-                    "error": redact_error_message(exc),
-                }
-            ),
-            status=500,
+            {
+                "ok": False,
+                "error_code": "SIMULATION_PREVIEW_ERROR",
+                "error": redact_error_message(exc),
+                "candidates": [],
+                "degraded": True,
+            }
         )
 
 

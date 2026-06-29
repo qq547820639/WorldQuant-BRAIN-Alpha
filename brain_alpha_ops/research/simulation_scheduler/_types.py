@@ -72,6 +72,10 @@ class SimulationSlot:
         self.result = {}
         self.started_at = 0.0
         self.completed_at = 0.0
+        # Reset error tracking so a reused slot starts clean instead of
+        # inheriting error_count/last_error from the previous occupant.
+        self.error_count = 0
+        self.last_error = ""
 
     def to_dict(self) -> dict[str, Any]:
         return {

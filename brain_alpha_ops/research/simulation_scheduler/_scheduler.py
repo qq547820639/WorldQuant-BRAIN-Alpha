@@ -52,7 +52,7 @@ class ThreeSlotScheduler(_SchedulerHelpersMixin, _SchedulerTickMixin):
     api: BrainAPI
     settings_provider: Callable[[], dict[str, Any]]
     poll_interval: Callable[[], float] = field(default=lambda: _DEFAULT_POLL_INTERVAL)
-    event_callback: Callable[..., None] = field(default=lambda: lambda *a, **kw: None)
+    event_callback: Callable[..., None] | None = None
     progress_callback: Callable[..., None] | None = None
     stop_callback: Callable[[], bool] = field(default=lambda: False)
     max_slots: int = 3

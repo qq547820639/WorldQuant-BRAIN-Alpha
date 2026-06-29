@@ -14,6 +14,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import threading
 from typing import Any, Dict, List, Optional
 
 from brain_alpha_ops.brain_api.canonical import CANONICAL_THRESHOLDS
@@ -69,6 +70,7 @@ class OfficialScoringSystem(_GatesMixin, _HintsMixin, _HistoryMixin):
         # Optional persistent history for convergence tracking across restarts
         self._persisted_history = _PersistedScoreHistoryDB() if persist_history else None
         self._audit_trail_dir = audit_trail_dir
+        self._lock = threading.Lock()
 
     # ── Core Evaluation ──
 

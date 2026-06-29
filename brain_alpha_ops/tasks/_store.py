@@ -255,7 +255,11 @@ class JobStore:
             return
         try:
             payload = json.loads(self.persistence_path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
+        except (OSError, json.JSONDecodeError) as exc:
+            # F-023: record the failure but do NOT set persistence_load_skipped
+            # — persistence remains enabled so the corrupted file can be
+            # overwritten with valid data on the next job change.
+            self.last_persist_error = f"failed to load job store: {exc}"
             return
         raw_jobs = payload.get("jobs") if isinstance(payload, dict) else payload
         if not isinstance(raw_jobs, dict):
@@ -317,9 +321,10 @@ class JobStore:
     def _persist_locked(self) -> None:
         if not self.persistence_path:
             return
-        if self.persistence_load_skipped:
-            self.last_persist_error = self.last_persist_error or "job store persistence skipped after oversized load"
-            return
+        # F-023: persistence_load_skipped is NOT permanent. When jobs change,
+        # retry writing so the store self-heals after a transient load skip
+        # (e.g. operator shrinks/removes the oversized file). The unreadable
+        # old data is overwritten with the current in-memory state.
         try:
             self.persistence_path.parent.mkdir(parents=True, exist_ok=True)
             payload = {
@@ -332,6 +337,8 @@ class JobStore:
             tmp_path.write_text(data, encoding="utf-8")
             os.replace(tmp_path, self.persistence_path)
             self.last_persist_error = ""
+            # Reset load-skipped flag after a successful persist.
+            self.persistence_load_skipped = False
         except OSError as exc:
             self.last_persist_error = str(exc)
 

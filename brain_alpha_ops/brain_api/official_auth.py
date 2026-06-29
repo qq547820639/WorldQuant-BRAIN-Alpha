@@ -63,15 +63,14 @@ class OfficialAuthProfileMixin:
         try:
             data, _headers = self._request("GET", self.config.user_profile_path)
         except BrainAPIError as exc:
-            return {
-                "error": f"Failed to fetch user profile: {exc}",
-                "status_code": exc.status_code,
-                "tier": "unknown",
-                "level": None,
-                "points": None,
-                "username": self.username,
-                "raw": {},
-            }
+            # F-012 fix: fail-closed — re-raise so callers cannot mistake a
+            # silently-returned ``{"tier": "unknown", ...}`` dict for a
+            # successful profile fetch. Callers (e.g. pipeline run mixin)
+            # already wrap this call in try/except and record the failure.
+            raise BrainAPIError(
+                f"Failed to fetch user profile: {exc}",
+                status_code=exc.status_code,
+            ) from exc
 
         scrubbed = _scrub(data)
         tier = str(_first_value(

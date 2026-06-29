@@ -26,7 +26,9 @@ class _WeightCalibrationMixin:
         Data format is compatible with calibrate_weights.py:calibrate_prior_weights().
         """
         try:
-            from calibrate_weights import calibrate_prior_weights
+            from brain_alpha_ops.research.calibration_engine import (
+                calibrate_prior_weights,
+            )
 
             return calibrate_prior_weights(records, target_metric="sharpe")
         except (ImportError, FileNotFoundError, AttributeError) as exc:
@@ -42,7 +44,9 @@ class _WeightCalibrationMixin:
         Data format is compatible with calibrate_weights.py:calibrate_scorecard_weights().
         """
         try:
-            from calibrate_weights import calibrate_scorecard_weights
+            from brain_alpha_ops.research.calibration_engine import (
+                calibrate_scorecard_weights,
+            )
 
             return calibrate_scorecard_weights(records)
         except (ImportError, FileNotFoundError, AttributeError) as exc:

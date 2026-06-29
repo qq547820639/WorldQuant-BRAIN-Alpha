@@ -59,6 +59,10 @@ class _LocalPrefilterMixin:
                 candidate.lifecycle_status = "local_prefilter_rejected"
                 candidate.gate = _blocked_gate("SCORING_ERROR", [_score_msg])
                 p.services.runtime._event("scoring_failed", _score_msg, candidate.alpha_id, level="WARN")
+                # F-034 fix: record lifecycle before continue so the scoring
+                # failure is captured in the candidate's lifecycle trail
+                # instead of being silently dropped by the early continue.
+                p.services.runtime._record_lifecycle(candidate, "local_scored", _score_msg)
                 continue
             _expr_key_val = getattr(candidate, "expression", "") or ""
             _cur_ds = getattr(p, "_active_dataset_id", "")

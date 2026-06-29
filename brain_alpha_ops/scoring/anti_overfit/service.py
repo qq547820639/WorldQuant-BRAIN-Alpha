@@ -37,20 +37,21 @@ class AntiOverfitService:
             or _candidate_value(candidate, "ic_series")
             or _candidate_value(candidate, "rank_ic_series")
         )
+        # F-001/F-002: fallback chain must keep returns/IC semantics strict.
+        # returns/forward_returns never fall back to ic_series/rank_ic_series
+        # (IC is a factor-quality metric, not a return). Missing returns →
+        # sample_size collapses → insufficient_data (fail-closed), never pass.
         returns = _number_series(
-            metrics.get("returns_series")
+            metrics.get("returns")
+            or metrics.get("returns_series")
             or metrics.get("forward_returns")
             or metrics.get("forward_returns_series")
-            or metrics.get("rank_ic_series")
-            or metrics.get("ic_series")
+            or _candidate_value(candidate, "returns")
             or _candidate_value(candidate, "returns_series")
-            or factor_values
         )
         forward_returns = _number_series(
             metrics.get("forward_returns")
             or metrics.get("forward_returns_series")
-            or metrics.get("rank_ic_series")
-            or metrics.get("ic_series")
             or _candidate_value(candidate, "forward_returns")
             or returns
         )

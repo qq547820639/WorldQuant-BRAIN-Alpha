@@ -101,16 +101,16 @@ def normalize_metrics(payload: Any) -> dict:
         "turnover": _ratio(_first_value(metrics_root, ["turnover", "Turnover"])),
         "turnover_raw": _num(_first_value(metrics_root, ["turnover", "Turnover"])),
         "returns": _num_or_none(_first_value(metrics_root, ["returns", "Returns", "return"], None)),
-        "drawdown": abs(_ratio(_first_value(metrics_root, ["drawdown", "maxDrawdown", "MaxDrawdown"]))),
+        "drawdown": abs(_ratio(_first_value(metrics_root, ["drawdown", "maxDrawdown", "MaxDrawdown"]), bounded=True)),
         "margin": _num_or_none(_first_value(metrics_root, ["margin", "Margin"], None)),
         "sub_universe_sharpe": sub_universe_sharpe_value,
         "subUniverseSize": _num_or_none(_first_value(metrics_root, ["subUniverseSize", "sub_universe_size", "subSize"], None)),
         "alphaSize": _num_or_none(_first_value(metrics_root, ["alphaSize", "alpha_size"], None)),
-        "correlation": abs(_ratio(correlation_value)) if correlation_value is not None else None,
-        "self_correlation": abs(_ratio(self_correlation_value)) if self_correlation_value is not None else None,
-        "prod_correlation": abs(_ratio(prod_correlation_value)) if prod_correlation_value is not None else None,
+        "correlation": abs(_ratio(correlation_value, bounded=True)) if correlation_value is not None else None,
+        "self_correlation": abs(_ratio(self_correlation_value, bounded=True)) if self_correlation_value is not None else None,
+        "prod_correlation": abs(_ratio(prod_correlation_value, bounded=True)) if prod_correlation_value is not None else None,
         "self_correlation_status": self_correlation_status or None,
-        "weight_concentration": _ratio(_first_value(metrics_root, ["weightConcentration", "weight_concentration"], 0.0)),
+        "weight_concentration": _ratio(_first_value(metrics_root, ["weightConcentration", "weight_concentration"], 0.0), bounded=True),
         "pass_fail": "FAIL" if failed else "PASS",
         "failure_reason": ", ".join(str(_first_value(item, ["name", "title", "check"], "FAILED_CHECK")) for item in failed[:3]) or None,
         "brain_checks": brain_checks,
@@ -264,24 +264,22 @@ def _num_or_none(value: Any):
     return _num(value)
 
 
-def _ratio(value: Any) -> float:
-    """Convert a metric value to a decimal ratio.
+def _ratio(value: Any, *, bounded: bool = False) -> float:
+    """Convert a metric value to a decimal ratio (unified rule).
 
-    BRAIN API can return metrics as either percentages (e.g. 75.0 -> 0.75) or
-    decimals (e.g. 0.75). Values below 2.0 are preserved so ordinary ratios like
-    turnover=1.5 are not converted to 0.015.
+    Delegates to :func:`brain_alpha_ops.research._ratio.normalize_brain_ratio`
+    so that ``official_helpers`` uses the same threshold as the rest of the
+    codebase: ``abs(value) >= 100`` triggers division by 100 in unbounded
+    mode (default), and ``abs(value) > 1.0`` triggers it in bounded mode for
+    metrics mathematically clamped to ``[0, 1]`` (drawdown, correlation,
+    weight concentration).
 
-    Values >= 2.0 are treated as percentage-scale. This follows the existing
-    project contract and keeps high-turnover official metrics conservative:
-    turnover=3.5 is normalized to 0.035 instead of being treated as a passing
-    350% decimal ratio.
+    This replaces the legacy ``abs >= 2.0`` heuristic which incorrectly
+    compressed natural turnover values like ``2.5 → 0.025``.
     """
-    numeric = _num(value)
-    # Only treat values >= 2.0 as percentage-scale; values in [0, 2) are
-    # kept as-is to avoid mutilating turnover / correlation ratios.
-    if numeric >= 2.0:
-        return numeric / 100.0
-    return numeric
+    from brain_alpha_ops.research._ratio import normalize_brain_ratio
+
+    return normalize_brain_ratio(value, bounded=bounded)
 
 
 def merge_payloads(left: Any, right: Any) -> dict:

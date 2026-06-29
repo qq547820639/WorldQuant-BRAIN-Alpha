@@ -78,6 +78,10 @@ class _LocalPrefilterMixin:
                 candidate.lifecycle_status = "local_prefilter_rejected"
                 candidate.gate = _blocked_gate("SCORING_ERROR", [_score_msg])
                 self._event("scoring_failed", _score_msg, candidate.alpha_id, level="WARN")
+                # F-034 fix: record lifecycle before continue so the scoring
+                # failure is captured in the candidate's lifecycle trail
+                # instead of being silently dropped by the early continue.
+                self._record_lifecycle(candidate, "local_scored", _score_msg)
                 continue
             # Item 7: Detect cross-universe expression reuse
             _expr_key = getattr(candidate, "expression", "") or ""

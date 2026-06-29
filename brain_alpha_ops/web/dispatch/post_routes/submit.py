@@ -13,6 +13,12 @@ from ..web_handler_dispatch import (
     _validated_post_route,
 )
 
+# Configurable HTTP status returned when the Web-flow real-submit kill-switch
+# is active. Defaults to 403 (Forbidden) per HTTP semantics for policy
+# denials; exposed as a module constant so tests or operators can override
+# (e.g. 409 Conflict / 423 Locked) without editing the route body.
+_SUBMIT_DISABLED_HTTP_STATUS: int = 403
+
 
 @_validated_post_route(validate_alpha_action_payload, "SUBMIT_ERROR")
 def _post_submit(
@@ -40,7 +46,7 @@ def _post_submit(
                 },
             }
         ),
-        status=403,
+        status=_SUBMIT_DISABLED_HTTP_STATUS,
     )
 
 
@@ -72,5 +78,5 @@ def _post_submit_batch(
                 },
             }
         ),
-        status=403,
+        status=_SUBMIT_DISABLED_HTTP_STATUS,
     )

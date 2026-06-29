@@ -131,8 +131,16 @@ class PipelineRunMixin:
                 experiment_id=self._experiment_id,
                 experiment_version=self._experiment_version)
         except Exception as exc:
-            logger.warning("failed to persist run history for %s: %s", run_id, redact_error_message(exc))
+            message = redact_error_message(exc)
+            logger.warning("failed to persist run history for %s: %s", run_id, message)
             logger.debug("run history persistence traceback for %s", run_id, exc_info=True)
+            # Record the persistence failure as a pipeline event so it is
+            # surfaced in the event stream instead of being silently logged.
+            self.services.runtime._event(
+                "run_history_persist_failed",
+                f"Failed to persist run history: {message}",
+                level="WARN",
+            )
 
         # P1-2: Auto-record trend after pipeline run
         try:

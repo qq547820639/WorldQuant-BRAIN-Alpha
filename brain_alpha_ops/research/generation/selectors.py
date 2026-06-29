@@ -44,8 +44,15 @@ class HypothesisSelector:
             pool = all_h
             excluded_ids.clear()
 
-        # Weighted random selection by experience_weights.overall
-        weights = [max(0.01, h.experience_weights.overall) for h in pool]
+        # Weighted random selection by experience_weights.overall, scaled by
+        # the feedback weight recorded via ``HypothesisLibrary.adjust_weight``
+        # (closes the hypothesis feedback loop: prod_correlation penalties
+        # reduce a hypothesis's selection probability, diversity rewards
+        # increase it). Defaults to 1.0 (neutral) when no feedback recorded.
+        weights = [
+            max(0.01, h.experience_weights.overall * self._library.get_hypothesis_weight(h.id))
+            for h in pool
+        ]
         chosen: "Hypothesis" = random.choices(pool, weights=weights, k=1)[0]
 
         # Update recency tracker

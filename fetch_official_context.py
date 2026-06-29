@@ -8,12 +8,11 @@ credentials, tokens, cookies, or raw authentication responses.
 from __future__ import annotations
 
 import argparse
-from contextlib import contextmanager
 from copy import deepcopy
 from datetime import datetime, timedelta, timezone
+from email.utils import parsedate_to_datetime
 import json
 from pathlib import Path
-import signal
 import threading
 import tempfile
 from typing import Any
@@ -49,77 +48,80 @@ def refresh_official_context(
     before = official_context_file_counts(load_config=lambda: run_config)
 
     progress_event = threading.Event()
-    try:
-        with _refresh_deadline(timeout_seconds, progress_event=progress_event):
-            _require_credentials(run_config)
-            with _api_cache_scope(run_config, write=write) as api_config:
-                api = OfficialBrainAPI(api_config, disable_proxy=disable_proxy, **run_config.credentials.resolve())
-                api.set_market_scope(run_config.ops.settings)
-                auth = api.authenticate()
-                progress: dict[str, list[dict[str, Any]]] = {"fields": [], "operators": [], "datasets": []}
-                fields = api.list_fields(
-                    "all",
-                    run_config.ops.settings.region,
-                    progress_callback=_progress(progress, "fields", progress_event=progress_event),
-                )
-                if not fields:
-                    raise RuntimeError("official data-fields refresh returned zero records")
-                operators = api.list_operators("all", progress_callback=_progress(progress, "operators", progress_event=progress_event))
-                if not operators:
-                    raise RuntimeError("official operators refresh returned zero records")
-                datasets = list_official_datasets_or_derive(
-                    api,
+
+    def _do_refresh() -> dict[str, Any]:
+        _require_credentials(run_config)
+        with _api_cache_scope(run_config, write=write) as api_config:
+            api = OfficialBrainAPI(api_config, disable_proxy=disable_proxy, **run_config.credentials.resolve())
+            api.set_market_scope(run_config.ops.settings)
+            auth = api.authenticate()
+            progress: dict[str, list[dict[str, Any]]] = {"fields": [], "operators": [], "datasets": []}
+            fields = api.list_fields(
+                "all",
+                run_config.ops.settings.region,
+                progress_callback=_progress(progress, "fields", progress_event=progress_event),
+            )
+            if not fields:
+                raise RuntimeError("official data-fields refresh returned zero records")
+            operators = api.list_operators("all", progress_callback=_progress(progress, "operators", progress_event=progress_event))
+            if not operators:
+                raise RuntimeError("official operators refresh returned zero records")
+            datasets = list_official_datasets_or_derive(
+                api,
+                fields,
+                region=run_config.ops.settings.region,
+                datasets_from_fields=lambda rows: datasets_from_fields(rows, load_config=lambda: run_config),
+            )
+            if not datasets:
+                raise RuntimeError("official data-sets refresh returned zero records")
+            if write:
+                persist_official_context(
                     fields,
-                    region=run_config.ops.settings.region,
-                    datasets_from_fields=lambda rows: datasets_from_fields(rows, load_config=lambda: run_config),
+                    operators,
+                    datasets,
+                    load_config=lambda: run_config,
                 )
-                if not datasets:
-                    raise RuntimeError("official data-sets refresh returned zero records")
-                if write:
-                    persist_official_context(
-                        fields,
-                        operators,
-                        datasets,
-                        load_config=lambda: run_config,
-                    )
-                after = official_context_file_counts(load_config=lambda: run_config)
-                freshness_findings = _post_refresh_freshness_findings(after) if write else []
-                result = _base_result(
-                    run_config,
-                    started_at,
-                    status_path,
-                    write=write,
-                    disable_proxy=disable_proxy,
-                    timeout_seconds=timeout_seconds,
-                )
+            after = official_context_file_counts(load_config=lambda: run_config)
+            freshness_findings = _post_refresh_freshness_findings(after) if write else []
+            result = _base_result(
+                run_config,
+                started_at,
+                status_path,
+                write=write,
+                disable_proxy=disable_proxy,
+                timeout_seconds=timeout_seconds,
+            )
+            result.update(
+                {
+                    "ok": not freshness_findings,
+                    "status": "refresh_incomplete"
+                    if freshness_findings
+                    else ("refreshed" if write else "fetched_no_write"),
+                    "auth": _safe_auth_summary(auth),
+                    "counts": {
+                        "fields": len(fields),
+                        "operators": len(operators),
+                        "datasets": len(datasets),
+                    },
+                    "before": _context_counts(before),
+                    "after": _context_counts(after),
+                    "progress": _compact_progress(progress),
+                }
+            )
+            if freshness_findings:
                 result.update(
                     {
-                        "ok": not freshness_findings,
-                        "status": "refresh_incomplete"
-                        if freshness_findings
-                        else ("refreshed" if write else "fetched_no_write"),
-                        "auth": _safe_auth_summary(auth),
-                        "counts": {
-                            "fields": len(fields),
-                            "operators": len(operators),
-                            "datasets": len(datasets),
-                        },
-                        "before": _context_counts(before),
-                        "after": _context_counts(after),
-                        "progress": _compact_progress(progress),
+                        "error_code": "OFFICIAL_CONTEXT_METADATA_STALE",
+                        "error_category": "freshness",
+                        "retryable": False,
+                        "freshness_findings": freshness_findings,
                     }
                 )
-                if freshness_findings:
-                    result.update(
-                        {
-                            "error_code": "OFFICIAL_CONTEXT_METADATA_STALE",
-                            "error_category": "freshness",
-                            "retryable": False,
-                            "freshness_findings": freshness_findings,
-                        }
-                    )
-                _write_status_file(status_path, result)
-                return result
+            _write_status_file(status_path, result)
+            return result
+
+    try:
+        return _run_with_deadline(_do_refresh, timeout_seconds=timeout_seconds)
     except Exception as exc:
         retry_after = _retry_after_seconds(exc)
         result = _base_result(
@@ -246,14 +248,41 @@ def _retryable(exc: Exception) -> bool:
     return "rate limit" in str(exc).lower()
 
 
+def _parse_retry_after(value) -> float:
+    """Parse a Retry-After header value (delta-seconds or HTTP-date).
+
+    RFC 7231 allows Retry-After to be either an integer number of seconds
+    or an HTTP-date in the IMF-fixdate format (e.g.
+    ``Wed, 21 Oct 2015 07:28:00 GMT``).  Returns 0.0 if *value* cannot be
+    parsed or is in the past.
+    """
+    if value is None:
+        return 0.0
+    # Try integer/float seconds first (most common case).
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        pass
+    # Try HTTP-date format (RFC 7231 §7.1.3).
+    if isinstance(value, str):
+        try:
+            dt = parsedate_to_datetime(value)
+        except (TypeError, ValueError, OverflowError):
+            return 0.0
+        if dt is None:
+            return 0.0
+        # Assume UTC for naive datetimes (HTTP-date is always GMT).
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        delta = (dt - datetime.now(timezone.utc)).total_seconds()
+        return max(0.0, delta)
+    return 0.0
+
+
 def _retry_after_seconds(exc: Exception) -> float | None:
     if isinstance(exc, OfficialContextRefreshTimeout):
         return 15 * 60
-    value = getattr(exc, "retry_after", None)
-    try:
-        parsed = float(value)
-    except (TypeError, ValueError):
-        parsed = 0.0
+    parsed = _parse_retry_after(getattr(exc, "retry_after", None))
     if parsed > 0:
         return parsed
     if getattr(exc, "status_code", None) == 429 or "rate limit" in str(exc).lower():
@@ -357,32 +386,39 @@ class OfficialContextRefreshTimeout(TimeoutError):
     """Raised when the overall official-context refresh deadline is exceeded."""
 
 
-@contextmanager
-def _refresh_deadline(timeout_seconds: float | None, *, progress_event=None):
+def _run_with_deadline(func, *, timeout_seconds: float | None):
+    """Run *func* with an overall deadline.
+
+    Uses a daemon worker thread + ``join(timeout)`` so it works on Windows
+    and non-main threads (unlike ``signal.SIGALRM``).  The worker thread
+    cannot be killed; on timeout it continues in the background as a daemon
+    (never blocking process exit) but the caller receives
+    ``OfficialContextRefreshTimeout`` promptly.
+    """
     if timeout_seconds is None or timeout_seconds <= 0:
-        yield
-        return
-    if not hasattr(signal, "SIGALRM"):
-        yield
-        return
+        return func()
 
-    previous_handler = signal.getsignal(signal.SIGALRM)
-    previous_timer = signal.getitimer(signal.ITIMER_REAL)
+    result_box: list = []
+    exception_box: list[BaseException] = []
 
-    def _handle_timeout(_signum, _frame):
+    def _worker():
+        try:
+            result_box.append(func())
+        except BaseException as exc:  # noqa: BLE001 - re-raised in caller
+            exception_box.append(exc)
+
+    thread = threading.Thread(target=_worker, daemon=True, name="official-context-refresh")
+    thread.start()
+    thread.join(timeout=timeout_seconds)
+
+    if thread.is_alive():
         raise OfficialContextRefreshTimeout(
             f"official context refresh exceeded {timeout_seconds:g}s timeout"
         )
 
-    signal.signal(signal.SIGALRM, _handle_timeout)
-    signal.setitimer(signal.ITIMER_REAL, timeout_seconds)
-    try:
-        yield
-    finally:
-        signal.setitimer(signal.ITIMER_REAL, 0)
-        signal.signal(signal.SIGALRM, previous_handler)
-        if previous_timer[0] > 0:
-            signal.setitimer(signal.ITIMER_REAL, previous_timer[0], previous_timer[1])
+    if exception_box:
+        raise exception_box[0]
+    return result_box[0] if result_box else None
 
 
 def main(argv: list[str] | None = None) -> int:

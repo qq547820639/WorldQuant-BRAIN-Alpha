@@ -121,6 +121,13 @@ class EvolutionRunner:
         if not population:
             return []
 
+        # Task 2.10: birth-generation tracker so new offspring get a grace
+        # window before they can be pruned. Without this, offspring that
+        # have not yet been scored (scores=0) are dropped immediately and
+        # evolution exploration collapses to the seed population.
+        new_offspring_grace = 3
+        birth_gen: dict[str, int] = {expr: 0 for expr in population}
+
         for gen in range(self.max_generations):
             # Score current population
             scores: dict[str, float] = {}
@@ -192,10 +199,36 @@ class EvolutionRunner:
 
             self._results.append(result)
 
-            # Prune population to population_size
+            # Record birth generation for offspring added this iteration
+            # (seeds are pre-registered as born at gen 0).
+            for expr in population:
+                if expr not in birth_gen:
+                    birth_gen[expr] = gen
+
+            # Prune population to population_size, but protect new offspring
+            # within their grace window so scores=0 offspring survive long
+            # enough to be evaluated in subsequent generations.
             if len(population) > self.population_size:
-                ranked = sorted(population, key=lambda e: scores.get(e, 0.0), reverse=True)
-                population = ranked[:self.population_size]
+                protected = {
+                    e for e, bg in birth_gen.items()
+                    if e in population and gen - bg < new_offspring_grace
+                }
+                if protected:
+                    unprotected = [e for e in population if e not in protected]
+                    slots_left = max(0, self.population_size - len(protected))
+                    ranked = sorted(
+                        unprotected,
+                        key=lambda e: scores.get(e, 0.0),
+                        reverse=True,
+                    )
+                    population = list(protected) + ranked[:slots_left]
+                else:
+                    ranked = sorted(population, key=lambda e: scores.get(e, 0.0), reverse=True)
+                    population = ranked[:self.population_size]
+
+            # Drop birth records for expressions that were pruned
+            population_set = set(population)
+            birth_gen = {e: bg for e, bg in birth_gen.items() if e in population_set}
 
         return list(self._results)
 

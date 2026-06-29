@@ -97,9 +97,14 @@ def test_normalize_metrics_keeps_prod_correlation_separate_from_generic_correlat
 
 
 def test_normalize_metrics_documents_percentage_scale_turnover_contract():
+    # Unified rule (abs >= 100 → divide by 100): natural turnover decimals
+    # like 3.5 are preserved; only percentage-scale values (>= 100) are
+    # normalized.
     metrics = normalize_metrics({"is": {"turnover": 3.5}})
+    assert metrics["turnover"] == 3.5
 
-    assert metrics["turnover"] == 0.035
+    metrics_pct = normalize_metrics({"is": {"turnover": 150}})
+    assert metrics_pct["turnover"] == 1.5
 
 
 def test_normalize_metrics_preserves_sub_universe_size_fields():
@@ -3268,7 +3273,9 @@ def test_check_prod_correlation_posts_official_body_and_parses_related_alphas():
     assert result["warning"] is None
 
 
-def test_check_prod_correlation_returns_warning_when_official_endpoint_unavailable():
+def test_check_prod_correlation_raises_when_official_endpoint_unavailable():
+    # F-012: fail-closed — API failures must propagate, not be swallowed
+    # into a warning dict that callers could mistake for a passing gate.
     api = OfficialBrainAPI(
         OfficialAPIConfig(base_url="https://example.test", min_request_interval_seconds=0),
         token="token",
@@ -3278,12 +3285,13 @@ def test_check_prod_correlation_returns_warning_when_official_endpoint_unavailab
         raise BrainAPIError("HTTP 503: unavailable", status_code=503)
 
     api._request = fake_request
-    result = api.check_prod_correlation("rank(close)")
 
-    assert result["status"] == "error"
-    assert result["max_correlation"] is None
-    assert result["related_alphas"] is None
-    assert "PROD_CORRELATION API check unavailable" in result["warning"]
+    try:
+        api.check_prod_correlation("rank(close)")
+    except BrainAPIError as exc:
+        assert "HTTP 503: unavailable" in str(exc)
+    else:
+        raise AssertionError("expected check_prod_correlation to raise on API failure")
 
 
 def test_submit_alpha_blocks_by_default_before_network_call():

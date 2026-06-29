@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import threading
 from typing import Any, Dict, List, Optional
 
 from brain_alpha_ops.scoring.official_scoring._constants import (
@@ -19,19 +20,20 @@ class _HistoryMixin:
     """History tracking methods extracted from OfficialScoringSystem."""
 
     def _record_history(self, alpha_id: str, result) -> None:
-        if alpha_id not in self._score_history:
-            self._score_history[alpha_id] = []
-        history = self._score_history[alpha_id]
-        history.append({
-            "timestamp": result.evaluated_at,
-            "total_score": result.total_score,
-            "decision_band": result.decision_band,
-            "passed_gate": result.passed_gate,
-            "api_deviation": result.api_output_deviation,
-        })
-        if len(history) > _MAX_SCORE_HISTORY_PER_ALPHA:
-            del history[:-_MAX_SCORE_HISTORY_PER_ALPHA]
-        self._trim_score_history()
+        with self._lock:
+            if alpha_id not in self._score_history:
+                self._score_history[alpha_id] = []
+            history = self._score_history[alpha_id]
+            history.append({
+                "timestamp": result.evaluated_at,
+                "total_score": result.total_score,
+                "decision_band": result.decision_band,
+                "passed_gate": result.passed_gate,
+                "api_deviation": result.api_output_deviation,
+            })
+            if len(history) > _MAX_SCORE_HISTORY_PER_ALPHA:
+                del history[:-_MAX_SCORE_HISTORY_PER_ALPHA]
+            self._trim_score_history()
         # Persist to disk for convergence tracking across restarts
         if self._persisted_history is not None:
             try:
@@ -76,7 +78,8 @@ class _HistoryMixin:
 
     def get_score_trend(self, alpha_id: str) -> Optional[str]:
         """Get score trend over evaluations: improving/stable/declining."""
-        history = self._score_history.get(alpha_id, [])
+        with self._lock:
+            history = list(self._score_history.get(alpha_id, []))
         if len(history) < 2:
             return None
         first = history[0]["total_score"]

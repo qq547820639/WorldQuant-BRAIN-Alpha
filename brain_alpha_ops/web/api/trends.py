@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import os
+import threading
 import time
 from datetime import datetime
 
@@ -16,6 +17,11 @@ _TRENDS_FILE = os.path.join(
 
 _DEFAULT_DAYS = 30
 _MAX_POINTS = 90
+
+# Serialize concurrent appends so the JSONL file does not get interleaved
+# records when multiple pipeline runs / web handlers call record_trend at
+# the same time.
+_TRENDS_LOCK = threading.Lock()
 
 
 def get_trends(days: int = _DEFAULT_DAYS) -> list[dict]:
@@ -69,6 +75,7 @@ def record_trend(
         "submissions": submissions,
         "cycles": completed_cycles,
     }
-    with open(_TRENDS_FILE, "a", encoding="utf-8") as f:
-        json.dump(record, f, ensure_ascii=False)
-        f.write("\n")
+    with _TRENDS_LOCK:
+        with open(_TRENDS_FILE, "a", encoding="utf-8") as f:
+            json.dump(record, f, ensure_ascii=False)
+            f.write("\n")

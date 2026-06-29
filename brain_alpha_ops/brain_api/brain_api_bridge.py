@@ -82,18 +82,38 @@ class BrainAPIBridge:
         raise BrainAPIError("fetch_result not supported by browser backend")
 
     def concurrent_simulate(self, alphas, concurrency: int = 3, *, return_exceptions: bool = False) -> list:
-        results = []
-        for alpha in alphas:
+        rows = list(alphas or [])
+        if not rows:
+            return []
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        from brain_alpha_ops.brain_api.official_simulation._helpers import (
+            _bounded_concurrency,
+        )
+
+        worker_count = _bounded_concurrency(concurrency)
+        results: list = [None] * len(rows)
+
+        def _worker(index: int, alpha):
             try:
                 expr = alpha.expression if hasattr(alpha, "expression") else alpha.get("expression", "")
                 settings = alpha.settings if hasattr(alpha, "settings") else alpha.get("settings", {})
-                r = self._backend.simulate_alpha(expr, settings)
-                results.append(r)
-            except Exception as e:
-                if return_exceptions:
-                    results.append(e)
+                return index, self._backend.simulate_alpha(expr, settings), None
+            except Exception as exc:
+                return index, None, exc
+
+        with ThreadPoolExecutor(max_workers=worker_count) as executor:
+            futures = {executor.submit(_worker, i, alpha): i for i, alpha in enumerate(rows)}
+            for future in as_completed(futures):
+                index, result, exc = future.result()
+                if exc is not None:
+                    if not return_exceptions:
+                        for f in futures:
+                            f.cancel()
+                        raise exc
+                    results[index] = exc
                 else:
-                    raise
+                    results[index] = result
         return results
 
     # ---- BrainAPI Protocol: check ----
@@ -105,16 +125,36 @@ class BrainAPIBridge:
         return result
 
     def concurrent_check(self, alpha_ids, concurrency: int = 3, *, return_exceptions: bool = False) -> list:
-        results = []
-        for alpha_id in alpha_ids:
+        ids = list(alpha_ids or [])
+        if not ids:
+            return []
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        from brain_alpha_ops.brain_api.official_simulation._helpers import (
+            _bounded_concurrency,
+        )
+
+        worker_count = _bounded_concurrency(concurrency)
+        results: list = [None] * len(ids)
+
+        def _worker(index: int, alpha_id: str):
             try:
-                r = self._backend.check_alpha(alpha_id)
-                results.append(r)
-            except Exception as e:
-                if return_exceptions:
-                    results.append(e)
+                return index, self._backend.check_alpha(alpha_id), None
+            except Exception as exc:
+                return index, None, exc
+
+        with ThreadPoolExecutor(max_workers=worker_count) as executor:
+            futures = {executor.submit(_worker, i, alpha_id): i for i, alpha_id in enumerate(ids)}
+            for future in as_completed(futures):
+                index, result, exc = future.result()
+                if exc is not None:
+                    if not return_exceptions:
+                        for f in futures:
+                            f.cancel()
+                        raise exc
+                    results[index] = exc
                 else:
-                    raise
+                    results[index] = result
         return results
 
     # ---- BrainAPI Protocol: submit ----

@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web/security/web_security.py
+# hypothesis_version: 6.141.1
+
+[0.0, 1000.0, 128, 10000, 10000000000, '/api/', '/api/health', '/api/stream', '/sse', '127.0.0.1', '::1', '; Secure', 'Authorization', 'REPLAY_CACHE_FULL', 'REPLAY_DETECTED', 'REPLAY_TOKEN_INVALID', 'SESSION_INVALID', 'absolute_expires_at', 'bearer ', 'created_at', 'csrf', 'duplicate request id', 'error', 'error_code', 'expires_at', 'id', 'last_accessed', 'localhost', 'metadata', 'missing request id', 'ok', 'request_replay', 'stream', 'stream_token']

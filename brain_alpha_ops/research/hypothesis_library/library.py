@@ -244,6 +244,17 @@ class HypothesisLibrary:
             self._validate_weights()
         return new
 
+    def get_hypothesis_weight(self, hypothesis_name: str) -> float:
+        """Return the feedback-adjusted weight for *hypothesis_name*.
+
+        Closes the feedback loop with :meth:`adjust_weight`: the generate
+        path (``HypothesisSelector``) reads this to bias hypothesis
+        selection probability — penalised hypotheses become less likely
+        to be selected, rewarded ones more likely. Returns 1.0 (neutral)
+        when no feedback has been recorded for the hypothesis.
+        """
+        return self._hypothesis_weights.get(hypothesis_name, 1.0)
+
     def _validate_weights(self) -> None:
         """Ensure all experience weights are non-negative."""
         for hyp in self._hypotheses.values():

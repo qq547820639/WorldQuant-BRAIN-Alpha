@@ -60,13 +60,26 @@ def _spearman_r(x: list[float], y: list[float]) -> float:
     return _pearson_r(x_ranks, y_ranks)
 
 
-def _rank_ic(x: list[float], y: list[float]) -> list[float]:
-    """Compute rank IC (Spearman correlation) per cross-section.
+def _rank_ic(x: list[float], y: list[float], window: int = 21) -> list[float]:
+    """Compute rank IC (Spearman correlation) per non-overlapping time window.
 
-    When group_ids is not provided, treats entire series as one group.
-    Returns a single-element list for the overall IC.
+    Segments the aligned series into windows of ``window`` elements (default
+    21 ≈ 1 trading month) and computes a Spearman rank IC for each window.
+    Returning a multi-element list lets ``ic_std`` reflect real IC fluctuation
+    instead of collapsing to 0 (F-002). When the series is shorter than one
+    window, falls back to a single overall IC so callers still receive a value.
     """
-    return [_spearman_r(x, y)] if x and y else [0.0]
+    if not x or not y:
+        return [0.0]
+    n = min(len(x), len(y))
+    if window <= 0:
+        window = 21
+    if n < window:
+        return [_spearman_r(x[:n], y[:n])]
+    ics: list[float] = []
+    for start in range(0, n - window + 1, window):
+        ics.append(_spearman_r(x[start:start + window], y[start:start + window]))
+    return ics if ics else [_spearman_r(x[:n], y[:n])]
 
 
 def _sharpe(returns: list[float], risk_free: float = 0.0) -> float:

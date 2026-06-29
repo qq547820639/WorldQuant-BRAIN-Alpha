@@ -36,7 +36,11 @@ def is_allowed_local_request(
     allow_remote: bool = False,
 ) -> bool:
     host = header_hostname(host_header)
-    if host and host not in local_hosts and not allow_remote:
+    if not host:
+        # F-034 fix: empty/missing Host header is suspicious — fail-closed
+        # unless the operator has explicitly opted into ``allow_remote``.
+        return bool(allow_remote)
+    if host not in local_hosts and not allow_remote:
         return False
     host_port = header_port(host_header)
     for header_value in (origin_header, referer_header):

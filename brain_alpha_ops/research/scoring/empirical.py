@@ -153,12 +153,12 @@ def empirical_score(metrics: dict, thresholds: QualityThresholds, settings: dict
              turnover <= getattr(thresholds, "platform_max_turnover", 0.70), 8, is_hard_gate=True),
         # Advisor quality target: turnover < 30%, optionally promoted to a hard gate.
         item("turnover_quality", turnover, "<=", getattr(thresholds, "target_max_turnover", 0.30),
-             turnover <= getattr(thresholds, "target_max_turnover", 0.30), 6,
+             turnover <= getattr(thresholds, "target_max_turnover", 0.30), 15,
              is_hard_gate=_turnover_quality_is_hard),
         # qualitative — positive returns expected (not a BRAIN hard check)
-        item("returns", returns, ">=", thresholds.min_returns, returns >= thresholds.min_returns, 5),
+        item("returns", returns, ">=", thresholds.min_returns, returns >= thresholds.min_returns, 20),
         # qualitative — NOT a BRAIN hard check; guidance only
-        item("drawdown", drawdown, "<=", thresholds.max_drawdown, drawdown <= thresholds.max_drawdown, 5),
+        item("drawdown", drawdown, "<=", thresholds.max_drawdown, drawdown <= thresholds.max_drawdown, 20),
         # BRAIN: SELF_CORRELATION if >= 0.70 (PnL correlation)
         # P1-1: Exception rule — if new_alpha.Sharpe >= related_alpha.Sharpe × 1.10, allow
         _build_self_correlation_item(self_correlation, thresholds, metrics),
@@ -172,9 +172,9 @@ def empirical_score(metrics: dict, thresholds: QualityThresholds, settings: dict
         item("is_oos_ratio",
              round(sub_universe_sharpe / max(sharpe, 0.01), 4) if sharpe > 0 else 0.0,
              ">=", 0.5,
-             (sub_universe_sharpe / max(sharpe, 0.01)) >= 0.5 if sharpe > 0 else False, 8),
+             (sub_universe_sharpe / max(sharpe, 0.01)) >= 0.5 if sharpe > 0 else False, 25),
         # BRAIN advisor target: margin >= min_margin_bps (default 4.0 bps).
-        item("margin_bps", round(margin, 4), ">=", margin_threshold, margin >= margin_threshold, 10),
+        item("margin_bps", round(margin, 4), ">=", margin_threshold, margin >= margin_threshold, 35),
     ]
     # P2-3: Annotate margin source
     for row in items:

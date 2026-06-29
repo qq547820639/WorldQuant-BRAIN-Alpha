@@ -503,6 +503,7 @@ def test_agent_toolbox_runs_anti_overfit_and_rolling_validation(tmp_path):
         "expression": "rank(ts_delta(close, 20))",
         "official_metrics": {
             "ic_series": [0.03, 0.035, 0.04, 0.025] * 20,
+            "returns": [0.001, 0.002, 0.0015, 0.0018] * 20,
             "rolling_fitness": [1.0, 1.1, 1.0, 0.9, 0.85, 0.8, 0.75, 0.7],
         },
         "submission": {},

@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/pipeline/_run_mixin.py
+# hypothesis_version: 6.141.1
+
+[0.5, 100, 600, 3600, 'INFO', 'WARN', 'advice', 'auto_calibration', 'completed', 'cycle', 'error', 'pipeline_run', 'propose', 'reason', 'run', 'run_completed', 'run_started', 'safe_fields', 'startup', 'stopped', 'tier', 'triggered', 'user_profile', 'user_profile_failed', 'user_profile_loaded', '准备认证并加载官方字段/算子上下文。', '生产、评价、排序和回测等待流程完成。', '用户已停止连续生产队列。']

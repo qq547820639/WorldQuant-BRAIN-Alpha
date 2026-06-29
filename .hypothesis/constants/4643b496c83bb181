@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/simulation_scheduler/_scheduler_tick.py
+# hypothesis_version: 6.141.1
+
+[0.0, 30.0, 429, 'COMPLETED', 'FAILED', 'SUBMITTED', 'WARN', 'alpha_id', 'backtest_slot', 'completed', 'cooldown', 'failed', 'metrics', 'next_poll_at', 'official_alpha_id', 'official_simulated', 'poll_count', 'result_error', 'scheduler_completed', 'scheduler_failed', 'scheduler_poll_error', 'scheduler_rate_limit', 'scheduler_submit', 'scheduler_submitted', 'settings', 'simulation_failed', 'simulation_status', 'simulation_submitted', 'submitted']

@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/brain_api/brain_api_bridge.py
+# hypothesis_version: 6.141.1
+
+['AUTH_INVALID', 'BRAIN_PASSWORD', 'BRAIN_TOKEN', 'BRAIN_USERNAME', 'Check failed', 'Simulation failed', 'Submit failed', 'all', 'error', 'expression', 'fetch_result', 'filter_alphas', 'get_user_profile', 'list_data_categories', 'list_datasets', 'list_fields', 'list_operators', 'list_user_alphas', 'locate_alpha', 'locate_dataset', 'locate_field', 'ok', 'password', 'poll_simulation', 'results', 'search_datasets', 'search_fields', 'settings', 'simulationId', 'simulation_id', 'token', 'username', 'validate_expression']

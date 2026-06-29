@@ -115,23 +115,22 @@ class TestRatioConsistency:
         assert safety_ratio(0.10) == 0.10
 
     def test_official_helpers_ratio(self):
-        """official_helpers.py:_ratio uses the >= 2.0 heuristic."""
+        """official_helpers.py:_ratio uses the unified >= 100 heuristic."""
         from brain_alpha_ops.brain_api.official_helpers import _ratio as off_ratio
 
-        # Percentage values (>= 2.0 → divide by 100)
-        assert off_ratio(75.0) == 0.75
+        # Percentage values (>= 100 → divide by 100)
         assert off_ratio(150.0) == 1.50
 
-        # The heuristic: >= 2.0 → divide by 100
-        # turnover=3.5 → 3.5/100 = 0.035
-        # This means turnover values in [2.0, 100) are treated as percentages.
-        # This is a known trade-off documented in the code comments.
-        result = off_ratio(3.5)
-        assert result == 0.035  # abs >= 2.0 → normalized
-
-        # Decimal values (< 2.0) pass through
+        # Free-range decimals (abs < 100) pass through unchanged
+        assert off_ratio(75.0) == 75.0  # not a percentage in this rule
+        assert off_ratio(3.5) == 3.5  # natural turnover preserved
         assert off_ratio(0.75) == 0.75
         assert off_ratio(1.5) == 1.5
+
+        # Bounded mode: normalizes abs > 1.0 for [0,1]-clamped metrics
+        assert off_ratio(75.0, bounded=True) == 0.75
+        assert off_ratio(3.5, bounded=True) == 0.035
+        assert off_ratio(0.75, bounded=True) == 0.75
 
     def test_turnover_boundary_values(self):
         """Test the boundary cases where normalization is ambiguous.

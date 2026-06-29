@@ -297,34 +297,30 @@ class OfficialSimulationSubmissionMixin:
         }
 
     def check_prod_correlation(self, expression: str, settings: dict | None = None) -> dict:
+        # F-012: fail-closed — API failure must propagate, not be swallowed
+        # into a warning dict. Returning a warning let callers treat the
+        # prod-correlation gate as passing when the check was actually
+        # unavailable, which is unsafe for a submission gate.
         body: dict[str, object] = {"expression": expression}
         if settings:
             body["settings"] = settings
-        try:
-            data, _headers = self._request(
-                "POST",
-                self.config.alpha_correlations_path,
-                body=body,
-            )
-            max_corr = _first_value(
-                data,
-                ["maxCorrelation", "max_correlation", "prodCorrelation", "prod_correlation"],
-                None,
-            )
-            related = data.get("relatedAlphas") or data.get("related_alphas") or data.get("alphas")
-            return {
-                "status": "ok",
-                "max_correlation": abs(float(max_corr)) if max_corr is not None else None,
-                "related_alphas": related if isinstance(related, list) else None,
-                "warning": None,
-            }
-        except BrainAPIError as exc:
-            return {
-                "status": "error",
-                "max_correlation": None,
-                "related_alphas": None,
-                "warning": f"PROD_CORRELATION API check unavailable: {exc}",
-            }
+        data, _headers = self._request(
+            "POST",
+            self.config.alpha_correlations_path,
+            body=body,
+        )
+        max_corr = _first_value(
+            data,
+            ["maxCorrelation", "max_correlation", "prodCorrelation", "prod_correlation"],
+            None,
+        )
+        related = data.get("relatedAlphas") or data.get("related_alphas") or data.get("alphas")
+        return {
+            "status": "ok",
+            "max_correlation": abs(float(max_corr)) if max_corr is not None else None,
+            "related_alphas": related if isinstance(related, list) else None,
+            "warning": None,
+        }
 
     def poll_until_complete(self, simulation_id: str, *, stop_check: Callable[[], bool] | None = None) -> str:
         """Poll simulation until COMPLETED, FAILED, or TIMEOUT.

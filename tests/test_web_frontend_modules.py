@@ -31,7 +31,7 @@ REACT_CONTRACT_COVERAGE = {
     "components/CandidateTableLoading.tsx": "React component: candidate table loading",
     "components/CandidateTableMobile.tsx": "React component: candidate table mobile",
     "components/CandidateTablePagination.tsx": "React component: candidate table pagination",
-    "components/CandidateTableSubComponents.tsx": "React component: candidate table sub components",
+    "components/CandidateTableSubComponents/index.ts": "React component (candidate table sub components submodule): index re-export",
     "components/CandidateTableSubComponents/CandidateMobileCard.tsx": "React component (candidate table sub components submodule): candidate mobile card",
     "components/CandidateTableSubComponents/EmptyState.tsx": "React component (candidate table sub components submodule): empty state",
     "components/CandidateTableSubComponents/LifecycleReplayPanel.tsx": "React component (candidate table sub components submodule): lifecycle replay panel",
@@ -44,7 +44,6 @@ REACT_CONTRACT_COVERAGE = {
     "components/CandidateTableToolbarProductionControls.tsx": "React component: candidate table toolbar production controls",
     "components/CandidateTableToolbarQualitySummaryBar.tsx": "React component: candidate table toolbar quality summary bar",
     "components/CandidateTableToolbarTitleStats.tsx": "React component: candidate table toolbar title stats",
-    "components/CandidateTableUtils.ts": "React component: candidate table utils",
     "components/CandidateTableUtils/base.ts": "React component (candidate table utils submodule): base",
     "components/CandidateTableUtils/constants.ts": "React component (candidate table utils submodule): constants",
     "components/CandidateTableUtils/formatters.ts": "React component (candidate table utils submodule): formatters",
@@ -148,7 +147,7 @@ REACT_CONTRACT_COVERAGE = {
     "components/ScoreBreakdown/ScoreDetails.tsx": "React component (score breakdown submodule): score details",
     "components/ScoreBreakdown/ScoreHistory.tsx": "React component (score breakdown submodule): score history",
     "components/ScoreBreakdown/index.ts": "React component (score breakdown submodule): index",
-    "components/ScoringPanel.tsx": "score evaluation, attribution, and result presentation",
+    "components/ScoringPanel/index.ts": "React component (scoring panel submodule): index re-export",
     "components/ScoringPanel/AttributionTooltip.tsx": "React component (scoring panel submodule): attribution tooltip",
     "components/ScoringPanel/AttributionTree.tsx": "React component (scoring panel submodule): attribution tree",
     "components/ScoringPanel/GateDecisionStrip.tsx": "React component (scoring panel submodule): gate decision strip",
@@ -181,7 +180,6 @@ REACT_CONTRACT_COVERAGE = {
     "components/SubmissionGates/utils.ts": "React component (submission gates submodule): utils",
     "components/SubmissionGuidance.tsx": "React component: submission guidance",
     "components/ThemeProvider.tsx": "React component: theme provider",
-    "components/Toast.tsx": "React component: toast",
     "components/ToastContainer.tsx": "toast roles, actions, and dismissal",
     "components/Tooltip.tsx": "React component: tooltip",
     "components/TrendPanel.tsx": "React component: trend panel",
@@ -193,7 +191,6 @@ REACT_CONTRACT_COVERAGE = {
     "helpers/connectionErrorGuide.ts": "helper module: connection error guide",
     "helpers/errorExperience.ts": "backend user-error payload to user-facing message mapping",
     "helpers/readinessLabels.ts": "official readiness and blocker reason labels shared across review panels",
-    "helpers/runPayload.ts": "prod validation run payload builder (Terminal Precision v2.0)",
     "helpers/runPayload/classify.ts": "helper (run payload submodule): classify",
     "helpers/runPayload/constants.ts": "helper (run payload submodule): constants",
     "helpers/runPayload/events.ts": "helper (run payload submodule): events",
@@ -202,7 +199,6 @@ REACT_CONTRACT_COVERAGE = {
     "helpers/runPayload/run.ts": "helper (run payload submodule): run",
     "helpers/runPayload/types.ts": "helper (run payload submodule): types",
     "hooks/useApi.ts": "CSRF, replay headers, same-origin credentials, and error mapping",
-    "hooks/useAppState.ts": "React hook: use app state",
     "hooks/useAppState/AppStateContext.tsx": "React hook (use app state submodule): app state context",
     "hooks/useAppState/index.ts": "React hook (use app state submodule): index",
     "hooks/useAppState/stateContract.ts": "React hook (use app state submodule): state contract",
@@ -231,7 +227,6 @@ REACT_CONTRACT_COVERAGE = {
     "hooks/useIntersectionObserver.ts": "React hook: use intersection observer",
     "hooks/useJobDisconnectedState.ts": "React hook: use job disconnected state",
     "hooks/useJobLifecycle.ts": "React hook: use job lifecycle",
-    "hooks/useJobMonitor.ts": "React hook: use job monitor",
     "hooks/useJobMonitor/constants.ts": "React hook (use job monitor submodule): constants",
     "hooks/useJobMonitor/index.ts": "React hook (use job monitor submodule): index",
     "hooks/useJobMonitor/types.ts": "React hook (use job monitor submodule): types",
@@ -318,10 +313,10 @@ def test_frontend_runtime_modules_render_state_and_interaction_contracts():
     quality = _source("components/QualityCheckPanel.tsx")
     slots = _source("components/OfficialBacktestSlots.tsx")
     progress = _source("components/ProgressFeedback.tsx")
-    scoring = _source("components/ScoringPanel.tsx")
+    scoring = _source("components/ScoringPanel/ScoringPanel.tsx")
     job_monitor = _source("components/JobMonitor.tsx")
     use_job_state = _source("hooks/useJobState.ts")
-    run_payload = _source("helpers/runPayload.ts")
+    run_payload = _source("helpers/runPayload/index.ts")
     readiness_labels = _source("helpers/readinessLabels.ts")
     use_api = _source("hooks/useApi.ts")
     use_sse = _source("hooks/useSSE.ts")

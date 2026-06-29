@@ -58,11 +58,14 @@ def _store_is_cancelled(store: JobStoreLike, job_id: str) -> bool:
     try:
         return bool(checker(job_id))
     except Exception:
+        # F-034 fix: fail-closed — when the cancellation probe itself errors,
+        # treat the job as cancelled so we stop mutating downstream state
+        # rather than silently continuing a possibly-cancelled job.
         logger.warning(
-            "job cancellation check failed; treating as not cancelled",
+            "job cancellation check failed; treating as cancelled (fail-closed)",
             exc_info=True,
         )
-        return False
+        return True
 
 
 def _update_check_batch_cancelled(

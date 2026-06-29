@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/stall_monitor.py
+# hypothesis_version: 6.141.1
+
+[5.0, 120, 'StallMonitor stopped', 'canceled', 'cancelled', 'completed', 'failed', 'id', 'job_id', 'percent', 'percent_complete', 'phase', 'progress', 'stall-monitor', 'status', 'status_message', 'stopped', 'task_id']

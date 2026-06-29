@@ -18,6 +18,9 @@ class PipelineBacktestRecoveryMixin:
         except Exception as exc:
             message = redact_error_message(exc, max_length=160)
             self._event("backtest_recovery_failed", message, level="WARN")
+            # F-034 fix: fail-closed — explicitly zero out the recovered-slot
+            # count so stale values from a previous run cannot leak forward.
+            self.recovered_backtest_slot_count = 0
             return
         self.recovered_backtest_slot_count = self.backtest_slot_manager.recovered_slot_count
         if self.recovered_backtest_slot_count:

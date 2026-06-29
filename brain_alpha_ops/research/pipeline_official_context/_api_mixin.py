@@ -154,6 +154,35 @@ class _OfficialContextAPIMixin:
                     context_warning,
                     data={"retry_seconds": self.config.budget.official_retry_pause_seconds},
                 )
+                # F-034 fix: return early with cached defaults — do not fall
+                # through into the normal ``context_loaded`` event/progress
+                # path which would overwrite the deferred status and re-enter
+                # official-call paths that were just halted.
+                fallback_fields = list(DEFAULT_FIELDS)
+                fallback_operators = list(DEFAULT_OPERATORS)
+                try:
+                    self.generator.update_context(fallback_fields, fallback_operators)
+                except Exception:
+                    logger.warning("generator.update_context failed during 429 fallback", exc_info=True)
+                return OfficialContextLoadResult(
+                    fields=fallback_fields,
+                    operators=fallback_operators,
+                    context_summary={
+                        "fields_count": len(fallback_fields),
+                        "operators_count": len(fallback_operators),
+                        "source": "official_api_or_cache",
+                        "warning": (
+                            context_warning
+                            + " Using locally cached official field context; successful login refreshes the official field cache."
+                            + " Using locally cached official operator context; successful login refreshes the official operator cache."
+                        ),
+                        "active_dataset_id": "",
+                        "degraded": True,
+                        "degraded_reason": "official context API rate-limited (429)",
+                    },
+                    generator=self.generator,
+                    active_dataset_id="",
+                )
             else:
                 raise
         used_default_fields = False

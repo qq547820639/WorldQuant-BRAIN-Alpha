@@ -35,8 +35,19 @@ class RollingValidationService:
         means = [mean(chunk) for chunk in chunks if chunk]
         first = means[0]
         last = means[-1]
-        decay_ratio = last / max(abs(first), 1e-9) if first >= 0 else -last / max(abs(first), 1e-9)
         positive_windows = sum(1 for item in means if item > 0)
+        # Detect direction reversal: first and last have opposite signs.
+        # first<0, last>0 is an "improvement" (loss → profit) → strong
+        # recovery, treat as passing the decay check.
+        # first>0, last<0 is a "deterioration" (profit → loss) → hard
+        # failure. In both cases decay_ratio is not meaningful, so we
+        # bypass the ratio calculation.
+        direction_reversal = (first < 0) != (last < 0)
+        if direction_reversal:
+            improvement_reversal = first < 0 < last
+            decay_ratio = 1.0 if improvement_reversal else -1.0
+        else:
+            decay_ratio = last / max(abs(first), 1e-9) if first >= 0 else -last / max(abs(first), 1e-9)
         passed = last > 0 and decay_ratio >= 0.5 and positive_windows >= max(2, math.ceil(len(means) * 0.6))
         score = round(max(0.0, min(100.0, 100.0 * max(0.0, min(decay_ratio, 1.0)))), 2)
         report = {

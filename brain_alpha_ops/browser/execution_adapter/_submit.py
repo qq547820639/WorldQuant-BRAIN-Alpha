@@ -56,6 +56,9 @@ class _SubmitMixin:
                 "missing": missing,
             }
         if key in self._used_idempotency_keys:
+            # F-011: refresh LRU position so actively-polled duplicate keys
+            # are never evicted by new insertions.
+            self._used_idempotency_keys.move_to_end(key)
             return {
                 "ok": False,
                 "alpha_id": alpha_id,
@@ -133,11 +136,13 @@ class _SubmitMixin:
                 error_code=str(blocking["code"]),
                 details=blocking,
             )
-        self._used_idempotency_keys.add(key)
-        self._idempotency_key_order.append(key)
-        if len(self._idempotency_key_order) > self._MAX_IDEMPOTENCY_KEYS:
-            old = self._idempotency_key_order.popleft()
-            self._used_idempotency_keys.discard(old)
+        # F-011: LRU eviction. Insert at the most-recently-used end; if the
+        # cache exceeds the cap, evict the least-recently-used key. Repeated
+        # duplicate checks (move_to_end above) keep a key fresh so it cannot
+        # be evicted while still being actively re-attempted.
+        self._used_idempotency_keys[key] = None
+        while len(self._used_idempotency_keys) > self._MAX_IDEMPOTENCY_KEYS:
+            self._used_idempotency_keys.popitem(last=False)
 
         return {
             "ok": True,

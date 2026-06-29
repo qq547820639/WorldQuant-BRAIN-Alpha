@@ -321,21 +321,30 @@ def test_job_store_load_prunes_large_history_before_redaction(tmp_path):
     )
 
 
-def test_job_store_skips_oversized_persistence_without_overwriting(tmp_path):
+def test_job_store_recovers_persistence_after_oversized_load(tmp_path):
+    # F-023: persistence must NOT be permanently disabled after a single
+    # oversized-load skip. When jobs change, _persist_locked retries writing
+    # and resets persistence_load_skipped.
     path = tmp_path / "jobs.json"
     original = json.dumps({"version": 1, "jobs": {"job_0001": {"status": "completed"}}})
     path.write_text(original + (" " * 64), encoding="utf-8")
 
     store = JobStore(path, max_load_bytes=32)
 
+    # Load was skipped because the file is oversized.
     assert store.all() == []
     assert store.persistence_load_skipped is True
     assert "too large to load safely" in store.last_persist_error
 
     store.create({"status": "completed", "result": {"ok": True}})
 
-    assert path.read_text(encoding="utf-8") == original + (" " * 64)
-    assert "too large to load safely" in store.last_persist_error
+    # Persistence retried and overwrote the unreadable oversized file.
+    assert store.persistence_load_skipped is False
+    assert store.last_persist_error == ""
+    data = json.loads(path.read_text(encoding="utf-8"))
+    assert len(data["jobs"]) == 1  # only the new job, old unreadable data replaced
+    new_job = next(iter(data["jobs"].values()))
+    assert new_job["result"] == {"ok": True}
 
 
 def test_compact_runtime_result_replaces_heavy_runtime_lists_with_counts_and_preview():

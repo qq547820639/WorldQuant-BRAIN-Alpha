@@ -47,6 +47,10 @@ class _BootstrapMixin:
 
         Returns ``(ci_low, ci_high)``.
         """
+        # Task 2.10: guard against empty input — otherwise the n < 3
+        # branch below divides by zero (sum([]) / 0).
+        if not values:
+            return (0.0, 0.0)
         n = len(values)
         if n < 3:
             # n < 3: use t-distribution interval (limited data)

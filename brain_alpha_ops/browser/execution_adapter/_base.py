@@ -15,7 +15,7 @@ Extracted from the former ``execution_adapter.py`` monolith
 
 from __future__ import annotations
 
-from collections import deque
+from collections import OrderedDict
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -37,8 +37,15 @@ class BrowserExecutionAdapterBase:
     readonly: bool = True
     approval_ticket: str = ""
     idempotency_key: str = ""
-    _used_idempotency_keys: set[str] = field(default_factory=set, init=False, repr=False)
-    _idempotency_key_order: deque[str] = field(default_factory=deque, init=False, repr=False)
+    # F-011: LRU eviction via OrderedDict. Previously a `set` + `deque` FIFO
+    # pair evicted the oldest *inserted* key, so a key that was checked
+    # repeatedly (duplicate re-attempt) could still be evicted just because
+    # it was old, letting the duplicate through. With LRU, any check or
+    # re-insertion refreshes the key's position, so actively-polled keys
+    # are never evicted.
+    _used_idempotency_keys: "OrderedDict[str, None]" = field(
+        default_factory=OrderedDict, init=False, repr=False
+    )
     _MAX_IDEMPOTENCY_KEYS = 1000
 
     # Internal state — managed by context manager

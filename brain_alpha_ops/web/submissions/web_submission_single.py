@@ -17,7 +17,7 @@ from brain_alpha_ops.models import Candidate, utc_now
 from brain_alpha_ops.redaction import redact_error_message, redact_text
 from brain_alpha_ops.research.repository import ResearchRepository
 from brain_alpha_ops.research.safety import SubmissionLedger
-from brain_alpha_ops.runtime_constants import REAL_SUBMIT_DISABLED_WEB_FLOW
+from brain_alpha_ops.runtime_constants import REAL_SUBMIT_DISABLED_WEB_FLOW, real_submit_test_override_enabled
 from brain_alpha_ops.submission_readiness import live_submit_readiness_hard_gate
 
 logger = logging.getLogger(__name__)
@@ -28,6 +28,11 @@ def _real_submit_disabled() -> bool:
     The Web console does not honor environment-variable submit overrides.
     Tests that exercise downstream branches must monkeypatch this helper.
     """
+    # F-034 fix: consult the real config (env-var test override) so the
+    # kill-switch is not purely a hard-coded constant. The override is only
+    # honored under the explicit test-approved direct-submit exercise.
+    if real_submit_test_override_enabled():
+        return False
     return REAL_SUBMIT_DISABLED_WEB_FLOW is not False
 
 RunConfigFromPayload = Callable[[dict[str, Any]], RunConfig]

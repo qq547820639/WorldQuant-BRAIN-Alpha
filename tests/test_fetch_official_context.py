@@ -1,8 +1,8 @@
 
 from __future__ import annotations
 import json
-import signal
 import time
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -52,6 +52,23 @@ class FakeOfficialBrainAPI:
 class RateLimitedOfficialBrainAPI(FakeOfficialBrainAPI):
     def list_fields(self, *_args, progress_callback=None):
         raise BrainAPIError("HTTP 429: rate limit", status_code=429, retry_after=12)
+
+
+class HttpDateRateLimitedOfficialBrainAPI(FakeOfficialBrainAPI):
+    """Rate-limited API that returns Retry-After as an HTTP-date string."""
+
+    def __init__(self, config, **credentials):
+        super().__init__(config, **credentials)
+        self._retry_after_date = (
+            datetime.now(timezone.utc) + timedelta(seconds=45)
+        ).strftime("%a, %d %b %Y %H:%M:%S GMT")
+
+    def list_fields(self, *_args, progress_callback=None):
+        raise BrainAPIError(
+            "HTTP 429: rate limit",
+            status_code=429,
+            retry_after=self._retry_after_date,
+        )
 
 
 class ServerErrorOfficialBrainAPI(FakeOfficialBrainAPI):
@@ -220,6 +237,47 @@ def test_refresh_official_context_records_retryable_rate_limit(monkeypatch, tmp_
     assert saved_status["retryable"] is True
 
 
+def test_refresh_official_context_parses_http_date_retry_after(monkeypatch, tmp_path):
+    """Retry-After as HTTP-date (RFC 7231) must be parsed into seconds (F-017)."""
+    monkeypatch.setattr(
+        fetch_official_context, "OfficialBrainAPI", HttpDateRateLimitedOfficialBrainAPI
+    )
+    config_path = _write_config(tmp_path, monkeypatch)
+    status_path = tmp_path / "refresh_status.json"
+
+    result = fetch_official_context.refresh_official_context(config_path, status_output=status_path)
+
+    assert result["ok"] is False
+    assert result["error_code"] == "RATE_LIMITED"
+    assert result["error_category"] == "rate_limit"
+    assert result["retryable"] is True
+    # Date was set 45s in the future; allow slack for test execution.
+    assert 30 <= result["retry_after_seconds"] <= 45
+    assert result["next_retry_at"]
+
+
+def test_parse_retry_after_handles_integer_seconds():
+    """Unit test for _parse_retry_after with integer seconds."""
+    assert fetch_official_context._parse_retry_after(12) == 12.0
+    assert fetch_official_context._parse_retry_after("30") == 30.0
+    assert fetch_official_context._parse_retry_after(None) == 0.0
+
+
+def test_parse_retry_after_handles_http_date():
+    """Unit test for _parse_retry_after with HTTP-date format (F-017)."""
+    future = datetime.now(timezone.utc) + timedelta(seconds=60)
+    http_date = future.strftime("%a, %d %b %Y %H:%M:%S GMT")
+    parsed = fetch_official_context._parse_retry_after(http_date)
+    assert 50 <= parsed <= 60
+
+
+def test_parse_retry_after_past_http_date_returns_zero():
+    """A past HTTP-date should return 0.0 (no negative retry-after)."""
+    past = datetime.now(timezone.utc) - timedelta(seconds=60)
+    http_date = past.strftime("%a, %d %b %Y %H:%M:%S GMT")
+    assert fetch_official_context._parse_retry_after(http_date) == 0.0
+
+
 def test_refresh_official_context_records_retryable_http_5xx(monkeypatch, tmp_path):
     monkeypatch.setattr(fetch_official_context, "OfficialBrainAPI", ServerErrorOfficialBrainAPI)
     config_path = _write_config(tmp_path, monkeypatch)
@@ -253,7 +311,6 @@ def test_refresh_official_context_records_generic_internal_failure(monkeypatch, 
     assert saved_status["error_category"] == "internal"
 
 
-@pytest.mark.skipif(not hasattr(signal, "SIGALRM"), reason="SIGALRM not available on Windows")
 def test_refresh_official_context_records_timeout(monkeypatch, tmp_path):
     monkeypatch.setattr(fetch_official_context, "OfficialBrainAPI", SlowOfficialBrainAPI)
     config_path = _write_config(tmp_path, monkeypatch)
