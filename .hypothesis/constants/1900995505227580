@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web/candidates/web_check_availability/_batch_helpers.py
+# hypothesis_version: 6.141.1
+
+[0.0, 100, 1000, 'CHECK_STOPPED', 'blocked', 'check_batch', 'checked', 'elapsed_seconds', 'eta_deadline_at_ms', 'eta_seconds', 'failed', 'is_cancelled', 'items', 'job_id', 'message', 'mode', 'operation', 'percent', 'percent_complete', 'phase', 'range', 'started_at_ms', 'status_code', 'status_message', 'stopped', 'submittable', 'task_id', 'total', 'updated_at_ms']

@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/scoring/history.py
+# hypothesis_version: 6.141.1
+
+[0.0, 0.5, 5000, '.jsonl', 'a', 'alpha_id', 'api_deviation', 'avg_score', 'checklist', 'config_hash', 'count', 'decision_band', 'declining', 'empirical', 'history_limit', 'improving', 'insufficient_data', 'pass_rate', 'passed_gate', 'prior', 'ready', 'recent_avg', 'score', 'score_history.jsonl', 'stable', 'status', 'std_dev', 'timestamp', 'total_evaluations', 'total_score', 'trend', 'utf-8']

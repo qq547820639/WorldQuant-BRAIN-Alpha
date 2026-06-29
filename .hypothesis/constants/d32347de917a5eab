@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web_candidates/decisions/__init__.py
+# hypothesis_version: 6.141.1
+
+['_blocking_pairs', '_decision', '_decision_band', '_gate_failed_reasons', '_lifecycle_text', '_safe_int', '_status', 'candidate_score']

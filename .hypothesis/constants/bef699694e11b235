@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/hypothesis_expression_support/_fields.py
+# hypothesis_version: 6.141.1
+
+[100, '-1', '\\b([a-zA-Z_]\\w+)\\b', '_', 'inf', 'nan', 'returns', 'std']

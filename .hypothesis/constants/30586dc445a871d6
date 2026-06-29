@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/scoring/release_score_gate/_helpers.py
+# hypothesis_version: 6.141.1
+
+[0.0, 'brain_checks', 'brain_settings', 'data_delay', 'default_delay_1', 'delay', 'settings', 'simulation_settings', 'value']

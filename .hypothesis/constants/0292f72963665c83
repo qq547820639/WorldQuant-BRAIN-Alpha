@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/brain_api/official_simulation/_helpers.py
+# hypothesis_version: 6.141.1
+
+[b'BRAIN_ALPHA_SUBMIT_GUARD_v1', 'ERROR', 'FAIL', 'FAILED', 'IN_PROGRESS', 'OK', 'PASS', 'PASSED', 'PENDING', 'QUEUED', 'REJECTED', 'RUNNING', 'SUCCEEDED', 'SUCCESS', 'UNKNOWN', 'WAITING', '_', '_classification', 'alpha', 'check', 'checks', 'code', 'complete', 'expression', 'failed', 'failed_checks', 'inSample', 'in_sample', 'is', 'max', 'name', 'os', 'outSample', 'out_sample', 'passed', 'passed_checks', 'pending', 'pending_checks', 'raw', 'regular', 'result', 'settings', 'simulation_settings', 'status', 'title', 'unknown', 'unknown_checks', 'value']

@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/scripts/check_prod_defect_tracking/_cli.py
+# hypothesis_version: 6.141.1
+
+['--config', '--jobs', '--json', '--report', 'Run config path.', 'failed', 'findings', 'ok', 'store_true']

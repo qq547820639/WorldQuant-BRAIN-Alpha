@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/scoring/anti_overfit/candidate.py
+# hypothesis_version: 6.141.1
+
+['data_source', 'official_metrics', 'ok', 'passed', 'reason', 'recommendation', 'sample_size', 'schema_version', 'score', 'submission']

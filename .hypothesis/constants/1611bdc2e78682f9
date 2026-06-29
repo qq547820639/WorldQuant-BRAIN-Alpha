@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/scripts/scan_sensitive_artifacts/_scanners.py
+# hypothesis_version: 6.141.1
+
+[220, 5000000, '--all', '--fail-on-findings', '--include-all', '--json', '--max-bytes', '--objects', '--root', '-C', '-p', '-s', '.', '.codex_tmp_', '.egg-info', '.git', '<redacted>', 'actionable_ok', 'build_', 'cat-file', 'checked', 'cookie', 'dist_', 'findings', 'git', 'git_history', 'git_object', 'include_all', 'known_secret_hash', 'known_secret_hashes', 'line', 'message', 'ok', 'path', 'rb', 'replace', 'rev-list', 'root', 'schema_version', 'secret_key', 'secret_label', 'snippet', 'store_true', 'type', 'utf-8']

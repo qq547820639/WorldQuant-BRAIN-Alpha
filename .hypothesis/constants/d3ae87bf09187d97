@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/error_knowledge.py
+# hypothesis_version: 6.141.1
+
+['API_RATE_LIMITED', 'API_TIMEOUT', 'API_UNAUTHORIZED', 'AppError', 'AuthError', 'BUDGET_EXHAUSTED', 'ConflictError', 'ContextRefreshError', 'ErrorInfo', 'GATE_BLOCKED', 'GENERATION_FAILED', 'NO_CANDIDATES', 'NotFoundError', 'OriginForbiddenError', 'REDLINE_FAILED', 'SCORE_LOW', 'SessionError', 'SubmitBlockedError', 'UNKNOWN', 'UX_ERROR_CODES', 'ValidationError', 'budget', 'category', 'classify_ux_error', 'compliance', 'connectivity', 'credentials', 'error', 'error_category', 'error_code', 'error_type', 'fix_hint', 'generation', 'quality', 'rate_limit', 'retry_after', 'retryable', 'status_code', 'unknown']

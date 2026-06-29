@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/validated_generator/__init__.py
+# hypothesis_version: 6.141.1
+
+['CROSS_SECTIONAL_OPS', 'FIELD_PAIRINGS', 'FIELD_POOLS', 'KNOWN_TOXIC_OPS', 'LONG_WINDOWS', 'MEDIUM_WINDOWS', 'OPERATOR_SIGNATURES', 'RETURN_TRANSFORM_OPS', 'SAFE_FIELDS', 'SHORT_WINDOWS', 'TEMPLATES', 'WINDOW_CONSTRAINTS', 'WINDOW_POOL', '_extract_bracketed', '_minhash_signature', '_minhash_top_k', '_passes_diversity', '_split_args', '_tokenize', 'prefilter_quality', 'validate_expression']

@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/scripts/check_log_redaction.py
+# hypothesis_version: 6.141.1
+
+['*.py', '--json', '--root', '.py', '.venv', 'FAIL', 'PASS', '__main__', '__pycache__', 'alpha_id', 'brain_alpha_ops', 'cache_dir', 'cleanup_exc', 'code', 'critical', 'debug', 'e', 'err', 'error', 'exc', 'exception', 'expression', 'filename', 'filepath', 'finding_count', 'findings', 'get', 'index_code', 'info', 'key', 'last_error', 'line', 'lineno', 'log', 'logger', 'logger_fstring', 'logging', 'message', 'official_alpha_id', 'official_id', 'ok', 'path', 'profile_path', 'redact_error_message', 'redact_text', 'root', 'safe_error_message', 'schema_version', 'simulation_id', 'store_true', 'symbol', 'syntax_error', 'utf-8-sig', 'warning']

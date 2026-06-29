@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/submission_readiness.py
+# hypothesis_version: 6.141.1
+
+[200, '/', 'action', 'alpha_id', 'blocked', 'blocking_reasons', 'candidate_count', 'code', 'eligible', 'eligible_candidates', 'eligible_count', 'error', 'error_category', 'error_code', 'expression', 'expression_key', 'finding_codes', 'findings', 'fitness', 'job_id', 'job_ledger', 'jobs_production.json', 'latest_job_id', 'official_alpha_id', 'official_metrics', 'ok', 'ops', 'primary_action', 'prod_correlation', 'readiness', 'readiness_summary', 'ready_to_submit', 'reason_code', 'schema_version', 'self_correlation', 'sharpe', 'source', 'state', 'state_navigation', 'storage_dir', 'subUniverseSharpe', 'sub_universe_sharpe', 'submit', 'summary', 'target_view', 'title', 'turnover', 'weight_concentration', '刷新官方检查和提交就绪证据后再提交。', '提交就绪门禁未通过']

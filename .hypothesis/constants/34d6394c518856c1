@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web/submissions/web_submission_safety/__init__.py
+# hypothesis_version: 6.141.1
+
+['CloudAlphaSnapshot', 'CloudStatusFor', 'LedgerFactory', 'ObservabilityBuilder', 'RepositoryFactory', 'SafeErrorMessage', 'extract_alpha_rows', 'logger', 'official_alpha_id']

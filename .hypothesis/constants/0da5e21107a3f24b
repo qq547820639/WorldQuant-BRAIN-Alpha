@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/scripts/check_review_gap_closure_tracker/_surface_checks.py
+# hypothesis_version: 6.141.1
+
+['React mirror-only', 'React preview path', 'available', 'build_runner', 'inline_html_js', 'local_node_modules', 'mirror', 'production_surface', 'react_surface', 'react_surface_fact', 'ready', 'ready=true', 'tooling']

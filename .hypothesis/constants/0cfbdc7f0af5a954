@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web/business/__init__.py
+# hypothesis_version: 6.141.1
+
+['.web_async_jobs', '.web_business', '.web_job_registry', '.web_jobs', '.web_run_job', 'JobStoreLike', 'WebJobRegistry', 'get_web_job_store', 'init_job_persistence', 'inject_dependencies', 'job_delete', 'job_get', 'job_list', 'job_start', 'job_update', 'legacy_job_export', 'load_jobs_from_jsonl', 'new_job_id', 'progress_update', 'run_job_service', 'set_jobs_storage_dir', 'utc_timestamp']

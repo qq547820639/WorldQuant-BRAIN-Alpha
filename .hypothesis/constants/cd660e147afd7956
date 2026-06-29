@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/mcp_server.py
+# hypothesis_version: 6.141.1
+
+[-32700, -32601, 1024, '--allow-live-api', '--config', '0.5.0', '2.0', '2024-11-05', '__main__', 'aliasFor', 'alias_for', 'annotations', 'arguments', 'brain-alpha-ops', 'capabilities', 'category', 'chainStage', 'chain_stage', 'check', 'code', 'content', 'description', 'destructive', 'error', 'id', 'initialize', 'inputSchema', 'input_schema', 'isError', 'jsonrpc', 'liveApi', 'live_api', 'message', 'method', 'name', 'ok', 'params', 'prod', 'production', 'protocolVersion', 'request too large', 'result', 'serverInfo', 'store_true', 'sync', 'text', 'tools', 'tools/call', 'tools/list', 'type', 'version']

@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web_cloud/snapshot/_cloud_alpha.py
+# hypothesis_version: 6.141.1
+
+['ACTIVE', 'CLOUD_CACHE_EMPTY', 'CLOUD_CACHE_LOADED', 'CONDUCTED', 'FAIL', 'PASS', 'PRODUCTION', 'SUBMITTED', 'UNKNOWN', 'UNSUBMITTED', 'added', 'age_seconds', 'alpha_id', 'alphas', 'api_cache', 'cloud_alphas.jsonl', 'count', 'created_at', 'display_limit', 'empty', 'failed', 'failure_reason', 'id', 'is_stale', 'loaded', 'loaded_at', 'local-cache', 'metrics', 'ok', 'pass_fail', 'range', 'returned_count', 'scanned', 'skipped', 'source', 'status', 'status_code', 'status_counts', 'storage', 'submitted_count', 'summary', 'timestamp', 'total', 'updated_at']

@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/expression_ast/_similarity.py
+# hypothesis_version: 6.141.1
+
+[0.0, 0.4, 0.6, 0.999, 1.0, 'long', 'medium', 'short']

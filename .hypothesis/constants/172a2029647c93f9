@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web_candidates/generation_summary.py
+# hypothesis_version: 6.141.1
+
+['candidates', 'count', 'error', 'existing_pool_size', 'generated_count', 'invalid_count', 'local_quality_failed', 'local_valid_count', 'ok', 'persisted_count', 'persistence', 'pool_deficit', 'qualified_count', 'quality_summary', 'reason_counts', 'rejected_count', 'rejected_reasons', 'returned_count', 'summary', 'target_pool_size', '候选生成失败。', '提交门禁未就绪', '本地候选未通过', '本地回测不支持', '本地回测未通过', '本地质量未通过', '缺少官方 Alpha ID', '缺少官方仿真指标', '非信号字段', '高换手生成风险', '（', '）', '，']

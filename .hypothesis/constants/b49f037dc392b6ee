@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web/business/web_jobs.py
+# hypothesis_version: 6.141.1
+
+[0.0, 100, 200, 3600, '+00:00', 'Z', 'a', 'by_status', 'canceled', 'cancelled', 'completed', 'failed', 'interrupted', 'job_id', 'max_age_seconds', 'max_count', 'percent_complete', 'phase', 'progress', 'running', 'status', 'status_message', 'stopped', 'task_id', 'total', 'unknown', 'updated_at', 'utf-8', 'web_jobs.jsonl']

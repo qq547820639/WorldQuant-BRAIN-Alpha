@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/evolution/_types.py
+# hypothesis_version: 6.141.1
+
+[0.0, 'EXPLORE', 'best_expression', 'best_score', 'crossover_point', 'crossovers', 'expression', 'generation', 'mutation_id', 'mutations', 'parent_a', 'parent_b', 'parent_expression', 'parent_score', 'population_size', 'strategy', 'strategy_used']

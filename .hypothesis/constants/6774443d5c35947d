@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web/dispatch/post_routes/job_management.py
+# hypothesis_version: 6.141.1
+
+[200, 404, 409, 'CANCEL_ERROR', 'CONFLICT_RUNNING', 'JOB_NOT_FOUND', 'RUN_ERROR', 'STOP_ERROR', 'already_terminal', 'async', 'auto_submit', 'check', 'error', 'error_code', 'job_id', 'job_not_found', 'job_type', 'message', 'ok', 'queue_blocked', 'reason', 'run', 'source', 'sse_url', 'status', 'status_url', 'stopping', 'submitted', 'sync', 'task_id', '已有生产任务正在运行，请先停止当前任务。', '未找到可停止的任务。']

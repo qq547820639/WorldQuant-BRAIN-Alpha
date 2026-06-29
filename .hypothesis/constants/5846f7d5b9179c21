@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/scripts/check_live_submit_readiness/_candidates.py
+# hypothesis_version: 6.141.1
+
+[0.0, 'alpha_id', 'blocking_reasons', 'candidate_source', 'candidate_sources', 'chain_summary', 'eligible', 'expression', 'local_only_jobs', 'official_alpha_id', 'officially_simulated', 'score', 'simulation_id', 'submission_ready', 'submitted_this_run']

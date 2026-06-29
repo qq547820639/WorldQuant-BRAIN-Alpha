@@ -4,7 +4,12 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Callable, Optional, TypeAlias
+import sys
+from typing import Callable, Optional
+if sys.version_info >= (3, 10):
+    from typing import TypeAlias
+else:
+    from typing_extensions import TypeAlias
 
 from brain_alpha_ops.config import OpsConfig
 from brain_alpha_ops.models import Candidate

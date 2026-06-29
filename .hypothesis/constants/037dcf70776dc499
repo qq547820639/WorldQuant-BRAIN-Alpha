@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web_candidates/audit/_record.py
+# hypothesis_version: 6.141.1
+
+['alpha_id', 'anti_overfit', 'bounded', 'candidate', 'candidate_production', 'created_at', 'dataset_id', 'details', 'events', 'evidence', 'explainability', 'expression', 'extra_fields', 'family', 'feedback_policy', 'feedback_sources', 'lifecycle_status', 'lineage', 'local_only', 'local_quality', 'metadata', 'official_api_called', 'operation', 'parent_expression', 'parent_similarity', 'poll_count', 'quality_diagnosis', 'retry', 'retry_count', 'safety_boundary', 'schema_version', 'scientific_audit', 'scorecard', 'source', 'source_tags', 'submission', 'submit_allowed', 'timestamp', 'web_candidate_pool']

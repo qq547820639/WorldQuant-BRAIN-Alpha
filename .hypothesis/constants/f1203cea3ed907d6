@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/memory/__init__.py
+# hypothesis_version: 6.141.1
+
+['ResearchMemory', '_as_list', '_clamp', '_clean_reason', '_failure_reasons', '_has_generator_bias', '_is_success', '_metrics_for', '_num', '_parse_window', '_rank_buckets', '_recommendations', '_score_for', '_stat_bucket', '_top_windows', '_truthy', '_update_bucket']

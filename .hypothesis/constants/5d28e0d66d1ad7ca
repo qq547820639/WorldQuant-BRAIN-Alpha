@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/compliance/redline_check_alignment.py
+# hypothesis_version: 6.141.1
+
+['BLOCKING', 'WARNING', '_VALID_ALPHA_TYPES', '_VALID_DELAYS', '_VALID_REGIONS', '_VALID_TYPES', '_VALID_UNIT_HANDLING', '_VALID_UNIVERSES', 'alpha_check', 'alpha_correlations', 'alpha_detail', 'alpha_submit', 'authentication', 'base_url 非官方地址', 'config.delay', 'config.region', 'config.type', 'config.unitHandling', 'config.universe', 'data_categories', 'data_field_detail', 'data_fields', 'data_set_detail', 'data_sets', 'delay', 'neutralization', 'official_api', 'operators', 'ops', 'region', 'settings', 'simulations', 'type', 'unitHandling', 'universe', 'user_alphas', 'user_profile', 'web.delay', 'web.neutralization', 'web.region', 'web.type', 'web.universe', '代码强对齐', '修复评分模块导入或指标命名。', '可能使用了非标准字段名', '无法验证 BRAIN API 指标字段名', '无法验证官方 API base_url', '无法验证官方 API 路径', '未找到']

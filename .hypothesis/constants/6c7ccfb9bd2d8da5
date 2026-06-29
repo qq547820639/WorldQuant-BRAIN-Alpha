@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web_candidates/simulation/__init__.py
+# hypothesis_version: 6.141.1
+
+[0.0, 60.0, 180.0, 100, 'account_cooldown', 'api_init_failed', 'auth', 'completed', 'data', 'eligible', 'environment', 'error', 'extra_fields', 'failed', 'gate', 'last_status', 'lifecycle_status', 'max_simulations', 'message', 'min_score', 'no_candidates', 'no_eligible', 'no_simulation_slots', 'official_alpha_id', 'official_metrics', 'password', 'percent', 'percent_complete', 'phase', 'progress', 'remaining_seconds', 'result', 'results', 'running', 'scientific_audit', 'scorecard', 'settings', 'simulating', 'simulation_error', 'simulation_id', 'slot_limit', 'stall_timeout', 'status', 'status_message', 'stopped', 'token', 'total', 'total_candidates', 'unknown', 'username', '当前没有可用的官方模拟槽位。', '没有找到候选Alpha。']

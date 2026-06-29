@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/pipeline_observability.py
+# hypothesis_version: 6.141.1
+
+[0.0, 160, 180, 5000, 'INFO', 'WARN', 'active', 'applied', 'applied_to_generator', 'apply_failed', 'avoid_expressions', 'blocking_flags', 'cycle', 'duplicate_ratio', 'error', 'expression', 'expression_canonical', 'expression_index', 'generated_at', 'generation_guidance', 'generator_type', 'health_flags', 'idle', 'no_generator_hook', 'observability', 'official_call_guard', 'ok', 'ready', 'recommendations', 'recommended_actions', 'refresh_failed', 'risk_level', 'schema_version', 'source', 'status', 'top_duplicates', 'unknown', 'warning_flags']

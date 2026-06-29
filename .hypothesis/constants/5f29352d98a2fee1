@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/generation/generator/_guidance.py
+# hypothesis_version: 6.141.1
+
+[0.25, 'avoid_expressions', 'diversity_boost', 'duplicate_ratio', 'expression', 'expression_canonical', 'field_combinations', 'fields', 'forbidden_patterns', 'health_flags', 'preferred_fields', 'preferred_operators', 'preferred_windows', 'risk_level', 'sample_size', 'top_duplicates', 'top_operators', 'unknown']

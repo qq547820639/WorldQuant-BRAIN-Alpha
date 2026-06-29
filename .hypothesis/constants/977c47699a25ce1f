@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/hypothesis_generator_helpers.py
+# hypothesis_version: 6.141.1
+
+[0.0, 2.0, 2.5, 3.0, '[^a-zA-Z0-9]+', 'accrual', 'accruals', 'actual', 'analyst', 'and', 'anl4', 'beta', 'cash', 'cff', 'cfi', 'cfo', 'change', 'chg', 'consensus', 'count', 'coverage', 'dispersion', 'div', 'dividend', 'earnings', 'eps', 'est', 'estimate', 'float', 'gross', 'growth', 'high', 'historical', 'history', 'income', 'long', 'low', 'margin', 'mean', 'median', 'net_income', 'netincome', 'num', 'number', 'numest', 'operating', 'preest', 'previosestimate', 'previous', 'price', 'profit', 'profitability', 'rating', 'ratio', 'rec', 'recommendation', 'returns', 'revenue', 'revision', 'revisions', 'roa', 'roe', 'sales', 'shares', 'short', 'std', 'stddev', 'surprise', 'target', 'term', 'the', 'to', 'tp', 'value']

@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/strategy_lifecycle.py
+# hypothesis_version: 6.141.1
+
+[0.0, -500, 'action', 'active_profile_id', 'average_reward', 'count', 'cycle', 'latest_reward', 'lineage', 'metrics', 'mutate', 'name', 'neutralization', 'official_results', 'parent_profile_id', 'pool_size', 'profile_id', 'profile_index', 'profile_name', 'propose', 'ready_rate', 'reason', 'records', 'region', 'retire', 'retired_profile_ids', 'reward', 'reward_count', 'reward_summary', 'schema_version', 'strategy_', 'timestamp', 'universe', 'unknown', 'utf-8', 'validate']

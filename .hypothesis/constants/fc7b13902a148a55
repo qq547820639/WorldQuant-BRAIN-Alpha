@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/ux/errors/_phase_guidance.py
+# hypothesis_version: 6.141.1
+
+['action', 'check', 'connection', 'description', 'generate', 'score', 'submit', 'sync', 'title', '云端数据同步', '候选 Alpha 生成', '提交到 BRAIN', '提交前检查', '操作进行中', '评分与验证', '请按工作流步骤操作', '连接与认证']

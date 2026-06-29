@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/production_diagnostics/_snapshot.py
+# hypothesis_version: 6.141.1
+
+['blocking_ok', 'completed_items', 'contract_comparison', 'environment', 'frontend_inline', 'gap_matrix', 'generated_at', 'history_replay', 'official_context', 'official_refresh', 'ok', 'parameter_audit', 'priority_items', 'redline', 'schema_version', 'scoring_probe', 'storage_dir', 'unfinished_items', 'upgrade_plan', 'zero_deviation']

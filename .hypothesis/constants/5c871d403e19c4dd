@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/contracts.py
+# hypothesis_version: 6.141.1
+
+[0.0, 'RUNNING', 'Recovered', 'action', 'alpha_id', 'backtest_record.v1', 'backtest_slot', 'corr_', 'correlation_id', 'expression', 'family', 'gate', 'guidance', 'guidance_digest', 'hypothesis', 'lifecycle_record.v1', 'lifecycle_status', 'next_poll_at', 'official_alpha_id', 'official_metrics', 'poll_count', 'profile_id', 'run_id', 'schema_version', 'score', 'scorecard', 'simulation_id', 'simulation_running', 'simulation_status', 'slot', 'source', 'stage', 'status', 'timestamp', 'total_score', 'utf-8', 'web', '|']

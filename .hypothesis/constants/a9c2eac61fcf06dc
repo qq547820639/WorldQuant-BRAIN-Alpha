@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web/misc/web_assistant_snapshots/_assistant_guidance.py
+# hypothesis_version: 6.141.1
+
+[0.0, 0.6, 1.0, 100, 5000, 'assistant_guidance', 'assistant_guided', 'confidence', 'eligible', 'enabled', 'field_combinations', 'guidance', 'guidance_digest', 'has_generator_bias', 'has_healthy_outcome', 'historical_outcome', 'history', 'history_count', 'history_index', 'history_limit', 'meets_min_confidence', 'min_confidence', 'ok', 'outcomes', 'outcomes_by_guidance', 'persisted_at', 'persistence_source', 'preferred_windows', 'reason', 'risk_flags', 'sample_size', 'schema_version', 'scoring_policy', 'source', 'summary', 'timestamp', 'top_fields', 'top_operators', 'usable', 'weak']

@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/scripts/check_live_submit_readiness/_constants.py
+# hypothesis_version: 6.141.1
+
+[0.9, 'candidates.jsonl', 'config', 'data', 'jobs_*.json', 'jobs_production.json', 'run_config.json']

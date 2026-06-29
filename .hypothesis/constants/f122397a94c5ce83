@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/scripts/check_frontend_surface_parity/_audit.py
+# hypothesis_version: 6.141.1
+
+['Sidebar.tsx', 'code', 'components', 'fail_on_gaps', 'findings', 'id', 'inline_only_views', 'inline_registry', 'inline_view_count', 'inline_views', 'matches', 'message', 'missing_inline_views', 'missing_react_tabs', 'ok', 'parity', 'path', 'plan', 'react_app', 'react_only_tabs', 'react_tab_count', 'react_tabs', 'schema_version', 'shared_ids', 'strict_matches', 'utf-8']

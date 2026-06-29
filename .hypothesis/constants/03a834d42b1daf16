@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/alpha_quality/constants.py
+# hypothesis_version: 6.141.1
+
+['alpha_id', 'and', 'correlation', 'data_fields', 'dataset', 'decay', 'delay', 'drawdown', 'else', 'expression', 'false', 'family', 'fitness', 'hypothesis', 'if', 'instrumentType', 'language', 'nanHandling', 'neutralization', 'none', 'not', 'operators', 'or', 'pasteurization', 'region', 'returns', 'sharpe', 'true', 'truncation', 'turnover', 'type', 'unitHandling', 'universe']

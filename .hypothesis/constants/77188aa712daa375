@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web_candidates/simulation_runtime.py
+# hypothesis_version: 6.141.1
+
+[0.0, 0.95, 1.0, 5.0, 120.0, 'budget', 'completed', 'current_alpha_id', 'current_slot', 'data', 'failed', 'last_status', 'message', 'official_api', 'ops', 'percent', 'percent_complete', 'phase', 'poll_attempt', 'poll_attempts', 'poll_elapsed_seconds', 'poll_timeout', 'running', 'status_message', 'submit_attempts', 'total']

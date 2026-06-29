@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web/misc/web_runtime_facade/_submission.py
+# hypothesis_version: 6.141.1
+
+[500, 5000, 'BRAIN_PASSWORD', 'BRAIN_TOKEN', 'BRAIN_USERNAME', 'CONFLICT_RUNNING', 'Submitting batch.', 'credentials', 'current_alpha_id', 'done', 'error', 'error_code', 'failed', 'message', 'ok', 'password', 'password_env', 'phase', 'submit_batch', 'submitted', 'submitting', 'token', 'token_env', 'total', 'username', 'username_env', '已有提交任务正在运行，请完成后再操作。']

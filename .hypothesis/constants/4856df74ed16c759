@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/core_state.py
+# hypothesis_version: 6.141.1
+
+['CANCELLED', 'COMPLETED', 'ERROR', 'FAILED', 'OFFICIAL_SIMULATED', 'PENDING', 'POLLING', 'RUNNING', 'SIMULATION_FAILED', 'SIMULATION_RUNNING', 'SIMULATION_SUBMITTED', 'SIMULATION_TIMEOUT', 'SUBMISSION_READY', 'SUBMITTED', 'active', 'canceled', 'cancelled', 'completed', 'failed', 'idle', 'interrupted', 'pending', 'poll_deferred', 'poll_failed', 'polled', 'queued', 'result_deferred', 'result_failed', 'running', 'starting', 'stopped', 'stopping', 'submit_failed', 'submitted', 'success', 'unknown', 'warning']

@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/compliance/redline_check_coverage.py
+# hypothesis_version: 6.141.1
+
+['BLOCKING', 'CONCENTRATED_WEIGHT', 'HIGH_TURNOVER', 'LOW_FITNESS', 'LOW_SHARPE', 'LOW_TURNOVER', 'SELF_CORRELATION', 'WARNING', 'brain_alpha_ops', 'exception_applied', 'fitness', 'research', 'scoring.py', 'self_correlation', 'sharpe', 'sub_universe_sharpe', 'turnover_min', 'turnover_platform', 'utf-8', 'weight_concentration', '函数可导入', '未确认', '缺少 Fitness 交叉验证', '要素全覆盖']

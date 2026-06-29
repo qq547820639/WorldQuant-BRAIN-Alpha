@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/scripts/check_frontend_surface_parity/_cli.py
+# hypothesis_version: 6.141.1
+
+['--fail-on-gaps', '--fail-on-stale-plan', '--inline-registry', '--json', '--plan', '--react-app', 'findings', 'has gaps', 'matches', 'ok', 'parity', 'store_true', 'strict matches', 'strict_matches']

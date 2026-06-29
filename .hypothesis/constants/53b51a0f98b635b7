@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/iterative_optimizer/_types.py
+# hypothesis_version: 6.141.1
+
+[120, 180, 252, 'correlation', 'decay', 'difference', 'group_rank', 'group_zscore', 'minmax', 'moving_average', 'rank', 'ranking', 'scale', 'standardization', 'step', 'ts_arg_max', 'ts_arg_min', 'ts_av_diff', 'ts_corr', 'ts_covariance', 'ts_decay_linear', 'ts_delta', 'ts_kurtosis', 'ts_max', 'ts_mean', 'ts_min', 'ts_product', 'ts_rank', 'ts_skewness', 'ts_std_dev', 'ts_step', 'ts_sum', 'volatility', 'winsorization', 'winsorize', 'zscore']

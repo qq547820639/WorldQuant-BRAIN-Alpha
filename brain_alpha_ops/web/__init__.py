@@ -31,6 +31,11 @@ from ._reexports import (  # noqa: F401
 # Public re-exports + compat facade wrappers installed by _reexports.
 from ._reexports import *  # noqa: F401,F403
 
+# Service namespace stored for lazy lookup via __getattr__ (Phase 2a refactoring).
+# This avoids polluting the module globals with ~160 private names while keeping
+# backward compatibility for ``web._xxx_service`` access patterns.
+_SERVICE_NS: dict = _build_web_service_namespace()
+
 # ``_web_submit_readiness`` is needed by the submit-readiness helpers below,
 # which MUST live in this module so that ``monkeypatch.setattr(web,
 # "_run_live_submit_readiness_check", ...)`` is observed by
@@ -130,6 +135,7 @@ def _install_facade_bindings() -> None:
        import-time facade): provides backwards-compatible top-level symbols
        for tests and external scripts that historically did
        ``from brain_alpha_ops.web import X``.
+       Now stored in ``_SERVICE_NS`` and resolved via ``__getattr__``.
 
     2. ``web_runtime_facade``: lazy runtime facade used by
        ``web_service_namespace`` for ``compute_run_stats`` and
@@ -145,8 +151,10 @@ def _install_facade_bindings() -> None:
     ``web_handler_dispatch_core.py`` for the dispatch loop.
     """
     try:
-        namespace = _build_web_service_namespace()
-        globals().update(namespace)
+        # Build a merged namespace for facade bindings: globals + _SERVICE_NS.
+        # This allows build_web_facade_bindings to access service namespace
+        # values without polluting module globals.
+        merged_ns = {**globals(), **_SERVICE_NS}
         from brain_alpha_ops.web.business import web_business as _business_handlers
         from brain_alpha_ops.web.business.web_business import (
             _has_valid_api_session as _business_has_valid_api_session,
@@ -180,9 +188,9 @@ def _install_facade_bindings() -> None:
         # work because each handler falls back to ``brain_alpha_ops.web``
         # module globals when the injected callable is absent.
         _business_handlers.inject_dependencies(
-            load_run_config=globals().get("load_run_config", _load_run_config),
+            load_run_config=globals().get("load_run_config", _SERVICE_NS.get("_load_run_config", _load_run_config)),
             run_config_from_payload=globals().get("run_config_from_payload"),
-            web_error=globals().get("web_error_payload") or globals().get("_web_error"),
+            web_error=globals().get("web_error_payload") or _SERVICE_NS.get("_web_error"),
             submit_background_job=globals().get("_submit_background_job"),
             job_registry=globals().get("JOB_REGISTRY"),
         )
@@ -205,8 +213,8 @@ def _install_facade_bindings() -> None:
         globals()["_has_valid_api_session"] = _business_has_valid_api_session
         globals()["_has_valid_local_origin"] = _business_has_valid_local_origin
         globals()["_runtime_facade"] = _web_runtime_facade
-        globals().update(_build_web_facade_bindings(globals()))
-        globals()["_LEGACY_IMPORTED_EXPORTS"] = _build_legacy_imported_exports(globals())
+        globals().update(_build_web_facade_bindings(merged_ns))
+        globals()["_LEGACY_IMPORTED_EXPORTS"] = _build_legacy_imported_exports(merged_ns)
     except Exception as e:
         from brain_alpha_ops.redaction import redact_error_message; logger.error("Facade bindings install failed: %s", redact_error_message(e))
 
@@ -261,6 +269,10 @@ def __getattr__(name: str):
     legacy = _LEGACY_IMPORTED_EXPORTS.get(name)
     if legacy is not None:
         return legacy
+    # Service namespace lookup (Phase 2a: lazy resolution via __getattr__)
+    service_val = _SERVICE_NS.get(name)
+    if service_val is not None:
+        return service_val
     raise AttributeError(name)
 
 # ``main`` is re-exported from ``._reexports`` (legacy implementation) and

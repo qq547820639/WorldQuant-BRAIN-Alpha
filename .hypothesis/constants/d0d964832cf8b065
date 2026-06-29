@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/generation/generator/_modes.py
+# hypothesis_version: 6.141.1
+
+[160, 1000, 10000, 'Bare Fallback', 'Random Exploration', 'TOP3000', 'USA', '_windows', 'alpha', 'default', 'delay', 'experience_feedback', 'experience_pattern', 'fallback', 'hypothesis_driven', 'preferred_operators', 'random', 'random_exploration', 'region', 'universe']

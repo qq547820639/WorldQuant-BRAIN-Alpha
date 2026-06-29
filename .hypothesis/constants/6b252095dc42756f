@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/__init__.py
+# hypothesis_version: 6.141.1
+
+['%Y-%m-%d %H:%M:%S', '0.5.0', 'AlphaCheckRegistry', 'BrainAlphaToolbox', 'CandidateGenerator', 'DatasetRef', 'DatasetSelector', 'DynamicThemeEngine', 'FieldDatasetMapper', 'JobStore', 'OfficialDataLoader', 'OfficialDataset', 'OfficialField', 'OfficialOperator', 'ResearchMemory', 'ToolDefinition', 'ToolRegistry', '__version__', 'brain_alpha_ops.data', 'resolve_tool_name', 'tool_aliases', 'tool_definitions']

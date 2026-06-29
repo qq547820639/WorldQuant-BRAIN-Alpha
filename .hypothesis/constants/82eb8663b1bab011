@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/scoring/_helpers.py
+# hypothesis_version: 6.141.1
+
+[0.0, 0.25, 0.5, 1.0, 100.0, 'BRAIN_Official', 'actual', 'direction', 'is_hard_gate', 'meaning', 'name', 'neutral', 'passed', 'points', 'source', 'strong', 'target', 'unknown', 'weak', '经验']

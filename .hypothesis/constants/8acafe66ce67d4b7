@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/ux/errors/_check_results.py
+# hypothesis_version: 6.141.1
+
+[':', 'check', 'expression_valid', 'fitness_minimum', 'fix', 'friendly_name', 'meaning', 'name', 'prod_correlation', 'raw', 'returns_positive', 'self_correlation', 'sharpe_positive', 'sub_universe_sharpe', 'turnover_platform', 'turnover_quality', 'weight_concentration', '产品相关 < 0.70', '增加跨市场验证或选择更通用的因子。', '夏普比率 ≥ 1.25', '子域夏普比率', '尝试减少极端值暴露或缩短回看窗口。', '换手率 ≤ 70%', '换手率质量阈值 ≤ 30%', '提高夏普比率或降低换手率可提升适应度。', '收益为正', '改变算子组合或使用不同的数据字段族。', '权重集中度 ≤ 10%', '检查因子方向是否正确，可尝试取反。', '检查算子名称、括号匹配、字段是否存在。', '自相关 < 0.70', '表达式语法有效', '请查看评分详情了解具体不通过原因。', '质量检查项', '进一步优化换手率以提升评分。', '适应度 ≥ 1.0']

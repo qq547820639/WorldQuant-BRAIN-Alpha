@@ -281,5 +281,5 @@ def install_log_redaction() -> None:
     _installed_filters.add(filter_id)
 
 
-# Auto-install on import
-install_log_redaction()
+# NOTE: install_log_redaction() is no longer called automatically on import.
+# Entry points (launch_web.py, mcp_server.py) must call it explicitly.

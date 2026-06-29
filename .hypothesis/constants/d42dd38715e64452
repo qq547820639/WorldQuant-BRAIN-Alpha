@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/local_backtest_gate.py
+# hypothesis_version: 6.141.1
+
+[0.0, 8.0, '(FAIL)', ',', '; ', 'advisory', 'blocking', 'data_fields', 'default', 'error', 'error_type', 'evaluated', 'failed_reasons', 'fields', 'fitness', 'local_backtest', 'local_backtest:', 'local_quality', 'ok', 'operators', 'pass_local', 'pass_reasons', 'passed', 'production-gate-v2.1', 'reasons', 'result', 'schema_version', 'score', 'sharpe', 'skipped', 'status', 'submission', 'submission_ready', 'support', 'supported', 'supported_fields', 'supported_operators', 'turnover', 'unknown', 'unsupported_fields', 'unsupported_fields=', 'warnings', 'weight_concentration']

@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/simulation_scheduler/_types.py
+# hypothesis_version: 6.141.1
+
+[0.0, 15.0, 30.0, 45.0, 60.0, 120.0, 'candidate_alpha_id', 'completed', 'cooldown', 'cooldown_reason', 'error_count', 'failed', 'idle', 'last_error', 'poll_count', 'polling', 'simulation_id', 'slot_id', 'state', 'submitting']

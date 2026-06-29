@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/generation/selectors.py
+# hypothesis_version: 6.141.1
+
+[0.01, 1.0, 'ExpressionFamily', 'Hypothesis', 'Hypothesis | None', 'HypothesisLibrary', 'HypothesisSelector']

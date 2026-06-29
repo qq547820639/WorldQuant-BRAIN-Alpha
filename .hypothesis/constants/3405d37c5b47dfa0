@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web/security/web_session/__init__.py
+# hypothesis_version: 6.141.1
+
+['LOCAL_HOSTS', 'SESSIONS', 'SESSION_COOKIE_NAME', 'SESSION_LOCK', 'SESSION_MANAGER', 'WebSession', 'create_session', 'csrf_for_session', 'expire_session', 'header_hostname', 'header_port', 'is_allowed_request', 'new_session_id', 'normalize_host', 'parse_cookies', 'prune_sessions', 'session_end_payload', 'session_status', 'session_ttl_seconds', 'set_remote_policy', 'validate_admin_token', 'validate_session']

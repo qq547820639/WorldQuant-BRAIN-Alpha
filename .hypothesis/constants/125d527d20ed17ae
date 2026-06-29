@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/context/_pack.py
+# hypothesis_version: 6.141.1
+
+[5000, 'authorization', 'cache_dir', 'cloud_alphas', 'compliance', 'cookie', 'credential', 'expression_index', 'generated_at', 'generation_focus', 'latest_result', 'mission', 'objective', 'observability', 'ok', 'operating_mode', 'password', 'path', 'prompt', 'prompt_diagnostics', 'research_memory', 'risk_controls', 'robustness', 'role', 'run_config', 'schema_version', 'secret', 'source', 'storage_dir', 'token']

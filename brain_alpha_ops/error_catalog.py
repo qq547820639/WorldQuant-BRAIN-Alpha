@@ -2,7 +2,7 @@
 
 Converts the 11 spec-mandated user-facing error classes into structured
 payloads that always carry cause / impact_scope / suggested_action /
-recovery_entry.
+recovery entry.
 
 Each entry is bilingual (Chinese primary) and exposes a stable
 ``recovery_url`` that the frontend renders as a clickable recovery entry.
@@ -13,7 +13,9 @@ known BRAIN error strings onto ``ErrorKind``::
     kind = classify_exception(exc)
     payload = build_actionable_error(kind, context={"retry_after": 60})
 
-Stdlib-only; no dependency on ``brain_alpha_ops.errors`` (avoids cycles).
+Classification delegates to ``errors.classify_error`` for the general
+fallback path (status codes, text heuristics); catalog-specific ErrorKind
+patterns (error_code substrings, exception types) are checked first.
 """
 
 from __future__ import annotations
@@ -22,6 +24,8 @@ import json
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any
+
+from brain_alpha_ops.errors import classify_error
 
 
 class ErrorKind(str, Enum):
@@ -238,59 +242,110 @@ _STRING_KIND_RULES: list[tuple[tuple[str, ...], ErrorKind]] = [
 ]
 
 
+# ── ErrorInfo.category → ErrorKind mapping ────────────────────────────────
+# Used when classify_exception falls through to the unified classify_error()
+# and the resulting ErrorInfo.category must be mapped back to an ErrorKind.
+_CATEGORY_TO_KIND: dict[str, ErrorKind] = {
+    "auth": ErrorKind.login_expired,
+    "rate_limit": ErrorKind.official_rate_limited,
+    "network": ErrorKind.network_timeout,
+    "not_found": ErrorKind.dataset_missing,
+    "validation": ErrorKind.field_non_compliant,
+    "conflict": ErrorKind.simulation_concurrency_exceeded,
+    "storage": ErrorKind.cache_unavailable,
+}
+
+
+def _classify_fallback(
+    exc: BaseException | int | str,
+    message: str = "",
+) -> ErrorKind:
+    """Delegate to the unified ``classify_error`` and map category → ErrorKind.
+
+    Catalog-specific status-code mappings (503 → local_service_unavailable)
+    take priority over the generic classify_error category mapping.
+    """
+    # Check catalog-specific status-code mapping first (differs from
+    # classify_error's generic "network" bucket for 503).
+    if isinstance(exc, int):
+        sc: int | None = exc
+    elif isinstance(exc, str):
+        sc = None
+    else:
+        raw = getattr(exc, "status_code", None)
+        try:
+            sc = int(raw) if raw is not None else None
+        except (TypeError, ValueError):
+            sc = None
+    if sc is not None:
+        kind = _kind_from_status(sc)
+        if kind is not None:
+            return kind
+
+    if isinstance(exc, int):
+        class _SCExc(Exception):
+            def __init__(self, sc: int) -> None:
+                self.status_code = sc
+                super().__init__("")
+        info = classify_error(_SCExc(exc))
+    elif isinstance(exc, str):
+        info = classify_error(Exception(exc))
+    else:
+        info = classify_error(exc)
+    kind = _CATEGORY_TO_KIND.get(info.category)
+    if kind is not None:
+        return kind
+    return ErrorKind.network_timeout
+
+
 def classify_exception(exc: BaseException | int | str) -> ErrorKind:
     """Map a Python exception / HTTP status / known string to an ``ErrorKind``.
 
     Resolution order:
-      1. ``error_code`` attribute (BRAIN codes).
-      2. ``status_code`` attribute (401/403→login_expired, 429→
-         official_rate_limited, 408/504→network_timeout,
-         503→local_service_unavailable).
-      3. Exception type (JSONDecodeError→cache_unavailable; KeyError→
+      1. ``error_code`` attribute — catalog-specific substring rules.
+      2. Exception type (JSONDecodeError→cache_unavailable; KeyError→
          dataset_missing; ConnectionError→local_service_unavailable;
          TimeoutError→network_timeout; asyncio.CancelledError→
          task_cancelled).
-      4. Substring match against error_code + message.
-      5. Fallback: ``network_timeout`` (least-misleading operational
-         error; avoids implying user fault or system-down).
+      3. ``error_code`` + message substring rules (catalog-specific).
+      4. Fallback: delegates to ``errors.classify_error()`` and maps the
+         resulting ``ErrorInfo.category`` to an ``ErrorKind``.
+
+    The unified ``classify_error`` is the single classification engine;
+    catalog-specific patterns (step 1-3) refine the mapping to the 11
+    user-facing ``ErrorKind`` values.
     """
     if isinstance(exc, int):
-        return _kind_from_status(exc) or ErrorKind.network_timeout
+        return _classify_fallback(exc)
     if isinstance(exc, str):
-        return _kind_from_string(exc) or ErrorKind.network_timeout
+        return _kind_from_string(exc) or _classify_fallback(exc)
     if exc is None:
         return ErrorKind.network_timeout
 
+    # 1. error_code → catalog-specific substring match.
     err_code = str(getattr(exc, "error_code", "") or "").lower()
     if err_code:
         kind = _kind_from_string(err_code)
         if kind is not None:
             return kind
 
-    status = getattr(exc, "status_code", None)
-    if status is not None:
-        try:
-            sc = int(status)
-        except (TypeError, ValueError):
-            sc = None
-        if sc is not None:
-            kind = _kind_from_status(sc)
-            if kind is not None:
-                return kind
-
+    # 2. Exception-type-based (catalog-specific mapping).
     kind = _kind_from_type(exc)
     if kind is not None:
         return kind
 
+    # 3. Message substring match (catalog-specific rules).
     message = str(exc).lower()
     kind = _kind_from_string(message)
     if kind is not None:
         return kind
 
-    return ErrorKind.network_timeout
+    # 4. Fallback: delegate to the unified classify_error → map category.
+    return _classify_fallback(exc, message)
 
 
 def _kind_from_status(sc: int) -> ErrorKind | None:
+    """Map an HTTP status code to a catalog-specific ErrorKind."""
     if sc in (401, 403):
         return ErrorKind.login_expired
     if sc == 429:
@@ -299,7 +354,6 @@ def _kind_from_status(sc: int) -> ErrorKind | None:
         return ErrorKind.network_timeout
     if sc == 503:
         return ErrorKind.local_service_unavailable
-    # 400 is too generic; expression_invalid only when message confirms.
     return None
 
 

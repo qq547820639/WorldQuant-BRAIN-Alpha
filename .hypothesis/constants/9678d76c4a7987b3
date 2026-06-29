@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web_candidates/bindings/__init__.py
+# hypothesis_version: 6.141.1
+
+['check_candidate', 'cloud_alpha_snapshot', 'cloud_alpha_summary', 'cloud_status_for', 'compute_run_stats', 'config_from_payload', 'datasets_from_fields', 'durable_job_rows', 'find_free_port', 'job_registry', 'job_registry_view', 'lifecycle_from_job', 'load_check_results', 'load_presets', 'lookup_sse_job', 'main', 'match_preset_id', 'normalize_host', 'public_run_config', 'rate_limit_request', 'read_storage_jsonl', 'run_check_batch_job', 'run_job', 'run_submit_batch_job', 'run_sync_job', 'serve', 'shutdown_server', 'smoke_test_server', 'snapshot_facade', 'snapshot_runtime', 'start_thread', 'storage_jsonl_path', 'submit_batch', 'submit_candidate', 'sync_cloud_alphas', 'test_connection']

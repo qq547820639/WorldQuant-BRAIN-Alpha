@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/observability/_snapshot.py
+# hypothesis_version: 6.141.1
+
+[240, 5000, 'actions', 'alerts', 'backtests', 'backtests.jsonl', 'candidates.jsonl', 'checks', 'checks.jsonl', 'component', 'error', 'errors', 'expression_index', 'generated_at', 'health', 'include_cloud', 'job_diagnostics', 'job_rows', 'jsonl', 'lifecycle.jsonl', 'limit', 'local_research_jsonl', 'market_data_cache', 'market_data_vector', 'official_call_guard', 'ok', 'partial_errors', 'recommendations', 'schema_version', 'source', 'source_file', 'sqlite_cache', 'sqlite_index', 'storage_dir', 'top_n']

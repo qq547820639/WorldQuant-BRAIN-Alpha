@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/ux/guided_models.py
+# hypothesis_version: 6.141.1
+
+[0.0, 'CheckpointData', 'candidates_generated', 'checkpoint_path', 'completed', 'completed_at', 'cycle_number', 'description', 'duration_seconds', 'errors', 'failed', 'name', 'parameter_audit', 'pending', 'phase_completed', 'phases', 'result_summary', 'run_id', 'running', 'snapshot', 'started_at', 'status', 'submissions_made', 'summary', 'timestamp', 'warnings']

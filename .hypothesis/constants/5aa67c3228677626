@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/scoring/official_scoring/_system.py
+# hypothesis_version: 6.141.1
+
+['BRAIN_Official', 'CONFIGURED_GATE', 'GateConfig | None', 'calibration', 'decision_band', 'empirical', 'gate_name', 'layer_weights', 'prior', 'score_basis', 'scoring', 'settings', 'settings_trace', 'source', 'submission_checklist', 'submission_ready', 'thresholds', 'total_score', 'type', 'value']

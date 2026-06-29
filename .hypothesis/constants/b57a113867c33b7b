@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/scripts/check_diagnostic_report.py
+# hypothesis_version: 6.141.1
+
+['## Gap Matrix', '--config', '--json', '--report', 'Architecture', 'Backtest execution', 'Data efficiency', 'Data lineage', 'Errors and logs', 'Experience', 'Functional closure', 'LLM prompting', 'Parameter accuracy', 'Run config path.', 'Scoring', 'Technical compliance', '__main__', 'code', 'config', 'docs', 'expected', 'findings', 'gap_matrix_section', 'header', 'history_replay', 'message', 'missing_report', 'official_context', 'official_refresh', 'ok', 'parameter_audit', 'parameter_audit_hash', 'priority_items', 'quantgpt_section', 'read_error', 'redline', 'redline_counts', 'report', 'run_config.json', 'schema_version', 'scoring_probe', 'snapshot_ok', 'store_true', 'utf-8']

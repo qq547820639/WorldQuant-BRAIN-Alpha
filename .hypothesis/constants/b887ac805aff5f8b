@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web/submissions/web_submission_safety/_preflight_advisory.py
+# hypothesis_version: 6.141.1
+
+[5000, 'ACTIVE', 'CONDUCTED', 'ERROR', 'FAIL', 'MISSING_OFFICIAL_ID', 'PASS', 'PRODUCTION', 'SUBMITTED', 'SUBMIT_NOT_READY', 'alpha_id', 'alphas', 'attributions', 'check_status', 'checked_at', 'checks', 'checks.jsonl', 'conflict', 'decision_band', 'expression', 'failed', 'gate', 'high', 'is_stale', 'level', 'lifecycle_status', 'name', 'navigation', 'not_passed', 'official_alpha_id', 'ok', 'pass_fail', 'passed', 'rejected', 'risk', 'scorecard', 'severity', 'status', 'submission_ready', 'submit_candidate', 'summary']

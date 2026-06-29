@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/field_quality.py
+# hypothesis_version: 6.141.1
+
+['VECTOR', '_', 'country', 'currency', 'cusip', 'dataType', 'fieldType', 'figi', 'flag', 'flags', 'group_', 'hierarchy', 'id', 'identifier', 'industry', 'isin', 'market', 'name', 'parent', 'parents', 'rha', 'rha2', 'sector', 'sedol', 'subindustry', 'ticker', 'top', 'topsp', 'type', 'unit', 'units']

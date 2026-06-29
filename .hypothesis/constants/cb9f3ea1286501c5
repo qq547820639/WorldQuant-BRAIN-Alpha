@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web/state/web_state_contract/__init__.py
+# hypothesis_version: 6.141.1
+
+['_CANCELLED_STATUSES', '_ERROR_DEFINITIONS', '_FAILED_STATUSES', '_MISSING_STATUSES', '_STATUS_LABELS', '_SUCCESS_STATUSES', '_WARNING_STATUSES', '_int_value', '_looks_interrupted', '_normalize_status', '_state', 'build_user_error', 'classify_job_status', 'enrich_error_payload', 'enrich_job_response']

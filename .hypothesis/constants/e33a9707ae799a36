@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web/submissions/web_submission_safety/_preflight_message.py
+# hypothesis_version: 6.141.1
+
+['ACTIVE', 'CONDUCTED', 'PRODUCTION', 'SUBMITTED', 'alphas', 'expression', 'failed', 'gate', 'is_stale', 'lifecycle_status', 'official_alpha_id', 'rejected', 'status', 'submission_ready', 'summary', '不达标', '云端缓存显示该 Alpha 已提交。', '提交前请先同步云端数据。', '本地提交记录中已存在相同表达式。']

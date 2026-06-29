@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web_candidates/simulation/_submit.py
+# hypothesis_version: 6.141.1
+
+[0.0, 429, '%Y-%m-%dT%H:%M:%S', 'CAPACITY_TIMEOUT', 'CAPACITY_WAIT', 'RATE_LIMITED', 'SUBMITTED', 'SUBMITTING', 'SUBMIT_FAILED', 'action', 'alpha_id', 'candidate', 'capacity_timeout', 'capacity_wait', 'completed', 'current_alpha_id', 'data', 'dataset', 'dataset_id', 'deferred_rate_limit', 'error', 'expression', 'failed', 'lifecycle_status', 'message', 'next_poll_seconds', 'percent', 'phase', 'poll_attempt', 'poll_count', 'poll_elapsed_seconds', 'poll_start', 'progress_percent', 'retry_after_seconds', 'simulating', 'simulation_id', 'simulation_submitted', 'slot', 'slot_index', 'status', 'submit_attempts', 'submit_failed', 'submitted', 'timestamp', 'total']

@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/_market_data_helpers.py
+# hypothesis_version: 6.141.1
+
+[0.0, 'alpha_id', 'id', 'loaded_at', 'metrics', 'official_alpha_id', 'official_metrics', 'saved_at', 'symbol', 'timestamp', 'updated_at', 'values']

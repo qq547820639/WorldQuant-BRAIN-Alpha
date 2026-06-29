@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/brain_api/official_query_params.py
+# hypothesis_version: 6.141.1
+
+[100, 'alphaCount', 'category', 'color', 'competition', 'coverage', 'dateCreated', 'dateSubmitted', 'delay', 'favorite', 'hidden', 'is.bookSize', 'is.drawdown', 'is.fitness', 'is.longCount', 'is.margin', 'is.pnl', 'is.prodCorrelation', 'is.returns', 'is.selfCorrelation', 'is.sharpe', 'is.shortCount', 'is.turnover', 'limit', 'name', 'offset', 'order', 'os.drawdown', 'os.fitness', 'os.longCount', 'os.margin', 'os.pnl', 'os.returns', 'os.sharpe', 'os.shortCount', 'os.turnover', 'settings.decay', 'settings.delay', 'settings.language', 'settings.nanHandling', 'settings.region', 'settings.truncation', 'settings.universe', 'stage', 'startDate', 'status', 'tag', 'type', 'universe', 'userCount', 'valueScore']

@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/search_orchestrator.py
+# hypothesis_version: 6.141.1
+
+[0.0, 'best_result', 'bounded', 'budget', 'candidate', 'duplicate_count', 'evaluated_candidates', 'expression', 'frontier_count', 'frontier_exhausted', 'input_count', 'keep_top', 'live_api_calls', 'max_mutations', 'ok', 'result_count', 'results', 'round_index', 'round_summaries', 'rounds', 'schema_version', 'score', 'selected_count', 'selected_results', 'termination_reason']

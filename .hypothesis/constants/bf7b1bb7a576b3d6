@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/browser/_brain_ui_helpers.py
+# hypothesis_version: 6.141.1
+
+[30000, '#', '(?i)(\\b(?:', ')\\s*=\\s*)[^;\\s]+', '?', '?[redacted-query]', 'alpha submitted', 'approval', 'are you sure', 'brain.worldquant.com', 'confirm', 'confirm submit', 'log in', 'login', 'password', 'sign in', 'submit', 'submit alpha']

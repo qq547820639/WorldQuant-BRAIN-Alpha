@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web_candidates/generation/_selection.py
+# hypothesis_version: 6.141.1
+
+['alpha_id', 'candidate', 'candidates', 'check_candidates', 'data', 'gate', 'job_id', 'lifecycle_status', 'metrics', 'official_alpha_id', 'official_metrics', 'passed_candidates', 'progress', 'result', 'submission_ready', 'summary']

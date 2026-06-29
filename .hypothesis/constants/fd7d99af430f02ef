@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/llm_review/_ledger.py
+# hypothesis_version: 6.141.1
+
+['a', 'context_digest', 'context_pack', 'model', 'parse_status', 'prompt', 'prompt_digest', 'prompt_run_ledger.v1', 'prompt_runs.jsonl', 'response_digest', 'schema_version', 'temperature', 'timestamp', 'unknown', 'utf-8']

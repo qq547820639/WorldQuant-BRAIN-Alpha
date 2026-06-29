@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web_candidates/simulation_state/_cooldown.py
+# hypothesis_version: 6.141.1
+
+[0.0, 'account', 'active', 'cleared_at', 'deferred_until', 'endpoint', 'lifecycle_status', 'official_simulation', 'reason', 'recorded_at', 'remaining_seconds', 'retry_after_seconds', 'scope', 'utf-8']

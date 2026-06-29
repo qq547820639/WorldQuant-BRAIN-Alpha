@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/official_call_guard.py
+# hypothesis_version: 6.141.1
+
+[0.0, 160, 'active', 'alpha_id', 'already_recorded', 'blocked', 'blocked_at', 'blocked_candidates', 'blocked_count', 'expression_canonical', 'family', 'guard', 'last_blocked_at', 'last_blocked_phase', 'official_simulation', 'official_validation', 'phase', 'phase_counts', 'reason', 'schema_version', 'score', 'total_score']

@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/memory/_helpers.py
+# hypothesis_version: 6.141.1
+
+[0.0, 0.25, 0.5, 180, 252, ', ', '0', 'PASS', '\\b(\\d{1,3})\\b', 'alpha_id', 'assistant_guidance_', 'avg_fitness', 'avg_score', 'avg_sharpe', 'correlation', 'count', 'data_fields', 'drawdown', 'error', 'errors', 'expression', 'failed_checks', 'failed_reasons', 'failure_reason', 'false', 'field_combinations', 'field_set', 'fields', 'fitness', 'fitness_sum', 'gate', 'guidance_digest', 'lifecycle_status', 'margin', 'message', 'name', 'neutral', 'no', 'note', 'off', 'official_metrics', 'pass_fail', 'preferred_windows', 'returns', 'score', 'score_sum', 'scorecard', 'sharpe', 'sharpe_sum', 'source_tags', 'status', 'strong', 'submission', 'submission_ready', 'submitted', 'success_count', 'success_rate', 'top_fields', 'top_operators', 'total_score', 'turnover', 'unknown', 'validation', 'weak', 'window_values']

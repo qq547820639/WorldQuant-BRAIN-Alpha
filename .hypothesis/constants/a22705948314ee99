@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/llm_service/_service_review.py
+# hypothesis_version: 6.141.1
+
+[0.0, 0.5, 0.7, 1.5, 5.0, 10.0, 200, 500, '; ', 'category', 'complete', 'confidence', 'critique', 'cross_sectional', 'dataset', 'empty expression', 'fields', 'group_', 'momentum', 'name', 'neutralize', 'offline_heuristic', 'operators', 'primary', 'quality', 'reversal', 'risks', 'score', 'secondary', 'suggestions', 'ts_', 'ts_delta', 'ts_mean', 'ts_pct_change', 'ts_std', 'ts_sum', 'unknown', 'winsorize', '{', '}', '增加不同数据族的字段组合', '时间序列算子缺少极值处理', '简化表达式或减少参数', '缺少中性化处理', '表达式结构合理', '表达式过短，缺乏结构性信号组合', '表达式过长，可能过拟合']

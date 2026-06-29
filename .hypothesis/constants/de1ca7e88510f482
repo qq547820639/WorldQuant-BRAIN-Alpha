@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/backtest_finalization.py
+# hypothesis_version: 6.141.1
+
+['; ', 'BRAIN_CHECK_FAILED', 'ERROR', 'WARN', 'WARNING', '_thresholds', 'alpha_check_error', 'anti_overfit', 'anti_overfit_report', 'backtest_failed', 'check_registry_error', 'check_summary', 'data_fields', 'data_source', 'dataset', 'errors', 'expression', 'failed_reasons', 'info', 'message', 'name', 'ok', 'operators', 'passed', 'recommendation', 'robustness_policy', 'rolling_validation', 'sample_size', 'schema_version', 'settings', 'status', 'submission_ready', 'to_dict', 'warnings', '通过本地与官方检查']

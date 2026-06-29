@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/brain_api/context_defaults.py
+# hypothesis_version: 6.141.1
+
+['category', 'coverage', 'definition', 'delay', 'description', 'fields', 'name', 'official_fields.json', 'operators', 'source']

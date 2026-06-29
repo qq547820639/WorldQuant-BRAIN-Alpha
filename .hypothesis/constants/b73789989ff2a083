@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/hypothesis_expression_support/_normalization.py
+# hypothesis_version: 6.141.1
+
+['call', 'group_rank', 'identifier', 'number', 'rank', 'ts_delta']

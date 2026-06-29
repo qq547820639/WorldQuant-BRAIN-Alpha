@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/scoring/release_score_gate/_models.py
+# hypothesis_version: 6.141.1
+
+['OfficialSnapshot', 'ThresholdPolicy', 'alphaSize', 'alpha_size', 'default_delay_1', 'drawdown', 'fitness', 'margin', 'min_fitness', 'min_fitness_delay0', 'min_sharpe', 'min_sharpe_delay0', 'pass_fail', 'prod_correlation', 'returns', 'self_correlation', 'sharpe', 'subUniverseSharpe', 'subUniverseSize', 'sub_size', 'sub_universe_sharpe', 'sub_universe_size', 'turnover', 'weight_concentration']

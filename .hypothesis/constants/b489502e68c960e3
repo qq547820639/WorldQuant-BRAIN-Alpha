@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/compliance/redline_models.py
+# hypothesis_version: 6.141.1
+
+['=', 'BLOCKING', 'ComplianceReport', 'FAIL', 'INFO', 'PASS', 'PENDING', 'WARNING', '[FAIL]', '[WARN]', 'actual_value', 'check_name', 'deviation', 'expected_value', 'failed', 'fix_guidance', 'overall', 'passed', 'redline_id', 'redline_name', 'redline_summary', 'severity', 'total_checks', 'verified_at', 'violations', 'warnings']

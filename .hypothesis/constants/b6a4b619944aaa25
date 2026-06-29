@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/safety.py
+# hypothesis_version: 6.141.1
+
+[0.0, 0.01, 0.1, 0.7, 180, 'ALLOW', 'BLOCK', 'SUBMITTED', 'a', 'account_risk_low', 'allowed', 'alpha_id', 'already submitted', 'auto', 'checks', 'correlation', 'correlation_id', 'data', 'demo', 'detail', 'dry-run', 'dry_run', 'dryrun', 'duplicate_expression', 'environment', 'experience', 'expression', 'failed_reasons', 'fake', 'family', 'high', 'low', 'medium', 'mock', 'mode', 'name', 'new expression', 'new id', 'official_alpha_id', 'passed', 'policy', 'prod-stub', 'prod_stub', 'production', 'production_gate', 'risk_level', 'sample', 'schema_version', 'simulation_id', 'source', 'source_tags', 'status', 'stub', 'submission_ready', 'submission_record.v1', 'submissions.jsonl', 'test', 'testing', 'timestamp', 'turnover', 'utf-8', 'weight_concentration']

@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/pipeline_backtest_flow/_slot_submission_mixin.py
+# hypothesis_version: 6.141.1
+
+['SUBMITTED', 'official_deferred', 'official_simulation', 'simulation_submit', 'simulation_submitted', 'submit_failed', 'submitted']

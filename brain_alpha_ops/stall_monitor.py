@@ -110,7 +110,14 @@ class StallMonitor:
             self._stop.wait(self.config.poll_interval_seconds)
 
     def _check_all_jobs(self) -> None:
-        """Check all tracked jobs for stalls."""
+        """Check all tracked jobs for stalls.
+
+        Lock strategy (reduced granularity):
+        1. Brief lock to snapshot internal state (copy references).
+        2. No-lock processing using local copies.
+        3. Brief lock to write back updated state.
+        4. Callbacks fire outside any lock.
+        """
         try:
             jobs = self._get_jobs()
         except Exception:
@@ -118,59 +125,83 @@ class StallMonitor:
             return
 
         now = time.time()
+
+        # ── Phase 1: brief lock — copy internal state ──
         with self._lock:
-            active_ids = set()
-            for job_id, job in _iter_job_rows(jobs):
-                status = str(job.get("status", "")).lower()
-                if status in TERMINAL_STATUSES:
-                    self._snapshots.pop(job_id, None)
-                    self._stall_counts.pop(job_id, None)
-                    continue
+            local_snapshots: dict[str, JobStallSnapshot] = dict(self._snapshots)
+            local_stall_counts: dict[str, int] = dict(self._stall_counts)
 
-                active_ids.add(job_id)
-                progress = job.get("progress") or {}
-                current = JobStallSnapshot(
-                    job_id=job_id,
-                    status=status,
-                    percent_complete=float(progress.get("percent", progress.get("percent_complete", 0))),
-                    phase=str(progress.get("phase", "")),
-                    status_message=str(progress.get("status_message", "")),
-                    observed_at=now,
+        # ── Phase 2: lock-free processing on local copies ──
+        active_ids: set[str] = set()
+        updates: dict[str, JobStallSnapshot] = {}
+        stall_removals: set[str] = set()
+        stall_events: list[tuple[str, JobStallSnapshot, int]] = []
+
+        for job_id, job in _iter_job_rows(jobs):
+            status = str(job.get("status", "")).lower()
+            if status in TERMINAL_STATUSES:
+                stall_removals.add(job_id)
+                continue
+
+            active_ids.add(job_id)
+            progress = job.get("progress") or {}
+            current = JobStallSnapshot(
+                job_id=job_id,
+                status=status,
+                percent_complete=float(progress.get("percent", progress.get("percent_complete", 0))),
+                phase=str(progress.get("phase", "")),
+                status_message=str(progress.get("status_message", "")),
+                observed_at=now,
+            )
+
+            previous = local_snapshots.get(job_id)
+            if previous is None:
+                updates[job_id] = current
+                continue
+
+            # Check if job has progressed
+            if (current.percent_complete > previous.percent_complete or
+                current.phase != previous.phase or
+                current.status != previous.status):
+                # Job is making progress — reset stall counter
+                updates[job_id] = current
+                stall_removals.discard(job_id)
+                continue
+
+            # No progress — check timeout
+            elapsed = now - previous.observed_at
+            if elapsed >= self.config.stall_timeout_seconds:
+                stall_count = local_stall_counts.get(job_id, 0) + 1
+                local_stall_counts[job_id] = stall_count
+                logger.warning(
+                    "StallMonitor: job %s stalled for %.0fs (phase=%s, progress=%.1f%%, count=%d)",
+                    job_id[:12], elapsed, current.phase, current.percent_complete, stall_count
                 )
+                stall_events.append((job_id, current, stall_count))
 
-                previous = self._snapshots.get(job_id)
-                if previous is None:
-                    self._snapshots[job_id] = current
-                    continue
+        # Determine stale snapshot keys
+        stale_ids = {sid for sid in local_snapshots if sid not in active_ids}
 
-                # Check if job has progressed
-                if (current.percent_complete > previous.percent_complete or
-                    current.phase != previous.phase or
-                    current.status != previous.status):
-                    # Job is making progress — reset stall counter
-                    self._snapshots[job_id] = current
-                    self._stall_counts.pop(job_id, None)
-                    continue
+        # ── Phase 3: brief lock — write back state ──
+        with self._lock:
+            self._snapshots.update(updates)
+            for job_id in stall_removals:
+                self._snapshots.pop(job_id, None)
+                self._stall_counts.pop(job_id, None)
+            for sid in stale_ids:
+                self._snapshots.pop(sid, None)
+                self._stall_counts.pop(sid, None)
+            self._stall_counts.update(
+                {jid: cnt for jid, cnt in local_stall_counts.items()
+                 if jid not in stall_removals and jid not in stale_ids}
+            )
 
-                # No progress — check timeout
-                elapsed = now - previous.observed_at
-                if elapsed >= self.config.stall_timeout_seconds:
-                    stall_count = self._stall_counts.get(job_id, 0) + 1
-                    self._stall_counts[job_id] = stall_count
-                    logger.warning(
-                        "StallMonitor: job %s stalled for %.0fs (phase=%s, progress=%.1f%%, count=%d)",
-                        job_id[:12], elapsed, current.phase, current.percent_complete, stall_count
-                    )
-                    if self._on_stall:
-                        self._on_stall(job_id, current)
-                    if self.config.auto_interrupt:
-                        self._auto_interrupt(job_id, stall_count)
-
-            # Clean up snapshots for jobs that are no longer active
-            for stale_id in list(self._snapshots.keys()):
-                if stale_id not in active_ids:
-                    self._snapshots.pop(stale_id, None)
-                    self._stall_counts.pop(stale_id, None)
+        # ── Phase 4: callbacks outside lock ──
+        for job_id, snapshot, stall_count in stall_events:
+            if self._on_stall:
+                self._on_stall(job_id, snapshot)
+            if self.config.auto_interrupt:
+                self._auto_interrupt(job_id, stall_count)
 
     def _auto_interrupt(self, job_id: str, stall_count: int) -> None:
         """Auto-interrupt a stalled job."""

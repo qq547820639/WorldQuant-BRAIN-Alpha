@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/build_inline.py
+# hypothesis_version: 6.141.1
+
+['--check', '--json', '--output', '/', '<!-- inline-css:', '<!-- inline:', 'FAIL', 'Output JSON.', 'PASS', '__main__', 'actual_bytes', 'asset_count', 'asset_refs', 'brain_alpha_ops', 'build', 'build_inline', 'check', 'css_replaced', 'deprecated', 'dist', 'error', 'frontend', 'index.html', 'index_path', 'main', 'missing', 'ok', 'output_path', 'react', 'react_app', 'replaced', 'schema_version', 'store_true', 'utf-8', 'utf-8-sig', 'web', '\ufeff']

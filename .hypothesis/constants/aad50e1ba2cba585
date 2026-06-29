@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web/dispatch/web_get_handlers.py
+# hypothesis_version: 6.141.1
+
+[200, 404, 'JOB_NOT_FOUND', 'account_id', 'complete', 'count', 'display_limit', 'error', 'error_code', 'eta_seconds', 'idle', 'items', 'job_id', 'ok', 'percent_complete', 'phase', 'presets', 'profile', 'progress', 'ready', 'records', 'returned_count', 'status', 'status_message', 'task_id', 'total', 'total_count', 'unknown', 'unknown job', 'user_id']

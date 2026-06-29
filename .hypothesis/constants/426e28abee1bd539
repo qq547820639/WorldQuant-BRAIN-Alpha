@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/scoring/official_scoring/_result.py
+# hypothesis_version: 6.141.1
+
+[0.0, '  Improvement Hints:', '  Score Attribution:', '  Top Failures:', '=', 'CANONICAL_v2', 'alpha_id', 'api_output_deviation', 'attribution_summary', 'attribution_tree', 'calibration', 'checklist', 'config_hash', 'decision_band', 'deviation_details', 'empirical', 'evaluated_at', 'expression', 'hard_gates', 'improvement_hints', 'layer_weights', 'passed_gate', 'prior', 'release_gate', 'score_basis', 'scorecard-v2.3', 'scoring_schema', 'scoring_version', 'settings_trace', 'simulated_api_output', 'soft_gates', 'threshold_trace', 'threshold_version', 'top_failures', 'total_score']

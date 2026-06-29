@@ -9,109 +9,160 @@ from __future__ import annotations
 
 from typing import Any, TypedDict
 
+try:
+    from typing import NotRequired  # Python 3.11+
+except ImportError:  # pragma: no cover
+    from typing_extensions import NotRequired
 
-class OfficialMetrics(TypedDict, total=False):
+
+class OfficialMetrics(TypedDict):
     """Metrics returned from BRAIN API simulation/check results."""
     sharpe: float
-    fitness: float
-    turnover: float
-    returns: float
-    drawdown: float
-    correlation: float
-    self_correlation: float
-    prod_correlation: float
-    weight_concentration: float
-    sub_universe_sharpe: float
-    margin: float
-    alphaSize: int
-    subUniverseSize: int
-    pass_fail: str
-    long_count: int
-    short_count: int
-    turnover_min: float
-    turnover_platform: float
-    turnover_quality: float
+    fitness: NotRequired[float]
+    turnover: NotRequired[float]
+    returns: NotRequired[float]
+    drawdown: NotRequired[float]
+    correlation: NotRequired[float]
+    self_correlation: NotRequired[float]
+    prod_correlation: NotRequired[float]
+    weight_concentration: NotRequired[float]
+    sub_universe_sharpe: NotRequired[float]
+    margin: NotRequired[float]
+    alphaSize: NotRequired[int]
+    subUniverseSize: NotRequired[int]
+    pass_fail: NotRequired[str]
+    long_count: NotRequired[int]
+    short_count: NotRequired[int]
+    turnover_min: NotRequired[float]
+    turnover_platform: NotRequired[float]
+    turnover_quality: NotRequired[float]
 
 
-class ScorecardDict(TypedDict, total=False):
+class ScorecardDict(TypedDict):
     """Scorecard result from build_scorecard()."""
-    schema_version: str
     total_score: float
     decision_band: str
-    score_basis: str
-    local_rank_score: float
-    base_local_rank_score: float
-    layer_weights: dict[str, float]
-    prior: dict[str, Any]
-    empirical: dict[str, Any]
-    submission_checklist: dict[str, Any]
-    assistant_guidance_adjustment: dict[str, Any]
-    confidence: float | None
-    calibration: dict[str, Any]
-    settings_trace: dict[str, Any]
-    attribution_tree: dict[str, Any]
-    top_failures: list[dict[str, str]]
-    improvement_hints: list[str]
+    schema_version: NotRequired[str]
+    score_basis: NotRequired[str]
+    local_rank_score: NotRequired[float]
+    base_local_rank_score: NotRequired[float]
+    layer_weights: NotRequired[dict[str, float]]
+    prior: NotRequired[dict[str, Any]]
+    empirical: NotRequired[dict[str, Any]]
+    submission_checklist: NotRequired[dict[str, Any]]
+    assistant_guidance_adjustment: NotRequired[dict[str, Any]]
+    confidence: NotRequired[float | None]
+    calibration: NotRequired[dict[str, Any]]
+    settings_trace: NotRequired[dict[str, Any]]
+    attribution_tree: NotRequired[dict[str, Any]]
+    top_failures: NotRequired[list[dict[str, str]]]
+    improvement_hints: NotRequired[list[str]]
 
 
-class GateResultDict(TypedDict, total=False):
+class GateResultDict(TypedDict):
     """Gate result from GateConfig.evaluate()."""
     gate_name: str
     passed: bool
     check_items: list[dict[str, Any]]
     failed_items: list[str]
     threshold_source: str
-    notes: list[str]
-    zero_deviation: bool
+    notes: NotRequired[list[str]]
+    zero_deviation: NotRequired[bool]
 
 
-class BrainAPIResponse(TypedDict, total=False):
+class BrainAPIResponse(TypedDict):
     """Standard response from BRAIN API operations."""
     ok: bool
+    status: NotRequired[str]
+    error: NotRequired[str]
+    error_code: NotRequired[str]
+    alpha_id: NotRequired[str]
+    simulation_id: NotRequired[str]
+    metrics: NotRequired[OfficialMetrics]
+    raw: NotRequired[dict[str, Any]]
+
+
+# ── Candidate Sub-structure TypedDicts ────────────────────────────────
+
+
+class LocalQualityDict(TypedDict, total=False):
+    """Local prefilter quality assessment result."""
+    passed: bool
+    score: float
+    reasons: list[str]
+    warnings: list[str]
+    local_backtest: dict[str, Any]
+    local_backtest_support: dict[str, Any]
+
+
+class ValidationDict(TypedDict, total=False):
+    """Candidate validation result (strategy-switch resets to {})."""
     status: str
-    error: str
-    error_code: str
-    alpha_id: str
-    simulation_id: str
-    metrics: OfficialMetrics
-    raw: dict[str, Any]
+    score: float
+    details: dict[str, Any]
 
 
-class CandidateDict(TypedDict, total=False):
+class QualityDiagnosisDict(TypedDict, total=False):
+    """Quality diagnosis for candidate pipeline gating."""
+    local_candidate_valid: bool
+    submission_ready: bool
+    blocking_reasons: list[str]
+
+
+class SubmissionDict(TypedDict, total=False):
+    """Submission tracking data accumulated during the submission pipeline."""
+    safety: dict[str, Any]
+    cross_review: dict[str, Any]
+    live_submit_readiness: dict[str, Any]
+    result: dict[str, Any]
+    gate_decision: dict[str, Any]
+    settings: dict[str, Any]
+    backtest_slot: str
+    simulation_status: str
+    next_poll_at: float
+    poll_count: int
+    robustness_policy: dict[str, Any]
+    anti_overfit_report: dict[str, Any]
+    rolling_validation_report: dict[str, Any]
+    secondary_fusion_child_id: str
+
+
+class CandidateDict(TypedDict):
     """Candidate representation as a dict (for serialization)."""
     alpha_id: str
     expression: str
     family: str
     hypothesis: str
-    data_fields: list[str]
-    operators: list[str]
-    source_tags: list[str]
-    parent_id: str
-    mutation_type: str
-    dataset_id: str
-    template_source: str
-    local_quality: dict[str, Any]
-    validation: dict[str, Any]
-    simulation_id: str
-    official_alpha_id: str
-    official_metrics: OfficialMetrics
-    scorecard: ScorecardDict
-    gate: GateResultDict
-    submission: dict[str, Any]
     lifecycle_status: str
-    created_at: str
+    data_fields: NotRequired[list[str]]
+    operators: NotRequired[list[str]]
+    source_tags: NotRequired[list[str]]
+    parent_id: NotRequired[str]
+    mutation_type: NotRequired[str]
+    dataset_id: NotRequired[str]
+    template_source: NotRequired[str]
+    local_quality: NotRequired[LocalQualityDict]
+    validation: NotRequired[ValidationDict]
+    simulation_id: NotRequired[str]
+    official_alpha_id: NotRequired[str]
+    official_metrics: NotRequired[OfficialMetrics]
+    scorecard: NotRequired[ScorecardDict]
+    gate: NotRequired[GateResultDict]
+    submission: NotRequired[SubmissionDict]
+    quality_diagnosis: NotRequired[QualityDiagnosisDict]
+    created_at: NotRequired[str]
 
 
-class PipelineSummaryDict(TypedDict, total=False):
+class PipelineSummaryDict(TypedDict):
     """Pipeline run summary."""
     run_id: str
     total_candidates: int
-    submission_ready: int
-    auto_submitted: int
-    best_score: float
-    officially_simulated: int
-    official_validation_attempted: int
-    official_validation_passed: int
+    submission_ready: NotRequired[int]
+    auto_submitted: NotRequired[int]
+    best_score: NotRequired[float]
+    officially_simulated: NotRequired[int]
+    official_validation_attempted: NotRequired[int]
+    official_validation_passed: NotRequired[int]
 
 
 class RedlineViolationDict(TypedDict, total=False):
@@ -221,38 +272,38 @@ class UserSession(TypedDict, total=False):
 # ── Scoring Layer TypedDicts ──────────────────────────────────────────
 
 
-class PriorScoreDict(TypedDict, total=False):
+class PriorScoreDict(TypedDict):
     """Prior score result from prior_score()."""
     score: float
-    dimensions: dict[str, float]
-    weights: dict[str, float]
-    items: list[dict[str, Any]]
+    dimensions: NotRequired[dict[str, float]]
+    weights: NotRequired[dict[str, float]]
+    items: NotRequired[list[dict[str, Any]]]
 
 
-class EmpiricalScoreDict(TypedDict, total=False):
+class EmpiricalScoreDict(TypedDict):
     """Empirical score result from empirical_score()."""
     score: float
-    items: list[dict[str, Any]]
-    hard_gate_failed: bool
+    items: NotRequired[list[dict[str, Any]]]
+    hard_gate_failed: NotRequired[bool]
 
 
-class ChecklistScoreDict(TypedDict, total=False):
+class ChecklistScoreDict(TypedDict):
     """Submission checklist score from submission_checklist()."""
     score: float
-    items: list[dict[str, Any]]
-    passed_count: int
-    failed_count: int
+    items: NotRequired[list[dict[str, Any]]]
+    passed_count: NotRequired[int]
+    failed_count: NotRequired[int]
 
 
-class AttributionNodeDict(TypedDict, total=False):
+class AttributionNodeDict(TypedDict):
     """Attribution tree node."""
     name: str
     score: float
-    weight: float
-    contribution: float
-    explanation: str
-    historical_trend: str
-    children: list["AttributionNodeDict"]
+    weight: NotRequired[float]
+    contribution: NotRequired[float]
+    explanation: NotRequired[str]
+    historical_trend: NotRequired[str]
+    children: NotRequired[list["AttributionNodeDict"]]
 
 
 class ScoringConfigDict(TypedDict, total=False):
@@ -266,12 +317,12 @@ class ScoringConfigDict(TypedDict, total=False):
 # ── Research Layer TypedDicts ─────────────────────────────────────────
 
 
-class GenerationResultDict(TypedDict, total=False):
+class GenerationResultDict(TypedDict):
     """Result from candidate generation."""
     candidates: list[CandidateDict]
     total_generated: int
-    duplicates_skipped: int
-    expression_diversity_score: float
+    duplicates_skipped: NotRequired[int]
+    expression_diversity_score: NotRequired[float]
 
 
 class ConvergenceSummaryDict(TypedDict, total=False):

@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/scripts/check_review_gap_closure_tracker/__init__.py
+# hypothesis_version: 6.141.1
+
+['BASELINE_CHECKS', 'BASELINE_SNIPPETS', 'BASE_QUEUE_ITEMS', 'DEFAULT_CONFIG', 'DEFAULT_JOBS', 'DEFAULT_TRACKER', 'NOT_YET_SNIPPETS', 'REQUIRED_SECTIONS', 'ROOT', 'SCHEMA_VERSION', 'STATUS_MATRIX_ITEMS', 'TRIAGE_ITEMS', 'TRIAGE_SNIPPETS', 'main']

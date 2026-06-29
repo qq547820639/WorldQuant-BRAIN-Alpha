@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/brain_api/rate_limit_policy.py
+# hypothesis_version: 6.141.1
+
+['ERROR', 'WARNING', 'check', 'details', 'doc_source', 'fix', 'max', 'min', 'severity']

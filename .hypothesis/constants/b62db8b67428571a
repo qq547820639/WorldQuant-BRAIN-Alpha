@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/scripts/check_frontend_syntax.py
+# hypothesis_version: 6.141.1
+
+['--html', '--json', '--node', '.cache', 'NODE', '__main__', 'bin', 'brain_alpha_ops', 'check.js', 'checked', 'codex-runtimes', 'content', 'dependencies', 'dist', 'error', 'failures', 'html', 'html_line', 'index.html', 'line', 'node', 'node.exe', 'ok', 'react_app', 'script', 'script_index', 'src', 'store_true', 'utf-8', 'web']

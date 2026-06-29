@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/scripts/check_tracked_data_inventory/_summary.py
+# hypothesis_version: 6.141.1
+
+[', ', 'Decision todo:', 'Findings:', 'boundary_plan', 'categories', 'changed', 'changed_categories', 'decision_todo', 'failed', 'findings', 'keep', 'keep_files', 'missing', 'none', 'ok', 'passed', 'path', 'pending', 'present', 'recommendations', 'referenced', 'remove', 'remove_files', 'runtime_generated', 'unclassified']

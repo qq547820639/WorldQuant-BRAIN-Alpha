@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/robustness_context.py
+# hypothesis_version: 6.141.1
+
+[0.0, ', ', 'actions', 'alpha_id', 'anti', 'anti_available', 'anti_overfit', 'anti_overfit_block', 'anti_overfit_caution', 'anti_overfit_report', 'available_count', 'avg_score', 'block', 'candidate_count', 'candidates', 'caution', 'data', 'expression', 'fail', 'failed_tests', 'flags', 'insufficient_data', 'name', 'none', 'official_alpha_id', 'passed', 'passed_candidates', 'progress', 'rationale', 'recommendation', 'recommended_actions', 'result', 'risk_flags', 'robustness_gate', 'rolling', 'rolling_available', 'rolling_validation', 'sample_size', 'schema_version', 'score', 'scorecard', 'simulation_id', 'status', 'status_counts', 'submission', 'submitted_candidates', 'summary', 'target', 'tests', 'top_reports', 'value']

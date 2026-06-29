@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web/dispatch/web_get_routes/_routes_misc.py
+# hypothesis_version: 6.141.1
+
+[0.0, 1.0, 100, 401, 10000, '0.0', '0.75', '10', '2000', '50', 'ADMIN_AUTH_REQUIRED', 'Set-Cookie', 'alpha_id', 'config', 'error', 'error_code', 'expression', 'false', 'headers', 'include_cloud', 'include_draft', 'include_prompt', 'include_sensitive', 'is_default', 'limit', 'max_scan_rows', 'min_confidence', 'min_similarity', 'ok', 'schema', 'top_n', 'true', '远程 Web 访问需要管理员认证']

@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web/submissions/web_submission_batch.py
+# hypothesis_version: 6.141.1
+
+[100, 'ALREADY_SUBMITTED', 'BLOCKED', 'COMPLETED', 'FAILED', 'PARTIAL_FAILED', 'SUBMITTED', 'SUBMIT_BATCH_ERROR', 'action', 'alpha_id', 'alpha_ids', 'blocked', 'blocked_candidates', 'candidate', 'confirm_submit', 'confirmation', 'current_alpha_id', 'done', 'error', 'error_category', 'error_code', 'failed', 'failed_alpha_ids', 'job_id', 'message', 'official_alpha_id', 'ok', 'percent', 'phase', 'preflight', 'primary_action', 'readiness', 'reason_code', 'results', 'risk_explanation', 'risk_explanations', 'schema_version', 'state', 'state_counts', 'state_navigation', 'status', 'submission', 'submit', 'submit_candidates', 'submitted', 'submitted_alpha_ids', 'submitting', 'summary', 'target_view', 'title', 'total', 'validation', '批量提交前置检查未通过', '需要单独批量提交审批']

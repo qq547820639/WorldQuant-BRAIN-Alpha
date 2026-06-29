@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/ux/guided_storage.py
+# hypothesis_version: 6.141.1
+
+[180, '*.checkpoint.json', '.checkpoint', 'auto_submitted', 'candidates', 'candidates_generated', 'completed', 'cycle', 'events', 'file', 'guided_pipeline', 'officially_simulated', 'phase', 'phase_completed', 'run_id', 'summary', 'timestamp', 'unknown', 'utf-8']

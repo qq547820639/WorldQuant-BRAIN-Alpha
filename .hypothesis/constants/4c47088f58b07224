@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/production_context.py
+# hypothesis_version: 6.141.1
+
+['ADVANCED', 'BASIC', 'CHN', 'EQUITY', 'EUR', 'GLB', 'MARKET', 'REGULAR', 'SECTOR', 'SUBINDUSTRY', 'TOP1000', 'TOP3000', 'USA', 'USA liquid universe', 'USA market neutral', 'USA sector neutral', 'VECTOR', '_reserved', 'account_tier', 'china_standard', 'delay', 'eligible_profiles', 'europe_standard', 'global_market', 'id', 'instrument_type', 'label', 'min_tier', 'name', 'neutralization', 'reason', 'region', 'safe_field_count', 'safe_fields', 'type', 'type_available', 'universe', 'usa_liquid', 'usa_market', 'usa_sector', 'usa_standard']

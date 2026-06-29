@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/generator/_helpers.py
+# hypothesis_version: 6.141.1
+
+[120, 220, ':observability', 'alpha', 'co_movement', 'conditional', 'decay', 'default', 'expression', 'family', 'forbidden_patterns', 'hybrid', 'liquidity', 'momentum', 'preferred_fields', 'preferred_operators', 'quality', 'rank(reverse({f1}))', 'rank(zscore({f1}))', 'relative_momentum', 'relative_value', 'reversal', 'templates', 'templates.yaml', 'utf-8', 'value', 'volatility', '{f1}', '{f2}', '{w}']

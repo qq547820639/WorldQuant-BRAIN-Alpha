@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/pipeline_context_sync.py
+# hypothesis_version: 6.141.1
+
+[180, 'CACHE_LOADED', 'FAILED', 'RUNNING', 'STOPPED', 'SYNCED', 'WARN', '_fields', '_operators', 'added', 'all', 'api_reported_total', 'applied', 'cached', 'cancelled', 'cloud_alphas', 'cloud_alphas_synced', 'cloud_sync', 'cloud_sync_failed', 'cloud_sync_stopped', 'count', 'error', 'expected_pages', 'failed', 'filter_window_count', 'forbidden_patterns', 'loaded', 'next_offset', 'offset', 'page_limit', 'page_number', 'page_size', 'pages_fetched', 'preferred_fields', 'preferred_operators', 'range', 'run_status', 'running', 'scanned', 'skipped', 'stale', 'status', 'status_code', 'stopped', 'supported_fields', 'supported_operators', 'synced', 'total', 'updated', 'warning', '接口分页参考数仍在确认']

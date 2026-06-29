@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/generation/mode_router.py
+# hypothesis_version: 6.141.1
+
+[0.0, 0.1, 0.2, 0.7, '/', '70/20/10', 'GenerationModeRouter', 'experience_feedback', 'hypothesis_driven', 'random_exploration']

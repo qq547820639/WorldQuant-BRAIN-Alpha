@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/brain_api/official_context/_fields_mixin.py
+# hypothesis_version: 6.141.1
+
+[10000, 'GET', 'all', 'cached', 'category', 'count', 'data-fields', 'dataSetId', 'data_set_id', 'dataset', 'datasetId', 'dataset_id', 'delay', 'field_type', 'fields', 'headers', 'instrumentType', 'instrument_type', 'items', 'limit', 'name', 'offset', 'raw', 'region', 'scanned', 'total', 'type', 'universe']

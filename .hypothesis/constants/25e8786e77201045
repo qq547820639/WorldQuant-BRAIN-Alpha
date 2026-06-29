@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/scripts/check_tracked_data_inventory/_constants.py
+# hypothesis_version: 6.141.1
+
+['.gitignore', 'data/', 'data/_codex_bench', 'data/api_cache/', 'data/audit/', 'data/checkpoints/', 'data/jobs_', 'data/official_', 'data/prd_', 'data/qa_', 'data/run_history/', 'docs', 'keep', 'pending_decision', 'remove', 'tests/']

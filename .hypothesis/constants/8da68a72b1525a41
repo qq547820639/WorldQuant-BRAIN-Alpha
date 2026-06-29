@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web/dispatch/post_routes/helpers.py
+# hypothesis_version: 6.141.1
+
+[400, 409, 'CONFLICT_RUNNING', 'alpha_id', 'autoSubmit', 'auto_submit', 'auto_submitted', 'current', 'error', 'error_code', 'job_id', 'message', 'ok', 'operation', 'percent', 'percent_complete', 'persistence', 'phase', 'production_run', 'progress', 'queue_blocked', 'queued', 'result', 'safe_mode', 'status_message', 'status_url', 'submit', 'submitted_this_run', 'summary', 'sync', 'task_id', 'total', '已有云端同步任务正在运行。', '已有云端同步任务运行中', '已有提交任务正在运行，请完成后再操作。', '非提交流水线已排队。']

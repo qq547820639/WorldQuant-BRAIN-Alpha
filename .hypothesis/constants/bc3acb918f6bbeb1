@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/experience/_query.py
+# hypothesis_version: 6.141.1
+
+[0.0, 0.5, 1.0, 'PASS', '\\b\\w+\\b', 'alpha_features.jsonl', 'avg_fitness', 'avg_sharpe', 'count', 'data', 'expression', 'f1', 'f2', 'family', 'field', 'field_combinations', 'field_set', 'fields', 'fitness', 'get_by_id', 'get_ids', 'history_limit', 'operator_set', 'pass_fail', 'preferred_windows', 'sample_size', 'sharpe', 'source', 'summary', 'top_categories', 'top_operators', 'total_records', 'unknown', 'update_weights', 'updated_hypotheses', 'w', 'window', 'window_values', 'winner_count']

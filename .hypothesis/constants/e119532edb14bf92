@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/scoring/official_scoring/_hints.py
+# hypothesis_version: 6.141.1
+
+[100, 'HARD', 'SOFT', 'diversity', 'economic_logic', 'empirical', 'empirical_score', 'fitness', 'is_hard_gate', 'item', 'items', 'meaning', 'name', 'official_pass', 'passed', 'prior', 'reason', 'score', 'self_correlation', 'severity', 'sharpe', 'source', 'submission_checklist', 'turnover_platform', 'turnover_quality', 'weight_concentration']

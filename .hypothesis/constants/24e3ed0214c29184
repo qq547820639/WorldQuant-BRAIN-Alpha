@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/llm_review/__init__.py
+# hypothesis_version: 6.141.1
+
+['CrossReviewService', 'FallbackLLMProvider', 'LLMProvider', 'LLMProviderRouter', 'PromptRunLedger', 'StaticLLMProvider', '_agreement', '_confidence', '_digest_json', '_digest_text', '_optional_float', '_parse_response', '_providers_from_env', '_review_request', '_strings']

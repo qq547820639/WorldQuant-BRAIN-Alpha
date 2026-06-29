@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web/dispatch/get_routes/_helpers.py
+# hypothesis_version: 6.141.1
+
+[1000, 5000, '1', 'BRAIN_PASSWORD', 'BRAIN_TOKEN', 'BRAIN_USERNAME', 'alphas', 'backtest_slots', 'backtests', 'candidate_count', 'candidate_workflow', 'candidates.jsonl', 'cloud_alphas_jsonl', 'completed', 'count', 'credentials', 'data', 'error', 'idle', 'is_stale', 'items', 'job not found', 'job_id', 'latest_job', 'lifecycle.jsonl', 'limit', 'main_pool_candidates', 'missing', 'ok', 'on', 'password', 'password_env', 'path', 'pool_summary', 'progress', 'result', 'returned_count', 'sample_alphas', 'slots', 'source', 'status', 'submitted_count', 'summary', 'summary_only', 'task_id', 'token', 'token_env', 'total', 'total_count', 'true', 'updated_at', 'username', 'username_env', 'utf-8', 'workflow_plan', 'yes']

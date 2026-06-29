@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/hypothesis_library/models.py
+# hypothesis_version: 6.141.1
+
+[1.0, '%Y-%m-%dT%H:%M:%SZ', '1.0.0', 'AdaptationConfig', 'ExperienceWeights', 'ExpressionFamily', 'FailureMode', 'FieldCategoryDef', 'GenerationMeta', 'Hypothesis', 'P1', 'Rationale', 'academic_refs', 'adaptation', 'behavioral_bias', 'category', 'delay', 'description', 'examples', 'experience_weights', 'expression_families', 'expression_family_id', 'field_categories', 'field_category', 'gate', 'hypothesis', 'hypothesis_id', 'hypothesis_name', 'id', 'mitigation', 'mode', 'name', 'overall', 'preferred_delays', 'preferred_regions', 'preferred_universes', 'priority', 'rationale', 'reason', 'region', 'selected_fields', 'structure', 'theory', 'timestamp', 'universe', 'unsuitable_regions', 'version', 'weight', 'window_weights', 'windows', 'windows_long', 'windows_short']

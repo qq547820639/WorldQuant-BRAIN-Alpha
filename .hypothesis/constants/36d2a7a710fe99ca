@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web_candidates/audit/_helpers.py
+# hypothesis_version: 6.141.1
+
+[',', ':', 'browser-smoke', 'browser_smoke', 'events', 'extra_fields', 'fixture', 'fixtures', 'pytest', 'scientific_audit', 'test_result', 'unit-test', 'unit_test', 'unknown', 'vitest']

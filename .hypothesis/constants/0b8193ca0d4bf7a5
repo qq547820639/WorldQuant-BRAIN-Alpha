@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/scripts/check_frontend_surface_parity/_constants.py
+# hypothesis_version: 6.141.1
+
+['App.tsx', 'accepted', 'brain_alpha_ops', 'docs', 'implemented', 'js', 'planned', 'react_app', 'retired', 'src', 'view-registry.js', 'web']

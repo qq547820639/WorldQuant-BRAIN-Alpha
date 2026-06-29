@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web/dispatch/web_http_handler/__init__.py
+# hypothesis_version: 6.141.1
+
+['_is_origin_allowed', '_is_terminal_status', '_json_default', '_sse_event_type', 'create_handler_class', 'logger']

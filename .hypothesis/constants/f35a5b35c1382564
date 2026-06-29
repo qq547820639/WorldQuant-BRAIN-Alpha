@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web_cloud/snapshot/__init__.py
+# hypothesis_version: 6.141.1
+
+['DatasetsFromFields', 'JobStoreLike', 'LoadConfig', 'RuntimeRoot', 'SafeErrorMessage', 'cloud_alpha_id', 'cloud_alpha_snapshot', 'cloud_alpha_summary', 'cloud_row_sort_key', 'context_items_hash', 'datasets_from_fields', 'extract_alpha_rows', 'path_modified_at', 'read_storage_jsonl', 'storage_jsonl_path']

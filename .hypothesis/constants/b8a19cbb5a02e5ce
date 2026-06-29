@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/pipeline_services_container.py
+# hypothesis_version: 6.141.1
+
+['_cache', '_pipeline', 'backtest_flow', 'backtest_polling', 'backtest_submission', 'batch_backtest', 'candidate_pool', 'context_sync', 'dataset_selection', 'experience_feedback', 'fusion_candidates', 'generation_phase', 'legacy_simulation', 'official_validation', 'official_workflow', 'runtime', 'secondary_fusion', 'strategy', 'submission_gate']

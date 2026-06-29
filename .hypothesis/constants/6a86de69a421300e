@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/candidate_lifecycle.py
+# hypothesis_version: 6.141.1
+
+['Candidate', '_lifecycle', 'alpha_id', 'archived', 'audit_trail', 'created', 'draft', 'from_state', 'gate_rejected', 'lifecycle_status', 'local_scored', 'locally_scored', 'needs_optimization', 'official_simulated', 'ready_for_review', 'reason', 'simulating', 'simulation_failed', 'simulation_passed', 'simulation_running', 'simulation_submitted', 'state', 'str | LifecycleState', 'submission_ready', 'submitted', 'timestamp', 'to_state', 'trigger_rule']

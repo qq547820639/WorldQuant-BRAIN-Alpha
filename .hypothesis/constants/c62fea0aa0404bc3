@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/_web_bridge.py
+# hypothesis_version: 6.141.1
+
+['web_alpha_lifecycle', 'web_async_jobs', 'web_backtest_slots', 'web_business', 'web_cli', 'web_config', 'web_config_bindings', 'web_config_schema', 'web_csp', 'web_dispatch_context', 'web_errors', 'web_facade_bindings', 'web_get_handlers', 'web_handler_dispatch', 'web_html', 'web_http_handler', 'web_job_bindings', 'web_job_registry', 'web_jobs', 'web_post_handlers', 'web_progress', 'web_rate_limit', 'web_redline_scoring', 'web_review', 'web_review_api', 'web_routes', 'web_run_job', 'web_runtime_bindings', 'web_runtime_facade', 'web_runtime_state', 'web_security', 'web_server_lifecycle', 'web_session', 'web_session_bindings', 'web_simulation_job', 'web_snapshot_facade', 'web_snapshot_runtime', 'web_snapshots', 'web_sqlite_indexes', 'web_sse', 'web_sse_compat', 'web_state_contract', 'web_submission_batch', 'web_submit_readiness']

@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/templates.py
+# hypothesis_version: 6.141.1
+
+[120, 180, 252, '-', 'Cross-Sectional', 'FieldDatasetMapper', 'Fundamental Value', 'OfficialDataLoader', 'Price Momentum', 'Quality Composite', 'Short-term Reversal', 'Volume Liquidity', '_', 'adv', 'analyst', 'applicable_datasets', 'category', 'close', 'composite', 'cross_sectional', 'description', 'expression_template', 'fundamental', 'growth', 'id', 'industry', 'liquidity', 'liquidity_volume', 'margin', 'model', 'momentum', 'momentum_price', 'name', 'open', 'price', 'profitability', 'profitability_ratio', 'quality', 'quality_composite', 'rank(-{FIELD_1})', 'required_field_types', 'returns', 'reversal', 'reversal_short_term', 'roa', 'roe', 'sector', 'subindustry', 'tags', 'utf-8', 'valuation', 'value', 'value_fundamental', 'volume', '{GROUP}', '{WINDOW}']

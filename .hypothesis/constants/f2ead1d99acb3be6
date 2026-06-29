@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/llm_service/_types.py
+# hypothesis_version: 6.141.1
+
+[0.0, 'avoid_patterns', 'category', 'confidence', 'critique', 'error', 'expression', 'none', 'provider_name', 'quality_score', 'recommended_fields', 'recommended_windows', 'risk_flags', 'suggestions', 'unknown']

@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/scripts/check_python_silent_broad_exceptions.py
+# hypothesis_version: 6.141.1
+
+[' | ', '*.py', '--json', '--root', '.git', '.pytest_cache', 'BaseException', 'Exception', '__main__', '__pycache__', 'brain_alpha_ops', 'checked_files', 'experiments', 'file', 'findings', 'ignore', 'line', 'ok', 'root', 'schema_version', 'scripts', 'store_true', 'tests', 'text', 'utf-8']

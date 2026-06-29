@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web/business/web_business/_handlers_misc.py
+# hypothesis_version: 6.141.1
+
+['CONFLICT_RUNNING', 'CONNECTION_FAILED', 'FACADE_NOT_READY', 'JOB_REGISTRY', 'RUN_ERROR', '_has_valid_session', '_web_error', 'auth', 'autoSubmit', 'auto_submit', 'auto_submitted', 'brain_alpha_ops.web', 'connected', 'csrf_token', 'environment', 'error', 'error_code', 'get_user_profile', 'job_id', 'jobs', 'message', 'ok', 'operation', 'percent', 'percent_complete', 'phase', 'production_run', 'progress', 'queued', 'real_stop failed', 'result', 'run_job', 'safe_mode', 'session_id', 'sse_url', 'status', 'status_code', 'status_message', 'status_url', 'stopping', 'submitted', 'submitted_this_run', 'summary', 'task_id', 'tier', 'ttl_seconds', 'unknown', 'web_error_payload', '已有生产任务正在运行，请先停止当前任务。', '非提交流水线已排队。']

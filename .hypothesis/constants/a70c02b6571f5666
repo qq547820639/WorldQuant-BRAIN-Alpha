@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/experience/_common.py
+# hypothesis_version: 6.141.1
+
+[0.0, 5000, 'avg_fitness', 'avg_sharpe', 'field_combinations', 'preferred_windows', 'sample_size', 'source', 'summary', 'top_categories', 'top_operators', 'total_records']

@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/scripts/check_web_handler_dispatch_context.py
+# hypothesis_version: 6.141.1
+
+[', ', '--json', '--module', 'FAIL', 'PASS', '__main__', 'actions', 'assistant', 'code', 'config', 'core', 'findings', 'first_group', 'flat', 'flat_constructor_ok', 'group_field_count', 'group_field_counts', 'group_field_names', 'grouped', 'job', 'jobs', 'legacy_access_ok', 'message', 'module', 'name', 'ok', 'research', 'route_for', 'schema_version', 'second_group', 'session', 'store_true', 'submit_lock', 'validate_run_payload', 'value']

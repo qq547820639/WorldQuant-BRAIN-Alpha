@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/observability_errors.py
+# hypothesis_version: 6.141.1
+
+['BACKTEST', 'BACKTEST_ERROR', 'BLOCKED', 'CHECK', 'CHECK_ERROR', 'ERROR', 'EXCEPTION', 'FAIL', 'RECORDED_ERROR', 'SIMULATION', 'SUBMIT', 'SUBMIT_ERROR', 'TIMEOUT', 'action', 'alpha_id', 'backtests', 'checked_at', 'checks', 'error', 'error_context', 'failure_reason', 'jobs', 'lifecycle', 'lifecycle_status', 'message', 'note', 'progress', 'recorded failure', 'source', 'stage', 'status', 'timestamp', 'updated_at']

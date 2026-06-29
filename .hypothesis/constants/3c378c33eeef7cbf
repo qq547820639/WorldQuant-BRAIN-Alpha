@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/scripts/check_review_gap_closure_tracker_helpers/_frontend.py
+# hypothesis_version: 6.141.1
+
+['CLOSED_CURRENT', 'available', 'current release', 'gap', 'inline_html_js', 'mirror', 'mirror-only', 'production_surface', 'react_surface', 'status']

@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/generator_mutation.py
+# hypothesis_version: 6.141.1
+
+[-0.2, 0.2, 120, 180, 252, 1000, '\\b', '\\b([a-zA-Z_]\\w*)\\b', '\\b\\d+\\b', '_', 'default', 'field_swap', 'field_swap_semantic', 'longer_window', 'operator_substitute', 'structure_change', 'window_perturb', 'winsorize', 'zscore']

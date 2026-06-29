@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/repository/_constants.py
+# hypothesis_version: 6.141.1
+
+[0.05, 120.0, 'ab_tests.jsonl', 'alpha_id', 'backtests.jsonl', 'candidate', 'candidates.jsonl', 'checks.jsonl', 'cloud_alphas.jsonl', 'cloud_record_hash', 'events.jsonl', 'expression', 'families.jsonl', 'id', 'lifecycle.jsonl', 'run_history', 'submissions.jsonl', 'sync_range', 'synced_at', 'timestamp', 'utf-8']

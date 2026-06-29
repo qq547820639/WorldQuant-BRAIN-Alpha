@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/scoring/gates.py
+# hypothesis_version: 6.141.1
+
+['Advisor_Standard', 'BRAIN_Official', 'GateConfig', 'HARD', 'SOFT', 'actual', 'check', 'check_items', 'configured_passed', 'delay', 'description', 'direction', 'error', 'failed_items', 'fitness', 'gate_name', 'gate_type', 'is_hard_gate', 'items', 'name', 'notes', 'official_passed', 'passed', 'positional', 'prod_correlation', 'self_correlation', 'sharpe', 'source', 'sub_universe_sharpe', 'takes', 'target', 'threshold_source', 'triggered_rules', 'turnover_min', 'turnover_platform', 'type', 'weight_concentration', 'zero_deviation']

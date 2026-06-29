@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/strategy_service.py
+# hypothesis_version: 6.141.1
+
+['INFO', 'WARN', 'bandit_selection', 'chronic_no_candidate', 'cold-start', 'cycle', 'delay', 'exploit', 'mean_rewards', 'mode', 'mutate', 'neutralization', 'next_index', 'profile', 'propose', 'region', 'retire', 'set_market_scope', 'settings', 'strategy_profile', 'strategy_switch', 'universe', 'user_profile', 'validate']

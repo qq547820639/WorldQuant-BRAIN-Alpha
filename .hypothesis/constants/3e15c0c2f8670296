@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/_config_schema_helpers.py
+# hypothesis_version: 6.141.1
+
+['(root)', '.', 'boolean', 'enum', 'integer', 'maximum', 'minLength', 'minimum', 'number', 'object', 'properties', 'required', 'string', 'type']

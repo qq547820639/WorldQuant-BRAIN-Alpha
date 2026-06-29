@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web/business/web_async_jobs.py
+# hypothesis_version: 6.141.1
+
+[0.0, 1.0, 30.0, 100.0, 100, 1000, '%s job failed: %s', 'COMPLETED', 'FAILED', 'RUNNING', 'STOPPED', 'Task completed.', 'Task failed.', 'cancel_callback', 'completed', 'count', 'done', 'elapsed_seconds', 'error', 'error_context', 'eta_deadline_at_ms', 'eta_seconds', 'failed', 'generated_count', 'heartbeat', 'is_cancelled', 'job_id', 'message', 'ok', 'operation', 'percent', 'percent_complete', 'phase', 'progress', 'queued', 'running', 'source', 'started_at_ms', 'status', 'status_code', 'status_message', 'stopped', 'stopping', 'submitted', 'summary', 'task_id', 'total', 'updated_at', 'updated_at_ms', 'web_async_jobs']

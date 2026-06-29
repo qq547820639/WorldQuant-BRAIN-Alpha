@@ -13,6 +13,7 @@ from typing import Any, TextIO
 
 from brain_alpha_ops.agent_tools import BrainAlphaToolbox
 from brain_alpha_ops.config import load_run_config
+from brain_alpha_ops.secure_credentials import install_log_redaction
 from brain_alpha_ops.tasks import JobStore
 
 JSONRPC_VERSION = "2.0"
@@ -113,6 +114,7 @@ def build_toolbox(config_path: str = "", *, allow_live_api: bool = False) -> Bra
 
 
 def main(argv: list[str] | None = None) -> int:
+    install_log_redaction()
     parser = argparse.ArgumentParser(description="Run the Brain Alpha Ops MCP-style stdio adapter.")
     parser.add_argument("--config", default="")
     parser.add_argument("--allow-live-api", action="store_true")

@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/tasks/_constants.py
+# hypothesis_version: 6.141.1
+
+[300.0, 1024, 'alphas', 'backtests', 'candidates', 'cloud_alphas', 'lifecycle_records']

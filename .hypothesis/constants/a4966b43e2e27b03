@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/data/capability_registry/_types.py
+# hypothesis_version: 6.141.1
+
+['CapabilityEntry', 'CapabilityKind', 'CapabilityRegistry', 'dataset', 'decay', 'delay', 'field', 'nan_handling', 'neutralization', 'official_context', 'operator', 'pasteurization', 'region', 'test_period', 'truncation', 'unit_handling', 'universe', 'visualization']

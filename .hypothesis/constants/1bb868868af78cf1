@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/generation/field_selector.py
+# hypothesis_version: 6.141.1
+
+[0.0, 0.01, 5.0, 200, ',', 'DatasetSelector', 'FieldCategoryDef', 'FieldSelector', 'Hypothesis', 'P0', '_loader']

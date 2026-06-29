@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/scripts/check_candidate_scientific_audit.py
+# hypothesis_version: 6.141.1
+
+['*.py', '--json', '--root', '__init__.py', '__main__', '_records_mixin.py', 'append', 'audit', 'blocking', 'brain_alpha_ops', 'browser_smoke', 'check_evidence', 'checked_files', 'code', 'concentration_risk', 'decisions', 'expression_delta', 'failed_dimension', 'feedback_sources', 'file', 'findings', 'fixture', 'generation', 'line', 'lineno', 'message', 'missing_file', 'official_api_called', 'ok', 'optimization', 'optimizer_trace', 'payloads', 'pipeline_runtime', 'pytest', 'python_syntax_error', 'quality_gate', 'redact_data', 'research', 'risk_reasons', 'root', 'schema_version', 'scripts', 'selected_strategy', 'severity', 'simulation', 'simulation_failures', 'single_mutation_mode', 'store_true', 'submit_allowed', 'test_result', 'unit_test', 'utf-8', 'vitest']

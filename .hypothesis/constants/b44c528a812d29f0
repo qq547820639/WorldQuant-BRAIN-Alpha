@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web/dispatch/web_post_handlers.py
+# hypothesis_version: 6.141.1
+
+[200, 409, 'CONFLICT_RUNNING', 'Set-Cookie', 'error', 'error_code', 'job_id', 'ok', 'sse_url', 'status_url', 'task_id']

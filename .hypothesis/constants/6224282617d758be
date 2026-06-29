@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web/config/web_config/_config.py
+# hypothesis_version: 6.141.1
+
+['BRAIN_PASSWORD', 'BRAIN_TOKEN', 'BRAIN_USERNAME', 'config', 'credentials', 'ok', 'password', 'password_env', 'path', 'token', 'token_env', 'username', 'username_env']

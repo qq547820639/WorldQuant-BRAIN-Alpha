@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/scripts/check_tracked_data_inventory/_cli.py
+# hypothesis_version: 6.141.1
+
+['--boundary-plan', '--json', '--root', '--show-files', 'ok', 'store_true']

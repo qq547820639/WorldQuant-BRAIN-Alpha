@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web/state/web_state_contract/_contract.py
+# hypothesis_version: 6.141.1
+
+[500, 'action_label', 'detail', 'error', 'error_code', 'general_error', 'impact', 'job_type', 'kind', 'message', 'next_action', 'ok', 'phase', 'progress', 'recoverable', 'redacted_message', 'retry_after', 'retryable', 'severity', 'status', 'status_message', 'suggested_action', 'title', 'unknown', 'user_error', 'user_error_kind', 'user_message']

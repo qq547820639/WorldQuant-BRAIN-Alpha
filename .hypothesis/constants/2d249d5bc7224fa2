@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/iterative_optimizer/_mutations_mixin.py
+# hypothesis_version: 6.141.1
+
+[0.2, 0.5, 252, 1000, ')', ',', '\\b', '\\b([a-zA-Z_]\\w*)\\b', '\\b\\d+\\b', '_', 'winsorize']

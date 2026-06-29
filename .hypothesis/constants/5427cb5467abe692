@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web/dispatch/web_get_routes/_helpers.py
+# hypothesis_version: 6.141.1
+
+[200, 404, 'JOB_NOT_FOUND', 'async', 'check', 'error', 'error_code', 'job_id', 'job_not_found', 'job_type', 'ok', 'run', 'sync', '未找到', '未知任务', '未知同步任务', '未知异步任务', '未知检查任务']

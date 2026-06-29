@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/audit_trail/quality_gate.py
+# hypothesis_version: 6.141.1
+
+[0.3, '; ', 'Candidate', '\\b\\d+(?:\\.\\d+)?\\b', 'all_results', 'alpha_id', 'child_numbers', 'concentration', 'details', 'duplicate_submission', 'error', 'expression', 'expression_hash', 'failed_gates', 'gate_name', 'high_frequency_retry', 'intercepted', 'parent_expression', 'parent_numbers', 'parent_skeleton', 'passed', 'reason', 'results', 'retry_count', 'similar_expression', 'skeleton', 'threshold', 'trigger_rule']

@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/legacy_simulation_service.py
+# hypothesis_version: 6.141.1
+
+[0.0, 429, '; ', 'COMPLETED', 'FAILED', 'SIMULATION_FAILED', 'SIMULATION_TIMEOUT', 'WARN', 'alpha_id', 'backtest_batch_rank', 'backtests', 'completed', 'config', 'failed_reasons', 'metrics', 'official_alpha_id', 'official_deferred', 'official_simulated', 'official_simulation', 'poll_attempts', 'settings', 'simulation_failed', 'simulation_running', 'simulation_status', 'simulation_submit', 'simulation_submitted', 'simulation_timeout', 'simulation_wait', 'submission_ready']

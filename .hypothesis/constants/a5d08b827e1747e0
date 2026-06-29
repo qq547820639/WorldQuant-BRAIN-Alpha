@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/scoring/_ranker.py
+# hypothesis_version: 6.141.1
+
+[0.0, 50.0, 60.0, 70.0, 85.0, '; ', 'RankingPartition', 'ScoringRanker', 'abandon_or_rebuild', 'cutoff_applied', 'eliminated', 'eliminated_count', 'failed_reasons', 'hard_gate_blocked', 'local_rank_score', 'official_verified', 'ranked', 'ranked_count', 'research_only', 'score', 'simulation', 'submission_ready', 'submit', 'submit_candidate', 'thresholds', 'total_score', 'validation']

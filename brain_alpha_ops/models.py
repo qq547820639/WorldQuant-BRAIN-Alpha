@@ -5,7 +5,18 @@ from __future__ import annotations
 import uuid
 from dataclasses import asdict, dataclass, field, fields
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from brain_alpha_ops.types import (
+        GateResultDict,
+        LocalQualityDict,
+        OfficialMetrics,
+        QualityDiagnosisDict,
+        ScorecardDict,
+        SubmissionDict,
+        ValidationDict,
+    )
 
 
 def utc_now() -> str:  # N-05: returns ISO string, not datetime (consider renaming to utc_now_iso); prefer datetime before serialization
@@ -29,16 +40,16 @@ class Candidate:
     mutation_type: str = ""
     dataset_id: str = ""          # P2-3: active dataset ID used during generation
     template_source: str = ""     # P2-3: source template/skeleton ID
-    local_quality: dict[str, Any] = field(default_factory=dict)
-    validation: dict[str, Any] = field(default_factory=dict)
+    local_quality: LocalQualityDict = field(default_factory=dict)
+    validation: ValidationDict = field(default_factory=dict)
     simulation_id: str = ""
     official_alpha_id: str = ""
-    official_metrics: dict[str, Any] = field(default_factory=dict)
-    scorecard: dict[str, Any] = field(default_factory=dict)
-    gate: dict[str, Any] = field(default_factory=dict)
-    submission: dict[str, Any] = field(default_factory=dict)
+    official_metrics: OfficialMetrics = field(default_factory=dict)
+    scorecard: ScorecardDict = field(default_factory=dict)
+    gate: GateResultDict = field(default_factory=dict)
+    submission: SubmissionDict = field(default_factory=dict)
     alpha_output_config: dict[str, Any] = field(default_factory=dict)
-    quality_diagnosis: dict[str, Any] = field(default_factory=dict)
+    quality_diagnosis: QualityDiagnosisDict = field(default_factory=dict)
     lifecycle_status: str = "created"
     created_at: str = field(default_factory=utc_now)
     extra_fields: dict[str, Any] = field(default_factory=dict)

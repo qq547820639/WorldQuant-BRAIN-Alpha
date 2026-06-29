@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web_candidates/optimization/_prepare.py
+# hypothesis_version: 6.141.1
+
+[0.0, 8.0, ',', 'allow_submit', 'alpha', 'default', 'extra_fields', 'lifecycle_status', 'mutation_mode', 'official_api_called', 'parameter_search', 'parent_alpha_id', 'parent_expression', 'passed', 'quality_diagnosis', 'reasons', 'score', 'search_score', 'source', 'updated_at']

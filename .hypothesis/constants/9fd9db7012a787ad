@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web/misc/web_errors.py
+# hypothesis_version: 6.141.1
+
+[0.9, 401, 403, 'AUTH_BEARER_INVALID', 'AUTH_INVALID', 'AUTH_TOKEN_EXPIRED', 'BRAIN 平台服务异常，请稍后重试。', 'BRAIN_SERVER_ERROR', 'CONNECTION_REFUSED', 'NETWORK_TIMEOUT', 'RATE_LIMITED', 'UNHANDLED_ERROR', 'actionable', 'authorization', 'cookie', 'credential', 'error', 'error_code', 'forbidden', 'high', 'http 401', 'http 403', 'level', 'matched_alpha_id', 'matched_status', 'max_similarity', 'navigation', 'password', 'retry_after', 'risk_explanation', 'risk_explanations', 'state_navigation', 'status_code', 'token', 'unauthorized', '登录已过期，请重新输入凭据。', '认证失败，用户名或密码不正确。', '认证失败，请检查凭据或连接设置。']

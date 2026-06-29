@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/brain_api/official_alphas/_locate_mixin.py
+# hypothesis_version: 6.141.1
+
+['GET', 'alpha_id', 'alpha_id is required', 'dataset_id', 'field_id', 'field_id is required', 'id']

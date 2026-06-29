@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/backtest_flow_service/_polling.py
+# hypothesis_version: 6.141.1
+
+[0.0, 0.1, 'config', 'next_poll_at', 'poll_count', 'simulation_wait']

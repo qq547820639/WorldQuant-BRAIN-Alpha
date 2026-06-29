@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web/dispatch/get_routes/_post_handlers.py
+# hypothesis_version: 6.141.1
+
+[100, 400, 409, 410, 500, '/', 'CONFIG_UPDATE_ERROR', 'CONFLICT_RUNNING', 'Config update failed', 'Pipeline failed', 'STOP_VIA_JOB_MONITOR', 'USE_BATCH_CHECK', 'VALIDATION_ERROR', 'auto_submit', 'candidate_id', 'completed', 'config', 'credentials', 'done', 'environment', 'error', 'error_code', 'failed', 'init', 'invalid path', 'job_id', 'message', 'ok', 'ops', 'pending', 'percent', 'percent_complete', 'phase', 'pipeline', 'preview', 'production', 'progress', 'queued', 'running', 'simulat', 'simulate', 'simulation_starting', 'sse_url', 'starting', 'status', 'status_message', 'status_url', 'stopping', 'suggestion', 'task_id', 'to_dict', 'warnings', '已有模拟任务在运行', '正在启动官方 BRAIN 模拟任务。']

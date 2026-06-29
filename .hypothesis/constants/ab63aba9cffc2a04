@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/brain_api/official_validation.py
+# hypothesis_version: 6.141.1
+
+[250, '\x00', '"', "'", '(', ')', ', ', ',\\s*,', ',\\s*\\)', 'ERROR', 'Empty expression', 'FAIL', 'PASS', 'Parse error: ', 'Unknown fields: ', 'Unknown operators: ', '\\(\\s*,', '\\b\\w+\\s*\\(\\s*\\)', 'errors', 'note', 'parse_error', 'status', 'unknown_fields', 'unknown_operators', 'values', 'warnings']

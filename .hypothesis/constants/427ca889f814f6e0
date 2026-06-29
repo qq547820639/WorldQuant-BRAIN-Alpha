@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/production_diagnostics/_render.py
+# hypothesis_version: 6.141.1
+
+['## Gap Matrix', '### Completed', '### Unfinished', 'ACTION REQUIRED', 'P0 ', 'P1 ', 'PASS', '\\|', 'completed_items', 'gap_matrix', 'history_replay', 'last_attempt_ok', 'official_context', 'official_refresh', 'ok', 'priority_items', 'redline', 'scoring_probe', 'unfinished_items', 'upgrade_plan', 'utf-8', '|']

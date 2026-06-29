@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web/dispatch/post_routes/misc.py
+# hypothesis_version: 6.141.1
+
+[400, 401, 1000, 10000, 43200, 'ADMIN_AUTH_REQUIRED', 'CONFIG_SAVE_ERROR', 'CONNECTION_ERROR', 'Set-Cookie', 'VALIDATION_ERROR', 'candidates', 'connected', 'csrf_token', 'cycles', 'details', 'error', 'error_code', 'headers', 'ok', 'session', 'session_id', 'stream_token', 'submissions', 'ttl_seconds', '请求体必须是 JSON 对象', '趋势参数校验失败', '远程 Web 访问需要管理员认证', '连接测试失败']

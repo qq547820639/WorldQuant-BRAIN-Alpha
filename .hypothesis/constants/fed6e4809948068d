@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web/misc/web_sqlite_indexes.py
+# hypothesis_version: 6.141.1
+
+[0.75, 2000, 'error', 'error_code', 'expression_index', 'has_missing_index', 'has_stale_index', 'is_stale', 'ok', 'record_index', 'schema_version', 'source', 'sqlite_index_cache', 'storage_dir']

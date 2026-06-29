@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/scripts/check_tracked_data_inventory/_core.py
+# hypothesis_version: 6.141.1
+
+['boundary_plan', 'categories', 'changed_categories', 'changed_count', 'code', 'findings', 'message', 'ok', 'path', 'present', 'recommendations', 'root', 'runtime_generated', 'schema_version', 'tracked_count', 'unclassified']

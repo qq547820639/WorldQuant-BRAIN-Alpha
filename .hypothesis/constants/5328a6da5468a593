@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/brain_api/official_auth.py
+# hypothesis_version: 6.141.1
+
+[400, 401, 3600, 'ADVANCED', 'Authorization', 'BASIC', 'GET', 'IQC', 'None', 'POST', '_cached_at', '_cached_profile', 'access_token', 'accountType', 'account_tier', 'accumulatedPoints', 'approved', 'ascii', 'auth', 'basic', 'consultantLevel', 'consultantTier', 'currentLevel', 'email', 'error', 'geniusLevel', 'level', 'login', 'ok', 'points', 'raw', 'response', 'score', 'session_cookie', 'status', 'status_code', 'tier', 'tierName', 'token', 'totalPoints', 'totalScore', 'unknown', 'userEmail', 'userLevel', 'userTier', 'username', 'utf-8']

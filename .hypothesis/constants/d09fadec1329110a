@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/llm_review/_cross_review.py
+# hypothesis_version: 6.141.1
+
+[0.0, 0.6, 0.8, 1.0, 'accept', 'agreement', 'cloud', 'confidence', 'conservative', 'content', 'cross_review', 'decision', 'follow_up_questions', 'messages', 'min_confidence', 'name', 'ok', 'primary', 'primary_confidence', 'primary_digest', 'prompt_digest', 'request', 'request_digest', 'response_schema', 'reviewer', 'reviewer_confidence', 'reviewer_digest', 'risk_flags', 'role', 'schema_version', 'summary', 'system', 'task', 'user']

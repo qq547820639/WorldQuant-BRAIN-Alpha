@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/convergence/_bootstrap_mixin.py
+# hypothesis_version: 6.141.1
+
+[0.0, 1e-12, 1e-07, 0.01, 0.3, 0.5, 0.9, 1.0, 1.5, 1.645, 2.0, 6.0, 100]

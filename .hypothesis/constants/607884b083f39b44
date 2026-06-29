@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web/misc/web_review_api.py
+# hypothesis_version: 6.141.1
+
+[0.0, 0.6, 1.0, 'CANDIDATE_NOT_FOUND', 'accepted_candidates', 'alpha_id', 'anti_overfit_report', 'archive_samples', 'candidate_id', 'candidates', 'error_category', 'error_code', 'expression', 'id', 'min_confidence', 'official_alpha_id', 'official_metrics', 'ok', 'passed_candidates', 'pool', 'primary', 'primary_response', 'ranked_candidates', 'request', 'request_pack', 'retained_candidates', 'retryable', 'reviewer', 'reviewer_response', 'schema_version', 'simulation_id', 'submission', 'validation']

@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/scripts/check_live_submit_readiness/__init__.py
+# hypothesis_version: 6.141.1
+
+['DEFAULT_CONFIG', 'DEFAULT_JOBS', 'ROOT', 'SCHEMA_VERSION', '__main__', 'main']

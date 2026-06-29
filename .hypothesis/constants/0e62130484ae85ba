@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/context/__init__.py
+# hypothesis_version: 6.141.1
+
+['_backtest_brief', '_candidate_brief', '_cloud_alpha_brief', '_cloud_context', '_cloud_pass_fail', '_compliance_context', '_dataclass_dict', '_expression_from_row', '_first_dict', '_first_list', '_float_value', '_generation_focus', '_guidance_outcomes', '_int_value', '_join_failures', '_join_stat_bucket', '_join_text_items', '_memory_context', '_next_actions', '_prompt_diagnostics', '_read_jsonl', '_risk_controls', '_run_config_context', '_unique_text_items']

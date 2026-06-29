@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/scripts/check_prod_defect_tracking/_gate_invariants.py
+# hypothesis_version: 6.141.1
+
+[0.05, 0.1, 0.2, 0.25, 0.7, 0.8, 0.9, 0.95, 1.2, 1.6, 66.9, 91.0, 'FAIL', 'PASS', 'ab12cd34ef56', 'alpha_gate_invariant', 'alpha_id', 'best_candidate', 'blocking_reasons', 'candidates', 'code', 'correlation', 'data', 'decision_band', 'eligible_count', 'expected', 'fitness', 'gate', 'high', 'job_0001', 'jobs', 'level', 'lifecycle_status', 'local_backtest', 'low', 'max_similarity', 'message', 'not_submission_ready', 'official_alpha_id', 'official_metrics', 'pass_fail', 'pass_local', 'prod_stub_alpha_0001', 'progress', 'ready_to_submit', 'research_only', 'result', 'scorecard', 'sharpe', 'status', 'stopped', 'submission', 'submission_ready', 'submit_candidate', 'summary', 'total_score', 'turnover', 'utf-8', 'version', 'weight_concentration']

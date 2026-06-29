@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/market_data_cache.py
+# hypothesis_version: 6.141.1
+
+['.jsonl', ';', 'CACHE_INVALID', 'CACHE_NOT_BUILT', 'CACHE_READ_FAILED', 'alpha_id', 'alphas', 'bounded_local_cache', 'cache_health', 'cache_path', 'cloud_alphas.jsonl', 'coverage_ratio', 'data', 'dropped_count', 'empty_value_ratio', 'empty_value_rows', 'end', 'error', 'error_code', 'exists', 'field', 'field_count', 'field_stats', 'generated_at', 'id', 'ingested_count', 'items', 'latest_timestamp', 'limit_per_source', 'loaded_at', 'local_market_cache', 'market_data_cache.v1', 'multi_source', 'official_alpha_id', 'official_fields.json', 'ok', 'path', 'ready', 'record_count', 'records', 'results', 'rows', 'saved_at', 'schema_version', 'source', 'source_files', 'start', 'symbol', 'symbol_count', 'symbol_hash', 'symbol_stats', 'symbols', 'time_range', 'timestamp', 'top_fields', 'top_symbols', 'updated_at', 'utf-8', 'values']

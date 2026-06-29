@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/alpha_quality/output_config.py
+# hypothesis_version: 6.141.1
+
+[0.0, 'REGULAR', 'allow_submit', 'alpha_type', 'auto_submit', 'block_micro_variants', 'count', 'dataset', 'dataset_id', 'generation', 'local', 'local_gate', 'local_only', 'max_drawdown', 'max_prod_correlation', 'max_self_correlation', 'min_fitness', 'min_fitness_delay0', 'min_margin_bps', 'min_returns', 'min_sharpe', 'min_sharpe_delay0', 'min_success_rate', 'min_turnover', 'mode', 'official_api_called', 'official_thresholds', 'platform_payload', 'requested_count', 'schema_version', 'settings', 'submission', 'submission_policy', 'target_max_turnover', 'top_n', 'type', 'use_research_memory']

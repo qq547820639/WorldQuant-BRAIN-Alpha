@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/evolution_helpers.py
+# hypothesis_version: 6.141.1
+
+[120, 180, 252, '(', '()', ')', '+', ',', '-', 'abs', 'add', 'adv20', 'close', 'divide', 'group_backfill', 'group_neutralize', 'group_rank', 'group_scale', 'group_zscore', 'high', 'id', 'inverse', 'log', 'long', 'low', 'market_cap', 'max', 'medium', 'min', 'multiply', 'name', 'normalize', 'open', 'rank', 'returns', 'reverse', 'scale', 'short', 'sign', 'sqrt', 'subtract', 'ts_arg_max', 'ts_arg_min', 'ts_av_diff', 'ts_backfill', 'ts_corr', 'ts_covariance', 'ts_decay_linear', 'ts_delay', 'ts_delta', 'ts_mean', 'ts_rank', 'ts_regression', 'ts_std_dev', 'ts_sum', 'ts_zscore', 'volume', 'vwap', 'zscore']

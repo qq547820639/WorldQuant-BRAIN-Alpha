@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/candidate_pool_service_/_local_prefilter.py
+# hypothesis_version: 6.141.1
+
+[0.0, 0.5, 0.55, 0.8, 8.0, 160, 200, ',', '; ', 'SCORING_ERROR', 'WARN', '_active_dataset_id', '_generator', 'alpha_id', 'candidates', 'cycle', 'dataset_id', 'default', 'error', 'error_type', 'expression', 'failed_reasons', 'failure', 'failure_category', 'field_effectiveness', 'finding', 'hypothesis', 'local_backtest', 'local_scored', 'local_scored_count', 'local_scoring', 'low_signal', 'ok', 'pass_local', 'pass_reasons', 'passed', 'pipeline', 'prod_correlation', 'produced_count', 'production-gate-v2.1', 'reasons', 'result', 'retained_pool_limit', 'schema_version', 'score', 'scoring_failed', 'status', 'submission_ready', 'total_score', 'warnings']

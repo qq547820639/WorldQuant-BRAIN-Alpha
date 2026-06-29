@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/ux/guided_pipeline/_base.py
+# hypothesis_version: 6.141.1
+
+['GuidedPipelineBase', 'checkpoints', 'completed', 'context', 'data', 'error', 'failed', 'finalize', 'gating', 'generation', 'init', 'message', 'redline', 'resume', 'run_history', 'run_id', 'running', 'scoring', 'simulation', 'storage_dir', 'submission', 'type', 'validation', '准备连接', '刷新官方资料', '合规预检', '复核本地质量', '完成并保存记录', '提交安全复核', '生成候选', '评分归因', '质量门禁', '运行官方验证']

@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web_candidates/decisions/_evidence.py
+# hypothesis_version: 6.141.1
+
+['action_hint', 'blocking', 'decision_evidence', 'evidence', 'feedback_sources', 'latest_event_at', 'latest_stage', 'latest_status', 'lifecycle_history', 'lifecycle_jsonl', 'lifecycle_replay', 'lifecycle_risk', 'local_only', 'matched_by', 'matched_event_count', 'official_api_called', 'reason_code', 'schema_version', 'source', 'submit_allowed']

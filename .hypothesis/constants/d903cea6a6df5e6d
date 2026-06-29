@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/context/_compliance.py
+# hypothesis_version: 6.141.1
+
+[300, 'available', 'error', 'module not found', 'ok', 'redline', 'scoring_health', 'summary', 'thresholds_synced', 'violations']

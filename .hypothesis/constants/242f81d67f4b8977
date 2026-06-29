@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/scripts/verify_canonical_compliance/_checks.py
+# hypothesis_version: 6.141.1
+
+['allowed', 'alpha_check', 'alpha_correlations', 'alpha_detail', 'alpha_path_template', 'alpha_submit', 'api_path_alignment', 'authentication', 'authentication_path', 'base_url', 'canonical', 'configured', 'data_categories', 'data_categories_path', 'data_field_detail', 'data_fields', 'data_fields_path', 'data_set_detail', 'data_sets', 'data_sets_path', 'delay', 'details', 'deviation', 'deviations', 'instrumentType', 'language', 'match', 'matching', 'name', 'nanHandling', 'neutralization', 'operators', 'operators_path', 'passed', 'pasteurization', 'region', 'simulations', 'simulations_path', 'total', 'type', 'unitHandling', 'universe', 'user_alphas', 'user_alphas_path', 'user_profile', 'user_profile_path']

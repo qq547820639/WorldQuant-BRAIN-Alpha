@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/agent_tools/_research_mixin.py
+# hypothesis_version: 6.141.1
+
+[0.0, 0.75, 1.0, 1000, 5000, 50000, 'assistant_guidance', 'assistant_raw_output', 'assistant_response', 'confidence', 'diagnostics', 'expression', 'include_cloud', 'limit', 'max_mutations', 'min_confidence', 'min_similarity', 'min_success_rate', 'ok', 'persist', 'refresh', 'rows', 'sample_size', 'source', 'source_file', 'top_n', 'usable', 'written_to']

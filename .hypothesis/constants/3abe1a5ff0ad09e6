@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/alpha_quality/diagnosis.py
+# hypothesis_version: 6.141.1
+
+['blocked', 'blocking', 'blocking_reasons', 'candidate_count', 'category', 'category_counts', 'code', 'field', 'format_checks', 'format_error', 'invalid_count', 'local_only_count', 'local_quality_failed', 'local_valid_count', 'missing', 'missing_fields', 'numeric_bounds', 'other', 'primary_reason', 'qualified', 'qualified_count', 'quality_diagnosis', 'reason_counts', 'reasons', 'schema_version', 'severity', 'status', 'status_counts', 'status_label', 'submission_ready', 'unknown', 'warning_reasons']

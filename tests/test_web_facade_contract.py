@@ -119,7 +119,10 @@ def test_web_service_namespace_supplies_legacy_export_private_names():
 
 
 def test_web_facade_bindings_install_core_public_surface():
-    bindings = build_web_facade_bindings(web.__dict__)
+    # Phase 2a: service namespace is now stored in _SERVICE_NS and resolved
+    # via __getattr__, so we need to merge it with web.__dict__ for the builder.
+    merged_ns = {**web.__dict__, **web._SERVICE_NS}
+    bindings = build_web_facade_bindings(merged_ns)
 
     assert {
         "JOBS",

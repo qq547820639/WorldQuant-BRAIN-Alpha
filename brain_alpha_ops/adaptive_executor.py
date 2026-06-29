@@ -178,6 +178,7 @@ class CachedAPIRateLimiter:
         max_retries: int = 3,
         base_retry_delay: float = 2.0,
         retry_backoff: float = 2.0,
+        stop_event: threading.Event | None = None,
     ):
         self.ttl = max(1.0, float(ttl))
         self.max_size = max(1, int(max_size))
@@ -188,6 +189,7 @@ class CachedAPIRateLimiter:
         self._lock = threading.Lock()
         self._hits: int = 0
         self._misses: int = 0
+        self._stop_event = stop_event or threading.Event()
 
     def get_or_fetch(
         self,
@@ -236,7 +238,11 @@ class CachedAPIRateLimiter:
                         attempt + 1, self.max_retries + 1, redact_text(key, max_length=120),
                         redact_error_message(exc, max_length=100), delay,
                     )
-                    time.sleep(delay)
+                    # Use Event.wait instead of time.sleep so the
+                    # wait can be interrupted for graceful shutdown.
+                    if self._stop_event.wait(timeout=delay):
+                        # stop_event was set — abort retry loop
+                        break
                 else:
                     break
 

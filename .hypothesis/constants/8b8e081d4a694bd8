@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/scripts/check_tracked_data_inventory/_classify.py
+# hypothesis_version: 6.141.1
+
+['/', '\\', 'official_snapshot', 'review_artifact', 'runtime_generated', 'unclassified']

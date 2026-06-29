@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/scoring/scoring_comparison.py
+# hypothesis_version: 6.141.1
+
+[0.0, 1e-09, 0.001, 0.5, 1.0, 'Advisor_Standard', 'CANONICAL_v2', 'FAIL', 'FAILED', 'PASS', 'UNKNOWN', '_', 'actual', 'alpha_id', 'brain_checks', 'checklist', 'checks', 'correlation', 'decision_band', 'direction', 'drawdown', 'empirical', 'expression', 'fitness', 'gate', 'hard_gate_failed', 'hard_gate_failures', 'hard_gate_passed', 'is_hard_gate', 'items', 'limit', 'margin', 'meta', 'name', 'pass_fail', 'passed', 'prior', 'prod_correlation', 'result', 'returns', 'score', 'scorecard-v2.3', 'scoring_schema', 'self_correlation', 'sharpe', 'simulated', 'soft_gate_warnings', 'source', 'status', 'sub_universe_sharpe', 'submission_checklist', 'submission_ready', 'submit_candidate', 'target', 'threshold', 'threshold deviation', 'threshold_version', 'thresholds_used', 'total', 'total_score', 'turnover', 'value', 'weight_concentration']

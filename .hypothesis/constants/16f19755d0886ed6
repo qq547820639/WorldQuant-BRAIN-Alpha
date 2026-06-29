@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/audit_trail/writer.py
+# hypothesis_version: 6.141.1
+
+[0.0, 100, 1024, 'BRAIN_Official', 'FAILURE_COLLECTION', 'HARD', 'RELEASE', 'RELEASE_SCORE_GATE', 'SOFT', '_truncated', 'a', 'actual', 'alpha_id', 'attribution_report', 'attributions', 'audit_trail.v1', 'check_count', 'check_items', 'config_hash', 'data/audit_trail', 'decision_band', 'details', 'direction', 'evaluated_at', 'expression', 'failed_items', 'gate', 'gate_decisions', 'gate_name', 'gate_type', 'hard_gates', 'item', 'name', 'pass_fail', 'passed', 'passed_gate', 'r', 'rb', 'reason', 'release_gate', 'rule', 'schema_version', 'scoring_audit.jsonl', 'scoring_evaluated', 'scoring_schema', 'severity', 'soft_gates', 'source', 'status', 'target', 'threshold_source', 'threshold_version', 'to_dict', 'top_failures', 'total_score', 'triggered_rules', 'utf-8', 'written_at']

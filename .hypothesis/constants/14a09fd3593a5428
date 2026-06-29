@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web_candidates/simulation_failures.py
+# hypothesis_version: 6.141.1
+
+[240, 'checks', 'detail', 'error', 'errors', 'failureReason', 'failure_reason', 'failures', 'fetch_result', 'message', 'metrics', 'poll_count', 'raw', 'reason', 'retry_after_seconds', 'simulation_id', 'source', 'state', 'status', 'submit_attempts']

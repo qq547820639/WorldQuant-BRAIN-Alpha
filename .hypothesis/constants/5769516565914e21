@@ -1,0 +1,4 @@
+# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web/dispatch/web_handler_dispatch_core.py
+# hypothesis_version: 6.141.1
+
+[400, 403, 404, 409, 429, 500, '/api/', '10', 'GET', 'HEAD', 'NOT_FOUND', 'OPTIONS', 'ORIGIN_FORBIDDEN', 'REPLAY_DETECTED', 'Retry-After', 'SESSION_INVALID', 'api', 'category', 'client_address', 'error', 'error_code', 'headers', 'local', 'not found', 'ok', 'retry_after', 'web_rate_limited']
