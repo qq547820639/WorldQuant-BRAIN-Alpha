@@ -166,6 +166,7 @@
   --color-session-invalid-border: oklch(0.62 0.1 35 / 0.35);
   --color-kbd-bg: oklch(0.92 0.004 45);
   --color-kbd-border: oklch(0.8 0.005 45);
+  --color-on-saturated: oklch(1 0 0);
 }
 .dark {
   --bg: #0f172a;
@@ -320,4 +321,5 @@
   --color-session-invalid-border: oklch(0.62 0.1 35 / 0.35);
   --color-kbd-bg: oklch(0.22 0.008 45);
   --color-kbd-border: oklch(0.3 0.008 45);
+  --color-on-saturated: oklch(1 0 0);
 }

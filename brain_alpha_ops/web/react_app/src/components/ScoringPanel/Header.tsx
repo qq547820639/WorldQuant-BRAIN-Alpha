@@ -16,18 +16,18 @@ interface Props {
 }
 
 /**
- * 获取分数颜色编码
- * 优秀（≥0.8）：green
- * 良好（0.6-0.8）：blue
- * 一般（0.4-0.6）：yellow
- * 差（<0.4）：red
+ * 获取分数颜色编码（使用设计令牌语义类）
+ * 优秀（≥0.8）：positive
+ * 良好（0.6-0.8）：info
+ * 一般（0.4-0.6）：warning
+ * 差（<0.4）：negative
  */
 function getScoreColorClass(score: number | undefined): string {
-  if (score == null) return 'text-gray-400';
-  if (score >= 0.8) return 'text-green-600';
-  if (score >= 0.6) return 'text-blue-600';
-  if (score >= 0.4) return 'text-yellow-600';
-  return 'text-red-600';
+  if (score == null) return 'text-text-tertiary';
+  if (score >= 0.8) return 'text-positive';
+  if (score >= 0.6) return 'text-info';
+  if (score >= 0.4) return 'text-warning';
+  return 'text-negative';
 }
 
 export default function ScoringHeader({

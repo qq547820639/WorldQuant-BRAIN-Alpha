@@ -249,22 +249,22 @@
 ## Phase 4: UI 视觉统一
 
 ### Task 4.1: 完善设计令牌采用率
-- [ ] 4 处硬编码 hex 颜色已替换为 `var(--color-*)`（ProgressHeader / DashboardStepProgress / Dashboard）
-- [ ] 251 处硬编码 px 间距/字号已替换为 `var(--space-*)` / `var(--font-size-*)`（动态计算除外）
-- [ ] grep `#[0-9a-fA-F]{3,6}` 在 .tsx 中返回 ≤ 0（动态计算除外）
+- [x] 3 处硬编码 hex 颜色已替换为 `var(--color-*)`（DashboardStepProgress `#fff`→`var(--color-on-saturated)`；Dashboard TrendPanel `#3b82f6`→`var(--color-info-text)`、`#f59e0b`→`var(--color-status-active-text)`）。ProgressHeader `&#10003;` 为 HTML 实体非 hex，误报
+- [~] 235 处硬编码 px **保留** — 代码库未定义 `--space-*` / `--font-size-*` 令牌，盲目替换会破坏布局；引入新令牌需视觉验证，超出自动化代理安全范围
+- [x] grep `#[0-9a-fA-F]{3,6}` 在 .tsx 中返回 0（仅 `&#10003;` HTML 实体误报）
 - [ ] `npm run build` 成功
 
 ### Task 4.2: 统一组件视觉语言
 - [ ] 基础组件（Button / Card / Input / Modal / Toast / Tooltip / Skeleton）全部使用设计令牌
-- [ ] `ScoringPanel/Header.tsx` 硬编码 `text-gray-*` / `text-green-*` 等已修复
-- [ ] `Sidebar` 三元表达式两分支相同已修复
+- [x] `ScoringPanel/Header.tsx` `getScoreColorClass` 5 处硬编码 Tailwind 类已替换为语义类（`text-positive`/`text-info`/`text-warning`/`text-negative`/`text-text-tertiary`）
+- [x] `Sidebar.tsx` 已无两分支相同的三元表达式（grep 仅 1 处 `group.expanded ? 'is-expanded' : ''`，正常）
 - [ ] 移除过度的视觉装饰，遵循现代极简原则
 - [ ] `npm run build` 成功
 
 ### Task 4.3: 修复 StateCardItem 暗色主题适配（W-013）
-- [ ] `StateCardItem.tsx` 硬编码 `border-slate-200` / `bg-white` / `text-slate-950` / `text-slate-600` 已替换为设计令牌
-- [ ] `hover:border-brand-200` / `hover:bg-brand-50/40` / `focus:ring-brand-500/50` 等失效类名已修复为 `accent-*`（与 Task 1.9 协调）
-- [ ] 手动测试暗色主题切换无白色块
+- [~] **任务作废** — `StateCardItem.tsx` 已在 Phase 1 Task 1.1 删除（StateCards/ 整目录 0 引用）
+- [x] grep `hover:bg-brand|hover:border-brand|focus:ring-brand` 在 .tsx 返回 0（Phase 1 Task 1.9 已清理）
+- [x] grep `bg-white|bg-black\b|border-(slate|gray)-[0-9]+` 在 .tsx 返回 0，无暗色主题白色块风险
 
 ### Task 4.4: 重设计 Dashboard 布局
 - [ ] 信息密度合理化，卡片对齐与间距统一（使用 `var(--space-*)`）

@@ -34,7 +34,7 @@ export const StepProgressBar = memo(function StepProgressBar({
                     : isActive
                       ? 'var(--color-step-active)'
                       : 'var(--color-step-pending)',
-                  color: isPending ? 'var(--color-step-pending-text)' : '#fff',
+                  color: isPending ? 'var(--color-step-pending-text)' : 'var(--color-on-saturated)',
                 }}
               >
                 {isComplete ? '✓' : step.num}

@@ -192,7 +192,7 @@ export default function Dashboard({
                 title="候选总数"
                 data={trendCandidates}
                 unit="个"
-                color="#3b82f6"
+                color="var(--color-info-text)"
                 currentValue={
                   memory?.total_candidates ?? status?.progress?.candidates_generated ?? 0
                 }
@@ -222,7 +222,7 @@ export default function Dashboard({
                 title="提交数"
                 data={trendSubmissions}
                 unit="个"
-                color="#f59e0b"
+                color="var(--color-status-active-text)"
                 currentValue={
                   status?.progress?.submissions ?? cloudSummaryData.submitted_count ?? 0
                 }
