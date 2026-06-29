@@ -2,7 +2,7 @@
 
 ## Why
 
-在完整阅读 brain_alpha_ops **全量源码**（三轮深度分析覆盖所有子模块：core / web / brain_api / research / scoring / compliance / audit_trail / monitoring / production_diagnostics / web_candidates / web_cloud / data / agent_tools / mcp_server / browser / llm_service / config / execution_backend / strategy / shared / types / security / deployment）并**交叉核对项目已有的 17 份审计/缺陷文档**后，识别出 **110+ 项实质性重大问题**，覆盖三大维度：
+在完整阅读 brain_alpha_ops **全量源码**（四轮深度分析覆盖所有子模块：core / web / web/dispatch / brain_api（official/official_alphas/official_context/official_helpers/official_simulation） / research（含全部子包：decoupled_pipeline/simulation_scheduler/repository/pipeline mixins/expression_index/iterative_optimizer/cross_review_pipeline/calibration_engine/auto_calibrator/evolution/knowledge_base/memory/experience/theme_engine 等） / scoring（含 official_scoring/release_score_gate） / compliance / audit_trail / monitoring / production_diagnostics / web_candidates / web_cloud / data / agent_tools / mcp_server / browser（execution_adapter） / llm_service / config / execution_backend / strategy / shared / types / security / deployment / tests / scripts）并**交叉核对项目已有的 17 份审计/缺陷文档**后，识别出 **160+ 项实质性重大问题**，覆盖三大维度：
 
 - **功能缺陷**：约 60 项 — 含**反过拟合 returns→factor_values 回退链导致虚假 PASS（核心防线失效）**、Quality Gate 审计失败跳过状态转换、仿真并发超限 deferred 被计为 failed、BCa Bootstrap n<5 退化为 (0,0)、Pearson 系数被 (n-1)/n 系统性缩小、ProdCorrelation 按表达式长度自动放行、状态机非法转换静默回退、真实提交后审计失败致重复提交、浏览器驱动真实提交流缺失（P0）、**三套 backend 注册机制互不协同 + 生产 pipeline 从未接入 execution_backend**、**MCP stdio 单线程阻塞**、**LLM 配额账本是死代码**、**Browser 提交幂等键淘汰后可重放**、**Browser 登录判定用 nav 选择器误判已登录**、registry 校验把枚举值误当数据字段必然误报、strategy profile_id 不含 delay 哈希冲突、参数审计遗漏 10+ official_api 参数、lifecycle_records 无界增长 OOM 等
 - **用户体验**：13 项 — 含 Web 端永久无法真实提交却强制走完整 HIL、SSE 断连误取消但云端任务仍在运行、错误引导仅覆盖 4/11 类等
