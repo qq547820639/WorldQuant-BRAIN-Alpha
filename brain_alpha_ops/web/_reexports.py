@@ -57,8 +57,6 @@ from brain_alpha_ops.web.misc.web_html import (
 from brain_alpha_ops.web.business.web_jobs import job_get as _job_get  # noqa: F401
 from brain_alpha_ops.web.business.web_jobs import job_update as _job_update  # noqa: F401
 from brain_alpha_ops.web.business.web_jobs import new_job_id as _new_job_id  # noqa: F401
-from brain_alpha_ops.web.dispatch.web_routes import dispatch_get as _routes_dispatch_get  # noqa: F401
-from brain_alpha_ops.web.dispatch.web_routes import dispatch_post as _routes_dispatch_post  # noqa: F401
 from brain_alpha_ops.web.misc.web_server_lifecycle import (
     SafeThreadingHTTPServer as _SafeThreadingHTTPServer,
 )
@@ -149,7 +147,6 @@ class Handler(BaseHTTPRequestHandler):
             length = int(self.headers.get("Content-Length", "0"))
         except (ValueError, TypeError):
             length = 0
-        length = min(length, self._MAX_BODY_BYTES)
         if length < 0:
             raise ValueError("invalid request body length")
         if length > self._MAX_BODY_BYTES:

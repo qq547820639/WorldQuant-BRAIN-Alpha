@@ -93,7 +93,6 @@ def test_config_actions_and_toasts_fit_narrow_viewports():
 
 
 def test_operational_panels_wrap_on_narrow_viewports():
-    submission = _source(COMPONENTS / "SubmissionPanel.tsx")
     scoring = _joined([
         COMPONENTS / "ScoringPanel.tsx",
         COMPONENTS / "ScoringPanel" / "Header.tsx",
@@ -113,8 +112,6 @@ def test_operational_panels_wrap_on_narrow_viewports():
         COMPONENTS / "SnapshotPanel" / "SnapshotDesktopTable.tsx",
     ])
 
-    assert 'className="w-full max-w-3xl min-w-0 space-y-6 animate-fade-in"' in submission
-    assert "min-w-0 outline-none focus:ring-2 focus:ring-brand-500/50" in submission
     assert 'className="animate-fade-in"' in scoring
     assert "flexWrap: 'wrap'" in scoring
     assert "grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4" in scoring

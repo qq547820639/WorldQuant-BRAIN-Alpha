@@ -23,19 +23,10 @@ REACT_CONTRACT_COVERAGE = {
     "__tests__/components_v3.test.tsx": "unit tests for PhaseShell, StepGuide, MobileTabBar, EmptyState components (v3.0)",
     "__tests__/usePhaseState.test.ts": "unit tests for usePhaseState hook — phase transitions and step computation (v3.0)",
     "api/jobCancel.ts": "shared browser job cancellation helper using cross-store job cancel",
-    "components/A11y/FocusTrap.tsx": "React component (a11y submodule): focus trap",
-    "components/A11y/LiveRegion.tsx": "React component (a11y submodule): live region",
-    "components/A11y/SkipLink.tsx": "React component (a11y submodule): skip link",
-    "components/A11y/VisuallyHidden.tsx": "React component (a11y submodule): visually hidden",
-    "components/A11y/index.ts": "React component (a11y submodule): index",
     "components/ActionableError.tsx": "React component: actionable error",
     "components/CandidateDetailPanel.tsx": "React component: candidate detail panel",
     "components/CandidateRow.tsx": "React component: candidate row",
     "components/CandidateTable.tsx": "candidate generation, filters, queue views, and SSE completion",
-    "components/CandidateTable/CandidateTable.tsx": "React component (candidate table submodule): candidate table",
-    "components/CandidateTable/TaskSuccessBanner.tsx": "React component (candidate table submodule): task success banner",
-    "components/CandidateTable/detailPanelProps.ts": "React component (candidate table submodule): detail panel props",
-    "components/CandidateTable/useCandidateTableSse.ts": "React component (candidate table submodule): use candidate table sse",
     "components/CandidateTableDesktop.tsx": "React component: candidate table desktop",
     "components/CandidateTableLoading.tsx": "React component: candidate table loading",
     "components/CandidateTableMobile.tsx": "React component: candidate table mobile",
@@ -104,9 +95,6 @@ REACT_CONTRACT_COVERAGE = {
     "components/JobMonitor/index.ts": "React component (job monitor submodule): index",
     "components/KeyboardShortcutsHelp.tsx": "React component: keyboard shortcuts help",
     "components/KpiCard.tsx": "compact KPI presentation",
-    "components/LazyImage/LazyImage.tsx": "React component (lazy image submodule): lazy image",
-    "components/LazyImage/index.ts": "React component (lazy image submodule): index",
-    "components/LoadingProgress.tsx": "React component: loading progress",
     "components/LoadingState/ButtonLoader.tsx": "React component (loading state submodule): button loader",
     "components/LoadingState/PageLoader.tsx": "React component (loading state submodule): page loader",
     "components/LoadingState/Skeleton.tsx": "React component (loading state submodule): skeleton",
@@ -181,12 +169,6 @@ REACT_CONTRACT_COVERAGE = {
     "components/SnapshotPanel/SnapshotPanelLocal.tsx": "React component (snapshot panel submodule): snapshot panel local",
     "components/SnapshotPanel/snapshotViews.ts": "React component (snapshot panel submodule): snapshot views",
     "components/SnapshotPanel/utils.ts": "React component (snapshot panel submodule): utils",
-    "components/StateCards.tsx": "card-first navigation and startup status loading (superseded by Sidebar)",
-    "components/StateCards/StateCardItem.tsx": "React component (state cards submodule): state card item",
-    "components/StateCards/StateCards.tsx": "React component (state cards submodule): state cards",
-    "components/StateCards/cardConfigs.ts": "React component (state cards submodule): card configs",
-    "components/StateCards/helpers.ts": "React component (state cards submodule): helpers",
-    "components/StateCards/metrics.ts": "React component (state cards submodule): metrics",
     "components/StatusFlowDiagram.tsx": "submission readiness flow visualization showing checklist to submit flow (v3.0)",
     "components/StepGuide.tsx": "horizontal step progress bar with complete/active/pending states (v3.0)",
     "components/SubmissionChecklist.tsx": "React component: submission checklist",
@@ -198,14 +180,11 @@ REACT_CONTRACT_COVERAGE = {
     "components/SubmissionGates/index.ts": "React component (submission gates submodule): index",
     "components/SubmissionGates/utils.ts": "React component (submission gates submodule): utils",
     "components/SubmissionGuidance.tsx": "React component: submission guidance",
-    "components/SubmissionPanel.tsx": "retired submit compatibility wrapper for read-only readiness review",
     "components/ThemeProvider.tsx": "React component: theme provider",
     "components/Toast.tsx": "React component: toast",
     "components/ToastContainer.tsx": "toast roles, actions, and dismissal",
     "components/Tooltip.tsx": "React component: tooltip",
     "components/TrendPanel.tsx": "React component: trend panel",
-    "components/VirtualList/VirtualList.tsx": "React component (virtual list submodule): virtual list",
-    "components/VirtualList/index.ts": "React component (virtual list submodule): index",
     "components/useCandidateColumns.tsx": "React component: use candidate columns",
     "components/views/_renderViewHelpers.tsx": "React component (views submodule): render view helpers",
     "components/views/helpers.ts": "React component (views submodule): helpers",
@@ -268,11 +247,7 @@ REACT_CONTRACT_COVERAGE = {
     "hooks/useJobStatusHook.ts": "React hook: use job status hook",
     "hooks/useJobWatchdog.ts": "React hook: use job watchdog",
     "hooks/useKeyboardShortcuts.ts": "global keyboard shortcuts and KeyboardShortcutsHelp modal",
-    "hooks/useLoadingState.ts": "React hook: use loading state",
     "hooks/useMediaQuery.ts": "React hook: use media query",
-    "hooks/useMemoCompare.ts": "React hook: use memo compare",
-    "hooks/useNetworkError.ts": "React hook: use network error",
-    "hooks/useOperationState.ts": "React hook: use operation state",
     "hooks/usePagination.ts": "React hook: use pagination",
     "hooks/usePhaseState.ts": "phase navigation state management with phase determination and step computation (v3.0)",
     "hooks/useProgressFeedback.ts": "React hook: use progress feedback",
@@ -280,7 +255,6 @@ REACT_CONTRACT_COVERAGE = {
     "hooks/useSorting.ts": "React hook: use sorting",
     "hooks/useSseManager.ts": "React hook: use sse manager",
     "hooks/useTheme.ts": "React hook: use theme",
-    "hooks/useThrottle.ts": "React hook: use throttle",
     "hooks/useToast.ts": "toast lifecycle state",
     "main.tsx": "React root bootstrap",
     "types/api.ts": "TypeScript type definitions: api",
@@ -340,7 +314,6 @@ def test_frontend_runtime_modules_render_state_and_interaction_contracts():
     candidate_utils = _source("components/CandidateTableUtils")
     official = _source("components/OfficialOperationsPanel.tsx")
     official_subdir = _source("components/OfficialOperations")
-    submission = _source("components/SubmissionPanel.tsx")
     confirm = _source("components/SubmissionConfirmPanel.tsx")
     quality = _source("components/QualityCheckPanel.tsx")
     slots = _source("components/OfficialBacktestSlots.tsx")
@@ -376,19 +349,6 @@ def test_frontend_runtime_modules_render_state_and_interaction_contracts():
             "没有匹配的候选",
         ],
     )
-    _assert_snippets(
-        submission,
-        [
-            "Retired submit surface kept as a compatibility alias",
-            "SubmissionConfirmPanel notify={notify}",
-            "旧提交面板已退役",
-            "Web 页面不执行真实提交",
-            "任何真实提交需另走人工审批",
-            'role="status"',
-        ],
-    )
-    assert "/api/submit" not in submission
-    assert "/api/submit_batch" not in submission
     assert "callReadiness<SubmitReadinessResponse>('/api/submit_readiness')" in confirm
     _assert_snippets(
         official + official_subdir,
@@ -708,9 +668,6 @@ def test_browser_react_smoke_requires_non_submit_state_error_assertions():
 
 def test_app_ux_orchestrator_has_tested_navigation_empty_and_busy_contracts():
     app = _source("App.tsx")
-    state_cards = _source("components/StateCards.tsx")
-    card_configs = _source("components/StateCards/cardConfigs.ts")
-    state_card_item = _source("components/StateCards/StateCardItem.tsx")
     base_state = _source("hooks/useAppState/useBaseState.ts")
     handlers = _source("hooks/useAppState/useHandlers.ts")
     render_view = _source("components/views/renderView.tsx")
@@ -722,9 +679,6 @@ def test_app_ux_orchestrator_has_tested_navigation_empty_and_busy_contracts():
 
     _assert_snippets(
         app
-        + state_cards
-        + card_configs
-        + state_card_item
         + base_state
         + handlers
         + render_view
@@ -743,12 +697,7 @@ def test_app_ux_orchestrator_has_tested_navigation_empty_and_busy_contracts():
             "页面凭证为空",
             'viewMode="checkpoint_status"',
             "selectedCandidate",
-            "grid w-full max-w-full grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5",
-            "onClick={() => onNavigate(config.id)}",
             'role="alert"',
-            'aria-live="assertive"',
-            "ProgressFeedback",
-            "phase: 'state_cards_load'",
         ],
     )
     for view_id in (
@@ -763,7 +712,6 @@ def test_app_ux_orchestrator_has_tested_navigation_empty_and_busy_contracts():
         "config",
         "cloud",
     ):
-        assert f"id: '{view_id}'" in card_configs
         assert f"case '{view_id}':" in render_view
 
     _assert_snippets(

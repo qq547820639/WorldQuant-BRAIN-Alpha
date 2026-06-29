@@ -13,7 +13,7 @@ import brain_alpha_ops.web  # noqa: F401 — side-effect: installs sys.meta_path
 
 from brain_alpha_ops.config import RunConfig
 from brain_alpha_ops.tasks import JobStore
-from brain_alpha_ops.web_handler_dispatch import (
+from brain_alpha_ops.web.dispatch.web_handler_dispatch import (
     _GET_DISPATCH_HANDLERS,
     _POST_DISPATCH_HANDLERS,
     _rate_limit_key,
@@ -21,9 +21,9 @@ from brain_alpha_ops.web_handler_dispatch import (
     dispatch_get,
     dispatch_post,
 )
-from brain_alpha_ops.web_get_handlers import active_job_payload
+from brain_alpha_ops.web.dispatch.web_get_handlers import active_job_payload
 from brain_alpha_ops.web_rate_limit import RateLimitPolicy, RequestRateLimiter
-from brain_alpha_ops.web_routes import GET_ROUTES, POST_ROUTES, route_for
+from brain_alpha_ops.web.dispatch.web_routes import GET_ROUTES, POST_ROUTES, route_for
 
 
 def _write_jsonl(path, rows):
@@ -774,7 +774,7 @@ def test_submit_with_lock_logs_exceptions(caplog):
         raise RuntimeError("boom")
 
     with caplog.at_level(logging.ERROR, logger="brain_alpha_ops.web.dispatch.web_handler_dispatch"):
-        from brain_alpha_ops.web_handler_dispatch import _submit_with_lock
+        from brain_alpha_ops.web.dispatch.web_handler_dispatch import _submit_with_lock
 
         _submit_with_lock(handler, ctx, boom, "SUBMIT_ERROR", payload={"alpha_id": "A1"})
 

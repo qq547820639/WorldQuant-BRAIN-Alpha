@@ -65,9 +65,9 @@ from brain_alpha_ops.web_errors import (
 from brain_alpha_ops.web_errors import (
     web_error_payload as _web_error_payload_service,
 )
-from brain_alpha_ops.web_handler_dispatch import dispatch_get as _dispatch_get
-from brain_alpha_ops.web_handler_dispatch import dispatch_post as _dispatch_post
-from brain_alpha_ops.web_handler_dispatch import stop_job_payload as _stop_job_payload
+from brain_alpha_ops.web.dispatch.web_handler_dispatch import dispatch_get as _dispatch_get
+from brain_alpha_ops.web.dispatch.web_handler_dispatch import dispatch_post as _dispatch_post
+from brain_alpha_ops.web.dispatch.web_handler_dispatch import stop_job_payload as _stop_job_payload
 from brain_alpha_ops.web_html import (
     content_security_policy_for_html as _content_security_policy_for_html,
 )
@@ -93,15 +93,15 @@ from brain_alpha_ops.web_http_handler import (
     create_handler_class as _create_handler_class,
 )
 from brain_alpha_ops.web_job_registry import WebJobRegistry as _WebJobRegistry
-from brain_alpha_ops.web_post_handlers import (
+from brain_alpha_ops.web.dispatch.web_post_handlers import (
     assistant_response_guidance_post_payload as _assistant_response_guidance_post_payload,
 )
-from brain_alpha_ops.web_post_handlers import (
+from brain_alpha_ops.web.dispatch.web_post_handlers import (
     assistant_response_parse_post_payload as _assistant_response_parse_post_payload,
 )
 from brain_alpha_ops.web_progress import enrich_progress as _enrich_progress_service
 from brain_alpha_ops.web_rate_limit import RequestRateLimiter as _RequestRateLimiter
-from brain_alpha_ops.web_routes import route_for as _route_for
+from brain_alpha_ops.web.dispatch.web_routes import route_for as _route_for
 from brain_alpha_ops.web_run_job import (
     run_guided_job_service as _run_guided_job_service,
 )

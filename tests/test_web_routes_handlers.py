@@ -14,7 +14,7 @@ from unittest.mock import MagicMock, patch, PropertyMock
 
 import pytest
 
-from brain_alpha_ops.web_routes import (
+from brain_alpha_ops.web.dispatch.web_routes import (
     _public_config,
     _status_payload,
     _query_limit,

@@ -92,7 +92,7 @@ def _get_rolling_validation(
 def _get_backtest_slots(
     handler: Any, _parsed: Any, _ctx: WebHandlerDispatchContext
 ) -> None:
-    from brain_alpha_ops.web_routes import _backtest_slots_payload
+    from brain_alpha_ops.web.dispatch.web_routes import _backtest_slots_payload
 
     handler._json(_backtest_slots_payload())
 
@@ -100,6 +100,6 @@ def _get_backtest_slots(
 def _get_submit_readiness(
     handler: Any, _parsed: Any, _ctx: WebHandlerDispatchContext
 ) -> None:
-    from brain_alpha_ops.web_routes import _submit_readiness_payload
+    from brain_alpha_ops.web.dispatch.web_routes import _submit_readiness_payload
 
     handler._json(_submit_readiness_payload())

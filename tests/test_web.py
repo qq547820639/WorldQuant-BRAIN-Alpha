@@ -32,7 +32,7 @@ from brain_alpha_ops.web_config import config_from_payload as web_config_from_pa
 from brain_alpha_ops.web_config import save_run_config_payload as save_run_config_payload_service
 from brain_alpha_ops.web_job_registry import WebJobRegistry
 from brain_alpha_ops.web_rate_limit import RateLimitPolicy, RequestRateLimiter
-from brain_alpha_ops.web_routes import GET_ROUTES, POST_ROUTES, dispatch_get as legacy_dispatch_get, route_for
+from brain_alpha_ops.web.dispatch.web_routes import GET_ROUTES, POST_ROUTES, route_for
 from scripts.check_frontend_syntax import check_scripts
 
 
@@ -152,7 +152,6 @@ def test_web_html_serves_current_react_shell():
     assert "OfficialBrainAPI" not in html
 
     app_tsx = _react_source("App.tsx")
-    state_cards_tsx = _react_source("components", "StateCards.tsx")
     for text in (
         "BRAIN Alpha Ops",
         "本地非提交页面",
@@ -165,7 +164,7 @@ def test_web_html_serves_current_react_shell():
         "云端快照",
         "切换导航菜单",
     ):
-        assert text in app_tsx or text in state_cards_tsx
+        assert text in app_tsx
 
     for path in (
         "/api/research_knowledge",
@@ -396,84 +395,6 @@ def test_react_candidate_table_keeps_filter_sort_and_mobile_safe_table_contract(
     assert 'onclick="' not in candidate_tsx.lower()
     assert 'onkeydown="' not in candidate_tsx.lower()
     assert 'role="button"' not in candidate_tsx
-
-
-def test_react_state_cards_keep_core_flow_visible_and_actionable():
-    app_tsx = _react_source("App.tsx")
-    state_cards_tsx = _react_source("components", "StateCards.tsx")
-    job_monitor_tsx = _react_source("components", "JobMonitor.tsx")
-    # Phase 15 refactor: contracts were split across subdirectories and hooks.
-    # Aggregate the additional source files so the contract assertions
-    # remain accurate against the current frontend layout.
-    state_cards_pkg = _react_source("components", "StateCards")
-    job_monitor_pkg = _react_source("components", "JobMonitor")
-    use_base_state_ts = _react_source("hooks", "useAppState", "useBaseState.ts")
-    use_global_data_ts = _react_source("hooks", "useGlobalData.ts")
-    use_phase_connection_ts = _react_source("hooks", "useAppState", "usePhaseConnection.ts")
-    render_view_tsx = _react_source("components", "views", "renderView.tsx")
-    views_helpers_ts = _react_source("components", "views", "helpers.ts")
-    all_sources = (
-        app_tsx,
-        state_cards_tsx,
-        state_cards_pkg,
-        job_monitor_tsx,
-        job_monitor_pkg,
-        use_base_state_ts,
-        use_global_data_ts,
-        use_phase_connection_ts,
-        render_view_tsx,
-        views_helpers_ts,
-    )
-
-    for contract in (
-        "useState<CardViewId>(readViewFromHash)",
-        'aria-label="切换导航菜单"',
-        "onNavigate",
-        "点击状态卡进入对应功能模块",
-        "非提交生产验证",
-        "填写凭证",
-        "未连接",
-        "系统配置",
-        "/api/candidates",
-        "/api/backtest_slots",
-        "/api/config",
-        "/api/snapshot/cloud",
-        "grid w-full max-w-full grid-cols-1",
-        "2xl:grid-cols-5",
-        "onClick={() => onNavigate(config.id)}",
-        "caption: '提交审计'",
-        "handleConnectionTested",
-        "CredentialQuickStart",
-    ):
-        assert any(contract in src for src in all_sources), (
-            f"contract not found in any state-card source: {contract!r}"
-        )
-
-    assert "/api/submit_readiness" not in state_cards_tsx
-
-    for view_id in (
-        "id: 'candidates'",
-        "id: 'official_backtests'",
-        "id: 'quality_check'",
-        "id: 'submission_confirm'",
-        "id: 'checkpoint_status'",
-        "id: 'config'",
-        "id: 'cloud'",
-    ):
-        assert view_id in state_cards_pkg, f"missing card config: {view_id}"
-
-    assert "ConfigPanel" in render_view_tsx
-    assert "case 'config':" in render_view_tsx
-    for config_contract in (
-        "onConnectionTested={onConnectionTested}",
-        "connected={connected}",
-        "contextFresh={contextFresh}",
-        "managedCredentialsAvailable={managedCredentialsAvailable}",
-        "onLoggedOut={onLocalSessionLoggedOut}",
-    ):
-        assert config_contract in render_view_tsx, (
-            f"missing config contract in renderView: {config_contract!r}"
-        )
 
 
 def test_react_quality_submit_and_backtest_panels_cover_conflict_guards():
@@ -777,45 +698,6 @@ def test_web_routes_define_session_policy_and_known_paths():
     assert "/api/rolling_validation" in GET_ROUTES
     assert "/api/assistant_cross_review" in POST_ROUTES
     assert "/api/submit_batch" in POST_ROUTES
-
-
-@pytest.mark.skip(reason='dispatch system restructured — handler._storage_dir not set for callable routes')
-def test_legacy_web_routes_dispatches_alpha_lifecycle_history(monkeypatch, tmp_path):
-    storage_dir = tmp_path / "storage"
-    storage_dir.mkdir()
-    (storage_dir / "lifecycle.jsonl").write_text(
-        json.dumps({
-            "timestamp": "2026-06-12T02:00:00Z",
-            "alpha_id": "alpha_legacy",
-            "stage": "generated",
-            "status": "READY",
-            "expression": "rank(close)",
-        }) + "\n",
-        encoding="utf-8",
-    )
-    monkeypatch.setattr(
-        "brain_alpha_ops.web_routes.load_run_config",
-        lambda: SimpleNamespace(ops=SimpleNamespace(storage_dir=str(storage_dir))),
-    )
-
-    class Handler:
-        def __init__(self):
-            self.payload = None
-            self.status = None
-
-        def _send_json(self, payload, status=200):
-            self.payload = payload
-            self.status = status
-
-    handler = Handler()
-    handler._storage_dir = storage_dir
-    legacy_dispatch_get(handler, "/api/lifecycle/history", {"alpha_id": ["alpha_legacy"], "limit": ["1"]})
-
-    assert handler.status == 200
-    assert handler.payload["ok"] is True
-    assert handler.payload["official_api_called"] is False
-    assert handler.payload["submit_allowed"] is False
-    assert handler.payload["records"][0]["alpha_id"] == "alpha_legacy"
 
 
 def test_official_context_save_writes_cache_metadata(monkeypatch, tmp_path):

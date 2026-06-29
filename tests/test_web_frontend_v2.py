@@ -21,7 +21,7 @@ import pytest
 import brain_alpha_ops.build_inline as build_inline
 import brain_alpha_ops.web  # noqa: F401  install meta-path bridge for web_* modules
 import brain_alpha_ops.web_html as web_html
-from brain_alpha_ops.web_routes import GET_ROUTES, POST_ROUTES, route_for
+from brain_alpha_ops.web.dispatch.web_routes import GET_ROUTES, POST_ROUTES, route_for
 from _react_source_utils import resolve_react_source
 from scripts.check_frontend_syntax import _node_path
 
@@ -227,9 +227,7 @@ def test_web_html_loads_react_shell_when_inline_surface_is_absent():
 def test_all_card_views_are_typed_configured_and_routed_to_detail_components():
     app = _source("App.tsx")
     types = _source("types/ui.ts")
-    state_cards = _component("StateCards.tsx")
     base_state = _source("hooks/useAppState/useBaseState.ts")
-    card_configs = _component("StateCards/cardConfigs.ts")
     render_view = _source("components/views/renderView.tsx")
 
     assert "useState<CardViewId>(readViewFromHash)" in base_state
@@ -246,40 +244,13 @@ def test_all_card_views_are_typed_configured_and_routed_to_detail_components():
     for view_id in CARD_VIEW_IDS:
         assert f"| '{view_id}'" in types
         assert f'{view_id}:' in app
-        assert f"id: '{view_id}'" in card_configs
         assert f"case '{view_id}':" in render_view
     for view_id in COMPAT_CARD_VIEW_IDS:
         # Legacy compat aliases have been removed; verify they are absent from
-        # the view registry, card configs, and render switch. The type file is
-        # not checked because the same string may appear in unrelated types.
+        # the view registry and render switch. The type file is not checked
+        # because the same string may appear in unrelated types.
         assert f'{view_id}:' not in app
-        assert f"id: '{view_id}'" not in card_configs
         assert f"case '{view_id}':" not in render_view
-
-
-def test_state_card_navigation_preserves_priority_and_minimal_chrome():
-    app = _source("App.tsx")
-    state_cards = _component("StateCards.tsx")
-    card_configs = _component("StateCards/cardConfigs.ts")
-    handlers = _source("hooks/useAppState/useHandlers.ts")
-    state_card_item = _component("StateCards/StateCardItem.tsx")
-
-    ordered_ids = re.findall(r"id: '([^']+)'", card_configs)
-    assert ordered_ids[: len(CARD_VIEW_IDS)] == list(CARD_VIEW_IDS)
-    _assert_snippets(
-        app + state_cards + card_configs + handlers + state_card_item,
-        [
-            "BRAIN Alpha Ops",
-            "Sidebar",
-            "setActiveView(view)",
-            'aria-label="切换导航菜单"',
-            "import Sidebar from '@/components/Sidebar'",
-            "grid w-full max-w-full grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5",
-            "onClick={() => onNavigate(config.id)}",
-            'role="alert"',
-            'aria-live="assertive"',
-        ],
-    )
 
 
 def test_react_core_workflow_api_paths_are_registered_in_backend_routes():
@@ -309,8 +280,7 @@ def test_react_core_workflow_api_paths_are_registered_in_backend_routes():
 def test_app_submit_selected_candidates_handles_missing_async_job_result():
     """Async complete payloads can omit result rows without null dereferences."""
     generation = _source("hooks/useCandidateGeneration.ts")
-    table_sse = _source("components/CandidateTable/useCandidateTableSse.ts")
-    submission = _component("SubmissionPanel.tsx")
+    table_sse = _source("hooks/useCandidateTableSse.ts")
 
     _assert_snippets(
         generation,
@@ -329,46 +299,6 @@ def test_app_submit_selected_candidates_handles_missing_async_job_result():
             "sseManager.connect('task', `/sse?job_id=${encodeURIComponent(pipeline.task.jobId)}`",
         ],
     )
-    _assert_snippets(
-        submission,
-        [
-            "Retired submit surface kept as a compatibility alias",
-            "SubmissionConfirmPanel notify={notify}",
-            "旧提交面板已退役",
-        ],
-    )
-    assert "/api/submit" not in submission
-    assert "/api/submit_batch" not in submission
-
-
-def test_loading_feedback_runstartup_launches_all_tasks_concurrently():
-    """State-card startup launches all dashboard data fetches from one effect."""
-    state_cards = _component("StateCards.tsx")
-    global_data = _source("hooks/useGlobalData.ts")
-
-    loader_body = re.search(r"const loadStateSnapshots = useCallback\(\(\) => \{(?P<body>.*?)\}, \[", state_cards, re.S)
-    assert loader_body, "StateCards startup loader missing"
-    body = loader_body.group("body")
-    assert "refreshAll()" in body
-    assert "void checkpointApi.call('/api/checkpoint_status');" in body
-    assert "await " not in body
-
-    refresh_body = re.search(r"const refreshAll = useCallback\(\(\) => \{(?P<body>.*?)\}, \[", global_data, re.S)
-    assert refresh_body, "GlobalData refreshAll missing"
-    gbody = refresh_body.group("body")
-    expected_global_calls = [
-        "void candidatesApi.call('/api/candidates');",
-        "void slotsApi.call('/api/backtest_slots');",
-        "void cloudApi.call('/api/snapshot/cloud');",
-        "void configApi.call('/api/config');",
-    ]
-    for call in expected_global_calls:
-        assert call in gbody
-    assert "await " not in gbody
-
-    assert "useEffect(() => {\n    loadStateSnapshots();\n  }, [loadStateSnapshots]);" in state_cards
-    assert "ProgressFeedback" in state_cards
-    assert "phase: 'state_cards_load'" in state_cards
 
 
 def test_app_apply_preset_reads_presets_from_app_state():

@@ -20,14 +20,14 @@ class TestWebRouteDispatch:
 
     def test_dispatch_get_status(self):
         """Test status endpoint returns structured data."""
-        from brain_alpha_ops.web_routes import _status_payload
+        from brain_alpha_ops.web.dispatch.web_routes import _status_payload
 
         result = _status_payload({})
         assert isinstance(result, dict)
 
     def test_dispatch_returns_dict(self):
         """Test dispatch functions return dicts."""
-        from brain_alpha_ops.web_routes import dispatch_get, dispatch_post
+        from brain_alpha_ops.web.dispatch.web_handler_dispatch import dispatch_get, dispatch_post
 
         assert callable(dispatch_get)
         assert callable(dispatch_post)

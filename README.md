@@ -377,3 +377,21 @@ BRAIN Alpha Ops 的核心操作流程围绕生成、测试、打分、筛选四�
 ---
 
 <sub>MIT License · 本项目不是 WorldQuant 官方产品 · 使用前请阅读 BRAIN 平台服务条款</sub>
+
+---
+
+## 历史审计报告索引
+
+历史审计、诊断与交付报告已归档至 [`docs/history/`](docs/history/) 目录：
+
+| 文档 | 说明 |
+|------|------|
+| [REFACTORING_PLAN.md](docs/history/REFACTORING_PLAN.md) | 重构计划 |
+| [CODE_DIAGNOSTIC_REPORT_20260618.md](docs/history/CODE_DIAGNOSTIC_REPORT_20260618.md) | 代码诊断报告（2026-06-18） |
+| [BRAINALPHA_AUDIT_V3_20260619.md](docs/history/BRAINALPHA_AUDIT_V3_20260619.md) | BRAIN Alpha 审计报告 V3（2026-06-19） |
+| [PHASE33_DELIVERY_REPORT_20260619.md](docs/history/PHASE33_DELIVERY_REPORT_20260619.md) | Phase 33 交付报告（2026-06-19） |
+| [BRAINALPHA_FULLSTACK_AUDIT_20260622.md](docs/history/BRAINALPHA_FULLSTACK_AUDIT_20260622.md) | 全栈审计报告（2026-06-22） |
+| [IMPLEMENTATION_PLAN_20260622.md](docs/history/IMPLEMENTATION_PLAN_20260622.md) | 实施计划（2026-06-22） |
+| [DELIVERY_REPORT_20260622.md](docs/history/DELIVERY_REPORT_20260622.md) | 交付报告（2026-06-22） |
+| [DELIVERY_REPORT_OVERHAUL.md](docs/history/DELIVERY_REPORT_OVERHAUL.md) | 交付报告大修 |
+| [DEFECT_TRACKING.md](docs/history/DEFECT_TRACKING.md) | 缺陷跟踪记录 |

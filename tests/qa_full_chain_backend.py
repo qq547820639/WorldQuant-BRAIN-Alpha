@@ -613,7 +613,7 @@ class TestRouteRegistration:
 
     def test_get_routes_include_critical_paths(self):
         """Required GET routes must be registered."""
-        from brain_alpha_ops.web_routes import GET_ROUTES
+        from brain_alpha_ops.web.dispatch.web_routes import GET_ROUTES
 
         required_gets = [
             "/api/config",
@@ -631,7 +631,7 @@ class TestRouteRegistration:
 
     def test_post_routes_include_critical_paths(self):
         """Required POST routes must be registered."""
-        from brain_alpha_ops.web_routes import POST_ROUTES
+        from brain_alpha_ops.web.dispatch.web_routes import POST_ROUTES
 
         required_posts = [
             "/api/run",
@@ -648,14 +648,14 @@ class TestRouteRegistration:
 
     def test_route_handler_for_known_routes(self):
         """Route dispatch should return handlers for known routes."""
-        from brain_alpha_ops.web_routes import route_for
+        from brain_alpha_ops.web.dispatch.web_routes import route_for
 
         assert route_for("GET", "/api/config") is not None
         assert route_for("POST", "/api/run") is not None
 
     def test_unknown_route_returns_none(self):
         """Unknown routes should return None."""
-        from brain_alpha_ops.web_routes import route_for
+        from brain_alpha_ops.web.dispatch.web_routes import route_for
 
         assert route_for("GET", "/api/nonexistent") is None
         assert route_for("POST", "/api/fake_endpoint") is None

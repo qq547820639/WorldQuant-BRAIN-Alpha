@@ -1,6 +1,6 @@
 import json
 
-from brain_alpha_ops.web_get_handlers import (
+from brain_alpha_ops.web.dispatch.web_get_handlers import (
     active_job_payload,
     health_payload,
     job_status_payload,

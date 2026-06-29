@@ -4,7 +4,7 @@ import re
 from pathlib import Path
 
 import brain_alpha_ops.web  # noqa: F401  install meta-path bridge for web_* modules
-from brain_alpha_ops.web_routes import GET_ROUTES, POST_ROUTES, route_for
+from brain_alpha_ops.web.dispatch.web_routes import GET_ROUTES, POST_ROUTES, route_for
 
 from _react_source_utils import resolve_react_source
 
@@ -241,7 +241,6 @@ def test_official_sync_copy_does_not_call_filter_window_count_a_total():
         REACT_SRC / "components" / "OfficialOperationsPanel.tsx",
         REACT_SRC / "components" / "ProgressFeedback.tsx",
         REACT_SRC / "components" / "SnapshotPanel.tsx",
-        REACT_SRC / "components" / "StateCards.tsx",
         REACT_SRC / "hooks" / "useApi.ts",
         REACT_SRC / "types" / "index.ts",
         REACT_DIST / "index.html",
@@ -283,7 +282,6 @@ def test_phase_shell_keeps_blocked_content_interactive_for_recovery_controls():
 
 
 def test_react_submission_config_and_job_contracts_match_backend_routes():
-    submission = _source("components/SubmissionPanel.tsx")
     confirm = _source("components/SubmissionConfirmPanel.tsx")
     app = _app_shell_source()
     config = _config_source()
@@ -294,9 +292,6 @@ def test_react_submission_config_and_job_contracts_match_backend_routes():
         "hooks/useJobMonitor",
     ])
 
-    assert "SubmissionConfirmPanel notify={notify}" in submission
-    assert "/api/submit" not in submission
-    assert "/api/submit_batch" not in submission
     assert "callReadiness<SubmitReadinessResponse>('/api/submit_readiness')" in confirm
     assert route_for("GET", "/api/submit_readiness") is not None
     for endpoint in ("/api/config", "/api/config_schema"):
@@ -350,7 +345,6 @@ def test_react_cancel_helper_uses_cross_store_cancel_route():
 
 def test_default_react_app_and_dist_do_not_expose_raw_submit_surface():
     app = _app_shell_source()
-    state_cards = _source("components/StateCards.tsx")
     source_text = "\n".join(path.read_text(encoding="utf-8") for path in _react_source_files())
     dist_text = _dist_text()
     raw_submit_pattern = re.compile(r"/api/(?:submit|submit_batch)(?:$|[?#'\"`])")
@@ -358,8 +352,6 @@ def test_default_react_app_and_dist_do_not_expose_raw_submit_surface():
     assert "import SubmissionPanel" not in app
     assert "SubmissionPanel notify={notify}" not in app
     assert "<SubmissionConfirmPanel notify={notify}" in app
-    assert 'title: "手动提交"' not in state_cards
-    assert "进入提交" not in state_cards
     assert raw_submit_pattern.search(source_text) is None
     assert raw_submit_pattern.search(dist_text) is None
     assert "手动提交" not in dist_text
@@ -395,7 +387,6 @@ def test_react_html_shell_uses_local_resources_only_for_credential_flow():
 
 def test_react_official_operations_is_web_operator_console_not_cli_surface():
     app = _app_shell_source()
-    state_cards = _source("components/StateCards")
     operations = _official_operations_source()
     types = _source("types/ui.ts")
 
@@ -408,9 +399,6 @@ def test_react_official_operations_is_web_operator_console_not_cli_surface():
     assert "credentials={credentials}" in app
     assert "VisualTerminalPanel" not in app
     assert "visual_terminal" not in app
-    assert "title: '官方操作'" in state_cards
-    assert "description: '按钮驱动的官方上下文、合规与阻断复核'" in state_cards
-    assert "visual_terminal" not in state_cards
     assert "/api/sync_alphas" in operations
     assert "/api/sync_status" in operations
     assert "/api/sync_cancel" in operations
@@ -480,7 +468,6 @@ def test_react_components_do_not_display_raw_api_error_fields_directly():
         "App.tsx",
         "components/ConfigPanel.tsx",
         "hooks/useDashboard.ts",
-        "components/StateCards",
     ):
         assert "safeDisplayErrorMessage(" in _source(relative), f"{relative} shell display errors should fail closed"
 
@@ -852,7 +839,6 @@ def test_react_snapshot_panel_contracts_match_backend_routes():
 def test_react_state_cards_include_checkpoint_history_entry():
     app = _app_shell_source()
     sidebar = _source("components/Sidebar.tsx")
-    state_cards = _source("components/StateCards")
     types = _source("types/ui.ts")
 
     assert "'checkpoint_status'" in types
@@ -865,9 +851,6 @@ def test_react_state_cards_include_checkpoint_history_entry():
     assert 'viewMode="robustness"' in app
     assert "id: 'robustness'" in sidebar
     assert "label: '稳健性证据'" in sidebar
-    assert "checkpointApi.call('/api/checkpoint_status')" in state_cards
-    assert "title: '续跑记录'" in state_cards
-    assert "description: '上次进度与运行历史回溯'" in state_cards
 
 
 def test_react_fetch_helpers_keep_session_csrf_replay_and_sse_credentials():

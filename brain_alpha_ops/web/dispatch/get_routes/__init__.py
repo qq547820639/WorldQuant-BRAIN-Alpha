@@ -9,9 +9,6 @@ from __future__ import annotations
 # Types
 from ._types import Route, RouteHandler
 
-# Dispatch functions
-from ._dispatch import dispatch_get, dispatch_post
-
 # POST route handlers
 from ._post_handlers import (
     _handle_candidate_check,
@@ -74,8 +71,6 @@ from brain_alpha_ops.web.misc.web_backtest_slots import backtest_queue_next_acti
 __all__ = [
     "Route",
     "RouteHandler",
-    "dispatch_get",
-    "dispatch_post",
     "GET_ROUTES",
     "POST_ROUTES",
     "route_for",

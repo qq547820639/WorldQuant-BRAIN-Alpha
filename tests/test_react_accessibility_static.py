@@ -22,17 +22,10 @@ def _components(names: list[str]) -> str:
 def test_react_app_state_cards_have_accessible_navigation_semantics():
     app = resolve_react_source(APP)
     base_state = resolve_react_source(REACT_SRC / "hooks" / "useAppState" / "useBaseState.ts")
-    state_cards = _component("StateCards")
 
     assert "useState<CardViewId>(readViewFromHash)" in base_state
     assert 'aria-label="切换导航菜单"' in app
     assert "import Sidebar from '@/components/Sidebar'" in app
-    assert "onClick={() => onNavigate(config.id)}" in state_cards
-    assert 'type="button"' in state_cards
-    assert "focus:outline-none focus:ring-2 focus:ring-brand-500/50" in state_cards
-    assert 'role="alert"' in state_cards
-    assert 'aria-live="assertive"' in state_cards
-    assert 'aria-hidden="true"' in state_cards
 
 
 def test_react_dashboard_and_candidate_errors_are_announced():
@@ -56,13 +49,12 @@ def test_react_dashboard_and_candidate_errors_are_announced():
 
 
 def test_react_submission_inputs_expose_validation_and_confirmation_context():
-    submission = _component("SubmissionPanel.tsx")
     confirm = _component("SubmissionConfirmPanel.tsx")
 
-    assert 'role="status"' in submission
-    assert 'aria-live="polite"' in submission
-    assert "SubmissionConfirmPanel notify={notify}" in submission
+    assert 'role="status"' in confirm
+    assert 'aria-live="polite"' in confirm
     assert 'role="alert"' in confirm
+    assert 'aria-live="assertive"' in confirm
 
 
 def test_react_progress_and_score_bars_have_accessible_names():

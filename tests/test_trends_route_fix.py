@@ -6,7 +6,7 @@ and return the expected response structures.
 from __future__ import annotations
 
 import brain_alpha_ops.web  # noqa: F401 — side-effect: installs sys.meta_path bridge
-from brain_alpha_ops.web_routes import GET_ROUTES, POST_ROUTES, route_for
+from brain_alpha_ops.web.dispatch.web_routes import GET_ROUTES, POST_ROUTES, route_for
 
 
 def test_get_trends_route_registered():
@@ -21,7 +21,7 @@ def test_post_trends_route_registered():
 
 def test_get_trends_route_map_entry():
     """_build_route_map must map /api/trends → Route(handler='trends') for GET."""
-    from brain_alpha_ops.web_routes import _build_route_map
+    from brain_alpha_ops.web.dispatch.web_routes import _build_route_map
     route_map = _build_route_map()
     get_entry = route_map["GET"].get("/api/trends")
     assert get_entry is not None
@@ -30,7 +30,7 @@ def test_get_trends_route_map_entry():
 
 def test_post_trends_route_map_entry():
     """_build_route_map must map /api/trends → Route(handler='trends') for POST."""
-    from brain_alpha_ops.web_routes import _build_route_map
+    from brain_alpha_ops.web.dispatch.web_routes import _build_route_map
     route_map = _build_route_map()
     post_entry = route_map["POST"].get("/api/trends")
     assert post_entry is not None
@@ -46,21 +46,21 @@ def test_route_for_trends():
 
 def test_trends_get_handler_exists():
     """_get_trends handler must be callable."""
-    from brain_alpha_ops.web_handler_dispatch import _GET_DISPATCH_HANDLERS
+    from brain_alpha_ops.web.dispatch.web_handler_dispatch import _GET_DISPATCH_HANDLERS
     assert "trends" in _GET_DISPATCH_HANDLERS
     assert callable(_GET_DISPATCH_HANDLERS["trends"])
 
 
 def test_trends_post_handler_exists():
     """_post_trends handler must be callable."""
-    from brain_alpha_ops.web_handler_dispatch import _POST_DISPATCH_HANDLERS
+    from brain_alpha_ops.web.dispatch.web_handler_dispatch import _POST_DISPATCH_HANDLERS
     assert "trends" in _POST_DISPATCH_HANDLERS
     assert callable(_POST_DISPATCH_HANDLERS["trends"])
 
 
 def test_trends_dispatch_consistency():
     """Dispatch handler keys must match route table handler names."""
-    from brain_alpha_ops.web_handler_dispatch import (
+    from brain_alpha_ops.web.dispatch.web_handler_dispatch import (
         _GET_DISPATCH_HANDLERS,
         _POST_DISPATCH_HANDLERS,
     )

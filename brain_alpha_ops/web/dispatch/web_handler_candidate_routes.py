@@ -66,7 +66,7 @@ def get_candidates(handler: Any, parsed: Any, ctx: Any) -> None:
 def candidate_ledger_summary() -> dict[str, Any] | None:
     try:
         from brain_alpha_ops.jsonl import iter_jsonl_records
-        from brain_alpha_ops.web_routes import _storage_file
+        from brain_alpha_ops.web.dispatch.web_routes import _storage_file
 
         path = _storage_file("candidates.jsonl")
         if not path.is_file():
@@ -88,7 +88,7 @@ def candidate_ledger_summary() -> dict[str, Any] | None:
 
 def candidate_ledger_rows() -> tuple[list[dict[str, Any]], int, str]:
     try:
-        from brain_alpha_ops.web_routes import _read_jsonl_records
+        from brain_alpha_ops.web.dispatch.web_routes import _read_jsonl_records
 
         return _read_jsonl_records("candidates.jsonl")
     except Exception:
@@ -98,7 +98,7 @@ def candidate_ledger_rows() -> tuple[list[dict[str, Any]], int, str]:
 
 def candidate_lifecycle_rows() -> list[dict[str, Any]]:
     try:
-        from brain_alpha_ops.web_routes import _read_jsonl_records
+        from brain_alpha_ops.web.dispatch.web_routes import _read_jsonl_records
 
         rows, _total, _path = _read_jsonl_records("lifecycle.jsonl")
         return rows
@@ -113,7 +113,7 @@ def candidate_target_pool_size() -> int:
         # monkeypatch.setattr("brain_alpha_ops.web_routes.load_run_config", ...)
         # patches. ``from ... import`` would bind to the bridge module's
         # attribute and miss the patch.
-        import brain_alpha_ops.web_routes as _wr
+        import brain_alpha_ops.web.dispatch.web_routes as _wr
 
         return max(1, int(_wr.load_run_config().ops.budget.retained_alpha_pool_size or 10))
     except Exception:

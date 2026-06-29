@@ -7,7 +7,6 @@
 import { Suspense } from 'react';
 import { useAppStateContext, AppStateProvider } from '@/hooks/useAppState/AppStateContext';
 import ToastContainer from '@/components/ToastContainer';
-import { ToastProvider } from '@/components/Toast';
 import Sidebar from '@/components/Sidebar';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import { FlowGuide } from './components/FlowGuide';
@@ -107,8 +106,7 @@ function AppContent() {
 
   return (
     <ErrorBoundary>
-      <ToastProvider>
-        <div className="app-shell">
+      <div className="app-shell">
           <header className="app-topbar">
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               <button
@@ -327,7 +325,6 @@ function AppContent() {
             onClose={() => setShortcutsHelpOpen(false)}
           />
         </div>
-      </ToastProvider>
     </ErrorBoundary>
   );
 }
