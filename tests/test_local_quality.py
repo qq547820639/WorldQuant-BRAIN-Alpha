@@ -46,4 +46,5 @@ def test_extract_fields_with_returns():
 
 
 def test_nesting_depth():
-    assert nesting_depth("rank(ts_mean(returns, 20))") >= 0
+    # rank(ts_mean(returns, 20)) → depth 2: rank contains ts_mean
+    assert nesting_depth("rank(ts_mean(returns, 20))") == 2

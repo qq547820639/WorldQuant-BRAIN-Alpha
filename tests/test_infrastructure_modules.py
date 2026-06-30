@@ -140,6 +140,15 @@ class TestAdaptiveExecutor:
         ex.shutdown()
         ex.shutdown()  # should not raise
 
+    def test_submit_after_shutdown_raises(self):
+        # Phase 2 F-018: _closed flag must reject submissions after shutdown
+        from brain_alpha_ops.adaptive_executor import AdaptiveExecutor
+
+        ex = AdaptiveExecutor()
+        ex.shutdown()
+        with pytest.raises(RuntimeError, match="executor is closed"):
+            ex.submit(lambda: None)
+
     def test_task_classification(self):
         from brain_alpha_ops.adaptive_executor import _classify_task, TaskCategory
 

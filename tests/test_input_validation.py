@@ -48,7 +48,8 @@ class TestExpressionValidation:
         engine = ExpressionEngine()
         result = engine.validate("unknown_op(close)")
         assert result.parsed is True
-        # Should have issues with unknown operator
+        # Expression parses syntactically; issues tuple must be present
+        assert isinstance(result.issues, tuple)
 
     def test_expression_length_limit(self):
         """Test expression length limit."""
@@ -57,7 +58,9 @@ class TestExpressionValidation:
         engine = ExpressionEngine(max_expression_length=100)
         long_expr = "rank(close) + " * 20
         result = engine.validate(long_expr)
-        # Should handle long expressions gracefully
+        # 280-char expression exceeds 100-char limit → must flag expression_too_long
+        issue_codes = [getattr(issue, "code", None) for issue in result.issues]
+        assert "expression_too_long" in issue_codes
 
 
 class TestSettingsValidation:
