@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/scoring/anti_overfit/regime_stress.py
-# hypothesis_version: 6.141.1
-
-[0.0, 1e-09, 0.001, 1.0, 40.0, 100.0, 'bear', 'bear_sharpe', 'bull', 'bull_sharpe', 'passed', 'sideways_sharpe', 'warning']

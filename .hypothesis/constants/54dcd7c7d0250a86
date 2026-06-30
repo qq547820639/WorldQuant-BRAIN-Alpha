@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/brain_api/pagination.py
-# hypothesis_version: 6.141.1
-
-[0.0, 'api_reported_total', 'api_total', 'api_total_reached', 'clear_seen', 'empty_page', 'expected_pages', 'has_more', 'limit', 'new_unique_items', 'next_offset', 'no_new_unique_items', 'offset', 'page_limit', 'page_number', 'page_params', 'page_size', 'pages_fetched', 'pagination_complete', 'pagination_target', 'progress', 'remaining_items', 'repeated_page', 'scanned', 'short_page', 'sleep_seconds', 'stalled_unique_pages', 'stop_reason', 'total', 'unique_items', 'warning']

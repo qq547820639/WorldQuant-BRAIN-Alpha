@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/repository/_writes_mixin.py
-# hypothesis_version: 6.141.1
-
-[500, 1024, '%Y%m%d_%H%M%S', 'ab_tests.jsonl', 'after', 'alpha_id', 'backtests.jsonl', 'before', 'candidates.jsonl', 'checks.jsonl', 'completed', 'correlation', 'events.jsonl', 'experiment_id', 'experiment_version', 'extra_fields', 'families.jsonl', 'family', 'latest.json', 'lifecycle.jsonl', 'mutation_type', 'only_changed', 'parameter_audit', 'parent_id', 'run_history', 'run_id', 'scientific_audit', 'score', 'status', 'timestamp', 'total_score', 'utf-8', 'web']

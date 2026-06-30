@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web_candidates/simulation/_poll.py
-# hypothesis_version: 6.141.1
-
-[0.0, 30.0, 429, '%Y-%m-%dT%H:%M:%S', 'COMPLETED', 'FAILED', 'POLL_ERROR', 'POLL_TIMEOUT', 'RATE_LIMITED', 'RUNNING', 'STALL_DETECTED', 'action', 'alpha_id', 'candidate', 'error', 'expression', 'failed', 'lifecycle_status', 'message', 'next_poll_at', 'next_poll_seconds', 'poll_attempt', 'poll_count', 'poll_elapsed_seconds', 'poll_error', 'poll_start', 'poll_timeout', 'polling', 'progress_percent', 'simulation_id', 'simulation_polling', 'simulation_running', 'slot', 'slot_index', 'stall_detected', 'status', 'submit_attempts', 'timestamp']

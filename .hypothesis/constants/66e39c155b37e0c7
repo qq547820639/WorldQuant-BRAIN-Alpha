@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web_candidates/audit/_blocks.py
-# hypothesis_version: 6.141.1
-
-['action', 'alpha_id', 'blocking_reasons', 'decision_band', 'decision_evidence', 'expression', 'expression_canonical', 'expression_delta', 'expression_index', 'expression_profile', 'extra_fields', 'feedback_sources', 'fields', 'lifecycle_replay', 'lifecycle_status', 'lineage', 'local_backtest', 'local_quality', 'metric_sources', 'mutation_mode', 'mutation_type', 'official_alpha_id', 'official_evidence', 'official_metrics', 'operators', 'parent_alpha_id', 'parent_expression', 'parent_id', 'parsed', 'production_action', 'production_decision', 'quality_status', 'reason', 'reason_codes', 'score', 'scorecard', 'similarity_risk', 'simulation_id', 'status', 'submission', 'total_score', 'variant_reason', 'windows']

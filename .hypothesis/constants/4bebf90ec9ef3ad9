@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/scoring/anti_overfit/compliance.py
-# hypothesis_version: 6.141.1
-
-[0.0, '[a-zA-Z_]\\w*', 'blocked', 'decay', 'delay', 'details', 'empty expression', 'expression', 'failure_count', 'flagged', 'previous_submission', 'score', 'submitted_at']

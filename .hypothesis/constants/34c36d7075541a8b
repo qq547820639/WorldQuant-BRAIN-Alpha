@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web/misc/web_assistant_snapshots/_research_snapshots.py
-# hypothesis_version: 6.141.1
-
-[0.0, 100, 1000, 5000, 'all', 'context_digest', 'count', 'items', 'job_id', 'model', 'ok', 'parse_status', 'path', 'prompt_digest', 'prompt_runs.jsonl', 'prompt_runs_jsonl', 'response_digest', 'schema_version', 'source', 'temperature', 'timestamp']

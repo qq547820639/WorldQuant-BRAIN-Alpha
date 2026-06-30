@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/alpha_quality/utils.py
-# hypothesis_version: 6.141.1
-
-[0.0, 1.0, 100.0, '(', ')', ',', '0..1', '0..100', 'active_delay', 'blocked', 'category', 'code', 'config_delay', 'config_truncation', 'correlation', 'delay', 'expected', 'field', 'fields', 'local_quality_score', 'max_depth', 'message', 'node_count', 'official_thresholds', 'operators', 'parse_error', 'parsed', 'prodCorrelation', 'prod_correlation', 'selfCorrelation', 'self_correlation', 'severity', 'submission ready', 'submission_ready', 'value', 'weightConcentration', 'weight_concentration', 'window_constraints', 'windows']

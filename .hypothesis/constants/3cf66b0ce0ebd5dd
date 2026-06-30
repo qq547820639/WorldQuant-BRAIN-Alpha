@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/scripts/_defect_analysis_helpers.py
-# hypothesis_version: 6.141.1
-
-['(P[0-3])-', '(P[0-3])×(\\d+)', ',', '-', ':', '<none>', 'CLOSED_CURRENT', 'FIXED', 'FIXED_LOCAL_VERIFIED', 'ID', 'P0-3', 'P2-6', 'TRACKED_DEFERRED', 'TRACKED_ENVIRONMENT', 'TRACKED_OPEN', 'code', 'evidence', 'expected', 'id', 'malformed_status_row', 'message', 'next_action', 'no_new_unique_items', 'open_items_mismatch', 'report_text', 'stalled_unique_pages', 'status', 'title', '|', '不添加固定分页截断', '当前状态', '状态', '编号', '缺陷']

@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web/dispatch/web_handler_candidate_routes.py
-# hypothesis_version: 6.141.1
-
-['all', 'candidates', 'candidates.jsonl', 'candidates_jsonl', 'candidates_preview', 'false', 'job_id', 'latest_any', 'latest_async_result', 'lifecycle', 'lifecycle.jsonl', 'partial', 'records', 'result', 'source', 'summary', 'total', 'warning']

@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/candidate_pool.py
-# hypothesis_version: 6.141.1
-
-[0.0, 'PASS', 'local_backtest', 'local_quality_failed', 'pass_local', 'passed', 'status', 'str | LifecycleState', 'submission_ready', 'total_score', 'warnings']

@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/production_diagnostics/_analysis.py
-# hypothesis_version: 6.141.1
-
-['Architecture', 'Backtest execution', 'Data efficiency', 'Data lineage', 'Errors and logs', 'Experience', 'Functional closure', 'LLM prompting', 'P0', 'P1', 'P2', 'PASS', 'Parameter accuracy', 'Scoring', 'Technical compliance', 'architecture', 'area', 'blocking_ok', 'canonical', 'capability', 'config_hash', 'configured', 'data', 'datasets', 'deviation', 'frontend', 'history replay', 'history_replay_ready', 'last_attempt_error', 'last_attempt_ok', 'last_attempt_status', 'lineage', 'match', 'not_recorded', 'official context', 'official refresh', 'ok', 'p1_count', 'parameter audit', 'parameter_audit_hash', 'priority', 'ready', 'recommendation', 'redlines', 'redlines_pass', 'schema_version', 'scoring', 'thresholds', 'zero_deviation']

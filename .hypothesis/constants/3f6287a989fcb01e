@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/dataset_trace.py
-# hypothesis_version: 6.141.1
-
-['Candidate', 'active_dataset', 'all_valid', 'alpha_id', 'dataset_id', 'error', 'fixed_count', 'invalid_dataset', 'invalid_ids', 'missing_ids', 'official_datasets', 'total', 'unknown', 'valid_dataset', 'with_dataset', 'without_dataset']

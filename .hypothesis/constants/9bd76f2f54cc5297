@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web/misc/web_cli.py
-# hypothesis_version: 6.141.1
-
-[8765, '--host', '--no-browser', '--port', '0.0.0.0', '127.0.0.1', '::', 'BRAIN Alpha Ops', '_serve_thread', 'main', 'ok', 'port', 'serve', 'shutdown_server', 'smoke_test_server', 'store_true', 'web-serve-forever']

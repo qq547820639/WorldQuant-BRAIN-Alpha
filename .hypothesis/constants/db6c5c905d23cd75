@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web_candidates/simulation_state/_scoring.py
-# hypothesis_version: 6.141.1
-
-[0.0, ', ', 'FAIL', 'NEEDS_ITERATION', 'PASS', 'alpha_id', 'brain_settings', 'dataset', 'expression', 'extra_fields', 'failed_reasons', 'family', 'gate', 'hard_gate_blocked', 'hypothesis', 'pass_fail', 'production-gate-v2.2', 'schema_version', 'score', 'scorecard', 'settings', 'status', 'submission_ready', 'total_score', 'warnings']

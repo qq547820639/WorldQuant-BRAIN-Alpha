@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/brain_api/official/__init__.py
-# hypothesis_version: 6.141.1
-
-['BrainAPIError', 'OfficialBrainAPI', 'logger', 'normalize_metrics']

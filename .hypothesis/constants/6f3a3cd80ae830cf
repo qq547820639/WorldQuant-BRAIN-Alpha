@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/scoring/anti_overfit/suite.py
-# hypothesis_version: 6.141.1
-
-[0.0, 0.02, 0.05, 0.08, 5.0, 'bear_sharpe', 'bull_sharpe', 'half_life_days', 'half_life_result', 'half_life_score', 'ic_mean', 'ic_result', 'ic_stability_score', 'ic_std', 'monthly_means', 'p_value', 'passed', 'placebo_result', 'placebo_score', 'regime_result', 'sideways_sharpe']

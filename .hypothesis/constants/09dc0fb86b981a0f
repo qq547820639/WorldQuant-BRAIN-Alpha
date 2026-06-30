@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/task_executor.py
-# hypothesis_version: 6.141.1
-
-[0.0, 100, '4', 'cancelled', 'completed', 'failed', 'message', 'percent', 'phase', 'queued', 'register_future', 'running', 'status', 'task cancelled', 'task timed out', 'timeout']

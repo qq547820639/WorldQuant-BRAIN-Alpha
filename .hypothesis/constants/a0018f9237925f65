@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/local_backtest/expression_evaluator/_evaluator.py
-# hypothesis_version: 6.141.1
-
-[0.0, 1e-10, 1.0, 3.0, '*', '+', '-', '/', '>', 'MarketDataFrame', 'abs', 'arg', 'args', 'binary', 'call', 'close', 'divide', 'func', 'greater', 'group_neutralize', 'group_rank', 'ident', 'if_else', 'kind', 'left', 'literal', 'log', 'multiply', 'neg', 'normalize', 'op', 'power', 'price', 'rank', 'return', 'returns', 'reverse', 'right', 'sign', 'subtract', 'ts_corr', 'ts_decay_linear', 'ts_delta', 'ts_max', 'ts_mean', 'ts_min', 'ts_rank', 'ts_std_dev', 'ts_sum', 'ts_zscore', 'unary', 'value', 'volume', 'volume_traded', 'winsorize', 'zscore']

@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/strategy_plugins.py
-# hypothesis_version: 6.141.1
-
-[-100, 120, 160, ':', 'action', 'enabled_count', 'error', 'load_errors', 'mutate', 'name', 'ok', 'plugin', 'plugin_names', 'propose', 'result', 'retire', 'runtime_errors', 'runtime_events', 'schema_version', 'spec', 'status', 'validate', 'value']

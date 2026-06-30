@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/compliance/redline_check_traceability.py
-# hypothesis_version: 6.141.1
-
-[1024, 'BLOCKING', 'ScoringConfig 包含溯源字段', 'ScoringConfig 缺少溯源字段', 'WARNING', 'config', 'config_version', 'events', 'findings', 'market_regime', 'ok', 'params', 'params + settings', 'redline_verifier', 'run_config.json', 'run_id', 'runtime.ops', 'schema_version', 'settings', 'summary', 'utf-8', '修复参数审计模块后再运行生产流程。', '修复模型模块导入错误。', '修复评分模块导入或函数签名。', '修复配置模块导入错误。', '参数全链路可溯', '可解析的 schema_version', '实际运行参数与溯源记录不完整或存在偏差', '无法完整追溯运行参数', '无法验证评分溯源入口', '无版本字段', '评分配置缺少溯源维度', '运行参数审计不可执行', '运行参数审计未通过', '配置文件缺少版本号', '配置文件超过读取大小限制', '配置文件过大，可能存在异常', '配置版本不可追溯', '配置版本证据无法读取']

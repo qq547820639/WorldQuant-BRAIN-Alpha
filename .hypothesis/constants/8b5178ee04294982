@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/llm_service/_service_guidance.py
-# hypothesis_version: 6.141.1
-
-[0.0, 0.05, 0.4, 0.5, 0.6, 0.7, 120, 180, 'EXPLORE', 'SMID', 'TOP3000', 'avoid', 'complete', 'confidence', 'declining', 'diversification', 'fields', 'group_rank', 'hypothesis', 'operators', 'rank', 'reason', 'sharpe_trend', 'stable', 'stalled', 'switch_recommended', 'target_strategy', 'ts_delta', 'ts_mean', 'ts_rank', 'ts_std', 'ts_sum', 'windows', '{', '}']

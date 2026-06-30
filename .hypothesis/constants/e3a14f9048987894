@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web_candidates/optimization/_helpers.py
-# hypothesis_version: 6.141.1
-
-[0.0, ':', 'blocking', 'blocking_reasons', 'code', 'gate', 'lifecycle_status', 'local_backtest', 'local_quality', 'optimize', 'pass_local', 'passed', 'primary_reason', 'quality_diagnosis', 'reasons', 'score', 'scorecard', 'severity', 'submission_ready', 'supported', 'total_score']

@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web_cloud/snapshot/_official_context_read.py
-# hypothesis_version: 6.141.1
-
-[180, ',', ':', 'Z', 'actual_sha256', 'age_seconds', 'complete', 'data', 'dataset', 'dataset_id', 'empty_context_file', 'expected_files', 'expired_files', 'expires_at', 'expires_in_seconds', 'field_count', 'file_count', 'files', 'generated_at', 'id', 'integrity_errors', 'integrity_ok', 'invalid_files', 'is_expired', 'is_stale', 'metadata_incomplete', 'missing_files', 'name', 'record_count', 'record_count_matches', 'record_count_total', 'record_counts', 'saved_at', 'schema_version', 'sha256', 'sha256_matches', 'sha256_mismatch', 'stale_files', 'utf-8']

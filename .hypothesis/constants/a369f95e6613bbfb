@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/secure_credentials.py
-# hypothesis_version: 6.141.1
-
-['%%', '%(', '***', '-', '<REDACTED>', '<redacted>', 'BRAIN_PASSWORD', 'BRAIN_TOKEN', 'BRAIN_USERNAME', '_', 'access_token', 'api_key', 'auth_method', 'authorization', 'cookie', 'credential', 'credentials', 'csrf', 'environment_variable', 'explicit_argument', 'has_password', 'has_token', 'has_username', 'key', 'none', 'password', 'present', 'secret', 'session', 'source', 'token', 'trace', 'username', 'userpass']

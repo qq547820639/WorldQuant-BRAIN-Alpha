@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/scripts/verify_canonical_compliance/_report.py
-# hypothesis_version: 6.141.1
-
-['--config', '--json', '--strict', '=', 'FAIL', 'Output JSON format', 'PASS', 'all_deviations', 'check', 'details', 'deviation', 'deviations', 'error', 'failed_checks', 'message', 'name', 'ok', 'passed', 'passed_checks', 'results', 'schema_version', 'store_true', 'total_checks', 'total_deviations']

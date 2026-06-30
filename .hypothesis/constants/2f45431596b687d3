@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web/business/web_job_registry.py
-# hypothesis_version: 6.141.1
-
-[1.0, 'ASYNC_JOBS', 'CHECK_JOBS', 'JOBS', 'JOB_REGISTRY', 'RATE_LIMITER', 'SUBMIT_LOCK', 'SYNC_JOBS', 'TASK_EXECUTOR', '_module', 'check', 'data', 'generate', 'job', 'jobs_async.json', 'jobs_check.json', 'jobs_production.json', 'jobs_sync.json', 'run_check_batch_job', 'submit', 'submit_batch', 'sync', 'sync_cloud_alphas', 'task']

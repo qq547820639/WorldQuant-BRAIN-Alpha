@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/scoring/release_score_gate/_decision.py
-# hypothesis_version: 6.141.1
-
-['ERROR', 'FAIL', 'PASS', 'WARN', 'drawdown_cap', 'fitness', 'prod_correlation_cap', 'self_correlation_cap', 'sharpe', 'turnover_cap', 'turnover_floor']

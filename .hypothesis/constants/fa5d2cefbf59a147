@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/agent_research_tools.py
-# hypothesis_version: 6.141.1
-
-[0.0, 0.6, 1.0, 100, 200, 240, 1000, 5000, 50000, 'INVALID_REQUEST_PACK', 'all', 'backtests.jsonl', 'channels', 'collection_failed', 'diagnostics', 'error', 'error_code', 'error_context', 'fields', 'include_prompt', 'include_sensitive', 'info', 'job_id', 'keep_top', 'limit', 'limit_symbols', 'local', 'markets', 'max_batches', 'max_mutations', 'max_workers', 'message', 'metadata', 'min_confidence', 'min_field_coverage', 'normalize', 'ok', 'partial', 'per_account_limit', 'primary', 'primary_response', 'raw_output', 'request_pack', 'reviewer', 'reviewer_response', 'rounds', 'routes', 'rows', 'severity', 'source', 'status', 'text', 'title', 'top_n', 'windows']

@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/expression_sqlite_index/_core.py
-# hypothesis_version: 6.141.1
-
-[0.0, 0.75, 500, 5000, 'INDEX_NOT_BUILT', '[]', 'alpha_id', 'candidate', 'count', 'created_at', 'data', 'db_path', 'error', 'error_code', 'exact_count', 'exact_match', 'exact_records', 'expression', 'expression_canonical', 'expression_profile', 'family', 'fields', 'id', 'include_cloud', 'indexed', 'is_stale', 'last_refresh', 'limit', 'manifest', 'min_similarity', 'official_alpha_id', 'ok', 'operators', 'reason', 'record_count', 'record_index', 'record_not_mapping', 'schema_version', 'score', 'similar_count', 'similar_records', 'similar_scan_count', 'similar_scan_limit', 'similarity', 'simulation_id', 'source', 'source_file', 'stage', 'status', 'storage_dir', 'synced_at', 'timestamp', 'windows', '{}']

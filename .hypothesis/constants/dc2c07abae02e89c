@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/assistant/request.py
-# hypothesis_version: 6.141.1
-
-[0.2, 1200, 1600, 'anti_overfit', 'available_count', 'blocking_flags', 'budget_applied', 'content', 'context_digest', 'context_pack', 'evidence_digest', 'expression_index.*', 'focus', 'generated_at', 'generation_focus', 'generation_focus.*', 'generator_advisor', 'json_object', 'latest_result', 'max_output_tokens', 'max_prompt_tokens', 'messages', 'model_hints', 'observability', 'observability.*', 'offline_draft', 'ok', 'prompt', 'prompt_budget', 'prompt_diagnostics', 'prompt_digest', 'prompt_line_count', 'request', 'research_memory.*', 'response_format', 'response_schema', 'review_chain', 'review_roles', 'risk_flags', 'risk_level', 'risk_reviewer', 'robustness', 'role', 'rolling_validation', 'schema_version', 'source', 'system', 'temperature', 'truncated_sections', 'unknown', 'user', 'warning_flags']

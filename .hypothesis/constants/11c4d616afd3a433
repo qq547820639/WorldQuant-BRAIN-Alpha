@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/scripts/check_web_facade_contract.py
-# hypothesis_version: 6.141.1
-
-['--json', '--web', '.', 'FAIL', 'PASS', '_', '__init__.py', '__main__', '__name__', '_runtime_facade', 'brain_alpha_ops', 'code', 'findings', 'has_context_class', 'has_context_factory', 'lambda_alias_count', 'modules', 'ok', 'schema_version', 'store_true', 'sys', 'utf-8', 'value', 'web', 'web_path']

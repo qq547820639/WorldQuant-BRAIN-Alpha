@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web/state/web_runtime_state.py
-# hypothesis_version: 6.141.1
-
-['ACTIVE', 'CONDUCTED', 'FAILED', 'PASSED', 'POLLING', 'PRODUCTION', 'READY', 'REJECTED', 'RUNNING', 'SIMULATION_RUNNING', 'SIMULATION_SUBMITTED', 'SUBMITTED', 'active_backtests', 'alpha_id', 'backtests', 'blocked', 'candidates', 'check', 'checked_at', 'checks.jsonl', 'complete', 'config', 'count', 'data', 'failed', 'gate', 'is_stale', 'items', 'lifecycle.jsonl', 'lifecycle_records', 'lifecycle_status', 'note', 'official_alpha_id', 'other', 'passed', 'passed_count', 'presets.json', 'produced_count', 'production', 'progress', 'ready_results_count', 'result', 'returned_count', 'run_id', 'settings', 'simulation_id', 'stage', 'status', 'status_category', 'submission_blocked', 'submission_ready', 'submit', 'submitted', 'summary', 'sync', 'total', 'total_count', 'utf-8', 'validation_tile', 'warning', '已有提交任务正在运行，请完成后再操作。']

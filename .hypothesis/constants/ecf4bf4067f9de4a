@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/scripts/check_review_gap_closure_tracker/_constants.py
-# hypothesis_version: 6.141.1
-
-['.outerHTML', 'Active Work Queue', 'BRAIN_E2E_*', 'BRAIN_PASSWORD', 'CLOSED_CURRENT', 'Current Run Baseline', 'Not Yet Claimable', 'OPENAI_API_KEY', 'OS-assigned', 'PASS', 'Status Matrix', 'brain_alpha_ops', 'config', 'data', 'docs', 'document.writeln', 'eligible_count=0', 'exit_code=124', 'explicit `0`', 'explicit allowlist', 'findings=[]', 'jobs_production.json', 'missing `npm`', 'react_app', 'ready=false', 'ready=true', 'run_config.json', 'session-cookie-*', 'timeout=300', 'trustedHtml', 'web']

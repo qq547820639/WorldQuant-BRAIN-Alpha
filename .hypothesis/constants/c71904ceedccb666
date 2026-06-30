@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web/misc/web_runtime_facade/_job_services.py
-# hypothesis_version: 6.141.1
-
-['candidate_generation', 'candidates.jsonl', 'error_count', 'errors', 'generate_candidates', 'guided', 'ok', 'persisted_count', 'persistence', 'schema_version', 'scoring', 'scoring_evaluate', 'summary', 'target']

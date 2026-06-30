@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/scripts/check_live_submit_readiness/_reporters.py
-# hypothesis_version: 6.141.1
-
-[',', 'alpha_id', 'best_candidate', 'blocking_reasons', 'findings', 'lifecycle_status', 'none', 'not ready', 'ready', 'ready_to_submit', 'score']

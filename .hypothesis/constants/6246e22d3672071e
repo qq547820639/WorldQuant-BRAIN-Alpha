@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/generator_metadata.py
-# hypothesis_version: 6.141.1
-
-[120, 180, 252, '(', ')', ',', '\\b(d|lookback)\\b', '\\d+', 'category', 'choices', 'correlation', 'd', 'decay', 'default', 'definition', 'description', 'difference', 'group_backfill', 'group_rank', 'group_zscore', 'lookback', 'max', 'min', 'missing', 'moving_average', 'name', 'normalize', 'operator', 'parameters', 'params', 'rank', 'ranking', 'raw', 'scale', 'standard_deviation', 'standardization', 'std', 'time series', 'ts_', 'ts_av_diff', 'ts_corr', 'ts_cov', 'ts_covariance', 'ts_decay_linear', 'ts_delay', 'ts_delta', 'ts_mean', 'ts_product', 'ts_rank', 'ts_std_dev', 'ts_sum', 'type', 'unmatched', 'value', 'values', 'volatility', 'window', 'winsor', 'winsorization', 'winsorize', 'zscore']

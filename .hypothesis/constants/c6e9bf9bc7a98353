@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/agent_tools/_context_mixin.py
-# hypothesis_version: 6.141.1
-
-[200, 'Agent', 'agent_candidate', 'all', 'alpha_id', 'api', 'assistant_guidance', 'candidate', 'candidates', 'category', 'context_defaults', 'count', 'dataset_id', 'datasets', 'datasets_count', 'error', 'error_code', 'expression', 'family', 'fields', 'fields_count', 'hypothesis', 'id', 'idle', 'job_id', 'kind', 'limit', 'local', 'name', 'official_loader', 'official_metrics', 'ok', 'op_type', 'operators', 'operators_count', 'preferred_fields', 'preferred_operators', 'production', 'query', 'scorecard', 'settings', 'source', 'status', 'unknown job', 'use_api', 'use_research_memory', 'validate_expression']

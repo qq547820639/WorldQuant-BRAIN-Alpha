@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/fallback_generation.py
-# hypothesis_version: 6.141.1
-
-[0.9, 120, 180, 252, 'hybrid', 'liquidity', 'momentum', 'quality', 'rank', 'rank(-{f1})', 'rank(zscore({f1}))', 'returns', 'reversal', 'ts_arg_max', 'ts_arg_min', 'ts_argmax', 'ts_argmin', 'ts_corr', 'ts_cov', 'ts_covariance', 'ts_delta', 'ts_mean', 'ts_rank', 'ts_std', 'ts_std_dev', 'zscore', '{f1}', '{f2}', '{w}']

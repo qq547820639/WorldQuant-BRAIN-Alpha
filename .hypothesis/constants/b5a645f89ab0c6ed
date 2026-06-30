@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/pipeline/_cycle_mixin.py
-# hypothesis_version: 6.141.1
-
-[0.0, 0.6, 'INFO', '_Phase', '_last_dataset_id', 'confidence', 'guidance_digest', 'guidance_source', 'historical_outcome', 'persisted_at', 'preferred_windows', 'source', 'top_fields', 'top_operators', 'unknown', 'usable']

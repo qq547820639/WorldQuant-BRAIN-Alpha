@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/scoring/anti_overfit/service.py
-# hypothesis_version: 6.141.1
-
-[0.0, 50.0, 'anti_overfit_report', 'block', 'caution', 'data_source', 'factor_values', 'factor_values_series', 'forward_returns', 'ic_series', 'insufficient_data', 'official_metrics', 'ok', 'pass', 'passed', 'rank_ic_series', 'reason', 'recommendation', 'returns', 'returns_series', 'sample_size', 'schema_version', 'score', 'suite', 'warnings']

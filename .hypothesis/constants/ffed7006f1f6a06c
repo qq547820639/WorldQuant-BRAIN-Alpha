@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web_candidates/optimization/_summary.py
-# hypothesis_version: 6.141.1
-
-[100, 'automation', 'dataset_id', 'main_pool_count', 'mode', 'official_api_called', 'optimized_count', 'pool_summary', 'quality_summary', 'rejected_count', 'rejected_reasons', 'returned_count', 'schema_version', 'scientific_audit', 'search_budget', 'source', 'submit_allowed', 'targetPoolSize', 'target_pool_size']

@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/diagnostics.py
-# hypothesis_version: 6.141.1
-
-[0.0, 0.01, 0.1, 0.3, 0.7, 0.75, 1.0, 1.25, 4.0, 'Candidate', 'alpha_id', 'concentration', 'correlation', 'default', 'dimension', 'failed_dimensions', 'failed_reasons', 'field_swap', 'fitness', 'gate', 'lifecycle_status', 'longer_window', 'margin', 'max_self_correlation', 'min_fitness', 'min_margin_bps', 'min_sharpe', 'min_turnover', 'mutation_mode', 'primary_failure', 'sharpe', 'structure_change', 'sub_universe_sharpe', 'suggested_mutations', 'suggestions', 'summary', 'target_max_turnover', 'turnover', 'turnover_low', 'turnover_platform', 'turnover_quality', 'weight_concentration']

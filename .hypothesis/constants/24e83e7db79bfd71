@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/brain_api/official_simulation/_mixin.py
-# hypothesis_version: 6.141.1
-
-[0.0, 300, '/', 'COMPLETE', 'COMPLETED', 'DONE', 'ERROR', 'FAILED', 'GET', 'Location', 'PASSED', 'POST', 'RUNNING', 'STOPPED', 'SUBMITTED', 'TIMEOUT', 'alpha', 'alphaId', 'alpha_id', 'alphas', 'checks', 'complete', 'error', 'expression', 'http://', 'https://', 'id', 'index', 'location', 'maxCorrelation', 'max_correlation', 'metrics', 'missing result', 'official_alpha_id', 'ok', 'pre_submit_check', 'prodCorrelation', 'prod_correlation', 'raw', 'relatedAlphas', 'related_alphas', 'request_body_sent', 'result', 'settings', 'simulation_id', 'state', 'status', 'submit_check', 'warning']

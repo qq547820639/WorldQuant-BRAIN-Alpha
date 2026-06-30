@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/calibration_engine/_auto.py
-# hypothesis_version: 6.141.1
-
-[0.3, 3.0, 'advice', 'avg_score', 'calibration_failed', 'data', 'declining', 'insufficient_data', 'ok', 'optimized_weights', 'pass_rate', 'prior_calibration', 'ready', 'reason', 'recent_avg', 'recommendation', 'sharpe', 'stable', 'stats', 'status', 'total_evaluations', 'trend', 'triggered']

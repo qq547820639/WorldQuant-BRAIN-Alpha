@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/expression_sqlite_index/_helpers.py
-# hypothesis_version: 6.141.1
-
-[0.0, 2000, 'alpha_id', 'alpha_ids', 'candidate', 'code', 'count', 'db_path', 'duplicates', 'examples', 'expression', 'expression_canonical', 'expression_profile', 'family', 'fields', 'frequent_expressions', 'latest_timestamp', 'lifecycle_status', 'max_score', 'name', 'next_index', 'official_alpha_id', 'official_metrics', 'ok', 'operators', 'pass_fail', 'profile_json', 'raw', 'record_index', 'regular', 'schema_version', 'score', 'scorecard', 'simulation_id', 'source', 'source_count', 'source_counts', 'source_file', 'sources', 'stage', 'status', 'storage_dir', 'timestamp', 'total_score', 'window', 'windows', '{}']

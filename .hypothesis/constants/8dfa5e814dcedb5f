@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/monitoring/unified_monitor.py
-# hypothesis_version: 6.141.1
-
-[0.0, 1000, 'Auto-heal failed: %s', 'Healing actions: %s', '_take_screenshot', 'backend', 'backend_interrupt', 'browser', 'browser_auto_heal', 'browser_snapshot', 'checks', 'component', 'console_errors', 'context_snapshot', 'critical', 'degraded', 'dom_broken', 'heal', 'healthy', 'heartbeat_stale', 'high', 'interrupt', 'issues', 'log', 'medium', 'message', 'needs_interrupt', 'ok', 'overall', 'production', 'runner', 'severity', 'snapshot', 'stalled_jobs', 'suggested_action', 'timestamp', 'type', 'unified', 'value', 'warning']

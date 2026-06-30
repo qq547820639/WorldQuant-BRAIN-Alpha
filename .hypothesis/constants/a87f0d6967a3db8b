@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/execution_factory.py
-# hypothesis_version: 6.141.1
-
-['RunConfig | None', 'artifacts', 'auto', 'base_url', 'browser', 'evidence_dir', 'headless', 'password', 'username']

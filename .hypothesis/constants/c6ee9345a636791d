@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/tasks/_store.py
-# hypothesis_version: 6.141.1
-
-[0.0, 100, 200, '.tmp', 'RUNNING', 'Task queued.', 'alpha_id', 'cancel', 'completed', 'count', 'created_at', 'current', 'error', 'failed', 'heartbeat', 'job', 'job_id', 'jobs', 'message', 'operation', 'percent', 'phase', 'progress', 'queued', 'result', 'running', 'source', 'status', 'status_code', 'status_message', 'stopping', 'task_id', 'total', 'updated_at', 'utf-8', 'version']

@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web/dispatch/web_get_routes/_routes_simulation.py
-# hypothesis_version: 6.141.1
-
-[200, 365, 400, 500, '30', '5', 'JOB_NOT_FOUND', 'candidate_repo', 'candidates_count', 'check', 'cloud_alpha_snapshot', 'compact', 'connect', 'connected', 'connection_tracker', 'context_fresh', 'current_phase', 'data', 'days', 'error', 'error_code', 'false', 'history_limit', 'job_id', 'job_not_found', 'job_type', 'needs_setup', 'ok', 'operation_mode', 'readiness_passed', 'readiness_service', 'scored_count', 'sync', 'sync_jobs', '未知同步任务', '未知检查任务']

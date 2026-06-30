@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/checkpoint.py
-# hypothesis_version: 6.141.1
-
-[180, '.tmp', 'Checkpoint', '[]', 'can_resume', 'candidate_count', 'candidates', 'checkpoint_id', 'checkpoints', 'cycle_index', 'event_count', 'events', 'events_count', 'filename', 'fresh_start', 'idle', 'metadata', 'pid', 'recovered_candidates', 'snapshot_time', 'stage', 'stats', 'timestamp', 'utf-8']

@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web/dispatch/post_routes/submit.py
-# hypothesis_version: 6.141.1
-
-[403, 'SUBMIT_BATCH_ERROR', 'SUBMIT_ERROR', 'all_gates_passed', 'error', 'error_code', 'exit_paths', 'external', 'label', 'ok', 'state_navigation', 'submitted', 'type', 'url', '前往 BRAIN 平台手动提交']

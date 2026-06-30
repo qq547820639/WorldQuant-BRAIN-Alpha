@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/data/loader/_loader.py
-# hypothesis_version: 6.141.1
-
-[0.0, 'MATRIX', 'TOP3000', 'USA', 'alphaCount', 'category', 'coverage', 'data', 'dataset', 'definition', 'delay', 'description', 'field', 'fieldId', 'field_count', 'id', 'name', 'official_fields.json', 'region', 'type', 'universe', 'userCount', 'utf-8']

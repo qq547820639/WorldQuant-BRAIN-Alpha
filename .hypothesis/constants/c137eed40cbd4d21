@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/brain_api/official_alphas/_filter_mixin.py
-# hypothesis_version: 6.141.1
-
-[100, 10000, 'GET', 'api_filter_window', 'api_reported_total', 'api_total_reached', 'count', 'created_at', 'delay', 'expression', 'filter_window_count', 'has_more', 'headers', 'id', 'instrumentType', 'instrument_type', 'items', 'limit', 'next_offset', 'offset', 'page_limit', 'page_size', 'pagination_complete', 'pagination_target', 'raw', 'region', 'repeated_page', 'scanned', 'short_page', 'stop_reason', 'total', 'truncated', 'universe', 'user alpha', 'warning', 'window_limit']

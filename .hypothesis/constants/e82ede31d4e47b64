@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/parallel_backtest/_executor.py
-# hypothesis_version: 6.141.1
-
-['COMPLETED', 'ERROR', 'FAILED', 'USA', 'account_safety', 'alpha_count', 'batches', 'bounded', 'capacity_limited', 'completed', 'completed_count', 'empty_plan_blocked', 'error', 'error_code', 'expression', 'failed_count', 'failure_counts', 'job_finished', 'job_index', 'job_started', 'jobs', 'market', 'markets', 'max_batches', 'max_workers', 'ok', 'per_account_limit', 'plan', 'plan_empty', 'planned', 'progress_events', 'rate_limit', 'region', 'requested_jobs', 'results', 'schema_version', 'selected_jobs', 'settings_overrides', 'simulation_id', 'skipped_jobs', 'status', 'submitted_count']

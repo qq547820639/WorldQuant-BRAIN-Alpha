@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/candidate_pool_service_/__init__.py
-# hypothesis_version: 6.141.1
-
-['_CloudRiskMixin', '_LocalPrefilterMixin', '_PoolOpsMixin', '_safe_float', 'logger']

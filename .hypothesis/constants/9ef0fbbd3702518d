@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/failure_strategy_ranking.py
-# hypothesis_version: 6.141.1
-
-[0.0, 0.01, 0.1, 0.5, 0.7, 1.0, 1.25, 4.0, 180, 2000, 'FAIL', 'PASS', 'ab_tests.jsonl', 'concentration', 'correlation', 'data', 'field_swap', 'field_swap_semantic', 'fitness', 'gate', 'longer_window', 'margin', 'mutation_type', 'operator', 'operator_substitute', 'parent_correlation', 'parent_fitness', 'parent_margin', 'parent_pass_fail', 'parent_sharpe', 'parent_turnover', 'r', 'sharpe', 'sharpe_delta', 'structure', 'structure_refine', 'sub_universe_sharpe', 'turnover_low', 'turnover_platform', 'turnover_quality', 'utf-8', 'window', 'window_perturb']

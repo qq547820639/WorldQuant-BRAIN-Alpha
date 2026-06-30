@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/expression_index/_helpers.py
-# hypothesis_version: 6.141.1
-
-[0.0, 'alpha_id', 'candidate', 'expression', 'expression_canonical', 'family', 'lifecycle_status', 'official_alpha_id', 'official_metrics', 'pass_fail', 'score', 'scorecard', 'simulation_id', 'source', 'stage', 'status', 'timestamp', 'total_score']

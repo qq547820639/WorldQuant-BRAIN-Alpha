@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/scoring_explainability.py
-# hypothesis_version: 6.141.1
-
-['blocking', 'empirical', 'fitness', 'fitness_crosscheck', 'is_hard_gate', 'is_oos_ratio', 'item', 'items', 'margin_bps', 'meaning', 'name', 'official_pass', 'passed', 'prod_correlation', 'reason', 'self_correlation', 'severity', 'sharpe', 'sub_universe_sharpe', 'submission_checklist', 'turnover_min', 'turnover_platform', 'turnover_quality', 'warning', 'weight_concentration']

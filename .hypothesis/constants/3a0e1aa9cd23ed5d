@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web/misc/web_sse_compat.py
-# hypothesis_version: 6.141.1
-
-[0.5, 300.0, 200, 'Cache-Control', 'Connection', 'Content-Type', 'Referrer-Policy', 'SSE write failed: %s', 'SSEEventType', 'SSEStreamHandler', 'SSEWriter', 'SSE_DEFAULT_TIMEOUT', 'SSE_POLL_INTERVAL', '_cors', 'canceled', 'cancelled', 'close', 'complete', 'completed', 'error', 'failed', 'heartbeat', 'is_terminal_status', 'job not found', 'job stream timed out', 'job_id', 'missing job_id', 'no-cache', 'no-referrer', 'nosniff', 'ok', 'progress', 'result', 'running', 'status', 'stopped', 'task_id', 'text/event-stream', 'timestamp', 'type', 'utf-8']

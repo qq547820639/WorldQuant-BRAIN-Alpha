@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/pipeline_official_context/_service.py
-# hypothesis_version: 6.141.1
-
-['70/20/10', 'ERROR', 'WARN', 'category', 'context_loaded', 'coverage', 'dataset', 'dataset_strategy', 'dataset_unavailable', 'definition', 'delay', 'description', 'fields_count', 'fixed', 'id', 'locked', 'name', 'official_json_files', 'operators_count', 'refresh_failed', 'rotate', 'source', 'specific', 'status', 'type', 'warning']

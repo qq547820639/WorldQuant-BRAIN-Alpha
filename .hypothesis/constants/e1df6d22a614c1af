@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/assistant/_helpers.py
-# hypothesis_version: 6.141.1
-
-[0.0, 0.25, 0.5, 1.0, 100.0, 'avg_fitness', 'avg_score', 'avg_sharpe', 'count', 'guidance_digest', 'success_count', 'success_rate', 'utf-8']

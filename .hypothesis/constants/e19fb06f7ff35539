@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web_candidates/simulation_selection.py
-# hypothesis_version: 6.141.1
-
-['account_cooldown', 'alpha_id', 'candidate_ids', 'candidate_workflow', 'eligible_alphas', 'eligible_count', 'expression', 'min_score', 'next_candidate_ids', 'official_alpha_id', 'ok', 'score', 'simulation_id', 'total_candidates', 'validator', 'workflow_plan']

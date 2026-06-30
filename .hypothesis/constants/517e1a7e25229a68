@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/pipeline_official_context/_api_mixin.py
-# hypothesis_version: 6.141.1
-
-[429, '; ', 'CONTEXT_DEGRADED', 'CONTEXT_FIELDS', 'CONTEXT_OPERATORS', 'CONTEXT_READY', 'INFO', 'WARN', 'active_dataset_id', 'all', 'cached', 'context', 'context_degraded', 'context_load', 'context_loaded', 'current', 'dataset', 'dataset_id', 'degraded', 'degraded_reason', 'fields_count', 'fields_total', 'official_context', 'official_deferred', 'operator_usage_note', 'operators_count', 'operators_total', 'retry_seconds', 'running', 'scanned', 'set_dataset', 'source', 'status', 'status_code', 'synced', 'total', 'warning']

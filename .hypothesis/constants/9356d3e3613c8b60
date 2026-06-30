@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/observability.py
-# hypothesis_version: 6.141.1
-
-[500, 'UNHANDLED_ERROR', 'alpha_id', 'correlation_id', 'error_code', 'event', 'job_id', 'observability.v1', 'official_alpha_id', 'official_metrics', 'phase', 'run_id', 'schema_version', 'simulation_id']

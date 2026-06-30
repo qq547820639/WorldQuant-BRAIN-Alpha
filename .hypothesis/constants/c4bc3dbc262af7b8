@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/data/capability_registry/__init__.py
-# hypothesis_version: 6.141.1
-
-['CapabilityEntry', 'CapabilityKind', 'CapabilityRegistry', 'OFFICIAL_FILES', 'data', 'get_registry', 'reset_registry']

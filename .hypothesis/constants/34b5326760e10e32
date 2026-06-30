@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web_candidates/simulation/_results.py
-# hypothesis_version: 6.141.1
-
-[0.0, 100, '%Y-%m-%dT%H:%M:%S', 'COMPLETED', 'FAILED', 'RESCORED', 'RESULT_FETCH_FAILED', 'action', 'alpha_id', 'candidate', 'completed', 'error', 'expression', 'extra_fields', 'failed', 'failure_evidence', 'last_status', 'lifecycle_status', 'message', 'metrics', 'next_poll_seconds', 'official_alpha_id', 'official_metrics', 'official_simulated', 'poll_count', 'poll_elapsed_seconds', 'progress_percent', 'quality_gate', 'raw', 'result_fetch_failed', 'scorecard', 'simulation_error', 'simulation_failed', 'simulation_id', 'slot', 'slot_index', 'status', 'timestamp', 'web_official_rescore']

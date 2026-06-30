@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web/dispatch/web_http_handler/_handler.py
-# hypothesis_version: 6.141.1
-
-[b'{}', 200, 204, 400, 401, 403, 404, 415, '..', '/assets/', '0', ';', 'AUTH_REQUIRED', 'Cache-Control', 'Connection', 'Content-Length', 'Content-Type', 'Cookie', 'DENY', 'Host', 'NOT_FOUND', 'ORIGIN_FORBIDDEN', 'Origin', 'Referer', 'Referrer-Policy', 'VALIDATION_ERROR', 'X-Brain-Alpha-CSRF', 'X-CSRF', 'X-CSRF-Token', 'X-Frame-Options', 'application/json', 'assets', 'complete', 'content_type', 'details', 'error', 'error_code', 'eta_seconds', 'forbidden asset path', 'job_id', 'keep-alive', 'missing job_id', 'no-cache', 'no-referrer', 'no-store', 'nosniff', 'not found', 'ok', 'percent_complete', 'phase', 'progress', 'result', 'retryable', 'session required', 'sse', 'status', 'status_message', 'stream_timeout', 'task_id', 'text/event-stream', 'transport', 'type', 'unknown', 'utf-8']

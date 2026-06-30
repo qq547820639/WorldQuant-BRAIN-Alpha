@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/compliance/redline_check_datasets.py
-# hypothesis_version: 6.141.1
-
-['>= 10', 'BLOCKING', 'Dataset ID 全量可用', 'Dataset 数量不足', 'JSON 解析错误', 'WARNING', 'blocking_ok', 'dataset_id', 'detail', 'field_count', 'id', 'invalid', 'list', 'name', 'utf-8', '修复 Candidate 模型导入错误。', '包含 dataset_id', '官方上下文 Dataset 血缘不一致', '官方上下文血缘校验不可用', '官方数据集文件不存在', '数据集缺少必要字段', '文件内容不是数组', '文件缺失', '有效 JSON', '检查 BRAIN API 返回格式', '模型没有 dataset_id 字段']

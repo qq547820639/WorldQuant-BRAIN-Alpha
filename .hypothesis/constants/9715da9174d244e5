@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/scripts/check_frontend_silent_catches.py
-# hypothesis_version: 6.141.1
-
-['*', '*.js', '--json', '--root', '.js', '.jsx', '.ts', '.tsx', '__main__', 'brain_alpha_ops', 'checked_files', 'file', 'findings', 'ignore', 'index.html', 'js', 'line', 'ok', 'react_app', 'root', 'schema_version', 'silent_catch_count', 'src', 'store_true', 'text', 'utf-8', 'web']

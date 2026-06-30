@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web/misc/web_facade_bindings/_snapshot_imports.py
-# hypothesis_version: 6.141.1
-
-['_cloud_alpha_summary', '_durable_job_rows', '_load_presets', '_match_preset_id', '_public_run_config', '_read_storage_jsonl', '_snapshot_facade', '_snapshot_runtime', '_storage_jsonl_path']

@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web/business/web_business/_handlers_alpha.py
-# hypothesis_version: 6.141.1
-
-[100, ':', 'attribution', 'available', 'blocking_reasons', 'brain_alpha_ops.web', 'candidate_generation', 'candidates', 'candidates.jsonl', 'candidates_generated', 'completed', 'count', 'error', 'error_code', 'error_count', 'errors', 'expression', 'expression_key', 'extra_fields', 'failed', 'fitness', 'generate', 'generate_candidates', 'job_id', 'load_run_config', 'local_only', 'local_quality', 'local_score', 'official_api_called', 'ok', 'passed', 'percent_complete', 'persisted_count', 'persistence', 'phase', 'quality_diagnosis', 'quality_gate', 'quality_summary', 'real_check failed', 'real_score failed', 'reasons', 'report', 'running', 'schema_version', 'scientific_audit', 'scorecard', 'scoring', 'sharpe', 'sse_url', 'status', 'status_message', 'status_url', 'summary', 'target', 'task_id']

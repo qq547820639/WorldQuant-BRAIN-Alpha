@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/backtest_flow_service/_slot_submission.py
-# hypothesis_version: 6.141.1
-
-['SUBMITTED', 'official_deferred', 'official_simulation', 'simulation_submit', 'simulation_submitted', 'submit_failed', 'submitted']

@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/alpha_quality/reasons_quality.py
-# hypothesis_version: 6.141.1
-
-[100, ', ', '0..100', '<=', '>=', 'PASS', 'Scorecard is missing', '_out_of_bounds', 'advisory', 'blocking', 'correlation', 'decision_band', 'delay', 'details', 'drawdown', 'fitness', 'local_backtest', 'local_quality', 'local_quality.passed', 'local_quality.score', 'local_quality_failed', 'local_rank_score', 'missing', 'missing_scorecard', 'official_alpha_id', 'official_metrics', 'official_metrics.', 'passFail', 'pass_fail', 'pass_local', 'passed', 'prod_correlation', 'quality_gate_failed', 'reasons', 'returns', 'score', 'scorecard', 'scorecard.', 'scorecard_', 'sharpe', 'submission_ready', 'submit_candidate', 'threshold', 'total_score', 'turnover', 'warning', 'weight_concentration']

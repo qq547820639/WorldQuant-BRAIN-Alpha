@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/data/capability_registry/_loaders.py
-# hypothesis_version: 6.141.1
-
-['OFFICIAL_FILES', 'category', 'dataset', 'dataset_id', 'dateUpdated', 'field', 'id', 'name', 'official_context', 'official_fields.json', 'operator', 'region', 'saved_at', 'universe', 'utf-8']

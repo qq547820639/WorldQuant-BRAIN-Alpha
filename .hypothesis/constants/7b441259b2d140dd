@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web/candidates/web_check_batch_context.py
-# hypothesis_version: 6.141.1
-
-['; ', 'checked', 'dataset', 'dataset_id', 'error', 'expression', 'expression_key', 'expressions', 'invalid_count', 'ok', 'ops', 'passed', 'reason', 'reasons', 'results', 'settings', 'status', 'storage_dir', 'valid', 'valid_count']

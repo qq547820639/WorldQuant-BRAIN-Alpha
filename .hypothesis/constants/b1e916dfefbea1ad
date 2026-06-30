@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/compliance/redline_check_thresholds.py
-# hypothesis_version: 6.141.1
-
-[', ', 'BLOCKING', 'config', 'ops', 'regime_sharpe_factor', 'run_config.json', 'thresholds', 'utf-8', '修复评分模块导入或源码检查错误。', '修复运行配置加载后重新执行红线验证。', '无法验证硬门槛未被本地因子调整', '确保配置模块可导入。', '缺失', '运行阈值不可读取', '阈值配置无法读取', '阈值零偏差', '默认阈值不可读取']

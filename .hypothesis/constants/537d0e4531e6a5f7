@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/evolution/_mutation.py
-# hypothesis_version: 6.141.1
-
-[0.0, 120, 252, ' + ', '(', ')', '+', ',', '\\b', 'add', 'add(', 'add_field', 'add_operator', 'adjust_window', 'medium', 'none', 'remove_field', 'remove_operator', 'simplify', 'swap_field', 'swap_operator']

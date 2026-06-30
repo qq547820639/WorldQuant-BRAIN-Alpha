@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/audit_trail/export.py
-# hypothesis_version: 6.141.1
-
-[0.0, 500, 1000, 'alpha_id', 'attribution', 'attribution_summary', 'audit_export.v1', 'capability_version', 'change_record', 'context', 'data/audit_trail', 'decision_band', 'details', 'entry_count', 'entry_id', 'event_type', 'expected_effect', 'export_audit_trail', 'export_schema', 'field', 'from_state', 'gate_decision', 'gate_decisions', 'gate_name', 'gate_version', 'lifecycle_transition', 'parent_failure', 'passed', 'passed_gate', 'query_and_export', 'reason', 'result_summary', 'schema_version', 'scorecard', 'scoring_audit.jsonl', 'scoring_evaluated', 'scoring_version', 'sim_config', 'simulation_writeback', 'source_file', 'suggestion', 'threshold_version', 'timeline', 'to_state', 'total_score', 'trigger_rule', 'triggered_rules', 'written_at']

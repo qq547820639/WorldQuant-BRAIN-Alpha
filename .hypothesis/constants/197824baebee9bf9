@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web/dispatch/post_routes/sync.py
-# hypothesis_version: 6.141.1
-
-[404, 1000, 'STOPPING', 'SYNC_CANCEL_ERROR', 'SYNC_CONTEXT_ERROR', 'SYNC_ERROR', 'SYNC_JOB_NOT_FOUND', 'already_terminal', 'contextOnly', 'error', 'error_code', 'get', 'job_id', 'job_not_found', 'job_type', 'message', 'ok', 'phase', 'progress', 'status', 'status_code', 'status_message', 'stopping', 'stopping_since_ms', 'sync', 'task_id', 'update', 'userFacingOperation', '未找到可停止的云端同步任务。']

@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web/misc/web_sync_status_payload.py
-# hypothesis_version: 6.141.1
-
-[0.0, 1000, 'added', 'api_reported_total', 'complete', 'context_only', 'datasets_count', 'error', 'expired_files', 'failed', 'fields_count', 'filter_window_count', 'invalid_files', 'is_stale', 'job_id', 'manifest', 'message', 'missing_files', 'ok', 'operators_count', 'phase', 'progress', 'record_counts', 'result', 'scanned', 'skipped', 'stale_files', 'status', 'status_message', 'sync_history', 'sync_history_error', 'task_id', 'total', 'total_count', 'unknown', 'updated', 'updated_at', 'updated_at_ms']

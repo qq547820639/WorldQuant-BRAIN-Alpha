@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web_candidates/decisions/_annotate.py
-# hypothesis_version: 6.141.1
-
-['action', 'blocking', 'decision_action', 'decision_evidence', 'decision_reason', 'extra_fields', 'lifecycle_history', 'lifecycle_risk', 'lifecycle_status', 'next_state', 'production_decision', 'quality_diagnosis', 'quality_gate', 'reason', 'retain', 'scientific_audit', 'scorecard', 'source']

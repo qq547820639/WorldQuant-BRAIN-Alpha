@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web/business/web_business/_handlers_simulation.py
-# hypothesis_version: 6.141.1
-
-[6.0, 100, 120, 'BLOCKED', 'BRAIN 模拟失败', 'COMPLETED', 'FAILED', 'PASSED', 'SUBMIT_JOB_FAILED', 'UNKNOWN', 'alpha_id', 'check_status', 'checks', 'completed', 'drawdown', 'error', 'error_code', 'expression', 'failed', 'fitness', 'job_id', 'margin', 'metrics', 'note', 'ok', 'percent_complete', 'phase', 'range', 'real_sync failed', 'required_next_steps', 'returns', 'running', 'settings', 'sharpe', 'simulation_id', 'sse_url', 'status', 'status_message', 'status_url', 'submission', 'submit', 'submit_alpha', 'submit_result', 'submit_status', 'submitted', 'synced', 'task_id', 'timeout', 'to_platform_dict', 'turnover', '完成官方上下文刷新和提交前阻断复核', '提交失败：缺少表达式', '检查通过！正在提交...', '模拟完成但未生成 Alpha ID', '模拟超时', '正在提交 BRAIN 模拟...', '正在获取模拟结果...']

@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/market_data_vector.py
-# hypothesis_version: 6.141.1
-
-[0.0, 1.0, 200, 'cache_health', 'column_stats', 'count', 'data', 'field', 'field_count', 'fields', 'market_data_cache', 'matrix', 'max', 'mean', 'min', 'missing_count', 'missing_value_count', 'missing_value_ratio', 'non_zero_count', 'normalized', 'ok', 'row_count', 'row_stats', 'schema_version', 'source', 'symbol', 'symbol_count', 'symbols', 'values']

@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/code_quality.py
-# hypothesis_version: 6.141.1
-
-[0.0, 1.0, '*.py', '->', '=', 'brain_alpha_ops', 'def ', 'utf-8']

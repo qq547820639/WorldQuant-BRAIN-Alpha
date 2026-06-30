@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/compliance/redline_check_no_custom_extension.py
-# hypothesis_version: 6.141.1
-
-['BLOCKING', 'OfficialDataLoader', 'WARNING', 'fields', 'get_default_fields', 'ok', 'operators', '修复生成器导入或官方字段加载路径。', '修复评分模块导入或源码检查错误。', '可能使用了非官方字段', '字段/算子禁自定义扩展', '字段来源未确认', '无法验证评分逻辑字段来源', '确保包安装完整，并重新执行红线验证。', '确保生成器从官方数据源获取字段列表']

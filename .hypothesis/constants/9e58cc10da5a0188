@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web_cloud/sync_job/_helpers.py
-# hypothesis_version: 6.141.1
-
-[0.0, 1000, '3d', '6months', '7d', 'added', 'all', 'api_reported_total', 'cursor_before', 'elapsed_seconds', 'error_status', 'eta_deadline_at_ms', 'eta_seconds', 'expected_pages', 'filter_window_count', 'has_more', 'new_unique_items', 'next_offset', 'page_limit', 'page_number', 'page_size', 'pages_fetched', 'pagination_complete', 'pagination_target', 'rate_per_second', 'recent', 'remaining_items', 'retry_after_seconds', 'retry_attempt', 'retry_exhausted', 'scanned', 'stalled_unique_pages', 'started_at_ms', 'stop_reason', 'unique_items', 'updated', 'updated_at_ms', 'warning', '下一请求确认分页边界', '下一轮继续拉取', '全部', '已自动缩小时间范围', '近 3 天', '近 6 个月', '近 7 天', '近期 30 天', '；']

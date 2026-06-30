@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/local_backtest/engine.py
-# hypothesis_version: 6.141.1
-
-[0.0, 0.0005, 0.01, 0.1, 0.7, 1.0, 1.25, 180, 252, 500, 'LocalBacktestEngine', 'MarketDataFrame', 'abs', 'data_source', 'default', 'divide', 'error', 'error_type', 'expression', 'fitness', 'greater', 'group_neutralize', 'group_rank', 'if_else', 'log', 'multiply', 'n_dates', 'n_symbols', 'neg', 'normalize', 'ok', 'pass_local', 'pass_reasons', 'power', 'rank', 'returns', 'reverse', 'seed', 'sign', 'subtract', 'synthetic_config', 'synthetic_prefilter', 'ts_corr', 'ts_decay_linear', 'ts_delta', 'ts_max', 'ts_mean', 'ts_min', 'ts_rank', 'ts_std_dev', 'ts_sum', 'ts_zscore', 'winsorize', 'zscore']

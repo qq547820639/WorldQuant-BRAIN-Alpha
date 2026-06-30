@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/scripts/verify_canonical_compliance/__init__.py
-# hypothesis_version: 6.141.1
-
-['_PROJECT_ROOT', '_SCRIPT_DIR', '_check_api_paths', '_check_dataset_ids', '_check_thresholds', '_format_report', '_load_config', 'main', 'verify_all']

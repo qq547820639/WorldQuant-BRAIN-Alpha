@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web_cloud/sync_job/_service/_runner.py
-# hypothesis_version: 6.141.1
-
-[100, 'AUTH', 'COMPLETED', 'CONTEXT_FAILED', 'CONTEXT_FIELDS', 'CONTEXT_OPERATORS', 'FAILED', 'MERGE', 'SYNC_JOB_FAILED', 'added', 'all', 'alphas', 'api_reported_total', 'auth', 'completed', 'context', 'context_error', 'context_status', 'context_warnings', 'count', 'current', 'datasets_count', 'error_context', 'failed', 'fields_count', 'filter_window_count', 'job_id', 'merge', 'message', 'ok', 'operation', 'operators_count', 'percent', 'percent_complete', 'phase', 'refreshed', 'running', 'scanned', 'skipped', 'status_code', 'status_message', 'sync job failed: %s', 'sync_alphas', 'sync_job', 'task_id', 'total', 'total_steps', 'updated', '准备仅刷新官方上下文。', '正在刷新官方字段缓存。', '正在刷新官方算子缓存。']

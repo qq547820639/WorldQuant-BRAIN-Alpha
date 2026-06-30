@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web/misc/web_assistant_snapshots/_assistant_payloads.py
-# hypothesis_version: 6.141.1
-
-[0.0, 1.0, 5000, 'assistant_guidance', 'assistant_response', 'confidence', 'field_combinations', 'min_confidence', 'no_generator_bias', 'not_usable', 'ok', 'preferred_windows', 'raw_output', 'reason', 'saved', 'snapshot', 'source', 'text', 'top_fields', 'top_operators', 'usable']

@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/local_backtest_engine.py
-# hypothesis_version: 6.141.1
-
-['BacktestMetrics', 'LocalBacktestEngine', 'MarketDataFrame', 'MetricsComputer', 'PortfolioConstructor', '_cumsum', '_rank_values', '_safe_corr', '_safe_mean', '_safe_stdev', '_spearman_r']

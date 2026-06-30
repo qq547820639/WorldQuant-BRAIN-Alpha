@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web_candidates/decisions/_helpers.py
-# hypothesis_version: 6.141.1
-
-[0.0, 160, 'blocking', 'blocking_reasons', 'category', 'code', 'created', 'decision_band', 'failed', 'failed_reasons', 'gate', 'hard_gate_blocked', 'lifecycle_status', 'local_backtest', 'local_quality', 'local_quality_failed', 'locally_scored', 'official_alpha_id', 'official_metrics', 'pass_local', 'passed', 'primary_reason', 'quality_diagnosis', 'reasons', 'rejected', 'score', 'scorecard', 'severity', 'simulation_id', 'status', 'submission_ready', 'total_score']

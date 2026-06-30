@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/data/ashare_adapter/_provider.py
-# hypothesis_version: 6.141.1
-
-[0.0, 500, ', ', '000300', '2020-01-01', 'Cache stats:', 'akshare', 'akshare_available', 'amount', 'baostock', 'baostock_available', 'cache', 'cache_dir', 'close', 'daily_fetch_failed', 'daily_row_invalid', 'daily_rows_invalid', 'data/ashare_cache', 'date', 'diagnostics', 'empty', 'error', 'high', 'keys', 'low', 'ok', 'open', 'parquet_available', 'source', 'status', 'symbol', 'timestamp', 'total_size_bytes', 'turnover_rate', 'volume']

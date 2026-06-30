@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/validated_generator/_signatures.py
-# hypothesis_version: 6.141.1
-
-[120, 252, 'abs', 'analyst', 'cashflow', 'category', 'cross_sectional', 'd', 'd1', 'd2', 'deep_nested', 'f1', 'f2', 'fundamental', 'group_neutralize', 'group_rank', 'group_zscore', 'growth', 'hybrid', 'id', 'limit', 'liquidity', 'log', 'max', 'mean_reversion', 'min', 'momentum', 'name', 'params', 'price', 'quality', 'rank', 'rank(-{f1})', 'rank(zscore(-{f1}))', 'rank(zscore({f1}))', 'rank({f1})', 'returns', 'reversal', 'scale', 'sector', 'sign', 'stat_arb', 'std', 'time_series', 'transformation', 'truncate', 'ts_corr', 'ts_cov', 'ts_decay_linear', 'ts_delay', 'ts_delta', 'ts_kurtosis', 'ts_mean', 'ts_rank', 'ts_std_dev', 'ts_sum', 'ts_zscore', 'value', 'vector', 'volatility', 'volume', 'volume_reversal', 'winsorize', 'x', 'y', 'zscore']

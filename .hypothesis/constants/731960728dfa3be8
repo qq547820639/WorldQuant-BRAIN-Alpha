@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/scripts/check_tracked_data_inventory/_git.py
-# hypothesis_version: 6.141.1
-
-['--', '--cached', '--name-only', '-F', '-n', '/', ':', '\\', 'data', 'diff', 'git', 'grep', 'ls-files', 'replace', 'utf-8']

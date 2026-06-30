@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/scoring/_gate_decision.py
-# hypothesis_version: 6.141.1
-
-[':', 'ERROR', 'GateDecisionOutcome', 'GateDecisionService', 'HARD', 'WARN', 'action', 'actual', 'alpha_id', 'anti_overfit', 'anti_overfit_passed', 'anti_overfit_report', 'attributions', 'block', 'caution', 'check_items', 'configured_gate', 'discard_archive', 'drawdown_cap', 'expected', 'failed_items', 'failed_reasons', 'fitness_crosscheck', 'gate_decision.v1', 'gate_evidence', 'hard_gate_failed', 'has_official_metrics', 'insufficient_data', 'is_oos_ratio', 'margin_bps', 'name', 'next_action_hint', 'pass', 'pass_fail', 'passed', 'reason', 'recommendation', 'release_gate', 'release_score_gate', 'release_status', 'returns', 'rule', 'schema_version', 'score', 'severity', 'source', 'status', 'submission_ready', 'target_state', 'to_dict', 'triggered_rules', 'turnover_min', 'turnover_quality', 'type']

@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/generator/_filters.py
-# hypothesis_version: 6.141.1
-
-[0.0, 0.005, 0.01, 0.05, 0.25, 0.9, 1.0, 100, 'alphaCount', 'avoid_expressions', 'coverage', 'diversity_boost', 'duplicate_ratio', 'expression', 'expression_canonical', 'field_combinations', 'fields', 'forbidden_patterns', 'health_flags', 'industry', 'market', 'preferred_fields', 'preferred_operators', 'preferred_windows', 'risk_level', 'sample_size', 'sector', 'subindustry', 'top_duplicates', 'top_operators', 'unknown', 'userCount']

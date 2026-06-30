@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/pipeline_backtest_flow/_checks_mixin.py
-# hypothesis_version: 6.141.1
-
-[200, 'CHECK_REGISTRY_ERROR', 'Candidate', 'ERROR', 'INFO', 'WARN', '_thresholds', 'action', 'allow', 'alpha_check_report', 'alpha_checks_error', 'alpha_checks_failed', 'alpha_checks_passed', 'anti_overfit', 'anti_overfit_report', 'anti_overfit_score', 'data_fields', 'expression', 'failed', 'metrics', 'operators', 'passed', 'passed_overall', 'recommendation', 'registry_error', 'robustness_policy', 'rolling_validation', 'score', 'settings', 'status', 'summary', 'total']

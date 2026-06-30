@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/generation/context_adapter.py
-# hypothesis_version: 6.141.1
-
-['ALL_CAP', 'ASIA', 'ContextAdapter', 'DEV', 'DEV_EX_US', 'EUROPE', 'FRONTIER', 'Hypothesis', 'MICRO_CAP', 'MID_LARGE_CAP', 'SMALL_CAP', 'SMID_CAP', 'TOP1000', 'TOP3000', 'USA', 'delay', 'region', 'universe']

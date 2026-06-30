@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web_candidates/simulation_state/__init__.py
-# hypothesis_version: 6.141.1
-
-['GROUP_KEY_FIELDS', 'candidate_score', 'candidate_update_row', 'defer_candidate', 'load_candidates', 'save_candidates']

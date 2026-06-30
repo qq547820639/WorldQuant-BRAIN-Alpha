@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/alerting.py
-# hypothesis_version: 6.141.1
-
-[200, 500, 'Content-Type', 'a', 'alert_log.v1', 'alerts', 'alerts.jsonl', 'application/json', 'blocking_error', 'callback', 'channel', 'channel_count', 'channels', 'count', 'created_at', 'critical', 'data', 'debug', 'delivered', 'deliveries', 'error', 'failed_count', 'fatal', 'high', 'info', 'local', 'medium', 'message', 'metadata', 'ok', 'path', 'persisted', 'reason', 'schema_version', 'sender', 'severity', 'status', 'storage_dir', 'title', 'transport', 'utf-8', 'warn', 'warning']

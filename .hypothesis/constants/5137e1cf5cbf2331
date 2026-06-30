@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web_cloud/sync_payload.py
-# hypothesis_version: 6.141.1
-
-['added', 'all', 'alphas', 'completed', 'context_error', 'context_status', 'context_warnings', 'count', 'datasets_count', 'failed', 'fallback', 'fields_count', 'ok', 'operators_count', 'range', 'refreshed', 'scanned', 'skipped', 'status', 'updated']

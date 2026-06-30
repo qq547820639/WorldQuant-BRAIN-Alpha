@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/theme_engine/_engine.py
-# hypothesis_version: 6.141.1
-
-[0.7, 252, 'FIELD', 'OfficialDataLoader', 'OfficialField', 'W', '\\b[a-z][a-z0-9_]*\\b', '\\b\\d+\\b', '\\{WINDOW\\d*\\}', 'hybrid', 'returns', 'unknown', '{FIELD_A}', '{FIELD_B}', '{FIELD_C}', '{FIELD_D}', '{FIELD}', '{GROUP}', '{STD}']

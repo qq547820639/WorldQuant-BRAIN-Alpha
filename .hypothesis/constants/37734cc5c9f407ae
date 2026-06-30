@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/guidance.py
-# hypothesis_version: 6.141.1
-
-[0.0, 0.25, 0.5, 0.6, 1.0, 4.0, 5.0, 100.0, 'adjustment_direction', 'ag_', 'applies_to', 'avg_fitness', 'avg_score', 'avg_sharpe', 'avoid_patterns', 'bonus', 'bonus_cap', 'confidence', 'count', 'eligible', 'enabled', 'field_combinations', 'guidance_digest', 'historical_outcome', 'min_confidence', 'min_outcome_count', 'neutral', 'none', 'operational_flags', 'outcome_count', 'outcome_status', 'pass_fail', 'penalty', 'penalty_cap', 'persistence_source', 'preferred_windows', 'reason', 'risk_flags', 'sample_size', 'schema_version', 'small_bonus', 'source', 'strong', 'success_count', 'success_rate', 'summary', 'top_fields', 'top_operators', 'unknown', 'usable', 'utf-8', 'weak']

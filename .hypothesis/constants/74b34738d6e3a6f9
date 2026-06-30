@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web_cloud/snapshot/_refresh_service.py
-# hypothesis_version: 6.141.1
-
-[500, '; ', 'CHECK_CLOUD_SYNC', 'CHECK_CONTEXT_FIELDS', 'CHECK_LOCAL_CACHE', 'all', 'api_reported_total', 'blocked', 'checked', 'cloud_expected_pages', 'cloud_next_offset', 'cloud_page_limit', 'cloud_page_size', 'cloud_pages_fetched', 'cloud_saved_count', 'cloud_scanned', 'cloud_sync', 'context_warnings', 'expected_pages', 'failed', 'filter_window_count', 'items', 'message', 'mode', 'next_offset', 'page_limit', 'page_number', 'page_size', 'pages_fetched', 'phase', 'range', 'running', 'scanned', 'status_code', 'submittable', 'total', '接口分页参考数仍在确认']

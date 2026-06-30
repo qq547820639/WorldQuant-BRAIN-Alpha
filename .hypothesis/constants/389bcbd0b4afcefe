@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/expression_index/__init__.py
-# hypothesis_version: 6.141.1
-
-['DEFAULT_SOURCES', '_append_unique', '_as_int_list', '_as_text_list', '_compact_record', '_expression_bucket', '_feature_bucket', '_load_jsonl', '_nested', '_num', '_rank_window_buckets', '_score_for', '_source_records_for', '_status_for', '_summary_from_record', '_text']

@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/brain_api/official_helpers/_url.py
-# hypothesis_version: 6.141.1
-
-[0.0, 0.5, 2.0, 200, 408, 429, 500, 502, 503, 504, '..', '.invalid', '.test', '/', '?', 'Retry-After', 'ascii', 'base_url', 'demo', 'demo-', 'demo_', 'dry-run', 'dry-run-', 'dry_run', 'dry_run_', 'dryrun', 'dryrun_', 'fake', 'fake-', 'fake_', 'http://', 'https', 'https://', 'mock', 'mock-', 'mock_', 'prod-stub', 'prod-stub-', 'prod-stub_', 'prod_stub', 'prod_stub-', 'prod_stub_', 'raw_preview', 'sample', 'sample-', 'sample_', 'stub', 'stub-', 'stub_', 'target URL', 'test', 'test-', 'test_', 'testing']

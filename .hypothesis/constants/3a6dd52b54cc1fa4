@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/batch_backtest_coordinator.py
-# hypothesis_version: 6.141.1
-
-[0.0, 'account_safety', 'alpha_id', 'bounded', 'capacity', 'duplicate_expression', 'error', 'expression', 'high', 'level', 'matched_alpha_id', 'matched_status', 'max_similarity', 'max_workers', 'rate_limit', 'reason', 'requested', 'risk_level', 'schema_version', 'score', 'score_threshold', 'selected', 'selected_count', 'similarity_threshold', 'skipped', 'skipped_count', 'status', 'total_score']

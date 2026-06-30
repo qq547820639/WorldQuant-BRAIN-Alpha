@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/scripts/check_live_submit_readiness/_checks.py
-# hypothesis_version: 6.141.1
-
-['_', 'auto_submitted', 'best_candidate', 'candidate_count', 'candidate_ledger', 'candidates', 'chain_summary', 'code', 'data', 'eligible', 'eligible_candidates', 'eligible_count', 'error', 'exists', 'findings', 'items_count', 'items_preview', 'job_audits', 'job_id', 'job_ledger', 'jobs', 'jobs_checked', 'latest_candidates', 'latest_job_id', 'latest_job_status', 'local_only', 'local_only_jobs', 'max_similarity', 'message', 'official_api_called', 'officially_simulated', 'passed_candidates', 'progress', 'progress.candidates', 'ready_results_count', 'ready_to_submit', 'result', 'result.candidates', 'similarity_threshold', 'source', 'status', 'submission_ready', 'submitted_this_run', 'summary', 'summary_counts', 'threshold_summary', 'utf-8']

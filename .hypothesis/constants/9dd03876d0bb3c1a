@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/pipeline_snapshot/_backtest_slots.py
-# hypothesis_version: 6.141.1
-
-[0.0, 'CAPACITY_WAIT', 'EMPTY', 'alpha_id', 'expression', 'family', 'gate', 'hypothesis', 'lifecycle_status', 'local_quality', 'message', 'next_poll_at', 'next_poll_seconds', 'official_alpha_id', 'official_metrics', 'poll_count', 'progress_percent', 'score', 'scorecard', 'simulation_id', 'simulation_status', 'slot', 'status', 'total_score', 'validation', '空闲，等待候选进入官方回测。']

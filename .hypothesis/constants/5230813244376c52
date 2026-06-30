@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/agent_tools/_toolbox.py
-# hypothesis_version: 6.141.1
-
-[180, 5000, '; ', 'LIVE_API_NOT_ALLOWED', 'TOOL_ERROR', 'TOOL_NOT_FOUND', 'canonical_tool', 'check_alpha', 'confirm_live_api', 'detail', 'environment', 'error', 'error_code', 'exact_count', 'exact_records', 'expression_canonical', 'generate_candidates', 'get_job_status', 'list_context', 'matching_records', 'ok', 'production', 'route_alert', 'run_anti_overfit', 'run_simulation', 'run_simulation_batch', 'score_candidate', 'search_parameters', 'send_alert', 'sync_cloud_alphas', 'tool', 'tool_alias', 'validate_expression']

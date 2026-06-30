@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/validated_generator/_validate.py
-# hypothesis_version: 6.141.1
-
-[0.4, 0.5, 999, 2147483647, '(', ')', ',', ',\\s*(\\d+)\\)', '2', '\\b([a-zA-Z_]\\w*)\\b', 'and', 'd', 'd1', 'delta', 'else', 'errors', 'expression', 'f', 'f1', 'f2', 'false', 'if', 'max', 'min', 'momentum', 'none', 'not', 'or', 'params', 'price', 'returns', 'sign', 'theme', 'true', 'ts_corr', 'ts_cov', 'ts_decay_linear', 'ts_delta', 'ts_mean', 'ts_std_dev', 'ts_sum', 'valid', 'volume', 'warnings']

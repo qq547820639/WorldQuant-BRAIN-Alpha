@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web_candidates/lifecycle_risk.py
-# hypothesis_version: 6.141.1
-
-[160, 500, 'action', 'action_hint', 'alpha_id', 'archive', 'blocked', 'blocking', 'decision_evidence', 'expr_', 'expression', 'expression_digest', 'extra_fields', 'failed', 'hard_gate_blocked', 'identity', 'latest_event_at', 'latest_stage', 'latest_status', 'lifecycle_jsonl', 'lifecycle_risk', 'lifecycle_status', 'local_only', 'matched_by', 'matched_event_count', 'official_alpha_id', 'official_api_called', 'optimize', 'production_decision', 'reason_code', 'rejected', 'retain', 'schema_version', 'simulation_id', 'source', 'stage', 'status', 'status_category', 'submit_allowed', 'timestamp', 'utf-8']

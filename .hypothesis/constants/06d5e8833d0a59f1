@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/_launch_monitor.py
-# hypothesis_version: 6.141.1
-
-['BRAIN_PASSWORD', 'BRAIN_TOKEN', 'BRAIN_USERNAME', 'BrainAlphaProd.exe', 'COMSPEC', 'HOME', 'LANG', 'LC_ALL', 'LC_CTYPE', 'LOGNAME', 'PATH', 'PATHEXT', 'PYTHONIOENCODING', 'PYTHONNOUSERSITE', 'PYTHONUTF8', 'SYSTEMROOT', 'TEMP', 'TMP', 'TMPDIR', 'USER', 'USERNAME', 'VIRTUAL_ENV', 'WINDIR', '\\b(failed|error)\\b', '\\bDONE\\b', '__main__', 'data', 'dist', 'no_error', 'prod_monitor.log', 'replace', 'run_completed', 'utf-8', 'w', 'win32']

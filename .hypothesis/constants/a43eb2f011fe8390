@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/agent_live_tools.py
-# hypothesis_version: 6.141.1
-
-[0.5, 2.0, 30.0, 200, 1800, 'COMPLETED', 'ERROR', 'FAILED', 'OK', 'PASS', 'PASSED', 'SIMULATION_FAILED', 'VALIDATION_FAILED', 'account_safety', 'alpha_id', 'alphas', 'batch_size_limit', 'bounded', 'check', 'check_alpha', 'completed_count', 'count', 'error', 'error_code', 'expression', 'expressions', 'failed_count', 'index', 'limit', 'market', 'markets', 'max_batch_size', 'max_batches', 'max_polls', 'max_workers', 'merge', 'ok', 'per_account_limit', 'range', 'rate_limit', 'reason', 'requested_count', 'result', 'results', 'run_simulation', 'run_simulation_batch', 'schema_version', 'selected_count', 'settings', 'settings_overrides', 'simulation_id', 'skipped', 'skipped_count', 'status', 'submitted_count', 'sync_cloud_alphas', 'sync_range', 'validation']

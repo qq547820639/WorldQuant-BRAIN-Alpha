@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/scripts/check_frontend_surface_parity/_extractors.py
-# hypothesis_version: 6.141.1
-
-['DATA_VIEWS', 'RESEARCH_VIEWS', 'WORKFLOW_VIEWS', 'body', 'code', 'id', 'label', 'message', 'missing_file', 'path', 'read_error', 'utf-8', 'value']

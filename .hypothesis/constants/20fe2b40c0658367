@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/ux/errors/_error_messages.py
-# hypothesis_version: 6.141.1
-
-[200, 'API 请求超时', 'API 请求频率超限，请稍后重试', 'BRAIN 平台认证失败', 'GENERIC_ERROR', 'UNKNOWN', '\\[([A-Z_]{3,})\\]', 'authentication', 'concentration', 'config', 'connection', 'convergence_stalled', 'correlation', 'disk', 'error_code', 'friendly', 'json', 'memory', 'not found', 'original', 'permission', 'rate limit', 'self_correlation', 'simulation', 'submit', 'suggested_action', 'syntax', 'timeout', 'token', 'turnover', 'validation', '云端关联度过高', '发生未知错误', '官方模拟失败', '换手率不符合要求', '提交请求被阻止', '搜索收敛停滞', '操作未能完成', '数据格式解析错误', '无法连接到 BRAIN API 服务器', '权重集中度过高', '权限不足', '磁盘空间不足', '系统内存不足', '自相关度过高', '表达式语法错误', '表达式验证失败', '访问令牌无效或已过期', '请求的资源不存在', '配置文件验证失败']

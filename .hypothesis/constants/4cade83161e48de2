@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/audit_trail/anti_overfit.py
-# hypothesis_version: 6.141.1
-
-[0.0, 'action', 'cycle', 'draft', 'metadata', 'metrics', 'mode', 'mutate', 'mutation_metadata', 'mutation_mode', 'origin', 'parent_failure', 'parent_profile_id', 'profile_id', 'profile_index', 'profile_name', 'ready_rate', 'reason', 'retire', 'source', 'strategy_action', 'strategy_lifecycle', 'strategy_validation', 'validate']

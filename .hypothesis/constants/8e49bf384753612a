@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/ux/guided_pipeline/_phases.py
-# hypothesis_version: 6.141.1
-
-[300, 'BLOCKING', 'FAIL', '_', 'alpha_id', 'auto_submitted', 'backtest', 'blocking', 'candidate', 'completed', 'context', 'empty_context', 'environment', 'error', 'event', 'failed', 'fields', 'fields_count', 'finalize', 'gate', 'gate_summary', 'gating', 'generation', 'init', 'level', 'local_scoring', 'message', 'official', 'officially_simulated', 'operators', 'operators_count', 'overall', 'passed', 'phase', 'prefilter', 'production', 'progress', 'redline', 'running', 'score', 'scoring', 'simulation', 'status', 'stopped', 'submission', 'submission_ready', 'submit', 'summary', 'token', 'total_candidates', 'username', 'validation', 'violations', '核心流水线异常终止', '红线验证模块不可用']

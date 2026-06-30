@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/tasks/_compaction.py
-# hypothesis_version: 6.141.1
-
-['access_token', 'alpha_id', 'alpha_output_config', 'api_key', 'blocking_reasons', 'candidates', 'correlation', 'credential', 'data_fields', 'dataset_id', 'decision_band', 'diagnostics', 'drawdown', 'expression', 'family', 'fitness', 'gate', 'hard_gate_failed', 'hypothesis', 'items_count', 'items_preview', 'level', 'lifecycle_status', 'local_backtest', 'local_quality', 'matched_alpha_id', 'matched_expression', 'max_similarity', 'metrics', 'official_alpha_id', 'official_metrics', 'operators', 'pass_fail', 'pass_local', 'prod_correlation', 'quality_diagnosis', 'reasons', 'refresh_token', 'result', 'returns', 'score', 'scorecard', 'secret', 'session_token', 'sharpe', 'simulation_id', 'source_tags', 'status', 'submission', 'submission_ready', 'total_score', 'turnover']

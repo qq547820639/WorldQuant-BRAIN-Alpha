@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web/submissions/web_submit_readiness.py
-# hypothesis_version: 6.141.1
-
-['alpha_id', 'best_candidate', 'blocking_reasons', 'candidate_count', 'code', 'count', 'decision_band', 'eligible_count', 'error', 'findings', 'gaps', 'latest_job_id', 'latest_job_status', 'lifecycle_status', 'max_similarity', 'message', 'non_submit_flow', 'official_alpha_id', 'official_api_called', 'ok', 'production_gaps', 'ready', 'ready_to_submit', 'reason', 'required_next_steps', 'risk_level', 'score', 'source', 'summary_counts', 'top_blocking_reasons', 'validation_command']

@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/pipeline/_main_loop_mixin.py
-# hypothesis_version: 6.141.1
-
-[86400, 'ERROR', 'WARN', 'candidate_pool', 'candidates_generated', 'context_refreshed', 'cycle', 'cycle_completed', 'error', 'fields_delta', 'generated', 'official_validation', 'operators_delta', 'pipeline_timeout', 'pool_size', 'produced_count', 'production_loop', 'refresh_failed', 'refreshed', 'status', 'unknown', '本地生成']

@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/scripts/check_defect_analysis_report.py
-# hypothesis_version: 6.141.1
-
-['--json', '--report', '.', 'CLOSED_CURRENT', 'DEFECT-016', 'FAIL', 'PASS', '__main__', 'closed_count', 'detail', 'detailed_count', 'docs', 'findings', 'id', 'invalid_status', 'missing_next_action', 'missing_report', 'missing_status_row', 'next_action', 'ok', 'open_count', 'open_items', 'overview', 'priority_counts', 'python_runtime', 'python_runtime_ok', 'report', 'schema_version', 'stale_report_fact', 'status', 'status_count', 'store_true', 'title', 'utf-8']

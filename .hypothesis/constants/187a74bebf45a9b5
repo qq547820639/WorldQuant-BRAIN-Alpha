@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/record_sqlite_index.py
-# hypothesis_version: 6.141.1
-
-[10000, '.lookup.v1', 'DELETE FROM records', 'INDEX_NOT_BUILT', 'VALIDATION_ERROR', 'action', 'alpha_id', 'alpha_id is required', 'backtest_record', 'backtests.jsonl', 'cloud_alpha', 'cloud_alphas.jsonl', 'cloud_record_hash', 'count', 'counts', 'db_path', 'error', 'error_code', 'expression', 'expression_canonical', 'expression_key', 'id', 'ignore', 'is_stale', 'kind', 'latest_timestamp', 'lifecycle_status', 'manifest', 'max_index', 'metrics', 'official_alpha_id', 'ok', 'payload', 'payload_json', 'reason', 'record_count', 'record_id', 'record_index', 'records', 'records_index.sqlite', 'row_count', 'schema_version', 'simulation_id', 'source', 'source_file', 'sqlite_record_index', 'status', 'synced_at', 'timestamp', 'unsupported_source', 'utf-8']

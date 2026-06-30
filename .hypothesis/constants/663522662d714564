@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web_candidates/optimization/__init__.py
-# hypothesis_version: 6.141.1
-
-['LocalBacktestEngine', 'RepositoryFactory', 'RunConfigFromPayload', '_all_candidate_rows', '_candidate_score', '_expression_key', '_int_list', '_optimizer_trace', '_optional_float', '_optional_int', '_rank_rework_sources', '_resolve_dataset_id', '_source_candidates', '_source_tags', '_string_list', '_summary', '_target_pool_size']

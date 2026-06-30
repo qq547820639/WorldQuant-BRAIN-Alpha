@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web/dispatch/post_routes/candidates.py
-# hypothesis_version: 6.141.1
-
-[400, 409, 500, 'CHECK_BATCH_ERROR', 'CHECK_ERROR', 'CONFLICT_RUNNING', 'SCORING_ERROR', 'SIMULATE_ERROR', 'async', 'check', 'create_if_no_active', 'error', 'error_code', 'job_id', 'message', 'ok', 'operation', 'percent', 'percent_complete', 'phase', 'preview', 'preview_available', 'progress', 'queue_blocked', 'queued', 'required_field', 'running', 'simulat', 'simulation_starting', 'sse_url', 'status', 'status_message', 'status_url', 'stopping', 'task_id', '已有异步任务运行中', '已有批量检查任务正在运行。', '已有批量检查任务运行中', '已有模拟任务在运行', '正在启动官方 BRAIN 模拟任务。']

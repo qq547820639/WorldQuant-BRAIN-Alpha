@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/expression_index/_core.py
-# hypothesis_version: 6.141.1
-
-[0.0, 0.75, 2000, 5000, 'alpha_id', 'backtest', 'backtests.jsonl', 'candidate', 'candidates.jsonl', 'check', 'checks.jsonl', 'cloud_alpha', 'cloud_alphas.jsonl', 'count', 'created_at', 'data', 'duplicates', 'exact_count', 'exact_match', 'exact_records', 'expression', 'expression-index.v1', 'expression_canonical', 'expression_profile', 'family', 'fields', 'frequent_expressions', 'id', 'latest_timestamp', 'lifecycle', 'lifecycle.jsonl', 'max_score', 'min_similarity', 'official_alpha_id', 'ok', 'operators', 'record_index', 'schema_version', 'score', 'similar_count', 'similar_records', 'similarity', 'simulation_id', 'source', 'source_count', 'source_counts', 'source_file', 'stage', 'status', 'storage_dir', 'submission', 'submissions.jsonl', 'synced_at', 'timestamp', 'windows']

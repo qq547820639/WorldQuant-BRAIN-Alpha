@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web_candidates/simulation_state/_eligibility.py
-# hypothesis_version: 6.141.1
-
-['0', 'FAIL', 'PASS', 'alpha_id', 'data_fields', 'dataset', 'dataset_id', 'expression', 'false', 'group_', 'industry', 'lifecycle_status', 'local_quality', 'market', 'no', 'official_metrics', 'pass_fail', 'passed', 'sector', 'settings', 'simulation_id', 'simulation_running', 'simulation_submitted', 'subindustry', 'supported']

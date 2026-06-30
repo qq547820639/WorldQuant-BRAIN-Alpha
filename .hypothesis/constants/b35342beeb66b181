@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web_candidates/audit/__init__.py
-# hypothesis_version: 6.141.1
-
-['_audit_events', '_audit_identity', '_bool_default', '_bump', '_evidence_block', '_expression_block', '_first_int', '_is_int_like', '_lineage_block', '_metric_sources', '_optional_float', '_parent_similarity', '_similarity_sources']

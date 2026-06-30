@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/scoring/release_score_gate/_checks.py
-# hypothesis_version: 6.141.1
-
-[0.5, ', ', 'ERROR', 'INFO', 'PASS', 'alphaSize', 'delay', 'delay_source', 'expected', 'min_fitness_used', 'min_sharpe_used', 'official_pass_fail', 'sharpe', 'sharpe_threshold_key', 'size_factor', 'subUniverseSharpe', 'subUniverseSize', 'sub_universe_sharpe']

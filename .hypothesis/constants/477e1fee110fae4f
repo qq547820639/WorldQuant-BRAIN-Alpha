@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/validated_generator/_prefilter.py
-# hypothesis_version: 6.141.1
-
-[1.0, 999, 'close', 'delta', 'expression', 'group_neutralize', 'group_rank', 'group_zscore', 'high', 'low', 'open', 'rank', 'returns', 'scale', 'ts_cov', 'ts_decay_linear', 'ts_delta', 'ts_mean', 'ts_rank', 'ts_zscore', 'zscore']

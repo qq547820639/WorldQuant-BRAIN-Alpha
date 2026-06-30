@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/fusion_candidates.py
-# hypothesis_version: 6.141.1
-
-[0.0, 500, 'Hybrid', 'alpha', 'fusion', 'fusion_created', 'fusion_cycle', 'fusion_mode', 'fusion_pending', 'mode', 'parent_alpha_ids', 'parents', 'passed', 'total_score']

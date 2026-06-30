@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/adaptive_executor.py
-# hypothesis_version: 6.141.1
-
-[0.1, 1.0, 2.0, 86400.0, 100, 120, 200, '500', '502', '503', '504', '8', '[._]', '__module__', '__qualname__', 'api', 'calculate', 'cancelled', 'completed', 'compute', 'connection', 'cpu', 'default', 'download', 'evaluate', 'expression', 'failed', 'fetch', 'fitness', 'generate', 'hit_rate', 'hits', 'http', 'io', 'jsonl', 'matrix', 'max_size', 'message', 'misses', 'network', 'parse', 'percent', 'phase', 'queued', 'rate limit', 'read', 'request', 'running', 'score', 'scoring', 'size', 'sqlite', 'status', 'task cancelled', 'task timed out', 'temporarily', 'timed out', 'timeout', 'too many requests', 'upload', 'validate', 'vector', 'web', 'write']

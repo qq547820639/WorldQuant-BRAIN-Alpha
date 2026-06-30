@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/scoring/visualization.py
-# hypothesis_version: 6.141.1
-
-[0.0, 'attribution_tree', 'calibratable', 'children', 'contribution', 'contribution_bars', 'decision_band', 'depth', 'empirical', 'explanation', 'id', 'improvement_hints', 'name', 'node_count', 'nodes', 'ok', 'parent', 'prior', 'schema_version', 'score', 'submission_checklist', 'top_failures', 'total_score', 'visualization', 'weight']

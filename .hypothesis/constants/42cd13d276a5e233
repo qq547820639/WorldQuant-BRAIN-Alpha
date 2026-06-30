@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/data/official_context_validation.py
-# hypothesis_version: 6.141.1
-
-['BLOCKING', 'P1', 'Z', '_findings', 'blocking_count', 'blocking_ok', 'code', 'complete', 'data', 'data_dir', 'dataset', 'dataset_count', 'dataset_id', 'datasets', 'duplicate_identity', 'empty_context_file', 'expires_at', 'field_count', 'fields', 'files', 'findings', 'id', 'identity_count', 'invalid_json', 'invalid_shape', 'is_stale', 'kind', 'lineage', 'message', 'metadata', 'metadata_incomplete', 'metadata_stale', 'missing_file', 'missing_identity', 'missing_metadata', 'name', 'non_object_rows', 'official_api', 'official_fields.json', 'ok', 'operators', 'p1_count', 'path', 'present', 'read_error', 'record_count', 'record_count_matches', 'saved_at', 'schema_ok', 'schema_version', 'severity', 'sha256', 'sha256_matches', 'source', 'unknown', 'utf-8']

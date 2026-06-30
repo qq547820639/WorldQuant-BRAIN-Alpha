@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/scripts/check_live_submit_readiness/_runners.py
-# hypothesis_version: 6.141.1
-
-['--candidate-ledger', '--config', '--jobs', '--json', '--require-ready', 'best_candidate', 'candidate_count', 'candidate_ledger', 'candidates', 'candidates.jsonl', 'chain_summary', 'code', 'eligible', 'eligible_candidates', 'eligible_count', 'findings', 'gap_count', 'gaps', 'job_audits', 'job_ledger_audits', 'job_ledger_paths', 'job_ledgers_checked', 'jobs', 'jobs_checked', 'jobs_ledger_error', 'latest_candidates', 'latest_job_id', 'latest_job_status', 'max_similarity', 'message', 'ok', 'ready_to_submit', 'schema_version', 'similarity_threshold', 'store_true', 'summary_counts', 'threshold_summary']

@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web/dispatch/__init__.py
-# hypothesis_version: 6.141.1
-
-['.web_get_handlers', '.web_http_handler', '.web_post_handlers', '.web_routes', 'GET_ROUTES', 'POST_ROUTES', 'Route', 'active_job_payload', 'apply_rate_limit', 'create_handler_class', 'dispatch_get', 'dispatch_post', 'dispatch_route', 'error_response', 'get_candidates', 'health_payload', 'job_status_payload', 'lifecycle_payload', 'presets_payload', 'profile_payload', 'rate_limit_key', 'route_for', 'session_end_payload', 'stop_job_payload']

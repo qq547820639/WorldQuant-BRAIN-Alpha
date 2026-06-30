@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/scoring/official_scoring/_history.py
-# hypothesis_version: 6.141.1
-
-['api_deviation', 'data/audit_trail', 'decision_band', 'declining', 'improving', 'passed_gate', 'stable', 'timestamp', 'total_score']

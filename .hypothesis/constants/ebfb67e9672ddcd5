@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web/candidates/web_check_availability/_batch_job.py
-# hypothesis_version: 6.141.1
-
-[100, 'CHECK_CLOUD_SYNC', 'CHECK_COMPLETED', 'CHECK_FAILED', 'CHECK_RUNNING', 'all', 'alpha_id', 'blocked', 'blockers', 'check_batch', 'check_batch_job', 'checked', 'checking', 'checks', 'cloud_count', 'cloud_error', 'cloud_sync', 'completed', 'current_alpha_id', 'error', 'error_context', 'failed', 'items', 'job_id', 'message', 'mode', 'name', 'ok', 'operation', 'passed', 'percent', 'percent_complete', 'phase', 'quick', 'range', 'refreshCloudForCheck', 'running', 'status_code', 'status_message', 'submittable', 'summary', 'syncRange', 'task_id', 'total', 'unknown']

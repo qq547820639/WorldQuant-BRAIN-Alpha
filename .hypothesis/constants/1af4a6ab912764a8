@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/local_backtest/metrics.py
-# hypothesis_version: 6.141.1
-
-[0.0, 1e-10, 0.125, 2.0, 252, 10000, 'BacktestMetrics', 'MetricsComputer', 'correlation', 'drawdown', 'fitness', 'ic_ir', 'ic_mean', 'margin', 'n_dates', 'n_symbols', 'returns', 'sharpe', 'sub_universe_sharpe', 'turnover', 'weight_concentration']

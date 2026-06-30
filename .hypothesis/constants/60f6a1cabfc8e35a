@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/fusion.py
-# hypothesis_version: 6.141.1
-
-[512, ' + ', '(', ')', 'average', 'composite', 'ensemble_average', 'ensemble_min', 'fusion', 'max', 'min', 'orthogonal', 'orthogonal_blend', 'rank_average', 'residual', 'residual_alpha', 'reverse_residual', 'total_score']

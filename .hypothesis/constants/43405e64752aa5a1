@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/assistant/__init__.py
-# hypothesis_version: 6.141.1
-
-['_as_dict', '_budgeted_context', '_clamp', '_digest_json', '_digest_text', '_estimated_tokens', '_float_value', '_guidance_count', '_guidance_digest', '_guidance_outcomes', '_int_value', '_number_items', '_offline_confidence', '_offline_summary', '_string_items', '_unique_numbers', '_unique_strings', 'logger']

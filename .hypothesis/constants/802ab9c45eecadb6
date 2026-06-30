@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/brain_api/official_alphas/_lifecycle_mixin.py
-# hypothesis_version: 6.141.1
-
-[0.0, 100, 180, '3d', '6months', '7d', 'GET', 'PATCH', 'all', 'category', 'clear_seen', 'color', 'created_at', 'days', 'decay', 'expression', 'favorite', 'hidden', 'id', 'items', 'limit', 'name', 'nanHandling', 'neutralization', 'offset', 'page_params', 'pasteurization', 'progress', 'recent', 'retry_after', 'sleep_seconds', 'stage', 'status_code', 'tag', 'total', 'transient_page_retry', 'truncation', 'type', 'unitHandling', 'user_alphas']

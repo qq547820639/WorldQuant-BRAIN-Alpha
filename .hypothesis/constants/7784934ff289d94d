@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web/business/web_business/__init__.py
-# hypothesis_version: 6.141.1
-
-['_real_attribution', '_real_check', '_real_check_batch', '_real_connection', '_real_generate', '_real_run', '_real_score', '_real_session', '_real_stop', '_real_submit', '_real_submit_batch', '_real_sync', '_web_error_injected', 'inject_dependencies']

@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/llm_review/_providers.py
-# hypothesis_version: 6.141.1
-
-[0.0, 1.0, 60.0, 160, '/', '; ', 'Authorization', 'Content-Type', 'OPENAI_API_KEY', 'OPENAI_BASE_URL', 'OPENAI_MODEL', 'POST', 'application/json', 'choices', 'content', 'default', 'error_count', 'fallback', 'gpt-4o-mini', 'health', 'json_object', 'last_error', 'last_latency_seconds', 'last_ok', 'message', 'messages', 'model', 'name', 'ok_count', 'openai_compatible', 'provider_count', 'replace', 'response_format', 'response_schema', 'router', 'schema_version', 'static', 'task', 'task_routes', 'temperature', 'type', 'utf-8']

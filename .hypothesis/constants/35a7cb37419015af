@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web_candidates/check_evidence.py
-# hypothesis_version: 6.141.1
-
-['?', 'Skipped', 'alpha_id', 'checked_at', 'checks', 'cloud_similarity', 'cloud_status', 'context_health', 'dataset_id', 'detail', 'expression', 'failed_reasons', 'last_check_at', 'last_check_passed', 'last_check_status', 'latest_check', 'name', 'official_alpha_id', 'passed', 'scientific_audit', 'status', 'submittable']

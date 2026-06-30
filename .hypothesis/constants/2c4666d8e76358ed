@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/browser/monitor.py
-# hypothesis_version: 6.141.1
-
-[10.0, 15.0, 200, 400, 429, 500, 540, 960, '#root', 'BROWSER_DEGRADED', 'BROWSER_RATE_LIMITED', 'BROWSER_SERVER_ERROR', 'Browser health ok', 'OK', '_page', 'blocked', 'classification', 'code', 'consecutive_errors', 'console_errors', 'critical', 'dom_broken', 'dom_check_failed', 'domcontentloaded', 'error', 'healthy', 'heartbeat', 'heartbeat_age', 'heartbeat_stale', 'high', 'issues', 'last_heartbeat_ts', 'medium', 'message', 'network_failures', 'network_logs', 'ok', 'phase', 'response', 'retryable', 'severity', 'status', 'type', 'warning']

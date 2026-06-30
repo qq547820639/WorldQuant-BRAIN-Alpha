@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/scripts/check_frontend_surface_parity/__init__.py
-# hypothesis_version: 6.141.1
-
-['DEFAULT_PARITY_PLAN', 'DEFAULT_REACT_APP', 'ROOT', 'VALID_PLAN_STATUSES', '_empty_plan_summary', '_finding', '_plan_entry_error', '_plan_summary', '_read_text', '_string_literals', 'extract_inline_views', 'extract_react_tabs', 'main']

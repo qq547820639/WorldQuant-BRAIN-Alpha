@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/prod_correlation.py
-# hypothesis_version: 6.141.1
-
-[0.0, 0.25, 0.4, 0.6, 0.7, 0.85, 1.0, 100, 200, 'BrainAPI | None', 'POST', 'alpha_id', 'alpha_ids', 'correlation', 'error', 'expression', 'local_estimate', 'max_threshold', 'official_api', 'passed', 'results', 'settings', 'source', 'unavailable', 'unknown']

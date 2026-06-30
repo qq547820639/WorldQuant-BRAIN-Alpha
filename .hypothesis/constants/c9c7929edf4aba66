@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/scripts/check_tracked_data_inventory/_boundary.py
-# hypothesis_version: 6.141.1
-
-['code', 'count', 'decision_todo', 'description', 'entries', 'entry_count', 'files', 'id', 'invalid_entries', 'keep', 'keep_files', 'message', 'path', 'present', 'rationale', 'reason', 'recommendations', 'remove', 'remove_files', 'schema_version', 'stale_entries', 'status', 'strict_gate', 'unresolved_count', 'utf-8']

@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/expression_ast/__init__.py
-# hypothesis_version: 6.141.1
-
-['ExprNode', 'ExpressionParseError', 'ExpressionProfile', '_LEXICAL_TOKEN_RE', '_TOKEN_RE', '_canonical_child', '_collect', '_collect_operators', '_fields_from_text', '_fingerprint', '_flatten', '_is_identifier_token', '_is_number', '_jaccard', '_max_depth', '_node_count', '_normalize_number', '_operators_from_text', '_paren_depth', '_paren_depth_simple', '_precedence', '_semantic_tokens', '_tokenize', '_window_bucket', '_windows_from_text', 'canonical_expression', 'canonical_tokens', 'canonicalize', 'expression_key', 'lexical_normalize', 'ordered_operators', 'parse_expression', 'profile_expression']

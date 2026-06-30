@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/tasks/_watchdog.py
-# hypothesis_version: 6.141.1
-
-[0.0, 100, 'cancel', 'error', 'failed', 'message', 'percent', 'percent_complete', 'phase', 'previous_status', 'progress', 'status', 'status_message', 'triggered', 'unknown', 'updated_at', 'watchdog', 'watchdog_failed']

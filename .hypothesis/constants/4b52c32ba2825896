@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web_candidates/audit/_summary.py
-# hypothesis_version: 6.141.1
-
-['anti_overfit', 'audit_payload_count', 'audited_count', 'candidate_count', 'details', 'evidence', 'explainability', 'feedback_sources', 'missing_audit_count', 'official_api_called', 'official_context', 'operation', 'operations', 'passed', 'safety_boundary', 'schema_version', 'source', 'sources', 'submit_allowed', 'submit_allowed_count', 'unknown']

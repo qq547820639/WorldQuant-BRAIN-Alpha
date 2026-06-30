@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/scripts/check_live_submit_readiness/_thresholds.py
-# hypothesis_version: 6.141.1
-
-['code', 'max_prod_correlation', 'max_self_correlation', 'message', 'min_fitness', 'min_sharpe']

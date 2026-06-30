@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web/security/web_session/_state.py
-# hypothesis_version: 6.141.1
-
-[0.0, '127.0.0.1', 'absolute_expires_at', 'account_id', 'brain_connection', 'brain_credentials', 'created_at', 'csrf', 'csrf_token', 'expires_at', 'id', 'last_accessed', 'metadata', 'password', 'token', 'user_id', 'username']

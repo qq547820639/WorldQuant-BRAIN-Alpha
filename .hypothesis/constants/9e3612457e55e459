@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web_candidates/decisions/_decision.py
-# hypothesis_version: 6.141.1
-
-[0.0, 70.0, 'abandon_or_rebuild', 'action', 'archive', 'archived', 'blocking', 'decision_band', 'decision_evidence', 'hard_gate_blocked', 'lifecycle_replay', 'lifecycle_risk', 'needs_optimization', 'next_state', 'official_api_called', 'optimize', 'ready_for_review', 'reason', 'reason_code', 'reason_codes', 'research_only', 'retain', 'schema_version', 'score', 'source', 'submit_allowed', 'submit_candidate']

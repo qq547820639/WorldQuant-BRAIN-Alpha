@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/scripts/check_parameter_traceability/_audit.py
-# hypothesis_version: 6.141.1
-
-['--config', '--data-dir', '--json', 'BLOCKING', 'ERROR', 'FAIL', 'FAILED', 'OK', 'PASSED', 'WARNING', 'api_paths_check', 'api_paths_documented', 'audit_version', 'blocking_count', 'blocking_ok', 'budget', 'check', 'checked', 'checks', 'coverage_paths', 'coverage_scope', 'coverage_statement', 'data', 'dataset', 'dataset_ids_check', 'datasets', 'details', 'element_coverage', 'errors', 'errors_list', 'fields', 'findings', 'fix', 'id', 'issues', 'issues_found', 'lineage', 'message', 'name', 'official_api', 'official_fields.json', 'official_reference', 'operators', 'ops', 'passed', 'path', 'settings', 'settings_check', 'settings_documented', 'severity', 'source', 'store_true', 'surface_coverage', 'surfaces_checked', 'template_checks', 'thresholds', 'thresholds_check', 'total_issues', 'utf-8', 'warnings', 'warnings_found', 'warnings_list']

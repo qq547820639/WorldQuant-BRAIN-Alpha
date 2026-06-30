@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web/misc/web_runtime_facade/_server.py
-# hypothesis_version: 6.141.1
-
-[3600, '--config', '--frontend', '--no-browser', '--port', '--smoke-test', 'BRAIN Alpha Ops 已启动', 'SERVER_LOCK', 'WEB_FRONTEND_ENV', '__enter__', 'admin_token_env', 'candidates', 'environment', 'idle', 'inline', 'ok', 'production', 'react', 'reset_html_cache', 'simulations', 'status', 'stdout', 'store_true', 'submissions', 'web ready', 'web_html']

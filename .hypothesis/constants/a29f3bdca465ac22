@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web/business/web_run_job.py
-# hypothesis_version: 6.141.1
-
-[0.0, 1.0, 5.0, 30.0, 100.0, 100, 'GUIDED_JOB_FAILED', 'RUN_JOB_FAILED', 'alpha_id', 'backtest_slots', 'backtests', 'canceled', 'cancelled', 'candidates', 'checkpoint_available', 'completed', 'continuous', 'count', 'current', 'data', 'error', 'error_context', 'failed', 'guided', 'guided_run', 'heartbeat', 'message', 'percent', 'phase', 'phases', 'pipeline_waiting', 'progress', 'queued', 'resume', 'run_job', 'run_pipeline', 'running', 'source', 'startup', 'stats', 'status', 'status_message', 'stopped', 'stopping', 'summary', 'to_dict', 'total', 'updated_at', 'web_run_job', '任务完成。', '任务已停止。', '后台任务启动。', '引导式任务完成。', '引导式生产任务启动...', '等待官方接口或流水线进度回调。']

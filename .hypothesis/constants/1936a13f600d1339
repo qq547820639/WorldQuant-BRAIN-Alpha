@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/scripts/check_review_gap_closure_tracker/_core.py
-# hypothesis_version: 6.141.1
-
-['Active Work Queue', 'Current Run Baseline', 'Not Yet Claimable', 'Status Matrix', 'active_queue', 'baseline_fact', 'config', 'current_run_baseline', 'delivery_audit', 'delivery_audit_fact', 'findings', 'live_submit', 'missing_section', 'missing_tracker', 'not_yet_claimable', 'official_context', 'ok', 'queue_header', 'react_surface', 'review_triage_fact', 'schema_version', 'stale_tracker_fact', 'status_matrix', 'summary', 'tracker', 'utf-8']

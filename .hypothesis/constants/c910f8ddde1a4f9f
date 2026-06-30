@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/alpha_checks/_registry.py
-# hypothesis_version: 6.141.1
-
-['ATOM', 'ERROR', 'INFO', 'POWER_POOL', 'PYRAMID', 'WARNING', 'atom_single_dataset', 'coverage_minimum', 'delay_consistent', 'drawdown_limit', 'drawdown_stability', 'expression_valid', 'fitness_minimum', 'ic_ir', 'ic_mean', 'is_oos_robustness', 'margin_minimum', 'nan_handling', 'powerpool_fields', 'powerpool_operators', 'powerpool_self_corr', 'powerpool_sharpe', 'prod_correlation', 'pyramid_count', 'rank_ic', 'returns_positive', 'self_correlation', 'sharpe_positive', 'sub_universe_sharpe', 'turnover_platform', 'turnover_quality', 'turnover_stability', 'weight_concentration']

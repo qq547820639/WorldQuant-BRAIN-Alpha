@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web/dispatch/get_routes/__init__.py
-# hypothesis_version: 6.141.1
-
-['GET_ROUTES', 'POST_ROUTES', 'Route', 'RouteHandler', 'route_for']

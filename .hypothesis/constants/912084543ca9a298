@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web/submissions/web_submission_safety/_events.py
-# hypothesis_version: 6.141.1
-
-[0.0, 160, '?', 'BLOCKED', 'alpha_id', 'environment', 'expression', 'failure_reason', 'family', 'job_id', 'manual', 'manual_submit', 'note', 'official_alpha_id', 'score', 'scorecard', 'simulation_id', 'stage', 'status', 'submission_blocked', 'submit_mode', 'submit_trigger', 'timestamp', 'total_score']

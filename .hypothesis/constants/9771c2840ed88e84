@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/expression_index/_buckets.py
-# hypothesis_version: 6.141.1
-
-[0.0, 'alpha_id', 'alpha_ids', 'cache_schema_version', 'count', 'examples', 'expression-index.v1', 'expression_canonical', 'expression_profile', 'families', 'family', 'fingerprints', 'latest_timestamp', 'max_score', 'name', 'official_alpha_id', 'official_alpha_ids', 'schema_version', 'source', 'source_count', 'sources', 'status', 'statuses', 'timestamp', 'window']

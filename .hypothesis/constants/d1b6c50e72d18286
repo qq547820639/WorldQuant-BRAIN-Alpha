@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/brain_api/official_alphas/_helpers.py
-# hypothesis_version: 6.141.1
-
-['__cause__', 'connection aborted', 'connection reset', 'dataset', 'delay', 'eof', 'instrument_type', 'network error:', 'region', 'remote end closed', 'ssl', 'status_code', 'timed out', 'universe', 'urlopen error']

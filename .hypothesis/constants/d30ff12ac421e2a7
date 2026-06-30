@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/iterative_optimizer/_optimizer.py
-# hypothesis_version: 6.141.1
-
-[2.0, 'concentration', 'correlation', 'dataset_id', 'failed_dimension', 'failed_dimensions', 'field_swap', 'field_swap_semantic', 'fitness', 'gate', 'general', 'longer_window', 'margin', 'mutation_mode', 'official_api_called', 'operator_substitute', 'optimizer-trace-v1', 'optimizer_trace', 'schema_version', 'selected_strategy', 'sharpe', 'strategy_index', 'strategy_order', 'structure_refine', 'sub_universe_sharpe', 'submit_allowed', 'suggested_modes', 'suggested_mutations', 'turnover_low', 'turnover_platform', 'turnover_quality', 'window_perturb']

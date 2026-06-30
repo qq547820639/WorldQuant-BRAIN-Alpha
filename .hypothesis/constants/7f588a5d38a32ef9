@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/theme_engine/_skeletons.py
-# hypothesis_version: 6.141.1
-
-['conditional', 'cross_sectional', 'decay', 'growth', 'hybrid', 'liquidity', 'momentum', 'multi_window', 'quality', 'rank(-{FIELD})', 'rank({FIELD})', 'reversal', 'size', 'value', 'volatility']

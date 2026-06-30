@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/knowledge_base/_types.py
-# hypothesis_version: 6.141.1
-
-[0.0, 1.0, 'body', 'category', 'collinearity', 'combination_synergy', 'confidence', 'created_at', 'description', 'entry_id', 'evidence', 'expression_pattern', 'expression_structure', 'failure', 'failures', 'field_effectiveness', 'field_selection', 'fields_involved', 'finding', 'findings', 'high_turnover', 'kind', 'knowledge_base.v1', 'layer', 'low_signal', 'macro_sensitivity', 'market_regime', 'metadata', 'neutralization', 'operator_usage', 'operators_involved', 'overfit', 'platform_rejection', 'rule', 'rules', 'seasonality', 'self_correlation', 'source_run_id', 'source_tags', 'submission_safety', 'title', 'universe_constraint', 'updated_at', 'utf-8', 'value', 'window_effectiveness', 'window_selection']

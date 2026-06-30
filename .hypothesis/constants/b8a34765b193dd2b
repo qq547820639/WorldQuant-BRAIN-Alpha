@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/data/cache_metadata.py
-# hypothesis_version: 6.141.1
-
-[0.0, 0.95, '*.meta.json', ',', '.meta.json', ':', 'cache_dir', 'complete', 'completeness', 'empty', 'expires_at', 'file_count', 'filename', 'files', 'generated_at', 'has_records', 'id', 'id_or_name_count', 'id_or_name_coverage', 'is_available', 'is_stale', 'local_cache_metadata', 'name', 'ok', 'record_count', 'saved_at', 'schema_version', 'sha256', 'source', 'stale_count', 'ttl_seconds', 'unknown', 'utf-8', 'valid_count']

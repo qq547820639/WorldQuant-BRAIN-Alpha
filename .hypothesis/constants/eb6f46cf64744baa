@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/compliance/redline_verifier.py
-# hypothesis_version: 6.141.1
-
-['--block', '--config', '--json', 'BLOCKING', 'FAIL', 'PASS', '__main__', 'error', 'redline-verify', 'report', 'store_true', '输出 JSON 格式', '阻断模式: 有违规即报错退出']

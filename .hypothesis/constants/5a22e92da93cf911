@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web/misc/web_facade_bindings/_candidate_imports.py
-# hypothesis_version: 6.141.1
-
-['_check_candidate', '_cloud_status_for', '_load_check_results', '_run_check_batch_job', '_run_sync_job', '_submit_batch', '_submit_candidate', '_sync_cloud_alphas']

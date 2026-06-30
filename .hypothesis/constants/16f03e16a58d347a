@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web_cloud/sync_job/_service/_state.py
-# hypothesis_version: 6.141.1
-
-[120.0, 100, 'CONTEXT_FIELDS', 'CONTEXT_OPERATORS', 'HEARTBEAT', 'SCAN', 'STOPPED', 'added', 'api_reported_total', 'cancelled', 'context', 'contextOnly', 'context_only', 'count', 'current', 'elapsed', 'failed', 'fields_count', 'fields_total', 'filter_window_count', 'heartbeat', 'is_cancelled', 'job_id', 'message', 'offset', 'ok', 'operation', 'operators_count', 'operators_total', 'page_size', 'percent', 'percent_complete', 'phase', 'range', 'requested', 'running', 'scan', 'scanned', 'skipped', 'source', 'status', 'status_code', 'status_message', 'stopped', 'sync_alphas', 'task_id', 'total', 'total_steps', 'updated', 'watchdog_keepalive', '云端同步已停止。', '云端同步已停止，可调整范围后重试。']

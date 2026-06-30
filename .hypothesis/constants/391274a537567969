@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/knowledge_base/_base.py
-# hypothesis_version: 6.141.1
-
-[0.0, 100, 'body', 'confidence', 'count', 'counts', 'created_at', 'data', 'entry_id', 'evidence', 'evidence_payload', 'expression_pattern', 'fields_involved', 'items', 'kind', 'knowledge_id', 'metadata', 'ok', 'operators_involved', 'schema_version', 'source_run_id', 'source_tags', 'structured_summary', 'title', 'updated_at']

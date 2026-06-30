@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web/security/web_session/_brain_connection.py
-# hypothesis_version: 6.141.1
-
-[0.0, 'absolute_expires_at', 'auth', 'auth_mode', 'authenticated', 'connected', 'credential_source', 'environment', 'expires_at', 'id', 'last_accessed', 'last_verified_at', 'managed', 'metadata', 'none', 'ok', 'page', 'password', 'production', 'session_id', 'token', 'ttl_seconds', 'username', 'verified', 'verified_at']

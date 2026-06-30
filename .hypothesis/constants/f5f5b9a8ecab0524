@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/ux/guided_formatting.py
-# hypothesis_version: 6.141.1
-
-[200, '  可重试: 是 - 系统将自动重试', '  失败原因:', 'ERROR', 'INFO', 'SUCCESS', 'WARNING', '[+]', '[.]', '[E]', '[W]', '[i]', 'failed_reasons', 'fix', 'maybe', 'message', 'no', 'retry', 'type', 'yes']

@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/scripts/scan_sensitive_artifacts/__init__.py
-# hypothesis_version: 6.141.1
-
-['iter_candidate_files', 'main', 'scan_artifacts', 'scan_git_history']

@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/dataset_selection.py
-# hypothesis_version: 6.141.1
-
-['ERROR', 'INFO', 'WARN', 'action', 'available_datasets', 'break', 'continue', 'dataset', 'dataset_id', 'dataset_selection.v1', 'dataset_skip_cycle', 'event', 'fixed', 'level', 'locked', 'reason', 'rotate', 'schema_version', 'skip', 'specific']

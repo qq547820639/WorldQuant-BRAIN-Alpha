@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/scripts/check_review_gap_closure_tracker_helpers/_status.py
-# hypothesis_version: 6.141.1
-
-['after', 'available', 'before', 'blocking_count', 'blocking_ok', 'candidate_count', 'datasets', 'eligible_count', 'error_category', 'error_code', 'fields', 'files', 'job_ledgers_checked', 'jobs_checked', 'latest_job_id', 'lineage', 'manifest_stale', 'max_similarity', 'official_fields.json', 'ok', 'operators', 'p1_count', 'ready_to_submit', 'record_count', 'status', 'submission_ready', 'summary_counts', 'utf-8', 'validation_ok', 'write_enabled']

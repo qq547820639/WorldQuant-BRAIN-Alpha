@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web/misc/web_payload_validation.py
-# hypothesis_version: 6.141.1
-
-[0.0, 100.0, 100, 128, 3600, 200000, 'all', 'alpha_id', 'alpha_ids', 'alpha_ids[]', 'assistant_guidance', 'assistant_response', 'automationMode', 'automation_mode', 'candidate', 'candidate_ids', 'candidate_ids[]', 'candidates', 'check_candidates', 'count', 'existingPoolSize', 'existing_pool_size', 'integer', 'job_id', 'max_simulations', 'min_score', 'mode', 'next_candidate_ids', 'number', 'official_alpha_id', 'poll_timeout', 'poolDeficit', 'pool_deficit', 'primary', 'primary_response', 'quick', 'range', 'raw_output', 'request', 'request_pack', 'simulation_id', 'stall_timeout', 'submit_candidates', 'syncRange', 'targetPoolSize', 'target_pool_size', 'text', 'validator', 'workflow_plan']

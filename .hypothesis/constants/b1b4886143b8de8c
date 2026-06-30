@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/errors.py
-# hypothesis_version: 6.141.1
-
-[400, 401, 403, 404, 408, 409, 429, 500, 502, 503, 504, 'AUTH', 'AUTH_FAILED', 'CONFLICT', 'CONFLICT_RUNNING', 'INTERNAL_ERROR', 'JSON', 'MISSING', 'MISSING_OFFICIAL_ID', 'NOT_FOUND', 'Not found', 'ORIGIN', 'ORIGIN_FORBIDDEN', 'PARSE', 'RATE_LIMIT', 'RETRY', 'SESSION', 'SESSION_INVALID', 'SUBMIT_BLOCKED', 'TEMPORARY', 'TIMEOUT', 'UNHANDLED_ERROR', 'VALIDATION', 'VALIDATION_ERROR', 'auth', 'broken pipe', 'code', 'conflict', 'connection', 'connection aborted', 'connection reset', 'credential', 'error', 'error_category', 'error_code', 'error_type', 'forbidden', 'incomplete read', 'incompleteread', 'internal', 'invalid', 'missing', 'network', 'not found', 'not_found', 'ok', 'rate limit', 'rate_limit', 'remote end closed', 'retry_after', 'retryable', 'status_code', 'storage', 'timed out', 'timeout', 'too many requests', 'unauthorized', 'validation']

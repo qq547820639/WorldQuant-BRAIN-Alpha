@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web_candidates/optimization/_payload.py
-# hypothesis_version: 6.141.1
-
-['bounded', 'candidate', 'candidate_count', 'candidate_limit', 'candidates', 'candidates.jsonl', 'dataset_id', 'error_count', 'errors', 'expression', 'extra_fields', 'keep_top', 'live_api_calls', 'local_only', 'local_quality', 'max_candidates', 'max_mutations', 'official_api_called', 'ok', 'optimize_candidates', 'optimized_count', 'persisted_count', 'production_decision', 'quality_gate', 'rejected_count', 'results', 'returned_count', 'schema_version', 'scientific_audit', 'scorecard', 'source', 'submit_allowed', 'summary', 'target']

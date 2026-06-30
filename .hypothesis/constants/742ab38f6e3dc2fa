@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/browser/execution_adapter/_submit.py
-# hypothesis_version: 6.141.1
-
-['Not authenticated', '_page', 'allowed', 'alpha_id', 'approval_ticket', 'code', 'domcontentloaded', 'error', 'error_code', 'evidence', 'idempotency_key', 'message', 'missing', 'networkidle', 'ok', 'step', 'submit', 'submit.blocked_state', 'submit.guard', 'submit.navigate']

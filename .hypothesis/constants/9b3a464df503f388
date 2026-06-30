@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/convergence/__init__.py
-# hypothesis_version: 6.141.1
-
-['ConvergenceStatus', 'ConvergenceTracker', 'CycleRecord', '_BootstrapMixin', '_bca_alpha', '_inv_norm_cdf', '_normal_cdf', 'logger']

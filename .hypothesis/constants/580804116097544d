@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/backtest_polling.py
-# hypothesis_version: 6.141.1
-
-[0.0, 30.0, 429, 'CALCULATING', 'COMPLETED', 'EVALUATING', 'FAILED', 'IN_PROGRESS', 'PENDING', 'PROCESSING', 'QUEUED', 'RUNNING', 'SIMULATION_FAILED', 'STARTING', 'SUBMITTED', 'WARN', 'alpha_id', 'completed', 'failed', 'float | None', 'metrics', 'next_poll_at', 'official_alpha_id', 'official_simulated', 'poll_deferred', 'poll_failed', 'polled', 'result_deferred', 'result_failed', 'result_summary', 'running', 'settings', 'sim_config', 'simulation_failed', 'simulation_result', 'simulation_running', 'simulation_status', 'simulation_wait']

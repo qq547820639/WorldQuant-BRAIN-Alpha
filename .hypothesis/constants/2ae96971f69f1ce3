@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/scripts/check_prod_defect_tracking/_constants.py
-# hypothesis_version: 6.141.1
-
-[0.7, 0.9, 1.0, 1.25, 'BLOCKED', 'SUBMITTABLE', 'auditable candidate', 'bad_signal_slots=0', 'bad_std=[]', 'candidates_count', 'candidates_preview', 'config', 'data', 'docs', 'eligible_count=0', 'expression_key', 'fail-closed', 'fallback_count=0', 'forbidden_patterns', 'generated=30', 'high_turnover', 'jobs_production.json', 'max_self_correlation', 'min_fitness', 'min_sharpe', 'official metrics', 'official validation', 'official_pass_fail', 'parse_failures=0', 'pass_fail=PASS', 'prod_stub_alpha', 'requested=30', 'run_config.json', 'std=4', 'stub', 'submit_candidate', '不能声明已有可提交 Alpha', '不降低', '去重后继续补足', '官方验证', '本地 stub']

@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web/submissions/web_submission_safety/_observability.py
-# hypothesis_version: 6.141.1
-
-[5000, 'actions', 'blocking_flags', 'error', 'flag_details', 'generated_at', 'health', 'health_flags', 'navigation', 'official_call_guard', 'ok', 'risk_explanation', 'risk_level', 'schema_version', 'state_navigation', 'unknown', 'warning_flags']

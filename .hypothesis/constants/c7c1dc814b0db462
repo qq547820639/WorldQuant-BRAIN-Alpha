@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/data/ashare_adapter/_adapters.py
-# hypothesis_version: 6.141.1
-
-[1.0, 180, '0', '000016', '000300', '000905', '2', '2020-01-01', '399006', 'adj_factor', 'adjfactor', 'amount', 'close', 'constituent_code', 'd', 'date', 'empty', 'failed', 'high', 'ipo_date', 'low', 'name', 'open', 'status', 'symbol', 'turnover_rate', 'type', 'unsupported_index', 'volume', '上证50', '中证500', '代码', '创业板指', '名称', '成分券代码', '未知', '沪深300']

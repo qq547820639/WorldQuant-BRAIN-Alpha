@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/audit_trail/query.py
-# hypothesis_version: 6.141.1
-
-[200, '+00:00', 'Z', 'alpha_id', 'attribution', 'by_event_type', 'by_state', 'context', 'data/audit_trail', 'dataset', 'dataset_id', 'event_type', 'expression', 'from_state', 'gate_decision', 'gate_fail_count', 'gate_name', 'gate_pass_count', 'lifecycle_transition', 'passed', 'reason', 'records', 'region', 'result', 'result_summary', 'score', 'search_score', 'sharpe', 'sim_config', 'simulation_result', 'status', 'summary', 'to_state', 'total', 'total_records', 'total_score', 'trigger_rule', 'truncated', 'unique_alphas', 'universe', 'unknown', 'written_at']

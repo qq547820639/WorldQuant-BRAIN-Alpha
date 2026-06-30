@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/sqlite_index_manifest.py
-# hypothesis_version: 6.141.1
-
-[0.0, 1e-06, '%Y-%m-%dT%H:%M:%SZ', 'db_exists', 'db_modified_at', 'db_path', 'exists', 'indexed_count', 'is_stale', 'missing_index_rows', 'missing_sources', 'modified_at', 'path', 'record_count', 'schema_version', 'sources', 'stale_sources']

@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/scoring/anti_overfit/models.py
-# hypothesis_version: 6.141.1
-
-[0.0, 0.02, 0.05, 0.08, 0.95, 1.0, 5.0, 'bear_sharpe', 'block_reasons', 'blocked', 'bull_sharpe', 'days', 'details', 'duplicate_submission', 'failure_count', 'flagged', 'half_life', 'high_frequency_retry', 'ic_mean', 'ic_stability', 'ic_std', 'max_ic_std', 'min_half_life_days', 'min_ic_mean', 'monthly_means', 'overall_blocked', 'overall_score', 'p_value', 'parameter_tweak', 'passed', 'placebo', 'placebo_alpha', 'regime_stress', 'score', 'sideways_sharpe', 'similarity', 'thresholds', 'warnings']

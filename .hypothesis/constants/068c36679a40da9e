@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/alpha_checks/__init__.py
-# hypothesis_version: 6.141.1
-
-['AlphaCheck', 'AlphaCheckRegistry', 'CheckReport', 'CheckResult', '_check_ic_ir', '_check_ic_mean', '_check_nan_handling', '_check_pyramid_count', '_check_rank_ic', '_metric']

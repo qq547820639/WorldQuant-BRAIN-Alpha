@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web_candidates/generation/_generation_helpers.py
-# hypothesis_version: 6.141.1
-
-[':', 'automationMode', 'automation_mode', 'blocking_reasons', 'candidates', 'count', 'existing_pool_size', 'generate_candidates', 'local_backtest', 'local_quality', 'mode', 'next_steps', 'pass_local', 'passed', 'pool_deficit', 'quality_diagnosis', 'reasons', 'submit_allowed', 'supported', 'target_pool_size']

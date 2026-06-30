@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/convergence/_tracker.py
-# hypothesis_version: 6.141.1
-
-[0.0, 0.01, 100, 1000, 'avg_fitness', 'avg_sharpe', 'best_sharpe', 'cycle', 'cycles_tracked', 'declining', 'fitness', 'fusion_improvement', 'improving', 'max_sharpe', 'official_metrics', 'passed_gate', 'produced', 'recent_avg_sharpe', 'recent_max_sharpe', 'recommendation', 'sharpe', 'sharpe_ci_90', 'sharpe_trend', 'simulated', 'stable', 'stall_cycles', 'stall_is_significant', 'stalled', 'submitted', 'total_produced', 'total_submitted', 'trend_confidence', 'turnover']

@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/hypothesis_library/_minimal_yaml.py
-# hypothesis_version: 6.141.1
-
-['"', '#', "'", ',', '- ', '.', ':', '>', 'FALSE', 'False', 'NULL', 'Null', 'TRUE', 'True', '[', ']', 'e', 'false', 'null', 'true', '{}', '~']

@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web/dispatch/web_get_routes/_routes_alpha.py
-# hypothesis_version: 6.141.1
-
-['4', 'alpha_id', 'candidate_id', 'job_id', 'limit', 'ok', 'query', 'stage', 'status', 'status_category', 'windows']

@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/web/config/__init__.py
-# hypothesis_version: 6.141.1
-
-['.web_config', 'bounded_query_float', 'bounded_query_int', 'config_from_payload', 'payload_bool', 'payload_float', 'payload_int', 'payload_string_list', 'payload_truthy']

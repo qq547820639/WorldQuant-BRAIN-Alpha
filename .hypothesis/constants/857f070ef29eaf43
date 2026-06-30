@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/compliance/redline_helpers.py
-# hypothesis_version: 6.141.1
-
-[180, 500, '20', 'BLOCKING', 'adv20', 'close', 'data', 'f1', 'f2', 'field_count', 'id', 'inf', 'missing_fields', 'missing_operators', 'name', 'nan', 'ok', 'open', 'operator_count', 'ops', 'reason', 'returns', 'sample_fields', 'skipped', 'std', 'storage_dir', 'template_count', 'volume', 'vwap', '{f1}', '{f2}', '{w}', '关键红线证据无法验证，按失败关闭处理']

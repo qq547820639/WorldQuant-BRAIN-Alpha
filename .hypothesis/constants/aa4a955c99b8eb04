@@ -1,4 +1,0 @@
-# file: /Volumes/Extra/CodeProj/WorldQuant-BRAIN-Alpha/brain_alpha_ops/research/generation/generator/_constraints.py
-# hypothesis_version: 6.141.1
-
-[0.9, ':observability', 'forbidden_patterns', 'industry', 'market', 'observability', 'preferred_fields', 'preferred_operators', 'sector', 'subindustry']
