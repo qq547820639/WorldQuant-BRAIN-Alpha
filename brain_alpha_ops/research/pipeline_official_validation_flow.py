@@ -27,7 +27,6 @@ class PipelineOfficialValidationMixin:
         attempted = 0
         active_limit = self._active_backtest_limit()
         for candidate in validation_targets:
-            pool
             active_count = self.backtest_slot_manager.active_count()
             self._preflight_pending_backtest_candidates(pool)
             self._archive(
@@ -35,7 +34,6 @@ class PipelineOfficialValidationMixin:
                 [],
                 self._archive_validation_failures(pool_by_expression, pool, blocked_expressions),
             )
-            pool
             pending_count = len(self._pending_backtest_candidates(pool))
             if active_count + pending_count >= active_limit:
                 break
@@ -87,19 +85,14 @@ class PipelineOfficialValidationMixin:
         validation_targets: list[Candidate],
         blocked_expressions: set[str],
     ) -> list[Candidate]:
+        _ARCHIVABLE_STATUSES = frozenset({
+            "official_validation_failed",
+            "observability_duplicate_blocked",
+            "high_cloud_similarity_rejected",
+        })
         archived = []
         for candidate in validation_targets:
-            if candidate.lifecycle_status == "official_validation_failed":
-                key = _expr_key(candidate)
-                pool_by_expression.pop(key, None)
-                blocked_expressions.add(key)
-                archived.append(candidate)
-            elif candidate.lifecycle_status == "observability_duplicate_blocked":
-                key = _expr_key(candidate)
-                pool_by_expression.pop(key, None)
-                blocked_expressions.add(key)
-                archived.append(candidate)
-            elif candidate.lifecycle_status == "high_cloud_similarity_rejected":
+            if candidate.lifecycle_status in _ARCHIVABLE_STATUSES:
                 key = _expr_key(candidate)
                 pool_by_expression.pop(key, None)
                 blocked_expressions.add(key)

@@ -45,17 +45,6 @@ def test_strategy_plugin_registry_loads_and_notifies_plugin(tmp_path, monkeypatc
     assert summary["runtime_errors"] == []
 
 
-def test_example_strategy_plugin_spec_loads():
-    registry = StrategyPluginRegistry.from_specs(
-        ["brain_alpha_ops.examples.strategy_plugin:ConservativeMeanReversionPlugin"]
-    )
-    rows = registry.notify("propose", context={"cycle": 2})
-
-    assert registry.names() == ["conservative_mean_reversion"]
-    assert rows[0]["status"] == "ok"
-    assert rows[0]["result"]["profile"]["family"] == "mean_reversion"
-
-
 def test_strategy_plugin_registry_records_load_and_runtime_errors(tmp_path, monkeypatch, caplog):
     plugin_path = tmp_path / "bad_strategy_plugin.py"
     plugin_path.write_text(

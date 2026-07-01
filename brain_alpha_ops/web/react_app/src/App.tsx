@@ -301,9 +301,9 @@ function AppContent() {
 
           <footer className="app-statusbar">
             <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-              <span className="status-dot status-dot-active" />
+              <span className={`status-dot ${topbarStatus.dotClass}`} />
               <span>BRAIN API</span>
-              <span>runtime: production</span>
+              <span>{connected ? '已连接' : '未连接'}</span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
               <span>v3.0 · Phase Navigation</span>

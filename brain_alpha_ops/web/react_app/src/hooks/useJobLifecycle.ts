@@ -7,22 +7,8 @@ import { saveJobId as saveSessionJobId, clearSavedJobId } from '@/hooks/useJobRe
 import { requestNotificationPermission } from './useJobNotifications';
 
 /**
- * @deprecated Phase 3.1: useJobLifecycle is deprecated. Its start/stop/cancel
- * surface has been merged into useJobMonitor/useJobControl. This module is
- * retained for the legacy useJobState → useJobStatus path; new code should
- * use the composable useJobMonitor aggregator instead.
+ * @deprecated Use useJobMonitor/useJobControl for start/stop/cancel instead.
  */
-
-let warned = false;
-function emitDeprecationWarning(): void {
-  if (warned) return;
-  warned = true;
-  if (typeof console !== 'undefined' && typeof console.warn === 'function') {
-    console.warn(
-      'useJobLifecycle is deprecated; use useJobMonitor/useJobControl for start/stop/cancel.'
-    );
-  }
-}
 
 export interface JobLifecycleDeps {
   notify: (
@@ -45,7 +31,6 @@ export interface JobLifecycleDeps {
 }
 
 export function useJobLifecycle(deps: JobLifecycleDeps) {
-  emitDeprecationWarning();
   const {
     notify,
     credentials,

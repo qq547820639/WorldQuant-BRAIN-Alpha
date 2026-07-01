@@ -11,11 +11,8 @@ from typing import Any
 
 from brain_alpha_ops.redaction import redact_error_message
 from brain_alpha_ops.browser._brain_ui_helpers import (
-    _COOKIE_PAIR_RE,
-    _COOKIE_VALUE_RE,
     _DEFAULT_PAGE_TIMEOUT_MS,
     _REAL_BRAIN_HOSTS,
-    _SENSITIVE_HTML_FIELD_RE,
     LIVE_BROWSER_OPT_IN_ENV,
     _looks_like_login_page,
     _redact_text,

@@ -80,7 +80,7 @@ def _status_payload(query: dict) -> dict:
             durable_store = _durable_production_job_store()
             row = durable_store.get(job_id) if durable_store is not None else None
         if not row:
-            return {"ok": False, "error": "job not found", "job_id": job_id, "status": "missing"}
+            return {"ok": False, "error": "job not found", "error_code": "JOB_NOT_FOUND", "job_id": job_id, "status": "missing"}
         return {"ok": True, "job_id": job_id, "task_id": job_id, **row}
     with ASYNC_JOBS_LOCK:
         latest = max(ASYNC_JOBS.values(), key=lambda item: str(item.get("updated_at") or ""), default=None)

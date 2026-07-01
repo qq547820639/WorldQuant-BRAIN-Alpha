@@ -10,7 +10,6 @@ from __future__ import annotations
 import logging
 import time
 
-from brain_alpha_ops.models import Candidate
 from brain_alpha_ops.redaction import redact_error_message
 
 from ..pipeline_helpers import rank_candidates

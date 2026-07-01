@@ -5,11 +5,3 @@ channels:
 dependencies:
   - python=3.12
   - pip
-  - pip:
-      - pyyaml>=6.0,<7
-      - requests>=2.32.4,<3
-      - jsonschema>=4.20,<5
-      - pytest>=7.0,<9
-      - pytest-cov>=4.0,<7
-      - ruff>=0.4,<1
-      - mypy>=1.0,<2

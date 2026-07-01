@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from brain_alpha_ops.jsonl import read_jsonl_tail_with_stats
-from brain_alpha_ops.redaction import redact_error_message, redact_text
+from brain_alpha_ops.redaction import redact_error_message
 from brain_alpha_ops.research.expression_index import ExpressionHistoryIndex
 from brain_alpha_ops.research.observability_errors import observability_error_rows
 from brain_alpha_ops.research._observability_helpers import (

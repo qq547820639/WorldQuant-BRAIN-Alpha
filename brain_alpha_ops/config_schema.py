@@ -12,7 +12,6 @@ Schema version: config-schema.v2
 from __future__ import annotations
 
 import json
-import sys
 from pathlib import Path
 from typing import Any
 
@@ -32,15 +31,7 @@ from brain_alpha_ops.brain_api.canonical import (
 try:
     import jsonschema
 except ImportError:
-    try:
-        from pathlib import Path
-        Path("data/config_schema_fallback_warning.txt").write_text(
-            "jsonschema library not installed. Config validation is using built-in fallback, which has limited checks.\n"
-            "Install jsonschema>=4.20 for full structural validation.\n", encoding="utf-8"
-        )
-    except OSError:
-        pass
-    jsonschema = None
+    jsonschema = None  # Hard dependency; will raise at validation time if missing
 
 # ── Canonical enum lists for jsonschema (sorted for deterministic validation) ──
 _C_REGIONS = sorted(SUPPORTED_REGIONS)               # ["CHN", "EUR", "GLB", "USA"]
@@ -226,85 +217,6 @@ RUN_CONFIG_SCHEMA: dict[str, Any] = {
     "additionalProperties": True,
 }
 
-def _validate_config_without_jsonschema(
-    config_data: dict[str, Any],
-    schema: dict[str, Any],
-) -> list[str]:
-    """Small dependency-free fallback for the schema subset used in tests.
-
-    The production path prefers ``jsonschema``.  This fallback keeps critical
-    type/enum/range checks active in minimal runtime environments.
-
-    ``run_config.json`` is allowed to be a partial override file because
-    ``load_run_config`` merges it into ``RunConfig()`` defaults before the
-    procedural validator runs.  The fallback therefore treats the default run
-    config schema as partial-friendly: an entirely empty object is still
-    reported as missing required roots, while non-empty partial documents only
-    validate fields that are explicitly present.
-    """
-    errors: list[str] = []
-    enforce_required = schema is not RUN_CONFIG_SCHEMA or not config_data
-
-    def path_label(path: tuple[str, ...]) -> str:
-        return ".".join(path) if path else "(root)"
-
-    def validate_node(value: Any, node_schema: dict[str, Any], path: tuple[str, ...]) -> None:
-        expected_type = node_schema.get("type")
-        if expected_type == "object":
-            if not isinstance(value, dict):
-                errors.append(f"{path_label(path)}: {value!r} is not an object")
-                return
-            if enforce_required:
-                for key in node_schema.get("required", []):
-                    if key not in value:
-                        errors.append(f"{path_label(path)}: missing required property '{key}'")
-            for key, child_schema in node_schema.get("properties", {}).items():
-                if key in value and isinstance(child_schema, dict):
-                    validate_node(value[key], child_schema, (*path, str(key)))
-            return
-
-        if expected_type == "string":
-            if not isinstance(value, str):
-                errors.append(f"{path_label(path)}: {value!r} is not a string")
-                return
-            min_length = node_schema.get("minLength")
-            if isinstance(min_length, int) and len(value) < min_length:
-                errors.append(
-                    f"{path_label(path)}: {value!r} is shorter than the minimum length of {min_length}"
-                )
-        elif expected_type == "boolean":
-            if not isinstance(value, bool):
-                errors.append(f"{path_label(path)}: {value!r} is not a boolean")
-                return
-        elif expected_type == "integer":
-            # NOTE: isinstance(True, int) is True in Python, so the bool check
-            # MUST come before the int check. If the two checks are reordered,
-            # booleans will silently pass as integers (1/0). Keep this order.
-            if isinstance(value, bool) or not isinstance(value, int):
-                errors.append(f"{path_label(path)}: {value!r} is not an integer")
-                return
-        elif expected_type == "number":
-            if isinstance(value, bool) or not isinstance(value, (int, float)):
-                errors.append(f"{path_label(path)}: {value!r} is not a number")
-                return
-
-        allowed_values = node_schema.get("enum")
-        if allowed_values is not None and value not in allowed_values:
-            errors.append(f"{path_label(path)}: {value!r} is not one of {allowed_values!r}")
-
-        if expected_type in {"integer", "number"}:
-            numeric = float(value)
-            minimum = node_schema.get("minimum")
-            maximum = node_schema.get("maximum")
-            if minimum is not None and numeric < float(minimum):
-                errors.append(f"{path_label(path)}: {value!r} is less than the minimum of {minimum}")
-            if maximum is not None and numeric > float(maximum):
-                errors.append(f"{path_label(path)}: {value!r} is greater than the maximum of {maximum}")
-
-    validate_node(config_data, schema, ())
-
-    return errors
-
 
 def _partial_schema(schema: dict[str, Any]) -> dict[str, Any]:
     """Return a copy of ``schema`` that validates explicit override fields only."""
@@ -327,8 +239,6 @@ def validate_config_with_jsonschema(
     """Validate a raw config dict against the RUN_CONFIG_SCHEMA.
 
     Returns a list of validation error messages.  Empty list = valid.
-    When jsonschema is not installed, a dependency-free fallback validates the
-    critical required, enum, type, and numeric-bound checks.
 
     Args:
         config_data: JSON-parsed config dictionary.
@@ -338,15 +248,13 @@ def validate_config_with_jsonschema(
         List of error message strings (empty = valid).
     """
     if not isinstance(config_data, dict):
-        return _validate_config_without_jsonschema(config_data, schema or RUN_CONFIG_SCHEMA)
+        return [f"config data is not a dict: {type(config_data).__name__}"]
 
     if jsonschema is None:
-        print(
-            "jsonschema: jsonschema not installed; using built-in limited validation. "
-            "Install with: pip install jsonschema>=4.20 for full structural validation.",
-            file=sys.stderr,
+        raise ImportError(
+            "jsonschema is required for config validation. "
+            "Install with: pip install jsonschema>=4.20"
         )
-        return _validate_config_without_jsonschema(config_data, schema or RUN_CONFIG_SCHEMA)
 
     effective_schema = schema or RUN_CONFIG_SCHEMA
     validation_schema = _partial_schema(effective_schema) if schema is None and config_data else effective_schema

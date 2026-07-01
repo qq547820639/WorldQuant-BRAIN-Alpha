@@ -16,9 +16,6 @@ from brain_alpha_ops.jsonl import read_jsonl_records
 # for backward-compat with the previous module-level symbol.
 from brain_alpha_ops.research._ratio import normalize_brain_ratio  # noqa: F401
 
-if TYPE_CHECKING:
-    from brain_alpha_ops.models import Candidate
-
 logger = logging.getLogger("brain_alpha_ops.research.experience")
 
 DEFAULT_HISTORY_LIMIT = 5000

@@ -48,7 +48,6 @@ from brain_alpha_ops.web_config import (
     bounded_query_int,
     payload_truthy,
 )
-from brain_alpha_ops.web_payload_validation import MAX_GENERATE_CANDIDATES
 from brain_alpha_ops.web_candidates.generation._generation_helpers import (
     RunConfigFromPayload,
     ToolboxFactory,

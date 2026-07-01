@@ -60,18 +60,15 @@ class _BacktestFinalizationMixin:
         if candidate.official_metrics or retry_count >= max_retries:
             return False
 
-        # P0-5 fix: preserve original official_metrics before clearing them so
-        # that if the retry also fails the pipeline still has the first
-        # attempt's data for diagnostics and scoring fallback.
-        if candidate.official_metrics:
-            candidate.submission["previous_official_metrics"] = dict(candidate.official_metrics)
+        # P0-5 fix: preserve original state before clearing so that if the
+        # retry also fails the pipeline still has the first attempt's data
+        # for diagnostics and scoring fallback.
         if candidate.official_alpha_id:
             candidate.submission["previous_official_alpha_id"] = candidate.official_alpha_id
         if candidate.simulation_id:
             candidate.submission["previous_simulation_id"] = candidate.simulation_id
         candidate.simulation_id = ""
         candidate.official_alpha_id = ""
-        candidate.official_metrics = {}
         candidate.lifecycle_status = "simulation_retry_pending"
         candidate.submission["simulation_retry_count"] = retry_count + 1
         candidate.submission["simulation_status"] = "RETRY_PENDING"

@@ -12,6 +12,8 @@ import math
 from hashlib import sha256
 from typing import Any
 
+from brain_alpha_ops.research._value_helpers import _float_value, _int_value
+
 
 def _digest_text(value: str) -> str:
     return sha256(value.encode("utf-8")).hexdigest()
@@ -28,23 +30,6 @@ def _clamp(value: float, lower: float, upper: float) -> float:
 
 def _as_dict(value: Any) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
-
-
-def _int_value(value: Any) -> int:
-    try:
-        return int(float(value))
-    except (TypeError, ValueError):
-        return 0
-
-
-def _float_value(value: Any) -> float:
-    try:
-        number = float(value)
-    except (TypeError, ValueError):
-        return 0.0
-    if not math.isfinite(number):
-        return 0.0
-    return round(number, 4)
 
 
 def _string_items(value: Any) -> list[str]:

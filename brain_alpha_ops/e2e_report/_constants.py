@@ -5,8 +5,6 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from brain_alpha_ops.redaction import redact_text
-
 logger = logging.getLogger("brain_alpha_ops.e2e_report")
 
 SCHEMA_VERSION = "e2e_artifact_summary.v1"

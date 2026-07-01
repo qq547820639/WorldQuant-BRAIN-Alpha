@@ -2,8 +2,7 @@
 from __future__ import annotations
 
 import logging
-import threading
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 from brain_alpha_ops.scoring.official_scoring._constants import (
     _MAX_SCORE_HISTORY_PER_ALPHA,

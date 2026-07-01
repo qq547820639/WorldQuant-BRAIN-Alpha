@@ -16,7 +16,6 @@ export function validateForm(form: ConfigForm, schema: ConfigSchema | undefined)
     return `数据集长度不能超过 ${MAX_CONFIG_TEXT_LENGTH} 个字符。`;
   if (!CONFIG_TEXT_PATTERN.test(form.dataset))
     return '数据集只能包含字母、数字、下划线、短横线、点或冒号。';
-  if (!CONFIG_TEXT_PATTERN.test(form.dataset)) return '数据集名称包含非法字符';
   if (!isIntegerInRange(form.delay, 0, 1)) return '延迟值必须为 0 或 1';
   if (!isIntegerInRange(form.candidates, 1, 1000)) return '候选数必须在 1-1000 之间';
   if (!isIntegerInRange(form.cycles, 1, 1000)) return '周期数必须在 1-1000 之间';

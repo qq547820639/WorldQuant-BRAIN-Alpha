@@ -1,28 +1,10 @@
 /**
- * @deprecated Phase 3.1: useSseRetryState has been merged into useSseEventHandler.
- * This module re-exports the merged hook's retry-state surface for backward
- * compatibility. Import useSseEventHandler from './useSseEventHandler' instead.
- *
- * The standalone useSseRetryState hook shape is preserved so existing callers
- * can keep wiring retry countdown / exhausted flags while the migration
- * completes. A console.warn DeprecationWarning is emitted on first use.
+ * @deprecated Use useSseEventHandler from './useSseEventHandler' instead.
  */
 
 import { useState, useRef, useCallback } from 'react';
 import { SSE_RETRY_DELAYS, SSE_MAX_RETRIES } from './constants';
 import type { NotifyFn } from './types';
-
-let warned = false;
-function emitDeprecationWarning(): void {
-  if (warned) return;
-  warned = true;
-  if (typeof console !== 'undefined' && typeof console.warn === 'function') {
-    console.warn(
-      'useSseRetryState is deprecated and merged into useSseEventHandler. ' +
-        'Import useSseEventHandler from "@/hooks/useJobMonitor/useSseEventHandler" instead.'
-    );
-  }
-}
 
 export interface UseSseRetryStateOptions {
   notify: NotifyFn;
@@ -44,7 +26,6 @@ export function useSseRetryState({
   onResume,
   onExhausted,
 }: UseSseRetryStateOptions): SseRetryState {
-  emitDeprecationWarning();
   const sseRetryCountRef = useRef(0);
   const sseRetryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sseRetryCountdownIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);

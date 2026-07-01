@@ -16,7 +16,7 @@ from typing import Any
 
 from brain_alpha_ops.jsonl import read_jsonl_records
 from brain_alpha_ops.redaction import redact_error_message
-from brain_alpha_ops.research._market_data_helpers import _float, _numeric_values
+from brain_alpha_ops.research._market_data_helpers import _numeric_values
 
 DEFAULT_MARKET_CACHE_FILENAME = "market_data_cache.json"
 DEFAULT_MARKET_CACHE_SOURCE = "local_market_cache"

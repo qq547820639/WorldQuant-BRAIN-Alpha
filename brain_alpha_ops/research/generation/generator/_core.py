@@ -11,7 +11,7 @@ from __future__ import annotations
 import logging
 from typing import Any, TYPE_CHECKING
 
-from brain_alpha_ops.models import Candidate, new_id
+from brain_alpha_ops.models import Candidate
 from brain_alpha_ops.redaction import redact_error_message
 from brain_alpha_ops.research.expression_ast import (
     expression_key,

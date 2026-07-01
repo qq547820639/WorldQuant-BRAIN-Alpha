@@ -1,28 +1,10 @@
 /**
- * @deprecated Phase 3.1: useJobCancellation has been merged into useJobControl.
- * This module re-exports the merged hook's cancellation surface for backward
- * compatibility. Import useJobControl from './useJobControl' instead.
- *
- * The standalone useJobCancellation hook shape is preserved so existing callers
- * can keep wiring cancelAmbiguousJob / clearAutoCancelRequests while the
- * migration completes. A console.warn DeprecationWarning is emitted on first use.
+ * @deprecated Use useJobControl from './useJobControl' instead.
  */
 
 import { useRef, useCallback } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import { requestJobCancel, cancelResultEventMessage, type CancelReason } from '@/api/jobCancel';
-
-let warned = false;
-function emitDeprecationWarning(): void {
-  if (warned) return;
-  warned = true;
-  if (typeof console !== 'undefined' && typeof console.warn === 'function') {
-    console.warn(
-      'useJobCancellation is deprecated and merged into useJobControl. ' +
-        'Import useJobControl from "@/hooks/useJobMonitor/useJobControl" instead.'
-    );
-  }
-}
 
 export interface UseJobCancellationOptions {
   jobId: string | null;
@@ -44,7 +26,6 @@ export function useJobCancellation({
   statusJobId,
   setEvents,
 }: UseJobCancellationOptions): JobCancellation {
-  emitDeprecationWarning();
   const autoCancelRequests = useRef<Set<string>>(new Set());
 
   const cancelAmbiguousJob = useCallback(

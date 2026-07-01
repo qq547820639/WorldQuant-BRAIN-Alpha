@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from brain_alpha_ops.redaction import redact_data, redact_text
+from brain_alpha_ops.redaction import redact_data
 from brain_alpha_ops.e2e_report._constants import (
     CONSOLE_PREVIEW_LINES,
     DEFAULT_EVIDENCE_DIR,

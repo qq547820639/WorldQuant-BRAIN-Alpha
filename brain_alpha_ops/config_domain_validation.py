@@ -112,6 +112,15 @@ def validate_web(errors: list[str], web: WebConfig) -> None:
         )
 
 
+def validate_generation_config(errors: list[str], generation: Any) -> None:
+    """Validate the ops.generation sub-config."""
+    if not hasattr(generation, 'max_expression_length'):
+        return  # Optional config, skip if not present
+    require_int_range(errors, "ops.generation.max_expression_length", generation.max_expression_length, min_value=1)
+    require_int_range(errors, "ops.generation.max_nesting_depth", generation.max_nesting_depth, min_value=0)
+    require_float_range(errors, "ops.generation.duplicate_ratio_threshold", generation.duplicate_ratio_threshold, min_value=0.0, max_value=1.0)
+
+
 def validate_ops(errors: list[str], ops: OpsConfig) -> None:
     if not isinstance(ops, OpsConfig):
         errors.append("ops must be an object")
@@ -122,6 +131,7 @@ def validate_ops(errors: list[str], ops: OpsConfig) -> None:
     validate_thresholds(errors, ops.thresholds)
     validate_submission_policy(errors, ops.submission_policy)
     validate_official_api(errors, ops.official_api)
+    validate_generation_config(errors, ops.generation)
     require_str(errors, "ops.storage_dir", ops.storage_dir, allow_empty=False)
     require_str(errors, "ops.source_tag_policy", ops.source_tag_policy, allow_empty=False)
 
@@ -155,6 +165,7 @@ def validate_budget(errors: list[str], budget: ResearchBudget) -> None:
         "max_official_concurrent_simulations",
         "retained_alpha_pool_size",
         "official_backtest_batch_size",
+        "max_generation_attempts",
     ):
         require_int_range(errors, f"ops.budget.{field_name}", getattr(budget, field_name), min_value=1)
     for field_name in (
@@ -172,6 +183,7 @@ def validate_budget(errors: list[str], budget: ResearchBudget) -> None:
         "min_prior_score_for_official_simulation",
         "cycle_pause_seconds",
         "official_retry_pause_seconds",
+        "cloud_sync_max_elapsed_seconds",
     ):
         require_float_range(errors, f"ops.budget.{field_name}", getattr(budget, field_name), min_value=0.0)
     for field_name in (
@@ -309,6 +321,7 @@ def validate_thresholds(errors: list[str], thresholds: QualityThresholds) -> Non
         thresholds.enforce_target_turnover_as_hard_gate,
     )
     require_enum(errors, "ops.thresholds.market_regime", thresholds.market_regime, _VALID_MARKET_REGIMES)
+    require_enum(errors, "ops.thresholds.threshold_mode", thresholds.threshold_mode, {"static", "dynamic"})
     validate_regime_adjustments(errors, thresholds.regime_adjustments, _VALID_MARKET_REGIMES)
     for field_name in (
         "require_official_pass",

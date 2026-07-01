@@ -1,2 +1,0 @@
-jsonschema library not installed. Config validation is using built-in fallback, which has limited checks.
-Install jsonschema>=4.20 for full structural validation.

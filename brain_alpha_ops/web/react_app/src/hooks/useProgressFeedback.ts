@@ -83,15 +83,18 @@ export function useProgressFeedback({
     state,
   ]);
 
+  const progressRef = useRef(progress);
+  progressRef.current = progress;
+
   useEffect(() => {
     if (state !== 'loading' && state !== 'progress') return;
     if (!remaining || remaining <= 0) return;
     const timer = setInterval(() => {
-      const deadlineRemaining = etaSecondsFromProgress(progress, { deadlineOnly: true });
+      const deadlineRemaining = etaSecondsFromProgress(progressRef.current, { deadlineOnly: true });
       setRemaining((v) => (deadlineRemaining > 0 ? deadlineRemaining : Math.max(0, v - 1)));
     }, 1000);
     return () => clearInterval(timer);
-  }, [progress?.eta_deadline_at_ms, remaining, state]);
+  }, [remaining, state]);
 
   useEffect(() => {
     if (state !== 'loading' && state !== 'progress') {

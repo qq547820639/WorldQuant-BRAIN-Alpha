@@ -1,7 +1,7 @@
 /** Read-only quality-gate summary before pre-submit blocker review. */
 
 import { useCallback, useEffect, useMemo } from 'react';
-import { apiErrorMessage } from '@/helpers/errorExperience';
+import { apiErrorMessage, safeDisplayErrorMessage } from '@/helpers/errorExperience';
 import { readinessNextActionLabel, readinessReasonLabel } from '@/helpers/readinessLabels';
 import { useApi } from '@/hooks/useApi';
 import { useGlobalData } from '@/hooks/useGlobalData';
@@ -66,7 +66,7 @@ export default function QualityCheckPanel({ notify }: Props) {
           }}
         >
           <div className="flex items-center justify-between gap-3">
-            <p className="text-sm text-negative">达标检查数据加载失败: {error}</p>
+            <p className="text-sm text-negative">达标检查数据加载失败: {safeDisplayErrorMessage(error)}</p>
             <button type="button" onClick={load} className="btn btn-secondary btn-sm">
               重试
             </button>

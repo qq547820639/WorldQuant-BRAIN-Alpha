@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from brain_alpha_ops.jsonl import read_jsonl_tail
+from brain_alpha_ops.research._value_helpers import _float_value, _int_value
 
 
 def _latest_result_from_storage(storage_dir: str) -> dict[str, Any]:
@@ -241,19 +242,6 @@ def _weak_guidance_outcome(outcomes: list[dict[str, Any]]) -> dict[str, Any]:
         if (count >= 2 and success_rate <= 0.25) or (success_rate == 0.0 and avg_score <= 50):
             return row
     return {}
-
-def _int_value(value: Any) -> int:
-    try:
-        return int(float(value))
-    except (TypeError, ValueError):
-        return 0
-
-def _float_value(value: Any) -> float:
-    try:
-        number = float(value)
-    except (TypeError, ValueError):
-        return 0.0
-    return round(number, 4)
 
 def _first_dict(*values: Any) -> dict[str, Any]:
     for value in values:

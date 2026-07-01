@@ -1,14 +1,9 @@
 """Helper functions and types for candidate generation."""
 from __future__ import annotations
 
-from __future__ import annotations
-
 from typing import Any, Callable, Protocol
 
-from brain_alpha_ops.config import RunConfig, resolve_default_dataset_id
-from brain_alpha_ops.error_payloads import user_error_payload
-from brain_alpha_ops.errors import ValidationError
-from brain_alpha_ops.models import Candidate
+from brain_alpha_ops.config import RunConfig
 from brain_alpha_ops.research.alpha_quality import (
     build_alpha_output_config,
     diagnose_alpha_candidate,
@@ -17,7 +12,6 @@ from brain_alpha_ops.research.alpha_quality import (
 from brain_alpha_ops.research.fallback_generation import (
     high_turnover_generation_risk_reasons,
 )
-from brain_alpha_ops.research.field_quality import non_signal_generation_fields
 from brain_alpha_ops.research.generator import (
     extract_fields,
     extract_operators,
@@ -31,18 +25,15 @@ from brain_alpha_ops.research.local_backtest_config import (
     PREFILTER_BACKTEST_DATES,
     PREFILTER_BACKTEST_SYMBOLS,
 )
-from brain_alpha_ops.research.local_backtest_engine import LocalBacktestEngine
 from brain_alpha_ops.research.local_backtest_gate import (
     apply_local_backtest_gate,
     blocked_local_gate,
 )
 from brain_alpha_ops.research.repository import ResearchRepository
-from brain_alpha_ops.research.scoring import build_scorecard
 from brain_alpha_ops.web_candidates.audit import (
     attach_scientific_audit,
     scientific_audit_summary,
 )
-from brain_alpha_ops.web_candidates.decisions import annotate_candidate_decision
 from brain_alpha_ops.web_config import (
     _MAX_CANDIDATES,
     _MAX_POOL_SIZE,

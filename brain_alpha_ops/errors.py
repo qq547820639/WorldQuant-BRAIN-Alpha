@@ -102,6 +102,15 @@ class ErrorInfo:
     retryable: bool = False
     status_code: int | None = None
     retry_after: float | None = None
+    fix_hint: str = ""
+
+    @property
+    def error_category(self) -> str:
+        return self.category
+
+    @property
+    def redacted_message(self) -> str:
+        return self.message
 
     def to_dict(self) -> dict[str, Any]:
         payload: dict[str, Any] = {
@@ -110,6 +119,7 @@ class ErrorInfo:
             "error": self.message,
             "error_type": self.error_type,
             "retryable": self.retryable,
+            "fix_hint": self.fix_hint,
         }
         if self.status_code is not None:
             payload["status_code"] = self.status_code

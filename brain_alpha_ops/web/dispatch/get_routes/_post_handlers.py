@@ -138,7 +138,7 @@ def _handle_candidate_submit(handler: Any, path: str, payload: dict) -> None:
             status=410,
         )
     else:
-        handler._send_json({"ok": False, "error": "invalid path"}, status=400)
+        handler._send_json({"ok": False, "error": "invalid path", "error_code": "INVALID_PATH"}, status=400)
 
 
 def _handle_candidate_check(handler: Any, path: str, payload: dict) -> None:
@@ -181,7 +181,7 @@ def _handle_candidate_simulate(handler: Any, payload: dict) -> None:
             handler._send_json(result)
         except Exception as exc:
             from brain_alpha_ops.redaction import redact_error_message
-            handler._send_json({"ok": False, "error": redact_error_message(exc)}, status=500)
+            handler._send_json({"ok": False, "error": redact_error_message(exc), "error_code": "SIMULATION_PREVIEW_ERROR"}, status=500)
         return
 
     # Check for already running simulation job
@@ -221,7 +221,7 @@ def _handle_candidate_simulate(handler: Any, payload: dict) -> None:
             logger.exception("Simulation job %s failed", job_id)
             job_update(job_id, status="failed", error=redact_error_message(e))
 
-    threading.Thread(target=run_sim, daemon=False).start()
+    threading.Thread(target=run_sim, daemon=True).start()
     handler._send_json({
         "ok": True,
         "job_id": job_id,
