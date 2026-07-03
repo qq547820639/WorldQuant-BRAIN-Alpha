@@ -305,12 +305,15 @@ def get_lifecycle(candidate: "Candidate") -> CandidateLifecycle:
     """Lazily attach a CandidateLifecycle to a candidate.
 
     Initializes the lifecycle state from the candidate's current
-    ``lifecycle_status`` string (mapped via ``_LEGACY_STATUS_MAP``).
+    ``lifecycle_status`` string，经 ``LifecycleStatusNormalizer`` 统一映射到规范
+    ``LifecycleState``（Task 6.1：遗留状态映射清理）。
     """
+    # 延迟导入避免与 lifecycle_status_normalizer 形成循环导入。
+    from brain_alpha_ops.lifecycle_status_normalizer import normalizer
     lc = getattr(candidate, "_lifecycle", None)
     if lc is None or not isinstance(lc, CandidateLifecycle):
         current = getattr(candidate, "lifecycle_status", "") or "created"
-        initial = _LEGACY_STATUS_MAP.get(current, LifecycleState.draft)
+        initial = normalizer.normalize(current)
         lc = CandidateLifecycle(getattr(candidate, "alpha_id", "") or "", initial_state=initial)
         try:
             setattr(candidate, "_lifecycle", lc)

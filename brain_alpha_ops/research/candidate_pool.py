@@ -44,9 +44,9 @@ from typing import Callable, Iterable
 
 from brain_alpha_ops.candidate_lifecycle import (
     LifecycleState,
-    _LEGACY_STATUS_MAP,
     transition,
 )
+from brain_alpha_ops.lifecycle_status_normalizer import normalizer
 from brain_alpha_ops.models import Candidate
 
 from .fallback_generation import high_turnover_generation_risk_reasons
@@ -73,9 +73,10 @@ _INACTIVE_ENUM_STATES = frozenset({
 _INACTIVE_LEGACY_EXTRAS = frozenset({"submission_ready"})
 
 # Derived from the enum + legacy extras so all historical string statuses
-# continue to be recognised as inactive.
+# continue to be recognised as inactive. 经 normalizer 暴露的映射派生
+# （Task 6.1：单一数据源）。
 INACTIVE_BACKTEST_STATUSES = {
-    legacy for legacy, state in _LEGACY_STATUS_MAP.items()
+    legacy for legacy, state in normalizer.legacy_map.items()
     if state in _INACTIVE_ENUM_STATES
 } | _INACTIVE_LEGACY_EXTRAS
 
@@ -86,8 +87,9 @@ def _is_inactive(status: "str | LifecycleState") -> bool:
         return status in _INACTIVE_ENUM_STATES
     if status in INACTIVE_BACKTEST_STATUSES:
         return True
-    state = _LEGACY_STATUS_MAP.get(status)
-    return state in _INACTIVE_ENUM_STATES if state is not None else False
+    # 经 normalizer 统一映射到规范枚举后再判定（Task 6.1）。
+    state = normalizer.normalize(status)
+    return state in _INACTIVE_ENUM_STATES
 
 
 def is_active_backtest_candidate(candidate: Candidate) -> bool:
