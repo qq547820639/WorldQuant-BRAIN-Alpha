@@ -1,13 +1,16 @@
-"""Inner cycle machinery mixins for ``AlphaResearchPipeline``.
+"""Inner cycle machinery for ``AlphaResearchPipeline``.
 
 Consolidated from the original ``pipeline.py`` monolith's split files
 (``_main_loop_mixin`` / ``_post_processing_mixin`` / ``_cycle_mixin``).
-Holds the per-cycle mechanics: the main loop body, post-cycle
-convergence/calibration/fusion logic, and per-cycle phase helpers
-(dataset selection, assistant guidance, simulation+backtest driver).
+All per-cycle mechanics now live in ``PipelineMainLoopMixin``.
 
-These mixins are re-assembled at runtime onto ``AlphaResearchPipeline``
-(see ``pipeline.py``).
+Thin adapter pattern (post-refactor):
+  - ``PipelinePostProcessingMixin`` and ``PipelineCycleMixin`` are kept
+    as empty subclasses for backward-compatible imports but contribute
+    no additional methods.
+  - ``_try_fusion_top_candidates`` is provided as a thin adapter
+    that delegates to ``self.services.fusion_candidates``, eliminating
+    the need for ``PipelineBacktestMixin`` in the MRO.
 """
 
 from __future__ import annotations
@@ -43,7 +46,14 @@ CONVERGENCE_REPORT_INTERVAL = 10
 
 
 class PipelineMainLoopMixin:
-    """Main research loop body extracted from ``run()``."""
+    """Consolidated per-cycle machinery for ``AlphaResearchPipeline``.
+
+    Contains the main loop body, post-cycle convergence/calibration/fusion,
+    dataset selection, assistant guidance, and simulation+backtest phases.
+    Previously split across three mixins; merged to reduce MRO count.
+    """
+
+    # ── Main loop ──────────────────────────────────────────────────────
 
     def _run_main_loop(
         self,
@@ -277,9 +287,7 @@ class PipelineMainLoopMixin:
 
         return submitted_this_run, fields, operators, state
 
-
-class PipelinePostProcessingMixin:
-    """Post-processing phase: convergence, calibration, fusion, progress."""
+    # ── Post-processing (was PipelinePostProcessingMixin) ──────────────
 
     def _run_cycle_post_processing(
         self,
@@ -292,11 +300,7 @@ class PipelinePostProcessingMixin:
         archive_stats: dict,
         submitted_this_run: int,
     ) -> tuple[dict, list]:
-        """Post-processing: convergence tracking, calibration, fusion, progress.
-
-        Extracted from run() to reduce method length (B-03).
-        Called at the end of each cycle.
-        """
+        """Post-processing: convergence tracking, calibration, fusion, progress."""
         pool_values = list(pool_by_expression.values())
         self.convergence.record_cycle(
             cycle=cycle,
@@ -389,9 +393,25 @@ class PipelinePostProcessingMixin:
 
         return archive_stats, pool
 
+    # ── Thin adapter for fusion (was PipelineBacktestMixin) ────────────
+    #  This adapter delegates to FusionCandidateService via the composition
+    #  container, eliminating the need for PipelineBacktestMixin in the MRO.
 
-class PipelineCycleMixin:
-    """Per-cycle phase methods extracted from ``run()``."""
+    def _try_fusion_top_candidates(
+        self,
+        pool_by_expression: dict,
+        blocked_expressions: set | None,
+        cycle: int,
+    ) -> int:
+        """Thin adapter delegating fusion to ``self.services.fusion_candidates``."""
+        outcome = self.services.fusion_candidates.create_top_candidate_fusions(
+            pool_by_expression,
+            blocked_expressions or set(),
+            cycle=cycle,
+        )
+        return outcome.created_count
+
+    # ── Per-cycle phases (was PipelineCycleMixin) ──────────────────────
 
     def _cycle_select_dataset(self, cycle: int) -> "_Phase":
         """Select dataset for this cycle. Returns _Phase.SKIP or _Phase.BREAK on failure."""
@@ -539,3 +559,18 @@ class PipelineCycleMixin:
 
         self.services.runtime._archive(archive_stats, archive_samples, self.services.candidate_pool._prune_pool(pool_by_expression))
         return submitted_this_run, None
+
+
+# ── Backward-compatible empty shells ───────────────────────────────────
+# Kept so that tests and sibling modules that import these class names
+# do not break.  The classes contribute zero additional methods to the
+# MRO — all logic lives in PipelineMainLoopMixin.
+
+class PipelinePostProcessingMixin(PipelineMainLoopMixin):
+    """Backward-compatible shell — logic merged into PipelineMainLoopMixin."""
+    pass
+
+
+class PipelineCycleMixin(PipelineMainLoopMixin):
+    """Backward-compatible shell — logic merged into PipelineMainLoopMixin."""
+    pass

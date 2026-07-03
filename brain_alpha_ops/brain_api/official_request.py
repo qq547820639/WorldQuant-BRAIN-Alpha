@@ -1,4 +1,8 @@
-"""HTTP request helpers for the official BRAIN API adapter."""
+"""HTTP request helpers for the official BRAIN API adapter.
+
+The ``_request()`` method delegates authentication strategy selection,
+token lifecycle, and auth-fallback transitions to ``AuthStateMachine``.
+"""
 
 from __future__ import annotations
 
@@ -38,6 +42,7 @@ from .official_helpers import (
     retryable_status as _retryable_status,
     scrub as _scrub,
 )
+from .auth_state_machine import AuthAction
 
 logger = logging.getLogger("brain_alpha_ops.brain_api.official")
 
@@ -56,22 +61,19 @@ class OfficialRequestMixin:
         url = build_official_url(self.config.base_url, path_or_url, query)
         payload = None if body is None else json.dumps(body).encode("utf-8")
         attempts = max(1, int(self.config.rate_limit_retry_attempts) + 1)
-        auth_refresh_available = (
+        if self.token and (self._has_session_cookie() or (self.username and self.password)):
+            attempts = max(attempts, 2)
+        can_auth_refresh = (
             allow_auth_retry
             and bool(self.username and self.password)
             and not _is_authentication_request(path_or_url, self.config.authentication_path)
         )
-        if self.token and (self._has_session_cookie() or (self.username and self.password)):
-            attempts = max(attempts, 2)
-        if auth_refresh_available:
+        if can_auth_refresh:
             attempts = max(attempts, 2)
         last_error: BrainAPIError | None = None
-        token_before_auth_fallback: str | None = None
-        auth_refresh_attempted = False
+        sm = self._auth_state_machine
         for attempt in range(attempts):
             request_headers = {"Content-Type": "application/json", "Accept": "application/json"}
-            auth_mode = "none"
-
             caller_headers = dict(headers or {})
             skip_auto_auth = caller_headers.pop("X-Auth-Mode", "") == "json"
             if skip_auto_auth and not any(h.lower() == "authorization" for h in caller_headers):
@@ -79,21 +81,12 @@ class OfficialRequestMixin:
                     "X-Auth-Mode=json without explicit Authorization header "
                     "— request will be sent with no auth. Path: %s", path_or_url
                 )
-
-            with self._request_lock:
-                if self._prefer_cookie_auth and self._has_session_cookie():
-                    auth_mode = "cookie"
-                elif self.token and not skip_auto_auth:
-                    request_headers["Authorization"] = f"Bearer {self.token}"
-                    auth_mode = "bearer"
-                elif self.username and self.password and not skip_auto_auth:
-                    request_headers["Authorization"] = f"Basic {self._basic_auth()}"
-                    auth_mode = "basic"
+            auth_mode = sm.authenticate(request_headers, skip_auto_auth=skip_auto_auth)
             request_headers.update(caller_headers)
-            if auth_mode == 'none' and 'Authorization' not in request_headers:
+            if auth_mode == "none" and "Authorization" not in request_headers:
                 logger.warning(
-                    'HTTP request without Authorization header (auth_mode=none, '
-                    'skip_auto_auth=%s, method=%s, path=%s)',
+                    "HTTP request without Authorization header (auth_mode=none, "
+                    "skip_auto_auth=%s, method=%s, path=%s)",
                     skip_auto_auth, method, path_or_url,
                 )
             self._throttle()
@@ -103,14 +96,7 @@ class OfficialRequestMixin:
                     raw = resp.read().decode("utf-8")
                     parsed = _parse(raw)
                     resp_headers = dict(resp.headers.items())
-                    # C30 P0: Restore bearer token after successful cookie-auth fallback.
-                    # When a 401 on bearer mode triggers a cookie-auth retry and succeeds,
-                    # self.token was cleared (line 122) and never restored. Restoring it
-                    # here ensures subsequent requests can fall back to bearer if the
-                    # session cookie expires.
-                    if token_before_auth_fallback is not None and not self.token and auth_mode != "bearer":
-                        with self._request_lock:
-                            self.token = token_before_auth_fallback
+                    sm.on_success()
                     return parsed, resp_headers
             except urllib.error.HTTPError as exc:
                 raw = exc.read().decode("utf-8", errors="replace")
@@ -118,56 +104,6 @@ class OfficialRequestMixin:
                     parsed = _parse(raw)
                 except BrainAPIError:
                     parsed = {"raw": raw[:500]}
-                rate_limit_text = json.dumps(parsed, ensure_ascii=False, default=str)
-                concurrency_limit = "CONCURRENT_SIMULATION_LIMIT_EXCEEDED" in rate_limit_text
-                if (
-                    _retryable_status(exc.code)
-                    and self.config.rate_limit_retry_attempts > 0
-                    and attempt < attempts - 1
-                    and not concurrency_limit
-                ):
-                    time.sleep(_retry_delay(exc.headers, attempt, self.config.rate_limit_backoff_seconds))
-                    continue
-                # C30 P0: 401 bearer token may be expired — differentiate from hard auth failure
-                if exc.code == 401 and auth_mode == "bearer" and attempt < attempts - 1:
-                    with self._request_lock:
-                        token_before_auth_fallback = self.token
-                        self.token = ""
-                        if self._has_session_cookie():
-                            self._prefer_cookie_auth = True
-                    continue
-                if (
-                    exc.code in {401, 403}
-                    and auth_refresh_available
-                    and not auth_refresh_attempted
-                    and attempt < attempts - 1
-                ):
-                    auth_refresh_attempted = True
-                    auth_refresh_available = False
-                    try:
-                        self.authenticate()
-                    except BrainAPIError:
-                        logger.debug(
-                            "API auth refresh failed: method=%s path=%s auth_mode=%s",
-                            method,
-                            path_or_url,
-                            auth_mode,
-                            exc_info=True,
-                        )
-                    else:
-                        with self._request_lock:
-                            if self._has_session_cookie():
-                                self._prefer_cookie_auth = True
-                        continue
-                logger.debug(
-                    "API auth context: method=%s path=%s auth_mode=%s "
-                    "has_cookie=%s",
-                    method,
-                    path_or_url,
-                    auth_mode,
-                    self._has_session_cookie(),
-                )
-                # C20 P0: derive error_code from HTTP status for frontend display
                 _error_code = _http_error_code(exc.code, parsed, auth_mode)
                 last_error = BrainAPIError(
                     f"HTTP {exc.code}: {_scrub(parsed)}",
@@ -176,23 +112,38 @@ class OfficialRequestMixin:
                     retry_after=_retry_after(exc.headers),
                     error_code=_error_code,
                 )
-                if token_before_auth_fallback is not None and not self.token:
-                    with self._request_lock:
-                        self.token = token_before_auth_fallback
+                if (
+                    _retryable_status(exc.code)
+                    and self.config.rate_limit_retry_attempts > 0
+                    and attempt < attempts - 1
+                    and "CONCURRENT_SIMULATION_LIMIT_EXCEEDED"
+                    not in json.dumps(parsed, ensure_ascii=False, default=str)
+                ):
+                    time.sleep(_retry_delay(exc.headers, attempt, self.config.rate_limit_backoff_seconds))
+                    continue
+                action = sm.on_auth_failure(
+                    exc.code, auth_mode,
+                    has_more_attempts=(attempt < attempts - 1),
+                    is_auth_retry_allowed=can_auth_refresh,
+                    path_or_url=path_or_url,
+                )
+                if action == AuthAction.RETRY:
+                    continue
+                logger.debug(
+                    "API final failure: method=%s path=%s auth_mode=%s status=%d",
+                    method, path_or_url, auth_mode, exc.code,
+                )
+                sm.restore_token()
                 raise last_error from exc
             except urllib.error.URLError as exc:
                 last_error = BrainAPIError(f"network error: {exc}")
                 if self.config.rate_limit_retry_attempts > 0 and attempt < attempts - 1:
                     time.sleep(_retry_delay(None, attempt, self.config.rate_limit_backoff_seconds))
                     continue
-                if token_before_auth_fallback is not None and not self.token:
-                    with self._request_lock:
-                        self.token = token_before_auth_fallback
+                sm.restore_token()
                 raise last_error from exc
+        sm.restore_token()
         if last_error is not None:
-            if token_before_auth_fallback is not None and not self.token:
-                with self._request_lock:
-                    self.token = token_before_auth_fallback
             raise BrainAPIError(
                 f"request failed after retries: {redact_error_message(last_error)}",
                 status_code=last_error.status_code,

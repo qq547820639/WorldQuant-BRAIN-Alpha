@@ -87,7 +87,7 @@ class SubmissionGateService:
         if not safety["allowed"]:
             p.services.runtime._event("auto_submit_skipped", "; ".join(safety["failed_reasons"]), candidate.alpha_id)
             return 0
-        cross_review = p._pre_submit_cross_review(candidate)
+        cross_review = self._pre_submit_cross_review(candidate)
         candidate.submission["cross_review"] = cross_review
         if not cross_review.get("allowed", False):
             failed_reasons = list(cross_review.get("failed_reasons") or [])

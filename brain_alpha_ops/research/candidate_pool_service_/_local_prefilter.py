@@ -29,6 +29,13 @@ from brain_alpha_ops.research.candidate_pool_service_._helpers import (
     logger,
 )
 
+# Permutation-test prefilter hook (P0 correctness wave)
+try:
+    from brain_alpha_ops.scoring.anti_overfit.permutation import PermutationFilter
+    _PERMUTATION_FILTER_AVAILABLE = True
+except ImportError:  # pragma: no cover
+    _PERMUTATION_FILTER_AVAILABLE = False
+
 
 class _LocalPrefilterMixin:
     """Local scoring, prefilter, and knowledge-recording helpers.
@@ -45,6 +52,7 @@ class _LocalPrefilterMixin:
             candidate.local_quality = local_quality(candidate, p.config.budget.min_local_quality_score)
             self._apply_local_backtest_prefilter(candidate)
             self._apply_generation_field_prefilter(candidate)
+            self._apply_permutation_prefilter(candidate)
             try:
                 candidate.scorecard = build_scorecard(
                     candidate,
@@ -150,6 +158,89 @@ class _LocalPrefilterMixin:
         local["score"] = max(0.0, round(float(local.get("score", 0.0) or 0.0) - 8.0, 2))
         local["non_signal_generation_fields"] = non_signal_fields
         candidate.local_quality = local
+
+    def _apply_permutation_prefilter(self, candidate: Candidate) -> None:
+        """Permutation-test hook: reject candidates with p >= 0.05.
+
+        This filter runs after local-quality evaluation and before the
+        candidate enters the retained pool.  When factor_value / return
+        series data are not yet available the filter is silently skipped
+        so it does not block the pipeline.
+        """
+        if not _PERMUTATION_FILTER_AVAILABLE:
+            return
+
+        try:
+            factor_values = self._extract_series_for_permutation(candidate, (
+                "factor_values", "factor_values_series",
+            ))
+            returns = self._extract_series_for_permutation(candidate, (
+                "returns", "returns_series", "forward_returns",
+            ))
+            if not factor_values or not returns:
+                return  # insufficient data — skip silently
+
+            perm_filter = PermutationFilter(alpha=0.05, seed=42)
+            result = perm_filter.filter(
+                {"factor_values": factor_values, "returns": returns},
+                n_permutations=1000,
+            )
+            if not result.significant:
+                candidate.lifecycle_status = "REJECTED_BY_PERMUTATION_TEST"
+                candidate.gate = _blocked_gate(
+                    "PERMUTATION_TEST_FAILED",
+                    [f"permutation p-value={result.p_value:.4f} >= 0.05"],
+                )
+                # Ensure local_quality reflects rejection so the candidate
+                # is not added to the `passed` list in _local_prefilter.
+                local = dict(candidate.local_quality or {})
+                local["passed"] = False
+                reasons = list(local.get("reasons") or [])
+                reason = f"permutation_test_p={result.p_value:.4f}"
+                if reason not in reasons:
+                    reasons.append(reason)
+                local["reasons"] = reasons
+                candidate.local_quality = local
+                p = self._pipeline
+                p.services.runtime._event(
+                    "permutation_test_rejected",
+                    f"p={result.p_value:.4f}, observed_ic={result.observed_metric:.4f}",
+                    candidate.alpha_id,
+                )
+        except Exception:
+            # Permutation filter is advisory; never crash the pipeline.
+            pass
+
+    @staticmethod
+    def _extract_series_for_permutation(
+        candidate: Candidate,
+        keys: tuple[str, ...],
+    ) -> list[float]:
+        """Extract a numeric series from candidate for permutation testing.
+
+        Tries top-level attributes on the candidate model first, then falls
+        back to ``official_metrics`` dict keys.
+        """
+        import math as _math
+
+        for key in keys:
+            val = getattr(candidate, key, None)
+            if val is None:
+                # Fallback: check official_metrics dict
+                metrics = getattr(candidate, "official_metrics", None) or {}
+                val = metrics.get(key) if isinstance(metrics, dict) else None
+            if isinstance(val, (list, tuple)):
+                series = []
+                for v in val:
+                    try:
+                        f = float(v)
+                    except (TypeError, ValueError):
+                        continue
+                    if _math.isfinite(f):
+                        series.append(f)
+                if len(series) >= 2:
+                    return series
+        return []
 
     def _record_local_backtest_knowledge(self, candidate: Candidate, result: dict) -> None:
         p = self._pipeline

@@ -458,13 +458,13 @@ class TestConvergenceLink:
             f"stall_cycles={status.stall_cycles}, stalled={status.stalled}"
 
     def test_bootstrap_returns_zero_for_small_n(self):
-        """n<5 时 bootstrap 应安全返回 (0, 0)。"""
+        """n=3..4 时 bootstrap 应安全返回 (0, 0)；n<3 使用 t-distribution CI（P2-17）。"""
         from brain_alpha_ops.research.convergence import ConvergenceTracker
 
         tracker = ConvergenceTracker(rng=random.Random(42))
-        result = tracker._bootstrap_ci([1.0, 2.0])  # n=2 < 5
+        result = tracker._bootstrap_ci([1.0, 2.0, 1.5])  # n=3, triggers (0.0, 0.0) guard
         assert result == (0.0, 0.0), \
-            f"n<5 should return (0, 0), got {result}"
+            f"n=3 should return (0, 0), got {result}"
 
     def test_bootstrap_produces_ci_for_large_n(self):
         """n>=5 时 bootstrap 应产生有意义的置信区间。"""

@@ -34,11 +34,11 @@ class PipelineSnapshotMixin:
         return PipelineSnapshotBuilder(
             config=self.config,
             services=PipelineSnapshotServices(
-                candidate_pool_candidates=self._candidate_pool_candidates,
-                pending_backtest_candidates=self._pending_backtest_candidates,
-                validation_targets=self._validation_targets,
+                candidate_pool_candidates=self.services.candidate_pool._candidate_pool_candidates,
+                pending_backtest_candidates=self.services.candidate_pool._pending_backtest_candidates,
+                validation_targets=self.services.candidate_pool._validation_targets,
                 active_backtest_limit=self._active_backtest_limit,
-                poll_interval_seconds=self._poll_interval_seconds,
+                poll_interval_seconds=self.services.backtest_flow._poll_interval_seconds,
                 slot_snapshot=self._slot_snapshot,
                 current_strategy_profile=self.services.strategy._current_strategy_profile,
                 strategy_lifecycle_summary=lambda profile, index: self.strategy_lifecycle.summary(
@@ -48,9 +48,9 @@ class PipelineSnapshotMixin:
                 strategy_plugin_summary=self.services.runtime._strategy_plugin_summary,
                 observability_official_call_guard_snapshot=self.services.official_validation._observability_official_call_guard_snapshot,
                 assess_auto_submission=self.services.submission_gate._assess_auto_submission,
-                smart_rank_candidates=self._smart_rank_candidates,
-                smart_ranking_score=self._smart_ranking_score,
-                cloud_correlation_risk=self._cloud_correlation_risk,
+                smart_rank_candidates=self.services.candidate_pool._smart_rank_candidates,
+                smart_ranking_score=self.services.candidate_pool._smart_ranking_score,
+                cloud_correlation_risk=self.services.candidate_pool._cloud_correlation_risk,
             ),
         )
 
@@ -110,7 +110,7 @@ class PipelineSnapshotMixin:
             candidate_at_slot=self.backtest_slot_manager.get,
             official_calls_halted=self.official_calls_halted,
             official_halt_reason=self.official_halt_reason,
-            cloud_correlation_risk=self._cloud_correlation_risk,
+            cloud_correlation_risk=self.services.candidate_pool._cloud_correlation_risk,
         )
 
     def _active_backtest_limit(self) -> int:

@@ -445,7 +445,7 @@ def test_pipeline_auto_submit_blocks_when_cross_review_rejects(monkeypatch):
         )
 
         monkeypatch.setattr(
-            pipeline,
+            pipeline.services.submission_gate,
             "_pre_submit_cross_review",
             lambda candidate: {"allowed": False, "failed_reasons": ["manual_review_required"]},
         )
@@ -494,7 +494,7 @@ def test_pipeline_auto_submit_blocks_incomplete_official_metric_fields(monkeypat
             cross_review_called["value"] = True
             return {"allowed": True, "failed_reasons": []}
 
-        monkeypatch.setattr(pipeline, "_pre_submit_cross_review", cross_review)
+        monkeypatch.setattr(pipeline.services.submission_gate, "_pre_submit_cross_review", cross_review)
 
         submitted = pipeline.services.submission_gate._try_auto_submit(candidate, 0)
 
@@ -553,7 +553,7 @@ def test_pipeline_auto_submit_reports_exact_missing_official_metric_field(monkey
             cross_review_called["value"] = True
             return {"allowed": True, "failed_reasons": []}
 
-        monkeypatch.setattr(pipeline, "_pre_submit_cross_review", cross_review)
+        monkeypatch.setattr(pipeline.services.submission_gate, "_pre_submit_cross_review", cross_review)
 
         submitted = pipeline.services.submission_gate._try_auto_submit(candidate, 0)
 
@@ -618,7 +618,7 @@ def test_pipeline_auto_submit_blocks_official_release_gate_failure_before_cross_
             cross_review_called["value"] = True
             return {"allowed": True, "failed_reasons": []}
 
-        monkeypatch.setattr(pipeline, "_pre_submit_cross_review", cross_review)
+        monkeypatch.setattr(pipeline.services.submission_gate, "_pre_submit_cross_review", cross_review)
 
         submitted = pipeline.services.submission_gate._try_auto_submit(candidate, 0)
 
@@ -680,7 +680,7 @@ def test_pipeline_auto_submit_blocks_when_live_readiness_not_ready(monkeypatch):
         )
 
         monkeypatch.setattr(
-            pipeline,
+            pipeline.services.submission_gate,
             "_pre_submit_cross_review",
             lambda _candidate: {"allowed": True, "failed_reasons": []},
         )

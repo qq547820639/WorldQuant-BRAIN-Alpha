@@ -21,6 +21,7 @@ from __future__ import annotations
 
 from .pipeline import AlphaResearchPipeline
 from .pipeline_mixins import CONVERGENCE_REPORT_INTERVAL, CONTEXT_REFRESH_INTERVAL_SECONDS
+from ..pipeline_services_container import PipelineServices
 
 # Re-export of observability helper so legacy imports
 # ``from brain_alpha_ops.research.pipeline import build_research_observability_snapshot``
@@ -32,6 +33,7 @@ SUBMITTED_CLOUD_STATUSES = {"ACTIVE", "SUBMITTED", "PRODUCTION", "CONDUCTED"}
 
 __all__ = [
     "AlphaResearchPipeline",
+    "PipelineServices",
     "SUBMITTED_CLOUD_STATUSES",
     "CONVERGENCE_REPORT_INTERVAL",
     "CONTEXT_REFRESH_INTERVAL_SECONDS",

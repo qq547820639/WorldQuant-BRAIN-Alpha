@@ -40,6 +40,16 @@ from brain_alpha_ops.scoring.schema import (
     validate_gate_result,
     validate_scoring_result,
 )
+from brain_alpha_ops.scoring.policy import (
+    FIXABLE_GATE_HINTS,
+    AttributionTree,
+    GateDecision as PolicyGateDecision,
+    GateRuleSet,
+    LayerWeights,
+    ScoreResult,
+    ScoringPolicy,
+    ThresholdProfile,
+)
 
 __all__ = [
     "GateDecision",
@@ -74,4 +84,12 @@ __all__ = [
     "SCORECARD_DICT_SCHEMA",
     "validate_scoring_result",
     "validate_gate_result",
+    # Policy module exports
+    "ScoringPolicy",
+    "LayerWeights",
+    "ThresholdProfile",
+    "GateRuleSet",
+    "ScoreResult",
+    "AttributionTree",
+    "FIXABLE_GATE_HINTS",
 ]

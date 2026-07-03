@@ -55,17 +55,9 @@ from ..strategy_lifecycle import StrategyLifecycleTracker
 # Existing mixins (sibling modules in ``research/``)
 from ..pipeline_services import PipelineServiceFactoryMixin
 from ..pipeline_snapshots import PipelineSnapshotMixin
-from ..pipeline_candidates import PipelineCandidatePoolMixin
-from ..pipeline_backtest_flow import PipelineBacktestMixin
-from ..pipeline_context_sync import PipelineContextSyncMixin
-from ..pipeline_submission_gate import PipelineSubmissionMixin
 
-# Inner cycle machinery mixins (merged into this subpackage)
-from .pipeline_mixins import (
-    PipelineMainLoopMixin,
-    PipelinePostProcessingMixin,
-    PipelineCycleMixin,
-)
+# Inner cycle machinery (consolidated from 3 mixins into 1)
+from .pipeline_mixins import PipelineMainLoopMixin
 
 # Preserve the original ``brain_alpha_ops.research.pipeline`` logger name so
 # downstream log filters and test caplog assertions keep working after the
@@ -317,19 +309,17 @@ class PipelineRunMixin:
         return result
 
 
-# NOTE: Mixin inheritance reduced from 10+ to 2 (PipelineServiceFactoryMixin, PipelineSnapshotMixin). Remaining services are accessed via self.services composition container. See pipeline_services_container.py.
+# NOTE: Mixin inheritance reduced from 9 to 3.
+#   - PipelineMainLoopMixin: consolidated main loop + post-processing + cycle phases
+#   - PipelineServiceFactoryMixin: backward-compatible service factories
+#   - PipelineSnapshotMixin: snapshot / summary functionality
+# All other services are accessed via self.services composition container.
 class AlphaResearchPipeline(
     PipelineInitMixin,
     PipelineRunMixin,
     PipelineMainLoopMixin,
-    PipelinePostProcessingMixin,
-    PipelineCycleMixin,
     PipelineServiceFactoryMixin,
     PipelineSnapshotMixin,
-    PipelineCandidatePoolMixin,
-    PipelineContextSyncMixin,
-    PipelineBacktestMixin,
-    PipelineSubmissionMixin,
 ):
     """End-to-end alpha research, simulation, scoring, and optional submission.
 

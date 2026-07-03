@@ -18,6 +18,7 @@ from typing import Any
 from brain_alpha_ops.config import BrainSettings, OfficialAPIConfig
 from brain_alpha_ops.secure_credentials import resolve_credentials
 
+from ..auth_state_machine import AuthStateMachine
 from ..cache import cache_key as _cache_key
 from ..cache import cache_path as _cache_path
 from ..cache import read_cache as _read_cache
@@ -95,6 +96,18 @@ class OfficialBrainAPI(_OfficialAuthMixin, _OfficialSimulationMixin, _OfficialDa
         self._last_request_at = 0.0
         self._request_lock = threading.RLock()
         self._cache_lock = threading.Lock()
+        self._auth_state_machine = AuthStateMachine(
+            token_getter=lambda: self._credentials.token,
+            token_setter=lambda v: setattr(self._credentials, "token", v or ""),
+            username_getter=lambda: self._credentials.username,
+            password_getter=lambda: self._credentials.password,
+            cookie_jar_getter=lambda: self._cookie_jar,
+            prefer_cookie_getter=lambda: self._prefer_cookie_auth,
+            prefer_cookie_setter=lambda v: setattr(self, "_prefer_cookie_auth", bool(v)),
+            lock=self._request_lock,
+            authenticator=self.authenticate,
+            authentication_path=self.config.authentication_path,
+        )
         self._auth_profile = _OfficialAuthProfileClient(self)
         self._context_data = _OfficialContextDataClient(self)
         self._request_client = _OfficialRequestClient(self)

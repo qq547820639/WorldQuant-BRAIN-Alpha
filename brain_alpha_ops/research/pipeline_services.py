@@ -28,7 +28,7 @@ class PipelineServiceFactoryMixin:
             min_prior_score_for_official_validation=self.config.budget.min_prior_score_for_official_validation,
             min_prior_score_for_official_simulation=self.config.budget.min_prior_score_for_official_simulation,
             ranker=rank_candidates,
-            smart_ranker=self._smart_rank_candidates,
+            smart_ranker=self.services.candidate_pool._smart_rank_candidates,
         )
 
     def _backtest_submission_service(self) -> BacktestSubmissionService:
@@ -54,7 +54,7 @@ class PipelineServiceFactoryMixin:
             check_registry=self.check_registry,
             scoring_params=self.auto_calibrator.params,
             record_lifecycle=self.services.runtime._record_lifecycle,
-            remember_accepted=self._remember_accepted,
+            remember_accepted=self.services.candidate_pool._remember_accepted,
             retry_simulation=self.services.backtest_flow._retry_simulation_candidate,
             create_secondary_fusion=self.services.backtest_flow._create_secondary_fusion_candidate,
             archive=self.services.runtime._archive,
@@ -103,10 +103,10 @@ class PipelineServiceFactoryMixin:
 
     def _batch_backtest_coordinator(self) -> BatchBacktestCoordinator:
         return BatchBacktestCoordinator(
-            ranker=self._smart_rank_candidates,
+            ranker=self.services.candidate_pool._smart_rank_candidates,
             min_score=self.config.budget.min_prior_score_for_official_simulation,
             batch_size=self._active_backtest_limit(),
-            risk_evaluator=self._cloud_correlation_risk,
+            risk_evaluator=self.services.candidate_pool._cloud_correlation_risk,
             max_similarity_threshold=self.config.submission_policy.max_expression_similarity,
         )
 

@@ -40,6 +40,9 @@ class AntiOverfitResult:
     half_life_days: float = 0.0
     half_life_score: float = 0.0
 
+    dsr_score: float = 0.0
+    trial_count: int = 0
+
     warnings: list[str] = field(default_factory=list)
     details: dict[str, Any] = field(default_factory=dict)
 
@@ -71,6 +74,10 @@ class AntiOverfitResult:
             "half_life": {
                 "days": self.half_life_days,
                 "score": self.half_life_score,
+            },
+            "dsr": {
+                "score": self.dsr_score,
+                "trial_count": self.trial_count,
             },
             "warnings": self.warnings,
             "thresholds": {

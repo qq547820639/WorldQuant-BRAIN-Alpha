@@ -432,6 +432,58 @@ def estimate_half_life(
 # --------------------------------------------------------------------------- #
 # Former compliance.py
 # --------------------------------------------------------------------------- #
+def compute_permutation_test(
+    factor_values: list[float],
+    returns: list[float],
+    *,
+    n_permutations: int = 1000,
+    alpha: float = 0.05,
+) -> dict[str, Any]:
+    """Circular-permutation significance test for Alpha pre-screening.
+
+    Performs ``n_permutations`` circular permutations of the return series
+    and compares the observed Spearman rank correlation against the resulting
+    null distribution.  Candidates with ``p_value >= alpha`` should be
+    rejected to avoid wasting official API backtest slots on noise.
+
+    Args:
+        factor_values: Factor exposure time series.
+        returns: Forward return series (aligned with factor_values).
+        n_permutations: Number of permutation trials (default 1000).
+        alpha: Significance threshold (default 0.05).
+
+    Returns:
+        Dict with keys:
+        - ``p_value``: empirical p-value
+        - ``significant``: True if p_value < alpha
+        - ``observed_ic``: Spearman r on un-permuted data
+        - ``n_permutations``: trials performed (may be less with early stop)
+        - ``early_stopped``: whether early-stop terminated the loop
+        - ``passed``: alias for ``significant``
+    """
+    from .permutation import PermutationFilter
+
+    perm_filter = PermutationFilter(alpha=alpha, metric="spearman")
+    # Build a minimal candidate dict compatible with PermutationFilter
+    candidate = {
+        "factor_values": factor_values,
+        "returns": returns,
+    }
+    result = perm_filter.filter(candidate, n_permutations=n_permutations)
+
+    return {
+        "p_value": result.p_value,
+        "significant": result.significant,
+        "observed_ic": result.observed_metric,
+        "n_permutations": result.n_permutations,
+        "early_stopped": result.early_stopped,
+        "passed": result.significant,
+    }
+
+
+# --------------------------------------------------------------------------- #
+# Former compliance.py (continued)
+# --------------------------------------------------------------------------- #
 def _tokenize_expression(expression: str) -> set[str]:
     """Tokenize an expression into a set of meaningful tokens for comparison."""
     tokens = re.findall(r'[a-zA-Z_]\w*', expression.lower())

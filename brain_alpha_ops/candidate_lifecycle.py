@@ -96,6 +96,16 @@ _LEGAL_TRANSITIONS: dict[LifecycleState, frozenset[LifecycleState]] = {
 
 # Legacy pipeline status strings → canonical LifecycleState. Used by
 # ``get_lifecycle`` to seed state from ``candidate.lifecycle_status``.
+#
+# Deprecation timeline:
+#   v2.0 (current):  ``LifecycleStatusNormalizer`` introduced — wraps this
+#                     map with ``normalize()`` / ``is_legacy()`` / aliases.
+#                     All call-sites updated; map kept as internal storage.
+#   v2.1:             ``normalize()`` emits ``DeprecationWarning`` for
+#                     non-canonical legacy strings.  Log-to-audit-trail on
+#                     first occurrence per run.
+#   v2.2:             Remove ``_LEGACY_STATUS_MAP``.  ``normalize()``
+#                     raises ``ValueError`` for unknown strings.
 _LEGACY_STATUS_MAP: dict[str, LifecycleState] = {
     # draft
     "created": LifecycleState.draft, "draft": LifecycleState.draft,
@@ -136,6 +146,71 @@ _LEGACY_STATUS_MAP: dict[str, LifecycleState] = {
     "submitted": LifecycleState.submitted, "archived": LifecycleState.archived,
     "candidate_pool_pruned": LifecycleState.archived,
 }
+
+
+# ── LifecycleStatusNormalizer ──────────────────────────────────────────
+# Encapsulates the legacy → canonical status mapping to provide a single
+# point of truth for string-to-LifecycleState resolution.
+
+class LifecycleStatusNormalizer:
+    """Normalize legacy pipeline status strings to canonical ``LifecycleState``.
+
+    Wraps the ``_LEGACY_STATUS_MAP`` behind a clean API so callers don't
+    need to know about the internal dict structure.
+
+    Usage::
+
+        normalizer = LifecycleStatusNormalizer()
+        state = normalizer.normalize("simulation_submitted")  # → LifecycleState.simulating
+        assert normalizer.is_legacy("simulation_submitted")   # → True
+        print(normalizer.registered_aliases)                   # → 30+ entries
+    """
+
+    def __init__(self, legacy_map: dict[str, LifecycleState] | None = None) -> None:
+        """Initialise with an optional override map (defaults to module-level)."""
+        self._map: dict[str, LifecycleState] = dict(legacy_map) if legacy_map is not None else dict(_LEGACY_STATUS_MAP)
+
+    def normalize(self, legacy_status: str) -> LifecycleState:
+        """Map a legacy status string to a canonical ``LifecycleState``.
+
+        Args:
+            legacy_status: Raw status string from ``candidate.lifecycle_status``.
+
+        Returns:
+            The canonical ``LifecycleState``, defaulting to ``LifecycleState.draft``
+            for unrecognised strings (backward compatible).
+        """
+        return self._map.get(legacy_status, LifecycleState.draft)
+
+    def is_legacy(self, status: str) -> bool:
+        """Return ``True`` if *status* is a known legacy alias.
+
+        A canonical enum value (e.g. ``"draft"``) is NOT considered legacy
+        even though it appears in the map — it is the current standard.
+        """
+        if status not in self._map:
+            return False
+        # Canonical = the status string equals the LifecycleState value
+        try:
+            LifecycleState(status)
+            return False
+        except ValueError:
+            return True
+
+    @property
+    def registered_aliases(self) -> dict[str, LifecycleState]:
+        """Read-only view of all registered status→state mappings."""
+        return dict(self._map)
+
+    def __len__(self) -> int:
+        return len(self._map)
+
+    def __contains__(self, status: str) -> bool:
+        return status in self._map
+
+
+# Module-level default normalizer — used by ``get_lifecycle()``.
+_DEFAULT_NORMALIZER = LifecycleStatusNormalizer()
 
 
 @dataclass
@@ -310,7 +385,7 @@ def get_lifecycle(candidate: "Candidate") -> CandidateLifecycle:
     lc = getattr(candidate, "_lifecycle", None)
     if lc is None or not isinstance(lc, CandidateLifecycle):
         current = getattr(candidate, "lifecycle_status", "") or "created"
-        initial = _LEGACY_STATUS_MAP.get(current, LifecycleState.draft)
+        initial = _DEFAULT_NORMALIZER.normalize(current)
         lc = CandidateLifecycle(getattr(candidate, "alpha_id", "") or "", initial_state=initial)
         try:
             setattr(candidate, "_lifecycle", lc)

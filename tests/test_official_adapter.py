@@ -2656,8 +2656,16 @@ def test_cookie_auth_preferred_over_bearer_when_available():
         token="stale-token",
     )
     api._prefer_cookie_auth = True
-    api._has_session_cookie = lambda: True
-    api._auth_profile._has_session_cookie = lambda: True
+    # AuthStateMachine checks real cookie jar content — populate it.
+    cookie = http.cookiejar.Cookie(
+        version=0, name="sessionid", value="abc123",
+        port=None, port_specified=False,
+        domain="example.test", domain_specified=True, domain_initial_dot=False,
+        path="/", path_specified=True, secure=True,
+        expires=None, discard=False, comment=None, comment_url=None,
+        rest={"HttpOnly": None},
+    )
+    api._cookie_jar.set_cookie(cookie)
     api._open = fake_open
     api._request("GET", "/data-fields")
     assert captured["authorization"] is None

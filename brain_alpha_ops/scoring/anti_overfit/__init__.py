@@ -12,6 +12,8 @@ from .models import (
     _PLACEBO_TRIALS,
     _REGIME_MIN_SAMPLES,
 )
+from .dsr import compute_dsr
+from .permutation import PermutationFilter, PermutationResult
 from .checks import (
     _auto_classify_regimes,
     _pearson_r,
@@ -26,6 +28,7 @@ from .checks import compute_ic_stability
 from .checks import compute_regime_stress
 from .checks import compute_placebo_test
 from .checks import estimate_half_life
+from .checks import compute_permutation_test
 from .suite import run_anti_overfit_suite
 from .checks import (
     _attach_submission_report,
@@ -52,7 +55,9 @@ __all__ = [
     "HIGH_FREQUENCY_RETRY_THRESHOLD",
     "PARAMETER_TWEAK_IMPROVEMENT_THRESHOLD",
     "SIMILARITY_THRESHOLD",
+    "compute_dsr",
     "compute_ic_stability",
+    "compute_permutation_test",
     "compute_placebo_test",
     "compute_regime_stress",
     "check_duplicate_submission",
@@ -61,6 +66,8 @@ __all__ = [
     "check_parameter_tweak",
     "estimate_half_life",
     "evaluate_candidate",
+    "PermutationFilter",
+    "PermutationResult",
     "run_anti_overfit_suite",
     "run_compliance_guardrails",
 ]

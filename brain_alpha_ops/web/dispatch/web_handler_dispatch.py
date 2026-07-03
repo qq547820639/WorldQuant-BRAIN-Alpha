@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 from functools import wraps
-from typing import Any, Callable
+from typing import Any, Callable, Protocol, runtime_checkable
 
 from brain_alpha_ops.redaction import redact_text
 from brain_alpha_ops.research.assistant import AssistantResponseParseError
@@ -47,6 +47,24 @@ _LEGACY_FALLBACK_DISABLED_POST_PATHS = frozenset({"/api/pipeline/start"})
 RouteDispatcher = Callable[[Any, Any, WebHandlerDispatchContext], None]
 PayloadValidator = Callable[[Any], str]
 PayloadRouteDispatcher = Callable[[Any, Any, WebHandlerDispatchContext, dict[str, Any]], None]
+
+
+@runtime_checkable
+class WebHandler(Protocol):
+    """Protocol defining the contract for web request handler objects.
+
+    A ``WebHandler`` must expose a ``dispatch_get`` method for GET requests
+    and a ``dispatch_post`` method for POST requests.  Both receive the
+    handler instance, the parsed path, and the dispatch context.
+    """
+
+    def dispatch_get(self, handler: Any, path: str, ctx: WebHandlerDispatchContext) -> None:
+        """Handle a GET request."""
+        ...
+
+    def dispatch_post(self, handler: Any, path: str, ctx: WebHandlerDispatchContext) -> None:
+        """Handle a POST request."""
+        ...
 
 # ── Utility Functions ──────────────────────────────────────────────────
 
