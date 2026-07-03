@@ -19,7 +19,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from brain_alpha_ops.brain_api.base import BrainAPIError
 import brain_alpha_ops.brain_api as brain_api_pkg
-from brain_alpha_ops.brain_api import pagination_limits
+from brain_alpha_ops.brain_api import pagination as pagination_limits
 from brain_alpha_ops.brain_api.official_auth import OfficialAuthProfileMixin
 from brain_alpha_ops.brain_api.official_context import OfficialContextDataMixin
 from brain_alpha_ops.brain_api.official_filtering import FilterRange

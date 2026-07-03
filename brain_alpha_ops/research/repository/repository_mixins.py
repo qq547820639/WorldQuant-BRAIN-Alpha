@@ -1,0 +1,362 @@
+"""Higher-level repository mixins: writes, cloud-alpha, and sqlite-index.
+
+Merged from the former ``_writes_mixin``, ``_cloud_mixin``, and
+``_sqlite_mixin`` sub-modules.  These mixins extend
+``ResearchRepositoryCoreMixin`` (defined in ``repository``) to provide
+record persistence, cloud-Alpha merge/read, and SQLite incremental-index
+updates.
+
+Dependency chain (one-way):
+    ``ResearchRepositoryCoreMixin`` (in ``repository``)
+        ↑
+    ``ResearchRepositoryWritesMixin``   (this file)
+        ↑
+    ``ResearchRepositoryCloudMixin``    (this file)
+        ↑
+    ``ResearchRepositorySqliteMixin``   (this file)
+
+The final ``ResearchRepository`` class composes the top-most
+``ResearchRepositorySqliteMixin`` and is defined in ``__init__``.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import time
+from pathlib import Path
+from typing import Any
+
+from brain_alpha_ops.jsonl import read_jsonl_tail
+from brain_alpha_ops.models import Candidate, PipelineEvent, utc_now
+from brain_alpha_ops.redaction import redact_error_message, redact_text
+from brain_alpha_ops.research.contracts import (
+    assistant_guidance_record,
+    backtest_record,
+    lifecycle_record,
+    strategy_lifecycle_record,
+)
+from brain_alpha_ops.research.guidance import ensure_assistant_guidance_digest
+
+from brain_alpha_ops.research.repository.repository import (
+    ResearchRepositoryCoreMixin,
+    _EXPRESSION_INDEXED_FILES,
+    _RECORD_INDEXED_FILES,
+    _SQLITE_INDEX_DIAGNOSTICS_FILE,
+    _cloud_alpha_id,
+    _cloud_record_hash,
+    _repository_safe,
+    _with_expression_summary,
+    logger,
+)
+
+
+# ── Write-side mixin: persist records to JSONL files ──────────────────────
+
+
+class ResearchRepositoryWritesMixin(ResearchRepositoryCoreMixin):
+    def save_candidate(self, run_id: str, candidate: Candidate):
+        record = {"run_id": run_id, **candidate.to_dict()}
+        extra_fields = record.get("extra_fields") if isinstance(record.get("extra_fields"), dict) else {}
+        if isinstance(extra_fields.get("scientific_audit"), dict):
+            record.setdefault("scientific_audit", extra_fields["scientific_audit"])
+        self._append("candidates.jsonl", _with_expression_summary(record))
+
+    def save_event(self, run_id: str, event: PipelineEvent):
+        self._append("events.jsonl", {"run_id": run_id, **event.to_dict()})
+
+    def save_lifecycle_record(self, run_id: str, record: dict[str, Any]):
+        self._append("lifecycle.jsonl", _with_expression_summary(lifecycle_record(run_id, record)))
+
+    def save_cloud_alpha(self, record: dict[str, Any]):
+        self.merge_cloud_alphas([record])
+
+    def save_check_record(self, record: dict[str, Any]):
+        self._append("checks.jsonl", _with_expression_summary({"timestamp": utc_now(), **record}))
+
+    def save_backtest_record(self, run_id: str, record: dict[str, Any]):
+        self._append(
+            "backtests.jsonl",
+            _with_expression_summary(backtest_record(run_id, record)),
+        )
+
+    def save_assistant_guidance(self, guidance: dict[str, Any], *, source: str = "web") -> None:
+        guidance = ensure_assistant_guidance_digest(guidance)
+        self._append("assistant_guidance.jsonl", assistant_guidance_record(guidance, source=source))
+
+    def save_strategy_lifecycle_record(self, run_id: str, record: dict[str, Any]) -> None:
+        self._append("strategy_lifecycle.jsonl", strategy_lifecycle_record(run_id, record))
+
+    def save_run_history(
+        self,
+        run_id: str,
+        result: dict[str, Any],
+        *,
+        status: str = "completed",
+        parameter_audit: dict[str, Any] | None = None,
+        experiment_id: str = "",
+        experiment_version: str = "",
+    ) -> Path:
+        """Persist the latest run snapshot for UI recovery after app restart."""
+        history_dir = Path(self.storage_dir) / "run_history"
+        history_dir.mkdir(parents=True, exist_ok=True)
+        payload = {
+            **(result or {}),
+            "run_id": run_id,
+            "status": status,
+            "timestamp": utc_now(),
+        }
+        if experiment_id:
+            payload["experiment_id"] = experiment_id
+        if experiment_version:
+            payload["experiment_version"] = experiment_version
+        if parameter_audit is not None:
+            payload["parameter_audit"] = parameter_audit
+        payload = _repository_safe(payload)
+        with self._file_lock("run_history"):
+            target = history_dir / f"{run_id}.json"
+            latest = history_dir / "latest.json"
+            tmp = history_dir / f".{run_id}.{os.getpid()}.{time.time_ns()}.tmp"
+            data = json.dumps(payload, ensure_ascii=False, indent=2, default=str)
+            tmp.write_text(data, encoding="utf-8")
+            tmp.replace(target)
+            latest_tmp = history_dir / f".latest.{os.getpid()}.{time.time_ns()}.tmp"
+            latest_tmp.write_text(data, encoding="utf-8")
+            latest_tmp.replace(latest)
+            return target
+
+    def save_family_record(self, candidate: Candidate):
+        self._append(
+            "families.jsonl",
+            {
+                "timestamp": utc_now(),
+                "family": candidate.family,
+                "alpha_id": candidate.alpha_id,
+                "parent_id": candidate.parent_id,
+                "mutation_type": candidate.mutation_type,
+                "status": candidate.lifecycle_status,
+                "score": candidate.scorecard.get("total_score"),
+                "correlation": (candidate.official_metrics or {}).get("correlation"),
+            },
+        )
+
+    def maybe_archive(self, filename: str, max_size_mb: int = 50, max_age_days: int = 30):
+        """C4: Archive large JSONL files when they exceed max_size_mb.
+
+        Renames the current file to a timestamped archive and cleans up
+        archives older than max_age_days.
+        """
+        from datetime import datetime, timedelta
+
+        with self._file_lock(filename):
+            path = self._safe_storage_path(filename)
+            if not path.is_file():
+                return
+            size_mb = path.stat().st_size / (1024 * 1024)
+            if size_mb <= max_size_mb:
+                return
+
+            suffix = datetime.now().strftime("%Y%m%d_%H%M%S")
+            archive_path = self._safe_archive_path(filename, suffix)
+            try:
+                path.rename(archive_path)
+            except OSError:
+                return
+
+        # Clean up old archives
+        cutoff = datetime.now() - timedelta(days=max_age_days)
+        stem = Path(filename).stem
+        for old in sorted(self._storage_root().glob(f"{stem}_*.jsonl")):
+            try:
+                mtime = datetime.fromtimestamp(old.stat().st_mtime)
+                if mtime < cutoff:
+                    old.unlink()
+            except OSError:
+                continue
+
+    def save_ab_test(self, run_id: str, before: dict[str, Any], after: dict[str, Any], only_changed: str):
+        self._append(
+            "ab_tests.jsonl",
+            {
+                "timestamp": utc_now(),
+                "run_id": run_id,
+                "only_changed": only_changed,
+                "before": before,
+                "after": after,
+            },
+        )
+
+    def latest_backtest_records(self, *, limit: int = 500) -> list[dict[str, Any]]:
+        return read_jsonl_tail(self._safe_storage_path("backtests.jsonl"), limit=max(1, int(limit or 1)))
+
+
+# ── Cloud-Alpha merge/read mixin ──────────────────────────────────────────
+
+
+class ResearchRepositoryCloudMixin(ResearchRepositoryWritesMixin):
+    def cloud_alpha_ids(self) -> set[str]:
+        return set(self._latest_cloud_alpha_rows().keys())
+
+    def latest_cloud_alphas(self) -> list[dict[str, Any]]:
+        return list(self._latest_cloud_alpha_rows().values())
+
+    def merge_cloud_alphas(self, rows: list[dict[str, Any]], *, sync_range: str = "") -> dict[str, int]:
+        """Append only new or changed cloud Alpha records.
+
+        The cloud cache is an append-only history.  A record is appended when
+        its alpha id has not been seen before, or when the latest stored
+        version has a different stable hash.  This preserves incremental
+        changes without rewriting the whole file.
+        """
+        stats = {"scanned": 0, "added": 0, "updated": 0, "skipped": 0, "failed": 0}
+        if not rows:
+            return stats
+        filename = "cloud_alphas.jsonl"
+        with self._file_lock(filename):
+            latest_by_id = self._latest_cloud_alpha_rows_unlocked()
+            seen_hashes = {
+                str(row.get("cloud_record_hash") or _cloud_record_hash(row))
+                for row in latest_by_id.values()
+            }
+            for row in rows:
+                stats["scanned"] += 1
+                if not isinstance(row, dict):
+                    stats["failed"] += 1
+                    continue
+                clean_row = _repository_safe(row)
+                alpha_id = _cloud_alpha_id(clean_row)
+                record_hash = _cloud_record_hash(clean_row)
+                existing = latest_by_id.get(alpha_id) if alpha_id else None
+                existing_hash = str((existing or {}).get("cloud_record_hash") or (_cloud_record_hash(existing) if existing else ""))
+                if alpha_id and existing and existing_hash == record_hash:
+                    stats["skipped"] += 1
+                    continue
+                if not alpha_id and record_hash in seen_hashes:
+                    stats["skipped"] += 1
+                    continue
+
+                now = utc_now()
+                record = {
+                    **clean_row,
+                    "timestamp": now,
+                    "synced_at": now,
+                    "sync_range": sync_range,
+                    "cloud_record_hash": record_hash,
+                }
+                self._append_unlocked(filename, record)
+                if alpha_id:
+                    latest_by_id[alpha_id] = record
+                    if existing:
+                        stats["updated"] += 1
+                    else:
+                        stats["added"] += 1
+                else:
+                    seen_hashes.add(record_hash)
+                    stats["added"] += 1
+        return stats
+
+    def _latest_cloud_alpha_rows(self) -> dict[str, dict[str, Any]]:
+        with self._file_lock("cloud_alphas.jsonl"):
+            return self._latest_cloud_alpha_rows_unlocked()
+
+    def _latest_cloud_alpha_rows_unlocked(self) -> dict[str, dict[str, Any]]:
+        path = self._safe_storage_path("cloud_alphas.jsonl")
+        latest: dict[str, dict[str, Any]] = {}
+        if not path.exists():
+            return latest
+        try:
+            with path.open("r", encoding="utf-8") as f:
+                for line_number, line in enumerate(f, start=1):
+                    try:
+                        record = json.loads(line)
+                    except json.JSONDecodeError as exc:
+                        logger.warning(
+                            "corrupt cloud alpha JSON line skipped: %s:%d: %s",
+                            redact_text(str(path), max_length=180),
+                            line_number,
+                            redact_error_message(exc),
+                        )
+                        continue
+                    alpha_id = _cloud_alpha_id(record)
+                    if alpha_id:
+                        latest[alpha_id] = record
+        except OSError:
+            return latest
+        return latest
+
+
+# ── SQLite incremental-index update mixin ─────────────────────────────────
+
+
+class ResearchRepositorySqliteMixin(ResearchRepositoryCloudMixin):
+    def _update_expression_sqlite_cache(self, filename: str, record: dict[str, Any]) -> None:
+        if filename not in _EXPRESSION_INDEXED_FILES:
+            return
+        try:
+            from brain_alpha_ops.research.expression_sqlite_index import (
+                ExpressionSqliteIndex,
+            )
+
+            ExpressionSqliteIndex(self.storage_dir).append_record(record, source_file=filename)
+        except Exception as exc:
+            message = redact_error_message(exc)
+            logger.warning(
+                "failed to update incremental expression sqlite cache for %s: %s",
+                redact_text(filename, max_length=120),
+                message,
+            )
+            self._record_sqlite_cache_diagnostic(
+                component="expression_sqlite_index",
+                source_file=filename,
+                error=message,
+            )
+
+    def _update_record_sqlite_cache(self, filename: str, record: dict[str, Any]) -> None:
+        if filename not in _RECORD_INDEXED_FILES:
+            return
+        try:
+            from brain_alpha_ops.research.record_sqlite_index import RecordSqliteIndex
+
+            RecordSqliteIndex(self.storage_dir).append_record(record, source_file=filename)
+        except Exception as exc:
+            message = redact_error_message(exc)
+            logger.warning(
+                "failed to update incremental record sqlite cache for %s: %s",
+                redact_text(filename, max_length=120),
+                message,
+            )
+            self._record_sqlite_cache_diagnostic(
+                component="record_sqlite_index",
+                source_file=filename,
+                error=message,
+            )
+
+    def _record_sqlite_cache_diagnostic(self, *, component: str, source_file: str, error: str) -> None:
+        record = _repository_safe(
+            {
+                "timestamp": utc_now(),
+                "source": "sqlite_index",
+                "component": component,
+                "source_file": source_file,
+                "status": "index_update_failed",
+                "error": error,
+                "error_context": {
+                    "error_code": "SQLITE_INDEX_UPDATE_FAILED",
+                    "error": error,
+                    "component": component,
+                    "source_file": source_file,
+                },
+                "action": "Rebuild the SQLite research indexes or continue with bounded JSONL lookups.",
+            }
+        )
+        try:
+            with self._file_lock(_SQLITE_INDEX_DIAGNOSTICS_FILE):
+                path = self._safe_storage_path(_SQLITE_INDEX_DIAGNOSTICS_FILE)
+                with path.open("a", encoding="utf-8") as f:
+                    f.write(json.dumps(record, ensure_ascii=False, default=str) + "\n")
+        except Exception as exc:
+            logger.warning(
+                "failed to persist sqlite index diagnostic for %s: %s",
+                redact_text(source_file, max_length=120),
+                redact_error_message(exc),
+            )

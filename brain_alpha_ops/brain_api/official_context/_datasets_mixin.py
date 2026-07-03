@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any, Callable
 
 
-from .. import pagination_limits
+from .. import pagination as pagination_limits
 from ..base import BrainAPIError
 from ..official_alphas import _compat_blank, _pop_compat_alias
 from ..official_filtering import (

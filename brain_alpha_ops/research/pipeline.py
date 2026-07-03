@@ -12,9 +12,8 @@ public API for documentation and as a safety net.
 """
 from __future__ import annotations
 
-from .pipeline._class import AlphaResearchPipeline
-from .pipeline._post_processing_mixin import CONVERGENCE_REPORT_INTERVAL
-from .pipeline._main_loop_mixin import CONTEXT_REFRESH_INTERVAL_SECONDS
+from .pipeline.pipeline import AlphaResearchPipeline
+from .pipeline.pipeline_mixins import CONVERGENCE_REPORT_INTERVAL, CONTEXT_REFRESH_INTERVAL_SECONDS
 from .observability import build_research_observability_snapshot  # noqa: F401
 
 SUBMITTED_CLOUD_STATUSES = {"ACTIVE", "SUBMITTED", "PRODUCTION", "CONDUCTED"}

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .. import pagination_limits
+from .. import pagination as pagination_limits
 from ..base import BrainAPIError
 from ..official_helpers import (
     dedupe_alpha_items as _dedupe_alpha_items,
