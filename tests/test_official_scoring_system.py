@@ -196,7 +196,7 @@ def test_official_scoring_in_memory_history_is_bounded(monkeypatch):
     # Patch the constants where they are *used* (``_history`` module), not
     # where they are re-exported.  ``from X import Y`` creates a local binding
     # in ``_history`` that is unaffected by patching ``official_scoring.Y``.
-    from brain_alpha_ops.scoring.official_scoring import _history as _history_mod
+    from brain_alpha_ops.scoring.official_scoring import official_scoring_mixins as _history_mod
     monkeypatch.setattr(_history_mod, "_MAX_SCORE_HISTORY_PER_ALPHA", 3)
     monkeypatch.setattr(_history_mod, "_MAX_SCORE_HISTORY_TOTAL_ENTRIES", 5)
     scoring = OfficialScoringSystem()

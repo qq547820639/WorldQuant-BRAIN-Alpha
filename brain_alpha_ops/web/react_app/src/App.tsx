@@ -5,7 +5,7 @@
  */
 
 import { Suspense } from 'react';
-import { useAppStateContext, AppStateProvider } from '@/hooks/useAppState/AppStateContext';
+import { useAppStateContext, AppStateProvider } from '@/hooks/useAppState/useAppState';
 import ToastContainer from '@/components/ToastContainer';
 import Sidebar from '@/components/Sidebar';
 import ErrorBoundary from '@/components/ErrorBoundary';

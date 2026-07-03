@@ -12,11 +12,8 @@ CONFIG_MODULES = [
     CONFIG_PANEL,
     CONFIG_PANEL.parent / "ConfigPanel" / "utils.ts",
     CONFIG_PANEL.parent / "ConfigPanel" / "ConfigFormFields.tsx",
-    CONFIG_PANEL.parent / "ConfigPanel" / "ScoringWeightModal.tsx",
-    CONFIG_PANEL.parent / "ConfigPanel" / "CredentialsSection.tsx",
-    CONFIG_PANEL.parent / "ConfigPanel" / "LocalCacheConnectionSection.tsx",
-    CONFIG_PANEL.parent / "ConfigPanel" / "BasicConfigGroup.tsx",
-    CONFIG_PANEL.parent / "ConfigPanel" / "ScoringConfigGroup.tsx",
+    CONFIG_PANEL.parent / "ConfigPanel" / "ConfigPanelCredentials.tsx",
+    CONFIG_PANEL.parent / "ConfigPanel" / "ConfigPanelSections.tsx",
     REACT_SRC / "hooks" / "useConfigForm.ts",
 ]
 

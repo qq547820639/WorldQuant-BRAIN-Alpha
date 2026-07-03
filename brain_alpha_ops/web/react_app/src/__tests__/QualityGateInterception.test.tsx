@@ -20,7 +20,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import type { BacktestSlotsResponse, SubmitReadinessResponse } from '@/types';
-import type { ActionableErrorPayload } from '@/types/errors';
+import type { ActionableErrorPayload } from '@/types';
 
 // ── Module mocks ───────────────────────────────────────────
 

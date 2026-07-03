@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from brain_alpha_ops.brain_api.pagination_limits import (
+from brain_alpha_ops.brain_api.pagination import (
     MAX_FIELDS_PAGES,
     MAX_DATASETS_PAGES,
     MAX_OPERATORS_PAGES,

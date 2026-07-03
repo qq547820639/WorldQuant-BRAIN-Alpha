@@ -3,6 +3,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { apiErrorMessage } from '@/helpers/errorExperience';
 import { useDebounce } from '@/hooks/useDebounce';
+import { useApi } from '@/hooks/useApi';
+import ProgressFeedback from '@/components/ProgressFeedback';
+import type { CardViewId } from '@/types';
 import {
   MAX_FILTER_LENGTH,
   type SnapshotRow,
@@ -12,16 +15,143 @@ import {
   normalizeSnapshotRow,
   defaultMetrics,
   sanitizeTextInput,
+  displayKind,
+  statusBadge,
 } from './utils';
-import { SNAPSHOT_VIEWS, type SnapshotView } from './snapshotViews';
-import SnapshotMobileCard from './SnapshotMobileCard';
-import SnapshotDesktopTable from './SnapshotDesktopTable';
-import { checkpointComparisonSummary } from './SnapshotPanelCompare';
-import { useApi } from '@/hooks/useApi';
-import ProgressFeedback from '@/components/ProgressFeedback';
-import type { CardViewId } from '@/types';
+import { SNAPSHOT_VIEWS, type SnapshotView, checkpointComparisonSummary } from './snapshotViews';
 
 export type { SnapshotView };
+
+function SnapshotDesktopTable({
+  rows,
+  emptyMessage,
+  title,
+}: {
+  rows: SnapshotRow[];
+  emptyMessage: string;
+  title: string;
+}) {
+  return (
+    <div className="hidden max-w-full overflow-auto md:block">
+      <table className="data-table min-w-[820px] w-full text-sm" aria-label={`${title}表格`}>
+        <thead>
+          <tr
+            className="text-left text-xs uppercase tracking-wider"
+            style={{ borderBottom: '1px solid', borderColor: 'var(--color-border-medium)' }}
+          >
+            <th scope="col" className="p-3 text-text-tertiary">
+              类型
+            </th>
+            <th scope="col" className="p-3 text-text-tertiary">
+              名称
+            </th>
+            <th scope="col" className="p-3 text-text-tertiary">
+              状态
+            </th>
+            <th scope="col" className="p-3 text-text-tertiary">
+              指标
+            </th>
+            <th scope="col" className="p-3 text-text-tertiary">
+              详情
+            </th>
+            <th scope="col" className="p-3 text-text-tertiary">
+              时间
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.length === 0 ? (
+            <tr>
+              <td colSpan={6} className="p-6 text-center text-text-tertiary">
+                {emptyMessage}
+              </td>
+            </tr>
+          ) : (
+            rows.map((row, index) => (
+              <tr
+                key={`${row.kind}_${row.id}_${index}`}
+                className="transition-colors"
+                style={{ borderBottom: '1px solid', borderColor: 'var(--color-border-faded)' }}
+                onMouseEnter={(e) => {
+                  (e.currentTarget as HTMLElement).style.backgroundColor =
+                    'var(--color-surface-hover)';
+                }}
+                onMouseLeave={(e) => {
+                  (e.currentTarget as HTMLElement).style.backgroundColor = '';
+                }}
+              >
+                <td className="p-3 text-xs text-text-tertiary">{displayKind(row.kind)}</td>
+                <td className="p-3 font-mono-value text-xs text-accent">
+                  {row.title || row.id || '-'}
+                </td>
+                <td className="p-3">
+                  <span className={`badge text-xs ${statusBadge(row.status)}`}>
+                    {row.status || '-'}
+                  </span>
+                </td>
+                <td className="p-3 font-mono-value text-xs">{row.metric || '-'}</td>
+                <td
+                  className="p-3 text-xs text-text-secondary max-w-md truncate"
+                  title={row.detail}
+                >
+                  {row.detail || '-'}
+                </td>
+                <td className="p-3 font-mono-value text-xs text-text-tertiary">
+                  {row.timestamp || '-'}
+                </td>
+              </tr>
+            ))
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function SnapshotMobileCard({ row }: { row: SnapshotRow }) {
+  return (
+    <article
+      className="rounded-md p-4 text-sm"
+      style={{
+        border: '1px solid',
+        borderColor: 'var(--color-border-medium-alpha)',
+        backgroundColor: 'var(--color-surface-deep-alpha)',
+      }}
+    >
+      <div className="flex min-w-0 items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-xs uppercase tracking-wide text-text-tertiary">
+            {displayKind(row.kind || 'snapshot')}
+          </p>
+          <p className="mt-1 break-words font-mono-value text-xs text-accent">
+            {row.title || row.id || '-'}
+          </p>
+        </div>
+        <span className={`badge shrink-0 text-xs ${statusBadge(row.status)}`}>
+          {row.status || '-'}
+        </span>
+      </div>
+      <dl className="mt-4 grid gap-3 text-xs">
+        <div>
+          <dt className="text-text-tertiary">指标</dt>
+          <dd className="mt-1 break-words font-mono-value text-text-primary">
+            {row.metric || '-'}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-text-tertiary">详情</dt>
+          <dd className="mt-1 break-words text-text-secondary">{row.detail || '-'}</dd>
+        </div>
+        <div>
+          <dt className="text-text-tertiary">时间</dt>
+          <dd className="mt-1 break-words font-mono-value text-text-tertiary">
+            {row.timestamp || '-'}
+          </dd>
+        </div>
+      </dl>
+    </article>
+  );
+}
 
 interface Props {
   notify: (type: 'success' | 'error' | 'warning' | 'info', msg: string) => void;

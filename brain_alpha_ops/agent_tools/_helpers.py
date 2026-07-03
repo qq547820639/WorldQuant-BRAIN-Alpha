@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from brain_alpha_ops.agent_tool_errors import tool_error
+from brain_alpha_ops.errors import tool_error
 
 MAX_TOOL_CANDIDATES = 100
 

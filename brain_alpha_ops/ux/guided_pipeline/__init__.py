@@ -35,12 +35,10 @@ class GuidedPipeline(GuidedPipelineBase, _PhasesMixin):
 
 
 # Backward-compat re-exports (original guided_pipeline.py trailing imports).
-from ..guided_models import (  # noqa: F401,E402
+from ..guided import (  # noqa: F401,E402
     CheckpointData,
     PipelinePhase,
     RunRecord,
-)
-from ..guided_formatting import (  # noqa: F401,E402
     format_candidate_summary,
     format_error_for_user,
     format_pipeline_progress,

@@ -39,7 +39,7 @@ def test_app_shell_uses_mobile_safe_spacing_and_horizontal_tab_scroll():
 def test_readability_compat_layer_keeps_primary_buttons_high_contrast():
     css = _joined([
         REACT_SRC / "index.css",
-        REACT_SRC / "styles" / "components-ui.css",
+        REACT_SRC / "styles" / "app.css",
     ])
 
     assert ".btn-primary" in css
@@ -50,7 +50,7 @@ def test_candidate_toolbar_wraps_and_keeps_filter_input_shrinkable():
     source = _joined([
         COMPONENTS / "CandidateTable.tsx",
         COMPONENTS / "CandidateTableToolbar.tsx",
-        COMPONENTS / "CandidateTableSubComponents.tsx",
+        COMPONENTS / "CandidateTableSubComponents",
         COMPONENTS / "CandidateRow.tsx",
         COMPONENTS / "CandidateTableToolbarProductionControls.tsx",
         COMPONENTS / "CandidateTableToolbarFilterToolbar.tsx",
@@ -72,7 +72,8 @@ def test_config_actions_and_toasts_fit_narrow_viewports():
     config = _joined([
         COMPONENTS / "ConfigPanel.tsx",
         COMPONENTS / "ConfigPanel" / "ConfigFormFields.tsx",
-        COMPONENTS / "ConfigPanel" / "CredentialsSection.tsx",
+        COMPONENTS / "ConfigPanel" / "ConfigPanelCredentials.tsx",
+        COMPONENTS / "ConfigPanel" / "ConfigPanelSections.tsx",
     ])
     toast = _source(COMPONENTS / "ToastContainer.tsx")
 
@@ -84,7 +85,7 @@ def test_config_actions_and_toasts_fit_narrow_viewports():
     assert "账户邮箱" in config
     assert "type=\"password\"" in config
     assert "const inputClass = 'form-input';" in config
-    assert ".form-input" in _source(REACT_SRC / "styles" / "components-ui.css")
+    assert ".form-input" in _source(REACT_SRC / "styles" / "app.css")
     # Toast: migrated from inline Tailwind classes to toast-container CSS component
     assert 'className="toast-container"' in toast
     assert "TOAST_CLASS" in toast
@@ -94,8 +95,8 @@ def test_config_actions_and_toasts_fit_narrow_viewports():
 
 def test_operational_panels_wrap_on_narrow_viewports():
     scoring = _joined([
-        COMPONENTS / "ScoringPanel.tsx",
-        COMPONENTS / "ScoringPanel" / "Header.tsx",
+        COMPONENTS / "ScoringPanel",
+        COMPONENTS / "ScoringPanel" / "ScoringPanelHeader.tsx",
     ])
     job_monitor = _joined([
         COMPONENTS / "JobMonitor.tsx",
@@ -104,12 +105,8 @@ def test_operational_panels_wrap_on_narrow_viewports():
         COMPONENTS / "JobMonitor" / "JobActions.tsx",
     ])
     snapshot = _joined([
-        COMPONENTS / "SnapshotPanel.tsx",
+        COMPONENTS / "SnapshotPanel",
         COMPONENTS / "SnapshotPanel" / "utils.ts",
-        COMPONENTS / "SnapshotPanel" / "SnapshotPanelCloud.tsx",
-        COMPONENTS / "SnapshotPanel" / "SnapshotPanelLocal.tsx",
-        COMPONENTS / "SnapshotPanel" / "SnapshotPanelCompare.tsx",
-        COMPONENTS / "SnapshotPanel" / "SnapshotDesktopTable.tsx",
     ])
 
     assert 'className="animate-fade-in"' in scoring

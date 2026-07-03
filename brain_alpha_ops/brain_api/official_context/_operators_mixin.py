@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 
-from .. import pagination_limits
+from .. import pagination as pagination_limits
 from ..official_helpers import (
     items as _items,
 )

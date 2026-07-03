@@ -10,9 +10,18 @@ Each error has:
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any
 
-from ._user_messages_helpers import UserMessage
+
+@dataclass
+class UserMessage:
+    """Structured user-facing message with actionable guidance."""
+    title: str           # Chinese human-readable title
+    detail: str          # English technical detail
+    suggestion: str      # Actionable next step
+    severity: str        # "error" | "warning" | "info"
+    error_code: str = ""
 
 
 # ═══════════════════════════════════════════════════════════════════════

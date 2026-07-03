@@ -7,6 +7,7 @@ and catch type errors at development time.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any, TypedDict
 
 try:
@@ -427,3 +428,17 @@ class QualityThresholdsDict(TypedDict, total=False):
     max_prod_correlation: float
     max_weight_concentration: float
     min_sub_universe_sharpe: float
+
+
+# ── Job Execution ─────────────────────────────────────────────────────
+
+
+@dataclass
+class JobExecutionResult:
+    """Shared job execution result type (merged from ``job_types.py``)."""
+
+    job_id: str
+    status: str
+    result: Any = None
+    error: str = ""
+    duration_seconds: float = 0.0

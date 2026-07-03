@@ -12,7 +12,7 @@ from .models import (
     _PLACEBO_TRIALS,
     _REGIME_MIN_SAMPLES,
 )
-from .utils import (
+from .checks import (
     _auto_classify_regimes,
     _pearson_r,
     _rank_ic,
@@ -22,12 +22,12 @@ from .utils import (
     _sharpe,
     _spearman_r,
 )
-from .ic_stability import compute_ic_stability
-from .regime_stress import compute_regime_stress
-from .placebo import compute_placebo_test
-from .half_life import estimate_half_life
+from .checks import compute_ic_stability
+from .checks import compute_regime_stress
+from .checks import compute_placebo_test
+from .checks import estimate_half_life
 from .suite import run_anti_overfit_suite
-from .candidate import (
+from .checks import (
     _attach_submission_report,
     _candidate_metrics,
     _candidate_report,
@@ -35,7 +35,7 @@ from .candidate import (
     _number_series,
 )
 from .service import AntiOverfitService, evaluate_candidate
-from .compliance import (
+from .checks import (
     check_duplicate_submission,
     check_expression_similarity,
     check_high_frequency_retry,

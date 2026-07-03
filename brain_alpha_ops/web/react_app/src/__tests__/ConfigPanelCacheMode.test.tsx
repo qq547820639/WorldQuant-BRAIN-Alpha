@@ -11,8 +11,8 @@
  */
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import LocalCacheConnectionSection from '@/components/ConfigPanel/LocalCacheConnectionSection';
-import CredentialsSection from '@/components/ConfigPanel/CredentialsSection';
+import { LocalCacheConnectionSection } from '@/components/ConfigPanel/ConfigPanelCredentials';
+import { CredentialsSection } from '@/components/ConfigPanel/ConfigPanelCredentials';
 import type { BrainCredentials } from '@/types';
 
 type CredentialsSectionProps = Parameters<typeof CredentialsSection>[0];

@@ -13,7 +13,7 @@ from concurrent.futures import (
 )
 from typing import Any, Callable
 
-from brain_alpha_ops.job_types import JobExecutionResult
+from brain_alpha_ops.types import JobExecutionResult
 from brain_alpha_ops.redaction import redact_error_message
 from brain_alpha_ops.tasks import JobStore
 

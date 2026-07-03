@@ -7,7 +7,7 @@ simulation scheduler (``research.simulation_scheduler._scheduler.ThreeSlotSchedu
 This module enforces the four decoupling invariants required by the spec:
 
 C3.1 — Generator maintains pool capacity without being blocked by simulation.
-    The main loop (``pipeline._main_loop_mixin``) runs generation BEFORE
+    The main loop (``pipeline.pipeline_mixins``) runs generation BEFORE
     simulation each cycle, and ``_top_up_candidate_pool`` (in
     ``candidate_pool_service_``) refills the pool to ``retained_alpha_pool_size``
     independently of how many slots are in-flight. A full cooldown on all 3

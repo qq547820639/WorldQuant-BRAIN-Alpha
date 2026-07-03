@@ -17,9 +17,7 @@
  */
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, act } from '@testing-library/react';
-import GateDecisionStrip from '@/components/ScoringPanel/GateDecisionStrip';
-import AttributionTree from '@/components/ScoringPanel/AttributionTree';
-import AttributionTooltip from '@/components/ScoringPanel/AttributionTooltip';
+import { GateDecisionStrip, AttributionTree, AttributionTooltip } from '@/components/ScoringPanel';
 import type {
   AttributionNode,
   GateDecisionPayload,

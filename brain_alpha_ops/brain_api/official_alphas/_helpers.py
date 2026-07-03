@@ -7,16 +7,16 @@ from typing import Any
 from ..official_filtering import (
     resolve_compat_alias,
 )
-from ..user_alpha_transient import (
+from ..user_alpha_sync import (
     USER_ALPHA_TRANSIENT_PAGE_RETRY_ATTEMPTS as _USER_ALPHA_TRANSIENT_PAGE_RETRY_ATTEMPTS,
 )
-from ..user_alpha_transient import (
+from ..user_alpha_sync import (
     USER_ALPHA_TRANSIENT_PAGE_RETRY_EXCEPTIONS as _USER_ALPHA_TRANSIENT_PAGE_RETRY_EXCEPTIONS,
 )
-from ..user_alpha_transient import (
+from ..user_alpha_sync import (
     USER_ALPHA_TRANSIENT_PAGE_RETRY_SECONDS as _USER_ALPHA_TRANSIENT_PAGE_RETRY_SECONDS,
 )
-from ..user_alpha_transient import (
+from ..user_alpha_sync import (
     USER_ALPHA_TRANSIENT_RETRY_STATUSES as _USER_ALPHA_TRANSIENT_RETRY_STATUSES,
 )
 

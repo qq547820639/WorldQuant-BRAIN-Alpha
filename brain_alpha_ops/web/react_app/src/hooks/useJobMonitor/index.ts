@@ -1,13 +1,59 @@
+/**
+ * useJobMonitor — composition root for non-submission pipeline job monitoring.
+ *
+ * Aggregates SSE event handling, job control (start/stop/cancel), and the
+ * status watchdog into a single hook. Constants and shared types live here;
+ * sub-hooks live in `./useJobControl` and `./useSseEventHandler`.
+ */
+
 import { useState, useEffect, useCallback, useRef } from 'react';
-import type { JobStatus } from '@/types';
+import type { BrainCredentials, JobStatus, UnifiedProgress } from '@/types';
 import { useSSE } from '@/hooks/useSSE';
 import { useApi } from '@/hooks/useApi';
 import type { CancelReason } from '@/api/jobCancel';
-import { TRANSIENT_STATUS_REFRESH_PREFIX } from './constants';
-import type { UseJobMonitorOptions, UseJobMonitorResult } from './types';
 import { useSseEventHandler } from './useSseEventHandler';
 import { useJobControl } from './useJobControl';
-import { useStatusWatchdog } from './useStatusWatchdog';
+import { useStatusWatchdog } from './useSseEventHandler';
+
+// ──────────────────────────────────────────────────────────────────────────
+// constants
+// ──────────────────────────────────────────────────────────────────────────
+
+export const TRANSIENT_STATUS_REFRESH_PREFIX = '状态刷新失败:';
+export const SSE_RETRY_DELAYS = [5000, 10000, 20000];
+export const SSE_MAX_RETRIES = SSE_RETRY_DELAYS.length;
+
+// ──────────────────────────────────────────────────────────────────────────
+// types
+// ──────────────────────────────────────────────────────────────────────────
+
+export type NotifyFn = (type: 'success' | 'error' | 'warning' | 'info', msg: string) => void;
+
+export interface UseJobMonitorOptions {
+  notify: NotifyFn;
+  credentials?: BrainCredentials;
+}
+
+export interface UseJobMonitorResult {
+  jobId: string | null;
+  status: JobStatus | null;
+  running: boolean;
+  connected: boolean;
+  progress: UnifiedProgress | null;
+  error: string | null;
+  events: string[];
+  loading: boolean;
+  reconnectAttempts: number;
+  sseRetryExhausted: boolean;
+  sseRetryCountdown: number;
+  startJob: (resume?: boolean) => Promise<void>;
+  stopJob: () => Promise<void>;
+  onSseExhaustedRetry: () => void;
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// useJobMonitor — composition root
+// ──────────────────────────────────────────────────────────────────────────
 
 export function useJobMonitor({ notify, credentials }: UseJobMonitorOptions): UseJobMonitorResult {
   const [jobId, setJobId] = useState<string | null>(null);

@@ -1,7 +1,7 @@
 """Re-export from the ``official_scoring`` subpackage for backward compatibility."""
 from __future__ import annotations
 
-from brain_alpha_ops.scoring.official_scoring._constants import (  # noqa: F401
+from brain_alpha_ops.scoring.official_scoring.official_scoring_mixins import (  # noqa: F401
     SCORING_VERSION,
     _MAX_SCORE_HISTORY_PER_ALPHA,
     _MAX_SCORE_HISTORY_TOTAL_ENTRIES,
@@ -11,10 +11,8 @@ from brain_alpha_ops.scoring.official_scoring._constants import (  # noqa: F401
     _format_gate_failure,
     _gate_item_value,
 )
-from brain_alpha_ops.scoring.official_scoring._result import (  # noqa: F401
+from brain_alpha_ops.scoring.official_scoring.official_scoring import (  # noqa: F401
     ScoringResult,
-)
-from brain_alpha_ops.scoring.official_scoring._system import (  # noqa: F401
     OfficialScoringSystem,
     _PersistedScoreHistoryDB,
     logger,

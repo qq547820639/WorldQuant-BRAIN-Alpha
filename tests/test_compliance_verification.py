@@ -47,7 +47,7 @@ class TestComplianceReport:
 
     def test_compliance_report_creation(self):
         """Test compliance report creation."""
-        from brain_alpha_ops.compliance.redline_models import ComplianceReport
+        from brain_alpha_ops.compliance.redline_core import ComplianceReport
 
         report = ComplianceReport()
         assert report.overall == "PENDING"
@@ -57,7 +57,7 @@ class TestComplianceReport:
 
     def test_compliance_report_add_pass(self):
         """Test adding pass to compliance report."""
-        from brain_alpha_ops.compliance.redline_models import ComplianceReport
+        from brain_alpha_ops.compliance.redline_core import ComplianceReport
 
         report = ComplianceReport()
         report.add_pass()
@@ -66,7 +66,7 @@ class TestComplianceReport:
 
     def test_compliance_report_add_violation(self):
         """Test adding violation to compliance report."""
-        from brain_alpha_ops.compliance.redline_models import ComplianceReport, RedLineViolation
+        from brain_alpha_ops.compliance.redline_core import ComplianceReport, RedLineViolation
 
         report = ComplianceReport()
         violation = RedLineViolation(
@@ -87,7 +87,7 @@ class TestComplianceReport:
 
     def test_compliance_report_finalize(self):
         """Test compliance report finalize."""
-        from brain_alpha_ops.compliance.redline_models import ComplianceReport
+        from brain_alpha_ops.compliance.redline_core import ComplianceReport
 
         report = ComplianceReport()
         report.add_pass()
@@ -98,7 +98,7 @@ class TestComplianceReport:
 
     def test_compliance_report_to_dict(self):
         """Test compliance report serialization."""
-        from brain_alpha_ops.compliance.redline_models import ComplianceReport
+        from brain_alpha_ops.compliance.redline_core import ComplianceReport
 
         report = ComplianceReport()
         report.add_pass()
@@ -113,7 +113,7 @@ class TestRedlineViolation:
 
     def test_redline_violation_creation(self):
         """Test redline violation creation."""
-        from brain_alpha_ops.compliance.redline_models import RedLineViolation
+        from brain_alpha_ops.compliance.redline_core import RedLineViolation
 
         violation = RedLineViolation(
             redline_id=1,
@@ -131,7 +131,7 @@ class TestRedlineViolation:
 
     def test_redline_violation_severity_levels(self):
         """Test redline violation severity levels."""
-        from brain_alpha_ops.compliance.redline_models import RedLineViolation
+        from brain_alpha_ops.compliance.redline_core import RedLineViolation
 
         for severity in ["BLOCKING", "WARNING", "INFO"]:
             violation = RedLineViolation(
@@ -153,8 +153,8 @@ class TestRedlineChecks:
 
     def test_redline_1_no_custom_extension(self):
         """Test redline 1: no custom extension."""
-        from brain_alpha_ops.compliance.redline_check_no_custom_extension import _verify_redline_1_no_custom_extension
-        from brain_alpha_ops.compliance.redline_models import ComplianceReport
+        from brain_alpha_ops.compliance.redline_checks import _verify_redline_1_no_custom_extension
+        from brain_alpha_ops.compliance.redline_core import ComplianceReport
 
         report = ComplianceReport()
         _verify_redline_1_no_custom_extension(report, None)
@@ -163,8 +163,8 @@ class TestRedlineChecks:
 
     def test_redline_2_threshold_zero_deviation(self):
         """Test redline 2: threshold zero deviation."""
-        from brain_alpha_ops.compliance.redline_check_thresholds import _verify_redline_2_threshold_zero_deviation
-        from brain_alpha_ops.compliance.redline_models import ComplianceReport
+        from brain_alpha_ops.compliance.redline_checks import _verify_redline_2_threshold_zero_deviation
+        from brain_alpha_ops.compliance.redline_core import ComplianceReport
 
         report = ComplianceReport()
         _verify_redline_2_threshold_zero_deviation(report, None)

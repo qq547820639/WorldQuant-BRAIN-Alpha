@@ -11,7 +11,7 @@ Subpackage split (formerly ``agent_tools.py``):
 from __future__ import annotations
 
 from brain_alpha_ops.agent_live_tools import AgentLiveToolsMixin  # noqa: F401
-from brain_alpha_ops.agent_tool_errors import tool_error  # noqa: F401
+from brain_alpha_ops.errors import tool_error  # noqa: F401
 from brain_alpha_ops.config import RunConfig, load_run_config  # noqa: F401
 from brain_alpha_ops.research.assistant import AssistantResponseParseError  # noqa: F401
 from brain_alpha_ops.research.expression_index import ExpressionHistoryIndex  # noqa: F401

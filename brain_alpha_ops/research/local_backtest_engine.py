@@ -54,6 +54,10 @@ from brain_alpha_ops.research.local_backtest_metrics_helpers import (
     spearman_r as _spearman_r,
 )
 
+# Shared prefilter backtest config (merged from local_backtest_config.py).
+PREFILTER_BACKTEST_DATES = 84
+PREFILTER_BACKTEST_SYMBOLS = 160
+
 __all__ = [
     "SyntheticDataProvider",
     "LocalExpressionEvaluator",
@@ -68,4 +72,6 @@ __all__ = [
     "_safe_mean",
     "_safe_stdev",
     "_spearman_r",
+    "PREFILTER_BACKTEST_DATES",
+    "PREFILTER_BACKTEST_SYMBOLS",
 ]

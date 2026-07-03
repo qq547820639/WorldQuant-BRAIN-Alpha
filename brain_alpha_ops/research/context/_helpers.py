@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from brain_alpha_ops.jsonl import read_jsonl_tail
-from brain_alpha_ops.research._value_helpers import _float_value, _int_value
+from brain_alpha_ops.research._market_data_helpers import _float_value, _int_value
 
 
 def _latest_result_from_storage(storage_dir: str) -> dict[str, Any]:

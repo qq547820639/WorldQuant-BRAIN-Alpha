@@ -16,7 +16,7 @@ SLOTS = (
     / "OfficialBacktestSlots.tsx"
 )
 TYPES = ROOT / "brain_alpha_ops" / "web" / "react_app" / "src" / "types"
-UTILS = ROOT / "brain_alpha_ops" / "web" / "react_app" / "src" / "utils" / "backtestSlots.ts"
+UTILS = ROOT / "brain_alpha_ops" / "web" / "react_app" / "src" / "utils"
 
 
 def _source(path: Path) -> str:

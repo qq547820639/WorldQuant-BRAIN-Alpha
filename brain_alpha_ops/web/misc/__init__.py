@@ -14,30 +14,30 @@ def __getattr__(name: str):
 
 
 _MISC_LAZY: dict[str, tuple[str, str]] = {
-    # web_cli.py
-    "main": (".web_cli", "main"),
-    "serve": (".web_cli", "serve"),
-    "shutdown_server": (".web_cli", "shutdown_server"),
-    "smoke_test_server": (".web_cli", "smoke_test_server"),
-    # web_html.py
-    "load_html": (".web_html", "load_html"),
-    "resolve_react_asset": (".web_html", "resolve_react_asset"),
+    # web_cli.py (merged into web_sse.py)
+    "main": (".web_sse", "main"),
+    "serve": (".web_sse", "serve"),
+    "shutdown_server": (".web_sse", "shutdown_server"),
+    "smoke_test_server": (".web_sse", "smoke_test_server"),
+    # web_html.py (merged into web_errors.py)
+    "load_html": (".web_errors", "load_html"),
+    "resolve_react_asset": (".web_errors", "resolve_react_asset"),
     # web_sse.py
     "handle_sse_request": (".web_sse", "handle_sse_request"),
     # web_errors.py
-    "error_payload": (".web_errors", "error_payload"),
-    # web_rate_limit.py
-    "RateLimitPolicy": (".web_rate_limit", "RateLimitPolicy"),
-    "RequestRateLimiter": (".web_rate_limit", "RequestRateLimiter"),
+    "error_payload": (".web_errors", "web_error_payload"),
+    # web_rate_limit.py (merged into web_errors.py)
+    "RateLimitPolicy": (".web_errors", "RateLimitPolicy"),
+    "RequestRateLimiter": (".web_errors", "RequestRateLimiter"),
     # web_facade_bindings.py
     "build_web_facade_bindings": (".web_facade_bindings", "build_web_facade_bindings"),
     # web_service_namespace.py
     "build_web_service_namespace": (".web_service_namespace", "build_web_service_namespace"),
-    # web_server_lifecycle.py
-    "SafeThreadingHTTPServer": (".web_server_lifecycle", "SafeThreadingHTTPServer"),
-    "find_free_port": (".web_server_lifecycle", "find_free_port"),
-    # web_application_context.py
-    "WebApplicationContext": (".web_application_context", "WebApplicationContext"),
+    # web_server_lifecycle.py (merged into web_payload_validation.py)
+    "SafeThreadingHTTPServer": (".web_payload_validation", "SafeThreadingHTTPServer"),
+    "find_free_port": (".web_payload_validation", "find_free_port"),
+    # web_application_context.py (deleted; source is web_dispatch_context)
+    "WebApplicationContext": ("brain_alpha_ops.web_dispatch_context", "WebApplicationContext"),
 }
 
 __all__ = list(_MISC_LAZY.keys())

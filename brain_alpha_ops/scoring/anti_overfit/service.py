@@ -7,7 +7,7 @@ from .models import (
     ANTI_OVERFIT_SCHEMA_VERSION,
     _MIN_CANDIDATE_SERIES,
 )
-from .candidate import (
+from .checks import (
     _attach_submission_report,
     _candidate_metrics,
     _candidate_report,

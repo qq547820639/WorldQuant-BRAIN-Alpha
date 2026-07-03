@@ -31,6 +31,17 @@ from brain_alpha_ops.core_state import (
 )  # noqa: F401
 from brain_alpha_ops.redaction import redact_data  # noqa: F401
 
+# Module-level constants (merged from ``_constants.py``).  Defined here at
+# the top of the package init, before any submodule imports, so that
+# ``_store`` / ``_watchdog`` / ``_compaction`` can resolve them via
+# ``from . import <NAME>`` without a circular import.
+DEFAULT_RECOVERY_ERROR = "Process restarted before this task completed."
+DEFAULT_WATCHDOG_TIMEOUT_SECONDS = 300.0
+DEFAULT_WATCHDOG_ERROR = "Web flow watchdog stopped this task after no clear progress update."
+JOB_PREVIEW_ROWS = 5
+COMPACT_LIST_KEYS = {"alphas", "cloud_alphas", "candidates", "backtests", "lifecycle_records"}
+DEFAULT_MAX_PERSISTENCE_LOAD_BYTES = 50 * 1024 * 1024
+
 from ._compaction import (  # noqa: F401
     _candidate_submission_audit_evidence,
     _compact_runtime_result,
@@ -39,14 +50,6 @@ from ._compaction import (  # noqa: F401
     _should_compact_named_list,
     _submission_evidence_key,
     _submission_evidence_rows,
-)
-from ._constants import (  # noqa: F401
-    COMPACT_LIST_KEYS,
-    DEFAULT_MAX_PERSISTENCE_LOAD_BYTES,
-    DEFAULT_RECOVERY_ERROR,
-    DEFAULT_WATCHDOG_ERROR,
-    DEFAULT_WATCHDOG_TIMEOUT_SECONDS,
-    JOB_PREVIEW_ROWS,
 )
 from ._store import JobStore  # noqa: F401
 from ._watchdog import (  # noqa: F401

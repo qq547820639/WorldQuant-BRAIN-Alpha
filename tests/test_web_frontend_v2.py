@@ -226,8 +226,8 @@ def test_web_html_loads_react_shell_when_inline_surface_is_absent():
 
 def test_all_card_views_are_typed_configured_and_routed_to_detail_components():
     app = _source("App.tsx")
-    types = _source("types/ui.ts")
-    base_state = _source("hooks/useAppState/useBaseState.ts")
+    types = _source("types/allTypes.ts")
+    base_state = _source("hooks/useAppState/useAppStateState.ts")
     render_view = _source("components/views/renderView.tsx")
 
     assert "useState<CardViewId>(readViewFromHash)" in base_state
@@ -306,8 +306,8 @@ def test_app_apply_preset_reads_presets_from_app_state():
     config = _component("ConfigPanel.tsx")
     config_form = _source("hooks/useConfigForm.ts")
     global_data = _source("hooks/useGlobalData.ts")
-    local_cache = _component("ConfigPanel/LocalCacheConnectionSection.tsx")
-    basic_group = _component("ConfigPanel/BasicConfigGroup.tsx")
+    local_cache = _component("ConfigPanel/ConfigPanelCredentials.tsx")
+    basic_group = _component("ConfigPanel/ConfigPanelSections.tsx")
 
     _assert_snippets(
         global_data,
@@ -415,8 +415,8 @@ def test_submission_confirmation_panel_stays_read_only_and_local_boundary_aware(
 
 def test_sse_hook_preserves_stream_token_credentials_and_reconnect_contract():
     use_sse = _source("hooks/useSSE.ts")
-    types = _source("types/api.ts")
-    csrf_utils = _source("utils/csrf.ts")
+    types = _source("types/allTypes.ts")
+    csrf_utils = _source("utils/helpers.ts")
 
     _assert_snippets(
         use_sse + csrf_utils,

@@ -20,7 +20,7 @@ from brain_alpha_ops.agent_research_tools import (
     query_research_observability_snapshot,
     search_parameters_tool,
 )
-from brain_alpha_ops.agent_guidance_tools import guidance_sample_size
+from brain_alpha_ops.agent_research_tools import guidance_sample_size
 from brain_alpha_ops.models import Candidate
 from brain_alpha_ops.research.assistant import (
     assistant_response_to_generation_guidance,

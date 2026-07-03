@@ -14,7 +14,7 @@ def _source(path: str) -> str:
 
 
 def test_app_notify_forwards_toast_actions():
-    source = _source("hooks/useAppState/useBaseState.ts")
+    source = _source("hooks/useAppState/useAppStateState.ts")
 
     assert 'action?: { label: string; onClick: () => void }' in source
     assert 'addToast(type, msg, 5000, action' in source

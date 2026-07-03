@@ -30,8 +30,13 @@ from .anti_overfit.models import (
     _PLACEBO_TRIALS,
     _REGIME_MIN_SAMPLES,
 )
-from .anti_overfit.utils import (
+from .anti_overfit.checks import (
+    _attach_submission_report,
     _auto_classify_regimes,
+    _candidate_metrics,
+    _candidate_report,
+    _candidate_value,
+    _number_series,
     _pearson_r,
     _rank_ic,
     _rank_transform,
@@ -39,27 +44,18 @@ from .anti_overfit.utils import (
     _safe_std,
     _sharpe,
     _spearman_r,
-)
-from .anti_overfit.ic_stability import compute_ic_stability
-from .anti_overfit.regime_stress import compute_regime_stress
-from .anti_overfit.placebo import compute_placebo_test
-from .anti_overfit.half_life import estimate_half_life
-from .anti_overfit.suite import run_anti_overfit_suite
-from .anti_overfit.candidate import (
-    _attach_submission_report,
-    _candidate_metrics,
-    _candidate_report,
-    _candidate_value,
-    _number_series,
-)
-from .anti_overfit.service import AntiOverfitService, evaluate_candidate
-from .anti_overfit.compliance import (
     check_duplicate_submission,
     check_expression_similarity,
     check_high_frequency_retry,
     check_parameter_tweak,
+    compute_ic_stability,
+    compute_placebo_test,
+    compute_regime_stress,
+    estimate_half_life,
     run_compliance_guardrails,
 )
+from .anti_overfit.suite import run_anti_overfit_suite
+from .anti_overfit.service import AntiOverfitService, evaluate_candidate
 
 __all__ = [
     "ANTI_OVERFIT_SCHEMA_VERSION",

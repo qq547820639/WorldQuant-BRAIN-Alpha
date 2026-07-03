@@ -3,7 +3,7 @@
  */
 
 import type { BacktestSlotsResponse, PhaseApiStatus } from '@/types';
-import { backtestActiveCount, backtestSlotLimit } from '@/utils/backtestSlots';
+import { backtestActiveCount, backtestSlotLimit } from '@/utils';
 
 export function formatBacktestBadge(data?: BacktestSlotsResponse | null): string | undefined {
   if (!data) return undefined;

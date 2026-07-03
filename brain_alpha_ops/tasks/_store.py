@@ -18,7 +18,7 @@ from brain_alpha_ops.core_state import JOB_ACTIVE_STATUSES as ACTIVE_STATUSES
 from brain_alpha_ops.core_state import JOB_TERMINAL_STATUSES as TERMINAL_STATUSES
 
 from ._compaction import _job_safe
-from ._constants import (
+from . import (
     DEFAULT_MAX_PERSISTENCE_LOAD_BYTES,
     DEFAULT_RECOVERY_ERROR,
     DEFAULT_WATCHDOG_TIMEOUT_SECONDS,

@@ -11,11 +11,11 @@ from brain_alpha_ops.errors import ValidationError
 from brain_alpha_ops.jsonl import iter_jsonl_records
 from brain_alpha_ops.models import Candidate
 from brain_alpha_ops.research.alpha_quality import build_alpha_output_config
-from brain_alpha_ops.research.local_backtest_config import (
+from brain_alpha_ops.research.local_backtest_engine import (  # noqa: F401
+    LocalBacktestEngine,
     PREFILTER_BACKTEST_DATES,
     PREFILTER_BACKTEST_SYMBOLS,
 )
-from brain_alpha_ops.research.local_backtest_engine import LocalBacktestEngine  # noqa: F401
 from brain_alpha_ops.research.parameter_search import ParameterSearchService
 from brain_alpha_ops.research.repository import ResearchRepository
 from brain_alpha_ops.web_candidates.audit import attach_scientific_audit

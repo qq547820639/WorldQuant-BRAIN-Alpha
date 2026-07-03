@@ -146,6 +146,9 @@ def check_candidate_scientific_audit(root: str | Path = ROOT) -> dict[str, Any]:
 def _read(path: Path, *, findings: list[dict[str, Any]], key: str) -> str:
     # Phase 15 refactor: many modules were split into re-export subpackages.
     # If the .py file is missing, try the sibling subpackage directory.
+    # Extreme-consolidation-pass2: if the file was merged into a sibling
+    # (e.g. ``pipeline_runtime/_records_mixin.py`` → ``runtime.py``), fall
+    # back to reading all ``*.py`` files in the parent directory.
     subpackage = path.with_suffix("")
     parts: list[str] = []
     if path.is_file():
@@ -160,6 +163,13 @@ def _read(path: Path, *, findings: list[dict[str, Any]], key: str) -> str:
                 parts.append(child.read_text(encoding="utf-8"))
         except OSError as exc:
             findings.append(_finding("missing_file", subpackage, f"{key} subpackage cannot be read: {exc}", line=1))
+            return ""
+    if not parts and path.parent.is_dir():
+        try:
+            for child in sorted(path.parent.glob("*.py")):
+                parts.append(child.read_text(encoding="utf-8"))
+        except OSError as exc:
+            findings.append(_finding("missing_file", path.parent, f"{key} parent directory cannot be read: {exc}", line=1))
             return ""
     if not parts:
         findings.append(_finding("missing_file", path, f"{key} file cannot be read: [Errno 2] No such file or directory: '{path}'", line=1))

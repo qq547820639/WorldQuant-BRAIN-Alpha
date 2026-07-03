@@ -34,7 +34,7 @@ def _app_shell_source() -> str:
         "components/views/renderViewFromContext.tsx",
         "components/views/helpers.ts",
         "hooks/useGlobalData.ts",
-        "hooks/useAppState/index.ts",
+        "hooks/useAppState/useAppState.tsx",
     ])
 
 
@@ -64,8 +64,8 @@ def _config_source() -> str:
         "components/ConfigPanel.tsx",
         "components/ConfigPanel/utils.ts",
         "components/ConfigPanel/ConfigFormFields.tsx",
-        "components/ConfigPanel/ScoringWeightModal.tsx",
-        "components/ConfigPanel/CredentialsSection.tsx",
+        "components/ConfigPanel/ConfigPanelCredentials.tsx",
+        "components/ConfigPanel/ConfigPanelSections.tsx",
         "hooks/useConfigForm.ts",
     ])
 
@@ -388,7 +388,7 @@ def test_react_html_shell_uses_local_resources_only_for_credential_flow():
 def test_react_official_operations_is_web_operator_console_not_cli_surface():
     app = _app_shell_source()
     operations = _official_operations_source()
-    types = _source("types/ui.ts")
+    types = _source("types/allTypes.ts")
 
     assert "'official_operations'" in types
     assert '"visual_terminal"' not in types
@@ -458,7 +458,7 @@ def test_react_components_do_not_display_raw_api_error_fields_directly():
         "hooks/useCandidateTableData.ts",
         "hooks/useConfigForm.ts",
         "components/QualityCheckPanel.tsx",
-        "components/ScoringPanel.tsx",
+        "components/ScoringPanel/ScoringPanel.tsx",
         "components/SnapshotPanel.tsx",
         "components/SubmissionConfirmPanel.tsx",
     ):
@@ -839,7 +839,7 @@ def test_react_snapshot_panel_contracts_match_backend_routes():
 def test_react_state_cards_include_checkpoint_history_entry():
     app = _app_shell_source()
     sidebar = _source("components/Sidebar.tsx")
-    types = _source("types/ui.ts")
+    types = _source("types/allTypes.ts")
 
     assert "'checkpoint_status'" in types
     assert "checkpoint_status: '续跑记录'" in app
@@ -856,7 +856,7 @@ def test_react_state_cards_include_checkpoint_history_entry():
 def test_react_fetch_helpers_keep_session_csrf_replay_and_sse_credentials():
     use_api = _source("hooks/useApi.ts")
     use_sse = _source("hooks/useSSE.ts")
-    csrf_utils = _source("utils/csrf.ts")
+    csrf_utils = _source("utils/helpers.ts")
 
     assert "credentials: 'same-origin'" in use_api
     assert "headers['X-Brain-Alpha-CSRF'] = csrf" in use_api
@@ -880,7 +880,7 @@ def test_react_fetch_helpers_keep_session_csrf_replay_and_sse_credentials():
 
 def test_react_build_template_exposes_backend_token_placeholders():
     html = REACT_INDEX.read_text(encoding="utf-8")
-    csrf_utils = _source("utils/csrf.ts")
+    csrf_utils = _source("utils/helpers.ts")
 
     assert 'name="brain-alpha-csrf" content="__BRAIN_ALPHA_OPS_CSRF_TOKEN__"' in html
     assert 'name="brain-alpha-stream" content="__BRAIN_ALPHA_OPS_STREAM_TOKEN__"' in html

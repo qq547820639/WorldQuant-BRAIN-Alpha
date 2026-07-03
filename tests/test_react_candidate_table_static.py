@@ -60,7 +60,7 @@ def _app_source() -> str:
         resolve_react_source(REACT_SRC / "components" / "views" / "renderView.tsx"),
         resolve_react_source(REACT_SRC / "components" / "views" / "renderViewFromContext.tsx"),
         resolve_react_source(REACT_SRC / "hooks" / "useGlobalData.ts"),
-        resolve_react_source(REACT_SRC / "hooks" / "useAppState" / "useHandlers.ts"),
+        resolve_react_source(REACT_SRC / "hooks" / "useAppState" / "useAppStateEffects.ts"),
     ])
 
 

@@ -1,16 +1,15 @@
 """End-to-end alpha research, simulation, scoring, and optional submission.
 
-Subpackage split (formerly ``pipeline.py`` monolith):
-  - ``_init_mixin``: ``PipelineInitMixin`` with ``__init__``, ``services``,
-    and the ``_Phase`` enum
-  - ``_run_mixin``: ``PipelineRunMixin`` with the top-level ``run()`` method
-  - ``_main_loop_mixin``: ``PipelineMainLoopMixin`` with ``_run_main_loop``
-  - ``_post_processing_mixin``: ``PipelinePostProcessingMixin`` with
-    per-cycle convergence/calibration/fusion logic
-  - ``_cycle_mixin``: ``PipelineCycleMixin`` with dataset-selection,
-    assistant-guidance, and simulation phase helpers
-  - ``_class``: ``AlphaResearchPipeline`` class assembly + runtime-state
-    property binding
+Subpackage consolidation (formerly split across ``_class.py`` /
+``_init_mixin.py`` / ``_run_mixin.py`` / ``_main_loop_mixin.py`` /
+``_post_processing_mixin.py`` / ``_cycle_mixin.py``):
+  - ``pipeline``: ``AlphaResearchPipeline`` class assembly +
+    ``PipelineInitMixin`` (``__init__``, ``services``, ``_Phase`` enum) and
+    ``PipelineRunMixin`` (top-level ``run()`` method)
+  - ``pipeline_mixins``: ``PipelineMainLoopMixin`` (``_run_main_loop``),
+    ``PipelinePostProcessingMixin`` (per-cycle convergence/calibration/fusion
+    logic), ``PipelineCycleMixin`` (dataset-selection, assistant-guidance,
+    and simulation phase helpers)
 
 Constants:
   - ``SUBMITTED_CLOUD_STATUSES``: cloud Alpha statuses considered submitted
@@ -20,9 +19,8 @@ Constants:
 
 from __future__ import annotations
 
-from ._class import AlphaResearchPipeline
-from ._post_processing_mixin import CONVERGENCE_REPORT_INTERVAL
-from ._main_loop_mixin import CONTEXT_REFRESH_INTERVAL_SECONDS
+from .pipeline import AlphaResearchPipeline
+from .pipeline_mixins import CONVERGENCE_REPORT_INTERVAL, CONTEXT_REFRESH_INTERVAL_SECONDS
 
 # Re-export of observability helper so legacy imports
 # ``from brain_alpha_ops.research.pipeline import build_research_observability_snapshot``
